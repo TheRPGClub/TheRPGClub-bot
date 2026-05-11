@@ -1975,6 +1975,7 @@ export class NowPlayingCommand {
           session.userId,
           payload.components,
           false,
+          this.hasDisplayableNowPlayingNotes(list),
         );
         await safeUpdate(interaction, {
           components,
@@ -2797,6 +2798,7 @@ export class NowPlayingCommand {
         ownerId,
         payload.components,
         false,
+        this.hasDisplayableNowPlayingNotes(list),
       );
       await safeReply(interaction, {
         components,
@@ -3004,7 +3006,14 @@ export class NowPlayingCommand {
         emptyMessage,
       );
       await safeReply(interaction, {
-        components: [container, this.buildNowPlayingActionRow(ownerId, showNotes)],
+        components: [
+          container,
+          this.buildNowPlayingActionRow(
+            ownerId,
+            showNotes,
+            this.hasDisplayableNowPlayingNotes(entries),
+          ),
+        ],
         flags: buildComponentsV2Flags(isEphemeral),
       });
       return;
@@ -3022,6 +3031,7 @@ export class NowPlayingCommand {
       ownerId,
       payload.components,
       showNotes,
+      this.hasDisplayableNowPlayingNotes(entries),
     );
     await safeReply(interaction, {
       components,
@@ -3538,6 +3548,7 @@ export class NowPlayingCommand {
       ownerId,
       payload.components,
       false,
+      this.hasDisplayableNowPlayingNotes(list),
     );
     await interaction.update({
       components,
@@ -3590,6 +3601,7 @@ export class NowPlayingCommand {
       ownerId,
       payload.components,
       false,
+      this.hasDisplayableNowPlayingNotes(list),
     );
     await interaction.update({
       components,
@@ -3620,6 +3632,7 @@ export class NowPlayingCommand {
       ownerId,
       payload.components,
       false,
+      this.hasDisplayableNowPlayingNotes(list),
     );
     await interaction.update({
       components,
@@ -3644,7 +3657,7 @@ export class NowPlayingCommand {
             "Use Edit to manage notes, sort order, platform, completions, and removals in DM.",
           ].join("\n"),
         );
-        const actions = this.buildNowPlayingActionRow(target.id, false);
+        const actions = this.buildNowPlayingActionRow(target.id, false, false);
         await safeReply(interaction, {
           components: [container, actions],
           flags: buildComponentsV2Flags(ephemeral),
@@ -3696,6 +3709,7 @@ export class NowPlayingCommand {
       target.id,
       payload.components,
       false,
+      this.hasDisplayableNowPlayingNotes(sortedEntries),
     );
     await safeReply(interaction, {
       components,
@@ -3744,6 +3758,7 @@ export class NowPlayingCommand {
         selectedUserId,
         [container],
         false,
+        false,
       );
       const updated = await interaction.editReply({
         components,
@@ -3768,6 +3783,7 @@ export class NowPlayingCommand {
       selectedUserId,
       payload.components,
       false,
+      this.hasDisplayableNowPlayingNotes(sortedEntries),
     );
     const updated = await interaction.editReply({
       components,
@@ -3991,19 +4007,25 @@ export class NowPlayingCommand {
   private buildNowPlayingActionRow(
     ownerId: string,
     showNotes: boolean,
+    hasDisplayableNotes: boolean,
   ): ActionRowBuilder<ButtonBuilder> {
-    const notesAction = showNotes ? "hide" : "show";
-    const notesLabel = showNotes ? "Hide Notes" : "Show Notes";
-    return new ActionRowBuilder<ButtonBuilder>().addComponents(
+    const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
       new ButtonBuilder()
         .setCustomId(`${NOW_PLAYING_LIST_EDIT_PREFIX}:${ownerId}`)
         .setLabel("Edit")
         .setStyle(ButtonStyle.Primary),
-      new ButtonBuilder()
-        .setCustomId(`${NOW_PLAYING_LIST_NOTES_PREFIX}:${ownerId}:${notesAction}`)
-        .setLabel(notesLabel)
-        .setStyle(ButtonStyle.Secondary),
     );
+    if (hasDisplayableNotes) {
+      const notesAction = showNotes ? "hide" : "show";
+      const notesLabel = showNotes ? "Hide Notes" : "Show Notes";
+      row.addComponents(
+        new ButtonBuilder()
+          .setCustomId(`${NOW_PLAYING_LIST_NOTES_PREFIX}:${ownerId}:${notesAction}`)
+          .setLabel(notesLabel)
+          .setStyle(ButtonStyle.Secondary),
+      );
+    }
+    return row;
   }
 
   private buildNowPlayingCancelRow(ownerId: string): ActionRowBuilder<ButtonBuilder> {
@@ -4485,11 +4507,16 @@ export class NowPlayingCommand {
     ownerId: string,
     components: NowPlayingListComponents,
     showNotes: boolean,
+    hasDisplayableNotes: boolean = true,
   ): NowPlayingMessageComponents {
     if (!isOwnList) {
       return components;
     }
-    return [...components, this.buildNowPlayingActionRow(ownerId, showNotes)];
+    return [...components, this.buildNowPlayingActionRow(ownerId, showNotes, hasDisplayableNotes)];
+  }
+
+  private hasDisplayableNowPlayingNotes(entries: IMemberNowPlayingEntry[]): boolean {
+    return entries.some((entry) => !entry.journalEnabled && Boolean(entry.note?.trim()));
   }
 
   private async refreshNowPlayingListFromContext(
@@ -4553,7 +4580,14 @@ export class NowPlayingCommand {
               : `No Now Playing entries found for <@${ownerId}>.`;
             const container = this.buildNowPlayingMessageContainer(title, emptyMessage);
             const components = ownerId === interaction.user.id
-              ? [container, this.buildNowPlayingActionRow(ownerId, showNotes)]
+              ? [
+                container,
+                this.buildNowPlayingActionRow(
+                  ownerId,
+                  showNotes,
+                  this.hasDisplayableNowPlayingNotes(entries),
+                ),
+              ]
               : [container];
             await message.edit({
               components,
@@ -4575,6 +4609,7 @@ export class NowPlayingCommand {
             ownerId,
             payload.components,
             showNotes,
+            this.hasDisplayableNowPlayingNotes(entries),
           );
           await message.edit({
             components,
@@ -4634,6 +4669,7 @@ export class NowPlayingCommand {
               selectedUserId,
               [container],
               false,
+              false,
             );
             await message.edit({
               components,
@@ -4656,6 +4692,7 @@ export class NowPlayingCommand {
             selectedUserId,
             payload.components,
             false,
+            this.hasDisplayableNowPlayingNotes(entries),
           );
           await message.edit({
             components,
@@ -4834,12 +4871,14 @@ export class NowPlayingCommand {
       const section = new SectionBuilder().addTextDisplayComponents(
         new TextDisplayBuilder().setContent(content),
       );
-      section.setButtonAccessory(
-        new V2ButtonBuilder()
-          .setCustomId(`${NOW_PLAYING_JOURNAL_OPEN_PREFIX}:${ownerId}:${entry.gameId}:1`)
-          .setLabel("Journal")
-          .setStyle(ButtonStyle.Secondary),
-      );
+      if (entry.journalEnabled) {
+        section.setButtonAccessory(
+          new V2ButtonBuilder()
+            .setCustomId(`${NOW_PLAYING_JOURNAL_OPEN_PREFIX}:${ownerId}:${entry.gameId}:1`)
+            .setLabel("Journal")
+            .setStyle(ButtonStyle.Secondary),
+        );
+      }
       container.addSectionComponents(section);
     });
     return [container];
