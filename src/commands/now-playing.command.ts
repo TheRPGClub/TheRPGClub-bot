@@ -401,7 +401,13 @@ function buildEditNoteModal(
 
 function buildEditNotesModal(
   ownerId: string,
-  entries: IMemberNowPlayingEntry[],
+  entries: Array<{
+    gameId: number;
+    title: string;
+    platformName: string | null;
+    platformAbbreviation: string | null;
+    note: string | null;
+  }>,
 ): ModalBuilder {
   const modal = new ModalBuilder()
     .setCustomId(`${NOW_PLAYING_NOTE_MODAL_ID}:${ownerId}`)
@@ -2626,7 +2632,12 @@ export class NowPlayingCommand {
           continue;
         }
         const fieldId = `${NOW_PLAYING_NOTE_INPUT_ID}:${entry.gameId}`;
-        const noteInput = stripModalInput(interaction.fields.fields.get(fieldId)?.value ?? "");
+        let noteInput = "";
+        try {
+          noteInput = stripModalInput(interaction.fields.getTextInputValue(fieldId));
+        } catch {
+          noteInput = "";
+        }
         const note = noteInput.trim();
         if (note.length > MAX_NOW_PLAYING_NOTE_LEN) {
           await safeReply(interaction, {
