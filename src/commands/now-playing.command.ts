@@ -3887,10 +3887,7 @@ export class NowPlayingCommand {
             "Failed to remove that game (it may have been removed already).",
           ),
         );
-        await safeReply(interaction, {
-          components: [container],
-          flags: buildComponentsV2Flags(true),
-        });
+        await safeUpdate(interaction, { components: [container] });
         return;
       }
       await this.refreshNowPlayingListFromContext(interaction, ownerId).catch(() => {});
@@ -3900,10 +3897,7 @@ export class NowPlayingCommand {
       const container = new ContainerBuilder().addTextDisplayComponents(
         new TextDisplayBuilder().setContent(`Could not remove from Now Playing: ${msg}`),
       );
-      await safeReply(interaction, {
-        components: [container],
-        flags: buildComponentsV2Flags(true),
-      });
+      await safeUpdate(interaction, { components: [container] });
     }
   }
 
