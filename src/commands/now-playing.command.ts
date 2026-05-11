@@ -3766,9 +3766,10 @@ export class NowPlayingCommand {
       ownerId,
       interaction.guildId,
     );
-    await interaction.update({
+    const isEphemeral = interaction.message.flags?.has(MessageFlags.Ephemeral) ?? true;
+    await safeReply(interaction, {
       components: menuComponents,
-      flags: buildComponentsV2Flags(true),
+      flags: buildComponentsV2Flags(isEphemeral),
     });
   }
 
