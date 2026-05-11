@@ -91,6 +91,7 @@ const NOW_PLAYING_SORT_MOVE_PREFIX = "nowplaying-sort-move";
 const NOW_PLAYING_SORT_DONE_ID = "nowplaying-sort-done";
 const NOW_PLAYING_NOTE_MODAL_ID = "nowplaying-note-modal";
 const NOW_PLAYING_NOTE_INPUT_ID = "nowplaying-note-input";
+const NOW_PLAYING_NOTE_MODAL_MAX_FIELDS = 5;
 const NOW_PLAYING_ADD_MODAL_ID = "nowplaying-add-modal";
 const NOW_PLAYING_ADD_TITLE_INPUT_ID = "nowplaying-add-title";
 const NOW_PLAYING_ADD_NOTE_INPUT_ID = "nowplaying-add-note";
@@ -396,6 +397,28 @@ function buildEditNoteModal(
     .setCustomId(`${NOW_PLAYING_NOTE_MODAL_ID}:${ownerId}:${gameId}`)
     .setTitle("Edit Now Playing Note")
     .addComponents(new ActionRowBuilder<TextInputBuilder>().addComponents(input));
+}
+
+function buildEditNotesModal(
+  ownerId: string,
+  entries: IMemberNowPlayingEntry[],
+): ModalBuilder {
+  const modal = new ModalBuilder()
+    .setCustomId(`${NOW_PLAYING_NOTE_MODAL_ID}:${ownerId}`)
+    .setTitle("Edit Now Playing Notes");
+
+  entries.forEach((entry) => {
+    const input = new TextInputBuilder()
+      .setCustomId(`${NOW_PLAYING_NOTE_INPUT_ID}:${entry.gameId}`)
+      .setLabel(formatEntryTitleWithPlatform(entry).slice(0, 45))
+      .setStyle(TextInputStyle.Paragraph)
+      .setRequired(false)
+      .setMaxLength(MAX_NOW_PLAYING_NOTE_LEN)
+      .setValue(entry.note ?? "");
+    modal.addComponents(new ActionRowBuilder<TextInputBuilder>().addComponents(input));
+  });
+
+  return modal;
 }
 
 @Discord()
@@ -2121,74 +2144,32 @@ export class NowPlayingCommand {
       return;
     }
 
-    if (current.length === 1) {
-      const entry = current[0];
-      if (!entry?.gameId) {
-        await safeReply(interaction, {
-          content: "Unable to open the note form right now.",
-          flags: MessageFlags.Ephemeral,
-        });
-        return;
-      }
-      if (!("showModal" in interaction)) {
-        await safeReply(interaction, {
-          content: "Unable to open the note form right now.",
-          flags: MessageFlags.Ephemeral,
-        });
-        return;
-      }
-      await interaction.showModal(
-        buildEditNoteModal(
-          interaction.user.id,
-          entry.gameId,
-          formatEntryTitleWithPlatform(entry),
-          entry.note ?? null,
-        ),
-      ).catch(async () => {
-        await safeReply(interaction, {
-          content: "Unable to open the note form right now.",
-          flags: MessageFlags.Ephemeral,
-        });
+    if (!("showModal" in interaction)) {
+      await safeReply(interaction, {
+        content: "Unable to open the note form right now.",
+        flags: MessageFlags.Ephemeral,
       });
       return;
     }
 
-    const options = current.map((entry) => ({
-      label: formatEntryTitleWithPlatform(entry).slice(0, 100),
-      value: String(entry.gameId),
-      description: entry.note ? entry.note.slice(0, 95) : "Add a note",
-    }));
-
-    const selectId = `nowplaying-edit-note-select:${interaction.user.id}`;
-    const selectRow = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
-      new StringSelectMenuBuilder()
-        .setCustomId(selectId)
-        .setPlaceholder("Select a game to edit its note")
-        .addOptions(options),
-    );
-    const cancelRow = this.buildNowPlayingCancelRow(interaction.user.id);
-
-    const container = new ContainerBuilder()
-      .addTextDisplayComponents(
-        new TextDisplayBuilder().setContent("Select a game to add or update its note:"),
-      )
-      .addActionRowComponents(selectRow.toJSON())
-      .addActionRowComponents(cancelRow.toJSON());
-    const pmComponents = await this.withPmNowPlayingList(
-      interaction.user.id,
-      interaction.guildId,
-      [container],
-    );
-
-    if (mode === "update" && "update" in interaction) {
-      await interaction.update({ components: pmComponents });
-      return;
-    }
-
-    await safeReply(interaction, {
-      components: pmComponents,
-      flags: buildComponentsV2Flags(true),
+    const limitedEntries = current.slice(0, NOW_PLAYING_NOTE_MODAL_MAX_FIELDS);
+    await interaction.showModal(
+      buildEditNotesModal(interaction.user.id, limitedEntries),
+    ).catch(async () => {
+      await safeReply(interaction, {
+        content: "Unable to open the note form right now.",
+        flags: MessageFlags.Ephemeral,
+      });
     });
+
+    if (current.length > NOW_PLAYING_NOTE_MODAL_MAX_FIELDS) {
+      await safeReply(interaction, {
+        content:
+          `Discord modals support up to ${NOW_PLAYING_NOTE_MODAL_MAX_FIELDS} note fields at once. ` +
+          "I opened the first set. Submit, then use Edit Notes again for the rest.",
+        flags: MessageFlags.Ephemeral,
+      });
+    }
   }
 
   private async promptEditNowPlayingPlatform(
@@ -2597,10 +2578,12 @@ export class NowPlayingCommand {
     });
   }
 
-  @ModalComponent({ id: /^nowplaying-note-modal:\d+:\d+$/ })
+  @ModalComponent({ id: /^nowplaying-note-modal:\d+(?::\d+)?$/ })
   async handleEditNoteModal(interaction: ModalSubmitInteraction): Promise<void> {
     await safeDeferReply(interaction, { flags: MessageFlags.Ephemeral });
-    const [, ownerId, gameIdRaw] = interaction.customId.split(":");
+    const parts = interaction.customId.split(":");
+    const ownerId = parts[1];
+    const legacyGameIdRaw = parts[2] ?? null;
     if (interaction.user.id !== ownerId) {
       await safeReply(interaction, {
         content: "This note prompt isn't for you.",
@@ -2609,29 +2592,54 @@ export class NowPlayingCommand {
       return;
     }
 
-    const gameId = Number(gameIdRaw);
-    if (!Number.isInteger(gameId) || gameId <= 0) {
-      await safeReply(interaction, {
-        content: "Invalid selection.",
-        flags: MessageFlags.Ephemeral,
-      });
-      return;
-    }
+    let updated = false;
+    if (legacyGameIdRaw) {
+      const gameId = Number(legacyGameIdRaw);
+      if (!Number.isInteger(gameId) || gameId <= 0) {
+        await safeReply(interaction, {
+          content: "Invalid selection.",
+          flags: MessageFlags.Ephemeral,
+        });
+        return;
+      }
 
-    const noteInput = stripModalInput(
-      interaction.fields.getTextInputValue(NOW_PLAYING_NOTE_INPUT_ID),
-    );
-    const note = noteInput.trim();
-    const nextNote = note ? note : null;
-    if (note && note.length > MAX_NOW_PLAYING_NOTE_LEN) {
-      await safeReply(interaction, {
-        content: `Note must be ${MAX_NOW_PLAYING_NOTE_LEN} characters or fewer.`,
-        flags: MessageFlags.Ephemeral,
-      });
-      return;
-    }
+      const noteInput = stripModalInput(
+        interaction.fields.getTextInputValue(NOW_PLAYING_NOTE_INPUT_ID),
+      );
+      const note = noteInput.trim();
+      const nextNote = note ? note : null;
+      if (note && note.length > MAX_NOW_PLAYING_NOTE_LEN) {
+        await safeReply(interaction, {
+          content: `Note must be ${MAX_NOW_PLAYING_NOTE_LEN} characters or fewer.`,
+          flags: MessageFlags.Ephemeral,
+        });
+        return;
+      }
 
-    const updated = await Member.updateNowPlayingNote(ownerId, gameId, nextNote);
+      updated = await Member.updateNowPlayingNote(ownerId, gameId, nextNote);
+    } else {
+      const currentEntries = await Member.getNowPlayingEntries(ownerId);
+      const updateCandidates = currentEntries.slice(0, NOW_PLAYING_NOTE_MODAL_MAX_FIELDS);
+
+      for (const entry of updateCandidates) {
+        if (!entry.gameId) {
+          continue;
+        }
+        const fieldId = `${NOW_PLAYING_NOTE_INPUT_ID}:${entry.gameId}`;
+        const noteInput = stripModalInput(interaction.fields.fields.get(fieldId)?.value ?? "");
+        const note = noteInput.trim();
+        if (note.length > MAX_NOW_PLAYING_NOTE_LEN) {
+          await safeReply(interaction, {
+            content: `Note must be ${MAX_NOW_PLAYING_NOTE_LEN} characters or fewer.`,
+            flags: MessageFlags.Ephemeral,
+          });
+          return;
+        }
+        const nextNote = note ? note : null;
+        const changed = await Member.updateNowPlayingNote(ownerId, entry.gameId, nextNote);
+        updated = changed || updated;
+      }
+    }
     if (updated) {
       const refreshed = await this.refreshNowPlayingListFromContext(interaction, ownerId);
       if (!interaction.guildId && interaction.message) {
