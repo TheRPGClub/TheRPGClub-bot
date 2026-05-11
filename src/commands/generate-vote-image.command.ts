@@ -10,7 +10,7 @@ import { type NominationKind, listNominationsForRound } from "../classes/Nominat
 import { safeDeferReply, safeReply } from "../functions/InteractionUtils.js";
 import { getUpcomingNominationWindow } from "../functions/NominationWindow.js";
 import { isAdmin } from "./admin/admin-auth.utils.js";
-import { composeVoteImage, type VoteImageType } from "../services/voteImageComposer.js";
+import { composeVoteImage, type VoteImageType } from "../services/collageGenerator.js";
 
 const GENERATION_LOCK_TTL_MS = 2 * 60 * 1000;
 

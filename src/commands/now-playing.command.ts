@@ -79,7 +79,7 @@ import {
 import { parseTitleWithYear } from "../functions/GameTitleAutocompleteUtils.js";
 import { COMPONENTS_V2_FLAG } from "../config/flags.js";
 import { STANDARD_PLATFORM_IDS } from "../config/standardPlatforms.js";
-import { composeVoteImage } from "../services/voteImageComposer.js";
+import { composeVoteImage } from "../services/collageGenerator.js";
 import {
   getOrReplaceBackblazeImage,
   hasBackblazeB2Config,
@@ -3324,7 +3324,7 @@ export class NowPlayingCommand {
       title,
     );
     const components = this.withNowPlayingActions(
-      isOwnList,
+      true,
       target.id,
       payload.components,
       false,

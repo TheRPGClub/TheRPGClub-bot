@@ -16,7 +16,7 @@ import crypto from "node:crypto";
 import type { INominationEntry } from "../classes/Nomination.js";
 import Game from "../classes/Game.js";
 import { COMPONENTS_V2_FLAG } from "../config/flags.js";
-import { composeVoteImage, type VoteImageType } from "../services/voteImageComposer.js";
+import { composeVoteImage, type VoteImageType } from "../services/collageGenerator.js";
 import {
   getOrReplaceBackblazeImage,
   hasBackblazeB2Config,
