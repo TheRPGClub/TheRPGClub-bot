@@ -178,7 +178,8 @@ const HELP_TOPICS: HelpTopic[] = [
     syntax:
       "Use /now-playing help for subcommands: list, search.",
     notes:
-      "Add Game, Edit Note, Edit Platform, Sort, Remove Game, and Add Completion are available from the buttons under your own list.",
+      "Responses are public by default. Use private:true for an ephemeral response. " +
+      "Your list includes Show/Hide Notes and Edit buttons; Edit opens DM-based tools.",
   },
   {
     id: "game-completion",
@@ -632,16 +633,19 @@ const NOW_PLAYING_HELP_TOPICS: NowPlayingHelpTopic[] = [
     id: "list",
     label: "/now-playing list",
     summary: "Show Now Playing lists for you, someone else, or everyone.",
-    syntax: "Syntax: /now-playing list [member:<user>] [all:<boolean>] [showinchat:<boolean>]",
+    syntax: "Syntax: /now-playing list [member:<user>] [all:<boolean>] [private:<boolean>]",
     notes:
-      "Defaults to a private view for one member. Set all:true to list everyone (sent publicly) with thread links when available.",
+      "Public by default. Set private:true to send an ephemeral response. " +
+      "On your own list, use Show/Hide Notes and Edit (Edit opens in DM).",
   },
   {
     id: "search",
     label: "/now-playing search",
     summary: "Find members playing GameDB titles that match a search.",
-    syntax: "Syntax: /now-playing search title:<string> [showinchat:<boolean>]",
-    notes: "Matches GameDB titles and lists users currently playing those games.",
+    syntax: "Syntax: /now-playing search title:<string> [private:<boolean>]",
+    notes:
+      "Matches GameDB titles and lists users currently playing those games. " +
+      "Public by default; set private:true for an ephemeral response.",
   },
 ];
 

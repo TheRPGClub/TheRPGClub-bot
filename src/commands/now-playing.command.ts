@@ -79,7 +79,6 @@ import {
   hasBackblazeB2Config,
 } from "../services/BackblazeB2Service.js";
 
-const MAX_NOW_PLAYING = 10;
 const MAX_NOW_PLAYING_NOTE_LEN = 500;
 const NOW_PLAYING_SEARCH_LIMIT = 10;
 const NOW_PLAYING_SORT_MOVE_PREFIX = "nowplaying-sort-move";
@@ -91,7 +90,6 @@ const NOW_PLAYING_ADD_TITLE_INPUT_ID = "nowplaying-add-title";
 const NOW_PLAYING_ADD_NOTE_INPUT_ID = "nowplaying-add-note";
 const NOW_PLAYING_ADD_PLATFORM_SELECT_PREFIX = "nowplaying-add-platform-select";
 const NOW_PLAYING_EDIT_PLATFORM_SELECT_PREFIX = "nowplaying-edit-platform-select";
-const NOW_PLAYING_EDIT_NOTE_DIRECT_PREFIX = "nowplaying-edit-note-direct";
 const NOW_PLAYING_COMPLETE_MODAL_ID = "nowplaying-complete-modal";
 const NOW_PLAYING_COMPLETE_DATE_INPUT_ID = "nowplaying-complete-date";
 const NOW_PLAYING_COMPLETE_HOURS_INPUT_ID = "nowplaying-complete-hours";
@@ -106,6 +104,13 @@ const NOW_PLAYING_COMPLETE_PLATFORM_SELECT_PREFIX = "np-complete-platform";
 const NOW_PLAYING_GALLERY_MAX = 5;
 const NOW_PLAYING_COMPOSITE_MAX = 10;
 const NOW_PLAYING_ALL_SELECT_ID = "nowplaying-all-select:v1";
+const NOW_PLAYING_LIST_NOTES_PREFIX = "nowplaying-list-notes";
+const NOW_PLAYING_LIST_EDIT_PREFIX = "nowplaying-list-edit";
+const NOW_PLAYING_EDIT_MENU_NOTE_PREFIX = "nowplaying-edit-menu-note";
+const NOW_PLAYING_EDIT_MENU_SORT_PREFIX = "nowplaying-edit-menu-sort";
+const NOW_PLAYING_EDIT_MENU_PLATFORM_PREFIX = "nowplaying-edit-menu-platform";
+const NOW_PLAYING_EDIT_MENU_COMPLETE_PREFIX = "nowplaying-edit-menu-complete";
+const NOW_PLAYING_EDIT_MENU_REMOVE_PREFIX = "nowplaying-edit-menu-remove";
 type NowPlayingAddSession = {
   userId: string;
   query: string;
@@ -377,18 +382,18 @@ export class NowPlayingCommand {
     })
     showAll: boolean | undefined,
     @SlashOption({
-      description: "Show in chat (public) instead of ephemeral",
-      name: "showinchat",
+      description: "Show only to you",
+      name: "private",
       required: false,
       type: ApplicationCommandOptionType.Boolean,
     })
-    showInChat: boolean | undefined,
+    showPrivate: boolean | undefined,
     interaction: CommandInteraction,
   ): Promise<void> {
     const showAllFlag = showAll === true;
     const target = member ?? interaction.user;
-    const ephemeral = !(showAllFlag || showInChat);
-    await safeDeferReply(interaction, { flags: ephemeral ? MessageFlags.Ephemeral : undefined });
+    const ephemeral = showPrivate === true;
+    await safeDeferReply(interaction, { flags: buildComponentsV2Flags(ephemeral) });
 
     if (showAllFlag) {
       await this.showEveryone(interaction, ephemeral);
@@ -408,16 +413,16 @@ export class NowPlayingCommand {
     })
     title: string,
     @SlashOption({
-      description: "Show in chat (public) instead of ephemeral",
-      name: "showinchat",
+      description: "Show only to you",
+      name: "private",
       required: false,
       type: ApplicationCommandOptionType.Boolean,
     })
-    showInChat: boolean | undefined,
+    showPrivate: boolean | undefined,
     interaction: CommandInteraction,
   ): Promise<void> {
     const query = sanitizeUserInput(title, { preserveNewlines: false });
-    const ephemeral = !showInChat;
+    const ephemeral = showPrivate === true;
     await safeDeferReply(interaction, { flags: buildComponentsV2Flags(ephemeral) });
 
     if (!query) {
@@ -426,7 +431,7 @@ export class NowPlayingCommand {
       );
       await safeReply(interaction, {
         components: [container],
-        flags: buildComponentsV2Flags(true),
+        flags: buildComponentsV2Flags(ephemeral),
       });
       return;
     }
@@ -440,7 +445,7 @@ export class NowPlayingCommand {
       );
       await safeReply(interaction, {
         components: [container],
-        flags: buildComponentsV2Flags(true),
+        flags: buildComponentsV2Flags(ephemeral),
       });
       return;
     }
@@ -1639,8 +1644,6 @@ export class NowPlayingCommand {
         list,
         interaction.guildId,
         "Your Now Playing List",
-        true,
-        true,
       );
       const refreshed = await this.refreshNowPlayingListFromContext(interaction, session.userId);
       if (refreshed) {
@@ -1653,10 +1656,10 @@ export class NowPlayingCommand {
         });
       } else {
         const components = this.withNowPlayingActions(
-          "Your Now Playing List",
+          true,
           session.userId,
           payload.components,
-          list.length,
+          true,
         );
         await safeUpdate(interaction, {
           components,
@@ -2270,14 +2273,12 @@ export class NowPlayingCommand {
       list,
       interaction.guildId,
       "Your Now Playing List",
-      true,
-      true,
     );
     const components = this.withNowPlayingActions(
-      "Your Now Playing List",
+      true,
       ownerId,
       payload.components,
-      list.length,
+      true,
     );
     await interaction.update({
       components,
@@ -2332,14 +2333,12 @@ export class NowPlayingCommand {
         list,
         interaction.guildId,
         "Your Now Playing List",
-        true,
-        true,
       );
       const components = this.withNowPlayingActions(
-        "Your Now Playing List",
+        true,
         ownerId,
         payload.components,
-        list.length,
+        true,
       );
       await safeReply(interaction, {
         components,
@@ -2513,6 +2512,179 @@ export class NowPlayingCommand {
     }
   }
 
+  @ButtonComponent({ id: /^nowplaying-list-notes:\d+:(show|hide)$/ })
+  async handleNowPlayingListNotesToggle(interaction: ButtonInteraction): Promise<void> {
+    const [, ownerId, action] = interaction.customId.split(":");
+    const showNotes = action === "show";
+    const isEphemeral = interaction.message.flags?.has(MessageFlags.Ephemeral) ?? false;
+    const ownerUser =
+      interaction.user.id === ownerId
+        ? interaction.user
+        : await interaction.client.users.fetch(ownerId).catch(() => null);
+    const target = ownerUser ?? interaction.user;
+    const title = ownerId === interaction.user.id && isEphemeral
+      ? "Your Now Playing List"
+      : `${target.displayName ?? target.username ?? "User"}'s Now Playing List`;
+    const entries = getDisplayNowPlayingEntries(await Member.getNowPlaying(ownerId));
+
+    if (!entries.length) {
+      const emptyMessage = ownerId === interaction.user.id
+        ? "Your Now Playing list is empty."
+        : `No Now Playing entries found for <@${ownerId}>.`;
+      const container = this.buildNowPlayingMessageContainer(
+        title,
+        emptyMessage,
+      );
+      await interaction.update({
+        components: [container, this.buildNowPlayingActionRow(ownerId, showNotes)],
+        flags: buildComponentsV2Flags(isEphemeral),
+      });
+      return;
+    }
+
+    const payload = await this.buildNowPlayingListPayload(
+      target,
+      entries,
+      interaction.guildId,
+      title,
+      showNotes,
+    );
+    const components = this.withNowPlayingActions(
+      true,
+      ownerId,
+      payload.components,
+      showNotes,
+    );
+    await interaction.update({
+      components,
+      files: payload.files,
+      flags: buildComponentsV2Flags(isEphemeral),
+    });
+  }
+
+  @ButtonComponent({ id: /^nowplaying-list-edit:\d+$/ })
+  async handleNowPlayingListEdit(interaction: ButtonInteraction): Promise<void> {
+    const [, ownerId] = interaction.customId.split(":");
+    if (interaction.user.id !== ownerId) {
+      const container = new ContainerBuilder().addTextDisplayComponents(
+        new TextDisplayBuilder().setContent(
+          "Only the owner of this Now Playing list can use Edit.",
+        ),
+      );
+      await interaction.reply({
+        components: [container],
+        flags: buildComponentsV2Flags(true),
+      });
+      return;
+    }
+
+    setNowPlayingListContext(ownerId, interaction.message);
+    const dmChannel = await interaction.user.createDM().catch(() => null);
+    if (!dmChannel) {
+      const container = new ContainerBuilder().addTextDisplayComponents(
+        new TextDisplayBuilder().setContent(
+          "I couldn't open a DM. Enable DMs and try Edit again.",
+        ),
+      );
+      await interaction.reply({
+        components: [container],
+        flags: buildComponentsV2Flags(true),
+      });
+      return;
+    }
+
+    try {
+      await dmChannel.send({
+        components: this.buildNowPlayingEditMenuComponents(ownerId),
+        flags: buildComponentsV2Flags(false),
+      });
+    } catch {
+      const container = new ContainerBuilder().addTextDisplayComponents(
+        new TextDisplayBuilder().setContent(
+          "I couldn't send the DM edit menu. Enable DMs and try Edit again.",
+        ),
+      );
+      await interaction.reply({
+        components: [container],
+        flags: buildComponentsV2Flags(true),
+      });
+      return;
+    }
+    const container = new ContainerBuilder().addTextDisplayComponents(
+      new TextDisplayBuilder().setContent("Opened your Now Playing edit menu in DM."),
+    );
+    await interaction.reply({
+      components: [container],
+      flags: buildComponentsV2Flags(true),
+    });
+  }
+
+  @ButtonComponent({ id: /^nowplaying-edit-menu-note:\d+$/ })
+  async handleNowPlayingEditMenuNote(interaction: ButtonInteraction): Promise<void> {
+    const [, ownerId] = interaction.customId.split(":");
+    if (interaction.user.id !== ownerId) {
+      await interaction.reply({
+        content: "This edit menu isn't for you.",
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
+    await this.promptEditNowPlayingNote(interaction, "update");
+  }
+
+  @ButtonComponent({ id: /^nowplaying-edit-menu-sort:\d+$/ })
+  async handleNowPlayingEditMenuSort(interaction: ButtonInteraction): Promise<void> {
+    const [, ownerId] = interaction.customId.split(":");
+    if (interaction.user.id !== ownerId) {
+      await interaction.reply({
+        content: "This edit menu isn't for you.",
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
+    await this.promptSortNowPlayingButtons(interaction, ownerId);
+  }
+
+  @ButtonComponent({ id: /^nowplaying-edit-menu-platform:\d+$/ })
+  async handleNowPlayingEditMenuPlatform(interaction: ButtonInteraction): Promise<void> {
+    const [, ownerId] = interaction.customId.split(":");
+    if (interaction.user.id !== ownerId) {
+      await interaction.reply({
+        content: "This edit menu isn't for you.",
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
+    await this.promptEditNowPlayingPlatform(interaction, "update");
+  }
+
+  @ButtonComponent({ id: /^nowplaying-edit-menu-complete:\d+$/ })
+  async handleNowPlayingEditMenuComplete(interaction: ButtonInteraction): Promise<void> {
+    const [, ownerId] = interaction.customId.split(":");
+    if (interaction.user.id !== ownerId) {
+      await interaction.reply({
+        content: "This edit menu isn't for you.",
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
+    const sessionId = createNowPlayingCompletionWizardSession(ownerId, true);
+    await this.promptNowPlayingCompletionPick(interaction, ownerId, sessionId);
+  }
+
+  @ButtonComponent({ id: /^nowplaying-edit-menu-remove:\d+$/ })
+  async handleNowPlayingEditMenuRemove(interaction: ButtonInteraction): Promise<void> {
+    const [, ownerId] = interaction.customId.split(":");
+    if (interaction.user.id !== ownerId) {
+      await interaction.reply({
+        content: "This edit menu isn't for you.",
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
+    await this.promptRemoveNowPlaying(interaction, "update");
+  }
+
   @ButtonComponent({ id: /^nowplaying-list-add:\d+$/ })
   async handleNowPlayingListAdd(interaction: ButtonInteraction): Promise<void> {
     const [, ownerId] = interaction.customId.split(":");
@@ -2595,14 +2767,12 @@ export class NowPlayingCommand {
       list,
       interaction.guildId,
       "Your Now Playing List",
-      true,
-      true,
     );
     const components = this.withNowPlayingActions(
-      "Your Now Playing List",
+      true,
       ownerId,
       payload.components,
-      list.length,
+      true,
     );
     await interaction.update({
       components,
@@ -2656,14 +2826,12 @@ export class NowPlayingCommand {
       list,
       interaction.guildId,
       "Your Now Playing List",
-      true,
-      true,
     );
     const components = this.withNowPlayingActions(
-      "Your Now Playing List",
+      true,
       ownerId,
       payload.components,
-      list.length,
+      true,
     );
     await interaction.update({
       components,
@@ -2706,14 +2874,12 @@ export class NowPlayingCommand {
       list,
       interaction.guildId,
       "Your Now Playing List",
-      true,
-      true,
     );
     const components = this.withNowPlayingActions(
-      "Your Now Playing List",
+      true,
       ownerId,
       payload.components,
-      list.length,
+      true,
     );
     await interaction.update({
       components,
@@ -2738,14 +2904,12 @@ export class NowPlayingCommand {
       list,
       interaction.guildId,
       "Your Now Playing List",
-      true,
-      true,
     );
     const components = this.withNowPlayingActions(
-      "Your Now Playing List",
+      true,
       ownerId,
       payload.components,
-      list.length,
+      true,
     );
     await interaction.update({
       components,
@@ -2762,15 +2926,15 @@ export class NowPlayingCommand {
     const isOwnList = target.id === interaction.user.id;
     const entries = await Member.getNowPlaying(target.id);
     if (!entries.length) {
-      if (isOwnList && ephemeral) {
+      if (isOwnList) {
         const container = this.buildNowPlayingMessageContainer(
           "Your Now Playing List",
           [
             "Welcome. Your list is empty, so nothing shows yet.",
-            "Click Add Game to put your first game on the list.",
+            "Use Edit to manage notes, sort order, platform, completions, and removals in DM.",
           ].join("\n"),
         );
-        const actions = this.buildNowPlayingActionRow(target.id, 0);
+        const actions = this.buildNowPlayingActionRow(target.id, true);
         await safeReply(interaction, {
           components: [container, actions],
           flags: buildComponentsV2Flags(ephemeral),
@@ -2798,14 +2962,12 @@ export class NowPlayingCommand {
       sortedEntries,
       interaction.guildId,
       title,
-      isOwnList,
-      ephemeral,
     );
     const components = this.withNowPlayingActions(
-      title,
+      isOwnList,
       target.id,
       payload.components,
-      sortedEntries.length,
+      true,
     );
     await safeReply(interaction, {
       components,
@@ -2857,8 +3019,6 @@ export class NowPlayingCommand {
       sortedEntries,
       interaction.guildId,
       `${displayName}'s Now Playing List`,
-      false,
-      isEphemeral,
     );
     await interaction.editReply({
       components: [...payload.components, ...(selectRow ? [selectRow] : [])],
@@ -2990,8 +3150,7 @@ export class NowPlayingCommand {
     entries: IMemberNowPlayingEntry[],
     guildId: string | null,
     title: string,
-    isOwnList: boolean,
-    isEphemeral: boolean,
+    showNotes: boolean = true,
   ): Promise<{ components: NowPlayingListComponents; files: AttachmentBuilder[] }> {
     const { files, covers } = await this.buildNowPlayingAttachments(
       entries,
@@ -3001,10 +3160,8 @@ export class NowPlayingCommand {
       title,
       entries,
       guildId,
-      target.id,
-      isOwnList,
-      isEphemeral,
       await this.buildNowPlayingCompositeImageUrl(files, covers, target.id),
+      showNotes,
     );
     return { components, files };
   }
@@ -3022,7 +3179,7 @@ export class NowPlayingCommand {
     if (hasBackblazeB2Config()) {
       try {
         const stored = await getOrReplaceBackblazeImage(
-          `generated/now-playing/user-${ownerId}/composite`,
+          `generated/now-playing/${ownerId}/composite`,
           sourceHash,
           () => composeVoteImage({
             roundNumber: 1,
@@ -3063,44 +3220,20 @@ export class NowPlayingCommand {
 
   private buildNowPlayingActionRow(
     ownerId: string,
-    listCount: number,
+    showNotes: boolean,
   ): ActionRowBuilder<ButtonBuilder> {
-    const buttons: ButtonBuilder[] = [];
-    const addButton = new ButtonBuilder()
-      .setCustomId(`nowplaying-list-add:${ownerId}`)
-      .setLabel("Add Game")
-      .setStyle(ButtonStyle.Primary);
-    if (listCount >= MAX_NOW_PLAYING) {
-      addButton.setDisabled(true);
-    }
-    buttons.push(addButton);
-    if (listCount > 1) {
-      buttons.push(
-        new ButtonBuilder()
-          .setCustomId(`nowplaying-list-sort:${ownerId}`)
-          .setLabel("Sort")
-          .setStyle(ButtonStyle.Secondary),
-      );
-    }
-    if (listCount > 0) {
-      buttons.push(
-        new ButtonBuilder()
-          .setCustomId(`nowplaying-list-edit-platform:${ownerId}`)
-          .setLabel("Edit Platform")
-          .setStyle(ButtonStyle.Secondary),
-      );
-    }
-    buttons.push(
+    const notesAction = showNotes ? "hide" : "show";
+    const notesLabel = showNotes ? "Hide Notes" : "Show Notes";
+    return new ActionRowBuilder<ButtonBuilder>().addComponents(
       new ButtonBuilder()
-        .setCustomId(`nowplaying-list-complete:${ownerId}`)
-        .setLabel("Add Completion")
+        .setCustomId(`${NOW_PLAYING_LIST_NOTES_PREFIX}:${ownerId}:${notesAction}`)
+        .setLabel(notesLabel)
         .setStyle(ButtonStyle.Secondary),
       new ButtonBuilder()
-        .setCustomId(`nowplaying-list-remove:${ownerId}`)
-        .setLabel("Remove Game")
-        .setStyle(ButtonStyle.Danger),
+        .setCustomId(`${NOW_PLAYING_LIST_EDIT_PREFIX}:${ownerId}`)
+        .setLabel("Edit")
+        .setStyle(ButtonStyle.Primary),
     );
-    return new ActionRowBuilder<ButtonBuilder>().addComponents(buttons);
   }
 
   private buildNowPlayingCancelRow(ownerId: string): ActionRowBuilder<ButtonBuilder> {
@@ -3110,6 +3243,41 @@ export class NowPlayingCommand {
         .setLabel("Cancel")
         .setStyle(ButtonStyle.Secondary),
     );
+  }
+
+  private buildNowPlayingEditMenuComponents(
+    ownerId: string,
+  ): Array<ContainerBuilder | ActionRowBuilder<ButtonBuilder>> {
+    const container = new ContainerBuilder().addTextDisplayComponents(
+      new TextDisplayBuilder().setContent(
+        "## Now Playing Edit\nChoose an edit action. All edits happen in this DM.",
+      ),
+    );
+    const firstRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`${NOW_PLAYING_EDIT_MENU_NOTE_PREFIX}:${ownerId}`)
+        .setLabel("Edit Notes")
+        .setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder()
+        .setCustomId(`${NOW_PLAYING_EDIT_MENU_SORT_PREFIX}:${ownerId}`)
+        .setLabel("Sort")
+        .setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder()
+        .setCustomId(`${NOW_PLAYING_EDIT_MENU_PLATFORM_PREFIX}:${ownerId}`)
+        .setLabel("Edit Platform")
+        .setStyle(ButtonStyle.Secondary),
+    );
+    const secondRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`${NOW_PLAYING_EDIT_MENU_COMPLETE_PREFIX}:${ownerId}`)
+        .setLabel("Add Completion")
+        .setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder()
+        .setCustomId(`${NOW_PLAYING_EDIT_MENU_REMOVE_PREFIX}:${ownerId}`)
+        .setLabel("Remove Game")
+        .setStyle(ButtonStyle.Danger),
+    );
+    return [container, firstRow, secondRow];
   }
 
   private buildNowPlayingCompletionComponents(
@@ -3428,15 +3596,15 @@ export class NowPlayingCommand {
   }
 
   private withNowPlayingActions(
-    title: string,
+    isOwnList: boolean,
     ownerId: string,
     components: NowPlayingListComponents,
-    listCount: number,
+    showNotes: boolean,
   ): NowPlayingMessageComponents {
-    if (title !== "Your Now Playing List") {
+    if (!isOwnList) {
       return components;
     }
-    return [...components, this.buildNowPlayingActionRow(ownerId, listCount)];
+    return [...components, this.buildNowPlayingActionRow(ownerId, showNotes)];
   }
 
   private async refreshNowPlayingListFromContext(
@@ -3474,19 +3642,19 @@ export class NowPlayingCommand {
 
     const entries = await Member.getNowPlaying(userId);
     const isEphemeral = message.flags?.has(MessageFlags.Ephemeral) ?? true;
+    const showNotes = this.getNowPlayingShowNotesState(message, userId);
     const payload = await this.buildNowPlayingListPayload(
       target,
       entries,
       message.guildId ?? interaction.guildId,
       "Your Now Playing List",
-      interaction.user.id === userId,
-      isEphemeral,
+      showNotes,
     );
     const components = this.withNowPlayingActions(
-      "Your Now Playing List",
+      interaction.user.id === userId,
       userId,
       payload.components,
-      entries.length,
+      showNotes,
     );
     try {
       await message.edit({
@@ -3506,15 +3674,31 @@ export class NowPlayingCommand {
     return true;
   }
 
+  private getNowPlayingShowNotesState(message: Message, ownerId: string): boolean {
+    const prefix = `${NOW_PLAYING_LIST_NOTES_PREFIX}:${ownerId}:`;
+    for (const topLevel of message.components) {
+      if (!("components" in topLevel) || !Array.isArray(topLevel.components)) {
+        continue;
+      }
+      for (const component of topLevel.components) {
+        const customId = (component as { customId?: string; custom_id?: string }).customId ??
+          (component as { customId?: string; custom_id?: string }).custom_id;
+        if (!customId || !customId.startsWith(prefix)) {
+          continue;
+        }
+        return customId.endsWith(":hide");
+      }
+    }
+    return true;
+  }
+
 
   private buildNowPlayingEntryComponents(
     title: string,
     entries: IMemberNowPlayingEntry[],
     guildId: string | null,
-    ownerId: string,
-    isOwnList: boolean,
-    isEphemeral: boolean,
     imageUrl: string | null,
+    showNotes: boolean,
   ): NowPlayingListComponents {
     const container = new ContainerBuilder();
     if (imageUrl) {
@@ -3531,7 +3715,6 @@ export class NowPlayingCommand {
     }
     container.addTextDisplayComponents(new TextDisplayBuilder().setContent(`## ${title}`));
 
-    const showEditButton = isOwnList && isEphemeral;
     entries.forEach((entry, index) => {
       if (index === 0) {
         container.addSeparatorComponents(
@@ -3539,7 +3722,10 @@ export class NowPlayingCommand {
         );
       }
       const entryTitle = formatEntry(entry, guildId);
-      const lines = [`### ${entryTitle}`, entry.note ?? ""];
+      const lines = [`### ${entryTitle}`];
+      if (showNotes && entry.note) {
+        lines.push(entry.note);
+      }
       if (entry.addedAt) {
         const addedLabel = `Added ${formatTableDate(entry.addedAt)}`;
         if (entry.noteUpdatedAt) {
@@ -3554,20 +3740,7 @@ export class NowPlayingCommand {
         }
       }
       const content = this.trimTextDisplayContent(lines.join("\n"));
-      if (showEditButton && entry.gameId) {
-        const section = new SectionBuilder().addTextDisplayComponents(
-          new TextDisplayBuilder().setContent(content),
-        );
-        section.setButtonAccessory(
-          new V2ButtonBuilder()
-            .setCustomId(`${NOW_PLAYING_EDIT_NOTE_DIRECT_PREFIX}:${ownerId}:${entry.gameId}`)
-            .setLabel(entry.note ? "Edit Note" : "Add Note")
-            .setStyle(ButtonStyle.Secondary),
-        );
-        container.addSectionComponents(section);
-      } else {
-        container.addTextDisplayComponents(new TextDisplayBuilder().setContent(content));
-      }
+      container.addTextDisplayComponents(new TextDisplayBuilder().setContent(content));
     });
     return [container];
   }
