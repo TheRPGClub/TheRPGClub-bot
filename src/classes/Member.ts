@@ -797,14 +797,24 @@ export default class Member {
     viewerUserId?: string | null,
   ): Promise<number> {
     const connection = await getOraclePool().getConnection();
+    const isPublicOnly = viewerUserId === "__public__";
     try {
       const res = await connection.execute<{ CNT: number }>(
         `SELECT COUNT(*) AS CNT
            FROM USER_GAME_JOURNAL_ENTRIES
           WHERE USER_ID = :userId
             AND GAMEDB_GAME_ID = :gameId
-            AND (:viewerUserId = :userId OR IS_PUBLIC = 1)`,
-        { userId, gameId, viewerUserId: viewerUserId ?? null },
+            AND (
+              (:publicOnly = 1 AND IS_PUBLIC = 1)
+              OR
+              (:publicOnly = 0 AND (:viewerUserId = :userId OR IS_PUBLIC = 1))
+            )`,
+        {
+          userId,
+          gameId,
+          viewerUserId: viewerUserId ?? null,
+          publicOnly: isPublicOnly ? 1 : 0,
+        },
         { outFormat: oracledb.OUT_FORMAT_OBJECT },
       );
       return Number((res.rows ?? [])[0]?.CNT ?? 0);

@@ -3095,14 +3095,36 @@ export class NowPlayingCommand {
       });
       return;
     }
-    const components = await this.buildJournalComponents(
+    if (interaction.guildId) {
+      const publicCount = await Member.countGameJournalEntries(
+        ownerId,
+        Number(gameIdRaw),
+        "__public__",
+      );
+      if (publicCount <= 0) {
+        await safeReply(interaction, {
+          content: "This game's journal has no public entries to show in channel.",
+          flags: buildComponentsV2Flags(true),
+        });
+        return;
+      }
+    }
+    if (interaction.guildId && !selected.hasPublicJournalEntry) {
+      await safeReply(interaction, {
+        content: "This game's journal has no public entries to show in channel.",
+        flags: buildComponentsV2Flags(true),
+      });
+      return;
+    }
+    const payload = await this.buildJournalComponents(
       ownerId,
       interaction.user.id,
       Number(gameIdRaw),
       Number(pageRaw),
     );
     await safeReply(interaction, {
-      components,
+      components: payload.components,
+      files: payload.files,
       flags: buildComponentsV2Flags(interaction.message.flags?.has(MessageFlags.Ephemeral) ?? false),
     });
   }
@@ -3126,14 +3148,36 @@ export class NowPlayingCommand {
       });
       return;
     }
-    const components = await this.buildJournalComponents(
+    if (interaction.guildId) {
+      const publicCount = await Member.countGameJournalEntries(
+        ownerId,
+        Number(gameIdRaw),
+        "__public__",
+      );
+      if (publicCount <= 0) {
+        await safeReply(interaction, {
+          content: "This game's journal has no public entries to show in channel.",
+          flags: buildComponentsV2Flags(true),
+        });
+        return;
+      }
+    }
+    if (interaction.guildId && !selected.hasPublicJournalEntry) {
+      await safeReply(interaction, {
+        content: "This game's journal has no public entries to show in channel.",
+        flags: buildComponentsV2Flags(true),
+      });
+      return;
+    }
+    const payload = await this.buildJournalComponents(
       ownerId,
       interaction.user.id,
       Number(gameIdRaw),
       Number(pageRaw),
     );
     await safeReply(interaction, {
-      components,
+      components: payload.components,
+      files: payload.files,
       flags: buildComponentsV2Flags(interaction.message.flags?.has(MessageFlags.Ephemeral) ?? false),
     });
   }
@@ -3337,13 +3381,17 @@ export class NowPlayingCommand {
       isPublic,
     });
     await Member.upsertGameJournalPreference(ownerId, Number(gameIdRaw), true, isPublic);
-    const components = await this.buildJournalComponents(
+    const payload = await this.buildJournalComponents(
       ownerId,
       interaction.user.id,
       Number(gameIdRaw),
       Number(pageRaw),
     );
-    await safeReply(interaction, { components, flags: buildComponentsV2Flags(true) });
+    await safeReply(interaction, {
+      components: payload.components,
+      files: payload.files,
+      flags: buildComponentsV2Flags(true),
+    });
   }
 
   @ModalComponent({ id: /^nowplaying-journal-edit-modal:\d+:\d+:\d+:\d+$/ })
@@ -3384,13 +3432,17 @@ export class NowPlayingCommand {
       body,
       isPublic,
     });
-    const components = await this.buildJournalComponents(
+    const payload = await this.buildJournalComponents(
       ownerId,
       interaction.user.id,
       Number(gameIdRaw),
       Number(pageRaw),
     );
-    await safeReply(interaction, { components, flags: buildComponentsV2Flags(true) });
+    await safeReply(interaction, {
+      components: payload.components,
+      files: payload.files,
+      flags: buildComponentsV2Flags(true),
+    });
   }
 
   @ButtonComponent({ id: /^nowplaying-list-edit:\d+$/ })
@@ -5178,9 +5230,13 @@ export class NowPlayingCommand {
     viewerId: string,
     gameId: number,
     page: number,
-  ): Promise<Array<ContainerBuilder | ActionRowBuilder<ButtonBuilder>>> {
+  ): Promise<{
+    components: Array<ContainerBuilder | ActionRowBuilder<ButtonBuilder>>;
+    files: AttachmentBuilder[];
+  }> {
     const perPage = 5;
     const game = await Game.getGameById(gameId);
+    const files: AttachmentBuilder[] = [];
     const pref = await Member.getGameJournalPreference(ownerId, gameId);
     const isEnabled = pref?.isEnabled === true;
     const isOwnerView = ownerId === viewerId;
@@ -5195,9 +5251,24 @@ export class NowPlayingCommand {
     const totalPages = Math.max(1, Math.ceil(total / perPage));
     const safePage = Math.min(Math.max(page, 1), totalPages);
 
-    const container = new ContainerBuilder().addTextDisplayComponents(
+    const container = new ContainerBuilder();
+    if (game?.imageData) {
+      const filename = `game_journal_${gameId}.png`;
+      files.push(new AttachmentBuilder(game.imageData, { name: filename }));
+      container.addMediaGalleryComponents(
+        new MediaGalleryBuilder().addItems(
+          new MediaGalleryItemBuilder()
+            .setURL(`attachment://${filename}`)
+            .setDescription(`${game.title ?? `Game #${gameId}`} cover art`),
+        ),
+      );
+      container.addSeparatorComponents(
+        new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small).setDivider(false),
+      );
+    }
+    container.addTextDisplayComponents(
       new TextDisplayBuilder().setContent(
-        `## Journal: ${game?.title ?? `Game #${gameId}`}`,
+        `## Game Journal: ${game?.title ?? `Game #${gameId}`}`,
       ),
       new TextDisplayBuilder().setContent(`Total entries visible: **${total}** | Page ${safePage}/${totalPages}`),
     );
@@ -5260,7 +5331,7 @@ export class NowPlayingCommand {
         .setStyle(ButtonStyle.Secondary)
         .setDisabled(safePage >= totalPages),
     );
-    return [container, row];
+    return { components: [container, row], files };
   }
 
 
