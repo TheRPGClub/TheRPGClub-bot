@@ -2598,29 +2598,7 @@ export class NowPlayingCommand {
     }
 
     await this.refreshNowPlayingListFromContext(interaction, ownerId).catch(() => {});
-    if (interaction.guildId == null) {
-      await this.returnToNowPlayingEditMenu(interaction, ownerId);
-      return;
-    }
-
-    const list = await Member.getNowPlaying(ownerId);
-    const payload = await this.buildNowPlayingListPayload(
-      interaction.user,
-      list,
-      interaction.guildId,
-      "Your Now Playing List",
-    );
-    const components = this.withNowPlayingActions(
-      true,
-      ownerId,
-      payload.components,
-      false,
-    );
-    await safeReply(interaction, {
-      components,
-      files: payload.files,
-      flags: responseFlags,
-    });
+    await this.returnToNowPlayingEditMenu(interaction, ownerId);
   }
 
   @ButtonComponent({ id: /^nowplaying-sort-reset:\d+$/ })
