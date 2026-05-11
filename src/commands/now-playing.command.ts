@@ -5194,7 +5194,7 @@ export class NowPlayingCommand {
         section.setButtonAccessory(
           new V2ButtonBuilder()
             .setCustomId(`${NOW_PLAYING_JOURNAL_OPEN_PREFIX}:${ownerId}:${entry.gameId}:1`)
-            .setLabel("Journal")
+            .setLabel("Game Journal")
             .setStyle(ButtonStyle.Secondary),
         );
         container.addSectionComponents(section);
