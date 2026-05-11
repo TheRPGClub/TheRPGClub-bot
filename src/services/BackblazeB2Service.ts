@@ -47,6 +47,10 @@ type BackblazeB2ListFileNamesResponse = {
   }>;
 };
 
+type BackblazeB2DownloadAuthorizationResponse = {
+  authorizationToken: string;
+};
+
 type BackblazeStoredFileInfo = {
   fileId: string;
   fileName: string;
@@ -144,6 +148,10 @@ export function getBackblazeBucketConfig(): { bucketId: string; bucketName: stri
   };
 }
 
+function isBackblazeBucketPublic(): boolean {
+  return (process.env.BACKBLAZE_B2_BUCKET_PUBLIC ?? "").trim().toLowerCase() === "true";
+}
+
 export function sha256Hex(value: Buffer | string): string {
   return crypto.createHash("sha256").update(value).digest("hex");
 }
@@ -235,9 +243,16 @@ export async function getOrReplaceBackblazeImage(
 
   const existing = await getLatestStoredFileInfo(bucketId, fileName);
   if (existing?.sourceHash === sourceHash) {
+    const url = await buildBackblazeDownloadUrl(
+      auth.downloadUrl,
+      bucketId,
+      bucketName,
+      fileName,
+      sourceHash,
+    );
     return {
       fileName,
-      url: `${auth.downloadUrl}/file/${bucketName}/${fileName}`,
+      url,
       changed: false,
     };
   }
@@ -250,9 +265,45 @@ export async function getOrReplaceBackblazeImage(
     data: imageBuffer,
     sourceHash,
   });
+  const url = await buildBackblazeDownloadUrl(
+    auth.downloadUrl,
+    bucketId,
+    bucketName,
+    fileName,
+    sourceHash,
+  );
   return {
     fileName,
-    url: `${auth.downloadUrl}/file/${bucketName}/${fileName}`,
+    url,
     changed: true,
   };
+}
+
+async function buildBackblazeDownloadUrl(
+  downloadUrl: string,
+  bucketId: string,
+  bucketName: string,
+  fileName: string,
+  sourceHash: string,
+): Promise<string> {
+  const baseUrl = `${downloadUrl}/file/${bucketName}/${fileName}`;
+  if (isBackblazeBucketPublic()) {
+    return `${baseUrl}?v=${encodeURIComponent(sourceHash)}`;
+  }
+
+  const auth = await authorizeBackblazeB2();
+  const tokenResponse = await axios.post<BackblazeB2DownloadAuthorizationResponse>(
+    `${auth.apiUrl}/b2api/v2/b2_get_download_authorization`,
+    {
+      bucketId,
+      fileNamePrefix: fileName,
+      validDurationInSeconds: 60 * 60,
+    },
+    {
+      headers: {
+        Authorization: auth.authorizationToken,
+      },
+    },
+  );
+  return `${baseUrl}?Authorization=${encodeURIComponent(tokenResponse.data.authorizationToken)}&v=${encodeURIComponent(sourceHash)}`;
 }
