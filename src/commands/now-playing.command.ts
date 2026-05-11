@@ -64,6 +64,11 @@ import {
 } from "../functions/CompletionHelpers.js";
 import { formatPlatformDisplayName } from "../functions/PlatformDisplay.js";
 import {
+  autocompleteGameCompletionPlatform,
+  autocompleteGameCompletionTitle,
+  resolveGameCompletionPlatformId,
+} from "./game-completion/completion-autocomplete.utils.js";
+import {
   COMPLETION_TYPES,
   type CompletionType,
   formatDiscordTimestamp,
@@ -71,6 +76,7 @@ import {
   formatTableDate,
   parseCompletionDateInput,
 } from "../commands/profile.command.js";
+import { parseTitleWithYear } from "../functions/GameTitleAutocompleteUtils.js";
 import { COMPONENTS_V2_FLAG } from "../config/flags.js";
 import { STANDARD_PLATFORM_IDS } from "../config/standardPlatforms.js";
 import { composeVoteImage } from "../services/voteImageComposer.js";
@@ -395,6 +401,120 @@ function buildEditNoteModal(
 @SlashGroup({ description: "Show now playing data", name: "now-playing" })
 @SlashGroup("now-playing")
 export class NowPlayingCommand {
+  @Slash({ description: "Add a game to your now playing list", name: "add" })
+  async addNowPlayingSlash(
+    @SlashOption({
+      autocomplete: autocompleteGameCompletionTitle,
+      description: "Game title (autocomplete from GameDB)",
+      name: "title",
+      required: true,
+      type: ApplicationCommandOptionType.String,
+    })
+    rawTitle: string,
+    @SlashOption({
+      autocomplete: autocompleteGameCompletionPlatform,
+      description: "Platform (autocomplete from all GameDB platforms)",
+      name: "platform",
+      required: true,
+      type: ApplicationCommandOptionType.String,
+    })
+    rawPlatform: string,
+    @SlashOption({
+      description: "Optional note",
+      name: "note",
+      required: false,
+      type: ApplicationCommandOptionType.String,
+      maxLength: MAX_NOW_PLAYING_NOTE_LEN,
+    })
+    rawNote: string | undefined,
+    @SlashOption({
+      description: "Show only to you",
+      name: "private",
+      required: false,
+      type: ApplicationCommandOptionType.Boolean,
+    })
+    showPrivate: boolean | undefined,
+    interaction: CommandInteraction,
+  ): Promise<void> {
+    const title = sanitizeUserInput(rawTitle, { preserveNewlines: false }).trim();
+    const noteInput = sanitizeUserInput(rawNote ?? "", { preserveNewlines: true }).trim();
+    const note = noteInput ? noteInput : null;
+    const ephemeral = showPrivate === true;
+    await safeDeferReply(interaction, { flags: buildComponentsV2Flags(ephemeral) });
+
+    if (!title) {
+      const container = new ContainerBuilder().addTextDisplayComponents(
+        new TextDisplayBuilder().setContent("Please provide a game title from autocomplete."),
+      );
+      await safeReply(interaction, {
+        components: [container],
+        flags: buildComponentsV2Flags(ephemeral),
+      });
+      return;
+    }
+
+    const game = await this.resolveNowPlayingGameByTitle(title);
+    if (!game) {
+      const container = new ContainerBuilder().addTextDisplayComponents(
+        new TextDisplayBuilder().setContent(
+          `I could not find a unique GameDB match for "${title}". Please choose from autocomplete.`,
+        ),
+      );
+      await safeReply(interaction, {
+        components: [container],
+        flags: buildComponentsV2Flags(ephemeral),
+      });
+      return;
+    }
+
+    const platformId = await resolveGameCompletionPlatformId(rawPlatform);
+    if (!platformId) {
+      const container = new ContainerBuilder().addTextDisplayComponents(
+        new TextDisplayBuilder().setContent("Please choose a platform from autocomplete."),
+      );
+      await safeReply(interaction, {
+        components: [container],
+        flags: buildComponentsV2Flags(ephemeral),
+      });
+      return;
+    }
+
+    const platform = await Game.getPlatformById(platformId);
+    if (!platform) {
+      const container = new ContainerBuilder().addTextDisplayComponents(
+        new TextDisplayBuilder().setContent("Selected platform was not found."),
+      );
+      await safeReply(interaction, {
+        components: [container],
+        flags: buildComponentsV2Flags(ephemeral),
+      });
+      return;
+    }
+
+    try {
+      await Member.addNowPlaying(interaction.user.id, game.id, platformId, note);
+    } catch (err: any) {
+      const msg = err?.message ?? String(err);
+      const container = new ContainerBuilder().addTextDisplayComponents(
+        new TextDisplayBuilder().setContent(`Could not add to Now Playing: ${msg}`),
+      );
+      await safeReply(interaction, {
+        components: [container],
+        flags: buildComponentsV2Flags(ephemeral),
+      });
+      return;
+    }
+
+    const replacedCurrentChannelMessage = !ephemeral && interaction.channelId
+      ? await this.replaceNowPlayingMessageInCurrentChannel(interaction, interaction.user.id)
+      : false;
+    await this.refreshNowPlayingListFromContext(interaction, interaction.user.id).catch(() => {});
+    if (replacedCurrentChannelMessage) {
+      return;
+    }
+    await this.showSingle(interaction, interaction.user, ephemeral);
+  }
+
   @Slash({ description: "Show now playing data", name: "list" })
   async nowPlaying(
     @SlashOption({
@@ -678,6 +798,40 @@ export class NowPlayingCommand {
             .setMaxLength(MAX_NOW_PLAYING_NOTE_LEN),
         ),
       );
+  }
+
+  private async resolveNowPlayingGameByTitle(searchTerm: string): Promise<IGame | null> {
+    const parsed = parseTitleWithYear(searchTerm);
+    const normalizedSearchTerm = parsed.title.trim();
+    if (!normalizedSearchTerm) {
+      return null;
+    }
+
+    const existing = await Game.searchGames(normalizedSearchTerm);
+    const exact = existing.find((game) => {
+      if (game.title.toLowerCase() !== normalizedSearchTerm.toLowerCase()) {
+        return false;
+      }
+      if (parsed.year == null) {
+        return true;
+      }
+
+      const releaseDate = game.initialReleaseDate instanceof Date
+        ? game.initialReleaseDate
+        : game.initialReleaseDate
+          ? new Date(game.initialReleaseDate)
+          : null;
+      return releaseDate instanceof Date && !Number.isNaN(releaseDate.getTime())
+        ? releaseDate.getFullYear() === parsed.year
+        : false;
+    });
+    if (exact) {
+      return exact;
+    }
+    if (existing.length === 1) {
+      return existing[0] ?? null;
+    }
+    return null;
   }
 
   private buildNowPlayingCompletionConfigContainer(
@@ -2318,6 +2472,8 @@ export class NowPlayingCommand {
     }
 
     await safeDeferUpdate(interaction);
+    const isEphemeral = interaction.message.flags?.has(MessageFlags.Ephemeral) ?? false;
+    const responseFlags = buildComponentsV2Flags(isEphemeral);
     try {
       const entries = getDisplayNowPlayingEntries(
         await Member.getNowPlaying(ownerId),
@@ -2340,7 +2496,10 @@ export class NowPlayingCommand {
           interaction.guildId,
           components,
         );
-        await safeUpdate(interaction, this.buildComponentPayload(pmComponents as any, files));
+        await safeReply(interaction, {
+          ...this.buildComponentPayload(pmComponents as any, files),
+          flags: responseFlags,
+        });
         return;
       }
 
@@ -2352,7 +2511,10 @@ export class NowPlayingCommand {
         const container = new ContainerBuilder().addTextDisplayComponents(
           new TextDisplayBuilder().setContent("Could not update the sort order."),
         );
-        await safeUpdate(interaction, { components: [container] });
+        await safeReply(interaction, {
+          components: [container],
+          flags: responseFlags,
+        });
         return;
       }
       await this.refreshNowPlayingListFromContext(interaction, ownerId).catch(() => {});
@@ -2375,12 +2537,18 @@ export class NowPlayingCommand {
         interaction.guildId,
         components,
       );
-      await safeUpdate(interaction, this.buildComponentPayload(pmComponents as any, files));
+      await safeReply(interaction, {
+        ...this.buildComponentPayload(pmComponents as any, files),
+        flags: responseFlags,
+      });
     } catch {
       const container = new ContainerBuilder().addTextDisplayComponents(
         new TextDisplayBuilder().setContent("Could not update the sort order right now."),
       );
-      await safeUpdate(interaction, { components: [container] });
+      await safeReply(interaction, {
+        components: [container],
+        flags: responseFlags,
+      });
     }
   }
 
@@ -4063,6 +4231,48 @@ export class NowPlayingCommand {
     }
 
     return updatedAny;
+  }
+
+  private async replaceNowPlayingMessageInCurrentChannel(
+    interaction: CommandInteraction,
+    userId: string,
+  ): Promise<boolean> {
+    const channelId = interaction.channelId;
+    if (!channelId) {
+      return false;
+    }
+
+    const now = Date.now();
+    for (const [key, context] of nowPlayingListContexts.entries()) {
+      if (now - context.createdAt > NOW_PLAYING_CONTEXT_TTL_MS) {
+        nowPlayingListContexts.delete(key);
+        continue;
+      }
+      if (context.channelId !== channelId) {
+        continue;
+      }
+      if (context.view !== "single" || context.ownerUserId !== userId) {
+        continue;
+      }
+
+      const channel = await interaction.client.channels.fetch(context.channelId).catch(() => null);
+      if (!channel?.isTextBased()) {
+        nowPlayingListContexts.delete(key);
+        continue;
+      }
+      const message = await channel.messages.fetch(context.messageId).catch(() => null);
+      if (!message) {
+        nowPlayingListContexts.delete(key);
+        continue;
+      }
+
+      await message.delete().catch(() => null);
+      nowPlayingListContexts.delete(key);
+      await this.showSingle(interaction, interaction.user, false);
+      return true;
+    }
+
+    return false;
   }
 
   private getNowPlayingShowNotesState(message: Message, ownerId: string): boolean {
