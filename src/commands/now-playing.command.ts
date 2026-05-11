@@ -2549,6 +2549,9 @@ export class NowPlayingCommand {
       });
       return;
     }
+    await safeDeferUpdate(interaction);
+    const isEphemeral = interaction.message.flags?.has(MessageFlags.Ephemeral) ?? false;
+    const responseFlags = buildComponentsV2Flags(isEphemeral);
 
     const entries = getDisplayNowPlayingEntries(await Member.getNowPlaying(ownerId)).slice(0, 10);
     const parsed = parseNowPlayingSortStateToken(stateToken, entries.length);
@@ -2557,7 +2560,7 @@ export class NowPlayingCommand {
         new TextDisplayBuilder().setContent("This sort form has expired. Open Sort again."),
       );
       const pmComponents = await this.withPmNowPlayingList(ownerId, interaction.guildId, [container]);
-      await interaction.update({ components: pmComponents });
+      await safeReply(interaction, { components: pmComponents, flags: responseFlags });
       return;
     }
     if (parsed.some((value) => value < 0)) {
@@ -2568,7 +2571,7 @@ export class NowPlayingCommand {
         "Assign a title to every visible position before saving.",
       );
       const pmComponents = await this.withPmNowPlayingList(ownerId, interaction.guildId, components);
-      await interaction.update({ components: pmComponents });
+      await safeReply(interaction, { components: pmComponents, flags: responseFlags });
       return;
     }
     if (new Set(parsed).size !== parsed.length) {
@@ -2579,7 +2582,7 @@ export class NowPlayingCommand {
         "Each title can only be used once. Remove duplicate assignments and try again.",
       );
       const pmComponents = await this.withPmNowPlayingList(ownerId, interaction.guildId, components);
-      await interaction.update({ components: pmComponents });
+      await safeReply(interaction, { components: pmComponents, flags: responseFlags });
       return;
     }
 
@@ -2590,7 +2593,7 @@ export class NowPlayingCommand {
         new TextDisplayBuilder().setContent("Could not update the sort order."),
       );
       const pmComponents = await this.withPmNowPlayingList(ownerId, interaction.guildId, [container]);
-      await interaction.update({ components: pmComponents });
+      await safeReply(interaction, { components: pmComponents, flags: responseFlags });
       return;
     }
 
@@ -2613,9 +2616,10 @@ export class NowPlayingCommand {
       payload.components,
       false,
     );
-    await interaction.update({
+    await safeReply(interaction, {
       components,
       files: payload.files,
+      flags: responseFlags,
     });
   }
 
@@ -2629,11 +2633,14 @@ export class NowPlayingCommand {
       });
       return;
     }
+    await safeDeferUpdate(interaction);
+    const isEphemeral = interaction.message.flags?.has(MessageFlags.Ephemeral) ?? false;
+    const responseFlags = buildComponentsV2Flags(isEphemeral);
     const entries = getDisplayNowPlayingEntries(await Member.getNowPlaying(ownerId)).slice(0, 10);
     const stateToken = buildNowPlayingSortStateToken(entries.length);
     const components = this.buildNowPlayingSortComponents(entries, ownerId, stateToken);
     const pmComponents = await this.withPmNowPlayingList(ownerId, interaction.guildId, components);
-    await interaction.update({ components: pmComponents });
+    await safeReply(interaction, { components: pmComponents, flags: responseFlags });
   }
 
   @ModalComponent({ id: /^nowplaying-note-modal:\d+(?::\d+)?$/ })

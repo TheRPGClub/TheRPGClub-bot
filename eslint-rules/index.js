@@ -989,6 +989,118 @@ export default {
         };
       },
     },
+    "interactive-handler-requires-safe-interaction": {
+      meta: {
+        type: "problem",
+        docs: {
+          description:
+            "Require interactive handlers to use safe interaction helpers and avoid direct interaction response methods.",
+        },
+        schema: [],
+        messages: {
+          missingSafeMethod:
+            "Interactive handler '{{methodName}}' must call at least one safe interaction helper (safeReply, safeUpdate, safeDeferUpdate, safeDeferReply, or safeFollowUp).",
+          noDirectMethod:
+            "Do not call {{param}}.{{method}} directly in interactive handlers. Use safe interaction helpers instead.",
+        },
+      },
+      create(context) {
+        const isInteractiveHandler = (methodNode) => {
+          const decorators = methodNode?.decorators ?? [];
+          for (const decorator of decorators) {
+            const decoratorName = getDecoratorIdentifierName(decorator.expression);
+            if (
+              decoratorName === "ButtonComponent" ||
+              decoratorName === "SelectMenuComponent" ||
+              decoratorName === "ModalComponent"
+            ) {
+              return true;
+            }
+          }
+          return false;
+        };
+
+        const collectCalls = (node, calls) => {
+          if (!node || typeof node.type !== "string") return;
+          if (node.type === "CallExpression") {
+            calls.push(node);
+          }
+          for (const key of Object.keys(node)) {
+            const value = node[key];
+            if (!value) continue;
+            if (Array.isArray(value)) {
+              for (const item of value) {
+                if (item && typeof item.type === "string") {
+                  collectCalls(item, calls);
+                }
+              }
+              continue;
+            }
+            if (value && typeof value.type === "string") {
+              collectCalls(value, calls);
+            }
+          }
+        };
+
+        return {
+          MethodDefinition(node) {
+            if (!isInteractiveHandler(node)) return;
+            const methodValue = node.value;
+            if (!methodValue || methodValue.type !== "FunctionExpression") return;
+            const interactionParam = methodValue.params?.[0];
+            if (!interactionParam || interactionParam.type !== "Identifier") return;
+            if (!methodValue.body || methodValue.body.type !== "BlockStatement") return;
+
+            const calls = [];
+            collectCalls(methodValue.body, calls);
+
+            let hasSafeMethod = false;
+            const directMethodNodes = [];
+
+            for (const call of calls) {
+              if (
+                call.callee.type === "Identifier" &&
+                INTERACTION_RESPONSE_HELPERS.has(call.callee.name) &&
+                call.arguments?.[0]?.type === "Identifier" &&
+                call.arguments[0].name === interactionParam.name
+              ) {
+                hasSafeMethod = true;
+                continue;
+              }
+
+              if (
+                call.callee.type === "MemberExpression" &&
+                call.callee.object.type === "Identifier" &&
+                call.callee.object.name === interactionParam.name &&
+                call.callee.property.type === "Identifier" &&
+                DIRECT_INTERACTION_METHODS.has(call.callee.property.name)
+              ) {
+                directMethodNodes.push(call.callee.property);
+              }
+            }
+
+            for (const methodNode of directMethodNodes) {
+              context.report({
+                node: methodNode,
+                messageId: "noDirectMethod",
+                data: {
+                  param: interactionParam.name,
+                  method: methodNode.name,
+                },
+              });
+            }
+
+            if (!hasSafeMethod) {
+              context.report({
+                node: node.key,
+                messageId: "missingSafeMethod",
+                data: { methodName: node.key?.name ?? "handler" },
+              });
+            }
+          },
+        };
+      },
+    },
     "no-djs-button-in-v2-accessory": {
       meta: {
         type: "problem",
