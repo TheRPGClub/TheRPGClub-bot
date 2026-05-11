@@ -3232,6 +3232,9 @@ export class NowPlayingCommand {
         ),
     );
     await interaction.showModal(modal);
+    if (interaction.guildId) {
+      await interaction.message.delete().catch(() => null);
+    }
   }
 
   @ButtonComponent({ id: /^nowplaying-journal-edit:\d+:\d+:\d+$/ })
