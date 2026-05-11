@@ -894,6 +894,55 @@ export default {
         };
       },
     },
+    "no-direct-interaction-response-methods": {
+      meta: {
+        type: "problem",
+        docs: {
+          description:
+            "Disallow direct Discord interaction response methods outside InteractionUtils.",
+        },
+        schema: [],
+        messages: {
+          useSafeMethod:
+            "Do not call direct interaction response methods ({{method}}). Use safe interaction helpers from InteractionUtils.",
+        },
+      },
+      create(context) {
+        const fileName = normalizePathText(context.getFilename?.() ?? "");
+        if (fileName.endsWith("/src/functions/interactionutils.ts")) {
+          return {};
+        }
+
+        return {
+          CallExpression(node) {
+            const callee = node.callee;
+            if (
+              callee.type !== "MemberExpression" ||
+              callee.property.type !== "Identifier"
+            ) {
+              return;
+            }
+            const methodName = callee.property.name;
+            if (!DIRECT_INTERACTION_METHODS.has(methodName)) {
+              return;
+            }
+            if (callee.object.type !== "Identifier") {
+              return;
+            }
+            const objectName = callee.object.name.toLowerCase();
+            if (!objectName.includes("interaction")) {
+              return;
+            }
+
+            context.report({
+              node: callee.property,
+              messageId: "useSafeMethod",
+              data: { method: methodName },
+            });
+          },
+        };
+      },
+    },
     "component-update-requires-safe-defer": {
       meta: {
         type: "problem",

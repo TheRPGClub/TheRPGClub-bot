@@ -78,6 +78,7 @@ export default [
       "local/no-djs-button-in-v2-accessory": "error",
       "local/no-discordjs-modalbuilder-for-new-modal-components": "error",
       "local/prefer-safe-interaction-methods": "warn",
+      "local/no-direct-interaction-response-methods": "error",
       "local/no-deprecated-interaction-options": "error",
       "local/no-silent-interaction-update-catch": "error",
       "local/component-update-requires-safe-defer": "warn",
