@@ -3894,7 +3894,10 @@ export class NowPlayingCommand {
       });
       return;
     }
-    await safeDeferUpdate(interaction);
+    const loadingContainer = new ContainerBuilder().addTextDisplayComponents(
+      new TextDisplayBuilder().setContent("Updating your Now Playing remove list..."),
+    );
+    await safeUpdate(interaction, { components: [loadingContainer] });
 
     try {
       const removed = await Member.removeNowPlaying(ownerId, gameId);
@@ -3904,17 +3907,46 @@ export class NowPlayingCommand {
             "Failed to remove that game (it may have been removed already).",
           ),
         );
-        await safeUpdate(interaction, { components: [container] });
+        await interaction.editReply({ components: [container] }).catch(() => {});
         return;
       }
       await this.refreshNowPlayingListFromContext(interaction, ownerId).catch(() => {});
-      await this.promptRemoveNowPlaying(interaction, "update");
+      const entries = getDisplayNowPlayingEntries(await Member.getNowPlaying(ownerId));
+      if (!entries.length) {
+        const container = new ContainerBuilder().addTextDisplayComponents(
+          new TextDisplayBuilder().setContent("Your Now Playing list is empty."),
+        );
+        const pmComponents = await this.withPmNowPlayingList(
+          ownerId,
+          interaction.guildId,
+          [container],
+        );
+        await interaction.editReply({ components: pmComponents }).catch(() => {});
+        return;
+      }
+      const includeImages = interaction.guildId != null;
+      const { files, thumbnailsByGameId } = await this.buildNowPlayingAttachments(
+        entries,
+        NOW_PLAYING_GALLERY_MAX,
+        includeImages,
+      );
+      const components = this.buildNowPlayingRemoveComponents(
+        entries,
+        ownerId,
+        thumbnailsByGameId,
+      );
+      const pmComponents = await this.withPmNowPlayingList(
+        ownerId,
+        interaction.guildId,
+        components,
+      );
+      await interaction.editReply(this.buildComponentPayload(pmComponents as any, files)).catch(() => {});
     } catch (err: any) {
       const msg = err?.message ?? String(err);
       const container = new ContainerBuilder().addTextDisplayComponents(
         new TextDisplayBuilder().setContent(`Could not remove from Now Playing: ${msg}`),
       );
-      await safeUpdate(interaction, { components: [container] });
+      await interaction.editReply({ components: [container] }).catch(() => {});
     }
   }
 
