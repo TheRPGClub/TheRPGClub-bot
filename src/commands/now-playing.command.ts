@@ -4868,18 +4868,20 @@ export class NowPlayingCommand {
         lines.push(quotedNote);
       }
       const content = this.trimTextDisplayContent(lines.join("\n"));
-      const section = new SectionBuilder().addTextDisplayComponents(
-        new TextDisplayBuilder().setContent(content),
-      );
       if (entry.journalEnabled) {
+        const section = new SectionBuilder().addTextDisplayComponents(
+          new TextDisplayBuilder().setContent(content),
+        );
         section.setButtonAccessory(
           new V2ButtonBuilder()
             .setCustomId(`${NOW_PLAYING_JOURNAL_OPEN_PREFIX}:${ownerId}:${entry.gameId}:1`)
             .setLabel("Journal")
             .setStyle(ButtonStyle.Secondary),
         );
+        container.addSectionComponents(section);
+      } else {
+        container.addTextDisplayComponents(new TextDisplayBuilder().setContent(content));
       }
-      container.addSectionComponents(section);
     });
     return [container];
   }
