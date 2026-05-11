@@ -1941,6 +1941,8 @@ export class NowPlayingCommand {
       await safeDeferReply(interaction, { flags: buildComponentsV2Flags(true) });
     }
     const userId = interaction.user.id;
+    const useDeferredEditPath = mode === "update" &&
+      Boolean((interaction as any).__rpgDeferred ?? (interaction as any).deferred);
     try {
       const entries = getDisplayNowPlayingEntries(await Member.getNowPlaying(userId));
       if (!entries.length) {
@@ -1952,8 +1954,13 @@ export class NowPlayingCommand {
           interaction.guildId,
           [container],
         );
-        if (mode === "update") {
+        if (mode === "update" && !useDeferredEditPath) {
           await safeUpdate(interaction, { components: pmComponents });
+        } else if (mode === "update") {
+          await safeReply(interaction, {
+            components: pmComponents,
+            flags: buildComponentsV2Flags(true),
+          });
         } else {
           await safeReply(interaction, {
             components: pmComponents,
@@ -1979,8 +1986,13 @@ export class NowPlayingCommand {
         interaction.guildId,
         components,
       );
-      if (mode === "update") {
+      if (mode === "update" && !useDeferredEditPath) {
         await safeUpdate(interaction, this.buildComponentPayload(pmComponents as any, files));
+      } else if (mode === "update") {
+        await safeReply(interaction, {
+          ...this.buildComponentPayload(pmComponents as any, files),
+          flags: buildComponentsV2Flags(true),
+        });
       } else {
         await safeReply(interaction, {
           ...this.buildComponentPayload(pmComponents as any, files),
@@ -1997,8 +2009,13 @@ export class NowPlayingCommand {
         interaction.guildId,
         [container],
       );
-      if (mode === "update") {
+      if (mode === "update" && !useDeferredEditPath) {
         await safeUpdate(interaction, { components: pmComponents });
+      } else if (mode === "update") {
+        await safeReply(interaction, {
+          components: pmComponents,
+          flags: buildComponentsV2Flags(true),
+        });
       } else {
         await safeReply(interaction, {
           components: pmComponents,
