@@ -32,6 +32,11 @@ import {
 } from "discordx";
 import {
   ContainerBuilder,
+  ModalBuilder as ComponentsModalBuilder,
+  ActionRowBuilder as ComponentsActionRowBuilder,
+  TextInputBuilder as ComponentsTextInputBuilder,
+  LabelBuilder,
+  RadioGroupBuilder,
   MediaGalleryBuilder,
   MediaGalleryItemBuilder,
   ButtonBuilder as V2ButtonBuilder,
@@ -40,7 +45,7 @@ import {
   TextDisplayBuilder,
   ThumbnailBuilder,
 } from "@discordjs/builders";
-import { SeparatorSpacingSize } from "discord-api-types/v10";
+import { SeparatorSpacingSize, TextInputStyle as ApiTextInputStyle } from "discord-api-types/v10";
 import crypto from "node:crypto";
 import Member, { type IMemberNowPlayingEntry } from "../classes/Member.js";
 import {
@@ -190,6 +195,33 @@ const NOW_PLAYING_CONTEXT_TTL_MS = 3 * 60 * 60 * 1000;
 type NowPlayingMessageComponents = Array<
   ContainerBuilder | MediaGalleryBuilder | ActionRowBuilder<ButtonBuilder>
 >;
+
+function extractJournalPrivacyFromInteraction(interaction: ModalSubmitInteraction): boolean {
+  const components = (interaction.components ?? []) as Array<{
+    components?: Array<{ customId?: string; value?: unknown; values?: unknown }>;
+    component?: { customId?: string; value?: unknown; values?: unknown };
+  }>;
+  const fields: Array<{ customId?: string; value?: unknown; values?: unknown }> = [];
+  for (const topLevel of components) {
+    if (Array.isArray(topLevel.components)) {
+      fields.push(...topLevel.components);
+    } else if (topLevel.component) {
+      fields.push(topLevel.component);
+    }
+  }
+  for (const field of fields) {
+    if (field.customId !== NOW_PLAYING_JOURNAL_PRIVACY_INPUT_ID) {
+      continue;
+    }
+    if (typeof field.value === "string") {
+      return field.value.toLowerCase() === "public";
+    }
+    if (Array.isArray(field.values) && typeof field.values[0] === "string") {
+      return field.values[0].toLowerCase() === "public";
+    }
+  }
+  return false;
+}
 type NowPlayingListComponents = ContainerBuilder[];
 
 function buildComponentsV2Flags(isEphemeral: boolean): number {
@@ -3117,35 +3149,40 @@ export class NowPlayingCommand {
       await safeReply(interaction, { content: "Only the owner can add journal entries." });
       return;
     }
-    const modal = new ModalBuilder()
+    const modal = new ComponentsModalBuilder()
       .setCustomId(`${NOW_PLAYING_JOURNAL_MODAL_ID}:${ownerId}:${gameIdRaw}:${pageRaw}`)
       .setTitle("Add Journal Entry");
-    modal.addComponents(
-      new ActionRowBuilder<TextInputBuilder>().addComponents(
-        new TextInputBuilder()
+    modal.addActionRowComponents(
+      new ComponentsActionRowBuilder<ComponentsTextInputBuilder>().addComponents(
+        new ComponentsTextInputBuilder()
           .setCustomId(NOW_PLAYING_JOURNAL_TITLE_INPUT_ID)
           .setLabel("Title (optional)")
-          .setStyle(TextInputStyle.Short)
+          .setStyle(ApiTextInputStyle.Short)
           .setRequired(false)
           .setMaxLength(120),
       ),
-      new ActionRowBuilder<TextInputBuilder>().addComponents(
-        new TextInputBuilder()
+      new ComponentsActionRowBuilder<ComponentsTextInputBuilder>().addComponents(
+        new ComponentsTextInputBuilder()
           .setCustomId(NOW_PLAYING_JOURNAL_BODY_INPUT_ID)
           .setLabel("Entry")
-          .setStyle(TextInputStyle.Paragraph)
+          .setStyle(ApiTextInputStyle.Paragraph)
           .setRequired(true)
           .setMaxLength(2000),
       ),
-      new ActionRowBuilder<TextInputBuilder>().addComponents(
-        new TextInputBuilder()
-          .setCustomId(NOW_PLAYING_JOURNAL_PRIVACY_INPUT_ID)
-          .setLabel("Privacy: public or private")
-          .setStyle(TextInputStyle.Short)
-          .setRequired(true)
-          .setValue("private")
-          .setMaxLength(7),
-      ),
+    );
+    modal.addLabelComponents(
+      new LabelBuilder()
+        .setLabel("Privacy")
+        .setDescription("Choose who can view this entry")
+        .setRadioGroupComponent(
+          new RadioGroupBuilder()
+            .setCustomId(NOW_PLAYING_JOURNAL_PRIVACY_INPUT_ID)
+            .setRequired(true)
+            .setOptions(
+              { label: "Private", value: "private", description: "Only you can view it" },
+              { label: "Public", value: "public", description: "Visible to other members" },
+            ),
+        ),
     );
     await interaction.showModal(modal);
   }
@@ -3172,11 +3209,7 @@ export class NowPlayingCommand {
       interaction.fields.getTextInputValue(NOW_PLAYING_JOURNAL_BODY_INPUT_ID),
       { preserveNewlines: true, maxLength: 2000 },
     );
-    const privacyRaw = sanitizeUserInput(
-      interaction.fields.getTextInputValue(NOW_PLAYING_JOURNAL_PRIVACY_INPUT_ID) ?? "private",
-      { preserveNewlines: false, maxLength: 7 },
-    ).toLowerCase();
-    const isPublic = privacyRaw === "public";
+    const isPublic = extractJournalPrivacyFromInteraction(interaction);
     await Member.addGameJournalEntry({
       userId: ownerId,
       gameId: Number(gameIdRaw),
@@ -4405,6 +4438,21 @@ export class NowPlayingCommand {
       return;
     }
     await Member.upsertGameJournalPreference(ownerId, gameId, true, false);
+    const existingVisibleCount = await Member.countGameJournalEntries(ownerId, gameId, ownerId);
+    if (existingVisibleCount === 0) {
+      const nowPlayingEntries = await Member.getNowPlaying(ownerId);
+      const selectedEntry = nowPlayingEntries.find((entry) => entry.gameId === gameId);
+      const seedNote = selectedEntry?.note?.trim();
+      if (seedNote) {
+        await Member.addGameJournalEntry({
+          userId: ownerId,
+          gameId,
+          title: "Imported from Now Playing Note",
+          body: seedNote,
+          isPublic: false,
+        });
+      }
+    }
     const menuComponents = await this.buildNowPlayingEditInitialComponents(ownerId, interaction.guildId);
     const isEphemeral = interaction.message.flags?.has(MessageFlags.Ephemeral) ?? true;
     await safeReply(interaction, {
@@ -4903,9 +4951,6 @@ export class NowPlayingCommand {
         } else {
           lines.push(`-# *${addedLabel}.*`);
         }
-      }
-      if (entry.journalEnabled && this.canUseJournalFeature(ownerId)) {
-        lines.push("-# Journal mode enabled for this game.");
       }
       if (showNotes && entry.note && (!entry.journalEnabled || !this.canUseJournalFeature(ownerId))) {
         const quotedNote = entry.note
