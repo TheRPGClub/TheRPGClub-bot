@@ -545,6 +545,15 @@ export class NowPlayingCommand {
     const ephemeral = showPrivate === true;
     await safeDeferReply(interaction, { flags: buildComponentsV2Flags(ephemeral) });
 
+    if (!ephemeral) {
+      await this.deleteEligibleNowPlayingMessageInCurrentChannel(
+        interaction,
+        showAllFlag
+          ? (context) => context.view === "everyone" || context.view === "everyone-selected"
+          : (context) => context.view === "single" && context.ownerUserId === target.id,
+      );
+    }
+
     if (showAllFlag) {
       await this.showEveryone(interaction, ephemeral);
       return;
@@ -4269,6 +4278,44 @@ export class NowPlayingCommand {
       await message.delete().catch(() => null);
       nowPlayingListContexts.delete(key);
       await this.showSingle(interaction, interaction.user, false);
+      return true;
+    }
+
+    return false;
+  }
+
+  private async deleteEligibleNowPlayingMessageInCurrentChannel(
+    interaction: CommandInteraction,
+    predicate: (context: NowPlayingListContext) => boolean,
+  ): Promise<boolean> {
+    const channelId = interaction.channelId;
+    if (!channelId) {
+      return false;
+    }
+
+    const now = Date.now();
+    for (const [key, context] of nowPlayingListContexts.entries()) {
+      if (now - context.createdAt > NOW_PLAYING_CONTEXT_TTL_MS) {
+        nowPlayingListContexts.delete(key);
+        continue;
+      }
+      if (context.channelId !== channelId || !predicate(context)) {
+        continue;
+      }
+
+      const channel = await interaction.client.channels.fetch(context.channelId).catch(() => null);
+      if (!channel?.isTextBased()) {
+        nowPlayingListContexts.delete(key);
+        continue;
+      }
+      const message = await channel.messages.fetch(context.messageId).catch(() => null);
+      if (!message) {
+        nowPlayingListContexts.delete(key);
+        continue;
+      }
+
+      await message.delete().catch(() => null);
+      nowPlayingListContexts.delete(key);
       return true;
     }
 
