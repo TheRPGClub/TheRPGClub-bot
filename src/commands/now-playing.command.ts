@@ -3892,6 +3892,7 @@ export class NowPlayingCommand {
         });
         return;
       }
+      await this.refreshNowPlayingListFromContext(interaction, ownerId).catch(() => {});
       await this.promptRemoveNowPlaying(interaction, "update");
     } catch (err: any) {
       const msg = err?.message ?? String(err);
