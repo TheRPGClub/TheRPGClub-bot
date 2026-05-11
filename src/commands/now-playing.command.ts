@@ -2357,13 +2357,16 @@ export class NowPlayingCommand {
       }
       await this.refreshNowPlayingListFromContext(interaction, ownerId).catch(() => {});
 
+      const refreshedEntries = getDisplayNowPlayingEntries(
+        await Member.getNowPlaying(ownerId),
+      );
       const { files, thumbnailsByGameId } = await this.buildNowPlayingAttachments(
-        reordered,
+        refreshedEntries,
         NOW_PLAYING_GALLERY_MAX,
         includeImages,
       );
       const components = this.buildNowPlayingSortComponents(
-        reordered,
+        refreshedEntries,
         ownerId,
         thumbnailsByGameId,
       );
@@ -2392,6 +2395,10 @@ export class NowPlayingCommand {
         components: [container],
         flags: buildComponentsV2Flags(true),
       });
+      return;
+    }
+    if (interaction.guildId == null) {
+      await this.returnToNowPlayingEditMenu(interaction, ownerId);
       return;
     }
 
@@ -2913,6 +2920,10 @@ export class NowPlayingCommand {
       });
       return;
     }
+    if (interaction.guildId == null) {
+      await this.returnToNowPlayingEditMenu(interaction, ownerId);
+      return;
+    }
     const list = await Member.getNowPlaying(ownerId);
     const payload = await this.buildNowPlayingListPayload(
       interaction.user,
@@ -2972,6 +2983,10 @@ export class NowPlayingCommand {
       });
       return;
     }
+    if (interaction.guildId == null) {
+      await this.returnToNowPlayingEditMenu(interaction, ownerId);
+      return;
+    }
     const list = await Member.getNowPlaying(ownerId);
     const payload = await this.buildNowPlayingListPayload(
       interaction.user,
@@ -3018,6 +3033,10 @@ export class NowPlayingCommand {
         content: "This remove prompt isn't for you.",
         flags: MessageFlags.Ephemeral,
       });
+      return;
+    }
+    if (interaction.guildId == null) {
+      await this.returnToNowPlayingEditMenu(interaction, ownerId);
       return;
     }
     const list = await Member.getNowPlaying(ownerId);
@@ -3495,6 +3514,20 @@ export class NowPlayingCommand {
         .setStyle(ButtonStyle.Danger),
     );
     return [introContainer, listContainer, firstRow, secondRow];
+  }
+
+  private async returnToNowPlayingEditMenu(
+    interaction: ButtonInteraction,
+    ownerId: string,
+  ): Promise<void> {
+    const menuComponents = await this.buildNowPlayingEditInitialComponents(
+      ownerId,
+      interaction.guildId,
+    );
+    await interaction.update({
+      components: menuComponents,
+      flags: buildComponentsV2Flags(true),
+    });
   }
 
   private async buildNowPlayingEditInitialComponents(
