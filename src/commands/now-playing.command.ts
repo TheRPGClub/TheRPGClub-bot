@@ -2040,12 +2040,7 @@ export class NowPlayingCommand {
       await interaction.update({ components: pmComponents });
       return;
     }
-    const includeImages = interaction.guildId != null;
-    const { files, thumbnailsByGameId } = await this.buildNowPlayingAttachments(
-      entries,
-      NOW_PLAYING_GALLERY_MAX,
-      includeImages,
-    );
+    const thumbnailsByGameId = new Map<number, string>();
     const components = this.buildNowPlayingSortComponents(
       entries,
       ownerId,
@@ -2056,7 +2051,7 @@ export class NowPlayingCommand {
       interaction.guildId,
       components,
     );
-    await interaction.update(this.buildComponentPayload(pmComponents as any, files));
+    await interaction.update({ components: pmComponents });
   }
 
   private parseNowPlayingCompletionDate(value: string): Date | null {
@@ -2499,14 +2494,9 @@ export class NowPlayingCommand {
       const entries = getDisplayNowPlayingEntries(
         await Member.getNowPlaying(ownerId),
       );
-      const includeImages = interaction.guildId != null;
       const index = entries.findIndex((entry) => entry.gameId === gameId);
       if (index <= 0) {
-        const { files, thumbnailsByGameId } = await this.buildNowPlayingAttachments(
-          entries,
-          NOW_PLAYING_GALLERY_MAX,
-          includeImages,
-        );
+        const thumbnailsByGameId = new Map<number, string>();
         const components = this.buildNowPlayingSortComponents(
           entries,
           ownerId,
@@ -2518,7 +2508,7 @@ export class NowPlayingCommand {
           components,
         );
         await safeReply(interaction, {
-          ...this.buildComponentPayload(pmComponents as any, files),
+          components: pmComponents,
           flags: responseFlags,
         });
         return;
@@ -2538,16 +2528,11 @@ export class NowPlayingCommand {
         });
         return;
       }
-      await this.refreshNowPlayingListFromContext(interaction, ownerId).catch(() => {});
 
       const refreshedEntries = getDisplayNowPlayingEntries(
         await Member.getNowPlaying(ownerId),
       );
-      const { files, thumbnailsByGameId } = await this.buildNowPlayingAttachments(
-        refreshedEntries,
-        NOW_PLAYING_GALLERY_MAX,
-        includeImages,
-      );
+      const thumbnailsByGameId = new Map<number, string>();
       const components = this.buildNowPlayingSortComponents(
         refreshedEntries,
         ownerId,
@@ -2559,7 +2544,7 @@ export class NowPlayingCommand {
         components,
       );
       await safeReply(interaction, {
-        ...this.buildComponentPayload(pmComponents as any, files),
+        components: pmComponents,
         flags: responseFlags,
       });
     } catch {
@@ -2586,6 +2571,8 @@ export class NowPlayingCommand {
       });
       return;
     }
+
+    await this.refreshNowPlayingListFromContext(interaction, ownerId).catch(() => {});
     if (interaction.guildId == null) {
       await this.returnToNowPlayingEditMenu(interaction, ownerId);
       return;
