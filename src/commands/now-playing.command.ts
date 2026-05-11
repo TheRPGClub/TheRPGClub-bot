@@ -5252,26 +5252,20 @@ export class NowPlayingCommand {
     const safePage = Math.min(Math.max(page, 1), totalPages);
 
     const container = new ContainerBuilder();
+    let coverUrl: string | null = null;
     if (game?.imageData) {
       const filename = `game_journal_${gameId}.png`;
       files.push(new AttachmentBuilder(game.imageData, { name: filename }));
-      container.addMediaGalleryComponents(
-        new MediaGalleryBuilder().addItems(
-          new MediaGalleryItemBuilder()
-            .setURL(`attachment://${filename}`)
-            .setDescription(`${game.title ?? `Game #${gameId}`} cover art`),
-        ),
-      );
-      container.addSeparatorComponents(
-        new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small).setDivider(false),
-      );
+      coverUrl = `attachment://${filename}`;
     }
-    container.addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(
-        `## Game Journal: ${game?.title ?? `Game #${gameId}`}`,
-      ),
+    const introSection = new SectionBuilder().addTextDisplayComponents(
+      new TextDisplayBuilder().setContent(`## Game Journal: ${game?.title ?? `Game #${gameId}`}`),
       new TextDisplayBuilder().setContent(`Total entries visible: **${total}** | Page ${safePage}/${totalPages}`),
     );
+    if (coverUrl) {
+      introSection.setThumbnailAccessory(new ThumbnailBuilder().setURL(coverUrl));
+    }
+    container.addSectionComponents(introSection);
     if (!isEnabled) {
       container.addTextDisplayComponents(
         new TextDisplayBuilder().setContent("Journal mode is not enabled for this game."),
