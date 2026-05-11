@@ -1952,8 +1952,8 @@ export class NowPlayingCommand {
           interaction.guildId,
           [container],
         );
-        if (mode === "update" && "update" in interaction) {
-          await interaction.update({ components: pmComponents });
+        if (mode === "update") {
+          await safeUpdate(interaction, { components: pmComponents });
         } else {
           await safeReply(interaction, {
             components: pmComponents,
@@ -1979,8 +1979,8 @@ export class NowPlayingCommand {
         interaction.guildId,
         components,
       );
-      if (mode === "update" && "update" in interaction) {
-        await interaction.update(this.buildComponentPayload(pmComponents as any, files));
+      if (mode === "update") {
+        await safeUpdate(interaction, this.buildComponentPayload(pmComponents as any, files));
       } else {
         await safeReply(interaction, {
           ...this.buildComponentPayload(pmComponents as any, files),
@@ -1997,8 +1997,8 @@ export class NowPlayingCommand {
         interaction.guildId,
         [container],
       );
-      if (mode === "update" && "update" in interaction) {
-        await interaction.update({ components: pmComponents });
+      if (mode === "update") {
+        await safeUpdate(interaction, { components: pmComponents });
       } else {
         await safeReply(interaction, {
           components: pmComponents,
@@ -3877,6 +3877,7 @@ export class NowPlayingCommand {
       });
       return;
     }
+    await safeDeferUpdate(interaction);
 
     try {
       const removed = await Member.removeNowPlaying(ownerId, gameId);
@@ -3886,7 +3887,7 @@ export class NowPlayingCommand {
             "Failed to remove that game (it may have been removed already).",
           ),
         );
-        await interaction.reply({
+        await safeReply(interaction, {
           components: [container],
           flags: buildComponentsV2Flags(true),
         });
@@ -3899,7 +3900,7 @@ export class NowPlayingCommand {
       const container = new ContainerBuilder().addTextDisplayComponents(
         new TextDisplayBuilder().setContent(`Could not remove from Now Playing: ${msg}`),
       );
-      await interaction.reply({
+      await safeReply(interaction, {
         components: [container],
         flags: buildComponentsV2Flags(true),
       });
