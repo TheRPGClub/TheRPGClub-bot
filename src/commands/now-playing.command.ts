@@ -117,6 +117,7 @@ const NOW_PLAYING_EDIT_MENU_SORT_PREFIX = "nowplaying-edit-menu-sort";
 const NOW_PLAYING_EDIT_MENU_PLATFORM_PREFIX = "nowplaying-edit-menu-platform";
 const NOW_PLAYING_EDIT_MENU_COMPLETE_PREFIX = "nowplaying-edit-menu-complete";
 const NOW_PLAYING_EDIT_MENU_REMOVE_PREFIX = "nowplaying-edit-menu-remove";
+const NOW_PLAYING_REMOVE_SELECT_PREFIX = "nowplaying-remove-select";
 type NowPlayingAddSession = {
   userId: string;
   query: string;
@@ -3817,73 +3818,34 @@ export class NowPlayingCommand {
   private buildNowPlayingRemoveComponents(
     entries: IMemberNowPlayingEntry[],
     ownerId: string,
-    thumbnailsByGameId: Map<number, string>,
-  ): Array<ContainerBuilder | ActionRowBuilder<ButtonBuilder>> {
+    _thumbnailsByGameId: Map<number, string>,
+  ): Array<ContainerBuilder | ActionRowBuilder<ButtonBuilder | StringSelectMenuBuilder>> {
+    void _thumbnailsByGameId;
     const container = new ContainerBuilder();
+    const textLines = [
+      "## Now Playing Remove",
+      "Select a game below to remove it from your list.",
+      "",
+      ...this.buildNowPlayingListLines(entries, null),
+    ];
     container.addTextDisplayComponents(
       new TextDisplayBuilder().setContent(
-        "## Now Playing Remove\nClick Remove Game to delete an entry.",
+        this.trimTextDisplayContent(textLines.join("\n")),
       ),
     );
 
-    const galleryItems: MediaGalleryItemBuilder[] = [];
-    for (const entry of entries) {
-      if (galleryItems.length >= NOW_PLAYING_GALLERY_MAX) {
-        break;
-      }
-      if (!entry.gameId) {
-        continue;
-      }
-      const imageUrl = thumbnailsByGameId.get(entry.gameId);
-      if (!imageUrl) {
-        continue;
-      }
-      const item = new MediaGalleryItemBuilder()
-        .setURL(imageUrl)
-        .setDescription(formatEntryTitleWithPlatform(entry));
-      galleryItems.push(item);
-    }
-
-    if (galleryItems.length) {
-      container.addMediaGalleryComponents(new MediaGalleryBuilder().addItems(galleryItems));
-      container.addSeparatorComponents(
-        new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small).setDivider(false),
-      );
-    }
-
-    entries.forEach((entry, index) => {
-      if (index === 0) {
-        container.addSeparatorComponents(
-          new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small).setDivider(false),
-        );
-      }
-      const lines = [`### ${formatEntryTitleWithPlatform(entry)}`, entry.note ?? ""];
-      if (entry.addedAt) {
-        const addedLabel = `Added ${formatTableDate(entry.addedAt)}`;
-        if (entry.noteUpdatedAt) {
-          const updatedLabel = `last updated ${formatTableDate(entry.noteUpdatedAt)}`;
-          if (formatTableDate(entry.addedAt) === formatTableDate(entry.noteUpdatedAt)) {
-            lines.push(`-# *${addedLabel}.*`);
-          } else {
-            lines.push(`-# *${addedLabel}, ${updatedLabel}.*`);
-          }
-        } else {
-          lines.push(`-# *${addedLabel}.*`);
-        }
-      }
-      const section = new SectionBuilder().addTextDisplayComponents(
-        new TextDisplayBuilder().setContent(
-          this.trimTextDisplayContent(lines.join("\n")),
-        ),
-      );
-      section.setButtonAccessory(
-        new V2ButtonBuilder()
-          .setCustomId(`np-remove:${ownerId}:${entry.gameId}`)
-          .setLabel("Remove Game")
-          .setStyle(ButtonStyle.Danger),
-      );
-      container.addSectionComponents(section);
-    });
+    const selectOptions = entries
+      .filter((entry) => Number.isInteger(entry.gameId))
+      .slice(0, 25)
+      .map((entry) => ({
+        label: formatEntryTitleWithPlatform(entry).slice(0, 100),
+        value: String(entry.gameId),
+      }));
+    const removeSelect = new StringSelectMenuBuilder()
+      .setCustomId(`${NOW_PLAYING_REMOVE_SELECT_PREFIX}:${ownerId}`)
+      .setPlaceholder("Select a game to remove")
+      .addOptions(selectOptions);
+    const selectRow = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(removeSelect);
 
     const doneRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
       new ButtonBuilder()
@@ -3891,7 +3853,56 @@ export class NowPlayingCommand {
         .setLabel("Done")
         .setStyle(ButtonStyle.Success),
     );
-    return [container, doneRow];
+    return [container, selectRow, doneRow];
+  }
+
+  @SelectMenuComponent({ id: /^nowplaying-remove-select:\d+$/ })
+  async handleNowPlayingRemoveSelect(interaction: StringSelectMenuInteraction): Promise<void> {
+    const [, ownerId] = interaction.customId.split(":");
+    if (interaction.user.id !== ownerId) {
+      await interaction.reply({
+        content: "This remove prompt isn't for you.",
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
+    const gameId = Number(interaction.values?.[0]);
+    if (!Number.isInteger(gameId) || gameId <= 0) {
+      const container = new ContainerBuilder().addTextDisplayComponents(
+        new TextDisplayBuilder().setContent("Invalid game selection."),
+      );
+      await interaction.reply({
+        components: [container],
+        flags: buildComponentsV2Flags(true),
+      });
+      return;
+    }
+
+    try {
+      const removed = await Member.removeNowPlaying(ownerId, gameId);
+      if (!removed) {
+        const container = new ContainerBuilder().addTextDisplayComponents(
+          new TextDisplayBuilder().setContent(
+            "Failed to remove that game (it may have been removed already).",
+          ),
+        );
+        await interaction.reply({
+          components: [container],
+          flags: buildComponentsV2Flags(true),
+        });
+        return;
+      }
+      await this.promptRemoveNowPlaying(interaction, "update");
+    } catch (err: any) {
+      const msg = err?.message ?? String(err);
+      const container = new ContainerBuilder().addTextDisplayComponents(
+        new TextDisplayBuilder().setContent(`Could not remove from Now Playing: ${msg}`),
+      );
+      await interaction.reply({
+        components: [container],
+        flags: buildComponentsV2Flags(true),
+      });
+    }
   }
 
   private buildNowPlayingEditPlatformComponents(
