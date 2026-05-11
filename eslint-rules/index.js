@@ -894,6 +894,101 @@ export default {
         };
       },
     },
+    "component-update-requires-safe-defer": {
+      meta: {
+        type: "problem",
+        docs: {
+          description:
+            "Require safeDeferUpdate before direct interaction.update in button/select handlers.",
+        },
+        schema: [],
+        messages: {
+          missingSafeDefer:
+            "Call safeDeferUpdate({{param}}) in this component handler before using {{param}}.update(...).",
+        },
+      },
+      create(context) {
+        const hasComponentDecorator = (methodNode) => {
+          const decorators = methodNode?.decorators ?? [];
+          for (const decorator of decorators) {
+            const decoratorName = getDecoratorIdentifierName(decorator.expression);
+            if (decoratorName === "ButtonComponent" || decoratorName === "SelectMenuComponent") {
+              return true;
+            }
+          }
+          return false;
+        };
+
+        const collectCalls = (node, calls) => {
+          if (!node || typeof node.type !== "string") return;
+          if (node.type === "CallExpression") {
+            calls.push(node);
+          }
+          for (const key of Object.keys(node)) {
+            const value = node[key];
+            if (!value) continue;
+            if (Array.isArray(value)) {
+              for (const item of value) {
+                if (item && typeof item.type === "string") {
+                  collectCalls(item, calls);
+                }
+              }
+              continue;
+            }
+            if (value && typeof value.type === "string") {
+              collectCalls(value, calls);
+            }
+          }
+        };
+
+        return {
+          MethodDefinition(node) {
+            if (!hasComponentDecorator(node)) return;
+            const methodValue = node.value;
+            if (!methodValue || methodValue.type !== "FunctionExpression") return;
+            const interactionParam = methodValue.params?.[0];
+            if (!interactionParam || interactionParam.type !== "Identifier") return;
+            if (!methodValue.body || methodValue.body.type !== "BlockStatement") return;
+
+            const calls = [];
+            collectCalls(methodValue.body, calls);
+            let hasSafeDeferUpdate = false;
+            const directUpdateCalls = [];
+
+            for (const call of calls) {
+              if (
+                call.callee.type === "Identifier" &&
+                call.callee.name === "safeDeferUpdate" &&
+                call.arguments?.[0]?.type === "Identifier" &&
+                call.arguments[0].name === interactionParam.name
+              ) {
+                hasSafeDeferUpdate = true;
+                continue;
+              }
+
+              if (
+                call.callee.type === "MemberExpression" &&
+                call.callee.object.type === "Identifier" &&
+                call.callee.object.name === interactionParam.name &&
+                call.callee.property.type === "Identifier" &&
+                call.callee.property.name === "update"
+              ) {
+                directUpdateCalls.push(call.callee.property);
+              }
+            }
+
+            if (hasSafeDeferUpdate || directUpdateCalls.length === 0) return;
+            for (const updateNode of directUpdateCalls) {
+              context.report({
+                node: updateNode,
+                messageId: "missingSafeDefer",
+                data: { param: interactionParam.name },
+              });
+            }
+          },
+        };
+      },
+    },
     "no-djs-button-in-v2-accessory": {
       meta: {
         type: "problem",

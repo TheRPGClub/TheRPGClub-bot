@@ -2859,6 +2859,8 @@ export class NowPlayingCommand {
 
   @ButtonComponent({ id: /^nowplaying-list-notes:\d+:(show|hide)$/ })
   async handleNowPlayingListNotesToggle(interaction: ButtonInteraction): Promise<void> {
+    await safeDeferUpdate(interaction);
+
     const [, ownerId, action] = interaction.customId.split(":");
     const showNotes = action === "show";
     const isEphemeral = interaction.message.flags?.has(MessageFlags.Ephemeral) ?? false;
@@ -2880,7 +2882,7 @@ export class NowPlayingCommand {
         title,
         emptyMessage,
       );
-      await interaction.update({
+      await safeReply(interaction, {
         components: [container, this.buildNowPlayingActionRow(ownerId, showNotes)],
         flags: buildComponentsV2Flags(isEphemeral),
       });
@@ -2900,7 +2902,7 @@ export class NowPlayingCommand {
       payload.components,
       showNotes,
     );
-    await interaction.update({
+    await safeReply(interaction, {
       components,
       files: payload.files,
       flags: buildComponentsV2Flags(isEphemeral),

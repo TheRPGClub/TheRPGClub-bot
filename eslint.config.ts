@@ -80,6 +80,7 @@ export default [
       "local/prefer-safe-interaction-methods": "warn",
       "local/no-deprecated-interaction-options": "error",
       "local/no-silent-interaction-update-catch": "error",
+      "local/component-update-requires-safe-defer": "warn",
       "local/no-igdb-session-callback-unsafe-response": "error",
       "local/no-empty-catch-on-interaction-response": "warn",
       "local/no-edit-reply-on-modal-union": "error",
