@@ -5237,6 +5237,10 @@ export class NowPlayingCommand {
     const perPage = 5;
     const game = await Game.getGameById(gameId);
     const files: AttachmentBuilder[] = [];
+    const ownerProfile = await Member.getByUserId(ownerId);
+    const ownerLabel = ownerProfile?.globalName ?? ownerProfile?.username ?? ownerId;
+    const nowPlayingMeta = await Member.getNowPlayingEntryMeta(ownerId, gameId);
+    const completions = await Member.getCompletionsForGame(ownerId, gameId);
     const pref = await Member.getGameJournalPreference(ownerId, gameId);
     const isEnabled = pref?.isEnabled === true;
     const isOwnerView = ownerId === viewerId;
@@ -5259,13 +5263,46 @@ export class NowPlayingCommand {
       coverUrl = `attachment://${filename}`;
     }
     const introSection = new SectionBuilder().addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(`## Game Journal: ${game?.title ?? `Game #${gameId}`}`),
+      new TextDisplayBuilder().setContent(
+        `## ${ownerLabel}'s Game Journal: ${game?.title ?? `Game #${gameId}`}`,
+      ),
       new TextDisplayBuilder().setContent(`Total entries visible: **${total}** | Page ${safePage}/${totalPages}`),
     );
     if (coverUrl) {
       introSection.setThumbnailAccessory(new ThumbnailBuilder().setURL(coverUrl));
     }
     container.addSectionComponents(introSection);
+    if (nowPlayingMeta?.addedAt) {
+      container.addTextDisplayComponents(
+        new TextDisplayBuilder().setContent(
+          `Now Playing since ${formatTableDate(nowPlayingMeta.addedAt)}`,
+        ),
+      );
+    }
+    if (completions.length) {
+      const completionLines: string[] = [];
+      for (const completion of completions) {
+        const platform = completion.platformId
+          ? await Game.getPlatformById(completion.platformId).catch(() => null)
+          : null;
+        const platformName = platform?.abbreviation ?? platform?.name ?? "Unknown Platform";
+        const completedDate = completion.completedAt
+          ? formatTableDate(completion.completedAt)
+          : "Unknown Date";
+        const playtime = formatPlaytimeHours(completion.finalPlaytimeHours);
+        const parts = [
+          completion.completionType,
+          completedDate,
+          platformName,
+          playtime,
+          `Completion #${completion.completionId}`,
+        ].filter(Boolean);
+        completionLines.push(`- ${parts.join(" | ")}`);
+      }
+      container.addTextDisplayComponents(
+        new TextDisplayBuilder().setContent(`Completions:\n${completionLines.join("\n")}`),
+      );
+    }
     if (!isEnabled) {
       container.addTextDisplayComponents(
         new TextDisplayBuilder().setContent("Journal mode is not enabled for this game."),
