@@ -12,10 +12,15 @@ import {
   TextDisplayBuilder,
 } from "@discordjs/builders";
 import { SeparatorSpacingSize } from "discord-api-types/v10";
+import crypto from "node:crypto";
 import type { INominationEntry } from "../classes/Nomination.js";
 import Game from "../classes/Game.js";
 import { COMPONENTS_V2_FLAG } from "../config/flags.js";
 import { composeVoteImage, type VoteImageType } from "../services/voteImageComposer.js";
+import {
+  getOrReplaceBackblazeImage,
+  hasBackblazeB2Config,
+} from "../services/BackblazeB2Service.js";
 
 const MAX_SECTIONS_PER_CONTAINER = 10;
 const MAX_REASON_LENGTH = 1500;
@@ -266,11 +271,25 @@ async function appendVoteImageAttachment(
     return null;
   }
 
-  const imageBuffer = await composeVoteImage({
-    roundNumber,
-    voteType,
-    covers,
-  });
+  const sourceHash = buildNominationImageSourceHash(voteType, roundNumber, covers);
+  if (hasBackblazeB2Config()) {
+    try {
+      const stored = await getOrReplaceBackblazeImage(
+        `generated/noms/${voteType.toLowerCase()}/round-${roundNumber}`,
+        sourceHash,
+        () => composeVoteImage({
+          roundNumber,
+          voteType,
+          covers,
+        }),
+      );
+      return stored.url;
+    } catch (error) {
+      console.error("Backblaze upload failed for nomination vote image:", error);
+    }
+  }
+
+  const imageBuffer = await composeVoteImage({ roundNumber, voteType, covers });
   const filename = `noms_vote_${voteType.toLowerCase()}_round_${roundNumber}.png`;
   files.push(new AttachmentBuilder(imageBuffer, { name: filename }));
   return `attachment://${filename}`;
@@ -281,6 +300,20 @@ function toVoteImageType(kindLabel: string): VoteImageType | null {
     return kindLabel;
   }
   return null;
+}
+
+function buildNominationImageSourceHash(
+  voteType: VoteImageType,
+  roundNumber: number,
+  covers: Array<{ gameId: number; title: string; imageData: Buffer }>,
+): string {
+  const hash = crypto.createHash("sha256");
+  hash.update(`type:${voteType}|round:${roundNumber}|count:${covers.length}|`);
+  covers.forEach((cover) => {
+    hash.update(`id:${cover.gameId}|title:${cover.title}|`);
+    hash.update(cover.imageData);
+  });
+  return hash.digest("hex");
 }
 
 function addVoteImageToContainer(container: ContainerBuilder, voteImageUrl: string | null): void {

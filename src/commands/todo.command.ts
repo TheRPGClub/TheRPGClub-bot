@@ -2474,15 +2474,30 @@ export class TodoCommand {
       return;
     }
 
-    const listPayload = await this.buildTodoListPayload(parsed.payloadToken, parsed.page);
-    if (!listPayload) {
+    const basePayload = parseTodoPayloadToken(parsed.payloadToken);
+    if (!basePayload) {
       await replyTodoExpired(interaction);
       return;
     }
 
+    let comments: IGithubIssueComment[] = [];
+    try {
+      comments = await listIssueComments(parsed.issueNumber);
+    } catch {
+      comments = [];
+    }
+
+    const payload: TodoListPayload = { ...basePayload, page: parsed.page };
+    const viewPayload = buildIssueViewComponents(
+      closed,
+      comments,
+      payload,
+      parsed.payloadToken,
+    );
+
     try {
       await interaction.message.edit({
-        components: listPayload.components,
+        components: viewPayload.components,
       });
     } catch {
       await replyTodoExpired(interaction);

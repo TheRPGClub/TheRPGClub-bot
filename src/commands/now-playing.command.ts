@@ -41,6 +41,7 @@ import {
   ThumbnailBuilder,
 } from "@discordjs/builders";
 import { SeparatorSpacingSize } from "discord-api-types/v10";
+import crypto from "node:crypto";
 import Member, { type IMemberNowPlayingEntry } from "../classes/Member.js";
 import {
   safeDeferReply,
@@ -73,6 +74,10 @@ import {
 import { COMPONENTS_V2_FLAG } from "../config/flags.js";
 import { STANDARD_PLATFORM_IDS } from "../config/standardPlatforms.js";
 import { composeVoteImage } from "../services/voteImageComposer.js";
+import {
+  getOrReplaceBackblazeImage,
+  hasBackblazeB2Config,
+} from "../services/BackblazeB2Service.js";
 
 const MAX_NOW_PLAYING = 10;
 const MAX_NOW_PLAYING_NOTE_LEN = 500;
@@ -2999,7 +3004,7 @@ export class NowPlayingCommand {
       target.id,
       isOwnList,
       isEphemeral,
-      await this.buildNowPlayingCompositeImageUrl(files, covers),
+      await this.buildNowPlayingCompositeImageUrl(files, covers, target.id),
     );
     return { components, files };
   }
@@ -3007,10 +3012,31 @@ export class NowPlayingCommand {
   private async buildNowPlayingCompositeImageUrl(
     files: AttachmentBuilder[],
     covers: Array<{ gameId: number; title: string; imageData: Buffer }>,
+    ownerId: string,
   ): Promise<string | null> {
     if (!covers.length) {
       return null;
     }
+
+    const sourceHash = this.buildNowPlayingCompositeSourceHash(ownerId, covers);
+    if (hasBackblazeB2Config()) {
+      try {
+        const stored = await getOrReplaceBackblazeImage(
+          `generated/now-playing/user-${ownerId}/composite`,
+          sourceHash,
+          () => composeVoteImage({
+            roundNumber: 1,
+            voteType: "GOTM",
+            covers,
+            sortByTitle: false,
+          }),
+        );
+        return stored.url;
+      } catch (error) {
+        console.error("Backblaze upload failed for now-playing composite image:", error);
+      }
+    }
+
     const imageBuffer = await composeVoteImage({
       roundNumber: 1,
       voteType: "GOTM",
@@ -3020,6 +3046,19 @@ export class NowPlayingCommand {
     const filename = "now_playing_composite.png";
     files.push(new AttachmentBuilder(imageBuffer, { name: filename }));
     return `attachment://${filename}`;
+  }
+
+  private buildNowPlayingCompositeSourceHash(
+    ownerId: string,
+    covers: Array<{ gameId: number; title: string; imageData: Buffer }>,
+  ): string {
+    const hash = crypto.createHash("sha256");
+    hash.update(`owner:${ownerId}|count:${covers.length}|`);
+    covers.forEach((cover) => {
+      hash.update(`id:${cover.gameId}|title:${cover.title}|`);
+      hash.update(cover.imageData);
+    });
+    return hash.digest("hex");
   }
 
   private buildNowPlayingActionRow(
