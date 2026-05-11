@@ -3383,18 +3383,20 @@ export class NowPlayingCommand {
     const target =
       (await interaction.client.users.fetch(selectedUserId).catch(() => null)) ??
       interaction.user;
-    const lists = await Member.getAllNowPlaying();
-    const selectRow = lists.length
-      ? this.buildNowPlayingMemberSelect(lists, selectedUserId)
-      : null;
 
     if (!entries.length) {
       const container = this.buildNowPlayingMessageContainer(
         "Now Playing - Everyone",
         `No Now Playing entries found for <@${selectedUserId}>.`,
       );
+      const components = this.withNowPlayingActions(
+        true,
+        selectedUserId,
+        [container],
+        false,
+      );
       const updated = await interaction.editReply({
-        components: [container, ...(selectRow ? [selectRow] : [])],
+        components,
       });
       trackNowPlayingListContext(updated as Message<boolean>, {
         view: "everyone-selected",
@@ -3411,8 +3413,14 @@ export class NowPlayingCommand {
       interaction.guildId,
       `${displayName}'s Now Playing List`,
     );
+    const components = this.withNowPlayingActions(
+      true,
+      selectedUserId,
+      payload.components,
+      false,
+    );
     const updated = await interaction.editReply({
-      components: [...payload.components, ...(selectRow ? [selectRow] : [])],
+      components,
       files: payload.files,
     });
     trackNowPlayingListContext(updated as Message<boolean>, {
@@ -4245,9 +4253,6 @@ export class NowPlayingCommand {
 
         if (context.view === "everyone-selected" && context.selectedUserId) {
           const selectedUserId = context.selectedUserId;
-          const selectRow = allListsCache.length
-            ? this.buildNowPlayingMemberSelect(allListsCache, selectedUserId)
-            : null;
           const entries = getDisplayNowPlayingEntries(
             await Member.getNowPlaying(selectedUserId),
           );
@@ -4256,8 +4261,14 @@ export class NowPlayingCommand {
               "Now Playing - Everyone",
               `No Now Playing entries found for <@${selectedUserId}>.`,
             );
+            const components = this.withNowPlayingActions(
+              true,
+              selectedUserId,
+              [container],
+              false,
+            );
             await message.edit({
-              components: [container, ...(selectRow ? [selectRow] : [])],
+              components,
             });
             updatedAny = true;
             continue;
@@ -4272,8 +4283,14 @@ export class NowPlayingCommand {
             message.guildId ?? interaction.guildId,
             title,
           );
+          const components = this.withNowPlayingActions(
+            true,
+            selectedUserId,
+            payload.components,
+            false,
+          );
           await message.edit({
-            components: [...payload.components, ...(selectRow ? [selectRow] : [])],
+            components,
             files: payload.files,
           });
           updatedAny = true;
