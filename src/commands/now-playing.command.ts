@@ -79,6 +79,7 @@ import {
 import { parseTitleWithYear } from "../functions/GameTitleAutocompleteUtils.js";
 import { COMPONENTS_V2_FLAG } from "../config/flags.js";
 import { REGULARS_ROLE_ID } from "../config/roles.js";
+import { BOT_DEV_PING_USER_ID } from "../config/users.js";
 import { STANDARD_PLATFORM_IDS } from "../config/standardPlatforms.js";
 import { composeVoteImage } from "../services/collageGenerator.js";
 import {
@@ -3043,6 +3044,13 @@ export class NowPlayingCommand {
   @ButtonComponent({ id: /^nowplaying-journal-open:\d+:\d+:\d+$/ })
   async handleNowPlayingJournalOpen(interaction: ButtonInteraction): Promise<void> {
     const [, ownerId, gameIdRaw, pageRaw] = interaction.customId.split(":");
+    if (!this.canUseJournalFeature(ownerId) || !this.canUseJournalFeature(interaction.user.id)) {
+      await safeReply(interaction, {
+        content: "Journal is currently limited to an internal user.",
+        flags: buildComponentsV2Flags(true),
+      });
+      return;
+    }
     const nowPlayingEntries = getDisplayNowPlayingEntries(await Member.getNowPlaying(ownerId));
     const selected = nowPlayingEntries.find((entry) => entry.gameId === Number(gameIdRaw));
     if (!selected?.journalEnabled) {
@@ -3064,9 +3072,16 @@ export class NowPlayingCommand {
     });
   }
 
-  @ButtonComponent({ id: /^nowplaying-journal-page:\d+:\d+:\d+$/ })
+  @ButtonComponent({ id: /^nowplaying-journal-page:\d+:\d+:(prev|next):\d+$/ })
   async handleNowPlayingJournalPage(interaction: ButtonInteraction): Promise<void> {
-    const [, ownerId, gameIdRaw, pageRaw] = interaction.customId.split(":");
+    const [, ownerId, gameIdRaw, , pageRaw] = interaction.customId.split(":");
+    if (!this.canUseJournalFeature(ownerId) || !this.canUseJournalFeature(interaction.user.id)) {
+      await safeReply(interaction, {
+        content: "Journal is currently limited to an internal user.",
+        flags: buildComponentsV2Flags(true),
+      });
+      return;
+    }
     const nowPlayingEntries = getDisplayNowPlayingEntries(await Member.getNowPlaying(ownerId));
     const selected = nowPlayingEntries.find((entry) => entry.gameId === Number(gameIdRaw));
     if (!selected?.journalEnabled) {
@@ -3091,6 +3106,13 @@ export class NowPlayingCommand {
   @ButtonComponent({ id: /^nowplaying-journal-add:\d+:\d+:\d+$/ })
   async handleNowPlayingJournalAdd(interaction: ButtonInteraction): Promise<void> {
     const [, ownerId, gameIdRaw, pageRaw] = interaction.customId.split(":");
+    if (!this.canUseJournalFeature(ownerId) || !this.canUseJournalFeature(interaction.user.id)) {
+      await safeReply(interaction, {
+        content: "Journal is currently limited to an internal user.",
+        flags: buildComponentsV2Flags(true),
+      });
+      return;
+    }
     if (interaction.user.id !== ownerId) {
       await safeReply(interaction, { content: "Only the owner can add journal entries." });
       return;
@@ -3131,6 +3153,13 @@ export class NowPlayingCommand {
   @ModalComponent({ id: /^nowplaying-journal-modal:\d+:\d+:\d+$/ })
   async handleNowPlayingJournalModal(interaction: ModalSubmitInteraction): Promise<void> {
     const [, ownerId, gameIdRaw, pageRaw] = interaction.customId.split(":");
+    if (!this.canUseJournalFeature(ownerId) || !this.canUseJournalFeature(interaction.user.id)) {
+      await safeReply(interaction, {
+        content: "Journal is currently limited to an internal user.",
+        flags: buildComponentsV2Flags(true),
+      });
+      return;
+    }
     if (interaction.user.id !== ownerId) {
       await safeReply(interaction, { content: "Only the owner can submit journal entries." });
       return;
@@ -3285,6 +3314,13 @@ export class NowPlayingCommand {
       await interaction.reply({
         content: "This edit menu isn't for you.",
         flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
+    if (!this.canUseJournalFeature(ownerId)) {
+      await safeReply(interaction, {
+        content: "Journal is currently limited to an internal user.",
+        flags: buildComponentsV2Flags(true),
       });
       return;
     }
@@ -4341,6 +4377,13 @@ export class NowPlayingCommand {
   @SelectMenuComponent({ id: /^nowplaying-journal-optin-select:\d+$/ })
   async handleNowPlayingJournalOptInSelect(interaction: StringSelectMenuInteraction): Promise<void> {
     const [, ownerId] = interaction.customId.split(":");
+    if (!this.canUseJournalFeature(ownerId) || !this.canUseJournalFeature(interaction.user.id)) {
+      await safeReply(interaction, {
+        content: "Journal is currently limited to an internal user.",
+        flags: buildComponentsV2Flags(true),
+      });
+      return;
+    }
     if (interaction.user.id !== ownerId) {
       await safeReply(interaction, {
         content: "This journal prompt is not for you.",
@@ -4517,6 +4560,10 @@ export class NowPlayingCommand {
 
   private hasDisplayableNowPlayingNotes(entries: IMemberNowPlayingEntry[]): boolean {
     return entries.some((entry) => !entry.journalEnabled && Boolean(entry.note?.trim()));
+  }
+
+  private canUseJournalFeature(userId: string): boolean {
+    return userId === BOT_DEV_PING_USER_ID;
   }
 
   private async refreshNowPlayingListFromContext(
@@ -4857,10 +4904,10 @@ export class NowPlayingCommand {
           lines.push(`-# *${addedLabel}.*`);
         }
       }
-      if (entry.journalEnabled) {
+      if (entry.journalEnabled && this.canUseJournalFeature(ownerId)) {
         lines.push("-# Journal mode enabled for this game.");
       }
-      if (showNotes && entry.note && !entry.journalEnabled) {
+      if (showNotes && entry.note && (!entry.journalEnabled || !this.canUseJournalFeature(ownerId))) {
         const quotedNote = entry.note
           .split("\n")
           .map((noteLine) => `> ${noteLine}`)
@@ -4868,7 +4915,7 @@ export class NowPlayingCommand {
         lines.push(quotedNote);
       }
       const content = this.trimTextDisplayContent(lines.join("\n"));
-      if (entry.journalEnabled) {
+      if (entry.journalEnabled && this.canUseJournalFeature(ownerId)) {
         const section = new SectionBuilder().addTextDisplayComponents(
           new TextDisplayBuilder().setContent(content),
         );
@@ -4968,12 +5015,16 @@ export class NowPlayingCommand {
     }
     row.addComponents(
       new ButtonBuilder()
-        .setCustomId(`${NOW_PLAYING_JOURNAL_PAGE_PREFIX}:${ownerId}:${gameId}:${Math.max(1, safePage - 1)}`)
+        .setCustomId(
+          `${NOW_PLAYING_JOURNAL_PAGE_PREFIX}:${ownerId}:${gameId}:prev:${Math.max(1, safePage - 1)}`,
+        )
         .setLabel("Prev")
         .setStyle(ButtonStyle.Secondary)
         .setDisabled(safePage <= 1),
       new ButtonBuilder()
-        .setCustomId(`${NOW_PLAYING_JOURNAL_PAGE_PREFIX}:${ownerId}:${gameId}:${Math.min(totalPages, safePage + 1)}`)
+        .setCustomId(
+          `${NOW_PLAYING_JOURNAL_PAGE_PREFIX}:${ownerId}:${gameId}:next:${Math.min(totalPages, safePage + 1)}`,
+        )
         .setLabel("Next")
         .setStyle(ButtonStyle.Secondary)
         .setDisabled(safePage >= totalPages),

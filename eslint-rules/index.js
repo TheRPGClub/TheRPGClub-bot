@@ -320,6 +320,37 @@ function containsUnstableExpression(node) {
   return false;
 }
 
+function resolveStringShapeExpression(node, constantMap) {
+  if (!node) return null;
+  if (node.type === "Literal") {
+    if (typeof node.value === "string") return node.value;
+    if (typeof node.value === "number") return String(node.value);
+    return null;
+  }
+  if (node.type === "Identifier") {
+    const resolved = constantMap.get(node.name);
+    return typeof resolved === "string" ? resolved : null;
+  }
+  if (node.type === "TemplateLiteral") {
+    let output = "";
+    for (let i = 0; i < node.quasis.length; i += 1) {
+      output += node.quasis[i]?.value?.cooked ?? node.quasis[i]?.value?.raw ?? "";
+      if (i < node.expressions.length) {
+        output += "${*}";
+      }
+    }
+    return output;
+  }
+  if (node.type === "BinaryExpression" && node.operator === "+") {
+    const left = resolveStringShapeExpression(node.left, constantMap);
+    const right = resolveStringShapeExpression(node.right, constantMap);
+    if (typeof left === "string" && typeof right === "string") {
+      return `${left}${right}`;
+    }
+  }
+  return null;
+}
+
 function containsNewModalComponentType(node) {
   if (!node) return false;
   const nodes = [node];
@@ -1929,6 +1960,125 @@ export default {
         };
       },
     },
+    "no-duplicate-computable-custom-id-in-row": {
+      meta: {
+        type: "problem",
+        docs: {
+          description:
+            "Disallow duplicate or shape-colliding computable custom ids within one addComponents row call.",
+        },
+        schema: [],
+        messages: {
+          duplicateComputable:
+            "Potential duplicate custom id in addComponents row. Components share prefix '{{prefix}}' and shape '{{shape}}'.",
+        },
+      },
+      create(context) {
+        let constantMap = new Map();
+        const descriptorByIdentifier = new Map();
+
+        const findSetCustomIdArg = (node) => {
+          let current = node;
+          while (current && current.type === "CallExpression") {
+            const callee = current.callee;
+            if (
+              callee.type === "MemberExpression" &&
+              callee.property.type === "Identifier" &&
+              callee.property.name === "setCustomId"
+            ) {
+              return current.arguments[0] ?? null;
+            }
+            if (
+              callee.type === "MemberExpression" &&
+              callee.object &&
+              callee.object.type === "CallExpression"
+            ) {
+              current = callee.object;
+              continue;
+            }
+            break;
+          }
+          return null;
+        };
+
+        const toDescriptor = (customIdArg) => {
+          if (!customIdArg) return null;
+          const exact = resolveStaticStringExpression(customIdArg, constantMap);
+          const shape = resolveStringShapeExpression(customIdArg, constantMap);
+          const prefix = extractResolvablePrefix(customIdArg, constantMap);
+          if (!shape || !prefix) return null;
+          return {
+            exact: typeof exact === "string" ? exact : null,
+            shape,
+            prefix,
+            node: customIdArg,
+          };
+        };
+
+        const getDescriptorForComponentExpression = (node) => {
+          if (!node) return null;
+          if (node.type === "Identifier") {
+            return descriptorByIdentifier.get(node.name) ?? null;
+          }
+          if (node.type === "CallExpression") {
+            const customIdArg = findSetCustomIdArg(node);
+            return toDescriptor(customIdArg);
+          }
+          return null;
+        };
+
+        const reportDuplicate = (node, descriptor) => {
+          context.report({
+            node,
+            messageId: "duplicateComputable",
+            data: {
+              prefix: descriptor.prefix,
+              shape: descriptor.shape,
+            },
+          });
+        };
+
+        return {
+          Program(node) {
+            constantMap = collectStaticStringConstants(node);
+            descriptorByIdentifier.clear();
+          },
+          VariableDeclarator(node) {
+            if (node.id.type !== "Identifier") return;
+            if (!node.init) return;
+            const customIdArg = findSetCustomIdArg(node.init);
+            if (!customIdArg) return;
+            const descriptor = toDescriptor(customIdArg);
+            if (!descriptor) return;
+            descriptorByIdentifier.set(node.id.name, descriptor);
+          },
+          CallExpression(node) {
+            const callee = node.callee;
+            if (
+              callee.type !== "MemberExpression" ||
+              callee.property.type !== "Identifier" ||
+              callee.property.name !== "addComponents"
+            ) {
+              return;
+            }
+
+            const seen = new Set();
+            for (const arg of node.arguments) {
+              const descriptor = getDescriptorForComponentExpression(arg);
+              if (!descriptor) continue;
+              const key = descriptor.exact
+                ? `exact:${descriptor.exact}`
+                : `shape:${descriptor.prefix}|${descriptor.shape}`;
+              if (seen.has(key)) {
+                reportDuplicate(arg, descriptor);
+                continue;
+              }
+              seen.add(key);
+            }
+          },
+        };
+      },
+    },
     "components-v2-structure": {
       meta: {
         type: "problem",
@@ -2365,6 +2515,81 @@ export default {
             }
 
             context.report({ node: node.value, messageId: "requireChunking" });
+          },
+        };
+      },
+    },
+    "section-builder-requires-accessory": {
+      meta: {
+        type: "problem",
+        docs: {
+          description:
+            "Require SectionBuilder instances passed to addSectionComponents to set a button or thumbnail accessory first.",
+        },
+        schema: [],
+        messages: {
+          missingAccessory:
+            "SectionBuilder used in addSectionComponents must call setButtonAccessory or setThumbnailAccessory first.",
+        },
+      },
+      create(context) {
+        const sectionState = new Map();
+
+        const isSectionBuilderExpression = (node) => {
+          const root = getBuilderRootName(node);
+          return root === "SectionBuilder";
+        };
+
+        const markSection = (name) => {
+          if (!name) return;
+          if (!sectionState.has(name)) {
+            sectionState.set(name, { hasAccessory: false });
+          }
+        };
+
+        const markAccessory = (name) => {
+          if (!name) return;
+          const current = sectionState.get(name);
+          if (!current) return;
+          current.hasAccessory = true;
+        };
+
+        const hasAccessory = (name) => {
+          const current = sectionState.get(name);
+          return Boolean(current?.hasAccessory);
+        };
+
+        return {
+          VariableDeclarator(node) {
+            if (node.id.type !== "Identifier") return;
+            if (!isSectionBuilderExpression(node.init)) return;
+            markSection(node.id.name);
+          },
+          CallExpression(node) {
+            if (node.callee.type !== "MemberExpression") return;
+            if (node.callee.property.type !== "Identifier") return;
+            const methodName = node.callee.property.name;
+
+            if (methodName === "setButtonAccessory" || methodName === "setThumbnailAccessory") {
+              if (node.callee.object.type === "Identifier") {
+                markAccessory(node.callee.object.name);
+              }
+              return;
+            }
+
+            if (methodName !== "addSectionComponents") return;
+
+            for (const arg of node.arguments) {
+              if (arg.type === "Identifier") {
+                if (sectionState.has(arg.name) && !hasAccessory(arg.name)) {
+                  context.report({ node: arg, messageId: "missingAccessory" });
+                }
+                continue;
+              }
+              if (isSectionBuilderExpression(arg)) {
+                context.report({ node: arg, messageId: "missingAccessory" });
+              }
+            }
           },
         };
       },
