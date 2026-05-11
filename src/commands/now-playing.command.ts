@@ -153,11 +153,17 @@ const nowPlayingCompletionPlatformSessions = new Map<
   string,
   NowPlayingCompletionPlatformSession
 >();
+type NowPlayingTrackedView = "single" | "everyone" | "everyone-selected";
 type NowPlayingListContext = {
   channelId: string;
   messageId: string;
+  createdAt: number;
+  view: NowPlayingTrackedView;
+  ownerUserId: string | null;
+  selectedUserId: string | null;
 };
 const nowPlayingListContexts = new Map<string, NowPlayingListContext>();
+const NOW_PLAYING_CONTEXT_TTL_MS = 3 * 60 * 60 * 1000;
 type NowPlayingMessageComponents = Array<
   ContainerBuilder | MediaGalleryBuilder | ActionRowBuilder<ButtonBuilder>
 >;
@@ -278,10 +284,34 @@ function clearNowPlayingAddSession(sessionId: string): void {
   nowPlayingAddSessions.delete(sessionId);
 }
 
-function setNowPlayingListContext(userId: string, message: Message<boolean>): void {
-  nowPlayingListContexts.set(userId, {
+function buildNowPlayingContextKey(channelId: string, messageId: string): string {
+  return `${channelId}:${messageId}`;
+}
+
+function trackNowPlayingListContext(message: Message<boolean>, context: {
+  view: NowPlayingTrackedView;
+  ownerUserId?: string | null;
+  selectedUserId?: string | null;
+}): void {
+  if (message.flags.has(MessageFlags.Ephemeral)) {
+    return;
+  }
+  const key = buildNowPlayingContextKey(message.channelId, message.id);
+  const existing = nowPlayingListContexts.get(key);
+  nowPlayingListContexts.set(key, {
     channelId: message.channelId,
     messageId: message.id,
+    createdAt: existing?.createdAt ?? Date.now(),
+    view: context.view,
+    ownerUserId: context.ownerUserId ?? null,
+    selectedUserId: context.selectedUserId ?? null,
+  });
+}
+
+function setNowPlayingListContext(userId: string, message: Message<boolean>): void {
+  trackNowPlayingListContext(message, {
+    view: "single",
+    ownerUserId: userId,
   });
 }
 
@@ -1659,7 +1689,7 @@ export class NowPlayingCommand {
           true,
           session.userId,
           payload.components,
-          true,
+          false,
         );
         await safeUpdate(interaction, {
           components,
@@ -2075,6 +2105,7 @@ export class NowPlayingCommand {
       });
       return;
     }
+    await this.refreshNowPlayingListFromContext(interaction, ownerId).catch(() => {});
 
     const entries = getDisplayNowPlayingEntries(await Member.getNowPlaying(ownerId));
     if (!entries.length) {
@@ -2240,6 +2271,7 @@ export class NowPlayingCommand {
       await interaction.update({ components: [container] });
       return;
     }
+    await this.refreshNowPlayingListFromContext(interaction, ownerId).catch(() => {});
 
     const { files, thumbnailsByGameId } = await this.buildNowPlayingAttachments(
       reordered,
@@ -2278,7 +2310,7 @@ export class NowPlayingCommand {
       true,
       ownerId,
       payload.components,
-      true,
+      false,
     );
     await interaction.update({
       components,
@@ -2323,6 +2355,19 @@ export class NowPlayingCommand {
     const updated = await Member.updateNowPlayingNote(ownerId, gameId, nextNote);
     if (updated) {
       const refreshed = await this.refreshNowPlayingListFromContext(interaction, ownerId);
+      if (!interaction.guildId && interaction.message) {
+        try {
+          const dmComponents = await this.buildNowPlayingEditInitialComponents(ownerId, null);
+          await interaction.message.edit({
+            components: dmComponents,
+            flags: buildComponentsV2Flags(false),
+          });
+          await interaction.deleteReply().catch(() => {});
+          return;
+        } catch {
+          // Fall through to existing fallback response if DM message edit fails.
+        }
+      }
       if (refreshed) {
         await interaction.deleteReply().catch(() => {});
         return;
@@ -2338,7 +2383,7 @@ export class NowPlayingCommand {
         true,
         ownerId,
         payload.components,
-        true,
+        false,
       );
       await safeReply(interaction, {
         components,
@@ -2481,6 +2526,7 @@ export class NowPlayingCommand {
         });
         return;
       }
+      await this.refreshNowPlayingListFromContext(interaction, ownerId).catch(() => {});
 
       const entries = getDisplayNowPlayingEntries(await Member.getNowPlaying(ownerId));
       if (!entries.length) {
@@ -2595,7 +2641,10 @@ export class NowPlayingCommand {
 
     try {
       await dmChannel.send({
-        components: this.buildNowPlayingEditMenuComponents(ownerId),
+        components: await this.buildNowPlayingEditInitialComponents(
+          ownerId,
+          interaction.guildId,
+        ),
         flags: buildComponentsV2Flags(false),
       });
     } catch {
@@ -2772,7 +2821,7 @@ export class NowPlayingCommand {
       true,
       ownerId,
       payload.components,
-      true,
+      false,
     );
     await interaction.update({
       components,
@@ -2831,7 +2880,7 @@ export class NowPlayingCommand {
       true,
       ownerId,
       payload.components,
-      true,
+      false,
     );
     await interaction.update({
       components,
@@ -2879,7 +2928,7 @@ export class NowPlayingCommand {
       true,
       ownerId,
       payload.components,
-      true,
+      false,
     );
     await interaction.update({
       components,
@@ -2909,7 +2958,7 @@ export class NowPlayingCommand {
       true,
       ownerId,
       payload.components,
-      true,
+      false,
     );
     await interaction.update({
       components,
@@ -2934,11 +2983,20 @@ export class NowPlayingCommand {
             "Use Edit to manage notes, sort order, platform, completions, and removals in DM.",
           ].join("\n"),
         );
-        const actions = this.buildNowPlayingActionRow(target.id, true);
+        const actions = this.buildNowPlayingActionRow(target.id, false);
         await safeReply(interaction, {
           components: [container, actions],
           flags: buildComponentsV2Flags(ephemeral),
         });
+        if (!ephemeral && "fetchReply" in interaction && typeof interaction.fetchReply === "function") {
+          const message = await interaction.fetchReply().catch(() => null);
+          if (message) {
+            trackNowPlayingListContext(message as Message<boolean>, {
+              view: "single",
+              ownerUserId: target.id,
+            });
+          }
+        }
         return;
       }
 
@@ -2950,6 +3008,15 @@ export class NowPlayingCommand {
         components: [container],
         flags: buildComponentsV2Flags(ephemeral),
       });
+      if (!ephemeral && "fetchReply" in interaction && typeof interaction.fetchReply === "function") {
+        const message = await interaction.fetchReply().catch(() => null);
+        if (message) {
+          trackNowPlayingListContext(message as Message<boolean>, {
+            view: "single",
+            ownerUserId: target.id,
+          });
+        }
+      }
       return;
     }
 
@@ -2967,13 +3034,22 @@ export class NowPlayingCommand {
       isOwnList,
       target.id,
       payload.components,
-      true,
+      false,
     );
     await safeReply(interaction, {
       components,
       files: payload.files,
       flags: buildComponentsV2Flags(ephemeral),
     });
+    if (!ephemeral && "fetchReply" in interaction && typeof interaction.fetchReply === "function") {
+      const message = await interaction.fetchReply().catch(() => null);
+      if (message) {
+        trackNowPlayingListContext(message as Message<boolean>, {
+          view: "single",
+          ownerUserId: target.id,
+        });
+      }
+    }
   }
 
   @SelectMenuComponent({ id: /^nowplaying-all-select(?::v1)?$/ })
@@ -3006,8 +3082,12 @@ export class NowPlayingCommand {
         "Now Playing - Everyone",
         `No Now Playing entries found for <@${selectedUserId}>.`,
       );
-      await interaction.editReply({
+      const updated = await interaction.editReply({
         components: [container, ...(selectRow ? [selectRow] : [])],
+      });
+      trackNowPlayingListContext(updated as Message<boolean>, {
+        view: "everyone-selected",
+        selectedUserId,
       });
       return;
     }
@@ -3020,9 +3100,13 @@ export class NowPlayingCommand {
       interaction.guildId,
       `${displayName}'s Now Playing List`,
     );
-    await interaction.editReply({
+    const updated = await interaction.editReply({
       components: [...payload.components, ...(selectRow ? [selectRow] : [])],
       files: payload.files,
+    });
+    trackNowPlayingListContext(updated as Message<boolean>, {
+      view: "everyone-selected",
+      selectedUserId,
     });
   }
 
@@ -3064,6 +3148,14 @@ export class NowPlayingCommand {
       components: [container, selectRow],
       flags: buildComponentsV2Flags(ephemeral),
     });
+    if (!ephemeral) {
+      const message = await interaction.fetchReply().catch(() => null);
+      if (message) {
+        trackNowPlayingListContext(message as Message<boolean>, {
+          view: "everyone",
+        });
+      }
+    }
   }
 
   private buildNowPlayingListLines(
@@ -3150,7 +3242,7 @@ export class NowPlayingCommand {
     entries: IMemberNowPlayingEntry[],
     guildId: string | null,
     title: string,
-    showNotes: boolean = true,
+    showNotes: boolean = false,
   ): Promise<{ components: NowPlayingListComponents; files: AttachmentBuilder[] }> {
     const { files, covers } = await this.buildNowPlayingAttachments(
       entries,
@@ -3226,13 +3318,13 @@ export class NowPlayingCommand {
     const notesLabel = showNotes ? "Hide Notes" : "Show Notes";
     return new ActionRowBuilder<ButtonBuilder>().addComponents(
       new ButtonBuilder()
-        .setCustomId(`${NOW_PLAYING_LIST_NOTES_PREFIX}:${ownerId}:${notesAction}`)
-        .setLabel(notesLabel)
-        .setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder()
         .setCustomId(`${NOW_PLAYING_LIST_EDIT_PREFIX}:${ownerId}`)
         .setLabel("Edit")
         .setStyle(ButtonStyle.Primary),
+      new ButtonBuilder()
+        .setCustomId(`${NOW_PLAYING_LIST_NOTES_PREFIX}:${ownerId}:${notesAction}`)
+        .setLabel(notesLabel)
+        .setStyle(ButtonStyle.Secondary),
     );
   }
 
@@ -3247,12 +3339,26 @@ export class NowPlayingCommand {
 
   private buildNowPlayingEditMenuComponents(
     ownerId: string,
+    entries: IMemberNowPlayingEntry[],
+    guildId: string | null,
   ): Array<ContainerBuilder | ActionRowBuilder<ButtonBuilder>> {
-    const container = new ContainerBuilder().addTextDisplayComponents(
+    const introContainer = new ContainerBuilder().addTextDisplayComponents(
       new TextDisplayBuilder().setContent(
         "## Now Playing Edit\nChoose an edit action. All edits happen in this DM.",
       ),
     );
+    const listContainer = entries.length
+      ? this.buildNowPlayingEntryComponents(
+        "Your Now Playing List",
+        entries,
+        guildId,
+        null,
+        true,
+      )[0]
+      : this.buildNowPlayingMessageContainer(
+        "Your Now Playing List",
+        "Your Now Playing list is empty.",
+      );
     const firstRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
       new ButtonBuilder()
         .setCustomId(`${NOW_PLAYING_EDIT_MENU_NOTE_PREFIX}:${ownerId}`)
@@ -3277,7 +3383,15 @@ export class NowPlayingCommand {
         .setLabel("Remove Game")
         .setStyle(ButtonStyle.Danger),
     );
-    return [container, firstRow, secondRow];
+    return [introContainer, listContainer, firstRow, secondRow];
+  }
+
+  private async buildNowPlayingEditInitialComponents(
+    ownerId: string,
+    guildId: string | null,
+  ): Promise<Array<ContainerBuilder | ActionRowBuilder<ButtonBuilder>>> {
+    const entries = getDisplayNowPlayingEntries(await Member.getNowPlaying(ownerId));
+    return this.buildNowPlayingEditMenuComponents(ownerId, entries, guildId);
   }
 
   private buildNowPlayingCompletionComponents(
@@ -3611,67 +3725,176 @@ export class NowPlayingCommand {
     interaction: { client: Client; guildId: string | null; user: User },
     userId: string,
   ): Promise<boolean> {
-    const context = nowPlayingListContexts.get(userId);
-    if (!context) {
+    if (!nowPlayingListContexts.size) {
       return false;
     }
+    let updatedAny = false;
+    let allListsCache: Awaited<ReturnType<typeof Member.getAllNowPlaying>> | null = null;
 
-    const channel = await interaction.client.channels
-      .fetch(context.channelId)
-      .catch(() => null);
-    if (!channel?.isTextBased()) {
-      nowPlayingListContexts.delete(userId);
-      return false;
-    }
-
-    const message = await channel.messages
-      .fetch(context.messageId)
-      .catch(() => null);
-    if (!message) {
-      nowPlayingListContexts.delete(userId);
-      return false;
-    }
-
-    const target =
-      interaction.user.id === userId
-        ? interaction.user
-        : await interaction.client.users.fetch(userId).catch(() => null);
-    if (!target) {
-      return false;
-    }
-
-    const entries = await Member.getNowPlaying(userId);
-    const isEphemeral = message.flags?.has(MessageFlags.Ephemeral) ?? true;
-    const showNotes = this.getNowPlayingShowNotesState(message, userId);
-    const payload = await this.buildNowPlayingListPayload(
-      target,
-      entries,
-      message.guildId ?? interaction.guildId,
-      "Your Now Playing List",
-      showNotes,
-    );
-    const components = this.withNowPlayingActions(
-      interaction.user.id === userId,
-      userId,
-      payload.components,
-      showNotes,
-    );
-    try {
-      await message.edit({
-        components,
-        files: payload.files,
-        flags: buildComponentsV2Flags(isEphemeral),
-      });
-    } catch (err: unknown) {
-      const error = err as { code?: number; rawError?: { code?: number } };
-      const code = error?.code ?? error?.rawError?.code;
-      if (code === 10008) {
-        nowPlayingListContexts.delete(userId);
-        return false;
+    for (const [key, context] of nowPlayingListContexts.entries()) {
+      if (Date.now() - context.createdAt > NOW_PLAYING_CONTEXT_TTL_MS) {
+        nowPlayingListContexts.delete(key);
+        continue;
       }
-      throw err;
+
+      const shouldRefresh = context.view === "everyone" ||
+        context.view === "everyone-selected" ||
+        context.ownerUserId === userId;
+      if (!shouldRefresh) {
+        continue;
+      }
+
+      const channel = await interaction.client.channels
+        .fetch(context.channelId)
+        .catch(() => null);
+      if (!channel?.isTextBased()) {
+        nowPlayingListContexts.delete(key);
+        continue;
+      }
+
+      const message = await channel.messages
+        .fetch(context.messageId)
+        .catch(() => null);
+      if (!message) {
+        nowPlayingListContexts.delete(key);
+        continue;
+      }
+
+      try {
+        if (context.view === "single" && context.ownerUserId) {
+          const ownerId = context.ownerUserId;
+          const target = ownerId === interaction.user.id
+            ? interaction.user
+            : await interaction.client.users.fetch(ownerId).catch(() => null);
+          if (!target) {
+            continue;
+          }
+          const isEphemeral = message.flags?.has(MessageFlags.Ephemeral) ?? false;
+          const title = ownerId === interaction.user.id && isEphemeral
+            ? "Your Now Playing List"
+            : `${target.displayName ?? target.username ?? "User"}'s Now Playing List`;
+          const entries = getDisplayNowPlayingEntries(await Member.getNowPlaying(ownerId));
+          const showNotes = this.getNowPlayingShowNotesState(message, ownerId);
+
+          if (!entries.length) {
+            const emptyMessage = ownerId === interaction.user.id
+              ? "Your Now Playing list is empty."
+              : `No Now Playing entries found for <@${ownerId}>.`;
+            const container = this.buildNowPlayingMessageContainer(title, emptyMessage);
+            const components = ownerId === interaction.user.id
+              ? [container, this.buildNowPlayingActionRow(ownerId, showNotes)]
+              : [container];
+            await message.edit({
+              components,
+              flags: buildComponentsV2Flags(isEphemeral),
+            });
+            updatedAny = true;
+            continue;
+          }
+
+          const payload = await this.buildNowPlayingListPayload(
+            target,
+            entries,
+            message.guildId ?? interaction.guildId,
+            title,
+            showNotes,
+          );
+          const components = this.withNowPlayingActions(
+            ownerId === interaction.user.id,
+            ownerId,
+            payload.components,
+            showNotes,
+          );
+          await message.edit({
+            components,
+            files: payload.files,
+            flags: buildComponentsV2Flags(isEphemeral),
+          });
+          updatedAny = true;
+          continue;
+        }
+
+        if (!allListsCache) {
+          allListsCache = await Member.getAllNowPlaying();
+        }
+
+        if (context.view === "everyone") {
+          if (!allListsCache.length) {
+            const container = this.buildNowPlayingMessageContainer(
+              "Now Playing - Everyone",
+              "No Now Playing data found for anyone yet.",
+            );
+            await message.edit({ components: [container] });
+            updatedAny = true;
+            continue;
+          }
+          const sortedLists = [...allListsCache].sort((a, b) => {
+            const nameA = (a.globalName ?? a.username ?? a.userId).toLowerCase();
+            const nameB = (b.globalName ?? b.username ?? b.userId).toLowerCase();
+            return nameA.localeCompare(nameB);
+          });
+          const lines = sortedLists.map((record) => {
+            const displayName = record.globalName ?? record.username ?? record.userId;
+            const count = record.entries.length;
+            const suffix = count === 1 ? "game" : "games";
+            return `**${displayName}**: ${count} ${suffix}`;
+          });
+          const container = this.buildNowPlayingListContainer("Now Playing - Everyone", lines);
+          const selectRow = this.buildNowPlayingMemberSelect(sortedLists);
+          await message.edit({
+            components: [container, selectRow],
+          });
+          updatedAny = true;
+          continue;
+        }
+
+        if (context.view === "everyone-selected" && context.selectedUserId) {
+          const selectedUserId = context.selectedUserId;
+          const selectRow = allListsCache.length
+            ? this.buildNowPlayingMemberSelect(allListsCache, selectedUserId)
+            : null;
+          const entries = getDisplayNowPlayingEntries(
+            await Member.getNowPlaying(selectedUserId),
+          );
+          if (!entries.length) {
+            const container = this.buildNowPlayingMessageContainer(
+              "Now Playing - Everyone",
+              `No Now Playing entries found for <@${selectedUserId}>.`,
+            );
+            await message.edit({
+              components: [container, ...(selectRow ? [selectRow] : [])],
+            });
+            updatedAny = true;
+            continue;
+          }
+          const target =
+            (await interaction.client.users.fetch(selectedUserId).catch(() => null)) ??
+            interaction.user;
+          const title = `${target.displayName ?? target.username ?? "User"}'s Now Playing List`;
+          const payload = await this.buildNowPlayingListPayload(
+            target,
+            entries,
+            message.guildId ?? interaction.guildId,
+            title,
+          );
+          await message.edit({
+            components: [...payload.components, ...(selectRow ? [selectRow] : [])],
+            files: payload.files,
+          });
+          updatedAny = true;
+        }
+      } catch (err: unknown) {
+        const error = err as { code?: number; rawError?: { code?: number } };
+        const code = error?.code ?? error?.rawError?.code;
+        if (code === 10008) {
+          nowPlayingListContexts.delete(key);
+          continue;
+        }
+        throw err;
+      }
     }
-    return true;
+
+    return updatedAny;
   }
 
   private getNowPlayingShowNotesState(message: Message, ownerId: string): boolean {
@@ -3689,7 +3912,7 @@ export class NowPlayingCommand {
         return customId.endsWith(":hide");
       }
     }
-    return true;
+    return false;
   }
 
 
@@ -3723,9 +3946,7 @@ export class NowPlayingCommand {
       }
       const entryTitle = formatEntry(entry, guildId);
       const lines = [`### ${entryTitle}`];
-      if (showNotes && entry.note) {
-        lines.push(entry.note);
-      }
+      let hasUpdateText = false;
       if (entry.addedAt) {
         const addedLabel = `Added ${formatTableDate(entry.addedAt)}`;
         if (entry.noteUpdatedAt) {
@@ -3738,6 +3959,17 @@ export class NowPlayingCommand {
         } else {
           lines.push(`-# *${addedLabel}.*`);
         }
+        hasUpdateText = true;
+      }
+      if (showNotes && entry.note) {
+        if (hasUpdateText) {
+          lines.push("");
+        }
+        const quotedNote = entry.note
+          .split("\n")
+          .map((noteLine) => `> ${noteLine}`)
+          .join("\n");
+        lines.push(quotedNote);
       }
       const content = this.trimTextDisplayContent(lines.join("\n"));
       container.addTextDisplayComponents(new TextDisplayBuilder().setContent(content));
