@@ -215,10 +215,6 @@ function encodeNowPlayingSortState(state: number[]): string {
   return state.map((value) => (value < 0 ? "_" : value.toString(36))).join("");
 }
 
-function buildNowPlayingPlatformStateToken(entryCount: number): string {
-  return Array.from({ length: entryCount }, () => "_").join("");
-}
-
 function parseNowPlayingPlatformStateToken(
   token: string,
   entryCount: number,
@@ -243,6 +239,18 @@ function parseNowPlayingPlatformStateToken(
 
 function encodeNowPlayingPlatformState(state: number[]): string {
   return state.map((value) => (value < 0 ? "_" : value.toString(36))).join("");
+}
+
+function buildNowPlayingPlatformStateFromCurrent(
+  entries: IMemberNowPlayingEntry[],
+  platformOptions: Array<Array<{ label: string; value: string; platformId: number }>>,
+): string {
+  const state = entries.map((entry, slotIndex) => {
+    const options = platformOptions[slotIndex] ?? [];
+    const selectedIndex = options.findIndex((option) => option.platformId === entry.platformId);
+    return selectedIndex >= 0 ? selectedIndex : -1;
+  });
+  return encodeNowPlayingPlatformState(state);
 }
 
 async function confirmDuplicateCompletion(
@@ -2268,7 +2276,7 @@ export class NowPlayingCommand {
     }
 
     const platformOptions = await this.getNowPlayingEditPlatformOptions(entries);
-    const stateToken = buildNowPlayingPlatformStateToken(entries.length);
+    const stateToken = buildNowPlayingPlatformStateFromCurrent(entries, platformOptions);
     const components = this.buildNowPlayingEditPlatformComponents(
       entries,
       interaction.user.id,
@@ -3280,7 +3288,7 @@ export class NowPlayingCommand {
     const responseFlags = buildComponentsV2Flags(isEphemeral);
     const entries = getDisplayNowPlayingEntries(await Member.getNowPlaying(ownerId)).slice(0, 10);
     const platformOptions = await this.getNowPlayingEditPlatformOptions(entries);
-    const stateTokenReset = buildNowPlayingPlatformStateToken(entries.length);
+    const stateTokenReset = buildNowPlayingPlatformStateFromCurrent(entries, platformOptions);
     const components = this.buildNowPlayingEditPlatformComponents(
       entries,
       ownerId,
