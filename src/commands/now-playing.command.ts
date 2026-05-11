@@ -78,6 +78,7 @@ import {
 } from "../commands/profile.command.js";
 import { parseTitleWithYear } from "../functions/GameTitleAutocompleteUtils.js";
 import { COMPONENTS_V2_FLAG } from "../config/flags.js";
+import { REGULARS_ROLE_ID } from "../config/roles.js";
 import { STANDARD_PLATFORM_IDS } from "../config/standardPlatforms.js";
 import { composeVoteImage } from "../services/collageGenerator.js";
 import {
@@ -123,6 +124,14 @@ const NOW_PLAYING_EDIT_MENU_PLATFORM_PREFIX = "nowplaying-edit-menu-platform";
 const NOW_PLAYING_EDIT_MENU_COMPLETE_PREFIX = "nowplaying-edit-menu-complete";
 const NOW_PLAYING_EDIT_MENU_REMOVE_PREFIX = "nowplaying-edit-menu-remove";
 const NOW_PLAYING_REMOVE_SELECT_PREFIX = "nowplaying-remove-select";
+const NOW_PLAYING_JOURNAL_OPEN_PREFIX = "nowplaying-journal-open";
+const NOW_PLAYING_JOURNAL_ENABLE_PREFIX = "nowplaying-journal-enable";
+const NOW_PLAYING_JOURNAL_ADD_PREFIX = "nowplaying-journal-add";
+const NOW_PLAYING_JOURNAL_PAGE_PREFIX = "nowplaying-journal-page";
+const NOW_PLAYING_JOURNAL_MODAL_ID = "nowplaying-journal-modal";
+const NOW_PLAYING_JOURNAL_TITLE_INPUT_ID = "nowplaying-journal-title";
+const NOW_PLAYING_JOURNAL_BODY_INPUT_ID = "nowplaying-journal-body";
+const NOW_PLAYING_JOURNAL_PRIVACY_INPUT_ID = "nowplaying-journal-privacy";
 type NowPlayingAddSession = {
   userId: string;
   query: string;
@@ -3020,6 +3029,137 @@ export class NowPlayingCommand {
     });
   }
 
+  @ButtonComponent({ id: /^nowplaying-journal-open:\d+:\d+:\d+$/ })
+  async handleNowPlayingJournalOpen(interaction: ButtonInteraction): Promise<void> {
+    const [, ownerId, gameIdRaw, pageRaw] = interaction.customId.split(":");
+    const components = await this.buildJournalComponents(
+      ownerId,
+      interaction.user.id,
+      Number(gameIdRaw),
+      Number(pageRaw),
+    );
+    await safeReply(interaction, {
+      components,
+      flags: buildComponentsV2Flags(interaction.message.flags?.has(MessageFlags.Ephemeral) ?? false),
+    });
+  }
+
+  @ButtonComponent({ id: /^nowplaying-journal-page:\d+:\d+:\d+$/ })
+  async handleNowPlayingJournalPage(interaction: ButtonInteraction): Promise<void> {
+    const [, ownerId, gameIdRaw, pageRaw] = interaction.customId.split(":");
+    const components = await this.buildJournalComponents(
+      ownerId,
+      interaction.user.id,
+      Number(gameIdRaw),
+      Number(pageRaw),
+    );
+    await safeReply(interaction, {
+      components,
+      flags: buildComponentsV2Flags(interaction.message.flags?.has(MessageFlags.Ephemeral) ?? false),
+    });
+  }
+
+  @ButtonComponent({ id: /^nowplaying-journal-enable:\d+:\d+$/ })
+  async handleNowPlayingJournalEnable(interaction: ButtonInteraction): Promise<void> {
+    const [, ownerId, gameIdRaw] = interaction.customId.split(":");
+    if (interaction.user.id !== ownerId) {
+      await safeReply(interaction, { content: "Only the owner can enable journal mode." });
+      return;
+    }
+    if (!(await this.hasRegularsRoleForInteraction(interaction))) {
+      await safeReply(interaction, { content: "Journal mode requires the Regulars role." });
+      return;
+    }
+    await Member.upsertGameJournalPreference(ownerId, Number(gameIdRaw), true, false);
+    const components = await this.buildJournalComponents(
+      ownerId,
+      interaction.user.id,
+      Number(gameIdRaw),
+      1,
+    );
+    await safeReply(interaction, {
+      components,
+      flags: buildComponentsV2Flags(interaction.message.flags?.has(MessageFlags.Ephemeral) ?? false),
+    });
+  }
+
+  @ButtonComponent({ id: /^nowplaying-journal-add:\d+:\d+:\d+$/ })
+  async handleNowPlayingJournalAdd(interaction: ButtonInteraction): Promise<void> {
+    const [, ownerId, gameIdRaw, pageRaw] = interaction.customId.split(":");
+    if (interaction.user.id !== ownerId) {
+      await safeReply(interaction, { content: "Only the owner can add journal entries." });
+      return;
+    }
+    const modal = new ModalBuilder()
+      .setCustomId(`${NOW_PLAYING_JOURNAL_MODAL_ID}:${ownerId}:${gameIdRaw}:${pageRaw}`)
+      .setTitle("Add Journal Entry");
+    modal.addComponents(
+      new ActionRowBuilder<TextInputBuilder>().addComponents(
+        new TextInputBuilder()
+          .setCustomId(NOW_PLAYING_JOURNAL_TITLE_INPUT_ID)
+          .setLabel("Title (optional)")
+          .setStyle(TextInputStyle.Short)
+          .setRequired(false)
+          .setMaxLength(120),
+      ),
+      new ActionRowBuilder<TextInputBuilder>().addComponents(
+        new TextInputBuilder()
+          .setCustomId(NOW_PLAYING_JOURNAL_BODY_INPUT_ID)
+          .setLabel("Entry")
+          .setStyle(TextInputStyle.Paragraph)
+          .setRequired(true)
+          .setMaxLength(2000),
+      ),
+      new ActionRowBuilder<TextInputBuilder>().addComponents(
+        new TextInputBuilder()
+          .setCustomId(NOW_PLAYING_JOURNAL_PRIVACY_INPUT_ID)
+          .setLabel("Privacy: public or private")
+          .setStyle(TextInputStyle.Short)
+          .setRequired(true)
+          .setValue("private")
+          .setMaxLength(7),
+      ),
+    );
+    await interaction.showModal(modal);
+  }
+
+  @ModalComponent({ id: /^nowplaying-journal-modal:\d+:\d+:\d+$/ })
+  async handleNowPlayingJournalModal(interaction: ModalSubmitInteraction): Promise<void> {
+    const [, ownerId, gameIdRaw, pageRaw] = interaction.customId.split(":");
+    if (interaction.user.id !== ownerId) {
+      await safeReply(interaction, { content: "Only the owner can submit journal entries." });
+      return;
+    }
+    const title = sanitizeUserInput(
+      interaction.fields.getTextInputValue(NOW_PLAYING_JOURNAL_TITLE_INPUT_ID) ?? "",
+      { preserveNewlines: true, maxLength: 120 },
+    );
+    const body = sanitizeUserInput(
+      interaction.fields.getTextInputValue(NOW_PLAYING_JOURNAL_BODY_INPUT_ID),
+      { preserveNewlines: true, maxLength: 2000 },
+    );
+    const privacyRaw = sanitizeUserInput(
+      interaction.fields.getTextInputValue(NOW_PLAYING_JOURNAL_PRIVACY_INPUT_ID) ?? "private",
+      { preserveNewlines: false, maxLength: 7 },
+    ).toLowerCase();
+    const isPublic = privacyRaw === "public";
+    await Member.addGameJournalEntry({
+      userId: ownerId,
+      gameId: Number(gameIdRaw),
+      title: title || null,
+      body,
+      isPublic,
+    });
+    await Member.upsertGameJournalPreference(ownerId, Number(gameIdRaw), true, isPublic);
+    const components = await this.buildJournalComponents(
+      ownerId,
+      interaction.user.id,
+      Number(gameIdRaw),
+      Number(pageRaw),
+    );
+    await safeReply(interaction, { components, flags: buildComponentsV2Flags(true) });
+  }
+
   @ButtonComponent({ id: /^nowplaying-list-edit:\d+$/ })
   async handleNowPlayingListEdit(interaction: ButtonInteraction): Promise<void> {
     const [, ownerId] = interaction.customId.split(":");
@@ -3744,6 +3884,7 @@ export class NowPlayingCommand {
     const components = this.buildNowPlayingEntryComponents(
       title,
       entries,
+      target.id,
       guildId,
       await this.buildNowPlayingCompositeImageUrl(files, covers, target.id),
       showNotes,
@@ -3844,6 +3985,7 @@ export class NowPlayingCommand {
       ? this.buildNowPlayingEntryComponents(
         "Your Now Playing List",
         entries,
+        ownerId,
         guildId,
         null,
         true,
@@ -3915,6 +4057,7 @@ export class NowPlayingCommand {
       ? this.buildNowPlayingEntryComponents(
         "Your Now Playing List",
         entries,
+        ownerId,
         null,
         null,
         true,
@@ -4556,6 +4699,7 @@ export class NowPlayingCommand {
   private buildNowPlayingEntryComponents(
     title: string,
     entries: IMemberNowPlayingEntry[],
+    ownerId: string,
     guildId: string | null,
     imageUrl: string | null,
     showNotes: boolean,
@@ -4596,7 +4740,10 @@ export class NowPlayingCommand {
           lines.push(`-# *${addedLabel}.*`);
         }
       }
-      if (showNotes && entry.note) {
+      if (entry.journalEnabled) {
+        lines.push("-# Journal mode enabled for this game.");
+      }
+      if (showNotes && entry.note && !entry.journalEnabled) {
         const quotedNote = entry.note
           .split("\n")
           .map((noteLine) => `> ${noteLine}`)
@@ -4604,7 +4751,16 @@ export class NowPlayingCommand {
         lines.push(quotedNote);
       }
       const content = this.trimTextDisplayContent(lines.join("\n"));
-      container.addTextDisplayComponents(new TextDisplayBuilder().setContent(content));
+      const section = new SectionBuilder().addTextDisplayComponents(
+        new TextDisplayBuilder().setContent(content),
+      );
+      section.setButtonAccessory(
+        new V2ButtonBuilder()
+          .setCustomId(`${NOW_PLAYING_JOURNAL_OPEN_PREFIX}:${ownerId}:${entry.gameId}:1`)
+          .setLabel("Journal")
+          .setStyle(ButtonStyle.Secondary),
+      );
+      container.addSectionComponents(section);
     });
     return [container];
   }
@@ -4614,6 +4770,99 @@ export class NowPlayingCommand {
       return content;
     }
     return `${content.slice(0, 3997)}...`;
+  }
+
+  private async hasRegularsRoleForInteraction(interaction: ButtonInteraction): Promise<boolean> {
+    const roleData = (interaction.member as any)?.roles;
+    if (Array.isArray(roleData)) {
+      return roleData.includes(REGULARS_ROLE_ID);
+    }
+    const roleCache = roleData?.cache;
+    if (roleCache?.has?.(REGULARS_ROLE_ID)) {
+      return true;
+    }
+    const member = await Member.getByUserId(interaction.user.id);
+    return member?.roleRegular === 1;
+  }
+
+  private async buildJournalComponents(
+    ownerId: string,
+    viewerId: string,
+    gameId: number,
+    page: number,
+  ): Promise<Array<ContainerBuilder | ActionRowBuilder<ButtonBuilder>>> {
+    const perPage = 5;
+    const game = await Game.getGameById(gameId);
+    const pref = await Member.getGameJournalPreference(ownerId, gameId);
+    const isEnabled = pref?.isEnabled === true;
+    const canManage = ownerId === viewerId;
+    const offset = (page - 1) * perPage;
+    const total = await Member.countGameJournalEntries(ownerId, gameId, viewerId);
+    const entries = await Member.getGameJournalEntries(ownerId, gameId, {
+      viewerUserId: viewerId,
+      limit: perPage,
+      offset,
+    });
+    const totalPages = Math.max(1, Math.ceil(total / perPage));
+    const safePage = Math.min(Math.max(page, 1), totalPages);
+
+    const container = new ContainerBuilder().addTextDisplayComponents(
+      new TextDisplayBuilder().setContent(
+        `## Journal: ${game?.title ?? `Game #${gameId}`}`,
+      ),
+      new TextDisplayBuilder().setContent(`Total entries visible: **${total}** | Page ${safePage}/${totalPages}`),
+    );
+    if (!isEnabled) {
+      container.addTextDisplayComponents(
+        new TextDisplayBuilder().setContent("Journal mode is not enabled for this game."),
+      );
+    } else if (!entries.length) {
+      container.addTextDisplayComponents(
+        new TextDisplayBuilder().setContent("No journal entries yet."),
+      );
+    } else {
+      for (const entry of entries) {
+        const title = entry.title ? `### ${entry.title}` : "### Untitled Entry";
+        const privacy = entry.isPublic ? "Public" : "Private";
+        const body = this.trimTextDisplayContent(entry.body);
+        container.addTextDisplayComponents(
+          new TextDisplayBuilder().setContent(
+            `${title}\n-# ${formatTableDate(entry.createdAt)} | ${privacy}\n${body}`,
+          ),
+        );
+      }
+    }
+
+    const row = new ActionRowBuilder<ButtonBuilder>();
+    if (!isEnabled && canManage) {
+      row.addComponents(
+        new ButtonBuilder()
+          .setCustomId(`${NOW_PLAYING_JOURNAL_ENABLE_PREFIX}:${ownerId}:${gameId}`)
+          .setLabel("Enable Journal")
+          .setStyle(ButtonStyle.Primary),
+      );
+    }
+    if (isEnabled && canManage) {
+      row.addComponents(
+        new ButtonBuilder()
+          .setCustomId(`${NOW_PLAYING_JOURNAL_ADD_PREFIX}:${ownerId}:${gameId}:${safePage}`)
+          .setLabel("Add Entry")
+          .setStyle(ButtonStyle.Success),
+      );
+    }
+    row.addComponents(
+      new ButtonBuilder()
+        .setCustomId(`${NOW_PLAYING_JOURNAL_PAGE_PREFIX}:${ownerId}:${gameId}:${Math.max(1, safePage - 1)}`)
+        .setLabel("Prev")
+        .setStyle(ButtonStyle.Secondary)
+        .setDisabled(safePage <= 1),
+      new ButtonBuilder()
+        .setCustomId(`${NOW_PLAYING_JOURNAL_PAGE_PREFIX}:${ownerId}:${gameId}:${Math.min(totalPages, safePage + 1)}`)
+        .setLabel("Next")
+        .setStyle(ButtonStyle.Secondary)
+        .setDisabled(safePage >= totalPages),
+    );
+    return [container, row];
   }
 
 

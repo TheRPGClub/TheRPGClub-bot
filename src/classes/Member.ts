@@ -95,6 +95,7 @@ export interface IMemberNowPlayingEntry {
   addedAt: Date | null;
   noteUpdatedAt: Date | null;
   sortOrder: number | null;
+  journalEnabled: boolean;
 }
 
 export interface IMemberNowPlayingList {
@@ -102,6 +103,24 @@ export interface IMemberNowPlayingList {
   username: string | null;
   globalName: string | null;
   entries: IMemberNowPlayingEntry[];
+}
+
+export interface IGameJournalEntry {
+  entryId: number;
+  userId: string;
+  gameId: number;
+  title: string | null;
+  body: string;
+  isPublic: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface IGameJournalPreference {
+  userId: string;
+  gameId: number;
+  isEnabled: boolean;
+  defaultIsPublic: boolean;
 }
 
 export interface IAvatarHistoryRecord {
@@ -227,6 +246,7 @@ export default class Member {
         ADDED_AT: Date | string | null;
         NOTE_UPDATED_AT: Date | string | null;
         SORT_ORDER: number | null;
+        JOURNAL_ENABLED: number | null;
       }>(
         `SELECT g.GAME_ID,
                 g.TITLE,
@@ -237,10 +257,14 @@ export default class Member {
                 u.NOTE,
                 u.ADDED_AT,
                 u.NOTE_UPDATED_AT,
-                u.SORT_ORDER
+                u.SORT_ORDER,
+                jp.IS_ENABLED AS JOURNAL_ENABLED
            FROM USER_NOW_PLAYING u
            JOIN GAMEDB_GAMES g ON g.GAME_ID = u.GAMEDB_GAME_ID
            LEFT JOIN GAMEDB_PLATFORMS p ON p.PLATFORM_ID = u.PLATFORM_ID
+           LEFT JOIN USER_GAME_JOURNAL_PREFS jp
+             ON jp.USER_ID = u.USER_ID
+            AND jp.GAMEDB_GAME_ID = u.GAMEDB_GAME_ID
           WHERE u.USER_ID = :userId
             AND u.GAMEDB_GAME_ID IS NOT NULL
           ORDER BY u.SORT_ORDER NULLS LAST, u.ADDED_AT DESC, u.ENTRY_ID DESC`,
@@ -267,6 +291,7 @@ export default class Member {
               ? new Date(r.NOTE_UPDATED_AT as any)
               : null,
           sortOrder: r.SORT_ORDER == null ? null : Number(r.SORT_ORDER),
+          journalEnabled: Number(r.JOURNAL_ENABLED ?? 0) === 1,
         }))
         .slice(0, MAX_NOW_PLAYING);
     } finally {
@@ -351,6 +376,7 @@ export default class Member {
                 ? new Date(row.NOTE_UPDATED_AT as any)
                 : null,
             sortOrder: null,
+            journalEnabled: false,
           });
         }
       }
@@ -505,6 +531,7 @@ export default class Member {
             ? new Date(r.NOTE_UPDATED_AT as any)
             : null,
         sortOrder: r.SORT_ORDER == null ? null : Number(r.SORT_ORDER),
+        journalEnabled: false,
       }));
     } finally {
       await connection.close();
@@ -625,6 +652,180 @@ export default class Member {
         throw new Error("That title is already in your Now Playing list.");
       }
       throw err;
+    } finally {
+      await connection.close();
+    }
+  }
+
+  static async getGameJournalPreference(
+    userId: string,
+    gameId: number,
+  ): Promise<IGameJournalPreference | null> {
+    const connection = await getOraclePool().getConnection();
+    try {
+      const res = await connection.execute<{
+        USER_ID: string;
+        GAMEDB_GAME_ID: number;
+        IS_ENABLED: number;
+        DEFAULT_IS_PUBLIC: number;
+      }>(
+        `SELECT USER_ID,
+                GAMEDB_GAME_ID,
+                IS_ENABLED,
+                DEFAULT_IS_PUBLIC
+           FROM USER_GAME_JOURNAL_PREFS
+          WHERE USER_ID = :userId
+            AND GAMEDB_GAME_ID = :gameId`,
+        { userId, gameId },
+        { outFormat: oracledb.OUT_FORMAT_OBJECT },
+      );
+      const row = (res.rows ?? [])[0];
+      if (!row) return null;
+      return {
+        userId: row.USER_ID,
+        gameId: Number(row.GAMEDB_GAME_ID),
+        isEnabled: Number(row.IS_ENABLED) === 1,
+        defaultIsPublic: Number(row.DEFAULT_IS_PUBLIC) === 1,
+      };
+    } finally {
+      await connection.close();
+    }
+  }
+
+  static async upsertGameJournalPreference(
+    userId: string,
+    gameId: number,
+    isEnabled: boolean,
+    defaultIsPublic: boolean,
+  ): Promise<void> {
+    const connection = await getOraclePool().getConnection();
+    try {
+      await connection.execute(
+        `MERGE INTO USER_GAME_JOURNAL_PREFS p
+         USING (SELECT :userId AS USER_ID, :gameId AS GAMEDB_GAME_ID FROM dual) src
+            ON (p.USER_ID = src.USER_ID AND p.GAMEDB_GAME_ID = src.GAMEDB_GAME_ID)
+          WHEN MATCHED THEN
+            UPDATE SET IS_ENABLED = :isEnabled,
+                       DEFAULT_IS_PUBLIC = :defaultIsPublic,
+                       UPDATED_AT = SYSTIMESTAMP
+          WHEN NOT MATCHED THEN
+            INSERT (USER_ID, GAMEDB_GAME_ID, IS_ENABLED, DEFAULT_IS_PUBLIC)
+            VALUES (:userId, :gameId, :isEnabled, :defaultIsPublic)`,
+        {
+          userId,
+          gameId,
+          isEnabled: isEnabled ? 1 : 0,
+          defaultIsPublic: defaultIsPublic ? 1 : 0,
+        },
+        { autoCommit: true },
+      );
+    } finally {
+      await connection.close();
+    }
+  }
+
+  static async getGameJournalEntries(
+    userId: string,
+    gameId: number,
+    params?: { viewerUserId?: string | null; limit?: number; offset?: number },
+  ): Promise<IGameJournalEntry[]> {
+    const connection = await getOraclePool().getConnection();
+    const viewerUserId = params?.viewerUserId ?? null;
+    const safeLimit = Math.min(Math.max(params?.limit ?? 5, 1), 25);
+    const safeOffset = Math.max(params?.offset ?? 0, 0);
+    try {
+      const res = await connection.execute<{
+        ENTRY_ID: number;
+        USER_ID: string;
+        GAMEDB_GAME_ID: number;
+        ENTRY_TITLE: string | null;
+        ENTRY_BODY: string;
+        IS_PUBLIC: number;
+        CREATED_AT: Date | string;
+        UPDATED_AT: Date | string;
+      }>(
+        `SELECT ENTRY_ID,
+                USER_ID,
+                GAMEDB_GAME_ID,
+                ENTRY_TITLE,
+                ENTRY_BODY,
+                IS_PUBLIC,
+                CREATED_AT,
+                UPDATED_AT
+           FROM USER_GAME_JOURNAL_ENTRIES
+          WHERE USER_ID = :userId
+            AND GAMEDB_GAME_ID = :gameId
+            AND (:viewerUserId = :userId OR IS_PUBLIC = 1)
+          ORDER BY CREATED_AT DESC, ENTRY_ID DESC
+          OFFSET :offset ROWS FETCH NEXT :limit ROWS ONLY`,
+        { userId, gameId, viewerUserId, offset: safeOffset, limit: safeLimit },
+        { outFormat: oracledb.OUT_FORMAT_OBJECT },
+      );
+      return (res.rows ?? []).map((row) => ({
+        entryId: Number(row.ENTRY_ID),
+        userId: row.USER_ID,
+        gameId: Number(row.GAMEDB_GAME_ID),
+        title: row.ENTRY_TITLE ?? null,
+        body: row.ENTRY_BODY,
+        isPublic: Number(row.IS_PUBLIC) === 1,
+        createdAt: row.CREATED_AT instanceof Date ? row.CREATED_AT : new Date(row.CREATED_AT),
+        updatedAt: row.UPDATED_AT instanceof Date ? row.UPDATED_AT : new Date(row.UPDATED_AT),
+      }));
+    } finally {
+      await connection.close();
+    }
+  }
+
+  static async countGameJournalEntries(
+    userId: string,
+    gameId: number,
+    viewerUserId?: string | null,
+  ): Promise<number> {
+    const connection = await getOraclePool().getConnection();
+    try {
+      const res = await connection.execute<{ CNT: number }>(
+        `SELECT COUNT(*) AS CNT
+           FROM USER_GAME_JOURNAL_ENTRIES
+          WHERE USER_ID = :userId
+            AND GAMEDB_GAME_ID = :gameId
+            AND (:viewerUserId = :userId OR IS_PUBLIC = 1)`,
+        { userId, gameId, viewerUserId: viewerUserId ?? null },
+        { outFormat: oracledb.OUT_FORMAT_OBJECT },
+      );
+      return Number((res.rows ?? [])[0]?.CNT ?? 0);
+    } finally {
+      await connection.close();
+    }
+  }
+
+  static async addGameJournalEntry(params: {
+    userId: string;
+    gameId: number;
+    title?: string | null;
+    body: string;
+    isPublic?: boolean;
+  }): Promise<void> {
+    const connection = await getOraclePool().getConnection();
+    const titleValue = params.title?.trim() ? params.title.trim() : null;
+    const bodyValue = params.body.trim();
+    if (!bodyValue) {
+      throw new Error("Journal body cannot be empty.");
+    }
+    try {
+      await connection.execute(
+        `INSERT INTO USER_GAME_JOURNAL_ENTRIES
+          (USER_ID, GAMEDB_GAME_ID, ENTRY_TITLE, ENTRY_BODY, IS_PUBLIC)
+         VALUES
+          (:userId, :gameId, :title, :body, :isPublic)`,
+        {
+          userId: params.userId,
+          gameId: params.gameId,
+          title: titleValue,
+          body: bodyValue,
+          isPublic: params.isPublic === true ? 1 : 0,
+        },
+        { autoCommit: true },
+      );
     } finally {
       await connection.close();
     }
