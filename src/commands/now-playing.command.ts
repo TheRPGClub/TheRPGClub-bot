@@ -3946,7 +3946,6 @@ export class NowPlayingCommand {
       }
       const entryTitle = formatEntry(entry, guildId);
       const lines = [`### ${entryTitle}`];
-      let hasUpdateText = false;
       if (entry.addedAt) {
         const addedLabel = `Added ${formatTableDate(entry.addedAt)}`;
         if (entry.noteUpdatedAt) {
@@ -3959,12 +3958,8 @@ export class NowPlayingCommand {
         } else {
           lines.push(`-# *${addedLabel}.*`);
         }
-        hasUpdateText = true;
       }
       if (showNotes && entry.note) {
-        if (hasUpdateText) {
-          lines.push("");
-        }
         const quotedNote = entry.note
           .split("\n")
           .map((noteLine) => `> ${noteLine}`)
