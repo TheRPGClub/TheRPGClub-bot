@@ -19,6 +19,7 @@ test("now-playing list components serialize with mixed journal-enabled entries",
     noteUpdatedAt: null,
     sortOrder: null,
     journalEnabled: true,
+    hasPublicJournalEntry: true,
   }, {
     gameId: 102,
     title: "Notes Only Game",
@@ -31,6 +32,7 @@ test("now-playing list components serialize with mixed journal-enabled entries",
     noteUpdatedAt: null,
     sortOrder: null,
     journalEnabled: false,
+    hasPublicJournalEntry: false,
   }];
 
   const components = command.buildNowPlayingEntryComponents(

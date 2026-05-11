@@ -96,6 +96,7 @@ export interface IMemberNowPlayingEntry {
   noteUpdatedAt: Date | null;
   sortOrder: number | null;
   journalEnabled: boolean;
+  hasPublicJournalEntry: boolean;
 }
 
 export interface IMemberNowPlayingList {
@@ -247,6 +248,7 @@ export default class Member {
         NOTE_UPDATED_AT: Date | string | null;
         SORT_ORDER: number | null;
         JOURNAL_ENABLED: number | null;
+        HAS_PUBLIC_JOURNAL_ENTRY: number | null;
       }>(
         `SELECT g.GAME_ID,
                 g.TITLE,
@@ -258,7 +260,17 @@ export default class Member {
                 u.ADDED_AT,
                 u.NOTE_UPDATED_AT,
                 u.SORT_ORDER,
-                jp.IS_ENABLED AS JOURNAL_ENABLED
+                jp.IS_ENABLED AS JOURNAL_ENABLED,
+                CASE
+                  WHEN EXISTS (
+                    SELECT 1
+                    FROM USER_GAME_JOURNAL_ENTRIES je
+                    WHERE je.USER_ID = u.USER_ID
+                      AND je.GAMEDB_GAME_ID = u.GAMEDB_GAME_ID
+                      AND je.IS_PUBLIC = 1
+                  ) THEN 1
+                  ELSE 0
+                END AS HAS_PUBLIC_JOURNAL_ENTRY
            FROM USER_NOW_PLAYING u
            JOIN GAMEDB_GAMES g ON g.GAME_ID = u.GAMEDB_GAME_ID
            LEFT JOIN GAMEDB_PLATFORMS p ON p.PLATFORM_ID = u.PLATFORM_ID
@@ -292,6 +304,7 @@ export default class Member {
               : null,
           sortOrder: r.SORT_ORDER == null ? null : Number(r.SORT_ORDER),
           journalEnabled: Number(r.JOURNAL_ENABLED ?? 0) === 1,
+          hasPublicJournalEntry: Number(r.HAS_PUBLIC_JOURNAL_ENTRY ?? 0) === 1,
         }))
         .slice(0, MAX_NOW_PLAYING);
     } finally {
@@ -377,6 +390,7 @@ export default class Member {
                 : null,
             sortOrder: null,
             journalEnabled: false,
+            hasPublicJournalEntry: false,
           });
         }
       }
@@ -532,6 +546,7 @@ export default class Member {
             : null,
         sortOrder: r.SORT_ORDER == null ? null : Number(r.SORT_ORDER),
         journalEnabled: false,
+        hasPublicJournalEntry: false,
       }));
     } finally {
       await connection.close();
@@ -826,6 +841,102 @@ export default class Member {
         },
         { autoCommit: true },
       );
+    } finally {
+      await connection.close();
+    }
+  }
+
+  static async getGameJournalEntryForUser(
+    userId: string,
+    entryId: number,
+  ): Promise<IGameJournalEntry | null> {
+    const connection = await getOraclePool().getConnection();
+    try {
+      const res = await connection.execute<{
+        ENTRY_ID: number;
+        USER_ID: string;
+        GAMEDB_GAME_ID: number;
+        ENTRY_TITLE: string | null;
+        ENTRY_BODY: string;
+        IS_PUBLIC: number;
+        CREATED_AT: Date | string;
+        UPDATED_AT: Date | string;
+      }>(
+        `SELECT ENTRY_ID,
+                USER_ID,
+                GAMEDB_GAME_ID,
+                ENTRY_TITLE,
+                ENTRY_BODY,
+                IS_PUBLIC,
+                CREATED_AT,
+                UPDATED_AT
+           FROM USER_GAME_JOURNAL_ENTRIES
+          WHERE USER_ID = :userId
+            AND ENTRY_ID = :entryId
+          FETCH FIRST 1 ROWS ONLY`,
+        { userId, entryId },
+        { outFormat: oracledb.OUT_FORMAT_OBJECT },
+      );
+      const row = (res.rows ?? [])[0];
+      if (!row) return null;
+      return {
+        entryId: Number(row.ENTRY_ID),
+        userId: row.USER_ID,
+        gameId: Number(row.GAMEDB_GAME_ID),
+        title: row.ENTRY_TITLE ?? null,
+        body: row.ENTRY_BODY,
+        isPublic: Number(row.IS_PUBLIC) === 1,
+        createdAt: row.CREATED_AT instanceof Date ? row.CREATED_AT : new Date(row.CREATED_AT),
+        updatedAt: row.UPDATED_AT instanceof Date ? row.UPDATED_AT : new Date(row.UPDATED_AT),
+      };
+    } finally {
+      await connection.close();
+    }
+  }
+
+  static async updateGameJournalEntry(params: {
+    userId: string;
+    entryId: number;
+    title?: string | null;
+    body?: string;
+    isPublic?: boolean;
+  }): Promise<boolean> {
+    const connection = await getOraclePool().getConnection();
+    const fields: string[] = [];
+    const binds: Record<string, unknown> = {
+      userId: params.userId,
+      entryId: params.entryId,
+    };
+
+    if (params.title !== undefined) {
+      fields.push("ENTRY_TITLE = :title");
+      binds.title = params.title?.trim() ? params.title.trim() : null;
+    }
+    if (params.body !== undefined) {
+      const bodyValue = params.body.trim();
+      if (!bodyValue) {
+        throw new Error("Journal body cannot be empty.");
+      }
+      fields.push("ENTRY_BODY = :body");
+      binds.body = bodyValue;
+    }
+    if (params.isPublic !== undefined) {
+      fields.push("IS_PUBLIC = :isPublic");
+      binds.isPublic = params.isPublic ? 1 : 0;
+    }
+    if (!fields.length) return false;
+    fields.push("UPDATED_AT = SYSTIMESTAMP");
+
+    try {
+      const res = await connection.execute(
+        `UPDATE USER_GAME_JOURNAL_ENTRIES
+            SET ${fields.join(", ")}
+          WHERE USER_ID = :userId
+            AND ENTRY_ID = :entryId`,
+        binds as Record<string, any>,
+        { autoCommit: true },
+      );
+      return Number(res.rowsAffected ?? 0) > 0;
     } finally {
       await connection.close();
     }

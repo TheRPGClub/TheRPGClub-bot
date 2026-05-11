@@ -134,8 +134,11 @@ const NOW_PLAYING_JOURNAL_OPTIN_SELECT_PREFIX = "nowplaying-journal-optin-select
 const NOW_PLAYING_REMOVE_SELECT_PREFIX = "nowplaying-remove-select";
 const NOW_PLAYING_JOURNAL_OPEN_PREFIX = "nowplaying-journal-open";
 const NOW_PLAYING_JOURNAL_ADD_PREFIX = "nowplaying-journal-add";
+const NOW_PLAYING_JOURNAL_EDIT_PREFIX = "nowplaying-journal-edit";
+const NOW_PLAYING_JOURNAL_EDIT_SELECT_PREFIX = "nowplaying-journal-edit-select";
 const NOW_PLAYING_JOURNAL_PAGE_PREFIX = "nowplaying-journal-page";
 const NOW_PLAYING_JOURNAL_MODAL_ID = "nowplaying-journal-modal";
+const NOW_PLAYING_JOURNAL_EDIT_MODAL_ID = "nowplaying-journal-edit-modal";
 const NOW_PLAYING_JOURNAL_TITLE_INPUT_ID = "nowplaying-journal-title";
 const NOW_PLAYING_JOURNAL_BODY_INPUT_ID = "nowplaying-journal-body";
 const NOW_PLAYING_JOURNAL_PRIVACY_INPUT_ID = "nowplaying-journal-privacy";
@@ -3187,6 +3190,122 @@ export class NowPlayingCommand {
     await interaction.showModal(modal);
   }
 
+  @ButtonComponent({ id: /^nowplaying-journal-edit:\d+:\d+:\d+$/ })
+  async handleNowPlayingJournalEdit(interaction: ButtonInteraction): Promise<void> {
+    const [, ownerId, gameIdRaw, pageRaw] = interaction.customId.split(":");
+    if (!this.canUseJournalFeature(ownerId) || !this.canUseJournalFeature(interaction.user.id)) {
+      await safeReply(interaction, {
+        content: "Journal is currently limited to an internal user.",
+        flags: buildComponentsV2Flags(true),
+      });
+      return;
+    }
+    if (interaction.user.id !== ownerId) {
+      await safeReply(interaction, { content: "Only the owner can edit journal entries." });
+      return;
+    }
+    const gameId = Number(gameIdRaw);
+    const page = Number(pageRaw);
+    const offset = (Math.max(1, page) - 1) * 5;
+    const entries = await Member.getGameJournalEntries(ownerId, gameId, {
+      viewerUserId: ownerId,
+      limit: 5,
+      offset,
+    });
+    if (!entries.length) {
+      await safeReply(interaction, { content: "No journal entries available to edit." });
+      return;
+    }
+    const options = entries.map((entry) => ({
+      label: (entry.title ?? "Untitled Entry").slice(0, 100),
+      value: String(entry.entryId),
+      description: `${formatTableDate(entry.createdAt)} | ${entry.isPublic ? "Public" : "Private"}`,
+    }));
+    const select = new StringSelectMenuBuilder()
+      .setCustomId(`${NOW_PLAYING_JOURNAL_EDIT_SELECT_PREFIX}:${ownerId}:${gameId}:${page}`)
+      .setPlaceholder("Choose an entry to edit")
+      .addOptions(options);
+    const row = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select);
+    const container = new ContainerBuilder().addTextDisplayComponents(
+      new TextDisplayBuilder().setContent("## Edit Journal Entry\nSelect an entry to edit."),
+    );
+    await safeReply(interaction, {
+      components: [container, row],
+      flags: buildComponentsV2Flags(interaction.message.flags?.has(MessageFlags.Ephemeral) ?? false),
+    });
+  }
+
+  @SelectMenuComponent({ id: /^nowplaying-journal-edit-select:\d+:\d+:\d+$/ })
+  async handleNowPlayingJournalEditSelect(interaction: StringSelectMenuInteraction): Promise<void> {
+    const [, ownerId, gameIdRaw, pageRaw] = interaction.customId.split(":");
+    if (!this.canUseJournalFeature(ownerId) || !this.canUseJournalFeature(interaction.user.id)) {
+      await safeReply(interaction, {
+        content: "Journal is currently limited to an internal user.",
+        flags: buildComponentsV2Flags(true),
+      });
+      return;
+    }
+    if (interaction.user.id !== ownerId) {
+      await safeReply(interaction, { content: "Only the owner can edit journal entries." });
+      return;
+    }
+    const entryId = Number(interaction.values[0]);
+    const entry = await Member.getGameJournalEntryForUser(ownerId, entryId);
+    if (!entry || entry.gameId !== Number(gameIdRaw)) {
+      await safeReply(interaction, { content: "That journal entry was not found." });
+      return;
+    }
+
+    const modal = new ComponentsModalBuilder()
+      .setCustomId(`${NOW_PLAYING_JOURNAL_EDIT_MODAL_ID}:${ownerId}:${gameIdRaw}:${pageRaw}:${entryId}`)
+      .setTitle("Edit Journal Entry");
+    modal.addActionRowComponents(
+      new ComponentsActionRowBuilder<ComponentsTextInputBuilder>().addComponents(
+        new ComponentsTextInputBuilder()
+          .setCustomId(NOW_PLAYING_JOURNAL_TITLE_INPUT_ID)
+          .setLabel("Title (optional)")
+          .setStyle(ApiTextInputStyle.Short)
+          .setRequired(false)
+          .setMaxLength(120)
+          .setValue((entry.title ?? "").slice(0, 120)),
+      ),
+      new ComponentsActionRowBuilder<ComponentsTextInputBuilder>().addComponents(
+        new ComponentsTextInputBuilder()
+          .setCustomId(NOW_PLAYING_JOURNAL_BODY_INPUT_ID)
+          .setLabel("Entry")
+          .setStyle(ApiTextInputStyle.Paragraph)
+          .setRequired(true)
+          .setMaxLength(2000)
+          .setValue(entry.body.slice(0, 2000)),
+      ),
+    );
+    modal.addLabelComponents(
+      new LabelBuilder()
+        .setLabel("Privacy")
+        .setDescription("Choose who can view this entry")
+        .setRadioGroupComponent(
+          new RadioGroupBuilder()
+            .setCustomId(NOW_PLAYING_JOURNAL_PRIVACY_INPUT_ID)
+            .setRequired(true)
+            .setOptions(
+              {
+                label: "Private",
+                value: "private",
+                description: "Only you can view it",
+                default: !entry.isPublic,
+              },
+              {
+                label: "Public",
+                value: "public",
+                description: "Visible to other members",
+                default: entry.isPublic,
+              },
+            ),
+        ),
+    );
+    await interaction.showModal(modal);
+  }
+
   @ModalComponent({ id: /^nowplaying-journal-modal:\d+:\d+:\d+$/ })
   async handleNowPlayingJournalModal(interaction: ModalSubmitInteraction): Promise<void> {
     const [, ownerId, gameIdRaw, pageRaw] = interaction.customId.split(":");
@@ -3218,6 +3337,53 @@ export class NowPlayingCommand {
       isPublic,
     });
     await Member.upsertGameJournalPreference(ownerId, Number(gameIdRaw), true, isPublic);
+    const components = await this.buildJournalComponents(
+      ownerId,
+      interaction.user.id,
+      Number(gameIdRaw),
+      Number(pageRaw),
+    );
+    await safeReply(interaction, { components, flags: buildComponentsV2Flags(true) });
+  }
+
+  @ModalComponent({ id: /^nowplaying-journal-edit-modal:\d+:\d+:\d+:\d+$/ })
+  async handleNowPlayingJournalEditModal(interaction: ModalSubmitInteraction): Promise<void> {
+    const [, ownerId, gameIdRaw, pageRaw, entryIdRaw] = interaction.customId.split(":");
+    if (!this.canUseJournalFeature(ownerId) || !this.canUseJournalFeature(interaction.user.id)) {
+      await safeReply(interaction, {
+        content: "Journal is currently limited to an internal user.",
+        flags: buildComponentsV2Flags(true),
+      });
+      return;
+    }
+    if (interaction.user.id !== ownerId) {
+      await safeReply(interaction, { content: "Only the owner can edit journal entries." });
+      return;
+    }
+
+    const entryId = Number(entryIdRaw);
+    const existing = await Member.getGameJournalEntryForUser(ownerId, entryId);
+    if (!existing || existing.gameId !== Number(gameIdRaw)) {
+      await safeReply(interaction, { content: "That journal entry was not found." });
+      return;
+    }
+
+    const title = sanitizeUserInput(
+      interaction.fields.getTextInputValue(NOW_PLAYING_JOURNAL_TITLE_INPUT_ID) ?? "",
+      { preserveNewlines: true, maxLength: 120 },
+    );
+    const body = sanitizeUserInput(
+      interaction.fields.getTextInputValue(NOW_PLAYING_JOURNAL_BODY_INPUT_ID),
+      { preserveNewlines: true, maxLength: 2000 },
+    );
+    const isPublic = extractJournalPrivacyFromInteraction(interaction);
+    await Member.updateGameJournalEntry({
+      userId: ownerId,
+      entryId,
+      title: title || null,
+      body,
+      isPublic,
+    });
     const components = await this.buildJournalComponents(
       ownerId,
       interaction.user.id,
@@ -4124,6 +4290,7 @@ export class NowPlayingCommand {
         guildId,
         null,
         true,
+        true,
       )[0]
       : this.buildNowPlayingMessageContainer(
         "Your Now Playing List",
@@ -4199,6 +4366,7 @@ export class NowPlayingCommand {
         ownerId,
         null,
         null,
+        true,
         true,
       )[0]
       : this.buildNowPlayingMessageContainer(
@@ -4915,6 +5083,7 @@ export class NowPlayingCommand {
     guildId: string | null,
     imageUrl: string | null,
     showNotes: boolean,
+    showPrivateOnlyJournalButtons: boolean = false,
   ): NowPlayingListComponents {
     const container = new ContainerBuilder();
     if (imageUrl) {
@@ -4960,7 +5129,10 @@ export class NowPlayingCommand {
         lines.push(quotedNote);
       }
       const content = this.trimTextDisplayContent(lines.join("\n"));
-      if (entry.journalEnabled && this.canUseJournalFeature(ownerId)) {
+      const shouldShowJournalButton = entry.journalEnabled &&
+        this.canUseJournalFeature(ownerId) &&
+        (showPrivateOnlyJournalButtons || entry.hasPublicJournalEntry);
+      if (shouldShowJournalButton) {
         const section = new SectionBuilder().addTextDisplayComponents(
           new TextDisplayBuilder().setContent(content),
         );
@@ -5011,11 +5183,12 @@ export class NowPlayingCommand {
     const game = await Game.getGameById(gameId);
     const pref = await Member.getGameJournalPreference(ownerId, gameId);
     const isEnabled = pref?.isEnabled === true;
-    const canManage = ownerId === viewerId;
+    const isOwnerView = ownerId === viewerId;
+    const canManage = isOwnerView;
     const offset = (page - 1) * perPage;
-    const total = await Member.countGameJournalEntries(ownerId, gameId, viewerId);
+    const total = await Member.countGameJournalEntries(ownerId, gameId, ownerId);
     const entries = await Member.getGameJournalEntries(ownerId, gameId, {
-      viewerUserId: viewerId,
+      viewerUserId: ownerId,
       limit: perPage,
       offset,
     });
@@ -5038,6 +5211,14 @@ export class NowPlayingCommand {
       );
     } else {
       for (const entry of entries) {
+        if (!isOwnerView && !entry.isPublic) {
+          container.addTextDisplayComponents(
+            new TextDisplayBuilder().setContent(
+              `### Private Entry\n-# ${formatTableDate(entry.createdAt)}\nThis entry is private.`,
+            ),
+          );
+          continue;
+        }
         const title = entry.title ? `### ${entry.title}` : "### Untitled Entry";
         const privacy = entry.isPublic ? "Public" : "Private";
         const body = this.trimTextDisplayContent(entry.body);
@@ -5056,6 +5237,11 @@ export class NowPlayingCommand {
           .setCustomId(`${NOW_PLAYING_JOURNAL_ADD_PREFIX}:${ownerId}:${gameId}:${safePage}`)
           .setLabel("Add Entry")
           .setStyle(ButtonStyle.Success),
+        new ButtonBuilder()
+          .setCustomId(`${NOW_PLAYING_JOURNAL_EDIT_PREFIX}:${ownerId}:${gameId}:${safePage}`)
+          .setLabel("Edit Entry")
+          .setStyle(ButtonStyle.Primary)
+          .setDisabled(entries.length === 0),
       );
     }
     row.addComponents(
