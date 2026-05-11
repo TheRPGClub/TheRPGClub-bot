@@ -5265,23 +5265,26 @@ export class NowPlayingCommand {
       files.push(new AttachmentBuilder(game.imageData, { name: filename }));
       coverUrl = `attachment://${filename}`;
     }
-    const introSection = new SectionBuilder().addTextDisplayComponents(
+    const introTextDisplays = [
       new TextDisplayBuilder().setContent(
         `## ${ownerLabel}'s Game Journal: ${game?.title ?? `Game #${gameId}`}`,
       ),
-      new TextDisplayBuilder().setContent(`Total entries visible: **${total}** | Page ${safePage}/${totalPages}`),
-    );
-    if (coverUrl) {
-      introSection.setThumbnailAccessory(new ThumbnailBuilder().setURL(coverUrl));
-    }
-    container.addSectionComponents(introSection);
+    ];
     if (nowPlayingMeta?.addedAt) {
-      container.addTextDisplayComponents(
+      introTextDisplays.push(
         new TextDisplayBuilder().setContent(
           `Now Playing since ${formatTableDate(nowPlayingMeta.addedAt)}`,
         ),
       );
     }
+    introTextDisplays.push(
+      new TextDisplayBuilder().setContent(`Total entries visible: **${total}** | Page ${safePage}/${totalPages}`),
+    );
+    const introSection = new SectionBuilder().addTextDisplayComponents(...introTextDisplays);
+    if (coverUrl) {
+      introSection.setThumbnailAccessory(new ThumbnailBuilder().setURL(coverUrl));
+    }
+    container.addSectionComponents(introSection);
     if (completions.length) {
       const completionLines: string[] = [];
       for (const completion of completions) {
