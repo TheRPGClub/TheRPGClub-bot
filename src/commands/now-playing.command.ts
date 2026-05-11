@@ -98,6 +98,9 @@ const NOW_PLAYING_ADD_TITLE_INPUT_ID = "nowplaying-add-title";
 const NOW_PLAYING_ADD_NOTE_INPUT_ID = "nowplaying-add-note";
 const NOW_PLAYING_ADD_PLATFORM_SELECT_PREFIX = "nowplaying-add-platform-select";
 const NOW_PLAYING_EDIT_PLATFORM_SELECT_PREFIX = "nowplaying-edit-platform-select";
+const NOW_PLAYING_EDIT_PLATFORM_SLOT_PREFIX = "nowplaying-edit-platform-slot";
+const NOW_PLAYING_EDIT_PLATFORM_SAVE_PREFIX = "nowplaying-edit-platform-save";
+const NOW_PLAYING_EDIT_PLATFORM_RESET_PREFIX = "nowplaying-edit-platform-reset";
 const NOW_PLAYING_COMPLETE_MODAL_ID = "nowplaying-complete-modal";
 const NOW_PLAYING_COMPLETE_DATE_INPUT_ID = "nowplaying-complete-date";
 const NOW_PLAYING_COMPLETE_HOURS_INPUT_ID = "nowplaying-complete-hours";
@@ -209,6 +212,36 @@ function parseNowPlayingSortStateToken(
 }
 
 function encodeNowPlayingSortState(state: number[]): string {
+  return state.map((value) => (value < 0 ? "_" : value.toString(36))).join("");
+}
+
+function buildNowPlayingPlatformStateToken(entryCount: number): string {
+  return Array.from({ length: entryCount }, () => "_").join("");
+}
+
+function parseNowPlayingPlatformStateToken(
+  token: string,
+  entryCount: number,
+): number[] | null {
+  if (token.length !== entryCount) {
+    return null;
+  }
+  const parsed: number[] = [];
+  for (const character of token) {
+    if (character === "_") {
+      parsed.push(-1);
+      continue;
+    }
+    const value = Number.parseInt(character, 36);
+    if (!Number.isInteger(value) || value < 0 || value > 24) {
+      return null;
+    }
+    parsed.push(value);
+  }
+  return parsed;
+}
+
+function encodeNowPlayingPlatformState(state: number[]): string {
   return state.map((value) => (value < 0 ? "_" : value.toString(36))).join("");
 }
 
@@ -2234,16 +2267,13 @@ export class NowPlayingCommand {
       return;
     }
 
-    const includeImages = interaction.guildId != null;
-    const { files, thumbnailsByGameId } = await this.buildNowPlayingAttachments(
-      entries,
-      NOW_PLAYING_GALLERY_MAX,
-      includeImages,
-    );
+    const platformOptions = await this.getNowPlayingEditPlatformOptions(entries);
+    const stateToken = buildNowPlayingPlatformStateToken(entries.length);
     const components = this.buildNowPlayingEditPlatformComponents(
       entries,
       interaction.user.id,
-      thumbnailsByGameId,
+      platformOptions,
+      stateToken,
     );
     const pmComponents = await this.withPmNowPlayingList(
       interaction.user.id,
@@ -2252,13 +2282,46 @@ export class NowPlayingCommand {
     );
 
     if (mode === "update" && "update" in interaction) {
-      await interaction.update(this.buildComponentPayload(pmComponents as any, files));
+      await interaction.update({ components: pmComponents });
       return;
     }
     await safeReply(interaction, {
-      ...this.buildComponentPayload(pmComponents as any, files),
+      components: pmComponents,
       flags: buildComponentsV2Flags(true),
     });
+  }
+
+  private async getNowPlayingEditPlatformOptions(
+    entries: IMemberNowPlayingEntry[],
+  ): Promise<Array<Array<{ label: string; value: string; platformId: number }>>> {
+    const limitedEntries = entries.slice(0, 10);
+    const optionsPerEntry = await Promise.all(
+      limitedEntries.map(async (entry) => {
+        const platforms = await Game.getPlatformsForGameWithStandard(
+          entry.gameId,
+          STANDARD_PLATFORM_IDS,
+        );
+        const uniqueById = new Map<number, { id: number; name: string }>();
+        platforms.forEach((platform) => {
+          if (!uniqueById.has(platform.id)) {
+            uniqueById.set(platform.id, platform);
+          }
+        });
+        const deduped = Array.from(uniqueById.values()).slice(0, 25);
+        if (!deduped.length && entry.platformId) {
+          deduped.push({
+            id: entry.platformId,
+            name: entry.platformName ?? "Current Platform",
+          });
+        }
+        return deduped.map((platform, optionIndex) => ({
+          label: platform.name.slice(0, 100),
+          value: String(optionIndex),
+          platformId: platform.id,
+        }));
+      }),
+    );
+    return optionsPerEntry;
   }
 
   private async promptNowPlayingEditPlatformSelection(
@@ -2329,9 +2392,9 @@ export class NowPlayingCommand {
     }
   }
 
-  @SelectMenuComponent({ id: /^nowplaying-edit-platform-select:\d+:\d+$/ })
-  async handleEditPlatformSelect(interaction: StringSelectMenuInteraction): Promise<void> {
-    const [, ownerId, gameIdRaw] = interaction.customId.split(":");
+  @SelectMenuComponent({ id: /^nowplaying-edit-platform-slot:\d+:\d+:[a-z0-9_]+$/ })
+  async handleEditPlatformSlot(interaction: StringSelectMenuInteraction): Promise<void> {
+    const [, ownerId, slotRaw, stateToken] = interaction.customId.split(":");
     if (interaction.user.id !== ownerId) {
       await interaction.reply({
         content: "This platform prompt isn't for you.",
@@ -2339,9 +2402,15 @@ export class NowPlayingCommand {
       });
       return;
     }
-    const gameId = Number(gameIdRaw);
-    const platformId = Number(interaction.values?.[0]);
-    if (!Number.isInteger(gameId) || gameId <= 0 || !Number.isInteger(platformId) || platformId <= 0) {
+
+    const slotIndex = Number(slotRaw);
+    const selectedOptionIndex = Number(interaction.values?.[0]);
+    if (
+      !Number.isInteger(slotIndex) ||
+      slotIndex < 0 ||
+      !Number.isInteger(selectedOptionIndex) ||
+      selectedOptionIndex < 0
+    ) {
       await interaction.reply({
         content: "Invalid selection.",
         flags: MessageFlags.Ephemeral,
@@ -2349,42 +2418,33 @@ export class NowPlayingCommand {
       return;
     }
 
-    const updated = await Member.updateNowPlayingPlatform(ownerId, gameId, platformId);
-    if (!updated) {
-      await interaction.reply({
-        content: "Could not update that entry.",
+    const entries = getDisplayNowPlayingEntries(await Member.getNowPlaying(ownerId)).slice(0, 10);
+    const platformOptions = await this.getNowPlayingEditPlatformOptions(entries);
+    const parsed = parseNowPlayingPlatformStateToken(stateToken, entries.length);
+    if (!parsed || slotIndex >= entries.length || selectedOptionIndex > 24) {
+      await safeReply(interaction, {
+        content: "This platform form has expired. Open Edit Platform again.",
         flags: MessageFlags.Ephemeral,
       });
       return;
     }
-    await this.refreshNowPlayingListFromContext(interaction, ownerId).catch(() => {});
-
-    const entries = getDisplayNowPlayingEntries(await Member.getNowPlaying(ownerId));
-    if (!entries.length) {
-      const container = new ContainerBuilder().addTextDisplayComponents(
-        new TextDisplayBuilder().setContent("Your Now Playing list is empty."),
-      );
-      await interaction.update({ components: [container] });
+    if (selectedOptionIndex >= (platformOptions[slotIndex]?.length ?? 0)) {
+      await safeReply(interaction, {
+        content: "Invalid platform selection for that game.",
+        flags: MessageFlags.Ephemeral,
+      });
       return;
     }
 
-    const includeImages = interaction.guildId != null;
-    const { files, thumbnailsByGameId } = await this.buildNowPlayingAttachments(
-      entries,
-      NOW_PLAYING_GALLERY_MAX,
-      includeImages,
-    );
+    parsed[slotIndex] = selectedOptionIndex;
     const components = this.buildNowPlayingEditPlatformComponents(
       entries,
       ownerId,
-      thumbnailsByGameId,
+      platformOptions,
+      encodeNowPlayingPlatformState(parsed),
     );
-    const pmComponents = await this.withPmNowPlayingList(
-      ownerId,
-      interaction.guildId,
-      components,
-    );
-    await interaction.update(this.buildComponentPayload(pmComponents as any, files));
+    const pmComponents = await this.withPmNowPlayingList(ownerId, interaction.guildId, components);
+    await interaction.update({ components: pmComponents });
   }
 
   @SelectMenuComponent({ id: /^nowplaying-edit-note-select:\d+$/ })
@@ -3144,8 +3204,69 @@ export class NowPlayingCommand {
     await this.promptNowPlayingEditPlatformSelection(interaction, ownerId, gameId, "update");
   }
 
-  @ButtonComponent({ id: /^nowplaying-edit-platform-done:\d+$/ })
-  async handleNowPlayingEditPlatformDone(interaction: ButtonInteraction): Promise<void> {
+  @ButtonComponent({ id: /^nowplaying-edit-platform-save:\d+:[a-z0-9_]+$/ })
+  async handleNowPlayingEditPlatformSave(interaction: ButtonInteraction): Promise<void> {
+    const [, ownerId, stateToken] = interaction.customId.split(":");
+    if (interaction.user.id !== ownerId) {
+      await interaction.reply({
+        content: "This platform prompt isn't for you.",
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
+
+    await safeDeferUpdate(interaction);
+    const isEphemeral = interaction.message.flags?.has(MessageFlags.Ephemeral) ?? false;
+    const responseFlags = buildComponentsV2Flags(isEphemeral);
+    const entries = getDisplayNowPlayingEntries(await Member.getNowPlaying(ownerId)).slice(0, 10);
+    const platformOptions = await this.getNowPlayingEditPlatformOptions(entries);
+    const parsed = parseNowPlayingPlatformStateToken(stateToken, entries.length);
+    if (!parsed) {
+      await safeReply(interaction, {
+        content: "This platform form has expired. Open Edit Platform again.",
+        flags: responseFlags,
+      });
+      return;
+    }
+    if (parsed.some((value) => value < 0)) {
+      const components = this.buildNowPlayingEditPlatformComponents(
+        entries,
+        ownerId,
+        platformOptions,
+        stateToken,
+        "Assign a platform for every visible game before saving.",
+      );
+      const pmComponents = await this.withPmNowPlayingList(ownerId, interaction.guildId, components);
+      await safeReply(interaction, { components: pmComponents, flags: responseFlags });
+      return;
+    }
+
+    for (let slotIndex = 0; slotIndex < entries.length; slotIndex += 1) {
+      const selectedOptionIndex = parsed[slotIndex];
+      const option = platformOptions[slotIndex]?.[selectedOptionIndex];
+      const gameId = entries[slotIndex]?.gameId;
+      if (!option || !gameId) {
+        await safeReply(interaction, {
+          content: "One or more selected platforms are invalid. Please review and try again.",
+          flags: responseFlags,
+        });
+        return;
+      }
+      const updated = await Member.updateNowPlayingPlatform(ownerId, gameId, option.platformId);
+      if (!updated) {
+        await safeReply(interaction, {
+          content: `Could not update platform for ${entries[slotIndex].title}.`,
+          flags: responseFlags,
+        });
+        return;
+      }
+    }
+    await this.refreshNowPlayingListFromContext(interaction, ownerId).catch(() => {});
+    await this.returnToNowPlayingEditMenu(interaction, ownerId);
+  }
+
+  @ButtonComponent({ id: /^nowplaying-edit-platform-reset:\d+$/ })
+  async handleNowPlayingEditPlatformReset(interaction: ButtonInteraction): Promise<void> {
     const [, ownerId] = interaction.customId.split(":");
     if (interaction.user.id !== ownerId) {
       await interaction.reply({
@@ -3154,28 +3275,20 @@ export class NowPlayingCommand {
       });
       return;
     }
-    if (interaction.guildId == null) {
-      await this.returnToNowPlayingEditMenu(interaction, ownerId);
-      return;
-    }
-    const list = await Member.getNowPlaying(ownerId);
-    const payload = await this.buildNowPlayingListPayload(
-      interaction.user,
-      list,
-      interaction.guildId,
-      "Your Now Playing List",
-    );
-    const components = this.withNowPlayingActions(
-      true,
+    await safeDeferUpdate(interaction);
+    const isEphemeral = interaction.message.flags?.has(MessageFlags.Ephemeral) ?? false;
+    const responseFlags = buildComponentsV2Flags(isEphemeral);
+    const entries = getDisplayNowPlayingEntries(await Member.getNowPlaying(ownerId)).slice(0, 10);
+    const platformOptions = await this.getNowPlayingEditPlatformOptions(entries);
+    const stateTokenReset = buildNowPlayingPlatformStateToken(entries.length);
+    const components = this.buildNowPlayingEditPlatformComponents(
+      entries,
       ownerId,
-      payload.components,
-      false,
+      platformOptions,
+      stateTokenReset,
     );
-    await interaction.update({
-      components,
-      files: payload.files,
-      flags: buildComponentsV2Flags(true),
-    });
+    const pmComponents = await this.withPmNowPlayingList(ownerId, interaction.guildId, components);
+    await safeReply(interaction, { components: pmComponents, flags: responseFlags });
   }
 
   @ButtonComponent({ id: /^nowplaying-list-sort:\d+$/ })
@@ -4007,81 +4120,77 @@ export class NowPlayingCommand {
   private buildNowPlayingEditPlatformComponents(
     entries: IMemberNowPlayingEntry[],
     ownerId: string,
-    thumbnailsByGameId: Map<number, string>,
-  ): Array<ContainerBuilder | ActionRowBuilder<ButtonBuilder>> {
+    platformOptions: Array<Array<{ label: string; value: string; platformId: number }>>,
+    stateToken: string,
+    validationMessage: string | null = null,
+  ): Array<ContainerBuilder | ActionRowBuilder<StringSelectMenuBuilder | ButtonBuilder>> {
+    const parsedState = parseNowPlayingPlatformStateToken(stateToken, entries.length) ??
+      Array.from({ length: entries.length }, () => -1);
     const container = new ContainerBuilder();
+    const introLines = [
+      "## Now Playing Edit Platform",
+      "Pick one platform per game, then press Save.",
+    ];
+    if (validationMessage) {
+      introLines.push(`-# ${validationMessage}`);
+    }
     container.addTextDisplayComponents(
       new TextDisplayBuilder().setContent(
-        "## Now Playing Edit Platform\nClick Edit Platform on a game to change it.",
+        introLines.join("\n"),
       ),
     );
 
-    const galleryItems: MediaGalleryItemBuilder[] = [];
-    for (const entry of entries) {
-      if (galleryItems.length >= NOW_PLAYING_GALLERY_MAX) {
-        break;
-      }
-      if (!entry.gameId) {
-        continue;
-      }
-      const imageUrl = thumbnailsByGameId.get(entry.gameId);
-      if (!imageUrl) {
-        continue;
-      }
-      const item = new MediaGalleryItemBuilder()
-        .setURL(imageUrl)
-        .setDescription(formatEntryTitleWithPlatform(entry));
-      galleryItems.push(item);
-    }
-
-    if (galleryItems.length) {
-      container.addMediaGalleryComponents(new MediaGalleryBuilder().addItems(galleryItems));
-      container.addSeparatorComponents(
-        new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small).setDivider(false),
-      );
-    }
-
-    entries.forEach((entry, index) => {
-      if (index === 0) {
-        container.addSeparatorComponents(
-          new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small).setDivider(false),
+    const components: Array<ContainerBuilder | ActionRowBuilder<StringSelectMenuBuilder | ButtonBuilder>> = [
+      container,
+    ];
+    for (let slotIndex = 0; slotIndex < entries.length; slotIndex += 1) {
+      const entry = entries[slotIndex];
+      const options = platformOptions[slotIndex] ?? [];
+      if (!options.length) {
+        components.push(
+          new ContainerBuilder().addTextDisplayComponents(
+            new TextDisplayBuilder().setContent(
+              `### ${formatEntryTitleWithPlatform(entry)}\n-# No platform choices available for this game.`,
+            ),
+          ),
         );
+        continue;
       }
-      const lines = [`### ${formatEntryTitleWithPlatform(entry)}`, entry.note ?? ""];
-      if (entry.addedAt) {
-        const addedLabel = `Added ${formatTableDate(entry.addedAt)}`;
-        if (entry.noteUpdatedAt) {
-          const updatedLabel = `last updated ${formatTableDate(entry.noteUpdatedAt)}`;
-          if (formatTableDate(entry.addedAt) === formatTableDate(entry.noteUpdatedAt)) {
-            lines.push(`-# *${addedLabel}.*`);
-          } else {
-            lines.push(`-# *${addedLabel}, ${updatedLabel}.*`);
-          }
-        } else {
-          lines.push(`-# *${addedLabel}.*`);
-        }
-      }
-      const section = new SectionBuilder().addTextDisplayComponents(
+      const selectedIndex = parsedState[slotIndex];
+      components.push(new ContainerBuilder().addTextDisplayComponents(
         new TextDisplayBuilder().setContent(
-          this.trimTextDisplayContent(lines.join("\n")),
+          `### ${formatEntryTitleWithPlatform(entry)}`,
         ),
-      );
-      section.setButtonAccessory(
-        new V2ButtonBuilder()
-          .setCustomId(`np-edit-platform:${ownerId}:${entry.gameId}`)
-          .setLabel("Edit Platform")
-          .setStyle(ButtonStyle.Secondary),
-      );
-      container.addSectionComponents(section);
-    });
+      ));
+      const select = new StringSelectMenuBuilder()
+        .setCustomId(`${NOW_PLAYING_EDIT_PLATFORM_SLOT_PREFIX}:${ownerId}:${slotIndex}:${stateToken}`)
+        .setPlaceholder(`Platform for ${entry.title.slice(0, 70)}`)
+        .setMinValues(1)
+        .setMaxValues(1)
+        .addOptions(options.map((option, optionIndex) => ({
+          label: option.label,
+          value: option.value,
+          default: selectedIndex === optionIndex,
+        })));
+      components.push(new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select));
+    }
 
-    const doneRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+    const actionRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
       new ButtonBuilder()
-        .setCustomId(`nowplaying-edit-platform-done:${ownerId}`)
-        .setLabel("Done")
+        .setCustomId(`${NOW_PLAYING_EDIT_PLATFORM_SAVE_PREFIX}:${ownerId}:${stateToken}`)
+        .setLabel("Save")
         .setStyle(ButtonStyle.Success),
+      new ButtonBuilder()
+        .setCustomId(`${NOW_PLAYING_EDIT_PLATFORM_RESET_PREFIX}:${ownerId}`)
+        .setLabel("Reset to current platforms")
+        .setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder()
+        .setCustomId(`nowplaying-list-cancel:${ownerId}`)
+        .setLabel("Cancel")
+        .setStyle(ButtonStyle.Secondary),
     );
-    return [container, doneRow];
+    components.push(actionRow);
+    return components;
   }
 
   private buildNowPlayingSortComponents(
