@@ -818,8 +818,9 @@ export class NowPlayingCommand {
 
     let thumbnailUrl: string | null = null;
     const files: AttachmentBuilder[] = [];
+    const includeImages = interaction.guildId != null;
     const game = await Game.getGameById(entry.gameId);
-    if (game?.imageData) {
+    if (includeImages && game?.imageData) {
       const filename = `now_playing_completion_${entry.gameId}.png`;
       files.push(new AttachmentBuilder(game.imageData, { name: filename }));
       thumbnailUrl = `attachment://${filename}`;
@@ -874,9 +875,11 @@ export class NowPlayingCommand {
     }
 
     const entries = getDisplayNowPlayingEntries(current);
+    const includeImages = interaction.guildId != null;
     const { files, thumbnailsByGameId } = await this.buildNowPlayingAttachments(
       entries,
       NOW_PLAYING_GALLERY_MAX,
+      includeImages,
     );
     const components = this.buildNowPlayingCompletionComponents(
       entries,
@@ -1228,9 +1231,11 @@ export class NowPlayingCommand {
           flags: buildComponentsV2Flags(true),
         });
       } else {
+        const includeImages = interaction.guildId != null;
         const { files, thumbnailsByGameId } = await this.buildNowPlayingAttachments(
           entries,
           NOW_PLAYING_GALLERY_MAX,
+          includeImages,
         );
         const components = this.buildNowPlayingCompletionComponents(
           entries,
@@ -1800,9 +1805,11 @@ export class NowPlayingCommand {
         return;
       }
 
+      const includeImages = interaction.guildId != null;
       const { files, thumbnailsByGameId } = await this.buildNowPlayingAttachments(
         entries,
         NOW_PLAYING_GALLERY_MAX,
+        includeImages,
       );
       const components = this.buildNowPlayingRemoveComponents(
         entries,
@@ -1858,9 +1865,11 @@ export class NowPlayingCommand {
       await interaction.update({ components: pmComponents });
       return;
     }
+    const includeImages = interaction.guildId != null;
     const { files, thumbnailsByGameId } = await this.buildNowPlayingAttachments(
       entries,
       NOW_PLAYING_GALLERY_MAX,
+      includeImages,
     );
     const components = this.buildNowPlayingSortComponents(
       entries,
@@ -2041,9 +2050,11 @@ export class NowPlayingCommand {
       return;
     }
 
+    const includeImages = interaction.guildId != null;
     const { files, thumbnailsByGameId } = await this.buildNowPlayingAttachments(
       entries,
       NOW_PLAYING_GALLERY_MAX,
+      includeImages,
     );
     const components = this.buildNowPlayingEditPlatformComponents(
       entries,
@@ -2173,16 +2184,23 @@ export class NowPlayingCommand {
       return;
     }
 
+    const includeImages = interaction.guildId != null;
     const { files, thumbnailsByGameId } = await this.buildNowPlayingAttachments(
       entries,
       NOW_PLAYING_GALLERY_MAX,
+      includeImages,
     );
     const components = this.buildNowPlayingEditPlatformComponents(
       entries,
       ownerId,
       thumbnailsByGameId,
     );
-    await interaction.update(this.buildComponentPayload(components, files));
+    const pmComponents = await this.withPmNowPlayingList(
+      ownerId,
+      interaction.guildId,
+      components,
+    );
+    await interaction.update(this.buildComponentPayload(pmComponents as any, files));
   }
 
   @SelectMenuComponent({ id: /^nowplaying-edit-note-select:\d+$/ })
@@ -2302,18 +2320,25 @@ export class NowPlayingCommand {
     const entries = getDisplayNowPlayingEntries(
       await Member.getNowPlaying(ownerId),
     );
+    const includeImages = interaction.guildId != null;
     const index = entries.findIndex((entry) => entry.gameId === gameId);
     if (index <= 0) {
       const { files, thumbnailsByGameId } = await this.buildNowPlayingAttachments(
         entries,
         NOW_PLAYING_GALLERY_MAX,
+        includeImages,
       );
       const components = this.buildNowPlayingSortComponents(
         entries,
         ownerId,
         thumbnailsByGameId,
       );
-      await interaction.update(this.buildComponentPayload(components, files));
+      const pmComponents = await this.withPmNowPlayingList(
+        ownerId,
+        interaction.guildId,
+        components,
+      );
+      await interaction.update(this.buildComponentPayload(pmComponents as any, files));
       return;
     }
 
@@ -2333,13 +2358,19 @@ export class NowPlayingCommand {
     const { files, thumbnailsByGameId } = await this.buildNowPlayingAttachments(
       reordered,
       NOW_PLAYING_GALLERY_MAX,
+      includeImages,
     );
     const components = this.buildNowPlayingSortComponents(
       reordered,
       ownerId,
       thumbnailsByGameId,
     );
-    await interaction.update(this.buildComponentPayload(components, files));
+    const pmComponents = await this.withPmNowPlayingList(
+      ownerId,
+      interaction.guildId,
+      components,
+    );
+    await interaction.update(this.buildComponentPayload(pmComponents as any, files));
   }
 
   @ButtonComponent({ id: /^nowplaying-sort-done:\d+$/ })
@@ -2593,16 +2624,23 @@ export class NowPlayingCommand {
         await interaction.update({ components: [container] });
         return;
       }
+      const includeImages = interaction.guildId != null;
       const { files, thumbnailsByGameId } = await this.buildNowPlayingAttachments(
         entries,
         NOW_PLAYING_GALLERY_MAX,
+        includeImages,
       );
       const components = this.buildNowPlayingRemoveComponents(
         entries,
         ownerId,
         thumbnailsByGameId,
       );
-      await interaction.update(this.buildComponentPayload(components, files));
+      const pmComponents = await this.withPmNowPlayingList(
+        ownerId,
+        interaction.guildId,
+        components,
+      );
+      await interaction.update(this.buildComponentPayload(pmComponents as any, files));
     } catch (err: any) {
       const msg = err?.message ?? String(err);
       const container = new ContainerBuilder().addTextDisplayComponents(
@@ -3260,11 +3298,19 @@ export class NowPlayingCommand {
   private async buildNowPlayingAttachments(
     entries: IMemberNowPlayingEntry[],
     maxImages: number = Number.POSITIVE_INFINITY,
+    includeImages: boolean = true,
   ): Promise<{
     files: AttachmentBuilder[];
     thumbnailsByGameId: Map<number, string>;
     covers: Array<{ gameId: number; title: string; imageData: Buffer }>;
   }> {
+    if (!includeImages) {
+      return {
+        files: [],
+        thumbnailsByGameId: new Map<number, string>(),
+        covers: [],
+      };
+    }
     const files: AttachmentBuilder[] = [];
     const seen = new Set<number>();
     const thumbnailsByGameId = new Map<number, string>();
