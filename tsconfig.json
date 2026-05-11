@@ -1,13 +1,12 @@
 {
   "compilerOptions": {
     "allowJs": true,
-    "target": "ESNext",
-    "module": "ESNext",
+    "target": "esnext",
+    "module": "Node16",
     "outDir": "build",
-    "baseUrl": "./src",
     "rootDir": "./src",
     "strict": true,
-    "moduleResolution": "node",
+    "moduleResolution": "node16",
     "allowSyntheticDefaultImports": true,
     "resolveJsonModule": true,
     "esModuleInterop": true,

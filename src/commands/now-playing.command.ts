@@ -2317,19 +2317,53 @@ export class NowPlayingCommand {
       return;
     }
 
-    const entries = getDisplayNowPlayingEntries(
-      await Member.getNowPlaying(ownerId),
-    );
-    const includeImages = interaction.guildId != null;
-    const index = entries.findIndex((entry) => entry.gameId === gameId);
-    if (index <= 0) {
+    await safeDeferUpdate(interaction);
+    try {
+      const entries = getDisplayNowPlayingEntries(
+        await Member.getNowPlaying(ownerId),
+      );
+      const includeImages = interaction.guildId != null;
+      const index = entries.findIndex((entry) => entry.gameId === gameId);
+      if (index <= 0) {
+        const { files, thumbnailsByGameId } = await this.buildNowPlayingAttachments(
+          entries,
+          NOW_PLAYING_GALLERY_MAX,
+          includeImages,
+        );
+        const components = this.buildNowPlayingSortComponents(
+          entries,
+          ownerId,
+          thumbnailsByGameId,
+        );
+        const pmComponents = await this.withPmNowPlayingList(
+          ownerId,
+          interaction.guildId,
+          components,
+        );
+        await safeUpdate(interaction, this.buildComponentPayload(pmComponents as any, files));
+        return;
+      }
+
+      const reordered = [...entries];
+      [reordered[index - 1], reordered[index]] = [reordered[index], reordered[index - 1]];
+      const orderedIds = reordered.map((entry) => entry.gameId);
+      const updated = await Member.updateNowPlayingSort(ownerId, orderedIds);
+      if (!updated) {
+        const container = new ContainerBuilder().addTextDisplayComponents(
+          new TextDisplayBuilder().setContent("Could not update the sort order."),
+        );
+        await safeUpdate(interaction, { components: [container] });
+        return;
+      }
+      await this.refreshNowPlayingListFromContext(interaction, ownerId).catch(() => {});
+
       const { files, thumbnailsByGameId } = await this.buildNowPlayingAttachments(
-        entries,
+        reordered,
         NOW_PLAYING_GALLERY_MAX,
         includeImages,
       );
       const components = this.buildNowPlayingSortComponents(
-        entries,
+        reordered,
         ownerId,
         thumbnailsByGameId,
       );
@@ -2338,39 +2372,13 @@ export class NowPlayingCommand {
         interaction.guildId,
         components,
       );
-      await interaction.update(this.buildComponentPayload(pmComponents as any, files));
-      return;
-    }
-
-    const reordered = [...entries];
-    [reordered[index - 1], reordered[index]] = [reordered[index], reordered[index - 1]];
-    const orderedIds = reordered.map((entry) => entry.gameId);
-    const updated = await Member.updateNowPlayingSort(ownerId, orderedIds);
-    if (!updated) {
+      await safeUpdate(interaction, this.buildComponentPayload(pmComponents as any, files));
+    } catch {
       const container = new ContainerBuilder().addTextDisplayComponents(
-        new TextDisplayBuilder().setContent("Could not update the sort order."),
+        new TextDisplayBuilder().setContent("Could not update the sort order right now."),
       );
-      await interaction.update({ components: [container] });
-      return;
+      await safeUpdate(interaction, { components: [container] });
     }
-    await this.refreshNowPlayingListFromContext(interaction, ownerId).catch(() => {});
-
-    const { files, thumbnailsByGameId } = await this.buildNowPlayingAttachments(
-      reordered,
-      NOW_PLAYING_GALLERY_MAX,
-      includeImages,
-    );
-    const components = this.buildNowPlayingSortComponents(
-      reordered,
-      ownerId,
-      thumbnailsByGameId,
-    );
-    const pmComponents = await this.withPmNowPlayingList(
-      ownerId,
-      interaction.guildId,
-      components,
-    );
-    await interaction.update(this.buildComponentPayload(pmComponents as any, files));
   }
 
   @ButtonComponent({ id: /^nowplaying-sort-done:\d+$/ })
