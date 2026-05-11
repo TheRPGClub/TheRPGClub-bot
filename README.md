@@ -73,6 +73,8 @@ These are required or commonly used by the bot. Values depend on your deployment
 - `GITHUB_APP_ID`
 - `GITHUB_APP_INSTALLATION_ID`
 - `GITHUB_APP_PRIVATE_KEY`
+- `BACKBLAZE_B2_KEY_ID`
+- `BACKBLAZE_B2_APPLICATION_KEY`
 
 ## Useful Scripts
 
