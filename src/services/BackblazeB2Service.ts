@@ -13,8 +13,12 @@ type BackblazeB2AuthPayload = {
 };
 
 type BackblazeB2AuthResponse = {
-  accountId: string;
-  authorizationToken: string;
+  accountId?: string;
+  authorizationToken?: string;
+  apiUrl?: string;
+  downloadUrl?: string;
+  recommendedPartSize?: number;
+  absoluteMinimumPartSize?: number;
   apiInfo?: {
     storageApi?: {
       apiUrl?: string;
@@ -98,13 +102,18 @@ export async function authorizeBackblazeB2(): Promise<BackblazeB2AuthPayload> {
   });
 
   const data = response.data;
-  const apiUrl = data.apiInfo?.storageApi?.apiUrl ?? "";
-  const downloadUrl = data.apiInfo?.storageApi?.downloadUrl ?? "";
-  const recommendedPartSize = data.apiInfo?.storageApi?.recommendedPartSize ?? 0;
-  const absoluteMinimumPartSize = data.apiInfo?.storageApi?.absoluteMinimumPartSize ?? 0;
+  const apiUrl = data.apiUrl ?? data.apiInfo?.storageApi?.apiUrl ?? "";
+  const downloadUrl = data.downloadUrl ?? data.apiInfo?.storageApi?.downloadUrl ?? "";
+  const recommendedPartSize =
+    data.recommendedPartSize ?? data.apiInfo?.storageApi?.recommendedPartSize ?? 0;
+  const absoluteMinimumPartSize =
+    data.absoluteMinimumPartSize ?? data.apiInfo?.storageApi?.absoluteMinimumPartSize ?? 0;
 
   if (!data.accountId || !data.authorizationToken || !apiUrl || !downloadUrl) {
-    throw new Error("Backblaze B2 authorization response is missing required fields.");
+    throw new Error(
+      "Backblaze B2 authorization response is missing required fields. " +
+      "Confirm credentials and API compatibility.",
+    );
   }
 
   const payload = {
