@@ -4370,7 +4370,7 @@ export class NowPlayingCommand {
         );
       }
       const entryTitle = formatEntry(entry, guildId);
-      const lines = [`### ${entryTitle}`];
+      const lines = [`**${entryTitle}**`];
       if (entry.addedAt) {
         const addedLabel = `Added ${formatTableDate(entry.addedAt)}`;
         if (entry.noteUpdatedAt) {
