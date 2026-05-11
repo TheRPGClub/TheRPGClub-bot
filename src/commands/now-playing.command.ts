@@ -1856,13 +1856,7 @@ export class NowPlayingCommand {
       );
       const refreshed = await this.refreshNowPlayingListFromContext(interaction, session.userId);
       if (refreshed) {
-        const container = new ContainerBuilder().addTextDisplayComponents(
-          new TextDisplayBuilder().setContent("Now Playing list updated."),
-        );
-        await safeUpdate(interaction, {
-          components: [container],
-          flags: buildComponentsV2Flags(true),
-        });
+        return;
       } else {
         const components = this.withNowPlayingActions(
           true,
