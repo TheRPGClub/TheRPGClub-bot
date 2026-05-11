@@ -831,10 +831,15 @@ export class NowPlayingCommand {
       session,
       thumbnailUrl,
     );
+    const pmComponents = await this.withPmNowPlayingList(
+      session.userId,
+      interaction.guildId,
+      [container],
+    );
     if (files.length) {
-      await interaction.update({ components: [container], files });
+      await interaction.update({ components: pmComponents, files });
     } else {
-      await interaction.update({ components: [container] });
+      await interaction.update({ components: pmComponents });
     }
   }
 
@@ -848,7 +853,8 @@ export class NowPlayingCommand {
       const container = new ContainerBuilder().addTextDisplayComponents(
         new TextDisplayBuilder().setContent("Your Now Playing list is empty."),
       );
-      await interaction.update({ components: [container] });
+      const pmComponents = await this.withPmNowPlayingList(ownerId, interaction.guildId, [container]);
+      await interaction.update({ components: pmComponents });
       return;
     }
 
@@ -878,7 +884,8 @@ export class NowPlayingCommand {
       sessionId,
       thumbnailsByGameId,
     );
-    await interaction.update(this.buildComponentPayload(components, files));
+    const pmComponents = await this.withPmNowPlayingList(ownerId, interaction.guildId, components);
+    await interaction.update(this.buildComponentPayload(pmComponents as any, files));
   }
 
   @ModalComponent({ id: /^nowplaying-complete-modal:[^:]+$/ })
@@ -1148,10 +1155,14 @@ export class NowPlayingCommand {
       new TextDisplayBuilder().setContent(content),
     );
     await safeReply(interaction, {
-      components: [
-        container,
-        new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select),
-      ],
+      components: await this.withPmNowPlayingList(
+        session.userId,
+        interaction.guildId,
+        [
+          container,
+          new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select),
+        ],
+      ),
       flags: buildComponentsV2Flags(true),
     });
   }
@@ -1773,11 +1784,16 @@ export class NowPlayingCommand {
         const container = new ContainerBuilder().addTextDisplayComponents(
           new TextDisplayBuilder().setContent("Your Now Playing list is empty."),
         );
+        const pmComponents = await this.withPmNowPlayingList(
+          userId,
+          interaction.guildId,
+          [container],
+        );
         if (mode === "update" && "update" in interaction) {
-          await interaction.update({ components: [container] });
+          await interaction.update({ components: pmComponents });
         } else {
           await safeReply(interaction, {
-            components: [container],
+            components: pmComponents,
             flags: buildComponentsV2Flags(true),
           });
         }
@@ -1793,11 +1809,16 @@ export class NowPlayingCommand {
         userId,
         thumbnailsByGameId,
       );
+      const pmComponents = await this.withPmNowPlayingList(
+        userId,
+        interaction.guildId,
+        components,
+      );
       if (mode === "update" && "update" in interaction) {
-        await interaction.update(this.buildComponentPayload(components, files));
+        await interaction.update(this.buildComponentPayload(pmComponents as any, files));
       } else {
         await safeReply(interaction, {
-          ...this.buildComponentPayload(components, files),
+          ...this.buildComponentPayload(pmComponents as any, files),
           flags: buildComponentsV2Flags(true),
         });
       }
@@ -1806,11 +1827,16 @@ export class NowPlayingCommand {
       const container = new ContainerBuilder().addTextDisplayComponents(
         new TextDisplayBuilder().setContent(`Could not remove from Now Playing: ${msg}`),
       );
+      const pmComponents = await this.withPmNowPlayingList(
+        userId,
+        interaction.guildId,
+        [container],
+      );
       if (mode === "update" && "update" in interaction) {
-        await interaction.update({ components: [container] });
+        await interaction.update({ components: pmComponents });
       } else {
         await safeReply(interaction, {
-          components: [container],
+          components: pmComponents,
           flags: buildComponentsV2Flags(true),
         });
       }
@@ -1828,7 +1854,8 @@ export class NowPlayingCommand {
       const container = new ContainerBuilder().addTextDisplayComponents(
         new TextDisplayBuilder().setContent("Your Now Playing list is empty."),
       );
-      await interaction.update({ components: [container] });
+      const pmComponents = await this.withPmNowPlayingList(ownerId, interaction.guildId, [container]);
+      await interaction.update({ components: pmComponents });
       return;
     }
     const { files, thumbnailsByGameId } = await this.buildNowPlayingAttachments(
@@ -1840,7 +1867,12 @@ export class NowPlayingCommand {
       ownerId,
       thumbnailsByGameId,
     );
-    await interaction.update(this.buildComponentPayload(components, files));
+    const pmComponents = await this.withPmNowPlayingList(
+      ownerId,
+      interaction.guildId,
+      components,
+    );
+    await interaction.update(this.buildComponentPayload(pmComponents as any, files));
   }
 
   private parseNowPlayingCompletionDate(value: string): Date | null {
@@ -1894,11 +1926,16 @@ export class NowPlayingCommand {
       const container = new ContainerBuilder().addTextDisplayComponents(
         new TextDisplayBuilder().setContent("Your Now Playing list is empty."),
       );
+      const pmComponents = await this.withPmNowPlayingList(
+        interaction.user.id,
+        interaction.guildId,
+        [container],
+      );
       if (mode === "update" && "update" in interaction) {
-        await interaction.update({ components: [container] });
+        await interaction.update({ components: pmComponents });
       } else {
         await safeReply(interaction, {
-          components: [container],
+          components: pmComponents,
           flags: MessageFlags.Ephemeral,
         });
       }
@@ -1958,14 +1995,19 @@ export class NowPlayingCommand {
       )
       .addActionRowComponents(selectRow.toJSON())
       .addActionRowComponents(cancelRow.toJSON());
+    const pmComponents = await this.withPmNowPlayingList(
+      interaction.user.id,
+      interaction.guildId,
+      [container],
+    );
 
     if (mode === "update" && "update" in interaction) {
-      await interaction.update({ components: [container] });
+      await interaction.update({ components: pmComponents });
       return;
     }
 
     await safeReply(interaction, {
-      components: [container],
+      components: pmComponents,
       flags: buildComponentsV2Flags(true),
     });
   }
@@ -1983,11 +2025,16 @@ export class NowPlayingCommand {
       const container = new ContainerBuilder().addTextDisplayComponents(
         new TextDisplayBuilder().setContent("Your Now Playing list is empty."),
       );
+      const pmComponents = await this.withPmNowPlayingList(
+        interaction.user.id,
+        interaction.guildId,
+        [container],
+      );
       if (mode === "update" && "update" in interaction) {
-        await interaction.update({ components: [container] });
+        await interaction.update({ components: pmComponents });
       } else {
         await safeReply(interaction, {
-          components: [container],
+          components: pmComponents,
           flags: MessageFlags.Ephemeral,
         });
       }
@@ -2003,13 +2050,18 @@ export class NowPlayingCommand {
       interaction.user.id,
       thumbnailsByGameId,
     );
+    const pmComponents = await this.withPmNowPlayingList(
+      interaction.user.id,
+      interaction.guildId,
+      components,
+    );
 
     if (mode === "update" && "update" in interaction) {
-      await interaction.update(this.buildComponentPayload(components, files));
+      await interaction.update(this.buildComponentPayload(pmComponents as any, files));
       return;
     }
     await safeReply(interaction, {
-      ...this.buildComponentPayload(components, files),
+      ...this.buildComponentPayload(pmComponents as any, files),
       flags: buildComponentsV2Flags(true),
     });
   }
@@ -2070,10 +2122,15 @@ export class NowPlayingCommand {
       components: [container, new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select)],
       flags: buildComponentsV2Flags(true),
     };
+    const pmComponents = await this.withPmNowPlayingList(
+      ownerId,
+      interaction.guildId,
+      payload.components,
+    );
     if (mode === "update" && "update" in interaction) {
-      await interaction.update(payload);
+      await interaction.update({ ...payload, components: pmComponents });
     } else {
-      await safeReply(interaction, payload);
+      await safeReply(interaction, { ...payload, components: pmComponents });
     }
   }
 
@@ -3392,6 +3449,30 @@ export class NowPlayingCommand {
   ): Promise<Array<ContainerBuilder | ActionRowBuilder<ButtonBuilder>>> {
     const entries = getDisplayNowPlayingEntries(await Member.getNowPlaying(ownerId));
     return this.buildNowPlayingEditMenuComponents(ownerId, entries, guildId);
+  }
+
+  private async withPmNowPlayingList(
+    ownerId: string,
+    guildId: string | null,
+    components: Array<ContainerBuilder | ActionRowBuilder<any>>,
+  ): Promise<Array<ContainerBuilder | ActionRowBuilder<any>>> {
+    if (guildId) {
+      return components;
+    }
+    const entries = getDisplayNowPlayingEntries(await Member.getNowPlaying(ownerId));
+    const listContainer = entries.length
+      ? this.buildNowPlayingEntryComponents(
+        "Your Now Playing List",
+        entries,
+        null,
+        null,
+        true,
+      )[0]
+      : this.buildNowPlayingMessageContainer(
+        "Your Now Playing List",
+        "Your Now Playing list is empty.",
+      );
+    return [listContainer, ...components];
   }
 
   private buildNowPlayingCompletionComponents(
