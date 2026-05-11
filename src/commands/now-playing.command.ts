@@ -87,8 +87,9 @@ import {
 
 const MAX_NOW_PLAYING_NOTE_LEN = 500;
 const NOW_PLAYING_SEARCH_LIMIT = 10;
-const NOW_PLAYING_SORT_MOVE_PREFIX = "nowplaying-sort-move";
-const NOW_PLAYING_SORT_DONE_ID = "nowplaying-sort-done";
+const NOW_PLAYING_SORT_SLOT_PREFIX = "nowplaying-sort-slot";
+const NOW_PLAYING_SORT_SAVE_PREFIX = "nowplaying-sort-save";
+const NOW_PLAYING_SORT_RESET_PREFIX = "nowplaying-sort-reset";
 const NOW_PLAYING_NOTE_MODAL_ID = "nowplaying-note-modal";
 const NOW_PLAYING_NOTE_INPUT_ID = "nowplaying-note-input";
 const NOW_PLAYING_NOTE_MODAL_MAX_FIELDS = 5;
@@ -179,6 +180,36 @@ type NowPlayingListComponents = ContainerBuilder[];
 
 function buildComponentsV2Flags(isEphemeral: boolean): number {
   return (isEphemeral ? MessageFlags.Ephemeral : 0) | COMPONENTS_V2_FLAG;
+}
+
+function buildNowPlayingSortStateToken(entryCount: number): string {
+  return Array.from({ length: entryCount }, (_, index) => index.toString(36)).join("");
+}
+
+function parseNowPlayingSortStateToken(
+  token: string,
+  entryCount: number,
+): number[] | null {
+  if (token.length !== entryCount) {
+    return null;
+  }
+  const parsed: number[] = [];
+  for (const character of token) {
+    if (character === "_") {
+      parsed.push(-1);
+      continue;
+    }
+    const value = Number.parseInt(character, 36);
+    if (!Number.isInteger(value) || value < 0 || value >= entryCount) {
+      return null;
+    }
+    parsed.push(value);
+  }
+  return parsed;
+}
+
+function encodeNowPlayingSortState(state: number[]): string {
+  return state.map((value) => (value < 0 ? "_" : value.toString(36))).join("");
 }
 
 async function confirmDuplicateCompletion(
@@ -2060,7 +2091,7 @@ export class NowPlayingCommand {
   ): Promise<void> {
     const entries = getDisplayNowPlayingEntries(
       await Member.getNowPlaying(ownerId),
-    );
+    ).slice(0, 10);
     if (!entries.length) {
       const container = new ContainerBuilder().addTextDisplayComponents(
         new TextDisplayBuilder().setContent("Your Now Playing list is empty."),
@@ -2069,12 +2100,8 @@ export class NowPlayingCommand {
       await interaction.update({ components: pmComponents });
       return;
     }
-    const thumbnailsByGameId = new Map<number, string>();
-    const components = this.buildNowPlayingSortComponents(
-      entries,
-      ownerId,
-      thumbnailsByGameId,
-    );
+    const stateToken = buildNowPlayingSortStateToken(entries.length);
+    const components = this.buildNowPlayingSortComponents(entries, ownerId, stateToken);
     const pmComponents = await this.withPmNowPlayingList(
       ownerId,
       interaction.guildId,
@@ -2448,9 +2475,9 @@ export class NowPlayingCommand {
     });
   }
 
-  @ButtonComponent({ id: /^nowplaying-sort-move:\d+:\d+$/ })
-  async handleNowPlayingSortMove(interaction: ButtonInteraction): Promise<void> {
-    const [, ownerId, gameIdRaw] = interaction.customId.split(":");
+  @SelectMenuComponent({ id: /^nowplaying-sort-slot:\d+:\d+:[a-z0-9_]+$/ })
+  async handleNowPlayingSortSlot(interaction: StringSelectMenuInteraction): Promise<void> {
+    const [, ownerId, slotRaw, stateToken] = interaction.customId.split(":");
     if (interaction.user.id !== ownerId) {
       const container = new ContainerBuilder().addTextDisplayComponents(
         new TextDisplayBuilder().setContent("This sort prompt isn't for you."),
@@ -2462,8 +2489,8 @@ export class NowPlayingCommand {
       return;
     }
 
-    const gameId = Number(gameIdRaw);
-    if (!Number.isInteger(gameId) || gameId <= 0) {
+    const slotIndex = Number(slotRaw);
+    if (!Number.isInteger(slotIndex) || slotIndex < 0) {
       const container = new ContainerBuilder().addTextDisplayComponents(
         new TextDisplayBuilder().setContent("Invalid selection."),
       );
@@ -2474,80 +2501,44 @@ export class NowPlayingCommand {
       return;
     }
 
-    await safeDeferUpdate(interaction);
-    const isEphemeral = interaction.message.flags?.has(MessageFlags.Ephemeral) ?? false;
-    const responseFlags = buildComponentsV2Flags(isEphemeral);
     try {
-      const entries = getDisplayNowPlayingEntries(
-        await Member.getNowPlaying(ownerId),
-      );
-      const index = entries.findIndex((entry) => entry.gameId === gameId);
-      if (index <= 0) {
-        const thumbnailsByGameId = new Map<number, string>();
-        const components = this.buildNowPlayingSortComponents(
-          entries,
-          ownerId,
-          thumbnailsByGameId,
-        );
-        const pmComponents = await this.withPmNowPlayingList(
-          ownerId,
-          interaction.guildId,
-          components,
-        );
-        await safeReply(interaction, {
-          components: pmComponents,
-          flags: responseFlags,
-        });
-        return;
-      }
-
-      const reordered = [...entries];
-      [reordered[index - 1], reordered[index]] = [reordered[index], reordered[index - 1]];
-      const orderedIds = reordered.map((entry) => entry.gameId);
-      const updated = await Member.updateNowPlayingSort(ownerId, orderedIds);
-      if (!updated) {
+      const entries = getDisplayNowPlayingEntries(await Member.getNowPlaying(ownerId)).slice(0, 10);
+      const parsed = parseNowPlayingSortStateToken(stateToken, entries.length);
+      const selectedValue = interaction.values[0] ?? "";
+      const selectedIndex = Number(selectedValue);
+      if (
+        !parsed ||
+        !Number.isInteger(selectedIndex) ||
+        selectedIndex < 0 ||
+        selectedIndex >= entries.length ||
+        slotIndex >= entries.length
+      ) {
         const container = new ContainerBuilder().addTextDisplayComponents(
-          new TextDisplayBuilder().setContent("Could not update the sort order."),
+          new TextDisplayBuilder().setContent("This sort form has expired. Open Sort again."),
         );
-        await safeReply(interaction, {
-          components: [container],
-          flags: responseFlags,
-        });
+        await interaction.update({ components: [container] });
         return;
       }
 
-      const refreshedEntries = getDisplayNowPlayingEntries(
-        await Member.getNowPlaying(ownerId),
-      );
-      const thumbnailsByGameId = new Map<number, string>();
+      parsed[slotIndex] = selectedIndex;
       const components = this.buildNowPlayingSortComponents(
-        refreshedEntries,
+        entries,
         ownerId,
-        thumbnailsByGameId,
+        encodeNowPlayingSortState(parsed),
       );
-      const pmComponents = await this.withPmNowPlayingList(
-        ownerId,
-        interaction.guildId,
-        components,
-      );
-      await safeReply(interaction, {
-        components: pmComponents,
-        flags: responseFlags,
-      });
+      const pmComponents = await this.withPmNowPlayingList(ownerId, interaction.guildId, components);
+      await interaction.update({ components: pmComponents });
     } catch {
       const container = new ContainerBuilder().addTextDisplayComponents(
-        new TextDisplayBuilder().setContent("Could not update the sort order right now."),
+        new TextDisplayBuilder().setContent("Could not update the sort form right now."),
       );
-      await safeReply(interaction, {
-        components: [container],
-        flags: responseFlags,
-      });
+      await interaction.update({ components: [container] }).catch(() => {});
     }
   }
 
-  @ButtonComponent({ id: /^nowplaying-sort-done:\d+$/ })
-  async handleNowPlayingSortDone(interaction: ButtonInteraction): Promise<void> {
-    const [, ownerId] = interaction.customId.split(":");
+  @ButtonComponent({ id: /^nowplaying-sort-save:\d+:[a-z0-9_]+$/ })
+  async handleNowPlayingSortSave(interaction: ButtonInteraction): Promise<void> {
+    const [, ownerId, stateToken] = interaction.customId.split(":");
     if (interaction.user.id !== ownerId) {
       const container = new ContainerBuilder().addTextDisplayComponents(
         new TextDisplayBuilder().setContent("This sort prompt isn't for you."),
@@ -2556,6 +2547,50 @@ export class NowPlayingCommand {
         components: [container],
         flags: buildComponentsV2Flags(true),
       });
+      return;
+    }
+
+    const entries = getDisplayNowPlayingEntries(await Member.getNowPlaying(ownerId)).slice(0, 10);
+    const parsed = parseNowPlayingSortStateToken(stateToken, entries.length);
+    if (!parsed) {
+      const container = new ContainerBuilder().addTextDisplayComponents(
+        new TextDisplayBuilder().setContent("This sort form has expired. Open Sort again."),
+      );
+      const pmComponents = await this.withPmNowPlayingList(ownerId, interaction.guildId, [container]);
+      await interaction.update({ components: pmComponents });
+      return;
+    }
+    if (parsed.some((value) => value < 0)) {
+      const components = this.buildNowPlayingSortComponents(
+        entries,
+        ownerId,
+        stateToken,
+        "Assign a title to every visible position before saving.",
+      );
+      const pmComponents = await this.withPmNowPlayingList(ownerId, interaction.guildId, components);
+      await interaction.update({ components: pmComponents });
+      return;
+    }
+    if (new Set(parsed).size !== parsed.length) {
+      const components = this.buildNowPlayingSortComponents(
+        entries,
+        ownerId,
+        stateToken,
+        "Each title can only be used once. Remove duplicate assignments and try again.",
+      );
+      const pmComponents = await this.withPmNowPlayingList(ownerId, interaction.guildId, components);
+      await interaction.update({ components: pmComponents });
+      return;
+    }
+
+    const orderedIds = parsed.map((index) => entries[index].gameId);
+    const updated = await Member.updateNowPlayingSort(ownerId, orderedIds);
+    if (!updated) {
+      const container = new ContainerBuilder().addTextDisplayComponents(
+        new TextDisplayBuilder().setContent("Could not update the sort order."),
+      );
+      const pmComponents = await this.withPmNowPlayingList(ownerId, interaction.guildId, [container]);
+      await interaction.update({ components: pmComponents });
       return;
     }
 
@@ -2582,6 +2617,23 @@ export class NowPlayingCommand {
       components,
       files: payload.files,
     });
+  }
+
+  @ButtonComponent({ id: /^nowplaying-sort-reset:\d+$/ })
+  async handleNowPlayingSortReset(interaction: ButtonInteraction): Promise<void> {
+    const [, ownerId] = interaction.customId.split(":");
+    if (interaction.user.id !== ownerId) {
+      await interaction.reply({
+        content: "This sort prompt isn't for you.",
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
+    const entries = getDisplayNowPlayingEntries(await Member.getNowPlaying(ownerId)).slice(0, 10);
+    const stateToken = buildNowPlayingSortStateToken(entries.length);
+    const components = this.buildNowPlayingSortComponents(entries, ownerId, stateToken);
+    const pmComponents = await this.withPmNowPlayingList(ownerId, interaction.guildId, components);
+    await interaction.update({ components: pmComponents });
   }
 
   @ModalComponent({ id: /^nowplaying-note-modal:\d+(?::\d+)?$/ })
@@ -4049,75 +4101,57 @@ export class NowPlayingCommand {
   private buildNowPlayingSortComponents(
     entries: IMemberNowPlayingEntry[],
     ownerId: string,
-    thumbnailsByGameId: Map<number, string>,
-  ): Array<ContainerBuilder | ActionRowBuilder<ButtonBuilder>> {
+    stateToken: string,
+    validationMessage: string | null = null,
+  ): Array<ContainerBuilder | ActionRowBuilder<StringSelectMenuBuilder | ButtonBuilder>> {
+    const parsedState = parseNowPlayingSortStateToken(stateToken, entries.length) ??
+      Array.from({ length: entries.length }, () => -1);
     const container = new ContainerBuilder();
+    const introLines = [
+      "## Sort Your Now Playing List",
+      "Pick one title for each position, then press Save.",
+    ];
+    if (validationMessage) {
+      introLines.push(`-# ${validationMessage}`);
+    }
     container.addTextDisplayComponents(
       new TextDisplayBuilder().setContent(
-        "## Sort Your Now Playing List\nClick Move Up to raise a game. Press Done when finished.",
+        introLines.join("\n"),
       ),
     );
 
-    const galleryItems: MediaGalleryItemBuilder[] = [];
-    for (const entry of entries) {
-      if (galleryItems.length >= NOW_PLAYING_GALLERY_MAX) {
-        break;
-      }
-      if (!entry.gameId) {
-        continue;
-      }
-      const imageUrl = thumbnailsByGameId.get(entry.gameId);
-      if (!imageUrl) {
-        continue;
-      }
-      const item = new MediaGalleryItemBuilder()
-        .setURL(imageUrl)
-        .setDescription(formatEntryTitleWithPlatform(entry));
-      galleryItems.push(item);
+    const rows: Array<ActionRowBuilder<StringSelectMenuBuilder | ButtonBuilder>> = [];
+    for (let slotIndex = 0; slotIndex < entries.length; slotIndex += 1) {
+      const selectedIndex = parsedState[slotIndex] ?? -1;
+      const menu = new StringSelectMenuBuilder()
+        .setCustomId(`${NOW_PLAYING_SORT_SLOT_PREFIX}:${ownerId}:${slotIndex}:${stateToken}`)
+        .setPlaceholder(`Position ${slotIndex + 1}`)
+        .setMinValues(1)
+        .setMaxValues(1)
+        .addOptions(entries.map((entry, entryIndex) => ({
+          label: formatEntryTitleWithPlatform(entry).slice(0, 100),
+          value: String(entryIndex),
+          default: selectedIndex === entryIndex,
+        })));
+      rows.push(new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(menu));
     }
 
-    if (galleryItems.length) {
-      container.addMediaGalleryComponents(new MediaGalleryBuilder().addItems(galleryItems));
-      container.addSeparatorComponents(
-        new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Large).setDivider(false),
-      );
-    }
-
-    entries.forEach((entry, index) => {
-      const lines = [`### ${formatEntryTitleWithPlatform(entry)}`];
-      if (entry.note) {
-        lines.push(entry.note);
-        if (entry.noteUpdatedAt) {
-          lines.push(`-# *Last updated ${formatTableDate(entry.noteUpdatedAt)}.*`);
-        }
-      }
-      const section = new SectionBuilder().addTextDisplayComponents(
-        new TextDisplayBuilder().setContent(
-          this.trimTextDisplayContent(lines.join("\n")),
-        ),
-      );
-      const accessory =
-        index > 0
-          ? new V2ButtonBuilder()
-            .setCustomId(`${NOW_PLAYING_SORT_MOVE_PREFIX}:${ownerId}:${entry.gameId}`)
-            .setLabel("Move Up")
-            .setStyle(ButtonStyle.Secondary)
-          : new V2ButtonBuilder()
-            .setCustomId(`nowplaying-sort-top:${ownerId}`)
-            .setLabel("Top")
-            .setStyle(ButtonStyle.Secondary)
-            .setDisabled(true);
-      section.setButtonAccessory(accessory);
-      container.addSectionComponents(section);
-    });
-
-    const doneRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+    const actionRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
       new ButtonBuilder()
-        .setCustomId(`${NOW_PLAYING_SORT_DONE_ID}:${ownerId}`)
-        .setLabel("Done")
+        .setCustomId(`${NOW_PLAYING_SORT_SAVE_PREFIX}:${ownerId}:${stateToken}`)
+        .setLabel("Save")
         .setStyle(ButtonStyle.Success),
+      new ButtonBuilder()
+        .setCustomId(`${NOW_PLAYING_SORT_RESET_PREFIX}:${ownerId}`)
+        .setLabel("Reset to current order")
+        .setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder()
+        .setCustomId(`nowplaying-list-cancel:${ownerId}`)
+        .setLabel("Cancel")
+        .setStyle(ButtonStyle.Secondary),
     );
-    return [container, doneRow];
+    rows.push(actionRow);
+    return [container, ...rows];
   }
 
   private withNowPlayingActions(
