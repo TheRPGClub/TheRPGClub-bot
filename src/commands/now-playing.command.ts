@@ -5437,9 +5437,7 @@ export class NowPlayingCommand {
         ),
       );
     }
-    const totalEntriesLine = totalPages > 1
-      ? `Total entries visible: **${total}** | Page ${safePage}/${totalPages}`
-      : `Total entries visible: **${total}**`;
+    const totalEntriesLine = `${total} Entries`;
     introTextDisplays.push(
       new TextDisplayBuilder().setContent(totalEntriesLine),
     );
