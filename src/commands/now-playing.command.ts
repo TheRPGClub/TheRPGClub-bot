@@ -3403,9 +3403,10 @@ export class NowPlayingCommand {
       isPublic,
     });
     await Member.upsertGameJournalPreference(ownerId, Number(gameIdRaw), true, isPublic);
+    const journalViewerId = interaction.guildId ? "__public__" : interaction.user.id;
     const payload = await this.buildJournalComponents(
       ownerId,
-      interaction.user.id,
+      journalViewerId,
       Number(gameIdRaw),
       Number(pageRaw),
     );
@@ -3454,9 +3455,10 @@ export class NowPlayingCommand {
       body,
       isPublic,
     });
+    const journalViewerId = interaction.guildId ? "__public__" : interaction.user.id;
     const payload = await this.buildJournalComponents(
       ownerId,
-      interaction.user.id,
+      journalViewerId,
       Number(gameIdRaw),
       Number(pageRaw),
     );
