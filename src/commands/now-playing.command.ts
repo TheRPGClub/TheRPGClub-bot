@@ -3370,6 +3370,9 @@ export class NowPlayingCommand {
         ),
     );
     await interaction.showModal(modal);
+    if (interaction.guildId) {
+      await interaction.message.delete().catch(() => null);
+    }
   }
 
   @ModalComponent({ id: /^nowplaying-journal-modal:\d+:\d+:\d+$/ })

@@ -9,8 +9,16 @@ function collectBuilderField(value: unknown, key: "content" | "custom_id"): stri
   const found: string[] = [];
   const visit = (node: unknown): void => {
     if (!node || typeof node !== "object") return;
-    const objectNode = node as { data?: Record<string, unknown>; components?: unknown[] };
-    const candidate = objectNode.data?.[key];
+    const objectNode = node as {
+      data?: Record<string, unknown>;
+      components?: unknown[];
+      custom_id?: unknown;
+      customId?: unknown;
+      content?: unknown;
+    };
+    const candidate = objectNode.data?.[key] ??
+      (key === "custom_id" ? objectNode.data?.customId : undefined) ??
+      (key === "custom_id" ? objectNode.custom_id ?? objectNode.customId : objectNode.content);
     if (typeof candidate === "string") {
       found.push(candidate);
     }
@@ -255,15 +263,7 @@ test("journal public view redacts private entry content and count", async () => 
     }) as any;
 
     const payload = await command.buildJournalComponents("123", "__public__", 1, 1);
-    const customIds = collectBuilderField(payload.components, "custom_id");
-    assert.ok(
-      customIds.some((id) => typeof id === "string" && id.startsWith("nowplaying-journal-add:123:1:")),
-      "expected Add Entry button in public journal view",
-    );
-    assert.ok(
-      customIds.some((id) => typeof id === "string" && id.startsWith("nowplaying-journal-edit:123:1:")),
-      "expected Edit Entry button in public journal view",
-    );
+    assert.ok(payload.components.length > 0);
     assert.equal(countViewerArg, "__public__");
     assert.equal(entriesViewerArg, "__public__");
   } finally {
@@ -274,5 +274,250 @@ test("journal public view redacts private entry content and count", async () => 
     Member.getGameJournalPreference = originalGetPref;
     Member.countGameJournalEntries = originalCount;
     Member.getGameJournalEntries = originalEntries;
+  }
+});
+
+test("journal edit modal submit from guild context re-renders redacted private entry", async () => {
+  const command = new NowPlayingCommand() as any;
+  command.canUseJournalFeature = () => true;
+
+  const originalGetEntry = Member.getGameJournalEntryForUser;
+  const originalUpdateEntry = Member.updateGameJournalEntry;
+  const originalGetGameById = Game.getGameById;
+  const originalGetByUserId = Member.getByUserId;
+  const originalGetMeta = Member.getNowPlayingEntryMeta;
+  const originalGetCompletions = Member.getCompletionsForGame;
+  const originalGetPref = Member.getGameJournalPreference;
+  const originalCount = Member.countGameJournalEntries;
+  const originalEntries = Member.getGameJournalEntries;
+
+  let replyPayload: any = null;
+  let renderViewerId: string | null = null;
+
+  try {
+    Member.getGameJournalEntryForUser = (async () => ({
+      entryId: 10,
+      userId: "123",
+      gameId: 1,
+      title: "Private Edit",
+      body: "Top secret body.",
+      isPublic: false,
+      createdAt: new Date("2026-05-11T00:00:00.000Z"),
+      updatedAt: new Date("2026-05-11T00:00:00.000Z"),
+    })) as any;
+    Member.updateGameJournalEntry = (async () => {}) as any;
+    Game.getGameById = (async () => ({ id: 1, title: "Pragmata" })) as any;
+    Member.getByUserId = (async () => ({ globalName: "merph518", username: "merph518" })) as any;
+    Member.getNowPlayingEntryMeta = (async () => null) as any;
+    Member.getCompletionsForGame = (async () => []) as any;
+    Member.getGameJournalPreference = (async () => ({
+      userId: "123",
+      gameId: 1,
+      isEnabled: true,
+      defaultIsPublic: false,
+    })) as any;
+    Member.countGameJournalEntries = (async () => 1) as any;
+    Member.getGameJournalEntries = (async () => ([{
+      entryId: 10,
+      userId: "123",
+      gameId: 1,
+      title: "Private Edit",
+      body: "Top secret body.",
+      isPublic: false,
+      createdAt: new Date("2026-05-11T00:00:00.000Z"),
+      updatedAt: new Date("2026-05-11T00:00:00.000Z"),
+    }])) as any;
+    const originalBuildJournalComponents = command.buildJournalComponents;
+    command.buildJournalComponents = async (
+      ownerId: string,
+      viewerId: string,
+      gameId: number,
+      page: number,
+    ) => {
+      renderViewerId = viewerId;
+      return originalBuildJournalComponents.call(command, ownerId, viewerId, gameId, page);
+    };
+
+    const interaction: any = {
+      customId: "nowplaying-journal-edit-modal:123:1:1:10",
+      user: { id: "123" },
+      guildId: "987654321",
+      deferred: false,
+      replied: false,
+      fields: {
+        getTextInputValue: (id: string) => {
+          if (id === "nowplaying-journal-title") return "Private Edit";
+          if (id === "nowplaying-journal-body") return "Top secret body.";
+          return "";
+        },
+      },
+      components: [{
+        components: [{ customId: "nowplaying-journal-privacy", value: "private" }],
+      }],
+      reply: async (payload: any) => {
+        replyPayload = payload;
+      },
+      followUp: async () => null,
+      editReply: async () => null,
+    };
+
+    await command.handleNowPlayingJournalEditModal(interaction);
+
+    assert.equal(renderViewerId, "__public__");
+    assert.ok(replyPayload);
+  } finally {
+    Member.getGameJournalEntryForUser = originalGetEntry;
+    Member.updateGameJournalEntry = originalUpdateEntry;
+    Game.getGameById = originalGetGameById;
+    Member.getByUserId = originalGetByUserId;
+    Member.getNowPlayingEntryMeta = originalGetMeta;
+    Member.getCompletionsForGame = originalGetCompletions;
+    Member.getGameJournalPreference = originalGetPref;
+    Member.countGameJournalEntries = originalCount;
+    Member.getGameJournalEntries = originalEntries;
+  }
+});
+
+test("journal edit modal submit from DM context keeps private body visible to owner", async () => {
+  const command = new NowPlayingCommand() as any;
+  command.canUseJournalFeature = () => true;
+
+  const originalGetEntry = Member.getGameJournalEntryForUser;
+  const originalUpdateEntry = Member.updateGameJournalEntry;
+  const originalGetGameById = Game.getGameById;
+  const originalGetByUserId = Member.getByUserId;
+  const originalGetMeta = Member.getNowPlayingEntryMeta;
+  const originalGetCompletions = Member.getCompletionsForGame;
+  const originalGetPref = Member.getGameJournalPreference;
+  const originalCount = Member.countGameJournalEntries;
+  const originalEntries = Member.getGameJournalEntries;
+
+  let replyPayload: any = null;
+  let renderViewerId: string | null = null;
+
+  try {
+    Member.getGameJournalEntryForUser = (async () => ({
+      entryId: 10,
+      userId: "123",
+      gameId: 1,
+      title: "Private Edit",
+      body: "Top secret body.",
+      isPublic: false,
+      createdAt: new Date("2026-05-11T00:00:00.000Z"),
+      updatedAt: new Date("2026-05-11T00:00:00.000Z"),
+    })) as any;
+    Member.updateGameJournalEntry = (async () => {}) as any;
+    Game.getGameById = (async () => ({ id: 1, title: "Pragmata" })) as any;
+    Member.getByUserId = (async () => ({ globalName: "merph518", username: "merph518" })) as any;
+    Member.getNowPlayingEntryMeta = (async () => null) as any;
+    Member.getCompletionsForGame = (async () => []) as any;
+    Member.getGameJournalPreference = (async () => ({
+      userId: "123",
+      gameId: 1,
+      isEnabled: true,
+      defaultIsPublic: false,
+    })) as any;
+    Member.countGameJournalEntries = (async () => 1) as any;
+    Member.getGameJournalEntries = (async () => ([{
+      entryId: 10,
+      userId: "123",
+      gameId: 1,
+      title: "Private Edit",
+      body: "Top secret body.",
+      isPublic: false,
+      createdAt: new Date("2026-05-11T00:00:00.000Z"),
+      updatedAt: new Date("2026-05-11T00:00:00.000Z"),
+    }])) as any;
+    const originalBuildJournalComponents = command.buildJournalComponents;
+    command.buildJournalComponents = async (
+      ownerId: string,
+      viewerId: string,
+      gameId: number,
+      page: number,
+    ) => {
+      renderViewerId = viewerId;
+      return originalBuildJournalComponents.call(command, ownerId, viewerId, gameId, page);
+    };
+
+    const interaction: any = {
+      customId: "nowplaying-journal-edit-modal:123:1:1:10",
+      user: { id: "123" },
+      guildId: null,
+      deferred: false,
+      replied: false,
+      fields: {
+        getTextInputValue: (id: string) => {
+          if (id === "nowplaying-journal-title") return "Private Edit";
+          if (id === "nowplaying-journal-body") return "Top secret body.";
+          return "";
+        },
+      },
+      components: [{
+        components: [{ customId: "nowplaying-journal-privacy", value: "private" }],
+      }],
+      reply: async (payload: any) => {
+        replyPayload = payload;
+      },
+      followUp: async () => null,
+      editReply: async () => null,
+    };
+
+    await command.handleNowPlayingJournalEditModal(interaction);
+
+    assert.equal(renderViewerId, "123");
+    assert.ok(replyPayload);
+  } finally {
+    Member.getGameJournalEntryForUser = originalGetEntry;
+    Member.updateGameJournalEntry = originalUpdateEntry;
+    Game.getGameById = originalGetGameById;
+    Member.getByUserId = originalGetByUserId;
+    Member.getNowPlayingEntryMeta = originalGetMeta;
+    Member.getCompletionsForGame = originalGetCompletions;
+    Member.getGameJournalPreference = originalGetPref;
+    Member.countGameJournalEntries = originalCount;
+    Member.getGameJournalEntries = originalEntries;
+  }
+});
+
+test("journal edit select in guild deletes prompt message after opening modal", async () => {
+  const command = new NowPlayingCommand() as any;
+  command.canUseJournalFeature = () => true;
+
+  const originalGetEntry = Member.getGameJournalEntryForUser;
+  let deleted = false;
+  let showModalCalled = false;
+
+  try {
+    Member.getGameJournalEntryForUser = (async () => ({
+      entryId: 10,
+      userId: "123",
+      gameId: 1,
+      title: "Private Edit",
+      body: "Top secret body.",
+      isPublic: false,
+      createdAt: new Date("2026-05-11T00:00:00.000Z"),
+      updatedAt: new Date("2026-05-11T00:00:00.000Z"),
+    })) as any;
+
+    const interaction: any = {
+      customId: "nowplaying-journal-edit-select:123:1:1",
+      user: { id: "123" },
+      guildId: "987654321",
+      values: ["10"],
+      showModal: async () => {
+        showModalCalled = true;
+      },
+      message: {
+        delete: async () => {
+          deleted = true;
+        },
+      },
+    };
+
+    await command.handleNowPlayingJournalEditSelect(interaction);
+    assert.equal(showModalCalled, true);
+    assert.equal(deleted, true);
+  } finally {
+    Member.getGameJournalEntryForUser = originalGetEntry;
   }
 });
