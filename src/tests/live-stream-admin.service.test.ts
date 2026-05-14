@@ -12,9 +12,9 @@ test("buildLiveStreamModalCustomId includes prefix and user id", () => {
 
 test("parseLiveStreamModalInput accepts valid iana timezone and datetime", () => {
   const parsed = parseLiveStreamModalInput({
-    date: "2026-05-01",
+    endTime: "23:30",
     imageUrl: "https://example.com/banner.png",
-    time: "21:30",
+    start: "2026-05-01 21:30",
     timeZone: "America/New_York",
     topic: "Nintendo Direct",
   });
@@ -30,8 +30,8 @@ test("parseLiveStreamModalInput accepts valid iana timezone and datetime", () =>
 
 test("parseLiveStreamModalInput rejects invalid timezone", () => {
   const parsed = parseLiveStreamModalInput({
-    date: "2026-05-01",
-    time: "21:30",
+    endTime: "23:30",
+    start: "2026-05-01 21:30",
     timeZone: "Mars/Olympus",
     topic: "Nintendo Direct",
   });
@@ -41,8 +41,8 @@ test("parseLiveStreamModalInput rejects invalid timezone", () => {
 
 test("parseLiveStreamModalInput rejects invalid time format", () => {
   const parsed = parseLiveStreamModalInput({
-    date: "2026-05-01",
-    time: "9pm",
+    endTime: "9pm",
+    start: "2026-05-01 21:30",
     timeZone: "America/New_York",
     topic: "Nintendo Direct",
   });
@@ -52,9 +52,9 @@ test("parseLiveStreamModalInput rejects invalid time format", () => {
 
 test("parseLiveStreamModalInput rejects invalid image url protocol", () => {
   const parsed = parseLiveStreamModalInput({
-    date: "2026-05-01",
+    endTime: "23:30",
     imageUrl: "ftp://example.com/banner.png",
-    time: "21:30",
+    start: "2026-05-01 21:30",
     timeZone: "America/New_York",
     topic: "Nintendo Direct",
   });
