@@ -5271,7 +5271,6 @@ export class NowPlayingCommand {
     const pref = await Member.getGameJournalPreference(ownerId, gameId);
     const isEnabled = pref?.isEnabled === true;
     const isOwnerView = ownerId === viewerId;
-    const canManage = isOwnerView;
     const offset = (page - 1) * perPage;
     const total = await Member.countGameJournalEntries(ownerId, gameId, viewerId);
     const entries = await Member.getGameJournalEntries(ownerId, gameId, {
@@ -5363,7 +5362,7 @@ export class NowPlayingCommand {
     }
 
     const row = new ActionRowBuilder<ButtonBuilder>();
-    if (isEnabled && canManage) {
+    if (isEnabled) {
       row.addComponents(
         new ButtonBuilder()
           .setCustomId(`${NOW_PLAYING_JOURNAL_ADD_PREFIX}:${ownerId}:${gameId}:${safePage}`)

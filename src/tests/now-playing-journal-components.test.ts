@@ -254,7 +254,16 @@ test("journal public view redacts private entry content and count", async () => 
     }];
     }) as any;
 
-    await command.buildJournalComponents("123", "__public__", 1, 1);
+    const payload = await command.buildJournalComponents("123", "__public__", 1, 1);
+    const customIds = collectBuilderField(payload.components, "custom_id");
+    assert.ok(
+      customIds.some((id) => typeof id === "string" && id.startsWith("nowplaying-journal-add:123:1:")),
+      "expected Add Entry button in public journal view",
+    );
+    assert.ok(
+      customIds.some((id) => typeof id === "string" && id.startsWith("nowplaying-journal-edit:123:1:")),
+      "expected Edit Entry button in public journal view",
+    );
     assert.equal(countViewerArg, "__public__");
     assert.equal(entriesViewerArg, "__public__");
   } finally {
