@@ -5,6 +5,25 @@ import type { IMemberNowPlayingEntry } from "../classes/Member.js";
 import Member from "../classes/Member.js";
 import Game from "../classes/Game.js";
 
+function collectBuilderField(value: unknown, key: "content" | "custom_id"): string[] {
+  const found: string[] = [];
+  const visit = (node: unknown): void => {
+    if (!node || typeof node !== "object") return;
+    const objectNode = node as { data?: Record<string, unknown>; components?: unknown[] };
+    const candidate = objectNode.data?.[key];
+    if (typeof candidate === "string") {
+      found.push(candidate);
+    }
+    if (Array.isArray(objectNode.components)) {
+      for (const child of objectNode.components) {
+        visit(child);
+      }
+    }
+  };
+  visit(value);
+  return found;
+}
+
 test("now-playing list components serialize with mixed journal-enabled entries", () => {
   const command = new NowPlayingCommand() as any;
   const entries: IMemberNowPlayingEntry[] = [{
@@ -138,12 +157,18 @@ test("owner list with 10 entries stays serializable and keeps journal buttons", 
 test("journal pager uses unique custom ids when only one page exists", async () => {
   const command = new NowPlayingCommand() as any;
   const originalGetGameById = Game.getGameById;
+  const originalGetByUserId = Member.getByUserId;
+  const originalGetMeta = Member.getNowPlayingEntryMeta;
+  const originalGetCompletions = Member.getCompletionsForGame;
   const originalGetPref = Member.getGameJournalPreference;
   const originalCount = Member.countGameJournalEntries;
   const originalEntries = Member.getGameJournalEntries;
 
   try {
     Game.getGameById = (async () => ({ id: 1, title: "Test Game" })) as any;
+    Member.getByUserId = (async () => ({ globalName: "owner", username: "owner" })) as any;
+    Member.getNowPlayingEntryMeta = (async () => null) as any;
+    Member.getCompletionsForGame = (async () => []) as any;
     Member.getGameJournalPreference = (async () => ({
       userId: "123",
       gameId: 1,
@@ -162,13 +187,81 @@ test("journal pager uses unique custom ids when only one page exists", async () 
       updatedAt: new Date(),
     }])) as any;
 
-    const components = await command.buildJournalComponents("123", "123", 1, 1);
-    const json = components.map((component: any) => component.toJSON());
-    const customIds = JSON.stringify(json).match(/"custom_id":"([^"]+)"/g) ?? [];
+    const payload = await command.buildJournalComponents("123", "123", 1, 1);
+    const customIds = collectBuilderField(payload.components, "custom_id");
     const unique = new Set(customIds);
     assert.equal(customIds.length, unique.size);
   } finally {
     Game.getGameById = originalGetGameById;
+    Member.getByUserId = originalGetByUserId;
+    Member.getNowPlayingEntryMeta = originalGetMeta;
+    Member.getCompletionsForGame = originalGetCompletions;
+    Member.getGameJournalPreference = originalGetPref;
+    Member.countGameJournalEntries = originalCount;
+    Member.getGameJournalEntries = originalEntries;
+  }
+});
+
+test("journal public view redacts private entry content and count", async () => {
+  const command = new NowPlayingCommand() as any;
+  const originalGetGameById = Game.getGameById;
+  const originalGetByUserId = Member.getByUserId;
+  const originalGetMeta = Member.getNowPlayingEntryMeta;
+  const originalGetCompletions = Member.getCompletionsForGame;
+  const originalGetPref = Member.getGameJournalPreference;
+  const originalCount = Member.countGameJournalEntries;
+  const originalEntries = Member.getGameJournalEntries;
+  let countViewerArg: string | null | undefined;
+  let entriesViewerArg: string | null | undefined;
+
+  try {
+    Game.getGameById = (async () => ({ id: 1, title: "Pragmata" })) as any;
+    Member.getByUserId = (async () => ({ globalName: "merph518", username: "merph518" })) as any;
+    Member.getNowPlayingEntryMeta = (async () => ({ addedAt: new Date("2026-05-07T00:00:00.000Z") })) as any;
+    Member.getCompletionsForGame = (async () => []) as any;
+    Member.getGameJournalPreference = (async () => ({
+      userId: "123",
+      gameId: 1,
+      isEnabled: true,
+      defaultIsPublic: false,
+    })) as any;
+    Member.countGameJournalEntries = (async (_userId: string, _gameId: number, viewerUserId?: string | null) => {
+      countViewerArg = viewerUserId;
+      return 1;
+    }) as any;
+    Member.getGameJournalEntries = (async (_userId: string, _gameId: number, params?: {
+      viewerUserId?: string | null;
+    }) => {
+      entriesViewerArg = params?.viewerUserId;
+      return [{
+      entryId: 10,
+      userId: "123",
+      gameId: 1,
+      title: "Testing a Private Entry",
+      body: "This text should not render.",
+      isPublic: false,
+      createdAt: new Date("2026-05-11T00:00:00.000Z"),
+      updatedAt: new Date("2026-05-11T00:00:00.000Z"),
+    }, {
+      entryId: 11,
+      userId: "123",
+      gameId: 1,
+      title: "Finally",
+      body: "5 hours played.",
+      isPublic: true,
+      createdAt: new Date("2026-05-11T00:00:00.000Z"),
+      updatedAt: new Date("2026-05-11T00:00:00.000Z"),
+    }];
+    }) as any;
+
+    await command.buildJournalComponents("123", "__public__", 1, 1);
+    assert.equal(countViewerArg, "__public__");
+    assert.equal(entriesViewerArg, "__public__");
+  } finally {
+    Game.getGameById = originalGetGameById;
+    Member.getByUserId = originalGetByUserId;
+    Member.getNowPlayingEntryMeta = originalGetMeta;
+    Member.getCompletionsForGame = originalGetCompletions;
     Member.getGameJournalPreference = originalGetPref;
     Member.countGameJournalEntries = originalCount;
     Member.getGameJournalEntries = originalEntries;
