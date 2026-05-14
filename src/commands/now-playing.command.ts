@@ -198,6 +198,15 @@ type NowPlayingListContext = {
 };
 const nowPlayingListContexts = new Map<string, NowPlayingListContext>();
 const NOW_PLAYING_CONTEXT_TTL_MS = 3 * 60 * 60 * 1000;
+type NowPlayingJournalContext = {
+  channelId: string;
+  messageId: string;
+  createdAt: number;
+  ownerUserId: string;
+  gameId: number;
+};
+const nowPlayingJournalContexts = new Map<string, NowPlayingJournalContext>();
+const NOW_PLAYING_JOURNAL_CONTEXT_TTL_MS = 2 * 60 * 60 * 1000;
 type NowPlayingMessageComponents = Array<
   ContainerBuilder | MediaGalleryBuilder | ActionRowBuilder<ButtonBuilder>
 >;
@@ -417,6 +426,10 @@ function buildNowPlayingContextKey(channelId: string, messageId: string): string
   return `${channelId}:${messageId}`;
 }
 
+function buildNowPlayingJournalContextKey(channelId: string, messageId: string): string {
+  return `${channelId}:${messageId}`;
+}
+
 function trackNowPlayingListContext(message: Message<boolean>, context: {
   view: NowPlayingTrackedView;
   ownerUserId?: string | null;
@@ -441,6 +454,25 @@ function setNowPlayingListContext(userId: string, message: Message<boolean>): vo
   trackNowPlayingListContext(message, {
     view: "single",
     ownerUserId: userId,
+  });
+}
+
+function trackNowPlayingJournalContext(
+  message: Message<boolean>,
+  ownerUserId: string,
+  gameId: number,
+): void {
+  if (message.flags.has(MessageFlags.Ephemeral)) {
+    return;
+  }
+  const key = buildNowPlayingJournalContextKey(message.channelId, message.id);
+  const existing = nowPlayingJournalContexts.get(key);
+  nowPlayingJournalContexts.set(key, {
+    channelId: message.channelId,
+    messageId: message.id,
+    createdAt: existing?.createdAt ?? Date.now(),
+    ownerUserId,
+    gameId,
   });
 }
 
@@ -3101,6 +3133,7 @@ export class NowPlayingCommand {
   @ButtonComponent({ id: /^nowplaying-journal-open:\d+:\d+:\d+$/ })
   async handleNowPlayingJournalOpen(interaction: ButtonInteraction): Promise<void> {
     const [, ownerId, gameIdRaw, pageRaw] = interaction.customId.split(":");
+    const gameId = Number(gameIdRaw);
     if (!this.canUseJournalFeature(ownerId) || !this.canUseJournalFeature(interaction.user.id)) {
       await safeReply(interaction, {
         content: "Journal is currently limited to an internal user.",
@@ -3120,7 +3153,7 @@ export class NowPlayingCommand {
     if (interaction.guildId) {
       const publicCount = await Member.countGameJournalEntries(
         ownerId,
-        Number(gameIdRaw),
+        gameId,
         "__public__",
       );
       if (publicCount <= 0) {
@@ -3141,19 +3174,24 @@ export class NowPlayingCommand {
     const payload = await this.buildJournalComponents(
       ownerId,
       interaction.guildId ? "__public__" : interaction.user.id,
-      Number(gameIdRaw),
+      gameId,
       Number(pageRaw),
     );
+    if (interaction.guildId) {
+      await this.deleteRecentJournalMessagesInChannel(interaction, ownerId, gameId);
+    }
     await safeReply(interaction, {
       components: payload.components,
       files: payload.files,
       flags: buildComponentsV2Flags(interaction.message.flags?.has(MessageFlags.Ephemeral) ?? false),
     });
+    await this.trackJournalReply(interaction, ownerId, gameId);
   }
 
   @ButtonComponent({ id: /^nowplaying-journal-page:\d+:\d+:(prev|next):\d+$/ })
   async handleNowPlayingJournalPage(interaction: ButtonInteraction): Promise<void> {
     const [, ownerId, gameIdRaw, , pageRaw] = interaction.customId.split(":");
+    const gameId = Number(gameIdRaw);
     if (!this.canUseJournalFeature(ownerId) || !this.canUseJournalFeature(interaction.user.id)) {
       await safeReply(interaction, {
         content: "Journal is currently limited to an internal user.",
@@ -3173,7 +3211,7 @@ export class NowPlayingCommand {
     if (interaction.guildId) {
       const publicCount = await Member.countGameJournalEntries(
         ownerId,
-        Number(gameIdRaw),
+        gameId,
         "__public__",
       );
       if (publicCount <= 0) {
@@ -3194,14 +3232,18 @@ export class NowPlayingCommand {
     const payload = await this.buildJournalComponents(
       ownerId,
       interaction.guildId ? "__public__" : interaction.user.id,
-      Number(gameIdRaw),
+      gameId,
       Number(pageRaw),
     );
+    if (interaction.guildId) {
+      await this.deleteRecentJournalMessagesInChannel(interaction, ownerId, gameId);
+    }
     await safeReply(interaction, {
       components: payload.components,
       files: payload.files,
       flags: buildComponentsV2Flags(interaction.message.flags?.has(MessageFlags.Ephemeral) ?? false),
     });
+    await this.trackJournalReply(interaction, ownerId, gameId);
   }
 
   @ButtonComponent({ id: /^nowplaying-journal-add:\d+:\d+:\d+$/ })
@@ -3552,6 +3594,7 @@ export class NowPlayingCommand {
   @ModalComponent({ id: /^nowplaying-journal-edit-modal:\d+:\d+:\d+:\d+$/ })
   async handleNowPlayingJournalEditModal(interaction: ModalSubmitInteraction): Promise<void> {
     const [, ownerId, gameIdRaw, pageRaw, entryIdRaw] = interaction.customId.split(":");
+    const gameId = Number(gameIdRaw);
     if (!this.canUseJournalFeature(ownerId) || !this.canUseJournalFeature(interaction.user.id)) {
       await safeReply(interaction, {
         content: "Journal is currently limited to an internal user.",
@@ -3566,7 +3609,7 @@ export class NowPlayingCommand {
 
     const entryId = Number(entryIdRaw);
     const existing = await Member.getGameJournalEntryForUser(ownerId, entryId);
-    if (!existing || existing.gameId !== Number(gameIdRaw)) {
+    if (!existing || existing.gameId !== gameId) {
       await safeReply(interaction, { content: "That journal entry was not found." });
       return;
     }
@@ -3591,17 +3634,19 @@ export class NowPlayingCommand {
     const payload = await this.buildJournalComponents(
       ownerId,
       journalViewerId,
-      Number(gameIdRaw),
+      gameId,
       Number(pageRaw),
     );
     if (interaction.guildId) {
       await interaction.message?.delete().catch(() => null);
+      await this.deleteRecentJournalMessagesInChannel(interaction, ownerId, gameId);
     }
     await safeReply(interaction, {
       components: payload.components,
       files: payload.files,
       flags: buildComponentsV2Flags(true),
     });
+    await this.trackJournalReply(interaction, ownerId, gameId);
   }
 
   @ButtonComponent({ id: /^nowplaying-list-edit:\d+$/ })
@@ -5233,6 +5278,65 @@ export class NowPlayingCommand {
     }
 
     return false;
+  }
+
+  private async deleteRecentJournalMessagesInChannel(
+    interaction: ButtonInteraction | ModalSubmitInteraction,
+    ownerUserId: string,
+    gameId: number,
+  ): Promise<void> {
+    const channelId = interaction.channelId;
+    if (!channelId) {
+      return;
+    }
+
+    const now = Date.now();
+    for (const [key, context] of nowPlayingJournalContexts.entries()) {
+      if (now - context.createdAt > NOW_PLAYING_JOURNAL_CONTEXT_TTL_MS) {
+        nowPlayingJournalContexts.delete(key);
+        continue;
+      }
+      if (context.channelId !== channelId) {
+        continue;
+      }
+      if (context.ownerUserId !== ownerUserId || context.gameId !== gameId) {
+        continue;
+      }
+
+      const channel = await interaction.client.channels.fetch(context.channelId).catch(() => null);
+      if (!channel?.isTextBased()) {
+        nowPlayingJournalContexts.delete(key);
+        continue;
+      }
+
+      const message = await channel.messages.fetch(context.messageId).catch(() => null);
+      if (!message) {
+        nowPlayingJournalContexts.delete(key);
+        continue;
+      }
+
+      await message.delete().catch(() => null);
+      nowPlayingJournalContexts.delete(key);
+    }
+  }
+
+  private async trackJournalReply(
+    interaction: ButtonInteraction | ModalSubmitInteraction,
+    ownerUserId: string,
+    gameId: number,
+  ): Promise<void> {
+    if (!interaction.guildId) {
+      return;
+    }
+    if (typeof interaction.fetchReply !== "function") {
+      return;
+    }
+
+    const reply = await interaction.fetchReply().catch(() => null);
+    if (!reply) {
+      return;
+    }
+    trackNowPlayingJournalContext(reply as Message<boolean>, ownerUserId, gameId);
   }
 
   private async deleteEligibleNowPlayingMessageInCurrentChannel(
