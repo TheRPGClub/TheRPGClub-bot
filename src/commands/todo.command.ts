@@ -1886,8 +1886,9 @@ export class TodoCommand {
     const prefixedBody = isOwner ? baseBody : `${interaction.user.username}: ${baseBody}`;
     const finalBody = prefixedBody.length ? prefixedBody.slice(0, MAX_ISSUE_BODY) : null;
 
+    let created: IGithubIssue;
     try {
-      await createIssue({
+      created = await createIssue({
         title: trimmedTitle,
         body: finalBody,
         labels: selectedTypes,
@@ -1900,18 +1901,25 @@ export class TodoCommand {
       return;
     }
 
-    const listPayload = await this.buildTodoListPayload(parsed.payloadToken, parsed.page);
-    if (!listPayload) {
+    const basePayload = parseTodoPayloadToken(parsed.payloadToken);
+    if (!basePayload) {
       await replyTodoExpired(interaction);
       return;
     }
+    const payload: TodoListPayload = { ...basePayload, page: parsed.page };
+    const viewPayload = buildIssueViewComponents(
+      created,
+      [],
+      payload,
+      parsed.payloadToken,
+    );
 
     const channel = interaction.client.channels.cache.get(parsed.channelId);
     if (channel && "messages" in channel) {
       try {
         const message = await (channel as any).messages.fetch(parsed.messageId);
         await message.edit({
-          components: listPayload.components,
+          components: viewPayload.components,
         });
       } catch {
         // ignore refresh failures
