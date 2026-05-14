@@ -22,7 +22,7 @@ import { safeReply, sanitizeOptionalInput, sanitizeUserInput } from
 const LIVE_STREAM_MODAL_PREFIX = "admin-live-stream-create";
 const LIVE_STREAM_TOPIC_ID = "live-stream-topic";
 const LIVE_STREAM_START_ID = "live-stream-start";
-const LIVE_STREAM_END_TIME_ID = "live-stream-end-time";
+const LIVE_STREAM_END_ID = "live-stream-end";
 const LIVE_STREAM_TIMEZONE_ID = "live-stream-timezone";
 const LIVE_STREAM_IMAGE_URL_ID = "live-stream-image-url";
 const DEFAULT_TIMEZONE = "America/New_York";
@@ -30,7 +30,7 @@ const DEFAULT_TIMEZONE = "America/New_York";
 type LiveStreamModalInput = {
   topic: string;
   start: string;
-  endTime: string;
+  end: string;
   timeZone: string;
   imageUrl?: string;
 };
@@ -72,12 +72,12 @@ export function buildLiveStreamModal(customId: string): ModalBuilder {
       ),
       new ModalActionRowBuilder<ModalTextInputBuilder>().addComponents(
         new ModalTextInputBuilder()
-          .setCustomId(LIVE_STREAM_END_TIME_ID)
-          .setLabel("End Time (HH:mm)")
+          .setCustomId(LIVE_STREAM_END_ID)
+          .setLabel("End (YYYY-MM-DD HH:mm)")
           .setStyle(ApiTextInputStyle.Short)
           .setRequired(true)
-          .setMaxLength(5)
-          .setPlaceholder("23:00"),
+          .setMaxLength(16)
+          .setPlaceholder("2026-05-01 23:00"),
       ),
       new ModalActionRowBuilder<ModalTextInputBuilder>().addComponents(
         new ModalTextInputBuilder()
@@ -118,13 +118,13 @@ export function parseLiveStreamModalInput(
     return { error: "Start must use `YYYY-MM-DD HH:mm` (24-hour) format.", ok: false };
   }
 
-  const endTimeText = sanitizeUserInput(input.endTime, {
+  const endText = sanitizeUserInput(input.end, {
     blockSql: false,
-    maxLength: 5,
+    maxLength: 16,
     preserveNewlines: false,
   });
-  if (!/^\d{2}:\d{2}$/.test(endTimeText)) {
-    return { error: "End Time must use `HH:mm` (24-hour) format.", ok: false };
+  if (!/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(endText)) {
+    return { error: "End must use `YYYY-MM-DD HH:mm` (24-hour) format.", ok: false };
   }
 
   const timeZone = sanitizeUserInput(input.timeZone, {
@@ -151,20 +151,22 @@ export function parseLiveStreamModalInput(
     };
   }
 
-  const endTime = DateTime.fromFormat(endTimeText, "HH:mm", {
+  const end = DateTime.fromFormat(endText, "yyyy-MM-dd HH:mm", {
     zone: timeZone,
     setZone: true,
   });
-  if (!endTime.isValid) {
+  if (!end.isValid) {
     return {
-      error: "End Time must be a valid `HH:mm` value.",
+      error: "End does not form a valid timestamp in the selected Time Zone.",
       ok: false,
     };
   }
 
-  let end = start.set({ hour: endTime.hour, minute: endTime.minute, second: 0, millisecond: 0 });
   if (end <= start) {
-    end = end.plus({ days: 1 });
+    return {
+      error: "End must be after Start.",
+      ok: false,
+    };
   }
 
   const imageUrl = sanitizeOptionalInput(input.imageUrl, {
@@ -236,7 +238,7 @@ export async function handleLiveStreamCreateModal(interaction: ModalSubmitIntera
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
   const parsedInput = parseLiveStreamModalInput({
-    endTime: interaction.fields.getTextInputValue(LIVE_STREAM_END_TIME_ID),
+    end: interaction.fields.getTextInputValue(LIVE_STREAM_END_ID),
     imageUrl: interaction.fields.getTextInputValue(LIVE_STREAM_IMAGE_URL_ID),
     start: interaction.fields.getTextInputValue(LIVE_STREAM_START_ID),
     timeZone: interaction.fields.getTextInputValue(LIVE_STREAM_TIMEZONE_ID),
