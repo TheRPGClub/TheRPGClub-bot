@@ -3295,7 +3295,7 @@ export class NowPlayingCommand {
     const container = new ContainerBuilder().addTextDisplayComponents(
       new TextDisplayBuilder().setContent("## Edit Journal Entry\nSelect an entry to edit."),
     );
-    await safeReply(interaction, {
+    await safeUpdate(interaction, {
       components: [container, row],
       flags: buildComponentsV2Flags(interaction.message.flags?.has(MessageFlags.Ephemeral) ?? false),
     });
@@ -3409,7 +3409,7 @@ export class NowPlayingCommand {
       Number(gameIdRaw),
       Number(pageRaw),
     );
-    await safeReply(interaction, {
+    await safeUpdate(interaction, {
       components: payload.components,
       files: payload.files,
       flags: buildComponentsV2Flags(true),
