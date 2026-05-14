@@ -1123,7 +1123,7 @@ export class NowPlayingCommand {
       const container = new ContainerBuilder().addTextDisplayComponents(
         new TextDisplayBuilder().setContent("That game is no longer in your Now Playing list."),
       );
-      await interaction.update({ components: [container] });
+      await safeUpdate(interaction, { components: [container] });
       return;
     }
 
@@ -1149,9 +1149,9 @@ export class NowPlayingCommand {
       [container],
     );
     if (files.length) {
-      await interaction.update({ components: pmComponents, files });
+      await safeUpdate(interaction, { components: pmComponents, files });
     } else {
-      await interaction.update({ components: pmComponents });
+      await safeUpdate(interaction, { components: pmComponents });
     }
   }
 
@@ -1166,7 +1166,7 @@ export class NowPlayingCommand {
         new TextDisplayBuilder().setContent("Your Now Playing list is empty."),
       );
       const pmComponents = await this.withPmNowPlayingList(ownerId, interaction.guildId, [container]);
-      await interaction.update({ components: pmComponents });
+      await safeUpdate(interaction, { components: pmComponents });
       return;
     }
 
@@ -1177,7 +1177,7 @@ export class NowPlayingCommand {
         const container = new ContainerBuilder().addTextDisplayComponents(
           new TextDisplayBuilder().setContent("Unable to start completion flow."),
         );
-        await interaction.update({ components: [container] });
+        await safeUpdate(interaction, { components: [container] });
         return;
       }
       session.gameId = entry.gameId;
@@ -1199,7 +1199,7 @@ export class NowPlayingCommand {
       thumbnailsByGameId,
     );
     const pmComponents = await this.withPmNowPlayingList(ownerId, interaction.guildId, components);
-    await interaction.update(this.buildComponentPayload(pmComponents as any, files));
+    await safeUpdate(interaction, this.buildComponentPayload(pmComponents as any, files));
   }
 
   @ModalComponent({ id: /^nowplaying-complete-modal:[^:]+$/ })
@@ -1382,7 +1382,7 @@ export class NowPlayingCommand {
       return;
     }
 
-    await interaction.deferUpdate().catch(() => {});
+    await safeDeferUpdate(interaction);
     nowPlayingCompletionPlatformSessions.delete(platformSessionId);
 
     const game = await Game.getGameById(session.gameId);
