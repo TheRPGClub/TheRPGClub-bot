@@ -136,6 +136,9 @@ const NOW_PLAYING_JOURNAL_OPEN_PREFIX = "nowplaying-journal-open";
 const NOW_PLAYING_JOURNAL_ADD_PREFIX = "nowplaying-journal-add";
 const NOW_PLAYING_JOURNAL_EDIT_PREFIX = "nowplaying-journal-edit";
 const NOW_PLAYING_JOURNAL_EDIT_SELECT_PREFIX = "nowplaying-journal-edit-select";
+const NOW_PLAYING_JOURNAL_DELETE_PREFIX = "nowplaying-journal-delete";
+const NOW_PLAYING_JOURNAL_DELETE_SELECT_PREFIX = "nowplaying-journal-delete-select";
+const NOW_PLAYING_JOURNAL_DELETE_CONFIRM_PREFIX = "nowplaying-journal-delete-confirm";
 const NOW_PLAYING_JOURNAL_PAGE_PREFIX = "nowplaying-journal-page";
 const NOW_PLAYING_JOURNAL_MODAL_ID = "nowplaying-journal-modal";
 const NOW_PLAYING_JOURNAL_EDIT_MODAL_ID = "nowplaying-journal-edit-modal";
@@ -3375,6 +3378,132 @@ export class NowPlayingCommand {
     }
   }
 
+  @ButtonComponent({ id: /^nowplaying-journal-delete:\d+:\d+:\d+$/ })
+  async handleNowPlayingJournalDelete(interaction: ButtonInteraction): Promise<void> {
+    const [, ownerId, gameIdRaw, pageRaw] = interaction.customId.split(":");
+    if (!this.canUseJournalFeature(ownerId) || !this.canUseJournalFeature(interaction.user.id)) {
+      await safeReply(interaction, {
+        content: "Journal is currently limited to an internal user.",
+        flags: buildComponentsV2Flags(true),
+      });
+      return;
+    }
+    if (interaction.user.id !== ownerId) {
+      await safeReply(interaction, { content: "Only the owner can delete journal entries." });
+      return;
+    }
+    const gameId = Number(gameIdRaw);
+    const page = Number(pageRaw);
+    const offset = (Math.max(1, page) - 1) * 5;
+    const entries = await Member.getGameJournalEntries(ownerId, gameId, {
+      viewerUserId: ownerId,
+      limit: 5,
+      offset,
+    });
+    if (!entries.length) {
+      await safeReply(interaction, { content: "No journal entries available to delete." });
+      return;
+    }
+    const options = entries.map((entry) => ({
+      label: (entry.title ?? "Untitled Entry").slice(0, 100),
+      value: String(entry.entryId),
+      description: `${formatTableDate(entry.createdAt)} | ${entry.isPublic ? "Public" : "Private"}`,
+    }));
+    const select = new StringSelectMenuBuilder()
+      .setCustomId(`${NOW_PLAYING_JOURNAL_DELETE_SELECT_PREFIX}:${ownerId}:${gameId}:${page}`)
+      .setPlaceholder("Choose an entry to delete")
+      .addOptions(options);
+    const row = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select);
+    const container = new ContainerBuilder().addTextDisplayComponents(
+      new TextDisplayBuilder().setContent("## Delete Journal Entry\nSelect an entry to delete."),
+    );
+    await safeUpdate(interaction, {
+      components: [container, row],
+      flags: buildComponentsV2Flags(interaction.message.flags?.has(MessageFlags.Ephemeral) ?? false),
+    });
+  }
+
+  @SelectMenuComponent({ id: /^nowplaying-journal-delete-select:\d+:\d+:\d+$/ })
+  async handleNowPlayingJournalDeleteSelect(interaction: StringSelectMenuInteraction): Promise<void> {
+    const [, ownerId, gameIdRaw, pageRaw] = interaction.customId.split(":");
+    if (!this.canUseJournalFeature(ownerId) || !this.canUseJournalFeature(interaction.user.id)) {
+      await safeReply(interaction, {
+        content: "Journal is currently limited to an internal user.",
+        flags: buildComponentsV2Flags(true),
+      });
+      return;
+    }
+    if (interaction.user.id !== ownerId) {
+      await safeReply(interaction, { content: "Only the owner can delete journal entries." });
+      return;
+    }
+    const entryId = Number(interaction.values[0]);
+    const entry = await Member.getGameJournalEntryForUser(ownerId, entryId);
+    if (!entry || entry.gameId !== Number(gameIdRaw)) {
+      await safeReply(interaction, { content: "That journal entry was not found." });
+      return;
+    }
+    const entryTitle = entry.title?.trim() ? entry.title.trim() : "Untitled Entry";
+    const container = new ContainerBuilder().addTextDisplayComponents(
+      new TextDisplayBuilder().setContent(
+        `## Confirm Delete\nDelete **${entryTitle}** from ${formatTableDate(entry.createdAt)}?`,
+      ),
+    );
+    const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
+      new ButtonBuilder()
+        .setCustomId(
+          `${NOW_PLAYING_JOURNAL_DELETE_CONFIRM_PREFIX}:yes:${ownerId}:${gameIdRaw}:${pageRaw}:${entryId}`,
+        )
+        .setLabel("Delete")
+        .setStyle(ButtonStyle.Danger),
+      new ButtonBuilder()
+        .setCustomId(
+          `${NOW_PLAYING_JOURNAL_DELETE_CONFIRM_PREFIX}:no:${ownerId}:${gameIdRaw}:${pageRaw}:${entryId}`,
+        )
+        .setLabel("Cancel")
+        .setStyle(ButtonStyle.Secondary),
+    );
+    await safeUpdate(interaction, {
+      components: [container, row],
+      flags: buildComponentsV2Flags(interaction.message.flags?.has(MessageFlags.Ephemeral) ?? false),
+    });
+  }
+
+  @ButtonComponent({ id: /^nowplaying-journal-delete-confirm:(yes|no):\d+:\d+:\d+:\d+$/ })
+  async handleNowPlayingJournalDeleteConfirm(interaction: ButtonInteraction): Promise<void> {
+    const [, action, ownerId, gameIdRaw, pageRaw, entryIdRaw] = interaction.customId.split(":");
+    if (!this.canUseJournalFeature(ownerId) || !this.canUseJournalFeature(interaction.user.id)) {
+      await safeReply(interaction, {
+        content: "Journal is currently limited to an internal user.",
+        flags: buildComponentsV2Flags(true),
+      });
+      return;
+    }
+    if (interaction.user.id !== ownerId) {
+      await safeReply(interaction, { content: "Only the owner can delete journal entries." });
+      return;
+    }
+    if (action === "yes") {
+      const removed = await Member.deleteGameJournalEntry(ownerId, Number(entryIdRaw));
+      if (!removed) {
+        await safeReply(interaction, { content: "That journal entry was not found." });
+        return;
+      }
+    }
+    const journalViewerId = interaction.guildId ? "__public__" : interaction.user.id;
+    const payload = await this.buildJournalComponents(
+      ownerId,
+      journalViewerId,
+      Number(gameIdRaw),
+      Number(pageRaw),
+    );
+    await safeUpdate(interaction, {
+      components: payload.components,
+      files: payload.files,
+      flags: buildComponentsV2Flags(interaction.message.flags?.has(MessageFlags.Ephemeral) ?? false),
+    });
+  }
+
   @ModalComponent({ id: /^nowplaying-journal-modal:\d+:\d+:\d+$/ })
   async handleNowPlayingJournalModal(interaction: ModalSubmitInteraction): Promise<void> {
     const [, ownerId, gameIdRaw, pageRaw] = interaction.customId.split(":");
@@ -3465,6 +3594,9 @@ export class NowPlayingCommand {
       Number(gameIdRaw),
       Number(pageRaw),
     );
+    if (interaction.guildId) {
+      await interaction.message?.delete().catch(() => null);
+    }
     await safeReply(interaction, {
       components: payload.components,
       files: payload.files,
@@ -5377,6 +5509,11 @@ export class NowPlayingCommand {
           .setCustomId(`${NOW_PLAYING_JOURNAL_EDIT_PREFIX}:${ownerId}:${gameId}:${safePage}`)
           .setLabel("Edit Entry")
           .setStyle(ButtonStyle.Primary)
+          .setDisabled(entries.length === 0),
+        new ButtonBuilder()
+          .setCustomId(`${NOW_PLAYING_JOURNAL_DELETE_PREFIX}:${ownerId}:${gameId}:${safePage}`)
+          .setLabel("Delete Entry")
+          .setStyle(ButtonStyle.Danger)
           .setDisabled(entries.length === 0),
       );
     }

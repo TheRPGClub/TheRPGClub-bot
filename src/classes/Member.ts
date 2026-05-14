@@ -952,6 +952,22 @@ export default class Member {
     }
   }
 
+  static async deleteGameJournalEntry(userId: string, entryId: number): Promise<boolean> {
+    const connection = await getOraclePool().getConnection();
+    try {
+      const res = await connection.execute(
+        `DELETE FROM USER_GAME_JOURNAL_ENTRIES
+          WHERE USER_ID = :userId
+            AND ENTRY_ID = :entryId`,
+        { userId, entryId },
+        { autoCommit: true },
+      );
+      return Number(res.rowsAffected ?? 0) > 0;
+    } finally {
+      await connection.close();
+    }
+  }
+
   static async updateNowPlayingSort(
     userId: string,
     orderedGameIds: number[],

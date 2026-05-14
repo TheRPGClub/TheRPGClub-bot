@@ -293,6 +293,7 @@ test("journal edit modal submit from guild context re-renders redacted private e
 
   let replyPayload: any = null;
   let renderViewerId: string | null = null;
+  let sourcePromptDeleted = false;
 
   try {
     Member.getGameJournalEntryForUser = (async () => ({
@@ -344,6 +345,11 @@ test("journal edit modal submit from guild context re-renders redacted private e
       guildId: "987654321",
       deferred: false,
       replied: false,
+      message: {
+        delete: async () => {
+          sourcePromptDeleted = true;
+        },
+      },
       fields: {
         getTextInputValue: (id: string) => {
           if (id === "nowplaying-journal-title") return "Private Edit";
@@ -364,6 +370,7 @@ test("journal edit modal submit from guild context re-renders redacted private e
     await command.handleNowPlayingJournalEditModal(interaction);
 
     assert.equal(renderViewerId, "__public__");
+    assert.equal(sourcePromptDeleted, true);
     assert.ok(replyPayload);
   } finally {
     Member.getGameJournalEntryForUser = originalGetEntry;
@@ -519,5 +526,77 @@ test("journal edit select in guild deletes prompt message after opening modal", 
     assert.equal(deleted, true);
   } finally {
     Member.getGameJournalEntryForUser = originalGetEntry;
+  }
+});
+
+test("journal delete confirm removes entry on yes and skips removal on no", async () => {
+  const command = new NowPlayingCommand() as any;
+  command.canUseJournalFeature = () => true;
+
+  const originalDelete = Member.deleteGameJournalEntry;
+  const originalGetGameById = Game.getGameById;
+  const originalGetByUserId = Member.getByUserId;
+  const originalGetMeta = Member.getNowPlayingEntryMeta;
+  const originalGetCompletions = Member.getCompletionsForGame;
+  const originalGetPref = Member.getGameJournalPreference;
+  const originalCount = Member.countGameJournalEntries;
+  const originalEntries = Member.getGameJournalEntries;
+
+  let deleteCalls = 0;
+
+  try {
+    Member.deleteGameJournalEntry = (async () => {
+      deleteCalls += 1;
+      return true;
+    }) as any;
+    Game.getGameById = (async () => ({ id: 1, title: "Pragmata" })) as any;
+    Member.getByUserId = (async () => ({ globalName: "merph518", username: "merph518" })) as any;
+    Member.getNowPlayingEntryMeta = (async () => null) as any;
+    Member.getCompletionsForGame = (async () => []) as any;
+    Member.getGameJournalPreference = (async () => ({
+      userId: "123",
+      gameId: 1,
+      isEnabled: true,
+      defaultIsPublic: false,
+    })) as any;
+    Member.countGameJournalEntries = (async () => 1) as any;
+    Member.getGameJournalEntries = (async () => ([{
+      entryId: 10,
+      userId: "123",
+      gameId: 1,
+      title: "Entry",
+      body: "Body",
+      isPublic: true,
+      createdAt: new Date("2026-05-11T00:00:00.000Z"),
+      updatedAt: new Date("2026-05-11T00:00:00.000Z"),
+    }])) as any;
+
+    const makeInteraction = (action: "yes" | "no") => ({
+      customId: `nowplaying-journal-delete-confirm:${action}:123:1:1:10`,
+      user: { id: "123" },
+      guildId: "987654321",
+      message: { flags: { has: () => false } },
+      deferred: false,
+      replied: false,
+      update: async () => undefined,
+      followUp: async () => undefined,
+      reply: async () => undefined,
+      editReply: async () => undefined,
+    }) as any;
+
+    await command.handleNowPlayingJournalDeleteConfirm(makeInteraction("no"));
+    assert.equal(deleteCalls, 0);
+
+    await command.handleNowPlayingJournalDeleteConfirm(makeInteraction("yes"));
+    assert.equal(deleteCalls, 1);
+  } finally {
+    Member.deleteGameJournalEntry = originalDelete;
+    Game.getGameById = originalGetGameById;
+    Member.getByUserId = originalGetByUserId;
+    Member.getNowPlayingEntryMeta = originalGetMeta;
+    Member.getCompletionsForGame = originalGetCompletions;
+    Member.getGameJournalPreference = originalGetPref;
+    Member.countGameJournalEntries = originalCount;
+    Member.getGameJournalEntries = originalEntries;
   }
 });
