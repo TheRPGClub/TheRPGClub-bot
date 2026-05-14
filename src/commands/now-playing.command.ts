@@ -997,6 +997,7 @@ export class NowPlayingCommand {
     session: NowPlayingCompletionWizardSession,
     thumbnailUrl: string | null,
   ): ContainerBuilder {
+    void thumbnailUrl;
     const container = new ContainerBuilder();
     container.addTextDisplayComponents(
       new TextDisplayBuilder().setContent("## Add Completion"),
@@ -1005,19 +1006,11 @@ export class NowPlayingCommand {
     if (entry.note) {
       headerLines.push(`Current Note: ${entry.note}`);
     }
-    const headerSection = new SectionBuilder().addTextDisplayComponents(
+    container.addTextDisplayComponents(
       new TextDisplayBuilder().setContent(
         this.trimTextDisplayContent(headerLines.join("\n")),
       ),
     );
-    if (thumbnailUrl) {
-      headerSection.setThumbnailAccessory(
-        new ThumbnailBuilder()
-          .setURL(thumbnailUrl)
-          .setDescription("Game cover"),
-      );
-    }
-    container.addSectionComponents(headerSection);
 
     const typeSelect = new StringSelectMenuBuilder()
       .setCustomId(`${NOW_PLAYING_COMPLETE_TYPE_SELECT_PREFIX}:${sessionId}`)

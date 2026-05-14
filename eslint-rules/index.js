@@ -957,6 +957,19 @@ export default {
             if (!DIRECT_INTERACTION_METHODS.has(methodName)) {
               return;
             }
+
+            if (
+              methodName === "update" ||
+              methodName === "deferUpdate"
+            ) {
+              context.report({
+                node: callee.property,
+                messageId: "useSafeMethod",
+                data: { method: methodName },
+              });
+              return;
+            }
+
             if (callee.object.type !== "Identifier") {
               return;
             }
@@ -964,7 +977,6 @@ export default {
             if (!objectName.includes("interaction")) {
               return;
             }
-
             context.report({
               node: callee.property,
               messageId: "useSafeMethod",
