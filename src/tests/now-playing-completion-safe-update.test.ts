@@ -150,3 +150,141 @@ test("nowplaying completion config renders in DM with no image accessory", async
     Game.getGameById = originalGetGameById;
   }
 });
+
+test("nowplaying completion modal reuses existing now-playing platform and skips platform picker", async () => {
+  const command = new NowPlayingCommand() as any;
+  const originalDateNow = Date.now;
+  const originalMathRandom = Math.random;
+  const originalGetNowPlaying = Member.getNowPlaying;
+  const originalGetRecentCompletionForGame = Member.getRecentCompletionForGame;
+  const originalAddCompletion = Member.addCompletion;
+  const originalRemoveNowPlaying = Member.removeNowPlaying;
+  const originalGetGameById = Game.getGameById;
+  const originalGetPlatformsForGameWithStandard = Game.getPlatformsForGameWithStandard;
+
+  const addCompletionCalls: any[] = [];
+  const listUpdatePayloads: any[] = [];
+  const modalReplyPayloads: any[] = [];
+  let platformLookupCalls = 0;
+
+  try {
+    Date.now = () => 1700000000000;
+    Math.random = () => 0.12345;
+
+    Member.getNowPlaying = (async () => ([
+      {
+        gameId: 11,
+        title: "Alpha",
+        platformId: 77,
+        platformName: "Nintendo Switch",
+        platformAbbreviation: "NS",
+        note: "Current note",
+        threadId: null,
+        addedAt: null,
+        noteUpdatedAt: null,
+        sortOrder: null,
+      },
+    ])) as any;
+    Member.getRecentCompletionForGame = (async () => null) as any;
+    Member.addCompletion = (async (payload: any) => {
+      addCompletionCalls.push(payload);
+      return 999;
+    }) as any;
+    Member.removeNowPlaying = (async () => true) as any;
+
+    Game.getGameById = (async () => ({
+      id: 11,
+      title: "Alpha",
+      imageData: null,
+    })) as any;
+    Game.getPlatformsForGameWithStandard = (async () => {
+      platformLookupCalls += 1;
+      return [];
+    }) as any;
+
+    command.withPmNowPlayingList = async (
+      _ownerId: string,
+      _guildId: string | null,
+      components: any[],
+    ) => components;
+    command.buildNowPlayingListPayload = async () => ({ components: [{ kind: "list" }], files: [] });
+    command.withNowPlayingActions = (
+      _isOwner: boolean,
+      _ownerId: string,
+      components: any[],
+    ) => components;
+
+    const listInteraction: any = {
+      customId: "nowplaying-list-complete:123",
+      user: { id: "123" },
+      guildId: "guild-1",
+      message: {
+        id: "message-1",
+        channelId: "channel-1",
+        flags: { has: () => false },
+      },
+      deferred: false,
+      replied: false,
+      update: async (payload: any) => {
+        listUpdatePayloads.push(payload);
+      },
+      reply: async () => {
+        throw new Error("reply should not be called");
+      },
+      editReply: async () => {
+        throw new Error("editReply should not be called");
+      },
+      followUp: async () => {
+        throw new Error("followUp should not be called");
+      },
+    };
+
+    await command.handleNowPlayingListComplete(listInteraction);
+    assert.equal(listUpdatePayloads.length, 1, "completion setup should update once");
+
+    const modalInteraction: any = {
+      customId: "nowplaying-complete-modal:np-comp-ui-1700000000000-12345",
+      user: { id: "123" },
+      guildId: "guild-1",
+      client: { channels: { cache: new Map(), fetch: async () => null } },
+      deferred: false,
+      replied: false,
+      deferReply: async () => {
+        modalInteraction.deferred = true;
+      },
+      fields: {
+        getTextInputValue: (id: string) => {
+          if (id === "nowplaying-complete-date") return "";
+          if (id === "nowplaying-complete-hours") return "";
+          if (id === "nowplaying-complete-note") return "";
+          return "";
+        },
+      },
+      editReply: async (payload: any) => {
+        modalReplyPayloads.push(payload);
+      },
+      reply: async () => {
+        throw new Error("reply should not be called");
+      },
+      followUp: async () => {
+        throw new Error("followUp should not be called");
+      },
+    };
+
+    await command.handleNowPlayingCompletionModal(modalInteraction);
+
+    assert.equal(platformLookupCalls, 0, "should skip platform picker lookup when platform already exists");
+    assert.equal(addCompletionCalls.length, 1, "should add one completion");
+    assert.equal(addCompletionCalls[0]?.platformId, 77, "should reuse existing now-playing platform");
+    assert.equal(modalReplyPayloads.length, 1, "should complete with a single final response");
+  } finally {
+    Date.now = originalDateNow;
+    Math.random = originalMathRandom;
+    Member.getNowPlaying = originalGetNowPlaying;
+    Member.getRecentCompletionForGame = originalGetRecentCompletionForGame;
+    Member.addCompletion = originalAddCompletion;
+    Member.removeNowPlaying = originalRemoveNowPlaying;
+    Game.getGameById = originalGetGameById;
+    Game.getPlatformsForGameWithStandard = originalGetPlatformsForGameWithStandard;
+  }
+});

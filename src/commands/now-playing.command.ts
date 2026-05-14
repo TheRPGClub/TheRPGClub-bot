@@ -3137,7 +3137,7 @@ export class NowPlayingCommand {
     }
     const payload = await this.buildJournalComponents(
       ownerId,
-      interaction.user.id,
+      interaction.guildId ? "__public__" : interaction.user.id,
       Number(gameIdRaw),
       Number(pageRaw),
     );
@@ -3190,7 +3190,7 @@ export class NowPlayingCommand {
     }
     const payload = await this.buildJournalComponents(
       ownerId,
-      interaction.user.id,
+      interaction.guildId ? "__public__" : interaction.user.id,
       Number(gameIdRaw),
       Number(pageRaw),
     );
@@ -4012,6 +4012,8 @@ export class NowPlayingCommand {
       sortedEntries,
       interaction.guildId,
       title,
+      false,
+      isOwnList,
     );
     const components = this.withNowPlayingActions(
       true,
@@ -4245,6 +4247,7 @@ export class NowPlayingCommand {
     guildId: string | null,
     title: string,
     showNotes: boolean = false,
+    showPrivateOnlyJournalButtons: boolean = false,
   ): Promise<{ components: NowPlayingListComponents; files: AttachmentBuilder[] }> {
     const { files, covers } = await this.buildNowPlayingAttachments(
       entries,
@@ -4257,6 +4260,7 @@ export class NowPlayingCommand {
       guildId,
       await this.buildNowPlayingCompositeImageUrl(files, covers, target.id),
       showNotes,
+      showPrivateOnlyJournalButtons,
     );
     return { components, files };
   }
@@ -4940,6 +4944,7 @@ export class NowPlayingCommand {
             message.guildId ?? interaction.guildId,
             title,
             showNotes,
+            ownerId === interaction.user.id,
           );
           const components = this.withNowPlayingActions(
             ownerId === interaction.user.id,
@@ -5268,9 +5273,9 @@ export class NowPlayingCommand {
     const isOwnerView = ownerId === viewerId;
     const canManage = isOwnerView;
     const offset = (page - 1) * perPage;
-    const total = await Member.countGameJournalEntries(ownerId, gameId, ownerId);
+    const total = await Member.countGameJournalEntries(ownerId, gameId, viewerId);
     const entries = await Member.getGameJournalEntries(ownerId, gameId, {
-      viewerUserId: ownerId,
+      viewerUserId: viewerId,
       limit: perPage,
       offset,
     });

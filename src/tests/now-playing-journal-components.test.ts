@@ -53,6 +53,88 @@ test("now-playing list components serialize with mixed journal-enabled entries",
   });
 });
 
+test("owner list shows journal buttons for multiple journal-enabled entries", () => {
+  const command = new NowPlayingCommand() as any;
+  command.canUseJournalFeature = () => true;
+  const entries: IMemberNowPlayingEntry[] = [{
+    gameId: 201,
+    title: "Journal Entry One",
+    platformId: null,
+    platformName: "PC",
+    platformAbbreviation: "PC",
+    threadId: null,
+    note: null,
+    addedAt: null,
+    noteUpdatedAt: null,
+    sortOrder: null,
+    journalEnabled: true,
+    hasPublicJournalEntry: false,
+  }, {
+    gameId: 202,
+    title: "Journal Entry Two",
+    platformId: null,
+    platformName: "Switch",
+    platformAbbreviation: "NS",
+    threadId: null,
+    note: null,
+    addedAt: null,
+    noteUpdatedAt: null,
+    sortOrder: null,
+    journalEnabled: true,
+    hasPublicJournalEntry: true,
+  }];
+
+  const components = command.buildNowPlayingEntryComponents(
+    "Your Now Playing List",
+    entries,
+    "123456789012345678",
+    null,
+    null,
+    false,
+    true,
+  );
+  const json = JSON.stringify(components.map((component: any) => component.toJSON()));
+  const journalButtons = json.match(/nowplaying-journal-open:/g) ?? [];
+  assert.equal(journalButtons.length, 2);
+});
+
+test("owner list with 10 entries stays serializable and keeps journal buttons", () => {
+  const command = new NowPlayingCommand() as any;
+  command.canUseJournalFeature = () => true;
+  const entries: IMemberNowPlayingEntry[] = Array.from({ length: 10 }, (_, index) => ({
+    gameId: 300 + index,
+    title: `Journal Entry ${index + 1}`,
+    platformId: null,
+    platformName: "PC",
+    platformAbbreviation: "PC",
+    threadId: null,
+    note: null,
+    addedAt: null,
+    noteUpdatedAt: null,
+    sortOrder: null,
+    journalEnabled: true,
+    hasPublicJournalEntry: false,
+  }));
+
+  const components = command.buildNowPlayingEntryComponents(
+    "Your Now Playing List",
+    entries,
+    "123456789012345678",
+    null,
+    null,
+    false,
+    true,
+  );
+  assert.doesNotThrow(() => {
+    for (const component of components) {
+      (component as any).toJSON();
+    }
+  });
+  const json = JSON.stringify(components.map((component: any) => component.toJSON()));
+  const journalButtons = json.match(/nowplaying-journal-open:/g) ?? [];
+  assert.equal(journalButtons.length, 10);
+});
+
 test("journal pager uses unique custom ids when only one page exists", async () => {
   const command = new NowPlayingCommand() as any;
   const originalGetGameById = Game.getGameById;
