@@ -5437,8 +5437,11 @@ export class NowPlayingCommand {
         ),
       );
     }
+    const totalEntriesLine = totalPages > 1
+      ? `Total entries visible: **${total}** | Page ${safePage}/${totalPages}`
+      : `Total entries visible: **${total}**`;
     introTextDisplays.push(
-      new TextDisplayBuilder().setContent(`Total entries visible: **${total}** | Page ${safePage}/${totalPages}`),
+      new TextDisplayBuilder().setContent(totalEntriesLine),
     );
     const introSection = new SectionBuilder().addTextDisplayComponents(...introTextDisplays);
     if (coverUrl) {
@@ -5517,22 +5520,26 @@ export class NowPlayingCommand {
           .setDisabled(entries.length === 0),
       );
     }
-    row.addComponents(
-      new ButtonBuilder()
-        .setCustomId(
-          `${NOW_PLAYING_JOURNAL_PAGE_PREFIX}:${ownerId}:${gameId}:prev:${Math.max(1, safePage - 1)}`,
-        )
-        .setLabel("Prev")
-        .setStyle(ButtonStyle.Secondary)
-        .setDisabled(safePage <= 1),
-      new ButtonBuilder()
-        .setCustomId(
-          `${NOW_PLAYING_JOURNAL_PAGE_PREFIX}:${ownerId}:${gameId}:next:${Math.min(totalPages, safePage + 1)}`,
-        )
-        .setLabel("Next")
-        .setStyle(ButtonStyle.Secondary)
-        .setDisabled(safePage >= totalPages),
-    );
+    if (safePage > 1) {
+      row.addComponents(
+        new ButtonBuilder()
+          .setCustomId(
+            `${NOW_PLAYING_JOURNAL_PAGE_PREFIX}:${ownerId}:${gameId}:prev:${Math.max(1, safePage - 1)}`,
+          )
+          .setLabel("Prev")
+          .setStyle(ButtonStyle.Secondary),
+      );
+    }
+    if (safePage < totalPages) {
+      row.addComponents(
+        new ButtonBuilder()
+          .setCustomId(
+            `${NOW_PLAYING_JOURNAL_PAGE_PREFIX}:${ownerId}:${gameId}:next:${Math.min(totalPages, safePage + 1)}`,
+          )
+          .setLabel("Next")
+          .setStyle(ButtonStyle.Secondary),
+      );
+    }
     return { components: [container, row], files };
   }
 

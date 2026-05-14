@@ -162,7 +162,7 @@ test("owner list with 10 entries stays serializable and keeps journal buttons", 
   assert.equal(journalButtons.length, 10);
 });
 
-test("journal pager uses unique custom ids when only one page exists", async () => {
+test("journal single-page view omits pager buttons and page count", async () => {
   const command = new NowPlayingCommand() as any;
   const originalGetGameById = Game.getGameById;
   const originalGetByUserId = Member.getByUserId;
@@ -199,6 +199,10 @@ test("journal pager uses unique custom ids when only one page exists", async () 
     const customIds = collectBuilderField(payload.components, "custom_id");
     const unique = new Set(customIds);
     assert.equal(customIds.length, unique.size);
+    assert.equal(
+      customIds.some((id) => id.includes("nowplaying-journal-page:")),
+      false,
+    );
   } finally {
     Game.getGameById = originalGetGameById;
     Member.getByUserId = originalGetByUserId;
