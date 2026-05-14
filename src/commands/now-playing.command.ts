@@ -1311,6 +1311,32 @@ export class NowPlayingCommand {
       }
     }
 
+    const nowPlayingEntries = await Member.getNowPlaying(session.userId);
+    const selectedEntry = nowPlayingEntries.find((item) => item.gameId === session.gameId);
+    const existingPlatformId = selectedEntry?.platformId ?? null;
+    if (existingPlatformId) {
+      await this.finalizeNowPlayingCompletion(
+        interaction,
+        sessionId,
+        {
+          sessionId,
+          userId: session.userId,
+          gameId: game.id,
+          completionType: session.completionType,
+          completedAt,
+          finalPlaytimeHours,
+          note,
+          removeFromNowPlaying: session.removeFromNowPlaying,
+          announce: session.announce,
+          returnToList: session.returnToList,
+          platforms: [],
+        },
+        game,
+        existingPlatformId,
+      );
+      return;
+    }
+
     await this.promptNowPlayingCompletionPlatformSelection(
       interaction,
       sessionId,
@@ -1475,7 +1501,7 @@ export class NowPlayingCommand {
   }
 
   private async finalizeNowPlayingCompletion(
-    interaction: StringSelectMenuInteraction,
+    interaction: StringSelectMenuInteraction | ModalSubmitInteraction,
     sessionId: string,
     session: NowPlayingCompletionPlatformSession,
     game: IGame,
