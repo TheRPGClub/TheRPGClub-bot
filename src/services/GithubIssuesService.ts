@@ -118,6 +118,22 @@ function buildAppJwt(): string {
   return `${data}.${toBase64Url(signature)}`;
 }
 
+function logGithubAuthDiagnostics(): void {
+  const normalizedKey = normalizePrivateKey(GITHUB_APP_PRIVATE_KEY.replace(/\\n/g, "\n"));
+  const hasHeader = normalizedKey.includes("-----BEGIN");
+  const hasFooter = normalizedKey.includes("-----END");
+  const keyLength = normalizedKey.length;
+  console.error(
+    `[GithubAuth] Config diagnostics:` +
+    ` APP_ID="${GITHUB_APP_ID}"` +
+    ` INSTALLATION_ID="${GITHUB_APP_INSTALLATION_ID}"` +
+    ` KEY_SET=${Boolean(GITHUB_APP_PRIVATE_KEY)}` +
+    ` KEY_LEN=${keyLength}` +
+    ` KEY_HAS_HEADER=${hasHeader}` +
+    ` KEY_HAS_FOOTER=${hasFooter}`,
+  );
+}
+
 async function getInstallationToken(): Promise<string> {
   const now = Date.now();
   if (cachedToken && cachedToken.expiresAt - now > 60_000) {
@@ -127,29 +143,40 @@ async function getInstallationToken(): Promise<string> {
   requireGithubConfig();
   const jwt = buildAppJwt();
   const url = `${GITHUB_API_BASE}/app/installations/${GITHUB_APP_INSTALLATION_ID}/access_tokens`;
-  const response = await axios.post(
-    url,
-    {},
-    {
-      headers: {
-        Authorization: `Bearer ${jwt}`,
-        Accept: "application/vnd.github+json",
-        "X-GitHub-Api-Version": GITHUB_API_VERSION,
+  try {
+    const response = await axios.post(
+      url,
+      {},
+      {
+        headers: {
+          Authorization: `Bearer ${jwt}`,
+          Accept: "application/vnd.github+json",
+          "X-GitHub-Api-Version": GITHUB_API_VERSION,
+        },
       },
-    },
-  );
+    );
 
-  const token = response.data?.token as string | undefined;
-  const expiresAt = response.data?.expires_at as string | undefined;
-  if (!token || !expiresAt) {
-    throw new Error("Failed to acquire GitHub installation token.");
+    const token = response.data?.token as string | undefined;
+    const expiresAt = response.data?.expires_at as string | undefined;
+    if (!token || !expiresAt) {
+      throw new Error("Failed to acquire GitHub installation token.");
+    }
+
+    cachedToken = {
+      token,
+      expiresAt: Date.parse(expiresAt),
+    };
+    return token;
+  } catch (err: any) {
+    const status = err?.response?.status as number | undefined;
+    const responseData = err?.response?.data;
+    console.error(
+      `[GithubAuth] JWT->token exchange failed. Status: ${status ?? "no response"}` +
+      ` | Response: ${JSON.stringify(responseData ?? err?.message)}`,
+    );
+    logGithubAuthDiagnostics();
+    throw err;
   }
-
-  cachedToken = {
-    token,
-    expiresAt: Date.parse(expiresAt),
-  };
-  return token;
 }
 
 async function githubRequest<T>(
@@ -159,18 +186,29 @@ async function githubRequest<T>(
   params?: Record<string, unknown>,
 ): Promise<T> {
   const token = await getInstallationToken();
-  const response = await axios.request<T>({
-    method,
-    url: `${GITHUB_API_BASE}${path}`,
-    data,
-    params,
-    headers: {
-      Authorization: `token ${token}`,
-      Accept: "application/vnd.github+json",
-      "X-GitHub-Api-Version": GITHUB_API_VERSION,
-    },
-  });
-  return response.data;
+  try {
+    const response = await axios.request<T>({
+      method,
+      url: `${GITHUB_API_BASE}${path}`,
+      data,
+      params,
+      headers: {
+        Authorization: `token ${token}`,
+        Accept: "application/vnd.github+json",
+        "X-GitHub-Api-Version": GITHUB_API_VERSION,
+      },
+    });
+    return response.data;
+  } catch (err: any) {
+    const status = err?.response?.status as number | undefined;
+    const responseData = err?.response?.data;
+    console.error(
+      `[GithubAuth] API request failed. ${method.toUpperCase()} ${path}` +
+      ` | Status: ${status ?? "no response"}` +
+      ` | Response: ${JSON.stringify(responseData ?? err?.message)}`,
+    );
+    throw err;
+  }
 }
 
 function toIssue(raw: any): IGithubIssue {
