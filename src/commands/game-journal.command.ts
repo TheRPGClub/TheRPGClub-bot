@@ -40,6 +40,7 @@ import {
 } from "../functions/InteractionUtils.js";
 import { formatTableDate } from "../commands/profile.command.js";
 import { COMPONENTS_V2_FLAG } from "../config/flags.js";
+import { getUserEmojiString } from "../services/UserEmojiService.js";
 
 const LIST_PAGE_SIZE = 15;
 const ALL_PAGE_SIZE = 20;
@@ -253,9 +254,11 @@ function buildAllEmbed(
   const start = page * ALL_PAGE_SIZE;
   const pageSummaries = summaries.slice(start, start + ALL_PAGE_SIZE);
   const memberLabel = summaries.length === 1 ? "member" : "members";
-  const lines = pageSummaries.map(
-    (s) => `<@${s.userId}> — ${s.gameCount} ${gameLabel(s.gameCount)}`,
-  );
+  const lines = pageSummaries.map((s) => {
+    const emoji = getUserEmojiString(s.userId);
+    const prefix = emoji ? `${emoji} ` : "";
+    return `${prefix}<@${s.userId}> — ${s.gameCount} ${gameLabel(s.gameCount)}`;
+  });
   return new EmbedBuilder()
     .setTitle("Game Journal Users")
     .setDescription(lines.join("\n"))
