@@ -121,29 +121,49 @@ async function getInstallationToken(): Promise<string> {
   requireGithubConfig();
   const jwt = buildAppJwt();
   const url = `${GITHUB_API_BASE}/app/installations/${GITHUB_APP_INSTALLATION_ID}/access_tokens`;
-  const response = await axios.post(
-    url,
-    {},
-    {
-      headers: {
-        Authorization: `Bearer ${jwt}`,
-        Accept: "application/vnd.github+json",
-        "X-GitHub-Api-Version": GITHUB_API_VERSION,
+  try {
+    const response = await axios.post(
+      url,
+      {},
+      {
+        headers: {
+          Authorization: `Bearer ${jwt}`,
+          Accept: "application/vnd.github+json",
+          "X-GitHub-Api-Version": GITHUB_API_VERSION,
+        },
       },
-    },
-  );
+    );
 
-  const token = response.data?.token as string | undefined;
-  const expiresAt = response.data?.expires_at as string | undefined;
-  if (!token || !expiresAt) {
-    throw new Error("Failed to acquire GitHub installation token.");
+    const token = response.data?.token as string | undefined;
+    const expiresAt = response.data?.expires_at as string | undefined;
+    if (!token || !expiresAt) {
+      throw new Error("Failed to acquire GitHub installation token.");
+    }
+
+    cachedToken = {
+      token,
+      expiresAt: Date.parse(expiresAt),
+    };
+    return token;
+  } catch (err: any) {
+    if (err?.response?.status === 401) {
+      const githubDate = err.response.headers?.["date"] as string | undefined;
+      if (githubDate) {
+        const skewMs = Math.abs(Date.now() - Date.parse(githubDate));
+        if (skewMs > 60_000) {
+          const skewSec = Math.round(skewMs / 1000);
+          const enriched: any = new Error(
+            `GitHub authentication failed: clock skew detected.` +
+            ` This server's clock is ~${skewSec}s off from GitHub's.` +
+            ` Sync the system clock and restart the bot.`,
+          );
+          enriched.response = err.response;
+          throw enriched;
+        }
+      }
+    }
+    throw err;
   }
-
-  cachedToken = {
-    token,
-    expiresAt: Date.parse(expiresAt),
-  };
-  return token;
 }
 
 async function githubRequest<T>(
