@@ -5,6 +5,7 @@ Research best practices for Discord.js and DiscordX, along with Typescript, so y
 review eslint.config.ts and follow all rules outlined there
 keep lines of code under 100 characters long
 Do not delete the build directory.
+To type-check, run `tsc --noEmit` instead of building. Never run `npm run build`.
 Table docs live in db folder
 Never edit files in the build folder.  They're irrelevant.
 Exclude node_modules, build, and package-lock.json from searches unless they are needed for the task.
@@ -26,3 +27,4 @@ You are forbidden from committing code to git or reverting changes without being
 You are forbidden from reading my .env file.
 After completing a task, restate the prompt before your completion message.
 I develop on a laptop, but run the bot on my desktop.  Do not assume anything based on this machine's environment
+Do all coding tasks in branches.  When you're finished, open a PR and link it to me for approval/merging

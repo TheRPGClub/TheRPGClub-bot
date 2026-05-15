@@ -84,7 +84,6 @@ import {
 import { parseTitleWithYear } from "../functions/GameTitleAutocompleteUtils.js";
 import { COMPONENTS_V2_FLAG } from "../config/flags.js";
 import { REGULARS_ROLE_ID } from "../config/roles.js";
-import { BOT_DEV_PING_USER_ID } from "../config/users.js";
 import { STANDARD_PLATFORM_IDS } from "../config/standardPlatforms.js";
 import { composeVoteImage } from "../services/collageGenerator.js";
 import {
@@ -3134,9 +3133,9 @@ export class NowPlayingCommand {
   async handleNowPlayingJournalOpen(interaction: ButtonInteraction): Promise<void> {
     const [, ownerId, gameIdRaw, pageRaw] = interaction.customId.split(":");
     const gameId = Number(gameIdRaw);
-    if (!this.canUseJournalFeature(ownerId) || !this.canUseJournalFeature(interaction.user.id)) {
+    if (!(await this.canUseJournalFeature(ownerId)) || !(await this.canUseJournalFeature(interaction.user.id))) {
       await safeReply(interaction, {
-        content: "Journal is currently limited to an internal user.",
+        content: "Journal requires the Regulars role.",
         flags: buildComponentsV2Flags(true),
       });
       return;
@@ -3192,9 +3191,9 @@ export class NowPlayingCommand {
   async handleNowPlayingJournalPage(interaction: ButtonInteraction): Promise<void> {
     const [, ownerId, gameIdRaw, , pageRaw] = interaction.customId.split(":");
     const gameId = Number(gameIdRaw);
-    if (!this.canUseJournalFeature(ownerId) || !this.canUseJournalFeature(interaction.user.id)) {
+    if (!(await this.canUseJournalFeature(ownerId)) || !(await this.canUseJournalFeature(interaction.user.id))) {
       await safeReply(interaction, {
-        content: "Journal is currently limited to an internal user.",
+        content: "Journal requires the Regulars role.",
         flags: buildComponentsV2Flags(true),
       });
       return;
@@ -3249,9 +3248,9 @@ export class NowPlayingCommand {
   @ButtonComponent({ id: /^nowplaying-journal-add:\d+:\d+:\d+$/ })
   async handleNowPlayingJournalAdd(interaction: ButtonInteraction): Promise<void> {
     const [, ownerId, gameIdRaw, pageRaw] = interaction.customId.split(":");
-    if (!this.canUseJournalFeature(ownerId) || !this.canUseJournalFeature(interaction.user.id)) {
+    if (!(await this.canUseJournalFeature(ownerId)) || !(await this.canUseJournalFeature(interaction.user.id))) {
       await safeReply(interaction, {
-        content: "Journal is currently limited to an internal user.",
+        content: "Journal requires the Regulars role.",
         flags: buildComponentsV2Flags(true),
       });
       return;
@@ -3304,9 +3303,9 @@ export class NowPlayingCommand {
   @ButtonComponent({ id: /^nowplaying-journal-edit:\d+:\d+:\d+$/ })
   async handleNowPlayingJournalEdit(interaction: ButtonInteraction): Promise<void> {
     const [, ownerId, gameIdRaw, pageRaw] = interaction.customId.split(":");
-    if (!this.canUseJournalFeature(ownerId) || !this.canUseJournalFeature(interaction.user.id)) {
+    if (!(await this.canUseJournalFeature(ownerId)) || !(await this.canUseJournalFeature(interaction.user.id))) {
       await safeReply(interaction, {
-        content: "Journal is currently limited to an internal user.",
+        content: "Journal requires the Regulars role.",
         flags: buildComponentsV2Flags(true),
       });
       return;
@@ -3349,9 +3348,9 @@ export class NowPlayingCommand {
   @SelectMenuComponent({ id: /^nowplaying-journal-edit-select:\d+:\d+:\d+$/ })
   async handleNowPlayingJournalEditSelect(interaction: StringSelectMenuInteraction): Promise<void> {
     const [, ownerId, gameIdRaw, pageRaw] = interaction.customId.split(":");
-    if (!this.canUseJournalFeature(ownerId) || !this.canUseJournalFeature(interaction.user.id)) {
+    if (!(await this.canUseJournalFeature(ownerId)) || !(await this.canUseJournalFeature(interaction.user.id))) {
       await safeReply(interaction, {
-        content: "Journal is currently limited to an internal user.",
+        content: "Journal requires the Regulars role.",
         flags: buildComponentsV2Flags(true),
       });
       return;
@@ -3423,9 +3422,9 @@ export class NowPlayingCommand {
   @ButtonComponent({ id: /^nowplaying-journal-delete:\d+:\d+:\d+$/ })
   async handleNowPlayingJournalDelete(interaction: ButtonInteraction): Promise<void> {
     const [, ownerId, gameIdRaw, pageRaw] = interaction.customId.split(":");
-    if (!this.canUseJournalFeature(ownerId) || !this.canUseJournalFeature(interaction.user.id)) {
+    if (!(await this.canUseJournalFeature(ownerId)) || !(await this.canUseJournalFeature(interaction.user.id))) {
       await safeReply(interaction, {
-        content: "Journal is currently limited to an internal user.",
+        content: "Journal requires the Regulars role.",
         flags: buildComponentsV2Flags(true),
       });
       return;
@@ -3468,9 +3467,9 @@ export class NowPlayingCommand {
   @SelectMenuComponent({ id: /^nowplaying-journal-delete-select:\d+:\d+:\d+$/ })
   async handleNowPlayingJournalDeleteSelect(interaction: StringSelectMenuInteraction): Promise<void> {
     const [, ownerId, gameIdRaw, pageRaw] = interaction.customId.split(":");
-    if (!this.canUseJournalFeature(ownerId) || !this.canUseJournalFeature(interaction.user.id)) {
+    if (!(await this.canUseJournalFeature(ownerId)) || !(await this.canUseJournalFeature(interaction.user.id))) {
       await safeReply(interaction, {
-        content: "Journal is currently limited to an internal user.",
+        content: "Journal requires the Regulars role.",
         flags: buildComponentsV2Flags(true),
       });
       return;
@@ -3514,9 +3513,9 @@ export class NowPlayingCommand {
   @ButtonComponent({ id: /^nowplaying-journal-delete-confirm:(yes|no):\d+:\d+:\d+:\d+$/ })
   async handleNowPlayingJournalDeleteConfirm(interaction: ButtonInteraction): Promise<void> {
     const [, action, ownerId, gameIdRaw, pageRaw, entryIdRaw] = interaction.customId.split(":");
-    if (!this.canUseJournalFeature(ownerId) || !this.canUseJournalFeature(interaction.user.id)) {
+    if (!(await this.canUseJournalFeature(ownerId)) || !(await this.canUseJournalFeature(interaction.user.id))) {
       await safeReply(interaction, {
-        content: "Journal is currently limited to an internal user.",
+        content: "Journal requires the Regulars role.",
         flags: buildComponentsV2Flags(true),
       });
       return;
@@ -3549,9 +3548,9 @@ export class NowPlayingCommand {
   @ModalComponent({ id: /^nowplaying-journal-modal:\d+:\d+:\d+$/ })
   async handleNowPlayingJournalModal(interaction: ModalSubmitInteraction): Promise<void> {
     const [, ownerId, gameIdRaw, pageRaw] = interaction.customId.split(":");
-    if (!this.canUseJournalFeature(ownerId) || !this.canUseJournalFeature(interaction.user.id)) {
+    if (!(await this.canUseJournalFeature(ownerId)) || !(await this.canUseJournalFeature(interaction.user.id))) {
       await safeReply(interaction, {
-        content: "Journal is currently limited to an internal user.",
+        content: "Journal requires the Regulars role.",
         flags: buildComponentsV2Flags(true),
       });
       return;
@@ -3595,9 +3594,9 @@ export class NowPlayingCommand {
   async handleNowPlayingJournalEditModal(interaction: ModalSubmitInteraction): Promise<void> {
     const [, ownerId, gameIdRaw, pageRaw, entryIdRaw] = interaction.customId.split(":");
     const gameId = Number(gameIdRaw);
-    if (!this.canUseJournalFeature(ownerId) || !this.canUseJournalFeature(interaction.user.id)) {
+    if (!(await this.canUseJournalFeature(ownerId)) || !(await this.canUseJournalFeature(interaction.user.id))) {
       await safeReply(interaction, {
-        content: "Journal is currently limited to an internal user.",
+        content: "Journal requires the Regulars role.",
         flags: buildComponentsV2Flags(true),
       });
       return;
@@ -3772,9 +3771,9 @@ export class NowPlayingCommand {
       });
       return;
     }
-    if (!this.canUseJournalFeature(ownerId)) {
+    if (!(await this.canUseJournalFeature(ownerId))) {
       await safeReply(interaction, {
-        content: "Journal is currently limited to an internal user.",
+        content: "Journal requires the Regulars role.",
         flags: buildComponentsV2Flags(true),
       });
       return;
@@ -4431,10 +4430,10 @@ export class NowPlayingCommand {
     showNotes: boolean = false,
     showPrivateOnlyJournalButtons: boolean = false,
   ): Promise<{ components: NowPlayingListComponents; files: AttachmentBuilder[] }> {
-    const { files, covers } = await this.buildNowPlayingAttachments(
-      entries,
-      NOW_PLAYING_COMPOSITE_MAX,
-    );
+    const [{ files, covers }, ownerCanUseJournal] = await Promise.all([
+      this.buildNowPlayingAttachments(entries, NOW_PLAYING_COMPOSITE_MAX),
+      this.canUseJournalFeature(target.id),
+    ]);
     const components = this.buildNowPlayingEntryComponents(
       title,
       entries,
@@ -4443,6 +4442,7 @@ export class NowPlayingCommand {
       await this.buildNowPlayingCompositeImageUrl(files, covers, target.id),
       showNotes,
       showPrivateOnlyJournalButtons,
+      ownerCanUseJournal,
     );
     return { components, files };
   }
@@ -4536,6 +4536,7 @@ export class NowPlayingCommand {
     ownerId: string,
     entries: IMemberNowPlayingEntry[],
     guildId: string | null,
+    ownerCanUseJournal: boolean,
   ): Array<ContainerBuilder | ActionRowBuilder<ButtonBuilder>> {
     const introContainer = new ContainerBuilder().addTextDisplayComponents(
       new TextDisplayBuilder().setContent(
@@ -4551,6 +4552,7 @@ export class NowPlayingCommand {
         null,
         true,
         true,
+        ownerCanUseJournal,
       )[0]
       : this.buildNowPlayingMessageContainer(
         "Your Now Playing List",
@@ -4606,8 +4608,11 @@ export class NowPlayingCommand {
     ownerId: string,
     guildId: string | null,
   ): Promise<Array<ContainerBuilder | ActionRowBuilder<ButtonBuilder>>> {
-    const entries = getDisplayNowPlayingEntries(await Member.getNowPlaying(ownerId));
-    return this.buildNowPlayingEditMenuComponents(ownerId, entries, guildId);
+    const [entries, ownerCanUseJournal] = await Promise.all([
+      Member.getNowPlaying(ownerId).then(getDisplayNowPlayingEntries),
+      this.canUseJournalFeature(ownerId),
+    ]);
+    return this.buildNowPlayingEditMenuComponents(ownerId, entries, guildId, ownerCanUseJournal);
   }
 
   private async withPmNowPlayingList(
@@ -4618,7 +4623,10 @@ export class NowPlayingCommand {
     if (guildId) {
       return components;
     }
-    const entries = getDisplayNowPlayingEntries(await Member.getNowPlaying(ownerId));
+    const [entries, ownerCanUseJournal] = await Promise.all([
+      Member.getNowPlaying(ownerId).then(getDisplayNowPlayingEntries),
+      this.canUseJournalFeature(ownerId),
+    ]);
     const listContainer = entries.length
       ? this.buildNowPlayingEntryComponents(
         "Your Now Playing List",
@@ -4628,6 +4636,7 @@ export class NowPlayingCommand {
         null,
         true,
         true,
+        ownerCanUseJournal,
       )[0]
       : this.buildNowPlayingMessageContainer(
         "Your Now Playing List",
@@ -4838,9 +4847,9 @@ export class NowPlayingCommand {
   @SelectMenuComponent({ id: /^nowplaying-journal-optin-select:\d+$/ })
   async handleNowPlayingJournalOptInSelect(interaction: StringSelectMenuInteraction): Promise<void> {
     const [, ownerId] = interaction.customId.split(":");
-    if (!this.canUseJournalFeature(ownerId) || !this.canUseJournalFeature(interaction.user.id)) {
+    if (!(await this.canUseJournalFeature(ownerId)) || !(await this.canUseJournalFeature(interaction.user.id))) {
       await safeReply(interaction, {
-        content: "Journal is currently limited to an internal user.",
+        content: "Journal requires the Regulars role.",
         flags: buildComponentsV2Flags(true),
       });
       return;
@@ -5038,8 +5047,9 @@ export class NowPlayingCommand {
     return entries.some((entry) => !entry.journalEnabled && Boolean(entry.note?.trim()));
   }
 
-  private canUseJournalFeature(userId: string): boolean {
-    return userId === BOT_DEV_PING_USER_ID;
+  private async canUseJournalFeature(userId: string): Promise<boolean> {
+    const member = await Member.getByUserId(userId);
+    return member?.roleRegular === 1;
   }
 
   private async refreshNowPlayingListFromContext(
@@ -5404,6 +5414,7 @@ export class NowPlayingCommand {
     imageUrl: string | null,
     showNotes: boolean,
     showPrivateOnlyJournalButtons: boolean = false,
+    ownerCanUseJournal: boolean = false,
   ): NowPlayingListComponents {
     const container = new ContainerBuilder();
     if (imageUrl) {
@@ -5441,7 +5452,7 @@ export class NowPlayingCommand {
           lines.push(`-# *${addedLabel}.*`);
         }
       }
-      if (showNotes && entry.note && (!entry.journalEnabled || !this.canUseJournalFeature(ownerId))) {
+      if (showNotes && entry.note && (!entry.journalEnabled || !ownerCanUseJournal)) {
         const quotedNote = entry.note
           .split("\n")
           .map((noteLine) => `> ${noteLine}`)
@@ -5450,7 +5461,7 @@ export class NowPlayingCommand {
       }
       const content = this.trimTextDisplayContent(lines.join("\n"));
       const shouldShowJournalButton = entry.journalEnabled &&
-        this.canUseJournalFeature(ownerId) &&
+        ownerCanUseJournal &&
         (showPrivateOnlyJournalButtons || entry.hasPublicJournalEntry);
       if (shouldShowJournalButton) {
         const section = new SectionBuilder().addTextDisplayComponents(
