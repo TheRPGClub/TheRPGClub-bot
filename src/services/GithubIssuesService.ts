@@ -98,10 +98,11 @@ function toBase64Url(input: string | Buffer): string {
 
 function buildAppJwt(): string {
   const now = Math.floor(Date.now() / 1000);
+  const appId = parseInt(GITHUB_APP_ID, 10);
   const payload = {
     iat: now - 60,
     exp: now + 9 * 60,
-    iss: parseInt(GITHUB_APP_ID, 10),
+    iss: appId,
   };
   const header = {
     alg: "RS256",
@@ -111,6 +112,9 @@ function buildAppJwt(): string {
   const payloadToken = toBase64Url(JSON.stringify(payload));
   const data = `${headerToken}.${payloadToken}`;
   const key = normalizePrivateKey(GITHUB_APP_PRIVATE_KEY.replace(/\\n/g, "\n"));
+  console.error(
+    `[GithubAuth] Building JWT with iss=${appId} (parsed from "${GITHUB_APP_ID}")`,
+  );
   const signature = crypto
     .createSign("RSA-SHA256")
     .update(data)
