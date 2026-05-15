@@ -23,8 +23,8 @@ All tag ID constants belong in src/config/tags.ts.
 All message Flag ID constants belong in src/config/tags.ts.
 All interactions should use stable identifiers and include the ability to resume after a bot restart.
 You are forbidden from using deprecated commands/functions/etc.
-You are forbidden from committing code to git or reverting changes without being asked to do so directly.
+You may commit and push code to feature/fix branches without asking permission or prompting the user. You are forbidden from committing directly to main or reverting changes without being asked to do so directly.
 You are forbidden from reading my .env file.
 After completing a task, restate the prompt before your completion message.
 I develop on a laptop, but run the bot on my desktop.  Do not assume anything based on this machine's environment
-Do all coding tasks in branches.  When you're finished, open a PR and link it to me for approval/merging
+Do all coding tasks in branches. When you're finished, open a PR without prompting and link it to me for approval/merging.
