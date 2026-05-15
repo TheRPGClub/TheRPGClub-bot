@@ -1,4 +1,5 @@
 You may only edit files in the current working directory.
+Always use Bash tool instead of PowerShell unless Bash will not work for the task.
 You may only use non-destructive git commands.
 name sql files starting with today's date with datestamp (ie 20251210_sql_script_name) YYYYMMDD_name_format
 Research best practices for Discord.js and DiscordX, along with Typescript, so your coding mindset isn't out of date

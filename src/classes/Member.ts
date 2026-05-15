@@ -510,6 +510,7 @@ export default class Member {
         ADDED_AT: Date | string | null;
         NOTE_UPDATED_AT: Date | string | null;
         SORT_ORDER: number | null;
+        JOURNAL_ENABLED: number | null;
       }>(
         `SELECT u.GAMEDB_GAME_ID AS GAME_ID,
                 g.TITLE,
@@ -519,10 +520,14 @@ export default class Member {
                 u.NOTE,
                 u.ADDED_AT,
                 u.NOTE_UPDATED_AT,
-                u.SORT_ORDER
+                u.SORT_ORDER,
+                jp.IS_ENABLED AS JOURNAL_ENABLED
            FROM USER_NOW_PLAYING u
            JOIN GAMEDB_GAMES g ON g.GAME_ID = u.GAMEDB_GAME_ID
            LEFT JOIN GAMEDB_PLATFORMS p ON p.PLATFORM_ID = u.PLATFORM_ID
+           LEFT JOIN USER_GAME_JOURNAL_PREFS jp
+             ON jp.USER_ID = u.USER_ID
+            AND jp.GAMEDB_GAME_ID = u.GAMEDB_GAME_ID
           WHERE u.USER_ID = :userId
             AND u.GAMEDB_GAME_ID IS NOT NULL
           ORDER BY u.SORT_ORDER NULLS LAST, u.ADDED_AT DESC, u.ENTRY_ID DESC`,
@@ -547,7 +552,7 @@ export default class Member {
             ? new Date(r.NOTE_UPDATED_AT as any)
             : null,
         sortOrder: r.SORT_ORDER == null ? null : Number(r.SORT_ORDER),
-        journalEnabled: false,
+        journalEnabled: Number(r.JOURNAL_ENABLED ?? 0) === 1,
         hasPublicJournalEntry: false,
       }));
     } finally {
