@@ -8,7 +8,18 @@ import {
   ensureUserEmojiForMember,
   syncUserEmojiFromAvatarChange,
 } from "../services/UserEmojiService.js";
-import { REGULARS_ROLE_ID } from "../config/roles.js";
+import {
+  ADMIN_ROLE_ID,
+  MEMBER_ROLE_ID,
+  MODERATOR_ROLE_ID,
+  REGULARS_ROLE_ID,
+} from "../config/roles.js";
+
+const QUALIFYING_ROLE_IDS_SET = new Set(
+  [REGULARS_ROLE_ID, ADMIN_ROLE_ID, MODERATOR_ROLE_ID, MEMBER_ROLE_ID].filter(
+    (id): id is string => id !== null,
+  ),
+);
 
 @Discord()
 export class GuildMemberUpdate {
@@ -85,7 +96,8 @@ export class GuildMemberUpdate {
       }
     }
 
-    if (!user.bot && addedRoles.has(REGULARS_ROLE_ID)) {
+    const gainedQualifyingRole = addedRoles.some((r) => QUALIFYING_ROLE_IDS_SET.has(r.id));
+    if (!user.bot && gainedQualifyingRole) {
       await ensureUserEmojiForMember(_client, newMember);
     }
 

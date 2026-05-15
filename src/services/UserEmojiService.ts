@@ -1,8 +1,24 @@
 import type { Client, GuildMember } from "discord.js";
-import { REGULARS_ROLE_ID } from "../config/roles.js";
+import {
+  ADMIN_ROLE_ID,
+  MEMBER_ROLE_ID,
+  MODERATOR_ROLE_ID,
+  REGULARS_ROLE_ID,
+} from "../config/roles.js";
 
 const EMOJI_NAME_PREFIX = "u_";
 const CREATION_THROTTLE_MS = 600;
+
+const QUALIFYING_ROLE_IDS = [
+  REGULARS_ROLE_ID,
+  ADMIN_ROLE_ID,
+  MODERATOR_ROLE_ID,
+  MEMBER_ROLE_ID,
+].filter((id): id is string => id !== null);
+
+function hasQualifyingRole(member: GuildMember): boolean {
+  return QUALIFYING_ROLE_IDS.some((id) => member.roles.cache.has(id));
+}
 
 type EmojiCacheEntry = { emojiId: string };
 
@@ -52,7 +68,7 @@ async function syncAllRegularsEmoji(client: Client): Promise<void> {
   }
 
   const members = await guild.members.fetch();
-  const regulars = members.filter((m) => m.roles.cache.has(REGULARS_ROLE_ID) && !m.user.bot);
+  const regulars = members.filter((m) => !m.user.bot && hasQualifyingRole(m));
 
   let created = 0;
   for (const [userId, member] of regulars) {
