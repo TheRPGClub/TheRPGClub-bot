@@ -182,35 +182,33 @@ async function buildJournalViewPayload(
 
   const gameTitle = game?.title ?? `Game #${gameId}`;
   const pageInfo = totalPages > 1 ? `, page ${safePage} of ${totalPages}` : "";
+  const footer = `-# ${total} public ${entryLabel(total)}${pageInfo}`;
+
+  const bodyLines: string[] = [];
+  if (!entries.length) {
+    bodyLines.push("No public journal entries for this game.");
+  } else {
+    for (const entry of entries) {
+      const titleLine = entry.title ? `### ${entry.title}` : "### Untitled Entry";
+      const date = formatTableDate(entry.createdAt);
+      bodyLines.push(`${titleLine}\n-# ${date}\n${trimContent(entry.body)}`);
+    }
+  }
+
+  const fullContent = [
+    `${ownerLabel}'s Game Journal`,
+    `## ${gameTitle}`,
+    bodyLines.join("\n\n"),
+    footer,
+  ].join("\n");
+
   const introSection = new SectionBuilder().addTextDisplayComponents(
-    new TextDisplayBuilder().setContent(
-      [
-        `${ownerLabel}'s Game Journal`,
-        `**${gameTitle}**`,
-        `-# ${total} public ${entryLabel(total)}${pageInfo}`,
-      ].join("\n"),
-    ),
+    new TextDisplayBuilder().setContent(fullContent),
   );
   if (coverUrl) {
     introSection.setThumbnailAccessory(new ThumbnailBuilder().setURL(coverUrl));
   }
   container.addSectionComponents(introSection);
-
-  if (!entries.length) {
-    container.addTextDisplayComponents(
-      new TextDisplayBuilder().setContent("No public journal entries for this game."),
-    );
-  } else {
-    for (const entry of entries) {
-      const titleLine = entry.title ? `### ${entry.title}` : "### Untitled Entry";
-      const body = trimContent(entry.body);
-      container.addTextDisplayComponents(
-        new TextDisplayBuilder().setContent(
-          `${titleLine}\n-# ${formatTableDate(entry.createdAt)}\n${body}`,
-        ),
-      );
-    }
-  }
 
   const pageRow = new ActionRowBuilder<ButtonBuilder>();
   if (safePage > 1) {
