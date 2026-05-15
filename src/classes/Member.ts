@@ -108,6 +108,7 @@ export interface IMemberNowPlayingList {
 
 export interface IGameJournalEntry {
   entryId: number;
+  entryNumber: number;
   userId: string;
   gameId: number;
   title: string | null;
@@ -779,19 +780,33 @@ export default class Member {
         IS_PUBLIC: number;
         CREATED_AT: Date | string;
         UPDATED_AT: Date | string;
+        ENTRY_NUMBER: number;
       }>(
-        `SELECT ENTRY_ID,
+        `WITH all_entries AS (
+           SELECT ENTRY_ID,
+                  USER_ID,
+                  GAMEDB_GAME_ID,
+                  ENTRY_TITLE,
+                  ENTRY_BODY,
+                  IS_PUBLIC,
+                  CREATED_AT,
+                  UPDATED_AT,
+                  ROW_NUMBER() OVER (ORDER BY CREATED_AT ASC, ENTRY_ID ASC) AS ENTRY_NUMBER
+             FROM USER_GAME_JOURNAL_ENTRIES
+            WHERE USER_ID = :userId
+              AND GAMEDB_GAME_ID = :gameId
+         )
+         SELECT ENTRY_ID,
                 USER_ID,
                 GAMEDB_GAME_ID,
                 ENTRY_TITLE,
                 ENTRY_BODY,
                 IS_PUBLIC,
                 CREATED_AT,
-                UPDATED_AT
-           FROM USER_GAME_JOURNAL_ENTRIES
-          WHERE USER_ID = :userId
-            AND GAMEDB_GAME_ID = :gameId
-            AND (:viewerUserId = :userId OR IS_PUBLIC = 1)
+                UPDATED_AT,
+                ENTRY_NUMBER
+           FROM all_entries
+          WHERE :viewerUserId = :userId OR IS_PUBLIC = 1
           ORDER BY CREATED_AT DESC, ENTRY_ID DESC
           OFFSET :offset ROWS FETCH NEXT :limit ROWS ONLY`,
         { userId, gameId, viewerUserId, offset: safeOffset, limit: safeLimit },
@@ -799,6 +814,7 @@ export default class Member {
       );
       return (res.rows ?? []).map((row) => ({
         entryId: Number(row.ENTRY_ID),
+        entryNumber: Number(row.ENTRY_NUMBER),
         userId: row.USER_ID,
         gameId: Number(row.GAMEDB_GAME_ID),
         title: row.ENTRY_TITLE ?? null,
@@ -892,18 +908,26 @@ export default class Member {
         IS_PUBLIC: number;
         CREATED_AT: Date | string;
         UPDATED_AT: Date | string;
+        ENTRY_NUMBER: number;
       }>(
-        `SELECT ENTRY_ID,
-                USER_ID,
-                GAMEDB_GAME_ID,
-                ENTRY_TITLE,
-                ENTRY_BODY,
-                IS_PUBLIC,
-                CREATED_AT,
-                UPDATED_AT
-           FROM USER_GAME_JOURNAL_ENTRIES
-          WHERE USER_ID = :userId
-            AND ENTRY_ID = :entryId
+        `SELECT e.ENTRY_ID,
+                e.USER_ID,
+                e.GAMEDB_GAME_ID,
+                e.ENTRY_TITLE,
+                e.ENTRY_BODY,
+                e.IS_PUBLIC,
+                e.CREATED_AT,
+                e.UPDATED_AT,
+                (SELECT COUNT(*) + 1
+                   FROM USER_GAME_JOURNAL_ENTRIES e2
+                  WHERE e2.USER_ID = e.USER_ID
+                    AND e2.GAMEDB_GAME_ID = e.GAMEDB_GAME_ID
+                    AND (e2.CREATED_AT < e.CREATED_AT
+                         OR (e2.CREATED_AT = e.CREATED_AT AND e2.ENTRY_ID < e.ENTRY_ID))
+                ) AS ENTRY_NUMBER
+           FROM USER_GAME_JOURNAL_ENTRIES e
+          WHERE e.USER_ID = :userId
+            AND e.ENTRY_ID = :entryId
           FETCH FIRST 1 ROWS ONLY`,
         { userId, entryId },
         { outFormat: oracledb.OUT_FORMAT_OBJECT },
@@ -912,6 +936,7 @@ export default class Member {
       if (!row) return null;
       return {
         entryId: Number(row.ENTRY_ID),
+        entryNumber: Number(row.ENTRY_NUMBER),
         userId: row.USER_ID,
         gameId: Number(row.GAMEDB_GAME_ID),
         title: row.ENTRY_TITLE ?? null,
