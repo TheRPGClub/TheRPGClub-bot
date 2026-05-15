@@ -36,7 +36,9 @@ export interface JournalViewOptions {
   nextPageCustomId: (page: number) => string;
   /** When provided, builds owner management buttons (Add/Edit/Delete) prepended to the nav row */
   buildOwnerButtons?: (safePage: number, hasEntries: boolean) => ButtonBuilder[];
-  /** Extra rows appended after the nav row (e.g. a help button row) */
+  /** Buttons appended to the end of the nav row; omitted entirely when no other nav buttons exist */
+  navRowTrailingButtons?: ButtonBuilder[];
+  /** Extra rows appended after the nav row */
   extraRows?: Array<ActionRowBuilder<ButtonBuilder>>;
   /** Fetch and display the "Now Playing since" date in the header */
   includeNowPlayingMeta?: boolean;
@@ -58,6 +60,7 @@ export async function buildJournalView(options: JournalViewOptions): Promise<{
     prevPageCustomId,
     nextPageCustomId,
     buildOwnerButtons,
+    navRowTrailingButtons,
     extraRows,
     includeNowPlayingMeta,
     includeCompletions,
@@ -186,6 +189,10 @@ export async function buildJournalView(options: JournalViewOptions): Promise<{
         .setLabel("Next")
         .setStyle(ButtonStyle.Secondary),
     );
+  }
+
+  if (navRow.components.length > 0 && navRowTrailingButtons?.length) {
+    navRow.addComponents(...navRowTrailingButtons);
   }
 
   const components: Array<ContainerBuilder | ActionRowBuilder<ButtonBuilder>> = [container];

@@ -5635,13 +5635,11 @@ export class NowPlayingCommand {
               .setDisabled(!hasEntries),
           ]
         : undefined,
-      extraRows: [
-        new ActionRowBuilder<ButtonBuilder>().addComponents(
-          new ButtonBuilder()
-            .setCustomId(`${NOW_PLAYING_HELP_PREFIX}:journal-view:${ownerId}`)
-            .setLabel("?")
-            .setStyle(ButtonStyle.Secondary),
-        ),
+      navRowTrailingButtons: [
+        new ButtonBuilder()
+          .setCustomId(`${NOW_PLAYING_HELP_PREFIX}:journal-view:${ownerId}`)
+          .setLabel("?")
+          .setStyle(ButtonStyle.Secondary),
       ],
       includeNowPlayingMeta: true,
       includeCompletions: true,
