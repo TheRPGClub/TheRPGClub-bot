@@ -137,16 +137,20 @@ function buildJournalViewPayload(
   targetUserId: string,
   gameId: number,
   page: number,
+  guildId?: string | null,
 ) {
   return buildJournalView({
     ownerId: targetUserId,
     viewerId: null,
     gameId,
     page,
+    guildId,
     prevPageCustomId: (p) =>
       `${GJ_VIEW_PAGE_PREFIX}:${callerId}:${targetUserId}:${gameId}:${p}`,
     nextPageCustomId: (p) =>
       `${GJ_VIEW_PAGE_PREFIX}:${callerId}:${targetUserId}:${gameId}:${p}`,
+    includeNowPlayingMeta: true,
+    includeCompletions: true,
   });
 }
 
@@ -309,7 +313,7 @@ export class GameJournalCommand {
 
     await safeDeferUpdate(interaction);
 
-    const payload = await buildJournalViewPayload(callerId, targetUserId, gameId, 1);
+    const payload = await buildJournalViewPayload(callerId, targetUserId, gameId, 1, interaction.guildId);
     await safeUpdate(interaction, {
       embeds: [],
       components: payload.components,
@@ -431,7 +435,7 @@ export class GameJournalCommand {
     if (Number.isNaN(gameId) || Number.isNaN(page)) return;
 
     await safeDeferUpdate(interaction);
-    const payload = await buildJournalViewPayload(callerId, targetUserId, gameId, page);
+    const payload = await buildJournalViewPayload(callerId, targetUserId, gameId, page, interaction.guildId);
     await safeUpdate(interaction, {
       components: payload.components,
       files: payload.files,
