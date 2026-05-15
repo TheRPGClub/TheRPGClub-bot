@@ -147,6 +147,8 @@ function buildJournalViewPayload(
       `${GJ_VIEW_PAGE_PREFIX}:${callerId}:${targetUserId}:${gameId}:${p}`,
     nextPageCustomId: (p) =>
       `${GJ_VIEW_PAGE_PREFIX}:${callerId}:${targetUserId}:${gameId}:${p}`,
+    includeNowPlayingMeta: true,
+    includeCompletions: true,
   });
 }
 
