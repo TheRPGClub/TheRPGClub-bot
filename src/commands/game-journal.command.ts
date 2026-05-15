@@ -22,9 +22,11 @@ import {
 import {
   ContainerBuilder,
   SectionBuilder,
+  SeparatorBuilder,
   TextDisplayBuilder,
   ThumbnailBuilder,
 } from "@discordjs/builders";
+import { SeparatorSpacingSize } from "discord-api-types/v10";
 import Member, {
   type IGameJournalListEntry,
   type IJournalUserSummary,
@@ -182,35 +184,36 @@ async function buildJournalViewPayload(
 
   const gameTitle = game?.title ?? `Game #${gameId}`;
   const pageInfo = totalPages > 1 ? `, page ${safePage} of ${totalPages}` : "";
+  const footer = `-# ${total} public ${entryLabel(total)}${pageInfo}`;
+
   const introSection = new SectionBuilder().addTextDisplayComponents(
     new TextDisplayBuilder().setContent(
-      [
-        `${ownerLabel}'s Game Journal`,
-        `**${gameTitle}**`,
-        `-# ${total} public ${entryLabel(total)}${pageInfo}`,
-      ].join("\n"),
+      `${ownerLabel}'s Game Journal\n## ${gameTitle}`,
     ),
   );
   if (coverUrl) {
     introSection.setThumbnailAccessory(new ThumbnailBuilder().setURL(coverUrl));
   }
   container.addSectionComponents(introSection);
+  container.addSeparatorComponents(
+    new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small).setDivider(true),
+  );
 
+  const entryLines: string[] = [];
   if (!entries.length) {
-    container.addTextDisplayComponents(
-      new TextDisplayBuilder().setContent("No public journal entries for this game."),
-    );
+    entryLines.push("No public journal entries for this game.");
   } else {
     for (const entry of entries) {
       const titleLine = entry.title ? `### ${entry.title}` : "### Untitled Entry";
-      const body = trimContent(entry.body);
-      container.addTextDisplayComponents(
-        new TextDisplayBuilder().setContent(
-          `${titleLine}\n-# ${formatTableDate(entry.createdAt)}\n${body}`,
-        ),
-      );
+      const date = formatTableDate(entry.createdAt);
+      entryLines.push(`${titleLine}\n-# ${date}\n${trimContent(entry.body)}`);
     }
   }
+  entryLines.push(footer);
+
+  container.addTextDisplayComponents(
+    new TextDisplayBuilder().setContent(entryLines.join("\n\n")),
+  );
 
   const pageRow = new ActionRowBuilder<ButtonBuilder>();
   if (safePage > 1) {
