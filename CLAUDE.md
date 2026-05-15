@@ -25,3 +25,4 @@ You are forbidden from using deprecated commands/functions/etc.
 You are forbidden from committing code to git or reverting changes without being asked to do so directly.
 You are forbidden from reading my .env file.
 After completing a task, restate the prompt before your completion message.
+I develop on a laptop, but run the bot on my desktop.  Do not assume anything based on this machine's environment

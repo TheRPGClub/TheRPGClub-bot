@@ -1,6 +1,5 @@
 import axios from "axios";
 import crypto from "crypto";
-import https from "https";
 
 const GITHUB_API_BASE = "https://api.github.com";
 const GITHUB_API_VERSION = "2022-11-28";
@@ -99,66 +98,18 @@ function toBase64Url(input: string | Buffer): string {
 
 function buildAppJwt(): string {
   const now = Math.floor(Date.now() / 1000);
-  const appId = parseInt(GITHUB_APP_ID, 10);
   const payload = {
     iat: now - 60,
     exp: now + 9 * 60,
-    iss: appId,
+    iss: parseInt(GITHUB_APP_ID, 10),
   };
-  const header = {
-    alg: "RS256",
-    typ: "JWT",
-  };
+  const header = { alg: "RS256", typ: "JWT" };
   const headerToken = toBase64Url(JSON.stringify(header));
   const payloadToken = toBase64Url(JSON.stringify(payload));
   const data = `${headerToken}.${payloadToken}`;
-  const key = GITHUB_APP_PRIVATE_KEY.replace(/\\n/g, "\n");
-  const signingKeyFirstLine = key.split("\n")[0] ?? "(empty)";
-  console.error(`[GithubAuth] Signing key first line: "${signingKeyFirstLine}"`);
-  console.error(`[GithubAuth] Signing key total length: ${key.length}`);
-  const signature = crypto
-    .createSign("RSA-SHA256")
-    .update(data)
-    .sign(key);
-  const jwt = `${data}.${toBase64Url(signature)}`;
-  try {
-    const pub = crypto.createPublicKey({ key, format: "pem" });
-    const sigBuf = Buffer.from(toBase64Url(signature).replace(/-/g, "+").replace(/_/g, "/"), "base64");
-    const selfVerified = crypto.createVerify("RSA-SHA256").update(data).verify(pub, sigBuf);
-    const spkiDer = pub.export({ type: "spki", format: "der" }) as Buffer;
-    const signingFingerprint = crypto.createHash("sha256").update(spkiDer).digest("base64");
-    console.error(`[GithubAuth] Signing key fingerprint: SHA256:${signingFingerprint}`);
-    console.error(`[GithubAuth] JWT self-verification: ${selfVerified}`);
-  } catch (e: any) {
-    console.error(`[GithubAuth] Self-verification error: ${e?.message}`);
-  }
-  console.error(`[GithubAuth] JWT payload (decoded): ${Buffer.from(payloadToken, "base64").toString("utf8")}`);
-  console.error(`[GithubAuth] Full JWT (paste at jwt.io to inspect): ${jwt}`);
-  return jwt;
-}
-
-function logGithubAuthDiagnostics(): void {
-  const normalizedKey = normalizePrivateKey(GITHUB_APP_PRIVATE_KEY.replace(/\\n/g, "\n"));
-  const hasHeader = normalizedKey.includes("-----BEGIN");
-  const hasFooter = normalizedKey.includes("-----END");
-  const keyLength = normalizedKey.length;
-  console.error(
-    `[GithubAuth] Config diagnostics:` +
-    ` APP_ID="${GITHUB_APP_ID}"` +
-    ` INSTALLATION_ID="${GITHUB_APP_INSTALLATION_ID}"` +
-    ` KEY_SET=${Boolean(GITHUB_APP_PRIVATE_KEY)}` +
-    ` KEY_LEN=${keyLength}` +
-    ` KEY_HAS_HEADER=${hasHeader}` +
-    ` KEY_HAS_FOOTER=${hasFooter}`,
-  );
-  try {
-    const pub = crypto.createPublicKey({ key: normalizedKey, format: "pem" });
-    const der = pub.export({ type: "spki", format: "der" }) as Buffer;
-    const fingerprint = crypto.createHash("sha256").update(der).digest("base64");
-    console.error(`[GithubAuth] Key fingerprint (compare to GitHub App settings): SHA256:${fingerprint}`);
-  } catch (e: any) {
-    console.error(`[GithubAuth] Failed to derive public key fingerprint: ${e?.message}`);
-  }
+  const key = normalizePrivateKey(GITHUB_APP_PRIVATE_KEY.replace(/\\n/g, "\n"));
+  const signature = crypto.createSign("RSA-SHA256").update(data).sign(key);
+  return `${data}.${toBase64Url(signature)}`;
 }
 
 async function getInstallationToken(): Promise<string> {
@@ -169,75 +120,30 @@ async function getInstallationToken(): Promise<string> {
 
   requireGithubConfig();
   const jwt = buildAppJwt();
-
-  return new Promise<string>((resolve, reject) => {
-    const body = "{}";
-    const options = {
-      hostname: "api.github.com",
-      path: `/app/installations/${GITHUB_APP_INSTALLATION_ID}/access_tokens`,
-      method: "POST",
+  const url = `${GITHUB_API_BASE}/app/installations/${GITHUB_APP_INSTALLATION_ID}/access_tokens`;
+  const response = await axios.post(
+    url,
+    {},
+    {
       headers: {
         Authorization: `Bearer ${jwt}`,
         Accept: "application/vnd.github+json",
         "X-GitHub-Api-Version": GITHUB_API_VERSION,
-        "Content-Type": "application/json",
-        "Content-Length": Buffer.byteLength(body),
-        "User-Agent": "RPGClubBot",
       },
-    };
-    const req = https.request(options, (res) => {
-      let raw = "";
-      res.on("data", (chunk) => { raw += chunk; });
-      res.on("end", () => {
-        if (res.statusCode !== 201) {
-          logGithubAuthDiagnostics();
-          const err: any = new Error("GitHub installation token request failed");
-          err.response = { status: res.statusCode, data: raw };
-          console.error(
-            `[GithubAuth] JWT->token exchange failed. Status: ${res.statusCode}` +
-            ` | Response: ${raw}`,
-          );
-          const appReq = https.request({
-            hostname: "api.github.com",
-            path: "/app",
-            method: "GET",
-            headers: {
-              Authorization: `Bearer ${jwt}`,
-              Accept: "application/vnd.github+json",
-              "X-GitHub-Api-Version": GITHUB_API_VERSION,
-              "User-Agent": "RPGClubBot",
-            },
-          }, (appRes) => {
-            let appRaw = "";
-            appRes.on("data", (c) => { appRaw += c; });
-            appRes.on("end", () => {
-              console.error(`[GithubAuth] GET /app status: ${appRes.statusCode} | Response: ${appRaw}`);
-              reject(err);
-            });
-          });
-          appReq.on("error", () => reject(err));
-          appReq.end();
-          return;
-        }
-        try {
-          const parsed = JSON.parse(raw);
-          const token = parsed.token as string | undefined;
-          const expiresAt = parsed.expires_at as string | undefined;
-          if (!token || !expiresAt) {
-            reject(new Error("Failed to acquire GitHub installation token."));
-            return;
-          }
-          cachedToken = { token, expiresAt: Date.parse(expiresAt) };
-          resolve(token);
-        } catch {
-          reject(new Error(`Failed to parse GitHub token response: ${raw}`));
-        }
-      });
-    });
-    req.on("error", (e) => reject(e));
-    req.write(body);
-    req.end();
-  });
+    },
+  );
+
+  const token = response.data?.token as string | undefined;
+  const expiresAt = response.data?.expires_at as string | undefined;
+  if (!token || !expiresAt) {
+    throw new Error("Failed to acquire GitHub installation token.");
+  }
+
+  cachedToken = {
+    token,
+    expiresAt: Date.parse(expiresAt),
+  };
+  return token;
 }
 
 async function githubRequest<T>(
@@ -247,29 +153,18 @@ async function githubRequest<T>(
   params?: Record<string, unknown>,
 ): Promise<T> {
   const token = await getInstallationToken();
-  try {
-    const response = await axios.request<T>({
-      method,
-      url: `${GITHUB_API_BASE}${path}`,
-      data,
-      params,
-      headers: {
-        Authorization: `token ${token}`,
-        Accept: "application/vnd.github+json",
-        "X-GitHub-Api-Version": GITHUB_API_VERSION,
-      },
-    });
-    return response.data;
-  } catch (err: any) {
-    const status = err?.response?.status as number | undefined;
-    const responseData = err?.response?.data;
-    console.error(
-      `[GithubAuth] API request failed. ${method.toUpperCase()} ${path}` +
-      ` | Status: ${status ?? "no response"}` +
-      ` | Response: ${JSON.stringify(responseData ?? err?.message)}`,
-    );
-    throw err;
-  }
+  const response = await axios.request<T>({
+    method,
+    url: `${GITHUB_API_BASE}${path}`,
+    data,
+    params,
+    headers: {
+      Authorization: `token ${token}`,
+      Accept: "application/vnd.github+json",
+      "X-GitHub-Api-Version": GITHUB_API_VERSION,
+    },
+  });
+  return response.data;
 }
 
 function toIssue(raw: any): IGithubIssue {
