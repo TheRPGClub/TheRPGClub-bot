@@ -1,5 +1,6 @@
 import axios from "axios";
 import crypto from "crypto";
+import https from "https";
 
 const GITHUB_API_BASE = "https://api.github.com";
 const GITHUB_API_VERSION = "2022-11-28";
@@ -154,56 +155,56 @@ async function getInstallationToken(): Promise<string> {
 
   requireGithubConfig();
   const jwt = buildAppJwt();
-  const url = `${GITHUB_API_BASE}/app/installations/${GITHUB_APP_INSTALLATION_ID}/access_tokens`;
-  try {
-    const response = await axios.post(
-      url,
-      {},
-      {
-        headers: {
-          Authorization: `Bearer ${jwt}`,
-          Accept: "application/vnd.github+json",
-          "X-GitHub-Api-Version": GITHUB_API_VERSION,
-        },
+
+  return new Promise<string>((resolve, reject) => {
+    const body = "{}";
+    const options = {
+      hostname: "api.github.com",
+      path: `/app/installations/${GITHUB_APP_INSTALLATION_ID}/access_tokens`,
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${jwt}`,
+        Accept: "application/vnd.github+json",
+        "X-GitHub-Api-Version": GITHUB_API_VERSION,
+        "Content-Type": "application/json",
+        "Content-Length": Buffer.byteLength(body),
+        "User-Agent": "RPGClubBot",
       },
-    );
-
-    const token = response.data?.token as string | undefined;
-    const expiresAt = response.data?.expires_at as string | undefined;
-    if (!token || !expiresAt) {
-      throw new Error("Failed to acquire GitHub installation token.");
-    }
-
-    cachedToken = {
-      token,
-      expiresAt: Date.parse(expiresAt),
     };
-    return token;
-  } catch (err: any) {
-    const status = err?.response?.status as number | undefined;
-    const responseData = err?.response?.data;
-    console.error(
-      `[GithubAuth] JWT->token exchange failed. Status: ${status ?? "no response"}` +
-      ` | Response: ${JSON.stringify(responseData ?? err?.message)}`,
-    );
-    logGithubAuthDiagnostics();
-    try {
-      const appCheckResponse = await axios.get(`${GITHUB_API_BASE}/app`, {
-        headers: {
-          Authorization: `Bearer ${jwt}`,
-          Accept: "application/vnd.github+json",
-          "X-GitHub-Api-Version": GITHUB_API_VERSION,
-        },
+    const req = https.request(options, (res) => {
+      let raw = "";
+      res.on("data", (chunk) => { raw += chunk; });
+      res.on("end", () => {
+        if (res.statusCode !== 201) {
+          logGithubAuthDiagnostics();
+          const err: any = new Error("GitHub installation token request failed");
+          err.response = { status: res.statusCode, data: raw };
+          console.error(
+            `[GithubAuth] JWT->token exchange failed. Status: ${res.statusCode}` +
+            ` | Response: ${raw}`,
+          );
+          reject(err);
+          return;
+        }
+        try {
+          const parsed = JSON.parse(raw);
+          const token = parsed.token as string | undefined;
+          const expiresAt = parsed.expires_at as string | undefined;
+          if (!token || !expiresAt) {
+            reject(new Error("Failed to acquire GitHub installation token."));
+            return;
+          }
+          cachedToken = { token, expiresAt: Date.parse(expiresAt) };
+          resolve(token);
+        } catch {
+          reject(new Error(`Failed to parse GitHub token response: ${raw}`));
+        }
       });
-      console.error(`[GithubAuth] GET /app succeeded: ${JSON.stringify(appCheckResponse.data)}`);
-    } catch (appErr: any) {
-      console.error(
-        `[GithubAuth] GET /app also failed. Status: ${appErr?.response?.status ?? "no response"}` +
-        ` | Response: ${JSON.stringify(appErr?.response?.data ?? appErr?.message)}`,
-      );
-    }
-    throw err;
-  }
+    });
+    req.on("error", (e) => reject(e));
+    req.write(body);
+    req.end();
+  });
 }
 
 async function githubRequest<T>(
