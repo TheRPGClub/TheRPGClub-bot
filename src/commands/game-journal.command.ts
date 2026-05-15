@@ -22,9 +22,11 @@ import {
 import {
   ContainerBuilder,
   SectionBuilder,
+  SeparatorBuilder,
   TextDisplayBuilder,
   ThumbnailBuilder,
 } from "@discordjs/builders";
+import { SeparatorSpacingSize } from "discord-api-types/v10";
 import Member, {
   type IGameJournalListEntry,
   type IJournalUserSummary,
@@ -184,31 +186,34 @@ async function buildJournalViewPayload(
   const pageInfo = totalPages > 1 ? `, page ${safePage} of ${totalPages}` : "";
   const footer = `-# ${total} public ${entryLabel(total)}${pageInfo}`;
 
-  const bodyLines: string[] = [];
-  if (!entries.length) {
-    bodyLines.push("No public journal entries for this game.");
-  } else {
-    for (const entry of entries) {
-      const titleLine = entry.title ? `### ${entry.title}` : "### Untitled Entry";
-      const date = formatTableDate(entry.createdAt);
-      bodyLines.push(`${titleLine}\n-# ${date}\n${trimContent(entry.body)}`);
-    }
-  }
-
-  const fullContent = [
-    `${ownerLabel}'s Game Journal`,
-    `## ${gameTitle}`,
-    bodyLines.join("\n\n"),
-    footer,
-  ].join("\n");
-
   const introSection = new SectionBuilder().addTextDisplayComponents(
-    new TextDisplayBuilder().setContent(fullContent),
+    new TextDisplayBuilder().setContent(
+      `${ownerLabel}'s Game Journal\n## ${gameTitle}`,
+    ),
   );
   if (coverUrl) {
     introSection.setThumbnailAccessory(new ThumbnailBuilder().setURL(coverUrl));
   }
   container.addSectionComponents(introSection);
+  container.addSeparatorComponents(
+    new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small).setDivider(true),
+  );
+
+  const entryLines: string[] = [];
+  if (!entries.length) {
+    entryLines.push("No public journal entries for this game.");
+  } else {
+    for (const entry of entries) {
+      const titleLine = entry.title ? `### ${entry.title}` : "### Untitled Entry";
+      const date = formatTableDate(entry.createdAt);
+      entryLines.push(`${titleLine}\n-# ${date}\n${trimContent(entry.body)}`);
+    }
+  }
+  entryLines.push(footer);
+
+  container.addTextDisplayComponents(
+    new TextDisplayBuilder().setContent(entryLines.join("\n\n")),
+  );
 
   const pageRow = new ActionRowBuilder<ButtonBuilder>();
   if (safePage > 1) {
