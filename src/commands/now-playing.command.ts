@@ -90,6 +90,10 @@ import {
   getOrReplaceBackblazeImage,
   hasBackblazeB2Config,
 } from "../services/BackblazeB2Service.js";
+import {
+  NOW_PLAYING_HELP_PREFIX,
+  NOW_PLAYING_HELP_TEXTS,
+} from "./now-playing-help.js";
 
 const MAX_NOW_PLAYING_NOTE_LEN = 500;
 const NOW_PLAYING_SEARCH_LIMIT = 10;
@@ -1114,9 +1118,14 @@ export class NowPlayingCommand {
     const removeRow = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(removeSelect);
     const announceRow = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(announceSelect);
     const noteRow = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(noteSelect);
+    const helpButton = new ButtonBuilder()
+      .setCustomId(`${NOW_PLAYING_HELP_PREFIX}:completion-config:${session.userId}`)
+      .setLabel("?")
+      .setStyle(ButtonStyle.Secondary);
     const buttonRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
       detailsButton,
       cancelButton,
+      helpButton,
     );
 
     container.addTextDisplayComponents(
@@ -3339,8 +3348,14 @@ export class NowPlayingCommand {
     const container = new ContainerBuilder().addTextDisplayComponents(
       new TextDisplayBuilder().setContent("## Edit Journal Entry\nSelect an entry to edit."),
     );
+    const helpRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`${NOW_PLAYING_HELP_PREFIX}:journal-edit:${ownerId}`)
+        .setLabel("?")
+        .setStyle(ButtonStyle.Secondary),
+    );
     await safeUpdate(interaction, {
-      components: [container, row],
+      components: [container, row, helpRow],
       flags: buildComponentsV2Flags(interaction.message.flags?.has(MessageFlags.Ephemeral) ?? false),
     });
   }
@@ -3458,8 +3473,14 @@ export class NowPlayingCommand {
     const container = new ContainerBuilder().addTextDisplayComponents(
       new TextDisplayBuilder().setContent("## Delete Journal Entry\nSelect an entry to delete."),
     );
+    const helpRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`${NOW_PLAYING_HELP_PREFIX}:journal-delete:${ownerId}`)
+        .setLabel("?")
+        .setStyle(ButtonStyle.Secondary),
+    );
     await safeUpdate(interaction, {
-      components: [container, row],
+      components: [container, row, helpRow],
       flags: buildComponentsV2Flags(interaction.message.flags?.has(MessageFlags.Ephemeral) ?? false),
     });
   }
@@ -3502,6 +3523,10 @@ export class NowPlayingCommand {
           `${NOW_PLAYING_JOURNAL_DELETE_CONFIRM_PREFIX}:no:${ownerId}:${gameIdRaw}:${pageRaw}:${entryId}`,
         )
         .setLabel("Cancel")
+        .setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder()
+        .setCustomId(`${NOW_PLAYING_HELP_PREFIX}:journal-delete-confirm:${ownerId}`)
+        .setLabel("?")
         .setStyle(ButtonStyle.Secondary),
     );
     await safeUpdate(interaction, {
@@ -3708,6 +3733,27 @@ export class NowPlayingCommand {
     });
   }
 
+  @ButtonComponent({ id: /^nowplaying-help:[a-z-]+:\d+$/ })
+  async handleNowPlayingHelp(interaction: ButtonInteraction): Promise<void> {
+    const [, screenType, ownerId] = interaction.customId.split(":");
+    if (interaction.user.id !== ownerId) {
+      await interaction.reply({
+        content: "This help button isn't for you.",
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
+    const helpText = NOW_PLAYING_HELP_TEXTS[screenType]
+      ?? "No help available for this screen.";
+    const container = new ContainerBuilder().addTextDisplayComponents(
+      new TextDisplayBuilder().setContent(helpText),
+    );
+    await interaction.reply({
+      components: [container],
+      flags: buildComponentsV2Flags(true),
+    });
+  }
+
   @ButtonComponent({ id: /^nowplaying-edit-menu-note:\d+$/ })
   async handleNowPlayingEditMenuNote(interaction: ButtonInteraction): Promise<void> {
     const [, ownerId] = interaction.customId.split(":");
@@ -3810,7 +3856,17 @@ export class NowPlayingCommand {
         "## Journal Opt-In\nChoose one game to enable journal mode. This replaces note display for that game.",
       ),
     );
-    const pmComponents = await this.withPmNowPlayingList(ownerId, interaction.guildId, [container, row]);
+    const helpRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`${NOW_PLAYING_HELP_PREFIX}:journal-optin:${ownerId}`)
+        .setLabel("?")
+        .setStyle(ButtonStyle.Secondary),
+    );
+    const pmComponents = await this.withPmNowPlayingList(
+      ownerId,
+      interaction.guildId,
+      [container, row, helpRow],
+    );
     await safeReply(interaction, {
       components: pmComponents,
       flags: buildComponentsV2Flags(interaction.message.flags?.has(MessageFlags.Ephemeral) ?? true),
@@ -4586,7 +4642,13 @@ export class NowPlayingCommand {
         .setLabel("Remove Game")
         .setStyle(ButtonStyle.Danger),
     );
-    return [introContainer, listContainer, firstRow, secondRow];
+    const helpRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`${NOW_PLAYING_HELP_PREFIX}:edit-menu:${ownerId}`)
+        .setLabel("?")
+        .setStyle(ButtonStyle.Secondary),
+    );
+    return [introContainer, listContainer, firstRow, secondRow, helpRow];
   }
 
   private async returnToNowPlayingEditMenu(
@@ -4722,6 +4784,10 @@ export class NowPlayingCommand {
         .setCustomId(`nowplaying-complete-done:${ownerId}`)
         .setLabel("Done")
         .setStyle(ButtonStyle.Success),
+      new ButtonBuilder()
+        .setCustomId(`${NOW_PLAYING_HELP_PREFIX}:completion-pick:${ownerId}`)
+        .setLabel("?")
+        .setStyle(ButtonStyle.Secondary),
     );
     return [container, doneRow];
   }
@@ -4763,6 +4829,10 @@ export class NowPlayingCommand {
         .setCustomId(`nowplaying-remove-done:${ownerId}`)
         .setLabel("Done")
         .setStyle(ButtonStyle.Success),
+      new ButtonBuilder()
+        .setCustomId(`${NOW_PLAYING_HELP_PREFIX}:remove:${ownerId}`)
+        .setLabel("?")
+        .setStyle(ButtonStyle.Secondary),
     );
     return [container, selectRow, doneRow];
   }
@@ -4969,6 +5039,10 @@ export class NowPlayingCommand {
         .setCustomId(`nowplaying-list-cancel:${ownerId}`)
         .setLabel("Cancel")
         .setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder()
+        .setCustomId(`${NOW_PLAYING_HELP_PREFIX}:platform:${ownerId}`)
+        .setLabel("?")
+        .setStyle(ButtonStyle.Secondary),
     );
     components.push(actionRow);
     return components;
@@ -5024,6 +5098,10 @@ export class NowPlayingCommand {
       new ButtonBuilder()
         .setCustomId(`nowplaying-list-cancel:${ownerId}`)
         .setLabel("Cancel")
+        .setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder()
+        .setCustomId(`${NOW_PLAYING_HELP_PREFIX}:sort:${ownerId}`)
+        .setLabel("?")
         .setStyle(ButtonStyle.Secondary),
     );
     rows.push(actionRow);
@@ -5653,7 +5731,13 @@ export class NowPlayingCommand {
           .setStyle(ButtonStyle.Secondary),
       );
     }
-    return { components: [container, row], files };
+    const helpRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`${NOW_PLAYING_HELP_PREFIX}:journal-view:${ownerId}`)
+        .setLabel("?")
+        .setStyle(ButtonStyle.Secondary),
+    );
+    return { components: [container, row, helpRow], files };
   }
 
 
