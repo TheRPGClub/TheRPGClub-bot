@@ -4195,25 +4195,7 @@ export class NowPlayingCommand {
       });
       return;
     }
-    const list = await Member.getNowPlaying(ownerId);
-    const payload = await this.buildNowPlayingListPayload(
-      interaction.user,
-      list,
-      interaction.guildId,
-      "Your Now Playing List",
-    );
-    const components = this.withNowPlayingActions(
-      true,
-      ownerId,
-      payload.components,
-      false,
-      this.hasDisplayableNowPlayingNotes(list),
-    );
-    await interaction.update({
-      components,
-      files: payload.files,
-      flags: buildComponentsV2Flags(true),
-    });
+    await this.returnToNowPlayingEditMenu(interaction, ownerId);
   }
 
   async showSingle(
