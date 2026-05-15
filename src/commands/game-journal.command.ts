@@ -186,15 +186,11 @@ async function buildJournalViewPayload(
   const pageInfo = totalPages > 1 ? `, page ${safePage} of ${totalPages}` : "";
   const footer = `-# ${total} public ${entryLabel(total)}${pageInfo}`;
 
-  const introSection = new SectionBuilder().addTextDisplayComponents(
+  container.addTextDisplayComponents(
     new TextDisplayBuilder().setContent(
       `${ownerLabel}'s Game Journal\n## ${gameTitle}`,
     ),
   );
-  if (coverUrl) {
-    introSection.setThumbnailAccessory(new ThumbnailBuilder().setURL(coverUrl));
-  }
-  container.addSectionComponents(introSection);
   container.addSeparatorComponents(
     new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small).setDivider(true),
   );
@@ -211,9 +207,13 @@ async function buildJournalViewPayload(
   }
   entryLines.push(footer);
 
-  container.addTextDisplayComponents(
+  const entriesSection = new SectionBuilder().addTextDisplayComponents(
     new TextDisplayBuilder().setContent(entryLines.join("\n\n")),
   );
+  if (coverUrl) {
+    entriesSection.setThumbnailAccessory(new ThumbnailBuilder().setURL(coverUrl));
+  }
+  container.addSectionComponents(entriesSection);
 
   const pageRow = new ActionRowBuilder<ButtonBuilder>();
   if (safePage > 1) {
