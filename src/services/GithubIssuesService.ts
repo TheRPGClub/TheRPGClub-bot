@@ -138,7 +138,7 @@ function logGithubAuthDiagnostics(): void {
   );
   try {
     const pub = crypto.createPublicKey({ key: normalizedKey, format: "pem" });
-    const der = pub.export({ type: "pkcs1", format: "der" }) as Buffer;
+    const der = pub.export({ type: "spki", format: "der" }) as Buffer;
     const fingerprint = crypto.createHash("sha256").update(der).digest("base64");
     console.error(`[GithubAuth] Key fingerprint (compare to GitHub App settings): SHA256:${fingerprint}`);
   } catch (e: any) {
