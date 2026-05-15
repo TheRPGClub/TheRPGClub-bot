@@ -76,10 +76,11 @@ export async function buildJournalView(options: JournalViewOptions): Promise<{
   const countViewerId = isOwnerView ? ownerId : "__public__";
   const entriesViewerId: string | null = isOwnerView ? ownerId : null;
 
-  const [game, total, threadIds] = await Promise.all([
+  const [game, total, threadIds, memberRecord] = await Promise.all([
     Game.getGameById(gameId),
     Member.countGameJournalEntries(ownerId, gameId, countViewerId),
     getThreadsByGameId(gameId),
+    Member.getByUserId(ownerId),
   ]);
 
   const totalPages = Math.max(1, Math.ceil(total / JOURNAL_PAGE_SIZE));
@@ -110,7 +111,8 @@ export async function buildJournalView(options: JournalViewOptions): Promise<{
 
   const gameTitle = game?.title ?? `Game #${gameId}`;
   const emojiPrefix = getUserEmojiString(ownerId);
-  const ownerTag = emojiPrefix ? `${emojiPrefix} <@${ownerId}>` : `<@${ownerId}>`;
+  const ownerName = memberRecord?.globalName ?? memberRecord?.username ?? ownerId;
+  const ownerTag = emojiPrefix ? `${emojiPrefix} ${ownerName}` : ownerName;
 
   // Container 1: owner header
   const headerContainer = new ContainerBuilder().addTextDisplayComponents(
