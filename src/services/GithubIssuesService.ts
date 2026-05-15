@@ -136,6 +136,14 @@ function logGithubAuthDiagnostics(): void {
     ` KEY_HAS_HEADER=${hasHeader}` +
     ` KEY_HAS_FOOTER=${hasFooter}`,
   );
+  try {
+    const pub = crypto.createPublicKey({ key: normalizedKey, format: "pem" });
+    const der = pub.export({ type: "pkcs1", format: "der" }) as Buffer;
+    const fingerprint = crypto.createHash("sha256").update(der).digest("base64");
+    console.error(`[GithubAuth] Key fingerprint (compare to GitHub App settings): SHA256:${fingerprint}`);
+  } catch (e: any) {
+    console.error(`[GithubAuth] Failed to derive public key fingerprint: ${e?.message}`);
+  }
 }
 
 async function getInstallationToken(): Promise<string> {
