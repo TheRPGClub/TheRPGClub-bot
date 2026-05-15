@@ -180,11 +180,16 @@ async function buildJournalViewPayload(
     coverUrl = `attachment://${filename}`;
   }
 
+  const gameTitle = game?.title ?? `Game #${gameId}`;
+  const pageInfo = totalPages > 1 ? `, page ${safePage} of ${totalPages}` : "";
   const introSection = new SectionBuilder().addTextDisplayComponents(
     new TextDisplayBuilder().setContent(
-      `## ${ownerLabel}'s Game Journal: ${game?.title ?? `Game #${gameId}`}`,
+      [
+        `${ownerLabel}'s Game Journal`,
+        `**${gameTitle}**`,
+        `-# ${total} public ${entryLabel(total)}${pageInfo}`,
+      ].join("\n"),
     ),
-    new TextDisplayBuilder().setContent(`${total} public ${entryLabel(total)}`),
   );
   if (coverUrl) {
     introSection.setThumbnailAccessory(new ThumbnailBuilder().setURL(coverUrl));
