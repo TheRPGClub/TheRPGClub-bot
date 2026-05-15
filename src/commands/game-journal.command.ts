@@ -1,7 +1,6 @@
 import {
   ActionRowBuilder,
   ApplicationCommandOptionType,
-  AttachmentBuilder,
   ButtonBuilder,
   ButtonInteraction,
   ButtonStyle,
@@ -19,30 +18,21 @@ import {
   Slash,
   SlashOption,
 } from "discordx";
-import {
-  ContainerBuilder,
-  SectionBuilder,
-  TextDisplayBuilder,
-  ThumbnailBuilder,
-} from "@discordjs/builders";
 import Member, {
   type IGameJournalListEntry,
   type IJournalUserSummary,
 } from "../classes/Member.js";
-import Game from "../classes/Game.js";
 import {
   safeDeferReply,
   safeDeferUpdate,
   safeReply,
   safeUpdate,
 } from "../functions/InteractionUtils.js";
-import { formatTableDate } from "../commands/profile.command.js";
-import { COMPONENTS_V2_FLAG } from "../config/flags.js";
 import { getUserEmojiString } from "../services/UserEmojiService.js";
+import { buildJournalView } from "../functions/journalView.js";
 
 const LIST_PAGE_SIZE = 15;
 const ALL_PAGE_SIZE = 20;
-const JOURNAL_PAGE_SIZE = 5;
 
 const GJ_LIST_SELECT_PREFIX = "game-journal-list-select";
 const GJ_LIST_PAGE_PREFIX = "game-journal-list-page";
@@ -55,10 +45,6 @@ const GJ_ALL_PAGE_PREFIX = "game-journal-all-page";
 // customId: GJ_VIEW_PAGE_PREFIX:{callerId}:{targetUserId}:{gameId}:{page}
 // customId: GJ_ALL_SELECT_PREFIX:{callerId}:{page}                  value=userId
 // customId: GJ_ALL_PAGE_PREFIX:{callerId}:{page}
-
-function trimContent(text: string): string {
-  return text.length <= 4000 ? text : `${text.slice(0, 3997)}...`;
-}
 
 function gameLabel(n: number): string {
   return n === 1 ? "game" : "games";
@@ -146,99 +132,22 @@ function buildListPageRow(
   return row.components.length > 0 ? row : null;
 }
 
-async function buildJournalViewPayload(
+function buildJournalViewPayload(
   callerId: string,
   targetUserId: string,
   gameId: number,
   page: number,
-): Promise<{
-  components: Array<ContainerBuilder | ActionRowBuilder<ButtonBuilder>>;
-  files: AttachmentBuilder[];
-  flags: number;
-  allowedMentions: { users: string[] };
-}> {
-  const game = await Game.getGameById(gameId);
-
-  const total = await Member.countGameJournalEntries(targetUserId, gameId, "__public__");
-  const totalPages = Math.max(1, Math.ceil(total / JOURNAL_PAGE_SIZE));
-  const safePage = Math.min(Math.max(page, 1), totalPages);
-  const offset = (safePage - 1) * JOURNAL_PAGE_SIZE;
-
-  const entries = await Member.getGameJournalEntries(targetUserId, gameId, {
-    viewerUserId: null,
-    limit: JOURNAL_PAGE_SIZE,
-    offset,
+) {
+  return buildJournalView({
+    ownerId: targetUserId,
+    viewerId: null,
+    gameId,
+    page,
+    prevPageCustomId: (p) =>
+      `${GJ_VIEW_PAGE_PREFIX}:${callerId}:${targetUserId}:${gameId}:${p}`,
+    nextPageCustomId: (p) =>
+      `${GJ_VIEW_PAGE_PREFIX}:${callerId}:${targetUserId}:${gameId}:${p}`,
   });
-
-  const files: AttachmentBuilder[] = [];
-
-  let coverUrl: string | null = null;
-  if (game?.imageData) {
-    const filename = `game_journal_${gameId}.png`;
-    files.push(new AttachmentBuilder(game.imageData, { name: filename }));
-    coverUrl = `attachment://${filename}`;
-  }
-
-  const gameTitle = game?.title ?? `Game #${gameId}`;
-  const pageInfo = totalPages > 1 ? `, page ${safePage} of ${totalPages}` : "";
-  const footer = `-# ${total} public ${entryLabel(total)}${pageInfo}`;
-
-  const emojiPrefix = getUserEmojiString(targetUserId);
-  const ownerTag = emojiPrefix ? `${emojiPrefix} <@${targetUserId}>` : `<@${targetUserId}>`;
-
-  const entryLines: string[] = [];
-  if (!entries.length) {
-    entryLines.push("No public journal entries for this game.");
-  } else {
-    for (const entry of entries) {
-      const titleLine = entry.title ? `### ${entry.title}` : "### Untitled Entry";
-      const date = formatTableDate(entry.createdAt);
-      entryLines.push(`${titleLine}\n-# ${date}\n${trimContent(entry.body)}`);
-    }
-  }
-  entryLines.push(footer);
-
-  const section = new SectionBuilder()
-    .addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(`## ${gameTitle}\n${ownerTag}'s Game Journal\n\n`),
-    )
-    .addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(entryLines.join("\n\n")),
-    );
-  if (coverUrl) {
-    section.setThumbnailAccessory(new ThumbnailBuilder().setURL(coverUrl));
-  }
-
-  const container = new ContainerBuilder().addSectionComponents(section);
-
-  const pageRow = new ActionRowBuilder<ButtonBuilder>();
-  if (safePage > 1) {
-    pageRow.addComponents(
-      new ButtonBuilder()
-        .setCustomId(
-          `${GJ_VIEW_PAGE_PREFIX}:${callerId}:${targetUserId}:${gameId}:${safePage - 1}`,
-        )
-        .setLabel("Previous")
-        .setStyle(ButtonStyle.Secondary),
-    );
-  }
-  if (safePage < totalPages) {
-    pageRow.addComponents(
-      new ButtonBuilder()
-        .setCustomId(
-          `${GJ_VIEW_PAGE_PREFIX}:${callerId}:${targetUserId}:${gameId}:${safePage + 1}`,
-        )
-        .setLabel("Next")
-        .setStyle(ButtonStyle.Secondary),
-    );
-  }
-
-  const components: Array<ContainerBuilder | ActionRowBuilder<ButtonBuilder>> = [container];
-  if (pageRow.components.length > 0) {
-    components.push(pageRow);
-  }
-
-  return { components, files, flags: COMPONENTS_V2_FLAG, allowedMentions: { users: [] } };
 }
 
 function buildAllEmbed(
