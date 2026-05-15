@@ -113,11 +113,25 @@ function buildAppJwt(): string {
   const payloadToken = toBase64Url(JSON.stringify(payload));
   const data = `${headerToken}.${payloadToken}`;
   const key = GITHUB_APP_PRIVATE_KEY.replace(/\\n/g, "\n");
+  const signingKeyFirstLine = key.split("\n")[0] ?? "(empty)";
+  console.error(`[GithubAuth] Signing key first line: "${signingKeyFirstLine}"`);
+  console.error(`[GithubAuth] Signing key total length: ${key.length}`);
   const signature = crypto
     .createSign("RSA-SHA256")
     .update(data)
     .sign(key);
   const jwt = `${data}.${toBase64Url(signature)}`;
+  try {
+    const pub = crypto.createPublicKey({ key, format: "pem" });
+    const sigBuf = Buffer.from(toBase64Url(signature).replace(/-/g, "+").replace(/_/g, "/"), "base64");
+    const selfVerified = crypto.createVerify("RSA-SHA256").update(data).verify(pub, sigBuf);
+    const spkiDer = pub.export({ type: "spki", format: "der" }) as Buffer;
+    const signingFingerprint = crypto.createHash("sha256").update(spkiDer).digest("base64");
+    console.error(`[GithubAuth] Signing key fingerprint: SHA256:${signingFingerprint}`);
+    console.error(`[GithubAuth] JWT self-verification: ${selfVerified}`);
+  } catch (e: any) {
+    console.error(`[GithubAuth] Self-verification error: ${e?.message}`);
+  }
   console.error(`[GithubAuth] JWT payload (decoded): ${Buffer.from(payloadToken, "base64").toString("utf8")}`);
   console.error(`[GithubAuth] Full JWT (paste at jwt.io to inspect): ${jwt}`);
   return jwt;
