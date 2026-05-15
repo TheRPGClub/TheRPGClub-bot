@@ -197,7 +197,26 @@ async function getInstallationToken(): Promise<string> {
             `[GithubAuth] JWT->token exchange failed. Status: ${res.statusCode}` +
             ` | Response: ${raw}`,
           );
-          reject(err);
+          const appReq = https.request({
+            hostname: "api.github.com",
+            path: "/app",
+            method: "GET",
+            headers: {
+              Authorization: `Bearer ${jwt}`,
+              Accept: "application/vnd.github+json",
+              "X-GitHub-Api-Version": GITHUB_API_VERSION,
+              "User-Agent": "RPGClubBot",
+            },
+          }, (appRes) => {
+            let appRaw = "";
+            appRes.on("data", (c) => { appRaw += c; });
+            appRes.on("end", () => {
+              console.error(`[GithubAuth] GET /app status: ${appRes.statusCode} | Response: ${appRaw}`);
+              reject(err);
+            });
+          });
+          appReq.on("error", () => reject(err));
+          appReq.end();
           return;
         }
         try {
