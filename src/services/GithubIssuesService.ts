@@ -179,6 +179,21 @@ async function getInstallationToken(): Promise<string> {
       ` | Response: ${JSON.stringify(responseData ?? err?.message)}`,
     );
     logGithubAuthDiagnostics();
+    try {
+      const appCheckResponse = await axios.get(`${GITHUB_API_BASE}/app`, {
+        headers: {
+          Authorization: `Bearer ${jwt}`,
+          Accept: "application/vnd.github+json",
+          "X-GitHub-Api-Version": GITHUB_API_VERSION,
+        },
+      });
+      console.error(`[GithubAuth] GET /app succeeded: ${JSON.stringify(appCheckResponse.data)}`);
+    } catch (appErr: any) {
+      console.error(
+        `[GithubAuth] GET /app also failed. Status: ${appErr?.response?.status ?? "no response"}` +
+        ` | Response: ${JSON.stringify(appErr?.response?.data ?? appErr?.message)}`,
+      );
+    }
     throw err;
   }
 }
