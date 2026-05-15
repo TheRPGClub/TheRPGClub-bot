@@ -58,6 +58,7 @@ import {
   type AnyRepliable,
 } from "../functions/InteractionUtils.js";
 import Game, { type IGame } from "../classes/Game.js";
+import { buildJournalView } from "../functions/journalView.js";
 import { igdbService } from "../services/IGDB/IgdbService.js";
 import {
   createIgdbSession,
@@ -3221,6 +3222,7 @@ export class NowPlayingCommand {
       components: payload.components,
       files: payload.files,
       flags: buildComponentsV2Flags(interaction.message.flags?.has(MessageFlags.Ephemeral) ?? false),
+      allowedMentions: payload.allowedMentions,
     });
     await this.trackJournalReply(interaction, ownerId, gameId);
   }
@@ -3279,6 +3281,7 @@ export class NowPlayingCommand {
       components: payload.components,
       files: payload.files,
       flags: buildComponentsV2Flags(interaction.message.flags?.has(MessageFlags.Ephemeral) ?? false),
+      allowedMentions: payload.allowedMentions,
     });
     await this.trackJournalReply(interaction, ownerId, gameId);
   }
@@ -3596,6 +3599,7 @@ export class NowPlayingCommand {
       components: payload.components,
       files: payload.files,
       flags: buildComponentsV2Flags(interaction.message.flags?.has(MessageFlags.Ephemeral) ?? false),
+      allowedMentions: payload.allowedMentions,
     });
   }
 
@@ -3641,6 +3645,7 @@ export class NowPlayingCommand {
       components: payload.components,
       files: payload.files,
       flags: buildComponentsV2Flags(true),
+      allowedMentions: payload.allowedMentions,
     });
   }
 
@@ -3698,6 +3703,7 @@ export class NowPlayingCommand {
       components: payload.components,
       files: payload.files,
       flags: buildComponentsV2Flags(true),
+      allowedMentions: payload.allowedMentions,
     });
     await this.trackJournalReply(interaction, ownerId, gameId);
   }
@@ -5593,162 +5599,53 @@ export class NowPlayingCommand {
     return member?.roleRegular === 1;
   }
 
-  private async buildJournalComponents(
+  private buildJournalComponents(
     ownerId: string,
     viewerId: string,
     gameId: number,
     page: number,
-  ): Promise<{
-    components: Array<ContainerBuilder | ActionRowBuilder<ButtonBuilder>>;
-    files: AttachmentBuilder[];
-  }> {
-    const perPage = 5;
-    const game = await Game.getGameById(gameId);
-    const files: AttachmentBuilder[] = [];
-    const ownerProfile = await Member.getByUserId(ownerId);
-    const ownerLabel = ownerProfile?.globalName ?? ownerProfile?.username ?? ownerId;
-    const nowPlayingMeta = await Member.getNowPlayingEntryMeta(ownerId, gameId);
-    const completions = await Member.getCompletionsForGame(ownerId, gameId);
-    const pref = await Member.getGameJournalPreference(ownerId, gameId);
-    const isEnabled = pref?.isEnabled === true;
-    const isOwnerView = ownerId === viewerId;
-    const offset = (page - 1) * perPage;
-    const total = await Member.countGameJournalEntries(ownerId, gameId, viewerId);
-    const entries = await Member.getGameJournalEntries(ownerId, gameId, {
-      viewerUserId: viewerId,
-      limit: perPage,
-      offset,
-    });
-    const totalPages = Math.max(1, Math.ceil(total / perPage));
-    const safePage = Math.min(Math.max(page, 1), totalPages);
-
-    const container = new ContainerBuilder();
-    let coverUrl: string | null = null;
-    if (game?.imageData) {
-      const filename = `game_journal_${gameId}.png`;
-      files.push(new AttachmentBuilder(game.imageData, { name: filename }));
-      coverUrl = `attachment://${filename}`;
-    }
-    const introTextDisplays = [
-      new TextDisplayBuilder().setContent(
-        `## ${ownerLabel}'s Game Journal: ${game?.title ?? `Game #${gameId}`}`,
-      ),
-    ];
-    if (nowPlayingMeta?.addedAt) {
-      introTextDisplays.push(
-        new TextDisplayBuilder().setContent(
-          `Now Playing since ${formatTableDate(nowPlayingMeta.addedAt)}`,
+  ) {
+    const isOwnerView = viewerId === ownerId;
+    return buildJournalView({
+      ownerId,
+      viewerId,
+      gameId,
+      page,
+      prevPageCustomId: (p) =>
+        `${NOW_PLAYING_JOURNAL_PAGE_PREFIX}:${ownerId}:${gameId}:prev:${p}`,
+      nextPageCustomId: (p) =>
+        `${NOW_PLAYING_JOURNAL_PAGE_PREFIX}:${ownerId}:${gameId}:next:${p}`,
+      buildOwnerButtons: isOwnerView
+        ? (safePage, hasEntries) => [
+            new ButtonBuilder()
+              .setCustomId(`${NOW_PLAYING_JOURNAL_ADD_PREFIX}:${ownerId}:${gameId}:${safePage}`)
+              .setLabel("Add Entry")
+              .setStyle(ButtonStyle.Success),
+            new ButtonBuilder()
+              .setCustomId(`${NOW_PLAYING_JOURNAL_EDIT_PREFIX}:${ownerId}:${gameId}:${safePage}`)
+              .setLabel("Edit Entry")
+              .setStyle(ButtonStyle.Primary)
+              .setDisabled(!hasEntries),
+            new ButtonBuilder()
+              .setCustomId(
+                `${NOW_PLAYING_JOURNAL_DELETE_PREFIX}:${ownerId}:${gameId}:${safePage}`,
+              )
+              .setLabel("Delete Entry")
+              .setStyle(ButtonStyle.Danger)
+              .setDisabled(!hasEntries),
+          ]
+        : undefined,
+      extraRows: [
+        new ActionRowBuilder<ButtonBuilder>().addComponents(
+          new ButtonBuilder()
+            .setCustomId(`${NOW_PLAYING_HELP_PREFIX}:journal-view:${ownerId}`)
+            .setLabel("?")
+            .setStyle(ButtonStyle.Secondary),
         ),
-      );
-    }
-    const totalEntriesLine = `${total} Entries`;
-    introTextDisplays.push(
-      new TextDisplayBuilder().setContent(totalEntriesLine),
-    );
-    const introSection = new SectionBuilder().addTextDisplayComponents(...introTextDisplays);
-    if (coverUrl) {
-      introSection.setThumbnailAccessory(new ThumbnailBuilder().setURL(coverUrl));
-    }
-    container.addSectionComponents(introSection);
-    if (completions.length) {
-      const completionLines: string[] = [];
-      for (const completion of completions) {
-        const platform = completion.platformId
-          ? await Game.getPlatformById(completion.platformId).catch(() => null)
-          : null;
-        const platformName = platform?.abbreviation ?? platform?.name ?? "Unknown Platform";
-        const completedDate = completion.completedAt
-          ? formatTableDate(completion.completedAt)
-          : "Unknown Date";
-        const playtime = formatPlaytimeHours(completion.finalPlaytimeHours);
-        const parts = [
-          completion.completionType,
-          completedDate,
-          platformName,
-          playtime,
-          `Completion #${completion.completionId}`,
-        ].filter(Boolean);
-        completionLines.push(`- ${parts.join(" | ")}`);
-      }
-      container.addTextDisplayComponents(
-        new TextDisplayBuilder().setContent(`Completions:\n${completionLines.join("\n")}`),
-      );
-    }
-    if (!isEnabled) {
-      container.addTextDisplayComponents(
-        new TextDisplayBuilder().setContent("Journal mode is not enabled for this game."),
-      );
-    } else if (!entries.length) {
-      container.addTextDisplayComponents(
-        new TextDisplayBuilder().setContent("No journal entries yet."),
-      );
-    } else {
-      for (const entry of entries) {
-        if (!isOwnerView && !entry.isPublic) {
-          container.addTextDisplayComponents(
-            new TextDisplayBuilder().setContent(
-              `### Private Entry\n-# ${formatTableDate(entry.createdAt)}\nThis entry is private.`,
-            ),
-          );
-          continue;
-        }
-        const title = entry.title ? `### ${entry.title}` : "### Untitled Entry";
-        const privacy = entry.isPublic ? "Public" : "Private";
-        const body = this.trimTextDisplayContent(entry.body);
-        container.addTextDisplayComponents(
-          new TextDisplayBuilder().setContent(
-            `${title}\n-# ${formatTableDate(entry.createdAt)} | ${privacy}\n${body}`,
-          ),
-        );
-      }
-    }
-
-    const row = new ActionRowBuilder<ButtonBuilder>();
-    if (isEnabled) {
-      row.addComponents(
-        new ButtonBuilder()
-          .setCustomId(`${NOW_PLAYING_JOURNAL_ADD_PREFIX}:${ownerId}:${gameId}:${safePage}`)
-          .setLabel("Add Entry")
-          .setStyle(ButtonStyle.Success),
-        new ButtonBuilder()
-          .setCustomId(`${NOW_PLAYING_JOURNAL_EDIT_PREFIX}:${ownerId}:${gameId}:${safePage}`)
-          .setLabel("Edit Entry")
-          .setStyle(ButtonStyle.Primary)
-          .setDisabled(entries.length === 0),
-        new ButtonBuilder()
-          .setCustomId(`${NOW_PLAYING_JOURNAL_DELETE_PREFIX}:${ownerId}:${gameId}:${safePage}`)
-          .setLabel("Delete Entry")
-          .setStyle(ButtonStyle.Danger)
-          .setDisabled(entries.length === 0),
-      );
-    }
-    if (safePage > 1) {
-      row.addComponents(
-        new ButtonBuilder()
-          .setCustomId(
-            `${NOW_PLAYING_JOURNAL_PAGE_PREFIX}:${ownerId}:${gameId}:prev:${Math.max(1, safePage - 1)}`,
-          )
-          .setLabel("Prev")
-          .setStyle(ButtonStyle.Secondary),
-      );
-    }
-    if (safePage < totalPages) {
-      row.addComponents(
-        new ButtonBuilder()
-          .setCustomId(
-            `${NOW_PLAYING_JOURNAL_PAGE_PREFIX}:${ownerId}:${gameId}:next:${Math.min(totalPages, safePage + 1)}`,
-          )
-          .setLabel("Next")
-          .setStyle(ButtonStyle.Secondary),
-      );
-    }
-    const helpRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
-      new ButtonBuilder()
-        .setCustomId(`${NOW_PLAYING_HELP_PREFIX}:journal-view:${ownerId}`)
-        .setLabel("?")
-        .setStyle(ButtonStyle.Secondary),
-    );
-    return { components: [container, row, helpRow], files };
+      ],
+      includeNowPlayingMeta: true,
+      includeCompletions: true,
+    });
   }
 
 
