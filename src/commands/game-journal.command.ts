@@ -200,7 +200,7 @@ async function buildJournalViewPayload(
 
   const section = new SectionBuilder()
     .addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(`${ownerTag}'s Game Journal\n## ${gameTitle}`),
+      new TextDisplayBuilder().setContent(`## ${gameTitle}\n${ownerTag}'s Game Journal\n\n`),
     )
     .addTextDisplayComponents(
       new TextDisplayBuilder().setContent(entryLines.join("\n\n")),
