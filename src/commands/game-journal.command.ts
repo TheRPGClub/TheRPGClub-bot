@@ -40,15 +40,20 @@ import { formatTableDate } from "../commands/profile.command.js";
 import { COMPONENTS_V2_FLAG } from "../config/flags.js";
 
 const LIST_PAGE_SIZE = 15;
+const ALL_PAGE_SIZE = 20;
 const JOURNAL_PAGE_SIZE = 5;
 
 const GJ_LIST_SELECT_PREFIX = "game-journal-list-select";
 const GJ_LIST_PAGE_PREFIX = "game-journal-list-page";
 const GJ_VIEW_PAGE_PREFIX = "game-journal-view-page";
+const GJ_ALL_SELECT_PREFIX = "game-journal-all-select";
+const GJ_ALL_PAGE_PREFIX = "game-journal-all-page";
 
-// customId: GJ_LIST_SELECT_PREFIX:{callerId}:{targetUserId}:{page}
+// customId: GJ_LIST_SELECT_PREFIX:{callerId}:{targetUserId}:{page}  value=gameId
 // customId: GJ_LIST_PAGE_PREFIX:{callerId}:{targetUserId}:{page}
 // customId: GJ_VIEW_PAGE_PREFIX:{callerId}:{targetUserId}:{gameId}:{page}
+// customId: GJ_ALL_SELECT_PREFIX:{callerId}:{page}                  value=userId
+// customId: GJ_ALL_PAGE_PREFIX:{callerId}:{page}
 
 function trimContent(text: string): string {
   return text.length <= 4000 ? text : `${text.slice(0, 3997)}...`;
@@ -232,19 +237,66 @@ async function buildJournalViewPayload(
   return { components, files, flags: COMPONENTS_V2_FLAG };
 }
 
-function buildAllJournalsEmbed(summaries: IJournalUserSummary[]): EmbedBuilder {
-  const embed = new EmbedBuilder().setTitle("Game Journal Users");
-  if (!summaries.length) {
-    embed.setDescription("No members are currently using Game Journals.");
-    return embed;
-  }
-  const lines = summaries.map(
+function buildAllEmbed(
+  summaries: IJournalUserSummary[],
+  page: number,
+  totalPages: number,
+): EmbedBuilder {
+  const start = page * ALL_PAGE_SIZE;
+  const pageSummaries = summaries.slice(start, start + ALL_PAGE_SIZE);
+  const memberLabel = summaries.length === 1 ? "member" : "members";
+  const lines = pageSummaries.map(
     (s) => `<@${s.userId}> — ${s.gameCount} ${gameLabel(s.gameCount)}`,
   );
-  embed
+  return new EmbedBuilder()
+    .setTitle("Game Journal Users")
     .setDescription(lines.join("\n"))
-    .setFooter({ text: `${summaries.length} ${summaries.length === 1 ? "member" : "members"}` });
-  return embed;
+    .setFooter({ text: `${summaries.length} ${memberLabel} • Page ${page + 1}/${totalPages}` });
+}
+
+function buildAllSelectRow(
+  summaries: IJournalUserSummary[],
+  callerId: string,
+  page: number,
+): ActionRowBuilder<StringSelectMenuBuilder> {
+  const start = page * ALL_PAGE_SIZE;
+  const pageSummaries = summaries.slice(start, start + ALL_PAGE_SIZE);
+  const options = pageSummaries.map((s) => ({
+    label: (s.globalName ?? s.username ?? s.userId).slice(0, 100),
+    value: s.userId,
+    description: `${s.gameCount} ${gameLabel(s.gameCount)}`,
+  }));
+  const select = new StringSelectMenuBuilder()
+    .setCustomId(`${GJ_ALL_SELECT_PREFIX}:${callerId}:${page}`)
+    .setPlaceholder("Select a member to view their journals")
+    .addOptions(options);
+  return new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select);
+}
+
+function buildAllPageRow(
+  callerId: string,
+  page: number,
+  totalPages: number,
+): ActionRowBuilder<ButtonBuilder> | null {
+  if (totalPages <= 1) return null;
+  const row = new ActionRowBuilder<ButtonBuilder>();
+  if (page > 0) {
+    row.addComponents(
+      new ButtonBuilder()
+        .setCustomId(`${GJ_ALL_PAGE_PREFIX}:${callerId}:${page - 1}`)
+        .setLabel("Previous")
+        .setStyle(ButtonStyle.Secondary),
+    );
+  }
+  if (page < totalPages - 1) {
+    row.addComponents(
+      new ButtonBuilder()
+        .setCustomId(`${GJ_ALL_PAGE_PREFIX}:${callerId}:${page + 1}`)
+        .setLabel("Next")
+        .setStyle(ButtonStyle.Secondary),
+    );
+  }
+  return row.components.length > 0 ? row : null;
 }
 
 @Discord()
@@ -283,7 +335,20 @@ export class GameJournalCommand {
 
     if (all === true && member === undefined) {
       const summaries = await Member.getAllJournalUsers();
-      await safeReply(interaction, { embeds: [buildAllJournalsEmbed(summaries)], flags });
+      if (!summaries.length) {
+        await safeReply(interaction, {
+          content: "No members are currently using Game Journals.",
+          flags,
+        });
+        return;
+      }
+      const totalPages = Math.max(1, Math.ceil(summaries.length / ALL_PAGE_SIZE));
+      const page = 0;
+      const embed = buildAllEmbed(summaries, page, totalPages);
+      const selectRow = buildAllSelectRow(summaries, interaction.user.id, page);
+      const pageRow = buildAllPageRow(interaction.user.id, page, totalPages);
+      const components = pageRow ? [selectRow, pageRow] : [selectRow];
+      await safeReply(interaction, { embeds: [embed], components, flags });
       return;
     }
 
@@ -366,6 +431,70 @@ export class GameJournalCommand {
     const selectRow = buildListSelectRow(entries, callerId, targetUserId, safePage);
     const pageRow = buildListPageRow(callerId, targetUserId, safePage, totalPages);
 
+    const components = pageRow ? [selectRow, pageRow] : [selectRow];
+    await safeUpdate(interaction, { embeds: [embed], components });
+  }
+
+  @SelectMenuComponent({ id: new RegExp(`^${GJ_ALL_SELECT_PREFIX}:\\d+:\\d+$`) })
+  async handleAllSelect(interaction: StringSelectMenuInteraction): Promise<void> {
+    const [, callerId] = interaction.customId.split(":");
+    if (interaction.user.id !== callerId) {
+      await safeReply(interaction, {
+        content: "This member list isn't yours to navigate.",
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
+
+    const targetUserId = interaction.values[0];
+    if (!targetUserId) return;
+
+    await safeDeferUpdate(interaction);
+
+    const target = await interaction.client.users.fetch(targetUserId).catch(() => null);
+    if (!target) return;
+
+    const entries = await Member.getGameJournalList(targetUserId);
+    if (!entries.length) {
+      await safeUpdate(interaction, {
+        content: `${target.displayName ?? target.username} has no game journals.`,
+        embeds: [],
+        components: [],
+      });
+      return;
+    }
+
+    const totalPages = Math.max(1, Math.ceil(entries.length / LIST_PAGE_SIZE));
+    const page = 0;
+    const embed = buildListEmbed(target, entries, false, page, totalPages);
+    const selectRow = buildListSelectRow(entries, callerId, targetUserId, page);
+    const pageRow = buildListPageRow(callerId, targetUserId, page, totalPages);
+    const components = pageRow ? [selectRow, pageRow] : [selectRow];
+    await safeUpdate(interaction, { embeds: [embed], components });
+  }
+
+  @ButtonComponent({ id: new RegExp(`^${GJ_ALL_PAGE_PREFIX}:\\d+:\\d+$`) })
+  async handleAllPage(interaction: ButtonInteraction): Promise<void> {
+    const [, callerId, pageRaw] = interaction.customId.split(":");
+    if (interaction.user.id !== callerId) {
+      await safeReply(interaction, {
+        content: "This member list isn't yours to navigate.",
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
+
+    const page = Number(pageRaw);
+    if (Number.isNaN(page)) return;
+
+    await safeDeferUpdate(interaction);
+
+    const summaries = await Member.getAllJournalUsers();
+    const totalPages = Math.max(1, Math.ceil(summaries.length / ALL_PAGE_SIZE));
+    const safePage = Math.min(Math.max(page, 0), totalPages - 1);
+    const embed = buildAllEmbed(summaries, safePage, totalPages);
+    const selectRow = buildAllSelectRow(summaries, callerId, safePage);
+    const pageRow = buildAllPageRow(callerId, safePage, totalPages);
     const components = pageRow ? [selectRow, pageRow] : [selectRow];
     await safeUpdate(interaction, { embeds: [embed], components });
   }
