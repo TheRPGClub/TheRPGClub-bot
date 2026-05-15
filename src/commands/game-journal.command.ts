@@ -22,11 +22,9 @@ import {
 import {
   ContainerBuilder,
   SectionBuilder,
-  SeparatorBuilder,
   TextDisplayBuilder,
   ThumbnailBuilder,
 } from "@discordjs/builders";
-import { SeparatorSpacingSize } from "discord-api-types/v10";
 import Member, {
   type IGameJournalListEntry,
   type IJournalUserSummary,
@@ -157,10 +155,9 @@ async function buildJournalViewPayload(
   components: Array<ContainerBuilder | ActionRowBuilder<ButtonBuilder>>;
   files: AttachmentBuilder[];
   flags: number;
+  allowedMentions: { users: string[] };
 }> {
   const game = await Game.getGameById(gameId);
-  const ownerProfile = await Member.getByUserId(targetUserId);
-  const ownerLabel = ownerProfile?.globalName ?? ownerProfile?.username ?? targetUserId;
 
   const total = await Member.countGameJournalEntries(targetUserId, gameId, "__public__");
   const totalPages = Math.max(1, Math.ceil(total / JOURNAL_PAGE_SIZE));
@@ -174,7 +171,6 @@ async function buildJournalViewPayload(
   });
 
   const files: AttachmentBuilder[] = [];
-  const container = new ContainerBuilder();
 
   let coverUrl: string | null = null;
   if (game?.imageData) {
@@ -187,14 +183,8 @@ async function buildJournalViewPayload(
   const pageInfo = totalPages > 1 ? `, page ${safePage} of ${totalPages}` : "";
   const footer = `-# ${total} public ${entryLabel(total)}${pageInfo}`;
 
-  container.addTextDisplayComponents(
-    new TextDisplayBuilder().setContent(
-      `${ownerLabel}'s Game Journal\n## ${gameTitle}`,
-    ),
-  );
-  container.addSeparatorComponents(
-    new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small).setDivider(true),
-  );
+  const emojiPrefix = getUserEmojiString(targetUserId);
+  const ownerTag = emojiPrefix ? `${emojiPrefix} <@${targetUserId}>` : `<@${targetUserId}>`;
 
   const entryLines: string[] = [];
   if (!entries.length) {
@@ -208,13 +198,18 @@ async function buildJournalViewPayload(
   }
   entryLines.push(footer);
 
-  const entriesSection = new SectionBuilder().addTextDisplayComponents(
-    new TextDisplayBuilder().setContent(entryLines.join("\n\n")),
-  );
+  const section = new SectionBuilder()
+    .addTextDisplayComponents(
+      new TextDisplayBuilder().setContent(`${ownerTag}'s Game Journal\n## ${gameTitle}`),
+    )
+    .addTextDisplayComponents(
+      new TextDisplayBuilder().setContent(entryLines.join("\n\n")),
+    );
   if (coverUrl) {
-    entriesSection.setThumbnailAccessory(new ThumbnailBuilder().setURL(coverUrl));
+    section.setThumbnailAccessory(new ThumbnailBuilder().setURL(coverUrl));
   }
-  container.addSectionComponents(entriesSection);
+
+  const container = new ContainerBuilder().addSectionComponents(section);
 
   const pageRow = new ActionRowBuilder<ButtonBuilder>();
   if (safePage > 1) {
@@ -243,7 +238,7 @@ async function buildJournalViewPayload(
     components.push(pageRow);
   }
 
-  return { components, files, flags: COMPONENTS_V2_FLAG };
+  return { components, files, flags: COMPONENTS_V2_FLAG, allowedMentions: { users: [] } };
 }
 
 function buildAllEmbed(
@@ -411,6 +406,7 @@ export class GameJournalCommand {
       components: payload.components,
       files: payload.files,
       flags: payload.flags,
+      allowedMentions: payload.allowedMentions,
     });
   }
 
@@ -531,6 +527,7 @@ export class GameJournalCommand {
       components: payload.components,
       files: payload.files,
       flags: payload.flags,
+      allowedMentions: payload.allowedMentions,
     });
   }
 }
