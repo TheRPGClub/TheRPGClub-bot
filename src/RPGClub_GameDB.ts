@@ -30,6 +30,7 @@ import { startThreadLinkPromptService } from "./services/ThreadLinkPromptService
 import { refreshGiveawayHubMessage } from "./services/GiveawayHubService.js";
 import { startGameReleaseAnnouncementService } from "./services/GameReleaseAnnouncementService.js";
 import { startIgdbScanService } from "./services/IGDB/IgdbScanService.js";
+import { startUserEmojiService } from "./services/UserEmojiService.js";
 import { tryHandleManagedRawModalInteraction } from "./services/raw-modal/RawModalInteractionRouter.js";
 installConsoleLogging();
 
@@ -193,6 +194,7 @@ bot.once("clientReady", async () => {
   await joinAllTargetForumThreads(bot);
   startRssFeedService(bot);
   await refreshGiveawayHubMessage(bot);
+  await startUserEmojiService(bot);
   console.log("Startup sequence completed.");
 });
 

@@ -4,6 +4,11 @@ import { Discord, On } from "discordx";
 import Member, { type IMemberRecord } from "../classes/Member.js";
 import { formatTimestampWithDay, resolveLogChannel } from "../utilities/DiscordLogUtils.js";
 import { logAvatarChange, updateAvatarRecordFromUrl } from "../utilities/AvatarLogUtils.js";
+import {
+  ensureUserEmojiForMember,
+  syncUserEmojiFromAvatarChange,
+} from "../services/UserEmojiService.js";
+import { REGULARS_ROLE_ID } from "../config/roles.js";
 
 @Discord()
 export class GuildMemberUpdate {
@@ -71,7 +76,17 @@ export class GuildMemberUpdate {
         if (updated) {
           await logAvatarChange(_client, user, "Server avatar changed");
         }
+        const emojiUrl = newMember.displayAvatarURL({
+          extension: "png",
+          size: 128,
+          forceStatic: true,
+        });
+        await syncUserEmojiFromAvatarChange(_client, user.id, emojiUrl);
       }
+    }
+
+    if (!user.bot && addedRoles.has(REGULARS_ROLE_ID)) {
+      await ensureUserEmojiForMember(_client, newMember);
     }
 
     if (!user.bot && nicknameChanged) {
