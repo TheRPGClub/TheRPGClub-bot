@@ -101,7 +101,7 @@ function buildAppJwt(): string {
   const payload = {
     iat: now - 60,
     exp: now + 9 * 60,
-    iss: GITHUB_APP_ID,
+    iss: parseInt(GITHUB_APP_ID, 10),
   };
   const header = {
     alg: "RS256",
