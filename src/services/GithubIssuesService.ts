@@ -112,14 +112,14 @@ function buildAppJwt(): string {
   const payloadToken = toBase64Url(JSON.stringify(payload));
   const data = `${headerToken}.${payloadToken}`;
   const key = normalizePrivateKey(GITHUB_APP_PRIVATE_KEY.replace(/\\n/g, "\n"));
-  console.error(
-    `[GithubAuth] Building JWT with iss=${appId} (parsed from "${GITHUB_APP_ID}")`,
-  );
   const signature = crypto
     .createSign("RSA-SHA256")
     .update(data)
     .sign(key);
-  return `${data}.${toBase64Url(signature)}`;
+  const jwt = `${data}.${toBase64Url(signature)}`;
+  console.error(`[GithubAuth] JWT payload (decoded): ${Buffer.from(payloadToken, "base64").toString("utf8")}`);
+  console.error(`[GithubAuth] Full JWT (paste at jwt.io to inspect): ${jwt}`);
+  return jwt;
 }
 
 function logGithubAuthDiagnostics(): void {
