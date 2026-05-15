@@ -152,12 +152,14 @@ async function getInstallationToken(): Promise<string> {
         const skewMs = Math.abs(Date.now() - Date.parse(githubDate));
         if (skewMs > 60_000) {
           const skewSec = Math.round(skewMs / 1000);
-          const enriched: any = new Error(
-            `GitHub authentication failed: clock skew detected.` +
-            ` This server's clock is ~${skewSec}s off from GitHub's.` +
-            ` Sync the system clock and restart the bot.`,
-          );
-          enriched.response = err.response;
+          const message =
+            `Clock skew detected: this server's clock is ~${skewSec}s off from GitHub's.` +
+            ` Sync the system clock and restart the bot.`;
+          const enriched: any = new Error(message);
+          enriched.response = {
+            ...err.response,
+            data: { ...err.response.data, message },
+          };
           throw enriched;
         }
       }
