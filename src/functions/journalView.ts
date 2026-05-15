@@ -114,12 +114,7 @@ export async function buildJournalView(options: JournalViewOptions): Promise<{
   const ownerName = memberRecord?.globalName ?? memberRecord?.username ?? ownerId;
   const ownerTag = emojiPrefix ? `${emojiPrefix} ${ownerName}` : ownerName;
 
-  // Container 1: owner header
-  const headerContainer = new ContainerBuilder().addTextDisplayComponents(
-    new TextDisplayBuilder().setContent(`## ${ownerTag}'s Game Journal`),
-  );
-
-  // Container 2: game title (linked if thread exists) + now-playing/completion status + thumbnail
+  // Container 1: owner header + game title + status + thumbnail
   const threadId = threadIds[0] ?? null;
   const gameTitleLine =
     guildId && threadId
@@ -138,13 +133,13 @@ export async function buildJournalView(options: JournalViewOptions): Promise<{
   }
 
   const gameInfoContent = statusLine ? `${gameTitleLine}\n${statusLine}` : gameTitleLine;
-  const gameSection = new SectionBuilder().addTextDisplayComponents(
-    new TextDisplayBuilder().setContent(gameInfoContent),
-  );
+  const headerSection = new SectionBuilder()
+    .addTextDisplayComponents(new TextDisplayBuilder().setContent(`## ${ownerTag}'s Game Journal`))
+    .addTextDisplayComponents(new TextDisplayBuilder().setContent(gameInfoContent));
   if (coverUrl) {
-    gameSection.setThumbnailAccessory(new ThumbnailBuilder().setURL(coverUrl));
+    headerSection.setThumbnailAccessory(new ThumbnailBuilder().setURL(coverUrl));
   }
-  const gameContainer = new ContainerBuilder().addSectionComponents(gameSection);
+  const headerContainer = new ContainerBuilder().addSectionComponents(headerSection);
 
   // Container 3: journal entries + footer
   const pageInfo = totalPages > 1 ? `, page ${safePage} of ${totalPages}` : "";
@@ -225,7 +220,6 @@ export async function buildJournalView(options: JournalViewOptions): Promise<{
 
   const components: Array<ContainerBuilder | ActionRowBuilder<ButtonBuilder>> = [
     headerContainer,
-    gameContainer,
     entriesContainer,
   ];
   if (navRow.components.length > 0) {
