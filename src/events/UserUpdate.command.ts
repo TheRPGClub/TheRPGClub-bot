@@ -3,6 +3,7 @@ import type { ArgsOf, Client } from "discordx";
 import { Discord, On } from "discordx";
 import { formatTimestampWithDay, resolveLogChannel } from "../utilities/DiscordLogUtils.js";
 import { logAvatarChange, updateAvatarRecordFromUrl } from "../utilities/AvatarLogUtils.js";
+import { syncUserEmojiFromAvatarChange } from "../services/UserEmojiService.js";
 
 @Discord()
 export class UserUpdate {
@@ -32,6 +33,12 @@ export class UserUpdate {
         if (updated) {
           await logAvatarChange(client, newUser, "Avatar changed");
         }
+        const emojiUrl = newUser.displayAvatarURL({
+          extension: "png",
+          size: 128,
+          forceStatic: true,
+        });
+        await syncUserEmojiFromAvatarChange(client, newUser.id, emojiUrl);
       }
     }
 
