@@ -495,6 +495,8 @@ export default class Member {
     addedAt: Date | null;
     noteUpdatedAt: Date | null;
     sortOrder: number | null;
+    journalEnabled: boolean;
+    hasPublicJournalEntry: boolean;
   }[]> {
     const connection = await getOraclePool().getConnection();
     try {

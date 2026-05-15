@@ -2335,7 +2335,29 @@ export class NowPlayingCommand {
       return;
     }
 
-    const limitedEntries = current.slice(0, NOW_PLAYING_NOTE_MODAL_MAX_FIELDS);
+    const editableEntries = current.filter((e) => !e.journalEnabled);
+    if (!editableEntries.length) {
+      const container = new ContainerBuilder().addTextDisplayComponents(
+        new TextDisplayBuilder().setContent(
+          "All of your games use Game Journal for notes.",
+        ),
+      );
+      const pmComponents = await this.withPmNowPlayingList(
+        interaction.user.id,
+        interaction.guildId,
+        [container],
+      );
+      if (mode === "update" && "update" in interaction) {
+        await interaction.update({ components: pmComponents });
+      } else {
+        await safeReply(interaction, {
+          components: pmComponents,
+          flags: MessageFlags.Ephemeral,
+        });
+      }
+      return;
+    }
+    const limitedEntries = editableEntries.slice(0, NOW_PLAYING_NOTE_MODAL_MAX_FIELDS);
     await interaction.showModal(
       buildEditNotesModal(interaction.user.id, limitedEntries),
     ).catch(async () => {
@@ -2345,7 +2367,7 @@ export class NowPlayingCommand {
       });
     });
 
-    if (current.length > NOW_PLAYING_NOTE_MODAL_MAX_FIELDS) {
+    if (editableEntries.length > NOW_PLAYING_NOTE_MODAL_MAX_FIELDS) {
       await safeReply(interaction, {
         content:
           `Discord modals support up to ${NOW_PLAYING_NOTE_MODAL_MAX_FIELDS} note fields at once. ` +
@@ -2636,6 +2658,13 @@ export class NowPlayingCommand {
       });
       return;
     }
+    if (currentEntry.journalEnabled) {
+      await safeReply(interaction, {
+        content: "This game uses Game Journal for notes. Use the Journal button to add entries.",
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
     setNowPlayingListContext(ownerId, interaction.message);
     await interaction.showModal(
       buildEditNoteModal(
@@ -2842,7 +2871,7 @@ export class NowPlayingCommand {
       const updateCandidates = currentEntries.slice(0, NOW_PLAYING_NOTE_MODAL_MAX_FIELDS);
 
       for (const entry of updateCandidates) {
-        if (!entry.gameId) {
+        if (!entry.gameId || entry.journalEnabled) {
           continue;
         }
         const fieldId = `${NOW_PLAYING_NOTE_INPUT_ID}:${entry.gameId}`;
