@@ -124,6 +124,20 @@ export interface IGameJournalPreference {
   defaultIsPublic: boolean;
 }
 
+export interface IGameJournalListEntry {
+  gameId: number;
+  title: string;
+  totalEntries: number;
+  publicEntries: number;
+}
+
+export interface IJournalUserSummary {
+  userId: string;
+  username: string | null;
+  globalName: string | null;
+  gameCount: number;
+}
+
 export interface IAvatarHistoryRecord {
   eventId: number;
   userId: string;
@@ -2482,5 +2496,77 @@ export default class Member {
     }
 
     return totalUpdated;
+  }
+
+  static async getGameJournalList(userId: string): Promise<IGameJournalListEntry[]> {
+    const connection = await getOraclePool().getConnection();
+    try {
+      const res = await connection.execute<{
+        GAME_ID: number;
+        TITLE: string;
+        TOTAL_ENTRIES: number;
+        PUBLIC_ENTRIES: number;
+      }>(
+        `SELECT g.GAME_ID,
+                g.TITLE,
+                COUNT(e.ENTRY_ID) AS TOTAL_ENTRIES,
+                SUM(CASE WHEN e.IS_PUBLIC = 1 THEN 1 ELSE 0 END) AS PUBLIC_ENTRIES
+           FROM USER_GAME_JOURNAL_PREFS jp
+           JOIN GAMEDB_GAMES g ON g.GAME_ID = jp.GAMEDB_GAME_ID
+           LEFT JOIN USER_GAME_JOURNAL_ENTRIES e
+             ON e.USER_ID = jp.USER_ID
+            AND e.GAMEDB_GAME_ID = jp.GAMEDB_GAME_ID
+          WHERE jp.USER_ID = :userId
+            AND jp.IS_ENABLED = 1
+          GROUP BY g.GAME_ID, g.TITLE
+          ORDER BY g.TITLE`,
+        { userId },
+        { outFormat: oracledb.OUT_FORMAT_OBJECT },
+      );
+      return (res.rows ?? []).map((row) => ({
+        gameId: Number(row.GAME_ID),
+        title: row.TITLE,
+        totalEntries: Number(row.TOTAL_ENTRIES ?? 0),
+        publicEntries: Number(row.PUBLIC_ENTRIES ?? 0),
+      }));
+    } finally {
+      await connection.close();
+    }
+  }
+
+  static async getAllJournalUsers(): Promise<IJournalUserSummary[]> {
+    const connection = await getOraclePool().getConnection();
+    try {
+      const res = await connection.execute<{
+        USER_ID: string;
+        USERNAME: string | null;
+        GLOBAL_NAME: string | null;
+        GAME_COUNT: number;
+      }>(
+        `SELECT u.USER_ID,
+                u.USERNAME,
+                u.GLOBAL_NAME,
+                COUNT(DISTINCT jp.GAMEDB_GAME_ID) AS GAME_COUNT
+           FROM USER_GAME_JOURNAL_PREFS jp
+           JOIN RPG_CLUB_USERS u ON u.USER_ID = jp.USER_ID
+          WHERE jp.IS_ENABLED = 1
+            AND NVL(u.IS_BOT, 0) = 0
+            AND u.SERVER_LEFT_AT IS NULL
+          GROUP BY u.USER_ID, u.USERNAME, u.GLOBAL_NAME
+          ORDER BY COUNT(DISTINCT jp.GAMEDB_GAME_ID) DESC,
+                   u.GLOBAL_NAME NULLS LAST,
+                   u.USERNAME NULLS LAST`,
+        {},
+        { outFormat: oracledb.OUT_FORMAT_OBJECT },
+      );
+      return (res.rows ?? []).map((row) => ({
+        userId: row.USER_ID,
+        username: row.USERNAME ?? null,
+        globalName: row.GLOBAL_NAME ?? null,
+        gameCount: Number(row.GAME_COUNT ?? 0),
+      }));
+    } finally {
+      await connection.close();
+    }
   }
 }
