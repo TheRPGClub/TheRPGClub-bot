@@ -157,7 +157,7 @@ export async function buildJournalView(options: JournalViewOptions): Promise<{
         );
         continue;
       }
-      const titleLine = entry.title ? `### ${entry.title}` : "### Untitled Entry";
+      const titleLine = entry.title ? `### ${entry.title}` : `### Entry #${entry.entryNumber}`;
       const date = formatTableDate(entry.createdAt);
       const privacyLabel = isOwnerView ? ` | ${entry.isPublic ? "Public" : "Private"}` : "";
       entryParts.push(`${titleLine}\n-# ${date}${privacyLabel}\n${trimContent(entry.body)}`);

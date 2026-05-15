@@ -3370,7 +3370,7 @@ export class NowPlayingCommand {
       return;
     }
     const options = entries.map((entry) => ({
-      label: (entry.title ?? "Untitled Entry").slice(0, 100),
+      label: (entry.title ?? `Entry #${entry.entryNumber}`).slice(0, 100),
       value: String(entry.entryId),
       description: `${formatTableDate(entry.createdAt)} | ${entry.isPublic ? "Public" : "Private"}`,
     }));
@@ -3495,7 +3495,7 @@ export class NowPlayingCommand {
       return;
     }
     const options = entries.map((entry) => ({
-      label: (entry.title ?? "Untitled Entry").slice(0, 100),
+      label: (entry.title ?? `Entry #${entry.entryNumber}`).slice(0, 100),
       value: String(entry.entryId),
       description: `${formatTableDate(entry.createdAt)} | ${entry.isPublic ? "Public" : "Private"}`,
     }));
@@ -3539,7 +3539,7 @@ export class NowPlayingCommand {
       await safeReply(interaction, { content: "That journal entry was not found." });
       return;
     }
-    const entryTitle = entry.title?.trim() ? entry.title.trim() : "Untitled Entry";
+    const entryTitle = entry.title?.trim() ? entry.title.trim() : `Entry #${entry.entryNumber}`;
     const container = new ContainerBuilder().addTextDisplayComponents(
       new TextDisplayBuilder().setContent(
         `## Confirm Delete\nDelete **${entryTitle}** from ${formatTableDate(entry.createdAt)}?`,
