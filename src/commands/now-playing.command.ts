@@ -3214,6 +3214,7 @@ export class NowPlayingCommand {
       interaction.guildId ? "__public__" : interaction.user.id,
       gameId,
       Number(pageRaw),
+      interaction.guildId,
     );
     if (interaction.guildId) {
       await this.deleteRecentJournalMessagesInChannel(interaction, ownerId, gameId);
@@ -3273,6 +3274,7 @@ export class NowPlayingCommand {
       interaction.guildId ? "__public__" : interaction.user.id,
       gameId,
       Number(pageRaw),
+      interaction.guildId,
     );
     if (interaction.guildId) {
       await this.deleteRecentJournalMessagesInChannel(interaction, ownerId, gameId);
@@ -3594,6 +3596,7 @@ export class NowPlayingCommand {
       journalViewerId,
       Number(gameIdRaw),
       Number(pageRaw),
+      interaction.guildId,
     );
     await safeUpdate(interaction, {
       components: payload.components,
@@ -3640,6 +3643,7 @@ export class NowPlayingCommand {
       journalViewerId,
       Number(gameIdRaw),
       Number(pageRaw),
+      interaction.guildId,
     );
     await safeUpdate(interaction, {
       components: payload.components,
@@ -3694,6 +3698,7 @@ export class NowPlayingCommand {
       journalViewerId,
       gameId,
       Number(pageRaw),
+      interaction.guildId,
     );
     if (interaction.guildId) {
       await interaction.message?.delete().catch(() => null);
@@ -5604,6 +5609,7 @@ export class NowPlayingCommand {
     viewerId: string,
     gameId: number,
     page: number,
+    guildId?: string | null,
   ) {
     const isOwnerView = viewerId === ownerId;
     return buildJournalView({
@@ -5611,6 +5617,7 @@ export class NowPlayingCommand {
       viewerId,
       gameId,
       page,
+      guildId,
       prevPageCustomId: (p) =>
         `${NOW_PLAYING_JOURNAL_PAGE_PREFIX}:${ownerId}:${gameId}:prev:${p}`,
       nextPageCustomId: (p) =>

@@ -12,11 +12,13 @@ import {
 } from "@discordjs/builders";
 import Member, { type ICompletionRecord } from "../classes/Member.js";
 import Game from "../classes/Game.js";
+import { getThreadsByGameId } from "../classes/Thread.js";
 import { getUserEmojiString } from "../services/UserEmojiService.js";
 import { formatTableDate, formatPlaytimeHours } from "../commands/profile.command.js";
 import { COMPONENTS_V2_FLAG } from "../config/flags.js";
 
 const JOURNAL_PAGE_SIZE = 5;
+const ENTRY_SEPARATOR = "​";
 
 function trimContent(text: string): string {
   return text.length <= 4000 ? text : `${text.slice(0, 3997)}...`;
@@ -32,6 +34,8 @@ export interface JournalViewOptions {
   viewerId: string | null;
   gameId: number;
   page: number;
+  /** Used to build a clickable thread link in the game title; omit to show plain title */
+  guildId?: string | null;
   prevPageCustomId: (page: number) => string;
   nextPageCustomId: (page: number) => string;
   /** When provided, builds owner management buttons (Add/Edit/Delete) prepended to the nav row */
@@ -40,9 +44,9 @@ export interface JournalViewOptions {
   navRowTrailingButtons?: ButtonBuilder[];
   /** Extra rows appended after the nav row */
   extraRows?: Array<ActionRowBuilder<ButtonBuilder>>;
-  /** Fetch and display the "Now Playing since" date in the header */
+  /** Fetch and display the Now Playing / completion status in the game info container */
   includeNowPlayingMeta?: boolean;
-  /** Fetch and display the completions block below the main section */
+  /** Fetch and display completions in the game info container and entries container */
   includeCompletions?: boolean;
 }
 
@@ -57,6 +61,7 @@ export async function buildJournalView(options: JournalViewOptions): Promise<{
     viewerId,
     gameId,
     page,
+    guildId,
     prevPageCustomId,
     nextPageCustomId,
     buildOwnerButtons,
@@ -71,9 +76,10 @@ export async function buildJournalView(options: JournalViewOptions): Promise<{
   const countViewerId = isOwnerView ? ownerId : "__public__";
   const entriesViewerId: string | null = isOwnerView ? ownerId : null;
 
-  const [game, total] = await Promise.all([
+  const [game, total, threadIds] = await Promise.all([
     Game.getGameById(gameId),
     Member.countGameJournalEntries(ownerId, gameId, countViewerId),
+    getThreadsByGameId(gameId),
   ]);
 
   const totalPages = Math.max(1, Math.ceil(total / JOURNAL_PAGE_SIZE));
@@ -106,22 +112,50 @@ export async function buildJournalView(options: JournalViewOptions): Promise<{
   const emojiPrefix = getUserEmojiString(ownerId);
   const ownerTag = emojiPrefix ? `${emojiPrefix} <@${ownerId}>` : `<@${ownerId}>`;
 
+  // Container 1: owner header
+  const headerContainer = new ContainerBuilder().addTextDisplayComponents(
+    new TextDisplayBuilder().setContent(`## ${ownerTag}'s Game Journal`),
+  );
+
+  // Container 2: game title (linked if thread exists) + now-playing/completion status + thumbnail
+  const threadId = threadIds[0] ?? null;
+  const gameTitleLine =
+    guildId && threadId
+      ? `## [${gameTitle}](https://discord.com/channels/${guildId}/${threadId})`
+      : `## ${gameTitle}`;
+
+  let statusLine = "";
+  if (nowPlayingMeta?.addedAt) {
+    statusLine = `Now Playing since ${formatTableDate(nowPlayingMeta.addedAt)}`;
+  } else if (completions.length > 0) {
+    const latest = completions[0];
+    const completedDate = latest.completedAt
+      ? formatTableDate(latest.completedAt)
+      : "Unknown Date";
+    statusLine = `${latest.completionType} on ${completedDate}`;
+  }
+
+  const gameInfoContent = statusLine ? `${gameTitleLine}\n${statusLine}` : gameTitleLine;
+  const gameSection = new SectionBuilder().addTextDisplayComponents(
+    new TextDisplayBuilder().setContent(gameInfoContent),
+  );
+  if (coverUrl) {
+    gameSection.setThumbnailAccessory(new ThumbnailBuilder().setURL(coverUrl));
+  }
+  const gameContainer = new ContainerBuilder().addSectionComponents(gameSection);
+
+  // Container 3: journal entries + footer
   const pageInfo = totalPages > 1 ? `, page ${safePage} of ${totalPages}` : "";
   const publicQualifier = isOwnerView ? "" : "public ";
   const footer = `-# ${total} ${publicQualifier}${entryLabel(total)}${pageInfo}`;
 
-  let headerContent = `## ${gameTitle}\n${ownerTag}'s Game Journal\n\n`;
-  if (nowPlayingMeta?.addedAt) {
-    headerContent += `Now Playing since ${formatTableDate(nowPlayingMeta.addedAt)}\n`;
-  }
-
-  const entryLines: string[] = [];
+  const entryParts: string[] = [];
   if (!entries.length) {
-    entryLines.push("No journal entries yet.");
+    entryParts.push("No journal entries yet.");
   } else {
     for (const entry of entries) {
       if (!isOwnerView && !entry.isPublic) {
-        entryLines.push(
+        entryParts.push(
           `### Private Entry\n-# ${formatTableDate(entry.createdAt)}\nThis entry is private.`,
         );
         continue;
@@ -129,21 +163,9 @@ export async function buildJournalView(options: JournalViewOptions): Promise<{
       const titleLine = entry.title ? `### ${entry.title}` : "### Untitled Entry";
       const date = formatTableDate(entry.createdAt);
       const privacyLabel = isOwnerView ? ` | ${entry.isPublic ? "Public" : "Private"}` : "";
-      entryLines.push(`${titleLine}\n-# ${date}${privacyLabel}\n${trimContent(entry.body)}`);
+      entryParts.push(`${titleLine}\n-# ${date}${privacyLabel}\n${trimContent(entry.body)}`);
     }
   }
-  entryLines.push(footer);
-
-  const section = new SectionBuilder()
-    .addTextDisplayComponents(new TextDisplayBuilder().setContent(headerContent))
-    .addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(entryLines.join("\n\n")),
-    );
-  if (coverUrl) {
-    section.setThumbnailAccessory(new ThumbnailBuilder().setURL(coverUrl));
-  }
-
-  const container = new ContainerBuilder().addSectionComponents(section);
 
   if (completions.length) {
     const completionLines: string[] = [];
@@ -165,11 +187,16 @@ export async function buildJournalView(options: JournalViewOptions): Promise<{
       ].filter(Boolean);
       completionLines.push(`- ${parts.join(" | ")}`);
     }
-    container.addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(`Completions:\n${completionLines.join("\n")}`),
-    );
+    entryParts.push(`Completions:\n${completionLines.join("\n")}`);
   }
 
+  entryParts.push(footer);
+
+  const entriesContainer = new ContainerBuilder().addTextDisplayComponents(
+    new TextDisplayBuilder().setContent(entryParts.join(`\n${ENTRY_SEPARATOR}\n`)),
+  );
+
+  // Nav row
   const navRow = new ActionRowBuilder<ButtonBuilder>();
   if (buildOwnerButtons) {
     navRow.addComponents(...buildOwnerButtons(safePage, entries.length > 0));
@@ -190,12 +217,15 @@ export async function buildJournalView(options: JournalViewOptions): Promise<{
         .setStyle(ButtonStyle.Secondary),
     );
   }
-
   if (navRow.components.length > 0 && navRowTrailingButtons?.length) {
     navRow.addComponents(...navRowTrailingButtons);
   }
 
-  const components: Array<ContainerBuilder | ActionRowBuilder<ButtonBuilder>> = [container];
+  const components: Array<ContainerBuilder | ActionRowBuilder<ButtonBuilder>> = [
+    headerContainer,
+    gameContainer,
+    entriesContainer,
+  ];
   if (navRow.components.length > 0) {
     components.push(navRow);
   }
