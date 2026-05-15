@@ -112,7 +112,7 @@ function buildAppJwt(): string {
   const headerToken = toBase64Url(JSON.stringify(header));
   const payloadToken = toBase64Url(JSON.stringify(payload));
   const data = `${headerToken}.${payloadToken}`;
-  const key = normalizePrivateKey(GITHUB_APP_PRIVATE_KEY.replace(/\\n/g, "\n"));
+  const key = GITHUB_APP_PRIVATE_KEY.replace(/\\n/g, "\n");
   const signature = crypto
     .createSign("RSA-SHA256")
     .update(data)
