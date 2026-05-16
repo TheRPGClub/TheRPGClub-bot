@@ -134,12 +134,8 @@ export async function buildJournalView(options: JournalViewOptions): Promise<{
   const gameTitleLines = [`## ${gameTitlePart} Game Journal`];
   if (statusLine) gameTitleLines.push(statusLine);
 
-  const gameTitleSection = new SectionBuilder().addTextDisplayComponents(
-    new TextDisplayBuilder().setContent(gameTitleLines.join("\n")),
-  );
-  if (coverUrl) {
-    gameTitleSection.setThumbnailAccessory(new ThumbnailBuilder().setURL(coverUrl));
-  }
+  const gameTitleText = new TextDisplayBuilder().setContent(gameTitleLines.join("\n"));
+
   // Container 2: game title + entries + footer
   const pageInfo = totalPages > 1 ? `, page ${safePage} of ${totalPages}` : "";
   const publicQualifier = isOwnerView ? "" : "public ";
@@ -188,11 +184,19 @@ export async function buildJournalView(options: JournalViewOptions): Promise<{
 
   entryParts.push(footer);
 
-  const gameContainer = new ContainerBuilder()
-    .addSectionComponents(gameTitleSection)
-    .addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(entryParts.join(`\n${ENTRY_SEPARATOR}\n`)),
+  const gameContainer = new ContainerBuilder();
+  if (coverUrl) {
+    gameContainer.addSectionComponents(
+      new SectionBuilder()
+        .addTextDisplayComponents(gameTitleText)
+        .setThumbnailAccessory(new ThumbnailBuilder().setURL(coverUrl)),
     );
+  } else {
+    gameContainer.addTextDisplayComponents(gameTitleText);
+  }
+  gameContainer.addTextDisplayComponents(
+    new TextDisplayBuilder().setContent(entryParts.join(`\n${ENTRY_SEPARATOR}\n`)),
+  );
 
   // Nav row
   const navRow = new ActionRowBuilder<ButtonBuilder>();
