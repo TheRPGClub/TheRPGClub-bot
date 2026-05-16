@@ -140,9 +140,7 @@ export async function buildJournalView(options: JournalViewOptions): Promise<{
   if (coverUrl) {
     gameTitleSection.setThumbnailAccessory(new ThumbnailBuilder().setURL(coverUrl));
   }
-  const headerContainer = new ContainerBuilder().addSectionComponents(gameTitleSection);
-
-  // Container 3: journal entries + footer
+  // Container 2: game title + entries + footer
   const pageInfo = totalPages > 1 ? `, page ${safePage} of ${totalPages}` : "";
   const publicQualifier = isOwnerView ? "" : "public ";
   const footer = `-# ${total} ${publicQualifier}${entryLabel(total)}${pageInfo}`;
@@ -190,9 +188,11 @@ export async function buildJournalView(options: JournalViewOptions): Promise<{
 
   entryParts.push(footer);
 
-  const entriesContainer = new ContainerBuilder().addTextDisplayComponents(
-    new TextDisplayBuilder().setContent(entryParts.join(`\n${ENTRY_SEPARATOR}\n`)),
-  );
+  const gameContainer = new ContainerBuilder()
+    .addSectionComponents(gameTitleSection)
+    .addTextDisplayComponents(
+      new TextDisplayBuilder().setContent(entryParts.join(`\n${ENTRY_SEPARATOR}\n`)),
+    );
 
   // Nav row
   const navRow = new ActionRowBuilder<ButtonBuilder>();
@@ -221,8 +221,7 @@ export async function buildJournalView(options: JournalViewOptions): Promise<{
 
   const components: Array<ContainerBuilder | ActionRowBuilder<ButtonBuilder>> = [
     userHeaderContainer,
-    headerContainer,
-    entriesContainer,
+    gameContainer,
   ];
   if (navRow.components.length > 0) {
     components.push(navRow);
