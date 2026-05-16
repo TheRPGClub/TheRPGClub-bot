@@ -65,11 +65,12 @@ function buildListComponents(
   totalPages: number,
 ): ContainerBuilder[] {
   const ownerName = target.displayName ?? target.username;
-  const userHeader = buildUserHeaderContainer(target.id, ownerName);
+  const userHeader = buildUserHeaderContainer(target.id, ownerName, "Game Journals");
 
   const start = page * LIST_PAGE_SIZE;
   const pageEntries = entries.slice(start, start + LIST_PAGE_SIZE);
-  const lines = [`## Game Journals`];
+  // const lines = [`## Game Journals`];
+  const lines = [];
   lines.push(
     ...pageEntries.map((e) => {
       const count = isSelf ? e.totalEntries : e.publicEntries;
