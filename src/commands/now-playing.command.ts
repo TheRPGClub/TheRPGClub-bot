@@ -211,6 +211,21 @@ type NowPlayingJournalContext = {
 };
 const nowPlayingJournalContexts = new Map<string, NowPlayingJournalContext>();
 const NOW_PLAYING_JOURNAL_CONTEXT_TTL_MS = 2 * 60 * 60 * 1000;
+
+export async function restoreJournalMessageContextsFromDb(): Promise<void> {
+  try {
+    await Member.pruneExpiredJournalMessageContexts(NOW_PLAYING_JOURNAL_CONTEXT_TTL_MS);
+    const rows = await Member.loadActiveJournalMessageContexts(NOW_PLAYING_JOURNAL_CONTEXT_TTL_MS);
+    for (const row of rows) {
+      const key = `${row.channelId}:${row.messageId}`;
+      nowPlayingJournalContexts.set(key, row);
+    }
+    console.log(`[Journal] Restored ${rows.length} message context(s) from DB.`);
+  } catch (err) {
+    console.error("[Journal] Failed to restore message contexts from DB:", err);
+  }
+}
+
 type NowPlayingMessageComponents = Array<
   ContainerBuilder | MediaGalleryBuilder | ActionRowBuilder<ButtonBuilder>
 >;
@@ -461,23 +476,31 @@ function setNowPlayingListContext(userId: string, message: Message<boolean>): vo
   });
 }
 
-function trackNowPlayingJournalContext(
+async function trackNowPlayingJournalContext(
   message: Message<boolean>,
   ownerUserId: string,
   gameId: number,
-): void {
+): Promise<void> {
   if (message.flags.has(MessageFlags.Ephemeral)) {
     return;
   }
   const key = buildNowPlayingJournalContextKey(message.channelId, message.id);
   const existing = nowPlayingJournalContexts.get(key);
+  const createdAt = existing?.createdAt ?? Date.now();
   nowPlayingJournalContexts.set(key, {
     channelId: message.channelId,
     messageId: message.id,
-    createdAt: existing?.createdAt ?? Date.now(),
+    createdAt,
     ownerUserId,
     gameId,
   });
+  await Member.upsertJournalMessageContext(
+    message.channelId,
+    message.id,
+    createdAt,
+    ownerUserId,
+    gameId,
+  ).catch((err) => console.error("[Journal] Failed to persist message context:", err));
 }
 
 function resolvePlatformLabel(entry: IMemberNowPlayingEntry): string | null {
@@ -5433,6 +5456,8 @@ export class NowPlayingCommand {
     for (const [key, context] of nowPlayingJournalContexts.entries()) {
       if (now - context.createdAt > NOW_PLAYING_JOURNAL_CONTEXT_TTL_MS) {
         nowPlayingJournalContexts.delete(key);
+        await Member.deleteJournalMessageContext(context.channelId, context.messageId)
+          .catch((err) => console.error("[Journal] Failed to delete expired context from DB:", err));
         continue;
       }
       if (context.channelId !== channelId) {
@@ -5445,17 +5470,23 @@ export class NowPlayingCommand {
       const channel = await interaction.client.channels.fetch(context.channelId).catch(() => null);
       if (!channel?.isTextBased()) {
         nowPlayingJournalContexts.delete(key);
+        await Member.deleteJournalMessageContext(context.channelId, context.messageId)
+          .catch((err) => console.error("[Journal] Failed to delete unreachable context from DB:", err));
         continue;
       }
 
       const message = await channel.messages.fetch(context.messageId).catch(() => null);
       if (!message) {
         nowPlayingJournalContexts.delete(key);
+        await Member.deleteJournalMessageContext(context.channelId, context.messageId)
+          .catch((err) => console.error("[Journal] Failed to delete missing context from DB:", err));
         continue;
       }
 
       await message.delete().catch(() => null);
       nowPlayingJournalContexts.delete(key);
+      await Member.deleteJournalMessageContext(context.channelId, context.messageId)
+        .catch((err) => console.error("[Journal] Failed to delete context from DB after message delete:", err));
     }
   }
 
@@ -5475,7 +5506,7 @@ export class NowPlayingCommand {
     if (!reply) {
       return;
     }
-    trackNowPlayingJournalContext(reply as Message<boolean>, ownerUserId, gameId);
+    await trackNowPlayingJournalContext(reply as Message<boolean>, ownerUserId, gameId);
   }
 
   private async deleteEligibleNowPlayingMessageInCurrentChannel(
