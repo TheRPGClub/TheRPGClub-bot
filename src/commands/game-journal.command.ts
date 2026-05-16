@@ -32,6 +32,7 @@ import {
 import { getUserEmojiString } from "../services/UserEmojiService.js";
 import { buildJournalView } from "../functions/journalView.js";
 import { COMPONENTS_V2_FLAG } from "../config/flags.js";
+import { buildUserHeaderContainer } from "../functions/uiComponents.js";
 
 const LIST_PAGE_SIZE = 15;
 const ALL_PAGE_SIZE = 20;
@@ -64,19 +65,17 @@ function buildListComponents(
   totalPages: number,
 ): ContainerBuilder[] {
   const ownerName = target.displayName ?? target.username;
-  const emojiPrefix = getUserEmojiString(target.id);
-  const ownerTag = emojiPrefix ? `${emojiPrefix} ${ownerName}` : ownerName;
-
-  const headerContainer = new ContainerBuilder().addTextDisplayComponents(
-    new TextDisplayBuilder().setContent(`${ownerTag}\n## Game Journals`),
-  );
+  const userHeader = buildUserHeaderContainer(target.id, ownerName);
 
   const start = page * LIST_PAGE_SIZE;
   const pageEntries = entries.slice(start, start + LIST_PAGE_SIZE);
-  const lines = pageEntries.map((e) => {
-    const count = isSelf ? e.totalEntries : e.publicEntries;
-    return `**${e.title}** — ${count} ${entryLabel(count)}`;
-  });
+  const lines = [`## Game Journals`];
+  lines.push(
+    ...pageEntries.map((e) => {
+      const count = isSelf ? e.totalEntries : e.publicEntries;
+      return `**${e.title}** — ${count} ${entryLabel(count)}`;
+    }),
+  );
   const pageInfo = totalPages > 1 ? ` • Page ${page + 1}/${totalPages}` : "";
   lines.push(`-# ${entries.length} ${gameLabel(entries.length)}${pageInfo}`);
 
@@ -84,7 +83,7 @@ function buildListComponents(
     new TextDisplayBuilder().setContent(lines.join("\n")),
   );
 
-  return [headerContainer, listContainer];
+  return [userHeader, listContainer];
 }
 
 function buildListSelectRow(
