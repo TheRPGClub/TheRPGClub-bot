@@ -11,12 +11,7 @@ import {
   StringSelectMenuInteraction,
   User,
 } from "discord.js";
-import {
-  ContainerBuilder,
-  SectionBuilder,
-  TextDisplayBuilder,
-  ThumbnailBuilder,
-} from "@discordjs/builders";
+import { ContainerBuilder, TextDisplayBuilder } from "@discordjs/builders";
 import {
   ButtonComponent,
   Discord,
@@ -72,14 +67,9 @@ function buildListComponents(
   const emojiPrefix = getUserEmojiString(target.id);
   const ownerTag = emojiPrefix ? `${emojiPrefix} ${ownerName}` : ownerName;
 
-  const headerSection = new SectionBuilder()
-    .addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(
-        `${ownerTag}\n## ${ownerName}'s Game Journals`,
-      ),
-    )
-    .setThumbnailAccessory(new ThumbnailBuilder().setURL(target.displayAvatarURL()));
-  const headerContainer = new ContainerBuilder().addSectionComponents(headerSection);
+  const headerContainer = new ContainerBuilder().addTextDisplayComponents(
+    new TextDisplayBuilder().setContent(`${ownerTag}\n## Game Journals`),
+  );
 
   const start = page * LIST_PAGE_SIZE;
   const pageEntries = entries.slice(start, start + LIST_PAGE_SIZE);
