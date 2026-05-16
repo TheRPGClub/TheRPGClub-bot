@@ -13,9 +13,9 @@ import {
 import Member, { type ICompletionRecord } from "../classes/Member.js";
 import Game from "../classes/Game.js";
 import { getThreadsByGameId } from "../classes/Thread.js";
-import { getUserEmojiString } from "../services/UserEmojiService.js";
 import { formatTableDate, formatPlaytimeHours } from "../commands/profile.command.js";
 import { COMPONENTS_V2_FLAG } from "../config/flags.js";
+import { buildUserHeaderContainer } from "./uiComponents.js";
 
 const JOURNAL_PAGE_SIZE = 3;
 const ENTRY_SEPARATOR = "​";
@@ -110,11 +110,10 @@ export async function buildJournalView(options: JournalViewOptions): Promise<{
   }
 
   const gameTitle = game?.title ?? `Game #${gameId}`;
-  const emojiPrefix = getUserEmojiString(ownerId);
   const ownerName = memberRecord?.globalName ?? memberRecord?.username ?? ownerId;
-  const ownerTag = emojiPrefix ? `${emojiPrefix} ${ownerName}` : ownerName;
+  const userHeaderContainer = buildUserHeaderContainer(ownerId, ownerName);
 
-  // Container 1: owner header + game title + status + thumbnail
+  // Container 2: game title + status + thumbnail
   const threadId = threadIds[0] ?? null;
   const gameTitlePart =
     guildId && threadId
@@ -132,16 +131,16 @@ export async function buildJournalView(options: JournalViewOptions): Promise<{
     statusLine = `${latest.completionType} on ${completedDate}`;
   }
 
-  const headerLines = [ownerTag, `## ${gameTitlePart} Game Journal`];
-  if (statusLine) headerLines.push(statusLine);
+  const gameTitleLines = [`## ${gameTitlePart} Game Journal`];
+  if (statusLine) gameTitleLines.push(statusLine);
 
-  const headerSection = new SectionBuilder().addTextDisplayComponents(
-    new TextDisplayBuilder().setContent(headerLines.join("\n")),
+  const gameTitleSection = new SectionBuilder().addTextDisplayComponents(
+    new TextDisplayBuilder().setContent(gameTitleLines.join("\n")),
   );
   if (coverUrl) {
-    headerSection.setThumbnailAccessory(new ThumbnailBuilder().setURL(coverUrl));
+    gameTitleSection.setThumbnailAccessory(new ThumbnailBuilder().setURL(coverUrl));
   }
-  const headerContainer = new ContainerBuilder().addSectionComponents(headerSection);
+  const headerContainer = new ContainerBuilder().addSectionComponents(gameTitleSection);
 
   // Container 3: journal entries + footer
   const pageInfo = totalPages > 1 ? `, page ${safePage} of ${totalPages}` : "";
@@ -221,6 +220,7 @@ export async function buildJournalView(options: JournalViewOptions): Promise<{
   }
 
   const components: Array<ContainerBuilder | ActionRowBuilder<ButtonBuilder>> = [
+    userHeaderContainer,
     headerContainer,
     entriesContainer,
   ];
