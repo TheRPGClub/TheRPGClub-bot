@@ -1,4 +1,10 @@
-import { ContainerBuilder, TextDisplayBuilder } from "@discordjs/builders";
+import { ButtonStyle } from "discord.js";
+import {
+  ButtonBuilder,
+  ContainerBuilder,
+  SectionBuilder,
+  TextDisplayBuilder,
+} from "@discordjs/builders";
 import { getUserEmojiString } from "../services/UserEmojiService.js";
 
 export function buildUserHeaderContainer(
@@ -8,10 +14,21 @@ export function buildUserHeaderContainer(
 ): ContainerBuilder {
   const emoji = getUserEmojiString(userId);
   const userText = emoji ? `${emoji} ${displayName}` : displayName;
-  const container = new ContainerBuilder();
+
   if (title) {
-    container.addTextDisplayComponents(new TextDisplayBuilder().setContent(`## ${title}`));
+    const section = new SectionBuilder()
+      .addTextDisplayComponents(new TextDisplayBuilder().setContent(`## ${title}`))
+      .setButtonAccessory(
+        new ButtonBuilder()
+          .setCustomId(`user-header-label:${userId}`)
+          .setLabel(userText)
+          .setStyle(ButtonStyle.Secondary)
+          .setDisabled(true),
+      );
+    return new ContainerBuilder().addSectionComponents(section);
   }
-  container.addTextDisplayComponents(new TextDisplayBuilder().setContent(userText));
-  return container;
+
+  return new ContainerBuilder().addTextDisplayComponents(
+    new TextDisplayBuilder().setContent(userText),
+  );
 }
