@@ -3031,6 +3031,7 @@ export class NowPlayingCommand {
 
   @ButtonComponent({ id: /^np-remove:[^:]+:\d+$/ })
   async handleRemoveNowPlayingButton(interaction: ButtonInteraction): Promise<void> {
+    const isEphemeral = interaction.message.flags?.has(MessageFlags.Ephemeral) ?? false;
     const [, ownerId, gameIdRaw] = interaction.customId.split(":");
     if (interaction.user.id !== ownerId) {
       const container = new ContainerBuilder().addTextDisplayComponents(
@@ -3076,7 +3077,10 @@ export class NowPlayingCommand {
         const container = new ContainerBuilder().addTextDisplayComponents(
           new TextDisplayBuilder().setContent("Your Now Playing list is empty."),
         );
-        await interaction.update({ components: [container] });
+        await interaction.update({
+          components: [container],
+          flags: buildComponentsV2Flags(isEphemeral),
+        });
         return;
       }
       const includeImages = interaction.guildId != null;
@@ -3095,7 +3099,10 @@ export class NowPlayingCommand {
         interaction.guildId,
         components,
       );
-      await interaction.update(this.buildComponentPayload(pmComponents as any, files));
+      await interaction.update({
+        ...this.buildComponentPayload(pmComponents as any, files),
+        flags: buildComponentsV2Flags(isEphemeral),
+      });
     } catch (err: any) {
       const msg = err?.message ?? String(err);
       const container = new ContainerBuilder().addTextDisplayComponents(
@@ -4861,6 +4868,7 @@ export class NowPlayingCommand {
 
   @SelectMenuComponent({ id: /^nowplaying-remove-select:\d+$/ })
   async handleNowPlayingRemoveSelect(interaction: StringSelectMenuInteraction): Promise<void> {
+    const isEphemeral = interaction.message.flags?.has(MessageFlags.Ephemeral) ?? false;
     const [, ownerId] = interaction.customId.split(":");
     if (interaction.user.id !== ownerId) {
       await interaction.reply({
@@ -4883,7 +4891,10 @@ export class NowPlayingCommand {
     const loadingContainer = new ContainerBuilder().addTextDisplayComponents(
       new TextDisplayBuilder().setContent("Updating your Now Playing remove list..."),
     );
-    await safeUpdate(interaction, { components: [loadingContainer] });
+    await safeUpdate(interaction, {
+      components: [loadingContainer],
+      flags: buildComponentsV2Flags(isEphemeral),
+    });
 
     try {
       const removed = await Member.removeNowPlaying(ownerId, gameId);
@@ -4893,7 +4904,10 @@ export class NowPlayingCommand {
             "Failed to remove that game (it may have been removed already).",
           ),
         );
-        await interaction.editReply({ components: [container] }).catch(() => {});
+        await interaction.editReply({
+          components: [container],
+          flags: buildComponentsV2Flags(isEphemeral),
+        }).catch(() => {});
         return;
       }
       await this.refreshNowPlayingListFromContext(interaction, ownerId).catch(() => {});
@@ -4907,7 +4921,10 @@ export class NowPlayingCommand {
           interaction.guildId,
           [container],
         );
-        await interaction.editReply({ components: pmComponents }).catch(() => {});
+        await interaction.editReply({
+          components: pmComponents,
+          flags: buildComponentsV2Flags(isEphemeral),
+        }).catch(() => {});
         return;
       }
       const includeImages = interaction.guildId != null;
@@ -4926,13 +4943,19 @@ export class NowPlayingCommand {
         interaction.guildId,
         components,
       );
-      await interaction.editReply(this.buildComponentPayload(pmComponents as any, files)).catch(() => {});
+      await interaction.editReply({
+        ...this.buildComponentPayload(pmComponents as any, files),
+        flags: buildComponentsV2Flags(isEphemeral),
+      }).catch(() => {});
     } catch (err: any) {
       const msg = err?.message ?? String(err);
       const container = new ContainerBuilder().addTextDisplayComponents(
         new TextDisplayBuilder().setContent(`Could not remove from Now Playing: ${msg}`),
       );
-      await interaction.editReply({ components: [container] }).catch(() => {});
+      await interaction.editReply({
+        components: [container],
+        flags: buildComponentsV2Flags(isEphemeral),
+      }).catch(() => {});
     }
   }
 
