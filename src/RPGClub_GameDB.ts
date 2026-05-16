@@ -32,6 +32,7 @@ import { startGameReleaseAnnouncementService } from "./services/GameReleaseAnnou
 import { startIgdbScanService } from "./services/IGDB/IgdbScanService.js";
 import { startUserEmojiService } from "./services/UserEmojiService.js";
 import { tryHandleManagedRawModalInteraction } from "./services/raw-modal/RawModalInteractionRouter.js";
+import { restoreJournalMessageContextsFromDb } from "./commands/now-playing.command.js";
 installConsoleLogging();
 
 const PRESENCE_CHECK_INTERVAL_MS: number = 30 * 60 * 1000;
@@ -195,6 +196,7 @@ bot.once("clientReady", async () => {
   startRssFeedService(bot);
   await refreshGiveawayHubMessage(bot);
   await startUserEmojiService(bot);
+  await restoreJournalMessageContextsFromDb();
   console.log("Startup sequence completed.");
 });
 

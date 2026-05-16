@@ -2629,4 +2629,98 @@ export default class Member {
       await connection.close();
     }
   }
+
+  static async upsertJournalMessageContext(
+    channelId: string,
+    messageId: string,
+    createdAtMs: number,
+    ownerUserId: string,
+    gameId: number,
+  ): Promise<void> {
+    const connection = await getOraclePool().getConnection();
+    try {
+      await connection.execute(
+        `MERGE INTO JOURNAL_MESSAGE_CONTEXTS dst
+         USING (SELECT :channelId AS CHANNEL_ID, :messageId AS MESSAGE_ID FROM DUAL) src
+            ON (dst.CHANNEL_ID = src.CHANNEL_ID AND dst.MESSAGE_ID = src.MESSAGE_ID)
+          WHEN MATCHED THEN
+            UPDATE SET CREATED_AT_MS = :createdAtMs,
+                       OWNER_USER_ID = :ownerUserId,
+                       GAME_ID       = :gameId
+          WHEN NOT MATCHED THEN
+            INSERT (CHANNEL_ID, MESSAGE_ID, CREATED_AT_MS, OWNER_USER_ID, GAME_ID)
+            VALUES (:channelId, :messageId, :createdAtMs, :ownerUserId, :gameId)`,
+        { channelId, messageId, createdAtMs, ownerUserId, gameId },
+        { autoCommit: true },
+      );
+    } finally {
+      await connection.close();
+    }
+  }
+
+  static async deleteJournalMessageContext(channelId: string, messageId: string): Promise<void> {
+    const connection = await getOraclePool().getConnection();
+    try {
+      await connection.execute(
+        `DELETE FROM JOURNAL_MESSAGE_CONTEXTS
+          WHERE CHANNEL_ID = :channelId
+            AND MESSAGE_ID = :messageId`,
+        { channelId, messageId },
+        { autoCommit: true },
+      );
+    } finally {
+      await connection.close();
+    }
+  }
+
+  static async loadActiveJournalMessageContexts(
+    ttlMs: number,
+  ): Promise<Array<{
+    channelId: string;
+    messageId: string;
+    createdAt: number;
+    ownerUserId: string;
+    gameId: number;
+  }>> {
+    const connection = await getOraclePool().getConnection();
+    const cutoffMs = Date.now() - ttlMs;
+    try {
+      const res = await connection.execute<{
+        CHANNEL_ID: string;
+        MESSAGE_ID: string;
+        CREATED_AT_MS: number;
+        OWNER_USER_ID: string;
+        GAME_ID: number;
+      }>(
+        `SELECT CHANNEL_ID, MESSAGE_ID, CREATED_AT_MS, OWNER_USER_ID, GAME_ID
+           FROM JOURNAL_MESSAGE_CONTEXTS
+          WHERE CREATED_AT_MS >= :cutoffMs`,
+        { cutoffMs },
+        { outFormat: oracledb.OUT_FORMAT_OBJECT },
+      );
+      return (res.rows ?? []).map((row) => ({
+        channelId: row.CHANNEL_ID,
+        messageId: row.MESSAGE_ID,
+        createdAt: Number(row.CREATED_AT_MS),
+        ownerUserId: row.OWNER_USER_ID,
+        gameId: Number(row.GAME_ID),
+      }));
+    } finally {
+      await connection.close();
+    }
+  }
+
+  static async pruneExpiredJournalMessageContexts(ttlMs: number): Promise<void> {
+    const connection = await getOraclePool().getConnection();
+    const cutoffMs = Date.now() - ttlMs;
+    try {
+      await connection.execute(
+        `DELETE FROM JOURNAL_MESSAGE_CONTEXTS WHERE CREATED_AT_MS < :cutoffMs`,
+        { cutoffMs },
+        { autoCommit: true },
+      );
+    } finally {
+      await connection.close();
+    }
+  }
 }
