@@ -7,6 +7,7 @@ import { logAvatarChange, updateAvatarRecordFromUrl } from "../utilities/AvatarL
 import {
   ensureUserEmojiForMember,
   syncUserEmojiFromAvatarChange,
+  syncUserEmojiFromDisplayNameChange,
 } from "../services/UserEmojiService.js";
 import {
   ADMIN_ROLE_ID,
@@ -148,6 +149,8 @@ export class GuildMemberUpdate {
     if (!nicknameChanged) {
       return;
     }
+
+    await syncUserEmojiFromDisplayNameChange(_client, newMember);
 
     try {
       const existing = await Member.getByUserId(user.id);
