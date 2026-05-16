@@ -5,7 +5,6 @@ import {
   ButtonInteraction,
   ButtonStyle,
   CommandInteraction,
-  EmbedBuilder,
   MessageFlags,
   StringSelectMenuBuilder,
   StringSelectMenuInteraction,
@@ -160,23 +159,32 @@ function buildJournalViewPayload(
   });
 }
 
-function buildAllEmbed(
+function buildAllComponents(
   summaries: IJournalUserSummary[],
   page: number,
   totalPages: number,
-): EmbedBuilder {
+): ContainerBuilder[] {
+  const headerContainer = new ContainerBuilder().addTextDisplayComponents(
+    new TextDisplayBuilder().setContent("## Game Journals"),
+  );
+
   const start = page * ALL_PAGE_SIZE;
   const pageSummaries = summaries.slice(start, start + ALL_PAGE_SIZE);
   const memberLabel = summaries.length === 1 ? "member" : "members";
   const lines = pageSummaries.map((s) => {
     const emoji = getUserEmojiString(s.userId);
+    const displayName = s.globalName ?? s.username ?? s.userId;
     const prefix = emoji ? `${emoji} ` : "";
-    return `${prefix}<@${s.userId}> — ${s.gameCount} ${gameLabel(s.gameCount)}`;
+    return `${prefix}${displayName} — ${s.gameCount} ${gameLabel(s.gameCount)}`;
   });
-  return new EmbedBuilder()
-    .setTitle("Game Journal Users")
-    .setDescription(lines.join("\n"))
-    .setFooter({ text: `${summaries.length} ${memberLabel} • Page ${page + 1}/${totalPages}` });
+  const pageInfo = totalPages > 1 ? ` • Page ${page + 1}/${totalPages}` : "";
+  lines.push(`-# ${summaries.length} ${memberLabel}${pageInfo}`);
+
+  const listContainer = new ContainerBuilder().addTextDisplayComponents(
+    new TextDisplayBuilder().setContent(lines.join("\n")),
+  );
+
+  return [headerContainer, listContainer];
 }
 
 function buildAllSelectRow(
@@ -269,11 +277,14 @@ export class GameJournalCommand {
       }
       const totalPages = Math.max(1, Math.ceil(summaries.length / ALL_PAGE_SIZE));
       const page = 0;
-      const embed = buildAllEmbed(summaries, page, totalPages);
+      const allComponents = buildAllComponents(summaries, page, totalPages);
       const selectRow = buildAllSelectRow(summaries, interaction.user.id, page);
       const pageRow = buildAllPageRow(interaction.user.id, page, totalPages);
-      const components = pageRow ? [selectRow, pageRow] : [selectRow];
-      await safeReply(interaction, { embeds: [embed], components, flags });
+      const cvFlags = (ephemeral ? MessageFlags.Ephemeral : 0) | COMPONENTS_V2_FLAG;
+      const components = pageRow
+        ? [...allComponents, selectRow, pageRow]
+        : [...allComponents, selectRow];
+      await safeReply(interaction, { embeds: [], components, flags: cvFlags });
       return;
     }
 
@@ -423,11 +434,13 @@ export class GameJournalCommand {
     const summaries = await Member.getAllJournalUsers();
     const totalPages = Math.max(1, Math.ceil(summaries.length / ALL_PAGE_SIZE));
     const safePage = Math.min(Math.max(page, 0), totalPages - 1);
-    const embed = buildAllEmbed(summaries, safePage, totalPages);
+    const allComponents = buildAllComponents(summaries, safePage, totalPages);
     const selectRow = buildAllSelectRow(summaries, callerId, safePage);
     const pageRow = buildAllPageRow(callerId, safePage, totalPages);
-    const components = pageRow ? [selectRow, pageRow] : [selectRow];
-    await safeUpdate(interaction, { embeds: [embed], components });
+    const components = pageRow
+      ? [...allComponents, selectRow, pageRow]
+      : [...allComponents, selectRow];
+    await safeUpdate(interaction, { embeds: [], components, flags: COMPONENTS_V2_FLAG });
   }
 
   @ButtonComponent({ id: new RegExp(`^${GJ_VIEW_PAGE_PREFIX}:\\d+:\\d+:\\d+:\\d+$`) })
