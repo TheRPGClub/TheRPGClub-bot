@@ -335,7 +335,7 @@ async function confirmDuplicateCompletion(
   const container = new ContainerBuilder().addTextDisplayComponents(
     new TextDisplayBuilder().setContent(
       `We found a completion for **${gameTitle}** within the last week:\n` +
-        `• ${detailParts.join(" — ")} (Completion #${existing.completionId})${noteLine}\n\n` +
+        `• ${detailParts.join(" - ")} (Completion #${existing.completionId})${noteLine}\n\n` +
         "Add another completion anyway?",
     ),
   );

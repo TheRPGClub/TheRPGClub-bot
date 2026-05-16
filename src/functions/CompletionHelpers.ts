@@ -110,7 +110,7 @@ export async function saveCompletion(
   }
 
   const playtimeText = formatPlaytimeHours(finalPlaytimeHours);
-  const details = [completionType, playtimeText].filter(Boolean).join(" — ");
+  const details = [completionType, playtimeText].filter(Boolean).join(" - ");
 
   await interaction.followUp({
     content: `Logged completion for **${gameTitle ?? game.title}** (${details}).`,

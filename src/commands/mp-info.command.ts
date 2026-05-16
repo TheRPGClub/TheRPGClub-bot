@@ -126,7 +126,7 @@ function buildSummaryEmbed(
   const lines = pageMembers.map((member, idx) => {
     const displayIndex = offset + idx + 1;
     const platforms = formatPlatforms(member, filters);
-    return `${displayIndex}. <@${member.userId}> — ${platforms}`;
+    return `${displayIndex}. <@${member.userId}> - ${platforms}`;
   });
 
   const embed = new EmbedBuilder()

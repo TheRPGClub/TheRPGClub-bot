@@ -403,9 +403,9 @@ function buildCompletionEditPrompt(
 
   const noticeLine = notice ? `${notice}\n` : "";
   return {
-    content: `${noticeLine}Editing **${completion.title}** — choose a field to update:`,
+    content: `${noticeLine}Editing **${completion.title}** - choose a field to update:`,
     embeds: [
-      new EmbedBuilder().setDescription(`Current: ${currentParts.join(" — ")}${noteLine}`),
+      new EmbedBuilder().setDescription(`Current: ${currentParts.join(" - ")}${noteLine}`),
     ],
     components: [
       new ActionRowBuilder<ButtonBuilder>().addComponents(fieldButtons),

@@ -158,7 +158,7 @@ const HELP_TOPICS: HelpTopic[] = [
     label: "/hltb",
     summary: "Look up HowLongToBeat playtimes for a game.",
     syntax: "Syntax: /hltb title:<string> [showinchat:<boolean>]",
-    parameters: "title (required) — game name and optional details. showinchat (optional) — set true to share in channel.",
+    parameters: "title (required) - game name and optional details. showinchat (optional) - set true to share in channel.",
     notes: "Title autocompletes from GameDB and includes the release year.",
   },
   {

@@ -28,3 +28,4 @@ You are forbidden from reading my .env file.
 After completing a task, restate the prompt before your completion message.
 I develop on a laptop, but run the bot on my desktop.  Do not assume anything based on this machine's environment
 Do all coding tasks in branches. When you're finished, open a PR without prompting and link it to me for approval/merging.
+You are forbidden from using emdashes (—)

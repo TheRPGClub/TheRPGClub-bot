@@ -73,7 +73,7 @@ function buildListComponents(
   lines.push(
     ...pageEntries.map((e) => {
       const count = isSelf ? e.totalEntries : e.publicEntries;
-      return `**${e.title}** — ${count} ${entryLabel(count)}`;
+      return `**${e.title}** - ${count} ${entryLabel(count)}`;
     }),
   );
   const pageInfo = totalPages > 1 ? ` • Page ${page + 1}/${totalPages}` : "";
@@ -170,7 +170,7 @@ function buildAllEmbed(
   const lines = pageSummaries.map((s) => {
     const emoji = getUserEmojiString(s.userId);
     const prefix = emoji ? `${emoji} ` : "";
-    return `${prefix}<@${s.userId}> — ${s.gameCount} ${gameLabel(s.gameCount)}`;
+    return `${prefix}<@${s.userId}> - ${s.gameCount} ${gameLabel(s.gameCount)}`;
   });
   return new EmbedBuilder()
     .setTitle("Game Journal Users")
