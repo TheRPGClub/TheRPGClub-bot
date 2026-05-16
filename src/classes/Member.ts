@@ -2594,4 +2594,39 @@ export default class Member {
       await connection.close();
     }
   }
+
+  static async updateEmojiName(userId: string, emojiName: string | null): Promise<void> {
+    const connection = await getOraclePool().getConnection();
+    try {
+      await connection.execute(
+        `UPDATE RPG_CLUB_USERS
+            SET EMOJI_NAME = :emojiName,
+                UPDATED_AT = SYSTIMESTAMP
+          WHERE USER_ID = :userId`,
+        { userId, emojiName },
+        { autoCommit: true },
+      );
+    } finally {
+      await connection.close();
+    }
+  }
+
+  static async getAllWithEmojiName(): Promise<Array<{ userId: string; emojiName: string }>> {
+    const connection = await getOraclePool().getConnection();
+    try {
+      const res = await connection.execute<{ USER_ID: string; EMOJI_NAME: string }>(
+        `SELECT USER_ID, EMOJI_NAME
+           FROM RPG_CLUB_USERS
+          WHERE EMOJI_NAME IS NOT NULL`,
+        {},
+        { outFormat: oracledb.OUT_FORMAT_OBJECT },
+      );
+      return (res.rows ?? []).map((row) => ({
+        userId: row.USER_ID,
+        emojiName: row.EMOJI_NAME,
+      }));
+    } finally {
+      await connection.close();
+    }
+  }
 }

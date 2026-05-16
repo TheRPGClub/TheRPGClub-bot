@@ -38,6 +38,7 @@ Oracle table for storing RPG Club Discord user snapshots and role flags.
 | PROFILE_IMAGE | BLOB | Yes | — | Cached rendered profile image. |
 | PROFILE_IMAGE_AT | TIMESTAMP(6) WITH TIME ZONE | Yes | — | When the cached profile image was rendered. |
 | DONOR_NOTIFY_ON_CLAIM | NUMBER(1,0) | No | 0 | 1 if the user wants donation claim notifications. |
+| EMOJI_NAME | VARCHAR2(32) | Yes | — | Discord application emoji name assigned to this user (e.g. u_merph). |
 
 ## History / Audit
 
