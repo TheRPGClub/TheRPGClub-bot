@@ -116,10 +116,10 @@ export async function buildJournalView(options: JournalViewOptions): Promise<{
 
   // Container 1: owner header + game title + status + thumbnail
   const threadId = threadIds[0] ?? null;
-  const gameTitleLine =
+  const gameTitlePart =
     guildId && threadId
-      ? `## [${gameTitle}](https://discord.com/channels/${guildId}/${threadId})`
-      : `## ${gameTitle}`;
+      ? `[${gameTitle}](https://discord.com/channels/${guildId}/${threadId})`
+      : gameTitle;
 
   let statusLine = "";
   if (nowPlayingMeta?.addedAt) {
@@ -132,10 +132,12 @@ export async function buildJournalView(options: JournalViewOptions): Promise<{
     statusLine = `${latest.completionType} on ${completedDate}`;
   }
 
-  const gameInfoContent = statusLine ? `${gameTitleLine}\n${statusLine}` : gameTitleLine;
-  const headerSection = new SectionBuilder()
-    .addTextDisplayComponents(new TextDisplayBuilder().setContent(`## ${ownerTag}'s Game Journal`))
-    .addTextDisplayComponents(new TextDisplayBuilder().setContent(gameInfoContent));
+  const headerLines = [ownerTag, `## ${gameTitlePart} Game Journal`];
+  if (statusLine) headerLines.push(statusLine);
+
+  const headerSection = new SectionBuilder().addTextDisplayComponents(
+    new TextDisplayBuilder().setContent(headerLines.join("\n")),
+  );
   if (coverUrl) {
     headerSection.setThumbnailAccessory(new ThumbnailBuilder().setURL(coverUrl));
   }
