@@ -12,6 +12,12 @@ import {
   User,
 } from "discord.js";
 import {
+  ContainerBuilder,
+  SectionBuilder,
+  TextDisplayBuilder,
+  ThumbnailBuilder,
+} from "@discordjs/builders";
+import {
   ButtonComponent,
   Discord,
   SelectMenuComponent,
@@ -30,6 +36,7 @@ import {
 } from "../functions/InteractionUtils.js";
 import { getUserEmojiString } from "../services/UserEmojiService.js";
 import { buildJournalView } from "../functions/journalView.js";
+import { COMPONENTS_V2_FLAG } from "../config/flags.js";
 
 const LIST_PAGE_SIZE = 15;
 const ALL_PAGE_SIZE = 20;
@@ -54,31 +61,40 @@ function entryLabel(n: number): string {
   return n === 1 ? "entry" : "entries";
 }
 
-function buildListEmbed(
+function buildListComponents(
   target: User,
   entries: IGameJournalListEntry[],
   isSelf: boolean,
   page: number,
   totalPages: number,
-): EmbedBuilder {
-  const name = target.displayName ?? target.username;
+): ContainerBuilder[] {
+  const ownerName = target.displayName ?? target.username;
+  const emojiPrefix = getUserEmojiString(target.id);
+  const ownerTag = emojiPrefix ? `${emojiPrefix} ${ownerName}` : ownerName;
+
+  const headerSection = new SectionBuilder()
+    .addTextDisplayComponents(
+      new TextDisplayBuilder().setContent(
+        `${ownerTag}\n## ${ownerName}'s Game Journals`,
+      ),
+    )
+    .setThumbnailAccessory(new ThumbnailBuilder().setURL(target.displayAvatarURL()));
+  const headerContainer = new ContainerBuilder().addSectionComponents(headerSection);
+
   const start = page * LIST_PAGE_SIZE;
   const pageEntries = entries.slice(start, start + LIST_PAGE_SIZE);
-
   const lines = pageEntries.map((e) => {
     const count = isSelf ? e.totalEntries : e.publicEntries;
     return `**${e.title}** — ${count} ${entryLabel(count)}`;
   });
+  const pageInfo = totalPages > 1 ? ` • Page ${page + 1}/${totalPages}` : "";
+  lines.push(`-# ${entries.length} ${gameLabel(entries.length)}${pageInfo}`);
 
-  const embed = new EmbedBuilder()
-    .setTitle(`${name}'s Game Journals`)
-    .setThumbnail(target.displayAvatarURL())
-    .setDescription(lines.join("\n"))
-    .setFooter({
-      text: `${entries.length} ${gameLabel(entries.length)} • Page ${page + 1}/${totalPages}`,
-    });
+  const listContainer = new ContainerBuilder().addTextDisplayComponents(
+    new TextDisplayBuilder().setContent(lines.join("\n")),
+  );
 
-  return embed;
+  return [headerContainer, listContainer];
 }
 
 function buildListSelectRow(
@@ -286,15 +302,16 @@ export class GameJournalCommand {
 
     const totalPages = Math.max(1, Math.ceil(entries.length / LIST_PAGE_SIZE));
     const page = 0;
-    const embed = buildListEmbed(target, entries, isSelf, page, totalPages);
+    const listComponents = buildListComponents(target, entries, isSelf, page, totalPages);
     const selectRow = buildListSelectRow(entries, interaction.user.id, target.id, page);
     const pageRow = buildListPageRow(interaction.user.id, target.id, page, totalPages);
+    const cvFlags = (ephemeral ? MessageFlags.Ephemeral : 0) | COMPONENTS_V2_FLAG;
 
     const components = pageRow
-      ? [selectRow, pageRow]
-      : [selectRow];
+      ? [...listComponents, selectRow, pageRow]
+      : [...listComponents, selectRow];
 
-    await safeReply(interaction, { embeds: [embed], components, flags });
+    await safeReply(interaction, { embeds: [], components, flags: cvFlags });
   }
 
   @SelectMenuComponent({ id: new RegExp(`^${GJ_LIST_SELECT_PREFIX}:\\d+:\\d+:\\d+$`) })
@@ -347,12 +364,14 @@ export class GameJournalCommand {
     const totalPages = Math.max(1, Math.ceil(entries.length / LIST_PAGE_SIZE));
     const safePage = Math.min(Math.max(page, 0), totalPages - 1);
 
-    const embed = buildListEmbed(target, entries, isSelf, safePage, totalPages);
+    const listComponents = buildListComponents(target, entries, isSelf, safePage, totalPages);
     const selectRow = buildListSelectRow(entries, callerId, targetUserId, safePage);
     const pageRow = buildListPageRow(callerId, targetUserId, safePage, totalPages);
 
-    const components = pageRow ? [selectRow, pageRow] : [selectRow];
-    await safeUpdate(interaction, { embeds: [embed], components });
+    const components = pageRow
+      ? [...listComponents, selectRow, pageRow]
+      : [...listComponents, selectRow];
+    await safeUpdate(interaction, { embeds: [], components, flags: COMPONENTS_V2_FLAG });
   }
 
   @SelectMenuComponent({ id: new RegExp(`^${GJ_ALL_SELECT_PREFIX}:\\d+:\\d+$`) })
@@ -386,11 +405,13 @@ export class GameJournalCommand {
 
     const totalPages = Math.max(1, Math.ceil(entries.length / LIST_PAGE_SIZE));
     const page = 0;
-    const embed = buildListEmbed(target, entries, false, page, totalPages);
+    const listComponents = buildListComponents(target, entries, false, page, totalPages);
     const selectRow = buildListSelectRow(entries, callerId, targetUserId, page);
     const pageRow = buildListPageRow(callerId, targetUserId, page, totalPages);
-    const components = pageRow ? [selectRow, pageRow] : [selectRow];
-    await safeUpdate(interaction, { embeds: [embed], components });
+    const components = pageRow
+      ? [...listComponents, selectRow, pageRow]
+      : [...listComponents, selectRow];
+    await safeUpdate(interaction, { embeds: [], components, flags: COMPONENTS_V2_FLAG });
   }
 
   @ButtonComponent({ id: new RegExp(`^${GJ_ALL_PAGE_PREFIX}:\\d+:\\d+$`) })
