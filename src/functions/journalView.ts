@@ -17,7 +17,7 @@ import { getUserEmojiString } from "../services/UserEmojiService.js";
 import { formatTableDate, formatPlaytimeHours } from "../commands/profile.command.js";
 import { COMPONENTS_V2_FLAG } from "../config/flags.js";
 
-const JOURNAL_PAGE_SIZE = 5;
+const JOURNAL_PAGE_SIZE = 3;
 const ENTRY_SEPARATOR = "​";
 
 function trimContent(text: string): string {
