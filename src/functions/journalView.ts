@@ -132,7 +132,7 @@ export async function buildJournalView(options: JournalViewOptions): Promise<{
     statusLine = `${latest.completionType} on ${completedDate}`;
   }
 
-  const headerLines = [ownerTag, `## ${gameTitlePart} Game Journal`];
+  const headerLines = [ownerTag, `# ${gameTitlePart} Game Journal`];
   if (statusLine) headerLines.push(statusLine);
 
   const headerSection = new SectionBuilder().addTextDisplayComponents(

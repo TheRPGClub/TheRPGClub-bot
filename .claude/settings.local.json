@@ -4,5 +4,18 @@
       "Bash(npx tsc *)",
       "Bash(Remove-Item \"c:\\\\code\\\\RPGClubBotTs\\\\set-github-key.mjs\", \"c:\\\\code\\\\RPGClubBotTs\\\\test-github-auth.mjs\")"
     ]
+  },
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "shell": "bash",
+            "command": "jq -r '.prompt // \"\"' | grep -iEq '(accepted|merged)' && (cd \"C:/code/RPGClubBotTs\" && git checkout main && git pull) || true"
+          }
+        ]
+      }
+    ]
   }
 }
