@@ -34,7 +34,7 @@ export const ADMIN_HELP_TOPICS: AdminHelpTopic[] = [
     summary: "Update details for a specific GOTM round.",
     syntax: "Syntax: /admin edit-gotm round:<integer>",
     parameters:
-      "round (required) — GOTM round to edit. The bot shows current data and lets you pick what to change.",
+      "round (required) - GOTM round to edit. The bot shows current data and lets you pick what to change.",
   },
   {
     id: "add-nr-gotm",
@@ -62,7 +62,7 @@ export const ADMIN_HELP_TOPICS: AdminHelpTopic[] = [
     summary: "Update details for a specific NR-GOTM round.",
     syntax: "Syntax: /admin edit-nr-gotm round:<integer>",
     parameters:
-      "round (required) — NR-GOTM round to edit. The bot shows current data and lets you pick what to change.",
+      "round (required) - NR-GOTM round to edit. The bot shows current data and lets you pick what to change.",
   },
   {
     id: "delete-gotm-noms",

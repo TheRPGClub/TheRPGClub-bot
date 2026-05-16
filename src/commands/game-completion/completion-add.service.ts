@@ -417,7 +417,7 @@ async function confirmDuplicateCompletion(
   const payload: InteractionReplyOptions = {
     content:
       `We found a completion for **${gameTitle}** within the last week:\n` +
-      `• ${detailParts.join(" — ")} (Completion #${existing.completionId})${noteLine}\n\n` +
+      `• ${detailParts.join(" - ")} (Completion #${existing.completionId})${noteLine}\n\n` +
       "Add another completion anyway?",
     components: [row],
     flags: MessageFlags.Ephemeral,

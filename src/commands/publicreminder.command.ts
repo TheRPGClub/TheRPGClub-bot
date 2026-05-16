@@ -178,7 +178,7 @@ export class PublicReminderCommand {
         const recur =
           r.recurEvery && r.recurUnit ? ` (repeats every ${r.recurEvery} ${r.recurUnit})` : "";
         const timestamp = Math.floor(r.dueAt.getTime() / 1000);
-        return `#${r.reminderId}: <#${r.channelId}> at <t:${timestamp}:F>${recur} — ${r.message}`;
+        return `#${r.reminderId}: <#${r.channelId}> at <t:${timestamp}:F>${recur} - ${r.message}`;
       });
 
       await safeReply(interaction, {
