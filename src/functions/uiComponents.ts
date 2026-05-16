@@ -1,10 +1,20 @@
-import { ContainerBuilder, TextDisplayBuilder } from "@discordjs/builders";
+import { ContainerBuilder, SectionBuilder, TextDisplayBuilder } from "@discordjs/builders";
 import { getUserEmojiString } from "../services/UserEmojiService.js";
 
-export function buildUserHeaderContainer(userId: string, displayName: string): ContainerBuilder {
+export function buildUserHeaderContainer(
+  userId: string,
+  displayName: string,
+  title = "DEFAULT TITLE VALUE",
+): ContainerBuilder {
   const emoji = getUserEmojiString(userId);
-  const text = emoji ? `${emoji} ${displayName}` : displayName;
-  return new ContainerBuilder().addTextDisplayComponents(
-    new TextDisplayBuilder().setContent(text),
+  const userText = emoji ? `${emoji} ${displayName}` : displayName;
+
+  const titleSection = new SectionBuilder().addTextDisplayComponents(
+    new TextDisplayBuilder().setContent(title),
   );
+  const userSection = new SectionBuilder().addTextDisplayComponents(
+    new TextDisplayBuilder().setContent(userText),
+  );
+
+  return new ContainerBuilder().addSectionComponents(titleSection, userSection);
 }
