@@ -111,7 +111,7 @@ export async function buildJournalView(options: JournalViewOptions): Promise<{
 
   const gameTitle = game?.title ?? `Game #${gameId}`;
   const ownerName = memberRecord?.globalName ?? memberRecord?.username ?? ownerId;
-  const userHeaderContainer = buildUserHeaderContainer(ownerId, ownerName);
+  const userHeaderContainer = buildUserHeaderContainer(ownerId, ownerName, "Game Journal");
 
   // Container 2: game title + status + thumbnail
   const threadId = threadIds[0] ?? null;
