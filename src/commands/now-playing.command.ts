@@ -2240,6 +2240,7 @@ export class NowPlayingCommand {
     interaction: ButtonInteraction,
     ownerId: string,
   ): Promise<void> {
+    const isEphemeral = interaction.message.flags?.has(MessageFlags.Ephemeral) ?? false;
     const entries = getDisplayNowPlayingEntries(
       await Member.getNowPlaying(ownerId),
     ).slice(0, 10);
@@ -2248,7 +2249,7 @@ export class NowPlayingCommand {
         new TextDisplayBuilder().setContent("Your Now Playing list is empty."),
       );
       const pmComponents = await this.withPmNowPlayingList(ownerId, interaction.guildId, [container]);
-      await interaction.update({ components: pmComponents });
+      await interaction.update({ components: pmComponents, flags: buildComponentsV2Flags(isEphemeral) });
       return;
     }
     const stateToken = buildNowPlayingSortStateToken(entries.length);
@@ -2258,7 +2259,7 @@ export class NowPlayingCommand {
       interaction.guildId,
       components,
     );
-    await interaction.update({ components: pmComponents });
+    await interaction.update({ components: pmComponents, flags: buildComponentsV2Flags(isEphemeral) });
   }
 
   private parseNowPlayingCompletionDate(value: string): Date | null {
@@ -2318,7 +2319,7 @@ export class NowPlayingCommand {
         [container],
       );
       if (mode === "update" && "update" in interaction) {
-        await interaction.update({ components: pmComponents });
+        await interaction.update({ components: pmComponents, flags: buildComponentsV2Flags(true) });
       } else {
         await safeReply(interaction, {
           components: pmComponents,
@@ -2349,7 +2350,7 @@ export class NowPlayingCommand {
         [container],
       );
       if (mode === "update" && "update" in interaction) {
-        await interaction.update({ components: pmComponents });
+        await interaction.update({ components: pmComponents, flags: buildComponentsV2Flags(true) });
       } else {
         await safeReply(interaction, {
           components: pmComponents,
@@ -2397,7 +2398,7 @@ export class NowPlayingCommand {
         [container],
       );
       if (mode === "update" && "update" in interaction) {
-        await interaction.update({ components: pmComponents });
+        await interaction.update({ components: pmComponents, flags: buildComponentsV2Flags(true) });
       } else {
         await safeReply(interaction, {
           components: pmComponents,
@@ -2422,7 +2423,7 @@ export class NowPlayingCommand {
     );
 
     if (mode === "update" && "update" in interaction) {
-      await interaction.update({ components: pmComponents });
+      await interaction.update({ components: pmComponents, flags: buildComponentsV2Flags(true) });
       return;
     }
     await safeReply(interaction, {
@@ -2476,7 +2477,7 @@ export class NowPlayingCommand {
         new TextDisplayBuilder().setContent("That game could not be found."),
       );
       if (mode === "update" && "update" in interaction) {
-        await interaction.update({ components: [container] });
+        await interaction.update({ components: [container], flags: buildComponentsV2Flags(true) });
       } else {
         await safeReply(interaction, {
           components: [container],
@@ -2492,7 +2493,7 @@ export class NowPlayingCommand {
         new TextDisplayBuilder().setContent("No platform data is available for this game."),
       );
       if (mode === "update" && "update" in interaction) {
-        await interaction.update({ components: [container] });
+        await interaction.update({ components: [container], flags: buildComponentsV2Flags(true) });
       } else {
         await safeReply(interaction, {
           components: [container],
@@ -2534,6 +2535,7 @@ export class NowPlayingCommand {
 
   @SelectMenuComponent({ id: /^nowplaying-edit-platform-slot:\d+:\d+:[a-z0-9_]+$/ })
   async handleEditPlatformSlot(interaction: StringSelectMenuInteraction): Promise<void> {
+    const isEphemeral = interaction.message.flags?.has(MessageFlags.Ephemeral) ?? false;
     const [, ownerId, slotRaw, stateToken] = interaction.customId.split(":");
     if (interaction.user.id !== ownerId) {
       await interaction.reply({
@@ -2584,7 +2586,7 @@ export class NowPlayingCommand {
       encodeNowPlayingPlatformState(parsed),
     );
     const pmComponents = await this.withPmNowPlayingList(ownerId, interaction.guildId, components);
-    await interaction.update({ components: pmComponents });
+    await interaction.update({ components: pmComponents, flags: buildComponentsV2Flags(isEphemeral) });
   }
 
   @SelectMenuComponent({ id: /^nowplaying-edit-note-select:\d+$/ })
@@ -2684,6 +2686,7 @@ export class NowPlayingCommand {
 
   @SelectMenuComponent({ id: /^nowplaying-sort-slot:\d+:\d+:[a-z0-9_]+$/ })
   async handleNowPlayingSortSlot(interaction: StringSelectMenuInteraction): Promise<void> {
+    const isEphemeral = interaction.message.flags?.has(MessageFlags.Ephemeral) ?? false;
     const [, ownerId, slotRaw, stateToken] = interaction.customId.split(":");
     if (interaction.user.id !== ownerId) {
       const container = new ContainerBuilder().addTextDisplayComponents(
@@ -2723,7 +2726,7 @@ export class NowPlayingCommand {
         const container = new ContainerBuilder().addTextDisplayComponents(
           new TextDisplayBuilder().setContent("This sort form has expired. Open Sort again."),
         );
-        await interaction.update({ components: [container] });
+        await interaction.update({ components: [container], flags: buildComponentsV2Flags(isEphemeral) });
         return;
       }
 
@@ -2734,12 +2737,15 @@ export class NowPlayingCommand {
         encodeNowPlayingSortState(parsed),
       );
       const pmComponents = await this.withPmNowPlayingList(ownerId, interaction.guildId, components);
-      await interaction.update({ components: pmComponents });
+      await interaction.update({ components: pmComponents, flags: buildComponentsV2Flags(isEphemeral) });
     } catch {
       const container = new ContainerBuilder().addTextDisplayComponents(
         new TextDisplayBuilder().setContent("Could not update the sort form right now."),
       );
-      await interaction.update({ components: [container] }).catch(() => {});
+      await interaction.update({
+        components: [container],
+        flags: buildComponentsV2Flags(isEphemeral),
+      }).catch(() => {});
     }
   }
 
