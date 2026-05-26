@@ -6,10 +6,8 @@ import {
 } from "discord.js";
 import {
   ContainerBuilder,
-  SectionBuilder,
-  TextDisplayBuilder,
-  ThumbnailBuilder,
-} from "@discordjs/builders";
+    TextDisplayBuilder,
+  } from "@discordjs/builders";
 import Member, { type ICompletionRecord } from "../classes/Member.js";
 import Game from "../classes/Game.js";
 import { getThreadsByGameId } from "../classes/Thread.js";
@@ -18,7 +16,6 @@ import { COMPONENTS_V2_FLAG } from "../config/flags.js";
 import { buildUserHeaderContainer } from "./uiComponents.js";
 
 const JOURNAL_PAGE_SIZE = 3;
-const ENTRY_SEPARATOR = "​";
 
 function trimContent(text: string): string {
   return text.length <= 4000 ? text : `${text.slice(0, 3997)}...`;
@@ -102,18 +99,14 @@ export async function buildJournalView(options: JournalViewOptions): Promise<{
   ]);
 
   const files: AttachmentBuilder[] = [];
-  let coverUrl: string | null = null;
   if (game?.imageData) {
     const filename = `game_journal_${gameId}.png`;
     files.push(new AttachmentBuilder(game.imageData, { name: filename }));
-    coverUrl = `attachment://${filename}`;
   }
 
   const gameTitle = game?.title ?? `Game #${gameId}`;
   const ownerName = memberRecord?.globalName ?? memberRecord?.username ?? ownerId;
-  const userHeaderContainer = buildUserHeaderContainer(ownerId, ownerName, "Game Journal");
-
-  // Container 2: game title + status + thumbnail
+  // Header title and status
   const threadId = threadIds[0] ?? null;
   const gameTitlePart =
     guildId && threadId
@@ -131,12 +124,15 @@ export async function buildJournalView(options: JournalViewOptions): Promise<{
     statusLine = `${latest.completionType} on ${completedDate}`;
   }
 
-  const gameTitleLines = [`## ${gameTitlePart} Game Journal`];
-  if (statusLine) gameTitleLines.push(statusLine);
+  const headerTitleLines = [`${gameTitlePart} Game Journal`];
+  if (statusLine) headerTitleLines.push(statusLine);
+  const userHeaderContainer = buildUserHeaderContainer(
+    ownerId,
+    ownerName,
+    headerTitleLines.join("\n"),
+  );
 
-  const gameTitleText = new TextDisplayBuilder().setContent(gameTitleLines.join("\n"));
-
-  // Container 2: game title + entries + footer
+  // Container 2: entries + footer
   const pageInfo = totalPages > 1 ? `, page ${safePage} of ${totalPages}` : "";
   const publicQualifier = isOwnerView ? "" : "public ";
   const footer = `-# ${total} ${publicQualifier}${entryLabel(total)}${pageInfo}`;
@@ -185,17 +181,8 @@ export async function buildJournalView(options: JournalViewOptions): Promise<{
   entryParts.push(footer);
 
   const gameContainer = new ContainerBuilder();
-  if (coverUrl) {
-    gameContainer.addSectionComponents(
-      new SectionBuilder()
-        .addTextDisplayComponents(gameTitleText)
-        .setThumbnailAccessory(new ThumbnailBuilder().setURL(coverUrl)),
-    );
-  } else {
-    gameContainer.addTextDisplayComponents(gameTitleText);
-  }
   gameContainer.addTextDisplayComponents(
-    new TextDisplayBuilder().setContent(entryParts.join(`\n${ENTRY_SEPARATOR}\n`)),
+    new TextDisplayBuilder().setContent(entryParts.join(`\n\u00A0\n\n`)),
   );
 
   // Nav row
@@ -241,3 +228,4 @@ export async function buildJournalView(options: JournalViewOptions): Promise<{
     flags: COMPONENTS_V2_FLAG,
   };
 }
+
