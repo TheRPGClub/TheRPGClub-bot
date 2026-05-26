@@ -3,7 +3,7 @@ import axios from "axios";
 import { getOraclePool } from "../db/oracleClient.js";
 import { IGDBGameDetails, igdbService } from "../services/IGDB/IgdbService.js";
 import GameSearchSynonym from "./GameSearchSynonym.js";
-import { apiGet } from "../services/RpgClubApiClient.js";
+import { apiGet, apiGetRaw } from "../services/RpgClubApiClient.js";
 
 // Interfaces
 export interface IGame {
@@ -336,6 +336,27 @@ export default class Game {
   static async getGameRawFromApi(id: number): Promise<unknown> {
     const result = await apiGet<{ data: unknown }>(`/api/v1/games/${id}`);
     return result?.data ?? null;
+  }
+
+  /**
+   * Like `getGameRawFromApi` but also returns HTTP status and full request URL
+   * so callers can log the complete request/response details.
+   */
+  static async getGameRawFromApiWithMeta(id: number): Promise<{
+    rawResponse: unknown;
+    gameData: unknown;
+    status: number;
+    url: string;
+  }> {
+    const { rawData, status, url } = await apiGetRaw<{ data: unknown }>(
+      `/api/v1/games/${id}`,
+    );
+    return {
+      rawResponse: rawData,
+      gameData: rawData?.data ?? null,
+      status,
+      url,
+    };
   }
 
   static async getGameById(
