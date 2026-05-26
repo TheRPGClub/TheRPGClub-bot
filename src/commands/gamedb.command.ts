@@ -112,6 +112,7 @@ import {
   upsertGameDbCsvTitleMap,
 } from "../classes/GameDbCsvImportMapping.js";
 import { GAMEDB_CSV_PLATFORM_MAP } from "../config/gamedbCsvPlatformMap.js";
+import { renderUsernameWithEmoji } from "../services/UserEmojiService.js";
 
 const GAME_SEARCH_PAGE_SIZE = 10;
 const MAX_COMPONENT_CUSTOM_ID_LENGTH = 100;
@@ -2231,13 +2232,13 @@ export class GameDb {
       const gotmNomineesByRound = new Map<number, string[]>();
       associations.gotmNominations.forEach((nom) => {
         const list = gotmNomineesByRound.get(nom.round) ?? [];
-        list.push(nom.username);
+        list.push(renderUsernameWithEmoji(nom.userId, nom.username));
         gotmNomineesByRound.set(nom.round, list);
       });
       const nrGotmNomineesByRound = new Map<number, string[]>();
       associations.nrGotmNominations.forEach((nom) => {
         const list = nrGotmNomineesByRound.get(nom.round) ?? [];
-        list.push(nom.username);
+        list.push(renderUsernameWithEmoji(nom.userId, nom.username));
         nrGotmNomineesByRound.set(nom.round, list);
       });
 
@@ -2290,7 +2291,7 @@ export class GameDb {
         const MAX_NOW_PLAYING_DISPLAY = 12;
         const lines = nowPlayingMembers.slice(0, MAX_NOW_PLAYING_DISPLAY).map((member) => {
           const name = member.globalName ?? member.username ?? member.userId;
-          return name;
+          return renderUsernameWithEmoji(member.userId, name);
         });
 
         if (nowPlayingMembers.length > MAX_NOW_PLAYING_DISPLAY) {
@@ -2305,7 +2306,7 @@ export class GameDb {
         const MAX_OWNERS_DISPLAY = 12;
         const lines = collectionOwners.slice(0, MAX_OWNERS_DISPLAY).map((member) => {
           const name = member.globalName ?? member.username ?? member.userId;
-          return name;
+          return renderUsernameWithEmoji(member.userId, name);
         });
 
         if (collectionOwners.length > MAX_OWNERS_DISPLAY) {
@@ -2327,7 +2328,7 @@ export class GameDb {
         const uniqueList = Array.from(uniqueCompletions.values());
         const lines = uniqueList.slice(0, MAX_COMPLETIONS_DISPLAY).map((member) => {
           const name = member.globalName ?? member.username ?? member.userId;
-          return name;
+          return renderUsernameWithEmoji(member.userId, name);
         });
 
         if (uniqueList.length > MAX_COMPLETIONS_DISPLAY) {
@@ -2346,7 +2347,7 @@ export class GameDb {
       );
       if (gotmNominations.length) {
         const lines = gotmNominations.map(
-          (nom) => `Round ${nom.round} - ${nom.username}`,
+          (nom) => `Round ${nom.round} - ${renderUsernameWithEmoji(nom.userId, nom.username)}`,
         );
         pushRpgClubSection("GOTM Nominations", lines.join(", "));
       }
@@ -2356,7 +2357,7 @@ export class GameDb {
       );
       if (nrGotmNominations.length) {
         const lines = nrGotmNominations.map(
-          (nom) => `Round ${nom.round} - ${nom.username}`,
+          (nom) => `Round ${nom.round} - ${renderUsernameWithEmoji(nom.userId, nom.username)}`,
         );
         pushRpgClubSection("NR-GOTM Nominations", lines.join(", "));
       }

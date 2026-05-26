@@ -17,6 +17,7 @@ import { COMPLETION_PAGE_SIZE, formatDiscordTimestamp, formatTableDate } from ".
 import { formatPlatformDisplayName } from "../../functions/PlatformDisplay.js";
 import { safeReply } from "../../functions/InteractionUtils.js";
 import { shouldRenderPrevNextButtons } from "../../functions/PaginationUtils.js";
+import { renderUsernameWithEmoji } from "../../services/UserEmojiService.js";
 
 /**
  * Renders a leaderboard showing all members with completions, optionally filtered by game title
@@ -40,7 +41,7 @@ export async function renderCompletionLeaderboard(
   const lines = leaderboard.map((m, idx) => {
     const name = m.globalName ?? m.username ?? m.userId;
     const suffix = m.count === 1 ? "completion" : "completions";
-    return `${idx + 1}. **${name}**: ${m.count} ${suffix}`;
+    return `${idx + 1}. **${renderUsernameWithEmoji(m.userId, name)}**: ${m.count} ${suffix}`;
   });
 
   const embed = new EmbedBuilder()
