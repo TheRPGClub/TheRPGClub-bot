@@ -5665,7 +5665,7 @@ export class NowPlayingCommand {
     });
     if (showHeaderEditHint) {
       container.addTextDisplayComponents(
-        new TextDisplayBuilder().setContent("-# *Click user button in header to edit*"),
+        new TextDisplayBuilder().setContent("-# *Note: List owner can use button in the header to maintain this list.*"),
       );
     }
     return [container];
