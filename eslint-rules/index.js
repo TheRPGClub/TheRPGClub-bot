@@ -420,6 +420,38 @@ function collectUnusedVariables(scope, unused) {
   }
 }
 
+function isFunctionDeclarationExported(def) {
+  // export function foo() {}
+  // export default function foo() {}
+  const parent = def.node?.parent;
+  return (
+    parent?.type === "ExportNamedDeclaration" ||
+    parent?.type === "ExportDefaultDeclaration"
+  );
+}
+
+function collectUnusedFunctionDeclarations(scope, unused) {
+  for (const variable of scope.variables) {
+    if (shouldIgnoreUnusedVariable(variable)) continue;
+    // Only target named function declarations (def.type "FunctionName" from a
+    // FunctionDeclaration). Arrow/expression function variables are already
+    // covered by no-unused-imports-vars-local, so skip them here.
+    const isFuncDecl = variable.defs.some(
+      (def) =>
+        def.type === "FunctionName" && def.node?.type === "FunctionDeclaration",
+    );
+    if (!isFuncDecl) continue;
+    const isExported = variable.defs.some(isFunctionDeclarationExported);
+    if (isExported) continue;
+    if (variable.references.length === 0) {
+      unused.push(variable);
+    }
+  }
+  for (const child of scope.childScopes) {
+    collectUnusedFunctionDeclarations(child, unused);
+  }
+}
+
 function getDecoratorKind(name) {
   if (name === "ButtonComponent") return "button";
   if (name === "SelectMenuComponent") return "select";
@@ -2719,6 +2751,37 @@ export default {
                   kind: call.kind,
                   prefix: call.prefix,
                 },
+              });
+            }
+          },
+        };
+      },
+    },
+    "no-unused-functions": {
+      meta: {
+        type: "suggestion",
+        docs: {
+          description:
+            "Disallow unused named function declarations. " +
+            "Arrow/expression function variables are covered by no-unused-imports-vars-local.",
+        },
+        schema: [],
+        messages: {
+          unusedFunction: "Function '{{name}}' is defined but never used.",
+        },
+      },
+      create(context) {
+        return {
+          "Program:exit"() {
+            const unused = [];
+            collectUnusedFunctionDeclarations(context.getScope(), unused);
+            for (const variable of unused) {
+              const identifier = variable.identifiers[0];
+              if (!identifier) continue;
+              context.report({
+                node: identifier,
+                messageId: "unusedFunction",
+                data: { name: identifier.name },
               });
             }
           },
