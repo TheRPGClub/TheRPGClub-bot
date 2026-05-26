@@ -141,7 +141,36 @@ function clearAutocompleteSearchCaches(): void {
   pendingAutocompleteSearches.clear();
 }
 
+export type GameSource = "oracleSQL" | "API";
+
 // Helper functions for mapping rows
+
+/**
+ * Maps a Rails API JSON response (snake_case) to IGame.
+ * imageData and artData are always null from the API (blobs are not serialized).
+ */
+function mapGameFromApi(data: any): IGame {
+  return {
+    id: Number(data.id ?? data.game_id),
+    title: String(data.title),
+    description: data.description ? String(data.description) : null,
+    imageData: null,
+    artData: null,
+    thumbnailBad: Boolean(data.thumbnail_bad ?? false),
+    thumbnailApproved: Boolean(data.thumbnail_approved ?? false),
+    igdbId: data.igdb_id != null ? Number(data.igdb_id) : null,
+    slug: data.slug ? String(data.slug) : null,
+    totalRating: data.total_rating != null ? Number(data.total_rating) : null,
+    igdbUrl: data.igdb_url ? String(data.igdb_url) : null,
+    featuredVideoUrl: data.featured_video_url ? String(data.featured_video_url) : null,
+    initialReleaseDate: data.initial_release_date
+      ? new Date(data.initial_release_date)
+      : null,
+    createdAt: new Date(data.created_at),
+    updatedAt: new Date(data.updated_at),
+  };
+}
+
 function mapGameRow(row: any): IGame {
   return {
     id: Number(row.GAME_ID),
@@ -295,7 +324,20 @@ export default class Game {
     }
   }
 
-  static async getGameById(id: number): Promise<IGame | null> {
+  static async getGameById(
+    id: number,
+    source: GameSource = "oracleSQL",
+  ): Promise<IGame | null> {
+    if (source === "API") {
+      const baseUrl = process.env.RPGCLUB_API_BASE_URL;
+      if (!baseUrl) throw new Error("RPGCLUB_API_BASE_URL is not configured.");
+      const response = await axios.get<{ data: unknown }>(
+        `${baseUrl}/api/va/games/${id}`,
+      );
+      const data = response.data?.data;
+      return data ? mapGameFromApi(data) : null;
+    }
+
     const pool = getOraclePool();
     const connection = await pool.getConnection();
 
@@ -317,18 +359,19 @@ export default class Game {
         CREATED_AT: Date;
         UPDATED_AT: Date;
       }>(
-        `SELECT GAME_ID, TITLE, DESCRIPTION, IMAGE_DATA, ART_DATA, THUMBNAIL_BAD, THUMBNAIL_APPROVED, IGDB_ID, SLUG, TOTAL_RATING, IGDB_URL, FEATURED_VIDEO_URL,
+        `SELECT GAME_ID, TITLE, DESCRIPTION, IMAGE_DATA, ART_DATA, THUMBNAIL_BAD,
+                THUMBNAIL_APPROVED, IGDB_ID, SLUG, TOTAL_RATING, IGDB_URL, FEATURED_VIDEO_URL,
                 INITIAL_RELEASE_DATE, CREATED_AT, UPDATED_AT
            FROM GAMEDB_GAMES
           WHERE GAME_ID = :id`,
         { id },
-        { 
-          outFormat: oracledb.OUT_FORMAT_OBJECT, 
-          fetchInfo: { 
+        {
+          outFormat: oracledb.OUT_FORMAT_OBJECT,
+          fetchInfo: {
             "IMAGE_DATA": { type: oracledb.BUFFER },
             "ART_DATA": { type: oracledb.BUFFER },
-            "DESCRIPTION": { type: oracledb.STRING }
-          } 
+            "DESCRIPTION": { type: oracledb.STRING },
+          },
         },
       );
 

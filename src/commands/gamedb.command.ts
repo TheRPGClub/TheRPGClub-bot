@@ -65,7 +65,7 @@ import {
   stripTitleDateSuffix,
 } from "../functions/CsvUtils.js";
 import { shouldRenderPrevNextButtons } from "../functions/PaginationUtils.js";
-import Game, { type IGame, type IRelease } from "../classes/Game.js";
+import Game, { type GameSource, type IGame, type IRelease } from "../classes/Game.js";
 import { getHltbCacheByGameId, upsertHltbCache } from "../classes/HltbCache.js";
 import { getThreadsByGameId, setThreadGameLink, upsertThreadRecord } from "../classes/Thread.js";
 import axios from "axios"; // For downloading image attachments
@@ -1916,17 +1916,26 @@ export class GameDb {
       autocomplete: autocompleteGameDbViewTitle,
     })
     query: string,
+    @SlashChoice({ name: "oracle", value: "oracle" }, { name: "api", value: "api" })
+    @SlashOption({
+      description: "Data source for the game lookup (default: oracle)",
+      name: "source",
+      required: false,
+      type: ApplicationCommandOptionType.String,
+    })
+    sourceChoice: string | undefined,
     interaction: CommandInteraction,
   ): Promise<void> {
     await safeDeferReply(interaction, { flags: buildComponentsV2Flags(false) });
 
+    const source: GameSource = sourceChoice === "api" ? "API" : "oracleSQL";
     const searchTerm = sanitizeUserInput(query, { preserveNewlines: false });
     if (/^\d+$/.test(searchTerm)) {
       const gameId = Number(searchTerm);
       if (Number.isInteger(gameId) && gameId > 0) {
-        const game = await Game.getGameById(gameId);
+        const game = await Game.getGameById(gameId, source);
         if (game) {
-          await this.showGameProfile(interaction, gameId);
+          await this.showGameProfile(interaction, gameId, undefined, source);
           return;
         }
       }
@@ -2033,8 +2042,9 @@ export class GameDb {
     interaction: CommandInteraction | StringSelectMenuInteraction,
     gameId: number,
     includeActionsOverride?: boolean,
+    source?: GameSource,
   ): Promise<void> {
-    const profile = await this.buildGameProfile(gameId, interaction);
+    const profile = await this.buildGameProfile(gameId, interaction, source);
     if (!profile) {
       await safeReply(interaction, {
         content: `No game found with ID ${gameId}.`,
@@ -2152,6 +2162,7 @@ export class GameDb {
       | ButtonInteraction
       | ModalSubmitInteraction
       | GameProfileRenderContext,
+    source?: GameSource,
   ): Promise<{
     components: Array<ContainerBuilder | ActionRowBuilder<ButtonBuilder>>;
     files: AttachmentBuilder[];
@@ -2163,7 +2174,7 @@ export class GameDb {
     isReleased: boolean;
   } | null> {
     try {
-      const game = await Game.getGameById(gameId);
+      const game = await Game.getGameById(gameId, source);
       if (!game) {
         return null;
       }
