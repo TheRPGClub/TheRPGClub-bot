@@ -59,7 +59,7 @@ export async function buildNominationListPayload(
     window.targetRound,
     nominations,
   );
-  const components = buildNominationContainers(
+  const components = await buildNominationContainers(
     kindLabel,
     commandLabel,
     window,
