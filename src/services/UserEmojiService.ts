@@ -109,12 +109,16 @@ export function renderUsernameWithEmoji(userId: string, displayName: string): st
 export async function startUserEmojiService(client: Client): Promise<void> {
   if (initialized) return;
   initialized = true;
-  syncAllRegularsEmoji(client).catch((err) => {
+  const forceRefresh = process.env["FORCE_EMOJI_REFRESH"] === "true";
+  if (forceRefresh) {
+    console.log("[UserEmojiService] FORCE_EMOJI_REFRESH detected -- all emojis will be re-uploaded.");
+  }
+  syncAllRegularsEmoji(client, forceRefresh).catch((err) => {
     console.error("[UserEmojiService] Initial sync failed:", err);
   });
 }
 
-async function syncAllRegularsEmoji(client: Client): Promise<void> {
+async function syncAllRegularsEmoji(client: Client, forceRefresh = false): Promise<void> {
   const app = client.application;
   if (!app) {
     console.error("[UserEmojiService] client.application not available.");
@@ -151,12 +155,19 @@ async function syncAllRegularsEmoji(client: Client): Promise<void> {
 
     if (storedName) {
       const emojiId = discordEmojis.get(storedName);
-      if (emojiId) {
+      if (emojiId && !forceRefresh) {
         emojiCache.set(userId, { emojiId, emojiName: storedName });
         claimedNames.add(storedName);
         continue;
       }
-      // Emoji missing from Discord but DB has a name -- recreate it
+      // Delete the existing emoji so it can be re-uploaded (force refresh or missing from Discord)
+      if (emojiId) {
+        try {
+          await app.emojis.delete(emojiId);
+        } catch (err) {
+          console.error(`[UserEmojiService] Failed to delete emoji for refresh (${member.displayName}):`, err);
+        }
+      }
       const avatarUrl = member.displayAvatarURL({ extension: "png", size: 128, forceStatic: true });
       try {
         const emoji = await app.emojis.create({
