@@ -2,7 +2,13 @@
   "permissions": {
     "allow": [
       "Bash(npx tsc *)",
-      "Bash(Remove-Item \"c:\\\\code\\\\RPGClubBotTs\\\\set-github-key.mjs\", \"c:\\\\code\\\\RPGClubBotTs\\\\test-github-auth.mjs\")"
+      "Bash(Remove-Item \"c:\\\\code\\\\RPGClubBotTs\\\\set-github-key.mjs\", \"c:\\\\code\\\\RPGClubBotTs\\\\test-github-auth.mjs\")",
+      "Bash(grep -E '^pg$')",
+      "WebFetch(domain:therpgclub.fly.dev)",
+      "Bash(curl -s \"https://therpgclub.fly.dev/api/va/games/1\")",
+      "Bash(curl -sv \"https://therpgclub.fly.dev/api/va/games/1\")",
+      "Bash(curl -s \"https://therpgclub.fly.dev/api/va/games\")",
+      "Bash(curl -sv \"https://therpgclub.fly.dev/api/va/games\")"
     ]
   },
   "hooks": {
@@ -11,8 +17,8 @@
         "hooks": [
           {
             "type": "command",
-            "shell": "bash",
-            "command": "jq -r '.prompt // \"\"' | grep -iEq '(accepted|merged)' && (cd \"C:/code/RPGClubBotTs\" && git checkout main && git pull) || true"
+            "command": "jq -r '.prompt // \"\"' | grep -iEq '(accepted|merged)' && (cd \"C:/code/RPGClubBotTs\" && git checkout main && git pull) || true",
+            "shell": "bash"
           }
         ]
       }
