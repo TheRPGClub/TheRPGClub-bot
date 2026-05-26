@@ -3,7 +3,11 @@ import axios from "axios";
 import { getOraclePool } from "../db/oracleClient.js";
 import { IGDBGameDetails, igdbService } from "../services/IGDB/IgdbService.js";
 import GameSearchSynonym from "./GameSearchSynonym.js";
-import { apiGet, apiGetRaw } from "../services/RpgClubApiClient.js";
+import {
+  apiGet,
+  apiGetRaw,
+  type ApiGetRawMeta,
+} from "../services/RpgClubApiClient.js";
 
 // Interfaces
 export interface IGame {
@@ -339,24 +343,16 @@ export default class Game {
   }
 
   /**
-   * Like `getGameRawFromApi` but also returns HTTP status and full request URL
-   * so callers can log the complete request/response details.
+   * Like `getGameRawFromApi` but also returns HTTP status, request/response
+   * headers, and the full raw response body so callers can log diagnostics.
+   * HTTP errors (4xx/5xx) are returned as values; check `errorMessage`.
    */
-  static async getGameRawFromApiWithMeta(id: number): Promise<{
-    rawResponse: unknown;
-    gameData: unknown;
-    status: number;
-    url: string;
-  }> {
-    const { rawData, status, url } = await apiGetRaw<{ data: unknown }>(
-      `/api/v1/games/${id}`,
-    );
-    return {
-      rawResponse: rawData,
-      gameData: rawData?.data ?? null,
-      status,
-      url,
-    };
+  static async getGameRawFromApiWithMeta(
+    id: number,
+  ): Promise<ApiGetRawMeta & { gameData: unknown }> {
+    const meta = await apiGetRaw<{ data: unknown }>(`/api/v1/games/${id}`);
+    const body = meta.rawData as { data?: unknown } | null;
+    return { ...meta, gameData: body?.data ?? null };
   }
 
   static async getGameById(

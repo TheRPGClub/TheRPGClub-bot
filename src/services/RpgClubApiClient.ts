@@ -59,23 +59,64 @@ export async function apiGet<T>(
   }
 }
 
+export type ApiGetRawMeta = {
+  rawData: unknown;
+  status: number;
+  url: string;
+  /** Request headers actually sent (Authorization value is masked). */
+  requestHeaders: Record<string, string>;
+  /** Response headers returned by the server. */
+  responseHeaders: Record<string, string>;
+  /** Non-null when the request produced an HTTP or network error. */
+  errorMessage: string | null;
+};
+
+function maskHeaders(raw: Record<string, unknown>): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(raw)) {
+    const key = String(k);
+    const val = String(v ?? "");
+    out[key] = key.toLowerCase() === "authorization" ? "Bearer ***" : val;
+  }
+  return out;
+}
+
 /**
- * GET a resource and return raw response metadata alongside the parsed body.
- * Unlike `apiGet`, this never returns `null` -- 404 responses have `status: 404`
- * and `rawData: null`. Non-2xx errors (other than 404) still throw.
+ * GET a resource and return full response metadata alongside the parsed body.
+ * Unlike `apiGet`, HTTP errors (4xx/5xx) are returned as values rather than
+ * thrown -- check `errorMessage` and `status` to detect them. Only non-Axios
+ * errors (e.g. network failure before a response arrives) still throw.
  */
 export async function apiGetRaw<T>(
   path: string,
   config?: AxiosRequestConfig,
-): Promise<{ rawData: T | null; status: number; url: string }> {
+): Promise<ApiGetRawMeta> {
   const baseURL = process.env.RPGCLUB_API_BASE_URL ?? "";
   const url = `${baseURL}${path}`;
   try {
     const response = await getClient().get<T>(path, config);
-    return { rawData: response.data, status: response.status, url };
+    return {
+      rawData: response.data,
+      status: response.status,
+      url,
+      requestHeaders: maskHeaders(
+        (response.config.headers ?? {}) as Record<string, unknown>,
+      ),
+      responseHeaders: response.headers as Record<string, string>,
+      errorMessage: null,
+    };
   } catch (err: unknown) {
-    if (axios.isAxiosError(err) && err.response?.status === 404) {
-      return { rawData: null, status: 404, url };
+    if (axios.isAxiosError(err)) {
+      return {
+        rawData: err.response?.data ?? null,
+        status: err.response?.status ?? 0,
+        url,
+        requestHeaders: maskHeaders(
+          (err.config?.headers ?? {}) as Record<string, unknown>,
+        ),
+        responseHeaders: (err.response?.headers ?? {}) as Record<string, string>,
+        errorMessage: err.message,
+      };
     }
     throw err;
   }

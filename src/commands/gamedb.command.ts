@@ -387,13 +387,24 @@ function buildChoiceRows(
 
 type ISendableChannel = { send: (options: MessageCreateOptions) => Promise<unknown> };
 
+function formatHeadersBlock(headers: Record<string, string>): string {
+  const lines = Object.entries(headers)
+    .map(([k, v]) => `${k}: ${v}`)
+    .join("\n");
+  return lines ? `\`\`\`\n${lines}\n\`\`\`` : "`(none)`";
+}
+
 async function sendGameDbApiLog(
   interaction: CommandInteraction,
   gameId: number,
-  url: string,
-  status: number,
-  rawResponse: unknown,
-  error: string | null,
+  meta: {
+    url: string;
+    status: number;
+    rawData: unknown;
+    requestHeaders: Record<string, string>;
+    responseHeaders: Record<string, string>;
+    errorMessage: string | null;
+  },
 ): Promise<void> {
   try {
     const channel = await interaction.client.channels
@@ -405,42 +416,52 @@ async function sendGameDbApiLog(
 
     const userId = interaction.user.id;
     const timestamp = new Date().toISOString();
+    const { url, status, rawData, requestHeaders, responseHeaders, errorMessage } = meta;
 
-    const requestBlock = [
+    const header = [
       `**[GameDB API View]**`,
-      `**User:** <@${userId}>`,
-      `**Game ID:** ${gameId}`,
+      `**User:** <@${userId}>  **Game ID:** ${gameId}`,
       `**URL:** \`${url}\``,
       `**Time:** ${timestamp}`,
+      `**Status:** ${status || "N/A (network error)"}`,
     ].join("\n");
 
-    if (error) {
-      const errBlock = error.length > 1800
-        ? `${error.slice(0, 1800)}...(truncated)`
-        : error;
+    const reqSection = `**Request Headers:**\n${formatHeadersBlock(requestHeaders)}`;
+    const resHeaderSection =
+      `**Response Headers:**\n${formatHeadersBlock(responseHeaders)}`;
+
+    if (errorMessage) {
+      const errBlock = errorMessage.length > 900
+        ? `${errorMessage.slice(0, 900)}...(truncated)`
+        : errorMessage;
       await sendable.send({
-        content: `${requestBlock}\n\n**Status:** Error\n\`\`\`\n${errBlock}\n\`\`\``,
+        content: [
+          header,
+          reqSection,
+          resHeaderSection,
+          `**Error:**\n\`\`\`\n${errBlock}\n\`\`\``,
+        ].join("\n\n"),
       });
       return;
     }
 
-    const statusLine = `**Status:** ${status}`;
-    const json = JSON.stringify(rawResponse, null, 2);
+    const json = JSON.stringify(rawData, null, 2);
+    const preamble = [header, reqSection, resHeaderSection].join("\n\n");
 
-    if (json.length > 1800) {
+    if (json.length > 1200) {
       const buf = Buffer.from(json, "utf8");
       const attachment = new AttachmentBuilder(buf, {
         name: `gamedb-api-${gameId}.json`,
       });
       await sendable.send({
-        content: `${requestBlock}\n\n${statusLine}\n**Response:** (see attachment)`,
+        content: `${preamble}\n\n**Response:** (see attachment)`,
         files: [attachment],
       });
       return;
     }
 
     await sendable.send({
-      content: `${requestBlock}\n\n${statusLine}\n**Response:**\n\`\`\`json\n${json}\n\`\`\``,
+      content: `${preamble}\n\n**Response:**\n\`\`\`json\n${json}\n\`\`\``,
     });
   } catch {
     // Do not let logging failures surface to the user
@@ -2007,26 +2028,29 @@ export class GameDb {
       }
       let rawContent: string;
       try {
-        const { rawResponse, gameData, status, url } =
-          await Game.getGameRawFromApiWithMeta(gameId);
-        void sendGameDbApiLog(interaction, gameId, url, status, rawResponse, null);
-        const json = JSON.stringify(gameData, null, 2);
-        const body = json.length > 1900
-          ? json.slice(0, 1900) + "\n...(truncated)"
-          : json;
-        rawContent = `\`\`\`json\n${body}\n\`\`\``;
+        const meta = await Game.getGameRawFromApiWithMeta(gameId);
+        void sendGameDbApiLog(interaction, gameId, meta);
+        if (meta.errorMessage) {
+          rawContent = `API error: ${meta.errorMessage}`;
+        } else {
+          const json = JSON.stringify(meta.gameData, null, 2);
+          const body = json.length > 1900
+            ? json.slice(0, 1900) + "\n...(truncated)"
+            : json;
+          rawContent = `\`\`\`json\n${body}\n\`\`\``;
+        }
       } catch (err: any) {
+        // Only non-Axios errors (network failures) reach here
         const errMsg: string = err?.message ?? String(err);
-        const apiPath = `/api/v1/games/${gameId}`;
         const baseUrl = process.env.RPGCLUB_API_BASE_URL ?? "";
-        void sendGameDbApiLog(
-          interaction,
-          gameId,
-          `${baseUrl}${apiPath}`,
-          0,
-          null,
-          errMsg,
-        );
+        void sendGameDbApiLog(interaction, gameId, {
+          url: `${baseUrl}/api/v1/games/${gameId}`,
+          status: 0,
+          rawData: null,
+          requestHeaders: {},
+          responseHeaders: {},
+          errorMessage: errMsg,
+        });
         rawContent = `API error: ${errMsg}`;
       }
       await safeReply(interaction, {
