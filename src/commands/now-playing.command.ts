@@ -43,7 +43,6 @@ import {
   SectionBuilder,
   SeparatorBuilder,
   TextDisplayBuilder,
-  ThumbnailBuilder,
 } from "@discordjs/builders";
 import { SeparatorSpacingSize, TextInputStyle as ApiTextInputStyle } from "discord-api-types/v10";
 import crypto from "node:crypto";
@@ -95,6 +94,7 @@ import {
   NOW_PLAYING_HELP_PREFIX,
   NOW_PLAYING_HELP_TEXTS,
 } from "./now-playing-help.js";
+import { renderUsernameWithEmoji } from "../services/UserEmojiService.js";
 
 const MAX_NOW_PLAYING_NOTE_LEN = 500;
 const NOW_PLAYING_SEARCH_LIMIT = 10;
@@ -4428,7 +4428,7 @@ export class NowPlayingCommand {
       const displayName = record.globalName ?? record.username ?? record.userId;
       const count = record.entries.length;
       const suffix = count === 1 ? "game" : "games";
-      return `**${displayName}**: ${count} ${suffix}`;
+      return `**${renderUsernameWithEmoji(record.userId, displayName)}**: ${count} ${suffix}`;
     });
 
     const container = this.buildNowPlayingListContainer("Now Playing - Everyone", lines);
@@ -5329,7 +5329,7 @@ export class NowPlayingCommand {
             const displayName = record.globalName ?? record.username ?? record.userId;
             const count = record.entries.length;
             const suffix = count === 1 ? "game" : "games";
-            return `**${displayName}**: ${count} ${suffix}`;
+            return `**${renderUsernameWithEmoji(record.userId, displayName)}**: ${count} ${suffix}`;
           });
           const container = this.buildNowPlayingListContainer("Now Playing - Everyone", lines);
           const selectRow = this.buildNowPlayingMemberSelect(sortedLists);

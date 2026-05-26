@@ -29,7 +29,7 @@ import {
   safeReply,
   safeUpdate,
 } from "../functions/InteractionUtils.js";
-import { getUserEmojiString } from "../services/UserEmojiService.js";
+import { renderUsernameWithEmoji } from "../services/UserEmojiService.js";
 import { buildJournalView } from "../functions/journalView.js";
 import { COMPONENTS_V2_FLAG } from "../config/flags.js";
 import { buildUserHeaderContainer } from "../functions/uiComponents.js";
@@ -169,9 +169,8 @@ function buildAllEmbed(
   const pageSummaries = summaries.slice(start, start + ALL_PAGE_SIZE);
   const memberLabel = summaries.length === 1 ? "member" : "members";
   const lines = pageSummaries.map((s) => {
-    const emoji = getUserEmojiString(s.userId);
-    const prefix = emoji ? `${emoji} ` : "";
-    return `${prefix}<@${s.userId}> - ${s.gameCount} ${gameLabel(s.gameCount)}`;
+    return `${renderUsernameWithEmoji(s.userId, `<@${s.userId}>`)}`
+      + ` - ${s.gameCount} ${gameLabel(s.gameCount)}`;
   });
   return new EmbedBuilder()
     .setTitle("Game Journal Users")

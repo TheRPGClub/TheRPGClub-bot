@@ -8,7 +8,8 @@
       "Bash(curl -s \"https://therpgclub.fly.dev/api/va/games/1\")",
       "Bash(curl -sv \"https://therpgclub.fly.dev/api/va/games/1\")",
       "Bash(curl -s \"https://therpgclub.fly.dev/api/va/games\")",
-      "Bash(curl -sv \"https://therpgclub.fly.dev/api/va/games\")"
+      "Bash(curl -sv \"https://therpgclub.fly.dev/api/va/games\")",
+      "Bash(Select-Object Name, FullName)"
     ]
   },
   "hooks": {

@@ -5,15 +5,14 @@ import {
   SectionBuilder,
   TextDisplayBuilder,
 } from "@discordjs/builders";
-import { getUserEmojiString } from "../services/UserEmojiService.js";
+import { renderUsernameWithEmoji } from "../services/UserEmojiService.js";
 
 export function buildUserHeaderContainer(
   userId: string,
   displayName: string,
   title?: string,
 ): ContainerBuilder {
-  const emoji = getUserEmojiString(userId);
-  const userText = emoji ? `${emoji} ${displayName}` : displayName;
+  const userText = renderUsernameWithEmoji(userId, displayName);
 
   if (title) {
     const section = new SectionBuilder()
