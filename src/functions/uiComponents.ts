@@ -21,8 +21,7 @@ export function buildUserHeaderContainer(
     let button = new ButtonBuilder()
       .setCustomId(`user-header-label:${userId}`)
       .setLabel(displayName)
-      .setStyle(ButtonStyle.Secondary)
-      .setDisabled(true);
+      .setStyle(ButtonStyle.Secondary);
     if (emojiString) {
       // setEmoji requires APIMessageComponentEmoji; parse <:name:id> format.
       const match = emojiString.match(/^<:([^:]+):(\d+)>$/);
