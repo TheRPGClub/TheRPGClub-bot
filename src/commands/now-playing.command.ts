@@ -58,6 +58,7 @@ import {
 } from "../functions/InteractionUtils.js";
 import Game, { type IGame } from "../classes/Game.js";
 import { buildJournalView } from "../functions/journalView.js";
+import { buildUserHeaderContainer } from "../functions/uiComponents.js";
 import { igdbService } from "../services/IGDB/IgdbService.js";
 import {
   createIgdbSession,
@@ -2086,7 +2087,6 @@ export class NowPlayingCommand {
         interaction.user,
         list,
         interaction.guildId,
-        "Your Now Playing List",
       );
       const refreshed = await this.refreshNowPlayingListFromContext(interaction, session.userId);
       if (refreshed) {
@@ -2948,7 +2948,6 @@ export class NowPlayingCommand {
         interaction.user,
         list,
         interaction.guildId,
-        "Your Now Playing List",
       );
       const components = this.withNowPlayingActions(
         true,
@@ -3187,7 +3186,6 @@ export class NowPlayingCommand {
       target,
       entries,
       interaction.guildId,
-      title,
       showNotes,
     );
     const components = this.withNowPlayingActions(
@@ -4163,7 +4161,6 @@ export class NowPlayingCommand {
       interaction.user,
       list,
       interaction.guildId,
-      "Your Now Playing List",
     );
     const components = this.withNowPlayingActions(
       true,
@@ -4216,7 +4213,6 @@ export class NowPlayingCommand {
       interaction.user,
       list,
       interaction.guildId,
-      "Your Now Playing List",
     );
     const components = this.withNowPlayingActions(
       true,
@@ -4299,14 +4295,10 @@ export class NowPlayingCommand {
     }
 
     const sortedEntries = getDisplayNowPlayingEntries(entries);
-    const title = isOwnList && ephemeral
-      ? "Your Now Playing List"
-      : `${target.displayName ?? target.username ?? "User"}'s Now Playing List`;
     const payload = await this.buildNowPlayingListPayload(
       target,
       sortedEntries,
       interaction.guildId,
-      title,
       false,
       isOwnList,
     );
@@ -4377,12 +4369,10 @@ export class NowPlayingCommand {
     }
 
     const sortedEntries = getDisplayNowPlayingEntries(entries);
-    const displayName = target.displayName ?? target.username ?? "User";
     const payload = await this.buildNowPlayingListPayload(
       target,
       sortedEntries,
       interaction.guildId,
-      `${displayName}'s Now Playing List`,
     );
     const components = this.withNowPlayingActions(
       true,
@@ -4540,7 +4530,6 @@ export class NowPlayingCommand {
     target: User,
     entries: IMemberNowPlayingEntry[],
     guildId: string | null,
-    title: string,
     showNotes: boolean = false,
     showPrivateOnlyJournalButtons: boolean = false,
   ): Promise<{ components: NowPlayingListComponents; files: AttachmentBuilder[] }> {
@@ -4548,8 +4537,7 @@ export class NowPlayingCommand {
       this.buildNowPlayingAttachments(entries, NOW_PLAYING_COMPOSITE_MAX),
       this.canUseJournalFeature(target.id),
     ]);
-    const components = this.buildNowPlayingEntryComponents(
-      title,
+    const listComponents = this.buildNowPlayingEntryComponents(
       entries,
       target.id,
       guildId,
@@ -4558,7 +4546,9 @@ export class NowPlayingCommand {
       showPrivateOnlyJournalButtons,
       ownerCanUseJournal,
     );
-    return { components, files };
+    const ownerName = target.displayName ?? target.username ?? target.id;
+    const headerContainer = buildUserHeaderContainer(target.id, ownerName, "Now Playing");
+    return { components: [headerContainer, ...listComponents], files };
   }
 
   private async buildNowPlayingCompositeImageUrl(
@@ -4659,7 +4649,6 @@ export class NowPlayingCommand {
     );
     const listContainer = entries.length
       ? this.buildNowPlayingEntryComponents(
-        "Your Now Playing List",
         entries,
         ownerId,
         guildId,
@@ -4749,7 +4738,6 @@ export class NowPlayingCommand {
     ]);
     const listContainer = entries.length
       ? this.buildNowPlayingEntryComponents(
-        "Your Now Playing List",
         entries,
         ownerId,
         null,
@@ -5286,7 +5274,6 @@ export class NowPlayingCommand {
             target,
             entries,
             message.guildId ?? interaction.guildId,
-            title,
             showNotes,
             ownerId === interaction.user.id,
           );
@@ -5366,12 +5353,10 @@ export class NowPlayingCommand {
           const target =
             (await interaction.client.users.fetch(selectedUserId).catch(() => null)) ??
             interaction.user;
-          const title = `${target.displayName ?? target.username ?? "User"}'s Now Playing List`;
           const payload = await this.buildNowPlayingListPayload(
             target,
             entries,
             message.guildId ?? interaction.guildId,
-            title,
           );
           const components = this.withNowPlayingActions(
             true,
@@ -5567,7 +5552,6 @@ export class NowPlayingCommand {
 
 
   private buildNowPlayingEntryComponents(
-    title: string,
     entries: IMemberNowPlayingEntry[],
     ownerId: string,
     guildId: string | null,
@@ -5589,8 +5573,6 @@ export class NowPlayingCommand {
         new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small).setDivider(false),
       );
     }
-    container.addTextDisplayComponents(new TextDisplayBuilder().setContent(`## ${title}`));
-
     entries.forEach((entry, index) => {
       if (index === 0) {
         container.addSeparatorComponents(
