@@ -195,7 +195,7 @@ function buildProfileContentContainer(
   }
 
   return new ContainerBuilder().addTextDisplayComponents(
-    new TextDisplayBuilder().setContent(blocks.join(`\n${" ".repeat(60)}\n`)),
+    new TextDisplayBuilder().setContent(blocks.join(`\n${" ".repeat(120)}\n`)),
   );
 }
 
