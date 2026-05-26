@@ -16,10 +16,12 @@ import {
 } from "@discordjs/builders";
 import { SeparatorSpacingSize } from "discord-api-types/v10";
 import crypto from "node:crypto";
+import Member from "../classes/Member.js";
 import type { INominationEntry } from "../classes/Nomination.js";
 import Game from "../classes/Game.js";
 import { COMPONENTS_V2_FLAG } from "../config/flags.js";
 import { composeVoteImage, type VoteImageType } from "../services/collageGenerator.js";
+import { getUserEmojiString } from "../services/UserEmojiService.js";
 import {
   getOrReplaceBackblazeImage,
   hasBackblazeB2Config,
@@ -69,7 +71,7 @@ export async function buildNominationListPayload(
   return { components, files };
 }
 
-function buildNominationContainers(
+async function buildNominationContainers(
   kindLabel: string,
   commandLabel: string,
   window: NominationWindow,
@@ -77,7 +79,8 @@ function buildNominationContainers(
   voteImageUrl: string | null,
   altLayout: boolean,
   includeDetailSelect: boolean,
-): Array<ContainerBuilder | ActionRowBuilder<StringSelectMenuBuilder>> {
+): Promise<Array<ContainerBuilder | ActionRowBuilder<StringSelectMenuBuilder>>> {
+  const nominatorDisplayNames = await buildNominatorDisplayNames(nominations);
   const containers: ContainerBuilder[] = [];
   const headerContainer = new ContainerBuilder().addTextDisplayComponents(
     new TextDisplayBuilder().setContent(buildHeaderContent(kindLabel, window)),
@@ -86,16 +89,10 @@ function buildNominationContainers(
   let container = new ContainerBuilder();
   void altLayout;
   addVoteImageToContainer(container, voteImageUrl);
-  container.addSeparatorComponents(
-    new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small).setDivider(true),
-  );
 
   if (!nominations.length) {
     container.addTextDisplayComponents(
       new TextDisplayBuilder().setContent("No nominations yet."),
-    );
-    container.addSeparatorComponents(
-      new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small).setDivider(true),
     );
     container.addTextDisplayComponents(
       new TextDisplayBuilder().setContent(buildFooterContent(commandLabel, window)),
@@ -109,19 +106,12 @@ function buildNominationContainers(
       containers.push(container);
       container = new ContainerBuilder();
       container.addTextDisplayComponents(new TextDisplayBuilder().setContent("## Continued"));
-      container.addSeparatorComponents(
-        new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small).setDivider(true),
-      );
       sectionCount = 0;
-    }
-    if (sectionCount > 0) {
-      container.addSeparatorComponents(
-        new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small).setDivider(true),
-      );
     }
     addNominationContent(
       container,
       nomination,
+      nominatorDisplayNames.get(nomination.userId) ?? nomination.userId,
     );
     sectionCount += 1;
   });
@@ -129,9 +119,6 @@ function buildNominationContainers(
   containers.push(container);
   const lastContainer = containers[containers.length - 1];
   if (lastContainer) {
-    lastContainer.addSeparatorComponents(
-      new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small).setDivider(true),
-    );
     lastContainer.addTextDisplayComponents(
       new TextDisplayBuilder().setContent(buildFooterContent(commandLabel, window)),
     );
@@ -143,16 +130,23 @@ function buildNominationContainers(
 function addNominationContent(
   container: ContainerBuilder,
   nomination: INominationEntry,
+  displayName: string,
 ): void {
   const section = new SectionBuilder().addTextDisplayComponents(
     new TextDisplayBuilder().setContent(buildNominationText(nomination)),
   );
-  section.setButtonAccessory(
-    new ButtonBuilder()
-      .setCustomId(`user-header-label:${nomination.userId}`)
-      .setLabel(`<@${nomination.userId}>`)
-      .setStyle(ButtonStyle.Secondary),
-  );
+  let button = new ButtonBuilder()
+    .setCustomId(`user-header-label:${nomination.userId}`)
+    .setLabel(displayName)
+    .setStyle(ButtonStyle.Secondary);
+  const emojiString = getUserEmojiString(nomination.userId);
+  if (emojiString) {
+    const match = emojiString.match(/^<:([^:]+):(\d+)>$/);
+    if (match) {
+      button = button.setEmoji({ name: match[1], id: match[2] });
+    }
+  }
+  section.setButtonAccessory(button);
   container.addSectionComponents(section);
 }
 
@@ -236,6 +230,20 @@ function trimReason(reason: string): string {
 
 function formatDate(date: Date): string {
   return `<t:${Math.floor(date.getTime() / 1000)}:D>`;
+}
+
+async function buildNominatorDisplayNames(
+  nominations: INominationEntry[],
+): Promise<Map<string, string>> {
+  const uniqueUserIds = [...new Set(nominations.map((nomination) => nomination.userId))];
+  const records = await Promise.all(
+    uniqueUserIds.map(async (userId) => {
+      const member = await Member.getByUserId(userId).catch(() => null);
+      const displayName = member?.globalName ?? member?.username ?? userId;
+      return [userId, displayName] as const;
+    }),
+  );
+  return new Map(records);
 }
 
 async function buildNominationAttachments(
