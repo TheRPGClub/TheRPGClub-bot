@@ -13,6 +13,7 @@ import { Client } from "discordx";
 import { updateBotPresence } from "./functions/SetPresence.js";
 
 import { initOraclePool } from "./db/oracleClient.js";
+import { initPostgresPool } from "./db/postgresClient.js";
 import { loadGotmFromDb } from "./classes/Gotm.js";
 import { loadNrGotmFromDb } from "./classes/NrGotm.js";
 import {
@@ -267,6 +268,7 @@ async function run(): Promise<void> {
   }
 
   await initOraclePool();
+  await initPostgresPool();
   await loadGotmFromDb();
   await loadNrGotmFromDb();
 
