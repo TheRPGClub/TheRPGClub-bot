@@ -50,6 +50,9 @@ export async function apiGet<T>(
 ): Promise<T | null> {
   try {
     const response = await getClient().get<T>(path, config);
+    console.log('path', path);
+    console.log('config', config);
+    console.log('response', response);
     return response.data;
   } catch (err: unknown) {
     if (axios.isAxiosError(err) && err.response?.status === 404) {
