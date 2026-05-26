@@ -1936,6 +1936,17 @@ export class GameDb {
         const game = await Game.getGameById(gameId, source);
         if (game) {
           await this.showGameProfile(interaction, gameId, undefined, source);
+          if (source === "API") {
+            const raw = await Game.getGameRawFromApi(gameId);
+            const json = JSON.stringify(raw, null, 2);
+            const body = json.length > 1900
+              ? json.slice(0, 1900) + "\n...(truncated)"
+              : json;
+            await interaction.followUp({
+              content: `\`\`\`json\n${body}\n\`\`\``,
+              flags: MessageFlags.Ephemeral,
+            });
+          }
           return;
         }
       }
