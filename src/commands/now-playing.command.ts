@@ -3171,16 +3171,14 @@ export class NowPlayingCommand {
         title,
         emptyMessage,
       );
+      const actionRow = this.buildNowPlayingActionRow(
+        ownerId,
+        showNotes,
+        this.hasDisplayableNowPlayingNotes(entries),
+        !singleUserMode,
+      );
       await safeReply(interaction, {
-        components: [
-          container,
-          this.buildNowPlayingActionRow(
-            ownerId,
-            showNotes,
-            this.hasDisplayableNowPlayingNotes(entries),
-            !singleUserMode,
-          ),
-        ],
+        components: actionRow ? [container, actionRow] : [container],
         flags: buildComponentsV2Flags(isEphemeral),
       });
       return;
@@ -4266,8 +4264,9 @@ export class NowPlayingCommand {
           ].join("\n"),
         );
         const actions = this.buildNowPlayingActionRow(target.id, false, false, false);
+        const components = actions ? [container, actions] : [container];
         await safeReply(interaction, {
-          components: [container, actions],
+          components,
           flags: buildComponentsV2Flags(ephemeral),
         });
         if (!ephemeral && "fetchReply" in interaction && typeof interaction.fetchReply === "function") {
@@ -4630,7 +4629,7 @@ export class NowPlayingCommand {
     showNotes: boolean,
     hasDisplayableNotes: boolean,
     includeEditButton: boolean = true,
-  ): ActionRowBuilder<ButtonBuilder> {
+  ): ActionRowBuilder<ButtonBuilder> | null {
     const row = new ActionRowBuilder<ButtonBuilder>();
     if (includeEditButton) {
       row.addComponents(
@@ -4650,7 +4649,7 @@ export class NowPlayingCommand {
           .setStyle(ButtonStyle.Secondary),
       );
     }
-    return row;
+    return row.components.length > 0 ? row : null;
   }
 
   private buildNowPlayingCancelRow(ownerId: string): ActionRowBuilder<ButtonBuilder> {
@@ -5207,9 +5206,18 @@ export class NowPlayingCommand {
     if (!isOwnList) {
       return components;
     }
+    const actionRow = this.buildNowPlayingActionRow(
+      ownerId,
+      showNotes,
+      hasDisplayableNotes,
+      includeEditButton,
+    );
+    if (!actionRow) {
+      return components;
+    }
     return [
       ...components,
-      this.buildNowPlayingActionRow(ownerId, showNotes, hasDisplayableNotes, includeEditButton),
+      actionRow,
     ];
   }
 
@@ -5283,15 +5291,15 @@ export class NowPlayingCommand {
               : `No Now Playing entries found for <@${ownerId}>.`;
             const container = this.buildNowPlayingMessageContainer(title, emptyMessage);
             const components = ownerId === interaction.user.id
-              ? [
-                container,
-                this.buildNowPlayingActionRow(
+              ? (() => {
+                const actionRow = this.buildNowPlayingActionRow(
                   ownerId,
                   showNotes,
                   this.hasDisplayableNowPlayingNotes(entries),
                   false,
-                ),
-              ]
+                );
+                return actionRow ? [container, actionRow] : [container];
+              })()
               : [container];
             await message.edit({
               components,
