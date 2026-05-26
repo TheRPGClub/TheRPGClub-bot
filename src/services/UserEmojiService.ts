@@ -1,3 +1,4 @@
+import sharp from "sharp";
 import type { Client, GuildMember } from "discord.js";
 import Member from "../classes/Member.js";
 import {
@@ -6,6 +7,27 @@ import {
   MODERATOR_ROLE_ID,
   REGULARS_ROLE_ID,
 } from "../config/roles.js";
+
+const EMOJI_SIZE = 128;
+
+async function circularCropAvatar(url: string): Promise<Buffer> {
+  const response = await fetch(url);
+  const arrayBuffer = await response.arrayBuffer();
+  const inputBuffer = Buffer.from(arrayBuffer);
+
+  const circleSvg = Buffer.from(
+    `<svg width="${EMOJI_SIZE}" height="${EMOJI_SIZE}">` +
+      `<circle cx="${EMOJI_SIZE / 2}" cy="${EMOJI_SIZE / 2}" r="${EMOJI_SIZE / 2}" fill="white"/>` +
+      `</svg>`,
+  );
+
+  return sharp(inputBuffer)
+    .resize(EMOJI_SIZE, EMOJI_SIZE)
+    .ensureAlpha()
+    .composite([{ input: circleSvg, blend: "dest-in" }])
+    .png()
+    .toBuffer();
+}
 
 const EMOJI_NAME_PREFIX = "u_";
 const CREATION_THROTTLE_MS = 600;
@@ -107,7 +129,10 @@ async function syncAllRegularsEmoji(client: Client): Promise<void> {
       // Emoji missing from Discord but DB has a name -- recreate it
       const avatarUrl = member.displayAvatarURL({ extension: "png", size: 128, forceStatic: true });
       try {
-        const emoji = await app.emojis.create({ attachment: avatarUrl, name: storedName });
+        const emoji = await app.emojis.create({
+          attachment: await circularCropAvatar(avatarUrl),
+          name: storedName,
+        });
         if (emoji.id) {
           emojiCache.set(userId, { emojiId: emoji.id, emojiName: storedName });
           claimedNames.add(storedName);
@@ -159,7 +184,10 @@ async function createEmojiForMember(
   const emojiName = buildEmojiName(member);
   const avatarUrl = member.displayAvatarURL({ extension: "png", size: 128, forceStatic: true });
   try {
-    const emoji = await app.emojis.create({ attachment: avatarUrl, name: emojiName });
+    const emoji = await app.emojis.create({
+      attachment: await circularCropAvatar(avatarUrl),
+      name: emojiName,
+    });
     if (emoji.id) {
       emojiCache.set(member.id, { emojiId: emoji.id, emojiName });
       await Member.updateEmojiName(member.id, emojiName).catch((err) => {
@@ -193,7 +221,7 @@ export async function syncUserEmojiFromAvatarChange(
 
   try {
     const emoji = await app.emojis.create({
-      attachment: newAvatarUrl,
+      attachment: await circularCropAvatar(newAvatarUrl),
       name: existing.emojiName,
     });
     if (emoji.id) {
@@ -227,7 +255,10 @@ export async function syncUserEmojiFromDisplayNameChange(
 
   const avatarUrl = member.displayAvatarURL({ extension: "png", size: 128, forceStatic: true });
   try {
-    const emoji = await app.emojis.create({ attachment: avatarUrl, name: newEmojiName });
+    const emoji = await app.emojis.create({
+      attachment: await circularCropAvatar(avatarUrl),
+      name: newEmojiName,
+    });
     if (emoji.id) {
       emojiCache.set(member.id, { emojiId: emoji.id, emojiName: newEmojiName });
       await Member.updateEmojiName(member.id, newEmojiName).catch((err) => {
