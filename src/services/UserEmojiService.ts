@@ -10,21 +10,39 @@ import {
 
 const EMOJI_SIZE = 128;
 
+function buildCircleMask(size: number): Buffer {
+  const r = size / 2;
+  const mask = Buffer.alloc(size * size * 4);
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const dx = x - r;
+      const dy = y - r;
+      const alpha = dx * dx + dy * dy <= r * r ? 255 : 0;
+      const i = (y * size + x) * 4;
+      mask[i] = 255;
+      mask[i + 1] = 255;
+      mask[i + 2] = 255;
+      mask[i + 3] = alpha;
+    }
+  }
+  return mask;
+}
+
+const circleMaskBuffer = buildCircleMask(EMOJI_SIZE);
+
 async function circularCropAvatar(url: string): Promise<Buffer> {
   const response = await fetch(url);
   const arrayBuffer = await response.arrayBuffer();
   const inputBuffer = Buffer.from(arrayBuffer);
 
-  const circleSvg = Buffer.from(
-    `<svg width="${EMOJI_SIZE}" height="${EMOJI_SIZE}">` +
-      `<circle cx="${EMOJI_SIZE / 2}" cy="${EMOJI_SIZE / 2}" r="${EMOJI_SIZE / 2}" fill="white"/>` +
-      `</svg>`,
-  );
-
   return sharp(inputBuffer)
-    .resize(EMOJI_SIZE, EMOJI_SIZE)
+    .resize(EMOJI_SIZE, EMOJI_SIZE, { fit: "cover" })
     .ensureAlpha()
-    .composite([{ input: circleSvg, blend: "dest-in" }])
+    .composite([{
+      input: circleMaskBuffer,
+      raw: { width: EMOJI_SIZE, height: EMOJI_SIZE, channels: 4 },
+      blend: "dest-in",
+    }])
     .png()
     .toBuffer();
 }
