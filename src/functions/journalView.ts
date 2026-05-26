@@ -6,8 +6,10 @@ import {
 } from "discord.js";
 import {
   ContainerBuilder,
-    TextDisplayBuilder,
-  } from "@discordjs/builders";
+  SectionBuilder,
+  TextDisplayBuilder,
+  ThumbnailBuilder,
+} from "@discordjs/builders";
 import Member, { type ICompletionRecord } from "../classes/Member.js";
 import Game from "../classes/Game.js";
 import { getThreadsByGameId } from "../classes/Thread.js";
@@ -99,9 +101,11 @@ export async function buildJournalView(options: JournalViewOptions): Promise<{
   ]);
 
   const files: AttachmentBuilder[] = [];
+  let coverUrl: string | null = null;
   if (game?.imageData) {
     const filename = `game_journal_${gameId}.png`;
     files.push(new AttachmentBuilder(game.imageData, { name: filename }));
+    coverUrl = `attachment://${filename}`;
   }
 
   const gameTitle = game?.title ?? `Game #${gameId}`;
@@ -181,9 +185,16 @@ export async function buildJournalView(options: JournalViewOptions): Promise<{
   entryParts.push(footer);
 
   const gameContainer = new ContainerBuilder();
-  gameContainer.addTextDisplayComponents(
-    new TextDisplayBuilder().setContent(entryParts.join(`\n\u00A0\n\n`)),
-  );
+  const entriesText = new TextDisplayBuilder().setContent(entryParts.join(`\n\u00A0\n`));
+  if (coverUrl) {
+    gameContainer.addSectionComponents(
+      new SectionBuilder()
+        .addTextDisplayComponents(entriesText)
+        .setThumbnailAccessory(new ThumbnailBuilder().setURL(coverUrl)),
+    );
+  } else {
+    gameContainer.addTextDisplayComponents(entriesText);
+  }
 
   // Nav row
   const navRow = new ActionRowBuilder<ButtonBuilder>();
