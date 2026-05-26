@@ -89,6 +89,7 @@ export default [
       "local/require-relative-import-js-extension": "error",
       "local/slash-options-required-first": "error",
       "local/no-unused-imports-vars-local": "error",
+      "local/no-unused-functions": "error",
       "local/no-build-folder-edits": "error",
       "local/attachment-builder-asset-path": "error",
       "local/no-emdash": "error",
