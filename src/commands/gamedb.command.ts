@@ -88,7 +88,10 @@ import {
 } from "../functions/CompletionHelpers.js";
 import { searchHltb } from "../scripts/SearchHltb.js";
 import { formatPlatformDisplayName } from "../functions/PlatformDisplay.js";
-import { NOW_PLAYING_FORUM_ID } from "../config/channels.js";
+import {
+  DISCORD_CONSOLE_LOG_CHANNEL_ID,
+  NOW_PLAYING_FORUM_ID,
+} from "../config/channels.js";
 import { NOW_PLAYING_SIDEGAME_TAG_ID } from "../config/tags.js";
 import { COMPONENTS_V2_FLAG } from "../config/flags.js";
 import { STANDARD_PLATFORM_IDS } from "../config/standardPlatforms.js";
@@ -380,6 +383,68 @@ function buildChoiceRows(
     rows.push(row);
   }
   return rows;
+}
+
+type ISendableChannel = { send: (options: MessageCreateOptions) => Promise<unknown> };
+
+async function sendGameDbApiLog(
+  interaction: CommandInteraction,
+  gameId: number,
+  url: string,
+  status: number,
+  rawResponse: unknown,
+  error: string | null,
+): Promise<void> {
+  try {
+    const channel = await interaction.client.channels
+      .fetch(DISCORD_CONSOLE_LOG_CHANNEL_ID)
+      .catch(() => null);
+    if (!channel || !channel.isTextBased()) return;
+    if (!("send" in channel)) return;
+    const sendable = channel as unknown as ISendableChannel;
+
+    const userId = interaction.user.id;
+    const timestamp = new Date().toISOString();
+
+    const requestBlock = [
+      `**[GameDB API View]**`,
+      `**User:** <@${userId}>`,
+      `**Game ID:** ${gameId}`,
+      `**URL:** \`${url}\``,
+      `**Time:** ${timestamp}`,
+    ].join("\n");
+
+    if (error) {
+      const errBlock = error.length > 1800
+        ? `${error.slice(0, 1800)}...(truncated)`
+        : error;
+      await sendable.send({
+        content: `${requestBlock}\n\n**Status:** Error\n\`\`\`\n${errBlock}\n\`\`\``,
+      });
+      return;
+    }
+
+    const statusLine = `**Status:** ${status}`;
+    const json = JSON.stringify(rawResponse, null, 2);
+
+    if (json.length > 1800) {
+      const buf = Buffer.from(json, "utf8");
+      const attachment = new AttachmentBuilder(buf, {
+        name: `gamedb-api-${gameId}.json`,
+      });
+      await sendable.send({
+        content: `${requestBlock}\n\n${statusLine}\n**Response:** (see attachment)`,
+        files: [attachment],
+      });
+      return;
+    }
+
+    await sendable.send({
+      content: `${requestBlock}\n\n${statusLine}\n**Response:**\n\`\`\`json\n${json}\n\`\`\``,
+    });
+  } catch {
+    // Do not let logging failures surface to the user
+  }
 }
 
 @Discord()
@@ -1942,14 +2007,27 @@ export class GameDb {
       }
       let rawContent: string;
       try {
-        const raw = await Game.getGameRawFromApi(gameId);
-        const json = JSON.stringify(raw, null, 2);
+        const { rawResponse, gameData, status, url } =
+          await Game.getGameRawFromApiWithMeta(gameId);
+        void sendGameDbApiLog(interaction, gameId, url, status, rawResponse, null);
+        const json = JSON.stringify(gameData, null, 2);
         const body = json.length > 1900
           ? json.slice(0, 1900) + "\n...(truncated)"
           : json;
         rawContent = `\`\`\`json\n${body}\n\`\`\``;
       } catch (err: any) {
-        rawContent = `API error: ${err?.message ?? String(err)}`;
+        const errMsg: string = err?.message ?? String(err);
+        const apiPath = `/api/v1/games/${gameId}`;
+        const baseUrl = process.env.RPGCLUB_API_BASE_URL ?? "";
+        void sendGameDbApiLog(
+          interaction,
+          gameId,
+          `${baseUrl}${apiPath}`,
+          0,
+          null,
+          errMsg,
+        );
+        rawContent = `API error: ${errMsg}`;
       }
       await safeReply(interaction, {
         content: rawContent,

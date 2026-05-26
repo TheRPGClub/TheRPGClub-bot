@@ -50,13 +50,32 @@ export async function apiGet<T>(
 ): Promise<T | null> {
   try {
     const response = await getClient().get<T>(path, config);
-    console.log('path', path);
-    console.log('config', config);
-    console.log('response', response);
     return response.data;
   } catch (err: unknown) {
     if (axios.isAxiosError(err) && err.response?.status === 404) {
       return null;
+    }
+    throw err;
+  }
+}
+
+/**
+ * GET a resource and return raw response metadata alongside the parsed body.
+ * Unlike `apiGet`, this never returns `null` -- 404 responses have `status: 404`
+ * and `rawData: null`. Non-2xx errors (other than 404) still throw.
+ */
+export async function apiGetRaw<T>(
+  path: string,
+  config?: AxiosRequestConfig,
+): Promise<{ rawData: T | null; status: number; url: string }> {
+  const baseURL = process.env.RPGCLUB_API_BASE_URL ?? "";
+  const url = `${baseURL}${path}`;
+  try {
+    const response = await getClient().get<T>(path, config);
+    return { rawData: response.data, status: response.status, url };
+  } catch (err: unknown) {
+    if (axios.isAxiosError(err) && err.response?.status === 404) {
+      return { rawData: null, status: 404, url };
     }
     throw err;
   }
