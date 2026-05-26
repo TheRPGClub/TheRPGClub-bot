@@ -3152,7 +3152,7 @@ export class NowPlayingCommand {
     const isEphemeral = interaction.message.flags?.has(MessageFlags.Ephemeral) ?? false;
     const contextKey = buildNowPlayingContextKey(interaction.message.channelId, interaction.message.id);
     const trackedView = nowPlayingListContexts.get(contextKey)?.view ?? null;
-    const singleUserMode = trackedView === "single";
+    const singleUserMode = trackedView === "single" || trackedView === "everyone-selected";
     const ownerUser =
       interaction.user.id === ownerId
         ? interaction.user
@@ -4255,17 +4255,22 @@ export class NowPlayingCommand {
     const entries = await Member.getNowPlaying(target.id);
     if (!entries.length) {
       if (isOwnList) {
+        const ownerName = target.displayName ?? target.username ?? target.id;
+        const header = buildUserHeaderContainer(
+          target.id,
+          ownerName,
+          "Now Playing",
+          `${NOW_PLAYING_LIST_EDIT_PREFIX}:${target.id}`,
+        );
         const container = this.buildNowPlayingMessageContainer(
           "Your Now Playing List",
           [
             "Welcome. Your list is empty, so nothing shows yet.",
-            "Use Edit to manage notes, sort order, platform, completions, and removals in DM.",
+            "Use the user button in the header to manage notes, sort order, platform, completions, and removals in DM.",
           ].join("\n"),
         );
-        const actions = this.buildNowPlayingActionRow(target.id, false, false, false);
-        const components = actions ? [container, actions] : [container];
         await safeReply(interaction, {
-          components,
+          components: [header, container],
           flags: buildComponentsV2Flags(ephemeral),
         });
         if (!ephemeral && "fetchReply" in interaction && typeof interaction.fetchReply === "function") {
@@ -4355,6 +4360,13 @@ export class NowPlayingCommand {
       interaction.user;
 
     if (!entries.length) {
+      const ownerName = target.displayName ?? target.username ?? target.id;
+      const header = buildUserHeaderContainer(
+        selectedUserId,
+        ownerName,
+        "Now Playing",
+        `${NOW_PLAYING_LIST_EDIT_PREFIX}:${selectedUserId}`,
+      );
       const container = this.buildNowPlayingMessageContainer(
         "Now Playing - Everyone",
         `No Now Playing entries found for <@${selectedUserId}>.`,
@@ -4362,7 +4374,7 @@ export class NowPlayingCommand {
       const components = this.withNowPlayingActions(
         true,
         selectedUserId,
-        [container],
+        [header, container],
         false,
         false,
       );
@@ -4633,15 +4645,8 @@ export class NowPlayingCommand {
     hasDisplayableNotes: boolean,
     includeEditButton: boolean = true,
   ): ActionRowBuilder<ButtonBuilder> | null {
+    void includeEditButton;
     const row = new ActionRowBuilder<ButtonBuilder>();
-    if (includeEditButton) {
-      row.addComponents(
-        new ButtonBuilder()
-          .setCustomId(`${NOW_PLAYING_LIST_EDIT_PREFIX}:${ownerId}`)
-          .setLabel("Edit")
-          .setStyle(ButtonStyle.Primary),
-      );
-    }
     if (hasDisplayableNotes) {
       const notesAction = showNotes ? "hide" : "show";
       const notesLabel = showNotes ? "Hide Notes" : "Show Notes";
@@ -5289,21 +5294,18 @@ export class NowPlayingCommand {
           const showNotes = this.getNowPlayingShowNotesState(message, ownerId);
 
           if (!entries.length) {
+            const ownerName = target.displayName ?? target.username ?? target.id;
+            const header = buildUserHeaderContainer(
+              ownerId,
+              ownerName,
+              "Now Playing",
+              `${NOW_PLAYING_LIST_EDIT_PREFIX}:${ownerId}`,
+            );
             const emptyMessage = ownerId === interaction.user.id
               ? "Your Now Playing list is empty."
               : `No Now Playing entries found for <@${ownerId}>.`;
             const container = this.buildNowPlayingMessageContainer(title, emptyMessage);
-            const components = ownerId === interaction.user.id
-              ? (() => {
-                const actionRow = this.buildNowPlayingActionRow(
-                  ownerId,
-                  showNotes,
-                  this.hasDisplayableNowPlayingNotes(entries),
-                  false,
-                );
-                return actionRow ? [container, actionRow] : [container];
-              })()
-              : [container];
+            const components = [header, container];
             await message.edit({
               components,
               flags: buildComponentsV2Flags(isEphemeral),
@@ -5373,10 +5375,20 @@ export class NowPlayingCommand {
 
         if (context.view === "everyone-selected" && context.selectedUserId) {
           const selectedUserId = context.selectedUserId;
+          const target =
+            (await interaction.client.users.fetch(selectedUserId).catch(() => null)) ??
+            interaction.user;
           const entries = getDisplayNowPlayingEntries(
             await Member.getNowPlaying(selectedUserId),
           );
           if (!entries.length) {
+            const ownerName = target.displayName ?? target.username ?? target.id;
+            const header = buildUserHeaderContainer(
+              selectedUserId,
+              ownerName,
+              "Now Playing",
+              `${NOW_PLAYING_LIST_EDIT_PREFIX}:${selectedUserId}`,
+            );
             const container = this.buildNowPlayingMessageContainer(
               "Now Playing - Everyone",
               `No Now Playing entries found for <@${selectedUserId}>.`,
@@ -5384,7 +5396,7 @@ export class NowPlayingCommand {
             const components = this.withNowPlayingActions(
               false,
               selectedUserId,
-              [container],
+              [header, container],
               false,
               false,
             );
@@ -5394,9 +5406,6 @@ export class NowPlayingCommand {
             updatedAny = true;
             continue;
           }
-          const target =
-            (await interaction.client.users.fetch(selectedUserId).catch(() => null)) ??
-            interaction.user;
           const payload = await this.buildNowPlayingListPayload(
             target,
             entries,
