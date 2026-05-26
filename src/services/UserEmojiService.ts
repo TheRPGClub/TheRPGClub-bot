@@ -76,16 +76,16 @@ export function getUserEmojiString(userId: string): string | null {
   return `<:${entry.emojiName}:${entry.emojiId}>`;
 }
 
-const BRAILLE_BLANK = "⠀";
+const NBSP = " ";
 
 /**
  * Returns `emoji⠀displayName` when the user has a cached emoji, or just
- * `displayName` when they don't.  The gap is a Braille Pattern Blank
+ * `displayName` when they don't.  The gap is a non-breaking space
  * (U+2800) so Discord renders it as a non-collapsing visual space.
  */
 export function renderUsernameWithEmoji(userId: string, displayName: string): string {
   const emoji = getUserEmojiString(userId);
-  return emoji ? `${emoji}${BRAILLE_BLANK}${displayName}` : displayName;
+  return emoji ? `${emoji}${NBSP}${displayName}` : displayName;
 }
 
 export async function startUserEmojiService(client: Client): Promise<void> {
