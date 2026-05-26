@@ -2472,7 +2472,10 @@ export class GameDb {
       }
 
       const igdbIdText = game.igdbId ? String(game.igdbId) : "N/A";
-      bodyParts.push({ content: `-# GameDB ID: ${game.id} | IGDB ID: ${igdbIdText}` });
+      const sourceLabel = source === "API" ? "API" : "OracleSQL";
+      bodyParts.push({
+        content: `-# GameDB ID: ${game.id} | IGDB ID: ${igdbIdText} | Source: ${sourceLabel}`,
+      });
 
       const headerBlock = this.trimTextDisplayContent(headerLines.join("\n"));
       const bodyBlocks = bodyParts
