@@ -79,12 +79,13 @@ function buildNominationContainers(
   includeDetailSelect: boolean,
 ): Array<ContainerBuilder | ActionRowBuilder<StringSelectMenuBuilder>> {
   const containers: ContainerBuilder[] = [];
+  const headerContainer = new ContainerBuilder().addTextDisplayComponents(
+    new TextDisplayBuilder().setContent(buildHeaderContent(kindLabel, window)),
+  );
+  containers.push(headerContainer);
   let container = new ContainerBuilder();
   void altLayout;
   addVoteImageToContainer(container, voteImageUrl);
-  container.addTextDisplayComponents(
-    new TextDisplayBuilder().setContent(buildHeaderContent(kindLabel, window)),
-  );
   container.addSeparatorComponents(
     new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small).setDivider(true),
   );
@@ -99,7 +100,7 @@ function buildNominationContainers(
     container.addTextDisplayComponents(
       new TextDisplayBuilder().setContent(buildFooterContent(commandLabel, window)),
     );
-    return [container];
+    return [...containers, container];
   }
 
   let sectionCount = 0;
