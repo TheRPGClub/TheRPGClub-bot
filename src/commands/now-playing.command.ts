@@ -3191,10 +3191,9 @@ export class NowPlayingCommand {
       showNotes,
       false,
       singleUserMode,
-      interaction.user.id === ownerId,
     );
     const components = this.withNowPlayingActions(
-      true,
+      !singleUserMode,
       ownerId,
       payload.components,
       showNotes,
@@ -4309,7 +4308,6 @@ export class NowPlayingCommand {
       false,
       isOwnList,
       true,
-      isOwnList,
     );
     const components = this.withNowPlayingActions(
       false,
@@ -4386,7 +4384,6 @@ export class NowPlayingCommand {
       false,
       false,
       true,
-      interaction.user.id === selectedUserId,
     );
     const components = this.withNowPlayingActions(
       false,
@@ -4547,7 +4544,6 @@ export class NowPlayingCommand {
     showNotes: boolean = false,
     showPrivateOnlyJournalButtons: boolean = false,
     singleUserMode: boolean = false,
-    ownerCanEditFromHeader: boolean = false,
   ): Promise<{ components: NowPlayingListComponents; files: AttachmentBuilder[] }> {
     const [{ files, covers }, ownerCanUseJournal] = await Promise.all([
       this.buildNowPlayingAttachments(entries, NOW_PLAYING_COMPOSITE_MAX),
@@ -4562,7 +4558,7 @@ export class NowPlayingCommand {
       showNotes,
       showPrivateOnlyJournalButtons,
       ownerCanUseJournal,
-      singleUserMode && ownerCanEditFromHeader,
+      singleUserMode,
       singleUserMode,
       hasDisplayableNotes,
     );
@@ -5323,7 +5319,6 @@ export class NowPlayingCommand {
             showNotes,
             ownerId === interaction.user.id,
             true,
-            ownerId === interaction.user.id,
           );
           const components = this.withNowPlayingActions(
             false,
@@ -5409,7 +5404,6 @@ export class NowPlayingCommand {
             false,
             false,
             true,
-            interaction.user.id === selectedUserId,
           );
           const components = this.withNowPlayingActions(
             false,
