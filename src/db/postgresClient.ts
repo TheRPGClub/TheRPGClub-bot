@@ -16,10 +16,11 @@ function readIntEnv(name: string, fallback: number): number {
  *
  * Reads PG_CONNECTION_STRING from the environment (required).
  * Optional pool tuning via env vars:
- *   PG_POOL_MIN         -- minimum idle connections (default 2)
- *   PG_POOL_MAX         -- maximum connections      (default 16)
- *   PG_IDLE_TIMEOUT_MS  -- idle connection timeout  (default 10000 ms)
- *   PG_CONN_TIMEOUT_MS  -- connection acquire timeout (default 5000 ms)
+ *   PG_POOL_MIN              -- minimum idle connections (default 2)
+ *   PG_POOL_MAX              -- maximum connections      (default 16)
+ *   PG_IDLE_TIMEOUT_MS       -- idle connection timeout  (default 30000 ms)
+ *   PG_CONN_TIMEOUT_MS       -- connection acquire timeout (default 5000 ms)
+ *   PG_KEEPALIVE_DELAY_MS    -- initial TCP keepalive delay (default 10000 ms)
  */
 export async function initPostgresPool(): Promise<void> {
   if (pool) return;
@@ -33,8 +34,12 @@ export async function initPostgresPool(): Promise<void> {
     connectionString,
     min: readIntEnv("PG_POOL_MIN", 2),
     max: readIntEnv("PG_POOL_MAX", 16),
-    idleTimeoutMillis: readIntEnv("PG_IDLE_TIMEOUT_MS", 10_000),
+    idleTimeoutMillis: readIntEnv("PG_IDLE_TIMEOUT_MS", 30_000),
     connectionTimeoutMillis: readIntEnv("PG_CONN_TIMEOUT_MS", 5_000),
+    // TCP keepalive prevents NAT/firewall from silently dropping idle connections,
+    // which would otherwise surface as "Connection terminated unexpectedly" errors.
+    keepAlive: true,
+    keepAliveInitialDelayMillis: readIntEnv("PG_KEEPALIVE_DELAY_MS", 10_000),
   });
 
   pool.on("error", (err: Error) => {
