@@ -3,6 +3,7 @@ import axios from "axios";
 import { getOraclePool } from "../db/oracleClient.js";
 import { IGDBGameDetails, igdbService } from "../services/IGDB/IgdbService.js";
 import GameSearchSynonym from "./GameSearchSynonym.js";
+import { apiGet } from "../services/RpgClubApiClient.js";
 
 // Interfaces
 export interface IGame {
@@ -329,20 +330,9 @@ export default class Game {
     source: GameSource = "oracleSQL",
   ): Promise<IGame | null> {
     if (source === "API") {
-      const baseUrl = process.env.RPGCLUB_API_BASE_URL;
-      if (!baseUrl) throw new Error("RPGCLUB_API_BASE_URL is not configured.");
-      try {
-        const response = await axios.get<{ data: unknown }>(
-          `${baseUrl}/api/va/games/${id}`,
-        );
-        const data = response.data?.data;
-        return data ? mapGameFromApi(data) : null;
-      } catch (err: unknown) {
-        if (axios.isAxiosError(err) && err.response?.status === 404) {
-          return null;
-        }
-        throw err;
-      }
+      const result = await apiGet<{ data: unknown }>(`/api/v1/games/${id}`);
+      const data = result?.data;
+      return data ? mapGameFromApi(data) : null;
     }
 
     const pool = getOraclePool();
