@@ -2491,7 +2491,9 @@ export class GameDb {
         );
       }
 
-      if (primaryArt) {
+      const thumbnailUrl = primaryArt ? "attachment://game_image.png" : (game.coverUrl ?? null);
+
+      if (thumbnailUrl) {
         if (headerBlock.length > 0) {
           container.addTextDisplayComponents(new TextDisplayBuilder().setContent(headerBlock));
         }
@@ -2500,7 +2502,7 @@ export class GameDb {
           const descriptionSection = new SectionBuilder()
             .addTextDisplayComponents(new TextDisplayBuilder().setContent(descriptionBlock.content))
             .setThumbnailAccessory(
-              new ThumbnailBuilder().setURL("attachment://game_image.png"),
+              new ThumbnailBuilder().setURL(thumbnailUrl),
             );
           container.addSectionComponents(descriptionSection);
         }
