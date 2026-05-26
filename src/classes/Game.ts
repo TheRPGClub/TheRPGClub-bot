@@ -331,11 +331,18 @@ export default class Game {
     if (source === "API") {
       const baseUrl = process.env.RPGCLUB_API_BASE_URL;
       if (!baseUrl) throw new Error("RPGCLUB_API_BASE_URL is not configured.");
-      const response = await axios.get<{ data: unknown }>(
-        `${baseUrl}/api/va/games/${id}`,
-      );
-      const data = response.data?.data;
-      return data ? mapGameFromApi(data) : null;
+      try {
+        const response = await axios.get<{ data: unknown }>(
+          `${baseUrl}/api/va/games/${id}`,
+        );
+        const data = response.data?.data;
+        return data ? mapGameFromApi(data) : null;
+      } catch (err: unknown) {
+        if (axios.isAxiosError(err) && err.response?.status === 404) {
+          return null;
+        }
+        throw err;
+      }
     }
 
     const pool = getOraclePool();
