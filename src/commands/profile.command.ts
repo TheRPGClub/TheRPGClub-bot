@@ -18,10 +18,12 @@ import {
 } from "discordx";
 import {
   ContainerBuilder,
-  SectionBuilder,
+  MediaGalleryBuilder,
+  MediaGalleryItemBuilder,
+  SeparatorBuilder,
   TextDisplayBuilder,
-  ThumbnailBuilder,
 } from "@discordjs/builders";
+import { SeparatorSpacingSize } from "discord-api-types/v10";
 import axios from "axios";
 import Member, {
   type IMemberRecord,
@@ -157,14 +159,14 @@ function buildProfileContentContainer(
   nickHistory: string[],
   avatarUrl: string | null,
 ): ContainerBuilder {
-  const lines: string[] = [];
+  const blocks: string[] = [];
 
   if (record.isBot) {
-    lines.push("**Bot:** Yes");
+    blocks.push("**Bot**\nYes");
   }
 
   if (nickHistory.length > 0) {
-    lines.push(`**AKA:** ${nickHistory.join(", ")}`);
+    blocks.push(`**AKA**\n${nickHistory.join(", ")}`);
   }
 
   const roles = [
@@ -176,38 +178,44 @@ function buildProfileContentContainer(
   ]
     .filter(Boolean)
     .join(", ") || "None";
-  lines.push(`**Roles:** ${roles}`);
+  blocks.push(`**Roles**\n${roles}`);
 
-  lines.push(`**Last Seen:** ${formatDiscordTimestamp(record.lastSeenAt)}`);
-  lines.push(`**Joined Server:** ${formatDiscordTimestamp(record.serverJoinedAt)}`);
+  blocks.push(`**Last Seen**\n${formatDiscordTimestamp(record.lastSeenAt)}`);
+  blocks.push(`**Joined Server**\n${formatDiscordTimestamp(record.serverJoinedAt)}`);
 
   if (record.completionatorUrl) {
-    lines.push(`**Game Collection Tracker:** ${record.completionatorUrl}`);
+    blocks.push(`**Game Collection Tracker**\n${record.completionatorUrl}`);
   }
   if (record.steamUrl) {
-    lines.push(`**Steam:** ${record.steamUrl}`);
+    blocks.push(`**Steam**\n${record.steamUrl}`);
   }
   if (record.psnUsername) {
-    lines.push(`**PSN:** ${record.psnUsername}`);
+    blocks.push(`**PSN**\n${record.psnUsername}`);
   }
   if (record.xblUsername) {
-    lines.push(`**Xbox:** ${record.xblUsername}`);
+    blocks.push(`**Xbox**\n${record.xblUsername}`);
   }
   if (record.nswFriendCode) {
-    lines.push(`**Switch:** ${record.nswFriendCode}`);
+    blocks.push(`**Switch**\n${record.nswFriendCode}`);
   }
 
-  const text = new TextDisplayBuilder().setContent(lines.join("\n"));
   const container = new ContainerBuilder();
+
   if (avatarUrl) {
-    container.addSectionComponents(
-      new SectionBuilder()
-        .addTextDisplayComponents(text)
-        .setThumbnailAccessory(new ThumbnailBuilder().setURL(avatarUrl)),
+    container.addMediaGalleryComponents(
+      new MediaGalleryBuilder().addItems(
+        new MediaGalleryItemBuilder().setURL(avatarUrl),
+      ),
     );
-  } else {
-    container.addTextDisplayComponents(text);
+    container.addSeparatorComponents(
+      new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small),
+    );
   }
+
+  container.addTextDisplayComponents(
+    new TextDisplayBuilder().setContent(blocks.join("\n\n")),
+  );
+
   return container;
 }
 
