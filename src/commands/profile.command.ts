@@ -18,12 +18,8 @@ import {
 } from "discordx";
 import {
   ContainerBuilder,
-  MediaGalleryBuilder,
-  MediaGalleryItemBuilder,
-  SeparatorBuilder,
   TextDisplayBuilder,
 } from "@discordjs/builders";
-import { SeparatorSpacingSize } from "discord-api-types/v10";
 import axios from "axios";
 import Member, {
   type IMemberRecord,
@@ -157,7 +153,6 @@ export function formatDiscordTimestamp(value: Date | null): string {
 function buildProfileContentContainer(
   record: NonNullable<Awaited<ReturnType<typeof Member.getByUserId>>>,
   nickHistory: string[],
-  avatarUrl: string | null,
 ): ContainerBuilder {
   const blocks: string[] = [];
 
@@ -199,24 +194,9 @@ function buildProfileContentContainer(
     blocks.push(`**Switch**\n${record.nswFriendCode}`);
   }
 
-  const container = new ContainerBuilder();
-
-  if (avatarUrl) {
-    container.addMediaGalleryComponents(
-      new MediaGalleryBuilder().addItems(
-        new MediaGalleryItemBuilder().setURL(avatarUrl),
-      ),
-    );
-    container.addSeparatorComponents(
-      new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small),
-    );
-  }
-
-  container.addTextDisplayComponents(
+  return new ContainerBuilder().addTextDisplayComponents(
     new TextDisplayBuilder().setContent(blocks.join("\n\n")),
   );
-
-  return container;
 }
 
 function avatarBuffersDifferent(a: Buffer | null, b: Buffer | null): boolean {
@@ -308,9 +288,8 @@ export async function buildProfileViewPayload(
     }
 
     const displayName = record.globalName ?? record.username ?? target.username ?? "Unknown";
-    const thumbnailUrl = target.displayAvatarURL({ extension: "png", size: 256, forceStatic: true });
     const headerContainer = buildUserHeaderContainer(target.id, displayName, "Member Profile");
-    const contentContainer = buildProfileContentContainer(record, nickHistory, thumbnailUrl);
+    const contentContainer = buildProfileContentContainer(record, nickHistory);
 
     return {
       payload: {
