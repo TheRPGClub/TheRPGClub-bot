@@ -14,12 +14,13 @@ export function buildUserHeaderContainer(
   userId: string,
   displayName: string,
   title?: string,
+  buttonCustomId?: string,
 ): ContainerBuilder {
   if (title) {
     // Button labels do not render custom emoji markup -- use setEmoji() instead.
     const emojiString = getUserEmojiString(userId);
     let button = new ButtonBuilder()
-      .setCustomId(`user-header-label:${userId}`)
+      .setCustomId(buttonCustomId ?? `user-header-label:${userId}`)
       .setLabel(displayName)
       .setStyle(ButtonStyle.Secondary);
     if (emojiString) {

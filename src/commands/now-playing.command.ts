@@ -3150,6 +3150,9 @@ export class NowPlayingCommand {
     const [, ownerId, action] = interaction.customId.split(":");
     const showNotes = action === "show";
     const isEphemeral = interaction.message.flags?.has(MessageFlags.Ephemeral) ?? false;
+    const contextKey = buildNowPlayingContextKey(interaction.message.channelId, interaction.message.id);
+    const trackedView = nowPlayingListContexts.get(contextKey)?.view ?? null;
+    const singleUserMode = trackedView === "single";
     const ownerUser =
       interaction.user.id === ownerId
         ? interaction.user
@@ -3175,6 +3178,7 @@ export class NowPlayingCommand {
             ownerId,
             showNotes,
             this.hasDisplayableNowPlayingNotes(entries),
+            !singleUserMode,
           ),
         ],
         flags: buildComponentsV2Flags(isEphemeral),
@@ -3187,6 +3191,9 @@ export class NowPlayingCommand {
       entries,
       interaction.guildId,
       showNotes,
+      false,
+      singleUserMode,
+      interaction.user.id === ownerId,
     );
     const components = this.withNowPlayingActions(
       true,
@@ -3194,6 +3201,7 @@ export class NowPlayingCommand {
       payload.components,
       showNotes,
       this.hasDisplayableNowPlayingNotes(entries),
+      !singleUserMode,
     );
     await safeReply(interaction, {
       components,
@@ -4257,7 +4265,7 @@ export class NowPlayingCommand {
             "Use Edit to manage notes, sort order, platform, completions, and removals in DM.",
           ].join("\n"),
         );
-        const actions = this.buildNowPlayingActionRow(target.id, false, false);
+        const actions = this.buildNowPlayingActionRow(target.id, false, false, false);
         await safeReply(interaction, {
           components: [container, actions],
           flags: buildComponentsV2Flags(ephemeral),
@@ -4301,6 +4309,8 @@ export class NowPlayingCommand {
       interaction.guildId,
       false,
       isOwnList,
+      true,
+      isOwnList,
     );
     const components = this.withNowPlayingActions(
       true,
@@ -4308,6 +4318,7 @@ export class NowPlayingCommand {
       payload.components,
       false,
       this.hasDisplayableNowPlayingNotes(sortedEntries),
+      false,
     );
     await safeReply(interaction, {
       components,
@@ -4532,6 +4543,8 @@ export class NowPlayingCommand {
     guildId: string | null,
     showNotes: boolean = false,
     showPrivateOnlyJournalButtons: boolean = false,
+    singleUserMode: boolean = false,
+    ownerCanEditFromHeader: boolean = false,
   ): Promise<{ components: NowPlayingListComponents; files: AttachmentBuilder[] }> {
     const [{ files, covers }, ownerCanUseJournal] = await Promise.all([
       this.buildNowPlayingAttachments(entries, NOW_PLAYING_COMPOSITE_MAX),
@@ -4545,9 +4558,18 @@ export class NowPlayingCommand {
       showNotes,
       showPrivateOnlyJournalButtons,
       ownerCanUseJournal,
+      singleUserMode && ownerCanEditFromHeader,
     );
     const ownerName = target.displayName ?? target.username ?? target.id;
-    const headerContainer = buildUserHeaderContainer(target.id, ownerName, "Now Playing");
+    const headerCustomId = singleUserMode && ownerCanEditFromHeader
+      ? `${NOW_PLAYING_LIST_EDIT_PREFIX}:${target.id}`
+      : undefined;
+    const headerContainer = buildUserHeaderContainer(
+      target.id,
+      ownerName,
+      "Now Playing",
+      headerCustomId,
+    );
     return { components: [headerContainer, ...listComponents], files };
   }
 
@@ -4607,13 +4629,17 @@ export class NowPlayingCommand {
     ownerId: string,
     showNotes: boolean,
     hasDisplayableNotes: boolean,
+    includeEditButton: boolean = true,
   ): ActionRowBuilder<ButtonBuilder> {
-    const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
-      new ButtonBuilder()
-        .setCustomId(`${NOW_PLAYING_LIST_EDIT_PREFIX}:${ownerId}`)
-        .setLabel("Edit")
-        .setStyle(ButtonStyle.Primary),
-    );
+    const row = new ActionRowBuilder<ButtonBuilder>();
+    if (includeEditButton) {
+      row.addComponents(
+        new ButtonBuilder()
+          .setCustomId(`${NOW_PLAYING_LIST_EDIT_PREFIX}:${ownerId}`)
+          .setLabel("Edit")
+          .setStyle(ButtonStyle.Primary),
+      );
+    }
     if (hasDisplayableNotes) {
       const notesAction = showNotes ? "hide" : "show";
       const notesLabel = showNotes ? "Hide Notes" : "Show Notes";
@@ -5176,11 +5202,15 @@ export class NowPlayingCommand {
     components: NowPlayingListComponents,
     showNotes: boolean,
     hasDisplayableNotes: boolean = true,
+    includeEditButton: boolean = true,
   ): NowPlayingMessageComponents {
     if (!isOwnList) {
       return components;
     }
-    return [...components, this.buildNowPlayingActionRow(ownerId, showNotes, hasDisplayableNotes)];
+    return [
+      ...components,
+      this.buildNowPlayingActionRow(ownerId, showNotes, hasDisplayableNotes, includeEditButton),
+    ];
   }
 
   private hasDisplayableNowPlayingNotes(entries: IMemberNowPlayingEntry[]): boolean {
@@ -5259,6 +5289,7 @@ export class NowPlayingCommand {
                   ownerId,
                   showNotes,
                   this.hasDisplayableNowPlayingNotes(entries),
+                  false,
                 ),
               ]
               : [container];
@@ -5276,6 +5307,8 @@ export class NowPlayingCommand {
             message.guildId ?? interaction.guildId,
             showNotes,
             ownerId === interaction.user.id,
+            true,
+            ownerId === interaction.user.id,
           );
           const components = this.withNowPlayingActions(
             ownerId === interaction.user.id,
@@ -5283,6 +5316,7 @@ export class NowPlayingCommand {
             payload.components,
             showNotes,
             this.hasDisplayableNowPlayingNotes(entries),
+            false,
           );
           await message.edit({
             components,
@@ -5559,6 +5593,7 @@ export class NowPlayingCommand {
     showNotes: boolean,
     showPrivateOnlyJournalButtons: boolean = false,
     ownerCanUseJournal: boolean = false,
+    showHeaderEditHint: boolean = false,
   ): NowPlayingListComponents {
     const container = new ContainerBuilder();
     if (imageUrl) {
@@ -5620,6 +5655,11 @@ export class NowPlayingCommand {
         container.addTextDisplayComponents(new TextDisplayBuilder().setContent(content));
       }
     });
+    if (showHeaderEditHint) {
+      container.addTextDisplayComponents(
+        new TextDisplayBuilder().setContent("-# *Click user button in header to edit*"),
+      );
+    }
     return [container];
   }
 
