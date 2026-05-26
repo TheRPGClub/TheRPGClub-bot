@@ -9,9 +9,11 @@ import {
   ButtonBuilder,
   ButtonStyle,
   ButtonInteraction,
-  type ActionRow,
-  type MessageActionRowComponent,
 } from "discord.js";
+import {
+  ContainerBuilder,
+  TextDisplayBuilder,
+} from "@discordjs/builders";
 import {
   ButtonComponent,
   Discord,
@@ -22,6 +24,7 @@ import {
 import Member, { type IMemberPlatformRecord } from "../classes/Member.js";
 import { safeDeferReply, safeReply, safeUpdate } from "../functions/InteractionUtils.js";
 import { buildProfileViewPayload } from "./profile.command.js";
+import { buildComponentsV2Flags } from "../functions/NominationListComponents.js";
 import { shouldRenderPrevNextButtons } from "../functions/PaginationUtils.js";
 
 const MAX_OPTIONS = 25;
@@ -341,49 +344,51 @@ export class MultiplayerInfoCommand {
 
     try {
       const user = await interaction.client.users.fetch(userId);
-      const result = await buildProfileViewPayload(user, interaction.guildId ?? undefined);
+      const result = await buildProfileViewPayload(user);
 
       if (result.errorMessage) {
+        const errContainer = new ContainerBuilder().addTextDisplayComponents(
+          new TextDisplayBuilder().setContent(result.errorMessage),
+        );
         await safeReply(interaction, {
-          content: result.errorMessage,
-          flags: MessageFlags.Ephemeral,
+          components: [errContainer],
+          flags: buildComponentsV2Flags(true),
         });
         return;
       }
 
       if (!result.payload) {
-        await safeReply(interaction, {
-          content:
+        const notFoundContainer = new ContainerBuilder().addTextDisplayComponents(
+          new TextDisplayBuilder().setContent(
             result.notFoundMessage ?? `No profile data found for <@${userId}>.`,
-          flags: MessageFlags.Ephemeral,
+          ),
+        );
+        await safeReply(interaction, {
+          components: [notFoundContainer],
+          flags: buildComponentsV2Flags(true),
         });
         return;
       }
 
-      const components = interaction.message.components ?? [];
-      const content = interaction.message.content ?? null;
       const backButton = new ButtonBuilder()
         .setCustomId(`mpinfo-back:${ownerId}:${filterKey}:${pageRaw}`)
         .setLabel("Back to List")
         .setStyle(ButtonStyle.Secondary);
       const backRow = new ActionRowBuilder<ButtonBuilder>().addComponents(backButton);
-      const filteredComponents = components.filter((row) => {
-        if (!("components" in row)) return true;
-        const actionRow = row as ActionRow<MessageActionRowComponent>;
-        return !actionRow.components.some((component) =>
-          component.customId?.startsWith("mpinfo-back:"),
-        );
-      });
       await safeUpdate(interaction, {
-        ...result.payload,
-        components: [...filteredComponents, backRow],
-        content,
+        components: [...result.payload.components, backRow],
+        flags: buildComponentsV2Flags(false),
+        content: null,
+        embeds: [],
       });
     } catch (err: any) {
       const msg = err?.message ?? String(err);
+      const errContainer = new ContainerBuilder().addTextDisplayComponents(
+        new TextDisplayBuilder().setContent(`Could not load that profile: ${msg}`),
+      );
       await safeReply(interaction, {
-        content: `Could not load that profile: ${msg}`,
-        flags: MessageFlags.Ephemeral,
+        components: [errContainer],
+        flags: buildComponentsV2Flags(true),
       });
     }
   }

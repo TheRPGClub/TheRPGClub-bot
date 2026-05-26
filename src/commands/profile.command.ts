@@ -1,5 +1,4 @@
 import {
-  AttachmentBuilder,
   type CommandInteraction,
   ApplicationCommandOptionType,
   EmbedBuilder,
@@ -17,12 +16,20 @@ import {
   SlashGroup,
   SlashOption,
 } from "discordx";
+import {
+  ContainerBuilder,
+  SectionBuilder,
+  TextDisplayBuilder,
+  ThumbnailBuilder,
+} from "@discordjs/builders";
 import axios from "axios";
 import Member, {
   type IMemberRecord,
   type IMemberSearchFilters,
 } from "../classes/Member.js";
 import { safeDeferReply, safeReply, sanitizeUserInput } from "../functions/InteractionUtils.js";
+import { buildUserHeaderContainer } from "../functions/uiComponents.js";
+import { buildComponentsV2Flags } from "../functions/NominationListComponents.js";
 
 
 export const COMPLETION_TYPES = [
@@ -37,16 +44,9 @@ export type CompletionType = (typeof COMPLETION_TYPES)[number];
 
 export const COMPLETION_PAGE_SIZE = 20;
 
-type ProfileField = {
-  label: string;
-  value: string;
-  inline?: boolean;
-};
-
 export type ProfileViewPayload = {
   payload?: {
-    embeds: EmbedBuilder[];
-    files?: AttachmentBuilder[];
+    components: ContainerBuilder[];
   };
   notFoundMessage?: string;
   errorMessage?: string;
@@ -152,87 +152,63 @@ export function formatDiscordTimestamp(value: Date | null): string {
   return `<t:${seconds}:F>`;
 }
 
-function buildProfileFields(
-  record: Awaited<ReturnType<typeof Member.getByUserId>>,
+function buildProfileContentContainer(
+  record: NonNullable<Awaited<ReturnType<typeof Member.getByUserId>>>,
   nickHistory: string[],
-  guildId?: string,
-): ProfileField[] {
-  if (!record) {
-    return [];
-  }
-
-  const fields: ProfileField[] = [];
-
-  const globalName = record.globalName ?? "Unknown";
-  if (globalName !== "Unknown") {
-    fields.push({ label: "Global Name", value: globalName, inline: true });
-  }
+  avatarUrl: string | null,
+): ContainerBuilder {
+  const lines: string[] = [];
 
   if (record.isBot) {
-    fields.push({ label: "Bot", value: "Yes", inline: true });
+    lines.push("**Bot:** Yes");
   }
 
   if (nickHistory.length > 0) {
-    fields.push({
-      label: "AKA",
-      value: nickHistory.join(", "),
-      inline: true,
-    });
+    lines.push(`**AKA:** ${nickHistory.join(", ")}`);
   }
 
-  fields.push({
-    label: "Roles",
-    value:
-      [
-        record.roleAdmin ? "Admin" : null,
-        record.roleModerator ? "Moderator" : null,
-        record.roleRegular ? "Regular" : null,
-        record.roleMember ? "Member" : null,
-        record.roleNewcomer ? "Newcomer" : null,
-      ]
-        .filter(Boolean)
-        .join(", ")
-        .replace(/, $/, "") || "None",
-    inline: true,
-  });
+  const roles = [
+    record.roleAdmin ? "Admin" : null,
+    record.roleModerator ? "Moderator" : null,
+    record.roleRegular ? "Regular" : null,
+    record.roleMember ? "Member" : null,
+    record.roleNewcomer ? "Newcomer" : null,
+  ]
+    .filter(Boolean)
+    .join(", ") || "None";
+  lines.push(`**Roles:** ${roles}`);
 
-  fields.push({
-    label: "Last Seen",
-    value: formatDiscordTimestamp(record.lastSeenAt),
-  });
-  fields.push({
-    label: "Joined Server",
-    value: formatDiscordTimestamp(record.serverJoinedAt),
-  });
+  lines.push(`**Last Seen:** ${formatDiscordTimestamp(record.lastSeenAt)}`);
+  lines.push(`**Joined Server:** ${formatDiscordTimestamp(record.serverJoinedAt)}`);
 
   if (record.completionatorUrl) {
-    fields.push({ label: "Game Collection Tracker URL", value: record.completionatorUrl });
+    lines.push(`**Game Collection Tracker:** ${record.completionatorUrl}`);
   }
-
   if (record.steamUrl) {
-    fields.push({ label: "Steam", value: record.steamUrl });
+    lines.push(`**Steam:** ${record.steamUrl}`);
   }
-
   if (record.psnUsername) {
-    fields.push({ label: "PSN", value: record.psnUsername, inline: true });
+    lines.push(`**PSN:** ${record.psnUsername}`);
   }
-
   if (record.xblUsername) {
-    fields.push({ label: "Xbox", value: record.xblUsername, inline: true });
+    lines.push(`**Xbox:** ${record.xblUsername}`);
   }
-
   if (record.nswFriendCode) {
-    fields.push({ label: "Switch", value: record.nswFriendCode, inline: true });
+    lines.push(`**Switch:** ${record.nswFriendCode}`);
   }
 
-  return fields;
-}
-
-function buildAvatarAttachment(
-  record: Awaited<ReturnType<typeof Member.getByUserId>>,
-): AttachmentBuilder | null {
-  if (!record?.avatarBlob) return null;
-  return new AttachmentBuilder(record.avatarBlob, { name: "profile-avatar.png" });
+  const text = new TextDisplayBuilder().setContent(lines.join("\n"));
+  const container = new ContainerBuilder();
+  if (avatarUrl) {
+    container.addSectionComponents(
+      new SectionBuilder()
+        .addTextDisplayComponents(text)
+        .setThumbnailAccessory(new ThumbnailBuilder().setURL(avatarUrl)),
+    );
+  } else {
+    container.addTextDisplayComponents(text);
+  }
+  return container;
 }
 
 function avatarBuffersDifferent(a: Buffer | null, b: Buffer | null): boolean {
@@ -280,7 +256,6 @@ function buildBaseMemberRecord(user: User): IMemberRecord {
 
 export async function buildProfileViewPayload(
   target: User,
-  guildId?: string,
 ): Promise<ProfileViewPayload> {
   try {
     let record = await Member.getByUserId(target.id);
@@ -324,27 +299,14 @@ export async function buildProfileViewPayload(
       if (nickHistory.length >= 5) break;
     }
 
-    const fields = buildProfileFields(record, nickHistory, guildId).map((f) => ({
-      name: f.label,
-      value: f.value,
-      inline: f.inline ?? false,
-    }));
-    const embed = new EmbedBuilder()
-      .setTitle("Member Profile")
-      .setDescription(`<@${target.id}>`)
-      .addFields(fields);
-
-    const attachment = buildAvatarAttachment(record);
-    if (attachment) {
-      embed.setThumbnail("attachment://profile-avatar.png");
-    } else if (target.displayAvatarURL()) {
-      embed.setThumbnail(target.displayAvatarURL());
-    }
+    const displayName = record.globalName ?? record.username ?? target.username ?? "Unknown";
+    const thumbnailUrl = target.displayAvatarURL({ extension: "png", size: 256, forceStatic: true });
+    const headerContainer = buildUserHeaderContainer(target.id, displayName, "Member Profile");
+    const contentContainer = buildProfileContentContainer(record, nickHistory, thumbnailUrl);
 
     return {
       payload: {
-        embeds: [embed],
-        files: attachment ? [attachment] : undefined,
+        components: [headerContainer, contentContainer],
       },
     };
   } catch (err: any) {
@@ -377,30 +339,37 @@ export class ProfileCommand {
   ): Promise<void> {
     const target = member ?? interaction.user;
     const ephemeral = !showInChat;
-    await safeDeferReply(interaction, { flags: ephemeral ? MessageFlags.Ephemeral : undefined });
+    await safeDeferReply(interaction, { flags: buildComponentsV2Flags(ephemeral) });
 
-    const result = await buildProfileViewPayload(target, interaction.guildId ?? undefined);
+    const result = await buildProfileViewPayload(target);
 
     if (result.errorMessage) {
+      const errContainer = new ContainerBuilder().addTextDisplayComponents(
+        new TextDisplayBuilder().setContent(result.errorMessage),
+      );
       await safeReply(interaction, {
-        content: result.errorMessage,
-        flags: ephemeral ? MessageFlags.Ephemeral : undefined,
+        components: [errContainer],
+        flags: buildComponentsV2Flags(ephemeral),
       });
       return;
     }
 
     if (!result.payload) {
-      await safeReply(interaction, {
-        content:
+      const notFoundContainer = new ContainerBuilder().addTextDisplayComponents(
+        new TextDisplayBuilder().setContent(
           result.notFoundMessage ?? `No profile data found for <@${target.id}>.`,
-        flags: ephemeral ? MessageFlags.Ephemeral : undefined,
+        ),
+      );
+      await safeReply(interaction, {
+        components: [notFoundContainer],
+        flags: buildComponentsV2Flags(ephemeral),
       });
       return;
     }
 
     await safeReply(interaction, {
       ...result.payload,
-      ephemeral,
+      flags: buildComponentsV2Flags(ephemeral),
     });
   }
 
@@ -422,45 +391,58 @@ export class ProfileCommand {
   ): Promise<void> {
     const userId = interaction.values?.[0];
     if (!userId) {
+      const errContainer = new ContainerBuilder().addTextDisplayComponents(
+        new TextDisplayBuilder().setContent("Could not determine which member to load."),
+      );
       await safeReply(interaction, {
-        content: "Could not determine which member to load.",
-        flags: MessageFlags.Ephemeral,
+        components: [errContainer],
+        flags: buildComponentsV2Flags(true),
       });
       return;
     }
 
-    await safeDeferReply(interaction, { flags: MessageFlags.Ephemeral });
+    await safeDeferReply(interaction, { flags: buildComponentsV2Flags(true) });
 
     try {
       const user = await interaction.client.users.fetch(userId);
-      const result = await buildProfileViewPayload(user, interaction.guildId ?? undefined);
+      const result = await buildProfileViewPayload(user);
 
       if (result.errorMessage) {
+        const errContainer = new ContainerBuilder().addTextDisplayComponents(
+          new TextDisplayBuilder().setContent(result.errorMessage),
+        );
         await safeReply(interaction, {
-          content: result.errorMessage,
-          flags: MessageFlags.Ephemeral,
+          components: [errContainer],
+          flags: buildComponentsV2Flags(true),
         });
         return;
       }
 
       if (!result.payload) {
-        await safeReply(interaction, {
-          content:
+        const notFoundContainer = new ContainerBuilder().addTextDisplayComponents(
+          new TextDisplayBuilder().setContent(
             result.notFoundMessage ?? `No profile data found for <@${userId}>.`,
-          flags: MessageFlags.Ephemeral,
+          ),
+        );
+        await safeReply(interaction, {
+          components: [notFoundContainer],
+          flags: buildComponentsV2Flags(true),
         });
         return;
       }
 
       await safeReply(interaction, {
         ...result.payload,
-        flags: MessageFlags.Ephemeral,
+        flags: buildComponentsV2Flags(true),
       });
     } catch (err: any) {
       const msg = err?.message ?? String(err);
+      const errContainer = new ContainerBuilder().addTextDisplayComponents(
+        new TextDisplayBuilder().setContent(`Could not load that profile: ${msg}`),
+      );
       await safeReply(interaction, {
-        content: `Could not load that profile: ${msg}`,
-        flags: MessageFlags.Ephemeral,
+        components: [errContainer],
+        flags: buildComponentsV2Flags(true),
       });
     }
   }
