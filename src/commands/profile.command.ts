@@ -105,17 +105,6 @@ export function formatPlaytimeHours(val: number | null | undefined): string | nu
   return `${rounded} hours`;
 }
 
-function formatCompletionLine(
-  record: Awaited<ReturnType<typeof Member.getCompletions>>[number],
-  guildId?: string,
-): string {
-  const title =
-    record.threadId && guildId
-      ? `[${record.title}](https://discord.com/channels/${guildId}/${record.threadId})`
-      : record.title;
-  return title;
-}
-
 export function formatTableDate(date: Date | null): string {
   if (!date) return "No date";
   const month = String(date.getMonth() + 1).padStart(2, "0");
@@ -166,8 +155,6 @@ export function formatDiscordTimestamp(value: Date | null): string {
 function buildProfileFields(
   record: Awaited<ReturnType<typeof Member.getByUserId>>,
   nickHistory: string[],
-  nowPlaying: { title: string; threadId: string | null; note: string | null }[],
-  completions: Awaited<ReturnType<typeof Member.getCompletions>>,
   guildId?: string,
 ): ProfileField[] {
   if (!record) {
@@ -238,35 +225,6 @@ function buildProfileFields(
     fields.push({ label: "Switch", value: record.nswFriendCode, inline: true });
   }
 
-  if (nowPlaying.length) {
-    const lines: string[] = [];
-    nowPlaying.forEach((entry) => {
-      if (entry.threadId && guildId) {
-        lines.push(`[${entry.title}](https://discord.com/channels/${guildId}/${entry.threadId})`);
-      } else {
-        lines.push(entry.title);
-      }
-    });
-    fields.push({
-      label: "Now Playing",
-      value: lines.join("\n"),
-    });
-  }
-
-  if (completions.length) {
-    const lines: string[] = [];
-    completions.forEach((c) => {
-      lines.push(formatCompletionLine(c, guildId));
-      if (c.note) {
-        lines.push(`> ${c.note}`);
-      }
-    });
-    fields.push({
-      label: "Completed (recent)",
-      value: lines.join("\n"),
-    });
-  }
-
   return fields;
 }
 
@@ -326,8 +284,6 @@ export async function buildProfileViewPayload(
 ): Promise<ProfileViewPayload> {
   try {
     let record = await Member.getByUserId(target.id);
-    const nowPlaying = await Member.getNowPlaying(target.id);
-    const completions = await Member.getCompletions({ userId: target.id, limit: 5 });
     const nickHistoryEntries = await Member.getRecentNickHistory(target.id, 6);
     const avatarUrl = target.displayAvatarURL({
       extension: "png",
@@ -368,7 +324,7 @@ export async function buildProfileViewPayload(
       if (nickHistory.length >= 5) break;
     }
 
-    const fields = buildProfileFields(record, nickHistory, nowPlaying, completions, guildId).map((f) => ({
+    const fields = buildProfileFields(record, nickHistory, guildId).map((f) => ({
       name: f.label,
       value: f.value,
       inline: f.inline ?? false,
