@@ -149,10 +149,14 @@ export type GameSource = "oracleSQL" | "API";
 /**
  * Maps a Rails API JSON response (snake_case) to IGame.
  * imageData and artData are always null from the API (blobs are not serialized).
+ *
+ * The Rails API uses its own auto-increment PK in `data.id` (which differs from
+ * the Oracle GameDB GAME_ID). The Oracle ID is serialized as `data.game_id`, so
+ * we prefer that field and fall back to `data.id` only if absent.
  */
 function mapGameFromApi(data: any): IGame {
   return {
-    id: Number(data.id ?? data.game_id),
+    id: Number(data.game_id ?? data.id),
     title: String(data.title),
     description: data.description ? String(data.description) : null,
     imageData: null,
