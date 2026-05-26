@@ -2026,18 +2026,16 @@ export class GameDb {
         });
         return;
       }
-      let rawContent: string;
       try {
         const meta = await Game.getGameRawFromApiWithMeta(gameId);
         void sendGameDbApiLog(interaction, gameId, meta);
         if (meta.errorMessage) {
-          rawContent = `API error: ${meta.errorMessage}`;
-        } else {
-          const json = JSON.stringify(meta.gameData, null, 2);
-          const body = json.length > 1900
-            ? json.slice(0, 1900) + "\n...(truncated)"
-            : json;
-          rawContent = `\`\`\`json\n${body}\n\`\`\``;
+          await safeReply(interaction, {
+            content: `API error: ${meta.errorMessage}`,
+            flags: COMPONENTS_V2_FLAG,
+            __forceFollowUp: true,
+          });
+          return;
         }
       } catch (err: any) {
         // Only non-Axios errors (network failures) reach here
@@ -2051,13 +2049,14 @@ export class GameDb {
           responseHeaders: {},
           errorMessage: errMsg,
         });
-        rawContent = `API error: ${errMsg}`;
+        await safeReply(interaction, {
+          content: `API error: ${errMsg}`,
+          flags: COMPONENTS_V2_FLAG,
+          __forceFollowUp: true,
+        });
+        return;
       }
-      await safeReply(interaction, {
-        content: rawContent,
-        flags: COMPONENTS_V2_FLAG,
-        __forceFollowUp: true,
-      });
+      await this.showGameProfile(interaction, gameId, undefined, "API");
       return;
     }
 
