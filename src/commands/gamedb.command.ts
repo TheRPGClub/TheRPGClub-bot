@@ -88,10 +88,7 @@ import {
 } from "../functions/CompletionHelpers.js";
 import { searchHltb } from "../scripts/SearchHltb.js";
 import { formatPlatformDisplayName } from "../functions/PlatformDisplay.js";
-import {
-  DISCORD_CONSOLE_LOG_CHANNEL_ID,
-  NOW_PLAYING_FORUM_ID,
-} from "../config/channels.js";
+import { NOW_PLAYING_FORUM_ID } from "../config/channels.js";
 import { NOW_PLAYING_SIDEGAME_TAG_ID } from "../config/tags.js";
 import { COMPONENTS_V2_FLAG } from "../config/flags.js";
 import { STANDARD_PLATFORM_IDS } from "../config/standardPlatforms.js";
@@ -385,88 +382,6 @@ function buildChoiceRows(
   return rows;
 }
 
-type ISendableChannel = { send: (options: MessageCreateOptions) => Promise<unknown> };
-
-function formatHeadersBlock(headers: Record<string, string>): string {
-  const lines = Object.entries(headers)
-    .map(([k, v]) => `${k}: ${v}`)
-    .join("\n");
-  return lines ? `\`\`\`\n${lines}\n\`\`\`` : "`(none)`";
-}
-
-async function sendGameDbApiLog(
-  interaction: CommandInteraction,
-  gameId: number,
-  meta: {
-    url: string;
-    status: number;
-    rawData: unknown;
-    requestHeaders: Record<string, string>;
-    responseHeaders: Record<string, string>;
-    errorMessage: string | null;
-  },
-): Promise<void> {
-  try {
-    const channel = await interaction.client.channels
-      .fetch(DISCORD_CONSOLE_LOG_CHANNEL_ID)
-      .catch(() => null);
-    if (!channel || !channel.isTextBased()) return;
-    if (!("send" in channel)) return;
-    const sendable = channel as unknown as ISendableChannel;
-
-    const userId = interaction.user.id;
-    const timestamp = new Date().toISOString();
-    const { url, status, rawData, requestHeaders, responseHeaders, errorMessage } = meta;
-
-    const header = [
-      `**[GameDB API View]**`,
-      `**User:** <@${userId}>  **Game ID:** ${gameId}`,
-      `**URL:** \`${url}\``,
-      `**Time:** ${timestamp}`,
-      `**Status:** ${status || "N/A (network error)"}`,
-    ].join("\n");
-
-    const reqSection = `**Request Headers:**\n${formatHeadersBlock(requestHeaders)}`;
-    const resHeaderSection =
-      `**Response Headers:**\n${formatHeadersBlock(responseHeaders)}`;
-
-    if (errorMessage) {
-      const errBlock = errorMessage.length > 900
-        ? `${errorMessage.slice(0, 900)}...(truncated)`
-        : errorMessage;
-      await sendable.send({
-        content: [
-          header,
-          reqSection,
-          resHeaderSection,
-          `**Error:**\n\`\`\`\n${errBlock}\n\`\`\``,
-        ].join("\n\n"),
-      });
-      return;
-    }
-
-    const json = JSON.stringify(rawData, null, 2);
-    const preamble = [header, reqSection, resHeaderSection].join("\n\n");
-
-    if (json.length > 1200) {
-      const buf = Buffer.from(json, "utf8");
-      const attachment = new AttachmentBuilder(buf, {
-        name: `gamedb-api-${gameId}.json`,
-      });
-      await sendable.send({
-        content: `${preamble}\n\n**Response:** (see attachment)`,
-        files: [attachment],
-      });
-      return;
-    }
-
-    await sendable.send({
-      content: `${preamble}\n\n**Response:**\n\`\`\`json\n${json}\n\`\`\``,
-    });
-  } catch {
-    // Do not let logging failures surface to the user
-  }
-}
 
 @Discord()
 @SlashGroup({ description: "Game Database Commands", name: "gamedb" })
@@ -2023,36 +1938,6 @@ export class GameDb {
         await safeReply(interaction, {
           content: "API source requires a numeric game ID.",
           flags: COMPONENTS_V2_FLAG,
-        });
-        return;
-      }
-      try {
-        const meta = await Game.getGameRawFromApiWithMeta(gameId);
-        void sendGameDbApiLog(interaction, gameId, meta);
-        if (meta.errorMessage) {
-          await safeReply(interaction, {
-            content: `API error: ${meta.errorMessage}`,
-            flags: COMPONENTS_V2_FLAG,
-            __forceFollowUp: true,
-          });
-          return;
-        }
-      } catch (err: any) {
-        // Only non-Axios errors (network failures) reach here
-        const errMsg: string = err?.message ?? String(err);
-        const baseUrl = process.env.RPGCLUB_API_BASE_URL ?? "";
-        void sendGameDbApiLog(interaction, gameId, {
-          url: `${baseUrl}/api/v1/games/${gameId}`,
-          status: 0,
-          rawData: null,
-          requestHeaders: {},
-          responseHeaders: {},
-          errorMessage: errMsg,
-        });
-        await safeReply(interaction, {
-          content: `API error: ${errMsg}`,
-          flags: COMPONENTS_V2_FLAG,
-          __forceFollowUp: true,
         });
         return;
       }
