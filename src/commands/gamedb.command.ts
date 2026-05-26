@@ -1942,9 +1942,10 @@ export class GameDb {
             const body = json.length > 1900
               ? json.slice(0, 1900) + "\n...(truncated)"
               : json;
-            await interaction.followUp({
+            await safeReply(interaction, {
               content: `\`\`\`json\n${body}\n\`\`\``,
-              flags: MessageFlags.Ephemeral,
+              flags: COMPONENTS_V2_FLAG,
+              __forceFollowUp: true,
             });
           }
           return;
