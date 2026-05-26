@@ -1930,24 +1930,41 @@ export class GameDb {
 
     const source: GameSource = sourceChoice === "api" ? "API" : "oracleSQL";
     const searchTerm = sanitizeUserInput(query, { preserveNewlines: false });
+
+    if (source === "API") {
+      const gameId = /^\d+$/.test(searchTerm) ? Number(searchTerm) : NaN;
+      if (!Number.isInteger(gameId) || gameId <= 0) {
+        await safeReply(interaction, {
+          content: "API source requires a numeric game ID.",
+          flags: COMPONENTS_V2_FLAG,
+        });
+        return;
+      }
+      let rawContent: string;
+      try {
+        const raw = await Game.getGameRawFromApi(gameId);
+        const json = JSON.stringify(raw, null, 2);
+        const body = json.length > 1900
+          ? json.slice(0, 1900) + "\n...(truncated)"
+          : json;
+        rawContent = `\`\`\`json\n${body}\n\`\`\``;
+      } catch (err: any) {
+        rawContent = `API error: ${err?.message ?? String(err)}`;
+      }
+      await safeReply(interaction, {
+        content: rawContent,
+        flags: COMPONENTS_V2_FLAG,
+        __forceFollowUp: true,
+      });
+      return;
+    }
+
     if (/^\d+$/.test(searchTerm)) {
       const gameId = Number(searchTerm);
       if (Number.isInteger(gameId) && gameId > 0) {
         const game = await Game.getGameById(gameId, source);
         if (game) {
           await this.showGameProfile(interaction, gameId, undefined, source);
-          if (source === "API") {
-            const raw = await Game.getGameRawFromApi(gameId);
-            const json = JSON.stringify(raw, null, 2);
-            const body = json.length > 1900
-              ? json.slice(0, 1900) + "\n...(truncated)"
-              : json;
-            await safeReply(interaction, {
-              content: `\`\`\`json\n${body}\n\`\`\``,
-              flags: COMPONENTS_V2_FLAG,
-              __forceFollowUp: true,
-            });
-          }
           return;
         }
       }
