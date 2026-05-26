@@ -2248,7 +2248,7 @@ export class GameDb {
           if (!nominees.length) {
             return `Round ${win.round}`;
           }
-          return `Round ${win.round} (nominated by ${nominees.join(", ")})`;
+          return `Round ${win.round} (nominated by ${nominees.join(",  ")})`;
         });
         pushRpgClubSection("GOTM Round(s)", lines.join("\n"));
       }
@@ -2259,7 +2259,7 @@ export class GameDb {
           if (!nominees.length) {
             return `Round ${win.round}`;
           }
-          return `Round ${win.round} (nominated by ${nominees.join(", ")})`;
+          return `Round ${win.round} (nominated by ${nominees.join(",  ")})`;
         });
         pushRpgClubSection("NR-GOTM Round(s)", lines.join("\n"));
       }
@@ -2299,7 +2299,7 @@ export class GameDb {
           lines.push(`…and ${remaining} more playing now.`);
         }
 
-        pushRpgClubSection("Now Playing", lines.join(", "));
+        pushRpgClubSection("Now Playing", lines.join(",  "));
       }
 
       if (collectionOwners.length) {
@@ -2314,7 +2314,7 @@ export class GameDb {
           lines.push(`…and ${remaining} more own this.`);
         }
 
-        pushRpgClubSection("Owned By", lines.join(", "));
+        pushRpgClubSection("Owned By", lines.join(",  "));
       }
 
       if (completions.length) {
@@ -2336,7 +2336,7 @@ export class GameDb {
           lines.push(`…and ${remaining} more completed this.`);
         }
 
-        pushRpgClubSection("Completed By", lines.join(", "));
+        pushRpgClubSection("Completed By", lines.join(",  "));
       }
 
       const gotmWinRounds = new Set(associations.gotmWins.map((win) => win.round));
@@ -2349,7 +2349,7 @@ export class GameDb {
         const lines = gotmNominations.map(
           (nom) => `Round ${nom.round} - ${renderUsernameWithEmoji(nom.userId, nom.username)}`,
         );
-        pushRpgClubSection("GOTM Nominations", lines.join(", "));
+        pushRpgClubSection("GOTM Nominations", lines.join(",  "));
       }
 
       const nrGotmNominations = associations.nrGotmNominations.filter(
@@ -2359,7 +2359,7 @@ export class GameDb {
         const lines = nrGotmNominations.map(
           (nom) => `Round ${nom.round} - ${renderUsernameWithEmoji(nom.userId, nom.username)}`,
         );
-        pushRpgClubSection("NR-GOTM Nominations", lines.join(", "));
+        pushRpgClubSection("NR-GOTM Nominations", lines.join(",  "));
       }
 
       const bodyParts: Array<{ content: string; accessory?: ButtonBuilder }> = [];
