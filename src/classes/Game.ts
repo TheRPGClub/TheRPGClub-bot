@@ -26,6 +26,7 @@ export interface IGame {
   initialReleaseDate: Date | null;
   createdAt: Date;
   updatedAt: Date;
+  coverUrl: string | null;
 }
 
 export interface IRelease {
@@ -177,6 +178,7 @@ function mapGameFromApi(data: any): IGame {
       : null,
     createdAt: new Date(data.created_at),
     updatedAt: new Date(data.updated_at),
+    coverUrl: data.cover_url ? String(data.cover_url) : null,
   };
 }
 
@@ -201,6 +203,7 @@ function mapGameRow(row: any): IGame {
         : null,
     createdAt: row.CREATED_AT instanceof Date ? row.CREATED_AT : new Date(row.CREATED_AT),
     updatedAt: row.UPDATED_AT instanceof Date ? row.UPDATED_AT : new Date(row.UPDATED_AT),
+    coverUrl: null,
   };
 }
 
@@ -1920,6 +1923,7 @@ export default class Game {
             : null,
         createdAt: row.CREATED_AT instanceof Date ? row.CREATED_AT : new Date(row.CREATED_AT),
         updatedAt: row.UPDATED_AT instanceof Date ? row.UPDATED_AT : new Date(row.UPDATED_AT),
+        coverUrl: null,
       }));
 
       return await Game.attachPlatformsToGames(games);
