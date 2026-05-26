@@ -329,6 +329,15 @@ export default class Game {
     }
   }
 
+  /**
+   * Returns the raw `data` payload from the Rails API for a game, without any
+   * field mapping. Useful for debugging what the API actually returns.
+   */
+  static async getGameRawFromApi(id: number): Promise<unknown> {
+    const result = await apiGet<{ data: unknown }>(`/api/v1/games/${id}`);
+    return result?.data ?? null;
+  }
+
   static async getGameById(
     id: number,
     source: GameSource = "oracleSQL",
