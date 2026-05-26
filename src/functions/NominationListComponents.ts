@@ -1,13 +1,16 @@
 import {
   ActionRowBuilder,
   AttachmentBuilder,
+  ButtonStyle,
   MessageFlags,
   StringSelectMenuBuilder,
 } from "discord.js";
 import {
+  ButtonBuilder,
   ContainerBuilder,
   MediaGalleryBuilder,
   MediaGalleryItemBuilder,
+  SectionBuilder,
   SeparatorBuilder,
   TextDisplayBuilder,
 } from "@discordjs/builders";
@@ -140,16 +143,23 @@ function addNominationContent(
   container: ContainerBuilder,
   nomination: INominationEntry,
 ): void {
-  container.addTextDisplayComponents(
+  const section = new SectionBuilder().addTextDisplayComponents(
     new TextDisplayBuilder().setContent(buildNominationText(nomination)),
   );
+  section.setButtonAccessory(
+    new ButtonBuilder()
+      .setCustomId(`user-header-label:${nomination.userId}`)
+      .setLabel(`<@${nomination.userId}>`)
+      .setStyle(ButtonStyle.Secondary),
+  );
+  container.addSectionComponents(section);
 }
 
 function buildNominationText(nomination: INominationEntry): string {
   if (nomination.reason) {
-    return `### ${nomination.gameTitle}\n<@${nomination.userId}> ${trimReason(nomination.reason)}`;
+    return `**${nomination.gameTitle}**\n> ${trimReason(nomination.reason)}`;
   }
-  return `### ${nomination.gameTitle}\n<@${nomination.userId}> nominated this title, but did not provide a reason.`;
+  return `**${nomination.gameTitle}**\n-# *No reason provided.*`;
 }
 
 function buildHeaderContent(
