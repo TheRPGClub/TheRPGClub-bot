@@ -4312,7 +4312,7 @@ export class NowPlayingCommand {
       isOwnList,
     );
     const components = this.withNowPlayingActions(
-      true,
+      false,
       target.id,
       payload.components,
       false,
@@ -4383,9 +4383,13 @@ export class NowPlayingCommand {
       target,
       sortedEntries,
       interaction.guildId,
+      false,
+      false,
+      true,
+      interaction.user.id === selectedUserId,
     );
     const components = this.withNowPlayingActions(
-      true,
+      false,
       selectedUserId,
       payload.components,
       false,
@@ -4549,6 +4553,7 @@ export class NowPlayingCommand {
       this.buildNowPlayingAttachments(entries, NOW_PLAYING_COMPOSITE_MAX),
       this.canUseJournalFeature(target.id),
     ]);
+    const hasDisplayableNotes = this.hasDisplayableNowPlayingNotes(entries);
     const listComponents = this.buildNowPlayingEntryComponents(
       entries,
       target.id,
@@ -4558,9 +4563,11 @@ export class NowPlayingCommand {
       showPrivateOnlyJournalButtons,
       ownerCanUseJournal,
       singleUserMode && ownerCanEditFromHeader,
+      singleUserMode,
+      hasDisplayableNotes,
     );
     const ownerName = target.displayName ?? target.username ?? target.id;
-    const headerCustomId = singleUserMode && ownerCanEditFromHeader
+    const headerCustomId = singleUserMode
       ? `${NOW_PLAYING_LIST_EDIT_PREFIX}:${target.id}`
       : undefined;
     const headerContainer = buildUserHeaderContainer(
@@ -5319,7 +5326,7 @@ export class NowPlayingCommand {
             ownerId === interaction.user.id,
           );
           const components = this.withNowPlayingActions(
-            ownerId === interaction.user.id,
+            false,
             ownerId,
             payload.components,
             showNotes,
@@ -5380,7 +5387,7 @@ export class NowPlayingCommand {
               `No Now Playing entries found for <@${selectedUserId}>.`,
             );
             const components = this.withNowPlayingActions(
-              true,
+              false,
               selectedUserId,
               [container],
               false,
@@ -5399,9 +5406,13 @@ export class NowPlayingCommand {
             target,
             entries,
             message.guildId ?? interaction.guildId,
+            false,
+            false,
+            true,
+            interaction.user.id === selectedUserId,
           );
           const components = this.withNowPlayingActions(
-            true,
+            false,
             selectedUserId,
             payload.components,
             false,
@@ -5602,6 +5613,8 @@ export class NowPlayingCommand {
     showPrivateOnlyJournalButtons: boolean = false,
     ownerCanUseJournal: boolean = false,
     showHeaderEditHint: boolean = false,
+    singleUserMode: boolean = false,
+    hasDisplayableNotes: boolean = false,
   ): NowPlayingListComponents {
     const container = new ContainerBuilder();
     if (imageUrl) {
@@ -5616,7 +5629,51 @@ export class NowPlayingCommand {
         new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small).setDivider(false),
       );
     }
-    entries.forEach((entry, index) => {
+    if (singleUserMode) {
+      const entryBlocks = entries.map((entry) => {
+        const entryTitle = formatEntry(entry, guildId);
+        const lines = [`**${entryTitle}**`];
+        if (entry.addedAt) {
+          const addedLabel = `Added ${formatTableDate(entry.addedAt)}`;
+          if (entry.noteUpdatedAt) {
+            const updatedLabel = `last updated ${formatTableDate(entry.noteUpdatedAt)}`;
+            if (formatTableDate(entry.addedAt) === formatTableDate(entry.noteUpdatedAt)) {
+              lines.push(`-# *${addedLabel}.*`);
+            } else {
+              lines.push(`-# *${addedLabel}, ${updatedLabel}.*`);
+            }
+          } else {
+            lines.push(`-# *${addedLabel}.*`);
+          }
+        }
+        if (showNotes && entry.note && (!entry.journalEnabled || !ownerCanUseJournal)) {
+          const quotedNote = entry.note
+            .split("\n")
+            .map((noteLine) => `> ${noteLine}`)
+            .join("\n");
+          lines.push(quotedNote);
+        }
+        return lines.join("\n");
+      });
+      const combined = this.trimTextDisplayContent(entryBlocks.join("\n\n"));
+      if (hasDisplayableNotes) {
+        const notesAction = showNotes ? "hide" : "show";
+        const notesLabel = showNotes ? "Hide Notes" : "Show Notes";
+        const section = new SectionBuilder().addTextDisplayComponents(
+          new TextDisplayBuilder().setContent(combined),
+        );
+        section.setButtonAccessory(
+          new V2ButtonBuilder()
+            .setCustomId(`${NOW_PLAYING_LIST_NOTES_PREFIX}:${ownerId}:${notesAction}`)
+            .setLabel(notesLabel)
+            .setStyle(ButtonStyle.Secondary),
+        );
+        container.addSectionComponents(section);
+      } else {
+        container.addTextDisplayComponents(new TextDisplayBuilder().setContent(combined));
+      }
+    } else {
+      entries.forEach((entry, index) => {
       if (index === 0) {
         container.addSeparatorComponents(
           new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small).setDivider(false),
@@ -5662,7 +5719,8 @@ export class NowPlayingCommand {
       } else {
         container.addTextDisplayComponents(new TextDisplayBuilder().setContent(content));
       }
-    });
+      });
+    }
     if (showHeaderEditHint) {
       container.addTextDisplayComponents(
         new TextDisplayBuilder().setContent("-# *Note: List owner can use button in the header to maintain this list.*"),
