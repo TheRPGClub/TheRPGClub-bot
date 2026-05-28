@@ -138,6 +138,7 @@ const NOW_PLAYING_EDIT_MENU_JOURNAL_PREFIX = "nowplaying-edit-menu-journal";
 const NOW_PLAYING_JOURNAL_OPTIN_SELECT_PREFIX = "nowplaying-journal-optin-select";
 const NOW_PLAYING_REMOVE_SELECT_PREFIX = "nowplaying-remove-select";
 const NOW_PLAYING_JOURNAL_OPEN_PREFIX = "nowplaying-journal-open";
+const NOW_PLAYING_JOURNAL_VIEW_SELECT_PREFIX = "nowplaying-journal-view-select";
 const NOW_PLAYING_JOURNAL_ADD_PREFIX = "nowplaying-journal-add";
 const NOW_PLAYING_JOURNAL_EDIT_PREFIX = "nowplaying-journal-edit";
 const NOW_PLAYING_JOURNAL_EDIT_SELECT_PREFIX = "nowplaying-journal-edit-select";
@@ -228,7 +229,7 @@ export async function restoreJournalMessageContextsFromDb(): Promise<void> {
 }
 
 type NowPlayingMessageComponents = Array<
-  ContainerBuilder | MediaGalleryBuilder | ActionRowBuilder<ButtonBuilder>
+  ContainerBuilder | MediaGalleryBuilder | ActionRowBuilder<ButtonBuilder> | ActionRowBuilder<StringSelectMenuBuilder>
 >;
 
 function extractJournalPrivacyFromInteraction(interaction: ModalSubmitInteraction): boolean {
@@ -258,6 +259,7 @@ function extractJournalPrivacyFromInteraction(interaction: ModalSubmitInteractio
   return false;
 }
 type NowPlayingListComponents = ContainerBuilder[];
+type NowPlayingPayloadComponents = Array<ContainerBuilder | ActionRowBuilder<StringSelectMenuBuilder>>;
 
 function buildComponentsV2Flags(isEphemeral: boolean): number {
   return (isEphemeral ? MessageFlags.Ephemeral : 0) | COMPONENTS_V2_FLAG;
@@ -3267,6 +3269,51 @@ export class NowPlayingCommand {
     await this.trackJournalReply(interaction, ownerId, gameId);
   }
 
+  @SelectMenuComponent({ id: /^nowplaying-journal-view-select:\d+$/ })
+  async handleNowPlayingJournalViewSelect(
+    interaction: StringSelectMenuInteraction,
+  ): Promise<void> {
+    const [, ownerId] = interaction.customId.split(":");
+    const gameId = Number(interaction.values?.[0]);
+    if (!gameId) return;
+    if (
+      !(await this.canUseJournalFeature(ownerId)) ||
+      !(await this.canUseJournalFeature(interaction.user.id))
+    ) {
+      await safeReply(interaction, {
+        content: "Journal requires the Regulars role.",
+        flags: buildComponentsV2Flags(true),
+      });
+      return;
+    }
+    const nowPlayingEntries = getDisplayNowPlayingEntries(await Member.getNowPlaying(ownerId));
+    const selected = nowPlayingEntries.find((e) => e.gameId === gameId);
+    if (!selected?.journalEnabled || !selected.hasPublicJournalEntry) {
+      await safeReply(interaction, {
+        content: "This game has no public journal entries.",
+        flags: buildComponentsV2Flags(true),
+      });
+      return;
+    }
+    const payload = await this.buildJournalComponents(
+      ownerId,
+      interaction.guildId ? "__public__" : interaction.user.id,
+      gameId,
+      1,
+      interaction.guildId,
+    );
+    if (interaction.guildId) {
+      await this.deleteRecentJournalMessagesInChannel(interaction, ownerId, gameId);
+    }
+    await safeReply(interaction, {
+      components: payload.components,
+      files: payload.files,
+      flags: buildComponentsV2Flags(interaction.message.flags?.has(MessageFlags.Ephemeral) ?? false),
+      allowedMentions: payload.allowedMentions,
+    });
+    await this.trackJournalReply(interaction, ownerId, gameId);
+  }
+
   @ButtonComponent({ id: /^nowplaying-journal-page:\d+:\d+:(prev|next):\d+$/ })
   async handleNowPlayingJournalPage(interaction: ButtonInteraction): Promise<void> {
     const [, ownerId, gameIdRaw, , pageRaw] = interaction.customId.split(":");
@@ -4556,7 +4603,7 @@ export class NowPlayingCommand {
     showNotes: boolean = false,
     showPrivateOnlyJournalButtons: boolean = false,
     singleUserMode: boolean = false,
-  ): Promise<{ components: NowPlayingListComponents; files: AttachmentBuilder[] }> {
+  ): Promise<{ components: NowPlayingPayloadComponents; files: AttachmentBuilder[] }> {
     const [{ files, covers }, ownerCanUseJournal] = await Promise.all([
       this.buildNowPlayingAttachments(entries, NOW_PLAYING_COMPOSITE_MAX),
       this.canUseJournalFeature(target.id),
@@ -4584,7 +4631,34 @@ export class NowPlayingCommand {
       "Now Playing",
       headerCustomId,
     );
-    return { components: [headerContainer, ...listComponents], files };
+    const journalSelectRow = this.buildJournalSelectRow(entries, target.id);
+    const trailingComponents: NowPlayingPayloadComponents = journalSelectRow ? [journalSelectRow] : [];
+    return { components: [headerContainer, ...listComponents, ...trailingComponents], files };
+  }
+
+  private buildJournalSelectRow(
+    entries: IMemberNowPlayingEntry[],
+    ownerId: string,
+  ): ActionRowBuilder<StringSelectMenuBuilder> | null {
+    const journalEntries = entries.filter(
+      (e) => e.journalEnabled && e.hasPublicJournalEntry,
+    );
+    if (!journalEntries.length) return null;
+    const options = journalEntries.map((e) => {
+      const rawLabel = `${e.title} Game Journal`;
+      const label = rawLabel.length > 100 ? `${rawLabel.slice(0, 97)}...` : rawLabel;
+      const countText = e.publicJournalCount === 1 ? "1 entry" : `${e.publicJournalCount} entries`;
+      const lastPart = e.lastPublicJournalAt
+        ? ` · Last entry ${formatTableDate(e.lastPublicJournalAt)}`
+        : "";
+      const description = `${countText}${lastPart}`.slice(0, 100);
+      return { label, description, value: String(e.gameId) };
+    });
+    const select = new StringSelectMenuBuilder()
+      .setCustomId(`${NOW_PLAYING_JOURNAL_VIEW_SELECT_PREFIX}:${ownerId}`)
+      .setPlaceholder("View Game Journals")
+      .addOptions(options);
+    return new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select);
   }
 
   private async buildNowPlayingCompositeImageUrl(
@@ -5206,7 +5280,7 @@ export class NowPlayingCommand {
   private withNowPlayingActions(
     isOwnList: boolean,
     ownerId: string,
-    components: NowPlayingListComponents,
+    components: NowPlayingPayloadComponents,
     showNotes: boolean,
     hasDisplayableNotes: boolean = true,
     includeEditButton: boolean = true,
@@ -5484,7 +5558,7 @@ export class NowPlayingCommand {
   }
 
   private async deleteRecentJournalMessagesInChannel(
-    interaction: ButtonInteraction | ModalSubmitInteraction,
+    interaction: ButtonInteraction | ModalSubmitInteraction | StringSelectMenuInteraction,
     ownerUserId: string,
     gameId: number,
   ): Promise<void> {
@@ -5532,7 +5606,7 @@ export class NowPlayingCommand {
   }
 
   private async trackJournalReply(
-    interaction: ButtonInteraction | ModalSubmitInteraction,
+    interaction: ButtonInteraction | ModalSubmitInteraction | StringSelectMenuInteraction,
     ownerUserId: string,
     gameId: number,
   ): Promise<void> {
