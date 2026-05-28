@@ -217,7 +217,7 @@ export async function buildJournalView(options: JournalViewOptions): Promise<{
         .setStyle(ButtonStyle.Secondary),
     );
   }
-  if (navRow.components.length > 0 && navRowTrailingButtons?.length) {
+  if (navRowTrailingButtons?.length) {
     navRow.addComponents(...navRowTrailingButtons);
   }
 
