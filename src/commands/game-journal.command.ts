@@ -42,12 +42,14 @@ const GJ_LIST_PAGE_PREFIX = "game-journal-list-page";
 const GJ_VIEW_PAGE_PREFIX = "game-journal-view-page";
 const GJ_ALL_SELECT_PREFIX = "game-journal-all-select";
 const GJ_ALL_PAGE_PREFIX = "game-journal-all-page";
+export const GJ_PUBLIC_CLOSE_PREFIX = "journal-public-close";
 
 // customId: GJ_LIST_SELECT_PREFIX:{callerId}:{targetUserId}:{page}  value=gameId
 // customId: GJ_LIST_PAGE_PREFIX:{callerId}:{targetUserId}:{page}
 // customId: GJ_VIEW_PAGE_PREFIX:{callerId}:{targetUserId}:{gameId}:{page}
 // customId: GJ_ALL_SELECT_PREFIX:{callerId}:{page}                  value=userId
 // customId: GJ_ALL_PAGE_PREFIX:{callerId}:{page}
+// customId: GJ_PUBLIC_CLOSE_PREFIX:{callerId}
 
 function gameLabel(n: number): string {
   return n === 1 ? "game" : "games";
@@ -155,6 +157,14 @@ function buildJournalViewPayload(
       `${GJ_VIEW_PAGE_PREFIX}:${callerId}:${targetUserId}:${gameId}:${p}`,
     nextPageCustomId: (p) =>
       `${GJ_VIEW_PAGE_PREFIX}:${callerId}:${targetUserId}:${gameId}:${p}`,
+    navRowTrailingButtons: guildId
+      ? [
+          new ButtonBuilder()
+            .setCustomId(`${GJ_PUBLIC_CLOSE_PREFIX}:${callerId}`)
+            .setLabel("Close")
+            .setStyle(ButtonStyle.Danger),
+        ]
+      : undefined,
     includeNowPlayingMeta: true,
     includeCompletions: true,
   });
@@ -452,5 +462,19 @@ export class GameJournalCommand {
       flags: payload.flags,
       allowedMentions: payload.allowedMentions,
     });
+  }
+
+  @ButtonComponent({ id: new RegExp(`^${GJ_PUBLIC_CLOSE_PREFIX}:\\d+$`) })
+  async handlePublicClose(interaction: ButtonInteraction): Promise<void> {
+    const [, callerId] = interaction.customId.split(":");
+    if (interaction.user.id !== callerId) {
+      await safeReply(interaction, {
+        content: "Only the person who opened this journal can close it.",
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
+    await interaction.deferUpdate();
+    await interaction.message.delete();
   }
 }
