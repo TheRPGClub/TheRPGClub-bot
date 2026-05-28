@@ -3276,12 +3276,9 @@ export class NowPlayingCommand {
     const [, ownerId] = interaction.customId.split(":");
     const gameId = Number(interaction.values?.[0]);
     if (!gameId) return;
-    if (
-      !(await this.canUseJournalFeature(ownerId)) ||
-      !(await this.canUseJournalFeature(interaction.user.id))
-    ) {
+    if (!(await this.canUseJournalFeature(ownerId))) {
       await safeReply(interaction, {
-        content: "Journal requires the Regulars role.",
+        content: "This user's journal is not available.",
         flags: buildComponentsV2Flags(true),
       });
       return;
