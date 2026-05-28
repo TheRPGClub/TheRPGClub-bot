@@ -5610,12 +5610,14 @@ export class NowPlayingCommand {
               .setDisabled(!hasEntries),
           ]
         : undefined,
-      navRowTrailingButtons: [
-        new ButtonBuilder()
-          .setCustomId(`${NOW_PLAYING_HELP_PREFIX}:journal-view:${ownerId}`)
-          .setLabel("?")
-          .setStyle(ButtonStyle.Secondary),
-      ],
+      navRowTrailingButtons: guildId
+        ? undefined
+        : [
+            new ButtonBuilder()
+              .setCustomId(`${NOW_PLAYING_HELP_PREFIX}:journal-view:${ownerId}`)
+              .setLabel("?")
+              .setStyle(ButtonStyle.Secondary),
+          ],
       includeNowPlayingMeta: true,
       includeCompletions: true,
     });
