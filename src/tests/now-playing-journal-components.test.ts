@@ -47,6 +47,8 @@ test("now-playing list components serialize with mixed journal-enabled entries",
     sortOrder: null,
     journalEnabled: true,
     hasPublicJournalEntry: true,
+    publicJournalCount: 3,
+    lastPublicJournalAt: null,
   }, {
     gameId: 102,
     title: "Notes Only Game",
@@ -60,6 +62,8 @@ test("now-playing list components serialize with mixed journal-enabled entries",
     sortOrder: null,
     journalEnabled: false,
     hasPublicJournalEntry: false,
+    publicJournalCount: 0,
+    lastPublicJournalAt: null,
   }];
 
   const components = command.buildNowPlayingEntryComponents(
@@ -96,6 +100,8 @@ test("owner list shows journal buttons for multiple journal-enabled entries", ()
     sortOrder: null,
     journalEnabled: true,
     hasPublicJournalEntry: false,
+    publicJournalCount: 0,
+    lastPublicJournalAt: null,
   }, {
     gameId: 202,
     title: "Journal Entry Two",
@@ -109,6 +115,8 @@ test("owner list shows journal buttons for multiple journal-enabled entries", ()
     sortOrder: null,
     journalEnabled: true,
     hasPublicJournalEntry: true,
+    publicJournalCount: 2,
+    lastPublicJournalAt: null,
   }];
 
   const components = command.buildNowPlayingEntryComponents(
@@ -141,6 +149,8 @@ test("owner list with 10 entries stays serializable and keeps journal buttons", 
     sortOrder: null,
     journalEnabled: true,
     hasPublicJournalEntry: false,
+    publicJournalCount: 0,
+    lastPublicJournalAt: null,
   }));
 
   const components = command.buildNowPlayingEntryComponents(

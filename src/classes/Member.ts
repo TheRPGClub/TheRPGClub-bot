@@ -97,6 +97,8 @@ export interface IMemberNowPlayingEntry {
   sortOrder: number | null;
   journalEnabled: boolean;
   hasPublicJournalEntry: boolean;
+  publicJournalCount: number;
+  lastPublicJournalAt: Date | null;
 }
 
 export interface IMemberNowPlayingList {
@@ -264,6 +266,8 @@ export default class Member {
         SORT_ORDER: number | null;
         JOURNAL_ENABLED: number | null;
         HAS_PUBLIC_JOURNAL_ENTRY: number | null;
+        PUBLIC_JOURNAL_COUNT: number | null;
+        LAST_PUBLIC_JOURNAL_AT: Date | string | null;
       }>(
         `SELECT g.GAME_ID,
                 g.TITLE,
@@ -285,7 +289,17 @@ export default class Member {
                       AND je.IS_PUBLIC = 1
                   ) THEN 1
                   ELSE 0
-                END AS HAS_PUBLIC_JOURNAL_ENTRY
+                END AS HAS_PUBLIC_JOURNAL_ENTRY,
+                (SELECT COUNT(*)
+                   FROM USER_GAME_JOURNAL_ENTRIES je2
+                  WHERE je2.USER_ID = u.USER_ID
+                    AND je2.GAMEDB_GAME_ID = u.GAMEDB_GAME_ID
+                    AND je2.IS_PUBLIC = 1) AS PUBLIC_JOURNAL_COUNT,
+                (SELECT MAX(je3.CREATED_AT)
+                   FROM USER_GAME_JOURNAL_ENTRIES je3
+                  WHERE je3.USER_ID = u.USER_ID
+                    AND je3.GAMEDB_GAME_ID = u.GAMEDB_GAME_ID
+                    AND je3.IS_PUBLIC = 1) AS LAST_PUBLIC_JOURNAL_AT
            FROM USER_NOW_PLAYING u
            JOIN GAMEDB_GAMES g ON g.GAME_ID = u.GAMEDB_GAME_ID
            LEFT JOIN GAMEDB_PLATFORMS p ON p.PLATFORM_ID = u.PLATFORM_ID
@@ -320,6 +334,12 @@ export default class Member {
           sortOrder: r.SORT_ORDER == null ? null : Number(r.SORT_ORDER),
           journalEnabled: Number(r.JOURNAL_ENABLED ?? 0) === 1,
           hasPublicJournalEntry: Number(r.HAS_PUBLIC_JOURNAL_ENTRY ?? 0) === 1,
+          publicJournalCount: Number(r.PUBLIC_JOURNAL_COUNT ?? 0),
+          lastPublicJournalAt: r.LAST_PUBLIC_JOURNAL_AT instanceof Date
+            ? r.LAST_PUBLIC_JOURNAL_AT
+            : r.LAST_PUBLIC_JOURNAL_AT
+              ? new Date(r.LAST_PUBLIC_JOURNAL_AT as any)
+              : null,
         }))
         .slice(0, MAX_NOW_PLAYING);
     } finally {
@@ -406,6 +426,8 @@ export default class Member {
             sortOrder: null,
             journalEnabled: false,
             hasPublicJournalEntry: false,
+            publicJournalCount: 0,
+            lastPublicJournalAt: null,
           });
         }
       }
