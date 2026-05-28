@@ -279,7 +279,7 @@ export default class Member {
                 u.ADDED_AT,
                 u.NOTE_UPDATED_AT,
                 u.SORT_ORDER,
-                jp.IS_ENABLED AS JOURNAL_ENABLED,
+                NVL(jp.IS_ENABLED, 1) AS JOURNAL_ENABLED,
                 CASE
                   WHEN EXISTS (
                     SELECT 1
@@ -703,6 +703,18 @@ export default class Member {
           (USER_ID, GAMEDB_GAME_ID, PLATFORM_ID, NOTE, NOTE_UPDATED_AT, SORT_ORDER)
          VALUES (:userId, :gameId, :platformId, :note, :noteUpdatedAt, :sortOrder)`,
         { userId, gameId, platformId, note: noteValue, noteUpdatedAt, sortOrder: nextSort },
+        { autoCommit: false },
+      );
+      await connection.execute(
+        `MERGE INTO USER_GAME_JOURNAL_PREFS p
+         USING (SELECT :userId AS USER_ID, :gameId AS GAMEDB_GAME_ID FROM dual) src
+            ON (p.USER_ID = src.USER_ID AND p.GAMEDB_GAME_ID = src.GAMEDB_GAME_ID)
+         WHEN MATCHED THEN
+           UPDATE SET IS_ENABLED = 1, UPDATED_AT = SYSTIMESTAMP
+         WHEN NOT MATCHED THEN
+           INSERT (USER_ID, GAMEDB_GAME_ID, IS_ENABLED, DEFAULT_IS_PUBLIC)
+           VALUES (:userId, :gameId, 1, 0)`,
+        { userId, gameId },
         { autoCommit: true },
       );
     } catch (err: any) {
