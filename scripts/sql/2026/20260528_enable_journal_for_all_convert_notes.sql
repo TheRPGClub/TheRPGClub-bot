@@ -1,0 +1,41 @@
+-- Enable journal mode for every existing now-playing entry.
+-- Entries that already have a pref row get IS_ENABLED flipped on;
+-- entries with no row get a new row inserted.
+MERGE INTO USER_GAME_JOURNAL_PREFS p
+USING (
+  SELECT u.USER_ID, u.GAMEDB_GAME_ID
+  FROM USER_NOW_PLAYING u
+  WHERE u.GAMEDB_GAME_ID IS NOT NULL
+) src
+ON (p.USER_ID = src.USER_ID AND p.GAMEDB_GAME_ID = src.GAMEDB_GAME_ID)
+WHEN MATCHED THEN
+  UPDATE SET IS_ENABLED = 1, UPDATED_AT = SYSTIMESTAMP
+WHEN NOT MATCHED THEN
+  INSERT (USER_ID, GAMEDB_GAME_ID, IS_ENABLED, DEFAULT_IS_PUBLIC)
+  VALUES (src.USER_ID, src.GAMEDB_GAME_ID, 1, 0);
+
+COMMIT;
+
+-- Convert existing Now Playing notes to public journal entries.
+-- Only touches entries that have a non-blank note and no existing journal entries.
+INSERT INTO USER_GAME_JOURNAL_ENTRIES
+  (USER_ID, GAMEDB_GAME_ID, ENTRY_TITLE, ENTRY_BODY, IS_PUBLIC, CREATED_AT, UPDATED_AT)
+SELECT
+  u.USER_ID,
+  u.GAMEDB_GAME_ID,
+  NULL AS ENTRY_TITLE,
+  u.NOTE AS ENTRY_BODY,
+  1 AS IS_PUBLIC,
+  NVL(u.ADDED_AT, SYSTIMESTAMP) AS CREATED_AT,
+  NVL(u.ADDED_AT, SYSTIMESTAMP) AS UPDATED_AT
+FROM USER_NOW_PLAYING u
+WHERE u.NOTE IS NOT NULL
+  AND TRIM(u.NOTE) IS NOT NULL
+  AND NOT EXISTS (
+    SELECT 1
+    FROM USER_GAME_JOURNAL_ENTRIES je
+    WHERE je.USER_ID = u.USER_ID
+      AND je.GAMEDB_GAME_ID = u.GAMEDB_GAME_ID
+  );
+
+COMMIT;

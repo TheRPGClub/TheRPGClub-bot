@@ -84,7 +84,6 @@ import {
 } from "../commands/profile.command.js";
 import { parseTitleWithYear } from "../functions/GameTitleAutocompleteUtils.js";
 import { COMPONENTS_V2_FLAG } from "../config/flags.js";
-import { REGULARS_ROLE_ID } from "../config/roles.js";
 import { STANDARD_PLATFORM_IDS } from "../config/standardPlatforms.js";
 import { composeVoteImage } from "../services/collageGenerator.js";
 import {
@@ -134,8 +133,6 @@ const NOW_PLAYING_EDIT_MENU_SORT_PREFIX = "nowplaying-edit-menu-sort";
 const NOW_PLAYING_EDIT_MENU_PLATFORM_PREFIX = "nowplaying-edit-menu-platform";
 const NOW_PLAYING_EDIT_MENU_COMPLETE_PREFIX = "nowplaying-edit-menu-complete";
 const NOW_PLAYING_EDIT_MENU_REMOVE_PREFIX = "nowplaying-edit-menu-remove";
-const NOW_PLAYING_EDIT_MENU_JOURNAL_PREFIX = "nowplaying-edit-menu-journal";
-const NOW_PLAYING_JOURNAL_OPTIN_SELECT_PREFIX = "nowplaying-journal-optin-select";
 const NOW_PLAYING_REMOVE_SELECT_PREFIX = "nowplaying-remove-select";
 const NOW_PLAYING_JOURNAL_OPEN_PREFIX = "nowplaying-journal-open";
 const NOW_PLAYING_JOURNAL_VIEW_SELECT_PREFIX = "nowplaying-journal-view-select";
@@ -706,6 +703,15 @@ export class NowPlayingCommand {
 
     try {
       await Member.addNowPlaying(interaction.user.id, game.id, platformId, note);
+      const trimmedNote = note?.trim();
+      if (trimmedNote) {
+        await Member.addGameJournalEntry({
+          userId: interaction.user.id,
+          gameId: game.id,
+          body: trimmedNote,
+          isPublic: true,
+        });
+      }
     } catch (err: any) {
       const msg = err?.message ?? String(err);
       const container = new ContainerBuilder().addTextDisplayComponents(
@@ -2082,6 +2088,15 @@ export class NowPlayingCommand {
 
     try {
       await Member.addNowPlaying(session.userId, session.gameId, platformId, session.note);
+      const trimmedSessionNote = session.note?.trim();
+      if (trimmedSessionNote) {
+        await Member.addGameJournalEntry({
+          userId: session.userId,
+          gameId: session.gameId,
+          body: trimmedSessionNote,
+          isPublic: true,
+        });
+      }
       nowPlayingAddPlatformSessions.delete(platformSessionId);
       clearNowPlayingAddSession(session.sourceSessionId);
       const list = await Member.getNowPlaying(session.userId);
@@ -3213,13 +3228,6 @@ export class NowPlayingCommand {
   async handleNowPlayingJournalOpen(interaction: ButtonInteraction): Promise<void> {
     const [, ownerId, gameIdRaw, pageRaw] = interaction.customId.split(":");
     const gameId = Number(gameIdRaw);
-    if (!(await this.canUseJournalFeature(ownerId)) || !(await this.canUseJournalFeature(interaction.user.id))) {
-      await safeReply(interaction, {
-        content: "Journal requires the Regulars role.",
-        flags: buildComponentsV2Flags(true),
-      });
-      return;
-    }
     const nowPlayingEntries = getDisplayNowPlayingEntries(await Member.getNowPlaying(ownerId));
     const selected = nowPlayingEntries.find((entry) => entry.gameId === Number(gameIdRaw));
     if (!selected?.journalEnabled) {
@@ -3228,20 +3236,6 @@ export class NowPlayingCommand {
         flags: buildComponentsV2Flags(true),
       });
       return;
-    }
-    if (interaction.guildId) {
-      const publicCount = await Member.countGameJournalEntries(
-        ownerId,
-        gameId,
-        "__public__",
-      );
-      if (publicCount <= 0) {
-        await safeReply(interaction, {
-          content: "This game's journal has no public entries to show in channel.",
-          flags: buildComponentsV2Flags(true),
-        });
-        return;
-      }
     }
     if (interaction.guildId && !selected.hasPublicJournalEntry) {
       await safeReply(interaction, {
@@ -3276,13 +3270,6 @@ export class NowPlayingCommand {
     const [, ownerId] = interaction.customId.split(":");
     const gameId = Number(interaction.values?.[0]);
     if (!gameId) return;
-    if (!(await this.canUseJournalFeature(ownerId))) {
-      await safeReply(interaction, {
-        content: "This user's journal is not available.",
-        flags: buildComponentsV2Flags(true),
-      });
-      return;
-    }
     const nowPlayingEntries = getDisplayNowPlayingEntries(await Member.getNowPlaying(ownerId));
     const selected = nowPlayingEntries.find((e) => e.gameId === gameId);
     if (!selected?.journalEnabled || !selected.hasPublicJournalEntry) {
@@ -3315,13 +3302,6 @@ export class NowPlayingCommand {
   async handleNowPlayingJournalPage(interaction: ButtonInteraction): Promise<void> {
     const [, ownerId, gameIdRaw, , pageRaw] = interaction.customId.split(":");
     const gameId = Number(gameIdRaw);
-    if (!(await this.canUseJournalFeature(ownerId)) || !(await this.canUseJournalFeature(interaction.user.id))) {
-      await safeReply(interaction, {
-        content: "Journal requires the Regulars role.",
-        flags: buildComponentsV2Flags(true),
-      });
-      return;
-    }
     const nowPlayingEntries = getDisplayNowPlayingEntries(await Member.getNowPlaying(ownerId));
     const selected = nowPlayingEntries.find((entry) => entry.gameId === Number(gameIdRaw));
     if (!selected?.journalEnabled) {
@@ -3330,20 +3310,6 @@ export class NowPlayingCommand {
         flags: buildComponentsV2Flags(true),
       });
       return;
-    }
-    if (interaction.guildId) {
-      const publicCount = await Member.countGameJournalEntries(
-        ownerId,
-        gameId,
-        "__public__",
-      );
-      if (publicCount <= 0) {
-        await safeReply(interaction, {
-          content: "This game's journal has no public entries to show in channel.",
-          flags: buildComponentsV2Flags(true),
-        });
-        return;
-      }
     }
     if (interaction.guildId && !selected.hasPublicJournalEntry) {
       await safeReply(interaction, {
@@ -3374,13 +3340,6 @@ export class NowPlayingCommand {
   @ButtonComponent({ id: /^nowplaying-journal-add:\d+:\d+:\d+$/ })
   async handleNowPlayingJournalAdd(interaction: ButtonInteraction): Promise<void> {
     const [, ownerId, gameIdRaw, pageRaw] = interaction.customId.split(":");
-    if (!(await this.canUseJournalFeature(ownerId)) || !(await this.canUseJournalFeature(interaction.user.id))) {
-      await safeReply(interaction, {
-        content: "Journal requires the Regulars role.",
-        flags: buildComponentsV2Flags(true),
-      });
-      return;
-    }
     if (interaction.user.id !== ownerId) {
       await safeReply(interaction, { content: "Only the owner can add journal entries." });
       return;
@@ -3429,13 +3388,6 @@ export class NowPlayingCommand {
   @ButtonComponent({ id: /^nowplaying-journal-edit:\d+:\d+:\d+$/ })
   async handleNowPlayingJournalEdit(interaction: ButtonInteraction): Promise<void> {
     const [, ownerId, gameIdRaw, pageRaw] = interaction.customId.split(":");
-    if (!(await this.canUseJournalFeature(ownerId)) || !(await this.canUseJournalFeature(interaction.user.id))) {
-      await safeReply(interaction, {
-        content: "Journal requires the Regulars role.",
-        flags: buildComponentsV2Flags(true),
-      });
-      return;
-    }
     if (interaction.user.id !== ownerId) {
       await safeReply(interaction, { content: "Only the owner can edit journal entries." });
       return;
@@ -3480,13 +3432,6 @@ export class NowPlayingCommand {
   @SelectMenuComponent({ id: /^nowplaying-journal-edit-select:\d+:\d+:\d+$/ })
   async handleNowPlayingJournalEditSelect(interaction: StringSelectMenuInteraction): Promise<void> {
     const [, ownerId, gameIdRaw, pageRaw] = interaction.customId.split(":");
-    if (!(await this.canUseJournalFeature(ownerId)) || !(await this.canUseJournalFeature(interaction.user.id))) {
-      await safeReply(interaction, {
-        content: "Journal requires the Regulars role.",
-        flags: buildComponentsV2Flags(true),
-      });
-      return;
-    }
     if (interaction.user.id !== ownerId) {
       await safeReply(interaction, { content: "Only the owner can edit journal entries." });
       return;
@@ -3554,13 +3499,6 @@ export class NowPlayingCommand {
   @ButtonComponent({ id: /^nowplaying-journal-delete:\d+:\d+:\d+$/ })
   async handleNowPlayingJournalDelete(interaction: ButtonInteraction): Promise<void> {
     const [, ownerId, gameIdRaw, pageRaw] = interaction.customId.split(":");
-    if (!(await this.canUseJournalFeature(ownerId)) || !(await this.canUseJournalFeature(interaction.user.id))) {
-      await safeReply(interaction, {
-        content: "Journal requires the Regulars role.",
-        flags: buildComponentsV2Flags(true),
-      });
-      return;
-    }
     if (interaction.user.id !== ownerId) {
       await safeReply(interaction, { content: "Only the owner can delete journal entries." });
       return;
@@ -3605,13 +3543,6 @@ export class NowPlayingCommand {
   @SelectMenuComponent({ id: /^nowplaying-journal-delete-select:\d+:\d+:\d+$/ })
   async handleNowPlayingJournalDeleteSelect(interaction: StringSelectMenuInteraction): Promise<void> {
     const [, ownerId, gameIdRaw, pageRaw] = interaction.customId.split(":");
-    if (!(await this.canUseJournalFeature(ownerId)) || !(await this.canUseJournalFeature(interaction.user.id))) {
-      await safeReply(interaction, {
-        content: "Journal requires the Regulars role.",
-        flags: buildComponentsV2Flags(true),
-      });
-      return;
-    }
     if (interaction.user.id !== ownerId) {
       await safeReply(interaction, { content: "Only the owner can delete journal entries." });
       return;
@@ -3655,13 +3586,6 @@ export class NowPlayingCommand {
   @ButtonComponent({ id: /^nowplaying-journal-delete-confirm:(yes|no):\d+:\d+:\d+:\d+$/ })
   async handleNowPlayingJournalDeleteConfirm(interaction: ButtonInteraction): Promise<void> {
     const [, action, ownerId, gameIdRaw, pageRaw, entryIdRaw] = interaction.customId.split(":");
-    if (!(await this.canUseJournalFeature(ownerId)) || !(await this.canUseJournalFeature(interaction.user.id))) {
-      await safeReply(interaction, {
-        content: "Journal requires the Regulars role.",
-        flags: buildComponentsV2Flags(true),
-      });
-      return;
-    }
     if (interaction.user.id !== ownerId) {
       await safeReply(interaction, { content: "Only the owner can delete journal entries." });
       return;
@@ -3692,13 +3616,6 @@ export class NowPlayingCommand {
   @ModalComponent({ id: /^nowplaying-journal-modal:\d+:\d+:\d+$/ })
   async handleNowPlayingJournalModal(interaction: ModalSubmitInteraction): Promise<void> {
     const [, ownerId, gameIdRaw, pageRaw] = interaction.customId.split(":");
-    if (!(await this.canUseJournalFeature(ownerId)) || !(await this.canUseJournalFeature(interaction.user.id))) {
-      await safeReply(interaction, {
-        content: "Journal requires the Regulars role.",
-        flags: buildComponentsV2Flags(true),
-      });
-      return;
-    }
     if (interaction.user.id !== ownerId) {
       await safeReply(interaction, { content: "Only the owner can submit journal entries." });
       return;
@@ -3740,13 +3657,6 @@ export class NowPlayingCommand {
   async handleNowPlayingJournalEditModal(interaction: ModalSubmitInteraction): Promise<void> {
     const [, ownerId, gameIdRaw, pageRaw, entryIdRaw] = interaction.customId.split(":");
     const gameId = Number(gameIdRaw);
-    if (!(await this.canUseJournalFeature(ownerId)) || !(await this.canUseJournalFeature(interaction.user.id))) {
-      await safeReply(interaction, {
-        content: "Journal requires the Regulars role.",
-        flags: buildComponentsV2Flags(true),
-      });
-      return;
-    }
     if (interaction.user.id !== ownerId) {
       await safeReply(interaction, { content: "Only the owner can edit journal entries." });
       return;
@@ -3928,72 +3838,6 @@ export class NowPlayingCommand {
     }
     const sessionId = createNowPlayingCompletionWizardSession(ownerId, true);
     await this.promptNowPlayingCompletionPick(interaction, ownerId, sessionId);
-  }
-
-  @ButtonComponent({ id: /^nowplaying-edit-menu-journal:\d+$/ })
-  async handleNowPlayingEditMenuJournal(interaction: ButtonInteraction): Promise<void> {
-    const [, ownerId] = interaction.customId.split(":");
-    if (interaction.user.id !== ownerId) {
-      await interaction.reply({
-        content: "This edit menu isn't for you.",
-        flags: MessageFlags.Ephemeral,
-      });
-      return;
-    }
-    if (!(await this.canUseJournalFeature(ownerId))) {
-      await safeReply(interaction, {
-        content: "Journal requires the Regulars role.",
-        flags: buildComponentsV2Flags(true),
-      });
-      return;
-    }
-    if (!(await this.hasRegularsRoleForInteraction(interaction))) {
-      await safeReply(interaction, {
-        content: "Journal opt-in requires the Regulars role.",
-        flags: buildComponentsV2Flags(true),
-      });
-      return;
-    }
-
-    const entries = getDisplayNowPlayingEntries(await Member.getNowPlaying(ownerId));
-    if (!entries.length) {
-      await safeReply(interaction, {
-        content: "Your Now Playing list is empty.",
-        flags: buildComponentsV2Flags(true),
-      });
-      return;
-    }
-
-    const options = entries.slice(0, 25).map((entry) => ({
-      label: formatEntryTitleWithPlatform(entry).slice(0, 100),
-      value: String(entry.gameId),
-      description: entry.journalEnabled ? "Journal enabled" : "Notes mode",
-    }));
-    const select = new StringSelectMenuBuilder()
-      .setCustomId(`${NOW_PLAYING_JOURNAL_OPTIN_SELECT_PREFIX}:${ownerId}`)
-      .setPlaceholder("Choose a game to enable Journal")
-      .addOptions(options);
-    const row = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select);
-    const container = new ContainerBuilder().addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(
-        "## Journal Opt-In\nChoose one game to enable journal mode. This replaces note display for that game.",
-      ),
-    );
-    const helpRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
-      new ButtonBuilder()
-        .setCustomId(`${NOW_PLAYING_HELP_PREFIX}:journal-optin:${ownerId}`)
-        .setLabel("?")
-        .setStyle(ButtonStyle.Secondary),
-    );
-    const pmComponents = await this.withPmNowPlayingList(
-      ownerId,
-      interaction.guildId,
-      [container, row, helpRow],
-    );
-    await safeReply(interaction, {
-      components: pmComponents,
-      flags: buildComponentsV2Flags(interaction.message.flags?.has(MessageFlags.Ephemeral) ?? true),
-    });
   }
 
   @ButtonComponent({ id: /^nowplaying-edit-menu-remove:\d+$/ })
@@ -4601,10 +4445,7 @@ export class NowPlayingCommand {
     showPrivateOnlyJournalButtons: boolean = false,
     singleUserMode: boolean = false,
   ): Promise<{ components: NowPlayingPayloadComponents; files: AttachmentBuilder[] }> {
-    const [{ files, covers }, ownerCanUseJournal] = await Promise.all([
-      this.buildNowPlayingAttachments(entries, NOW_PLAYING_COMPOSITE_MAX),
-      this.canUseJournalFeature(target.id),
-    ]);
+    const { files, covers } = await this.buildNowPlayingAttachments(entries, NOW_PLAYING_COMPOSITE_MAX);
     const hasDisplayableNotes = this.hasDisplayableNowPlayingNotes(entries);
     const listComponents = this.buildNowPlayingEntryComponents(
       entries,
@@ -4613,7 +4454,6 @@ export class NowPlayingCommand {
       await this.buildNowPlayingCompositeImageUrl(files, covers, target.id),
       showNotes,
       showPrivateOnlyJournalButtons,
-      ownerCanUseJournal,
       singleUserMode,
       singleUserMode,
       hasDisplayableNotes,
@@ -4744,7 +4584,6 @@ export class NowPlayingCommand {
     ownerId: string,
     entries: IMemberNowPlayingEntry[],
     guildId: string | null,
-    ownerCanUseJournal: boolean,
   ): Array<ContainerBuilder | ActionRowBuilder<ButtonBuilder>> {
     const introContainer = new ContainerBuilder().addTextDisplayComponents(
       new TextDisplayBuilder().setContent(
@@ -4759,17 +4598,12 @@ export class NowPlayingCommand {
         null,
         true,
         true,
-        ownerCanUseJournal,
       )[0]
       : this.buildNowPlayingMessageContainer(
         "Your Now Playing List",
         "Your Now Playing list is empty.",
       );
     const firstRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
-      new ButtonBuilder()
-        .setCustomId(`${NOW_PLAYING_EDIT_MENU_NOTE_PREFIX}:${ownerId}`)
-        .setLabel("Edit Notes")
-        .setStyle(ButtonStyle.Secondary),
       new ButtonBuilder()
         .setCustomId(`${NOW_PLAYING_EDIT_MENU_SORT_PREFIX}:${ownerId}`)
         .setLabel("Sort")
@@ -4783,10 +4617,6 @@ export class NowPlayingCommand {
       new ButtonBuilder()
         .setCustomId(`${NOW_PLAYING_EDIT_MENU_COMPLETE_PREFIX}:${ownerId}`)
         .setLabel("Add Completion")
-        .setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder()
-        .setCustomId(`${NOW_PLAYING_EDIT_MENU_JOURNAL_PREFIX}:${ownerId}`)
-        .setLabel("Journal Opt-In")
         .setStyle(ButtonStyle.Secondary),
       new ButtonBuilder()
         .setCustomId(`${NOW_PLAYING_EDIT_MENU_REMOVE_PREFIX}:${ownerId}`)
@@ -4821,11 +4651,8 @@ export class NowPlayingCommand {
     ownerId: string,
     guildId: string | null,
   ): Promise<Array<ContainerBuilder | ActionRowBuilder<ButtonBuilder>>> {
-    const [entries, ownerCanUseJournal] = await Promise.all([
-      Member.getNowPlaying(ownerId).then(getDisplayNowPlayingEntries),
-      this.canUseJournalFeature(ownerId),
-    ]);
-    return this.buildNowPlayingEditMenuComponents(ownerId, entries, guildId, ownerCanUseJournal);
+    const entries = await Member.getNowPlaying(ownerId).then(getDisplayNowPlayingEntries);
+    return this.buildNowPlayingEditMenuComponents(ownerId, entries, guildId);
   }
 
   private async withPmNowPlayingList(
@@ -4836,10 +4663,7 @@ export class NowPlayingCommand {
     if (guildId) {
       return components;
     }
-    const [entries, ownerCanUseJournal] = await Promise.all([
-      Member.getNowPlaying(ownerId).then(getDisplayNowPlayingEntries),
-      this.canUseJournalFeature(ownerId),
-    ]);
+    const entries = await Member.getNowPlaying(ownerId).then(getDisplayNowPlayingEntries);
     const listContainer = entries.length
       ? this.buildNowPlayingEntryComponents(
         entries,
@@ -4848,7 +4672,6 @@ export class NowPlayingCommand {
         null,
         true,
         true,
-        ownerCanUseJournal,
       )[0]
       : this.buildNowPlayingMessageContainer(
         "Your Now Playing List",
@@ -5080,60 +4903,6 @@ export class NowPlayingCommand {
     }
   }
 
-  @SelectMenuComponent({ id: /^nowplaying-journal-optin-select:\d+$/ })
-  async handleNowPlayingJournalOptInSelect(interaction: StringSelectMenuInteraction): Promise<void> {
-    const [, ownerId] = interaction.customId.split(":");
-    if (!(await this.canUseJournalFeature(ownerId)) || !(await this.canUseJournalFeature(interaction.user.id))) {
-      await safeReply(interaction, {
-        content: "Journal requires the Regulars role.",
-        flags: buildComponentsV2Flags(true),
-      });
-      return;
-    }
-    if (interaction.user.id !== ownerId) {
-      await safeReply(interaction, {
-        content: "This journal prompt is not for you.",
-        flags: buildComponentsV2Flags(true),
-      });
-      return;
-    }
-    if (!(await this.hasRegularsRoleForInteraction(interaction))) {
-      await safeReply(interaction, {
-        content: "Journal opt-in requires the Regulars role.",
-        flags: buildComponentsV2Flags(true),
-      });
-      return;
-    }
-
-    const gameId = Number(interaction.values[0]);
-    if (!Number.isInteger(gameId) || gameId <= 0) {
-      await safeReply(interaction, { content: "Invalid game selection.", flags: buildComponentsV2Flags(true) });
-      return;
-    }
-    await Member.upsertGameJournalPreference(ownerId, gameId, true, false);
-    const existingVisibleCount = await Member.countGameJournalEntries(ownerId, gameId, ownerId);
-    if (existingVisibleCount === 0) {
-      const nowPlayingEntries = await Member.getNowPlaying(ownerId);
-      const selectedEntry = nowPlayingEntries.find((entry) => entry.gameId === gameId);
-      const seedNote = selectedEntry?.note?.trim();
-      if (seedNote) {
-        await Member.addGameJournalEntry({
-          userId: ownerId,
-          gameId,
-          title: "Imported from Now Playing Note",
-          body: seedNote,
-          isPublic: false,
-        });
-      }
-    }
-    const menuComponents = await this.buildNowPlayingEditInitialComponents(ownerId, interaction.guildId);
-    const isEphemeral = interaction.message.flags?.has(MessageFlags.Ephemeral) ?? true;
-    await safeReply(interaction, {
-      components: menuComponents,
-      flags: buildComponentsV2Flags(isEphemeral),
-    });
-  }
-
   private buildNowPlayingEditPlatformComponents(
     entries: IMemberNowPlayingEntry[],
     ownerId: string,
@@ -5302,11 +5071,6 @@ export class NowPlayingCommand {
 
   private hasDisplayableNowPlayingNotes(entries: IMemberNowPlayingEntry[]): boolean {
     return entries.some((entry) => !entry.journalEnabled && Boolean(entry.note?.trim()));
-  }
-
-  private async canUseJournalFeature(userId: string): Promise<boolean> {
-    const member = await Member.getByUserId(userId);
-    return member?.roleRegular === 1;
   }
 
   private async refreshNowPlayingListFromContext(
@@ -5685,7 +5449,6 @@ export class NowPlayingCommand {
     imageUrl: string | null,
     showNotes: boolean,
     showPrivateOnlyJournalButtons: boolean = false,
-    ownerCanUseJournal: boolean = false,
     showHeaderEditHint: boolean = false,
     singleUserMode: boolean = false,
     hasDisplayableNotes: boolean = false,
@@ -5720,7 +5483,7 @@ export class NowPlayingCommand {
             lines.push(`-# *${addedLabel}.*`);
           }
         }
-        if (showNotes && entry.note && (!entry.journalEnabled || !ownerCanUseJournal)) {
+        if (showNotes && entry.note && !entry.journalEnabled) {
           const quotedNote = entry.note
             .split("\n")
             .map((noteLine) => `> ${noteLine}`)
@@ -5768,7 +5531,7 @@ export class NowPlayingCommand {
           lines.push(`-# *${addedLabel}.*`);
         }
       }
-      if (showNotes && entry.note && (!entry.journalEnabled || !ownerCanUseJournal)) {
+      if (showNotes && entry.note && !entry.journalEnabled) {
         const quotedNote = entry.note
           .split("\n")
           .map((noteLine) => `> ${noteLine}`)
@@ -5777,7 +5540,6 @@ export class NowPlayingCommand {
       }
       const content = this.trimTextDisplayContent(lines.join("\n"));
       const shouldShowJournalButton = entry.journalEnabled &&
-        ownerCanUseJournal &&
         (showPrivateOnlyJournalButtons || entry.hasPublicJournalEntry);
       if (shouldShowJournalButton) {
         const section = new SectionBuilder().addTextDisplayComponents(
@@ -5808,22 +5570,6 @@ export class NowPlayingCommand {
       return content;
     }
     return `${content.slice(0, 3997)}...`;
-  }
-
-  private async hasRegularsRoleForInteraction(interaction: {
-    member?: unknown;
-    user: { id: string };
-  }): Promise<boolean> {
-    const roleData = (interaction.member as any)?.roles;
-    if (Array.isArray(roleData)) {
-      return roleData.includes(REGULARS_ROLE_ID);
-    }
-    const roleCache = roleData?.cache;
-    if (roleCache?.has?.(REGULARS_ROLE_ID)) {
-      return true;
-    }
-    const member = await Member.getByUserId(interaction.user.id);
-    return member?.roleRegular === 1;
   }
 
   private buildJournalComponents(
