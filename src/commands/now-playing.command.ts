@@ -94,6 +94,7 @@ import {
   NOW_PLAYING_HELP_PREFIX,
   NOW_PLAYING_HELP_TEXTS,
 } from "./now-playing-help.js";
+import { GJ_PUBLIC_CLOSE_PREFIX } from "./game-journal.command.js";
 import { renderUsernameWithEmoji } from "../services/UserEmojiService.js";
 
 const MAX_NOW_PLAYING_NOTE_LEN = 500;
@@ -3250,6 +3251,7 @@ export class NowPlayingCommand {
       gameId,
       Number(pageRaw),
       interaction.guildId,
+      interaction.user.id,
     );
     if (interaction.guildId) {
       await this.deleteRecentJournalMessagesInChannel(interaction, ownerId, gameId);
@@ -3285,6 +3287,7 @@ export class NowPlayingCommand {
       gameId,
       1,
       interaction.guildId,
+      interaction.user.id,
     );
     if (interaction.guildId) {
       await this.deleteRecentJournalMessagesInChannel(interaction, ownerId, gameId);
@@ -3324,6 +3327,7 @@ export class NowPlayingCommand {
       gameId,
       Number(pageRaw),
       interaction.guildId,
+      interaction.user.id,
     );
     if (interaction.guildId) {
       await this.deleteRecentJournalMessagesInChannel(interaction, ownerId, gameId);
@@ -3604,6 +3608,7 @@ export class NowPlayingCommand {
       Number(gameIdRaw),
       Number(pageRaw),
       interaction.guildId,
+      interaction.user.id,
     );
     await safeUpdate(interaction, {
       components: payload.components,
@@ -3644,6 +3649,7 @@ export class NowPlayingCommand {
       Number(gameIdRaw),
       Number(pageRaw),
       interaction.guildId,
+      interaction.user.id,
     );
     await safeUpdate(interaction, {
       components: payload.components,
@@ -3692,6 +3698,7 @@ export class NowPlayingCommand {
       gameId,
       Number(pageRaw),
       interaction.guildId,
+      interaction.user.id,
     );
     if (interaction.guildId) {
       await interaction.message?.delete().catch(() => null);
@@ -5578,6 +5585,7 @@ export class NowPlayingCommand {
     gameId: number,
     page: number,
     guildId?: string | null,
+    callerId?: string,
   ) {
     const isOwnerView = viewerId === ownerId;
     return buildJournalView({
@@ -5610,12 +5618,21 @@ export class NowPlayingCommand {
               .setDisabled(!hasEntries),
           ]
         : undefined,
-      navRowTrailingButtons: [
-        new ButtonBuilder()
-          .setCustomId(`${NOW_PLAYING_HELP_PREFIX}:journal-view:${ownerId}`)
-          .setLabel("?")
-          .setStyle(ButtonStyle.Secondary),
-      ],
+      navRowTrailingButtons: guildId && callerId
+        ? [
+            new ButtonBuilder()
+              .setCustomId(`${GJ_PUBLIC_CLOSE_PREFIX}:${callerId}`)
+              .setLabel("Close")
+              .setStyle(ButtonStyle.Danger),
+          ]
+        : !guildId
+          ? [
+              new ButtonBuilder()
+                .setCustomId(`${NOW_PLAYING_HELP_PREFIX}:journal-view:${ownerId}`)
+                .setLabel("?")
+                .setStyle(ButtonStyle.Secondary),
+            ]
+          : undefined,
       includeNowPlayingMeta: true,
       includeCompletions: true,
     });

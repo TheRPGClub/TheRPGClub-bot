@@ -205,7 +205,7 @@ export async function buildJournalView(options: JournalViewOptions): Promise<{
     navRow.addComponents(
       new ButtonBuilder()
         .setCustomId(prevPageCustomId(safePage - 1))
-        .setLabel("Previous")
+        .setLabel("Previous Page")
         .setStyle(ButtonStyle.Secondary),
     );
   }
@@ -213,7 +213,7 @@ export async function buildJournalView(options: JournalViewOptions): Promise<{
     navRow.addComponents(
       new ButtonBuilder()
         .setCustomId(nextPageCustomId(safePage + 1))
-        .setLabel("Next")
+        .setLabel("Next Page")
         .setStyle(ButtonStyle.Secondary),
     );
   }
