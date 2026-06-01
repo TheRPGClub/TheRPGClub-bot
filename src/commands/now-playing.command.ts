@@ -3503,9 +3503,7 @@ export class NowPlayingCommand {
         ),
     );
     await interaction.showModal(modal);
-    if (interaction.guildId && interaction.message.flags?.has(MessageFlags.Ephemeral)) {
-      await interaction.message.delete().catch(() => null);
-    }
+    await journalOwnerMenu.dismiss(ownerId);
   }
 
   @ButtonComponent({ id: /^nowplaying-journal-edit:\d+:\d+:\d+$/ })
@@ -3723,20 +3721,10 @@ export class NowPlayingCommand {
         return;
       }
     }
-    const journalViewerId = interaction.guildId ? "__public__" : interaction.user.id;
-    const payload = await this.buildJournalComponents(
-      ownerId,
-      journalViewerId,
-      Number(gameIdRaw),
-      Number(pageRaw),
-      interaction.guildId,
-      true,
-    );
+    const row = await this.buildManageJournalButtonRow(ownerId, Number(gameIdRaw), Number(pageRaw));
     await safeUpdate(interaction, {
-      components: payload.components,
-      files: payload.files,
+      components: [row],
       flags: buildComponentsV2Flags(interaction.message.flags?.has(MessageFlags.Ephemeral) ?? false),
-      allowedMentions: payload.allowedMentions,
     });
     if (action === "yes") {
       await refreshPublicJournalMessages(
@@ -3769,21 +3757,9 @@ export class NowPlayingCommand {
       isPublic,
     });
     await Member.upsertGameJournalPreference(ownerId, Number(gameIdRaw), true, isPublic);
-    const journalViewerId = interaction.guildId ? "__public__" : interaction.user.id;
-    const payload = await this.buildJournalComponents(
-      ownerId,
-      journalViewerId,
-      Number(gameIdRaw),
-      Number(pageRaw),
-      interaction.guildId,
-      true,
-    );
-    await safeUpdate(interaction, {
-      components: payload.components,
-      files: payload.files,
-      flags: buildComponentsV2Flags(true),
-      allowedMentions: payload.allowedMentions,
-    });
+    const page = Number(pageRaw);
+    const row = await this.buildManageJournalButtonRow(ownerId, Number(gameIdRaw), page);
+    await journalOwnerMenu.show(interaction, ownerId, [row]);
     await refreshPublicJournalMessages(interaction.client, ownerId, Number(gameIdRaw));
   }
 
