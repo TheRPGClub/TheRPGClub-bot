@@ -72,6 +72,40 @@ type BackblazeUploadResult = {
 
 let cachedAuth: { value: BackblazeB2AuthPayload; expiresAtMs: number } | null = null;
 
+const RETRY_MAX_ATTEMPTS = 3;
+const RETRY_BASE_DELAY_MS = 500;
+
+function isTransientError(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const code = (error as Record<string, unknown>).code;
+  const status = (error as { response?: { status?: number } }).response?.status;
+  if (typeof code === "string" && ["ECONNRESET", "ETIMEDOUT", "ECONNABORTED"].includes(code)) {
+    return true;
+  }
+  if (typeof status === "number" && (status === 429 || status >= 500)) return true;
+  const message = (error as { message?: string }).message ?? "";
+  return message.toLowerCase().includes("socket hang up");
+}
+
+async function withRetry<T>(fn: () => Promise<T>, label: string): Promise<T> {
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= RETRY_MAX_ATTEMPTS; attempt++) {
+    try {
+      return await fn();
+    } catch (error) {
+      lastError = error;
+      if (!isTransientError(error) || attempt === RETRY_MAX_ATTEMPTS) throw error;
+      const delay = RETRY_BASE_DELAY_MS * Math.pow(2, attempt - 1);
+      console.warn(
+        `[Backblaze] ${label} failed (attempt ${attempt}/${RETRY_MAX_ATTEMPTS}), ` +
+        `retrying in ${delay}ms...`,
+      );
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    }
+  }
+  throw lastError;
+}
+
 function getRequiredEnv(name: string): string {
   const value = (process.env[name] ?? "").trim();
   if (!value) {
@@ -203,32 +237,35 @@ export async function getLatestStoredFileInfo(
 export async function uploadFileToBackblazeB2(
   input: BackblazeUploadInput,
 ): Promise<BackblazeUploadResult> {
-  const upload = await getUploadUrl(input.bucketId);
   const fileSha1 = crypto.createHash("sha1").update(input.data).digest("hex");
-  const headers: Record<string, string> = {
-    Authorization: upload.authorizationToken,
-    "X-Bz-File-Name": encodeURIComponent(input.fileName),
-    "Content-Type": input.contentType,
-    "Content-Length": String(input.data.length),
-    "X-Bz-Content-Sha1": fileSha1,
-  };
-  if (input.sourceHash) {
-    headers["X-Bz-Info-sourcehash"] = input.sourceHash;
-  }
 
-  const response = await axios.post<BackblazeB2UploadResponse>(
-    upload.uploadUrl,
-    input.data,
-    {
-      headers,
-      maxBodyLength: Infinity,
-    },
-  );
+  return withRetry(async () => {
+    const upload = await getUploadUrl(input.bucketId);
+    const headers: Record<string, string> = {
+      Authorization: upload.authorizationToken,
+      "X-Bz-File-Name": encodeURIComponent(input.fileName),
+      "Content-Type": input.contentType,
+      "Content-Length": String(input.data.length),
+      "X-Bz-Content-Sha1": fileSha1,
+    };
+    if (input.sourceHash) {
+      headers["X-Bz-Info-sourcehash"] = input.sourceHash;
+    }
 
-  return {
-    fileId: response.data.fileId,
-    fileName: response.data.fileName,
-  };
+    const response = await axios.post<BackblazeB2UploadResponse>(
+      upload.uploadUrl,
+      input.data,
+      {
+        headers,
+        maxBodyLength: Infinity,
+      },
+    );
+
+    return {
+      fileId: response.data.fileId,
+      fileName: response.data.fileName,
+    };
+  }, `upload ${input.fileName}`);
 }
 
 export async function getOrReplaceBackblazeImage(
