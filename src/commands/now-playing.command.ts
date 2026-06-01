@@ -2833,6 +2833,11 @@ export class NowPlayingCommand {
         return;
       }
 
+      for (let i = 0; i < parsed.length; i += 1) {
+        if (i !== slotIndex && parsed[i] === selectedIndex) {
+          parsed[i] = -1;
+        }
+      }
       parsed[slotIndex] = selectedIndex;
       const components = this.buildNowPlayingSortComponents(
         entries,
@@ -2914,7 +2919,7 @@ export class NowPlayingCommand {
     }
 
     await this.refreshNowPlayingListFromContext(interaction, ownerId).catch(() => {});
-    await this.returnToNowPlayingEditMenu(interaction, ownerId);
+    await this.returnToNowPlayingEditMenu(interaction, ownerId, "Sort order saved.");
   }
 
   @ButtonComponent({ id: /^nowplaying-sort-reset:\d+$/ })
@@ -4655,11 +4660,14 @@ export class NowPlayingCommand {
     ownerId: string,
     entries: IMemberNowPlayingEntry[],
     guildId: string | null,
+    statusMessage: string | null = null,
   ): Array<ContainerBuilder | ActionRowBuilder<ButtonBuilder>> {
+    const introLines = ["## Now Playing Edit\nChoose an edit action. All edits happen in this DM."];
+    if (statusMessage) {
+      introLines.push(`-# ${statusMessage}`);
+    }
     const introContainer = new ContainerBuilder().addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(
-        "## Now Playing Edit\nChoose an edit action. All edits happen in this DM.",
-      ),
+      new TextDisplayBuilder().setContent(introLines.join("\n")),
     );
     const listContainer = entries.length
       ? this.buildNowPlayingEntryComponents(
@@ -4706,10 +4714,12 @@ export class NowPlayingCommand {
   private async returnToNowPlayingEditMenu(
     interaction: ButtonInteraction,
     ownerId: string,
+    statusMessage: string | null = null,
   ): Promise<void> {
     const menuComponents = await this.buildNowPlayingEditInitialComponents(
       ownerId,
       interaction.guildId,
+      statusMessage,
     );
     const isEphemeral = interaction.message.flags?.has(MessageFlags.Ephemeral) ?? true;
     await safeReply(interaction, {
@@ -4721,9 +4731,10 @@ export class NowPlayingCommand {
   private async buildNowPlayingEditInitialComponents(
     ownerId: string,
     guildId: string | null,
+    statusMessage: string | null = null,
   ): Promise<Array<ContainerBuilder | ActionRowBuilder<ButtonBuilder>>> {
     const entries = await Member.getNowPlaying(ownerId).then(getDisplayNowPlayingEntries);
-    return this.buildNowPlayingEditMenuComponents(ownerId, entries, guildId);
+    return this.buildNowPlayingEditMenuComponents(ownerId, entries, guildId, statusMessage);
   }
 
   private async withPmNowPlayingList(
