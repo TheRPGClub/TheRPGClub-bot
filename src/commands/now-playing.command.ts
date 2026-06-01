@@ -212,6 +212,10 @@ type NowPlayingJournalContext = {
 const nowPlayingJournalContexts = new Map<string, NowPlayingJournalContext>();
 const NOW_PLAYING_JOURNAL_CONTEXT_TTL_MS = 2 * 60 * 60 * 1000;
 
+// Tracks the deleteReply closure for the last owner manage-journal menu per owner,
+// so repeated header-button clicks always dismiss the previous ephemeral before showing a new one.
+const journalOwnerMenuDeletors = new Map<string, () => Promise<unknown>>();
+
 export async function restoreJournalMessageContextsFromDb(): Promise<void> {
   try {
     await Member.pruneExpiredJournalMessageContexts(NOW_PLAYING_JOURNAL_CONTEXT_TTL_MS);
@@ -3336,6 +3340,8 @@ export class NowPlayingCommand {
       await safeDeferUpdate(interaction);
       return;
     }
+    await journalOwnerMenuDeletors.get(ownerId)?.().catch(() => null);
+    journalOwnerMenuDeletors.delete(ownerId);
     const gameId = Number(gameIdRaw);
     const page = Number(pageRaw);
     const row = await this.buildManageJournalButtonRow(ownerId, gameId, page);
@@ -3343,6 +3349,7 @@ export class NowPlayingCommand {
       components: [row],
       flags: buildComponentsV2Flags(true),
     });
+    journalOwnerMenuDeletors.set(ownerId, () => interaction.deleteReply());
   }
 
   @ButtonComponent({ id: /^nowplaying-journal-open:\d+:\d+:\d+$/ })
