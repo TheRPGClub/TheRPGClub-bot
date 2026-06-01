@@ -59,6 +59,7 @@ import {
 import Game, { type IGame } from "../classes/Game.js";
 import { buildJournalView } from "../functions/journalView.js";
 import { buildUserHeaderContainer } from "../functions/uiComponents.js";
+import { EphemeralOwnerMenu } from "../functions/EphemeralOwnerMenu.js";
 import { igdbService } from "../services/IGDB/IgdbService.js";
 import {
   createIgdbSession,
@@ -211,6 +212,7 @@ type NowPlayingJournalContext = {
 };
 const nowPlayingJournalContexts = new Map<string, NowPlayingJournalContext>();
 const NOW_PLAYING_JOURNAL_CONTEXT_TTL_MS = 2 * 60 * 60 * 1000;
+const journalOwnerMenu = new EphemeralOwnerMenu();
 
 export async function restoreJournalMessageContextsFromDb(): Promise<void> {
   try {
@@ -3339,10 +3341,7 @@ export class NowPlayingCommand {
     const gameId = Number(gameIdRaw);
     const page = Number(pageRaw);
     const row = await this.buildManageJournalButtonRow(ownerId, gameId, page);
-    await safeReply(interaction, {
-      components: [row],
-      flags: buildComponentsV2Flags(true),
-    });
+    await journalOwnerMenu.show(interaction, ownerId, [row]);
   }
 
   @ButtonComponent({ id: /^nowplaying-journal-open:\d+:\d+:\d+$/ })
