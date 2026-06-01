@@ -143,6 +143,7 @@ const NOW_PLAYING_JOURNAL_DELETE_PREFIX = "nowplaying-journal-delete";
 const NOW_PLAYING_JOURNAL_DELETE_SELECT_PREFIX = "nowplaying-journal-delete-select";
 const NOW_PLAYING_JOURNAL_DELETE_CONFIRM_PREFIX = "nowplaying-journal-delete-confirm";
 const NOW_PLAYING_JOURNAL_PAGE_PREFIX = "nowplaying-journal-page";
+const NOW_PLAYING_JOURNAL_HEADER_PREFIX = "nowplaying-journal-header";
 const NOW_PLAYING_JOURNAL_MODAL_ID = "nowplaying-journal-modal";
 const NOW_PLAYING_JOURNAL_EDIT_MODAL_ID = "nowplaying-journal-edit-modal";
 const NOW_PLAYING_JOURNAL_TITLE_INPUT_ID = "nowplaying-journal-title";
@@ -3299,6 +3300,46 @@ export class NowPlayingCommand {
     });
   }
 
+  @ButtonComponent({ id: /^nowplaying-journal-header:\d+:\d+:\d+$/ })
+  async handleNowPlayingJournalHeader(interaction: ButtonInteraction): Promise<void> {
+    const [, ownerId, gameIdRaw, pageRaw] = interaction.customId.split(":");
+    if (interaction.user.id !== ownerId) {
+      await safeDeferUpdate(interaction);
+      return;
+    }
+    const gameId = Number(gameIdRaw);
+    const page = Number(pageRaw);
+    const entries = await Member.getGameJournalEntries(ownerId, gameId, {
+      viewerUserId: ownerId,
+      limit: 1,
+      offset: 0,
+    });
+    const hasEntries = entries.length > 0;
+    const container = new ContainerBuilder().addTextDisplayComponents(
+      new TextDisplayBuilder().setContent("## Manage Journal"),
+    );
+    const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`${NOW_PLAYING_JOURNAL_ADD_PREFIX}:${ownerId}:${gameId}:${page}`)
+        .setLabel("Add Entry")
+        .setStyle(ButtonStyle.Success),
+      new ButtonBuilder()
+        .setCustomId(`${NOW_PLAYING_JOURNAL_EDIT_PREFIX}:${ownerId}:${gameId}:${page}`)
+        .setLabel("Edit Entry")
+        .setStyle(ButtonStyle.Primary)
+        .setDisabled(!hasEntries),
+      new ButtonBuilder()
+        .setCustomId(`${NOW_PLAYING_JOURNAL_DELETE_PREFIX}:${ownerId}:${gameId}:${page}`)
+        .setLabel("Delete Entry")
+        .setStyle(ButtonStyle.Danger)
+        .setDisabled(!hasEntries),
+    );
+    await safeReply(interaction, {
+      components: [container, row],
+      flags: buildComponentsV2Flags(true),
+    });
+  }
+
   @ButtonComponent({ id: /^nowplaying-journal-open:\d+:\d+:\d+$/ })
   async handleNowPlayingJournalOpen(interaction: ButtonInteraction): Promise<void> {
     const [, ownerId, gameIdRaw, pageRaw] = interaction.customId.split(":");
@@ -3325,6 +3366,7 @@ export class NowPlayingCommand {
       gameId,
       Number(pageRaw),
       interaction.guildId,
+      interaction.user.id === ownerId,
     );
     if (interaction.guildId) {
       await this.deleteRecentJournalMessagesInChannel(interaction, ownerId, gameId);
@@ -3360,6 +3402,7 @@ export class NowPlayingCommand {
       gameId,
       1,
       interaction.guildId,
+      interaction.user.id === ownerId,
     );
     if (interaction.guildId) {
       await this.deleteRecentJournalMessagesInChannel(interaction, ownerId, gameId);
@@ -3399,6 +3442,7 @@ export class NowPlayingCommand {
       gameId,
       Number(pageRaw),
       interaction.guildId,
+      interaction.user.id === ownerId,
     );
     if (interaction.guildId) {
       await this.deleteRecentJournalMessagesInChannel(interaction, ownerId, gameId);
@@ -3679,6 +3723,7 @@ export class NowPlayingCommand {
       Number(gameIdRaw),
       Number(pageRaw),
       interaction.guildId,
+      true,
     );
     await safeUpdate(interaction, {
       components: payload.components,
@@ -3724,6 +3769,7 @@ export class NowPlayingCommand {
       Number(gameIdRaw),
       Number(pageRaw),
       interaction.guildId,
+      true,
     );
     await safeUpdate(interaction, {
       components: payload.components,
@@ -3773,6 +3819,7 @@ export class NowPlayingCommand {
       gameId,
       Number(pageRaw),
       interaction.guildId,
+      true,
     );
     await safeReply(interaction, {
       components: payload.components,
@@ -5661,6 +5708,7 @@ export class NowPlayingCommand {
     gameId: number,
     page: number,
     guildId?: string | null,
+    showOwnerHeader?: boolean,
   ) {
     const isOwnerView = viewerId === ownerId;
     return buildJournalView({
@@ -5673,6 +5721,9 @@ export class NowPlayingCommand {
         `${NOW_PLAYING_JOURNAL_PAGE_PREFIX}:${ownerId}:${gameId}:prev:${p}`,
       nextPageCustomId: (p) =>
         `${NOW_PLAYING_JOURNAL_PAGE_PREFIX}:${ownerId}:${gameId}:next:${p}`,
+      headerButtonCustomId: showOwnerHeader
+        ? `${NOW_PLAYING_JOURNAL_HEADER_PREFIX}:${ownerId}:${gameId}:${page}`
+        : undefined,
       buildOwnerButtons: isOwnerView
         ? (safePage, hasEntries) => [
             new ButtonBuilder()
