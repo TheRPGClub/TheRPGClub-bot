@@ -8,6 +8,7 @@ import {
   EmbedBuilder,
   Message,
   MessageFlags,
+  ModalSubmitInteraction,
   StringSelectMenuBuilder,
   StringSelectMenuInteraction,
   User,
@@ -25,6 +26,7 @@ import { TextInputStyle as ApiTextInputStyle } from "discord-api-types/v10";
 import {
   ButtonComponent,
   Discord,
+  ModalComponent,
   SelectMenuComponent,
   Slash,
   SlashOption,
@@ -36,6 +38,7 @@ import Member, {
 import {
   safeDeferReply,
   safeDeferUpdate,
+  sanitizeUserInput,
   safeReply,
   safeUpdate,
 } from "../functions/InteractionUtils.js";
@@ -45,14 +48,16 @@ import { COMPONENTS_V2_FLAG } from "../config/flags.js";
 import { buildUserHeaderContainer } from "../functions/uiComponents.js";
 import {
   GJ_PUBLIC_CLOSE_PREFIX,
-  JOURNAL_ADD_MODAL_ID,
   JOURNAL_TITLE_INPUT_ID,
   JOURNAL_BODY_INPUT_ID,
   JOURNAL_PRIVACY_INPUT_ID,
 } from "../config/journalConstants.js";
+import { formatTableDate } from "./profile.command.js";
 import {
   trackNowPlayingJournalContext,
+  refreshPublicJournalMessages,
 } from "./now-playing.command.js";
+import { NOW_PLAYING_HELP_PREFIX } from "./now-playing-help.js";
 
 const LIST_PAGE_SIZE = 15;
 const ALL_PAGE_SIZE = 20;
@@ -63,6 +68,14 @@ const GJ_VIEW_PAGE_PREFIX = "game-journal-view-page";
 const GJ_ALL_SELECT_PREFIX = "game-journal-all-select";
 const GJ_ALL_PAGE_PREFIX = "game-journal-all-page";
 const GJ_HEADER_ADD_PREFIX = "game-journal-header-add";
+const GJ_HMENU_ADD_PREFIX = "game-journal-hmenu-add";
+const GJ_HMENU_EDIT_PREFIX = "game-journal-hmenu-edit";
+const GJ_HMENU_EDIT_SELECT_PREFIX = "game-journal-hmenu-edit-select";
+const GJ_HMENU_DELETE_PREFIX = "game-journal-hmenu-delete";
+const GJ_HMENU_DELETE_SELECT_PREFIX = "game-journal-hmenu-delete-select";
+const GJ_HMENU_DELETE_CONFIRM_PREFIX = "game-journal-hmenu-delete-confirm";
+const GJ_HMENU_ADD_MODAL_ID = "game-journal-hmenu-add-modal";
+const GJ_HMENU_EDIT_MODAL_ID = "game-journal-hmenu-edit-modal";
 export { GJ_PUBLIC_CLOSE_PREFIX };
 
 // customId: GJ_LIST_SELECT_PREFIX:{callerId}:{targetUserId}:{page}  value=gameId
@@ -72,7 +85,120 @@ export { GJ_PUBLIC_CLOSE_PREFIX };
 // customId: GJ_ALL_PAGE_PREFIX:{callerId}:{page}
 // customId: GJ_PUBLIC_CLOSE_PREFIX:{callerId}
 // customId: GJ_HEADER_ADD_PREFIX:{ownerId}:{gameId}
+// customId: GJ_HMENU_ADD_PREFIX:{ownerId}:{gameId}
+// customId: GJ_HMENU_EDIT_PREFIX:{ownerId}:{gameId}
+// customId: GJ_HMENU_EDIT_SELECT_PREFIX:{ownerId}:{gameId}          value=entryId
+// customId: GJ_HMENU_DELETE_PREFIX:{ownerId}:{gameId}
+// customId: GJ_HMENU_DELETE_SELECT_PREFIX:{ownerId}:{gameId}        value=entryId
+// customId: GJ_HMENU_DELETE_CONFIRM_PREFIX:(yes|no):{ownerId}:{gameId}:{entryId}
 // modal:    JOURNAL_ADD_MODAL_ID:{ownerId}:{gameId}:{page}
+// modal:    GJ_HMENU_ADD_MODAL_ID:{ownerId}:{gameId}
+// modal:    GJ_HMENU_EDIT_MODAL_ID:{ownerId}:{gameId}:{entryId}
+
+function buildComponentsV2Flags(isEphemeral: boolean): number {
+  return (isEphemeral ? MessageFlags.Ephemeral : 0) | COMPONENTS_V2_FLAG;
+}
+
+function extractGjPrivacyFromInteraction(interaction: ModalSubmitInteraction): boolean {
+  const components = (interaction.components ?? []) as Array<{
+    components?: Array<{ customId?: string; value?: unknown; values?: unknown }>;
+    component?: { customId?: string; value?: unknown; values?: unknown };
+  }>;
+  const fields: Array<{ customId?: string; value?: unknown; values?: unknown }> = [];
+  for (const topLevel of components) {
+    if (Array.isArray(topLevel.components)) {
+      fields.push(...topLevel.components);
+    } else if (topLevel.component) {
+      fields.push(topLevel.component);
+    }
+  }
+  for (const field of fields) {
+    if (field.customId !== JOURNAL_PRIVACY_INPUT_ID) continue;
+    if (typeof field.value === "string") return field.value.toLowerCase() === "public";
+    if (Array.isArray(field.values) && typeof field.values[0] === "string") {
+      return field.values[0].toLowerCase() === "public";
+    }
+  }
+  return false;
+}
+
+function buildHmenuActionRow(ownerId: string, gameId: number): ActionRowBuilder<ButtonBuilder> {
+  return new ActionRowBuilder<ButtonBuilder>().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`${GJ_HMENU_ADD_PREFIX}:${ownerId}:${gameId}`)
+      .setLabel("Add Entry")
+      .setStyle(ButtonStyle.Success),
+    new ButtonBuilder()
+      .setCustomId(`${GJ_HMENU_EDIT_PREFIX}:${ownerId}:${gameId}`)
+      .setLabel("Edit Entry")
+      .setStyle(ButtonStyle.Primary),
+    new ButtonBuilder()
+      .setCustomId(`${GJ_HMENU_DELETE_PREFIX}:${ownerId}:${gameId}`)
+      .setLabel("Delete Entry")
+      .setStyle(ButtonStyle.Danger),
+    new ButtonBuilder()
+      .setCustomId(`${NOW_PLAYING_HELP_PREFIX}:journal-add:${ownerId}`)
+      .setLabel("?")
+      .setStyle(ButtonStyle.Secondary),
+  );
+}
+
+function buildHmenuModal(
+  modalId: string,
+  modalTitle: string,
+  prefillTitle?: string,
+  prefillBody?: string,
+  defaultPublic?: boolean,
+): ComponentsModalBuilder {
+  const modal = new ComponentsModalBuilder()
+    .setCustomId(modalId)
+    .setTitle(modalTitle);
+  modal.addActionRowComponents(
+    new ComponentsActionRowBuilder<ComponentsTextInputBuilder>().addComponents(
+      new ComponentsTextInputBuilder()
+        .setCustomId(JOURNAL_TITLE_INPUT_ID)
+        .setLabel("Title (optional)")
+        .setStyle(ApiTextInputStyle.Short)
+        .setRequired(false)
+        .setMaxLength(120)
+        .setValue((prefillTitle ?? "").slice(0, 120)),
+    ),
+    new ComponentsActionRowBuilder<ComponentsTextInputBuilder>().addComponents(
+      new ComponentsTextInputBuilder()
+        .setCustomId(JOURNAL_BODY_INPUT_ID)
+        .setLabel("Entry")
+        .setStyle(ApiTextInputStyle.Paragraph)
+        .setRequired(true)
+        .setMaxLength(2000)
+        .setValue((prefillBody ?? "").slice(0, 2000)),
+    ),
+  );
+  modal.addLabelComponents(
+    new LabelBuilder()
+      .setLabel("Privacy")
+      .setDescription("Choose who can view this entry")
+      .setRadioGroupComponent(
+        new RadioGroupBuilder()
+          .setCustomId(JOURNAL_PRIVACY_INPUT_ID)
+          .setRequired(true)
+          .setOptions(
+            {
+              label: "Private",
+              value: "private",
+              description: "Only you can view it",
+              default: defaultPublic === false,
+            },
+            {
+              label: "Public",
+              value: "public",
+              description: "Visible to other members",
+              default: defaultPublic === true,
+            },
+          ),
+      ),
+  );
+  return modal;
+}
 
 function gameLabel(n: number): string {
   return n === 1 ? "game" : "games";
@@ -503,48 +629,314 @@ export class GameJournalCommand {
   async handleHeaderAdd(interaction: ButtonInteraction): Promise<void> {
     const [, ownerId, gameIdRaw] = interaction.customId.split(":");
     if (interaction.user.id !== ownerId) {
-      await safeReply(interaction, {
-        content: "Only the journal owner can add entries.",
-        flags: MessageFlags.Ephemeral,
+      await safeDeferUpdate(interaction);
+      return;
+    }
+    const gameId = Number(gameIdRaw);
+    const container = new ContainerBuilder().addTextDisplayComponents(
+      new TextDisplayBuilder().setContent("## Manage Journal"),
+    );
+    const row = buildHmenuActionRow(ownerId, gameId);
+    await safeReply(interaction, {
+      components: [container, row],
+      flags: buildComponentsV2Flags(true),
+    });
+  }
+
+  @ButtonComponent({ id: /^game-journal-hmenu-add:\d+:\d+$/ })
+  async handleGjHmenuAdd(interaction: ButtonInteraction): Promise<void> {
+    const [, ownerId, gameIdRaw] = interaction.customId.split(":");
+    if (interaction.user.id !== ownerId) {
+      await safeDeferUpdate(interaction);
+      return;
+    }
+    const modal = buildHmenuModal(
+      `${GJ_HMENU_ADD_MODAL_ID}:${ownerId}:${gameIdRaw}`,
+      "Add Journal Entry",
+    );
+    await interaction.showModal(modal);
+  }
+
+  @ButtonComponent({ id: /^game-journal-hmenu-edit:\d+:\d+$/ })
+  async handleGjHmenuEdit(interaction: ButtonInteraction): Promise<void> {
+    const [, ownerId, gameIdRaw] = interaction.customId.split(":");
+    if (interaction.user.id !== ownerId) {
+      await safeDeferUpdate(interaction);
+      return;
+    }
+    const gameId = Number(gameIdRaw);
+    const entries = await Member.getGameJournalEntries(ownerId, gameId, {
+      viewerUserId: ownerId,
+      limit: 5,
+      offset: 0,
+    });
+    if (!entries.length) {
+      await safeUpdate(interaction, {
+        components: [
+          new ContainerBuilder().addTextDisplayComponents(
+            new TextDisplayBuilder().setContent("No journal entries to edit."),
+          ),
+          new ActionRowBuilder<ButtonBuilder>().addComponents(
+            new ButtonBuilder()
+              .setCustomId(`${GJ_HMENU_ADD_PREFIX}:${ownerId}:${gameId}`)
+              .setLabel("Add Entry")
+              .setStyle(ButtonStyle.Success),
+          ),
+        ],
+        flags: buildComponentsV2Flags(true),
       });
       return;
     }
-    const modal = new ComponentsModalBuilder()
-      .setCustomId(`${JOURNAL_ADD_MODAL_ID}:${ownerId}:${gameIdRaw}:1`)
-      .setTitle("Add Journal Entry");
-    modal.addActionRowComponents(
-      new ComponentsActionRowBuilder<ComponentsTextInputBuilder>().addComponents(
-        new ComponentsTextInputBuilder()
-          .setCustomId(JOURNAL_TITLE_INPUT_ID)
-          .setLabel("Title (optional)")
-          .setStyle(ApiTextInputStyle.Short)
-          .setRequired(false)
-          .setMaxLength(120),
-      ),
-      new ComponentsActionRowBuilder<ComponentsTextInputBuilder>().addComponents(
-        new ComponentsTextInputBuilder()
-          .setCustomId(JOURNAL_BODY_INPUT_ID)
-          .setLabel("Entry")
-          .setStyle(ApiTextInputStyle.Paragraph)
-          .setRequired(true)
-          .setMaxLength(2000),
-      ),
+    const options = entries.map((e) => ({
+      label: (e.title ?? `Entry #${e.entryNumber}`).slice(0, 100),
+      value: String(e.entryId),
+      description: `${formatTableDate(e.createdAt)} | ${e.isPublic ? "Public" : "Private"}`,
+    }));
+    const select = new StringSelectMenuBuilder()
+      .setCustomId(`${GJ_HMENU_EDIT_SELECT_PREFIX}:${ownerId}:${gameId}`)
+      .setPlaceholder("Choose an entry to edit")
+      .addOptions(options);
+    const container = new ContainerBuilder().addTextDisplayComponents(
+      new TextDisplayBuilder().setContent("## Edit Journal Entry\nSelect an entry to edit."),
     );
-    modal.addLabelComponents(
-      new LabelBuilder()
-        .setLabel("Privacy")
-        .setDescription("Choose who can view this entry")
-        .setRadioGroupComponent(
-          new RadioGroupBuilder()
-            .setCustomId(JOURNAL_PRIVACY_INPUT_ID)
-            .setRequired(true)
-            .setOptions(
-              { label: "Private", value: "private", description: "Only you can view it" },
-              { label: "Public", value: "public", description: "Visible to other members" },
-            ),
-        ),
+    const row = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select);
+    const helpRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`${NOW_PLAYING_HELP_PREFIX}:journal-edit:${ownerId}`)
+        .setLabel("?")
+        .setStyle(ButtonStyle.Secondary),
+    );
+    await safeUpdate(interaction, {
+      components: [container, row, helpRow],
+      flags: buildComponentsV2Flags(true),
+    });
+  }
+
+  @SelectMenuComponent({ id: /^game-journal-hmenu-edit-select:\d+:\d+$/ })
+  async handleGjHmenuEditSelect(
+    interaction: StringSelectMenuInteraction,
+  ): Promise<void> {
+    const [, ownerId, gameIdRaw] = interaction.customId.split(":");
+    if (interaction.user.id !== ownerId) {
+      await safeDeferUpdate(interaction);
+      return;
+    }
+    const entryId = Number(interaction.values[0]);
+    const entry = await Member.getGameJournalEntryForUser(ownerId, entryId);
+    if (!entry || entry.gameId !== Number(gameIdRaw)) {
+      await safeReply(interaction, { content: "That journal entry was not found." });
+      return;
+    }
+    const modal = buildHmenuModal(
+      `${GJ_HMENU_EDIT_MODAL_ID}:${ownerId}:${gameIdRaw}:${entryId}`,
+      "Edit Journal Entry",
+      entry.title ?? "",
+      entry.body,
+      entry.isPublic,
     );
     await interaction.showModal(modal);
+  }
+
+  @ButtonComponent({ id: /^game-journal-hmenu-delete:\d+:\d+$/ })
+  async handleGjHmenuDelete(interaction: ButtonInteraction): Promise<void> {
+    const [, ownerId, gameIdRaw] = interaction.customId.split(":");
+    if (interaction.user.id !== ownerId) {
+      await safeDeferUpdate(interaction);
+      return;
+    }
+    const gameId = Number(gameIdRaw);
+    const entries = await Member.getGameJournalEntries(ownerId, gameId, {
+      viewerUserId: ownerId,
+      limit: 5,
+      offset: 0,
+    });
+    if (!entries.length) {
+      await safeUpdate(interaction, {
+        components: [
+          new ContainerBuilder().addTextDisplayComponents(
+            new TextDisplayBuilder().setContent("No journal entries to delete."),
+          ),
+          new ActionRowBuilder<ButtonBuilder>().addComponents(
+            new ButtonBuilder()
+              .setCustomId(`${GJ_HMENU_ADD_PREFIX}:${ownerId}:${gameId}`)
+              .setLabel("Add Entry")
+              .setStyle(ButtonStyle.Success),
+          ),
+        ],
+        flags: buildComponentsV2Flags(true),
+      });
+      return;
+    }
+    const options = entries.map((e) => ({
+      label: (e.title ?? `Entry #${e.entryNumber}`).slice(0, 100),
+      value: String(e.entryId),
+      description: `${formatTableDate(e.createdAt)} | ${e.isPublic ? "Public" : "Private"}`,
+    }));
+    const select = new StringSelectMenuBuilder()
+      .setCustomId(`${GJ_HMENU_DELETE_SELECT_PREFIX}:${ownerId}:${gameId}`)
+      .setPlaceholder("Choose an entry to delete")
+      .addOptions(options);
+    const container = new ContainerBuilder().addTextDisplayComponents(
+      new TextDisplayBuilder().setContent(
+        "## Delete Journal Entry\nSelect an entry to delete.",
+      ),
+    );
+    const row = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select);
+    const helpRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`${NOW_PLAYING_HELP_PREFIX}:journal-delete:${ownerId}`)
+        .setLabel("?")
+        .setStyle(ButtonStyle.Secondary),
+    );
+    await safeUpdate(interaction, {
+      components: [container, row, helpRow],
+      flags: buildComponentsV2Flags(true),
+    });
+  }
+
+  @SelectMenuComponent({ id: /^game-journal-hmenu-delete-select:\d+:\d+$/ })
+  async handleGjHmenuDeleteSelect(
+    interaction: StringSelectMenuInteraction,
+  ): Promise<void> {
+    const [, ownerId, gameIdRaw] = interaction.customId.split(":");
+    if (interaction.user.id !== ownerId) {
+      await safeDeferUpdate(interaction);
+      return;
+    }
+    const entryId = Number(interaction.values[0]);
+    const entry = await Member.getGameJournalEntryForUser(ownerId, entryId);
+    if (!entry || entry.gameId !== Number(gameIdRaw)) {
+      await safeReply(interaction, { content: "That journal entry was not found." });
+      return;
+    }
+    const entryTitle = entry.title?.trim() ? entry.title.trim() : `Entry #${entry.entryNumber}`;
+    const container = new ContainerBuilder().addTextDisplayComponents(
+      new TextDisplayBuilder().setContent(
+        `## Confirm Delete\nDelete **${entryTitle}** from ${formatTableDate(entry.createdAt)}?`,
+      ),
+    );
+    const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
+      new ButtonBuilder()
+        .setCustomId(
+          `${GJ_HMENU_DELETE_CONFIRM_PREFIX}:yes:${ownerId}:${gameIdRaw}:${entryId}`,
+        )
+        .setLabel("Delete")
+        .setStyle(ButtonStyle.Danger),
+      new ButtonBuilder()
+        .setCustomId(
+          `${GJ_HMENU_DELETE_CONFIRM_PREFIX}:no:${ownerId}:${gameIdRaw}:${entryId}`,
+        )
+        .setLabel("Cancel")
+        .setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder()
+        .setCustomId(`${NOW_PLAYING_HELP_PREFIX}:journal-delete-confirm:${ownerId}`)
+        .setLabel("?")
+        .setStyle(ButtonStyle.Secondary),
+    );
+    await safeUpdate(interaction, {
+      components: [container, row],
+      flags: buildComponentsV2Flags(true),
+    });
+  }
+
+  @ButtonComponent({ id: /^game-journal-hmenu-delete-confirm:(yes|no):\d+:\d+:\d+$/ })
+  async handleGjHmenuDeleteConfirm(interaction: ButtonInteraction): Promise<void> {
+    const [, action, ownerId, gameIdRaw, entryIdRaw] = interaction.customId.split(":");
+    if (interaction.user.id !== ownerId) {
+      await safeDeferUpdate(interaction);
+      return;
+    }
+    if (action === "yes") {
+      const removed = await Member.deleteGameJournalEntry(ownerId, Number(entryIdRaw));
+      if (!removed) {
+        await safeReply(interaction, { content: "That journal entry was not found." });
+        return;
+      }
+    }
+    const gameId = Number(gameIdRaw);
+    const container = new ContainerBuilder().addTextDisplayComponents(
+      new TextDisplayBuilder().setContent("## Manage Journal"),
+    );
+    const row = buildHmenuActionRow(ownerId, gameId);
+    await safeUpdate(interaction, {
+      components: [container, row],
+      flags: buildComponentsV2Flags(true),
+    });
+    if (action === "yes") {
+      await refreshPublicJournalMessages(interaction.client, ownerId, gameId);
+    }
+  }
+
+  @ModalComponent({ id: /^game-journal-hmenu-add-modal:\d+:\d+$/ })
+  async handleGjHmenuAddModal(interaction: ModalSubmitInteraction): Promise<void> {
+    const [, ownerId, gameIdRaw] = interaction.customId.split(":");
+    if (interaction.user.id !== ownerId) {
+      await safeReply(interaction, { content: "Only the owner can submit journal entries." });
+      return;
+    }
+    const title = sanitizeUserInput(
+      interaction.fields.getTextInputValue(JOURNAL_TITLE_INPUT_ID) ?? "",
+      { preserveNewlines: true, maxLength: 120 },
+    );
+    const body = sanitizeUserInput(
+      interaction.fields.getTextInputValue(JOURNAL_BODY_INPUT_ID),
+      { preserveNewlines: true, maxLength: 2000 },
+    );
+    const isPublic = extractGjPrivacyFromInteraction(interaction);
+    const gameId = Number(gameIdRaw);
+    await Member.addGameJournalEntry({
+      userId: ownerId,
+      gameId,
+      title: title || null,
+      body,
+      isPublic,
+    });
+    await Member.upsertGameJournalPreference(ownerId, gameId, true, isPublic);
+    const container = new ContainerBuilder().addTextDisplayComponents(
+      new TextDisplayBuilder().setContent("## Manage Journal"),
+    );
+    const row = buildHmenuActionRow(ownerId, gameId);
+    await safeUpdate(interaction, {
+      components: [container, row],
+      flags: buildComponentsV2Flags(true),
+    });
+    await refreshPublicJournalMessages(interaction.client, ownerId, gameId);
+  }
+
+  @ModalComponent({ id: /^game-journal-hmenu-edit-modal:\d+:\d+:\d+$/ })
+  async handleGjHmenuEditModal(interaction: ModalSubmitInteraction): Promise<void> {
+    const [, ownerId, gameIdRaw, entryIdRaw] = interaction.customId.split(":");
+    if (interaction.user.id !== ownerId) {
+      await safeReply(interaction, { content: "Only the owner can edit journal entries." });
+      return;
+    }
+    const gameId = Number(gameIdRaw);
+    const entryId = Number(entryIdRaw);
+    const existing = await Member.getGameJournalEntryForUser(ownerId, entryId);
+    if (!existing || existing.gameId !== gameId) {
+      await safeReply(interaction, { content: "That journal entry was not found." });
+      return;
+    }
+    const title = sanitizeUserInput(
+      interaction.fields.getTextInputValue(JOURNAL_TITLE_INPUT_ID) ?? "",
+      { preserveNewlines: true, maxLength: 120 },
+    );
+    const body = sanitizeUserInput(
+      interaction.fields.getTextInputValue(JOURNAL_BODY_INPUT_ID),
+      { preserveNewlines: true, maxLength: 2000 },
+    );
+    const isPublic = extractGjPrivacyFromInteraction(interaction);
+    await Member.updateGameJournalEntry({ userId: ownerId, entryId, title: title || null, body,
+      isPublic });
+    const container = new ContainerBuilder().addTextDisplayComponents(
+      new TextDisplayBuilder().setContent("## Manage Journal"),
+    );
+    const row = buildHmenuActionRow(ownerId, gameId);
+    await safeUpdate(interaction, {
+      components: [container, row],
+      flags: buildComponentsV2Flags(true),
+    });
+    await refreshPublicJournalMessages(interaction.client, ownerId, gameId);
   }
 
   @ButtonComponent({ id: new RegExp(`^${GJ_PUBLIC_CLOSE_PREFIX}:\\d+$`) })
