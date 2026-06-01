@@ -25,7 +25,6 @@ import { TextInputStyle as ApiTextInputStyle } from "discord-api-types/v10";
 import {
   ButtonComponent,
   Discord,
-  ModalComponent,
   SelectMenuComponent,
   Slash,
   SlashOption,
@@ -53,7 +52,6 @@ import {
 } from "../config/journalConstants.js";
 import {
   trackNowPlayingJournalContext,
-  refreshPublicJournalMessages,
 } from "./now-playing.command.js";
 
 const LIST_PAGE_SIZE = 15;

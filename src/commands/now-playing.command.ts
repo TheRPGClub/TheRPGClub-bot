@@ -129,7 +129,6 @@ const NOW_PLAYING_COMPOSITE_MAX = 10;
 const NOW_PLAYING_ALL_SELECT_ID = "nowplaying-all-select:v1";
 const NOW_PLAYING_LIST_NOTES_PREFIX = "nowplaying-list-notes";
 const NOW_PLAYING_LIST_EDIT_PREFIX = "nowplaying-list-edit";
-const NOW_PLAYING_EDIT_MENU_NOTE_PREFIX = "nowplaying-edit-menu-note";
 const NOW_PLAYING_EDIT_MENU_SORT_PREFIX = "nowplaying-edit-menu-sort";
 const NOW_PLAYING_EDIT_MENU_PLATFORM_PREFIX = "nowplaying-edit-menu-platform";
 const NOW_PLAYING_EDIT_MENU_COMPLETE_PREFIX = "nowplaying-edit-menu-complete";
