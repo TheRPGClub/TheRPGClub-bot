@@ -19,8 +19,6 @@ import {
   ModalBuilder as ComponentsModalBuilder,
   ActionRowBuilder as ComponentsActionRowBuilder,
   TextInputBuilder as ComponentsTextInputBuilder,
-  LabelBuilder,
-  RadioGroupBuilder,
 } from "@discordjs/builders";
 import { TextInputStyle as ApiTextInputStyle } from "discord-api-types/v10";
 import {
@@ -47,15 +45,14 @@ import { buildJournalView } from "../functions/journalView.js";
 import { COMPONENTS_V2_FLAG } from "../config/flags.js";
 import { buildUserHeaderContainer } from "../functions/uiComponents.js";
 import {
-  GJ_PUBLIC_CLOSE_PREFIX,
+  GJ_CLOSE_PREFIX,
   JOURNAL_TITLE_INPUT_ID,
   JOURNAL_BODY_INPUT_ID,
-  JOURNAL_PRIVACY_INPUT_ID,
 } from "../config/journalConstants.js";
 import { formatTableDate } from "./profile.command.js";
 import {
   trackNowPlayingJournalContext,
-  refreshPublicJournalMessages,
+  refreshJournalMessages,
 } from "./now-playing.command.js";
 import { NOW_PLAYING_HELP_PREFIX } from "./now-playing-help.js";
 
@@ -76,7 +73,7 @@ const GJ_HMENU_DELETE_SELECT_PREFIX = "game-journal-hmenu-delete-select";
 const GJ_HMENU_DELETE_CONFIRM_PREFIX = "game-journal-hmenu-delete-confirm";
 const GJ_HMENU_ADD_MODAL_ID = "game-journal-hmenu-add-modal";
 const GJ_HMENU_EDIT_MODAL_ID = "game-journal-hmenu-edit-modal";
-export { GJ_PUBLIC_CLOSE_PREFIX };
+export { GJ_CLOSE_PREFIX };
 
 // customId: GJ_LIST_SELECT_PREFIX:{callerId}:{targetUserId}:{page}  value=gameId
 // customId: GJ_LIST_PAGE_PREFIX:{callerId}:{targetUserId}:{page}
@@ -97,29 +94,6 @@ export { GJ_PUBLIC_CLOSE_PREFIX };
 
 function buildComponentsV2Flags(isEphemeral: boolean): number {
   return (isEphemeral ? MessageFlags.Ephemeral : 0) | COMPONENTS_V2_FLAG;
-}
-
-function extractGjPrivacyFromInteraction(interaction: ModalSubmitInteraction): boolean {
-  const components = (interaction.components ?? []) as Array<{
-    components?: Array<{ customId?: string; value?: unknown; values?: unknown }>;
-    component?: { customId?: string; value?: unknown; values?: unknown };
-  }>;
-  const fields: Array<{ customId?: string; value?: unknown; values?: unknown }> = [];
-  for (const topLevel of components) {
-    if (Array.isArray(topLevel.components)) {
-      fields.push(...topLevel.components);
-    } else if (topLevel.component) {
-      fields.push(topLevel.component);
-    }
-  }
-  for (const field of fields) {
-    if (field.customId !== JOURNAL_PRIVACY_INPUT_ID) continue;
-    if (typeof field.value === "string") return field.value.toLowerCase() === "public";
-    if (Array.isArray(field.values) && typeof field.values[0] === "string") {
-      return field.values[0].toLowerCase() === "public";
-    }
-  }
-  return false;
 }
 
 function buildHmenuActionRow(ownerId: string, gameId: number): ActionRowBuilder<ButtonBuilder> {
@@ -148,7 +122,6 @@ function buildHmenuModal(
   modalTitle: string,
   prefillTitle?: string,
   prefillBody?: string,
-  defaultPublic?: boolean,
 ): ComponentsModalBuilder {
   const modal = new ComponentsModalBuilder()
     .setCustomId(modalId)
@@ -173,30 +146,6 @@ function buildHmenuModal(
         .setValue((prefillBody ?? "").slice(0, 2000)),
     ),
   );
-  modal.addLabelComponents(
-    new LabelBuilder()
-      .setLabel("Privacy")
-      .setDescription("Choose who can view this entry")
-      .setRadioGroupComponent(
-        new RadioGroupBuilder()
-          .setCustomId(JOURNAL_PRIVACY_INPUT_ID)
-          .setRequired(true)
-          .setOptions(
-            {
-              label: "Private",
-              value: "private",
-              description: "Only you can view it",
-              default: defaultPublic === false,
-            },
-            {
-              label: "Public",
-              value: "public",
-              description: "Visible to other members",
-              default: defaultPublic === true,
-            },
-          ),
-      ),
-  );
   return modal;
 }
 
@@ -211,7 +160,6 @@ function entryLabel(n: number): string {
 function buildListComponents(
   target: User,
   entries: IGameJournalListEntry[],
-  isSelf: boolean,
   page: number,
   totalPages: number,
 ): ContainerBuilder[] {
@@ -223,10 +171,7 @@ function buildListComponents(
   // const lines = [`## Game Journals`];
   const lines = [];
   lines.push(
-    ...pageEntries.map((e) => {
-      const count = isSelf ? e.totalEntries : e.publicEntries;
-      return `**${e.title}** - ${count} ${entryLabel(count)}`;
-    }),
+    ...pageEntries.map((e) => `**${e.title}** - ${e.totalEntries} ${entryLabel(e.totalEntries)}`),
   );
   const pageInfo = totalPages > 1 ? ` • Page ${page + 1}/${totalPages}` : "";
   lines.push(`-# ${entries.length} ${gameLabel(entries.length)}${pageInfo}`);
@@ -250,7 +195,7 @@ function buildListSelectRow(
   const options = pageEntries.map((e) => ({
     label: e.title.slice(0, 100),
     value: String(e.gameId),
-    description: `${e.publicEntries} public ${entryLabel(e.publicEntries)}`,
+    description: `${e.totalEntries} ${entryLabel(e.totalEntries)}`,
   }));
 
   const select = new StringSelectMenuBuilder()
@@ -432,7 +377,6 @@ export class GameJournalCommand {
     }
 
     const target = member ?? interaction.user;
-    const isSelf = target.id === interaction.user.id;
     const entries = await Member.getGameJournalList(target.id);
 
     if (!entries.length) {
@@ -446,7 +390,7 @@ export class GameJournalCommand {
 
     const totalPages = Math.max(1, Math.ceil(entries.length / LIST_PAGE_SIZE));
     const page = 0;
-    const listComponents = buildListComponents(target, entries, isSelf, page, totalPages);
+    const listComponents = buildListComponents(target, entries, page, totalPages);
     const selectRow = buildListSelectRow(entries, interaction.user.id, target.id, page);
     const pageRow = buildListPageRow(interaction.user.id, target.id, page, totalPages);
     const cvFlags = (ephemeral ? MessageFlags.Ephemeral : 0) | COMPONENTS_V2_FLAG;
@@ -511,12 +455,11 @@ export class GameJournalCommand {
     const target = await interaction.client.users.fetch(targetUserId).catch(() => null);
     if (!target) return;
 
-    const isSelf = targetUserId === callerId;
     const entries = await Member.getGameJournalList(targetUserId);
     const totalPages = Math.max(1, Math.ceil(entries.length / LIST_PAGE_SIZE));
     const safePage = Math.min(Math.max(page, 0), totalPages - 1);
 
-    const listComponents = buildListComponents(target, entries, isSelf, safePage, totalPages);
+    const listComponents = buildListComponents(target, entries, safePage, totalPages);
     const selectRow = buildListSelectRow(entries, callerId, targetUserId, safePage);
     const pageRow = buildListPageRow(callerId, targetUserId, safePage, totalPages);
 
@@ -557,7 +500,7 @@ export class GameJournalCommand {
 
     const totalPages = Math.max(1, Math.ceil(entries.length / LIST_PAGE_SIZE));
     const page = 0;
-    const listComponents = buildListComponents(target, entries, false, page, totalPages);
+    const listComponents = buildListComponents(target, entries, page, totalPages);
     const selectRow = buildListSelectRow(entries, callerId, targetUserId, page);
     const pageRow = buildListPageRow(callerId, targetUserId, page, totalPages);
     const components = pageRow
@@ -666,7 +609,6 @@ export class GameJournalCommand {
     }
     const gameId = Number(gameIdRaw);
     const entries = await Member.getGameJournalEntries(ownerId, gameId, {
-      viewerUserId: ownerId,
       limit: 5,
       offset: 0,
     });
@@ -690,7 +632,7 @@ export class GameJournalCommand {
     const options = entries.map((e) => ({
       label: (e.title ?? `Entry #${e.entryNumber}`).slice(0, 100),
       value: String(e.entryId),
-      description: `${formatTableDate(e.createdAt)} | ${e.isPublic ? "Public" : "Private"}`,
+      description: formatTableDate(e.createdAt),
     }));
     const select = new StringSelectMenuBuilder()
       .setCustomId(`${GJ_HMENU_EDIT_SELECT_PREFIX}:${ownerId}:${gameId}`)
@@ -732,7 +674,6 @@ export class GameJournalCommand {
       "Edit Journal Entry",
       entry.title ?? "",
       entry.body,
-      entry.isPublic,
     );
     await interaction.showModal(modal);
   }
@@ -746,7 +687,6 @@ export class GameJournalCommand {
     }
     const gameId = Number(gameIdRaw);
     const entries = await Member.getGameJournalEntries(ownerId, gameId, {
-      viewerUserId: ownerId,
       limit: 5,
       offset: 0,
     });
@@ -770,7 +710,7 @@ export class GameJournalCommand {
     const options = entries.map((e) => ({
       label: (e.title ?? `Entry #${e.entryNumber}`).slice(0, 100),
       value: String(e.entryId),
-      description: `${formatTableDate(e.createdAt)} | ${e.isPublic ? "Public" : "Private"}`,
+      description: formatTableDate(e.createdAt),
     }));
     const select = new StringSelectMenuBuilder()
       .setCustomId(`${GJ_HMENU_DELETE_SELECT_PREFIX}:${ownerId}:${gameId}`)
@@ -863,7 +803,7 @@ export class GameJournalCommand {
       flags: buildComponentsV2Flags(true),
     });
     if (action === "yes") {
-      await refreshPublicJournalMessages(interaction.client, ownerId, gameId);
+      await refreshJournalMessages(interaction.client, ownerId, gameId);
     }
   }
 
@@ -882,16 +822,9 @@ export class GameJournalCommand {
       interaction.fields.getTextInputValue(JOURNAL_BODY_INPUT_ID),
       { preserveNewlines: true, maxLength: 2000 },
     );
-    const isPublic = extractGjPrivacyFromInteraction(interaction);
     const gameId = Number(gameIdRaw);
-    await Member.addGameJournalEntry({
-      userId: ownerId,
-      gameId,
-      title: title || null,
-      body,
-      isPublic,
-    });
-    await Member.upsertGameJournalPreference(ownerId, gameId, true, isPublic);
+    await Member.addGameJournalEntry({ userId: ownerId, gameId, title: title || null, body });
+    await Member.upsertGameJournalPreference(ownerId, gameId, true);
     const container = new ContainerBuilder().addTextDisplayComponents(
       new TextDisplayBuilder().setContent("## Manage Journal"),
     );
@@ -900,7 +833,7 @@ export class GameJournalCommand {
       components: [container, row],
       flags: buildComponentsV2Flags(true),
     });
-    await refreshPublicJournalMessages(interaction.client, ownerId, gameId);
+    await refreshJournalMessages(interaction.client, ownerId, gameId);
   }
 
   @ModalComponent({ id: /^game-journal-hmenu-edit-modal:\d+:\d+:\d+$/ })
@@ -925,9 +858,7 @@ export class GameJournalCommand {
       interaction.fields.getTextInputValue(JOURNAL_BODY_INPUT_ID),
       { preserveNewlines: true, maxLength: 2000 },
     );
-    const isPublic = extractGjPrivacyFromInteraction(interaction);
-    await Member.updateGameJournalEntry({ userId: ownerId, entryId, title: title || null, body,
-      isPublic });
+    await Member.updateGameJournalEntry({ userId: ownerId, entryId, title: title || null, body });
     const container = new ContainerBuilder().addTextDisplayComponents(
       new TextDisplayBuilder().setContent("## Manage Journal"),
     );
@@ -936,10 +867,10 @@ export class GameJournalCommand {
       components: [container, row],
       flags: buildComponentsV2Flags(true),
     });
-    await refreshPublicJournalMessages(interaction.client, ownerId, gameId);
+    await refreshJournalMessages(interaction.client, ownerId, gameId);
   }
 
-  @ButtonComponent({ id: new RegExp(`^${GJ_PUBLIC_CLOSE_PREFIX}:\\d+$`) })
+  @ButtonComponent({ id: new RegExp(`^${GJ_CLOSE_PREFIX}:\\d+$`) })
   async handlePublicClose(interaction: ButtonInteraction): Promise<void> {
     const [, callerId] = interaction.customId.split(":");
     if (interaction.user.id !== callerId) {

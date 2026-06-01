@@ -96,9 +96,9 @@ export interface IMemberNowPlayingEntry {
   noteUpdatedAt: Date | null;
   sortOrder: number | null;
   journalEnabled: boolean;
-  hasPublicJournalEntry: boolean;
-  publicJournalCount: number;
-  lastPublicJournalAt: Date | null;
+  hasJournalEntry: boolean;
+  journalCount: number;
+  lastJournalAt: Date | null;
 }
 
 export interface IMemberNowPlayingList {
@@ -115,7 +115,6 @@ export interface IGameJournalEntry {
   gameId: number;
   title: string | null;
   body: string;
-  isPublic: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -124,14 +123,12 @@ export interface IGameJournalPreference {
   userId: string;
   gameId: number;
   isEnabled: boolean;
-  defaultIsPublic: boolean;
 }
 
 export interface IGameJournalListEntry {
   gameId: number;
   title: string;
   totalEntries: number;
-  publicEntries: number;
 }
 
 export interface IJournalUserSummary {
@@ -265,9 +262,9 @@ export default class Member {
         NOTE_UPDATED_AT: Date | string | null;
         SORT_ORDER: number | null;
         JOURNAL_ENABLED: number | null;
-        HAS_PUBLIC_JOURNAL_ENTRY: number | null;
-        PUBLIC_JOURNAL_COUNT: number | null;
-        LAST_PUBLIC_JOURNAL_AT: Date | string | null;
+        HAS_JOURNAL_ENTRY: number | null;
+        JOURNAL_COUNT: number | null;
+        LAST_JOURNAL_AT: Date | string | null;
       }>(
         `SELECT g.GAME_ID,
                 g.TITLE,
@@ -286,20 +283,17 @@ export default class Member {
                     FROM USER_GAME_JOURNAL_ENTRIES je
                     WHERE je.USER_ID = u.USER_ID
                       AND je.GAMEDB_GAME_ID = u.GAMEDB_GAME_ID
-                      AND je.IS_PUBLIC = 1
                   ) THEN 1
                   ELSE 0
-                END AS HAS_PUBLIC_JOURNAL_ENTRY,
+                END AS HAS_JOURNAL_ENTRY,
                 (SELECT COUNT(*)
                    FROM USER_GAME_JOURNAL_ENTRIES je2
                   WHERE je2.USER_ID = u.USER_ID
-                    AND je2.GAMEDB_GAME_ID = u.GAMEDB_GAME_ID
-                    AND je2.IS_PUBLIC = 1) AS PUBLIC_JOURNAL_COUNT,
+                    AND je2.GAMEDB_GAME_ID = u.GAMEDB_GAME_ID) AS JOURNAL_COUNT,
                 (SELECT MAX(je3.CREATED_AT)
                    FROM USER_GAME_JOURNAL_ENTRIES je3
                   WHERE je3.USER_ID = u.USER_ID
-                    AND je3.GAMEDB_GAME_ID = u.GAMEDB_GAME_ID
-                    AND je3.IS_PUBLIC = 1) AS LAST_PUBLIC_JOURNAL_AT
+                    AND je3.GAMEDB_GAME_ID = u.GAMEDB_GAME_ID) AS LAST_JOURNAL_AT
            FROM USER_NOW_PLAYING u
            JOIN GAMEDB_GAMES g ON g.GAME_ID = u.GAMEDB_GAME_ID
            LEFT JOIN GAMEDB_PLATFORMS p ON p.PLATFORM_ID = u.PLATFORM_ID
@@ -333,12 +327,12 @@ export default class Member {
               : null,
           sortOrder: r.SORT_ORDER == null ? null : Number(r.SORT_ORDER),
           journalEnabled: Number(r.JOURNAL_ENABLED ?? 0) === 1,
-          hasPublicJournalEntry: Number(r.HAS_PUBLIC_JOURNAL_ENTRY ?? 0) === 1,
-          publicJournalCount: Number(r.PUBLIC_JOURNAL_COUNT ?? 0),
-          lastPublicJournalAt: r.LAST_PUBLIC_JOURNAL_AT instanceof Date
-            ? r.LAST_PUBLIC_JOURNAL_AT
-            : r.LAST_PUBLIC_JOURNAL_AT
-              ? new Date(r.LAST_PUBLIC_JOURNAL_AT as any)
+          hasJournalEntry: Number(r.HAS_JOURNAL_ENTRY ?? 0) === 1,
+          journalCount: Number(r.JOURNAL_COUNT ?? 0),
+          lastJournalAt: r.LAST_JOURNAL_AT instanceof Date
+            ? r.LAST_JOURNAL_AT
+            : r.LAST_JOURNAL_AT
+              ? new Date(r.LAST_JOURNAL_AT as any)
               : null,
         }))
         .slice(0, MAX_NOW_PLAYING);
@@ -425,9 +419,9 @@ export default class Member {
                 : null,
             sortOrder: null,
             journalEnabled: false,
-            hasPublicJournalEntry: false,
-            publicJournalCount: 0,
-            lastPublicJournalAt: null,
+            hasJournalEntry: false,
+            journalCount: 0,
+            lastJournalAt: null,
           });
         }
       }
@@ -533,7 +527,7 @@ export default class Member {
     noteUpdatedAt: Date | null;
     sortOrder: number | null;
     journalEnabled: boolean;
-    hasPublicJournalEntry: boolean;
+    hasJournalEntry: boolean;
   }[]> {
     const connection = await getOraclePool().getConnection();
     try {
@@ -590,7 +584,7 @@ export default class Member {
             : null,
         sortOrder: r.SORT_ORDER == null ? null : Number(r.SORT_ORDER),
         journalEnabled: Number(r.JOURNAL_ENABLED ?? 0) === 1,
-        hasPublicJournalEntry: false,
+        hasJournalEntry: false,
       }));
     } finally {
       await connection.close();
@@ -738,12 +732,10 @@ export default class Member {
         USER_ID: string;
         GAMEDB_GAME_ID: number;
         IS_ENABLED: number;
-        DEFAULT_IS_PUBLIC: number;
       }>(
         `SELECT USER_ID,
                 GAMEDB_GAME_ID,
-                IS_ENABLED,
-                DEFAULT_IS_PUBLIC
+                IS_ENABLED
            FROM USER_GAME_JOURNAL_PREFS
           WHERE USER_ID = :userId
             AND GAMEDB_GAME_ID = :gameId`,
@@ -756,7 +748,6 @@ export default class Member {
         userId: row.USER_ID,
         gameId: Number(row.GAMEDB_GAME_ID),
         isEnabled: Number(row.IS_ENABLED) === 1,
-        defaultIsPublic: Number(row.DEFAULT_IS_PUBLIC) === 1,
       };
     } finally {
       await connection.close();
@@ -767,7 +758,6 @@ export default class Member {
     userId: string,
     gameId: number,
     isEnabled: boolean,
-    defaultIsPublic: boolean,
   ): Promise<void> {
     const connection = await getOraclePool().getConnection();
     try {
@@ -777,16 +767,15 @@ export default class Member {
             ON (p.USER_ID = src.USER_ID AND p.GAMEDB_GAME_ID = src.GAMEDB_GAME_ID)
           WHEN MATCHED THEN
             UPDATE SET IS_ENABLED = :isEnabled,
-                       DEFAULT_IS_PUBLIC = :defaultIsPublic,
+                       DEFAULT_IS_PUBLIC = 1,
                        UPDATED_AT = SYSTIMESTAMP
           WHEN NOT MATCHED THEN
             INSERT (USER_ID, GAMEDB_GAME_ID, IS_ENABLED, DEFAULT_IS_PUBLIC)
-            VALUES (:userId, :gameId, :isEnabled, :defaultIsPublic)`,
+            VALUES (:userId, :gameId, :isEnabled, 1)`,
         {
           userId,
           gameId,
           isEnabled: isEnabled ? 1 : 0,
-          defaultIsPublic: defaultIsPublic ? 1 : 0,
         },
         { autoCommit: true },
       );
@@ -798,10 +787,9 @@ export default class Member {
   static async getGameJournalEntries(
     userId: string,
     gameId: number,
-    params?: { viewerUserId?: string | null; limit?: number; offset?: number },
+    params?: { limit?: number; offset?: number },
   ): Promise<IGameJournalEntry[]> {
     const connection = await getOraclePool().getConnection();
-    const viewerUserId = params?.viewerUserId ?? null;
     const safeLimit = Math.min(Math.max(params?.limit ?? 5, 1), 25);
     const safeOffset = Math.max(params?.offset ?? 0, 0);
     try {
@@ -811,7 +799,6 @@ export default class Member {
         GAMEDB_GAME_ID: number;
         ENTRY_TITLE: string | null;
         ENTRY_BODY: string;
-        IS_PUBLIC: number;
         CREATED_AT: Date | string;
         UPDATED_AT: Date | string;
         ENTRY_NUMBER: number;
@@ -822,7 +809,6 @@ export default class Member {
                   GAMEDB_GAME_ID,
                   ENTRY_TITLE,
                   ENTRY_BODY,
-                  IS_PUBLIC,
                   CREATED_AT,
                   UPDATED_AT,
                   ROW_NUMBER() OVER (ORDER BY CREATED_AT ASC, ENTRY_ID ASC) AS ENTRY_NUMBER
@@ -835,15 +821,13 @@ export default class Member {
                 GAMEDB_GAME_ID,
                 ENTRY_TITLE,
                 ENTRY_BODY,
-                IS_PUBLIC,
                 CREATED_AT,
                 UPDATED_AT,
                 ENTRY_NUMBER
            FROM all_entries
-          WHERE :viewerUserId = :userId OR IS_PUBLIC = 1
           ORDER BY CREATED_AT DESC, ENTRY_ID DESC
           OFFSET :offset ROWS FETCH NEXT :limit ROWS ONLY`,
-        { userId, gameId, viewerUserId, offset: safeOffset, limit: safeLimit },
+        { userId, gameId, offset: safeOffset, limit: safeLimit },
         { outFormat: oracledb.OUT_FORMAT_OBJECT },
       );
       return (res.rows ?? []).map((row) => ({
@@ -853,7 +837,6 @@ export default class Member {
         gameId: Number(row.GAMEDB_GAME_ID),
         title: row.ENTRY_TITLE ?? null,
         body: row.ENTRY_BODY,
-        isPublic: Number(row.IS_PUBLIC) === 1,
         createdAt: row.CREATED_AT instanceof Date ? row.CREATED_AT : new Date(row.CREATED_AT),
         updatedAt: row.UPDATED_AT instanceof Date ? row.UPDATED_AT : new Date(row.UPDATED_AT),
       }));
@@ -862,30 +845,15 @@ export default class Member {
     }
   }
 
-  static async countGameJournalEntries(
-    userId: string,
-    gameId: number,
-    viewerUserId?: string | null,
-  ): Promise<number> {
+  static async countGameJournalEntries(userId: string, gameId: number): Promise<number> {
     const connection = await getOraclePool().getConnection();
-    const isPublicOnly = viewerUserId === "__public__";
     try {
       const res = await connection.execute<{ CNT: number }>(
         `SELECT COUNT(*) AS CNT
            FROM USER_GAME_JOURNAL_ENTRIES
           WHERE USER_ID = :userId
-            AND GAMEDB_GAME_ID = :gameId
-            AND (
-              (:publicOnly = 1 AND IS_PUBLIC = 1)
-              OR
-              (:publicOnly = 0 AND (:viewerUserId = :userId OR IS_PUBLIC = 1))
-            )`,
-        {
-          userId,
-          gameId,
-          viewerUserId: viewerUserId ?? null,
-          publicOnly: isPublicOnly ? 1 : 0,
-        },
+            AND GAMEDB_GAME_ID = :gameId`,
+        { userId, gameId },
         { outFormat: oracledb.OUT_FORMAT_OBJECT },
       );
       return Number((res.rows ?? [])[0]?.CNT ?? 0);
@@ -899,7 +867,6 @@ export default class Member {
     gameId: number;
     title?: string | null;
     body: string;
-    isPublic?: boolean;
   }): Promise<void> {
     const connection = await getOraclePool().getConnection();
     const titleValue = params.title?.trim() ? params.title.trim() : null;
@@ -912,13 +879,12 @@ export default class Member {
         `INSERT INTO USER_GAME_JOURNAL_ENTRIES
           (USER_ID, GAMEDB_GAME_ID, ENTRY_TITLE, ENTRY_BODY, IS_PUBLIC)
          VALUES
-          (:userId, :gameId, :title, :body, :isPublic)`,
+          (:userId, :gameId, :title, :body, 1)`,
         {
           userId: params.userId,
           gameId: params.gameId,
           title: titleValue,
           body: bodyValue,
-          isPublic: params.isPublic === true ? 1 : 0,
         },
         { autoCommit: true },
       );
@@ -939,7 +905,6 @@ export default class Member {
         GAMEDB_GAME_ID: number;
         ENTRY_TITLE: string | null;
         ENTRY_BODY: string;
-        IS_PUBLIC: number;
         CREATED_AT: Date | string;
         UPDATED_AT: Date | string;
         ENTRY_NUMBER: number;
@@ -949,7 +914,6 @@ export default class Member {
                 e.GAMEDB_GAME_ID,
                 e.ENTRY_TITLE,
                 e.ENTRY_BODY,
-                e.IS_PUBLIC,
                 e.CREATED_AT,
                 e.UPDATED_AT,
                 (SELECT COUNT(*) + 1
@@ -975,7 +939,6 @@ export default class Member {
         gameId: Number(row.GAMEDB_GAME_ID),
         title: row.ENTRY_TITLE ?? null,
         body: row.ENTRY_BODY,
-        isPublic: Number(row.IS_PUBLIC) === 1,
         createdAt: row.CREATED_AT instanceof Date ? row.CREATED_AT : new Date(row.CREATED_AT),
         updatedAt: row.UPDATED_AT instanceof Date ? row.UPDATED_AT : new Date(row.UPDATED_AT),
       };
@@ -989,7 +952,6 @@ export default class Member {
     entryId: number;
     title?: string | null;
     body?: string;
-    isPublic?: boolean;
   }): Promise<boolean> {
     const connection = await getOraclePool().getConnection();
     const fields: string[] = [];
@@ -1009,10 +971,6 @@ export default class Member {
       }
       fields.push("ENTRY_BODY = :body");
       binds.body = bodyValue;
-    }
-    if (params.isPublic !== undefined) {
-      fields.push("IS_PUBLIC = :isPublic");
-      binds.isPublic = params.isPublic ? 1 : 0;
     }
     if (!fields.length) return false;
     fields.push("UPDATED_AT = SYSTIMESTAMP");
@@ -2564,12 +2522,10 @@ export default class Member {
         GAME_ID: number;
         TITLE: string;
         TOTAL_ENTRIES: number;
-        PUBLIC_ENTRIES: number;
       }>(
         `SELECT g.GAME_ID,
                 g.TITLE,
-                COUNT(e.ENTRY_ID) AS TOTAL_ENTRIES,
-                SUM(CASE WHEN e.IS_PUBLIC = 1 THEN 1 ELSE 0 END) AS PUBLIC_ENTRIES
+                COUNT(e.ENTRY_ID) AS TOTAL_ENTRIES
            FROM USER_GAME_JOURNAL_PREFS jp
            JOIN GAMEDB_GAMES g ON g.GAME_ID = jp.GAMEDB_GAME_ID
            LEFT JOIN USER_GAME_JOURNAL_ENTRIES e
@@ -2586,7 +2542,6 @@ export default class Member {
         gameId: Number(row.GAME_ID),
         title: row.TITLE,
         totalEntries: Number(row.TOTAL_ENTRIES ?? 0),
-        publicEntries: Number(row.PUBLIC_ENTRIES ?? 0),
       }));
     } finally {
       await connection.close();
