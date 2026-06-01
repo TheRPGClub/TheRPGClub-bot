@@ -3684,9 +3684,9 @@ export class NowPlayingCommand {
     await Member.upsertGameJournalPreference(ownerId, gameId, true);
     const page = Number(pageRaw);
     const row = await this.buildManageJournalButtonRow(ownerId, gameId, page);
-    await journalOwnerMenu.show(interaction, ownerId, [row]);
-    await refreshJournalMessages(interaction.client, ownerId, gameId);
     if (!hasExistingTracked && interaction.guildId) {
+      // First entry: post the journal message first so it appears before the manage buttons.
+      // Skip journalOwnerMenu here to avoid its deletor pointing at the journal post.
       await this.deleteRecentJournalMessagesInChannel(interaction, ownerId, gameId);
       const payload = await this.buildJournalComponents(
         ownerId,
@@ -3696,15 +3696,20 @@ export class NowPlayingCommand {
         interaction.guildId,
         true,
       );
-      const posted = await interaction.followUp({
+      await safeReply(interaction, {
         components: payload.components as any[],
         files: payload.files,
         flags: buildComponentsV2Flags(false),
         allowedMentions: payload.allowedMentions,
+      });
+      await this.trackJournalReply(interaction, ownerId, gameId);
+      await interaction.followUp({
+        components: [row],
+        flags: buildComponentsV2Flags(true),
       }).catch(() => null);
-      if (posted) {
-        await trackNowPlayingJournalContext(posted as Message<boolean>, ownerId, gameId);
-      }
+    } else {
+      await journalOwnerMenu.show(interaction, ownerId, [row]);
+      await refreshJournalMessages(interaction.client, ownerId, gameId);
     }
   }
 
