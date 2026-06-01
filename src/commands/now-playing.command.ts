@@ -132,6 +132,8 @@ const NOW_PLAYING_EDIT_MENU_SORT_PREFIX = "nowplaying-edit-menu-sort";
 const NOW_PLAYING_EDIT_MENU_PLATFORM_PREFIX = "nowplaying-edit-menu-platform";
 const NOW_PLAYING_EDIT_MENU_COMPLETE_PREFIX = "nowplaying-edit-menu-complete";
 const NOW_PLAYING_EDIT_MENU_REMOVE_PREFIX = "nowplaying-edit-menu-remove";
+const NOW_PLAYING_EDIT_MENU_START_JOURNAL_PREFIX = "nowplaying-edit-menu-start-journal";
+const NOW_PLAYING_EDIT_MENU_START_JOURNAL_SELECT_PREFIX = "nowplaying-edit-menu-start-journal-select";
 const NOW_PLAYING_REMOVE_SELECT_PREFIX = "nowplaying-remove-select";
 const NOW_PLAYING_JOURNAL_OPEN_PREFIX = "nowplaying-journal-open";
 const NOW_PLAYING_JOURNAL_VIEW_SELECT_PREFIX = "nowplaying-journal-view-select";
@@ -3734,7 +3736,11 @@ export class NowPlayingCommand {
     }
 
     setNowPlayingListContext(ownerId, interaction.message);
-    await nowPlayingOwnerMenu.show(interaction, ownerId, [this.buildNowPlayingManageRow(ownerId)]);
+    await nowPlayingOwnerMenu.show(
+      interaction,
+      ownerId,
+      [await this.buildNowPlayingManageRow(ownerId)],
+    );
   }
 
   @ButtonComponent({ id: /^nowplaying-help:[a-z-]+:\d+$/ })
@@ -3809,6 +3815,93 @@ export class NowPlayingCommand {
       return;
     }
     await this.promptRemoveNowPlaying(interaction, "update");
+  }
+
+  @ButtonComponent({ id: /^nowplaying-edit-menu-start-journal:\d+$/ })
+  async handleNowPlayingEditMenuStartJournal(interaction: ButtonInteraction): Promise<void> {
+    const [, ownerId] = interaction.customId.split(":");
+    if (interaction.user.id !== ownerId) {
+      await interaction.reply({
+        content: "This edit menu isn't for you.",
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
+    const entries = await Member.getNowPlaying(ownerId).then(getDisplayNowPlayingEntries);
+    const gamesWithoutJournal = entries.filter((e) => !e.journalEnabled);
+    if (!gamesWithoutJournal.length) {
+      await safeUpdate(interaction, {
+        components: [await this.buildNowPlayingManageRow(ownerId)],
+        flags: buildComponentsV2Flags(true),
+      });
+      return;
+    }
+    const options = gamesWithoutJournal.map((e) => ({
+      label: e.title.slice(0, 100),
+      value: String(e.gameId),
+    }));
+    const select = new StringSelectMenuBuilder()
+      .setCustomId(`${NOW_PLAYING_EDIT_MENU_START_JOURNAL_SELECT_PREFIX}:${ownerId}`)
+      .setPlaceholder("Select a game to start a journal")
+      .addOptions(options);
+    const selectRow = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select);
+    const container = new ContainerBuilder().addTextDisplayComponents(
+      new TextDisplayBuilder().setContent(
+        "## Start a Game Journal\nSelect a game to write your first entry.",
+      ),
+    );
+    await safeUpdate(interaction, {
+      components: [container, selectRow],
+      flags: buildComponentsV2Flags(true),
+    });
+  }
+
+  @SelectMenuComponent({ id: /^nowplaying-edit-menu-start-journal-select:\d+$/ })
+  async handleNowPlayingEditMenuStartJournalSelect(
+    interaction: StringSelectMenuInteraction,
+  ): Promise<void> {
+    const [, ownerId] = interaction.customId.split(":");
+    if (interaction.user.id !== ownerId) {
+      await safeReply(interaction, {
+        content: "This edit menu isn't for you.",
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
+    const gameId = Number(interaction.values[0]);
+    if (!gameId) return;
+    const entries = await Member.getNowPlaying(ownerId).then(getDisplayNowPlayingEntries);
+    const selected = entries.find((e) => e.gameId === gameId);
+    if (!selected || selected.journalEnabled) {
+      await safeUpdate(interaction, {
+        components: [await this.buildNowPlayingManageRow(ownerId)],
+        flags: buildComponentsV2Flags(true),
+      });
+      return;
+    }
+    const modal = new ComponentsModalBuilder()
+      .setCustomId(`${NOW_PLAYING_JOURNAL_MODAL_ID}:${ownerId}:${gameId}:1`)
+      .setTitle("Add Journal Entry");
+    modal.addActionRowComponents(
+      new ComponentsActionRowBuilder<ComponentsTextInputBuilder>().addComponents(
+        new ComponentsTextInputBuilder()
+          .setCustomId(NOW_PLAYING_JOURNAL_TITLE_INPUT_ID)
+          .setLabel("Title (optional)")
+          .setStyle(ApiTextInputStyle.Short)
+          .setRequired(false)
+          .setMaxLength(120),
+      ),
+      new ComponentsActionRowBuilder<ComponentsTextInputBuilder>().addComponents(
+        new ComponentsTextInputBuilder()
+          .setCustomId(NOW_PLAYING_JOURNAL_BODY_INPUT_ID)
+          .setLabel("Entry")
+          .setStyle(ApiTextInputStyle.Paragraph)
+          .setRequired(true)
+          .setMaxLength(2000),
+      ),
+    );
+    await interaction.showModal(modal);
+    await nowPlayingOwnerMenu.dismiss(ownerId);
   }
 
   @ButtonComponent({ id: /^nowplaying-list-add:\d+$/ })
@@ -4482,8 +4575,21 @@ export class NowPlayingCommand {
     );
   }
 
-  private buildNowPlayingManageRow(ownerId: string): ActionRowBuilder<ButtonBuilder> {
-    return new ActionRowBuilder<ButtonBuilder>().addComponents(
+  private async buildNowPlayingManageRow(
+    ownerId: string,
+  ): Promise<ActionRowBuilder<ButtonBuilder>> {
+    const entries = await Member.getNowPlaying(ownerId).then(getDisplayNowPlayingEntries);
+    const hasGamesWithoutJournal = entries.some((e) => !e.journalEnabled);
+    const buttons: ButtonBuilder[] = [];
+    if (hasGamesWithoutJournal) {
+      buttons.push(
+        new ButtonBuilder()
+          .setCustomId(`${NOW_PLAYING_EDIT_MENU_START_JOURNAL_PREFIX}:${ownerId}`)
+          .setLabel("Start a Game Journal")
+          .setStyle(ButtonStyle.Success),
+      );
+    }
+    buttons.push(
       new ButtonBuilder()
         .setCustomId(`${NOW_PLAYING_EDIT_MENU_SORT_PREFIX}:${ownerId}`)
         .setLabel("Sort")
@@ -4501,6 +4607,7 @@ export class NowPlayingCommand {
         .setLabel("Remove Game")
         .setStyle(ButtonStyle.Danger),
     );
+    return new ActionRowBuilder<ButtonBuilder>().addComponents(...buttons);
   }
 
   private buildNowPlayingEditMenuComponents(
@@ -4555,7 +4662,7 @@ export class NowPlayingCommand {
     interaction: ButtonInteraction,
     ownerId: string,
   ): Promise<void> {
-    const row = this.buildNowPlayingManageRow(ownerId);
+    const row = await this.buildNowPlayingManageRow(ownerId);
     const flags = buildComponentsV2Flags(true);
     const anyInteraction = interaction as any;
     const isAcked = Boolean(
