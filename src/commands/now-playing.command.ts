@@ -210,6 +210,7 @@ type NowPlayingJournalContext = {
 const nowPlayingJournalContexts = new Map<string, NowPlayingJournalContext>();
 const NOW_PLAYING_JOURNAL_CONTEXT_TTL_MS = 2 * 60 * 60 * 1000;
 const journalOwnerMenu = new EphemeralOwnerMenu();
+const nowPlayingOwnerMenu = new EphemeralOwnerMenu();
 
 export async function restoreJournalMessageContextsFromDb(): Promise<void> {
   try {
@@ -2900,7 +2901,7 @@ export class NowPlayingCommand {
     }
 
     await this.refreshNowPlayingListFromContext(interaction, ownerId).catch(() => {});
-    await this.returnToNowPlayingEditMenu(interaction, ownerId, "Sort order saved.");
+    await this.returnToNowPlayingEditMenu(interaction, ownerId);
   }
 
   @ButtonComponent({ id: /^nowplaying-sort-reset:\d+$/ })
@@ -3733,11 +3734,7 @@ export class NowPlayingCommand {
     }
 
     setNowPlayingListContext(ownerId, interaction.message);
-    const components = await this.buildNowPlayingEditInitialComponents(ownerId);
-    await safeReply(interaction, {
-      components,
-      flags: buildComponentsV2Flags(true),
-    });
+    await nowPlayingOwnerMenu.show(interaction, ownerId, [this.buildNowPlayingManageRow(ownerId)]);
   }
 
   @ButtonComponent({ id: /^nowplaying-help:[a-z-]+:\d+$/ })
@@ -4485,6 +4482,27 @@ export class NowPlayingCommand {
     );
   }
 
+  private buildNowPlayingManageRow(ownerId: string): ActionRowBuilder<ButtonBuilder> {
+    return new ActionRowBuilder<ButtonBuilder>().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`${NOW_PLAYING_EDIT_MENU_SORT_PREFIX}:${ownerId}`)
+        .setLabel("Sort")
+        .setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder()
+        .setCustomId(`${NOW_PLAYING_EDIT_MENU_PLATFORM_PREFIX}:${ownerId}`)
+        .setLabel("Edit Platform")
+        .setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder()
+        .setCustomId(`${NOW_PLAYING_EDIT_MENU_COMPLETE_PREFIX}:${ownerId}`)
+        .setLabel("Add Completion")
+        .setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder()
+        .setCustomId(`${NOW_PLAYING_EDIT_MENU_REMOVE_PREFIX}:${ownerId}`)
+        .setLabel("Remove Game")
+        .setStyle(ButtonStyle.Danger),
+    );
+  }
+
   private buildNowPlayingEditMenuComponents(
     ownerId: string,
     entries: IMemberNowPlayingEntry[],
@@ -4536,17 +4554,8 @@ export class NowPlayingCommand {
   private async returnToNowPlayingEditMenu(
     interaction: ButtonInteraction,
     ownerId: string,
-    statusMessage: string | null = null,
   ): Promise<void> {
-    const menuComponents = await this.buildNowPlayingEditInitialComponents(
-      ownerId,
-      statusMessage,
-    );
-    const isEphemeral = interaction.message.flags?.has(MessageFlags.Ephemeral) ?? true;
-    await safeReply(interaction, {
-      components: menuComponents,
-      flags: buildComponentsV2Flags(isEphemeral),
-    });
+    await nowPlayingOwnerMenu.show(interaction, ownerId, [this.buildNowPlayingManageRow(ownerId)]);
   }
 
   private async buildNowPlayingEditInitialComponents(
