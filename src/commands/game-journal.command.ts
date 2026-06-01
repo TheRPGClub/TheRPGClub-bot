@@ -6,15 +6,26 @@ import {
   ButtonStyle,
   CommandInteraction,
   EmbedBuilder,
+  Message,
   MessageFlags,
   StringSelectMenuBuilder,
   StringSelectMenuInteraction,
   User,
 } from "discord.js";
-import { ContainerBuilder, TextDisplayBuilder } from "@discordjs/builders";
+import {
+  ContainerBuilder,
+  TextDisplayBuilder,
+  ModalBuilder as ComponentsModalBuilder,
+  ActionRowBuilder as ComponentsActionRowBuilder,
+  TextInputBuilder as ComponentsTextInputBuilder,
+  LabelBuilder,
+  RadioGroupBuilder,
+} from "@discordjs/builders";
+import { TextInputStyle as ApiTextInputStyle } from "discord-api-types/v10";
 import {
   ButtonComponent,
   Discord,
+  ModalComponent,
   SelectMenuComponent,
   Slash,
   SlashOption,
@@ -33,6 +44,17 @@ import { renderUsernameWithEmoji } from "../services/UserEmojiService.js";
 import { buildJournalView } from "../functions/journalView.js";
 import { COMPONENTS_V2_FLAG } from "../config/flags.js";
 import { buildUserHeaderContainer } from "../functions/uiComponents.js";
+import {
+  GJ_PUBLIC_CLOSE_PREFIX,
+  JOURNAL_ADD_MODAL_ID,
+  JOURNAL_TITLE_INPUT_ID,
+  JOURNAL_BODY_INPUT_ID,
+  JOURNAL_PRIVACY_INPUT_ID,
+} from "../config/journalConstants.js";
+import {
+  trackNowPlayingJournalContext,
+  refreshPublicJournalMessages,
+} from "./now-playing.command.js";
 
 const LIST_PAGE_SIZE = 15;
 const ALL_PAGE_SIZE = 20;
@@ -42,7 +64,8 @@ const GJ_LIST_PAGE_PREFIX = "game-journal-list-page";
 const GJ_VIEW_PAGE_PREFIX = "game-journal-view-page";
 const GJ_ALL_SELECT_PREFIX = "game-journal-all-select";
 const GJ_ALL_PAGE_PREFIX = "game-journal-all-page";
-export const GJ_PUBLIC_CLOSE_PREFIX = "journal-public-close";
+const GJ_HEADER_ADD_PREFIX = "game-journal-header-add";
+export { GJ_PUBLIC_CLOSE_PREFIX };
 
 // customId: GJ_LIST_SELECT_PREFIX:{callerId}:{targetUserId}:{page}  value=gameId
 // customId: GJ_LIST_PAGE_PREFIX:{callerId}:{targetUserId}:{page}
@@ -50,6 +73,8 @@ export const GJ_PUBLIC_CLOSE_PREFIX = "journal-public-close";
 // customId: GJ_ALL_SELECT_PREFIX:{callerId}:{page}                  value=userId
 // customId: GJ_ALL_PAGE_PREFIX:{callerId}:{page}
 // customId: GJ_PUBLIC_CLOSE_PREFIX:{callerId}
+// customId: GJ_HEADER_ADD_PREFIX:{ownerId}:{gameId}
+// modal:    JOURNAL_ADD_MODAL_ID:{ownerId}:{gameId}:{page}
 
 function gameLabel(n: number): string {
   return n === 1 ? "game" : "games";
@@ -146,6 +171,7 @@ function buildJournalViewPayload(
   gameId: number,
   page: number,
   guildId?: string | null,
+  isOwner?: boolean,
 ) {
   return buildJournalView({
     ownerId: targetUserId,
@@ -157,13 +183,8 @@ function buildJournalViewPayload(
       `${GJ_VIEW_PAGE_PREFIX}:${callerId}:${targetUserId}:${gameId}:${p}`,
     nextPageCustomId: (p) =>
       `${GJ_VIEW_PAGE_PREFIX}:${callerId}:${targetUserId}:${gameId}:${p}`,
-    navRowTrailingButtons: guildId
-      ? [
-          new ButtonBuilder()
-            .setCustomId(`${GJ_PUBLIC_CLOSE_PREFIX}:${callerId}`)
-            .setLabel("Close")
-            .setStyle(ButtonStyle.Danger),
-        ]
+    headerButtonCustomId: isOwner
+      ? `${GJ_HEADER_ADD_PREFIX}:${targetUserId}:${gameId}`
       : undefined,
     includeNowPlayingMeta: true,
     includeCompletions: true,
@@ -329,7 +350,10 @@ export class GameJournalCommand {
 
     await safeDeferUpdate(interaction);
 
-    const payload = await buildJournalViewPayload(callerId, targetUserId, gameId, 1, interaction.guildId);
+    const isOwner = callerId === targetUserId;
+    const payload = await buildJournalViewPayload(
+      callerId, targetUserId, gameId, 1, interaction.guildId, isOwner,
+    );
     await safeUpdate(interaction, {
       embeds: [],
       components: payload.components,
@@ -337,6 +361,11 @@ export class GameJournalCommand {
       flags: payload.flags,
       allowedMentions: payload.allowedMentions,
     });
+    if (interaction.guildId && interaction.message) {
+      await trackNowPlayingJournalContext(
+        interaction.message as Message<boolean>, targetUserId, gameId,
+      );
+    }
   }
 
   @ButtonComponent({ id: new RegExp(`^${GJ_LIST_PAGE_PREFIX}:\\d+:\\d+:\\d+$`) })
@@ -455,13 +484,69 @@ export class GameJournalCommand {
     if (Number.isNaN(gameId) || Number.isNaN(page)) return;
 
     await safeDeferUpdate(interaction);
-    const payload = await buildJournalViewPayload(callerId, targetUserId, gameId, page, interaction.guildId);
+    const isOwner = callerId === targetUserId;
+    const payload = await buildJournalViewPayload(
+      callerId, targetUserId, gameId, page, interaction.guildId, isOwner,
+    );
     await safeUpdate(interaction, {
       components: payload.components,
       files: payload.files,
       flags: payload.flags,
       allowedMentions: payload.allowedMentions,
     });
+    if (interaction.guildId && interaction.message) {
+      await trackNowPlayingJournalContext(
+        interaction.message as Message<boolean>, targetUserId, gameId,
+      );
+    }
+  }
+
+  @ButtonComponent({ id: /^game-journal-header-add:\d+:\d+$/ })
+  async handleHeaderAdd(interaction: ButtonInteraction): Promise<void> {
+    const [, ownerId, gameIdRaw] = interaction.customId.split(":");
+    if (interaction.user.id !== ownerId) {
+      await safeReply(interaction, {
+        content: "Only the journal owner can add entries.",
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
+    const modal = new ComponentsModalBuilder()
+      .setCustomId(`${JOURNAL_ADD_MODAL_ID}:${ownerId}:${gameIdRaw}:1`)
+      .setTitle("Add Journal Entry");
+    modal.addActionRowComponents(
+      new ComponentsActionRowBuilder<ComponentsTextInputBuilder>().addComponents(
+        new ComponentsTextInputBuilder()
+          .setCustomId(JOURNAL_TITLE_INPUT_ID)
+          .setLabel("Title (optional)")
+          .setStyle(ApiTextInputStyle.Short)
+          .setRequired(false)
+          .setMaxLength(120),
+      ),
+      new ComponentsActionRowBuilder<ComponentsTextInputBuilder>().addComponents(
+        new ComponentsTextInputBuilder()
+          .setCustomId(JOURNAL_BODY_INPUT_ID)
+          .setLabel("Entry")
+          .setStyle(ApiTextInputStyle.Paragraph)
+          .setRequired(true)
+          .setMaxLength(2000),
+      ),
+    );
+    modal.addLabelComponents(
+      new LabelBuilder()
+        .setLabel("Privacy")
+        .setDescription("Choose who can view this entry")
+        .setRadioGroupComponent(
+          new RadioGroupBuilder()
+            .setCustomId(JOURNAL_PRIVACY_INPUT_ID)
+            .setRequired(true)
+            .setOptions(
+              { label: "Private", value: "private", description: "Only you can view it" },
+              { label: "Public", value: "public", description: "Visible to other members" },
+            ),
+        ),
+    );
+    await interaction.showModal(modal);
   }
 
   @ButtonComponent({ id: new RegExp(`^${GJ_PUBLIC_CLOSE_PREFIX}:\\d+$`) })
