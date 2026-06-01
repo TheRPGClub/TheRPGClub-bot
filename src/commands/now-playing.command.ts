@@ -547,6 +547,7 @@ export async function refreshPublicJournalMessages(
         `${NOW_PLAYING_JOURNAL_PAGE_PREFIX}:${ownerId}:${gameId}:prev:${p}`,
       nextPageCustomId: (p) =>
         `${NOW_PLAYING_JOURNAL_PAGE_PREFIX}:${ownerId}:${gameId}:next:${p}`,
+      headerButtonCustomId: `${NOW_PLAYING_JOURNAL_HEADER_PREFIX}:${ownerId}:${gameId}:1`,
       includeNowPlayingMeta: true,
       includeCompletions: true,
     });
