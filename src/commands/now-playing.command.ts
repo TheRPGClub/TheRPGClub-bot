@@ -4555,7 +4555,18 @@ export class NowPlayingCommand {
     interaction: ButtonInteraction,
     ownerId: string,
   ): Promise<void> {
-    await nowPlayingOwnerMenu.show(interaction, ownerId, [this.buildNowPlayingManageRow(ownerId)]);
+    const row = this.buildNowPlayingManageRow(ownerId);
+    const flags = buildComponentsV2Flags(true);
+    const anyInteraction = interaction as any;
+    const isAcked = Boolean(
+      anyInteraction.__rpgDeferred ?? anyInteraction.__rpgAcked ??
+      anyInteraction.deferred ?? anyInteraction.replied,
+    );
+    if (isAcked) {
+      await interaction.editReply({ components: [row], flags }).catch(() => {});
+    } else {
+      await interaction.update({ components: [row], flags }).catch(() => {});
+    }
   }
 
   private async buildNowPlayingEditInitialComponents(
