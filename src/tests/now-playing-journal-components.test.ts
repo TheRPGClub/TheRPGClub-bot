@@ -46,9 +46,9 @@ test("now-playing list components serialize with mixed journal-enabled entries",
     noteUpdatedAt: null,
     sortOrder: null,
     journalEnabled: true,
-    hasPublicJournalEntry: true,
-    publicJournalCount: 3,
-    lastPublicJournalAt: null,
+    hasJournalEntry: true,
+    journalCount: 3,
+    lastJournalAt: null,
   }, {
     gameId: 102,
     title: "Notes Only Game",
@@ -61,9 +61,9 @@ test("now-playing list components serialize with mixed journal-enabled entries",
     noteUpdatedAt: null,
     sortOrder: null,
     journalEnabled: false,
-    hasPublicJournalEntry: false,
-    publicJournalCount: 0,
-    lastPublicJournalAt: null,
+    hasJournalEntry: false,
+    journalCount: 0,
+    lastJournalAt: null,
   }];
 
   const components = command.buildNowPlayingEntryComponents(
@@ -99,9 +99,9 @@ test("owner list shows journal buttons for multiple journal-enabled entries", ()
     noteUpdatedAt: null,
     sortOrder: null,
     journalEnabled: true,
-    hasPublicJournalEntry: false,
-    publicJournalCount: 0,
-    lastPublicJournalAt: null,
+    hasJournalEntry: false,
+    journalCount: 0,
+    lastJournalAt: null,
   }, {
     gameId: 202,
     title: "Journal Entry Two",
@@ -114,9 +114,9 @@ test("owner list shows journal buttons for multiple journal-enabled entries", ()
     noteUpdatedAt: null,
     sortOrder: null,
     journalEnabled: true,
-    hasPublicJournalEntry: true,
-    publicJournalCount: 2,
-    lastPublicJournalAt: null,
+    hasJournalEntry: true,
+    journalCount: 2,
+    lastJournalAt: null,
   }];
 
   const components = command.buildNowPlayingEntryComponents(
@@ -148,9 +148,9 @@ test("owner list with 10 entries stays serializable and keeps journal buttons", 
     noteUpdatedAt: null,
     sortOrder: null,
     journalEnabled: true,
-    hasPublicJournalEntry: false,
-    publicJournalCount: 0,
-    lastPublicJournalAt: null,
+    hasJournalEntry: false,
+    journalCount: 0,
+    lastJournalAt: null,
   }));
 
   const components = command.buildNowPlayingEntryComponents(
@@ -191,7 +191,6 @@ test("journal single-page view omits pager buttons and page count", async () => 
       userId: "123",
       gameId: 1,
       isEnabled: true,
-      defaultIsPublic: false,
     })) as any;
     Member.countGameJournalEntries = (async () => 1) as any;
     Member.getGameJournalEntries = (async () => ([{
@@ -200,7 +199,6 @@ test("journal single-page view omits pager buttons and page count", async () => 
       gameId: 1,
       title: "Entry",
       body: "Body",
-      isPublic: false,
       createdAt: new Date(),
       updatedAt: new Date(),
     }])) as any;
@@ -245,7 +243,6 @@ test("journal public view redacts private entry content and count", async () => 
       userId: "123",
       gameId: 1,
       isEnabled: true,
-      defaultIsPublic: false,
     })) as any;
     Member.countGameJournalEntries = (async (_userId: string, _gameId: number, viewerUserId?: string | null) => {
       countViewerArg = viewerUserId;
@@ -261,7 +258,6 @@ test("journal public view redacts private entry content and count", async () => 
       gameId: 1,
       title: "Testing a Private Entry",
       body: "This text should not render.",
-      isPublic: false,
       createdAt: new Date("2026-05-11T00:00:00.000Z"),
       updatedAt: new Date("2026-05-11T00:00:00.000Z"),
     }, {
@@ -270,7 +266,6 @@ test("journal public view redacts private entry content and count", async () => 
       gameId: 1,
       title: "Finally",
       body: "5 hours played.",
-      isPublic: true,
       createdAt: new Date("2026-05-11T00:00:00.000Z"),
       updatedAt: new Date("2026-05-11T00:00:00.000Z"),
     }];
@@ -308,7 +303,6 @@ test("journal edit modal submit shows manage journal buttons", async () => {
       gameId: 1,
       title: "Private Edit",
       body: "Top secret body.",
-      isPublic: false,
       createdAt: new Date("2026-05-11T00:00:00.000Z"),
       updatedAt: new Date("2026-05-11T00:00:00.000Z"),
     })) as any;
@@ -319,7 +313,6 @@ test("journal edit modal submit shows manage journal buttons", async () => {
       gameId: 1,
       title: "Private Edit",
       body: "Top secret body.",
-      isPublic: false,
       createdAt: new Date("2026-05-11T00:00:00.000Z"),
       updatedAt: new Date("2026-05-11T00:00:00.000Z"),
     }])) as any;
@@ -337,9 +330,7 @@ test("journal edit modal submit shows manage journal buttons", async () => {
           return "";
         },
       },
-      components: [{
-        components: [{ customId: "nowplaying-journal-privacy", value: "private" }],
-      }],
+      components: [],
       reply: async (payload: any) => {
         replyPayload = payload;
       },
@@ -374,7 +365,6 @@ test("journal edit select in guild deletes prompt message after opening modal", 
       gameId: 1,
       title: "Private Edit",
       body: "Top secret body.",
-      isPublic: false,
       createdAt: new Date("2026-05-11T00:00:00.000Z"),
       updatedAt: new Date("2026-05-11T00:00:00.000Z"),
     })) as any;
@@ -430,7 +420,6 @@ test("journal delete confirm removes entry on yes and skips removal on no", asyn
       userId: "123",
       gameId: 1,
       isEnabled: true,
-      defaultIsPublic: false,
     })) as any;
     Member.countGameJournalEntries = (async () => 1) as any;
     Member.getGameJournalEntries = (async () => ([{
@@ -439,7 +428,6 @@ test("journal delete confirm removes entry on yes and skips removal on no", asyn
       gameId: 1,
       title: "Entry",
       body: "Body",
-      isPublic: true,
       createdAt: new Date("2026-05-11T00:00:00.000Z"),
       updatedAt: new Date("2026-05-11T00:00:00.000Z"),
     }])) as any;

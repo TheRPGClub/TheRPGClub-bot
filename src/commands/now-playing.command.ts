@@ -35,8 +35,6 @@ import {
   ModalBuilder as ComponentsModalBuilder,
   ActionRowBuilder as ComponentsActionRowBuilder,
   TextInputBuilder as ComponentsTextInputBuilder,
-  LabelBuilder,
-  RadioGroupBuilder,
   MediaGalleryBuilder,
   MediaGalleryItemBuilder,
   ButtonBuilder as V2ButtonBuilder,
@@ -149,7 +147,6 @@ const NOW_PLAYING_JOURNAL_MODAL_ID = "nowplaying-journal-modal";
 const NOW_PLAYING_JOURNAL_EDIT_MODAL_ID = "nowplaying-journal-edit-modal";
 const NOW_PLAYING_JOURNAL_TITLE_INPUT_ID = "nowplaying-journal-title";
 const NOW_PLAYING_JOURNAL_BODY_INPUT_ID = "nowplaying-journal-body";
-const NOW_PLAYING_JOURNAL_PRIVACY_INPUT_ID = "nowplaying-journal-privacy";
 type NowPlayingAddSession = {
   userId: string;
   query: string;
@@ -232,32 +229,7 @@ type NowPlayingMessageComponents = Array<
   ContainerBuilder | MediaGalleryBuilder | ActionRowBuilder<ButtonBuilder> | ActionRowBuilder<StringSelectMenuBuilder>
 >;
 
-function extractJournalPrivacyFromInteraction(interaction: ModalSubmitInteraction): boolean {
-  const components = (interaction.components ?? []) as Array<{
-    components?: Array<{ customId?: string; value?: unknown; values?: unknown }>;
-    component?: { customId?: string; value?: unknown; values?: unknown };
-  }>;
-  const fields: Array<{ customId?: string; value?: unknown; values?: unknown }> = [];
-  for (const topLevel of components) {
-    if (Array.isArray(topLevel.components)) {
-      fields.push(...topLevel.components);
-    } else if (topLevel.component) {
-      fields.push(topLevel.component);
-    }
-  }
-  for (const field of fields) {
-    if (field.customId !== NOW_PLAYING_JOURNAL_PRIVACY_INPUT_ID) {
-      continue;
-    }
-    if (typeof field.value === "string") {
-      return field.value.toLowerCase() === "public";
-    }
-    if (Array.isArray(field.values) && typeof field.values[0] === "string") {
-      return field.values[0].toLowerCase() === "public";
-    }
-  }
-  return false;
-}
+
 type NowPlayingListComponents = ContainerBuilder[];
 type NowPlayingPayloadComponents = Array<ContainerBuilder | ActionRowBuilder<StringSelectMenuBuilder>>;
 
@@ -506,7 +478,7 @@ export async function trackNowPlayingJournalContext(
   ).catch((err) => console.error("[Journal] Failed to persist message context:", err));
 }
 
-export async function refreshPublicJournalMessages(
+export async function refreshJournalMessages(
   client: Client,
   ownerId: string,
   gameId: number,
@@ -764,7 +736,6 @@ export class NowPlayingCommand {
           userId: interaction.user.id,
           gameId: game.id,
           body: trimmedNote,
-          isPublic: true,
         });
       }
     } catch (err: any) {
@@ -2149,7 +2120,6 @@ export class NowPlayingCommand {
           userId: session.userId,
           gameId: session.gameId,
           body: trimmedSessionNote,
-          isPublic: true,
         });
       }
       nowPlayingAddPlatformSessions.delete(platformSessionId);
@@ -3308,11 +3278,7 @@ export class NowPlayingCommand {
     gameId: number,
     page: number,
   ): Promise<ActionRowBuilder<ButtonBuilder>> {
-    const entries = await Member.getGameJournalEntries(ownerId, gameId, {
-      viewerUserId: ownerId,
-      limit: 1,
-      offset: 0,
-    });
+    const entries = await Member.getGameJournalEntries(ownerId, gameId, { limit: 1, offset: 0 });
     const hasEntries = entries.length > 0;
     return new ActionRowBuilder<ButtonBuilder>().addComponents(
       new ButtonBuilder()
@@ -3358,7 +3324,7 @@ export class NowPlayingCommand {
       });
       return;
     }
-    if (interaction.guildId && !selected.hasPublicJournalEntry) {
+    if (interaction.guildId && !selected.hasJournalEntry) {
       await safeReply(interaction, {
         content: "This game's journal has no public entries to show in channel.",
         flags: buildComponentsV2Flags(true),
@@ -3394,7 +3360,7 @@ export class NowPlayingCommand {
     if (!gameId) return;
     const nowPlayingEntries = getDisplayNowPlayingEntries(await Member.getNowPlaying(ownerId));
     const selected = nowPlayingEntries.find((e) => e.gameId === gameId);
-    if (!selected?.journalEnabled || !selected.hasPublicJournalEntry) {
+    if (!selected?.journalEnabled || !selected.hasJournalEntry) {
       await safeReply(interaction, {
         content: "This game has no public journal entries.",
         flags: buildComponentsV2Flags(true),
@@ -3434,7 +3400,7 @@ export class NowPlayingCommand {
       });
       return;
     }
-    if (interaction.guildId && !selected.hasPublicJournalEntry) {
+    if (interaction.guildId && !selected.hasJournalEntry) {
       await safeReply(interaction, {
         content: "This game's journal has no public entries to show in channel.",
         flags: buildComponentsV2Flags(true),
@@ -3489,20 +3455,6 @@ export class NowPlayingCommand {
           .setMaxLength(2000),
       ),
     );
-    modal.addLabelComponents(
-      new LabelBuilder()
-        .setLabel("Privacy")
-        .setDescription("Choose who can view this entry")
-        .setRadioGroupComponent(
-          new RadioGroupBuilder()
-            .setCustomId(NOW_PLAYING_JOURNAL_PRIVACY_INPUT_ID)
-            .setRequired(true)
-            .setOptions(
-              { label: "Private", value: "private", description: "Only you can view it" },
-              { label: "Public", value: "public", description: "Visible to other members" },
-            ),
-        ),
-    );
     await interaction.showModal(modal);
     await journalOwnerMenu.dismiss(ownerId);
   }
@@ -3517,11 +3469,7 @@ export class NowPlayingCommand {
     const gameId = Number(gameIdRaw);
     const page = Number(pageRaw);
     const offset = (Math.max(1, page) - 1) * 5;
-    const entries = await Member.getGameJournalEntries(ownerId, gameId, {
-      viewerUserId: ownerId,
-      limit: 5,
-      offset,
-    });
+    const entries = await Member.getGameJournalEntries(ownerId, gameId, { limit: 5, offset });
     if (!entries.length) {
       await safeReply(interaction, { content: "No journal entries available to edit." });
       return;
@@ -3529,7 +3477,7 @@ export class NowPlayingCommand {
     const options = entries.map((entry) => ({
       label: (entry.title ?? `Entry #${entry.entryNumber}`).slice(0, 100),
       value: String(entry.entryId),
-      description: `${formatTableDate(entry.createdAt)} | ${entry.isPublic ? "Public" : "Private"}`,
+      description: formatTableDate(entry.createdAt),
     }));
     const select = new StringSelectMenuBuilder()
       .setCustomId(`${NOW_PLAYING_JOURNAL_EDIT_SELECT_PREFIX}:${ownerId}:${gameId}:${page}`)
@@ -3588,30 +3536,6 @@ export class NowPlayingCommand {
           .setValue(entry.body.slice(0, 2000)),
       ),
     );
-    modal.addLabelComponents(
-      new LabelBuilder()
-        .setLabel("Privacy")
-        .setDescription("Choose who can view this entry")
-        .setRadioGroupComponent(
-          new RadioGroupBuilder()
-            .setCustomId(NOW_PLAYING_JOURNAL_PRIVACY_INPUT_ID)
-            .setRequired(true)
-            .setOptions(
-              {
-                label: "Private",
-                value: "private",
-                description: "Only you can view it",
-                default: !entry.isPublic,
-              },
-              {
-                label: "Public",
-                value: "public",
-                description: "Visible to other members",
-                default: entry.isPublic,
-              },
-            ),
-        ),
-    );
     await interaction.showModal(modal);
     const isEphemeral = interaction.message.flags?.has(MessageFlags.Ephemeral) ?? false;
     if (isEphemeral) {
@@ -3631,11 +3555,7 @@ export class NowPlayingCommand {
     const gameId = Number(gameIdRaw);
     const page = Number(pageRaw);
     const offset = (Math.max(1, page) - 1) * 5;
-    const entries = await Member.getGameJournalEntries(ownerId, gameId, {
-      viewerUserId: ownerId,
-      limit: 5,
-      offset,
-    });
+    const entries = await Member.getGameJournalEntries(ownerId, gameId, { limit: 5, offset });
     if (!entries.length) {
       await safeReply(interaction, { content: "No journal entries available to delete." });
       return;
@@ -3643,7 +3563,7 @@ export class NowPlayingCommand {
     const options = entries.map((entry) => ({
       label: (entry.title ?? `Entry #${entry.entryNumber}`).slice(0, 100),
       value: String(entry.entryId),
-      description: `${formatTableDate(entry.createdAt)} | ${entry.isPublic ? "Public" : "Private"}`,
+      description: formatTableDate(entry.createdAt),
     }));
     const select = new StringSelectMenuBuilder()
       .setCustomId(`${NOW_PLAYING_JOURNAL_DELETE_SELECT_PREFIX}:${ownerId}:${gameId}:${page}`)
@@ -3728,7 +3648,7 @@ export class NowPlayingCommand {
       flags: buildComponentsV2Flags(interaction.message.flags?.has(MessageFlags.Ephemeral) ?? false),
     });
     if (action === "yes") {
-      await refreshPublicJournalMessages(
+      await refreshJournalMessages(
         interaction.client, ownerId, Number(gameIdRaw), interaction.message.id,
       );
     }
@@ -3749,19 +3669,17 @@ export class NowPlayingCommand {
       interaction.fields.getTextInputValue(NOW_PLAYING_JOURNAL_BODY_INPUT_ID),
       { preserveNewlines: true, maxLength: 2000 },
     );
-    const isPublic = extractJournalPrivacyFromInteraction(interaction);
     await Member.addGameJournalEntry({
       userId: ownerId,
       gameId: Number(gameIdRaw),
       title: title || null,
       body,
-      isPublic,
     });
-    await Member.upsertGameJournalPreference(ownerId, Number(gameIdRaw), true, isPublic);
+    await Member.upsertGameJournalPreference(ownerId, Number(gameIdRaw), true);
     const page = Number(pageRaw);
     const row = await this.buildManageJournalButtonRow(ownerId, Number(gameIdRaw), page);
     await journalOwnerMenu.show(interaction, ownerId, [row]);
-    await refreshPublicJournalMessages(interaction.client, ownerId, Number(gameIdRaw));
+    await refreshJournalMessages(interaction.client, ownerId, Number(gameIdRaw));
   }
 
   @ModalComponent({ id: /^nowplaying-journal-edit-modal:\d+:\d+:\d+:\d+$/ })
@@ -3788,21 +3706,14 @@ export class NowPlayingCommand {
       interaction.fields.getTextInputValue(NOW_PLAYING_JOURNAL_BODY_INPUT_ID),
       { preserveNewlines: true, maxLength: 2000 },
     );
-    const isPublic = extractJournalPrivacyFromInteraction(interaction);
-    await Member.updateGameJournalEntry({
-      userId: ownerId,
-      entryId,
-      title: title || null,
-      body,
-      isPublic,
-    });
+    await Member.updateGameJournalEntry({ userId: ownerId, entryId, title: title || null, body });
     const page = Number(pageRaw);
     const row = await this.buildManageJournalButtonRow(ownerId, gameId, page);
     await safeReply(interaction, {
       components: [row],
       flags: buildComponentsV2Flags(true),
     });
-    await refreshPublicJournalMessages(interaction.client, ownerId, gameId);
+    await refreshJournalMessages(interaction.client, ownerId, gameId);
   }
 
   @ButtonComponent({ id: /^nowplaying-list-edit:\d+$/ })
@@ -4577,15 +4488,15 @@ export class NowPlayingCommand {
     ownerId: string,
   ): ActionRowBuilder<StringSelectMenuBuilder> | null {
     const journalEntries = entries.filter(
-      (e) => e.journalEnabled && e.hasPublicJournalEntry,
+      (e) => e.journalEnabled && e.hasJournalEntry,
     );
     if (!journalEntries.length) return null;
     const options = journalEntries.map((e) => {
       const rawLabel = `${e.title} Game Journal`;
       const label = rawLabel.length > 100 ? `${rawLabel.slice(0, 97)}...` : rawLabel;
-      const countText = e.publicJournalCount === 1 ? "1 entry" : `${e.publicJournalCount} entries`;
-      const lastPart = e.lastPublicJournalAt
-        ? ` · Last entry ${formatTableDate(e.lastPublicJournalAt)}`
+      const countText = e.journalCount === 1 ? "1 entry" : `${e.journalCount} entries`;
+      const lastPart = e.lastJournalAt
+        ? ` · Last entry ${formatTableDate(e.lastJournalAt)}`
         : "";
       const description = `${countText}${lastPart}`.slice(0, 100);
       return { label, description, value: String(e.gameId) };
@@ -5645,7 +5556,7 @@ export class NowPlayingCommand {
       }
       const content = this.trimTextDisplayContent(lines.join("\n"));
       const shouldShowJournalButton = entry.journalEnabled &&
-        (showPrivateOnlyJournalButtons || entry.hasPublicJournalEntry);
+        (showPrivateOnlyJournalButtons || entry.hasJournalEntry);
       if (shouldShowJournalButton) {
         const section = new SectionBuilder().addTextDisplayComponents(
           new TextDisplayBuilder().setContent(content),

@@ -29,7 +29,7 @@ function entryLabel(n: number): string {
 
 export interface JournalViewOptions {
   ownerId: string;
-  /** null or "__public__" = public-only view; ownerId = owner view (includes private entries) */
+  /** null or "__public__" = viewer-only; ownerId = owner view (shows management controls) */
   viewerId: string | null;
   gameId: number;
   page: number;
@@ -75,12 +75,10 @@ export async function buildJournalView(options: JournalViewOptions): Promise<{
 
   const isOwnerView =
     viewerId !== null && viewerId !== "__public__" && viewerId === ownerId;
-  const countViewerId = isOwnerView ? ownerId : "__public__";
-  const entriesViewerId: string | null = isOwnerView ? ownerId : null;
 
   const [game, total, threadIds, memberRecord] = await Promise.all([
     Game.getGameById(gameId),
-    Member.countGameJournalEntries(ownerId, gameId, countViewerId),
+    Member.countGameJournalEntries(ownerId, gameId),
     getThreadsByGameId(gameId),
     Member.getByUserId(ownerId),
   ]);
@@ -91,7 +89,6 @@ export async function buildJournalView(options: JournalViewOptions): Promise<{
 
   const [entries, nowPlayingMeta, completions] = await Promise.all([
     Member.getGameJournalEntries(ownerId, gameId, {
-      viewerUserId: entriesViewerId,
       limit: JOURNAL_PAGE_SIZE,
       offset,
     }),
@@ -142,24 +139,16 @@ export async function buildJournalView(options: JournalViewOptions): Promise<{
 
   // Container 2: entries + footer
   const pageInfo = totalPages > 1 ? `, page ${safePage} of ${totalPages}` : "";
-  const publicQualifier = isOwnerView ? "" : "public ";
-  const footer = `-# ${total} ${publicQualifier}${entryLabel(total)}${pageInfo}`;
+  const footer = `-# ${total} ${entryLabel(total)}${pageInfo}`;
 
   const entryParts: string[] = [];
   if (!entries.length) {
     entryParts.push("No journal entries yet.");
   } else {
     for (const entry of entries) {
-      if (!isOwnerView && !entry.isPublic) {
-        entryParts.push(
-          `### Private Entry\n-# ${formatTableDate(entry.createdAt)}\nThis entry is private.`,
-        );
-        continue;
-      }
       const titleLine = entry.title ? `### ${entry.title}` : `### Entry #${entry.entryNumber}`;
       const date = formatTableDate(entry.createdAt);
-      const privacyLabel = isOwnerView ? ` | ${entry.isPublic ? "Public" : "Private"}` : "";
-      entryParts.push(`${titleLine}\n-# ${date}${privacyLabel}\n${trimContent(entry.body)}`);
+      entryParts.push(`${titleLine}\n-# ${date}\n${trimContent(entry.body)}`);
     }
   }
 
