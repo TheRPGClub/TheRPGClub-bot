@@ -4,7 +4,7 @@ import { NowPlayingCommand } from "../commands/now-playing.command.js";
 import Member from "../classes/Member.js";
 import Game from "../classes/Game.js";
 
-test("nowplaying edit menu add completion uses safe update fallback in DM flow", async () => {
+test("nowplaying edit menu add completion uses safe update fallback", async () => {
   const command = new NowPlayingCommand() as any;
   const originalGetNowPlaying = Member.getNowPlaying;
   const edits: any[] = [];
@@ -42,11 +42,6 @@ test("nowplaying edit menu add completion uses safe update fallback in DM flow",
       covers: [],
     });
     command.buildNowPlayingCompletionComponents = () => [{ kind: "completion-components" }];
-    command.withPmNowPlayingList = async (
-      _ownerId: string,
-      _guildId: string | null,
-      components: any[],
-    ) => components;
     command.buildComponentPayload = (components: any[]) => ({ components });
 
     const interaction: any = {
@@ -84,7 +79,7 @@ test("nowplaying edit menu add completion uses safe update fallback in DM flow",
   }
 });
 
-test("nowplaying completion config renders in DM with no image accessory", async () => {
+test("nowplaying completion config renders with no image accessory", async () => {
   const command = new NowPlayingCommand() as any;
   const originalGetNowPlaying = Member.getNowPlaying;
   const originalGetGameById = Game.getGameById;
@@ -110,12 +105,6 @@ test("nowplaying completion config renders in DM with no image accessory", async
       title: "Alpha",
       imageData: null,
     })) as any;
-
-    command.withPmNowPlayingList = async (
-      _ownerId: string,
-      _guildId: string | null,
-      components: any[],
-    ) => components;
 
     const interaction: any = {
       customId: "nowplaying-edit-menu-complete:123",
@@ -202,11 +191,6 @@ test("nowplaying completion modal reuses existing now-playing platform and skips
       return [];
     }) as any;
 
-    command.withPmNowPlayingList = async (
-      _ownerId: string,
-      _guildId: string | null,
-      components: any[],
-    ) => components;
     command.buildNowPlayingListPayload = async () => ({ components: [{ kind: "list" }], files: [] });
     command.withNowPlayingActions = (
       _isOwner: boolean,

@@ -2,16 +2,14 @@ export const NOW_PLAYING_HELP_PREFIX = "nowplaying-help";
 
 export const NOW_PLAYING_HELP_TEXTS: Record<string, string> = {
   "edit-menu": [
-    "## Now Playing Edit - Help",
-    "This is your edit menu. All changes happen here in your DMs.",
+    "## Manage Now Playing - Help",
+    "Use this menu to manage your Now Playing list from the list header button.",
     "",
-    "- **Edit Notes** - Add or update a short note shown under each game in your list.",
     "- **Sort** - Rearrange the order your games appear.",
     "- **Edit Platform** - Set or change which platform you are playing each game on.",
     "- **Add Completion** - Log that you finished or made notable progress on a game.",
     "  You can choose whether to announce it to the server.",
-    "- **Journal Opt-In** - Switch a game from note mode to journal mode.",
-    "  Journal lets you write longer, dated entries about your playthrough.",
+    "- Notes are managed through **Game Journal** entries.",
     "- **Remove Game** - Permanently remove a game from your Now Playing list.",
   ].join("\n"),
   "sort": [

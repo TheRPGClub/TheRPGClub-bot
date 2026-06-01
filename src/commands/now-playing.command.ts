@@ -2994,7 +2994,7 @@ export class NowPlayingCommand {
       const refreshed = await this.refreshNowPlayingListFromContext(interaction, ownerId);
       if (!interaction.guildId && interaction.message) {
         try {
-          const dmComponents = await this.buildNowPlayingEditInitialComponents(ownerId, null);
+          const dmComponents = await this.buildNowPlayingEditInitialComponents(ownerId);
           await interaction.message.edit({
             components: dmComponents,
             flags: buildComponentsV2Flags(false),
@@ -3733,45 +3733,9 @@ export class NowPlayingCommand {
     }
 
     setNowPlayingListContext(ownerId, interaction.message);
-    const dmChannel = await interaction.user.createDM().catch(() => null);
-    if (!dmChannel) {
-      const container = new ContainerBuilder().addTextDisplayComponents(
-        new TextDisplayBuilder().setContent(
-          "I couldn't open a DM. Enable DMs and try Edit again.",
-        ),
-      );
-      await interaction.reply({
-        components: [container],
-        flags: buildComponentsV2Flags(true),
-      });
-      return;
-    }
-
-    try {
-      await dmChannel.send({
-        components: await this.buildNowPlayingEditInitialComponents(
-          ownerId,
-          interaction.guildId,
-        ),
-        flags: buildComponentsV2Flags(false),
-      });
-    } catch {
-      const container = new ContainerBuilder().addTextDisplayComponents(
-        new TextDisplayBuilder().setContent(
-          "I couldn't send the DM edit menu. Enable DMs and try Edit again.",
-        ),
-      );
-      await interaction.reply({
-        components: [container],
-        flags: buildComponentsV2Flags(true),
-      });
-      return;
-    }
-    const container = new ContainerBuilder().addTextDisplayComponents(
-      new TextDisplayBuilder().setContent("Opened your Now Playing edit menu in DM."),
-    );
-    await interaction.reply({
-      components: [container],
+    const components = await this.buildNowPlayingEditInitialComponents(ownerId);
+    await safeReply(interaction, {
+      components,
       flags: buildComponentsV2Flags(true),
     });
   }
@@ -3795,19 +3759,6 @@ export class NowPlayingCommand {
       components: [container],
       flags: buildComponentsV2Flags(true),
     });
-  }
-
-  @ButtonComponent({ id: /^nowplaying-edit-menu-note:\d+$/ })
-  async handleNowPlayingEditMenuNote(interaction: ButtonInteraction): Promise<void> {
-    const [, ownerId] = interaction.customId.split(":");
-    if (interaction.user.id !== ownerId) {
-      await interaction.reply({
-        content: "This edit menu isn't for you.",
-        flags: MessageFlags.Ephemeral,
-      });
-      return;
-    }
-    await this.promptEditNowPlayingNote(interaction, "update");
   }
 
   @ButtonComponent({ id: /^nowplaying-edit-menu-sort:\d+$/ })
@@ -3878,20 +3829,6 @@ export class NowPlayingCommand {
     }
     setNowPlayingListContext(ownerId, interaction.message);
     await interaction.showModal(this.buildNowPlayingAddModal()).catch(() => {});
-  }
-
-  @ButtonComponent({ id: /^nowplaying-list-edit-note:\d+$/ })
-  async handleNowPlayingListEditNote(interaction: ButtonInteraction): Promise<void> {
-    const [, ownerId] = interaction.customId.split(":");
-    if (interaction.user.id !== ownerId) {
-      await interaction.reply({
-        content: "This note prompt isn't for you.",
-        flags: MessageFlags.Ephemeral,
-      });
-      return;
-    }
-    setNowPlayingListContext(ownerId, interaction.message);
-    await this.promptEditNowPlayingNote(interaction, "update");
   }
 
   @ButtonComponent({ id: /^nowplaying-list-edit-platform:\d+$/ })
@@ -4055,28 +3992,7 @@ export class NowPlayingCommand {
       });
       return;
     }
-    if (interaction.guildId == null) {
-      await this.returnToNowPlayingEditMenu(interaction, ownerId);
-      return;
-    }
-    const list = await Member.getNowPlaying(ownerId);
-    const payload = await this.buildNowPlayingListPayload(
-      interaction.user,
-      list,
-      interaction.guildId,
-    );
-    const components = this.withNowPlayingActions(
-      true,
-      ownerId,
-      payload.components,
-      false,
-      this.hasDisplayableNowPlayingNotes(list),
-    );
-    await interaction.update({
-      components,
-      files: payload.files,
-      flags: buildComponentsV2Flags(true),
-    });
+    await this.returnToNowPlayingEditMenu(interaction, ownerId);
   }
 
 
@@ -4107,28 +4023,7 @@ export class NowPlayingCommand {
       });
       return;
     }
-    if (interaction.guildId == null) {
-      await this.returnToNowPlayingEditMenu(interaction, ownerId);
-      return;
-    }
-    const list = await Member.getNowPlaying(ownerId);
-    const payload = await this.buildNowPlayingListPayload(
-      interaction.user,
-      list,
-      interaction.guildId,
-    );
-    const components = this.withNowPlayingActions(
-      true,
-      ownerId,
-      payload.components,
-      false,
-      this.hasDisplayableNowPlayingNotes(list),
-    );
-    await interaction.update({
-      components,
-      files: payload.files,
-      flags: buildComponentsV2Flags(true),
-    });
+    await this.returnToNowPlayingEditMenu(interaction, ownerId);
   }
 
   @ButtonComponent({ id: /^nowplaying-list-cancel:\d+$/ })
@@ -4164,7 +4059,7 @@ export class NowPlayingCommand {
           "Your Now Playing List",
           [
             "Welcome. Your list is empty, so nothing shows yet.",
-            "Use the user button in the header to manage notes, sort order, platform, completions, and removals in DM.",
+            "Use the user button in the header to manage sort order, platform, completions, and removals.",
           ].join("\n"),
         );
         await safeReply(interaction, {
@@ -4593,10 +4488,9 @@ export class NowPlayingCommand {
   private buildNowPlayingEditMenuComponents(
     ownerId: string,
     entries: IMemberNowPlayingEntry[],
-    guildId: string | null,
     statusMessage: string | null = null,
   ): Array<ContainerBuilder | ActionRowBuilder<ButtonBuilder>> {
-    const introLines = ["## Now Playing Edit\nChoose an edit action. All edits happen in this DM."];
+    const introLines = ["## Manage Now Playing\nChoose an action."];
     if (statusMessage) {
       introLines.push(`-# ${statusMessage}`);
     }
@@ -4607,7 +4501,7 @@ export class NowPlayingCommand {
       ? this.buildNowPlayingEntryComponents(
         entries,
         ownerId,
-        guildId,
+        null,
         null,
         true,
         true,
@@ -4636,13 +4530,7 @@ export class NowPlayingCommand {
         .setLabel("Remove Game")
         .setStyle(ButtonStyle.Danger),
     );
-    const helpRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
-      new ButtonBuilder()
-        .setCustomId(`${NOW_PLAYING_HELP_PREFIX}:edit-menu:${ownerId}`)
-        .setLabel("?")
-        .setStyle(ButtonStyle.Secondary),
-    );
-    return [introContainer, listContainer, firstRow, secondRow, helpRow];
+    return [introContainer, listContainer, firstRow, secondRow];
   }
 
   private async returnToNowPlayingEditMenu(
@@ -4652,7 +4540,6 @@ export class NowPlayingCommand {
   ): Promise<void> {
     const menuComponents = await this.buildNowPlayingEditInitialComponents(
       ownerId,
-      interaction.guildId,
       statusMessage,
     );
     const isEphemeral = interaction.message.flags?.has(MessageFlags.Ephemeral) ?? true;
@@ -4664,36 +4551,18 @@ export class NowPlayingCommand {
 
   private async buildNowPlayingEditInitialComponents(
     ownerId: string,
-    guildId: string | null,
     statusMessage: string | null = null,
   ): Promise<Array<ContainerBuilder | ActionRowBuilder<ButtonBuilder>>> {
     const entries = await Member.getNowPlaying(ownerId).then(getDisplayNowPlayingEntries);
-    return this.buildNowPlayingEditMenuComponents(ownerId, entries, guildId, statusMessage);
+    return this.buildNowPlayingEditMenuComponents(ownerId, entries, statusMessage);
   }
 
   private async withPmNowPlayingList(
-    ownerId: string,
-    guildId: string | null,
+    _ownerId: string,
+    _guildId: string | null,
     components: Array<ContainerBuilder | ActionRowBuilder<any>>,
   ): Promise<Array<ContainerBuilder | ActionRowBuilder<any>>> {
-    if (guildId) {
-      return components;
-    }
-    const entries = await Member.getNowPlaying(ownerId).then(getDisplayNowPlayingEntries);
-    const listContainer = entries.length
-      ? this.buildNowPlayingEntryComponents(
-        entries,
-        ownerId,
-        null,
-        null,
-        true,
-        true,
-      )[0]
-      : this.buildNowPlayingMessageContainer(
-        "Your Now Playing List",
-        "Your Now Playing list is empty.",
-      );
-    return [listContainer, ...components];
+    return components;
   }
 
   private buildNowPlayingCompletionComponents(

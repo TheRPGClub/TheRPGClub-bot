@@ -35,8 +35,6 @@ test("nowplaying remove select acknowledges interaction and refreshes same messa
       covers: [],
     });
     command.buildNowPlayingRemoveComponents = () => ([{ kind: "remove-components" }]);
-    command.withPmNowPlayingList = async (_ownerId: string, _guildId: string | null, components: any[]) =>
-      components;
     command.buildComponentPayload = (components: any[]) => ({ components });
 
     const interaction: any = {
@@ -44,6 +42,9 @@ test("nowplaying remove select acknowledges interaction and refreshes same messa
       user: { id: "123" },
       values: ["11"],
       guildId: null,
+      message: {
+        flags: { has: () => false },
+      },
       deferred: false,
       replied: false,
       update: async (payload: any) => {
@@ -89,6 +90,9 @@ test("nowplaying remove select acknowledges interaction and shows error on faile
       user: { id: "123" },
       values: ["11"],
       guildId: null,
+      message: {
+        flags: { has: () => false },
+      },
       deferred: false,
       replied: false,
       update: async (payload: any) => {
@@ -114,4 +118,3 @@ test("nowplaying remove select acknowledges interaction and shows error on faile
     Member.removeNowPlaying = originalRemoveNowPlaying;
   }
 });
-
