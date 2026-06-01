@@ -43,6 +43,8 @@ export interface JournalViewOptions {
   navRowTrailingButtons?: ButtonBuilder[];
   /** Extra rows appended after the nav row */
   extraRows?: Array<ActionRowBuilder<ButtonBuilder>>;
+  /** Custom ID for the header section button; defaults to a non-interactive label button */
+  headerButtonCustomId?: string;
   /** Fetch and display the Now Playing / completion status in the game info container */
   includeNowPlayingMeta?: boolean;
   /** Fetch and display completions in the game info container and entries container */
@@ -66,6 +68,7 @@ export async function buildJournalView(options: JournalViewOptions): Promise<{
     buildOwnerButtons,
     navRowTrailingButtons,
     extraRows,
+    headerButtonCustomId,
     includeNowPlayingMeta,
     includeCompletions,
   } = options;
@@ -134,6 +137,7 @@ export async function buildJournalView(options: JournalViewOptions): Promise<{
     ownerId,
     ownerName,
     headerTitleLines.join("\n"),
+    headerButtonCustomId,
   );
 
   // Container 2: entries + footer

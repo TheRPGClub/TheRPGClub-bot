@@ -94,7 +94,7 @@ import {
   NOW_PLAYING_HELP_PREFIX,
   NOW_PLAYING_HELP_TEXTS,
 } from "./now-playing-help.js";
-import { GJ_PUBLIC_CLOSE_PREFIX } from "./game-journal.command.js";
+import { GJ_PUBLIC_CLOSE_PREFIX } from "../config/journalConstants.js";
 import { renderUsernameWithEmoji } from "../services/UserEmojiService.js";
 
 const MAX_NOW_PLAYING_NOTE_LEN = 500;
@@ -129,7 +129,6 @@ const NOW_PLAYING_COMPOSITE_MAX = 10;
 const NOW_PLAYING_ALL_SELECT_ID = "nowplaying-all-select:v1";
 const NOW_PLAYING_LIST_NOTES_PREFIX = "nowplaying-list-notes";
 const NOW_PLAYING_LIST_EDIT_PREFIX = "nowplaying-list-edit";
-const NOW_PLAYING_EDIT_MENU_NOTE_PREFIX = "nowplaying-edit-menu-note";
 const NOW_PLAYING_EDIT_MENU_SORT_PREFIX = "nowplaying-edit-menu-sort";
 const NOW_PLAYING_EDIT_MENU_PLATFORM_PREFIX = "nowplaying-edit-menu-platform";
 const NOW_PLAYING_EDIT_MENU_COMPLETE_PREFIX = "nowplaying-edit-menu-complete";
@@ -477,7 +476,7 @@ function setNowPlayingListContext(userId: string, message: Message<boolean>): vo
   });
 }
 
-async function trackNowPlayingJournalContext(
+export async function trackNowPlayingJournalContext(
   message: Message<boolean>,
   ownerUserId: string,
   gameId: number,
@@ -502,6 +501,57 @@ async function trackNowPlayingJournalContext(
     ownerUserId,
     gameId,
   ).catch((err) => console.error("[Journal] Failed to persist message context:", err));
+}
+
+export async function refreshPublicJournalMessages(
+  client: Client,
+  ownerId: string,
+  gameId: number,
+  excludeMessageId?: string,
+): Promise<void> {
+  const now = Date.now();
+  for (const [key, ctx] of nowPlayingJournalContexts.entries()) {
+    if (ctx.ownerUserId !== ownerId || ctx.gameId !== gameId) continue;
+    if (ctx.messageId === excludeMessageId) continue;
+    if (now - ctx.createdAt > NOW_PLAYING_JOURNAL_CONTEXT_TTL_MS) {
+      nowPlayingJournalContexts.delete(key);
+      await Member.deleteJournalMessageContext(ctx.channelId, ctx.messageId)
+        .catch((err) => console.error("[Journal] Failed to delete expired context:", err));
+      continue;
+    }
+    const channel = await client.channels.fetch(ctx.channelId).catch(() => null);
+    if (!channel?.isTextBased()) {
+      nowPlayingJournalContexts.delete(key);
+      await Member.deleteJournalMessageContext(ctx.channelId, ctx.messageId)
+        .catch((err) => console.error("[Journal] Failed to delete unreachable context:", err));
+      continue;
+    }
+    const message = await channel.messages.fetch(ctx.messageId).catch(() => null);
+    if (!message) {
+      nowPlayingJournalContexts.delete(key);
+      await Member.deleteJournalMessageContext(ctx.channelId, ctx.messageId)
+        .catch((err) => console.error("[Journal] Failed to delete missing context:", err));
+      continue;
+    }
+    const guildId = channel.isDMBased() ? null : (channel as any).guildId as string;
+    const payload = await buildJournalView({
+      ownerId,
+      viewerId: null,
+      gameId,
+      page: 1,
+      guildId,
+      prevPageCustomId: (p) =>
+        `${NOW_PLAYING_JOURNAL_PAGE_PREFIX}:${ownerId}:${gameId}:prev:${p}`,
+      nextPageCustomId: (p) =>
+        `${NOW_PLAYING_JOURNAL_PAGE_PREFIX}:${ownerId}:${gameId}:next:${p}`,
+      includeNowPlayingMeta: true,
+      includeCompletions: true,
+    });
+    await message.edit({
+      components: payload.components as any[],
+      files: payload.files,
+    }).catch((err) => console.error("[Journal] Failed to refresh public message:", err));
+  }
 }
 
 function resolvePlatformLabel(entry: IMemberNowPlayingEntry): string | null {
@@ -3396,7 +3446,7 @@ export class NowPlayingCommand {
         ),
     );
     await interaction.showModal(modal);
-    if (interaction.guildId) {
+    if (interaction.guildId && interaction.message.flags?.has(MessageFlags.Ephemeral)) {
       await interaction.message.delete().catch(() => null);
     }
   }
@@ -3628,6 +3678,11 @@ export class NowPlayingCommand {
       flags: buildComponentsV2Flags(interaction.message.flags?.has(MessageFlags.Ephemeral) ?? false),
       allowedMentions: payload.allowedMentions,
     });
+    if (action === "yes") {
+      await refreshPublicJournalMessages(
+        interaction.client, ownerId, Number(gameIdRaw), interaction.message.id,
+      );
+    }
   }
 
   @ModalComponent({ id: /^nowplaying-journal-modal:\d+:\d+:\d+$/ })
@@ -3669,6 +3724,7 @@ export class NowPlayingCommand {
       flags: buildComponentsV2Flags(true),
       allowedMentions: payload.allowedMentions,
     });
+    await refreshPublicJournalMessages(interaction.client, ownerId, Number(gameIdRaw));
   }
 
   @ModalComponent({ id: /^nowplaying-journal-edit-modal:\d+:\d+:\d+:\d+$/ })
@@ -3712,17 +3768,13 @@ export class NowPlayingCommand {
       interaction.guildId,
       interaction.user.id,
     );
-    if (interaction.guildId) {
-      await interaction.message?.delete().catch(() => null);
-      await this.deleteRecentJournalMessagesInChannel(interaction, ownerId, gameId);
-    }
     await safeReply(interaction, {
       components: payload.components,
       files: payload.files,
       flags: buildComponentsV2Flags(true),
       allowedMentions: payload.allowedMentions,
     });
-    await this.trackJournalReply(interaction, ownerId, gameId);
+    await refreshPublicJournalMessages(interaction.client, ownerId, gameId);
   }
 
   @ButtonComponent({ id: /^nowplaying-list-edit:\d+$/ })
