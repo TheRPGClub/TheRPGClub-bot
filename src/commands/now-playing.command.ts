@@ -3300,25 +3300,18 @@ export class NowPlayingCommand {
     });
   }
 
-  @ButtonComponent({ id: /^nowplaying-journal-header:\d+:\d+:\d+$/ })
-  async handleNowPlayingJournalHeader(interaction: ButtonInteraction): Promise<void> {
-    const [, ownerId, gameIdRaw, pageRaw] = interaction.customId.split(":");
-    if (interaction.user.id !== ownerId) {
-      await safeDeferUpdate(interaction);
-      return;
-    }
-    const gameId = Number(gameIdRaw);
-    const page = Number(pageRaw);
+  private async buildManageJournalButtonRow(
+    ownerId: string,
+    gameId: number,
+    page: number,
+  ): Promise<ActionRowBuilder<ButtonBuilder>> {
     const entries = await Member.getGameJournalEntries(ownerId, gameId, {
       viewerUserId: ownerId,
       limit: 1,
       offset: 0,
     });
     const hasEntries = entries.length > 0;
-    const container = new ContainerBuilder().addTextDisplayComponents(
-      new TextDisplayBuilder().setContent("## Manage Journal"),
-    );
-    const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
+    return new ActionRowBuilder<ButtonBuilder>().addComponents(
       new ButtonBuilder()
         .setCustomId(`${NOW_PLAYING_JOURNAL_ADD_PREFIX}:${ownerId}:${gameId}:${page}`)
         .setLabel("Add Entry")
@@ -3334,8 +3327,20 @@ export class NowPlayingCommand {
         .setStyle(ButtonStyle.Danger)
         .setDisabled(!hasEntries),
     );
+  }
+
+  @ButtonComponent({ id: /^nowplaying-journal-header:\d+:\d+:\d+$/ })
+  async handleNowPlayingJournalHeader(interaction: ButtonInteraction): Promise<void> {
+    const [, ownerId, gameIdRaw, pageRaw] = interaction.customId.split(":");
+    if (interaction.user.id !== ownerId) {
+      await safeDeferUpdate(interaction);
+      return;
+    }
+    const gameId = Number(gameIdRaw);
+    const page = Number(pageRaw);
+    const row = await this.buildManageJournalButtonRow(ownerId, gameId, page);
     await safeReply(interaction, {
-      components: [container, row],
+      components: [row],
       flags: buildComponentsV2Flags(true),
     });
   }
@@ -3610,7 +3615,10 @@ export class NowPlayingCommand {
         ),
     );
     await interaction.showModal(modal);
-    if (interaction.guildId) {
+    const isEphemeral = interaction.message.flags?.has(MessageFlags.Ephemeral) ?? false;
+    if (isEphemeral) {
+      await interaction.deleteReply().catch(() => null);
+    } else if (interaction.guildId) {
       await interaction.message.delete().catch(() => null);
     }
   }
@@ -3812,20 +3820,11 @@ export class NowPlayingCommand {
       body,
       isPublic,
     });
-    const journalViewerId = interaction.guildId ? "__public__" : interaction.user.id;
-    const payload = await this.buildJournalComponents(
-      ownerId,
-      journalViewerId,
-      gameId,
-      Number(pageRaw),
-      interaction.guildId,
-      true,
-    );
+    const page = Number(pageRaw);
+    const row = await this.buildManageJournalButtonRow(ownerId, gameId, page);
     await safeReply(interaction, {
-      components: payload.components,
-      files: payload.files,
+      components: [row],
       flags: buildComponentsV2Flags(true),
-      allowedMentions: payload.allowedMentions,
     });
     await refreshPublicJournalMessages(interaction.client, ownerId, gameId);
   }
