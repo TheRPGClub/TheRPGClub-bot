@@ -6,8 +6,6 @@ test("nowplaying list edit opens ephemeral manage menu for owner", async () => {
   const command = new NowPlayingCommand() as any;
   const replies: any[] = [];
 
-  command.buildNowPlayingEditInitialComponents = async () => [{ kind: "manage-menu" }];
-
   const interaction: any = {
     customId: "nowplaying-list-edit:123",
     user: { id: "123" },
@@ -27,6 +25,7 @@ test("nowplaying list edit opens ephemeral manage menu for owner", async () => {
     editReply: async () => {
       throw new Error("editReply should not be called");
     },
+    deleteReply: async () => {},
   };
 
   await command.handleNowPlayingListEdit(interaction);
