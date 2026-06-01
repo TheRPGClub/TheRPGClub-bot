@@ -3699,6 +3699,7 @@ export class NowPlayingCommand {
       const posted = await interaction.followUp({
         components: payload.components as any[],
         files: payload.files,
+        flags: buildComponentsV2Flags(false),
         allowedMentions: payload.allowedMentions,
       }).catch(() => null);
       if (posted) {
