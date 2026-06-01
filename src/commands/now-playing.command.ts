@@ -2195,6 +2195,9 @@ export class NowPlayingCommand {
     const userId = interaction.user.id;
     const useDeferredEditPath = mode === "update" &&
       Boolean((interaction as any).__rpgDeferred ?? (interaction as any).deferred);
+    const isEphemeral = mode === "update"
+      ? ((interaction as any).message?.flags?.has(MessageFlags.Ephemeral) ?? false)
+      : true;
     try {
       const entries = getDisplayNowPlayingEntries(await Member.getNowPlaying(userId));
       if (!entries.length) {
@@ -2207,7 +2210,10 @@ export class NowPlayingCommand {
           [container],
         );
         if (mode === "update" && !useDeferredEditPath) {
-          await safeUpdate(interaction, { components: pmComponents });
+          await safeUpdate(interaction, {
+            components: pmComponents,
+            flags: buildComponentsV2Flags(isEphemeral),
+          });
         } else if (mode === "update") {
           await safeReply(interaction, {
             components: pmComponents,
@@ -2239,7 +2245,10 @@ export class NowPlayingCommand {
         components,
       );
       if (mode === "update" && !useDeferredEditPath) {
-        await safeUpdate(interaction, this.buildComponentPayload(pmComponents as any, files));
+        await safeUpdate(interaction, {
+          ...this.buildComponentPayload(pmComponents as any, files),
+          flags: buildComponentsV2Flags(isEphemeral),
+        });
       } else if (mode === "update") {
         await safeReply(interaction, {
           ...this.buildComponentPayload(pmComponents as any, files),
@@ -2262,7 +2271,10 @@ export class NowPlayingCommand {
         [container],
       );
       if (mode === "update" && !useDeferredEditPath) {
-        await safeUpdate(interaction, { components: pmComponents });
+        await safeUpdate(interaction, {
+          components: pmComponents,
+          flags: buildComponentsV2Flags(isEphemeral),
+        });
       } else if (mode === "update") {
         await safeReply(interaction, {
           components: pmComponents,
