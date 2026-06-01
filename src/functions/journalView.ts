@@ -59,7 +59,6 @@ export async function buildJournalView(options: JournalViewOptions): Promise<{
 }> {
   const {
     ownerId,
-    viewerId,
     gameId,
     page,
     guildId,
@@ -72,9 +71,6 @@ export async function buildJournalView(options: JournalViewOptions): Promise<{
     includeNowPlayingMeta,
     includeCompletions,
   } = options;
-
-  const isOwnerView =
-    viewerId !== null && viewerId !== "__public__" && viewerId === ownerId;
 
   const [game, total, threadIds, memberRecord] = await Promise.all([
     Game.getGameById(gameId),
