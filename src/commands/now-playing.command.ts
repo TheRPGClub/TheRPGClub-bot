@@ -2907,6 +2907,13 @@ export class NowPlayingCommand {
       return;
     }
 
+    const loadingContainer = new ContainerBuilder().addTextDisplayComponents(
+      new TextDisplayBuilder().setContent(
+        "## Now Loading\nSaving sort order and generating cover layout...",
+      ),
+    );
+    await safeUpdate(interaction, { components: [loadingContainer], flags: responseFlags });
+
     const orderedIds = parsed.map((index) => entries[index].gameId);
     const updated = await Member.updateNowPlayingSort(ownerId, orderedIds);
     if (!updated) {
