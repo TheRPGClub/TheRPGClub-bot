@@ -3672,17 +3672,39 @@ export class NowPlayingCommand {
       interaction.fields.getTextInputValue(NOW_PLAYING_JOURNAL_BODY_INPUT_ID),
       { preserveNewlines: true, maxLength: 2000 },
     );
+    const gameId = Number(gameIdRaw);
+    const hasExistingTracked = Array.from(nowPlayingJournalContexts.values())
+      .some((ctx) => ctx.ownerUserId === ownerId && ctx.gameId === gameId);
     await Member.addGameJournalEntry({
       userId: ownerId,
-      gameId: Number(gameIdRaw),
+      gameId,
       title: title || null,
       body,
     });
-    await Member.upsertGameJournalPreference(ownerId, Number(gameIdRaw), true);
+    await Member.upsertGameJournalPreference(ownerId, gameId, true);
     const page = Number(pageRaw);
-    const row = await this.buildManageJournalButtonRow(ownerId, Number(gameIdRaw), page);
+    const row = await this.buildManageJournalButtonRow(ownerId, gameId, page);
     await journalOwnerMenu.show(interaction, ownerId, [row]);
-    await refreshJournalMessages(interaction.client, ownerId, Number(gameIdRaw));
+    await refreshJournalMessages(interaction.client, ownerId, gameId);
+    if (!hasExistingTracked && interaction.guildId) {
+      await this.deleteRecentJournalMessagesInChannel(interaction, ownerId, gameId);
+      const payload = await this.buildJournalComponents(
+        ownerId,
+        "__public__",
+        gameId,
+        page,
+        interaction.guildId,
+        true,
+      );
+      const posted = await interaction.followUp({
+        components: payload.components as any[],
+        files: payload.files,
+        allowedMentions: payload.allowedMentions,
+      }).catch(() => null);
+      if (posted) {
+        await trackNowPlayingJournalContext(posted as Message<boolean>, ownerId, gameId);
+      }
+    }
   }
 
   @ModalComponent({ id: /^nowplaying-journal-edit-modal:\d+:\d+:\d+:\d+$/ })
