@@ -3828,7 +3828,7 @@ export class NowPlayingCommand {
       return;
     }
     const entries = await Member.getNowPlaying(ownerId).then(getDisplayNowPlayingEntries);
-    const gamesWithoutJournal = entries.filter((e) => !e.journalEnabled);
+    const gamesWithoutJournal = entries.filter((e) => !e.hasJournalEntry);
     if (!gamesWithoutJournal.length) {
       await safeUpdate(interaction, {
         components: [await this.buildNowPlayingManageRow(ownerId)],
@@ -3872,7 +3872,7 @@ export class NowPlayingCommand {
     if (!gameId) return;
     const entries = await Member.getNowPlaying(ownerId).then(getDisplayNowPlayingEntries);
     const selected = entries.find((e) => e.gameId === gameId);
-    if (!selected || selected.journalEnabled) {
+    if (!selected || selected.hasJournalEntry) {
       await safeUpdate(interaction, {
         components: [await this.buildNowPlayingManageRow(ownerId)],
         flags: buildComponentsV2Flags(true),
@@ -4579,7 +4579,7 @@ export class NowPlayingCommand {
     ownerId: string,
   ): Promise<ActionRowBuilder<ButtonBuilder>> {
     const entries = await Member.getNowPlaying(ownerId).then(getDisplayNowPlayingEntries);
-    const hasGamesWithoutJournal = entries.some((e) => !e.journalEnabled);
+    const hasGamesWithoutJournal = entries.some((e) => !e.hasJournalEntry);
     const buttons: ButtonBuilder[] = [];
     if (hasGamesWithoutJournal) {
       buttons.push(
