@@ -5508,22 +5508,10 @@ export class NowPlayingCommand {
       );
     }
     if (singleUserMode) {
-      const entryBlocks = entries.map((entry) => {
+      const entryBlocks = entries.map((entry, index) => {
         const entryTitle = formatEntry(entry, guildId);
-        const lines = [`**${entryTitle}**`];
-        if (entry.addedAt) {
-          const addedLabel = `Added ${formatTableDate(entry.addedAt)}`;
-          if (entry.noteUpdatedAt) {
-            const updatedLabel = `last updated ${formatTableDate(entry.noteUpdatedAt)}`;
-            if (formatTableDate(entry.addedAt) === formatTableDate(entry.noteUpdatedAt)) {
-              lines.push(`-# *${addedLabel}.*`);
-            } else {
-              lines.push(`-# *${addedLabel}, ${updatedLabel}.*`);
-            }
-          } else {
-            lines.push(`-# *${addedLabel}.*`);
-          }
-        }
+        const journalMark = entry.hasJournalEntry ? " 📒" : "";
+        const lines = [`${index + 1}. ${entryTitle}${journalMark}`];
         if (showNotes && entry.note && !entry.journalEnabled) {
           const quotedNote = entry.note
             .split("\n")
@@ -5558,20 +5546,8 @@ export class NowPlayingCommand {
         );
       }
       const entryTitle = formatEntry(entry, guildId);
-      const lines = [`**${entryTitle}**`];
-      if (entry.addedAt) {
-        const addedLabel = `Added ${formatTableDate(entry.addedAt)}`;
-        if (entry.noteUpdatedAt) {
-          const updatedLabel = `last updated ${formatTableDate(entry.noteUpdatedAt)}`;
-          if (formatTableDate(entry.addedAt) === formatTableDate(entry.noteUpdatedAt)) {
-            lines.push(`-# *${addedLabel}.*`);
-          } else {
-            lines.push(`-# *${addedLabel}, ${updatedLabel}.*`);
-          }
-        } else {
-          lines.push(`-# *${addedLabel}.*`);
-        }
-      }
+      const journalMark = entry.hasJournalEntry ? " 📒" : "";
+      const lines = [`${index + 1}. ${entryTitle}${journalMark}`];
       if (showNotes && entry.note && !entry.journalEnabled) {
         const quotedNote = entry.note
           .split("\n")
