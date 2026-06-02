@@ -314,9 +314,11 @@ async function buildCompletionComponents(
   if (!allCompletions.length) return null;
 
   const yearCounts: Record<string, number> = {};
+  const yearIndices = new Map<number, number>();
   for (const c of allCompletions) {
     const yr = c.completedAt ? String(c.completedAt.getFullYear()) : "Unknown";
     yearCounts[yr] = (yearCounts[yr] ?? 0) + 1;
+    yearIndices.set(c.completionId, yearCounts[yr]);
   }
 
   const pageCompletions = allCompletions.slice(offset, offset + COMPLETION_PAGE_SIZE);
@@ -340,7 +342,7 @@ async function buildCompletionComponents(
     const hoursLabel =
       c.finalPlaytimeHours != null ? ` · ${c.finalPlaytimeHours} hrs` : "";
 
-    const num = acc[yr].length + 1;
+    const num = yearIndices.get(c.completionId)!;
     acc[yr].push(
       `${num}. **${c.title}**${platformLabel} (${typeAbbrev})${dateLabel}${hoursLabel}`,
     );
