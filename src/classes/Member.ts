@@ -141,6 +141,8 @@ export interface IJournalUserSummary {
 export interface IJournalSearchResult {
   entryId: number;
   userId: string;
+  globalName: string | null;
+  username: string | null;
   gameId: number;
   gameTitle: string;
   entryTitle: string | null;
@@ -2663,6 +2665,8 @@ export default class Member {
         TOTAL_COUNT: number;
         ENTRY_ID: number;
         USER_ID: string;
+        GLOBAL_NAME: string | null;
+        USERNAME: string | null;
         GAMEDB_GAME_ID: number;
         GAME_TITLE: string;
         ENTRY_TITLE: string | null;
@@ -2672,6 +2676,8 @@ export default class Member {
         `SELECT COUNT(*) OVER () AS TOTAL_COUNT,
                 je.ENTRY_ID,
                 je.USER_ID,
+                u.GLOBAL_NAME,
+                u.USERNAME,
                 je.GAMEDB_GAME_ID,
                 g.TITLE         AS GAME_TITLE,
                 je.ENTRY_TITLE,
@@ -2679,6 +2685,7 @@ export default class Member {
                 je.CREATED_AT
            FROM USER_GAME_JOURNAL_ENTRIES je
            JOIN GAMEDB_GAMES g ON g.GAME_ID = je.GAMEDB_GAME_ID
+           JOIN RPG_CLUB_USERS u ON u.USER_ID = je.USER_ID
           WHERE (
                   UPPER(je.ENTRY_TITLE) LIKE '%' || UPPER(:searchTerm) || '%'
                OR UPPER(je.ENTRY_BODY)  LIKE '%' || UPPER(:searchTerm) || '%'
@@ -2703,6 +2710,8 @@ export default class Member {
         rows: rows.map((row) => ({
           entryId: Number(row.ENTRY_ID),
           userId: row.USER_ID,
+          globalName: row.GLOBAL_NAME ?? null,
+          username: row.USERNAME ?? null,
           gameId: Number(row.GAMEDB_GAME_ID),
           gameTitle: row.GAME_TITLE,
           entryTitle: row.ENTRY_TITLE ?? null,

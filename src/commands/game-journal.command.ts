@@ -390,8 +390,12 @@ function buildSearchResultComponents(
       ? `_${result.entryTitle.trim()}_`
       : "_(no title)_";
     const date = formatTableDate(result.createdAt);
+    const displayName = result.globalName ?? result.username ?? result.userId;
+    const userPart = targetUserName
+      ? ""
+      : ` | ${renderUsernameWithEmoji(result.userId, displayName)}`;
     resultLines.push(
-      `**${result.gameTitle}** | <@${result.userId}>\n`
+      `**${result.gameTitle}**${userPart}\n`
       + `-# ${entryLabel} • ${date}\n\n`
       + result.body,
     );
