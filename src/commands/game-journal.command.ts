@@ -55,6 +55,9 @@ import {
   refreshJournalMessages,
 } from "./now-playing.command.js";
 import { NOW_PLAYING_HELP_PREFIX } from "./now-playing-help.js";
+import { EphemeralOwnerMenu } from "../functions/EphemeralOwnerMenu.js";
+
+const gjHmenu = new EphemeralOwnerMenu();
 
 const LIST_PAGE_SIZE = 15;
 const ALL_PAGE_SIZE = 20;
@@ -583,10 +586,7 @@ export class GameJournalCommand {
       new TextDisplayBuilder().setContent("## Manage Journal"),
     );
     const row = buildHmenuActionRow(ownerId, gameId, page);
-    await safeReply(interaction, {
-      components: [container, row],
-      flags: buildComponentsV2Flags(true),
-    });
+    await gjHmenu.show(interaction, ownerId, [container, row]);
   }
 
   @ButtonComponent({ id: /^game-journal-hmenu-add:\d+:\d+$/ })
@@ -639,7 +639,7 @@ export class GameJournalCommand {
       entry.body,
     );
     await interaction.showModal(modal);
-    await interaction.message.delete().catch(() => null);
+    await gjHmenu.dismiss(ownerId);
   }
 
   @ButtonComponent({ id: /^game-journal-hmenu-delete:\d+:\d+$/ })
