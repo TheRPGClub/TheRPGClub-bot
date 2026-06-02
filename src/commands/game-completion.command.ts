@@ -63,6 +63,7 @@ import {
   handleCompletionClearYearFilter,
   handleCompletionJournalViewSelect,
   handleCompletionJournalPage,
+  handleCompletionListHeader,
 } from "./game-completion/completion-pagination.service.js";
 import {
   handleCompletionDeleteMenu,
@@ -846,6 +847,11 @@ export class GameCompletionCommands {
   @ButtonComponent({ id: /^comp-journal-page:\d+:\d+:(prev|next):\d+$/ })
   async handleCompletionJournalPage(interaction: ButtonInteraction): Promise<void> {
     await handleCompletionJournalPage(interaction);
+  }
+
+  @ButtonComponent({ id: /^comp-list-header:\d+$/ })
+  async handleCompletionListHeader(interaction: ButtonInteraction): Promise<void> {
+    await handleCompletionListHeader(interaction);
   }
 
   @ButtonComponent({ id: /^completion-add-igdb-confirm:.+/ })

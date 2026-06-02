@@ -4,6 +4,7 @@ import {
   type StringSelectMenuInteraction,
 } from "discord.js";
 import { renderCompletionPage, renderSelectionPage } from "./completion-list.service.js";
+import { ContainerBuilder, TextDisplayBuilder } from "@discordjs/builders";
 import Member from "../../classes/Member.js";
 import { buildJournalView } from "../../functions/journalView.js";
 import { safeReply } from "../../functions/InteractionUtils.js";
@@ -167,6 +168,38 @@ export async function handleCompletionJournalPage(
   const page = Number(pageRaw);
   if (!gameId || Number.isNaN(page)) return;
   await openCompletionJournalView(interaction, ownerId, gameId, page);
+}
+
+const COMPLETION_HELP_TEXT = [
+  "## Game Completion Commands",
+  "**/game-completion add** — Add a game completion",
+  "**/game-completion edit** — Edit one of your completion records",
+  "**/game-completion delete** — Delete one of your completion records",
+  "**/game-completion export** — Export your completions to a CSV file",
+  "**/game-completion import-completionator** — Import completions from a Completionator CSV",
+  "**/game-completion common** — Show shared completions between two members",
+].join("\n");
+
+/**
+ * Handles the header button click for the owner of a completion list
+ */
+export async function handleCompletionListHeader(
+  interaction: ButtonInteraction,
+): Promise<void> {
+  const parts = interaction.customId.split(":");
+  const ownerId = parts[1];
+  if (interaction.user.id !== ownerId) {
+    await interaction.deferUpdate().catch(() => {});
+    return;
+  }
+  await interaction.reply({
+    components: [
+      new ContainerBuilder().addTextDisplayComponents(
+        new TextDisplayBuilder().setContent(COMPLETION_HELP_TEXT),
+      ),
+    ],
+    flags: MessageFlags.Ephemeral | COMPONENTS_V2_FLAG,
+  });
 }
 
 /**

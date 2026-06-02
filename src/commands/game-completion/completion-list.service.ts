@@ -158,7 +158,9 @@ export async function renderCompletionPage(
     journalEntries,
   );
   const displayName = user.displayName ?? user.username ?? user.id;
-  const header = buildUserHeaderContainer(userId, displayName, "Completed Games");
+  const isOwner = interaction.user.id === userId;
+  const headerButtonCustomId = isOwner ? `comp-list-header:${userId}` : undefined;
+  const header = buildUserHeaderContainer(userId, displayName, "Completed Games", headerButtonCustomId);
 
   await safeReply(interaction as any, {
     components: [
