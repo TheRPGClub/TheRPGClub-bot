@@ -817,8 +817,8 @@ export default class Member {
       }>(
         `SELECT gids.GAME_ID,
                 NVL(jp.IS_ENABLED, 1) AS JOURNAL_ENABLED,
-                CASE WHEN COUNT(je.ID) > 0 THEN 1 ELSE 0 END AS HAS_JOURNAL_ENTRY,
-                COUNT(je.ID) AS JOURNAL_COUNT,
+                CASE WHEN COUNT(*) > 0 THEN 1 ELSE 0 END AS HAS_JOURNAL_ENTRY,
+                COUNT(*) AS JOURNAL_COUNT,
                 MAX(je.CREATED_AT) AS LAST_JOURNAL_AT
            FROM (${inlineTable}) gids
            LEFT JOIN USER_GAME_JOURNAL_ENTRIES je
