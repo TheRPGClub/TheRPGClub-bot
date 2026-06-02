@@ -3355,7 +3355,7 @@ export class NowPlayingCommand {
       interaction.user.id === ownerId,
     );
     if (interaction.guildId) {
-      await this.deleteRecentJournalMessagesInChannel(interaction, ownerId, gameId);
+      await this.deleteLatestJournalMessageInChannel(interaction, ownerId, gameId);
     }
     await safeReply(interaction, {
       components: payload.components,
@@ -3391,7 +3391,7 @@ export class NowPlayingCommand {
       interaction.user.id === ownerId,
     );
     if (interaction.guildId) {
-      await this.deleteRecentJournalMessagesInChannel(interaction, ownerId, gameId);
+      await this.deleteLatestJournalMessageInChannel(interaction, ownerId, gameId);
     }
     await safeReply(interaction, {
       components: payload.components,
@@ -3431,7 +3431,7 @@ export class NowPlayingCommand {
       interaction.user.id === ownerId,
     );
     if (interaction.guildId) {
-      await this.deleteRecentJournalMessagesInChannel(interaction, ownerId, gameId);
+      await this.deleteLatestJournalMessageInChannel(interaction, ownerId, gameId);
     }
     await safeReply(interaction, {
       components: payload.components,
@@ -3655,7 +3655,7 @@ export class NowPlayingCommand {
     if (!hasExistingTracked && interaction.guildId) {
       // First entry: post the journal message first so it appears before the manage buttons.
       // Skip journalOwnerMenu here to avoid its deletor pointing at the journal post.
-      await this.deleteRecentJournalMessagesInChannel(interaction, ownerId, gameId);
+      await this.deleteLatestJournalMessageInChannel(interaction, ownerId, gameId);
       const payload = await this.buildJournalComponents(
         ownerId,
         "__public__",
@@ -5327,7 +5327,7 @@ export class NowPlayingCommand {
     return false;
   }
 
-  private async deleteRecentJournalMessagesInChannel(
+  private async deleteLatestJournalMessageInChannel(
     interaction: ButtonInteraction | ModalSubmitInteraction | StringSelectMenuInteraction,
     ownerUserId: string,
     gameId: number,
