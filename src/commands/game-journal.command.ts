@@ -36,6 +36,7 @@ import Member, {
   type IJournalUserSummary,
 } from "../classes/Member.js";
 import Game from "../classes/Game.js";
+import { getThreadsByGameId } from "../classes/Thread.js";
 import {
   safeDeferReply,
   safeDeferUpdate,
@@ -366,15 +367,17 @@ function buildSearchCustomId(
 
 function buildSearchResultComponents(
   targetUser: { id: string; displayName: string } | null,
-  gameTitle: string | null,
+  gameTitlePart: string | null,
   query: string,
   results: IJournalSearchResult[],
   total: number,
   page: number,
   totalPages: number,
 ): ContainerBuilder[] {
-  const gamePart = gameTitle ? ` in **${gameTitle}**` : "";
-  const headerTitle = `Game Journal Search: "${query}"${gamePart}`;
+  const titleLine = gameTitlePart
+    ? `${gameTitlePart} Game Journal Search`
+    : "Game Journal Search";
+  const headerTitle = `${titleLine}\nQuery: "${query}"`;
 
   const headerContainer = targetUser
     ? buildUserHeaderContainer(targetUser.id, targetUser.displayName, headerTitle)
@@ -509,7 +512,7 @@ export class GameJournalCommand {
       const gameIdStr = gameId ? String(gameId) : "0";
       const callerId = interaction.user.id;
 
-      const [{ rows, total }, gameRecord] = await Promise.all([
+      const [{ rows, total }, gameRecord, threadIds] = await Promise.all([
         Member.searchJournalEntries({
           query: cleanQuery,
           userId: targetUserId !== "0" ? targetUserId : undefined,
@@ -518,15 +521,22 @@ export class GameJournalCommand {
           offset: 0,
         }),
         gameId ? Game.getGameById(gameId) : Promise.resolve(null),
+        gameId ? getThreadsByGameId(gameId) : Promise.resolve([]),
       ]);
 
-      const gameTitle = gameRecord?.title ?? null;
+      const rawGameTitle = gameRecord?.title ?? null;
+      const threadId = threadIds[0] ?? null;
+      const gameTitlePart = rawGameTitle
+        ? (interaction.guildId && threadId
+          ? `[${rawGameTitle}](https://discord.com/channels/${interaction.guildId}/${threadId})`
+          : rawGameTitle)
+        : null;
       const targetUser = member
         ? { id: member.id, displayName: member.displayName ?? member.username }
         : null;
       const totalPages = Math.max(1, Math.ceil(total / SEARCH_PAGE_SIZE));
       const searchComponents = buildSearchResultComponents(
-        targetUser, gameTitle, cleanQuery, rows, total, 0, totalPages,
+        targetUser, gameTitlePart, cleanQuery, rows, total, 0, totalPages,
       );
       const pageRow = buildSearchPageRow(
         callerId, targetUserId, gameIdStr, cleanQuery, 0, totalPages,
@@ -742,7 +752,7 @@ export class GameJournalCommand {
       : undefined;
     const userId = targetUserId !== "0" ? targetUserId : undefined;
 
-    const [{ rows, total }, gameRecord] = await Promise.all([
+    const [{ rows, total }, gameRecord, threadIds] = await Promise.all([
       Member.searchJournalEntries({
         query,
         userId,
@@ -751,9 +761,16 @@ export class GameJournalCommand {
         offset: page * SEARCH_PAGE_SIZE,
       }),
       gameId ? Game.getGameById(gameId) : Promise.resolve(null),
+      gameId ? getThreadsByGameId(gameId) : Promise.resolve([]),
     ]);
 
-    const gameTitle = gameRecord?.title ?? null;
+    const rawGameTitle = gameRecord?.title ?? null;
+    const threadId = threadIds[0] ?? null;
+    const gameTitlePart = rawGameTitle
+      ? (interaction.guildId && threadId
+        ? `[${rawGameTitle}](https://discord.com/channels/${interaction.guildId}/${threadId})`
+        : rawGameTitle)
+      : null;
     const fetchedUser = targetUserId !== "0"
       ? await interaction.client.users.fetch(targetUserId).catch(() => null)
       : null;
@@ -764,7 +781,7 @@ export class GameJournalCommand {
     const safePage = Math.min(Math.max(page, 0), totalPages - 1);
 
     const searchComponents = buildSearchResultComponents(
-      targetUser, gameTitle, query, rows, total, safePage, totalPages,
+      targetUser, gameTitlePart, query, rows, total, safePage, totalPages,
     );
     const nextPageRow = buildSearchPageRow(
       callerId, targetUserId, gameIdStr, query, safePage, totalPages,
