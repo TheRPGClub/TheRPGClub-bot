@@ -139,7 +139,6 @@ const NOW_PLAYING_JOURNAL_OPEN_PREFIX = "nowplaying-journal-open";
 const NOW_PLAYING_JOURNAL_VIEW_SELECT_PREFIX = "nowplaying-journal-view-select";
 const NOW_PLAYING_JOURNAL_ADD_PREFIX = "nowplaying-journal-add";
 const NOW_PLAYING_JOURNAL_EDIT_PREFIX = "nowplaying-journal-edit";
-const NOW_PLAYING_JOURNAL_EDIT_SELECT_PREFIX = "nowplaying-journal-edit-select";
 const NOW_PLAYING_JOURNAL_DELETE_PREFIX = "nowplaying-journal-delete";
 const NOW_PLAYING_JOURNAL_DELETE_SELECT_PREFIX = "nowplaying-journal-delete-select";
 const NOW_PLAYING_JOURNAL_DELETE_CONFIRM_PREFIX = "nowplaying-journal-delete-confirm";
@@ -3471,53 +3470,15 @@ export class NowPlayingCommand {
     }
     const gameId = Number(gameIdRaw);
     const page = Number(pageRaw);
-    const offset = (Math.max(1, page) - 1) * 5;
-    const entries = await Member.getGameJournalEntries(ownerId, gameId, { limit: 5, offset });
+    const offset = Math.max(0, page - 1);
+    const entries = await Member.getGameJournalEntries(ownerId, gameId, { limit: 1, offset });
     if (!entries.length) {
       await safeReply(interaction, { content: "No journal entries available to edit." });
       return;
     }
-    const options = entries.map((entry) => ({
-      label: (entry.title ?? `Entry #${entry.entryNumber}`).slice(0, 100),
-      value: String(entry.entryId),
-      description: formatTableDate(entry.createdAt),
-    }));
-    const select = new StringSelectMenuBuilder()
-      .setCustomId(`${NOW_PLAYING_JOURNAL_EDIT_SELECT_PREFIX}:${ownerId}:${gameId}:${page}`)
-      .setPlaceholder("Choose an entry to edit")
-      .addOptions(options);
-    const row = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select);
-    const container = new ContainerBuilder().addTextDisplayComponents(
-      new TextDisplayBuilder().setContent("## Edit Journal Entry\nSelect an entry to edit."),
-    );
-    const helpRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
-      new ButtonBuilder()
-        .setCustomId(`${NOW_PLAYING_HELP_PREFIX}:journal-edit:${ownerId}`)
-        .setLabel("?")
-        .setStyle(ButtonStyle.Secondary),
-    );
-    await safeUpdate(interaction, {
-      components: [container, row, helpRow],
-      flags: buildComponentsV2Flags(interaction.message.flags?.has(MessageFlags.Ephemeral) ?? false),
-    });
-  }
-
-  @SelectMenuComponent({ id: /^nowplaying-journal-edit-select:\d+:\d+:\d+$/ })
-  async handleNowPlayingJournalEditSelect(interaction: StringSelectMenuInteraction): Promise<void> {
-    const [, ownerId, gameIdRaw, pageRaw] = interaction.customId.split(":");
-    if (interaction.user.id !== ownerId) {
-      await safeReply(interaction, { content: "Only the owner can edit journal entries." });
-      return;
-    }
-    const entryId = Number(interaction.values[0]);
-    const entry = await Member.getGameJournalEntryForUser(ownerId, entryId);
-    if (!entry || entry.gameId !== Number(gameIdRaw)) {
-      await safeReply(interaction, { content: "That journal entry was not found." });
-      return;
-    }
-
+    const entry = entries[0];
     const modal = new ComponentsModalBuilder()
-      .setCustomId(`${NOW_PLAYING_JOURNAL_EDIT_MODAL_ID}:${ownerId}:${gameIdRaw}:${pageRaw}:${entryId}`)
+      .setCustomId(`${NOW_PLAYING_JOURNAL_EDIT_MODAL_ID}:${ownerId}:${gameIdRaw}:${pageRaw}:${entry.entryId}`)
       .setTitle("Edit Journal Entry");
     modal.addActionRowComponents(
       new ComponentsActionRowBuilder<ComponentsTextInputBuilder>().addComponents(
@@ -3540,12 +3501,6 @@ export class NowPlayingCommand {
       ),
     );
     await interaction.showModal(modal);
-    const isEphemeral = interaction.message.flags?.has(MessageFlags.Ephemeral) ?? false;
-    if (isEphemeral) {
-      await interaction.deleteReply().catch(() => null);
-    } else if (interaction.guildId) {
-      await interaction.message.delete().catch(() => null);
-    }
   }
 
   @ButtonComponent({ id: /^nowplaying-journal-delete:\d+:\d+:\d+$/ })

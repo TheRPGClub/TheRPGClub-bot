@@ -67,7 +67,6 @@ const GJ_ALL_PAGE_PREFIX = "game-journal-all-page";
 const GJ_HEADER_ADD_PREFIX = "game-journal-header-add";
 const GJ_HMENU_ADD_PREFIX = "game-journal-hmenu-add";
 const GJ_HMENU_EDIT_PREFIX = "game-journal-hmenu-edit";
-const GJ_HMENU_EDIT_SELECT_PREFIX = "game-journal-hmenu-edit-select";
 const GJ_HMENU_DELETE_PREFIX = "game-journal-hmenu-delete";
 const GJ_HMENU_DELETE_SELECT_PREFIX = "game-journal-hmenu-delete-select";
 const GJ_HMENU_DELETE_CONFIRM_PREFIX = "game-journal-hmenu-delete-confirm";
@@ -81,10 +80,9 @@ export { GJ_CLOSE_PREFIX };
 // customId: GJ_ALL_SELECT_PREFIX:{callerId}:{page}                  value=userId
 // customId: GJ_ALL_PAGE_PREFIX:{callerId}:{page}
 // customId: GJ_PUBLIC_CLOSE_PREFIX:{callerId}
-// customId: GJ_HEADER_ADD_PREFIX:{ownerId}:{gameId}
+// customId: GJ_HEADER_ADD_PREFIX:{ownerId}:{gameId}:{page}
 // customId: GJ_HMENU_ADD_PREFIX:{ownerId}:{gameId}
-// customId: GJ_HMENU_EDIT_PREFIX:{ownerId}:{gameId}
-// customId: GJ_HMENU_EDIT_SELECT_PREFIX:{ownerId}:{gameId}          value=entryId
+// customId: GJ_HMENU_EDIT_PREFIX:{ownerId}:{gameId}:{page}
 // customId: GJ_HMENU_DELETE_PREFIX:{ownerId}:{gameId}
 // customId: GJ_HMENU_DELETE_SELECT_PREFIX:{ownerId}:{gameId}        value=entryId
 // customId: GJ_HMENU_DELETE_CONFIRM_PREFIX:(yes|no):{ownerId}:{gameId}:{entryId}
@@ -96,14 +94,18 @@ function buildComponentsV2Flags(isEphemeral: boolean): number {
   return (isEphemeral ? MessageFlags.Ephemeral : 0) | COMPONENTS_V2_FLAG;
 }
 
-function buildHmenuActionRow(ownerId: string, gameId: number): ActionRowBuilder<ButtonBuilder> {
+function buildHmenuActionRow(
+  ownerId: string,
+  gameId: number,
+  page = 1,
+): ActionRowBuilder<ButtonBuilder> {
   return new ActionRowBuilder<ButtonBuilder>().addComponents(
     new ButtonBuilder()
       .setCustomId(`${GJ_HMENU_ADD_PREFIX}:${ownerId}:${gameId}`)
       .setLabel("Add Entry")
       .setStyle(ButtonStyle.Success),
     new ButtonBuilder()
-      .setCustomId(`${GJ_HMENU_EDIT_PREFIX}:${ownerId}:${gameId}`)
+      .setCustomId(`${GJ_HMENU_EDIT_PREFIX}:${ownerId}:${gameId}:${page}`)
       .setLabel("Edit Entry")
       .setStyle(ButtonStyle.Primary),
     new ButtonBuilder()
@@ -253,7 +255,7 @@ function buildJournalViewPayload(
     nextPageCustomId: (p) =>
       `${GJ_VIEW_PAGE_PREFIX}:${callerId}:${targetUserId}:${gameId}:${p}`,
     headerButtonCustomId: isOwner
-      ? `${GJ_HEADER_ADD_PREFIX}:${targetUserId}:${gameId}`
+      ? `${GJ_HEADER_ADD_PREFIX}:${targetUserId}:${gameId}:${page}`
       : undefined,
     includeNowPlayingMeta: true,
     includeCompletions: true,
@@ -568,18 +570,19 @@ export class GameJournalCommand {
     }
   }
 
-  @ButtonComponent({ id: /^game-journal-header-add:\d+:\d+$/ })
+  @ButtonComponent({ id: /^game-journal-header-add:\d+:\d+:\d+$/ })
   async handleHeaderAdd(interaction: ButtonInteraction): Promise<void> {
-    const [, ownerId, gameIdRaw] = interaction.customId.split(":");
+    const [, ownerId, gameIdRaw, pageRaw] = interaction.customId.split(":");
     if (interaction.user.id !== ownerId) {
       await safeDeferUpdate(interaction);
       return;
     }
     const gameId = Number(gameIdRaw);
+    const page = Number(pageRaw);
     const container = new ContainerBuilder().addTextDisplayComponents(
       new TextDisplayBuilder().setContent("## Manage Journal"),
     );
-    const row = buildHmenuActionRow(ownerId, gameId);
+    const row = buildHmenuActionRow(ownerId, gameId, page);
     await safeReply(interaction, {
       components: [container, row],
       flags: buildComponentsV2Flags(true),
@@ -600,18 +603,17 @@ export class GameJournalCommand {
     await interaction.showModal(modal);
   }
 
-  @ButtonComponent({ id: /^game-journal-hmenu-edit:\d+:\d+$/ })
+  @ButtonComponent({ id: /^game-journal-hmenu-edit:\d+:\d+:\d+$/ })
   async handleGjHmenuEdit(interaction: ButtonInteraction): Promise<void> {
-    const [, ownerId, gameIdRaw] = interaction.customId.split(":");
+    const [, ownerId, gameIdRaw, pageRaw] = interaction.customId.split(":");
     if (interaction.user.id !== ownerId) {
       await safeDeferUpdate(interaction);
       return;
     }
     const gameId = Number(gameIdRaw);
-    const entries = await Member.getGameJournalEntries(ownerId, gameId, {
-      limit: 5,
-      offset: 0,
-    });
+    const page = Number(pageRaw);
+    const offset = Math.max(0, page - 1);
+    const entries = await Member.getGameJournalEntries(ownerId, gameId, { limit: 1, offset });
     if (!entries.length) {
       await safeUpdate(interaction, {
         components: [
@@ -629,48 +631,9 @@ export class GameJournalCommand {
       });
       return;
     }
-    const options = entries.map((e) => ({
-      label: (e.title ?? `Entry #${e.entryNumber}`).slice(0, 100),
-      value: String(e.entryId),
-      description: formatTableDate(e.createdAt),
-    }));
-    const select = new StringSelectMenuBuilder()
-      .setCustomId(`${GJ_HMENU_EDIT_SELECT_PREFIX}:${ownerId}:${gameId}`)
-      .setPlaceholder("Choose an entry to edit")
-      .addOptions(options);
-    const container = new ContainerBuilder().addTextDisplayComponents(
-      new TextDisplayBuilder().setContent("## Edit Journal Entry\nSelect an entry to edit."),
-    );
-    const row = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select);
-    const helpRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
-      new ButtonBuilder()
-        .setCustomId(`${NOW_PLAYING_HELP_PREFIX}:journal-edit:${ownerId}`)
-        .setLabel("?")
-        .setStyle(ButtonStyle.Secondary),
-    );
-    await safeUpdate(interaction, {
-      components: [container, row, helpRow],
-      flags: buildComponentsV2Flags(true),
-    });
-  }
-
-  @SelectMenuComponent({ id: /^game-journal-hmenu-edit-select:\d+:\d+$/ })
-  async handleGjHmenuEditSelect(
-    interaction: StringSelectMenuInteraction,
-  ): Promise<void> {
-    const [, ownerId, gameIdRaw] = interaction.customId.split(":");
-    if (interaction.user.id !== ownerId) {
-      await safeDeferUpdate(interaction);
-      return;
-    }
-    const entryId = Number(interaction.values[0]);
-    const entry = await Member.getGameJournalEntryForUser(ownerId, entryId);
-    if (!entry || entry.gameId !== Number(gameIdRaw)) {
-      await safeReply(interaction, { content: "That journal entry was not found." });
-      return;
-    }
+    const entry = entries[0];
     const modal = buildHmenuModal(
-      `${GJ_HMENU_EDIT_MODAL_ID}:${ownerId}:${gameIdRaw}:${entryId}`,
+      `${GJ_HMENU_EDIT_MODAL_ID}:${ownerId}:${gameIdRaw}:${entry.entryId}`,
       "Edit Journal Entry",
       entry.title ?? "",
       entry.body,

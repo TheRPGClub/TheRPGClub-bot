@@ -134,8 +134,7 @@ export async function buildJournalView(options: JournalViewOptions): Promise<{
   );
 
   // Container 2: entries + footer
-  const pageInfo = totalPages > 1 ? `, page ${safePage} of ${totalPages}` : "";
-  const footer = `-# ${total} ${entryLabel(total)}${pageInfo}`;
+  const footer = `-# ${total} ${entryLabel(total)}`;
 
   const entryParts: string[] = [];
   if (!entries.length) {
@@ -194,7 +193,7 @@ export async function buildJournalView(options: JournalViewOptions): Promise<{
     navRow.addComponents(
       new ButtonBuilder()
         .setCustomId(prevPageCustomId(safePage - 1))
-        .setLabel("Previous Page")
+        .setLabel("Next Entry")
         .setStyle(ButtonStyle.Secondary),
     );
   }
@@ -202,7 +201,7 @@ export async function buildJournalView(options: JournalViewOptions): Promise<{
     navRow.addComponents(
       new ButtonBuilder()
         .setCustomId(nextPageCustomId(safePage + 1))
-        .setLabel("Next Page")
+        .setLabel("Previous Entry")
         .setStyle(ButtonStyle.Secondary),
     );
   }
