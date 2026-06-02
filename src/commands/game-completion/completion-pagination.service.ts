@@ -118,7 +118,7 @@ async function openCompletionJournalView(
 ): Promise<void> {
   const statuses = await Member.getJournalStatusForGames(ownerId, [gameId]);
   const status = statuses[0];
-  if (!status?.journalEnabled || !status.hasJournalEntry) {
+  if ((status?.journalCount ?? 0) === 0) {
     await safeReply(interaction, {
       content: "This game has no journal entries.",
       flags: MessageFlags.Ephemeral | COMPONENTS_V2_FLAG,
