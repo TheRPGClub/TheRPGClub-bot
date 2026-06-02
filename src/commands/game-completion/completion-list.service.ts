@@ -371,7 +371,8 @@ async function buildCompletionComponents(
     const count = yearCounts[yr] ?? 0;
     const lines = grouped[yr] ?? [];
 
-    let buffer = `### ${displayYear} (${count})`;
+    const gameWord = count === 1 ? "Game" : "Games";
+    let buffer = `### ${displayYear} (${count} ${gameWord} Completed)`;
     for (const line of lines) {
       const next = `${buffer}\n${line}`;
       if (next.length > CHUNK_LIMIT) {
