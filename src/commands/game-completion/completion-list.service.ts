@@ -16,7 +16,6 @@ import Game from "../../classes/Game.js";
 import { COMPLETION_PAGE_SIZE, formatDiscordTimestamp, formatTableDate } from "../profile.command.js";
 import { formatPlatformDisplayName } from "../../functions/PlatformDisplay.js";
 import { safeReply } from "../../functions/InteractionUtils.js";
-import { shouldRenderPrevNextButtons } from "../../functions/PaginationUtils.js";
 import { renderUsernameWithEmoji } from "../../services/UserEmojiService.js";
 import { COMPONENTS_V2_FLAG } from "../../config/flags.js";
 import { buildUserHeaderContainer } from "../../functions/uiComponents.js";
@@ -143,7 +142,6 @@ export async function renderCompletionPage(
   const paginationRows = buildPaginationRows(
     totalPages,
     safePage,
-    `comp-page-select:${userId}:${yearPart}:list${queryPart}`,
     `comp-list-page:${userId}:${yearPart}:${safePage}:prev${queryPart}`,
     `comp-list-page:${userId}:${yearPart}:${safePage}:next${queryPart}`,
   );
@@ -211,7 +209,6 @@ export async function renderSelectionPage(
   const paginationRows = buildPaginationRows(
     totalPages,
     safePage,
-    `comp-page-select:${userId}:${yearPart}:${mode}${queryPart}`,
     `comp-${mode}-page:${userId}:${yearPart}:${safePage}:prev${queryPart}`,
     `comp-${mode}-page:${userId}:${yearPart}:${safePage}:next${queryPart}`,
   );
@@ -234,62 +231,36 @@ export async function renderSelectionPage(
   }
 }
 
-type PaginationRow =
-  | ActionRowBuilder<StringSelectMenuBuilder>
-  | ActionRowBuilder<ButtonBuilder>;
-
 function buildPaginationRows(
   totalPages: number,
   safePage: number,
-  selectCustomId: string,
   prevCustomId: string,
   nextCustomId: string,
-): PaginationRow[] {
+): ActionRowBuilder<ButtonBuilder>[] {
   if (totalPages <= 1) return [];
 
-  const maxOptions = 25;
-  let startPage = 0;
-  let endPage = totalPages - 1;
+  const showPrev = safePage > 0;
+  const showNext = safePage < totalPages - 1;
+  if (!showPrev && !showNext) return [];
 
-  if (totalPages > maxOptions) {
-    const half = Math.floor(maxOptions / 2);
-    startPage = Math.max(0, safePage - half);
-    endPage = Math.min(totalPages - 1, startPage + maxOptions - 1);
-    startPage = Math.max(0, endPage - maxOptions + 1);
+  const buttons: ButtonBuilder[] = [];
+  if (showPrev) {
+    buttons.push(
+      new ButtonBuilder()
+        .setCustomId(prevCustomId)
+        .setLabel("Previous Page")
+        .setStyle(ButtonStyle.Secondary),
+    );
   }
-
-  const options: { label: string; value: string; default: boolean }[] = [];
-  for (let i = startPage; i <= endPage; i++) {
-    options.push({ label: `Page ${i + 1}`, value: String(i), default: i === safePage });
+  if (showNext) {
+    buttons.push(
+      new ButtonBuilder()
+        .setCustomId(nextCustomId)
+        .setLabel("Next Page")
+        .setStyle(ButtonStyle.Secondary),
+    );
   }
-
-  const select = new StringSelectMenuBuilder()
-    .setCustomId(selectCustomId)
-    .setPlaceholder(`Page ${safePage + 1} of ${totalPages}`)
-    .addOptions(options);
-
-  const rows: PaginationRow[] = [
-    new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select),
-  ];
-
-  const prevDisabled = safePage <= 0;
-  const nextDisabled = safePage >= totalPages - 1;
-
-  if (shouldRenderPrevNextButtons(prevDisabled, nextDisabled)) {
-    const prev = new ButtonBuilder()
-      .setCustomId(prevCustomId)
-      .setLabel("Previous")
-      .setStyle(ButtonStyle.Secondary)
-      .setDisabled(prevDisabled);
-    const next = new ButtonBuilder()
-      .setCustomId(nextCustomId)
-      .setLabel("Next")
-      .setStyle(ButtonStyle.Secondary)
-      .setDisabled(nextDisabled);
-    rows.push(new ActionRowBuilder<ButtonBuilder>().addComponents(prev, next));
-  }
-
-  return rows;
+  return [new ActionRowBuilder<ButtonBuilder>().addComponents(...buttons)];
 }
 
 const CHUNK_LIMIT = 1500;
@@ -343,30 +314,16 @@ async function buildCompletionComponents(
   if (!allCompletions.length) return null;
 
   const yearCounts: Record<string, number> = {};
-  const yearIndices = new Map<number, number>();
-
   for (const c of allCompletions) {
     const yr = c.completedAt ? String(c.completedAt.getFullYear()) : "Unknown";
     yearCounts[yr] = (yearCounts[yr] ?? 0) + 1;
-    yearIndices.set(c.completionId, yearCounts[yr]);
   }
 
   const pageCompletions = allCompletions.slice(offset, offset + COMPLETION_PAGE_SIZE);
-  const dateWidth = 10;
-  const maxIndexLabelLength =
-    String(Math.max(...pageCompletions.map((c) => yearIndices.get(c.completionId) ?? 0)))
-      .length + 1;
 
   const grouped = pageCompletions.reduce<Record<string, string[]>>((acc, c) => {
     const yr = c.completedAt ? String(c.completedAt.getFullYear()) : "Unknown";
     acc[yr] = acc[yr] || [];
-
-    const yearIdx = yearIndices.get(c.completionId)!;
-    const idxLabelRaw = `${yearIdx}.`;
-    const idxLabel = idxLabelRaw.padStart(maxIndexLabelLength, " ");
-    const dateLabel = c.completedAt
-      ? formatTableDate(c.completedAt).padStart(dateWidth, " ")
-      : "";
 
     const typeAbbrev =
       c.completionType === "Main Story"
@@ -375,20 +332,18 @@ async function buildCompletionComponents(
           ? "M+S"
           : "C";
 
-    const idxBlock = `\`${idxLabel}\``;
-    const dateBlock = dateLabel ? `\`${dateLabel}\`` : "";
     const rawPlatformName =
       c.platformId == null ? null : platformMap.get(c.platformId) ?? "Unknown Platform";
     const platformName = formatPlatformDisplayName(rawPlatformName);
     const platformLabel = platformName ? ` [${platformName}]` : "";
-    const line = `${idxBlock} ${dateBlock} **${c.title}**${platformLabel} (${typeAbbrev})`.replace(
-      /\s{2,}/g,
-      " ",
+    const dateLabel = c.completedAt ? ` · ${formatTableDate(c.completedAt)}` : "";
+    const hoursLabel =
+      c.finalPlaytimeHours != null ? ` · ${c.finalPlaytimeHours} hrs` : "";
+
+    const num = acc[yr].length + 1;
+    acc[yr].push(
+      `${num}. **${c.title}**${platformLabel} (${typeAbbrev})${dateLabel}${hoursLabel}`,
     );
-    acc[yr].push(line);
-    if (c.note) {
-      acc[yr].push(`> ${c.note}`);
-    }
     return acc;
   }, {});
 
