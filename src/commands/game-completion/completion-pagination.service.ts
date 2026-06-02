@@ -123,7 +123,8 @@ export async function handleCompletionYearSelect(
     return;
   }
 
-  await renderCompletionPage(interaction, userId, 0, year, ephemeral);
+  const firstPage = 0;
+  await renderCompletionPage(interaction, userId, firstPage, year, ephemeral);
 }
 
 /**
@@ -137,5 +138,7 @@ export async function handleCompletionLeaderboardSelect(
   const userId = interaction.values[0];
   const ephemeral = interaction.message?.flags?.has(MessageFlags.Ephemeral) ?? true;
   await interaction.deferReply({ flags: ephemeral ? MessageFlags.Ephemeral : undefined });
-  await renderCompletionPage(interaction, userId, 0, null, ephemeral, query);
+  const firstPage = 0;
+  const noYearFilter = null;
+  await renderCompletionPage(interaction, userId, firstPage, noYearFilter, ephemeral, query);
 }
