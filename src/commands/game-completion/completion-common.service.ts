@@ -404,7 +404,7 @@ export async function renderCommonCompletionPage(
 
   const commonRows = createCommonRows(leftCompletions, rightCompletions);
   const filtered = applyFilters(commonRows, state);
-  const sorted = sortRows(filtered, state.sort);
+  const sorted = sortRows(filtered, "title_asc");
 
   if (!sorted.length) {
     await safeReply(interaction, {
@@ -453,11 +453,10 @@ export async function renderCommonCompletionPage(
   if (state.query?.trim()) {
     footerLines.push(`-# Query: "${state.query.trim()}"`);
   }
-  const gameWord = total === 1 ? "shared game" : "shared games";
   if (totalPages > 1) {
-    footerLines.push(`-# ${total} ${gameWord}. Page ${safePage + 1} of ${totalPages}.`);
+    footerLines.push(`-# ${total} game completions in common. Page ${safePage + 1} of ${totalPages}.`);
   } else {
-    footerLines.push(`-# ${total} ${gameWord}.`);
+    footerLines.push(`-# ${total} game completions in common.`);
   }
   containers.push(
     new ContainerBuilder().addTextDisplayComponents(
