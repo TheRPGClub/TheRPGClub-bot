@@ -43,7 +43,7 @@ export async function handleCompletionPageSelect(
   try {
     await interaction.deferUpdate();
   } catch {
-    // ignore
+    return;
   }
 
   if (mode === "list") {
@@ -88,7 +88,7 @@ export async function handleCompletionPaging(interaction: ButtonInteraction): Pr
   try {
     await interaction.deferUpdate();
   } catch {
-    // ignore
+    return;
   }
 
   if (mode === "list") {
