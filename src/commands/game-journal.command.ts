@@ -639,6 +639,7 @@ export class GameJournalCommand {
       entry.body,
     );
     await interaction.showModal(modal);
+    await interaction.message.delete().catch(() => null);
   }
 
   @ButtonComponent({ id: /^game-journal-hmenu-delete:\d+:\d+$/ })
