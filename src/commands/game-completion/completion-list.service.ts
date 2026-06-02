@@ -18,7 +18,11 @@ import { formatPlatformDisplayName } from "../../functions/PlatformDisplay.js";
 import { safeReply } from "../../functions/InteractionUtils.js";
 import { renderUsernameWithEmoji } from "../../services/UserEmojiService.js";
 import { COMPONENTS_V2_FLAG } from "../../config/flags.js";
-import { buildUserHeaderContainer } from "../../functions/uiComponents.js";
+import {
+  buildJournalSelectRow,
+  buildUserHeaderContainer,
+  type JournalSelectEntry,
+} from "../../functions/uiComponents.js";
 
 function buildCompletionV2Flags(ephemeral: boolean): number {
   return (ephemeral ? MessageFlags.Ephemeral : 0) | COMPONENTS_V2_FLAG;
@@ -136,7 +140,7 @@ export async function renderCompletionPage(
     return;
   }
 
-  const { containers, totalPages, safePage, sortedYears, yearCounts } = result;
+  const { containers, totalPages, safePage, sortedYears, yearCounts, journalEntries } = result;
   const yearPart = year == null ? "" : String(year);
   const queryPart = query ? `:${query.slice(0, 50)}` : "";
   const clearFilterCustomId = year !== null ? `comp-clear-year-filter:${userId}` : undefined;
@@ -149,14 +153,21 @@ export async function renderCompletionPage(
   );
 
   const yearJumpRow = buildYearJumpRow(userId, year, query, totalPages, sortedYears, yearCounts);
+  const journalSelectRow = buildJournalSelectRow(
+    `comp-journal-view-select:${userId}`,
+    journalEntries,
+  );
   const displayName = user.displayName ?? user.username ?? user.id;
-  const header = buildUserHeaderContainer(userId, displayName, "Completed Games");
+  const isOwner = interaction.user.id === userId;
+  const headerButtonCustomId = isOwner ? `comp-list-header:${userId}` : undefined;
+  const header = buildUserHeaderContainer(userId, displayName, "Completed Games", headerButtonCustomId);
 
   await safeReply(interaction as any, {
     components: [
       header,
       ...containers,
       ...(yearJumpRow ? [yearJumpRow] : []),
+      ...(journalSelectRow ? [journalSelectRow] : []),
       ...paginationRows,
     ],
     flags: buildCompletionV2Flags(ephemeral),
@@ -304,7 +315,7 @@ function buildPaginationRows(
   return [new ActionRowBuilder<ButtonBuilder>().addComponents(...buttons)];
 }
 
-const CHUNK_LIMIT = 1500;
+const CHUNK_LIMIT = 3500;
 
 async function buildCompletionComponents(
   userId: string,
@@ -320,6 +331,7 @@ async function buildCompletionComponents(
   pageCompletions: any[];
   sortedYears: string[];
   yearCounts: Record<string, number>;
+  journalEntries: JournalSelectEntry[];
 } | null> {
   const total = await Member.countCompletions(userId, year, query);
   if (total === 0) return null;
@@ -358,7 +370,13 @@ async function buildCompletionComponents(
 
   const pageCompletions = allCompletions.slice(offset, offset + COMPLETION_PAGE_SIZE);
 
+  const pageGameIds = [...new Set(pageCompletions.map((c) => c.gameId))];
+  const journalStatuses = await Member.getJournalStatusForGames(userId, pageGameIds);
+  const journalByGameId = new Map(journalStatuses.map((s) => [s.gameId, s]));
+
   const buildEntryLine = (c: (typeof pageCompletions)[number], num: number): string => {
+    const journal = journalByGameId.get(c.gameId);
+    const journalEmoji = journal?.journalEnabled && journal.hasJournalEntry ? " 📒" : "";
     const typeAbbrev =
       c.completionType === "Main Story"
         ? "M"
@@ -371,7 +389,7 @@ async function buildCompletionComponents(
     const platformLabel = platformName ? ` [${platformName}]` : "";
     const dateLabel = c.completedAt ? ` · ${formatTableDate(c.completedAt)}` : "";
     const hoursLabel = c.finalPlaytimeHours != null ? ` · ${c.finalPlaytimeHours} hrs` : "";
-    return `${num}. **${c.title}**${platformLabel} (${typeAbbrev})${dateLabel}${hoursLabel}`;
+    return `${num}. **${c.title}**${journalEmoji}${platformLabel} (${typeAbbrev})${dateLabel}${hoursLabel}`;
   };
 
   const pushChunked = (containers: ContainerBuilder[], lines: string[]): void => {
@@ -414,6 +432,9 @@ async function buildCompletionComponents(
     const yearLabel = year === "unknown" ? "Unknown Date" : String(year);
     footerLines.push(`-# Year filter: ${yearLabel}`);
   }
+  if (queryLabel) {
+    footerLines.push(`-# Query: "${queryLabel}"`);
+  }
   if (totalPages > 1) {
     let resultsText = `${total} results`;
     if (minYear !== null && maxYear !== null) {
@@ -429,11 +450,6 @@ async function buildCompletionComponents(
   const yearCounts: Record<string, number> = {};
 
   if (queryLabel) {
-    containers.push(
-      new ContainerBuilder().addTextDisplayComponents(
-        new TextDisplayBuilder().setContent(`-# Query: "${queryLabel}"`),
-      ),
-    );
     const lines = pageCompletions.map((c, i) => buildEntryLine(c, offset + i + 1));
     pushChunked(containers, lines);
   } else {
@@ -473,5 +489,29 @@ async function buildCompletionComponents(
     ),
   );
 
-  return { containers, total, totalPages, safePage, pageCompletions, sortedYears, yearCounts };
+  const journalEntries: JournalSelectEntry[] = pageCompletions
+    .filter((c) => {
+      const s = journalByGameId.get(c.gameId);
+      return s?.journalEnabled && s.hasJournalEntry;
+    })
+    .map((c) => {
+      const s = journalByGameId.get(c.gameId)!;
+      return {
+        gameId: c.gameId,
+        title: c.title,
+        journalCount: s.journalCount,
+        lastJournalAt: s.lastJournalAt,
+      };
+    });
+
+  return {
+    containers,
+    total,
+    totalPages,
+    safePage,
+    pageCompletions,
+    sortedYears,
+    yearCounts,
+    journalEntries,
+  };
 }

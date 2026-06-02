@@ -784,6 +784,70 @@ export default class Member {
     }
   }
 
+  static async getJournalStatusForGames(
+    userId: string,
+    gameIds: number[],
+  ): Promise<
+    Array<{
+      gameId: number;
+      journalEnabled: boolean;
+      hasJournalEntry: boolean;
+      journalCount: number;
+      lastJournalAt: Date | null;
+    }>
+  > {
+    if (!gameIds.length) return [];
+    const uniqueIds = [...new Set(gameIds.filter((id) => Number.isInteger(id) && id > 0))];
+    if (!uniqueIds.length) return [];
+    const connection = await getOraclePool().getConnection();
+    const inlineTable = uniqueIds
+      .map((_, idx) => `SELECT :id${idx} AS GAME_ID FROM DUAL`)
+      .join(" UNION ALL ");
+    const binds: Record<string, string | number> = { userId };
+    uniqueIds.forEach((id, idx) => {
+      binds[`id${idx}`] = id;
+    });
+    try {
+      const res = await connection.execute<{
+        GAME_ID: number;
+        JOURNAL_ENABLED: number | null;
+        HAS_JOURNAL_ENTRY: number;
+        JOURNAL_COUNT: number;
+        LAST_JOURNAL_AT: Date | string | null;
+      }>(
+        `SELECT gids.GAME_ID,
+                NVL(jp.IS_ENABLED, 1) AS JOURNAL_ENABLED,
+                CASE WHEN COUNT(je.ID) > 0 THEN 1 ELSE 0 END AS HAS_JOURNAL_ENTRY,
+                COUNT(je.ID) AS JOURNAL_COUNT,
+                MAX(je.CREATED_AT) AS LAST_JOURNAL_AT
+           FROM (${inlineTable}) gids
+           LEFT JOIN USER_GAME_JOURNAL_ENTRIES je
+             ON je.USER_ID = :userId
+            AND je.GAMEDB_GAME_ID = gids.GAME_ID
+           LEFT JOIN USER_GAME_JOURNAL_PREFS jp
+             ON jp.USER_ID = :userId
+            AND jp.GAMEDB_GAME_ID = gids.GAME_ID
+          GROUP BY gids.GAME_ID, jp.IS_ENABLED`,
+        binds,
+        { outFormat: oracledb.OUT_FORMAT_OBJECT },
+      );
+      return (res.rows ?? []).map((row) => ({
+        gameId: Number(row.GAME_ID),
+        journalEnabled: Number(row.JOURNAL_ENABLED ?? 1) === 1,
+        hasJournalEntry: Number(row.HAS_JOURNAL_ENTRY) === 1,
+        journalCount: Number(row.JOURNAL_COUNT),
+        lastJournalAt:
+          row.LAST_JOURNAL_AT instanceof Date
+            ? row.LAST_JOURNAL_AT
+            : row.LAST_JOURNAL_AT
+              ? new Date(row.LAST_JOURNAL_AT as any)
+              : null,
+      }));
+    } finally {
+      await connection.close();
+    }
+  }
+
   static async getGameJournalEntries(
     userId: string,
     gameId: number,

@@ -56,7 +56,7 @@ import {
 } from "../functions/InteractionUtils.js";
 import Game, { type IGame } from "../classes/Game.js";
 import { buildJournalView } from "../functions/journalView.js";
-import { buildUserHeaderContainer } from "../functions/uiComponents.js";
+import { buildJournalSelectRow, buildUserHeaderContainer } from "../functions/uiComponents.js";
 import { EphemeralOwnerMenu } from "../functions/EphemeralOwnerMenu.js";
 import { igdbService } from "../services/IGDB/IgdbService.js";
 import {
@@ -4468,25 +4468,18 @@ export class NowPlayingCommand {
     entries: IMemberNowPlayingEntry[],
     ownerId: string,
   ): ActionRowBuilder<StringSelectMenuBuilder> | null {
-    const journalEntries = entries.filter(
-      (e) => e.journalEnabled && e.hasJournalEntry,
+    const journalEntries = entries
+      .filter((e) => e.journalEnabled && e.hasJournalEntry)
+      .map((e) => ({
+        gameId: e.gameId,
+        title: e.title,
+        journalCount: e.journalCount,
+        lastJournalAt: e.lastJournalAt,
+      }));
+    return buildJournalSelectRow(
+      `${NOW_PLAYING_JOURNAL_VIEW_SELECT_PREFIX}:${ownerId}`,
+      journalEntries,
     );
-    if (!journalEntries.length) return null;
-    const options = journalEntries.map((e) => {
-      const rawLabel = `${e.title} Game Journal`;
-      const label = rawLabel.length > 100 ? `${rawLabel.slice(0, 97)}...` : rawLabel;
-      const countText = e.journalCount === 1 ? "1 entry" : `${e.journalCount} entries`;
-      const lastPart = e.lastJournalAt
-        ? ` · Last entry ${formatTableDate(e.lastJournalAt)}`
-        : "";
-      const description = `${countText}${lastPart}`.slice(0, 100);
-      return { label, description, value: String(e.gameId) };
-    });
-    const select = new StringSelectMenuBuilder()
-      .setCustomId(`${NOW_PLAYING_JOURNAL_VIEW_SELECT_PREFIX}:${ownerId}`)
-      .setPlaceholder("View Game Journals")
-      .addOptions(options);
-    return new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select);
   }
 
   private async buildNowPlayingCompositeImageUrl(
