@@ -23,7 +23,8 @@ export function buildJournalSelectRow(
   entries: JournalSelectEntry[],
 ): ActionRowBuilder<StringSelectMenuBuilder> | null {
   if (!entries.length) return null;
-  const options = entries.map((e) => {
+  const sorted = [...entries].sort((a, b) => a.title.localeCompare(b.title));
+  const options = sorted.map((e) => {
     const rawLabel = `${e.title} Game Journal`;
     const label = rawLabel.length > 100 ? `${rawLabel.slice(0, 97)}...` : rawLabel;
     const countText = e.journalCount === 1 ? "1 entry" : `${e.journalCount} entries`;
