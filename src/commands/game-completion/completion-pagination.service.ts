@@ -43,7 +43,7 @@ export async function handleCompletionPageSelect(
   try {
     await interaction.deferUpdate();
   } catch {
-    // ignore
+    return;
   }
 
   if (mode === "list") {
@@ -88,7 +88,7 @@ export async function handleCompletionPaging(interaction: ButtonInteraction): Pr
   try {
     await interaction.deferUpdate();
   } catch {
-    // ignore
+    return;
   }
 
   if (mode === "list") {
@@ -106,6 +106,28 @@ export async function handleCompletionPaging(interaction: ButtonInteraction): Pr
 }
 
 /**
+ * Handles year-jump select menu on the completion list
+ */
+export async function handleCompletionYearSelect(
+  interaction: StringSelectMenuInteraction,
+): Promise<void> {
+  const parts = interaction.customId.split(":");
+  const userId = parts[1];
+  const selectedYear = interaction.values[0];
+  const year = parseCompletionYearFilter(selectedYear);
+  const ephemeral = interaction.message?.flags?.has(MessageFlags.Ephemeral) ?? true;
+
+  try {
+    await interaction.deferUpdate();
+  } catch {
+    return;
+  }
+
+  const firstPage = 0;
+  await renderCompletionPage(interaction, userId, firstPage, year, ephemeral);
+}
+
+/**
  * Handles leaderboard member selection to view their completions
  */
 export async function handleCompletionLeaderboardSelect(
@@ -114,6 +136,9 @@ export async function handleCompletionLeaderboardSelect(
   const parts = interaction.customId.split(":");
   const query = parts.slice(1).join(":") || undefined;
   const userId = interaction.values[0];
-  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-  await renderCompletionPage(interaction, userId, 0, null, true, query);
+  const ephemeral = interaction.message?.flags?.has(MessageFlags.Ephemeral) ?? true;
+  await interaction.deferReply({ flags: ephemeral ? MessageFlags.Ephemeral : undefined });
+  const firstPage = 0;
+  const noYearFilter = null;
+  await renderCompletionPage(interaction, userId, firstPage, noYearFilter, ephemeral, query);
 }
