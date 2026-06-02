@@ -5338,6 +5338,10 @@ export class NowPlayingCommand {
     }
 
     const now = Date.now();
+
+    // Expire stale entries and find the single most recent context for this channel.
+    let latestKey: string | null = null;
+    let latestContext: NowPlayingJournalContext | null = null;
     for (const [key, context] of nowPlayingJournalContexts.entries()) {
       if (now - context.createdAt > NOW_PLAYING_JOURNAL_CONTEXT_TTL_MS) {
         nowPlayingJournalContexts.delete(key);
@@ -5345,34 +5349,36 @@ export class NowPlayingCommand {
           .catch((err) => console.error("[Journal] Failed to delete expired context from DB:", err));
         continue;
       }
-      if (context.channelId !== channelId) {
-        continue;
+      if (context.channelId !== channelId) continue;
+      if (context.ownerUserId !== ownerUserId || context.gameId !== gameId) continue;
+      if (!latestContext || context.createdAt > latestContext.createdAt) {
+        latestKey = key;
+        latestContext = context;
       }
-      if (context.ownerUserId !== ownerUserId || context.gameId !== gameId) {
-        continue;
-      }
-
-      const channel = await interaction.client.channels.fetch(context.channelId).catch(() => null);
-      if (!channel?.isTextBased()) {
-        nowPlayingJournalContexts.delete(key);
-        await Member.deleteJournalMessageContext(context.channelId, context.messageId)
-          .catch((err) => console.error("[Journal] Failed to delete unreachable context from DB:", err));
-        continue;
-      }
-
-      const message = await channel.messages.fetch(context.messageId).catch(() => null);
-      if (!message) {
-        nowPlayingJournalContexts.delete(key);
-        await Member.deleteJournalMessageContext(context.channelId, context.messageId)
-          .catch((err) => console.error("[Journal] Failed to delete missing context from DB:", err));
-        continue;
-      }
-
-      await message.delete().catch(() => null);
-      nowPlayingJournalContexts.delete(key);
-      await Member.deleteJournalMessageContext(context.channelId, context.messageId)
-        .catch((err) => console.error("[Journal] Failed to delete context from DB after message delete:", err));
     }
+
+    if (!latestKey || !latestContext) return;
+
+    const channel = await interaction.client.channels.fetch(latestContext.channelId).catch(() => null);
+    if (!channel?.isTextBased()) {
+      nowPlayingJournalContexts.delete(latestKey);
+      await Member.deleteJournalMessageContext(latestContext.channelId, latestContext.messageId)
+        .catch((err) => console.error("[Journal] Failed to delete unreachable context from DB:", err));
+      return;
+    }
+
+    const message = await channel.messages.fetch(latestContext.messageId).catch(() => null);
+    if (!message) {
+      nowPlayingJournalContexts.delete(latestKey);
+      await Member.deleteJournalMessageContext(latestContext.channelId, latestContext.messageId)
+        .catch((err) => console.error("[Journal] Failed to delete missing context from DB:", err));
+      return;
+    }
+
+    await message.delete().catch(() => null);
+    nowPlayingJournalContexts.delete(latestKey);
+    await Member.deleteJournalMessageContext(latestContext.channelId, latestContext.messageId)
+      .catch((err) => console.error("[Journal] Failed to delete context from DB after message delete:", err));
   }
 
   private async trackJournalReply(
