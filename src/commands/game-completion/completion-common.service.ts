@@ -2,7 +2,6 @@ import {
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
-  EmbedBuilder,
   MessageFlags,
   StringSelectMenuBuilder,
   type ButtonInteraction,
@@ -11,13 +10,14 @@ import {
   type StringSelectMenuInteraction,
   type User,
 } from "discord.js";
+import { ContainerBuilder, TextDisplayBuilder } from "@discordjs/builders";
 import Member, { type ICompletionRecord } from "../../classes/Member.js";
 import Game from "../../classes/Game.js";
 import { safeReply } from "../../functions/InteractionUtils.js";
-import { buildComponentsV2Flags } from "../../functions/NominationListComponents.js";
-import { shouldRenderPrevNextButtons } from "../../functions/PaginationUtils.js";
 import { formatPlatformDisplayName } from "../../functions/PlatformDisplay.js";
 import { GameDb } from "../gamedb.command.js";
+import { COMPONENTS_V2_FLAG } from "../../config/flags.js";
+import { buildComponentsV2Flags } from "../../functions/NominationListComponents.js";
 import {
   COMPLETION_PAGE_SIZE,
 } from "../profile.command.js";
@@ -379,6 +379,36 @@ function sortRows(rows: ICommonCompletionRow[], sort: CommonCompletionSort): ICo
   return sorted;
 }
 
+function buildV2Flags(ephemeral: boolean): number {
+  return (ephemeral ? MessageFlags.Ephemeral : 0) | COMPONENTS_V2_FLAG;
+}
+
+const CHUNK_LIMIT = 3500;
+
+function pushChunked(containers: ContainerBuilder[], lines: string[]): void {
+  let buffer = "";
+  for (const line of lines) {
+    const next = buffer ? `${buffer}\n${line}` : line;
+    if (next.length > CHUNK_LIMIT) {
+      containers.push(
+        new ContainerBuilder().addTextDisplayComponents(
+          new TextDisplayBuilder().setContent(buffer),
+        ),
+      );
+      buffer = line;
+    } else {
+      buffer = next;
+    }
+  }
+  if (buffer) {
+    containers.push(
+      new ContainerBuilder().addTextDisplayComponents(
+        new TextDisplayBuilder().setContent(buffer),
+      ),
+    );
+  }
+}
+
 function formatYearLabel(year: number | "unknown" | null): string {
   if (year == null) return "All";
   if (year === "unknown") return "Unknown";
@@ -409,13 +439,16 @@ export async function renderCommonCompletionPage(
 
   const commonRows = createCommonRows(leftCompletions, rightCompletions);
   const filtered = applyFilters(commonRows, state);
-  const sorted = sortRows(filtered, "title_asc");
+  const sorted = sortRows(filtered, state.sort);
 
   if (!sorted.length) {
     await safeReply(interaction, {
-      content: "No shared completions matched those filters.",
-      components: [],
-      flags: ephemeral ? MessageFlags.Ephemeral : undefined,
+      components: [
+        new ContainerBuilder().addTextDisplayComponents(
+          new TextDisplayBuilder().setContent("No shared completions matched those filters."),
+        ),
+      ],
+      flags: buildV2Flags(ephemeral),
     });
     return;
   }
@@ -428,31 +461,45 @@ export async function renderCommonCompletionPage(
 
   const leftLabel = displayUserName(leftUser);
   const rightLabel = displayUserName(rightUser);
-  const lines: string[] = [];
 
-  for (let index = 0; index < pageRows.length; index += 1) {
-    const row = pageRows[index];
-    const position = offset + index + 1;
-    lines.push(`${position}. ${row.title}`);
+  const containers: ContainerBuilder[] = [];
+
+  containers.push(
+    new ContainerBuilder().addTextDisplayComponents(
+      new TextDisplayBuilder().setContent(
+        `## Shared Completions: ${leftLabel} & ${rightLabel}`,
+      ),
+    ),
+  );
+
+  const lines = pageRows.map((row, index) => `${offset + index + 1}. **${row.title}**`);
+  pushChunked(containers, lines);
+
+  const sortLabel =
+    COMMON_COMPLETION_SORT_OPTIONS.find((o) => o.value === state.sort)?.label ?? state.sort;
+  const footerLines = [`-# Sort: ${sortLabel}`];
+  if (state.year !== null) {
+    footerLines.push(`-# Year: ${formatYearLabel(state.year)}`);
   }
+  if (state.platformId != null) {
+    const rawName = platformMap.get(state.platformId) ?? "Unknown Platform";
+    footerLines.push(`-# Platform: ${formatPlatformDisplayName(rawName)}`);
+  }
+  if (state.query?.trim()) {
+    footerLines.push(`-# Query: "${state.query.trim()}"`);
+  }
+  const gameWord = total === 1 ? "shared game" : "shared games";
+  if (totalPages > 1) {
+    footerLines.push(`-# ${total} ${gameWord}. Page ${safePage + 1} of ${totalPages}.`);
+  } else {
+    footerLines.push(`-# ${total} ${gameWord}.`);
+  }
+  containers.push(
+    new ContainerBuilder().addTextDisplayComponents(
+      new TextDisplayBuilder().setContent(footerLines.join("\n")),
+    ),
+  );
 
-  const embed = new EmbedBuilder()
-    .setTitle(`Shared Completions: ${leftLabel} and ${rightLabel}`)
-    .setDescription(lines.join("\n"))
-    .setFooter({
-      text: [
-        `Total shared games: ${total}`,
-        "Sort: Title (A-Z)",
-        `Year: ${formatYearLabel(state.year)}`,
-        `Platform: ${state.platformId == null
-          ? "All"
-          : formatPlatformDisplayName(platformMap.get(state.platformId) ?? "Unknown Platform")}`,
-        `Title filter: ${state.query?.trim() || "None"}`,
-        `Page ${safePage + 1} of ${totalPages}`,
-      ].join(" | "),
-    });
-
-  const components: Array<ActionRowBuilder<StringSelectMenuBuilder> | ActionRowBuilder<ButtonBuilder>> = [];
   const detailSelect = new StringSelectMenuBuilder()
     .setCustomId(buildCommonViewCustomId(state, safePage))
     .setPlaceholder("View /gamedb details for a shared title")
@@ -462,31 +509,36 @@ export async function renderCommonCompletionPage(
         value: String(row.gameId),
       })),
     );
-  components.push(new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(detailSelect));
 
-  if (totalPages > 1) {
-    const prevDisabled = safePage <= 0;
-    const nextDisabled = safePage >= totalPages - 1;
-    const prevButton = new ButtonBuilder()
-      .setCustomId(buildCommonNavCustomId(state, safePage, "prev"))
-      .setLabel("Previous")
-      .setStyle(ButtonStyle.Secondary)
-      .setDisabled(prevDisabled);
-    const nextButton = new ButtonBuilder()
-      .setCustomId(buildCommonNavCustomId(state, safePage, "next"))
-      .setLabel("Next")
-      .setStyle(ButtonStyle.Secondary)
-      .setDisabled(nextDisabled);
-
-    if (shouldRenderPrevNextButtons(prevDisabled, nextDisabled)) {
-      components.push(new ActionRowBuilder<ButtonBuilder>().addComponents(prevButton, nextButton));
-    }
+  const showPrev = totalPages > 1 && safePage > 0;
+  const showNext = totalPages > 1 && safePage < totalPages - 1;
+  const paginationButtons: ButtonBuilder[] = [];
+  if (showPrev) {
+    paginationButtons.push(
+      new ButtonBuilder()
+        .setCustomId(buildCommonNavCustomId(state, safePage, "prev"))
+        .setLabel("Previous Page")
+        .setStyle(ButtonStyle.Secondary),
+    );
+  }
+  if (showNext) {
+    paginationButtons.push(
+      new ButtonBuilder()
+        .setCustomId(buildCommonNavCustomId(state, safePage, "next"))
+        .setLabel("Next Page")
+        .setStyle(ButtonStyle.Secondary),
+    );
   }
 
   await safeReply(interaction, {
-    embeds: [embed],
-    components,
-    flags: ephemeral ? MessageFlags.Ephemeral : undefined,
+    components: [
+      ...containers,
+      new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(detailSelect),
+      ...(paginationButtons.length
+        ? [new ActionRowBuilder<ButtonBuilder>().addComponents(...paginationButtons)]
+        : []),
+    ],
+    flags: buildV2Flags(ephemeral),
   });
 }
 
