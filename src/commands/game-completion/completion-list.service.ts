@@ -376,7 +376,7 @@ async function buildCompletionComponents(
 
   const buildEntryLine = (c: (typeof pageCompletions)[number], num: number): string => {
     const journal = journalByGameId.get(c.gameId);
-    const journalEmoji = (journal?.journalCount ?? 0) > 0 ? " 📒" : "";
+    const journalEmoji = (journal?.journalCount ?? 0) > 1 ? " 📒" : "";
     const typeAbbrev =
       c.completionType === "Main Story"
         ? "M"
@@ -492,7 +492,7 @@ async function buildCompletionComponents(
   const journalEntries: JournalSelectEntry[] = pageCompletions
     .filter((c) => {
       const s = journalByGameId.get(c.gameId);
-      return (s?.journalCount ?? 0) > 0;
+      return (s?.journalCount ?? 0) > 1;
     })
     .map((c) => {
       const s = journalByGameId.get(c.gameId)!;
