@@ -2561,14 +2561,13 @@ export default class Member {
         `SELECT u.USER_ID,
                 u.USERNAME,
                 u.GLOBAL_NAME,
-                COUNT(DISTINCT jp.GAMEDB_GAME_ID) AS GAME_COUNT
-           FROM USER_GAME_JOURNAL_PREFS jp
-           JOIN RPG_CLUB_USERS u ON u.USER_ID = jp.USER_ID
-          WHERE jp.IS_ENABLED = 1
-            AND NVL(u.IS_BOT, 0) = 0
+                COUNT(DISTINCT je.GAMEDB_GAME_ID) AS GAME_COUNT
+           FROM RPG_CLUB_USER_GAME_JOURNAL_ENTRIES je
+           JOIN RPG_CLUB_USERS u ON u.USER_ID = je.USER_ID
+          WHERE NVL(u.IS_BOT, 0) = 0
             AND u.SERVER_LEFT_AT IS NULL
           GROUP BY u.USER_ID, u.USERNAME, u.GLOBAL_NAME
-          ORDER BY COUNT(DISTINCT jp.GAMEDB_GAME_ID) DESC,
+          ORDER BY COUNT(DISTINCT je.GAMEDB_GAME_ID) DESC,
                    u.GLOBAL_NAME NULLS LAST,
                    u.USERNAME NULLS LAST`,
         {},
