@@ -1,6 +1,7 @@
 import {
   ActionRowBuilder,
   ApplicationCommandOptionType,
+  AutocompleteInteraction,
   ButtonBuilder,
   ButtonInteraction,
   ButtonStyle,
@@ -31,8 +32,10 @@ import {
 } from "discordx";
 import Member, {
   type IGameJournalListEntry,
+  type IJournalSearchResult,
   type IJournalUserSummary,
 } from "../classes/Member.js";
+import Game from "../classes/Game.js";
 import {
   safeDeferReply,
   safeDeferUpdate,
@@ -40,12 +43,14 @@ import {
   safeReply,
   safeUpdate,
 } from "../functions/InteractionUtils.js";
+import { formatGameTitleWithYear } from "../functions/GameTitleAutocompleteUtils.js";
 import { renderUsernameWithEmoji } from "../services/UserEmojiService.js";
 import { buildJournalView } from "../functions/journalView.js";
 import { COMPONENTS_V2_FLAG } from "../config/flags.js";
 import { buildUserHeaderContainer } from "../functions/uiComponents.js";
 import {
   GJ_CLOSE_PREFIX,
+  GJ_SEARCH_PAGE_PREFIX,
   JOURNAL_TITLE_INPUT_ID,
   JOURNAL_BODY_INPUT_ID,
 } from "../config/journalConstants.js";
@@ -61,6 +66,8 @@ const gjHmenu = new EphemeralOwnerMenu();
 
 const LIST_PAGE_SIZE = 15;
 const ALL_PAGE_SIZE = 20;
+const SEARCH_PAGE_SIZE = 5;
+const SEARCH_QUERY_MAX_LENGTH = 35;
 
 const GJ_LIST_SELECT_PREFIX = "game-journal-list-select";
 const GJ_LIST_PAGE_PREFIX = "game-journal-list-page";
@@ -328,6 +335,115 @@ function buildAllPageRow(
   return row.components.length > 0 ? row : null;
 }
 
+async function autocompleteJournalSearchGame(
+  interaction: AutocompleteInteraction,
+): Promise<void> {
+  const focused = interaction.options.getFocused(true);
+  const rawQuery = focused?.value ? String(focused.value) : "";
+  const query = sanitizeUserInput(rawQuery, { preserveNewlines: false }).trim();
+  if (!query) {
+    await interaction.respond([]);
+    return;
+  }
+  const results = await Game.searchGamesAutocomplete(query);
+  await interaction.respond(
+    results.slice(0, 25).map((game) => ({
+      name: formatGameTitleWithYear(game).slice(0, 100),
+      value: String(game.id),
+    })),
+  );
+}
+
+function buildSearchCustomId(
+  callerId: string,
+  targetUserId: string,
+  gameId: string,
+  page: number,
+  query: string,
+): string {
+  return `${GJ_SEARCH_PAGE_PREFIX}:${callerId}:${targetUserId}:${gameId}:${page}:${query}`;
+}
+
+function buildSearchResultComponents(
+  targetUserId: string,
+  gameId: string,
+  query: string,
+  results: IJournalSearchResult[],
+  total: number,
+  page: number,
+  totalPages: number,
+): ContainerBuilder[] {
+  const scopeParts: string[] = [];
+  if (targetUserId !== "0") scopeParts.push(`<@${targetUserId}>`);
+  if (gameId !== "0") {
+    const gameResult = results.find((r) => String(r.gameId) === gameId);
+    if (gameResult) scopeParts.push(`**${gameResult.gameTitle}**`);
+  }
+  const scopeLabel = scopeParts.length ? ` in ${scopeParts.join(", ")}` : "";
+  const pageInfo = totalPages > 1 ? ` • Page ${page + 1}/${totalPages}` : "";
+
+  const headerContainer = new ContainerBuilder().addTextDisplayComponents(
+    new TextDisplayBuilder().setContent(`## Journal Search: "${query}"${scopeLabel}`),
+  );
+
+  const lines: string[] = [];
+  if (!results.length) {
+    lines.push(`No journal entries matched **"${query}"**.`);
+  } else {
+    for (const result of results) {
+      const entryLabel = result.entryTitle?.trim()
+        ? `_${result.entryTitle.trim()}_`
+        : "_(no title)_";
+      const date = formatTableDate(result.createdAt);
+      const snippet = result.bodySnippet.length > 120
+        ? `${result.bodySnippet.slice(0, 117)}...`
+        : result.bodySnippet;
+      lines.push(
+        `**${result.gameTitle}** | <@${result.userId}>\n`
+        + `-# ${entryLabel} • ${date}\n`
+        + `> ${snippet.replace(/\n/g, " ")}`,
+      );
+    }
+  }
+  const resultLabel = total === 1 ? "result" : "results";
+  lines.push(`-# ${total} ${resultLabel}${pageInfo}`);
+
+  const resultsContainer = new ContainerBuilder().addTextDisplayComponents(
+    new TextDisplayBuilder().setContent(lines.join("\n\n")),
+  );
+
+  return [headerContainer, resultsContainer];
+}
+
+function buildSearchPageRow(
+  callerId: string,
+  targetUserId: string,
+  gameId: string,
+  query: string,
+  page: number,
+  totalPages: number,
+): ActionRowBuilder<ButtonBuilder> | null {
+  if (totalPages <= 1) return null;
+  const row = new ActionRowBuilder<ButtonBuilder>();
+  if (page > 0) {
+    row.addComponents(
+      new ButtonBuilder()
+        .setCustomId(buildSearchCustomId(callerId, targetUserId, gameId, page - 1, query))
+        .setLabel("Previous")
+        .setStyle(ButtonStyle.Secondary),
+    );
+  }
+  if (page < totalPages - 1) {
+    row.addComponents(
+      new ButtonBuilder()
+        .setCustomId(buildSearchCustomId(callerId, targetUserId, gameId, page + 1, query))
+        .setLabel("Next")
+        .setStyle(ButtonStyle.Secondary),
+    );
+  }
+  return row.components.length > 0 ? row : null;
+}
+
 @Discord()
 export class GameJournalCommand {
   @Slash({
@@ -356,11 +472,69 @@ export class GameJournalCommand {
       type: ApplicationCommandOptionType.Boolean,
     })
     isPrivate: boolean | undefined,
+    @SlashOption({
+      description: "Search for a term across journal entries",
+      name: "query",
+      required: false,
+      type: ApplicationCommandOptionType.String,
+    })
+    query: string | undefined,
+    @SlashOption({
+      autocomplete: autocompleteJournalSearchGame,
+      description: "Filter search to a specific game (autocomplete from GameDB)",
+      name: "game",
+      required: false,
+      type: ApplicationCommandOptionType.String,
+    })
+    gameRaw: string | undefined,
     interaction: CommandInteraction,
   ): Promise<void> {
     const ephemeral = isPrivate === true;
     const flags = ephemeral ? MessageFlags.Ephemeral : undefined;
     await safeDeferReply(interaction, { flags });
+
+    if (query !== undefined) {
+      const cleanQuery = sanitizeUserInput(query, { preserveNewlines: false })
+        .trim()
+        .slice(0, SEARCH_QUERY_MAX_LENGTH);
+      if (!cleanQuery) {
+        await safeReply(interaction, {
+          content: "Please enter a search term.",
+          flags: MessageFlags.Ephemeral,
+        });
+        return;
+      }
+      const targetUserId = member?.id ?? "0";
+      const gameIdParsed = gameRaw ? Number(gameRaw) : NaN;
+      const gameId = Number.isInteger(gameIdParsed) && gameIdParsed > 0
+        ? gameIdParsed
+        : undefined;
+      const gameIdStr = gameId ? String(gameId) : "0";
+      const callerId = interaction.user.id;
+
+      const { rows, total } = await Member.searchJournalEntries({
+        query: cleanQuery,
+        callerId,
+        userId: targetUserId !== "0" ? targetUserId : undefined,
+        gameId,
+        limit: SEARCH_PAGE_SIZE,
+        offset: 0,
+      });
+
+      const totalPages = Math.max(1, Math.ceil(total / SEARCH_PAGE_SIZE));
+      const searchComponents = buildSearchResultComponents(
+        targetUserId, gameIdStr, cleanQuery, rows, total, 0, totalPages,
+      );
+      const pageRow = buildSearchPageRow(
+        callerId, targetUserId, gameIdStr, cleanQuery, 0, totalPages,
+      );
+      const cvFlags = (ephemeral ? MessageFlags.Ephemeral : 0) | COMPONENTS_V2_FLAG;
+      const allComponents = pageRow
+        ? [...searchComponents, pageRow]
+        : searchComponents;
+      await safeReply(interaction, { embeds: [], components: allComponents, flags: cvFlags });
+      return;
+    }
 
     if (all === true && member === undefined) {
       const summaries = await Member.getAllJournalUsers();
@@ -538,6 +712,55 @@ export class GameJournalCommand {
     const pageRow = buildAllPageRow(callerId, safePage, totalPages);
     const components = pageRow ? [selectRow, pageRow] : [selectRow];
     await safeUpdate(interaction, { embeds: [embed], components });
+  }
+
+  @ButtonComponent({ id: new RegExp(`^${GJ_SEARCH_PAGE_PREFIX}:\\d+:\\d+:\\d+:\\d+:.+$`) })
+  async handleSearchPage(interaction: ButtonInteraction): Promise<void> {
+    const parts = interaction.customId.split(":");
+    const [, callerId, targetUserId, gameIdStr, pageRaw, ...queryParts] = parts;
+    if (interaction.user.id !== callerId) {
+      await safeReply(interaction, {
+        content: "This search isn't yours to navigate.",
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
+
+    const page = Number(pageRaw);
+    if (Number.isNaN(page)) return;
+
+    const query = queryParts.join(":");
+    if (!query) return;
+
+    await safeDeferUpdate(interaction);
+
+    const gameId = gameIdStr !== "0" && Number(gameIdStr) > 0
+      ? Number(gameIdStr)
+      : undefined;
+    const userId = targetUserId !== "0" ? targetUserId : undefined;
+
+    const { rows, total } = await Member.searchJournalEntries({
+      query,
+      callerId,
+      userId,
+      gameId,
+      limit: SEARCH_PAGE_SIZE,
+      offset: page * SEARCH_PAGE_SIZE,
+    });
+
+    const totalPages = Math.max(1, Math.ceil(total / SEARCH_PAGE_SIZE));
+    const safePage = Math.min(Math.max(page, 0), totalPages - 1);
+
+    const searchComponents = buildSearchResultComponents(
+      targetUserId, gameIdStr, query, rows, total, safePage, totalPages,
+    );
+    const nextPageRow = buildSearchPageRow(
+      callerId, targetUserId, gameIdStr, query, safePage, totalPages,
+    );
+    const allComponents = nextPageRow
+      ? [...searchComponents, nextPageRow]
+      : searchComponents;
+    await safeUpdate(interaction, { embeds: [], components: allComponents, flags: COMPONENTS_V2_FLAG });
   }
 
   @ButtonComponent({ id: new RegExp(`^${GJ_VIEW_PAGE_PREFIX}:\\d+:\\d+:\\d+:\\d+$`) })

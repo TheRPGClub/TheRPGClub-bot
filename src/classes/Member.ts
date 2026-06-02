@@ -138,6 +138,17 @@ export interface IJournalUserSummary {
   gameCount: number;
 }
 
+export interface IJournalSearchResult {
+  entryId: number;
+  userId: string;
+  gameId: number;
+  gameTitle: string;
+  entryTitle: string | null;
+  bodySnippet: string;
+  createdAt: Date;
+  isPublic: number;
+}
+
 export interface IAvatarHistoryRecord {
   eventId: number;
   userId: string;
@@ -2632,6 +2643,82 @@ export default class Member {
         globalName: row.GLOBAL_NAME ?? null,
         gameCount: Number(row.GAME_COUNT ?? 0),
       }));
+    } finally {
+      await connection.close();
+    }
+  }
+
+  static async searchJournalEntries(params: {
+    query: string;
+    callerId: string;
+    userId?: string;
+    gameId?: number;
+    limit: number;
+    offset: number;
+  }): Promise<{ rows: IJournalSearchResult[]; total: number }> {
+    const connection = await getOraclePool().getConnection();
+    const safeLimit = Math.min(Math.max(params.limit, 1), 25);
+    const safeOffset = Math.max(params.offset, 0);
+    const searchTerm = params.query.trim();
+    try {
+      const res = await connection.execute<{
+        TOTAL_COUNT: number;
+        ENTRY_ID: number;
+        USER_ID: string;
+        GAMEDB_GAME_ID: number;
+        GAME_TITLE: string;
+        ENTRY_TITLE: string | null;
+        BODY_SNIPPET: string;
+        CREATED_AT: Date | string;
+        IS_PUBLIC: number;
+      }>(
+        `SELECT COUNT(*) OVER () AS TOTAL_COUNT,
+                je.ENTRY_ID,
+                je.USER_ID,
+                je.GAMEDB_GAME_ID,
+                g.TITLE         AS GAME_TITLE,
+                je.ENTRY_TITLE,
+                SUBSTR(je.ENTRY_BODY, 1, 200) AS BODY_SNIPPET,
+                je.CREATED_AT,
+                je.IS_PUBLIC
+           FROM USER_GAME_JOURNAL_ENTRIES je
+           JOIN GAMEDB_GAMES g ON g.GAME_ID = je.GAMEDB_GAME_ID
+          WHERE (
+                  UPPER(je.ENTRY_TITLE) LIKE '%' || UPPER(:searchTerm) || '%'
+               OR UPPER(je.ENTRY_BODY)  LIKE '%' || UPPER(:searchTerm) || '%'
+                )
+            AND (je.IS_PUBLIC = 1 OR je.USER_ID = :callerId)
+            AND (:userId IS NULL OR je.USER_ID = :userId)
+            AND (:gameId IS NULL OR je.GAMEDB_GAME_ID = :gameId)
+          ORDER BY je.CREATED_AT DESC, je.ENTRY_ID DESC
+          OFFSET :offset ROWS FETCH NEXT :limit ROWS ONLY`,
+        {
+          searchTerm,
+          callerId: params.callerId,
+          userId: params.userId ?? null,
+          gameId: params.gameId ?? null,
+          offset: safeOffset,
+          limit: safeLimit,
+        },
+        { outFormat: oracledb.OUT_FORMAT_OBJECT },
+      );
+      const rows = res.rows ?? [];
+      const total = rows.length > 0 ? Number(rows[0].TOTAL_COUNT) : 0;
+      return {
+        total,
+        rows: rows.map((row) => ({
+          entryId: Number(row.ENTRY_ID),
+          userId: row.USER_ID,
+          gameId: Number(row.GAMEDB_GAME_ID),
+          gameTitle: row.GAME_TITLE,
+          entryTitle: row.ENTRY_TITLE ?? null,
+          bodySnippet: row.BODY_SNIPPET,
+          createdAt: row.CREATED_AT instanceof Date
+            ? row.CREATED_AT
+            : new Date(row.CREATED_AT),
+          isPublic: Number(row.IS_PUBLIC),
+        })),
+      };
     } finally {
       await connection.close();
     }
