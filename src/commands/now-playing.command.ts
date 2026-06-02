@@ -5521,7 +5521,7 @@ export class NowPlayingCommand {
         }
         return lines.join("\n");
       });
-      const combined = this.trimTextDisplayContent(entryBlocks.join("\n\n"));
+      const combined = this.trimTextDisplayContent(entryBlocks.join("\n"));
       if (hasDisplayableNotes) {
         const notesAction = showNotes ? "hide" : "show";
         const notesLabel = showNotes ? "Hide Notes" : "Show Notes";
