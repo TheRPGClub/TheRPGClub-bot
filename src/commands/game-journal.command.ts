@@ -365,7 +365,7 @@ function buildSearchCustomId(
 }
 
 function buildSearchResultComponents(
-  targetUserName: string | null,
+  targetUser: { id: string; displayName: string } | null,
   gameTitle: string | null,
   query: string,
   results: IJournalSearchResult[],
@@ -373,13 +373,14 @@ function buildSearchResultComponents(
   page: number,
   totalPages: number,
 ): ContainerBuilder[] {
-  const gameLabel = gameTitle ? ` in **${gameTitle}**` : "";
-  const headerLines = [`## Game Journal Search: "${query}"${gameLabel}`];
-  if (targetUserName) headerLines.push(`-# for ${targetUserName}`);
+  const gamePart = gameTitle ? ` in **${gameTitle}**` : "";
+  const headerTitle = `Game Journal Search: "${query}"${gamePart}`;
 
-  const headerContainer = new ContainerBuilder().addTextDisplayComponents(
-    new TextDisplayBuilder().setContent(headerLines.join("\n")),
-  );
+  const headerContainer = targetUser
+    ? buildUserHeaderContainer(targetUser.id, targetUser.displayName, headerTitle)
+    : new ContainerBuilder().addTextDisplayComponents(
+      new TextDisplayBuilder().setContent(`## ${headerTitle}`),
+    );
 
   const result = results[0];
   const resultLines: string[] = [];
@@ -390,8 +391,12 @@ function buildSearchResultComponents(
       ? `_${result.entryTitle.trim()}_`
       : "_(no title)_";
     const date = formatTableDate(result.createdAt);
+    const displayName = result.globalName ?? result.username ?? result.userId;
+    const userPart = targetUser
+      ? ""
+      : ` | ${renderUsernameWithEmoji(result.userId, displayName)}`;
     resultLines.push(
-      `**${result.gameTitle}** | <@${result.userId}>\n`
+      `**${result.gameTitle}**${userPart}\n`
       + `-# ${entryLabel} • ${date}\n\n`
       + result.body,
     );
@@ -516,12 +521,12 @@ export class GameJournalCommand {
       ]);
 
       const gameTitle = gameRecord?.title ?? null;
-      const targetUserName = member
-        ? renderUsernameWithEmoji(member.id, member.displayName ?? member.username)
+      const targetUser = member
+        ? { id: member.id, displayName: member.displayName ?? member.username }
         : null;
       const totalPages = Math.max(1, Math.ceil(total / SEARCH_PAGE_SIZE));
       const searchComponents = buildSearchResultComponents(
-        targetUserName, gameTitle, cleanQuery, rows, total, 0, totalPages,
+        targetUser, gameTitle, cleanQuery, rows, total, 0, totalPages,
       );
       const pageRow = buildSearchPageRow(
         callerId, targetUserId, gameIdStr, cleanQuery, 0, totalPages,
@@ -749,17 +754,17 @@ export class GameJournalCommand {
     ]);
 
     const gameTitle = gameRecord?.title ?? null;
-    const targetUser = targetUserId !== "0"
+    const fetchedUser = targetUserId !== "0"
       ? await interaction.client.users.fetch(targetUserId).catch(() => null)
       : null;
-    const targetUserName = targetUser
-      ? renderUsernameWithEmoji(targetUser.id, targetUser.displayName ?? targetUser.username)
+    const targetUser = fetchedUser
+      ? { id: fetchedUser.id, displayName: fetchedUser.displayName ?? fetchedUser.username }
       : null;
     const totalPages = Math.max(1, Math.ceil(total / SEARCH_PAGE_SIZE));
     const safePage = Math.min(Math.max(page, 0), totalPages - 1);
 
     const searchComponents = buildSearchResultComponents(
-      targetUserName, gameTitle, query, rows, total, safePage, totalPages,
+      targetUser, gameTitle, query, rows, total, safePage, totalPages,
     );
     const nextPageRow = buildSearchPageRow(
       callerId, targetUserId, gameIdStr, query, safePage, totalPages,
