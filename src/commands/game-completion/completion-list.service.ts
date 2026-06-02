@@ -139,11 +139,13 @@ export async function renderCompletionPage(
   const { containers, totalPages, safePage, sortedYears, yearCounts } = result;
   const yearPart = year == null ? "" : String(year);
   const queryPart = query ? `:${query.slice(0, 50)}` : "";
+  const clearFilterCustomId = year !== null ? `comp-clear-year-filter:${userId}` : undefined;
   const paginationRows = buildPaginationRows(
     totalPages,
     safePage,
     `comp-list-page:${userId}:${yearPart}:${safePage}:prev${queryPart}`,
     `comp-list-page:${userId}:${yearPart}:${safePage}:next${queryPart}`,
+    clearFilterCustomId,
   );
 
   const yearJumpRow = buildYearJumpRow(userId, year, query, totalPages, sortedYears, yearCounts);
@@ -267,12 +269,12 @@ function buildPaginationRows(
   safePage: number,
   prevCustomId: string,
   nextCustomId: string,
+  clearFilterCustomId?: string,
 ): ActionRowBuilder<ButtonBuilder>[] {
-  if (totalPages <= 1) return [];
+  const showPrev = totalPages > 1 && safePage > 0;
+  const showNext = totalPages > 1 && safePage < totalPages - 1;
 
-  const showPrev = safePage > 0;
-  const showNext = safePage < totalPages - 1;
-  if (!showPrev && !showNext) return [];
+  if (!showPrev && !showNext && !clearFilterCustomId) return [];
 
   const buttons: ButtonBuilder[] = [];
   if (showPrev) {
@@ -280,6 +282,14 @@ function buildPaginationRows(
       new ButtonBuilder()
         .setCustomId(prevCustomId)
         .setLabel("Previous Page")
+        .setStyle(ButtonStyle.Secondary),
+    );
+  }
+  if (clearFilterCustomId) {
+    buttons.push(
+      new ButtonBuilder()
+        .setCustomId(clearFilterCustomId)
+        .setLabel("Clear Filter")
         .setStyle(ButtonStyle.Secondary),
     );
   }
@@ -400,6 +410,10 @@ async function buildCompletionComponents(
   const footerLines = [
     "-# M = Main Story • M+S = Main Story + Side Content • C = Completionist",
   ];
+  if (year !== null) {
+    const yearLabel = year === "unknown" ? "Unknown Date" : String(year);
+    footerLines.push(`-# Year filter: ${yearLabel}`);
+  }
   if (totalPages > 1) {
     let resultsText = `${total} results`;
     if (minYear !== null && maxYear !== null) {

@@ -60,6 +60,7 @@ import {
   handleCompletionPaging,
   handleCompletionLeaderboardSelect,
   handleCompletionYearSelect,
+  handleCompletionClearYearFilter,
 } from "./game-completion/completion-pagination.service.js";
 import {
   handleCompletionDeleteMenu,
@@ -826,6 +827,11 @@ export class GameCompletionCommands {
   @SelectMenuComponent({ id: /^comp-year-select:.+$/ })
   async handleCompletionYearSelect(interaction: StringSelectMenuInteraction): Promise<void> {
     await handleCompletionYearSelect(interaction);
+  }
+
+  @ButtonComponent({ id: /^comp-clear-year-filter:.+$/ })
+  async handleCompletionClearYearFilter(interaction: ButtonInteraction): Promise<void> {
+    await handleCompletionClearYearFilter(interaction);
   }
 
   @ButtonComponent({ id: /^completion-add-igdb-confirm:.+/ })

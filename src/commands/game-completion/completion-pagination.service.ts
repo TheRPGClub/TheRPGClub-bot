@@ -106,6 +106,27 @@ export async function handleCompletionPaging(interaction: ButtonInteraction): Pr
 }
 
 /**
+ * Handles the "Clear Filter" button that removes the active year filter
+ */
+export async function handleCompletionClearYearFilter(
+  interaction: ButtonInteraction,
+): Promise<void> {
+  const parts = interaction.customId.split(":");
+  const userId = parts[1];
+  const ephemeral = interaction.message?.flags?.has(MessageFlags.Ephemeral) ?? true;
+
+  try {
+    await interaction.deferUpdate();
+  } catch {
+    return;
+  }
+
+  const firstPage = 0;
+  const noYearFilter = null;
+  await renderCompletionPage(interaction, userId, firstPage, noYearFilter, ephemeral);
+}
+
+/**
  * Handles year-jump select menu on the completion list
  */
 export async function handleCompletionYearSelect(
