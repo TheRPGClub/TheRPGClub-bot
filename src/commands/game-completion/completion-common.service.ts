@@ -3,11 +3,9 @@ import {
   ButtonBuilder,
   ButtonStyle,
   MessageFlags,
-  StringSelectMenuBuilder,
   type ButtonInteraction,
   type CommandInteraction,
   type ModalSubmitInteraction,
-  type StringSelectMenuInteraction,
   type User,
 } from "discord.js";
 import { ContainerBuilder, TextDisplayBuilder } from "@discordjs/builders";
@@ -15,9 +13,8 @@ import Member, { type ICompletionRecord } from "../../classes/Member.js";
 import Game from "../../classes/Game.js";
 import { safeReply } from "../../functions/InteractionUtils.js";
 import { formatPlatformDisplayName } from "../../functions/PlatformDisplay.js";
-import { GameDb } from "../gamedb.command.js";
 import { COMPONENTS_V2_FLAG } from "../../config/flags.js";
-import { buildComponentsV2Flags } from "../../functions/NominationListComponents.js";
+import { renderUsernameWithEmoji } from "../../services/UserEmojiService.js";
 import {
   COMPLETION_PAGE_SIZE,
 } from "../profile.command.js";
@@ -41,7 +38,6 @@ export const COMMON_COMPLETION_SORT_OPTIONS: Array<{
 type InteractionLike =
   | CommandInteraction
   | ButtonInteraction
-  | StringSelectMenuInteraction
   | ModalSubmitInteraction;
 
 type IUserCompletionSummary = {
@@ -131,16 +127,6 @@ function decodeQueryToken(token: string): string | undefined {
   }
 }
 
-function buildCommonViewCustomId(
-  state: ICommonCompletionState,
-  page: number,
-): string {
-  const base = `comp-common-view:${state.leftId}:${state.rightId}:${state.sort}:${normalizeYearToken(state.year)}:${normalizePlatformToken(state.platformId)}:${page}:`;
-  const maxQueryLength = Math.max(100 - base.length, 0);
-  const queryToken = encodeQueryToken(state.query, maxQueryLength);
-  return `${base}${queryToken}`;
-}
-
 function buildCommonBackCustomId(
   state: ICommonCompletionState,
   page: number,
@@ -160,27 +146,6 @@ function buildCommonNavCustomId(
   const maxQueryLength = Math.max(100 - base.length, 0);
   const queryToken = encodeQueryToken(state.query, maxQueryLength);
   return `${base}${queryToken}`;
-}
-
-function parseCommonViewCustomId(
-  customId: string,
-): { state: ICommonCompletionState; page: number } | null {
-  const parts = customId.split(":");
-  if (parts.length !== 8 || parts[0] !== "comp-common-view") return null;
-  const page = Number(parts[6]);
-  if (!Number.isInteger(page) || page < 0) return null;
-
-  return {
-    page,
-    state: {
-      leftId: parts[1],
-      rightId: parts[2],
-      sort: normalizeSort(parts[3]),
-      year: parseYearToken(parts[4]),
-      platformId: parsePlatformToken(parts[5]),
-      query: decodeQueryToken(parts[7]),
-    },
-  };
 }
 
 function parseCommonBackCustomId(
@@ -439,7 +404,7 @@ export async function renderCommonCompletionPage(
 
   const commonRows = createCommonRows(leftCompletions, rightCompletions);
   const filtered = applyFilters(commonRows, state);
-  const sorted = sortRows(filtered, state.sort);
+  const sorted = sortRows(filtered, "title_asc");
 
   if (!sorted.length) {
     await safeReply(interaction, {
@@ -464,10 +429,12 @@ export async function renderCommonCompletionPage(
 
   const containers: ContainerBuilder[] = [];
 
+  const leftDisplay = renderUsernameWithEmoji(state.leftId, leftLabel);
+  const rightDisplay = renderUsernameWithEmoji(state.rightId, rightLabel);
   containers.push(
     new ContainerBuilder().addTextDisplayComponents(
       new TextDisplayBuilder().setContent(
-        `## Shared Completions: ${leftLabel} & ${rightLabel}`,
+        `## Shared Completions\n### ${leftDisplay} & ${rightDisplay}`,
       ),
     ),
   );
@@ -475,9 +442,7 @@ export async function renderCommonCompletionPage(
   const lines = pageRows.map((row, index) => `${offset + index + 1}. **${row.title}**`);
   pushChunked(containers, lines);
 
-  const sortLabel =
-    COMMON_COMPLETION_SORT_OPTIONS.find((o) => o.value === state.sort)?.label ?? state.sort;
-  const footerLines = [`-# Sort: ${sortLabel}`];
+  const footerLines: string[] = [];
   if (state.year !== null) {
     footerLines.push(`-# Year: ${formatYearLabel(state.year)}`);
   }
@@ -488,27 +453,16 @@ export async function renderCommonCompletionPage(
   if (state.query?.trim()) {
     footerLines.push(`-# Query: "${state.query.trim()}"`);
   }
-  const gameWord = total === 1 ? "shared game" : "shared games";
   if (totalPages > 1) {
-    footerLines.push(`-# ${total} ${gameWord}. Page ${safePage + 1} of ${totalPages}.`);
+    footerLines.push(`-# ${total} game completions in common. Page ${safePage + 1} of ${totalPages}.`);
   } else {
-    footerLines.push(`-# ${total} ${gameWord}.`);
+    footerLines.push(`-# ${total} game completions in common.`);
   }
   containers.push(
     new ContainerBuilder().addTextDisplayComponents(
       new TextDisplayBuilder().setContent(footerLines.join("\n")),
     ),
   );
-
-  const detailSelect = new StringSelectMenuBuilder()
-    .setCustomId(buildCommonViewCustomId(state, safePage))
-    .setPlaceholder("View /gamedb details for a shared title")
-    .addOptions(
-      pageRows.map((row) => ({
-        label: row.title.slice(0, 100),
-        value: String(row.gameId),
-      })),
-    );
 
   const showPrev = totalPages > 1 && safePage > 0;
   const showNext = totalPages > 1 && safePage < totalPages - 1;
@@ -533,57 +487,11 @@ export async function renderCommonCompletionPage(
   await safeReply(interaction, {
     components: [
       ...containers,
-      new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(detailSelect),
       ...(paginationButtons.length
         ? [new ActionRowBuilder<ButtonBuilder>().addComponents(...paginationButtons)]
         : []),
     ],
     flags: buildV2Flags(ephemeral),
-  });
-}
-
-export async function handleCommonCompletionGameSelect(
-  interaction: StringSelectMenuInteraction,
-): Promise<void> {
-  const parsed = parseCommonViewCustomId(interaction.customId);
-  if (!parsed) return;
-
-  const gameId = Number(interaction.values[0]);
-  if (!Number.isInteger(gameId) || gameId <= 0) return;
-
-  try {
-    await interaction.deferUpdate();
-  } catch {
-    // ignore
-  }
-
-  const ephemeral = interaction.message?.flags?.has(MessageFlags.Ephemeral) ?? true;
-  const gameDb = new GameDb();
-  const gamePayload = await gameDb.buildGameProfileMessagePayload(gameId, {
-    includeActions: true,
-    guildId: interaction.guildId ?? undefined,
-  });
-
-  const backButton = new ButtonBuilder()
-    .setCustomId(buildCommonBackCustomId(parsed.state, parsed.page))
-    .setLabel("Back to shared list")
-    .setStyle(ButtonStyle.Secondary);
-  const backRow = new ActionRowBuilder<ButtonBuilder>().addComponents(backButton);
-
-  if (!gamePayload) {
-    await interaction.editReply({
-      content: `No game found with ID ${gameId}.`,
-      embeds: [],
-      components: [backRow],
-    });
-    return;
-  }
-
-  await interaction.editReply({
-    embeds: [],
-    files: gamePayload.files,
-    components: [...gamePayload.components, backRow],
-    flags: buildComponentsV2Flags(ephemeral),
   });
 }
 

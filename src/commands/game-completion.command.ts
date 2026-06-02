@@ -50,7 +50,6 @@ import {
 import {
   COMMON_COMPLETION_SORT_OPTIONS,
   renderCommonCompletionPage,
-  handleCommonCompletionGameSelect,
   handleCommonCompletionNav,
   handleCommonCompletionBack,
   type CommonCompletionSort,
@@ -805,11 +804,6 @@ export class GameCompletionCommands {
   @ButtonComponent({ id: /^comp-(list|edit|delete)-page:[^:]+:[^:]*:\d+:(prev|next)(?::.*)?$/ })
   async handleCompletionPaging(interaction: ButtonInteraction): Promise<void> {
     await handleCompletionPaging(interaction);
-  }
-
-  @SelectMenuComponent({ id: /^comp-common-view:[^:]+:[^:]+:[^:]+:[^:]+:[^:]+:\d+:[^:]+$/ })
-  async handleCommonCompletionGameSelect(interaction: StringSelectMenuInteraction): Promise<void> {
-    await handleCommonCompletionGameSelect(interaction);
   }
 
   @ButtonComponent({ id: /^comp-common-nav:[^:]+:[^:]+:[^:]+:[^:]+:[^:]+:\d+:(prev|next):[^:]+$/ })
