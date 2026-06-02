@@ -516,7 +516,9 @@ export class GameJournalCommand {
       ]);
 
       const gameTitle = gameRecord?.title ?? null;
-      const targetUserName = member ? (member.displayName ?? member.username) : null;
+      const targetUserName = member
+        ? renderUsernameWithEmoji(member.id, member.displayName ?? member.username)
+        : null;
       const totalPages = Math.max(1, Math.ceil(total / SEARCH_PAGE_SIZE));
       const searchComponents = buildSearchResultComponents(
         targetUserName, gameTitle, cleanQuery, rows, total, 0, totalPages,
@@ -751,7 +753,7 @@ export class GameJournalCommand {
       ? await interaction.client.users.fetch(targetUserId).catch(() => null)
       : null;
     const targetUserName = targetUser
-      ? (targetUser.displayName ?? targetUser.username)
+      ? renderUsernameWithEmoji(targetUser.id, targetUser.displayName ?? targetUser.username)
       : null;
     const totalPages = Math.max(1, Math.ceil(total / SEARCH_PAGE_SIZE));
     const safePage = Math.min(Math.max(page, 0), totalPages - 1);
