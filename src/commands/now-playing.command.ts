@@ -4966,40 +4966,41 @@ export class NowPlayingCommand {
       ),
     );
 
-    const components: Array<ContainerBuilder | ActionRowBuilder<StringSelectMenuBuilder | ButtonBuilder>> = [
-      container,
-    ];
+    const rows: Array<ActionRowBuilder<StringSelectMenuBuilder>> = [];
     for (let slotIndex = 0; slotIndex < entries.length; slotIndex += 1) {
       const entry = entries[slotIndex];
       const options = platformOptions[slotIndex] ?? [];
       if (!options.length) {
-        components.push(
-          new ContainerBuilder().addTextDisplayComponents(
-            new TextDisplayBuilder().setContent(
-              `### ${formatEntryTitleWithPlatform(entry)}\n-# No platform choices available for this game.`,
-            ),
+        container.addTextDisplayComponents(
+          new TextDisplayBuilder().setContent(
+            `-# ${entry.title.slice(0, 80)}: No platform choices available.`,
           ),
         );
         continue;
       }
       const selectedIndex = parsedState[slotIndex];
-      components.push(new ContainerBuilder().addTextDisplayComponents(
-        new TextDisplayBuilder().setContent(
-          `### ${formatEntryTitleWithPlatform(entry)}`,
-        ),
-      ));
+      const currentPlatformName = selectedIndex >= 0 ? (options[selectedIndex]?.label ?? null) : null;
+      const placeholder = currentPlatformName
+        ? `${entry.title.slice(0, 50)} - ${currentPlatformName}`.slice(0, 100)
+        : entry.title.slice(0, 100);
       const select = new StringSelectMenuBuilder()
         .setCustomId(`${NOW_PLAYING_EDIT_PLATFORM_SLOT_PREFIX}:${ownerId}:${slotIndex}:${stateToken}`)
-        .setPlaceholder(`Platform for ${entry.title.slice(0, 70)}`)
+        .setPlaceholder(placeholder)
         .setMinValues(1)
         .setMaxValues(1)
         .addOptions(options.map((option, optionIndex) => ({
-          label: option.label,
+          label: optionIndex === selectedIndex
+            ? `${entry.title.slice(0, 50)} - ${option.label}`.slice(0, 100)
+            : option.label,
           value: option.value,
           default: selectedIndex === optionIndex,
         })));
-      components.push(new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select));
+      rows.push(new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select));
     }
+    const components: Array<ContainerBuilder | ActionRowBuilder<StringSelectMenuBuilder | ButtonBuilder>> = [
+      container,
+      ...rows,
+    ];
 
     const actionRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
       new ButtonBuilder()
