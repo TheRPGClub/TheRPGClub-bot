@@ -790,8 +790,6 @@ export default class Member {
   ): Promise<
     Array<{
       gameId: number;
-      journalEnabled: boolean;
-      hasJournalEntry: boolean;
       journalCount: number;
       lastJournalAt: Date | null;
     }>
@@ -810,31 +808,22 @@ export default class Member {
     try {
       const res = await connection.execute<{
         GAME_ID: number;
-        JOURNAL_ENABLED: number | null;
-        HAS_JOURNAL_ENTRY: number;
         JOURNAL_COUNT: number;
         LAST_JOURNAL_AT: Date | string | null;
       }>(
         `SELECT gids.GAME_ID,
-                NVL(jp.IS_ENABLED, 1) AS JOURNAL_ENABLED,
-                CASE WHEN COUNT(*) > 0 THEN 1 ELSE 0 END AS HAS_JOURNAL_ENTRY,
                 COUNT(*) AS JOURNAL_COUNT,
                 MAX(je.CREATED_AT) AS LAST_JOURNAL_AT
            FROM (${inlineTable}) gids
            LEFT JOIN USER_GAME_JOURNAL_ENTRIES je
              ON je.USER_ID = :userId
             AND je.GAMEDB_GAME_ID = gids.GAME_ID
-           LEFT JOIN USER_GAME_JOURNAL_PREFS jp
-             ON jp.USER_ID = :userId
-            AND jp.GAMEDB_GAME_ID = gids.GAME_ID
-          GROUP BY gids.GAME_ID, jp.IS_ENABLED`,
+          GROUP BY gids.GAME_ID`,
         binds,
         { outFormat: oracledb.OUT_FORMAT_OBJECT },
       );
       return (res.rows ?? []).map((row) => ({
         gameId: Number(row.GAME_ID),
-        journalEnabled: Number(row.JOURNAL_ENABLED ?? 1) === 1,
-        hasJournalEntry: Number(row.HAS_JOURNAL_ENTRY) === 1,
         journalCount: Number(row.JOURNAL_COUNT),
         lastJournalAt:
           row.LAST_JOURNAL_AT instanceof Date
