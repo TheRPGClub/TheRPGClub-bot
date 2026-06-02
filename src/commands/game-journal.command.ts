@@ -365,7 +365,7 @@ function buildSearchCustomId(
 }
 
 function buildSearchResultComponents(
-  targetUserId: string,
+  targetUserName: string | null,
   gameTitle: string | null,
   query: string,
   results: IJournalSearchResult[],
@@ -374,8 +374,8 @@ function buildSearchResultComponents(
   totalPages: number,
 ): ContainerBuilder[] {
   const gameLabel = gameTitle ? ` in **${gameTitle}**` : "";
-  const headerLines = [`## Journal Search: "${query}"${gameLabel}`];
-  if (targetUserId !== "0") headerLines.push(`-# for <@${targetUserId}>`);
+  const headerLines = [`## Game Journal Search: "${query}"${gameLabel}`];
+  if (targetUserName) headerLines.push(`-# for ${targetUserName}`);
 
   const headerContainer = new ContainerBuilder().addTextDisplayComponents(
     new TextDisplayBuilder().setContent(headerLines.join("\n")),
@@ -516,9 +516,10 @@ export class GameJournalCommand {
       ]);
 
       const gameTitle = gameRecord?.title ?? null;
+      const targetUserName = member ? (member.displayName ?? member.username) : null;
       const totalPages = Math.max(1, Math.ceil(total / SEARCH_PAGE_SIZE));
       const searchComponents = buildSearchResultComponents(
-        targetUserId, gameTitle, cleanQuery, rows, total, 0, totalPages,
+        targetUserName, gameTitle, cleanQuery, rows, total, 0, totalPages,
       );
       const pageRow = buildSearchPageRow(
         callerId, targetUserId, gameIdStr, cleanQuery, 0, totalPages,
@@ -746,11 +747,17 @@ export class GameJournalCommand {
     ]);
 
     const gameTitle = gameRecord?.title ?? null;
+    const targetUser = targetUserId !== "0"
+      ? await interaction.client.users.fetch(targetUserId).catch(() => null)
+      : null;
+    const targetUserName = targetUser
+      ? (targetUser.displayName ?? targetUser.username)
+      : null;
     const totalPages = Math.max(1, Math.ceil(total / SEARCH_PAGE_SIZE));
     const safePage = Math.min(Math.max(page, 0), totalPages - 1);
 
     const searchComponents = buildSearchResultComponents(
-      targetUserId, gameTitle, query, rows, total, safePage, totalPages,
+      targetUserName, gameTitle, query, rows, total, safePage, totalPages,
     );
     const nextPageRow = buildSearchPageRow(
       callerId, targetUserId, gameIdStr, query, safePage, totalPages,
