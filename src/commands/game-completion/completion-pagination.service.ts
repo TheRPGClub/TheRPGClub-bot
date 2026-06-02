@@ -106,6 +106,27 @@ export async function handleCompletionPaging(interaction: ButtonInteraction): Pr
 }
 
 /**
+ * Handles year-jump select menu on the completion list
+ */
+export async function handleCompletionYearSelect(
+  interaction: StringSelectMenuInteraction,
+): Promise<void> {
+  const parts = interaction.customId.split(":");
+  const userId = parts[1];
+  const selectedYear = interaction.values[0];
+  const year = parseCompletionYearFilter(selectedYear);
+  const ephemeral = interaction.message?.flags?.has(MessageFlags.Ephemeral) ?? true;
+
+  try {
+    await interaction.deferUpdate();
+  } catch {
+    return;
+  }
+
+  await renderCompletionPage(interaction, userId, 0, year, ephemeral);
+}
+
+/**
  * Handles leaderboard member selection to view their completions
  */
 export async function handleCompletionLeaderboardSelect(

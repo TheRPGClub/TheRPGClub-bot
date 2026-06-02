@@ -136,7 +136,7 @@ export async function renderCompletionPage(
     return;
   }
 
-  const { containers, totalPages, safePage } = result;
+  const { containers, totalPages, safePage, sortedYears, yearCounts } = result;
   const yearPart = year == null ? "" : String(year);
   const queryPart = query ? `:${query.slice(0, 50)}` : "";
   const paginationRows = buildPaginationRows(
@@ -146,11 +146,17 @@ export async function renderCompletionPage(
     `comp-list-page:${userId}:${yearPart}:${safePage}:next${queryPart}`,
   );
 
+  const yearJumpRow = buildYearJumpRow(userId, year, query, totalPages, sortedYears, yearCounts);
   const displayName = user.displayName ?? user.username ?? user.id;
   const header = buildUserHeaderContainer(userId, displayName, "Completed Games");
 
   await safeReply(interaction as any, {
-    components: [header, ...containers, ...paginationRows],
+    components: [
+      header,
+      ...containers,
+      ...(yearJumpRow ? [yearJumpRow] : []),
+      ...paginationRows,
+    ],
     flags: buildCompletionV2Flags(ephemeral),
   });
 }
@@ -231,6 +237,31 @@ export async function renderSelectionPage(
   }
 }
 
+function buildYearJumpRow(
+  userId: string,
+  activeYear: number | "unknown" | null,
+  query: string | undefined,
+  totalPages: number,
+  sortedYears: string[],
+  yearCounts: Record<string, number>,
+): ActionRowBuilder<StringSelectMenuBuilder> | null {
+  if (activeYear !== null || query || totalPages <= 5 || sortedYears.length <= 3) return null;
+
+  const options = sortedYears.slice(0, 25).map((yr) => {
+    const count = yearCounts[yr] ?? 0;
+    const label = yr === "Unknown" ? "Unknown Date" : yr;
+    const gameWord = count === 1 ? "game" : "games";
+    return { label, value: yr === "Unknown" ? "unknown" : yr, description: `${count} ${gameWord}` };
+  });
+
+  const select = new StringSelectMenuBuilder()
+    .setCustomId(`comp-year-select:${userId}`)
+    .setPlaceholder("Jump to year")
+    .addOptions(options);
+
+  return new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select);
+}
+
 function buildPaginationRows(
   totalPages: number,
   safePage: number,
@@ -277,6 +308,8 @@ async function buildCompletionComponents(
   totalPages: number;
   safePage: number;
   pageCompletions: any[];
+  sortedYears: string[];
+  yearCounts: Record<string, number>;
 } | null> {
   const total = await Member.countCompletions(userId, year, query);
   if (total === 0) return null;
@@ -365,6 +398,9 @@ async function buildCompletionComponents(
     footerLines.push(`-# ${total} results. Page ${safePage + 1} of ${totalPages}.`);
   }
 
+  let sortedYears: string[] = [];
+  const yearCounts: Record<string, number> = {};
+
   if (queryLabel) {
     containers.push(
       new ContainerBuilder().addTextDisplayComponents(
@@ -374,7 +410,6 @@ async function buildCompletionComponents(
     const lines = pageCompletions.map((c, i) => buildEntryLine(c, offset + i + 1));
     pushChunked(containers, lines);
   } else {
-    const yearCounts: Record<string, number> = {};
     const yearIndices = new Map<number, number>();
     for (const c of allCompletions) {
       const yr = c.completedAt ? String(c.completedAt.getFullYear()) : "Unknown";
@@ -389,13 +424,14 @@ async function buildCompletionComponents(
       return acc;
     }, {});
 
-    const sortedYears = Object.keys(grouped).sort((a, b) => {
+    sortedYears = Object.keys(yearCounts).sort((a, b) => {
       if (a === "Unknown") return 1;
       if (b === "Unknown") return -1;
       return Number(b) - Number(a);
     });
 
     for (const yr of sortedYears) {
+      if (!grouped[yr]) continue;
       const displayYear = yr === "Unknown" ? "Unknown Date" : yr;
       const count = yearCounts[yr] ?? 0;
       const gameWord = count === 1 ? "Game" : "Games";
@@ -410,5 +446,5 @@ async function buildCompletionComponents(
     ),
   );
 
-  return { containers, total, totalPages, safePage, pageCompletions };
+  return { containers, total, totalPages, safePage, pageCompletions, sortedYears, yearCounts };
 }
