@@ -278,8 +278,8 @@ export class GameCompletionCommands {
     })
     yearRaw: string | undefined,
     @SlashOption({
-      description: "Filter by title (optional)",
-      name: "title",
+      description: "Filter by any search string (optional)",
+      name: "query",
       required: false,
       type: ApplicationCommandOptionType.String,
     })
@@ -388,8 +388,8 @@ export class GameCompletionCommands {
     })
     platformRaw: string | undefined,
     @SlashOption({
-      description: "Filter by title (optional).",
-      name: "title",
+      description: "Filter by any search string (optional).",
+      name: "query",
       required: false,
       type: ApplicationCommandOptionType.String,
     })

@@ -313,68 +313,28 @@ async function buildCompletionComponents(
 
   if (!allCompletions.length) return null;
 
-  const yearCounts: Record<string, number> = {};
-  const yearIndices = new Map<number, number>();
-  for (const c of allCompletions) {
-    const yr = c.completedAt ? String(c.completedAt.getFullYear()) : "Unknown";
-    yearCounts[yr] = (yearCounts[yr] ?? 0) + 1;
-    yearIndices.set(c.completionId, yearCounts[yr]);
-  }
-
   const pageCompletions = allCompletions.slice(offset, offset + COMPLETION_PAGE_SIZE);
 
-  const grouped = pageCompletions.reduce<Record<string, string[]>>((acc, c) => {
-    const yr = c.completedAt ? String(c.completedAt.getFullYear()) : "Unknown";
-    acc[yr] = acc[yr] || [];
-
+  const buildEntryLine = (c: (typeof pageCompletions)[number], num: number): string => {
     const typeAbbrev =
       c.completionType === "Main Story"
         ? "M"
         : c.completionType === "Main Story + Side Content"
           ? "M+S"
           : "C";
-
     const rawPlatformName =
       c.platformId == null ? null : platformMap.get(c.platformId) ?? "Unknown Platform";
     const platformName = formatPlatformDisplayName(rawPlatformName);
     const platformLabel = platformName ? ` [${platformName}]` : "";
     const dateLabel = c.completedAt ? ` · ${formatTableDate(c.completedAt)}` : "";
-    const hoursLabel =
-      c.finalPlaytimeHours != null ? ` · ${c.finalPlaytimeHours} hrs` : "";
+    const hoursLabel = c.finalPlaytimeHours != null ? ` · ${c.finalPlaytimeHours} hrs` : "";
+    return `${num}. **${c.title}**${platformLabel} (${typeAbbrev})${dateLabel}${hoursLabel}`;
+  };
 
-    const num = yearIndices.get(c.completionId)!;
-    acc[yr].push(
-      `${num}. **${c.title}**${platformLabel} (${typeAbbrev})${dateLabel}${hoursLabel}`,
-    );
-    return acc;
-  }, {});
-
-  const sortedYears = Object.keys(grouped).sort((a, b) => {
-    if (a === "Unknown") return 1;
-    if (b === "Unknown") return -1;
-    return Number(b) - Number(a);
-  });
-
-  const containers: ContainerBuilder[] = [];
-
-  const queryLabel = query?.trim();
-  if (queryLabel) {
-    containers.push(
-      new ContainerBuilder().addTextDisplayComponents(
-        new TextDisplayBuilder().setContent(`-# Filter: "${queryLabel}"`),
-      ),
-    );
-  }
-
-  for (const yr of sortedYears) {
-    const displayYear = yr === "Unknown" ? "Unknown Date" : yr;
-    const count = yearCounts[yr] ?? 0;
-    const lines = grouped[yr] ?? [];
-
-    const gameWord = count === 1 ? "Game" : "Games";
-    let buffer = `### ${displayYear} (${count} ${gameWord} Completed)`;
+  const pushChunked = (containers: ContainerBuilder[], lines: string[]): void => {
+    let buffer = "";
     for (const line of lines) {
-      const next = `${buffer}\n${line}`;
+      const next = buffer ? `${buffer}\n${line}` : line;
       if (next.length > CHUNK_LIMIT) {
         containers.push(
           new ContainerBuilder().addTextDisplayComponents(
@@ -393,7 +353,10 @@ async function buildCompletionComponents(
         ),
       );
     }
-  }
+  };
+
+  const queryLabel = query?.trim();
+  const containers: ContainerBuilder[] = [];
 
   const footerLines = [
     "-# M = Main Story • M+S = Main Story + Side Content • C = Completionist",
@@ -401,6 +364,46 @@ async function buildCompletionComponents(
   if (totalPages > 1) {
     footerLines.push(`-# ${total} results. Page ${safePage + 1} of ${totalPages}.`);
   }
+
+  if (queryLabel) {
+    containers.push(
+      new ContainerBuilder().addTextDisplayComponents(
+        new TextDisplayBuilder().setContent(`-# Query: "${queryLabel}"`),
+      ),
+    );
+    const lines = pageCompletions.map((c, i) => buildEntryLine(c, offset + i + 1));
+    pushChunked(containers, lines);
+  } else {
+    const yearCounts: Record<string, number> = {};
+    const yearIndices = new Map<number, number>();
+    for (const c of allCompletions) {
+      const yr = c.completedAt ? String(c.completedAt.getFullYear()) : "Unknown";
+      yearCounts[yr] = (yearCounts[yr] ?? 0) + 1;
+      yearIndices.set(c.completionId, yearCounts[yr]);
+    }
+
+    const grouped = pageCompletions.reduce<Record<string, string[]>>((acc, c) => {
+      const yr = c.completedAt ? String(c.completedAt.getFullYear()) : "Unknown";
+      acc[yr] = acc[yr] || [];
+      acc[yr].push(buildEntryLine(c, yearIndices.get(c.completionId)!));
+      return acc;
+    }, {});
+
+    const sortedYears = Object.keys(grouped).sort((a, b) => {
+      if (a === "Unknown") return 1;
+      if (b === "Unknown") return -1;
+      return Number(b) - Number(a);
+    });
+
+    for (const yr of sortedYears) {
+      const displayYear = yr === "Unknown" ? "Unknown Date" : yr;
+      const count = yearCounts[yr] ?? 0;
+      const gameWord = count === 1 ? "Game" : "Games";
+      const heading = `### ${displayYear} (${count} ${gameWord} Completed)`;
+      pushChunked(containers, [heading, ...(grouped[yr] ?? [])]);
+    }
+  }
+
   containers.push(
     new ContainerBuilder().addTextDisplayComponents(
       new TextDisplayBuilder().setContent(footerLines.join("\n")),
