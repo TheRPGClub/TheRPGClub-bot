@@ -135,6 +135,7 @@ export async function handleCompletionLeaderboardSelect(
   const parts = interaction.customId.split(":");
   const query = parts.slice(1).join(":") || undefined;
   const userId = interaction.values[0];
-  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-  await renderCompletionPage(interaction, userId, 0, null, true, query);
+  const ephemeral = interaction.message?.flags?.has(MessageFlags.Ephemeral) ?? true;
+  await interaction.deferReply({ flags: ephemeral ? MessageFlags.Ephemeral : undefined });
+  await renderCompletionPage(interaction, userId, 0, null, ephemeral, query);
 }

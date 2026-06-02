@@ -391,11 +391,24 @@ async function buildCompletionComponents(
   const queryLabel = query?.trim();
   const containers: ContainerBuilder[] = [];
 
+  const knownYears = allCompletions
+    .map((c) => c.completedAt?.getFullYear())
+    .filter((y): y is number => y != null);
+  const minYear = knownYears.length ? Math.min(...knownYears) : null;
+  const maxYear = knownYears.length ? Math.max(...knownYears) : null;
+
   const footerLines = [
     "-# M = Main Story • M+S = Main Story + Side Content • C = Completionist",
   ];
   if (totalPages > 1) {
-    footerLines.push(`-# ${total} results. Page ${safePage + 1} of ${totalPages}.`);
+    let resultsText = `${total} results`;
+    if (minYear !== null && maxYear !== null) {
+      resultsText +=
+        minYear === maxYear
+          ? ` recorded in ${minYear}`
+          : ` recorded between ${minYear}-${maxYear}`;
+    }
+    footerLines.push(`-# ${resultsText}. Page ${safePage + 1} of ${totalPages}.`);
   }
 
   let sortedYears: string[] = [];
