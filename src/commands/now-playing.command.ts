@@ -487,6 +487,9 @@ export async function refreshJournalMessages(
   excludeMessageId?: string,
 ): Promise<void> {
   const now = Date.now();
+
+  // First pass: expire stale contexts and collect the most recent context per channel.
+  const latestByChannel = new Map<string, NowPlayingJournalContext>();
   for (const [key, ctx] of nowPlayingJournalContexts.entries()) {
     if (ctx.ownerUserId !== ownerId || ctx.gameId !== gameId) continue;
     if (ctx.messageId === excludeMessageId) continue;
@@ -496,8 +499,17 @@ export async function refreshJournalMessages(
         .catch((err) => console.error("[Journal] Failed to delete expired context:", err));
       continue;
     }
+    const existing = latestByChannel.get(ctx.channelId);
+    if (!existing || ctx.createdAt > existing.createdAt) {
+      latestByChannel.set(ctx.channelId, ctx);
+    }
+  }
+
+  // Second pass: update only the single most recent message per channel.
+  for (const ctx of latestByChannel.values()) {
     const channel = await client.channels.fetch(ctx.channelId).catch(() => null);
     if (!channel?.isTextBased()) {
+      const key = `${ctx.channelId}:${ctx.messageId}`;
       nowPlayingJournalContexts.delete(key);
       await Member.deleteJournalMessageContext(ctx.channelId, ctx.messageId)
         .catch((err) => console.error("[Journal] Failed to delete unreachable context:", err));
@@ -505,6 +517,7 @@ export async function refreshJournalMessages(
     }
     const message = await channel.messages.fetch(ctx.messageId).catch(() => null);
     if (!message) {
+      const key = `${ctx.channelId}:${ctx.messageId}`;
       nowPlayingJournalContexts.delete(key);
       await Member.deleteJournalMessageContext(ctx.channelId, ctx.messageId)
         .catch((err) => console.error("[Journal] Failed to delete missing context:", err));
