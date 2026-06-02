@@ -2562,7 +2562,7 @@ export default class Member {
                 u.USERNAME,
                 u.GLOBAL_NAME,
                 COUNT(DISTINCT je.GAMEDB_GAME_ID) AS GAME_COUNT
-           FROM RPG_CLUB_USER_GAME_JOURNAL_ENTRIES je
+           FROM USER_GAME_JOURNAL_ENTRIES je
            JOIN RPG_CLUB_USERS u ON u.USER_ID = je.USER_ID
           WHERE NVL(u.IS_BOT, 0) = 0
             AND u.SERVER_LEFT_AT IS NULL
