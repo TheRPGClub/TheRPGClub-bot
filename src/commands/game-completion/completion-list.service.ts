@@ -304,7 +304,7 @@ function buildPaginationRows(
   return [new ActionRowBuilder<ButtonBuilder>().addComponents(...buttons)];
 }
 
-const CHUNK_LIMIT = 1500;
+const CHUNK_LIMIT = 3500;
 
 async function buildCompletionComponents(
   userId: string,
@@ -414,6 +414,9 @@ async function buildCompletionComponents(
     const yearLabel = year === "unknown" ? "Unknown Date" : String(year);
     footerLines.push(`-# Year filter: ${yearLabel}`);
   }
+  if (queryLabel) {
+    footerLines.push(`-# Query: "${queryLabel}"`);
+  }
   if (totalPages > 1) {
     let resultsText = `${total} results`;
     if (minYear !== null && maxYear !== null) {
@@ -429,11 +432,6 @@ async function buildCompletionComponents(
   const yearCounts: Record<string, number> = {};
 
   if (queryLabel) {
-    containers.push(
-      new ContainerBuilder().addTextDisplayComponents(
-        new TextDisplayBuilder().setContent(`-# Query: "${queryLabel}"`),
-      ),
-    );
     const lines = pageCompletions.map((c, i) => buildEntryLine(c, offset + i + 1));
     pushChunked(containers, lines);
   } else {
