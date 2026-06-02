@@ -2534,6 +2534,7 @@ export default class Member {
           WHERE jp.USER_ID = :userId
             AND jp.IS_ENABLED = 1
           GROUP BY g.GAME_ID, g.TITLE
+         HAVING COUNT(e.ENTRY_ID) > 0
           ORDER BY g.TITLE`,
         { userId },
         { outFormat: oracledb.OUT_FORMAT_OBJECT },
