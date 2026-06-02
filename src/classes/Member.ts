@@ -144,9 +144,8 @@ export interface IJournalSearchResult {
   gameId: number;
   gameTitle: string;
   entryTitle: string | null;
-  bodySnippet: string;
+  body: string;
   createdAt: Date;
-  isPublic: number;
 }
 
 export interface IAvatarHistoryRecord {
@@ -2650,7 +2649,6 @@ export default class Member {
 
   static async searchJournalEntries(params: {
     query: string;
-    callerId: string;
     userId?: string;
     gameId?: number;
     limit: number;
@@ -2668,9 +2666,8 @@ export default class Member {
         GAMEDB_GAME_ID: number;
         GAME_TITLE: string;
         ENTRY_TITLE: string | null;
-        BODY_SNIPPET: string;
+        ENTRY_BODY: string;
         CREATED_AT: Date | string;
-        IS_PUBLIC: number;
       }>(
         `SELECT COUNT(*) OVER () AS TOTAL_COUNT,
                 je.ENTRY_ID,
@@ -2678,23 +2675,20 @@ export default class Member {
                 je.GAMEDB_GAME_ID,
                 g.TITLE         AS GAME_TITLE,
                 je.ENTRY_TITLE,
-                SUBSTR(je.ENTRY_BODY, 1, 200) AS BODY_SNIPPET,
-                je.CREATED_AT,
-                je.IS_PUBLIC
+                je.ENTRY_BODY,
+                je.CREATED_AT
            FROM USER_GAME_JOURNAL_ENTRIES je
            JOIN GAMEDB_GAMES g ON g.GAME_ID = je.GAMEDB_GAME_ID
           WHERE (
                   UPPER(je.ENTRY_TITLE) LIKE '%' || UPPER(:searchTerm) || '%'
                OR UPPER(je.ENTRY_BODY)  LIKE '%' || UPPER(:searchTerm) || '%'
                 )
-            AND (je.IS_PUBLIC = 1 OR je.USER_ID = :callerId)
             AND (:userId IS NULL OR je.USER_ID = :userId)
             AND (:gameId IS NULL OR je.GAMEDB_GAME_ID = :gameId)
           ORDER BY je.CREATED_AT DESC, je.ENTRY_ID DESC
           OFFSET :offset ROWS FETCH NEXT :limit ROWS ONLY`,
         {
           searchTerm,
-          callerId: params.callerId,
           userId: params.userId ?? null,
           gameId: params.gameId ?? null,
           offset: safeOffset,
@@ -2712,11 +2706,10 @@ export default class Member {
           gameId: Number(row.GAMEDB_GAME_ID),
           gameTitle: row.GAME_TITLE,
           entryTitle: row.ENTRY_TITLE ?? null,
-          bodySnippet: row.BODY_SNIPPET,
+          body: row.ENTRY_BODY,
           createdAt: row.CREATED_AT instanceof Date
             ? row.CREATED_AT
             : new Date(row.CREATED_AT),
-          isPublic: Number(row.IS_PUBLIC),
         })),
       };
     } finally {
