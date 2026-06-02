@@ -388,8 +388,8 @@ export class GameCompletionCommands {
     })
     platformRaw: string | undefined,
     @SlashOption({
-      description: "Filter by any search string (optional).",
-      name: "query",
+      description: "Filter by title (optional).",
+      name: "title",
       required: false,
       type: ApplicationCommandOptionType.String,
     })
