@@ -17,7 +17,7 @@ import { formatTableDate, formatPlaytimeHours } from "../commands/profile.comman
 import { COMPONENTS_V2_FLAG } from "../config/flags.js";
 import { buildUserHeaderContainer } from "./uiComponents.js";
 
-const JOURNAL_PAGE_SIZE = 3;
+const JOURNAL_PAGE_SIZE = 1;
 
 function trimContent(text: string): string {
   return text.length <= 4000 ? text : `${text.slice(0, 3997)}...`;
