@@ -279,18 +279,16 @@ function buildAllComponents(
 ): ContainerBuilder[] {
   const start = page * ALL_PAGE_SIZE;
   const pageSummaries = summaries.slice(start, start + ALL_PAGE_SIZE);
-  const memberLabel = summaries.length === 1 ? "member" : "members";
   const lines = ["## Game Journal Users"];
   lines.push(
     ...pageSummaries.map((s, idx) => {
       const displayName = s.globalName ?? s.username ?? s.userId;
-      const journalLabel = s.gameCount === 1 ? "Game Journal" : "Game Journals";
+      const journalLabel = s.gameCount === 1 ? "Journal" : "Journals";
+      const entryLabel = s.entryCount === 1 ? "entry" : "entries";
       return `${start + idx + 1}. **${renderUsernameWithEmoji(s.userId, displayName)}**:`
-        + ` ${s.gameCount} ${journalLabel}`;
+        + ` ${s.gameCount} ${journalLabel} with ${s.entryCount} total ${entryLabel}`;
     }),
   );
-  const pageInfo = totalPages > 1 ? ` • Page ${page + 1}/${totalPages}` : "";
-  lines.push(`-# ${summaries.length} ${memberLabel}${pageInfo}`);
   return [
     new ContainerBuilder().addTextDisplayComponents(
       new TextDisplayBuilder().setContent(lines.join("\n")),
