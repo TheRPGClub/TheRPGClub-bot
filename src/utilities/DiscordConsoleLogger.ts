@@ -278,6 +278,11 @@ async function sendToDiscord(level: ConsoleLevel, message: string): Promise<void
       return;
     }
 
+    // Suppress individual slash command invocation logs
+    if (level === "log" && message.includes("[SlashCommand]")) {
+      return;
+    }
+
     bufferLog(level, message);
     return;
   } catch {
