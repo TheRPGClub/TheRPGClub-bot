@@ -439,3 +439,20 @@ export async function safeUpdate(interaction: AnyRepliable, options: any): Promi
 
   await safeReply(interaction, { content: String(options ?? ""), flags: MessageFlags.Ephemeral });
 }
+
+export function resolveMemberLabel(
+  member: import("discord.js").User | import("discord.js").GuildMember | undefined,
+  fallback: import("discord.js").User,
+): string {
+  if (!member) return fallback.username;
+  if ("displayName" in member && member.displayName) {
+    return member.displayName;
+  }
+  if ("user" in member && (member as import("discord.js").GuildMember).user?.username) {
+    return (member as import("discord.js").GuildMember).user.username;
+  }
+  if ("username" in member) {
+    return (member as import("discord.js").User).username;
+  }
+  return fallback.username;
+}
