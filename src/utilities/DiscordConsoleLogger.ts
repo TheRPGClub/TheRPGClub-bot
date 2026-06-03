@@ -268,6 +268,11 @@ async function sendToDiscord(level: ConsoleLevel, message: string): Promise<void
       return;
     }
 
+    // Suppress PostgreSQL idle-connection drops until PG is actively used
+    if (level === "error" && message.includes("[PostgreSQL] Unexpected client error:")) {
+      return;
+    }
+
     bufferLog(level, message);
     return;
   } catch {
