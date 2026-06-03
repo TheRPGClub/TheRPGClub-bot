@@ -198,7 +198,7 @@ async function handleLinkButton(interaction: ButtonInteraction, threadId: string
             const finalId = await finalizeSelection(igdbId);
             if (!finalId) return;
             gameId = finalId;
-            await sel.update({ content: `Linked to GameDB #${finalId}.`, components: [] });
+            await sel.editReply({ content: `Linked to GameDB #${finalId}.`, components: [] });
             await finishLink();
           },
         );
