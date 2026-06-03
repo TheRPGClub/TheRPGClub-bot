@@ -1,5 +1,5 @@
 import axios from "axios";
-import { Attachment, AttachmentBuilder } from "discord.js";
+import { ActionRowBuilder, AttachmentBuilder, ButtonBuilder, ButtonStyle, type Attachment } from "discord.js";
 import ExcelJS from "exceljs";
 import {
   COLLECTION_OWNERSHIP_TYPES,
@@ -8,6 +8,261 @@ import {
 import { GAMEDB_CSV_PLATFORM_MAP } from "../../config/gamedbCsvPlatformMap.js";
 import { sanitizeUserInput } from "../../functions/InteractionUtils.js";
 import { resolveGameCompletionPlatformId } from "../game-completion/completion-autocomplete.utils.js";
+import { buildImportReasonSummary } from "./collection-import-ui.utils.js";
+
+export type CollectionCsvImportButtonAction = "skip" | "remap" | "game-id" | "pause";
+
+export const CSV_IMPORT_ACTION_PREFIX = "collection-csv-import-v1";
+export const CSV_CHOOSE_PREFIX = "collection-csv-choose-v1";
+export const CSV_REMAP_MODAL_PREFIX = "collection-csv-remap-v1";
+export const CSV_REMAP_INPUT_ID = "collection-csv-remap-title";
+export const CSV_GAME_ID_MODAL_PREFIX = "collection-csv-game-id-v1";
+export const CSV_GAME_ID_INPUT_ID = "collection-csv-game-id";
+
+export const CSV_IMPORT_REASON_LABELS: Record<string, string> = {
+  DUPLICATE: "duplicate",
+  MANUAL_SKIP: "manual-skip",
+  ADD_FAILED: "add-failed",
+  PLATFORM_UNRESOLVED: "platform-unresolved",
+  NO_CANDIDATE: "no-candidate",
+  INVALID_REMAP: "invalid-remap",
+  INVALID_ROW: "invalid-row",
+  CSV_GAMEDB_ID: "csv-gamedb-id",
+  CSV_IGDB_ID: "csv-igdb-id",
+};
+
+export function buildCollectionCsvImportActionId(params: {
+  ownerId: string;
+  importId: number;
+  itemId: number;
+  action: CollectionCsvImportButtonAction;
+}): string {
+  const actionCode = params.action === "skip"
+    ? "s"
+    : params.action === "remap"
+      ? "r"
+      : params.action === "game-id"
+        ? "i"
+      : "p";
+  return [
+    CSV_IMPORT_ACTION_PREFIX,
+    params.ownerId,
+    String(params.importId),
+    String(params.itemId),
+    actionCode,
+  ].join(":");
+}
+
+export function parseCollectionCsvImportActionId(customId: string): {
+  ownerId: string;
+  importId: number;
+  itemId: number;
+  action: CollectionCsvImportButtonAction;
+} | null {
+  const parts = customId.split(":");
+  if (parts.length !== 5) return null;
+  if (parts[0] !== CSV_IMPORT_ACTION_PREFIX) return null;
+  const importId = Number(parts[2]);
+  const itemId = Number(parts[3]);
+  if (!Number.isInteger(importId) || !Number.isInteger(itemId)) return null;
+  if (!parts[1]) return null;
+  const action = parts[4] === "s"
+    ? "skip"
+    : parts[4] === "r"
+      ? "remap"
+      : parts[4] === "i"
+        ? "game-id"
+      : parts[4] === "p"
+        ? "pause"
+        : null;
+  if (!action) return null;
+  return { ownerId: parts[1], importId, itemId, action };
+}
+
+export function buildCollectionCsvChooseId(params: {
+  ownerId: string;
+  importId: number;
+  itemId: number;
+  gameId: number;
+}): string {
+  return [
+    CSV_CHOOSE_PREFIX,
+    params.ownerId,
+    String(params.importId),
+    String(params.itemId),
+    String(params.gameId),
+  ].join(":");
+}
+
+export function parseCollectionCsvChooseId(customId: string): {
+  ownerId: string;
+  importId: number;
+  itemId: number;
+  gameId: number;
+} | null {
+  const parts = customId.split(":");
+  if (parts.length !== 5) return null;
+  if (parts[0] !== CSV_CHOOSE_PREFIX) return null;
+  const importId = Number(parts[2]);
+  const itemId = Number(parts[3]);
+  const gameId = Number(parts[4]);
+  if (!Number.isInteger(importId) || !Number.isInteger(itemId)) return null;
+  if (!Number.isInteger(gameId) || gameId <= 0) return null;
+  if (!parts[1]) return null;
+  return { ownerId: parts[1], importId, itemId, gameId };
+}
+
+export function buildCollectionCsvRemapModalId(params: {
+  ownerId: string;
+  importId: number;
+  itemId: number;
+}): string {
+  return [
+    CSV_REMAP_MODAL_PREFIX,
+    params.ownerId,
+    String(params.importId),
+    String(params.itemId),
+  ].join(":");
+}
+
+export function parseCollectionCsvRemapModalId(customId: string): {
+  ownerId: string;
+  importId: number;
+  itemId: number;
+} | null {
+  const parts = customId.split(":");
+  if (parts.length !== 4) return null;
+  if (parts[0] !== CSV_REMAP_MODAL_PREFIX) return null;
+  const importId = Number(parts[2]);
+  const itemId = Number(parts[3]);
+  if (!Number.isInteger(importId) || !Number.isInteger(itemId)) return null;
+  if (!parts[1]) return null;
+  return { ownerId: parts[1], importId, itemId };
+}
+
+export function buildCollectionCsvGameIdModalId(params: {
+  ownerId: string;
+  importId: number;
+  itemId: number;
+}): string {
+  return [
+    CSV_GAME_ID_MODAL_PREFIX,
+    params.ownerId,
+    String(params.importId),
+    String(params.itemId),
+  ].join(":");
+}
+
+export function parseCollectionCsvGameIdModalId(customId: string): {
+  ownerId: string;
+  importId: number;
+  itemId: number;
+} | null {
+  const parts = customId.split(":");
+  if (parts.length !== 4) return null;
+  if (parts[0] !== CSV_GAME_ID_MODAL_PREFIX) return null;
+  const importId = Number(parts[2]);
+  const itemId = Number(parts[3]);
+  if (!Number.isInteger(importId) || !Number.isInteger(itemId)) return null;
+  if (!parts[1]) return null;
+  return { ownerId: parts[1], importId, itemId };
+}
+
+export function buildCsvImportItemMessage(params: {
+  importId: number;
+  rowIndex: number;
+  totalCount: number;
+  title: string;
+  platformLabel: string;
+  ownershipType: string;
+  note: string | null;
+  sourceGameDbId: number | null;
+  sourceIgdbId: number | null;
+}): string {
+  const details = [
+    `Platform: ${params.platformLabel}`,
+    `Ownership: ${params.ownershipType}`,
+  ];
+  if (params.sourceGameDbId) {
+    details.push(`CSV GameDB ID: ${params.sourceGameDbId}`);
+  }
+  if (params.sourceIgdbId) {
+    details.push(`CSV IGDB ID: ${params.sourceIgdbId}`);
+  }
+
+  const noteText = params.note ? `\nNote: ${params.note}` : "";
+  return (
+    `## CSV Import #${params.importId}\n` +
+    `Row ${params.rowIndex}/${params.totalCount}\n` +
+    `Title: **${params.title}**\n` +
+    `${details.join(" | ")}${noteText}`
+  );
+}
+
+export function buildCsvImportItemButtons(params: {
+  ownerId: string;
+  importId: number;
+  itemId: number;
+}): ActionRowBuilder<ButtonBuilder> {
+  return new ActionRowBuilder<ButtonBuilder>().addComponents(
+    new ButtonBuilder()
+      .setCustomId(
+        buildCollectionCsvImportActionId({
+          ownerId: params.ownerId,
+          importId: params.importId,
+          itemId: params.itemId,
+          action: "remap",
+        }),
+      )
+      .setLabel("Search a different title")
+      .setStyle(ButtonStyle.Primary),
+    new ButtonBuilder()
+      .setCustomId(
+        buildCollectionCsvImportActionId({
+          ownerId: params.ownerId,
+          importId: params.importId,
+          itemId: params.itemId,
+          action: "game-id",
+        }),
+      )
+      .setLabel("Enter GameDB or IGDB ID")
+      .setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder()
+      .setCustomId(
+        buildCollectionCsvImportActionId({
+          ownerId: params.ownerId,
+          importId: params.importId,
+          itemId: params.itemId,
+          action: "skip",
+        }),
+      )
+      .setLabel("Skip")
+      .setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder()
+      .setCustomId(
+        buildCollectionCsvImportActionId({
+          ownerId: params.ownerId,
+          importId: params.importId,
+          itemId: params.itemId,
+          action: "pause",
+        }),
+      )
+      .setLabel("Pause")
+      .setStyle(ButtonStyle.Danger),
+  );
+}
+
+export function logCsvImportEvent(
+  message: string,
+  meta: Record<string, string | number>,
+): void {
+  const entries = Object.entries(meta).map(([key, value]) => `${key}=${value}`);
+  console.info(`[CsvImport] ${message} ${entries.join(" ")}`.trim());
+}
+
+export function buildCsvImportReasonSummary(reasonCounts: Record<string, number>): string[] {
+  return buildImportReasonSummary(reasonCounts, CSV_IMPORT_REASON_LABELS);
+}
 
 export type CollectionCsvParsedRow = {
   rowIndex: number;
