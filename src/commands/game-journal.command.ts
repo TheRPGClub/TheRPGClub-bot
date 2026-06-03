@@ -275,7 +275,6 @@ function buildJournalViewPayload(
 function buildAllComponents(
   summaries: IJournalUserSummary[],
   page: number,
-  totalPages: number,
 ): ContainerBuilder[] {
   const start = page * ALL_PAGE_SIZE;
   const pageSummaries = summaries.slice(start, start + ALL_PAGE_SIZE);
@@ -283,7 +282,7 @@ function buildAllComponents(
   lines.push(
     ...pageSummaries.map((s, idx) => {
       const displayName = s.globalName ?? s.username ?? s.userId;
-      const journalLabel = s.gameCount === 1 ? "Journal" : "Journals";
+      const journalLabel = s.gameCount === 1 ? "journal" : "journals";
       const entryLabel = s.entryCount === 1 ? "entry" : "entries";
       return `${start + idx + 1}. **${renderUsernameWithEmoji(s.userId, displayName)}**:`
         + ` ${s.gameCount} ${journalLabel} with ${s.entryCount} total ${entryLabel}`;
@@ -377,7 +376,6 @@ function buildSearchResultComponents(
   results: IJournalSearchResult[],
   total: number,
   page: number,
-  totalPages: number,
 ): ContainerBuilder[] {
   const titleLine = gameTitlePart
     ? `${gameTitlePart} Game Journal Search`
@@ -541,7 +539,7 @@ export class GameJournalCommand {
         : null;
       const totalPages = Math.max(1, Math.ceil(total / SEARCH_PAGE_SIZE));
       const searchComponents = buildSearchResultComponents(
-        targetUser, gameTitlePart, cleanQuery, rows, total, 0, totalPages,
+        targetUser, gameTitlePart, cleanQuery, rows, total, 0,
       );
       const pageRow = buildSearchPageRow(
         callerId, targetUserId, gameIdStr, cleanQuery, 0, totalPages,
@@ -566,7 +564,7 @@ export class GameJournalCommand {
       const totalPages = Math.max(1, Math.ceil(summaries.length / ALL_PAGE_SIZE));
       const page = 0;
       const cvFlags = (ephemeral ? MessageFlags.Ephemeral : 0) | COMPONENTS_V2_FLAG;
-      const allContainers = buildAllComponents(summaries, page, totalPages);
+      const allContainers = buildAllComponents(summaries, page);
       const selectRow = buildAllSelectRow(summaries, interaction.user.id, page);
       const pageRow = buildAllPageRow(interaction.user.id, page, totalPages);
       const components = pageRow
@@ -728,7 +726,7 @@ export class GameJournalCommand {
     const summaries = await Member.getAllJournalUsers();
     const totalPages = Math.max(1, Math.ceil(summaries.length / ALL_PAGE_SIZE));
     const safePage = Math.min(Math.max(page, 0), totalPages - 1);
-    const allContainers = buildAllComponents(summaries, safePage, totalPages);
+    const allContainers = buildAllComponents(summaries, safePage);
     const selectRow = buildAllSelectRow(summaries, callerId, safePage);
     const pageRow = buildAllPageRow(callerId, safePage, totalPages);
     const components = pageRow
@@ -791,7 +789,7 @@ export class GameJournalCommand {
     const safePage = Math.min(Math.max(page, 0), totalPages - 1);
 
     const searchComponents = buildSearchResultComponents(
-      targetUser, gameTitlePart, query, rows, total, safePage, totalPages,
+      targetUser, gameTitlePart, query, rows, total, safePage,
     );
     const nextPageRow = buildSearchPageRow(
       callerId, targetUserId, gameIdStr, query, safePage, totalPages,
