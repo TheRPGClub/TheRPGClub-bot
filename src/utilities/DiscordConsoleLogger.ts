@@ -273,6 +273,11 @@ async function sendToDiscord(level: ConsoleLevel, message: string): Promise<void
       return;
     }
 
+    // Suppress routine IGDB scan progress logs; only surface errors
+    if (level !== "error" && message.includes("[IGDB Scan]")) {
+      return;
+    }
+
     bufferLog(level, message);
     return;
   } catch {
