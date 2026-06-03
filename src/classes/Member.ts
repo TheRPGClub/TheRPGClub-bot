@@ -136,6 +136,7 @@ export interface IJournalUserSummary {
   username: string | null;
   globalName: string | null;
   gameCount: number;
+  entryCount: number;
 }
 
 export interface IJournalSearchResult {
@@ -2622,11 +2623,13 @@ export default class Member {
         USERNAME: string | null;
         GLOBAL_NAME: string | null;
         GAME_COUNT: number;
+        ENTRY_COUNT: number;
       }>(
         `SELECT u.USER_ID,
                 u.USERNAME,
                 u.GLOBAL_NAME,
-                COUNT(DISTINCT je.GAMEDB_GAME_ID) AS GAME_COUNT
+                COUNT(DISTINCT je.GAMEDB_GAME_ID) AS GAME_COUNT,
+                COUNT(je.ENTRY_ID) AS ENTRY_COUNT
            FROM USER_GAME_JOURNAL_ENTRIES je
            JOIN RPG_CLUB_USERS u ON u.USER_ID = je.USER_ID
           WHERE NVL(u.IS_BOT, 0) = 0
@@ -2643,6 +2646,7 @@ export default class Member {
         username: row.USERNAME ?? null,
         globalName: row.GLOBAL_NAME ?? null,
         gameCount: Number(row.GAME_COUNT ?? 0),
+        entryCount: Number(row.ENTRY_COUNT ?? 0),
       }));
     } finally {
       await connection.close();
