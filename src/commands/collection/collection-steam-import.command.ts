@@ -68,7 +68,6 @@ import {
 import {
   buildCollectionSteamChooseId,
   buildCollectionSteamGameIdModalId,
-  buildCollectionSteamImportActionId,
   buildCollectionSteamRemapModalId,
   buildSteamImportItemButtons,
   buildSteamImportItemMessage,

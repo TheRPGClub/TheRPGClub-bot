@@ -127,16 +127,6 @@ function decodeQueryToken(token: string): string | undefined {
   }
 }
 
-function buildCommonBackCustomId(
-  state: ICommonCompletionState,
-  page: number,
-): string {
-  const base = `comp-common-back:${state.leftId}:${state.rightId}:${state.sort}:${normalizeYearToken(state.year)}:${normalizePlatformToken(state.platformId)}:${page}:`;
-  const maxQueryLength = Math.max(100 - base.length, 0);
-  const queryToken = encodeQueryToken(state.query, maxQueryLength);
-  return `${base}${queryToken}`;
-}
-
 function buildCommonNavCustomId(
   state: ICommonCompletionState,
   page: number,

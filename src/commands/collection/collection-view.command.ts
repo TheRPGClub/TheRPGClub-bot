@@ -39,7 +39,6 @@ import {
 import { flattenErrorMessages } from "../imports/import-scaffold.service.js";
 import {
   buildAllCollectionsOverviewMessages,
-  buildCollectionOverviewContainer,
   buildCollectionOverviewResponse,
   extractOverviewTitleFromMessage,
   parseCollectionOverviewSelectId,
@@ -48,9 +47,7 @@ import {
 } from "./collection-overview.service.js";
 import {
   applyFiltersToSourceMessage,
-  buildCollectionFilterActionId,
   buildCollectionFilterModalId,
-  buildCollectionFilterPanelActionId,
   buildCollectionFilterPanelComponents,
   buildCollectionFilterPanelContent,
   buildCollectionListNavId,
