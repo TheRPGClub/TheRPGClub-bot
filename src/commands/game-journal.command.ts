@@ -282,11 +282,11 @@ function buildAllComponents(
   const memberLabel = summaries.length === 1 ? "member" : "members";
   const lines = ["## Game Journal Users"];
   lines.push(
-    ...pageSummaries.map(
-      (s) =>
-        `${renderUsernameWithEmoji(s.userId, `<@${s.userId}>`)}`
-        + ` - ${s.gameCount} ${gameLabel(s.gameCount)}`,
-    ),
+    ...pageSummaries.map((s, idx) => {
+      const displayName = s.globalName ?? s.username ?? s.userId;
+      return `${start + idx + 1}. **${renderUsernameWithEmoji(s.userId, displayName)}**:`
+        + ` ${s.gameCount} ${gameLabel(s.gameCount)}`;
+    }),
   );
   const pageInfo = totalPages > 1 ? ` • Page ${page + 1}/${totalPages}` : "";
   lines.push(`-# ${summaries.length} ${memberLabel}${pageInfo}`);
