@@ -6,7 +6,7 @@ import GameReleaseAnnouncement, {
   type IReleaseAnnouncementCandidate,
 } from "../classes/GameReleaseAnnouncement.js";
 import { NEW_GAME_ANNOUNCEMENT_CHANNEL_ID } from "../config/channels.js";
-import { GameDb } from "../commands/gamedb.command.js";
+import { buildGameProfileMessagePayload } from "../commands/gamedb.command.js";
 import { COMPONENTS_V2_FLAG } from "../config/flags.js";
 import { resolveAssetPath } from "../functions/AssetPath.js";
 
@@ -14,7 +14,6 @@ const CHECK_INTERVAL_MS = 60_000;
 const BATCH_SIZE = 25;
 const RELEASE_SCHEDULING_ZONE = "UTC";
 const RELEASE_SPACER_IMAGE_PATH = resolveAssetPath("images", "force-message-width.png");
-const gameDbCommand = new GameDb();
 
 let gameReleaseTimer: NodeJS.Timeout | null = null;
 let currentlyChecking = false;
@@ -69,7 +68,7 @@ async function checkAndSendReleaseAnnouncements(client: Client): Promise<void> {
 
   for (const candidate of due) {
     try {
-      const payload = await gameDbCommand.buildGameProfileMessagePayload(candidate.gameId, {
+      const payload = await buildGameProfileMessagePayload(candidate.gameId, {
         includeActions: false,
         guildId: getGuildId(channel),
         prefaceText: buildAnnouncementPreface(candidate),
