@@ -29,7 +29,7 @@ import {
 } from "../functions/NominationWindow.js";
 import { safeDeferReply, safeReply, sanitizeUserInput } from "../functions/InteractionUtils.js";
 import { GOTM_NOMINATION_CHANNEL_ID, NR_GOTM_NOMINATION_CHANNEL_ID } from "../config/nominationChannels.js";
-import { GameDb } from "./gamedb.command.js";
+import { showGameProfileFromNomination } from "./gamedb.command.js";
 
 const NOMINATE_REASON_MAX_LENGTH = 1500;
 
@@ -359,7 +359,6 @@ export class NominateCommand {
       return;
     }
 
-    const gameDb = new GameDb();
-    await gameDb.showGameProfileFromNomination(interaction, gameId);
+    await showGameProfileFromNomination(interaction, gameId);
   }
 }
