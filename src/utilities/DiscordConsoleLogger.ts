@@ -2,6 +2,7 @@ import { AttachmentBuilder, EmbedBuilder, type MessageCreateOptions, type TextBa
 import type { Client } from "discordx";
 
 import { DISCORD_CONSOLE_LOG_CHANNEL_ID } from "../config/channels.js";
+import { BOT_DEV_PING_USER_ID } from "../config/users.js";
 import { resolveAssetPath } from "../functions/AssetPath.js";
 const MAX_DESCRIPTION_LENGTH = 3900;
 const LEVEL_COLORS: Record<string, number> = {
@@ -126,13 +127,18 @@ function buildConsoleMessageOptions(embed: EmbedBuilder): MessageCreateOptions {
   };
 }
 
-async function sendEmbedToChannel(channel: ILoggerChannel, embed: EmbedBuilder): Promise<void> {
+async function sendEmbedToChannel(
+  channel: ILoggerChannel,
+  embed: EmbedBuilder,
+  content?: string,
+): Promise<void> {
   const options = buildConsoleMessageOptions(embed);
+  if (content) options.content = content;
   try {
     await channel.send(options);
   } catch {
     // If image attachment fails, still send the log message.
-    await channel.send({ embeds: [embed] });
+    await channel.send({ embeds: [embed], ...(content ? { content } : {}) });
   }
 }
 
@@ -215,8 +221,9 @@ async function flushLogBuffer(targetLevel?: BufferedLevel): Promise<void> {
         );
       }
 
-      for (const embed of embeds) {
-        await sendEmbedToChannel(channel, embed);
+      const pingContent = level === "error" ? `<@${BOT_DEV_PING_USER_ID}>` : undefined;
+      for (let i = 0; i < embeds.length; i++) {
+        await sendEmbedToChannel(channel, embeds[i], i === 0 ? pingContent : undefined);
       }
     }
   } catch {
