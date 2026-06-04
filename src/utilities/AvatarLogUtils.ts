@@ -1,6 +1,6 @@
 import axios from "axios";
 import { AttachmentBuilder, EmbedBuilder } from "discord.js";
-import type { User } from "discord.js";
+import type { GuildMember, User } from "discord.js";
 import Member, { type IMemberRecord } from "../classes/Member.js";
 import { formatTimestampWithDay, resolveLogChannel } from "./DiscordLogUtils.js";
 
@@ -72,6 +72,22 @@ export async function updateAvatarRecordFromUrl(
   const avatarBlob = await downloadAvatarBuffer(avatarUrl);
   if (!avatarBlob) return false;
   await upsertAvatarRecord(user, avatarBlob);
+  return true;
+}
+
+export async function recordCurrentAvatarIfNew(member: GuildMember): Promise<boolean> {
+  if (member.user.bot) return false;
+  const avatarHash = member.avatar ?? member.user.avatar;
+  if (!avatarHash) return false;
+
+  const latest = await Member.getAvatarHistory(member.user.id, 1, 0);
+  if (latest.length && latest[0].avatarHash === avatarHash) return false;
+
+  const avatarUrl = member.displayAvatarURL({ extension: "png", size: 512, forceStatic: true });
+  const avatarBlob = await downloadAvatarBuffer(avatarUrl);
+  if (!avatarBlob) return false;
+
+  await Member.insertAvatarHistoryRecord(member.user.id, avatarHash, avatarUrl, avatarBlob);
   return true;
 }
 
