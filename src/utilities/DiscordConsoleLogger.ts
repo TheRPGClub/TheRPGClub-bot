@@ -1,9 +1,10 @@
-import { AttachmentBuilder, EmbedBuilder, type MessageCreateOptions, type TextBasedChannel } from "discord.js";
+import { type MessageCreateOptions, type TextBasedChannel } from "discord.js";
+import { ContainerBuilder, TextDisplayBuilder } from "@discordjs/builders";
 import type { Client } from "discordx";
 
 import { DISCORD_CONSOLE_LOG_CHANNEL_ID } from "../config/channels.js";
 import { BOT_DEV_PING_USER_ID } from "../config/users.js";
-import { resolveAssetPath } from "../functions/AssetPath.js";
+import { COMPONENTS_V2_FLAG } from "../config/flags.js";
 const MAX_DESCRIPTION_LENGTH = 3900;
 const LEVEL_COLORS: Record<string, number> = {
   log: 0x95a5a6,
@@ -14,8 +15,6 @@ const LEVEL_COLORS: Record<string, number> = {
 };
 const LOG_BATCH_INTERVAL_MS = 5 * 1000;
 const LOG_BATCH_MAX_CHARS = 2600;
-const FORCE_WIDTH_IMAGE_NAME = "force-message-width.png";
-const FORCE_WIDTH_IMAGE_PATH = resolveAssetPath("images", FORCE_WIDTH_IMAGE_NAME);
 const STARTUP_COMPLETE_LOG = "Startup sequence completed.";
 const STARTUP_ALLOWED_LOG_PATTERNS: RegExp[] = [
   /^bot >> connecting discord\.\.\.$/i,
@@ -119,27 +118,28 @@ async function ensureChannel(): Promise<ILoggerChannel | null> {
   return logChannel;
 }
 
-function buildConsoleMessageOptions(embed: EmbedBuilder): MessageCreateOptions {
-  embed.setImage(`attachment://${FORCE_WIDTH_IMAGE_NAME}`);
-  return {
-    embeds: [embed],
-    files: [new AttachmentBuilder(FORCE_WIDTH_IMAGE_PATH, { name: FORCE_WIDTH_IMAGE_NAME })],
-  };
+function buildLogContainer(level: BufferedLevel, description: string): ContainerBuilder {
+  const timestamp = Math.floor(Date.now() / 1000);
+  return new ContainerBuilder()
+    .setAccentColor(LEVEL_COLORS[level])
+    .addTextDisplayComponents(
+      new TextDisplayBuilder().setContent(`\`\`\`\n${description}\`\`\``),
+    )
+    .addTextDisplayComponents(
+      new TextDisplayBuilder().setContent(`-# <t:${timestamp}:T>`),
+    );
 }
 
-async function sendEmbedToChannel(
+async function sendContainerToChannel(
   channel: ILoggerChannel,
-  embed: EmbedBuilder,
+  container: ContainerBuilder,
   content?: string,
 ): Promise<void> {
-  const options = buildConsoleMessageOptions(embed);
-  if (content) options.content = content;
-  try {
-    await channel.send(options);
-  } catch {
-    // If image attachment fails, still send the log message.
-    await channel.send({ embeds: [embed], ...(content ? { content } : {}) });
-  }
+  await channel.send({
+    components: [container],
+    flags: COMPONENTS_V2_FLAG,
+    ...(content ? { content } : {}),
+  });
 }
 
 function getBufferedLine(level: BufferedLevel, message: string): string {
@@ -194,18 +194,13 @@ async function flushLogBuffer(targetLevel?: BufferedLevel): Promise<void> {
       logBufferCharCount[level] = 0;
 
       let currentDescription = "";
-      const embeds: EmbedBuilder[] = [];
+      const containers: ContainerBuilder[] = [];
 
       for (const item of logsToSend) {
         const line = item.message;
         const nextLine = `${line}\n`;
         if (currentDescription.length + nextLine.length > MAX_DESCRIPTION_LENGTH - 8) {
-          embeds.push(
-            new EmbedBuilder()
-              .setDescription(`\`\`\`\n${currentDescription}\`\`\``)
-              .setColor(LEVEL_COLORS[level])
-              .setTimestamp(new Date()),
-          );
+          containers.push(buildLogContainer(level, currentDescription));
           currentDescription = "";
         }
 
@@ -213,17 +208,12 @@ async function flushLogBuffer(targetLevel?: BufferedLevel): Promise<void> {
       }
 
       if (currentDescription.length > 0) {
-        embeds.push(
-          new EmbedBuilder()
-            .setDescription(`\`\`\`\n${currentDescription}\`\`\``)
-            .setColor(LEVEL_COLORS[level])
-            .setTimestamp(new Date()),
-        );
+        containers.push(buildLogContainer(level, currentDescription));
       }
 
       const pingContent = level === "error" ? `<@${BOT_DEV_PING_USER_ID}>` : undefined;
-      for (let i = 0; i < embeds.length; i++) {
-        await sendEmbedToChannel(channel, embeds[i], i === 0 ? pingContent : undefined);
+      for (let i = 0; i < containers.length; i++) {
+        await sendContainerToChannel(channel, containers[i], i === 0 ? pingContent : undefined);
       }
     }
   } catch {
