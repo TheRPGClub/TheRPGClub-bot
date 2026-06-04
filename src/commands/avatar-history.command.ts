@@ -26,6 +26,8 @@ import {
 } from "../functions/ComponentsV2Utils.js";
 import { renderUsernameWithEmoji } from "../services/UserEmojiService.js";
 import { buildUserHeaderContainer } from "../functions/uiComponents.js";
+import { recordCurrentAvatarIfNew } from "../utilities/AvatarLogUtils.js";
+import { isAdmin } from "./admin/admin-auth.utils.js";
 
 const AVATAR_HISTORY_PAGE_SIZE = 10;
 
@@ -154,9 +156,63 @@ export class AvatarHistoryCommand {
       type: ApplicationCommandOptionType.Boolean,
     })
     showAll: boolean | undefined,
+    @SlashOption({
+      description: "Scan all cached members and record current avatars for new entries (admin only).",
+      name: "scan",
+      required: false,
+      type: ApplicationCommandOptionType.Boolean,
+    })
+    scan: boolean | undefined,
     interaction: CommandInteraction,
   ): Promise<void> {
     const ephemeral = !showInChat;
+
+    if (scan === true) {
+      await safeDeferReply(interaction, { flags: buildComponentsV2Flags(true) });
+      if (!(await isAdmin(interaction))) return;
+      if (!interaction.guild) {
+        await safeReply(interaction, {
+          components: [
+            new ContainerBuilder().addTextDisplayComponents(
+              new TextDisplayBuilder().setContent("This command can only be used in a server."),
+            ),
+          ],
+          flags: buildComponentsV2Flags(true),
+        });
+        return;
+      }
+      const guildMembers = interaction.guild.members.cache.filter((m) => !m.user.bot);
+      let recorded = 0;
+      let skipped = 0;
+      let failed = 0;
+      for (const guildMember of guildMembers.values()) {
+        try {
+          const wasRecorded = await recordCurrentAvatarIfNew(guildMember);
+          if (wasRecorded) recorded++;
+          else skipped++;
+        } catch {
+          failed++;
+        }
+      }
+      const lines = [
+        `Scanned **${guildMembers.size}** members.`,
+        `- **${recorded}** new avatar${recorded !== 1 ? "s" : ""} recorded`,
+        `- **${skipped}** already up to date or no avatar`,
+        ...(failed > 0 ? [`- **${failed}** failed`] : []),
+      ];
+      const scanContainer = new ContainerBuilder();
+      scanContainer.addTextDisplayComponents(
+        new TextDisplayBuilder().setContent("# Avatar History Scan"),
+      );
+      scanContainer.addTextDisplayComponents(
+        new TextDisplayBuilder().setContent(lines.join("\n")),
+      );
+      await safeReply(interaction, {
+        components: [scanContainer],
+        flags: buildComponentsV2Flags(true),
+      });
+      return;
+    }
 
     if (showAll === true) {
       await safeDeferReply(interaction, {

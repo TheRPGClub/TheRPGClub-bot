@@ -2399,6 +2399,25 @@ export default class Member {
     }
   }
 
+  static async insertAvatarHistoryRecord(
+    userId: string,
+    avatarHash: string,
+    avatarUrl: string,
+    avatarBlob: Buffer | null,
+  ): Promise<void> {
+    const connection = await getOraclePool().getConnection();
+    try {
+      await connection.execute(
+        `INSERT INTO RPG_CLUB_USER_AVATAR_HISTORY (USER_ID, AVATAR_HASH, AVATAR_URL, AVATAR_BLOB)
+         VALUES (:userId, :avatarHash, :avatarUrl, :avatarBlob)`,
+        { userId, avatarHash, avatarUrl, avatarBlob },
+        { autoCommit: true },
+      );
+    } finally {
+      await connection.close();
+    }
+  }
+
   static async getAllMembersAvatarHistoryCounts(): Promise<IMemberAvatarHistoryCount[]> {
     const connection = await getOraclePool().getConnection();
     try {

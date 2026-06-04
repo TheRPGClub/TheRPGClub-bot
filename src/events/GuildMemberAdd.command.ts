@@ -3,6 +3,7 @@ import type { ArgsOf, Client } from "discordx";
 import { Discord, On } from "discordx";
 import { formatTimestampWithDay } from "../utilities/DiscordLogUtils.js";
 import { JOIN_LEAVE_LOG_CHANNEL_ID } from "../config/channels.js";
+import { recordCurrentAvatarIfNew } from "../utilities/AvatarLogUtils.js";
 
 function formatDiscordDateTime(date: Date): string {
   return `<t:${Math.floor(date.getTime() / 1000)}:F>`;
@@ -45,6 +46,14 @@ export class GuildMemberAdd {
 
         await (logChannel as any).send({ embeds: [embed] });
       }
+    }
+
+    if (!member.user.bot) {
+      recordCurrentAvatarIfNew(member).catch((err: any) => {
+        console.error(
+          `[GuildMemberAdd] Failed to record avatar for ${member.user.id}: ${err?.message ?? err}`,
+        );
+      });
     }
 
     // auto-role assignment on member join
