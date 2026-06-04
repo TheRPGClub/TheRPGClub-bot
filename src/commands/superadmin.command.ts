@@ -19,6 +19,7 @@ import {
 } from "discordx";
 import {
   AnyRepliable,
+  extractErrorMessage,
   safeDeferReply,
   safeReply,
   safeUpdate,
@@ -686,7 +687,7 @@ export class SuperAdmin {
       await this.promptCompletionPlatformSelection(interaction, ctx, game);
       return true;
     } catch (err: any) {
-      const msg = err?.message ?? String(err);
+      const msg = extractErrorMessage(err);
       await interaction.followUp({
         content: `Failed to add completion: ${msg}`,
         flags: MessageFlags.Ephemeral,

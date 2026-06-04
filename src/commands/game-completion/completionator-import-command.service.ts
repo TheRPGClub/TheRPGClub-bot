@@ -1,7 +1,7 @@
 import type { CommandInteraction, Attachment } from "discord.js";
 import { MessageFlags, EmbedBuilder } from "discord.js";
 import type { CompletionatorAction } from "./completion.types.js";
-import { safeDeferReply, safeReply } from "../../functions/InteractionUtils.js";
+import { ephemeralFlag, safeDeferReply, safeReply } from "../../functions/InteractionUtils.js";
 import { fetchCsv, parseCompletionatorCsv } from "./completionator-parser.service.js";
 import {
   createImportSession,
@@ -21,7 +21,7 @@ export async function handleCompletionatorImport(
 ): Promise<void> {
   const ephemeral = interaction.channel?.id !== BOT_DEV_CHANNEL_ID;
   await safeDeferReply(interaction, {
-    flags: ephemeral ? MessageFlags.Ephemeral : undefined,
+    flags: ephemeralFlag(ephemeral),
   });
   const userId = interaction.user.id;
   const guild = interaction.guild;
@@ -29,7 +29,7 @@ export async function handleCompletionatorImport(
   if (!guild) {
     await safeReply(interaction, {
       content: "This command can only be used inside a server.",
-      flags: ephemeral ? MessageFlags.Ephemeral : undefined,
+      flags: ephemeralFlag(ephemeral),
     });
     return;
   }
@@ -45,7 +45,7 @@ export async function handleCompletionatorImport(
           "3. In the upper-right, click 'Export' and then 'Export to CSV'",
           "4. Upload the CSV with `/game-completion import-completionator action:start file:<csv>`.",
         ].join("\n"),
-        flags: ephemeral ? MessageFlags.Ephemeral : undefined,
+        flags: ephemeralFlag(ephemeral),
       });
       return;
     }
@@ -54,7 +54,7 @@ export async function handleCompletionatorImport(
     if (!csvText) {
       await safeReply(interaction, {
         content: "Failed to download the CSV file.",
-        flags: ephemeral ? MessageFlags.Ephemeral : undefined,
+        flags: ephemeralFlag(ephemeral),
       });
       return;
     }
@@ -63,7 +63,7 @@ export async function handleCompletionatorImport(
     if (!parsed.length) {
       await safeReply(interaction, {
         content: "No rows found in the CSV file.",
-        flags: ephemeral ? MessageFlags.Ephemeral : undefined,
+        flags: ephemeralFlag(ephemeral),
       });
       return;
     }
@@ -84,7 +84,7 @@ export async function handleCompletionatorImport(
       content:
         `Import session #${session.importId} created with ${parsed.length} rows. ` +
         `Starting review in ${threadMention}.`,
-      flags: ephemeral ? MessageFlags.Ephemeral : undefined,
+      flags: ephemeralFlag(ephemeral),
     });
 
     const workflowService = new CompletionatorWorkflowService();
@@ -100,7 +100,7 @@ export async function handleCompletionatorImport(
     if (!session) {
       await safeReply(interaction, {
         content: "No active import session found.",
-        flags: ephemeral ? MessageFlags.Ephemeral : undefined,
+        flags: ephemeralFlag(ephemeral),
       });
       return;
     }
@@ -119,7 +119,7 @@ export async function handleCompletionatorImport(
 
     await safeReply(interaction, {
       embeds: [embed],
-      flags: ephemeral ? MessageFlags.Ephemeral : undefined,
+      flags: ephemeralFlag(ephemeral),
     });
     return;
   }
@@ -128,7 +128,7 @@ export async function handleCompletionatorImport(
   if (!session) {
     await safeReply(interaction, {
       content: "No active import session found.",
-      flags: ephemeral ? MessageFlags.Ephemeral : undefined,
+      flags: ephemeralFlag(ephemeral),
     });
     return;
   }
@@ -141,7 +141,7 @@ export async function handleCompletionatorImport(
       content:
         `Import #${session.importId} paused. ` +
         "Resume with `/game-completion import-completionator action:resume`.",
-      flags: ephemeral ? MessageFlags.Ephemeral : undefined,
+      flags: ephemeralFlag(ephemeral),
     });
     return;
   }
@@ -150,7 +150,7 @@ export async function handleCompletionatorImport(
     await setImportStatus(session.importId, "CANCELED");
     await safeReply(interaction, {
       content: `Import #${session.importId} canceled.`,
-      flags: ephemeral ? MessageFlags.Ephemeral : undefined,
+      flags: ephemeralFlag(ephemeral),
     });
     return;
   }
@@ -163,7 +163,7 @@ export async function handleCompletionatorImport(
     content:
       `Import #${session.importId} resumed. ` +
       `Continue in <#${context.threadId}>.`,
-    flags: ephemeral ? MessageFlags.Ephemeral : undefined,
+    flags: ephemeralFlag(ephemeral),
   });
 
   const workflowService = new CompletionatorWorkflowService();

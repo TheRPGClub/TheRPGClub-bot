@@ -1,6 +1,6 @@
 import type { CommandInteraction } from "discord.js";
 import { ButtonStyle } from "discord.js";
-import { safeReply } from "../../functions/InteractionUtils.js";
+import { extractErrorMessage, safeReply } from "../../functions/InteractionUtils.js";
 import Gotm, {
   type IGotmEntry,
   type IGotmGame,
@@ -23,7 +23,7 @@ export async function handleAddGotm(interaction: CommandInteraction): Promise<vo
   try {
     allEntries = Gotm.all();
   } catch (err: any) {
-    const msg = err?.message ?? String(err);
+    const msg = extractErrorMessage(err);
     await safeReply(interaction, {
       content: `Error loading existing GOTM data: ${msg}`,
     });
@@ -117,7 +117,7 @@ export async function handleAddGotm(interaction: CommandInteraction): Promise<vo
       files: embedAssets.files?.length ? embedAssets.files : undefined,
     });
   } catch (err: any) {
-    const msg = err?.message ?? String(err);
+    const msg = extractErrorMessage(err);
     await safeReply(interaction, {
       content: `Failed to create GOTM round ${nextRound}: ${msg}`,
     });
@@ -140,7 +140,7 @@ export async function handleEditGotm(
   try {
     entries = Gotm.getByRound(roundNumber);
   } catch (err: any) {
-    const msg = err?.message ?? String(err);
+    const msg = extractErrorMessage(err);
     await safeReply(interaction, {
       content: `Error loading GOTM data: ${msg}`,
     });
@@ -274,7 +274,7 @@ export async function handleEditGotm(
       files: updatedAssets.files?.length ? updatedAssets.files : undefined,
     });
   } catch (err: any) {
-    const msg = err?.message ?? String(err);
+    const msg = extractErrorMessage(err);
     await safeReply(interaction, {
       content: `Failed to update GOTM round ${roundNumber}: ${msg}`,
     });

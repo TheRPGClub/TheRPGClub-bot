@@ -4,9 +4,9 @@ import type { CompletionatorThreadContext, ICompletionatorImport } from "./compl
 import { completionatorThreadContexts } from "./completion.types.js";
 import { getCompletionatorThreadKey } from "./completion-helpers.js";
 import { CompletionatorUiService } from "./completionator-ui.service.js";
-import { buildComponentsV2Flags } from "../../functions/NominationListComponents.js";
+import { buildComponentsV2Flags } from "../../functions/ComponentsV2Utils.js";
 import { BOT_DEV_CHANNEL_ID } from "../../config/channels.js";
-import { safeReply } from "../../functions/InteractionUtils.js";
+import { ephemeralFlag, safeReply } from "../../functions/InteractionUtils.js";
 
 export class CompletionatorThreadService {
   private uiService: CompletionatorUiService;
@@ -30,7 +30,7 @@ export class CompletionatorThreadService {
     if (!channel || typeof channel.send !== "function") {
       await safeReply(interaction, {
         content: "Cannot create a thread in this channel.",
-        flags: ephemeral ? MessageFlags.Ephemeral : undefined,
+        flags: ephemeralFlag(ephemeral),
       });
       return null;
     }
@@ -91,7 +91,7 @@ export class CompletionatorThreadService {
     if (typeof parentMessage.startThread !== "function") {
       await safeReply(interaction, {
         content: "Thread creation is not supported in this channel.",
-        flags: ephemeral ? MessageFlags.Ephemeral : undefined,
+        flags: ephemeralFlag(ephemeral),
       });
       return null;
     }

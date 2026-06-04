@@ -1,7 +1,12 @@
 import type { Channel, CommandInteraction } from "discord.js";
 import { ApplicationCommandOptionType, MessageFlags } from "discord.js";
 import { Discord, Slash, SlashChoice, SlashGroup, SlashOption } from "discordx";
-import { safeDeferReply, safeReply, sanitizeUserInput } from "../functions/InteractionUtils.js";
+import {
+  extractErrorMessage,
+  safeDeferReply,
+  safeReply,
+  sanitizeUserInput,
+} from "../functions/InteractionUtils.js";
 import { isAdmin } from "./admin.command.js";
 import {
   createReminder,
@@ -152,7 +157,7 @@ export class PublicReminderCommand {
         flags: MessageFlags.Ephemeral,
       });
     } catch (err: any) {
-      const msg = err?.message ?? String(err);
+      const msg = extractErrorMessage(err);
       await safeReply(interaction, {
         content: `Failed to create reminder: ${msg}`,
         flags: MessageFlags.Ephemeral,
@@ -186,7 +191,7 @@ export class PublicReminderCommand {
         flags: MessageFlags.Ephemeral,
       });
     } catch (err: any) {
-      const msg = err?.message ?? String(err);
+      const msg = extractErrorMessage(err);
       await safeReply(interaction, {
         content: `Failed to list reminders: ${msg}`,
         flags: MessageFlags.Ephemeral,
@@ -217,7 +222,7 @@ export class PublicReminderCommand {
         flags: MessageFlags.Ephemeral,
       });
     } catch (err: any) {
-      const msg = err?.message ?? String(err);
+      const msg = extractErrorMessage(err);
       await safeReply(interaction, {
         content: `Failed to delete reminder: ${msg}`,
         flags: MessageFlags.Ephemeral,

@@ -27,7 +27,11 @@ import {
   safeUpdate,
   stripModalInput,
 } from "../functions/InteractionUtils.js";
-import { shouldRenderPrevNextButtons } from "../functions/PaginationUtils.js";
+import {
+  buildPrevNextRow,
+  parseDirAndPage,
+  shouldRenderPrevNextButtons,
+} from "../functions/PaginationUtils.js";
 import {
   claimGameKey,
   createGameKey,
@@ -416,23 +420,11 @@ function buildKeyListComponents(
     }
   }
 
-  const prevDisabled = page <= 0;
-  const nextDisabled = page >= totalPages - 1;
-  if (shouldRenderPrevNextButtons(prevDisabled, nextDisabled)) {
-    const pagePrefix = isPublic ? "giveaway-page-public" : "giveaway-page";
-    const pageTarget = isPublic ? `${pagePrefix}:${sessionId}:${page}` :
-      `${pagePrefix}:${sessionId}:${ownerId}:${page}`;
-    const prevButton = new ButtonBuilder()
-      .setCustomId(`${pageTarget}:prev`)
-      .setLabel("Previous")
-      .setStyle(ButtonStyle.Secondary)
-      .setDisabled(prevDisabled);
-    const nextButton = new ButtonBuilder()
-      .setCustomId(`${pageTarget}:next`)
-      .setLabel("Next")
-      .setStyle(ButtonStyle.Secondary)
-      .setDisabled(nextDisabled);
-    rows.push(new ActionRowBuilder<ButtonBuilder>().addComponents(prevButton, nextButton));
+  if (shouldRenderPrevNextButtons(page <= 0, page >= totalPages - 1)) {
+    const pageBase = isPublic
+      ? `giveaway-page-public:${sessionId}`
+      : `giveaway-page:${sessionId}:${ownerId}`;
+    rows.push(buildPrevNextRow(pageBase, page, totalPages));
   }
 
   return rows;
@@ -622,23 +614,17 @@ export class GiveawayCommand {
       return;
     }
 
-    const page = Number(pageRaw);
-    if (Number.isNaN(page)) return;
-    const delta = dir === "next" ? 1 : -1;
-    const nextPage = Math.max(page + delta, 0);
-
-    await updateKeyListInteraction(interaction, sessionId, ownerId, nextPage, false);
+    const parsed = parseDirAndPage(pageRaw, dir);
+    if (!parsed) return;
+    await updateKeyListInteraction(interaction, sessionId, ownerId, parsed.nextPage, false);
   }
 
   @ButtonComponent({ id: /^giveaway-page-public:[^:]+:\d+:(prev|next)$/ })
   async handlePublicPage(interaction: ButtonInteraction): Promise<void> {
     const [, sessionId, pageRaw, dir] = interaction.customId.split(":");
-    const page = Number(pageRaw);
-    if (Number.isNaN(page)) return;
-    const delta = dir === "next" ? 1 : -1;
-    const nextPage = Math.max(page + delta, 0);
-
-    await updateKeyListInteraction(interaction, sessionId, interaction.user.id, nextPage, true);
+    const parsed = parseDirAndPage(pageRaw, dir);
+    if (!parsed) return;
+    await updateKeyListInteraction(interaction, sessionId, interaction.user.id, parsed.nextPage, true);
   }
 
   @ButtonComponent({ id: /^giveaway-hub-claim:\d+$/ })

@@ -21,7 +21,7 @@ import {
   SlashChoice,
   ModalComponent,
 } from "discordx";
-import { safeDeferReply, sanitizeUserInput } from "../functions/InteractionUtils.js";
+import { ephemeralFlag, safeDeferReply, sanitizeUserInput } from "../functions/InteractionUtils.js";
 import { COMPLETION_TYPES, type CompletionType, parseCompletionDateInput } from "./profile.command.js";
 import { saveCompletion } from "../functions/CompletionHelpers.js";
 import {
@@ -305,7 +305,7 @@ export class GameCompletionCommands {
     interaction: CommandInteraction,
   ): Promise<void> {
     const ephemeral = !showInChat;
-    await safeDeferReply(interaction, { flags: ephemeral ? MessageFlags.Ephemeral : undefined });
+    await safeDeferReply(interaction, { flags: ephemeralFlag(ephemeral) });
 
     const sanitizedQuery = query
       ? sanitizeUserInput(query, { preserveNewlines: false })
@@ -408,7 +408,7 @@ export class GameCompletionCommands {
     interaction: CommandInteraction,
   ): Promise<void> {
     const ephemeral = !showInChat;
-    await safeDeferReply(interaction, { flags: ephemeral ? MessageFlags.Ephemeral : undefined });
+    await safeDeferReply(interaction, { flags: ephemeralFlag(ephemeral) });
 
     let leftUserId = interaction.user.id;
     let rightUserId: string | null = null;

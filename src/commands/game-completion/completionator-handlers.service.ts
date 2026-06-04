@@ -4,6 +4,7 @@ import type {
   StringSelectMenuInteraction,
 } from "discord.js";
 import { MessageFlags } from "discord.js";
+import { ephemeralFlag } from "../../functions/InteractionUtils.js";
 import Member from "../../classes/Member.js";
 import Game from "../../classes/Game.js";
 import type { CompletionatorModalKind, CompletionatorDateChoice } from "./completion.types.js";
@@ -53,7 +54,7 @@ export class CompletionatorHandlersService {
     if (!Number.isInteger(importId) || !Number.isInteger(itemId)) {
       await interaction.reply({
         content: "Invalid import selection.",
-        flags: ephemeral ? MessageFlags.Ephemeral : undefined,
+        flags: ephemeralFlag(ephemeral),
       });
       return;
     }
@@ -62,7 +63,7 @@ export class CompletionatorHandlersService {
     if (!session) {
       await interaction.reply({
         content: "Import session not found.",
-        flags: ephemeral ? MessageFlags.Ephemeral : undefined,
+        flags: ephemeralFlag(ephemeral),
       });
       return;
     }
@@ -74,7 +75,7 @@ export class CompletionatorHandlersService {
     if (!choice) {
       await interaction.reply({
         content: "No selection received.",
-        flags: ephemeral ? MessageFlags.Ephemeral : undefined,
+        flags: ephemeralFlag(ephemeral),
       });
       return;
     }
@@ -90,7 +91,7 @@ export class CompletionatorHandlersService {
       if (!item) {
         await interaction.reply({
           content: "Import item not found.",
-          flags: ephemeral ? MessageFlags.Ephemeral : undefined,
+          flags: ephemeralFlag(ephemeral),
         });
         return;
       }
@@ -103,7 +104,7 @@ export class CompletionatorHandlersService {
     if (!Number.isInteger(gameId) || gameId <= 0) {
       await interaction.reply({
         content: "Invalid game selection.",
-        flags: ephemeral ? MessageFlags.Ephemeral : undefined,
+        flags: ephemeralFlag(ephemeral),
       });
       return;
     }
@@ -112,7 +113,7 @@ export class CompletionatorHandlersService {
     if (!item) {
       await interaction.reply({
         content: "Import item not found.",
-        flags: ephemeral ? MessageFlags.Ephemeral : undefined,
+        flags: ephemeralFlag(ephemeral),
       });
       return;
     }
@@ -208,7 +209,7 @@ export class CompletionatorHandlersService {
     if (!Number.isInteger(importId) || !Number.isInteger(itemId)) {
       await interaction.reply({
         content: "Invalid import selection.",
-        flags: ephemeral ? MessageFlags.Ephemeral : undefined,
+        flags: ephemeralFlag(ephemeral),
       });
       return;
     }
@@ -217,7 +218,7 @@ export class CompletionatorHandlersService {
     if (!session) {
       await interaction.reply({
         content: "Import session not found.",
-        flags: ephemeral ? MessageFlags.Ephemeral : undefined,
+        flags: ephemeralFlag(ephemeral),
       });
       return;
     }
@@ -226,7 +227,7 @@ export class CompletionatorHandlersService {
     if (!item || !item.completionId) {
       await interaction.reply({
         content: "Import item not found.",
-        flags: ephemeral ? MessageFlags.Ephemeral : undefined,
+        flags: ephemeralFlag(ephemeral),
       });
       return;
     }
@@ -235,7 +236,7 @@ export class CompletionatorHandlersService {
     if (!existing) {
       await interaction.reply({
         content: "Completion not found.",
-        flags: ephemeral ? MessageFlags.Ephemeral : undefined,
+        flags: ephemeralFlag(ephemeral),
       });
       return;
     }
@@ -299,7 +300,7 @@ export class CompletionatorHandlersService {
     if (!Number.isInteger(importId) || !Number.isInteger(itemId)) {
       await interaction.reply({
         content: "Invalid import action.",
-        flags: ephemeral ? MessageFlags.Ephemeral : undefined,
+        flags: ephemeralFlag(ephemeral),
       });
       return;
     }
@@ -308,7 +309,7 @@ export class CompletionatorHandlersService {
     if (!session) {
       await interaction.reply({
         content: "Import session not found.",
-        flags: ephemeral ? MessageFlags.Ephemeral : undefined,
+        flags: ephemeralFlag(ephemeral),
       });
       return;
     }
@@ -317,7 +318,7 @@ export class CompletionatorHandlersService {
     if (!item) {
       await interaction.reply({
         content: "Import item not found.",
-        flags: ephemeral ? MessageFlags.Ephemeral : undefined,
+        flags: ephemeralFlag(ephemeral),
       });
       return;
     }
@@ -326,7 +327,7 @@ export class CompletionatorHandlersService {
       if (!item.gameDbGameId) {
         await interaction.reply({
           content: "Import item data is missing. Please resume the import.",
-          flags: ephemeral ? MessageFlags.Ephemeral : undefined,
+          flags: ephemeralFlag(ephemeral),
         });
         return;
       }
@@ -391,7 +392,7 @@ export class CompletionatorHandlersService {
       if (!item.completionId) {
         await interaction.reply({
           content: "Import item data is missing. Please resume the import.",
-          flags: ephemeral ? MessageFlags.Ephemeral : undefined,
+          flags: ephemeralFlag(ephemeral),
         });
         return;
       }
@@ -400,7 +401,7 @@ export class CompletionatorHandlersService {
       if (!existing) {
         await interaction.reply({
           content: "Completion not found.",
-          flags: ephemeral ? MessageFlags.Ephemeral : undefined,
+          flags: ephemeralFlag(ephemeral),
         });
         return;
       }
@@ -428,7 +429,7 @@ export class CompletionatorHandlersService {
       if (!item.gameDbGameId) {
         await interaction.reply({
           content: "Import item data is missing. Please resume the import.",
-          flags: ephemeral ? MessageFlags.Ephemeral : undefined,
+          flags: ephemeralFlag(ephemeral),
         });
         return;
       }
@@ -528,7 +529,7 @@ export class CompletionatorHandlersService {
       if (!item.gameDbGameId || !item.completionId) {
         await interaction.reply({
           content: "Import item data is missing. Please resume the import.",
-          flags: ephemeral ? MessageFlags.Ephemeral : undefined,
+          flags: ephemeralFlag(ephemeral),
         });
         return;
       }
@@ -537,7 +538,7 @@ export class CompletionatorHandlersService {
       if (!existing) {
         await interaction.reply({
           content: "Completion not found.",
-          flags: ephemeral ? MessageFlags.Ephemeral : undefined,
+          flags: ephemeralFlag(ephemeral),
         });
         return;
       }

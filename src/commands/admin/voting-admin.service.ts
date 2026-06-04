@@ -1,7 +1,7 @@
 import { DateTime } from "luxon";
 import type { CommandInteraction } from "discord.js";
 import { MessageFlags } from "discord.js";
-import { safeReply } from "../../functions/InteractionUtils.js";
+import { extractErrorMessage, safeReply } from "../../functions/InteractionUtils.js";
 import { listNominationsForRound } from "../../classes/Nomination.js";
 import { getUpcomingNominationWindow } from "../../functions/NominationWindow.js";
 import { calculateNextVoteDateEt } from "../../functions/VoteDateUtils.js";
@@ -100,7 +100,7 @@ export async function handleVotingSetup(interaction: CommandInteraction): Promis
       });
     }
   } catch (err: any) {
-    const msg = err?.message ?? String(err);
+    const msg = extractErrorMessage(err);
     await safeReply(interaction, {
       content: `Could not generate vote commands: ${msg}`,
       flags: MessageFlags.Ephemeral,

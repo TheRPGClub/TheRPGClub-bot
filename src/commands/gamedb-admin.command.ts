@@ -26,6 +26,8 @@ import {
   SlashOption,
 } from "discordx";
 import { safeDeferReply, safeReply, safeUpdate, sanitizeUserInput } from "../functions/InteractionUtils.js";
+import { decodeBase64Url, encodeWithMaxLength } from "../functions/CustomIdUtils.js";
+import { buildComponentsV2Flags } from "../functions/ComponentsV2Utils.js";
 import {
   ContainerBuilder,
   TextDisplayBuilder,
@@ -62,34 +64,15 @@ const SYNONYM_EDIT_GROUP_MODAL_PREFIX = "gamedb-syn-edit-group-modal";
 const SYNONYM_EDIT_GROUP_INPUT_ID = "gamedb-syn-edit-group-input";
 const SYNONYM_DELETE_GROUP_SELECT_PREFIX = "gamedb-syn-delete-group";
 const SYNONYM_ADD_FROM_LIST_PREFIX = "gamedb-syn-add-from-list";
-const COMPONENTS_V2_FLAG = 1 << 15;
 const SYNONYM_LIST_PAGE_SIZE = 20;
 const MAX_COMPONENT_CUSTOM_ID_LENGTH = 100;
 
-function buildComponentsV2Flags(isEphemeral: boolean): number {
-  return (isEphemeral ? MessageFlags.Ephemeral : 0) | COMPONENTS_V2_FLAG;
-}
-
 function encodeSynonymQuery(query: string, maxLength: number): string {
-  if (!query) return "";
-  let trimmed = query.trim();
-  let encoded = Buffer.from(trimmed, "utf8").toString("base64url");
-  if (encoded.length <= maxLength) return encoded;
-  for (let i = trimmed.length - 1; i >= 0; i -= 1) {
-    trimmed = trimmed.slice(0, i + 1);
-    encoded = Buffer.from(trimmed, "utf8").toString("base64url");
-    if (encoded.length <= maxLength) return encoded;
-  }
-  return "";
+  return encodeWithMaxLength(query.trim(), maxLength);
 }
 
 function decodeSynonymQuery(encoded: string): string {
-  if (!encoded) return "";
-  try {
-    return Buffer.from(encoded, "base64url").toString("utf8");
-  } catch {
-    return "";
-  }
+  return decodeBase64Url(encoded);
 }
 
 function clampSynonymOptionText(value: string, maxLength = 100): string {

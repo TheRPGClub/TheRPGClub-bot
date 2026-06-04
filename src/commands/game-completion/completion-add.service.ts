@@ -15,7 +15,7 @@ import axios from "axios";
 import Game from "../../classes/Game.js";
 import Member from "../../classes/Member.js";
 import { saveCompletion } from "../../functions/CompletionHelpers.js";
-import { safeReply } from "../../functions/InteractionUtils.js";
+import { extractErrorMessage, safeReply } from "../../functions/InteractionUtils.js";
 import { formatDiscordTimestamp, formatPlaytimeHours } from "../profile.command.js";
 import { igdbService } from "../../services/IGDB/IgdbService.js";
 import { createIgdbSession, type IgdbSelectOption } from "../../services/IGDB/IgdbSelectService.js";
@@ -325,7 +325,7 @@ export async function processCompletionSelection(
     }
     return false;
   } catch (err: any) {
-    const msg = err?.message ?? String(err);
+    const msg = extractErrorMessage(err);
     await interaction.followUp({
       content: `Failed to add completion: ${msg}`,
       flags: MessageFlags.Ephemeral,

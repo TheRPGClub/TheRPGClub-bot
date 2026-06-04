@@ -29,7 +29,8 @@ import type { INrGotmEntry } from "../classes/NrGotm.js";
 import NrGotm from "../classes/NrGotm.js";
 import { buildGotmCardsFromEntries, buildGotmSearchMessages } from "../functions/GotmSearchComponents.js";
 import { safeDeferReply, safeDeferUpdate, safeReply, sanitizeUserInput } from "../functions/InteractionUtils.js";
-import { buildComponentsV2Flags } from "../functions/NominationListComponents.js";
+import { buildComponentsV2Flags } from "../functions/ComponentsV2Utils.js";
+import { decodeBase64Url, encodeBase64Url } from "../functions/CustomIdUtils.js";
 import { buildRawModalCustomId, parseRawModalCustomId } from "../services/raw-modal/RawModalCustomId.js";
 
 const ROUND_HISTORY_MODAL_TITLE = "Round History";
@@ -262,16 +263,13 @@ function extractSingleValueFromModal(
 
 function encodeQueryToken(query: string): string {
   if (!query) return "_";
-  return Buffer.from(query, "utf8").toString("base64url");
+  return encodeBase64Url(query);
 }
 
 function decodeQueryToken(token: string): string | null {
   if (token === "_") return "";
-  try {
-    return Buffer.from(token, "base64url").toString("utf8");
-  } catch {
-    return null;
-  }
+  const decoded = decodeBase64Url(token, "\0");
+  return decoded === "\0" ? null : decoded;
 }
 
 function buildRoundHistoryPageCustomId(state: IRoundHistoryFilterState): string {

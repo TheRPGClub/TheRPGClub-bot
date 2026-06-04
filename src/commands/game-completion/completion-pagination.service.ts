@@ -7,8 +7,8 @@ import { renderCompletionPage, renderSelectionPage } from "./completion-list.ser
 import { ContainerBuilder, TextDisplayBuilder } from "@discordjs/builders";
 import Member from "../../classes/Member.js";
 import { buildJournalView } from "../../functions/journalView.js";
-import { safeReply } from "../../functions/InteractionUtils.js";
-import { COMPONENTS_V2_FLAG } from "../../config/flags.js";
+import { ephemeralFlag, safeReply } from "../../functions/InteractionUtils.js";
+import { buildComponentsV2Flags } from "../../functions/ComponentsV2Utils.js";
 
 /**
  * Parses a year filter string into a number, "unknown", or null
@@ -121,7 +121,7 @@ async function openCompletionJournalView(
   if ((status?.journalCount ?? 0) === 0) {
     await safeReply(interaction, {
       content: "This game has no journal entries.",
-      flags: MessageFlags.Ephemeral | COMPONENTS_V2_FLAG,
+      flags: buildComponentsV2Flags(true),
     });
     return;
   }
@@ -138,7 +138,7 @@ async function openCompletionJournalView(
   await safeReply(interaction, {
     components: payload.components,
     files: payload.files,
-    flags: (ephemeral ? MessageFlags.Ephemeral : 0) | COMPONENTS_V2_FLAG,
+    flags: buildComponentsV2Flags(ephemeral),
     allowedMentions: payload.allowedMentions,
   });
 }
@@ -198,7 +198,7 @@ export async function handleCompletionListHeader(
         new TextDisplayBuilder().setContent(COMPLETION_HELP_TEXT),
       ),
     ],
-    flags: MessageFlags.Ephemeral | COMPONENTS_V2_FLAG,
+    flags: buildComponentsV2Flags(true),
   });
 }
 
@@ -255,7 +255,7 @@ export async function handleCompletionLeaderboardSelect(
   const query = parts.slice(1).join(":") || undefined;
   const userId = interaction.values[0];
   const ephemeral = interaction.message?.flags?.has(MessageFlags.Ephemeral) ?? true;
-  await interaction.deferReply({ flags: ephemeral ? MessageFlags.Ephemeral : undefined });
+  await interaction.deferReply({ flags: ephemeralFlag(ephemeral) });
   const firstPage = 0;
   const noYearFilter = null;
   await renderCompletionPage(interaction, userId, firstPage, noYearFilter, ephemeral, query);

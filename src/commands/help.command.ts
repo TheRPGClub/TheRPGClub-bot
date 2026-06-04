@@ -18,6 +18,7 @@ import { buildAdminHelpResponse } from "./admin/admin-help.service.js";
 import { buildModHelpResponse, isModerator } from "./mod.command.js";
 import { buildSuperAdminHelpResponse, isSuperAdmin } from "./superadmin.command.js";
 import { safeDeferReply, safeReply, safeUpdate } from "../functions/InteractionUtils.js";
+import { decodeBase64Url, encodeBase64Url } from "../functions/CustomIdUtils.js";
 
 type HelpTopicId =
   | "noms"
@@ -366,16 +367,8 @@ function isHelpView(view: string): view is HelpMenuView {
   );
 }
 
-function toBase64Url(value: string): string {
-  return Buffer.from(value, "utf8").toString("base64url");
-}
-
-function fromBase64Url(value: string): string {
-  return Buffer.from(value, "base64url").toString("utf8");
-}
-
 function buildHelpCustomId(view: HelpMenuView, state: HelpStatePayload = {}): string {
-  const encodedState = toBase64Url(JSON.stringify(state));
+  const encodedState = encodeBase64Url(JSON.stringify(state));
   return `${HELP_CUSTOM_ID_PREFIX}:${view}:${encodedState}`;
 }
 
@@ -387,7 +380,7 @@ function parseHelpCustomId(
   if (!isHelpView(view)) return null;
 
   try {
-    const state = JSON.parse(fromBase64Url(encodedState)) as HelpStatePayload;
+    const state = JSON.parse(decodeBase64Url(encodedState)) as HelpStatePayload;
     return { view, state };
   } catch {
     return null;

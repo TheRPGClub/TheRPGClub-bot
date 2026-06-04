@@ -46,6 +46,7 @@ import { SeparatorSpacingSize, TextInputStyle as ApiTextInputStyle } from "disco
 import crypto from "node:crypto";
 import Member, { type IMemberNowPlayingEntry } from "../classes/Member.js";
 import {
+  extractErrorMessage,
   safeDeferReply,
   safeDeferUpdate,
   safeReply,
@@ -754,7 +755,7 @@ export class NowPlayingCommand {
         });
       }
     } catch (err: any) {
-      const msg = err?.message ?? String(err);
+      const msg = extractErrorMessage(err);
       const container = new ContainerBuilder().addTextDisplayComponents(
         new TextDisplayBuilder().setContent(`Could not add to Now Playing: ${msg}`),
       );
@@ -1034,7 +1035,7 @@ export class NowPlayingCommand {
         }
       }, 60_000);
     } catch (err: any) {
-      const msg = err?.message ?? String(err);
+      const msg = extractErrorMessage(err);
       const container = new ContainerBuilder().addTextDisplayComponents(
         new TextDisplayBuilder().setContent(`Could not add to Now Playing: ${msg}`),
       );
@@ -2066,7 +2067,7 @@ export class NowPlayingCommand {
         "update",
       );
     } catch (err: any) {
-      const msg = err?.message ?? String(err);
+      const msg = extractErrorMessage(err);
       const container = new ContainerBuilder().addTextDisplayComponents(
         new TextDisplayBuilder().setContent(`Could not add to Now Playing: ${msg}`),
       );
@@ -2163,7 +2164,7 @@ export class NowPlayingCommand {
         });
       }
     } catch (err: any) {
-      const msg = err?.message ?? String(err);
+      const msg = extractErrorMessage(err);
       const container = new ContainerBuilder().addTextDisplayComponents(
         new TextDisplayBuilder().setContent(`Could not add to Now Playing: ${msg}`),
       );
@@ -2300,7 +2301,7 @@ export class NowPlayingCommand {
         });
       }
     } catch (err: any) {
-      const msg = err?.message ?? String(err);
+      const msg = extractErrorMessage(err);
       const container = new ContainerBuilder().addTextDisplayComponents(
         new TextDisplayBuilder().setContent(`Could not remove from Now Playing: ${msg}`),
       );
@@ -3213,7 +3214,7 @@ export class NowPlayingCommand {
         flags: buildComponentsV2Flags(isEphemeral),
       });
     } catch (err: any) {
-      const msg = err?.message ?? String(err);
+      const msg = extractErrorMessage(err);
       const container = new ContainerBuilder().addTextDisplayComponents(
         new TextDisplayBuilder().setContent(`Could not remove from Now Playing: ${msg}`),
       );
@@ -4893,7 +4894,7 @@ export class NowPlayingCommand {
         flags: buildComponentsV2Flags(isEphemeral),
       }).catch(() => {});
     } catch (err: any) {
-      const msg = err?.message ?? String(err);
+      const msg = extractErrorMessage(err);
       const container = new ContainerBuilder().addTextDisplayComponents(
         new TextDisplayBuilder().setContent(`Could not remove from Now Playing: ${msg}`),
       );

@@ -25,7 +25,13 @@ import Member, {
   type IMemberRecord,
   type IMemberSearchFilters,
 } from "../classes/Member.js";
-import { safeDeferReply, safeReply, sanitizeUserInput } from "../functions/InteractionUtils.js";
+import {
+  ephemeralFlag,
+  extractErrorMessage,
+  safeDeferReply,
+  safeReply,
+  sanitizeUserInput,
+} from "../functions/InteractionUtils.js";
 import { buildUserHeaderContainer } from "../functions/uiComponents.js";
 import { buildComponentsV2Flags } from "../functions/NominationListComponents.js";
 
@@ -297,7 +303,7 @@ export async function buildProfileViewPayload(
       },
     };
   } catch (err: any) {
-    const msg = err?.message ?? String(err);
+    const msg = extractErrorMessage(err);
     return { errorMessage: `Error loading profile: ${msg}` };
   }
 }
@@ -423,7 +429,7 @@ export class ProfileCommand {
         flags: buildComponentsV2Flags(true),
       });
     } catch (err: any) {
-      const msg = err?.message ?? String(err);
+      const msg = extractErrorMessage(err);
       const errContainer = new ContainerBuilder().addTextDisplayComponents(
         new TextDisplayBuilder().setContent(`Could not load that profile: ${msg}`),
       );
@@ -587,7 +593,7 @@ export class ProfileCommand {
     interaction: CommandInteraction,
   ): Promise<void> {
     const ephemeral = !showInChat;
-    await safeDeferReply(interaction, { flags: ephemeral ? MessageFlags.Ephemeral : undefined });
+    await safeDeferReply(interaction, { flags: ephemeralFlag(ephemeral) });
 
     userId = userId ? sanitizeUserInput(userId, { preserveNewlines: false }) : undefined;
     username = username ? sanitizeUserInput(username, { preserveNewlines: false }) : undefined;
@@ -618,7 +624,7 @@ export class ProfileCommand {
     if (joinedAfter && !joinedAfterDate) {
       await safeReply(interaction, {
         content: "Invalid joinedafter date/time. Please use an ISO format.",
-        flags: ephemeral ? MessageFlags.Ephemeral : undefined,
+        flags: ephemeralFlag(ephemeral),
       });
       return;
     }
@@ -626,7 +632,7 @@ export class ProfileCommand {
     if (joinedBefore && !joinedBeforeDate) {
       await safeReply(interaction, {
         content: "Invalid joinedbefore date/time. Please use an ISO format.",
-        flags: ephemeral ? MessageFlags.Ephemeral : undefined,
+        flags: ephemeralFlag(ephemeral),
       });
       return;
     }
@@ -634,7 +640,7 @@ export class ProfileCommand {
     if (lastSeenAfter && !lastSeenAfterDate) {
       await safeReply(interaction, {
         content: "Invalid lastseenafter date/time. Please use an ISO format.",
-        flags: ephemeral ? MessageFlags.Ephemeral : undefined,
+        flags: ephemeralFlag(ephemeral),
       });
       return;
     }
@@ -642,7 +648,7 @@ export class ProfileCommand {
     if (lastSeenBefore && !lastSeenBeforeDate) {
       await safeReply(interaction, {
         content: "Invalid lastseenbefore date/time. Please use an ISO format.",
-        flags: ephemeral ? MessageFlags.Ephemeral : undefined,
+        flags: ephemeralFlag(ephemeral),
       });
       return;
     }
@@ -674,7 +680,7 @@ export class ProfileCommand {
     if (!results.length) {
       await safeReply(interaction, {
         content: "No members matched those filters.",
-        flags: ephemeral ? MessageFlags.Ephemeral : undefined,
+        flags: ephemeralFlag(ephemeral),
       });
       return;
     }
@@ -783,7 +789,7 @@ export class ProfileCommand {
       interaction.memberPermissions?.has(PermissionsBitField.Flags.Administrator) ?? false;
     const isSelf = target.id === interaction.user.id;
     const ephemeral = true;
-    await safeDeferReply(interaction, { flags: ephemeral ? MessageFlags.Ephemeral : undefined });
+    await safeDeferReply(interaction, { flags: ephemeralFlag(ephemeral) });
 
     completionator = completionator
       ? sanitizeUserInput(completionator, { preserveNewlines: false })
@@ -844,7 +850,7 @@ export class ProfileCommand {
         flags: MessageFlags.Ephemeral,
       });
     } catch (err: any) {
-      const msg = err?.message ?? String(err);
+      const msg = extractErrorMessage(err);
       await safeReply(interaction, {
         content: `Error updating profile: ${msg}`,
         flags: MessageFlags.Ephemeral,

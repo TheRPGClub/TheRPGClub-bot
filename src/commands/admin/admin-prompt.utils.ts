@@ -6,7 +6,7 @@ import {
   type Message,
   type CommandInteraction,
 } from "discord.js";
-import { safeReply } from "../../functions/InteractionUtils.js";
+import { extractErrorMessage, safeReply } from "../../functions/InteractionUtils.js";
 import { type PromptChoiceOption } from "./admin.types.js";
 
 export function buildChoiceRows(
@@ -167,7 +167,7 @@ export async function promptUserForInput(
 
     return content;
   } catch (err: any) {
-    const msg = err?.message ?? String(err);
+    const msg = extractErrorMessage(err);
     try {
       await safeReply(interaction, {
         content: `Error while waiting for a response: ${msg}`,

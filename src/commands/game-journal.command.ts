@@ -37,6 +37,7 @@ import Member, {
 import Game from "../classes/Game.js";
 import { getThreadsByGameId } from "../classes/Thread.js";
 import {
+  ephemeralFlag,
   safeDeferReply,
   safeDeferUpdate,
   sanitizeUserInput,
@@ -46,7 +47,7 @@ import {
 import { formatGameTitleWithYear } from "../functions/GameTitleAutocompleteUtils.js";
 import { renderUsernameWithEmoji } from "../services/UserEmojiService.js";
 import { buildJournalView } from "../functions/journalView.js";
-import { COMPONENTS_V2_FLAG } from "../config/flags.js";
+import { buildComponentsV2Flags } from "../functions/ComponentsV2Utils.js";
 import { buildUserHeaderContainer } from "../functions/uiComponents.js";
 import {
   GJ_CLOSE_PREFIX,
@@ -100,9 +101,6 @@ export { GJ_CLOSE_PREFIX };
 // modal:    GJ_HMENU_ADD_MODAL_ID:{ownerId}:{gameId}
 // modal:    GJ_HMENU_EDIT_MODAL_ID:{ownerId}:{gameId}:{entryId}
 
-function buildComponentsV2Flags(isEphemeral: boolean): number {
-  return (isEphemeral ? MessageFlags.Ephemeral : 0) | COMPONENTS_V2_FLAG;
-}
 
 function buildHmenuActionRow(
   ownerId: string,
@@ -493,7 +491,7 @@ export class GameJournalCommand {
     interaction: CommandInteraction,
   ): Promise<void> {
     const ephemeral = isPrivate === true;
-    const flags = ephemeral ? MessageFlags.Ephemeral : undefined;
+    const flags = ephemeralFlag(ephemeral);
     await safeDeferReply(interaction, { flags });
 
     if (query !== undefined) {
@@ -544,7 +542,7 @@ export class GameJournalCommand {
       const pageRow = buildSearchPageRow(
         callerId, targetUserId, gameIdStr, cleanQuery, 0, totalPages,
       );
-      const cvFlags = (ephemeral ? MessageFlags.Ephemeral : 0) | COMPONENTS_V2_FLAG;
+      const cvFlags = buildComponentsV2Flags(ephemeral);
       const allComponents = pageRow
         ? [...searchComponents, pageRow]
         : searchComponents;
@@ -563,7 +561,7 @@ export class GameJournalCommand {
       }
       const totalPages = Math.max(1, Math.ceil(summaries.length / ALL_PAGE_SIZE));
       const page = 0;
-      const cvFlags = (ephemeral ? MessageFlags.Ephemeral : 0) | COMPONENTS_V2_FLAG;
+      const cvFlags = buildComponentsV2Flags(ephemeral);
       const allContainers = buildAllComponents(summaries, page);
       const selectRow = buildAllSelectRow(summaries, interaction.user.id, page);
       const pageRow = buildAllPageRow(interaction.user.id, page, totalPages);
@@ -591,7 +589,7 @@ export class GameJournalCommand {
     const listComponents = buildListComponents(target, entries, page, totalPages);
     const selectRow = buildListSelectRow(entries, interaction.user.id, target.id, page);
     const pageRow = buildListPageRow(interaction.user.id, target.id, page, totalPages);
-    const cvFlags = (ephemeral ? MessageFlags.Ephemeral : 0) | COMPONENTS_V2_FLAG;
+    const cvFlags = buildComponentsV2Flags(ephemeral);
 
     const components = pageRow
       ? [...listComponents, selectRow, pageRow]
@@ -664,7 +662,7 @@ export class GameJournalCommand {
     const components = pageRow
       ? [...listComponents, selectRow, pageRow]
       : [...listComponents, selectRow];
-    await safeUpdate(interaction, { embeds: [], components, flags: COMPONENTS_V2_FLAG });
+    await safeUpdate(interaction, { embeds: [], components, flags: buildComponentsV2Flags(false) });
   }
 
   @SelectMenuComponent({ id: new RegExp(`^${GJ_ALL_SELECT_PREFIX}:\\d+:\\d+$`) })
@@ -704,7 +702,7 @@ export class GameJournalCommand {
     const components = pageRow
       ? [...listComponents, selectRow, pageRow]
       : [...listComponents, selectRow];
-    await safeUpdate(interaction, { embeds: [], components, flags: COMPONENTS_V2_FLAG });
+    await safeUpdate(interaction, { embeds: [], components, flags: buildComponentsV2Flags(false) });
   }
 
   @ButtonComponent({ id: new RegExp(`^${GJ_ALL_PAGE_PREFIX}:\\d+:\\d+$`) })
@@ -732,7 +730,7 @@ export class GameJournalCommand {
     const components = pageRow
       ? [...allContainers, selectRow, pageRow]
       : [...allContainers, selectRow];
-    await safeUpdate(interaction, { embeds: [], components, flags: COMPONENTS_V2_FLAG });
+    await safeUpdate(interaction, { embeds: [], components, flags: buildComponentsV2Flags(false) });
   }
 
   @ButtonComponent({ id: new RegExp(`^${GJ_SEARCH_PAGE_PREFIX}:\\d+:\\d+:\\d+:\\d+:.+$`) })
@@ -797,7 +795,7 @@ export class GameJournalCommand {
     const allComponents = nextPageRow
       ? [...searchComponents, nextPageRow]
       : searchComponents;
-    await safeUpdate(interaction, { embeds: [], components: allComponents, flags: COMPONENTS_V2_FLAG });
+    await safeUpdate(interaction, { embeds: [], components: allComponents, flags: buildComponentsV2Flags(false) });
   }
 
   @ButtonComponent({ id: new RegExp(`^${GJ_VIEW_PAGE_PREFIX}:\\d+:\\d+:\\d+:\\d+$`) })

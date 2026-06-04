@@ -1,18 +1,19 @@
 import {
   ApplicationCommandOptionType,
   AttachmentBuilder,
-  ActionRowBuilder,
-  ButtonBuilder,
   ButtonInteraction,
-  ButtonStyle,
   CommandInteraction,
   EmbedBuilder,
   MessageFlags,
   User,
 } from "discord.js";
 import { ButtonComponent, Discord, Slash, SlashOption } from "discordx";
-import { safeDeferReply, safeReply } from "../functions/InteractionUtils.js";
-import { shouldRenderPrevNextButtons } from "../functions/PaginationUtils.js";
+import { ephemeralFlag, safeDeferReply, safeReply } from "../functions/InteractionUtils.js";
+import {
+  buildPrevNextRow,
+  parseDirAndPage,
+  shouldRenderPrevNextButtons,
+} from "../functions/PaginationUtils.js";
 import Member from "../classes/Member.js";
 
 const AVATAR_HISTORY_PAGE_SIZE = 10;
@@ -78,26 +79,6 @@ async function buildAvatarHistoryPage(
   return { embeds, files, totalPages, safePage, totalCount };
 }
 
-function buildPaginationRow(
-  ownerId: string,
-  targetId: string,
-  page: number,
-  totalPages: number,
-): ActionRowBuilder<ButtonBuilder> {
-  const prevDisabled = page <= 0;
-  const nextDisabled = page >= totalPages - 1;
-  const prevButton = new ButtonBuilder()
-    .setCustomId(`avatar-history-page:${ownerId}:${targetId}:${page}:prev`)
-    .setLabel("Previous")
-    .setStyle(ButtonStyle.Secondary)
-    .setDisabled(prevDisabled);
-  const nextButton = new ButtonBuilder()
-    .setCustomId(`avatar-history-page:${ownerId}:${targetId}:${page}:next`)
-    .setLabel("Next")
-    .setStyle(ButtonStyle.Secondary)
-    .setDisabled(nextDisabled);
-  return new ActionRowBuilder<ButtonBuilder>().addComponents(prevButton, nextButton);
-}
 
 @Discord()
 export class AvatarHistoryCommand {
@@ -120,28 +101,28 @@ export class AvatarHistoryCommand {
     interaction: CommandInteraction,
   ): Promise<void> {
     const ephemeral = !showInChat;
-    await safeDeferReply(interaction, { flags: ephemeral ? MessageFlags.Ephemeral : undefined });
+    await safeDeferReply(interaction, { flags: ephemeralFlag(ephemeral) });
 
     const target = member ?? interaction.user;
     const pageResult = await buildAvatarHistoryPage(target, 0);
     if (!pageResult) {
       await safeReply(interaction, {
         content: `No avatar history found for <@${target.id}>.`,
-        flags: ephemeral ? MessageFlags.Ephemeral : undefined,
+        flags: ephemeralFlag(ephemeral),
       });
       return;
     }
 
     const { embeds, files, totalPages, safePage } = pageResult;
     const components = shouldRenderPrevNextButtons(safePage <= 0, safePage >= totalPages - 1)
-      ? [buildPaginationRow(interaction.user.id, target.id, safePage, totalPages)]
+      ? [buildPrevNextRow(`avatar-history-page:${interaction.user.id}:${target.id}`, safePage, totalPages)]
       : [];
 
     await safeReply(interaction, {
       embeds,
       files: files.length ? files : undefined,
       components: components.length ? components : undefined,
-      flags: ephemeral ? MessageFlags.Ephemeral : undefined,
+      flags: ephemeralFlag(ephemeral),
     });
   }
 
@@ -156,12 +137,10 @@ export class AvatarHistoryCommand {
       return;
     }
 
-    const page = Number(pageRaw);
-    if (Number.isNaN(page)) return;
-    const delta = dir === "next" ? 1 : -1;
-    const nextPage = Math.max(page + delta, 0);
+    const parsed = parseDirAndPage(pageRaw, dir);
+    if (!parsed) return;
     const target = await interaction.client.users.fetch(targetId).catch(() => interaction.user);
-    const pageResult = await buildAvatarHistoryPage(target, nextPage);
+    const pageResult = await buildAvatarHistoryPage(target, parsed.nextPage);
     if (!pageResult) {
       await interaction.update({
         content: "No avatar history found.",
@@ -173,7 +152,7 @@ export class AvatarHistoryCommand {
 
     const { embeds, files, totalPages, safePage } = pageResult;
     const components = shouldRenderPrevNextButtons(safePage <= 0, safePage >= totalPages - 1)
-      ? [buildPaginationRow(ownerId, targetId, safePage, totalPages)]
+      ? [buildPrevNextRow(`avatar-history-page:${ownerId}:${targetId}`, safePage, totalPages)]
       : [];
 
     await interaction.update({

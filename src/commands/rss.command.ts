@@ -1,7 +1,12 @@
 import type { CommandInteraction } from "discord.js";
 import { ApplicationCommandOptionType, MessageFlags, type Channel } from "discord.js";
 import { Discord, Slash, SlashGroup, SlashOption } from "discordx";
-import { safeDeferReply, safeReply, sanitizeUserInput } from "../functions/InteractionUtils.js";
+import {
+  extractErrorMessage,
+  safeDeferReply,
+  safeReply,
+  sanitizeUserInput,
+} from "../functions/InteractionUtils.js";
 import { isAdmin } from "./admin.command.js";
 import { addFeed, listFeeds, removeFeed, updateFeed } from "../classes/RssFeed.js";
 import { buildRssHelpResponse } from "./help.command.js";
@@ -97,7 +102,7 @@ export class RssCommand {
         flags: MessageFlags.Ephemeral,
       });
     } catch (err: any) {
-      const msg = err?.message ?? String(err);
+      const msg = extractErrorMessage(err);
       await safeReply(interaction, {
         content: `Failed to add feed: ${msg}`,
         flags: MessageFlags.Ephemeral,
@@ -128,7 +133,7 @@ export class RssCommand {
         flags: MessageFlags.Ephemeral,
       });
     } catch (err: any) {
-      const msg = err?.message ?? String(err);
+      const msg = extractErrorMessage(err);
       await safeReply(interaction, {
         content: `Failed to remove feed: ${msg}`,
         flags: MessageFlags.Ephemeral,
@@ -228,7 +233,7 @@ export class RssCommand {
         flags: MessageFlags.Ephemeral,
       });
     } catch (err: any) {
-      const msg = err?.message ?? String(err);
+      const msg = extractErrorMessage(err);
       await safeReply(interaction, {
         content: `Failed to edit feed: ${msg}`,
         flags: MessageFlags.Ephemeral,
@@ -262,7 +267,7 @@ export class RssCommand {
         flags: MessageFlags.Ephemeral,
       });
     } catch (err: any) {
-      const msg = err?.message ?? String(err);
+      const msg = extractErrorMessage(err);
       await safeReply(interaction, {
         content: `Failed to list feeds: ${msg}`,
         flags: MessageFlags.Ephemeral,

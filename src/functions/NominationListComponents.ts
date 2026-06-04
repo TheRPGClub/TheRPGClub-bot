@@ -2,7 +2,6 @@ import {
   ActionRowBuilder,
   AttachmentBuilder,
   ButtonStyle,
-  MessageFlags,
   StringSelectMenuBuilder,
 } from "discord.js";
 import {
@@ -19,7 +18,7 @@ import crypto from "node:crypto";
 import Member from "../classes/Member.js";
 import type { INominationEntry } from "../classes/Nomination.js";
 import Game from "../classes/Game.js";
-import { COMPONENTS_V2_FLAG } from "../config/flags.js";
+import { buildComponentsV2Flags } from "./ComponentsV2Utils.js";
 import { composeVoteImage, type VoteImageType } from "../services/collageGenerator.js";
 import { getUserEmojiString } from "../services/UserEmojiService.js";
 import {
@@ -42,9 +41,7 @@ export type NominationListPayload = {
   files: AttachmentBuilder[];
 };
 
-export function buildComponentsV2Flags(isEphemeral: boolean): number {
-  return (isEphemeral ? MessageFlags.Ephemeral : 0) | COMPONENTS_V2_FLAG;
-}
+export { buildComponentsV2Flags };
 
 export async function buildNominationListPayload(
   kindLabel: string,

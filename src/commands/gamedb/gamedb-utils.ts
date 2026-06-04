@@ -10,7 +10,8 @@ import {
 } from "discord.js";
 import { AnyRepliable, safeReply, sanitizeUserInput } from "../../functions/InteractionUtils.js";
 import { formatGameTitleWithYear } from "../../functions/GameTitleAutocompleteUtils.js";
-import { COMPONENTS_V2_FLAG } from "../../config/flags.js";
+import { buildComponentsV2Flags } from "../../functions/ComponentsV2Utils.js";
+import { decodeBase64Url, encodeWithMaxLength } from "../../functions/CustomIdUtils.js";
 import Game from "../../classes/Game.js";
 
 export const GAME_SEARCH_PAGE_SIZE = 10;
@@ -27,24 +28,11 @@ export type PromptChoiceOption = {
 };
 
 export function decodeSearchQuery(encoded: string): string {
-  if (!encoded) return "";
-  try {
-    return Buffer.from(encoded, "base64url").toString("utf8");
-  } catch {
-    return "";
-  }
+  return decodeBase64Url(encoded);
 }
 
 export function encodeSearchQuery(query: string, maxLength: number): string {
-  let trimmed = query.trim();
-  let encoded = Buffer.from(trimmed, "utf8").toString("base64url");
-  if (encoded.length <= maxLength) return encoded;
-  for (let i = trimmed.length - 1; i >= 0; i -= 1) {
-    trimmed = trimmed.slice(0, i + 1);
-    encoded = Buffer.from(trimmed, "utf8").toString("base64url");
-    if (encoded.length <= maxLength) return encoded;
-  }
-  return "";
+  return encodeWithMaxLength(query.trim(), maxLength);
 }
 
 export function buildIgdbSearchLink(title: string): string {
@@ -152,9 +140,7 @@ export function isUnknownWebhookError(err: any): boolean {
   return code === 10015;
 }
 
-export function buildComponentsV2Flags(isEphemeral: boolean): number {
-  return (isEphemeral ? MessageFlags.Ephemeral : 0) | COMPONENTS_V2_FLAG;
-}
+export { buildComponentsV2Flags };
 
 export function isHltbImportEligible(
   game: { initialReleaseDate?: Date | null },
