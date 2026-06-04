@@ -16,9 +16,8 @@ import {
 import { ButtonComponent, Discord, Slash, SlashOption } from "discordx";
 import { safeDeferReply, safeReply, safeUpdate } from "../functions/InteractionUtils.js";
 import {
-  buildPrevNextRow,
+  buildOptionalPrevNextRow,
   parseDirAndPage,
-  shouldRenderPrevNextButtons,
 } from "../functions/PaginationUtils.js";
 import Member from "../classes/Member.js";
 import {
@@ -259,9 +258,11 @@ export class AvatarHistoryCommand {
         return;
       }
       const { container, totalPages, safePage } = pageResult;
-      const paginationRow = shouldRenderPrevNextButtons(safePage <= 0, safePage >= totalPages - 1)
-        ? buildPrevNextRow(`avatar-history-all-page:${interaction.user.id}`, safePage, totalPages)
-        : null;
+      const paginationRow = buildOptionalPrevNextRow(
+        `avatar-history-all-page:${interaction.user.id}`,
+        safePage,
+        totalPages,
+      );
       await safeReply(interaction, {
         components: paginationRow ? [container, paginationRow] : [container],
         flags: buildComponentsV2Flags(ephemeral),
@@ -285,13 +286,11 @@ export class AvatarHistoryCommand {
     }
 
     const { containers, files, totalPages, safePage } = pageResult;
-    const paginationRow = shouldRenderPrevNextButtons(safePage <= 0, safePage >= totalPages - 1)
-      ? buildPrevNextRow(
-          `avatar-history-page:${interaction.user.id}:${target.id}`,
-          safePage,
-          totalPages,
-        )
-      : null;
+    const paginationRow = buildOptionalPrevNextRow(
+      `avatar-history-page:${interaction.user.id}:${target.id}`,
+      safePage,
+      totalPages,
+    );
 
     await safeReply(interaction, {
       components: paginationRow ? [...containers, paginationRow] : containers,
@@ -329,13 +328,11 @@ export class AvatarHistoryCommand {
     }
 
     const { containers, files, totalPages, safePage } = pageResult;
-    const paginationRow = shouldRenderPrevNextButtons(safePage <= 0, safePage >= totalPages - 1)
-      ? buildPrevNextRow(
-          `avatar-history-page:${ownerId}:${targetId}`,
-          safePage,
-          totalPages,
-        )
-      : null;
+    const paginationRow = buildOptionalPrevNextRow(
+      `avatar-history-page:${ownerId}:${targetId}`,
+      safePage,
+      totalPages,
+    );
 
     await safeUpdate(interaction, {
       components: paginationRow ? [...containers, paginationRow] : containers,
@@ -369,9 +366,11 @@ export class AvatarHistoryCommand {
       return;
     }
     const { container, totalPages, safePage } = pageResult;
-    const paginationRow = shouldRenderPrevNextButtons(safePage <= 0, safePage >= totalPages - 1)
-      ? buildPrevNextRow(`avatar-history-all-page:${ownerId}`, safePage, totalPages)
-      : null;
+    const paginationRow = buildOptionalPrevNextRow(
+      `avatar-history-all-page:${ownerId}`,
+      safePage,
+      totalPages,
+    );
     await safeUpdate(interaction, {
       components: paginationRow ? [container, paginationRow] : [container],
       flags: buildComponentsV2EditFlags(),

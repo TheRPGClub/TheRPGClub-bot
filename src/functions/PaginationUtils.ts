@@ -25,26 +25,33 @@ export function parseDirAndPage(
 }
 
 /**
- * Builds a Previous / Next button row for paginated embeds.
- * customIdBase should already include all session/owner segments; page and
- * direction are appended as `:${page}:prev` / `:${page}:next`.
+ * Builds a Previous / Next button row, omitting whichever buttons are disabled.
+ * Returns null when neither button would be enabled (i.e. single page).
+ * customIdBase should include all session/owner segments; page and direction
+ * are appended as `:${page}:prev` / `:${page}:next`.
  */
-export function buildPrevNextRow(
+export function buildOptionalPrevNextRow(
   customIdBase: string,
   page: number,
   totalPages: number,
-): ActionRowBuilder<ButtonBuilder> {
-  const prevDisabled = page <= 0;
-  const nextDisabled = page >= totalPages - 1;
-  const prevButton = new ButtonBuilder()
-    .setCustomId(`${customIdBase}:${page}:prev`)
-    .setLabel("Previous")
-    .setStyle(ButtonStyle.Secondary)
-    .setDisabled(prevDisabled);
-  const nextButton = new ButtonBuilder()
-    .setCustomId(`${customIdBase}:${page}:next`)
-    .setLabel("Next")
-    .setStyle(ButtonStyle.Secondary)
-    .setDisabled(nextDisabled);
-  return new ActionRowBuilder<ButtonBuilder>().addComponents(prevButton, nextButton);
+): ActionRowBuilder<ButtonBuilder> | null {
+  const buttons: ButtonBuilder[] = [];
+  if (page > 0) {
+    buttons.push(
+      new ButtonBuilder()
+        .setCustomId(`${customIdBase}:${page}:prev`)
+        .setLabel("Previous")
+        .setStyle(ButtonStyle.Secondary),
+    );
+  }
+  if (page < totalPages - 1) {
+    buttons.push(
+      new ButtonBuilder()
+        .setCustomId(`${customIdBase}:${page}:next`)
+        .setLabel("Next")
+        .setStyle(ButtonStyle.Secondary),
+    );
+  }
+  if (!buttons.length) return null;
+  return new ActionRowBuilder<ButtonBuilder>().addComponents(buttons);
 }
