@@ -3,25 +3,29 @@ import {
   StringSelectMenuBuilder,
   ButtonBuilder,
   ButtonStyle,
-  MessageFlags,
   ComponentType,
   type CommandInteraction,
   type StringSelectMenuInteraction,
   type ButtonInteraction,
   type Message,
-  type InteractionReplyOptions,
 } from "discord.js";
 import axios from "axios";
 import Game from "../../classes/Game.js";
 import Member from "../../classes/Member.js";
 import { saveCompletion } from "../../functions/CompletionHelpers.js";
-import { extractErrorMessage, safeReply } from "../../functions/InteractionUtils.js";
+import {
+  extractErrorMessage,
+  safeReply,
+  safeUpdate,
+} from "../../functions/InteractionUtils.js";
 import { formatDiscordTimestamp, formatPlaytimeHours } from "../profile.command.js";
 import { igdbService } from "../../services/IGDB/IgdbService.js";
 import { createIgdbSession, type IgdbSelectOption } from "../../services/IGDB/IgdbSelectService.js";
 import { resolveNowPlayingRemoval } from "./completion-helpers.js";
 import { promptCompletionPlatformSelection } from "./completion-platform.service.js";
 import { completionAddSessions, type CompletionAddContext } from "./completion.types.js";
+import { buildComponentsV2Flags, buildTextContainer } from "../../functions/ComponentsV2Utils.js";
+import { COMPONENTS_V2_FLAG } from "../../config/flags.js";
 
 /**
  * Creates a completion session and returns the session ID
@@ -63,7 +67,7 @@ export async function promptCompletionSelection(
     await safeReply(interaction, {
       content: `Select the game for "${searchTerm}".`,
       components: [new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select)],
-      flags: MessageFlags.Ephemeral,
+      flags: buildComponentsV2Flags(true),
     });
     return;
   }
@@ -80,11 +84,17 @@ export async function promptIgdbSelection(
   ctx: CompletionAddContext,
 ): Promise<void> {
   if (interaction.isMessageComponent()) {
-    const loading = { content: `Searching IGDB for "${searchTerm}"...`, components: [] };
+    const loadingComponents = [buildTextContainer(`Searching IGDB for "${searchTerm}"...`)];
     if (interaction.deferred || interaction.replied) {
-      await interaction.editReply(loading);
+      await interaction.editReply({
+        components: loadingComponents,
+        flags: COMPONENTS_V2_FLAG,
+      });
     } else {
-      await interaction.update(loading);
+      await interaction.update({
+        components: loadingComponents,
+        flags: COMPONENTS_V2_FLAG,
+      });
     }
   }
 
@@ -92,11 +102,14 @@ export async function promptIgdbSelection(
   if (!igdbSearch.results.length) {
     const content = `No GameDB or IGDB matches found for "${searchTerm}" (len: ${searchTerm.length}).`;
     if (interaction.isMessageComponent()) {
-      await interaction.editReply({ content, components: [] });
+      await interaction.editReply({
+        components: [buildTextContainer(content)],
+        flags: COMPONENTS_V2_FLAG,
+      });
     } else {
       await safeReply(interaction, {
         content,
-        flags: MessageFlags.Ephemeral,
+        flags: buildComponentsV2Flags(true),
       });
     }
     return;
@@ -121,8 +134,8 @@ export async function promptIgdbSelection(
         await sel.deferUpdate().catch(() => {});
       }
       await sel.editReply({
-        content: "Importing game details from IGDB...",
-        components: [],
+        components: [buildTextContainer("Importing game details from IGDB...")],
+        flags: COMPONENTS_V2_FLAG,
       }).catch(() => {});
 
       const imported = await importGameFromIgdb(gameId);
@@ -184,15 +197,18 @@ export async function promptIgdbSelection(
   const content = `No GameDB match; select an IGDB result to import for "${searchTerm}".`;
   if (interaction.isMessageComponent()) {
     await interaction.editReply({
-      content: "Found results on IGDB. Please see the new message below.",
-      components: [],
+      components: [buildTextContainer("Found results on IGDB. Please see the new message below.")],
+      flags: COMPONENTS_V2_FLAG,
     });
-    await interaction.followUp({ content, components, flags: MessageFlags.Ephemeral });
+    await interaction.followUp({
+      components: [buildTextContainer(content), ...components],
+      flags: buildComponentsV2Flags(true),
+    });
   } else {
     await safeReply(interaction, {
       content,
       components,
-      flags: MessageFlags.Ephemeral,
+      flags: buildComponentsV2Flags(true),
     });
   }
 }
@@ -207,9 +223,9 @@ export async function processCompletionSelection(
 ): Promise<boolean> {
   if (value === "import-igdb") {
     if (!ctx.query) {
-      await interaction.reply({
+      await safeReply(interaction, {
         content: "Original search query lost. Please try again.",
-        flags: MessageFlags.Ephemeral,
+        flags: buildComponentsV2Flags(true),
       });
       return false;
     }
@@ -233,8 +249,8 @@ export async function processCompletionSelection(
       const igdbId = Number(value.split(":")[1]);
       if (!Number.isInteger(igdbId) || igdbId <= 0) {
         await interaction.followUp({
-          content: "Invalid IGDB selection.",
-          flags: MessageFlags.Ephemeral,
+          components: [buildTextContainer("Invalid IGDB selection.")],
+          flags: buildComponentsV2Flags(true),
         });
         return false;
       }
@@ -245,16 +261,16 @@ export async function processCompletionSelection(
       const parsedId = Number(value);
       if (!Number.isInteger(parsedId) || parsedId <= 0) {
         await interaction.followUp({
-          content: "Invalid selection.",
-          flags: MessageFlags.Ephemeral,
+          components: [buildTextContainer("Invalid selection.")],
+          flags: buildComponentsV2Flags(true),
         });
         return false;
       }
       const game = await Game.getGameById(parsedId);
       if (!game) {
         await interaction.followUp({
-          content: "Selected game was not found in GameDB.",
-          flags: MessageFlags.Ephemeral,
+          components: [buildTextContainer("Selected game was not found in GameDB.")],
+          flags: buildComponentsV2Flags(true),
         });
         return false;
       }
@@ -264,8 +280,8 @@ export async function processCompletionSelection(
 
     if (!gameId) {
       await interaction.followUp({
-        content: "Could not determine a game to log.",
-        flags: MessageFlags.Ephemeral,
+        components: [buildTextContainer("Could not determine a game to log.")],
+        flags: buildComponentsV2Flags(true),
       });
       return false;
     }
@@ -327,8 +343,8 @@ export async function processCompletionSelection(
   } catch (err: any) {
     const msg = extractErrorMessage(err);
     await interaction.followUp({
-      content: `Failed to add completion: ${msg}`,
-      flags: MessageFlags.Ephemeral,
+      components: [buildTextContainer(`Failed to add completion: ${msg}`)],
+      flags: buildComponentsV2Flags(true),
     });
     return false;
   }
@@ -344,33 +360,27 @@ export async function handleCompletionAddSelect(
   const ctx = completionAddSessions.get(sessionId);
 
   if (!ctx) {
-    await interaction
-      .reply({
-        content: "This completion prompt has expired.",
-        flags: MessageFlags.Ephemeral,
-      })
-      .catch(() => {});
+    await safeReply(interaction, {
+      content: "This completion prompt has expired.",
+      flags: buildComponentsV2Flags(true),
+    });
     return;
   }
 
   if (interaction.user.id !== ctx.userId) {
-    await interaction
-      .reply({
-        content: "This completion prompt isn't for you.",
-        flags: MessageFlags.Ephemeral,
-      })
-      .catch(() => {});
+    await safeReply(interaction, {
+      content: "This completion prompt isn't for you.",
+      flags: buildComponentsV2Flags(true),
+    });
     return;
   }
 
   const value = interaction.values?.[0];
   if (!value) {
-    await interaction
-      .reply({
-        content: "No selection received.",
-        flags: MessageFlags.Ephemeral,
-      })
-      .catch(() => {});
+    await safeReply(interaction, {
+      content: "No selection received.",
+      flags: buildComponentsV2Flags(true),
+    });
     return;
   }
 
@@ -414,27 +424,28 @@ async function confirmDuplicateCompletion(
       .setStyle(ButtonStyle.Secondary),
   );
 
-  const payload: InteractionReplyOptions = {
-    content:
-      `We found a completion for **${gameTitle}** within the last week:\n` +
-      `• ${detailParts.join(" - ")} (Completion #${existing.completionId})${noteLine}\n\n` +
-      "Add another completion anyway?",
-    components: [row],
-    flags: MessageFlags.Ephemeral,
+  const promptText =
+    `We found a completion for **${gameTitle}** within the last week:\n` +
+    `- ${detailParts.join(" - ")} (Completion #${existing.completionId})${noteLine}\n\n` +
+    "Add another completion anyway?";
+
+  const payload = {
+    components: [buildTextContainer(promptText), row],
+    flags: buildComponentsV2Flags(true),
   };
 
   let message: Message | null = null;
   try {
     if (interaction.deferred || interaction.replied) {
-      const reply = await interaction.followUp(payload);
+      const reply = await interaction.followUp(payload as any);
       message = reply as Message;
     } else {
-      const reply = await interaction.reply({ ...payload, fetchReply: true });
-      message = reply as Message;
+      const reply = await interaction.reply({ ...payload, withResponse: true } as any);
+      message = reply.resource?.message ?? null;
     }
   } catch {
     try {
-      const reply = await interaction.followUp(payload);
+      const reply = await interaction.followUp(payload as any);
       message = reply as Message;
     } catch {
       return false;
@@ -454,8 +465,10 @@ async function confirmDuplicateCompletion(
     });
     const confirmed = selection.customId.endsWith(":yes");
     await selection.update({
-      content: confirmed ? "Adding another completion." : "Cancelled.",
-      components: [],
+      components: [buildTextContainer(
+        confirmed ? "Adding another completion." : "Cancelled.",
+      )],
+      flags: buildComponentsV2Flags(false),
     });
     return confirmed;
   } catch {
@@ -466,7 +479,9 @@ async function confirmDuplicateCompletion(
 /**
  * Imports a game from IGDB into GameDB
  */
-export async function importGameFromIgdb(igdbId: number): Promise<{ gameId: number; title: string }> {
+export async function importGameFromIgdb(
+  igdbId: number,
+): Promise<{ gameId: number; title: string }> {
   const existing = await Game.getGameByIgdbId(igdbId);
   if (existing) {
     return { gameId: existing.id, title: existing.title };
@@ -480,7 +495,8 @@ export async function importGameFromIgdb(igdbId: number): Promise<{ gameId: numb
   let imageData: Buffer | null = null;
   if (details.cover?.image_id) {
     try {
-      const imageUrl = `https://images.igdb.com/igdb/image/upload/t_cover_big/${details.cover.image_id}.jpg`;
+      const imageUrl =
+        `https://images.igdb.com/igdb/image/upload/t_cover_big/${details.cover.image_id}.jpg`;
       const imageResponse = await axios.get(imageUrl, { responseType: "arraybuffer" });
       imageData = Buffer.from(imageResponse.data);
     } catch (err) {

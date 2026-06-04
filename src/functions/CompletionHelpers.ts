@@ -26,6 +26,7 @@ import Game, { type IGame } from "../classes/Game.js";
 import Member from "../classes/Member.js";
 import { ANNOUNCEMENT_CHANNEL_ID, BOT_DEV_CHANNEL_ID } from "../config/channels.js";
 import { COMPONENTS_V2_FLAG } from "../config/flags.js";
+import { buildComponentsV2Flags, buildTextContainer } from "./ComponentsV2Utils.js";
 
 const MAX_PLAYTIME_HOURS = 999999.99;
 const COMPLETION_COVER_ATTACHMENT_PREFIX = "completion-cover";
@@ -67,8 +68,8 @@ export async function saveCompletion(
 ): Promise<void> {
   if (interaction.user.id !== userId && !isAdminOverride) {
     await interaction.followUp({
-      content: "You can only log completions for yourself.",
-      flags: MessageFlags.Ephemeral,
+      components: [buildTextContainer("You can only log completions for yourself.")],
+      flags: buildComponentsV2Flags(true),
     });
     return;
   }
@@ -76,8 +77,8 @@ export async function saveCompletion(
   const game = await Game.getGameById(gameId);
   if (!game) {
     await interaction.followUp({
-      content: `GameDB #${gameId} was not found.`,
-      flags: MessageFlags.Ephemeral,
+      components: [buildTextContainer(`GameDB #${gameId} was not found.`)],
+      flags: buildComponentsV2Flags(true),
     });
     return;
   }
@@ -95,8 +96,8 @@ export async function saveCompletion(
   } catch (err: any) {
     const msg = err?.message ?? "Failed to save completion.";
     await interaction.followUp({
-      content: `Could not save completion: ${msg}`,
-      flags: MessageFlags.Ephemeral,
+      components: [buildTextContainer(`Could not save completion: ${msg}`)],
+      flags: buildComponentsV2Flags(true),
     });
     return;
   }
@@ -113,8 +114,10 @@ export async function saveCompletion(
   const details = [completionType, playtimeText].filter(Boolean).join(" - ");
 
   await interaction.followUp({
-    content: `Logged completion for **${gameTitle ?? game.title}** (${details}).`,
-    flags: MessageFlags.Ephemeral,
+    components: [buildTextContainer(
+      `Logged completion for **${gameTitle ?? game.title}** (${details}).`,
+    )],
+    flags: buildComponentsV2Flags(true),
   });
 
   if (announce) {
@@ -259,9 +262,11 @@ export async function promptRemoveFromNowPlaying(
   );
 
   const payload = {
-    content: `Remove **${gameTitle}** from your Now Playing list?`,
-    components: [row],
-    flags: MessageFlags.Ephemeral,
+    components: [
+      buildTextContainer(`Remove **${gameTitle}** from your Now Playing list?`),
+      row,
+    ],
+    flags: buildComponentsV2Flags(true),
   };
 
   let message: Message | null = null;
@@ -294,16 +299,18 @@ export async function promptRemoveFromNowPlaying(
     });
     const remove = selection.customId.endsWith(":yes");
     await selection.update({
-      content: remove
-        ? "Okay, I'll remove it from Now Playing."
-        : "Okay, I'll leave it in your Now Playing list.",
-      components: [],
+      components: [buildTextContainer(
+        remove
+          ? "Okay, I'll remove it from Now Playing."
+          : "Okay, I'll leave it in your Now Playing list.",
+      )],
+      flags: buildComponentsV2Flags(false),
     }).catch(() => {});
     return remove;
   } catch {
     await message.edit({
-      content: "No response received. Leaving it in your Now Playing list.",
-      components: [],
+      components: [buildTextContainer("No response received. Leaving it in your Now Playing list.")],
+      flags: buildComponentsV2Flags(false),
     }).catch(() => {});
     return false;
   }

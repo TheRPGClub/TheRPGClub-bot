@@ -4,7 +4,8 @@ import type {
   StringSelectMenuInteraction,
 } from "discord.js";
 import { MessageFlags } from "discord.js";
-import { ephemeralFlag } from "../../functions/InteractionUtils.js";
+import { ephemeralFlag, safeReply } from "../../functions/InteractionUtils.js";
+import { buildComponentsV2Flags } from "../../functions/ComponentsV2Utils.js";
 import Member from "../../classes/Member.js";
 import Game from "../../classes/Game.js";
 import type { CompletionatorModalKind, CompletionatorDateChoice } from "./completion.types.js";
@@ -25,7 +26,6 @@ import { COMPLETION_TYPES } from "../profile.command.js";
 import { STANDARD_PLATFORM_IDS } from "../../config/standardPlatforms.js";
 import { COMPLETIONATOR_SKIP_SENTINEL } from "./completion.types.js";
 import { parseCompletionDateInput } from "../profile.command.js";
-import { buildComponentsV2Flags } from "../../functions/NominationListComponents.js";
 import { searchGameDbWithFallback, importGameFromIgdb } from "./completionator-parser.service.js";
 
 
@@ -41,9 +41,9 @@ export class CompletionatorHandlersService {
   async handleCompletionatorSelect(interaction: StringSelectMenuInteraction): Promise<void> {
     const [, ownerId, importIdRaw, itemIdRaw] = interaction.customId.split(":");
     if (interaction.user.id !== ownerId) {
-      await interaction.reply({
+      await safeReply(interaction, {
         content: "This import prompt isn't for you.",
-        flags: MessageFlags.Ephemeral,
+        flags: buildComponentsV2Flags(true),
       });
       return;
     }
@@ -52,18 +52,18 @@ export class CompletionatorHandlersService {
     const importId = Number(importIdRaw);
     const itemId = Number(itemIdRaw);
     if (!Number.isInteger(importId) || !Number.isInteger(itemId)) {
-      await interaction.reply({
+      await safeReply(interaction, {
         content: "Invalid import selection.",
-        flags: ephemeralFlag(ephemeral),
+        flags: buildComponentsV2Flags(Boolean(ephemeral)),
       });
       return;
     }
 
     const session = await getImportById(importId);
     if (!session) {
-      await interaction.reply({
+      await safeReply(interaction, {
         content: "Import session not found.",
-        flags: ephemeralFlag(ephemeral),
+        flags: buildComponentsV2Flags(Boolean(ephemeral)),
       });
       return;
     }
@@ -73,9 +73,9 @@ export class CompletionatorHandlersService {
 
     const choice = interaction.values?.[0];
     if (!choice) {
-      await interaction.reply({
+      await safeReply(interaction, {
         content: "No selection received.",
-        flags: ephemeralFlag(ephemeral),
+        flags: buildComponentsV2Flags(Boolean(ephemeral)),
       });
       return;
     }
@@ -89,9 +89,9 @@ export class CompletionatorHandlersService {
     if (choice === "import-igdb") {
       const item = await getImportItemById(itemId);
       if (!item) {
-        await interaction.reply({
+        await safeReply(interaction, {
           content: "Import item not found.",
-          flags: ephemeralFlag(ephemeral),
+          flags: buildComponentsV2Flags(Boolean(ephemeral)),
         });
         return;
       }
@@ -102,18 +102,18 @@ export class CompletionatorHandlersService {
 
     const gameId = Number(choice);
     if (!Number.isInteger(gameId) || gameId <= 0) {
-      await interaction.reply({
+      await safeReply(interaction, {
         content: "Invalid game selection.",
-        flags: ephemeralFlag(ephemeral),
+        flags: buildComponentsV2Flags(Boolean(ephemeral)),
       });
       return;
     }
 
     const item = await getImportItemById(itemId);
     if (!item) {
-      await interaction.reply({
+      await safeReply(interaction, {
         content: "Import item not found.",
-        flags: ephemeralFlag(ephemeral),
+        flags: buildComponentsV2Flags(Boolean(ephemeral)),
       });
       return;
     }
@@ -138,17 +138,17 @@ export class CompletionatorHandlersService {
   async handleCompletionatorChoose(interaction: ButtonInteraction): Promise<void> {
     const parsed = parseCompletionatorChooseId(interaction.customId);
     if (!parsed) {
-      await interaction.reply({
+      await safeReply(interaction, {
         content: "Invalid completionator selection.",
-        flags: MessageFlags.Ephemeral,
+        flags: buildComponentsV2Flags(true),
       });
       return;
     }
 
     if (interaction.user.id !== parsed.ownerId) {
-      await interaction.reply({
+      await safeReply(interaction, {
         content: "This import prompt isn't for you.",
-        flags: MessageFlags.Ephemeral,
+        flags: buildComponentsV2Flags(true),
       });
       return;
     }
@@ -157,18 +157,18 @@ export class CompletionatorHandlersService {
 
     const session = await getImportById(parsed.importId);
     if (!session) {
-      await interaction.followUp({
+      await safeReply(interaction, {
         content: "Import session not found.",
-        flags: MessageFlags.Ephemeral,
+        flags: buildComponentsV2Flags(true),
       }).catch(() => {});
       return;
     }
 
     const item = await getImportItemById(parsed.itemId);
     if (!item) {
-      await interaction.followUp({
+      await safeReply(interaction, {
         content: "Import item not found.",
-        flags: MessageFlags.Ephemeral,
+        flags: buildComponentsV2Flags(true),
       }).catch(() => {});
       return;
     }
@@ -196,9 +196,9 @@ export class CompletionatorHandlersService {
   async handleCompletionatorUpdateFields(interaction: StringSelectMenuInteraction): Promise<void> {
     const [, ownerId, importIdRaw, itemIdRaw] = interaction.customId.split(":");
     if (interaction.user.id !== ownerId) {
-      await interaction.reply({
+      await safeReply(interaction, {
         content: "This import prompt isn't for you.",
-        flags: MessageFlags.Ephemeral,
+        flags: buildComponentsV2Flags(true),
       });
       return;
     }
@@ -207,36 +207,36 @@ export class CompletionatorHandlersService {
     const importId = Number(importIdRaw);
     const itemId = Number(itemIdRaw);
     if (!Number.isInteger(importId) || !Number.isInteger(itemId)) {
-      await interaction.reply({
+      await safeReply(interaction, {
         content: "Invalid import selection.",
-        flags: ephemeralFlag(ephemeral),
+        flags: buildComponentsV2Flags(Boolean(ephemeral)),
       });
       return;
     }
 
     const session = await getImportById(importId);
     if (!session) {
-      await interaction.reply({
+      await safeReply(interaction, {
         content: "Import session not found.",
-        flags: ephemeralFlag(ephemeral),
+        flags: buildComponentsV2Flags(Boolean(ephemeral)),
       });
       return;
     }
 
     const item = await getImportItemById(itemId);
     if (!item || !item.completionId) {
-      await interaction.reply({
+      await safeReply(interaction, {
         content: "Import item not found.",
-        flags: ephemeralFlag(ephemeral),
+        flags: buildComponentsV2Flags(Boolean(ephemeral)),
       });
       return;
     }
 
     const existing = await Member.getCompletion(item.completionId);
     if (!existing) {
-      await interaction.reply({
+      await safeReply(interaction, {
         content: "Completion not found.",
-        flags: ephemeralFlag(ephemeral),
+        flags: buildComponentsV2Flags(Boolean(ephemeral)),
       });
       return;
     }
@@ -287,9 +287,9 @@ export class CompletionatorHandlersService {
   async handleCompletionatorAction(interaction: ButtonInteraction): Promise<void> {
     const [, ownerId, importIdRaw, itemIdRaw, action] = interaction.customId.split(":");
     if (interaction.user.id !== ownerId) {
-      await interaction.reply({
+      await safeReply(interaction, {
         content: "This import prompt isn't for you.",
-        flags: MessageFlags.Ephemeral,
+        flags: buildComponentsV2Flags(true),
       });
       return;
     }
@@ -298,36 +298,36 @@ export class CompletionatorHandlersService {
     const importId = Number(importIdRaw);
     const itemId = Number(itemIdRaw);
     if (!Number.isInteger(importId) || !Number.isInteger(itemId)) {
-      await interaction.reply({
+      await safeReply(interaction, {
         content: "Invalid import action.",
-        flags: ephemeralFlag(ephemeral),
+        flags: buildComponentsV2Flags(Boolean(ephemeral)),
       });
       return;
     }
 
     const session = await getImportById(importId);
     if (!session) {
-      await interaction.reply({
+      await safeReply(interaction, {
         content: "Import session not found.",
-        flags: ephemeralFlag(ephemeral),
+        flags: buildComponentsV2Flags(Boolean(ephemeral)),
       });
       return;
     }
 
     const item = await getImportItemById(itemId);
     if (!item) {
-      await interaction.reply({
+      await safeReply(interaction, {
         content: "Import item not found.",
-        flags: ephemeralFlag(ephemeral),
+        flags: buildComponentsV2Flags(Boolean(ephemeral)),
       });
       return;
     }
 
     if (action === "add") {
       if (!item.gameDbGameId) {
-        await interaction.reply({
+        await safeReply(interaction, {
           content: "Import item data is missing. Please resume the import.",
-          flags: ephemeralFlag(ephemeral),
+          flags: buildComponentsV2Flags(Boolean(ephemeral)),
         });
         return;
       }
@@ -390,18 +390,18 @@ export class CompletionatorHandlersService {
 
     if (action === "same-yes") {
       if (!item.completionId) {
-        await interaction.reply({
+        await safeReply(interaction, {
           content: "Import item data is missing. Please resume the import.",
-          flags: ephemeralFlag(ephemeral),
+          flags: buildComponentsV2Flags(Boolean(ephemeral)),
         });
         return;
       }
 
       const existing = await Member.getCompletion(item.completionId);
       if (!existing) {
-        await interaction.reply({
+        await safeReply(interaction, {
           content: "Completion not found.",
-          flags: ephemeralFlag(ephemeral),
+          flags: buildComponentsV2Flags(Boolean(ephemeral)),
         });
         return;
       }
@@ -427,9 +427,9 @@ export class CompletionatorHandlersService {
 
     if (action === "same-no") {
       if (!item.gameDbGameId) {
-        await interaction.reply({
+        await safeReply(interaction, {
           content: "Import item data is missing. Please resume the import.",
-          flags: ephemeralFlag(ephemeral),
+          flags: buildComponentsV2Flags(Boolean(ephemeral)),
         });
         return;
       }
@@ -527,18 +527,18 @@ export class CompletionatorHandlersService {
 
     if (action === "update") {
       if (!item.gameDbGameId || !item.completionId) {
-        await interaction.reply({
+        await safeReply(interaction, {
           content: "Import item data is missing. Please resume the import.",
-          flags: ephemeralFlag(ephemeral),
+          flags: buildComponentsV2Flags(Boolean(ephemeral)),
         });
         return;
       }
 
       const existing = await Member.getCompletion(item.completionId);
       if (!existing) {
-        await interaction.reply({
+        await safeReply(interaction, {
           content: "Completion not found.",
-          flags: ephemeralFlag(ephemeral),
+          flags: buildComponentsV2Flags(Boolean(ephemeral)),
         });
         return;
       }
@@ -563,9 +563,9 @@ export class CompletionatorHandlersService {
   async handleCompletionatorFormSelect(interaction: StringSelectMenuInteraction): Promise<void> {
     const [, ownerId, importIdRaw, itemIdRaw, field] = interaction.customId.split(":");
     if (interaction.user.id !== ownerId) {
-      await interaction.reply({
+      await safeReply(interaction, {
         content: "This import prompt is not for you.",
-        flags: MessageFlags.Ephemeral,
+        flags: buildComponentsV2Flags(true),
       });
       return;
     }
@@ -573,36 +573,36 @@ export class CompletionatorHandlersService {
     const importId = Number(importIdRaw);
     const itemId = Number(itemIdRaw);
     if (!Number.isInteger(importId) || !Number.isInteger(itemId)) {
-      await interaction.reply({
+      await safeReply(interaction, {
         content: "Invalid import selection.",
-        flags: MessageFlags.Ephemeral,
+        flags: buildComponentsV2Flags(true),
       });
       return;
     }
 
     const session = await getImportById(importId);
     if (!session) {
-      await interaction.reply({
+      await safeReply(interaction, {
         content: "Import session not found.",
-        flags: MessageFlags.Ephemeral,
+        flags: buildComponentsV2Flags(true),
       });
       return;
     }
 
     const item = await getImportItemById(itemId);
     if (!item || !item.gameDbGameId) {
-      await interaction.reply({
+      await safeReply(interaction, {
         content: "Import item data is missing. Please resume the import.",
-        flags: MessageFlags.Ephemeral,
+        flags: buildComponentsV2Flags(true),
       });
       return;
     }
 
     const value = interaction.values?.[0];
     if (!value) {
-      await interaction.reply({
+      await safeReply(interaction, {
         content: "No selection received.",
-        flags: MessageFlags.Ephemeral,
+        flags: buildComponentsV2Flags(true),
       });
       return;
     }
@@ -617,9 +617,9 @@ export class CompletionatorHandlersService {
     if (field === "type") {
       const normalized = COMPLETION_TYPES.find((t) => t === value);
       if (!normalized) {
-        await interaction.reply({
+        await safeReply(interaction, {
           content: "Invalid completion type selected.",
-          flags: MessageFlags.Ephemeral,
+          flags: buildComponentsV2Flags(true),
         });
         return;
       }
@@ -627,9 +627,9 @@ export class CompletionatorHandlersService {
     } else if (field === "date") {
       const choice = value as CompletionatorDateChoice;
       if (!["csv", "today", "unknown", "date"].includes(choice)) {
-        await interaction.reply({
+        await safeReply(interaction, {
           content: "Invalid date option selected.",
-          flags: MessageFlags.Ephemeral,
+          flags: buildComponentsV2Flags(true),
         });
         return;
       }
@@ -658,9 +658,9 @@ export class CompletionatorHandlersService {
         );
         const platformIds = new Set(platforms.map((platform) => platform.id));
         if (!Number.isInteger(platformId) || !platformIds.has(platformId)) {
-          await interaction.reply({
+          await safeReply(interaction, {
             content: "Invalid platform selected.",
-            flags: MessageFlags.Ephemeral,
+            flags: buildComponentsV2Flags(true),
           });
           return;
         }
@@ -686,9 +686,9 @@ export class CompletionatorHandlersService {
   async handleCompletionatorDateModal(interaction: ModalSubmitInteraction): Promise<void> {
     const [, ownerId, importIdRaw, itemIdRaw] = interaction.customId.split(":");
     if (interaction.user.id !== ownerId) {
-      await interaction.reply({
+      await safeReply(interaction, {
         content: "This import prompt is not for you.",
-        flags: MessageFlags.Ephemeral,
+        flags: buildComponentsV2Flags(true),
       });
       return;
     }
@@ -696,27 +696,27 @@ export class CompletionatorHandlersService {
     const importId = Number(importIdRaw);
     const itemId = Number(itemIdRaw);
     if (!Number.isInteger(importId) || !Number.isInteger(itemId)) {
-      await interaction.reply({
+      await safeReply(interaction, {
         content: "Invalid import selection.",
-        flags: MessageFlags.Ephemeral,
+        flags: buildComponentsV2Flags(true),
       });
       return;
     }
 
     const session = await getImportById(importId);
     if (!session) {
-      await interaction.reply({
+      await safeReply(interaction, {
         content: "Import session not found.",
-        flags: MessageFlags.Ephemeral,
+        flags: buildComponentsV2Flags(true),
       });
       return;
     }
 
     const item = await getImportItemById(itemId);
     if (!item || !item.gameDbGameId) {
-      await interaction.reply({
+      await safeReply(interaction, {
         content: "Import item data is missing. Please resume the import.",
-        flags: MessageFlags.Ephemeral,
+        flags: buildComponentsV2Flags(true),
       });
       return;
     }
@@ -726,17 +726,17 @@ export class CompletionatorHandlersService {
     try {
       parsedDate = parseCompletionDateInput(rawValue);
     } catch (err: any) {
-      await interaction.reply({
+      await safeReply(interaction, {
         content: err?.message ?? "Invalid completion date.",
-        flags: MessageFlags.Ephemeral,
+        flags: buildComponentsV2Flags(true),
       });
       return;
     }
 
     if (!parsedDate) {
-      await interaction.reply({
+      await safeReply(interaction, {
         content: "Completion date is required.",
-        flags: MessageFlags.Ephemeral,
+        flags: buildComponentsV2Flags(true),
       });
       return;
     }
@@ -768,9 +768,9 @@ export class CompletionatorHandlersService {
         .catch(() => {});
     }
 
-    await interaction.reply({
+    await safeReply(interaction, {
       content: "Completion date saved.",
-      flags: MessageFlags.Ephemeral,
+      flags: buildComponentsV2Flags(true),
     });
   }
 
@@ -782,44 +782,44 @@ export class CompletionatorHandlersService {
     const itemId = Number(parts[4]);
 
     if (interaction.user.id !== ownerId) {
-      await interaction.reply({
+      await safeReply(interaction, {
         content: "This import prompt is not for you.",
-        flags: MessageFlags.Ephemeral,
+        flags: buildComponentsV2Flags(true),
       });
       return;
     }
 
     if (!Number.isInteger(importId) || !Number.isInteger(itemId)) {
-      await interaction.reply({
+      await safeReply(interaction, {
         content: "Invalid import request.",
-        flags: MessageFlags.Ephemeral,
+        flags: buildComponentsV2Flags(true),
       });
       return;
     }
 
     const session = await getImportById(importId);
     if (!session) {
-      await interaction.reply({
+      await safeReply(interaction, {
         content: "Import session not found.",
-        flags: MessageFlags.Ephemeral,
+        flags: buildComponentsV2Flags(true),
       });
       return;
     }
 
     const item = await getImportItemById(itemId);
     if (!item) {
-      await interaction.reply({
+      await safeReply(interaction, {
         content: "Import item not found.",
-        flags: MessageFlags.Ephemeral,
+        flags: buildComponentsV2Flags(true),
       });
       return;
     }
 
     const rawValue = interaction.fields.getTextInputValue("completionator-input")?.trim();
     if (!rawValue) {
-      await interaction.reply({
+      await safeReply(interaction, {
         content: "Input is required.",
-        flags: MessageFlags.Ephemeral,
+        flags: buildComponentsV2Flags(true),
       });
       return;
     }
@@ -979,19 +979,11 @@ export class CompletionatorHandlersService {
     const content =
       `Import #${session.importId} paused. ` +
       "Resume with `/game-completion import-completionator action:resume`.";
-    const payload: {
-      content: string;
-      flags: number;
-    } = {
-      content,
-      flags: MessageFlags.Ephemeral,
-    };
 
-    if (interaction.deferred || interaction.replied) {
-      await interaction.followUp(payload).catch(() => {});
-    } else {
-      await interaction.reply(payload).catch(() => {});
-    }
+    await safeReply(interaction, {
+      content,
+      flags: buildComponentsV2Flags(true),
+    }).catch(() => {});
   }
 }
 
