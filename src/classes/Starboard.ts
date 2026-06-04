@@ -41,7 +41,8 @@ export default class Starboard {
         starboardMessageId: row.STARBOARD_MESSAGE_ID,
         authorId: row.AUTHOR_ID,
         starCount: Number(row.STAR_COUNT ?? 0),
-        createdAt: row.CREATED_AT instanceof Date ? row.CREATED_AT : new Date(row.CREATED_AT as any),
+        createdAt: row.CREATED_AT instanceof Date ? row.CREATED_AT : 
+          new Date(row.CREATED_AT as any),
       };
     } finally {
       await connection.close();

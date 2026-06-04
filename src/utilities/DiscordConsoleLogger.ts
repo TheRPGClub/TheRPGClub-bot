@@ -40,7 +40,8 @@ const originalConsole = {
   debug: console.debug.bind(console),
 };
 
-type ILoggerChannel = TextBasedChannel & { send: (options: MessageCreateOptions) => Promise<unknown> };
+type ILoggerChannel = TextBasedChannel & { send: (options: MessageCreateOptions) =>
+  Promise<unknown> };
 
 let discordClient: Client | null = null;
 let logChannel: ILoggerChannel | null = null;
@@ -84,7 +85,7 @@ function isAllowedStartupLog(message: string): boolean {
     .filter((line) => line.length > 0);
   if (!lines.length) return false;
   return lines.every((line) =>
-    STARTUP_ALLOWED_LOG_PATTERNS.some((pattern) => pattern.test(line))
+    STARTUP_ALLOWED_LOG_PATTERNS.some((pattern) => pattern.test(line)),
   );
 }
 
@@ -106,7 +107,8 @@ async function ensureChannel(): Promise<ILoggerChannel | null> {
 
   resolvingChannel = true;
   try {
-    const channel = await discordClient.channels.fetch(DISCORD_CONSOLE_LOG_CHANNEL_ID).catch(() => null);
+    const channel = await discordClient.channels.fetch(DISCORD_CONSOLE_LOG_CHANNEL_ID)
+      .catch(() => null);
     const sendable = channel as { send?: unknown } | null;
     if (channel && channel.isTextBased() && typeof sendable?.send === "function") {
       logChannel = channel as ILoggerChannel;

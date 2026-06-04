@@ -1687,7 +1687,8 @@ export default class Member {
       binds.completedAt = updates.completedAt;
     }
     if (updates.platformId !== undefined) {
-      if (updates.platformId != null && (!Number.isInteger(updates.platformId) || updates.platformId <= 0)) {
+      if (updates.platformId != null && 
+        (!Number.isInteger(updates.platformId) || updates.platformId <= 0)) {
         throw new Error("Invalid platform selection.");
       }
       fields.push("PLATFORM_ID = :platformId");

@@ -164,7 +164,6 @@ const TODO_LABEL_CODE_TO_LABEL: Record<string, TodoLabel> = {
   W: "wontfix",
 };
 
-
 function clampNumber(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max);
 }
@@ -1625,7 +1624,6 @@ export class TodoCommand {
     await this.renderTodoListPage(interaction, nextToken, 1);
   }
 
-
   @SelectMenuComponent({ id: /^todo-close-select:[^:]+:\d+:\d+:\d+$/ })
   async closeSelect(interaction: StringSelectMenuInteraction): Promise<void> {
     const parsed = parseTodoCloseSelectId(interaction.customId, TODO_CLOSE_SELECT_PREFIX);
@@ -2376,7 +2374,6 @@ export class TodoCommand {
       // ignore
     }
   }
-
 
   @ButtonComponent({ id: /^todo-view:[^:]+:\d+:\d+$/ })
   async viewFromList(interaction: ButtonInteraction): Promise<void> {

@@ -291,7 +291,7 @@ export function buildCollectionOverviewContainer(params: {
   );
 
   const platformLabels = params.platformCounts.map((entry) =>
-    formatCollectionOverviewPlatformLabel(entry)
+    formatCollectionOverviewPlatformLabel(entry),
   );
   const totals = params.platformCounts.map((entry) => entry.total.toLocaleString("en-US"));
   const labelWidth = platformLabels.length
@@ -366,7 +366,7 @@ export function buildAllCollectionsSummaryContainers(params: {
   }
 
   const platformLabels = params.platformCounts.map((entry) =>
-    formatCollectionOverviewPlatformLabel(entry)
+    formatCollectionOverviewPlatformLabel(entry),
   );
   const totals = params.platformCounts.map((entry) => entry.total.toLocaleString("en-US"));
   const labelWidth = platformLabels.length

@@ -200,5 +200,4 @@ function buildTitleVariants(rawTitle: string, normalizedTitle: string): string[]
   return Array.from(new Set(variants.filter((variant) => variant && variant !== trimmed)));
 }
 
-
 export { importGameFromIgdb } from "./completion-add.service.js";

@@ -221,8 +221,6 @@ function buildAutoAcceptFollowUpPayload(
   };
 }
 
-
-
 @Discord()
 @SlashGroup({ description: "Game Database Commands", name: "gamedb" })
 @SlashGroup("gamedb")
@@ -730,7 +728,7 @@ export class GameDbAdmin {
 
     await safeReply(interaction, {
         content: "Please upload an image (or paste a URL) for this game in the chat.",
-        flags: MessageFlags.Ephemeral 
+        flags: MessageFlags.Ephemeral, 
     });
 
     const channel = interaction.channel as any;
@@ -790,8 +788,6 @@ export class GameDbAdmin {
       await safeReply(interaction, { content: "Timed out waiting for image.", flags: MessageFlags.Ephemeral });
     }
   }
-
-
 
   @ButtonComponent({ id: /^audit-accept-video:[^:]+:\d+$/ })
   async handleAuditAcceptVideo(interaction: ButtonInteraction): Promise<void> {
@@ -1047,7 +1043,7 @@ export class GameDbAdmin {
           const releaseStatus = g.initialReleaseDate ? "✅Rel" : "❌Rel";
           return `• **${g.title}** (ID: ${g.id}) ` +
             `${imageStatus} ${videoStatus} ${descStatus} ${releaseStatus}`;
-        }).join("\n")
+        }).join("\n"),
       )
       .setFooter({ text: `Page ${page + 1}/${totalPages}` });
 
@@ -1059,7 +1055,7 @@ export class GameDbAdmin {
           label: g.title.substring(0, 100),
           value: String(g.id),
           description: `ID: ${g.id}`,
-        }))
+        })),
       );
 
     const prevDisabled = page === 0;
@@ -1075,7 +1071,7 @@ export class GameDbAdmin {
         .setCustomId(`audit-page:${sessionId}:next`)
         .setLabel("Next")
         .setStyle(ButtonStyle.Secondary)
-        .setDisabled(nextDisabled)
+        .setDisabled(nextDisabled),
     );
 
     const row = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select);
@@ -1088,7 +1084,7 @@ export class GameDbAdmin {
     return {
       embeds: [embed],
       components,
-      files: []
+      files: [],
     };
   }
 

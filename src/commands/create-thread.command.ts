@@ -139,7 +139,7 @@ export class CreateThreadCommand {
     }
 
     const selectedTag = forum.availableTags.find((tag) =>
-      tag.name.toLowerCase() === tagTitle.toLowerCase().trim()
+      tag.name.toLowerCase() === tagTitle.toLowerCase().trim(),
     );
     if (!selectedTag) {
       await safeReply(interaction, {

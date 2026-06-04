@@ -241,7 +241,8 @@ function mapReleaseRow(row: any): IRelease {
     platformId: Number(row.PLATFORM_ID),
     regionId: Number(row.REGION_ID),
     format: row.FORMAT ? (String(row.FORMAT) as "Physical" | "Digital") : null,
-    releaseDate: row.RELEASE_DATE instanceof Date ? row.RELEASE_DATE : (row.RELEASE_DATE ? new Date(row.RELEASE_DATE) : null),
+    releaseDate: row.RELEASE_DATE instanceof Date ? row.RELEASE_DATE : (row.RELEASE_DATE ? 
+      new Date(row.RELEASE_DATE) : null),
     notes: row.NOTES ? String(row.NOTES) : null,
   };
 }
@@ -703,7 +704,7 @@ export default class Game {
     nameCol: string, 
     igdbIdCol: string, 
     name: string, 
-    igdbId: number
+    igdbId: number,
   ): Promise<number> {
     const findRes = await connection.execute(
       `SELECT ${idCol} FROM ${table} WHERE ${igdbIdCol} = :igdbId`,
@@ -1105,7 +1106,7 @@ export default class Game {
          JOIN GAMEDB_GAME_COMPANIES gc ON c.COMPANY_ID = gc.COMPANY_ID 
          WHERE gc.GAME_ID = :gameId AND gc.ROLE = :role`,
         { gameId, role },
-        { outFormat: oracledb.OUT_FORMAT_OBJECT }
+        { outFormat: oracledb.OUT_FORMAT_OBJECT },
       );
       return (result.rows as any[]).map(r => r.NAME);
     } finally {
@@ -1146,7 +1147,7 @@ export default class Game {
          JOIN GAMEDB_GAMES g ON c.COLLECTION_ID = g.COLLECTION_ID 
          WHERE g.GAME_ID = :gameId`,
         { gameId },
-        { outFormat: oracledb.OUT_FORMAT_OBJECT }
+        { outFormat: oracledb.OUT_FORMAT_OBJECT },
       );
       return (result.rows as any[])[0]?.NAME || null;
     } finally {
@@ -1154,7 +1155,8 @@ export default class Game {
     }
   }
 
-  private static async getSimpleList(gameId: number, defTable: string, mapTable: string, idCol: string): Promise<string[]> {
+  private static async getSimpleList(
+    gameId: number, defTable: string, mapTable: string, idCol: string): Promise<string[]> {
     const pool = getOraclePool();
     const connection = await pool.getConnection();
     try {
@@ -1163,7 +1165,7 @@ export default class Game {
          JOIN ${mapTable} m ON t.${idCol} = m.${idCol} 
          WHERE m.GAME_ID = :gameId`,
         { gameId },
-        { outFormat: oracledb.OUT_FORMAT_OBJECT }
+        { outFormat: oracledb.OUT_FORMAT_OBJECT },
       );
       return (result.rows as any[]).map(r => r.NAME);
     } finally {
@@ -2084,7 +2086,7 @@ export default class Game {
       await connection.execute(
         `UPDATE GAMEDB_GAMES SET IMAGE_DATA = :imageData, UPDATED_AT = SYSTIMESTAMP WHERE GAME_ID = :gameId`,
         { imageData, gameId },
-        { autoCommit: true }
+        { autoCommit: true },
       );
     } finally {
       await connection.close();

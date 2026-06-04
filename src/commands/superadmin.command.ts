@@ -258,7 +258,6 @@ export class SuperAdmin {
     });
   }
 
-
   @SelectMenuComponent({ id: /^sa-comp-add-select:.+/ })
   async handleSuperAdminCompletionSelect(interaction: StringSelectMenuInteraction): Promise<void> {
     const [, sessionId] = interaction.customId.split(":");
@@ -753,7 +752,6 @@ export class SuperAdmin {
     );
   }
 
-
   @ButtonComponent({ id: /^(gotm|nr-gotm)-audit(img)?-(stop|skip|novalue).*-/ })
   async handleAuditButtons(interaction: ButtonInteraction): Promise<void> {
     if (!interaction.deferred && !interaction.replied) {
@@ -938,8 +936,6 @@ export class SuperAdmin {
       flags: MessageFlags.Ephemeral,
     });
   }
-
-
 
   @Slash({ description: "Show help for server owner commands", name: "help" })
   async help(interaction: CommandInteraction): Promise<void> {

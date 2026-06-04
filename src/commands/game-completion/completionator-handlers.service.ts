@@ -28,7 +28,6 @@ import { COMPLETIONATOR_SKIP_SENTINEL } from "./completion.types.js";
 import { parseCompletionDateInput } from "../profile.command.js";
 import { searchGameDbWithFallback, importGameFromIgdb } from "./completionator-parser.service.js";
 
-
 export class CompletionatorHandlersService {
   private workflowService: CompletionatorWorkflowService;
   private uiService: CompletionatorUiService;

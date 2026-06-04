@@ -232,7 +232,6 @@ type NowPlayingMessageComponents = Array<
   ContainerBuilder | MediaGalleryBuilder | ActionRowBuilder<ButtonBuilder> | ActionRowBuilder<StringSelectMenuBuilder>
 >;
 
-
 type NowPlayingListComponents = ContainerBuilder[];
 type NowPlayingPayloadComponents = Array<ContainerBuilder | ActionRowBuilder<StringSelectMenuBuilder>>;
 
@@ -4082,7 +4081,6 @@ export class NowPlayingCommand {
     await this.returnToNowPlayingEditMenu(interaction, ownerId);
   }
 
-
   @ButtonComponent({ id: /^nowplaying-list-remove:\d+$/ })
   async handleNowPlayingListRemove(interaction: ButtonInteraction): Promise<void> {
     const [, ownerId] = interaction.customId.split(":");
@@ -5450,7 +5448,6 @@ export class NowPlayingCommand {
     return false;
   }
 
-
   private buildNowPlayingEntryComponents(
     entries: IMemberNowPlayingEntry[],
     ownerId: string,
@@ -5611,7 +5608,6 @@ export class NowPlayingCommand {
       includeCompletions: true,
     });
   }
-
 
   private buildNowPlayingMemberSelect(
     lists: Array<{

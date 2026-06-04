@@ -18,7 +18,8 @@ export interface IRssFeedItem {
   publishedAt: Date | null;
 }
 
-export function normalizeKeywords(input: string | (string | null | undefined)[] | null | undefined): string[] {
+export function normalizeKeywords(
+  input: string | (string | null | undefined)[] | null | undefined): string[] {
   if (!input) return [];
   const values = typeof input === "string" ? input.split(",") : input;
   return values
@@ -174,7 +175,8 @@ export async function updateFeed(
   }
 }
 
-export async function markItemsSeen(items: IRssFeedItem[], existingConnection?: oracledb.Connection): Promise<void> {
+export async function markItemsSeen(
+  items: IRssFeedItem[], existingConnection?: oracledb.Connection): Promise<void> {
   if (!items.length) return;
   const connection = existingConnection ?? await getOraclePool().getConnection();
   const shouldClose = !existingConnection;
@@ -217,7 +219,8 @@ export async function markItemsSeen(items: IRssFeedItem[], existingConnection?: 
   }
 }
 
-export async function isItemSeen(feedId: number, itemIdHash: string, existingConnection?: oracledb.Connection): Promise<boolean> {
+export async function isItemSeen(
+  feedId: number, itemIdHash: string, existingConnection?: oracledb.Connection): Promise<boolean> {
   const connection = existingConnection ?? await getOraclePool().getConnection();
   const shouldClose = !existingConnection;
   try {
@@ -233,7 +236,9 @@ export async function isItemSeen(feedId: number, itemIdHash: string, existingCon
   }
 }
 
-export async function getSeenItemHashes(feedId: number, itemIdHashes: string[], existingConnection?: oracledb.Connection): Promise<Set<string>> {
+export async function getSeenItemHashes(
+  feedId: number, itemIdHashes: string[], existingConnection?: oracledb.Connection): 
+  Promise<Set<string>> {
   if (!itemIdHashes.length) return new Set();
 
   const connection = existingConnection ?? await getOraclePool().getConnection();

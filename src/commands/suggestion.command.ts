@@ -265,8 +265,6 @@ async function openSuggestionReviewDecisionModal(
   }
 }
 
-
-
 function formatSuggestionTimestampPlain(date: Date | null | undefined): string {
   if (!date) return "Unknown";
   const unixSeconds = Math.floor(date.getTime() / 1000);

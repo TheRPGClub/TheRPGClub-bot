@@ -81,7 +81,8 @@ export default class GameSearchSynonymDraft {
            FROM GAMEDB_SEARCH_SYNONYM_DRAFTS
           WHERE DRAFT_ID = :draftId`,
         { draftId },
-        { outFormat: oracledb.OUT_FORMAT_OBJECT, fetchInfo: { PAIRS_JSON: { type: oracledb.STRING } } },
+        { outFormat: oracledb.OUT_FORMAT_OBJECT, fetchInfo: { 
+          PAIRS_JSON: { type: oracledb.STRING } } },
       );
       const row = (result.rows ?? [])[0] as any;
       return row ? mapDraftRow(row) : null;

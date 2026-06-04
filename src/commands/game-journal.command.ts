@@ -101,7 +101,6 @@ export { GJ_CLOSE_PREFIX };
 // modal:    GJ_HMENU_ADD_MODAL_ID:{ownerId}:{gameId}
 // modal:    GJ_HMENU_EDIT_MODAL_ID:{ownerId}:{gameId}:{entryId}
 
-
 function buildHmenuActionRow(
   ownerId: string,
   gameId: number,

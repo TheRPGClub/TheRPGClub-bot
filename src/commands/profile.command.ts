@@ -35,7 +35,6 @@ import {
 import { buildUserHeaderContainer } from "../functions/uiComponents.js";
 import { buildComponentsV2Flags } from "../functions/NominationListComponents.js";
 
-
 export const COMPLETION_TYPES = [
   "Main Story",
   "Main Story + Side Content",
@@ -43,8 +42,6 @@ export const COMPLETION_TYPES = [
 ] as const;
 
 export type CompletionType = (typeof COMPLETION_TYPES)[number];
-
-
 
 export const COMPLETION_PAGE_SIZE = 20;
 
@@ -365,18 +362,6 @@ export class ProfileCommand {
       flags: buildComponentsV2Flags(ephemeral),
     });
   }
-
-
-
-
-
-
-
-
-
-
-
-
 
   @SelectMenuComponent({ id: /^profile-search-select-\d+$/ })
   async handleProfileSearchSelect(
@@ -857,7 +842,6 @@ export class ProfileCommand {
       });
     }
   }
-
 
 }
 

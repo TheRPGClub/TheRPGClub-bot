@@ -66,5 +66,5 @@ export const GAMEDB_CSV_PLATFORM_MAP: Record<string, string[]> = {
   "xbox one": ["Xbox One"],
   "xbox series": ["Xbox Series X|S"],
   "xbox series x|s": ["Xbox Series X|S"],
-  "zx spectrum": ["ZX Spectrum"]
+  "zx spectrum": ["ZX Spectrum"],
 };
