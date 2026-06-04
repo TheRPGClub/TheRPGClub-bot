@@ -5,7 +5,12 @@ import { EmbedBuilder } from "discord.js";
 import { searchHltb, type HltbSearchResult } from "../scripts/SearchHltb.js";
 import Game from "../classes/Game.js";
 import { getHltbCacheByGameId, upsertHltbCache } from "../classes/HltbCache.js";
-import { safeDeferReply, safeReply, sanitizeUserInput } from "../functions/InteractionUtils.js";
+import {
+  ephemeralFlag,
+  safeDeferReply,
+  safeReply,
+  sanitizeUserInput,
+} from "../functions/InteractionUtils.js";
 import {
   formatGameTitleWithYear,
   getReleaseYear,
@@ -65,7 +70,7 @@ export class hltb {
   ): Promise<void> {
     title = sanitizeUserInput(title, { preserveNewlines: false });
     const ephemeral = !showInChat;
-    await safeDeferReply(interaction, { flags: ephemeral ? MessageFlags.Ephemeral : undefined });
+    await safeDeferReply(interaction, { flags: ephemeralFlag(ephemeral) });
 
     try {
       const result = await resolveHltbResult(title);
@@ -73,7 +78,7 @@ export class hltb {
   } catch {
       await safeReply(interaction, {
         content: `Sorry, there was an error searching for "${title}". Please try again later.`,
-        flags: ephemeral ? MessageFlags.Ephemeral : undefined,
+        flags: ephemeralFlag(ephemeral),
       });
     }
   }
@@ -158,12 +163,12 @@ async function outputHltbResultsAsEmbed(
 
     await safeReply(interaction, {
       embeds: [hltbEmbed],
-      flags: options.ephemeral ? MessageFlags.Ephemeral : undefined,
+      flags: ephemeralFlag(options.ephemeral),
     });
   } else {
     await safeReply(interaction, {
       content: `Sorry, no results were found for "${hltbQuery}"`,
-      flags: options.ephemeral ? MessageFlags.Ephemeral : undefined,
+      flags: ephemeralFlag(options.ephemeral),
     });
   }
 }

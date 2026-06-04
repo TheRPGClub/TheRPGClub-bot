@@ -1,6 +1,6 @@
 import type { CommandInteraction } from "discord.js";
 import { ButtonStyle } from "discord.js";
-import { safeReply } from "../../functions/InteractionUtils.js";
+import { extractErrorMessage, safeReply } from "../../functions/InteractionUtils.js";
 import NrGotm, {
   type INrGotmEntry,
   type INrGotmGame,
@@ -23,7 +23,7 @@ export async function handleAddNrGotm(interaction: CommandInteraction): Promise<
   try {
     allEntries = NrGotm.all();
   } catch (err: any) {
-    const msg = err?.message ?? String(err);
+    const msg = extractErrorMessage(err);
     await safeReply(interaction, {
       content: `Error loading existing NR-GOTM data: ${msg}`,
     });
@@ -118,7 +118,7 @@ export async function handleAddNrGotm(interaction: CommandInteraction): Promise<
       files: embedAssets.files?.length ? embedAssets.files : undefined,
     });
   } catch (err: any) {
-    const msg = err?.message ?? String(err);
+    const msg = extractErrorMessage(err);
     await safeReply(interaction, {
       content: `Failed to create NR-GOTM round ${nextRound}: ${msg}`,
     });
@@ -141,7 +141,7 @@ export async function handleEditNrGotm(
   try {
     entries = NrGotm.getByRound(roundNumber);
   } catch (err: any) {
-    const msg = err?.message ?? String(err);
+    const msg = extractErrorMessage(err);
     await safeReply(interaction, {
       content: `Error loading NR-GOTM data: ${msg}`,
     });
@@ -281,7 +281,7 @@ export async function handleEditNrGotm(
       files: updatedAssets.files?.length ? updatedAssets.files : undefined,
     });
   } catch (err: any) {
-    const msg = err?.message ?? String(err);
+    const msg = extractErrorMessage(err);
     await safeReply(interaction, {
       content: `Failed to update NR-GOTM round ${roundNumber}: ${msg}`,
     });

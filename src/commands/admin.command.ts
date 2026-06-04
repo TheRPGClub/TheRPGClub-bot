@@ -18,6 +18,7 @@ import {
   SlashOption,
 } from "discordx";
 import {
+  extractErrorMessage,
   safeDeferReply,
   safeReply,
   safeUpdate,
@@ -73,7 +74,7 @@ export class Admin {
         flags: MessageFlags.Ephemeral,
       });
     } catch (err: any) {
-      const msg: string = err?.message ?? String(err);
+      const msg = extractErrorMessage(err);
       await safeReply(interaction, {
         content: `Failed to sync commands: ${msg}`,
         flags: MessageFlags.Ephemeral,
@@ -134,7 +135,7 @@ export class Admin {
           `Next vote date updated to <t:${voteUnix}:D> (America/New_York).`,
       });
     } catch (err: any) {
-      const msg = err?.message ?? String(err);
+      const msg = extractErrorMessage(err);
       await safeReply(interaction, {
         content: `Error updating next vote date: ${msg}`,
         flags: MessageFlags.Ephemeral,

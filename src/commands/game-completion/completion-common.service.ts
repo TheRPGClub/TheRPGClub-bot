@@ -13,7 +13,8 @@ import Member, { type ICompletionRecord } from "../../classes/Member.js";
 import Game from "../../classes/Game.js";
 import { safeReply } from "../../functions/InteractionUtils.js";
 import { formatPlatformDisplayName } from "../../functions/PlatformDisplay.js";
-import { COMPONENTS_V2_FLAG } from "../../config/flags.js";
+import { buildComponentsV2Flags } from "../../functions/ComponentsV2Utils.js";
+import { decodeBase64Url, encodeWithMaxLength } from "../../functions/CustomIdUtils.js";
 import { renderUsernameWithEmoji } from "../../services/UserEmojiService.js";
 import {
   COMPLETION_PAGE_SIZE,
@@ -106,25 +107,13 @@ function parsePlatformToken(raw: string): number | null {
 function encodeQueryToken(query: string | undefined, maxLength: number): string {
   const trimmed = query?.trim();
   if (!trimmed) return NO_QUERY_TOKEN;
-  if (maxLength <= 0) return NO_QUERY_TOKEN;
-
-  let value = trimmed;
-  while (value.length > 0) {
-    const encoded = Buffer.from(value, "utf8").toString("base64url");
-    if (encoded.length <= maxLength) return encoded;
-    value = value.slice(0, -1);
-  }
-  return NO_QUERY_TOKEN;
+  return encodeWithMaxLength(trimmed, maxLength, NO_QUERY_TOKEN);
 }
 
 function decodeQueryToken(token: string): string | undefined {
   if (!token || token === NO_QUERY_TOKEN) return undefined;
-  try {
-    const decoded = Buffer.from(token, "base64url").toString("utf8").trim();
-    return decoded.length ? decoded : undefined;
-  } catch {
-    return undefined;
-  }
+  const decoded = decodeBase64Url(token).trim();
+  return decoded.length ? decoded : undefined;
 }
 
 function buildCommonNavCustomId(
@@ -335,7 +324,7 @@ function sortRows(rows: ICommonCompletionRow[], sort: CommonCompletionSort): ICo
 }
 
 function buildV2Flags(ephemeral: boolean): number {
-  return (ephemeral ? MessageFlags.Ephemeral : 0) | COMPONENTS_V2_FLAG;
+  return buildComponentsV2Flags(ephemeral);
 }
 
 const CHUNK_LIMIT = 3500;

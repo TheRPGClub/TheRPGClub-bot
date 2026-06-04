@@ -51,7 +51,8 @@ import {
   type IGithubIssueComment,
   type IGithubIssue,
 } from "../services/GithubIssuesService.js";
-import { COMPONENTS_V2_FLAG } from "../config/flags.js";
+import { buildComponentsV2Flags } from "../functions/ComponentsV2Utils.js";
+import { decodeBase64Url, encodeWithMaxLength } from "../functions/CustomIdUtils.js";
 
 const TODO_LABELS = [
   "New Feature",
@@ -163,9 +164,6 @@ const TODO_LABEL_CODE_TO_LABEL: Record<string, TodoLabel> = {
   W: "wontfix",
 };
 
-function buildComponentsV2Flags(isEphemeral: boolean): number {
-  return (isEphemeral ? MessageFlags.Ephemeral : 0) | COMPONENTS_V2_FLAG;
-}
 
 function clampNumber(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max);
@@ -185,25 +183,13 @@ function decodeTodoLabels(value: string): TodoLabel[] {
 
 function decodeTodoQuery(encoded: string | undefined): string | undefined {
   if (!encoded) return undefined;
-  try {
-    const decoded = Buffer.from(encoded, "base64url").toString("utf8");
-    return decoded.length ? decoded : undefined;
-  } catch {
-    return undefined;
-  }
+  const decoded = decodeBase64Url(encoded);
+  return decoded.length ? decoded : undefined;
 }
 
 function encodeTodoQuery(query: string | undefined, maxLength: number): string {
   if (!query) return "";
-  let trimmed = query;
-  let encoded = Buffer.from(trimmed, "utf8").toString("base64url");
-  if (encoded.length <= maxLength) return encoded;
-  for (let i = trimmed.length - 1; i >= 0; i -= 1) {
-    trimmed = trimmed.slice(0, i + 1);
-    encoded = Buffer.from(trimmed, "utf8").toString("base64url");
-    if (encoded.length <= maxLength) return encoded;
-  }
-  return "";
+  return encodeWithMaxLength(query, maxLength);
 }
 
 function buildTodoPayloadToken(

@@ -1,6 +1,6 @@
 import { type CommandInteraction, ApplicationCommandOptionType, MessageFlags } from "discord.js";
 import { Discord, Slash, SlashOption } from "discordx";
-import { safeDeferReply, safeReply } from "../functions/InteractionUtils.js";
+import { extractErrorMessage, safeDeferReply, safeReply } from "../functions/InteractionUtils.js";
 import BotVotingInfo from "../classes/BotVotingInfo.js";
 import Gotm from "../classes/Gotm.js";
 import NrGotm from "../classes/NrGotm.js";
@@ -94,7 +94,7 @@ export class CurrentRoundCommand {
         });
       }
     } catch (err: any) {
-      const msg = err?.message ?? String(err);
+      const msg = extractErrorMessage(err);
       await safeReply(interaction, {
         content: `Error fetching current round information: ${msg}`,
         flags: MessageFlags.Ephemeral,

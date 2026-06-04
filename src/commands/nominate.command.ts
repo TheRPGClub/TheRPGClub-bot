@@ -27,7 +27,12 @@ import {
   areNominationsClosed,
   getUpcomingNominationWindow,
 } from "../functions/NominationWindow.js";
-import { safeDeferReply, safeReply, sanitizeUserInput } from "../functions/InteractionUtils.js";
+import {
+  ephemeralFlag,
+  safeDeferReply,
+  safeReply,
+  sanitizeUserInput,
+} from "../functions/InteractionUtils.js";
 import { GOTM_NOMINATION_CHANNEL_ID, NR_GOTM_NOMINATION_CHANNEL_ID } from "../config/nominationChannels.js";
 import { showGameProfileFromNomination } from "./gamedb.command.js";
 
@@ -332,7 +337,7 @@ export class NominateCommand {
       const errorMessage = error instanceof Error ? error.message : String(error);
       await safeReply(interaction, {
         content: `Could not load nominations: ${errorMessage}`,
-        flags: ephemeral ? MessageFlags.Ephemeral : undefined,
+        flags: ephemeralFlag(ephemeral),
       });
     }
   }

@@ -22,9 +22,15 @@ import {
   SlashOption,
 } from "discordx";
 import Member, { type IMemberPlatformRecord } from "../classes/Member.js";
-import { safeDeferReply, safeReply, safeUpdate } from "../functions/InteractionUtils.js";
+import {
+  ephemeralFlag,
+  extractErrorMessage,
+  safeDeferReply,
+  safeReply,
+  safeUpdate,
+} from "../functions/InteractionUtils.js";
 import { buildProfileViewPayload } from "./profile.command.js";
-import { buildComponentsV2Flags } from "../functions/NominationListComponents.js";
+import { buildComponentsV2Flags } from "../functions/ComponentsV2Utils.js";
 import { shouldRenderPrevNextButtons } from "../functions/PaginationUtils.js";
 
 const MAX_OPTIONS = 25;
@@ -213,7 +219,7 @@ async function renderMpInfoPage(
   if (!activeMembers.length) {
     await safeReply(interaction as any, {
       content: "No members match the selected platforms.",
-      flags: ephemeral ? MessageFlags.Ephemeral : undefined,
+      flags: ephemeralFlag(ephemeral),
     });
     return;
   }
@@ -242,7 +248,7 @@ async function renderMpInfoPage(
     await safeReply(interaction as any, {
       embeds: [embed],
       components,
-      flags: ephemeral ? MessageFlags.Ephemeral : undefined,
+      flags: ephemeralFlag(ephemeral),
     });
   }
 }
@@ -303,13 +309,13 @@ export class MultiplayerInfoCommand {
           nsw: nsw ?? true,
         };
     const ephemeral = !showInChat;
-    await safeDeferReply(interaction, { flags: ephemeral ? MessageFlags.Ephemeral : undefined });
+    await safeDeferReply(interaction, { flags: ephemeralFlag(ephemeral) });
 
     const anyIncluded = filters.steam || filters.xbl || filters.psn || filters.nsw;
     if (!anyIncluded) {
       await safeReply(interaction, {
         content: "Please enable at least one platform filter.",
-        flags: ephemeral ? MessageFlags.Ephemeral : undefined,
+        flags: ephemeralFlag(ephemeral),
       });
       return;
     }
@@ -382,7 +388,7 @@ export class MultiplayerInfoCommand {
         embeds: [],
       });
     } catch (err: any) {
-      const msg = err?.message ?? String(err);
+      const msg = extractErrorMessage(err);
       const errContainer = new ContainerBuilder().addTextDisplayComponents(
         new TextDisplayBuilder().setContent(`Could not load that profile: ${msg}`),
       );

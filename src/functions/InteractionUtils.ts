@@ -440,6 +440,15 @@ export async function safeUpdate(interaction: AnyRepliable, options: any): Promi
   await safeReply(interaction, { content: String(options ?? ""), flags: MessageFlags.Ephemeral });
 }
 
+export function ephemeralFlag(isEphemeral: boolean | undefined): number | undefined {
+  return isEphemeral ? MessageFlags.Ephemeral : undefined;
+}
+
+export function extractErrorMessage(err: unknown): string {
+  const e = err as any;
+  return e?.message ?? String(e);
+}
+
 export function resolveMemberLabel(
   member: import("discord.js").User | import("discord.js").GuildMember | undefined,
   fallback: import("discord.js").User,
