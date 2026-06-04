@@ -1,0 +1,10 @@
+{
+  "eslint.useFlatConfig": true,
+  "eslint.options": {
+    "flags": ["unstable_ts_config"]
+  },
+  "eslint.validate": [
+    "javascript",
+    "typescript"
+  ]
+}

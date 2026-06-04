@@ -1,5 +1,4 @@
 # files
-.vscode
 .env
 .env.local
 package-lock.json
