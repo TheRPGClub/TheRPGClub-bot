@@ -1280,6 +1280,7 @@ export default {
     "no-deprecated-interaction-options": {
       meta: {
         type: "problem",
+        fixable: "code",
         docs: {
           description:
             "Disallow deprecated interaction response options and fetchReply usage.",
@@ -1587,6 +1588,7 @@ export default {
     "require-relative-import-js-extension": {
       meta: {
         type: "problem",
+        fixable: "code",
         docs: {
           description:
             "Require relative import and export paths to include .js or other allowed extensions.",
@@ -1603,7 +1605,13 @@ export default {
           const value = sourceNode.value;
           if (!isRelativeImportPath(value)) return;
           if (hasAllowedRelativeImportExtension(value)) return;
-          context.report({ node: sourceNode, messageId: "missingExtension" });
+          context.report({
+            node: sourceNode,
+            messageId: "missingExtension",
+            fix(fixer) {
+              return fixer.replaceText(sourceNode, JSON.stringify(`${value}.js`));
+            },
+          });
         };
 
         return {
@@ -1780,6 +1788,7 @@ export default {
     "no-emdash": {
       meta: {
         type: "problem",
+        fixable: "code",
         docs: {
           description: "Disallow em dash characters.",
         },
@@ -1804,12 +1813,29 @@ export default {
             }
           },
           Literal(node) {
-            if (typeof node.value === "string") {
-              reportIfEmdash(node, node.value);
+            if (typeof node.value === "string" && node.value.includes("—")) {
+              context.report({
+                node,
+                messageId: "emdash",
+                fix(fixer) {
+                  const src = sourceCode.getText(node);
+                  return fixer.replaceText(node, src.replace(/—/g, " - "));
+                },
+              });
             }
           },
           TemplateElement(node) {
-            reportIfEmdash(node, node.value?.cooked ?? node.value?.raw);
+            const text = node.value?.cooked ?? node.value?.raw;
+            if (typeof text === "string" && text.includes("—")) {
+              context.report({
+                node,
+                messageId: "emdash",
+                fix(fixer) {
+                  const src = sourceCode.getText(node);
+                  return fixer.replaceText(node, src.replace(/—/g, " - "));
+                },
+              });
+            }
           },
         };
       },
