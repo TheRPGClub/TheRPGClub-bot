@@ -109,6 +109,7 @@ export default [
       "local/no-plain-text-v1-reply": "error",
       "local/custom-id-has-matching-handler": "error",
       "local/custom-id-builder-matches-handler": "error",
+      "local/split-long-import": "error",
     },
   },
   {
