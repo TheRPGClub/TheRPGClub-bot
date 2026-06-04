@@ -103,7 +103,6 @@ class IgdbService {
 
       this.accessToken = response.data.access_token;
       this.tokenExpiry = Date.now() + (response.data.expires_in * 1000) - 60000;
-      console.log("IGDB: Fetched new Twitch access token.");
       return this.accessToken;
     } catch (error) {
       console.error("IGDB: Failed to fetch Twitch access token:", error);
