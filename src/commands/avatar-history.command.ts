@@ -3,6 +3,7 @@ import {
   AttachmentBuilder,
   ButtonInteraction,
   CommandInteraction,
+  Guild,
   MessageFlags,
   User,
 } from "discord.js";
@@ -19,7 +20,7 @@ import {
   parseDirAndPage,
   shouldRenderPrevNextButtons,
 } from "../functions/PaginationUtils.js";
-import Member, { IAvatarHistoryRecord } from "../classes/Member.js";
+import Member from "../classes/Member.js";
 import {
   buildComponentsV2EditFlags,
   buildComponentsV2Flags,
@@ -30,6 +31,7 @@ import { recordCurrentAvatarIfNew } from "../utilities/AvatarLogUtils.js";
 import { isAdmin } from "./admin/admin-auth.utils.js";
 
 const AVATAR_HISTORY_PAGE_SIZE = 10;
+const ALL_VIEW_PAGE_SIZE = 15;
 
 function formatTimestamp(date: Date): string {
   const seconds = Math.floor(date.getTime() / 1000);
@@ -48,30 +50,21 @@ async function buildAvatarHistoryV2Page(
   target: User,
   page: number,
 ): Promise<AvatarHistoryV2Page | null> {
-  const currentAvatarUrl = target.avatarURL({ size: 4096 });
-  const dbCount = await Member.countAvatarHistory(target.id);
-
-  let injectCurrent = false;
-  if (currentAvatarUrl) {
-    if (dbCount === 0) {
-      injectCurrent = true;
-    } else {
-      const latest = await Member.getAvatarHistory(target.id, 1, 0);
-      injectCurrent = !latest.length || latest[0].avatarHash !== target.avatar;
-    }
-  }
-
-  const totalCount = dbCount + (injectCurrent ? 1 : 0);
+  const totalCount = await Member.countAvatarHistory(target.id);
   if (!totalCount) return null;
 
   const totalPages = Math.max(1, Math.ceil(totalCount / AVATAR_HISTORY_PAGE_SIZE));
   const safePage = Math.min(Math.max(page, 0), totalPages - 1);
+  const offset = safePage * AVATAR_HISTORY_PAGE_SIZE;
+  const history = await Member.getAvatarHistory(target.id, AVATAR_HISTORY_PAGE_SIZE, offset);
+  if (!history.length) return null;
 
   const files: AttachmentBuilder[] = [];
   const gallery = new MediaGalleryBuilder();
   let hasItems = false;
 
-  const addDbEntry = (entry: IAvatarHistoryRecord, number: number) => {
+  history.forEach((entry, idx) => {
+    const number = offset + idx + 1;
     const description = `#${number} of ${totalCount} - ${formatTimestamp(entry.changedAt)}`;
     if (entry.avatarUrl) {
       gallery.addItems(
@@ -88,28 +81,7 @@ async function buildAvatarHistoryV2Page(
       );
       hasItems = true;
     }
-  };
-
-  if (injectCurrent && safePage === 0) {
-    gallery.addItems(
-      new MediaGalleryItemBuilder()
-        .setURL(currentAvatarUrl!)
-        .setDescription(`Current - #1 of ${totalCount}`),
-    );
-    hasItems = true;
-    const dbItems = await Member.getAvatarHistory(target.id, AVATAR_HISTORY_PAGE_SIZE - 1, 0);
-    dbItems.forEach((entry, idx) => addDbEntry(entry, idx + 2));
-  } else {
-    // When injected, page N>=1 starts at DB offset (N*pageSize - 1) to account for the
-    // synthetic entry occupying slot #1 on page 0.
-    const dbOffset = injectCurrent
-      ? safePage * AVATAR_HISTORY_PAGE_SIZE - 1
-      : safePage * AVATAR_HISTORY_PAGE_SIZE;
-    const history = await Member.getAvatarHistory(target.id, AVATAR_HISTORY_PAGE_SIZE, dbOffset);
-    if (!history.length) return null;
-    const numberBase = (injectCurrent ? 1 : 0) + dbOffset + 1;
-    history.forEach((entry, idx) => addDbEntry(entry, numberBase + idx));
-  }
+  });
 
   const displayName = target.displayName ?? target.username ?? "User";
   const headerContainer = buildUserHeaderContainer(target.id, displayName, "Avatar History");
@@ -129,6 +101,64 @@ async function buildAvatarHistoryV2Page(
     safePage,
     totalCount,
   };
+}
+
+type AllViewPage = {
+  container: ContainerBuilder;
+  totalPages: number;
+  safePage: number;
+  totalMembers: number;
+};
+
+async function buildAvatarHistoryAllPage(
+  guild: Guild | null,
+  page: number,
+): Promise<AllViewPage | null> {
+  const allRecords = await Member.getAllMembersAvatarHistoryCounts();
+  let members = allRecords;
+  if (guild) {
+    const checks = await Promise.all(
+      allRecords.map(async (record) => {
+        if (guild.members.cache.has(record.userId)) return record;
+        const fetched = await guild.members.fetch(record.userId).catch(() => null);
+        return fetched ? record : null;
+      }),
+    );
+    members = checks.filter((r): r is NonNullable<typeof r> => r !== null);
+  }
+  if (!members.length) return null;
+
+  const sorted = [...members].sort((a, b) => {
+    const nameA = (a.globalName ?? a.username ?? a.userId).toLowerCase();
+    const nameB = (b.globalName ?? b.username ?? b.userId).toLowerCase();
+    return nameA.localeCompare(nameB);
+  });
+
+  const totalPages = Math.max(1, Math.ceil(sorted.length / ALL_VIEW_PAGE_SIZE));
+  const safePage = Math.min(Math.max(page, 0), totalPages - 1);
+  const offset = safePage * ALL_VIEW_PAGE_SIZE;
+  const pageMembers = sorted.slice(offset, offset + ALL_VIEW_PAGE_SIZE);
+
+  const lines = pageMembers.map((record, idx) => {
+    const displayName = record.globalName ?? record.username ?? record.userId;
+    const suffix = record.count === 1 ? "avatar" : "avatars";
+    return `${offset + idx + 1}. **${renderUsernameWithEmoji(record.userId, displayName)}**: ${record.count} ${suffix}`;
+  });
+
+  const container = new ContainerBuilder();
+  container.addTextDisplayComponents(
+    new TextDisplayBuilder().setContent("# Avatar History"),
+  );
+  container.addTextDisplayComponents(
+    new TextDisplayBuilder().setContent(lines.join("\n")),
+  );
+  container.addTextDisplayComponents(
+    new TextDisplayBuilder().setContent(
+      `-# _${sorted.length} users with avatar history stored._`,
+    ),
+  );
+
+  return { container, totalPages, safePage, totalMembers: sorted.length };
 }
 
 @Discord()
@@ -215,54 +245,25 @@ export class AvatarHistoryCommand {
     }
 
     if (showAll === true) {
-      await safeDeferReply(interaction, {
-        flags: buildComponentsV2Flags(ephemeral),
-      });
-      const allRecords = await Member.getAllMembersAvatarHistoryCounts();
-      let members = allRecords;
-      if (interaction.guild) {
-        const guild = interaction.guild;
-        const checks = await Promise.all(
-          allRecords.map(async (record) => {
-            if (guild.members.cache.has(record.userId)) return record;
-            const fetched = await guild.members.fetch(record.userId).catch(() => null);
-            return fetched ? record : null;
-          }),
-        );
-        members = checks.filter((r): r is NonNullable<typeof r> => r !== null);
-      }
-      if (!members.length) {
-        const container = new ContainerBuilder().addTextDisplayComponents(
-          new TextDisplayBuilder().setContent("No avatar history found for any members."),
-        );
+      await safeDeferReply(interaction, { flags: buildComponentsV2Flags(ephemeral) });
+      const pageResult = await buildAvatarHistoryAllPage(interaction.guild, 0);
+      if (!pageResult) {
         await safeReply(interaction, {
-          components: [container],
+          components: [
+            new ContainerBuilder().addTextDisplayComponents(
+              new TextDisplayBuilder().setContent("No avatar history found for any members."),
+            ),
+          ],
           flags: buildComponentsV2Flags(ephemeral),
         });
         return;
       }
-
-      const lines = members.map((record) => {
-        const displayName = record.globalName ?? record.username ?? record.userId;
-        const suffix = record.count === 1 ? "avatar" : "avatars";
-        return `- **${renderUsernameWithEmoji(record.userId, displayName)}**: ${record.count} ${suffix}`;
-      });
-
-      const container = new ContainerBuilder();
-      container.addTextDisplayComponents(
-        new TextDisplayBuilder().setContent("# Avatar History"),
-      );
-      container.addTextDisplayComponents(
-        new TextDisplayBuilder().setContent(lines.join("\n")),
-      );
-      container.addTextDisplayComponents(
-        new TextDisplayBuilder().setContent(
-          `-# _${members.length} users with avatar history stored._`,
-        ),
-      );
-
+      const { container, totalPages, safePage } = pageResult;
+      const paginationRow = shouldRenderPrevNextButtons(safePage <= 0, safePage >= totalPages - 1)
+        ? buildPrevNextRow(`avatar-history-all-page:${interaction.user.id}`, safePage, totalPages)
+        : null;
       await safeReply(interaction, {
-        components: [container],
+        components: paginationRow ? [container, paginationRow] : [container],
         flags: buildComponentsV2Flags(ephemeral),
       });
       return;
@@ -339,6 +340,40 @@ export class AvatarHistoryCommand {
     await safeUpdate(interaction, {
       components: paginationRow ? [...containers, paginationRow] : containers,
       files: files.length ? files : [],
+      flags: buildComponentsV2EditFlags(),
+    });
+  }
+
+  @ButtonComponent({ id: /^avatar-history-all-page:\d+:\d+:(prev|next)$/ })
+  async handleAllPage(interaction: ButtonInteraction): Promise<void> {
+    const [, ownerId, pageRaw, dir] = interaction.customId.split(":");
+    if (interaction.user.id !== ownerId) {
+      await safeReply(interaction, {
+        content: "This avatar history list isn't for you.",
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
+    const parsed = parseDirAndPage(pageRaw, dir);
+    if (!parsed) return;
+    const pageResult = await buildAvatarHistoryAllPage(interaction.guild, parsed.nextPage);
+    if (!pageResult) {
+      await safeUpdate(interaction, {
+        components: [
+          new ContainerBuilder().addTextDisplayComponents(
+            new TextDisplayBuilder().setContent("No avatar history found."),
+          ),
+        ],
+        flags: buildComponentsV2EditFlags(),
+      });
+      return;
+    }
+    const { container, totalPages, safePage } = pageResult;
+    const paginationRow = shouldRenderPrevNextButtons(safePage <= 0, safePage >= totalPages - 1)
+      ? buildPrevNextRow(`avatar-history-all-page:${ownerId}`, safePage, totalPages)
+      : null;
+    await safeUpdate(interaction, {
+      components: paginationRow ? [container, paginationRow] : [container],
       flags: buildComponentsV2EditFlags(),
     });
   }
