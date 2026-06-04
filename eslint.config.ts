@@ -10,8 +10,8 @@ export default [
   pluginJs.configs.recommended,
   ...tseslint.configs.recommended,
   {
-    files: ["src/**/*.{ts}"],
-    ignores: ["**/*.config.{ts}", "*.reference.ts"],
+    files: ["src/**/*.ts"],
+    ignores: ["**/*.config.ts", "*.reference.ts"],
     plugins: {
       "@stylistic": stylistic,
       local: localRules,
@@ -106,6 +106,7 @@ export default [
       "local/require-components-v2-flag-with-v2-components": "error",
       "local/dynamic-components-require-chunking": "error",
       "local/section-builder-requires-accessory": "error",
+      "local/no-plain-text-v1-reply": "error",
       "local/custom-id-has-matching-handler": "error",
       "local/custom-id-builder-matches-handler": "error",
     },

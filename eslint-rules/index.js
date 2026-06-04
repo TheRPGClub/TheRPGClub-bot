@@ -279,9 +279,11 @@ function isNumericIdString(node) {
 function containsUnstableExpression(node) {
   if (!node) return false;
   const nodes = [node];
+  const visited = new Set();
   while (nodes.length) {
     const current = nodes.pop();
-    if (!current) continue;
+    if (!current || visited.has(current)) continue;
+    visited.add(current);
 
     if (current.type === "CallExpression") {
       const callee = current.callee;
@@ -354,9 +356,11 @@ function resolveStringShapeExpression(node, constantMap) {
 function containsNewModalComponentType(node) {
   if (!node) return false;
   const nodes = [node];
+  const visited = new Set();
   while (nodes.length) {
     const current = nodes.pop();
-    if (!current) continue;
+    if (!current || visited.has(current)) continue;
+    visited.add(current);
 
     if (
       current.type === "NewExpression" &&
@@ -1043,8 +1047,10 @@ export default {
           return false;
         };
 
-        const collectCalls = (node, calls) => {
+        const collectCalls = (node, calls, visited = new Set()) => {
           if (!node || typeof node.type !== "string") return;
+          if (visited.has(node)) return;
+          visited.add(node);
           if (node.type === "CallExpression") {
             calls.push(node);
           }
@@ -1054,13 +1060,13 @@ export default {
             if (Array.isArray(value)) {
               for (const item of value) {
                 if (item && typeof item.type === "string") {
-                  collectCalls(item, calls);
+                  collectCalls(item, calls, visited);
                 }
               }
               continue;
             }
             if (value && typeof value.type === "string") {
-              collectCalls(value, calls);
+              collectCalls(value, calls, visited);
             }
           }
         };
@@ -1144,8 +1150,10 @@ export default {
           return false;
         };
 
-        const collectCalls = (node, calls) => {
+        const collectCalls = (node, calls, visited = new Set()) => {
           if (!node || typeof node.type !== "string") return;
+          if (visited.has(node)) return;
+          visited.add(node);
           if (node.type === "CallExpression") {
             calls.push(node);
           }
@@ -1155,13 +1163,13 @@ export default {
             if (Array.isArray(value)) {
               for (const item of value) {
                 if (item && typeof item.type === "string") {
-                  collectCalls(item, calls);
+                  collectCalls(item, calls, visited);
                 }
               }
               continue;
             }
             if (value && typeof value.type === "string") {
-              collectCalls(value, calls);
+              collectCalls(value, calls, visited);
             }
           }
         };
@@ -1414,8 +1422,10 @@ export default {
         },
       },
       create(context) {
-        const walk = (node, visit) => {
+        const walk = (node, visit, visited = new Set()) => {
           if (!node || typeof node.type !== "string") return;
+          if (visited.has(node)) return;
+          visited.add(node);
           visit(node);
           for (const key of Object.keys(node)) {
             const value = node[key];
@@ -1423,13 +1433,13 @@ export default {
             if (Array.isArray(value)) {
               for (const item of value) {
                 if (item && typeof item.type === "string") {
-                  walk(item, visit);
+                  walk(item, visit, visited);
                 }
               }
               continue;
             }
             if (value && typeof value.type === "string") {
-              walk(value, visit);
+              walk(value, visit, visited);
             }
           }
         };
@@ -1674,9 +1684,9 @@ export default {
       },
       create(context) {
         return {
-          "Program:exit"() {
+          "Program:exit"(node) {
             const unused = [];
-            collectUnusedVariables(context.getScope(), unused);
+            collectUnusedVariables(context.sourceCode.getScope(node), unused);
             for (const variable of unused) {
               const identifier = variable.identifiers[0];
               if (!identifier) continue;
@@ -2289,9 +2299,11 @@ export default {
         const expressionIncludesComponentsV2 = (node) => {
           if (!node) return false;
           const nodes = [node];
+          const visited = new Set();
           while (nodes.length) {
             const current = nodes.pop();
-            if (!current) continue;
+            if (!current || visited.has(current)) continue;
+            visited.add(current);
             if (isComponentsV2Flag(current)) return true;
             if (current.type === "CallExpression") {
               if (current.callee.type === "Identifier" &&
@@ -2387,9 +2399,11 @@ export default {
         const expressionIncludesComponentsV2 = (node) => {
           if (!node) return false;
           const nodes = [node];
+          const visited = new Set();
           while (nodes.length) {
             const current = nodes.pop();
-            if (!current) continue;
+            if (!current || visited.has(current)) continue;
+            visited.add(current);
             if (isComponentsV2Flag(current)) return true;
             if (
               current.type === "CallExpression" &&
@@ -2416,9 +2430,11 @@ export default {
         const expressionContainsV2Builders = (node) => {
           if (!node) return false;
           const nodes = [node];
+          const visited = new Set();
           while (nodes.length) {
             const current = nodes.pop();
-            if (!current) continue;
+            if (!current || visited.has(current)) continue;
+            visited.add(current);
 
             if (current.type === "NewExpression" && current.callee.type === "Identifier") {
               if (COMPONENTS_V2_ROOT_BUILDERS.has(current.callee.name)) {
@@ -2772,9 +2788,9 @@ export default {
       },
       create(context) {
         return {
-          "Program:exit"() {
+          "Program:exit"(node) {
             const unused = [];
-            collectUnusedFunctionDeclarations(context.getScope(), unused);
+            collectUnusedFunctionDeclarations(context.sourceCode.getScope(node), unused);
             for (const variable of unused) {
               const identifier = variable.identifiers[0];
               if (!identifier) continue;
@@ -2783,6 +2799,80 @@ export default {
                 messageId: "unusedFunction",
                 data: { name: identifier.name },
               });
+            }
+          },
+        };
+      },
+    },
+    "no-plain-text-v1-reply": {
+      meta: {
+        type: "problem",
+        docs: {
+          description:
+            "Disallow plain text (v1) interaction replies without Components V2. " +
+            "Use buildTextReply() from ComponentsV2Utils instead.",
+        },
+        schema: [],
+        messages: {
+          useTextReply:
+            "Plain text reply detected. Use buildTextReply() from ComponentsV2Utils " +
+            "to wrap this message in a Components V2 container.",
+        },
+      },
+      create(context) {
+        const REPLY_HELPER_NAMES = new Set([
+          "safeReply",
+          "safeFollowUp",
+          "safeUpdate",
+          "safeDeferReply",
+        ]);
+        const REPLY_METHOD_NAMES = new Set([
+          "reply",
+          "editReply",
+          "followUp",
+          "update",
+        ]);
+
+        function getOptionsArg(node) {
+          if (!node.arguments || node.arguments.length === 0) return null;
+          const last = node.arguments[node.arguments.length - 1];
+          return last.type === "ObjectExpression" ? last : null;
+        }
+
+        function hasProperty(objNode, key) {
+          return objNode.properties.some(
+            (p) =>
+              p.type === "Property" &&
+              p.key &&
+              ((p.key.type === "Identifier" && p.key.name === key) ||
+                (p.key.type === "Literal" && p.key.value === key)),
+          );
+        }
+
+        return {
+          CallExpression(node) {
+            const callee = node.callee;
+            let isReplyCall = false;
+
+            if (callee.type === "Identifier") {
+              isReplyCall = REPLY_HELPER_NAMES.has(callee.name);
+            } else if (
+              callee.type === "MemberExpression" &&
+              callee.property.type === "Identifier"
+            ) {
+              isReplyCall = REPLY_METHOD_NAMES.has(callee.property.name);
+            }
+
+            if (!isReplyCall) return;
+
+            const optionsArg = getOptionsArg(node);
+            if (!optionsArg) return;
+
+            if (
+              hasProperty(optionsArg, "content") &&
+              !hasProperty(optionsArg, "components")
+            ) {
+              context.report({ node: optionsArg, messageId: "useTextReply" });
             }
           },
         };
