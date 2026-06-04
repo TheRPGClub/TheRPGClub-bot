@@ -5,6 +5,7 @@ import {
   ADMIN_ROLE_ID,
   MEMBER_ROLE_ID,
   MODERATOR_ROLE_ID,
+  NEWCOMERS_ROLE_ID,
   REGULARS_ROLE_ID,
 } from "../config/roles.js";
 
@@ -55,6 +56,7 @@ const QUALIFYING_ROLE_IDS = [
   ADMIN_ROLE_ID,
   MODERATOR_ROLE_ID,
   MEMBER_ROLE_ID,
+  NEWCOMERS_ROLE_ID,
 ].filter((id): id is string => id !== null);
 
 function hasQualifyingRole(member: GuildMember): boolean {
@@ -113,12 +115,12 @@ export async function startUserEmojiService(client: Client): Promise<void> {
   if (forceRefresh) {
     console.log("[UserEmojiService] FORCE_EMOJI_REFRESH detected -- all emojis will be re-uploaded.");
   }
-  syncAllRegularsEmoji(client, forceRefresh).catch((err) => {
+  syncAllUserEmoji(client, forceRefresh).catch((err) => {
     console.error("[UserEmojiService] Initial sync failed:", err);
   });
 }
 
-async function syncAllRegularsEmoji(client: Client, forceRefresh = false): Promise<void> {
+async function syncAllUserEmoji(client: Client, forceRefresh = false): Promise<void> {
   const app = client.application;
   if (!app) {
     console.error("[UserEmojiService] client.application not available.");
