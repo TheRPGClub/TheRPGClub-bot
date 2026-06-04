@@ -2904,6 +2904,67 @@ export default {
         };
       },
     },
+    "split-long-import": {
+      meta: {
+        type: "suggestion",
+        fixable: "code",
+        docs: {
+          description:
+            "Require long single-line import declarations to use multi-line named specifier format.",
+        },
+        schema: [],
+        messages: {
+          tooLong:
+            "Import line exceeds 100 characters. Split named specifiers onto separate lines.",
+        },
+      },
+      create(context) {
+        const MAX_LEN = 100;
+
+        return {
+          ImportDeclaration(node) {
+            const sourceCode = context.getSourceCode();
+            const nodeText = sourceCode.getText(node);
+            if (nodeText.includes("\n")) return;
+
+            const line = sourceCode.lines[node.loc.start.line - 1];
+            if (!line || line.length <= MAX_LEN) return;
+
+            const namedSpecifiers = node.specifiers.filter(
+              (s) => s.type === "ImportSpecifier",
+            );
+            if (namedSpecifiers.length < 2) return;
+
+            context.report({
+              node,
+              messageId: "tooLong",
+              fix(fixer) {
+                const indent = /^(\s*)/.exec(line)?.[1] ?? "";
+                const innerIndent = `${indent}  `;
+
+                const importKind = node.importKind === "type" ? "import type " : "import ";
+                const otherSpecs = node.specifiers
+                  .filter((s) => s.type !== "ImportSpecifier")
+                  .map((s) => sourceCode.getText(s));
+
+                const namedLines = namedSpecifiers
+                  .map((s) => `${innerIndent}${sourceCode.getText(s)},`)
+                  .join("\n");
+
+                const leadParts = otherSpecs.length > 0 ? `${otherSpecs.join(", ")}, ` : "";
+                const semi = nodeText.trimEnd().endsWith(";") ? ";" : "";
+
+                return fixer.replaceText(
+                  node,
+                  `${importKind}${leadParts}{\n${namedLines}\n${indent}} from ` +
+                    `${sourceCode.getText(node.source)}${semi}`,
+                );
+              },
+            });
+          },
+        };
+      },
+    },
     "custom-id-builder-matches-handler": {
       meta: {
         type: "problem",
