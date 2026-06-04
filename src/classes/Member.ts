@@ -160,6 +160,13 @@ export interface IAvatarHistoryRecord {
   changedAt: Date;
 }
 
+export interface IMemberAvatarHistoryCount {
+  userId: string;
+  username: string | null;
+  globalName: string | null;
+  count: number;
+}
+
 export interface ICompletionRecord {
   completionId: number;
   gameId: number;
@@ -2387,6 +2394,39 @@ export default class Member {
       );
       const row = result.rows?.[0];
       return Number(row?.TOTAL ?? 0);
+    } finally {
+      await connection.close();
+    }
+  }
+
+  static async getAllMembersAvatarHistoryCounts(): Promise<IMemberAvatarHistoryCount[]> {
+    const connection = await getOraclePool().getConnection();
+    try {
+      const result = await connection.execute<{
+        USER_ID: string;
+        USERNAME: string | null;
+        GLOBAL_NAME: string | null;
+        TOTAL: number;
+      }>(
+        `SELECT h.USER_ID,
+                u.USERNAME,
+                u.GLOBAL_NAME,
+                COUNT(*) AS TOTAL
+           FROM RPG_CLUB_USER_AVATAR_HISTORY h
+           JOIN RPG_CLUB_USERS u ON u.USER_ID = h.USER_ID
+          WHERE NVL(u.IS_BOT, 0) = 0
+            AND u.SERVER_LEFT_AT IS NULL
+          GROUP BY h.USER_ID, u.USERNAME, u.GLOBAL_NAME
+          ORDER BY COALESCE(u.GLOBAL_NAME, u.USERNAME, h.USER_ID)`,
+        {},
+        { outFormat: oracledb.OUT_FORMAT_OBJECT },
+      );
+      return (result.rows ?? []).map((row) => ({
+        userId: String(row.USER_ID),
+        username: row.USERNAME ?? null,
+        globalName: row.GLOBAL_NAME ?? null,
+        count: Number(row.TOTAL),
+      }));
     } finally {
       await connection.close();
     }
