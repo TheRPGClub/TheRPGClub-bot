@@ -5,6 +5,7 @@ import type { Client } from "discordx";
 import { DISCORD_CONSOLE_LOG_CHANNEL_ID } from "../config/channels.js";
 import { BOT_DEV_PING_USER_ID } from "../config/users.js";
 import { COMPONENTS_V2_FLAG } from "../config/flags.js";
+import { safeV2TextContent } from "../commands/imports/import-scaffold.service.js";
 const MAX_DESCRIPTION_LENGTH = 3900;
 const LEVEL_COLORS: Record<string, number> = {
   log: 0x95a5a6,
@@ -125,10 +126,12 @@ function buildLogContainer(level: BufferedLevel, description: string): Container
   return new ContainerBuilder()
     .setAccentColor(LEVEL_COLORS[level])
     .addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(`\`\`\`\n${description}\`\`\``),
+      new TextDisplayBuilder().setContent(
+        safeV2TextContent(`\`\`\`\n${description}\`\`\``, MAX_DESCRIPTION_LENGTH),
+      ),
     )
     .addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(`-# <t:${timestamp}:T>`),
+      new TextDisplayBuilder().setContent(safeV2TextContent(`-# <t:${timestamp}:T>`, 100)),
     );
 }
 

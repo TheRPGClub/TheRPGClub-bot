@@ -3,6 +3,7 @@ import { safeDeferReply, safeReply } from "../../functions/InteractionUtils.js";
 import { parseRawModalCustomId } from "./RawModalCustomId.js";
 import { RAW_MODAL_CUSTOM_ID_PREFIX } from "./RawModalScope.js";
 import { isRawModalPilotEnabled } from "./RawModalFeatureFlag.js";
+import { buildTextReply } from "../../functions/ComponentsV2Utils.js";
 import {
   claimRawModalSessionForSubmit,
   expireRawModalSession,
@@ -29,10 +30,10 @@ async function handleManagedRawModalInteraction(interaction: Interaction): Promi
     return;
   }
 
-  await safeReply(interaction, {
-    content: "This modal flow is reserved for direct API routing and is not wired yet.",
-    flags: MessageFlags.Ephemeral,
-  });
+  await safeReply(interaction, buildTextReply(
+    "This modal flow is reserved for direct API routing and is not wired yet.",
+    true,
+  ));
 }
 
 async function sendSessionRecoveryMessage(
@@ -40,10 +41,7 @@ async function sendSessionRecoveryMessage(
   content: string,
 ): Promise<void> {
   if (!interaction.isRepliable()) return;
-  await safeReply(interaction, {
-    content,
-    flags: MessageFlags.Ephemeral,
-  });
+  await safeReply(interaction, buildTextReply(content, true));
 }
 
 async function handleManagedRawModalSubmit(
@@ -146,10 +144,10 @@ async function handleManagedRawModalSubmit(
     sessionId,
     userId: interaction.user.id,
   });
-  await safeReply(interaction, {
-    content: "Modal submission accepted for this session.Raw handling will be wired next.",
-    flags: MessageFlags.Ephemeral,
-  });
+  await safeReply(interaction, buildTextReply(
+    "Modal submission accepted for this session.Raw handling will be wired next.",
+    true,
+  ));
 }
 
 export async function tryHandleManagedRawModalInteraction(

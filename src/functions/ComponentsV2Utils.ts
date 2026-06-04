@@ -15,3 +15,13 @@ export function buildTextContainer(content: string): ContainerBuilder {
     new TextDisplayBuilder().setContent(content),
   );
 }
+
+export function buildTextReply(
+  content: string,
+  isEphemeral: boolean,
+): { components: ContainerBuilder[]; flags: number } {
+  return {
+    components: [buildTextContainer(content)],
+    flags: buildComponentsV2Flags(isEphemeral),
+  };
+}
