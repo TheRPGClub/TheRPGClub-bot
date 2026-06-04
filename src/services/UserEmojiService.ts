@@ -96,6 +96,12 @@ export function getUserEmojiString(userId: string): string | null {
   return `<:${entry.emojiName}:${entry.emojiId}>`;
 }
 
+export function getUserEmojiData(userId: string): { name: string; id: string } | null {
+  const entry = emojiCache.get(userId);
+  if (!entry) return null;
+  return { name: entry.emojiName, id: entry.emojiId };
+}
+
 const NBSP = " ";
 
 /**

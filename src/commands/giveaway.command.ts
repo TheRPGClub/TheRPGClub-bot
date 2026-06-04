@@ -28,9 +28,8 @@ import {
   stripModalInput,
 } from "../functions/InteractionUtils.js";
 import {
-  buildPrevNextRow,
+  buildOptionalPrevNextRow,
   parseDirAndPage,
-  shouldRenderPrevNextButtons,
 } from "../functions/PaginationUtils.js";
 import {
   claimGameKey,
@@ -420,12 +419,11 @@ function buildKeyListComponents(
     }
   }
 
-  if (shouldRenderPrevNextButtons(page <= 0, page >= totalPages - 1)) {
-    const pageBase = isPublic
-      ? `giveaway-page-public:${sessionId}`
-      : `giveaway-page:${sessionId}:${ownerId}`;
-    rows.push(buildPrevNextRow(pageBase, page, totalPages));
-  }
+  const pageBase = isPublic
+    ? `giveaway-page-public:${sessionId}`
+    : `giveaway-page:${sessionId}:${ownerId}`;
+  const pageRow = buildOptionalPrevNextRow(pageBase, page, totalPages);
+  if (pageRow) rows.push(pageRow);
 
   return rows;
 }
