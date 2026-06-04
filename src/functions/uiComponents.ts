@@ -39,6 +39,12 @@ export function buildJournalSelectRow(
   return new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select);
 }
 
+export function buildTitleHeaderContainer(title: string): ContainerBuilder {
+  return new ContainerBuilder().addTextDisplayComponents(
+    new TextDisplayBuilder().setContent(`## ${title}`),
+  );
+}
+
 export function buildUserHeaderContainer(
   userId: string,
   displayName: string,

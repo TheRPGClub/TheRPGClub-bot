@@ -1,10 +1,14 @@
 import {
+  ActionRowBuilder,
   ApplicationCommandOptionType,
   AttachmentBuilder,
   ButtonInteraction,
   CommandInteraction,
   Guild,
   MessageFlags,
+  StringSelectMenuBuilder,
+  StringSelectMenuInteraction,
+  StringSelectMenuOptionBuilder,
   User,
 } from "discord.js";
 import {
@@ -13,7 +17,7 @@ import {
   MediaGalleryItemBuilder,
   TextDisplayBuilder,
 } from "@discordjs/builders";
-import { ButtonComponent, Discord, Slash, SlashOption } from "discordx";
+import { ButtonComponent, Discord, SelectMenuComponent, Slash, SlashOption } from "discordx";
 import { safeDeferReply, safeReply, safeUpdate } from "../functions/InteractionUtils.js";
 import {
   buildOptionalPrevNextRow,
@@ -24,8 +28,9 @@ import {
   buildComponentsV2EditFlags,
   buildComponentsV2Flags,
 } from "../functions/ComponentsV2Utils.js";
-import { renderUsernameWithEmoji } from "../services/UserEmojiService.js";
-import { buildUserHeaderContainer } from "../functions/uiComponents.js";
+import { getUserEmojiData, renderUsernameWithEmoji } from "../services/UserEmojiService.js";
+import { buildTitleHeaderContainer, buildUserHeaderContainer } from "../functions/uiComponents.js";
+import { safeDeferUpdate } from "../functions/InteractionUtils.js";
 import { recordCurrentAvatarIfNew } from "../utilities/AvatarLogUtils.js";
 import { isAdmin } from "./admin/admin-auth.utils.js";
 
@@ -103,15 +108,17 @@ async function buildAvatarHistoryV2Page(
 }
 
 type AllViewPage = {
-  container: ContainerBuilder;
+  headerContainer: ContainerBuilder;
+  contentContainer: ContainerBuilder;
+  selectRow: ActionRowBuilder<StringSelectMenuBuilder>;
   totalPages: number;
   safePage: number;
-  totalMembers: number;
 };
 
 async function buildAvatarHistoryAllPage(
   guild: Guild | null,
   page: number,
+  ownerId: string,
 ): Promise<AllViewPage | null> {
   const allRecords = await Member.getAllMembersAvatarHistoryCounts();
   let members = allRecords;
@@ -144,20 +151,35 @@ async function buildAvatarHistoryAllPage(
     return `${offset + idx + 1}. **${renderUsernameWithEmoji(record.userId, displayName)}**: ${record.count} ${suffix}`;
   });
 
-  const container = new ContainerBuilder();
-  container.addTextDisplayComponents(
-    new TextDisplayBuilder().setContent("# Avatar History"),
-  );
-  container.addTextDisplayComponents(
+  const headerContainer = buildTitleHeaderContainer("Avatar History");
+
+  const contentContainer = new ContainerBuilder();
+  contentContainer.addTextDisplayComponents(
     new TextDisplayBuilder().setContent(lines.join("\n")),
   );
-  container.addTextDisplayComponents(
+  contentContainer.addTextDisplayComponents(
     new TextDisplayBuilder().setContent(
       `-# _${sorted.length} users with avatar history stored._`,
     ),
   );
 
-  return { container, totalPages, safePage, totalMembers: sorted.length };
+  const selectMenu = new StringSelectMenuBuilder()
+    .setCustomId(`avatar-history-all-select:${ownerId}`)
+    .setPlaceholder("View a member's avatar history");
+  pageMembers.forEach((record) => {
+    const displayName = record.globalName ?? record.username ?? record.userId;
+    const suffix = record.count === 1 ? "avatar" : "avatars";
+    const option = new StringSelectMenuOptionBuilder()
+      .setValue(record.userId)
+      .setLabel(displayName)
+      .setDescription(`${record.count} ${suffix}`);
+    const emojiData = getUserEmojiData(record.userId);
+    if (emojiData) option.setEmoji(emojiData);
+    selectMenu.addOptions(option);
+  });
+  const selectRow = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(selectMenu);
+
+  return { headerContainer, contentContainer, selectRow, totalPages, safePage };
 }
 
 @Discord()
@@ -245,7 +267,11 @@ export class AvatarHistoryCommand {
 
     if (showAll === true) {
       await safeDeferReply(interaction, { flags: buildComponentsV2Flags(ephemeral) });
-      const pageResult = await buildAvatarHistoryAllPage(interaction.guild, 0);
+      const pageResult = await buildAvatarHistoryAllPage(
+        interaction.guild,
+        0,
+        interaction.user.id,
+      );
       if (!pageResult) {
         await safeReply(interaction, {
           components: [
@@ -257,14 +283,17 @@ export class AvatarHistoryCommand {
         });
         return;
       }
-      const { container, totalPages, safePage } = pageResult;
+      const { headerContainer, contentContainer, selectRow, totalPages, safePage } = pageResult;
       const paginationRow = buildOptionalPrevNextRow(
         `avatar-history-all-page:${interaction.user.id}`,
         safePage,
         totalPages,
       );
+      const components = paginationRow
+        ? [headerContainer, contentContainer, selectRow, paginationRow]
+        : [headerContainer, contentContainer, selectRow];
       await safeReply(interaction, {
-        components: paginationRow ? [container, paginationRow] : [container],
+        components,
         flags: buildComponentsV2Flags(ephemeral),
       });
       return;
@@ -353,7 +382,7 @@ export class AvatarHistoryCommand {
     }
     const parsed = parseDirAndPage(pageRaw, dir);
     if (!parsed) return;
-    const pageResult = await buildAvatarHistoryAllPage(interaction.guild, parsed.nextPage);
+    const pageResult = await buildAvatarHistoryAllPage(interaction.guild, parsed.nextPage, ownerId);
     if (!pageResult) {
       await safeUpdate(interaction, {
         components: [
@@ -365,14 +394,54 @@ export class AvatarHistoryCommand {
       });
       return;
     }
-    const { container, totalPages, safePage } = pageResult;
+    const { headerContainer, contentContainer, selectRow, totalPages, safePage } = pageResult;
     const paginationRow = buildOptionalPrevNextRow(
       `avatar-history-all-page:${ownerId}`,
       safePage,
       totalPages,
     );
+    const components = paginationRow
+      ? [headerContainer, contentContainer, selectRow, paginationRow]
+      : [headerContainer, contentContainer, selectRow];
+    await safeUpdate(interaction, { components, flags: buildComponentsV2EditFlags() });
+  }
+
+  @SelectMenuComponent({ id: /^avatar-history-all-select:\d+$/ })
+  async handleAllSelect(interaction: StringSelectMenuInteraction): Promise<void> {
+    const [, ownerId] = interaction.customId.split(":");
+    if (interaction.user.id !== ownerId) {
+      await safeReply(interaction, {
+        content: "This avatar history list isn't for you.",
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
+    const targetId = interaction.values[0];
+    if (!targetId) return;
+    await safeDeferUpdate(interaction);
+    const target = await interaction.client.users.fetch(targetId).catch(() => null);
+    if (!target) return;
+    const pageResult = await buildAvatarHistoryV2Page(target, 0);
+    if (!pageResult) {
+      await safeUpdate(interaction, {
+        components: [
+          new ContainerBuilder().addTextDisplayComponents(
+            new TextDisplayBuilder().setContent(`No avatar history found for <@${targetId}>.`),
+          ),
+        ],
+        flags: buildComponentsV2EditFlags(),
+      });
+      return;
+    }
+    const { containers, files, totalPages, safePage } = pageResult;
+    const paginationRow = buildOptionalPrevNextRow(
+      `avatar-history-page:${ownerId}:${targetId}`,
+      safePage,
+      totalPages,
+    );
     await safeUpdate(interaction, {
-      components: paginationRow ? [container, paginationRow] : [container],
+      components: paginationRow ? [...containers, paginationRow] : containers,
+      files: files.length ? files : [],
       flags: buildComponentsV2EditFlags(),
     });
   }
