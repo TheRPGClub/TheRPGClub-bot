@@ -135,7 +135,13 @@ export class AvatarHistoryCommand {
       await safeDeferReply(interaction, {
         flags: buildComponentsV2Flags(ephemeral),
       });
-      const members = await Member.getAllMembersAvatarHistoryCounts();
+      const guildMemberIds = interaction.guild
+        ? new Set((await interaction.guild.members.fetch()).keys())
+        : null;
+      const allRecords = await Member.getAllMembersAvatarHistoryCounts();
+      const members = guildMemberIds
+        ? allRecords.filter((r) => guildMemberIds.has(r.userId))
+        : allRecords;
       if (!members.length) {
         const container = new ContainerBuilder().addTextDisplayComponents(
           new TextDisplayBuilder().setContent("No avatar history found for any members."),
