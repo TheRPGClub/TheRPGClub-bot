@@ -106,7 +106,9 @@ export async function buildGotmSearchMessages(
     messageStartIndex < chunks.length;
     messageStartIndex += maxContainersPerMessage
   ) {
-    const messageChunks = chunks.slice(messageStartIndex, messageStartIndex + maxContainersPerMessage);
+    const messageChunks = chunks.slice(
+      messageStartIndex, messageStartIndex + maxContainersPerMessage,
+    );
     const components: ContainerBuilder[] = [];
     const files: AttachmentBuilder[] = [];
 

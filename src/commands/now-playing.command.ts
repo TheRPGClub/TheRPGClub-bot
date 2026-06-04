@@ -229,11 +229,16 @@ export async function restoreJournalMessageContextsFromDb(): Promise<void> {
 }
 
 type NowPlayingMessageComponents = Array<
-  ContainerBuilder | MediaGalleryBuilder | ActionRowBuilder<ButtonBuilder> | ActionRowBuilder<StringSelectMenuBuilder>
+  | ContainerBuilder
+  | MediaGalleryBuilder
+  | ActionRowBuilder<ButtonBuilder>
+  | ActionRowBuilder<StringSelectMenuBuilder>
 >;
 
 type NowPlayingListComponents = ContainerBuilder[];
-type NowPlayingPayloadComponents = Array<ContainerBuilder | ActionRowBuilder<StringSelectMenuBuilder>>;
+type NowPlayingPayloadComponents = Array<
+  ContainerBuilder | ActionRowBuilder<StringSelectMenuBuilder>
+>;
 
 function buildComponentsV2Flags(isEphemeral: boolean): number {
   return (isEphemeral ? MessageFlags.Ephemeral : 0) | COMPONENTS_V2_FLAG;
@@ -1190,7 +1195,8 @@ export class NowPlayingCommand {
 
     const typeRow = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(typeSelect);
     const removeRow = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(removeSelect);
-    const announceRow = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(announceSelect);
+    const announceRow = new ActionRowBuilder<StringSelectMenuBuilder>()
+      .addComponents(announceSelect);
     const noteRow = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(noteSelect);
     const helpButton = new ButtonBuilder()
       .setCustomId(`${NOW_PLAYING_HELP_PREFIX}:completion-config:${session.userId}`)
@@ -1275,7 +1281,9 @@ export class NowPlayingCommand {
       const container = new ContainerBuilder().addTextDisplayComponents(
         new TextDisplayBuilder().setContent("Your Now Playing list is empty."),
       );
-      const pmComponents = await this.withPmNowPlayingList(ownerId, interaction.guildId, [container]);
+      const pmComponents = await this.withPmNowPlayingList(
+        ownerId, interaction.guildId, [container],
+      );
       await safeUpdate(interaction, { components: pmComponents });
       return;
     }
@@ -2214,7 +2222,10 @@ export class NowPlayingCommand {
       new TextDisplayBuilder().setContent(titleWithCap),
     );
     const payload = {
-      components: [container, new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select)],
+      components: [
+        container,
+        new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select),
+      ],
       flags: buildComponentsV2Flags(true),
     };
     if (mode === "update") {
@@ -2340,8 +2351,13 @@ export class NowPlayingCommand {
       const container = new ContainerBuilder().addTextDisplayComponents(
         new TextDisplayBuilder().setContent("Your Now Playing list is empty."),
       );
-      const pmComponents = await this.withPmNowPlayingList(ownerId, interaction.guildId, [container]);
-      await interaction.update({ components: pmComponents, flags: buildComponentsV2Flags(isEphemeral) });
+      const pmComponents = await this.withPmNowPlayingList(
+        ownerId, interaction.guildId, [container],
+      );
+      await interaction.update({
+        components: pmComponents,
+        flags: buildComponentsV2Flags(isEphemeral),
+      });
       return;
     }
     const stateToken = buildNowPlayingSortStateToken(entries.length);
@@ -2351,7 +2367,10 @@ export class NowPlayingCommand {
       interaction.guildId,
       components,
     );
-    await interaction.update({ components: pmComponents, flags: buildComponentsV2Flags(isEphemeral) });
+    await interaction.update({
+      components: pmComponents,
+      flags: buildComponentsV2Flags(isEphemeral),
+    });
   }
 
   private parseNowPlayingCompletionDate(value: string): Date | null {
@@ -2610,7 +2629,10 @@ export class NowPlayingCommand {
       new TextDisplayBuilder().setContent(content),
     );
     const payload = {
-      components: [container, new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select)],
+      components: [
+        container,
+        new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select),
+      ],
       flags: buildComponentsV2Flags(true),
     };
     const pmComponents = await this.withPmNowPlayingList(
@@ -2678,7 +2700,10 @@ export class NowPlayingCommand {
       encodeNowPlayingPlatformState(parsed),
     );
     const pmComponents = await this.withPmNowPlayingList(ownerId, interaction.guildId, components);
-    await interaction.update({ components: pmComponents, flags: buildComponentsV2Flags(isEphemeral) });
+    await interaction.update({
+      components: pmComponents,
+      flags: buildComponentsV2Flags(isEphemeral),
+    });
   }
 
   @SelectMenuComponent({ id: /^nowplaying-edit-note-select:\d+$/ })
@@ -2818,7 +2843,10 @@ export class NowPlayingCommand {
         const container = new ContainerBuilder().addTextDisplayComponents(
           new TextDisplayBuilder().setContent("This sort form has expired. Open Sort again."),
         );
-        await interaction.update({ components: [container], flags: buildComponentsV2Flags(isEphemeral) });
+        await interaction.update({
+          components: [container],
+          flags: buildComponentsV2Flags(isEphemeral),
+        });
         return;
       }
 
@@ -2833,8 +2861,13 @@ export class NowPlayingCommand {
         ownerId,
         encodeNowPlayingSortState(parsed),
       );
-      const pmComponents = await this.withPmNowPlayingList(ownerId, interaction.guildId, components);
-      await interaction.update({ components: pmComponents, flags: buildComponentsV2Flags(isEphemeral) });
+      const pmComponents = await this.withPmNowPlayingList(
+        ownerId, interaction.guildId, components,
+      );
+      await interaction.update({
+        components: pmComponents,
+        flags: buildComponentsV2Flags(isEphemeral),
+      });
     } catch {
       const container = new ContainerBuilder().addTextDisplayComponents(
         new TextDisplayBuilder().setContent("Could not update the sort form right now."),
@@ -2869,7 +2902,9 @@ export class NowPlayingCommand {
       const container = new ContainerBuilder().addTextDisplayComponents(
         new TextDisplayBuilder().setContent("This sort form has expired. Open Sort again."),
       );
-      const pmComponents = await this.withPmNowPlayingList(ownerId, interaction.guildId, [container]);
+      const pmComponents = await this.withPmNowPlayingList(
+        ownerId, interaction.guildId, [container],
+      );
       await safeReply(interaction, { components: pmComponents, flags: responseFlags });
       return;
     }
@@ -2880,7 +2915,9 @@ export class NowPlayingCommand {
         stateToken,
         "Assign a title to every visible position before saving.",
       );
-      const pmComponents = await this.withPmNowPlayingList(ownerId, interaction.guildId, components);
+      const pmComponents = await this.withPmNowPlayingList(
+        ownerId, interaction.guildId, components,
+      );
       await safeReply(interaction, { components: pmComponents, flags: responseFlags });
       return;
     }
@@ -2891,7 +2928,9 @@ export class NowPlayingCommand {
         stateToken,
         "Each title can only be used once. Remove duplicate assignments and try again.",
       );
-      const pmComponents = await this.withPmNowPlayingList(ownerId, interaction.guildId, components);
+      const pmComponents = await this.withPmNowPlayingList(
+        ownerId, interaction.guildId, components,
+      );
       await safeReply(interaction, { components: pmComponents, flags: responseFlags });
       return;
     }
@@ -2909,7 +2948,9 @@ export class NowPlayingCommand {
       const container = new ContainerBuilder().addTextDisplayComponents(
         new TextDisplayBuilder().setContent("Could not update the sort order."),
       );
-      const pmComponents = await this.withPmNowPlayingList(ownerId, interaction.guildId, [container]);
+      const pmComponents = await this.withPmNowPlayingList(
+        ownerId, interaction.guildId, [container],
+      );
       await safeReply(interaction, { components: pmComponents, flags: responseFlags });
       return;
     }
@@ -3231,7 +3272,9 @@ export class NowPlayingCommand {
     const [, ownerId, action] = interaction.customId.split(":");
     const showNotes = action === "show";
     const isEphemeral = interaction.message.flags?.has(MessageFlags.Ephemeral) ?? false;
-    const contextKey = buildNowPlayingContextKey(interaction.message.channelId, interaction.message.id);
+    const contextKey = buildNowPlayingContextKey(
+      interaction.message.channelId, interaction.message.id,
+    );
     const trackedView = nowPlayingListContexts.get(contextKey)?.view ?? null;
     const singleUserMode = trackedView === "single" || trackedView === "everyone-selected";
     const ownerUser =
@@ -3360,7 +3403,9 @@ export class NowPlayingCommand {
     await safeReply(interaction, {
       components: payload.components,
       files: payload.files,
-      flags: buildComponentsV2Flags(interaction.message.flags?.has(MessageFlags.Ephemeral) ?? false),
+      flags: buildComponentsV2Flags(
+        interaction.message.flags?.has(MessageFlags.Ephemeral) ?? false,
+      ),
       allowedMentions: payload.allowedMentions,
     });
     await this.trackJournalReply(interaction, ownerId, gameId);
@@ -3396,7 +3441,9 @@ export class NowPlayingCommand {
     await safeReply(interaction, {
       components: payload.components,
       files: payload.files,
-      flags: buildComponentsV2Flags(interaction.message.flags?.has(MessageFlags.Ephemeral) ?? false),
+      flags: buildComponentsV2Flags(
+        interaction.message.flags?.has(MessageFlags.Ephemeral) ?? false,
+      ),
       allowedMentions: payload.allowedMentions,
     });
     await this.trackJournalReply(interaction, ownerId, gameId);
@@ -3436,7 +3483,9 @@ export class NowPlayingCommand {
     await safeReply(interaction, {
       components: payload.components,
       files: payload.files,
-      flags: buildComponentsV2Flags(interaction.message.flags?.has(MessageFlags.Ephemeral) ?? false),
+      flags: buildComponentsV2Flags(
+        interaction.message.flags?.has(MessageFlags.Ephemeral) ?? false,
+      ),
       allowedMentions: payload.allowedMentions,
     });
     await this.trackJournalReply(interaction, ownerId, gameId);
@@ -3552,12 +3601,16 @@ export class NowPlayingCommand {
     );
     await safeUpdate(interaction, {
       components: [container, row, helpRow],
-      flags: buildComponentsV2Flags(interaction.message.flags?.has(MessageFlags.Ephemeral) ?? false),
+      flags: buildComponentsV2Flags(
+        interaction.message.flags?.has(MessageFlags.Ephemeral) ?? false,
+      ),
     });
   }
 
   @SelectMenuComponent({ id: /^nowplaying-journal-delete-select:\d+:\d+:\d+$/ })
-  async handleNowPlayingJournalDeleteSelect(interaction: StringSelectMenuInteraction): Promise<void> {
+  async handleNowPlayingJournalDeleteSelect(
+    interaction: StringSelectMenuInteraction,
+  ): Promise<void> {
     const [, ownerId, gameIdRaw, pageRaw] = interaction.customId.split(":");
     if (interaction.user.id !== ownerId) {
       await safeReply(interaction, { content: "Only the owner can delete journal entries." });
@@ -3595,7 +3648,9 @@ export class NowPlayingCommand {
     );
     await safeUpdate(interaction, {
       components: [container, row],
-      flags: buildComponentsV2Flags(interaction.message.flags?.has(MessageFlags.Ephemeral) ?? false),
+      flags: buildComponentsV2Flags(
+        interaction.message.flags?.has(MessageFlags.Ephemeral) ?? false,
+      ),
     });
   }
 
@@ -3616,7 +3671,9 @@ export class NowPlayingCommand {
     const row = await this.buildManageJournalButtonRow(ownerId, Number(gameIdRaw), Number(pageRaw));
     await safeUpdate(interaction, {
       components: [row],
-      flags: buildComponentsV2Flags(interaction.message.flags?.has(MessageFlags.Ephemeral) ?? false),
+      flags: buildComponentsV2Flags(
+        interaction.message.flags?.has(MessageFlags.Ephemeral) ?? false,
+      ),
     });
     if (action === "yes") {
       await refreshJournalMessages(
@@ -3984,7 +4041,9 @@ export class NowPlayingCommand {
         stateToken,
         "Assign a platform for every visible game before saving.",
       );
-      const pmComponents = await this.withPmNowPlayingList(ownerId, interaction.guildId, components);
+      const pmComponents = await this.withPmNowPlayingList(
+        ownerId, interaction.guildId, components,
+      );
       await safeReply(interaction, { components: pmComponents, flags: responseFlags });
       return;
     }
@@ -4375,7 +4434,10 @@ export class NowPlayingCommand {
   private buildComponentPayload(
     components: Array<ContainerBuilder | ActionRowBuilder<ButtonBuilder>>,
     files?: AttachmentBuilder[],
-  ): { components: Array<ContainerBuilder | ActionRowBuilder<ButtonBuilder>>; files?: AttachmentBuilder[] } {
+  ): {
+    components: Array<ContainerBuilder | ActionRowBuilder<ButtonBuilder>>;
+    files?: AttachmentBuilder[];
+  } {
     if (files && files.length) {
       return { components, files };
     }
@@ -4435,7 +4497,9 @@ export class NowPlayingCommand {
     showPrivateOnlyJournalButtons: boolean = false,
     singleUserMode: boolean = false,
   ): Promise<{ components: NowPlayingPayloadComponents; files: AttachmentBuilder[] }> {
-    const { files, covers } = await this.buildNowPlayingAttachments(entries, NOW_PLAYING_COMPOSITE_MAX);
+    const { files, covers } = await this.buildNowPlayingAttachments(
+      entries, NOW_PLAYING_COMPOSITE_MAX,
+    );
     const hasDisplayableNotes = this.hasDisplayableNowPlayingNotes(entries);
     const listComponents = this.buildNowPlayingEntryComponents(
       entries,
@@ -4459,7 +4523,8 @@ export class NowPlayingCommand {
       headerCustomId,
     );
     const journalSelectRow = this.buildJournalSelectRow(entries, target.id);
-    const trailingComponents: NowPlayingPayloadComponents = journalSelectRow ? [journalSelectRow] : [];
+    const trailingComponents: NowPlayingPayloadComponents =
+      journalSelectRow ? [journalSelectRow] : [];
     return { components: [headerContainer, ...listComponents, ...trailingComponents], files };
   }
 
@@ -4939,7 +5004,8 @@ export class NowPlayingCommand {
         continue;
       }
       const selectedIndex = parsedState[slotIndex];
-      const currentPlatformName = selectedIndex >= 0 ? (options[selectedIndex]?.label ?? null) : null;
+      const currentPlatformName =
+        selectedIndex >= 0 ? (options[selectedIndex]?.label ?? null) : null;
       const placeholder = currentPlatformName
         ? `${entry.title.slice(0, 50)} - ${currentPlatformName}`.slice(0, 100)
         : entry.title.slice(0, 100);
@@ -4957,7 +5023,9 @@ export class NowPlayingCommand {
         })));
       rows.push(new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select));
     }
-    const components: Array<ContainerBuilder | ActionRowBuilder<StringSelectMenuBuilder | ButtonBuilder>> = [
+    const components: Array<
+      ContainerBuilder | ActionRowBuilder<StringSelectMenuBuilder | ButtonBuilder>
+    > = [
       container,
       ...rows,
     ];
@@ -5351,7 +5419,9 @@ export class NowPlayingCommand {
 
     if (!latestKey || !latestContext) return;
 
-    const channel = await interaction.client.channels.fetch(latestContext.channelId).catch(() => null);
+    const channel = await interaction.client.channels
+      .fetch(latestContext.channelId)
+      .catch(() => null);
     if (!channel?.isTextBased()) {
       nowPlayingJournalContexts.delete(latestKey);
       await Member.deleteJournalMessageContext(latestContext.channelId, latestContext.messageId)

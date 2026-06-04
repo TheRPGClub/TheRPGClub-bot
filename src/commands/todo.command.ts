@@ -660,7 +660,9 @@ function buildTodoCommentButtonId(payloadToken: string, page: number, issueNumbe
   return [TODO_COMMENT_BUTTON_PREFIX, payloadToken, page, issueNumber].join(":");
 }
 
-function buildTodoEditViewButtonId(payloadToken: string, page: number, issueNumber: number): string {
+function buildTodoEditViewButtonId(
+  payloadToken: string, page: number, issueNumber: number,
+): string {
   return [TODO_EDIT_VIEW_BUTTON_PREFIX, payloadToken, page, issueNumber].join(":");
 }
 
@@ -885,7 +887,13 @@ function parseTodoIssueActionId(
 function parseTodoIssueModalId(
   id: string,
   prefix: string,
-): { payloadToken: string; page: number; issueNumber: number; channelId: string; messageId: string } | null {
+): {
+  payloadToken: string;
+  page: number;
+  issueNumber: number;
+  channelId: string;
+  messageId: string;
+} | null {
   const parts = id.split(":");
   if (parts.length !== 6 || parts[0] !== prefix) {
     return null;
@@ -927,7 +935,13 @@ function parseTodoLabelEditId(
 function parseTodoLabelEditSelectId(
   id: string,
   prefix: string,
-): { payloadToken: string; page: number; issueNumber: number; channelId: string; messageId: string } | null {
+): {
+  payloadToken: string;
+  page: number;
+  issueNumber: number;
+  channelId: string;
+  messageId: string;
+} | null {
   return parseTodoIssueModalId(id, prefix);
 }
 

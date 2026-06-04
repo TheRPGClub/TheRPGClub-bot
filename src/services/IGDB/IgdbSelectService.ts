@@ -174,7 +174,9 @@ export async function handleIgdbSelectInteraction(
     const message = session.emptyMessage ??
       "No IGDB matches found. Try Search a different title.";
     if (interaction.deferred || interaction.replied) {
-      await interaction.followUp({ content: message, flags: MessageFlags.Ephemeral }).catch(() => {});
+      await interaction
+        .followUp({ content: message, flags: MessageFlags.Ephemeral })
+        .catch(() => {});
     } else {
       await interaction.reply({ content: message, flags: MessageFlags.Ephemeral }).catch(() => {});
     }
@@ -247,7 +249,9 @@ export async function handleIgdbFirstMatchInteraction(
     const message = session.emptyMessage ??
       "No IGDB matches found. Try Search a different title.";
     if (interaction.deferred || interaction.replied) {
-      await interaction.followUp({ content: message, flags: MessageFlags.Ephemeral }).catch(() => {});
+      await interaction
+        .followUp({ content: message, flags: MessageFlags.Ephemeral })
+        .catch(() => {});
     } else {
       await interaction.reply({ content: message, flags: MessageFlags.Ephemeral }).catch(() => {});
     }

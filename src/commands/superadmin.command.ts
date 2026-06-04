@@ -695,7 +695,9 @@ export class SuperAdmin {
     }
   }
 
-  private async importGameFromIgdbForCompletion(igdbId: number): Promise<{ gameId: number; title: string }> {
+  private async importGameFromIgdbForCompletion(
+    igdbId: number,
+  ): Promise<{ gameId: number; title: string }> {
     const existing = await Game.getGameByIgdbId(igdbId);
     if (existing) {
       return { gameId: existing.id, title: existing.title };

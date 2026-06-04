@@ -384,7 +384,11 @@ function buildSuggestionReviewContainer(
 
 async function getCurrentSuggestionForReview(
   session: SuggestionReviewSession,
-): Promise<{ suggestion: Awaited<ReturnType<typeof getSuggestionById>>; index: number; total: number }> {
+): Promise<{
+  suggestion: Awaited<ReturnType<typeof getSuggestionById>>;
+  index: number;
+  total: number;
+}> {
   while (session.index < session.suggestionIds.length) {
     const suggestionId = session.suggestionIds[session.index];
     const suggestion = await getSuggestionById(suggestionId);

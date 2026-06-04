@@ -27,11 +27,22 @@ import type { IGotmEntry } from "../classes/Gotm.js";
 import Gotm from "../classes/Gotm.js";
 import type { INrGotmEntry } from "../classes/NrGotm.js";
 import NrGotm from "../classes/NrGotm.js";
-import { buildGotmCardsFromEntries, buildGotmSearchMessages } from "../functions/GotmSearchComponents.js";
-import { safeDeferReply, safeDeferUpdate, safeReply, sanitizeUserInput } from "../functions/InteractionUtils.js";
+import {
+  buildGotmCardsFromEntries,
+  buildGotmSearchMessages,
+} from "../functions/GotmSearchComponents.js";
+import {
+  safeDeferReply,
+  safeDeferUpdate,
+  safeReply,
+  sanitizeUserInput,
+} from "../functions/InteractionUtils.js";
 import { buildComponentsV2Flags } from "../functions/ComponentsV2Utils.js";
 import { decodeBase64Url, encodeBase64Url } from "../functions/CustomIdUtils.js";
-import { buildRawModalCustomId, parseRawModalCustomId } from "../services/raw-modal/RawModalCustomId.js";
+import {
+  buildRawModalCustomId,
+  parseRawModalCustomId,
+} from "../services/raw-modal/RawModalCustomId.js";
 
 const ROUND_HISTORY_MODAL_TITLE = "Round History";
 const ROUND_HISTORY_HELP_ID = "round-history-help";
@@ -302,7 +313,9 @@ function parseRoundHistoryPageCustomId(customId: string): IRoundHistoryFilterSta
   const sortToken = parts[4];
   const page = Number(parts[5]);
   const query = decodeQueryToken(parts[6] ?? "");
-  if (!ownerUserId || !Number.isInteger(year) || !Number.isInteger(page) || page < 0 || query === null) {
+  if (
+    !ownerUserId || !Number.isInteger(year) || !Number.isInteger(page) || page < 0 || query === null
+  ) {
     return null;
   }
 

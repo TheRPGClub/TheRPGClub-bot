@@ -197,7 +197,9 @@ export class MessageReactionAdd {
 
       const row = buildCompletionTypeRow(sessionId);
       const titleRow = buildCompletionTitleRow(sessionId);
-      const targetChannel = await _client.channels.fetch(COMPLETION_REACTION_DEV_CHANNEL_ID).catch(() => null);
+      const targetChannel = await _client.channels
+        .fetch(COMPLETION_REACTION_DEV_CHANNEL_ID)
+        .catch(() => null);
       if (!targetChannel || !("send" in targetChannel)) {
         await user.send({
           content: "Bot dev channel not found. Cannot start completion flow.",

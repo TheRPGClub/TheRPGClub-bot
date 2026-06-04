@@ -845,7 +845,9 @@ const GAMEDB_HELP_TOPICS: GameDbHelpTopic[] = [
   },
 ];
 
-function buildRssHelpButtons(activeId?: RssHelpTopicId): ActionRowBuilder<StringSelectMenuBuilder>[] {
+function buildRssHelpButtons(
+  activeId?: RssHelpTopicId,
+): ActionRowBuilder<StringSelectMenuBuilder>[] {
   const select = new StringSelectMenuBuilder()
     .setCustomId(buildHelpCustomId("rss", { activeTopicId: activeId }))
     .setPlaceholder("/rss help")
@@ -984,7 +986,10 @@ export class BotHelp {
     }
 
     if (!topicId) {
-      const response = buildCategoryHelpResponse(category.id, parsed.state.activeTopicId as HelpTopicId | undefined);
+      const response = buildCategoryHelpResponse(
+        category.id,
+        parsed.state.activeTopicId as HelpTopicId | undefined,
+      );
       await safeUpdate(interaction, {
         ...response,
         content: "Please pick a command from the list.",
@@ -1050,7 +1055,9 @@ export class BotHelp {
     const topic = RSS_HELP_TOPICS.find((entry) => entry.id === topicId);
 
     if (!topic) {
-      const response = buildRssHelpResponse(parsed.state.activeTopicId as RssHelpTopicId | undefined);
+      const response = buildRssHelpResponse(
+        parsed.state.activeTopicId as RssHelpTopicId | undefined,
+      );
       await safeUpdate(interaction, {
         ...response,
         content: "Sorry, I don't recognize that RSS help topic. Showing the RSS help menu.",
@@ -1084,7 +1091,9 @@ export class BotHelp {
     const topic = PROFILE_HELP_TOPICS.find((entry) => entry.id === topicId);
 
     if (!topic) {
-      const response = buildProfileHelpResponse(parsed.state.activeTopicId as ProfileHelpTopicId | undefined);
+      const response = buildProfileHelpResponse(
+        parsed.state.activeTopicId as ProfileHelpTopicId | undefined,
+      );
       await safeUpdate(interaction, {
         ...response,
         content: "Sorry, I don't recognize that profile help topic. Showing the profile help menu.",
@@ -1118,7 +1127,9 @@ export class BotHelp {
     const topic = NOW_PLAYING_HELP_TOPICS.find((entry) => entry.id === topicId);
 
     if (!topic) {
-      const response = buildNowPlayingHelpResponse(parsed.state.activeTopicId as NowPlayingHelpTopicId | undefined);
+      const response = buildNowPlayingHelpResponse(
+        parsed.state.activeTopicId as NowPlayingHelpTopicId | undefined,
+      );
       await safeUpdate(interaction, {
         ...response,
         content: "Sorry, I don't recognize that now-playing help topic. Showing the help menu.",
@@ -1152,7 +1163,9 @@ export class BotHelp {
     const topic = GAMEDB_HELP_TOPICS.find((entry) => entry.id === topicId);
 
     if (!topic) {
-      const response = buildGamedbHelpResponse(parsed.state.activeTopicId as GameDbHelpTopicId | undefined);
+      const response = buildGamedbHelpResponse(
+        parsed.state.activeTopicId as GameDbHelpTopicId | undefined,
+      );
       await safeUpdate(interaction, {
         ...response,
         content: "Sorry, I don't recognize that gamedb help topic. Showing the gamedb help menu.",
