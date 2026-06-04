@@ -3,21 +3,29 @@ import {
   AttachmentBuilder,
   ButtonInteraction,
   CommandInteraction,
-  EmbedBuilder,
   MessageFlags,
   User,
 } from "discord.js";
-import { ContainerBuilder, TextDisplayBuilder } from "@discordjs/builders";
+import {
+  ContainerBuilder,
+  MediaGalleryBuilder,
+  MediaGalleryItemBuilder,
+  TextDisplayBuilder,
+} from "@discordjs/builders";
 import { ButtonComponent, Discord, Slash, SlashOption } from "discordx";
-import { ephemeralFlag, safeDeferReply, safeReply } from "../functions/InteractionUtils.js";
+import { safeDeferReply, safeReply, safeUpdate } from "../functions/InteractionUtils.js";
 import {
   buildPrevNextRow,
   parseDirAndPage,
   shouldRenderPrevNextButtons,
 } from "../functions/PaginationUtils.js";
 import Member from "../classes/Member.js";
-import { COMPONENTS_V2_FLAG } from "../config/flags.js";
+import {
+  buildComponentsV2EditFlags,
+  buildComponentsV2Flags,
+} from "../functions/ComponentsV2Utils.js";
 import { renderUsernameWithEmoji } from "../services/UserEmojiService.js";
+import { buildUserHeaderContainer } from "../functions/uiComponents.js";
 
 const AVATAR_HISTORY_PAGE_SIZE = 10;
 
@@ -26,62 +34,73 @@ function formatTimestamp(date: Date): string {
   return `<t:${seconds}:F>`;
 }
 
-type AvatarHistoryPage = {
-  embeds: EmbedBuilder[];
+type AvatarHistoryV2Page = {
+  containers: ContainerBuilder[];
   files: AttachmentBuilder[];
   totalPages: number;
   safePage: number;
   totalCount: number;
 };
 
-async function buildAvatarHistoryPage(
+async function buildAvatarHistoryV2Page(
   target: User,
   page: number,
-): Promise<AvatarHistoryPage | null> {
+): Promise<AvatarHistoryV2Page | null> {
   const totalCount = await Member.countAvatarHistory(target.id);
   if (!totalCount) return null;
 
   const totalPages = Math.max(1, Math.ceil(totalCount / AVATAR_HISTORY_PAGE_SIZE));
   const safePage = Math.min(Math.max(page, 0), totalPages - 1);
   const offset = safePage * AVATAR_HISTORY_PAGE_SIZE;
-  const history = await Member.getAvatarHistory(
-    target.id,
-    AVATAR_HISTORY_PAGE_SIZE,
-    offset,
-  );
+  const history = await Member.getAvatarHistory(target.id, AVATAR_HISTORY_PAGE_SIZE, offset);
   if (!history.length) return null;
 
   const displayName = target.displayName ?? target.username ?? "User";
-  const embeds: EmbedBuilder[] = [];
   const files: AttachmentBuilder[] = [];
+
+  const headerContainer = buildUserHeaderContainer(target.id, displayName, "Avatar History");
+
+  const gallery = new MediaGalleryBuilder();
+  let hasItems = false;
 
   history.forEach((entry, idx) => {
     const number = offset + idx + 1;
-    const embed = new EmbedBuilder()
-      .setTitle(`${displayName} Avatar History`)
-      .setDescription(`Updated: ${formatTimestamp(entry.changedAt)}`)
-      .setFooter({ text: `Entry ${number} of ${totalCount}` });
+    const description = `#${number} of ${totalCount} - ${formatTimestamp(entry.changedAt)}`;
 
     if (entry.avatarUrl) {
-      embed.setImage(entry.avatarUrl);
+      gallery.addItems(
+        new MediaGalleryItemBuilder().setURL(entry.avatarUrl).setDescription(description),
+      );
+      hasItems = true;
     } else if (entry.avatarBlob) {
       const fileName = `avatar_${entry.eventId}_${number}.png`;
       files.push(new AttachmentBuilder(entry.avatarBlob, { name: fileName }));
-      embed.setImage(`attachment://${fileName}`);
-    } else {
-      embed.addFields({ name: "Avatar", value: "No avatar image stored." });
+      gallery.addItems(
+        new MediaGalleryItemBuilder()
+          .setURL(`attachment://${fileName}`)
+          .setDescription(description),
+      );
+      hasItems = true;
     }
-
-    if (entry.avatarHash) {
-      embed.addFields({ name: "Avatar Hash", value: entry.avatarHash, inline: true });
-    }
-
-    embeds.push(embed);
   });
 
-  return { embeds, files, totalPages, safePage, totalCount };
-}
+  const galleryContainer = new ContainerBuilder();
+  if (hasItems) {
+    galleryContainer.addMediaGalleryComponents(gallery);
+  } else {
+    galleryContainer.addTextDisplayComponents(
+      new TextDisplayBuilder().setContent("No avatar images available for this page."),
+    );
+  }
 
+  return {
+    containers: [headerContainer, galleryContainer],
+    files,
+    totalPages,
+    safePage,
+    totalCount,
+  };
+}
 
 @Discord()
 export class AvatarHistoryCommand {
@@ -114,7 +133,7 @@ export class AvatarHistoryCommand {
 
     if (showAll === true) {
       await safeDeferReply(interaction, {
-        flags: (ephemeral ? MessageFlags.Ephemeral : 0) | COMPONENTS_V2_FLAG,
+        flags: buildComponentsV2Flags(ephemeral),
       });
       const members = await Member.getAllMembersAvatarHistoryCounts();
       if (!members.length) {
@@ -123,7 +142,7 @@ export class AvatarHistoryCommand {
         );
         await safeReply(interaction, {
           components: [container],
-          flags: (ephemeral ? MessageFlags.Ephemeral : 0) | COMPONENTS_V2_FLAG,
+          flags: buildComponentsV2Flags(ephemeral),
         });
         return;
       }
@@ -144,33 +163,39 @@ export class AvatarHistoryCommand {
 
       await safeReply(interaction, {
         components: [container],
-        flags: (ephemeral ? MessageFlags.Ephemeral : 0) | COMPONENTS_V2_FLAG,
+        flags: buildComponentsV2Flags(ephemeral),
       });
       return;
     }
 
-    await safeDeferReply(interaction, { flags: ephemeralFlag(ephemeral) });
+    await safeDeferReply(interaction, { flags: buildComponentsV2Flags(ephemeral) });
 
     const target = member ?? interaction.user;
-    const pageResult = await buildAvatarHistoryPage(target, 0);
+    const pageResult = await buildAvatarHistoryV2Page(target, 0);
     if (!pageResult) {
+      const noResultContainer = new ContainerBuilder().addTextDisplayComponents(
+        new TextDisplayBuilder().setContent(`No avatar history found for <@${target.id}>.`),
+      );
       await safeReply(interaction, {
-        content: `No avatar history found for <@${target.id}>.`,
-        flags: ephemeralFlag(ephemeral),
+        components: [noResultContainer],
+        flags: buildComponentsV2Flags(ephemeral),
       });
       return;
     }
 
-    const { embeds, files, totalPages, safePage } = pageResult;
-    const components = shouldRenderPrevNextButtons(safePage <= 0, safePage >= totalPages - 1)
-      ? [buildPrevNextRow(`avatar-history-page:${interaction.user.id}:${target.id}`, safePage, totalPages)]
-      : [];
+    const { containers, files, totalPages, safePage } = pageResult;
+    const paginationRow = shouldRenderPrevNextButtons(safePage <= 0, safePage >= totalPages - 1)
+      ? buildPrevNextRow(
+          `avatar-history-page:${interaction.user.id}:${target.id}`,
+          safePage,
+          totalPages,
+        )
+      : null;
 
     await safeReply(interaction, {
-      embeds,
+      components: paginationRow ? [...containers, paginationRow] : containers,
       files: files.length ? files : undefined,
-      components: components.length ? components : undefined,
-      flags: ephemeralFlag(ephemeral),
+      flags: buildComponentsV2Flags(ephemeral),
     });
   }
 
@@ -188,25 +213,33 @@ export class AvatarHistoryCommand {
     const parsed = parseDirAndPage(pageRaw, dir);
     if (!parsed) return;
     const target = await interaction.client.users.fetch(targetId).catch(() => interaction.user);
-    const pageResult = await buildAvatarHistoryPage(target, parsed.nextPage);
+    const pageResult = await buildAvatarHistoryV2Page(target, parsed.nextPage);
     if (!pageResult) {
-      await interaction.update({
-        content: "No avatar history found.",
-        embeds: [],
-        components: [],
-      }).catch(() => {});
+      await safeUpdate(interaction, {
+        components: [
+          new ContainerBuilder().addTextDisplayComponents(
+            new TextDisplayBuilder().setContent("No avatar history found."),
+          ),
+        ],
+        files: [],
+        flags: buildComponentsV2EditFlags(),
+      });
       return;
     }
 
-    const { embeds, files, totalPages, safePage } = pageResult;
-    const components = shouldRenderPrevNextButtons(safePage <= 0, safePage >= totalPages - 1)
-      ? [buildPrevNextRow(`avatar-history-page:${ownerId}:${targetId}`, safePage, totalPages)]
-      : [];
+    const { containers, files, totalPages, safePage } = pageResult;
+    const paginationRow = shouldRenderPrevNextButtons(safePage <= 0, safePage >= totalPages - 1)
+      ? buildPrevNextRow(
+          `avatar-history-page:${ownerId}:${targetId}`,
+          safePage,
+          totalPages,
+        )
+      : null;
 
-    await interaction.update({
-      embeds,
-      files: files.length ? files : undefined,
-      components,
+    await safeUpdate(interaction, {
+      components: paginationRow ? [...containers, paginationRow] : containers,
+      files: files.length ? files : [],
+      flags: buildComponentsV2EditFlags(),
     });
   }
 }
