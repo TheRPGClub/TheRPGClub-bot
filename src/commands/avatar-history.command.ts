@@ -7,6 +7,7 @@ import {
   MessageFlags,
   User,
 } from "discord.js";
+import { ContainerBuilder, TextDisplayBuilder } from "@discordjs/builders";
 import { ButtonComponent, Discord, Slash, SlashOption } from "discordx";
 import { ephemeralFlag, safeDeferReply, safeReply } from "../functions/InteractionUtils.js";
 import {
@@ -15,6 +16,8 @@ import {
   shouldRenderPrevNextButtons,
 } from "../functions/PaginationUtils.js";
 import Member from "../classes/Member.js";
+import { COMPONENTS_V2_FLAG } from "../config/flags.js";
+import { renderUsernameWithEmoji } from "../services/UserEmojiService.js";
 
 const AVATAR_HISTORY_PAGE_SIZE = 10;
 
@@ -98,9 +101,54 @@ export class AvatarHistoryCommand {
       type: ApplicationCommandOptionType.Boolean,
     })
     showInChat: boolean | undefined,
+    @SlashOption({
+      description: "List all members with avatar history and their stored count.",
+      name: "all",
+      required: false,
+      type: ApplicationCommandOptionType.Boolean,
+    })
+    showAll: boolean | undefined,
     interaction: CommandInteraction,
   ): Promise<void> {
     const ephemeral = !showInChat;
+
+    if (showAll === true) {
+      await safeDeferReply(interaction, {
+        flags: (ephemeral ? MessageFlags.Ephemeral : 0) | COMPONENTS_V2_FLAG,
+      });
+      const members = await Member.getAllMembersAvatarHistoryCounts();
+      if (!members.length) {
+        const container = new ContainerBuilder().addTextDisplayComponents(
+          new TextDisplayBuilder().setContent("No avatar history found for any members."),
+        );
+        await safeReply(interaction, {
+          components: [container],
+          flags: (ephemeral ? MessageFlags.Ephemeral : 0) | COMPONENTS_V2_FLAG,
+        });
+        return;
+      }
+
+      const lines = members.map((record) => {
+        const displayName = record.globalName ?? record.username ?? record.userId;
+        const suffix = record.count === 1 ? "avatar" : "avatars";
+        return `**${renderUsernameWithEmoji(record.userId, displayName)}**: ${record.count} ${suffix}`;
+      });
+
+      const container = new ContainerBuilder();
+      container.addTextDisplayComponents(
+        new TextDisplayBuilder().setContent("# Avatar History - Everyone"),
+      );
+      container.addTextDisplayComponents(
+        new TextDisplayBuilder().setContent(lines.join("\n")),
+      );
+
+      await safeReply(interaction, {
+        components: [container],
+        flags: (ephemeral ? MessageFlags.Ephemeral : 0) | COMPONENTS_V2_FLAG,
+      });
+      return;
+    }
+
     await safeDeferReply(interaction, { flags: ephemeralFlag(ephemeral) });
 
     const target = member ?? interaction.user;
