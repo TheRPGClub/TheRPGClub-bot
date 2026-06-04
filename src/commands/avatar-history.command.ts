@@ -19,7 +19,7 @@ import {
   parseDirAndPage,
   shouldRenderPrevNextButtons,
 } from "../functions/PaginationUtils.js";
-import Member from "../classes/Member.js";
+import Member, { IAvatarHistoryRecord } from "../classes/Member.js";
 import {
   buildComponentsV2EditFlags,
   buildComponentsV2Flags,
@@ -46,27 +46,31 @@ async function buildAvatarHistoryV2Page(
   target: User,
   page: number,
 ): Promise<AvatarHistoryV2Page | null> {
-  const totalCount = await Member.countAvatarHistory(target.id);
+  const currentAvatarUrl = target.avatarURL({ size: 4096 });
+  const dbCount = await Member.countAvatarHistory(target.id);
+
+  let injectCurrent = false;
+  if (currentAvatarUrl) {
+    if (dbCount === 0) {
+      injectCurrent = true;
+    } else {
+      const latest = await Member.getAvatarHistory(target.id, 1, 0);
+      injectCurrent = !latest.length || latest[0].avatarHash !== target.avatar;
+    }
+  }
+
+  const totalCount = dbCount + (injectCurrent ? 1 : 0);
   if (!totalCount) return null;
 
   const totalPages = Math.max(1, Math.ceil(totalCount / AVATAR_HISTORY_PAGE_SIZE));
   const safePage = Math.min(Math.max(page, 0), totalPages - 1);
-  const offset = safePage * AVATAR_HISTORY_PAGE_SIZE;
-  const history = await Member.getAvatarHistory(target.id, AVATAR_HISTORY_PAGE_SIZE, offset);
-  if (!history.length) return null;
 
-  const displayName = target.displayName ?? target.username ?? "User";
   const files: AttachmentBuilder[] = [];
-
-  const headerContainer = buildUserHeaderContainer(target.id, displayName, "Avatar History");
-
   const gallery = new MediaGalleryBuilder();
   let hasItems = false;
 
-  history.forEach((entry, idx) => {
-    const number = offset + idx + 1;
+  const addDbEntry = (entry: IAvatarHistoryRecord, number: number) => {
     const description = `#${number} of ${totalCount} - ${formatTimestamp(entry.changedAt)}`;
-
     if (entry.avatarUrl) {
       gallery.addItems(
         new MediaGalleryItemBuilder().setURL(entry.avatarUrl).setDescription(description),
@@ -82,8 +86,31 @@ async function buildAvatarHistoryV2Page(
       );
       hasItems = true;
     }
-  });
+  };
 
+  if (injectCurrent && safePage === 0) {
+    gallery.addItems(
+      new MediaGalleryItemBuilder()
+        .setURL(currentAvatarUrl!)
+        .setDescription(`Current - #1 of ${totalCount}`),
+    );
+    hasItems = true;
+    const dbItems = await Member.getAvatarHistory(target.id, AVATAR_HISTORY_PAGE_SIZE - 1, 0);
+    dbItems.forEach((entry, idx) => addDbEntry(entry, idx + 2));
+  } else {
+    // When injected, page N>=1 starts at DB offset (N*pageSize - 1) to account for the
+    // synthetic entry occupying slot #1 on page 0.
+    const dbOffset = injectCurrent
+      ? safePage * AVATAR_HISTORY_PAGE_SIZE - 1
+      : safePage * AVATAR_HISTORY_PAGE_SIZE;
+    const history = await Member.getAvatarHistory(target.id, AVATAR_HISTORY_PAGE_SIZE, dbOffset);
+    if (!history.length) return null;
+    const numberBase = (injectCurrent ? 1 : 0) + dbOffset + 1;
+    history.forEach((entry, idx) => addDbEntry(entry, numberBase + idx));
+  }
+
+  const displayName = target.displayName ?? target.username ?? "User";
+  const headerContainer = buildUserHeaderContainer(target.id, displayName, "Avatar History");
   const galleryContainer = new ContainerBuilder();
   if (hasItems) {
     galleryContainer.addMediaGalleryComponents(gallery);
@@ -162,15 +189,20 @@ export class AvatarHistoryCommand {
       const lines = members.map((record) => {
         const displayName = record.globalName ?? record.username ?? record.userId;
         const suffix = record.count === 1 ? "avatar" : "avatars";
-        return `**${renderUsernameWithEmoji(record.userId, displayName)}**: ${record.count} ${suffix}`;
+        return `- **${renderUsernameWithEmoji(record.userId, displayName)}**: ${record.count} ${suffix}`;
       });
 
       const container = new ContainerBuilder();
       container.addTextDisplayComponents(
-        new TextDisplayBuilder().setContent("# Avatar History - Everyone"),
+        new TextDisplayBuilder().setContent("# Avatar History"),
       );
       container.addTextDisplayComponents(
         new TextDisplayBuilder().setContent(lines.join("\n")),
+      );
+      container.addTextDisplayComponents(
+        new TextDisplayBuilder().setContent(
+          `-# _${members.length} users with avatar history stored._`,
+        ),
       );
 
       await safeReply(interaction, {
