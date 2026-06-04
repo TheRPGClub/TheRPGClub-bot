@@ -147,12 +147,13 @@ async function handleManagedRawModalSubmit(
     userId: interaction.user.id,
   });
   await safeReply(interaction, {
-    content: "Modal submission accepted for this session. Raw handling will be wired next.",
+    content: "Modal submission accepted for this session.Raw handling will be wired next.",
     flags: MessageFlags.Ephemeral,
   });
 }
 
-export async function tryHandleManagedRawModalInteraction(interaction: Interaction): Promise<boolean> {
+export async function tryHandleManagedRawModalInteraction(
+  interaction: Interaction): Promise<boolean> {
   const customId = getInteractionCustomId(interaction);
   if (!customId || !customId.startsWith(RAW_MODAL_PREFIX)) {
     return false;

@@ -234,7 +234,8 @@ export default class UserGameCollection {
     const binds: Record<string, any> = { entryId, userId };
 
     if (updates.platformId !== undefined) {
-      if (updates.platformId != null && (!Number.isInteger(updates.platformId) || updates.platformId <= 0)) {
+      if (updates.platformId != null && 
+        (!Number.isInteger(updates.platformId) || updates.platformId <= 0)) {
         throw new Error("Invalid platform id.");
       }
       updateParts.push("PLATFORM_ID = :platformId");

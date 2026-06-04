@@ -21,7 +21,11 @@ import {
 } from "../../classes/CompletionatorImport.js";
 import { CompletionatorUiService } from "./completionator-ui.service.js";
 import { completionatorThreadContexts, completionatorAddFormStates } from "./completion.types.js";
-import { getCompletionatorThreadKey, getCompletionatorFormKey, resolveNowPlayingRemoval } from "./completion-helpers.js";
+import {
+  getCompletionatorThreadKey,
+  getCompletionatorFormKey,
+  resolveNowPlayingRemoval,
+} from "./completion-helpers.js";
 import { notifyUnknownCompletionPlatform } from "../../functions/CompletionHelpers.js";
 import { formatTableDate } from "../profile.command.js";
 import { COMPLETION_TYPES, type CompletionType } from "../profile.command.js";
@@ -214,7 +218,8 @@ export class CompletionatorWorkflowService {
         gameId,
         interaction.user.id,
       );
-      const resolution = await this.resolveCompletionatorPlatformState(state, item, gameId, platforms);
+      const resolution = 
+        await this.resolveCompletionatorPlatformState(state, item, gameId, platforms);
       platforms = resolution.platforms;
 
       if (this.canAutoAddCompletion(item, state)) {
@@ -362,7 +367,8 @@ export class CompletionatorWorkflowService {
           headerLines: updateContent.headerLines,
           extraContainers,
           actionText: updateContent.actionText,
-          actionRows: [updateRow, buttonsRow, ...(existingPayload ? [existingPayload.changeRow] : [])],
+          actionRows: 
+            [updateRow, buttonsRow, ...(existingPayload ? [existingPayload.changeRow] : [])],
         }),
         files: existingPayload?.files,
       },
@@ -406,7 +412,8 @@ export class CompletionatorWorkflowService {
   }> {
     let platforms = await Game.getPlatformsForGameWithStandard(gameId, STANDARD_PLATFORM_IDS);
     const state = this.getOrCreateCompletionatorAddFormState(session, item, gameId, ownerId);
-    const resolution = await this.resolveCompletionatorPlatformState(state, item, gameId, platforms);
+    const resolution = 
+      await this.resolveCompletionatorPlatformState(state, item, gameId, platforms);
     platforms = resolution.platforms;
 
     if (!platforms.length) {

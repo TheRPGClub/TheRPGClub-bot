@@ -22,7 +22,11 @@ import {
   ModalComponent,
 } from "discordx";
 import { ephemeralFlag, safeDeferReply, sanitizeUserInput } from "../functions/InteractionUtils.js";
-import { COMPLETION_TYPES, type CompletionType, parseCompletionDateInput } from "./profile.command.js";
+import {
+  COMPLETION_TYPES,
+  type CompletionType,
+  parseCompletionDateInput,
+} from "./profile.command.js";
 import { saveCompletion } from "../functions/CompletionHelpers.js";
 import {
   autocompleteGameCompletionTitle,
@@ -76,7 +80,10 @@ import {
   handleCompletionatorDateModal,
   handleCompletionatorInputModal,
 } from "./game-completion/completionator-handlers.service.js";
-import { COMPLETIONATOR_STATUS_OPTIONS, type CompletionatorAction } from "./game-completion/completion.types.js";
+import {
+  COMPLETIONATOR_STATUS_OPTIONS,
+  type CompletionatorAction,
+} from "./game-completion/completion.types.js";
 import Game from "../classes/Game.js";
 import Member from "../classes/Member.js";
 
@@ -761,7 +768,8 @@ export class GameCompletionCommands {
   }
 
   @SelectMenuComponent({ id: /^comp-import-update-fields:\d+:\d+:\d+$/ })
-  async handleCompletionatorUpdateFieldsHandler(interaction: StringSelectMenuInteraction): Promise<void> {
+  async handleCompletionatorUpdateFieldsHandler(
+    interaction: StringSelectMenuInteraction): Promise<void> {
     await handleCompletionatorUpdateFields(interaction);
   }
 
@@ -771,7 +779,8 @@ export class GameCompletionCommands {
   }
 
   @SelectMenuComponent({ id: /^comp-import-form-select:\d+:\d+:\d+:(type|date|platform)$/ })
-  async handleCompletionatorFormSelectHandler(interaction: StringSelectMenuInteraction): Promise<void> {
+  async handleCompletionatorFormSelectHandler(
+    interaction: StringSelectMenuInteraction): Promise<void> {
     await handleCompletionatorFormSelect(interaction);
   }
 
@@ -780,7 +789,8 @@ export class GameCompletionCommands {
     await handleCompletionatorDateModal(interaction);
   }
 
-  @ModalComponent({ id: /^comp-import-modal:(gamedb-query|igdb-query|gamedb-manual|igdb-manual):\d+:\d+:\d+$/ })
+  @ModalComponent(
+    { id: /^comp-import-modal:(gamedb-query|igdb-query|gamedb-manual|igdb-manual):\d+:\d+:\d+$/ })
   async handleCompletionatorInputModalHandler(interaction: ModalSubmitInteraction): Promise<void> {
     await handleCompletionatorInputModal(interaction);
   }

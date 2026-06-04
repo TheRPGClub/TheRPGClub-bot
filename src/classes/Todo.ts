@@ -279,7 +279,13 @@ export async function countTodos(): Promise<{ open: number; completed: number }>
 export async function countTodoSummary(): Promise<{
   open: number;
   completed: number;
-  openByCategory: { newFeatures: number; improvements: number; defects: number; blocked: number; refactoring: number };
+  openByCategory: { 
+    newFeatures: number; 
+    improvements: number; 
+    defects: number; 
+    blocked: number; 
+    refactoring: number;
+  };
 }> {
   const connection = await getOraclePool().getConnection();
   try {

@@ -172,12 +172,12 @@ export async function handleCompletionJournalPage(
 
 const COMPLETION_HELP_TEXT = [
   "## Game Completion Commands",
-  "**/game-completion add** — Add a game completion",
-  "**/game-completion edit** — Edit one of your completion records",
-  "**/game-completion delete** — Delete one of your completion records",
-  "**/game-completion export** — Export your completions to a CSV file",
-  "**/game-completion import-completionator** — Import completions from a Completionator CSV",
-  "**/game-completion common** — Show shared completions between two members",
+  "**/game-completion add**  -  Add a game completion",
+  "**/game-completion edit**  -  Edit one of your completion records",
+  "**/game-completion delete**  -  Delete one of your completion records",
+  "**/game-completion export**  -  Export your completions to a CSV file",
+  "**/game-completion import-completionator**  -  Import completions from a Completionator CSV",
+  "**/game-completion common**  -  Show shared completions between two members",
 ].join("\n");
 
 /**

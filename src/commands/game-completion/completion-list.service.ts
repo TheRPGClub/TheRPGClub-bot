@@ -13,7 +13,11 @@ import {
 import { ContainerBuilder, TextDisplayBuilder } from "@discordjs/builders";
 import Member from "../../classes/Member.js";
 import Game from "../../classes/Game.js";
-import { COMPLETION_PAGE_SIZE, formatDiscordTimestamp, formatTableDate } from "../profile.command.js";
+import {
+  COMPLETION_PAGE_SIZE,
+  formatDiscordTimestamp,
+  formatTableDate,
+} from "../profile.command.js";
 import { formatPlatformDisplayName } from "../../functions/PlatformDisplay.js";
 import { safeReply } from "../../functions/InteractionUtils.js";
 import { renderUsernameWithEmoji } from "../../services/UserEmojiService.js";
@@ -238,7 +242,8 @@ export async function renderSelectionPage(
 
   if (interaction.isMessageComponent()) {
     if (interaction.deferred || interaction.replied) {
-      await (interaction as any).editReply({ components: allComponents, flags: COMPONENTS_V2_FLAG });
+      await (interaction as any)
+        .editReply({ components: allComponents, flags: COMPONENTS_V2_FLAG });
     } else {
       await (interaction as any).update({ components: allComponents, flags: COMPONENTS_V2_FLAG });
     }

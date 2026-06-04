@@ -8,7 +8,11 @@ import {
   ContainerBuilder,
   TextDisplayBuilder,
 } from "@discordjs/builders";
-import { normalizePlatformKey, normalizeTitleKey, stripTitleDateSuffix } from "../../functions/CsvUtils.js";
+import {
+  normalizePlatformKey,
+  normalizeTitleKey,
+  stripTitleDateSuffix,
+} from "../../functions/CsvUtils.js";
 import { formatPlatformDisplayName } from "../../functions/PlatformDisplay.js";
 import { formatTableDate } from "../profile.command.js";
 import { igdbService, type IGDBGame } from "../../services/IGDB/IgdbService.js";

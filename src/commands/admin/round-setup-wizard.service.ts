@@ -18,7 +18,11 @@ import NrGotm, { insertNrGotmRoundInDatabase, type INrGotmGame } from "../../cla
 import BotVotingInfo from "../../classes/BotVotingInfo.js";
 import { calculateNextVoteDate } from "./voting-admin.service.js";
 import { formatVoteDateForDisplay, parseVoteDateInput } from "../../functions/VoteDateUtils.js";
-import { addCancelOption, buildChoiceRows, buildNumberChoiceOptions } from "./admin-prompt.utils.js";
+import {
+  addCancelOption,
+  buildChoiceRows,
+  buildNumberChoiceOptions,
+} from "./admin-prompt.utils.js";
 import { type WizardAction, type PromptChoiceOption } from "./admin.types.js";
 import {
   closeActiveAdminWizardSession,
@@ -468,7 +472,8 @@ export async function handleNextRoundSetup(
     (testMode ? " (Test mode data source)" : ""),
   );
 
-  if (!testMode && (Gotm.getByRound(nextRound).length > 0 || NrGotm.getByRound(nextRound).length > 0)) {
+  if (!testMode && (Gotm.getByRound(nextRound).length > 0 || 
+    NrGotm.getByRound(nextRound).length > 0)) {
     await wizardLog(
       `Round ${nextRound} already exists in GOTM and/or NR-GOTM data. ` +
       "Use edit commands or choose another round.",
@@ -844,7 +849,8 @@ export async function handleNextRoundSetup(
           }
         }
         const insertedIds = await insertNrGotmRoundInDatabase(nextRound, monthYear, nrGotmGames);
-        const withIds = nrGotmGames.map((entry, index) => ({ ...entry, id: insertedIds[index] ?? null }));
+        const withIds = nrGotmGames.map((entry, index) => (
+          { ...entry, id: insertedIds[index] ?? null }));
         NrGotm.addRound(nextRound, monthYear, withIds);
       },
     },

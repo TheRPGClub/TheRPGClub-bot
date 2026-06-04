@@ -265,7 +265,8 @@ export async function handleEditNrGotm(
     if (field === "gamedbGameId") {
       updatedEntry = NrGotm.updateGamedbIdByRound(roundNumber, newValue as number, gameIndex);
     } else if (field === "redditUrl") {
-      updatedEntry = NrGotm.updateRedditUrlByRound(roundNumber, newValue as string | null, gameIndex);
+      updatedEntry = NrGotm.updateRedditUrlByRound(
+        roundNumber, newValue as string | null, gameIndex);
     }
 
     const entryToShow = updatedEntry ?? entry;

@@ -794,7 +794,8 @@ export class GameJournalCommand {
     const allComponents = nextPageRow
       ? [...searchComponents, nextPageRow]
       : searchComponents;
-    await safeUpdate(interaction, { embeds: [], components: allComponents, flags: buildComponentsV2Flags(false) });
+    await safeUpdate(interaction, { 
+      embeds: [], components: allComponents, flags: buildComponentsV2Flags(false) });
   }
 
   @ButtonComponent({ id: new RegExp(`^${GJ_VIEW_PAGE_PREFIX}:\\d+:\\d+:\\d+:\\d+$`) })

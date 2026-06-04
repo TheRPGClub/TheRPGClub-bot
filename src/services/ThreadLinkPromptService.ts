@@ -79,7 +79,8 @@ async function promptThread(thread: ThreadChannel): Promise<void> {
   markPrompted(thread.id);
 
   try {
-    await thread.send({ embeds: [buildPromptEmbed(thread)], components: [buildButtons(thread.id)] });
+    await thread.send(
+      { embeds: [buildPromptEmbed(thread)], components: [buildButtons(thread.id)] });
   } catch (err) {
     console.error("[ThreadLinkPrompt] Failed to post prompt:", err);
   }

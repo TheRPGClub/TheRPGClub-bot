@@ -25,7 +25,12 @@ import {
   SlashGroup,
   SlashOption,
 } from "discordx";
-import { safeDeferReply, safeReply, safeUpdate, sanitizeUserInput } from "../functions/InteractionUtils.js";
+import {
+  safeDeferReply,
+  safeReply,
+  safeUpdate,
+  sanitizeUserInput,
+} from "../functions/InteractionUtils.js";
 import { decodeBase64Url, encodeWithMaxLength } from "../functions/CustomIdUtils.js";
 import { buildComponentsV2Flags } from "../functions/ComponentsV2Utils.js";
 import {
@@ -736,7 +741,8 @@ export class GameDbAdmin {
 
     try {
       const collected = await channel.awaitMessages({
-        filter: (m: any) => m.author.id === interaction.user.id && (m.attachments.size > 0 || m.content.length > 0),
+        filter: (m: any) => m.author.id === interaction.user.id && (m.attachments.size > 0 
+          || m.content.length > 0),
         max: 1,
         time: 60000,
         errors: ["time"],

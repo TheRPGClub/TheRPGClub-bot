@@ -102,7 +102,8 @@ export function toNominationOptionMap(
       existing.reasons.push(nomination.reason);
     }
   }
-  return new Map([...byGame.entries()].sort((a, b) => a[1].gameTitle.localeCompare(b[1].gameTitle)));
+  return new Map([...byGame.entries()].sort(
+    (a, b) => a[1].gameTitle.localeCompare(b[1].gameTitle)));
 }
 
 export function buildNominationPreviewLine(index: number, option: WizardNominationOption): string {

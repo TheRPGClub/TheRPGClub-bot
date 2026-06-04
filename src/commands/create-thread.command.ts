@@ -46,7 +46,8 @@ async function autocompleteCreateThreadTag(
   const rawQuery = focused?.value ? String(focused.value) : "";
   const query = sanitizeUserInput(rawQuery, { preserveNewlines: false }).trim().toLowerCase();
 
-  const forum = (await interaction.guild?.channels.fetch(NOW_PLAYING_FORUM_ID)) as ForumChannel | null;
+  const forum = (
+    await interaction.guild?.channels.fetch(NOW_PLAYING_FORUM_ID)) as ForumChannel | null;
   if (!forum) {
     await interaction.respond([]);
     return;
@@ -129,7 +130,8 @@ export class CreateThreadCommand {
       return;
     }
 
-    const forum = (await interaction.guild?.channels.fetch(NOW_PLAYING_FORUM_ID)) as ForumChannel | null;
+    const forum = 
+      (await interaction.guild?.channels.fetch(NOW_PLAYING_FORUM_ID)) as ForumChannel | null;
     if (!forum) {
       await safeReply(interaction, {
         content: "Now Playing forum channel was not found.",

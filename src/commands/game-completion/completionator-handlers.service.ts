@@ -989,7 +989,8 @@ export class CompletionatorHandlersService {
 // Export handler functions for decorator usage
 const handlerService = new CompletionatorHandlersService();
 
-export async function handleCompletionatorSelect(interaction: StringSelectMenuInteraction): Promise<void> {
+export async function handleCompletionatorSelect(
+  interaction: StringSelectMenuInteraction): Promise<void> {
   return handlerService.handleCompletionatorSelect(interaction);
 }
 
@@ -997,7 +998,8 @@ export async function handleCompletionatorChoose(interaction: ButtonInteraction)
   return handlerService.handleCompletionatorChoose(interaction);
 }
 
-export async function handleCompletionatorUpdateFields(interaction: StringSelectMenuInteraction): Promise<void> {
+export async function handleCompletionatorUpdateFields(
+  interaction: StringSelectMenuInteraction): Promise<void> {
   return handlerService.handleCompletionatorUpdateFields(interaction);
 }
 
@@ -1005,14 +1007,17 @@ export async function handleCompletionatorAction(interaction: ButtonInteraction)
   return handlerService.handleCompletionatorAction(interaction);
 }
 
-export async function handleCompletionatorFormSelect(interaction: StringSelectMenuInteraction): Promise<void> {
+export async function handleCompletionatorFormSelect(
+  interaction: StringSelectMenuInteraction): Promise<void> {
   return handlerService.handleCompletionatorFormSelect(interaction);
 }
 
-export async function handleCompletionatorDateModal(interaction: ModalSubmitInteraction): Promise<void> {
+export async function handleCompletionatorDateModal(
+  interaction: ModalSubmitInteraction): Promise<void> {
   return handlerService.handleCompletionatorDateModal(interaction);
 }
 
-export async function handleCompletionatorInputModal(interaction: ModalSubmitInteraction): Promise<void> {
+export async function handleCompletionatorInputModal(
+  interaction: ModalSubmitInteraction): Promise<void> {
   return handlerService.handleCompletionatorInputModal(interaction);
 }

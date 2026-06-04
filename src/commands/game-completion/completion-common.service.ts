@@ -291,7 +291,10 @@ function applyFilters(
   });
 }
 
-function sortRows(rows: ICommonCompletionRow[], sort: CommonCompletionSort): ICommonCompletionRow[] {
+function sortRows(
+  rows: ICommonCompletionRow[], 
+  sort: CommonCompletionSort,
+): ICommonCompletionRow[] {
   const sorted = [...rows];
   sorted.sort((a, b) => {
     if (sort === "title_asc") {

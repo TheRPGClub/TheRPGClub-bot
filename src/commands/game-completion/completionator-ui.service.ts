@@ -272,7 +272,8 @@ export class CompletionatorUiService {
     const completions = await Member.getCompletionsForGame(userId, gameId);
     const gamePlatforms = await Game.getPlatformsForGame(gameId);
     const platforms = await Game.getAllPlatforms();
-    const platformMap = new Map(platforms.map((platform: IPlatformDef) => [platform.id, platform.name]));
+    const platformMap = 
+      new Map(platforms.map((platform: IPlatformDef) => [platform.id, platform.name]));
     const formattedPlatforms = gamePlatforms
       .map((platform: IPlatformDef) => formatPlatformDisplayName(platform.name) ?? platform.name)
       .sort((a: string, b: string) => a.localeCompare(b, "en", { sensitivity: "base" }));

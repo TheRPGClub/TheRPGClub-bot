@@ -6,13 +6,13 @@ import { safeReply } from "../../functions/InteractionUtils.js";
 
 export type SqlTarget = "oracle" | "postgresql";
 
-interface HealthResult {
+interface IHealthResult {
   ok: boolean;
   latencyMs: number | null;
   error: string | null;
 }
 
-async function checkOracle(): Promise<HealthResult> {
+async function checkOracle(): Promise<IHealthResult> {
   const start = Date.now();
   let connection;
   try {
@@ -26,7 +26,7 @@ async function checkOracle(): Promise<HealthResult> {
   }
 }
 
-async function checkPostgres(): Promise<HealthResult> {
+async function checkPostgres(): Promise<IHealthResult> {
   const start = Date.now();
   let client;
   try {

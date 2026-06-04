@@ -23,7 +23,12 @@ import {
 import { igdbService, type IGDBGameDetails } from "../../services/IGDB/IgdbService.js";
 import { createIgdbSession } from "../../services/IGDB/IgdbSelectService.js";
 import Game, { type IGame } from "../../classes/Game.js";
-import { autocompleteGameDbViewTitle, buildComponentsV2Flags, isUniqueConstraintError, isUnknownWebhookError } from "./gamedb-utils.js";
+import {
+  autocompleteGameDbViewTitle,
+  buildComponentsV2Flags,
+  isUniqueConstraintError,
+  isUnknownWebhookError,
+} from "./gamedb-utils.js";
 import { buildIgdbSelectOptions } from "./gamedb-csv-import.service.js";
 import { showGameProfile, trimTextDisplayContent } from "./gamedb-profile.service.js";
 

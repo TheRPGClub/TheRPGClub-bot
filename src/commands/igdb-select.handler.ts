@@ -1,6 +1,9 @@
 import { ButtonComponent, Discord, SelectMenuComponent } from "discordx";
 import { type ButtonInteraction, type StringSelectMenuInteraction, MessageFlags } from "discord.js";
-import { handleIgdbFirstMatchInteraction, handleIgdbSelectInteraction } from "../services/IGDB/IgdbSelectService.js";
+import {
+  handleIgdbFirstMatchInteraction,
+  handleIgdbSelectInteraction,
+} from "../services/IGDB/IgdbSelectService.js";
 
 @Discord()
 export class IgdbSelectHandler {

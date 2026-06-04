@@ -3,7 +3,10 @@
 import axios from "axios";
 import type { CompletionType } from "../profile.command.js";
 import Game from "../../classes/Game.js";
-import { buildProgressiveTitleVariants, normalizeTitleWithSteps } from "../../functions/ImportTitleNormalization.js";
+import {
+  buildProgressiveTitleVariants,
+  normalizeTitleWithSteps,
+} from "../../functions/ImportTitleNormalization.js";
 
 export async function fetchCsv(url: string): Promise<string | null> {
   try {

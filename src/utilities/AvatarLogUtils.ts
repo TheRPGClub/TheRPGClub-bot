@@ -128,6 +128,7 @@ export async function logAvatarChange(
     embed.setThumbnail(beforeImage.url);
   }
 
-  const files = [beforeImage.attachment, afterImage.attachment].filter(Boolean) as AttachmentBuilder[];
+  const files = [beforeImage.attachment, afterImage.attachment]
+    .filter(Boolean) as AttachmentBuilder[];
   await (logChannel as any).send({ embeds: [embed], files: files.length ? files : undefined });
 }

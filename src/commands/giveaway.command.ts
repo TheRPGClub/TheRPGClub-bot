@@ -622,7 +622,8 @@ export class GiveawayCommand {
     const [, sessionId, pageRaw, dir] = interaction.customId.split(":");
     const parsed = parseDirAndPage(pageRaw, dir);
     if (!parsed) return;
-    await updateKeyListInteraction(interaction, sessionId, interaction.user.id, parsed.nextPage, true);
+    await updateKeyListInteraction(
+      interaction, sessionId, interaction.user.id, parsed.nextPage, true);
   }
 
   @ButtonComponent({ id: /^giveaway-hub-claim:\d+$/ })

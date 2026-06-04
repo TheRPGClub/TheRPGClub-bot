@@ -21,7 +21,10 @@ import {
 import { ModalBuilder } from "discord.js";
 import { ContainerBuilder, TextDisplayBuilder } from "@discordjs/builders";
 import { safeReply, safeUpdate, stripModalInput } from "../../functions/InteractionUtils.js";
-import { notifyUnknownCompletionPlatform, validateCompletionPlaytimeInput } from "../../functions/CompletionHelpers.js";
+import {
+  notifyUnknownCompletionPlatform,
+  validateCompletionPlaytimeInput,
+} from "../../functions/CompletionHelpers.js";
 import {
   COMPLETION_TYPES,
   type CompletionType,

@@ -30,7 +30,11 @@ import {
 import { bot } from "../RPGClub_GameDB.js";
 import BotVotingInfo from "../classes/BotVotingInfo.js";
 import { isAdmin } from "./admin/admin-auth.utils.js";
-import { ADMIN_HELP_TOPICS, buildAdminHelpEmbed, buildAdminHelpResponse } from "./admin/admin-help.service.js";
+import {
+  ADMIN_HELP_TOPICS,
+  buildAdminHelpEmbed,
+  buildAdminHelpResponse,
+} from "./admin/admin-help.service.js";
 import { handleVotingSetup } from "./admin/voting-admin.service.js";
 import {
   handleDeleteGotmNomsPanel,
@@ -49,7 +53,11 @@ import {
 } from "./admin/gotm-audit-handlers.js";
 import { handleNextRoundSetup } from "./admin/round-setup-wizard.service.js";
 import { handleSqlHealthCheck, type SqlTarget } from "./admin/sql-health-check.service.js";
-import { GOTM_AUDIT_ACTIONS, type AdminHelpTopicId, type GotmAuditAction } from "./admin/admin.types.js";
+import {
+  GOTM_AUDIT_ACTIONS,
+  type AdminHelpTopicId,
+  type GotmAuditAction,
+} from "./admin/admin.types.js";
 
 @Discord()
 @SlashGroup({ description: "Admin Commands", name: "admin" })

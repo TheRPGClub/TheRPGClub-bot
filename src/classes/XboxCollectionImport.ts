@@ -798,7 +798,8 @@ export async function getXboxTitleHistoricalMappedGameIds(params: {
   excludeUserId?: string;
   limit?: number;
 }): Promise<number[]> {
-  const limit = Number.isInteger(params.limit) && (params.limit ?? 0) > 0 ? Number(params.limit) : 5;
+  const limit = Number.isInteger(params.limit) && 
+    (params.limit ?? 0) > 0 ? Number(params.limit) : 5;
   const connection = await getOraclePool().getConnection();
   try {
     const result = await connection.execute<{

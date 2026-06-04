@@ -12,7 +12,15 @@ import {
   ActionRowBuilder,
   type Attachment,
 } from "discord.js";
-import { ButtonComponent, Discord, ModalComponent, Slash, SlashChoice, SlashGroup, SlashOption } from "discordx";
+import {
+  ButtonComponent,
+  Discord,
+  ModalComponent,
+  Slash,
+  SlashChoice,
+  SlashGroup,
+  SlashOption,
+} from "discordx";
 import Game from "../../classes/Game.js";
 import UserGameCollection from "../../classes/UserGameCollection.js";
 import {
@@ -142,7 +150,8 @@ export class CollectionCsvImportCommand {
     importId: number,
     ownerId: string,
   ): Promise<void> {
-    const shouldUseInteractionUpdate = (interaction.isButton() || interaction.isStringSelectMenu()) &&
+    const shouldUseInteractionUpdate = 
+      (interaction.isButton() || interaction.isStringSelectMenu()) &&
       !interaction.deferred &&
       !interaction.replied;
     const shouldUseModalUpdate = interaction.isModalSubmit();

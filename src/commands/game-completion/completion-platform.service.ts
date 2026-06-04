@@ -1,9 +1,16 @@
 // Platform selection workflow for game completions
 
-import type { CommandInteraction, StringSelectMenuInteraction, ButtonInteraction } from "discord.js";
+import type {
+  CommandInteraction,
+  StringSelectMenuInteraction,
+  ButtonInteraction,
+} from "discord.js";
 import { ActionRowBuilder, StringSelectMenuBuilder } from "discord.js";
 import { safeReply } from "../../functions/InteractionUtils.js";
-import { notifyUnknownCompletionPlatform, saveCompletion } from "../../functions/CompletionHelpers.js";
+import {
+  notifyUnknownCompletionPlatform,
+  saveCompletion,
+} from "../../functions/CompletionHelpers.js";
 import { buildComponentsV2Flags } from "../../functions/ComponentsV2Utils.js";
 import Game from "../../classes/Game.js";
 import { STANDARD_PLATFORM_IDS } from "../../config/standardPlatforms.js";

@@ -214,10 +214,15 @@ async function fetchImageBuffer(imageUrl: string): Promise<Buffer> {
 }
 
 export async function openLiveStreamCreateModal(interaction: CommandInteraction): Promise<void> {
-  await interaction.showModal(buildLiveStreamModal(buildLiveStreamModalCustomId(interaction.user.id)));
+  await interaction.showModal(
+    buildLiveStreamModal(
+      buildLiveStreamModalCustomId(interaction.user.id),
+    ),
+  );
 }
 
-export async function handleLiveStreamCreateModal(interaction: ModalSubmitInteraction): Promise<void> {
+export async function handleLiveStreamCreateModal(interaction: ModalSubmitInteraction): 
+  Promise<void> {
   const customIdParts = interaction.customId.split(":");
   if (customIdParts.length !== 2 || customIdParts[0] !== LIVE_STREAM_MODAL_PREFIX) {
     await safeReply(interaction, {
@@ -254,7 +259,8 @@ export async function handleLiveStreamCreateModal(interaction: ModalSubmitIntera
   }
 
   const { topic, startsAt, endsAt, timeZone, imageUrl } = parsedInput.value;
-  const forum = (await interaction.guild?.channels.fetch(LIVE_EVENT_FORUM_ID)) as ForumChannel | null;
+  const forum = 
+    (await interaction.guild?.channels.fetch(LIVE_EVENT_FORUM_ID)) as ForumChannel | null;
   if (!forum) {
     await safeReply(interaction, {
       content: "Live Events forum channel was not found.",

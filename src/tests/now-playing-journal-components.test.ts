@@ -244,7 +244,8 @@ test("journal public view redacts private entry content and count", async () => 
       gameId: 1,
       isEnabled: true,
     })) as any;
-    Member.countGameJournalEntries = (async (_userId: string, _gameId: number, viewerUserId?: string | null) => {
+    Member.countGameJournalEntries = 
+      (async (_userId: string, _gameId: number, viewerUserId?: string | null) => {
       countViewerArg = viewerUserId;
       return 1;
     }) as any;

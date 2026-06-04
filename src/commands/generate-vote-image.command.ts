@@ -39,7 +39,8 @@ function releaseLock(guildId: string, roundNumber: number, voteType: VoteImageTy
   inProgressByKey.delete(getLockKey(guildId, roundNumber, voteType));
 }
 
-function toVoteKind(value: string): { nominationKind: NominationKind; label: VoteImageType } | null {
+function toVoteKind(value: string): 
+  { nominationKind: NominationKind; label: VoteImageType } | null {
   if (value === "gotm") {
     return { nominationKind: "gotm", label: "GOTM" };
   }
@@ -142,7 +143,8 @@ export class GenerateVoteImageCommand {
         return;
       }
 
-      const orderedNominations = [...nominations].sort((a, b) => a.gameTitle.localeCompare(b.gameTitle));
+      const orderedNominations = 
+        [...nominations].sort((a, b) => a.gameTitle.localeCompare(b.gameTitle));
       const games = await Game.getGamesByIds(orderedNominations.map((nom) => nom.gamedbGameId));
       const gameById = new Map(games.map((game) => [game.id, game] as const));
 
