@@ -76,9 +76,13 @@ export class MessageLog {
     [oldMessage, newMessage]: ArgsOf<"messageUpdate">,
     client: Client,
   ): Promise<void> {
-    const resolvedNew = newMessage.partial ? await newMessage.fetch().catch(() => null) : newMessage;
+    const resolvedNew = newMessage.partial
+      ? await newMessage.fetch().catch(() => null)
+      : newMessage;
     if (!resolvedNew || !resolvedNew.author || resolvedNew.author.bot) return;
-    const resolvedOld = oldMessage.partial ? await oldMessage.fetch().catch(() => null) : oldMessage;
+    const resolvedOld = oldMessage.partial
+      ? await oldMessage.fetch().catch(() => null)
+      : oldMessage;
     if (!resolvedOld) return;
 
     const beforeText = resolvedOld.cleanContent ?? resolvedOld.content ?? "";

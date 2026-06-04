@@ -302,7 +302,9 @@ export async function runAutoAcceptImagesAudit(
     await message.edit({ embeds: [currentEmbed] }).catch(() => {});
   };
 
-  const { updated, skipped, failed, logs } = await performAutoAcceptImages(updateEmbed, undefined, titleWords);
+  const { updated, skipped, failed, logs } = await performAutoAcceptImages(
+    updateEmbed, undefined, titleWords,
+  );
   if (!logs.length) {
     currentEmbed
       .setDescription("No games found with missing images and valid IGDB IDs.")

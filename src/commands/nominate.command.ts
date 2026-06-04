@@ -22,7 +22,10 @@ import {
   buildComponentsV2Flags,
   buildNominationListPayload,
 } from "../functions/NominationListComponents.js";
-import { formatGameTitleWithYear, parseTitleWithYear } from "../functions/GameTitleAutocompleteUtils.js";
+import {
+  formatGameTitleWithYear,
+  parseTitleWithYear,
+} from "../functions/GameTitleAutocompleteUtils.js";
 import {
   areNominationsClosed,
   getUpcomingNominationWindow,
@@ -33,7 +36,10 @@ import {
   safeReply,
   sanitizeUserInput,
 } from "../functions/InteractionUtils.js";
-import { GOTM_NOMINATION_CHANNEL_ID, NR_GOTM_NOMINATION_CHANNEL_ID } from "../config/nominationChannels.js";
+import {
+  GOTM_NOMINATION_CHANNEL_ID,
+  NR_GOTM_NOMINATION_CHANNEL_ID,
+} from "../config/nominationChannels.js";
 import { showGameProfileFromNomination } from "./gamedb.command.js";
 
 const NOMINATE_REASON_MAX_LENGTH = 1500;
@@ -233,7 +239,9 @@ export class NominateCommand {
         return;
       }
 
-      const existing = await getNominationForUser(selectedKind, window.targetRound, interaction.user.id);
+      const existing = await getNominationForUser(
+        selectedKind, window.targetRound, interaction.user.id,
+      );
       const saved = await upsertNomination(
         selectedKind,
         window.targetRound,

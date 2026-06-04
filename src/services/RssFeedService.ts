@@ -24,7 +24,9 @@ function hashId(parts: (string | null | undefined)[]): string {
   return crypto.createHash("sha256").update(joined).digest("hex");
 }
 
-function matchesKeywords(include: string[], exclude: string[], title: string, content: string): boolean {
+function matchesKeywords(
+  include: string[], exclude: string[], title: string, content: string,
+): boolean {
   const haystack = `${title} ${content}`.toLowerCase();
 
   if (exclude.length && exclude.some((kw) => haystack.includes(kw))) {

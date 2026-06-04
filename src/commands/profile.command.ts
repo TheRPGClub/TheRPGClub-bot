@@ -582,7 +582,9 @@ export class ProfileCommand {
 
     userId = userId ? sanitizeUserInput(userId, { preserveNewlines: false }) : undefined;
     username = username ? sanitizeUserInput(username, { preserveNewlines: false }) : undefined;
-    globalName = globalName ? sanitizeUserInput(globalName, { preserveNewlines: false }) : undefined;
+    globalName = globalName
+      ? sanitizeUserInput(globalName, { preserveNewlines: false })
+      : undefined;
     completionator = completionator
       ? sanitizeUserInput(completionator, { preserveNewlines: false })
       : undefined;
@@ -590,7 +592,9 @@ export class ProfileCommand {
     psn = psn ? sanitizeUserInput(psn, { preserveNewlines: false }) : undefined;
     xbl = xbl ? sanitizeUserInput(xbl, { preserveNewlines: false }) : undefined;
     nsw = nsw ? sanitizeUserInput(nsw, { preserveNewlines: false }) : undefined;
-    joinedAfter = joinedAfter ? sanitizeUserInput(joinedAfter, { preserveNewlines: false }) : undefined;
+    joinedAfter = joinedAfter
+      ? sanitizeUserInput(joinedAfter, { preserveNewlines: false })
+      : undefined;
     joinedBefore = joinedBefore
       ? sanitizeUserInput(joinedBefore, { preserveNewlines: false })
       : undefined;

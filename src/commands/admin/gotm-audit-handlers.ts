@@ -1,6 +1,10 @@
 // Handlers for gotm-audit button/select/modal interactions
 
-import type { ButtonInteraction, StringSelectMenuInteraction, ModalSubmitInteraction } from "discord.js";
+import type {
+  ButtonInteraction,
+  StringSelectMenuInteraction,
+  ModalSubmitInteraction,
+} from "discord.js";
 import {
   MessageFlags,
   ModalBuilder,
@@ -32,7 +36,8 @@ import {
   buildGotmAuditPromptComponents,
 } from "./gotm-audit-ui.service.js";
 
-export async function handleGotmAuditSelect(interaction: StringSelectMenuInteraction): Promise<void> {
+export async function handleGotmAuditSelect(
+  interaction: StringSelectMenuInteraction): Promise<void> {
   const [, ownerId, importIdRaw, itemIdRaw] = interaction.customId.split(":");
   if (interaction.user.id !== ownerId) {
     await interaction
@@ -299,7 +304,9 @@ export async function handleGotmAuditAction(interaction: ButtonInteraction): Pro
   }
 }
 
-export async function handleGotmAuditManualModal(interaction: ModalSubmitInteraction): Promise<void> {
+export async function handleGotmAuditManualModal(
+  interaction: ModalSubmitInteraction,
+): Promise<void> {
   const [, ownerId, importIdRaw, itemIdRaw] = interaction.customId.split(":");
   if (interaction.user.id !== ownerId) {
     await interaction
@@ -393,7 +400,9 @@ export async function handleGotmAuditManualModal(interaction: ModalSubmitInterac
   await processNextGotmAuditItem(interaction, session);
 }
 
-export async function handleGotmAuditQueryModal(interaction: ModalSubmitInteraction): Promise<void> {
+export async function handleGotmAuditQueryModal(
+  interaction: ModalSubmitInteraction,
+): Promise<void> {
   const [, ownerId, importIdRaw, itemIdRaw] = interaction.customId.split(":");
   if (interaction.user.id !== ownerId) {
     await interaction

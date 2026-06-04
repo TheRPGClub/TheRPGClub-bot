@@ -117,7 +117,9 @@ export async function handleAdminNominationDeleteReasonModal(
     return;
   }
 
-  const nomination = await getNominationForUser(parsedState.kind, parsedState.round, parsedState.userId);
+  const nomination = await getNominationForUser(
+    parsedState.kind, parsedState.round, parsedState.userId,
+  );
   const sessionState = nomination
     ? buildDeletionReasonState(
       parsedState.kind,

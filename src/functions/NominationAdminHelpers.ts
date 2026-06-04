@@ -41,7 +41,10 @@ type PendingDeleteSelectionState = {
 export async function buildNominationDeleteView(
   kind: NominationKind,
   commandLabel: string,
-): Promise<{ payload: NominationListPayload; controls: ActionRowBuilder<StringSelectMenuBuilder>[] } | null> {
+): Promise<{
+  payload: NominationListPayload;
+  controls: ActionRowBuilder<StringSelectMenuBuilder>[];
+} | null> {
   const window = await getUpcomingNominationWindow();
   const nominations = await listNominationsForRound(kind, window.targetRound);
   if (!nominations.length) return null;
@@ -83,7 +86,9 @@ export function buildDeletionSelectCustomId(kind: NominationKind, round: number)
   return `${ADMIN_NOMINATION_DELETE_SELECT_PREFIX}:${kind}:${round}`;
 }
 
-export function buildDeletionReasonModalCustomId(kind: NominationKind, round: number, userId: string): string {
+export function buildDeletionReasonModalCustomId(
+  kind: NominationKind, round: number, userId: string,
+): string {
   return buildDeletionReasonStateId(kind, round, userId);
 }
 
