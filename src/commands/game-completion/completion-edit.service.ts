@@ -1,14 +1,16 @@
 import {
-  EmbedBuilder,
   ActionRowBuilder,
   StringSelectMenuBuilder,
   ButtonBuilder,
   ButtonStyle,
-  MessageFlags,
   type StringSelectMenuInteraction,
   type ButtonInteraction,
   type Message,
 } from "discord.js";
+import {
+  ContainerBuilder,
+  TextDisplayBuilder,
+} from "@discordjs/builders";
 import Member from "../../classes/Member.js";
 import {
   COMPLETION_TYPES,
@@ -20,9 +22,16 @@ import {
   resolveGameCompletionPlatformId,
   resolveGameCompletionPlatformLabel,
 } from "./completion-autocomplete.utils.js";
+import { buildComponentsV2Flags } from "../../functions/ComponentsV2Utils.js";
+import { COMPONENTS_V2_FLAG } from "../../config/flags.js";
 
 const MAX_NOTE_LENGTH = 500;
 type CompletionEditField = "type" | "date" | "platform" | "playtime" | "note";
+
+type EditPromptPayload = {
+  components: Array<ContainerBuilder | ActionRowBuilder<ButtonBuilder>>;
+  flags: number;
+};
 
 /**
  * Handles completion edit menu selection
@@ -34,7 +43,7 @@ export async function handleCompletionEditMenu(
   if (interaction.user.id !== ownerId) {
     await interaction.reply({
       content: "This edit prompt isn't for you.",
-      flags: MessageFlags.Ephemeral,
+      flags: buildComponentsV2Flags(true),
     });
     return;
   }
@@ -43,7 +52,7 @@ export async function handleCompletionEditMenu(
   if (!Number.isInteger(completionId) || completionId <= 0) {
     await interaction.reply({
       content: "Invalid selection.",
-      flags: MessageFlags.Ephemeral,
+      flags: buildComponentsV2Flags(true),
     });
     return;
   }
@@ -52,7 +61,7 @@ export async function handleCompletionEditMenu(
   if (!completion) {
     await interaction.reply({
       content: "Completion not found.",
-      flags: MessageFlags.Ephemeral,
+      flags: buildComponentsV2Flags(true),
     });
     return;
   }
@@ -73,15 +82,18 @@ export async function handleCompletionEditDone(interaction: ButtonInteraction): 
   if (interaction.user.id !== ownerId) {
     await interaction.reply({
       content: "This edit prompt isn't for you.",
-      flags: MessageFlags.Ephemeral,
+      flags: buildComponentsV2Flags(true),
     });
     return;
   }
 
   await interaction.update({
-    content: "Edit complete.",
-    embeds: [],
-    components: [],
+    components: [
+      new ContainerBuilder().addTextDisplayComponents(
+        new TextDisplayBuilder().setContent("Edit complete."),
+      ),
+    ],
+    flags: COMPONENTS_V2_FLAG,
   }).catch(() => {});
 }
 
@@ -93,7 +105,7 @@ export async function handleCompletionFieldEdit(interaction: ButtonInteraction):
   if (interaction.user.id !== ownerId) {
     await interaction.reply({
       content: "This edit prompt isn't for you.",
-      flags: MessageFlags.Ephemeral,
+      flags: buildComponentsV2Flags(true),
     });
     return;
   }
@@ -102,7 +114,7 @@ export async function handleCompletionFieldEdit(interaction: ButtonInteraction):
   if (!Number.isInteger(completionId) || completionId <= 0) {
     await interaction.reply({
       content: "Invalid selection.",
-      flags: MessageFlags.Ephemeral,
+      flags: buildComponentsV2Flags(true),
     });
     return;
   }
@@ -113,11 +125,21 @@ export async function handleCompletionFieldEdit(interaction: ButtonInteraction):
       .setPlaceholder("Select completion type")
       .addOptions(COMPLETION_TYPES.map((t) => ({ label: t, value: t })));
 
+    const currentEmbedText = extractEditPromptText(interaction);
+    const container = new ContainerBuilder().addTextDisplayComponents(
+      new TextDisplayBuilder().setContent("Select the new completion type:"),
+      ...(currentEmbedText
+        ? [new TextDisplayBuilder().setContent(currentEmbedText)]
+        : []),
+    );
+
     await interaction
       .update({
-        content: "Select the new completion type:",
-        components: [new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select)],
-        embeds: interaction.message?.embeds?.length ? interaction.message.embeds : undefined,
+        components: [
+          container,
+          new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select),
+        ],
+        flags: COMPONENTS_V2_FLAG,
       })
       .catch(() => {});
     return;
@@ -134,9 +156,12 @@ export async function handleCompletionFieldEdit(interaction: ButtonInteraction):
 
   await interaction
     .update({
-      content: prompt,
-      components: [],
-      embeds: interaction.message?.embeds?.length ? interaction.message.embeds : undefined,
+      components: [
+        new ContainerBuilder().addTextDisplayComponents(
+          new TextDisplayBuilder().setContent(prompt),
+        ),
+      ],
+      flags: COMPONENTS_V2_FLAG,
     })
     .catch(() => {});
 
@@ -145,14 +170,12 @@ export async function handleCompletionFieldEdit(interaction: ButtonInteraction):
     const updated = await Member.getCompletion(completionId);
     if (updated) {
       await interaction.message
-        .edit(
-          buildCompletionEditPrompt(
-            ownerId,
-            completionId,
-            updated,
-            "I couldn't listen for your response in this channel.",
-          ),
-        )
+        .edit(buildCompletionEditPrompt(
+          ownerId,
+          completionId,
+          updated,
+          "I couldn't listen for your response in this channel.",
+        ))
         .catch(() => {});
     }
     return;
@@ -171,14 +194,12 @@ export async function handleCompletionFieldEdit(interaction: ButtonInteraction):
     const updated = await Member.getCompletion(completionId);
     if (updated) {
       await interaction.message
-        .edit(
-          buildCompletionEditPrompt(
-            ownerId,
-            completionId,
-            updated,
-            "Timed out waiting for your response.",
-          ),
-        )
+        .edit(buildCompletionEditPrompt(
+          ownerId,
+          completionId,
+          updated,
+          "Timed out waiting for your response.",
+        ))
         .catch(() => {});
     }
     return;
@@ -195,7 +216,9 @@ export async function handleCompletionFieldEdit(interaction: ButtonInteraction):
       } else {
         const platformId = await resolveGameCompletionPlatformId(value);
         if (platformId == null) {
-          throw new Error("Platform not found. Use the platform autocomplete in `/game-completion add`.");
+          throw new Error(
+            "Platform not found. Use the platform autocomplete in `/game-completion add`.",
+          );
         }
         await Member.updateCompletion(ownerId, completionId, { platformId });
       }
@@ -253,7 +276,7 @@ export async function handleCompletionTypeSelect(
   if (interaction.user.id !== ownerId) {
     await interaction.reply({
       content: "This edit prompt isn't for you.",
-      flags: MessageFlags.Ephemeral,
+      flags: buildComponentsV2Flags(true),
     });
     return;
   }
@@ -285,9 +308,12 @@ export async function handleCompletionTypeSelect(
   if (!updated) {
     await interaction
       .update({
-        content: "Completion not found.",
-        embeds: [],
-        components: [],
+        components: [
+          new ContainerBuilder().addTextDisplayComponents(
+            new TextDisplayBuilder().setContent("Completion not found."),
+          ),
+        ],
+        flags: COMPONENTS_V2_FLAG,
       })
       .catch(() => {});
     return;
@@ -340,24 +366,29 @@ async function getCompletionEditValueLabel(
   return compact.length > 80 ? `${compact.slice(0, 77)}...` : compact;
 }
 
+function extractEditPromptText(interaction: ButtonInteraction): string | null {
+  const firstComponent = interaction.message?.components?.[0];
+  if (!firstComponent) return null;
+  return null;
+}
+
 /**
- * Builds the edit prompt with current completion details and edit buttons
+ * Builds the V2 edit prompt with current completion details and edit buttons
  */
 function buildCompletionEditPrompt(
   ownerId: string,
   completionId: number,
   completion: Awaited<ReturnType<typeof Member.getCompletion>>,
   notice?: string | null,
-): {
-  content: string;
-  embeds: EmbedBuilder[];
-  components: ActionRowBuilder<ButtonBuilder>[];
-} {
+): EditPromptPayload {
   if (!completion) {
     return {
-      content: "Completion not found.",
-      embeds: [],
-      components: [],
+      components: [
+        new ContainerBuilder().addTextDisplayComponents(
+          new TextDisplayBuilder().setContent("Completion not found."),
+        ),
+      ],
+      flags: COMPONENTS_V2_FLAG,
     };
   }
 
@@ -402,14 +433,20 @@ function buildCompletionEditPrompt(
   const noteLine = completion.note ? `\n> ${completion.note}` : "";
 
   const noticeLine = notice ? `${notice}\n` : "";
+  const headerText = `${noticeLine}Editing **${completion.title}** - choose a field to update:`;
+  const detailText = `Current: ${currentParts.join(" - ")}${noteLine}`;
+
+  const infoContainer = new ContainerBuilder().addTextDisplayComponents(
+    new TextDisplayBuilder().setContent(headerText),
+    new TextDisplayBuilder().setContent(detailText),
+  );
+
   return {
-    content: `${noticeLine}Editing **${completion.title}** - choose a field to update:`,
-    embeds: [
-      new EmbedBuilder().setDescription(`Current: ${currentParts.join(" - ")}${noteLine}`),
-    ],
     components: [
+      infoContainer,
       new ActionRowBuilder<ButtonBuilder>().addComponents(fieldButtons),
       new ActionRowBuilder<ButtonBuilder>().addComponents(secondaryButtons),
     ],
+    flags: COMPONENTS_V2_FLAG,
   };
 }

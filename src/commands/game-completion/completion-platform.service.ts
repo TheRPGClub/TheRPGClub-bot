@@ -1,9 +1,10 @@
 // Platform selection workflow for game completions
 
 import type { CommandInteraction, StringSelectMenuInteraction, ButtonInteraction } from "discord.js";
-import { ActionRowBuilder, StringSelectMenuBuilder, MessageFlags } from "discord.js";
+import { ActionRowBuilder, StringSelectMenuBuilder } from "discord.js";
 import { safeReply } from "../../functions/InteractionUtils.js";
 import { notifyUnknownCompletionPlatform, saveCompletion } from "../../functions/CompletionHelpers.js";
+import { buildComponentsV2Flags } from "../../functions/ComponentsV2Utils.js";
 import Game from "../../classes/Game.js";
 import { STANDARD_PLATFORM_IDS } from "../../config/standardPlatforms.js";
 import {
@@ -29,7 +30,7 @@ export async function promptCompletionPlatformSelection(
   if (!platforms.length) {
     await safeReply(interaction, {
       content: "No platform release data is available for this game.",
-      flags: MessageFlags.Ephemeral,
+      flags: buildComponentsV2Flags(true),
     });
     return;
   }
@@ -64,18 +65,20 @@ export async function promptCompletionPlatformSelection(
   await safeReply(interaction, {
     content,
     components: [new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select)],
-    flags: MessageFlags.Ephemeral,
+    flags: buildComponentsV2Flags(true),
   });
 }
 
-export async function handleCompletionPlatformSelect(interaction: StringSelectMenuInteraction): Promise<void> {
+export async function handleCompletionPlatformSelect(
+  interaction: StringSelectMenuInteraction,
+): Promise<void> {
   const [, sessionId] = interaction.customId.split(":");
   const ctx = completionPlatformSessions.get(sessionId);
 
   if (!ctx) {
     await interaction.reply({
       content: "This completion prompt has expired.",
-      flags: MessageFlags.Ephemeral,
+      flags: buildComponentsV2Flags(true),
     }).catch(() => {});
     return;
   }
@@ -83,7 +86,7 @@ export async function handleCompletionPlatformSelect(interaction: StringSelectMe
   if (interaction.user.id !== ctx.userId) {
     await interaction.reply({
       content: "This completion prompt isn't for you.",
-      flags: MessageFlags.Ephemeral,
+      flags: buildComponentsV2Flags(true),
     }).catch(() => {});
     return;
   }
@@ -104,7 +107,7 @@ export async function handleCompletionPlatformSelect(interaction: StringSelectMe
   if (!valid) {
     await interaction.reply({
       content: "Invalid platform selection.",
-      flags: MessageFlags.Ephemeral,
+      flags: buildComponentsV2Flags(true),
     }).catch(() => {});
     return;
   }
