@@ -167,9 +167,9 @@ export class GameDbViewCommand {
     }
 
     if (action === "bad-thumb") {
-      if (!game.artData) {
+      if (!game.imageData) {
         await safeReply(interaction, buildTextReply(
-          "No artwork thumbnail is available for this game.", true,
+          "No cover image is available for this game.", true,
         ));
         return;
       }
@@ -189,9 +189,9 @@ export class GameDbViewCommand {
     }
 
     if (action === "good-thumb") {
-      if (!game.artData) {
+      if (!game.imageData) {
         await safeReply(interaction, buildTextReply(
-          "No artwork thumbnail is available for this game.", true,
+          "No cover image is available for this game.", true,
         ));
         return;
       }

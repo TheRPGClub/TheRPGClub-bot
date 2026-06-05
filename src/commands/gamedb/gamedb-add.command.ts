@@ -47,19 +47,6 @@ async function fetchIgdbCoverImage(details: IGDBGameDetails): Promise<Buffer | n
   }
 }
 
-async function fetchIgdbArtImage(details: IGDBGameDetails): Promise<Buffer | null> {
-  const imageId = details.artworks?.[0]?.image_id;
-  if (!imageId) return null;
-  try {
-    const imageUrl =
-      `https://images.igdb.com/igdb/image/upload/t_thumb_2x/${imageId}.jpg`;
-    const imageResponse = await axios.get(imageUrl, { responseType: "arraybuffer" });
-    return Buffer.from(imageResponse.data);
-  } catch (err) {
-    console.error("Failed to download artwork image:", err);
-    return null;
-  }
-}
 
 export async function processReleaseDates(
   gameId: number,
@@ -143,7 +130,6 @@ export async function addGameToDatabase(
   }
 
   const imageData = await fetchIgdbCoverImage(details);
-  const artData = await fetchIgdbArtImage(details);
 
   const igdbUrl = details.url
     || (details.slug ? `https://www.igdb.com/games/${details.slug}` : null);
@@ -158,7 +144,6 @@ export async function addGameToDatabase(
       details.total_rating ?? null,
       igdbUrl,
       Game.getFeaturedVideoUrl(details),
-      artData,
     );
   } catch (err: any) {
     if (isUniqueConstraintError(err)) {

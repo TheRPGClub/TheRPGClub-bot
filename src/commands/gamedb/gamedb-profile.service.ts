@@ -220,7 +220,7 @@ export async function buildGameProfile(
     const isThumbnailBad = Boolean(game.thumbnailBad);
     const isThumbnailApproved = Boolean(game.thumbnailApproved);
     const isReleased = isGameReleased(game, releases);
-    const primaryArt = isThumbnailBad ? game.imageData : (game.artData ?? game.imageData);
+    const primaryArt = game.imageData;
     if (primaryArt) {
       files.push(new AttachmentBuilder(primaryArt, { name: "game_image.png" }));
     }
@@ -576,7 +576,7 @@ export async function buildGameProfile(
       files,
       hasThread: Boolean(threadId),
       featuredVideoUrl: game.featuredVideoUrl ?? null,
-      canMarkThumbnailBad: Boolean(game.artData) && !isThumbnailApproved,
+      canMarkThumbnailBad: Boolean(game.imageData) && !isThumbnailApproved,
       isThumbnailBad,
       isThumbnailApproved,
       isReleased,

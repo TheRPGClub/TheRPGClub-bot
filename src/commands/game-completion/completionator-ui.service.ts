@@ -326,7 +326,7 @@ export class CompletionatorUiService {
 
     const files: AttachmentBuilder[] = [];
     if (game) {
-      const primaryArt = game.thumbnailBad ? game.imageData : (game.artData ?? game.imageData);
+      const primaryArt = game.imageData;
       if (primaryArt) {
         const { AttachmentBuilder } = await import("discord.js");
         files.push(

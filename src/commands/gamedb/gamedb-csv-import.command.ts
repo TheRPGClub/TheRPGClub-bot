@@ -162,16 +162,6 @@ async function importGameFromCsv(igdbId: number): Promise<{ gameId: number; titl
         } catch { /* ignore */ }
       }
     }
-    if (!existing.artData) {
-      const artImageId = details.artworks?.[0]?.image_id;
-      if (artImageId) {
-        try {
-          const url = `https://images.igdb.com/igdb/image/upload/t_thumb_2x/${artImageId}.jpg`;
-          const imgRes = await axios.get(url, { responseType: "arraybuffer" });
-          await Game.updateGameArt(existing.id, Buffer.from(imgRes.data));
-        } catch { /* ignore */ }
-      }
-    }
     return { gameId: existing.id, title: existing.title };
   }
 
@@ -187,7 +177,6 @@ async function importGameFromCsv(igdbId: number): Promise<{ gameId: number; titl
     details.total_rating ?? null,
     igdbUrl,
     Game.getFeaturedVideoUrl(details),
-    null,
   );
 
   await Game.saveFullGameMetadata(newGame.id, details);

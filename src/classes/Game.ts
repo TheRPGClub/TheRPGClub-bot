@@ -15,7 +15,6 @@ export interface IGame {
   title: string;
   description: string | null;
   imageData: Buffer | null; // BLOB
-  artData: Buffer | null;
   thumbnailBad: boolean;
   thumbnailApproved: boolean;
   igdbId: number | null;
@@ -153,7 +152,7 @@ export type GameSource = "oracleSQL" | "API";
 
 /**
  * Maps a Rails API JSON response (snake_case) to IGame.
- * imageData and artData are always null from the API (blobs are not serialized).
+ * imageData is always null from the API (blobs are not serialized).
  *
  * The Rails API uses its own auto-increment PK in `data.id` (which differs from
  * the Oracle GameDB GAME_ID). The Oracle ID is serialized as `data.game_id`, so
@@ -165,7 +164,6 @@ function mapGameFromApi(data: any): IGame {
     title: String(data.title),
     description: data.description ? String(data.description) : null,
     imageData: null,
-    artData: null,
     thumbnailBad: Boolean(data.thumbnail_bad ?? false),
     thumbnailApproved: Boolean(data.thumbnail_approved ?? false),
     igdbId: data.igdb_id != null ? Number(data.igdb_id) : null,
@@ -188,7 +186,6 @@ function mapGameRow(row: any): IGame {
     title: String(row.TITLE),
     description: row.DESCRIPTION ? String(row.DESCRIPTION) : null,
     imageData: row.IMAGE_DATA instanceof Buffer ? row.IMAGE_DATA : null,
-    artData: row.ART_DATA instanceof Buffer ? row.ART_DATA : null,
     thumbnailBad: Number(row.THUMBNAIL_BAD ?? 0) === 1,
     thumbnailApproved: Number(row.THUMBNAIL_APPROVED ?? 0) === 1,
     igdbId: row.IGDB_ID ? Number(row.IGDB_ID) : null,
@@ -276,7 +273,6 @@ export default class Game {
     totalRating: number | null = null,
     igdbUrl: string | null = null,
     featuredVideoUrl: string | null = null,
-    artData: Buffer | null = null,
   ): Promise<IGame> {
     const pool = getOraclePool();
     const connection = await pool.getConnection();
@@ -287,7 +283,6 @@ export default class Game {
            TITLE,
            DESCRIPTION,
            IMAGE_DATA,
-           ART_DATA,
            IGDB_ID,
            SLUG,
            TOTAL_RATING,
@@ -297,7 +292,6 @@ export default class Game {
            :title,
            :description,
            :imageData,
-           :artData,
            :igdbId,
            :slug,
            :totalRating,
@@ -309,7 +303,6 @@ export default class Game {
           title,
           description,
           imageData: imageData || null,
-          artData: artData || null,
           igdbId: igdbId || null,
           slug: slug || null,
           totalRating: totalRating || null,
@@ -378,7 +371,6 @@ export default class Game {
         TITLE: string;
         DESCRIPTION: string | null;
         IMAGE_DATA: Buffer | null;
-        ART_DATA: Buffer | null;
         THUMBNAIL_BAD: number | null;
         THUMBNAIL_APPROVED: number | null;
         IGDB_ID: number | null;
@@ -390,7 +382,7 @@ export default class Game {
         CREATED_AT: Date;
         UPDATED_AT: Date;
       }>(
-        `SELECT GAME_ID, TITLE, DESCRIPTION, IMAGE_DATA, ART_DATA, THUMBNAIL_BAD,
+        `SELECT GAME_ID, TITLE, DESCRIPTION, IMAGE_DATA, THUMBNAIL_BAD,
                 THUMBNAIL_APPROVED, IGDB_ID, SLUG, TOTAL_RATING, IGDB_URL, FEATURED_VIDEO_URL,
                 INITIAL_RELEASE_DATE, CREATED_AT, UPDATED_AT
            FROM GAMEDB_GAMES
@@ -400,7 +392,6 @@ export default class Game {
           outFormat: oracledb.OUT_FORMAT_OBJECT,
           fetchInfo: {
             "IMAGE_DATA": { type: oracledb.BUFFER },
-            "ART_DATA": { type: oracledb.BUFFER },
             "DESCRIPTION": { type: oracledb.STRING },
           },
         },
@@ -435,7 +426,6 @@ export default class Game {
         TITLE: string;
         DESCRIPTION: string | null;
         IMAGE_DATA: Buffer | null;
-        ART_DATA: Buffer | null;
         THUMBNAIL_BAD: number | null;
         THUMBNAIL_APPROVED: number | null;
         IGDB_ID: number | null;
@@ -447,7 +437,7 @@ export default class Game {
         CREATED_AT: Date;
         UPDATED_AT: Date;
       }>(
-        `SELECT GAME_ID, TITLE, DESCRIPTION, IMAGE_DATA, ART_DATA, THUMBNAIL_BAD, THUMBNAIL_APPROVED, IGDB_ID, SLUG, TOTAL_RATING,
+        `SELECT GAME_ID, TITLE, DESCRIPTION, IMAGE_DATA, THUMBNAIL_BAD, THUMBNAIL_APPROVED, IGDB_ID, SLUG, TOTAL_RATING,
                 IGDB_URL, FEATURED_VIDEO_URL, INITIAL_RELEASE_DATE, CREATED_AT, UPDATED_AT
            FROM GAMEDB_GAMES
           WHERE GAME_ID IN (${placeholders.join(", ")})`,
@@ -456,7 +446,6 @@ export default class Game {
           outFormat: oracledb.OUT_FORMAT_OBJECT,
           fetchInfo: {
             IMAGE_DATA: { type: oracledb.BUFFER },
-            ART_DATA: { type: oracledb.BUFFER },
             DESCRIPTION: { type: oracledb.STRING },
           },
         },
@@ -477,7 +466,6 @@ export default class Game {
         TITLE: string;
         DESCRIPTION: string | null;
         IMAGE_DATA: Buffer | null;
-        ART_DATA: Buffer | null;
         THUMBNAIL_BAD: number | null;
         THUMBNAIL_APPROVED: number | null;
         IGDB_ID: number | null;
@@ -489,7 +477,7 @@ export default class Game {
         CREATED_AT: Date;
         UPDATED_AT: Date;
       }>(
-        `SELECT GAME_ID, TITLE, DESCRIPTION, IMAGE_DATA, ART_DATA, THUMBNAIL_BAD, THUMBNAIL_APPROVED, IGDB_ID, SLUG, TOTAL_RATING,
+        `SELECT GAME_ID, TITLE, DESCRIPTION, IMAGE_DATA, THUMBNAIL_BAD, THUMBNAIL_APPROVED, IGDB_ID, SLUG, TOTAL_RATING,
                 IGDB_URL, FEATURED_VIDEO_URL, INITIAL_RELEASE_DATE, CREATED_AT, UPDATED_AT
            FROM GAMEDB_GAMES
           WHERE GAME_ID IN (
@@ -506,7 +494,6 @@ export default class Game {
           outFormat: oracledb.OUT_FORMAT_OBJECT,
           fetchInfo: {
             IMAGE_DATA: { type: oracledb.BUFFER },
-            ART_DATA: { type: oracledb.BUFFER },
             DESCRIPTION: { type: oracledb.STRING },
           },
         },
@@ -573,7 +560,6 @@ export default class Game {
         TITLE: string;
         DESCRIPTION: string | null;
         IMAGE_DATA: Buffer | null;
-        ART_DATA: Buffer | null;
         THUMBNAIL_BAD: number | null;
         THUMBNAIL_APPROVED: number | null;
         IGDB_ID: number | null;
@@ -585,8 +571,8 @@ export default class Game {
         CREATED_AT: Date;
         UPDATED_AT: Date;
       }>(
-        `SELECT GAME_ID, TITLE, DESCRIPTION, IMAGE_DATA, ART_DATA, THUMBNAIL_BAD, THUMBNAIL_APPROVED, IGDB_ID, SLUG, TOTAL_RATING, IGDB_URL, FEATURED_VIDEO_URL,
-                INITIAL_RELEASE_DATE, CREATED_AT, UPDATED_AT
+        `SELECT GAME_ID, TITLE, DESCRIPTION, IMAGE_DATA, THUMBNAIL_BAD, THUMBNAIL_APPROVED, IGDB_ID, SLUG, TOTAL_RATING, IGDB_URL,
+                FEATURED_VIDEO_URL, INITIAL_RELEASE_DATE, CREATED_AT, UPDATED_AT
            FROM GAMEDB_GAMES
           WHERE IGDB_ID = :igdbId`,
         { igdbId },
@@ -594,7 +580,6 @@ export default class Game {
           outFormat: oracledb.OUT_FORMAT_OBJECT,
           fetchInfo: {
             IMAGE_DATA: { type: oracledb.BUFFER },
-            ART_DATA: { type: oracledb.BUFFER },
             DESCRIPTION: { type: oracledb.STRING },
           },
         },
@@ -641,18 +626,6 @@ export default class Game {
       }
     }
 
-    let artData: Buffer | null = null;
-    const artId = details.artworks?.[0]?.image_id;
-    if (artId) {
-      try {
-        const artUrl = `https://images.igdb.com/igdb/image/upload/t_1080p/${artId}.jpg`;
-        const artResponse = await axios.get(artUrl, { responseType: "arraybuffer" });
-        artData = Buffer.from(artResponse.data);
-      } catch (err) {
-        console.error("Failed to download artwork image:", err);
-      }
-    }
-
     let newGame: IGame | null = null;
     try {
       newGame = await Game.createGame(
@@ -664,7 +637,6 @@ export default class Game {
         details.total_rating ?? null,
         details.url ?? null,
         Game.getFeaturedVideoUrl(details),
-        artData,
       );
     } catch (err: any) {
       const message = err?.message ?? "";
@@ -1882,7 +1854,6 @@ export default class Game {
         TITLE: string;
         DESCRIPTION: string | null;
         IMAGE_DATA: Buffer | null;
-        ART_DATA: Buffer | null;
         IGDB_ID: number | null;
         SLUG: string | null;
         TOTAL_RATING: number | null;
@@ -1909,8 +1880,7 @@ export default class Game {
         id: Number(row.GAME_ID),
         title: String(row.TITLE),
         description: row.DESCRIPTION ? String(row.DESCRIPTION) : null,
-        imageData: null, // Exclude image data for search results
-        artData: null,
+        imageData: null,
         thumbnailBad: false,
         thumbnailApproved: false,
         igdbId: row.IGDB_ID ? Number(row.IGDB_ID) : null,
@@ -2056,7 +2026,7 @@ export default class Game {
         CREATED_AT: Date;
         UPDATED_AT: Date;
       }>(
-        `SELECT g.GAME_ID, g.TITLE, g.DESCRIPTION, g.IMAGE_DATA, g.ART_DATA, g.IGDB_ID, g.SLUG, g.TOTAL_RATING,
+        `SELECT g.GAME_ID, g.TITLE, g.DESCRIPTION, g.IMAGE_DATA, g.IGDB_ID, g.SLUG, g.TOTAL_RATING,
                 g.IGDB_URL, g.FEATURED_VIDEO_URL, g.INITIAL_RELEASE_DATE, g.CREATED_AT, g.UPDATED_AT
            FROM GAMEDB_GAMES g
           WHERE ${combinedClause}
@@ -2066,7 +2036,6 @@ export default class Game {
           outFormat: oracledb.OUT_FORMAT_OBJECT,
           fetchInfo: {
             IMAGE_DATA: { type: oracledb.BUFFER },
-            ART_DATA: { type: oracledb.BUFFER },
             DESCRIPTION: { type: oracledb.STRING },
           },
         },
@@ -2086,21 +2055,6 @@ export default class Game {
       await connection.execute(
         `UPDATE GAMEDB_GAMES SET IMAGE_DATA = :imageData, UPDATED_AT = SYSTIMESTAMP WHERE GAME_ID = :gameId`,
         { imageData, gameId },
-        { autoCommit: true },
-      );
-    } finally {
-      await connection.close();
-    }
-  }
-
-  static async updateGameArt(gameId: number, artData: Buffer): Promise<void> {
-    const pool = getOraclePool();
-    const connection = await pool.getConnection();
-
-    try {
-      await connection.execute(
-        `UPDATE GAMEDB_GAMES SET ART_DATA = :artData, UPDATED_AT = SYSTIMESTAMP WHERE GAME_ID = :gameId`,
-        { artData, gameId },
         { autoCommit: true },
       );
     } finally {

@@ -16,9 +16,8 @@ Game metadata ingested from IGDB and stored for bot lookups. Schema created by
 | TITLE | VARCHAR2(255) | No | Game title. |
 | DESCRIPTION | CLOB | Yes | Long-form summary from IGDB. |
 | IMAGE_DATA | BLOB | Yes | Cover art bytes, if downloaded. |
-| ART_DATA | BLOB | Yes | Artwork bytes, if downloaded. |
-| THUMBNAIL_BAD | NUMBER(1) | No | 1 when the artwork thumbnail is marked as bad. |
-| THUMBNAIL_APPROVED | NUMBER(1) | No | 1 when the artwork thumbnail is approved. |
+| THUMBNAIL_BAD | NUMBER(1) | No | 1 when the cover image is marked as bad. |
+| THUMBNAIL_APPROVED | NUMBER(1) | No | 1 when the cover image is approved. |
 | IGDB_ID | NUMBER | Yes | Unique IGDB game id. |
 | SLUG | VARCHAR2(255) | Yes | IGDB slug. |
 | TOTAL_RATING | NUMBER | Yes | IGDB aggregated rating. |
