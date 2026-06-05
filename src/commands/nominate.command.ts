@@ -31,11 +31,11 @@ import {
   getUpcomingNominationWindow,
 } from "../functions/NominationWindow.js";
 import {
-  ephemeralFlag,
   safeDeferReply,
   safeReply,
   sanitizeUserInput,
 } from "../functions/InteractionUtils.js";
+import { buildTextReply } from "../functions/ComponentsV2Utils.js";
 import {
   GOTM_NOMINATION_CHANNEL_ID,
   NR_GOTM_NOMINATION_CHANNEL_ID,
@@ -182,34 +182,25 @@ export class NominateCommand {
     const selectedKind = parseNominationKind(rawKind);
 
     if (!cleanedTitle) {
-      await safeReply(interaction, {
-        content: "Please provide a non-empty game title.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("Please provide a non-empty game title.", true));
       return;
     }
 
     if (!selectedKind) {
-      await safeReply(interaction, {
-        content: "Please choose either GOTM or NR-GOTM.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("Please choose either GOTM or NR-GOTM.", true));
       return;
     }
 
     if (!cleanedReason) {
-      await safeReply(interaction, {
-        content: "Reason is required.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("Reason is required.", true));
       return;
     }
 
     if (cleanedReason.length > NOMINATE_REASON_MAX_LENGTH) {
-      await safeReply(interaction, {
-        content: `Reason must be ${NOMINATE_REASON_MAX_LENGTH} characters or fewer.`,
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(
+        interaction,
+        buildTextReply(`Reason must be ${NOMINATE_REASON_MAX_LENGTH} characters or fewer.`, true),
+      );
       return;
     }
 
@@ -219,23 +210,19 @@ export class NominateCommand {
       const window = await getUpcomingNominationWindow();
       if (areNominationsClosed(window)) {
         const voteUnix = Math.floor(window.nextVoteAt.getTime() / 1000);
-        await safeReply(interaction, {
-          content:
-            `Nominations for Round ${window.targetRound} are closed. ` +
-            `Voting is scheduled for <t:${voteUnix}:F>.`,
-          flags: MessageFlags.Ephemeral,
-        });
+        const closedMsg =
+          `Nominations for Round ${window.targetRound} are closed. ` +
+          `Voting is scheduled for <t:${voteUnix}:F>.`;
+        await safeReply(interaction, buildTextReply(closedMsg, true));
         return;
       }
 
       const game = await resolveNominatedGameByTitle(cleanedTitle);
       if (!game) {
-        await safeReply(interaction, {
-          content:
-            `I could not find a unique GameDB match for "${cleanedTitle}". ` +
-            "Please use the title autocomplete or add the game to GameDB first.",
-          flags: MessageFlags.Ephemeral,
-        });
+        const notFoundMsg =
+          `I could not find a unique GameDB match for "${cleanedTitle}". ` +
+          "Please use the title autocomplete or add the game to GameDB first.";
+        await safeReply(interaction, buildTextReply(notFoundMsg, true));
         return;
       }
 
@@ -258,12 +245,10 @@ export class NominateCommand {
             : "";
       const kindLabel = selectedKind === "gotm" ? "GOTM" : "NR-GOTM";
 
-      await safeReply(interaction, {
-        content:
-          `${existing ? "Updated" : "Recorded"} your ${kindLabel} nomination for Round ` +
-          `${window.targetRound}: "${saved.gameTitle}".${replaced}`,
-        flags: MessageFlags.Ephemeral,
-      });
+      const successMsg =
+        `${existing ? "Updated" : "Recorded"} your ${kindLabel} nomination for Round ` +
+        `${window.targetRound}: "${saved.gameTitle}".${replaced}`;
+      await safeReply(interaction, buildTextReply(successMsg, true));
 
       const nominations = await listNominationsForRound(selectedKind, window.targetRound);
       const payload = await buildNominationListPayload(
@@ -282,10 +267,9 @@ export class NominateCommand {
       );
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : String(error);
-      await safeReply(interaction, {
-        content: `Could not save your nomination: ${errorMessage}`,
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(
+        interaction, buildTextReply(`Could not save your nomination: ${errorMessage}`, true),
+      );
     }
   }
 
@@ -315,10 +299,7 @@ export class NominateCommand {
     const ephemeral = !showInChat;
 
     if (!selectedKind) {
-      await safeReply(interaction, {
-        content: "Please choose either GOTM or NR-GOTM.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("Please choose either GOTM or NR-GOTM.", true));
       return;
     }
 
@@ -343,18 +324,19 @@ export class NominateCommand {
       });
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : String(error);
-      await safeReply(interaction, {
-        content: `Could not load nominations: ${errorMessage}`,
-        flags: ephemeralFlag(ephemeral),
-      });
+      await safeReply(
+        interaction, buildTextReply(`Could not load nominations: ${errorMessage}`, ephemeral),
+      );
     }
   }
 
+  // eslint-disable-next-line local/stable-custom-id
   @SelectMenuComponent({ id: /^gotm-nom-details:\d+$/ })
   async showGotmNominationDetails(interaction: StringSelectMenuInteraction): Promise<void> {
     await this.showNominationDetails(interaction);
   }
 
+  // eslint-disable-next-line local/stable-custom-id
   @SelectMenuComponent({ id: /^nr-gotm-nom-details:\d+$/ })
   async showNrGotmNominationDetails(interaction: StringSelectMenuInteraction): Promise<void> {
     await this.showNominationDetails(interaction);
@@ -365,10 +347,7 @@ export class NominateCommand {
   ): Promise<void> {
     const gameId = Number(interaction.values?.[0]);
     if (!Number.isInteger(gameId) || gameId <= 0) {
-      await safeReply(interaction, {
-        content: "Invalid GameDB id.",
-        flags: buildComponentsV2Flags(true),
-      });
+      await safeReply(interaction, buildTextReply("Invalid GameDB id.", true));
       return;
     }
 

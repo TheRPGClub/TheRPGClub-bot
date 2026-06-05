@@ -5,7 +5,6 @@ import {
   ButtonInteraction,
   CommandInteraction,
   Guild,
-  MessageFlags,
   StringSelectMenuBuilder,
   StringSelectMenuInteraction,
   StringSelectMenuOptionBuilder,
@@ -27,6 +26,7 @@ import Member from "../classes/Member.js";
 import {
   buildComponentsV2EditFlags,
   buildComponentsV2Flags,
+  buildTextReply,
 } from "../functions/ComponentsV2Utils.js";
 import { getUserEmojiData, renderUsernameWithEmoji } from "../services/UserEmojiService.js";
 import { buildTitleHeaderContainer, buildUserHeaderContainer } from "../functions/uiComponents.js";
@@ -332,10 +332,10 @@ export class AvatarHistoryCommand {
   async handlePage(interaction: ButtonInteraction): Promise<void> {
     const [, ownerId, targetId, pageRaw, dir] = interaction.customId.split(":");
     if (interaction.user.id !== ownerId) {
-      await safeReply(interaction, {
-        content: "This avatar history list isn't for you.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply(
+        "This avatar history list isn't for you.",
+        true,
+      ));
       return;
     }
 
@@ -374,10 +374,10 @@ export class AvatarHistoryCommand {
   async handleAllPage(interaction: ButtonInteraction): Promise<void> {
     const [, ownerId, pageRaw, dir] = interaction.customId.split(":");
     if (interaction.user.id !== ownerId) {
-      await safeReply(interaction, {
-        content: "This avatar history list isn't for you.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply(
+        "This avatar history list isn't for you.",
+        true,
+      ));
       return;
     }
     const parsed = parseDirAndPage(pageRaw, dir);
@@ -410,10 +410,10 @@ export class AvatarHistoryCommand {
   async handleAllSelect(interaction: StringSelectMenuInteraction): Promise<void> {
     const [, ownerId] = interaction.customId.split(":");
     if (interaction.user.id !== ownerId) {
-      await safeReply(interaction, {
-        content: "This avatar history list isn't for you.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply(
+        "This avatar history list isn't for you.",
+        true,
+      ));
       return;
     }
     const targetId = interaction.values[0];

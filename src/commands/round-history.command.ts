@@ -37,7 +37,7 @@ import {
   safeReply,
   sanitizeUserInput,
 } from "../functions/InteractionUtils.js";
-import { buildComponentsV2Flags } from "../functions/ComponentsV2Utils.js";
+import { buildComponentsV2Flags, buildTextReply } from "../functions/ComponentsV2Utils.js";
 import { decodeBase64Url, encodeBase64Url } from "../functions/CustomIdUtils.js";
 import {
   buildRawModalCustomId,
@@ -71,13 +71,12 @@ type IRoundHistoryFilterState = {
 };
 
 function buildRoundHistorySessionId(userId: string, showInChat: boolean): string {
-  const ts = Date.now().toString(36);
   const visibility = showInChat ? "1" : "0";
-  return `u${userId}_c${visibility}_t${ts}`;
+  return `u${userId}_c${visibility}`;
 }
 
 function parseShowInChatFromSessionId(sessionId: string): boolean | null {
-  const match = /^u\d+_c([01])_t[a-z0-9]+$/.exec(sessionId);
+  const match = /^u\d+_c([01])$/.exec(sessionId);
   if (!match || !match[1]) {
     return null;
   }

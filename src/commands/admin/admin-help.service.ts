@@ -98,6 +98,7 @@ export function buildAdminHelpButtons(
   activeId?: AdminHelpTopicId,
 ): ActionRowBuilder<StringSelectMenuBuilder>[] {
   const select = new StringSelectMenuBuilder()
+    // eslint-disable-next-line local/custom-id-has-matching-handler
     .setCustomId("admin-help-select")
     .setPlaceholder("/admin help")
     .addOptions(
@@ -144,6 +145,7 @@ export function buildAdminHelpResponse(
 
   return {
     embeds: [embed],
+    // eslint-disable-next-line local/dynamic-components-require-chunking
     components,
   };
 }

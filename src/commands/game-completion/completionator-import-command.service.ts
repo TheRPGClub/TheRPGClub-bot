@@ -13,7 +13,7 @@ import {
 import { CompletionatorThreadService } from "./completionator-thread.service.js";
 import { CompletionatorWorkflowService } from "./completionator-workflow.service.js";
 import { BOT_DEV_CHANNEL_ID } from "../../config/channels.js";
-import { buildComponentsV2Flags } from "../../functions/ComponentsV2Utils.js";
+import { buildComponentsV2Flags, buildTextReply } from "../../functions/ComponentsV2Utils.js";
 
 export async function handleCompletionatorImport(
   interaction: CommandInteraction,
@@ -28,44 +28,33 @@ export async function handleCompletionatorImport(
   const guild = interaction.guild;
 
   if (!guild) {
-    await safeReply(interaction, {
-      content: "This command can only be used inside a server.",
-      flags: buildComponentsV2Flags(ephemeral),
-    });
+    await safeReply(interaction, buildTextReply("This command can only be used inside a server.", ephemeral));
     return;
   }
 
   if (action === "start") {
     if (!file?.url) {
-      await safeReply(interaction, {
-        content: [
-          "Please attach the Completionator CSV file.",
-          "To export it from Completionator:",
-          "1. Open your Completionator profile",
-          "2. Hover over 'Playthroughs' from the top menu and choose 'My Completions'",
-          "3. In the upper-right, click 'Export' and then 'Export to CSV'",
-          "4. Upload the CSV with `/game-completion import-completionator action:start file:<csv>`.",
-        ].join("\n"),
-        flags: buildComponentsV2Flags(ephemeral),
-      });
+      const attachMsg = [
+        "Please attach the Completionator CSV file.",
+        "To export it from Completionator:",
+        "1. Open your Completionator profile",
+        "2. Hover over 'Playthroughs' from the top menu and choose 'My Completions'",
+        "3. In the upper-right, click 'Export' and then 'Export to CSV'",
+        "4. Upload the CSV with `/game-completion import-completionator action:start file:<csv>`.",
+      ].join("\n");
+      await safeReply(interaction, buildTextReply(attachMsg, ephemeral));
       return;
     }
 
     const csvText = await fetchCsv(file.url);
     if (!csvText) {
-      await safeReply(interaction, {
-        content: "Failed to download the CSV file.",
-        flags: buildComponentsV2Flags(ephemeral),
-      });
+      await safeReply(interaction, buildTextReply("Failed to download the CSV file.", ephemeral));
       return;
     }
 
     const parsed = parseCompletionatorCsv(csvText);
     if (!parsed.length) {
-      await safeReply(interaction, {
-        content: "No rows found in the CSV file.",
-        flags: buildComponentsV2Flags(ephemeral),
-      });
+      await safeReply(interaction, buildTextReply("No rows found in the CSV file.", ephemeral));
       return;
     }
 
@@ -81,12 +70,11 @@ export async function handleCompletionatorImport(
     if (!context) return;
     const threadMention: string = `<#${context.threadId}>`;
 
-    await safeReply(interaction, {
-      content:
-        `Import session #${session.importId} created with ${parsed.length} rows. ` +
-        `Starting review in ${threadMention}.`,
-      flags: buildComponentsV2Flags(ephemeral),
-    });
+    await safeReply(interaction, buildTextReply(
+      `Import session #${session.importId} created with ${parsed.length} rows. ` +
+      `Starting review in ${threadMention}.`,
+      ephemeral,
+    ));
 
     const workflowService = new CompletionatorWorkflowService();
     await workflowService.processNextCompletionatorItem(interaction, session, {
@@ -99,10 +87,7 @@ export async function handleCompletionatorImport(
   if (action === "status") {
     const session = await getActiveImportForUser(userId);
     if (!session) {
-      await safeReply(interaction, {
-        content: "No active import session found.",
-        flags: buildComponentsV2Flags(ephemeral),
-      });
+      await safeReply(interaction, buildTextReply("No active import session found.", ephemeral));
       return;
     }
 
@@ -126,10 +111,7 @@ export async function handleCompletionatorImport(
 
   const session = await getActiveImportForUser(userId);
   if (!session) {
-    await safeReply(interaction, {
-      content: "No active import session found.",
-      flags: buildComponentsV2Flags(ephemeral),
-    });
+    await safeReply(interaction, buildTextReply("No active import session found.", ephemeral));
     return;
   }
 
@@ -137,21 +119,20 @@ export async function handleCompletionatorImport(
     await setImportStatus(session.importId, "PAUSED");
     const threadService = new CompletionatorThreadService();
     await threadService.cleanupCompletionatorThread(session.userId, session.importId);
-    await safeReply(interaction, {
-      content:
-        `Import #${session.importId} paused. ` +
-        "Resume with `/game-completion import-completionator action:resume`.",
-      flags: buildComponentsV2Flags(ephemeral),
-    });
+    await safeReply(interaction, buildTextReply(
+      `Import #${session.importId} paused. ` +
+      "Resume with `/game-completion import-completionator action:resume`.",
+      ephemeral,
+    ));
     return;
   }
 
   if (action === "cancel") {
     await setImportStatus(session.importId, "CANCELED");
-    await safeReply(interaction, {
-      content: `Import #${session.importId} canceled.`,
-      flags: buildComponentsV2Flags(ephemeral),
-    });
+    await safeReply(
+      interaction,
+      buildTextReply(`Import #${session.importId} canceled.`, ephemeral),
+    );
     return;
   }
 
@@ -159,12 +140,10 @@ export async function handleCompletionatorImport(
   const threadService = new CompletionatorThreadService();
   const context = await threadService.getOrCreateCompletionatorThread(interaction, session);
   if (!context) return;
-  await safeReply(interaction, {
-    content:
-      `Import #${session.importId} resumed. ` +
-      `Continue in <#${context.threadId}>.`,
-    flags: buildComponentsV2Flags(ephemeral),
-  });
+  await safeReply(interaction, buildTextReply(
+    `Import #${session.importId} resumed. Continue in <#${context.threadId}>.`,
+    ephemeral,
+  ));
 
   const workflowService = new CompletionatorWorkflowService();
   await workflowService.processNextCompletionatorItem(interaction, session, {

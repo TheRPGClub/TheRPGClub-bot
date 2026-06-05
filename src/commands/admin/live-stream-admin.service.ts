@@ -22,6 +22,7 @@ import {
   sanitizeOptionalInput,
   sanitizeUserInput,
 } from "../../functions/InteractionUtils.js";
+import { buildTextReply } from "../../functions/ComponentsV2Utils.js";
 
 const LIVE_STREAM_MODAL_PREFIX = "admin-live-stream-create";
 const LIVE_STREAM_TOPIC_ID = "live-stream-topic";
@@ -225,22 +226,16 @@ export async function openLiveStreamCreateModal(interaction: CommandInteraction)
   );
 }
 
-export async function handleLiveStreamCreateModal(interaction: ModalSubmitInteraction): 
+export async function handleLiveStreamCreateModal(interaction: ModalSubmitInteraction):
   Promise<void> {
   const customIdParts = interaction.customId.split(":");
   if (customIdParts.length !== 2 || customIdParts[0] !== LIVE_STREAM_MODAL_PREFIX) {
-    await safeReply(interaction, {
-      content: "This modal is invalid.",
-      flags: MessageFlags.Ephemeral,
-    });
+    await safeReply(interaction, buildTextReply("This modal is invalid.", true));
     return;
   }
 
   if (customIdParts[1] !== interaction.user.id) {
-    await safeReply(interaction, {
-      content: "This modal is not for you.",
-      flags: MessageFlags.Ephemeral,
-    });
+    await safeReply(interaction, buildTextReply("This modal is not for you.", true));
     return;
   }
 
@@ -255,21 +250,15 @@ export async function handleLiveStreamCreateModal(interaction: ModalSubmitIntera
   });
 
   if (!parsedInput.ok) {
-    await safeReply(interaction, {
-      content: parsedInput.error,
-      flags: MessageFlags.Ephemeral,
-    });
+    await safeReply(interaction, buildTextReply(parsedInput.error, true));
     return;
   }
 
   const { topic, startsAt, endsAt, timeZone, imageUrl } = parsedInput.value;
-  const forum = 
+  const forum =
     (await interaction.guild?.channels.fetch(LIVE_EVENT_FORUM_ID)) as ForumChannel | null;
   if (!forum) {
-    await safeReply(interaction, {
-      content: "Live Events forum channel was not found.",
-      flags: MessageFlags.Ephemeral,
-    });
+    await safeReply(interaction, buildTextReply("Live Events forum channel was not found.", true));
     return;
   }
 
@@ -279,10 +268,7 @@ export async function handleLiveStreamCreateModal(interaction: ModalSubmitIntera
       imageBuffer = await fetchImageBuffer(imageUrl);
     } catch (error: unknown) {
       const msg = error instanceof Error ? error.message : String(error);
-      await safeReply(interaction, {
-        content: `Image fetch failed: ${msg}`,
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply(`Image fetch failed: ${msg}`, true));
       return;
     }
   }
@@ -301,10 +287,7 @@ export async function handleLiveStreamCreateModal(interaction: ModalSubmitIntera
     threadId = thread.id;
   } catch (error: unknown) {
     const msg = error instanceof Error ? error.message : String(error);
-    await safeReply(interaction, {
-      content: `Thread creation failed: ${msg}`,
-      flags: MessageFlags.Ephemeral,
-    });
+    await safeReply(interaction, buildTextReply(`Thread creation failed: ${msg}`, true));
     return;
   }
 
@@ -324,21 +307,19 @@ export async function handleLiveStreamCreateModal(interaction: ModalSubmitIntera
     }
 
     const eventUrl = `https://discord.com/events/${interaction.guildId}/${event.id}`;
-    await safeReply(interaction, {
-      content:
-        `Created live event resources.\n` +
-        `Thread: <#${threadId}>\n` +
-        `Event: ${eventUrl}\n` +
-        `Scheduled: ${timeZone}`,
-      flags: MessageFlags.Ephemeral,
-    });
+    await safeReply(interaction, buildTextReply(
+      `Created live event resources.\n` +
+      `Thread: <#${threadId}>\n` +
+      `Event: ${eventUrl}\n` +
+      `Scheduled: ${timeZone}`,
+      true,
+    ));
   } catch (error: unknown) {
     const msg = error instanceof Error ? error.message : String(error);
-    await safeReply(interaction, {
-      content:
-        `Scheduled event creation failed: ${msg}\n` +
-        `Thread was created successfully: <#${threadId}>`,
-      flags: MessageFlags.Ephemeral,
-    });
+    await safeReply(interaction, buildTextReply(
+      `Scheduled event creation failed: ${msg}\n` +
+      `Thread was created successfully: <#${threadId}>`,
+      true,
+    ));
   }
 }

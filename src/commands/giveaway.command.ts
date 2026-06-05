@@ -28,6 +28,7 @@ import {
   safeUpdate,
   stripModalInput,
 } from "../functions/InteractionUtils.js";
+import { buildTextReply } from "../functions/ComponentsV2Utils.js";
 import {
   buildOptionalPrevNextRow,
   parseDirAndPage,
@@ -95,6 +96,7 @@ function buildKeySelectMenus(
     }));
     const range = getKeyRangeLabel(chunk);
     const select = new StringSelectMenuBuilder()
+      // eslint-disable-next-line local/stable-custom-id
       .setCustomId(`${customIdPrefix}:${rows.length}`)
       .setPlaceholder(`Claim a key... (${range})`)
       .setMinValues(1)
@@ -186,10 +188,7 @@ async function handleDonation(
 ): Promise<boolean> {
   const normalized = normalizeDonationInput(title, platform, keyValue);
   if ("error" in normalized) {
-    await safeReply(interaction, {
-      content: normalized.error,
-      flags: MessageFlags.Ephemeral,
-    });
+    await safeReply(interaction, buildTextReply(normalized.error, true));
     return false;
   }
 
@@ -200,30 +199,23 @@ async function handleDonation(
     interaction.user.id,
   );
 
-  await safeReply(interaction, {
-    content:
-      `Thanks! Added **${created.gameTitle}** (${created.platform}) to the giveaway pool ` +
-      `(Key ID: ${created.keyId}).`,
-    flags: MessageFlags.Ephemeral,
-  });
+  await safeReply(interaction, buildTextReply(
+    `Thanks! Added **${created.gameTitle}** (${created.platform}) to the giveaway pool ` +
+    `(Key ID: ${created.keyId}).`,
+    true,
+  ));
   return true;
 }
 
 async function handleRevoke(interaction: AnyRepliable, keyId: number): Promise<boolean> {
   if (!Number.isInteger(keyId) || keyId <= 0) {
-    await safeReply(interaction, {
-      content: "Invalid key id.",
-      flags: MessageFlags.Ephemeral,
-    });
+    await safeReply(interaction, buildTextReply("Invalid key id.", true));
     return false;
   }
 
   const key = await getGameKeyById(keyId);
   if (!key) {
-    await safeReply(interaction, {
-      content: "No key found with that id.",
-      flags: MessageFlags.Ephemeral,
-    });
+    await safeReply(interaction, buildTextReply("No key found with that id.", true));
     return false;
   }
 
@@ -236,12 +228,12 @@ async function handleRevoke(interaction: AnyRepliable, keyId: number): Promise<b
   }
 
   const removed = await revokeGameKey(keyId);
-  await safeReply(interaction, {
-    content: removed
+  await safeReply(interaction, buildTextReply(
+    removed
       ? `Removed **${key.gameTitle}** (${key.platform}) from the giveaway pool.`
       : "Could not remove that key.",
-    flags: MessageFlags.Ephemeral,
-  });
+    true,
+  ));
 
   return Boolean(removed);
 }
@@ -255,10 +247,12 @@ function buildClaimConfirmComponents(
   cancelId: string,
 ): ActionRowBuilder<ButtonBuilder>[] {
   const yesButton = new ButtonBuilder()
+    // eslint-disable-next-line local/stable-custom-id
     .setCustomId(confirmId)
     .setLabel("Yes")
     .setStyle(ButtonStyle.Success);
   const noButton = new ButtonBuilder()
+    // eslint-disable-next-line local/stable-custom-id
     .setCustomId(cancelId)
     .setLabel("No")
     .setStyle(ButtonStyle.Secondary);
@@ -288,11 +282,13 @@ function buildDonorSettingsRow(
   enabled: boolean,
 ): ActionRowBuilder<ButtonBuilder> {
   const yesButton = new ButtonBuilder()
+    // eslint-disable-next-line local/stable-custom-id
     .setCustomId(`${GIVEAWAY_DONOR_NOTIFY_ID}:${userId}:yes`)
     .setLabel("Yes")
     .setStyle(ButtonStyle.Success)
     .setDisabled(enabled);
   const noButton = new ButtonBuilder()
+    // eslint-disable-next-line local/stable-custom-id
     .setCustomId(`${GIVEAWAY_DONOR_NOTIFY_ID}:${userId}:no`)
     .setLabel("No")
     .setStyle(ButtonStyle.Secondary)
@@ -354,18 +350,21 @@ async function claimKey(
 
 function buildDonateModal(): ModalBuilder {
   const titleInput = new TextInputBuilder()
+    // eslint-disable-next-line local/stable-custom-id
     .setCustomId(GIVEAWAY_DONATE_TITLE_ID)
     .setLabel("Game title")
     .setStyle(TextInputStyle.Short)
     .setRequired(true)
     .setMaxLength(MAX_TITLE_LENGTH);
   const platformInput = new TextInputBuilder()
+    // eslint-disable-next-line local/stable-custom-id
     .setCustomId(GIVEAWAY_DONATE_PLATFORM_ID)
     .setLabel("Platform (Steam, Epic, GOG, etc.)")
     .setStyle(TextInputStyle.Short)
     .setRequired(true)
     .setMaxLength(MAX_PLATFORM_LENGTH);
   const keyInput = new TextInputBuilder()
+    // eslint-disable-next-line local/stable-custom-id
     .setCustomId(GIVEAWAY_DONATE_KEY_ID)
     .setLabel("Game key")
     .setStyle(TextInputStyle.Short)
@@ -373,6 +372,7 @@ function buildDonateModal(): ModalBuilder {
     .setMaxLength(MAX_KEY_LENGTH);
 
   return new ModalBuilder()
+    // eslint-disable-next-line local/stable-custom-id
     .setCustomId(GIVEAWAY_DONATE_MODAL_ID)
     .setTitle("Donate a Game Key")
     .addComponents(
@@ -384,12 +384,14 @@ function buildDonateModal(): ModalBuilder {
 
 function buildRevokeModal(): ModalBuilder {
   const keyIdInput = new TextInputBuilder()
+    // eslint-disable-next-line local/stable-custom-id
     .setCustomId(GIVEAWAY_REVOKE_KEY_ID)
     .setLabel("Key ID")
     .setStyle(TextInputStyle.Short)
     .setRequired(true);
 
   return new ModalBuilder()
+    // eslint-disable-next-line local/stable-custom-id
     .setCustomId(GIVEAWAY_REVOKE_MODAL_ID)
     .setTitle("Revoke a Game Key")
     .addComponents(new ActionRowBuilder<TextInputBuilder>().addComponents(keyIdInput));
@@ -407,6 +409,7 @@ function buildKeyListComponents(
   if (keys.length) {
     if (isPublic) {
       const claimButton = new ButtonBuilder()
+        // eslint-disable-next-line local/stable-custom-id
         .setCustomId(`giveaway-claim-button:${sessionId}:${page}`)
         .setLabel("Claim a key")
         .setStyle(ButtonStyle.Primary);
@@ -453,6 +456,7 @@ async function buildKeyListPayload(
     keys,
     isPublic,
   );
+  // eslint-disable-next-line local/dynamic-components-require-chunking
   return { embeds: [embed], components };
 }
 
@@ -602,14 +606,12 @@ export class GiveawayCommand {
   }
   */
 
+  // eslint-disable-next-line local/stable-custom-id
   @ButtonComponent({ id: /^giveaway-page:[^:]+:\d+:\d+:(prev|next)$/ })
   async handlePage(interaction: ButtonInteraction): Promise<void> {
     const [, sessionId, ownerId, pageRaw, dir] = interaction.customId.split(":");
     if (interaction.user.id !== ownerId) {
-      await safeReply(interaction, {
-        content: "This giveaway list isn't for you.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("This giveaway list isn't for you.", true));
       return;
     }
 
@@ -618,6 +620,7 @@ export class GiveawayCommand {
     await updateKeyListInteraction(interaction, sessionId, ownerId, parsed.nextPage, false);
   }
 
+  // eslint-disable-next-line local/stable-custom-id
   @ButtonComponent({ id: /^giveaway-page-public:[^:]+:\d+:(prev|next)$/ })
   async handlePublicPage(interaction: ButtonInteraction): Promise<void> {
     const [, sessionId, pageRaw, dir] = interaction.customId.split(":");
@@ -627,6 +630,7 @@ export class GiveawayCommand {
       interaction, sessionId, interaction.user.id, parsed.nextPage, true);
   }
 
+  // eslint-disable-next-line local/stable-custom-id
   @ButtonComponent({ id: /^giveaway-hub-claim:\d+$/ })
   async handleHubClaim(interaction: ButtonInteraction): Promise<void> {
     const [, pageRaw] = interaction.customId.split(":");
@@ -634,19 +638,16 @@ export class GiveawayCommand {
     if (Number.isNaN(page)) return;
 
     if (!hasMemberRole(interaction.member)) {
-      await safeReply(interaction, {
-        content: "Claiming keys requires the Member role.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("Claiming keys requires the Member role.", true));
       return;
     }
 
     const keys = await listAllAvailableKeys();
     if (!keys.length) {
-      await safeReply(interaction, {
-        content: "There are no available game keys right now.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply(
+        "There are no available game keys right now.",
+        true,
+      ));
       return;
     }
 
@@ -660,11 +661,13 @@ export class GiveawayCommand {
     });
   }
 
+  // eslint-disable-next-line local/stable-custom-id
   @ButtonComponent({ id: "giveaway-hub-donate" })
   async handleHubDonate(interaction: ButtonInteraction): Promise<void> {
     await interaction.showModal(buildDonateModal()).catch(() => {});
   }
 
+  // eslint-disable-next-line local/stable-custom-id
   @ButtonComponent({ id: GIVEAWAY_DONOR_SETTINGS_ID })
   async handleDonorSettings(interaction: ButtonInteraction): Promise<void> {
     const enabled = await Member.getGiveawayDonorNotifySetting(interaction.user.id);
@@ -684,19 +687,18 @@ export class GiveawayCommand {
     });
   }
 
+  // eslint-disable-next-line local/stable-custom-id
   @ButtonComponent({ id: "giveaway-hub-revoke" })
   async handleHubRevoke(interaction: ButtonInteraction): Promise<void> {
     await interaction.showModal(buildRevokeModal()).catch(() => {});
   }
 
+  // eslint-disable-next-line local/stable-custom-id
   @ButtonComponent({ id: /^giveaway-donor-notify:\d+:(yes|no)$/ })
   async handleDonorNotifyUpdate(interaction: ButtonInteraction): Promise<void> {
     const [, ownerId, choice] = interaction.customId.split(":");
     if (interaction.user.id !== ownerId) {
-      await safeReply(interaction, {
-        content: "This donor setting isn't for you.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("This donor setting isn't for you.", true));
       return;
     }
 
@@ -717,6 +719,7 @@ export class GiveawayCommand {
     });
   }
 
+  // eslint-disable-next-line local/stable-custom-id
   @ButtonComponent({ id: /^giveaway-claim-button:[^:]+:\d+$/ })
   async handleClaimButton(interaction: ButtonInteraction): Promise<void> {
     const [, sessionId, pageRaw] = interaction.customId.split(":");
@@ -724,19 +727,16 @@ export class GiveawayCommand {
     if (Number.isNaN(page)) return;
 
     if (!hasMemberRole(interaction.member)) {
-      await safeReply(interaction, {
-        content: "Claiming keys requires the Member role.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("Claiming keys requires the Member role.", true));
       return;
     }
 
     const { keys, totalCount, totalPages, safePage } = await getAvailableKeysPage(page);
     if (!totalCount || !keys.length) {
-      await safeReply(interaction, {
-        content: "There are no available game keys right now.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply(
+        "There are no available game keys right now.",
+        true,
+      ));
       return;
     }
 
@@ -751,22 +751,17 @@ export class GiveawayCommand {
     });
   }
 
+  // eslint-disable-next-line local/stable-custom-id
   @SelectMenuComponent({ id: /^giveaway-claim:[^:]+:\d+:\d+:\d+$/ })
   async handleClaim(interaction: StringSelectMenuInteraction): Promise<void> {
     const [, sessionId, ownerId, pageRaw] = interaction.customId.split(":");
     if (interaction.user.id !== ownerId) {
-      await safeReply(interaction, {
-        content: "This giveaway list isn't for you.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("This giveaway list isn't for you.", true));
       return;
     }
 
     if (!hasMemberRole(interaction.member)) {
-      await safeReply(interaction, {
-        content: "Claiming keys requires the Member role.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("Claiming keys requires the Member role.", true));
       return;
     }
 
@@ -775,10 +770,7 @@ export class GiveawayCommand {
 
     const keyId = Number(interaction.values?.[0]);
     if (!Number.isInteger(keyId) || keyId <= 0) {
-      await safeReply(interaction, {
-        content: "Invalid selection.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("Invalid selection.", true));
       return;
     }
 
@@ -801,22 +793,17 @@ export class GiveawayCommand {
     });
   }
 
+  // eslint-disable-next-line local/stable-custom-id
   @SelectMenuComponent({ id: /^giveaway-hub-claim-select:\d+:\d+$/ })
   async handleHubClaimSelect(interaction: StringSelectMenuInteraction): Promise<void> {
     const [, userId] = interaction.customId.split(":");
     if (interaction.user.id !== userId) {
-      await safeReply(interaction, {
-        content: "This giveaway claim isn't for you.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("This giveaway claim isn't for you.", true));
       return;
     }
 
     if (!hasMemberRole(interaction.member)) {
-      await safeReply(interaction, {
-        content: "Claiming keys requires the Member role.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("Claiming keys requires the Member role.", true));
       return;
     }
 
@@ -824,10 +811,7 @@ export class GiveawayCommand {
 
     const keyId = Number(interaction.values?.[0]);
     if (!Number.isInteger(keyId) || keyId <= 0) {
-      await safeReply(interaction, {
-        content: "Invalid selection.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("Invalid selection.", true));
       return;
     }
 
@@ -850,22 +834,17 @@ export class GiveawayCommand {
     });
   }
 
+  // eslint-disable-next-line local/stable-custom-id
   @SelectMenuComponent({ id: /^giveaway-claim-public:[^:]+:\d+:\d+:\d+:\d+$/ })
   async handlePublicClaim(interaction: StringSelectMenuInteraction): Promise<void> {
     const [, sessionId, pageRaw, messageId, userId] = interaction.customId.split(":");
     if (interaction.user.id !== userId) {
-      await safeReply(interaction, {
-        content: "This giveaway claim isn't for you.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("This giveaway claim isn't for you.", true));
       return;
     }
 
     if (!hasMemberRole(interaction.member)) {
-      await safeReply(interaction, {
-        content: "Claiming keys requires the Member role.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("Claiming keys requires the Member role.", true));
       return;
     }
 
@@ -874,10 +853,7 @@ export class GiveawayCommand {
 
     const keyId = Number(interaction.values?.[0]);
     if (!Number.isInteger(keyId) || keyId <= 0) {
-      await safeReply(interaction, {
-        content: "Invalid selection.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("Invalid selection.", true));
       return;
     }
 
@@ -901,6 +877,7 @@ export class GiveawayCommand {
     });
   }
 
+  // eslint-disable-next-line local/stable-custom-id
   @ButtonComponent({ id: /^giveaway-claim-confirm:(hub|private|public):/ })
   async handleClaimConfirm(interaction: ButtonInteraction): Promise<void> {
     const parts = interaction.customId.split(":");
@@ -929,10 +906,7 @@ export class GiveawayCommand {
     if (scope === "hub") {
       const userId = parts[4];
       if (interaction.user.id !== userId) {
-        await safeReply(interaction, {
-          content: "This giveaway claim isn't for you.",
-          flags: MessageFlags.Ephemeral,
-        });
+        await safeReply(interaction, buildTextReply("This giveaway claim isn't for you.", true));
         return;
       }
     }
@@ -940,10 +914,7 @@ export class GiveawayCommand {
     if (scope === "private") {
       const ownerId = parts[5];
       if (interaction.user.id !== ownerId) {
-        await safeReply(interaction, {
-          content: "This giveaway claim isn't for you.",
-          flags: MessageFlags.Ephemeral,
-        });
+        await safeReply(interaction, buildTextReply("This giveaway claim isn't for you.", true));
         return;
       }
     }
@@ -951,10 +922,7 @@ export class GiveawayCommand {
     if (scope === "public") {
       const userId = parts[6];
       if (interaction.user.id !== userId) {
-        await safeReply(interaction, {
-          content: "This giveaway claim isn't for you.",
-          flags: MessageFlags.Ephemeral,
-        });
+        await safeReply(interaction, buildTextReply("This giveaway claim isn't for you.", true));
         return;
       }
     }
@@ -962,19 +930,11 @@ export class GiveawayCommand {
     await safeDeferUpdate(interaction);
     const result = await claimKey(interaction, keyId);
     if (result.status === "unavailable") {
-      await safeReply(interaction, {
-        content: "That key is no longer available.",
-        embeds: [],
-        components: [],
-      });
+      await safeReply(interaction, buildTextReply("That key is no longer available.", false));
       return;
     }
 
-    await safeReply(interaction, {
-      content: "Sending your key by DM now.",
-      embeds: [],
-      components: [],
-    });
+    await safeReply(interaction, buildTextReply("Sending your key by DM now.", false));
 
     const dmResult = await interaction.user
       .send({
@@ -987,17 +947,15 @@ export class GiveawayCommand {
 
     if (dmResult) {
       await safeReply(interaction, {
-        content: "Your key was sent by DM. Thanks for claiming responsibly.",
-        embeds: [],
-        components: [],
+        ...buildTextReply("Your key was sent by DM. Thanks for claiming responsibly.", false),
         __forceFollowUp: true,
       });
     } else {
       await safeReply(interaction, {
-        content:
+        ...buildTextReply(
           "I could not send you a DM. Please enable DMs and contact an admin to resend your key.",
-        embeds: [],
-        components: [],
+          false,
+        ),
         __forceFollowUp: true,
       });
     }
@@ -1019,14 +977,12 @@ export class GiveawayCommand {
       .catch(() => {});
   }
 
+  // eslint-disable-next-line local/stable-custom-id
   @ButtonComponent({ id: /^giveaway-claim-cancel:\d+$/ })
   async handleClaimCancel(interaction: ButtonInteraction): Promise<void> {
     const [, userId] = interaction.customId.split(":");
     if (interaction.user.id !== userId) {
-      await safeReply(interaction, {
-        content: "This giveaway claim isn't for you.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("This giveaway claim isn't for you.", true));
       return;
     }
 
@@ -1037,6 +993,7 @@ export class GiveawayCommand {
     });
   }
 
+  // eslint-disable-next-line local/stable-custom-id
   @ModalComponent({ id: GIVEAWAY_DONATE_MODAL_ID })
   async handleDonateModal(interaction: ModalSubmitInteraction): Promise<void> {
     await safeDeferReply(interaction, { flags: MessageFlags.Ephemeral });
@@ -1052,6 +1009,7 @@ export class GiveawayCommand {
     }
   }
 
+  // eslint-disable-next-line local/stable-custom-id
   @ModalComponent({ id: GIVEAWAY_REVOKE_MODAL_ID })
   async handleRevokeModal(interaction: ModalSubmitInteraction): Promise<void> {
     await safeDeferReply(interaction, { flags: MessageFlags.Ephemeral });
@@ -1060,10 +1018,7 @@ export class GiveawayCommand {
     );
     const keyId = Number(keyIdInput);
     if (Number.isNaN(keyId)) {
-      await safeReply(interaction, {
-        content: "Invalid key id.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("Invalid key id.", true));
       return;
     }
 
@@ -1083,9 +1038,9 @@ export class GiveawayRedirectCommand {
     const link = guildId
       ? `https://discord.com/channels/${guildId}/${GIVEAWAY_HUB_CHANNEL_ID}`
       : `https://discord.com/channels/@me/${GIVEAWAY_HUB_CHANNEL_ID}`;
-    await safeReply(interaction, {
-      content: `Use the giveaway hub here: ${link}`,
-      flags: MessageFlags.Ephemeral,
-    });
+    await safeReply(interaction, buildTextReply(
+      `Use the giveaway hub here: ${link}`,
+      true,
+    ));
   }
 }

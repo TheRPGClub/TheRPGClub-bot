@@ -1,6 +1,7 @@
 import type { CommandInteraction } from "discord.js";
 import { ButtonStyle } from "discord.js";
 import { extractErrorMessage, safeReply } from "../../functions/InteractionUtils.js";
+import { buildTextReply } from "../../functions/ComponentsV2Utils.js";
 import Gotm, {
   type IGotmEntry,
   type IGotmGame,
@@ -24,18 +25,17 @@ export async function handleAddGotm(interaction: CommandInteraction): Promise<vo
     allEntries = Gotm.all();
   } catch (err: any) {
     const msg = extractErrorMessage(err);
-    await safeReply(interaction, {
-      content: `Error loading existing GOTM data: ${msg}`,
-    });
+    await safeReply(
+      interaction,
+      buildTextReply(`Error loading existing GOTM data: ${msg}`, false),
+    );
     return;
   }
 
   const nextRound =
     allEntries.length > 0 ? Math.max(...allEntries.map((e) => e.round)) + 1 : 1;
 
-  await safeReply(interaction, {
-    content: `Preparing to create GOTM round ${nextRound}.`,
-  });
+  await safeReply(interaction, buildTextReply(`Preparing to create GOTM round ${nextRound}.`, false));
 
   const monthYearRaw = await promptUserForInput(
     interaction,
@@ -46,9 +46,10 @@ export async function handleAddGotm(interaction: CommandInteraction): Promise<vo
   }
   const monthYear = monthYearRaw.trim();
   if (!monthYear) {
-    await safeReply(interaction, {
-      content: "Month/year label cannot be empty. Creation cancelled.",
-    });
+    await safeReply(
+      interaction,
+      buildTextReply("Month/year label cannot be empty. Creation cancelled.", false),
+    );
     return;
   }
 
@@ -63,9 +64,10 @@ export async function handleAddGotm(interaction: CommandInteraction): Promise<vo
 
   const gameCount = Number(gameCountRaw);
   if (!Number.isInteger(gameCount) || gameCount < 1 || gameCount > 5) {
-    await safeReply(interaction, {
-      content: `Invalid game count "${gameCountRaw}". Creation cancelled.`,
-    });
+    await safeReply(
+      interaction,
+      buildTextReply(`Invalid game count "${gameCountRaw}". Creation cancelled.`, false),
+    );
     return;
   }
 
@@ -81,14 +83,18 @@ export async function handleAddGotm(interaction: CommandInteraction): Promise<vo
     if (gamedbRaw === null) return;
     const gamedbId = Number(gamedbRaw.trim());
     if (!Number.isInteger(gamedbId) || gamedbId <= 0) {
-      await safeReply(interaction, { content: "Invalid GameDB id. Creation cancelled." });
+      await safeReply(
+        interaction,
+        buildTextReply("Invalid GameDB id. Creation cancelled.", false),
+      );
       return;
     }
     const gameMeta = await Game.getGameById(gamedbId);
     if (!gameMeta) {
-      await safeReply(interaction, {
-        content: `GameDB id ${gamedbId} not found. Use /gamedb add first.`,
-      });
+      await safeReply(
+        interaction,
+        buildTextReply(`GameDB id ${gamedbId} not found. Use /gamedb add first.`, false),
+      );
       return;
     }
 
@@ -112,15 +118,16 @@ export async function handleAddGotm(interaction: CommandInteraction): Promise<vo
     );
 
     await safeReply(interaction, {
-      content: `Created GOTM round ${nextRound}.`,
+      ...buildTextReply(`Created GOTM round ${nextRound}.`, false),
       embeds: [embedAssets.embed],
       files: embedAssets.files?.length ? embedAssets.files : undefined,
     });
   } catch (err: any) {
     const msg = extractErrorMessage(err);
-    await safeReply(interaction, {
-      content: `Failed to create GOTM round ${nextRound}: ${msg}`,
-    });
+    await safeReply(
+      interaction,
+      buildTextReply(`Failed to create GOTM round ${nextRound}: ${msg}`, false),
+    );
   }
 }
 
@@ -130,9 +137,7 @@ export async function handleEditGotm(
 ): Promise<void> {
   const roundNumber = Number(round);
   if (!Number.isFinite(roundNumber)) {
-    await safeReply(interaction, {
-      content: "Invalid round number.",
-    });
+    await safeReply(interaction, buildTextReply("Invalid round number.", false));
     return;
   }
 
@@ -141,16 +146,18 @@ export async function handleEditGotm(
     entries = Gotm.getByRound(roundNumber);
   } catch (err: any) {
     const msg = extractErrorMessage(err);
-    await safeReply(interaction, {
-      content: `Error loading GOTM data: ${msg}`,
-    });
+    await safeReply(
+      interaction,
+      buildTextReply(`Error loading GOTM data: ${msg}`, false),
+    );
     return;
   }
 
   if (!entries.length) {
-    await safeReply(interaction, {
-      content: `No GOTM entry found for round ${roundNumber}.`,
-    });
+    await safeReply(
+      interaction,
+      buildTextReply(`No GOTM entry found for round ${roundNumber}.`, false),
+    );
     return;
   }
 
@@ -163,7 +170,7 @@ export async function handleEditGotm(
   );
 
   await safeReply(interaction, {
-    content: `Editing GOTM round ${roundNumber}.`,
+    ...buildTextReply(`Editing GOTM round ${roundNumber}.`, false),
     embeds: [embedAssets.embed],
     files: embedAssets.files?.length ? embedAssets.files : undefined,
   });
@@ -183,9 +190,10 @@ export async function handleEditGotm(
 
     const idx = Number(gameAnswer);
     if (!Number.isInteger(idx) || idx < 1 || idx > totalGames) {
-      await safeReply(interaction, {
-        content: `Invalid game number "${gameAnswer}". Edit cancelled.`,
-      });
+      await safeReply(
+        interaction,
+        buildTextReply(`Invalid game number "${gameAnswer}". Edit cancelled.`, false),
+      );
       return;
     }
     gameIndex = idx - 1;
@@ -213,9 +221,10 @@ export async function handleEditGotm(
     field = "redditUrl";
     nullableField = true;
   } else {
-    await safeReply(interaction, {
-      content: `Unknown field "${fieldAnswerRaw}". Edit cancelled.`,
-    });
+    await safeReply(
+      interaction,
+      buildTextReply(`Unknown field "${fieldAnswerRaw}". Edit cancelled.`, false),
+    );
     return;
   }
 
@@ -236,16 +245,18 @@ export async function handleEditGotm(
   } else if (field === "gamedbGameId") {
     const parsed = Number(valueTrimmed);
     if (!Number.isInteger(parsed) || parsed <= 0) {
-      await safeReply(interaction, {
-        content: "Please provide a valid numeric GameDB id.",
-      });
+      await safeReply(
+        interaction,
+        buildTextReply("Please provide a valid numeric GameDB id.", false),
+      );
       return;
     }
     const game = await Game.getGameById(parsed);
     if (!game) {
-      await safeReply(interaction, {
-        content: `GameDB id ${parsed} was not found. Use /gamedb add first if needed.`,
-      });
+      await safeReply(
+        interaction,
+        buildTextReply(`GameDB id ${parsed} was not found. Use /gamedb add first if needed.`, false),
+      );
       return;
     }
     newValue = parsed;
@@ -269,14 +280,15 @@ export async function handleEditGotm(
     );
 
     await safeReply(interaction, {
-      content: `GOTM round ${roundNumber} updated successfully.`,
+      ...buildTextReply(`GOTM round ${roundNumber} updated successfully.`, false),
       embeds: [updatedAssets.embed],
       files: updatedAssets.files?.length ? updatedAssets.files : undefined,
     });
   } catch (err: any) {
     const msg = extractErrorMessage(err);
-    await safeReply(interaction, {
-      content: `Failed to update GOTM round ${roundNumber}: ${msg}`,
-    });
+    await safeReply(
+      interaction,
+      buildTextReply(`Failed to update GOTM round ${roundNumber}: ${msg}`, false),
+    );
   }
 }

@@ -22,9 +22,9 @@ import {
   resolveGameCompletionPlatformId,
   resolveGameCompletionPlatformLabel,
 } from "./completion-autocomplete.utils.js";
-import { buildComponentsV2Flags } from "../../functions/ComponentsV2Utils.js";
+import { buildTextReply } from "../../functions/ComponentsV2Utils.js";
 import { COMPONENTS_V2_FLAG } from "../../config/flags.js";
-import { safeDeferUpdate, safeReply, safeUpdate } from "../../functions/InteractionUtils.js";
+import { safeReply, safeUpdate } from "../../functions/InteractionUtils.js";
 
 const MAX_NOTE_LENGTH = 500;
 type CompletionEditField = "type" | "date" | "platform" | "playtime" | "note";
@@ -42,28 +42,19 @@ export async function handleCompletionEditMenu(
 ): Promise<void> {
   const [, ownerId] = interaction.customId.split(":");
   if (interaction.user.id !== ownerId) {
-    await safeReply(interaction, {
-      content: "This edit prompt isn't for you.",
-      flags: buildComponentsV2Flags(true),
-    });
+    await safeReply(interaction, buildTextReply("This edit prompt isn't for you.", true));
     return;
   }
 
   const completionId = Number(interaction.values[0]);
   if (!Number.isInteger(completionId) || completionId <= 0) {
-    await safeReply(interaction, {
-      content: "Invalid selection.",
-      flags: buildComponentsV2Flags(true),
-    });
+    await safeReply(interaction, buildTextReply("Invalid selection.", true));
     return;
   }
 
   const completion = await Member.getCompletion(completionId);
   if (!completion) {
-    await safeReply(interaction, {
-      content: "Completion not found.",
-      flags: buildComponentsV2Flags(true),
-    });
+    await safeReply(interaction, buildTextReply("Completion not found.", true));
     return;
   }
 
@@ -81,10 +72,7 @@ export async function handleCompletionEditMenu(
 export async function handleCompletionEditDone(interaction: ButtonInteraction): Promise<void> {
   const [, ownerId] = interaction.customId.split(":");
   if (interaction.user.id !== ownerId) {
-    await safeReply(interaction, {
-      content: "This edit prompt isn't for you.",
-      flags: buildComponentsV2Flags(true),
-    });
+    await safeReply(interaction, buildTextReply("This edit prompt isn't for you.", true));
     return;
   }
 
@@ -104,24 +92,19 @@ export async function handleCompletionEditDone(interaction: ButtonInteraction): 
 export async function handleCompletionFieldEdit(interaction: ButtonInteraction): Promise<void> {
   const [, ownerId, completionIdRaw, field] = interaction.customId.split(":");
   if (interaction.user.id !== ownerId) {
-    await safeReply(interaction, {
-      content: "This edit prompt isn't for you.",
-      flags: buildComponentsV2Flags(true),
-    });
+    await safeReply(interaction, buildTextReply("This edit prompt isn't for you.", true));
     return;
   }
 
   const completionId = Number(completionIdRaw);
   if (!Number.isInteger(completionId) || completionId <= 0) {
-    await safeReply(interaction, {
-      content: "Invalid selection.",
-      flags: buildComponentsV2Flags(true),
-    });
+    await safeReply(interaction, buildTextReply("Invalid selection.", true));
     return;
   }
 
   if (field === "type") {
     const select = new StringSelectMenuBuilder()
+      // eslint-disable-next-line local/custom-id-has-matching-handler
       .setCustomId(`comp-edit-type-select:${ownerId}:${completionId}`)
       .setPlaceholder("Select completion type")
       .addOptions(COMPLETION_TYPES.map((t) => ({ label: t, value: t })));
@@ -271,10 +254,7 @@ export async function handleCompletionTypeSelect(
 ): Promise<void> {
   const [, ownerId, completionIdRaw] = interaction.customId.split(":");
   if (interaction.user.id !== ownerId) {
-    await safeReply(interaction, {
-      content: "This edit prompt isn't for you.",
-      flags: buildComponentsV2Flags(true),
-    });
+    await safeReply(interaction, buildTextReply("This edit prompt isn't for you.", true));
     return;
   }
 
@@ -386,14 +366,17 @@ function buildCompletionEditPrompt(
 
   const fieldButtons = [
     new ButtonBuilder()
+      // eslint-disable-next-line local/custom-id-has-matching-handler
       .setCustomId(`comp-edit-field:${ownerId}:${completionId}:type`)
       .setLabel("Completion Type")
       .setStyle(ButtonStyle.Primary),
     new ButtonBuilder()
+      // eslint-disable-next-line local/custom-id-has-matching-handler
       .setCustomId(`comp-edit-field:${ownerId}:${completionId}:date`)
       .setLabel("Completion Date")
       .setStyle(ButtonStyle.Secondary),
     new ButtonBuilder()
+      // eslint-disable-next-line local/custom-id-has-matching-handler
       .setCustomId(`comp-edit-field:${ownerId}:${completionId}:platform`)
       .setLabel("Platform")
       .setStyle(ButtonStyle.Secondary),
@@ -401,14 +384,17 @@ function buildCompletionEditPrompt(
 
   const secondaryButtons = [
     new ButtonBuilder()
+      // eslint-disable-next-line local/custom-id-has-matching-handler
       .setCustomId(`comp-edit-field:${ownerId}:${completionId}:playtime`)
       .setLabel("Final Playtime")
       .setStyle(ButtonStyle.Secondary),
     new ButtonBuilder()
+      // eslint-disable-next-line local/custom-id-has-matching-handler
       .setCustomId(`comp-edit-field:${ownerId}:${completionId}:note`)
       .setLabel("Note")
       .setStyle(ButtonStyle.Secondary),
     new ButtonBuilder()
+      // eslint-disable-next-line local/custom-id-has-matching-handler
       .setCustomId(`comp-edit-done:${ownerId}:${completionId}`)
       .setLabel("Done")
       .setStyle(ButtonStyle.Success),

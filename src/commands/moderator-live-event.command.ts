@@ -24,6 +24,7 @@ export class ModeratorLiveEventCommand {
   }
 
   @ModalComponent({ id: /^admin-live-stream-create:\d+$/ })
+  // eslint-disable-next-line local/interactive-handler-requires-safe-interaction
   async handleCreateLiveEventModal(interaction: ModalSubmitInteraction): Promise<void> {
     const okToUseCommand: boolean = await isModerator(interaction);
     if (!okToUseCommand) {

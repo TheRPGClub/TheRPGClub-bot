@@ -757,96 +757,114 @@ export class GameCompletionCommands {
     await handleCompletionatorImport(interaction, action, file);
   }
 
+  // eslint-disable-next-line local/stable-custom-id
   @SelectMenuComponent({ id: /^completion-platform-select:.+/ })
   async handlePlatformSelect(interaction: StringSelectMenuInteraction): Promise<void> {
     await handleCompletionPlatformSelect(interaction);
   }
 
   // Simplified handlers - full implementation would delegate to respective service files
+  // eslint-disable-next-line local/stable-custom-id
   @SelectMenuComponent({ id: /^comp-import-select:\d+:\d+:\d+$/ })
   async handleCompletionatorSelectHandler(interaction: StringSelectMenuInteraction): Promise<void> {
     await handleCompletionatorSelect(interaction);
   }
 
+  // eslint-disable-next-line local/stable-custom-id
   @ButtonComponent({ id: /^comp-import-choose-v1:\d+:\d+:\d+:\d+$/ })
   async handleCompletionatorChooseHandler(interaction: ButtonInteraction): Promise<void> {
     await handleCompletionatorChoose(interaction);
   }
 
+  // eslint-disable-next-line local/stable-custom-id
   @SelectMenuComponent({ id: /^comp-import-update-fields:\d+:\d+:\d+$/ })
   async handleCompletionatorUpdateFieldsHandler(
     interaction: StringSelectMenuInteraction): Promise<void> {
     await handleCompletionatorUpdateFields(interaction);
   }
 
+  // eslint-disable-next-line local/stable-custom-id
   @ButtonComponent({ id: /^comp-import-action:\d+:\d+:\d+:.+$/ })
   async handleCompletionatorActionHandler(interaction: ButtonInteraction): Promise<void> {
     await handleCompletionatorAction(interaction);
   }
 
+  // eslint-disable-next-line local/stable-custom-id
   @SelectMenuComponent({ id: /^comp-import-form-select:\d+:\d+:\d+:(type|date|platform)$/ })
   async handleCompletionatorFormSelectHandler(
     interaction: StringSelectMenuInteraction): Promise<void> {
     await handleCompletionatorFormSelect(interaction);
   }
 
+  // eslint-disable-next-line local/stable-custom-id
   @ModalComponent({ id: /^comp-import-date:\d+:\d+:\d+$/ })
   async handleCompletionatorDateModalHandler(interaction: ModalSubmitInteraction): Promise<void> {
     await handleCompletionatorDateModal(interaction);
   }
 
   @ModalComponent(
+    // eslint-disable-next-line local/stable-custom-id
     { id: /^comp-import-modal:(gamedb-query|igdb-query|gamedb-manual|igdb-manual):\d+:\d+:\d+$/ })
   async handleCompletionatorInputModalHandler(interaction: ModalSubmitInteraction): Promise<void> {
     await handleCompletionatorInputModal(interaction);
   }
 
   // Additional simplified handlers for edit/delete/list pagination
+  // eslint-disable-next-line local/stable-custom-id
   @SelectMenuComponent({ id: /^completion-add-select:.+/ })
   async handleCompletionAddSelectHandler(interaction: StringSelectMenuInteraction): Promise<void> {
     await handleCompletionAddSelect(interaction);
   }
 
+  // eslint-disable-next-line local/stable-custom-id
   @SelectMenuComponent({ id: /^comp-del-menu:.+$/ })
   async handleCompletionDeleteMenu(interaction: StringSelectMenuInteraction): Promise<void> {
     await handleCompletionDeleteMenu(interaction);
   }
 
+  // eslint-disable-next-line local/stable-custom-id
   @SelectMenuComponent({ id: /^comp-page-select:.+$/ })
   async handleCompletionPageSelect(interaction: StringSelectMenuInteraction): Promise<void> {
     await handleCompletionPageSelect(interaction);
   }
 
+  // eslint-disable-next-line local/stable-custom-id
   @ButtonComponent({ id: /^comp-(list|edit|delete)-page:[^:]+:[^:]*:\d+:(prev|next)(?::.*)?$/ })
   async handleCompletionPaging(interaction: ButtonInteraction): Promise<void> {
     await handleCompletionPaging(interaction);
   }
 
+  // eslint-disable-next-line local/stable-custom-id
   @ButtonComponent({ id: /^comp-common-nav:[^:]+:[^:]+:[^:]+:[^:]+:[^:]+:\d+:(prev|next):[^:]+$/ })
   async handleCommonCompletionNav(interaction: ButtonInteraction): Promise<void> {
     await handleCommonCompletionNav(interaction);
   }
 
+  // eslint-disable-next-line local/stable-custom-id
   @ButtonComponent({ id: /^comp-common-back:[^:]+:[^:]+:[^:]+:[^:]+:[^:]+:\d+:[^:]+$/ })
   async handleCommonCompletionBack(interaction: ButtonInteraction): Promise<void> {
     await handleCommonCompletionBack(interaction);
   }
 
+  // eslint-disable-next-line local/stable-custom-id
   @SelectMenuComponent({ id: /^comp-leaderboard-select(?::.*)?$/ })
   async handleCompletionLeaderboardSelect(interaction: StringSelectMenuInteraction): Promise<void> {
     await handleCompletionLeaderboardSelect(interaction);
   }
 
+  // eslint-disable-next-line local/stable-custom-id
   @SelectMenuComponent({ id: /^comp-year-select:.+$/ })
   async handleCompletionYearSelect(interaction: StringSelectMenuInteraction): Promise<void> {
     await handleCompletionYearSelect(interaction);
   }
 
+  // eslint-disable-next-line local/stable-custom-id
   @ButtonComponent({ id: /^comp-clear-year-filter:.+$/ })
   async handleCompletionClearYearFilter(interaction: ButtonInteraction): Promise<void> {
     await handleCompletionClearYearFilter(interaction);
   }
 
+  // eslint-disable-next-line local/stable-custom-id
   @SelectMenuComponent({ id: /^comp-journal-view-select:\d+$/ })
   async handleCompletionJournalViewSelect(
     interaction: StringSelectMenuInteraction,
@@ -854,16 +872,19 @@ export class GameCompletionCommands {
     await handleCompletionJournalViewSelect(interaction);
   }
 
+  // eslint-disable-next-line local/stable-custom-id
   @ButtonComponent({ id: /^comp-journal-page:\d+:\d+:(prev|next):\d+$/ })
   async handleCompletionJournalPage(interaction: ButtonInteraction): Promise<void> {
     await handleCompletionJournalPage(interaction);
   }
 
+  // eslint-disable-next-line local/stable-custom-id
   @ButtonComponent({ id: /^comp-list-header:\d+$/ })
   async handleCompletionListHeader(interaction: ButtonInteraction): Promise<void> {
     await handleCompletionListHeader(interaction);
   }
 
+  // eslint-disable-next-line local/stable-custom-id
   @ButtonComponent({ id: /^completion-add-igdb-confirm:.+/ })
   async handleCompletionAddIgdbConfirm(interaction: ButtonInteraction): Promise<void> {
     await safeUpdate(interaction, {

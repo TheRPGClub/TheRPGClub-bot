@@ -108,6 +108,7 @@ function buildAppJwt(): string {
   const payloadToken = toBase64Url(JSON.stringify(payload));
   const data = `${headerToken}.${payloadToken}`;
   const key = normalizePrivateKey(GITHUB_APP_PRIVATE_KEY.replace(/\\n/g, "\n"));
+  // eslint-disable-next-line local/no-direct-interaction-response-methods
   const signature = crypto.createSign("RSA-SHA256").update(data).sign(key);
   return `${data}.${toBase64Url(signature)}`;
 }

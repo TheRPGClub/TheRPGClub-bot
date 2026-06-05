@@ -12,6 +12,7 @@ import {
   type MessageCreateOptions,
 } from "discord.js";
 import { safeDeferUpdate, safeReply } from "../../functions/InteractionUtils.js";
+import { buildTextReply } from "../../functions/ComponentsV2Utils.js";
 import { ADMIN_CHANNEL_ID, NOW_PLAYING_FORUM_ID } from "../../config/channels.js";
 import Gotm, { insertGotmRoundInDatabase, type IGotmGame } from "../../classes/Gotm.js";
 import NrGotm, { insertNrGotmRoundInDatabase, type INrGotmGame } from "../../classes/NrGotm.js";
@@ -179,6 +180,7 @@ async function promptSelectNomination(
   const selectId = `${promptPrefix}:select`;
   const cancelId = `${promptPrefix}:cancel`;
   const select = new StringSelectMenuBuilder()
+    // eslint-disable-next-line local/stable-custom-id
     .setCustomId(selectId)
     .setPlaceholder("Choose a nomination")
     .setMinValues(1)
@@ -186,6 +188,7 @@ async function promptSelectNomination(
     .addOptions(options);
   const selectRow = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select);
   const buttonRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+    // eslint-disable-next-line local/stable-custom-id
     new ButtonBuilder().setCustomId(cancelId).setLabel("Cancel").setStyle(ButtonStyle.Danger),
   );
 
@@ -257,17 +260,19 @@ export async function handleNextRoundSetup(
   testModeInput: boolean | undefined,
 ): Promise<void> {
   if (interaction.channelId !== ADMIN_CHANNEL_ID) {
-    await safeReply(interaction, {
-      content: `This command can only be used in <#${ADMIN_CHANNEL_ID}>.`,
-    });
+    await safeReply(
+      interaction,
+      buildTextReply(`This command can only be used in <#${ADMIN_CHANNEL_ID}>.`, false),
+    );
     return;
   }
 
   const channel: any = interaction.channel;
   if (!channel || typeof channel.send !== "function") {
-    await safeReply(interaction, {
-      content: "This command must be used in a text channel.",
-    });
+    await safeReply(
+      interaction,
+      buildTextReply("This command must be used in a text channel.", false),
+    );
     return;
   }
 
@@ -281,8 +286,11 @@ export async function handleNextRoundSetup(
     embed.setFooter({ text: "TEST MODE ENABLED" });
   }
 
-  await safeReply(interaction, { embeds: [embed] });
-  const message = await interaction.fetchReply();
+  const replyResult = await safeReply(
+    interaction,
+    { embeds: [embed], withResponse: true } as any,
+  );
+  const message = replyResult?.resource?.message ?? null;
   let logHistory = "";
   let wizardState: INextRoundWizardState = createDefaultNextRoundWizardState(testMode);
 
@@ -934,8 +942,11 @@ export async function handleNextRoundSetup(
     );
 
     const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
+      // eslint-disable-next-line local/stable-custom-id, local/custom-id-has-matching-handler
       new ButtonBuilder().setCustomId("wiz-commit").setLabel("Commit").setStyle(ButtonStyle.Success),
+      // eslint-disable-next-line local/stable-custom-id, local/custom-id-has-matching-handler
       new ButtonBuilder().setCustomId("wiz-edit").setLabel("Edit").setStyle(ButtonStyle.Secondary),
+      // eslint-disable-next-line local/stable-custom-id, local/custom-id-has-matching-handler
       new ButtonBuilder().setCustomId("wiz-cancel").setLabel("Cancel").setStyle(ButtonStyle.Danger),
     );
     await safeReply(interaction, { components: [row] });

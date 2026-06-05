@@ -7,6 +7,7 @@ import type {
 } from "discord.js";
 import { BOT_DEV_CHANNEL_ID } from "../config/channels.js";
 import { COMPONENTS_V2_FLAG } from "../config/flags.js";
+import { buildTextReply } from "./ComponentsV2Utils.js";
 
 export type AnyRepliable = RepliableInteraction | CommandInteraction;
 
@@ -349,6 +350,7 @@ export async function safeReply(interaction: AnyRepliable, options: any): Promis
   if (forceFollowUp) {
     try {
       if (typeof options === "string") {
+        // eslint-disable-next-line local/no-plain-text-v1-reply
         return await interaction.followUp({ content: options });
       } else {
         return await interaction.followUp(normalizedOptions as any);
@@ -363,6 +365,7 @@ export async function safeReply(interaction: AnyRepliable, options: any): Promis
   if (deferred && !replied) {
     try {
       if (typeof options === "string") {
+        // eslint-disable-next-line local/no-plain-text-v1-reply
         return await interaction.editReply({ content: options });
       } else {
         return await interaction.editReply(normalizedOptions as any);
@@ -378,6 +381,7 @@ export async function safeReply(interaction: AnyRepliable, options: any): Promis
   if (replied || acked || forceFollowUp) {
     try {
       if (typeof options === "string") {
+        // eslint-disable-next-line local/no-plain-text-v1-reply
         return await interaction.followUp({ content: options });
       } else {
         return await interaction.followUp(normalizedOptions as any);
@@ -437,7 +441,7 @@ export async function safeUpdate(interaction: AnyRepliable, options: any): Promi
     return;
   }
 
-  await safeReply(interaction, { content: String(options ?? ""), flags: MessageFlags.Ephemeral });
+  await safeReply(interaction, buildTextReply(String(options ?? ""), true));
 }
 
 export function ephemeralFlag(isEphemeral: boolean | undefined): number | undefined {

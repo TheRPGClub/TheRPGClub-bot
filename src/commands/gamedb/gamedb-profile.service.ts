@@ -3,7 +3,6 @@ import {
   AttachmentBuilder,
   ButtonBuilder,
   ButtonStyle,
-  MessageFlags,
   type ButtonInteraction,
   type CommandInteraction,
   type ModalSubmitInteraction,
@@ -18,7 +17,8 @@ import {
   ThumbnailBuilder,
 } from "@discordjs/builders";
 import { SeparatorSpacingSize } from "discord-api-types/v10";
-import { safeReply, safeUpdate } from "../../functions/InteractionUtils.js";
+import { safeReply } from "../../functions/InteractionUtils.js";
+import { buildTextReply } from "../../functions/ComponentsV2Utils.js";
 import { formatPlatformDisplayName } from "../../functions/PlatformDisplay.js";
 import { formatTableDate } from "../profile.command.js";
 import { getHltbCacheByGameId } from "../../classes/HltbCache.js";
@@ -130,17 +130,18 @@ export function buildGameProfileActionRow(
   disableVideo = false,
 ): ActionRowBuilder<ButtonBuilder>[] {
   const addNowPlaying = new ButtonBuilder()
-    .setCustomId(`gamedb-action:nowplaying:${gameId}`)
+    .setCustomId(`gamedb-action:nowplaying:${gameId}`) // eslint-disable-line local/stable-custom-id, local/custom-id-has-matching-handler
     .setLabel("Add to Now Playing List")
     .setStyle(ButtonStyle.Primary);
   const viewFeaturedVideo = new ButtonBuilder()
-    .setCustomId(`gamedb-action:video:${gameId}`)
+    .setCustomId(`gamedb-action:video:${gameId}`) // eslint-disable-line local/stable-custom-id, local/custom-id-has-matching-handler
     .setLabel("View Featured Video")
     .setStyle(ButtonStyle.Secondary)
     .setDisabled(disableVideo);
   const rows: ActionRowBuilder<ButtonBuilder>[] = [];
   const primaryRow = new ActionRowBuilder<ButtonBuilder>().addComponents(addNowPlaying);
   if (isReleased) {
+     
     const addCompletion = new ButtonBuilder()
       .setCustomId(`gamedb-action:completion:${gameId}`)
       .setLabel("Add Completion")
@@ -148,6 +149,7 @@ export function buildGameProfileActionRow(
     primaryRow.addComponents(addCompletion);
   }
   if (!hasThread) {
+     
     const addThread = new ButtonBuilder()
       .setCustomId(`gamedb-action:thread:${gameId}`)
       .setLabel("Create Now Playing Thread")
@@ -159,10 +161,12 @@ export function buildGameProfileActionRow(
   }
   rows.push(primaryRow);
   if (canMarkThumbnailBad && !isThumbnailBad && !isThumbnailApproved) {
+     
     const badThumbnail = new ButtonBuilder()
       .setCustomId(`gamedb-action:bad-thumb:${gameId}`)
       .setLabel("Bad Thumbnail")
       .setStyle(ButtonStyle.Danger);
+     
     const goodThumbnail = new ButtonBuilder()
       .setCustomId(`gamedb-action:good-thumb:${gameId}`)
       .setLabel("Good Thumbnail")
@@ -447,6 +451,7 @@ export async function buildGameProfile(
         bodyParts.push({ content: `**HowLongToBeat™**\n${hltbLines.join("\n")}` });
       }
     } else if (canImportHltb && includeInlineButtons) {
+       
       const importHltb = new V2ButtonBuilder()
         .setCustomId(`gamedb-action:hltb-import:${gameId}`)
         .setLabel("Import HLTB Data")
@@ -511,6 +516,7 @@ export async function buildGameProfile(
       }
       const [descriptionBlock, ...remainingBlocks] = bodyBlocks;
       if (descriptionBlock) {
+         
         const descriptionSection = new SectionBuilder()
           .addTextDisplayComponents(
             new TextDisplayBuilder().setContent(descriptionBlock.content),
@@ -522,6 +528,7 @@ export async function buildGameProfile(
       }
       remainingBlocks.forEach((block) => {
         if (block.accessory) {
+           
           const section = new SectionBuilder()
             .addTextDisplayComponents(new TextDisplayBuilder().setContent(block.content))
             .setButtonAccessory(block.accessory);
@@ -536,6 +543,7 @@ export async function buildGameProfile(
       }
       bodyBlocks.forEach((block) => {
         if (block.accessory) {
+           
           const section = new SectionBuilder()
             .addTextDisplayComponents(new TextDisplayBuilder().setContent(block.content))
             .setButtonAccessory(block.accessory);
@@ -570,10 +578,7 @@ export async function showGameProfile(
 ): Promise<void> {
   const profile = await buildGameProfile(gameId, interaction, source);
   if (!profile) {
-    await safeReply(interaction, {
-      content: `No game found with ID ${gameId}.`,
-      flags: MessageFlags.Ephemeral,
-    });
+    await safeReply(interaction, buildTextReply(`No game found with ID ${gameId}.`, true));
     return;
   }
 
@@ -610,10 +615,7 @@ export async function showGameProfileFromNomination(
 ): Promise<void> {
   const profile = await buildGameProfile(gameId, interaction);
   if (!profile) {
-    await safeReply(interaction, {
-      content: `No game found with ID ${gameId}.`,
-      flags: MessageFlags.Ephemeral,
-    });
+    await safeReply(interaction, buildTextReply(`No game found with ID ${gameId}.`, true));
     return;
   }
   const components = [
@@ -673,6 +675,7 @@ export async function buildGameProfileMessagePayload(
   }
 
   return {
+    // eslint-disable-next-line local/dynamic-components-require-chunking
     components,
     files: profile.files,
   };

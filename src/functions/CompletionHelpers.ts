@@ -4,7 +4,6 @@ import {
   ButtonBuilder,
   ButtonStyle,
   ComponentType,
-  MessageFlags,
   type ButtonInteraction,
   type CommandInteraction,
   type Message,
@@ -248,7 +247,7 @@ export async function promptRemoveFromNowPlaying(
     | ModalSubmitInteraction,
   gameTitle: string,
 ): Promise<boolean> {
-  const promptId = `np-remove:${interaction.user.id}:${Date.now()}`;
+  const promptId = `np-remove:${interaction.user.id}`;
   const yesId = `${promptId}:yes`;
   const noId = `${promptId}:no`;
   const row = new ActionRowBuilder<ButtonBuilder>().addComponents(

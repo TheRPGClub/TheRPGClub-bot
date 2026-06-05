@@ -11,7 +11,7 @@ import {
   notifyUnknownCompletionPlatform,
   saveCompletion,
 } from "../../functions/CompletionHelpers.js";
-import { buildComponentsV2Flags } from "../../functions/ComponentsV2Utils.js";
+import { buildComponentsV2Flags, buildTextReply } from "../../functions/ComponentsV2Utils.js";
 import Game from "../../classes/Game.js";
 import { STANDARD_PLATFORM_IDS } from "../../config/standardPlatforms.js";
 import {
@@ -20,8 +20,11 @@ import {
   type CompletionPlatformContext,
 } from "./completion.types.js";
 
-export function createCompletionPlatformSession(ctx: CompletionPlatformContext): string {
-  const sessionId = `comp-platform-${Date.now()}-${Math.floor(Math.random() * 100000)}`;
+export function createCompletionPlatformSession(
+  ctx: CompletionPlatformContext,
+  userId: string,
+): string {
+  const sessionId = `comp-platform-${userId}-${ctx.gameId}`;
   completionPlatformSessions.set(sessionId, ctx);
   return sessionId;
 }
@@ -35,10 +38,10 @@ export async function promptCompletionPlatformSelection(
     STANDARD_PLATFORM_IDS,
   );
   if (!platforms.length) {
-    await safeReply(interaction, {
-      content: "No platform release data is available for this game.",
-      flags: buildComponentsV2Flags(true),
-    });
+    await safeReply(
+      interaction,
+      buildTextReply("No platform release data is available for this game.", true),
+    );
     return;
   }
 
@@ -51,7 +54,7 @@ export async function promptCompletionPlatformSelection(
   const sessionId = createCompletionPlatformSession({
     ...ctx,
     platforms: platformOptions,
-  });
+  }, interaction.user.id);
 
   const baseOptions = platformOptions.map((platform) => ({
     label: platform.name.slice(0, 100),
@@ -65,12 +68,7 @@ export async function promptCompletionPlatformSelection(
     .setCustomId(`${COMPLETION_PLATFORM_SELECT_PREFIX}:${sessionId}`)
     .setPlaceholder("Select the platform")
     .addOptions(options);
-  const content = platformOptions.length > 24
-    ? `Select the platform for **${ctx.gameTitle}** (showing first 24).`
-    : `Select the platform for **${ctx.gameTitle}**.`;
-
   await safeReply(interaction, {
-    content,
     components: [new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select)],
     flags: buildComponentsV2Flags(true),
   });
@@ -83,18 +81,18 @@ export async function handleCompletionPlatformSelect(
   const ctx = completionPlatformSessions.get(sessionId);
 
   if (!ctx) {
-    await safeReply(interaction, {
-      content: "This completion prompt has expired.",
-      flags: buildComponentsV2Flags(true),
-    }).catch(() => {});
+    await safeReply(
+      interaction,
+      buildTextReply("This completion prompt has expired.", true),
+    ).catch(() => {});
     return;
   }
 
   if (interaction.user.id !== ctx.userId) {
-    await safeReply(interaction, {
-      content: "This completion prompt isn't for you.",
-      flags: buildComponentsV2Flags(true),
-    }).catch(() => {});
+    await safeReply(
+      interaction,
+      buildTextReply("This completion prompt isn't for you.", true),
+    ).catch(() => {});
     return;
   }
 
@@ -112,14 +110,14 @@ export async function handleCompletionPlatformSelect(
     ctx.platforms.some((platform) => platform.id === platformId)
   );
   if (!valid) {
-    await safeReply(interaction, {
-      content: "Invalid platform selection.",
-      flags: buildComponentsV2Flags(true),
-    }).catch(() => {});
+    await safeReply(
+      interaction,
+      buildTextReply("Invalid platform selection.", true),
+    ).catch(() => {});
     return;
   }
 
-  await safeDeferUpdate(interaction);
+  await safeDeferUpdate(interaction).catch(() => {});
   completionPlatformSessions.delete(sessionId);
 
   if (isOther) {

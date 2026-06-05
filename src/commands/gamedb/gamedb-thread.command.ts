@@ -20,6 +20,7 @@ import {
   safeReply,
   stripModalInput,
 } from "../../functions/InteractionUtils.js";
+import { buildTextReply } from "../../functions/ComponentsV2Utils.js";
 import { getThreadsByGameId, setThreadGameLink, upsertThreadRecord } from "../../classes/Thread.js";
 import { NOW_PLAYING_FORUM_ID } from "../../config/channels.js";
 import { NOW_PLAYING_SIDEGAME_TAG_ID } from "../../config/tags.js";
@@ -56,10 +57,9 @@ export async function showNowPlayingThreadModal(
   const sourceChannelId = interaction.channelId;
   const sourceMessageId = interaction.message?.id;
   if (!sourceChannelId || !sourceMessageId) {
-    await safeReply(interaction, {
-      content: "Unable to open thread modal from this message.",
-      flags: MessageFlags.Ephemeral,
-    }).catch(() => {});
+    await safeReply(interaction, buildTextReply(
+      "Unable to open thread modal from this message.", true,
+    )).catch(() => {});
     return;
   }
 
@@ -70,12 +70,14 @@ export async function showNowPlayingThreadModal(
 
   const modal = new ModalBuilder()
     .setCustomId(
+      // eslint-disable-next-line local/stable-custom-id
       buildNowPlayingThreadModalCustomId(gameId, sourceChannelId, sourceMessageId),
     )
     .setTitle("Create Now Playing Thread")
     .addComponents(
       new ActionRowBuilder<TextInputBuilder>().addComponents(
         new TextInputBuilder()
+          // eslint-disable-next-line local/stable-custom-id
           .setCustomId(GAMEDB_THREAD_TITLE_INPUT_ID)
           .setLabel("Thread Title")
           .setStyle(TextInputStyle.Short)
@@ -85,6 +87,7 @@ export async function showNowPlayingThreadModal(
       ),
       new ActionRowBuilder<TextInputBuilder>().addComponents(
         new TextInputBuilder()
+          // eslint-disable-next-line local/stable-custom-id
           .setCustomId(GAMEDB_THREAD_BODY_INPUT_ID)
           .setLabel("Initial Post")
           .setStyle(TextInputStyle.Paragraph)
@@ -95,10 +98,9 @@ export async function showNowPlayingThreadModal(
     );
 
   await interaction.showModal(modal).catch(async () => {
-    await safeReply(interaction, {
-      content: "Failed to open thread customization modal.",
-      flags: MessageFlags.Ephemeral,
-    }).catch(() => {});
+    await safeReply(interaction, buildTextReply(
+      "Failed to open thread customization modal.", true,
+    )).catch(() => {});
   });
 }
 
@@ -119,10 +121,10 @@ async function runNowPlayingThreadWizard(
     interaction.isModalSubmit();
   const sendStatus = async (content: string): Promise<void> => {
     if (isModalInteraction && (interaction.deferred || interaction.replied)) {
-      await safeReply(interaction, { content }).catch(() => {});
+      await safeReply(interaction, buildTextReply(content, false)).catch(() => {});
       return;
     }
-    await safeReply(interaction, { content, __forceFollowUp: true });
+    await safeReply(interaction, { ...buildTextReply(content, false), __forceFollowUp: true });
   };
 
   const existingThreads = await getThreadsByGameId(gameId);
@@ -219,6 +221,7 @@ async function runNowPlayingThreadWizard(
 @Discord()
 @SlashGroup("gamedb")
 export class GameDbThreadCommand {
+  // eslint-disable-next-line local/stable-custom-id
   @ModalComponent({ id: /^gamedb-thread-modal:\d+:\d+:\d+$/ })
   async handleGameDbThreadModal(interaction: ModalSubmitInteraction): Promise<void> {
     const parts = interaction.customId.split(":");
@@ -229,15 +232,15 @@ export class GameDbThreadCommand {
     await safeDeferReply(interaction, { flags: MessageFlags.Ephemeral });
 
     if (!Number.isInteger(gameId) || gameId <= 0 || !sourceChannelId || !sourceMessageId) {
-      await safeReply(interaction, { content: "Invalid thread request payload." }).catch(() => {});
+      await safeReply(interaction, buildTextReply("Invalid thread request payload.", false))
+        .catch(() => {});
       return;
     }
 
     const game = await Game.getGameById(gameId);
     if (!game) {
-      await safeReply(interaction, {
-        content: "That game was not found in GameDB.",
-      }).catch(() => {});
+      await safeReply(interaction, buildTextReply("That game was not found in GameDB.", false))
+        .catch(() => {});
       return;
     }
 
@@ -256,15 +259,15 @@ export class GameDbThreadCommand {
     const threadBody = bodyInput || defaultBody;
 
     if (!threadTitle || threadTitle.length > MAX_THREAD_TITLE_LEN) {
-      await safeReply(interaction, {
-        content: `Thread title must be between 1 and ${MAX_THREAD_TITLE_LEN} characters.`,
-      }).catch(() => {});
+      await safeReply(interaction, buildTextReply(
+        `Thread title must be between 1 and ${MAX_THREAD_TITLE_LEN} characters.`, false,
+      )).catch(() => {});
       return;
     }
     if (!threadBody || threadBody.length > MAX_THREAD_BODY_LEN) {
-      await safeReply(interaction, {
-        content: `Initial post must be between 1 and ${MAX_THREAD_BODY_LEN} characters.`,
-      }).catch(() => {});
+      await safeReply(interaction, buildTextReply(
+        `Initial post must be between 1 and ${MAX_THREAD_BODY_LEN} characters.`, false,
+      )).catch(() => {});
       return;
     }
 

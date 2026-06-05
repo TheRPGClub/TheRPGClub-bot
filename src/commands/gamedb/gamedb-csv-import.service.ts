@@ -117,6 +117,7 @@ export function buildCsvPromptComponents(
 
   if (options.length) {
     const select = new StringSelectMenuBuilder()
+      // eslint-disable-next-line local/stable-custom-id, local/custom-id-has-matching-handler
       .setCustomId(`${GAMEDB_CSV_SELECT_PREFIX}:${ownerId}:${importId}:${itemId}`)
       .setPlaceholder("Select a match from IGDB")
       .addOptions(
@@ -132,24 +133,29 @@ export function buildCsvPromptComponents(
 
   const actionRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
     new ButtonBuilder()
+      // eslint-disable-next-line local/stable-custom-id, local/custom-id-has-matching-handler
       .setCustomId(`${GAMEDB_CSV_ACTION_PREFIX}:${ownerId}:${importId}:${itemId}:manual`)
       .setLabel("Manual IGDB ID")
       .setStyle(ButtonStyle.Primary),
     new ButtonBuilder()
+      // eslint-disable-next-line local/stable-custom-id, local/custom-id-has-matching-handler
       .setCustomId(`${GAMEDB_CSV_ACTION_PREFIX}:${ownerId}:${importId}:${itemId}:query`)
       .setLabel("Manual IGDB Query")
       .setStyle(ButtonStyle.Primary),
     new ButtonBuilder()
+      // eslint-disable-next-line local/stable-custom-id, local/custom-id-has-matching-handler
       .setCustomId(`${GAMEDB_CSV_ACTION_PREFIX}:${ownerId}:${importId}:${itemId}:accept`)
       .setLabel("Accept First Option")
       .setStyle(ButtonStyle.Success),
   );
   const controlRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
     new ButtonBuilder()
+      // eslint-disable-next-line local/stable-custom-id, local/custom-id-has-matching-handler
       .setCustomId(`${GAMEDB_CSV_ACTION_PREFIX}:${ownerId}:${importId}:${itemId}:skip`)
       .setLabel("Skip")
       .setStyle(ButtonStyle.Secondary),
     new ButtonBuilder()
+      // eslint-disable-next-line local/stable-custom-id, local/custom-id-has-matching-handler
       .setCustomId(`${GAMEDB_CSV_ACTION_PREFIX}:${ownerId}:${importId}:${itemId}:pause`)
       .setLabel("Pause")
       .setStyle(ButtonStyle.Secondary),

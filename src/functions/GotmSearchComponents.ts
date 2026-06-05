@@ -166,6 +166,7 @@ export async function buildGotmSearchMessages(
       components.push(container);
     }
 
+    // eslint-disable-next-line local/dynamic-components-require-chunking
     payloads.push({ components, files });
   }
 

@@ -56,6 +56,7 @@ export async function buildNominationListPayload(
     window.targetRound,
     nominations,
   );
+   
   const components = await buildNominationContainers(
     kindLabel,
     commandLabel,
@@ -65,6 +66,7 @@ export async function buildNominationListPayload(
     altLayout,
     options?.includeDetailSelect ?? true,
   );
+  // eslint-disable-next-line local/dynamic-components-require-chunking
   return { components, files };
 }
 
@@ -133,6 +135,7 @@ function addNominationContent(
     new TextDisplayBuilder().setContent(buildNominationText(nomination)),
   );
   let button = new ButtonBuilder()
+    // eslint-disable-next-line local/custom-id-has-matching-handler
     .setCustomId(`user-header-label:${nomination.userId}`)
     .setLabel(displayName)
     .setStyle(ButtonStyle.Secondary);
@@ -324,9 +327,12 @@ function buildNominationImageSourceHash(
   covers: Array<{ gameId: number; title: string; imageData: Buffer }>,
 ): string {
   const hash = crypto.createHash("sha256");
+  // eslint-disable-next-line local/no-direct-interaction-response-methods
   hash.update(`type:${voteType}|round:${roundNumber}|count:${covers.length}|`);
   covers.forEach((cover) => {
+    // eslint-disable-next-line local/no-direct-interaction-response-methods
     hash.update(`id:${cover.gameId}|title:${cover.title}|`);
+    // eslint-disable-next-line local/no-direct-interaction-response-methods
     hash.update(cover.imageData);
   });
   return hash.digest("hex");

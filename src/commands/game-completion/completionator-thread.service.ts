@@ -1,12 +1,11 @@
 import type { CommandInteraction, Message, ThreadChannel } from "discord.js";
-import { MessageFlags } from "discord.js";
 import type { CompletionatorThreadContext, ICompletionatorImport } from "./completion.types.js";
 import { completionatorThreadContexts } from "./completion.types.js";
 import { getCompletionatorThreadKey } from "./completion-helpers.js";
 import { CompletionatorUiService } from "./completionator-ui.service.js";
-import { buildComponentsV2Flags } from "../../functions/ComponentsV2Utils.js";
+import { buildComponentsV2Flags, buildTextReply } from "../../functions/ComponentsV2Utils.js";
 import { BOT_DEV_CHANNEL_ID } from "../../config/channels.js";
-import { ephemeralFlag, safeReply } from "../../functions/InteractionUtils.js";
+import { safeReply } from "../../functions/InteractionUtils.js";
 
 export class CompletionatorThreadService {
   private uiService: CompletionatorUiService;
@@ -28,10 +27,7 @@ export class CompletionatorThreadService {
 
     const channel: any = interaction.channel;
     if (!channel || typeof channel.send !== "function") {
-      await safeReply(interaction, {
-        content: "Cannot create a thread in this channel.",
-        flags: ephemeralFlag(ephemeral),
-      });
+      await safeReply(interaction, buildTextReply("Cannot create a thread in this channel.", ephemeral));
       return null;
     }
 
@@ -89,10 +85,10 @@ export class CompletionatorThreadService {
       content: `Completionator Import #${session.importId} started by <@${session.userId}>.`,
     });
     if (typeof parentMessage.startThread !== "function") {
-      await safeReply(interaction, {
-        content: "Thread creation is not supported in this channel.",
-        flags: ephemeralFlag(ephemeral),
-      });
+      await safeReply(
+        interaction,
+        buildTextReply("Thread creation is not supported in this channel.", ephemeral),
+      );
       return null;
     }
 

@@ -17,6 +17,7 @@ import {
   safeUpdate,
   sanitizeUserInput,
 } from "../functions/InteractionUtils.js";
+import { buildTextReply } from "../functions/ComponentsV2Utils.js";
 
 type ModHelpTopicId = "presence" | "presence-history";
 
@@ -102,9 +103,7 @@ export class Mod {
         interaction,
         text,
       );
-      await safeReply(interaction, {
-        content: `I'm now playing: ${text}!`,
-      });
+      await safeReply(interaction, buildTextReply(`I'm now playing: ${text}!`, false));
     }
   }
 
@@ -134,9 +133,7 @@ export class Mod {
     const entries = await getPresenceHistory(limit);
 
     if (!entries.length) {
-      await safeReply(interaction, {
-        content: "No presence history found.",
-      });
+      await safeReply(interaction, buildTextReply("No presence history found.", false));
       return;
     }
 
@@ -153,9 +150,7 @@ export class Mod {
       entries.length === 1 ? "y" : "ies"
     }:\n`;
 
-    await safeReply(interaction, {
-      content: header + lines.join("\n"),
-    });
+    await safeReply(interaction, buildTextReply(header + lines.join("\n"), false));
   }
 
   @Slash({ description: "Show help for moderator commands", name: "help" })
@@ -190,10 +185,7 @@ export class Mod {
 
     if (!topic) {
       const response = buildModHelpResponse();
-      await safeUpdate(interaction, {
-        ...response,
-        content: "Sorry, I don't recognize that moderator help topic. Showing the moderator help menu.",
-      });
+      await safeUpdate(interaction, response);
       return;
     }
 
@@ -208,7 +200,6 @@ export class Mod {
 }
 
 export async function isModerator(interaction: AnyRepliable) {
-  const anyInteraction = interaction as any;
   const member: any = (interaction as any).member;
   const canCheck =
     member && typeof member.permissionsIn === "function" && interaction.channel;
@@ -244,11 +235,12 @@ export function buildModHelpResponse(
   const embed = new EmbedBuilder()
     .setTitle("Moderator Commands Help")
     .setDescription("Pick a `/mod` command to see what it does and how to run it.");
-
+   
   const components = buildModHelpButtons(activeTopicId);
 
   return {
     embeds: [embed],
+    // eslint-disable-next-line local/dynamic-components-require-chunking
     components,
   };
 }

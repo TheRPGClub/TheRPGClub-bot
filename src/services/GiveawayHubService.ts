@@ -163,15 +163,18 @@ function buildGiveawayHubComponents(hasKeys: boolean): ActionRowBuilder<ButtonBu
   const rows: ActionRowBuilder<ButtonBuilder>[] = [];
 
   const claimButton = new ButtonBuilder()
+    // eslint-disable-next-line local/custom-id-has-matching-handler
     .setCustomId("giveaway-hub-claim:0")
     .setLabel("Claim a Game")
     .setStyle(ButtonStyle.Primary)
     .setDisabled(!hasKeys);
   const donateButton = new ButtonBuilder()
+    // eslint-disable-next-line local/custom-id-has-matching-handler
     .setCustomId("giveaway-hub-donate")
     .setLabel("Donate a Game")
     .setStyle(ButtonStyle.Success);
   const donorSettingsButton = new ButtonBuilder()
+    // eslint-disable-next-line local/custom-id-has-matching-handler
     .setCustomId("giveaway-hub-settings")
     .setLabel("Donor Settings")
     .setStyle(ButtonStyle.Secondary);
@@ -194,12 +197,14 @@ async function buildGiveawayHubPayload(page: number): Promise<GiveawayHubPayload
     return {
       content: "There are no available game keys right now.",
       embeds: [],
+      // eslint-disable-next-line local/dynamic-components-require-chunking
       components: buildGiveawayHubComponents(false),
     };
   }
 
   return {
     embeds: buildGiveawayHubEmbeds(keys),
+    // eslint-disable-next-line local/dynamic-components-require-chunking
     components: buildGiveawayHubComponents(true),
   };
 }

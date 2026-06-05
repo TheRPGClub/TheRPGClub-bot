@@ -61,6 +61,7 @@ import {
   pushAutoAcceptedTitle,
   consumeAutoAcceptedSummary,
 } from "./gamedb-utils.js";
+import { buildTextReply } from "../../functions/ComponentsV2Utils.js";
 import {
   buildCsvPromptComponents,
   buildCsvPromptContainer,
@@ -216,8 +217,7 @@ async function processNextGameDbCsvImportItem(
   if (!nextItem) {
     await setGameDbCsvImportStatus(session.importId, "COMPLETED");
     await safeReply(interaction, {
-      content: `CSV import #${session.importId} completed.`,
-      flags: MessageFlags.Ephemeral,
+      ...buildTextReply(`CSV import #${session.importId} completed.`, true),
       __forceFollowUp: true,
     });
     return;
@@ -234,8 +234,7 @@ async function processNextGameDbCsvImportItem(
       errorText: "Missing title for IGDB search.",
     });
     await safeReply(interaction, {
-      content: "Missing title for IGDB search. Skipping.",
-      flags: MessageFlags.Ephemeral,
+      ...buildTextReply("Missing title for IGDB search. Skipping.", true),
       __forceFollowUp: true,
     });
     await processNextGameDbCsvImportItem(interaction, session);
@@ -258,8 +257,9 @@ async function processNextGameDbCsvImportItem(
           errorText: `Mapped GameDB id ${mapping.gameDbGameId} not found.`,
         });
         await safeReply(interaction, {
-          content: `Mapped GameDB #${mapping.gameDbGameId} not found. Skipping.`,
-          flags: MessageFlags.Ephemeral,
+          ...buildTextReply(
+            `Mapped GameDB #${mapping.gameDbGameId} not found. Skipping.`, true,
+          ),
           __forceFollowUp: true,
         });
         await processNextGameDbCsvImportItem(interaction, session);
@@ -287,8 +287,9 @@ async function processNextGameDbCsvImportItem(
       errorText: err?.message ?? "IGDB search failed.",
     });
     await safeReply(interaction, {
-      content: `IGDB search failed for "${nextItem.gameTitle}". Skipping.`,
-      flags: MessageFlags.Ephemeral,
+      ...buildTextReply(
+        `IGDB search failed for "${nextItem.gameTitle}". Skipping.`, true,
+      ),
       __forceFollowUp: true,
     });
     await processNextGameDbCsvImportItem(interaction, session);
@@ -363,10 +364,8 @@ export class GameDbCsvImportCommand {
   ): Promise<boolean> {
     const guild = interaction.guild;
     if (!guild) {
-      await safeReply(interaction, {
-        content: "This command can only be used inside a server.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction,
+        buildTextReply("This command can only be used inside a server.", true));
       return false;
     }
 
@@ -375,10 +374,8 @@ export class GameDbCsvImportCommand {
       return true;
     }
 
-    await safeReply(interaction, {
-      content: "Access denied. Command requires server owner.",
-      flags: MessageFlags.Ephemeral,
-    });
+    await safeReply(interaction,
+      buildTextReply("Access denied. Command requires server owner.", true));
     return false;
   }
 

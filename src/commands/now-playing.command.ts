@@ -319,7 +319,7 @@ async function confirmDuplicateCompletion(
 ): Promise<boolean> {
   if (!existing) return true;
 
-  const promptId = `np-comp-dup:${interaction.user.id}:${Date.now()}`;
+  const promptId = `np-comp-dup:${interaction.user.id}`;
   const yesId = `${promptId}:yes`;
   const noId = `${promptId}:no`;
   const dateText = existing.completedAt
@@ -401,7 +401,7 @@ function createNowPlayingCompletionWizardSession(
   userId: string,
   returnToList: boolean = false,
 ): string {
-  const sessionId = `np-comp-ui-${Date.now()}-${Math.floor(Math.random() * 100000)}`;
+  const sessionId = `np-comp-ui-${userId}`;
   const defaultType = (COMPLETION_TYPES[0] ?? "Main Story") as CompletionType;
   nowPlayingCompletionWizardSessions.set(sessionId, {
     userId,
@@ -963,7 +963,7 @@ export class NowPlayingCommand {
         );
         return;
       }
-      const sessionId = `np-${Date.now()}-${Math.floor(Math.random() * 100000)}`;
+      const sessionId = `np-${interaction.user.id}`;
       const session: NowPlayingAddSession = {
         userId: interaction.user.id,
         query,
@@ -1579,7 +1579,7 @@ export class NowPlayingCommand {
       id: platform.id,
       name: platform.name,
     }));
-    const platformSessionId = `np-comp-platform-${Date.now()}-${Math.floor(Math.random() * 100000)}`;
+    const platformSessionId = `np-comp-platform-${session.userId}`;
     nowPlayingCompletionPlatformSessions.set(platformSessionId, {
       sessionId,
       userId: session.userId,
@@ -2200,7 +2200,7 @@ export class NowPlayingCommand {
     if (!platforms.length) {
       throw new Error("No platform data is available for this game.");
     }
-    const platformSessionId = `np-add-platform-${Date.now()}-${Math.floor(Math.random() * 100000)}`;
+    const platformSessionId = `np-add-platform-${userId}`;
     nowPlayingAddPlatformSessions.set(platformSessionId, {
       userId,
       gameId,
@@ -5763,7 +5763,7 @@ export class NowPlayingCommand {
         try {
           await safeDeferUpdate(sel);
           const imported = await this.importGameFromIgdb(igdbId);
-          const sourceSessionId = `np-igdb-add-${Date.now()}-${Math.floor(Math.random() * 100000)}`;
+          const sourceSessionId = `np-igdb-add-${session.userId}`;
           await this.promptNowPlayingAddPlatformSelection(
             sel,
             sourceSessionId,

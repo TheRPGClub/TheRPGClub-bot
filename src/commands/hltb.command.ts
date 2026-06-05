@@ -1,5 +1,5 @@
 import type { AutocompleteInteraction, CommandInteraction } from "discord.js";
-import { ApplicationCommandOptionType, MessageFlags } from "discord.js";
+import { ApplicationCommandOptionType } from "discord.js";
 import { Discord, Slash, SlashOption } from "discordx";
 import { EmbedBuilder } from "discord.js";
 import { searchHltb, type HltbSearchResult } from "../scripts/SearchHltb.js";
@@ -11,6 +11,7 @@ import {
   safeReply,
   sanitizeUserInput,
 } from "../functions/InteractionUtils.js";
+import { buildTextReply } from "../functions/ComponentsV2Utils.js";
 import {
   formatGameTitleWithYear,
   getReleaseYear,
@@ -76,10 +77,10 @@ export class hltb {
       const result = await resolveHltbResult(title);
       await outputHltbResultsAsEmbed(interaction, result, title, { ephemeral });
   } catch {
-      await safeReply(interaction, {
-        content: `Sorry, there was an error searching for "${title}". Please try again later.`,
-        flags: ephemeralFlag(ephemeral),
-      });
+      await safeReply(interaction, buildTextReply(
+        `Sorry, there was an error searching for "${title}". Please try again later.`,
+        ephemeral,
+      ));
     }
   }
 }
@@ -166,10 +167,10 @@ async function outputHltbResultsAsEmbed(
       flags: ephemeralFlag(options.ephemeral),
     });
   } else {
-    await safeReply(interaction, {
-      content: `Sorry, no results were found for "${hltbQuery}"`,
-      flags: ephemeralFlag(options.ephemeral),
-    });
+    await safeReply(interaction, buildTextReply(
+      `Sorry, no results were found for "${hltbQuery}"`,
+      options.ephemeral,
+    ));
   }
 }
 

@@ -11,6 +11,7 @@ import { getThreadsByGameId, setThreadGameLink, upsertThreadRecord } from "../cl
 import { NOW_PLAYING_FORUM_ID } from "../config/channels.js";
 import { safeDeferReply, safeReply, sanitizeOptionalInput, sanitizeUserInput } from
   "../functions/InteractionUtils.js";
+import { buildTextReply } from "../functions/ComponentsV2Utils.js";
 import { formatGameTitleWithYear } from "../functions/GameTitleAutocompleteUtils.js";
 
 const DEFAULT_FIRST_POST_PREFIX = "Thread created by";
@@ -96,47 +97,47 @@ export class CreateThreadCommand {
 
     const gameId = Number.parseInt(title, 10);
     if (!Number.isFinite(gameId) || gameId <= 0) {
-      await safeReply(interaction, {
-        content: "Please select a game from title autocomplete.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply(
+        "Please select a game from title autocomplete.",
+        true,
+      ));
       return;
     }
 
     const game = await Game.getGameById(gameId);
     if (!game) {
-      await safeReply(interaction, {
-        content: `Could not find GameDB game #${gameId}.`,
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply(
+        `Could not find GameDB game #${gameId}.`,
+        true,
+      ));
       return;
     }
 
     const existingThreads = await getThreadsByGameId(gameId);
     const existingThreadId = existingThreads[0] ?? null;
     if (existingThreadId) {
-      await safeReply(interaction, {
-        content: `A thread is already linked for "${game.title}": <#${existingThreadId}>`,
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply(
+        `A thread is already linked for "${game.title}": <#${existingThreadId}>`,
+        true,
+      ));
       return;
     }
 
     if (!game.imageData) {
-      await safeReply(interaction, {
-        content: `Cannot create a thread for "${game.title}" because it has no cover image.`,
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply(
+        `Cannot create a thread for "${game.title}" because it has no cover image.`,
+        true,
+      ));
       return;
     }
 
-    const forum = 
+    const forum =
       (await interaction.guild?.channels.fetch(NOW_PLAYING_FORUM_ID)) as ForumChannel | null;
     if (!forum) {
-      await safeReply(interaction, {
-        content: "Now Playing forum channel was not found.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply(
+        "Now Playing forum channel was not found.",
+        true,
+      ));
       return;
     }
 
@@ -144,10 +145,10 @@ export class CreateThreadCommand {
       tag.name.toLowerCase() === tagTitle.toLowerCase().trim(),
     );
     if (!selectedTag) {
-      await safeReply(interaction, {
-        content: `Could not find forum tag "${tagTitle}". Please pick one from tag autocomplete.`,
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply(
+        `Could not find forum tag "${tagTitle}". Please pick one from tag autocomplete.`,
+        true,
+      ));
       return;
     }
 
@@ -178,9 +179,9 @@ export class CreateThreadCommand {
     });
     await setThreadGameLink(thread.id, game.id);
 
-    await safeReply(interaction, {
-      content: `Created thread <#${thread.id}> for "${game.title}" with tag "${selectedTag.name}".`,
-      flags: MessageFlags.Ephemeral,
-    });
+    await safeReply(interaction, buildTextReply(
+      `Created thread <#${thread.id}> for "${game.title}" with tag "${selectedTag.name}".`,
+      true,
+    ));
   }
 }

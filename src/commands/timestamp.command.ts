@@ -3,6 +3,7 @@ import { ApplicationCommandOptionType, MessageFlags } from "discord.js";
 import { Discord, Slash, SlashChoice, SlashOption } from "discordx";
 import { DateTime } from "luxon";
 import { safeDeferReply, safeReply, sanitizeUserInput } from "../functions/InteractionUtils.js";
+import { buildTextReply } from "../functions/ComponentsV2Utils.js";
 
 type DiscordTimestampFormat = "t" | "T" | "d" | "D" | "f" | "F" | "R";
 type RelativeUnit = "minutes" | "hours" | "days" | "weeks";
@@ -126,28 +127,29 @@ export class TimestampCommand {
     });
 
     if (!timezoneResult.ok) {
-      await safeReply(interaction, {
-        content:
-          `${timezoneResult.error}\n` +
-          "Use an IANA timezone like `America/New_York`, `Europe/London`, `Asia/Tokyo`, or `UTC`.",
-      });
+      await safeReply(interaction, buildTextReply(
+        `${timezoneResult.error}\n` +
+        "Use an IANA timezone like `America/New_York`, `Europe/London`, `Asia/Tokyo`, or `UTC`.",
+        false,
+      ));
       return;
     }
 
     const parseResult = parseDateTimeInput(datetimeInput, timezoneResult.zone);
     if (!parseResult.ok) {
-      await safeReply(interaction, {
-        content:
-          `${parseResult.error}\n` +
-          "Examples: `in 5 hours`, `8pm on Friday`, `08/21 at 19:30`, `tomorrow at 5pm`.",
-      });
+      await safeReply(interaction, buildTextReply(
+        `${parseResult.error}\n` +
+        "Examples: `in 5 hours`, `8pm on Friday`, `08/21 at 19:30`, `tomorrow at 5pm`.",
+        false,
+      ));
       return;
     }
 
     const unixSeconds = Math.floor(parseResult.dateTime.toSeconds());
-    await safeReply(interaction, {
-      content: buildTimestampDetailsMessage(unixSeconds, timezoneResult.zone, formatInput),
-    });
+    await safeReply(interaction, buildTextReply(
+      buildTimestampDetailsMessage(unixSeconds, timezoneResult.zone, formatInput),
+      false,
+    ));
   }
 }
 

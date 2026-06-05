@@ -13,7 +13,7 @@ import {
   safeDeferUpdate,
   safeReply,
 } from "../../functions/InteractionUtils.js";
-import { buildComponentsV2Flags } from "../../functions/ComponentsV2Utils.js";
+import { buildComponentsV2Flags, buildTextReply } from "../../functions/ComponentsV2Utils.js";
 
 /**
  * Parses a year filter string into a number, "unknown", or null
@@ -38,10 +38,7 @@ export async function handleCompletionPageSelect(
   const query = parts.slice(4).join(":") || undefined;
 
   if (mode !== "list" && interaction.user.id !== ownerId) {
-    await safeReply(interaction, {
-      content: "This list isn't for you.",
-      flags: MessageFlags.Ephemeral,
-    });
+    await safeReply(interaction, buildTextReply("This list isn't for you.", true));
     return;
   }
 
@@ -83,10 +80,7 @@ export async function handleCompletionPaging(interaction: ButtonInteraction): Pr
   const query = parts.slice(5).join(":") || undefined;
 
   if (mode !== "list" && interaction.user.id !== ownerId) {
-    await safeReply(interaction, {
-      content: "This list isn't for you.",
-      flags: MessageFlags.Ephemeral,
-    });
+    await safeReply(interaction, buildTextReply("This list isn't for you.", true));
     return;
   }
   const page = Number(pageRaw);
@@ -124,10 +118,7 @@ async function openCompletionJournalView(
   const statuses = await Member.getJournalStatusForGames(ownerId, [gameId]);
   const status = statuses[0];
   if ((status?.journalCount ?? 0) === 0) {
-    await safeReply(interaction, {
-      content: "This game has no journal entries.",
-      flags: buildComponentsV2Flags(true),
-    });
+    await safeReply(interaction, buildTextReply("This game has no journal entries.", true));
     return;
   }
   const ephemeral = interaction.message?.flags?.has(MessageFlags.Ephemeral) ?? true;
@@ -149,7 +140,7 @@ async function openCompletionJournalView(
 }
 
 /**
- * Handles journal select menu on the completion list — opens the journal for the selected game
+ * Handles journal select menu on the completion list - opens the journal for the selected game
  */
 export async function handleCompletionJournalViewSelect(
   interaction: StringSelectMenuInteraction,
@@ -194,7 +185,7 @@ export async function handleCompletionListHeader(
   const parts = interaction.customId.split(":");
   const ownerId = parts[1];
   if (interaction.user.id !== ownerId) {
-    await safeDeferUpdate(interaction);
+    await safeDeferUpdate(interaction).catch(() => {});
     return;
   }
   await safeReply(interaction, {
