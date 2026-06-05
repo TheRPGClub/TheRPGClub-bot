@@ -23,6 +23,7 @@ import {
 import {
   AnyRepliable,
   safeDeferReply,
+  safeDeferUpdate,
   safeReply,
   safeUpdate,
   stripModalInput,
@@ -703,7 +704,7 @@ export class GiveawayCommand {
     await Member.setGiveawayDonorNotifySetting(interaction.user.id, enabled);
     const donatedKeys = await listKeysByDonor(interaction.user.id);
     const inventory = buildDonorInventorySummary(donatedKeys);
-    await interaction.update({
+    await safeUpdate(interaction, {
       content:
         [
           "Your donated keys:",
@@ -713,7 +714,7 @@ export class GiveawayCommand {
             `Current setting: **${formatDonorNotifyStatus(enabled)}**.`,
         ].join("\n"),
       components: [buildDonorSettingsRow(interaction.user.id, enabled)],
-    }).catch(() => {});
+    });
   }
 
   @ButtonComponent({ id: /^giveaway-claim-button:[^:]+:\d+$/ })
@@ -783,21 +784,21 @@ export class GiveawayCommand {
 
     const key = await getGameKeyById(keyId);
     if (!key || key.claimedByUserId) {
-      await interaction.update({
+      await safeUpdate(interaction, {
         content: "That key is no longer available.",
         embeds: [],
         components: [],
-      }).catch(() => {});
+      });
       return;
     }
 
     const confirmId = `giveaway-claim-confirm:private:${keyId}:${page}:${sessionId}:${ownerId}`;
     const cancelId = `giveaway-claim-cancel:${interaction.user.id}`;
-    await interaction.update({
+    await safeUpdate(interaction, {
       content: buildClaimConfirmContent(key.gameTitle, key.platform),
       embeds: [],
       components: buildClaimConfirmComponents(confirmId, cancelId),
-    }).catch(() => {});
+    });
   }
 
   @SelectMenuComponent({ id: /^giveaway-hub-claim-select:\d+:\d+$/ })
@@ -832,21 +833,21 @@ export class GiveawayCommand {
 
     const key = await getGameKeyById(keyId);
     if (!key || key.claimedByUserId) {
-      await interaction.update({
+      await safeUpdate(interaction, {
         content: "That key is no longer available.",
         embeds: [],
         components: [],
-      }).catch(() => {});
+      });
       return;
     }
 
     const confirmId = `giveaway-claim-confirm:hub:${keyId}:${page}:${interaction.user.id}`;
     const cancelId = `giveaway-claim-cancel:${interaction.user.id}`;
-    await interaction.update({
+    await safeUpdate(interaction, {
       content: buildClaimConfirmContent(key.gameTitle, key.platform),
       embeds: [],
       components: buildClaimConfirmComponents(confirmId, cancelId),
-    }).catch(() => {});
+    });
   }
 
   @SelectMenuComponent({ id: /^giveaway-claim-public:[^:]+:\d+:\d+:\d+:\d+$/ })
@@ -882,22 +883,22 @@ export class GiveawayCommand {
 
     const key = await getGameKeyById(keyId);
     if (!key || key.claimedByUserId) {
-      await interaction.update({
+      await safeUpdate(interaction, {
         content: "That key is no longer available.",
         embeds: [],
         components: [],
-      }).catch(() => {});
+      });
       return;
     }
 
     const confirmId =
       `giveaway-claim-confirm:public:${keyId}:${page}:${sessionId}:${messageId}:${userId}`;
     const cancelId = `giveaway-claim-cancel:${interaction.user.id}`;
-    await interaction.update({
+    await safeUpdate(interaction, {
       content: buildClaimConfirmContent(key.gameTitle, key.platform),
       embeds: [],
       components: buildClaimConfirmComponents(confirmId, cancelId),
-    }).catch(() => {});
+    });
   }
 
   @ButtonComponent({ id: /^giveaway-claim-confirm:(hub|private|public):/ })
@@ -908,20 +909,20 @@ export class GiveawayCommand {
     const page = Number(parts[3]);
 
     if (!Number.isInteger(keyId) || keyId <= 0) {
-      await interaction.update({
+      await safeUpdate(interaction, {
         content: "Invalid selection.",
         embeds: [],
         components: [],
-      }).catch(() => {});
+      });
       return;
     }
 
     if (!hasMemberRole(interaction.member)) {
-      await interaction.update({
+      await safeUpdate(interaction, {
         content: "Claiming keys requires the Member role.",
         embeds: [],
         components: [],
-      }).catch(() => {});
+      });
       return;
     }
 
@@ -958,22 +959,22 @@ export class GiveawayCommand {
       }
     }
 
-    await interaction.deferUpdate().catch(() => {});
+    await safeDeferUpdate(interaction);
     const result = await claimKey(interaction, keyId);
     if (result.status === "unavailable") {
-      await interaction.editReply({
+      await safeReply(interaction, {
         content: "That key is no longer available.",
         embeds: [],
         components: [],
-      }).catch(() => {});
+      });
       return;
     }
 
-    await interaction.editReply({
+    await safeReply(interaction, {
       content: "Sending your key by DM now.",
       embeds: [],
       components: [],
-    }).catch(() => {});
+    });
 
     const dmResult = await interaction.user
       .send({
@@ -985,19 +986,20 @@ export class GiveawayCommand {
       .catch(() => null);
 
     if (dmResult) {
-      await interaction.editReply({
-        content:
-          "Your key was sent by DM. Thanks for claiming responsibly.",
+      await safeReply(interaction, {
+        content: "Your key was sent by DM. Thanks for claiming responsibly.",
         embeds: [],
         components: [],
-      }).catch(() => {});
+        __forceFollowUp: true,
+      });
     } else {
-      await interaction.editReply({
+      await safeReply(interaction, {
         content:
           "I could not send you a DM. Please enable DMs and contact an admin to resend your key.",
         embeds: [],
         components: [],
-      }).catch(() => {});
+        __forceFollowUp: true,
+      });
     }
 
     if (scope === "public") {
@@ -1028,11 +1030,11 @@ export class GiveawayCommand {
       return;
     }
 
-    await interaction.update({
+    await safeUpdate(interaction, {
       content: "Claim cancelled.",
       embeds: [],
       components: [],
-    }).catch(() => {});
+    });
   }
 
   @ModalComponent({ id: GIVEAWAY_DONATE_MODAL_ID })

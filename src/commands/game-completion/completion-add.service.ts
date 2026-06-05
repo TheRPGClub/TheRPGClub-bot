@@ -15,6 +15,7 @@ import Member from "../../classes/Member.js";
 import { saveCompletion } from "../../functions/CompletionHelpers.js";
 import {
   extractErrorMessage,
+  safeDeferUpdate,
   safeReply,
   safeUpdate,
 } from "../../functions/InteractionUtils.js";
@@ -86,12 +87,12 @@ export async function promptIgdbSelection(
   if (interaction.isMessageComponent()) {
     const loadingComponents = [buildTextContainer(`Searching IGDB for "${searchTerm}"...`)];
     if (interaction.deferred || interaction.replied) {
-      await interaction.editReply({
+      await safeReply(interaction, {
         components: loadingComponents,
         flags: COMPONENTS_V2_FLAG,
       });
     } else {
-      await interaction.update({
+      await safeUpdate(interaction, {
         components: loadingComponents,
         flags: COMPONENTS_V2_FLAG,
       });
@@ -102,7 +103,7 @@ export async function promptIgdbSelection(
   if (!igdbSearch.results.length) {
     const content = `No GameDB or IGDB matches found for "${searchTerm}" (len: ${searchTerm.length}).`;
     if (interaction.isMessageComponent()) {
-      await interaction.editReply({
+      await safeReply(interaction, {
         components: [buildTextContainer(content)],
         flags: COMPONENTS_V2_FLAG,
       });
@@ -131,12 +132,12 @@ export async function promptIgdbSelection(
     opts,
     async (sel, gameId) => {
       if (!sel.deferred && !sel.replied) {
-        await sel.deferUpdate().catch(() => {});
+        await safeDeferUpdate(sel);
       }
-      await sel.editReply({
+      await safeReply(sel, {
         components: [buildTextContainer("Importing game details from IGDB...")],
         flags: COMPONENTS_V2_FLAG,
-      }).catch(() => {});
+      });
 
       const imported = await importGameFromIgdb(gameId);
       const referenceDate = ctx.completedAt ?? new Date();
@@ -196,13 +197,14 @@ export async function promptIgdbSelection(
 
   const content = `No GameDB match; select an IGDB result to import for "${searchTerm}".`;
   if (interaction.isMessageComponent()) {
-    await interaction.editReply({
+    await safeReply(interaction, {
       components: [buildTextContainer("Found results on IGDB. Please see the new message below.")],
       flags: COMPONENTS_V2_FLAG,
     });
-    await interaction.followUp({
+    await safeReply(interaction, {
       components: [buildTextContainer(content), ...components],
       flags: buildComponentsV2Flags(true),
+      __forceFollowUp: true,
     });
   } else {
     await safeReply(interaction, {
@@ -235,7 +237,7 @@ export async function processCompletionSelection(
 
   if (!interaction.deferred && !interaction.replied) {
     try {
-      await interaction.deferUpdate();
+      await safeDeferUpdate(interaction);
     } catch {
       // ignore
     }
@@ -248,9 +250,10 @@ export async function processCompletionSelection(
     if (value.startsWith("igdb:")) {
       const igdbId = Number(value.split(":")[1]);
       if (!Number.isInteger(igdbId) || igdbId <= 0) {
-        await interaction.followUp({
+        await safeReply(interaction, {
           components: [buildTextContainer("Invalid IGDB selection.")],
           flags: buildComponentsV2Flags(true),
+          __forceFollowUp: true,
         });
         return false;
       }
@@ -260,17 +263,19 @@ export async function processCompletionSelection(
     } else {
       const parsedId = Number(value);
       if (!Number.isInteger(parsedId) || parsedId <= 0) {
-        await interaction.followUp({
+        await safeReply(interaction, {
           components: [buildTextContainer("Invalid selection.")],
           flags: buildComponentsV2Flags(true),
+          __forceFollowUp: true,
         });
         return false;
       }
       const game = await Game.getGameById(parsedId);
       if (!game) {
-        await interaction.followUp({
+        await safeReply(interaction, {
           components: [buildTextContainer("Selected game was not found in GameDB.")],
           flags: buildComponentsV2Flags(true),
+          __forceFollowUp: true,
         });
         return false;
       }
@@ -279,9 +284,10 @@ export async function processCompletionSelection(
     }
 
     if (!gameId) {
-      await interaction.followUp({
+      await safeReply(interaction, {
         components: [buildTextContainer("Could not determine a game to log.")],
         flags: buildComponentsV2Flags(true),
+        __forceFollowUp: true,
       });
       return false;
     }
@@ -342,9 +348,10 @@ export async function processCompletionSelection(
     return false;
   } catch (err: any) {
     const msg = extractErrorMessage(err);
-    await interaction.followUp({
+    await safeReply(interaction, {
       components: [buildTextContainer(`Failed to add completion: ${msg}`)],
       flags: buildComponentsV2Flags(true),
+      __forceFollowUp: true,
     });
     return false;
   }
@@ -384,7 +391,7 @@ export async function handleCompletionAddSelect(
     return;
   }
 
-  await interaction.deferUpdate().catch(() => {});
+  await safeDeferUpdate(interaction);
 
   try {
     await processCompletionSelection(interaction, value, ctx);
@@ -436,16 +443,14 @@ async function confirmDuplicateCompletion(
 
   let message: Message | null = null;
   try {
-    if (interaction.deferred || interaction.replied) {
-      const reply = await interaction.followUp(payload as any);
-      message = reply as Message;
-    } else {
-      const reply = await interaction.reply({ ...payload, withResponse: true } as any);
-      message = reply.resource?.message ?? null;
-    }
+    const reply = await safeReply(interaction, {
+      ...payload,
+      __forceFollowUp: interaction.deferred || interaction.replied,
+    });
+    message = (reply as any)?.resource?.message ?? (reply as Message) ?? null;
   } catch {
     try {
-      const reply = await interaction.followUp(payload as any);
+      const reply = await safeReply(interaction, { ...payload, __forceFollowUp: true });
       message = reply as Message;
     } catch {
       return false;
@@ -464,7 +469,7 @@ async function confirmDuplicateCompletion(
       time: 120_000,
     });
     const confirmed = selection.customId.endsWith(":yes");
-    await selection.update({
+    await safeUpdate(selection, {
       components: [buildTextContainer(
         confirmed ? "Adding another completion." : "Cancelled.",
       )],

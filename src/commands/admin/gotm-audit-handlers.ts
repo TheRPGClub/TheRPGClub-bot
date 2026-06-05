@@ -12,7 +12,12 @@ import {
   TextInputBuilder,
   TextInputStyle,
 } from "discord.js";
-import { safeReply, safeUpdate, stripModalInput } from "../../functions/InteractionUtils.js";
+import {
+  safeDeferUpdate,
+  safeReply,
+  safeUpdate,
+  stripModalInput,
+} from "../../functions/InteractionUtils.js";
 import type { IGameWithPlatforms } from "../../classes/Game.js";
 import Game from "../../classes/Game.js";
 import {
@@ -40,40 +45,34 @@ export async function handleGotmAuditSelect(
   interaction: StringSelectMenuInteraction): Promise<void> {
   const [, ownerId, importIdRaw, itemIdRaw] = interaction.customId.split(":");
   if (interaction.user.id !== ownerId) {
-    await interaction
-      .reply({
-        content: "This audit prompt is not for you.",
-        flags: MessageFlags.Ephemeral,
-      })
-      .catch(() => {});
+    await safeReply(interaction, {
+      content: "This audit prompt is not for you.",
+      flags: MessageFlags.Ephemeral,
+    });
     return;
   }
 
   const importId = Number(importIdRaw);
   const itemId = Number(itemIdRaw);
   if (!Number.isInteger(importId) || !Number.isInteger(itemId)) {
-    await interaction
-      .reply({
-        content: "Invalid audit selection.",
-        flags: MessageFlags.Ephemeral,
-      })
-      .catch(() => {});
+    await safeReply(interaction, {
+      content: "Invalid audit selection.",
+      flags: MessageFlags.Ephemeral,
+    });
     return;
   }
 
   const selectedRaw = interaction.values?.[0];
   const gameDbId = Number(selectedRaw);
   if (!Number.isInteger(gameDbId) || gameDbId <= 0) {
-    await interaction
-      .reply({
-        content: "Invalid GameDB selection.",
-        flags: MessageFlags.Ephemeral,
-      })
-      .catch(() => {});
+    await safeReply(interaction, {
+      content: "Invalid GameDB selection.",
+      flags: MessageFlags.Ephemeral,
+    });
     return;
   }
 
-  await interaction.deferUpdate().catch(() => {});
+  await safeDeferUpdate(interaction);
 
   const session = await getGotmAuditImportById(importId);
   if (!session || session.userId !== ownerId) {
@@ -133,24 +132,20 @@ export async function handleGotmAuditSelect(
 export async function handleGotmAuditAction(interaction: ButtonInteraction): Promise<void> {
   const [, ownerId, importIdRaw, itemIdRaw, action] = interaction.customId.split(":");
   if (interaction.user.id !== ownerId) {
-    await interaction
-      .reply({
-        content: "This audit prompt is not for you.",
-        flags: MessageFlags.Ephemeral,
-      })
-      .catch(() => {});
+    await safeReply(interaction, {
+      content: "This audit prompt is not for you.",
+      flags: MessageFlags.Ephemeral,
+    });
     return;
   }
 
   const importId = Number(importIdRaw);
   const itemId = Number(itemIdRaw);
   if (!Number.isInteger(importId) || !Number.isInteger(itemId)) {
-    await interaction
-      .reply({
-        content: "Invalid audit action.",
-        flags: MessageFlags.Ephemeral,
-      })
-      .catch(() => {});
+    await safeReply(interaction, {
+      content: "Invalid audit action.",
+      flags: MessageFlags.Ephemeral,
+    });
     return;
   }
 
@@ -231,7 +226,7 @@ export async function handleGotmAuditAction(interaction: ButtonInteraction): Pro
       return;
     }
 
-    await interaction.deferUpdate().catch(() => {});
+    await safeDeferUpdate(interaction);
 
     await updateGotmAuditItem(itemId, {
       status: "IMPORTED",
@@ -309,24 +304,20 @@ export async function handleGotmAuditManualModal(
 ): Promise<void> {
   const [, ownerId, importIdRaw, itemIdRaw] = interaction.customId.split(":");
   if (interaction.user.id !== ownerId) {
-    await interaction
-      .reply({
-        content: "This audit prompt is not for you.",
-        flags: MessageFlags.Ephemeral,
-      })
-      .catch(() => {});
+    await safeReply(interaction, {
+      content: "This audit prompt is not for you.",
+      flags: MessageFlags.Ephemeral,
+    });
     return;
   }
 
   const importId = Number(importIdRaw);
   const itemId = Number(itemIdRaw);
   if (!Number.isInteger(importId) || !Number.isInteger(itemId)) {
-    await interaction
-      .reply({
-        content: "Invalid audit request.",
-        flags: MessageFlags.Ephemeral,
-      })
-      .catch(() => {});
+    await safeReply(interaction, {
+      content: "Invalid audit request.",
+      flags: MessageFlags.Ephemeral,
+    });
     return;
   }
 
@@ -334,16 +325,14 @@ export async function handleGotmAuditManualModal(
   const cleaned = stripModalInput(raw);
   const gameDbId = Number(cleaned);
   if (!Number.isInteger(gameDbId) || gameDbId <= 0) {
-    await interaction
-      .reply({
-        content: "Please provide a valid GameDB id.",
-        flags: MessageFlags.Ephemeral,
-      })
-      .catch(() => {});
+    await safeReply(interaction, {
+      content: "Please provide a valid GameDB id.",
+      flags: MessageFlags.Ephemeral,
+    });
     return;
   }
 
-  await interaction.deferUpdate().catch(() => {});
+  await safeDeferUpdate(interaction);
 
   const session = await getGotmAuditImportById(importId);
   if (!session || session.userId !== ownerId) {
@@ -405,40 +394,34 @@ export async function handleGotmAuditQueryModal(
 ): Promise<void> {
   const [, ownerId, importIdRaw, itemIdRaw] = interaction.customId.split(":");
   if (interaction.user.id !== ownerId) {
-    await interaction
-      .reply({
-        content: "This audit prompt is not for you.",
-        flags: MessageFlags.Ephemeral,
-      })
-      .catch(() => {});
+    await safeReply(interaction, {
+      content: "This audit prompt is not for you.",
+      flags: MessageFlags.Ephemeral,
+    });
     return;
   }
 
   const importId = Number(importIdRaw);
   const itemId = Number(itemIdRaw);
   if (!Number.isInteger(importId) || !Number.isInteger(itemId)) {
-    await interaction
-      .reply({
-        content: "Invalid audit request.",
-        flags: MessageFlags.Ephemeral,
-      })
-      .catch(() => {});
+    await safeReply(interaction, {
+      content: "Invalid audit request.",
+      flags: MessageFlags.Ephemeral,
+    });
     return;
   }
 
   const raw = interaction.fields.getTextInputValue(GOTM_AUDIT_QUERY_INPUT_ID);
   const query = stripModalInput(raw).trim();
   if (!query) {
-    await interaction
-      .reply({
-        content: "Please provide a search query.",
-        flags: MessageFlags.Ephemeral,
-      })
-      .catch(() => {});
+    await safeReply(interaction, {
+      content: "Please provide a search query.",
+      flags: MessageFlags.Ephemeral,
+    });
     return;
   }
 
-  await interaction.deferUpdate().catch(() => {});
+  await safeDeferUpdate(interaction);
 
   const session = await getGotmAuditImportById(importId);
   if (!session || session.userId !== ownerId) {

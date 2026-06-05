@@ -18,7 +18,7 @@ import {
   ThumbnailBuilder,
 } from "@discordjs/builders";
 import { SeparatorSpacingSize } from "discord-api-types/v10";
-import { safeReply } from "../../functions/InteractionUtils.js";
+import { safeReply, safeUpdate } from "../../functions/InteractionUtils.js";
 import { formatPlatformDisplayName } from "../../functions/PlatformDisplay.js";
 import { formatTableDate } from "../profile.command.js";
 import { getHltbCacheByGameId } from "../../classes/HltbCache.js";
@@ -695,12 +695,12 @@ export async function refreshGameProfileMessage(
   );
   const existingComponents = interaction.message?.components ?? [];
   const searchRows = getSearchRowsFromComponents(existingComponents);
-  await interaction.editReply({
+  await safeReply(interaction, {
     embeds: [],
     files: profile.files,
     components: [...profile.components, ...actionRows, ...searchRows],
     flags: buildComponentsV2Flags(false),
-  }).catch(() => {});
+  });
 }
 
 export async function updateGameProfileMessageById(

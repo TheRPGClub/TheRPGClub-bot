@@ -1,5 +1,6 @@
 import { ButtonComponent, Discord, SelectMenuComponent } from "discordx";
 import { type ButtonInteraction, type StringSelectMenuInteraction, MessageFlags } from "discord.js";
+import { safeReply } from "../functions/InteractionUtils.js";
 import {
   handleIgdbFirstMatchInteraction,
   handleIgdbSelectInteraction,
@@ -11,7 +12,10 @@ export class IgdbSelectHandler {
   async handleIgdbSelect(interaction: StringSelectMenuInteraction): Promise<void> {
     const handled = await handleIgdbSelectInteraction(interaction);
     if (!handled && !interaction.replied && !interaction.deferred) {
-      await interaction.reply({ content: "This IGDB selection is no longer valid.", flags: MessageFlags.Ephemeral }).catch(() => {});
+      await safeReply(interaction, {
+        content: "This IGDB selection is no longer valid.",
+        flags: MessageFlags.Ephemeral,
+      });
     }
   }
 
@@ -19,7 +23,10 @@ export class IgdbSelectHandler {
   async handleIgdbFirstMatch(interaction: ButtonInteraction): Promise<void> {
     const handled = await handleIgdbFirstMatchInteraction(interaction);
     if (!handled && !interaction.replied && !interaction.deferred) {
-      await interaction.reply({ content: "This IGDB selection is no longer valid.", flags: MessageFlags.Ephemeral }).catch(() => {});
+      await safeReply(interaction, {
+        content: "This IGDB selection is no longer valid.",
+        flags: MessageFlags.Ephemeral,
+      });
     }
   }
 }

@@ -227,17 +227,7 @@ export async function isModerator(interaction: AnyRepliable) {
         flags: MessageFlags.Ephemeral,
       };
 
-      try {
-        if (anyInteraction.replied || anyInteraction.deferred || anyInteraction.__rpgAcked) {
-          await interaction.followUp(denial as any);
-        } else {
-          await interaction.reply(denial as any);
-          anyInteraction.__rpgAcked = true;
-          anyInteraction.__rpgDeferred = false;
-        }
-      } catch {
-        // swallow
-      }
+      await safeReply(interaction, denial as any);
     } else {
       isMod = true;
     }

@@ -1102,7 +1102,7 @@ export class GameJournalCommand {
       });
       return;
     }
-    await interaction.deferUpdate();
+    await safeDeferUpdate(interaction);
     await interaction.message.delete();
   }
 }

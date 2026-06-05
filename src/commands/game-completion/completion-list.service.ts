@@ -19,7 +19,7 @@ import {
   formatTableDate,
 } from "../profile.command.js";
 import { formatPlatformDisplayName } from "../../functions/PlatformDisplay.js";
-import { safeReply } from "../../functions/InteractionUtils.js";
+import { safeReply, safeUpdate } from "../../functions/InteractionUtils.js";
 import { renderUsernameWithEmoji } from "../../services/UserEmojiService.js";
 import { COMPONENTS_V2_FLAG } from "../../config/flags.js";
 import {
@@ -202,7 +202,7 @@ export async function renderSelectionPage(
         ? "You have no completions to edit matching your filters."
         : "You have no completions to delete matching your filters.";
     if (interaction.isMessageComponent() && !interaction.deferred && !interaction.replied) {
-      await interaction.reply({ content: msg, flags: MessageFlags.Ephemeral });
+      await safeUpdate(interaction, { content: msg, flags: MessageFlags.Ephemeral });
     } else {
       await safeReply(interaction, { content: msg, flags: MessageFlags.Ephemeral });
     }
@@ -242,10 +242,9 @@ export async function renderSelectionPage(
 
   if (interaction.isMessageComponent()) {
     if (interaction.deferred || interaction.replied) {
-      await (interaction as any)
-        .editReply({ components: allComponents, flags: COMPONENTS_V2_FLAG });
+      await safeReply(interaction, { components: allComponents, flags: COMPONENTS_V2_FLAG });
     } else {
-      await (interaction as any).update({ components: allComponents, flags: COMPONENTS_V2_FLAG });
+      await safeUpdate(interaction, { components: allComponents, flags: COMPONENTS_V2_FLAG });
     }
   } else {
     await safeReply(interaction, {

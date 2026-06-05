@@ -21,7 +21,13 @@ import Member from "../classes/Member.js";
 import { COMPLETION_TYPES, type CompletionType } from "../commands/profile.command.js";
 import { createIgdbSession, type IgdbSelectOption } from "../services/IGDB/IgdbSelectService.js";
 import { igdbService, type IGDBGameDetails } from "../services/IGDB/IgdbService.js";
-import { safeUpdate, stripModalInput } from "../functions/InteractionUtils.js";
+import {
+  safeDeferReply,
+  safeDeferUpdate,
+  safeReply,
+  safeUpdate,
+  stripModalInput,
+} from "../functions/InteractionUtils.js";
 import { notifyUnknownCompletionPlatform } from "../functions/CompletionHelpers.js";
 import { COMPLETION_REACTION_DEV_CHANNEL_ID } from "../config/channels.js";
 
@@ -254,7 +260,7 @@ export class MessageReactionAdd {
     const [, sessionId] = interaction.customId.split(":");
     const session = completionReactionSessions.get(sessionId);
     if (!session) {
-      await interaction.update({
+      await safeUpdate(interaction, {
         content: "This completion prompt has expired.",
         components: [],
       }).catch(() => {});
@@ -262,7 +268,7 @@ export class MessageReactionAdd {
     }
 
     if (interaction.user.id !== session.requesterId) {
-      await interaction.reply({
+      await safeReply(interaction, {
         content: "This completion prompt is not for you.",
       }).catch(() => {});
       return;
@@ -270,7 +276,7 @@ export class MessageReactionAdd {
 
     const value = interaction.values?.[0];
     if (!value || !COMPLETION_TYPES.includes(value as CompletionType)) {
-      await interaction.update({
+      await safeUpdate(interaction, {
         content: "Invalid completion type.",
         components: [],
       }).catch(() => {});
@@ -298,7 +304,7 @@ export class MessageReactionAdd {
       description: `GameDB #${game.id}`,
     }));
     const row = buildCompletionGameRow(sessionId, options);
-    await interaction.update({
+    await safeUpdate(interaction, {
       content: `Select the game for "${session.query}".`,
       components: [row, buildCompletionTitleRow(sessionId)],
     }).catch(() => {});
@@ -311,7 +317,7 @@ export class MessageReactionAdd {
     const [, sessionId] = interaction.customId.split(":");
     const session = completionReactionSessions.get(sessionId);
     if (!session) {
-      await interaction.update({
+      await safeUpdate(interaction, {
         content: "This completion prompt has expired.",
         components: [],
       }).catch(() => {});
@@ -319,7 +325,7 @@ export class MessageReactionAdd {
     }
 
     if (interaction.user.id !== session.requesterId) {
-      await interaction.reply({
+      await safeReply(interaction, {
         content: "This completion prompt is not for you.",
       }).catch(() => {});
       return;
@@ -328,7 +334,7 @@ export class MessageReactionAdd {
     const value = interaction.values?.[0];
     const gameId = value ? Number(value) : Number.NaN;
     if (!Number.isInteger(gameId) || gameId <= 0) {
-      await interaction.update({
+      await safeUpdate(interaction, {
         content: "Invalid game selection.",
         components: [],
       }).catch(() => {});
@@ -346,7 +352,7 @@ export class MessageReactionAdd {
     const [, sessionId] = interaction.customId.split(":");
     const session = completionReactionPlatformSessions.get(sessionId);
     if (!session) {
-      await interaction.update({
+      await safeUpdate(interaction, {
         content: "This completion prompt has expired.",
         components: [],
       }).catch(() => {});
@@ -354,7 +360,7 @@ export class MessageReactionAdd {
     }
 
     if (interaction.user.id !== session.requesterId) {
-      await interaction.reply({
+      await safeReply(interaction, {
         content: "This completion prompt is not for you.",
       }).catch(() => {});
       return;
@@ -374,7 +380,7 @@ export class MessageReactionAdd {
       session.platforms.some((platform) => platform.id === platformId)
     );
     if (!valid) {
-      await interaction.update({
+      await safeUpdate(interaction, {
         content: "Invalid platform selection.",
         components: [],
       }).catch(() => {});
@@ -386,7 +392,7 @@ export class MessageReactionAdd {
     const completionType = session.completionType ?? (COMPLETION_TYPES[0] as CompletionType);
     const game = await Game.getGameById(session.gameId);
     if (!game) {
-      await interaction.update({
+      await safeUpdate(interaction, {
         content: "Selected game was not found in GameDB.",
         components: [],
       }).catch(() => {});
@@ -411,7 +417,7 @@ export class MessageReactionAdd {
       });
     } catch (err: any) {
       const msg = err?.message ?? "Failed to save completion.";
-      await interaction.update({
+      await safeUpdate(interaction, {
         content: `Could not save completion: ${msg}`,
         components: [],
       }).catch(() => {});
@@ -421,7 +427,7 @@ export class MessageReactionAdd {
     }
 
     const completedAtUnix = Math.floor(session.completedAt.getTime() / 1000);
-    await interaction.update({
+    await safeUpdate(interaction, {
       content: [
         "Completion added.",
         `Member: <@${session.targetUserId}>`,
@@ -444,14 +450,14 @@ export class MessageReactionAdd {
     const [, sessionId] = interaction.customId.split(":");
     const session = completionReactionSessions.get(sessionId);
     if (!session) {
-      await interaction.reply({
+      await safeReply(interaction, {
         content: "This completion prompt has expired.",
       }).catch(() => {});
       return;
     }
 
     if (interaction.user.id !== session.requesterId) {
-      await interaction.reply({
+      await safeReply(interaction, {
         content: "This completion prompt is not for you.",
       }).catch(() => {});
       return;
@@ -485,7 +491,7 @@ export class MessageReactionAdd {
     const [, sessionId] = interaction.customId.split(":");
     const session = completionReactionSessions.get(sessionId);
     if (!session) {
-      await interaction.reply({
+      await safeReply(interaction, {
         content: "This completion prompt has expired.",
         flags: MessageFlags.Ephemeral,
       }).catch(() => {});
@@ -493,7 +499,7 @@ export class MessageReactionAdd {
     }
 
     if (interaction.user.id !== session.requesterId) {
-      await interaction.reply({
+      await safeReply(interaction, {
         content: "This completion prompt is not for you.",
         flags: MessageFlags.Ephemeral,
       }).catch(() => {});
@@ -504,7 +510,7 @@ export class MessageReactionAdd {
       interaction.fields.getTextInputValue("completion-react-title-input"),
     );
     if (!newTitle) {
-      await interaction.reply({
+      await safeReply(interaction, {
         content: "Game title is required.",
         flags: MessageFlags.Ephemeral,
       }).catch(() => {});
@@ -512,7 +518,7 @@ export class MessageReactionAdd {
     }
 
     session.query = newTitle;
-    await interaction.deferReply({ flags: MessageFlags.Ephemeral }).catch(() => {});
+    await safeDeferReply(interaction, { flags: MessageFlags.Ephemeral }).catch(() => {});
     const channelId = session.promptChannelId;
     const messageId = session.promptMessageId;
     if (channelId && messageId) {
@@ -584,7 +590,7 @@ export class MessageReactionAdd {
       searchRes = await igdbService.searchGames(session.query);
     } catch (err: any) {
       const msg = err?.message ?? "Failed to search IGDB.";
-      await interaction.update({
+      await safeUpdate(interaction, {
         content: `IGDB search failed: ${msg}`,
         components: [],
       }).catch(() => {});
@@ -593,7 +599,7 @@ export class MessageReactionAdd {
     }
 
     if (!searchRes.results.length) {
-      await interaction.update({
+      await safeUpdate(interaction, {
         content: `No IGDB results found for "${session.query}".`,
         components: [],
       }).catch(() => {});
@@ -605,9 +611,9 @@ export class MessageReactionAdd {
     const { components } = createIgdbSession(session.requesterId, opts, async (sel, igdbId) => {
       try {
         if (!sel.deferred && !sel.replied) {
-          await sel.deferUpdate().catch(() => {});
+          await safeDeferUpdate(sel);
         }
-        await sel.editReply({
+        await safeReply(sel, {
           content: "Importing game details from IGDB...",
           components: [],
         }).catch(() => {});
@@ -616,7 +622,7 @@ export class MessageReactionAdd {
         completionReactionSessions.delete(session.sessionId);
       } catch (err: any) {
         const msg = err?.message ?? "Failed to import from IGDB.";
-        await sel.editReply({
+        await safeReply(sel, {
           content: msg,
           components: [],
         }).catch(() => {});
@@ -624,7 +630,7 @@ export class MessageReactionAdd {
       }
     });
 
-    await interaction.update({
+    await safeUpdate(interaction, {
       content: `No GameDB match. Select an IGDB result for "${session.query}".`,
       components: [...components, buildCompletionTitleRow(session.sessionId)],
     }).catch(() => {});

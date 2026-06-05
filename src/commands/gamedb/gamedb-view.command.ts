@@ -18,7 +18,9 @@ import {
 } from "discordx";
 import {
   safeDeferReply,
+  safeDeferUpdate,
   safeReply,
+  safeUpdate,
   sanitizeUserInput,
 } from "../../functions/InteractionUtils.js";
 import { getHltbCacheByGameId, upsertHltbCache } from "../../classes/HltbCache.js";
@@ -103,7 +105,7 @@ export class GameDbViewCommand {
     const [, action, gameIdRaw] = interaction.customId.split(":");
     const gameId = Number(gameIdRaw);
     if (!Number.isInteger(gameId) || gameId <= 0) {
-      await interaction.reply({
+      await safeReply(interaction, {
         content: "Invalid GameDB id.",
         flags: MessageFlags.Ephemeral,
       });
@@ -112,10 +114,11 @@ export class GameDbViewCommand {
 
     const game = await Game.getGameById(gameId);
     if (!game) {
-      await interaction.followUp({
+      await safeReply(interaction, {
         content: `No game found with ID ${gameId}.`,
         flags: MessageFlags.Ephemeral,
-      }).catch(() => {});
+        __forceFollowUp: true,
+      });
       return;
     }
 
@@ -144,7 +147,7 @@ export class GameDbViewCommand {
         const existingComponents = interaction.message?.components ?? [];
         const searchRows = getSearchRowsFromComponents(existingComponents);
         try {
-          await interaction.update({
+          await safeUpdate(interaction, {
             embeds: [],
             files: profile.files,
             components: [...profile.components, ...actionRows, ...searchRows],
@@ -156,10 +159,11 @@ export class GameDbViewCommand {
         }
       }
       if (!updatedMessage) {
-        await interaction.deferUpdate().catch(() => {});
+        await safeDeferUpdate(interaction);
       }
-      await interaction.followUp({
+      await safeReply(interaction, {
         content: `Warning: videos may contain spoilers. ${videoUrl}`,
+        __forceFollowUp: true,
       });
       return;
     }
@@ -186,13 +190,14 @@ export class GameDbViewCommand {
         });
         return;
       }
-      await interaction.deferUpdate().catch(() => {});
+      await safeDeferUpdate(interaction);
       await Game.updateGameThumbnailBad(gameId, true);
       await Game.updateGameThumbnailApproved(gameId, false);
       await refreshGameProfileMessage(interaction, gameId);
-      await interaction.followUp({
+      await safeReply(interaction, {
         content: "Thumbnail flagged. GameDB view will use cover art from now on.",
         flags: MessageFlags.Ephemeral,
+        __forceFollowUp: true,
       });
       return;
     }
@@ -212,13 +217,14 @@ export class GameDbViewCommand {
         });
         return;
       }
-      await interaction.deferUpdate().catch(() => {});
+      await safeDeferUpdate(interaction);
       await Game.updateGameThumbnailBad(gameId, false);
       await Game.updateGameThumbnailApproved(gameId, true);
       await refreshGameProfileMessage(interaction, gameId);
-      await interaction.followUp({
+      await safeReply(interaction, {
         content: "Thumbnail marked as good. GameDB view will keep using artwork.",
         flags: MessageFlags.Ephemeral,
+        __forceFollowUp: true,
       });
       return;
     }
@@ -242,11 +248,7 @@ export class GameDbViewCommand {
     }
 
     if (action === "hltb-import") {
-      try {
-        await interaction.deferUpdate();
-      } catch {
-        // ignore
-      }
+      await safeDeferUpdate(interaction);
       const hltbCache = await getHltbCacheByGameId(gameId);
       if (isHltbImportEligible(game, Boolean(hltbCache))) {
         const scraped = await searchHltb(game.title);

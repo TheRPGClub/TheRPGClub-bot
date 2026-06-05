@@ -21,7 +21,13 @@ import {
   SlashChoice,
   ModalComponent,
 } from "discordx";
-import { ephemeralFlag, safeDeferReply, sanitizeUserInput } from "../functions/InteractionUtils.js";
+import {
+  ephemeralFlag,
+  safeDeferReply,
+  safeReply,
+  safeUpdate,
+  sanitizeUserInput,
+} from "../functions/InteractionUtils.js";
 import {
   COMPLETION_TYPES,
   type CompletionType,
@@ -160,7 +166,7 @@ export class GameCompletionCommands {
     await safeDeferReply(interaction, { flags: MessageFlags.Ephemeral });
 
     if (!COMPLETION_TYPES.includes(completionType)) {
-      await interaction.editReply("Invalid completion type.");
+      await safeReply(interaction, "Invalid completion type.");
       return;
     }
 
@@ -174,7 +180,7 @@ export class GameCompletionCommands {
     try {
       completedAt = parseCompletionDateInput(completionDate);
     } catch (err: any) {
-      await interaction.editReply(err?.message ?? "Invalid completion date.");
+      await safeReply(interaction, err?.message ?? "Invalid completion date.");
       return;
     }
 
@@ -182,7 +188,7 @@ export class GameCompletionCommands {
       finalPlaytimeHours !== undefined &&
       (Number.isNaN(finalPlaytimeHours) || finalPlaytimeHours < 0)
     ) {
-      await interaction.editReply("Final playtime must be a non-negative number of hours.");
+      await safeReply(interaction, "Final playtime must be a non-negative number of hours.");
       return;
     }
 
@@ -191,18 +197,18 @@ export class GameCompletionCommands {
     const trimmedNote = note?.trim() ?? null;
     const selectedPlatformId = await resolveGameCompletionPlatformId(selectedPlatformRaw);
     if (selectedPlatformId == null) {
-      await interaction.editReply("Invalid platform selection.");
+      await safeReply(interaction, "Invalid platform selection.");
       return;
     }
 
     if (trimmedNote && trimmedNote.length > this.maxNoteLength) {
-      await interaction.editReply(`Note must be ${this.maxNoteLength} characters or fewer.`);
+      await safeReply(interaction, `Note must be ${this.maxNoteLength} characters or fewer.`);
       return;
     }
 
     const searchTerm = query.trim();
     if (!searchTerm) {
-      await interaction.editReply("Provide a game title to search.");
+      await safeReply(interaction, "Provide a game title to search.");
       return;
     }
 
@@ -334,7 +340,7 @@ export class GameCompletionCommands {
       } else {
         const parsed = Number(trimmed);
         if (!Number.isInteger(parsed) || parsed <= 0) {
-          await interaction.editReply(
+          await safeReply(interaction, 
             "Year must be a valid integer (e.g., 2024) or 'unknown'.",
           );
           return;
@@ -430,7 +436,7 @@ export class GameCompletionCommands {
     }
 
     if (!rightUserId) {
-      await interaction.editReply(
+      await safeReply(interaction, 
         "Pick at least one member (`member_one` or `member_two`) to compare with.",
       );
       return;
@@ -452,7 +458,7 @@ export class GameCompletionCommands {
       } else {
         const parsed = Number(trimmed);
         if (!Number.isInteger(parsed) || parsed <= 0) {
-          await interaction.editReply(
+          await safeReply(interaction, 
             "Year must be a valid integer (e.g., 2024) or 'unknown'.",
           );
           return;
@@ -466,7 +472,7 @@ export class GameCompletionCommands {
     if (platformRaw) {
       platformId = await resolveGameCompletionPlatformId(platformRaw);
       if (platformId == null) {
-        await interaction.editReply("Invalid platform selection.");
+        await safeReply(interaction, "Invalid platform selection.");
         return;
       }
     }
@@ -564,22 +570,22 @@ export class GameCompletionCommands {
     await safeDeferReply(interaction, { flags: MessageFlags.Ephemeral });
     const completionId = parseCompletionTitleAutocompleteValue(selectedCompletionRaw);
     if (!completionId) {
-      await interaction.editReply("Select a completion from the title autocomplete list.");
+      await safeReply(interaction, "Select a completion from the title autocomplete list.");
       return;
     }
 
     if (clearPlatform && platformRaw) {
-      await interaction.editReply("Use either `platform` or `clear_platform:true`, not both.");
+      await safeReply(interaction, "Use either `platform` or `clear_platform:true`, not both.");
       return;
     }
     if (clearFinalPlaytime && finalPlaytimeHours !== undefined) {
-      await interaction.editReply(
+      await safeReply(interaction, 
         "Use either `final_playtime_hours` or `clear_final_playtime:true`, not both.",
       );
       return;
     }
     if (clearNote && noteRaw !== undefined) {
-      await interaction.editReply("Use either `note` or `clear_note:true`, not both.");
+      await safeReply(interaction, "Use either `note` or `clear_note:true`, not both.");
       return;
     }
 
@@ -593,7 +599,7 @@ export class GameCompletionCommands {
 
     if (completionType !== undefined) {
       if (!COMPLETION_TYPES.includes(completionType)) {
-        await interaction.editReply("Invalid completion type.");
+        await safeReply(interaction, "Invalid completion type.");
         return;
       }
       updates.completionType = completionType;
@@ -604,7 +610,7 @@ export class GameCompletionCommands {
       try {
         updates.completedAt = parseCompletionDateInput(sanitizedDate);
       } catch (err: any) {
-        await interaction.editReply(err?.message ?? "Invalid completion date.");
+        await safeReply(interaction, err?.message ?? "Invalid completion date.");
         return;
       }
     }
@@ -614,7 +620,7 @@ export class GameCompletionCommands {
     } else if (platformRaw !== undefined) {
       const platformId = await resolveGameCompletionPlatformId(platformRaw);
       if (platformId == null) {
-        await interaction.editReply("Invalid platform selection.");
+        await safeReply(interaction, "Invalid platform selection.");
         return;
       }
       updates.platformId = platformId;
@@ -624,7 +630,7 @@ export class GameCompletionCommands {
       updates.finalPlaytimeHours = null;
     } else if (finalPlaytimeHours !== undefined) {
       if (Number.isNaN(finalPlaytimeHours) || finalPlaytimeHours < 0) {
-        await interaction.editReply("Final playtime must be a non-negative number of hours.");
+        await safeReply(interaction, "Final playtime must be a non-negative number of hours.");
         return;
       }
       updates.finalPlaytimeHours = finalPlaytimeHours;
@@ -635,14 +641,14 @@ export class GameCompletionCommands {
     } else if (noteRaw !== undefined) {
       const sanitizedNote = sanitizeUserInput(noteRaw, { preserveNewlines: true });
       if (sanitizedNote.length > this.maxNoteLength) {
-        await interaction.editReply(`Note must be ${this.maxNoteLength} characters or fewer.`);
+        await safeReply(interaction, `Note must be ${this.maxNoteLength} characters or fewer.`);
         return;
       }
       updates.note = sanitizedNote.length ? sanitizedNote : null;
     }
 
     if (!Object.keys(updates).length) {
-      await interaction.editReply(
+      await safeReply(interaction, 
         "Provide at least one field to update (type, date, platform, playtime, or note).",
       );
       return;
@@ -650,13 +656,13 @@ export class GameCompletionCommands {
 
     const saved = await Member.updateCompletion(interaction.user.id, completionId, updates);
     if (!saved) {
-      await interaction.editReply("Completion not found.");
+      await safeReply(interaction, "Completion not found.");
       return;
     }
 
     const updated = await Member.getCompletionForUser(interaction.user.id, completionId);
     if (!updated) {
-      await interaction.editReply("Completion updated.");
+      await safeReply(interaction, "Completion updated.");
       return;
     }
 
@@ -685,7 +691,7 @@ export class GameCompletionCommands {
       changedLines.push(`- Note: ${noteLabel}`);
     }
 
-    await interaction.editReply(
+    await safeReply(interaction, 
       `Saved: **${updated.title}** updated.\n${changedLines.join("\n")}`,
     );
   }
@@ -860,7 +866,7 @@ export class GameCompletionCommands {
 
   @ButtonComponent({ id: /^completion-add-igdb-confirm:.+/ })
   async handleCompletionAddIgdbConfirm(interaction: ButtonInteraction): Promise<void> {
-    await interaction.update({
+    await safeUpdate(interaction, {
       content: "IGDB confirm handler - full implementation in service file",
       components: [],
     });

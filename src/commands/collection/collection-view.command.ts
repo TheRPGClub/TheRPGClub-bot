@@ -28,6 +28,8 @@ import UserGameCollection, {
 } from "../../classes/UserGameCollection.js";
 import {
   safeDeferReply,
+  safeDeferUpdate,
+  safeReply,
   safeUpdate,
   sanitizeUserInput,
   resolveMemberLabel,
@@ -155,10 +157,10 @@ export class CollectionViewCommand {
     });
 
     if (response.content) {
-      await interaction.editReply(response.content);
+      await safeReply(interaction, response.content);
       return;
     }
-    await interaction.editReply({
+    await safeReply(interaction, {
       components: response.components,
       flags: buildComponentsV2Flags(isEphemeral),
     });
@@ -196,19 +198,20 @@ export class CollectionViewCommand {
       const messages = await buildAllCollectionsOverviewMessages();
       const [first, ...rest] = messages;
       if (!first) {
-        await interaction.editReply("No collection entries yet.");
+        await safeReply(interaction, "No collection entries yet.");
         return;
       }
 
-      await interaction.editReply({
+      await safeReply(interaction, {
         components: first.components,
         flags: buildComponentsV2Flags(isEphemeral),
       });
 
       for (const message of rest) {
-        await interaction.followUp({
+        await safeReply(interaction, {
           components: message.components,
           flags: buildComponentsV2Flags(isEphemeral),
+          __forceFollowUp: true,
         });
       }
       return;
@@ -224,7 +227,7 @@ export class CollectionViewCommand {
       titleOverride: member ? `${memberLabel}'s Game Collection` : undefined,
     });
 
-    await interaction.editReply({
+    await safeReply(interaction, {
       components,
       flags: buildComponentsV2Flags(isEphemeral),
     });
@@ -238,7 +241,7 @@ export class CollectionViewCommand {
   ): Promise<void> {
     const parsed = parseCollectionOverviewSelectId(interaction.customId);
     if (!parsed) {
-      await interaction.reply({
+      await safeReply(interaction, {
         content: "This collection overview control is invalid.",
         flags: MessageFlags.Ephemeral,
       }).catch(() => {});
@@ -246,7 +249,7 @@ export class CollectionViewCommand {
     }
 
     if (interaction.user.id !== parsed.viewerUserId) {
-      await interaction.reply({
+      await safeReply(interaction, {
         content: "This collection overview is not for you.",
         flags: MessageFlags.Ephemeral,
       }).catch(() => {});
@@ -255,7 +258,7 @@ export class CollectionViewCommand {
 
     const selection = parseCollectionOverviewSelectValue(interaction.values?.[0] ?? "");
     if (!selection) {
-      await interaction.reply({
+      await safeReply(interaction, {
         content: "That collection selection is invalid.",
         flags: MessageFlags.Ephemeral,
       }).catch(() => {});
@@ -268,7 +271,7 @@ export class CollectionViewCommand {
       interaction.user.username,
     );
 
-    await interaction.deferUpdate().catch(() => {});
+    await safeDeferUpdate(interaction);
 
     if (selection === "overview") {
       const components = await buildCollectionOverviewResponse({
@@ -279,7 +282,7 @@ export class CollectionViewCommand {
         titleOverride: overviewTitle ?? undefined,
       });
 
-      await interaction.editReply({
+      await safeReply(interaction, {
         components,
         flags: buildComponentsV2EditFlags(),
       }).catch(() => {});
@@ -301,14 +304,14 @@ export class CollectionViewCommand {
       });
 
       if (response.content) {
-        await interaction.editReply({
+        await safeReply(interaction, {
           content: response.content,
           components: [],
         }).catch(() => {});
         return;
       }
 
-      await interaction.editReply({
+      await safeReply(interaction, {
         components: response.components,
         flags: buildComponentsV2EditFlags(),
       }).catch(() => {});
@@ -336,14 +339,14 @@ export class CollectionViewCommand {
     });
 
     if (response.content) {
-      await interaction.editReply({
+      await safeReply(interaction, {
         content: response.content,
         components: [],
       }).catch(() => {});
       return;
     }
 
-    await interaction.editReply({
+    await safeReply(interaction, {
       components: response.components,
       flags: buildComponentsV2EditFlags(),
     }).catch(() => {});
@@ -355,7 +358,7 @@ export class CollectionViewCommand {
   async onCollectionListNav(interaction: ButtonInteraction): Promise<void> {
     const parsed = parseCollectionListNavId(interaction.customId);
     if (!parsed) {
-      await interaction.reply({
+      await safeReply(interaction, {
         content: "This collection view control is invalid.",
         flags: MessageFlags.Ephemeral,
       }).catch(() => {});
@@ -363,7 +366,7 @@ export class CollectionViewCommand {
     }
 
     if (interaction.user.id !== parsed.viewerUserId) {
-      await interaction.reply({
+      await safeReply(interaction, {
         content: "This collection view is not for you.",
         flags: MessageFlags.Ephemeral,
       }).catch(() => {});
@@ -438,7 +441,7 @@ export class CollectionViewCommand {
   async onCollectionFilterOpen(interaction: ButtonInteraction): Promise<void> {
     const parsed = parseCollectionFilterActionId(interaction.customId);
     if (!parsed || parsed.action !== "open") {
-      await interaction.reply({
+      await safeReply(interaction, {
         content: "This filter control is invalid.",
         flags: MessageFlags.Ephemeral,
       }).catch(() => {});
@@ -446,7 +449,7 @@ export class CollectionViewCommand {
     }
 
     if (interaction.user.id !== parsed.viewerUserId) {
-      await interaction.reply({
+      await safeReply(interaction, {
         content: "This collection view is not for you.",
         flags: MessageFlags.Ephemeral,
       }).catch(() => {});
@@ -455,7 +458,7 @@ export class CollectionViewCommand {
 
     const currentFilters = parseCollectionFiltersFromListMessage(interaction.message);
 
-    await interaction.reply({
+    await safeReply(interaction, {
       content: buildCollectionFilterPanelContent({
         title: currentFilters.title,
         platform: currentFilters.platform,
@@ -478,7 +481,7 @@ export class CollectionViewCommand {
   async onCollectionFilterAction(interaction: ButtonInteraction): Promise<void> {
     const parsed = parseCollectionFilterPanelActionId(interaction.customId);
     if (!parsed) {
-      await interaction.reply({
+      await safeReply(interaction, {
         content: "This filter control is invalid.",
         flags: MessageFlags.Ephemeral,
       }).catch(() => {});
@@ -486,7 +489,7 @@ export class CollectionViewCommand {
     }
 
     if (interaction.user.id !== parsed.viewerUserId) {
-      await interaction.reply({
+      await safeReply(interaction, {
         content: "This filter control is not for you.",
         flags: MessageFlags.Ephemeral,
       }).catch(() => {});
@@ -555,7 +558,7 @@ export class CollectionViewCommand {
         };
 
     if (parsed.action === "apply") {
-      await interaction.deferUpdate().catch(() => {});
+      await safeDeferUpdate(interaction);
       const applied = await applyFiltersToSourceMessage({
         interaction,
         sourceMessageId: parsed.sourceMessageId,
@@ -568,10 +571,11 @@ export class CollectionViewCommand {
       });
       await (interaction.message as any)?.delete?.().catch(() => {});
       if (!applied) {
-        await interaction.followUp({
+        await safeReply(interaction, {
           content: "Could not update that collection message.",
           flags: MessageFlags.Ephemeral,
-        }).catch(() => {});
+          __forceFollowUp: true,
+        });
         return;
       }
       return;
@@ -596,7 +600,7 @@ export class CollectionViewCommand {
   async onCollectionFilterTextModal(interaction: ModalSubmitInteraction): Promise<void> {
     const parsed = parseCollectionFilterModalId(interaction.customId);
     if (!parsed) {
-      await interaction.reply({
+      await safeReply(interaction, {
         content: "This filter modal is invalid.",
         flags: MessageFlags.Ephemeral,
       }).catch(() => {});
@@ -604,7 +608,7 @@ export class CollectionViewCommand {
     }
 
     if (interaction.user.id !== parsed.viewerUserId) {
-      await interaction.reply({
+      await safeReply(interaction, {
         content: "This filter modal is not for you.",
         flags: MessageFlags.Ephemeral,
       }).catch(() => {});

@@ -16,8 +16,12 @@ import {
 } from "@discordjs/builders";
 import { TextInputStyle as ApiTextInputStyle } from "discord-api-types/v10";
 import { LIVE_EVENT_FORUM_ID } from "../../config/channels.js";
-import { safeReply, sanitizeOptionalInput, sanitizeUserInput } from
-  "../../functions/InteractionUtils.js";
+import {
+  safeDeferReply,
+  safeReply,
+  sanitizeOptionalInput,
+  sanitizeUserInput,
+} from "../../functions/InteractionUtils.js";
 
 const LIVE_STREAM_MODAL_PREFIX = "admin-live-stream-create";
 const LIVE_STREAM_TOPIC_ID = "live-stream-topic";
@@ -240,7 +244,7 @@ export async function handleLiveStreamCreateModal(interaction: ModalSubmitIntera
     return;
   }
 
-  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+  await safeDeferReply(interaction, { flags: MessageFlags.Ephemeral });
 
   const parsedInput = parseLiveStreamModalInput({
     end: interaction.fields.getTextInputValue(LIVE_STREAM_END_ID),

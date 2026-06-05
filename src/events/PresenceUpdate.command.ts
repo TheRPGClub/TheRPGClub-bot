@@ -15,6 +15,7 @@ import PresencePromptOptOut, { normalizePresenceGameTitle } from "../classes/Pre
 import PresencePromptHistory from "../classes/PresencePromptHistory.js";
 import UserActivityIcon from "../classes/UserActivityIcon.js";
 import { igdbService } from "../services/IGDB/IgdbService.js";
+import { safeReply, safeUpdate } from "../functions/InteractionUtils.js";
 import { PRESENCE_PROMPT_CHANNEL_ID } from "../config/channels.js";
 
 const YES_PREFIX = "presence-np-yes";
@@ -194,14 +195,14 @@ export class PresenceUpdate {
     const sessionId = interaction.customId.replace(`${YES_PREFIX}:`, "");
     const session = presencePromptSessions.get(sessionId);
     if (!session) {
-      await interaction.reply({
+      await safeReply(interaction, {
         content: "That prompt has expired.",
         flags: MessageFlags.Ephemeral,
       });
       return;
     }
     if (interaction.user.id !== session.userId) {
-      await interaction.reply({
+      await safeReply(interaction, {
         content: "This prompt isn't for you.",
         flags: MessageFlags.Ephemeral,
       });
@@ -212,7 +213,7 @@ export class PresenceUpdate {
       await PresencePromptHistory.markResolved(sessionId, "ACCEPTED");
       const resolved = await resolvePresenceGame(session.gameTitle);
       if (!resolved) {
-        await interaction.update({
+        await safeUpdate(interaction, {
           content:
             `I could not find **${session.gameTitle}** in GameDB. ` +
             "Try adding it with `/gamedb add`.",
@@ -224,7 +225,7 @@ export class PresenceUpdate {
 
       const platforms = await Game.getPlatformsForGame(resolved.gameId);
       if (!platforms.length) {
-        await interaction.update({
+        await safeUpdate(interaction, {
           content:
             `I found **${resolved.title}**, but it has no platform data yet. ` +
             "Please add it manually from `/now-playing list` when platform data is available.",
@@ -235,7 +236,7 @@ export class PresenceUpdate {
       }
       const defaultPlatform = platforms[0];
       await Member.addNowPlaying(session.userId, resolved.gameId, defaultPlatform.id, null);
-      await interaction.update({
+      await safeUpdate(interaction, {
         content: `Added **${resolved.title}** to your Now Playing list.`,
         components: [],
       });
@@ -243,7 +244,7 @@ export class PresenceUpdate {
     } catch (err: any) {
       await PresencePromptHistory.markResolved(sessionId, "DECLINED");
       const msg = err?.message ?? "Failed to add that game.";
-      await interaction.update({
+      await safeUpdate(interaction, {
         content: msg,
         components: [],
       });
@@ -256,14 +257,14 @@ export class PresenceUpdate {
     const sessionId = interaction.customId.replace(`${NO_PREFIX}:`, "");
     const session = presencePromptSessions.get(sessionId);
     if (!session) {
-      await interaction.reply({
+      await safeReply(interaction, {
         content: "That prompt has expired.",
         flags: MessageFlags.Ephemeral,
       });
       return;
     }
     if (interaction.user.id !== session.userId) {
-      await interaction.reply({
+      await safeReply(interaction, {
         content: "This prompt isn't for you.",
         flags: MessageFlags.Ephemeral,
       });
@@ -271,7 +272,7 @@ export class PresenceUpdate {
     }
 
     await PresencePromptHistory.markResolved(sessionId, "DECLINED");
-    await interaction.update({
+    await safeUpdate(interaction, {
       content: `<@${session.userId}>, no problem. I won't add it.`,
       components: [],
     });
@@ -282,14 +283,14 @@ export class PresenceUpdate {
     const sessionId = interaction.customId.replace(`${OPT_OUT_GAME_PREFIX}:`, "");
     const session = presencePromptSessions.get(sessionId);
     if (!session) {
-      await interaction.reply({
+      await safeReply(interaction, {
         content: "That prompt has expired.",
         flags: MessageFlags.Ephemeral,
       });
       return;
     }
     if (interaction.user.id !== session.userId) {
-      await interaction.reply({
+      await safeReply(interaction, {
         content: "This prompt isn't for you.",
         flags: MessageFlags.Ephemeral,
       });
@@ -298,7 +299,7 @@ export class PresenceUpdate {
 
     await PresencePromptOptOut.addOptOutGame(session.userId, session.gameTitle);
     await PresencePromptHistory.markResolved(sessionId, "OPT_OUT_GAME");
-    await interaction.update({
+    await safeUpdate(interaction, {
       content: `<@${session.userId}>, got it. I won't ask again about **${session.gameTitle}**.`,
       components: [],
     });
@@ -310,14 +311,14 @@ export class PresenceUpdate {
     const sessionId = interaction.customId.replace(`${OPT_OUT_ALL_PREFIX}:`, "");
     const session = presencePromptSessions.get(sessionId);
     if (!session) {
-      await interaction.reply({
+      await safeReply(interaction, {
         content: "That prompt has expired.",
         flags: MessageFlags.Ephemeral,
       });
       return;
     }
     if (interaction.user.id !== session.userId) {
-      await interaction.reply({
+      await safeReply(interaction, {
         content: "This prompt isn't for you.",
         flags: MessageFlags.Ephemeral,
       });
@@ -326,7 +327,7 @@ export class PresenceUpdate {
 
     await PresencePromptOptOut.addOptOutAll(session.userId);
     await PresencePromptHistory.markResolved(sessionId, "OPT_OUT_ALL");
-    await interaction.update({
+    await safeUpdate(interaction, {
       content: `<@${session.userId}>, got it. I won't ask again about any games.`,
       components: [],
     });

@@ -17,6 +17,7 @@ import {
 import axios from "axios";
 import {
   safeDeferReply,
+  safeDeferUpdate,
   safeReply,
   sanitizeUserInput,
 } from "../../functions/InteractionUtils.js";
@@ -126,9 +127,9 @@ export async function addGameToDatabase(
     const payload = { content: msg };
     try {
       if (interaction.isMessageComponent()) {
-        await interaction.followUp(payload);
+        await safeReply(interaction, { ...payload, __forceFollowUp: true });
       } else {
-        await interaction.editReply(payload);
+        await safeReply(interaction, payload);
       }
     } catch (err) {
       if (isUnknownWebhookError(err)) {
@@ -164,9 +165,9 @@ export async function addGameToDatabase(
       const payload = { content: msg };
       try {
         if (interaction.isMessageComponent()) {
-          await interaction.followUp(payload);
+          await safeReply(interaction, { ...payload, __forceFollowUp: true });
         } else {
-          await interaction.editReply(payload);
+          await safeReply(interaction, payload);
         }
       } catch (e) {
         if (isUnknownWebhookError(e)) {
@@ -241,7 +242,7 @@ export async function handleNoResults(
       opts,
       async (sel, igdbId) => {
         if (!sel.deferred && !sel.replied) {
-          await sel.deferUpdate().catch(() => {});
+          await safeDeferUpdate(sel);
         }
         await addGameToDatabase(sel, igdbId, { selectionMessage: sel.message as any });
       },
@@ -475,7 +476,7 @@ export class GameDbAddCommand {
         opts,
         async (sel, igdbId) => {
           if (!sel.deferred && !sel.replied) {
-            await sel.deferUpdate().catch(() => {});
+            await safeDeferUpdate(sel);
           }
           await addGameToDatabase(sel, igdbId, { selectionMessage: sel.message as any });
         },

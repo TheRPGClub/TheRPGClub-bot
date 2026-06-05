@@ -7,6 +7,7 @@ import {
   type ButtonInteraction,
   type StringSelectMenuInteraction,
 } from "discord.js";
+import { safeDeferUpdate, safeReply, safeUpdate } from "../../functions/InteractionUtils.js";
 
 export type IgdbSelectOption = { id: number; label: string; description?: string };
 
@@ -147,22 +148,18 @@ export async function handleIgdbSelectInteraction(
   if (!sessionId) return false;
   const session = getSessionStore().get(sessionId);
   if (!session) {
-    await interaction
-      .reply({
-        content: "This selection session has expired.",
-        flags: MessageFlags.Ephemeral,
-      })
-      .catch(() => {});
+    await safeReply(interaction, {
+      content: "This selection session has expired.",
+      flags: MessageFlags.Ephemeral,
+    });
     return true;
   }
 
   if (interaction.user.id !== session.ownerId) {
-    await interaction
-      .reply({
-        content: "This selection isn't for you.",
-        flags: MessageFlags.Ephemeral,
-      })
-      .catch(() => {});
+    await safeReply(interaction, {
+      content: "This selection isn't for you.",
+      flags: MessageFlags.Ephemeral,
+    });
     return true;
   }
 
@@ -173,13 +170,7 @@ export async function handleIgdbSelectInteraction(
   if (value === "__igdb_none") {
     const message = session.emptyMessage ??
       "No IGDB matches found. Try Search a different title.";
-    if (interaction.deferred || interaction.replied) {
-      await interaction
-        .followUp({ content: message, flags: MessageFlags.Ephemeral })
-        .catch(() => {});
-    } else {
-      await interaction.reply({ content: message, flags: MessageFlags.Ephemeral }).catch(() => {});
-    }
+    await safeReply(interaction, { content: message, flags: MessageFlags.Ephemeral });
     return true;
   }
 
@@ -187,10 +178,10 @@ export async function handleIgdbSelectInteraction(
     const result = resolveIgdbSelection(sessionId, page, value);
     if (result && result.kind === "page") {
       try {
-        await interaction.update({ components: result.components });
+        await safeUpdate(interaction, { components: result.components });
       } catch {
         // ensure the interaction is acknowledged to avoid "Interaction failed"
-        await interaction.deferUpdate().catch(() => {});
+        await safeDeferUpdate(interaction);
       }
     }
     return true;
@@ -198,18 +189,16 @@ export async function handleIgdbSelectInteraction(
 
   const selected = resolveIgdbSelection(sessionId, page, value);
   if (!selected || selected.kind !== "select") {
-    await interaction
-      .reply({
-        content: "Invalid selection.",
-        flags: MessageFlags.Ephemeral,
-      })
-      .catch(() => {});
+    await safeReply(interaction, {
+      content: "Invalid selection.",
+      flags: MessageFlags.Ephemeral,
+    });
     return true;
   }
 
   try {
     if (!interaction.deferred && !interaction.replied) {
-      await interaction.deferUpdate().catch(() => {});
+      await safeDeferUpdate(interaction);
     }
     await session.onSelect(interaction, selected.gameId);
   } finally {
@@ -225,22 +214,18 @@ export async function handleIgdbFirstMatchInteraction(
   if (!sessionId) return false;
   const session = getSessionStore().get(sessionId);
   if (!session) {
-    await interaction
-      .reply({
-        content: "This selection session has expired.",
-        flags: MessageFlags.Ephemeral,
-      })
-      .catch(() => {});
+    await safeReply(interaction, {
+      content: "This selection session has expired.",
+      flags: MessageFlags.Ephemeral,
+    });
     return true;
   }
 
   if (interaction.user.id !== session.ownerId) {
-    await interaction
-      .reply({
-        content: "This selection isn't for you.",
-        flags: MessageFlags.Ephemeral,
-      })
-      .catch(() => {});
+    await safeReply(interaction, {
+      content: "This selection isn't for you.",
+      flags: MessageFlags.Ephemeral,
+    });
     return true;
   }
 
@@ -248,19 +233,13 @@ export async function handleIgdbFirstMatchInteraction(
   if (!firstOption) {
     const message = session.emptyMessage ??
       "No IGDB matches found. Try Search a different title.";
-    if (interaction.deferred || interaction.replied) {
-      await interaction
-        .followUp({ content: message, flags: MessageFlags.Ephemeral })
-        .catch(() => {});
-    } else {
-      await interaction.reply({ content: message, flags: MessageFlags.Ephemeral }).catch(() => {});
-    }
+    await safeReply(interaction, { content: message, flags: MessageFlags.Ephemeral });
     return true;
   }
 
   try {
     if (!interaction.deferred && !interaction.replied) {
-      await interaction.deferUpdate().catch(() => {});
+      await safeDeferUpdate(interaction);
     }
     await session.onSelect(interaction as unknown as StringSelectMenuInteraction, firstOption.id);
   } finally {

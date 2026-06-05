@@ -26,6 +26,7 @@ import {
   ephemeralFlag,
   extractErrorMessage,
   safeDeferReply,
+  safeDeferUpdate,
   safeReply,
   safeUpdate,
 } from "../functions/InteractionUtils.js";
@@ -342,11 +343,7 @@ export class MultiplayerInfoCommand {
       });
       return;
     }
-    try {
-      await interaction.deferUpdate();
-    } catch {
-      // ignore
-    }
+    await safeDeferUpdate(interaction);
 
     try {
       const user = await interaction.client.users.fetch(userId);

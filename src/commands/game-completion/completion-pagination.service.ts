@@ -7,7 +7,12 @@ import { renderCompletionPage, renderSelectionPage } from "./completion-list.ser
 import { ContainerBuilder, TextDisplayBuilder } from "@discordjs/builders";
 import Member from "../../classes/Member.js";
 import { buildJournalView } from "../../functions/journalView.js";
-import { ephemeralFlag, safeReply } from "../../functions/InteractionUtils.js";
+import {
+  ephemeralFlag,
+  safeDeferReply,
+  safeDeferUpdate,
+  safeReply,
+} from "../../functions/InteractionUtils.js";
 import { buildComponentsV2Flags } from "../../functions/ComponentsV2Utils.js";
 
 /**
@@ -33,7 +38,7 @@ export async function handleCompletionPageSelect(
   const query = parts.slice(4).join(":") || undefined;
 
   if (mode !== "list" && interaction.user.id !== ownerId) {
-    await interaction.reply({
+    await safeReply(interaction, {
       content: "This list isn't for you.",
       flags: MessageFlags.Ephemeral,
     });
@@ -46,7 +51,7 @@ export async function handleCompletionPageSelect(
   const ephemeral = interaction.message?.flags?.has(MessageFlags.Ephemeral) ?? true;
 
   try {
-    await interaction.deferUpdate();
+    await safeDeferUpdate(interaction);
   } catch {
     return;
   }
@@ -78,7 +83,7 @@ export async function handleCompletionPaging(interaction: ButtonInteraction): Pr
   const query = parts.slice(5).join(":") || undefined;
 
   if (mode !== "list" && interaction.user.id !== ownerId) {
-    await interaction.reply({
+    await safeReply(interaction, {
       content: "This list isn't for you.",
       flags: MessageFlags.Ephemeral,
     });
@@ -91,7 +96,7 @@ export async function handleCompletionPaging(interaction: ButtonInteraction): Pr
   const ephemeral = interaction.message?.flags?.has(MessageFlags.Ephemeral) ?? true;
 
   try {
-    await interaction.deferUpdate();
+    await safeDeferUpdate(interaction);
   } catch {
     return;
   }
@@ -189,10 +194,10 @@ export async function handleCompletionListHeader(
   const parts = interaction.customId.split(":");
   const ownerId = parts[1];
   if (interaction.user.id !== ownerId) {
-    await interaction.deferUpdate().catch(() => {});
+    await safeDeferUpdate(interaction);
     return;
   }
-  await interaction.reply({
+  await safeReply(interaction, {
     components: [
       new ContainerBuilder().addTextDisplayComponents(
         new TextDisplayBuilder().setContent(COMPLETION_HELP_TEXT),
@@ -213,7 +218,7 @@ export async function handleCompletionClearYearFilter(
   const ephemeral = interaction.message?.flags?.has(MessageFlags.Ephemeral) ?? true;
 
   try {
-    await interaction.deferUpdate();
+    await safeDeferUpdate(interaction);
   } catch {
     return;
   }
@@ -236,7 +241,7 @@ export async function handleCompletionYearSelect(
   const ephemeral = interaction.message?.flags?.has(MessageFlags.Ephemeral) ?? true;
 
   try {
-    await interaction.deferUpdate();
+    await safeDeferUpdate(interaction);
   } catch {
     return;
   }
@@ -255,7 +260,7 @@ export async function handleCompletionLeaderboardSelect(
   const query = parts.slice(1).join(":") || undefined;
   const userId = interaction.values[0];
   const ephemeral = interaction.message?.flags?.has(MessageFlags.Ephemeral) ?? true;
-  await interaction.deferReply({ flags: ephemeralFlag(ephemeral) });
+  await safeDeferReply(interaction, { flags: ephemeralFlag(ephemeral) });
   const firstPage = 0;
   const noYearFilter = null;
   await renderCompletionPage(interaction, userId, firstPage, noYearFilter, ephemeral, query);
