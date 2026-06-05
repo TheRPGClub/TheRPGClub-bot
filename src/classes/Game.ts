@@ -1770,7 +1770,10 @@ export default class Game {
     }
   }
 
-  static async searchGames(query: string): Promise<IGameWithPlatforms[]> {
+  static async searchGames(
+    query: string,
+    filters: { unreleased?: boolean; platformId?: number; year?: number } = {},
+  ): Promise<IGameWithPlatforms[]> {
     const pool = getOraclePool();
     const connection = await pool.getConnection();
     try {
@@ -1834,7 +1837,7 @@ export default class Game {
 
       const termEntries = Array.from(termSet.entries());
       const clauses: string[] = [];
-      const binds: Record<string, string> = {};
+      const binds: Record<string, string | number> = {};
       const titleFoldExpr =
         "REPLACE(REPLACE(REPLACE(REPLACE(LOWER(TITLE), 'é', 'e'), 'è', 'e'), 'ê', 'e'), 'ë', 'e')";
       const titleNormExpr = `REGEXP_REPLACE(${titleFoldExpr}, '[^a-z0-9]', '')`;
@@ -1848,7 +1851,28 @@ export default class Game {
         );
       });
 
-      const whereClause = clauses.length ? clauses.join(" OR ") : "1=0";
+      const filterClauses: string[] = [];
+      if (filters.unreleased) {
+        filterClauses.push(
+          "INITIAL_RELEASE_DATE IS NOT NULL AND INITIAL_RELEASE_DATE > SYSDATE",
+        );
+      }
+      if (filters.platformId) {
+        filterClauses.push(
+          "GAME_ID IN (SELECT GAME_ID FROM GAMEDB_GAME_PLATFORMS WHERE PLATFORM_ID = :filterPlatformId)",
+        );
+        binds["filterPlatformId"] = filters.platformId;
+      }
+      if (filters.year) {
+        filterClauses.push("EXTRACT(YEAR FROM INITIAL_RELEASE_DATE) = :filterYear");
+        binds["filterYear"] = filters.year;
+      }
+
+      const titleWhereClause = clauses.length ? clauses.join(" OR ") : "1=0";
+      const filterWhere = filterClauses.length
+        ? ` AND (${filterClauses.join(" AND ")})`
+        : "";
+
       const result = await connection.execute<{
         GAME_ID: number;
         TITLE: string;
@@ -1866,7 +1890,7 @@ export default class Game {
         `SELECT GAME_ID, TITLE, DESCRIPTION, IGDB_ID, SLUG, TOTAL_RATING, IGDB_URL, FEATURED_VIDEO_URL,
                 INITIAL_RELEASE_DATE, CREATED_AT, UPDATED_AT
            FROM GAMEDB_GAMES
-          WHERE ${whereClause}
+          WHERE (${titleWhereClause})${filterWhere}
           ORDER BY TITLE ASC`,
         binds,
         {

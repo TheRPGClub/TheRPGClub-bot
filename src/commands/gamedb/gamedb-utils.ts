@@ -10,8 +10,32 @@ import {
 import { AnyRepliable, safeReply, sanitizeUserInput } from "../../functions/InteractionUtils.js";
 import { formatGameTitleWithYear } from "../../functions/GameTitleAutocompleteUtils.js";
 import { buildComponentsV2Flags, buildTextReply } from "../../functions/ComponentsV2Utils.js";
-import { decodeBase64Url, encodeWithMaxLength } from "../../functions/CustomIdUtils.js";
+import { decodeBase64Url, encodeBase64Url } from "../../functions/CustomIdUtils.js";
 import Game from "../../classes/Game.js";
+
+export interface ISearchFilters {
+  unreleased?: boolean;
+  platformId?: number;
+  year?: number;
+}
+
+function compactFilters(filters: ISearchFilters): string {
+  let result = "";
+  if (filters.unreleased) result += "u";
+  if (filters.platformId) result += `p${filters.platformId}`;
+  if (filters.year) result += `y${filters.year}`;
+  return result;
+}
+
+function parseCompactFilters(filterStr: string): ISearchFilters {
+  const filters: ISearchFilters = {};
+  if (filterStr.includes("u")) filters.unreleased = true;
+  const platformMatch = filterStr.match(/p(\d+)/);
+  if (platformMatch) filters.platformId = Number(platformMatch[1]);
+  const yearMatch = filterStr.match(/y(\d{4})/);
+  if (yearMatch) filters.year = Number(yearMatch[1]);
+  return filters;
+}
 
 export const GAME_SEARCH_PAGE_SIZE = 10;
 export const MAX_COMPONENT_CUSTOM_ID_LENGTH = 100;
@@ -27,11 +51,35 @@ export type PromptChoiceOption = {
 };
 
 export function decodeSearchQuery(encoded: string): string {
-  return decodeBase64Url(encoded);
+  const decoded = decodeBase64Url(encoded);
+  const nullIdx = decoded.indexOf("\0");
+  return nullIdx >= 0 ? decoded.slice(0, nullIdx) : decoded;
 }
 
-export function encodeSearchQuery(query: string, maxLength: number): string {
-  return encodeWithMaxLength(query.trim(), maxLength);
+export function decodeISearchFilters(encoded: string): ISearchFilters {
+  const decoded = decodeBase64Url(encoded);
+  const nullIdx = decoded.indexOf("\0");
+  if (nullIdx < 0) return {};
+  return parseCompactFilters(decoded.slice(nullIdx + 1));
+}
+
+export function encodeSearchQuery(
+  query: string,
+  maxLength: number,
+  filters?: ISearchFilters,
+): string {
+  const filterStr = filters ? compactFilters(filters) : "";
+  const suffix = filterStr ? `\0${filterStr}` : "";
+  if (!query && !suffix) return "";
+  if (maxLength <= 0) return "";
+  let trimmed = query.trim();
+  while (trimmed.length >= 0) {
+    const encoded = encodeBase64Url(trimmed + suffix);
+    if (encoded.length <= maxLength) return encoded;
+    if (trimmed.length === 0) return "";
+    trimmed = trimmed.slice(0, -1);
+  }
+  return "";
 }
 
 export function buildIgdbSearchLink(title: string): string {
@@ -100,11 +148,12 @@ export function buildSearchCustomId(
   page: number,
   query: string,
   direction?: "next" | "prev",
+  filters?: ISearchFilters,
 ): string {
   const base = `gamedb-search-${type}:${ownerId}:${page}:`;
   const maxQueryLength =
     MAX_COMPONENT_CUSTOM_ID_LENGTH - base.length - (direction ? `:${direction}`.length : 0);
-  const encodedQuery = encodeSearchQuery(query, Math.max(maxQueryLength, 0));
+  const encodedQuery = encodeSearchQuery(query, Math.max(maxQueryLength, 0), filters);
   return direction
     ? `${base}${encodedQuery}:${direction}`
     : `${base}${encodedQuery}`;
@@ -174,6 +223,27 @@ export function buildKeepTypingOption(query: string): { name: string; value: str
     name: label.slice(0, 100),
     value: query,
   };
+}
+
+export async function autocompleteSearchPlatform(
+  interaction: AutocompleteInteraction,
+): Promise<void> {
+  const focused = interaction.options.getFocused(true);
+  const rawQuery = focused?.value ? String(focused.value) : "";
+  const platforms = await Game.getAllPlatforms();
+  const query = rawQuery.toLowerCase().trim();
+  const filtered = query
+    ? platforms.filter((p) =>
+      p.name.toLowerCase().includes(query)
+        || (p.abbreviation ?? "").toLowerCase().includes(query)
+        || p.code.toLowerCase().includes(query),
+    )
+    : platforms;
+  const options = filtered.slice(0, 25).map((p) => ({
+    name: (p.abbreviation ? `${p.name} (${p.abbreviation})` : p.name).slice(0, 100),
+    value: String(p.id),
+  }));
+  await interaction.respond(options);
 }
 
 export async function autocompleteGameDbViewTitle(

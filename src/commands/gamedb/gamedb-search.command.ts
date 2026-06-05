@@ -1,6 +1,7 @@
 import {
   ActionRowBuilder,
   ApplicationCommandOptionType,
+  AutocompleteInteraction,
   ButtonBuilder,
   ButtonStyle,
   CommandInteraction,
@@ -31,11 +32,14 @@ import { buildTextReply, safeV2TextContent } from "../../functions/ComponentsV2U
 import { shouldRenderPrevNextButtons } from "../../functions/PaginationUtils.js";
 import Game from "../../classes/Game.js";
 import {
+  autocompleteSearchPlatform,
   buildComponentsV2Flags,
   buildSearchCustomId,
   buildSearchRecoveryComponents,
+  decodeISearchFilters,
   decodeSearchQuery,
   GAME_SEARCH_PAGE_SIZE,
+  type ISearchFilters,
 } from "./gamedb-utils.js";
 import {
   buildGameProfile,
@@ -45,24 +49,42 @@ import {
 } from "./gamedb-profile.service.js";
 import { handleNoResults } from "./gamedb-add.command.js";
 
+async function buildFilterSummary(filters: ISearchFilters): Promise<string> {
+  const parts: string[] = [];
+  if (filters.unreleased) parts.push("Unreleased only");
+  if (filters.platformId) {
+    const platform = await Game.getPlatformById(filters.platformId);
+    parts.push(`Platform: ${platform?.name ?? `ID ${filters.platformId}`}`);
+  }
+  if (filters.year) parts.push(`Year: ${filters.year}`);
+  return parts.join(" | ");
+}
+
 export async function runSearchFlow(
   interaction: CommandInteraction,
   searchTerm: string,
   rawQuery?: string,
+  filters?: ISearchFilters,
 ): Promise<void> {
-  const results = await Game.searchGames(searchTerm);
+  const activeFilters = filters ?? {};
+  const results = await Game.searchGames(searchTerm, activeFilters);
 
   if (results.length === 0) {
     await handleNoResults(interaction, searchTerm || rawQuery || "Unknown");
     return;
   }
 
-  if (results.length === 1) {
+  if (results.length === 1 && !Object.keys(activeFilters).length) {
     await showGameProfile(interaction, results[0].id);
     return;
   }
 
-  const response = buildSearchResponse(searchTerm, results, interaction.user.id, 0, true);
+  const filterSummary = Object.keys(activeFilters).length
+    ? await buildFilterSummary(activeFilters)
+    : "";
+  const response = buildSearchResponse(
+    searchTerm, results, interaction.user.id, 0, true, activeFilters, filterSummary,
+  );
 
   await safeReply(interaction, response);
 }
@@ -73,6 +95,8 @@ function buildSearchResponse(
   ownerId: string,
   page: number,
   includeList: boolean,
+  filters?: ISearchFilters,
+  filterSummary?: string,
 ): { components: Array<ContainerBuilder | ActionRowBuilder<any>>; flags: number } {
   const totalPages = Math.max(
     1,
@@ -106,7 +130,7 @@ function buildSearchResponse(
     ? `Search Results for "${searchTerm}" (Page ${safePage + 1}/${totalPages})`
     : `All Games (Page ${safePage + 1}/${totalPages})`;
 
-  const selectCustomId = buildSearchCustomId("select", ownerId, safePage, searchTerm);
+  const selectCustomId = buildSearchCustomId("select", ownerId, safePage, searchTerm, undefined, filters);
   const options = displayedResults.map((game) => {
     const gameTitle = String(game.title ?? "");
     const isDuplicate = (titleCounts.get(gameTitle) ?? 0) > 1;
@@ -129,7 +153,7 @@ function buildSearchResponse(
   });
 
   const selectMenu = new StringSelectMenuBuilder()
-     
+
     .setCustomId(selectCustomId)
     .setPlaceholder("Select a game to view details")
     .addOptions(options);
@@ -140,15 +164,15 @@ function buildSearchResponse(
   const nextDisabled = safePage >= totalPages - 1;
 
   const prevButton = new ButtonBuilder()
-     
-    .setCustomId(buildSearchCustomId("page", ownerId, safePage, searchTerm, "prev"))
+
+    .setCustomId(buildSearchCustomId("page", ownerId, safePage, searchTerm, "prev", filters))
     .setLabel("Previous Page")
     .setStyle(ButtonStyle.Secondary)
     .setDisabled(prevDisabled);
 
   const nextButton = new ButtonBuilder()
-     
-    .setCustomId(buildSearchCustomId("page", ownerId, safePage, searchTerm, "next"))
+
+    .setCustomId(buildSearchCustomId("page", ownerId, safePage, searchTerm, "next", filters))
     .setLabel("Next Page")
     .setStyle(ButtonStyle.Secondary)
     .setDisabled(nextDisabled);
@@ -156,9 +180,10 @@ function buildSearchResponse(
   const buttonRow = new ActionRowBuilder<ButtonBuilder>().addComponents(prevButton, nextButton);
   const components: Array<ContainerBuilder | ActionRowBuilder<any>> = [];
   if (includeList) {
+    const filterNote = filterSummary ? `\n*Filters: ${filterSummary}*` : "";
     const listText = resultList || "No results.";
     const content = trimTextDisplayContent(
-      `## ${title}\n\n${listText}\n\n*${results.length} results total*`,
+      `## ${title}\n\n${listText}\n\n*${results.length} results total*${filterNote}`,
     );
     const container = new ContainerBuilder().addTextDisplayComponents(
       new TextDisplayBuilder().setContent(safeV2TextContent(content, 3500)),
@@ -168,7 +193,7 @@ function buildSearchResponse(
   components.push(selectRow);
 
   if (shouldRenderPrevNextButtons(prevDisabled, nextDisabled)) {
-     
+
     components.push(buttonRow);
   }
 
@@ -191,20 +216,51 @@ export class GameDbSearchCommand {
       type: ApplicationCommandOptionType.String,
     })
     query: string,
+    @SlashOption({
+      description: "Filter to games with a future release date (must have release info).",
+      name: "unreleased",
+      required: false,
+      type: ApplicationCommandOptionType.Boolean,
+    })
+    unreleased: boolean | null,
+    @SlashOption({
+      description: "Filter to a specific platform.",
+      name: "platform",
+      required: false,
+      type: ApplicationCommandOptionType.String,
+      autocomplete: async (interaction: AutocompleteInteraction) => {
+        await autocompleteSearchPlatform(interaction);
+      },
+    })
+    platformValue: string | null,
+    @SlashOption({
+      description: "Filter to a specific release year (uses first release date).",
+      name: "year",
+      required: false,
+      type: ApplicationCommandOptionType.Integer,
+    })
+    year: number | null,
     interaction: CommandInteraction,
   ): Promise<void> {
     await safeDeferReply(interaction, { flags: buildComponentsV2Flags(false) });
 
     try {
       const searchTerm = sanitizeUserInput(query, { preserveNewlines: false });
-      await runSearchFlow(interaction, searchTerm, query);
+      const filters: ISearchFilters = {};
+      if (unreleased === true) filters.unreleased = true;
+      const platformId = platformValue ? Number(platformValue) : null;
+      if (platformId && Number.isInteger(platformId) && platformId > 0) {
+        filters.platformId = platformId;
+      }
+      if (year && Number.isInteger(year) && year > 0) filters.year = year;
+      await runSearchFlow(interaction, searchTerm, query, filters);
     } catch (error: any) {
       await safeReply(interaction, buildTextReply(
         `Failed to search games. Error: ${error.message}`, true,
       ));
     }
   }
-   
+
   @SelectMenuComponent({ id: /^gamedb-search-select:\d+:\d+:[A-Za-z0-9_-]*$/ })
   async handleSearchSelect(interaction: StringSelectMenuInteraction): Promise<void> {
     const parts = interaction.customId.split(":");
@@ -234,7 +290,8 @@ export class GameDbSearchCommand {
       return;
     }
 
-    const results = await Game.searchGames(searchTerm);
+    const filters = decodeISearchFilters(encodedQuery);
+    const results = await Game.searchGames(searchTerm, filters);
 
     const gameId = Number(interaction.values?.[0]);
     if (!Number.isFinite(gameId)) {
@@ -257,7 +314,7 @@ export class GameDbSearchCommand {
       return;
     }
 
-    const response = buildSearchResponse(searchTerm, results, ownerId, page, false);
+    const response = buildSearchResponse(searchTerm, results, ownerId, page, false, filters);
     const actionRows = buildGameProfileActionRow(
       gameId,
       profile.hasThread,
@@ -276,7 +333,7 @@ export class GameDbSearchCommand {
       // ignore update failures
     }
   }
-   
+
   @ButtonComponent({ id: /^gamedb-search-page:\d+:\d+:[A-Za-z0-9_-]*:(next|prev)$/ })
   async handleSearchPage(interaction: ButtonInteraction): Promise<void> {
     const parts = interaction.customId.split(":");
@@ -307,7 +364,8 @@ export class GameDbSearchCommand {
       return;
     }
 
-    const results = await Game.searchGames(searchTerm);
+    const filters = decodeISearchFilters(encodedQuery);
+    const results = await Game.searchGames(searchTerm, filters);
     const totalPages = Math.max(
       1,
       Math.ceil(results.length / GAME_SEARCH_PAGE_SIZE),
@@ -321,7 +379,12 @@ export class GameDbSearchCommand {
       // ignore
     }
 
-    const response = buildSearchResponse(searchTerm, results, ownerId, newPage, true);
+    const filterSummary = Object.keys(filters).length
+      ? await buildFilterSummary(filters)
+      : "";
+    const response = buildSearchResponse(
+      searchTerm, results, ownerId, newPage, true, filters, filterSummary,
+    );
 
     try {
       await safeReply(interaction, response);
@@ -329,7 +392,7 @@ export class GameDbSearchCommand {
       // ignore
     }
   }
-   
+
   @ButtonComponent({ id: /^gamedb-search-refresh:\d+:[A-Za-z0-9_-]*$/ })
   async handleSearchRefresh(interaction: ButtonInteraction): Promise<void> {
     const parts = interaction.customId.split(":");
@@ -356,7 +419,8 @@ export class GameDbSearchCommand {
       return;
     }
 
-    const results = await Game.searchGames(searchTerm);
+    const filters = decodeISearchFilters(encodedQuery);
+    const results = await Game.searchGames(searchTerm, filters);
     if (results.length === 0) {
       await safeReply(interaction, {
         ...buildTextReply(`No results found for "${searchTerm}".`, true),
@@ -365,7 +429,12 @@ export class GameDbSearchCommand {
       return;
     }
 
-    const response = buildSearchResponse(searchTerm, results, ownerId, 0, true);
+    const filterSummary = Object.keys(filters).length
+      ? await buildFilterSummary(filters)
+      : "";
+    const response = buildSearchResponse(
+      searchTerm, results, ownerId, 0, true, filters, filterSummary,
+    );
     await safeUpdate(interaction, response);
   }
 }
