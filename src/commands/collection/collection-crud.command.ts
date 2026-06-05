@@ -41,6 +41,7 @@ import { resolveCollectionGameForAdd } from "./collection-game-resolve.utils.js"
 import { buildTextReply } from "../../functions/ComponentsV2Utils.js";
 
 @Discord()
+@SlashGroup({ description: "Manage your game collection", name: "collection" })
 @SlashGroup("collection")
 export class CollectionCrudCommand {
   @Slash({ name: "add", description: "Add a game you own to your collection" })
