@@ -358,7 +358,6 @@ async function performAutoAcceptAll(
       stats.videos.skipped++;
       stats.descriptions.skipped++;
       stats.releases.skipped++;
-      await addLog(`⏭️ Skipped **${game.title}** (Missing IGDB ID)`, processed);
       continue;
     }
 
@@ -384,7 +383,6 @@ async function performAutoAcceptAll(
       stats.videos.skipped++;
       stats.descriptions.skipped++;
       stats.releases.skipped++;
-      await addLog(`⏭️ Skipped **${game.title}** (No IGDB data found)`, processed);
       if (shouldStop?.()) break;
       await new Promise((resolve) => setTimeout(resolve, 1000));
       continue;
@@ -466,11 +464,12 @@ async function performAutoAcceptAll(
       failures.push(`releases: ${err?.message ?? String(err)}`);
     }
 
-    const parts: string[] = [];
-    if (updates.length) parts.push(`✅ Updated: ${updates.join(", ")}`);
-    if (skips.length) parts.push(`⏭️ No data: ${skips.join(", ")}`);
-    if (failures.length) parts.push(`❌ Failed: ${failures.join("; ")}`);
-    await addLog(`**${game.title}**: ${parts.join(" | ")}`, processed);
+    if (updates.length || failures.length) {
+      const parts: string[] = [];
+      if (updates.length) parts.push(`✅ Updated: ${updates.join(", ")}`);
+      if (failures.length) parts.push(`❌ Failed: ${failures.join("; ")}`);
+      await addLog(`**${game.title}**: ${parts.join(" | ")}`, processed);
+    }
 
     if (shouldStop?.()) break;
     await new Promise((resolve) => setTimeout(resolve, 1000));
