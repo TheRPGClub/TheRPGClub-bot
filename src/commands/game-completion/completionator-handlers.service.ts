@@ -4,7 +4,12 @@ import type {
   StringSelectMenuInteraction,
 } from "discord.js";
 import { MessageFlags } from "discord.js";
-import { ephemeralFlag, safeReply } from "../../functions/InteractionUtils.js";
+import {
+  ephemeralFlag,
+  safeDeferReply,
+  safeDeferUpdate,
+  safeReply,
+} from "../../functions/InteractionUtils.js";
 import { buildComponentsV2Flags } from "../../functions/ComponentsV2Utils.js";
 import Member from "../../classes/Member.js";
 import Game from "../../classes/Game.js";
@@ -152,7 +157,7 @@ export class CompletionatorHandlersService {
       return;
     }
 
-    await interaction.deferUpdate().catch(() => {});
+    await safeDeferUpdate(interaction);
 
     const session = await getImportById(parsed.importId);
     if (!session) {
@@ -668,7 +673,7 @@ export class CompletionatorHandlersService {
       }
     }
 
-    await interaction.deferUpdate().catch(() => {});
+    await safeDeferUpdate(interaction);
     const context = completionatorThreadContexts.get(
       getCompletionatorThreadKey(ownerId, session.importId),
     );
@@ -828,7 +833,7 @@ export class CompletionatorHandlersService {
     );
     const shouldDeferForContext = Boolean(context?.message);
     if (shouldDeferForContext) {
-      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+      await safeDeferReply(interaction, { flags: MessageFlags.Ephemeral });
     }
     const cleanupDeferredReply = async (): Promise<void> => {
       if (shouldDeferForContext) {

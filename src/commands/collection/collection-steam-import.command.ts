@@ -45,6 +45,8 @@ import {
 } from "../game-completion/completion-autocomplete.utils.js";
 import {
   safeDeferReply,
+  safeDeferUpdate,
+  safeReply,
   safeUpdate,
   sanitizeUserInput,
 } from "../../functions/InteractionUtils.js";
@@ -175,7 +177,7 @@ export class CollectionSteamImportCommand {
       if (shouldUseInteractionUpdate || shouldUseModalUpdate) {
         await safeUpdate(interaction, payload);
       } else {
-        await interaction.editReply(payload);
+        await safeReply(interaction, payload);
       }
       return;
     }
@@ -191,7 +193,7 @@ export class CollectionSteamImportCommand {
       if (shouldUseInteractionUpdate || shouldUseModalUpdate) {
         await safeUpdate(interaction, payload);
       } else {
-        await interaction.editReply(payload);
+        await safeReply(interaction, payload);
       }
       return;
     }
@@ -227,7 +229,7 @@ export class CollectionSteamImportCommand {
       if (shouldUseInteractionUpdate || shouldUseModalUpdate) {
         await safeUpdate(interaction, payload);
       } else {
-        await interaction.editReply(payload);
+        await safeReply(interaction, payload);
       }
       return;
     }
@@ -281,10 +283,11 @@ export class CollectionSteamImportCommand {
             currentSession.userId !== ownerId ||
             currentSession.status !== "ACTIVE"
           ) {
-            await selectionInteraction.followUp({
+            await safeReply(selectionInteraction, {
               content: "This Steam import session is no longer active.",
               flags: MessageFlags.Ephemeral,
-            }).catch(() => {});
+              __forceFollowUp: true,
+            });
             return;
           }
 
@@ -294,10 +297,11 @@ export class CollectionSteamImportCommand {
             currentItem.importId !== session.importId ||
             currentItem.status !== "PENDING"
           ) {
-            await selectionInteraction.followUp({
+            await safeReply(selectionInteraction, {
               content: "This import row is no longer pending.",
               flags: MessageFlags.Ephemeral,
-            }).catch(() => {});
+              __forceFollowUp: true,
+            });
             return;
           }
 
@@ -449,7 +453,7 @@ export class CollectionSteamImportCommand {
         });
         return;
       }
-      await interaction.editReply({
+      await safeReply(interaction, {
         content: null,
         components,
         flags: buildComponentsV2Flags(true),
@@ -503,7 +507,7 @@ export class CollectionSteamImportCommand {
   ): Promise<void> {
     const guild = interaction.guild;
     if (!guild) {
-      await interaction.reply({
+      await safeReply(interaction, {
         content: "This command can only be used inside a server.",
         flags: MessageFlags.Ephemeral,
       }).catch(() => {});
@@ -517,7 +521,7 @@ export class CollectionSteamImportCommand {
       onStart: async () => {
         const existing = await getActiveSteamCollectionImportForUser(interaction.user.id);
         if (existing) {
-          await interaction.editReply(
+          await safeReply(interaction, 
             `You already have import #${existing.importId} (${existing.status}). ` +
             "Use action:resume, action:status, action:pause, or action:cancel.",
           );
@@ -534,7 +538,7 @@ export class CollectionSteamImportCommand {
         }
 
         if (!identifier) {
-          await interaction.editReply(
+          await safeReply(interaction, 
             "Add your Steam profile first:\n" +
             "1. Set it once with `/profile edit steam:<url>`\n" +
             "2. Then run `/collection import-steam action:start`\n" +
@@ -548,7 +552,7 @@ export class CollectionSteamImportCommand {
           const library = await steamApiService.getOwnedGames(resolved.steamId64);
 
           if (!library.games.length) {
-            await interaction.editReply(
+            await safeReply(interaction, 
               "No Steam games were found. Ensure your profile and game details are public.",
             );
             return;
@@ -583,7 +587,7 @@ export class CollectionSteamImportCommand {
             total: library.gameCount,
           });
 
-          await interaction.editReply(
+          await safeReply(interaction, 
             `Steam import #${session.importId} created for **${library.gameCount}** games ` +
             `(${library.profileName ?? resolved.steamId64}). Starting review now.`,
           );
@@ -598,17 +602,17 @@ export class CollectionSteamImportCommand {
             error: String(error?.message ?? "unknown"),
           });
           if (error instanceof SteamApiError) {
-            await interaction.editReply(error.message);
+            await safeReply(interaction, error.message);
             return;
           }
-          await interaction.editReply(
+          await safeReply(interaction, 
             error?.message ?? "Failed to start Steam import. Verify profile and try again.",
           );
         }
       },
       getActiveSession: (userId: string) => getActiveSteamCollectionImportForUser(userId),
       onMissingSession: async () => {
-        await interaction.editReply("No active Steam import session found.");
+        await safeReply(interaction, "No active Steam import session found.");
       },
       onStatus: async (session) => {
         const stats = await countSteamCollectionImportItems(session.importId);
@@ -630,7 +634,7 @@ export class CollectionSteamImportCommand {
             value: reasonLines.join(" | ").slice(0, 1024),
           });
         }
-        await interaction.editReply({ embeds: [embed] });
+        await safeReply(interaction, { embeds: [embed] });
       },
       onPause: async (session) => {
         await setSteamCollectionImportStatus(session.importId, "PAUSED");
@@ -640,7 +644,7 @@ export class CollectionSteamImportCommand {
           importId: session.importId,
           pending: stats.pending,
         });
-        await interaction.editReply(
+        await safeReply(interaction, 
           `Steam import #${session.importId} paused. ` +
           `Pending ${stats.pending}, Added ${stats.added}, Updated ${stats.updated}, ` +
           `Skipped ${stats.skipped}, Failed ${stats.failed}.`,
@@ -654,7 +658,7 @@ export class CollectionSteamImportCommand {
           importId: session.importId,
           pending: stats.pending,
         });
-        await interaction.editReply(
+        await safeReply(interaction, 
           `Steam import #${session.importId} canceled. ` +
           `Pending ${stats.pending}, Added ${stats.added}, Updated ${stats.updated}, ` +
           `Skipped ${stats.skipped}, Failed ${stats.failed}.`,
@@ -662,7 +666,7 @@ export class CollectionSteamImportCommand {
       },
       onResume: async (session) => {
         await setSteamCollectionImportStatus(session.importId, "ACTIVE");
-        await interaction.editReply(`Steam import #${session.importId} resumed.`);
+        await safeReply(interaction, `Steam import #${session.importId} resumed.`);
         logSteamImportEvent("resumed", {
           userId: interaction.user.id,
           importId: session.importId,
@@ -682,7 +686,7 @@ export class CollectionSteamImportCommand {
   async onSteamImportAction(interaction: ButtonInteraction): Promise<void> {
     const parsed = parseCollectionSteamImportActionId(interaction.customId);
     if (!parsed) {
-      await interaction.reply({
+      await safeReply(interaction, {
         content: "This Steam import control is invalid.",
         flags: MessageFlags.Ephemeral,
       }).catch(() => {});
@@ -690,7 +694,7 @@ export class CollectionSteamImportCommand {
     }
 
     if (interaction.user.id !== parsed.ownerId) {
-      await interaction.reply({
+      await safeReply(interaction, {
         content: "This Steam import control is not for you.",
         flags: MessageFlags.Ephemeral,
       }).catch(() => {});
@@ -719,7 +723,7 @@ export class CollectionSteamImportCommand {
 
     const item = await getNextPendingSteamCollectionImportItem(session.importId);
     if (!item || item.itemId !== parsed.itemId) {
-      await interaction.deferUpdate().catch(() => {});
+      await safeDeferUpdate(interaction).catch(() => {});
       await this.renderNextSteamImportItem(interaction, session.importId, parsed.ownerId);
       return;
     }
@@ -738,7 +742,7 @@ export class CollectionSteamImportCommand {
     }
 
     if (parsed.action === "skip") {
-      await interaction.deferUpdate().catch(() => {});
+      await safeDeferUpdate(interaction).catch(() => {});
       await updateSteamCollectionImportItem(item.itemId, {
         status: "SKIPPED",
         resultReason: "MANUAL_SKIP",
@@ -820,7 +824,7 @@ export class CollectionSteamImportCommand {
   async onSteamImportChoose(interaction: ButtonInteraction): Promise<void> {
     const parsed = parseCollectionSteamChooseId(interaction.customId);
     if (!parsed) {
-      await interaction.reply({
+      await safeReply(interaction, {
         content: "This Steam import choice is invalid.",
         flags: MessageFlags.Ephemeral,
       }).catch(() => {});
@@ -828,7 +832,7 @@ export class CollectionSteamImportCommand {
     }
 
     if (interaction.user.id !== parsed.ownerId) {
-      await interaction.reply({
+      await safeReply(interaction, {
         content: "This Steam import choice is not for you.",
         flags: MessageFlags.Ephemeral,
       }).catch(() => {});
@@ -849,12 +853,12 @@ export class CollectionSteamImportCommand {
 
     const item = await getNextPendingSteamCollectionImportItem(session.importId);
     if (!item || item.itemId !== parsed.itemId) {
-      await interaction.deferUpdate().catch(() => {});
+      await safeDeferUpdate(interaction).catch(() => {});
       await this.renderNextSteamImportItem(interaction, session.importId, parsed.ownerId);
       return;
     }
 
-    await interaction.deferUpdate().catch(() => {});
+    await safeDeferUpdate(interaction).catch(() => {});
     await this.applySteamImportSelection({
       ownerId: parsed.ownerId,
       gameId: parsed.gameId,
@@ -879,7 +883,7 @@ export class CollectionSteamImportCommand {
   async onSteamImportRemapModal(interaction: ModalSubmitInteraction): Promise<void> {
     const parsed = parseCollectionSteamRemapModalId(interaction.customId);
     if (!parsed) {
-      await interaction.reply({
+      await safeReply(interaction, {
         content: "This remap form is invalid.",
         flags: MessageFlags.Ephemeral,
       }).catch(() => {});
@@ -887,7 +891,7 @@ export class CollectionSteamImportCommand {
     }
 
     if (interaction.user.id !== parsed.ownerId) {
-      await interaction.reply({
+      await safeReply(interaction, {
         content: "This remap form is not for you.",
         flags: MessageFlags.Ephemeral,
       }).catch(() => {});
@@ -896,7 +900,7 @@ export class CollectionSteamImportCommand {
 
     const session = await getSteamCollectionImportById(parsed.importId);
     if (!session || session.userId !== parsed.ownerId || session.status !== "ACTIVE") {
-      await interaction.reply({
+      await safeReply(interaction, {
         content: "This Steam import session is no longer active.",
         flags: MessageFlags.Ephemeral,
       }).catch(() => {});
@@ -973,7 +977,7 @@ export class CollectionSteamImportCommand {
   async onSteamImportGameIdModal(interaction: ModalSubmitInteraction): Promise<void> {
     const parsed = parseCollectionSteamGameIdModalId(interaction.customId);
     if (!parsed) {
-      await interaction.reply({
+      await safeReply(interaction, {
         content: "This GameDB ID form is invalid.",
         flags: MessageFlags.Ephemeral,
       }).catch(() => {});
@@ -981,7 +985,7 @@ export class CollectionSteamImportCommand {
     }
 
     if (interaction.user.id !== parsed.ownerId) {
-      await interaction.reply({
+      await safeReply(interaction, {
         content: "This GameDB ID form is not for you.",
         flags: MessageFlags.Ephemeral,
       }).catch(() => {});
@@ -990,7 +994,7 @@ export class CollectionSteamImportCommand {
 
     const session = await getSteamCollectionImportById(parsed.importId);
     if (!session || session.userId !== parsed.ownerId || session.status !== "ACTIVE") {
-      await interaction.reply({
+      await safeReply(interaction, {
         content: "This Steam import session is no longer active.",
         flags: MessageFlags.Ephemeral,
       }).catch(() => {});

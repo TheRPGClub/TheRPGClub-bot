@@ -21,6 +21,7 @@ import {
 } from "../game-completion/completion-autocomplete.utils.js";
 import {
   safeDeferReply,
+  safeReply,
   sanitizeUserInput,
 } from "../../functions/InteractionUtils.js";
 import {
@@ -85,7 +86,7 @@ export class CollectionCrudCommand {
 
     const platformId = await resolveGameCompletionPlatformId(platformRaw);
     if (!platformId) {
-      await interaction.editReply("Invalid platform selection.");
+      await safeReply(interaction, "Invalid platform selection.");
       return;
     }
 
@@ -97,7 +98,7 @@ export class CollectionCrudCommand {
     try {
       resolution = await resolveCollectionGameForAdd(gameIdRaw);
     } catch (err: any) {
-      await interaction.editReply(err?.message ?? "Invalid game selection.");
+      await safeReply(interaction, err?.message ?? "Invalid game selection.");
       return;
     }
 
@@ -117,22 +118,24 @@ export class CollectionCrudCommand {
             });
 
             const platformLabel = created.platformName ?? `Platform #${platformId}`;
-            await selectionInteraction.followUp({
+            await safeReply(selectionInteraction, {
               content:
                 `Imported and added **${created.title}** (${platformLabel}, ` +
                 `${created.ownershipType}) to your collection.`,
               flags: MessageFlags.Ephemeral,
-            }).catch(() => {});
+              __forceFollowUp: true,
+            });
           } catch (err: any) {
-            await selectionInteraction.followUp({
+            await safeReply(selectionInteraction, {
               content: err?.message ?? "Failed to import from IGDB and add collection entry.",
               flags: MessageFlags.Ephemeral,
-            }).catch(() => {});
+              __forceFollowUp: true,
+            });
           }
         },
       );
 
-      await interaction.editReply({
+      await safeReply(interaction, {
         content:
           `No exact GameDB match found for "${resolution.titleQuery}". ` +
           "Select the correct IGDB game to import:",
@@ -153,12 +156,12 @@ export class CollectionCrudCommand {
       });
 
       const platformLabel = created.platformName ?? `Platform #${platformId}`;
-      await interaction.editReply(
+      await safeReply(interaction, 
         `Added **${created.title}** (${platformLabel}, ${created.ownershipType}) ` +
         `to your collection.`,
       );
     } catch (err: any) {
-      await interaction.editReply(err?.message ?? "Failed to add collection entry.");
+      await safeReply(interaction, err?.message ?? "Failed to add collection entry.");
     }
   }
 
@@ -213,7 +216,7 @@ export class CollectionCrudCommand {
 
     const entryId = parseCollectionEntryAutocompleteValue(entryRaw);
     if (!entryId) {
-      await interaction.editReply("Invalid collection entry selection.");
+      await safeReply(interaction, "Invalid collection entry selection.");
       return;
     }
 
@@ -226,7 +229,7 @@ export class CollectionCrudCommand {
     if (platformRaw !== undefined) {
       const platformId = await resolveGameCompletionPlatformId(platformRaw);
       if (!platformId) {
-        await interaction.editReply("Invalid platform selection.");
+        await safeReply(interaction, "Invalid platform selection.");
         return;
       }
       updates.platformId = platformId;
@@ -243,7 +246,7 @@ export class CollectionCrudCommand {
     }
 
     if (!Object.keys(updates).length) {
-      await interaction.editReply("Provide at least one field to update.");
+      await safeReply(interaction, "Provide at least one field to update.");
       return;
     }
 
@@ -254,16 +257,16 @@ export class CollectionCrudCommand {
         updates,
       );
       if (!updated) {
-        await interaction.editReply("Collection entry was not found.");
+        await safeReply(interaction, "Collection entry was not found.");
         return;
       }
 
       const platformLabel = updated.platformName ?? "Unknown platform";
-      await interaction.editReply(
+      await safeReply(interaction, 
         `Updated **${updated.title}** (${platformLabel}, ${updated.ownershipType}).`,
       );
     } catch (err: any) {
-      await interaction.editReply(err?.message ?? "Failed to update collection entry.");
+      await safeReply(interaction, err?.message ?? "Failed to update collection entry.");
     }
   }
 
@@ -283,23 +286,23 @@ export class CollectionCrudCommand {
 
     const entryId = parseCollectionEntryAutocompleteValue(entryRaw);
     if (!entryId) {
-      await interaction.editReply("Invalid collection entry selection.");
+      await safeReply(interaction, "Invalid collection entry selection.");
       return;
     }
 
     const existing = await UserGameCollection.getEntryForUser(entryId, interaction.user.id);
     if (!existing) {
-      await interaction.editReply("Collection entry was not found.");
+      await safeReply(interaction, "Collection entry was not found.");
       return;
     }
 
     const deleted = await UserGameCollection.removeEntryForUser(entryId, interaction.user.id);
     if (!deleted) {
-      await interaction.editReply("Failed to remove that collection entry.");
+      await safeReply(interaction, "Failed to remove that collection entry.");
       return;
     }
 
-    await interaction.editReply(`Removed **${existing.title}** from your collection.`);
+    await safeReply(interaction, `Removed **${existing.title}** from your collection.`);
   }
 
   @Slash({
@@ -328,18 +331,18 @@ export class CollectionCrudCommand {
 
     const entryId = parseCollectionEntryAutocompleteValue(entryRaw);
     if (!entryId) {
-      await interaction.editReply("Invalid collection entry selection.");
+      await safeReply(interaction, "Invalid collection entry selection.");
       return;
     }
 
     const entry = await UserGameCollection.getEntryForUser(entryId, interaction.user.id);
     if (!entry) {
-      await interaction.editReply("Collection entry was not found.");
+      await safeReply(interaction, "Collection entry was not found.");
       return;
     }
 
     if (!entry.platformId) {
-      await interaction.editReply(
+      await safeReply(interaction, 
         "This entry does not have a platform. Update it before adding.",
       );
       return;
@@ -351,12 +354,12 @@ export class CollectionCrudCommand {
 
     try {
       await Member.addNowPlaying(interaction.user.id, entry.gameId, entry.platformId, note);
-      await interaction.editReply(
+      await safeReply(interaction, 
         `Added **${entry.title}** (${entry.platformName ?? "Unknown platform"}) ` +
         "to your now-playing list.",
       );
     } catch (err: any) {
-      await interaction.editReply(err?.message ?? "Failed to add entry to now-playing.");
+      await safeReply(interaction, err?.message ?? "Failed to add entry to now-playing.");
     }
   }
 
@@ -424,13 +427,13 @@ export class CollectionCrudCommand {
 
     const entryId = parseCollectionEntryAutocompleteValue(entryRaw);
     if (!entryId) {
-      await interaction.editReply("Invalid collection entry selection.");
+      await safeReply(interaction, "Invalid collection entry selection.");
       return;
     }
 
     const entry = await UserGameCollection.getEntryForUser(entryId, interaction.user.id);
     if (!entry) {
-      await interaction.editReply("Collection entry was not found.");
+      await safeReply(interaction, "Collection entry was not found.");
       return;
     }
 
@@ -442,7 +445,7 @@ export class CollectionCrudCommand {
     try {
       completedAt = parseCompletionDateInput(completionDateInput);
     } catch (err: any) {
-      await interaction.editReply(err?.message ?? "Invalid completion date.");
+      await safeReply(interaction, err?.message ?? "Invalid completion date.");
       return;
     }
 
@@ -450,7 +453,7 @@ export class CollectionCrudCommand {
       finalPlaytimeHours !== undefined &&
       (Number.isNaN(finalPlaytimeHours) || finalPlaytimeHours < 0)
     ) {
-      await interaction.editReply("Final playtime must be a non-negative number.");
+      await safeReply(interaction, "Final playtime must be a non-negative number.");
       return;
     }
 

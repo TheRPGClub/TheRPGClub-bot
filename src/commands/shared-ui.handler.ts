@@ -1,5 +1,6 @@
 import { ButtonInteraction } from "discord.js";
 import { ButtonComponent, Discord } from "discordx";
+import { safeDeferUpdate } from "../functions/InteractionUtils.js";
 
 /**
  * No-op handler for decorative/label buttons used in UI component headers.
@@ -9,6 +10,6 @@ import { ButtonComponent, Discord } from "discordx";
 export class SharedUiHandler {
   @ButtonComponent({ id: /^user-header-label:/ })
   async handleUserHeaderLabel(interaction: ButtonInteraction): Promise<void> {
-    await interaction.deferUpdate().catch(() => {});
+    await safeDeferUpdate(interaction);
   }
 }

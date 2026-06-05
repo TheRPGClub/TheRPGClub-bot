@@ -6,7 +6,11 @@ import {
   type Message,
   type CommandInteraction,
 } from "discord.js";
-import { extractErrorMessage, safeReply } from "../../functions/InteractionUtils.js";
+import {
+  extractErrorMessage,
+  safeDeferUpdate,
+  safeReply,
+} from "../../functions/InteractionUtils.js";
 import { type PromptChoiceOption } from "./admin.types.js";
 
 export function buildChoiceRows(
@@ -97,7 +101,7 @@ export async function promptUserForChoice(
       filter: (i) => i.user.id === userId && i.customId.startsWith(`${promptId}:`),
       time: timeoutMs,
     });
-    await selection.deferUpdate().catch(() => {});
+    await safeDeferUpdate(selection);
     const value = selection.customId.slice(promptId.length + 1);
     await promptMessage.edit({ components: [] }).catch(() => {});
     if (value === "cancel") {

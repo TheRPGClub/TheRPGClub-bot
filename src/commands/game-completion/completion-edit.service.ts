@@ -24,6 +24,7 @@ import {
 } from "./completion-autocomplete.utils.js";
 import { buildComponentsV2Flags } from "../../functions/ComponentsV2Utils.js";
 import { COMPONENTS_V2_FLAG } from "../../config/flags.js";
+import { safeDeferUpdate, safeReply, safeUpdate } from "../../functions/InteractionUtils.js";
 
 const MAX_NOTE_LENGTH = 500;
 type CompletionEditField = "type" | "date" | "platform" | "playtime" | "note";
@@ -41,7 +42,7 @@ export async function handleCompletionEditMenu(
 ): Promise<void> {
   const [, ownerId] = interaction.customId.split(":");
   if (interaction.user.id !== ownerId) {
-    await interaction.reply({
+    await safeReply(interaction, {
       content: "This edit prompt isn't for you.",
       flags: buildComponentsV2Flags(true),
     });
@@ -50,7 +51,7 @@ export async function handleCompletionEditMenu(
 
   const completionId = Number(interaction.values[0]);
   if (!Number.isInteger(completionId) || completionId <= 0) {
-    await interaction.reply({
+    await safeReply(interaction, {
       content: "Invalid selection.",
       flags: buildComponentsV2Flags(true),
     });
@@ -59,7 +60,7 @@ export async function handleCompletionEditMenu(
 
   const completion = await Member.getCompletion(completionId);
   if (!completion) {
-    await interaction.reply({
+    await safeReply(interaction, {
       content: "Completion not found.",
       flags: buildComponentsV2Flags(true),
     });
@@ -68,9 +69,9 @@ export async function handleCompletionEditMenu(
 
   const response = buildCompletionEditPrompt(ownerId, completionId, completion);
   if (interaction.deferred || interaction.replied) {
-    await interaction.editReply(response).catch(() => {});
+    await safeReply(interaction, response);
   } else {
-    await interaction.update(response).catch(() => {});
+    await safeUpdate(interaction, response);
   }
 }
 
@@ -80,21 +81,21 @@ export async function handleCompletionEditMenu(
 export async function handleCompletionEditDone(interaction: ButtonInteraction): Promise<void> {
   const [, ownerId] = interaction.customId.split(":");
   if (interaction.user.id !== ownerId) {
-    await interaction.reply({
+    await safeReply(interaction, {
       content: "This edit prompt isn't for you.",
       flags: buildComponentsV2Flags(true),
     });
     return;
   }
 
-  await interaction.update({
+  await safeUpdate(interaction, {
     components: [
       new ContainerBuilder().addTextDisplayComponents(
         new TextDisplayBuilder().setContent("Edit complete."),
       ),
     ],
     flags: COMPONENTS_V2_FLAG,
-  }).catch(() => {});
+  });
 }
 
 /**
@@ -103,7 +104,7 @@ export async function handleCompletionEditDone(interaction: ButtonInteraction): 
 export async function handleCompletionFieldEdit(interaction: ButtonInteraction): Promise<void> {
   const [, ownerId, completionIdRaw, field] = interaction.customId.split(":");
   if (interaction.user.id !== ownerId) {
-    await interaction.reply({
+    await safeReply(interaction, {
       content: "This edit prompt isn't for you.",
       flags: buildComponentsV2Flags(true),
     });
@@ -112,7 +113,7 @@ export async function handleCompletionFieldEdit(interaction: ButtonInteraction):
 
   const completionId = Number(completionIdRaw);
   if (!Number.isInteger(completionId) || completionId <= 0) {
-    await interaction.reply({
+    await safeReply(interaction, {
       content: "Invalid selection.",
       flags: buildComponentsV2Flags(true),
     });
@@ -133,15 +134,13 @@ export async function handleCompletionFieldEdit(interaction: ButtonInteraction):
         : []),
     );
 
-    await interaction
-      .update({
-        components: [
-          container,
-          new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select),
-        ],
-        flags: COMPONENTS_V2_FLAG,
-      })
-      .catch(() => {});
+    await safeUpdate(interaction, {
+      components: [
+        container,
+        new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select),
+      ],
+      flags: COMPONENTS_V2_FLAG,
+    });
     return;
   }
 
@@ -154,16 +153,14 @@ export async function handleCompletionFieldEdit(interaction: ButtonInteraction):
         ? "Type the new final playtime in hours (e.g., 42.5)."
         : "Type the new note (or `clear` to remove it).";
 
-  await interaction
-    .update({
-      components: [
-        new ContainerBuilder().addTextDisplayComponents(
-          new TextDisplayBuilder().setContent(prompt),
-        ),
-      ],
-      flags: COMPONENTS_V2_FLAG,
-    })
-    .catch(() => {});
+  await safeUpdate(interaction, {
+    components: [
+      new ContainerBuilder().addTextDisplayComponents(
+        new TextDisplayBuilder().setContent(prompt),
+      ),
+    ],
+    flags: COMPONENTS_V2_FLAG,
+  });
 
   const channel = interaction.channel;
   if (!channel || !("awaitMessages" in channel)) {
@@ -274,7 +271,7 @@ export async function handleCompletionTypeSelect(
 ): Promise<void> {
   const [, ownerId, completionIdRaw] = interaction.customId.split(":");
   if (interaction.user.id !== ownerId) {
-    await interaction.reply({
+    await safeReply(interaction, {
       content: "This edit prompt isn't for you.",
       flags: buildComponentsV2Flags(true),
     });
@@ -288,16 +285,15 @@ export async function handleCompletionTypeSelect(
   if (!normalized) {
     const updated = await Member.getCompletion(completionId);
     if (updated) {
-      await interaction
-        .update(
-          buildCompletionEditPrompt(
-            ownerId,
-            completionId,
-            updated,
-            "Invalid completion type selected.",
-          ),
-        )
-        .catch(() => {});
+      await safeUpdate(
+        interaction,
+        buildCompletionEditPrompt(
+          ownerId,
+          completionId,
+          updated,
+          "Invalid completion type selected.",
+        ),
+      );
     }
     return;
   }
@@ -306,23 +302,19 @@ export async function handleCompletionTypeSelect(
 
   const updated = await Member.getCompletion(completionId);
   if (!updated) {
-    await interaction
-      .update({
-        components: [
-          new ContainerBuilder().addTextDisplayComponents(
-            new TextDisplayBuilder().setContent("Completion not found."),
-          ),
-        ],
-        flags: COMPONENTS_V2_FLAG,
-      })
-      .catch(() => {});
+    await safeUpdate(interaction, {
+      components: [
+        new ContainerBuilder().addTextDisplayComponents(
+          new TextDisplayBuilder().setContent("Completion not found."),
+        ),
+      ],
+      flags: COMPONENTS_V2_FLAG,
+    });
     return;
   }
 
   const notice = await buildCompletionEditSuccessNotice(updated, "type");
-  await interaction
-    .update(buildCompletionEditPrompt(ownerId, completionId, updated, notice))
-    .catch(() => {});
+  await safeUpdate(interaction, buildCompletionEditPrompt(ownerId, completionId, updated, notice));
 }
 
 async function buildCompletionEditSuccessNotice(

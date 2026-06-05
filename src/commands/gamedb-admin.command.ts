@@ -27,6 +27,7 @@ import {
 } from "discordx";
 import {
   safeDeferReply,
+  safeDeferUpdate,
   safeReply,
   safeUpdate,
   sanitizeUserInput,
@@ -809,11 +810,7 @@ export class GameDbAdmin {
       return;
     }
 
-    try {
-      await interaction.deferUpdate();
-    } catch {
-      // ignore
-    }
+    await safeDeferUpdate(interaction);
 
     try {
       const details = await igdbService.getGameDetails(game.igdbId);
@@ -894,12 +891,12 @@ export class GameDbAdmin {
     const session = AUDIT_SESSIONS.get(sessionId);
     if (!session || session.userId !== interaction.user.id) return;
 
-    await interaction.deferReply({ flags: MessageFlags.Ephemeral }).catch(() => {});
+    await safeDeferReply(interaction, { flags: MessageFlags.Ephemeral });
 
     const rawUrl = interaction.fields.getTextInputValue(AUDIT_VIDEO_INPUT_ID);
     const videoUrl = sanitizeUserInput(rawUrl, { preserveNewlines: false });
     if (!videoUrl || !videoUrl.startsWith("http")) {
-      await interaction.editReply({ content: "Please provide a valid YouTube URL." });
+      await safeReply(interaction, { content: "Please provide a valid YouTube URL." });
       return;
     }
 
@@ -929,12 +926,12 @@ export class GameDbAdmin {
     const session = AUDIT_SESSIONS.get(sessionId);
     if (!session || session.userId !== interaction.user.id) return;
 
-    await interaction.deferReply({ flags: MessageFlags.Ephemeral }).catch(() => {});
+    await safeDeferReply(interaction, { flags: MessageFlags.Ephemeral });
 
     const rawDescription = interaction.fields.getTextInputValue(AUDIT_DESCRIPTION_INPUT_ID);
     const description = sanitizeUserInput(rawDescription, { preserveNewlines: true });
     if (!description) {
-      await interaction.editReply({ content: "Please provide a valid description." });
+      await safeReply(interaction, { content: "Please provide a valid description." });
       return;
     }
 
@@ -1275,14 +1272,14 @@ export class GameDbAdmin {
     let currentMessage: any = null;
     try {
       currentMessage = useFollowUp
-        ? await interaction.followUp(followUpPayload)
-        : await interaction.editReply(editPayload);
+        ? await safeReply(interaction, { ...followUpPayload, __forceFollowUp: true })
+        : await safeReply(interaction, editPayload);
     } catch {
       // ignore
     }
     if (!currentMessage) {
       try {
-        currentMessage = await interaction.followUp(followUpPayload);
+        currentMessage = await safeReply(interaction, { ...followUpPayload, __forceFollowUp: true });
       } catch {
         // ignore
       }
@@ -1302,13 +1299,14 @@ export class GameDbAdmin {
             .setColor(0x0099ff);
           logLines.length = 0;
           try {
-            currentMessage = await interaction.followUp(
-              buildAutoAcceptFollowUpPayload(
+            currentMessage = await safeReply(interaction, {
+              ...buildAutoAcceptFollowUpPayload(
                 [currentEmbed],
                 [this.buildAutoAcceptStopRow(runId, shouldStop())],
                 isPublic,
               ),
-            );
+              __forceFollowUp: true,
+            });
           } catch {
             // ignore
           }
@@ -1394,14 +1392,14 @@ export class GameDbAdmin {
     let currentMessage: any = null;
     try {
       currentMessage = useFollowUp
-        ? await interaction.followUp(followUpPayload)
-        : await interaction.editReply(editPayload);
+        ? await safeReply(interaction, { ...followUpPayload, __forceFollowUp: true })
+        : await safeReply(interaction, editPayload);
     } catch {
       // ignore
     }
     if (!currentMessage) {
       try {
-        currentMessage = await interaction.followUp(followUpPayload);
+        currentMessage = await safeReply(interaction, { ...followUpPayload, __forceFollowUp: true });
       } catch {
         // ignore
       }
@@ -1421,13 +1419,14 @@ export class GameDbAdmin {
             .setColor(0x0099ff);
           logLines.length = 0;
           try {
-            currentMessage = await interaction.followUp(
-              buildAutoAcceptFollowUpPayload(
+            currentMessage = await safeReply(interaction, {
+              ...buildAutoAcceptFollowUpPayload(
                 [currentEmbed],
                 [this.buildAutoAcceptStopRow(runId, shouldStop())],
                 isPublic,
               ),
-            );
+              __forceFollowUp: true,
+            });
           } catch {
             // ignore
           }
@@ -1514,14 +1513,14 @@ export class GameDbAdmin {
     let currentMessage: any = null;
     try {
       currentMessage = useFollowUp
-        ? await interaction.followUp(followUpPayload)
-        : await interaction.editReply(editPayload);
+        ? await safeReply(interaction, { ...followUpPayload, __forceFollowUp: true })
+        : await safeReply(interaction, editPayload);
     } catch {
       // ignore
     }
     if (!currentMessage) {
       try {
-        currentMessage = await interaction.followUp(followUpPayload);
+        currentMessage = await safeReply(interaction, { ...followUpPayload, __forceFollowUp: true });
       } catch {
         // ignore
       }
@@ -1541,13 +1540,14 @@ export class GameDbAdmin {
             .setColor(0x0099ff);
           logLines.length = 0;
           try {
-            currentMessage = await interaction.followUp(
-              buildAutoAcceptFollowUpPayload(
+            currentMessage = await safeReply(interaction, {
+              ...buildAutoAcceptFollowUpPayload(
                 [currentEmbed],
                 [this.buildAutoAcceptStopRow(runId, shouldStop())],
                 isPublic,
               ),
-            );
+              __forceFollowUp: true,
+            });
           } catch {
             // ignore
           }

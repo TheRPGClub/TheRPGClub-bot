@@ -11,7 +11,7 @@ import {
 import { ContainerBuilder, TextDisplayBuilder } from "@discordjs/builders";
 import Member, { type ICompletionRecord } from "../../classes/Member.js";
 import Game from "../../classes/Game.js";
-import { safeReply } from "../../functions/InteractionUtils.js";
+import { safeDeferUpdate, safeReply } from "../../functions/InteractionUtils.js";
 import { formatPlatformDisplayName } from "../../functions/PlatformDisplay.js";
 import { buildComponentsV2Flags } from "../../functions/ComponentsV2Utils.js";
 import { decodeBase64Url, encodeWithMaxLength } from "../../functions/CustomIdUtils.js";
@@ -485,11 +485,7 @@ export async function handleCommonCompletionNav(
 
   const targetPage = parsed.direction === "next" ? parsed.page + 1 : Math.max(parsed.page - 1, 0);
 
-  try {
-    await interaction.deferUpdate();
-  } catch {
-    // ignore
-  }
+  await safeDeferUpdate(interaction);
 
   const ephemeral = interaction.message?.flags?.has(MessageFlags.Ephemeral) ?? true;
   await renderCommonCompletionPage(interaction, parsed.state, targetPage, ephemeral);
@@ -501,11 +497,7 @@ export async function handleCommonCompletionBack(
   const parsed = parseCommonBackCustomId(interaction.customId);
   if (!parsed) return;
 
-  try {
-    await interaction.deferUpdate();
-  } catch {
-    // ignore
-  }
+  await safeDeferUpdate(interaction);
 
   const ephemeral = interaction.message?.flags?.has(MessageFlags.Ephemeral) ?? true;
   await renderCommonCompletionPage(interaction, parsed.state, parsed.page, ephemeral);

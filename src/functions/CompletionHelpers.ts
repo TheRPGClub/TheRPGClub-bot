@@ -27,6 +27,7 @@ import Member from "../classes/Member.js";
 import { ANNOUNCEMENT_CHANNEL_ID, BOT_DEV_CHANNEL_ID } from "../config/channels.js";
 import { COMPONENTS_V2_FLAG } from "../config/flags.js";
 import { buildComponentsV2Flags, buildTextContainer } from "./ComponentsV2Utils.js";
+import { safeReply, safeUpdate } from "./InteractionUtils.js";
 
 const MAX_PLAYTIME_HOURS = 999999.99;
 const COMPLETION_COVER_ATTACHMENT_PREFIX = "completion-cover";
@@ -67,7 +68,7 @@ export async function saveCompletion(
   removeFromNowPlaying: boolean = true,
 ): Promise<void> {
   if (interaction.user.id !== userId && !isAdminOverride) {
-    await interaction.followUp({
+    await safeReply(interaction, {
       components: [buildTextContainer("You can only log completions for yourself.")],
       flags: buildComponentsV2Flags(true),
     });
@@ -76,7 +77,7 @@ export async function saveCompletion(
 
   const game = await Game.getGameById(gameId);
   if (!game) {
-    await interaction.followUp({
+    await safeReply(interaction, {
       components: [buildTextContainer(`GameDB #${gameId} was not found.`)],
       flags: buildComponentsV2Flags(true),
     });
@@ -95,7 +96,7 @@ export async function saveCompletion(
     });
   } catch (err: any) {
     const msg = err?.message ?? "Failed to save completion.";
-    await interaction.followUp({
+    await safeReply(interaction, {
       components: [buildTextContainer(`Could not save completion: ${msg}`)],
       flags: buildComponentsV2Flags(true),
     });
@@ -113,7 +114,7 @@ export async function saveCompletion(
   const playtimeText = formatPlaytimeHours(finalPlaytimeHours);
   const details = [completionType, playtimeText].filter(Boolean).join(" - ");
 
-  await interaction.followUp({
+  await safeReply(interaction, {
     components: [buildTextContainer(
       `Logged completion for **${gameTitle ?? game.title}** (${details}).`,
     )],
@@ -272,15 +273,15 @@ export async function promptRemoveFromNowPlaying(
   let message: Message | null = null;
   try {
     if (interaction.deferred || interaction.replied) {
-      const reply = await interaction.followUp(payload as any);
+      const reply = await safeReply(interaction, { ...payload, __forceFollowUp: true } as any);
       message = reply as Message;
     } else {
-      const reply = await interaction.reply({ ...payload, withResponse: true } as any);
+      const reply = await safeReply(interaction, { ...payload, withResponse: true } as any);
       message = reply.resource?.message ?? null;
     }
   } catch {
     try {
-      const reply = await interaction.followUp(payload as any);
+      const reply = await safeReply(interaction, { ...payload, __forceFollowUp: true } as any);
       message = reply as Message;
     } catch {
       return false;
@@ -298,7 +299,7 @@ export async function promptRemoveFromNowPlaying(
       time: 120_000,
     });
     const remove = selection.customId.endsWith(":yes");
-    await selection.update({
+    await safeUpdate(selection, {
       components: [buildTextContainer(
         remove
           ? "Okay, I'll remove it from Now Playing."

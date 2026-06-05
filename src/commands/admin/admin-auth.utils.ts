@@ -1,5 +1,5 @@
 import { MessageFlags, PermissionsBitField } from "discord.js";
-import { AnyRepliable } from "../../functions/InteractionUtils.js";
+import { AnyRepliable, safeReply } from "../../functions/InteractionUtils.js";
 
 export async function isAdmin(interaction: AnyRepliable): Promise<boolean> {
   const anyInteraction = interaction as any;
@@ -17,13 +17,7 @@ export async function isAdmin(interaction: AnyRepliable): Promise<boolean> {
     };
 
     try {
-      if (anyInteraction.replied || anyInteraction.deferred || anyInteraction.__rpgAcked) {
-        await interaction.followUp(denial as any);
-      } else {
-        await interaction.reply(denial as any);
-        anyInteraction.__rpgAcked = true;
-        anyInteraction.__rpgDeferred = false;
-      }
+      await safeReply(interaction, denial);
     } catch {
       // swallow to avoid leaking
     }

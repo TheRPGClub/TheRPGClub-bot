@@ -33,6 +33,7 @@ import {
 import {
   AnyRepliable,
   safeDeferReply,
+  safeDeferUpdate,
   safeReply,
   safeUpdate,
   sanitizeUserInput,
@@ -1650,11 +1651,7 @@ export class TodoCommand {
       return;
     }
 
-    try {
-      await interaction.deferUpdate();
-    } catch {
-      // ignore
-    }
+    await safeDeferUpdate(interaction);
 
     const ok = await requireOwner(interaction);
     if (!ok) return;
@@ -1730,11 +1727,7 @@ export class TodoCommand {
     const ok = await requireModeratorOrAdminOrOwner(interaction);
     if (!ok) return;
 
-    try {
-      await interaction.deferUpdate();
-    } catch {
-      // ignore
-    }
+    await safeDeferUpdate(interaction);
 
     const selectedLabels = interaction.values
       .map((value) => TODO_LABELS.find((label) => label === value))
@@ -2452,11 +2445,7 @@ export class TodoCommand {
     const ok = await requireOwner(interaction);
     if (!ok) return;
 
-    try {
-      await interaction.deferUpdate();
-    } catch {
-      // ignore
-    }
+    await safeDeferUpdate(interaction);
 
     let closed: IGithubIssue | null;
     try {
@@ -2521,11 +2510,7 @@ export class TodoCommand {
     const ok = await requireOwner(interaction);
     if (!ok) return;
 
-    try {
-      await interaction.deferUpdate();
-    } catch {
-      // ignore
-    }
+    await safeDeferUpdate(interaction);
 
     let reopened: IGithubIssue | null;
     try {

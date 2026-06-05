@@ -21,6 +21,7 @@ import {
   AnyRepliable,
   extractErrorMessage,
   safeDeferReply,
+  safeDeferUpdate,
   safeReply,
   safeUpdate,
   sanitizeUserInput,
@@ -288,14 +289,14 @@ export class SuperAdmin {
       return;
     }
 
-    await interaction.deferUpdate().catch(() => {});
+    await safeDeferUpdate(interaction);
 
     try {
       await this.processCompletionSelection(interaction, value, ctx);
     } finally {
       superadminCompletionAddSessions.delete(sessionId);
       try {
-        await interaction.editReply({ components: [] }).catch(() => {});
+        await safeReply(interaction, { components: [] }).catch(() => {});
       } catch {
         // ignore
       }
@@ -310,7 +311,7 @@ export class SuperAdmin {
     const ctx = superadminCompletionPlatformSessions.get(sessionId);
 
     if (!ctx) {
-      await interaction.reply({
+      await safeReply(interaction, {
         content: "This completion prompt has expired.",
         flags: MessageFlags.Ephemeral,
       }).catch(() => {});
@@ -321,7 +322,7 @@ export class SuperAdmin {
     if (!okToUseCommand) return;
 
     if (interaction.user.id !== ctx.userId) {
-      await interaction.reply({
+      await safeReply(interaction, {
         content: "This completion prompt isn't for you.",
         flags: MessageFlags.Ephemeral,
       }).catch(() => {});
@@ -342,22 +343,23 @@ export class SuperAdmin {
       ctx.platforms.some((platform) => platform.id === platformId)
     );
     if (!valid) {
-      await interaction.reply({
+      await safeReply(interaction, {
         content: "Invalid platform selection.",
         flags: MessageFlags.Ephemeral,
       }).catch(() => {});
       return;
     }
 
-    await interaction.deferUpdate().catch(() => {});
+    await safeDeferUpdate(interaction);
     superadminCompletionPlatformSessions.delete(sessionId);
 
     const game = await Game.getGameById(ctx.gameId);
     if (!game) {
-      await interaction.followUp({
+      await safeReply(interaction, {
         content: "Selected game was not found in GameDB.",
         flags: MessageFlags.Ephemeral,
-      }).catch(() => {});
+        __forceFollowUp: true,
+      });
       return;
     }
 
@@ -365,7 +367,7 @@ export class SuperAdmin {
       await notifyUnknownCompletionPlatform(interaction, game.title, game.id);
     }
     await this.saveCompletionForContext(interaction, ctx, game, platformId);
-    await interaction.editReply({ components: [] }).catch(() => {});
+    await safeReply(interaction, { components: [] });
   }
 
   private async promptCompletionSelection(
@@ -472,9 +474,9 @@ export class SuperAdmin {
     if ("isMessageComponent" in interaction && interaction.isMessageComponent()) {
       const loading = { content: `Searching IGDB for "${searchTerm}"...`, components: [] };
       if (interaction.deferred || interaction.replied) {
-        await interaction.editReply(loading).catch(() => {});
+        await safeReply(interaction, loading).catch(() => {});
       } else {
-        await interaction.update(loading).catch(() => {});
+        await safeUpdate(interaction, loading).catch(() => {});
       }
     } else {
       await safeReply(interaction, {
@@ -487,7 +489,7 @@ export class SuperAdmin {
     if (!igdbSearch.results.length) {
       const content = `No GameDB or IGDB matches found for "${searchTerm}".`;
       if ("isMessageComponent" in interaction && interaction.isMessageComponent()) {
-        await interaction.editReply({ content, components: [] }).catch(() => {});
+        await safeReply(interaction, { content, components: [] }).catch(() => {});
       } else {
         await safeReply(interaction, {
           content,
@@ -513,9 +515,9 @@ export class SuperAdmin {
       opts,
       async (sel, gameId) => {
         if (!sel.deferred && !sel.replied) {
-          await sel.deferUpdate().catch(() => {});
+          await safeDeferUpdate(sel);
         }
-        await sel.editReply({
+        await safeReply(sel, {
           content: "Importing game details from IGDB...",
           components: [],
         }).catch(() => {});
@@ -523,9 +525,10 @@ export class SuperAdmin {
         const imported = await this.importGameFromIgdbForCompletion(gameId);
         const game = await Game.getGameById(imported.gameId);
         if (!game) {
-          await sel.followUp({
+          await safeReply(sel, {
             content: "Imported game was not found in GameDB.",
             flags: MessageFlags.Ephemeral,
+            __forceFollowUp: true,
           });
           return;
         }
@@ -535,11 +538,16 @@ export class SuperAdmin {
 
     const content = `No GameDB match; select an IGDB result to import for "${searchTerm}".`;
     if ("isMessageComponent" in interaction && interaction.isMessageComponent()) {
-      await interaction.editReply({
+      await safeReply(interaction, {
         content: "Found results on IGDB. See message below.",
         components: [],
       });
-      await interaction.followUp({ content, components, flags: MessageFlags.Ephemeral });
+      await safeReply(interaction, {
+        content,
+        components,
+        flags: MessageFlags.Ephemeral,
+        __forceFollowUp: true,
+      });
     } else {
       await safeReply(interaction, {
         content,
@@ -655,7 +663,7 @@ export class SuperAdmin {
   ): Promise<boolean> {
     if (value === "import-igdb") {
       if (!ctx.query) {
-        await interaction.reply({
+        await safeReply(interaction, {
           content: "Original search query lost. Please try again.",
           flags: MessageFlags.Ephemeral,
         });
@@ -668,17 +676,19 @@ export class SuperAdmin {
     try {
       const parsedId = Number(value);
       if (!Number.isInteger(parsedId) || parsedId <= 0) {
-        await interaction.followUp({
+        await safeReply(interaction, {
           content: "Invalid selection.",
           flags: MessageFlags.Ephemeral,
+          __forceFollowUp: true,
         });
         return false;
       }
       const game = await Game.getGameById(parsedId);
       if (!game) {
-        await interaction.followUp({
+        await safeReply(interaction, {
           content: "Selected game was not found in GameDB.",
           flags: MessageFlags.Ephemeral,
+          __forceFollowUp: true,
         });
         return false;
       }
@@ -687,9 +697,10 @@ export class SuperAdmin {
       return true;
     } catch (err: any) {
       const msg = extractErrorMessage(err);
-      await interaction.followUp({
+      await safeReply(interaction, {
         content: `Failed to add completion: ${msg}`,
         flags: MessageFlags.Ephemeral,
+        __forceFollowUp: true,
       });
       return false;
     }
@@ -757,7 +768,7 @@ export class SuperAdmin {
   @ButtonComponent({ id: /^(gotm|nr-gotm)-audit(img)?-(stop|skip|novalue).*-/ })
   async handleAuditButtons(interaction: ButtonInteraction): Promise<void> {
     if (!interaction.deferred && !interaction.replied) {
-      await interaction.deferUpdate().catch(() => {});
+      await safeDeferUpdate(interaction);
     }
   }
 
@@ -1015,17 +1026,7 @@ export async function isSuperAdmin(interaction: AnyRepliable): Promise<boolean> 
       flags: MessageFlags.Ephemeral,
     };
 
-    try {
-      if (anyInteraction.replied || anyInteraction.deferred || anyInteraction.__rpgAcked) {
-        await interaction.followUp(denial as any);
-      } else {
-        await interaction.reply(denial as any);
-        anyInteraction.__rpgAcked = true;
-        anyInteraction.__rpgDeferred = false;
-      }
-    } catch {
-      // ignore
-    }
+    await safeReply(interaction, denial as any);
   }
 
   return isOwner;

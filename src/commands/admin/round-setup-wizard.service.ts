@@ -11,7 +11,7 @@ import {
   type Message,
   type MessageCreateOptions,
 } from "discord.js";
-import { safeReply } from "../../functions/InteractionUtils.js";
+import { safeDeferUpdate, safeReply } from "../../functions/InteractionUtils.js";
 import { ADMIN_CHANNEL_ID, NOW_PLAYING_FORUM_ID } from "../../config/channels.js";
 import Gotm, { insertGotmRoundInDatabase, type IGotmGame } from "../../classes/Gotm.js";
 import NrGotm, { insertNrGotmRoundInDatabase, type INrGotmGame } from "../../classes/NrGotm.js";
@@ -205,7 +205,7 @@ async function promptSelectNomination(
       time: 180_000,
     }) as StringSelectMenuInteraction;
     const pickedValue = Number(component.values?.[0] ?? "");
-    await component.deferUpdate().catch(() => {});
+    await safeDeferUpdate(component);
     await promptMessage.delete().catch(async () => {
       await promptMessage.edit({ components: [] }).catch(() => {});
     });
@@ -220,7 +220,7 @@ async function promptSelectNomination(
       time: 1,
     }).catch(() => null);
     if (cancel) {
-      await cancel.deferUpdate().catch(() => {});
+      await safeDeferUpdate(cancel);
     }
     await promptMessage.delete().catch(async () => {
       await promptMessage.edit({ components: [] }).catch(() => {});
@@ -294,7 +294,7 @@ export async function handleNextRoundSetup(
       logHistory = "..." + logHistory.slice(logHistory.length - 3500);
     }
     embed.setDescription(logHistory || "Processing...");
-    await interaction.editReply({ embeds: [embed] }).catch(() => {});
+    await safeReply(interaction, { embeds: [embed] });
   };
 
   const wizardLog = async (msg: string) => {
@@ -347,7 +347,7 @@ export async function handleNextRoundSetup(
           i.user.id === interaction.user.id && i.customId.startsWith(`${promptId}:`),
         time: 180_000,
       });
-      await selection.deferUpdate().catch(() => {});
+      await safeDeferUpdate(selection);
       const value = selection.customId.slice(promptId.length + 1);
       const chosenLabel = options.find((opt) => opt.value === value)?.label ?? value;
       await promptMessage.delete().catch(async () => {
@@ -938,7 +938,7 @@ export async function handleNextRoundSetup(
       new ButtonBuilder().setCustomId("wiz-edit").setLabel("Edit").setStyle(ButtonStyle.Secondary),
       new ButtonBuilder().setCustomId("wiz-cancel").setLabel("Cancel").setStyle(ButtonStyle.Danger),
     );
-    await interaction.editReply({ components: [row] });
+    await safeReply(interaction, { components: [row] });
 
     let decision = "cancel";
     try {
@@ -947,8 +947,8 @@ export async function handleNextRoundSetup(
         filter: (i: any) => i.user.id === interaction.user.id,
         time: 300_000,
       });
-      await collected.deferUpdate();
-      await interaction.editReply({ components: [] });
+      await safeDeferUpdate(collected);
+      await safeReply(interaction, { components: [] });
       if (collected.customId === "wiz-commit") decision = "commit";
       else if (collected.customId === "wiz-edit") decision = "edit";
     } catch {

@@ -35,6 +35,7 @@ import { importGameFromIgdb } from "./completionator-parser.service.js";
 import { searchGameDbWithFallback } from "./completionator-parser.service.js";
 import { runDockerVolumeBackup } from "../../services/DockerVolumeBackupService.js";
 import { buildImportTextContainer } from "../imports/import-scaffold.service.js";
+import { safeDeferReply, safeDeferUpdate } from "../../functions/InteractionUtils.js";
 
 export class CompletionatorWorkflowService {
   private uiService: CompletionatorUiService;
@@ -534,9 +535,9 @@ export class CompletionatorWorkflowService {
       "isMessageComponent" in interaction && interaction.isMessageComponent();
     if (!interaction.deferred && !interaction.replied) {
       if (isComponent) {
-        await interaction.deferUpdate().catch(() => {});
+        await safeDeferUpdate(interaction);
       } else {
-        await interaction.deferReply({ flags: 64 }).catch(() => {});
+        await safeDeferReply(interaction, { flags: 64 });
       }
     }
 
@@ -564,7 +565,7 @@ export class CompletionatorWorkflowService {
         igdbSearch.results,
         async (sel, gameId) => {
           if (!sel.deferred && !sel.replied) {
-            await sel.deferUpdate().catch(() => {});
+            await safeDeferUpdate(sel);
           }
           await this.uiService.respondToImportInteraction(
             sel,
@@ -649,7 +650,7 @@ export class CompletionatorWorkflowService {
             igdbSearch.results,
           async (selectionInteraction, gameId) => {
             if (!selectionInteraction.deferred && !selectionInteraction.replied) {
-              await selectionInteraction.deferUpdate().catch(() => {});
+              await safeDeferUpdate(selectionInteraction);
             }
             await this.uiService.respondToImportInteraction(
               selectionInteraction,

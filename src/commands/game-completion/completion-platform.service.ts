@@ -6,7 +6,7 @@ import type {
   ButtonInteraction,
 } from "discord.js";
 import { ActionRowBuilder, StringSelectMenuBuilder } from "discord.js";
-import { safeReply } from "../../functions/InteractionUtils.js";
+import { safeDeferUpdate, safeReply } from "../../functions/InteractionUtils.js";
 import {
   notifyUnknownCompletionPlatform,
   saveCompletion,
@@ -83,7 +83,7 @@ export async function handleCompletionPlatformSelect(
   const ctx = completionPlatformSessions.get(sessionId);
 
   if (!ctx) {
-    await interaction.reply({
+    await safeReply(interaction, {
       content: "This completion prompt has expired.",
       flags: buildComponentsV2Flags(true),
     }).catch(() => {});
@@ -91,7 +91,7 @@ export async function handleCompletionPlatformSelect(
   }
 
   if (interaction.user.id !== ctx.userId) {
-    await interaction.reply({
+    await safeReply(interaction, {
       content: "This completion prompt isn't for you.",
       flags: buildComponentsV2Flags(true),
     }).catch(() => {});
@@ -112,14 +112,14 @@ export async function handleCompletionPlatformSelect(
     ctx.platforms.some((platform) => platform.id === platformId)
   );
   if (!valid) {
-    await interaction.reply({
+    await safeReply(interaction, {
       content: "Invalid platform selection.",
       flags: buildComponentsV2Flags(true),
     }).catch(() => {});
     return;
   }
 
-  await interaction.deferUpdate().catch(() => {});
+  await safeDeferUpdate(interaction);
   completionPlatformSessions.delete(sessionId);
 
   if (isOther) {
@@ -141,7 +141,7 @@ export async function handleCompletionPlatformSelect(
     ctx.removeFromNowPlaying,
   );
 
-  await interaction.editReply({ components: [] }).catch(() => {});
+  await safeReply(interaction, { components: [] }).catch(() => {});
 }
 
 export async function resolveDefaultCompletionPlatformId(gameId: number): Promise<number | null> {

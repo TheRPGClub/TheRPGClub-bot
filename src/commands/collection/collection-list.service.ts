@@ -17,6 +17,7 @@ import Game from "../../classes/Game.js";
 import { igdbService } from "../../services/IGDB/IgdbService.js";
 import { flattenErrorMessages, safeV2TextContent } from "../imports/import-scaffold.service.js";
 import { formatTableDate } from "../profile.command.js";
+import { safeDeferUpdate } from "../../functions/InteractionUtils.js";
 
 const COLLECTION_LIST_PAGE_SIZE = 10;
 const COLLECTION_LIST_NAV_PREFIX = "collection-list-nav-v2";
@@ -710,7 +711,7 @@ export async function applyFiltersToSourceMessage(params: {
 }
 
 export async function closeFilterPanel(interaction: ButtonInteraction): Promise<void> {
-  await interaction.deferUpdate().catch(() => {});
+  await safeDeferUpdate(interaction);
   await (interaction.message as any)?.delete?.().catch(() => {});
 }
 

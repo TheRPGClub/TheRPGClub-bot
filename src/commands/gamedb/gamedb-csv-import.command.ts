@@ -25,6 +25,7 @@ import {
 import axios from "axios";
 import {
   safeDeferReply,
+  safeDeferUpdate,
   safeReply,
   safeUpdate,
   stripModalInput,
@@ -524,40 +525,34 @@ export class GameDbCsvImportCommand {
   async handleGameDbCsvSelect(interaction: StringSelectMenuInteraction): Promise<void> {
     const [, ownerId, importIdRaw, itemIdRaw] = interaction.customId.split(":");
     if (interaction.user.id !== ownerId) {
-      await interaction
-        .reply({
+      await safeReply(interaction, {
           content: "This import prompt is not for you.",
           flags: MessageFlags.Ephemeral,
-        })
-        .catch(() => {});
+        });
       return;
     }
 
     const igdbIdRaw = interaction.values?.[0];
     const igdbId = Number(igdbIdRaw);
     if (!Number.isInteger(igdbId) || igdbId <= 0) {
-      await interaction
-        .reply({
+      await safeReply(interaction, {
           content: "Invalid IGDB selection.",
           flags: MessageFlags.Ephemeral,
-        })
-        .catch(() => {});
+        });
       return;
     }
 
     const importId = Number(importIdRaw);
     const itemId = Number(itemIdRaw);
     if (!Number.isInteger(importId) || !Number.isInteger(itemId)) {
-      await interaction
-        .reply({
+      await safeReply(interaction, {
           content: "Invalid import selection.",
           flags: MessageFlags.Ephemeral,
-        })
-        .catch(() => {});
+        });
       return;
     }
 
-    await interaction.deferUpdate().catch(() => {});
+    await safeDeferUpdate(interaction);
 
     const session = await getGameDbCsvImportById(importId);
     if (!session || session.userId !== ownerId) {
@@ -628,24 +623,20 @@ export class GameDbCsvImportCommand {
   async handleGameDbCsvAction(interaction: ButtonInteraction): Promise<void> {
     const [, ownerId, importIdRaw, itemIdRaw, action] = interaction.customId.split(":");
     if (interaction.user.id !== ownerId) {
-      await interaction
-        .reply({
+      await safeReply(interaction, {
           content: "This import prompt is not for you.",
           flags: MessageFlags.Ephemeral,
-        })
-        .catch(() => {});
+        });
       return;
     }
 
     const importId = Number(importIdRaw);
     const itemId = Number(itemIdRaw);
     if (!Number.isInteger(importId) || !Number.isInteger(itemId)) {
-      await interaction
-        .reply({
+      await safeReply(interaction, {
           content: "Invalid import action.",
           flags: MessageFlags.Ephemeral,
-        })
-        .catch(() => {});
+        });
       return;
     }
 
@@ -750,7 +741,7 @@ export class GameDbCsvImportCommand {
         return;
       }
 
-      await interaction.deferUpdate().catch(() => {});
+      await safeDeferUpdate(interaction);
 
       try {
         const result = await importGameFromCsv(first.id);
@@ -819,24 +810,20 @@ export class GameDbCsvImportCommand {
   async handleGameDbCsvManualModal(interaction: ModalSubmitInteraction): Promise<void> {
     const [, ownerId, importIdRaw, itemIdRaw] = interaction.customId.split(":");
     if (interaction.user.id !== ownerId) {
-      await interaction
-        .reply({
+      await safeReply(interaction, {
           content: "This import prompt is not for you.",
           flags: MessageFlags.Ephemeral,
-        })
-        .catch(() => {});
+        });
       return;
     }
 
     const importId = Number(importIdRaw);
     const itemId = Number(itemIdRaw);
     if (!Number.isInteger(importId) || !Number.isInteger(itemId)) {
-      await interaction
-        .reply({
+      await safeReply(interaction, {
           content: "Invalid import request.",
           flags: MessageFlags.Ephemeral,
-        })
-        .catch(() => {});
+        });
       return;
     }
 
@@ -844,16 +831,14 @@ export class GameDbCsvImportCommand {
     const cleaned = stripModalInput(raw);
     const igdbId = Number(cleaned);
     if (!Number.isInteger(igdbId) || igdbId <= 0) {
-      await interaction
-        .reply({
+      await safeReply(interaction, {
           content: "Please provide a valid IGDB id.",
           flags: MessageFlags.Ephemeral,
-        })
-        .catch(() => {});
+        });
       return;
     }
 
-    await interaction.deferUpdate().catch(() => {});
+    await safeDeferUpdate(interaction);
 
     const session = await getGameDbCsvImportById(importId);
     if (!session || session.userId !== ownerId) {
@@ -922,40 +907,34 @@ export class GameDbCsvImportCommand {
   async handleGameDbCsvQueryModal(interaction: ModalSubmitInteraction): Promise<void> {
     const [, ownerId, importIdRaw, itemIdRaw] = interaction.customId.split(":");
     if (interaction.user.id !== ownerId) {
-      await interaction
-        .reply({
+      await safeReply(interaction, {
           content: "This import prompt is not for you.",
           flags: MessageFlags.Ephemeral,
-        })
-        .catch(() => {});
+        });
       return;
     }
 
     const importId = Number(importIdRaw);
     const itemId = Number(itemIdRaw);
     if (!Number.isInteger(importId) || !Number.isInteger(itemId)) {
-      await interaction
-        .reply({
+      await safeReply(interaction, {
           content: "Invalid import request.",
           flags: MessageFlags.Ephemeral,
-        })
-        .catch(() => {});
+        });
       return;
     }
 
     const raw = interaction.fields.getTextInputValue(GAMEDB_CSV_QUERY_INPUT_ID);
     const query = stripModalInput(raw).trim();
     if (!query) {
-      await interaction
-        .reply({
+      await safeReply(interaction, {
           content: "Please provide a search query.",
           flags: MessageFlags.Ephemeral,
-        })
-        .catch(() => {});
+        });
       return;
     }
 
-    await interaction.deferUpdate().catch(() => {});
+    await safeDeferUpdate(interaction);
 
     const session = await getGameDbCsvImportById(importId);
     if (!session || session.userId !== ownerId) {

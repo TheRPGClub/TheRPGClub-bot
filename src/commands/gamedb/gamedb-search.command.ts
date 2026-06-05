@@ -23,6 +23,7 @@ import {
 } from "@discordjs/builders";
 import {
   safeDeferReply,
+  safeDeferUpdate,
   safeReply,
   safeUpdate,
   sanitizeUserInput,
@@ -208,12 +209,10 @@ export class GameDbSearchCommand {
     const encodedQuery = parts[3] ?? "";
 
     if (interaction.user.id !== ownerId) {
-      await interaction
-        .reply({
+      await safeReply(interaction, {
           content: "This menu isn't for you.",
           flags: MessageFlags.Ephemeral,
-        })
-        .catch(() => {});
+        });
       return;
     }
 
@@ -236,29 +235,26 @@ export class GameDbSearchCommand {
 
     const gameId = Number(interaction.values?.[0]);
     if (!Number.isFinite(gameId)) {
-      await interaction
-        .reply({
+      await safeReply(interaction, {
           content: "Invalid selection.",
           flags: MessageFlags.Ephemeral,
-        })
-        .catch(() => {});
+        });
       return;
     }
 
     try {
-      await interaction.deferUpdate();
+      await safeDeferUpdate(interaction);
     } catch {
       // ignore
     }
 
     const profile = await buildGameProfile(gameId, interaction);
     if (!profile) {
-      await interaction
-        .followUp({
-          content: "Unable to load that game.",
-          flags: MessageFlags.Ephemeral,
-        })
-        .catch(() => {});
+      await safeReply(interaction, {
+        __forceFollowUp: true,
+        content: "Unable to load that game.",
+        flags: MessageFlags.Ephemeral,
+      });
       return;
     }
 
@@ -274,7 +270,7 @@ export class GameDbSearchCommand {
     );
 
     try {
-      await interaction.editReply({
+      await safeReply(interaction, {
         embeds: [],
         files: profile.files,
         components: [...profile.components, ...actionRows, ...response.components],
@@ -294,12 +290,10 @@ export class GameDbSearchCommand {
     const direction = parts[4];
 
     if (interaction.user.id !== ownerId) {
-      await interaction
-        .reply({
+      await safeReply(interaction, {
           content: "This menu isn't for you.",
           flags: MessageFlags.Ephemeral,
-        })
-        .catch(() => {});
+        });
       return;
     }
 
@@ -327,7 +321,7 @@ export class GameDbSearchCommand {
     const newPage = Math.min(Math.max(page + delta, 0), totalPages - 1);
 
     try {
-      await interaction.deferUpdate();
+      await safeDeferUpdate(interaction);
     } catch {
       // ignore
     }
@@ -335,7 +329,7 @@ export class GameDbSearchCommand {
     const response = buildSearchResponse(searchTerm, results, ownerId, newPage, true);
 
     try {
-      await interaction.editReply(response);
+      await safeReply(interaction, response);
     } catch {
       // ignore
     }

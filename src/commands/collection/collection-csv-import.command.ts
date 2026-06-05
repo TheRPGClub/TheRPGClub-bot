@@ -43,6 +43,8 @@ import {
 } from "../game-completion/completion-autocomplete.utils.js";
 import {
   safeDeferReply,
+  safeDeferUpdate,
+  safeReply,
   safeUpdate,
   sanitizeUserInput,
 } from "../../functions/InteractionUtils.js";
@@ -166,7 +168,7 @@ export class CollectionCsvImportCommand {
       if (shouldUseInteractionUpdate || shouldUseModalUpdate) {
         await safeUpdate(interaction, payload);
       } else {
-        await interaction.editReply(payload);
+        await safeReply(interaction, payload);
       }
       return;
     }
@@ -182,7 +184,7 @@ export class CollectionCsvImportCommand {
       if (shouldUseInteractionUpdate || shouldUseModalUpdate) {
         await safeUpdate(interaction, payload);
       } else {
-        await interaction.editReply(payload);
+        await safeReply(interaction, payload);
       }
       return;
     }
@@ -218,7 +220,7 @@ export class CollectionCsvImportCommand {
       if (shouldUseInteractionUpdate || shouldUseModalUpdate) {
         await safeUpdate(interaction, payload);
       } else {
-        await interaction.editReply(payload);
+        await safeReply(interaction, payload);
       }
       return;
     }
@@ -305,10 +307,11 @@ export class CollectionCsvImportCommand {
             currentSession.userId !== ownerId ||
             currentSession.status !== "ACTIVE"
           ) {
-            await selectionInteraction.followUp({
+            await safeReply(selectionInteraction, {
               content: "This CSV import session is no longer active.",
               flags: MessageFlags.Ephemeral,
-            }).catch(() => {});
+              __forceFollowUp: true,
+            });
             return;
           }
 
@@ -318,10 +321,11 @@ export class CollectionCsvImportCommand {
             currentItem.importId !== session.importId ||
             currentItem.status !== "PENDING"
           ) {
-            await selectionInteraction.followUp({
+            await safeReply(selectionInteraction, {
               content: "This import row is no longer pending.",
               flags: MessageFlags.Ephemeral,
-            }).catch(() => {});
+              __forceFollowUp: true,
+            });
             return;
           }
 
@@ -468,7 +472,7 @@ export class CollectionCsvImportCommand {
         });
         return;
       }
-      await interaction.editReply({
+      await safeReply(interaction, {
         content: null,
         components,
         flags: buildComponentsV2Flags(true),
@@ -523,7 +527,7 @@ export class CollectionCsvImportCommand {
   ): Promise<void> {
     const guild = interaction.guild;
     if (!guild) {
-      await interaction.reply({
+      await safeReply(interaction, {
         content: "This command can only be used inside a server.",
         flags: MessageFlags.Ephemeral,
       }).catch(() => {});
@@ -537,7 +541,7 @@ export class CollectionCsvImportCommand {
       onStart: async () => {
         const existing = await getActiveCollectionCsvImportForUser(interaction.user.id);
         if (existing) {
-          await interaction.editReply(
+          await safeReply(interaction, 
             `You already have import #${existing.importId} (${existing.status}). ` +
             "Use action:resume, action:status, action:pause, or action:cancel.",
           );
@@ -546,7 +550,7 @@ export class CollectionCsvImportCommand {
 
         if (!file) {
           const template = await buildCollectionCsvTemplateAttachment();
-          await interaction.editReply({
+          await safeReply(interaction, {
             content: [
               "### Custom CSV Collection Import",
               "Download the attached Excel template and fill in your rows.",
@@ -565,7 +569,7 @@ export class CollectionCsvImportCommand {
           file.contentType?.toLowerCase().includes("csv");
         if (!isCsv) {
           const template = await buildCollectionCsvTemplateAttachment();
-          await interaction.editReply({
+          await safeReply(interaction, {
             content: "The uploaded file is not a CSV. Use the attached template and export to CSV.",
             files: [template],
           });
@@ -574,7 +578,7 @@ export class CollectionCsvImportCommand {
 
         const csvText = await fetchCsvAttachment(file);
         if (!csvText) {
-          await interaction.editReply("Failed to download the CSV file. Please try again.");
+          await safeReply(interaction, "Failed to download the CSV file. Please try again.");
           return;
         }
 
@@ -587,7 +591,7 @@ export class CollectionCsvImportCommand {
             lines.push(`- ...and ${parsed.errors.length - 12} more`);
           }
           const template = await buildCollectionCsvTemplateAttachment();
-          await interaction.editReply({
+          await safeReply(interaction, {
             content: [
               "CSV validation failed. Fix the following issues and try again.",
               "",
@@ -599,7 +603,7 @@ export class CollectionCsvImportCommand {
         }
 
         if (!parsed.rows.length) {
-          await interaction.editReply("CSV file contains no importable rows.");
+          await safeReply(interaction, "CSV file contains no importable rows.");
           return;
         }
 
@@ -631,7 +635,7 @@ export class CollectionCsvImportCommand {
           total: parsed.rows.length,
         });
 
-        await interaction.editReply(
+        await safeReply(interaction, 
           `CSV import #${session.importId} created for **${parsed.rows.length}** rows. ` +
           "Starting review now.",
         );
@@ -639,7 +643,7 @@ export class CollectionCsvImportCommand {
       },
       getActiveSession: (userId: string) => getActiveCollectionCsvImportForUser(userId),
       onMissingSession: async () => {
-        await interaction.editReply("No active CSV import session found.");
+        await safeReply(interaction, "No active CSV import session found.");
       },
       onStatus: async (session) => {
         const stats = await countCollectionCsvImportItems(session.importId);
@@ -661,7 +665,7 @@ export class CollectionCsvImportCommand {
             value: reasonLines.join(" | ").slice(0, 1024),
           });
         }
-        await interaction.editReply({ embeds: [embed] });
+        await safeReply(interaction, { embeds: [embed] });
       },
       onPause: async (session) => {
         await setCollectionCsvImportStatus(session.importId, "PAUSED");
@@ -671,7 +675,7 @@ export class CollectionCsvImportCommand {
           importId: session.importId,
           pending: stats.pending,
         });
-        await interaction.editReply(
+        await safeReply(interaction, 
           `CSV import #${session.importId} paused. ` +
           `Pending ${stats.pending}, Added ${stats.added}, Updated ${stats.updated}, ` +
           `Skipped ${stats.skipped}, Failed ${stats.failed}.`,
@@ -685,7 +689,7 @@ export class CollectionCsvImportCommand {
           importId: session.importId,
           pending: stats.pending,
         });
-        await interaction.editReply(
+        await safeReply(interaction, 
           `CSV import #${session.importId} canceled. ` +
           `Pending ${stats.pending}, Added ${stats.added}, Updated ${stats.updated}, ` +
           `Skipped ${stats.skipped}, Failed ${stats.failed}.`,
@@ -693,7 +697,7 @@ export class CollectionCsvImportCommand {
       },
       onResume: async (session) => {
         await setCollectionCsvImportStatus(session.importId, "ACTIVE");
-        await interaction.editReply(`CSV import #${session.importId} resumed.`);
+        await safeReply(interaction, `CSV import #${session.importId} resumed.`);
         logCsvImportEvent("resumed", {
           userId: interaction.user.id,
           importId: session.importId,
@@ -709,7 +713,7 @@ export class CollectionCsvImportCommand {
   async onCsvImportAction(interaction: ButtonInteraction): Promise<void> {
     const parsed = parseCollectionCsvImportActionId(interaction.customId);
     if (!parsed) {
-      await interaction.reply({
+      await safeReply(interaction, {
         content: "This CSV import control is invalid.",
         flags: MessageFlags.Ephemeral,
       }).catch(() => {});
@@ -717,7 +721,7 @@ export class CollectionCsvImportCommand {
     }
 
     if (interaction.user.id !== parsed.ownerId) {
-      await interaction.reply({
+      await safeReply(interaction, {
         content: "This CSV import control is not for you.",
         flags: MessageFlags.Ephemeral,
       }).catch(() => {});
@@ -746,7 +750,7 @@ export class CollectionCsvImportCommand {
 
     const item = await getNextPendingCollectionCsvImportItem(session.importId);
     if (!item || item.itemId !== parsed.itemId) {
-      await interaction.deferUpdate().catch(() => {});
+      await safeDeferUpdate(interaction).catch(() => {});
       await this.renderNextCsvImportItem(interaction, session.importId, parsed.ownerId);
       return;
     }
@@ -765,7 +769,7 @@ export class CollectionCsvImportCommand {
     }
 
     if (parsed.action === "skip") {
-      await interaction.deferUpdate().catch(() => {});
+      await safeDeferUpdate(interaction).catch(() => {});
       await updateCollectionCsvImportItem(item.itemId, {
         status: "SKIPPED",
         resultReason: "MANUAL_SKIP",
@@ -840,7 +844,7 @@ export class CollectionCsvImportCommand {
   async onCsvImportChoose(interaction: ButtonInteraction): Promise<void> {
     const parsed = parseCollectionCsvChooseId(interaction.customId);
     if (!parsed) {
-      await interaction.reply({
+      await safeReply(interaction, {
         content: "This CSV import choice is invalid.",
         flags: MessageFlags.Ephemeral,
       }).catch(() => {});
@@ -848,7 +852,7 @@ export class CollectionCsvImportCommand {
     }
 
     if (interaction.user.id !== parsed.ownerId) {
-      await interaction.reply({
+      await safeReply(interaction, {
         content: "This CSV import choice is not for you.",
         flags: MessageFlags.Ephemeral,
       }).catch(() => {});
@@ -869,12 +873,12 @@ export class CollectionCsvImportCommand {
 
     const item = await getNextPendingCollectionCsvImportItem(session.importId);
     if (!item || item.itemId !== parsed.itemId) {
-      await interaction.deferUpdate().catch(() => {});
+      await safeDeferUpdate(interaction).catch(() => {});
       await this.renderNextCsvImportItem(interaction, session.importId, parsed.ownerId);
       return;
     }
 
-    await interaction.deferUpdate().catch(() => {});
+    await safeDeferUpdate(interaction).catch(() => {});
     await this.applyCsvImportSelection({
       ownerId: parsed.ownerId,
       item,
@@ -897,7 +901,7 @@ export class CollectionCsvImportCommand {
   async onCsvImportRemapModal(interaction: ModalSubmitInteraction): Promise<void> {
     const parsed = parseCollectionCsvRemapModalId(interaction.customId);
     if (!parsed) {
-      await interaction.reply({
+      await safeReply(interaction, {
         content: "This remap form is invalid.",
         flags: MessageFlags.Ephemeral,
       }).catch(() => {});
@@ -905,7 +909,7 @@ export class CollectionCsvImportCommand {
     }
 
     if (interaction.user.id !== parsed.ownerId) {
-      await interaction.reply({
+      await safeReply(interaction, {
         content: "This remap form is not for you.",
         flags: MessageFlags.Ephemeral,
       }).catch(() => {});
@@ -914,7 +918,7 @@ export class CollectionCsvImportCommand {
 
     const session = await getCollectionCsvImportById(parsed.importId);
     if (!session || session.userId !== parsed.ownerId || session.status !== "ACTIVE") {
-      await interaction.reply({
+      await safeReply(interaction, {
         content: "This CSV import session is no longer active.",
         flags: MessageFlags.Ephemeral,
       }).catch(() => {});
@@ -990,7 +994,7 @@ export class CollectionCsvImportCommand {
   async onCsvImportGameIdModal(interaction: ModalSubmitInteraction): Promise<void> {
     const parsed = parseCollectionCsvGameIdModalId(interaction.customId);
     if (!parsed) {
-      await interaction.reply({
+      await safeReply(interaction, {
         content: "This GameDB ID form is invalid.",
         flags: MessageFlags.Ephemeral,
       }).catch(() => {});
@@ -998,7 +1002,7 @@ export class CollectionCsvImportCommand {
     }
 
     if (interaction.user.id !== parsed.ownerId) {
-      await interaction.reply({
+      await safeReply(interaction, {
         content: "This GameDB ID form is not for you.",
         flags: MessageFlags.Ephemeral,
       }).catch(() => {});
@@ -1007,7 +1011,7 @@ export class CollectionCsvImportCommand {
 
     const session = await getCollectionCsvImportById(parsed.importId);
     if (!session || session.userId !== parsed.ownerId || session.status !== "ACTIVE") {
-      await interaction.reply({
+      await safeReply(interaction, {
         content: "This CSV import session is no longer active.",
         flags: MessageFlags.Ephemeral,
       }).catch(() => {});
