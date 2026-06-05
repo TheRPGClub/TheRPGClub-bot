@@ -52,8 +52,12 @@ import {
   type IGithubIssueComment,
   type IGithubIssue,
 } from "../services/GithubIssuesService.js";
-import { buildComponentsV2Flags } from "../functions/ComponentsV2Utils.js";
+import {
+  buildComponentsV2Flags,
+  buildTextReply,
+} from "../functions/ComponentsV2Utils.js";
 import { decodeBase64Url, encodeWithMaxLength } from "../functions/CustomIdUtils.js";
+import { safeV2TextContent } from "./imports/import-scaffold.service.js";
 
 const TODO_LABELS = [
   "New Feature",
@@ -375,10 +379,10 @@ async function requireModeratorOrAdminOrOwner(
 ): Promise<boolean> {
   const permissions = getTodoPermissionFlags(interaction);
   if (!permissions) {
-    await safeReply(interaction, {
-      content: "This command can only be used inside a server.",
-      flags: MessageFlags.Ephemeral,
-    });
+    await safeReply(
+      interaction,
+      buildTodoTextReply("This command can only be used inside a server.", true),
+    );
     return false;
   }
 
@@ -386,20 +390,23 @@ async function requireModeratorOrAdminOrOwner(
     return true;
   }
 
-  await safeReply(interaction, {
-    content: "Access denied. Command requires Moderator, Administrator, or server owner.",
-    flags: MessageFlags.Ephemeral,
-  });
+  await safeReply(
+    interaction,
+    buildTodoTextReply(
+      "Access denied. Command requires Moderator, Administrator, or server owner.",
+      true,
+    ),
+  );
   return false;
 }
 
 async function requireOwner(interaction: AnyRepliable): Promise<boolean> {
   const permissions = getTodoPermissionFlags(interaction);
   if (!permissions) {
-    await safeReply(interaction, {
-      content: "This command can only be used inside a server.",
-      flags: MessageFlags.Ephemeral,
-    });
+    await safeReply(
+      interaction,
+      buildTodoTextReply("This command can only be used inside a server.", true),
+    );
     return false;
   }
 
@@ -407,10 +414,10 @@ async function requireOwner(interaction: AnyRepliable): Promise<boolean> {
     return true;
   }
 
-  await safeReply(interaction, {
-    content: "Access denied. Command requires server owner.",
-    flags: MessageFlags.Ephemeral,
-  });
+  await safeReply(
+    interaction,
+    buildTodoTextReply("Access denied. Command requires server owner.", true),
+  );
   return false;
 }
 
@@ -559,8 +566,31 @@ function addTextDisplayWithBudget(
   if (!clipped.length) {
     return;
   }
-  container.addTextDisplayComponents(new TextDisplayBuilder().setContent(clipped));
+  container.addTextDisplayComponents(
+    new TextDisplayBuilder().setContent(
+      safeV2TextContent(clipped, MAX_TEXT_DISPLAY_CONTENT),
+    ),
+  );
   budget.remaining -= clipped.length;
+}
+
+function buildTodoTextReply(
+  content: string,
+  isEphemeral: boolean,
+  extraComponents: Array<ContainerBuilder | ActionRowBuilder<any>> = [],
+): {
+  components: Array<ContainerBuilder | ActionRowBuilder<any>>;
+  flags: number;
+} {
+  const textReply = buildTextReply(content, isEphemeral);
+  if (extraComponents.length === 0) {
+    return textReply;
+  }
+
+  return {
+    ...textReply,
+    components: [...textReply.components, ...extraComponents],
+  };
 }
 
 function buildIssueCommentsDisplay(comments: IGithubIssueComment[]): {
@@ -1012,10 +1042,10 @@ function parseTodoCreateTypeLabels(values: readonly string[]): TodoLabel[] {
 }
 
 async function replyTodoExpired(interaction: AnyRepliable): Promise<void> {
-  await safeReply(interaction, {
-    content: "This /todo view expired. Run /todo again to refresh it.",
-    flags: MessageFlags.Ephemeral,
-  });
+  await safeReply(
+    interaction,
+    buildTodoTextReply("This /todo view expired. Run /todo again to refresh it.", true),
+  );
 }
 
 function buildIssueListComponents(
@@ -1043,12 +1073,18 @@ function buildIssueListComponents(
   }
 
   const container = new ContainerBuilder()
-    .addTextDisplayComponents(new TextDisplayBuilder().setContent(`## ${ISSUE_LIST_TITLE}`));
+    .addTextDisplayComponents(
+      new TextDisplayBuilder().setContent(
+        safeV2TextContent(`## ${ISSUE_LIST_TITLE}`, MAX_TEXT_DISPLAY_CONTENT),
+      ),
+    );
 
   if (issues.length) {
     issues.forEach((issue) => {
       const section = new SectionBuilder().addTextDisplayComponents(
-        new TextDisplayBuilder().setContent(formatIssueLink(issue)),
+        new TextDisplayBuilder().setContent(
+          safeV2TextContent(formatIssueLink(issue), MAX_TEXT_DISPLAY_CONTENT),
+        ),
       );
       section.setButtonAccessory(
         new V2ButtonBuilder()
@@ -1066,7 +1102,10 @@ function buildIssueListComponents(
 
   container.addTextDisplayComponents(
     new TextDisplayBuilder().setContent(
-      `${summaryParts.join(" | ")} | Total: ${totalIssues}`,
+      safeV2TextContent(
+        `${summaryParts.join(" | ")} | Total: ${totalIssues}`,
+        MAX_TEXT_DISPLAY_CONTENT,
+      ),
     ),
   );
 
@@ -1119,6 +1158,7 @@ function buildIssueListComponents(
   if (suggestionCount > 0) {
     actionRow.addComponents(
       new ButtonBuilder()
+        // eslint-disable-next-line local/custom-id-has-matching-handler
         .setCustomId(TODO_REVIEW_SUGGESTIONS_BUTTON_ID)
         .setLabel("Review Suggestions")
         .setStyle(ButtonStyle.Primary),
@@ -1297,13 +1337,15 @@ export class TodoCommand {
     const parsedLabels = parseTodoLabels(labelsRaw);
     const query = normalizeQuery(queryRaw);
     if (parsedLabels.invalid.length) {
-      await safeReply(interaction, {
-        content:
+      await safeReply(
+        interaction,
+        buildTodoTextReply(
           "Unknown labels: " +
-          parsedLabels.invalid.join(", ") +
-          `. Valid labels: ${TODO_LABELS.join(", ")}.`,
-        flags: buildComponentsV2Flags(true),
-      });
+            parsedLabels.invalid.join(", ") +
+            `. Valid labels: ${TODO_LABELS.join(", ")}.`,
+          true,
+        ),
+      );
       return;
     }
 
@@ -1320,10 +1362,7 @@ export class TodoCommand {
         direction: direction ?? "desc",
       });
     } catch (err: any) {
-      await safeReply(interaction, {
-        content: getGithubErrorMessage(err),
-        flags: buildComponentsV2Flags(true),
-      });
+      await safeReply(interaction, buildTodoTextReply(getGithubErrorMessage(err), true));
       return;
     }
 
@@ -1571,10 +1610,10 @@ export class TodoCommand {
       return;
     }
     if (listPayload.pageIssues.length === 0) {
-      await safeReply(interaction, {
-        content: "No issues to close on this page.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(
+        interaction,
+        buildTodoTextReply("No issues to close on this page.", true),
+      );
       return;
     }
 
@@ -1600,11 +1639,10 @@ export class TodoCommand {
         .setStyle(ButtonStyle.Secondary),
     );
 
-    await safeReply(interaction, {
-      content: "Choose an issue to close.",
-      components: [selectRow, cancelRow],
-      flags: MessageFlags.Ephemeral,
-    });
+    await safeReply(
+      interaction,
+      buildTodoTextReply("Choose an issue to close.", true, [selectRow, cancelRow]),
+    );
   }
 
   @SelectMenuComponent({ id: /^todo-filter-label:[^:]+:\d+$/ })
@@ -1643,11 +1681,10 @@ export class TodoCommand {
   async closeSelect(interaction: StringSelectMenuInteraction): Promise<void> {
     const parsed = parseTodoCloseSelectId(interaction.customId, TODO_CLOSE_SELECT_PREFIX);
     if (!parsed) {
-      await safeUpdate(interaction, {
-        components: [],
-        content: "This close menu expired.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeUpdate(
+        interaction,
+        buildTodoTextReply("This close menu expired.", true),
+      );
       return;
     }
 
@@ -1658,11 +1695,10 @@ export class TodoCommand {
 
     const issueNumber = Number(interaction.values[0]);
     if (!issueNumber) {
-      await safeUpdate(interaction, {
-        content: "Invalid issue selection.",
-        components: [],
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeUpdate(
+        interaction,
+        buildTodoTextReply("Invalid issue selection.", true),
+      );
       return;
     }
 
@@ -1670,20 +1706,18 @@ export class TodoCommand {
     try {
       closed = await closeIssue(issueNumber);
     } catch (err: any) {
-      await safeUpdate(interaction, {
-        content: getGithubErrorMessage(err),
-        components: [],
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeUpdate(
+        interaction,
+        buildTodoTextReply(getGithubErrorMessage(err), true),
+      );
       return;
     }
 
     if (!closed) {
-      await safeUpdate(interaction, {
-        content: `Issue #${issueNumber} was not found.`,
-        components: [],
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeUpdate(
+        interaction,
+        buildTodoTextReply(`Issue #${issueNumber} was not found.`, true),
+      );
       return;
     }
 
@@ -1717,10 +1751,7 @@ export class TodoCommand {
   async labelEditSelect(interaction: StringSelectMenuInteraction): Promise<void> {
     const parsed = parseTodoLabelEditSelectId(interaction.customId, TODO_LABEL_EDIT_SELECT_PREFIX);
     if (!parsed) {
-      await safeReply(interaction, {
-        content: "This label editor expired.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTodoTextReply("This label editor expired.", true));
       return;
     }
 
@@ -1737,20 +1768,18 @@ export class TodoCommand {
     try {
       updated = await setIssueLabels(parsed.issueNumber, selectedLabels);
     } catch (err: any) {
-      await safeUpdate(interaction, {
-        content: getGithubErrorMessage(err),
-        components: [],
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeUpdate(
+        interaction,
+        buildTodoTextReply(getGithubErrorMessage(err), true),
+      );
       return;
     }
 
     if (!updated) {
-      await safeUpdate(interaction, {
-        content: `Issue #${parsed.issueNumber} was not found.`,
-        components: [],
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeUpdate(
+        interaction,
+        buildTodoTextReply(`Issue #${parsed.issueNumber} was not found.`, true),
+      );
       return;
     }
 
@@ -1808,29 +1837,21 @@ export class TodoCommand {
   async closeCancel(interaction: ButtonInteraction): Promise<void> {
     const parsed = parseTodoCloseId(interaction.customId, TODO_CLOSE_CANCEL_PREFIX);
     if (!parsed) {
-      await safeUpdate(interaction, {
-        components: [],
-        content: "This close menu expired.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeUpdate(
+        interaction,
+        buildTodoTextReply("This close menu expired.", true),
+      );
       return;
     }
 
-    await safeUpdate(interaction, {
-      content: "Close issue cancelled.",
-      components: [],
-      flags: MessageFlags.Ephemeral,
-    });
+    await safeUpdate(interaction, buildTodoTextReply("Close issue cancelled.", true));
   }
 
   @ModalComponent({ id: /^todo-create-modal:[^:]+:\d+:\d+:\d+$/ })
   async submitCreateModal(interaction: ModalSubmitInteraction): Promise<void> {
     const parsed = parseTodoCreateModalId(interaction.customId, TODO_CREATE_MODAL_PREFIX);
     if (!parsed) {
-      await safeReply(interaction, {
-        content: "This create form expired.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTodoTextReply("This create form expired.", true));
       return;
     }
 
@@ -1846,10 +1867,7 @@ export class TodoCommand {
     );
     const trimmedTitle = sanitizeTodoRichText(rawTitle).trim();
     if (!trimmedTitle) {
-      await safeReply(interaction, {
-        content: "Title cannot be empty.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTodoTextReply("Title cannot be empty.", true));
       return;
     }
 
@@ -1857,18 +1875,18 @@ export class TodoCommand {
       ? sanitizeTodoRichText(rawBody)
       : "";
     if (!trimmedBody.trim()) {
-      await safeReply(interaction, {
-        content: "Description cannot be empty.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(
+        interaction,
+        buildTodoTextReply("Description cannot be empty.", true),
+      );
       return;
     }
 
     if (selectedTypes.length === 0) {
-      await safeReply(interaction, {
-        content: "Select at least one issue type.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(
+        interaction,
+        buildTodoTextReply("Select at least one issue type.", true),
+      );
       return;
     }
 
@@ -1885,10 +1903,7 @@ export class TodoCommand {
         labels: selectedTypes,
       });
     } catch (err: any) {
-      await safeReply(interaction, {
-        content: getGithubErrorMessage(err),
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTodoTextReply(getGithubErrorMessage(err), true));
       return;
     }
 
@@ -1928,10 +1943,7 @@ export class TodoCommand {
   async submitCommentModal(interaction: ModalSubmitInteraction): Promise<void> {
     const parsed = parseTodoIssueModalId(interaction.customId, TODO_COMMENT_MODAL_PREFIX);
     if (!parsed) {
-      await safeReply(interaction, {
-        content: "This comment form expired.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTodoTextReply("This comment form expired.", true));
       return;
     }
 
@@ -1940,10 +1952,7 @@ export class TodoCommand {
     const rawComment = interaction.fields.getTextInputValue(TODO_COMMENT_INPUT_ID);
     const finalCommentBody = sanitizeTodoRichText(rawComment);
     if (!finalCommentBody.trim()) {
-      await safeReply(interaction, {
-        content: "Comment cannot be empty.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTodoTextReply("Comment cannot be empty.", true));
       return;
     }
 
@@ -1955,10 +1964,7 @@ export class TodoCommand {
     try {
       await addComment(parsed.issueNumber, prefixedComment);
     } catch (err: any) {
-      await safeReply(interaction, {
-        content: getGithubErrorMessage(err),
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTodoTextReply(getGithubErrorMessage(err), true));
       return;
     }
 
@@ -2030,10 +2036,7 @@ export class TodoCommand {
   async submitEditViewModal(interaction: ModalSubmitInteraction): Promise<void> {
     const parsed = parseTodoIssueModalId(interaction.customId, TODO_EDIT_VIEW_MODAL_PREFIX);
     if (!parsed) {
-      await safeReply(interaction, {
-        content: "This edit prompt expired.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTodoTextReply("This edit prompt expired.", true));
       return;
     }
 
@@ -2049,27 +2052,24 @@ export class TodoCommand {
     );
     const trimmedTitle = sanitizeTodoRichText(rawTitle).trim();
     if (!trimmedTitle) {
-      await safeReply(interaction, {
-        content: "Title cannot be empty.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTodoTextReply("Title cannot be empty.", true));
       return;
     }
 
     const trimmedBody = sanitizeTodoRichText(rawBody);
     if (!trimmedBody.trim()) {
-      await safeReply(interaction, {
-        content: "Description cannot be empty.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(
+        interaction,
+        buildTodoTextReply("Description cannot be empty.", true),
+      );
       return;
     }
 
     if (selectedTypes.length === 0) {
-      await safeReply(interaction, {
-        content: "Select at least one issue type.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(
+        interaction,
+        buildTodoTextReply("Select at least one issue type.", true),
+      );
       return;
     }
 
@@ -2080,10 +2080,7 @@ export class TodoCommand {
       });
       await setIssueLabels(parsed.issueNumber, selectedTypes);
     } catch (err: any) {
-      await safeReply(interaction, {
-        content: getGithubErrorMessage(err),
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTodoTextReply(getGithubErrorMessage(err), true));
       return;
     }
 
@@ -2148,10 +2145,7 @@ export class TodoCommand {
   async submitEditTitleModal(interaction: ModalSubmitInteraction): Promise<void> {
     const parsed = parseTodoIssueModalId(interaction.customId, TODO_EDIT_TITLE_MODAL_PREFIX);
     if (!parsed) {
-      await safeReply(interaction, {
-        content: "This edit prompt expired.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTodoTextReply("This edit prompt expired.", true));
       return;
     }
 
@@ -2163,10 +2157,7 @@ export class TodoCommand {
     const rawTitle = interaction.fields.getTextInputValue(TODO_EDIT_TITLE_INPUT_ID);
     const trimmedTitle = sanitizeTodoRichText(rawTitle).trim();
     if (!trimmedTitle) {
-      await safeReply(interaction, {
-        content: "Title cannot be empty.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTodoTextReply("Title cannot be empty.", true));
       return;
     }
 
@@ -2175,10 +2166,7 @@ export class TodoCommand {
         title: trimmedTitle,
       });
     } catch (err: any) {
-      await safeReply(interaction, {
-        content: getGithubErrorMessage(err),
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTodoTextReply(getGithubErrorMessage(err), true));
       return;
     }
 
@@ -2243,10 +2231,7 @@ export class TodoCommand {
   async submitEditDescriptionModal(interaction: ModalSubmitInteraction): Promise<void> {
     const parsed = parseTodoIssueModalId(interaction.customId, TODO_EDIT_DESC_MODAL_PREFIX);
     if (!parsed) {
-      await safeReply(interaction, {
-        content: "This edit prompt expired.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTodoTextReply("This edit prompt expired.", true));
       return;
     }
 
@@ -2258,10 +2243,10 @@ export class TodoCommand {
     const rawBody = interaction.fields.getTextInputValue(TODO_EDIT_DESC_INPUT_ID);
     const trimmedBody = sanitizeTodoRichText(rawBody);
     if (!trimmedBody.trim()) {
-      await safeReply(interaction, {
-        content: "Description cannot be empty.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(
+        interaction,
+        buildTodoTextReply("Description cannot be empty.", true),
+      );
       return;
     }
 
@@ -2270,10 +2255,7 @@ export class TodoCommand {
         body: trimmedBody.slice(0, MAX_ISSUE_BODY),
       });
     } catch (err: any) {
-      await safeReply(interaction, {
-        content: getGithubErrorMessage(err),
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTodoTextReply(getGithubErrorMessage(err), true));
       return;
     }
 
@@ -2337,10 +2319,7 @@ export class TodoCommand {
   async submitQueryModal(interaction: ModalSubmitInteraction): Promise<void> {
     const parsed = parseTodoQueryModalId(interaction.customId, TODO_QUERY_MODAL_PREFIX);
     if (!parsed) {
-      await safeReply(interaction, {
-        content: "This query prompt expired.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTodoTextReply("This query prompt expired.", true));
       return;
     }
 
@@ -2398,20 +2377,18 @@ export class TodoCommand {
         comments = await listIssueComments(parsed.issueNumber);
       }
     } catch (err: any) {
-      await safeUpdate(interaction, {
-        content: getGithubErrorMessage(err),
-        components: [],
-        flags: buildComponentsV2Flags(true),
-      });
+      await safeUpdate(
+        interaction,
+        buildTodoTextReply(getGithubErrorMessage(err), true),
+      );
       return;
     }
 
     if (!issue) {
-      await safeUpdate(interaction, {
-        content: `Issue #${parsed.issueNumber} was not found.`,
-        components: [],
-        flags: buildComponentsV2Flags(true),
-      });
+      await safeUpdate(
+        interaction,
+        buildTodoTextReply(`Issue #${parsed.issueNumber} was not found.`, true),
+      );
       return;
     }
 
@@ -2451,20 +2428,18 @@ export class TodoCommand {
     try {
       closed = await closeIssue(parsed.issueNumber);
     } catch (err: any) {
-      await safeUpdate(interaction, {
-        content: getGithubErrorMessage(err),
-        components: [],
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeUpdate(
+        interaction,
+        buildTodoTextReply(getGithubErrorMessage(err), true),
+      );
       return;
     }
 
     if (!closed) {
-      await safeUpdate(interaction, {
-        content: `Issue #${parsed.issueNumber} was not found.`,
-        components: [],
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeUpdate(
+        interaction,
+        buildTodoTextReply(`Issue #${parsed.issueNumber} was not found.`, true),
+      );
       return;
     }
 
@@ -2516,20 +2491,18 @@ export class TodoCommand {
     try {
       reopened = await reopenIssue(parsed.issueNumber);
     } catch (err: any) {
-      await safeUpdate(interaction, {
-        content: getGithubErrorMessage(err),
-        components: [],
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeUpdate(
+        interaction,
+        buildTodoTextReply(getGithubErrorMessage(err), true),
+      );
       return;
     }
 
     if (!reopened) {
-      await safeUpdate(interaction, {
-        content: `Issue #${parsed.issueNumber} was not found.`,
-        components: [],
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeUpdate(
+        interaction,
+        buildTodoTextReply(`Issue #${parsed.issueNumber} was not found.`, true),
+      );
       return;
     }
 
@@ -2564,18 +2537,15 @@ export class TodoCommand {
     try {
       issue = await getIssue(parsed.issueNumber);
     } catch (err: any) {
-      await safeReply(interaction, {
-        content: getGithubErrorMessage(err),
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTodoTextReply(getGithubErrorMessage(err), true));
       return;
     }
 
     if (!issue) {
-      await safeReply(interaction, {
-        content: `Issue #${parsed.issueNumber} was not found.`,
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(
+        interaction,
+        buildTodoTextReply(`Issue #${parsed.issueNumber} was not found.`, true),
+      );
       return;
     }
 
@@ -2600,11 +2570,12 @@ export class TodoCommand {
         })),
       );
 
-    await safeReply(interaction, {
-      content: "Select labels to apply to this issue.",
-      components: [new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select)],
-      flags: MessageFlags.Ephemeral,
-    });
+    await safeReply(
+      interaction,
+      buildTodoTextReply("Select labels to apply to this issue.", true, [
+        new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select),
+      ]),
+    );
   }
 
   @ButtonComponent({ id: /^todo-query-button:[^:]+:\d+$/ })
@@ -2666,10 +2637,10 @@ export class TodoCommand {
     }
 
     if (!issue) {
-      await safeReply(interaction, {
-        content: `Issue #${parsed.issueNumber} was not found.`,
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(
+        interaction,
+        buildTodoTextReply(`Issue #${parsed.issueNumber} was not found.`, true),
+      );
       return;
     }
     const issueLabelSet = new Set(issue.labels.map((label) => label.toLowerCase()));
@@ -2782,10 +2753,10 @@ export class TodoCommand {
     }
 
     if (!issue) {
-      await safeReply(interaction, {
-        content: `Issue #${parsed.issueNumber} was not found.`,
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(
+        interaction,
+        buildTodoTextReply(`Issue #${parsed.issueNumber} was not found.`, true),
+      );
       return;
     }
 
@@ -2833,10 +2804,10 @@ export class TodoCommand {
     }
 
     if (!issue) {
-      await safeReply(interaction, {
-        content: `Issue #${parsed.issueNumber} was not found.`,
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(
+        interaction,
+        buildTodoTextReply(`Issue #${parsed.issueNumber} was not found.`, true),
+      );
       return;
     }
 
