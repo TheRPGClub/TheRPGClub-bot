@@ -13,7 +13,11 @@ import {
   safeDeferUpdate,
   safeReply,
 } from "../../functions/InteractionUtils.js";
-import { buildComponentsV2Flags, buildTextReply } from "../../functions/ComponentsV2Utils.js";
+import {
+  buildComponentsV2Flags,
+  buildTextReply,
+  safeV2TextContent,
+} from "../../functions/ComponentsV2Utils.js";
 
 /**
  * Parses a year filter string into a number, "unknown", or null
@@ -191,7 +195,7 @@ export async function handleCompletionListHeader(
   await safeReply(interaction, {
     components: [
       new ContainerBuilder().addTextDisplayComponents(
-        new TextDisplayBuilder().setContent(COMPLETION_HELP_TEXT),
+        new TextDisplayBuilder().setContent(safeV2TextContent(COMPLETION_HELP_TEXT, 1000)),
       ),
     ],
     flags: buildComponentsV2Flags(true),

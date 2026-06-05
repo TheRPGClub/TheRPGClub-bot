@@ -6,6 +6,7 @@ import {
   TextDisplayBuilder,
   ThumbnailBuilder,
 } from "@discordjs/builders";
+import { safeV2TextContent } from "../../functions/ComponentsV2Utils.js";
 
 type ImportLogEvent = (message: string, meta: Record<string, string | number>) => void;
 
@@ -80,12 +81,6 @@ export async function handleImportActionCommand<Session>(
   await handlers.onResume(session);
 }
 
-export function safeV2TextContent(value: string, maxLength: number): string {
-  const normalized = value.split("\0").join("").trim();
-  if (normalized.length <= maxLength) return normalized;
-  return `${normalized.slice(0, Math.max(0, maxLength - 1))}...`;
-}
-
 export function flattenErrorMessages(error: unknown, depth: number = 0): string[] {
   if (!error || depth > 3) return [];
   const anyError = error as any;
@@ -117,13 +112,13 @@ export function buildImportMessageContainer(
   const container = new ContainerBuilder();
   if (!params.thumbnailUrl) {
     container.addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(safeContent),
+      new TextDisplayBuilder().setContent(safeV2TextContent(safeContent, 3500)),
     );
     return container;
   }
   try {
     const section = new SectionBuilder().addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(safeContent),
+      new TextDisplayBuilder().setContent(safeV2TextContent(safeContent, 3500)),
     );
     section.setThumbnailAccessory(new ThumbnailBuilder().setURL(params.thumbnailUrl));
     section.toJSON();
@@ -158,7 +153,7 @@ export function buildImportActionsContainer(params: {
 }): ContainerBuilder {
   const container = new ContainerBuilder().addTextDisplayComponents(
     new TextDisplayBuilder().setContent("### Actions"),
-    new TextDisplayBuilder().setContent(params.helpText),
+    new TextDisplayBuilder().setContent(safeV2TextContent(params.helpText, 900)),
   );
   container.addActionRowComponents(params.controlRow.toJSON());
   return container;

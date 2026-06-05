@@ -43,8 +43,8 @@ import { createIgdbSession } from "../../services/IGDB/IgdbSelectService.js";
 import {
   buildImportMessageContainer,
   buildImportTextContainer,
-  safeV2TextContent,
 } from "../imports/import-scaffold.service.js";
+import { safeV2TextContent } from "../../functions/ComponentsV2Utils.js";
 import { buildCompletionatorChooseId } from "./completion-helpers.js";
 
 export class CompletionatorUiService {
@@ -110,7 +110,7 @@ export class CompletionatorUiService {
     const container = new ContainerBuilder().addTextDisplayComponents(
       new TextDisplayBuilder().setContent("### GameDB Match Candidates"),
       ...(params.guidanceText
-        ? [new TextDisplayBuilder().setContent(params.guidanceText)]
+        ? [new TextDisplayBuilder().setContent(safeV2TextContent(params.guidanceText, 1000))]
         : []),
     );
 
@@ -149,7 +149,7 @@ export class CompletionatorUiService {
         900,
       );
       const section = new SectionBuilder().addTextDisplayComponents(
-        new TextDisplayBuilder().setContent(sectionText),
+        new TextDisplayBuilder().setContent(safeV2TextContent(sectionText, 900)),
       );
       section.setButtonAccessory(
         new V2ButtonBuilder()
@@ -186,12 +186,15 @@ export class CompletionatorUiService {
     }
     if (params.noResultsText) {
       container.addTextDisplayComponents(
-        new TextDisplayBuilder().setContent(params.noResultsText),
+        new TextDisplayBuilder().setContent(safeV2TextContent(params.noResultsText, 1000)),
       );
     }
     container.addTextDisplayComponents(
       new TextDisplayBuilder().setContent(
-        `Not seeing the right title? ${igdbLink}, find the **IGDB ID** and enter it below.`,
+        safeV2TextContent(
+          `Not seeing the right title? ${igdbLink}, find the **IGDB ID** and enter it below.`,
+          1000,
+        ),
       ),
     );
     return container;

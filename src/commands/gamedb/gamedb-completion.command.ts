@@ -26,7 +26,7 @@ import {
   safeUpdate,
   stripModalInput,
 } from "../../functions/InteractionUtils.js";
-import { buildTextReply } from "../../functions/ComponentsV2Utils.js";
+import { buildTextReply, safeV2TextContent } from "../../functions/ComponentsV2Utils.js";
 import {
   notifyUnknownCompletionPlatform,
   validateCompletionPlaytimeInput,
@@ -117,7 +117,7 @@ function buildCompletionWizardContainer(
   }
   const content = trimTextDisplayContent(lines.join("\n"));
   return new ContainerBuilder().addTextDisplayComponents(
-    new TextDisplayBuilder().setContent(content),
+    new TextDisplayBuilder().setContent(safeV2TextContent(content, 3500)),
   );
 }
 

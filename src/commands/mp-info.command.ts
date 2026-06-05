@@ -30,7 +30,11 @@ import {
   safeUpdate,
 } from "../functions/InteractionUtils.js";
 import { buildProfileViewPayload } from "./profile.command.js";
-import { buildComponentsV2Flags, buildTextReply } from "../functions/ComponentsV2Utils.js";
+import {
+  buildComponentsV2Flags,
+  buildTextReply,
+  safeV2TextContent,
+} from "../functions/ComponentsV2Utils.js";
 import { shouldRenderPrevNextButtons } from "../functions/PaginationUtils.js";
 
 const MAX_OPTIONS = 25;
@@ -338,7 +342,7 @@ export class MultiplayerInfoCommand {
 
       if (result.errorMessage) {
         const errContainer = new ContainerBuilder().addTextDisplayComponents(
-          new TextDisplayBuilder().setContent(result.errorMessage),
+          new TextDisplayBuilder().setContent(safeV2TextContent(result.errorMessage, 1000)),
         );
         await safeReply(interaction, {
           components: [errContainer],
@@ -350,7 +354,10 @@ export class MultiplayerInfoCommand {
       if (!result.payload) {
         const notFoundContainer = new ContainerBuilder().addTextDisplayComponents(
           new TextDisplayBuilder().setContent(
-            result.notFoundMessage ?? `No profile data found for <@${userId}>.`,
+            safeV2TextContent(
+              result.notFoundMessage ?? `No profile data found for <@${userId}>.`,
+              1000,
+            ),
           ),
         );
         await safeReply(interaction, {
@@ -374,7 +381,9 @@ export class MultiplayerInfoCommand {
     } catch (err: any) {
       const msg = extractErrorMessage(err);
       const errContainer = new ContainerBuilder().addTextDisplayComponents(
-        new TextDisplayBuilder().setContent(`Could not load that profile: ${msg}`),
+        new TextDisplayBuilder().setContent(
+          safeV2TextContent(`Could not load that profile: ${msg}`, 1000),
+        ),
       );
       await safeReply(interaction, {
         components: [errContainer],

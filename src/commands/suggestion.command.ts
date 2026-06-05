@@ -45,6 +45,7 @@ import { createIssue } from "../services/GithubIssuesService.js";
 import { BOT_DEV_CHANNEL_ID, GAMEDB_UPDATES_CHANNEL_ID } from "../config/channels.js";
 import { BOT_DEV_PING_USER_ID } from "../config/users.js";
 import { COMPONENTS_V2_FLAG } from "../config/flags.js";
+import { safeV2TextContent } from "../functions/ComponentsV2Utils.js";
 import { logRawModal } from "../services/raw-modal/RawModalLogging.js";
 
 const SUGGESTION_APPROVE_PREFIX = "suggestion-approve";
@@ -368,14 +369,14 @@ function buildSuggestionReviewContainer(
 
   container.addTextDisplayComponents(
     new TextDisplayBuilder().setContent(
-      buildSuggestionReviewSummaryText(suggestion, index, total),
+      safeV2TextContent(buildSuggestionReviewSummaryText(suggestion, index, total), 1000),
     ),
   );
 
   if (totalCount > total) {
     container.addTextDisplayComponents(
       new TextDisplayBuilder().setContent(
-        `Showing ${total} most recent suggestions out of ${totalCount}.`,
+        safeV2TextContent(`Showing ${total} most recent suggestions out of ${totalCount}.`, 1000),
       ),
     );
   }

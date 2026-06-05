@@ -11,6 +11,7 @@ import {
   GOTM_AUDIT_ACTION_PREFIX,
   GOTM_AUDIT_RESULT_LIMIT,
 } from "./admin.types.js";
+import { safeV2TextContent } from "../../functions/ComponentsV2Utils.js";
 
 export function buildGotmAuditPromptContent(
   session: IGotmAuditImport,
@@ -46,9 +47,8 @@ export function buildGotmAuditPromptContent(
 
 export function buildGotmAuditPromptContainer(content: string): ContainerBuilder {
   const container = new ContainerBuilder();
-  const safeContent = content.length > 4000 ? `${content.slice(0, 3997)}...` : content;
   container.addTextDisplayComponents(
-    new TextDisplayBuilder().setContent(safeContent),
+    new TextDisplayBuilder().setContent(safeV2TextContent(content, 3500)),
   );
   return container;
 }

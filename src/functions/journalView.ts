@@ -15,6 +15,7 @@ import Game from "../classes/Game.js";
 import { getThreadsByGameId } from "../classes/Thread.js";
 import { formatTableDate, formatPlaytimeHours } from "../commands/profile.command.js";
 import { COMPONENTS_V2_FLAG } from "../config/flags.js";
+import { safeV2TextContent } from "./ComponentsV2Utils.js";
 import { buildUserHeaderContainer } from "./uiComponents.js";
 
 const JOURNAL_PAGE_SIZE = 1;
@@ -173,7 +174,9 @@ export async function buildJournalView(options: IJournalViewOptions): Promise<{
   entryParts.push(footer);
 
   const gameContainer = new ContainerBuilder();
-  const entriesText = new TextDisplayBuilder().setContent(entryParts.join(`\n\u00A0\n`));
+  const entriesText = new TextDisplayBuilder().setContent(
+    safeV2TextContent(entryParts.join(`\n\u00A0\n`), 3500),
+  );
   if (coverUrl) {
     const section = new SectionBuilder().addTextDisplayComponents(entriesText);
     section.setThumbnailAccessory(new ThumbnailBuilder().setURL(coverUrl));
@@ -225,4 +228,3 @@ export async function buildJournalView(options: IJournalViewOptions): Promise<{
     flags: COMPONENTS_V2_FLAG,
   };
 }
-

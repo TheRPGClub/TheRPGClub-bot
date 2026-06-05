@@ -24,7 +24,7 @@ import {
 import { igdbService, type IGDBGameDetails } from "../../services/IGDB/IgdbService.js";
 import { createIgdbSession } from "../../services/IGDB/IgdbSelectService.js";
 import Game, { type IGame } from "../../classes/Game.js";
-import { buildTextReply } from "../../functions/ComponentsV2Utils.js";
+import { buildTextReply, safeV2TextContent } from "../../functions/ComponentsV2Utils.js";
 import {
   autocompleteGameDbViewTitle,
   buildComponentsV2Flags,
@@ -267,7 +267,7 @@ export async function handleNoResults(
     }
     const content = trimTextDisplayContent(contentParts.join("\n\n"));
     const container = new ContainerBuilder().addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(content),
+      new TextDisplayBuilder().setContent(safeV2TextContent(content, 3500)),
     );
 
     await safeReply(interaction, {
@@ -486,7 +486,7 @@ export class GameDbAddCommand {
         `## IGDB Results for "${title}"\nFound ${results.length} results. Please select one:`,
       );
       const container = new ContainerBuilder().addTextDisplayComponents(
-        new TextDisplayBuilder().setContent(content),
+        new TextDisplayBuilder().setContent(safeV2TextContent(content, 3500)),
       );
       await safeReply(interaction, {
         components: [container, ...components],

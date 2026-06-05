@@ -32,6 +32,7 @@ import {
   safeReply,
   sanitizeUserInput,
 } from "../functions/InteractionUtils.js";
+import { safeV2TextContent } from "../functions/ComponentsV2Utils.js";
 import { buildUserHeaderContainer } from "../functions/uiComponents.js";
 import { buildComponentsV2Flags } from "../functions/NominationListComponents.js";
 
@@ -198,7 +199,9 @@ function buildProfileContentContainer(
   }
 
   return new ContainerBuilder().addTextDisplayComponents(
-    new TextDisplayBuilder().setContent(blocks.join(`\n${" ".repeat(120)}\n`)),
+    new TextDisplayBuilder().setContent(
+      safeV2TextContent(blocks.join(`\n${" ".repeat(120)}\n`), 3500),
+    ),
   );
 }
 
@@ -335,7 +338,7 @@ export class ProfileCommand {
 
     if (result.errorMessage) {
       const errContainer = new ContainerBuilder().addTextDisplayComponents(
-        new TextDisplayBuilder().setContent(result.errorMessage),
+        new TextDisplayBuilder().setContent(safeV2TextContent(result.errorMessage, 1000)),
       );
       await safeReply(interaction, {
         components: [errContainer],
@@ -347,7 +350,10 @@ export class ProfileCommand {
     if (!result.payload) {
       const notFoundContainer = new ContainerBuilder().addTextDisplayComponents(
         new TextDisplayBuilder().setContent(
-          result.notFoundMessage ?? `No profile data found for <@${target.id}>.`,
+          safeV2TextContent(
+            result.notFoundMessage ?? `No profile data found for <@${target.id}>.`,
+            1000,
+          ),
         ),
       );
       await safeReply(interaction, {
@@ -387,7 +393,7 @@ export class ProfileCommand {
 
       if (result.errorMessage) {
         const errContainer = new ContainerBuilder().addTextDisplayComponents(
-          new TextDisplayBuilder().setContent(result.errorMessage),
+          new TextDisplayBuilder().setContent(safeV2TextContent(result.errorMessage, 1000)),
         );
         await safeReply(interaction, {
           components: [errContainer],
@@ -399,7 +405,10 @@ export class ProfileCommand {
       if (!result.payload) {
         const notFoundContainer = new ContainerBuilder().addTextDisplayComponents(
           new TextDisplayBuilder().setContent(
-            result.notFoundMessage ?? `No profile data found for <@${userId}>.`,
+            safeV2TextContent(
+              result.notFoundMessage ?? `No profile data found for <@${userId}>.`,
+              1000,
+            ),
           ),
         );
         await safeReply(interaction, {
@@ -416,7 +425,9 @@ export class ProfileCommand {
     } catch (err: any) {
       const msg = extractErrorMessage(err);
       const errContainer = new ContainerBuilder().addTextDisplayComponents(
-        new TextDisplayBuilder().setContent(`Could not load that profile: ${msg}`),
+        new TextDisplayBuilder().setContent(
+          safeV2TextContent(`Could not load that profile: ${msg}`, 1000),
+        ),
       );
       await safeReply(interaction, {
         components: [errContainer],
@@ -848,4 +859,3 @@ export class ProfileCommand {
   }
 
 }
-

@@ -15,7 +15,8 @@ import UserGameCollection, {
 } from "../../classes/UserGameCollection.js";
 import Game from "../../classes/Game.js";
 import { igdbService } from "../../services/IGDB/IgdbService.js";
-import { flattenErrorMessages, safeV2TextContent } from "../imports/import-scaffold.service.js";
+import { flattenErrorMessages } from "../imports/import-scaffold.service.js";
+import { safeV2TextContent } from "../../functions/ComponentsV2Utils.js";
 import { formatTableDate } from "../profile.command.js";
 import { safeDeferUpdate } from "../../functions/InteractionUtils.js";
 
@@ -547,21 +548,21 @@ async function buildCollectionListResponse(params: {
     const thumb = thumbnailsByGameId.get(entry.gameId);
     if (!thumb) {
       const entryContainer = new ContainerBuilder().addTextDisplayComponents(
-        new TextDisplayBuilder().setContent(sectionText),
+        new TextDisplayBuilder().setContent(safeV2TextContent(sectionText, 1000)),
       );
       components.push(entryContainer);
       continue;
     }
 
     const section = new SectionBuilder().addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(sectionText),
+      new TextDisplayBuilder().setContent(safeV2TextContent(sectionText, 1000)),
     );
     try {
       section.setThumbnailAccessory(new ThumbnailBuilder().setURL(thumb));
       section.toJSON();
     } catch {
       const entryContainer = new ContainerBuilder().addTextDisplayComponents(
-        new TextDisplayBuilder().setContent(sectionText),
+        new TextDisplayBuilder().setContent(safeV2TextContent(sectionText, 1000)),
       );
       components.push(entryContainer);
       continue;

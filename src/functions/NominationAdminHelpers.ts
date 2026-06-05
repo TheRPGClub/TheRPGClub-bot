@@ -18,6 +18,7 @@ import {
   type INominationEntry,
   type NominationKind,
 } from "../classes/Nomination.js";
+import { safeV2TextContent } from "./ComponentsV2Utils.js";
 import {
   buildComponentsV2Flags,
   buildNominationListPayload,
@@ -196,7 +197,7 @@ function buildDeletionReasonStateId(kind: NominationKind, round: number, userId:
 
 function buildNominationNoticeContainer(content: string): ContainerBuilder {
   return new ContainerBuilder().addTextDisplayComponents(
-    new TextDisplayBuilder().setContent(content),
+    new TextDisplayBuilder().setContent(safeV2TextContent(content, 3500)),
   );
 }
 

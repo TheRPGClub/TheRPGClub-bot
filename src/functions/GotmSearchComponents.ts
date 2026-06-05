@@ -6,6 +6,7 @@ import {
   ThumbnailBuilder,
 } from "@discordjs/builders";
 import Game from "../classes/Game.js";
+import { safeV2TextContent } from "./ComponentsV2Utils.js";
 
 const ANNOUNCEMENTS_CHANNEL_ID: string | undefined = process.env.ANNOUNCEMENTS_CHANNEL_ID;
 const MAX_GAMES_PER_CONTAINER = 10;
@@ -87,15 +88,15 @@ export async function buildGotmSearchMessages(
 
   if (!chunks.length) {
     const container = new ContainerBuilder().addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(`## ${options.title}`),
+      new TextDisplayBuilder().setContent(safeV2TextContent(`## ${options.title}`, 250)),
     );
     if (options.introText) {
       container.addTextDisplayComponents(
-        new TextDisplayBuilder().setContent(options.introText),
+        new TextDisplayBuilder().setContent(safeV2TextContent(options.introText, 1000)),
       );
     }
     container.addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(options.emptyMessage),
+      new TextDisplayBuilder().setContent(safeV2TextContent(options.emptyMessage, 1000)),
     );
     return [{ components: [container], files: [] }];
   }
@@ -121,7 +122,9 @@ export async function buildGotmSearchMessages(
           ? options.title
           : (options.continuationTitle ?? `${options.title} (continued)`);
       if (chunkOffset === 0) {
-        container.addTextDisplayComponents(new TextDisplayBuilder().setContent(`## ${title}`));
+        container.addTextDisplayComponents(
+          new TextDisplayBuilder().setContent(safeV2TextContent(`## ${title}`, 250)),
+        );
       } else {
         container.addTextDisplayComponents(
           new TextDisplayBuilder().setContent("-# Continued results"),
@@ -129,7 +132,7 @@ export async function buildGotmSearchMessages(
       }
       if (chunkIndex === 0 && options.introText) {
         container.addTextDisplayComponents(
-          new TextDisplayBuilder().setContent(options.introText),
+          new TextDisplayBuilder().setContent(safeV2TextContent(options.introText, 1000)),
         );
       }
 
@@ -144,7 +147,7 @@ export async function buildGotmSearchMessages(
           lines.push(detailsLine);
         }
         const section = new SectionBuilder().addTextDisplayComponents(
-          new TextDisplayBuilder().setContent(lines.join("\n")),
+          new TextDisplayBuilder().setContent(safeV2TextContent(lines.join("\n"), 1000)),
         );
 
         const accessory = await resolveAccessoryThumbnail(

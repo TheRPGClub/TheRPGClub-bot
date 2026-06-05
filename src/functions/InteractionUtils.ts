@@ -7,7 +7,7 @@ import type {
 } from "discord.js";
 import { BOT_DEV_CHANNEL_ID } from "../config/channels.js";
 import { COMPONENTS_V2_FLAG } from "../config/flags.js";
-import { buildTextReply } from "./ComponentsV2Utils.js";
+import { buildTextReply, safeV2TextContent } from "./ComponentsV2Utils.js";
 
 export type AnyRepliable = RepliableInteraction | CommandInteraction;
 
@@ -171,7 +171,7 @@ function normalizeComponentsV2Payload(options: any): any {
   }
 
   const textContainer = new ContainerBuilder().addTextDisplayComponents(
-    new TextDisplayBuilder().setContent(content),
+    new TextDisplayBuilder().setContent(safeV2TextContent(content, 3500)),
   );
   const mergedComponents = Array.isArray(components)
     ? [textContainer, ...components]

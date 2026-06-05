@@ -13,7 +13,11 @@ import {
 import { CompletionatorThreadService } from "./completionator-thread.service.js";
 import { CompletionatorWorkflowService } from "./completionator-workflow.service.js";
 import { BOT_DEV_CHANNEL_ID } from "../../config/channels.js";
-import { buildComponentsV2Flags, buildTextReply } from "../../functions/ComponentsV2Utils.js";
+import {
+  buildComponentsV2Flags,
+  buildTextReply,
+  safeV2TextContent,
+} from "../../functions/ComponentsV2Utils.js";
 
 export async function handleCompletionatorImport(
   interaction: CommandInteraction,
@@ -94,11 +98,14 @@ export async function handleCompletionatorImport(
     const stats = await countImportItems(session.importId);
     const statusContainer = new ContainerBuilder().addTextDisplayComponents(
       new TextDisplayBuilder().setContent(
-        `## Completionator Import #${session.importId}\n` +
-        `Status: ${session.status}\n\n` +
-        `**Pending:** ${stats.pending} | **Imported:** ${stats.imported} | ` +
-        `**Updated:** ${stats.updated} | **Skipped:** ${stats.skipped} | ` +
-        `**Errors:** ${stats.error}`,
+        safeV2TextContent(
+          `## Completionator Import #${session.importId}\n` +
+          `Status: ${session.status}\n\n` +
+          `**Pending:** ${stats.pending} | **Imported:** ${stats.imported} | ` +
+          `**Updated:** ${stats.updated} | **Skipped:** ${stats.skipped} | ` +
+          `**Errors:** ${stats.error}`,
+          1000,
+        ),
       ),
     );
 

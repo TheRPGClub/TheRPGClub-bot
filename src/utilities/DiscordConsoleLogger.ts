@@ -5,7 +5,7 @@ import type { Client } from "discordx";
 import { DISCORD_CONSOLE_LOG_CHANNEL_ID } from "../config/channels.js";
 import { BOT_DEV_PING_USER_ID } from "../config/users.js";
 import { COMPONENTS_V2_FLAG } from "../config/flags.js";
-import { safeV2TextContent } from "../commands/imports/import-scaffold.service.js";
+import { safeV2TextContent } from "../functions/ComponentsV2Utils.js";
 const MAX_DESCRIPTION_LENGTH = 3900;
 const LEVEL_COLORS: Record<string, number> = {
   log: 0x95a5a6,

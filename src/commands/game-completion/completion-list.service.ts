@@ -20,7 +20,7 @@ import {
 } from "../profile.command.js";
 import { formatPlatformDisplayName } from "../../functions/PlatformDisplay.js";
 import { safeReply, safeUpdate } from "../../functions/InteractionUtils.js";
-import { buildTextReply } from "../../functions/ComponentsV2Utils.js";
+import { buildTextReply, safeV2TextContent } from "../../functions/ComponentsV2Utils.js";
 import { renderUsernameWithEmoji } from "../../services/UserEmojiService.js";
 import { COMPONENTS_V2_FLAG } from "../../config/flags.js";
 import {
@@ -49,7 +49,7 @@ export async function renderCompletionLeaderboard(
     await safeReply(interaction, {
       components: [
         new ContainerBuilder().addTextDisplayComponents(
-          new TextDisplayBuilder().setContent(text),
+          new TextDisplayBuilder().setContent(safeV2TextContent(text, 1000)),
         ),
       ],
       flags: buildCompletionV2Flags(ephemeral),
@@ -70,7 +70,7 @@ export async function renderCompletionLeaderboard(
   }
 
   const container = new ContainerBuilder().addTextDisplayComponents(
-    new TextDisplayBuilder().setContent(contentParts.join("\n")),
+    new TextDisplayBuilder().setContent(safeV2TextContent(contentParts.join("\n"), 3500)),
   );
 
   const options = leaderboard.map((m) => ({
@@ -122,11 +122,11 @@ export async function renderCompletionPage(
     if (year === "unknown") {
       await safeReply(interaction as any, {
         components: [
-          new ContainerBuilder().addTextDisplayComponents(
-            new TextDisplayBuilder().setContent(
-              "You have no recorded completions with unknown dates.",
-            ),
+        new ContainerBuilder().addTextDisplayComponents(
+          new TextDisplayBuilder().setContent(
+            safeV2TextContent("You have no recorded completions with unknown dates.", 1000),
           ),
+        ),
         ],
         flags: buildCompletionV2Flags(ephemeral),
       });
@@ -138,7 +138,7 @@ export async function renderCompletionPage(
     await safeReply(interaction as any, {
       components: [
         new ContainerBuilder().addTextDisplayComponents(
-          new TextDisplayBuilder().setContent(text),
+          new TextDisplayBuilder().setContent(safeV2TextContent(text, 1000)),
         ),
       ],
       flags: buildCompletionV2Flags(ephemeral),
@@ -398,7 +398,7 @@ async function buildCompletionComponents(
       if (next.length > CHUNK_LIMIT) {
         containers.push(
           new ContainerBuilder().addTextDisplayComponents(
-            new TextDisplayBuilder().setContent(buffer),
+            new TextDisplayBuilder().setContent(safeV2TextContent(buffer, CHUNK_LIMIT)),
           ),
         );
         buffer = line;
@@ -409,7 +409,7 @@ async function buildCompletionComponents(
     if (buffer) {
       containers.push(
         new ContainerBuilder().addTextDisplayComponents(
-          new TextDisplayBuilder().setContent(buffer),
+          new TextDisplayBuilder().setContent(safeV2TextContent(buffer, CHUNK_LIMIT)),
         ),
       );
     }
@@ -484,7 +484,7 @@ async function buildCompletionComponents(
 
   containers.push(
     new ContainerBuilder().addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(footerLines.join("\n")),
+      new TextDisplayBuilder().setContent(safeV2TextContent(footerLines.join("\n"), 1000)),
     ),
   );
 

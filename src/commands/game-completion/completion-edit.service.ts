@@ -22,7 +22,7 @@ import {
   resolveGameCompletionPlatformId,
   resolveGameCompletionPlatformLabel,
 } from "./completion-autocomplete.utils.js";
-import { buildTextReply } from "../../functions/ComponentsV2Utils.js";
+import { buildTextReply, safeV2TextContent } from "../../functions/ComponentsV2Utils.js";
 import { COMPONENTS_V2_FLAG } from "../../config/flags.js";
 import { safeReply, safeUpdate } from "../../functions/InteractionUtils.js";
 
@@ -113,7 +113,7 @@ export async function handleCompletionFieldEdit(interaction: ButtonInteraction):
     const container = new ContainerBuilder().addTextDisplayComponents(
       new TextDisplayBuilder().setContent("Select the new completion type:"),
       ...(currentEmbedText
-        ? [new TextDisplayBuilder().setContent(currentEmbedText)]
+        ? [new TextDisplayBuilder().setContent(safeV2TextContent(currentEmbedText, 1000))]
         : []),
     );
 
@@ -139,7 +139,7 @@ export async function handleCompletionFieldEdit(interaction: ButtonInteraction):
   await safeUpdate(interaction, {
     components: [
       new ContainerBuilder().addTextDisplayComponents(
-        new TextDisplayBuilder().setContent(prompt),
+        new TextDisplayBuilder().setContent(safeV2TextContent(prompt, 1000)),
       ),
     ],
     flags: COMPONENTS_V2_FLAG,
@@ -415,8 +415,8 @@ function buildCompletionEditPrompt(
   const detailText = `Current: ${currentParts.join(" - ")}${noteLine}`;
 
   const infoContainer = new ContainerBuilder().addTextDisplayComponents(
-    new TextDisplayBuilder().setContent(headerText),
-    new TextDisplayBuilder().setContent(detailText),
+    new TextDisplayBuilder().setContent(safeV2TextContent(headerText, 1000)),
+    new TextDisplayBuilder().setContent(safeV2TextContent(detailText, 3500)),
   );
 
   return {

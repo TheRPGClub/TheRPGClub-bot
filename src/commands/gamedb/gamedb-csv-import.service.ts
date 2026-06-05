@@ -13,6 +13,7 @@ import {
   normalizeTitleKey,
   stripTitleDateSuffix,
 } from "../../functions/CsvUtils.js";
+import { safeV2TextContent } from "../../functions/ComponentsV2Utils.js";
 import { formatPlatformDisplayName } from "../../functions/PlatformDisplay.js";
 import { formatTableDate } from "../profile.command.js";
 import { igdbService, type IGDBGame } from "../../services/IGDB/IgdbService.js";
@@ -102,7 +103,7 @@ export function buildCsvPromptContainer(content: string): ContainerBuilder {
     ? `${content.slice(0, 3997)}...`
     : content;
   container.addTextDisplayComponents(
-    new TextDisplayBuilder().setContent(safeContent),
+    new TextDisplayBuilder().setContent(safeV2TextContent(safeContent, 3500)),
   );
   return container;
 }

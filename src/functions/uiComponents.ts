@@ -9,6 +9,7 @@ import {
   getUserEmojiString,
   renderUsernameWithEmoji,
 } from "../services/UserEmojiService.js";
+import { safeV2TextContent } from "./ComponentsV2Utils.js";
 import { formatTableDate } from "../commands/profile.command.js";
 
 export interface IJournalSelectEntry {
@@ -41,7 +42,7 @@ export function buildJournalSelectRow(
 
 export function buildTitleHeaderContainer(title: string): ContainerBuilder {
   return new ContainerBuilder().addTextDisplayComponents(
-    new TextDisplayBuilder().setContent(`## ${title}`),
+    new TextDisplayBuilder().setContent(safeV2TextContent(`## ${title}`, 250)),
   );
 }
 
@@ -66,13 +67,15 @@ export function buildUserHeaderContainer(
       }
     }
     const section = new SectionBuilder()
-      .addTextDisplayComponents(new TextDisplayBuilder().setContent(`## ${title}`));
+      .addTextDisplayComponents(
+        new TextDisplayBuilder().setContent(safeV2TextContent(`## ${title}`, 250)),
+      );
     section.setButtonAccessory(button);
     return new ContainerBuilder().addSectionComponents(section);
   }
 
   const userText = renderUsernameWithEmoji(userId, displayName);
   return new ContainerBuilder().addTextDisplayComponents(
-    new TextDisplayBuilder().setContent(userText),
+    new TextDisplayBuilder().setContent(safeV2TextContent(userText, 500)),
   );
 }

@@ -35,7 +35,7 @@ import {
   safeReply,
   sanitizeUserInput,
 } from "../functions/InteractionUtils.js";
-import { buildTextReply } from "../functions/ComponentsV2Utils.js";
+import { buildTextReply, safeV2TextContent } from "../functions/ComponentsV2Utils.js";
 import {
   GOTM_NOMINATION_CHANNEL_ID,
   NR_GOTM_NOMINATION_CHANNEL_ID,
@@ -121,7 +121,7 @@ async function announceNominationList(
 
     const nominationNotice = new ContainerBuilder().addTextDisplayComponents(
       new TextDisplayBuilder().setContent(
-        `<@${nominatorUserId}> Nominated "${nominatedTitle}"!`,
+        safeV2TextContent(`<@${nominatorUserId}> Nominated "${nominatedTitle}"!`, 1000),
       ),
     );
 

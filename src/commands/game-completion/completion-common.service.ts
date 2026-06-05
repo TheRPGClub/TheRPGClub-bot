@@ -13,7 +13,7 @@ import Member, { type ICompletionRecord } from "../../classes/Member.js";
 import Game from "../../classes/Game.js";
 import { safeDeferUpdate, safeReply } from "../../functions/InteractionUtils.js";
 import { formatPlatformDisplayName } from "../../functions/PlatformDisplay.js";
-import { buildComponentsV2Flags } from "../../functions/ComponentsV2Utils.js";
+import { buildComponentsV2Flags, safeV2TextContent } from "../../functions/ComponentsV2Utils.js";
 import { decodeBase64Url, encodeWithMaxLength } from "../../functions/CustomIdUtils.js";
 import { renderUsernameWithEmoji } from "../../services/UserEmojiService.js";
 import {
@@ -339,7 +339,7 @@ function pushChunked(containers: ContainerBuilder[], lines: string[]): void {
     if (next.length > CHUNK_LIMIT) {
       containers.push(
         new ContainerBuilder().addTextDisplayComponents(
-          new TextDisplayBuilder().setContent(buffer),
+          new TextDisplayBuilder().setContent(safeV2TextContent(buffer, CHUNK_LIMIT)),
         ),
       );
       buffer = line;
@@ -350,7 +350,7 @@ function pushChunked(containers: ContainerBuilder[], lines: string[]): void {
   if (buffer) {
     containers.push(
       new ContainerBuilder().addTextDisplayComponents(
-        new TextDisplayBuilder().setContent(buffer),
+        new TextDisplayBuilder().setContent(safeV2TextContent(buffer, CHUNK_LIMIT)),
       ),
     );
   }
@@ -416,7 +416,7 @@ export async function renderCommonCompletionPage(
   containers.push(
     new ContainerBuilder().addTextDisplayComponents(
       new TextDisplayBuilder().setContent(
-        `## Shared Completions\n### ${leftDisplay} & ${rightDisplay}`,
+        safeV2TextContent(`## Shared Completions\n### ${leftDisplay} & ${rightDisplay}`, 3500),
       ),
     ),
   );
@@ -442,7 +442,7 @@ export async function renderCommonCompletionPage(
   }
   containers.push(
     new ContainerBuilder().addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(footerLines.join("\n")),
+      new TextDisplayBuilder().setContent(safeV2TextContent(footerLines.join("\n"), 1000)),
     ),
   );
 

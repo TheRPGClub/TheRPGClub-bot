@@ -57,7 +57,7 @@ import {
   buildTextReply,
 } from "../functions/ComponentsV2Utils.js";
 import { decodeBase64Url, encodeWithMaxLength } from "../functions/CustomIdUtils.js";
-import { safeV2TextContent } from "./imports/import-scaffold.service.js";
+import { safeV2TextContent } from "../functions/ComponentsV2Utils.js";
 
 const TODO_LABELS = [
   "New Feature",

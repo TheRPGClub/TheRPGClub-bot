@@ -68,6 +68,7 @@ import {
   announceCompletion,
   notifyUnknownCompletionPlatform,
 } from "../functions/CompletionHelpers.js";
+import { safeV2TextContent } from "../functions/ComponentsV2Utils.js";
 import { formatPlatformDisplayName } from "../functions/PlatformDisplay.js";
 import {
   autocompleteGameCompletionPlatform,
@@ -331,9 +332,12 @@ async function confirmDuplicateCompletion(
 
   const container = new ContainerBuilder().addTextDisplayComponents(
     new TextDisplayBuilder().setContent(
-      `We found a completion for **${gameTitle}** within the last week:\n` +
-        `• ${detailParts.join(" - ")} (Completion #${existing.completionId})${noteLine}\n\n` +
-        "Add another completion anyway?",
+      safeV2TextContent(
+        `We found a completion for **${gameTitle}** within the last week:\n` +
+          `• ${detailParts.join(" - ")} (Completion #${existing.completionId})${noteLine}\n\n` +
+          "Add another completion anyway?",
+        3500,
+      ),
     ),
   );
   const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
@@ -384,7 +388,7 @@ async function confirmDuplicateCompletion(
     const confirmed = selection.customId.endsWith(":yes");
     const resultContainer = new ContainerBuilder().addTextDisplayComponents(
       new TextDisplayBuilder().setContent(
-        confirmed ? "Adding another completion." : "Cancelled.",
+        safeV2TextContent(confirmed ? "Adding another completion." : "Cancelled.", 1000),
       ),
     );
     await safeUpdate(selection, {
@@ -714,7 +718,10 @@ export class NowPlayingCommand {
     if (!game) {
       const container = new ContainerBuilder().addTextDisplayComponents(
         new TextDisplayBuilder().setContent(
-          `I could not find a unique GameDB match for "${title}". Please choose from autocomplete.`,
+          safeV2TextContent(
+            `I could not find a unique GameDB match for "${title}". Please choose from autocomplete.`,
+            1000,
+          ),
         ),
       );
       await safeReply(interaction, {
@@ -761,7 +768,9 @@ export class NowPlayingCommand {
     } catch (err: any) {
       const msg = extractErrorMessage(err);
       const container = new ContainerBuilder().addTextDisplayComponents(
-        new TextDisplayBuilder().setContent(`Could not add to Now Playing: ${msg}`),
+        new TextDisplayBuilder().setContent(
+          safeV2TextContent(`Could not add to Now Playing: ${msg}`, 1000),
+        ),
       );
       await safeReply(interaction, {
         components: [container],
@@ -864,7 +873,7 @@ export class NowPlayingCommand {
     if (!nowPlayingRows.length) {
       const container = new ContainerBuilder().addTextDisplayComponents(
         new TextDisplayBuilder().setContent(
-          `No one is currently playing GameDB titles matching "${query}".`,
+          safeV2TextContent(`No one is currently playing GameDB titles matching "${query}".`, 1000),
         ),
       );
       await safeReply(interaction, {
@@ -909,7 +918,7 @@ export class NowPlayingCommand {
     }
     const content = this.trimTextDisplayContent(contentLines.join("\n"));
     const container = new ContainerBuilder().addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(content),
+      new TextDisplayBuilder().setContent(safeV2TextContent(content, 3500)),
     );
 
     await safeReply(interaction, {
@@ -939,7 +948,7 @@ export class NowPlayingCommand {
     if (noteRaw.length > MAX_NOW_PLAYING_NOTE_LEN) {
       const container = new ContainerBuilder().addTextDisplayComponents(
         new TextDisplayBuilder().setContent(
-          `Note must be ${MAX_NOW_PLAYING_NOTE_LEN} characters or fewer.`,
+          safeV2TextContent(`Note must be ${MAX_NOW_PLAYING_NOTE_LEN} characters or fewer.`, 1000),
         ),
       );
       await safeReply(interaction, {
@@ -1000,7 +1009,9 @@ export class NowPlayingCommand {
       }
       const content = this.trimTextDisplayContent(contentLines.join("\n"));
       const container = new ContainerBuilder()
-        .addTextDisplayComponents(new TextDisplayBuilder().setContent(content))
+        .addTextDisplayComponents(
+          new TextDisplayBuilder().setContent(safeV2TextContent(content, 3500)),
+        )
         .addActionRowComponents(selectRow.toJSON());
 
       await safeReply(interaction, {
@@ -1026,7 +1037,7 @@ export class NowPlayingCommand {
 
           const timeoutContainer = new ContainerBuilder().addTextDisplayComponents(
             new TextDisplayBuilder().setContent(
-              "Timed out waiting for a selection. No changes made.",
+              safeV2TextContent("Timed out waiting for a selection. No changes made.", 1000),
             ),
           );
           await safeReply(interaction, {
@@ -1041,7 +1052,9 @@ export class NowPlayingCommand {
     } catch (err: any) {
       const msg = extractErrorMessage(err);
       const container = new ContainerBuilder().addTextDisplayComponents(
-        new TextDisplayBuilder().setContent(`Could not add to Now Playing: ${msg}`),
+        new TextDisplayBuilder().setContent(
+          safeV2TextContent(`Could not add to Now Playing: ${msg}`, 1000),
+        ),
       );
       await safeReply(interaction, {
         components: [container],
@@ -1125,7 +1138,7 @@ export class NowPlayingCommand {
     }
     container.addTextDisplayComponents(
       new TextDisplayBuilder().setContent(
-        this.trimTextDisplayContent(headerLines.join("\n")),
+        safeV2TextContent(this.trimTextDisplayContent(headerLines.join("\n")), 3500),
       ),
     );
 
@@ -1377,7 +1390,9 @@ export class NowPlayingCommand {
       completedAt = this.parseNowPlayingCompletionDate(completionDateInput);
     } catch (err: any) {
       const container = new ContainerBuilder().addTextDisplayComponents(
-        new TextDisplayBuilder().setContent(err?.message ?? "Invalid completion date."),
+        new TextDisplayBuilder().setContent(
+          safeV2TextContent(err?.message ?? "Invalid completion date.", 1000),
+        ),
       );
       await safeReply(interaction, {
         components: [container],
@@ -1610,7 +1625,7 @@ export class NowPlayingCommand {
       ? `Select the platform for **${game.title}** (showing first 24).`
       : `Select the platform for **${game.title}**.`;
     const container = new ContainerBuilder().addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(content),
+      new TextDisplayBuilder().setContent(safeV2TextContent(content, 1000)),
     );
     await safeReply(interaction, {
       components: await this.withPmNowPlayingList(
@@ -1645,7 +1660,9 @@ export class NowPlayingCommand {
     } catch (err: any) {
       const msg = err?.message ?? "Failed to save completion.";
       const container = new ContainerBuilder().addTextDisplayComponents(
-        new TextDisplayBuilder().setContent(`Could not save completion: ${msg}`),
+        new TextDisplayBuilder().setContent(
+          safeV2TextContent(`Could not save completion: ${msg}`, 1000),
+        ),
       );
       await safeReply(interaction, {
         components: [container],
@@ -1725,7 +1742,7 @@ export class NowPlayingCommand {
     );
     const content = this.trimTextDisplayContent(detailLines.join("\n"));
     const container = new ContainerBuilder().addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(content),
+      new TextDisplayBuilder().setContent(safeV2TextContent(content, 1000)),
     );
     await safeReply(interaction, {
       components: [container],
@@ -2076,7 +2093,9 @@ export class NowPlayingCommand {
     } catch (err: any) {
       const msg = extractErrorMessage(err);
       const container = new ContainerBuilder().addTextDisplayComponents(
-        new TextDisplayBuilder().setContent(`Could not add to Now Playing: ${msg}`),
+        new TextDisplayBuilder().setContent(
+          safeV2TextContent(`Could not add to Now Playing: ${msg}`, 1000),
+        ),
       );
       await safeUpdate(interaction, {
         components: [container],
@@ -2173,7 +2192,9 @@ export class NowPlayingCommand {
     } catch (err: any) {
       const msg = extractErrorMessage(err);
       const container = new ContainerBuilder().addTextDisplayComponents(
-        new TextDisplayBuilder().setContent(`Could not add to Now Playing: ${msg}`),
+        new TextDisplayBuilder().setContent(
+          safeV2TextContent(`Could not add to Now Playing: ${msg}`, 1000),
+        ),
       );
       await safeUpdate(interaction, {
         components: [container],
@@ -2219,7 +2240,7 @@ export class NowPlayingCommand {
       ? `Select the platform for **${game.title}** (showing first ${options.length}).`
       : `Select the platform for **${game.title}**.`;
     const container = new ContainerBuilder().addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(titleWithCap),
+      new TextDisplayBuilder().setContent(safeV2TextContent(titleWithCap, 1000)),
     );
     const payload = {
       components: [
@@ -2313,7 +2334,9 @@ export class NowPlayingCommand {
     } catch (err: any) {
       const msg = extractErrorMessage(err);
       const container = new ContainerBuilder().addTextDisplayComponents(
-        new TextDisplayBuilder().setContent(`Could not remove from Now Playing: ${msg}`),
+        new TextDisplayBuilder().setContent(
+          safeV2TextContent(`Could not remove from Now Playing: ${msg}`, 1000),
+        ),
       );
       const pmComponents = await this.withPmNowPlayingList(
         userId,
@@ -2626,7 +2649,7 @@ export class NowPlayingCommand {
       ? `Select the platform for **${game.title}** (showing first ${options.length}).`
       : `Select the platform for **${game.title}**.`;
     const container = new ContainerBuilder().addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(content),
+      new TextDisplayBuilder().setContent(safeV2TextContent(content, 1000)),
     );
     const payload = {
       components: [
@@ -3256,7 +3279,9 @@ export class NowPlayingCommand {
     } catch (err: any) {
       const msg = extractErrorMessage(err);
       const container = new ContainerBuilder().addTextDisplayComponents(
-        new TextDisplayBuilder().setContent(`Could not remove from Now Playing: ${msg}`),
+        new TextDisplayBuilder().setContent(
+          safeV2TextContent(`Could not remove from Now Playing: ${msg}`, 1000),
+        ),
       );
       await safeReply(interaction, {
         components: [container],
@@ -3625,7 +3650,10 @@ export class NowPlayingCommand {
     const entryTitle = entry.title?.trim() ? entry.title.trim() : `Entry #${entry.entryNumber}`;
     const container = new ContainerBuilder().addTextDisplayComponents(
       new TextDisplayBuilder().setContent(
-        `## Confirm Delete\nDelete **${entryTitle}** from ${formatTableDate(entry.createdAt)}?`,
+        safeV2TextContent(
+          `## Confirm Delete\nDelete **${entryTitle}** from ${formatTableDate(entry.createdAt)}?`,
+          1000,
+        ),
       ),
     );
     const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
@@ -3810,7 +3838,7 @@ export class NowPlayingCommand {
     const helpText = NOW_PLAYING_HELP_TEXTS[screenType]
       ?? "No help available for this screen.";
     const container = new ContainerBuilder().addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(helpText),
+      new TextDisplayBuilder().setContent(safeV2TextContent(helpText, 1000)),
     );
     await safeReply(interaction, {
       components: [container],
@@ -4416,10 +4444,12 @@ export class NowPlayingCommand {
 
   private buildNowPlayingListContainer(title: string, lines: string[]): ContainerBuilder {
     const container = new ContainerBuilder();
-    container.addTextDisplayComponents(new TextDisplayBuilder().setContent(`# ${title}`));
+    container.addTextDisplayComponents(
+      new TextDisplayBuilder().setContent(safeV2TextContent(`# ${title}`, 250)),
+    );
     if (lines.length) {
       container.addTextDisplayComponents(
-        new TextDisplayBuilder().setContent(lines.join("\n")),
+        new TextDisplayBuilder().setContent(safeV2TextContent(lines.join("\n"), 3500)),
       );
     }
     return container;
@@ -4427,8 +4457,12 @@ export class NowPlayingCommand {
 
   private buildNowPlayingMessageContainer(title: string, message: string): ContainerBuilder {
     const container = new ContainerBuilder();
-    container.addTextDisplayComponents(new TextDisplayBuilder().setContent(`# ${title}`));
-    container.addTextDisplayComponents(new TextDisplayBuilder().setContent(message));
+    container.addTextDisplayComponents(
+      new TextDisplayBuilder().setContent(safeV2TextContent(`# ${title}`, 250)),
+    );
+    container.addTextDisplayComponents(
+      new TextDisplayBuilder().setContent(safeV2TextContent(message, 1000)),
+    );
     return container;
   }
 
@@ -4674,7 +4708,7 @@ export class NowPlayingCommand {
       introLines.push(`-# ${statusMessage}`);
     }
     const introContainer = new ContainerBuilder().addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(introLines.join("\n")),
+      new TextDisplayBuilder().setContent(safeV2TextContent(introLines.join("\n"), 1000)),
     );
     const listContainer = entries.length
       ? this.buildNowPlayingEntryComponents(
@@ -4806,7 +4840,7 @@ export class NowPlayingCommand {
       }
       const section = new SectionBuilder().addTextDisplayComponents(
         new TextDisplayBuilder().setContent(
-          this.trimTextDisplayContent(lines.join("\n")),
+          safeV2TextContent(this.trimTextDisplayContent(lines.join("\n")), 3500),
         ),
       );
       section.setButtonAccessory(
@@ -4846,7 +4880,7 @@ export class NowPlayingCommand {
     ];
     container.addTextDisplayComponents(
       new TextDisplayBuilder().setContent(
-        this.trimTextDisplayContent(textLines.join("\n")),
+        safeV2TextContent(this.trimTextDisplayContent(textLines.join("\n")), 3500),
       ),
     );
 
@@ -4960,7 +4994,9 @@ export class NowPlayingCommand {
     } catch (err: any) {
       const msg = extractErrorMessage(err);
       const container = new ContainerBuilder().addTextDisplayComponents(
-        new TextDisplayBuilder().setContent(`Could not remove from Now Playing: ${msg}`),
+        new TextDisplayBuilder().setContent(
+          safeV2TextContent(`Could not remove from Now Playing: ${msg}`, 1000),
+        ),
       );
       await safeReply(interaction, {
         components: [container],
@@ -4988,7 +5024,7 @@ export class NowPlayingCommand {
     }
     container.addTextDisplayComponents(
       new TextDisplayBuilder().setContent(
-        introLines.join("\n"),
+        safeV2TextContent(introLines.join("\n"), 1000),
       ),
     );
 
@@ -4999,7 +5035,7 @@ export class NowPlayingCommand {
       if (!options.length) {
         container.addTextDisplayComponents(
           new TextDisplayBuilder().setContent(
-            `-# ${entry.title.slice(0, 80)}: No platform choices available.`,
+            safeV2TextContent(`-# ${entry.title.slice(0, 80)}: No platform choices available.`, 1000),
           ),
         );
         continue;
@@ -5071,7 +5107,7 @@ export class NowPlayingCommand {
     }
     container.addTextDisplayComponents(
       new TextDisplayBuilder().setContent(
-        introLines.join("\n"),
+        safeV2TextContent(introLines.join("\n"), 1000),
       ),
     );
 
@@ -5562,7 +5598,7 @@ export class NowPlayingCommand {
         const notesAction = showNotes ? "hide" : "show";
         const notesLabel = showNotes ? "Hide Notes" : "Show Notes";
         const section = new SectionBuilder().addTextDisplayComponents(
-          new TextDisplayBuilder().setContent(combined),
+          new TextDisplayBuilder().setContent(safeV2TextContent(combined, 3500)),
         );
         section.setButtonAccessory(
           new V2ButtonBuilder()
@@ -5572,7 +5608,9 @@ export class NowPlayingCommand {
         );
         container.addSectionComponents(section);
       } else {
-        container.addTextDisplayComponents(new TextDisplayBuilder().setContent(combined));
+        container.addTextDisplayComponents(
+          new TextDisplayBuilder().setContent(safeV2TextContent(combined, 3500)),
+        );
       }
     } else {
       entries.forEach((entry, index) => {
@@ -5596,7 +5634,7 @@ export class NowPlayingCommand {
         (showPrivateOnlyJournalButtons || entry.hasJournalEntry);
       if (shouldShowJournalButton) {
         const section = new SectionBuilder().addTextDisplayComponents(
-          new TextDisplayBuilder().setContent(content),
+          new TextDisplayBuilder().setContent(safeV2TextContent(content, 3500)),
         );
         section.setButtonAccessory(
           new V2ButtonBuilder()
@@ -5606,7 +5644,9 @@ export class NowPlayingCommand {
         );
         container.addSectionComponents(section);
       } else {
-        container.addTextDisplayComponents(new TextDisplayBuilder().setContent(content));
+        container.addTextDisplayComponents(
+          new TextDisplayBuilder().setContent(safeV2TextContent(content, 3500)),
+        );
       }
       });
     }
@@ -5734,7 +5774,7 @@ export class NowPlayingCommand {
       if (!searchRes.results.length) {
         const container = new ContainerBuilder().addTextDisplayComponents(
           new TextDisplayBuilder().setContent(
-            `No IGDB results found for "${session.query}".`,
+            safeV2TextContent(`No IGDB results found for "${session.query}".`, 1000),
           ),
         );
         if (mode === "update" && "update" in interaction) {
@@ -5775,7 +5815,7 @@ export class NowPlayingCommand {
         } catch (err: any) {
           const msg = err?.message ?? "Failed to import from IGDB.";
           const container = new ContainerBuilder().addTextDisplayComponents(
-            new TextDisplayBuilder().setContent(msg),
+            new TextDisplayBuilder().setContent(safeV2TextContent(msg, 1000)),
           );
           await safeReply(sel, {
             components: [container],
@@ -5787,7 +5827,7 @@ export class NowPlayingCommand {
       const container = new ContainerBuilder()
         .addTextDisplayComponents(
           new TextDisplayBuilder().setContent(
-            "Select an IGDB result to import and add to Now Playing:",
+            safeV2TextContent("Select an IGDB result to import and add to Now Playing:", 1000),
           ),
         )
         .addActionRowComponents(components.map((row) => row.toJSON()));
@@ -5802,7 +5842,7 @@ export class NowPlayingCommand {
     } catch (err: any) {
       const msg = err?.message ?? "Failed to search IGDB.";
       const container = new ContainerBuilder().addTextDisplayComponents(
-        new TextDisplayBuilder().setContent(msg),
+        new TextDisplayBuilder().setContent(safeV2TextContent(msg, 1000)),
       );
       if (mode === "update" && "update" in interaction) {
         await safeUpdate(interaction, { components: [container] });

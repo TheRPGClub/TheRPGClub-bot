@@ -33,7 +33,11 @@ import {
   sanitizeUserInput,
 } from "../functions/InteractionUtils.js";
 import { decodeBase64Url, encodeWithMaxLength } from "../functions/CustomIdUtils.js";
-import { buildComponentsV2Flags, buildTextReply } from "../functions/ComponentsV2Utils.js";
+import {
+  buildComponentsV2Flags,
+  buildTextReply,
+  safeV2TextContent,
+} from "../functions/ComponentsV2Utils.js";
 import {
   ContainerBuilder,
   TextDisplayBuilder,
@@ -278,7 +282,7 @@ export class GameDbAdmin {
       : `${titleLine}\n\nNo search synonyms found.`;
 
     const container = new ContainerBuilder().addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(content.slice(0, 4000)),
+      new TextDisplayBuilder().setContent(safeV2TextContent(content, 3500)),
     );
 
     const prevDisabled = safePage === 0;

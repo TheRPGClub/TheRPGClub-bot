@@ -16,6 +16,7 @@ import {
   TextDisplayBuilder,
   ThumbnailBuilder,
 } from "@discordjs/builders";
+import { safeV2TextContent } from "./ComponentsV2Utils.js";
 import {
   type CompletionType,
   formatPlaytimeHours,
@@ -217,7 +218,7 @@ export async function announceCompletion(
     const summaryText = summaryLines.join("\n\n");
     const container = new ContainerBuilder();
     const section = new SectionBuilder().addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(summaryText),
+      new TextDisplayBuilder().setContent(safeV2TextContent(summaryText, 3500)),
     );
     const files: AttachmentBuilder[] = [];
     if (game.imageData) {

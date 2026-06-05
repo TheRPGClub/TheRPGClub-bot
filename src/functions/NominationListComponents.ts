@@ -18,7 +18,7 @@ import crypto from "node:crypto";
 import Member from "../classes/Member.js";
 import type { INominationEntry } from "../classes/Nomination.js";
 import Game from "../classes/Game.js";
-import { buildComponentsV2Flags } from "./ComponentsV2Utils.js";
+import { buildComponentsV2Flags, safeV2TextContent } from "./ComponentsV2Utils.js";
 import { composeVoteImage, type VoteImageType } from "../services/collageGenerator.js";
 import { getUserEmojiString } from "../services/UserEmojiService.js";
 import {
@@ -82,7 +82,9 @@ async function buildNominationContainers(
   const nominatorDisplayNames = await buildNominatorDisplayNames(nominations);
   const containers: ContainerBuilder[] = [];
   const headerContainer = new ContainerBuilder().addTextDisplayComponents(
-    new TextDisplayBuilder().setContent(buildHeaderContent(kindLabel, window)),
+    new TextDisplayBuilder().setContent(
+      safeV2TextContent(buildHeaderContent(kindLabel, window), 250),
+    ),
   );
   containers.push(headerContainer);
   let container = new ContainerBuilder();
@@ -94,7 +96,9 @@ async function buildNominationContainers(
       new TextDisplayBuilder().setContent("No nominations yet."),
     );
     container.addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(buildFooterContent(commandLabel, window)),
+      new TextDisplayBuilder().setContent(
+        safeV2TextContent(buildFooterContent(commandLabel, window), 1000),
+      ),
     );
     return [...containers, container];
   }
@@ -119,7 +123,9 @@ async function buildNominationContainers(
   const lastContainer = containers[containers.length - 1];
   if (lastContainer) {
     lastContainer.addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(buildFooterContent(commandLabel, window)),
+      new TextDisplayBuilder().setContent(
+        safeV2TextContent(buildFooterContent(commandLabel, window), 1000),
+      ),
     );
   }
   const selectRows = includeDetailSelect ? buildNominationSelectRows(nominations, kindLabel) : [];
@@ -132,7 +138,9 @@ function addNominationContent(
   displayName: string,
 ): void {
   const section = new SectionBuilder().addTextDisplayComponents(
-    new TextDisplayBuilder().setContent(buildNominationText(nomination)),
+    new TextDisplayBuilder().setContent(
+      safeV2TextContent(buildNominationText(nomination), 1800),
+    ),
   );
   let button = new ButtonBuilder()
     // eslint-disable-next-line local/custom-id-has-matching-handler

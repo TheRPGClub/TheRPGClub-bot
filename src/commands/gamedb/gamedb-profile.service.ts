@@ -18,7 +18,7 @@ import {
 } from "@discordjs/builders";
 import { SeparatorSpacingSize } from "discord-api-types/v10";
 import { safeReply } from "../../functions/InteractionUtils.js";
-import { buildTextReply } from "../../functions/ComponentsV2Utils.js";
+import { buildTextReply, safeV2TextContent } from "../../functions/ComponentsV2Utils.js";
 import { formatPlatformDisplayName } from "../../functions/PlatformDisplay.js";
 import { formatTableDate } from "../profile.command.js";
 import { getHltbCacheByGameId } from "../../classes/HltbCache.js";
@@ -501,7 +501,9 @@ export async function buildGameProfile(
 
     if (prefaceText) {
       container.addTextDisplayComponents(
-        new TextDisplayBuilder().setContent(trimTextDisplayContent(prefaceText)),
+        new TextDisplayBuilder().setContent(
+          safeV2TextContent(trimTextDisplayContent(prefaceText), 3500),
+        ),
       );
       container.addSeparatorComponents(
         new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Large).setDivider(true),
@@ -512,14 +514,18 @@ export async function buildGameProfile(
 
     if (thumbnailUrl) {
       if (headerBlock.length > 0) {
-        container.addTextDisplayComponents(new TextDisplayBuilder().setContent(headerBlock));
+        container.addTextDisplayComponents(
+          new TextDisplayBuilder().setContent(safeV2TextContent(headerBlock, 3500)),
+        );
       }
       const [descriptionBlock, ...remainingBlocks] = bodyBlocks;
       if (descriptionBlock) {
          
         const descriptionSection = new SectionBuilder()
           .addTextDisplayComponents(
-            new TextDisplayBuilder().setContent(descriptionBlock.content),
+            new TextDisplayBuilder().setContent(
+              safeV2TextContent(descriptionBlock.content, 3500),
+            ),
           )
           .setThumbnailAccessory(
             new ThumbnailBuilder().setURL(thumbnailUrl),
@@ -530,26 +536,36 @@ export async function buildGameProfile(
         if (block.accessory) {
            
           const section = new SectionBuilder()
-            .addTextDisplayComponents(new TextDisplayBuilder().setContent(block.content))
+            .addTextDisplayComponents(
+              new TextDisplayBuilder().setContent(safeV2TextContent(block.content, 3500)),
+            )
             .setButtonAccessory(block.accessory);
           container.addSectionComponents(section);
         } else {
-          container.addTextDisplayComponents(new TextDisplayBuilder().setContent(block.content));
+          container.addTextDisplayComponents(
+            new TextDisplayBuilder().setContent(safeV2TextContent(block.content, 3500)),
+          );
         }
       });
     } else {
       if (headerBlock.length > 0) {
-        container.addTextDisplayComponents(new TextDisplayBuilder().setContent(headerBlock));
+        container.addTextDisplayComponents(
+          new TextDisplayBuilder().setContent(safeV2TextContent(headerBlock, 3500)),
+        );
       }
       bodyBlocks.forEach((block) => {
         if (block.accessory) {
            
           const section = new SectionBuilder()
-            .addTextDisplayComponents(new TextDisplayBuilder().setContent(block.content))
+            .addTextDisplayComponents(
+              new TextDisplayBuilder().setContent(safeV2TextContent(block.content, 3500)),
+            )
             .setButtonAccessory(block.accessory);
           container.addSectionComponents(section);
         } else {
-          container.addTextDisplayComponents(new TextDisplayBuilder().setContent(block.content));
+          container.addTextDisplayComponents(
+            new TextDisplayBuilder().setContent(safeV2TextContent(block.content, 3500)),
+          );
         }
       });
     }

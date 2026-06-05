@@ -27,6 +27,7 @@ import {
   buildComponentsV2EditFlags,
   buildComponentsV2Flags,
   buildTextReply,
+  safeV2TextContent,
 } from "../functions/ComponentsV2Utils.js";
 import { getUserEmojiData, renderUsernameWithEmoji } from "../services/UserEmojiService.js";
 import { buildTitleHeaderContainer, buildUserHeaderContainer } from "../functions/uiComponents.js";
@@ -155,11 +156,11 @@ async function buildAvatarHistoryAllPage(
 
   const contentContainer = new ContainerBuilder();
   contentContainer.addTextDisplayComponents(
-    new TextDisplayBuilder().setContent(lines.join("\n")),
+    new TextDisplayBuilder().setContent(safeV2TextContent(lines.join("\n"), 3500)),
   );
   contentContainer.addTextDisplayComponents(
     new TextDisplayBuilder().setContent(
-      `-# _${sorted.length} users with avatar history stored._`,
+      safeV2TextContent(`-# _${sorted.length} users with avatar history stored._`, 1000),
     ),
   );
 
@@ -256,7 +257,7 @@ export class AvatarHistoryCommand {
         new TextDisplayBuilder().setContent("# Avatar History Scan"),
       );
       scanContainer.addTextDisplayComponents(
-        new TextDisplayBuilder().setContent(lines.join("\n")),
+        new TextDisplayBuilder().setContent(safeV2TextContent(lines.join("\n"), 3500)),
       );
       await safeReply(interaction, {
         components: [scanContainer],
@@ -305,7 +306,9 @@ export class AvatarHistoryCommand {
     const pageResult = await buildAvatarHistoryV2Page(target, 0);
     if (!pageResult) {
       const noResultContainer = new ContainerBuilder().addTextDisplayComponents(
-        new TextDisplayBuilder().setContent(`No avatar history found for <@${target.id}>.`),
+        new TextDisplayBuilder().setContent(
+          safeV2TextContent(`No avatar history found for <@${target.id}>.`, 1000),
+        ),
       );
       await safeReply(interaction, {
         components: [noResultContainer],
@@ -426,7 +429,9 @@ export class AvatarHistoryCommand {
       await safeUpdate(interaction, {
         components: [
           new ContainerBuilder().addTextDisplayComponents(
-            new TextDisplayBuilder().setContent(`No avatar history found for <@${targetId}>.`),
+            new TextDisplayBuilder().setContent(
+              safeV2TextContent(`No avatar history found for <@${targetId}>.`, 1000),
+            ),
           ),
         ],
         flags: buildComponentsV2EditFlags(),

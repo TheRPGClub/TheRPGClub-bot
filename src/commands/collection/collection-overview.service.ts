@@ -7,6 +7,7 @@ import UserGameCollection, {
   type IUserGameCollectionOverviewEntry,
 } from "../../classes/UserGameCollection.js";
 import { COLLECTION_OVERVIEW_EMOJIS } from "../../config/emojis.js";
+import { safeV2TextContent } from "../../functions/ComponentsV2Utils.js";
 import { formatPlatformDisplayName } from "../../functions/PlatformDisplay.js";
 
 export const COLLECTION_OVERVIEW_SELECT_PREFIX = "collection-overview-select-v1";
@@ -274,7 +275,7 @@ export function buildCollectionOverviewContainer(params: {
   platformCounts: IUserGameCollectionOverviewEntry[];
 }): ContainerBuilder {
   const container = new ContainerBuilder().addTextDisplayComponents(
-    new TextDisplayBuilder().setContent(`## ${params.title}`),
+    new TextDisplayBuilder().setContent(safeV2TextContent(`## ${params.title}`, 250)),
   );
 
   if (params.totalCount <= 0) {
@@ -286,7 +287,7 @@ export function buildCollectionOverviewContainer(params: {
 
   container.addTextDisplayComponents(
     new TextDisplayBuilder().setContent(
-      `Total games: **${params.totalCount.toLocaleString("en-US")}**`,
+      safeV2TextContent(`Total games: **${params.totalCount.toLocaleString("en-US")}**`, 1000),
     ),
   );
 
@@ -311,7 +312,9 @@ export function buildCollectionOverviewContainer(params: {
     const fixedTotal = formatCollectionOverviewFixedTotal(entry.total, totalWidth);
     const prefix = emoji ? `${emoji} ` : "";
     container.addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(`${prefix}**${fixedLabel}** ${fixedTotal}`),
+      new TextDisplayBuilder().setContent(
+        safeV2TextContent(`${prefix}**${fixedLabel}** ${fixedTotal}`, 1000),
+      ),
     );
   }
 
@@ -354,7 +357,7 @@ export function buildAllCollectionsSummaryContainers(params: {
 }): ContainerBuilder[] {
   const createBaseContainer = (title: string): ContainerBuilder =>
     new ContainerBuilder().addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(`## ${title}`),
+      new TextDisplayBuilder().setContent(safeV2TextContent(`## ${title}`, 250)),
     );
 
   if (params.totalCount <= 0) {
@@ -398,7 +401,7 @@ export function buildAllCollectionsSummaryContainers(params: {
     if (isFirst) {
       container.addTextDisplayComponents(
         new TextDisplayBuilder().setContent(
-          `Total games: **${params.totalCount.toLocaleString("en-US")}**`,
+          safeV2TextContent(`Total games: **${params.totalCount.toLocaleString("en-US")}**`, 1000),
         ),
       );
     }
@@ -410,7 +413,9 @@ export function buildAllCollectionsSummaryContainers(params: {
     );
     const chunk = lines.slice(offset, offset + capacity);
     for (const line of chunk) {
-      container.addTextDisplayComponents(new TextDisplayBuilder().setContent(line));
+      container.addTextDisplayComponents(
+        new TextDisplayBuilder().setContent(safeV2TextContent(line, 1000)),
+      );
     }
 
     containers.push(container);

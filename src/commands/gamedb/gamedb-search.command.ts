@@ -27,7 +27,7 @@ import {
   safeUpdate,
   sanitizeUserInput,
 } from "../../functions/InteractionUtils.js";
-import { buildTextReply } from "../../functions/ComponentsV2Utils.js";
+import { buildTextReply, safeV2TextContent } from "../../functions/ComponentsV2Utils.js";
 import { shouldRenderPrevNextButtons } from "../../functions/PaginationUtils.js";
 import Game from "../../classes/Game.js";
 import {
@@ -161,7 +161,7 @@ function buildSearchResponse(
       `## ${title}\n\n${listText}\n\n*${results.length} results total*`,
     );
     const container = new ContainerBuilder().addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(content),
+      new TextDisplayBuilder().setContent(safeV2TextContent(content, 3500)),
     );
     components.push(container);
   }

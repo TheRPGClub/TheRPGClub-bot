@@ -8,8 +8,8 @@ import {
 import Game from "../../classes/Game.js";
 import {
   flattenErrorMessages,
-  safeV2TextContent,
 } from "../imports/import-scaffold.service.js";
+import { safeV2TextContent } from "../../functions/ComponentsV2Utils.js";
 import type { ImportCandidate } from "../../functions/ImportCandidateUtils.js";
 
 export async function buildImportCandidatesContainer(params: {
@@ -28,8 +28,10 @@ export async function buildImportCandidatesContainer(params: {
   logPrefix: string;
 }): Promise<ContainerBuilder> {
   const container = new ContainerBuilder().addTextDisplayComponents(
-    new TextDisplayBuilder().setContent(params.headerText),
-    ...(params.headerHelpText ? [new TextDisplayBuilder().setContent(params.headerHelpText)] : []),
+    new TextDisplayBuilder().setContent(safeV2TextContent(params.headerText, 250)),
+    ...(params.headerHelpText
+      ? [new TextDisplayBuilder().setContent(safeV2TextContent(params.headerHelpText, 1000))]
+      : []),
   );
   if (!params.candidates.length) {
     container.addTextDisplayComponents(
@@ -68,7 +70,7 @@ export async function buildImportCandidatesContainer(params: {
     );
     try {
       const section = new SectionBuilder().addTextDisplayComponents(
-        new TextDisplayBuilder().setContent(sectionText),
+        new TextDisplayBuilder().setContent(safeV2TextContent(sectionText, 900)),
       );
       section.setButtonAccessory(
         new V2ButtonBuilder()
@@ -125,12 +127,15 @@ export function buildImportIgdbContainer(params: {
   }
   if (params.noResultsText) {
     container.addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(params.noResultsText),
+      new TextDisplayBuilder().setContent(safeV2TextContent(params.noResultsText, 1000)),
     );
   }
   container.addTextDisplayComponents(
     new TextDisplayBuilder().setContent(
-      `Not seeing the right title? ${igdbLink}, find the **IGDB ID** and enter it using the button below.`,
+      safeV2TextContent(
+        `Not seeing the right title? ${igdbLink}, find the **IGDB ID** and enter it using the button below.`,
+        1000,
+      ),
     ),
   );
   return container;

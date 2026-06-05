@@ -207,18 +207,12 @@ export async function handleIgdbFirstMatchInteraction(
   if (!sessionId) return false;
   const session = getSessionStore().get(sessionId);
   if (!session) {
-    await safeReply(interaction, {
-      content: "This selection session has expired.",
-      flags: MessageFlags.Ephemeral,
-    });
+    await safeReply(interaction, buildTextReply("This selection session has expired.", true));
     return true;
   }
 
   if (interaction.user.id !== session.ownerId) {
-    await safeReply(interaction, {
-      content: "This selection isn't for you.",
-      flags: MessageFlags.Ephemeral,
-    });
+    await safeReply(interaction, buildTextReply("This selection isn't for you.", true));
     return true;
   }
 
@@ -226,7 +220,7 @@ export async function handleIgdbFirstMatchInteraction(
   if (!firstOption) {
     const message = session.emptyMessage ??
       "No IGDB matches found. Try Search a different title.";
-    await safeReply(interaction, { content: message, flags: MessageFlags.Ephemeral });
+    await safeReply(interaction, buildTextReply(message, true));
     return true;
   }
 

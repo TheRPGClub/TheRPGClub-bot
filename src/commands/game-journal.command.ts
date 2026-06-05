@@ -47,7 +47,11 @@ import {
 import { formatGameTitleWithYear } from "../functions/GameTitleAutocompleteUtils.js";
 import { renderUsernameWithEmoji } from "../services/UserEmojiService.js";
 import { buildJournalView } from "../functions/journalView.js";
-import { buildComponentsV2Flags, buildTextReply } from "../functions/ComponentsV2Utils.js";
+import {
+  buildComponentsV2Flags,
+  buildTextReply,
+  safeV2TextContent,
+} from "../functions/ComponentsV2Utils.js";
 import { buildUserHeaderContainer } from "../functions/uiComponents.js";
 import {
   GJ_CLOSE_PREFIX,
@@ -186,7 +190,7 @@ function buildListComponents(
   lines.push(`-# ${entries.length} ${gameLabel(entries.length)}${pageInfo}`);
 
   const listContainer = new ContainerBuilder().addTextDisplayComponents(
-    new TextDisplayBuilder().setContent(lines.join("\n")),
+    new TextDisplayBuilder().setContent(safeV2TextContent(lines.join("\n"), 3500)),
   );
 
   return [userHeader, listContainer];
@@ -290,7 +294,7 @@ function buildAllComponents(
   );
   return [
     new ContainerBuilder().addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(lines.join("\n")),
+      new TextDisplayBuilder().setContent(safeV2TextContent(lines.join("\n"), 3500)),
     ),
   ];
 }
@@ -388,7 +392,7 @@ function buildSearchResultComponents(
   const headerContainer = targetUser
     ? buildUserHeaderContainer(targetUser.id, targetUser.displayName, headerTitle)
     : new ContainerBuilder().addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(`## ${headerTitle}`),
+      new TextDisplayBuilder().setContent(safeV2TextContent(`## ${headerTitle}`, 250)),
     );
 
   const result = results[0];
@@ -415,7 +419,7 @@ function buildSearchResultComponents(
   resultLines.push(resultInfo);
 
   const resultsContainer = new ContainerBuilder().addTextDisplayComponents(
-    new TextDisplayBuilder().setContent(resultLines.join("\n\n")),
+    new TextDisplayBuilder().setContent(safeV2TextContent(resultLines.join("\n\n"), 3500)),
   );
 
   return [headerContainer, resultsContainer];
@@ -955,7 +959,10 @@ export class GameJournalCommand {
     const entryTitle = entry.title?.trim() ? entry.title.trim() : `Entry #${entry.entryNumber}`;
     const container = new ContainerBuilder().addTextDisplayComponents(
       new TextDisplayBuilder().setContent(
-        `## Confirm Delete\nDelete **${entryTitle}** from ${formatTableDate(entry.createdAt)}?`,
+        safeV2TextContent(
+          `## Confirm Delete\nDelete **${entryTitle}** from ${formatTableDate(entry.createdAt)}?`,
+          1000,
+        ),
       ),
     );
     const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
