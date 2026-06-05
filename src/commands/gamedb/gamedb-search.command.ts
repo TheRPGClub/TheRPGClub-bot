@@ -262,9 +262,6 @@ export class GameDbSearchCommand {
       gameId,
       profile.hasThread,
       profile.featuredVideoUrl,
-      profile.canMarkThumbnailBad,
-      profile.isThumbnailBad,
-      profile.isThumbnailApproved,
       profile.isReleased,
     );
 

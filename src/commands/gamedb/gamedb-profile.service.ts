@@ -43,9 +43,6 @@ type GameProfileResult = {
   files: AttachmentBuilder[];
   hasThread: boolean;
   featuredVideoUrl: string | null;
-  canMarkThumbnailBad: boolean;
-  isThumbnailBad: boolean;
-  isThumbnailApproved: boolean;
   isReleased: boolean;
 };
 
@@ -123,9 +120,6 @@ export function buildGameProfileActionRow(
   gameId: number,
   hasThread: boolean,
   featuredVideoUrl: string | null,
-  canMarkThumbnailBad: boolean,
-  isThumbnailBad: boolean,
-  isThumbnailApproved: boolean,
   isReleased: boolean,
   disableVideo = false,
 ): ActionRowBuilder<ButtonBuilder>[] {
@@ -160,24 +154,6 @@ export function buildGameProfileActionRow(
     primaryRow.addComponents(viewFeaturedVideo);
   }
   rows.push(primaryRow);
-  if (canMarkThumbnailBad && !isThumbnailBad && !isThumbnailApproved) {
-    const badThumbnail = new ButtonBuilder()
-      // eslint-disable-next-line local/custom-id-has-matching-handler
-      .setCustomId(`gamedb-action:bad-thumb:${gameId}`)
-      .setLabel("Bad Thumbnail")
-      .setStyle(ButtonStyle.Danger);
-
-    const goodThumbnail = new ButtonBuilder()
-      // eslint-disable-next-line local/custom-id-has-matching-handler
-      .setCustomId(`gamedb-action:good-thumb:${gameId}`)
-      .setLabel("Good Thumbnail")
-      .setStyle(ButtonStyle.Secondary);
-    const thumbRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
-      badThumbnail,
-      goodThumbnail,
-    );
-    rows.push(thumbRow);
-  }
   return rows;
 }
 
@@ -217,8 +193,6 @@ export async function buildGameProfile(
     const prefaceText = (interaction as GameProfileRenderContext | undefined)?.prefaceText?.trim();
 
     const files: AttachmentBuilder[] = [];
-    const isThumbnailBad = Boolean(game.thumbnailBad);
-    const isThumbnailApproved = Boolean(game.thumbnailApproved);
     const isReleased = isGameReleased(game, releases);
     const primaryArt = game.imageData;
     if (primaryArt) {
@@ -576,9 +550,6 @@ export async function buildGameProfile(
       files,
       hasThread: Boolean(threadId),
       featuredVideoUrl: game.featuredVideoUrl ?? null,
-      canMarkThumbnailBad: Boolean(game.imageData) && !isThumbnailApproved,
-      isThumbnailBad,
-      isThumbnailApproved,
       isReleased,
     };
   } catch (error: any) {
@@ -610,9 +581,6 @@ export async function showGameProfile(
         gameId,
         profile.hasThread,
         profile.featuredVideoUrl,
-        profile.canMarkThumbnailBad,
-        profile.isThumbnailBad,
-        profile.isThumbnailApproved,
         profile.isReleased,
       ),
     );
@@ -641,9 +609,6 @@ export async function showGameProfileFromNomination(
       gameId,
       profile.hasThread,
       profile.featuredVideoUrl,
-      profile.canMarkThumbnailBad,
-      profile.isThumbnailBad,
-      profile.isThumbnailApproved,
       profile.isReleased,
     ),
   ];
@@ -683,9 +648,6 @@ export async function buildGameProfileMessagePayload(
         gameId,
         profile.hasThread,
         profile.featuredVideoUrl,
-        profile.canMarkThumbnailBad,
-        profile.isThumbnailBad,
-        profile.isThumbnailApproved,
         profile.isReleased,
       ),
     );
@@ -708,9 +670,6 @@ export async function refreshGameProfileMessage(
     gameId,
     profile.hasThread,
     profile.featuredVideoUrl,
-    profile.canMarkThumbnailBad,
-    profile.isThumbnailBad,
-    profile.isThumbnailApproved,
     profile.isReleased,
   );
   const existingComponents = interaction.message?.components ?? [];
@@ -741,9 +700,6 @@ export async function updateGameProfileMessageById(
     gameId,
     profile.hasThread,
     profile.featuredVideoUrl,
-    profile.canMarkThumbnailBad,
-    profile.isThumbnailBad,
-    profile.isThumbnailApproved,
     profile.isReleased,
   );
   const searchRows = getSearchRowsFromComponents(message.components ?? []);
