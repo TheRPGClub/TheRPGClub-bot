@@ -17,6 +17,7 @@ import { isAdmin } from "./admin.command.js";
 import { buildAdminHelpResponse } from "./admin/admin-help.service.js";
 import { buildModHelpResponse, isModerator } from "./mod.command.js";
 import { buildSuperAdminHelpResponse, isSuperAdmin } from "./superadmin.command.js";
+import { buildTextReply } from "../functions/ComponentsV2Utils.js";
 import { safeDeferReply, safeReply, safeUpdate } from "../functions/InteractionUtils.js";
 import { decodeBase64Url, encodeBase64Url } from "../functions/CustomIdUtils.js";
 
@@ -318,6 +319,18 @@ const HELP_TOPICS: HelpTopic[] = [
     notes: "Suggestions are approved from the Review Suggestions button in /todo by the server owner or bot dev.",
   },
 ];
+
+function withHelpNotice<T extends { components: ActionRowBuilder<MessageActionRowComponentBuilder>[] }>(
+  response: T,
+  content: string,
+): T & { flags: number; components: Array<ActionRowBuilder<MessageActionRowComponentBuilder>> } {
+  const textReply = buildTextReply(content, false);
+  return {
+    ...response,
+    flags: textReply.flags,
+    components: [...textReply.components, ...response.components],
+  };
+}
 
 const HELP_CATEGORIES: { id: string; name: string; topicIds: HelpTopicId[] }[] = [
   {
@@ -992,10 +1005,7 @@ export class BotHelp {
         category.id,
         parsed.state.activeTopicId as HelpTopicId | undefined,
       );
-      await safeUpdate(interaction, {
-        ...response,
-        content: "Please pick a command from the list.",
-      });
+      await safeUpdate(interaction, withHelpNotice(response, "Please pick a command from the list."));
       return;
     }
 
@@ -1018,10 +1028,13 @@ export class BotHelp {
 
     if (!topic) {
       const response = buildCategoryHelpResponse(category.id);
-      await safeUpdate(interaction, {
-        ...response,
-        content: "Sorry, I don't recognize that help topic. Showing the category menu.",
-      });
+      await safeUpdate(
+        interaction,
+        withHelpNotice(
+          response,
+          "Sorry, I don't recognize that help topic. Showing the category menu.",
+        ),
+      );
       return;
     }
 
@@ -1060,10 +1073,13 @@ export class BotHelp {
       const response = buildRssHelpResponse(
         parsed.state.activeTopicId as RssHelpTopicId | undefined,
       );
-      await safeUpdate(interaction, {
-        ...response,
-        content: "Sorry, I don't recognize that RSS help topic. Showing the RSS help menu.",
-      });
+      await safeUpdate(
+        interaction,
+        withHelpNotice(
+          response,
+          "Sorry, I don't recognize that RSS help topic. Showing the RSS help menu.",
+        ),
+      );
       return;
     }
 
@@ -1096,10 +1112,13 @@ export class BotHelp {
       const response = buildProfileHelpResponse(
         parsed.state.activeTopicId as ProfileHelpTopicId | undefined,
       );
-      await safeUpdate(interaction, {
-        ...response,
-        content: "Sorry, I don't recognize that profile help topic. Showing the profile help menu.",
-      });
+      await safeUpdate(
+        interaction,
+        withHelpNotice(
+          response,
+          "Sorry, I don't recognize that profile help topic. Showing the profile help menu.",
+        ),
+      );
       return;
     }
 
@@ -1132,10 +1151,13 @@ export class BotHelp {
       const response = buildNowPlayingHelpResponse(
         parsed.state.activeTopicId as NowPlayingHelpTopicId | undefined,
       );
-      await safeUpdate(interaction, {
-        ...response,
-        content: "Sorry, I don't recognize that now-playing help topic. Showing the help menu.",
-      });
+      await safeUpdate(
+        interaction,
+        withHelpNotice(
+          response,
+          "Sorry, I don't recognize that now-playing help topic. Showing the help menu.",
+        ),
+      );
       return;
     }
 
@@ -1168,10 +1190,13 @@ export class BotHelp {
       const response = buildGamedbHelpResponse(
         parsed.state.activeTopicId as GameDbHelpTopicId | undefined,
       );
-      await safeUpdate(interaction, {
-        ...response,
-        content: "Sorry, I don't recognize that gamedb help topic. Showing the gamedb help menu.",
-      });
+      await safeUpdate(
+        interaction,
+        withHelpNotice(
+          response,
+          "Sorry, I don't recognize that gamedb help topic. Showing the gamedb help menu.",
+        ),
+      );
       return;
     }
 
@@ -1204,10 +1229,13 @@ export class BotHelp {
       const response = buildGameCompletionHelpResponse(
         parsed.state.activeTopicId as GameCompletionHelpTopicId | undefined,
       );
-      await safeUpdate(interaction, {
-        ...response,
-        content: "Sorry, I don't recognize that game-completion help topic. Showing the help menu.",
-      });
+      await safeUpdate(
+        interaction,
+        withHelpNotice(
+          response,
+          "Sorry, I don't recognize that game-completion help topic. Showing the help menu.",
+        ),
+      );
       return;
     }
 
@@ -1227,10 +1255,7 @@ export class BotHelp {
     }
 
     const response = buildMainHelpResponse();
-    await safeUpdate(interaction, {
-      ...response,
-      content: "Help menu refreshed.",
-    });
+    await safeUpdate(interaction, withHelpNotice(response, "Help menu refreshed."));
   }
 }
 

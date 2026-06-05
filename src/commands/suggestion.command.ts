@@ -499,10 +499,7 @@ export class SuggestionCommand {
         customId: SUGGESTION_CREATE_MODAL_ID,
         error: formatErrorForLog(error),
       });
-      await safeReply(interaction, {
-        content: "Unable to open the suggestion form.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("Unable to open the suggestion form.", true));
     });
   }
 
@@ -517,27 +514,18 @@ export class SuggestionCommand {
     );
     const trimmedTitle = sanitizeUserInput(rawTitle, { preserveNewlines: false });
     if (!trimmedTitle) {
-      await safeReply(interaction, {
-        content: "Title cannot be empty.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("Title cannot be empty.", true));
       return;
     }
 
     const trimmedDetails = sanitizeUserInput(rawDetails, { preserveNewlines: true });
     if (!trimmedDetails) {
-      await safeReply(interaction, {
-        content: "Details cannot be empty.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("Details cannot be empty.", true));
       return;
     }
 
     if (selectedLabels.length === 0) {
-      await safeReply(interaction, {
-        content: "Select at least one suggestion type.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("Select at least one suggestion type.", true));
       return;
     }
 
@@ -549,10 +537,7 @@ export class SuggestionCommand {
       interaction.user.username,
     );
 
-    await safeReply(interaction, {
-      content: `Thanks! Suggestion #${suggestion.suggestionId} submitted.`,
-      flags: MessageFlags.Ephemeral,
-    });
+    await safeReply(interaction, buildTextReply(`Thanks! Suggestion #${suggestion.suggestionId} submitted.`, true));
 
     try {
       const channel = await interaction.client.channels.fetch(BOT_DEV_CHANNEL_ID);
@@ -587,10 +572,7 @@ export class SuggestionCommand {
         customId: interaction.customId,
         reason: "not_owner_or_bot_dev",
       });
-      await safeReply(interaction, {
-        content: "Only the server owner or bot dev can review suggestions.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("Only the server owner or bot dev can review suggestions.", true));
       return;
     }
 
@@ -606,10 +588,7 @@ export class SuggestionCommand {
         userId: interaction.user.id,
         customId: interaction.customId,
       });
-      await safeReply(interaction, {
-        content: "No pending suggestions to review.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("No pending suggestions to review.", true));
       return;
     }
 
@@ -622,10 +601,7 @@ export class SuggestionCommand {
         customId: interaction.customId,
         reason: `totalCount=${totalCount}`,
       });
-      await safeReply(interaction, {
-        content: "No pending suggestions to review.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("No pending suggestions to review.", true));
       return;
     }
 
@@ -651,10 +627,7 @@ export class SuggestionCommand {
         reason: `suggestionId=${currentSuggestion.suggestionId}`,
         error: formatErrorForLog(error),
       });
-      await safeReply(interaction, {
-        content: "Unable to open the review decision form.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("Unable to open the review decision form.", true));
     }
   }
 
@@ -669,19 +642,13 @@ export class SuggestionCommand {
     const isOwner = interaction.guild?.ownerId === interaction.user.id;
     const isBotDev = interaction.user.id === BOT_DEV_PING_USER_ID;
     if (!isOwner && !isBotDev) {
-      await safeReply(interaction, {
-        content: "Only the server owner or bot dev can approve suggestions.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("Only the server owner or bot dev can approve suggestions.", true));
       return;
     }
 
     const suggestion = await getSuggestionById(suggestionId);
     if (!suggestion) {
-      await safeReply(interaction, {
-        content: "Suggestion not found.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("Suggestion not found.", true));
       return;
     }
 
@@ -701,10 +668,7 @@ export class SuggestionCommand {
       });
       await deleteSuggestion(suggestionId);
     } catch (err: any) {
-      await safeReply(interaction, {
-        content: err?.message ?? "Failed to create GitHub issue.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply(err?.message ?? "Failed to create GitHub issue.", true));
       return;
     }
 
@@ -736,10 +700,7 @@ export class SuggestionCommand {
     }
 
     if (parsed.reviewerId !== interaction.user.id) {
-      await safeReply(interaction, {
-        content: "This review prompt isn't for you.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("This review prompt isn't for you.", true));
       return;
     }
 
@@ -799,10 +760,7 @@ export class SuggestionCommand {
           reason: `suggestionId=${current.suggestion.suggestionId}`,
           error: formatErrorForLog(error),
         });
-        await safeReply(interaction, {
-          content: "Unable to open the review decision form.",
-          flags: MessageFlags.Ephemeral,
-        });
+        await safeReply(interaction, buildTextReply("Unable to open the review decision form.", true));
       }
       return;
     }
@@ -812,38 +770,26 @@ export class SuggestionCommand {
   async submitSuggestionReviewDecision(interaction: ModalSubmitInteraction): Promise<void> {
     const parsed = parseSuggestionReviewDecisionModalId(interaction.customId);
     if (!parsed) {
-      await safeReply(interaction, {
-        content: "This review decision form expired.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("This review decision form expired.", true));
       return;
     }
 
     if (parsed.reviewerId !== interaction.user.id) {
-      await safeReply(interaction, {
-        content: "This review prompt isn't for you.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("This review prompt isn't for you.", true));
       return;
     }
 
     const extracted = extractReviewDecisionFromInteraction(interaction);
     const decision = extracted.decision;
     if (decision !== "accept" && decision !== "reject") {
-      await safeReply(interaction, {
-        content: "Select Accept or Reject.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("Select Accept or Reject.", true));
       return;
     }
 
     const reason = extracted.reason;
 
     if (decision === "reject" && !reason) {
-      await safeReply(interaction, {
-        content: "Rejection reason cannot be empty when Reject is selected.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("Rejection reason cannot be empty when Reject is selected.", true));
       return;
     }
 
@@ -868,10 +814,7 @@ export class SuggestionCommand {
           });
           await deleteSuggestion(parsed.suggestionId);
         } catch (err: any) {
-          await safeReply(interaction, {
-            content: err?.message ?? "Failed to create GitHub issue.",
-            flags: MessageFlags.Ephemeral,
-          });
+          await safeReply(interaction, buildTextReply(err?.message ?? "Failed to create GitHub issue.", true));
           return;
         }
 
@@ -888,10 +831,7 @@ export class SuggestionCommand {
         try {
           await deleteSuggestion(parsed.suggestionId);
         } catch (err: any) {
-          await safeReply(interaction, {
-            content: err?.message ?? "Failed to reject suggestion.",
-            flags: MessageFlags.Ephemeral,
-          });
+          await safeReply(interaction, buildTextReply(err?.message ?? "Failed to reject suggestion.", true));
           return;
         }
 
@@ -908,12 +848,9 @@ export class SuggestionCommand {
     const outcomeLabel = decision === "accept"
       ? "Accepted."
       : "Rejected.";
-    await safeReply(interaction, {
-      content: remainingCount > 0
+    await safeReply(interaction, buildTextReply(remainingCount > 0
         ? `${outcomeLabel} ${remainingCount} suggestion(s) remain. Use Review Suggestions again from /todo.`
-        : `${outcomeLabel} No pending suggestions remain.`,
-      flags: MessageFlags.Ephemeral,
-    });
+        : `${outcomeLabel} No pending suggestions remain.`, true));
   }
 
 }

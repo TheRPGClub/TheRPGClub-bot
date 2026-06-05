@@ -2,7 +2,10 @@ import pluginJs from "@eslint/js";
 import tseslint from "typescript-eslint";
 import stylistic from "@stylistic/eslint-plugin";
 import eslintConfigPrettier from "eslint-config-prettier";
+import { fileURLToPath } from "node:url";
 import localRules from "./eslint-rules/index.js";
+
+const tsconfigRootDir = fileURLToPath(new URL(".", import.meta.url));
 
 export default [
   { ignores: ["build/**"] },
@@ -12,6 +15,11 @@ export default [
   {
     files: ["src/**/*.ts"],
     ignores: ["**/*.config.ts", "*.reference.ts"],
+    languageOptions: {
+      parserOptions: {
+        tsconfigRootDir,
+      },
+    },
     plugins: {
       "@stylistic": stylistic,
       local: localRules,

@@ -254,21 +254,13 @@ export async function startCompletionWizard(
     STANDARD_PLATFORM_IDS,
   );
   if (!platforms.length) {
-    await safeReply(interaction, {
-      content: "No platform release data is available for this game.",
-      flags: MessageFlags.Ephemeral,
-      __forceFollowUp: true,
-    });
+    await safeReply(interaction, { ...buildTextReply("No platform release data is available for this game.", true), __forceFollowUp: true });
     return;
   }
 
   const message = interaction.message;
   if (!message) {
-    await safeReply(interaction, {
-      content: "Unable to locate the original GameDB view message.",
-      flags: MessageFlags.Ephemeral,
-      __forceFollowUp: true,
-    });
+    await safeReply(interaction, { ...buildTextReply("Unable to locate the original GameDB view message.", true), __forceFollowUp: true });
     return;
   }
 
@@ -313,26 +305,17 @@ export class GameDbCompletionCommand {
     const field = parts[2];
     const session = COMPLETION_WIZARD_SESSIONS.get(sessionId);
     if (!session) {
-      await safeReply(interaction, {
-        content: "This completion request has expired.",
-        flags: MessageFlags.Ephemeral,
-      }).catch(() => {});
+      await safeReply(interaction, buildTextReply("This completion request has expired.", true)).catch(() => {});
       return;
     }
     if (interaction.user.id !== session.userId) {
-      await safeReply(interaction, {
-        content: "This menu isn't for you.",
-        flags: MessageFlags.Ephemeral,
-      }).catch(() => {});
+      await safeReply(interaction, buildTextReply("This menu isn't for you.", true)).catch(() => {});
       return;
     }
 
     const value = interaction.values?.[0];
     if (!value) {
-      await safeReply(interaction, {
-        content: "No selection made.",
-        flags: MessageFlags.Ephemeral,
-      }).catch(() => {});
+      await safeReply(interaction, buildTextReply("No selection made.", true)).catch(() => {});
       return;
     }
 
@@ -366,17 +349,11 @@ export class GameDbCompletionCommand {
     const sessionId = parts[1];
     const session = COMPLETION_WIZARD_SESSIONS.get(sessionId);
     if (!session) {
-      await safeReply(interaction, {
-        content: "This completion request has expired.",
-        flags: MessageFlags.Ephemeral,
-      }).catch(() => {});
+      await safeReply(interaction, buildTextReply("This completion request has expired.", true)).catch(() => {});
       return;
     }
     if (interaction.user.id !== session.userId) {
-      await safeReply(interaction, {
-        content: "This action isn't for you.",
-        flags: MessageFlags.Ephemeral,
-      }).catch(() => {});
+      await safeReply(interaction, buildTextReply("This action isn't for you.", true)).catch(() => {});
       return;
     }
 
@@ -448,13 +425,11 @@ export class GameDbCompletionCommand {
     const session = COMPLETION_WIZARD_SESSIONS.get(sessionId);
     await safeDeferReply(interaction, { flags: MessageFlags.Ephemeral }).catch(() => {});
     if (!session) {
-      await safeReply(interaction, {
-        content: "This completion request has expired.",
-      }).catch(() => {});
+      await safeReply(interaction, buildTextReply("This completion request has expired.", false)).catch(() => {});
       return;
     }
     if (interaction.user.id !== session.userId) {
-      await safeReply(interaction, { content: "This action isn't for you." }).catch(() => {});
+      await safeReply(interaction, buildTextReply("This action isn't for you.", false)).catch(() => {});
       return;
     }
 
@@ -470,9 +445,7 @@ export class GameDbCompletionCommand {
       try {
         completedAt = parseCompletionDateInput(dateInput);
       } catch (err: any) {
-        await safeReply(interaction, {
-          content: err?.message ?? "Invalid completion date.",
-        }).catch(() => {});
+        await safeReply(interaction, buildTextReply(err?.message ?? "Invalid completion date.", false)).catch(() => {});
         return;
       }
     }
@@ -482,9 +455,7 @@ export class GameDbCompletionCommand {
     );
     const playtimeCheck = validateCompletionPlaytimeInput(playtimeInput);
     if (playtimeCheck.error) {
-      await safeReply(interaction, {
-        content: playtimeCheck.error,
-      }).catch(() => {});
+      await safeReply(interaction, buildTextReply(playtimeCheck.error, false)).catch(() => {});
       return;
     }
     const playtime = playtimeCheck.value;
@@ -494,14 +465,12 @@ export class GameDbCompletionCommand {
     );
     const note = noteInput ? noteInput : null;
     if (note && note.length > MAX_COMPLETION_NOTE_LEN) {
-      await safeReply(interaction, {
-        content: `Note must be ${MAX_COMPLETION_NOTE_LEN} characters or fewer.`,
-      }).catch(() => {});
+      await safeReply(interaction, buildTextReply(`Note must be ${MAX_COMPLETION_NOTE_LEN} characters or fewer.`, false)).catch(() => {});
       return;
     }
 
     if (!session.platformChoice) {
-      await safeReply(interaction, { content: "Platform selection missing." }).catch(() => {});
+      await safeReply(interaction, buildTextReply("Platform selection missing.", false)).catch(() => {});
       return;
     }
     const isOtherPlatform = session.platformChoice === "other";
@@ -509,7 +478,7 @@ export class GameDbCompletionCommand {
     if (!isOtherPlatform) {
       const parsedId = Number(session.platformChoice);
       if (!Number.isInteger(parsedId) || parsedId <= 0) {
-        await safeReply(interaction, { content: "Invalid platform selection." }).catch(() => {});
+        await safeReply(interaction, buildTextReply("Invalid platform selection.", false)).catch(() => {});
         return;
       }
       platformId = parsedId;
@@ -544,9 +513,7 @@ export class GameDbCompletionCommand {
       COMPLETION_WIZARD_SESSIONS.delete(sessionId);
       await interaction.deleteReply().catch(() => {});
     } catch (err: any) {
-      await safeReply(interaction, {
-        content: `Failed to add completion: ${err?.message ?? String(err)}`,
-      }).catch(() => {});
+      await safeReply(interaction, buildTextReply(`Failed to add completion: ${err?.message ?? String(err)}`, false)).catch(() => {});
     }
   }
 
@@ -557,15 +524,13 @@ export class GameDbCompletionCommand {
     const gameId = Number(gameIdRaw);
     await safeDeferReply(interaction, { flags: MessageFlags.Ephemeral });
     if (!Number.isInteger(gameId) || gameId <= 0) {
-      await safeReply(interaction, { content: "Invalid GameDB id." }).catch(() => {});
+      await safeReply(interaction, buildTextReply("Invalid GameDB id.", false)).catch(() => {});
       return;
     }
 
     const game = await Game.getGameById(gameId);
     if (!game) {
-      await safeReply(interaction, {
-        content: "That game was not found in GameDB.",
-      }).catch(() => {});
+      await safeReply(interaction, buildTextReply("That game was not found in GameDB.", false)).catch(() => {});
       return;
     }
 
@@ -573,9 +538,7 @@ export class GameDbCompletionCommand {
       interaction.fields.getTextInputValue("gamedb-nowplaying-note"),
     );
     if (noteRaw.length > MAX_NOW_PLAYING_NOTE_LEN) {
-      await safeReply(interaction, {
-        content: `Note must be ${MAX_NOW_PLAYING_NOTE_LEN} characters or fewer.`,
-      }).catch(() => {});
+      await safeReply(interaction, buildTextReply(`Note must be ${MAX_NOW_PLAYING_NOTE_LEN} characters or fewer.`, false)).catch(() => {});
       return;
     }
 
@@ -583,11 +546,8 @@ export class GameDbCompletionCommand {
     try {
       const platforms = await Game.getPlatformsForGame(gameId);
       if (!platforms.length) {
-        await safeReply(interaction, {
-          content:
-            "This game has no platform data yet. Add to Now Playing from `/now-playing list` " +
-            "after platform data is available.",
-        }).catch(() => {});
+        await safeReply(interaction, buildTextReply("This game has no platform data yet. Add to Now Playing from `/now-playing list` " +
+            "after platform data is available.", false)).catch(() => {});
         return;
       }
       const defaultPlatform = platforms[0];
@@ -596,15 +556,11 @@ export class GameDbCompletionCommand {
       await nowPlaying.showSingle(interaction, interaction.user, true);
     } catch (err: any) {
       if (isUniqueConstraintError(err)) {
-        await safeReply(interaction, {
-          content: `**${game.title}** is already in your Now Playing list.`,
-        }).catch(() => {});
+        await safeReply(interaction, buildTextReply(`**${game.title}** is already in your Now Playing list.`, false)).catch(() => {});
         return;
       }
       const msg = err?.message ?? "Failed to add to Now Playing.";
-      await safeReply(interaction, {
-        content: `Failed to add: ${msg}`,
-      }).catch(() => {});
+      await safeReply(interaction, buildTextReply(`Failed to add: ${msg}`, false)).catch(() => {});
     }
   }
 }

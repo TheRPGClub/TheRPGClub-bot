@@ -412,28 +412,19 @@ export class GameDbCsvImportCommand {
 
     if (action === "start") {
       if (!file?.url) {
-        await safeReply(interaction, {
-          content: "Please attach the Completionator CSV file.",
-          flags: MessageFlags.Ephemeral,
-        });
+        await safeReply(interaction, buildTextReply("Please attach the Completionator CSV file.", true));
         return;
       }
 
       const csvText = await fetchCsvText(file.url);
       if (!csvText) {
-        await safeReply(interaction, {
-          content: "Failed to download the CSV file.",
-          flags: MessageFlags.Ephemeral,
-        });
+        await safeReply(interaction, buildTextReply("Failed to download the CSV file.", true));
         return;
       }
 
       const parsed = parseGameDbCsv(csvText);
       if (!parsed.length) {
-        await safeReply(interaction, {
-          content: "No rows found in the CSV file.",
-          flags: MessageFlags.Ephemeral,
-        });
+        await safeReply(interaction, buildTextReply("No rows found in the CSV file.", true));
         return;
       }
 
@@ -444,12 +435,8 @@ export class GameDbCsvImportCommand {
       });
       await insertGameDbCsvImportItems(session.importId, parsed);
 
-      await safeReply(interaction, {
-        content:
-          `CSV import #${session.importId} created with ${parsed.length} rows.` +
-          " Starting review now.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply(`CSV import #${session.importId} created with ${parsed.length} rows.` +
+          " Starting review now.", true));
 
       await processNextGameDbCsvImportItem(interaction, session);
       return;
@@ -458,10 +445,7 @@ export class GameDbCsvImportCommand {
     if (action === "status") {
       const session = await getActiveGameDbCsvImportForUser(userId);
       if (!session) {
-        await safeReply(interaction, {
-          content: "No active CSV import session found.",
-          flags: MessageFlags.Ephemeral,
-        });
+        await safeReply(interaction, buildTextReply("No active CSV import session found.", true));
         return;
       }
 
@@ -485,36 +469,24 @@ export class GameDbCsvImportCommand {
 
     const session = await getActiveGameDbCsvImportForUser(userId);
     if (!session) {
-      await safeReply(interaction, {
-        content: "No active CSV import session found.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("No active CSV import session found.", true));
       return;
     }
 
     if (action === "pause") {
       await setGameDbCsvImportStatus(session.importId, "PAUSED");
-      await safeReply(interaction, {
-        content: `CSV import #${session.importId} paused.`,
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply(`CSV import #${session.importId} paused.`, true));
       return;
     }
 
     if (action === "cancel") {
       await setGameDbCsvImportStatus(session.importId, "CANCELED");
-      await safeReply(interaction, {
-        content: `CSV import #${session.importId} canceled.`,
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply(`CSV import #${session.importId} canceled.`, true));
       return;
     }
 
     await setGameDbCsvImportStatus(session.importId, "ACTIVE");
-    await safeReply(interaction, {
-      content: `Resuming CSV import #${session.importId}.`,
-      flags: MessageFlags.Ephemeral,
-    });
+    await safeReply(interaction, buildTextReply(`Resuming CSV import #${session.importId}.`, true));
     await processNextGameDbCsvImportItem(interaction, session);
   }
 
@@ -522,30 +494,21 @@ export class GameDbCsvImportCommand {
   async handleGameDbCsvSelect(interaction: StringSelectMenuInteraction): Promise<void> {
     const [, ownerId, importIdRaw, itemIdRaw] = interaction.customId.split(":");
     if (interaction.user.id !== ownerId) {
-      await safeReply(interaction, {
-          content: "This import prompt is not for you.",
-          flags: MessageFlags.Ephemeral,
-        });
+      await safeReply(interaction, buildTextReply("This import prompt is not for you.", true));
       return;
     }
 
     const igdbIdRaw = interaction.values?.[0];
     const igdbId = Number(igdbIdRaw);
     if (!Number.isInteger(igdbId) || igdbId <= 0) {
-      await safeReply(interaction, {
-          content: "Invalid IGDB selection.",
-          flags: MessageFlags.Ephemeral,
-        });
+      await safeReply(interaction, buildTextReply("Invalid IGDB selection.", true));
       return;
     }
 
     const importId = Number(importIdRaw);
     const itemId = Number(itemIdRaw);
     if (!Number.isInteger(importId) || !Number.isInteger(itemId)) {
-      await safeReply(interaction, {
-          content: "Invalid import selection.",
-          flags: MessageFlags.Ephemeral,
-        });
+      await safeReply(interaction, buildTextReply("Invalid import selection.", true));
       return;
     }
 
@@ -553,30 +516,18 @@ export class GameDbCsvImportCommand {
 
     const session = await getGameDbCsvImportById(importId);
     if (!session || session.userId !== ownerId) {
-      await safeReply(interaction, {
-        content: "This import session no longer exists.",
-        flags: MessageFlags.Ephemeral,
-        __forceFollowUp: true,
-      });
+      await safeReply(interaction, { ...buildTextReply("This import session no longer exists.", true), __forceFollowUp: true });
       return;
     }
 
     if (session.status !== "ACTIVE") {
-      await safeReply(interaction, {
-        content: "This import session is not active.",
-        flags: MessageFlags.Ephemeral,
-        __forceFollowUp: true,
-      });
+      await safeReply(interaction, { ...buildTextReply("This import session is not active.", true), __forceFollowUp: true });
       return;
     }
 
     const item = await getGameDbCsvImportItemById(itemId);
     if (!item || item.importId !== session.importId || item.status !== "PENDING") {
-      await safeReply(interaction, {
-        content: "This import item is no longer pending.",
-        flags: MessageFlags.Ephemeral,
-        __forceFollowUp: true,
-      });
+      await safeReply(interaction, { ...buildTextReply("This import item is no longer pending.", true), __forceFollowUp: true });
       return;
     }
 
@@ -594,21 +545,13 @@ export class GameDbCsvImportCommand {
         status: "MAPPED",
         createdBy: interaction.user.id,
       });
-      await safeReply(interaction, {
-        content: `Imported ${result.title} as GameDB #${result.gameId}.`,
-        flags: MessageFlags.Ephemeral,
-        __forceFollowUp: true,
-      });
+      await safeReply(interaction, { ...buildTextReply(`Imported ${result.title} as GameDB #${result.gameId}.`, true), __forceFollowUp: true });
     } catch (err: any) {
       await updateGameDbCsvImportItem(itemId, {
         status: "ERROR",
         errorText: err?.message ?? "Import failed.",
       });
-      await safeReply(interaction, {
-        content: `Failed to import "${item.gameTitle}". Skipping.`,
-        flags: MessageFlags.Ephemeral,
-        __forceFollowUp: true,
-      });
+      await safeReply(interaction, { ...buildTextReply(`Failed to import "${item.gameTitle}". Skipping.`, true), __forceFollowUp: true });
     }
 
     await processNextGameDbCsvImportItem(interaction, session);
@@ -620,29 +563,20 @@ export class GameDbCsvImportCommand {
   async handleGameDbCsvAction(interaction: ButtonInteraction): Promise<void> {
     const [, ownerId, importIdRaw, itemIdRaw, action] = interaction.customId.split(":");
     if (interaction.user.id !== ownerId) {
-      await safeReply(interaction, {
-          content: "This import prompt is not for you.",
-          flags: MessageFlags.Ephemeral,
-        });
+      await safeReply(interaction, buildTextReply("This import prompt is not for you.", true));
       return;
     }
 
     const importId = Number(importIdRaw);
     const itemId = Number(itemIdRaw);
     if (!Number.isInteger(importId) || !Number.isInteger(itemId)) {
-      await safeReply(interaction, {
-          content: "Invalid import action.",
-          flags: MessageFlags.Ephemeral,
-        });
+      await safeReply(interaction, buildTextReply("Invalid import action.", true));
       return;
     }
 
     const session = await getGameDbCsvImportById(importId);
     if (!session || session.userId !== ownerId) {
-      await safeReply(interaction, {
-        content: "This import session no longer exists.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("This import session no longer exists.", true));
       return;
     }
 
@@ -679,27 +613,18 @@ export class GameDbCsvImportCommand {
     if (action === "accept") {
       const acceptSession = await getGameDbCsvImportById(importId);
       if (!acceptSession || acceptSession.userId !== ownerId) {
-        await safeReply(interaction, {
-          content: "This import session no longer exists.",
-          flags: MessageFlags.Ephemeral,
-        });
+        await safeReply(interaction, buildTextReply("This import session no longer exists.", true));
         return;
       }
 
       if (acceptSession.status !== "ACTIVE") {
-        await safeReply(interaction, {
-          content: "This import session is not active.",
-          flags: MessageFlags.Ephemeral,
-        });
+        await safeReply(interaction, buildTextReply("This import session is not active.", true));
         return;
       }
 
       const item = await getGameDbCsvImportItemById(itemId);
       if (!item || item.importId !== acceptSession.importId || item.status !== "PENDING") {
-        await safeReply(interaction, {
-          content: "This import item is no longer pending.",
-          flags: MessageFlags.Ephemeral,
-        });
+        await safeReply(interaction, buildTextReply("This import item is no longer pending.", true));
         return;
       }
 
@@ -707,10 +632,7 @@ export class GameDbCsvImportCommand {
         item.rawGameTitle ?? item.gameTitle,
       ).trim();
       if (!searchTitle) {
-        await safeReply(interaction, {
-          content: "Missing title for IGDB search.",
-          flags: MessageFlags.Ephemeral,
-        });
+        await safeReply(interaction, buildTextReply("Missing title for IGDB search.", true));
         return;
       }
 
@@ -719,10 +641,7 @@ export class GameDbCsvImportCommand {
         const search = await igdbService.searchGames(searchTitle, 50);
         results = search.results ?? [];
       } catch (err: any) {
-        await safeReply(interaction, {
-          content: `IGDB search failed: ${err?.message ?? "Unknown error"}`,
-          flags: MessageFlags.Ephemeral,
-        });
+        await safeReply(interaction, buildTextReply(`IGDB search failed: ${err?.message ?? "Unknown error"}`, true));
         return;
       }
 
@@ -731,10 +650,7 @@ export class GameDbCsvImportCommand {
         : [];
       const first = sortedGames[0];
       if (!first) {
-        await safeReply(interaction, {
-          content: "No IGDB matches found for this title.",
-          flags: MessageFlags.Ephemeral,
-        });
+        await safeReply(interaction, buildTextReply("No IGDB matches found for this title.", true));
         return;
       }
 
@@ -747,21 +663,13 @@ export class GameDbCsvImportCommand {
           gameDbGameId: result.gameId,
           errorText: null,
         });
-        await safeReply(interaction, {
-          content: `Imported ${result.title} as GameDB #${result.gameId}.`,
-          flags: MessageFlags.Ephemeral,
-          __forceFollowUp: true,
-        });
+        await safeReply(interaction, { ...buildTextReply(`Imported ${result.title} as GameDB #${result.gameId}.`, true), __forceFollowUp: true });
       } catch (err: any) {
         await updateGameDbCsvImportItem(itemId, {
           status: "ERROR",
           errorText: err?.message ?? "Import failed.",
         });
-        await safeReply(interaction, {
-          content: `Failed to import "${item.gameTitle}". Skipping.`,
-          flags: MessageFlags.Ephemeral,
-          __forceFollowUp: true,
-        });
+        await safeReply(interaction, { ...buildTextReply(`Failed to import "${item.gameTitle}". Skipping.`, true), __forceFollowUp: true });
       }
 
       await processNextGameDbCsvImportItem(interaction, acceptSession);
@@ -780,10 +688,7 @@ export class GameDbCsvImportCommand {
     if (action === "skip") {
       const item = await getGameDbCsvImportItemById(itemId);
       if (!item || item.importId !== session.importId || item.status !== "PENDING") {
-        await safeReply(interaction, {
-          content: "This import item is no longer pending.",
-          flags: MessageFlags.Ephemeral,
-        });
+        await safeReply(interaction, buildTextReply("This import item is no longer pending.", true));
         return;
       }
 
@@ -807,20 +712,14 @@ export class GameDbCsvImportCommand {
   async handleGameDbCsvManualModal(interaction: ModalSubmitInteraction): Promise<void> {
     const [, ownerId, importIdRaw, itemIdRaw] = interaction.customId.split(":");
     if (interaction.user.id !== ownerId) {
-      await safeReply(interaction, {
-          content: "This import prompt is not for you.",
-          flags: MessageFlags.Ephemeral,
-        });
+      await safeReply(interaction, buildTextReply("This import prompt is not for you.", true));
       return;
     }
 
     const importId = Number(importIdRaw);
     const itemId = Number(itemIdRaw);
     if (!Number.isInteger(importId) || !Number.isInteger(itemId)) {
-      await safeReply(interaction, {
-          content: "Invalid import request.",
-          flags: MessageFlags.Ephemeral,
-        });
+      await safeReply(interaction, buildTextReply("Invalid import request.", true));
       return;
     }
 
@@ -828,10 +727,7 @@ export class GameDbCsvImportCommand {
     const cleaned = stripModalInput(raw);
     const igdbId = Number(cleaned);
     if (!Number.isInteger(igdbId) || igdbId <= 0) {
-      await safeReply(interaction, {
-          content: "Please provide a valid IGDB id.",
-          flags: MessageFlags.Ephemeral,
-        });
+      await safeReply(interaction, buildTextReply("Please provide a valid IGDB id.", true));
       return;
     }
 
@@ -839,30 +735,18 @@ export class GameDbCsvImportCommand {
 
     const session = await getGameDbCsvImportById(importId);
     if (!session || session.userId !== ownerId) {
-      await safeReply(interaction, {
-        content: "This import session no longer exists.",
-        flags: MessageFlags.Ephemeral,
-        __forceFollowUp: true,
-      });
+      await safeReply(interaction, { ...buildTextReply("This import session no longer exists.", true), __forceFollowUp: true });
       return;
     }
 
     if (session.status !== "ACTIVE") {
-      await safeReply(interaction, {
-        content: "This import session is not active.",
-        flags: MessageFlags.Ephemeral,
-        __forceFollowUp: true,
-      });
+      await safeReply(interaction, { ...buildTextReply("This import session is not active.", true), __forceFollowUp: true });
       return;
     }
 
     const item = await getGameDbCsvImportItemById(itemId);
     if (!item || item.importId !== session.importId || item.status !== "PENDING") {
-      await safeReply(interaction, {
-        content: "This import item is no longer pending.",
-        flags: MessageFlags.Ephemeral,
-        __forceFollowUp: true,
-      });
+      await safeReply(interaction, { ...buildTextReply("This import item is no longer pending.", true), __forceFollowUp: true });
       return;
     }
 
@@ -880,21 +764,13 @@ export class GameDbCsvImportCommand {
         status: "MAPPED",
         createdBy: interaction.user.id,
       });
-      await safeReply(interaction, {
-        content: `Imported ${result.title} as GameDB #${result.gameId}.`,
-        flags: MessageFlags.Ephemeral,
-        __forceFollowUp: true,
-      });
+      await safeReply(interaction, { ...buildTextReply(`Imported ${result.title} as GameDB #${result.gameId}.`, true), __forceFollowUp: true });
     } catch (err: any) {
       await updateGameDbCsvImportItem(itemId, {
         status: "ERROR",
         errorText: err?.message ?? "Import failed.",
       });
-      await safeReply(interaction, {
-        content: `Failed to import "${item.gameTitle}". Skipping.`,
-        flags: MessageFlags.Ephemeral,
-        __forceFollowUp: true,
-      });
+      await safeReply(interaction, { ...buildTextReply(`Failed to import "${item.gameTitle}". Skipping.`, true), __forceFollowUp: true });
     }
 
     await processNextGameDbCsvImportItem(interaction, session);
@@ -904,30 +780,21 @@ export class GameDbCsvImportCommand {
   async handleGameDbCsvQueryModal(interaction: ModalSubmitInteraction): Promise<void> {
     const [, ownerId, importIdRaw, itemIdRaw] = interaction.customId.split(":");
     if (interaction.user.id !== ownerId) {
-      await safeReply(interaction, {
-          content: "This import prompt is not for you.",
-          flags: MessageFlags.Ephemeral,
-        });
+      await safeReply(interaction, buildTextReply("This import prompt is not for you.", true));
       return;
     }
 
     const importId = Number(importIdRaw);
     const itemId = Number(itemIdRaw);
     if (!Number.isInteger(importId) || !Number.isInteger(itemId)) {
-      await safeReply(interaction, {
-          content: "Invalid import request.",
-          flags: MessageFlags.Ephemeral,
-        });
+      await safeReply(interaction, buildTextReply("Invalid import request.", true));
       return;
     }
 
     const raw = interaction.fields.getTextInputValue(GAMEDB_CSV_QUERY_INPUT_ID);
     const query = stripModalInput(raw).trim();
     if (!query) {
-      await safeReply(interaction, {
-          content: "Please provide a search query.",
-          flags: MessageFlags.Ephemeral,
-        });
+      await safeReply(interaction, buildTextReply("Please provide a search query.", true));
       return;
     }
 
@@ -935,30 +802,18 @@ export class GameDbCsvImportCommand {
 
     const session = await getGameDbCsvImportById(importId);
     if (!session || session.userId !== ownerId) {
-      await safeReply(interaction, {
-        content: "This import session no longer exists.",
-        flags: MessageFlags.Ephemeral,
-        __forceFollowUp: true,
-      });
+      await safeReply(interaction, { ...buildTextReply("This import session no longer exists.", true), __forceFollowUp: true });
       return;
     }
 
     if (session.status !== "ACTIVE") {
-      await safeReply(interaction, {
-        content: "This import session is not active.",
-        flags: MessageFlags.Ephemeral,
-        __forceFollowUp: true,
-      });
+      await safeReply(interaction, { ...buildTextReply("This import session is not active.", true), __forceFollowUp: true });
       return;
     }
 
     const item = await getGameDbCsvImportItemById(itemId);
     if (!item || item.importId !== session.importId || item.status !== "PENDING") {
-      await safeReply(interaction, {
-        content: "This import item is no longer pending.",
-        flags: MessageFlags.Ephemeral,
-        __forceFollowUp: true,
-      });
+      await safeReply(interaction, { ...buildTextReply("This import item is no longer pending.", true), __forceFollowUp: true });
       return;
     }
 
@@ -967,11 +822,7 @@ export class GameDbCsvImportCommand {
       const search = await igdbService.searchGames(query, 50);
       results = search.results ?? [];
     } catch (err: any) {
-      await safeReply(interaction, {
-        content: `IGDB search failed: ${err?.message ?? "Unknown error"}`,
-        flags: MessageFlags.Ephemeral,
-        __forceFollowUp: true,
-      });
+      await safeReply(interaction, { ...buildTextReply(`IGDB search failed: ${err?.message ?? "Unknown error"}`, true), __forceFollowUp: true });
       return;
     }
 

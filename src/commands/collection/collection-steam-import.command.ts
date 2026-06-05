@@ -283,11 +283,7 @@ export class CollectionSteamImportCommand {
             currentSession.userId !== ownerId ||
             currentSession.status !== "ACTIVE"
           ) {
-            await safeReply(selectionInteraction, {
-              content: "This Steam import session is no longer active.",
-              flags: MessageFlags.Ephemeral,
-              __forceFollowUp: true,
-            });
+            await safeReply(selectionInteraction, { ...buildTextReply("This Steam import session is no longer active.", true), __forceFollowUp: true });
             return;
           }
 
@@ -297,11 +293,7 @@ export class CollectionSteamImportCommand {
             currentItem.importId !== session.importId ||
             currentItem.status !== "PENDING"
           ) {
-            await safeReply(selectionInteraction, {
-              content: "This import row is no longer pending.",
-              flags: MessageFlags.Ephemeral,
-              __forceFollowUp: true,
-            });
+            await safeReply(selectionInteraction, { ...buildTextReply("This import row is no longer pending.", true), __forceFollowUp: true });
             return;
           }
 
@@ -507,10 +499,7 @@ export class CollectionSteamImportCommand {
   ): Promise<void> {
     const guild = interaction.guild;
     if (!guild) {
-      await safeReply(interaction, {
-        content: "This command can only be used inside a server.",
-        flags: MessageFlags.Ephemeral,
-      }).catch(() => {});
+      await safeReply(interaction, buildTextReply("This command can only be used inside a server.", true)).catch(() => {});
       return;
     }
 
@@ -686,18 +675,12 @@ export class CollectionSteamImportCommand {
   async onSteamImportAction(interaction: ButtonInteraction): Promise<void> {
     const parsed = parseCollectionSteamImportActionId(interaction.customId);
     if (!parsed) {
-      await safeReply(interaction, {
-        content: "This Steam import control is invalid.",
-        flags: MessageFlags.Ephemeral,
-      }).catch(() => {});
+      await safeReply(interaction, buildTextReply("This Steam import control is invalid.", true)).catch(() => {});
       return;
     }
 
     if (interaction.user.id !== parsed.ownerId) {
-      await safeReply(interaction, {
-        content: "This Steam import control is not for you.",
-        flags: MessageFlags.Ephemeral,
-      }).catch(() => {});
+      await safeReply(interaction, buildTextReply("This Steam import control is not for you.", true)).catch(() => {});
       return;
     }
 
@@ -824,18 +807,12 @@ export class CollectionSteamImportCommand {
   async onSteamImportChoose(interaction: ButtonInteraction): Promise<void> {
     const parsed = parseCollectionSteamChooseId(interaction.customId);
     if (!parsed) {
-      await safeReply(interaction, {
-        content: "This Steam import choice is invalid.",
-        flags: MessageFlags.Ephemeral,
-      }).catch(() => {});
+      await safeReply(interaction, buildTextReply("This Steam import choice is invalid.", true)).catch(() => {});
       return;
     }
 
     if (interaction.user.id !== parsed.ownerId) {
-      await safeReply(interaction, {
-        content: "This Steam import choice is not for you.",
-        flags: MessageFlags.Ephemeral,
-      }).catch(() => {});
+      await safeReply(interaction, buildTextReply("This Steam import choice is not for you.", true)).catch(() => {});
       return;
     }
 
@@ -883,27 +860,18 @@ export class CollectionSteamImportCommand {
   async onSteamImportRemapModal(interaction: ModalSubmitInteraction): Promise<void> {
     const parsed = parseCollectionSteamRemapModalId(interaction.customId);
     if (!parsed) {
-      await safeReply(interaction, {
-        content: "This remap form is invalid.",
-        flags: MessageFlags.Ephemeral,
-      }).catch(() => {});
+      await safeReply(interaction, buildTextReply("This remap form is invalid.", true)).catch(() => {});
       return;
     }
 
     if (interaction.user.id !== parsed.ownerId) {
-      await safeReply(interaction, {
-        content: "This remap form is not for you.",
-        flags: MessageFlags.Ephemeral,
-      }).catch(() => {});
+      await safeReply(interaction, buildTextReply("This remap form is not for you.", true)).catch(() => {});
       return;
     }
 
     const session = await getSteamCollectionImportById(parsed.importId);
     if (!session || session.userId !== parsed.ownerId || session.status !== "ACTIVE") {
-      await safeReply(interaction, {
-        content: "This Steam import session is no longer active.",
-        flags: MessageFlags.Ephemeral,
-      }).catch(() => {});
+      await safeReply(interaction, buildTextReply("This Steam import session is no longer active.", true)).catch(() => {});
       return;
     }
 
@@ -977,27 +945,18 @@ export class CollectionSteamImportCommand {
   async onSteamImportGameIdModal(interaction: ModalSubmitInteraction): Promise<void> {
     const parsed = parseCollectionSteamGameIdModalId(interaction.customId);
     if (!parsed) {
-      await safeReply(interaction, {
-        content: "This GameDB ID form is invalid.",
-        flags: MessageFlags.Ephemeral,
-      }).catch(() => {});
+      await safeReply(interaction, buildTextReply("This GameDB ID form is invalid.", true)).catch(() => {});
       return;
     }
 
     if (interaction.user.id !== parsed.ownerId) {
-      await safeReply(interaction, {
-        content: "This GameDB ID form is not for you.",
-        flags: MessageFlags.Ephemeral,
-      }).catch(() => {});
+      await safeReply(interaction, buildTextReply("This GameDB ID form is not for you.", true)).catch(() => {});
       return;
     }
 
     const session = await getSteamCollectionImportById(parsed.importId);
     if (!session || session.userId !== parsed.ownerId || session.status !== "ACTIVE") {
-      await safeReply(interaction, {
-        content: "This Steam import session is no longer active.",
-        flags: MessageFlags.Ephemeral,
-      }).catch(() => {});
+      await safeReply(interaction, buildTextReply("This Steam import session is no longer active.", true)).catch(() => {});
       return;
     }
 

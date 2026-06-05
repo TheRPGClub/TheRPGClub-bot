@@ -4,7 +4,6 @@ import {
   ButtonBuilder,
   ButtonInteraction,
   ButtonStyle,
-  MessageFlags,
 } from "discord.js";
 import type { Presence } from "discord.js";
 import type { ArgsOf, Client } from "discordx";
@@ -278,17 +277,11 @@ export class PresenceUpdate {
     const sessionId = interaction.customId.replace(`${OPT_OUT_GAME_PREFIX}:`, "");
     const session = presencePromptSessions.get(sessionId);
     if (!session) {
-      await safeReply(interaction, {
-        content: "That prompt has expired.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("That prompt has expired.", true));
       return;
     }
     if (interaction.user.id !== session.userId) {
-      await safeReply(interaction, {
-        content: "This prompt isn't for you.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("This prompt isn't for you.", true));
       return;
     }
 
@@ -306,17 +299,11 @@ export class PresenceUpdate {
     const sessionId = interaction.customId.replace(`${OPT_OUT_ALL_PREFIX}:`, "");
     const session = presencePromptSessions.get(sessionId);
     if (!session) {
-      await safeReply(interaction, {
-        content: "That prompt has expired.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("That prompt has expired.", true));
       return;
     }
     if (interaction.user.id !== session.userId) {
-      await safeReply(interaction, {
-        content: "This prompt isn't for you.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("This prompt isn't for you.", true));
       return;
     }
 

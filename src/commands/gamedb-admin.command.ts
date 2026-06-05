@@ -1360,10 +1360,7 @@ export class GameDbAdmin {
       titleWords,
     );
     if (!logs.length) {
-      await safeReply(interaction, {
-        content: "No games found with missing images and valid IGDB IDs.",
-        flags: isPublic ? undefined : MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("No games found with missing images and valid IGDB IDs.", !(isPublic)));
       AUTO_ACCEPT_RUNS.delete(runId);
       return;
     }
@@ -1483,11 +1480,7 @@ export class GameDbAdmin {
       titleWords,
     );
     if (!logs.length) {
-      await safeReply(interaction, {
-        content: "No games found with missing featured videos and valid IGDB IDs.",
-        __forceFollowUp: useFollowUp,
-        flags: isPublic ? undefined : MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, { ...buildTextReply("No games found with missing featured videos and valid IGDB IDs.", !(isPublic)), __forceFollowUp: useFollowUp });
       AUTO_ACCEPT_RUNS.delete(runId);
       return;
     }
@@ -1607,11 +1600,7 @@ export class GameDbAdmin {
       titleWords,
     );
     if (!logs.length) {
-      await safeReply(interaction, {
-        content: "No games found with missing release data and valid IGDB IDs.",
-        __forceFollowUp: useFollowUp,
-        flags: isPublic ? undefined : MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, { ...buildTextReply("No games found with missing release data and valid IGDB IDs.", !(isPublic)), __forceFollowUp: useFollowUp });
       AUTO_ACCEPT_RUNS.delete(runId);
       return;
     }
@@ -1684,12 +1673,8 @@ export class GameDbAdmin {
       cleanedAdditionalSynonyms,
     );
     if (terms.length < 2) {
-      await safeReply(interaction, {
-        content:
-          "Invalid input. Provide a base term and synonym with letters or numbers. " +
-          "Additional synonyms can be separated by comma, pipe, semicolon, or newline.",
-        flags: isPublic ? undefined : MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("Invalid input. Provide a base term and synonym with letters or numbers. " +
+          "Additional synonyms can be separated by comma, pipe, semicolon, or newline.", !(isPublic)));
       return;
     }
 
@@ -1700,15 +1685,9 @@ export class GameDbAdmin {
       if (content.length > 1900) {
         content = `${content.slice(0, 1900)}...`;
       }
-      await safeReply(interaction, {
-        content,
-        flags: isPublic ? undefined : MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply(content, !(isPublic)));
     } catch (err: any) {
-      await safeReply(interaction, {
-        content: `Failed to save synonym group. ${err?.message ?? "Unknown error."}`,
-        flags: isPublic ? undefined : MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply(`Failed to save synonym group. ${err?.message ?? "Unknown error."}`, !(isPublic)));
     }
   }
 
@@ -1752,19 +1731,13 @@ export class GameDbAdmin {
     const parts = interaction.customId.split(":");
     const draftId = Number(parts[1]);
     if (!Number.isInteger(draftId) || draftId <= 0) {
-      await safeReply(interaction, {
-        content: "This synonym draft is no longer valid.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("This synonym draft is no longer valid.", true));
       return;
     }
 
     const draft = await GameSearchSynonymDraft.getDraft(draftId);
     if (!draft || draft.userId !== interaction.user.id) {
-      await safeReply(interaction, {
-        content: "This synonym draft is no longer available.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("This synonym draft is no longer available.", true));
       return;
     }
 
@@ -1772,11 +1745,7 @@ export class GameDbAdmin {
     const cleanedInput = sanitizeUserInput(rawInput, { preserveNewlines: true });
     const pairs = parseSynonymPairs(cleanedInput, 50);
     if (!pairs.length) {
-      await safeReply(interaction, {
-        content:
-          "No valid pairs found. Use one pair per line with a separator like \"<->\" or \"->\".",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("No valid pairs found. Use one pair per line with a separator like \"<->\" or \"->\".", true));
       return;
     }
 
@@ -1815,10 +1784,13 @@ export class GameDbAdmin {
       content = `${content.slice(0, 1900)}...`;
     }
 
+    const synonymSummaryReply = buildTextReply(content, true);
     await safeReply(interaction, {
-      content,
-      components: buildSynonymContinueComponents(draftId),
-      flags: MessageFlags.Ephemeral,
+      ...synonymSummaryReply,
+      components: [
+        ...synonymSummaryReply.components,
+        ...buildSynonymContinueComponents(draftId),
+      ],
     });
   }
 
@@ -1827,19 +1799,13 @@ export class GameDbAdmin {
     const parts = interaction.customId.split(":");
     const draftId = Number(parts[1]);
     if (!Number.isInteger(draftId) || draftId <= 0) {
-      await safeReply(interaction, {
-        content: "This synonym draft is no longer valid.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("This synonym draft is no longer valid.", true));
       return;
     }
 
     const draft = await GameSearchSynonymDraft.getDraft(draftId);
     if (!draft || draft.userId !== interaction.user.id) {
-      await safeReply(interaction, {
-        content: "This synonym draft is no longer available.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("This synonym draft is no longer available.", true));
       return;
     }
 
@@ -1851,28 +1817,18 @@ export class GameDbAdmin {
     const parts = interaction.customId.split(":");
     const draftId = Number(parts[1]);
     if (!Number.isInteger(draftId) || draftId <= 0) {
-      await safeReply(interaction, {
-        content: "This synonym draft is no longer valid.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("This synonym draft is no longer valid.", true));
       return;
     }
 
     const draft = await GameSearchSynonymDraft.getDraft(draftId);
     if (!draft || draft.userId !== interaction.user.id) {
-      await safeReply(interaction, {
-        content: "This synonym draft is no longer available.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("This synonym draft is no longer available.", true));
       return;
     }
 
     await GameSearchSynonymDraft.deleteDraft(draftId);
-    await safeUpdate(interaction, {
-      content: "Synonym entry complete.",
-      components: [],
-      flags: MessageFlags.Ephemeral,
-    });
+    await safeUpdate(interaction, buildTextReply("Synonym entry complete.", true));
   }
 
   @SelectMenuComponent({ id: /^gamedb-syn-edit-group:\d+:\d+:[A-Za-z0-9_-]*$/ })
@@ -1882,28 +1838,19 @@ export class GameDbAdmin {
     const parts = interaction.customId.split(":");
     const ownerId = parts[1];
     if (interaction.user.id !== ownerId) {
-      await safeReply(interaction, {
-        content: "This list isn't for you.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("This list isn't for you.", true));
       return;
     }
 
     const groupId = Number(interaction.values[0]);
     if (!Number.isInteger(groupId) || groupId <= 0) {
-      await safeReply(interaction, {
-        content: "Invalid synonym group selected.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("Invalid synonym group selected.", true));
       return;
     }
 
     const terms = await GameSearchSynonym.listGroupTerms(groupId);
     if (!terms.length) {
-      await safeReply(interaction, {
-        content: "Synonym group not found.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("Synonym group not found.", true));
       return;
     }
 
@@ -1915,10 +1862,7 @@ export class GameDbAdmin {
     await interaction
       .showModal(buildSynonymGroupEditModal(ownerId, groupId, termLines))
       .catch(async () => {
-        await safeReply(interaction, {
-          content: "Unable to open the edit modal. Please try again.",
-          flags: MessageFlags.Ephemeral,
-        });
+        await safeReply(interaction, buildTextReply("Unable to open the edit modal. Please try again.", true));
       });
   }
 
@@ -1931,28 +1875,19 @@ export class GameDbAdmin {
     const page = Number(parts[2]);
     const encodedQuery = parts[3] ?? "";
     if (interaction.user.id !== ownerId) {
-      await safeReply(interaction, {
-        content: "This list isn't for you.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("This list isn't for you.", true));
       return;
     }
 
     const groupId = Number(interaction.values[0]);
     if (!Number.isInteger(groupId) || groupId <= 0) {
-      await safeReply(interaction, {
-        content: "Invalid synonym group selected.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("Invalid synonym group selected.", true));
       return;
     }
 
     const deleted = await GameSearchSynonym.deleteGroup(groupId);
     if (!deleted) {
-      await safeReply(interaction, {
-        content: "Synonym group not found.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("Synonym group not found.", true));
       return;
     }
 
@@ -1972,10 +1907,7 @@ export class GameDbAdmin {
     const parts = interaction.customId.split(":");
     const ownerId = parts[1];
     if (interaction.user.id !== ownerId) {
-      await safeReply(interaction, {
-        content: "This list isn't for you.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("This list isn't for you.", true));
       return;
     }
 
@@ -1983,10 +1915,7 @@ export class GameDbAdmin {
     await interaction
       .showModal(buildSynonymAddModal(draft.draftId))
       .catch(async () => {
-        await safeReply(interaction, {
-          content: "Unable to open the synonym modal. Please try again.",
-          flags: MessageFlags.Ephemeral,
-        });
+        await safeReply(interaction, buildTextReply("Unable to open the synonym modal. Please try again.", true));
       });
   }
 
@@ -1998,17 +1927,11 @@ export class GameDbAdmin {
     const ownerId = parts[1];
     const groupId = Number(parts[2]);
     if (interaction.user.id !== ownerId) {
-      await safeReply(interaction, {
-        content: "This edit request isn't for you.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("This edit request isn't for you.", true));
       return;
     }
     if (!Number.isInteger(groupId) || groupId <= 0) {
-      await safeReply(interaction, {
-        content: "Invalid synonym group selected.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("Invalid synonym group selected.", true));
       return;
     }
 
@@ -2026,10 +1949,7 @@ export class GameDbAdmin {
     }
 
     if (terms.length < 2) {
-      await safeReply(interaction, {
-        content: "Synonym groups must include at least two terms.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("Synonym groups must include at least two terms.", true));
       return;
     }
 
@@ -2044,15 +1964,9 @@ export class GameDbAdmin {
       if (content.length > 1900) {
         content = `${content.slice(0, 1900)}...`;
       }
-      await safeReply(interaction, {
-        content,
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply(content, true));
     } catch (err: any) {
-      await safeReply(interaction, {
-        content: err?.message ?? "Failed to update synonym group.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply(err?.message ?? "Failed to update synonym group.", true));
     }
   }
 
@@ -2065,10 +1979,7 @@ export class GameDbAdmin {
     const direction = parts[4];
 
     if (interaction.user.id !== ownerId) {
-      await safeReply(interaction, {
-        content: "This list isn't for you.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("This list isn't for you.", true));
       return;
     }
 

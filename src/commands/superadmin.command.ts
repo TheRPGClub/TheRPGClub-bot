@@ -44,6 +44,7 @@ import {
   notifyUnknownCompletionPlatform,
   saveCompletion,
 } from "../functions/CompletionHelpers.js";
+import { buildTextReply } from "../functions/ComponentsV2Utils.js";
 
 type CompletionAddContext = {
   targetUserId: string;
@@ -212,10 +213,7 @@ export class SuperAdmin {
     if (!okToUseCommand) return;
 
     if (!COMPLETION_TYPES.includes(completionType)) {
-      await safeReply(interaction, {
-        content: "Invalid completion type.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("Invalid completion type.", true));
       return;
     }
 
@@ -228,10 +226,7 @@ export class SuperAdmin {
     try {
       completedAt = parseCompletionDateInput(normalizedDate ?? "today");
     } catch (err: any) {
-      await safeReply(interaction, {
-        content: err?.message ?? "Invalid completion date.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply(err?.message ?? "Invalid completion date.", true));
       return;
     }
 
@@ -239,10 +234,7 @@ export class SuperAdmin {
       finalPlaytimeHours !== undefined &&
       (Number.isNaN(finalPlaytimeHours) || finalPlaytimeHours < 0)
     ) {
-      await safeReply(interaction, {
-        content: "Final playtime must be a non-negative number of hours.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("Final playtime must be a non-negative number of hours.", true));
       return;
     }
 
@@ -265,11 +257,7 @@ export class SuperAdmin {
     const ctx = superadminCompletionAddSessions.get(sessionId);
 
     if (!ctx) {
-      await interaction
-        .reply({
-          content: "This completion prompt has expired.",
-          flags: MessageFlags.Ephemeral,
-        })
+      await safeReply(interaction, buildTextReply("This completion prompt has expired.", true))
         .catch(() => {});
       return;
     }
@@ -280,12 +268,7 @@ export class SuperAdmin {
 
     const value = interaction.values?.[0];
     if (!value) {
-      await interaction
-        .reply({
-          content: "No selection received.",
-          flags: MessageFlags.Ephemeral,
-        })
-        .catch(() => {});
+      await safeReply(interaction, buildTextReply("No selection received.", true)).catch(() => {});
       return;
     }
 
@@ -311,10 +294,7 @@ export class SuperAdmin {
     const ctx = superadminCompletionPlatformSessions.get(sessionId);
 
     if (!ctx) {
-      await safeReply(interaction, {
-        content: "This completion prompt has expired.",
-        flags: MessageFlags.Ephemeral,
-      }).catch(() => {});
+      await safeReply(interaction, buildTextReply("This completion prompt has expired.", true)).catch(() => {});
       return;
     }
 
@@ -322,10 +302,7 @@ export class SuperAdmin {
     if (!okToUseCommand) return;
 
     if (interaction.user.id !== ctx.userId) {
-      await safeReply(interaction, {
-        content: "This completion prompt isn't for you.",
-        flags: MessageFlags.Ephemeral,
-      }).catch(() => {});
+      await safeReply(interaction, buildTextReply("This completion prompt isn't for you.", true)).catch(() => {});
       return;
     }
 
@@ -343,10 +320,7 @@ export class SuperAdmin {
       ctx.platforms.some((platform) => platform.id === platformId)
     );
     if (!valid) {
-      await safeReply(interaction, {
-        content: "Invalid platform selection.",
-        flags: MessageFlags.Ephemeral,
-      }).catch(() => {});
+      await safeReply(interaction, buildTextReply("Invalid platform selection.", true)).catch(() => {});
       return;
     }
 
@@ -355,11 +329,7 @@ export class SuperAdmin {
 
     const game = await Game.getGameById(ctx.gameId);
     if (!game) {
-      await safeReply(interaction, {
-        content: "Selected game was not found in GameDB.",
-        flags: MessageFlags.Ephemeral,
-        __forceFollowUp: true,
-      });
+      await safeReply(interaction, { ...buildTextReply("Selected game was not found in GameDB.", true), __forceFollowUp: true });
       return;
     }
 
@@ -424,10 +394,7 @@ export class SuperAdmin {
       STANDARD_PLATFORM_IDS,
     );
     if (!platforms.length) {
-      await safeReply(interaction, {
-        content: "No platform release data found for this game.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("No platform release data found for this game.", true));
       return;
     }
 
@@ -479,22 +446,16 @@ export class SuperAdmin {
         await safeUpdate(interaction, loading).catch(() => {});
       }
     } else {
-      await safeReply(interaction, {
-        content: `Searching IGDB for "${searchTerm}"...`,
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply(`Searching IGDB for "${searchTerm}"...`, true));
     }
 
     const igdbSearch = await igdbService.searchGames(searchTerm);
     if (!igdbSearch.results.length) {
       const content = `No GameDB or IGDB matches found for "${searchTerm}".`;
       if ("isMessageComponent" in interaction && interaction.isMessageComponent()) {
-        await safeReply(interaction, { content, components: [] }).catch(() => {});
+        await safeReply(interaction, buildTextReply(content, false)).catch(() => {});
       } else {
-        await safeReply(interaction, {
-          content,
-          flags: MessageFlags.Ephemeral,
-        });
+        await safeReply(interaction, buildTextReply(content, true));
       }
       return;
     }
@@ -525,11 +486,7 @@ export class SuperAdmin {
         const imported = await this.importGameFromIgdbForCompletion(gameId);
         const game = await Game.getGameById(imported.gameId);
         if (!game) {
-          await safeReply(sel, {
-            content: "Imported game was not found in GameDB.",
-            flags: MessageFlags.Ephemeral,
-            __forceFollowUp: true,
-          });
+          await safeReply(sel, { ...buildTextReply("Imported game was not found in GameDB.", true), __forceFollowUp: true });
           return;
         }
         await this.promptCompletionPlatformSelection(sel, ctx, game);
@@ -589,10 +546,7 @@ export class SuperAdmin {
 
     const sanitizedMessage = sanitizeUserInput(message, { preserveNewlines: true });
     if (!sanitizedMessage) {
-      await safeReply(interaction, {
-        content: "Message cannot be empty.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("Message cannot be empty.", true));
       return;
     }
 
@@ -607,53 +561,35 @@ export class SuperAdmin {
         targetChannel = interaction.channel;
       }
       if (!targetChannel || !("messages" in targetChannel)) {
-        await safeReply(interaction, {
-          content: "Channel not found for that message id.",
-          flags: MessageFlags.Ephemeral,
-        });
+        await safeReply(interaction, buildTextReply("Channel not found for that message id.", true));
         return;
       }
       const targetMessage = await (targetChannel as any).messages
         .fetch(replyTargetId)
         .catch(() => null);
       if (!targetMessage) {
-        await safeReply(interaction, {
-          content: "Message not found in that channel.",
-          flags: MessageFlags.Ephemeral,
-        });
+        await safeReply(interaction, buildTextReply("Message not found in that channel.", true));
         return;
       }
 
-      await targetMessage.reply({ content: sanitizedMessage }).catch(() => {});
-      await safeReply(interaction, {
-        content: "Reply sent.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await targetMessage.reply(buildTextReply(sanitizedMessage, false)).catch(() => {});
+      await safeReply(interaction, buildTextReply("Reply sent.", true));
       return;
     }
 
     if (!targetChannelId) {
-      await safeReply(interaction, {
-        content: "Channel ID is required when no message id is provided.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("Channel ID is required when no message id is provided.", true));
       return;
     }
 
     targetChannel = await interaction.client.channels.fetch(targetChannelId).catch(() => null);
     if (!targetChannel || !("send" in targetChannel)) {
-      await safeReply(interaction, {
-        content: "Channel not found or not a text channel.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("Channel not found or not a text channel.", true));
       return;
     }
 
     await (targetChannel as any).send({ content: sanitizedMessage }).catch(() => {});
-    await safeReply(interaction, {
-      content: "Message sent.",
-      flags: MessageFlags.Ephemeral,
-    });
+    await safeReply(interaction, buildTextReply("Message sent.", true));
   }
 
   private async processCompletionSelection(
@@ -663,10 +599,7 @@ export class SuperAdmin {
   ): Promise<boolean> {
     if (value === "import-igdb") {
       if (!ctx.query) {
-        await safeReply(interaction, {
-          content: "Original search query lost. Please try again.",
-          flags: MessageFlags.Ephemeral,
-        });
+        await safeReply(interaction, buildTextReply("Original search query lost. Please try again.", true));
         return false;
       }
       await this.promptIgdbSelection(interaction, ctx.query, ctx);
@@ -676,20 +609,12 @@ export class SuperAdmin {
     try {
       const parsedId = Number(value);
       if (!Number.isInteger(parsedId) || parsedId <= 0) {
-        await safeReply(interaction, {
-          content: "Invalid selection.",
-          flags: MessageFlags.Ephemeral,
-          __forceFollowUp: true,
-        });
+        await safeReply(interaction, { ...buildTextReply("Invalid selection.", true), __forceFollowUp: true });
         return false;
       }
       const game = await Game.getGameById(parsedId);
       if (!game) {
-        await safeReply(interaction, {
-          content: "Selected game was not found in GameDB.",
-          flags: MessageFlags.Ephemeral,
-          __forceFollowUp: true,
-        });
+        await safeReply(interaction, { ...buildTextReply("Selected game was not found in GameDB.", true), __forceFollowUp: true });
         return false;
       }
 
@@ -697,11 +622,7 @@ export class SuperAdmin {
       return true;
     } catch (err: any) {
       const msg = extractErrorMessage(err);
-      await safeReply(interaction, {
-        content: `Failed to add completion: ${msg}`,
-        flags: MessageFlags.Ephemeral,
-        __forceFollowUp: true,
-      });
+      await safeReply(interaction, { ...buildTextReply(`Failed to add completion: ${msg}`, true), __forceFollowUp: true });
       return false;
     }
   }
@@ -783,7 +704,7 @@ export class SuperAdmin {
 
     const guild = interaction.guild;
     if (!guild) {
-      await safeReply(interaction, { content: "This command must be run in a guild.", flags: MessageFlags.Ephemeral });
+      await safeReply(interaction, buildTextReply("This command must be run in a guild.", true));
       return;
     }
 
@@ -795,7 +716,7 @@ export class SuperAdmin {
       newcomer: process.env.NEWCOMER_ROLE_ID?.replace(/[<@&>]/g, "").trim() || null,
     };
 
-    await safeReply(interaction, { content: "Fetching all guild members... this may take a moment.", flags: MessageFlags.Ephemeral });
+    await safeReply(interaction, buildTextReply("Fetching all guild members... this may take a moment.", true));
 
     const members = await guild.members.fetch();
     const departedCount = await Member.markDepartedNotIn(Array.from(members.keys()));
@@ -942,12 +863,8 @@ export class SuperAdmin {
       await connection.close();
     }
 
-    await safeReply(interaction, {
-      content:
-        `Member scan complete. Upserts succeeded: ${successCount}. Failed: ${failCount}. ` +
-        `Marked departed: ${departedCount}.`,
-      flags: MessageFlags.Ephemeral,
-    });
+    await safeReply(interaction, buildTextReply(`Member scan complete. Upserts succeeded: ${successCount}. Failed: ${failCount}. ` +
+        `Marked departed: ${departedCount}.`, true));
   }
 
   @Slash({ description: "Show help for server owner commands", name: "help" })
@@ -982,9 +899,14 @@ export class SuperAdmin {
 
     if (!topic) {
       const response = buildSuperAdminHelpResponse();
+      const textReply = buildTextReply(
+        "Sorry, I don't recognize that superadmin help topic. Showing the superadmin help menu.",
+        false,
+      );
       await safeUpdate(interaction, {
         ...response,
-        content: "Sorry, I don't recognize that superadmin help topic. Showing the superadmin help menu.",
+        flags: textReply.flags,
+        components: [...textReply.components, ...response.components],
       });
       return;
     }
@@ -1011,9 +933,7 @@ export async function isSuperAdmin(interaction: AnyRepliable): Promise<boolean> 
   const userId = interaction.user.id;
 
   if (!guild) {
-    await safeReply(interaction, {
-      content: "This command can only be used inside a server.",
-    });
+    await safeReply(interaction, buildTextReply("This command can only be used inside a server.", false));
     return false;
   }
 
@@ -1050,4 +970,3 @@ export function buildSuperAdminHelpResponse(
     components,
   };
 }
-

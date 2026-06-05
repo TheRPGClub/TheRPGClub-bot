@@ -622,34 +622,22 @@ export class ProfileCommand {
     const lastSeenBeforeDate = parseDateInput(lastSeenBefore);
 
     if (joinedAfter && !joinedAfterDate) {
-      await safeReply(interaction, {
-        content: "Invalid joinedafter date/time. Please use an ISO format.",
-        flags: ephemeralFlag(ephemeral),
-      });
+      await safeReply(interaction, buildTextReply("Invalid joinedafter date/time. Please use an ISO format.", ephemeral));
       return;
     }
 
     if (joinedBefore && !joinedBeforeDate) {
-      await safeReply(interaction, {
-        content: "Invalid joinedbefore date/time. Please use an ISO format.",
-        flags: ephemeralFlag(ephemeral),
-      });
+      await safeReply(interaction, buildTextReply("Invalid joinedbefore date/time. Please use an ISO format.", ephemeral));
       return;
     }
 
     if (lastSeenAfter && !lastSeenAfterDate) {
-      await safeReply(interaction, {
-        content: "Invalid lastseenafter date/time. Please use an ISO format.",
-        flags: ephemeralFlag(ephemeral),
-      });
+      await safeReply(interaction, buildTextReply("Invalid lastseenafter date/time. Please use an ISO format.", ephemeral));
       return;
     }
 
     if (lastSeenBefore && !lastSeenBeforeDate) {
-      await safeReply(interaction, {
-        content: "Invalid lastseenbefore date/time. Please use an ISO format.",
-        flags: ephemeralFlag(ephemeral),
-      });
+      await safeReply(interaction, buildTextReply("Invalid lastseenbefore date/time. Please use an ISO format.", ephemeral));
       return;
     }
 
@@ -678,10 +666,7 @@ export class ProfileCommand {
 
     const results = await Member.search(filters);
     if (!results.length) {
-      await safeReply(interaction, {
-        content: "No members matched those filters.",
-        flags: ephemeralFlag(ephemeral),
-      });
+      await safeReply(interaction, buildTextReply("No members matched those filters.", ephemeral));
       return;
     }
 
@@ -800,10 +785,7 @@ export class ProfileCommand {
     steam = steam ? sanitizeUserInput(steam, { preserveNewlines: false }) : undefined;
 
     if (!isSelf && !isAdmin) {
-      await safeReply(interaction, {
-        content: "You can only edit your own profile.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("You can only edit your own profile.", true));
       return;
     }
 
@@ -814,10 +796,7 @@ export class ProfileCommand {
       nsw === undefined &&
       steam === undefined
     ) {
-      await safeReply(interaction, {
-        content: "Provide at least one field to update.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("Provide at least one field to update.", true));
       return;
     }
 
@@ -845,16 +824,10 @@ export class ProfileCommand {
       if (nsw !== undefined) changedFields.push("Switch");
       if (steam !== undefined) changedFields.push("Steam");
 
-      await safeReply(interaction, {
-        content: `Updated profile for <@${target.id}> (${changedFields.join(", ")}).`,
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply(`Updated profile for <@${target.id}> (${changedFields.join(", ")}).`, true));
     } catch (err: any) {
       const msg = extractErrorMessage(err);
-      await safeReply(interaction, {
-        content: `Error updating profile: ${msg}`,
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply(`Error updating profile: ${msg}`, true));
     }
   }
 

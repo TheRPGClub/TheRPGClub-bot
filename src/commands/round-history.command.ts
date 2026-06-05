@@ -8,7 +8,6 @@ import {
   ApplicationCommandOptionType,
   ButtonBuilder,
   ButtonStyle,
-  MessageFlags,
 } from "discord.js";
 import {
   ActionRowBuilder as ModalActionRowBuilder,
@@ -560,10 +559,7 @@ export class RoundHistoryCommand {
           postErrorJsonError instanceof Error ? postErrorJsonError : String(postErrorJsonError ?? ""),
         componentSummary: getRoundHistoryModalComponentSummary(postErrorJson),
       });
-      await safeReply(interaction, {
-        content: `Unable to open round history form: ${errorMessage}`,
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply(`Unable to open round history form: ${errorMessage}`, true));
     }
   }
 
@@ -580,18 +576,12 @@ export class RoundHistoryCommand {
     const selectedYear = Number(selectedYearRaw);
 
     if (!parsedCustomId || parsedCustomId.feature !== "round-history" || parsedCustomId.flow !== "query") {
-      await safeReply(interaction, {
-        content: "This round history form is invalid. Please run /round-history again.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("This round history form is invalid. Please run /round-history again.", true));
       return;
     }
 
     if (!selectedKind) {
-      await safeReply(interaction, {
-        content: "Please choose GOTM, NR-GOTM, or Both.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("Please choose GOTM, NR-GOTM, or Both.", true));
       return;
     }
 
@@ -620,18 +610,12 @@ export class RoundHistoryCommand {
   async handleRoundHistoryPageButton(interaction: ButtonInteraction): Promise<void> {
     const parsed = parseRoundHistoryPageCustomId(interaction.customId);
     if (!parsed) {
-      await safeReply(interaction, {
-        content: "This round history page control is invalid. Please run /round-history again.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("This round history page control is invalid. Please run /round-history again.", true));
       return;
     }
 
     if (parsed.ownerUserId !== interaction.user.id) {
-      await safeReply(interaction, {
-        content: "Only the user who opened this round history view can use these controls.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("Only the user who opened this round history view can use these controls.", true));
       return;
     }
 

@@ -68,7 +68,7 @@ import {
   announceCompletion,
   notifyUnknownCompletionPlatform,
 } from "../functions/CompletionHelpers.js";
-import { safeV2TextContent } from "../functions/ComponentsV2Utils.js";
+import { buildTextReply, safeV2TextContent } from "../functions/ComponentsV2Utils.js";
 import { formatPlatformDisplayName } from "../functions/PlatformDisplay.js";
 import {
   autocompleteGameCompletionPlatform,
@@ -2453,7 +2453,8 @@ export class NowPlayingCommand {
         [container],
       );
       if (mode === "update" && "update" in interaction) {
-        await safeUpdate(interaction, { components: pmComponents, flags: buildComponentsV2Flags(true) });
+        await safeUpdate(interaction, { 
+          components: pmComponents, flags: buildComponentsV2Flags(true) });
       } else {
         await safeReply(interaction, {
           components: pmComponents,
@@ -2464,10 +2465,7 @@ export class NowPlayingCommand {
     }
 
     if (!("showModal" in interaction)) {
-      await safeReply(interaction, {
-        content: "Unable to open the note form right now.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("Unable to open the note form right now.", true));
       return;
     }
 
@@ -2484,7 +2482,8 @@ export class NowPlayingCommand {
         [container],
       );
       if (mode === "update" && "update" in interaction) {
-        await safeUpdate(interaction, { components: pmComponents, flags: buildComponentsV2Flags(true) });
+        await safeUpdate(interaction, { 
+          components: pmComponents, flags: buildComponentsV2Flags(true) });
       } else {
         await safeReply(interaction, {
           components: pmComponents,
@@ -2497,19 +2496,12 @@ export class NowPlayingCommand {
     await interaction.showModal(
       buildEditNotesModal(interaction.user.id, limitedEntries),
     ).catch(async () => {
-      await safeReply(interaction, {
-        content: "Unable to open the note form right now.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("Unable to open the note form right now.", true));
     });
 
     if (editableEntries.length > NOW_PLAYING_NOTE_MODAL_MAX_FIELDS) {
-      await safeReply(interaction, {
-        content:
-          `Discord modals support up to ${NOW_PLAYING_NOTE_MODAL_MAX_FIELDS} note fields at once. ` +
-          "I opened the first set. Submit, then use Edit Notes again for the rest.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply(`Discord modals support up to ${NOW_PLAYING_NOTE_MODAL_MAX_FIELDS} note fields at once. ` +
+          "I opened the first set. Submit, then use Edit Notes again for the rest.", true));
     }
   }
 
@@ -2532,7 +2524,8 @@ export class NowPlayingCommand {
         [container],
       );
       if (mode === "update" && "update" in interaction) {
-        await safeUpdate(interaction, { components: pmComponents, flags: buildComponentsV2Flags(true) });
+        await safeUpdate(interaction, { 
+          components: pmComponents, flags: buildComponentsV2Flags(true) });
       } else {
         await safeReply(interaction, {
           components: pmComponents,
@@ -2611,7 +2604,8 @@ export class NowPlayingCommand {
         new TextDisplayBuilder().setContent("That game could not be found."),
       );
       if (mode === "update" && "update" in interaction) {
-        await safeUpdate(interaction, { components: [container], flags: buildComponentsV2Flags(true) });
+        await safeUpdate(interaction, { 
+          components: [container], flags: buildComponentsV2Flags(true) });
       } else {
         await safeReply(interaction, {
           components: [container],
@@ -2627,7 +2621,8 @@ export class NowPlayingCommand {
         new TextDisplayBuilder().setContent("No platform data is available for this game."),
       );
       if (mode === "update" && "update" in interaction) {
-        await safeUpdate(interaction, { components: [container], flags: buildComponentsV2Flags(true) });
+        await safeUpdate(interaction, { 
+          components: [container], flags: buildComponentsV2Flags(true) });
       } else {
         await safeReply(interaction, {
           components: [container],
@@ -2675,10 +2670,7 @@ export class NowPlayingCommand {
     const isEphemeral = interaction.message.flags?.has(MessageFlags.Ephemeral) ?? false;
     const [, ownerId, slotRaw, stateToken] = interaction.customId.split(":");
     if (interaction.user.id !== ownerId) {
-      await safeReply(interaction, {
-        content: "This platform prompt isn't for you.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("This platform prompt isn't for you.", true));
       return;
     }
 
@@ -2690,10 +2682,7 @@ export class NowPlayingCommand {
       !Number.isInteger(selectedOptionIndex) ||
       selectedOptionIndex < 0
     ) {
-      await safeReply(interaction, {
-        content: "Invalid selection.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("Invalid selection.", true));
       return;
     }
 
@@ -2701,17 +2690,11 @@ export class NowPlayingCommand {
     const platformOptions = await this.getNowPlayingEditPlatformOptions(entries);
     const parsed = parseNowPlayingPlatformStateToken(stateToken, entries.length);
     if (!parsed || slotIndex >= entries.length || selectedOptionIndex > 24) {
-      await safeReply(interaction, {
-        content: "This platform form has expired. Open Edit Platform again.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("This platform form has expired. Open Edit Platform again.", true));
       return;
     }
     if (selectedOptionIndex >= (platformOptions[slotIndex]?.length ?? 0)) {
-      await safeReply(interaction, {
-        content: "Invalid platform selection for that game.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("Invalid platform selection for that game.", true));
       return;
     }
 
@@ -2733,29 +2716,20 @@ export class NowPlayingCommand {
   async handleEditNoteSelect(interaction: StringSelectMenuInteraction): Promise<void> {
     const [, ownerId] = interaction.customId.split(":");
     if (interaction.user.id !== ownerId) {
-      await safeReply(interaction, {
-        content: "This note prompt isn't for you.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("This note prompt isn't for you.", true));
       return;
     }
 
     const gameId = Number(interaction.values?.[0]);
     if (!Number.isInteger(gameId) || gameId <= 0) {
-      await safeReply(interaction, {
-        content: "Invalid selection.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("Invalid selection.", true));
       return;
     }
 
     const currentEntries = await Member.getNowPlayingEntries(ownerId);
     const currentEntry = currentEntries.find((entry) => entry.gameId === gameId);
     if (!currentEntry) {
-      await safeReply(interaction, {
-        content: "Entry not found.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("Entry not found.", true));
       return;
     }
 
@@ -2767,10 +2741,7 @@ export class NowPlayingCommand {
         currentEntry.note ?? null,
       ),
     ).catch(async () => {
-      await safeReply(interaction, {
-        content: "Unable to open the note form right now.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("Unable to open the note form right now.", true));
     });
   }
 
@@ -2778,34 +2749,22 @@ export class NowPlayingCommand {
   async handleEditNoteDirect(interaction: ButtonInteraction): Promise<void> {
     const [, ownerId, gameIdRaw] = interaction.customId.split(":");
     if (interaction.user.id !== ownerId) {
-      await safeReply(interaction, {
-        content: "This note prompt isn't for you.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("This note prompt isn't for you.", true));
       return;
     }
     const gameId = Number(gameIdRaw);
     if (!Number.isInteger(gameId) || gameId <= 0) {
-      await safeReply(interaction, {
-        content: "Invalid selection.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("Invalid selection.", true));
       return;
     }
     const currentEntries = await Member.getNowPlayingEntries(ownerId);
     const currentEntry = currentEntries.find((entry) => entry.gameId === gameId);
     if (!currentEntry) {
-      await safeReply(interaction, {
-        content: "Entry not found.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("Entry not found.", true));
       return;
     }
     if (currentEntry.journalEnabled) {
-      await safeReply(interaction, {
-        content: "This game uses Game Journal for notes. Use the Journal button to add entries.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("This game uses Game Journal for notes. Use the Journal button to add entries.", true));
       return;
     }
     setNowPlayingListContext(ownerId, interaction.message);
@@ -2817,10 +2776,7 @@ export class NowPlayingCommand {
         currentEntry.note ?? null,
       ),
     ).catch(async () => {
-      await safeReply(interaction, {
-        content: "Unable to open the note form right now.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("Unable to open the note form right now.", true));
     });
   }
 
@@ -2986,10 +2942,7 @@ export class NowPlayingCommand {
   async handleNowPlayingSortReset(interaction: ButtonInteraction): Promise<void> {
     const [, ownerId] = interaction.customId.split(":");
     if (interaction.user.id !== ownerId) {
-      await safeReply(interaction, {
-        content: "This sort prompt isn't for you.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("This sort prompt isn't for you.", true));
       return;
     }
     await safeDeferUpdate(interaction);
@@ -3009,10 +2962,7 @@ export class NowPlayingCommand {
     const ownerId = parts[1];
     const legacyGameIdRaw = parts[2] ?? null;
     if (interaction.user.id !== ownerId) {
-      await safeReply(interaction, {
-        content: "This note prompt isn't for you.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("This note prompt isn't for you.", true));
       return;
     }
 
@@ -3020,10 +2970,7 @@ export class NowPlayingCommand {
     if (legacyGameIdRaw) {
       const gameId = Number(legacyGameIdRaw);
       if (!Number.isInteger(gameId) || gameId <= 0) {
-        await safeReply(interaction, {
-          content: "Invalid selection.",
-          flags: MessageFlags.Ephemeral,
-        });
+        await safeReply(interaction, buildTextReply("Invalid selection.", true));
         return;
       }
 
@@ -3033,10 +2980,7 @@ export class NowPlayingCommand {
       const note = noteInput.trim();
       const nextNote = note ? note : null;
       if (note && note.length > MAX_NOW_PLAYING_NOTE_LEN) {
-        await safeReply(interaction, {
-          content: `Note must be ${MAX_NOW_PLAYING_NOTE_LEN} characters or fewer.`,
-          flags: MessageFlags.Ephemeral,
-        });
+        await safeReply(interaction, buildTextReply(`Note must be ${MAX_NOW_PLAYING_NOTE_LEN} characters or fewer.`, true));
         return;
       }
 
@@ -3058,10 +3002,7 @@ export class NowPlayingCommand {
         }
         const note = noteInput.trim();
         if (note.length > MAX_NOW_PLAYING_NOTE_LEN) {
-          await safeReply(interaction, {
-            content: `Note must be ${MAX_NOW_PLAYING_NOTE_LEN} characters or fewer.`,
-            flags: MessageFlags.Ephemeral,
-          });
+          await safeReply(interaction, buildTextReply(`Note must be ${MAX_NOW_PLAYING_NOTE_LEN} characters or fewer.`, true));
           return;
         }
         const nextNote = note ? note : null;
@@ -3108,29 +3049,20 @@ export class NowPlayingCommand {
       });
       return;
     }
-    await safeReply(interaction, {
-      content: "Could not update that entry.",
-      flags: MessageFlags.Ephemeral,
-    });
+    await safeReply(interaction, buildTextReply("Could not update that entry.", true));
   }
 
   @SelectMenuComponent({ id: /^nowplaying-delete-note-select:\d+$/ })
   async handleDeleteNoteSelect(interaction: StringSelectMenuInteraction): Promise<void> {
     const [, ownerId] = interaction.customId.split(":");
     if (interaction.user.id !== ownerId) {
-      await safeReply(interaction, {
-        content: "This note prompt isn't for you.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("This note prompt isn't for you.", true));
       return;
     }
 
     const gameId = Number(interaction.values?.[0]);
     if (!Number.isInteger(gameId) || gameId <= 0) {
-      await safeReply(interaction, {
-        content: "Invalid selection.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("Invalid selection.", true));
       return;
     }
 
@@ -3138,10 +3070,7 @@ export class NowPlayingCommand {
     const currentEntry = currentEntries.find((entry) => entry.gameId === gameId);
     const currentNote = currentEntry?.note ? currentEntry.note : "No note set.";
     if (!currentEntry) {
-      await safeReply(interaction, {
-        content: "Entry not found.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("Entry not found.", true));
       return;
     }
 
@@ -3171,10 +3100,7 @@ export class NowPlayingCommand {
   async handleDeleteNoteConfirm(interaction: ButtonInteraction): Promise<void> {
     const [, ownerId, gameIdRaw, choice] = interaction.customId.split(":");
     if (interaction.user.id !== ownerId) {
-      await safeReply(interaction, {
-        content: "This note prompt isn't for you.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("This note prompt isn't for you.", true));
       return;
     }
 
@@ -3188,10 +3114,7 @@ export class NowPlayingCommand {
 
     const gameId = Number(gameIdRaw);
     if (!Number.isInteger(gameId) || gameId <= 0) {
-      await safeReply(interaction, {
-        content: "Invalid selection.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("Invalid selection.", true));
       return;
     }
 
@@ -3401,17 +3324,11 @@ export class NowPlayingCommand {
     const nowPlayingEntries = getDisplayNowPlayingEntries(await Member.getNowPlaying(ownerId));
     const selected = nowPlayingEntries.find((entry) => entry.gameId === Number(gameIdRaw));
     if (!selected?.journalEnabled) {
-      await safeReply(interaction, {
-        content: "Journal is not enabled for this game.",
-        flags: buildComponentsV2Flags(true),
-      });
+      await safeReply(interaction, buildTextReply("Journal is not enabled for this game.", true));
       return;
     }
     if (interaction.guildId && !selected.hasJournalEntry) {
-      await safeReply(interaction, {
-        content: "This game's journal has no public entries to show in channel.",
-        flags: buildComponentsV2Flags(true),
-      });
+      await safeReply(interaction, buildTextReply("This game's journal has no public entries to show in channel.", true));
       return;
     }
     const payload = await this.buildJournalComponents(
@@ -3446,10 +3363,7 @@ export class NowPlayingCommand {
     const nowPlayingEntries = getDisplayNowPlayingEntries(await Member.getNowPlaying(ownerId));
     const selected = nowPlayingEntries.find((e) => e.gameId === gameId);
     if (!selected?.journalEnabled || !selected.hasJournalEntry) {
-      await safeReply(interaction, {
-        content: "This game has no public journal entries.",
-        flags: buildComponentsV2Flags(true),
-      });
+      await safeReply(interaction, buildTextReply("This game has no public journal entries.", true));
       return;
     }
     const payload = await this.buildJournalComponents(
@@ -3481,17 +3395,11 @@ export class NowPlayingCommand {
     const nowPlayingEntries = getDisplayNowPlayingEntries(await Member.getNowPlaying(ownerId));
     const selected = nowPlayingEntries.find((entry) => entry.gameId === Number(gameIdRaw));
     if (!selected?.journalEnabled) {
-      await safeReply(interaction, {
-        content: "Journal is not enabled for this game.",
-        flags: buildComponentsV2Flags(true),
-      });
+      await safeReply(interaction, buildTextReply("Journal is not enabled for this game.", true));
       return;
     }
     if (interaction.guildId && !selected.hasJournalEntry) {
-      await safeReply(interaction, {
-        content: "This game's journal has no public entries to show in channel.",
-        flags: buildComponentsV2Flags(true),
-      });
+      await safeReply(interaction, buildTextReply("This game's journal has no public entries to show in channel.", true));
       return;
     }
     const payload = await this.buildJournalComponents(
@@ -3520,7 +3428,7 @@ export class NowPlayingCommand {
   async handleNowPlayingJournalAdd(interaction: ButtonInteraction): Promise<void> {
     const [, ownerId, gameIdRaw, pageRaw] = interaction.customId.split(":");
     if (interaction.user.id !== ownerId) {
-      await safeReply(interaction, { content: "Only the owner can add journal entries." });
+      await safeReply(interaction, buildTextReply("Only the owner can add journal entries.", false));
       return;
     }
     const modal = new ComponentsModalBuilder()
@@ -3552,7 +3460,7 @@ export class NowPlayingCommand {
   async handleNowPlayingJournalEdit(interaction: ButtonInteraction): Promise<void> {
     const [, ownerId, gameIdRaw, pageRaw] = interaction.customId.split(":");
     if (interaction.user.id !== ownerId) {
-      await safeReply(interaction, { content: "Only the owner can edit journal entries." });
+      await safeReply(interaction, buildTextReply("Only the owner can edit journal entries.", false));
       return;
     }
     const gameId = Number(gameIdRaw);
@@ -3560,7 +3468,7 @@ export class NowPlayingCommand {
     const offset = Math.max(0, page - 1);
     const entries = await Member.getGameJournalEntries(ownerId, gameId, { limit: 1, offset });
     if (!entries.length) {
-      await safeReply(interaction, { content: "No journal entries available to edit." });
+      await safeReply(interaction, buildTextReply("No journal entries available to edit.", false));
       return;
     }
     const entry = entries[0];
@@ -3594,7 +3502,7 @@ export class NowPlayingCommand {
   async handleNowPlayingJournalDelete(interaction: ButtonInteraction): Promise<void> {
     const [, ownerId, gameIdRaw, pageRaw] = interaction.customId.split(":");
     if (interaction.user.id !== ownerId) {
-      await safeReply(interaction, { content: "Only the owner can delete journal entries." });
+      await safeReply(interaction, buildTextReply("Only the owner can delete journal entries.", false));
       return;
     }
     const gameId = Number(gameIdRaw);
@@ -3602,7 +3510,7 @@ export class NowPlayingCommand {
     const offset = (Math.max(1, page) - 1) * 5;
     const entries = await Member.getGameJournalEntries(ownerId, gameId, { limit: 5, offset });
     if (!entries.length) {
-      await safeReply(interaction, { content: "No journal entries available to delete." });
+      await safeReply(interaction, buildTextReply("No journal entries available to delete.", false));
       return;
     }
     const options = entries.map((entry) => ({
@@ -3638,13 +3546,13 @@ export class NowPlayingCommand {
   ): Promise<void> {
     const [, ownerId, gameIdRaw, pageRaw] = interaction.customId.split(":");
     if (interaction.user.id !== ownerId) {
-      await safeReply(interaction, { content: "Only the owner can delete journal entries." });
+      await safeReply(interaction, buildTextReply("Only the owner can delete journal entries.", false));
       return;
     }
     const entryId = Number(interaction.values[0]);
     const entry = await Member.getGameJournalEntryForUser(ownerId, entryId);
     if (!entry || entry.gameId !== Number(gameIdRaw)) {
-      await safeReply(interaction, { content: "That journal entry was not found." });
+      await safeReply(interaction, buildTextReply("That journal entry was not found.", false));
       return;
     }
     const entryTitle = entry.title?.trim() ? entry.title.trim() : `Entry #${entry.entryNumber}`;
@@ -3686,13 +3594,13 @@ export class NowPlayingCommand {
   async handleNowPlayingJournalDeleteConfirm(interaction: ButtonInteraction): Promise<void> {
     const [, action, ownerId, gameIdRaw, pageRaw, entryIdRaw] = interaction.customId.split(":");
     if (interaction.user.id !== ownerId) {
-      await safeReply(interaction, { content: "Only the owner can delete journal entries." });
+      await safeReply(interaction, buildTextReply("Only the owner can delete journal entries.", false));
       return;
     }
     if (action === "yes") {
       const removed = await Member.deleteGameJournalEntry(ownerId, Number(entryIdRaw));
       if (!removed) {
-        await safeReply(interaction, { content: "That journal entry was not found." });
+        await safeReply(interaction, buildTextReply("That journal entry was not found.", false));
         return;
       }
     }
@@ -3714,7 +3622,7 @@ export class NowPlayingCommand {
   async handleNowPlayingJournalModal(interaction: ModalSubmitInteraction): Promise<void> {
     const [, ownerId, gameIdRaw, pageRaw] = interaction.customId.split(":");
     if (interaction.user.id !== ownerId) {
-      await safeReply(interaction, { content: "Only the owner can submit journal entries." });
+      await safeReply(interaction, buildTextReply("Only the owner can submit journal entries.", false));
       return;
     }
     const title = sanitizeUserInput(
@@ -3772,14 +3680,14 @@ export class NowPlayingCommand {
     const [, ownerId, gameIdRaw, pageRaw, entryIdRaw] = interaction.customId.split(":");
     const gameId = Number(gameIdRaw);
     if (interaction.user.id !== ownerId) {
-      await safeReply(interaction, { content: "Only the owner can edit journal entries." });
+      await safeReply(interaction, buildTextReply("Only the owner can edit journal entries.", false));
       return;
     }
 
     const entryId = Number(entryIdRaw);
     const existing = await Member.getGameJournalEntryForUser(ownerId, entryId);
     if (!existing || existing.gameId !== gameId) {
-      await safeReply(interaction, { content: "That journal entry was not found." });
+      await safeReply(interaction, buildTextReply("That journal entry was not found.", false));
       return;
     }
 
@@ -3829,10 +3737,7 @@ export class NowPlayingCommand {
   async handleNowPlayingHelp(interaction: ButtonInteraction): Promise<void> {
     const [, screenType, ownerId] = interaction.customId.split(":");
     if (interaction.user.id !== ownerId) {
-      await safeReply(interaction, {
-        content: "This help button isn't for you.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("This help button isn't for you.", true));
       return;
     }
     const helpText = NOW_PLAYING_HELP_TEXTS[screenType]
@@ -3850,10 +3755,7 @@ export class NowPlayingCommand {
   async handleNowPlayingEditMenuSort(interaction: ButtonInteraction): Promise<void> {
     const [, ownerId] = interaction.customId.split(":");
     if (interaction.user.id !== ownerId) {
-      await safeReply(interaction, {
-        content: "This edit menu isn't for you.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("This edit menu isn't for you.", true));
       return;
     }
     await this.promptSortNowPlayingButtons(interaction, ownerId);
@@ -3863,10 +3765,7 @@ export class NowPlayingCommand {
   async handleNowPlayingEditMenuPlatform(interaction: ButtonInteraction): Promise<void> {
     const [, ownerId] = interaction.customId.split(":");
     if (interaction.user.id !== ownerId) {
-      await safeReply(interaction, {
-        content: "This edit menu isn't for you.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("This edit menu isn't for you.", true));
       return;
     }
     await this.promptEditNowPlayingPlatform(interaction, "update");
@@ -3876,10 +3775,7 @@ export class NowPlayingCommand {
   async handleNowPlayingEditMenuComplete(interaction: ButtonInteraction): Promise<void> {
     const [, ownerId] = interaction.customId.split(":");
     if (interaction.user.id !== ownerId) {
-      await safeReply(interaction, {
-        content: "This edit menu isn't for you.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("This edit menu isn't for you.", true));
       return;
     }
     const sessionId = createNowPlayingCompletionWizardSession(ownerId, true);
@@ -3890,10 +3786,7 @@ export class NowPlayingCommand {
   async handleNowPlayingEditMenuRemove(interaction: ButtonInteraction): Promise<void> {
     const [, ownerId] = interaction.customId.split(":");
     if (interaction.user.id !== ownerId) {
-      await safeReply(interaction, {
-        content: "This edit menu isn't for you.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("This edit menu isn't for you.", true));
       return;
     }
     await this.promptRemoveNowPlaying(interaction, "update");
@@ -3903,10 +3796,7 @@ export class NowPlayingCommand {
   async handleNowPlayingEditMenuStartJournal(interaction: ButtonInteraction): Promise<void> {
     const [, ownerId] = interaction.customId.split(":");
     if (interaction.user.id !== ownerId) {
-      await safeReply(interaction, {
-        content: "This edit menu isn't for you.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("This edit menu isn't for you.", true));
       return;
     }
     const entries = await Member.getNowPlaying(ownerId).then(getDisplayNowPlayingEntries);
@@ -3944,10 +3834,7 @@ export class NowPlayingCommand {
   ): Promise<void> {
     const [, ownerId] = interaction.customId.split(":");
     if (interaction.user.id !== ownerId) {
-      await safeReply(interaction, {
-        content: "This edit menu isn't for you.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("This edit menu isn't for you.", true));
       return;
     }
     const gameId = Number(interaction.values[0]);
@@ -4007,10 +3894,7 @@ export class NowPlayingCommand {
   async handleNowPlayingListEditPlatform(interaction: ButtonInteraction): Promise<void> {
     const [, ownerId] = interaction.customId.split(":");
     if (interaction.user.id !== ownerId) {
-      await safeReply(interaction, {
-        content: "This platform prompt isn't for you.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("This platform prompt isn't for you.", true));
       return;
     }
     setNowPlayingListContext(ownerId, interaction.message);
@@ -4021,18 +3905,12 @@ export class NowPlayingCommand {
   async handleNowPlayingEditPlatformPick(interaction: ButtonInteraction): Promise<void> {
     const [, ownerId, gameIdRaw] = interaction.customId.split(":");
     if (interaction.user.id !== ownerId) {
-      await safeReply(interaction, {
-        content: "This platform prompt isn't for you.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("This platform prompt isn't for you.", true));
       return;
     }
     const gameId = Number(gameIdRaw);
     if (!Number.isInteger(gameId) || gameId <= 0) {
-      await safeReply(interaction, {
-        content: "Invalid selection.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("Invalid selection.", true));
       return;
     }
     await this.promptNowPlayingEditPlatformSelection(interaction, ownerId, gameId, "update");
@@ -4042,10 +3920,7 @@ export class NowPlayingCommand {
   async handleNowPlayingEditPlatformSave(interaction: ButtonInteraction): Promise<void> {
     const [, ownerId, stateToken] = interaction.customId.split(":");
     if (interaction.user.id !== ownerId) {
-      await safeReply(interaction, {
-        content: "This platform prompt isn't for you.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("This platform prompt isn't for you.", true));
       return;
     }
 
@@ -4056,10 +3931,10 @@ export class NowPlayingCommand {
     const platformOptions = await this.getNowPlayingEditPlatformOptions(entries);
     const parsed = parseNowPlayingPlatformStateToken(stateToken, entries.length);
     if (!parsed) {
-      await safeReply(interaction, {
-        content: "This platform form has expired. Open Edit Platform again.",
-        flags: responseFlags,
-      });
+      await safeReply(
+        interaction,
+        buildTextReply("This platform form has expired. Open Edit Platform again.", isEphemeral),
+      );
       return;
     }
     if (parsed.some((value) => value < 0)) {
@@ -4082,18 +3957,24 @@ export class NowPlayingCommand {
       const option = platformOptions[slotIndex]?.[selectedOptionIndex];
       const gameId = entries[slotIndex]?.gameId;
       if (!option || !gameId) {
-        await safeReply(interaction, {
-          content: "One or more selected platforms are invalid. Please review and try again.",
-          flags: responseFlags,
-        });
+        await safeReply(
+          interaction,
+          buildTextReply(
+            "One or more selected platforms are invalid. Please review and try again.",
+            isEphemeral,
+          ),
+        );
         return;
       }
       const updated = await Member.updateNowPlayingPlatform(ownerId, gameId, option.platformId);
       if (!updated) {
-        await safeReply(interaction, {
-          content: `Could not update platform for ${entries[slotIndex].title}.`,
-          flags: responseFlags,
-        });
+        await safeReply(
+          interaction,
+          buildTextReply(
+            `Could not update platform for ${entries[slotIndex].title}.`,
+            isEphemeral,
+          ),
+        );
         return;
       }
     }
@@ -4105,10 +3986,7 @@ export class NowPlayingCommand {
   async handleNowPlayingEditPlatformReset(interaction: ButtonInteraction): Promise<void> {
     const [, ownerId] = interaction.customId.split(":");
     if (interaction.user.id !== ownerId) {
-      await safeReply(interaction, {
-        content: "This platform prompt isn't for you.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("This platform prompt isn't for you.", true));
       return;
     }
     await safeDeferUpdate(interaction);
@@ -4131,10 +4009,7 @@ export class NowPlayingCommand {
   async handleNowPlayingListSort(interaction: ButtonInteraction): Promise<void> {
     const [, ownerId] = interaction.customId.split(":");
     if (interaction.user.id !== ownerId) {
-      await safeReply(interaction, {
-        content: "This sort prompt isn't for you.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("This sort prompt isn't for you.", true));
       return;
     }
     setNowPlayingListContext(ownerId, interaction.message);
@@ -4145,10 +4020,7 @@ export class NowPlayingCommand {
   async handleNowPlayingListComplete(interaction: ButtonInteraction): Promise<void> {
     const [, ownerId] = interaction.customId.split(":");
     if (interaction.user.id !== ownerId) {
-      await safeReply(interaction, {
-        content: "This completion prompt isn't for you.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("This completion prompt isn't for you.", true));
       return;
     }
     setNowPlayingListContext(ownerId, interaction.message);
@@ -4160,10 +4032,7 @@ export class NowPlayingCommand {
   async handleNowPlayingCompleteDone(interaction: ButtonInteraction): Promise<void> {
     const [, ownerId] = interaction.customId.split(":");
     if (interaction.user.id !== ownerId) {
-      await safeReply(interaction, {
-        content: "This completion prompt isn't for you.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("This completion prompt isn't for you.", true));
       return;
     }
     await this.returnToNowPlayingEditMenu(interaction, ownerId);
@@ -4190,10 +4059,7 @@ export class NowPlayingCommand {
   async handleNowPlayingRemoveDone(interaction: ButtonInteraction): Promise<void> {
     const [, ownerId] = interaction.customId.split(":");
     if (interaction.user.id !== ownerId) {
-      await safeReply(interaction, {
-        content: "This remove prompt isn't for you.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("This remove prompt isn't for you.", true));
       return;
     }
     await this.returnToNowPlayingEditMenu(interaction, ownerId);
@@ -4203,10 +4069,7 @@ export class NowPlayingCommand {
   async handleNowPlayingListCancel(interaction: ButtonInteraction): Promise<void> {
     const [, ownerId] = interaction.customId.split(":");
     if (interaction.user.id !== ownerId) {
-      await safeReply(interaction, {
-        content: "This prompt isn't for you.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("This prompt isn't for you.", true));
       return;
     }
     await this.returnToNowPlayingEditMenu(interaction, ownerId);
@@ -4915,10 +4778,7 @@ export class NowPlayingCommand {
     const isEphemeral = interaction.message.flags?.has(MessageFlags.Ephemeral) ?? false;
     const [, ownerId] = interaction.customId.split(":");
     if (interaction.user.id !== ownerId) {
-      await safeReply(interaction, {
-        content: "This remove prompt isn't for you.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("This remove prompt isn't for you.", true));
       return;
     }
     const gameId = Number(interaction.values?.[0]);
