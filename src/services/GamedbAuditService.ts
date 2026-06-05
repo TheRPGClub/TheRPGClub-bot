@@ -4,7 +4,7 @@ import axios from "axios";
 import Game from "../classes/Game.js";
 import { igdbService } from "./IGDB/IgdbService.js";
 
-type AutoAcceptResult = {
+export type AutoAcceptResult = {
   updated: number;
   skipped: number;
   failed: number;
@@ -239,6 +239,246 @@ async function performAutoAcceptReleaseData(
   return { updated, skipped, failed, logs };
 }
 
+async function performAutoAcceptDescriptions(
+  onProgress?: (line: string, processed: number) => Promise<void>,
+  shouldStop?: () => boolean,
+  titleWords?: string[],
+): Promise<AutoAcceptResult> {
+  const games = await Game.getGamesForAudit(false, false, true, false, titleWords);
+  const candidates = games.filter((game) => !game.description && game.igdbId);
+
+  if (!candidates.length) {
+    return { updated: 0, skipped: 0, failed: 0, logs: [] };
+  }
+
+  const logs: string[] = [];
+  const addLog = async (line: string, processed: number): Promise<void> => {
+    logs.push(line);
+    if (onProgress) {
+      await onProgress(line, processed);
+    }
+  };
+
+  let updated = 0;
+  let skipped = 0;
+  let failed = 0;
+  let processed = 0;
+
+  for (const game of candidates) {
+    if (shouldStop?.()) {
+      break;
+    }
+    processed += 1;
+    let logged = false;
+    try {
+      if (!game.igdbId) {
+        skipped++;
+        logged = true;
+        await addLog(`⏭️ Skipped **${game.title}** (Missing IGDB ID)`, processed);
+        continue;
+      }
+
+      const details = await igdbService.getGameDetails(game.igdbId);
+      if (!details?.summary) {
+        skipped++;
+        logged = true;
+        await addLog(`⏭️ Skipped **${game.title}** (No IGDB summary found)`, processed);
+        continue;
+      }
+
+      await Game.updateGameDescription(game.id, details.summary);
+      updated++;
+      logged = true;
+      await addLog(`✅ Updated **${game.title}**`, processed);
+    } catch (err: any) {
+      failed++;
+      logged = true;
+      await addLog(`❌ Failed **${game.title}**: ${err?.message ?? String(err)}`, processed);
+    }
+
+    if (!logged && onProgress) {
+      await onProgress("", processed);
+    }
+
+    if (shouldStop?.()) {
+      break;
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+  }
+
+  return { updated, skipped, failed, logs };
+}
+
+type AllAcceptStats = {
+  images: { updated: number; skipped: number; failed: number };
+  videos: { updated: number; skipped: number; failed: number };
+  descriptions: { updated: number; skipped: number; failed: number };
+  releases: { updated: number; skipped: number; failed: number };
+  logs: string[];
+};
+
+async function performAutoAcceptAll(
+  onProgress?: (line: string, processed: number) => Promise<void>,
+  shouldStop?: () => boolean,
+  titleWords?: string[],
+): Promise<AllAcceptStats> {
+  const games = await Game.getGamesForAudit(true, true, true, true, titleWords);
+  const candidates = games.filter((game) => game.igdbId);
+
+  const stats: AllAcceptStats = {
+    images: { updated: 0, skipped: 0, failed: 0 },
+    videos: { updated: 0, skipped: 0, failed: 0 },
+    descriptions: { updated: 0, skipped: 0, failed: 0 },
+    releases: { updated: 0, skipped: 0, failed: 0 },
+    logs: [],
+  };
+
+  if (!candidates.length) {
+    return stats;
+  }
+
+  const addLog = async (line: string, processed: number): Promise<void> => {
+    stats.logs.push(line);
+    if (onProgress) {
+      await onProgress(line, processed);
+    }
+  };
+
+  let processed = 0;
+
+  for (const game of candidates) {
+    if (shouldStop?.()) {
+      break;
+    }
+    processed += 1;
+
+    if (!game.igdbId) {
+      stats.images.skipped++;
+      stats.videos.skipped++;
+      stats.descriptions.skipped++;
+      stats.releases.skipped++;
+      await addLog(`⏭️ Skipped **${game.title}** (Missing IGDB ID)`, processed);
+      continue;
+    }
+
+    let details: Awaited<ReturnType<typeof igdbService.getGameDetails>> = null;
+    try {
+      details = await igdbService.getGameDetails(game.igdbId);
+    } catch (err: any) {
+      stats.images.failed++;
+      stats.videos.failed++;
+      stats.descriptions.failed++;
+      stats.releases.failed++;
+      await addLog(
+        `❌ Failed **${game.title}**: IGDB fetch error: ${err?.message ?? String(err)}`,
+        processed,
+      );
+      if (shouldStop?.()) break;
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+      continue;
+    }
+
+    if (!details) {
+      stats.images.skipped++;
+      stats.videos.skipped++;
+      stats.descriptions.skipped++;
+      stats.releases.skipped++;
+      await addLog(`⏭️ Skipped **${game.title}** (No IGDB data found)`, processed);
+      if (shouldStop?.()) break;
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+      continue;
+    }
+
+    const updates: string[] = [];
+    const skips: string[] = [];
+    const failures: string[] = [];
+
+    // Image
+    if (!game.imageData) {
+      if (details.cover?.image_id) {
+        try {
+          const imageUrl =
+            `https://images.igdb.com/igdb/image/upload/t_cover_big/${details.cover.image_id}.jpg`;
+          const resp = await axios.get(imageUrl, { responseType: "arraybuffer" });
+          await Game.updateGameImage(game.id, Buffer.from(resp.data));
+          stats.images.updated++;
+          updates.push("image");
+        } catch (err: any) {
+          stats.images.failed++;
+          failures.push(`image: ${err?.message ?? String(err)}`);
+        }
+      } else {
+        stats.images.skipped++;
+        skips.push("image");
+      }
+    }
+
+    // Video
+    if (!game.featuredVideoUrl) {
+      const videoUrl = Game.getFeaturedVideoUrl(details);
+      if (videoUrl) {
+        try {
+          await Game.updateFeaturedVideoUrl(game.id, videoUrl);
+          stats.videos.updated++;
+          updates.push("video");
+        } catch (err: any) {
+          stats.videos.failed++;
+          failures.push(`video: ${err?.message ?? String(err)}`);
+        }
+      } else {
+        stats.videos.skipped++;
+        skips.push("video");
+      }
+    }
+
+    // Description
+    if (!game.description) {
+      if (details.summary) {
+        try {
+          await Game.updateGameDescription(game.id, details.summary);
+          stats.descriptions.updated++;
+          updates.push("description");
+        } catch (err: any) {
+          stats.descriptions.failed++;
+          failures.push(`description: ${err?.message ?? String(err)}`);
+        }
+      } else {
+        stats.descriptions.skipped++;
+        skips.push("description");
+      }
+    }
+
+    // Release dates
+    const releasesBefore = (await Game.getGameReleases(game.id)).length;
+    try {
+      await Game.importReleaseDatesFromIgdb(game.id, game.igdbId);
+      const releasesAfter = (await Game.getGameReleases(game.id)).length;
+      if (releasesAfter > releasesBefore) {
+        stats.releases.updated++;
+        updates.push("releases");
+      } else {
+        stats.releases.skipped++;
+        skips.push("releases");
+      }
+    } catch (err: any) {
+      stats.releases.failed++;
+      failures.push(`releases: ${err?.message ?? String(err)}`);
+    }
+
+    const parts: string[] = [];
+    if (updates.length) parts.push(`✅ Updated: ${updates.join(", ")}`);
+    if (skips.length) parts.push(`⏭️ No data: ${skips.join(", ")}`);
+    if (failures.length) parts.push(`❌ Failed: ${failures.join("; ")}`);
+    await addLog(`**${game.title}**: ${parts.join(" | ")}`, processed);
+
+    if (shouldStop?.()) break;
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+  }
+
+  return stats;
+}
+
 function trimLogLines(lines: string[]): string[] {
   const copy = [...lines];
   let content = copy.join("\n");
@@ -347,4 +587,11 @@ export function startGamedbAutoImageAuditService(
   }, intervalMs);
 }
 
-export { performAutoAcceptImages, performAutoAcceptVideos, performAutoAcceptReleaseData };
+export {
+  performAutoAcceptImages,
+  performAutoAcceptVideos,
+  performAutoAcceptReleaseData,
+  performAutoAcceptDescriptions,
+  performAutoAcceptAll,
+};
+export type { AllAcceptStats };
