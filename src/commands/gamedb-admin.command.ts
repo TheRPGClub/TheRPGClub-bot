@@ -46,6 +46,10 @@ import {
   performAutoAcceptImages,
   performAutoAcceptReleaseData,
   performAutoAcceptVideos,
+  performAutoAcceptDescriptions,
+  performAutoAcceptAll,
+  type AutoAcceptResult,
+  type AllAcceptStats,
 } from "../services/GamedbAuditService.js";
 import { isAdmin } from "./admin.command.js";
 import Game, { IGame } from "../classes/Game.js";
@@ -411,6 +415,20 @@ export class GameDbAdmin {
     })
     autoAcceptReleaseData: boolean | undefined,
     @SlashOption({
+      description: "Automatically accept IGDB descriptions for all games missing one",
+      name: "auto_accept_descriptions",
+      required: false,
+      type: ApplicationCommandOptionType.Boolean,
+    })
+    autoAcceptDescriptions: boolean | undefined,
+    @SlashOption({
+      description: "Sweep all games missing any data and fill from IGDB in one pass",
+      name: "auto_accept_all",
+      required: false,
+      type: ApplicationCommandOptionType.Boolean,
+    })
+    autoAcceptAll: boolean | undefined,
+    @SlashOption({
       description: "Optional title query (matches any word)",
       name: "query",
       required: false,
@@ -446,29 +464,40 @@ export class GameDbAdmin {
       .map((word) => word.trim())
       .filter(Boolean);
 
-    if (autoAcceptImages || autoAcceptVideos || autoAcceptReleaseData) {
+    if (autoAcceptAll) {
+      await this.runAutoAcceptAll(interaction, isPublic, queryWords);
+      return;
+    }
+
+    if (autoAcceptImages || autoAcceptVideos || autoAcceptReleaseData || autoAcceptDescriptions) {
+      const multiOp = [
+        autoAcceptImages,
+        autoAcceptVideos,
+        autoAcceptReleaseData,
+        autoAcceptDescriptions,
+      ].filter(Boolean).length > 1;
       if (autoAcceptImages) {
-        await this.runAutoAcceptImages(
-          interaction,
-          isPublic,
-          Boolean(autoAcceptVideos || autoAcceptReleaseData),
-          queryWords,
+        await this.runAutoAcceptOperation(
+          interaction, isPublic, multiOp, queryWords,
+          "Auto-Accept IGDB Images", performAutoAcceptImages,
         );
       }
       if (autoAcceptVideos) {
-        await this.runAutoAcceptVideos(
-          interaction,
-          isPublic,
-          Boolean(autoAcceptImages || autoAcceptReleaseData),
-          queryWords,
+        await this.runAutoAcceptOperation(
+          interaction, isPublic, multiOp, queryWords,
+          "Auto-Accept IGDB Videos", performAutoAcceptVideos,
         );
       }
       if (autoAcceptReleaseData) {
-        await this.runAutoAcceptReleaseData(
-          interaction,
-          isPublic,
-          Boolean(autoAcceptImages || autoAcceptVideos),
-          queryWords,
+        await this.runAutoAcceptOperation(
+          interaction, isPublic, multiOp, queryWords,
+          "Auto-Accept IGDB Release Data", performAutoAcceptReleaseData,
+        );
+      }
+      if (autoAcceptDescriptions) {
+        await this.runAutoAcceptOperation(
+          interaction, isPublic, multiOp, queryWords,
+          "Auto-Accept IGDB Descriptions", performAutoAcceptDescriptions,
         );
       }
       return;
@@ -1262,11 +1291,17 @@ export class GameDbAdmin {
     };
   }
 
-  private async runAutoAcceptImages(
+  private async runAutoAcceptOperation(
     interaction: CommandInteraction,
     isPublic: boolean,
     useFollowUp: boolean,
-    titleWords?: string[],
+    titleWords: string[] | undefined,
+    title: string,
+    performer: (
+      onProgress: (line: string, processed: number) => Promise<void>,
+      shouldStop: () => boolean,
+      titleWords?: string[],
+    ) => Promise<AutoAcceptResult>,
   ): Promise<void> {
     const runId = interaction.id;
     AUTO_ACCEPT_RUNS.set(runId, {
@@ -1275,21 +1310,17 @@ export class GameDbAdmin {
     });
 
     let currentEmbed = new EmbedBuilder()
-      .setTitle("Auto-Accept IGDB Images")
+      .setTitle(title)
       .setDescription("Starting auto accept run...")
       .setColor(0x0099ff);
     const stopRow = this.buildAutoAcceptStopRow(runId, false);
 
     const followUpPayload = buildAutoAcceptFollowUpPayload([currentEmbed], [stopRow], isPublic);
-    const editPayload = {
-      embeds: [currentEmbed],
-      components: [stopRow],
-    };
     let currentMessage: any = null;
     try {
       currentMessage = useFollowUp
         ? await safeReply(interaction, { ...followUpPayload, __forceFollowUp: true })
-        : await safeReply(interaction, editPayload);
+        : await safeReply(interaction, { embeds: [currentEmbed], components: [stopRow] });
     } catch {
       // ignore
     }
@@ -1313,7 +1344,7 @@ export class GameDbAdmin {
         if (chunk !== currentChunk) {
           currentChunk = chunk;
           currentEmbed = new EmbedBuilder()
-            .setTitle("Auto-Accept IGDB Images")
+            .setTitle(title)
             .setDescription("Processing...")
             .setColor(0x0099ff);
           logLines.length = 0;
@@ -1331,16 +1362,13 @@ export class GameDbAdmin {
           }
         }
       }
-      if (log) {
-        logLines.push(log);
-      }
+      if (log) logLines.push(log);
 
       let content = logLines.join("\n");
       while (content.length > 3500) {
         logLines.shift();
         content = logLines.join("\n");
       }
-
       currentEmbed.setDescription(content || "Processing...");
       try {
         if (currentMessage?.edit) {
@@ -1354,13 +1382,12 @@ export class GameDbAdmin {
       }
     };
 
-    const { updated, skipped, failed, logs } = await performAutoAcceptImages(
-      updateEmbed,
-      shouldStop,
-      titleWords,
-    );
+    const { updated, skipped, failed, logs } = await performer(updateEmbed, shouldStop, titleWords);
     if (!logs.length) {
-      await safeReply(interaction, buildTextReply("No games found with missing images and valid IGDB IDs.", !(isPublic)));
+      await safeReply(interaction, {
+        ...buildTextReply("No eligible games found for this operation.", !isPublic),
+        __forceFollowUp: useFollowUp,
+      });
       AUTO_ACCEPT_RUNS.delete(runId);
       return;
     }
@@ -1371,21 +1398,16 @@ export class GameDbAdmin {
     await updateEmbed(summary);
     currentEmbed.setColor(0x2ecc71);
     const stopped = shouldStop();
-    const finalStopRow = this.buildAutoAcceptStopRow(
-      runId,
-      true,
-      stopped ? "Stopped" : "Stop",
-    );
+    const finalStopRow = this.buildAutoAcceptStopRow(runId, true, stopped ? "Stopped" : "Stop");
     if (currentMessage?.edit) {
       await currentMessage.edit({ embeds: [currentEmbed], components: [finalStopRow] });
     }
     AUTO_ACCEPT_RUNS.delete(runId);
   }
 
-  private async runAutoAcceptVideos(
+  private async runAutoAcceptAll(
     interaction: CommandInteraction,
     isPublic: boolean,
-    useFollowUp: boolean,
     titleWords?: string[],
   ): Promise<void> {
     const runId = interaction.id;
@@ -1394,34 +1416,22 @@ export class GameDbAdmin {
       ownerId: interaction.guild?.ownerId ?? null,
     });
 
+    const title = "GameDB IGDB Sweep (All Fields)";
     let currentEmbed = new EmbedBuilder()
-      .setTitle("Auto-Accept IGDB Videos")
-      .setDescription("Starting auto accept run...")
+      .setTitle(title)
+      .setDescription("Starting sweep...")
       .setColor(0x0099ff);
     const stopRow = this.buildAutoAcceptStopRow(runId, false);
 
-    const followUpPayload = buildAutoAcceptFollowUpPayload([currentEmbed], [stopRow], isPublic);
-    const editPayload = {
-      embeds: [currentEmbed],
-      components: [stopRow],
-    };
     let currentMessage: any = null;
     try {
-      currentMessage = useFollowUp
-        ? await safeReply(interaction, { ...followUpPayload, __forceFollowUp: true })
-        : await safeReply(interaction, editPayload);
+      currentMessage = await safeReply(interaction, {
+        embeds: [currentEmbed],
+        components: [stopRow],
+        flags: isPublic ? undefined : MessageFlags.Ephemeral,
+      });
     } catch {
       // ignore
-    }
-    if (!currentMessage) {
-      try {
-        currentMessage = await safeReply(
-          interaction,
-          { ...followUpPayload, __forceFollowUp: true },
-        );
-      } catch {
-        // ignore
-      }
     }
 
     const logLines: string[] = [];
@@ -1433,7 +1443,7 @@ export class GameDbAdmin {
         if (chunk !== currentChunk) {
           currentChunk = chunk;
           currentEmbed = new EmbedBuilder()
-            .setTitle("Auto-Accept IGDB Videos")
+            .setTitle(title)
             .setDescription("Processing...")
             .setColor(0x0099ff);
           logLines.length = 0;
@@ -1451,16 +1461,13 @@ export class GameDbAdmin {
           }
         }
       }
-      if (log) {
-        logLines.push(log);
-      }
+      if (log) logLines.push(log);
 
       let content = logLines.join("\n");
       while (content.length > 3500) {
         logLines.shift();
         content = logLines.join("\n");
       }
-
       currentEmbed.setDescription(content || "Processing...");
       try {
         if (currentMessage?.edit) {
@@ -1474,148 +1481,30 @@ export class GameDbAdmin {
       }
     };
 
-    const { updated, skipped, failed, logs } = await performAutoAcceptVideos(
-      updateEmbed,
-      shouldStop,
-      titleWords,
-    );
-    if (!logs.length) {
-      await safeReply(interaction, { ...buildTextReply("No games found with missing featured videos and valid IGDB IDs.", !(isPublic)), __forceFollowUp: useFollowUp });
+    const stats: AllAcceptStats = await performAutoAcceptAll(updateEmbed, shouldStop, titleWords);
+
+    if (!stats.logs.length) {
+      await safeReply(interaction, buildTextReply(
+        "No games found missing any data with a valid IGDB ID.",
+        !isPublic,
+      ));
       AUTO_ACCEPT_RUNS.delete(runId);
       return;
     }
 
-    const summary =
-      `\n**Run Complete**\n✅ Updated: ${updated}\n` +
-      `⏭️ Skipped: ${skipped}\n❌ Failed: ${failed}`;
+    const summary = [
+      "\n**Sweep Complete**",
+      `Images:       ✅ ${stats.images.updated} | ⏭️ ${stats.images.skipped} | ❌ ${stats.images.failed}`,
+      `Videos:       ✅ ${stats.videos.updated} | ⏭️ ${stats.videos.skipped} | ❌ ${stats.videos.failed}`,
+      `Descriptions: ✅ ${stats.descriptions.updated} | ⏭️ ${stats.descriptions.skipped}` +
+        ` | ❌ ${stats.descriptions.failed}`,
+      `Releases:     ✅ ${stats.releases.updated} | ⏭️ ${stats.releases.skipped}` +
+        ` | ❌ ${stats.releases.failed}`,
+    ].join("\n");
     await updateEmbed(summary);
     currentEmbed.setColor(0x2ecc71);
     const stopped = shouldStop();
-    const finalStopRow = this.buildAutoAcceptStopRow(
-      runId,
-      true,
-      stopped ? "Stopped" : "Stop",
-    );
-    if (currentMessage?.edit) {
-      await currentMessage.edit({ embeds: [currentEmbed], components: [finalStopRow] });
-    }
-    AUTO_ACCEPT_RUNS.delete(runId);
-  }
-
-  private async runAutoAcceptReleaseData(
-    interaction: CommandInteraction,
-    isPublic: boolean,
-    useFollowUp: boolean,
-    titleWords?: string[],
-  ): Promise<void> {
-    const runId = interaction.id;
-    AUTO_ACCEPT_RUNS.set(runId, {
-      canceled: false,
-      ownerId: interaction.guild?.ownerId ?? null,
-    });
-
-    let currentEmbed = new EmbedBuilder()
-      .setTitle("Auto-Accept IGDB Release Data")
-      .setDescription("Starting auto accept run...")
-      .setColor(0x0099ff);
-    const stopRow = this.buildAutoAcceptStopRow(runId, false);
-
-    const followUpPayload = buildAutoAcceptFollowUpPayload([currentEmbed], [stopRow], isPublic);
-    const editPayload = {
-      embeds: [currentEmbed],
-      components: [stopRow],
-    };
-    let currentMessage: any = null;
-    try {
-      currentMessage = useFollowUp
-        ? await safeReply(interaction, { ...followUpPayload, __forceFollowUp: true })
-        : await safeReply(interaction, editPayload);
-    } catch {
-      // ignore
-    }
-    if (!currentMessage) {
-      try {
-        currentMessage = await safeReply(
-          interaction,
-          { ...followUpPayload, __forceFollowUp: true },
-        );
-      } catch {
-        // ignore
-      }
-    }
-
-    const logLines: string[] = [];
-    let currentChunk = 0;
-    const shouldStop = (): boolean => AUTO_ACCEPT_RUNS.get(runId)?.canceled ?? true;
-    const updateEmbed = async (log?: string, processed?: number) => {
-      if (processed && processed > 0) {
-        const chunk = Math.floor((processed - 1) / 50);
-        if (chunk !== currentChunk) {
-          currentChunk = chunk;
-          currentEmbed = new EmbedBuilder()
-            .setTitle("Auto-Accept IGDB Release Data")
-            .setDescription("Processing...")
-            .setColor(0x0099ff);
-          logLines.length = 0;
-          try {
-            currentMessage = await safeReply(interaction, {
-              ...buildAutoAcceptFollowUpPayload(
-                [currentEmbed],
-                [this.buildAutoAcceptStopRow(runId, shouldStop())],
-                isPublic,
-              ),
-              __forceFollowUp: true,
-            });
-          } catch {
-            // ignore
-          }
-        }
-      }
-      if (log) {
-        logLines.push(log);
-      }
-
-      let content = logLines.join("\n");
-      while (content.length > 3500) {
-        logLines.shift();
-        content = logLines.join("\n");
-      }
-
-      currentEmbed.setDescription(content || "Processing...");
-      try {
-        if (currentMessage?.edit) {
-          await currentMessage.edit({
-            embeds: [currentEmbed],
-            components: [this.buildAutoAcceptStopRow(runId, shouldStop())],
-          });
-        }
-      } catch {
-        // ignore
-      }
-    };
-
-    const { updated, skipped, failed, logs } = await performAutoAcceptReleaseData(
-      updateEmbed,
-      shouldStop,
-      titleWords,
-    );
-    if (!logs.length) {
-      await safeReply(interaction, { ...buildTextReply("No games found with missing release data and valid IGDB IDs.", !(isPublic)), __forceFollowUp: useFollowUp });
-      AUTO_ACCEPT_RUNS.delete(runId);
-      return;
-    }
-
-    const summary =
-      `\n**Run Complete**\n✅ Updated: ${updated}\n` +
-      `⏭️ Skipped: ${skipped}\n❌ Failed: ${failed}`;
-    await updateEmbed(summary);
-    currentEmbed.setColor(0x2ecc71);
-    const stopped = shouldStop();
-    const finalStopRow = this.buildAutoAcceptStopRow(
-      runId,
-      true,
-      stopped ? "Stopped" : "Stop",
-    );
+    const finalStopRow = this.buildAutoAcceptStopRow(runId, true, stopped ? "Stopped" : "Stop");
     if (currentMessage?.edit) {
       await currentMessage.edit({ embeds: [currentEmbed], components: [finalStopRow] });
     }
