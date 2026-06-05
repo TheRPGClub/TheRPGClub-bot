@@ -31,7 +31,6 @@ import {
   buildComponentsV2Flags,
   getSearchRowsFromComponents,
   isHltbImportEligible,
-  requireModeratorOrAdminOrOwner,
 } from "./gamedb-utils.js";
 import {
   buildGameProfile,
@@ -95,7 +94,7 @@ export class GameDbViewCommand {
   }
 
   @ButtonComponent({
-    id: /^gamedb-action:(nowplaying|completion|thread|video|hltb-import|bad-thumb|good-thumb):\d+$/,
+    id: /^gamedb-action:(nowplaying|completion|thread|video|hltb-import):\d+$/,
   })
   async handleGameDbAction(interaction: ButtonInteraction): Promise<void> {
     const [, action, gameIdRaw] = interaction.customId.split(":");
@@ -129,9 +128,6 @@ export class GameDbViewCommand {
           gameId,
           profile.hasThread,
           profile.featuredVideoUrl,
-          profile.canMarkThumbnailBad,
-          profile.isThumbnailBad,
-          profile.isThumbnailApproved,
           profile.isReleased,
           true,
         );
@@ -154,59 +150,6 @@ export class GameDbViewCommand {
       }
       await safeReply(interaction, {
         ...buildTextReply(`Warning: videos may contain spoilers. ${videoUrl}`, false),
-        __forceFollowUp: true,
-      });
-      return;
-    }
-
-    if (action === "bad-thumb" || action === "good-thumb") {
-      const hasAccess = await requireModeratorOrAdminOrOwner(interaction);
-      if (!hasAccess) {
-        return;
-      }
-    }
-
-    if (action === "bad-thumb") {
-      if (!game.imageData) {
-        await safeReply(interaction, buildTextReply(
-          "No cover image is available for this game.", true,
-        ));
-        return;
-      }
-      if (game.thumbnailBad) {
-        await safeReply(interaction, buildTextReply("This thumbnail is already marked as bad.", true));
-        return;
-      }
-      await safeDeferUpdate(interaction);
-      await Game.updateGameThumbnailBad(gameId, true);
-      await Game.updateGameThumbnailApproved(gameId, false);
-      await refreshGameProfileMessage(interaction, gameId);
-      await safeReply(interaction, {
-        ...buildTextReply("Thumbnail flagged. GameDB view will use cover art from now on.", true),
-        __forceFollowUp: true,
-      });
-      return;
-    }
-
-    if (action === "good-thumb") {
-      if (!game.imageData) {
-        await safeReply(interaction, buildTextReply(
-          "No cover image is available for this game.", true,
-        ));
-        return;
-      }
-      if (game.thumbnailApproved) {
-        await safeReply(interaction, buildTextReply(
-          "This thumbnail is already marked as approved.", true,
-        ));
-        return;
-      }
-      await safeDeferUpdate(interaction);
-      await Game.updateGameThumbnailBad(gameId, false);
-      await Game.updateGameThumbnailApproved(gameId, true);
-      await refreshGameProfileMessage(interaction, gameId);
-      await safeReply(interaction, {
-        ...buildTextReply("Thumbnail marked as good. GameDB view will keep using artwork.", true),
         __forceFollowUp: true,
       });
       return;
