@@ -308,6 +308,7 @@ function containsUnstableExpression(node) {
     }
 
     for (const key of Object.keys(current)) {
+      if (key === "parent") continue;
       const value = current[key];
       if (!value) continue;
       if (Array.isArray(value)) {

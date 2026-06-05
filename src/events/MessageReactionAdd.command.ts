@@ -58,7 +58,7 @@ const COMPLETION_REACTION_PLATFORM_SELECT_PREFIX = "completion-react-platform";
 
 const buildCompletionTypeRow = (sessionId: string): ActionRowBuilder<StringSelectMenuBuilder> => {
   const select = new StringSelectMenuBuilder()
-    // eslint-disable-next-line local/stable-custom-id
+     
     .setCustomId(`completion-react-type:${sessionId}`)
     .setPlaceholder("Select a completion type")
     .addOptions(
@@ -73,7 +73,7 @@ const buildCompletionTypeRow = (sessionId: string): ActionRowBuilder<StringSelec
 const buildCompletionTitleRow = (sessionId: string): ActionRowBuilder<ButtonBuilder> =>
   new ActionRowBuilder<ButtonBuilder>().addComponents(
     new ButtonBuilder()
-      // eslint-disable-next-line local/stable-custom-id
+       
       .setCustomId(`completion-react-title:${sessionId}`)
       .setLabel("Change title")
       .setStyle(ButtonStyle.Secondary),
@@ -84,7 +84,7 @@ const buildCompletionGameRow = (
   gameOptions: { label: string; value: string; description?: string }[],
 ): ActionRowBuilder<StringSelectMenuBuilder> => {
   const select = new StringSelectMenuBuilder()
-    // eslint-disable-next-line local/stable-custom-id
+     
     .setCustomId(`completion-react-game:${sessionId}`)
     .setPlaceholder("Select the game")
     .addOptions(gameOptions);
@@ -96,7 +96,7 @@ const buildCompletionPlatformRow = (
   platformOptions: { label: string; value: string }[],
 ): ActionRowBuilder<StringSelectMenuBuilder> => {
   const select = new StringSelectMenuBuilder()
-    // eslint-disable-next-line local/stable-custom-id
+     
     .setCustomId(`${COMPLETION_REACTION_PLATFORM_SELECT_PREFIX}:${sessionId}`)
     .setPlaceholder("Select the platform")
     .addOptions(platformOptions);
@@ -257,8 +257,7 @@ export class MessageReactionAdd {
       }
     }
   }
-
-  // eslint-disable-next-line local/stable-custom-id
+   
   @SelectMenuComponent({ id: /^completion-react-type:.+$/ })
   async handleCompletionReactionType(
     interaction: StringSelectMenuInteraction,
@@ -314,8 +313,7 @@ export class MessageReactionAdd {
       components: [row, buildCompletionTitleRow(sessionId)],
     }).catch(() => {});
   }
-
-  // eslint-disable-next-line local/stable-custom-id
+   
   @SelectMenuComponent({ id: /^completion-react-game:.+$/ })
   async handleCompletionReactionGame(
     interaction: StringSelectMenuInteraction,
@@ -349,8 +347,7 @@ export class MessageReactionAdd {
 
     await this.saveCompletionFromReaction(interaction, session, gameId);
   }
-
-  // eslint-disable-next-line local/stable-custom-id
+   
   @SelectMenuComponent({ id: /^completion-react-platform:.+$/ })
   async handleCompletionReactionPlatform(
     interaction: StringSelectMenuInteraction,
@@ -447,8 +444,7 @@ export class MessageReactionAdd {
     completionReactionPlatformSessions.delete(sessionId);
     completionReactionSessions.delete(sessionId);
   }
-
-  // eslint-disable-next-line local/stable-custom-id
+   
   @ButtonComponent({ id: /^completion-react-title:.+$/ })
   async handleCompletionReactionTitle(
     interaction: ButtonInteraction,
@@ -471,13 +467,13 @@ export class MessageReactionAdd {
     session.promptChannelId = interaction.channelId ?? session.promptChannelId;
 
     const modal = new ModalBuilder()
-      // eslint-disable-next-line local/stable-custom-id
+       
       .setCustomId(`completion-react-title-modal:${sessionId}`)
       .setTitle("Change completion title")
       .addComponents(
         new ActionRowBuilder<TextInputBuilder>().addComponents(
           new TextInputBuilder()
-            // eslint-disable-next-line local/stable-custom-id
+             
             .setCustomId("completion-react-title-input")
             .setLabel("Game title")
             .setStyle(TextInputStyle.Short)
@@ -489,8 +485,7 @@ export class MessageReactionAdd {
 
     await interaction.showModal(modal).catch(() => {});
   }
-
-  // eslint-disable-next-line local/stable-custom-id
+   
   @ModalComponent({ id: /^completion-react-title-modal:.+$/ })
   async handleCompletionReactionTitleModal(
     interaction: ModalSubmitInteraction,

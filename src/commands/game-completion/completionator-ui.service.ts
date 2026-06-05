@@ -153,7 +153,7 @@ export class CompletionatorUiService {
       );
       section.setButtonAccessory(
         new V2ButtonBuilder()
-          // eslint-disable-next-line local/stable-custom-id
+           
           .setCustomId(buildCompletionatorChooseId({
             ownerId: params.ownerId,
             importId: params.importId,
@@ -346,7 +346,7 @@ export class CompletionatorUiService {
       },
     });
     const changeButton = new ButtonBuilder()
-      // eslint-disable-next-line local/custom-id-has-matching-handler, local/stable-custom-id
+      // eslint-disable-next-line local/custom-id-has-matching-handler
       .setCustomId(`comp-import-action:${userId}:${session.importId}:${item.itemId}:igdb`)
       .setLabel("Choose a Different Game")
       .setStyle(ButtonStyle.Secondary);
@@ -361,7 +361,7 @@ export class CompletionatorUiService {
   ): ActionRowBuilder<any>[] {
     const typeSelect = new StringSelectMenuBuilder()
       .setCustomId(
-        // eslint-disable-next-line local/custom-id-has-matching-handler, local/stable-custom-id
+        // eslint-disable-next-line local/custom-id-has-matching-handler
         `comp-import-form-select:${state.ownerId}:${state.importId}:${state.itemId}:type`,
       )
       .setPlaceholder("Completion type")
@@ -405,7 +405,7 @@ export class CompletionatorUiService {
 
     const dateSelect = new StringSelectMenuBuilder()
       .setCustomId(
-        // eslint-disable-next-line local/custom-id-has-matching-handler, local/stable-custom-id
+        // eslint-disable-next-line local/custom-id-has-matching-handler
         `comp-import-form-select:${state.ownerId}:${state.importId}:${state.itemId}:date`,
       )
       .setPlaceholder("Completion date")
@@ -425,24 +425,24 @@ export class CompletionatorUiService {
     ];
     const platformSelect = new StringSelectMenuBuilder()
       .setCustomId(
-        // eslint-disable-next-line local/custom-id-has-matching-handler, local/stable-custom-id
+        // eslint-disable-next-line local/custom-id-has-matching-handler
         `comp-import-form-select:${state.ownerId}:${state.importId}:${state.itemId}:platform`,
       )
       .setPlaceholder("Platform")
       .addOptions(options);
 
     const addButton = new ButtonBuilder()
-      // eslint-disable-next-line local/custom-id-has-matching-handler, local/stable-custom-id
+      // eslint-disable-next-line local/custom-id-has-matching-handler
       .setCustomId(`comp-import-action:${state.ownerId}:${state.importId}:${state.itemId}:add`)
       .setLabel("Add Completion")
       .setStyle(ButtonStyle.Success);
     const skipButton = new ButtonBuilder()
-      // eslint-disable-next-line local/custom-id-has-matching-handler, local/stable-custom-id
+      // eslint-disable-next-line local/custom-id-has-matching-handler
       .setCustomId(`comp-import-action:${state.ownerId}:${state.importId}:${state.itemId}:skip`)
       .setLabel("Skip")
       .setStyle(ButtonStyle.Secondary);
     const pauseButton = new ButtonBuilder()
-      // eslint-disable-next-line local/custom-id-has-matching-handler, local/stable-custom-id
+      // eslint-disable-next-line local/custom-id-has-matching-handler
       .setCustomId(`comp-import-action:${state.ownerId}:${state.importId}:${state.itemId}:pause`)
       .setLabel("Pause")
       .setStyle(ButtonStyle.Secondary);
@@ -462,12 +462,12 @@ export class CompletionatorUiService {
   ): ActionRowBuilder<ButtonBuilder> {
     return new ActionRowBuilder<ButtonBuilder>().addComponents(
       new ButtonBuilder()
-        // eslint-disable-next-line local/custom-id-has-matching-handler, local/stable-custom-id
+        // eslint-disable-next-line local/custom-id-has-matching-handler
         .setCustomId(`comp-import-action:${userId}:${importId}:${itemId}:same-yes`)
         .setLabel("Yes")
         .setStyle(ButtonStyle.Success),
       new ButtonBuilder()
-        // eslint-disable-next-line local/custom-id-has-matching-handler, local/stable-custom-id
+        // eslint-disable-next-line local/custom-id-has-matching-handler
         .setCustomId(`comp-import-action:${userId}:${importId}:${itemId}:same-no`)
         .setLabel("No")
         .setStyle(ButtonStyle.Secondary),
@@ -484,7 +484,7 @@ export class CompletionatorUiService {
     buttonsRow: ActionRowBuilder<ButtonBuilder>;
   } {
     const updateSelect = new StringSelectMenuBuilder()
-      // eslint-disable-next-line local/custom-id-has-matching-handler, local/stable-custom-id
+      // eslint-disable-next-line local/custom-id-has-matching-handler
       .setCustomId(`comp-import-update-fields:${userId}:${importId}:${itemId}`)
       .setPlaceholder("Select fields to update")
       .setMinValues(1)
@@ -493,12 +493,12 @@ export class CompletionatorUiService {
 
     const buttons = new ActionRowBuilder<ButtonBuilder>().addComponents(
       new ButtonBuilder()
-        // eslint-disable-next-line local/custom-id-has-matching-handler, local/stable-custom-id
+        // eslint-disable-next-line local/custom-id-has-matching-handler
         .setCustomId(`comp-import-action:${userId}:${importId}:${itemId}:skip`)
         .setLabel("Skip")
         .setStyle(ButtonStyle.Secondary),
       new ButtonBuilder()
-        // eslint-disable-next-line local/custom-id-has-matching-handler, local/stable-custom-id
+        // eslint-disable-next-line local/custom-id-has-matching-handler
         .setCustomId(`comp-import-action:${userId}:${importId}:${itemId}:pause`)
         .setLabel("Pause")
         .setStyle(ButtonStyle.Secondary),
@@ -517,29 +517,29 @@ export class CompletionatorUiService {
   ): ActionRowBuilder<ButtonBuilder>[] {
     const primaryRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
       new ButtonBuilder()
-        // eslint-disable-next-line local/custom-id-has-matching-handler, local/stable-custom-id
+        // eslint-disable-next-line local/custom-id-has-matching-handler
         .setCustomId(`comp-import-action:${userId}:${importId}:${itemId}:igdb-manual`)
         .setLabel("Enter IGDB ID")
         .setStyle(ButtonStyle.Primary),
       new ButtonBuilder()
-        // eslint-disable-next-line local/custom-id-has-matching-handler, local/stable-custom-id
+        // eslint-disable-next-line local/custom-id-has-matching-handler
         .setCustomId(`comp-import-action:${userId}:${importId}:${itemId}:query`)
         .setLabel("Query GameDB")
         .setStyle(ButtonStyle.Primary),
       new ButtonBuilder()
-        // eslint-disable-next-line local/custom-id-has-matching-handler, local/stable-custom-id
+        // eslint-disable-next-line local/custom-id-has-matching-handler
         .setCustomId(`comp-import-action:${userId}:${importId}:${itemId}:manual`)
         .setLabel("Enter GameDB ID")
         .setStyle(ButtonStyle.Primary),
     );
     const secondaryRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
       new ButtonBuilder()
-        // eslint-disable-next-line local/custom-id-has-matching-handler, local/stable-custom-id
+        // eslint-disable-next-line local/custom-id-has-matching-handler
         .setCustomId(`comp-import-action:${userId}:${importId}:${itemId}:skip`)
         .setLabel("Skip")
         .setStyle(ButtonStyle.Secondary),
       new ButtonBuilder()
-        // eslint-disable-next-line local/custom-id-has-matching-handler, local/stable-custom-id
+        // eslint-disable-next-line local/custom-id-has-matching-handler
         .setCustomId(`comp-import-action:${userId}:${importId}:${itemId}:pause`)
         .setLabel("Pause")
         .setStyle(ButtonStyle.Secondary),
@@ -569,17 +569,17 @@ export class CompletionatorUiService {
     });
 
     const pauseButton = new ButtonBuilder()
-      // eslint-disable-next-line local/custom-id-has-matching-handler, local/stable-custom-id
+      // eslint-disable-next-line local/custom-id-has-matching-handler
       .setCustomId(`comp-import-action:${userId}:${session.importId}:${item.itemId}:pause`)
       .setLabel("Pause")
       .setStyle(ButtonStyle.Secondary);
     const skipButton = new ButtonBuilder()
-      // eslint-disable-next-line local/custom-id-has-matching-handler, local/stable-custom-id
+      // eslint-disable-next-line local/custom-id-has-matching-handler
       .setCustomId(`comp-import-action:${userId}:${session.importId}:${item.itemId}:skip`)
       .setLabel("Skip")
       .setStyle(ButtonStyle.Secondary);
     const queryButton = new ButtonBuilder()
-      // eslint-disable-next-line local/custom-id-has-matching-handler, local/stable-custom-id
+      // eslint-disable-next-line local/custom-id-has-matching-handler
       .setCustomId(`comp-import-action:${userId}:${session.importId}:${item.itemId}:igdb-query`)
       .setLabel("New IGDB Search")
       .setStyle(ButtonStyle.Secondary);
@@ -602,17 +602,17 @@ export class CompletionatorUiService {
   ): ActionRowBuilder<ButtonBuilder> {
     return new ActionRowBuilder<ButtonBuilder>().addComponents(
       new ButtonBuilder()
-        // eslint-disable-next-line local/custom-id-has-matching-handler, local/stable-custom-id
+        // eslint-disable-next-line local/custom-id-has-matching-handler
         .setCustomId(`comp-import-action:${userId}:${importId}:${itemId}:igdb-query`)
         .setLabel("New IGDB Search")
         .setStyle(ButtonStyle.Secondary),
       new ButtonBuilder()
-        // eslint-disable-next-line local/custom-id-has-matching-handler, local/stable-custom-id
+        // eslint-disable-next-line local/custom-id-has-matching-handler
         .setCustomId(`comp-import-action:${userId}:${importId}:${itemId}:skip`)
         .setLabel("Skip")
         .setStyle(ButtonStyle.Secondary),
       new ButtonBuilder()
-        // eslint-disable-next-line local/custom-id-has-matching-handler, local/stable-custom-id
+        // eslint-disable-next-line local/custom-id-has-matching-handler
         .setCustomId(`comp-import-action:${userId}:${importId}:${itemId}:pause`)
         .setLabel("Pause")
         .setStyle(ButtonStyle.Secondary),
@@ -687,11 +687,11 @@ export class CompletionatorUiService {
     itemId: number,
   ): ModalBuilder {
     const modal = new ModalBuilder()
-      // eslint-disable-next-line local/custom-id-has-matching-handler, local/stable-custom-id
+      // eslint-disable-next-line local/custom-id-has-matching-handler
       .setCustomId(`comp-import-date:${userId}:${importId}:${itemId}`)
       .setTitle("Completion Date");
     const dateInput = new TextInputBuilder()
-      // eslint-disable-next-line local/stable-custom-id
+       
       .setCustomId("completion-date")
       .setLabel("Completion date (YYYY-MM-DD)")
       .setPlaceholder("2025-12-31")
@@ -712,11 +712,11 @@ export class CompletionatorUiService {
     itemTitle?: string,
   ): ModalBuilder {
     const modal = new ModalBuilder()
-      // eslint-disable-next-line local/custom-id-has-matching-handler, local/stable-custom-id
+      // eslint-disable-next-line local/custom-id-has-matching-handler
       .setCustomId(`comp-import-modal:${kind}:${userId}:${importId}:${itemId}`)
       .setTitle(title);
     const input = new TextInputBuilder()
-      // eslint-disable-next-line local/stable-custom-id
+       
       .setCustomId("completionator-input")
       .setLabel(label.slice(0, 45))
       .setPlaceholder((itemTitle ?? placeholder).slice(0, 100))

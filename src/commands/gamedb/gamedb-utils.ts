@@ -119,7 +119,7 @@ export function buildSearchRecoveryComponents(
   encodedQuery: string,
 ): ActionRowBuilder<ButtonBuilder>[] {
   const button = new ButtonBuilder()
-    // eslint-disable-next-line local/stable-custom-id
+     
     .setCustomId(buildSearchRefreshCustomId(ownerId, encodedQuery))
     .setLabel("Refresh search")
     .setStyle(ButtonStyle.Primary);
@@ -208,7 +208,7 @@ export function buildChoiceRows(
     const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
       slice.map((opt) =>
         new ButtonBuilder()
-          // eslint-disable-next-line local/stable-custom-id
+           
           .setCustomId(`${customIdPrefix}:${opt.value}`)
           .setLabel(opt.label)
           .setStyle(opt.style ?? ButtonStyle.Secondary),

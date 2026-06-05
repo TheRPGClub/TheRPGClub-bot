@@ -602,7 +602,10 @@ export class CollectionViewCommand {
       ownershipType: parsed.ownershipType,
     };
 
-    const modalFilterUpdateReply = buildTextReply(buildCollectionFilterPanelContent(nextState), true);
+    const modalFilterUpdateReply = buildTextReply(
+      buildCollectionFilterPanelContent(nextState),
+      true,
+    );
     await safeUpdate(interaction, {
       ...modalFilterUpdateReply,
       components: [

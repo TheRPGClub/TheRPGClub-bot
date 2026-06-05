@@ -320,7 +320,9 @@ const HELP_TOPICS: HelpTopic[] = [
   },
 ];
 
-function withHelpNotice<T extends { components: ActionRowBuilder<MessageActionRowComponentBuilder>[] }>(
+function withHelpNotice<
+  T extends { components: ActionRowBuilder<MessageActionRowComponentBuilder>[] },
+>(
   response: T,
   content: string,
 ): T & { flags: number; components: Array<ActionRowBuilder<MessageActionRowComponentBuilder>> } {
@@ -894,6 +896,7 @@ export function buildRssHelpResponse(
     .setDescription("Choose an RSS subcommand from the dropdown to view details.");
 
   const components = buildRssHelpButtons(activeTopicId);
+  // eslint-disable-next-line local/dynamic-components-require-chunking
   return { embeds: [embed], components };
 }
 
@@ -936,6 +939,7 @@ export function buildMainHelpResponse(): {
 
   return {
     embeds: [embed],
+    // eslint-disable-next-line local/dynamic-components-require-chunking
     components: buildMainHelpComponents(),
   };
 }
@@ -948,6 +952,7 @@ export function buildProfileHelpResponse(
     .setDescription("Choose a profile subcommand from the dropdown to view details.");
 
   const components = buildProfileHelpButtons(activeTopicId);
+  // eslint-disable-next-line local/dynamic-components-require-chunking
   return { embeds: [embed], components };
 }
 
@@ -959,6 +964,7 @@ export function buildGamedbHelpResponse(
     .setDescription("Choose a GameDB subcommand from the dropdown to view details.");
 
   const components = buildGamedbHelpButtons(activeTopicId);
+  // eslint-disable-next-line local/dynamic-components-require-chunking
   return { embeds: [embed], components };
 }
 
@@ -1335,12 +1341,15 @@ function buildCategoryHelpResponse(
 
   return {
     embeds: [embed],
+    // eslint-disable-next-line local/dynamic-components-require-chunking
     components: buildCategoryComponents(categoryId, activeTopicId),
   };
 }
 
 function buildMainHelpComponents(): ActionRowBuilder<StringSelectMenuBuilder>[] {
-  return HELP_CATEGORIES.flatMap((category) =>
-    buildCategoryComponents(category.id, undefined, false),
-  );
+  const rows: ActionRowBuilder<StringSelectMenuBuilder>[] = [];
+  HELP_CATEGORIES.forEach((category) => {
+    rows.push(...buildCategoryComponents(category.id, undefined, false));
+  });
+  return rows;
 }

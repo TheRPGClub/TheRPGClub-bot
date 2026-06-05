@@ -329,14 +329,12 @@ export class NominateCommand {
       );
     }
   }
-
-  // eslint-disable-next-line local/stable-custom-id
+   
   @SelectMenuComponent({ id: /^gotm-nom-details:\d+$/ })
   async showGotmNominationDetails(interaction: StringSelectMenuInteraction): Promise<void> {
     await this.showNominationDetails(interaction);
   }
-
-  // eslint-disable-next-line local/stable-custom-id
+   
   @SelectMenuComponent({ id: /^nr-gotm-nom-details:\d+$/ })
   async showNrGotmNominationDetails(interaction: StringSelectMenuInteraction): Promise<void> {
     await this.showNominationDetails(interaction);

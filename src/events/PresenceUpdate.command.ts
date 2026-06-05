@@ -5,6 +5,7 @@ import {
   ButtonInteraction,
   ButtonStyle,
 } from "discord.js";
+import crypto from "node:crypto";
 import type { Presence } from "discord.js";
 import type { ArgsOf, Client } from "discordx";
 import { ButtonComponent, Discord, On } from "discordx";
@@ -36,6 +37,17 @@ type PresencePromptSession = {
 
 const presencePromptSessions = new Map<string, PresencePromptSession>();
 const lastPresenceGameByUser = new Map<string, string>();
+
+function buildPresencePromptSessionId(userId: string, gameTitleNorm: string): string {
+  const dayStamp = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+  const titleHash = crypto
+    .createHash("sha256")
+    // eslint-disable-next-line local/no-direct-interaction-response-methods
+    .update(`${userId}:${gameTitleNorm}:${dayStamp}`)
+    .digest("hex")
+    .slice(0, 12);
+  return `presence-${userId}-${dayStamp}-${titleHash}`;
+}
 
 function getPresenceGameTitle(presence?: Presence | null): string | null {
   if (!presence) return null;
@@ -75,22 +87,18 @@ async function resolvePresenceGame(
 
 function buildPromptButtons(sessionId: string): ActionRowBuilder<ButtonBuilder> {
   const yes = new ButtonBuilder()
-    // eslint-disable-next-line local/stable-custom-id
     .setCustomId(`${YES_PREFIX}:${sessionId}`)
     .setLabel("Yes")
     .setStyle(ButtonStyle.Success);
   const no = new ButtonBuilder()
-    // eslint-disable-next-line local/stable-custom-id
     .setCustomId(`${NO_PREFIX}:${sessionId}`)
     .setLabel("No")
     .setStyle(ButtonStyle.Secondary);
   const optOutGame = new ButtonBuilder()
-    // eslint-disable-next-line local/stable-custom-id
     .setCustomId(`${OPT_OUT_GAME_PREFIX}:${sessionId}`)
     .setLabel("Don't ask again for this game")
     .setStyle(ButtonStyle.Secondary);
   const optOutAll = new ButtonBuilder()
-    // eslint-disable-next-line local/stable-custom-id
     .setCustomId(`${OPT_OUT_ALL_PREFIX}:${sessionId}`)
     .setLabel("Don't ask again for any game")
     .setStyle(ButtonStyle.Danger);
@@ -171,7 +179,7 @@ export class PresenceUpdate {
     const sendableChannel = channel as any;
     if (!sendableChannel || typeof sendableChannel.send !== "function") return;
 
-    const sessionId = `${user.id}-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
+    const sessionId = buildPresencePromptSessionId(user.id, newNorm);
     presencePromptSessions.set(sessionId, {
       userId: user.id,
       gameTitle: newGame,
@@ -194,7 +202,6 @@ export class PresenceUpdate {
     }
   }
 
-  // eslint-disable-next-line local/stable-custom-id
   @ButtonComponent({ id: /^presence-np-yes:.+$/ })
   async handlePresenceYes(interaction: ButtonInteraction): Promise<void> {
     const sessionId = interaction.customId.replace(`${YES_PREFIX}:`, "");
@@ -251,7 +258,6 @@ export class PresenceUpdate {
     }
   }
 
-  // eslint-disable-next-line local/stable-custom-id
   @ButtonComponent({ id: /^presence-np-no:.+$/ })
   async handlePresenceNo(interaction: ButtonInteraction): Promise<void> {
     const sessionId = interaction.customId.replace(`${NO_PREFIX}:`, "");

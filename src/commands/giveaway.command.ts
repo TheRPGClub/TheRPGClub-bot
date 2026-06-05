@@ -96,7 +96,7 @@ function buildKeySelectMenus(
     }));
     const range = getKeyRangeLabel(chunk);
     const select = new StringSelectMenuBuilder()
-      // eslint-disable-next-line local/stable-custom-id
+       
       .setCustomId(`${customIdPrefix}:${rows.length}`)
       .setPlaceholder(`Claim a key... (${range})`)
       .setMinValues(1)
@@ -247,12 +247,12 @@ function buildClaimConfirmComponents(
   cancelId: string,
 ): ActionRowBuilder<ButtonBuilder>[] {
   const yesButton = new ButtonBuilder()
-    // eslint-disable-next-line local/stable-custom-id
+     
     .setCustomId(confirmId)
     .setLabel("Yes")
     .setStyle(ButtonStyle.Success);
   const noButton = new ButtonBuilder()
-    // eslint-disable-next-line local/stable-custom-id
+     
     .setCustomId(cancelId)
     .setLabel("No")
     .setStyle(ButtonStyle.Secondary);
@@ -282,13 +282,13 @@ function buildDonorSettingsRow(
   enabled: boolean,
 ): ActionRowBuilder<ButtonBuilder> {
   const yesButton = new ButtonBuilder()
-    // eslint-disable-next-line local/stable-custom-id
+     
     .setCustomId(`${GIVEAWAY_DONOR_NOTIFY_ID}:${userId}:yes`)
     .setLabel("Yes")
     .setStyle(ButtonStyle.Success)
     .setDisabled(enabled);
   const noButton = new ButtonBuilder()
-    // eslint-disable-next-line local/stable-custom-id
+     
     .setCustomId(`${GIVEAWAY_DONOR_NOTIFY_ID}:${userId}:no`)
     .setLabel("No")
     .setStyle(ButtonStyle.Secondary)
@@ -350,21 +350,21 @@ async function claimKey(
 
 function buildDonateModal(): ModalBuilder {
   const titleInput = new TextInputBuilder()
-    // eslint-disable-next-line local/stable-custom-id
+     
     .setCustomId(GIVEAWAY_DONATE_TITLE_ID)
     .setLabel("Game title")
     .setStyle(TextInputStyle.Short)
     .setRequired(true)
     .setMaxLength(MAX_TITLE_LENGTH);
   const platformInput = new TextInputBuilder()
-    // eslint-disable-next-line local/stable-custom-id
+     
     .setCustomId(GIVEAWAY_DONATE_PLATFORM_ID)
     .setLabel("Platform (Steam, Epic, GOG, etc.)")
     .setStyle(TextInputStyle.Short)
     .setRequired(true)
     .setMaxLength(MAX_PLATFORM_LENGTH);
   const keyInput = new TextInputBuilder()
-    // eslint-disable-next-line local/stable-custom-id
+     
     .setCustomId(GIVEAWAY_DONATE_KEY_ID)
     .setLabel("Game key")
     .setStyle(TextInputStyle.Short)
@@ -372,7 +372,7 @@ function buildDonateModal(): ModalBuilder {
     .setMaxLength(MAX_KEY_LENGTH);
 
   return new ModalBuilder()
-    // eslint-disable-next-line local/stable-custom-id
+     
     .setCustomId(GIVEAWAY_DONATE_MODAL_ID)
     .setTitle("Donate a Game Key")
     .addComponents(
@@ -384,14 +384,14 @@ function buildDonateModal(): ModalBuilder {
 
 function buildRevokeModal(): ModalBuilder {
   const keyIdInput = new TextInputBuilder()
-    // eslint-disable-next-line local/stable-custom-id
+     
     .setCustomId(GIVEAWAY_REVOKE_KEY_ID)
     .setLabel("Key ID")
     .setStyle(TextInputStyle.Short)
     .setRequired(true);
 
   return new ModalBuilder()
-    // eslint-disable-next-line local/stable-custom-id
+     
     .setCustomId(GIVEAWAY_REVOKE_MODAL_ID)
     .setTitle("Revoke a Game Key")
     .addComponents(new ActionRowBuilder<TextInputBuilder>().addComponents(keyIdInput));
@@ -409,7 +409,7 @@ function buildKeyListComponents(
   if (keys.length) {
     if (isPublic) {
       const claimButton = new ButtonBuilder()
-        // eslint-disable-next-line local/stable-custom-id
+         
         .setCustomId(`giveaway-claim-button:${sessionId}:${page}`)
         .setLabel("Claim a key")
         .setStyle(ButtonStyle.Primary);
@@ -605,8 +605,7 @@ export class GiveawayCommand {
     }
   }
   */
-
-  // eslint-disable-next-line local/stable-custom-id
+   
   @ButtonComponent({ id: /^giveaway-page:[^:]+:\d+:\d+:(prev|next)$/ })
   async handlePage(interaction: ButtonInteraction): Promise<void> {
     const [, sessionId, ownerId, pageRaw, dir] = interaction.customId.split(":");
@@ -619,8 +618,7 @@ export class GiveawayCommand {
     if (!parsed) return;
     await updateKeyListInteraction(interaction, sessionId, ownerId, parsed.nextPage, false);
   }
-
-  // eslint-disable-next-line local/stable-custom-id
+   
   @ButtonComponent({ id: /^giveaway-page-public:[^:]+:\d+:(prev|next)$/ })
   async handlePublicPage(interaction: ButtonInteraction): Promise<void> {
     const [, sessionId, pageRaw, dir] = interaction.customId.split(":");
@@ -629,8 +627,7 @@ export class GiveawayCommand {
     await updateKeyListInteraction(
       interaction, sessionId, interaction.user.id, parsed.nextPage, true);
   }
-
-  // eslint-disable-next-line local/stable-custom-id
+   
   @ButtonComponent({ id: /^giveaway-hub-claim:\d+$/ })
   async handleHubClaim(interaction: ButtonInteraction): Promise<void> {
     const [, pageRaw] = interaction.customId.split(":");
@@ -660,14 +657,12 @@ export class GiveawayCommand {
       flags: MessageFlags.Ephemeral,
     });
   }
-
-  // eslint-disable-next-line local/stable-custom-id
+   
   @ButtonComponent({ id: "giveaway-hub-donate" })
   async handleHubDonate(interaction: ButtonInteraction): Promise<void> {
     await interaction.showModal(buildDonateModal()).catch(() => {});
   }
-
-  // eslint-disable-next-line local/stable-custom-id
+   
   @ButtonComponent({ id: GIVEAWAY_DONOR_SETTINGS_ID })
   async handleDonorSettings(interaction: ButtonInteraction): Promise<void> {
     const enabled = await Member.getGiveawayDonorNotifySetting(interaction.user.id);
@@ -686,14 +681,12 @@ export class GiveawayCommand {
       flags: MessageFlags.Ephemeral,
     });
   }
-
-  // eslint-disable-next-line local/stable-custom-id
+   
   @ButtonComponent({ id: "giveaway-hub-revoke" })
   async handleHubRevoke(interaction: ButtonInteraction): Promise<void> {
     await interaction.showModal(buildRevokeModal()).catch(() => {});
   }
-
-  // eslint-disable-next-line local/stable-custom-id
+   
   @ButtonComponent({ id: /^giveaway-donor-notify:\d+:(yes|no)$/ })
   async handleDonorNotifyUpdate(interaction: ButtonInteraction): Promise<void> {
     const [, ownerId, choice] = interaction.customId.split(":");
@@ -718,8 +711,7 @@ export class GiveawayCommand {
       components: [buildDonorSettingsRow(interaction.user.id, enabled)],
     });
   }
-
-  // eslint-disable-next-line local/stable-custom-id
+   
   @ButtonComponent({ id: /^giveaway-claim-button:[^:]+:\d+$/ })
   async handleClaimButton(interaction: ButtonInteraction): Promise<void> {
     const [, sessionId, pageRaw] = interaction.customId.split(":");
@@ -750,8 +742,7 @@ export class GiveawayCommand {
       flags: MessageFlags.Ephemeral,
     });
   }
-
-  // eslint-disable-next-line local/stable-custom-id
+   
   @SelectMenuComponent({ id: /^giveaway-claim:[^:]+:\d+:\d+:\d+$/ })
   async handleClaim(interaction: StringSelectMenuInteraction): Promise<void> {
     const [, sessionId, ownerId, pageRaw] = interaction.customId.split(":");
@@ -792,8 +783,7 @@ export class GiveawayCommand {
       components: buildClaimConfirmComponents(confirmId, cancelId),
     });
   }
-
-  // eslint-disable-next-line local/stable-custom-id
+   
   @SelectMenuComponent({ id: /^giveaway-hub-claim-select:\d+:\d+$/ })
   async handleHubClaimSelect(interaction: StringSelectMenuInteraction): Promise<void> {
     const [, userId] = interaction.customId.split(":");
@@ -833,8 +823,7 @@ export class GiveawayCommand {
       components: buildClaimConfirmComponents(confirmId, cancelId),
     });
   }
-
-  // eslint-disable-next-line local/stable-custom-id
+   
   @SelectMenuComponent({ id: /^giveaway-claim-public:[^:]+:\d+:\d+:\d+:\d+$/ })
   async handlePublicClaim(interaction: StringSelectMenuInteraction): Promise<void> {
     const [, sessionId, pageRaw, messageId, userId] = interaction.customId.split(":");
@@ -876,8 +865,7 @@ export class GiveawayCommand {
       components: buildClaimConfirmComponents(confirmId, cancelId),
     });
   }
-
-  // eslint-disable-next-line local/stable-custom-id
+   
   @ButtonComponent({ id: /^giveaway-claim-confirm:(hub|private|public):/ })
   async handleClaimConfirm(interaction: ButtonInteraction): Promise<void> {
     const parts = interaction.customId.split(":");
@@ -976,8 +964,7 @@ export class GiveawayCommand {
     await refreshGiveawayHubMessage(interaction.client)
       .catch(() => {});
   }
-
-  // eslint-disable-next-line local/stable-custom-id
+   
   @ButtonComponent({ id: /^giveaway-claim-cancel:\d+$/ })
   async handleClaimCancel(interaction: ButtonInteraction): Promise<void> {
     const [, userId] = interaction.customId.split(":");
@@ -992,8 +979,7 @@ export class GiveawayCommand {
       components: [],
     });
   }
-
-  // eslint-disable-next-line local/stable-custom-id
+   
   @ModalComponent({ id: GIVEAWAY_DONATE_MODAL_ID })
   async handleDonateModal(interaction: ModalSubmitInteraction): Promise<void> {
     await safeDeferReply(interaction, { flags: MessageFlags.Ephemeral });
@@ -1008,8 +994,7 @@ export class GiveawayCommand {
       await refreshGiveawayHubMessage(interaction.client).catch(() => {});
     }
   }
-
-  // eslint-disable-next-line local/stable-custom-id
+   
   @ModalComponent({ id: GIVEAWAY_REVOKE_MODAL_ID })
   async handleRevokeModal(interaction: ModalSubmitInteraction): Promise<void> {
     await safeDeferReply(interaction, { flags: MessageFlags.Ephemeral });

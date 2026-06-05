@@ -8,7 +8,7 @@ import localRules from "./eslint-rules/index.js";
 const tsconfigRootDir = fileURLToPath(new URL(".", import.meta.url));
 
 export default [
-  { ignores: ["build/**"] },
+  { ignores: ["build/**", ".claude/worktrees/**"] },
   eslintConfigPrettier,
   pluginJs.configs.recommended,
   ...tseslint.configs.recommended,

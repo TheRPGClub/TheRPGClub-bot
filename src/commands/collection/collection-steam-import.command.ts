@@ -60,7 +60,7 @@ import {
   searchIgdbWithProgressiveTitleVariants,
   type ImportCandidate,
 } from "../../functions/ImportCandidateUtils.js";
-import { buildComponentsV2Flags } from "../../functions/ComponentsV2Utils.js";
+import { buildComponentsV2Flags, buildTextReply } from "../../functions/ComponentsV2Utils.js";
 import {
   buildImportActionsContainer,
   buildImportMessageContainer,

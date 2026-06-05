@@ -45,7 +45,7 @@ import { createIssue } from "../services/GithubIssuesService.js";
 import { BOT_DEV_CHANNEL_ID, GAMEDB_UPDATES_CHANNEL_ID } from "../config/channels.js";
 import { BOT_DEV_PING_USER_ID } from "../config/users.js";
 import { COMPONENTS_V2_FLAG } from "../config/flags.js";
-import { safeV2TextContent } from "../functions/ComponentsV2Utils.js";
+import { buildTextReply, safeV2TextContent } from "../functions/ComponentsV2Utils.js";
 import { logRawModal } from "../services/raw-modal/RawModalLogging.js";
 
 const SUGGESTION_APPROVE_PREFIX = "suggestion-approve";

@@ -498,6 +498,7 @@ async function buildRoundHistoryResponse(
   const paginationRow = buildRoundHistoryPaginationRow({ ...state, page: safePage }, totalPages);
   const components = paginationRow ? [...payload.components, paginationRow] : payload.components;
   return {
+    // eslint-disable-next-line local/dynamic-components-require-chunking
     components,
     files: payload.files,
     totalPages,

@@ -131,11 +131,11 @@ export async function handleGotmAuditAction(interaction: ButtonInteraction): Pro
 
   if (action === "manual") {
     const modal = new ModalBuilder()
-      // eslint-disable-next-line local/stable-custom-id
+       
       .setCustomId(`${GOTM_AUDIT_MANUAL_PREFIX}:${ownerId}:${importId}:${itemId}`)
       .setTitle("Manual GameDB Entry");
     const input = new TextInputBuilder()
-      // eslint-disable-next-line local/stable-custom-id
+       
       .setCustomId(GOTM_AUDIT_MANUAL_INPUT_ID)
       .setLabel("GameDB ID")
       .setStyle(TextInputStyle.Short)
@@ -148,11 +148,11 @@ export async function handleGotmAuditAction(interaction: ButtonInteraction): Pro
 
   if (action === "query") {
     const modal = new ModalBuilder()
-      // eslint-disable-next-line local/stable-custom-id
+       
       .setCustomId(`${GOTM_AUDIT_QUERY_PREFIX}:${ownerId}:${importId}:${itemId}`)
       .setTitle("Manual GameDB Search");
     const input = new TextInputBuilder()
-      // eslint-disable-next-line local/stable-custom-id
+       
       .setCustomId(GOTM_AUDIT_QUERY_INPUT_ID)
       .setLabel("Search query")
       .setStyle(TextInputStyle.Short)

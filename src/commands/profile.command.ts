@@ -3,7 +3,6 @@ import {
   ApplicationCommandOptionType,
   EmbedBuilder,
   type User,
-  MessageFlags,
   PermissionsBitField,
   ActionRowBuilder,
   StringSelectMenuBuilder,
@@ -32,7 +31,7 @@ import {
   safeReply,
   sanitizeUserInput,
 } from "../functions/InteractionUtils.js";
-import { safeV2TextContent } from "../functions/ComponentsV2Utils.js";
+import { buildTextReply, safeV2TextContent } from "../functions/ComponentsV2Utils.js";
 import { buildUserHeaderContainer } from "../functions/uiComponents.js";
 import { buildComponentsV2Flags } from "../functions/NominationListComponents.js";
 

@@ -213,7 +213,7 @@ export function buildCsvImportItemButtons(params: {
   return new ActionRowBuilder<ButtonBuilder>().addComponents(
     new ButtonBuilder()
       .setCustomId(
-        // eslint-disable-next-line local/stable-custom-id
+         
         buildCollectionCsvImportActionId({
           ownerId: params.ownerId,
           importId: params.importId,
@@ -225,7 +225,7 @@ export function buildCsvImportItemButtons(params: {
       .setStyle(ButtonStyle.Primary),
     new ButtonBuilder()
       .setCustomId(
-        // eslint-disable-next-line local/stable-custom-id
+         
         buildCollectionCsvImportActionId({
           ownerId: params.ownerId,
           importId: params.importId,
@@ -237,7 +237,7 @@ export function buildCsvImportItemButtons(params: {
       .setStyle(ButtonStyle.Secondary),
     new ButtonBuilder()
       .setCustomId(
-        // eslint-disable-next-line local/stable-custom-id
+         
         buildCollectionCsvImportActionId({
           ownerId: params.ownerId,
           importId: params.importId,
@@ -249,7 +249,7 @@ export function buildCsvImportItemButtons(params: {
       .setStyle(ButtonStyle.Secondary),
     new ButtonBuilder()
       .setCustomId(
-        // eslint-disable-next-line local/stable-custom-id
+         
         buildCollectionCsvImportActionId({
           ownerId: params.ownerId,
           importId: params.importId,

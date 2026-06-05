@@ -65,7 +65,7 @@ export async function promptCompletionSelection(
     });
 
     const select = new StringSelectMenuBuilder()
-      // eslint-disable-next-line local/stable-custom-id, local/custom-id-has-matching-handler
+      // eslint-disable-next-line local/custom-id-has-matching-handler
       .setCustomId(`completion-add-select:${sessionId}`)
       .setPlaceholder("Select a game to log completion")
       .addOptions(options);
@@ -413,12 +413,12 @@ async function confirmDuplicateCompletion(
 
   const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
     new ButtonBuilder()
-      // eslint-disable-next-line local/stable-custom-id
+       
       .setCustomId(yesId)
       .setLabel("Add Another")
       .setStyle(ButtonStyle.Danger),
     new ButtonBuilder()
-      // eslint-disable-next-line local/stable-custom-id
+       
       .setCustomId(noId)
       .setLabel("Cancel")
       .setStyle(ButtonStyle.Secondary),

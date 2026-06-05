@@ -130,27 +130,27 @@ export function buildGameProfileActionRow(
   disableVideo = false,
 ): ActionRowBuilder<ButtonBuilder>[] {
   const addNowPlaying = new ButtonBuilder()
-    .setCustomId(`gamedb-action:nowplaying:${gameId}`) // eslint-disable-line local/stable-custom-id, local/custom-id-has-matching-handler
+    .setCustomId(`gamedb-action:nowplaying:${gameId}`) // eslint-disable-line local/custom-id-has-matching-handler
     .setLabel("Add to Now Playing List")
     .setStyle(ButtonStyle.Primary);
   const viewFeaturedVideo = new ButtonBuilder()
-    .setCustomId(`gamedb-action:video:${gameId}`) // eslint-disable-line local/stable-custom-id, local/custom-id-has-matching-handler
+    .setCustomId(`gamedb-action:video:${gameId}`) // eslint-disable-line local/custom-id-has-matching-handler
     .setLabel("View Featured Video")
     .setStyle(ButtonStyle.Secondary)
     .setDisabled(disableVideo);
   const rows: ActionRowBuilder<ButtonBuilder>[] = [];
   const primaryRow = new ActionRowBuilder<ButtonBuilder>().addComponents(addNowPlaying);
   if (isReleased) {
-     
     const addCompletion = new ButtonBuilder()
+      // eslint-disable-next-line local/custom-id-has-matching-handler
       .setCustomId(`gamedb-action:completion:${gameId}`)
       .setLabel("Add Completion")
       .setStyle(ButtonStyle.Primary);
     primaryRow.addComponents(addCompletion);
   }
   if (!hasThread) {
-     
     const addThread = new ButtonBuilder()
+      // eslint-disable-next-line local/custom-id-has-matching-handler
       .setCustomId(`gamedb-action:thread:${gameId}`)
       .setLabel("Create Now Playing Thread")
       .setStyle(ButtonStyle.Primary);
@@ -161,13 +161,14 @@ export function buildGameProfileActionRow(
   }
   rows.push(primaryRow);
   if (canMarkThumbnailBad && !isThumbnailBad && !isThumbnailApproved) {
-     
     const badThumbnail = new ButtonBuilder()
+      // eslint-disable-next-line local/custom-id-has-matching-handler
       .setCustomId(`gamedb-action:bad-thumb:${gameId}`)
       .setLabel("Bad Thumbnail")
       .setStyle(ButtonStyle.Danger);
-     
+
     const goodThumbnail = new ButtonBuilder()
+      // eslint-disable-next-line local/custom-id-has-matching-handler
       .setCustomId(`gamedb-action:good-thumb:${gameId}`)
       .setLabel("Good Thumbnail")
       .setStyle(ButtonStyle.Secondary);
@@ -451,8 +452,8 @@ export async function buildGameProfile(
         bodyParts.push({ content: `**HowLongToBeat™**\n${hltbLines.join("\n")}` });
       }
     } else if (canImportHltb && includeInlineButtons) {
-       
       const importHltb = new V2ButtonBuilder()
+        // eslint-disable-next-line local/custom-id-has-matching-handler
         .setCustomId(`gamedb-action:hltb-import:${gameId}`)
         .setLabel("Import HLTB Data")
         .setStyle(ButtonStyle.Secondary);
@@ -520,26 +521,26 @@ export async function buildGameProfile(
       }
       const [descriptionBlock, ...remainingBlocks] = bodyBlocks;
       if (descriptionBlock) {
-         
         const descriptionSection = new SectionBuilder()
+          .setThumbnailAccessory(
+            new ThumbnailBuilder().setURL(thumbnailUrl),
+          )
           .addTextDisplayComponents(
             new TextDisplayBuilder().setContent(
               safeV2TextContent(descriptionBlock.content, 3500),
             ),
-          )
-          .setThumbnailAccessory(
-            new ThumbnailBuilder().setURL(thumbnailUrl),
           );
+        // eslint-disable-next-line local/section-builder-requires-accessory
         container.addSectionComponents(descriptionSection);
       }
       remainingBlocks.forEach((block) => {
         if (block.accessory) {
-           
           const section = new SectionBuilder()
+            .setButtonAccessory(block.accessory)
             .addTextDisplayComponents(
               new TextDisplayBuilder().setContent(safeV2TextContent(block.content, 3500)),
-            )
-            .setButtonAccessory(block.accessory);
+            );
+          // eslint-disable-next-line local/section-builder-requires-accessory
           container.addSectionComponents(section);
         } else {
           container.addTextDisplayComponents(
@@ -555,12 +556,12 @@ export async function buildGameProfile(
       }
       bodyBlocks.forEach((block) => {
         if (block.accessory) {
-           
           const section = new SectionBuilder()
+            .setButtonAccessory(block.accessory)
             .addTextDisplayComponents(
               new TextDisplayBuilder().setContent(safeV2TextContent(block.content, 3500)),
-            )
-            .setButtonAccessory(block.accessory);
+            );
+          // eslint-disable-next-line local/section-builder-requires-accessory
           container.addSectionComponents(section);
         } else {
           container.addTextDisplayComponents(

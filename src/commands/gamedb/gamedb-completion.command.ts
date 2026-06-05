@@ -142,7 +142,7 @@ function buildCompletionWizardComponents(
   platformOptions: Array<{ label: string; value: string }>,
 ): Array<ActionRowBuilder<StringSelectMenuBuilder> | ActionRowBuilder<ButtonBuilder>> {
   const typeSelect = new StringSelectMenuBuilder()
-    // eslint-disable-next-line local/stable-custom-id
+     
     .setCustomId(`gamedb-completion-select:${session.id}:type`)
     .setPlaceholder("Completion type")
     .addOptions(
@@ -154,7 +154,7 @@ function buildCompletionWizardComponents(
     );
 
   const dateSelect = new StringSelectMenuBuilder()
-    // eslint-disable-next-line local/stable-custom-id
+     
     .setCustomId(`gamedb-completion-select:${session.id}:date`)
     .setPlaceholder("Completion date")
     .addOptions(
@@ -176,7 +176,7 @@ function buildCompletionWizardComponents(
     );
 
   const platformSelect = new StringSelectMenuBuilder()
-    // eslint-disable-next-line local/stable-custom-id
+     
     .setCustomId(`gamedb-completion-select:${session.id}:platform`)
     .setPlaceholder("Platform")
     .addOptions(
@@ -196,7 +196,7 @@ function buildCompletionWizardComponents(
 
   if (session.requiresRemoveChoice) {
     const removeSelect = new StringSelectMenuBuilder()
-      // eslint-disable-next-line local/stable-custom-id
+       
       .setCustomId(`gamedb-completion-select:${session.id}:remove`)
       .setPlaceholder("Remove from Now Playing?")
       .addOptions(
@@ -215,7 +215,7 @@ function buildCompletionWizardComponents(
   }
 
   const nextButton = new ButtonBuilder()
-    // eslint-disable-next-line local/stable-custom-id
+     
     .setCustomId(`gamedb-completion-next:${session.id}`)
     .setLabel("Next")
     .setStyle(ButtonStyle.Primary);
@@ -297,7 +297,7 @@ export async function startCompletionWizard(
 @Discord()
 @SlashGroup("gamedb")
 export class GameDbCompletionCommand {
-  // eslint-disable-next-line local/stable-custom-id
+   
   @SelectMenuComponent({ id: /^gamedb-completion-select:\d+:(type|date|platform|remove)$/ })
   async handleCompletionWizardSelect(interaction: StringSelectMenuInteraction): Promise<void> {
     const parts = interaction.customId.split(":");
@@ -341,8 +341,7 @@ export class GameDbCompletionCommand {
     ];
     await safeUpdate(interaction, { components });
   }
-
-  // eslint-disable-next-line local/stable-custom-id
+   
   @ButtonComponent({ id: /^gamedb-completion-next:\d+$/ })
   async handleCompletionWizardNext(interaction: ButtonInteraction): Promise<void> {
     const parts = interaction.customId.split(":");
@@ -374,7 +373,7 @@ export class GameDbCompletionCommand {
     }
 
     const modal = new ModalBuilder()
-      // eslint-disable-next-line local/stable-custom-id
+       
       .setCustomId(`gamedb-completion-modal:${session.id}`)
       .setTitle("Add Completion Details");
 
@@ -382,7 +381,7 @@ export class GameDbCompletionCommand {
       modal.addComponents(
         new ActionRowBuilder<TextInputBuilder>().addComponents(
           new TextInputBuilder()
-            // eslint-disable-next-line local/stable-custom-id
+             
             .setCustomId("completion-date")
             .setLabel("Completion date (YYYY-MM-DD)")
             .setStyle(TextInputStyle.Short)
@@ -394,7 +393,7 @@ export class GameDbCompletionCommand {
     modal.addComponents(
       new ActionRowBuilder<TextInputBuilder>().addComponents(
         new TextInputBuilder()
-          // eslint-disable-next-line local/stable-custom-id
+           
           .setCustomId("completion-playtime")
           .setLabel("Playtime hours (optional)")
           .setStyle(TextInputStyle.Short)
@@ -405,7 +404,7 @@ export class GameDbCompletionCommand {
     modal.addComponents(
       new ActionRowBuilder<TextInputBuilder>().addComponents(
         new TextInputBuilder()
-          // eslint-disable-next-line local/stable-custom-id
+           
           .setCustomId("completion-note")
           .setLabel(`Note (optional, ${MAX_COMPLETION_NOTE_LEN} chars max)`)
           .setStyle(TextInputStyle.Paragraph)
@@ -416,8 +415,7 @@ export class GameDbCompletionCommand {
 
     await interaction.showModal(modal).catch(() => {});
   }
-
-  // eslint-disable-next-line local/stable-custom-id
+   
   @ModalComponent({ id: /^gamedb-completion-modal:\d+$/ })
   async handleCompletionWizardModal(interaction: ModalSubmitInteraction): Promise<void> {
     const parts = interaction.customId.split(":");
@@ -516,8 +514,7 @@ export class GameDbCompletionCommand {
       await safeReply(interaction, buildTextReply(`Failed to add completion: ${err?.message ?? String(err)}`, false)).catch(() => {});
     }
   }
-
-  // eslint-disable-next-line local/stable-custom-id
+   
   @ModalComponent({ id: /^gamedb-nowplaying-modal:\d+$/ })
   async handleGameDbNowPlayingModal(interaction: ModalSubmitInteraction): Promise<void> {
     const [, gameIdRaw] = interaction.customId.split(":");

@@ -70,14 +70,14 @@ export async function showNowPlayingThreadModal(
 
   const modal = new ModalBuilder()
     .setCustomId(
-      // eslint-disable-next-line local/stable-custom-id
+       
       buildNowPlayingThreadModalCustomId(gameId, sourceChannelId, sourceMessageId),
     )
     .setTitle("Create Now Playing Thread")
     .addComponents(
       new ActionRowBuilder<TextInputBuilder>().addComponents(
         new TextInputBuilder()
-          // eslint-disable-next-line local/stable-custom-id
+           
           .setCustomId(GAMEDB_THREAD_TITLE_INPUT_ID)
           .setLabel("Thread Title")
           .setStyle(TextInputStyle.Short)
@@ -87,7 +87,7 @@ export async function showNowPlayingThreadModal(
       ),
       new ActionRowBuilder<TextInputBuilder>().addComponents(
         new TextInputBuilder()
-          // eslint-disable-next-line local/stable-custom-id
+           
           .setCustomId(GAMEDB_THREAD_BODY_INPUT_ID)
           .setLabel("Initial Post")
           .setStyle(TextInputStyle.Paragraph)
@@ -221,7 +221,7 @@ async function runNowPlayingThreadWizard(
 @Discord()
 @SlashGroup("gamedb")
 export class GameDbThreadCommand {
-  // eslint-disable-next-line local/stable-custom-id
+   
   @ModalComponent({ id: /^gamedb-thread-modal:\d+:\d+:\d+$/ })
   async handleGameDbThreadModal(interaction: ModalSubmitInteraction): Promise<void> {
     const parts = interaction.customId.split(":");

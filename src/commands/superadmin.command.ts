@@ -8,6 +8,7 @@ import {
 } from "discord.js";
 import type { ButtonInteraction, CommandInteraction, User } from "discord.js";
 import axios from "axios";
+import crypto from "node:crypto";
 import {
   ButtonComponent,
   Discord,
@@ -127,6 +128,13 @@ function buildSuperAdminHelpButtons(
 }
 
 type ImageBufferResult = { buffer: Buffer; mimeType: string | null };
+
+function buildStableSuperAdminSessionId(prefix: string, parts: string[]): string {
+  const hash = crypto.createHash("sha256");
+  // eslint-disable-next-line local/no-direct-interaction-response-methods
+  hash.update(parts.join(":"));
+  return `${prefix}-${hash.digest("hex").slice(0, 16)}`;
+}
 
 async function downloadImageBuffer(url: string): Promise<ImageBufferResult> {
   const resp = await axios.get<ArrayBuffer>(url, { responseType: "arraybuffer" });
@@ -347,7 +355,12 @@ export class SuperAdmin {
   ): Promise<void> {
     const localResults = await Game.searchGames(searchTerm);
     if (localResults.length) {
-      const sessionId = `sacomp-${Date.now()}-${Math.floor(Math.random() * 100000)}`;
+      const sessionId = buildStableSuperAdminSessionId("sacomp", [
+        interaction.id,
+        ctx.targetUserId,
+        ctx.completionType,
+        searchTerm,
+      ]);
       superadminCompletionAddSessions.set(sessionId, ctx);
 
       const options = localResults.slice(0, 24).map((game) => ({
@@ -378,8 +391,16 @@ export class SuperAdmin {
     await this.promptIgdbSelection(interaction, searchTerm, ctx);
   }
 
-  private createCompletionPlatformSession(ctx: CompletionPlatformContext): string {
-    const sessionId = `sacomp-platform-${Date.now()}-${Math.floor(Math.random() * 100000)}`;
+  private createCompletionPlatformSession(
+    ctx: CompletionPlatformContext,
+    sourceInteractionId: string,
+  ): string {
+    const sessionId = buildStableSuperAdminSessionId("sacomp-platform", [
+      sourceInteractionId,
+      ctx.targetUserId,
+      String(ctx.gameId),
+      ctx.completionType,
+    ]);
     superadminCompletionPlatformSessions.set(sessionId, ctx);
     return sessionId;
   }
@@ -404,13 +425,16 @@ export class SuperAdmin {
         id: platform.id,
         name: platform.name,
       }));
-    const sessionId = this.createCompletionPlatformSession({
-      ...ctx,
-      userId: interaction.user.id,
-      gameId: game.id,
-      gameTitle: game.title,
-      platforms: platformOptions,
-    });
+    const sessionId = this.createCompletionPlatformSession(
+      {
+        ...ctx,
+        userId: interaction.user.id,
+        gameId: game.id,
+        gameTitle: game.title,
+        platforms: platformOptions,
+      },
+      interaction.id,
+    );
     const baseOptions = platformOptions.map((platform) => ({
       label: platform.name.slice(0, 100),
       value: String(platform.id),
@@ -572,7 +596,12 @@ export class SuperAdmin {
         return;
       }
 
-      await targetMessage.reply(buildTextReply(sanitizedMessage, false)).catch(() => {});
+      try {
+        await targetMessage.reply(buildTextReply(sanitizedMessage, false));
+      } catch {
+        await safeReply(interaction, buildTextReply("Could not send that reply.", true));
+        return;
+      }
       await safeReply(interaction, buildTextReply("Reply sent.", true));
       return;
     }
@@ -928,7 +957,6 @@ export class SuperAdmin {
 export const AUDIT_NO_VALUE_SENTINEL = "__NO_VALUE__";
 
 export async function isSuperAdmin(interaction: AnyRepliable): Promise<boolean> {
-  const anyInteraction = interaction as any;
   const guild = interaction.guild;
   const userId = interaction.user.id;
 
@@ -967,6 +995,7 @@ export function buildSuperAdminHelpResponse(
 
   return {
     embeds: [embed],
+    // eslint-disable-next-line local/dynamic-components-require-chunking
     components,
   };
 }

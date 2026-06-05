@@ -110,7 +110,6 @@ const NOW_PLAYING_ADD_MODAL_ID = "nowplaying-add-modal";
 const NOW_PLAYING_ADD_TITLE_INPUT_ID = "nowplaying-add-title";
 const NOW_PLAYING_ADD_NOTE_INPUT_ID = "nowplaying-add-note";
 const NOW_PLAYING_ADD_PLATFORM_SELECT_PREFIX = "nowplaying-add-platform-select";
-const NOW_PLAYING_EDIT_PLATFORM_SELECT_PREFIX = "nowplaying-edit-platform-select";
 const NOW_PLAYING_EDIT_PLATFORM_SLOT_PREFIX = "nowplaying-edit-platform-slot";
 const NOW_PLAYING_EDIT_PLATFORM_SAVE_PREFIX = "nowplaying-edit-platform-save";
 const NOW_PLAYING_EDIT_PLATFORM_RESET_PREFIX = "nowplaying-edit-platform-reset";
@@ -1014,18 +1013,23 @@ export class NowPlayingCommand {
         )
         .addActionRowComponents(selectRow.toJSON());
 
-      await safeReply(interaction, {
+      const reply = await safeReply(interaction, {
         components: [container],
         flags: buildComponentsV2Flags(true),
-      });
+        withResponse: true,
+      } as any);
+      const replyMessage = reply?.resource?.message ?? null;
 
       session.timeoutId = setTimeout(async () => {
         try {
           if (!nowPlayingAddSessions.has(sessionId)) {
             return;
           }
-          const reply = await interaction.fetchReply();
-          const hasMatchingSelect = reply.components.some((row) => {
+          if (!replyMessage) {
+            return;
+          }
+          const hasMatchingSelect = replyMessage.components.some(
+            (row: ActionRow<MessageActionRowComponent>) => {
             if (!("components" in row)) return false;
             const actionRow = row as ActionRow<MessageActionRowComponent>;
             return actionRow.components.some(
@@ -2550,7 +2554,10 @@ export class NowPlayingCommand {
     );
 
     if (mode === "update" && "update" in interaction) {
-      await safeUpdate(interaction, { components: pmComponents, flags: buildComponentsV2Flags(true) });
+      await safeUpdate(interaction, {
+        components: pmComponents,
+        flags: buildComponentsV2Flags(true),
+      });
       return;
     }
     await safeReply(interaction, {
@@ -2637,7 +2644,7 @@ export class NowPlayingCommand {
       value: String(platform.id),
     }));
     const select = new StringSelectMenuBuilder()
-      .setCustomId(`${NOW_PLAYING_EDIT_PLATFORM_SELECT_PREFIX}:${ownerId}:${gameId}`)
+      .setCustomId(`nowplaying-edit-platform-select:${ownerId}:${gameId}`)
       .setPlaceholder("Select the platform")
       .addOptions(options);
     const content = platforms.length > options.length
@@ -2663,6 +2670,38 @@ export class NowPlayingCommand {
     } else {
       await safeReply(interaction, { ...payload, components: pmComponents });
     }
+  }
+
+  @SelectMenuComponent({ id: /^nowplaying-edit-platform-select:\d+:\d+$/ })
+  async handleNowPlayingEditPlatformSelect(
+    interaction: StringSelectMenuInteraction,
+  ): Promise<void> {
+    const [, ownerId, gameIdRaw] = interaction.customId.split(":");
+    if (interaction.user.id !== ownerId) {
+      await safeReply(interaction, buildTextReply("This platform prompt isn't for you.", true));
+      return;
+    }
+
+    const gameId = Number(gameIdRaw);
+    const platformId = Number(interaction.values?.[0]);
+    if (
+      !Number.isInteger(gameId) ||
+      gameId <= 0 ||
+      !Number.isInteger(platformId) ||
+      platformId <= 0
+    ) {
+      await safeReply(interaction, buildTextReply("Invalid platform selection.", true));
+      return;
+    }
+
+    const updated = await Member.updateNowPlayingPlatform(ownerId, gameId, platformId);
+    if (!updated) {
+      await safeReply(interaction, buildTextReply("Could not update that platform.", true));
+      return;
+    }
+
+    await this.refreshNowPlayingListFromContext(interaction, ownerId).catch(() => {});
+    await this.returnToNowPlayingEditMenu(interaction, ownerId);
   }
 
   @SelectMenuComponent({ id: /^nowplaying-edit-platform-slot:\d+:\d+:[a-z0-9_]+$/ })
@@ -3342,15 +3381,16 @@ export class NowPlayingCommand {
     if (interaction.guildId) {
       await this.deleteLatestJournalMessageInChannel(interaction, ownerId, gameId);
     }
-    await safeReply(interaction, {
+    const reply = await safeReply(interaction, {
       components: payload.components,
       files: payload.files,
       flags: buildComponentsV2Flags(
         interaction.message.flags?.has(MessageFlags.Ephemeral) ?? false,
       ),
       allowedMentions: payload.allowedMentions,
-    });
-    await this.trackJournalReply(interaction, ownerId, gameId);
+      withResponse: true,
+    } as any);
+    await this.trackJournalReply(reply?.resource?.message ?? null, ownerId, gameId);
   }
 
   @SelectMenuComponent({ id: /^nowplaying-journal-view-select:\d+$/ })
@@ -3377,15 +3417,16 @@ export class NowPlayingCommand {
     if (interaction.guildId) {
       await this.deleteLatestJournalMessageInChannel(interaction, ownerId, gameId);
     }
-    await safeReply(interaction, {
+    const reply = await safeReply(interaction, {
       components: payload.components,
       files: payload.files,
       flags: buildComponentsV2Flags(
         interaction.message.flags?.has(MessageFlags.Ephemeral) ?? false,
       ),
       allowedMentions: payload.allowedMentions,
-    });
-    await this.trackJournalReply(interaction, ownerId, gameId);
+      withResponse: true,
+    } as any);
+    await this.trackJournalReply(reply?.resource?.message ?? null, ownerId, gameId);
   }
 
   @ButtonComponent({ id: /^nowplaying-journal-page:\d+:\d+:(prev|next):\d+$/ })
@@ -3413,15 +3454,16 @@ export class NowPlayingCommand {
     if (interaction.guildId) {
       await this.deleteLatestJournalMessageInChannel(interaction, ownerId, gameId);
     }
-    await safeReply(interaction, {
+    const reply = await safeReply(interaction, {
       components: payload.components,
       files: payload.files,
       flags: buildComponentsV2Flags(
         interaction.message.flags?.has(MessageFlags.Ephemeral) ?? false,
       ),
       allowedMentions: payload.allowedMentions,
-    });
-    await this.trackJournalReply(interaction, ownerId, gameId);
+      withResponse: true,
+    } as any);
+    await this.trackJournalReply(reply?.resource?.message ?? null, ownerId, gameId);
   }
 
   @ButtonComponent({ id: /^nowplaying-journal-add:\d+:\d+:\d+$/ })
@@ -3657,13 +3699,14 @@ export class NowPlayingCommand {
         interaction.guildId,
         true,
       );
-      await safeReply(interaction, {
+      const reply = await safeReply(interaction, {
         components: payload.components as any[],
         files: payload.files,
         flags: buildComponentsV2Flags(false),
         allowedMentions: payload.allowedMentions,
-      });
-      await this.trackJournalReply(interaction, ownerId, gameId);
+        withResponse: true,
+      } as any);
+      await this.trackJournalReply(reply?.resource?.message ?? null, ownerId, gameId);
       await safeReply(interaction, {
         components: [row],
         flags: buildComponentsV2Flags(true),
@@ -4098,15 +4141,16 @@ export class NowPlayingCommand {
             "Use the user button in the header to manage sort order, platform, completions, and removals.",
           ].join("\n"),
         );
-        await safeReply(interaction, {
-          components: [header, container],
-          flags: buildComponentsV2Flags(ephemeral),
-        });
-        if (!ephemeral && "fetchReply" in interaction && typeof interaction.fetchReply === "function") {
-          const message = await interaction.fetchReply().catch(() => null);
-          if (message) {
-            trackNowPlayingListContext(message as Message<boolean>, {
-              view: "single",
+      const reply = await safeReply(interaction, {
+        components: [header, container],
+        flags: buildComponentsV2Flags(ephemeral),
+        withResponse: !ephemeral,
+      } as any);
+      if (!ephemeral) {
+        const message = reply?.resource?.message ?? null;
+        if (message) {
+          trackNowPlayingListContext(message as Message<boolean>, {
+            view: "single",
               ownerUserId: target.id,
             });
           }
@@ -4118,12 +4162,13 @@ export class NowPlayingCommand {
         "Now Playing",
         `No Now Playing entries found for <@${target.id}>.`,
       );
-      await safeReply(interaction, {
+      const reply = await safeReply(interaction, {
         components: [container],
         flags: buildComponentsV2Flags(ephemeral),
-      });
-      if (!ephemeral && "fetchReply" in interaction && typeof interaction.fetchReply === "function") {
-        const message = await interaction.fetchReply().catch(() => null);
+        withResponse: !ephemeral,
+      } as any);
+      if (!ephemeral) {
+        const message = reply?.resource?.message ?? null;
         if (message) {
           trackNowPlayingListContext(message as Message<boolean>, {
             view: "single",
@@ -4151,13 +4196,14 @@ export class NowPlayingCommand {
       this.hasDisplayableNowPlayingNotes(sortedEntries),
       false,
     );
-    await safeReply(interaction, {
+    const reply = await safeReply(interaction, {
       components,
       files: payload.files,
       flags: buildComponentsV2Flags(ephemeral),
-    });
-    if (!ephemeral && "fetchReply" in interaction && typeof interaction.fetchReply === "function") {
-      const message = await interaction.fetchReply().catch(() => null);
+      withResponse: !ephemeral,
+    } as any);
+    if (!ephemeral) {
+      const message = reply?.resource?.message ?? null;
       if (message) {
         trackNowPlayingListContext(message as Message<boolean>, {
           view: "single",
@@ -4277,12 +4323,13 @@ export class NowPlayingCommand {
 
     const selectRow = this.buildNowPlayingMemberSelect(sortedLists);
 
-    await safeReply(interaction, {
+    const reply = await safeReply(interaction, {
       components: [container, selectRow],
       flags: buildComponentsV2Flags(ephemeral),
-    });
+      withResponse: !ephemeral,
+    } as any);
     if (!ephemeral) {
-      const message = await interaction.fetchReply().catch(() => null);
+      const message = reply?.resource?.message ?? null;
       if (message) {
         trackNowPlayingListContext(message as Message<boolean>, {
           view: "everyone",
@@ -4488,9 +4535,12 @@ export class NowPlayingCommand {
     covers: Array<{ gameId: number; title: string; imageData: Buffer }>,
   ): string {
     const hash = crypto.createHash("sha256");
+    // eslint-disable-next-line local/no-direct-interaction-response-methods
     hash.update(`owner:${ownerId}|count:${covers.length}|`);
     covers.forEach((cover) => {
+      // eslint-disable-next-line local/no-direct-interaction-response-methods
       hash.update(`id:${cover.gameId}|title:${cover.title}|`);
+      // eslint-disable-next-line local/no-direct-interaction-response-methods
       hash.update(cover.imageData);
     });
     return hash.digest("hex");
@@ -4610,7 +4660,7 @@ export class NowPlayingCommand {
   }
 
   private async returnToNowPlayingEditMenu(
-    interaction: ButtonInteraction,
+    interaction: AnyRepliable,
     ownerId: string,
   ): Promise<void> {
     const row = await this.buildNowPlayingManageRow(ownerId);
@@ -5341,18 +5391,10 @@ export class NowPlayingCommand {
   }
 
   private async trackJournalReply(
-    interaction: ButtonInteraction | ModalSubmitInteraction | StringSelectMenuInteraction,
+    reply: Message | null,
     ownerUserId: string,
     gameId: number,
   ): Promise<void> {
-    if (!interaction.guildId) {
-      return;
-    }
-    if (typeof interaction.fetchReply !== "function") {
-      return;
-    }
-
-    const reply = await interaction.fetchReply().catch(() => null);
     if (!reply) {
       return;
     }

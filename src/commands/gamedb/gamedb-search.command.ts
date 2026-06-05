@@ -129,7 +129,7 @@ function buildSearchResponse(
   });
 
   const selectMenu = new StringSelectMenuBuilder()
-    // eslint-disable-next-line local/stable-custom-id
+     
     .setCustomId(selectCustomId)
     .setPlaceholder("Select a game to view details")
     .addOptions(options);
@@ -140,14 +140,14 @@ function buildSearchResponse(
   const nextDisabled = safePage >= totalPages - 1;
 
   const prevButton = new ButtonBuilder()
-    // eslint-disable-next-line local/stable-custom-id
+     
     .setCustomId(buildSearchCustomId("page", ownerId, safePage, searchTerm, "prev"))
     .setLabel("Previous Page")
     .setStyle(ButtonStyle.Secondary)
     .setDisabled(prevDisabled);
 
   const nextButton = new ButtonBuilder()
-    // eslint-disable-next-line local/stable-custom-id
+     
     .setCustomId(buildSearchCustomId("page", ownerId, safePage, searchTerm, "next"))
     .setLabel("Next Page")
     .setStyle(ButtonStyle.Secondary)
@@ -204,8 +204,7 @@ export class GameDbSearchCommand {
       ));
     }
   }
-
-  // eslint-disable-next-line local/stable-custom-id
+   
   @SelectMenuComponent({ id: /^gamedb-search-select:\d+:\d+:[A-Za-z0-9_-]*$/ })
   async handleSearchSelect(interaction: StringSelectMenuInteraction): Promise<void> {
     const parts = interaction.customId.split(":");
@@ -280,8 +279,7 @@ export class GameDbSearchCommand {
       // ignore update failures
     }
   }
-
-  // eslint-disable-next-line local/stable-custom-id
+   
   @ButtonComponent({ id: /^gamedb-search-page:\d+:\d+:[A-Za-z0-9_-]*:(next|prev)$/ })
   async handleSearchPage(interaction: ButtonInteraction): Promise<void> {
     const parts = interaction.customId.split(":");
@@ -334,8 +332,7 @@ export class GameDbSearchCommand {
       // ignore
     }
   }
-
-  // eslint-disable-next-line local/stable-custom-id
+   
   @ButtonComponent({ id: /^gamedb-search-refresh:\d+:[A-Za-z0-9_-]*$/ })
   async handleSearchRefresh(interaction: ButtonInteraction): Promise<void> {
     const parts = interaction.customId.split(":");

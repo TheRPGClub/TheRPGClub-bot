@@ -1,7 +1,7 @@
 // CSV export functionality for game completions
 
 import type { CommandInteraction } from "discord.js";
-import { AttachmentBuilder } from "discord.js";
+import { AttachmentBuilder, MessageFlags } from "discord.js";
 import { safeDeferReply, safeReply } from "../../functions/InteractionUtils.js";
 import { buildTextReply } from "../../functions/ComponentsV2Utils.js";
 import Member from "../../classes/Member.js";

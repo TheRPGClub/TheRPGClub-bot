@@ -180,7 +180,7 @@ async function promptSelectNomination(
   const selectId = `${promptPrefix}:select`;
   const cancelId = `${promptPrefix}:cancel`;
   const select = new StringSelectMenuBuilder()
-    // eslint-disable-next-line local/stable-custom-id
+     
     .setCustomId(selectId)
     .setPlaceholder("Choose a nomination")
     .setMinValues(1)
@@ -188,7 +188,7 @@ async function promptSelectNomination(
     .addOptions(options);
   const selectRow = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select);
   const buttonRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
-    // eslint-disable-next-line local/stable-custom-id
+     
     new ButtonBuilder().setCustomId(cancelId).setLabel("Cancel").setStyle(ButtonStyle.Danger),
   );
 
@@ -942,11 +942,11 @@ export async function handleNextRoundSetup(
     );
 
     const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
-      // eslint-disable-next-line local/stable-custom-id, local/custom-id-has-matching-handler
+      // eslint-disable-next-line local/custom-id-has-matching-handler
       new ButtonBuilder().setCustomId("wiz-commit").setLabel("Commit").setStyle(ButtonStyle.Success),
-      // eslint-disable-next-line local/stable-custom-id, local/custom-id-has-matching-handler
+      // eslint-disable-next-line local/custom-id-has-matching-handler
       new ButtonBuilder().setCustomId("wiz-edit").setLabel("Edit").setStyle(ButtonStyle.Secondary),
-      // eslint-disable-next-line local/stable-custom-id, local/custom-id-has-matching-handler
+      // eslint-disable-next-line local/custom-id-has-matching-handler
       new ButtonBuilder().setCustomId("wiz-cancel").setLabel("Cancel").setStyle(ButtonStyle.Danger),
     );
     await safeReply(interaction, { components: [row] });
