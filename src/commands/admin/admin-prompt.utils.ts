@@ -11,6 +11,7 @@ import {
   safeDeferUpdate,
   safeReply,
 } from "../../functions/InteractionUtils.js";
+import { buildTextReply } from "../../functions/ComponentsV2Utils.js";
 import { type PromptChoiceOption } from "./admin.types.js";
 
 export function buildChoiceRows(
@@ -56,13 +57,17 @@ export async function promptUserForChoice(
   const userId = interaction.user.id;
 
   if (!channel || typeof channel.send !== "function") {
-    await safeReply(interaction, {
-      content: "Cannot prompt for additional input; this command must be used in a text channel.",
-    });
+    await safeReply(
+      interaction,
+      buildTextReply(
+        "Cannot prompt for additional input; this command must be used in a text channel.",
+        false,
+      ),
+    );
     return null;
   }
 
-  const promptId = `admin-choice:${Date.now()}-${Math.floor(Math.random() * 100000)}`;
+  const promptId = `admin-choice:${userId}`;
   const rows = buildChoiceRows(promptId, options);
   const content = `<@${userId}> ${question}`;
 
@@ -89,9 +94,7 @@ export async function promptUserForChoice(
   }
 
   if (!promptMessage) {
-    await safeReply(interaction, {
-      content: "Failed to send the prompt message.",
-    });
+    await safeReply(interaction, buildTextReply("Failed to send the prompt message.", false));
     return null;
   }
 
@@ -105,13 +108,13 @@ export async function promptUserForChoice(
     const value = selection.customId.slice(promptId.length + 1);
     await promptMessage.edit({ components: [] }).catch(() => {});
     if (value === "cancel") {
-      await safeReply(interaction, { content: cancelMessage });
+      await safeReply(interaction, buildTextReply(cancelMessage, false));
       return null;
     }
     return value;
   } catch {
     await promptMessage.edit({ components: [] }).catch(() => {});
-    await safeReply(interaction, { content: "Timed out waiting for a selection. Cancelled." });
+    await safeReply(interaction, buildTextReply("Timed out waiting for a selection. Cancelled.", false));
     return null;
   }
 }
@@ -125,16 +128,18 @@ export async function promptUserForInput(
   const userId = interaction.user.id;
 
   if (!channel || typeof channel.awaitMessages !== "function") {
-    await safeReply(interaction, {
-      content: "Cannot prompt for additional input; this command must be used in a text channel.",
-    });
+    await safeReply(
+      interaction,
+      buildTextReply(
+        "Cannot prompt for additional input; this command must be used in a text channel.",
+        false,
+      ),
+    );
     return null;
   }
 
   try {
-    await safeReply(interaction, {
-      content: `<@${userId}> ${question}`,
-    });
+    await safeReply(interaction, buildTextReply(`<@${userId}> ${question}`, false));
   } catch (err) {
     console.error("Failed to send prompt message:", err);
   }
@@ -148,24 +153,18 @@ export async function promptUserForInput(
 
     const first = collected?.first?.();
     if (!first) {
-      await safeReply(interaction, {
-        content: "Timed out waiting for a response. Edit cancelled.",
-      });
+      await safeReply(interaction, buildTextReply("Timed out waiting for a response. Edit cancelled.", false));
       return null;
     }
 
     const content: string = (first.content ?? "").trim();
     if (!content) {
-      await safeReply(interaction, {
-        content: "Empty response received. Edit cancelled.",
-      });
+      await safeReply(interaction, buildTextReply("Empty response received. Edit cancelled.", false));
       return null;
     }
 
     if (/^cancel$/i.test(content)) {
-      await safeReply(interaction, {
-        content: "Edit cancelled.",
-      });
+      await safeReply(interaction, buildTextReply("Edit cancelled.", false));
       return null;
     }
 
@@ -173,9 +172,7 @@ export async function promptUserForInput(
   } catch (err: any) {
     const msg = extractErrorMessage(err);
     try {
-      await safeReply(interaction, {
-        content: `Error while waiting for a response: ${msg}`,
-      });
+      await safeReply(interaction, buildTextReply(`Error while waiting for a response: ${msg}`, false));
     } catch {
       // ignore
     }

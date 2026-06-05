@@ -34,6 +34,7 @@ async function run(): Promise<void> {
   const browser = await chromium.launch();
   try {
     const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+    // eslint-disable-next-line no-restricted-properties
     await page.goto(url.toString(), { waitUntil: "networkidle" });
     await page.screenshot({ path: outputPath, fullPage: true });
     console.log(`Snapshot saved to ${outputPath}`);

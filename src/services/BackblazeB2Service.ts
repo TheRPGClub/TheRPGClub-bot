@@ -187,6 +187,7 @@ function isBackblazeBucketPublic(): boolean {
 }
 
 export function sha256Hex(value: Buffer | string): string {
+  // eslint-disable-next-line local/no-direct-interaction-response-methods
   return crypto.createHash("sha256").update(value).digest("hex");
 }
 
@@ -237,6 +238,7 @@ export async function getLatestStoredFileInfo(
 export async function uploadFileToBackblazeB2(
   input: BackblazeUploadInput,
 ): Promise<BackblazeUploadResult> {
+  // eslint-disable-next-line local/no-direct-interaction-response-methods
   const fileSha1 = crypto.createHash("sha1").update(input.data).digest("hex");
 
   return withRetry(async () => {

@@ -6,7 +6,6 @@ import type {
   ModalSubmitInteraction,
 } from "discord.js";
 import {
-  MessageFlags,
   ModalBuilder,
   ActionRowBuilder,
   TextInputBuilder,
@@ -18,6 +17,7 @@ import {
   safeUpdate,
   stripModalInput,
 } from "../../functions/InteractionUtils.js";
+import { buildTextReply } from "../../functions/ComponentsV2Utils.js";
 import type { IGameWithPlatforms } from "../../classes/Game.js";
 import Game from "../../classes/Game.js";
 import {
@@ -45,30 +45,21 @@ export async function handleGotmAuditSelect(
   interaction: StringSelectMenuInteraction): Promise<void> {
   const [, ownerId, importIdRaw, itemIdRaw] = interaction.customId.split(":");
   if (interaction.user.id !== ownerId) {
-    await safeReply(interaction, {
-      content: "This audit prompt is not for you.",
-      flags: MessageFlags.Ephemeral,
-    });
+    await safeReply(interaction, buildTextReply("This audit prompt is not for you.", true));
     return;
   }
 
   const importId = Number(importIdRaw);
   const itemId = Number(itemIdRaw);
   if (!Number.isInteger(importId) || !Number.isInteger(itemId)) {
-    await safeReply(interaction, {
-      content: "Invalid audit selection.",
-      flags: MessageFlags.Ephemeral,
-    });
+    await safeReply(interaction, buildTextReply("Invalid audit selection.", true));
     return;
   }
 
   const selectedRaw = interaction.values?.[0];
   const gameDbId = Number(selectedRaw);
   if (!Number.isInteger(gameDbId) || gameDbId <= 0) {
-    await safeReply(interaction, {
-      content: "Invalid GameDB selection.",
-      flags: MessageFlags.Ephemeral,
-    });
+    await safeReply(interaction, buildTextReply("Invalid GameDB selection.", true));
     return;
   }
 
@@ -77,8 +68,7 @@ export async function handleGotmAuditSelect(
   const session = await getGotmAuditImportById(importId);
   if (!session || session.userId !== ownerId) {
     await safeReply(interaction, {
-      content: "This audit session no longer exists.",
-      flags: MessageFlags.Ephemeral,
+      ...buildTextReply("This audit session no longer exists.", true),
       __forceFollowUp: true,
     });
     return;
@@ -86,8 +76,7 @@ export async function handleGotmAuditSelect(
 
   if (session.status !== "ACTIVE") {
     await safeReply(interaction, {
-      content: "This audit session is not active.",
-      flags: MessageFlags.Ephemeral,
+      ...buildTextReply("This audit session is not active.", true),
       __forceFollowUp: true,
     });
     return;
@@ -96,8 +85,7 @@ export async function handleGotmAuditSelect(
   const item = await getGotmAuditItemById(itemId);
   if (!item || item.importId !== session.importId || item.status !== "PENDING") {
     await safeReply(interaction, {
-      content: "This audit item is no longer pending.",
-      flags: MessageFlags.Ephemeral,
+      ...buildTextReply("This audit item is no longer pending.", true),
       __forceFollowUp: true,
     });
     return;
@@ -106,8 +94,7 @@ export async function handleGotmAuditSelect(
   const game = await Game.getGameById(gameDbId);
   if (!game) {
     await safeReply(interaction, {
-      content: `GameDB #${gameDbId} not found.`,
-      flags: MessageFlags.Ephemeral,
+      ...buildTextReply(`GameDB #${gameDbId} not found.`, true),
       __forceFollowUp: true,
     });
     return;
@@ -120,8 +107,7 @@ export async function handleGotmAuditSelect(
   });
 
   await safeReply(interaction, {
-    content: `Selected ${game.title} (GameDB #${gameDbId}).`,
-    flags: MessageFlags.Ephemeral,
+    ...buildTextReply(`Selected ${game.title} (GameDB #${gameDbId}).`, true),
     __forceFollowUp: true,
   });
 
@@ -132,28 +118,24 @@ export async function handleGotmAuditSelect(
 export async function handleGotmAuditAction(interaction: ButtonInteraction): Promise<void> {
   const [, ownerId, importIdRaw, itemIdRaw, action] = interaction.customId.split(":");
   if (interaction.user.id !== ownerId) {
-    await safeReply(interaction, {
-      content: "This audit prompt is not for you.",
-      flags: MessageFlags.Ephemeral,
-    });
+    await safeReply(interaction, buildTextReply("This audit prompt is not for you.", true));
     return;
   }
 
   const importId = Number(importIdRaw);
   const itemId = Number(itemIdRaw);
   if (!Number.isInteger(importId) || !Number.isInteger(itemId)) {
-    await safeReply(interaction, {
-      content: "Invalid audit action.",
-      flags: MessageFlags.Ephemeral,
-    });
+    await safeReply(interaction, buildTextReply("Invalid audit action.", true));
     return;
   }
 
   if (action === "manual") {
     const modal = new ModalBuilder()
+      // eslint-disable-next-line local/stable-custom-id
       .setCustomId(`${GOTM_AUDIT_MANUAL_PREFIX}:${ownerId}:${importId}:${itemId}`)
       .setTitle("Manual GameDB Entry");
     const input = new TextInputBuilder()
+      // eslint-disable-next-line local/stable-custom-id
       .setCustomId(GOTM_AUDIT_MANUAL_INPUT_ID)
       .setLabel("GameDB ID")
       .setStyle(TextInputStyle.Short)
@@ -166,9 +148,11 @@ export async function handleGotmAuditAction(interaction: ButtonInteraction): Pro
 
   if (action === "query") {
     const modal = new ModalBuilder()
+      // eslint-disable-next-line local/stable-custom-id
       .setCustomId(`${GOTM_AUDIT_QUERY_PREFIX}:${ownerId}:${importId}:${itemId}`)
       .setTitle("Manual GameDB Search");
     const input = new TextInputBuilder()
+      // eslint-disable-next-line local/stable-custom-id
       .setCustomId(GOTM_AUDIT_QUERY_INPUT_ID)
       .setLabel("Search query")
       .setStyle(TextInputStyle.Short)
@@ -182,27 +166,18 @@ export async function handleGotmAuditAction(interaction: ButtonInteraction): Pro
   if (action === "accept") {
     const session = await getGotmAuditImportById(importId);
     if (!session || session.userId !== ownerId) {
-      await safeReply(interaction, {
-        content: "This audit session no longer exists.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("This audit session no longer exists.", true));
       return;
     }
 
     if (session.status !== "ACTIVE") {
-      await safeReply(interaction, {
-        content: "This audit session is not active.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("This audit session is not active.", true));
       return;
     }
 
     const item = await getGotmAuditItemById(itemId);
     if (!item || item.importId !== session.importId || item.status !== "PENDING") {
-      await safeReply(interaction, {
-        content: "This audit item is no longer pending.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("This audit item is no longer pending.", true));
       return;
     }
 
@@ -210,19 +185,16 @@ export async function handleGotmAuditAction(interaction: ButtonInteraction): Pro
     try {
       results = await Game.searchGames(item.gameTitle);
     } catch (err: any) {
-      await safeReply(interaction, {
-        content: `GameDB search failed: ${err?.message ?? "Unknown error"}`,
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply(
+        `GameDB search failed: ${err?.message ?? "Unknown error"}`,
+        true,
+      ));
       return;
     }
 
     const first = results[0];
     if (!first) {
-      await safeReply(interaction, {
-        content: "No GameDB matches found for this title.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("No GameDB matches found for this title.", true));
       return;
     }
 
@@ -235,8 +207,7 @@ export async function handleGotmAuditAction(interaction: ButtonInteraction): Pro
     });
 
     await safeReply(interaction, {
-      content: `Selected ${first.title} (GameDB #${first.id}).`,
-      flags: MessageFlags.Ephemeral,
+      ...buildTextReply(`Selected ${first.title} (GameDB #${first.id}).`, true),
       __forceFollowUp: true,
     });
 
@@ -248,27 +219,18 @@ export async function handleGotmAuditAction(interaction: ButtonInteraction): Pro
   if (action === "skip") {
     const session = await getGotmAuditImportById(importId);
     if (!session || session.userId !== ownerId) {
-      await safeReply(interaction, {
-        content: "This audit session no longer exists.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("This audit session no longer exists.", true));
       return;
     }
 
     if (session.status !== "ACTIVE") {
-      await safeReply(interaction, {
-        content: "This audit session is not active.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("This audit session is not active.", true));
       return;
     }
 
     const item = await getGotmAuditItemById(itemId);
     if (!item || item.importId !== session.importId || item.status !== "PENDING") {
-      await safeReply(interaction, {
-        content: "This audit item is no longer pending.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("This audit item is no longer pending.", true));
       return;
     }
 
@@ -284,10 +246,7 @@ export async function handleGotmAuditAction(interaction: ButtonInteraction): Pro
   if (action === "pause") {
     const session = await getGotmAuditImportById(importId);
     if (!session || session.userId !== ownerId) {
-      await safeReply(interaction, {
-        content: "This audit session no longer exists.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("This audit session no longer exists.", true));
       return;
     }
 
@@ -304,20 +263,14 @@ export async function handleGotmAuditManualModal(
 ): Promise<void> {
   const [, ownerId, importIdRaw, itemIdRaw] = interaction.customId.split(":");
   if (interaction.user.id !== ownerId) {
-    await safeReply(interaction, {
-      content: "This audit prompt is not for you.",
-      flags: MessageFlags.Ephemeral,
-    });
+    await safeReply(interaction, buildTextReply("This audit prompt is not for you.", true));
     return;
   }
 
   const importId = Number(importIdRaw);
   const itemId = Number(itemIdRaw);
   if (!Number.isInteger(importId) || !Number.isInteger(itemId)) {
-    await safeReply(interaction, {
-      content: "Invalid audit request.",
-      flags: MessageFlags.Ephemeral,
-    });
+    await safeReply(interaction, buildTextReply("Invalid audit request.", true));
     return;
   }
 
@@ -325,10 +278,7 @@ export async function handleGotmAuditManualModal(
   const cleaned = stripModalInput(raw);
   const gameDbId = Number(cleaned);
   if (!Number.isInteger(gameDbId) || gameDbId <= 0) {
-    await safeReply(interaction, {
-      content: "Please provide a valid GameDB id.",
-      flags: MessageFlags.Ephemeral,
-    });
+    await safeReply(interaction, buildTextReply("Please provide a valid GameDB id.", true));
     return;
   }
 
@@ -337,8 +287,7 @@ export async function handleGotmAuditManualModal(
   const session = await getGotmAuditImportById(importId);
   if (!session || session.userId !== ownerId) {
     await safeReply(interaction, {
-      content: "This audit session no longer exists.",
-      flags: MessageFlags.Ephemeral,
+      ...buildTextReply("This audit session no longer exists.", true),
       __forceFollowUp: true,
     });
     return;
@@ -346,8 +295,7 @@ export async function handleGotmAuditManualModal(
 
   if (session.status !== "ACTIVE") {
     await safeReply(interaction, {
-      content: "This audit session is not active.",
-      flags: MessageFlags.Ephemeral,
+      ...buildTextReply("This audit session is not active.", true),
       __forceFollowUp: true,
     });
     return;
@@ -356,8 +304,7 @@ export async function handleGotmAuditManualModal(
   const item = await getGotmAuditItemById(itemId);
   if (!item || item.importId !== session.importId || item.status !== "PENDING") {
     await safeReply(interaction, {
-      content: "This audit item is no longer pending.",
-      flags: MessageFlags.Ephemeral,
+      ...buildTextReply("This audit item is no longer pending.", true),
       __forceFollowUp: true,
     });
     return;
@@ -366,8 +313,7 @@ export async function handleGotmAuditManualModal(
   const game = await Game.getGameById(gameDbId);
   if (!game) {
     await safeReply(interaction, {
-      content: `GameDB #${gameDbId} not found.`,
-      flags: MessageFlags.Ephemeral,
+      ...buildTextReply(`GameDB #${gameDbId} not found.`, true),
       __forceFollowUp: true,
     });
     return;
@@ -380,8 +326,7 @@ export async function handleGotmAuditManualModal(
   });
 
   await safeReply(interaction, {
-    content: `Selected ${game.title} (GameDB #${gameDbId}).`,
-    flags: MessageFlags.Ephemeral,
+    ...buildTextReply(`Selected ${game.title} (GameDB #${gameDbId}).`, true),
     __forceFollowUp: true,
   });
 
@@ -394,30 +339,21 @@ export async function handleGotmAuditQueryModal(
 ): Promise<void> {
   const [, ownerId, importIdRaw, itemIdRaw] = interaction.customId.split(":");
   if (interaction.user.id !== ownerId) {
-    await safeReply(interaction, {
-      content: "This audit prompt is not for you.",
-      flags: MessageFlags.Ephemeral,
-    });
+    await safeReply(interaction, buildTextReply("This audit prompt is not for you.", true));
     return;
   }
 
   const importId = Number(importIdRaw);
   const itemId = Number(itemIdRaw);
   if (!Number.isInteger(importId) || !Number.isInteger(itemId)) {
-    await safeReply(interaction, {
-      content: "Invalid audit request.",
-      flags: MessageFlags.Ephemeral,
-    });
+    await safeReply(interaction, buildTextReply("Invalid audit request.", true));
     return;
   }
 
   const raw = interaction.fields.getTextInputValue(GOTM_AUDIT_QUERY_INPUT_ID);
   const query = stripModalInput(raw).trim();
   if (!query) {
-    await safeReply(interaction, {
-      content: "Please provide a search query.",
-      flags: MessageFlags.Ephemeral,
-    });
+    await safeReply(interaction, buildTextReply("Please provide a search query.", true));
     return;
   }
 
@@ -426,8 +362,7 @@ export async function handleGotmAuditQueryModal(
   const session = await getGotmAuditImportById(importId);
   if (!session || session.userId !== ownerId) {
     await safeReply(interaction, {
-      content: "This audit session no longer exists.",
-      flags: MessageFlags.Ephemeral,
+      ...buildTextReply("This audit session no longer exists.", true),
       __forceFollowUp: true,
     });
     return;
@@ -435,8 +370,7 @@ export async function handleGotmAuditQueryModal(
 
   if (session.status !== "ACTIVE") {
     await safeReply(interaction, {
-      content: "This audit session is not active.",
-      flags: MessageFlags.Ephemeral,
+      ...buildTextReply("This audit session is not active.", true),
       __forceFollowUp: true,
     });
     return;
@@ -445,8 +379,7 @@ export async function handleGotmAuditQueryModal(
   const item = await getGotmAuditItemById(itemId);
   if (!item || item.importId !== session.importId || item.status !== "PENDING") {
     await safeReply(interaction, {
-      content: "This audit item is no longer pending.",
-      flags: MessageFlags.Ephemeral,
+      ...buildTextReply("This audit item is no longer pending.", true),
       __forceFollowUp: true,
     });
     return;
@@ -457,8 +390,7 @@ export async function handleGotmAuditQueryModal(
     results = await Game.searchGames(query);
   } catch (err: any) {
     await safeReply(interaction, {
-      content: `GameDB search failed: ${err?.message ?? "Unknown error"}`,
-      flags: MessageFlags.Ephemeral,
+      ...buildTextReply(`GameDB search failed: ${err?.message ?? "Unknown error"}`, true),
       __forceFollowUp: true,
     });
     return;

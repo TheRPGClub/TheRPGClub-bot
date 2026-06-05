@@ -21,6 +21,7 @@ const parser = new Parser({
 
 function hashId(parts: (string | null | undefined)[]): string {
   const joined = parts.filter(Boolean).join("|");
+  // eslint-disable-next-line local/no-direct-interaction-response-methods
   return crypto.createHash("sha256").update(joined).digest("hex");
 }
 

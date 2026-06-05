@@ -86,11 +86,11 @@ export interface ICompletionatorItem {
   errorText: string | null;
 }
 
-export interface IgdbSelectOption {
+export type IgdbSelectOption = {
   id: number;
   label: string;
   description: string;
-}
+};
 
 export const COMPLETION_PLATFORM_SELECT_PREFIX = "completion-platform-select";
 export const COMPLETIONATOR_SKIP_SENTINEL = "skip";

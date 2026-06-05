@@ -3,7 +3,6 @@ import {
   ApplicationCommandOptionType,
   ButtonInteraction,
   CommandInteraction,
-  MessageFlags,
   ModalBuilder,
   TextInputBuilder,
   TextInputStyle,
@@ -26,7 +25,7 @@ import {
 import { getHltbCacheByGameId, upsertHltbCache } from "../../classes/HltbCache.js";
 import Game, { type GameSource } from "../../classes/Game.js";
 import { searchHltb } from "../../scripts/SearchHltb.js";
-import { COMPONENTS_V2_FLAG } from "../../config/flags.js";
+import { buildTextReply } from "../../functions/ComponentsV2Utils.js";
 import {
   autocompleteGameDbViewTitle,
   buildComponentsV2Flags,
@@ -75,10 +74,7 @@ export class GameDbViewCommand {
     if (source === "API") {
       const gameId = /^\d+$/.test(searchTerm) ? Number(searchTerm) : NaN;
       if (!Number.isInteger(gameId) || gameId <= 0) {
-        await safeReply(interaction, {
-          content: "API source requires a numeric game ID.",
-          flags: COMPONENTS_V2_FLAG,
-        });
+        await safeReply(interaction, buildTextReply("API source requires a numeric game ID.", false));
         return;
       }
       await showGameProfile(interaction, gameId, undefined, "API");
@@ -105,18 +101,14 @@ export class GameDbViewCommand {
     const [, action, gameIdRaw] = interaction.customId.split(":");
     const gameId = Number(gameIdRaw);
     if (!Number.isInteger(gameId) || gameId <= 0) {
-      await safeReply(interaction, {
-        content: "Invalid GameDB id.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("Invalid GameDB id.", true));
       return;
     }
 
     const game = await Game.getGameById(gameId);
     if (!game) {
       await safeReply(interaction, {
-        content: `No game found with ID ${gameId}.`,
-        flags: MessageFlags.Ephemeral,
+        ...buildTextReply(`No game found with ID ${gameId}.`, true),
         __forceFollowUp: true,
       });
       return;
@@ -125,10 +117,9 @@ export class GameDbViewCommand {
     if (action === "video") {
       const videoUrl = game.featuredVideoUrl;
       if (!videoUrl) {
-        await safeReply(interaction, {
-          content: "No featured video is available for this game.",
-          flags: MessageFlags.Ephemeral,
-        });
+        await safeReply(interaction, buildTextReply(
+          "No featured video is available for this game.", true,
+        ));
         return;
       }
       let updatedMessage = false;
@@ -162,7 +153,7 @@ export class GameDbViewCommand {
         await safeDeferUpdate(interaction);
       }
       await safeReply(interaction, {
-        content: `Warning: videos may contain spoilers. ${videoUrl}`,
+        ...buildTextReply(`Warning: videos may contain spoilers. ${videoUrl}`, false),
         __forceFollowUp: true,
       });
       return;
@@ -177,17 +168,13 @@ export class GameDbViewCommand {
 
     if (action === "bad-thumb") {
       if (!game.artData) {
-        await safeReply(interaction, {
-          content: "No artwork thumbnail is available for this game.",
-          flags: MessageFlags.Ephemeral,
-        });
+        await safeReply(interaction, buildTextReply(
+          "No artwork thumbnail is available for this game.", true,
+        ));
         return;
       }
       if (game.thumbnailBad) {
-        await safeReply(interaction, {
-          content: "This thumbnail is already marked as bad.",
-          flags: MessageFlags.Ephemeral,
-        });
+        await safeReply(interaction, buildTextReply("This thumbnail is already marked as bad.", true));
         return;
       }
       await safeDeferUpdate(interaction);
@@ -195,8 +182,7 @@ export class GameDbViewCommand {
       await Game.updateGameThumbnailApproved(gameId, false);
       await refreshGameProfileMessage(interaction, gameId);
       await safeReply(interaction, {
-        content: "Thumbnail flagged. GameDB view will use cover art from now on.",
-        flags: MessageFlags.Ephemeral,
+        ...buildTextReply("Thumbnail flagged. GameDB view will use cover art from now on.", true),
         __forceFollowUp: true,
       });
       return;
@@ -204,17 +190,15 @@ export class GameDbViewCommand {
 
     if (action === "good-thumb") {
       if (!game.artData) {
-        await safeReply(interaction, {
-          content: "No artwork thumbnail is available for this game.",
-          flags: MessageFlags.Ephemeral,
-        });
+        await safeReply(interaction, buildTextReply(
+          "No artwork thumbnail is available for this game.", true,
+        ));
         return;
       }
       if (game.thumbnailApproved) {
-        await safeReply(interaction, {
-          content: "This thumbnail is already marked as approved.",
-          flags: MessageFlags.Ephemeral,
-        });
+        await safeReply(interaction, buildTextReply(
+          "This thumbnail is already marked as approved.", true,
+        ));
         return;
       }
       await safeDeferUpdate(interaction);
@@ -222,8 +206,7 @@ export class GameDbViewCommand {
       await Game.updateGameThumbnailApproved(gameId, true);
       await refreshGameProfileMessage(interaction, gameId);
       await safeReply(interaction, {
-        content: "Thumbnail marked as good. GameDB view will keep using artwork.",
-        flags: MessageFlags.Ephemeral,
+        ...buildTextReply("Thumbnail marked as good. GameDB view will keep using artwork.", true),
         __forceFollowUp: true,
       });
       return;
@@ -231,6 +214,7 @@ export class GameDbViewCommand {
 
     if (action === "nowplaying") {
       const modal = new ModalBuilder()
+        // eslint-disable-next-line local/custom-id-has-matching-handler
         .setCustomId(`gamedb-nowplaying-modal:${gameId}`)
         .setTitle("Add to Now Playing")
         .addComponents(

@@ -1,8 +1,9 @@
 // CSV export functionality for game completions
 
 import type { CommandInteraction } from "discord.js";
-import { AttachmentBuilder, MessageFlags } from "discord.js";
+import { AttachmentBuilder } from "discord.js";
 import { safeDeferReply, safeReply } from "../../functions/InteractionUtils.js";
+import { buildTextReply } from "../../functions/ComponentsV2Utils.js";
 import Member from "../../classes/Member.js";
 import { escapeCsv } from "./completion-helpers.js";
 
@@ -11,10 +12,7 @@ export async function handleCompletionExport(interaction: CommandInteraction): P
 
   const completions = await Member.getAllCompletions(interaction.user.id);
   if (!completions.length) {
-    await safeReply(interaction, {
-      content: "You have no completions to export.",
-      flags: MessageFlags.Ephemeral,
-    });
+    await safeReply(interaction, buildTextReply("You have no completions to export.", true));
     return;
   }
 
@@ -48,8 +46,7 @@ export async function handleCompletionExport(interaction: CommandInteraction): P
   const attachment = new AttachmentBuilder(buffer, { name: "completions.csv" });
 
   await safeReply(interaction, {
-    content: `Here is your completion data export (${completions.length} records).`,
+    ...buildTextReply(`Here is your completion data export (${completions.length} records).`, true),
     files: [attachment],
-    flags: MessageFlags.Ephemeral,
   });
 }

@@ -4,7 +4,6 @@ import {
   ButtonBuilder,
   ButtonStyle,
   CommandInteraction,
-  MessageFlags,
   StringSelectMenuBuilder,
   StringSelectMenuInteraction,
   type ButtonInteraction,
@@ -28,6 +27,7 @@ import {
   safeUpdate,
   sanitizeUserInput,
 } from "../../functions/InteractionUtils.js";
+import { buildTextReply } from "../../functions/ComponentsV2Utils.js";
 import { shouldRenderPrevNextButtons } from "../../functions/PaginationUtils.js";
 import Game from "../../classes/Game.js";
 import {
@@ -129,6 +129,7 @@ function buildSearchResponse(
   });
 
   const selectMenu = new StringSelectMenuBuilder()
+    // eslint-disable-next-line local/stable-custom-id
     .setCustomId(selectCustomId)
     .setPlaceholder("Select a game to view details")
     .addOptions(options);
@@ -139,12 +140,14 @@ function buildSearchResponse(
   const nextDisabled = safePage >= totalPages - 1;
 
   const prevButton = new ButtonBuilder()
+    // eslint-disable-next-line local/stable-custom-id
     .setCustomId(buildSearchCustomId("page", ownerId, safePage, searchTerm, "prev"))
     .setLabel("Previous Page")
     .setStyle(ButtonStyle.Secondary)
     .setDisabled(prevDisabled);
 
   const nextButton = new ButtonBuilder()
+    // eslint-disable-next-line local/stable-custom-id
     .setCustomId(buildSearchCustomId("page", ownerId, safePage, searchTerm, "next"))
     .setLabel("Next Page")
     .setStyle(ButtonStyle.Secondary)
@@ -165,10 +168,12 @@ function buildSearchResponse(
   components.push(selectRow);
 
   if (shouldRenderPrevNextButtons(prevDisabled, nextDisabled)) {
+     
     components.push(buttonRow);
   }
 
   return {
+    // eslint-disable-next-line local/dynamic-components-require-chunking
     components,
     flags: buildComponentsV2Flags(false),
   };
@@ -194,13 +199,13 @@ export class GameDbSearchCommand {
       const searchTerm = sanitizeUserInput(query, { preserveNewlines: false });
       await runSearchFlow(interaction, searchTerm, query);
     } catch (error: any) {
-      await safeReply(interaction, {
-        content: `Failed to search games. Error: ${error.message}`,
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply(
+        `Failed to search games. Error: ${error.message}`, true,
+      ));
     }
   }
 
+  // eslint-disable-next-line local/stable-custom-id
   @SelectMenuComponent({ id: /^gamedb-search-select:\d+:\d+:[A-Za-z0-9_-]*$/ })
   async handleSearchSelect(interaction: StringSelectMenuInteraction): Promise<void> {
     const parts = interaction.customId.split(":");
@@ -209,10 +214,7 @@ export class GameDbSearchCommand {
     const encodedQuery = parts[3] ?? "";
 
     if (interaction.user.id !== ownerId) {
-      await safeReply(interaction, {
-          content: "This menu isn't for you.",
-          flags: MessageFlags.Ephemeral,
-        });
+      await safeReply(interaction, buildTextReply("This menu isn't for you.", true));
       return;
     }
 
@@ -221,11 +223,13 @@ export class GameDbSearchCommand {
       { preserveNewlines: false },
     );
     if (!searchTerm) {
-      const components = buildSearchRecoveryComponents(ownerId, encodedQuery);
+      const recoveryComponents = buildSearchRecoveryComponents(ownerId, encodedQuery);
+      const textParts = buildTextReply(
+        "This search request expired. Refresh to run it again.", true,
+      );
       await safeReply(interaction, {
-        content: "This search request expired. Refresh to run it again.",
-        components,
-        flags: MessageFlags.Ephemeral,
+        components: [...textParts.components, ...recoveryComponents],
+        flags: textParts.flags,
         __forceFollowUp: true,
       });
       return;
@@ -235,10 +239,7 @@ export class GameDbSearchCommand {
 
     const gameId = Number(interaction.values?.[0]);
     if (!Number.isFinite(gameId)) {
-      await safeReply(interaction, {
-          content: "Invalid selection.",
-          flags: MessageFlags.Ephemeral,
-        });
+      await safeReply(interaction, buildTextReply("Invalid selection.", true));
       return;
     }
 
@@ -251,9 +252,8 @@ export class GameDbSearchCommand {
     const profile = await buildGameProfile(gameId, interaction);
     if (!profile) {
       await safeReply(interaction, {
+        ...buildTextReply("Unable to load that game.", true),
         __forceFollowUp: true,
-        content: "Unable to load that game.",
-        flags: MessageFlags.Ephemeral,
       });
       return;
     }
@@ -281,6 +281,7 @@ export class GameDbSearchCommand {
     }
   }
 
+  // eslint-disable-next-line local/stable-custom-id
   @ButtonComponent({ id: /^gamedb-search-page:\d+:\d+:[A-Za-z0-9_-]*:(next|prev)$/ })
   async handleSearchPage(interaction: ButtonInteraction): Promise<void> {
     const parts = interaction.customId.split(":");
@@ -290,10 +291,7 @@ export class GameDbSearchCommand {
     const direction = parts[4];
 
     if (interaction.user.id !== ownerId) {
-      await safeReply(interaction, {
-          content: "This menu isn't for you.",
-          flags: MessageFlags.Ephemeral,
-        });
+      await safeReply(interaction, buildTextReply("This menu isn't for you.", true));
       return;
     }
 
@@ -302,11 +300,13 @@ export class GameDbSearchCommand {
       { preserveNewlines: false },
     );
     if (!searchTerm) {
-      const components = buildSearchRecoveryComponents(ownerId, encodedQuery);
+      const recoveryComponents = buildSearchRecoveryComponents(ownerId, encodedQuery);
+      const textParts = buildTextReply(
+        "This search request expired. Refresh to run it again.", true,
+      );
       await safeReply(interaction, {
-        content: "This search request expired. Refresh to run it again.",
-        components,
-        flags: MessageFlags.Ephemeral,
+        components: [...textParts.components, ...recoveryComponents],
+        flags: textParts.flags,
         __forceFollowUp: true,
       });
       return;
@@ -335,6 +335,7 @@ export class GameDbSearchCommand {
     }
   }
 
+  // eslint-disable-next-line local/stable-custom-id
   @ButtonComponent({ id: /^gamedb-search-refresh:\d+:[A-Za-z0-9_-]*$/ })
   async handleSearchRefresh(interaction: ButtonInteraction): Promise<void> {
     const parts = interaction.customId.split(":");
@@ -343,8 +344,7 @@ export class GameDbSearchCommand {
 
     if (interaction.user.id !== ownerId) {
       await safeReply(interaction, {
-        content: "This refresh button isn't for you.",
-        flags: MessageFlags.Ephemeral,
+        ...buildTextReply("This refresh button isn't for you.", true),
         __forceFollowUp: true,
       });
       return;
@@ -356,8 +356,7 @@ export class GameDbSearchCommand {
     );
     if (!searchTerm) {
       await safeReply(interaction, {
-        content: "Unable to refresh: search details were not found.",
-        flags: MessageFlags.Ephemeral,
+        ...buildTextReply("Unable to refresh: search details were not found.", true),
         __forceFollowUp: true,
       });
       return;
@@ -366,8 +365,7 @@ export class GameDbSearchCommand {
     const results = await Game.searchGames(searchTerm);
     if (results.length === 0) {
       await safeReply(interaction, {
-        content: `No results found for "${searchTerm}".`,
-        flags: MessageFlags.Ephemeral,
+        ...buildTextReply(`No results found for "${searchTerm}".`, true),
         __forceFollowUp: true,
       });
       return;

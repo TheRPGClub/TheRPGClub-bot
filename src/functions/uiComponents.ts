@@ -11,7 +11,7 @@ import {
 } from "../services/UserEmojiService.js";
 import { formatTableDate } from "../commands/profile.command.js";
 
-export interface JournalSelectEntry {
+export interface IJournalSelectEntry {
   gameId: number;
   title: string;
   journalCount: number;
@@ -20,7 +20,7 @@ export interface JournalSelectEntry {
 
 export function buildJournalSelectRow(
   selectCustomId: string,
-  entries: JournalSelectEntry[],
+  entries: IJournalSelectEntry[],
 ): ActionRowBuilder<StringSelectMenuBuilder> | null {
   if (!entries.length) return null;
   const sorted = [...entries].sort((a, b) => a.title.localeCompare(b.title));
@@ -66,8 +66,8 @@ export function buildUserHeaderContainer(
       }
     }
     const section = new SectionBuilder()
-      .addTextDisplayComponents(new TextDisplayBuilder().setContent(`## ${title}`))
-      .setButtonAccessory(button);
+      .addTextDisplayComponents(new TextDisplayBuilder().setContent(`## ${title}`));
+    section.setButtonAccessory(button);
     return new ContainerBuilder().addSectionComponents(section);
   }
 

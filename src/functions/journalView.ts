@@ -27,7 +27,7 @@ function entryLabel(n: number): string {
   return n === 1 ? "entry" : "entries";
 }
 
-export interface JournalViewOptions {
+export interface IJournalViewOptions {
   ownerId: string;
   /** null or "__public__" = viewer-only; ownerId = owner view (shows management controls) */
   viewerId: string | null;
@@ -51,7 +51,7 @@ export interface JournalViewOptions {
   includeCompletions?: boolean;
 }
 
-export async function buildJournalView(options: JournalViewOptions): Promise<{
+export async function buildJournalView(options: IJournalViewOptions): Promise<{
   components: Array<ContainerBuilder | ActionRowBuilder<ButtonBuilder>>;
   files: AttachmentBuilder[];
   allowedMentions: { users: string[] };
@@ -175,11 +175,9 @@ export async function buildJournalView(options: JournalViewOptions): Promise<{
   const gameContainer = new ContainerBuilder();
   const entriesText = new TextDisplayBuilder().setContent(entryParts.join(`\n\u00A0\n`));
   if (coverUrl) {
-    gameContainer.addSectionComponents(
-      new SectionBuilder()
-        .addTextDisplayComponents(entriesText)
-        .setThumbnailAccessory(new ThumbnailBuilder().setURL(coverUrl)),
-    );
+    const section = new SectionBuilder().addTextDisplayComponents(entriesText);
+    section.setThumbnailAccessory(new ThumbnailBuilder().setURL(coverUrl));
+    gameContainer.addSectionComponents(section);
   } else {
     gameContainer.addTextDisplayComponents(entriesText);
   }

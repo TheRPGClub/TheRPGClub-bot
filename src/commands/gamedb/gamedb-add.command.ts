@@ -24,6 +24,7 @@ import {
 import { igdbService, type IGDBGameDetails } from "../../services/IGDB/IgdbService.js";
 import { createIgdbSession } from "../../services/IGDB/IgdbSelectService.js";
 import Game, { type IGame } from "../../classes/Game.js";
+import { buildTextReply } from "../../functions/ComponentsV2Utils.js";
 import {
   autocompleteGameDbViewTitle,
   buildComponentsV2Flags,
@@ -218,10 +219,11 @@ export async function handleNoResults(
     const results = searchRes.results;
 
     if (!results.length) {
+      const noResultsMsg = existingText
+        ? `No games found on IGDB matching "${query}".\nSimilar GameDB entries:\n${existingText}`
+        : `No games found on IGDB matching "${query}".`;
       await safeReply(interaction, {
-        content: existingText
-          ? `No games found on IGDB matching "${query}".\nSimilar GameDB entries:\n${existingText}`
-          : `No games found on IGDB matching "${query}".`,
+        ...buildTextReply(noResultsMsg, false),
         __forceFollowUp: true,
       });
       return;
@@ -275,7 +277,7 @@ export async function handleNoResults(
     });
   } catch (err: any) {
     await safeReply(interaction, {
-      content: `Auto-import failed: ${err?.message ?? err}`,
+      ...buildTextReply(`Auto-import failed: ${err?.message ?? err}`, false),
       __forceFollowUp: true,
     });
   }
@@ -331,16 +333,18 @@ export class GameDbAddCommand {
       (singleTitle ? [singleTitle] : []).concat(parsedBulk).filter(Boolean);
 
     if (!allTitles.length) {
-      await safeReply(interaction, {
-        content: "Provide a title or up to 5 comma-separated titles.",
-      });
+      await safeReply(interaction, buildTextReply(
+        "Provide a title or up to 5 comma-separated titles.",
+        false,
+      ));
       return;
     }
 
     if (allTitles.length > 5) {
-      await safeReply(interaction, {
-        content: "Bulk import supports up to 5 titles at a time.",
-      });
+      await safeReply(interaction, buildTextReply(
+        "Bulk import supports up to 5 titles at a time.",
+        false,
+      ));
       return;
     }
 
@@ -368,10 +372,10 @@ export class GameDbAddCommand {
 
     const searchTerm = sanitizeUserInput(titleInput, { preserveNewlines: false }).trim();
     if (!searchTerm) {
-      await safeReply(interaction, {
-        content: "Please provide a GameDB title or GameDB ID.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply(
+        "Please provide a GameDB title or GameDB ID.",
+        true,
+      ));
       return;
     }
 
@@ -395,31 +399,28 @@ export class GameDbAddCommand {
           .slice(0, 10)
           .map((entry) => `- ${entry.title} (GameDB #${entry.id})`)
           .join("\n");
-        await safeReply(interaction, {
-          content:
-            "Multiple GameDB titles matched that input. Please rerun and choose one from " +
-            "autocomplete or provide a GameDB ID.\n\n" +
-            preview,
-          flags: MessageFlags.Ephemeral,
-        });
+        await safeReply(interaction, buildTextReply(
+          "Multiple GameDB titles matched that input. Please rerun and choose one from " +
+          `autocomplete or provide a GameDB ID.\n\n${preview}`,
+          true,
+        ));
         return;
       }
     }
 
     if (!game) {
-      await safeReply(interaction, {
-        content: `No GameDB title found for "${searchTerm}".`,
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply(
+        `No GameDB title found for "${searchTerm}".`,
+        true,
+      ));
       return;
     }
 
     if (!game.igdbId) {
-      await safeReply(interaction, {
-        content:
-          `GameDB #${game.id} (${game.title}) has no IGDB ID, so release data cannot be refreshed.`,
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply(
+        `GameDB #${game.id} (${game.title}) has no IGDB ID, so release data cannot be refreshed.`,
+        true,
+      ));
       return;
     }
 
@@ -433,18 +434,17 @@ export class GameDbAddCommand {
         ? `Added ${added} release entr${added === 1 ? "y" : "ies"}.`
         : "No additional release entries were found on IGDB.";
 
-      await safeReply(interaction, {
-        content:
-          `Release refresh complete for **${game.title}** ` +
-          `(GameDB #${game.id}, IGDB #${game.igdbId}). ` +
-          `${summary} Current total releases: ${after.length}.`,
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply(
+        `Release refresh complete for **${game.title}** ` +
+        `(GameDB #${game.id}, IGDB #${game.igdbId}). ` +
+        `${summary} Current total releases: ${after.length}.`,
+        true,
+      ));
     } catch (err: any) {
-      await safeReply(interaction, {
-        content: `Failed to refresh release info: ${err?.message ?? String(err)}`,
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply(
+        `Failed to refresh release info: ${err?.message ?? String(err)}`,
+        true,
+      ));
     }
   }
 
@@ -496,7 +496,8 @@ export class GameDbAddCommand {
 
     } catch (error: any) {
       await safeReply(interaction, {
-        content: `Failed to search IGDB. Error: ${error.message}`,
+        ...buildTextReply(`Failed to search IGDB. Error: ${error.message}`, false),
+        __forceFollowUp: true,
       });
     }
   }

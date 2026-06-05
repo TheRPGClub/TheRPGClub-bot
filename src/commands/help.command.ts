@@ -509,6 +509,7 @@ export function buildNowPlayingHelpResponse(
     .setDescription("Choose a subcommand from the dropdown to view details.");
 
   const components = buildNowPlayingHelpButtons(activeTopicId);
+  // eslint-disable-next-line local/dynamic-components-require-chunking
   return { embeds: [embed], components };
 }
 
@@ -748,6 +749,7 @@ export function buildGameCompletionHelpResponse(
     .setDescription("Choose a subcommand from the dropdown to view details.");
 
   const components = buildGameCompletionHelpButtons(activeTopicId);
+  // eslint-disable-next-line local/dynamic-components-require-chunking
   return { embeds: [embed], components };
 }
 

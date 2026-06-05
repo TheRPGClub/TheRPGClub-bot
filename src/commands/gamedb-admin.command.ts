@@ -33,7 +33,7 @@ import {
   sanitizeUserInput,
 } from "../functions/InteractionUtils.js";
 import { decodeBase64Url, encodeWithMaxLength } from "../functions/CustomIdUtils.js";
-import { buildComponentsV2Flags } from "../functions/ComponentsV2Utils.js";
+import { buildComponentsV2Flags, buildTextReply } from "../functions/ComponentsV2Utils.js";
 import {
   ContainerBuilder,
   TextDisplayBuilder,
@@ -222,6 +222,7 @@ function buildAutoAcceptFollowUpPayload(
 ): InteractionReplyOptions {
   return {
     embeds,
+    // eslint-disable-next-line local/dynamic-components-require-chunking
     components,
     ...(isPublic ? {} : { flags: MessageFlags.Ephemeral }),
   };
@@ -495,10 +496,10 @@ export class GameDbAdmin {
       !checkDescriptions &&
       !checkReleaseData
     ) {
-      await safeReply(interaction, {
-        content: "You must check for at least one thing (images, videos, descriptions, or release data).",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply(
+        "You must check for at least one thing (images, videos, descriptions, or release data).",
+        true,
+      ));
       return;
     }
 
@@ -512,10 +513,10 @@ export class GameDbAdmin {
     );
 
     if (games.length === 0) {
-      await safeReply(interaction, {
-        content: "No games found matching the audit criteria! Great job.",
-        flags: isPublic ? undefined : MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply(
+        "No games found matching the audit criteria! Great job.",
+        !isPublic,
+      ));
       return;
     }
 
@@ -568,10 +569,10 @@ export class GameDbAdmin {
     gameIdsRaw = sanitizeUserInput(gameIdsRaw, { preserveNewlines: false });
     const gameIds = parseGameIdList(gameIdsRaw);
     if (gameIds.length < 2) {
-      await safeReply(interaction, {
-        content: "Provide at least two valid GameDB ids to link.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply(
+        "Provide at least two valid GameDB ids to link.",
+        true,
+      ));
       return;
     }
 
@@ -579,10 +580,10 @@ export class GameDbAdmin {
     const foundIds = new Set(games.map((game) => game.id));
     const missingIds = gameIds.filter((id) => !foundIds.has(id));
     if (missingIds.length) {
-      await safeReply(interaction, {
-        content: `Missing GameDB id(s): ${missingIds.join(", ")}.`,
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply(
+        `Missing GameDB id(s): ${missingIds.join(", ")}.`,
+        true,
+      ));
       return;
     }
 
@@ -642,7 +643,7 @@ export class GameDbAdmin {
     const game = session.games.find((g) => g.id === gameId);
 
     if (!game) {
-      await safeUpdate(interaction, { content: "Game not found in session." });
+      await safeUpdate(interaction, buildTextReply("Game not found in session.", false));
       return;
     }
 
@@ -692,34 +693,38 @@ export class GameDbAdmin {
 
     const game = session.games.find(g => g.id === gameId);
     if (!game || !game.igdbId) {
-      await safeReply(interaction, { content: "Invalid game or missing IGDB ID.", flags: MessageFlags.Ephemeral });
+      await safeReply(interaction, buildTextReply("Invalid game or missing IGDB ID.", true));
       return;
     }
 
-    await safeReply(interaction, { content: "Fetching image from IGDB...", flags: MessageFlags.Ephemeral });
+    await safeReply(interaction, buildTextReply("Fetching image from IGDB...", true));
 
     try {
       const details = await igdbService.getGameDetails(game.igdbId);
       if (!details || !details.cover?.image_id) {
-        await safeReply(interaction, { content: "Failed to find cover image on IGDB.", flags: MessageFlags.Ephemeral });
+        await safeReply(interaction, buildTextReply("Failed to find cover image on IGDB.", true));
         return;
       }
 
-      const imageUrl = `https://images.igdb.com/igdb/image/upload/t_cover_big/${details.cover.image_id}.jpg`;
+      const imageUrl =
+        `https://images.igdb.com/igdb/image/upload/t_cover_big/${details.cover.image_id}.jpg`;
       const resp = await axios.get(imageUrl, { responseType: "arraybuffer" });
       const buffer = Buffer.from(resp.data);
 
       await Game.updateGameImage(gameId, buffer);
-      
+
       // Update session data
       if (game) {
         game.imageData = buffer;
       }
 
-      await safeReply(interaction, { content: "IGDB Image accepted and saved!", flags: MessageFlags.Ephemeral });
+      await safeReply(interaction, buildTextReply("IGDB Image accepted and saved!", true));
 
     } catch (err: any) {
-      await safeReply(interaction, { content: `Error fetching IGDB image: ${err.message}`, flags: MessageFlags.Ephemeral });
+      await safeReply(interaction, buildTextReply(
+        `Error fetching IGDB image: ${err.message}`,
+        true,
+      ));
     }
   }
 
@@ -732,18 +737,20 @@ export class GameDbAdmin {
     const session = AUDIT_SESSIONS.get(sessionId);
     if (!session || session.userId !== interaction.user.id) return;
 
-    await safeReply(interaction, {
-        content: "Please upload an image (or paste a URL) for this game in the chat.",
-        flags: MessageFlags.Ephemeral, 
-    });
+    await safeReply(interaction, buildTextReply(
+      "Please upload an image (or paste a URL) for this game in the chat.",
+      true,
+    ));
 
     const channel = interaction.channel as any;
     if (!channel) return;
 
     try {
       const collected = await channel.awaitMessages({
-        filter: (m: any) => m.author.id === interaction.user.id && (m.attachments.size > 0 
-          || m.content.length > 0),
+        filter: (m: any) => (
+          m.author.id === interaction.user.id &&
+          (m.attachments.size > 0 || m.content.length > 0)
+        ),
         max: 1,
         time: 60000,
         errors: ["time"],
@@ -761,38 +768,40 @@ export class GameDbAdmin {
 
       // Validate URL roughly
       if (!imageUrl.startsWith("http")) {
-        await safeReply(interaction, { content: "Invalid image URL/attachment.", flags: MessageFlags.Ephemeral });
+        await safeReply(interaction, buildTextReply("Invalid image URL/attachment.", true));
         return;
       }
 
-      await safeReply(interaction, { content: "Processing image...", flags: MessageFlags.Ephemeral });
-      
+      await safeReply(interaction, buildTextReply("Processing image...", true));
+
       try {
         const resp = await axios.get(imageUrl, { responseType: "arraybuffer" });
         const buffer = Buffer.from(resp.data);
-        
+
         await Game.updateGameImage(gameId, buffer);
         await msg.delete().catch(() => {});
 
         // Update session data locally so UI reflects change if we go back/refresh
         const game = session.games.find(g => g.id === gameId);
         if (game) {
-             game.imageData = buffer;
+          game.imageData = buffer;
         }
 
-        await safeReply(interaction, { content: "Image updated successfully!", flags: MessageFlags.Ephemeral });
-        
+        await safeReply(interaction, buildTextReply("Image updated successfully!", true));
+
         // Refresh detail view
-        // We can't easily "edit" the previous interaction message from here without the interaction object flow
-        // But the user can click "Back" or re-select to see changes, or we could update the message if we had access.
-        // Since this is a new reply, let's just let them know.
+        // We can't easily "edit" the previous interaction message from here without the
+        // interaction object flow. The user can click "Back" or re-select to see changes.
 
       } catch (err: any) {
-        await safeReply(interaction, { content: `Failed to update image: ${err.message}`, flags: MessageFlags.Ephemeral });
+        await safeReply(interaction, buildTextReply(
+          `Failed to update image: ${err.message}`,
+          true,
+        ));
       }
 
     } catch {
-      await safeReply(interaction, { content: "Timed out waiting for image.", flags: MessageFlags.Ephemeral });
+      await safeReply(interaction, buildTextReply("Timed out waiting for image.", true));
     }
   }
 
@@ -806,7 +815,7 @@ export class GameDbAdmin {
 
     const game = session.games.find(g => g.id === gameId);
     if (!game || !game.igdbId) {
-      await safeReply(interaction, { content: "Invalid game or missing IGDB ID.", flags: MessageFlags.Ephemeral });
+      await safeReply(interaction, buildTextReply("Invalid game or missing IGDB ID.", true));
       return;
     }
 
@@ -816,7 +825,7 @@ export class GameDbAdmin {
       const details = await igdbService.getGameDetails(game.igdbId);
       const videoUrl = details ? Game.getFeaturedVideoUrl(details) : null;
       if (!videoUrl) {
-        await safeReply(interaction, { content: "No featured video found on IGDB.", flags: MessageFlags.Ephemeral });
+        await safeReply(interaction, buildTextReply("No featured video found on IGDB.", true));
         return;
       }
 
@@ -834,7 +843,10 @@ export class GameDbAdmin {
 
       // no extra success message
     } catch (err: any) {
-      await safeReply(interaction, { content: `Error fetching featured video: ${err.message}`, flags: MessageFlags.Ephemeral });
+      await safeReply(interaction, buildTextReply(
+        `Error fetching featured video: ${err.message}`,
+        true,
+      ));
     }
   }
 
@@ -896,7 +908,7 @@ export class GameDbAdmin {
     const rawUrl = interaction.fields.getTextInputValue(AUDIT_VIDEO_INPUT_ID);
     const videoUrl = sanitizeUserInput(rawUrl, { preserveNewlines: false });
     if (!videoUrl || !videoUrl.startsWith("http")) {
-      await safeReply(interaction, { content: "Please provide a valid YouTube URL." });
+      await safeReply(interaction, buildTextReply("Please provide a valid YouTube URL.", true));
       return;
     }
 
@@ -931,7 +943,7 @@ export class GameDbAdmin {
     const rawDescription = interaction.fields.getTextInputValue(AUDIT_DESCRIPTION_INPUT_ID);
     const description = sanitizeUserInput(rawDescription, { preserveNewlines: true });
     if (!description) {
-      await safeReply(interaction, { content: "Please provide a valid description." });
+      await safeReply(interaction, buildTextReply("Please provide a valid description.", true));
       return;
     }
 
@@ -964,18 +976,18 @@ export class GameDbAdmin {
 
     const run = AUTO_ACCEPT_RUNS.get(runId);
     if (!run) {
-      await safeReply(interaction, {
-        content: "This audit run has already finished.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply(
+        "This audit run has already finished.",
+        true,
+      ));
       return;
     }
 
     if (interaction.guild?.ownerId !== interaction.user.id) {
-      await safeReply(interaction, {
-        content: "Only the server owner can stop this audit.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply(
+        "Only the server owner can stop this audit.",
+        true,
+      ));
       return;
     }
 
@@ -1252,7 +1264,7 @@ export class GameDbAdmin {
     useFollowUp: boolean,
     titleWords?: string[],
   ): Promise<void> {
-    const runId = `audit-auto-${Date.now()}-${Math.floor(Math.random() * 100000)}`;
+    const runId = interaction.id;
     AUTO_ACCEPT_RUNS.set(runId, {
       canceled: false,
       ownerId: interaction.guild?.ownerId ?? null,
@@ -1279,7 +1291,10 @@ export class GameDbAdmin {
     }
     if (!currentMessage) {
       try {
-        currentMessage = await safeReply(interaction, { ...followUpPayload, __forceFollowUp: true });
+        currentMessage = await safeReply(
+          interaction,
+          { ...followUpPayload, __forceFollowUp: true },
+        );
       } catch {
         // ignore
       }
@@ -1372,7 +1387,7 @@ export class GameDbAdmin {
     useFollowUp: boolean,
     titleWords?: string[],
   ): Promise<void> {
-    const runId = `audit-auto-${Date.now()}-${Math.floor(Math.random() * 100000)}`;
+    const runId = interaction.id;
     AUTO_ACCEPT_RUNS.set(runId, {
       canceled: false,
       ownerId: interaction.guild?.ownerId ?? null,
@@ -1399,7 +1414,10 @@ export class GameDbAdmin {
     }
     if (!currentMessage) {
       try {
-        currentMessage = await safeReply(interaction, { ...followUpPayload, __forceFollowUp: true });
+        currentMessage = await safeReply(
+          interaction,
+          { ...followUpPayload, __forceFollowUp: true },
+        );
       } catch {
         // ignore
       }
@@ -1493,7 +1511,7 @@ export class GameDbAdmin {
     useFollowUp: boolean,
     titleWords?: string[],
   ): Promise<void> {
-    const runId = `audit-auto-${Date.now()}-${Math.floor(Math.random() * 100000)}`;
+    const runId = interaction.id;
     AUTO_ACCEPT_RUNS.set(runId, {
       canceled: false,
       ownerId: interaction.guild?.ownerId ?? null,
@@ -1520,7 +1538,10 @@ export class GameDbAdmin {
     }
     if (!currentMessage) {
       try {
-        currentMessage = await safeReply(interaction, { ...followUpPayload, __forceFollowUp: true });
+        currentMessage = await safeReply(
+          interaction,
+          { ...followUpPayload, __forceFollowUp: true },
+        );
       } catch {
         // ignore
       }

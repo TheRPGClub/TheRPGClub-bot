@@ -2,7 +2,6 @@ import {
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
-  MessageFlags,
   PermissionsBitField,
   type ActionRow,
   type MessageActionRowComponent,
@@ -10,7 +9,7 @@ import {
 } from "discord.js";
 import { AnyRepliable, safeReply, sanitizeUserInput } from "../../functions/InteractionUtils.js";
 import { formatGameTitleWithYear } from "../../functions/GameTitleAutocompleteUtils.js";
-import { buildComponentsV2Flags } from "../../functions/ComponentsV2Utils.js";
+import { buildComponentsV2Flags, buildTextReply } from "../../functions/ComponentsV2Utils.js";
 import { decodeBase64Url, encodeWithMaxLength } from "../../functions/CustomIdUtils.js";
 import Game from "../../classes/Game.js";
 
@@ -66,10 +65,7 @@ export async function requireModeratorOrAdminOrOwner(
 ): Promise<boolean> {
   const permissions = getModeratorPermissionFlags(interaction);
   if (!permissions) {
-    await safeReply(interaction, {
-      content: "This action can only be used inside a server.",
-      flags: MessageFlags.Ephemeral,
-    });
+    await safeReply(interaction, buildTextReply("This action can only be used inside a server.", true));
     return false;
   }
 
@@ -77,10 +73,10 @@ export async function requireModeratorOrAdminOrOwner(
     return true;
   }
 
-  await safeReply(interaction, {
-    content: "Access denied. Action requires Moderator, Administrator, or server owner.",
-    flags: MessageFlags.Ephemeral,
-  });
+  await safeReply(interaction, buildTextReply(
+    "Access denied. Action requires Moderator, Administrator, or server owner.",
+    true,
+  ));
   return false;
 }
 
@@ -123,6 +119,7 @@ export function buildSearchRecoveryComponents(
   encodedQuery: string,
 ): ActionRowBuilder<ButtonBuilder>[] {
   const button = new ButtonBuilder()
+    // eslint-disable-next-line local/stable-custom-id
     .setCustomId(buildSearchRefreshCustomId(ownerId, encodedQuery))
     .setLabel("Refresh search")
     .setStyle(ButtonStyle.Primary);
@@ -211,6 +208,7 @@ export function buildChoiceRows(
     const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
       slice.map((opt) =>
         new ButtonBuilder()
+          // eslint-disable-next-line local/stable-custom-id
           .setCustomId(`${customIdPrefix}:${opt.value}`)
           .setLabel(opt.label)
           .setStyle(opt.style ?? ButtonStyle.Secondary),

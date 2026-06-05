@@ -5,6 +5,7 @@ import type {
 } from "discord.js";
 import { MessageFlags } from "discord.js";
 import { safeDeferReply, safeReply, sanitizeUserInput } from "../../functions/InteractionUtils.js";
+import { buildTextReply } from "../../functions/ComponentsV2Utils.js";
 import {
   deleteNominationForUser,
   getNominationForUser,
@@ -30,15 +31,14 @@ export async function handleDeleteGotmNomsPanel(interaction: CommandInteraction)
   const window = await getUpcomingNominationWindow();
   const view = await buildNominationDeleteView("gotm", "/nominate");
   if (!view) {
-    await safeReply(interaction, {
-      content: `No GOTM nominations found for Round ${window.targetRound}.`,
-      flags: MessageFlags.Ephemeral,
-    });
+    await safeReply(
+      interaction,
+      buildTextReply(`No GOTM nominations found for Round ${window.targetRound}.`, true),
+    );
     return;
   }
 
   await safeReply(interaction, {
-    content: `Choose a GOTM nomination for Round ${window.targetRound} to start deletion.`,
     components: [...view.payload.components, ...view.controls],
     files: view.payload.files,
     flags: buildComponentsV2Flags(true),
@@ -49,15 +49,14 @@ export async function handleDeleteNrGotmNomsPanel(interaction: CommandInteractio
   const window = await getUpcomingNominationWindow();
   const view = await buildNominationDeleteView("nr-gotm", "/nominate");
   if (!view) {
-    await safeReply(interaction, {
-      content: `No NR-GOTM nominations found for Round ${window.targetRound}.`,
-      flags: MessageFlags.Ephemeral,
-    });
+    await safeReply(
+      interaction,
+      buildTextReply(`No NR-GOTM nominations found for Round ${window.targetRound}.`, true),
+    );
     return;
   }
 
   await safeReply(interaction, {
-    content: `Choose an NR-GOTM nomination for Round ${window.targetRound} to start deletion.`,
     components: [...view.payload.components, ...view.controls],
     files: view.payload.files,
     flags: buildComponentsV2Flags(true),
@@ -70,29 +69,29 @@ export async function handleAdminNominationDeleteSelect(
   const parsed = parseDeletionSelectCustomId(interaction.customId);
   const selectedUserId = interaction.values?.[0];
   if (!parsed || !selectedUserId) {
-    await safeReply(interaction, {
-      content: "This nomination deletion menu is invalid. Run the command again.",
-      flags: MessageFlags.Ephemeral,
-    });
+    await safeReply(
+      interaction,
+      buildTextReply("This nomination deletion menu is invalid. Run the command again.", true),
+    );
     return;
   }
 
   const nomination = await getNominationForUser(parsed.kind, parsed.round, selectedUserId);
   if (!nomination) {
-    await safeReply(interaction, {
-      content: "That nomination no longer exists. Run the command again.",
-      flags: MessageFlags.Ephemeral,
-    });
+    await safeReply(
+      interaction,
+      buildTextReply("That nomination no longer exists. Run the command again.", true),
+    );
     return;
   }
 
   await interaction.showModal(
     buildDeletionReasonModal(parsed.kind, parsed.round, selectedUserId, nomination.gameTitle),
   ).catch(async () => {
-    await safeReply(interaction, {
-      content: "Unable to open the deletion reason prompt. Try again.",
-      flags: MessageFlags.Ephemeral,
-    });
+    await safeReply(
+      interaction,
+      buildTextReply("Unable to open the deletion reason prompt. Try again.", true),
+    );
   });
 }
 
@@ -101,19 +100,19 @@ export async function handleAdminNominationDeleteReasonModal(
 ): Promise<void> {
   const parsed = parseDeletionReasonModalCustomId(interaction.customId);
   if (!parsed) {
-    await safeReply(interaction, {
-      content: "This nomination deletion prompt is invalid. Run the command again.",
-      flags: MessageFlags.Ephemeral,
-    });
+    await safeReply(
+      interaction,
+      buildTextReply("This nomination deletion prompt is invalid. Run the command again.", true),
+    );
     return;
   }
 
   const parsedState = parseDeletionReasonStateId(parsed.sessionId);
   if (!parsedState) {
-    await safeReply(interaction, {
-      content: "This nomination deletion prompt is invalid. Run the command again.",
-      flags: MessageFlags.Ephemeral,
-    });
+    await safeReply(
+      interaction,
+      buildTextReply("This nomination deletion prompt is invalid. Run the command again.", true),
+    );
     return;
   }
 
@@ -129,10 +128,10 @@ export async function handleAdminNominationDeleteReasonModal(
     )
     : null;
   if (!sessionState) {
-    await safeReply(interaction, {
-      content: "That nomination no longer exists. Run the command again.",
-      flags: MessageFlags.Ephemeral,
-    });
+    await safeReply(
+      interaction,
+      buildTextReply("That nomination no longer exists. Run the command again.", true),
+    );
     return;
   }
 
@@ -141,10 +140,10 @@ export async function handleAdminNominationDeleteReasonModal(
     { preserveNewlines: true, maxLength: 250 },
   );
   if (!reason) {
-    await safeReply(interaction, {
-      content: "A deletion reason is required.",
-      flags: MessageFlags.Ephemeral,
-    });
+    await safeReply(
+      interaction,
+      buildTextReply("A deletion reason is required.", true),
+    );
     return;
   }
 
@@ -167,11 +166,9 @@ export async function handleAdminNominationDeleteReasonModal(
     `"${sessionState.gameTitle}" for ${sessionState.kind.toUpperCase()} Round ${sessionState.round}. ` +
     `Reason: ${reason}`;
 
+  const textContainer = buildTextReply(content, true);
   await safeReply(interaction, {
-    components: [
-      ...payload.components,
-    ],
-    content,
+    components: [...textContainer.components, ...payload.components],
     files: payload.files,
     flags: buildComponentsV2Flags(true),
   });

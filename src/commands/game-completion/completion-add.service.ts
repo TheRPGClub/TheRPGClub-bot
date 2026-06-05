@@ -25,7 +25,11 @@ import { createIgdbSession, type IgdbSelectOption } from "../../services/IGDB/Ig
 import { resolveNowPlayingRemoval } from "./completion-helpers.js";
 import { promptCompletionPlatformSelection } from "./completion-platform.service.js";
 import { completionAddSessions, type CompletionAddContext } from "./completion.types.js";
-import { buildComponentsV2Flags, buildTextContainer } from "../../functions/ComponentsV2Utils.js";
+import {
+  buildComponentsV2Flags,
+  buildTextContainer,
+  buildTextReply,
+} from "../../functions/ComponentsV2Utils.js";
 import { COMPONENTS_V2_FLAG } from "../../config/flags.js";
 
 /**
@@ -61,13 +65,16 @@ export async function promptCompletionSelection(
     });
 
     const select = new StringSelectMenuBuilder()
+      // eslint-disable-next-line local/stable-custom-id, local/custom-id-has-matching-handler
       .setCustomId(`completion-add-select:${sessionId}`)
       .setPlaceholder("Select a game to log completion")
       .addOptions(options);
 
     await safeReply(interaction, {
-      content: `Select the game for "${searchTerm}".`,
-      components: [new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select)],
+      components: [
+        ...buildTextReply(`Select the game for "${searchTerm}".`, true).components,
+        new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select),
+      ],
       flags: buildComponentsV2Flags(true),
     });
     return;
@@ -108,10 +115,7 @@ export async function promptIgdbSelection(
         flags: COMPONENTS_V2_FLAG,
       });
     } else {
-      await safeReply(interaction, {
-        content,
-        flags: buildComponentsV2Flags(true),
-      });
+      await safeReply(interaction, buildTextReply(content, true));
     }
     return;
   }
@@ -208,8 +212,7 @@ export async function promptIgdbSelection(
     });
   } else {
     await safeReply(interaction, {
-      content,
-      components,
+      components: [...buildTextReply(content, true).components, ...components],
       flags: buildComponentsV2Flags(true),
     });
   }
@@ -225,10 +228,7 @@ export async function processCompletionSelection(
 ): Promise<boolean> {
   if (value === "import-igdb") {
     if (!ctx.query) {
-      await safeReply(interaction, {
-        content: "Original search query lost. Please try again.",
-        flags: buildComponentsV2Flags(true),
-      });
+      await safeReply(interaction, buildTextReply("Original search query lost. Please try again.", true));
       return false;
     }
     await promptIgdbSelection(interaction, ctx.query, ctx);
@@ -367,27 +367,18 @@ export async function handleCompletionAddSelect(
   const ctx = completionAddSessions.get(sessionId);
 
   if (!ctx) {
-    await safeReply(interaction, {
-      content: "This completion prompt has expired.",
-      flags: buildComponentsV2Flags(true),
-    });
+    await safeReply(interaction, buildTextReply("This completion prompt has expired.", true));
     return;
   }
 
   if (interaction.user.id !== ctx.userId) {
-    await safeReply(interaction, {
-      content: "This completion prompt isn't for you.",
-      flags: buildComponentsV2Flags(true),
-    });
+    await safeReply(interaction, buildTextReply("This completion prompt isn't for you.", true));
     return;
   }
 
   const value = interaction.values?.[0];
   if (!value) {
-    await safeReply(interaction, {
-      content: "No selection received.",
-      flags: buildComponentsV2Flags(true),
-    });
+    await safeReply(interaction, buildTextReply("No selection received.", true));
     return;
   }
 
@@ -422,10 +413,12 @@ async function confirmDuplicateCompletion(
 
   const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
     new ButtonBuilder()
+      // eslint-disable-next-line local/stable-custom-id
       .setCustomId(yesId)
       .setLabel("Add Another")
       .setStyle(ButtonStyle.Danger),
     new ButtonBuilder()
+      // eslint-disable-next-line local/stable-custom-id
       .setCustomId(noId)
       .setLabel("Cancel")
       .setStyle(ButtonStyle.Secondary),

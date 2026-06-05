@@ -4,6 +4,7 @@
 import type { CommandInteraction, Attachment } from "discord.js";
 import { EmbedBuilder, MessageFlags } from "discord.js";
 import { safeReply } from "../../functions/InteractionUtils.js";
+import { buildTextReply } from "../../functions/ComponentsV2Utils.js";
 import type { IGameWithPlatforms } from "../../classes/Game.js";
 import Game from "../../classes/Game.js";
 import Gotm, {
@@ -52,28 +53,19 @@ export async function handleGotmAudit(
 
   if (action === "start") {
     if (!file?.url) {
-      await safeReply(interaction, {
-        content: "Please attach the GOTM audit CSV file.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("Please attach the GOTM audit CSV file.", true));
       return;
     }
 
     const csvText = await fetchGotmAuditCsvText(file.url);
     if (!csvText) {
-      await safeReply(interaction, {
-        content: "Failed to download the CSV file.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("Failed to download the CSV file.", true));
       return;
     }
 
     const parsed = parseGotmAuditCsv(csvText);
     if (!parsed.length) {
-      await safeReply(interaction, {
-        content: "No valid rows found in the CSV file.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("No valid rows found in the CSV file.", true));
       return;
     }
 
@@ -84,12 +76,10 @@ export async function handleGotmAudit(
     });
     await insertGotmAuditImportItems(session.importId, parsed);
 
-    await safeReply(interaction, {
-      content:
-        `GOTM audit #${session.importId} created with ${parsed.length} rows.` +
-        " Starting review now.",
-      flags: MessageFlags.Ephemeral,
-    });
+    await safeReply(interaction, buildTextReply(
+      `GOTM audit #${session.importId} created with ${parsed.length} rows. Starting review now.`,
+      true,
+    ));
 
     await processNextGotmAuditItem(interaction, session);
     return;
@@ -98,10 +88,10 @@ export async function handleGotmAudit(
   if (action === "status") {
     const session = await getActiveGotmAuditImportForUser(userId);
     if (!session) {
-      await safeReply(interaction, {
-        content: "No active GOTM audit session found.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(
+        interaction,
+        buildTextReply("No active GOTM audit session found.", true),
+      );
       return;
     }
 
@@ -125,36 +115,36 @@ export async function handleGotmAudit(
 
   const session = await getActiveGotmAuditImportForUser(userId);
   if (!session) {
-    await safeReply(interaction, {
-      content: "No active GOTM audit session found.",
-      flags: MessageFlags.Ephemeral,
-    });
+    await safeReply(
+      interaction,
+      buildTextReply("No active GOTM audit session found.", true),
+    );
     return;
   }
 
   if (action === "pause") {
     await setGotmAuditImportStatus(session.importId, "PAUSED");
-    await safeReply(interaction, {
-      content: `GOTM audit #${session.importId} paused.`,
-      flags: MessageFlags.Ephemeral,
-    });
+    await safeReply(
+      interaction,
+      buildTextReply(`GOTM audit #${session.importId} paused.`, true),
+    );
     return;
   }
 
   if (action === "cancel") {
     await setGotmAuditImportStatus(session.importId, "CANCELED");
-    await safeReply(interaction, {
-      content: `GOTM audit #${session.importId} canceled.`,
-      flags: MessageFlags.Ephemeral,
-    });
+    await safeReply(
+      interaction,
+      buildTextReply(`GOTM audit #${session.importId} canceled.`, true),
+    );
     return;
   }
 
   await setGotmAuditImportStatus(session.importId, "ACTIVE");
-  await safeReply(interaction, {
-    content: `Resuming GOTM audit #${session.importId}.`,
-    flags: MessageFlags.Ephemeral,
-  });
+  await safeReply(
+    interaction,
+    buildTextReply(`Resuming GOTM audit #${session.importId}.`, true),
+  );
   await processNextGotmAuditItem(interaction, session);
 }
 
@@ -171,8 +161,7 @@ export async function processNextGotmAuditItem(
   if (!nextItem) {
     await setGotmAuditImportStatus(session.importId, "COMPLETED");
     await safeReply(interaction, {
-      content: `GOTM audit #${session.importId} completed.`,
-      flags: MessageFlags.Ephemeral,
+      ...buildTextReply(`GOTM audit #${session.importId} completed.`, true),
       __forceFollowUp: true,
     });
     return;
@@ -209,8 +198,7 @@ export async function processNextGotmAuditItem(
       errorText: err?.message ?? "GameDB search failed.",
     });
     await safeReply(interaction, {
-      content: `GameDB search failed for "${nextItem.gameTitle}". Skipping.`,
-      flags: MessageFlags.Ephemeral,
+      ...buildTextReply(`GameDB search failed for "${nextItem.gameTitle}". Skipping.`, true),
       __forceFollowUp: true,
     });
     await processNextGotmAuditItem(interaction, session);
@@ -345,11 +333,11 @@ export async function tryInsertGotmAuditRound(
       }
     }
 
+    const insertMsg =
+      `${item.kind === "gotm" ? "GOTM" : "NR-GOTM"} round ${item.roundNumber} ` +
+      `inserted with ${games.length} game${games.length === 1 ? "" : "s"}.`;
     await safeReply(interaction, {
-      content:
-        `${item.kind === "gotm" ? "GOTM" : "NR-GOTM"} round ${item.roundNumber} ` +
-        `inserted with ${games.length} game${games.length === 1 ? "" : "s"}.`,
-      flags: MessageFlags.Ephemeral,
+      ...buildTextReply(insertMsg, true),
       __forceFollowUp: true,
     });
   } catch (err: any) {
@@ -398,9 +386,10 @@ async function updateMissingGotmAuditLinks(
     }
 
     if (updated > 0) {
+      const linkMsg =
+        `Updated ${updated} missing GOTM link${updated === 1 ? "" : "s"} for Round ${roundNumber}.`;
       await safeReply(interaction, {
-        content: `Updated ${updated} missing GOTM link${updated === 1 ? "" : "s"} for Round ${roundNumber}.`,
-        flags: MessageFlags.Ephemeral,
+        ...buildTextReply(linkMsg, true),
         __forceFollowUp: true,
       });
     }
@@ -436,9 +425,10 @@ async function updateMissingGotmAuditLinks(
   }
 
   if (updated > 0) {
+    const nrLinkMsg =
+      `Updated ${updated} missing NR-GOTM link${updated === 1 ? "" : "s"} for Round ${roundNumber}.`;
     await safeReply(interaction, {
-      content: `Updated ${updated} missing NR-GOTM link${updated === 1 ? "" : "s"} for Round ${roundNumber}.`,
-      flags: MessageFlags.Ephemeral,
+      ...buildTextReply(nrLinkMsg, true),
       __forceFollowUp: true,
     });
   }

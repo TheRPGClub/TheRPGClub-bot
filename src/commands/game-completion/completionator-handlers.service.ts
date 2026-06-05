@@ -5,12 +5,11 @@ import type {
 } from "discord.js";
 import { MessageFlags } from "discord.js";
 import {
-  ephemeralFlag,
   safeDeferReply,
   safeDeferUpdate,
   safeReply,
 } from "../../functions/InteractionUtils.js";
-import { buildComponentsV2Flags } from "../../functions/ComponentsV2Utils.js";
+import { buildComponentsV2Flags, buildTextReply } from "../../functions/ComponentsV2Utils.js";
 import Member from "../../classes/Member.js";
 import Game from "../../classes/Game.js";
 import type { CompletionatorModalKind, CompletionatorDateChoice } from "./completion.types.js";
@@ -45,10 +44,7 @@ export class CompletionatorHandlersService {
   async handleCompletionatorSelect(interaction: StringSelectMenuInteraction): Promise<void> {
     const [, ownerId, importIdRaw, itemIdRaw] = interaction.customId.split(":");
     if (interaction.user.id !== ownerId) {
-      await safeReply(interaction, {
-        content: "This import prompt isn't for you.",
-        flags: buildComponentsV2Flags(true),
-      });
+      await safeReply(interaction, buildTextReply("This import prompt isn't for you.", true));
       return;
     }
 
@@ -56,19 +52,13 @@ export class CompletionatorHandlersService {
     const importId = Number(importIdRaw);
     const itemId = Number(itemIdRaw);
     if (!Number.isInteger(importId) || !Number.isInteger(itemId)) {
-      await safeReply(interaction, {
-        content: "Invalid import selection.",
-        flags: buildComponentsV2Flags(Boolean(ephemeral)),
-      });
+      await safeReply(interaction, buildTextReply("Invalid import selection.", Boolean(ephemeral)));
       return;
     }
 
     const session = await getImportById(importId);
     if (!session) {
-      await safeReply(interaction, {
-        content: "Import session not found.",
-        flags: buildComponentsV2Flags(Boolean(ephemeral)),
-      });
+      await safeReply(interaction, buildTextReply("Import session not found.", Boolean(ephemeral)));
       return;
     }
     const context = completionatorThreadContexts.get(
@@ -77,10 +67,7 @@ export class CompletionatorHandlersService {
 
     const choice = interaction.values?.[0];
     if (!choice) {
-      await safeReply(interaction, {
-        content: "No selection received.",
-        flags: buildComponentsV2Flags(Boolean(ephemeral)),
-      });
+      await safeReply(interaction, buildTextReply("No selection received.", Boolean(ephemeral)));
       return;
     }
 
@@ -93,10 +80,7 @@ export class CompletionatorHandlersService {
     if (choice === "import-igdb") {
       const item = await getImportItemById(itemId);
       if (!item) {
-        await safeReply(interaction, {
-          content: "Import item not found.",
-          flags: buildComponentsV2Flags(Boolean(ephemeral)),
-        });
+        await safeReply(interaction, buildTextReply("Import item not found.", Boolean(ephemeral)));
         return;
       }
 
@@ -106,19 +90,13 @@ export class CompletionatorHandlersService {
 
     const gameId = Number(choice);
     if (!Number.isInteger(gameId) || gameId <= 0) {
-      await safeReply(interaction, {
-        content: "Invalid game selection.",
-        flags: buildComponentsV2Flags(Boolean(ephemeral)),
-      });
+      await safeReply(interaction, buildTextReply("Invalid game selection.", Boolean(ephemeral)));
       return;
     }
 
     const item = await getImportItemById(itemId);
     if (!item) {
-      await safeReply(interaction, {
-        content: "Import item not found.",
-        flags: buildComponentsV2Flags(Boolean(ephemeral)),
-      });
+      await safeReply(interaction, buildTextReply("Import item not found.", Boolean(ephemeral)));
       return;
     }
 
@@ -142,18 +120,12 @@ export class CompletionatorHandlersService {
   async handleCompletionatorChoose(interaction: ButtonInteraction): Promise<void> {
     const parsed = parseCompletionatorChooseId(interaction.customId);
     if (!parsed) {
-      await safeReply(interaction, {
-        content: "Invalid completionator selection.",
-        flags: buildComponentsV2Flags(true),
-      });
+      await safeReply(interaction, buildTextReply("Invalid completionator selection.", true));
       return;
     }
 
     if (interaction.user.id !== parsed.ownerId) {
-      await safeReply(interaction, {
-        content: "This import prompt isn't for you.",
-        flags: buildComponentsV2Flags(true),
-      });
+      await safeReply(interaction, buildTextReply("This import prompt isn't for you.", true));
       return;
     }
 
@@ -161,19 +133,13 @@ export class CompletionatorHandlersService {
 
     const session = await getImportById(parsed.importId);
     if (!session) {
-      await safeReply(interaction, {
-        content: "Import session not found.",
-        flags: buildComponentsV2Flags(true),
-      }).catch(() => {});
+      await safeReply(interaction, buildTextReply("Import session not found.", true)).catch(() => {});
       return;
     }
 
     const item = await getImportItemById(parsed.itemId);
     if (!item) {
-      await safeReply(interaction, {
-        content: "Import item not found.",
-        flags: buildComponentsV2Flags(true),
-      }).catch(() => {});
+      await safeReply(interaction, buildTextReply("Import item not found.", true)).catch(() => {});
       return;
     }
 
@@ -200,10 +166,7 @@ export class CompletionatorHandlersService {
   async handleCompletionatorUpdateFields(interaction: StringSelectMenuInteraction): Promise<void> {
     const [, ownerId, importIdRaw, itemIdRaw] = interaction.customId.split(":");
     if (interaction.user.id !== ownerId) {
-      await safeReply(interaction, {
-        content: "This import prompt isn't for you.",
-        flags: buildComponentsV2Flags(true),
-      });
+      await safeReply(interaction, buildTextReply("This import prompt isn't for you.", true));
       return;
     }
 
@@ -211,37 +174,25 @@ export class CompletionatorHandlersService {
     const importId = Number(importIdRaw);
     const itemId = Number(itemIdRaw);
     if (!Number.isInteger(importId) || !Number.isInteger(itemId)) {
-      await safeReply(interaction, {
-        content: "Invalid import selection.",
-        flags: buildComponentsV2Flags(Boolean(ephemeral)),
-      });
+      await safeReply(interaction, buildTextReply("Invalid import selection.", Boolean(ephemeral)));
       return;
     }
 
     const session = await getImportById(importId);
     if (!session) {
-      await safeReply(interaction, {
-        content: "Import session not found.",
-        flags: buildComponentsV2Flags(Boolean(ephemeral)),
-      });
+      await safeReply(interaction, buildTextReply("Import session not found.", Boolean(ephemeral)));
       return;
     }
 
     const item = await getImportItemById(itemId);
     if (!item || !item.completionId) {
-      await safeReply(interaction, {
-        content: "Import item not found.",
-        flags: buildComponentsV2Flags(Boolean(ephemeral)),
-      });
+      await safeReply(interaction, buildTextReply("Import item not found.", Boolean(ephemeral)));
       return;
     }
 
     const existing = await Member.getCompletion(item.completionId);
     if (!existing) {
-      await safeReply(interaction, {
-        content: "Completion not found.",
-        flags: buildComponentsV2Flags(Boolean(ephemeral)),
-      });
+      await safeReply(interaction, buildTextReply("Completion not found.", Boolean(ephemeral)));
       return;
     }
 
@@ -291,10 +242,7 @@ export class CompletionatorHandlersService {
   async handleCompletionatorAction(interaction: ButtonInteraction): Promise<void> {
     const [, ownerId, importIdRaw, itemIdRaw, action] = interaction.customId.split(":");
     if (interaction.user.id !== ownerId) {
-      await safeReply(interaction, {
-        content: "This import prompt isn't for you.",
-        flags: buildComponentsV2Flags(true),
-      });
+      await safeReply(interaction, buildTextReply("This import prompt isn't for you.", true));
       return;
     }
 
@@ -302,37 +250,25 @@ export class CompletionatorHandlersService {
     const importId = Number(importIdRaw);
     const itemId = Number(itemIdRaw);
     if (!Number.isInteger(importId) || !Number.isInteger(itemId)) {
-      await safeReply(interaction, {
-        content: "Invalid import action.",
-        flags: buildComponentsV2Flags(Boolean(ephemeral)),
-      });
+      await safeReply(interaction, buildTextReply("Invalid import action.", Boolean(ephemeral)));
       return;
     }
 
     const session = await getImportById(importId);
     if (!session) {
-      await safeReply(interaction, {
-        content: "Import session not found.",
-        flags: buildComponentsV2Flags(Boolean(ephemeral)),
-      });
+      await safeReply(interaction, buildTextReply("Import session not found.", Boolean(ephemeral)));
       return;
     }
 
     const item = await getImportItemById(itemId);
     if (!item) {
-      await safeReply(interaction, {
-        content: "Import item not found.",
-        flags: buildComponentsV2Flags(Boolean(ephemeral)),
-      });
+      await safeReply(interaction, buildTextReply("Import item not found.", Boolean(ephemeral)));
       return;
     }
 
     if (action === "add") {
       if (!item.gameDbGameId) {
-        await safeReply(interaction, {
-          content: "Import item data is missing. Please resume the import.",
-          flags: buildComponentsV2Flags(Boolean(ephemeral)),
-        });
+        await safeReply(interaction, buildTextReply("Import item data is missing. Please resume the import.", Boolean(ephemeral)));
         return;
       }
 
@@ -394,19 +330,13 @@ export class CompletionatorHandlersService {
 
     if (action === "same-yes") {
       if (!item.completionId) {
-        await safeReply(interaction, {
-          content: "Import item data is missing. Please resume the import.",
-          flags: buildComponentsV2Flags(Boolean(ephemeral)),
-        });
+        await safeReply(interaction, buildTextReply("Import item data is missing. Please resume the import.", Boolean(ephemeral)));
         return;
       }
 
       const existing = await Member.getCompletion(item.completionId);
       if (!existing) {
-        await safeReply(interaction, {
-          content: "Completion not found.",
-          flags: buildComponentsV2Flags(Boolean(ephemeral)),
-        });
+        await safeReply(interaction, buildTextReply("Completion not found.", Boolean(ephemeral)));
         return;
       }
 
@@ -431,10 +361,7 @@ export class CompletionatorHandlersService {
 
     if (action === "same-no") {
       if (!item.gameDbGameId) {
-        await safeReply(interaction, {
-          content: "Import item data is missing. Please resume the import.",
-          flags: buildComponentsV2Flags(Boolean(ephemeral)),
-        });
+        await safeReply(interaction, buildTextReply("Import item data is missing. Please resume the import.", Boolean(ephemeral)));
         return;
       }
 
@@ -531,19 +458,13 @@ export class CompletionatorHandlersService {
 
     if (action === "update") {
       if (!item.gameDbGameId || !item.completionId) {
-        await safeReply(interaction, {
-          content: "Import item data is missing. Please resume the import.",
-          flags: buildComponentsV2Flags(Boolean(ephemeral)),
-        });
+        await safeReply(interaction, buildTextReply("Import item data is missing. Please resume the import.", Boolean(ephemeral)));
         return;
       }
 
       const existing = await Member.getCompletion(item.completionId);
       if (!existing) {
-        await safeReply(interaction, {
-          content: "Completion not found.",
-          flags: buildComponentsV2Flags(Boolean(ephemeral)),
-        });
+        await safeReply(interaction, buildTextReply("Completion not found.", Boolean(ephemeral)));
         return;
       }
 
@@ -567,47 +488,32 @@ export class CompletionatorHandlersService {
   async handleCompletionatorFormSelect(interaction: StringSelectMenuInteraction): Promise<void> {
     const [, ownerId, importIdRaw, itemIdRaw, field] = interaction.customId.split(":");
     if (interaction.user.id !== ownerId) {
-      await safeReply(interaction, {
-        content: "This import prompt is not for you.",
-        flags: buildComponentsV2Flags(true),
-      });
+      await safeReply(interaction, buildTextReply("This import prompt is not for you.", true));
       return;
     }
 
     const importId = Number(importIdRaw);
     const itemId = Number(itemIdRaw);
     if (!Number.isInteger(importId) || !Number.isInteger(itemId)) {
-      await safeReply(interaction, {
-        content: "Invalid import selection.",
-        flags: buildComponentsV2Flags(true),
-      });
+      await safeReply(interaction, buildTextReply("Invalid import selection.", true));
       return;
     }
 
     const session = await getImportById(importId);
     if (!session) {
-      await safeReply(interaction, {
-        content: "Import session not found.",
-        flags: buildComponentsV2Flags(true),
-      });
+      await safeReply(interaction, buildTextReply("Import session not found.", true));
       return;
     }
 
     const item = await getImportItemById(itemId);
     if (!item || !item.gameDbGameId) {
-      await safeReply(interaction, {
-        content: "Import item data is missing. Please resume the import.",
-        flags: buildComponentsV2Flags(true),
-      });
+      await safeReply(interaction, buildTextReply("Import item data is missing. Please resume the import.", true));
       return;
     }
 
     const value = interaction.values?.[0];
     if (!value) {
-      await safeReply(interaction, {
-        content: "No selection received.",
-        flags: buildComponentsV2Flags(true),
-      });
+      await safeReply(interaction, buildTextReply("No selection received.", true));
       return;
     }
 
@@ -621,20 +527,14 @@ export class CompletionatorHandlersService {
     if (field === "type") {
       const normalized = COMPLETION_TYPES.find((t) => t === value);
       if (!normalized) {
-        await safeReply(interaction, {
-          content: "Invalid completion type selected.",
-          flags: buildComponentsV2Flags(true),
-        });
+        await safeReply(interaction, buildTextReply("Invalid completion type selected.", true));
         return;
       }
       state.completionType = normalized;
     } else if (field === "date") {
       const choice = value as CompletionatorDateChoice;
       if (!["csv", "today", "unknown", "date"].includes(choice)) {
-        await safeReply(interaction, {
-          content: "Invalid date option selected.",
-          flags: buildComponentsV2Flags(true),
-        });
+        await safeReply(interaction, buildTextReply("Invalid date option selected.", true));
         return;
       }
       state.dateChoice = choice;
@@ -662,10 +562,7 @@ export class CompletionatorHandlersService {
         );
         const platformIds = new Set(platforms.map((platform) => platform.id));
         if (!Number.isInteger(platformId) || !platformIds.has(platformId)) {
-          await safeReply(interaction, {
-            content: "Invalid platform selected.",
-            flags: buildComponentsV2Flags(true),
-          });
+          await safeReply(interaction, buildTextReply("Invalid platform selected.", true));
           return;
         }
         state.platformId = platformId;
@@ -690,38 +587,26 @@ export class CompletionatorHandlersService {
   async handleCompletionatorDateModal(interaction: ModalSubmitInteraction): Promise<void> {
     const [, ownerId, importIdRaw, itemIdRaw] = interaction.customId.split(":");
     if (interaction.user.id !== ownerId) {
-      await safeReply(interaction, {
-        content: "This import prompt is not for you.",
-        flags: buildComponentsV2Flags(true),
-      });
+      await safeReply(interaction, buildTextReply("This import prompt is not for you.", true));
       return;
     }
 
     const importId = Number(importIdRaw);
     const itemId = Number(itemIdRaw);
     if (!Number.isInteger(importId) || !Number.isInteger(itemId)) {
-      await safeReply(interaction, {
-        content: "Invalid import selection.",
-        flags: buildComponentsV2Flags(true),
-      });
+      await safeReply(interaction, buildTextReply("Invalid import selection.", true));
       return;
     }
 
     const session = await getImportById(importId);
     if (!session) {
-      await safeReply(interaction, {
-        content: "Import session not found.",
-        flags: buildComponentsV2Flags(true),
-      });
+      await safeReply(interaction, buildTextReply("Import session not found.", true));
       return;
     }
 
     const item = await getImportItemById(itemId);
     if (!item || !item.gameDbGameId) {
-      await safeReply(interaction, {
-        content: "Import item data is missing. Please resume the import.",
-        flags: buildComponentsV2Flags(true),
-      });
+      await safeReply(interaction, buildTextReply("Import item data is missing. Please resume the import.", true));
       return;
     }
 
@@ -730,18 +615,12 @@ export class CompletionatorHandlersService {
     try {
       parsedDate = parseCompletionDateInput(rawValue);
     } catch (err: any) {
-      await safeReply(interaction, {
-        content: err?.message ?? "Invalid completion date.",
-        flags: buildComponentsV2Flags(true),
-      });
+      await safeReply(interaction, buildTextReply(err?.message ?? "Invalid completion date.", true));
       return;
     }
 
     if (!parsedDate) {
-      await safeReply(interaction, {
-        content: "Completion date is required.",
-        flags: buildComponentsV2Flags(true),
-      });
+      await safeReply(interaction, buildTextReply("Completion date is required.", true));
       return;
     }
 
@@ -772,10 +651,7 @@ export class CompletionatorHandlersService {
         .catch(() => {});
     }
 
-    await safeReply(interaction, {
-      content: "Completion date saved.",
-      flags: buildComponentsV2Flags(true),
-    });
+    await safeReply(interaction, buildTextReply("Completion date saved.", true));
   }
 
   async handleCompletionatorInputModal(interaction: ModalSubmitInteraction): Promise<void> {
@@ -786,45 +662,30 @@ export class CompletionatorHandlersService {
     const itemId = Number(parts[4]);
 
     if (interaction.user.id !== ownerId) {
-      await safeReply(interaction, {
-        content: "This import prompt is not for you.",
-        flags: buildComponentsV2Flags(true),
-      });
+      await safeReply(interaction, buildTextReply("This import prompt is not for you.", true));
       return;
     }
 
     if (!Number.isInteger(importId) || !Number.isInteger(itemId)) {
-      await safeReply(interaction, {
-        content: "Invalid import request.",
-        flags: buildComponentsV2Flags(true),
-      });
+      await safeReply(interaction, buildTextReply("Invalid import request.", true));
       return;
     }
 
     const session = await getImportById(importId);
     if (!session) {
-      await safeReply(interaction, {
-        content: "Import session not found.",
-        flags: buildComponentsV2Flags(true),
-      });
+      await safeReply(interaction, buildTextReply("Import session not found.", true));
       return;
     }
 
     const item = await getImportItemById(itemId);
     if (!item) {
-      await safeReply(interaction, {
-        content: "Import item not found.",
-        flags: buildComponentsV2Flags(true),
-      });
+      await safeReply(interaction, buildTextReply("Import item not found.", true));
       return;
     }
 
     const rawValue = interaction.fields.getTextInputValue("completionator-input")?.trim();
     if (!rawValue) {
-      await safeReply(interaction, {
-        content: "Input is required.",
-        flags: buildComponentsV2Flags(true),
-      });
+      await safeReply(interaction, buildTextReply("Input is required.", true));
       return;
     }
 
@@ -984,10 +845,7 @@ export class CompletionatorHandlersService {
       `Import #${session.importId} paused. ` +
       "Resume with `/game-completion import-completionator action:resume`.";
 
-    await safeReply(interaction, {
-      content,
-      flags: buildComponentsV2Flags(true),
-    }).catch(() => {});
+    await safeReply(interaction, buildTextReply(content, true)).catch(() => {});
   }
 }
 

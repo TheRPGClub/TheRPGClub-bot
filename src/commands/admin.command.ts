@@ -24,6 +24,7 @@ import {
   safeUpdate,
   sanitizeUserInput,
 } from "../functions/InteractionUtils.js";
+import { buildTextReply } from "../functions/ComponentsV2Utils.js";
 import {
   parseVoteDateInput,
 } from "../functions/VoteDateUtils.js";
@@ -77,16 +78,10 @@ export class Admin {
 
     try {
       await bot.initApplicationCommands();
-      await safeReply(interaction, {
-        content: "✅ Commands synchronized with Discord.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("✅ Commands synchronized with Discord.", true));
     } catch (err: any) {
       const msg = extractErrorMessage(err);
-      await safeReply(interaction, {
-        content: `Failed to sync commands: ${msg}`,
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply(`Failed to sync commands: ${msg}`, true));
     }
   }
 
@@ -116,38 +111,39 @@ export class Admin {
 
     const parsed = parseVoteDateInput(dateText);
     if (!parsed) {
-      await safeReply(interaction, {
-        content:
+      await safeReply(
+        interaction,
+        buildTextReply(
           "Invalid date format. Please use a recognizable date such as `YYYY-MM-DD`.",
-        flags: MessageFlags.Ephemeral,
-      });
+          true,
+        ),
+      );
       return;
     }
 
     try {
       const current = await BotVotingInfo.getCurrentRound();
       if (!current) {
-        await safeReply(interaction, {
-          content:
+        await safeReply(
+          interaction,
+          buildTextReply(
             "No voting round information is available. Create a round before setting the next vote date.",
-          flags: MessageFlags.Ephemeral,
-        });
+            true,
+          ),
+        );
         return;
       }
 
       await BotVotingInfo.updateNextVoteAt(current.roundNumber, parsed);
       const voteUnix = Math.floor(parsed.getTime() / 1000);
 
-      await safeReply(interaction, {
-        content:
-          `Next vote date updated to <t:${voteUnix}:D> (America/New_York).`,
-      });
+      await safeReply(
+        interaction,
+        buildTextReply(`Next vote date updated to <t:${voteUnix}:D> (America/New_York).`, false),
+      );
     } catch (err: any) {
       const msg = extractErrorMessage(err);
-      await safeReply(interaction, {
-        content: `Error updating next vote date: ${msg}`,
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply(`Error updating next vote date: ${msg}`, true));
     }
   }
 
@@ -407,9 +403,13 @@ export class Admin {
 
     if (!topic) {
       const response = buildAdminHelpResponse();
+      const errReply = buildTextReply(
+        "Sorry, I don't recognize that admin help topic. Showing the admin help menu.",
+        false,
+      );
       await safeUpdate(interaction, {
-        ...response,
-        content: "Sorry, I don't recognize that admin help topic. Showing the admin help menu.",
+        components: [...errReply.components, ...response.components],
+        flags: errReply.flags,
       });
       return;
     }

@@ -1,6 +1,6 @@
 import axios from "axios";
 
-interface TwitchAuthResponse {
+interface ITwitchAuthResponse {
   access_token: string;
   expires_in: number;
   token_type: string;
@@ -96,7 +96,7 @@ class IgdbService {
     }
 
     try {
-      const response = await axios.post<TwitchAuthResponse>(
+      const response = await axios.post<ITwitchAuthResponse>(
         `https://id.twitch.tv/oauth2/token?client_id=${this.clientId}` +
         `&client_secret=${this.clientSecret}&grant_type=client_credentials`,
       );

@@ -1,7 +1,7 @@
 import { DateTime } from "luxon";
 import type { CommandInteraction } from "discord.js";
-import { MessageFlags } from "discord.js";
 import { extractErrorMessage, safeReply } from "../../functions/InteractionUtils.js";
+import { buildTextReply } from "../../functions/ComponentsV2Utils.js";
 import { listNominationsForRound } from "../../classes/Nomination.js";
 import { getUpcomingNominationWindow } from "../../functions/NominationWindow.js";
 import { calculateNextVoteDateEt } from "../../functions/VoteDateUtils.js";
@@ -89,22 +89,16 @@ export async function handleVotingSetup(interaction: CommandInteraction): Promis
 
     if (adminChannel && (adminChannel as any).send) {
       await (adminChannel as any).send({ content: messageContent });
-      await safeReply(interaction, {
-        content: "Voting setup commands posted to #admin.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(
+        interaction,
+        buildTextReply("Voting setup commands posted to #admin.", true),
+      );
     } else {
-      await safeReply(interaction, {
-        content: messageContent,
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply(messageContent, true));
     }
   } catch (err: any) {
     const msg = extractErrorMessage(err);
-    await safeReply(interaction, {
-      content: `Could not generate vote commands: ${msg}`,
-      flags: MessageFlags.Ephemeral,
-    });
+    await safeReply(interaction, buildTextReply(`Could not generate vote commands: ${msg}`, true));
   }
 }
 
@@ -130,14 +124,15 @@ async function normalizeVotingTitles(
 
       const trimmed = response.trim();
       if (!trimmed) {
-        await safeReply(interaction, { content: "Title cannot be empty." });
+        await safeReply(interaction, buildTextReply("Title cannot be empty.", false));
         continue;
       }
 
       if (trimmed.length >= 39) {
-        await safeReply(interaction, {
-          content: `Title must be ${VOTING_TITLE_MAX_LEN} characters or fewer.`,
-        });
+        await safeReply(
+          interaction,
+          buildTextReply(`Title must be ${VOTING_TITLE_MAX_LEN} characters or fewer.`, false),
+        );
         continue;
       }
 

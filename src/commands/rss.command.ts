@@ -7,6 +7,7 @@ import {
   safeReply,
   sanitizeUserInput,
 } from "../functions/InteractionUtils.js";
+import { buildTextReply } from "../functions/ComponentsV2Utils.js";
 import { isAdmin } from "./admin.command.js";
 import { addFeed, listFeeds, removeFeed, updateFeed } from "../classes/RssFeed.js";
 import { buildRssHelpResponse } from "./help.command.js";
@@ -97,16 +98,12 @@ export class RssCommand {
         includeKeywords,
         excludeKeywords,
       );
-      await safeReply(interaction, {
-        content: `Added feed #${id} (${sanitizedName ?? "unnamed"}) -> <#${channelId}> (url=${url}).`,
-        flags: MessageFlags.Ephemeral,
-      });
+      const addedMsg =
+        `Added feed #${id} (${sanitizedName ?? "unnamed"}) -> <#${channelId}> (url=${url}).`;
+      await safeReply(interaction, buildTextReply(addedMsg, true));
     } catch (err: any) {
       const msg = extractErrorMessage(err);
-      await safeReply(interaction, {
-        content: `Failed to add feed: ${msg}`,
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply(`Failed to add feed: ${msg}`, true));
     }
   }
 
@@ -128,16 +125,11 @@ export class RssCommand {
 
     try {
       const removed = await removeFeed(feedId);
-      await safeReply(interaction, {
-        content: removed ? `Removed feed #${feedId}.` : `Feed #${feedId} not found.`,
-        flags: MessageFlags.Ephemeral,
-      });
+      const removeMsg = removed ? `Removed feed #${feedId}.` : `Feed #${feedId} not found.`;
+      await safeReply(interaction, buildTextReply(removeMsg, true));
     } catch (err: any) {
       const msg = extractErrorMessage(err);
-      await safeReply(interaction, {
-        content: `Failed to remove feed: ${msg}`,
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply(`Failed to remove feed: ${msg}`, true));
     }
   }
 
@@ -199,10 +191,13 @@ export class RssCommand {
       include === undefined &&
       exclude === undefined
     ) {
-      await safeReply(interaction, {
-        content: "Nothing to update. Provide at least one field (url/channel/include/exclude).",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(
+        interaction,
+        buildTextReply(
+          "Nothing to update. Provide at least one field (url/channel/include/exclude).",
+          true,
+        ),
+      );
       return;
     }
 
@@ -226,18 +221,13 @@ export class RssCommand {
         feedName: sanitizedName ?? undefined,
       });
 
-      await safeReply(interaction, {
-        content: updated
-          ? `Updated feed #${feedId}.`
-          : `Feed #${feedId} not found or no changes applied.`,
-        flags: MessageFlags.Ephemeral,
-      });
+      const editMsg = updated
+        ? `Updated feed #${feedId}.`
+        : `Feed #${feedId} not found or no changes applied.`;
+      await safeReply(interaction, buildTextReply(editMsg, true));
     } catch (err: any) {
       const msg = extractErrorMessage(err);
-      await safeReply(interaction, {
-        content: `Failed to edit feed: ${msg}`,
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply(`Failed to edit feed: ${msg}`, true));
     }
   }
 
@@ -251,7 +241,7 @@ export class RssCommand {
     try {
       const feeds = await listFeeds();
       if (!feeds.length) {
-        await safeReply(interaction, { content: "No feeds configured.", flags: MessageFlags.Ephemeral });
+        await safeReply(interaction, buildTextReply("No feeds configured.", true));
         return;
       }
 
@@ -262,16 +252,10 @@ export class RssCommand {
           (f.excludeKeywords.length ? ` exclude=[${f.excludeKeywords.join(", ")}]` : ""),
       );
 
-      await safeReply(interaction, {
-        content: lines.join("\n"),
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply(lines.join("\n"), true));
     } catch (err: any) {
       const msg = extractErrorMessage(err);
-      await safeReply(interaction, {
-        content: `Failed to list feeds: ${msg}`,
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply(`Failed to list feeds: ${msg}`, true));
     }
   }
 }

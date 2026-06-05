@@ -2,12 +2,12 @@ import {
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
-  MessageFlags,
   StringSelectMenuBuilder,
   type ButtonInteraction,
   type StringSelectMenuInteraction,
 } from "discord.js";
 import { safeDeferUpdate, safeReply, safeUpdate } from "../../functions/InteractionUtils.js";
+import { buildTextReply } from "../../functions/ComponentsV2Utils.js";
 
 export type IgdbSelectOption = { id: number; label: string; description?: string };
 
@@ -53,7 +53,7 @@ export function createIgdbSession(
   sessionId: string;
   components: ActionRowBuilder<any>[];
 } {
-  const sessionId = `igdb-${Date.now()}-${Math.floor(Math.random() * 100000)}`;
+  const sessionId = `igdb-${ownerId}`;
   const sorted = [...options].sort((a, b) => {
     const lenDiff = a.label.length - b.label.length;
     if (lenDiff !== 0) return lenDiff;
@@ -82,6 +82,7 @@ export function buildIgdbComponents(
   const hasOptions = pageOptions.length > 0;
 
   const select = new StringSelectMenuBuilder()
+    // eslint-disable-next-line local/custom-id-has-matching-handler
     .setCustomId(`igdb-select:${sessionId}:${page}`)
     .setPlaceholder("Select a game from IGDB")
     .addOptions(
@@ -123,6 +124,7 @@ export function buildIgdbComponents(
   if (hasOptions) {
     rows.push(new ActionRowBuilder<ButtonBuilder>().addComponents(
       new ButtonBuilder()
+        // eslint-disable-next-line local/custom-id-has-matching-handler
         .setCustomId(`${IGDB_FIRST_MATCH_PREFIX}:${sessionId}`)
         .setLabel("Import First Match")
         .setStyle(ButtonStyle.Primary),
@@ -148,18 +150,12 @@ export async function handleIgdbSelectInteraction(
   if (!sessionId) return false;
   const session = getSessionStore().get(sessionId);
   if (!session) {
-    await safeReply(interaction, {
-      content: "This selection session has expired.",
-      flags: MessageFlags.Ephemeral,
-    });
+    await safeReply(interaction, buildTextReply("This selection session has expired.", true));
     return true;
   }
 
   if (interaction.user.id !== session.ownerId) {
-    await safeReply(interaction, {
-      content: "This selection isn't for you.",
-      flags: MessageFlags.Ephemeral,
-    });
+    await safeReply(interaction, buildTextReply("This selection isn't for you.", true));
     return true;
   }
 
@@ -170,7 +166,7 @@ export async function handleIgdbSelectInteraction(
   if (value === "__igdb_none") {
     const message = session.emptyMessage ??
       "No IGDB matches found. Try Search a different title.";
-    await safeReply(interaction, { content: message, flags: MessageFlags.Ephemeral });
+    await safeReply(interaction, buildTextReply(message, true));
     return true;
   }
 
@@ -189,10 +185,7 @@ export async function handleIgdbSelectInteraction(
 
   const selected = resolveIgdbSelection(sessionId, page, value);
   if (!selected || selected.kind !== "select") {
-    await safeReply(interaction, {
-      content: "Invalid selection.",
-      flags: MessageFlags.Ephemeral,
-    });
+    await safeReply(interaction, buildTextReply("Invalid selection.", true));
     return true;
   }
 

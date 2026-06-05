@@ -1,13 +1,13 @@
 import {
   ApplicationCommandOptionType,
   AttachmentBuilder,
-  MessageFlags,
   type CommandInteraction,
 } from "discord.js";
 import { Discord, Guild, Slash, SlashChoice, SlashOption } from "discordx";
 import Game from "../classes/Game.js";
 import { type NominationKind, listNominationsForRound } from "../classes/Nomination.js";
 import { safeDeferReply, safeReply } from "../functions/InteractionUtils.js";
+import { buildTextReply } from "../functions/ComponentsV2Utils.js";
 import { getUpcomingNominationWindow } from "../functions/NominationWindow.js";
 import { isAdmin } from "./admin/admin-auth.utils.js";
 import { composeVoteImage, type VoteImageType } from "../services/collageGenerator.js";
@@ -84,37 +84,34 @@ export class GenerateVoteImageCommand {
     }
 
     if (!interaction.guildId) {
-      await safeReply(interaction, {
-        content: "This command is only available in a server.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply(
+        "This command is only available in a server.",
+        true,
+      ));
       return;
     }
 
     const voteKind = toVoteKind(voteType);
     if (!voteKind) {
-      await safeReply(interaction, {
-        content: "Please choose either GOTM or NR-GOTM.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("Please choose either GOTM or NR-GOTM.", true));
       return;
     }
 
     const defaultRound = round ?? (await getUpcomingNominationWindow()).targetRound;
     if (!Number.isInteger(defaultRound) || Number(defaultRound) <= 0) {
-      await safeReply(interaction, {
-        content: "No upcoming nomination round could be resolved from BOT_VOTING_INFO.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply(
+        "No upcoming nomination round could be resolved from BOT_VOTING_INFO.",
+        true,
+      ));
       return;
     }
 
     const roundNumber = Number(defaultRound);
     if (!tryAcquireLock(interaction.guildId, roundNumber, voteKind.label)) {
-      await safeReply(interaction, {
-        content: `Generation already in progress for [${voteKind.label}] Round ${roundNumber}. Try again shortly.`,
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply(
+        `Generation already in progress for [${voteKind.label}] Round ${roundNumber}. Try again shortly.`,
+        true,
+      ));
       return;
     }
 
@@ -136,10 +133,10 @@ export class GenerateVoteImageCommand {
 
       const nominations = await listNominationsForRound(voteKind.nominationKind, roundNumber);
       if (!nominations.length) {
-        await safeReply(interaction, {
-          content: `No nominations found for [${voteKind.label}] Round ${roundNumber}.`,
-          flags: MessageFlags.Ephemeral,
-        });
+        await safeReply(interaction, buildTextReply(
+          `No nominations found for [${voteKind.label}] Round ${roundNumber}.`,
+          true,
+        ));
         return;
       }
 
@@ -153,10 +150,10 @@ export class GenerateVoteImageCommand {
         return !game?.imageData;
       });
       if (missingBlobNomination) {
-        await safeReply(interaction, {
-          content: "One or more nominations are missing cover art blobs.",
-          flags: MessageFlags.Ephemeral,
-        });
+        await safeReply(interaction, buildTextReply(
+          "One or more nominations are missing cover art blobs.",
+          true,
+        ));
         return;
       }
 
@@ -180,7 +177,7 @@ export class GenerateVoteImageCommand {
       const attachment = new AttachmentBuilder(imageBuffer, { name: filename });
       const summary = `Generated [${voteKind.label}] Round ${roundNumber} from ${orderedNominations.length} nominations.`;
       try {
-        await safeReply(interaction, { content: summary, files: [attachment] });
+        await safeReply(interaction, { ...buildTextReply(summary, false), files: [attachment] });
       } catch (uploadErr) {
         console.error(
           formatStructuredLog({
@@ -192,10 +189,10 @@ export class GenerateVoteImageCommand {
             error: uploadErr instanceof Error ? uploadErr.message : String(uploadErr),
           }),
         );
-        await safeReply(interaction, {
-          content: "Image generation failed. Please try again.",
-          flags: MessageFlags.Ephemeral,
-        });
+        await safeReply(interaction, buildTextReply(
+          "Image generation failed. Please try again.",
+          true,
+        ));
         return;
       }
 
@@ -215,20 +212,20 @@ export class GenerateVoteImageCommand {
         lower.includes("unsupported image format") ||
         lower.includes("input buffer contains unsupported image format")
       ) {
-        await safeReply(interaction, {
-          content: "Failed to decode one or more cover images.",
-          flags: MessageFlags.Ephemeral,
-        });
+        await safeReply(interaction, buildTextReply(
+          "Failed to decode one or more cover images.",
+          true,
+        ));
       } else if (errorMessage === "cover_blob_missing") {
-        await safeReply(interaction, {
-          content: "One or more nominations are missing cover art blobs.",
-          flags: MessageFlags.Ephemeral,
-        });
+        await safeReply(interaction, buildTextReply(
+          "One or more nominations are missing cover art blobs.",
+          true,
+        ));
       } else {
-        await safeReply(interaction, {
-          content: "Image generation failed. Please try again.",
-          flags: MessageFlags.Ephemeral,
-        });
+        await safeReply(interaction, buildTextReply(
+          "Image generation failed. Please try again.",
+          true,
+        ));
       }
 
       console.error(formatStructuredLog({

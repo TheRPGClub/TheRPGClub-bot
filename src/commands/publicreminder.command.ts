@@ -7,6 +7,7 @@ import {
   safeReply,
   sanitizeUserInput,
 } from "../functions/InteractionUtils.js";
+import { buildTextReply } from "../functions/ComponentsV2Utils.js";
 import { isAdmin } from "./admin.command.js";
 import {
   createReminder,
@@ -102,40 +103,41 @@ export class PublicReminderCommand {
     }
 
     if (!parsedDateTime) {
-      await safeReply(interaction, {
-        content: `Could not parse the date and time: "${dateTimeString}". Please use formats like "1/1/2026" for date and "9:00 AM" or "15:30" for time.`,
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(
+        interaction,
+        buildTextReply(
+          `Could not parse the date and time: "${dateTimeString}". ` +
+            `Please use formats like "1/1/2026" for date and "9:00 AM" or "15:30" for time.`,
+          true,
+        ),
+      );
       return;
     }
 
     const parsedDate = parsedDateTime.toJSDate();
     if (parsedDate.getTime() <= Date.now()) {
-      await safeReply(interaction, {
-        content: "The reminder time must be in the future.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(
+        interaction,
+        buildTextReply("The reminder time must be in the future.", true),
+      );
       return;
     }
 
     if (typeof recurEvery === "number" && recurEvery > 0 && !recurUnit) {
-      await safeReply(interaction, {
-        content: "Please specify recurunit when recur is provided.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(
+        interaction,
+        buildTextReply("Please specify recurunit when recur is provided.", true),
+      );
       return;
     }
 
     if (recurEvery && recurEvery <= 0) {
-      await safeReply(interaction, {
-        content: "Recur must be a positive integer.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("Recur must be a positive integer.", true));
       return;
     }
 
     if (!message || message.trim().length === 0) {
-      await safeReply(interaction, { content: "Message cannot be empty.", flags: MessageFlags.Ephemeral });
+      await safeReply(interaction, buildTextReply("Message cannot be empty.", true));
       return;
     }
 
@@ -150,18 +152,13 @@ export class PublicReminderCommand {
       );
 
       const timestamp = Math.floor(parsedDate.getTime() / 1000);
-      await safeReply(interaction, {
-        content:
-          `Created reminder #${reminder.reminderId} for <#${channel.id}> at <t:${timestamp}:F>.` +
-          `${recurEvery && recurUnit ? ` (repeats every ${recurEvery} ${recurUnit})` : ""}`,
-        flags: MessageFlags.Ephemeral,
-      });
+      const createdMsg =
+        `Created reminder #${reminder.reminderId} for <#${channel.id}> at <t:${timestamp}:F>.` +
+        `${recurEvery && recurUnit ? ` (repeats every ${recurEvery} ${recurUnit})` : ""}`;
+      await safeReply(interaction, buildTextReply(createdMsg, true));
     } catch (err: any) {
       const msg = extractErrorMessage(err);
-      await safeReply(interaction, {
-        content: `Failed to create reminder: ${msg}`,
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply(`Failed to create reminder: ${msg}`, true));
     }
   }
 
@@ -175,7 +172,10 @@ export class PublicReminderCommand {
     try {
       const reminders = await listUpcomingReminders(20);
       if (!reminders.length) {
-        await safeReply(interaction, { content: "No public reminders scheduled.", flags: MessageFlags.Ephemeral });
+        await safeReply(
+          interaction,
+          buildTextReply("No public reminders scheduled.", true),
+        );
         return;
       }
 
@@ -186,16 +186,10 @@ export class PublicReminderCommand {
         return `#${r.reminderId}: <#${r.channelId}> at <t:${timestamp}:F>${recur} - ${r.message}`;
       });
 
-      await safeReply(interaction, {
-        content: lines.join("\n"),
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply(lines.join("\n"), true));
     } catch (err: any) {
       const msg = extractErrorMessage(err);
-      await safeReply(interaction, {
-        content: `Failed to list reminders: ${msg}`,
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply(`Failed to list reminders: ${msg}`, true));
     }
   }
 
@@ -217,16 +211,13 @@ export class PublicReminderCommand {
 
     try {
       const removed = await deleteReminder(reminderId);
-      await safeReply(interaction, {
-        content: removed ? `Deleted reminder #${reminderId}.` : `Reminder #${reminderId} not found.`,
-        flags: MessageFlags.Ephemeral,
-      });
+      const deleteMsg = removed
+        ? `Deleted reminder #${reminderId}.`
+        : `Reminder #${reminderId} not found.`;
+      await safeReply(interaction, buildTextReply(deleteMsg, true));
     } catch (err: any) {
       const msg = extractErrorMessage(err);
-      await safeReply(interaction, {
-        content: `Failed to delete reminder: ${msg}`,
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply(`Failed to delete reminder: ${msg}`, true));
     }
   }
 }

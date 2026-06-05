@@ -1,6 +1,7 @@
-import { type CommandInteraction, ApplicationCommandOptionType, MessageFlags } from "discord.js";
+import { type CommandInteraction, ApplicationCommandOptionType } from "discord.js";
 import { Discord, Slash, SlashOption } from "discordx";
 import { extractErrorMessage, safeDeferReply, safeReply } from "../functions/InteractionUtils.js";
+import { buildTextReply } from "../functions/ComponentsV2Utils.js";
 import BotVotingInfo from "../classes/BotVotingInfo.js";
 import Gotm from "../classes/Gotm.js";
 import NrGotm from "../classes/NrGotm.js";
@@ -32,10 +33,7 @@ export class CurrentRoundCommand {
     try {
       const current = await BotVotingInfo.getCurrentRound();
       if (!current) {
-        await safeReply(interaction, {
-          content: "No voting round information is available.",
-          flags: MessageFlags.Ephemeral,
-        });
+        await safeReply(interaction, buildTextReply("No voting round information is available.", true));
         return;
       }
 
@@ -95,10 +93,10 @@ export class CurrentRoundCommand {
       }
     } catch (err: any) {
       const msg = extractErrorMessage(err);
-      await safeReply(interaction, {
-        content: `Error fetching current round information: ${msg}`,
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply(
+        `Error fetching current round information: ${msg}`,
+        true,
+      ));
     }
   }
 }

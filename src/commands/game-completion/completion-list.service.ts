@@ -20,12 +20,13 @@ import {
 } from "../profile.command.js";
 import { formatPlatformDisplayName } from "../../functions/PlatformDisplay.js";
 import { safeReply, safeUpdate } from "../../functions/InteractionUtils.js";
+import { buildTextReply } from "../../functions/ComponentsV2Utils.js";
 import { renderUsernameWithEmoji } from "../../services/UserEmojiService.js";
 import { COMPONENTS_V2_FLAG } from "../../config/flags.js";
 import {
   buildJournalSelectRow,
   buildUserHeaderContainer,
-  type JournalSelectEntry,
+  type IJournalSelectEntry,
 } from "../../functions/uiComponents.js";
 
 function buildCompletionV2Flags(ephemeral: boolean): number {
@@ -80,6 +81,7 @@ export async function renderCompletionLeaderboard(
 
   const select = new StringSelectMenuBuilder()
     .setCustomId(
+      // eslint-disable-next-line local/custom-id-has-matching-handler
       `comp-leaderboard-select${trimmedQuery ? `:${trimmedQuery.slice(0, 50)}` : ""}`,
     )
     .setPlaceholder("View completions for a member")
@@ -201,11 +203,7 @@ export async function renderSelectionPage(
       mode === "edit"
         ? "You have no completions to edit matching your filters."
         : "You have no completions to delete matching your filters.";
-    if (interaction.isMessageComponent() && !interaction.deferred && !interaction.replied) {
-      await safeUpdate(interaction, { content: msg, flags: MessageFlags.Ephemeral });
-    } else {
-      await safeReply(interaction, { content: msg, flags: MessageFlags.Ephemeral });
-    }
+    await safeReply(interaction, buildTextReply(msg, true));
     return;
   }
 
@@ -241,11 +239,7 @@ export async function renderSelectionPage(
   const allComponents = [header, ...containers, selectRow, ...paginationRows];
 
   if (interaction.isMessageComponent()) {
-    if (interaction.deferred || interaction.replied) {
-      await safeReply(interaction, { components: allComponents, flags: COMPONENTS_V2_FLAG });
-    } else {
-      await safeUpdate(interaction, { components: allComponents, flags: COMPONENTS_V2_FLAG });
-    }
+    await safeUpdate(interaction, { components: allComponents, flags: COMPONENTS_V2_FLAG });
   } else {
     await safeReply(interaction, {
       components: allComponents,
@@ -272,6 +266,7 @@ function buildYearJumpRow(
   });
 
   const select = new StringSelectMenuBuilder()
+    // eslint-disable-next-line local/custom-id-has-matching-handler
     .setCustomId(`comp-year-select:${userId}`)
     .setPlaceholder("Jump to year")
     .addOptions(options);
@@ -335,7 +330,7 @@ async function buildCompletionComponents(
   pageCompletions: any[];
   sortedYears: string[];
   yearCounts: Record<string, number>;
-  journalEntries: JournalSelectEntry[];
+  journalEntries: IJournalSelectEntry[];
 } | null> {
   const total = await Member.countCompletions(userId, year, query);
   if (total === 0) return null;
@@ -493,7 +488,7 @@ async function buildCompletionComponents(
     ),
   );
 
-  const journalEntries: JournalSelectEntry[] = pageCompletions
+  const journalEntries: IJournalSelectEntry[] = pageCompletions
     .filter((c) => {
       const s = journalByGameId.get(c.gameId);
       return (s?.journalCount ?? 0) > 1;

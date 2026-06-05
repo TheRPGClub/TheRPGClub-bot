@@ -38,6 +38,7 @@ import {
   parseCollectionEntryAutocompleteValue,
 } from "./collection-autocomplete.utils.js";
 import { resolveCollectionGameForAdd } from "./collection-game-resolve.utils.js";
+import { buildTextReply } from "../../functions/ComponentsV2Utils.js";
 
 @Discord()
 @SlashGroup("collection")
@@ -119,16 +120,19 @@ export class CollectionCrudCommand {
 
             const platformLabel = created.platformName ?? `Platform #${platformId}`;
             await safeReply(selectionInteraction, {
-              content:
+              ...buildTextReply(
                 `Imported and added **${created.title}** (${platformLabel}, ` +
                 `${created.ownershipType}) to your collection.`,
-              flags: MessageFlags.Ephemeral,
+                true,
+              ),
               __forceFollowUp: true,
             });
           } catch (err: any) {
             await safeReply(selectionInteraction, {
-              content: err?.message ?? "Failed to import from IGDB and add collection entry.",
-              flags: MessageFlags.Ephemeral,
+              ...buildTextReply(
+                err?.message ?? "Failed to import from IGDB and add collection entry.",
+                true,
+              ),
               __forceFollowUp: true,
             });
           }

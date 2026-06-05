@@ -5,7 +5,6 @@ import {
   StringSelectMenuBuilder,
   StringSelectMenuInteraction,
   ApplicationCommandOptionType,
-  MessageFlags,
   ButtonBuilder,
   ButtonStyle,
   ButtonInteraction,
@@ -31,7 +30,7 @@ import {
   safeUpdate,
 } from "../functions/InteractionUtils.js";
 import { buildProfileViewPayload } from "./profile.command.js";
-import { buildComponentsV2Flags } from "../functions/ComponentsV2Utils.js";
+import { buildComponentsV2Flags, buildTextReply } from "../functions/ComponentsV2Utils.js";
 import { shouldRenderPrevNextButtons } from "../functions/PaginationUtils.js";
 
 const MAX_OPTIONS = 25;
@@ -218,10 +217,7 @@ async function renderMpInfoPage(
   const activeMembers = await filterActiveGuildMembers(filtered, interaction.guild);
 
   if (!activeMembers.length) {
-    await safeReply(interaction as any, {
-      content: "No members match the selected platforms.",
-      flags: ephemeralFlag(ephemeral),
-    });
+    await safeReply(interaction as any, buildTextReply("No members match the selected platforms.", ephemeral));
     return;
   }
 
@@ -314,10 +310,7 @@ export class MultiplayerInfoCommand {
 
     const anyIncluded = filters.steam || filters.xbl || filters.psn || filters.nsw;
     if (!anyIncluded) {
-      await safeReply(interaction, {
-        content: "Please enable at least one platform filter.",
-        flags: ephemeralFlag(ephemeral),
-      });
+      await safeReply(interaction, buildTextReply("Please enable at least one platform filter.", ephemeral));
       return;
     }
 
@@ -328,19 +321,13 @@ export class MultiplayerInfoCommand {
   async handleProfileSelect(interaction: StringSelectMenuInteraction): Promise<void> {
     const [, ownerId, filterKey, pageRaw] = interaction.customId.split(":");
     if (interaction.user.id !== ownerId) {
-      await safeReply(interaction, {
-        content: "This menu isn't for you.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("This menu isn't for you.", true));
       return;
     }
 
     const userId = interaction.values?.[0];
     if (!userId) {
-      await safeReply(interaction, {
-        content: "Could not determine which member to load.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("Could not determine which member to load.", true));
       return;
     }
     await safeDeferUpdate(interaction);
@@ -400,10 +387,7 @@ export class MultiplayerInfoCommand {
   async handleBackToList(interaction: ButtonInteraction): Promise<void> {
     const [, ownerId, filterKey, pageRaw] = interaction.customId.split(":");
     if (interaction.user.id !== ownerId) {
-      await safeReply(interaction, {
-        content: "This menu isn't for you.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("This menu isn't for you.", true));
       return;
     }
 
@@ -418,10 +402,7 @@ export class MultiplayerInfoCommand {
   async handlePageButton(interaction: ButtonInteraction): Promise<void> {
     const [, ownerId, filterKey, pageRaw, dir] = interaction.customId.split(":");
     if (interaction.user.id !== ownerId) {
-      await safeReply(interaction, {
-        content: "This menu isn't for you.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("This menu isn't for you.", true));
       return;
     }
 

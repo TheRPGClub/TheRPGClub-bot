@@ -1,12 +1,12 @@
 import {
   ApplicationCommandOptionType,
   CommandInteraction,
-  MessageFlags,
 } from "discord.js";
 import { Discord, Slash, SlashGroup, SlashOption } from "discordx";
 import { removeThreadGameLink, setThreadGameLink } from "../classes/Thread.js";
 import { REGULARS_ROLE_ID } from "../config/roles.js";
 import { safeReply, sanitizeUserInput } from "../functions/InteractionUtils.js";
+import { buildTextReply } from "../functions/ComponentsV2Utils.js";
 
 @Discord()
 @SlashGroup({ description: "Thread commands", name: "thread" })
@@ -32,18 +32,12 @@ export class ThreadAdminCommands {
   ): Promise<void> {
     threadId = sanitizeUserInput(threadId, { preserveNewlines: false });
     if (!this.hasRegularsRole(interaction)) {
-      await safeReply(interaction, {
-        content: "Access denied. Command requires the Regulars role.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("Access denied. Command requires the Regulars role.", true));
       return;
     }
 
     await setThreadGameLink(threadId, gamedbGameId);
-    await safeReply(interaction, {
-      content: `Linked thread ${threadId} to GameDB game ${gamedbGameId}.`,
-      flags: MessageFlags.Ephemeral,
-    });
+    await safeReply(interaction, buildTextReply(`Linked thread ${threadId} to GameDB game ${gamedbGameId}.`, true));
   }
 
   @Slash({ description: "Unlink a thread from a GameDB game id", name: "unlink" })
@@ -66,20 +60,17 @@ export class ThreadAdminCommands {
   ): Promise<void> {
     threadId = sanitizeUserInput(threadId, { preserveNewlines: false });
     if (!this.hasRegularsRole(interaction)) {
-      await safeReply(interaction, {
-        content: "Access denied. Command requires the Regulars role.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("Access denied. Command requires the Regulars role.", true));
       return;
     }
 
     const removed = await removeThreadGameLink(threadId, gamedbGameId);
     const target = gamedbGameId ? `GameDB game ${gamedbGameId}` : "all GameDB links";
     const suffix = removed === 0 ? " (no matching links were found)." : ".";
-    await safeReply(interaction, {
-      content: `Unlinked ${target} from thread ${threadId}${suffix}`,
-      flags: MessageFlags.Ephemeral,
-    });
+    await safeReply(interaction, buildTextReply(
+      `Unlinked ${target} from thread ${threadId}${suffix}`,
+      true,
+    ));
   }
 
   private hasRegularsRole(interaction: CommandInteraction): boolean {

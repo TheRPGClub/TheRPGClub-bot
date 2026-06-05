@@ -7,7 +7,7 @@ import {
   ButtonStyle,
   CommandInteraction,
   Message,
-  MessageFlags,
+
   ModalSubmitInteraction,
   StringSelectMenuBuilder,
   StringSelectMenuInteraction,
@@ -47,7 +47,7 @@ import {
 import { formatGameTitleWithYear } from "../functions/GameTitleAutocompleteUtils.js";
 import { renderUsernameWithEmoji } from "../services/UserEmojiService.js";
 import { buildJournalView } from "../functions/journalView.js";
-import { buildComponentsV2Flags } from "../functions/ComponentsV2Utils.js";
+import { buildComponentsV2Flags, buildTextReply } from "../functions/ComponentsV2Utils.js";
 import { buildUserHeaderContainer } from "../functions/uiComponents.js";
 import {
   GJ_CLOSE_PREFIX,
@@ -208,6 +208,7 @@ function buildListSelectRow(
   }));
 
   const select = new StringSelectMenuBuilder()
+    // eslint-disable-next-line local/custom-id-has-matching-handler
     .setCustomId(`${GJ_LIST_SELECT_PREFIX}:${callerId}:${targetUserId}:${page}`)
     .setPlaceholder("Select a game to read its journal")
     .addOptions(options);
@@ -227,6 +228,7 @@ function buildListPageRow(
   if (page > 0) {
     row.addComponents(
       new ButtonBuilder()
+        // eslint-disable-next-line local/custom-id-has-matching-handler
         .setCustomId(`${GJ_LIST_PAGE_PREFIX}:${callerId}:${targetUserId}:${page - 1}`)
         .setLabel("Previous")
         .setStyle(ButtonStyle.Secondary),
@@ -235,6 +237,7 @@ function buildListPageRow(
   if (page < totalPages - 1) {
     row.addComponents(
       new ButtonBuilder()
+        // eslint-disable-next-line local/custom-id-has-matching-handler
         .setCustomId(`${GJ_LIST_PAGE_PREFIX}:${callerId}:${targetUserId}:${page + 1}`)
         .setLabel("Next")
         .setStyle(ButtonStyle.Secondary),
@@ -305,6 +308,7 @@ function buildAllSelectRow(
     description: `${s.gameCount} ${gameLabel(s.gameCount)}`,
   }));
   const select = new StringSelectMenuBuilder()
+    // eslint-disable-next-line local/custom-id-has-matching-handler
     .setCustomId(`${GJ_ALL_SELECT_PREFIX}:${callerId}:${page}`)
     .setPlaceholder("Select a member to view their journals")
     .addOptions(options);
@@ -321,6 +325,7 @@ function buildAllPageRow(
   if (page > 0) {
     row.addComponents(
       new ButtonBuilder()
+        // eslint-disable-next-line local/custom-id-has-matching-handler
         .setCustomId(`${GJ_ALL_PAGE_PREFIX}:${callerId}:${page - 1}`)
         .setLabel("Previous")
         .setStyle(ButtonStyle.Secondary),
@@ -329,6 +334,7 @@ function buildAllPageRow(
   if (page < totalPages - 1) {
     row.addComponents(
       new ButtonBuilder()
+        // eslint-disable-next-line local/custom-id-has-matching-handler
         .setCustomId(`${GJ_ALL_PAGE_PREFIX}:${callerId}:${page + 1}`)
         .setLabel("Next")
         .setStyle(ButtonStyle.Secondary),
@@ -498,10 +504,7 @@ export class GameJournalCommand {
         .trim()
         .slice(0, SEARCH_QUERY_MAX_LENGTH);
       if (!cleanQuery) {
-        await safeReply(interaction, {
-          content: "Please enter a search term.",
-          flags: MessageFlags.Ephemeral,
-        });
+        await safeReply(interaction, buildTextReply("Please enter a search term.", true));
         return;
       }
       const targetUserId = member?.id ?? "0";
@@ -552,10 +555,9 @@ export class GameJournalCommand {
     if (all === true && member === undefined) {
       const summaries = await Member.getAllJournalUsers();
       if (!summaries.length) {
-        await safeReply(interaction, {
-          content: "No members are currently using Game Journals.",
-          flags,
-        });
+        await safeReply(
+          interaction, buildTextReply("No members are currently using Game Journals.", ephemeral),
+        );
         return;
       }
       const totalPages = Math.max(1, Math.ceil(summaries.length / ALL_PAGE_SIZE));
@@ -576,10 +578,7 @@ export class GameJournalCommand {
 
     if (!entries.length) {
       const name = target.displayName ?? target.username;
-      await safeReply(interaction, {
-        content: `${name} has no game journals.`,
-        flags,
-      });
+      await safeReply(interaction, buildTextReply(`${name} has no game journals.`, ephemeral));
       return;
     }
 
@@ -601,10 +600,7 @@ export class GameJournalCommand {
   async handleListSelect(interaction: StringSelectMenuInteraction): Promise<void> {
     const [, callerId, targetUserId] = interaction.customId.split(":");
     if (interaction.user.id !== callerId) {
-      await safeReply(interaction, {
-        content: "This journal list isn't yours to navigate.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("This journal list isn't yours to navigate.", true));
       return;
     }
 
@@ -635,10 +631,7 @@ export class GameJournalCommand {
   async handleListPage(interaction: ButtonInteraction): Promise<void> {
     const [, callerId, targetUserId, pageRaw] = interaction.customId.split(":");
     if (interaction.user.id !== callerId) {
-      await safeReply(interaction, {
-        content: "This journal list isn't yours to navigate.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("This journal list isn't yours to navigate.", true));
       return;
     }
 
@@ -668,10 +661,7 @@ export class GameJournalCommand {
   async handleAllSelect(interaction: StringSelectMenuInteraction): Promise<void> {
     const [, callerId] = interaction.customId.split(":");
     if (interaction.user.id !== callerId) {
-      await safeReply(interaction, {
-        content: "This member list isn't yours to navigate.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("This member list isn't yours to navigate.", true));
       return;
     }
 
@@ -708,10 +698,7 @@ export class GameJournalCommand {
   async handleAllPage(interaction: ButtonInteraction): Promise<void> {
     const [, callerId, pageRaw] = interaction.customId.split(":");
     if (interaction.user.id !== callerId) {
-      await safeReply(interaction, {
-        content: "This member list isn't yours to navigate.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("This member list isn't yours to navigate.", true));
       return;
     }
 
@@ -737,10 +724,7 @@ export class GameJournalCommand {
     const parts = interaction.customId.split(":");
     const [, callerId, targetUserId, gameIdStr, pageRaw, ...queryParts] = parts;
     if (interaction.user.id !== callerId) {
-      await safeReply(interaction, {
-        content: "This search isn't yours to navigate.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("This search isn't yours to navigate.", true));
       return;
     }
 
@@ -802,10 +786,7 @@ export class GameJournalCommand {
   async handleViewPage(interaction: ButtonInteraction): Promise<void> {
     const [, callerId, targetUserId, gameIdRaw, pageRaw] = interaction.customId.split(":");
     if (interaction.user.id !== callerId) {
-      await safeReply(interaction, {
-        content: "This journal isn't yours to navigate.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("This journal isn't yours to navigate.", true));
       return;
     }
 
@@ -968,7 +949,7 @@ export class GameJournalCommand {
     const entryId = Number(interaction.values[0]);
     const entry = await Member.getGameJournalEntryForUser(ownerId, entryId);
     if (!entry || entry.gameId !== Number(gameIdRaw)) {
-      await safeReply(interaction, { content: "That journal entry was not found." });
+      await safeReply(interaction, buildTextReply("That journal entry was not found.", false));
       return;
     }
     const entryTitle = entry.title?.trim() ? entry.title.trim() : `Entry #${entry.entryNumber}`;
@@ -1011,7 +992,7 @@ export class GameJournalCommand {
     if (action === "yes") {
       const removed = await Member.deleteGameJournalEntry(ownerId, Number(entryIdRaw));
       if (!removed) {
-        await safeReply(interaction, { content: "That journal entry was not found." });
+        await safeReply(interaction, buildTextReply("That journal entry was not found.", false));
         return;
       }
     }
@@ -1033,7 +1014,7 @@ export class GameJournalCommand {
   async handleGjHmenuAddModal(interaction: ModalSubmitInteraction): Promise<void> {
     const [, ownerId, gameIdRaw] = interaction.customId.split(":");
     if (interaction.user.id !== ownerId) {
-      await safeReply(interaction, { content: "Only the owner can submit journal entries." });
+      await safeReply(interaction, buildTextReply("Only the owner can submit journal entries.", false));
       return;
     }
     const title = sanitizeUserInput(
@@ -1062,14 +1043,14 @@ export class GameJournalCommand {
   async handleGjHmenuEditModal(interaction: ModalSubmitInteraction): Promise<void> {
     const [, ownerId, gameIdRaw, entryIdRaw] = interaction.customId.split(":");
     if (interaction.user.id !== ownerId) {
-      await safeReply(interaction, { content: "Only the owner can edit journal entries." });
+      await safeReply(interaction, buildTextReply("Only the owner can edit journal entries.", false));
       return;
     }
     const gameId = Number(gameIdRaw);
     const entryId = Number(entryIdRaw);
     const existing = await Member.getGameJournalEntryForUser(ownerId, entryId);
     if (!existing || existing.gameId !== gameId) {
-      await safeReply(interaction, { content: "That journal entry was not found." });
+      await safeReply(interaction, buildTextReply("That journal entry was not found.", false));
       return;
     }
     const title = sanitizeUserInput(
@@ -1096,10 +1077,10 @@ export class GameJournalCommand {
   async handlePublicClose(interaction: ButtonInteraction): Promise<void> {
     const [, callerId] = interaction.customId.split(":");
     if (interaction.user.id !== callerId) {
-      await safeReply(interaction, {
-        content: "Only the person who opened this journal can close it.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(
+        interaction,
+        buildTextReply("Only the person who opened this journal can close it.", true),
+      );
       return;
     }
     await safeDeferUpdate(interaction);

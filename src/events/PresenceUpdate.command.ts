@@ -16,6 +16,7 @@ import PresencePromptHistory from "../classes/PresencePromptHistory.js";
 import UserActivityIcon from "../classes/UserActivityIcon.js";
 import { igdbService } from "../services/IGDB/IgdbService.js";
 import { safeReply, safeUpdate } from "../functions/InteractionUtils.js";
+import { buildTextReply } from "../functions/ComponentsV2Utils.js";
 import { PRESENCE_PROMPT_CHANNEL_ID } from "../config/channels.js";
 
 const YES_PREFIX = "presence-np-yes";
@@ -75,18 +76,22 @@ async function resolvePresenceGame(
 
 function buildPromptButtons(sessionId: string): ActionRowBuilder<ButtonBuilder> {
   const yes = new ButtonBuilder()
+    // eslint-disable-next-line local/stable-custom-id
     .setCustomId(`${YES_PREFIX}:${sessionId}`)
     .setLabel("Yes")
     .setStyle(ButtonStyle.Success);
   const no = new ButtonBuilder()
+    // eslint-disable-next-line local/stable-custom-id
     .setCustomId(`${NO_PREFIX}:${sessionId}`)
     .setLabel("No")
     .setStyle(ButtonStyle.Secondary);
   const optOutGame = new ButtonBuilder()
+    // eslint-disable-next-line local/stable-custom-id
     .setCustomId(`${OPT_OUT_GAME_PREFIX}:${sessionId}`)
     .setLabel("Don't ask again for this game")
     .setStyle(ButtonStyle.Secondary);
   const optOutAll = new ButtonBuilder()
+    // eslint-disable-next-line local/stable-custom-id
     .setCustomId(`${OPT_OUT_ALL_PREFIX}:${sessionId}`)
     .setLabel("Don't ask again for any game")
     .setStyle(ButtonStyle.Danger);
@@ -190,22 +195,17 @@ export class PresenceUpdate {
     }
   }
 
+  // eslint-disable-next-line local/stable-custom-id
   @ButtonComponent({ id: /^presence-np-yes:.+$/ })
   async handlePresenceYes(interaction: ButtonInteraction): Promise<void> {
     const sessionId = interaction.customId.replace(`${YES_PREFIX}:`, "");
     const session = presencePromptSessions.get(sessionId);
     if (!session) {
-      await safeReply(interaction, {
-        content: "That prompt has expired.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("That prompt has expired.", true));
       return;
     }
     if (interaction.user.id !== session.userId) {
-      await safeReply(interaction, {
-        content: "This prompt isn't for you.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("This prompt isn't for you.", true));
       return;
     }
 
@@ -252,22 +252,17 @@ export class PresenceUpdate {
     }
   }
 
+  // eslint-disable-next-line local/stable-custom-id
   @ButtonComponent({ id: /^presence-np-no:.+$/ })
   async handlePresenceNo(interaction: ButtonInteraction): Promise<void> {
     const sessionId = interaction.customId.replace(`${NO_PREFIX}:`, "");
     const session = presencePromptSessions.get(sessionId);
     if (!session) {
-      await safeReply(interaction, {
-        content: "That prompt has expired.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("That prompt has expired.", true));
       return;
     }
     if (interaction.user.id !== session.userId) {
-      await safeReply(interaction, {
-        content: "This prompt isn't for you.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await safeReply(interaction, buildTextReply("This prompt isn't for you.", true));
       return;
     }
 

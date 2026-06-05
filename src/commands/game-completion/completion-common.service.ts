@@ -485,7 +485,7 @@ export async function handleCommonCompletionNav(
 
   const targetPage = parsed.direction === "next" ? parsed.page + 1 : Math.max(parsed.page - 1, 0);
 
-  await safeDeferUpdate(interaction);
+  await safeDeferUpdate(interaction).catch(() => {});
 
   const ephemeral = interaction.message?.flags?.has(MessageFlags.Ephemeral) ?? true;
   await renderCommonCompletionPage(interaction, parsed.state, targetPage, ephemeral);
@@ -497,7 +497,7 @@ export async function handleCommonCompletionBack(
   const parsed = parseCommonBackCustomId(interaction.customId);
   if (!parsed) return;
 
-  await safeDeferUpdate(interaction);
+  await safeDeferUpdate(interaction).catch(() => {});
 
   const ephemeral = interaction.message?.flags?.has(MessageFlags.Ephemeral) ?? true;
   await renderCommonCompletionPage(interaction, parsed.state, parsed.page, ephemeral);

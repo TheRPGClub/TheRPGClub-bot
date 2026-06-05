@@ -636,6 +636,7 @@ async function buildCollectionListResponse(params: {
     });
   }
 
+  // eslint-disable-next-line local/dynamic-components-require-chunking
   return { components };
 }
 

@@ -1,7 +1,7 @@
 import { type StringSelectMenuInteraction } from "discord.js";
 import Member from "../../classes/Member.js";
 import { safeReply } from "../../functions/InteractionUtils.js";
-import { buildComponentsV2Flags, buildTextContainer } from "../../functions/ComponentsV2Utils.js";
+import { buildTextReply } from "../../functions/ComponentsV2Utils.js";
 import { COMPONENTS_V2_FLAG } from "../../config/flags.js";
 
 /**
@@ -12,35 +12,26 @@ export async function handleCompletionDeleteMenu(
 ): Promise<void> {
   const [, ownerId] = interaction.customId.split(":");
   if (interaction.user.id !== ownerId) {
-    await safeReply(interaction, {
-      content: "This delete prompt isn't for you.",
-      flags: buildComponentsV2Flags(true),
-    });
+    await safeReply(interaction, buildTextReply("This delete prompt isn't for you.", true));
     return;
   }
 
   const completionId = Number(interaction.values[0]);
   if (!Number.isInteger(completionId) || completionId <= 0) {
-    await safeReply(interaction, {
-      content: "Invalid selection.",
-      flags: buildComponentsV2Flags(true),
-    });
+    await safeReply(interaction, buildTextReply("Invalid selection.", true));
     return;
   }
 
   const ok = await Member.deleteCompletion(ownerId, completionId);
   if (!ok) {
-    await safeReply(interaction, {
-      content: "Completion not found or could not be deleted.",
-      flags: buildComponentsV2Flags(true),
-    });
+    await safeReply(
+      interaction,
+      buildTextReply("Completion not found or could not be deleted.", true),
+    );
     return;
   }
 
-  await safeReply(interaction, {
-    content: `Deleted completion #${completionId}.`,
-    flags: buildComponentsV2Flags(true),
-  });
+  await safeReply(interaction, buildTextReply(`Deleted completion #${completionId}.`, true));
 
   try {
     await interaction.message.edit({
