@@ -338,20 +338,19 @@ async function performAutoAcceptAll(
     return stats;
   }
 
-  const addLog = async (line: string, processed: number): Promise<void> => {
+  let logged = 0;
+  const addLog = async (line: string): Promise<void> => {
+    logged += 1;
     stats.logs.push(line);
     if (onProgress) {
-      await onProgress(line, processed);
+      await onProgress(line, logged);
     }
   };
-
-  let processed = 0;
 
   for (const game of candidates) {
     if (shouldStop?.()) {
       break;
     }
-    processed += 1;
 
     if (!game.igdbId) {
       stats.images.skipped++;
@@ -371,7 +370,6 @@ async function performAutoAcceptAll(
       stats.releases.failed++;
       await addLog(
         `❌ Failed **${game.title}**: IGDB fetch error: ${err?.message ?? String(err)}`,
-        processed,
       );
       if (shouldStop?.()) break;
       await new Promise((resolve) => setTimeout(resolve, 1000));
@@ -468,7 +466,7 @@ async function performAutoAcceptAll(
       const parts: string[] = [];
       if (updates.length) parts.push(`✅ Updated: ${updates.join(", ")}`);
       if (failures.length) parts.push(`❌ Failed: ${failures.join("; ")}`);
-      await addLog(`**${game.title}**: ${parts.join(" | ")}`, processed);
+      await addLog(`**${game.title}**: ${parts.join(" | ")}`);
     }
 
     if (shouldStop?.()) break;
