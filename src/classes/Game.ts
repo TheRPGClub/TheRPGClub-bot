@@ -52,6 +52,7 @@ export interface IGameWithPlatforms extends IGame {
 
 export interface IGameSearchResult extends IGameWithPlatforms {
   upcomingReleaseDate: Date | null;
+  upcomingReleasePlatforms: string[];
 }
 
 export interface IGameAutocompleteResult {
@@ -1860,18 +1861,16 @@ export default class Game {
 
       const filterClauses: string[] = [];
       if (filters.upcomingRelease) {
-        filterClauses.push(
-          "GAME_ID IN (SELECT DISTINCT GAME_ID FROM GAMEDB_RELEASES WHERE RELEASE_DATE > SYSDATE)",
-        );
+        filterClauses.push("u.UPCOMING_DATE IS NOT NULL");
       }
       if (filters.platformId) {
         filterClauses.push(
-          "GAME_ID IN (SELECT GAME_ID FROM GAMEDB_GAME_PLATFORMS WHERE PLATFORM_ID = :filterPlatformId)",
+          "g.GAME_ID IN (SELECT GAME_ID FROM GAMEDB_GAME_PLATFORMS WHERE PLATFORM_ID = :filterPlatformId)",
         );
         binds["filterPlatformId"] = filters.platformId;
       }
       if (filters.year) {
-        filterClauses.push("EXTRACT(YEAR FROM INITIAL_RELEASE_DATE) = :filterYear");
+        filterClauses.push("EXTRACT(YEAR FROM g.INITIAL_RELEASE_DATE) = :filterYear");
         binds["filterYear"] = filters.year;
       }
 
@@ -1895,14 +1894,28 @@ export default class Game {
         CREATED_AT: Date;
         UPDATED_AT: Date;
         UPCOMING_RELEASE_DATE: Date | null;
+        UPCOMING_PLATFORMS: string | null;
       }>(
-        `SELECT g.GAME_ID, g.TITLE, g.DESCRIPTION, g.IGDB_ID, g.SLUG, g.TOTAL_RATING,
-                g.IGDB_URL, g.FEATURED_VIDEO_URL, g.INITIAL_RELEASE_DATE, g.CREATED_AT, g.UPDATED_AT,
-                (SELECT MIN(r.RELEASE_DATE) FROM GAMEDB_RELEASES r
-                  WHERE r.GAME_ID = g.GAME_ID AND r.RELEASE_DATE > SYSDATE) AS UPCOMING_RELEASE_DATE
+        `WITH upcoming AS (
+           SELECT GAME_ID, MIN(RELEASE_DATE) AS UPCOMING_DATE
+             FROM GAMEDB_RELEASES
+            WHERE RELEASE_DATE > SYSDATE
+            GROUP BY GAME_ID
+         )
+         SELECT g.GAME_ID, g.TITLE, g.DESCRIPTION, g.IGDB_ID, g.SLUG, g.TOTAL_RATING,
+                g.IGDB_URL, g.FEATURED_VIDEO_URL, g.INITIAL_RELEASE_DATE,
+                g.CREATED_AT, g.UPDATED_AT,
+                u.UPCOMING_DATE AS UPCOMING_RELEASE_DATE,
+                (SELECT LISTAGG(COALESCE(p.PLATFORM_ABBREVIATION, p.PLATFORM_NAME), ',')
+                        WITHIN GROUP (ORDER BY p.PLATFORM_NAME)
+                   FROM GAMEDB_RELEASES r
+                   JOIN GAMEDB_PLATFORMS p ON p.PLATFORM_ID = r.PLATFORM_ID
+                  WHERE r.GAME_ID = g.GAME_ID AND r.RELEASE_DATE = u.UPCOMING_DATE
+                ) AS UPCOMING_PLATFORMS
            FROM GAMEDB_GAMES g
+           LEFT JOIN upcoming u ON u.GAME_ID = g.GAME_ID
           WHERE ${whereClause}
-          ORDER BY UPCOMING_RELEASE_DATE ASC NULLS LAST, TITLE ASC`,
+          ORDER BY u.UPCOMING_DATE ASC NULLS LAST, g.TITLE ASC`,
         binds,
         {
           outFormat: oracledb.OUT_FORMAT_OBJECT,
@@ -1911,6 +1924,7 @@ export default class Game {
       );
 
       const upcomingDates = new Map<number, Date | null>();
+      const upcomingPlatforms = new Map<number, string[]>();
       const games: IGame[] = (result.rows ?? []).map(row => {
         const id = Number(row.GAME_ID);
         const upcomingDate = row.UPCOMING_RELEASE_DATE instanceof Date
@@ -1919,6 +1933,10 @@ export default class Game {
             ? new Date(row.UPCOMING_RELEASE_DATE)
             : null;
         upcomingDates.set(id, upcomingDate);
+        const platforms = row.UPCOMING_PLATFORMS
+          ? row.UPCOMING_PLATFORMS.split(",").map((s: string) => s.trim()).filter(Boolean)
+          : [];
+        upcomingPlatforms.set(id, platforms);
         return {
           id,
           title: String(row.TITLE),
@@ -1946,6 +1964,7 @@ export default class Game {
       return withPlatforms.map(g => ({
         ...g,
         upcomingReleaseDate: upcomingDates.get(g.id) ?? null,
+        upcomingReleasePlatforms: upcomingPlatforms.get(g.id) ?? [],
       }));
     } finally {
       await connection.close();

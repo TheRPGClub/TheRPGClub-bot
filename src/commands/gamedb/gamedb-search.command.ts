@@ -127,9 +127,7 @@ function buildSearchResponse(
   const resultList = displayedResults.map((game) => {
     const title = String(game.title ?? "");
     const dateStr = formatUpcomingDate(game.upcomingReleaseDate);
-    const platforms: string[] = (game.platforms ?? []).map(
-      (p: any) => p.abbreviation ?? p.name,
-    );
+    const platforms: string[] = game.upcomingReleasePlatforms ?? [];
     const platformStr = platforms.length ? ` ${platforms.join(", ")}` : "";
     const datePart = dateStr ? `${dateStr} ` : "";
     return `• ${datePart}**${title}**${platformStr}`;
