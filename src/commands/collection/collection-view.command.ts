@@ -165,7 +165,10 @@ export class CollectionViewCommand {
       ]);
     } catch (err) {
       console.error("[collection list] Failed to build response:", err);
-      await safeReply(interaction, buildTextReply("Failed to load your collection. Please try again.", true));
+      await safeReply(
+        interaction,
+        buildTextReply("Failed to load your collection. Please try again.", isEphemeral),
+      );
       return;
     }
 
@@ -175,7 +178,7 @@ export class CollectionViewCommand {
     });
     try {
       if (response.content) {
-        await safeReply(interaction, response.content);
+        await safeReply(interaction, buildTextReply(response.content, isEphemeral));
         return;
       }
       await safeReply(interaction, {
@@ -184,6 +187,11 @@ export class CollectionViewCommand {
       });
     } catch (err) {
       console.error("[collection list] safeReply failed:", err);
+      try {
+        await interaction.editReply({ content: "Failed to display collection. Please try again." });
+      } catch (fallbackErr) {
+        console.error("[collection list] fallback editReply also failed:", fallbackErr);
+      }
     }
     console.log("[collection list] step: reply sent");
   }
