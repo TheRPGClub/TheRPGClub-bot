@@ -152,10 +152,24 @@ function buildSearchResponse(
       const yearText = year ? ` (${year})` : " (Unknown Year)";
       label = `${gameTitle}${yearText}`;
     }
+    const upcomingDate = game.upcomingReleaseDate as Date | null | undefined;
+    const dateLabel = upcomingDate
+      ? (() => {
+        const d = upcomingDate instanceof Date ? upcomingDate : new Date(upcomingDate);
+        const mm = String(d.getUTCMonth() + 1).padStart(2, "0");
+        const dd = String(d.getUTCDate()).padStart(2, "0");
+        const yyyy = d.getUTCFullYear();
+        return `${mm}/${dd}/${yyyy}`;
+      })()
+      : null;
+    const releasePlatforms: string[] = game.upcomingReleasePlatforms
+      ?? (game.platforms ?? []).map((p: any) => p.abbreviation ?? p.name);
+    const platformLabel = releasePlatforms.length ? ` (${releasePlatforms.join(", ")})` : "";
+    const description = dateLabel ? `${dateLabel}${platformLabel}` : undefined;
     return {
       label: label.substring(0, 100),
       value: String(game.id),
-      description: "View this game",
+      ...(description ? { description: description.substring(0, 100) } : {}),
     };
   });
 
