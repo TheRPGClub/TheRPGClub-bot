@@ -70,11 +70,15 @@ export async function runSearchFlow(
   const results = await Game.searchGames(searchTerm, activeFilters);
 
   if (results.length === 0) {
-    await handleNoResults(interaction, searchTerm || rawQuery || "Unknown");
+    if (!searchTerm) {
+      await safeReply(interaction, buildTextReply("No games found matching your filters.", true));
+    } else {
+      await handleNoResults(interaction, searchTerm || rawQuery || "Unknown");
+    }
     return;
   }
 
-  if (results.length === 1 && !Object.keys(activeFilters).length) {
+  if (results.length === 1 && searchTerm && !Object.keys(activeFilters).length) {
     await showGameProfile(interaction, results[0].id);
     return;
   }
@@ -210,12 +214,12 @@ export class GameDbSearchCommand {
   @Slash({ description: "Search for a game", name: "search" })
   async search(
     @SlashOption({
-      description: "Search query (game title).",
+      description: "Search query (game title). Optional if other filters are provided.",
       name: "title",
-      required: true,
+      required: false,
       type: ApplicationCommandOptionType.String,
     })
-    query: string,
+    query: string | null,
     @SlashOption({
       description: "Filter to games with a future release date (must have release info).",
       name: "unreleased",
@@ -245,7 +249,7 @@ export class GameDbSearchCommand {
     await safeDeferReply(interaction, { flags: buildComponentsV2Flags(false) });
 
     try {
-      const searchTerm = sanitizeUserInput(query, { preserveNewlines: false });
+      const searchTerm = query ? sanitizeUserInput(query, { preserveNewlines: false }) : "";
       const filters: ISearchFilters = {};
       if (unreleased === true) filters.unreleased = true;
       const platformId = platformValue ? Number(platformValue) : null;
@@ -253,7 +257,14 @@ export class GameDbSearchCommand {
         filters.platformId = platformId;
       }
       if (year && Number.isInteger(year) && year > 0) filters.year = year;
-      await runSearchFlow(interaction, searchTerm, query, filters);
+      const hasFilters = filters.unreleased || filters.platformId || filters.year;
+      if (!searchTerm && !hasFilters) {
+        await safeReply(interaction, buildTextReply(
+          "Please provide a title or at least one filter (unreleased, platform, or year).", true,
+        ));
+        return;
+      }
+      await runSearchFlow(interaction, searchTerm, query ?? undefined, filters);
     } catch (error: any) {
       await safeReply(interaction, buildTextReply(
         `Failed to search games. Error: ${error.message}`, true,
