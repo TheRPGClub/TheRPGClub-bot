@@ -92,7 +92,7 @@ function isAllowedStartupLog(message: string): boolean {
 
 function shouldSendToDiscord(level: ConsoleLevel, message: string): boolean {
   if (!startupLogFilterEnabled) return true;
-  if (level === "log" && isAllowedStartupLog(message)) {
+  if (isAllowedStartupLog(message)) {
     if (message.includes(STARTUP_COMPLETE_LOG)) {
       startupLogFilterEnabled = false;
     }
