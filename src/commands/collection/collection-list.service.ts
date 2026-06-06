@@ -14,6 +14,7 @@ import UserGameCollection, {
 import { flattenErrorMessages } from "../imports/import-scaffold.service.js";
 import { safeV2TextContent } from "../../functions/ComponentsV2Utils.js";
 import { safeDeferUpdate } from "../../functions/InteractionUtils.js";
+import { buildUserHeaderContainer } from "../../functions/uiComponents.js";
 
 const COLLECTION_LIST_PAGE_SIZE = 20;
 const COLLECTION_LIST_NAV_PREFIX = "collection-list-nav-v2";
@@ -482,9 +483,6 @@ async function buildCollectionListResponse(params: {
     });
   }
 
-  const headerTitle = params.targetUserId === params.viewerUserId
-    ? (params.isEphemeral ? "Your game collection" : `${params.memberLabel}'s Game Collection`)
-    : `${params.memberLabel}'s Game Collection`;
   const filtersText = [
     params.title ? `title~${params.title}` : null,
     params.platformLabel ? `platform~${params.platformLabel}` : null,
@@ -502,9 +500,7 @@ async function buildCollectionListResponse(params: {
   const components: Array<ContainerBuilder | ActionRowBuilder<any>> = [];
 
   components.push(
-    new ContainerBuilder().addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(safeV2TextContent(`## ${headerTitle}`, 250)),
-    ),
+    buildUserHeaderContainer(params.targetUserId, params.memberLabel, "Game Collection"),
   );
 
   components.push(
