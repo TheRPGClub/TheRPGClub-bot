@@ -372,6 +372,12 @@ export async function safeReply(interaction: AnyRepliable, options: any): Promis
       }
     } catch (err: any) {
       if (!isAckError(err)) throw err;
+      console.error("[safeReply] editReply ack error", {
+        code: err?.code,
+        status: err?.status,
+        message: err?.message,
+        rawError: JSON.stringify(err?.rawError),
+      });
     }
     return;
   }
