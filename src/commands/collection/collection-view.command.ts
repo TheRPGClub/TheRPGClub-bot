@@ -169,14 +169,23 @@ export class CollectionViewCommand {
       return;
     }
 
-    if (response.content) {
-      await safeReply(interaction, response.content);
-      return;
-    }
-    await safeReply(interaction, {
-      components: response.components,
-      flags: buildComponentsV2Flags(isEphemeral),
+    console.log("[collection list] step: sending reply", {
+      hasContent: Boolean(response.content),
+      componentCount: response.components?.length,
     });
+    try {
+      if (response.content) {
+        await safeReply(interaction, response.content);
+        return;
+      }
+      await safeReply(interaction, {
+        components: response.components,
+        flags: buildComponentsV2Flags(isEphemeral),
+      });
+    } catch (err) {
+      console.error("[collection list] safeReply failed:", err);
+    }
+    console.log("[collection list] step: reply sent");
   }
 
   @Slash({ name: "overview", description: "Show a summary of your collection by platform" })

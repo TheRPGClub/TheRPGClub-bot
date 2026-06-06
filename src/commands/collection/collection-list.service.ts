@@ -659,6 +659,7 @@ async function buildCollectionListResponse(params: {
     });
   }
 
+  console.log("[collection-list] step: components built", { count: components.length });
   // eslint-disable-next-line local/dynamic-components-require-chunking
   return { components };
 }
