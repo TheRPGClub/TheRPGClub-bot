@@ -124,9 +124,10 @@ function buildSearchResponse(
     const title = String(game.title ?? "");
     titleCounts.set(title, (titleCounts.get(title) ?? 0) + 1);
   });
+  const showDates = filters?.upcomingRelease === true;
   const resultList = displayedResults.map((game) => {
     const title = String(game.title ?? "");
-    const dateStr = formatUpcomingDate(game.upcomingReleaseDate);
+    const dateStr = showDates ? formatUpcomingDate(game.upcomingReleaseDate) : "";
     const platforms: string[] = game.upcomingReleasePlatforms?.length
       ? game.upcomingReleasePlatforms
       : (game.platforms ?? []).map((p: any) => p.abbreviation ?? p.name);
@@ -154,7 +155,7 @@ function buildSearchResponse(
       const yearText = year ? ` (${year})` : " (Unknown Year)";
       label = `${gameTitle}${yearText}`;
     }
-    const upcomingDate = game.upcomingReleaseDate as Date | null | undefined;
+    const upcomingDate = showDates ? (game.upcomingReleaseDate as Date | null | undefined) : null;
     const dateLabel = upcomingDate
       ? (() => {
         const d = upcomingDate instanceof Date ? upcomingDate : new Date(upcomingDate);
