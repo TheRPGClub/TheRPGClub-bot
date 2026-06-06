@@ -401,20 +401,33 @@ async function buildCollectionThumbnails(
   entries: Array<{ gameId: number }>,
 ): Promise<Map<number, string>> {
   const thumbnailsByGameId = new Map<number, string>();
-  for (const entry of entries) {
-    if (thumbnailsByGameId.has(entry.gameId)) continue;
-    const game = await Game.getGameById(entry.gameId);
-    if (!game?.igdbId) continue;
-    try {
-      const details = await igdbService.getGameDetails(game.igdbId);
-      const imageId = details?.cover?.image_id ?? null;
-      if (!imageId) continue;
+  if (!entries.length) return thumbnailsByGameId;
+
+  const uniqueGameIds = [...new Set(entries.map((e) => e.gameId))];
+  const games = await Promise.all(uniqueGameIds.map((id) => Game.getGameById(id)));
+
+  const igdbIdsByGameId = new Map<number, number>();
+  for (let i = 0; i < uniqueGameIds.length; i++) {
+    const game = games[i];
+    if (game?.igdbId) igdbIdsByGameId.set(uniqueGameIds[i]!, game.igdbId);
+  }
+
+  if (!igdbIdsByGameId.size) return thumbnailsByGameId;
+
+  let imageIdsByIgdbId: Map<number, string>;
+  try {
+    imageIdsByIgdbId = await igdbService.getCoversForGames([...igdbIdsByGameId.values()]);
+  } catch {
+    return thumbnailsByGameId;
+  }
+
+  for (const [gameId, igdbId] of igdbIdsByGameId) {
+    const imageId = imageIdsByIgdbId.get(igdbId);
+    if (imageId) {
       thumbnailsByGameId.set(
-        entry.gameId,
+        gameId,
         `https://images.igdb.com/igdb/image/upload/t_cover_big/${imageId}.jpg`,
       );
-    } catch {
-      // ignore thumbnail failures
     }
   }
   return thumbnailsByGameId;
