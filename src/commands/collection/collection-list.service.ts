@@ -404,7 +404,9 @@ async function buildCollectionThumbnails(
   if (!entries.length) return thumbnailsByGameId;
 
   const uniqueGameIds = [...new Set(entries.map((e) => e.gameId))];
+  console.log("[collection-list] thumbnails: getGameById start", { count: uniqueGameIds.length });
   const games = await Promise.all(uniqueGameIds.map((id) => Game.getGameById(id)));
+  console.log("[collection-list] thumbnails: getGameById done");
 
   const igdbIdsByGameId = new Map<number, number>();
   for (let i = 0; i < uniqueGameIds.length; i++) {
@@ -414,10 +416,13 @@ async function buildCollectionThumbnails(
 
   if (!igdbIdsByGameId.size) return thumbnailsByGameId;
 
+  console.log("[collection-list] thumbnails: getCoversForGames start", { count: igdbIdsByGameId.size });
   let imageIdsByIgdbId: Map<number, string>;
   try {
     imageIdsByIgdbId = await igdbService.getCoversForGames([...igdbIdsByGameId.values()]);
-  } catch {
+    console.log("[collection-list] thumbnails: getCoversForGames done");
+  } catch (err) {
+    console.error("[collection-list] thumbnails: getCoversForGames failed", err);
     return thumbnailsByGameId;
   }
 
@@ -482,6 +487,7 @@ async function buildCollectionListResponse(params: {
   components: Array<ContainerBuilder | ActionRowBuilder<any>>;
   content?: string;
 }> {
+  console.log("[collection-list] step: searchEntries start", { targetUserId: params.targetUserId });
   const entries = await UserGameCollection.searchEntries({
     targetUserId: params.targetUserId,
     title: params.title,
@@ -489,6 +495,7 @@ async function buildCollectionListResponse(params: {
     platformId: params.platformId,
     ownershipType: params.ownershipType,
   });
+  console.log("[collection-list] step: searchEntries done", { count: entries.length });
 
   const total = entries.length;
   if (!total) {
@@ -530,7 +537,9 @@ async function buildCollectionListResponse(params: {
     params.platformId ? `platform-id=${params.platformId}` : null,
     params.ownershipType ? `ownership=${params.ownershipType}` : null,
   ].filter(Boolean).join(" | ");
+  console.log("[collection-list] step: buildThumbnails start", { pageEntryCount: pageEntries.length });
   const thumbnailsByGameId = await buildCollectionThumbnails(pageEntries);
+  console.log("[collection-list] step: buildThumbnails done", { count: thumbnailsByGameId.size });
   const components: Array<ContainerBuilder | ActionRowBuilder<any>> = [];
 
   const headerContainer = new ContainerBuilder().addTextDisplayComponents(

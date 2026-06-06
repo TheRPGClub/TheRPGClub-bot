@@ -145,18 +145,24 @@ export class CollectionViewCommand {
     const memberLabel = resolveMemberLabel(member, interaction.user);
     let response: Awaited<ReturnType<typeof buildCollectionListResponse>>;
     try {
-      response = await buildCollectionListResponse({
-        viewerUserId: interaction.user.id,
-        targetUserId,
-        memberLabel,
-        title: titleFilter,
-        platform: platformFilter,
-        platformId: undefined,
-        platformLabel: platformFilter,
-        ownershipType,
-        page: 0,
-        isEphemeral,
-      });
+      const timeoutMs = 20_000;
+      response = await Promise.race([
+        buildCollectionListResponse({
+          viewerUserId: interaction.user.id,
+          targetUserId,
+          memberLabel,
+          title: titleFilter,
+          platform: platformFilter,
+          platformId: undefined,
+          platformLabel: platformFilter,
+          ownershipType,
+          page: 0,
+          isEphemeral,
+        }),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error(`collection list timed out after ${timeoutMs}ms`)), timeoutMs),
+        ),
+      ]);
     } catch (err) {
       console.error("[collection list] Failed to build response:", err);
       await safeReply(interaction, buildTextReply("Failed to load your collection. Please try again.", true));
