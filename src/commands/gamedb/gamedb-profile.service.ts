@@ -82,7 +82,7 @@ export function buildListFieldValue(lines: string[], maxLength: number): string 
     currentLength = nextLength;
   }
 
-  return output.join("\n");
+  return output.join();
 }
 
 export function trimTextDisplayContent(content: string): string {
@@ -459,7 +459,7 @@ export async function buildGameProfile(
         (alt) => `> **${alt.title}**`,
       );
       const value = buildListFieldValue(lines, 2000);
-      detailSections.push(`**Alternate Versions**\n${value}`);
+      detailSections.push(`**Alternate Versions** ${value}`);
     }
 
     if (detailSections.length) {
