@@ -1915,7 +1915,7 @@ export default class Game {
            FROM GAMEDB_GAMES g
            LEFT JOIN upcoming u ON u.GAME_ID = g.GAME_ID
           WHERE ${whereClause}
-          ORDER BY u.UPCOMING_DATE ASC NULLS LAST, g.TITLE ASC`,
+          ORDER BY ${filters.upcomingRelease ? "u.UPCOMING_DATE ASC NULLS LAST, " : ""}g.TITLE ASC`,
         binds,
         {
           outFormat: oracledb.OUT_FORMAT_OBJECT,
