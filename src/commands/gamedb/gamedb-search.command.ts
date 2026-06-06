@@ -128,14 +128,14 @@ function buildSearchResponse(
     const title = String(game.title ?? "");
     const dateStr = formatUpcomingDate(game.upcomingReleaseDate);
     const platforms: string[] = game.upcomingReleasePlatforms ?? [];
-    const platformStr = platforms.length ? ` ${platforms.join(", ")}` : "";
+    const platformStr = platforms.length ? ` (${platforms.join(", ")})` : "";
     const datePart = dateStr ? `${dateStr} ` : "";
     return `• ${datePart}**${title}**${platformStr}`;
   }).join("\n");
 
   const title = searchTerm
     ? `Search Results for "${searchTerm}" (Page ${safePage + 1}/${totalPages})`
-    : `All Games (Page ${safePage + 1}/${totalPages})`;
+    : `Upcoming Releases (Page ${safePage + 1}/${totalPages})`;
 
   const selectCustomId = buildSearchCustomId("select", ownerId, safePage, searchTerm, undefined, filters);
   const options = displayedResults.map((game) => {
