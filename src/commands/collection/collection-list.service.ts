@@ -6,21 +6,16 @@ import {
 } from "discord.js";
 import {
   ContainerBuilder,
-  SectionBuilder,
   TextDisplayBuilder,
-  ThumbnailBuilder,
 } from "@discordjs/builders";
 import UserGameCollection, {
   type CollectionOwnershipType,
 } from "../../classes/UserGameCollection.js";
-import Game from "../../classes/Game.js";
-import { igdbService } from "../../services/IGDB/IgdbService.js";
 import { flattenErrorMessages } from "../imports/import-scaffold.service.js";
 import { safeV2TextContent } from "../../functions/ComponentsV2Utils.js";
-import { formatTableDate } from "../profile.command.js";
 import { safeDeferUpdate } from "../../functions/InteractionUtils.js";
 
-const COLLECTION_LIST_PAGE_SIZE = 10;
+const COLLECTION_LIST_PAGE_SIZE = 20;
 const COLLECTION_LIST_NAV_PREFIX = "collection-list-nav-v2";
 const COLLECTION_LIST_FILTER_PREFIX = "collection-list-filter-v1";
 const COLLECTION_LIST_FILTER_PANEL_PREFIX = "clf1";
@@ -397,47 +392,6 @@ export function parseCollectionFiltersFromListMessage(message: any): {
   };
 }
 
-async function buildCollectionThumbnails(
-  entries: Array<{ gameId: number }>,
-): Promise<Map<number, string>> {
-  const thumbnailsByGameId = new Map<number, string>();
-  if (!entries.length) return thumbnailsByGameId;
-
-  const uniqueGameIds = [...new Set(entries.map((e) => e.gameId))];
-  console.log("[collection-list] thumbnails: getGameById start", { count: uniqueGameIds.length });
-  const games = await Promise.all(uniqueGameIds.map((id) => Game.getGameById(id)));
-  console.log("[collection-list] thumbnails: getGameById done");
-
-  const igdbIdsByGameId = new Map<number, number>();
-  for (let i = 0; i < uniqueGameIds.length; i++) {
-    const game = games[i];
-    if (game?.igdbId) igdbIdsByGameId.set(uniqueGameIds[i]!, game.igdbId);
-  }
-
-  if (!igdbIdsByGameId.size) return thumbnailsByGameId;
-
-  console.log("[collection-list] thumbnails: getCoversForGames start", { count: igdbIdsByGameId.size });
-  let imageIdsByIgdbId: Map<number, string>;
-  try {
-    imageIdsByIgdbId = await igdbService.getCoversForGames([...igdbIdsByGameId.values()]);
-    console.log("[collection-list] thumbnails: getCoversForGames done");
-  } catch (err) {
-    console.error("[collection-list] thumbnails: getCoversForGames failed", err);
-    return thumbnailsByGameId;
-  }
-
-  for (const [gameId, igdbId] of igdbIdsByGameId) {
-    const imageId = imageIdsByIgdbId.get(igdbId);
-    if (imageId) {
-      thumbnailsByGameId.set(
-        gameId,
-        `https://images.igdb.com/igdb/image/upload/t_cover_big/${imageId}.jpg`,
-      );
-    }
-  }
-  return thumbnailsByGameId;
-}
-
 function logCollectionListNavDebug(
   event: string,
   details: Record<string, unknown>,
@@ -537,70 +491,37 @@ async function buildCollectionListResponse(params: {
     params.platformId ? `platform-id=${params.platformId}` : null,
     params.ownershipType ? `ownership=${params.ownershipType}` : null,
   ].filter(Boolean).join(" | ");
-  console.log("[collection-list] step: buildThumbnails start", { pageEntryCount: pageEntries.length });
-  const thumbnailsByGameId = await buildCollectionThumbnails(pageEntries);
-  console.log("[collection-list] step: buildThumbnails done", { count: thumbnailsByGameId.size });
+
+  const listText = pageEntries
+    .map((entry) => {
+      const platform = entry.platformName ?? "Unknown";
+      return `**${safeV2TextContent(entry.title, 100)}** · ${platform} · ${entry.ownershipType}`;
+    })
+    .join("\n");
+
   const components: Array<ContainerBuilder | ActionRowBuilder<any>> = [];
 
-  const headerContainer = new ContainerBuilder().addTextDisplayComponents(
-    new TextDisplayBuilder().setContent(safeV2TextContent(`## ${headerTitle}`, 250)),
+  components.push(
+    new ContainerBuilder().addTextDisplayComponents(
+      new TextDisplayBuilder().setContent(safeV2TextContent(`## ${headerTitle}`, 250)),
+    ),
   );
-  components.push(headerContainer);
 
-  for (const entry of pageEntries) {
-    const platform = entry.platformName ?? "Unknown platform";
-    const noteLine = entry.note ? `\n> Note: ${entry.note}` : "";
-    const sectionText = safeV2TextContent(
-      `### ${entry.title}\n` +
-      `> Platform: ${platform}\n` +
-      `> Ownership: ${entry.ownershipType}\n` +
-      `> Added: ${formatTableDate(entry.createdAt)}${noteLine}`,
-      1000,
-    );
-    if (params.debugSource === "nav") {
-      logCollectionListNavDebug("entry_section_payload", {
-        entryId: entry.entryId,
-        gameId: entry.gameId,
-        titleLength: entry.title.length,
-        noteLength: entry.note?.length ?? 0,
-        platformLength: (entry.platformName ?? "Unknown platform").length,
-        sectionTextLength: sectionText.length,
-      });
-    }
-    const thumb = thumbnailsByGameId.get(entry.gameId);
-    if (!thumb) {
-      const entryContainer = new ContainerBuilder().addTextDisplayComponents(
-        new TextDisplayBuilder().setContent(safeV2TextContent(sectionText, 1000)),
-      );
-      components.push(entryContainer);
-      continue;
-    }
-
-    const section = new SectionBuilder().addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(safeV2TextContent(sectionText, 1000)),
-    );
-    try {
-      section.setThumbnailAccessory(new ThumbnailBuilder().setURL(thumb));
-      section.toJSON();
-    } catch {
-      const entryContainer = new ContainerBuilder().addTextDisplayComponents(
-        new TextDisplayBuilder().setContent(safeV2TextContent(sectionText, 1000)),
-      );
-      components.push(entryContainer);
-      continue;
-    }
-    const entryContainer = new ContainerBuilder().addSectionComponents(section);
-    components.push(entryContainer);
-  }
+  components.push(
+    new ContainerBuilder().addTextDisplayComponents(
+      new TextDisplayBuilder().setContent(safeV2TextContent(listText, 3500)),
+    ),
+  );
 
   const footerParts = [`Page ${safePage + 1}/${pageCount}`, `${total} total entries`];
   if (filtersText) {
     footerParts.push(`Filters: ${filtersText}`);
   }
-  const footerContainer = new ContainerBuilder().addTextDisplayComponents(
-    new TextDisplayBuilder().setContent(safeV2TextContent(`-# ${footerParts.join(" | ")}`, 1000)),
+  components.push(
+    new ContainerBuilder().addTextDisplayComponents(
+      new TextDisplayBuilder().setContent(safeV2TextContent(`-# ${footerParts.join(" | ")}`, 1000)),
+    ),
   );
-  components.push(footerContainer);
 
   const row = new ActionRowBuilder<ButtonBuilder>();
   if (pageCount > 1) {
