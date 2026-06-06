@@ -1778,78 +1778,81 @@ export default class Game {
     const connection = await pool.getConnection();
     try {
       const baseQuery = query.trim();
-      if (!baseQuery) {
+      const hasFilters = filters.unreleased || filters.platformId || filters.year;
+      if (!baseQuery && !hasFilters) {
         return [];
       }
 
-      const queryVariants = new Set<string>();
-      queryVariants.add(baseQuery);
-      const spacedQuery = baseQuery
-        .replace(/([a-zA-Z])(\d)/g, "$1 $2")
-        .replace(/(\d)([a-zA-Z])/g, "$1 $2");
-      queryVariants.add(spacedQuery);
-
-      const tokens = spacedQuery.split(/\s+/).filter(Boolean);
-      const tokenOptions: string[][] = [];
-      for (const token of tokens) {
-        const options = new Set<string>();
-        options.add(token);
-        const tokenSynonyms = await GameSearchSynonym.getTermsForQuery(token, connection);
-        tokenSynonyms.forEach((synonym) => {
-          if (synonym.trim()) {
-            options.add(synonym.trim());
-          }
-        });
-        tokenOptions.push(Array.from(options));
-      }
-
-      if (tokenOptions.length) {
-        let variants: string[] = [""];
-        const MAX_VARIANTS = 50;
-        for (const options of tokenOptions) {
-          const nextVariants: string[] = [];
-          for (const prefix of variants) {
-            for (const option of options) {
-              const next = prefix ? `${prefix} ${option}` : option;
-              nextVariants.push(next);
-              if (nextVariants.length >= MAX_VARIANTS) break;
-            }
-            if (nextVariants.length >= MAX_VARIANTS) break;
-          }
-          variants = nextVariants;
-          if (variants.length >= MAX_VARIANTS) break;
-        }
-        variants.forEach((variant) => queryVariants.add(variant));
-      }
-
-      const termSet = new Map<string, string>();
-      Array.from(queryVariants).forEach((term) => {
-        const folded = foldAccentE(term).toLowerCase();
-        const norm = folded.replace(/[^a-z0-9]/g, "");
-        if (norm) {
-          termSet.set(norm, folded);
-        }
-      });
-
-      if (!termSet.size) {
-        return [];
-      }
-
-      const termEntries = Array.from(termSet.entries());
       const clauses: string[] = [];
       const binds: Record<string, string | number> = {};
-      const titleFoldExpr =
-        "REPLACE(REPLACE(REPLACE(REPLACE(LOWER(TITLE), 'é', 'e'), 'è', 'e'), 'ê', 'e'), 'ë', 'e')";
-      const titleNormExpr = `REGEXP_REPLACE(${titleFoldExpr}, '[^a-z0-9]', '')`;
-      termEntries.forEach(([norm, term], index) => {
-        const rawKey = `searchQuery${index}`;
-        const normKey = `normalizedQuery${index}`;
-        binds[rawKey] = `%${term}%`;
-        binds[normKey] = `%${norm}%`;
-        clauses.push(
-          `(${titleFoldExpr} LIKE :${rawKey} OR ${titleNormExpr} LIKE :${normKey})`,
-        );
-      });
+
+      if (baseQuery) {
+        const queryVariants = new Set<string>();
+        queryVariants.add(baseQuery);
+        const spacedQuery = baseQuery
+          .replace(/([a-zA-Z])(\d)/g, "$1 $2")
+          .replace(/(\d)([a-zA-Z])/g, "$1 $2");
+        queryVariants.add(spacedQuery);
+
+        const tokens = spacedQuery.split(/\s+/).filter(Boolean);
+        const tokenOptions: string[][] = [];
+        for (const token of tokens) {
+          const options = new Set<string>();
+          options.add(token);
+          const tokenSynonyms = await GameSearchSynonym.getTermsForQuery(token, connection);
+          tokenSynonyms.forEach((synonym) => {
+            if (synonym.trim()) {
+              options.add(synonym.trim());
+            }
+          });
+          tokenOptions.push(Array.from(options));
+        }
+
+        if (tokenOptions.length) {
+          let variants: string[] = [""];
+          const MAX_VARIANTS = 50;
+          for (const options of tokenOptions) {
+            const nextVariants: string[] = [];
+            for (const prefix of variants) {
+              for (const option of options) {
+                const next = prefix ? `${prefix} ${option}` : option;
+                nextVariants.push(next);
+                if (nextVariants.length >= MAX_VARIANTS) break;
+              }
+              if (nextVariants.length >= MAX_VARIANTS) break;
+            }
+            variants = nextVariants;
+            if (variants.length >= MAX_VARIANTS) break;
+          }
+          variants.forEach((variant) => queryVariants.add(variant));
+        }
+
+        const termSet = new Map<string, string>();
+        Array.from(queryVariants).forEach((term) => {
+          const folded = foldAccentE(term).toLowerCase();
+          const norm = folded.replace(/[^a-z0-9]/g, "");
+          if (norm) {
+            termSet.set(norm, folded);
+          }
+        });
+
+        if (!termSet.size) {
+          return [];
+        }
+
+        const titleFoldExpr =
+          "REPLACE(REPLACE(REPLACE(REPLACE(LOWER(TITLE), 'é', 'e'), 'è', 'e'), 'ê', 'e'), 'ë', 'e')";
+        const titleNormExpr = `REGEXP_REPLACE(${titleFoldExpr}, '[^a-z0-9]', '')`;
+        Array.from(termSet.entries()).forEach(([norm, term], index) => {
+          const rawKey = `searchQuery${index}`;
+          const normKey = `normalizedQuery${index}`;
+          binds[rawKey] = `%${term}%`;
+          binds[normKey] = `%${norm}%`;
+          clauses.push(
+            `(${titleFoldExpr} LIKE :${rawKey} OR ${titleNormExpr} LIKE :${normKey})`,
+          );
+        });
+      }
 
       const filterClauses: string[] = [];
       if (filters.unreleased) {
@@ -1868,10 +1871,11 @@ export default class Game {
         binds["filterYear"] = filters.year;
       }
 
-      const titleWhereClause = clauses.length ? clauses.join(" OR ") : "1=0";
-      const filterWhere = filterClauses.length
-        ? ` AND (${filterClauses.join(" AND ")})`
-        : "";
+      const titlePart = clauses.length ? `(${clauses.join(" OR ")})` : "";
+      const filterPart = filterClauses.length ? `(${filterClauses.join(" AND ")})` : "";
+      const whereClause = titlePart && filterPart
+        ? `${titlePart} AND ${filterPart}`
+        : titlePart || filterPart || "1=0";
 
       const result = await connection.execute<{
         GAME_ID: number;
@@ -1890,7 +1894,7 @@ export default class Game {
         `SELECT GAME_ID, TITLE, DESCRIPTION, IGDB_ID, SLUG, TOTAL_RATING, IGDB_URL, FEATURED_VIDEO_URL,
                 INITIAL_RELEASE_DATE, CREATED_AT, UPDATED_AT
            FROM GAMEDB_GAMES
-          WHERE (${titleWhereClause})${filterWhere}
+          WHERE ${whereClause}
           ORDER BY TITLE ASC`,
         binds,
         {
