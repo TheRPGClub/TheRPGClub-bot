@@ -14,14 +14,14 @@ import { decodeBase64Url, encodeBase64Url } from "../../functions/CustomIdUtils.
 import Game from "../../classes/Game.js";
 
 export interface ISearchFilters {
-  unreleased?: boolean;
+  upcomingRelease?: boolean;
   platformId?: number;
   year?: number;
 }
 
 function compactFilters(filters: ISearchFilters): string {
   let result = "";
-  if (filters.unreleased) result += "u";
+  if (filters.upcomingRelease) result += "u";
   if (filters.platformId) result += `p${filters.platformId}`;
   if (filters.year) result += `y${filters.year}`;
   return result;
@@ -29,7 +29,7 @@ function compactFilters(filters: ISearchFilters): string {
 
 function parseCompactFilters(filterStr: string): ISearchFilters {
   const filters: ISearchFilters = {};
-  if (filterStr.includes("u")) filters.unreleased = true;
+  if (filterStr.includes("u")) filters.upcomingRelease = true;
   const platformMatch = filterStr.match(/p(\d+)/);
   if (platformMatch) filters.platformId = Number(platformMatch[1]);
   const yearMatch = filterStr.match(/y(\d{4})/);
