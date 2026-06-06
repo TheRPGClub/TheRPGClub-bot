@@ -374,12 +374,26 @@ export async function safeReply(interaction: AnyRepliable, options: any): Promis
       }
     } catch (err: any) {
       if (!isAckError(err)) throw err;
+      const ackCode = err?.code ?? err?.rawError?.code;
       console.error("[safeReply] editReply ack error", {
         code: err?.code,
         status: err?.status,
         message: err?.message,
         rawError: JSON.stringify(err?.rawError),
       });
+      // 40060 = already replied; a followUp can still deliver the content
+      if (ackCode === 40060) {
+        try {
+          if (typeof options === "string") {
+            // eslint-disable-next-line local/no-plain-text-v1-reply
+            return await interaction.followUp({ content: options });
+          } else {
+            return await interaction.followUp(normalizedOptions as any);
+          }
+        } catch {
+          // followUp also failed; nothing more to do
+        }
+      }
     }
     return;
   }
