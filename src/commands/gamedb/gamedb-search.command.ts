@@ -288,7 +288,9 @@ export class GameDbSearchCommand {
       decodeSearchQuery(encodedQuery),
       { preserveNewlines: false },
     );
-    if (!searchTerm) {
+    const filters = decodeISearchFilters(encodedQuery);
+    const hasFilters = filters.unreleased || filters.platformId || filters.year;
+    if (!searchTerm && !hasFilters) {
       const recoveryComponents = buildSearchRecoveryComponents(ownerId, encodedQuery);
       const textParts = buildTextReply(
         "This search request expired. Refresh to run it again.", true,
@@ -296,12 +298,10 @@ export class GameDbSearchCommand {
       await safeReply(interaction, {
         components: [...textParts.components, ...recoveryComponents],
         flags: textParts.flags,
-        __forceFollowUp: true,
       });
       return;
     }
 
-    const filters = decodeISearchFilters(encodedQuery);
     const results = await Game.searchGames(searchTerm, filters);
 
     const gameId = Number(interaction.values?.[0]);
@@ -362,7 +362,9 @@ export class GameDbSearchCommand {
       decodeSearchQuery(encodedQuery),
       { preserveNewlines: false },
     );
-    if (!searchTerm) {
+    const filters = decodeISearchFilters(encodedQuery);
+    const hasFilters = filters.unreleased || filters.platformId || filters.year;
+    if (!searchTerm && !hasFilters) {
       const recoveryComponents = buildSearchRecoveryComponents(ownerId, encodedQuery);
       const textParts = buildTextReply(
         "This search request expired. Refresh to run it again.", true,
@@ -370,12 +372,10 @@ export class GameDbSearchCommand {
       await safeReply(interaction, {
         components: [...textParts.components, ...recoveryComponents],
         flags: textParts.flags,
-        __forceFollowUp: true,
       });
       return;
     }
 
-    const filters = decodeISearchFilters(encodedQuery);
     const results = await Game.searchGames(searchTerm, filters);
     const totalPages = Math.max(
       1,
@@ -422,21 +422,21 @@ export class GameDbSearchCommand {
       decodeSearchQuery(encodedQuery),
       { preserveNewlines: false },
     );
-    if (!searchTerm) {
-      await safeReply(interaction, {
-        ...buildTextReply("Unable to refresh: search details were not found.", true),
-        __forceFollowUp: true,
-      });
+    const filters = decodeISearchFilters(encodedQuery);
+    const hasFilters = filters.unreleased || filters.platformId || filters.year;
+    if (!searchTerm && !hasFilters) {
+      await safeReply(interaction, buildTextReply(
+        "Unable to refresh: search details were not found.", true,
+      ));
       return;
     }
 
-    const filters = decodeISearchFilters(encodedQuery);
     const results = await Game.searchGames(searchTerm, filters);
     if (results.length === 0) {
-      await safeReply(interaction, {
-        ...buildTextReply(`No results found for "${searchTerm}".`, true),
-        __forceFollowUp: true,
-      });
+      const msg = searchTerm
+        ? `No results found for "${searchTerm}".`
+        : "No games found matching your filters.";
+      await safeReply(interaction, buildTextReply(msg, true));
       return;
     }
 
