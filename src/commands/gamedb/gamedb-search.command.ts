@@ -32,6 +32,7 @@ import { buildTextReply, safeV2TextContent } from "../../functions/ComponentsV2U
 import { shouldRenderPrevNextButtons } from "../../functions/PaginationUtils.js";
 import Game from "../../classes/Game.js";
 import {
+  autocompleteSearchCompany,
   autocompleteSearchPlatform,
   buildComponentsV2Flags,
   buildSearchCustomId,
@@ -67,6 +68,14 @@ async function buildFilterSummary(filters: ISearchFilters): Promise<string> {
     parts.push(`Platform: ${platform?.name ?? `ID ${filters.platformId}`}`);
   }
   if (filters.year) parts.push(`Year: ${filters.year}`);
+  if (filters.developerId) {
+    const company = await Game.getCompanyById(filters.developerId);
+    parts.push(`Developer: ${company?.name ?? `ID ${filters.developerId}`}`);
+  }
+  if (filters.publisherId) {
+    const company = await Game.getCompanyById(filters.publisherId);
+    parts.push(`Publisher: ${company?.name ?? `ID ${filters.publisherId}`}`);
+  }
   return parts.join(" | ");
 }
 
@@ -264,6 +273,26 @@ export class GameDbSearchCommand {
       type: ApplicationCommandOptionType.Integer,
     })
     year: number | null,
+    @SlashOption({
+      description: "Filter to games developed by a specific company.",
+      name: "developer",
+      required: false,
+      type: ApplicationCommandOptionType.String,
+      autocomplete: async (interaction: AutocompleteInteraction) => {
+        await autocompleteSearchCompany(interaction);
+      },
+    })
+    developerValue: string | null,
+    @SlashOption({
+      description: "Filter to games published by a specific company.",
+      name: "publisher",
+      required: false,
+      type: ApplicationCommandOptionType.String,
+      autocomplete: async (interaction: AutocompleteInteraction) => {
+        await autocompleteSearchCompany(interaction);
+      },
+    })
+    publisherValue: string | null,
     interaction: CommandInteraction,
   ): Promise<void> {
     await safeDeferReply(interaction, { flags: buildComponentsV2Flags(false) });
@@ -277,10 +306,22 @@ export class GameDbSearchCommand {
         filters.platformId = platformId;
       }
       if (year && Number.isInteger(year) && year > 0) filters.year = year;
-      const hasFilters = filters.upcomingRelease || filters.platformId || filters.year;
+      const developerId = developerValue ? Number(developerValue) : null;
+      if (developerId && Number.isInteger(developerId) && developerId > 0) {
+        filters.developerId = developerId;
+      }
+      const publisherId = publisherValue ? Number(publisherValue) : null;
+      if (publisherId && Number.isInteger(publisherId) && publisherId > 0) {
+        filters.publisherId = publisherId;
+      }
+      const hasFilters =
+        filters.upcomingRelease || filters.platformId || filters.year ||
+        filters.developerId || filters.publisherId;
       if (!searchTerm && !hasFilters) {
         await safeReply(interaction, buildTextReply(
-          "Please provide a title or at least one filter (upcoming_release, platform, or year).", true,
+          "Please provide a title or at least one filter " +
+          "(upcoming_release, platform, year, developer, or publisher).",
+          true,
         ));
         return;
       }
@@ -309,7 +350,9 @@ export class GameDbSearchCommand {
       { preserveNewlines: false },
     );
     const filters = decodeISearchFilters(encodedQuery);
-    const hasFilters = filters.upcomingRelease || filters.platformId || filters.year;
+    const hasFilters =
+      filters.upcomingRelease || filters.platformId || filters.year ||
+      filters.developerId || filters.publisherId;
     if (!searchTerm && !hasFilters) {
       const recoveryComponents = buildSearchRecoveryComponents(ownerId, encodedQuery);
       const textParts = buildTextReply(
@@ -383,7 +426,9 @@ export class GameDbSearchCommand {
       { preserveNewlines: false },
     );
     const filters = decodeISearchFilters(encodedQuery);
-    const hasFilters = filters.upcomingRelease || filters.platformId || filters.year;
+    const hasFilters =
+      filters.upcomingRelease || filters.platformId || filters.year ||
+      filters.developerId || filters.publisherId;
     if (!searchTerm && !hasFilters) {
       const recoveryComponents = buildSearchRecoveryComponents(ownerId, encodedQuery);
       const textParts = buildTextReply(
@@ -443,7 +488,9 @@ export class GameDbSearchCommand {
       { preserveNewlines: false },
     );
     const filters = decodeISearchFilters(encodedQuery);
-    const hasFilters = filters.upcomingRelease || filters.platformId || filters.year;
+    const hasFilters =
+      filters.upcomingRelease || filters.platformId || filters.year ||
+      filters.developerId || filters.publisherId;
     if (!searchTerm && !hasFilters) {
       await safeReply(interaction, buildTextReply(
         "Unable to refresh: search details were not found.", true,

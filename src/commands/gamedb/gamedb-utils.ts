@@ -17,6 +17,8 @@ export interface ISearchFilters {
   upcomingRelease?: boolean;
   platformId?: number;
   year?: number;
+  developerId?: number;
+  publisherId?: number;
 }
 
 function compactFilters(filters: ISearchFilters): string {
@@ -24,6 +26,8 @@ function compactFilters(filters: ISearchFilters): string {
   if (filters.upcomingRelease) result += "u";
   if (filters.platformId) result += `p${filters.platformId}`;
   if (filters.year) result += `y${filters.year}`;
+  if (filters.developerId) result += `d${filters.developerId}`;
+  if (filters.publisherId) result += `q${filters.publisherId}`;
   return result;
 }
 
@@ -34,6 +38,10 @@ function parseCompactFilters(filterStr: string): ISearchFilters {
   if (platformMatch) filters.platformId = Number(platformMatch[1]);
   const yearMatch = filterStr.match(/y(\d{4})/);
   if (yearMatch) filters.year = Number(yearMatch[1]);
+  const developerMatch = filterStr.match(/d(\d+)/);
+  if (developerMatch) filters.developerId = Number(developerMatch[1]);
+  const publisherMatch = filterStr.match(/q(\d+)/);
+  if (publisherMatch) filters.publisherId = Number(publisherMatch[1]);
   return filters;
 }
 
@@ -242,6 +250,23 @@ export async function autocompleteSearchPlatform(
   const options = filtered.slice(0, 25).map((p) => ({
     name: (p.abbreviation ? `${p.name} (${p.abbreviation})` : p.name).slice(0, 100),
     value: String(p.id),
+  }));
+  await interaction.respond(options);
+}
+
+export async function autocompleteSearchCompany(
+  interaction: AutocompleteInteraction,
+): Promise<void> {
+  const focused = interaction.options.getFocused(true);
+  const rawQuery = focused?.value ? String(focused.value) : "";
+  const companies = await Game.getAllCompanies();
+  const query = rawQuery.toLowerCase().trim();
+  const filtered = query
+    ? companies.filter((c) => c.name.toLowerCase().includes(query))
+    : companies;
+  const options = filtered.slice(0, 25).map((c) => ({
+    name: c.name.slice(0, 100),
+    value: String(c.id),
   }));
   await interaction.respond(options);
 }
