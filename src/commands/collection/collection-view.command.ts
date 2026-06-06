@@ -143,18 +143,25 @@ export class CollectionViewCommand {
       : undefined;
 
     const memberLabel = resolveMemberLabel(member, interaction.user);
-    const response = await buildCollectionListResponse({
-      viewerUserId: interaction.user.id,
-      targetUserId,
-      memberLabel,
-      title: titleFilter,
-      platform: platformFilter,
-      platformId: undefined,
-      platformLabel: platformFilter,
-      ownershipType,
-      page: 0,
-      isEphemeral,
-    });
+    let response: Awaited<ReturnType<typeof buildCollectionListResponse>>;
+    try {
+      response = await buildCollectionListResponse({
+        viewerUserId: interaction.user.id,
+        targetUserId,
+        memberLabel,
+        title: titleFilter,
+        platform: platformFilter,
+        platformId: undefined,
+        platformLabel: platformFilter,
+        ownershipType,
+        page: 0,
+        isEphemeral,
+      });
+    } catch (err) {
+      console.error("[collection list] Failed to build response:", err);
+      await safeReply(interaction, buildTextReply("Failed to load your collection. Please try again.", true));
+      return;
+    }
 
     if (response.content) {
       await safeReply(interaction, response.content);
