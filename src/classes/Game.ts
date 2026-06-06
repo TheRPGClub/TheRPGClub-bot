@@ -1775,15 +1775,65 @@ export default class Game {
     }
   }
 
+  static async getAllCompanies(): Promise<ICompany[]> {
+    const pool = getOraclePool();
+    const connection = await pool.getConnection();
+    try {
+      const result = await connection.execute<{
+        COMPANY_ID: number; NAME: string; IGDB_COMPANY_ID: number | null;
+      }>(
+        `SELECT COMPANY_ID, NAME, IGDB_COMPANY_ID FROM GAMEDB_COMPANIES ORDER BY NAME ASC`,
+        [],
+        { outFormat: oracledb.OUT_FORMAT_OBJECT },
+      );
+      return (result.rows ?? []).map((row: any) => ({
+        id: Number(row.COMPANY_ID),
+        name: String(row.NAME),
+        igdbId: row.IGDB_COMPANY_ID ? Number(row.IGDB_COMPANY_ID) : null,
+      }));
+    } finally {
+      await connection.close();
+    }
+  }
+
+  static async getCompanyById(id: number): Promise<ICompany | null> {
+    const pool = getOraclePool();
+    const connection = await pool.getConnection();
+    try {
+      const result = await connection.execute<{
+        COMPANY_ID: number; NAME: string; IGDB_COMPANY_ID: number | null;
+      }>(
+        `SELECT COMPANY_ID, NAME, IGDB_COMPANY_ID FROM GAMEDB_COMPANIES WHERE COMPANY_ID = :id`,
+        { id },
+        { outFormat: oracledb.OUT_FORMAT_OBJECT },
+      );
+      const row = (result.rows ?? [])[0] as any;
+      return row
+        ? { id: Number(row.COMPANY_ID), name: String(row.NAME),
+            igdbId: row.IGDB_COMPANY_ID ? Number(row.IGDB_COMPANY_ID) : null }
+        : null;
+    } finally {
+      await connection.close();
+    }
+  }
+
   static async searchGames(
     query: string,
-    filters: { upcomingRelease?: boolean; platformId?: number; year?: number } = {},
+    filters: {
+      upcomingRelease?: boolean;
+      platformId?: number;
+      year?: number;
+      developerId?: number;
+      publisherId?: number;
+    } = {},
   ): Promise<IGameSearchResult[]> {
     const pool = getOraclePool();
     const connection = await pool.getConnection();
     try {
       const baseQuery = query.trim();
-      const hasFilters = filters.upcomingRelease || filters.platformId || filters.year;
+      const hasFilters =
+        filters.upcomingRelease || filters.platformId || filters.year ||
+        filters.developerId || filters.publisherId;
       if (!baseQuery && !hasFilters) {
         return [];
       }
@@ -1872,6 +1922,24 @@ export default class Game {
       if (filters.year) {
         filterClauses.push("EXTRACT(YEAR FROM g.INITIAL_RELEASE_DATE) = :filterYear");
         binds["filterYear"] = filters.year;
+      }
+      if (filters.developerId) {
+        filterClauses.push(
+          `g.GAME_ID IN (
+            SELECT GAME_ID FROM GAMEDB_GAME_COMPANIES
+             WHERE COMPANY_ID = :filterDeveloperId AND ROLE = 'Developer'
+          )`,
+        );
+        binds["filterDeveloperId"] = filters.developerId;
+      }
+      if (filters.publisherId) {
+        filterClauses.push(
+          `g.GAME_ID IN (
+            SELECT GAME_ID FROM GAMEDB_GAME_COMPANIES
+             WHERE COMPANY_ID = :filterPublisherId AND ROLE = 'Publisher'
+          )`,
+        );
+        binds["filterPublisherId"] = filters.publisherId;
       }
 
       const titlePart = clauses.length ? `(${clauses.join(" OR ")})` : "";

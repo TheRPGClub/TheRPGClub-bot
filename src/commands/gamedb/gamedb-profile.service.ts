@@ -438,8 +438,18 @@ export async function buildGameProfile(
     }
 
     const series = await Game.getGameSeries(gameId);
+    const [developers, publishers] = await Promise.all([
+      Game.getGameDevelopers(gameId),
+      Game.getGamePublishers(gameId),
+    ]);
     const detailSections: string[] = [];
 
+    if (developers.length) {
+      detailSections.push(`**Developer**\n> ${developers.join(", ")}`);
+    }
+    if (publishers.length) {
+      detailSections.push(`**Publisher**\n> ${publishers.join(", ")}`);
+    }
     if (series) {
       detailSections.push(`**Series / Collection**\n> ${series}`);
     }
