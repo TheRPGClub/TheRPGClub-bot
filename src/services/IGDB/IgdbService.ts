@@ -313,6 +313,35 @@ class IgdbService {
     }
   }
 
+  async getCoversForGames(igdbIds: number[]): Promise<Map<number, string>> {
+    if (!igdbIds.length) return new Map();
+    if (!this.clientId) throw new Error("IGDB service not configured.");
+    const token = await this.getAccessToken();
+    const idList = igdbIds.join(", ");
+    const body = `fields id, cover.image_id; where id = (${idList}); limit ${igdbIds.length};`;
+
+    const response = await axios.post<Array<{ id: number; cover?: { image_id: string } }>>(
+      "https://api.igdb.com/v4/games",
+      body,
+      {
+        headers: {
+          "Client-ID": this.clientId,
+          "Authorization": `Bearer ${token}`,
+          "Content-Type": "text/plain",
+        },
+        timeout: 8000,
+      },
+    );
+
+    const result = new Map<number, string>();
+    for (const game of response.data ?? []) {
+      if (game.cover?.image_id) {
+        result.set(game.id, game.cover.image_id);
+      }
+    }
+    return result;
+  }
+
   // Helper to get image URL from image_id
   static getCoverImageUrl(imageId: string, size: string = "cover_big"): string {
     return `https://images.igdb.com/igdb/image/upload/t_${size}/${imageId}.jpg`;
