@@ -202,7 +202,7 @@ export async function buildGameProfile(
     const rpgClubSections: string[] = [];
     const pushRpgClubSection = (title: string, value: string | null): void => {
       if (!value) return;
-      rpgClubSections.push(`**${title}**\n> ${value}`);
+      rpgClubSections.push(`**${title}:** ${value}`);
     };
 
     const gotmNomineesByRound = new Map<number, string[]>();
@@ -445,13 +445,13 @@ export async function buildGameProfile(
     const detailSections: string[] = [];
 
     if (developers.length) {
-      detailSections.push(`**Developer**\n> ${developers.join(", ")}`);
+      detailSections.push(`**Developer:** ${developers.join(", ")}`);
     }
     if (publishers.length) {
-      detailSections.push(`**Publisher**\n> ${publishers.join(", ")}`);
+      detailSections.push(`**Publisher:** ${publishers.join(", ")}`);
     }
     if (series) {
-      detailSections.push(`**Series / Collection**\n> ${series}`);
+      detailSections.push(`**Series / Collection:** ${series}`);
     }
 
     if (alternateVersions.length) {
@@ -463,11 +463,11 @@ export async function buildGameProfile(
     }
 
     if (detailSections.length) {
-      bodyParts.push({ content: detailSections.join("\n\n") });
+      bodyParts.push({ content: detailSections.join("\n") });
     }
 
     if (rpgClubSections.length) {
-      bodyParts.push({ content: rpgClubSections.join("\n\n") });
+      bodyParts.push({ content: rpgClubSections.join("\n") });
     }
 
     const igdbIdText = game.igdbId ? String(game.igdbId) : "N/A";
