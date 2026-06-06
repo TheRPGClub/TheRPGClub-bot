@@ -49,9 +49,19 @@ import {
 } from "./gamedb-profile.service.js";
 import { handleNoResults } from "./gamedb-add.command.js";
 
+function formatUpcomingDate(date: Date | null | undefined): string {
+  if (!date) return "";
+  const d = date instanceof Date ? date : new Date(date);
+  if (Number.isNaN(d.getTime())) return "";
+  const mm = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const dd = String(d.getUTCDate()).padStart(2, "0");
+  const yyyy = d.getUTCFullYear();
+  return `\`${mm}/${dd}/${yyyy}\``;
+}
+
 async function buildFilterSummary(filters: ISearchFilters): Promise<string> {
   const parts: string[] = [];
-  if (filters.unreleased) parts.push("Unreleased only");
+  if (filters.upcomingRelease) parts.push("Upcoming release");
   if (filters.platformId) {
     const platform = await Game.getPlatformById(filters.platformId);
     parts.push(`Platform: ${platform?.name ?? `ID ${filters.platformId}`}`);
@@ -116,18 +126,13 @@ function buildSearchResponse(
   });
   const resultList = displayedResults.map((game) => {
     const title = String(game.title ?? "");
-    const isDuplicate = (titleCounts.get(title) ?? 0) > 1;
-    if (!isDuplicate) {
-      return `• **${title}**`;
-    }
-    const releaseDate = game.initialReleaseDate as Date | null | undefined;
-    const year = releaseDate instanceof Date
-      ? releaseDate.getFullYear()
-      : releaseDate
-        ? new Date(releaseDate).getFullYear()
-        : null;
-    const yearText = year ? ` (${year})` : " (Unknown Year)";
-    return `• **${title}**${yearText}`;
+    const dateStr = formatUpcomingDate(game.upcomingReleaseDate);
+    const platforms: string[] = (game.platforms ?? []).map(
+      (p: any) => p.abbreviation ?? p.name,
+    );
+    const platformStr = platforms.length ? ` ${platforms.join(", ")}` : "";
+    const datePart = dateStr ? `${dateStr} ` : "";
+    return `• ${datePart}**${title}**${platformStr}`;
   }).join("\n");
 
   const title = searchTerm
@@ -221,12 +226,12 @@ export class GameDbSearchCommand {
     })
     query: string | null,
     @SlashOption({
-      description: "Filter to games with a future release date (must have release info).",
-      name: "unreleased",
+      description: "Filter to games with any upcoming release (including games already out on other platforms).",
+      name: "upcoming_release",
       required: false,
       type: ApplicationCommandOptionType.Boolean,
     })
-    unreleased: boolean | null,
+    upcomingRelease: boolean | null,
     @SlashOption({
       description: "Filter to a specific platform.",
       name: "platform",
@@ -251,16 +256,16 @@ export class GameDbSearchCommand {
     try {
       const searchTerm = query ? sanitizeUserInput(query, { preserveNewlines: false }) : "";
       const filters: ISearchFilters = {};
-      if (unreleased === true) filters.unreleased = true;
+      if (upcomingRelease === true) filters.upcomingRelease = true;
       const platformId = platformValue ? Number(platformValue) : null;
       if (platformId && Number.isInteger(platformId) && platformId > 0) {
         filters.platformId = platformId;
       }
       if (year && Number.isInteger(year) && year > 0) filters.year = year;
-      const hasFilters = filters.unreleased || filters.platformId || filters.year;
+      const hasFilters = filters.upcomingRelease || filters.platformId || filters.year;
       if (!searchTerm && !hasFilters) {
         await safeReply(interaction, buildTextReply(
-          "Please provide a title or at least one filter (unreleased, platform, or year).", true,
+          "Please provide a title or at least one filter (upcoming_release, platform, or year).", true,
         ));
         return;
       }
@@ -289,7 +294,7 @@ export class GameDbSearchCommand {
       { preserveNewlines: false },
     );
     const filters = decodeISearchFilters(encodedQuery);
-    const hasFilters = filters.unreleased || filters.platformId || filters.year;
+    const hasFilters = filters.upcomingRelease || filters.platformId || filters.year;
     if (!searchTerm && !hasFilters) {
       const recoveryComponents = buildSearchRecoveryComponents(ownerId, encodedQuery);
       const textParts = buildTextReply(
@@ -363,7 +368,7 @@ export class GameDbSearchCommand {
       { preserveNewlines: false },
     );
     const filters = decodeISearchFilters(encodedQuery);
-    const hasFilters = filters.unreleased || filters.platformId || filters.year;
+    const hasFilters = filters.upcomingRelease || filters.platformId || filters.year;
     if (!searchTerm && !hasFilters) {
       const recoveryComponents = buildSearchRecoveryComponents(ownerId, encodedQuery);
       const textParts = buildTextReply(
@@ -423,7 +428,7 @@ export class GameDbSearchCommand {
       { preserveNewlines: false },
     );
     const filters = decodeISearchFilters(encodedQuery);
-    const hasFilters = filters.unreleased || filters.platformId || filters.year;
+    const hasFilters = filters.upcomingRelease || filters.platformId || filters.year;
     if (!searchTerm && !hasFilters) {
       await safeReply(interaction, buildTextReply(
         "Unable to refresh: search details were not found.", true,

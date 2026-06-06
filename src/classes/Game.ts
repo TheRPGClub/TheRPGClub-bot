@@ -50,6 +50,10 @@ export interface IGameWithPlatforms extends IGame {
   platforms: IPlatformDef[];
 }
 
+export interface IGameSearchResult extends IGameWithPlatforms {
+  upcomingReleaseDate: Date | null;
+}
+
 export interface IGameAutocompleteResult {
   id: number;
   title: string;
@@ -1772,13 +1776,13 @@ export default class Game {
 
   static async searchGames(
     query: string,
-    filters: { unreleased?: boolean; platformId?: number; year?: number } = {},
-  ): Promise<IGameWithPlatforms[]> {
+    filters: { upcomingRelease?: boolean; platformId?: number; year?: number } = {},
+  ): Promise<IGameSearchResult[]> {
     const pool = getOraclePool();
     const connection = await pool.getConnection();
     try {
       const baseQuery = query.trim();
-      const hasFilters = filters.unreleased || filters.platformId || filters.year;
+      const hasFilters = filters.upcomingRelease || filters.platformId || filters.year;
       if (!baseQuery && !hasFilters) {
         return [];
       }
@@ -1855,9 +1859,9 @@ export default class Game {
       }
 
       const filterClauses: string[] = [];
-      if (filters.unreleased) {
+      if (filters.upcomingRelease) {
         filterClauses.push(
-          "INITIAL_RELEASE_DATE IS NOT NULL AND INITIAL_RELEASE_DATE > SYSDATE",
+          "GAME_ID IN (SELECT DISTINCT GAME_ID FROM GAMEDB_RELEASES WHERE RELEASE_DATE > SYSDATE)",
         );
       }
       if (filters.platformId) {
@@ -1890,12 +1894,15 @@ export default class Game {
         INITIAL_RELEASE_DATE: Date | null;
         CREATED_AT: Date;
         UPDATED_AT: Date;
+        UPCOMING_RELEASE_DATE: Date | null;
       }>(
-        `SELECT GAME_ID, TITLE, DESCRIPTION, IGDB_ID, SLUG, TOTAL_RATING, IGDB_URL, FEATURED_VIDEO_URL,
-                INITIAL_RELEASE_DATE, CREATED_AT, UPDATED_AT
-           FROM GAMEDB_GAMES
+        `SELECT g.GAME_ID, g.TITLE, g.DESCRIPTION, g.IGDB_ID, g.SLUG, g.TOTAL_RATING,
+                g.IGDB_URL, g.FEATURED_VIDEO_URL, g.INITIAL_RELEASE_DATE, g.CREATED_AT, g.UPDATED_AT,
+                (SELECT MIN(r.RELEASE_DATE) FROM GAMEDB_RELEASES r
+                  WHERE r.GAME_ID = g.GAME_ID AND r.RELEASE_DATE > SYSDATE) AS UPCOMING_RELEASE_DATE
+           FROM GAMEDB_GAMES g
           WHERE ${whereClause}
-          ORDER BY TITLE ASC`,
+          ORDER BY UPCOMING_RELEASE_DATE ASC NULLS LAST, TITLE ASC`,
         binds,
         {
           outFormat: oracledb.OUT_FORMAT_OBJECT,
@@ -1903,30 +1910,43 @@ export default class Game {
         },
       );
 
-      // Map rows, but exclude imageData to keep search results lightweight
-      const games: IGame[] = (result.rows ?? []).map(row => ({
-        id: Number(row.GAME_ID),
-        title: String(row.TITLE),
-        description: row.DESCRIPTION ? String(row.DESCRIPTION) : null,
-        imageData: null,
-        thumbnailBad: false,
-        thumbnailApproved: false,
-        igdbId: row.IGDB_ID ? Number(row.IGDB_ID) : null,
-        slug: row.SLUG ? String(row.SLUG) : null,
-        totalRating: row.TOTAL_RATING ? Number(row.TOTAL_RATING) : null,
-        igdbUrl: row.IGDB_URL ? String(row.IGDB_URL) : null,
-        featuredVideoUrl: row.FEATURED_VIDEO_URL ? String(row.FEATURED_VIDEO_URL) : null,
-        initialReleaseDate: row.INITIAL_RELEASE_DATE instanceof Date
-          ? row.INITIAL_RELEASE_DATE
-          : row.INITIAL_RELEASE_DATE
-            ? new Date(row.INITIAL_RELEASE_DATE)
-            : null,
-        createdAt: row.CREATED_AT instanceof Date ? row.CREATED_AT : new Date(row.CREATED_AT),
-        updatedAt: row.UPDATED_AT instanceof Date ? row.UPDATED_AT : new Date(row.UPDATED_AT),
-        coverUrl: null,
-      }));
+      const upcomingDates = new Map<number, Date | null>();
+      const games: IGame[] = (result.rows ?? []).map(row => {
+        const id = Number(row.GAME_ID);
+        const upcomingDate = row.UPCOMING_RELEASE_DATE instanceof Date
+          ? row.UPCOMING_RELEASE_DATE
+          : row.UPCOMING_RELEASE_DATE
+            ? new Date(row.UPCOMING_RELEASE_DATE)
+            : null;
+        upcomingDates.set(id, upcomingDate);
+        return {
+          id,
+          title: String(row.TITLE),
+          description: row.DESCRIPTION ? String(row.DESCRIPTION) : null,
+          imageData: null,
+          thumbnailBad: false,
+          thumbnailApproved: false,
+          igdbId: row.IGDB_ID ? Number(row.IGDB_ID) : null,
+          slug: row.SLUG ? String(row.SLUG) : null,
+          totalRating: row.TOTAL_RATING ? Number(row.TOTAL_RATING) : null,
+          igdbUrl: row.IGDB_URL ? String(row.IGDB_URL) : null,
+          featuredVideoUrl: row.FEATURED_VIDEO_URL ? String(row.FEATURED_VIDEO_URL) : null,
+          initialReleaseDate: row.INITIAL_RELEASE_DATE instanceof Date
+            ? row.INITIAL_RELEASE_DATE
+            : row.INITIAL_RELEASE_DATE
+              ? new Date(row.INITIAL_RELEASE_DATE)
+              : null,
+          createdAt: row.CREATED_AT instanceof Date ? row.CREATED_AT : new Date(row.CREATED_AT),
+          updatedAt: row.UPDATED_AT instanceof Date ? row.UPDATED_AT : new Date(row.UPDATED_AT),
+          coverUrl: null,
+        };
+      });
 
-      return await Game.attachPlatformsToGames(games);
+      const withPlatforms = await Game.attachPlatformsToGames(games);
+      return withPlatforms.map(g => ({
+        ...g,
+        upcomingReleaseDate: upcomingDates.get(g.id) ?? null,
+      }));
     } finally {
       await connection.close();
     }
