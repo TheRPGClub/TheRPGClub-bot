@@ -368,7 +368,9 @@ export async function safeReply(interaction: AnyRepliable, options: any): Promis
         // eslint-disable-next-line local/no-plain-text-v1-reply
         return await interaction.editReply({ content: options });
       } else {
-        return await interaction.editReply(normalizedOptions as any);
+        const result = await interaction.editReply(normalizedOptions as any);
+        console.log("[safeReply] editReply success", { messageId: (result as any)?.id });
+        return result;
       }
     } catch (err: any) {
       if (!isAckError(err)) throw err;
