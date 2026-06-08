@@ -2,6 +2,8 @@ import oracledb from "oracledb";
 import { getOraclePool } from "./oracleClient.js";
 
 export { pgQuery, pgTransaction } from "./postgresClient.js";
+export type { Dialect, SqlEntry } from "./sql/types.js";
+export { getSql, getSqlDynamic } from "./sql/index.js";
 
 /**
  * Runs a SELECT and maps each row with `mapper`. Defaults to OUT_FORMAT_OBJECT.
