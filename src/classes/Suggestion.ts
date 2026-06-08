@@ -1,7 +1,6 @@
 import oracledb from "oracledb";
-import { oraQuery, oraMutate, oraWithConnection } from "../db/SqlManager.js";
+import { dbQuery, dbMutate, oraQuery, oraMutate, oraWithConnection, getSql } from "../db/SqlManager.js";
 import { getDialect } from "../db/dialect.js";
-import { getSql } from "../db/SqlManager.js";
 import { SuggestionSql } from "../db/sql/index.js";
 
 const dialect = getDialect();
@@ -78,16 +77,12 @@ export async function createSuggestion(
 
 export async function listSuggestions(limit: number = 50): Promise<ISuggestionItem[]> {
   const safeLimit = Math.min(Math.max(limit, 1), 200);
-  return oraQuery(
-    getSql(SuggestionSql.list, dialect),
-    { limit: safeLimit },
-    mapSuggestionRow,
-  );
+  return dbQuery(SuggestionSql.list, { limit: safeLimit }, mapSuggestionRow);
 }
 
 export async function countSuggestions(): Promise<number> {
-  const rows = await oraQuery(
-    getSql(SuggestionSql.count, dialect),
+  const rows = await dbQuery(
+    SuggestionSql.count,
     {},
     (row: { TOTAL: number | null }) => row,
   );
@@ -108,9 +103,6 @@ export async function getSuggestionById(
 }
 
 export async function deleteSuggestion(suggestionId: number): Promise<boolean> {
-  const result = await oraMutate(
-    getSql(SuggestionSql.delete, dialect),
-    { id: suggestionId },
-  );
-  return (result.rowsAffected ?? 0) > 0;
+  const count = await dbMutate(SuggestionSql.delete, { id: suggestionId });
+  return count > 0;
 }

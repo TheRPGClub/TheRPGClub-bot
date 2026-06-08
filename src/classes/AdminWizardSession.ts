@@ -1,4 +1,4 @@
-import { oraQuery, oraMutate, oraWithConnection } from "../db/SqlManager.js";
+import { dbQuery, dbMutate, oraWithConnection } from "../db/SqlManager.js";
 import { getDialect } from "../db/dialect.js";
 import { getSql } from "../db/SqlManager.js";
 import { AdminWizardSessionSql } from "../db/sql/index.js";
@@ -194,8 +194,8 @@ export async function getActiveAdminWizardSession(
   ownerUserId: string,
   channelId: string,
 ): Promise<IAdminWizardSession | null> {
-  const rows = await oraQuery(
-    getSql(AdminWizardSessionSql.getActive, dialect),
+  const rows = await dbQuery(
+    AdminWizardSessionSql.getActive,
     { commandKey, ownerUserId, channelId },
     mapAdminWizardSessionRow,
   );
@@ -224,8 +224,8 @@ export async function saveAdminWizardSession(params: {
     Math.floor(Math.random() * 1_000_000).toString(),
   ].join("-");
 
-  await oraMutate(
-    getSql(AdminWizardSessionSql.saveSession, dialect),
+  await dbMutate(
+    AdminWizardSessionSql.saveSession,
     {
       commandKey: params.commandKey,
       ownerUserId: params.ownerUserId,

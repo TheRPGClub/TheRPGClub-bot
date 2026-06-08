@@ -1,5 +1,12 @@
 import oracledb from "oracledb";
-import { oraQuery, oraMutate, oraWithConnection, oraTransaction } from "../db/SqlManager.js";
+import {
+  dbQuery,
+  dbMutate,
+  oraQuery,
+  oraMutate,
+  oraWithConnection,
+  oraTransaction,
+} from "../db/SqlManager.js";
 import { getDialect } from "../db/dialect.js";
 import { getSql } from "../db/SqlManager.js";
 import { GotmAuditImportSql } from "../db/sql/index.js";
@@ -175,8 +182,8 @@ export async function getGotmAuditImportById(
 export async function getActiveGotmAuditImportForUser(
   userId: string,
 ): Promise<IGotmAuditImport | null> {
-  const rows = await oraQuery(
-    getSql(GotmAuditImportSql.getActiveForUser, dialect),
+  const rows = await dbQuery(
+    GotmAuditImportSql.getActiveForUser,
     { userId },
     mapImport,
   );
@@ -187,8 +194,8 @@ export async function setGotmAuditImportStatus(
   importId: number,
   status: GotmAuditStatus,
 ): Promise<void> {
-  await oraMutate(
-    getSql(GotmAuditImportSql.setStatus, dialect),
+  await dbMutate(
+    GotmAuditImportSql.setStatus,
     { importId, status },
   );
 }
@@ -197,8 +204,8 @@ export async function updateGotmAuditImportIndex(
   importId: number,
   currentIndex: number,
 ): Promise<void> {
-  await oraMutate(
-    getSql(GotmAuditImportSql.updateIndex, dialect),
+  await dbMutate(
+    GotmAuditImportSql.updateIndex,
     { importId, currentIndex },
   );
 }
@@ -206,8 +213,8 @@ export async function updateGotmAuditImportIndex(
 export async function getNextGotmAuditItem(
   importId: number,
 ): Promise<IGotmAuditItem | null> {
-  const rows = await oraQuery(
-    getSql(GotmAuditImportSql.getNextPendingItem, dialect),
+  const rows = await dbQuery(
+    GotmAuditImportSql.getNextPendingItem,
     { importId },
     mapItem,
   );
@@ -217,8 +224,8 @@ export async function getNextGotmAuditItem(
 export async function getGotmAuditItemById(
   itemId: number,
 ): Promise<IGotmAuditItem | null> {
-  const rows = await oraQuery(
-    getSql(GotmAuditImportSql.getItemById, dialect),
+  const rows = await dbQuery(
+    GotmAuditImportSql.getItemById,
     { itemId },
     mapItem,
   );
@@ -251,8 +258,8 @@ export async function updateGotmAuditItem(
 
   if (!fields.length) return;
 
-  await oraMutate(
-    GotmAuditImportSql.updateItem(fields)[dialect],
+  await dbMutate(
+    GotmAuditImportSql.updateItem(fields),
     binds,
   );
 }
@@ -262,8 +269,8 @@ export async function getGotmAuditItemsForRound(
   kind: GotmAuditKind,
   roundNumber: number,
 ): Promise<IGotmAuditItem[]> {
-  return oraQuery(
-    getSql(GotmAuditImportSql.getItemsForRound, dialect),
+  return dbQuery(
+    GotmAuditImportSql.getItemsForRound,
     { importId, kind, roundNumber },
     mapItem,
   );
@@ -276,8 +283,8 @@ export async function countGotmAuditItems(importId: number): Promise<{
   error: number;
 }> {
   const stats = { pending: 0, imported: 0, skipped: 0, error: 0 };
-  const rows = await oraQuery(
-    getSql(GotmAuditImportSql.countItems, dialect),
+  const rows = await dbQuery(
+    GotmAuditImportSql.countItems,
     { importId },
     (row: { STATUS: GotmAuditItemStatus; CNT: number }) => row,
   );

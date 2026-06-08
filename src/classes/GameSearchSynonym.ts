@@ -1,5 +1,5 @@
 import oracledb from "oracledb";
-import { oraQuery, oraMutate, oraWithConnection } from "../db/SqlManager.js";
+import { dbQuery, oraQuery, oraMutate, oraWithConnection } from "../db/SqlManager.js";
 import { getDialect } from "../db/dialect.js";
 import { getSql } from "../db/SqlManager.js";
 import { GameSearchSynonymSql } from "../db/sql/index.js";
@@ -89,8 +89,8 @@ export default class GameSearchSynonym {
     const searchQuery = query ? `%${query}%` : null;
     const normalizedQuery = query ? `%${normalizeSearchTerm(query)}%` : null;
     const limit = options.limit ?? 50;
-    return oraQuery(
-      getSql(GameSearchSynonymSql.listSynonyms, dialect),
+    return dbQuery(
+      GameSearchSynonymSql.listSynonyms,
       { searchQuery, normalizedQuery, limit },
       mapSynonymRow,
     );
@@ -102,8 +102,8 @@ export default class GameSearchSynonym {
     const normalizedQuery = cleanedQuery
       ? `%${normalizeSearchTerm(cleanedQuery)}%`
       : null;
-    const rows = await oraQuery(
-      getSql(GameSearchSynonymSql.countSynonymGroups, dialect),
+    const rows = await dbQuery(
+      GameSearchSynonymSql.countSynonymGroups,
       { searchQuery, normalizedQuery },
       (row: { CNT: number }) => Number(row.CNT ?? 0),
     );

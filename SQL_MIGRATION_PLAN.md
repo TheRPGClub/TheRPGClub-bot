@@ -296,108 +296,97 @@ Migrated in this phase (Phases A/B/C):
 
 ---
 
-### Next Step: Phase D -- Dialect-agnostic execution wrappers
+### Next Step: Phase D (in progress) -- Dialect-agnostic execution wrappers
 
 ---
 
 ### Phase D: Dialect-agnostic execution wrappers
 
-#### Current state
+#### Completed as of 2026-06-08
 
-`SqlManager.ts` exposes four Oracle-specific helpers and re-exports two Postgres helpers:
+**Infrastructure (done, on branch `feature/phase-d-dialect-agnostic-wrappers`):**
 
-| Wrapper | Dialect | Call sites | Notes |
-|---|---|---|---|
-| `oraQuery(sql, params, mapper)` | Oracle only | 210 | Mapper function inline at call site |
-| `oraMutate(sql, params, conn?)` | Oracle only | 205 | Returns `oracledb.Result<unknown>` |
-| `oraWithConnection(callback)` | Oracle only | 84 | Callback receives `oracledb.Connection` |
-| `oraTransaction(callback)` | Oracle only | 26 | Callback receives `oracledb.Connection` |
-| `pgQuery(text, values?)` | Postgres only | 3 | No mapper -- returns raw rows |
-| `pgTransaction(callback)` | Postgres only | 2 | Callback receives `pg.PoolClient` |
+- `pgMutate` and `pgWithConnection` added to `src/db/postgresClient.ts`
+- `ora*` helpers (`oraQuery`, `oraMutate`, `oraWithConnection`, `oraTransaction`) moved from
+  `SqlManager.ts` to `src/db/oracleClient.ts` -- mirrors `postgresClient.ts` structure
+- `SqlManager.ts` now re-exports everything from both clients and adds four dialect-agnostic
+  wrappers:
+  - `dbQuery(entry, params, mapper)` -- SELECT, picks dialect SQL from `SqlEntry`
+  - `dbMutate(entry, params)` -- DML, returns rows-affected count
+  - `dbWithConnection(callback)` -- single-connection scope
+  - `dbTransaction(callback)` -- atomic transaction
 
-No `pgMutate` or `pgWithConnection` exists. The two sides also have incompatible signatures
-(e.g., `oraQuery` requires a mapper at the call site; `pgQuery` does not).
+**Call sites migrated (simple `oraQuery`/`oraMutate` with no BIND_OUT or conn-passing):**
 
-#### What needs to be built
+| File | Status |
+|---|---|
+| `AdminWizardSession.ts` | Partial -- `getActive` and `saveSession` done; `closeActive` uses `conn.execute` directly (oracle-specific) |
+| `BotVotingInfo.ts` | Partial -- all `get*` and `mark*` done; `setRoundInfo` uses `conn.execute` (oracle-specific) |
+| `CollectionCsvImport.ts` | Partial -- `getImportById` done; `createImport` (BIND_OUT) and `insertItem` (conn-passing) remain |
+| `CompletionatorImport.ts` | Partial -- same pattern as CollectionCsvImport |
+| `GameDbCsvImport.ts` | Partial -- same pattern |
+| `GameDbCsvImportMapping.ts` | Fully migrated |
+| `GameKey.ts` | Partial -- `get*`, `list*`, `claim`, `revoke` done; `create` (BIND_OUT) remains |
+| `GameReleaseAnnouncement.ts` | Partial -- `mark*` and `list*` done; `syncReleaseAnnouncements` (conn-passing) remains |
+| `GameSearchSynonymDraft.ts` | Partial -- `getDraft`, `deleteDraft` done; `createDraft` (BIND_OUT), `appendPairs` (conn-passing) remain |
+| `GameSearchSynonym.ts` | Partial -- standalone `dbQuery` lookups done; all mutation/insert paths use oracle conn-passing and BIND_OUT |
+| `GotmAuditImport.ts` | Partial -- `getById` done; `createSession` (BIND_OUT) and bulk insert (conn-passing) remain |
+| `Gotm.ts` | Partial -- most `get*` done; `updateRowOrder` and `commitRound` use conn-passing |
+| `HltbCache.ts` | Fully migrated |
+| `Member.ts` | Partial -- large file; many `get*` done; connection-passing and BIND_OUT methods remain |
+| `Nomination.ts` | Fully migrated |
+| `PresencePromptHistory.ts` | Fully migrated |
+| `PresencePromptOptOut.ts` | Fully migrated |
+| `PublicReminder.ts` | Partial -- `list*`, `delete`, `update*` done; `create` (BIND_OUT) remains |
+| `Reminder.ts` | Partial -- all done except `create` (BIND_OUT) and `getById` (optional conn) |
+| `RssFeed.ts` | Partial -- `removeFeed`, `updateFeed` done; `addFeed` (BIND_OUT), `markItemsSeen` (executeMany), `getSeenItemHashes` (conn-passing) remain |
+| `Starboard.ts` | Fully migrated |
+| `SuggestionReviewSession.ts` | Partial -- `update`, `delete*` done; `create` (conn-passing) and `getById` (optional conn) remain |
+| `Suggestion.ts` | Partial -- `list`, `count`, `delete` done; `create` (BIND_OUT) and `getById` (optional conn) remain |
+| `Thread.ts` | Partial -- `upsertThread`, `setSkipLinking`, `getThreadSkipLinking` done; transactions and conn-passing remain |
+| `Todo.ts` | Partial -- all done except `create` (BIND_OUT) |
 
-**1. Add missing Postgres helpers to `postgresClient.ts`**
+**Not yet started (oracle-specific throughout):**
 
-```typescript
-/** Runs a DML statement and returns rowCount. */
-export async function pgMutate(
-  text: string,
-  values?: unknown[],
-): Promise<number> {
-  const result = await getPostgresPool().query(text, values);
-  return result.rowCount ?? 0;
-}
+- `Game.ts` (69 remaining ora* calls)
+- `NrGotm.ts` (11)
+- `SteamCollectionImport.ts` (17)
+- `UserActivityIcon.ts` (3)
+- `UserChannelMessageCount.ts` (4)
+- `UserGameCollection.ts` (15)
+- `XboxCollectionImport.ts` (18)
 
-/** Acquires a client, runs callback, then releases it. */
-export async function pgWithConnection<T>(
-  callback: (client: pg.PoolClient) => Promise<T>,
-): Promise<T> {
-  const client = await getPostgresPool().connect();
-  try {
-    return await callback(client);
-  } finally {
-    client.release();
-  }
-}
-```
+---
 
-**2. Add dialect-agnostic wrappers to `SqlManager.ts`**
+#### Remaining work in Phase D
 
-These dispatch to `ora*` or `pg*` based on `getDialect()`. They accept a `SqlEntry` directly so
-`getSql` never needs to be called at the call site.
+**D1 -- Migrate standalone oraQuery/oraMutate in untouched files**
 
-```typescript
-/** SELECT: runs the dialect variant and maps each row. */
-export async function dbQuery<RowT extends object, R>(
-  entry: SqlEntry,
-  params: unknown[],
-  mapper: (row: RowT) => R,
-): Promise<R[]>
+Files above with `ora=N db=0`. For each: replace `oraQuery(getSql(Sql.key, dialect), params, mapper)`
+with `dbQuery(Sql.key, params, mapper)` and `oraMutate(...)` -> `dbMutate(...)` for all calls that
+do not use BIND_OUT or pass a connection argument.
 
-/** DML: runs the dialect variant, returns rows-affected count. */
-export async function dbMutate(
-  entry: SqlEntry,
-  params: unknown[],
-): Promise<number>
+**D2 -- Oracle-only blockers (defer until postgres SQL is written)**
 
-/** Acquire/release a single connection for multiple statements. */
-export async function dbWithConnection<T>(
-  callback: (conn: oracledb.Connection | pg.PoolClient) => Promise<T>,
-): Promise<T>
+Two categories of calls cannot use `db*` wrappers yet:
 
-/** Atomic transaction: commit on success, rollback on throw. */
-export async function dbTransaction<T>(
-  callback: (conn: oracledb.Connection | pg.PoolClient) => Promise<T>,
-): Promise<T>
-```
+1. **BIND_OUT** (`INSERT ... RETURNING x INTO :outVar`): These need postgres SQL filled in as
+   `INSERT ... RETURNING x` and a new `dbInsert(entry, params): Promise<number>` wrapper that
+   returns the generated id (uses `outBinds[0]` on Oracle, `rows[0].id` on Postgres).
 
-**Design notes:**
-- `params` unifies Oracle `BindParameters` and Postgres `unknown[]`. Oracle named binds
-  (`:name`) and Postgres positional (`$1`) are already separated by the `SqlEntry` oracle/postgres
-  keys, so call sites can pass a plain array or object that matches their dialect's SQL.
-- The `dbWithConnection` / `dbTransaction` callback type is a union. Callers that need to issue
-  multiple statements inside one connection will need a small internal helper per dialect, or accept
-  the union and narrow with `instanceof`.
-- Oracle `RETURNING ... INTO :outVar` (bind-out) has no direct Postgres analogue in a shared
-  signature -- those call sites need individual attention when porting.
+2. **Connection-passing** (`oraWithConnection`/`oraTransaction` callbacks that call
+   `oraMutate(sql, params, conn)` or `oraQuery(sql, params, mapper, conn)`): These multi-statement
+   blocks need the postgres SQL filled in and the callback rewritten to accept a union connection
+   type, dispatching to driver-specific calls inside.
 
-**3. Migrate all call sites**
+**D3 -- `executeMany` (RssFeed.markItemsSeen)**
 
-Replace every `oraQuery` / `oraMutate` / `oraWithConnection` / `oraTransaction` call with the
-corresponding `db*` wrapper. Scope: ~525 call sites across 37+ files (see table above for per-file
-counts from the first column of Phase A/B).
+Oracle's `conn.executeMany` has no pg equivalent in the current wrappers. When porting, replace
+with a per-row `pgMutate` loop or a postgres multi-row INSERT ... ON CONFLICT pattern.
 
-**4. Re-export `pgMutate` and `pgWithConnection` from `SqlManager.ts`**
+#### Previously planned approach (still valid)
 
-Keep `SqlManager.ts` as the single import point for all DB helpers.
-
-#### Suggested approach
-
-- Implement and test `dbQuery` / `dbMutate` first (covers 415 of the 525 call sites).
-- Tackle `dbWithConnection` next (84 sites, mostly bulk-import classes).
-- Do `dbTransaction` last (26 sites, already well-isolated in transaction-scoped methods).
+- `dbQuery` / `dbMutate` first (covers the bulk of standalone call sites).
+- `dbWithConnection` / `dbTransaction` next (connection-scoped multi-statement blocks).
+- BIND_OUT cases last (require postgres SQL to be written first).
 - Run `tsc --noEmit` after each batch.

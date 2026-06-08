@@ -1,4 +1,4 @@
-import { oraQuery, oraMutate, oraWithConnection, oraTransaction } from "../db/SqlManager.js";
+import { dbQuery, dbMutate, oraQuery, oraMutate, oraWithConnection, oraTransaction } from "../db/SqlManager.js";
 import { getDialect } from "../db/dialect.js";
 import { getSql } from "../db/SqlManager.js";
 import { GotmSql } from "../db/sql/index.js";
@@ -68,8 +68,8 @@ type GotmEntryRow = {
 };
 
 async function loadFromDatabaseInternal(): Promise<IGotmEntry[]> {
-  const rows = await oraQuery<GotmEntryRow, GotmEntryRow>(
-    getSql(GotmSql.loadAll, dialect),
+  const rows = await dbQuery<GotmEntryRow, GotmEntryRow>(
+    GotmSql.loadAll,
     {},
     (row) => row,
   );
@@ -388,8 +388,8 @@ export async function updateGotmVotingResultsInDatabase(
   round: number,
   messageId: string | null,
 ): Promise<void> {
-  await oraMutate(
-    getSql(GotmSql.updateVotingResults, dialect),
+  await dbMutate(
+    GotmSql.updateVotingResults,
     { round, value: messageId },
   );
 }
@@ -406,8 +406,8 @@ export async function insertGotmRoundInDatabase(
     throw new Error("At least one game is required for a GOTM round.");
   }
 
-  const countRows = await oraQuery<{ CNT: number }, { CNT: number }>(
-    getSql(GotmSql.checkRoundExists, dialect),
+  const countRows = await dbQuery<{ CNT: number }, { CNT: number }>(
+    GotmSql.checkRoundExists,
     { round },
     (row) => row,
   );
@@ -444,9 +444,8 @@ export async function deleteGotmRoundFromDatabase(round: number): Promise<number
     throw new Error("Invalid round number for GOTM delete.");
   }
 
-  const result = await oraMutate(
-    getSql(GotmSql.deleteRound, dialect),
+  return dbMutate(
+    GotmSql.deleteRound,
     { round },
   );
-  return result.rowsAffected ?? 0;
 }

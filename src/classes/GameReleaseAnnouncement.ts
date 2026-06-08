@@ -1,4 +1,4 @@
-import { oraQuery, oraMutate, oraWithConnection } from "../db/SqlManager.js";
+import { dbQuery, dbMutate, oraMutate, oraWithConnection } from "../db/SqlManager.js";
 import { getDialect } from "../db/dialect.js";
 import { getSql } from "../db/SqlManager.js";
 import { GameReleaseAnnouncementSql } from "../db/sql/index.js";
@@ -83,11 +83,10 @@ export default class GameReleaseAnnouncement {
   }
 
   static async markNonCanonicalAnnouncements(): Promise<number> {
-    const result = await oraMutate(
-      getSql(GameReleaseAnnouncementSql.markNonCanonical, dialect),
+    return dbMutate(
+      GameReleaseAnnouncementSql.markNonCanonical,
       { portOnlyReason: PORT_ONLY_RELEASE_REASON, sameDayReason: SAME_DAY_DUPLICATE_REASON },
     );
-    return Number(result.rowsAffected ?? 0);
   }
 
   static async listDueAnnouncements(
@@ -95,26 +94,25 @@ export default class GameReleaseAnnouncement {
     limit: number = DEFAULT_BATCH_SIZE,
   ): Promise<IReleaseAnnouncementCandidate[]> {
     const safeLimit = clampBatchSize(limit);
-    return oraQuery(
-      getSql(GameReleaseAnnouncementSql.listDueAnnouncements, dialect),
+    return dbQuery(
+      GameReleaseAnnouncementSql.listDueAnnouncements,
       { referenceTime, limit: safeLimit },
       mapCandidateRow,
     );
   }
 
   static async markAnnouncementSent(releaseId: number, sentAt: Date): Promise<boolean> {
-    const result = await oraMutate(
-      getSql(GameReleaseAnnouncementSql.markSent, dialect),
+    const count = await dbMutate(
+      GameReleaseAnnouncementSql.markSent,
       { releaseId, sentAt },
     );
-    return (result.rowsAffected ?? 0) > 0;
+    return count > 0;
   }
 
   static async markMissedAnnouncements(referenceTime: Date): Promise<number> {
-    const result = await oraMutate(
-      getSql(GameReleaseAnnouncementSql.markMissed, dialect),
+    return dbMutate(
+      GameReleaseAnnouncementSql.markMissed,
       { referenceTime, reason: MISSED_WINDOW_REASON },
     );
-    return Number(result.rowsAffected ?? 0);
   }
 }

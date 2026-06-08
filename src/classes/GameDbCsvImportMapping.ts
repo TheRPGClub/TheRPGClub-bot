@@ -1,9 +1,5 @@
-import { oraQuery, oraMutate } from "../db/SqlManager.js";
-import { getDialect } from "../db/dialect.js";
-import { getSql } from "../db/SqlManager.js";
+import { dbQuery, dbMutate } from "../db/SqlManager.js";
 import { GameDbCsvImportMappingSql } from "../db/sql/index.js";
-
-const dialect = getDialect();
 
 export type GameDbCsvTitleMapStatus = "MAPPED" | "SKIPPED";
 
@@ -47,8 +43,8 @@ function mapRow(row: {
 export async function getGameDbCsvTitleMapByNorm(
   titleNorm: string,
 ): Promise<IGameDbCsvTitleMap | null> {
-  const rows = await oraQuery(
-    getSql(GameDbCsvImportMappingSql.getByTitleNorm, dialect),
+  const rows = await dbQuery(
+    GameDbCsvImportMappingSql.getByTitleNorm,
     { titleNorm },
     mapRow,
   );
@@ -62,8 +58,8 @@ export async function upsertGameDbCsvTitleMap(params: {
   status: GameDbCsvTitleMapStatus;
   createdBy: string | null;
 }): Promise<void> {
-  await oraMutate(
-    getSql(GameDbCsvImportMappingSql.upsert, dialect),
+  await dbMutate(
+    GameDbCsvImportMappingSql.upsert,
     {
       titleRaw: params.titleRaw,
       titleNorm: params.titleNorm,

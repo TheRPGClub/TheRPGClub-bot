@@ -1,5 +1,5 @@
 import oracledb from "oracledb";
-import { oraQuery, oraMutate, oraWithConnection } from "../db/SqlManager.js";
+import { dbQuery, dbMutate, oraQuery, oraMutate, oraWithConnection } from "../db/SqlManager.js";
 import { getDialect } from "../db/dialect.js";
 import { getSql } from "../db/SqlManager.js";
 import { GameSearchSynonymDraftSql } from "../db/sql/index.js";
@@ -66,8 +66,8 @@ export default class GameSearchSynonymDraft {
   }
 
   static async getDraft(draftId: number): Promise<ISynonymDraft | null> {
-    const rows = await oraQuery(
-      getSql(GameSearchSynonymDraftSql.getDraft, dialect),
+    const rows = await dbQuery(
+      GameSearchSynonymDraftSql.getDraft,
       { draftId },
       mapDraftRow,
     );
@@ -92,8 +92,8 @@ export default class GameSearchSynonymDraft {
   }
 
   static async deleteDraft(draftId: number): Promise<void> {
-    await oraMutate(
-      getSql(GameSearchSynonymDraftSql.deleteDraft, dialect),
+    await dbMutate(
+      GameSearchSynonymDraftSql.deleteDraft,
       { draftId },
     );
   }

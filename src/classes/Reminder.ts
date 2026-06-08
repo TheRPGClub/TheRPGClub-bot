@@ -1,8 +1,7 @@
 import oracledb from "oracledb";
 import type { Connection } from "oracledb";
-import { oraQuery, oraMutate } from "../db/SqlManager.js";
+import { dbQuery, dbMutate, oraQuery, oraMutate, getSql } from "../db/SqlManager.js";
 import { getDialect } from "../db/dialect.js";
-import { getSql } from "../db/SqlManager.js";
 import { ReminderSql } from "../db/sql/index.js";
 
 const dialect = getDialect();
@@ -133,11 +132,7 @@ export default class Reminder {
   }
 
   static async listByUser(userId: string): Promise<IReminderRecord[]> {
-    return oraQuery(
-      getSql(ReminderSql.listByUser, dialect),
-      { userId },
-      mapRowToReminder,
-    );
+    return dbQuery(ReminderSql.listByUser, { userId }, mapRowToReminder);
   }
 
   static async getById(
@@ -156,11 +151,8 @@ export default class Reminder {
 
   static async delete(reminderId: number, userId: string): Promise<boolean> {
     const id = normalizeReminderId(reminderId);
-    const result = await oraMutate(
-      getSql(ReminderSql.delete, dialect),
-      { reminderId: id, userId },
-    );
-    return (result.rowsAffected ?? 0) > 0;
+    const count = await dbMutate(ReminderSql.delete, { reminderId: id, userId });
+    return count > 0;
   }
 
   static async snooze(
@@ -170,43 +162,30 @@ export default class Reminder {
   ): Promise<IReminderRecord | null> {
     const id = normalizeReminderId(reminderId);
     const normalizedDate = normalizeDate(remindAt);
-
-    const result = await oraMutate(
-      getSql(ReminderSql.snooze, dialect),
+    const count = await dbMutate(
+      ReminderSql.snooze,
       { reminderId: id, userId, remindAt: normalizedDate },
     );
-
-    if ((result.rowsAffected ?? 0) === 0) {
-      return null;
-    }
+    if (count === 0) return null;
     return Reminder.getById(reminderId);
   }
 
   static async markSent(reminderId: number): Promise<void> {
     const id = normalizeReminderId(reminderId);
-    const result = await oraMutate(
-      getSql(ReminderSql.markSent, dialect),
-      { reminderId: id },
-    );
-    if ((result.rowsAffected ?? 0) === 0) {
+    const count = await dbMutate(ReminderSql.markSent, { reminderId: id });
+    if (count === 0) {
       throw new Error(`No reminder found for id ${id} when marking as sent.`);
     }
   }
 
   static async recordFailure(reminderId: number): Promise<void> {
     const id = normalizeReminderId(reminderId);
-    await oraMutate(
-      getSql(ReminderSql.recordFailure, dialect),
-      { reminderId: id },
-    );
+    await dbMutate(ReminderSql.recordFailure, { reminderId: id });
   }
 
   static async markFailedPermanently(reminderId: number): Promise<void> {
     const id = normalizeReminderId(reminderId);
-    await oraMutate(
-      getSql(ReminderSql.markFailedPermanently, dialect),
-      { reminderId: id },
-    );
+    await dbMutate(ReminderSql.markFailedPermanently, { reminderId: id });
   }
 
   static async getDueUndelivered(
@@ -215,9 +194,8 @@ export default class Reminder {
   ): Promise<IReminderRecord[]> {
     const normalizedDate = normalizeDate(cutoff);
     const safeLimit = Math.max(1, Math.min(limit, 100));
-
-    return oraQuery(
-      getSql(ReminderSql.getDueUndelivered, dialect),
+    return dbQuery(
+      ReminderSql.getDueUndelivered,
       { cutoff: normalizedDate, limit: safeLimit },
       mapRowToReminder,
     );
