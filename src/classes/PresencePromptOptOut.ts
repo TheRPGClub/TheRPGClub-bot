@@ -1,4 +1,9 @@
 import { oraQuery, oraMutate } from "../db/SqlManager.js";
+import { getDialect } from "../db/dialect.js";
+import { getSql } from "../db/SqlManager.js";
+import { PresencePromptOptOutSql } from "../db/sql/index.js";
+
+const dialect = getDialect();
 
 const OPT_OUT_ALL_TOKEN = "__ALL__";
 
@@ -9,11 +14,7 @@ export function normalizePresenceGameTitle(title: string): string {
 export default class PresencePromptOptOut {
   static async isOptedOutAll(userId: string): Promise<boolean> {
     const rows = await oraQuery(
-      `SELECT COUNT(*) AS CNT
-         FROM RPG_CLUB_PRESENCE_PROMPT_OPTS
-        WHERE USER_ID = :userId
-          AND SCOPE = 'ALL'
-          AND GAME_TITLE_NORM = :token`,
+      getSql(PresencePromptOptOutSql.isOptedOutAll, dialect),
       { userId, token: OPT_OUT_ALL_TOKEN },
       (row: { CNT: number }) => Number(row.CNT ?? 0),
     );
@@ -25,11 +26,7 @@ export default class PresencePromptOptOut {
     if (!normalized) return false;
 
     const rows = await oraQuery(
-      `SELECT COUNT(*) AS CNT
-         FROM RPG_CLUB_PRESENCE_PROMPT_OPTS
-        WHERE USER_ID = :userId
-          AND SCOPE = 'GAME'
-          AND GAME_TITLE_NORM = :gameTitleNorm`,
+      getSql(PresencePromptOptOutSql.isOptedOutGame, dialect),
       { userId, gameTitleNorm: normalized },
       (row: { CNT: number }) => Number(row.CNT ?? 0),
     );
@@ -54,9 +51,7 @@ export default class PresencePromptOptOut {
   ): Promise<void> {
     try {
       await oraMutate(
-        `INSERT INTO RPG_CLUB_PRESENCE_PROMPT_OPTS
-          (USER_ID, SCOPE, GAME_TITLE, GAME_TITLE_NORM)
-         VALUES (:userId, :scope, :gameTitle, :gameTitleNorm)`,
+        getSql(PresencePromptOptOutSql.insertOptOut, dialect),
         { userId, scope, gameTitle, gameTitleNorm: normalizedTitle },
       );
     } catch (err: any) {

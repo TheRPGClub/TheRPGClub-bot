@@ -1,4 +1,8 @@
 import { oraQuery, oraMutate } from "../db/SqlManager.js";
+import { getDialect } from "../db/dialect.js";
+import { NominationSql } from "../db/sql/index.js";
+
+const dialect = getDialect();
 
 export type NominationKind = "gotm" | "nr-gotm";
 
@@ -57,17 +61,7 @@ export async function getNominationForUser(
   userId: string,
 ): Promise<INominationEntry | null> {
   const rows = await oraQuery(
-    `SELECT n.NOMINATION_ID,
-            n.ROUND_NUMBER,
-            n.USER_ID,
-            n.GAMEDB_GAME_ID,
-            g.TITLE AS GAMEDB_TITLE,
-            n.NOMINATED_AT,
-            n.REASON
-       FROM ${tableName(kind)} n
-       LEFT JOIN GAMEDB_GAMES g ON g.GAME_ID = n.GAMEDB_GAME_ID
-      WHERE n.ROUND_NUMBER = :roundNumber
-        AND n.USER_ID = :userId`,
+    NominationSql.getNominationForUser(tableName(kind))[dialect],
     { roundNumber, userId },
     mapRow,
   );
@@ -86,23 +80,7 @@ export async function upsertNomination(
   }
 
   await oraMutate(
-    `MERGE INTO ${tableName(kind)} t
-      USING (
-        SELECT :roundNumber AS ROUND_NUMBER,
-               :userId AS USER_ID,
-               :gamedbGameId AS GAMEDB_GAME_ID,
-               CAST(:nominatedAt AS TIMESTAMP) AS NOMINATED_AT,
-               :reason AS REASON
-          FROM dual
-      ) src
-         ON (t.ROUND_NUMBER = src.ROUND_NUMBER AND t.USER_ID = src.USER_ID)
-    WHEN MATCHED THEN
-      UPDATE SET t.GAMEDB_GAME_ID = src.GAMEDB_GAME_ID,
-                 t.NOMINATED_AT = src.NOMINATED_AT,
-                 t.REASON = src.REASON
-    WHEN NOT MATCHED THEN
-      INSERT (ROUND_NUMBER, USER_ID, GAMEDB_GAME_ID, NOMINATED_AT, REASON)
-      VALUES (src.ROUND_NUMBER, src.USER_ID, src.GAMEDB_GAME_ID, src.NOMINATED_AT, src.REASON)`,
+    NominationSql.upsertNomination(tableName(kind))[dialect],
     { roundNumber, userId, gamedbGameId, nominatedAt: new Date(), reason },
   );
 
@@ -119,9 +97,7 @@ export async function deleteNominationForUser(
   userId: string,
 ): Promise<boolean> {
   const result = await oraMutate(
-    `DELETE FROM ${tableName(kind)}
-      WHERE ROUND_NUMBER = :roundNumber
-        AND USER_ID = :userId`,
+    NominationSql.deleteNomination(tableName(kind))[dialect],
     { roundNumber, userId },
   );
   return (result.rowsAffected ?? 0) > 0;
@@ -132,17 +108,7 @@ export async function listNominationsForRound(
   roundNumber: number,
 ): Promise<INominationEntry[]> {
   return oraQuery(
-    `SELECT n.NOMINATION_ID,
-            n.ROUND_NUMBER,
-            n.USER_ID,
-            n.GAMEDB_GAME_ID,
-            g.TITLE AS GAMEDB_TITLE,
-            n.NOMINATED_AT,
-            n.REASON
-       FROM ${tableName(kind)} n
-       LEFT JOIN GAMEDB_GAMES g ON g.GAME_ID = n.GAMEDB_GAME_ID
-      WHERE n.ROUND_NUMBER = :roundNumber
-      ORDER BY g.TITLE ASC`,
+    NominationSql.listNominationsForRound(tableName(kind))[dialect],
     { roundNumber },
     mapRow,
   );

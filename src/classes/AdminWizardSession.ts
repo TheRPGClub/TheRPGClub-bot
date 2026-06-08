@@ -1,4 +1,9 @@
 import { oraQuery, oraMutate, oraWithConnection } from "../db/SqlManager.js";
+import { getDialect } from "../db/dialect.js";
+import { getSql } from "../db/SqlManager.js";
+import { AdminWizardSessionSql } from "../db/sql/index.js";
+
+const dialect = getDialect();
 
 export const ADMIN_WIZARD_COMMANDS = ["nextround-setup"] as const;
 export type AdminWizardCommand = (typeof ADMIN_WIZARD_COMMANDS)[number];
@@ -190,23 +195,7 @@ export async function getActiveAdminWizardSession(
   channelId: string,
 ): Promise<IAdminWizardSession | null> {
   const rows = await oraQuery(
-    `SELECT SESSION_ID,
-            COMMAND_KEY,
-            OWNER_USER_ID,
-            CHANNEL_ID,
-            GUILD_ID,
-            STATUS,
-            STATE_JSON,
-            LAST_UPDATED_AT,
-            CREATED_AT,
-            UPDATED_AT
-       FROM RPG_CLUB_ADMIN_WIZARD_SESSIONS
-      WHERE COMMAND_KEY = :commandKey
-        AND OWNER_USER_ID = :ownerUserId
-        AND CHANNEL_ID = :channelId
-        AND STATUS = 'ACTIVE'
-      ORDER BY LAST_UPDATED_AT DESC
-      FETCH FIRST 1 ROWS ONLY`,
+    getSql(AdminWizardSessionSql.getActive, dialect),
     { commandKey, ownerUserId, channelId },
     mapAdminWizardSessionRow,
   );
@@ -236,37 +225,7 @@ export async function saveAdminWizardSession(params: {
   ].join("-");
 
   await oraMutate(
-    `MERGE INTO RPG_CLUB_ADMIN_WIZARD_SESSIONS t
-      USING (
-        SELECT :commandKey AS COMMAND_KEY,
-               :ownerUserId AS OWNER_USER_ID,
-               :channelId AS CHANNEL_ID,
-               :guildId AS GUILD_ID,
-               :stateJson AS STATE_JSON,
-               :lastUpdatedAt AS LAST_UPDATED_AT
-          FROM dual
-      ) src
-         ON (t.COMMAND_KEY = src.COMMAND_KEY
-             AND t.OWNER_USER_ID = src.OWNER_USER_ID
-             AND t.CHANNEL_ID = src.CHANNEL_ID
-             AND t.STATUS = 'ACTIVE')
-    WHEN MATCHED THEN
-      UPDATE SET t.STATE_JSON = src.STATE_JSON,
-                 t.GUILD_ID = src.GUILD_ID,
-                 t.LAST_UPDATED_AT = src.LAST_UPDATED_AT
-    WHEN NOT MATCHED THEN
-      INSERT (SESSION_ID, COMMAND_KEY, OWNER_USER_ID, CHANNEL_ID, GUILD_ID, STATUS,
-              STATE_JSON, LAST_UPDATED_AT)
-      VALUES (
-        :sessionId,
-        src.COMMAND_KEY,
-        src.OWNER_USER_ID,
-        src.CHANNEL_ID,
-        src.GUILD_ID,
-        'ACTIVE',
-        src.STATE_JSON,
-        src.LAST_UPDATED_AT
-      )`,
+    getSql(AdminWizardSessionSql.saveSession, dialect),
     {
       commandKey: params.commandKey,
       ownerUserId: params.ownerUserId,
@@ -299,11 +258,7 @@ export async function closeActiveAdminWizardSession(params: {
     // Remove any prior historical row to avoid unique index collision when
     // promoting ACTIVE -> CANCELLED/COMPLETED.
     await conn.execute(
-      `DELETE FROM RPG_CLUB_ADMIN_WIZARD_SESSIONS
-        WHERE COMMAND_KEY = :commandKey
-          AND OWNER_USER_ID = :ownerUserId
-          AND CHANNEL_ID = :channelId
-          AND STATUS = :status`,
+      getSql(AdminWizardSessionSql.deleteHistorical, dialect),
       {
         commandKey: params.commandKey,
         ownerUserId: params.ownerUserId,
@@ -314,13 +269,7 @@ export async function closeActiveAdminWizardSession(params: {
     );
 
     const result = await conn.execute(
-      `UPDATE RPG_CLUB_ADMIN_WIZARD_SESSIONS
-          SET STATUS = :status,
-              LAST_UPDATED_AT = :lastUpdatedAt
-        WHERE COMMAND_KEY = :commandKey
-          AND OWNER_USER_ID = :ownerUserId
-          AND CHANNEL_ID = :channelId
-          AND STATUS = 'ACTIVE'`,
+      getSql(AdminWizardSessionSql.updateStatus, dialect),
       {
         status: toDbStatus(params.status),
         lastUpdatedAt: new Date(),

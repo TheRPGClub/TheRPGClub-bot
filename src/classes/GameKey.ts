@@ -1,5 +1,10 @@
 import oracledb from "oracledb";
 import { oraQuery, oraMutate } from "../db/SqlManager.js";
+import { getDialect } from "../db/dialect.js";
+import { getSql } from "../db/SqlManager.js";
+import { GameKeySql } from "../db/sql/index.js";
+
+const dialect = getDialect();
 
 export interface IGameKey {
   keyId: number;
@@ -44,16 +49,6 @@ function mapGameKeyRow(row: GameKeyRow): IGameKey {
   };
 }
 
-const GAME_KEY_COLS = `KEY_ID,
-        GAME_TITLE,
-        PLATFORM,
-        KEY_VALUE,
-        DONOR_USER_ID,
-        CLAIMED_BY_USER_ID,
-        CLAIMED_AT,
-        CREATED_AT,
-        UPDATED_AT`;
-
 export async function createGameKey(
   title: string,
   platform: string,
@@ -61,9 +56,7 @@ export async function createGameKey(
   donorUserId: string,
 ): Promise<IGameKey> {
   const result = await oraMutate(
-    `INSERT INTO RPG_CLUB_GAME_KEYS (GAME_TITLE, PLATFORM, KEY_VALUE, DONOR_USER_ID)
-     VALUES (:title, :platform, :keyValue, :donorUserId)
-     RETURNING KEY_ID INTO :id`,
+    getSql(GameKeySql.create, dialect),
     {
       title,
       platform,
@@ -85,9 +78,7 @@ export async function createGameKey(
 
 export async function getGameKeyById(keyId: number): Promise<IGameKey | null> {
   const rows = await oraQuery(
-    `SELECT ${GAME_KEY_COLS}
-       FROM RPG_CLUB_GAME_KEYS
-      WHERE KEY_ID = :id`,
+    getSql(GameKeySql.getById, dialect),
     { id: keyId },
     mapGameKeyRow,
   );
@@ -96,9 +87,7 @@ export async function getGameKeyById(keyId: number): Promise<IGameKey | null> {
 
 export async function countAvailableGameKeys(): Promise<number> {
   const rows = await oraQuery(
-    `SELECT COUNT(*) AS TOTAL
-       FROM RPG_CLUB_GAME_KEYS
-      WHERE CLAIMED_BY_USER_ID IS NULL`,
+    getSql(GameKeySql.countAvailable, dialect),
     {},
     (row: { TOTAL: number | null }) => Number(row.TOTAL ?? 0),
   );
@@ -112,11 +101,7 @@ export async function listAvailableGameKeys(
   const safeLimit = Math.min(Math.max(limit, 1), 50);
   const safeOffset = Math.max(offset, 0);
   return oraQuery(
-    `SELECT ${GAME_KEY_COLS}
-       FROM RPG_CLUB_GAME_KEYS
-      WHERE CLAIMED_BY_USER_ID IS NULL
-      ORDER BY UPPER(GAME_TITLE), KEY_ID
-      OFFSET :offset ROWS FETCH NEXT :limit ROWS ONLY`,
+    getSql(GameKeySql.listAvailable, dialect),
     { offset: safeOffset, limit: safeLimit },
     mapGameKeyRow,
   );
@@ -124,10 +109,7 @@ export async function listAvailableGameKeys(
 
 export async function listKeysByDonor(userId: string): Promise<IGameKey[]> {
   return oraQuery(
-    `SELECT ${GAME_KEY_COLS}
-       FROM RPG_CLUB_GAME_KEYS
-      WHERE DONOR_USER_ID = :userId
-      ORDER BY CREATED_AT DESC, KEY_ID DESC`,
+    getSql(GameKeySql.listByDonor, dialect),
     { userId },
     mapGameKeyRow,
   );
@@ -138,11 +120,7 @@ export async function claimGameKey(
   userId: string,
 ): Promise<boolean> {
   const result = await oraMutate(
-    `UPDATE RPG_CLUB_GAME_KEYS
-        SET CLAIMED_BY_USER_ID = :userId,
-            CLAIMED_AT = SYSTIMESTAMP
-      WHERE KEY_ID = :keyId
-        AND CLAIMED_BY_USER_ID IS NULL`,
+    getSql(GameKeySql.claim, dialect),
     { keyId, userId },
   );
   return (result.rowsAffected ?? 0) > 0;
@@ -150,7 +128,7 @@ export async function claimGameKey(
 
 export async function revokeGameKey(keyId: number): Promise<boolean> {
   const result = await oraMutate(
-    `DELETE FROM RPG_CLUB_GAME_KEYS WHERE KEY_ID = :keyId`,
+    getSql(GameKeySql.revoke, dialect),
     { keyId },
   );
   return (result.rowsAffected ?? 0) > 0;

@@ -1,5 +1,10 @@
 import oracledb from "oracledb";
 import { oraQuery, oraMutate, oraWithConnection, oraTransaction } from "../db/SqlManager.js";
+import { getDialect } from "../db/dialect.js";
+import { getSql } from "../db/SqlManager.js";
+import { CompletionatorImportSql } from "../db/sql/index.js";
+
+const dialect = getDialect();
 
 export type ImportStatus = "ACTIVE" | "PAUSED" | "COMPLETED" | "CANCELED";
 export type ImportItemStatus =
@@ -111,11 +116,7 @@ export async function createImportSession(params: {
 }): Promise<ICompletionatorImport> {
   return oraWithConnection(async (conn) => {
     const result = await oraMutate(
-      `INSERT INTO RPG_CLUB_COMPLETIONATOR_IMPORTS (
-         USER_ID, STATUS, CURRENT_INDEX, TOTAL_COUNT, SOURCE_FILENAME
-       ) VALUES (
-         :userId, 'ACTIVE', 0, :totalCount, :sourceFilename
-       ) RETURNING IMPORT_ID INTO :id`,
+      getSql(CompletionatorImportSql.createImport, dialect),
       {
         userId: params.userId,
         totalCount: params.totalCount,
@@ -153,31 +154,7 @@ export async function insertImportItems(
   await oraTransaction(async (conn) => {
     for (const item of items) {
       await oraMutate(
-        `INSERT INTO RPG_CLUB_COMPLETIONATOR_IMPORT_ITEMS (
-           IMPORT_ID,
-           ROW_INDEX,
-           GAME_TITLE,
-           PLATFORM_NAME,
-           REGION_NAME,
-           SOURCE_TYPE,
-           TIME_TEXT,
-           COMPLETED_AT,
-           COMPLETION_TYPE,
-           PLAYTIME_HRS,
-           STATUS
-         ) VALUES (
-           :importId,
-           :rowIndex,
-           :gameTitle,
-           :platformName,
-           :regionName,
-           :sourceType,
-           :timeText,
-           :completedAt,
-           :completionType,
-           :playtimeHours,
-           'PENDING'
-         )`,
+        getSql(CompletionatorImportSql.insertItem, dialect),
         {
           importId,
           rowIndex: item.rowIndex,
@@ -201,16 +178,7 @@ export async function getImportById(
   existingConn?: oracledb.Connection,
 ): Promise<ICompletionatorImport | null> {
   const rows = await oraQuery(
-    `SELECT IMPORT_ID,
-            USER_ID,
-            STATUS,
-            CURRENT_INDEX,
-            TOTAL_COUNT,
-            SOURCE_FILENAME,
-            CREATED_AT,
-            UPDATED_AT
-       FROM RPG_CLUB_COMPLETIONATOR_IMPORTS
-      WHERE IMPORT_ID = :id`,
+    getSql(CompletionatorImportSql.getImportById, dialect),
     { id: importId },
     mapImport,
     existingConn,
@@ -222,19 +190,7 @@ export async function getActiveImportForUser(
   userId: string,
 ): Promise<ICompletionatorImport | null> {
   const rows = await oraQuery(
-    `SELECT IMPORT_ID,
-            USER_ID,
-            STATUS,
-            CURRENT_INDEX,
-            TOTAL_COUNT,
-            SOURCE_FILENAME,
-            CREATED_AT,
-            UPDATED_AT
-       FROM RPG_CLUB_COMPLETIONATOR_IMPORTS
-      WHERE USER_ID = :userId
-        AND STATUS IN ('ACTIVE', 'PAUSED')
-      ORDER BY CREATED_AT DESC, IMPORT_ID DESC
-      FETCH FIRST 1 ROWS ONLY`,
+    getSql(CompletionatorImportSql.getActiveForUser, dialect),
     { userId },
     mapImport,
   );
@@ -246,9 +202,7 @@ export async function setImportStatus(
   status: ImportStatus,
 ): Promise<void> {
   await oraMutate(
-    `UPDATE RPG_CLUB_COMPLETIONATOR_IMPORTS
-        SET STATUS = :status
-      WHERE IMPORT_ID = :importId`,
+    getSql(CompletionatorImportSql.setStatus, dialect),
     { status, importId },
   );
 }
@@ -258,9 +212,7 @@ export async function updateImportIndex(
   currentIndex: number,
 ): Promise<void> {
   await oraMutate(
-    `UPDATE RPG_CLUB_COMPLETIONATOR_IMPORTS
-        SET CURRENT_INDEX = :currentIndex
-      WHERE IMPORT_ID = :importId`,
+    getSql(CompletionatorImportSql.updateIndex, dialect),
     { currentIndex, importId },
   );
 }
@@ -269,26 +221,7 @@ export async function getNextPendingItem(
   importId: number,
 ): Promise<ICompletionatorItem | null> {
   const rows = await oraQuery(
-    `SELECT ITEM_ID,
-            IMPORT_ID,
-            ROW_INDEX,
-            GAME_TITLE,
-            PLATFORM_NAME,
-            REGION_NAME,
-            SOURCE_TYPE,
-            TIME_TEXT,
-            COMPLETED_AT,
-            COMPLETION_TYPE,
-            PLAYTIME_HRS,
-            STATUS,
-            GAMEDB_GAME_ID,
-            COMPLETION_ID,
-            ERROR_TEXT
-       FROM RPG_CLUB_COMPLETIONATOR_IMPORT_ITEMS
-      WHERE IMPORT_ID = :importId
-        AND STATUS = 'PENDING'
-      ORDER BY ROW_INDEX ASC
-      FETCH FIRST 1 ROWS ONLY`,
+    getSql(CompletionatorImportSql.getNextPendingItem, dialect),
     { importId },
     mapItem,
   );
@@ -299,23 +232,7 @@ export async function getImportItemById(
   itemId: number,
 ): Promise<ICompletionatorItem | null> {
   const rows = await oraQuery(
-    `SELECT ITEM_ID,
-            IMPORT_ID,
-            ROW_INDEX,
-            GAME_TITLE,
-            PLATFORM_NAME,
-            REGION_NAME,
-            SOURCE_TYPE,
-            TIME_TEXT,
-            COMPLETED_AT,
-            COMPLETION_TYPE,
-            PLAYTIME_HRS,
-            STATUS,
-            GAMEDB_GAME_ID,
-            COMPLETION_ID,
-            ERROR_TEXT
-       FROM RPG_CLUB_COMPLETIONATOR_IMPORT_ITEMS
-      WHERE ITEM_ID = :itemId`,
+    getSql(CompletionatorImportSql.getItemById, dialect),
     { itemId },
     mapItem,
   );
@@ -354,9 +271,7 @@ export async function updateImportItem(
   if (!fields.length) return;
 
   await oraMutate(
-    `UPDATE RPG_CLUB_COMPLETIONATOR_IMPORT_ITEMS
-        SET ${fields.join(", ")}
-      WHERE ITEM_ID = :itemId`,
+    CompletionatorImportSql.updateItem(fields)[dialect],
     binds,
   );
 }
@@ -370,10 +285,7 @@ export async function countImportItems(importId: number): Promise<{
 }> {
   const stats = { pending: 0, skipped: 0, imported: 0, updated: 0, error: 0 };
   const rows = await oraQuery(
-    `SELECT STATUS, COUNT(*) AS CNT
-       FROM RPG_CLUB_COMPLETIONATOR_IMPORT_ITEMS
-      WHERE IMPORT_ID = :importId
-      GROUP BY STATUS`,
+    getSql(CompletionatorImportSql.countItemsByStatus, dialect),
     { importId },
     (row: { STATUS: string; CNT: number }) => row,
   );

@@ -1,4 +1,9 @@
 import { oraQuery, oraMutate } from "../db/SqlManager.js";
+import { getDialect } from "../db/dialect.js";
+import { getSql } from "../db/SqlManager.js";
+import { GameDbCsvImportMappingSql } from "../db/sql/index.js";
+
+const dialect = getDialect();
 
 export type GameDbCsvTitleMapStatus = "MAPPED" | "SKIPPED";
 
@@ -43,16 +48,7 @@ export async function getGameDbCsvTitleMapByNorm(
   titleNorm: string,
 ): Promise<IGameDbCsvTitleMap | null> {
   const rows = await oraQuery(
-    `SELECT MAP_ID,
-            TITLE_RAW,
-            TITLE_NORM,
-            GAMEDB_GAME_ID,
-            STATUS,
-            CREATED_BY,
-            CREATED_AT,
-            UPDATED_AT
-       FROM RPG_CLUB_GAMEDB_IMPORT_TITLE_MAP
-      WHERE TITLE_NORM = :titleNorm`,
+    getSql(GameDbCsvImportMappingSql.getByTitleNorm, dialect),
     { titleNorm },
     mapRow,
   );
@@ -67,20 +63,7 @@ export async function upsertGameDbCsvTitleMap(params: {
   createdBy: string | null;
 }): Promise<void> {
   await oraMutate(
-    `MERGE INTO RPG_CLUB_GAMEDB_IMPORT_TITLE_MAP t
-     USING (
-       SELECT :titleNorm AS TITLE_NORM FROM dual
-     ) s
-        ON (t.TITLE_NORM = s.TITLE_NORM)
-     WHEN MATCHED THEN
-       UPDATE SET
-         TITLE_RAW = :titleRaw,
-         GAMEDB_GAME_ID = :gameDbGameId,
-         STATUS = :status,
-         CREATED_BY = :createdBy
-     WHEN NOT MATCHED THEN
-       INSERT (TITLE_RAW, TITLE_NORM, GAMEDB_GAME_ID, STATUS, CREATED_BY)
-       VALUES (:titleRaw, :titleNorm, :gameDbGameId, :status, :createdBy)`,
+    getSql(GameDbCsvImportMappingSql.upsert, dialect),
     {
       titleRaw: params.titleRaw,
       titleNorm: params.titleNorm,
