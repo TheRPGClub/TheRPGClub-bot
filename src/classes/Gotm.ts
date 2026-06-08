@@ -1,5 +1,10 @@
 import { oraQuery, oraMutate, oraWithConnection, oraTransaction } from "../db/SqlManager.js";
+import { getDialect } from "../db/dialect.js";
+import { getSql } from "../db/SqlManager.js";
+import { GotmSql } from "../db/sql/index.js";
 import Game from "./Game.js";
+
+const dialect = getDialect();
 import { getThreadsByGameId } from "./Thread.js";
 
 export interface IGotmGame {
@@ -64,14 +69,7 @@ type GotmEntryRow = {
 
 async function loadFromDatabaseInternal(): Promise<IGotmEntry[]> {
   const rows = await oraQuery<GotmEntryRow, GotmEntryRow>(
-    `SELECT ROUND_NUMBER,
-            MONTH_YEAR,
-            GAME_INDEX,
-            REDDIT_URL,
-            VOTING_RESULTS_MESSAGE_ID,
-            GAMEDB_GAME_ID
-       FROM GOTM_ENTRIES
-      ORDER BY ROUND_NUMBER, GAME_INDEX`,
+    getSql(GotmSql.loadAll, dialect),
     {},
     (row) => row,
   );
@@ -334,11 +332,7 @@ export async function updateGotmGameFieldInDatabase(
 
   await oraWithConnection(async (conn) => {
     const rows = await oraQuery<GotmRowIndexRow, GotmRowIndexRow>(
-      `SELECT ROUND_NUMBER,
-              GAME_INDEX
-         FROM GOTM_ENTRIES
-        WHERE ROUND_NUMBER = :round
-        ORDER BY GAME_INDEX`,
+      getSql(GotmSql.getRowsByRound, dialect),
       { round },
       (row) => row,
       conn,
@@ -368,10 +362,7 @@ export async function updateGotmGameFieldInDatabase(
     }
 
     await oraMutate(
-      `UPDATE GOTM_ENTRIES
-          SET ${columnName} = :value
-        WHERE ROUND_NUMBER = :round
-          AND GAME_INDEX = :gameIndex`,
+      GotmSql.updateField(columnName)[dialect],
       { round, gameIndex: dbGameIndex, value: dbValue },
       conn,
     );
@@ -398,9 +389,7 @@ export async function updateGotmVotingResultsInDatabase(
   messageId: string | null,
 ): Promise<void> {
   await oraMutate(
-    `UPDATE GOTM_ENTRIES
-        SET VOTING_RESULTS_MESSAGE_ID = :value
-      WHERE ROUND_NUMBER = :round`,
+    getSql(GotmSql.updateVotingResults, dialect),
     { round, value: messageId },
   );
 }
@@ -418,9 +407,7 @@ export async function insertGotmRoundInDatabase(
   }
 
   const countRows = await oraQuery<{ CNT: number }, { CNT: number }>(
-    `SELECT COUNT(*) AS CNT
-       FROM GOTM_ENTRIES
-      WHERE ROUND_NUMBER = :round`,
+    getSql(GotmSql.checkRoundExists, dialect),
     { round },
     (row) => row,
   );
@@ -437,21 +424,7 @@ export async function insertGotmRoundInDatabase(
       }
       const gameMeta = await getGameDetailsCached(g.gamedbGameId);
       await oraMutate(
-        `INSERT INTO GOTM_ENTRIES (
-           ROUND_NUMBER,
-           MONTH_YEAR,
-           GAME_INDEX,
-           REDDIT_URL,
-           VOTING_RESULTS_MESSAGE_ID,
-           GAMEDB_GAME_ID
-         ) VALUES (
-           :round,
-           :monthYear,
-           :gameIndex,
-           :redditUrl,
-           NULL,
-           :gamedbGameId
-         )`,
+        getSql(GotmSql.insertRound, dialect),
         {
           round,
           monthYear,
@@ -472,8 +445,7 @@ export async function deleteGotmRoundFromDatabase(round: number): Promise<number
   }
 
   const result = await oraMutate(
-    `DELETE FROM GOTM_ENTRIES
-      WHERE ROUND_NUMBER = :round`,
+    getSql(GotmSql.deleteRound, dialect),
     { round },
   );
   return result.rowsAffected ?? 0;

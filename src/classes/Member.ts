@@ -5,6 +5,11 @@ import {
   oraWithConnection,
   oraTransaction,
 } from "../db/SqlManager.js";
+import { getDialect } from "../db/dialect.js";
+import { getSql } from "../db/SqlManager.js";
+import { MemberSql } from "../db/sql/index.js";
+
+const dialect = getDialect();
 
 export interface IMemberRecord {
   userId: string;
@@ -205,11 +210,7 @@ async function getNowPlayingThreadIdSql(connection: Connection): Promise<string>
   if (nowPlayingLinkedThreadColumnAvailable === null) {
     try {
       const res = await oraQuery<{ CNT: number }, number>(
-        `SELECT COUNT(*) AS CNT
-           FROM ALL_TAB_COLUMNS
-          WHERE OWNER = SYS_CONTEXT('USERENV', 'CURRENT_SCHEMA')
-            AND TABLE_NAME = 'GAMEDB_GAMES'
-            AND COLUMN_NAME = 'LINKED_THREAD_ID'`,
+        getSql(MemberSql.checkLinkedThreadColumn, dialect),
         {},
         (row) => Number(row.CNT),
         connection,
@@ -256,10 +257,7 @@ export default class Member {
   static async touchLastSeen(userId: string, when: Date = new Date()): Promise<void> {
     try {
       await oraMutate(
-        `UPDATE RPG_CLUB_USERS
-            SET LAST_SEEN_AT = :lastSeen,
-                UPDATED_AT = SYSTIMESTAMP
-          WHERE USER_ID = :userId`,
+        getSql(MemberSql.touchLastSeen, dialect),
         { userId, lastSeen: when },
       );
     } catch (err: any) {
@@ -289,43 +287,7 @@ export default class Member {
         JOURNAL_COUNT: number | null;
         LAST_JOURNAL_AT: Date | string | null;
       }>(
-        `SELECT g.GAME_ID,
-                g.TITLE,
-                u.PLATFORM_ID,
-                p.PLATFORM_NAME,
-                p.PLATFORM_ABBREVIATION,
-                ${threadIdSql} AS THREAD_ID,
-                u.NOTE,
-                u.ADDED_AT,
-                u.NOTE_UPDATED_AT,
-                u.SORT_ORDER,
-                NVL(jp.IS_ENABLED, 1) AS JOURNAL_ENABLED,
-                CASE
-                  WHEN EXISTS (
-                    SELECT 1
-                    FROM USER_GAME_JOURNAL_ENTRIES je
-                    WHERE je.USER_ID = u.USER_ID
-                      AND je.GAMEDB_GAME_ID = u.GAMEDB_GAME_ID
-                  ) THEN 1
-                  ELSE 0
-                END AS HAS_JOURNAL_ENTRY,
-                (SELECT COUNT(*)
-                   FROM USER_GAME_JOURNAL_ENTRIES je2
-                  WHERE je2.USER_ID = u.USER_ID
-                    AND je2.GAMEDB_GAME_ID = u.GAMEDB_GAME_ID) AS JOURNAL_COUNT,
-                (SELECT MAX(je3.CREATED_AT)
-                   FROM USER_GAME_JOURNAL_ENTRIES je3
-                  WHERE je3.USER_ID = u.USER_ID
-                    AND je3.GAMEDB_GAME_ID = u.GAMEDB_GAME_ID) AS LAST_JOURNAL_AT
-           FROM USER_NOW_PLAYING u
-           JOIN GAMEDB_GAMES g ON g.GAME_ID = u.GAMEDB_GAME_ID
-           LEFT JOIN GAMEDB_PLATFORMS p ON p.PLATFORM_ID = u.PLATFORM_ID
-           LEFT JOIN USER_GAME_JOURNAL_PREFS jp
-             ON jp.USER_ID = u.USER_ID
-            AND jp.GAMEDB_GAME_ID = u.GAMEDB_GAME_ID
-          WHERE u.USER_ID = :userId
-            AND u.GAMEDB_GAME_ID IS NOT NULL
-          ORDER BY u.SORT_ORDER NULLS LAST, u.ADDED_AT DESC, u.ENTRY_ID DESC`,
+        MemberSql.getNowPlaying(threadIdSql)[dialect],
         { userId },
         { outFormat: oracledb.OUT_FORMAT_OBJECT },
       );
@@ -379,28 +341,7 @@ export default class Member {
         ADDED_AT: Date | string | null;
         NOTE_UPDATED_AT: Date | string | null;
       }>(
-        `SELECT u.USER_ID,
-                ru.USERNAME,
-                ru.GLOBAL_NAME,
-                g.GAME_ID,
-                g.TITLE,
-                u.PLATFORM_ID,
-                p.PLATFORM_NAME,
-                p.PLATFORM_ABBREVIATION,
-                ${threadIdSql} AS THREAD_ID,
-                u.NOTE,
-                u.ADDED_AT,
-                u.NOTE_UPDATED_AT,
-                u.ENTRY_ID
-           FROM USER_NOW_PLAYING u
-           JOIN RPG_CLUB_USERS ru ON ru.USER_ID = u.USER_ID
-           JOIN GAMEDB_GAMES g ON g.GAME_ID = u.GAMEDB_GAME_ID
-           LEFT JOIN GAMEDB_PLATFORMS p ON p.PLATFORM_ID = u.PLATFORM_ID
-          WHERE NVL(ru.IS_BOT, 0) = 0
-            AND ru.SERVER_LEFT_AT IS NULL
-          ORDER BY COALESCE(ru.GLOBAL_NAME, ru.USERNAME, ru.USER_ID),
-                   u.ADDED_AT DESC,
-                   u.ENTRY_ID DESC`,
+        MemberSql.getAllNowPlaying(threadIdSql)[dialect],
         {},
         { outFormat: oracledb.OUT_FORMAT_OBJECT },
       );
@@ -466,16 +407,7 @@ export default class Member {
 
     return oraQuery<{ GAME_ID: number; TITLE: string; USER_ID: string },
       { gameId: number; title: string; userId: string }>(
-      `SELECT u.GAMEDB_GAME_ID AS GAME_ID,
-              g.TITLE,
-              u.USER_ID
-         FROM USER_NOW_PLAYING u
-         JOIN RPG_CLUB_USERS ru ON ru.USER_ID = u.USER_ID
-         JOIN GAMEDB_GAMES g ON g.GAME_ID = u.GAMEDB_GAME_ID
-        WHERE u.GAMEDB_GAME_ID IN (${placeholders.join(", ")})
-          AND NVL(ru.IS_BOT, 0) = 0
-          AND ru.SERVER_LEFT_AT IS NULL
-        ORDER BY g.TITLE, u.USER_ID`,
+      MemberSql.getNowPlayingByGameIds(placeholders.join(", "))[dialect],
       binds,
       (row) => ({
         gameId: Number(row.GAME_ID),
@@ -494,17 +426,7 @@ export default class Member {
     const normalizedQuery = `%${trimmed.replace(/[^a-z0-9]/g, "")}%`;
     return oraQuery<{ GAME_ID: number; TITLE: string; USER_ID: string },
       { gameId: number; title: string; userId: string }>(
-      `SELECT u.GAMEDB_GAME_ID AS GAME_ID,
-              g.TITLE,
-              u.USER_ID
-         FROM USER_NOW_PLAYING u
-         JOIN RPG_CLUB_USERS ru ON ru.USER_ID = u.USER_ID
-         JOIN GAMEDB_GAMES g ON g.GAME_ID = u.GAMEDB_GAME_ID
-        WHERE (LOWER(g.TITLE) LIKE :searchQuery
-            OR REGEXP_REPLACE(LOWER(g.TITLE), '[^a-z0-9]', '') LIKE :normalizedQuery)
-          AND NVL(ru.IS_BOT, 0) = 0
-          AND ru.SERVER_LEFT_AT IS NULL
-        ORDER BY g.TITLE, u.USER_ID`,
+      getSql(MemberSql.getNowPlayingByTitleSearch, dialect),
       { searchQuery, normalizedQuery },
       (row) => ({
         gameId: Number(row.GAME_ID),
@@ -553,25 +475,7 @@ export default class Member {
       journalEnabled: boolean;
       hasJournalEntry: boolean;
     }>(
-      `SELECT u.GAMEDB_GAME_ID AS GAME_ID,
-              g.TITLE,
-              u.PLATFORM_ID,
-              p.PLATFORM_NAME,
-              p.PLATFORM_ABBREVIATION,
-              u.NOTE,
-              u.ADDED_AT,
-              u.NOTE_UPDATED_AT,
-              u.SORT_ORDER,
-              jp.IS_ENABLED AS JOURNAL_ENABLED
-         FROM USER_NOW_PLAYING u
-         JOIN GAMEDB_GAMES g ON g.GAME_ID = u.GAMEDB_GAME_ID
-         LEFT JOIN GAMEDB_PLATFORMS p ON p.PLATFORM_ID = u.PLATFORM_ID
-         LEFT JOIN USER_GAME_JOURNAL_PREFS jp
-           ON jp.USER_ID = u.USER_ID
-          AND jp.GAMEDB_GAME_ID = u.GAMEDB_GAME_ID
-        WHERE u.USER_ID = :userId
-          AND u.GAMEDB_GAME_ID IS NOT NULL
-        ORDER BY u.SORT_ORDER NULLS LAST, u.ADDED_AT DESC, u.ENTRY_ID DESC`,
+      getSql(MemberSql.getNowPlayingEntries, dialect),
       { userId },
       (r) => ({
         gameId: Number(r.GAME_ID),
@@ -605,10 +509,7 @@ export default class Member {
       throw new Error("Invalid GameDB id.");
     }
     const rows = await oraQuery<{ ADDED_AT: Date | string | null }, { addedAt: Date | null }>(
-      `SELECT ADDED_AT
-         FROM USER_NOW_PLAYING
-        WHERE USER_ID = :userId
-          AND GAMEDB_GAME_ID = :gameId`,
+      getSql(MemberSql.getNowPlayingEntryMeta, dialect),
       { userId, gameId },
       (row) => ({
         addedAt: row.ADDED_AT instanceof Date

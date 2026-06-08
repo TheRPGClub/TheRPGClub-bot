@@ -1,5 +1,10 @@
 import oracledb from "oracledb";
 import { oraQuery, oraMutate, oraWithConnection } from "../db/SqlManager.js";
+import { getDialect } from "../db/dialect.js";
+import { getSql } from "../db/SqlManager.js";
+import { SuggestionSql } from "../db/sql/index.js";
+
+const dialect = getDialect();
 
 export interface ISuggestionItem {
   suggestionId: number;
@@ -49,9 +54,7 @@ export async function createSuggestion(
 ): Promise<ISuggestionItem> {
   return oraWithConnection(async (conn) => {
     const result = await oraMutate(
-      `INSERT INTO RPG_CLUB_SUGGESTIONS (TITLE, DETAILS, LABELS, CREATED_BY, CREATED_BY_NAME)
-       VALUES (:title, :details, :labels, :createdBy, :createdByName)
-       RETURNING SUGGESTION_ID INTO :id`,
+      getSql(SuggestionSql.create, dialect),
       {
         title,
         details,
@@ -76,17 +79,7 @@ export async function createSuggestion(
 export async function listSuggestions(limit: number = 50): Promise<ISuggestionItem[]> {
   const safeLimit = Math.min(Math.max(limit, 1), 200);
   return oraQuery(
-    `SELECT SUGGESTION_ID,
-            TITLE,
-            DETAILS,
-            LABELS,
-            CREATED_BY,
-            CREATED_BY_NAME,
-            CREATED_AT,
-            UPDATED_AT
-       FROM RPG_CLUB_SUGGESTIONS
-      ORDER BY CREATED_AT DESC, SUGGESTION_ID DESC
-      FETCH FIRST :limit ROWS ONLY`,
+    getSql(SuggestionSql.list, dialect),
     { limit: safeLimit },
     mapSuggestionRow,
   );
@@ -94,7 +87,7 @@ export async function listSuggestions(limit: number = 50): Promise<ISuggestionIt
 
 export async function countSuggestions(): Promise<number> {
   const rows = await oraQuery(
-    "SELECT COUNT(*) AS TOTAL FROM RPG_CLUB_SUGGESTIONS",
+    getSql(SuggestionSql.count, dialect),
     {},
     (row: { TOTAL: number | null }) => row,
   );
@@ -106,16 +99,7 @@ export async function getSuggestionById(
   existingConnection?: oracledb.Connection,
 ): Promise<ISuggestionItem | null> {
   const rows = await oraQuery(
-    `SELECT SUGGESTION_ID,
-            TITLE,
-            DETAILS,
-            LABELS,
-            CREATED_BY,
-            CREATED_BY_NAME,
-            CREATED_AT,
-            UPDATED_AT
-       FROM RPG_CLUB_SUGGESTIONS
-      WHERE SUGGESTION_ID = :id`,
+    getSql(SuggestionSql.getById, dialect),
     { id: suggestionId },
     mapSuggestionRow,
     existingConnection,
@@ -125,7 +109,7 @@ export async function getSuggestionById(
 
 export async function deleteSuggestion(suggestionId: number): Promise<boolean> {
   const result = await oraMutate(
-    `DELETE FROM RPG_CLUB_SUGGESTIONS WHERE SUGGESTION_ID = :id`,
+    getSql(SuggestionSql.delete, dialect),
     { id: suggestionId },
   );
   return (result.rowsAffected ?? 0) > 0;

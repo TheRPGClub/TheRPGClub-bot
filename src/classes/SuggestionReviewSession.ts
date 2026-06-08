@@ -1,5 +1,10 @@
 import oracledb from "oracledb";
 import { oraQuery, oraMutate, oraWithConnection } from "../db/SqlManager.js";
+import { getDialect } from "../db/dialect.js";
+import { getSql } from "../db/SqlManager.js";
+import { SuggestionReviewSessionSql } from "../db/sql/index.js";
+
+const dialect = getDialect();
 
 export interface ISuggestionReviewSession {
   sessionId: string;
@@ -73,9 +78,7 @@ export async function createSuggestionReviewSessionRecord(session: {
   return oraWithConnection(async (conn) => {
     const suggestionIds = serializeSuggestionIds(session.suggestionIds);
     await oraMutate(
-      `INSERT INTO RPG_CLUB_SUGGESTION_REVIEW_SESSIONS
-         (SESSION_ID, REVIEWER_ID, SUGGESTION_IDS, CURRENT_INDEX, TOTAL_COUNT)
-       VALUES (:sessionId, :reviewerId, :suggestionIds, :currentIndex, :totalCount)`,
+      getSql(SuggestionReviewSessionSql.create, dialect),
       {
         sessionId: session.sessionId,
         reviewerId: session.reviewerId,
@@ -98,15 +101,7 @@ export async function getSuggestionReviewSession(
   existingConnection?: oracledb.Connection,
 ): Promise<ISuggestionReviewSession | null> {
   const rows = await oraQuery(
-    `SELECT SESSION_ID,
-            REVIEWER_ID,
-            SUGGESTION_IDS,
-            CURRENT_INDEX,
-            TOTAL_COUNT,
-            CREATED_AT,
-            UPDATED_AT
-       FROM RPG_CLUB_SUGGESTION_REVIEW_SESSIONS
-      WHERE SESSION_ID = :sessionId`,
+    getSql(SuggestionReviewSessionSql.getById, dialect),
     { sessionId },
     mapSessionRow,
     existingConnection,
@@ -119,12 +114,7 @@ export async function updateSuggestionReviewSession(
 ): Promise<void> {
   const suggestionIds = serializeSuggestionIds(session.suggestionIds);
   await oraMutate(
-    `UPDATE RPG_CLUB_SUGGESTION_REVIEW_SESSIONS
-        SET REVIEWER_ID = :reviewerId,
-            SUGGESTION_IDS = :suggestionIds,
-            CURRENT_INDEX = :currentIndex,
-            TOTAL_COUNT = :totalCount
-      WHERE SESSION_ID = :sessionId`,
+    getSql(SuggestionReviewSessionSql.update, dialect),
     {
       reviewerId: session.reviewerId,
       suggestionIds,
@@ -137,7 +127,7 @@ export async function updateSuggestionReviewSession(
 
 export async function deleteSuggestionReviewSession(sessionId: string): Promise<boolean> {
   const result = await oraMutate(
-    `DELETE FROM RPG_CLUB_SUGGESTION_REVIEW_SESSIONS WHERE SESSION_ID = :sessionId`,
+    getSql(SuggestionReviewSessionSql.delete, dialect),
     { sessionId },
   );
   return (result.rowsAffected ?? 0) > 0;
@@ -147,7 +137,7 @@ export async function deleteSuggestionReviewSessionsForReviewer(
   reviewerId: string,
 ): Promise<number> {
   const result = await oraMutate(
-    `DELETE FROM RPG_CLUB_SUGGESTION_REVIEW_SESSIONS WHERE REVIEWER_ID = :reviewerId`,
+    getSql(SuggestionReviewSessionSql.deleteForReviewer, dialect),
     { reviewerId },
   );
   return Number(result.rowsAffected ?? 0);
@@ -157,7 +147,7 @@ export async function deleteExpiredSuggestionReviewSessions(
   cutoffDate: Date,
 ): Promise<number> {
   const result = await oraMutate(
-    `DELETE FROM RPG_CLUB_SUGGESTION_REVIEW_SESSIONS WHERE CREATED_AT < :cutoff`,
+    getSql(SuggestionReviewSessionSql.deleteExpired, dialect),
     { cutoff: cutoffDate },
   );
   return Number(result.rowsAffected ?? 0);

@@ -1,6 +1,11 @@
 import oracledb from "oracledb";
 import { oraQuery, oraMutate, oraWithConnection } from "../db/SqlManager.js";
+import { getDialect } from "../db/dialect.js";
+import { getSql } from "../db/SqlManager.js";
+import { NrGotmSql } from "../db/sql/index.js";
 import Game from "./Game.js";
+
+const dialect = getDialect();
 import { getThreadsByGameId } from "./Thread.js";
 
 export interface INrGotmGame {
@@ -67,14 +72,7 @@ type NrGotmEntryRow = {
 
 async function loadFromDatabaseInternal(): Promise<INrGotmEntry[]> {
   const rows = await oraQuery<NrGotmEntryRow, NrGotmEntryRow>(
-    `SELECT ROUND_NUMBER,
-            MONTH_YEAR,
-            GAME_INDEX,
-            REDDIT_URL,
-            VOTING_RESULTS_MESSAGE_ID,
-            GAMEDB_GAME_ID
-       FROM NR_GOTM_ENTRIES
-      ORDER BY ROUND_NUMBER, GAME_INDEX`,
+    getSql(NrGotmSql.loadAll, dialect),
     {},
     (row) => row,
   );
@@ -359,9 +357,7 @@ export async function updateNrGotmGameFieldInDatabase(
   await oraWithConnection(async (conn) => {
     if (opts.rowId) {
       await oraMutate(
-        `UPDATE NR_GOTM_ENTRIES
-            SET ${columnName} = :bindValue
-          WHERE NR_GOTM_ID = :rowIdValue`,
+        NrGotmSql.updateByRowId(columnName)[dialect],
         { rowIdValue: opts.rowId, bindValue: dbValue },
         conn,
       );
@@ -397,12 +393,7 @@ export async function updateNrGotmGameFieldInDatabase(
     }
 
     const rows = await oraQuery<NrGotmRowRef, NrGotmRowRef>(
-      `SELECT NR_GOTM_ID,
-              ROUND_NUMBER,
-              GAME_INDEX
-         FROM NR_GOTM_ENTRIES
-        WHERE ROUND_NUMBER = :roundNumber
-        ORDER BY GAME_INDEX`,
+      getSql(NrGotmSql.getRowsByRound, dialect),
       { roundNumber: round },
       (row) => row,
       conn,
@@ -423,9 +414,7 @@ export async function updateNrGotmGameFieldInDatabase(
     const rowId = rows[gi].NR_GOTM_ID;
 
     await oraMutate(
-      `UPDATE NR_GOTM_ENTRIES
-          SET ${columnName} = :bindValue
-        WHERE NR_GOTM_ID = :rowIdValue`,
+      NrGotmSql.updateByRowId(columnName)[dialect],
       { rowIdValue: rowId, bindValue: dbValue },
       conn,
     );
@@ -452,9 +441,7 @@ export async function updateNrGotmVotingResultsInDatabase(
   messageId: string | null,
 ): Promise<void> {
   await oraMutate(
-    `UPDATE NR_GOTM_ENTRIES
-        SET VOTING_RESULTS_MESSAGE_ID = :bindValue
-      WHERE ROUND_NUMBER = :roundNumber`,
+    getSql(NrGotmSql.updateVotingResults, dialect),
     { roundNumber: round, bindValue: messageId },
   );
 }
@@ -472,9 +459,7 @@ export async function insertNrGotmRoundInDatabase(
   }
 
   const countRows = await oraQuery<{ CNT: number }, { CNT: number }>(
-    `SELECT COUNT(*) AS CNT
-       FROM NR_GOTM_ENTRIES
-      WHERE ROUND_NUMBER = :roundNumber`,
+    getSql(NrGotmSql.checkRoundExists, dialect),
     { roundNumber: round },
     (row) => row,
   );
@@ -493,22 +478,7 @@ export async function insertNrGotmRoundInDatabase(
       }
       const meta = await getNrGameDetailsCached(g.gamedbGameId);
       const result = await oraMutate(
-        `INSERT INTO NR_GOTM_ENTRIES (
-           ROUND_NUMBER,
-           MONTH_YEAR,
-           GAME_INDEX,
-           REDDIT_URL,
-           VOTING_RESULTS_MESSAGE_ID,
-           GAMEDB_GAME_ID
-         ) VALUES (
-           :roundNumber,
-           :monthYear,
-           :gameIndex,
-           :redditUrl,
-           NULL,
-           :gamedbGameId
-         )
-         RETURNING NR_GOTM_ID INTO :outId`,
+        getSql(NrGotmSql.insertRound, dialect),
         {
           roundNumber: round,
           monthYear,
@@ -540,8 +510,7 @@ export async function deleteNrGotmRoundFromDatabase(round: number): Promise<numb
   }
 
   const result = await oraMutate(
-    `DELETE FROM NR_GOTM_ENTRIES
-      WHERE ROUND_NUMBER = :roundNumber`,
+    getSql(NrGotmSql.deleteRound, dialect),
     { roundNumber: round },
   );
   return result.rowsAffected ?? 0;

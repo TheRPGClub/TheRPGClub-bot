@@ -1,5 +1,10 @@
 import oracledb from "oracledb";
 import { oraQuery, oraMutate } from "../db/SqlManager.js";
+import { getDialect } from "../db/dialect.js";
+import { getSql } from "../db/SqlManager.js";
+import { PublicReminderSql } from "../db/sql/index.js";
+
+const dialect = getDialect();
 
 export type RecurrenceUnit = "minutes" | "hours" | "days" | "weeks" | "months" | "years";
 
@@ -23,24 +28,7 @@ export async function createReminder(
   createdBy: string | null,
 ): Promise<IPublicReminder> {
   const result = await oraMutate(
-    `INSERT INTO RPG_CLUB_PUBLIC_REMINDERS (
-       CHANNEL_ID,
-       MESSAGE,
-       DUE_AT,
-       RECUR_EVERY,
-       RECUR_UNIT,
-       ENABLED,
-       CREATED_BY
-     ) VALUES (
-       :channelId,
-       :message,
-       :dueAt,
-       :recurEvery,
-       :recurUnit,
-       1,
-       :createdBy
-     )
-     RETURNING REMINDER_ID INTO :id`,
+    getSql(PublicReminderSql.create, dialect),
     {
       channelId,
       message,
@@ -67,18 +55,7 @@ export async function createReminder(
 export async function listUpcomingReminders(limit: number = 20): Promise<IPublicReminder[]> {
   const safeLimit = Math.min(Math.max(limit, 1), 100);
   return oraQuery(
-    `SELECT REMINDER_ID,
-            CHANNEL_ID,
-            MESSAGE,
-            DUE_AT,
-            RECUR_EVERY,
-            RECUR_UNIT,
-            ENABLED,
-            CREATED_BY
-       FROM RPG_CLUB_PUBLIC_REMINDERS
-      WHERE ENABLED = 1
-      ORDER BY DUE_AT ASC
-      FETCH FIRST :limit ROWS ONLY`,
+    getSql(PublicReminderSql.listUpcoming, dialect),
     { limit: safeLimit },
     (row: {
       REMINDER_ID: number;
@@ -104,7 +81,7 @@ export async function listUpcomingReminders(limit: number = 20): Promise<IPublic
 
 export async function deleteReminder(reminderId: number): Promise<boolean> {
   const result = await oraMutate(
-    `DELETE FROM RPG_CLUB_PUBLIC_REMINDERS WHERE REMINDER_ID = :id`,
+    getSql(PublicReminderSql.delete, dialect),
     { id: reminderId },
   );
   return (result.rowsAffected ?? 0) > 0;
@@ -115,18 +92,14 @@ export async function updateReminderDueDate(
   nextDue: Date,
 ): Promise<void> {
   await oraMutate(
-    `UPDATE RPG_CLUB_PUBLIC_REMINDERS
-        SET DUE_AT = :nextDue
-      WHERE REMINDER_ID = :id`,
+    getSql(PublicReminderSql.updateDueDate, dialect),
     { nextDue, id: reminderId },
   );
 }
 
 export async function disableReminder(reminderId: number): Promise<void> {
   await oraMutate(
-    `UPDATE RPG_CLUB_PUBLIC_REMINDERS
-        SET ENABLED = 0
-      WHERE REMINDER_ID = :id`,
+    getSql(PublicReminderSql.disable, dialect),
     { id: reminderId },
   );
 }

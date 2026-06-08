@@ -1,5 +1,10 @@
 import oracledb from "oracledb";
 import { oraQuery, oraMutate } from "../db/SqlManager.js";
+import { getDialect } from "../db/dialect.js";
+import { getSql } from "../db/SqlManager.js";
+import { TodoSql } from "../db/sql/index.js";
+
+const dialect = getDialect();
 
 export interface ITodoItem {
   todoId: number;
@@ -47,23 +52,9 @@ function mapTodoRow(row: {
   };
 }
 
-const TODO_COLS = `TODO_ID,
-              TITLE,
-              DETAILS,
-              TODO_CATEGORY,
-              TODO_SIZE,
-              CREATED_BY,
-              CREATED_AT,
-              UPDATED_AT,
-              COMPLETED_AT,
-              COMPLETED_BY,
-              IS_COMPLETED`;
-
 export async function fetchTodoById(todoId: number): Promise<ITodoItem | null> {
   const rows = await oraQuery(
-    `SELECT ${TODO_COLS}
-       FROM RPG_CLUB_TODOS
-      WHERE TODO_ID = :id`,
+    getSql(TodoSql.getById, dialect),
     { id: todoId },
     mapTodoRow,
   );
@@ -78,9 +69,7 @@ export async function createTodo(
   createdBy: string | null,
 ): Promise<ITodoItem> {
   const result = await oraMutate(
-    `INSERT INTO RPG_CLUB_TODOS (TITLE, DETAILS, TODO_CATEGORY, TODO_SIZE, CREATED_BY)
-     VALUES (:title, :details, :todoCategory, :todoSize, :createdBy)
-     RETURNING TODO_ID INTO :id`,
+    getSql(TodoSql.create, dialect),
     {
       title,
       details,
@@ -108,11 +97,7 @@ export async function listTodos(
   const safeLimit = Math.min(Math.max(limit, 1), 200);
   const whereClause = includeCompleted ? "" : "WHERE IS_COMPLETED = 0";
   return oraQuery(
-    `SELECT ${TODO_COLS}
-       FROM RPG_CLUB_TODOS
-       ${whereClause}
-      ORDER BY IS_COMPLETED ASC, CREATED_AT ASC
-      FETCH FIRST :limit ROWS ONLY`,
+    TodoSql.list(whereClause)[dialect],
     { limit: safeLimit },
     mapTodoRow,
   );
@@ -130,18 +115,7 @@ export async function updateTodo(
   const categoryProvided = todoCategory !== undefined ? 1 : 0;
   const sizeProvided = todoSize !== undefined ? 1 : 0;
   const result = await oraMutate(
-    `UPDATE RPG_CLUB_TODOS
-        SET TITLE = CASE WHEN :titleProvided = 1 THEN :title ELSE TITLE END,
-            DETAILS = CASE WHEN :detailsProvided = 1 THEN :details ELSE DETAILS END,
-            TODO_CATEGORY = CASE
-              WHEN :categoryProvided = 1 THEN :todoCategory
-              ELSE TODO_CATEGORY
-            END,
-            TODO_SIZE = CASE
-              WHEN :sizeProvided = 1 THEN :todoSize
-              ELSE TODO_SIZE
-            END
-      WHERE TODO_ID = :id`,
+    getSql(TodoSql.update, dialect),
     {
       id: todoId,
       title,
@@ -159,7 +133,7 @@ export async function updateTodo(
 
 export async function deleteTodo(todoId: number): Promise<boolean> {
   const result = await oraMutate(
-    `DELETE FROM RPG_CLUB_TODOS WHERE TODO_ID = :id`,
+    getSql(TodoSql.delete, dialect),
     { id: todoId },
   );
   return (result.rowsAffected ?? 0) > 0;
@@ -170,12 +144,7 @@ export async function completeTodo(
   completedBy: string | null,
 ): Promise<boolean> {
   const result = await oraMutate(
-    `UPDATE RPG_CLUB_TODOS
-        SET IS_COMPLETED = 1,
-            COMPLETED_AT = SYSTIMESTAMP,
-            COMPLETED_BY = :completedBy
-      WHERE TODO_ID = :id
-        AND IS_COMPLETED = 0`,
+    getSql(TodoSql.complete, dialect),
     { id: todoId, completedBy },
   );
   return (result.rowsAffected ?? 0) > 0;
@@ -183,9 +152,7 @@ export async function completeTodo(
 
 export async function countTodos(): Promise<{ open: number; completed: number }> {
   const rows = await oraQuery(
-    `SELECT SUM(CASE WHEN IS_COMPLETED = 1 THEN 0 ELSE 1 END) AS OPEN_COUNT,
-            SUM(CASE WHEN IS_COMPLETED = 1 THEN 1 ELSE 0 END) AS COMPLETED_COUNT
-       FROM RPG_CLUB_TODOS`,
+    getSql(TodoSql.countTodos, dialect),
     {},
     (row: { OPEN_COUNT: number | null; COMPLETED_COUNT: number | null }) => ({
       open: Number(row.OPEN_COUNT ?? 0),
@@ -207,39 +174,7 @@ export async function countTodoSummary(): Promise<{
   };
 }> {
   const rows = await oraQuery(
-    `SELECT SUM(CASE WHEN IS_COMPLETED = 1 THEN 0 ELSE 1 END) AS OPEN_COUNT,
-            SUM(CASE WHEN IS_COMPLETED = 1 THEN 1 ELSE 0 END) AS COMPLETED_COUNT,
-            SUM(
-              CASE
-                WHEN IS_COMPLETED = 0 AND TODO_CATEGORY = 'New Features' THEN 1
-                ELSE 0
-              END
-            ) AS OPEN_NEW_FEATURES,
-            SUM(
-              CASE
-                WHEN IS_COMPLETED = 0 AND TODO_CATEGORY = 'Improvements' THEN 1
-                ELSE 0
-              END
-            ) AS OPEN_IMPROVEMENTS,
-            SUM(
-              CASE
-                WHEN IS_COMPLETED = 0 AND TODO_CATEGORY = 'Defects' THEN 1
-                ELSE 0
-              END
-            ) AS OPEN_DEFECTS,
-            SUM(
-              CASE
-                WHEN IS_COMPLETED = 0 AND TODO_CATEGORY = 'Blocked' THEN 1
-                ELSE 0
-              END
-            ) AS OPEN_BLOCKED,
-            SUM(
-              CASE
-                WHEN IS_COMPLETED = 0 AND TODO_CATEGORY = 'Refactoring' THEN 1
-                ELSE 0
-              END
-            ) AS OPEN_REFACTORING
-       FROM RPG_CLUB_TODOS`,
+    getSql(TodoSql.countTodoSummary, dialect),
     {},
     (row: {
       OPEN_COUNT: number | null;

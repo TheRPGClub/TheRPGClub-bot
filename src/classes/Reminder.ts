@@ -1,6 +1,11 @@
 import oracledb from "oracledb";
 import type { Connection } from "oracledb";
 import { oraQuery, oraMutate } from "../db/SqlManager.js";
+import { getDialect } from "../db/dialect.js";
+import { getSql } from "../db/SqlManager.js";
+import { ReminderSql } from "../db/sql/index.js";
+
+const dialect = getDialect();
 
 export interface IReminderRecord {
   reminderId: number;
@@ -14,10 +19,6 @@ export interface IReminderRecord {
   createdAt: Date | null;
   updatedAt: Date | null;
 }
-
-const REMINDER_COLUMNS =
-  "REMINDER_ID, USER_ID, REMIND_AT, CONTENT, IS_NOISY, SENT_AT," +
-  " FAILURE_COUNT, FAILED_AT, CREATED_AT, UPDATED_AT";
 
 function normalizeReminderId(value: number): number {
   const id = Number(value);
@@ -111,14 +112,7 @@ export default class Reminder {
     const noisyVal = isNoisy ? 1 : 0;
 
     const result = await oraMutate(
-      `INSERT INTO USER_REMINDERS (
-         USER_ID, REMIND_AT, CONTENT, IS_NOISY, SENT_AT, FAILURE_COUNT,
-         FAILED_AT, CREATED_AT, UPDATED_AT
-       ) VALUES (
-         :userId, :remindAt, :content, :noisyVal, NULL, 0, NULL,
-         SYSTIMESTAMP, SYSTIMESTAMP
-       )
-       RETURNING REMINDER_ID INTO :reminderId`,
+      getSql(ReminderSql.create, dialect),
       {
         userId,
         remindAt: normalizedDate,
@@ -140,10 +134,7 @@ export default class Reminder {
 
   static async listByUser(userId: string): Promise<IReminderRecord[]> {
     return oraQuery(
-      `SELECT ${REMINDER_COLUMNS}
-         FROM USER_REMINDERS
-        WHERE USER_ID = :userId
-        ORDER BY REMIND_AT`,
+      getSql(ReminderSql.listByUser, dialect),
       { userId },
       mapRowToReminder,
     );
@@ -155,9 +146,7 @@ export default class Reminder {
   ): Promise<IReminderRecord | null> {
     const id = normalizeReminderId(reminderId);
     const rows = await oraQuery(
-      `SELECT ${REMINDER_COLUMNS}
-         FROM USER_REMINDERS
-        WHERE REMINDER_ID = :reminderId`,
+      getSql(ReminderSql.getById, dialect),
       { reminderId: id },
       mapRowToReminder,
       opts?.connection,
@@ -168,9 +157,7 @@ export default class Reminder {
   static async delete(reminderId: number, userId: string): Promise<boolean> {
     const id = normalizeReminderId(reminderId);
     const result = await oraMutate(
-      `DELETE FROM USER_REMINDERS
-        WHERE REMINDER_ID = :reminderId
-          AND USER_ID = :userId`,
+      getSql(ReminderSql.delete, dialect),
       { reminderId: id, userId },
     );
     return (result.rowsAffected ?? 0) > 0;
@@ -185,14 +172,7 @@ export default class Reminder {
     const normalizedDate = normalizeDate(remindAt);
 
     const result = await oraMutate(
-      `UPDATE USER_REMINDERS
-          SET REMIND_AT = :remindAt,
-              SENT_AT = NULL,
-              FAILURE_COUNT = 0,
-              FAILED_AT = NULL,
-              UPDATED_AT = SYSTIMESTAMP
-        WHERE REMINDER_ID = :reminderId
-          AND USER_ID = :userId`,
+      getSql(ReminderSql.snooze, dialect),
       { reminderId: id, userId, remindAt: normalizedDate },
     );
 
@@ -205,12 +185,7 @@ export default class Reminder {
   static async markSent(reminderId: number): Promise<void> {
     const id = normalizeReminderId(reminderId);
     const result = await oraMutate(
-      `UPDATE USER_REMINDERS
-          SET SENT_AT = SYSTIMESTAMP,
-              FAILURE_COUNT = 0,
-              FAILED_AT = NULL,
-              UPDATED_AT = SYSTIMESTAMP
-        WHERE REMINDER_ID = :reminderId`,
+      getSql(ReminderSql.markSent, dialect),
       { reminderId: id },
     );
     if ((result.rowsAffected ?? 0) === 0) {
@@ -221,11 +196,7 @@ export default class Reminder {
   static async recordFailure(reminderId: number): Promise<void> {
     const id = normalizeReminderId(reminderId);
     await oraMutate(
-      `UPDATE USER_REMINDERS
-          SET FAILURE_COUNT = FAILURE_COUNT + 1,
-              FAILED_AT = SYSTIMESTAMP,
-              UPDATED_AT = SYSTIMESTAMP
-        WHERE REMINDER_ID = :reminderId`,
+      getSql(ReminderSql.recordFailure, dialect),
       { reminderId: id },
     );
   }
@@ -233,10 +204,7 @@ export default class Reminder {
   static async markFailedPermanently(reminderId: number): Promise<void> {
     const id = normalizeReminderId(reminderId);
     await oraMutate(
-      `UPDATE USER_REMINDERS
-          SET SENT_AT = SYSTIMESTAMP,
-              UPDATED_AT = SYSTIMESTAMP
-        WHERE REMINDER_ID = :reminderId`,
+      getSql(ReminderSql.markFailedPermanently, dialect),
       { reminderId: id },
     );
   }
@@ -249,16 +217,7 @@ export default class Reminder {
     const safeLimit = Math.max(1, Math.min(limit, 100));
 
     return oraQuery(
-      `SELECT ${REMINDER_COLUMNS}
-         FROM (
-           SELECT ${REMINDER_COLUMNS}
-             FROM USER_REMINDERS
-            WHERE REMIND_AT <= :cutoff
-              AND SENT_AT IS NULL
-              AND FAILURE_COUNT < 5
-            ORDER BY REMIND_AT
-         )
-        WHERE ROWNUM <= :limit`,
+      getSql(ReminderSql.getDueUndelivered, dialect),
       { cutoff: normalizedDate, limit: safeLimit },
       mapRowToReminder,
     );
