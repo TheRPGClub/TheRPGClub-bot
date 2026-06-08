@@ -316,7 +316,13 @@ Migrated in this phase (Phases A/B/C):
   - `dbWithConnection(callback)` -- single-connection scope
   - `dbTransaction(callback)` -- atomic transaction
 
-**Call sites migrated (simple `oraQuery`/`oraMutate` with no BIND_OUT or conn-passing):**
+**D1 complete as of 2026-06-08 (PR #545, branch `feature/phase-d-d1-remaining-call-sites`):**
+
+All standalone `oraQuery`/`oraMutate` calls (no BIND_OUT, no connection-passing) have been
+converted to `dbQuery`/`dbMutate` across all domain classes. Every remaining `ora*` call in the
+codebase is now a D2 blocker.
+
+**Call sites -- current status:**
 
 | File | Status |
 |---|---|
@@ -326,6 +332,7 @@ Migrated in this phase (Phases A/B/C):
 | `CompletionatorImport.ts` | Partial -- same pattern as CollectionCsvImport |
 | `GameDbCsvImport.ts` | Partial -- same pattern |
 | `GameDbCsvImportMapping.ts` | Fully migrated |
+| `Game.ts` | Partial -- all standalone get/update/mutate done; BIND_OUT inserts, conn-passing blocks, and oracle-specific `conn.execute` paths remain |
 | `GameKey.ts` | Partial -- `get*`, `list*`, `claim`, `revoke` done; `create` (BIND_OUT) remains |
 | `GameReleaseAnnouncement.ts` | Partial -- `mark*` and `list*` done; `syncReleaseAnnouncements` (conn-passing) remains |
 | `GameSearchSynonymDraft.ts` | Partial -- `getDraft`, `deleteDraft` done; `createDraft` (BIND_OUT), `appendPairs` (conn-passing) remain |
@@ -335,36 +342,31 @@ Migrated in this phase (Phases A/B/C):
 | `HltbCache.ts` | Fully migrated |
 | `Member.ts` | Partial -- large file; many `get*` done; connection-passing and BIND_OUT methods remain |
 | `Nomination.ts` | Fully migrated |
+| `NrGotm.ts` | Partial -- `loadAll`, `updateVotingResults`, `checkRoundExists`, `deleteRound` done; conn-passing update block and BIND_OUT insert remain |
 | `PresencePromptHistory.ts` | Fully migrated |
 | `PresencePromptOptOut.ts` | Fully migrated |
 | `PublicReminder.ts` | Partial -- `list*`, `delete`, `update*` done; `create` (BIND_OUT) remains |
 | `Reminder.ts` | Partial -- all done except `create` (BIND_OUT) and `getById` (optional conn) |
 | `RssFeed.ts` | Partial -- `removeFeed`, `updateFeed` done; `addFeed` (BIND_OUT), `markItemsSeen` (executeMany), `getSeenItemHashes` (conn-passing) remain |
 | `Starboard.ts` | Fully migrated |
+| `SteamCollectionImport.ts` | Partial -- `getActiveForUser`, `setStatus`, `updateIndex`, `updateItem`, `countItems*`, `getHistoricalMappedIds` done; `createImport` (BIND_OUT), `insertItems` (oraTransaction conn-passing), `getItemById`/`getNextPending` (fetchInfo conn), `getAppMap`/`upsertAppMap` (optional conn) remain |
 | `SuggestionReviewSession.ts` | Partial -- `update`, `delete*` done; `create` (conn-passing) and `getById` (optional conn) remain |
 | `Suggestion.ts` | Partial -- `list`, `count`, `delete` done; `create` (BIND_OUT) and `getById` (optional conn) remain |
 | `Thread.ts` | Partial -- `upsertThread`, `setSkipLinking`, `getThreadSkipLinking` done; transactions and conn-passing remain |
 | `Todo.ts` | Partial -- all done except `create` (BIND_OUT) |
-
-**Not yet started (oracle-specific throughout):**
-
-- `Game.ts` (69 remaining ora* calls)
-- `NrGotm.ts` (11)
-- `SteamCollectionImport.ts` (17)
-- `UserActivityIcon.ts` (3)
-- `UserChannelMessageCount.ts` (4)
-- `UserGameCollection.ts` (15)
-- `XboxCollectionImport.ts` (18)
+| `UserActivityIcon.ts` | No D1 conversions possible -- all calls use dynamic Oracle-style named binds or oraTransaction conn-passing |
+| `UserChannelMessageCount.ts` | Partial -- `getScannedChannelIds`, `getChannelScanMeta` done; `upsertChannelCounts` (executeMany) remains |
+| `UserGameCollection.ts` | Partial -- all standalone selects and `removeEntry` done; `addEntry` (BIND_OUT), `updateEntry` (conn-passing), `getEntryById` (required conn) remain |
+| `XboxCollectionImport.ts` | Partial -- `getActiveForUser`, `setStatus`, `updateIndex`, `getItemById`, `getNextPending`, `updateItem`, `countItems*`, `getHistoricalMappedIds` done; `createImport` (BIND_OUT), `insertItems` (oraTransaction), `getImportById`/`getTitleMap` (optional conn), `upsertTitleMap` (conn-passing) remain |
 
 ---
 
 #### Remaining work in Phase D
 
-**D1 -- Migrate standalone oraQuery/oraMutate in untouched files**
+**D1 -- COMPLETE**
 
-Files above with `ora=N db=0`. For each: replace `oraQuery(getSql(Sql.key, dialect), params, mapper)`
-with `dbQuery(Sql.key, params, mapper)` and `oraMutate(...)` -> `dbMutate(...)` for all calls that
-do not use BIND_OUT or pass a connection argument.
+All standalone `oraQuery`/`oraMutate` call sites (no BIND_OUT, no connection argument) have been
+converted to `dbQuery`/`dbMutate`. No D1 work remains.
 
 **D2 -- Oracle-only blockers (defer until postgres SQL is written)**
 
