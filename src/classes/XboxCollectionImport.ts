@@ -1,7 +1,10 @@
 import oracledb from "oracledb";
-import { oraQuery, oraMutate, oraWithConnection, oraTransaction } from "../db/SqlManager.js";
+import {
+  dbQuery, dbMutate,
+  oraQuery, oraMutate, oraWithConnection, oraTransaction,
+  getSql,
+} from "../db/SqlManager.js";
 import { getDialect } from "../db/dialect.js";
-import { getSql } from "../db/SqlManager.js";
 import { XboxCollectionImportSql } from "../db/sql/index.js";
 
 const dialect = getDialect();
@@ -287,8 +290,8 @@ export async function getXboxCollectionImportById(
 export async function getActiveXboxCollectionImportForUser(
   userId: string,
 ): Promise<IXboxCollectionImport | null> {
-  const rows = await oraQuery(
-    getSql(XboxCollectionImportSql.getActiveForUser, dialect),
+  const rows = await dbQuery(
+    XboxCollectionImportSql.getActiveForUser,
     { userId },
     mapImport,
   );
@@ -299,8 +302,8 @@ export async function setXboxCollectionImportStatus(
   importId: number,
   status: XboxCollectionImportStatus,
 ): Promise<void> {
-  await oraMutate(
-    getSql(XboxCollectionImportSql.setStatus, dialect),
+  await dbMutate(
+    XboxCollectionImportSql.setStatus,
     { importId, status },
   );
 }
@@ -309,8 +312,8 @@ export async function updateXboxCollectionImportIndex(
   importId: number,
   currentIndex: number,
 ): Promise<void> {
-  await oraMutate(
-    getSql(XboxCollectionImportSql.updateIndex, dialect),
+  await dbMutate(
+    XboxCollectionImportSql.updateIndex,
     { importId, currentIndex },
   );
 }
@@ -318,8 +321,8 @@ export async function updateXboxCollectionImportIndex(
 export async function getXboxCollectionImportItemById(
   itemId: number,
 ): Promise<IXboxCollectionImportItem | null> {
-  const rows = await oraQuery(
-    getSql(XboxCollectionImportSql.getItemById, dialect),
+  const rows = await dbQuery(
+    XboxCollectionImportSql.getItemById,
     { itemId },
     mapItem,
   );
@@ -329,8 +332,8 @@ export async function getXboxCollectionImportItemById(
 export async function getNextPendingXboxCollectionImportItem(
   importId: number,
 ): Promise<IXboxCollectionImportItem | null> {
-  const rows = await oraQuery(
-    getSql(XboxCollectionImportSql.getNextPendingItem, dialect),
+  const rows = await dbQuery(
+    XboxCollectionImportSql.getNextPendingItem,
     { importId },
     mapItem,
   );
@@ -383,8 +386,8 @@ export async function updateXboxCollectionImportItem(
 
   if (!fields.length) return;
 
-  await oraMutate(
-    XboxCollectionImportSql.updateItem(fields)[dialect],
+  await dbMutate(
+    XboxCollectionImportSql.updateItem(fields),
     binds,
   );
 }
@@ -398,8 +401,8 @@ export async function countXboxCollectionImportItems(
   skipped: number;
   failed: number;
 }> {
-  const rows = await oraQuery(
-    getSql(XboxCollectionImportSql.countItemsByStatus, dialect),
+  const rows = await dbQuery(
+    XboxCollectionImportSql.countItemsByStatus,
     { importId },
     (row: { STATUS: XboxCollectionImportItemStatus; CNT: number }) => row,
   );
@@ -418,8 +421,8 @@ export async function countXboxCollectionImportItems(
 export async function countXboxCollectionImportResultReasons(
   importId: number,
 ): Promise<Record<string, number>> {
-  const rows = await oraQuery(
-    getSql(XboxCollectionImportSql.countItemsByReason, dialect),
+  const rows = await dbQuery(
+    XboxCollectionImportSql.countItemsByReason,
     { importId },
     (row: { RESULT_REASON: XboxCollectionImportResultReason | null; CNT: number }) => row,
   );
@@ -477,8 +480,8 @@ export async function getXboxTitleHistoricalMappedGameIds(params: {
   const limit = Number.isInteger(params.limit) &&
     (params.limit ?? 0) > 0 ? Number(params.limit) : 5;
 
-  const rows = await oraQuery(
-    getSql(XboxCollectionImportSql.getHistoricalMappedIds, dialect),
+  const rows = await dbQuery(
+    XboxCollectionImportSql.getHistoricalMappedIds,
     {
       xboxTitleId: params.xboxTitleId,
       excludeUserId: params.excludeUserId ?? null,

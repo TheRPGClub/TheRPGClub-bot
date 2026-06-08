@@ -1,7 +1,6 @@
 import oracledb from "oracledb";
-import { oraQuery, oraMutate, oraWithConnection } from "../db/SqlManager.js";
+import { dbQuery, dbMutate, oraQuery, oraMutate, oraWithConnection, getSql } from "../db/SqlManager.js";
 import { getDialect } from "../db/dialect.js";
-import { getSql } from "../db/SqlManager.js";
 import { NrGotmSql } from "../db/sql/index.js";
 import Game from "./Game.js";
 
@@ -71,8 +70,8 @@ type NrGotmEntryRow = {
 };
 
 async function loadFromDatabaseInternal(): Promise<INrGotmEntry[]> {
-  const rows = await oraQuery<NrGotmEntryRow, NrGotmEntryRow>(
-    getSql(NrGotmSql.loadAll, dialect),
+  const rows = await dbQuery<NrGotmEntryRow, NrGotmEntryRow>(
+    NrGotmSql.loadAll,
     {},
     (row) => row,
   );
@@ -440,8 +439,8 @@ export async function updateNrGotmVotingResultsInDatabase(
   round: number,
   messageId: string | null,
 ): Promise<void> {
-  await oraMutate(
-    getSql(NrGotmSql.updateVotingResults, dialect),
+  await dbMutate(
+    NrGotmSql.updateVotingResults,
     { roundNumber: round, bindValue: messageId },
   );
 }
@@ -458,8 +457,8 @@ export async function insertNrGotmRoundInDatabase(
     throw new Error("At least one game is required for an NR-GOTM round.");
   }
 
-  const countRows = await oraQuery<{ CNT: number }, { CNT: number }>(
-    getSql(NrGotmSql.checkRoundExists, dialect),
+  const countRows = await dbQuery<{ CNT: number }, { CNT: number }>(
+    NrGotmSql.checkRoundExists,
     { roundNumber: round },
     (row) => row,
   );
@@ -509,9 +508,8 @@ export async function deleteNrGotmRoundFromDatabase(round: number): Promise<numb
     throw new Error("Invalid round number for NR-GOTM delete.");
   }
 
-  const result = await oraMutate(
-    getSql(NrGotmSql.deleteRound, dialect),
+  return dbMutate(
+    NrGotmSql.deleteRound,
     { roundNumber: round },
   );
-  return result.rowsAffected ?? 0;
 }
