@@ -672,7 +672,7 @@ export default class Game {
     igdbId: number,
   ): Promise<number> {
     const rows = await oraQuery(
-      `SELECT ${idCol} FROM ${table} WHERE ${igdbIdCol} = :igdbId`,
+      GameSql.getOrInsertMetadataSelect(idCol, table, igdbIdCol)[dialect],
       { igdbId },
       (row: Record<string, number>) => Number(row[idCol]),
       conn,
@@ -680,7 +680,7 @@ export default class Game {
     if (rows.length > 0) return rows[0];
 
     const insertRes = await oraMutate(
-      `INSERT INTO ${table} (${nameCol}, ${igdbIdCol}) VALUES (:name, :igdbId) RETURNING ${idCol} INTO :id`,
+      GameSql.getOrInsertMetadataInsert(table, nameCol, idCol, igdbIdCol)[dialect],
       { name, igdbId, id: { type: oracledb.NUMBER, dir: oracledb.BIND_OUT } },
       conn,
     );
@@ -1132,9 +1132,7 @@ export default class Game {
     idCol: string,
   ): Promise<string[]> {
     return oraQuery(
-      `SELECT t.NAME FROM ${defTable} t
-       JOIN ${mapTable} m ON t.${idCol} = m.${idCol}
-       WHERE m.GAME_ID = :gameId`,
+      GameSql.getSimpleList(defTable, mapTable, idCol)[dialect],
       { gameId },
       (row: { NAME: string }) => row.NAME,
     );
@@ -1448,24 +1446,7 @@ export default class Game {
         TITLE: string;
         INITIAL_RELEASE_DATE: Date | null;
       }>(
-        `SELECT GAME_ID, TITLE, INITIAL_RELEASE_DATE
-           FROM GAMEDB_GAMES
-          WHERE ${titleFoldExpr} LIKE :rawContains
-             OR (
-               :exactNorm IS NOT NULL AND
-               ${titleNormExpr} LIKE :normContains
-             )
-          ORDER BY CASE
-                     WHEN ${titleFoldExpr} = :exactRaw THEN 0
-                     WHEN ${titleFoldExpr} LIKE :rawPrefix THEN 1
-                     WHEN :exactNorm IS NOT NULL AND
-                          ${titleNormExpr} = :exactNorm THEN 2
-                     WHEN :exactNorm IS NOT NULL AND
-                          ${titleNormExpr} LIKE :normPrefix THEN 3
-                     ELSE 4
-                   END,
-                   TITLE ASC
-          FETCH FIRST :limit ROWS ONLY`,
+        GameSql.searchGamesAutocomplete(titleFoldExpr, titleNormExpr)[dialect],
         binds,
         { outFormat: oracledb.OUT_FORMAT_OBJECT },
       );
@@ -1669,6 +1650,9 @@ export default class Game {
           ? `${titlePart} AND ${filterPart}`
           : titlePart || filterPart || "1=0";
 
+      const orderPrefix = filters.upcomingRelease
+        ? "u.UPCOMING_DATE ASC NULLS LAST, "
+        : "";
       const result = await connection.execute<{
         GAME_ID: number;
         TITLE: string;
@@ -1685,26 +1669,7 @@ export default class Game {
         UPCOMING_RELEASE_DATE: Date | null;
         UPCOMING_PLATFORMS: string | null;
       }>(
-        `WITH upcoming AS (
-           SELECT GAME_ID, MIN(RELEASE_DATE) AS UPCOMING_DATE
-             FROM GAMEDB_RELEASES
-            WHERE RELEASE_DATE > SYSDATE
-            GROUP BY GAME_ID
-         )
-         SELECT g.GAME_ID, g.TITLE, g.DESCRIPTION, g.IGDB_ID, g.SLUG, g.TOTAL_RATING,
-                g.IGDB_URL, g.FEATURED_VIDEO_URL, g.INITIAL_RELEASE_DATE,
-                g.CREATED_AT, g.UPDATED_AT,
-                u.UPCOMING_DATE AS UPCOMING_RELEASE_DATE,
-                (SELECT LISTAGG(COALESCE(p.PLATFORM_ABBREVIATION, p.PLATFORM_NAME), ',')
-                        WITHIN GROUP (ORDER BY p.PLATFORM_NAME)
-                   FROM GAMEDB_RELEASES r
-                   JOIN GAMEDB_PLATFORMS p ON p.PLATFORM_ID = r.PLATFORM_ID
-                  WHERE r.GAME_ID = g.GAME_ID AND r.RELEASE_DATE = u.UPCOMING_DATE
-                ) AS UPCOMING_PLATFORMS
-           FROM GAMEDB_GAMES g
-           LEFT JOIN upcoming u ON u.GAME_ID = g.GAME_ID
-          WHERE ${whereClause}
-          ORDER BY ${filters.upcomingRelease ? "u.UPCOMING_DATE ASC NULLS LAST, " : ""}g.TITLE ASC`,
+        GameSql.searchGames(whereClause, orderPrefix)[dialect],
         binds,
         {
           outFormat: oracledb.OUT_FORMAT_OBJECT,
