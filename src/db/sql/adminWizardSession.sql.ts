@@ -1,0 +1,79 @@
+import type { SqlEntry } from "./types.js";
+
+export const AdminWizardSessionSql = {
+  getActive: {
+    oracle: `SELECT SESSION_ID,
+            COMMAND_KEY,
+            OWNER_USER_ID,
+            CHANNEL_ID,
+            GUILD_ID,
+            STATUS,
+            STATE_JSON,
+            LAST_UPDATED_AT,
+            CREATED_AT,
+            UPDATED_AT
+       FROM RPG_CLUB_ADMIN_WIZARD_SESSIONS
+      WHERE COMMAND_KEY = :commandKey
+        AND OWNER_USER_ID = :ownerUserId
+        AND CHANNEL_ID = :channelId
+        AND STATUS = 'ACTIVE'
+      ORDER BY LAST_UPDATED_AT DESC
+      FETCH FIRST 1 ROWS ONLY`,
+    postgres: ``,
+  } satisfies SqlEntry,
+
+  saveSession: {
+    oracle: `MERGE INTO RPG_CLUB_ADMIN_WIZARD_SESSIONS t
+      USING (
+        SELECT :commandKey AS COMMAND_KEY,
+               :ownerUserId AS OWNER_USER_ID,
+               :channelId AS CHANNEL_ID,
+               :guildId AS GUILD_ID,
+               :stateJson AS STATE_JSON,
+               :lastUpdatedAt AS LAST_UPDATED_AT
+          FROM dual
+      ) src
+         ON (t.COMMAND_KEY = src.COMMAND_KEY
+             AND t.OWNER_USER_ID = src.OWNER_USER_ID
+             AND t.CHANNEL_ID = src.CHANNEL_ID
+             AND t.STATUS = 'ACTIVE')
+    WHEN MATCHED THEN
+      UPDATE SET t.STATE_JSON = src.STATE_JSON,
+                 t.GUILD_ID = src.GUILD_ID,
+                 t.LAST_UPDATED_AT = src.LAST_UPDATED_AT
+    WHEN NOT MATCHED THEN
+      INSERT (SESSION_ID, COMMAND_KEY, OWNER_USER_ID, CHANNEL_ID, GUILD_ID, STATUS,
+              STATE_JSON, LAST_UPDATED_AT)
+      VALUES (
+        :sessionId,
+        src.COMMAND_KEY,
+        src.OWNER_USER_ID,
+        src.CHANNEL_ID,
+        src.GUILD_ID,
+        'ACTIVE',
+        src.STATE_JSON,
+        src.LAST_UPDATED_AT
+      )`,
+    postgres: ``,
+  } satisfies SqlEntry,
+
+  deleteHistorical: {
+    oracle: `DELETE FROM RPG_CLUB_ADMIN_WIZARD_SESSIONS
+        WHERE COMMAND_KEY = :commandKey
+          AND OWNER_USER_ID = :ownerUserId
+          AND CHANNEL_ID = :channelId
+          AND STATUS = :status`,
+    postgres: ``,
+  } satisfies SqlEntry,
+
+  updateStatus: {
+    oracle: `UPDATE RPG_CLUB_ADMIN_WIZARD_SESSIONS
+          SET STATUS = :status,
+              LAST_UPDATED_AT = :lastUpdatedAt
+        WHERE COMMAND_KEY = :commandKey
+          AND OWNER_USER_ID = :ownerUserId
+          AND CHANNEL_ID = :channelId
+          AND STATUS = 'ACTIVE'`,
+    postgres: ``,
+  } satisfies SqlEntry,
+};
