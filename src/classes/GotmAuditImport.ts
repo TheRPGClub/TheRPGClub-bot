@@ -1,5 +1,10 @@
 import oracledb from "oracledb";
 import { oraQuery, oraMutate, oraWithConnection, oraTransaction } from "../db/SqlManager.js";
+import { getDialect } from "../db/dialect.js";
+import { getSql } from "../db/SqlManager.js";
+import { GotmAuditImportSql } from "../db/sql/index.js";
+
+const dialect = getDialect();
 
 export type GotmAuditStatus = "ACTIVE" | "PAUSED" | "COMPLETED" | "CANCELED";
 export type GotmAuditItemStatus = "PENDING" | "SKIPPED" | "IMPORTED" | "ERROR";
@@ -97,11 +102,7 @@ export async function createGotmAuditImportSession(params: {
 }): Promise<IGotmAuditImport> {
   return oraWithConnection(async (conn) => {
     const result = await oraMutate(
-      `INSERT INTO RPG_CLUB_GOTM_AUDIT_IMPORTS (
-         USER_ID, STATUS, CURRENT_INDEX, TOTAL_COUNT, SOURCE_FILENAME
-       ) VALUES (
-         :userId, 'ACTIVE', 0, :totalCount, :sourceFilename
-       ) RETURNING IMPORT_ID INTO :id`,
+      getSql(GotmAuditImportSql.createSession, dialect),
       {
         userId: params.userId,
         totalCount: params.totalCount,
@@ -139,31 +140,7 @@ export async function insertGotmAuditImportItems(
   await oraTransaction(async (conn) => {
     for (const item of items) {
       await oraMutate(
-        `INSERT INTO RPG_CLUB_GOTM_AUDIT_ITEMS (
-           IMPORT_ID,
-           ROW_INDEX,
-           KIND,
-           ROUND_NUMBER,
-           MONTH_YEAR,
-           GAME_INDEX,
-           GAME_TITLE,
-           THREAD_ID,
-           REDDIT_URL,
-           STATUS,
-           GAMEDB_GAME_ID
-         ) VALUES (
-           :importId,
-           :rowIndex,
-           :kind,
-           :roundNumber,
-           :monthYear,
-           :gameIndex,
-           :gameTitle,
-           :threadId,
-           :redditUrl,
-           'PENDING',
-           :gameDbGameId
-         )`,
+        getSql(GotmAuditImportSql.insertItems, dialect),
         {
           importId,
           rowIndex: item.rowIndex,
@@ -187,16 +164,7 @@ export async function getGotmAuditImportById(
   existingConn?: oracledb.Connection,
 ): Promise<IGotmAuditImport | null> {
   const rows = await oraQuery(
-    `SELECT IMPORT_ID,
-            USER_ID,
-            STATUS,
-            CURRENT_INDEX,
-            TOTAL_COUNT,
-            SOURCE_FILENAME,
-            CREATED_AT,
-            UPDATED_AT
-       FROM RPG_CLUB_GOTM_AUDIT_IMPORTS
-      WHERE IMPORT_ID = :id`,
+    getSql(GotmAuditImportSql.getById, dialect),
     { id: importId },
     mapImport,
     existingConn,
@@ -208,18 +176,7 @@ export async function getActiveGotmAuditImportForUser(
   userId: string,
 ): Promise<IGotmAuditImport | null> {
   const rows = await oraQuery(
-    `SELECT IMPORT_ID,
-            USER_ID,
-            STATUS,
-            CURRENT_INDEX,
-            TOTAL_COUNT,
-            SOURCE_FILENAME,
-            CREATED_AT,
-            UPDATED_AT
-       FROM RPG_CLUB_GOTM_AUDIT_IMPORTS
-      WHERE USER_ID = :userId
-        AND STATUS IN ('ACTIVE', 'PAUSED')
-      ORDER BY IMPORT_ID DESC`,
+    getSql(GotmAuditImportSql.getActiveForUser, dialect),
     { userId },
     mapImport,
   );
@@ -231,9 +188,7 @@ export async function setGotmAuditImportStatus(
   status: GotmAuditStatus,
 ): Promise<void> {
   await oraMutate(
-    `UPDATE RPG_CLUB_GOTM_AUDIT_IMPORTS
-        SET STATUS = :status
-      WHERE IMPORT_ID = :importId`,
+    getSql(GotmAuditImportSql.setStatus, dialect),
     { importId, status },
   );
 }
@@ -243,9 +198,7 @@ export async function updateGotmAuditImportIndex(
   currentIndex: number,
 ): Promise<void> {
   await oraMutate(
-    `UPDATE RPG_CLUB_GOTM_AUDIT_IMPORTS
-        SET CURRENT_INDEX = :currentIndex
-      WHERE IMPORT_ID = :importId`,
+    getSql(GotmAuditImportSql.updateIndex, dialect),
     { importId, currentIndex },
   );
 }
@@ -254,24 +207,7 @@ export async function getNextGotmAuditItem(
   importId: number,
 ): Promise<IGotmAuditItem | null> {
   const rows = await oraQuery(
-    `SELECT ITEM_ID,
-            IMPORT_ID,
-            ROW_INDEX,
-            KIND,
-            ROUND_NUMBER,
-            MONTH_YEAR,
-            GAME_INDEX,
-            GAME_TITLE,
-            THREAD_ID,
-            REDDIT_URL,
-            STATUS,
-            GAMEDB_GAME_ID,
-            ERROR_TEXT
-       FROM RPG_CLUB_GOTM_AUDIT_ITEMS
-      WHERE IMPORT_ID = :importId
-        AND STATUS = 'PENDING'
-      ORDER BY ROW_INDEX
-      FETCH FIRST 1 ROWS ONLY`,
+    getSql(GotmAuditImportSql.getNextPendingItem, dialect),
     { importId },
     mapItem,
   );
@@ -282,21 +218,7 @@ export async function getGotmAuditItemById(
   itemId: number,
 ): Promise<IGotmAuditItem | null> {
   const rows = await oraQuery(
-    `SELECT ITEM_ID,
-            IMPORT_ID,
-            ROW_INDEX,
-            KIND,
-            ROUND_NUMBER,
-            MONTH_YEAR,
-            GAME_INDEX,
-            GAME_TITLE,
-            THREAD_ID,
-            REDDIT_URL,
-            STATUS,
-            GAMEDB_GAME_ID,
-            ERROR_TEXT
-       FROM RPG_CLUB_GOTM_AUDIT_ITEMS
-      WHERE ITEM_ID = :itemId`,
+    getSql(GotmAuditImportSql.getItemById, dialect),
     { itemId },
     mapItem,
   );
@@ -330,9 +252,7 @@ export async function updateGotmAuditItem(
   if (!fields.length) return;
 
   await oraMutate(
-    `UPDATE RPG_CLUB_GOTM_AUDIT_ITEMS
-        SET ${fields.join(", ")}
-      WHERE ITEM_ID = :itemId`,
+    GotmAuditImportSql.updateItem(fields)[dialect],
     binds,
   );
 }
@@ -343,24 +263,7 @@ export async function getGotmAuditItemsForRound(
   roundNumber: number,
 ): Promise<IGotmAuditItem[]> {
   return oraQuery(
-    `SELECT ITEM_ID,
-            IMPORT_ID,
-            ROW_INDEX,
-            KIND,
-            ROUND_NUMBER,
-            MONTH_YEAR,
-            GAME_INDEX,
-            GAME_TITLE,
-            THREAD_ID,
-            REDDIT_URL,
-            STATUS,
-            GAMEDB_GAME_ID,
-            ERROR_TEXT
-       FROM RPG_CLUB_GOTM_AUDIT_ITEMS
-      WHERE IMPORT_ID = :importId
-        AND KIND = :kind
-        AND ROUND_NUMBER = :roundNumber
-      ORDER BY GAME_INDEX`,
+    getSql(GotmAuditImportSql.getItemsForRound, dialect),
     { importId, kind, roundNumber },
     mapItem,
   );
@@ -374,10 +277,7 @@ export async function countGotmAuditItems(importId: number): Promise<{
 }> {
   const stats = { pending: 0, imported: 0, skipped: 0, error: 0 };
   const rows = await oraQuery(
-    `SELECT STATUS, COUNT(*) AS CNT
-       FROM RPG_CLUB_GOTM_AUDIT_ITEMS
-      WHERE IMPORT_ID = :importId
-      GROUP BY STATUS`,
+    getSql(GotmAuditImportSql.countItems, dialect),
     { importId },
     (row: { STATUS: GotmAuditItemStatus; CNT: number }) => row,
   );

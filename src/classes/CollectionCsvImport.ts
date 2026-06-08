@@ -1,5 +1,10 @@
 import oracledb from "oracledb";
 import { oraQuery, oraMutate, oraWithConnection, oraTransaction } from "../db/SqlManager.js";
+import { getDialect } from "../db/dialect.js";
+import { getSql } from "../db/SqlManager.js";
+import { CollectionCsvImportSql } from "../db/sql/index.js";
+
+const dialect = getDialect();
 
 export type CollectionCsvImportStatus = "ACTIVE" | "PAUSED" | "COMPLETED" | "CANCELED";
 export type CollectionCsvImportItemStatus =
@@ -140,23 +145,7 @@ export async function createCollectionCsvImportSession(params: {
 }): Promise<ICollectionCsvImport> {
   return oraWithConnection(async (conn) => {
     const result = await oraMutate(
-      `INSERT INTO RPG_CLUB_COLLECTION_CSV_IMPORTS (
-         USER_ID,
-         STATUS,
-         CURRENT_INDEX,
-         TOTAL_COUNT,
-         SOURCE_FILE_NAME,
-         SOURCE_FILE_SIZE,
-         TEMPLATE_VERSION
-       ) VALUES (
-         :userId,
-         'ACTIVE',
-         0,
-         :totalCount,
-         :sourceFileName,
-         :sourceFileSize,
-         :templateVersion
-       ) RETURNING IMPORT_ID INTO :id`,
+      getSql(CollectionCsvImportSql.createImport, dialect),
       {
         userId: params.userId,
         totalCount: params.totalCount,
@@ -198,33 +187,7 @@ export async function insertCollectionCsvImportItems(
   await oraTransaction(async (conn) => {
     for (const item of items) {
       await oraMutate(
-        `INSERT INTO RPG_CLUB_COLLECTION_CSV_IMPORT_ITEMS (
-           IMPORT_ID,
-           ROW_INDEX,
-           RAW_TITLE,
-           RAW_PLATFORM,
-           RAW_OWNERSHIP_TYPE,
-           RAW_NOTE,
-           RAW_GAMEDB_ID,
-           RAW_IGDB_ID,
-           PLATFORM_ID,
-           OWNERSHIP_TYPE,
-           NOTE,
-           STATUS
-         ) VALUES (
-           :importId,
-           :rowIndex,
-           :rawTitle,
-           :rawPlatform,
-           :rawOwnershipType,
-           :rawNote,
-           :rawGameDbId,
-           :rawIgdbId,
-           :platformId,
-           :ownershipType,
-           :note,
-           'PENDING'
-         )`,
+        getSql(CollectionCsvImportSql.insertItem, dialect),
         {
           importId,
           rowIndex: item.rowIndex,
@@ -249,18 +212,7 @@ export async function getCollectionCsvImportById(
   existingConn?: oracledb.Connection,
 ): Promise<ICollectionCsvImport | null> {
   const rows = await oraQuery(
-    `SELECT IMPORT_ID,
-            USER_ID,
-            STATUS,
-            CURRENT_INDEX,
-            TOTAL_COUNT,
-            SOURCE_FILE_NAME,
-            SOURCE_FILE_SIZE,
-            TEMPLATE_VERSION,
-            CREATED_AT,
-            UPDATED_AT
-       FROM RPG_CLUB_COLLECTION_CSV_IMPORTS
-      WHERE IMPORT_ID = :importId`,
+    getSql(CollectionCsvImportSql.getImportById, dialect),
     { importId },
     mapImport,
     existingConn,
@@ -272,21 +224,7 @@ export async function getActiveCollectionCsvImportForUser(
   userId: string,
 ): Promise<ICollectionCsvImport | null> {
   const rows = await oraQuery(
-    `SELECT IMPORT_ID,
-            USER_ID,
-            STATUS,
-            CURRENT_INDEX,
-            TOTAL_COUNT,
-            SOURCE_FILE_NAME,
-            SOURCE_FILE_SIZE,
-            TEMPLATE_VERSION,
-            CREATED_AT,
-            UPDATED_AT
-       FROM RPG_CLUB_COLLECTION_CSV_IMPORTS
-      WHERE USER_ID = :userId
-        AND STATUS IN ('ACTIVE', 'PAUSED')
-      ORDER BY CREATED_AT DESC, IMPORT_ID DESC
-      FETCH FIRST 1 ROWS ONLY`,
+    getSql(CollectionCsvImportSql.getActiveForUser, dialect),
     { userId },
     mapImport,
   );
@@ -298,9 +236,7 @@ export async function setCollectionCsvImportStatus(
   status: CollectionCsvImportStatus,
 ): Promise<void> {
   await oraMutate(
-    `UPDATE RPG_CLUB_COLLECTION_CSV_IMPORTS
-        SET STATUS = :status
-      WHERE IMPORT_ID = :importId`,
+    getSql(CollectionCsvImportSql.setStatus, dialect),
     { status, importId },
   );
 }
@@ -310,9 +246,7 @@ export async function updateCollectionCsvImportIndex(
   currentIndex: number,
 ): Promise<void> {
   await oraMutate(
-    `UPDATE RPG_CLUB_COLLECTION_CSV_IMPORTS
-        SET CURRENT_INDEX = :currentIndex
-      WHERE IMPORT_ID = :importId`,
+    getSql(CollectionCsvImportSql.updateIndex, dialect),
     { currentIndex, importId },
   );
 }
@@ -321,27 +255,7 @@ export async function getCollectionCsvImportItemById(
   itemId: number,
 ): Promise<ICollectionCsvImportItem | null> {
   const rows = await oraQuery(
-    `SELECT ITEM_ID,
-            IMPORT_ID,
-            ROW_INDEX,
-            RAW_TITLE,
-            RAW_PLATFORM,
-            RAW_OWNERSHIP_TYPE,
-            RAW_NOTE,
-            RAW_GAMEDB_ID,
-            RAW_IGDB_ID,
-            PLATFORM_ID,
-            OWNERSHIP_TYPE,
-            NOTE,
-            STATUS,
-            MATCH_CONFIDENCE,
-            MATCH_CANDIDATE_JSON,
-            GAMEDB_GAME_ID,
-            COLLECTION_ENTRY_ID,
-            RESULT_REASON,
-            ERROR_TEXT
-       FROM RPG_CLUB_COLLECTION_CSV_IMPORT_ITEMS
-      WHERE ITEM_ID = :itemId`,
+    getSql(CollectionCsvImportSql.getItemById, dialect),
     { itemId },
     mapItem,
   );
@@ -352,30 +266,7 @@ export async function getNextPendingCollectionCsvImportItem(
   importId: number,
 ): Promise<ICollectionCsvImportItem | null> {
   const rows = await oraQuery(
-    `SELECT ITEM_ID,
-            IMPORT_ID,
-            ROW_INDEX,
-            RAW_TITLE,
-            RAW_PLATFORM,
-            RAW_OWNERSHIP_TYPE,
-            RAW_NOTE,
-            RAW_GAMEDB_ID,
-            RAW_IGDB_ID,
-            PLATFORM_ID,
-            OWNERSHIP_TYPE,
-            NOTE,
-            STATUS,
-            MATCH_CONFIDENCE,
-            MATCH_CANDIDATE_JSON,
-            GAMEDB_GAME_ID,
-            COLLECTION_ENTRY_ID,
-            RESULT_REASON,
-            ERROR_TEXT
-       FROM RPG_CLUB_COLLECTION_CSV_IMPORT_ITEMS
-      WHERE IMPORT_ID = :importId
-        AND STATUS = 'PENDING'
-      ORDER BY ROW_INDEX ASC, ITEM_ID ASC
-      FETCH FIRST 1 ROWS ONLY`,
+    getSql(CollectionCsvImportSql.getNextPendingItem, dialect),
     { importId },
     mapItem,
   );
@@ -429,9 +320,7 @@ export async function updateCollectionCsvImportItem(
   if (!setParts.length) return;
 
   await oraMutate(
-    `UPDATE RPG_CLUB_COLLECTION_CSV_IMPORT_ITEMS
-        SET ${setParts.join(", ")}
-      WHERE ITEM_ID = :itemId`,
+    CollectionCsvImportSql.updateItem(setParts)[dialect],
     binds,
   );
 }
@@ -453,10 +342,7 @@ export async function countCollectionCsvImportItems(
     FAILED: 0,
   };
   const rows = await oraQuery(
-    `SELECT STATUS, COUNT(*) AS TOTAL
-       FROM RPG_CLUB_COLLECTION_CSV_IMPORT_ITEMS
-      WHERE IMPORT_ID = :importId
-      GROUP BY STATUS`,
+    getSql(CollectionCsvImportSql.countItemsByStatus, dialect),
     { importId },
     (row: { STATUS: CollectionCsvImportItemStatus; TOTAL: number }) => row,
   );
@@ -477,11 +363,7 @@ export async function countCollectionCsvImportResultReasons(
 ): Promise<Record<string, number>> {
   const counts: Record<string, number> = {};
   const rows = await oraQuery(
-    `SELECT RESULT_REASON, COUNT(*) AS TOTAL
-       FROM RPG_CLUB_COLLECTION_CSV_IMPORT_ITEMS
-      WHERE IMPORT_ID = :importId
-        AND RESULT_REASON IS NOT NULL
-      GROUP BY RESULT_REASON`,
+    getSql(CollectionCsvImportSql.countItemsByReason, dialect),
     { importId },
     (row: { RESULT_REASON: CollectionCsvImportResultReason; TOTAL: number }) => row,
   );

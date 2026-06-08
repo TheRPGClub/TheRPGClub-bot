@@ -1,5 +1,10 @@
 import { oraQuery, oraMutate } from "../db/SqlManager.js";
+import { getDialect } from "../db/dialect.js";
+import { getSql } from "../db/SqlManager.js";
+import { PresencePromptHistorySql } from "../db/sql/index.js";
 import { normalizePresenceGameTitle } from "./PresencePromptOptOut.js";
+
+const dialect = getDialect();
 
 export type PresencePromptStatus =
   | "PENDING"
@@ -16,19 +21,14 @@ export default class PresencePromptHistory {
   ): Promise<void> {
     const normalized = normalizePresenceGameTitle(gameTitle);
     await oraMutate(
-      `INSERT INTO RPG_CLUB_PRESENCE_PROMPT_HISTORY
-        (PROMPT_ID, USER_ID, GAME_TITLE, GAME_TITLE_NORM, STATUS)
-       VALUES (:promptId, :userId, :gameTitle, :gameTitleNorm, 'PENDING')`,
+      getSql(PresencePromptHistorySql.createPrompt, dialect),
       { promptId, userId, gameTitle, gameTitleNorm: normalized },
     );
   }
 
   static async markResolved(promptId: string, status: PresencePromptStatus): Promise<void> {
     await oraMutate(
-      `UPDATE RPG_CLUB_PRESENCE_PROMPT_HISTORY
-          SET STATUS = :status,
-              RESOLVED_AT = SYSTIMESTAMP
-        WHERE PROMPT_ID = :promptId`,
+      getSql(PresencePromptHistorySql.markResolved, dialect),
       { status, promptId },
     );
   }
@@ -39,12 +39,7 @@ export default class PresencePromptHistory {
   ): Promise<Date | null> {
     const normalized = normalizePresenceGameTitle(gameTitle);
     const rows = await oraQuery(
-      `SELECT CREATED_AT
-         FROM RPG_CLUB_PRESENCE_PROMPT_HISTORY
-        WHERE USER_ID = :userId
-          AND GAME_TITLE_NORM = :gameTitleNorm
-        ORDER BY CREATED_AT DESC
-        FETCH NEXT 1 ROWS ONLY`,
+      getSql(PresencePromptHistorySql.getLastPromptDate, dialect),
       { userId, gameTitleNorm: normalized },
       (row: { CREATED_AT: Date | string }) =>
         row.CREATED_AT instanceof Date ? row.CREATED_AT : new Date(row.CREATED_AT as string),
@@ -55,11 +50,7 @@ export default class PresencePromptHistory {
   static async countPendingForGame(userId: string, gameTitle: string): Promise<number> {
     const normalized = normalizePresenceGameTitle(gameTitle);
     const rows = await oraQuery(
-      `SELECT COUNT(*) AS CNT
-         FROM RPG_CLUB_PRESENCE_PROMPT_HISTORY
-        WHERE USER_ID = :userId
-          AND GAME_TITLE_NORM = :gameTitleNorm
-          AND STATUS = 'PENDING'`,
+      getSql(PresencePromptHistorySql.countPendingForGame, dialect),
       { userId, gameTitleNorm: normalized },
       (row: { CNT: number }) => Number(row.CNT ?? 0),
     );
@@ -68,10 +59,7 @@ export default class PresencePromptHistory {
 
   static async countPendingForUser(userId: string): Promise<number> {
     const rows = await oraQuery(
-      `SELECT COUNT(*) AS CNT
-         FROM RPG_CLUB_PRESENCE_PROMPT_HISTORY
-        WHERE USER_ID = :userId
-          AND STATUS = 'PENDING'`,
+      getSql(PresencePromptHistorySql.countPendingForUser, dialect),
       { userId },
       (row: { CNT: number }) => Number(row.CNT ?? 0),
     );

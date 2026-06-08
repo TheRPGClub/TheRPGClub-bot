@@ -1,4 +1,9 @@
 import { oraQuery, oraMutate, oraWithConnection } from "../db/SqlManager.js";
+import { getDialect } from "../db/dialect.js";
+import { getSql } from "../db/SqlManager.js";
+import { BotVotingInfoSql } from "../db/sql/index.js";
+
+const dialect = getDialect();
 
 export interface IBotVotingInfoEntry {
   roundNumber: number;
@@ -61,18 +66,10 @@ function normalizeDate(value: Date | string): Date {
   return d;
 }
 
-const VOTING_COLS = `ROUND_NUMBER,
-                NOMINATION_LIST_ID,
-                NEXT_VOTE_AT,
-                FIVE_DAY_REMINDER_SENT,
-                ONE_DAY_REMINDER_SENT`;
-
 export default class BotVotingInfo {
   static async getAll(): Promise<IBotVotingInfoEntry[]> {
     return oraQuery(
-      `SELECT ${VOTING_COLS}
-         FROM BOT_VOTING_INFO
-        ORDER BY ROUND_NUMBER`,
+      getSql(BotVotingInfoSql.getAll, dialect),
       [],
       mapRowToEntry,
     );
@@ -81,9 +78,7 @@ export default class BotVotingInfo {
   static async getByRound(roundNumber: number): Promise<IBotVotingInfoEntry | null> {
     const round = normalizeRoundNumber(roundNumber);
     const rows = await oraQuery(
-      `SELECT ${VOTING_COLS}
-         FROM BOT_VOTING_INFO
-        WHERE ROUND_NUMBER = :round`,
+      getSql(BotVotingInfoSql.getByRound, dialect),
       { round },
       mapRowToEntry,
     );
@@ -92,11 +87,7 @@ export default class BotVotingInfo {
 
   static async getCurrentRound(): Promise<IBotVotingInfoEntry | null> {
     const rows = await oraQuery(
-      `SELECT ${VOTING_COLS}
-         FROM BOT_VOTING_INFO
-        WHERE ROUND_NUMBER = (
-          SELECT MAX(ROUND_NUMBER) FROM BOT_VOTING_INFO
-        )`,
+      getSql(BotVotingInfoSql.getCurrentRound, dialect),
       [],
       mapRowToEntry,
     );
@@ -113,29 +104,14 @@ export default class BotVotingInfo {
 
     await oraWithConnection(async (conn) => {
       const updateResult = await conn.execute(
-        `UPDATE BOT_VOTING_INFO
-            SET NOMINATION_LIST_ID = :nominationListId,
-                NEXT_VOTE_AT = :nextVoteAt
-          WHERE ROUND_NUMBER = :round`,
+        getSql(BotVotingInfoSql.updateRoundInfo, dialect),
         { round, nominationListId, nextVoteAt: nextVote },
         { autoCommit: true },
       );
       if ((updateResult.rowsAffected ?? 0) > 0) return;
 
       await conn.execute(
-        `INSERT INTO BOT_VOTING_INFO (
-           ROUND_NUMBER,
-           NOMINATION_LIST_ID,
-           NEXT_VOTE_AT,
-           FIVE_DAY_REMINDER_SENT,
-           ONE_DAY_REMINDER_SENT
-         ) VALUES (
-           :round,
-           :nominationListId,
-           :nextVoteAt,
-           0,
-           0
-         )`,
+        getSql(BotVotingInfoSql.insertRoundInfo, dialect),
         { round, nominationListId, nextVoteAt: nextVote },
         { autoCommit: true },
       );
@@ -151,9 +127,7 @@ export default class BotVotingInfo {
       reminder === "fiveDay" ? "FIVE_DAY_REMINDER_SENT" : "ONE_DAY_REMINDER_SENT";
 
     const result = await oraMutate(
-      `UPDATE BOT_VOTING_INFO
-          SET ${column} = 1
-        WHERE ROUND_NUMBER = :round`,
+      BotVotingInfoSql.markReminderSent(column)[dialect],
       { round },
     );
     if ((result.rowsAffected ?? 0) === 0) {
@@ -170,9 +144,7 @@ export default class BotVotingInfo {
     const round = normalizeRoundNumber(roundNumber);
     const nextVote = normalizeDate(nextVoteAt);
     const result = await oraMutate(
-      `UPDATE BOT_VOTING_INFO
-          SET NEXT_VOTE_AT = :nextVoteAt
-        WHERE ROUND_NUMBER = :round`,
+      getSql(BotVotingInfoSql.updateNextVoteAt, dialect),
       { round, nextVoteAt: nextVote },
     );
     if ((result.rowsAffected ?? 0) === 0) {
@@ -188,9 +160,7 @@ export default class BotVotingInfo {
   ): Promise<void> {
     const round = normalizeRoundNumber(roundNumber);
     const result = await oraMutate(
-      `UPDATE BOT_VOTING_INFO
-          SET NOMINATION_LIST_ID = :nominationListId
-        WHERE ROUND_NUMBER = :round`,
+      getSql(BotVotingInfoSql.updateNominationListId, dialect),
       { round, nominationListId },
     );
     if ((result.rowsAffected ?? 0) === 0) {
@@ -204,8 +174,7 @@ export default class BotVotingInfo {
   static async deleteRound(roundNumber: number): Promise<number> {
     const round = normalizeRoundNumber(roundNumber);
     const result = await oraMutate(
-      `DELETE FROM BOT_VOTING_INFO
-        WHERE ROUND_NUMBER = :round`,
+      getSql(BotVotingInfoSql.deleteRound, dialect),
       { round },
     );
     return result.rowsAffected ?? 0;

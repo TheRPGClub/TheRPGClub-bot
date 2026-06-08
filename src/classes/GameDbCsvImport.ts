@@ -1,5 +1,10 @@
 import oracledb from "oracledb";
 import { oraQuery, oraMutate, oraWithConnection, oraTransaction } from "../db/SqlManager.js";
+import { getDialect } from "../db/dialect.js";
+import { getSql } from "../db/SqlManager.js";
+import { GameDbCsvImportSql } from "../db/sql/index.js";
+
+const dialect = getDialect();
 
 export type GameDbCsvImportStatus = "ACTIVE" | "PAUSED" | "COMPLETED" | "CANCELED";
 export type GameDbCsvItemStatus = "PENDING" | "SKIPPED" | "IMPORTED" | "ERROR";
@@ -94,11 +99,7 @@ export async function createGameDbCsvImportSession(params: {
 }): Promise<IGameDbCsvImport> {
   return oraWithConnection(async (conn) => {
     const result = await oraMutate(
-      `INSERT INTO RPG_CLUB_GAMEDB_IMPORTS (
-         USER_ID, STATUS, CURRENT_INDEX, TOTAL_COUNT, SOURCE_FILENAME
-       ) VALUES (
-         :userId, 'ACTIVE', 0, :totalCount, :sourceFilename
-       ) RETURNING IMPORT_ID INTO :id`,
+      getSql(GameDbCsvImportSql.createImport, dialect),
       {
         userId: params.userId,
         totalCount: params.totalCount,
@@ -133,25 +134,7 @@ export async function insertGameDbCsvImportItems(
   await oraTransaction(async (conn) => {
     for (const item of items) {
       await oraMutate(
-        `INSERT INTO RPG_CLUB_GAMEDB_IMPORT_ITEMS (
-           IMPORT_ID,
-           ROW_INDEX,
-           GAME_TITLE,
-           RAW_GAME_TITLE,
-           PLATFORM_NAME,
-           REGION_NAME,
-           INITIAL_RELEASE_DATE,
-           STATUS
-         ) VALUES (
-           :importId,
-           :rowIndex,
-           :gameTitle,
-           :rawGameTitle,
-           :platformName,
-           :regionName,
-           :initialReleaseDate,
-           'PENDING'
-         )`,
+        getSql(GameDbCsvImportSql.insertItem, dialect),
         {
           importId,
           rowIndex: item.rowIndex,
@@ -172,16 +155,7 @@ export async function getGameDbCsvImportById(
   existingConn?: oracledb.Connection,
 ): Promise<IGameDbCsvImport | null> {
   const rows = await oraQuery(
-    `SELECT IMPORT_ID,
-            USER_ID,
-            STATUS,
-            CURRENT_INDEX,
-            TOTAL_COUNT,
-            SOURCE_FILENAME,
-            CREATED_AT,
-            UPDATED_AT
-       FROM RPG_CLUB_GAMEDB_IMPORTS
-      WHERE IMPORT_ID = :id`,
+    getSql(GameDbCsvImportSql.getImportById, dialect),
     { id: importId },
     mapImport,
     existingConn,
@@ -193,19 +167,7 @@ export async function getActiveGameDbCsvImportForUser(
   userId: string,
 ): Promise<IGameDbCsvImport | null> {
   const rows = await oraQuery(
-    `SELECT IMPORT_ID,
-            USER_ID,
-            STATUS,
-            CURRENT_INDEX,
-            TOTAL_COUNT,
-            SOURCE_FILENAME,
-            CREATED_AT,
-            UPDATED_AT
-       FROM RPG_CLUB_GAMEDB_IMPORTS
-      WHERE USER_ID = :userId
-        AND STATUS IN ('ACTIVE', 'PAUSED')
-      ORDER BY CREATED_AT DESC, IMPORT_ID DESC
-      FETCH FIRST 1 ROWS ONLY`,
+    getSql(GameDbCsvImportSql.getActiveForUser, dialect),
     { userId },
     mapImport,
   );
@@ -217,9 +179,7 @@ export async function setGameDbCsvImportStatus(
   status: GameDbCsvImportStatus,
 ): Promise<void> {
   await oraMutate(
-    `UPDATE RPG_CLUB_GAMEDB_IMPORTS
-        SET STATUS = :status
-      WHERE IMPORT_ID = :importId`,
+    getSql(GameDbCsvImportSql.setStatus, dialect),
     { status, importId },
   );
 }
@@ -229,9 +189,7 @@ export async function updateGameDbCsvImportIndex(
   currentIndex: number,
 ): Promise<void> {
   await oraMutate(
-    `UPDATE RPG_CLUB_GAMEDB_IMPORTS
-        SET CURRENT_INDEX = :currentIndex
-      WHERE IMPORT_ID = :importId`,
+    getSql(GameDbCsvImportSql.updateIndex, dialect),
     { currentIndex, importId },
   );
 }
@@ -240,22 +198,7 @@ export async function getNextGameDbCsvImportItem(
   importId: number,
 ): Promise<IGameDbCsvImportItem | null> {
   const rows = await oraQuery(
-    `SELECT ITEM_ID,
-            IMPORT_ID,
-            ROW_INDEX,
-            GAME_TITLE,
-            RAW_GAME_TITLE,
-            PLATFORM_NAME,
-            REGION_NAME,
-            INITIAL_RELEASE_DATE,
-            STATUS,
-            GAMEDB_GAME_ID,
-            ERROR_TEXT
-       FROM RPG_CLUB_GAMEDB_IMPORT_ITEMS
-      WHERE IMPORT_ID = :importId
-        AND STATUS = 'PENDING'
-      ORDER BY ROW_INDEX ASC
-      FETCH FIRST 1 ROWS ONLY`,
+    getSql(GameDbCsvImportSql.getNextPendingItem, dialect),
     { importId },
     mapItem,
   );
@@ -266,19 +209,7 @@ export async function getGameDbCsvImportItemById(
   itemId: number,
 ): Promise<IGameDbCsvImportItem | null> {
   const rows = await oraQuery(
-    `SELECT ITEM_ID,
-            IMPORT_ID,
-            ROW_INDEX,
-            GAME_TITLE,
-            RAW_GAME_TITLE,
-            PLATFORM_NAME,
-            REGION_NAME,
-            INITIAL_RELEASE_DATE,
-            STATUS,
-            GAMEDB_GAME_ID,
-            ERROR_TEXT
-       FROM RPG_CLUB_GAMEDB_IMPORT_ITEMS
-      WHERE ITEM_ID = :itemId`,
+    getSql(GameDbCsvImportSql.getItemById, dialect),
     { itemId },
     mapItem,
   );
@@ -312,9 +243,7 @@ export async function updateGameDbCsvImportItem(
   if (!fields.length) return;
 
   await oraMutate(
-    `UPDATE RPG_CLUB_GAMEDB_IMPORT_ITEMS
-        SET ${fields.join(", ")}
-      WHERE ITEM_ID = :itemId`,
+    GameDbCsvImportSql.updateItem(fields)[dialect],
     binds,
   );
 }
@@ -327,10 +256,7 @@ export async function countGameDbCsvImportItems(importId: number): Promise<{
 }> {
   const stats = { pending: 0, skipped: 0, imported: 0, error: 0 };
   const rows = await oraQuery(
-    `SELECT STATUS, COUNT(*) AS CNT
-       FROM RPG_CLUB_GAMEDB_IMPORT_ITEMS
-      WHERE IMPORT_ID = :importId
-      GROUP BY STATUS`,
+    getSql(GameDbCsvImportSql.countItems, dialect),
     { importId },
     (row: { STATUS: string; CNT: number }) => row,
   );
