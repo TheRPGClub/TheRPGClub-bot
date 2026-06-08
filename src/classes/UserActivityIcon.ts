@@ -1,5 +1,10 @@
 import type { Activity } from "discord.js";
 import { oraQuery, oraTransaction } from "../db/SqlManager.js";
+import { getDialect } from "../db/dialect.js";
+import { getSql } from "../db/SqlManager.js";
+import { UserActivityIconSql } from "../db/sql/index.js";
+
+const dialect = getDialect();
 
 export type IUserActivityIconRow = {
   userId: string;
@@ -92,42 +97,6 @@ function collectActivityRecords(activities: readonly Activity[]): ActivityRecord
   return records;
 }
 
-const MERGE_SQL = `MERGE INTO RPG_CLUB_USER_ACTIVITY_ICONS t
-USING (
-  SELECT
-    :userId AS USER_ID,
-    :username AS USERNAME,
-    :activityName AS ACTIVITY_NAME,
-    :activityNameNorm AS ACTIVITY_NAME_NORM,
-    :iconType AS ICON_TYPE,
-    :sourceRef AS SOURCE_REF,
-    :iconUrl AS ICON_URL
-  FROM dual
-) s
-ON (
-  t.USER_ID = s.USER_ID
-  AND t.ACTIVITY_NAME_NORM = s.ACTIVITY_NAME_NORM
-  AND t.ICON_TYPE = s.ICON_TYPE
-  AND t.SOURCE_REF = s.SOURCE_REF
-)
-WHEN MATCHED THEN
-  UPDATE SET
-    t.USERNAME = s.USERNAME,
-    t.ICON_URL = s.ICON_URL,
-    t.LAST_SEEN_AT = SYSTIMESTAMP,
-    t.SEEN_COUNT = t.SEEN_COUNT + 1
-WHEN NOT MATCHED THEN
-  INSERT (
-    USER_ID, USERNAME, ACTIVITY_NAME, ACTIVITY_NAME_NORM,
-    ICON_TYPE, SOURCE_REF, ICON_URL,
-    FIRST_SEEN_AT, LAST_SEEN_AT, SEEN_COUNT
-  )
-  VALUES (
-    s.USER_ID, s.USERNAME, s.ACTIVITY_NAME, s.ACTIVITY_NAME_NORM,
-    s.ICON_TYPE, s.SOURCE_REF, s.ICON_URL,
-    SYSTIMESTAMP, SYSTIMESTAMP, 1
-  )`;
-
 export default class UserActivityIcon {
   static async recordFromPresence(
     userId: string,
@@ -140,7 +109,7 @@ export default class UserActivityIcon {
 
     await oraTransaction(async (conn) => {
       for (const record of records) {
-        await conn.execute(MERGE_SQL, {
+        await conn.execute(getSql(UserActivityIconSql.mergeActivity, dialect), {
           userId,
           username,
           activityName: record.activityName,
@@ -194,19 +163,7 @@ export default class UserActivityIcon {
     }
 
     return oraQuery(
-      `SELECT
-         USER_ID,
-         ACTIVITY_NAME,
-         ICON_TYPE,
-         SOURCE_REF,
-         ICON_URL,
-         LAST_SEEN_AT
-       FROM RPG_CLUB_USER_ACTIVITY_ICONS
-       WHERE (${userGroupClauses.join(" OR ")})
-         AND LAST_SEEN_AT >= SYSTIMESTAMP - NUMTODSINTERVAL(:days, 'DAY')
-         AND (:activityNameNorm IS NULL OR ACTIVITY_NAME_NORM = :activityNameNorm)
-         AND (:iconType IS NULL OR ICON_TYPE = :iconType)
-       ORDER BY LAST_SEEN_AT DESC`,
+      UserActivityIconSql.getRecentForUsers(userGroupClauses.join(" OR "))[dialect],
       binds,
       (row: {
         USER_ID: string;

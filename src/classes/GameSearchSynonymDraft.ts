@@ -1,5 +1,10 @@
 import oracledb from "oracledb";
 import { oraQuery, oraMutate, oraWithConnection } from "../db/SqlManager.js";
+import { getDialect } from "../db/dialect.js";
+import { getSql } from "../db/SqlManager.js";
+import { GameSearchSynonymDraftSql } from "../db/sql/index.js";
+
+const dialect = getDialect();
 
 export type ISynonymDraftPair = {
   term: string;
@@ -45,9 +50,7 @@ function mapDraftRow(row: any): ISynonymDraft {
 export default class GameSearchSynonymDraft {
   static async createDraft(userId: string): Promise<ISynonymDraft> {
     const result = await oraMutate(
-      `INSERT INTO GAMEDB_SEARCH_SYNONYM_DRAFTS (USER_ID, PAIRS_JSON)
-       VALUES (:userId, :pairsJson)
-       RETURNING DRAFT_ID INTO :draftId`,
+      getSql(GameSearchSynonymDraftSql.createDraft, dialect),
       {
         userId,
         pairsJson: JSON.stringify([]),
@@ -64,9 +67,7 @@ export default class GameSearchSynonymDraft {
 
   static async getDraft(draftId: number): Promise<ISynonymDraft | null> {
     const rows = await oraQuery(
-      `SELECT DRAFT_ID, USER_ID, PAIRS_JSON, CREATED_AT, UPDATED_AT
-         FROM GAMEDB_SEARCH_SYNONYM_DRAFTS
-        WHERE DRAFT_ID = :draftId`,
+      getSql(GameSearchSynonymDraftSql.getDraft, dialect),
       { draftId },
       mapDraftRow,
     );
@@ -82,10 +83,7 @@ export default class GameSearchSynonymDraft {
       if (!existing) return null;
       const combined = [...existing.pairs, ...pairs];
       await oraMutate(
-        `UPDATE GAMEDB_SEARCH_SYNONYM_DRAFTS
-            SET PAIRS_JSON = :pairsJson,
-                UPDATED_AT = CURRENT_TIMESTAMP
-          WHERE DRAFT_ID = :draftId`,
+        getSql(GameSearchSynonymDraftSql.updateDraft, dialect),
         { draftId, pairsJson: JSON.stringify(combined) },
         conn,
       );
@@ -95,7 +93,7 @@ export default class GameSearchSynonymDraft {
 
   static async deleteDraft(draftId: number): Promise<void> {
     await oraMutate(
-      `DELETE FROM GAMEDB_SEARCH_SYNONYM_DRAFTS WHERE DRAFT_ID = :draftId`,
+      getSql(GameSearchSynonymDraftSql.deleteDraft, dialect),
       { draftId },
     );
   }
@@ -105,9 +103,7 @@ export default class GameSearchSynonymDraft {
     conn: oracledb.Connection,
   ): Promise<ISynonymDraft | null> {
     const rows = await oraQuery(
-      `SELECT DRAFT_ID, USER_ID, PAIRS_JSON, CREATED_AT, UPDATED_AT
-         FROM GAMEDB_SEARCH_SYNONYM_DRAFTS
-        WHERE DRAFT_ID = :draftId`,
+      getSql(GameSearchSynonymDraftSql.getDraft, dialect),
       { draftId },
       mapDraftRow,
       conn,

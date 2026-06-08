@@ -1,5 +1,10 @@
 import oracledb from "oracledb";
 import { oraQuery, oraWithConnection } from "../db/SqlManager.js";
+import { getDialect } from "../db/dialect.js";
+import { getSql } from "../db/SqlManager.js";
+import { UserChannelMessageCountSql } from "../db/sql/index.js";
+
+const dialect = getDialect();
 
 type ChannelCountBind = {
   userId: string;
@@ -23,24 +28,7 @@ export default class UserChannelMessageCount {
     await oraWithConnection(async (conn) => {
       try {
         await conn.executeMany(
-          `MERGE INTO RPG_CLUB_USER_CHANNEL_COUNTS t
-            USING (
-              SELECT :userId AS user_id,
-                     :channelId AS channel_id,
-                     :count AS message_count,
-                     :scanned AS scanned
-                FROM dual
-            ) s
-               ON (t.USER_ID = s.user_id AND t.CHANNEL_ID = s.channel_id)
-             WHEN MATCHED THEN
-               UPDATE SET t.MESSAGE_COUNT = NVL(t.MESSAGE_COUNT, 0) + s.message_count,
-                          t.LAST_SCANNED_AT = s.scanned,
-                          t.UPDATED_AT = SYSTIMESTAMP
-             WHEN NOT MATCHED THEN
-               INSERT (USER_ID, CHANNEL_ID, MESSAGE_COUNT, LAST_SCANNED_AT,
-                       CREATED_AT, UPDATED_AT)
-               VALUES (s.user_id, s.channel_id, s.message_count, s.scanned,
-                       SYSTIMESTAMP, SYSTIMESTAMP)`,
+          getSql(UserChannelMessageCountSql.upsertChannelCounts, dialect),
           rows,
           {
             autoCommit: true,
@@ -65,7 +53,7 @@ export default class UserChannelMessageCount {
   static async getScannedChannelIds(): Promise<Set<string>> {
     try {
       const rows = await oraQuery(
-        `SELECT DISTINCT CHANNEL_ID FROM RPG_CLUB_USER_CHANNEL_COUNTS`,
+        getSql(UserChannelMessageCountSql.getScannedChannelIds, dialect),
         [],
         (row: { CHANNEL_ID: string }) => row.CHANNEL_ID,
       );
@@ -80,7 +68,7 @@ export default class UserChannelMessageCount {
   static async getChannelScanMeta(): Promise<Map<string, Date>> {
     try {
       const rows = await oraQuery(
-        `SELECT CHANNEL_ID, LAST_SCANNED_AT FROM RPG_CLUB_USER_CHANNEL_COUNTS`,
+        getSql(UserChannelMessageCountSql.getChannelScanMeta, dialect),
         [],
         (row: { CHANNEL_ID: string; LAST_SCANNED_AT: Date }) => row,
       );

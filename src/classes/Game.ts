@@ -6,6 +6,11 @@ import {
   oraWithConnection,
   oraTransaction,
 } from "../db/SqlManager.js";
+import { getDialect } from "../db/dialect.js";
+import { getSql } from "../db/SqlManager.js";
+import { GameSql } from "../db/sql/index.js";
+
+const dialect = getDialect();
 import { IGDBGameDetails, igdbService } from "../services/IGDB/IgdbService.js";
 import GameSearchSynonym from "./GameSearchSynonym.js";
 import {
@@ -338,26 +343,7 @@ export default class Game {
   ): Promise<IGame> {
     const gameId = await oraWithConnection(async (conn) => {
       const result = await oraMutate(
-        `INSERT INTO GAMEDB_GAMES (
-           TITLE,
-           DESCRIPTION,
-           IMAGE_DATA,
-           IGDB_ID,
-           SLUG,
-           TOTAL_RATING,
-           IGDB_URL,
-           FEATURED_VIDEO_URL
-         ) VALUES (
-           :title,
-           :description,
-           :imageData,
-           :igdbId,
-           :slug,
-           :totalRating,
-           :igdbUrl,
-           :featuredVideoUrl
-         )
-         RETURNING GAME_ID INTO :id`,
+        getSql(GameSql.createGame, dialect),
         {
           title,
           description,
@@ -432,11 +418,7 @@ export default class Game {
         CREATED_AT: Date;
         UPDATED_AT: Date;
       }>(
-        `SELECT GAME_ID, TITLE, DESCRIPTION, IMAGE_DATA, THUMBNAIL_BAD,
-                THUMBNAIL_APPROVED, IGDB_ID, SLUG, TOTAL_RATING, IGDB_URL, FEATURED_VIDEO_URL,
-                INITIAL_RELEASE_DATE, CREATED_AT, UPDATED_AT
-           FROM GAMEDB_GAMES
-          WHERE GAME_ID = :id`,
+        getSql(GameSql.getGameById, dialect),
         { id },
         {
           outFormat: oracledb.OUT_FORMAT_OBJECT,
@@ -483,10 +465,7 @@ export default class Game {
         CREATED_AT: Date;
         UPDATED_AT: Date;
       }>(
-        `SELECT GAME_ID, TITLE, DESCRIPTION, IMAGE_DATA, THUMBNAIL_BAD, THUMBNAIL_APPROVED, IGDB_ID, SLUG, TOTAL_RATING,
-                IGDB_URL, FEATURED_VIDEO_URL, INITIAL_RELEASE_DATE, CREATED_AT, UPDATED_AT
-           FROM GAMEDB_GAMES
-          WHERE GAME_ID IN (${placeholders.join(", ")})`,
+        GameSql.getGamesByIds(placeholders.join(", "))[dialect],
         binds,
         {
           outFormat: oracledb.OUT_FORMAT_OBJECT,
@@ -519,18 +498,7 @@ export default class Game {
         CREATED_AT: Date;
         UPDATED_AT: Date;
       }>(
-        `SELECT GAME_ID, TITLE, DESCRIPTION, IMAGE_DATA, THUMBNAIL_BAD, THUMBNAIL_APPROVED, IGDB_ID, SLUG, TOTAL_RATING,
-                IGDB_URL, FEATURED_VIDEO_URL, INITIAL_RELEASE_DATE, CREATED_AT, UPDATED_AT
-           FROM GAMEDB_GAMES
-          WHERE GAME_ID IN (
-            SELECT CASE
-                     WHEN GAME_ID = :id THEN ALT_GAME_ID
-                     ELSE GAME_ID
-                   END
-              FROM GAMEDB_GAME_ALTERNATES
-             WHERE GAME_ID = :id OR ALT_GAME_ID = :id
-          )
-          ORDER BY UPPER(TITLE)`,
+        getSql(GameSql.getAlternateVersions, dialect),
         { id: gameId },
         {
           outFormat: oracledb.OUT_FORMAT_OBJECT,
@@ -572,17 +540,7 @@ export default class Game {
 
     return oraWithConnection(async (conn) => {
       await conn.executeMany(
-        `MERGE INTO GAMEDB_GAME_ALTERNATES t
-         USING (
-           SELECT :gameId AS GAME_ID,
-                  :altGameId AS ALT_GAME_ID,
-                  :createdBy AS CREATED_BY
-             FROM dual
-         ) s
-            ON (t.GAME_ID = s.GAME_ID AND t.ALT_GAME_ID = s.ALT_GAME_ID)
-         WHEN NOT MATCHED THEN
-           INSERT (GAME_ID, ALT_GAME_ID, CREATED_BY)
-           VALUES (s.GAME_ID, s.ALT_GAME_ID, s.CREATED_BY)`,
+        getSql(GameSql.linkAlternateVersions, dialect),
         pairs,
         { autoCommit: true },
       );
@@ -608,10 +566,7 @@ export default class Game {
         CREATED_AT: Date;
         UPDATED_AT: Date;
       }>(
-        `SELECT GAME_ID, TITLE, DESCRIPTION, IMAGE_DATA, THUMBNAIL_BAD, THUMBNAIL_APPROVED, IGDB_ID, SLUG, TOTAL_RATING, IGDB_URL,
-                FEATURED_VIDEO_URL, INITIAL_RELEASE_DATE, CREATED_AT, UPDATED_AT
-           FROM GAMEDB_GAMES
-          WHERE IGDB_ID = :igdbId`,
+        getSql(GameSql.getGameByIgdbId, dialect),
         { igdbId },
         {
           outFormat: oracledb.OUT_FORMAT_OBJECT,
@@ -750,8 +705,7 @@ export default class Game {
             ic.company.id,
           );
           await oraMutate(
-            `INSERT INTO GAMEDB_GAME_COMPANIES (GAME_ID, COMPANY_ID, ROLE)
-             VALUES (:gameId, :companyId, :role)`,
+            getSql(GameSql.insertGameCompany, dialect),
             {
               gameId,
               companyId,
@@ -780,7 +734,7 @@ export default class Game {
             g.id,
           );
           await oraMutate(
-            `INSERT INTO GAMEDB_GAME_GENRES (GAME_ID, GENRE_ID) VALUES (:gameId, :genreId)`,
+            getSql(GameSql.insertGameGenre, dialect),
             { gameId, genreId },
             conn,
           )
@@ -801,7 +755,7 @@ export default class Game {
             t.id,
           );
           await oraMutate(
-            `INSERT INTO GAMEDB_GAME_THEMES (GAME_ID, THEME_ID) VALUES (:gameId, :themeId)`,
+            getSql(GameSql.insertGameTheme, dialect),
             { gameId, themeId },
             conn,
           )
@@ -822,7 +776,7 @@ export default class Game {
             gm.id,
           );
           await oraMutate(
-            `INSERT INTO GAMEDB_GAME_MODES (GAME_ID, MODE_ID) VALUES (:gameId, :modeId)`,
+            getSql(GameSql.insertGameMode, dialect),
             { gameId, modeId },
             conn,
           )
@@ -843,7 +797,7 @@ export default class Game {
             pp.id,
           );
           await oraMutate(
-            `INSERT INTO GAMEDB_GAME_PERSPECTIVES (GAME_ID, PERSPECTIVE_ID) VALUES (:gameId, :persId)`,
+            getSql(GameSql.insertGamePerspective, dialect),
             { gameId, persId },
             conn,
           )
@@ -864,7 +818,7 @@ export default class Game {
             e.id,
           );
           await oraMutate(
-            `INSERT INTO GAMEDB_GAME_ENGINES (GAME_ID, ENGINE_ID) VALUES (:gameId, :engineId)`,
+            getSql(GameSql.insertGameEngine, dialect),
             { gameId, engineId },
             conn,
           )
@@ -885,7 +839,7 @@ export default class Game {
             f.id,
           );
           await oraMutate(
-            `INSERT INTO GAMEDB_GAME_FRANCHISES (GAME_ID, FRANCHISE_ID) VALUES (:gameId, :franchiseId)`,
+            getSql(GameSql.insertGameFranchise, dialect),
             { gameId, franchiseId },
             conn,
           )
@@ -905,7 +859,7 @@ export default class Game {
           details.collection.id,
         );
         await oraMutate(
-          `UPDATE GAMEDB_GAMES SET COLLECTION_ID = :collectionId WHERE GAME_ID = :gameId`,
+          getSql(GameSql.updateCollectionId, dialect),
           { collectionId, gameId },
           conn,
         );
@@ -914,8 +868,7 @@ export default class Game {
 
       if (details.parent_game) {
         await oraMutate(
-          `UPDATE GAMEDB_GAMES SET PARENT_IGDB_ID = :parentId, PARENT_GAME_NAME = :parentName
-           WHERE GAME_ID = :gameId`,
+          getSql(GameSql.updateParentIgdbId, dialect),
           {
             parentId: details.parent_game.id,
             parentName: details.parent_game.name,
@@ -1016,19 +969,14 @@ export default class Game {
 
   static async updateInitialReleaseDate(gameId: number): Promise<void> {
     const rows = await oraQuery(
-      `SELECT MIN(RELEASE_DATE) AS MIN_DATE
-         FROM GAMEDB_RELEASES
-        WHERE GAME_ID = :gameId
-          AND RELEASE_DATE IS NOT NULL`,
+      getSql(GameSql.updateInitialReleaseDateSelect, dialect),
       { gameId },
       (row: { MIN_DATE: Date | null }) => row.MIN_DATE,
     );
     const minDate = rows[0] ?? null;
     if (!minDate) return;
     await oraMutate(
-      `UPDATE GAMEDB_GAMES
-          SET INITIAL_RELEASE_DATE = :releaseDate
-        WHERE GAME_ID = :gameId`,
+      getSql(GameSql.updateInitialReleaseDateUpdate, dialect),
       { releaseDate: minDate, gameId },
     );
   }
@@ -1044,8 +992,7 @@ export default class Game {
 
     try {
       await oraMutate(
-        `INSERT INTO GAMEDB_PLATFORMS (PLATFORM_CODE, PLATFORM_NAME, IGDB_PLATFORM_ID)
-         VALUES (:code, :name, :igdbId)`,
+        getSql(GameSql.insertPlatform, dialect),
         {
           code: buildPlatformCode(igdbPlatform.name, igdbPlatform.id),
           name: igdbPlatform.name ?? `IGDB Platform ${igdbPlatform.id}`,
@@ -1075,9 +1022,7 @@ export default class Game {
 
     try {
       const insertRes = await oraMutate(
-        `INSERT INTO GAMEDB_REGIONS (REGION_CODE, REGION_NAME, IGDB_REGION_ID)
-         VALUES (:code, :name, :igdbId)
-         RETURNING REGION_ID INTO :id`,
+        getSql(GameSql.insertRegion, dialect),
         {
           code: regionConfig.code,
           name: regionConfig.name,
@@ -1111,9 +1056,7 @@ export default class Game {
     role: string,
   ): Promise<string[]> {
     return oraQuery(
-      `SELECT c.NAME FROM GAMEDB_COMPANIES c
-       JOIN GAMEDB_GAME_COMPANIES gc ON c.COMPANY_ID = gc.COMPANY_ID
-       WHERE gc.GAME_ID = :gameId AND gc.ROLE = :role`,
+      getSql(GameSql.getGameCompanies, dialect),
       { gameId, role },
       (row: { NAME: string }) => row.NAME,
     );
@@ -1175,9 +1118,7 @@ export default class Game {
 
   static async getGameSeries(gameId: number): Promise<string | null> {
     const rows = await oraQuery(
-      `SELECT c.NAME FROM GAMEDB_COLLECTIONS c
-       JOIN GAMEDB_GAMES g ON c.COLLECTION_ID = g.COLLECTION_ID
-       WHERE g.GAME_ID = :gameId`,
+      getSql(GameSql.getGameSeries, dialect),
       { gameId },
       (row: { NAME: string }) => row.NAME,
     );
@@ -1208,9 +1149,7 @@ export default class Game {
     notes: string | null,
   ): Promise<IRelease> {
     const result = await oraMutate(
-      `INSERT INTO GAMEDB_RELEASES (GAME_ID, PLATFORM_ID, REGION_ID, FORMAT, RELEASE_DATE, NOTES)
-       VALUES (:gameId, :platformId, :regionId, :format, :releaseDate, :notes)
-       RETURNING RELEASE_ID INTO :id`,
+      getSql(GameSql.insertRelease, dialect),
       {
         gameId,
         platformId,
@@ -1231,9 +1170,7 @@ export default class Game {
 
   static async getReleaseById(id: number): Promise<IRelease | null> {
     const rows = await oraQuery(
-      `SELECT RELEASE_ID, GAME_ID, PLATFORM_ID, REGION_ID, FORMAT, RELEASE_DATE, NOTES
-         FROM GAMEDB_RELEASES
-        WHERE RELEASE_ID = :id`,
+      getSql(GameSql.getReleaseById, dialect),
       { id },
       mapReleaseRow,
     );
@@ -1242,10 +1179,7 @@ export default class Game {
 
   static async getGameReleases(gameId: number): Promise<IRelease[]> {
     return oraQuery(
-      `SELECT RELEASE_ID, GAME_ID, PLATFORM_ID, REGION_ID, FORMAT, RELEASE_DATE, NOTES
-         FROM GAMEDB_RELEASES
-        WHERE GAME_ID = :gameId
-        ORDER BY RELEASE_DATE ASC`,
+      getSql(GameSql.getGameReleases, dialect),
       { gameId },
       mapReleaseRow,
     );
@@ -1253,15 +1187,7 @@ export default class Game {
 
   static async getPlatformsForGame(gameId: number): Promise<IPlatformDef[]> {
     return oraQuery(
-      `SELECT DISTINCT p.PLATFORM_ID,
-              p.PLATFORM_CODE,
-              p.PLATFORM_NAME,
-              p.PLATFORM_ABBREVIATION,
-              p.IGDB_PLATFORM_ID
-         FROM GAMEDB_RELEASES r
-         JOIN GAMEDB_PLATFORMS p ON p.PLATFORM_ID = r.PLATFORM_ID
-        WHERE r.GAME_ID = :gameId
-        ORDER BY p.PLATFORM_NAME ASC`,
+      getSql(GameSql.getPlatformsForGame, dialect),
       { gameId },
       mapPlatformDefRow,
     );
@@ -1269,13 +1195,7 @@ export default class Game {
 
   static async getAllPlatforms(): Promise<IPlatformDef[]> {
     return oraQuery(
-      `SELECT PLATFORM_ID,
-              PLATFORM_CODE,
-              PLATFORM_NAME,
-              PLATFORM_ABBREVIATION,
-              IGDB_PLATFORM_ID
-         FROM GAMEDB_PLATFORMS
-        ORDER BY PLATFORM_NAME ASC`,
+      getSql(GameSql.getAllPlatforms, dialect),
       {},
       mapPlatformDefRow,
     );
@@ -1300,13 +1220,7 @@ export default class Game {
     });
 
     const platforms = await oraQuery(
-      `SELECT PLATFORM_ID,
-              PLATFORM_CODE,
-              PLATFORM_NAME,
-              PLATFORM_ABBREVIATION,
-              IGDB_PLATFORM_ID
-         FROM GAMEDB_PLATFORMS
-        WHERE IGDB_PLATFORM_ID IN (${placeholders.join(", ")})`,
+      GameSql.getPlatformsByIgdbIds(placeholders.join(", "))[dialect],
       binds,
       mapPlatformDefRow,
     );
@@ -1350,13 +1264,7 @@ export default class Game {
 
   static async getPlatformByCode(code: string): Promise<IPlatformDef | null> {
     const rows = await oraQuery(
-      `SELECT PLATFORM_ID,
-              PLATFORM_CODE,
-              PLATFORM_NAME,
-              PLATFORM_ABBREVIATION,
-              IGDB_PLATFORM_ID
-         FROM GAMEDB_PLATFORMS
-        WHERE PLATFORM_CODE = :code`,
+      getSql(GameSql.getPlatformByCode, dialect),
       { code },
       mapPlatformDefRow,
     );
@@ -1365,13 +1273,7 @@ export default class Game {
 
   static async getPlatformById(id: number): Promise<IPlatformDef | null> {
     const rows = await oraQuery(
-      `SELECT PLATFORM_ID,
-              PLATFORM_CODE,
-              PLATFORM_NAME,
-              PLATFORM_ABBREVIATION,
-              IGDB_PLATFORM_ID
-         FROM GAMEDB_PLATFORMS
-        WHERE PLATFORM_ID = :id`,
+      getSql(GameSql.getPlatformById, dialect),
       { id },
       mapPlatformDefRow,
     );
@@ -1404,15 +1306,7 @@ export default class Game {
     const missingPlatformIds = new Set<number>();
 
     const rows = await oraQuery(
-      `SELECT gp.GAME_ID,
-              gp.PLATFORM_ID,
-              p.PLATFORM_CODE,
-              p.PLATFORM_NAME,
-              p.PLATFORM_ABBREVIATION,
-              p.IGDB_PLATFORM_ID
-         FROM GAMEDB_GAME_PLATFORMS gp
-         LEFT JOIN GAMEDB_PLATFORMS p ON p.PLATFORM_ID = gp.PLATFORM_ID
-        WHERE gp.GAME_ID IN (${placeholders.join(", ")})`,
+      GameSql.attachPlatformsToGames(placeholders.join(", "))[dialect],
       binds,
       (row: {
         GAME_ID: number;
@@ -1463,13 +1357,7 @@ export default class Game {
     igdbId: number,
   ): Promise<IPlatformDef | null> {
     const rows = await oraQuery(
-      `SELECT PLATFORM_ID,
-              PLATFORM_CODE,
-              PLATFORM_NAME,
-              PLATFORM_ABBREVIATION,
-              IGDB_PLATFORM_ID
-         FROM GAMEDB_PLATFORMS
-        WHERE IGDB_PLATFORM_ID = :igdbId`,
+      getSql(GameSql.getPlatformByIgdbId, dialect),
       { igdbId },
       mapPlatformDefRow,
     );
@@ -1478,9 +1366,7 @@ export default class Game {
 
   static async getAllRegions(): Promise<IRegionDef[]> {
     return oraQuery(
-      `SELECT REGION_ID, REGION_CODE, REGION_NAME, IGDB_REGION_ID
-         FROM GAMEDB_REGIONS
-        ORDER BY REGION_NAME ASC`,
+      getSql(GameSql.getAllRegions, dialect),
       {},
       mapRegionDefRow,
     );
@@ -1488,9 +1374,7 @@ export default class Game {
 
   static async getRegionByCode(code: string): Promise<IRegionDef | null> {
     const rows = await oraQuery(
-      `SELECT REGION_ID, REGION_CODE, REGION_NAME, IGDB_REGION_ID
-         FROM GAMEDB_REGIONS
-        WHERE REGION_CODE = :code`,
+      getSql(GameSql.getRegionByCode, dialect),
       { code },
       mapRegionDefRow,
     );
@@ -1499,9 +1383,7 @@ export default class Game {
 
   static async getRegionById(id: number): Promise<IRegionDef | null> {
     const rows = await oraQuery(
-      `SELECT REGION_ID, REGION_CODE, REGION_NAME, IGDB_REGION_ID
-         FROM GAMEDB_REGIONS
-        WHERE REGION_ID = :id`,
+      getSql(GameSql.getRegionById, dialect),
       { id },
       mapRegionDefRow,
     );
@@ -1510,9 +1392,7 @@ export default class Game {
 
   static async getRegionByIgdbId(igdbId: number): Promise<IRegionDef | null> {
     const rows = await oraQuery(
-      `SELECT REGION_ID, REGION_CODE, REGION_NAME, IGDB_REGION_ID
-         FROM GAMEDB_REGIONS
-        WHERE IGDB_REGION_ID = :igdbId`,
+      getSql(GameSql.getRegionByIgdbId, dialect),
       { igdbId },
       mapRegionDefRow,
     );
@@ -1621,7 +1501,7 @@ export default class Game {
 
   static async getAllCompanies(): Promise<ICompany[]> {
     return oraQuery(
-      `SELECT COMPANY_ID, NAME, IGDB_COMPANY_ID FROM GAMEDB_COMPANIES ORDER BY NAME ASC`,
+      getSql(GameSql.getAllCompanies, dialect),
       {},
       (row: {
         COMPANY_ID: number;
@@ -1637,7 +1517,7 @@ export default class Game {
 
   static async getCompanyById(id: number): Promise<ICompany | null> {
     const rows = await oraQuery(
-      `SELECT COMPANY_ID, NAME, IGDB_COMPANY_ID FROM GAMEDB_COMPANIES WHERE COMPANY_ID = :id`,
+      getSql(GameSql.getCompanyById, dialect),
       { id },
       (row: {
         COMPANY_ID: number;
@@ -1913,11 +1793,7 @@ export default class Game {
         const platform = platformMap.get(igdbId);
         if (!platform) continue;
         await oraMutate(
-          `MERGE INTO GAMEDB_GAME_PLATFORMS gp
-           USING (SELECT :gameId AS GAME_ID, :platformId AS PLATFORM_ID FROM dual) src
-           ON (gp.GAME_ID = src.GAME_ID AND gp.PLATFORM_ID = src.PLATFORM_ID)
-           WHEN NOT MATCHED THEN
-             INSERT (GAME_ID, PLATFORM_ID) VALUES (src.GAME_ID, src.PLATFORM_ID)`,
+          getSql(GameSql.addGamePlatformMerge, dialect),
           { gameId, platformId: platform.id },
           conn,
         );
@@ -2003,11 +1879,7 @@ export default class Game {
         CREATED_AT: Date;
         UPDATED_AT: Date;
       }>(
-        `SELECT g.GAME_ID, g.TITLE, g.DESCRIPTION, g.IMAGE_DATA, g.IGDB_ID, g.SLUG, g.TOTAL_RATING,
-                g.IGDB_URL, g.FEATURED_VIDEO_URL, g.INITIAL_RELEASE_DATE, g.CREATED_AT, g.UPDATED_AT
-           FROM GAMEDB_GAMES g
-          WHERE ${combinedClause}
-          ORDER BY g.TITLE ASC`,
+        GameSql.getGamesForAudit(combinedClause)[dialect],
         binds,
         {
           outFormat: oracledb.OUT_FORMAT_OBJECT,
@@ -2027,7 +1899,7 @@ export default class Game {
     imageData: Buffer,
   ): Promise<void> {
     await oraMutate(
-      `UPDATE GAMEDB_GAMES SET IMAGE_DATA = :imageData, UPDATED_AT = SYSTIMESTAMP WHERE GAME_ID = :gameId`,
+      getSql(GameSql.updateGameImage, dialect),
       { imageData, gameId },
     );
   }
@@ -2037,10 +1909,7 @@ export default class Game {
     isBad: boolean,
   ): Promise<void> {
     await oraMutate(
-      `UPDATE GAMEDB_GAMES
-          SET THUMBNAIL_BAD = :thumbnailBad,
-              UPDATED_AT = SYSTIMESTAMP
-        WHERE GAME_ID = :gameId`,
+      getSql(GameSql.updateGameThumbnailBad, dialect),
       { thumbnailBad: isBad ? 1 : 0, gameId },
     );
   }
@@ -2050,10 +1919,7 @@ export default class Game {
     isApproved: boolean,
   ): Promise<void> {
     await oraMutate(
-      `UPDATE GAMEDB_GAMES
-          SET THUMBNAIL_APPROVED = :thumbnailApproved,
-              UPDATED_AT = SYSTIMESTAMP
-        WHERE GAME_ID = :gameId`,
+      getSql(GameSql.updateGameThumbnailApproved, dialect),
       { thumbnailApproved: isApproved ? 1 : 0, gameId },
     );
   }
@@ -2073,13 +1939,7 @@ export default class Game {
     });
 
     const rows = await oraQuery(
-      `SELECT DISTINCT g.GAME_ID
-         FROM GAMEDB_GAMES g
-        WHERE g.GAME_ID IN (${placeholders})
-          AND (
-            EXISTS (SELECT 1 FROM THREAD_GAME_LINKS tgl WHERE tgl.GAMEDB_GAME_ID = g.GAME_ID)
-            OR EXISTS (SELECT 1 FROM THREADS th WHERE th.GAMEDB_GAME_ID = g.GAME_ID)
-          )`,
+      GameSql.getThreadStatusForGameIds(placeholders)[dialect],
       binds,
       (row: { GAME_ID: number }) => Number(row.GAME_ID),
     );
@@ -2091,10 +1951,7 @@ export default class Game {
     featuredVideoUrl: string | null,
   ): Promise<void> {
     await oraMutate(
-      `UPDATE GAMEDB_GAMES
-          SET FEATURED_VIDEO_URL = :featuredVideoUrl,
-              UPDATED_AT = SYSTIMESTAMP
-        WHERE GAME_ID = :gameId`,
+      getSql(GameSql.updateFeaturedVideoUrl, dialect),
       { featuredVideoUrl, gameId },
     );
   }
@@ -2104,10 +1961,7 @@ export default class Game {
     description: string | null,
   ): Promise<void> {
     await oraMutate(
-      `UPDATE GAMEDB_GAMES
-          SET DESCRIPTION = :description,
-              UPDATED_AT = SYSTIMESTAMP
-        WHERE GAME_ID = :gameId`,
+      getSql(GameSql.updateGameDescription, dialect),
       { description, gameId },
     );
   }
@@ -2117,22 +1971,17 @@ export default class Game {
   ): Promise<{ releases: number; announcements: number }> {
     return oraTransaction(async (conn) => {
       const announceResult = await oraMutate(
-        `DELETE FROM GAMEDB_RELEASE_ANNOUNCEMENTS
-          WHERE RELEASE_ID IN (
-            SELECT RELEASE_ID FROM GAMEDB_RELEASES WHERE GAME_ID = :gameId
-          )`,
+        getSql(GameSql.clearReleaseAnnouncements, dialect),
         { gameId },
         conn,
       );
       const releaseResult = await oraMutate(
-        `DELETE FROM GAMEDB_RELEASES WHERE GAME_ID = :gameId`,
+        getSql(GameSql.clearReleases, dialect),
         { gameId },
         conn,
       );
       await oraMutate(
-        `UPDATE GAMEDB_GAMES
-            SET INITIAL_RELEASE_DATE = NULL, UPDATED_AT = SYSTIMESTAMP
-          WHERE GAME_ID = :gameId`,
+        getSql(GameSql.clearInitialReleaseDate, dialect),
         { gameId },
         conn,
       );
@@ -2154,7 +2003,7 @@ export default class Game {
 
   static async touchGameUpdatedAt(gameId: number): Promise<void> {
     await oraMutate(
-      `UPDATE GAMEDB_GAMES SET UPDATED_AT = SYSTIMESTAMP WHERE GAME_ID = :gameId`,
+      getSql(GameSql.touchGameUpdatedAt, dialect),
       { gameId },
     );
   }
@@ -2186,15 +2035,7 @@ export default class Game {
             monthYear: string;
           }
         >(
-          `SELECT ge.ROUND_NUMBER,
-                COALESCE(
-                  (SELECT MIN(tgl.THREAD_ID) FROM THREAD_GAME_LINKS tgl WHERE tgl.GAMEDB_GAME_ID = ge.GAMEDB_GAME_ID),
-                  (SELECT MIN(th.THREAD_ID) FROM THREADS th WHERE th.GAMEDB_GAME_ID = ge.GAMEDB_GAME_ID)
-                ) AS THREAD_ID,
-                ge.REDDIT_URL, ge.MONTH_YEAR
-           FROM GOTM_ENTRIES ge
-          WHERE ge.GAMEDB_GAME_ID = :gameId
-          ORDER BY ge.ROUND_NUMBER`,
+          getSql(GameSql.getGotmWins, dialect),
           { gameId },
           (row) => ({
             round: Number(row.ROUND_NUMBER),
@@ -2212,15 +2053,7 @@ export default class Game {
             monthYear: string;
           }
         >(
-          `SELECT nge.ROUND_NUMBER,
-                COALESCE(
-                  (SELECT MIN(tgl.THREAD_ID) FROM THREAD_GAME_LINKS tgl WHERE tgl.GAMEDB_GAME_ID = nge.GAMEDB_GAME_ID),
-                  (SELECT MIN(th.THREAD_ID) FROM THREADS th WHERE th.GAMEDB_GAME_ID = nge.GAMEDB_GAME_ID)
-                ) AS THREAD_ID,
-                nge.REDDIT_URL, nge.MONTH_YEAR
-           FROM NR_GOTM_ENTRIES nge
-          WHERE nge.GAMEDB_GAME_ID = :gameId
-          ORDER BY nge.ROUND_NUMBER`,
+          getSql(GameSql.getNrGotmWins, dialect),
           { gameId },
           (row) => ({
             round: Number(row.ROUND_NUMBER),
@@ -2230,11 +2063,7 @@ export default class Game {
           }),
         ),
         oraQuery<NomRow, { round: number; userId: string; username: string }>(
-          `SELECT n.ROUND_NUMBER, n.USER_ID, u.USERNAME, u.GLOBAL_NAME
-           FROM GOTM_NOMINATIONS n
-           LEFT JOIN RPG_CLUB_USERS u ON u.USER_ID = n.USER_ID
-          WHERE n.GAMEDB_GAME_ID = :gameId
-          ORDER BY n.ROUND_NUMBER`,
+          getSql(GameSql.getGotmNominations, dialect),
           { gameId },
           (row) => ({
             round: Number(row.ROUND_NUMBER),
@@ -2243,11 +2072,7 @@ export default class Game {
           }),
         ),
         oraQuery<NomRow, { round: number; userId: string; username: string }>(
-          `SELECT n.ROUND_NUMBER, n.USER_ID, u.USERNAME, u.GLOBAL_NAME
-           FROM NR_GOTM_NOMINATIONS n
-           LEFT JOIN RPG_CLUB_USERS u ON u.USER_ID = n.USER_ID
-          WHERE n.GAMEDB_GAME_ID = :gameId
-          ORDER BY n.ROUND_NUMBER`,
+          getSql(GameSql.getNrGotmNominations, dialect),
           { gameId },
           (row) => ({
             round: Number(row.ROUND_NUMBER),
@@ -2264,20 +2089,7 @@ export default class Game {
     gameId: number,
   ): Promise<INowPlayingMember[]> {
     return oraQuery(
-      `SELECT u.USER_ID,
-              ru.USERNAME,
-              ru.GLOBAL_NAME,
-              COALESCE(
-                (SELECT MIN(tgl.THREAD_ID) FROM THREAD_GAME_LINKS tgl
-                  WHERE tgl.GAMEDB_GAME_ID = u.GAMEDB_GAME_ID),
-                (SELECT MIN(th.THREAD_ID) FROM THREADS th
-                  WHERE th.GAMEDB_GAME_ID = u.GAMEDB_GAME_ID)
-              ) AS THREAD_ID,
-              u.ADDED_AT
-         FROM USER_NOW_PLAYING u
-         JOIN RPG_CLUB_USERS ru ON ru.USER_ID = u.USER_ID
-        WHERE u.GAMEDB_GAME_ID = :gameId
-        ORDER BY u.ADDED_AT DESC, u.ENTRY_ID DESC`,
+      getSql(GameSql.getNowPlayingMembers, dialect),
       { gameId },
       (row: {
         USER_ID: string;
@@ -2302,12 +2114,7 @@ export default class Game {
 
   static async getGameCompletions(gameId: number): Promise<ICompletedMember[]> {
     return oraQuery(
-      `SELECT c.USER_ID, u.USERNAME, u.GLOBAL_NAME,
-              c.COMPLETION_TYPE, c.COMPLETED_AT, c.FINAL_PLAYTIME_HRS
-         FROM USER_GAME_COMPLETIONS c
-         LEFT JOIN RPG_CLUB_USERS u ON u.USER_ID = c.USER_ID
-        WHERE c.GAMEDB_GAME_ID = :gameId
-        ORDER BY c.COMPLETED_AT DESC NULLS LAST, c.CREATED_AT DESC, c.COMPLETION_ID DESC`,
+      getSql(GameSql.getGameCompletions, dialect),
       { gameId },
       (row: {
         USER_ID: string;
@@ -2339,12 +2146,7 @@ export default class Game {
     gameId: number,
   ): Promise<ICollectionOwnerMember[]> {
     return oraQuery(
-      `SELECT c.USER_ID, u.USERNAME, u.GLOBAL_NAME
-         FROM USER_GAME_COLLECTIONS c
-         LEFT JOIN RPG_CLUB_USERS u ON u.USER_ID = c.USER_ID
-        WHERE c.GAMEDB_GAME_ID = :gameId
-        GROUP BY c.USER_ID, u.USERNAME, u.GLOBAL_NAME
-        ORDER BY LOWER(COALESCE(u.GLOBAL_NAME, u.USERNAME, c.USER_ID))`,
+      getSql(GameSql.getGameCollectionOwners, dialect),
       { gameId },
       (row: {
         USER_ID: string;

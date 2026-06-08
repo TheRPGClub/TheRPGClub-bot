@@ -1,5 +1,10 @@
 import oracledb from "oracledb";
 import { oraQuery, oraMutate, oraWithConnection, oraTransaction } from "../db/SqlManager.js";
+import { getDialect } from "../db/dialect.js";
+import { getSql } from "../db/SqlManager.js";
+import { SteamCollectionImportSql } from "../db/sql/index.js";
+
+const dialect = getDialect();
 
 export type SteamCollectionImportStatus = "ACTIVE" | "PAUSED" | "COMPLETED" | "CANCELED";
 export type SteamCollectionImportItemStatus =
@@ -167,37 +172,6 @@ function mapAppMap(row: AppMapRow): ISteamAppGameDbMap {
   };
 }
 
-const IMPORT_SELECT_SQL = `SELECT IMPORT_ID,
-       USER_ID,
-       STATUS,
-       CURRENT_INDEX,
-       TOTAL_COUNT,
-       STEAM_ID64,
-       STEAM_PROFILE_REF,
-       SOURCE_PROFILE_NAME,
-       CREATED_AT,
-       UPDATED_AT
-  FROM RPG_CLUB_STEAM_COLLECTION_IMPORTS`;
-
-const ITEM_SELECT_SQL = `SELECT ITEM_ID,
-       IMPORT_ID,
-       ROW_INDEX,
-       STEAM_APP_ID,
-       STEAM_APP_NAME,
-       PLAYTIME_FOREVER_MIN,
-       PLAYTIME_WINDOWS_MIN,
-       PLAYTIME_MAC_MIN,
-       PLAYTIME_LINUX_MIN,
-       PLAYTIME_DECK_MIN,
-       LAST_PLAYED_AT,
-       STATUS,
-       MATCH_CONFIDENCE,
-       MATCH_CANDIDATE_JSON,
-       GAMEDB_GAME_ID,
-       COLLECTION_ENTRY_ID,
-       RESULT_REASON,
-       ERROR_TEXT
-  FROM RPG_CLUB_STEAM_COLLECTION_IMPORT_ITEMS`;
 
 export async function createSteamCollectionImportSession(params: {
   userId: string;
@@ -208,23 +182,7 @@ export async function createSteamCollectionImportSession(params: {
 }): Promise<ISteamCollectionImport> {
   return oraWithConnection(async (conn) => {
     const insert = await oraMutate(
-      `INSERT INTO RPG_CLUB_STEAM_COLLECTION_IMPORTS (
-         USER_ID,
-         STATUS,
-         CURRENT_INDEX,
-         TOTAL_COUNT,
-         STEAM_ID64,
-         STEAM_PROFILE_REF,
-         SOURCE_PROFILE_NAME
-       ) VALUES (
-         :userId,
-         'ACTIVE',
-         0,
-         :totalCount,
-         :steamId64,
-         :steamProfileRef,
-         :sourceProfileName
-       ) RETURNING IMPORT_ID INTO :id`,
+      getSql(SteamCollectionImportSql.createImport, dialect),
       {
         userId: params.userId,
         totalCount: params.totalCount,
@@ -265,31 +223,7 @@ export async function insertSteamCollectionImportItems(
   await oraTransaction(async (conn) => {
     for (const item of items) {
       await oraMutate(
-        `INSERT INTO RPG_CLUB_STEAM_COLLECTION_IMPORT_ITEMS (
-           IMPORT_ID,
-           ROW_INDEX,
-           STEAM_APP_ID,
-           STEAM_APP_NAME,
-           PLAYTIME_FOREVER_MIN,
-           PLAYTIME_WINDOWS_MIN,
-           PLAYTIME_MAC_MIN,
-           PLAYTIME_LINUX_MIN,
-           PLAYTIME_DECK_MIN,
-           LAST_PLAYED_AT,
-           STATUS
-         ) VALUES (
-           :importId,
-           :rowIndex,
-           :steamAppId,
-           :steamAppName,
-           :playtimeForeverMin,
-           :playtimeWindowsMin,
-           :playtimeMacMin,
-           :playtimeLinuxMin,
-           :playtimeDeckMin,
-           :lastPlayedAt,
-           'PENDING'
-         )`,
+        getSql(SteamCollectionImportSql.insertItem, dialect),
         {
           importId,
           rowIndex: item.rowIndex,
@@ -313,7 +247,7 @@ export async function getSteamCollectionImportById(
   existingConnection?: oracledb.Connection,
 ): Promise<ISteamCollectionImport | null> {
   const rows = await oraQuery(
-    `${IMPORT_SELECT_SQL} WHERE IMPORT_ID = :importId`,
+    getSql(SteamCollectionImportSql.getImportById, dialect),
     { importId },
     mapImport,
     existingConnection,
@@ -325,11 +259,7 @@ export async function getActiveSteamCollectionImportForUser(
   userId: string,
 ): Promise<ISteamCollectionImport | null> {
   const rows = await oraQuery(
-    `${IMPORT_SELECT_SQL}
-     WHERE USER_ID = :userId
-       AND STATUS IN ('ACTIVE', 'PAUSED')
-     ORDER BY CREATED_AT DESC, IMPORT_ID DESC
-     FETCH FIRST 1 ROWS ONLY`,
+    getSql(SteamCollectionImportSql.getActiveForUser, dialect),
     { userId },
     mapImport,
   );
@@ -341,9 +271,7 @@ export async function setSteamCollectionImportStatus(
   status: SteamCollectionImportStatus,
 ): Promise<void> {
   await oraMutate(
-    `UPDATE RPG_CLUB_STEAM_COLLECTION_IMPORTS
-        SET STATUS = :status
-      WHERE IMPORT_ID = :importId`,
+    getSql(SteamCollectionImportSql.setStatus, dialect),
     { status, importId },
   );
 }
@@ -353,9 +281,7 @@ export async function updateSteamCollectionImportIndex(
   currentIndex: number,
 ): Promise<void> {
   await oraMutate(
-    `UPDATE RPG_CLUB_STEAM_COLLECTION_IMPORTS
-        SET CURRENT_INDEX = :currentIndex
-      WHERE IMPORT_ID = :importId`,
+    getSql(SteamCollectionImportSql.updateIndex, dialect),
     { currentIndex, importId },
   );
 }
@@ -377,18 +303,14 @@ async function fetchItemWithJsonCol(
 export async function getSteamCollectionImportItemById(
   itemId: number,
 ): Promise<ISteamCollectionImportItem | null> {
-  return fetchItemWithJsonCol(`${ITEM_SELECT_SQL} WHERE ITEM_ID = :itemId`, { itemId });
+  return fetchItemWithJsonCol(getSql(SteamCollectionImportSql.getItemById, dialect), { itemId });
 }
 
 export async function getNextPendingSteamCollectionImportItem(
   importId: number,
 ): Promise<ISteamCollectionImportItem | null> {
   return fetchItemWithJsonCol(
-    `${ITEM_SELECT_SQL}
-     WHERE IMPORT_ID = :importId
-       AND STATUS = 'PENDING'
-     ORDER BY ROW_INDEX ASC
-     FETCH FIRST 1 ROWS ONLY`,
+    getSql(SteamCollectionImportSql.getNextPendingItem, dialect),
     { importId },
   );
 }
@@ -440,9 +362,7 @@ export async function updateSteamCollectionImportItem(
   if (!setParts.length) return;
 
   await oraMutate(
-    `UPDATE RPG_CLUB_STEAM_COLLECTION_IMPORT_ITEMS
-        SET ${setParts.join(", ")}
-      WHERE ITEM_ID = :itemId`,
+    SteamCollectionImportSql.updateItem(setParts)[dialect],
     binds,
   );
 }
@@ -457,10 +377,7 @@ export async function countSteamCollectionImportItems(
   failed: number;
 }> {
   const rows = await oraQuery(
-    `SELECT STATUS, COUNT(*) AS CNT
-       FROM RPG_CLUB_STEAM_COLLECTION_IMPORT_ITEMS
-      WHERE IMPORT_ID = :importId
-      GROUP BY STATUS`,
+    getSql(SteamCollectionImportSql.countItemsByStatus, dialect),
     { importId },
     (row: { STATUS: SteamCollectionImportItemStatus; CNT: number }) => row,
   );
@@ -481,11 +398,7 @@ export async function countSteamCollectionImportResultReasons(
   importId: number,
 ): Promise<Record<string, number>> {
   const rows = await oraQuery(
-    `SELECT RESULT_REASON, COUNT(*) AS CNT
-       FROM RPG_CLUB_STEAM_COLLECTION_IMPORT_ITEMS
-      WHERE IMPORT_ID = :importId
-        AND RESULT_REASON IS NOT NULL
-      GROUP BY RESULT_REASON`,
+    getSql(SteamCollectionImportSql.countItemsByReason, dialect),
     { importId },
     (row: { RESULT_REASON: string | null; CNT: number }) => row,
   );
@@ -503,15 +416,7 @@ export async function getSteamAppGameDbMapByAppId(
   existingConnection?: oracledb.Connection,
 ): Promise<ISteamAppGameDbMap | null> {
   const rows = await oraQuery(
-    `SELECT MAP_ID,
-            STEAM_APP_ID,
-            GAMEDB_GAME_ID,
-            STATUS,
-            CREATED_BY,
-            CREATED_AT,
-            UPDATED_AT
-       FROM RPG_CLUB_STEAM_APP_GAMEDB_MAP
-      WHERE STEAM_APP_ID = :steamAppId`,
+    getSql(SteamCollectionImportSql.getAppMap, dialect),
     { steamAppId },
     mapAppMap,
     existingConnection,
@@ -527,30 +432,7 @@ export async function upsertSteamAppGameDbMap(params: {
 }): Promise<ISteamAppGameDbMap> {
   return oraWithConnection(async (conn) => {
     await oraMutate(
-      `MERGE INTO RPG_CLUB_STEAM_APP_GAMEDB_MAP m
-       USING (
-         SELECT :steamAppId AS steamAppId,
-                :gameDbGameId AS gameDbGameId,
-                :status AS status,
-                :createdBy AS createdBy
-           FROM dual
-       ) src
-          ON (m.STEAM_APP_ID = src.steamAppId)
-       WHEN MATCHED THEN UPDATE SET
-         m.GAMEDB_GAME_ID = src.gameDbGameId,
-         m.STATUS = src.status,
-         m.CREATED_BY = src.createdBy
-       WHEN NOT MATCHED THEN INSERT (
-         STEAM_APP_ID,
-         GAMEDB_GAME_ID,
-         STATUS,
-         CREATED_BY
-       ) VALUES (
-         src.steamAppId,
-         src.gameDbGameId,
-         src.status,
-         src.createdBy
-       )`,
+      getSql(SteamCollectionImportSql.upsertAppMap, dialect),
       {
         steamAppId: params.steamAppId,
         gameDbGameId: params.gameDbGameId,
@@ -576,22 +458,7 @@ export async function getSteamAppHistoricalMappedGameIds(params: {
     ? Number(params.limit) : 5;
 
   const rows = await oraQuery(
-    `SELECT t.GAMEDB_GAME_ID
-       FROM (
-         SELECT ii.GAMEDB_GAME_ID,
-                COUNT(*) AS CNT,
-                MAX(ii.ITEM_ID) AS LAST_ITEM_ID
-           FROM RPG_CLUB_STEAM_COLLECTION_IMPORT_ITEMS ii
-           JOIN RPG_CLUB_STEAM_COLLECTION_IMPORTS i
-             ON i.IMPORT_ID = ii.IMPORT_ID
-          WHERE ii.STEAM_APP_ID = :steamAppId
-            AND ii.GAMEDB_GAME_ID IS NOT NULL
-            AND ii.RESULT_REASON = 'MANUAL_REMAP'
-            AND (:excludeUserId IS NULL OR i.USER_ID <> :excludeUserId)
-          GROUP BY ii.GAMEDB_GAME_ID
-          ORDER BY CNT DESC, LAST_ITEM_ID DESC
-       ) t
-      WHERE ROWNUM <= :limit`,
+    getSql(SteamCollectionImportSql.getHistoricalMappedIds, dialect),
     {
       steamAppId: params.steamAppId,
       excludeUserId: params.excludeUserId ?? null,
