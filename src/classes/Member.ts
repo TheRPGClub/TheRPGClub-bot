@@ -539,11 +539,7 @@ export default class Member {
     const noteUpdatedAt = noteValue ? new Date() : null;
 
     const res = await oraMutate(
-      `UPDATE USER_NOW_PLAYING
-          SET NOTE = :note,
-              NOTE_UPDATED_AT = :noteUpdatedAt
-        WHERE USER_ID = :userId
-          AND GAMEDB_GAME_ID = :gameId`,
+      getSql(MemberSql.updateNowPlayingNote, dialect),
       { userId, gameId, note: noteValue, noteUpdatedAt },
     );
     return (res.rowsAffected ?? 0) > 0;
@@ -568,7 +564,7 @@ export default class Member {
     try {
       await oraWithConnection(async (conn) => {
         const countRes = await conn.execute<{ CNT: number }>(
-          `SELECT COUNT(*) AS CNT FROM USER_NOW_PLAYING WHERE USER_ID = :userId`,
+          getSql(MemberSql.countNowPlaying, dialect),
           { userId },
           { outFormat: oracledb.OUT_FORMAT_OBJECT },
         );
@@ -578,9 +574,7 @@ export default class Member {
         }
 
         const sortRes = await conn.execute<{ MAX_SORT: number | null }>(
-          `SELECT MAX(SORT_ORDER) AS MAX_SORT
-             FROM USER_NOW_PLAYING
-            WHERE USER_ID = :userId`,
+          getSql(MemberSql.getNowPlayingMaxSort, dialect),
           { userId },
           { outFormat: oracledb.OUT_FORMAT_OBJECT },
         );
@@ -588,21 +582,12 @@ export default class Member {
         const nextSort = maxSort + 1;
 
         await oraMutate(
-          `INSERT INTO USER_NOW_PLAYING
-            (USER_ID, GAMEDB_GAME_ID, PLATFORM_ID, NOTE, NOTE_UPDATED_AT, SORT_ORDER)
-           VALUES (:userId, :gameId, :platformId, :note, :noteUpdatedAt, :sortOrder)`,
+          getSql(MemberSql.insertNowPlaying, dialect),
           { userId, gameId, platformId, note: noteValue, noteUpdatedAt, sortOrder: nextSort },
           conn,
         );
         await oraMutate(
-          `MERGE INTO USER_GAME_JOURNAL_PREFS p
-           USING (SELECT :userId AS USER_ID, :gameId AS GAMEDB_GAME_ID FROM dual) src
-              ON (p.USER_ID = src.USER_ID AND p.GAMEDB_GAME_ID = src.GAMEDB_GAME_ID)
-           WHEN MATCHED THEN
-             UPDATE SET IS_ENABLED = 1, UPDATED_AT = SYSTIMESTAMP
-           WHEN NOT MATCHED THEN
-             INSERT (USER_ID, GAMEDB_GAME_ID, IS_ENABLED, DEFAULT_IS_PUBLIC)
-             VALUES (:userId, :gameId, 1, 0)`,
+          getSql(MemberSql.mergeJournalPrefs, dialect),
           { userId, gameId },
           conn,
         );
@@ -626,12 +611,7 @@ export default class Member {
       GAMEDB_GAME_ID: number;
       IS_ENABLED: number;
     }, IGameJournalPreference>(
-      `SELECT USER_ID,
-              GAMEDB_GAME_ID,
-              IS_ENABLED
-         FROM USER_GAME_JOURNAL_PREFS
-        WHERE USER_ID = :userId
-          AND GAMEDB_GAME_ID = :gameId`,
+      getSql(MemberSql.getGameJournalPreference, dialect),
       { userId, gameId },
       (row) => ({
         userId: row.USER_ID,
@@ -650,16 +630,7 @@ export default class Member {
     isEnabled: boolean,
   ): Promise<void> {
     await oraMutate(
-      `MERGE INTO USER_GAME_JOURNAL_PREFS p
-       USING (SELECT :userId AS USER_ID, :gameId AS GAMEDB_GAME_ID FROM dual) src
-          ON (p.USER_ID = src.USER_ID AND p.GAMEDB_GAME_ID = src.GAMEDB_GAME_ID)
-        WHEN MATCHED THEN
-          UPDATE SET IS_ENABLED = :isEnabled,
-                     DEFAULT_IS_PUBLIC = 1,
-                     UPDATED_AT = SYSTIMESTAMP
-        WHEN NOT MATCHED THEN
-          INSERT (USER_ID, GAMEDB_GAME_ID, IS_ENABLED, DEFAULT_IS_PUBLIC)
-          VALUES (:userId, :gameId, :isEnabled, 1)`,
+      getSql(MemberSql.upsertGameJournalPreference, dialect),
       {
         userId,
         gameId,
@@ -693,14 +664,7 @@ export default class Member {
       JOURNAL_COUNT: number;
       LAST_JOURNAL_AT: Date | string | null;
     }, { gameId: number; journalCount: number; lastJournalAt: Date | null }>(
-      `SELECT gids.GAME_ID,
-              COUNT(*) AS JOURNAL_COUNT,
-              MAX(je.CREATED_AT) AS LAST_JOURNAL_AT
-         FROM (${inlineTable}) gids
-         LEFT JOIN USER_GAME_JOURNAL_ENTRIES je
-           ON je.USER_ID = :userId
-          AND je.GAMEDB_GAME_ID = gids.GAME_ID
-        GROUP BY gids.GAME_ID`,
+      MemberSql.getJournalStatusForGames(inlineTable)[dialect],
       binds,
       (row) => ({
         gameId: Number(row.GAME_ID),
@@ -732,30 +696,7 @@ export default class Member {
       UPDATED_AT: Date | string;
       ENTRY_NUMBER: number;
     }, IGameJournalEntry>(
-      `WITH all_entries AS (
-         SELECT ENTRY_ID,
-                USER_ID,
-                GAMEDB_GAME_ID,
-                ENTRY_TITLE,
-                ENTRY_BODY,
-                CREATED_AT,
-                UPDATED_AT,
-                ROW_NUMBER() OVER (ORDER BY CREATED_AT ASC, ENTRY_ID ASC) AS ENTRY_NUMBER
-           FROM USER_GAME_JOURNAL_ENTRIES
-          WHERE USER_ID = :userId
-            AND GAMEDB_GAME_ID = :gameId
-       )
-       SELECT ENTRY_ID,
-              USER_ID,
-              GAMEDB_GAME_ID,
-              ENTRY_TITLE,
-              ENTRY_BODY,
-              CREATED_AT,
-              UPDATED_AT,
-              ENTRY_NUMBER
-         FROM all_entries
-        ORDER BY CREATED_AT DESC, ENTRY_ID DESC
-        OFFSET :offset ROWS FETCH NEXT :limit ROWS ONLY`,
+      getSql(MemberSql.getGameJournalEntries, dialect),
       { userId, gameId, offset: safeOffset, limit: safeLimit },
       (row) => ({
         entryId: Number(row.ENTRY_ID),
@@ -772,10 +713,7 @@ export default class Member {
 
   static async countGameJournalEntries(userId: string, gameId: number): Promise<number> {
     const rows = await oraQuery<{ CNT: number }, number>(
-      `SELECT COUNT(*) AS CNT
-         FROM USER_GAME_JOURNAL_ENTRIES
-        WHERE USER_ID = :userId
-          AND GAMEDB_GAME_ID = :gameId`,
+      getSql(MemberSql.countGameJournalEntries, dialect),
       { userId, gameId },
       (row) => Number(row.CNT),
     );
@@ -794,10 +732,7 @@ export default class Member {
       throw new Error("Journal body cannot be empty.");
     }
     await oraMutate(
-      `INSERT INTO USER_GAME_JOURNAL_ENTRIES
-        (USER_ID, GAMEDB_GAME_ID, ENTRY_TITLE, ENTRY_BODY, IS_PUBLIC)
-       VALUES
-        (:userId, :gameId, :title, :body, 1)`,
+      getSql(MemberSql.addGameJournalEntry, dialect),
       {
         userId: params.userId,
         gameId: params.gameId,
@@ -821,24 +756,7 @@ export default class Member {
       UPDATED_AT: Date | string;
       ENTRY_NUMBER: number;
     }, IGameJournalEntry>(
-      `SELECT e.ENTRY_ID,
-              e.USER_ID,
-              e.GAMEDB_GAME_ID,
-              e.ENTRY_TITLE,
-              e.ENTRY_BODY,
-              e.CREATED_AT,
-              e.UPDATED_AT,
-              (SELECT COUNT(*) + 1
-                 FROM USER_GAME_JOURNAL_ENTRIES e2
-                WHERE e2.USER_ID = e.USER_ID
-                  AND e2.GAMEDB_GAME_ID = e.GAMEDB_GAME_ID
-                  AND (e2.CREATED_AT < e.CREATED_AT
-                       OR (e2.CREATED_AT = e.CREATED_AT AND e2.ENTRY_ID < e.ENTRY_ID))
-              ) AS ENTRY_NUMBER
-         FROM USER_GAME_JOURNAL_ENTRIES e
-        WHERE e.USER_ID = :userId
-          AND e.ENTRY_ID = :entryId
-        FETCH FIRST 1 ROWS ONLY`,
+      getSql(MemberSql.getGameJournalEntryForUser, dialect),
       { userId, entryId },
       (row) => ({
         entryId: Number(row.ENTRY_ID),
@@ -884,10 +802,7 @@ export default class Member {
     fields.push("UPDATED_AT = SYSTIMESTAMP");
 
     const res = await oraMutate(
-      `UPDATE USER_GAME_JOURNAL_ENTRIES
-          SET ${fields.join(", ")}
-        WHERE USER_ID = :userId
-          AND ENTRY_ID = :entryId`,
+      MemberSql.updateGameJournalEntry(fields)[dialect],
       binds as Record<string, any>,
     );
     return Number(res.rowsAffected ?? 0) > 0;
@@ -895,9 +810,7 @@ export default class Member {
 
   static async deleteGameJournalEntry(userId: string, entryId: number): Promise<boolean> {
     const res = await oraMutate(
-      `DELETE FROM USER_GAME_JOURNAL_ENTRIES
-        WHERE USER_ID = :userId
-          AND ENTRY_ID = :entryId`,
+      getSql(MemberSql.deleteGameJournalEntry, dialect),
       { userId, entryId },
     );
     return Number(res.rowsAffected ?? 0) > 0;
@@ -915,10 +828,7 @@ export default class Member {
         sortOrder: idx + 1,
       }));
       const result = await conn.executeMany(
-        `UPDATE USER_NOW_PLAYING
-            SET SORT_ORDER = :sortOrder
-          WHERE USER_ID = :userId
-            AND GAMEDB_GAME_ID = :gameId`,
+        getSql(MemberSql.updateNowPlayingSort, dialect),
         binds,
       );
       await conn.commit();
@@ -932,7 +842,7 @@ export default class Member {
     }
 
     const res = await oraMutate(
-      `DELETE FROM USER_NOW_PLAYING WHERE USER_ID = :userId AND GAMEDB_GAME_ID = :gameId`,
+      getSql(MemberSql.removeNowPlaying, dialect),
       { userId, gameId },
     );
     const rows = (res as any).rowsAffected ?? 0;
@@ -981,15 +891,7 @@ export default class Member {
 
     return oraTransaction(async (conn) => {
       const result = await oraMutate(
-        `
-        INSERT INTO USER_GAME_COMPLETIONS (
-          USER_ID, GAMEDB_GAME_ID, COMPLETION_TYPE, PLATFORM_ID,
-          COMPLETED_AT, FINAL_PLAYTIME_HRS, NOTE
-        ) VALUES (
-          :userId, :gameId, :type, :platformId, :completedAt, :playtime, :note
-        )
-        RETURNING COMPLETION_ID INTO :completionId
-        `,
+        getSql(MemberSql.addCompletion, dialect),
         {
           userId,
           gameId,
@@ -1007,8 +909,7 @@ export default class Member {
       if (!id) throw new Error("Failed to save completion (no id returned).");
 
       const verify = await oraQuery<{ CNT: number }, number>(
-        `SELECT COUNT(*) AS CNT FROM USER_GAME_COMPLETIONS
-          WHERE COMPLETION_ID = :id AND USER_ID = :userId`,
+        getSql(MemberSql.verifyCompletion, dialect),
         { id, userId },
         (row) => Number(row.CNT),
         conn,
@@ -1035,32 +936,7 @@ export default class Member {
       THREAD_ID: string | null;
       NOTE: string | null;
     }, ICompletionRecord>(
-      `
-      SELECT c.COMPLETION_ID,
-             g.GAME_ID,
-             g.TITLE,
-             c.COMPLETION_TYPE,
-             c.PLATFORM_ID,
-             c.COMPLETED_AT,
-             c.FINAL_PLAYTIME_HRS,
-             c.CREATED_AT,
-             c.NOTE,
-             COALESCE(
-                (
-                  SELECT MIN(tgl.THREAD_ID)
-                  FROM THREAD_GAME_LINKS tgl
-                  WHERE tgl.GAMEDB_GAME_ID = c.GAMEDB_GAME_ID
-                ),
-                (
-                  SELECT MIN(th.THREAD_ID)
-                  FROM THREADS th
-                  WHERE th.GAMEDB_GAME_ID = c.GAMEDB_GAME_ID
-                )
-              ) AS THREAD_ID
-        FROM USER_GAME_COMPLETIONS c
-        JOIN GAMEDB_GAMES g ON g.GAME_ID = c.GAMEDB_GAME_ID
-       WHERE c.COMPLETION_ID = :completionId
-      `,
+      getSql(MemberSql.getCompletion, dialect),
       { completionId },
       (row) => ({
         completionId: Number(row.COMPLETION_ID),
@@ -1106,33 +982,7 @@ export default class Member {
       THREAD_ID: string | null;
       NOTE: string | null;
     }, ICompletionRecord>(
-      `
-      SELECT c.COMPLETION_ID,
-             g.GAME_ID,
-             g.TITLE,
-             c.COMPLETION_TYPE,
-             c.PLATFORM_ID,
-             c.COMPLETED_AT,
-             c.FINAL_PLAYTIME_HRS,
-             c.CREATED_AT,
-             c.NOTE,
-             COALESCE(
-                (
-                  SELECT MIN(tgl.THREAD_ID)
-                  FROM THREAD_GAME_LINKS tgl
-                  WHERE tgl.GAMEDB_GAME_ID = c.GAMEDB_GAME_ID
-                ),
-                (
-                  SELECT MIN(th.THREAD_ID)
-                  FROM THREADS th
-                  WHERE th.GAMEDB_GAME_ID = c.GAMEDB_GAME_ID
-                )
-              ) AS THREAD_ID
-        FROM USER_GAME_COMPLETIONS c
-        JOIN GAMEDB_GAMES g ON g.GAME_ID = c.GAMEDB_GAME_ID
-       WHERE c.USER_ID = :userId
-         AND c.COMPLETION_ID = :completionId
-      `,
+      getSql(MemberSql.getCompletionForUser, dialect),
       { userId, completionId },
       (row) => ({
         completionId: Number(row.COMPLETION_ID),
@@ -1181,34 +1031,7 @@ export default class Member {
       THREAD_ID: string | null;
       NOTE: string | null;
     }, ICompletionRecord>(
-      `
-      SELECT c.COMPLETION_ID,
-             g.GAME_ID,
-             g.TITLE,
-             c.COMPLETION_TYPE,
-             c.PLATFORM_ID,
-             c.COMPLETED_AT,
-             c.FINAL_PLAYTIME_HRS,
-             c.CREATED_AT,
-             c.NOTE,
-             COALESCE(
-                (
-                  SELECT MIN(tgl.THREAD_ID)
-                  FROM THREAD_GAME_LINKS tgl
-                  WHERE tgl.GAMEDB_GAME_ID = c.GAMEDB_GAME_ID
-                ),
-                (
-                  SELECT MIN(th.THREAD_ID)
-                  FROM THREADS th
-                  WHERE th.GAMEDB_GAME_ID = c.GAMEDB_GAME_ID
-                )
-              ) AS THREAD_ID
-        FROM USER_GAME_COMPLETIONS c
-        JOIN GAMEDB_GAMES g ON g.GAME_ID = c.GAMEDB_GAME_ID
-       WHERE c.USER_ID = :userId
-         AND c.GAMEDB_GAME_ID = :gameId
-       FETCH FIRST 1 ROWS ONLY
-      `,
+      getSql(MemberSql.getCompletionByGameId, dialect),
       { userId, gameId },
       (row) => ({
         completionId: Number(row.COMPLETION_ID),
@@ -1274,34 +1097,7 @@ export default class Member {
       THREAD_ID: string | null;
       NOTE: string | null;
     }, ICompletionRecord>(
-      `
-      SELECT c.COMPLETION_ID,
-             g.GAME_ID,
-             g.TITLE,
-             c.COMPLETION_TYPE,
-             c.PLATFORM_ID,
-             c.COMPLETED_AT,
-             c.FINAL_PLAYTIME_HRS,
-             c.CREATED_AT,
-             c.NOTE,
-             COALESCE(
-                (
-                  SELECT MIN(tgl.THREAD_ID)
-                  FROM THREAD_GAME_LINKS tgl
-                  WHERE tgl.GAMEDB_GAME_ID = c.GAMEDB_GAME_ID
-                ),
-                (
-                  SELECT MIN(th.THREAD_ID)
-                  FROM THREADS th
-                  WHERE th.GAMEDB_GAME_ID = c.GAMEDB_GAME_ID
-                )
-              ) AS THREAD_ID
-        FROM USER_GAME_COMPLETIONS c
-        JOIN GAMEDB_GAMES g ON g.GAME_ID = c.GAMEDB_GAME_ID
-       WHERE ${clauses.join(" AND ")}
-       ORDER BY c.COMPLETED_AT DESC NULLS LAST, c.COMPLETION_ID DESC
-       OFFSET :offset ROWS FETCH NEXT :limit ROWS ONLY
-      `,
+      MemberSql.getCompletions(clauses.join(" AND "))[dialect],
       binds,
       (row) => ({
         completionId: Number(row.COMPLETION_ID),
@@ -1342,33 +1138,7 @@ export default class Member {
       THREAD_ID: string | null;
       NOTE: string | null;
     }, ICompletionRecord>(
-      `
-      SELECT c.COMPLETION_ID,
-             g.GAME_ID,
-             g.TITLE,
-             c.COMPLETION_TYPE,
-             c.PLATFORM_ID,
-             c.COMPLETED_AT,
-             c.FINAL_PLAYTIME_HRS,
-             c.CREATED_AT,
-             c.NOTE,
-             COALESCE(
-                (
-                  SELECT MIN(tgl.THREAD_ID)
-                  FROM THREAD_GAME_LINKS tgl
-                  WHERE tgl.GAMEDB_GAME_ID = c.GAMEDB_GAME_ID
-                ),
-                (
-                  SELECT MIN(th.THREAD_ID)
-                  FROM THREADS th
-                  WHERE th.GAMEDB_GAME_ID = c.GAMEDB_GAME_ID
-                )
-              ) AS THREAD_ID
-        FROM USER_GAME_COMPLETIONS c
-        JOIN GAMEDB_GAMES g ON g.GAME_ID = c.GAMEDB_GAME_ID
-       WHERE c.USER_ID = :userId
-       ORDER BY c.COMPLETED_AT DESC NULLS LAST, c.CREATED_AT DESC, c.COMPLETION_ID DESC
-      `,
+      getSql(MemberSql.getAllCompletions, dialect),
       { userId },
       (row) => ({
         completionId: Number(row.COMPLETION_ID),
@@ -1415,12 +1185,7 @@ export default class Member {
     }
 
     const rows = await oraQuery<{ CNT: number }, number>(
-      `
-      SELECT COUNT(*) AS CNT
-        FROM USER_GAME_COMPLETIONS c
-        JOIN GAMEDB_GAMES g ON g.GAME_ID = c.GAMEDB_GAME_ID
-       WHERE ${clauses.join(" AND ")}
-      `,
+      MemberSql.countCompletions(clauses.join(" AND "))[dialect],
       binds,
       (row) => Number(row.CNT),
     );
@@ -1474,12 +1239,7 @@ export default class Member {
     if (!fields.length) return false;
 
     const res = await oraMutate(
-      `
-      UPDATE USER_GAME_COMPLETIONS
-         SET ${fields.join(", ")}
-       WHERE COMPLETION_ID = :completionId
-         AND USER_ID = :userId
-      `,
+      MemberSql.updateCompletion(fields)[dialect],
       binds,
     );
     const rows = (res as any).rowsAffected ?? 0;
@@ -1491,11 +1251,7 @@ export default class Member {
       throw new Error("Invalid completion id.");
     }
     const res = await oraMutate(
-      `
-      DELETE FROM USER_GAME_COMPLETIONS
-       WHERE COMPLETION_ID = :completionId
-         AND USER_ID = :userId
-      `,
+      getSql(MemberSql.deleteCompletion, dialect),
       { completionId, userId },
     );
     const rows = (res as any).rowsAffected ?? 0;
@@ -1513,11 +1269,7 @@ export default class Member {
         NEW_NICK: string | null;
         CHANGED_AT: Date;
       }, IMemberNickHistory>(
-        `SELECT OLD_NICK, NEW_NICK, CHANGED_AT
-           FROM RPG_CLUB_USER_NICK_HISTORY
-          WHERE USER_ID = :userId
-          ORDER BY CHANGED_AT DESC
-          FETCH FIRST :limit ROWS ONLY`,
+        getSql(MemberSql.getRecentNickHistory, dialect),
         { userId, limit: safeLimit },
         (row) => ({
           oldNick: row.OLD_NICK ?? null,
@@ -1555,16 +1307,7 @@ export default class Member {
       GLOBAL_NAME: string | null;
       CNT: number;
     }, { userId: string; username: string | null; globalName: string | null; count: number }>(
-      `
-      SELECT c.USER_ID, u.USERNAME, u.GLOBAL_NAME, COUNT(*) AS CNT
-        FROM USER_GAME_COMPLETIONS c
-        JOIN RPG_CLUB_USERS u ON u.USER_ID = c.USER_ID
-        JOIN GAMEDB_GAMES g ON g.GAME_ID = c.GAMEDB_GAME_ID
-       WHERE ${clauses.join(" AND ")}
-       GROUP BY c.USER_ID, u.USERNAME, u.GLOBAL_NAME
-       ORDER BY CNT DESC
-       FETCH FIRST :limit ROWS ONLY
-      `,
+      MemberSql.getCompletionLeaderboard(clauses.join(" AND "))[dialect],
       binds,
       (row) => ({
         userId: row.USER_ID,
@@ -1653,27 +1396,7 @@ export default class Member {
       SERVER_JOINED_AT: Date | null;
       LAST_SEEN_AT: Date | null;
     }, IMemberSearchResult>(
-      `SELECT USER_ID,
-              USERNAME,
-              GLOBAL_NAME,
-              IS_BOT,
-              COMPLETIONATOR_URL,
-              STEAM_URL,
-              PSN_USERNAME,
-              XBL_USERNAME,
-              NSW_FRIEND_CODE,
-              ROLE_ADMIN,
-              ROLE_MODERATOR,
-              ROLE_REGULAR,
-              ROLE_MEMBER,
-              ROLE_NEWCOMER,
-              SERVER_LEFT_AT,
-              SERVER_JOINED_AT,
-              LAST_SEEN_AT
-         FROM RPG_CLUB_USERS
-        WHERE ${where}
-        ORDER BY COALESCE(UPPER(GLOBAL_NAME), UPPER(USERNAME), USER_ID)
-        FETCH FIRST :limit ROWS ONLY`,
+      MemberSql.searchMembers(where)[dialect],
       params,
       (row) => ({
         userId: row.USER_ID,
@@ -1737,29 +1460,7 @@ export default class Member {
         PROFILE_IMAGE: Buffer | null;
         PROFILE_IMAGE_AT: Date | null;
       }>(
-        `SELECT USER_ID,
-                IS_BOT,
-                USERNAME,
-                GLOBAL_NAME,
-               AVATAR_BLOB,
-               SERVER_JOINED_AT,
-                SERVER_LEFT_AT,
-                LAST_SEEN_AT,
-                ROLE_ADMIN,
-                ROLE_MODERATOR,
-                ROLE_REGULAR,
-                ROLE_MEMBER,
-                ROLE_NEWCOMER,
-                MESSAGE_COUNT,
-                COMPLETIONATOR_URL,
-                PSN_USERNAME,
-                XBL_USERNAME,
-                NSW_FRIEND_CODE,
-                STEAM_URL,
-                PROFILE_IMAGE,
-                PROFILE_IMAGE_AT
-           FROM RPG_CLUB_USERS
-          WHERE USER_ID = :userId`,
+        getSql(MemberSql.getByUserId, dialect),
         { userId },
         {
           outFormat: oracledb.OUT_FORMAT_OBJECT,
@@ -1813,10 +1514,7 @@ export default class Member {
       throw new Error("Invalid platform selection.");
     }
     const res = await oraMutate(
-      `UPDATE USER_NOW_PLAYING
-          SET PLATFORM_ID = :platformId
-        WHERE USER_ID = :userId
-          AND GAMEDB_GAME_ID = :gameId`,
+      getSql(MemberSql.updateNowPlayingPlatform, dialect),
       { userId, gameId, platformId },
     );
     return (res.rowsAffected ?? 0) > 0;
@@ -1838,16 +1536,7 @@ export default class Member {
         AVATAR_BLOB: Buffer | null;
         CHANGED_AT: Date | string;
       }>(
-        `SELECT EVENT_ID,
-                USER_ID,
-                AVATAR_HASH,
-                AVATAR_URL,
-                AVATAR_BLOB,
-                CHANGED_AT
-           FROM RPG_CLUB_USER_AVATAR_HISTORY
-          WHERE USER_ID = :userId
-          ORDER BY CHANGED_AT DESC, EVENT_ID DESC
-          OFFSET :offset ROWS FETCH NEXT :limit ROWS ONLY`,
+        getSql(MemberSql.getAvatarHistory, dialect),
         { userId, limit: safeLimit, offset: safeOffset },
         {
           outFormat: oracledb.OUT_FORMAT_OBJECT,
@@ -1887,34 +1576,7 @@ export default class Member {
       THREAD_ID: string | null;
       NOTE: string | null;
     }, ICompletionRecord>(
-      `
-      SELECT c.COMPLETION_ID,
-             g.GAME_ID,
-             g.TITLE,
-             c.COMPLETION_TYPE,
-             c.PLATFORM_ID,
-             c.COMPLETED_AT,
-             c.FINAL_PLAYTIME_HRS,
-             c.CREATED_AT,
-             c.NOTE,
-             COALESCE(
-                (
-                  SELECT MIN(tgl.THREAD_ID)
-                  FROM THREAD_GAME_LINKS tgl
-                  WHERE tgl.GAMEDB_GAME_ID = c.GAMEDB_GAME_ID
-                ),
-                (
-                  SELECT MIN(th.THREAD_ID)
-                  FROM THREADS th
-                  WHERE th.GAMEDB_GAME_ID = c.GAMEDB_GAME_ID
-                )
-              ) AS THREAD_ID
-        FROM USER_GAME_COMPLETIONS c
-        JOIN GAMEDB_GAMES g ON g.GAME_ID = c.GAMEDB_GAME_ID
-       WHERE c.USER_ID = :userId
-         AND c.GAMEDB_GAME_ID = :gameId
-       ORDER BY c.COMPLETED_AT DESC NULLS LAST, c.COMPLETION_ID DESC
-      `,
+      getSql(MemberSql.getCompletionsForGame, dialect),
       { userId, gameId },
       (row) => ({
         completionId: Number(row.COMPLETION_ID),
@@ -1968,36 +1630,7 @@ export default class Member {
       THREAD_ID: string | null;
       NOTE: string | null;
     }, ICompletionRecord>(
-      `
-      SELECT c.COMPLETION_ID,
-             g.GAME_ID,
-             g.TITLE,
-             c.COMPLETION_TYPE,
-             c.PLATFORM_ID,
-             c.COMPLETED_AT,
-             c.FINAL_PLAYTIME_HRS,
-             c.CREATED_AT,
-             c.NOTE,
-             COALESCE(
-                (
-                  SELECT MIN(tgl.THREAD_ID)
-                  FROM THREAD_GAME_LINKS tgl
-                  WHERE tgl.GAMEDB_GAME_ID = c.GAMEDB_GAME_ID
-                ),
-                (
-                  SELECT MIN(th.THREAD_ID)
-                  FROM THREADS th
-                  WHERE th.GAMEDB_GAME_ID = c.GAMEDB_GAME_ID
-                )
-              ) AS THREAD_ID
-        FROM USER_GAME_COMPLETIONS c
-        JOIN GAMEDB_GAMES g ON g.GAME_ID = c.GAMEDB_GAME_ID
-       WHERE c.USER_ID = :userId
-         AND c.GAMEDB_GAME_ID = :gameId
-         AND COALESCE(c.COMPLETED_AT, c.CREATED_AT) BETWEEN :startDate AND :endDate
-       ORDER BY COALESCE(c.COMPLETED_AT, c.CREATED_AT) DESC
-       FETCH FIRST 1 ROWS ONLY
-      `,
+      getSql(MemberSql.getRecentCompletionForGame, dialect),
       { userId, gameId, startDate, endDate },
       (row) => ({
         completionId: Number(row.COMPLETION_ID),
@@ -2029,9 +1662,7 @@ export default class Member {
 
   static async getGiveawayDonorNotifySetting(userId: string): Promise<boolean> {
     const rows = await oraQuery<{ DONOR_NOTIFY_ON_CLAIM: number | null }, boolean>(
-      `SELECT DONOR_NOTIFY_ON_CLAIM
-         FROM RPG_CLUB_USERS
-        WHERE USER_ID = :userId`,
+      getSql(MemberSql.getGiveawayDonorNotifySetting, dialect),
       { userId },
       (row) => Boolean(row.DONOR_NOTIFY_ON_CLAIM),
     );
@@ -2044,9 +1675,7 @@ export default class Member {
   ): Promise<void> {
     await oraWithConnection(async (conn) => {
       const result = await oraMutate(
-        `UPDATE RPG_CLUB_USERS
-            SET DONOR_NOTIFY_ON_CLAIM = :enabled
-          WHERE USER_ID = :userId`,
+        getSql(MemberSql.updateGiveawayDonorNotifySetting, dialect),
         { userId, enabled: enabled ? 1 : 0 },
         conn,
       );
@@ -2057,8 +1686,7 @@ export default class Member {
 
       try {
         await oraMutate(
-          `INSERT INTO RPG_CLUB_USERS (USER_ID, DONOR_NOTIFY_ON_CLAIM)
-           VALUES (:userId, :enabled)`,
+          getSql(MemberSql.insertGiveawayDonorNotifySetting, dialect),
           { userId, enabled: enabled ? 1 : 0 },
           conn,
         );
@@ -2067,9 +1695,7 @@ export default class Member {
         const code = err?.code ?? err?.errorNum;
         if (code === "ORA-00001") {
           await oraMutate(
-            `UPDATE RPG_CLUB_USERS
-                SET DONOR_NOTIFY_ON_CLAIM = :enabled
-              WHERE USER_ID = :userId`,
+            getSql(MemberSql.updateGiveawayDonorNotifySetting, dialect),
             { userId, enabled: enabled ? 1 : 0 },
             conn,
           );
@@ -2083,9 +1709,7 @@ export default class Member {
 
   static async countAvatarHistory(userId: string): Promise<number> {
     const rows = await oraQuery<{ TOTAL: number | null }, number>(
-      `SELECT COUNT(*) AS TOTAL
-         FROM RPG_CLUB_USER_AVATAR_HISTORY
-        WHERE USER_ID = :userId`,
+      getSql(MemberSql.countAvatarHistory, dialect),
       { userId },
       (row) => Number(row.TOTAL ?? 0),
     );
@@ -2099,8 +1723,7 @@ export default class Member {
     avatarBlob: Buffer | null,
   ): Promise<void> {
     await oraMutate(
-      `INSERT INTO RPG_CLUB_USER_AVATAR_HISTORY (USER_ID, AVATAR_HASH, AVATAR_URL, AVATAR_BLOB)
-       VALUES (:userId, :avatarHash, :avatarUrl, :avatarBlob)`,
+      getSql(MemberSql.insertAvatarHistoryRecord, dialect),
       { userId, avatarHash, avatarUrl, avatarBlob },
     );
   }
@@ -2112,16 +1735,7 @@ export default class Member {
       GLOBAL_NAME: string | null;
       TOTAL: number;
     }, IMemberAvatarHistoryCount>(
-      `SELECT h.USER_ID,
-              u.USERNAME,
-              u.GLOBAL_NAME,
-              COUNT(*) AS TOTAL
-         FROM RPG_CLUB_USER_AVATAR_HISTORY h
-         JOIN RPG_CLUB_USERS u ON u.USER_ID = h.USER_ID
-        WHERE NVL(u.IS_BOT, 0) = 0
-          AND u.SERVER_LEFT_AT IS NULL
-        GROUP BY h.USER_ID, u.USERNAME, u.GLOBAL_NAME
-        ORDER BY COALESCE(u.GLOBAL_NAME, u.USERNAME, h.USER_ID)`,
+      getSql(MemberSql.getAllMembersAvatarHistoryCounts, dialect),
       {},
       (row) => ({
         userId: String(row.USER_ID),
@@ -2143,21 +1757,7 @@ export default class Member {
       NSW_FRIEND_CODE: string | null;
       SERVER_LEFT_AT: Date | null;
     }, IMemberPlatformRecord>(
-      `SELECT USER_ID,
-              USERNAME,
-              GLOBAL_NAME,
-              STEAM_URL,
-              PSN_USERNAME,
-              XBL_USERNAME,
-              NSW_FRIEND_CODE,
-              SERVER_LEFT_AT
-         FROM RPG_CLUB_USERS
-        WHERE (STEAM_URL IS NOT NULL
-               OR PSN_USERNAME IS NOT NULL
-               OR XBL_USERNAME IS NOT NULL
-               OR NSW_FRIEND_CODE IS NOT NULL)
-          AND NVL(IS_BOT, 0) = 0
-          AND SERVER_LEFT_AT IS NULL`,
+      getSql(MemberSql.getMembersWithPlatforms, dialect),
       {},
       (row) => ({
         userId: row.USER_ID,
@@ -2186,27 +1786,7 @@ export default class Member {
 
     async function doUpsert(conn: oracledb.Connection): Promise<void> {
       const update = await oraMutate(
-        `UPDATE RPG_CLUB_USERS
-            SET IS_BOT = :isBot,
-                USERNAME = :username,
-                GLOBAL_NAME = :globalName,
-                AVATAR_BLOB = :avatarBlob,
-                SERVER_JOINED_AT = :joinedAt,
-                SERVER_LEFT_AT = :leftAt,
-                LAST_SEEN_AT = :lastSeenAt,
-                LAST_FETCHED_AT = SYSTIMESTAMP,
-                ROLE_ADMIN = :roleAdmin,
-                ROLE_MODERATOR = :roleModerator,
-                ROLE_REGULAR = :roleRegular,
-                ROLE_MEMBER = :roleMember,
-                ROLE_NEWCOMER = :roleNewcomer,
-                COMPLETIONATOR_URL = :completionatorUrl,
-                PSN_USERNAME = :psnUsername,
-                XBL_USERNAME = :xblUsername,
-                NSW_FRIEND_CODE = :nswFriendCode,
-                STEAM_URL = :steamUrl,
-                UPDATED_AT = SYSTIMESTAMP
-          WHERE USER_ID = :userId`,
+        getSql(MemberSql.updateMember, dialect),
         params,
         conn,
       );
@@ -2217,21 +1797,7 @@ export default class Member {
 
       try {
         await oraMutate(
-          `INSERT INTO RPG_CLUB_USERS (
-             USER_ID, IS_BOT, USERNAME, GLOBAL_NAME, AVATAR_BLOB,
-             SERVER_JOINED_AT, SERVER_LEFT_AT, LAST_SEEN_AT, LAST_FETCHED_AT,
-             ROLE_ADMIN, ROLE_MODERATOR, ROLE_REGULAR, ROLE_MEMBER, ROLE_NEWCOMER,
-             COMPLETIONATOR_URL, PSN_USERNAME, XBL_USERNAME, NSW_FRIEND_CODE,
-             STEAM_URL,
-             CREATED_AT, UPDATED_AT
-           ) VALUES (
-             :userId, :isBot, :username, :globalName, :avatarBlob,
-             :joinedAt, :leftAt, :lastSeenAt, SYSTIMESTAMP,
-             :roleAdmin, :roleModerator, :roleRegular, :roleMember, :roleNewcomer,
-             :completionatorUrl, :psnUsername, :xblUsername,
-             :nswFriendCode, :steamUrl,
-             SYSTIMESTAMP, SYSTIMESTAMP
-           )`,
+          getSql(MemberSql.insertMember, dialect),
           params,
           conn,
         );
@@ -2240,27 +1806,7 @@ export default class Member {
         const code = insErr?.code ?? insErr?.errorNum;
         if (code === "ORA-00001") {
           await oraMutate(
-            `UPDATE RPG_CLUB_USERS
-                SET IS_BOT = :isBot,
-                    USERNAME = :username,
-                    GLOBAL_NAME = :globalName,
-                    AVATAR_BLOB = :avatarBlob,
-                    SERVER_JOINED_AT = :joinedAt,
-                    SERVER_LEFT_AT = :leftAt,
-                    LAST_SEEN_AT = :lastSeenAt,
-                    LAST_FETCHED_AT = SYSTIMESTAMP,
-                    ROLE_ADMIN = :roleAdmin,
-                    ROLE_MODERATOR = :roleModerator,
-                    ROLE_REGULAR = :roleRegular,
-                    ROLE_MEMBER = :roleMember,
-                    ROLE_NEWCOMER = :roleNewcomer,
-                    COMPLETIONATOR_URL = :completionatorUrl,
-                    PSN_USERNAME = :psnUsername,
-                    XBL_USERNAME = :xblUsername,
-                    NSW_FRIEND_CODE = :nswFriendCode,
-                    STEAM_URL = :steamUrl,
-                    UPDATED_AT = SYSTIMESTAMP
-              WHERE USER_ID = :userId`,
+            getSql(MemberSql.updateMember, dialect),
             params,
             conn,
           );
@@ -2294,15 +1840,11 @@ export default class Member {
           return `:${key}`;
         });
 
-        const sql = `
-          UPDATE RPG_CLUB_USERS
-             SET SERVER_LEFT_AT = SYSTIMESTAMP,
-                 UPDATED_AT = SYSTIMESTAMP
-           WHERE SERVER_LEFT_AT IS NULL
-             AND USER_ID NOT IN (${placeholders.join(", ")})
-        `;
-
-        const result = await oraMutate(sql, binds, conn);
+        const result = await oraMutate(
+          MemberSql.markDepartedNotIn(placeholders.join(", "))[dialect],
+          binds,
+          conn,
+        );
         totalUpdated += result.rowsAffected ?? 0;
         await conn.commit();
       }
@@ -2317,19 +1859,7 @@ export default class Member {
       TITLE: string;
       TOTAL_ENTRIES: number;
     }, IGameJournalListEntry>(
-      `SELECT g.GAME_ID,
-              g.TITLE,
-              COUNT(e.ENTRY_ID) AS TOTAL_ENTRIES
-         FROM USER_GAME_JOURNAL_PREFS jp
-         JOIN GAMEDB_GAMES g ON g.GAME_ID = jp.GAMEDB_GAME_ID
-         LEFT JOIN USER_GAME_JOURNAL_ENTRIES e
-           ON e.USER_ID = jp.USER_ID
-          AND e.GAMEDB_GAME_ID = jp.GAMEDB_GAME_ID
-        WHERE jp.USER_ID = :userId
-          AND jp.IS_ENABLED = 1
-        GROUP BY g.GAME_ID, g.TITLE
-       HAVING COUNT(e.ENTRY_ID) > 0
-        ORDER BY g.TITLE`,
+      getSql(MemberSql.getGameJournalList, dialect),
       { userId },
       (row) => ({
         gameId: Number(row.GAME_ID),
@@ -2347,19 +1877,7 @@ export default class Member {
       GAME_COUNT: number;
       ENTRY_COUNT: number;
     }, IJournalUserSummary>(
-      `SELECT u.USER_ID,
-              u.USERNAME,
-              u.GLOBAL_NAME,
-              COUNT(DISTINCT je.GAMEDB_GAME_ID) AS GAME_COUNT,
-              COUNT(je.ENTRY_ID) AS ENTRY_COUNT
-         FROM USER_GAME_JOURNAL_ENTRIES je
-         JOIN RPG_CLUB_USERS u ON u.USER_ID = je.USER_ID
-        WHERE NVL(u.IS_BOT, 0) = 0
-          AND u.SERVER_LEFT_AT IS NULL
-        GROUP BY u.USER_ID, u.USERNAME, u.GLOBAL_NAME
-        ORDER BY COUNT(DISTINCT je.GAMEDB_GAME_ID) DESC,
-                 u.GLOBAL_NAME NULLS LAST,
-                 u.USERNAME NULLS LAST`,
+      getSql(MemberSql.getAllJournalUsers, dialect),
       {},
       (row) => ({
         userId: row.USER_ID,
@@ -2393,27 +1911,7 @@ export default class Member {
       ENTRY_BODY: string;
       CREATED_AT: Date | string;
     }, IJournalSearchResult & { totalCount: number }>(
-      `SELECT COUNT(*) OVER () AS TOTAL_COUNT,
-              je.ENTRY_ID,
-              je.USER_ID,
-              u.GLOBAL_NAME,
-              u.USERNAME,
-              je.GAMEDB_GAME_ID,
-              g.TITLE         AS GAME_TITLE,
-              je.ENTRY_TITLE,
-              je.ENTRY_BODY,
-              je.CREATED_AT
-         FROM USER_GAME_JOURNAL_ENTRIES je
-         JOIN GAMEDB_GAMES g ON g.GAME_ID = je.GAMEDB_GAME_ID
-         JOIN RPG_CLUB_USERS u ON u.USER_ID = je.USER_ID
-        WHERE (
-                UPPER(je.ENTRY_TITLE) LIKE '%' || UPPER(:searchTerm) || '%'
-             OR UPPER(je.ENTRY_BODY)  LIKE '%' || UPPER(:searchTerm) || '%'
-              )
-          AND (:userId IS NULL OR je.USER_ID = :userId)
-          AND (:gameId IS NULL OR je.GAMEDB_GAME_ID = :gameId)
-        ORDER BY je.CREATED_AT DESC, je.ENTRY_ID DESC
-        OFFSET :offset ROWS FETCH NEXT :limit ROWS ONLY`,
+      getSql(MemberSql.searchJournalEntries, dialect),
       {
         searchTerm,
         userId: params.userId ?? null,
@@ -2455,10 +1953,7 @@ export default class Member {
 
   static async updateEmojiName(userId: string, emojiName: string | null): Promise<void> {
     await oraMutate(
-      `UPDATE RPG_CLUB_USERS
-          SET EMOJI_NAME = :emojiName,
-              UPDATED_AT = SYSTIMESTAMP
-        WHERE USER_ID = :userId`,
+      getSql(MemberSql.updateEmojiName, dialect),
       { userId, emojiName },
     );
   }
@@ -2466,9 +1961,7 @@ export default class Member {
   static async getAllWithEmojiName(): Promise<Array<{ userId: string; emojiName: string }>> {
     return oraQuery<{ USER_ID: string; EMOJI_NAME: string },
       { userId: string; emojiName: string }>(
-      `SELECT USER_ID, EMOJI_NAME
-         FROM RPG_CLUB_USERS
-        WHERE EMOJI_NAME IS NOT NULL`,
+      getSql(MemberSql.getAllWithEmojiName, dialect),
       {},
       (row) => ({
         userId: row.USER_ID,
@@ -2485,25 +1978,14 @@ export default class Member {
     gameId: number,
   ): Promise<void> {
     await oraMutate(
-      `MERGE INTO JOURNAL_MESSAGE_CONTEXTS dst
-       USING (SELECT :channelId AS CHANNEL_ID, :messageId AS MESSAGE_ID FROM DUAL) src
-          ON (dst.CHANNEL_ID = src.CHANNEL_ID AND dst.MESSAGE_ID = src.MESSAGE_ID)
-        WHEN MATCHED THEN
-          UPDATE SET CREATED_AT_MS = :createdAtMs,
-                     OWNER_USER_ID = :ownerUserId,
-                     GAME_ID       = :gameId
-        WHEN NOT MATCHED THEN
-          INSERT (CHANNEL_ID, MESSAGE_ID, CREATED_AT_MS, OWNER_USER_ID, GAME_ID)
-          VALUES (:channelId, :messageId, :createdAtMs, :ownerUserId, :gameId)`,
+      getSql(MemberSql.upsertJournalMessageContext, dialect),
       { channelId, messageId, createdAtMs, ownerUserId, gameId },
     );
   }
 
   static async deleteJournalMessageContext(channelId: string, messageId: string): Promise<void> {
     await oraMutate(
-      `DELETE FROM JOURNAL_MESSAGE_CONTEXTS
-        WHERE CHANNEL_ID = :channelId
-          AND MESSAGE_ID = :messageId`,
+      getSql(MemberSql.deleteJournalMessageContext, dialect),
       { channelId, messageId },
     );
   }
@@ -2526,9 +2008,7 @@ export default class Member {
       GAME_ID: number;
     }, { channelId: string; messageId: string; createdAt: number;
         ownerUserId: string; gameId: number }>(
-      `SELECT CHANNEL_ID, MESSAGE_ID, CREATED_AT_MS, OWNER_USER_ID, GAME_ID
-         FROM JOURNAL_MESSAGE_CONTEXTS
-        WHERE CREATED_AT_MS >= :cutoffMs`,
+      getSql(MemberSql.loadActiveJournalMessageContexts, dialect),
       { cutoffMs },
       (row) => ({
         channelId: row.CHANNEL_ID,
@@ -2543,7 +2023,7 @@ export default class Member {
   static async pruneExpiredJournalMessageContexts(ttlMs: number): Promise<void> {
     const cutoffMs = Date.now() - ttlMs;
     await oraMutate(
-      `DELETE FROM JOURNAL_MESSAGE_CONTEXTS WHERE CREATED_AT_MS < :cutoffMs`,
+      getSql(MemberSql.pruneExpiredJournalMessageContexts, dialect),
       { cutoffMs },
     );
   }
