@@ -1,5 +1,4 @@
-import oracledb from "oracledb";
-import { getOraclePool } from "../db/oracleClient.js";
+import { oraQuery, oraMutate, oraWithConnection } from "../db/SqlManager.js";
 
 export const ADMIN_WIZARD_COMMANDS = ["nextround-setup"] as const;
 export type AdminWizardCommand = (typeof ADMIN_WIZARD_COMMANDS)[number];
@@ -101,7 +100,9 @@ function parseNextRoundWizardState(raw: string): INextRoundWizardState {
 
   const roundNumber = parsed?.roundNumber == null ? null : Number(parsed.roundNumber);
   const normalizedRoundNumber =
-    roundNumber !== null && Number.isInteger(roundNumber) && roundNumber > 0 ? roundNumber : null;
+    roundNumber !== null && Number.isInteger(roundNumber) && roundNumber > 0
+      ? roundNumber
+      : null;
 
   const monthYear =
     typeof parsed?.monthYear === "string" && parsed.monthYear.trim()
@@ -116,7 +117,8 @@ function parseNextRoundWizardState(raw: string): INextRoundWizardState {
   const parsedUpdated = parsed?.stateLastUpdatedAt
     ? new Date(parsed.stateLastUpdatedAt)
     : new Date();
-  const stateLastUpdatedAt = Number.isNaN(parsedUpdated.getTime()) ? new Date() : parsedUpdated;
+  const stateLastUpdatedAt =
+    Number.isNaN(parsedUpdated.getTime()) ? new Date() : parsedUpdated;
 
   return {
     step,
@@ -127,7 +129,8 @@ function parseNextRoundWizardState(raw: string): INextRoundWizardState {
     selectedGotmOrder: sanitizeNumberArray(parsed?.selectedGotmOrder),
     selectedNrGotmOrder: sanitizeNumberArray(parsed?.selectedNrGotmOrder),
     gotmPickCount:
-      Number.isInteger(Number(parsed?.gotmPickCount)) && Number(parsed?.gotmPickCount) > 0
+      Number.isInteger(Number(parsed?.gotmPickCount)) &&
+      Number(parsed?.gotmPickCount) > 0
         ? Number(parsed?.gotmPickCount)
         : null,
     nrPickCount:
@@ -162,7 +165,9 @@ function mapAdminWizardSessionRow(row: AdminWizardSessionRow): IAdminWizardSessi
   };
 }
 
-export function createDefaultNextRoundWizardState(testMode: boolean): INextRoundWizardState {
+export function createDefaultNextRoundWizardState(
+  testMode: boolean,
+): INextRoundWizardState {
   return {
     step: "start",
     roundNumber: null,
@@ -184,39 +189,28 @@ export async function getActiveAdminWizardSession(
   ownerUserId: string,
   channelId: string,
 ): Promise<IAdminWizardSession | null> {
-  const connection = await getOraclePool().getConnection();
-  try {
-    const result = await connection.execute<AdminWizardSessionRow>(
-      `SELECT SESSION_ID,
-              COMMAND_KEY,
-              OWNER_USER_ID,
-              CHANNEL_ID,
-              GUILD_ID,
-              STATUS,
-              STATE_JSON,
-              LAST_UPDATED_AT,
-              CREATED_AT,
-              UPDATED_AT
-         FROM RPG_CLUB_ADMIN_WIZARD_SESSIONS
-        WHERE COMMAND_KEY = :commandKey
-          AND OWNER_USER_ID = :ownerUserId
-          AND CHANNEL_ID = :channelId
-          AND STATUS = 'ACTIVE'
-        ORDER BY LAST_UPDATED_AT DESC
-        FETCH FIRST 1 ROWS ONLY`,
-      {
-        commandKey,
-        ownerUserId,
-        channelId,
-      },
-      { outFormat: oracledb.OUT_FORMAT_OBJECT },
-    );
-
-    const row = result.rows?.[0];
-    return row ? mapAdminWizardSessionRow(row) : null;
-  } finally {
-    await connection.close();
-  }
+  const rows = await oraQuery(
+    `SELECT SESSION_ID,
+            COMMAND_KEY,
+            OWNER_USER_ID,
+            CHANNEL_ID,
+            GUILD_ID,
+            STATUS,
+            STATE_JSON,
+            LAST_UPDATED_AT,
+            CREATED_AT,
+            UPDATED_AT
+       FROM RPG_CLUB_ADMIN_WIZARD_SESSIONS
+      WHERE COMMAND_KEY = :commandKey
+        AND OWNER_USER_ID = :ownerUserId
+        AND CHANNEL_ID = :channelId
+        AND STATUS = 'ACTIVE'
+      ORDER BY LAST_UPDATED_AT DESC
+      FETCH FIRST 1 ROWS ONLY`,
+    { commandKey, ownerUserId, channelId },
+    mapAdminWizardSessionRow,
+  );
+  return rows[0] ?? null;
 }
 
 export async function saveAdminWizardSession(params: {
@@ -226,80 +220,73 @@ export async function saveAdminWizardSession(params: {
   guildId?: string | null;
   state: INextRoundWizardState;
 }): Promise<IAdminWizardSession> {
-  const connection = await getOraclePool().getConnection();
-  try {
-    const normalizedState: INextRoundWizardState = {
-      ...params.state,
-      stateLastUpdatedAt: new Date(),
-    };
-    const stateJson = serializeNextRoundWizardState(normalizedState);
-    const now = new Date();
+  const normalizedState: INextRoundWizardState = {
+    ...params.state,
+    stateLastUpdatedAt: new Date(),
+  };
+  const stateJson = serializeNextRoundWizardState(normalizedState);
+  const now = new Date();
+  const uniqueSessionId = [
+    "wiz",
+    params.commandKey,
+    params.ownerUserId,
+    params.channelId,
+    Date.now().toString(),
+    Math.floor(Math.random() * 1_000_000).toString(),
+  ].join("-");
 
-    const uniqueSessionId = [
-      "wiz",
-      params.commandKey,
-      params.ownerUserId,
-      params.channelId,
-      Date.now().toString(),
-      Math.floor(Math.random() * 1_000_000).toString(),
-    ].join("-");
+  await oraMutate(
+    `MERGE INTO RPG_CLUB_ADMIN_WIZARD_SESSIONS t
+      USING (
+        SELECT :commandKey AS COMMAND_KEY,
+               :ownerUserId AS OWNER_USER_ID,
+               :channelId AS CHANNEL_ID,
+               :guildId AS GUILD_ID,
+               :stateJson AS STATE_JSON,
+               :lastUpdatedAt AS LAST_UPDATED_AT
+          FROM dual
+      ) src
+         ON (t.COMMAND_KEY = src.COMMAND_KEY
+             AND t.OWNER_USER_ID = src.OWNER_USER_ID
+             AND t.CHANNEL_ID = src.CHANNEL_ID
+             AND t.STATUS = 'ACTIVE')
+    WHEN MATCHED THEN
+      UPDATE SET t.STATE_JSON = src.STATE_JSON,
+                 t.GUILD_ID = src.GUILD_ID,
+                 t.LAST_UPDATED_AT = src.LAST_UPDATED_AT
+    WHEN NOT MATCHED THEN
+      INSERT (SESSION_ID, COMMAND_KEY, OWNER_USER_ID, CHANNEL_ID, GUILD_ID, STATUS,
+              STATE_JSON, LAST_UPDATED_AT)
+      VALUES (
+        :sessionId,
+        src.COMMAND_KEY,
+        src.OWNER_USER_ID,
+        src.CHANNEL_ID,
+        src.GUILD_ID,
+        'ACTIVE',
+        src.STATE_JSON,
+        src.LAST_UPDATED_AT
+      )`,
+    {
+      commandKey: params.commandKey,
+      ownerUserId: params.ownerUserId,
+      channelId: params.channelId,
+      guildId: params.guildId ?? null,
+      stateJson,
+      lastUpdatedAt: now,
+      sessionId: uniqueSessionId,
+    },
+  );
 
-    await connection.execute(
-      `MERGE INTO RPG_CLUB_ADMIN_WIZARD_SESSIONS t
-        USING (
-          SELECT :commandKey AS COMMAND_KEY,
-                 :ownerUserId AS OWNER_USER_ID,
-                 :channelId AS CHANNEL_ID,
-                 :guildId AS GUILD_ID,
-                 :stateJson AS STATE_JSON,
-                 :lastUpdatedAt AS LAST_UPDATED_AT
-            FROM dual
-        ) src
-           ON (t.COMMAND_KEY = src.COMMAND_KEY
-               AND t.OWNER_USER_ID = src.OWNER_USER_ID
-               AND t.CHANNEL_ID = src.CHANNEL_ID
-               AND t.STATUS = 'ACTIVE')
-      WHEN MATCHED THEN
-        UPDATE SET t.STATE_JSON = src.STATE_JSON,
-                   t.GUILD_ID = src.GUILD_ID,
-                   t.LAST_UPDATED_AT = src.LAST_UPDATED_AT
-      WHEN NOT MATCHED THEN
-        INSERT (SESSION_ID, COMMAND_KEY, OWNER_USER_ID, CHANNEL_ID, GUILD_ID, STATUS, STATE_JSON,
-                LAST_UPDATED_AT)
-        VALUES (
-          :sessionId,
-          src.COMMAND_KEY,
-          src.OWNER_USER_ID,
-          src.CHANNEL_ID,
-          src.GUILD_ID,
-          'ACTIVE',
-          src.STATE_JSON,
-          src.LAST_UPDATED_AT
-        )`,
-      {
-        commandKey: params.commandKey,
-        ownerUserId: params.ownerUserId,
-        channelId: params.channelId,
-        guildId: params.guildId ?? null,
-        stateJson,
-        lastUpdatedAt: now,
-        sessionId: uniqueSessionId,
-      },
-      { autoCommit: true },
-    );
-
-    const saved = await getActiveAdminWizardSession(
-      params.commandKey,
-      params.ownerUserId,
-      params.channelId,
-    );
-    if (!saved) {
-      throw new Error("Failed to save admin wizard session.");
-    }
-    return saved;
-  } finally {
-    await connection.close();
+  const saved = await getActiveAdminWizardSession(
+    params.commandKey,
+    params.ownerUserId,
+    params.channelId,
+  );
+  if (!saved) {
+    throw new Error("Failed to save admin wizard session.");
   }
+  return saved;
 }
 
 export async function closeActiveAdminWizardSession(params: {
@@ -308,11 +295,10 @@ export async function closeActiveAdminWizardSession(params: {
   channelId: string;
   status: Exclude<AdminWizardSessionStatus, "active">;
 }): Promise<boolean> {
-  const connection = await getOraclePool().getConnection();
-  try {
-    // The unique index includes STATUS, so ensure we do not collide when promoting
-    // ACTIVE -> CANCELLED/COMPLETED if a prior historical row already exists.
-    await connection.execute(
+  return oraWithConnection(async (conn) => {
+    // Remove any prior historical row to avoid unique index collision when
+    // promoting ACTIVE -> CANCELLED/COMPLETED.
+    await conn.execute(
       `DELETE FROM RPG_CLUB_ADMIN_WIZARD_SESSIONS
         WHERE COMMAND_KEY = :commandKey
           AND OWNER_USER_ID = :ownerUserId
@@ -327,7 +313,7 @@ export async function closeActiveAdminWizardSession(params: {
       { autoCommit: true },
     );
 
-    const result = await connection.execute(
+    const result = await conn.execute(
       `UPDATE RPG_CLUB_ADMIN_WIZARD_SESSIONS
           SET STATUS = :status,
               LAST_UPDATED_AT = :lastUpdatedAt
@@ -345,7 +331,5 @@ export async function closeActiveAdminWizardSession(params: {
       { autoCommit: true },
     );
     return Number(result.rowsAffected ?? 0) > 0;
-  } finally {
-    await connection.close();
-  }
+  });
 }

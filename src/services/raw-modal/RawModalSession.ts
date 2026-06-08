@@ -1,6 +1,6 @@
 import type { RawModalFeature, RawModalFlow } from "./RawModalScope.js";
 import oracledb from "oracledb";
-import { getOraclePool } from "../../db/oracleClient.js";
+import { oraQuery, oraMutate, oraWithConnection } from "../../db/SqlManager.js";
 
 export const RAW_MODAL_SESSION_STATUSES = ["open", "submitted", "expired"] as const;
 export type RawModalSessionStatus = (typeof RAW_MODAL_SESSION_STATUSES)[number];
@@ -108,14 +108,25 @@ export function buildRawModalSessionExpiry(
   return new Date(now.getTime() + Math.max(1, ttlMinutes) * 60 * 1000);
 }
 
+const SESSION_SELECT_SQL = `SELECT SESSION_ID,
+       OWNER_USER_ID,
+       FEATURE_ID,
+       FLOW_ID,
+       STATE_JSON,
+       STATUS,
+       EXPIRES_AT,
+       GUILD_ID,
+       CHANNEL_ID,
+       CREATED_AT,
+       UPDATED_AT
+  FROM RPG_CLUB_RAW_MODAL_SESSIONS`;
+
 export async function createRawModalSessionRecord(
   input: IRawModalSessionCreateInput,
 ): Promise<IRawModalSessionRecord> {
-  const connection = await getOraclePool().getConnection();
-  try {
+  return oraWithConnection(async (conn) => {
     const session = normalizeCreateInput(input);
-
-    await connection.execute(
+    await oraMutate(
       `INSERT INTO RPG_CLUB_RAW_MODAL_SESSIONS
          (SESSION_ID, OWNER_USER_ID, FEATURE_ID, FLOW_ID, STATE_JSON, EXPIRES_AT, STATUS, GUILD_ID, CHANNEL_ID)
        VALUES
@@ -131,68 +142,41 @@ export async function createRawModalSessionRecord(
         guildId: session.guildId,
         channelId: session.channelId,
       },
-      { autoCommit: true },
+      conn,
     );
+    await conn.commit();
 
-    const saved = await getRawModalSessionRecord(session.sessionId, connection);
+    const saved = await getRawModalSessionRecord(session.sessionId, conn);
     if (!saved) {
       throw new Error("Failed to create raw modal session.");
     }
     return saved;
-  } finally {
-    await connection.close();
-  }
+  });
 }
 
 export async function getRawModalSessionRecord(
   sessionId: string,
   existingConnection?: oracledb.Connection,
 ): Promise<IRawModalSessionRecord | null> {
-  const connection = existingConnection ?? (await getOraclePool().getConnection());
-  try {
-    const result = await connection.execute<RawModalSessionRow>(
-      `SELECT SESSION_ID,
-              OWNER_USER_ID,
-              FEATURE_ID,
-              FLOW_ID,
-              STATE_JSON,
-              STATUS,
-              EXPIRES_AT,
-              GUILD_ID,
-              CHANNEL_ID,
-              CREATED_AT,
-              UPDATED_AT
-         FROM RPG_CLUB_RAW_MODAL_SESSIONS
-        WHERE SESSION_ID = :sessionId`,
-      { sessionId },
-      { outFormat: oracledb.OUT_FORMAT_OBJECT },
-    );
-
-    const row = result.rows?.[0];
-    return row ? mapRawModalSessionRow(row) : null;
-  } finally {
-    if (!existingConnection) {
-      await connection.close();
-    }
-  }
+  const rows = await oraQuery(
+    `${SESSION_SELECT_SQL} WHERE SESSION_ID = :sessionId`,
+    { sessionId },
+    mapRawModalSessionRow,
+    existingConnection,
+  );
+  return rows[0] ?? null;
 }
 
 export async function updateRawModalSessionStatus(
   input: IRawModalSessionUpdateInput,
 ): Promise<boolean> {
-  const connection = await getOraclePool().getConnection();
-  try {
-    const result = await connection.execute(
-      `UPDATE RPG_CLUB_RAW_MODAL_SESSIONS
-          SET STATUS = :status
-        WHERE SESSION_ID = :sessionId`,
-      { status: toDbStatus(input.status), sessionId: input.sessionId },
-      { autoCommit: true },
-    );
-    return Number(result.rowsAffected ?? 0) > 0;
-  } finally {
-    await connection.close();
-  }
+  const result = await oraMutate(
+    `UPDATE RPG_CLUB_RAW_MODAL_SESSIONS
+        SET STATUS = :status
+      WHERE SESSION_ID = :sessionId`,
+    { status: toDbStatus(input.status), sessionId: input.sessionId },
+  );
+  return Number(result.rowsAffected ?? 0) > 0;
 }
 
 export async function claimRawModalSessionForSubmit(
@@ -200,27 +184,16 @@ export async function claimRawModalSessionForSubmit(
   ownerUserId: string,
   now: Date = new Date(),
 ): Promise<boolean> {
-  const connection = await getOraclePool().getConnection();
-  try {
-    const result = await connection.execute(
-      `UPDATE RPG_CLUB_RAW_MODAL_SESSIONS
-          SET STATUS = 'SUBMITTED'
-        WHERE SESSION_ID = :sessionId
-          AND OWNER_USER_ID = :ownerUserId
-          AND STATUS = 'OPEN'
-          AND EXPIRES_AT > :nowTs`,
-      {
-        sessionId,
-        ownerUserId,
-        nowTs: now,
-      },
-      { autoCommit: true },
-    );
-
-    return Number(result.rowsAffected ?? 0) > 0;
-  } finally {
-    await connection.close();
-  }
+  const result = await oraMutate(
+    `UPDATE RPG_CLUB_RAW_MODAL_SESSIONS
+        SET STATUS = 'SUBMITTED'
+      WHERE SESSION_ID = :sessionId
+        AND OWNER_USER_ID = :ownerUserId
+        AND STATUS = 'OPEN'
+        AND EXPIRES_AT > :nowTs`,
+    { sessionId, ownerUserId, nowTs: now },
+  );
+  return Number(result.rowsAffected ?? 0) > 0;
 }
 
 export async function expireRawModalSession(sessionId: string): Promise<boolean> {
@@ -228,17 +201,11 @@ export async function expireRawModalSession(sessionId: string): Promise<boolean>
 }
 
 export async function deleteExpiredRawModalSessions(cutoffDate: Date): Promise<number> {
-  const connection = await getOraclePool().getConnection();
-  try {
-    const result = await connection.execute(
-      `DELETE FROM RPG_CLUB_RAW_MODAL_SESSIONS
-        WHERE EXPIRES_AT < :cutoffDate
-          AND STATUS IN ('OPEN', 'EXPIRED')`,
-      { cutoffDate },
-      { autoCommit: true },
-    );
-    return Number(result.rowsAffected ?? 0);
-  } finally {
-    await connection.close();
-  }
+  const result = await oraMutate(
+    `DELETE FROM RPG_CLUB_RAW_MODAL_SESSIONS
+      WHERE EXPIRES_AT < :cutoffDate
+        AND STATUS IN ('OPEN', 'EXPIRED')`,
+    { cutoffDate },
+  );
+  return Number(result.rowsAffected ?? 0);
 }

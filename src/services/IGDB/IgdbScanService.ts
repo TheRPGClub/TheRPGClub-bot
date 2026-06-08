@@ -1,5 +1,5 @@
 import oracledb from "oracledb";
-import { getOraclePool } from "../../db/oracleClient.js";
+import { oraWithConnection } from "../../db/SqlManager.js";
 import Game from "../../classes/Game.js";
 import { igdbService } from "./IgdbService.js";
 
@@ -51,11 +51,11 @@ function hasIgdbConfig(): boolean {
 }
 
 async function listScanCandidates(
-  connection: oracledb.Connection,
+  conn: oracledb.Connection,
   cutoff: Date,
   limit: number,
 ): Promise<IgdbScanCandidate[]> {
-  const result = await connection.execute<{
+  const result = await conn.execute<{
     GAME_ID: number;
     TITLE: string;
     IGDB_ID: number;
@@ -82,11 +82,8 @@ async function listScanCandidates(
   }));
 }
 
-async function countScanCandidates(
-  connection: oracledb.Connection,
-  cutoff: Date,
-): Promise<number> {
-  const result = await connection.execute<{ TOTAL: number }>(
+async function countScanCandidates(conn: oracledb.Connection, cutoff: Date): Promise<number> {
+  const result = await conn.execute<{ TOTAL: number }>(
     `SELECT COUNT(*) AS TOTAL
        FROM GAMEDB_GAMES
       WHERE IGDB_ID IS NOT NULL
@@ -94,7 +91,6 @@ async function countScanCandidates(
     { cutoff },
     { outFormat: oracledb.OUT_FORMAT_OBJECT },
   );
-
   const row = (result.rows ?? [])[0] as { TOTAL?: number } | undefined;
   return Number(row?.TOTAL ?? 0);
 }
@@ -108,92 +104,83 @@ export async function igdbScanTick(): Promise<void> {
   }
 
   const cutoff = new Date(Date.now() - (config.minAgeDays * 24 * 60 * 60 * 1000));
-  const pool = getOraclePool();
-  let connection: oracledb.Connection | null = null;
 
   try {
-    connection = await pool.getConnection();
-    const totalEligible = await countScanCandidates(connection, cutoff);
-    const candidates = await listScanCandidates(connection, cutoff, config.batchSize);
-    if (!candidates.length) {
+    await oraWithConnection(async (conn) => {
+      const totalEligible = await countScanCandidates(conn, cutoff);
+      const candidates = await listScanCandidates(conn, cutoff, config.batchSize);
+      if (!candidates.length) {
+        console.log(
+          "[IGDB Scan] No games queued for refresh.",
+          `Interval: ${(config.intervalMs / 60000).toFixed(1)}m,`,
+          `Batch: ${config.batchSize},`,
+          `Min age: ${config.minAgeDays}d,`,
+          `Remaining: ${totalEligible}.`,
+        );
+        return;
+      }
+
+      let successCount = 0;
+      let failCount = 0;
+      let releaseUpdated = 0;
+      let descriptionUpdated = 0;
+      const startedAt = Date.now();
+
+      for (const candidate of candidates) {
+        try {
+          const details = await igdbService.getGameDetails(candidate.igdbId);
+          if (!details) {
+            console.warn(
+              `[IGDB Scan] No IGDB details returned for ${candidate.title}` +
+              ` (ID: ${candidate.gameId}).`,
+            );
+            await Game.touchGameUpdatedAt(candidate.gameId);
+            continue;
+          }
+
+          const summary = details.summary?.trim() ?? "";
+          if (summary.length > 0) {
+            await Game.updateGameDescription(candidate.gameId, summary);
+            descriptionUpdated++;
+          }
+
+          const releases = details.release_dates ?? [];
+          if (releases.length > 0) {
+            await Game.refreshReleaseDates(candidate.gameId, releases);
+            releaseUpdated++;
+          }
+
+          await Game.touchGameUpdatedAt(candidate.gameId);
+          successCount++;
+
+          if (config.throttleMs > 0) {
+            await sleep(config.throttleMs);
+          }
+        } catch (err: any) {
+          failCount++;
+          console.error(
+            `[IGDB Scan] Failed to refresh ${candidate.title} (ID: ${candidate.gameId}):`,
+            err?.message ?? err,
+          );
+        }
+      }
+
+      const elapsedMs = Date.now() - startedAt;
+      const remaining = Math.max(totalEligible - candidates.length, 0);
       console.log(
-        "[IGDB Scan] No games queued for refresh.",
+        "[IGDB Scan] Completed batch.",
         `Interval: ${(config.intervalMs / 60000).toFixed(1)}m,`,
         `Batch: ${config.batchSize},`,
         `Min age: ${config.minAgeDays}d,`,
-        `Remaining: ${totalEligible}.`,
+        `Total eligible: ${totalEligible},`,
+        `Remaining: ${remaining},`,
+        `Success: ${successCount}, Failed: ${failCount},`,
+        `Descriptions: ${descriptionUpdated}, Releases: ${releaseUpdated},`,
+        `Elapsed: ${(elapsedMs / 1000).toFixed(1)}s.`,
       );
-      return;
-    }
-
-    let successCount = 0;
-    let failCount = 0;
-    let releaseUpdated = 0;
-    let descriptionUpdated = 0;
-    const startedAt = Date.now();
-
-    for (const candidate of candidates) {
-      try {
-        const details = await igdbService.getGameDetails(candidate.igdbId);
-        if (!details) {
-          const missingDetailsMessage =
-            `[IGDB Scan] No IGDB details returned for ${candidate.title} ` +
-            `(ID: ${candidate.gameId}).`;
-          console.warn(missingDetailsMessage);
-          await Game.touchGameUpdatedAt(candidate.gameId);
-          continue;
-        }
-
-        const summary = details.summary?.trim() ?? "";
-        if (summary.length > 0) {
-          await Game.updateGameDescription(candidate.gameId, summary);
-          descriptionUpdated++;
-        }
-
-        const releases = details.release_dates ?? [];
-        if (releases.length > 0) {
-          await Game.refreshReleaseDates(candidate.gameId, releases);
-          releaseUpdated++;
-        }
-
-        await Game.touchGameUpdatedAt(candidate.gameId);
-        successCount++;
-
-        if (config.throttleMs > 0) {
-          await sleep(config.throttleMs);
-        }
-      } catch (err: any) {
-        failCount++;
-        console.error(
-          `[IGDB Scan] Failed to refresh ${candidate.title} (ID: ${candidate.gameId}):`,
-          err?.message ?? err,
-        );
-      }
-    }
-
-    const elapsedMs = Date.now() - startedAt;
-    const remaining = Math.max(totalEligible - candidates.length, 0);
-    console.log(
-      "[IGDB Scan] Completed batch.",
-      `Interval: ${(config.intervalMs / 60000).toFixed(1)}m,`,
-      `Batch: ${config.batchSize},`,
-      `Min age: ${config.minAgeDays}d,`,
-      `Total eligible: ${totalEligible},`,
-      `Remaining: ${remaining},`,
-      `Success: ${successCount}, Failed: ${failCount},`,
-      `Descriptions: ${descriptionUpdated}, Releases: ${releaseUpdated},`,
-      `Elapsed: ${(elapsedMs / 1000).toFixed(1)}s.`,
-    );
+    });
   } catch (err) {
     console.error("[IGDB Scan] Batch failed:", err);
-  } finally {
-    if (connection) {
-      try {
-        await connection.close();
-      } catch (closeErr) {
-        console.error("[IGDB Scan] Error closing connection:", closeErr);
-      }
-    }
   }
 }
 

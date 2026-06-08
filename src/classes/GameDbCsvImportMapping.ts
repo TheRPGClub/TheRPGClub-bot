@@ -1,5 +1,4 @@
-import oracledb from "oracledb";
-import { getOraclePool } from "../db/oracleClient.js";
+import { oraQuery, oraMutate } from "../db/SqlManager.js";
 
 export type GameDbCsvTitleMapStatus = "MAPPED" | "SKIPPED";
 
@@ -43,36 +42,21 @@ function mapRow(row: {
 export async function getGameDbCsvTitleMapByNorm(
   titleNorm: string,
 ): Promise<IGameDbCsvTitleMap | null> {
-  const connection = await getOraclePool().getConnection();
-  try {
-    const res = await connection.execute<{
-      MAP_ID: number;
-      TITLE_RAW: string;
-      TITLE_NORM: string;
-      GAMEDB_GAME_ID: number | null;
-      STATUS: GameDbCsvTitleMapStatus;
-      CREATED_BY: string | null;
-      CREATED_AT: Date | string;
-      UPDATED_AT: Date | string;
-    }>(
-      `SELECT MAP_ID,
-              TITLE_RAW,
-              TITLE_NORM,
-              GAMEDB_GAME_ID,
-              STATUS,
-              CREATED_BY,
-              CREATED_AT,
-              UPDATED_AT
-         FROM RPG_CLUB_GAMEDB_IMPORT_TITLE_MAP
-        WHERE TITLE_NORM = :titleNorm`,
-      { titleNorm },
-      { outFormat: oracledb.OUT_FORMAT_OBJECT },
-    );
-    const row = res.rows?.[0];
-    return row ? mapRow(row) : null;
-  } finally {
-    await connection.close();
-  }
+  const rows = await oraQuery(
+    `SELECT MAP_ID,
+            TITLE_RAW,
+            TITLE_NORM,
+            GAMEDB_GAME_ID,
+            STATUS,
+            CREATED_BY,
+            CREATED_AT,
+            UPDATED_AT
+       FROM RPG_CLUB_GAMEDB_IMPORT_TITLE_MAP
+      WHERE TITLE_NORM = :titleNorm`,
+    { titleNorm },
+    mapRow,
+  );
+  return rows[0] ?? null;
 }
 
 export async function upsertGameDbCsvTitleMap(params: {
@@ -82,33 +66,27 @@ export async function upsertGameDbCsvTitleMap(params: {
   status: GameDbCsvTitleMapStatus;
   createdBy: string | null;
 }): Promise<void> {
-  const connection = await getOraclePool().getConnection();
-  try {
-    await connection.execute(
-      `MERGE INTO RPG_CLUB_GAMEDB_IMPORT_TITLE_MAP t
-       USING (
-         SELECT :titleNorm AS TITLE_NORM FROM dual
-       ) s
-          ON (t.TITLE_NORM = s.TITLE_NORM)
-       WHEN MATCHED THEN
-         UPDATE SET
-           TITLE_RAW = :titleRaw,
-           GAMEDB_GAME_ID = :gameDbGameId,
-           STATUS = :status,
-           CREATED_BY = :createdBy
-       WHEN NOT MATCHED THEN
-         INSERT (TITLE_RAW, TITLE_NORM, GAMEDB_GAME_ID, STATUS, CREATED_BY)
-         VALUES (:titleRaw, :titleNorm, :gameDbGameId, :status, :createdBy)`,
-      {
-        titleRaw: params.titleRaw,
-        titleNorm: params.titleNorm,
-        gameDbGameId: params.gameDbGameId,
-        status: params.status,
-        createdBy: params.createdBy,
-      },
-      { autoCommit: true },
-    );
-  } finally {
-    await connection.close();
-  }
+  await oraMutate(
+    `MERGE INTO RPG_CLUB_GAMEDB_IMPORT_TITLE_MAP t
+     USING (
+       SELECT :titleNorm AS TITLE_NORM FROM dual
+     ) s
+        ON (t.TITLE_NORM = s.TITLE_NORM)
+     WHEN MATCHED THEN
+       UPDATE SET
+         TITLE_RAW = :titleRaw,
+         GAMEDB_GAME_ID = :gameDbGameId,
+         STATUS = :status,
+         CREATED_BY = :createdBy
+     WHEN NOT MATCHED THEN
+       INSERT (TITLE_RAW, TITLE_NORM, GAMEDB_GAME_ID, STATUS, CREATED_BY)
+       VALUES (:titleRaw, :titleNorm, :gameDbGameId, :status, :createdBy)`,
+    {
+      titleRaw: params.titleRaw,
+      titleNorm: params.titleNorm,
+      gameDbGameId: params.gameDbGameId,
+      status: params.status,
+      createdBy: params.createdBy,
+    },
+  );
 }

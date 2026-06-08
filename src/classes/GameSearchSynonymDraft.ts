@@ -1,5 +1,5 @@
 import oracledb from "oracledb";
-import { getOraclePool } from "../db/oracleClient.js";
+import { oraQuery, oraMutate, oraWithConnection } from "../db/SqlManager.js";
 
 export type ISynonymDraftPair = {
   term: string;
@@ -44,93 +44,74 @@ function mapDraftRow(row: any): ISynonymDraft {
 
 export default class GameSearchSynonymDraft {
   static async createDraft(userId: string): Promise<ISynonymDraft> {
-    const pool = getOraclePool();
-    const connection = await pool.getConnection();
-    try {
-      const result = await connection.execute(
-        `INSERT INTO GAMEDB_SEARCH_SYNONYM_DRAFTS (USER_ID, PAIRS_JSON)
-         VALUES (:userId, :pairsJson)
-         RETURNING DRAFT_ID INTO :draftId`,
-        {
-          userId,
-          pairsJson: JSON.stringify([]),
-          draftId: { dir: oracledb.BIND_OUT, type: oracledb.NUMBER },
-        },
-        { autoCommit: true },
-      );
-      const draftId = Number((result.outBinds as any)?.draftId?.[0]);
-      const draft = await this.getDraft(draftId, connection);
-      if (!draft) {
-        throw new Error("Failed to load synonym draft after creation.");
-      }
-      return draft;
-    } finally {
-      await connection.close();
+    const result = await oraMutate(
+      `INSERT INTO GAMEDB_SEARCH_SYNONYM_DRAFTS (USER_ID, PAIRS_JSON)
+       VALUES (:userId, :pairsJson)
+       RETURNING DRAFT_ID INTO :draftId`,
+      {
+        userId,
+        pairsJson: JSON.stringify([]),
+        draftId: { dir: oracledb.BIND_OUT, type: oracledb.NUMBER },
+      },
+    );
+    const draftId = Number((result.outBinds as any)?.draftId?.[0]);
+    const draft = await this.getDraft(draftId);
+    if (!draft) {
+      throw new Error("Failed to load synonym draft after creation.");
     }
+    return draft;
   }
 
-  static async getDraft(
-    draftId: number,
-    connection?: oracledb.Connection,
-  ): Promise<ISynonymDraft | null> {
-    const pool = getOraclePool();
-    const activeConnection = connection ?? await pool.getConnection();
-    try {
-      const result = await activeConnection.execute(
-        `SELECT DRAFT_ID, USER_ID, PAIRS_JSON, CREATED_AT, UPDATED_AT
-           FROM GAMEDB_SEARCH_SYNONYM_DRAFTS
-          WHERE DRAFT_ID = :draftId`,
-        { draftId },
-        { outFormat: oracledb.OUT_FORMAT_OBJECT, fetchInfo: { 
-          PAIRS_JSON: { type: oracledb.STRING } } },
-      );
-      const row = (result.rows ?? [])[0] as any;
-      return row ? mapDraftRow(row) : null;
-    } finally {
-      if (!connection) {
-        await activeConnection.close();
-      }
-    }
+  static async getDraft(draftId: number): Promise<ISynonymDraft | null> {
+    const rows = await oraQuery(
+      `SELECT DRAFT_ID, USER_ID, PAIRS_JSON, CREATED_AT, UPDATED_AT
+         FROM GAMEDB_SEARCH_SYNONYM_DRAFTS
+        WHERE DRAFT_ID = :draftId`,
+      { draftId },
+      mapDraftRow,
+    );
+    return rows[0] ?? null;
   }
 
   static async appendPairs(
     draftId: number,
     pairs: ISynonymDraftPair[],
   ): Promise<ISynonymDraft | null> {
-    const pool = getOraclePool();
-    const connection = await pool.getConnection();
-    try {
-      const existing = await this.getDraft(draftId, connection);
+    return oraWithConnection(async (conn) => {
+      const existing = await GameSearchSynonymDraft.getDraftWithConn(draftId, conn);
       if (!existing) return null;
       const combined = [...existing.pairs, ...pairs];
-      await connection.execute(
+      await oraMutate(
         `UPDATE GAMEDB_SEARCH_SYNONYM_DRAFTS
             SET PAIRS_JSON = :pairsJson,
                 UPDATED_AT = CURRENT_TIMESTAMP
           WHERE DRAFT_ID = :draftId`,
-        {
-          draftId,
-          pairsJson: JSON.stringify(combined),
-        },
-        { autoCommit: true },
+        { draftId, pairsJson: JSON.stringify(combined) },
+        conn,
       );
-      return await this.getDraft(draftId, connection);
-    } finally {
-      await connection.close();
-    }
+      return GameSearchSynonymDraft.getDraftWithConn(draftId, conn);
+    });
   }
 
   static async deleteDraft(draftId: number): Promise<void> {
-    const pool = getOraclePool();
-    const connection = await pool.getConnection();
-    try {
-      await connection.execute(
-        `DELETE FROM GAMEDB_SEARCH_SYNONYM_DRAFTS WHERE DRAFT_ID = :draftId`,
-        { draftId },
-        { autoCommit: true },
-      );
-    } finally {
-      await connection.close();
-    }
+    await oraMutate(
+      `DELETE FROM GAMEDB_SEARCH_SYNONYM_DRAFTS WHERE DRAFT_ID = :draftId`,
+      { draftId },
+    );
+  }
+
+  private static async getDraftWithConn(
+    draftId: number,
+    conn: oracledb.Connection,
+  ): Promise<ISynonymDraft | null> {
+    const rows = await oraQuery(
+      `SELECT DRAFT_ID, USER_ID, PAIRS_JSON, CREATED_AT, UPDATED_AT
+         FROM GAMEDB_SEARCH_SYNONYM_DRAFTS
+        WHERE DRAFT_ID = :draftId`,
+      { draftId },
+      mapDraftRow,
+      conn,
+    );
+    return rows[0] ?? null;
   }
 }

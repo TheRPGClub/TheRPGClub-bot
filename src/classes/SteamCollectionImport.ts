@@ -1,5 +1,5 @@
 import oracledb from "oracledb";
-import { getOraclePool } from "../db/oracleClient.js";
+import { oraQuery, oraMutate, oraWithConnection, oraTransaction } from "../db/SqlManager.js";
 
 export type SteamCollectionImportStatus = "ACTIVE" | "PAUSED" | "COMPLETED" | "CANCELED";
 export type SteamCollectionImportItemStatus =
@@ -69,7 +69,7 @@ function toDate(value: Date | string): Date {
   return value instanceof Date ? value : new Date(value);
 }
 
-function mapImport(row: {
+type ImportRow = {
   IMPORT_ID: number;
   USER_ID: string;
   STATUS: SteamCollectionImportStatus;
@@ -80,7 +80,9 @@ function mapImport(row: {
   SOURCE_PROFILE_NAME: string | null;
   CREATED_AT: Date | string;
   UPDATED_AT: Date | string;
-}): ISteamCollectionImport {
+};
+
+function mapImport(row: ImportRow): ISteamCollectionImport {
   return {
     importId: Number(row.IMPORT_ID),
     userId: row.USER_ID,
@@ -95,7 +97,7 @@ function mapImport(row: {
   };
 }
 
-function mapItem(row: {
+type ItemRow = {
   ITEM_ID: number;
   IMPORT_ID: number;
   ROW_INDEX: number;
@@ -114,7 +116,9 @@ function mapItem(row: {
   COLLECTION_ENTRY_ID: number | null;
   RESULT_REASON: SteamCollectionImportResultReason | null;
   ERROR_TEXT: string | null;
-}): ISteamCollectionImportItem {
+};
+
+function mapItem(row: ItemRow): ISteamCollectionImportItem {
   return {
     itemId: Number(row.ITEM_ID),
     importId: Number(row.IMPORT_ID),
@@ -141,7 +145,7 @@ function mapItem(row: {
   };
 }
 
-function mapAppMap(row: {
+type AppMapRow = {
   MAP_ID: number;
   STEAM_APP_ID: number;
   GAMEDB_GAME_ID: number | null;
@@ -149,7 +153,9 @@ function mapAppMap(row: {
   CREATED_BY: string | null;
   CREATED_AT: Date | string;
   UPDATED_AT: Date | string;
-}): ISteamAppGameDbMap {
+};
+
+function mapAppMap(row: AppMapRow): ISteamAppGameDbMap {
   return {
     mapId: Number(row.MAP_ID),
     steamAppId: Number(row.STEAM_APP_ID),
@@ -161,6 +167,38 @@ function mapAppMap(row: {
   };
 }
 
+const IMPORT_SELECT_SQL = `SELECT IMPORT_ID,
+       USER_ID,
+       STATUS,
+       CURRENT_INDEX,
+       TOTAL_COUNT,
+       STEAM_ID64,
+       STEAM_PROFILE_REF,
+       SOURCE_PROFILE_NAME,
+       CREATED_AT,
+       UPDATED_AT
+  FROM RPG_CLUB_STEAM_COLLECTION_IMPORTS`;
+
+const ITEM_SELECT_SQL = `SELECT ITEM_ID,
+       IMPORT_ID,
+       ROW_INDEX,
+       STEAM_APP_ID,
+       STEAM_APP_NAME,
+       PLAYTIME_FOREVER_MIN,
+       PLAYTIME_WINDOWS_MIN,
+       PLAYTIME_MAC_MIN,
+       PLAYTIME_LINUX_MIN,
+       PLAYTIME_DECK_MIN,
+       LAST_PLAYED_AT,
+       STATUS,
+       MATCH_CONFIDENCE,
+       MATCH_CANDIDATE_JSON,
+       GAMEDB_GAME_ID,
+       COLLECTION_ENTRY_ID,
+       RESULT_REASON,
+       ERROR_TEXT
+  FROM RPG_CLUB_STEAM_COLLECTION_IMPORT_ITEMS`;
+
 export async function createSteamCollectionImportSession(params: {
   userId: string;
   totalCount: number;
@@ -168,9 +206,8 @@ export async function createSteamCollectionImportSession(params: {
   steamProfileRef: string | null;
   sourceProfileName: string | null;
 }): Promise<ISteamCollectionImport> {
-  const connection = await getOraclePool().getConnection();
-  try {
-    const result = await connection.execute(
+  return oraWithConnection(async (conn) => {
+    const insert = await oraMutate(
       `INSERT INTO RPG_CLUB_STEAM_COLLECTION_IMPORTS (
          USER_ID,
          STATUS,
@@ -196,23 +233,17 @@ export async function createSteamCollectionImportSession(params: {
         sourceProfileName: params.sourceProfileName,
         id: { dir: oracledb.BIND_OUT, type: oracledb.NUMBER },
       },
-      { autoCommit: true },
+      conn,
     );
+    await conn.commit();
 
-    const id = Number((result.outBinds as { id?: number[] }).id?.[0] ?? 0);
-    if (!id) {
-      throw new Error("Failed to create Steam collection import session.");
-    }
+    const id = Number((insert.outBinds as { id?: number[] }).id?.[0] ?? 0);
+    if (!id) throw new Error("Failed to create Steam collection import session.");
 
-    const session = await getSteamCollectionImportById(id, connection);
-    if (!session) {
-      throw new Error("Failed to load Steam collection import session.");
-    }
-
+    const session = await getSteamCollectionImportById(id, conn);
+    if (!session) throw new Error("Failed to load Steam collection import session.");
     return session;
-  } finally {
-    await connection.close();
-  }
+  });
 }
 
 export async function insertSteamCollectionImportItems(
@@ -231,10 +262,9 @@ export async function insertSteamCollectionImportItems(
 ): Promise<void> {
   if (!items.length) return;
 
-  const connection = await getOraclePool().getConnection();
-  try {
+  await oraTransaction(async (conn) => {
     for (const item of items) {
-      await connection.execute(
+      await oraMutate(
         `INSERT INTO RPG_CLUB_STEAM_COLLECTION_IMPORT_ITEMS (
            IMPORT_ID,
            ROW_INDEX,
@@ -272,259 +302,95 @@ export async function insertSteamCollectionImportItems(
           playtimeDeckMin: item.playtimeDeckMin,
           lastPlayedAt: item.lastPlayedAt,
         },
-        { autoCommit: false },
+        conn,
       );
     }
-    await connection.commit();
-  } catch (error) {
-    await connection.rollback().catch(() => {});
-    throw error;
-  } finally {
-    await connection.close();
-  }
+  });
 }
 
 export async function getSteamCollectionImportById(
   importId: number,
   existingConnection?: oracledb.Connection,
 ): Promise<ISteamCollectionImport | null> {
-  const connection = existingConnection ?? (await getOraclePool().getConnection());
-  try {
-    const result = await connection.execute<{
-      IMPORT_ID: number;
-      USER_ID: string;
-      STATUS: SteamCollectionImportStatus;
-      CURRENT_INDEX: number;
-      TOTAL_COUNT: number;
-      STEAM_ID64: string;
-      STEAM_PROFILE_REF: string | null;
-      SOURCE_PROFILE_NAME: string | null;
-      CREATED_AT: Date | string;
-      UPDATED_AT: Date | string;
-    }>(
-      `SELECT IMPORT_ID,
-              USER_ID,
-              STATUS,
-              CURRENT_INDEX,
-              TOTAL_COUNT,
-              STEAM_ID64,
-              STEAM_PROFILE_REF,
-              SOURCE_PROFILE_NAME,
-              CREATED_AT,
-              UPDATED_AT
-         FROM RPG_CLUB_STEAM_COLLECTION_IMPORTS
-        WHERE IMPORT_ID = :importId`,
-      { importId },
-      { outFormat: oracledb.OUT_FORMAT_OBJECT },
-    );
-    const row = result.rows?.[0];
-    return row ? mapImport(row) : null;
-  } finally {
-    if (!existingConnection) {
-      await connection.close();
-    }
-  }
+  const rows = await oraQuery(
+    `${IMPORT_SELECT_SQL} WHERE IMPORT_ID = :importId`,
+    { importId },
+    mapImport,
+    existingConnection,
+  );
+  return rows[0] ?? null;
 }
 
 export async function getActiveSteamCollectionImportForUser(
   userId: string,
 ): Promise<ISteamCollectionImport | null> {
-  const connection = await getOraclePool().getConnection();
-  try {
-    const result = await connection.execute<{
-      IMPORT_ID: number;
-      USER_ID: string;
-      STATUS: SteamCollectionImportStatus;
-      CURRENT_INDEX: number;
-      TOTAL_COUNT: number;
-      STEAM_ID64: string;
-      STEAM_PROFILE_REF: string | null;
-      SOURCE_PROFILE_NAME: string | null;
-      CREATED_AT: Date | string;
-      UPDATED_AT: Date | string;
-    }>(
-      `SELECT IMPORT_ID,
-              USER_ID,
-              STATUS,
-              CURRENT_INDEX,
-              TOTAL_COUNT,
-              STEAM_ID64,
-              STEAM_PROFILE_REF,
-              SOURCE_PROFILE_NAME,
-              CREATED_AT,
-              UPDATED_AT
-         FROM RPG_CLUB_STEAM_COLLECTION_IMPORTS
-        WHERE USER_ID = :userId
-          AND STATUS IN ('ACTIVE', 'PAUSED')
-        ORDER BY CREATED_AT DESC, IMPORT_ID DESC
-        FETCH FIRST 1 ROWS ONLY`,
-      { userId },
-      { outFormat: oracledb.OUT_FORMAT_OBJECT },
-    );
-    const row = result.rows?.[0];
-    return row ? mapImport(row) : null;
-  } finally {
-    await connection.close();
-  }
+  const rows = await oraQuery(
+    `${IMPORT_SELECT_SQL}
+     WHERE USER_ID = :userId
+       AND STATUS IN ('ACTIVE', 'PAUSED')
+     ORDER BY CREATED_AT DESC, IMPORT_ID DESC
+     FETCH FIRST 1 ROWS ONLY`,
+    { userId },
+    mapImport,
+  );
+  return rows[0] ?? null;
 }
 
 export async function setSteamCollectionImportStatus(
   importId: number,
   status: SteamCollectionImportStatus,
 ): Promise<void> {
-  const connection = await getOraclePool().getConnection();
-  try {
-    await connection.execute(
-      `UPDATE RPG_CLUB_STEAM_COLLECTION_IMPORTS
-          SET STATUS = :status
-        WHERE IMPORT_ID = :importId`,
-      { status, importId },
-      { autoCommit: true },
-    );
-  } finally {
-    await connection.close();
-  }
+  await oraMutate(
+    `UPDATE RPG_CLUB_STEAM_COLLECTION_IMPORTS
+        SET STATUS = :status
+      WHERE IMPORT_ID = :importId`,
+    { status, importId },
+  );
 }
 
 export async function updateSteamCollectionImportIndex(
   importId: number,
   currentIndex: number,
 ): Promise<void> {
-  const connection = await getOraclePool().getConnection();
-  try {
-    await connection.execute(
-      `UPDATE RPG_CLUB_STEAM_COLLECTION_IMPORTS
-          SET CURRENT_INDEX = :currentIndex
-        WHERE IMPORT_ID = :importId`,
-      { currentIndex, importId },
-      { autoCommit: true },
-    );
-  } finally {
-    await connection.close();
-  }
+  await oraMutate(
+    `UPDATE RPG_CLUB_STEAM_COLLECTION_IMPORTS
+        SET CURRENT_INDEX = :currentIndex
+      WHERE IMPORT_ID = :importId`,
+    { currentIndex, importId },
+  );
+}
+
+async function fetchItemWithJsonCol(
+  sql: string,
+  binds: Record<string, string | number>,
+): Promise<ISteamCollectionImportItem | null> {
+  return oraWithConnection(async (conn) => {
+    const result = await conn.execute<ItemRow>(sql, binds, {
+      outFormat: oracledb.OUT_FORMAT_OBJECT,
+      fetchInfo: { MATCH_CANDIDATE_JSON: { type: oracledb.STRING } },
+    });
+    const row = result.rows?.[0];
+    return row ? mapItem(row) : null;
+  });
 }
 
 export async function getSteamCollectionImportItemById(
   itemId: number,
 ): Promise<ISteamCollectionImportItem | null> {
-  const connection = await getOraclePool().getConnection();
-  try {
-    const result = await connection.execute<{
-      ITEM_ID: number;
-      IMPORT_ID: number;
-      ROW_INDEX: number;
-      STEAM_APP_ID: number;
-      STEAM_APP_NAME: string;
-      PLAYTIME_FOREVER_MIN: number | null;
-      PLAYTIME_WINDOWS_MIN: number | null;
-      PLAYTIME_MAC_MIN: number | null;
-      PLAYTIME_LINUX_MIN: number | null;
-      PLAYTIME_DECK_MIN: number | null;
-      LAST_PLAYED_AT: Date | string | null;
-      STATUS: SteamCollectionImportItemStatus;
-      MATCH_CONFIDENCE: SteamCollectionMatchConfidence | null;
-      MATCH_CANDIDATE_JSON: string | null;
-      GAMEDB_GAME_ID: number | null;
-      COLLECTION_ENTRY_ID: number | null;
-      RESULT_REASON: SteamCollectionImportResultReason | null;
-      ERROR_TEXT: string | null;
-    }>(
-      `SELECT ITEM_ID,
-              IMPORT_ID,
-              ROW_INDEX,
-              STEAM_APP_ID,
-              STEAM_APP_NAME,
-              PLAYTIME_FOREVER_MIN,
-              PLAYTIME_WINDOWS_MIN,
-              PLAYTIME_MAC_MIN,
-              PLAYTIME_LINUX_MIN,
-              PLAYTIME_DECK_MIN,
-              LAST_PLAYED_AT,
-              STATUS,
-              MATCH_CONFIDENCE,
-              MATCH_CANDIDATE_JSON,
-              GAMEDB_GAME_ID,
-              COLLECTION_ENTRY_ID,
-              RESULT_REASON,
-              ERROR_TEXT
-         FROM RPG_CLUB_STEAM_COLLECTION_IMPORT_ITEMS
-        WHERE ITEM_ID = :itemId`,
-      { itemId },
-      {
-        outFormat: oracledb.OUT_FORMAT_OBJECT,
-        fetchInfo: {
-          MATCH_CANDIDATE_JSON: { type: oracledb.STRING },
-        },
-      },
-    );
-    const row = result.rows?.[0];
-    return row ? mapItem(row) : null;
-  } finally {
-    await connection.close();
-  }
+  return fetchItemWithJsonCol(`${ITEM_SELECT_SQL} WHERE ITEM_ID = :itemId`, { itemId });
 }
 
 export async function getNextPendingSteamCollectionImportItem(
   importId: number,
 ): Promise<ISteamCollectionImportItem | null> {
-  const connection = await getOraclePool().getConnection();
-  try {
-    const result = await connection.execute<{
-      ITEM_ID: number;
-      IMPORT_ID: number;
-      ROW_INDEX: number;
-      STEAM_APP_ID: number;
-      STEAM_APP_NAME: string;
-      PLAYTIME_FOREVER_MIN: number | null;
-      PLAYTIME_WINDOWS_MIN: number | null;
-      PLAYTIME_MAC_MIN: number | null;
-      PLAYTIME_LINUX_MIN: number | null;
-      PLAYTIME_DECK_MIN: number | null;
-      LAST_PLAYED_AT: Date | string | null;
-      STATUS: SteamCollectionImportItemStatus;
-      MATCH_CONFIDENCE: SteamCollectionMatchConfidence | null;
-      MATCH_CANDIDATE_JSON: string | null;
-      GAMEDB_GAME_ID: number | null;
-      COLLECTION_ENTRY_ID: number | null;
-      RESULT_REASON: SteamCollectionImportResultReason | null;
-      ERROR_TEXT: string | null;
-    }>(
-      `SELECT ITEM_ID,
-              IMPORT_ID,
-              ROW_INDEX,
-              STEAM_APP_ID,
-              STEAM_APP_NAME,
-              PLAYTIME_FOREVER_MIN,
-              PLAYTIME_WINDOWS_MIN,
-              PLAYTIME_MAC_MIN,
-              PLAYTIME_LINUX_MIN,
-              PLAYTIME_DECK_MIN,
-              LAST_PLAYED_AT,
-              STATUS,
-              MATCH_CONFIDENCE,
-              MATCH_CANDIDATE_JSON,
-              GAMEDB_GAME_ID,
-              COLLECTION_ENTRY_ID,
-              RESULT_REASON,
-              ERROR_TEXT
-         FROM RPG_CLUB_STEAM_COLLECTION_IMPORT_ITEMS
-        WHERE IMPORT_ID = :importId
-          AND STATUS = 'PENDING'
-        ORDER BY ROW_INDEX ASC
-        FETCH FIRST 1 ROWS ONLY`,
-      { importId },
-      {
-        outFormat: oracledb.OUT_FORMAT_OBJECT,
-        fetchInfo: {
-          MATCH_CANDIDATE_JSON: { type: oracledb.STRING },
-        },
-      },
-    );
-    const row = result.rows?.[0];
-    return row ? mapItem(row) : null;
-  } finally {
-    await connection.close();
-  }
+  return fetchItemWithJsonCol(
+    `${ITEM_SELECT_SQL}
+     WHERE IMPORT_ID = :importId
+       AND STATUS = 'PENDING'
+     ORDER BY ROW_INDEX ASC
+     FETCH FIRST 1 ROWS ONLY`,
+    { importId },
+  );
 }
 
 export async function updateSteamCollectionImportItem(
@@ -571,22 +437,14 @@ export async function updateSteamCollectionImportItem(
     binds.errorText = updates.errorText;
   }
 
-  if (!setParts.length) {
-    return;
-  }
+  if (!setParts.length) return;
 
-  const connection = await getOraclePool().getConnection();
-  try {
-    await connection.execute(
-      `UPDATE RPG_CLUB_STEAM_COLLECTION_IMPORT_ITEMS
-          SET ${setParts.join(", ")}
-        WHERE ITEM_ID = :itemId`,
-      binds,
-      { autoCommit: true },
-    );
-  } finally {
-    await connection.close();
-  }
+  await oraMutate(
+    `UPDATE RPG_CLUB_STEAM_COLLECTION_IMPORT_ITEMS
+        SET ${setParts.join(", ")}
+      WHERE ITEM_ID = :itemId`,
+    binds,
+  );
 }
 
 export async function countSteamCollectionImportItems(
@@ -598,105 +456,67 @@ export async function countSteamCollectionImportItems(
   skipped: number;
   failed: number;
 }> {
-  const connection = await getOraclePool().getConnection();
-  try {
-    const result = await connection.execute<{
-      STATUS: SteamCollectionImportItemStatus;
-      CNT: number;
-    }>(
-      `SELECT STATUS, COUNT(*) AS CNT
-         FROM RPG_CLUB_STEAM_COLLECTION_IMPORT_ITEMS
-        WHERE IMPORT_ID = :importId
-        GROUP BY STATUS`,
-      { importId },
-      { outFormat: oracledb.OUT_FORMAT_OBJECT },
-    );
-
-    const counts = {
-      pending: 0,
-      added: 0,
-      updated: 0,
-      skipped: 0,
-      failed: 0,
-    };
-
-    for (const row of result.rows ?? []) {
-      const status = String(row.STATUS).toUpperCase();
-      const value = Number(row.CNT ?? 0);
-      if (status === "PENDING") counts.pending = value;
-      else if (status === "ADDED") counts.added = value;
-      else if (status === "UPDATED") counts.updated = value;
-      else if (status === "SKIPPED") counts.skipped = value;
-      else if (status === "FAILED") counts.failed = value;
-    }
-
-    return counts;
-  } finally {
-    await connection.close();
+  const rows = await oraQuery(
+    `SELECT STATUS, COUNT(*) AS CNT
+       FROM RPG_CLUB_STEAM_COLLECTION_IMPORT_ITEMS
+      WHERE IMPORT_ID = :importId
+      GROUP BY STATUS`,
+    { importId },
+    (row: { STATUS: SteamCollectionImportItemStatus; CNT: number }) => row,
+  );
+  const counts = { pending: 0, added: 0, updated: 0, skipped: 0, failed: 0 };
+  for (const row of rows) {
+    const status = String(row.STATUS).toUpperCase();
+    const value = Number(row.CNT ?? 0);
+    if (status === "PENDING") counts.pending = value;
+    else if (status === "ADDED") counts.added = value;
+    else if (status === "UPDATED") counts.updated = value;
+    else if (status === "SKIPPED") counts.skipped = value;
+    else if (status === "FAILED") counts.failed = value;
   }
+  return counts;
 }
 
 export async function countSteamCollectionImportResultReasons(
   importId: number,
 ): Promise<Record<string, number>> {
-  const connection = await getOraclePool().getConnection();
-  try {
-    const result = await connection.execute<{
-      RESULT_REASON: string | null;
-      CNT: number;
-    }>(
-      `SELECT RESULT_REASON, COUNT(*) AS CNT
-         FROM RPG_CLUB_STEAM_COLLECTION_IMPORT_ITEMS
-        WHERE IMPORT_ID = :importId
-          AND RESULT_REASON IS NOT NULL
-        GROUP BY RESULT_REASON`,
-      { importId },
-      { outFormat: oracledb.OUT_FORMAT_OBJECT },
-    );
-
-    const counts: Record<string, number> = {};
-    for (const row of result.rows ?? []) {
-      const key = String(row.RESULT_REASON ?? "").trim();
-      if (!key.length) continue;
-      counts[key] = Number(row.CNT ?? 0);
-    }
-    return counts;
-  } finally {
-    await connection.close();
+  const rows = await oraQuery(
+    `SELECT RESULT_REASON, COUNT(*) AS CNT
+       FROM RPG_CLUB_STEAM_COLLECTION_IMPORT_ITEMS
+      WHERE IMPORT_ID = :importId
+        AND RESULT_REASON IS NOT NULL
+      GROUP BY RESULT_REASON`,
+    { importId },
+    (row: { RESULT_REASON: string | null; CNT: number }) => row,
+  );
+  const counts: Record<string, number> = {};
+  for (const row of rows) {
+    const key = String(row.RESULT_REASON ?? "").trim();
+    if (!key.length) continue;
+    counts[key] = Number(row.CNT ?? 0);
   }
+  return counts;
 }
 
 export async function getSteamAppGameDbMapByAppId(
   steamAppId: number,
+  existingConnection?: oracledb.Connection,
 ): Promise<ISteamAppGameDbMap | null> {
-  const connection = await getOraclePool().getConnection();
-  try {
-    const result = await connection.execute<{
-      MAP_ID: number;
-      STEAM_APP_ID: number;
-      GAMEDB_GAME_ID: number | null;
-      STATUS: SteamAppGameDbMapStatus;
-      CREATED_BY: string | null;
-      CREATED_AT: Date | string;
-      UPDATED_AT: Date | string;
-    }>(
-      `SELECT MAP_ID,
-              STEAM_APP_ID,
-              GAMEDB_GAME_ID,
-              STATUS,
-              CREATED_BY,
-              CREATED_AT,
-              UPDATED_AT
-         FROM RPG_CLUB_STEAM_APP_GAMEDB_MAP
-        WHERE STEAM_APP_ID = :steamAppId`,
-      { steamAppId },
-      { outFormat: oracledb.OUT_FORMAT_OBJECT },
-    );
-    const row = result.rows?.[0];
-    return row ? mapAppMap(row) : null;
-  } finally {
-    await connection.close();
-  }
+  const rows = await oraQuery(
+    `SELECT MAP_ID,
+            STEAM_APP_ID,
+            GAMEDB_GAME_ID,
+            STATUS,
+            CREATED_BY,
+            CREATED_AT,
+            UPDATED_AT
+       FROM RPG_CLUB_STEAM_APP_GAMEDB_MAP
+      WHERE STEAM_APP_ID = :steamAppId`,
+    { steamAppId },
+    mapAppMap,
+    existingConnection,
+  );
+  return rows[0] ?? null;
 }
 
 export async function upsertSteamAppGameDbMap(params: {
@@ -705,9 +525,8 @@ export async function upsertSteamAppGameDbMap(params: {
   status: SteamAppGameDbMapStatus;
   createdBy: string | null;
 }): Promise<ISteamAppGameDbMap> {
-  const connection = await getOraclePool().getConnection();
-  try {
-    await connection.execute(
+  return oraWithConnection(async (conn) => {
+    await oraMutate(
       `MERGE INTO RPG_CLUB_STEAM_APP_GAMEDB_MAP m
        USING (
          SELECT :steamAppId AS steamAppId,
@@ -738,17 +557,14 @@ export async function upsertSteamAppGameDbMap(params: {
         status: params.status,
         createdBy: params.createdBy,
       },
-      { autoCommit: true },
+      conn,
     );
+    await conn.commit();
 
-    const mapping = await getSteamAppGameDbMapByAppId(params.steamAppId);
-    if (!mapping) {
-      throw new Error("Failed to load Steam app mapping.");
-    }
+    const mapping = await getSteamAppGameDbMapByAppId(params.steamAppId, conn);
+    if (!mapping) throw new Error("Failed to load Steam app mapping.");
     return mapping;
-  } finally {
-    await connection.close();
-  }
+  });
 }
 
 export async function getSteamAppHistoricalMappedGameIds(params: {
@@ -756,40 +572,32 @@ export async function getSteamAppHistoricalMappedGameIds(params: {
   excludeUserId?: string;
   limit?: number;
 }): Promise<number[]> {
-  const limit = Number.isInteger(params.limit) && (params.limit ?? 0) > 0 ? 
-    Number(params.limit) : 5;
-  const connection = await getOraclePool().getConnection();
-  try {
-    const result = await connection.execute<{
-      GAMEDB_GAME_ID: number;
-    }>(
-      `SELECT t.GAMEDB_GAME_ID
-         FROM (
-           SELECT ii.GAMEDB_GAME_ID,
-                  COUNT(*) AS CNT,
-                  MAX(ii.ITEM_ID) AS LAST_ITEM_ID
-             FROM RPG_CLUB_STEAM_COLLECTION_IMPORT_ITEMS ii
-             JOIN RPG_CLUB_STEAM_COLLECTION_IMPORTS i
-               ON i.IMPORT_ID = ii.IMPORT_ID
-            WHERE ii.STEAM_APP_ID = :steamAppId
-              AND ii.GAMEDB_GAME_ID IS NOT NULL
-              AND ii.RESULT_REASON = 'MANUAL_REMAP'
-              AND (:excludeUserId IS NULL OR i.USER_ID <> :excludeUserId)
-            GROUP BY ii.GAMEDB_GAME_ID
-            ORDER BY CNT DESC, LAST_ITEM_ID DESC
-         ) t
-        WHERE ROWNUM <= :limit`,
-      {
-        steamAppId: params.steamAppId,
-        excludeUserId: params.excludeUserId ?? null,
-        limit,
-      },
-      { outFormat: oracledb.OUT_FORMAT_OBJECT },
-    );
-    return (result.rows ?? [])
-      .map((row) => Number(row.GAMEDB_GAME_ID))
-      .filter((value) => Number.isInteger(value) && value > 0);
-  } finally {
-    await connection.close();
-  }
+  const limit = Number.isInteger(params.limit) && (params.limit ?? 0) > 0
+    ? Number(params.limit) : 5;
+
+  const rows = await oraQuery(
+    `SELECT t.GAMEDB_GAME_ID
+       FROM (
+         SELECT ii.GAMEDB_GAME_ID,
+                COUNT(*) AS CNT,
+                MAX(ii.ITEM_ID) AS LAST_ITEM_ID
+           FROM RPG_CLUB_STEAM_COLLECTION_IMPORT_ITEMS ii
+           JOIN RPG_CLUB_STEAM_COLLECTION_IMPORTS i
+             ON i.IMPORT_ID = ii.IMPORT_ID
+          WHERE ii.STEAM_APP_ID = :steamAppId
+            AND ii.GAMEDB_GAME_ID IS NOT NULL
+            AND ii.RESULT_REASON = 'MANUAL_REMAP'
+            AND (:excludeUserId IS NULL OR i.USER_ID <> :excludeUserId)
+          GROUP BY ii.GAMEDB_GAME_ID
+          ORDER BY CNT DESC, LAST_ITEM_ID DESC
+       ) t
+      WHERE ROWNUM <= :limit`,
+    {
+      steamAppId: params.steamAppId,
+      excludeUserId: params.excludeUserId ?? null,
+      limit,
+    },
+    (row: { GAMEDB_GAME_ID: number }) => Number(row.GAMEDB_GAME_ID),
+  );
+  return rows.filter((value) => Number.isInteger(value) && value > 0);
 }

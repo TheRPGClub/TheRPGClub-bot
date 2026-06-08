@@ -1,7 +1,7 @@
 import "dotenv/config";
 import { initOraclePool, getOraclePool } from "../db/oracleClient.js";
+import { oraQuery, oraMutate } from "../db/SqlManager.js";
 import Game from "../classes/Game.js";
-import oracledb from "oracledb";
 
 type ScriptMode = "dry-run" | "write";
 
@@ -15,61 +15,33 @@ const sleep = (ms: number): Promise<void> =>
   new Promise((resolve) => setTimeout(resolve, ms));
 
 async function getGamesWithIgdbIds(): Promise<IGameWithIgdb[]> {
-  const pool = getOraclePool();
-  const connection = await pool.getConnection();
-  try {
-    const result = await connection.execute<{
-      GAME_ID: number;
-      TITLE: string;
-      IGDB_ID: number;
-    }>(
-      `SELECT GAME_ID, TITLE, IGDB_ID
-         FROM GAMEDB_GAMES
-        WHERE IGDB_ID IS NOT NULL
-        ORDER BY GAME_ID`,
-      {},
-      { outFormat: oracledb.OUT_FORMAT_OBJECT },
-    );
-
-    return (result.rows ?? []).map((row) => ({
+  return oraQuery(
+    `SELECT GAME_ID, TITLE, IGDB_ID
+       FROM GAMEDB_GAMES
+      WHERE IGDB_ID IS NOT NULL
+      ORDER BY GAME_ID`,
+    {},
+    (row: { GAME_ID: number; TITLE: string; IGDB_ID: number }) => ({
       gameId: Number(row.GAME_ID),
       title: String(row.TITLE),
       igdbId: Number(row.IGDB_ID),
-    }));
-  } finally {
-    await connection.close();
-  }
+    }),
+  );
 }
 
 async function deleteGameReleases(gameId: number): Promise<number> {
-  const pool = getOraclePool();
-  const connection = await pool.getConnection();
-  try {
-    const result = await connection.execute(
-      `DELETE FROM GAMEDB_RELEASES WHERE GAME_ID = :gameId`,
-      { gameId },
-      { autoCommit: true },
-    );
-    return Number(result.rowsAffected ?? 0);
-  } finally {
-    await connection.close();
-  }
+  const result = await oraMutate(
+    `DELETE FROM GAMEDB_RELEASES WHERE GAME_ID = :gameId`,
+    { gameId },
+  );
+  return Number(result.rowsAffected ?? 0);
 }
 
 async function clearInitialReleaseDate(gameId: number): Promise<void> {
-  const pool = getOraclePool();
-  const connection = await pool.getConnection();
-  try {
-    await connection.execute(
-      `UPDATE GAMEDB_GAMES
-          SET INITIAL_RELEASE_DATE = NULL
-        WHERE GAME_ID = :gameId`,
-      { gameId },
-      { autoCommit: true },
-    );
-  } finally {
-    await connection.close();
-  }
+  await oraMutate(
+    `UPDATE GAMEDB_GAMES SET INITIAL_RELEASE_DATE = NULL WHERE GAME_ID = :gameId`,
+    { gameId },
+  );
 }
 
 async function reimportReleaseDates(
@@ -105,16 +77,16 @@ async function reimportReleaseDates(
         await Game.importReleaseDatesFromIgdb(game.gameId, game.igdbId);
         imported++;
         console.log(
-          `${progress} ✓ Imported release dates for "${game.title}" (ID: ${game.gameId})`,
+          `${progress} Imported release dates for "${game.title}" (ID: ${game.gameId})`,
         );
       } else {
         const releases = await Game.getGameReleases(game.gameId);
         console.log(
-          `${progress} [DRY RUN] Would clear ${releases.length} release(s) and reimport for "${game.title}" (ID: ${game.gameId})`,
+          `${progress} [DRY RUN] Would clear ${releases.length} release(s)` +
+          ` and reimport for "${game.title}" (ID: ${game.gameId})`,
         );
       }
 
-      // Rate limiting to avoid overwhelming IGDB API
       if (processed % 10 === 0) {
         await sleep(500);
       } else {
@@ -123,7 +95,7 @@ async function reimportReleaseDates(
     } catch (err: any) {
       failed++;
       console.error(
-        `${progress} ✗ Failed to process "${game.title}" (ID: ${game.gameId}): ${err?.message ?? err}`,
+        `${progress} Failed to process "${game.title}" (ID: ${game.gameId}): ${err?.message ?? err}`,
       );
     }
   }
@@ -147,10 +119,10 @@ async function main(): Promise<void> {
   const mode: ScriptMode = modeArg === "write" ? "write" : "dry-run";
 
   if (mode === "dry-run") {
-    console.log("\n⚠️  Running in DRY-RUN mode. No changes will be made.");
+    console.log("\n  Running in DRY-RUN mode. No changes will be made.");
     console.log("   Use 'npm run script:reimport-releases write' to execute.\n");
   } else {
-    console.log("\n⚠️  Running in WRITE mode. This will modify the database!");
+    console.log("\n  Running in WRITE mode. This will modify the database!");
     console.log("   Press Ctrl+C within 5 seconds to cancel...\n");
     await sleep(5000);
   }

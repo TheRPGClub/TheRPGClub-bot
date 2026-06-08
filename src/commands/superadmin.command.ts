@@ -28,7 +28,6 @@ import {
   sanitizeUserInput,
 } from "../functions/InteractionUtils.js";
 import Member, { type IMemberRecord } from "../classes/Member.js";
-import { getOraclePool } from "../db/oracleClient.js";
 import Game, { type IGame } from "../classes/Game.js";
 import { STANDARD_PLATFORM_IDS } from "../config/standardPlatforms.js";
 import { igdbService } from "../services/IGDB/IgdbService.js";
@@ -749,27 +748,6 @@ export class SuperAdmin {
 
     const members = await guild.members.fetch();
     const departedCount = await Member.markDepartedNotIn(Array.from(members.keys()));
-    const pool = getOraclePool();
-    let connection = await pool.getConnection();
-    const isRecoverableOracleError = (err: any): boolean => {
-      const code = err?.code ?? err?.errorNum;
-      const msg = err?.message ?? "";
-      return (
-        code === "NJS-500" ||
-        code === "NJS-503" ||
-        code === "ORA-03138" ||
-        code === "ORA-03146" ||
-        /DPI-1010|ORA-03135|end-of-file on communication channel/i.test(msg)
-      );
-    };
-    const reopenConnection = async () => {
-      try {
-        await connection?.close();
-      } catch {
-        // ignore
-      }
-      connection = await pool.getConnection();
-    };
 
     let successCount = 0;
     let failCount = 0;
@@ -783,113 +761,89 @@ export class SuperAdmin {
       return !a.equals(b);
     };
 
-    try {
-      for (const member of members.values()) {
-        const user = member.user;
-        const existing = await Member.getByUserId(user.id);
+    for (const member of members.values()) {
+      const user = member.user;
+      const existing = await Member.getByUserId(user.id);
 
-        // Build avatar blob (throttled per-user)
-        let avatarBlob: Buffer | null = null;
-        const avatarUrl = user.displayAvatarURL({ extension: "png", size: 512, forceStatic: true });
-        if (avatarUrl) {
-          try {
-            const { buffer } = await downloadImageBuffer(avatarUrl);
-            avatarBlob = buffer;
-          } catch {
-            // ignore avatar fetch failures
-          }
-        }
-
-        const hasRole = (id?: string | null): number => {
-          if (!id) return 0;
-          return member.roles.cache.has(id) ? 1 : 0;
-        };
-        const adminFlag =
-          hasRole(roleMap.admin) || member.permissions.has("Administrator") ? 1 : 0;
-        const moderatorFlag =
-          hasRole(roleMap.mod) || member.permissions.has("ManageMessages") ? 1 : 0;
-        const regularFlag = hasRole(roleMap.regular);
-        const memberFlag = hasRole(roleMap.member);
-        const newcomerFlag = hasRole(roleMap.newcomer);
-
-        const baseRecord: IMemberRecord = {
-          userId: user.id,
-          isBot: user.bot ? 1 : 0,
-          username: user.username,
-          globalName: (user as any).globalName ?? null,
-          avatarBlob: null,
-          serverJoinedAt: member.joinedAt ?? existing?.serverJoinedAt ?? null,
-          serverLeftAt: null,
-          lastSeenAt: existing?.lastSeenAt ?? null,
-          roleAdmin: adminFlag,
-          roleModerator: moderatorFlag,
-          roleRegular: regularFlag,
-          roleMember: memberFlag,
-          roleNewcomer: newcomerFlag,
-          messageCount: existing?.messageCount ?? null,
-          completionatorUrl: existing?.completionatorUrl ?? null,
-          psnUsername: existing?.psnUsername ?? null,
-          xblUsername: existing?.xblUsername ?? null,
-          nswFriendCode: existing?.nswFriendCode ?? null,
-          steamUrl: existing?.steamUrl ?? null,
-          profileImage: existing?.profileImage ?? null,
-          profileImageAt: existing?.profileImageAt ?? null,
-        };
-
-        let avatarToUse: Buffer | null = avatarBlob;
-        if (!avatarToUse && existing?.avatarBlob) {
-          avatarToUse = existing.avatarBlob;
-        } else if (avatarToUse && existing?.avatarBlob) {
-          if (!avatarBuffersDifferent(avatarToUse, existing.avatarBlob)) {
-            avatarToUse = existing.avatarBlob;
-          }
-        }
-
-        const execUpsert = async (avatarData: Buffer | null) => {
-          const record: IMemberRecord = { ...baseRecord, avatarBlob: avatarData };
-          await Member.upsert(record, { connection });
-        };
-
+      let avatarBlob: Buffer | null = null;
+      const avatarUrl = user.displayAvatarURL({ extension: "png", size: 512, forceStatic: true });
+      if (avatarUrl) {
         try {
-          await execUpsert(avatarToUse);
-          successCount++;
-        } catch (err) {
-          const code = (err as any)?.code ?? (err as any)?.errorNum;
+          const { buffer } = await downloadImageBuffer(avatarUrl);
+          avatarBlob = buffer;
+        } catch {
+          // ignore avatar fetch failures
+        }
+      }
 
-          if (code === "ORA-03146") {
-            try {
-              await execUpsert(null);
-              successCount++;
-              continue;
-            } catch (retryErr) {
-              failCount++;
-              console.error(`Failed to upsert user ${user.id} after stripping avatar`, retryErr);
-              continue;
-            }
-          }
+      const hasRole = (id?: string | null): number => {
+        if (!id) return 0;
+        return member.roles.cache.has(id) ? 1 : 0;
+      };
+      const adminFlag =
+        hasRole(roleMap.admin) || member.permissions.has("Administrator") ? 1 : 0;
+      const moderatorFlag =
+        hasRole(roleMap.mod) || member.permissions.has("ManageMessages") ? 1 : 0;
+      const regularFlag = hasRole(roleMap.regular);
+      const memberFlag = hasRole(roleMap.member);
+      const newcomerFlag = hasRole(roleMap.newcomer);
 
-          if (isRecoverableOracleError(err)) {
-            await reopenConnection();
-            try {
-              await execUpsert(avatarBlob);
-              successCount++;
-              continue;
-            } catch (retryErr) {
-              failCount++;
-              console.error(`Failed to upsert user ${user.id} after retry`, retryErr);
-            }
-          } else {
+      const baseRecord: IMemberRecord = {
+        userId: user.id,
+        isBot: user.bot ? 1 : 0,
+        username: user.username,
+        globalName: (user as any).globalName ?? null,
+        avatarBlob: null,
+        serverJoinedAt: member.joinedAt ?? existing?.serverJoinedAt ?? null,
+        serverLeftAt: null,
+        lastSeenAt: existing?.lastSeenAt ?? null,
+        roleAdmin: adminFlag,
+        roleModerator: moderatorFlag,
+        roleRegular: regularFlag,
+        roleMember: memberFlag,
+        roleNewcomer: newcomerFlag,
+        messageCount: existing?.messageCount ?? null,
+        completionatorUrl: existing?.completionatorUrl ?? null,
+        psnUsername: existing?.psnUsername ?? null,
+        xblUsername: existing?.xblUsername ?? null,
+        nswFriendCode: existing?.nswFriendCode ?? null,
+        steamUrl: existing?.steamUrl ?? null,
+        profileImage: existing?.profileImage ?? null,
+        profileImageAt: existing?.profileImageAt ?? null,
+      };
+
+      let avatarToUse: Buffer | null = avatarBlob;
+      if (!avatarToUse && existing?.avatarBlob) {
+        avatarToUse = existing.avatarBlob;
+      } else if (avatarToUse && existing?.avatarBlob) {
+        if (!avatarBuffersDifferent(avatarToUse, existing.avatarBlob)) {
+          avatarToUse = existing.avatarBlob;
+        }
+      }
+
+      try {
+        await Member.upsert({ ...baseRecord, avatarBlob: avatarToUse });
+        successCount++;
+      } catch (err) {
+        const code = (err as any)?.code ?? (err as any)?.errorNum;
+        if (code === "ORA-03146") {
+          try {
+            await Member.upsert({ ...baseRecord, avatarBlob: null });
+            successCount++;
+            await delay(1000);
+            continue;
+          } catch (retryErr) {
             failCount++;
-            console.error(`Failed to upsert user ${user.id}`, err);
+            console.error(`Failed to upsert user ${user.id} after stripping avatar`, retryErr);
+            await delay(1000);
+            continue;
           }
         }
-
-        // throttle: one user per second
-        await delay(1000);
-
+        failCount++;
+        console.error(`Failed to upsert user ${user.id}`, err);
       }
-    } finally {
-      await connection.close();
+
+      await delay(1000);
     }
 
     await safeReply(interaction, buildTextReply(`Member scan complete. Upserts succeeded: ${successCount}. Failed: ${failCount}. ` +

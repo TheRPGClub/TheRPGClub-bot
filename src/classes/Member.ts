@@ -1,5 +1,10 @@
 import oracledb from "oracledb";
-import { getOraclePool } from "../db/oracleClient.js";
+import {
+  oraQuery,
+  oraMutate,
+  oraWithConnection,
+  oraTransaction,
+} from "../db/SqlManager.js";
 
 export interface IMemberRecord {
   userId: string;
@@ -199,20 +204,23 @@ let nowPlayingLinkedThreadColumnAvailable: boolean | null = null;
 async function getNowPlayingThreadIdSql(connection: Connection): Promise<string> {
   if (nowPlayingLinkedThreadColumnAvailable === null) {
     try {
-      const res = await connection.execute<{ CNT: number }>(
+      const res = await oraQuery<{ CNT: number }, number>(
         `SELECT COUNT(*) AS CNT
            FROM ALL_TAB_COLUMNS
           WHERE OWNER = SYS_CONTEXT('USERENV', 'CURRENT_SCHEMA')
             AND TABLE_NAME = 'GAMEDB_GAMES'
             AND COLUMN_NAME = 'LINKED_THREAD_ID'`,
         {},
-        { outFormat: oracledb.OUT_FORMAT_OBJECT },
+        (row) => Number(row.CNT),
+        connection,
       );
-      nowPlayingLinkedThreadColumnAvailable = Number(res.rows?.[0]?.CNT ?? 0) > 0;
+      nowPlayingLinkedThreadColumnAvailable = (res[0] ?? 0) > 0;
     } catch (err) {
       nowPlayingLinkedThreadColumnAvailable = false;
       const msg = err instanceof Error ? err.message : String(err);
-      console.warn(`[Member] Failed to detect LINKED_THREAD_ID column; using legacy links: ${msg}`);
+      console.warn(
+        `[Member] Failed to detect LINKED_THREAD_ID column; using legacy links: ${msg}`,
+      );
     }
   }
 
@@ -246,31 +254,26 @@ function buildParams(record: IMemberRecord) {
 
 export default class Member {
   static async touchLastSeen(userId: string, when: Date = new Date()): Promise<void> {
-    const connection = await getOraclePool().getConnection();
     try {
-      await connection.execute(
+      await oraMutate(
         `UPDATE RPG_CLUB_USERS
             SET LAST_SEEN_AT = :lastSeen,
                 UPDATED_AT = SYSTIMESTAMP
           WHERE USER_ID = :userId`,
         { userId, lastSeen: when },
-        { autoCommit: true },
       );
     } catch (err: any) {
       const msg = err?.message ?? String(err);
       console.error(`[Member] Failed to update last seen for ${userId}: ${msg}`);
-    } finally {
-      await connection.close();
     }
   }
 
   static async getNowPlaying(
     userId: string,
   ): Promise<IMemberNowPlayingEntry[]> {
-    const connection = await getOraclePool().getConnection();
-    try {
-      const threadIdSql = await getNowPlayingThreadIdSql(connection);
-      const res = await connection.execute<{
+    return oraWithConnection(async (conn) => {
+      const threadIdSql = await getNowPlayingThreadIdSql(conn);
+      const res = await conn.execute<{
         GAME_ID: number;
         TITLE: string;
         PLATFORM_ID: number | null;
@@ -356,16 +359,13 @@ export default class Member {
               : null,
         }))
         .slice(0, MAX_NOW_PLAYING);
-    } finally {
-      await connection.close();
-    }
+    });
   }
 
   static async getAllNowPlaying(): Promise<IMemberNowPlayingList[]> {
-    const connection = await getOraclePool().getConnection();
-    try {
-      const threadIdSql = await getNowPlayingThreadIdSql(connection);
-      const res = await connection.execute<{
+    return oraWithConnection(async (conn) => {
+      const threadIdSql = await getNowPlayingThreadIdSql(conn);
+      const res = await conn.execute<{
         USER_ID: string;
         USERNAME: string | null;
         GLOBAL_NAME: string | null;
@@ -451,49 +451,38 @@ export default class Member {
         const bName = (b.globalName ?? b.username ?? b.userId).toLowerCase();
         return aName.localeCompare(bName);
       });
-    } finally {
-      await connection.close();
-    }
+    });
   }
 
   static async getNowPlayingByGameIds(
     gameIds: number[],
   ): Promise<{ gameId: number; title: string; userId: string }[]> {
     if (!gameIds.length) return [];
-    const connection = await getOraclePool().getConnection();
     const placeholders = gameIds.map((_, idx) => `:id${idx}`);
     const binds: Record<string, number> = {};
     gameIds.forEach((id, idx) => {
       binds[`id${idx}`] = id;
     });
 
-    try {
-      const res = await connection.execute<{
-        GAME_ID: number;
-        TITLE: string;
-        USER_ID: string;
-      }>(
-        `SELECT u.GAMEDB_GAME_ID AS GAME_ID,
-                g.TITLE,
-                u.USER_ID
-           FROM USER_NOW_PLAYING u
-           JOIN RPG_CLUB_USERS ru ON ru.USER_ID = u.USER_ID
-           JOIN GAMEDB_GAMES g ON g.GAME_ID = u.GAMEDB_GAME_ID
-          WHERE u.GAMEDB_GAME_ID IN (${placeholders.join(", ")})
-            AND NVL(ru.IS_BOT, 0) = 0
-            AND ru.SERVER_LEFT_AT IS NULL
-          ORDER BY g.TITLE, u.USER_ID`,
-        binds,
-        { outFormat: oracledb.OUT_FORMAT_OBJECT },
-      );
-      return (res.rows ?? []).map((row) => ({
+    return oraQuery<{ GAME_ID: number; TITLE: string; USER_ID: string },
+      { gameId: number; title: string; userId: string }>(
+      `SELECT u.GAMEDB_GAME_ID AS GAME_ID,
+              g.TITLE,
+              u.USER_ID
+         FROM USER_NOW_PLAYING u
+         JOIN RPG_CLUB_USERS ru ON ru.USER_ID = u.USER_ID
+         JOIN GAMEDB_GAMES g ON g.GAME_ID = u.GAMEDB_GAME_ID
+        WHERE u.GAMEDB_GAME_ID IN (${placeholders.join(", ")})
+          AND NVL(ru.IS_BOT, 0) = 0
+          AND ru.SERVER_LEFT_AT IS NULL
+        ORDER BY g.TITLE, u.USER_ID`,
+      binds,
+      (row) => ({
         gameId: Number(row.GAME_ID),
         title: row.TITLE,
         userId: row.USER_ID,
-      }));
-    } finally {
-      await connection.close();
-    }
+      }),
+    );
   }
 
   static async getNowPlayingByTitleSearch(
@@ -501,37 +490,28 @@ export default class Member {
   ): Promise<{ gameId: number; title: string; userId: string }[]> {
     const trimmed = query.trim().toLowerCase();
     if (!trimmed) return [];
-    const connection = await getOraclePool().getConnection();
     const searchQuery = `%${trimmed}%`;
     const normalizedQuery = `%${trimmed.replace(/[^a-z0-9]/g, "")}%`;
-    try {
-      const res = await connection.execute<{
-        GAME_ID: number;
-        TITLE: string;
-        USER_ID: string;
-      }>(
-        `SELECT u.GAMEDB_GAME_ID AS GAME_ID,
-                g.TITLE,
-                u.USER_ID
-           FROM USER_NOW_PLAYING u
-           JOIN RPG_CLUB_USERS ru ON ru.USER_ID = u.USER_ID
-           JOIN GAMEDB_GAMES g ON g.GAME_ID = u.GAMEDB_GAME_ID
-          WHERE (LOWER(g.TITLE) LIKE :searchQuery
-              OR REGEXP_REPLACE(LOWER(g.TITLE), '[^a-z0-9]', '') LIKE :normalizedQuery)
-            AND NVL(ru.IS_BOT, 0) = 0
-            AND ru.SERVER_LEFT_AT IS NULL
-          ORDER BY g.TITLE, u.USER_ID`,
-        { searchQuery, normalizedQuery },
-        { outFormat: oracledb.OUT_FORMAT_OBJECT },
-      );
-      return (res.rows ?? []).map((row) => ({
+    return oraQuery<{ GAME_ID: number; TITLE: string; USER_ID: string },
+      { gameId: number; title: string; userId: string }>(
+      `SELECT u.GAMEDB_GAME_ID AS GAME_ID,
+              g.TITLE,
+              u.USER_ID
+         FROM USER_NOW_PLAYING u
+         JOIN RPG_CLUB_USERS ru ON ru.USER_ID = u.USER_ID
+         JOIN GAMEDB_GAMES g ON g.GAME_ID = u.GAMEDB_GAME_ID
+        WHERE (LOWER(g.TITLE) LIKE :searchQuery
+            OR REGEXP_REPLACE(LOWER(g.TITLE), '[^a-z0-9]', '') LIKE :normalizedQuery)
+          AND NVL(ru.IS_BOT, 0) = 0
+          AND ru.SERVER_LEFT_AT IS NULL
+        ORDER BY g.TITLE, u.USER_ID`,
+      { searchQuery, normalizedQuery },
+      (row) => ({
         gameId: Number(row.GAME_ID),
         title: row.TITLE,
         userId: row.USER_ID,
-      }));
-    } finally {
-      await connection.close();
-    }
+      }),
+    );
   }
 
   static async getNowPlayingEntries(
@@ -549,43 +529,51 @@ export default class Member {
     journalEnabled: boolean;
     hasJournalEntry: boolean;
   }[]> {
-    const connection = await getOraclePool().getConnection();
-    try {
-      const res = await connection.execute<{
-        GAME_ID: number;
-        TITLE: string;
-        PLATFORM_ID: number | null;
-        PLATFORM_NAME: string | null;
-        PLATFORM_ABBREVIATION: string | null;
-        NOTE: string | null;
-        ADDED_AT: Date | string | null;
-        NOTE_UPDATED_AT: Date | string | null;
-        SORT_ORDER: number | null;
-        JOURNAL_ENABLED: number | null;
-      }>(
-        `SELECT u.GAMEDB_GAME_ID AS GAME_ID,
-                g.TITLE,
-                u.PLATFORM_ID,
-                p.PLATFORM_NAME,
-                p.PLATFORM_ABBREVIATION,
-                u.NOTE,
-                u.ADDED_AT,
-                u.NOTE_UPDATED_AT,
-                u.SORT_ORDER,
-                jp.IS_ENABLED AS JOURNAL_ENABLED
-           FROM USER_NOW_PLAYING u
-           JOIN GAMEDB_GAMES g ON g.GAME_ID = u.GAMEDB_GAME_ID
-           LEFT JOIN GAMEDB_PLATFORMS p ON p.PLATFORM_ID = u.PLATFORM_ID
-           LEFT JOIN USER_GAME_JOURNAL_PREFS jp
-             ON jp.USER_ID = u.USER_ID
-            AND jp.GAMEDB_GAME_ID = u.GAMEDB_GAME_ID
-          WHERE u.USER_ID = :userId
-            AND u.GAMEDB_GAME_ID IS NOT NULL
-          ORDER BY u.SORT_ORDER NULLS LAST, u.ADDED_AT DESC, u.ENTRY_ID DESC`,
-        { userId },
-        { outFormat: oracledb.OUT_FORMAT_OBJECT },
-      );
-      return (res.rows ?? []).map((r) => ({
+    return oraQuery<{
+      GAME_ID: number;
+      TITLE: string;
+      PLATFORM_ID: number | null;
+      PLATFORM_NAME: string | null;
+      PLATFORM_ABBREVIATION: string | null;
+      NOTE: string | null;
+      ADDED_AT: Date | string | null;
+      NOTE_UPDATED_AT: Date | string | null;
+      SORT_ORDER: number | null;
+      JOURNAL_ENABLED: number | null;
+    }, {
+      gameId: number;
+      title: string;
+      platformId: number | null;
+      platformName: string | null;
+      platformAbbreviation: string | null;
+      note: string | null;
+      addedAt: Date | null;
+      noteUpdatedAt: Date | null;
+      sortOrder: number | null;
+      journalEnabled: boolean;
+      hasJournalEntry: boolean;
+    }>(
+      `SELECT u.GAMEDB_GAME_ID AS GAME_ID,
+              g.TITLE,
+              u.PLATFORM_ID,
+              p.PLATFORM_NAME,
+              p.PLATFORM_ABBREVIATION,
+              u.NOTE,
+              u.ADDED_AT,
+              u.NOTE_UPDATED_AT,
+              u.SORT_ORDER,
+              jp.IS_ENABLED AS JOURNAL_ENABLED
+         FROM USER_NOW_PLAYING u
+         JOIN GAMEDB_GAMES g ON g.GAME_ID = u.GAMEDB_GAME_ID
+         LEFT JOIN GAMEDB_PLATFORMS p ON p.PLATFORM_ID = u.PLATFORM_ID
+         LEFT JOIN USER_GAME_JOURNAL_PREFS jp
+           ON jp.USER_ID = u.USER_ID
+          AND jp.GAMEDB_GAME_ID = u.GAMEDB_GAME_ID
+        WHERE u.USER_ID = :userId
+          AND u.GAMEDB_GAME_ID IS NOT NULL
+        ORDER BY u.SORT_ORDER NULLS LAST, u.ADDED_AT DESC, u.ENTRY_ID DESC`,
+      { userId },
+      (r) => ({
         gameId: Number(r.GAME_ID),
         title: r.TITLE,
         platformId: r.PLATFORM_ID == null ? null : Number(r.PLATFORM_ID),
@@ -605,10 +593,8 @@ export default class Member {
         sortOrder: r.SORT_ORDER == null ? null : Number(r.SORT_ORDER),
         journalEnabled: Number(r.JOURNAL_ENABLED ?? 0) === 1,
         hasJournalEntry: false,
-      }));
-    } finally {
-      await connection.close();
-    }
+      }),
+    );
   }
 
   static async getNowPlayingEntryMeta(
@@ -618,31 +604,25 @@ export default class Member {
     if (!Number.isInteger(gameId) || gameId <= 0) {
       throw new Error("Invalid GameDB id.");
     }
-    const connection = await getOraclePool().getConnection();
-    try {
-      const res = await connection.execute<{
-        ADDED_AT: Date | string | null;
-      }>(
-        `SELECT ADDED_AT
-           FROM USER_NOW_PLAYING
-          WHERE USER_ID = :userId
-            AND GAMEDB_GAME_ID = :gameId`,
-        { userId, gameId },
-        { outFormat: oracledb.OUT_FORMAT_OBJECT },
-      );
-      const row = res.rows?.[0];
-      if (!row) {
-        return null;
-      }
-      const addedAt = row.ADDED_AT instanceof Date
-        ? row.ADDED_AT
-        : row.ADDED_AT
-          ? new Date(row.ADDED_AT as any)
-          : null;
-      return { addedAt };
-    } finally {
-      await connection.close();
+    const rows = await oraQuery<{ ADDED_AT: Date | string | null }, { addedAt: Date | null }>(
+      `SELECT ADDED_AT
+         FROM USER_NOW_PLAYING
+        WHERE USER_ID = :userId
+          AND GAMEDB_GAME_ID = :gameId`,
+      { userId, gameId },
+      (row) => ({
+        addedAt: row.ADDED_AT instanceof Date
+          ? row.ADDED_AT
+          : row.ADDED_AT
+            ? new Date(row.ADDED_AT as any)
+            : null,
+      }),
+    );
+    const row = rows[0];
+    if (!row) {
+      return null;
     }
+    return row;
   }
 
   static async updateNowPlayingNote(
@@ -653,25 +633,19 @@ export default class Member {
     if (!Number.isInteger(gameId) || gameId <= 0) {
       throw new Error("Invalid GameDB id.");
     }
-    const connection = await getOraclePool().getConnection();
     const normalizedNote = note?.trim();
     const noteValue = normalizedNote ? normalizedNote : null;
     const noteUpdatedAt = noteValue ? new Date() : null;
 
-    try {
-      const res = await connection.execute(
-        `UPDATE USER_NOW_PLAYING
-            SET NOTE = :note,
-                NOTE_UPDATED_AT = :noteUpdatedAt
-          WHERE USER_ID = :userId
-            AND GAMEDB_GAME_ID = :gameId`,
-        { userId, gameId, note: noteValue, noteUpdatedAt },
-        { autoCommit: true },
-      );
-      return (res.rowsAffected ?? 0) > 0;
-    } finally {
-      await connection.close();
-    }
+    const res = await oraMutate(
+      `UPDATE USER_NOW_PLAYING
+          SET NOTE = :note,
+              NOTE_UPDATED_AT = :noteUpdatedAt
+        WHERE USER_ID = :userId
+          AND GAMEDB_GAME_ID = :gameId`,
+      { userId, gameId, note: noteValue, noteUpdatedAt },
+    );
+    return (res.rowsAffected ?? 0) > 0;
   }
 
   static async addNowPlaying(
@@ -686,59 +660,59 @@ export default class Member {
     if (!Number.isInteger(platformId) || platformId <= 0) {
       throw new Error("Invalid platform selection.");
     }
-    const connection = await getOraclePool().getConnection();
     const normalizedNote = note?.trim();
     const noteValue = normalizedNote ? normalizedNote : null;
     const noteUpdatedAt = noteValue ? new Date() : null;
 
     try {
-      const countRes = await connection.execute<{ CNT: number }>(
-        `SELECT COUNT(*) AS CNT FROM USER_NOW_PLAYING WHERE USER_ID = :userId`,
-        { userId },
-        { outFormat: oracledb.OUT_FORMAT_OBJECT },
-      );
-      const count = Number((countRes.rows ?? [])[0]?.CNT ?? 0);
-      if (count >= MAX_NOW_PLAYING) {
-        throw new Error(`You can only track up to ${MAX_NOW_PLAYING} Now Playing titles.`);
-      }
+      await oraWithConnection(async (conn) => {
+        const countRes = await conn.execute<{ CNT: number }>(
+          `SELECT COUNT(*) AS CNT FROM USER_NOW_PLAYING WHERE USER_ID = :userId`,
+          { userId },
+          { outFormat: oracledb.OUT_FORMAT_OBJECT },
+        );
+        const count = Number((countRes.rows ?? [])[0]?.CNT ?? 0);
+        if (count >= MAX_NOW_PLAYING) {
+          throw new Error(`You can only track up to ${MAX_NOW_PLAYING} Now Playing titles.`);
+        }
 
-      const sortRes = await connection.execute<{ MAX_SORT: number | null }>(
-        `SELECT MAX(SORT_ORDER) AS MAX_SORT
-           FROM USER_NOW_PLAYING
-          WHERE USER_ID = :userId`,
-        { userId },
-        { outFormat: oracledb.OUT_FORMAT_OBJECT },
-      );
-      const maxSort = Number((sortRes.rows ?? [])[0]?.MAX_SORT ?? 0);
-      const nextSort = maxSort + 1;
+        const sortRes = await conn.execute<{ MAX_SORT: number | null }>(
+          `SELECT MAX(SORT_ORDER) AS MAX_SORT
+             FROM USER_NOW_PLAYING
+            WHERE USER_ID = :userId`,
+          { userId },
+          { outFormat: oracledb.OUT_FORMAT_OBJECT },
+        );
+        const maxSort = Number((sortRes.rows ?? [])[0]?.MAX_SORT ?? 0);
+        const nextSort = maxSort + 1;
 
-      await connection.execute(
-        `INSERT INTO USER_NOW_PLAYING
-          (USER_ID, GAMEDB_GAME_ID, PLATFORM_ID, NOTE, NOTE_UPDATED_AT, SORT_ORDER)
-         VALUES (:userId, :gameId, :platformId, :note, :noteUpdatedAt, :sortOrder)`,
-        { userId, gameId, platformId, note: noteValue, noteUpdatedAt, sortOrder: nextSort },
-        { autoCommit: false },
-      );
-      await connection.execute(
-        `MERGE INTO USER_GAME_JOURNAL_PREFS p
-         USING (SELECT :userId AS USER_ID, :gameId AS GAMEDB_GAME_ID FROM dual) src
-            ON (p.USER_ID = src.USER_ID AND p.GAMEDB_GAME_ID = src.GAMEDB_GAME_ID)
-         WHEN MATCHED THEN
-           UPDATE SET IS_ENABLED = 1, UPDATED_AT = SYSTIMESTAMP
-         WHEN NOT MATCHED THEN
-           INSERT (USER_ID, GAMEDB_GAME_ID, IS_ENABLED, DEFAULT_IS_PUBLIC)
-           VALUES (:userId, :gameId, 1, 0)`,
-        { userId, gameId },
-        { autoCommit: true },
-      );
+        await oraMutate(
+          `INSERT INTO USER_NOW_PLAYING
+            (USER_ID, GAMEDB_GAME_ID, PLATFORM_ID, NOTE, NOTE_UPDATED_AT, SORT_ORDER)
+           VALUES (:userId, :gameId, :platformId, :note, :noteUpdatedAt, :sortOrder)`,
+          { userId, gameId, platformId, note: noteValue, noteUpdatedAt, sortOrder: nextSort },
+          conn,
+        );
+        await oraMutate(
+          `MERGE INTO USER_GAME_JOURNAL_PREFS p
+           USING (SELECT :userId AS USER_ID, :gameId AS GAMEDB_GAME_ID FROM dual) src
+              ON (p.USER_ID = src.USER_ID AND p.GAMEDB_GAME_ID = src.GAMEDB_GAME_ID)
+           WHEN MATCHED THEN
+             UPDATE SET IS_ENABLED = 1, UPDATED_AT = SYSTIMESTAMP
+           WHEN NOT MATCHED THEN
+             INSERT (USER_ID, GAMEDB_GAME_ID, IS_ENABLED, DEFAULT_IS_PUBLIC)
+             VALUES (:userId, :gameId, 1, 0)`,
+          { userId, gameId },
+          conn,
+        );
+        await conn.commit();
+      });
     } catch (err: any) {
       const msg = err?.message ?? String(err);
       if (/unique/i.test(msg) || /UQ_USER_NOW_PLAYING/i.test(msg)) {
         throw new Error("That title is already in your Now Playing list.");
       }
       throw err;
-    } finally {
-      await connection.close();
     }
   }
 
@@ -746,32 +720,27 @@ export default class Member {
     userId: string,
     gameId: number,
   ): Promise<IGameJournalPreference | null> {
-    const connection = await getOraclePool().getConnection();
-    try {
-      const res = await connection.execute<{
-        USER_ID: string;
-        GAMEDB_GAME_ID: number;
-        IS_ENABLED: number;
-      }>(
-        `SELECT USER_ID,
-                GAMEDB_GAME_ID,
-                IS_ENABLED
-           FROM USER_GAME_JOURNAL_PREFS
-          WHERE USER_ID = :userId
-            AND GAMEDB_GAME_ID = :gameId`,
-        { userId, gameId },
-        { outFormat: oracledb.OUT_FORMAT_OBJECT },
-      );
-      const row = (res.rows ?? [])[0];
-      if (!row) return null;
-      return {
+    const rows = await oraQuery<{
+      USER_ID: string;
+      GAMEDB_GAME_ID: number;
+      IS_ENABLED: number;
+    }, IGameJournalPreference>(
+      `SELECT USER_ID,
+              GAMEDB_GAME_ID,
+              IS_ENABLED
+         FROM USER_GAME_JOURNAL_PREFS
+        WHERE USER_ID = :userId
+          AND GAMEDB_GAME_ID = :gameId`,
+      { userId, gameId },
+      (row) => ({
         userId: row.USER_ID,
         gameId: Number(row.GAMEDB_GAME_ID),
         isEnabled: Number(row.IS_ENABLED) === 1,
-      };
-    } finally {
-      await connection.close();
-    }
+      }),
+    );
+    const row = rows[0];
+    if (!row) return null;
+    return row;
   }
 
   static async upsertGameJournalPreference(
@@ -779,29 +748,23 @@ export default class Member {
     gameId: number,
     isEnabled: boolean,
   ): Promise<void> {
-    const connection = await getOraclePool().getConnection();
-    try {
-      await connection.execute(
-        `MERGE INTO USER_GAME_JOURNAL_PREFS p
-         USING (SELECT :userId AS USER_ID, :gameId AS GAMEDB_GAME_ID FROM dual) src
-            ON (p.USER_ID = src.USER_ID AND p.GAMEDB_GAME_ID = src.GAMEDB_GAME_ID)
-          WHEN MATCHED THEN
-            UPDATE SET IS_ENABLED = :isEnabled,
-                       DEFAULT_IS_PUBLIC = 1,
-                       UPDATED_AT = SYSTIMESTAMP
-          WHEN NOT MATCHED THEN
-            INSERT (USER_ID, GAMEDB_GAME_ID, IS_ENABLED, DEFAULT_IS_PUBLIC)
-            VALUES (:userId, :gameId, :isEnabled, 1)`,
-        {
-          userId,
-          gameId,
-          isEnabled: isEnabled ? 1 : 0,
-        },
-        { autoCommit: true },
-      );
-    } finally {
-      await connection.close();
-    }
+    await oraMutate(
+      `MERGE INTO USER_GAME_JOURNAL_PREFS p
+       USING (SELECT :userId AS USER_ID, :gameId AS GAMEDB_GAME_ID FROM dual) src
+          ON (p.USER_ID = src.USER_ID AND p.GAMEDB_GAME_ID = src.GAMEDB_GAME_ID)
+        WHEN MATCHED THEN
+          UPDATE SET IS_ENABLED = :isEnabled,
+                     DEFAULT_IS_PUBLIC = 1,
+                     UPDATED_AT = SYSTIMESTAMP
+        WHEN NOT MATCHED THEN
+          INSERT (USER_ID, GAMEDB_GAME_ID, IS_ENABLED, DEFAULT_IS_PUBLIC)
+          VALUES (:userId, :gameId, :isEnabled, 1)`,
+      {
+        userId,
+        gameId,
+        isEnabled: isEnabled ? 1 : 0,
+      },
+    );
   }
 
   static async getJournalStatusForGames(
@@ -817,7 +780,6 @@ export default class Member {
     if (!gameIds.length) return [];
     const uniqueIds = [...new Set(gameIds.filter((id) => Number.isInteger(id) && id > 0))];
     if (!uniqueIds.length) return [];
-    const connection = await getOraclePool().getConnection();
     const inlineTable = uniqueIds
       .map((_, idx) => `SELECT :id${idx} AS GAME_ID FROM DUAL`)
       .join(" UNION ALL ");
@@ -825,24 +787,21 @@ export default class Member {
     uniqueIds.forEach((id, idx) => {
       binds[`id${idx}`] = id;
     });
-    try {
-      const res = await connection.execute<{
-        GAME_ID: number;
-        JOURNAL_COUNT: number;
-        LAST_JOURNAL_AT: Date | string | null;
-      }>(
-        `SELECT gids.GAME_ID,
-                COUNT(*) AS JOURNAL_COUNT,
-                MAX(je.CREATED_AT) AS LAST_JOURNAL_AT
-           FROM (${inlineTable}) gids
-           LEFT JOIN USER_GAME_JOURNAL_ENTRIES je
-             ON je.USER_ID = :userId
-            AND je.GAMEDB_GAME_ID = gids.GAME_ID
-          GROUP BY gids.GAME_ID`,
-        binds,
-        { outFormat: oracledb.OUT_FORMAT_OBJECT },
-      );
-      return (res.rows ?? []).map((row) => ({
+    return oraQuery<{
+      GAME_ID: number;
+      JOURNAL_COUNT: number;
+      LAST_JOURNAL_AT: Date | string | null;
+    }, { gameId: number; journalCount: number; lastJournalAt: Date | null }>(
+      `SELECT gids.GAME_ID,
+              COUNT(*) AS JOURNAL_COUNT,
+              MAX(je.CREATED_AT) AS LAST_JOURNAL_AT
+         FROM (${inlineTable}) gids
+         LEFT JOIN USER_GAME_JOURNAL_ENTRIES je
+           ON je.USER_ID = :userId
+          AND je.GAMEDB_GAME_ID = gids.GAME_ID
+        GROUP BY gids.GAME_ID`,
+      binds,
+      (row) => ({
         gameId: Number(row.GAME_ID),
         journalCount: Number(row.JOURNAL_COUNT),
         lastJournalAt:
@@ -851,10 +810,8 @@ export default class Member {
             : row.LAST_JOURNAL_AT
               ? new Date(row.LAST_JOURNAL_AT as any)
               : null,
-      }));
-    } finally {
-      await connection.close();
-    }
+      }),
+    );
   }
 
   static async getGameJournalEntries(
@@ -862,33 +819,19 @@ export default class Member {
     gameId: number,
     params?: { limit?: number; offset?: number },
   ): Promise<IGameJournalEntry[]> {
-    const connection = await getOraclePool().getConnection();
     const safeLimit = Math.min(Math.max(params?.limit ?? 5, 1), 25);
     const safeOffset = Math.max(params?.offset ?? 0, 0);
-    try {
-      const res = await connection.execute<{
-        ENTRY_ID: number;
-        USER_ID: string;
-        GAMEDB_GAME_ID: number;
-        ENTRY_TITLE: string | null;
-        ENTRY_BODY: string;
-        CREATED_AT: Date | string;
-        UPDATED_AT: Date | string;
-        ENTRY_NUMBER: number;
-      }>(
-        `WITH all_entries AS (
-           SELECT ENTRY_ID,
-                  USER_ID,
-                  GAMEDB_GAME_ID,
-                  ENTRY_TITLE,
-                  ENTRY_BODY,
-                  CREATED_AT,
-                  UPDATED_AT,
-                  ROW_NUMBER() OVER (ORDER BY CREATED_AT ASC, ENTRY_ID ASC) AS ENTRY_NUMBER
-             FROM USER_GAME_JOURNAL_ENTRIES
-            WHERE USER_ID = :userId
-              AND GAMEDB_GAME_ID = :gameId
-         )
+    return oraQuery<{
+      ENTRY_ID: number;
+      USER_ID: string;
+      GAMEDB_GAME_ID: number;
+      ENTRY_TITLE: string | null;
+      ENTRY_BODY: string;
+      CREATED_AT: Date | string;
+      UPDATED_AT: Date | string;
+      ENTRY_NUMBER: number;
+    }, IGameJournalEntry>(
+      `WITH all_entries AS (
          SELECT ENTRY_ID,
                 USER_ID,
                 GAMEDB_GAME_ID,
@@ -896,14 +839,24 @@ export default class Member {
                 ENTRY_BODY,
                 CREATED_AT,
                 UPDATED_AT,
-                ENTRY_NUMBER
-           FROM all_entries
-          ORDER BY CREATED_AT DESC, ENTRY_ID DESC
-          OFFSET :offset ROWS FETCH NEXT :limit ROWS ONLY`,
-        { userId, gameId, offset: safeOffset, limit: safeLimit },
-        { outFormat: oracledb.OUT_FORMAT_OBJECT },
-      );
-      return (res.rows ?? []).map((row) => ({
+                ROW_NUMBER() OVER (ORDER BY CREATED_AT ASC, ENTRY_ID ASC) AS ENTRY_NUMBER
+           FROM USER_GAME_JOURNAL_ENTRIES
+          WHERE USER_ID = :userId
+            AND GAMEDB_GAME_ID = :gameId
+       )
+       SELECT ENTRY_ID,
+              USER_ID,
+              GAMEDB_GAME_ID,
+              ENTRY_TITLE,
+              ENTRY_BODY,
+              CREATED_AT,
+              UPDATED_AT,
+              ENTRY_NUMBER
+         FROM all_entries
+        ORDER BY CREATED_AT DESC, ENTRY_ID DESC
+        OFFSET :offset ROWS FETCH NEXT :limit ROWS ONLY`,
+      { userId, gameId, offset: safeOffset, limit: safeLimit },
+      (row) => ({
         entryId: Number(row.ENTRY_ID),
         entryNumber: Number(row.ENTRY_NUMBER),
         userId: row.USER_ID,
@@ -912,27 +865,20 @@ export default class Member {
         body: row.ENTRY_BODY,
         createdAt: row.CREATED_AT instanceof Date ? row.CREATED_AT : new Date(row.CREATED_AT),
         updatedAt: row.UPDATED_AT instanceof Date ? row.UPDATED_AT : new Date(row.UPDATED_AT),
-      }));
-    } finally {
-      await connection.close();
-    }
+      }),
+    );
   }
 
   static async countGameJournalEntries(userId: string, gameId: number): Promise<number> {
-    const connection = await getOraclePool().getConnection();
-    try {
-      const res = await connection.execute<{ CNT: number }>(
-        `SELECT COUNT(*) AS CNT
-           FROM USER_GAME_JOURNAL_ENTRIES
-          WHERE USER_ID = :userId
-            AND GAMEDB_GAME_ID = :gameId`,
-        { userId, gameId },
-        { outFormat: oracledb.OUT_FORMAT_OBJECT },
-      );
-      return Number((res.rows ?? [])[0]?.CNT ?? 0);
-    } finally {
-      await connection.close();
-    }
+    const rows = await oraQuery<{ CNT: number }, number>(
+      `SELECT COUNT(*) AS CNT
+         FROM USER_GAME_JOURNAL_ENTRIES
+        WHERE USER_ID = :userId
+          AND GAMEDB_GAME_ID = :gameId`,
+      { userId, gameId },
+      (row) => Number(row.CNT),
+    );
+    return rows[0] ?? 0;
   }
 
   static async addGameJournalEntry(params: {
@@ -941,71 +887,59 @@ export default class Member {
     title?: string | null;
     body: string;
   }): Promise<void> {
-    const connection = await getOraclePool().getConnection();
     const titleValue = params.title?.trim() ? params.title.trim() : null;
     const bodyValue = params.body.trim();
     if (!bodyValue) {
       throw new Error("Journal body cannot be empty.");
     }
-    try {
-      await connection.execute(
-        `INSERT INTO USER_GAME_JOURNAL_ENTRIES
-          (USER_ID, GAMEDB_GAME_ID, ENTRY_TITLE, ENTRY_BODY, IS_PUBLIC)
-         VALUES
-          (:userId, :gameId, :title, :body, 1)`,
-        {
-          userId: params.userId,
-          gameId: params.gameId,
-          title: titleValue,
-          body: bodyValue,
-        },
-        { autoCommit: true },
-      );
-    } finally {
-      await connection.close();
-    }
+    await oraMutate(
+      `INSERT INTO USER_GAME_JOURNAL_ENTRIES
+        (USER_ID, GAMEDB_GAME_ID, ENTRY_TITLE, ENTRY_BODY, IS_PUBLIC)
+       VALUES
+        (:userId, :gameId, :title, :body, 1)`,
+      {
+        userId: params.userId,
+        gameId: params.gameId,
+        title: titleValue,
+        body: bodyValue,
+      },
+    );
   }
 
   static async getGameJournalEntryForUser(
     userId: string,
     entryId: number,
   ): Promise<IGameJournalEntry | null> {
-    const connection = await getOraclePool().getConnection();
-    try {
-      const res = await connection.execute<{
-        ENTRY_ID: number;
-        USER_ID: string;
-        GAMEDB_GAME_ID: number;
-        ENTRY_TITLE: string | null;
-        ENTRY_BODY: string;
-        CREATED_AT: Date | string;
-        UPDATED_AT: Date | string;
-        ENTRY_NUMBER: number;
-      }>(
-        `SELECT e.ENTRY_ID,
-                e.USER_ID,
-                e.GAMEDB_GAME_ID,
-                e.ENTRY_TITLE,
-                e.ENTRY_BODY,
-                e.CREATED_AT,
-                e.UPDATED_AT,
-                (SELECT COUNT(*) + 1
-                   FROM USER_GAME_JOURNAL_ENTRIES e2
-                  WHERE e2.USER_ID = e.USER_ID
-                    AND e2.GAMEDB_GAME_ID = e.GAMEDB_GAME_ID
-                    AND (e2.CREATED_AT < e.CREATED_AT
-                         OR (e2.CREATED_AT = e.CREATED_AT AND e2.ENTRY_ID < e.ENTRY_ID))
-                ) AS ENTRY_NUMBER
-           FROM USER_GAME_JOURNAL_ENTRIES e
-          WHERE e.USER_ID = :userId
-            AND e.ENTRY_ID = :entryId
-          FETCH FIRST 1 ROWS ONLY`,
-        { userId, entryId },
-        { outFormat: oracledb.OUT_FORMAT_OBJECT },
-      );
-      const row = (res.rows ?? [])[0];
-      if (!row) return null;
-      return {
+    const rows = await oraQuery<{
+      ENTRY_ID: number;
+      USER_ID: string;
+      GAMEDB_GAME_ID: number;
+      ENTRY_TITLE: string | null;
+      ENTRY_BODY: string;
+      CREATED_AT: Date | string;
+      UPDATED_AT: Date | string;
+      ENTRY_NUMBER: number;
+    }, IGameJournalEntry>(
+      `SELECT e.ENTRY_ID,
+              e.USER_ID,
+              e.GAMEDB_GAME_ID,
+              e.ENTRY_TITLE,
+              e.ENTRY_BODY,
+              e.CREATED_AT,
+              e.UPDATED_AT,
+              (SELECT COUNT(*) + 1
+                 FROM USER_GAME_JOURNAL_ENTRIES e2
+                WHERE e2.USER_ID = e.USER_ID
+                  AND e2.GAMEDB_GAME_ID = e.GAMEDB_GAME_ID
+                  AND (e2.CREATED_AT < e.CREATED_AT
+                       OR (e2.CREATED_AT = e.CREATED_AT AND e2.ENTRY_ID < e.ENTRY_ID))
+              ) AS ENTRY_NUMBER
+         FROM USER_GAME_JOURNAL_ENTRIES e
+        WHERE e.USER_ID = :userId
+          AND e.ENTRY_ID = :entryId
+        FETCH FIRST 1 ROWS ONLY`,
+      { userId, entryId },
+      (row) => ({
         entryId: Number(row.ENTRY_ID),
         entryNumber: Number(row.ENTRY_NUMBER),
         userId: row.USER_ID,
@@ -1014,10 +948,11 @@ export default class Member {
         body: row.ENTRY_BODY,
         createdAt: row.CREATED_AT instanceof Date ? row.CREATED_AT : new Date(row.CREATED_AT),
         updatedAt: row.UPDATED_AT instanceof Date ? row.UPDATED_AT : new Date(row.UPDATED_AT),
-      };
-    } finally {
-      await connection.close();
-    }
+      }),
+    );
+    const row = rows[0];
+    if (!row) return null;
+    return row;
   }
 
   static async updateGameJournalEntry(params: {
@@ -1026,7 +961,6 @@ export default class Member {
     title?: string | null;
     body?: string;
   }): Promise<boolean> {
-    const connection = await getOraclePool().getConnection();
     const fields: string[] = [];
     const binds: Record<string, unknown> = {
       userId: params.userId,
@@ -1048,35 +982,24 @@ export default class Member {
     if (!fields.length) return false;
     fields.push("UPDATED_AT = SYSTIMESTAMP");
 
-    try {
-      const res = await connection.execute(
-        `UPDATE USER_GAME_JOURNAL_ENTRIES
-            SET ${fields.join(", ")}
-          WHERE USER_ID = :userId
-            AND ENTRY_ID = :entryId`,
-        binds as Record<string, any>,
-        { autoCommit: true },
-      );
-      return Number(res.rowsAffected ?? 0) > 0;
-    } finally {
-      await connection.close();
-    }
+    const res = await oraMutate(
+      `UPDATE USER_GAME_JOURNAL_ENTRIES
+          SET ${fields.join(", ")}
+        WHERE USER_ID = :userId
+          AND ENTRY_ID = :entryId`,
+      binds as Record<string, any>,
+    );
+    return Number(res.rowsAffected ?? 0) > 0;
   }
 
   static async deleteGameJournalEntry(userId: string, entryId: number): Promise<boolean> {
-    const connection = await getOraclePool().getConnection();
-    try {
-      const res = await connection.execute(
-        `DELETE FROM USER_GAME_JOURNAL_ENTRIES
-          WHERE USER_ID = :userId
-            AND ENTRY_ID = :entryId`,
-        { userId, entryId },
-        { autoCommit: true },
-      );
-      return Number(res.rowsAffected ?? 0) > 0;
-    } finally {
-      await connection.close();
-    }
+    const res = await oraMutate(
+      `DELETE FROM USER_GAME_JOURNAL_ENTRIES
+        WHERE USER_ID = :userId
+          AND ENTRY_ID = :entryId`,
+      { userId, entryId },
+    );
+    return Number(res.rowsAffected ?? 0) > 0;
   }
 
   static async updateNowPlayingSort(
@@ -1084,44 +1007,35 @@ export default class Member {
     orderedGameIds: number[],
   ): Promise<boolean> {
     if (!orderedGameIds.length) return false;
-    const connection = await getOraclePool().getConnection();
-    try {
+    return oraWithConnection(async (conn) => {
       const binds = orderedGameIds.map((gameId, idx) => ({
         userId,
         gameId,
         sortOrder: idx + 1,
       }));
-      const result = await connection.executeMany(
+      const result = await conn.executeMany(
         `UPDATE USER_NOW_PLAYING
             SET SORT_ORDER = :sortOrder
           WHERE USER_ID = :userId
             AND GAMEDB_GAME_ID = :gameId`,
         binds,
-        { autoCommit: true },
       );
+      await conn.commit();
       return (result.rowsAffected ?? 0) > 0;
-    } finally {
-      await connection.close();
-    }
+    });
   }
 
   static async removeNowPlaying(userId: string, gameId: number): Promise<boolean> {
     if (!Number.isInteger(gameId) || gameId <= 0) {
       throw new Error("Invalid GameDB id.");
     }
-    const connection = await getOraclePool().getConnection();
 
-    try {
-      const res = await connection.execute(
-        `DELETE FROM USER_NOW_PLAYING WHERE USER_ID = :userId AND GAMEDB_GAME_ID = :gameId`,
-        { userId, gameId },
-        { autoCommit: true },
-      );
-      const rows = (res as any).rowsAffected ?? 0;
-      return rows > 0;
-    } finally {
-      await connection.close();
-    }
+    const res = await oraMutate(
+      `DELETE FROM USER_NOW_PLAYING WHERE USER_ID = :userId AND GAMEDB_GAME_ID = :gameId`,
+      { userId, gameId },
+    );
+    const rows = (res as any).rowsAffected ?? 0;
+    return rows > 0;
   }
 
   static async addCompletion(params: {
@@ -1161,12 +1075,11 @@ export default class Member {
         throw new Error("Playtime must have at most 2 decimal places.");
       }
     }
-    const connection = await getOraclePool().getConnection();
     const normalizedNote = note?.trim();
     const noteValue = normalizedNote ? normalizedNote : null;
 
-    try {
-      const result = await connection.execute<{ COMPLETION_ID: number }>(
+    return oraTransaction(async (conn) => {
+      const result = await oraMutate(
         `
         INSERT INTO USER_GAME_COMPLETIONS (
           USER_ID, GAMEDB_GAME_ID, COMPLETION_TYPE, PLATFORM_ID,
@@ -1186,81 +1099,69 @@ export default class Member {
           note: noteValue,
           completionId: { dir: oracledb.BIND_OUT, type: oracledb.NUMBER },
         },
-        { autoCommit: false },
+        conn,
       );
 
       const id = (result.outBinds as any)?.completionId?.[0];
       if (!id) throw new Error("Failed to save completion (no id returned).");
 
-      const verify = await connection.execute<{ CNT: number }>(
-        `SELECT COUNT(*) AS CNT FROM USER_GAME_COMPLETIONS WHERE COMPLETION_ID = :id AND USER_ID = :userId`,
+      const verify = await oraQuery<{ CNT: number }, number>(
+        `SELECT COUNT(*) AS CNT FROM USER_GAME_COMPLETIONS
+          WHERE COMPLETION_ID = :id AND USER_ID = :userId`,
         { id, userId },
-        { outFormat: oracledb.OUT_FORMAT_OBJECT },
+        (row) => Number(row.CNT),
+        conn,
       );
-      const exists = Number((verify.rows ?? [])[0]?.CNT ?? 0) > 0;
+      const exists = (verify[0] ?? 0) > 0;
       if (!exists) {
         throw new Error("Completion insert verification failed (row not found after insert).");
       }
 
-      await connection.commit();
       return Number(id);
-    } catch (err) {
-      await connection.rollback().catch(() => {});
-      throw err;
-    } finally {
-      await connection.close();
-    }
+    });
   }
 
   static async getCompletion(completionId: number): Promise<ICompletionRecord | null> {
-    const connection = await getOraclePool().getConnection();
-    try {
-      const res = await connection.execute<{
-        COMPLETION_ID: number;
-        GAME_ID: number;
-        TITLE: string;
-        COMPLETION_TYPE: string;
-        PLATFORM_ID: number | null;
-        COMPLETED_AT: Date | null;
-        FINAL_PLAYTIME_HRS: number | null;
-        CREATED_AT: Date;
-        THREAD_ID: string | null;
-        NOTE: string | null;
-      }>(
-        `
-        SELECT c.COMPLETION_ID,
-               g.GAME_ID,
-               g.TITLE,
-               c.COMPLETION_TYPE,
-               c.PLATFORM_ID,
-               c.COMPLETED_AT,
-               c.FINAL_PLAYTIME_HRS,
-               c.CREATED_AT,
-               c.NOTE,
-               COALESCE(
-                  (
-                    SELECT MIN(tgl.THREAD_ID)
-                    FROM THREAD_GAME_LINKS tgl
-                    WHERE tgl.GAMEDB_GAME_ID = c.GAMEDB_GAME_ID
-                  ),
-                  (
-                    SELECT MIN(th.THREAD_ID)
-                    FROM THREADS th
-                    WHERE th.GAMEDB_GAME_ID = c.GAMEDB_GAME_ID
-                  )
-                ) AS THREAD_ID
-          FROM USER_GAME_COMPLETIONS c
-          JOIN GAMEDB_GAMES g ON g.GAME_ID = c.GAMEDB_GAME_ID
-         WHERE c.COMPLETION_ID = :completionId
-        `,
-        { completionId },
-        { outFormat: oracledb.OUT_FORMAT_OBJECT },
-      );
-
-      const row = (res.rows ?? [])[0];
-      if (!row) return null;
-
-      return {
+    const rows = await oraQuery<{
+      COMPLETION_ID: number;
+      GAME_ID: number;
+      TITLE: string;
+      COMPLETION_TYPE: string;
+      PLATFORM_ID: number | null;
+      COMPLETED_AT: Date | null;
+      FINAL_PLAYTIME_HRS: number | null;
+      CREATED_AT: Date;
+      THREAD_ID: string | null;
+      NOTE: string | null;
+    }, ICompletionRecord>(
+      `
+      SELECT c.COMPLETION_ID,
+             g.GAME_ID,
+             g.TITLE,
+             c.COMPLETION_TYPE,
+             c.PLATFORM_ID,
+             c.COMPLETED_AT,
+             c.FINAL_PLAYTIME_HRS,
+             c.CREATED_AT,
+             c.NOTE,
+             COALESCE(
+                (
+                  SELECT MIN(tgl.THREAD_ID)
+                  FROM THREAD_GAME_LINKS tgl
+                  WHERE tgl.GAMEDB_GAME_ID = c.GAMEDB_GAME_ID
+                ),
+                (
+                  SELECT MIN(th.THREAD_ID)
+                  FROM THREADS th
+                  WHERE th.GAMEDB_GAME_ID = c.GAMEDB_GAME_ID
+                )
+              ) AS THREAD_ID
+        FROM USER_GAME_COMPLETIONS c
+        JOIN GAMEDB_GAMES g ON g.GAME_ID = c.GAMEDB_GAME_ID
+       WHERE c.COMPLETION_ID = :completionId
+      `,
+      { completionId },
+      (row) => ({
         completionId: Number(row.COMPLETION_ID),
         gameId: Number(row.GAME_ID),
         title: String(row.TITLE),
@@ -1282,65 +1183,57 @@ export default class Member {
               : new Date(),
         threadId: row.THREAD_ID ?? null,
         note: row.NOTE ?? null,
-      };
-    } finally {
-      await connection.close();
-    }
+      }),
+    );
+
+    return rows[0] ?? null;
   }
 
   static async getCompletionForUser(
     userId: string,
     completionId: number,
   ): Promise<ICompletionRecord | null> {
-    const connection = await getOraclePool().getConnection();
-    try {
-      const res = await connection.execute<{
-        COMPLETION_ID: number;
-        GAME_ID: number;
-        TITLE: string;
-        COMPLETION_TYPE: string;
-        PLATFORM_ID: number | null;
-        COMPLETED_AT: Date | null;
-        FINAL_PLAYTIME_HRS: number | null;
-        CREATED_AT: Date;
-        THREAD_ID: string | null;
-        NOTE: string | null;
-      }>(
-        `
-        SELECT c.COMPLETION_ID,
-               g.GAME_ID,
-               g.TITLE,
-               c.COMPLETION_TYPE,
-               c.PLATFORM_ID,
-               c.COMPLETED_AT,
-               c.FINAL_PLAYTIME_HRS,
-               c.CREATED_AT,
-               c.NOTE,
-               COALESCE(
-                  (
-                    SELECT MIN(tgl.THREAD_ID)
-                    FROM THREAD_GAME_LINKS tgl
-                    WHERE tgl.GAMEDB_GAME_ID = c.GAMEDB_GAME_ID
-                  ),
-                  (
-                    SELECT MIN(th.THREAD_ID)
-                    FROM THREADS th
-                    WHERE th.GAMEDB_GAME_ID = c.GAMEDB_GAME_ID
-                  )
-                ) AS THREAD_ID
-          FROM USER_GAME_COMPLETIONS c
-          JOIN GAMEDB_GAMES g ON g.GAME_ID = c.GAMEDB_GAME_ID
-         WHERE c.USER_ID = :userId
-           AND c.COMPLETION_ID = :completionId
-        `,
-        { userId, completionId },
-        { outFormat: oracledb.OUT_FORMAT_OBJECT },
-      );
-
-      const row = (res.rows ?? [])[0];
-      if (!row) return null;
-
-      return {
+    const rows = await oraQuery<{
+      COMPLETION_ID: number;
+      GAME_ID: number;
+      TITLE: string;
+      COMPLETION_TYPE: string;
+      PLATFORM_ID: number | null;
+      COMPLETED_AT: Date | null;
+      FINAL_PLAYTIME_HRS: number | null;
+      CREATED_AT: Date;
+      THREAD_ID: string | null;
+      NOTE: string | null;
+    }, ICompletionRecord>(
+      `
+      SELECT c.COMPLETION_ID,
+             g.GAME_ID,
+             g.TITLE,
+             c.COMPLETION_TYPE,
+             c.PLATFORM_ID,
+             c.COMPLETED_AT,
+             c.FINAL_PLAYTIME_HRS,
+             c.CREATED_AT,
+             c.NOTE,
+             COALESCE(
+                (
+                  SELECT MIN(tgl.THREAD_ID)
+                  FROM THREAD_GAME_LINKS tgl
+                  WHERE tgl.GAMEDB_GAME_ID = c.GAMEDB_GAME_ID
+                ),
+                (
+                  SELECT MIN(th.THREAD_ID)
+                  FROM THREADS th
+                  WHERE th.GAMEDB_GAME_ID = c.GAMEDB_GAME_ID
+                )
+              ) AS THREAD_ID
+        FROM USER_GAME_COMPLETIONS c
+        JOIN GAMEDB_GAMES g ON g.GAME_ID = c.GAMEDB_GAME_ID
+       WHERE c.USER_ID = :userId
+         AND c.COMPLETION_ID = :completionId
+      `,
+      { userId, completionId },
+      (row) => ({
         completionId: Number(row.COMPLETION_ID),
         gameId: Number(row.GAME_ID),
         title: String(row.TITLE),
@@ -1362,10 +1255,10 @@ export default class Member {
               : new Date(),
         threadId: row.THREAD_ID ?? null,
         note: row.NOTE ?? null,
-      };
-    } finally {
-      await connection.close();
-    }
+      }),
+    );
+
+    return rows[0] ?? null;
   }
 
   static async getCompletionByGameId(
@@ -1375,56 +1268,48 @@ export default class Member {
     if (!Number.isInteger(gameId) || gameId <= 0) {
       throw new Error("Invalid GameDB id.");
     }
-    const connection = await getOraclePool().getConnection();
-    try {
-      const res = await connection.execute<{
-        COMPLETION_ID: number;
-        GAME_ID: number;
-        TITLE: string;
-        COMPLETION_TYPE: string;
-        PLATFORM_ID: number | null;
-        COMPLETED_AT: Date | null;
-        FINAL_PLAYTIME_HRS: number | null;
-        CREATED_AT: Date;
-        THREAD_ID: string | null;
-        NOTE: string | null;
-      }>(
-        `
-        SELECT c.COMPLETION_ID,
-               g.GAME_ID,
-               g.TITLE,
-               c.COMPLETION_TYPE,
-               c.PLATFORM_ID,
-               c.COMPLETED_AT,
-               c.FINAL_PLAYTIME_HRS,
-               c.CREATED_AT,
-               c.NOTE,
-               COALESCE(
-                  (
-                    SELECT MIN(tgl.THREAD_ID)
-                    FROM THREAD_GAME_LINKS tgl
-                    WHERE tgl.GAMEDB_GAME_ID = c.GAMEDB_GAME_ID
-                  ),
-                  (
-                    SELECT MIN(th.THREAD_ID)
-                    FROM THREADS th
-                    WHERE th.GAMEDB_GAME_ID = c.GAMEDB_GAME_ID
-                  )
-                ) AS THREAD_ID
-          FROM USER_GAME_COMPLETIONS c
-          JOIN GAMEDB_GAMES g ON g.GAME_ID = c.GAMEDB_GAME_ID
-         WHERE c.USER_ID = :userId
-           AND c.GAMEDB_GAME_ID = :gameId
-         FETCH FIRST 1 ROWS ONLY
-        `,
-        { userId, gameId },
-        { outFormat: oracledb.OUT_FORMAT_OBJECT },
-      );
-
-      const row = (res.rows ?? [])[0];
-      if (!row) return null;
-
-      return {
+    const rows = await oraQuery<{
+      COMPLETION_ID: number;
+      GAME_ID: number;
+      TITLE: string;
+      COMPLETION_TYPE: string;
+      PLATFORM_ID: number | null;
+      COMPLETED_AT: Date | null;
+      FINAL_PLAYTIME_HRS: number | null;
+      CREATED_AT: Date;
+      THREAD_ID: string | null;
+      NOTE: string | null;
+    }, ICompletionRecord>(
+      `
+      SELECT c.COMPLETION_ID,
+             g.GAME_ID,
+             g.TITLE,
+             c.COMPLETION_TYPE,
+             c.PLATFORM_ID,
+             c.COMPLETED_AT,
+             c.FINAL_PLAYTIME_HRS,
+             c.CREATED_AT,
+             c.NOTE,
+             COALESCE(
+                (
+                  SELECT MIN(tgl.THREAD_ID)
+                  FROM THREAD_GAME_LINKS tgl
+                  WHERE tgl.GAMEDB_GAME_ID = c.GAMEDB_GAME_ID
+                ),
+                (
+                  SELECT MIN(th.THREAD_ID)
+                  FROM THREADS th
+                  WHERE th.GAMEDB_GAME_ID = c.GAMEDB_GAME_ID
+                )
+              ) AS THREAD_ID
+        FROM USER_GAME_COMPLETIONS c
+        JOIN GAMEDB_GAMES g ON g.GAME_ID = c.GAMEDB_GAME_ID
+       WHERE c.USER_ID = :userId
+         AND c.GAMEDB_GAME_ID = :gameId
+       FETCH FIRST 1 ROWS ONLY
+      `,
+      { userId, gameId },
+      (row) => ({
         completionId: Number(row.COMPLETION_ID),
         gameId: Number(row.GAME_ID),
         title: String(row.TITLE),
@@ -1446,10 +1331,10 @@ export default class Member {
               : new Date(),
         threadId: row.THREAD_ID ?? null,
         note: row.NOTE ?? null,
-      };
-    } finally {
-      await connection.close();
-    }
+      }),
+    );
+
+    return rows[0] ?? null;
   }
 
   static async getCompletions(params: {
@@ -1460,7 +1345,6 @@ export default class Member {
     title?: string;
   }): Promise<ICompletionRecord[]> {
     const { userId, limit, offset = 0, year = null, title } = params;
-    const connection = await getOraclePool().getConnection();
     const safeLimit = Math.min(Math.max(limit, 1), 1000);
     const safeOffset = Math.max(offset, 0);
 
@@ -1477,52 +1361,48 @@ export default class Member {
       binds.title = title;
     }
 
-    try {
-      const res = await connection.execute<{
-        COMPLETION_ID: number;
-        GAME_ID: number;
-        TITLE: string;
-        COMPLETION_TYPE: string;
-        PLATFORM_ID: number | null;
-        COMPLETED_AT: Date | null;
-        FINAL_PLAYTIME_HRS: number | null;
-        CREATED_AT: Date;
-        THREAD_ID: string | null;
-        NOTE: string | null;
-      }>(
-        `
-        SELECT c.COMPLETION_ID,
-               g.GAME_ID,
-               g.TITLE,
-               c.COMPLETION_TYPE,
-               c.PLATFORM_ID,
-               c.COMPLETED_AT,
-               c.FINAL_PLAYTIME_HRS,
-               c.CREATED_AT,
-               c.NOTE,
-               COALESCE(
-                  (
-                    SELECT MIN(tgl.THREAD_ID)
-                    FROM THREAD_GAME_LINKS tgl
-                    WHERE tgl.GAMEDB_GAME_ID = c.GAMEDB_GAME_ID
-                  ),
-                  (
-                    SELECT MIN(th.THREAD_ID)
-                    FROM THREADS th
-                    WHERE th.GAMEDB_GAME_ID = c.GAMEDB_GAME_ID
-                  )
-                ) AS THREAD_ID
-          FROM USER_GAME_COMPLETIONS c
-          JOIN GAMEDB_GAMES g ON g.GAME_ID = c.GAMEDB_GAME_ID
-         WHERE ${clauses.join(" AND ")}
-         ORDER BY c.COMPLETED_AT DESC NULLS LAST, c.COMPLETION_ID DESC
-         OFFSET :offset ROWS FETCH NEXT :limit ROWS ONLY
-        `,
-        binds,
-        { outFormat: oracledb.OUT_FORMAT_OBJECT },
-      );
-
-      return (res.rows ?? []).map((row) => ({
+    return oraQuery<{
+      COMPLETION_ID: number;
+      GAME_ID: number;
+      TITLE: string;
+      COMPLETION_TYPE: string;
+      PLATFORM_ID: number | null;
+      COMPLETED_AT: Date | null;
+      FINAL_PLAYTIME_HRS: number | null;
+      CREATED_AT: Date;
+      THREAD_ID: string | null;
+      NOTE: string | null;
+    }, ICompletionRecord>(
+      `
+      SELECT c.COMPLETION_ID,
+             g.GAME_ID,
+             g.TITLE,
+             c.COMPLETION_TYPE,
+             c.PLATFORM_ID,
+             c.COMPLETED_AT,
+             c.FINAL_PLAYTIME_HRS,
+             c.CREATED_AT,
+             c.NOTE,
+             COALESCE(
+                (
+                  SELECT MIN(tgl.THREAD_ID)
+                  FROM THREAD_GAME_LINKS tgl
+                  WHERE tgl.GAMEDB_GAME_ID = c.GAMEDB_GAME_ID
+                ),
+                (
+                  SELECT MIN(th.THREAD_ID)
+                  FROM THREADS th
+                  WHERE th.GAMEDB_GAME_ID = c.GAMEDB_GAME_ID
+                )
+              ) AS THREAD_ID
+        FROM USER_GAME_COMPLETIONS c
+        JOIN GAMEDB_GAMES g ON g.GAME_ID = c.GAMEDB_GAME_ID
+       WHERE ${clauses.join(" AND ")}
+       ORDER BY c.COMPLETED_AT DESC NULLS LAST, c.COMPLETION_ID DESC
+       OFFSET :offset ROWS FETCH NEXT :limit ROWS ONLY
+      `,
+      binds,
+      (row) => ({
         completionId: Number(row.COMPLETION_ID),
         gameId: Number(row.GAME_ID),
         title: String(row.TITLE),
@@ -1544,59 +1424,52 @@ export default class Member {
               : new Date(),
         threadId: row.THREAD_ID ?? null,
         note: row.NOTE ?? null,
-      }));
-    } finally {
-      await connection.close();
-    }
+      }),
+    );
   }
 
   static async getAllCompletions(userId: string): Promise<ICompletionRecord[]> {
-    const connection = await getOraclePool().getConnection();
-    try {
-      const res = await connection.execute<{
-        COMPLETION_ID: number;
-        GAME_ID: number;
-        TITLE: string;
-        COMPLETION_TYPE: string;
-        PLATFORM_ID: number | null;
-        COMPLETED_AT: Date | null;
-        FINAL_PLAYTIME_HRS: number | null;
-        CREATED_AT: Date;
-        THREAD_ID: string | null;
-        NOTE: string | null;
-      }>(
-        `
-        SELECT c.COMPLETION_ID,
-               g.GAME_ID,
-               g.TITLE,
-               c.COMPLETION_TYPE,
-               c.PLATFORM_ID,
-               c.COMPLETED_AT,
-               c.FINAL_PLAYTIME_HRS,
-               c.CREATED_AT,
-               c.NOTE,
-               COALESCE(
-                  (
-                    SELECT MIN(tgl.THREAD_ID)
-                    FROM THREAD_GAME_LINKS tgl
-                    WHERE tgl.GAMEDB_GAME_ID = c.GAMEDB_GAME_ID
-                  ),
-                  (
-                    SELECT MIN(th.THREAD_ID)
-                    FROM THREADS th
-                    WHERE th.GAMEDB_GAME_ID = c.GAMEDB_GAME_ID
-                  )
-                ) AS THREAD_ID
-          FROM USER_GAME_COMPLETIONS c
-          JOIN GAMEDB_GAMES g ON g.GAME_ID = c.GAMEDB_GAME_ID
-         WHERE c.USER_ID = :userId
-         ORDER BY c.COMPLETED_AT DESC NULLS LAST, c.CREATED_AT DESC, c.COMPLETION_ID DESC
-        `,
-        { userId },
-        { outFormat: oracledb.OUT_FORMAT_OBJECT },
-      );
-
-      return (res.rows ?? []).map((row) => ({
+    return oraQuery<{
+      COMPLETION_ID: number;
+      GAME_ID: number;
+      TITLE: string;
+      COMPLETION_TYPE: string;
+      PLATFORM_ID: number | null;
+      COMPLETED_AT: Date | null;
+      FINAL_PLAYTIME_HRS: number | null;
+      CREATED_AT: Date;
+      THREAD_ID: string | null;
+      NOTE: string | null;
+    }, ICompletionRecord>(
+      `
+      SELECT c.COMPLETION_ID,
+             g.GAME_ID,
+             g.TITLE,
+             c.COMPLETION_TYPE,
+             c.PLATFORM_ID,
+             c.COMPLETED_AT,
+             c.FINAL_PLAYTIME_HRS,
+             c.CREATED_AT,
+             c.NOTE,
+             COALESCE(
+                (
+                  SELECT MIN(tgl.THREAD_ID)
+                  FROM THREAD_GAME_LINKS tgl
+                  WHERE tgl.GAMEDB_GAME_ID = c.GAMEDB_GAME_ID
+                ),
+                (
+                  SELECT MIN(th.THREAD_ID)
+                  FROM THREADS th
+                  WHERE th.GAMEDB_GAME_ID = c.GAMEDB_GAME_ID
+                )
+              ) AS THREAD_ID
+        FROM USER_GAME_COMPLETIONS c
+        JOIN GAMEDB_GAMES g ON g.GAME_ID = c.GAMEDB_GAME_ID
+       WHERE c.USER_ID = :userId
+       ORDER BY c.COMPLETED_AT DESC NULLS LAST, c.CREATED_AT DESC, c.COMPLETION_ID DESC
+      `,
+      { userId },
+      (row) => ({
         completionId: Number(row.COMPLETION_ID),
         gameId: Number(row.GAME_ID),
         title: String(row.TITLE),
@@ -1618,10 +1491,8 @@ export default class Member {
               : new Date(),
         threadId: row.THREAD_ID ?? null,
         note: row.NOTE ?? null,
-      }));
-    } finally {
-      await connection.close();
-    }
+      }),
+    );
   }
 
   static async countCompletions(
@@ -1629,7 +1500,6 @@ export default class Member {
     year?: number | "unknown" | null,
     title?: string,
   ): Promise<number> {
-    const connection = await getOraclePool().getConnection();
     const clauses: string[] = ["c.USER_ID = :userId"];
     const binds: Record<string, any> = { userId };
     if (year === "unknown") {
@@ -1643,21 +1513,17 @@ export default class Member {
       binds.title = title;
     }
 
-    try {
-      const res = await connection.execute<{ CNT: number }>(
-        `
-        SELECT COUNT(*) AS CNT
-          FROM USER_GAME_COMPLETIONS c
-          JOIN GAMEDB_GAMES g ON g.GAME_ID = c.GAMEDB_GAME_ID
-         WHERE ${clauses.join(" AND ")}
-        `,
-        binds,
-        { outFormat: oracledb.OUT_FORMAT_OBJECT },
-      );
-      return Number((res.rows ?? [])[0]?.CNT ?? 0);
-    } finally {
-      await connection.close();
-    }
+    const rows = await oraQuery<{ CNT: number }, number>(
+      `
+      SELECT COUNT(*) AS CNT
+        FROM USER_GAME_COMPLETIONS c
+        JOIN GAMEDB_GAMES g ON g.GAME_ID = c.GAMEDB_GAME_ID
+       WHERE ${clauses.join(" AND ")}
+      `,
+      binds,
+      (row) => Number(row.CNT),
+    );
+    return rows[0] ?? 0;
   }
 
   static async updateCompletion(
@@ -1687,7 +1553,7 @@ export default class Member {
       binds.completedAt = updates.completedAt;
     }
     if (updates.platformId !== undefined) {
-      if (updates.platformId != null && 
+      if (updates.platformId != null &&
         (!Number.isInteger(updates.platformId) || updates.platformId <= 0)) {
         throw new Error("Invalid platform selection.");
       }
@@ -1706,79 +1572,62 @@ export default class Member {
 
     if (!fields.length) return false;
 
-    const connection = await getOraclePool().getConnection();
-    try {
-      const res = await connection.execute(
-        `
-        UPDATE USER_GAME_COMPLETIONS
-           SET ${fields.join(", ")}
-         WHERE COMPLETION_ID = :completionId
-           AND USER_ID = :userId
-        `,
-        binds,
-        { autoCommit: true },
-      );
-      const rows = (res as any).rowsAffected ?? 0;
-      return rows > 0;
-    } finally {
-      await connection.close();
-    }
+    const res = await oraMutate(
+      `
+      UPDATE USER_GAME_COMPLETIONS
+         SET ${fields.join(", ")}
+       WHERE COMPLETION_ID = :completionId
+         AND USER_ID = :userId
+      `,
+      binds,
+    );
+    const rows = (res as any).rowsAffected ?? 0;
+    return rows > 0;
   }
 
   static async deleteCompletion(userId: string, completionId: number): Promise<boolean> {
     if (!Number.isInteger(completionId) || completionId <= 0) {
       throw new Error("Invalid completion id.");
     }
-    const connection = await getOraclePool().getConnection();
-    try {
-      const res = await connection.execute(
-        `
-        DELETE FROM USER_GAME_COMPLETIONS
-         WHERE COMPLETION_ID = :completionId
-           AND USER_ID = :userId
-        `,
-        { completionId, userId },
-        { autoCommit: true },
-      );
-      const rows = (res as any).rowsAffected ?? 0;
-      return rows > 0;
-    } finally {
-      await connection.close();
-    }
+    const res = await oraMutate(
+      `
+      DELETE FROM USER_GAME_COMPLETIONS
+       WHERE COMPLETION_ID = :completionId
+         AND USER_ID = :userId
+      `,
+      { completionId, userId },
+    );
+    const rows = (res as any).rowsAffected ?? 0;
+    return rows > 0;
   }
 
   static async getRecentNickHistory(
     userId: string,
     limit: number = 5,
   ): Promise<IMemberNickHistory[]> {
-    const connection = await getOraclePool().getConnection();
     const safeLimit = Math.min(Math.max(limit, 1), 20);
     try {
-      const result = await connection.execute<{
+      return await oraQuery<{
         OLD_NICK: string | null;
         NEW_NICK: string | null;
         CHANGED_AT: Date;
-      }>(
+      }, IMemberNickHistory>(
         `SELECT OLD_NICK, NEW_NICK, CHANGED_AT
            FROM RPG_CLUB_USER_NICK_HISTORY
           WHERE USER_ID = :userId
           ORDER BY CHANGED_AT DESC
           FETCH FIRST :limit ROWS ONLY`,
         { userId, limit: safeLimit },
-        { outFormat: oracledb.OUT_FORMAT_OBJECT },
+        (row) => ({
+          oldNick: row.OLD_NICK ?? null,
+          newNick: row.NEW_NICK ?? null,
+          changedAt: row.CHANGED_AT,
+        }),
       );
-
-      return (result.rows ?? []).map((row) => ({
-        oldNick: row.OLD_NICK ?? null,
-        newNick: row.NEW_NICK ?? null,
-        changedAt: row.CHANGED_AT,
-      }));
     } catch (err: any) {
       const msg = err?.message ?? String(err);
       console.error(`[Member] Failed to load nick history for ${userId}: ${msg}`);
       return [];
-    } finally {
-      await connection.close();
     }
   }
 
@@ -1791,7 +1640,6 @@ export default class Member {
     globalName: string | null;
     count: number;
   }[]> {
-    const connection = await getOraclePool().getConnection();
     const safeLimit = Math.min(Math.max(limit, 1), 100);
     const clauses: string[] = ["u.SERVER_LEFT_AT IS NULL"];
     const binds: Record<string, any> = { limit: safeLimit };
@@ -1800,41 +1648,33 @@ export default class Member {
       binds.title = title;
     }
 
-    try {
-      const res = await connection.execute<{
-        USER_ID: string;
-        USERNAME: string | null;
-        GLOBAL_NAME: string | null;
-        CNT: number;
-      }>(
-        `
-        SELECT c.USER_ID, u.USERNAME, u.GLOBAL_NAME, COUNT(*) AS CNT
-          FROM USER_GAME_COMPLETIONS c
-          JOIN RPG_CLUB_USERS u ON u.USER_ID = c.USER_ID
-          JOIN GAMEDB_GAMES g ON g.GAME_ID = c.GAMEDB_GAME_ID
-         WHERE ${clauses.join(" AND ")}
-         GROUP BY c.USER_ID, u.USERNAME, u.GLOBAL_NAME
-         ORDER BY CNT DESC
-         FETCH FIRST :limit ROWS ONLY
-        `,
-        binds,
-        { outFormat: oracledb.OUT_FORMAT_OBJECT },
-      );
-
-      return (res.rows ?? []).map((row) => ({
+    return oraQuery<{
+      USER_ID: string;
+      USERNAME: string | null;
+      GLOBAL_NAME: string | null;
+      CNT: number;
+    }, { userId: string; username: string | null; globalName: string | null; count: number }>(
+      `
+      SELECT c.USER_ID, u.USERNAME, u.GLOBAL_NAME, COUNT(*) AS CNT
+        FROM USER_GAME_COMPLETIONS c
+        JOIN RPG_CLUB_USERS u ON u.USER_ID = c.USER_ID
+        JOIN GAMEDB_GAMES g ON g.GAME_ID = c.GAMEDB_GAME_ID
+       WHERE ${clauses.join(" AND ")}
+       GROUP BY c.USER_ID, u.USERNAME, u.GLOBAL_NAME
+       ORDER BY CNT DESC
+       FETCH FIRST :limit ROWS ONLY
+      `,
+      binds,
+      (row) => ({
         userId: row.USER_ID,
         username: row.USERNAME ?? null,
         globalName: row.GLOBAL_NAME ?? null,
         count: Number(row.CNT),
-      }));
-    } finally {
-      await connection.close();
-    }
+      }),
+    );
   }
 
   static async search(filters: IMemberSearchFilters): Promise<IMemberSearchResult[]> {
-    const connection = await getOraclePool().getConnection();
-
     const safeLimit = Math.min(Math.max(filters.limit ?? 50, 1), 100);
     const clauses: string[] = [];
     const params: Record<string, any> = { limit: safeLimit };
@@ -1893,55 +1733,48 @@ export default class Member {
 
     const where = clauses.length ? clauses.join(" AND ") : "1=1";
 
-    try {
-      const result = await connection.execute<{
-        USER_ID: string;
-        USERNAME: string | null;
-        GLOBAL_NAME: string | null;
-        IS_BOT: number;
-        COMPLETIONATOR_URL: string | null;
-        STEAM_URL: string | null;
-        PSN_USERNAME: string | null;
-        XBL_USERNAME: string | null;
-        NSW_FRIEND_CODE: string | null;
-        ROLE_ADMIN: number;
-        ROLE_MODERATOR: number;
-        ROLE_REGULAR: number;
-        ROLE_MEMBER: number;
-        ROLE_NEWCOMER: number;
-        SERVER_LEFT_AT: Date | null;
-        SERVER_JOINED_AT: Date | null;
-        LAST_SEEN_AT: Date | null;
-      }>(
-        `SELECT USER_ID,
-                USERNAME,
-                GLOBAL_NAME,
-                IS_BOT,
-                COMPLETIONATOR_URL,
-                STEAM_URL,
-                PSN_USERNAME,
-                XBL_USERNAME,
-                NSW_FRIEND_CODE,
-                ROLE_ADMIN,
-                ROLE_MODERATOR,
-                ROLE_REGULAR,
-                ROLE_MEMBER,
-                ROLE_NEWCOMER,
-                SERVER_LEFT_AT,
-                SERVER_JOINED_AT,
-                LAST_SEEN_AT
-           FROM RPG_CLUB_USERS
-          WHERE ${where}
-          ORDER BY COALESCE(UPPER(GLOBAL_NAME), UPPER(USERNAME), USER_ID)
-          FETCH FIRST :limit ROWS ONLY`,
-        params,
-        {
-          outFormat: oracledb.OUT_FORMAT_OBJECT,
-        },
-      );
-
-      const rows = result.rows ?? [];
-      return rows.map<IMemberSearchResult>((row) => ({
+    return oraQuery<{
+      USER_ID: string;
+      USERNAME: string | null;
+      GLOBAL_NAME: string | null;
+      IS_BOT: number;
+      COMPLETIONATOR_URL: string | null;
+      STEAM_URL: string | null;
+      PSN_USERNAME: string | null;
+      XBL_USERNAME: string | null;
+      NSW_FRIEND_CODE: string | null;
+      ROLE_ADMIN: number;
+      ROLE_MODERATOR: number;
+      ROLE_REGULAR: number;
+      ROLE_MEMBER: number;
+      ROLE_NEWCOMER: number;
+      SERVER_LEFT_AT: Date | null;
+      SERVER_JOINED_AT: Date | null;
+      LAST_SEEN_AT: Date | null;
+    }, IMemberSearchResult>(
+      `SELECT USER_ID,
+              USERNAME,
+              GLOBAL_NAME,
+              IS_BOT,
+              COMPLETIONATOR_URL,
+              STEAM_URL,
+              PSN_USERNAME,
+              XBL_USERNAME,
+              NSW_FRIEND_CODE,
+              ROLE_ADMIN,
+              ROLE_MODERATOR,
+              ROLE_REGULAR,
+              ROLE_MEMBER,
+              ROLE_NEWCOMER,
+              SERVER_LEFT_AT,
+              SERVER_JOINED_AT,
+              LAST_SEEN_AT
+         FROM RPG_CLUB_USERS
+        WHERE ${where}
+        ORDER BY COALESCE(UPPER(GLOBAL_NAME), UPPER(USERNAME), USER_ID)
+        FETCH FIRST :limit ROWS ONLY`,
+      params,
+      (row) => ({
         userId: row.USER_ID,
         username: row.USERNAME ?? null,
         globalName: row.GLOBAL_NAME ?? null,
@@ -1959,10 +1792,8 @@ export default class Member {
         serverLeftAt: row.SERVER_LEFT_AT ?? null,
         serverJoinedAt: row.SERVER_JOINED_AT ?? null,
         lastSeenAt: row.LAST_SEEN_AT ?? null,
-      }));
-    } finally {
-      await connection.close();
-    }
+      }),
+    );
   }
 
   static async setMessageCount(userId: string, count: number): Promise<void> {
@@ -1981,10 +1812,8 @@ export default class Member {
   }
 
   static async getByUserId(userId: string): Promise<IMemberRecord | null> {
-    const connection = await getOraclePool().getConnection();
-
-    try {
-      const result = await connection.execute<{
+    return oraWithConnection(async (conn) => {
+      const result = await conn.execute<{
         USER_ID: string;
         IS_BOT: number;
         USERNAME: string | null;
@@ -2068,9 +1897,7 @@ export default class Member {
         profileImage: row.PROFILE_IMAGE ?? null,
         profileImageAt: row.PROFILE_IMAGE_AT ?? null,
       };
-    } finally {
-      await connection.close();
-    }
+    });
   }
 
   static async updateNowPlayingPlatform(
@@ -2084,20 +1911,14 @@ export default class Member {
     if (!Number.isInteger(platformId) || platformId <= 0) {
       throw new Error("Invalid platform selection.");
     }
-    const connection = await getOraclePool().getConnection();
-    try {
-      const res = await connection.execute(
-        `UPDATE USER_NOW_PLAYING
-            SET PLATFORM_ID = :platformId
-          WHERE USER_ID = :userId
-            AND GAMEDB_GAME_ID = :gameId`,
-        { userId, gameId, platformId },
-        { autoCommit: true },
-      );
-      return (res.rowsAffected ?? 0) > 0;
-    } finally {
-      await connection.close();
-    }
+    const res = await oraMutate(
+      `UPDATE USER_NOW_PLAYING
+          SET PLATFORM_ID = :platformId
+        WHERE USER_ID = :userId
+          AND GAMEDB_GAME_ID = :gameId`,
+      { userId, gameId, platformId },
+    );
+    return (res.rowsAffected ?? 0) > 0;
   }
 
   static async getAvatarHistory(
@@ -2107,9 +1928,8 @@ export default class Member {
   ): Promise<IAvatarHistoryRecord[]> {
     const safeLimit = Math.min(Math.max(limit, 1), 50);
     const safeOffset = Math.max(offset, 0);
-    const connection = await getOraclePool().getConnection();
-    try {
-      const result = await connection.execute<{
+    return oraWithConnection(async (conn) => {
+      const result = await conn.execute<{
         EVENT_ID: number;
         USER_ID: string;
         AVATAR_HASH: string | null;
@@ -2144,9 +1964,7 @@ export default class Member {
             ? row.CHANGED_AT
             : new Date(row.CHANGED_AT as any),
       }));
-    } finally {
-      await connection.close();
-    }
+    });
   }
 
   static async getCompletionsForGame(
@@ -2156,53 +1974,48 @@ export default class Member {
     if (!Number.isInteger(gameId) || gameId <= 0) {
       throw new Error("Invalid GameDB id.");
     }
-    const connection = await getOraclePool().getConnection();
-    try {
-      const res = await connection.execute<{
-        COMPLETION_ID: number;
-        GAME_ID: number;
-        TITLE: string;
-        COMPLETION_TYPE: string;
-        PLATFORM_ID: number | null;
-        COMPLETED_AT: Date | null;
-        FINAL_PLAYTIME_HRS: number | null;
-        CREATED_AT: Date;
-        THREAD_ID: string | null;
-        NOTE: string | null;
-      }>(
-        `
-        SELECT c.COMPLETION_ID,
-               g.GAME_ID,
-               g.TITLE,
-               c.COMPLETION_TYPE,
-               c.PLATFORM_ID,
-               c.COMPLETED_AT,
-               c.FINAL_PLAYTIME_HRS,
-               c.CREATED_AT,
-               c.NOTE,
-               COALESCE(
-                  (
-                    SELECT MIN(tgl.THREAD_ID)
-                    FROM THREAD_GAME_LINKS tgl
-                    WHERE tgl.GAMEDB_GAME_ID = c.GAMEDB_GAME_ID
-                  ),
-                  (
-                    SELECT MIN(th.THREAD_ID)
-                    FROM THREADS th
-                    WHERE th.GAMEDB_GAME_ID = c.GAMEDB_GAME_ID
-                  )
-                ) AS THREAD_ID
-          FROM USER_GAME_COMPLETIONS c
-          JOIN GAMEDB_GAMES g ON g.GAME_ID = c.GAMEDB_GAME_ID
-         WHERE c.USER_ID = :userId
-           AND c.GAMEDB_GAME_ID = :gameId
-         ORDER BY c.COMPLETED_AT DESC NULLS LAST, c.COMPLETION_ID DESC
-        `,
-        { userId, gameId },
-        { outFormat: oracledb.OUT_FORMAT_OBJECT },
-      );
-
-      return (res.rows ?? []).map((row) => ({
+    return oraQuery<{
+      COMPLETION_ID: number;
+      GAME_ID: number;
+      TITLE: string;
+      COMPLETION_TYPE: string;
+      PLATFORM_ID: number | null;
+      COMPLETED_AT: Date | null;
+      FINAL_PLAYTIME_HRS: number | null;
+      CREATED_AT: Date;
+      THREAD_ID: string | null;
+      NOTE: string | null;
+    }, ICompletionRecord>(
+      `
+      SELECT c.COMPLETION_ID,
+             g.GAME_ID,
+             g.TITLE,
+             c.COMPLETION_TYPE,
+             c.PLATFORM_ID,
+             c.COMPLETED_AT,
+             c.FINAL_PLAYTIME_HRS,
+             c.CREATED_AT,
+             c.NOTE,
+             COALESCE(
+                (
+                  SELECT MIN(tgl.THREAD_ID)
+                  FROM THREAD_GAME_LINKS tgl
+                  WHERE tgl.GAMEDB_GAME_ID = c.GAMEDB_GAME_ID
+                ),
+                (
+                  SELECT MIN(th.THREAD_ID)
+                  FROM THREADS th
+                  WHERE th.GAMEDB_GAME_ID = c.GAMEDB_GAME_ID
+                )
+              ) AS THREAD_ID
+        FROM USER_GAME_COMPLETIONS c
+        JOIN GAMEDB_GAMES g ON g.GAME_ID = c.GAMEDB_GAME_ID
+       WHERE c.USER_ID = :userId
+         AND c.GAMEDB_GAME_ID = :gameId
+       ORDER BY c.COMPLETED_AT DESC NULLS LAST, c.COMPLETION_ID DESC
+      `,
+      { userId, gameId },
+      (row) => ({
         completionId: Number(row.COMPLETION_ID),
         gameId: Number(row.GAME_ID),
         title: String(row.TITLE),
@@ -2224,10 +2037,8 @@ export default class Member {
               : new Date(),
         threadId: row.THREAD_ID ?? null,
         note: row.NOTE ?? null,
-      }));
-    } finally {
-      await connection.close();
-    }
+      }),
+    );
   }
 
   static async getRecentCompletionForGame(
@@ -2244,58 +2055,50 @@ export default class Member {
     const startDate = new Date(ref.getTime() - windowMs);
     const endDate = new Date(ref.getTime() + windowMs);
 
-    const connection = await getOraclePool().getConnection();
-    try {
-      const res = await connection.execute<{
-        COMPLETION_ID: number;
-        GAME_ID: number;
-        TITLE: string;
-        COMPLETION_TYPE: string;
-        PLATFORM_ID: number | null;
-        COMPLETED_AT: Date | null;
-        FINAL_PLAYTIME_HRS: number | null;
-        CREATED_AT: Date;
-        THREAD_ID: string | null;
-        NOTE: string | null;
-      }>(
-        `
-        SELECT c.COMPLETION_ID,
-               g.GAME_ID,
-               g.TITLE,
-               c.COMPLETION_TYPE,
-               c.PLATFORM_ID,
-               c.COMPLETED_AT,
-               c.FINAL_PLAYTIME_HRS,
-               c.CREATED_AT,
-               c.NOTE,
-               COALESCE(
-                  (
-                    SELECT MIN(tgl.THREAD_ID)
-                    FROM THREAD_GAME_LINKS tgl
-                    WHERE tgl.GAMEDB_GAME_ID = c.GAMEDB_GAME_ID
-                  ),
-                  (
-                    SELECT MIN(th.THREAD_ID)
-                    FROM THREADS th
-                    WHERE th.GAMEDB_GAME_ID = c.GAMEDB_GAME_ID
-                  )
-                ) AS THREAD_ID
-          FROM USER_GAME_COMPLETIONS c
-          JOIN GAMEDB_GAMES g ON g.GAME_ID = c.GAMEDB_GAME_ID
-         WHERE c.USER_ID = :userId
-           AND c.GAMEDB_GAME_ID = :gameId
-           AND COALESCE(c.COMPLETED_AT, c.CREATED_AT) BETWEEN :startDate AND :endDate
-         ORDER BY COALESCE(c.COMPLETED_AT, c.CREATED_AT) DESC
-         FETCH FIRST 1 ROWS ONLY
-        `,
-        { userId, gameId, startDate, endDate },
-        { outFormat: oracledb.OUT_FORMAT_OBJECT },
-      );
-
-      const row = (res.rows ?? [])[0];
-      if (!row) return null;
-
-      return {
+    const rows = await oraQuery<{
+      COMPLETION_ID: number;
+      GAME_ID: number;
+      TITLE: string;
+      COMPLETION_TYPE: string;
+      PLATFORM_ID: number | null;
+      COMPLETED_AT: Date | null;
+      FINAL_PLAYTIME_HRS: number | null;
+      CREATED_AT: Date;
+      THREAD_ID: string | null;
+      NOTE: string | null;
+    }, ICompletionRecord>(
+      `
+      SELECT c.COMPLETION_ID,
+             g.GAME_ID,
+             g.TITLE,
+             c.COMPLETION_TYPE,
+             c.PLATFORM_ID,
+             c.COMPLETED_AT,
+             c.FINAL_PLAYTIME_HRS,
+             c.CREATED_AT,
+             c.NOTE,
+             COALESCE(
+                (
+                  SELECT MIN(tgl.THREAD_ID)
+                  FROM THREAD_GAME_LINKS tgl
+                  WHERE tgl.GAMEDB_GAME_ID = c.GAMEDB_GAME_ID
+                ),
+                (
+                  SELECT MIN(th.THREAD_ID)
+                  FROM THREADS th
+                  WHERE th.GAMEDB_GAME_ID = c.GAMEDB_GAME_ID
+                )
+              ) AS THREAD_ID
+        FROM USER_GAME_COMPLETIONS c
+        JOIN GAMEDB_GAMES g ON g.GAME_ID = c.GAMEDB_GAME_ID
+       WHERE c.USER_ID = :userId
+         AND c.GAMEDB_GAME_ID = :gameId
+         AND COALESCE(c.COMPLETED_AT, c.CREATED_AT) BETWEEN :startDate AND :endDate
+       ORDER BY COALESCE(c.COMPLETED_AT, c.CREATED_AT) DESC
+       FETCH FIRST 1 ROWS ONLY
+      `,
+      { userId, gameId, startDate, endDate },
+      (row) => ({
         completionId: Number(row.COMPLETION_ID),
         gameId: Number(row.GAME_ID),
         title: String(row.TITLE),
@@ -2317,87 +2120,75 @@ export default class Member {
               : new Date(),
         threadId: row.THREAD_ID ?? null,
         note: row.NOTE ?? null,
-      };
-    } finally {
-      await connection.close();
-    }
+      }),
+    );
+
+    return rows[0] ?? null;
   }
 
   static async getGiveawayDonorNotifySetting(userId: string): Promise<boolean> {
-    const connection = await getOraclePool().getConnection();
-    try {
-      const result = await connection.execute<{ DONOR_NOTIFY_ON_CLAIM: number | null }>(
-        `SELECT DONOR_NOTIFY_ON_CLAIM
-           FROM RPG_CLUB_USERS
-          WHERE USER_ID = :userId`,
-        { userId },
-        { outFormat: oracledb.OUT_FORMAT_OBJECT },
-      );
-      const row = result.rows?.[0];
-      return Boolean(row?.DONOR_NOTIFY_ON_CLAIM);
-    } finally {
-      await connection.close();
-    }
+    const rows = await oraQuery<{ DONOR_NOTIFY_ON_CLAIM: number | null }, boolean>(
+      `SELECT DONOR_NOTIFY_ON_CLAIM
+         FROM RPG_CLUB_USERS
+        WHERE USER_ID = :userId`,
+      { userId },
+      (row) => Boolean(row.DONOR_NOTIFY_ON_CLAIM),
+    );
+    return rows[0] ?? false;
   }
 
   static async setGiveawayDonorNotifySetting(
     userId: string,
     enabled: boolean,
   ): Promise<void> {
-    const connection = await getOraclePool().getConnection();
-    try {
-      const result = await connection.execute(
+    await oraWithConnection(async (conn) => {
+      const result = await oraMutate(
         `UPDATE RPG_CLUB_USERS
             SET DONOR_NOTIFY_ON_CLAIM = :enabled
           WHERE USER_ID = :userId`,
         { userId, enabled: enabled ? 1 : 0 },
-        { autoCommit: true },
+        conn,
       );
+      await conn.commit();
       if ((result.rowsAffected ?? 0) > 0) {
         return;
       }
 
       try {
-        await connection.execute(
+        await oraMutate(
           `INSERT INTO RPG_CLUB_USERS (USER_ID, DONOR_NOTIFY_ON_CLAIM)
            VALUES (:userId, :enabled)`,
           { userId, enabled: enabled ? 1 : 0 },
-          { autoCommit: true },
+          conn,
         );
+        await conn.commit();
       } catch (err: any) {
         const code = err?.code ?? err?.errorNum;
         if (code === "ORA-00001") {
-          await connection.execute(
+          await oraMutate(
             `UPDATE RPG_CLUB_USERS
                 SET DONOR_NOTIFY_ON_CLAIM = :enabled
               WHERE USER_ID = :userId`,
             { userId, enabled: enabled ? 1 : 0 },
-            { autoCommit: true },
+            conn,
           );
+          await conn.commit();
         } else {
           throw err;
         }
       }
-    } finally {
-      await connection.close();
-    }
+    });
   }
 
   static async countAvatarHistory(userId: string): Promise<number> {
-    const connection = await getOraclePool().getConnection();
-    try {
-      const result = await connection.execute<{ TOTAL: number | null }>(
-        `SELECT COUNT(*) AS TOTAL
-           FROM RPG_CLUB_USER_AVATAR_HISTORY
-          WHERE USER_ID = :userId`,
-        { userId },
-        { outFormat: oracledb.OUT_FORMAT_OBJECT },
-      );
-      const row = result.rows?.[0];
-      return Number(row?.TOTAL ?? 0);
-    } finally {
-      await connection.close();
-    }
+    const rows = await oraQuery<{ TOTAL: number | null }, number>(
+      `SELECT COUNT(*) AS TOTAL
+         FROM RPG_CLUB_USER_AVATAR_HISTORY
+        WHERE USER_ID = :userId`,
+      { userId },
+      (row) => Number(row.TOTAL ?? 0),
+    );
+    return rows[0] ?? 0;
   }
 
   static async insertAvatarHistoryRecord(
@@ -2406,89 +2197,68 @@ export default class Member {
     avatarUrl: string,
     avatarBlob: Buffer | null,
   ): Promise<void> {
-    const connection = await getOraclePool().getConnection();
-    try {
-      await connection.execute(
-        `INSERT INTO RPG_CLUB_USER_AVATAR_HISTORY (USER_ID, AVATAR_HASH, AVATAR_URL, AVATAR_BLOB)
-         VALUES (:userId, :avatarHash, :avatarUrl, :avatarBlob)`,
-        { userId, avatarHash, avatarUrl, avatarBlob },
-        { autoCommit: true },
-      );
-    } finally {
-      await connection.close();
-    }
+    await oraMutate(
+      `INSERT INTO RPG_CLUB_USER_AVATAR_HISTORY (USER_ID, AVATAR_HASH, AVATAR_URL, AVATAR_BLOB)
+       VALUES (:userId, :avatarHash, :avatarUrl, :avatarBlob)`,
+      { userId, avatarHash, avatarUrl, avatarBlob },
+    );
   }
 
   static async getAllMembersAvatarHistoryCounts(): Promise<IMemberAvatarHistoryCount[]> {
-    const connection = await getOraclePool().getConnection();
-    try {
-      const result = await connection.execute<{
-        USER_ID: string;
-        USERNAME: string | null;
-        GLOBAL_NAME: string | null;
-        TOTAL: number;
-      }>(
-        `SELECT h.USER_ID,
-                u.USERNAME,
-                u.GLOBAL_NAME,
-                COUNT(*) AS TOTAL
-           FROM RPG_CLUB_USER_AVATAR_HISTORY h
-           JOIN RPG_CLUB_USERS u ON u.USER_ID = h.USER_ID
-          WHERE NVL(u.IS_BOT, 0) = 0
-            AND u.SERVER_LEFT_AT IS NULL
-          GROUP BY h.USER_ID, u.USERNAME, u.GLOBAL_NAME
-          ORDER BY COALESCE(u.GLOBAL_NAME, u.USERNAME, h.USER_ID)`,
-        {},
-        { outFormat: oracledb.OUT_FORMAT_OBJECT },
-      );
-      return (result.rows ?? []).map((row) => ({
+    return oraQuery<{
+      USER_ID: string;
+      USERNAME: string | null;
+      GLOBAL_NAME: string | null;
+      TOTAL: number;
+    }, IMemberAvatarHistoryCount>(
+      `SELECT h.USER_ID,
+              u.USERNAME,
+              u.GLOBAL_NAME,
+              COUNT(*) AS TOTAL
+         FROM RPG_CLUB_USER_AVATAR_HISTORY h
+         JOIN RPG_CLUB_USERS u ON u.USER_ID = h.USER_ID
+        WHERE NVL(u.IS_BOT, 0) = 0
+          AND u.SERVER_LEFT_AT IS NULL
+        GROUP BY h.USER_ID, u.USERNAME, u.GLOBAL_NAME
+        ORDER BY COALESCE(u.GLOBAL_NAME, u.USERNAME, h.USER_ID)`,
+      {},
+      (row) => ({
         userId: String(row.USER_ID),
         username: row.USERNAME ?? null,
         globalName: row.GLOBAL_NAME ?? null,
         count: Number(row.TOTAL),
-      }));
-    } finally {
-      await connection.close();
-    }
+      }),
+    );
   }
 
   static async getMembersWithPlatforms(): Promise<IMemberPlatformRecord[]> {
-    const connection = await getOraclePool().getConnection();
-
-    try {
-      const result = await connection.execute<{
-        USER_ID: string;
-        USERNAME: string | null;
-        GLOBAL_NAME: string | null;
-        STEAM_URL: string | null;
-        PSN_USERNAME: string | null;
-        XBL_USERNAME: string | null;
-        NSW_FRIEND_CODE: string | null;
-        SERVER_LEFT_AT: Date | null;
-      }>(
-        `SELECT USER_ID,
-                USERNAME,
-                GLOBAL_NAME,
-                STEAM_URL,
-                PSN_USERNAME,
-                XBL_USERNAME,
-                NSW_FRIEND_CODE,
-                SERVER_LEFT_AT
-           FROM RPG_CLUB_USERS
-          WHERE (STEAM_URL IS NOT NULL
-                 OR PSN_USERNAME IS NOT NULL
-                 OR XBL_USERNAME IS NOT NULL
-                 OR NSW_FRIEND_CODE IS NOT NULL)
-            AND NVL(IS_BOT, 0) = 0
-            AND SERVER_LEFT_AT IS NULL`,
-        {},
-        {
-          outFormat: oracledb.OUT_FORMAT_OBJECT,
-        },
-      );
-
-      const rows = result.rows ?? [];
-      const members = rows.map<IMemberPlatformRecord>((row) => ({
+    const members = await oraQuery<{
+      USER_ID: string;
+      USERNAME: string | null;
+      GLOBAL_NAME: string | null;
+      STEAM_URL: string | null;
+      PSN_USERNAME: string | null;
+      XBL_USERNAME: string | null;
+      NSW_FRIEND_CODE: string | null;
+      SERVER_LEFT_AT: Date | null;
+    }, IMemberPlatformRecord>(
+      `SELECT USER_ID,
+              USERNAME,
+              GLOBAL_NAME,
+              STEAM_URL,
+              PSN_USERNAME,
+              XBL_USERNAME,
+              NSW_FRIEND_CODE,
+              SERVER_LEFT_AT
+         FROM RPG_CLUB_USERS
+        WHERE (STEAM_URL IS NOT NULL
+               OR PSN_USERNAME IS NOT NULL
+               OR XBL_USERNAME IS NOT NULL
+               OR NSW_FRIEND_CODE IS NOT NULL)
+          AND NVL(IS_BOT, 0) = 0
+          AND SERVER_LEFT_AT IS NULL`,
+      {},
+      (row) => ({
         userId: row.USER_ID,
         username: row.USERNAME ?? null,
         globalName: row.GLOBAL_NAME ?? null,
@@ -2496,16 +2266,14 @@ export default class Member {
         psnUsername: row.PSN_USERNAME ?? null,
         xblUsername: row.XBL_USERNAME ?? null,
         nswFriendCode: row.NSW_FRIEND_CODE ?? null,
-      }));
+      }),
+    );
 
-      return members.sort((a, b) => {
-        const aName = (a.globalName ?? a.username ?? a.userId).toLowerCase();
-        const bName = (b.globalName ?? b.username ?? b.userId).toLowerCase();
-        return aName.localeCompare(bName);
-      });
-    } finally {
-      await connection.close();
-    }
+    return members.sort((a, b) => {
+      const aName = (a.globalName ?? a.username ?? a.userId).toLowerCase();
+      const bName = (b.globalName ?? b.username ?? b.userId).toLowerCase();
+      return aName.localeCompare(bName);
+    });
   }
 
   static async upsert(
@@ -2513,12 +2281,10 @@ export default class Member {
     opts?: { connection?: Connection },
   ): Promise<void> {
     const externalConn = opts?.connection ?? null;
-    const connection = externalConn ?? (await getOraclePool().getConnection());
-
     const params = buildParams(record);
 
-    try {
-      const update = await connection.execute(
+    async function doUpsert(conn: oracledb.Connection): Promise<void> {
+      const update = await oraMutate(
         `UPDATE RPG_CLUB_USERS
             SET IS_BOT = :isBot,
                 USERNAME = :username,
@@ -2541,14 +2307,15 @@ export default class Member {
                 UPDATED_AT = SYSTIMESTAMP
           WHERE USER_ID = :userId`,
         params,
-        { autoCommit: true },
+        conn,
       );
+      await conn.commit();
 
       const rowsUpdated = update.rowsAffected ?? 0;
       if (rowsUpdated > 0) return;
 
       try {
-        await connection.execute(
+        await oraMutate(
           `INSERT INTO RPG_CLUB_USERS (
              USER_ID, IS_BOT, USERNAME, GLOBAL_NAME, AVATAR_BLOB,
              SERVER_JOINED_AT, SERVER_LEFT_AT, LAST_SEEN_AT, LAST_FETCHED_AT,
@@ -2565,12 +2332,13 @@ export default class Member {
              SYSTIMESTAMP, SYSTIMESTAMP
            )`,
           params,
-          { autoCommit: true },
+          conn,
         );
+        await conn.commit();
       } catch (insErr: any) {
         const code = insErr?.code ?? insErr?.errorNum;
         if (code === "ORA-00001") {
-          await connection.execute(
+          await oraMutate(
             `UPDATE RPG_CLUB_USERS
                 SET IS_BOT = :isBot,
                     USERNAME = :username,
@@ -2593,27 +2361,29 @@ export default class Member {
                     UPDATED_AT = SYSTIMESTAMP
               WHERE USER_ID = :userId`,
             params,
-            { autoCommit: true },
+            conn,
           );
+          await conn.commit();
         } else {
           throw insErr;
         }
       }
-    } finally {
-      if (!externalConn) {
-        await connection.close();
-      }
+    }
+
+    if (externalConn) {
+      await doUpsert(externalConn);
+    } else {
+      await oraWithConnection(doUpsert);
     }
   }
 
   static async markDepartedNotIn(userIds: string[]): Promise<number> {
     if (!userIds.length) return 0;
 
-    const connection = await getOraclePool().getConnection();
     const chunkSize = 999; // Oracle IN clause limit per statement (safe)
     let totalUpdated = 0;
 
-    try {
+    await oraWithConnection(async (conn) => {
       for (let i = 0; i < userIds.length; i += chunkSize) {
         const chunk = userIds.slice(i, i + chunkSize);
         const binds: Record<string, string> = {};
@@ -2631,86 +2401,73 @@ export default class Member {
              AND USER_ID NOT IN (${placeholders.join(", ")})
         `;
 
-        const result = await connection.execute(sql, binds, { autoCommit: true });
+        const result = await oraMutate(sql, binds, conn);
         totalUpdated += result.rowsAffected ?? 0;
+        await conn.commit();
       }
-    } finally {
-      await connection.close();
-    }
+    });
 
     return totalUpdated;
   }
 
   static async getGameJournalList(userId: string): Promise<IGameJournalListEntry[]> {
-    const connection = await getOraclePool().getConnection();
-    try {
-      const res = await connection.execute<{
-        GAME_ID: number;
-        TITLE: string;
-        TOTAL_ENTRIES: number;
-      }>(
-        `SELECT g.GAME_ID,
-                g.TITLE,
-                COUNT(e.ENTRY_ID) AS TOTAL_ENTRIES
-           FROM USER_GAME_JOURNAL_PREFS jp
-           JOIN GAMEDB_GAMES g ON g.GAME_ID = jp.GAMEDB_GAME_ID
-           LEFT JOIN USER_GAME_JOURNAL_ENTRIES e
-             ON e.USER_ID = jp.USER_ID
-            AND e.GAMEDB_GAME_ID = jp.GAMEDB_GAME_ID
-          WHERE jp.USER_ID = :userId
-            AND jp.IS_ENABLED = 1
-          GROUP BY g.GAME_ID, g.TITLE
-         HAVING COUNT(e.ENTRY_ID) > 0
-          ORDER BY g.TITLE`,
-        { userId },
-        { outFormat: oracledb.OUT_FORMAT_OBJECT },
-      );
-      return (res.rows ?? []).map((row) => ({
+    return oraQuery<{
+      GAME_ID: number;
+      TITLE: string;
+      TOTAL_ENTRIES: number;
+    }, IGameJournalListEntry>(
+      `SELECT g.GAME_ID,
+              g.TITLE,
+              COUNT(e.ENTRY_ID) AS TOTAL_ENTRIES
+         FROM USER_GAME_JOURNAL_PREFS jp
+         JOIN GAMEDB_GAMES g ON g.GAME_ID = jp.GAMEDB_GAME_ID
+         LEFT JOIN USER_GAME_JOURNAL_ENTRIES e
+           ON e.USER_ID = jp.USER_ID
+          AND e.GAMEDB_GAME_ID = jp.GAMEDB_GAME_ID
+        WHERE jp.USER_ID = :userId
+          AND jp.IS_ENABLED = 1
+        GROUP BY g.GAME_ID, g.TITLE
+       HAVING COUNT(e.ENTRY_ID) > 0
+        ORDER BY g.TITLE`,
+      { userId },
+      (row) => ({
         gameId: Number(row.GAME_ID),
         title: row.TITLE,
         totalEntries: Number(row.TOTAL_ENTRIES ?? 0),
-      }));
-    } finally {
-      await connection.close();
-    }
+      }),
+    );
   }
 
   static async getAllJournalUsers(): Promise<IJournalUserSummary[]> {
-    const connection = await getOraclePool().getConnection();
-    try {
-      const res = await connection.execute<{
-        USER_ID: string;
-        USERNAME: string | null;
-        GLOBAL_NAME: string | null;
-        GAME_COUNT: number;
-        ENTRY_COUNT: number;
-      }>(
-        `SELECT u.USER_ID,
-                u.USERNAME,
-                u.GLOBAL_NAME,
-                COUNT(DISTINCT je.GAMEDB_GAME_ID) AS GAME_COUNT,
-                COUNT(je.ENTRY_ID) AS ENTRY_COUNT
-           FROM USER_GAME_JOURNAL_ENTRIES je
-           JOIN RPG_CLUB_USERS u ON u.USER_ID = je.USER_ID
-          WHERE NVL(u.IS_BOT, 0) = 0
-            AND u.SERVER_LEFT_AT IS NULL
-          GROUP BY u.USER_ID, u.USERNAME, u.GLOBAL_NAME
-          ORDER BY COUNT(DISTINCT je.GAMEDB_GAME_ID) DESC,
-                   u.GLOBAL_NAME NULLS LAST,
-                   u.USERNAME NULLS LAST`,
-        {},
-        { outFormat: oracledb.OUT_FORMAT_OBJECT },
-      );
-      return (res.rows ?? []).map((row) => ({
+    return oraQuery<{
+      USER_ID: string;
+      USERNAME: string | null;
+      GLOBAL_NAME: string | null;
+      GAME_COUNT: number;
+      ENTRY_COUNT: number;
+    }, IJournalUserSummary>(
+      `SELECT u.USER_ID,
+              u.USERNAME,
+              u.GLOBAL_NAME,
+              COUNT(DISTINCT je.GAMEDB_GAME_ID) AS GAME_COUNT,
+              COUNT(je.ENTRY_ID) AS ENTRY_COUNT
+         FROM USER_GAME_JOURNAL_ENTRIES je
+         JOIN RPG_CLUB_USERS u ON u.USER_ID = je.USER_ID
+        WHERE NVL(u.IS_BOT, 0) = 0
+          AND u.SERVER_LEFT_AT IS NULL
+        GROUP BY u.USER_ID, u.USERNAME, u.GLOBAL_NAME
+        ORDER BY COUNT(DISTINCT je.GAMEDB_GAME_ID) DESC,
+                 u.GLOBAL_NAME NULLS LAST,
+                 u.USERNAME NULLS LAST`,
+      {},
+      (row) => ({
         userId: row.USER_ID,
         username: row.USERNAME ?? null,
         globalName: row.GLOBAL_NAME ?? null,
         gameCount: Number(row.GAME_COUNT ?? 0),
         entryCount: Number(row.ENTRY_COUNT ?? 0),
-      }));
-    } finally {
-      await connection.close();
-    }
+      }),
+    );
   }
 
   static async searchJournalEntries(params: {
@@ -2720,109 +2477,103 @@ export default class Member {
     limit: number;
     offset: number;
   }): Promise<{ rows: IJournalSearchResult[]; total: number }> {
-    const connection = await getOraclePool().getConnection();
     const safeLimit = Math.min(Math.max(params.limit, 1), 25);
     const safeOffset = Math.max(params.offset, 0);
     const searchTerm = params.query.trim();
-    try {
-      const res = await connection.execute<{
-        TOTAL_COUNT: number;
-        ENTRY_ID: number;
-        USER_ID: string;
-        GLOBAL_NAME: string | null;
-        USERNAME: string | null;
-        GAMEDB_GAME_ID: number;
-        GAME_TITLE: string;
-        ENTRY_TITLE: string | null;
-        ENTRY_BODY: string;
-        CREATED_AT: Date | string;
-      }>(
-        `SELECT COUNT(*) OVER () AS TOTAL_COUNT,
-                je.ENTRY_ID,
-                je.USER_ID,
-                u.GLOBAL_NAME,
-                u.USERNAME,
-                je.GAMEDB_GAME_ID,
-                g.TITLE         AS GAME_TITLE,
-                je.ENTRY_TITLE,
-                je.ENTRY_BODY,
-                je.CREATED_AT
-           FROM USER_GAME_JOURNAL_ENTRIES je
-           JOIN GAMEDB_GAMES g ON g.GAME_ID = je.GAMEDB_GAME_ID
-           JOIN RPG_CLUB_USERS u ON u.USER_ID = je.USER_ID
-          WHERE (
-                  UPPER(je.ENTRY_TITLE) LIKE '%' || UPPER(:searchTerm) || '%'
-               OR UPPER(je.ENTRY_BODY)  LIKE '%' || UPPER(:searchTerm) || '%'
-                )
-            AND (:userId IS NULL OR je.USER_ID = :userId)
-            AND (:gameId IS NULL OR je.GAMEDB_GAME_ID = :gameId)
-          ORDER BY je.CREATED_AT DESC, je.ENTRY_ID DESC
-          OFFSET :offset ROWS FETCH NEXT :limit ROWS ONLY`,
-        {
-          searchTerm,
-          userId: params.userId ?? null,
-          gameId: params.gameId ?? null,
-          offset: safeOffset,
-          limit: safeLimit,
-        },
-        { outFormat: oracledb.OUT_FORMAT_OBJECT },
-      );
-      const rows = res.rows ?? [];
-      const total = rows.length > 0 ? Number(rows[0].TOTAL_COUNT) : 0;
-      return {
-        total,
-        rows: rows.map((row) => ({
-          entryId: Number(row.ENTRY_ID),
-          userId: row.USER_ID,
-          globalName: row.GLOBAL_NAME ?? null,
-          username: row.USERNAME ?? null,
-          gameId: Number(row.GAMEDB_GAME_ID),
-          gameTitle: row.GAME_TITLE,
-          entryTitle: row.ENTRY_TITLE ?? null,
-          body: row.ENTRY_BODY,
-          createdAt: row.CREATED_AT instanceof Date
-            ? row.CREATED_AT
-            : new Date(row.CREATED_AT),
-        })),
-      };
-    } finally {
-      await connection.close();
-    }
+    const rows = await oraQuery<{
+      TOTAL_COUNT: number;
+      ENTRY_ID: number;
+      USER_ID: string;
+      GLOBAL_NAME: string | null;
+      USERNAME: string | null;
+      GAMEDB_GAME_ID: number;
+      GAME_TITLE: string;
+      ENTRY_TITLE: string | null;
+      ENTRY_BODY: string;
+      CREATED_AT: Date | string;
+    }, IJournalSearchResult & { totalCount: number }>(
+      `SELECT COUNT(*) OVER () AS TOTAL_COUNT,
+              je.ENTRY_ID,
+              je.USER_ID,
+              u.GLOBAL_NAME,
+              u.USERNAME,
+              je.GAMEDB_GAME_ID,
+              g.TITLE         AS GAME_TITLE,
+              je.ENTRY_TITLE,
+              je.ENTRY_BODY,
+              je.CREATED_AT
+         FROM USER_GAME_JOURNAL_ENTRIES je
+         JOIN GAMEDB_GAMES g ON g.GAME_ID = je.GAMEDB_GAME_ID
+         JOIN RPG_CLUB_USERS u ON u.USER_ID = je.USER_ID
+        WHERE (
+                UPPER(je.ENTRY_TITLE) LIKE '%' || UPPER(:searchTerm) || '%'
+             OR UPPER(je.ENTRY_BODY)  LIKE '%' || UPPER(:searchTerm) || '%'
+              )
+          AND (:userId IS NULL OR je.USER_ID = :userId)
+          AND (:gameId IS NULL OR je.GAMEDB_GAME_ID = :gameId)
+        ORDER BY je.CREATED_AT DESC, je.ENTRY_ID DESC
+        OFFSET :offset ROWS FETCH NEXT :limit ROWS ONLY`,
+      {
+        searchTerm,
+        userId: params.userId ?? null,
+        gameId: params.gameId ?? null,
+        offset: safeOffset,
+        limit: safeLimit,
+      },
+      (row) => ({
+        totalCount: Number(row.TOTAL_COUNT),
+        entryId: Number(row.ENTRY_ID),
+        userId: row.USER_ID,
+        globalName: row.GLOBAL_NAME ?? null,
+        username: row.USERNAME ?? null,
+        gameId: Number(row.GAMEDB_GAME_ID),
+        gameTitle: row.GAME_TITLE,
+        entryTitle: row.ENTRY_TITLE ?? null,
+        body: row.ENTRY_BODY,
+        createdAt: row.CREATED_AT instanceof Date
+          ? row.CREATED_AT
+          : new Date(row.CREATED_AT),
+      }),
+    );
+    const total = rows.length > 0 ? rows[0].totalCount : 0;
+    return {
+      total,
+      rows: rows.map((row): IJournalSearchResult => ({
+        entryId: row.entryId,
+        userId: row.userId,
+        globalName: row.globalName,
+        username: row.username,
+        gameId: row.gameId,
+        gameTitle: row.gameTitle,
+        entryTitle: row.entryTitle,
+        body: row.body,
+        createdAt: row.createdAt,
+      })),
+    };
   }
 
   static async updateEmojiName(userId: string, emojiName: string | null): Promise<void> {
-    const connection = await getOraclePool().getConnection();
-    try {
-      await connection.execute(
-        `UPDATE RPG_CLUB_USERS
-            SET EMOJI_NAME = :emojiName,
-                UPDATED_AT = SYSTIMESTAMP
-          WHERE USER_ID = :userId`,
-        { userId, emojiName },
-        { autoCommit: true },
-      );
-    } finally {
-      await connection.close();
-    }
+    await oraMutate(
+      `UPDATE RPG_CLUB_USERS
+          SET EMOJI_NAME = :emojiName,
+              UPDATED_AT = SYSTIMESTAMP
+        WHERE USER_ID = :userId`,
+      { userId, emojiName },
+    );
   }
 
   static async getAllWithEmojiName(): Promise<Array<{ userId: string; emojiName: string }>> {
-    const connection = await getOraclePool().getConnection();
-    try {
-      const res = await connection.execute<{ USER_ID: string; EMOJI_NAME: string }>(
-        `SELECT USER_ID, EMOJI_NAME
-           FROM RPG_CLUB_USERS
-          WHERE EMOJI_NAME IS NOT NULL`,
-        {},
-        { outFormat: oracledb.OUT_FORMAT_OBJECT },
-      );
-      return (res.rows ?? []).map((row) => ({
+    return oraQuery<{ USER_ID: string; EMOJI_NAME: string },
+      { userId: string; emojiName: string }>(
+      `SELECT USER_ID, EMOJI_NAME
+         FROM RPG_CLUB_USERS
+        WHERE EMOJI_NAME IS NOT NULL`,
+      {},
+      (row) => ({
         userId: row.USER_ID,
         emojiName: row.EMOJI_NAME,
-      }));
-    } finally {
-      await connection.close();
-    }
+      }),
+    );
   }
 
   static async upsertJournalMessageContext(
@@ -2832,40 +2583,28 @@ export default class Member {
     ownerUserId: string,
     gameId: number,
   ): Promise<void> {
-    const connection = await getOraclePool().getConnection();
-    try {
-      await connection.execute(
-        `MERGE INTO JOURNAL_MESSAGE_CONTEXTS dst
-         USING (SELECT :channelId AS CHANNEL_ID, :messageId AS MESSAGE_ID FROM DUAL) src
-            ON (dst.CHANNEL_ID = src.CHANNEL_ID AND dst.MESSAGE_ID = src.MESSAGE_ID)
-          WHEN MATCHED THEN
-            UPDATE SET CREATED_AT_MS = :createdAtMs,
-                       OWNER_USER_ID = :ownerUserId,
-                       GAME_ID       = :gameId
-          WHEN NOT MATCHED THEN
-            INSERT (CHANNEL_ID, MESSAGE_ID, CREATED_AT_MS, OWNER_USER_ID, GAME_ID)
-            VALUES (:channelId, :messageId, :createdAtMs, :ownerUserId, :gameId)`,
-        { channelId, messageId, createdAtMs, ownerUserId, gameId },
-        { autoCommit: true },
-      );
-    } finally {
-      await connection.close();
-    }
+    await oraMutate(
+      `MERGE INTO JOURNAL_MESSAGE_CONTEXTS dst
+       USING (SELECT :channelId AS CHANNEL_ID, :messageId AS MESSAGE_ID FROM DUAL) src
+          ON (dst.CHANNEL_ID = src.CHANNEL_ID AND dst.MESSAGE_ID = src.MESSAGE_ID)
+        WHEN MATCHED THEN
+          UPDATE SET CREATED_AT_MS = :createdAtMs,
+                     OWNER_USER_ID = :ownerUserId,
+                     GAME_ID       = :gameId
+        WHEN NOT MATCHED THEN
+          INSERT (CHANNEL_ID, MESSAGE_ID, CREATED_AT_MS, OWNER_USER_ID, GAME_ID)
+          VALUES (:channelId, :messageId, :createdAtMs, :ownerUserId, :gameId)`,
+      { channelId, messageId, createdAtMs, ownerUserId, gameId },
+    );
   }
 
   static async deleteJournalMessageContext(channelId: string, messageId: string): Promise<void> {
-    const connection = await getOraclePool().getConnection();
-    try {
-      await connection.execute(
-        `DELETE FROM JOURNAL_MESSAGE_CONTEXTS
-          WHERE CHANNEL_ID = :channelId
-            AND MESSAGE_ID = :messageId`,
-        { channelId, messageId },
-        { autoCommit: true },
-      );
-    } finally {
-      await connection.close();
-    }
+    await oraMutate(
+      `DELETE FROM JOURNAL_MESSAGE_CONTEXTS
+        WHERE CHANNEL_ID = :channelId
+          AND MESSAGE_ID = :messageId`,
+      { channelId, messageId },
+    );
   }
 
   static async loadActiveJournalMessageContexts(
@@ -2877,45 +2616,34 @@ export default class Member {
     ownerUserId: string;
     gameId: number;
   }>> {
-    const connection = await getOraclePool().getConnection();
     const cutoffMs = Date.now() - ttlMs;
-    try {
-      const res = await connection.execute<{
-        CHANNEL_ID: string;
-        MESSAGE_ID: string;
-        CREATED_AT_MS: number;
-        OWNER_USER_ID: string;
-        GAME_ID: number;
-      }>(
-        `SELECT CHANNEL_ID, MESSAGE_ID, CREATED_AT_MS, OWNER_USER_ID, GAME_ID
-           FROM JOURNAL_MESSAGE_CONTEXTS
-          WHERE CREATED_AT_MS >= :cutoffMs`,
-        { cutoffMs },
-        { outFormat: oracledb.OUT_FORMAT_OBJECT },
-      );
-      return (res.rows ?? []).map((row) => ({
+    return oraQuery<{
+      CHANNEL_ID: string;
+      MESSAGE_ID: string;
+      CREATED_AT_MS: number;
+      OWNER_USER_ID: string;
+      GAME_ID: number;
+    }, { channelId: string; messageId: string; createdAt: number;
+        ownerUserId: string; gameId: number }>(
+      `SELECT CHANNEL_ID, MESSAGE_ID, CREATED_AT_MS, OWNER_USER_ID, GAME_ID
+         FROM JOURNAL_MESSAGE_CONTEXTS
+        WHERE CREATED_AT_MS >= :cutoffMs`,
+      { cutoffMs },
+      (row) => ({
         channelId: row.CHANNEL_ID,
         messageId: row.MESSAGE_ID,
         createdAt: Number(row.CREATED_AT_MS),
         ownerUserId: row.OWNER_USER_ID,
         gameId: Number(row.GAME_ID),
-      }));
-    } finally {
-      await connection.close();
-    }
+      }),
+    );
   }
 
   static async pruneExpiredJournalMessageContexts(ttlMs: number): Promise<void> {
-    const connection = await getOraclePool().getConnection();
     const cutoffMs = Date.now() - ttlMs;
-    try {
-      await connection.execute(
-        `DELETE FROM JOURNAL_MESSAGE_CONTEXTS WHERE CREATED_AT_MS < :cutoffMs`,
-        { cutoffMs },
-        { autoCommit: true },
-      );
-    } finally {
-      await connection.close();
-    }
+    await oraMutate(
+      `DELETE FROM JOURNAL_MESSAGE_CONTEXTS WHERE CREATED_AT_MS < :cutoffMs`,
+      { cutoffMs },
+    );
   }
 }
