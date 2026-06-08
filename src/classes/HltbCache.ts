@@ -1,9 +1,5 @@
-import { oraQuery, oraMutate } from "../db/SqlManager.js";
-import { getDialect } from "../db/dialect.js";
-import { getSql } from "../db/SqlManager.js";
+import { dbQuery, dbMutate } from "../db/SqlManager.js";
 import { HltbCacheSql } from "../db/sql/index.js";
-
-const dialect = getDialect();
 
 export type HltbCacheEntry = {
   gameId: number;
@@ -60,8 +56,8 @@ function mapRow(row: {
 export async function getHltbCacheByGameId(
   gameId: number,
 ): Promise<HltbCacheEntry | null> {
-  const rows = await oraQuery(
-    getSql(HltbCacheSql.getByGameId, dialect),
+  const rows = await dbQuery(
+    HltbCacheSql.getByGameId,
     { gameId },
     mapRow,
   );
@@ -83,8 +79,8 @@ export async function upsertHltbCache(
     sourceQuery?: string | null;
   },
 ): Promise<void> {
-  await oraMutate(
-    getSql(HltbCacheSql.upsertCache, dialect),
+  await dbMutate(
+    HltbCacheSql.upsertCache,
     {
       gameId,
       name: payload.name ?? null,

@@ -1,10 +1,6 @@
-import { oraQuery, oraMutate } from "../db/SqlManager.js";
-import { getDialect } from "../db/dialect.js";
-import { getSql } from "../db/SqlManager.js";
+import { dbQuery, dbMutate } from "../db/SqlManager.js";
 import { PresencePromptHistorySql } from "../db/sql/index.js";
 import { normalizePresenceGameTitle } from "./PresencePromptOptOut.js";
-
-const dialect = getDialect();
 
 export type PresencePromptStatus =
   | "PENDING"
@@ -20,15 +16,15 @@ export default class PresencePromptHistory {
     gameTitle: string,
   ): Promise<void> {
     const normalized = normalizePresenceGameTitle(gameTitle);
-    await oraMutate(
-      getSql(PresencePromptHistorySql.createPrompt, dialect),
+    await dbMutate(
+      PresencePromptHistorySql.createPrompt,
       { promptId, userId, gameTitle, gameTitleNorm: normalized },
     );
   }
 
   static async markResolved(promptId: string, status: PresencePromptStatus): Promise<void> {
-    await oraMutate(
-      getSql(PresencePromptHistorySql.markResolved, dialect),
+    await dbMutate(
+      PresencePromptHistorySql.markResolved,
       { status, promptId },
     );
   }
@@ -38,8 +34,8 @@ export default class PresencePromptHistory {
     gameTitle: string,
   ): Promise<Date | null> {
     const normalized = normalizePresenceGameTitle(gameTitle);
-    const rows = await oraQuery(
-      getSql(PresencePromptHistorySql.getLastPromptDate, dialect),
+    const rows = await dbQuery(
+      PresencePromptHistorySql.getLastPromptDate,
       { userId, gameTitleNorm: normalized },
       (row: { CREATED_AT: Date | string }) =>
         row.CREATED_AT instanceof Date ? row.CREATED_AT : new Date(row.CREATED_AT as string),
@@ -49,8 +45,8 @@ export default class PresencePromptHistory {
 
   static async countPendingForGame(userId: string, gameTitle: string): Promise<number> {
     const normalized = normalizePresenceGameTitle(gameTitle);
-    const rows = await oraQuery(
-      getSql(PresencePromptHistorySql.countPendingForGame, dialect),
+    const rows = await dbQuery(
+      PresencePromptHistorySql.countPendingForGame,
       { userId, gameTitleNorm: normalized },
       (row: { CNT: number }) => Number(row.CNT ?? 0),
     );
@@ -58,8 +54,8 @@ export default class PresencePromptHistory {
   }
 
   static async countPendingForUser(userId: string): Promise<number> {
-    const rows = await oraQuery(
-      getSql(PresencePromptHistorySql.countPendingForUser, dialect),
+    const rows = await dbQuery(
+      PresencePromptHistorySql.countPendingForUser,
       { userId },
       (row: { CNT: number }) => Number(row.CNT ?? 0),
     );

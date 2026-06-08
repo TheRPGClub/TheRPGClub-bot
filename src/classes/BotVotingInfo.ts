@@ -1,4 +1,4 @@
-import { oraQuery, oraMutate, oraWithConnection } from "../db/SqlManager.js";
+import { dbQuery, dbMutate, oraWithConnection } from "../db/SqlManager.js";
 import { getDialect } from "../db/dialect.js";
 import { getSql } from "../db/SqlManager.js";
 import { BotVotingInfoSql } from "../db/sql/index.js";
@@ -68,8 +68,8 @@ function normalizeDate(value: Date | string): Date {
 
 export default class BotVotingInfo {
   static async getAll(): Promise<IBotVotingInfoEntry[]> {
-    return oraQuery(
-      getSql(BotVotingInfoSql.getAll, dialect),
+    return dbQuery(
+      BotVotingInfoSql.getAll,
       [],
       mapRowToEntry,
     );
@@ -77,8 +77,8 @@ export default class BotVotingInfo {
 
   static async getByRound(roundNumber: number): Promise<IBotVotingInfoEntry | null> {
     const round = normalizeRoundNumber(roundNumber);
-    const rows = await oraQuery(
-      getSql(BotVotingInfoSql.getByRound, dialect),
+    const rows = await dbQuery(
+      BotVotingInfoSql.getByRound,
       { round },
       mapRowToEntry,
     );
@@ -86,8 +86,8 @@ export default class BotVotingInfo {
   }
 
   static async getCurrentRound(): Promise<IBotVotingInfoEntry | null> {
-    const rows = await oraQuery(
-      getSql(BotVotingInfoSql.getCurrentRound, dialect),
+    const rows = await dbQuery(
+      BotVotingInfoSql.getCurrentRound,
       [],
       mapRowToEntry,
     );
@@ -126,11 +126,11 @@ export default class BotVotingInfo {
     const column =
       reminder === "fiveDay" ? "FIVE_DAY_REMINDER_SENT" : "ONE_DAY_REMINDER_SENT";
 
-    const result = await oraMutate(
-      BotVotingInfoSql.markReminderSent(column)[dialect],
+    const count = await dbMutate(
+      BotVotingInfoSql.markReminderSent(column),
       { round },
     );
-    if ((result.rowsAffected ?? 0) === 0) {
+    if (count === 0) {
       throw new Error(
         `No BOT_VOTING_INFO row found for round ${round} when updating ${column}.`,
       );
@@ -143,11 +143,11 @@ export default class BotVotingInfo {
   ): Promise<void> {
     const round = normalizeRoundNumber(roundNumber);
     const nextVote = normalizeDate(nextVoteAt);
-    const result = await oraMutate(
-      getSql(BotVotingInfoSql.updateNextVoteAt, dialect),
+    const count = await dbMutate(
+      BotVotingInfoSql.updateNextVoteAt,
       { round, nextVoteAt: nextVote },
     );
-    if ((result.rowsAffected ?? 0) === 0) {
+    if (count === 0) {
       throw new Error(
         `No BOT_VOTING_INFO row found for round ${round} when updating NEXT_VOTE_AT.`,
       );
@@ -159,11 +159,11 @@ export default class BotVotingInfo {
     nominationListId: number | null,
   ): Promise<void> {
     const round = normalizeRoundNumber(roundNumber);
-    const result = await oraMutate(
-      getSql(BotVotingInfoSql.updateNominationListId, dialect),
+    const count = await dbMutate(
+      BotVotingInfoSql.updateNominationListId,
       { round, nominationListId },
     );
-    if ((result.rowsAffected ?? 0) === 0) {
+    if (count === 0) {
       throw new Error(
         `No BOT_VOTING_INFO row found for round ${round}` +
         ` when updating NOMINATION_LIST_ID.`,
@@ -173,10 +173,9 @@ export default class BotVotingInfo {
 
   static async deleteRound(roundNumber: number): Promise<number> {
     const round = normalizeRoundNumber(roundNumber);
-    const result = await oraMutate(
-      getSql(BotVotingInfoSql.deleteRound, dialect),
+    return dbMutate(
+      BotVotingInfoSql.deleteRound,
       { round },
     );
-    return result.rowsAffected ?? 0;
   }
 }

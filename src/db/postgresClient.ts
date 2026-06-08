@@ -95,3 +95,24 @@ export async function pgTransaction<T>(
     client.release();
   }
 }
+
+/** Runs a DML statement and returns the number of rows affected. */
+export async function pgMutate(
+  text: string,
+  values?: unknown[],
+): Promise<number> {
+  const result = await getPostgresPool().query(text, values);
+  return result.rowCount ?? 0;
+}
+
+/** Acquires a client from the pool, runs callback, then releases it. */
+export async function pgWithConnection<T>(
+  callback: (client: pg.PoolClient) => Promise<T>,
+): Promise<T> {
+  const client = await getPostgresPool().connect();
+  try {
+    return await callback(client);
+  } finally {
+    client.release();
+  }
+}

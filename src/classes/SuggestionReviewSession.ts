@@ -1,7 +1,12 @@
 import oracledb from "oracledb";
-import { oraQuery, oraMutate, oraWithConnection } from "../db/SqlManager.js";
+import {
+  dbMutate,
+  oraQuery,
+  oraMutate,
+  oraWithConnection,
+  getSql,
+} from "../db/SqlManager.js";
 import { getDialect } from "../db/dialect.js";
-import { getSql } from "../db/SqlManager.js";
 import { SuggestionReviewSessionSql } from "../db/sql/index.js";
 
 const dialect = getDialect();
@@ -113,42 +118,28 @@ export async function updateSuggestionReviewSession(
   session: ISuggestionReviewSession,
 ): Promise<void> {
   const suggestionIds = serializeSuggestionIds(session.suggestionIds);
-  await oraMutate(
-    getSql(SuggestionReviewSessionSql.update, dialect),
-    {
-      reviewerId: session.reviewerId,
-      suggestionIds,
-      currentIndex: Math.max(session.index, 0),
-      totalCount: Math.max(session.totalCount, 0),
-      sessionId: session.sessionId,
-    },
-  );
+  await dbMutate(SuggestionReviewSessionSql.update, {
+    reviewerId: session.reviewerId,
+    suggestionIds,
+    currentIndex: Math.max(session.index, 0),
+    totalCount: Math.max(session.totalCount, 0),
+    sessionId: session.sessionId,
+  });
 }
 
 export async function deleteSuggestionReviewSession(sessionId: string): Promise<boolean> {
-  const result = await oraMutate(
-    getSql(SuggestionReviewSessionSql.delete, dialect),
-    { sessionId },
-  );
-  return (result.rowsAffected ?? 0) > 0;
+  const count = await dbMutate(SuggestionReviewSessionSql.delete, { sessionId });
+  return count > 0;
 }
 
 export async function deleteSuggestionReviewSessionsForReviewer(
   reviewerId: string,
 ): Promise<number> {
-  const result = await oraMutate(
-    getSql(SuggestionReviewSessionSql.deleteForReviewer, dialect),
-    { reviewerId },
-  );
-  return Number(result.rowsAffected ?? 0);
+  return dbMutate(SuggestionReviewSessionSql.deleteForReviewer, { reviewerId });
 }
 
 export async function deleteExpiredSuggestionReviewSessions(
   cutoffDate: Date,
 ): Promise<number> {
-  const result = await oraMutate(
-    getSql(SuggestionReviewSessionSql.deleteExpired, dialect),
-    { cutoff: cutoffDate },
-  );
-  return Number(result.rowsAffected ?? 0);
+  return dbMutate(SuggestionReviewSessionSql.deleteExpired, { cutoff: cutoffDate });
 }

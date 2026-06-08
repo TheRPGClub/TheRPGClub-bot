@@ -1,5 +1,12 @@
 import oracledb from "oracledb";
-import { oraQuery, oraMutate, oraWithConnection, oraTransaction } from "../db/SqlManager.js";
+import {
+  dbQuery,
+  dbMutate,
+  oraQuery,
+  oraMutate,
+  oraWithConnection,
+  oraTransaction,
+} from "../db/SqlManager.js";
 import { getDialect } from "../db/dialect.js";
 import { getSql } from "../db/SqlManager.js";
 import { CompletionatorImportSql } from "../db/sql/index.js";
@@ -189,8 +196,8 @@ export async function getImportById(
 export async function getActiveImportForUser(
   userId: string,
 ): Promise<ICompletionatorImport | null> {
-  const rows = await oraQuery(
-    getSql(CompletionatorImportSql.getActiveForUser, dialect),
+  const rows = await dbQuery(
+    CompletionatorImportSql.getActiveForUser,
     { userId },
     mapImport,
   );
@@ -201,8 +208,8 @@ export async function setImportStatus(
   importId: number,
   status: ImportStatus,
 ): Promise<void> {
-  await oraMutate(
-    getSql(CompletionatorImportSql.setStatus, dialect),
+  await dbMutate(
+    CompletionatorImportSql.setStatus,
     { status, importId },
   );
 }
@@ -211,8 +218,8 @@ export async function updateImportIndex(
   importId: number,
   currentIndex: number,
 ): Promise<void> {
-  await oraMutate(
-    getSql(CompletionatorImportSql.updateIndex, dialect),
+  await dbMutate(
+    CompletionatorImportSql.updateIndex,
     { currentIndex, importId },
   );
 }
@@ -220,8 +227,8 @@ export async function updateImportIndex(
 export async function getNextPendingItem(
   importId: number,
 ): Promise<ICompletionatorItem | null> {
-  const rows = await oraQuery(
-    getSql(CompletionatorImportSql.getNextPendingItem, dialect),
+  const rows = await dbQuery(
+    CompletionatorImportSql.getNextPendingItem,
     { importId },
     mapItem,
   );
@@ -231,8 +238,8 @@ export async function getNextPendingItem(
 export async function getImportItemById(
   itemId: number,
 ): Promise<ICompletionatorItem | null> {
-  const rows = await oraQuery(
-    getSql(CompletionatorImportSql.getItemById, dialect),
+  const rows = await dbQuery(
+    CompletionatorImportSql.getItemById,
     { itemId },
     mapItem,
   );
@@ -270,8 +277,8 @@ export async function updateImportItem(
 
   if (!fields.length) return;
 
-  await oraMutate(
-    CompletionatorImportSql.updateItem(fields)[dialect],
+  await dbMutate(
+    CompletionatorImportSql.updateItem(fields),
     binds,
   );
 }
@@ -284,8 +291,8 @@ export async function countImportItems(importId: number): Promise<{
   error: number;
 }> {
   const stats = { pending: 0, skipped: 0, imported: 0, updated: 0, error: 0 };
-  const rows = await oraQuery(
-    getSql(CompletionatorImportSql.countItemsByStatus, dialect),
+  const rows = await dbQuery(
+    CompletionatorImportSql.countItemsByStatus,
     { importId },
     (row: { STATUS: string; CNT: number }) => row,
   );

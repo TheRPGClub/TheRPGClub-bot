@@ -1,5 +1,12 @@
 import oracledb from "oracledb";
-import { oraQuery, oraMutate, oraWithConnection, oraTransaction } from "../db/SqlManager.js";
+import {
+  dbQuery,
+  dbMutate,
+  oraQuery,
+  oraMutate,
+  oraWithConnection,
+  oraTransaction,
+} from "../db/SqlManager.js";
 import { getDialect } from "../db/dialect.js";
 import { getSql } from "../db/SqlManager.js";
 import { CollectionCsvImportSql } from "../db/sql/index.js";
@@ -223,8 +230,8 @@ export async function getCollectionCsvImportById(
 export async function getActiveCollectionCsvImportForUser(
   userId: string,
 ): Promise<ICollectionCsvImport | null> {
-  const rows = await oraQuery(
-    getSql(CollectionCsvImportSql.getActiveForUser, dialect),
+  const rows = await dbQuery(
+    CollectionCsvImportSql.getActiveForUser,
     { userId },
     mapImport,
   );
@@ -235,8 +242,8 @@ export async function setCollectionCsvImportStatus(
   importId: number,
   status: CollectionCsvImportStatus,
 ): Promise<void> {
-  await oraMutate(
-    getSql(CollectionCsvImportSql.setStatus, dialect),
+  await dbMutate(
+    CollectionCsvImportSql.setStatus,
     { status, importId },
   );
 }
@@ -245,8 +252,8 @@ export async function updateCollectionCsvImportIndex(
   importId: number,
   currentIndex: number,
 ): Promise<void> {
-  await oraMutate(
-    getSql(CollectionCsvImportSql.updateIndex, dialect),
+  await dbMutate(
+    CollectionCsvImportSql.updateIndex,
     { currentIndex, importId },
   );
 }
@@ -254,8 +261,8 @@ export async function updateCollectionCsvImportIndex(
 export async function getCollectionCsvImportItemById(
   itemId: number,
 ): Promise<ICollectionCsvImportItem | null> {
-  const rows = await oraQuery(
-    getSql(CollectionCsvImportSql.getItemById, dialect),
+  const rows = await dbQuery(
+    CollectionCsvImportSql.getItemById,
     { itemId },
     mapItem,
   );
@@ -265,8 +272,8 @@ export async function getCollectionCsvImportItemById(
 export async function getNextPendingCollectionCsvImportItem(
   importId: number,
 ): Promise<ICollectionCsvImportItem | null> {
-  const rows = await oraQuery(
-    getSql(CollectionCsvImportSql.getNextPendingItem, dialect),
+  const rows = await dbQuery(
+    CollectionCsvImportSql.getNextPendingItem,
     { importId },
     mapItem,
   );
@@ -319,8 +326,8 @@ export async function updateCollectionCsvImportItem(
 
   if (!setParts.length) return;
 
-  await oraMutate(
-    CollectionCsvImportSql.updateItem(setParts)[dialect],
+  await dbMutate(
+    CollectionCsvImportSql.updateItem(setParts),
     binds,
   );
 }
@@ -341,8 +348,8 @@ export async function countCollectionCsvImportItems(
     SKIPPED: 0,
     FAILED: 0,
   };
-  const rows = await oraQuery(
-    getSql(CollectionCsvImportSql.countItemsByStatus, dialect),
+  const rows = await dbQuery(
+    CollectionCsvImportSql.countItemsByStatus,
     { importId },
     (row: { STATUS: CollectionCsvImportItemStatus; TOTAL: number }) => row,
   );
@@ -362,8 +369,8 @@ export async function countCollectionCsvImportResultReasons(
   importId: number,
 ): Promise<Record<string, number>> {
   const counts: Record<string, number> = {};
-  const rows = await oraQuery(
-    getSql(CollectionCsvImportSql.countItemsByReason, dialect),
+  const rows = await dbQuery(
+    CollectionCsvImportSql.countItemsByReason,
     { importId },
     (row: { RESULT_REASON: CollectionCsvImportResultReason; TOTAL: number }) => row,
   );

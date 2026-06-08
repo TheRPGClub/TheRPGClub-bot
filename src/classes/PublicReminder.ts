@@ -1,7 +1,6 @@
 import oracledb from "oracledb";
-import { oraQuery, oraMutate } from "../db/SqlManager.js";
+import { dbQuery, dbMutate, oraMutate, getSql } from "../db/SqlManager.js";
 import { getDialect } from "../db/dialect.js";
-import { getSql } from "../db/SqlManager.js";
 import { PublicReminderSql } from "../db/sql/index.js";
 
 const dialect = getDialect();
@@ -54,8 +53,8 @@ export async function createReminder(
 
 export async function listUpcomingReminders(limit: number = 20): Promise<IPublicReminder[]> {
   const safeLimit = Math.min(Math.max(limit, 1), 100);
-  return oraQuery(
-    getSql(PublicReminderSql.listUpcoming, dialect),
+  return dbQuery(
+    PublicReminderSql.listUpcoming,
     { limit: safeLimit },
     (row: {
       REMINDER_ID: number;
@@ -80,26 +79,26 @@ export async function listUpcomingReminders(limit: number = 20): Promise<IPublic
 }
 
 export async function deleteReminder(reminderId: number): Promise<boolean> {
-  const result = await oraMutate(
-    getSql(PublicReminderSql.delete, dialect),
+  const count = await dbMutate(
+    PublicReminderSql.delete,
     { id: reminderId },
   );
-  return (result.rowsAffected ?? 0) > 0;
+  return count > 0;
 }
 
 export async function updateReminderDueDate(
   reminderId: number,
   nextDue: Date,
 ): Promise<void> {
-  await oraMutate(
-    getSql(PublicReminderSql.updateDueDate, dialect),
+  await dbMutate(
+    PublicReminderSql.updateDueDate,
     { nextDue, id: reminderId },
   );
 }
 
 export async function disableReminder(reminderId: number): Promise<void> {
-  await oraMutate(
-    getSql(PublicReminderSql.disable, dialect),
+  await dbMutate(
+    PublicReminderSql.disable,
     { id: reminderId },
   );
 }

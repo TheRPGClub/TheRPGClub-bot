@@ -1,9 +1,5 @@
-import { oraQuery, oraMutate } from "../db/SqlManager.js";
-import { getDialect } from "../db/dialect.js";
-import { getSql } from "../db/SqlManager.js";
+import { dbQuery, dbMutate } from "../db/SqlManager.js";
 import { StarboardSql } from "../db/sql/index.js";
-
-const dialect = getDialect();
 
 export type StarboardRecord = {
   messageId: string;
@@ -16,8 +12,8 @@ export type StarboardRecord = {
 
 export default class Starboard {
   static async getByMessageId(messageId: string): Promise<StarboardRecord | null> {
-    const rows = await oraQuery(
-      getSql(StarboardSql.getByMessageId, dialect),
+    const rows = await dbQuery(
+      StarboardSql.getByMessageId,
       { messageId },
       (row: {
         MESSAGE_ID: string;
@@ -41,8 +37,8 @@ export default class Starboard {
   }
 
   static async insert(record: Omit<StarboardRecord, "createdAt">): Promise<void> {
-    await oraMutate(
-      getSql(StarboardSql.insert, dialect),
+    await dbMutate(
+      StarboardSql.insert,
       {
         messageId: record.messageId,
         channelId: record.channelId,

@@ -1,6 +1,13 @@
-import { oraQuery, oraMutate, oraTransaction, oraWithConnection } from "../db/SqlManager.js";
+import {
+  dbQuery,
+  dbMutate,
+  oraQuery,
+  oraMutate,
+  oraTransaction,
+  oraWithConnection,
+  getSql,
+} from "../db/SqlManager.js";
 import { getDialect } from "../db/dialect.js";
-import { getSql } from "../db/SqlManager.js";
 import { ThreadSql } from "../db/sql/index.js";
 
 const dialect = getDialect();
@@ -20,18 +27,15 @@ export async function upsertThreadRecord(params: {
   lastSeenAt: NullableDate;
   skipLinking?: "Y" | "N";
 }): Promise<void> {
-  await oraMutate(
-    getSql(ThreadSql.upsertThread, dialect),
-    {
-      threadId: params.threadId,
-      forumChannelId: params.forumChannelId,
-      threadName: params.threadName,
-      isArchived: toYN(params.isArchived),
-      createdAt: params.createdAt,
-      lastSeenAt: params.lastSeenAt,
-      skipLinking: params.skipLinking ?? "N",
-    },
-  );
+  await dbMutate(ThreadSql.upsertThread, {
+    threadId: params.threadId,
+    forumChannelId: params.forumChannelId,
+    threadName: params.threadName,
+    isArchived: toYN(params.isArchived),
+    createdAt: params.createdAt,
+    lastSeenAt: params.lastSeenAt,
+    skipLinking: params.skipLinking ?? "N",
+  });
 }
 
 export async function setThreadGameLink(
@@ -97,15 +101,12 @@ export async function setThreadSkipLinking(
   threadId: string,
   skip: boolean,
 ): Promise<void> {
-  await oraMutate(
-    getSql(ThreadSql.setSkipLinking, dialect),
-    { skip: toYN(skip), threadId },
-  );
+  await dbMutate(ThreadSql.setSkipLinking, { skip: toYN(skip), threadId });
 }
 
 export async function getThreadSkipLinking(threadId: string): Promise<boolean> {
-  const rows = await oraQuery(
-    getSql(ThreadSql.getSkipLinking, dialect),
+  const rows = await dbQuery(
+    ThreadSql.getSkipLinking,
     { threadId },
     (row: { SKIP_LINKING: string }) => String(row.SKIP_LINKING ?? "N").toUpperCase() === "Y",
   );

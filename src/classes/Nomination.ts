@@ -1,8 +1,5 @@
-import { oraQuery, oraMutate } from "../db/SqlManager.js";
-import { getDialect } from "../db/dialect.js";
+import { dbQuery, dbMutate } from "../db/SqlManager.js";
 import { NominationSql } from "../db/sql/index.js";
-
-const dialect = getDialect();
 
 export type NominationKind = "gotm" | "nr-gotm";
 
@@ -60,8 +57,8 @@ export async function getNominationForUser(
   roundNumber: number,
   userId: string,
 ): Promise<INominationEntry | null> {
-  const rows = await oraQuery(
-    NominationSql.getNominationForUser(tableName(kind))[dialect],
+  const rows = await dbQuery(
+    NominationSql.getNominationForUser(tableName(kind)),
     { roundNumber, userId },
     mapRow,
   );
@@ -79,8 +76,8 @@ export async function upsertNomination(
     throw new Error("A valid GameDB game id is required to save a nomination.");
   }
 
-  await oraMutate(
-    NominationSql.upsertNomination(tableName(kind))[dialect],
+  await dbMutate(
+    NominationSql.upsertNomination(tableName(kind)),
     { roundNumber, userId, gamedbGameId, nominatedAt: new Date(), reason },
   );
 
@@ -96,19 +93,19 @@ export async function deleteNominationForUser(
   roundNumber: number,
   userId: string,
 ): Promise<boolean> {
-  const result = await oraMutate(
-    NominationSql.deleteNomination(tableName(kind))[dialect],
+  const count = await dbMutate(
+    NominationSql.deleteNomination(tableName(kind)),
     { roundNumber, userId },
   );
-  return (result.rowsAffected ?? 0) > 0;
+  return count > 0;
 }
 
 export async function listNominationsForRound(
   kind: NominationKind,
   roundNumber: number,
 ): Promise<INominationEntry[]> {
-  return oraQuery(
-    NominationSql.listNominationsForRound(tableName(kind))[dialect],
+  return dbQuery(
+    NominationSql.listNominationsForRound(tableName(kind)),
     { roundNumber },
     mapRow,
   );

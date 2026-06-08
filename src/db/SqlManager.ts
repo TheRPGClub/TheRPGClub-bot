@@ -1,82 +1,82 @@
 import oracledb from "oracledb";
-import { getOraclePool } from "./oracleClient.js";
+import pg from "pg";
+import { getDialect } from "./dialect.js";
+import type { SqlEntry } from "./sql/types.js";
+import {
+  oraQuery,
+  oraMutate,
+  oraWithConnection,
+  oraTransaction,
+} from "./oracleClient.js";
+import {
+  pgQuery,
+  pgMutate,
+  pgTransaction,
+  pgWithConnection,
+} from "./postgresClient.js";
 
-export { pgQuery, pgTransaction } from "./postgresClient.js";
+export { oraQuery, oraMutate, oraWithConnection, oraTransaction } from "./oracleClient.js";
+export { pgQuery, pgMutate, pgTransaction, pgWithConnection } from "./postgresClient.js";
 export type { Dialect, SqlEntry } from "./sql/types.js";
 export { getSql, getSqlDynamic } from "./sql/index.js";
 
 /**
- * Runs a SELECT and maps each row with `mapper`. Defaults to OUT_FORMAT_OBJECT.
- * Pass `existingConn` to reuse a connection (caller manages its lifecycle).
+ * Dialect-agnostic SELECT. Passes the dialect-appropriate SQL from `entry`
+ * to the underlying driver and maps each row with `mapper`.
  */
-export async function oraQuery<RowT extends object, R>(
-  sql: string,
-  params: oracledb.BindParameters,
+export async function dbQuery<RowT extends object, R>(
+  entry: SqlEntry,
+  params: oracledb.BindParameters | unknown[],
   mapper: (row: RowT) => R,
-  existingConn?: oracledb.Connection,
 ): Promise<R[]> {
-  const conn = existingConn ?? (await getOraclePool().getConnection());
-  try {
-    const result = await conn.execute<RowT>(sql, params, {
-      outFormat: oracledb.OUT_FORMAT_OBJECT,
-    });
-    return (result.rows ?? []).map(mapper);
-  } finally {
-    if (!existingConn) await conn.close();
+  const dialect = getDialect();
+  if (dialect === "oracle") {
+    return oraQuery(entry.oracle, params as oracledb.BindParameters, mapper);
   }
+  const rows = await pgQuery<RowT>(entry.postgres, params as unknown[]);
+  return rows.map(mapper);
 }
 
 /**
- * Runs a single DML statement with autoCommit:true.
- * Returns the full Result so callers can inspect rowsAffected / outBinds.
- * Pass `existingConn` to reuse a connection (no autoCommit in that case).
+ * Dialect-agnostic DML. Returns the number of rows affected.
+ * For Oracle INSERT...RETURNING (BIND_OUT) cases, use oraMutate directly.
  */
-export async function oraMutate(
-  sql: string,
-  params: oracledb.BindParameters,
-  existingConn?: oracledb.Connection,
-): Promise<oracledb.Result<unknown>> {
-  const conn = existingConn ?? (await getOraclePool().getConnection());
-  try {
-    return await conn.execute(sql, params, {
-      autoCommit: existingConn ? false : true,
-    });
-  } finally {
-    if (!existingConn) await conn.close();
+export async function dbMutate(
+  entry: SqlEntry,
+  params: oracledb.BindParameters | unknown[],
+): Promise<number> {
+  const dialect = getDialect();
+  if (dialect === "oracle") {
+    const result = await oraMutate(entry.oracle, params as oracledb.BindParameters);
+    return result.rowsAffected ?? 0;
   }
+  return pgMutate(entry.postgres, params as unknown[]);
 }
 
 /**
- * Acquires a connection, runs `callback`, then closes it.
- * Each statement inside should use autoCommit:true (or pass conn to oraMutate).
- * For atomic multi-statement operations, use oraTransaction instead.
+ * Dialect-agnostic connection scope. Acquires a connection, runs callback,
+ * then releases it. Each statement inside should commit individually.
+ * For atomic multi-statement operations, use dbTransaction instead.
  */
-export async function oraWithConnection<T>(
-  callback: (conn: oracledb.Connection) => Promise<T>,
+export async function dbWithConnection<T>(
+  callback: (conn: oracledb.Connection | pg.PoolClient) => Promise<T>,
 ): Promise<T> {
-  const conn = await getOraclePool().getConnection();
-  try {
-    return await callback(conn);
-  } finally {
-    await conn.close();
+  const dialect = getDialect();
+  if (dialect === "oracle") {
+    return oraWithConnection(callback as (conn: oracledb.Connection) => Promise<T>);
   }
+  return pgWithConnection(callback as (client: pg.PoolClient) => Promise<T>);
 }
 
 /**
- * Runs `callback` inside a transaction. Commits on success, rolls back on throw.
+ * Dialect-agnostic transaction. Commits on success, rolls back on throw.
  */
-export async function oraTransaction<T>(
-  callback: (conn: oracledb.Connection) => Promise<T>,
+export async function dbTransaction<T>(
+  callback: (conn: oracledb.Connection | pg.PoolClient) => Promise<T>,
 ): Promise<T> {
-  const conn = await getOraclePool().getConnection();
-  try {
-    const result = await callback(conn);
-    await conn.commit();
-    return result;
-  } catch (err) {
-    await conn.rollback();
-    throw err;
-  } finally {
-    await conn.close();
+  const dialect = getDialect();
+  if (dialect === "oracle") {
+    return oraTransaction(callback as (conn: oracledb.Connection) => Promise<T>);
   }
+  return pgTransaction(callback as (client: pg.PoolClient) => Promise<T>);
 }

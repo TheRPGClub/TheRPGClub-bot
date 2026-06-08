@@ -1,5 +1,12 @@
 import oracledb from "oracledb";
-import { oraQuery, oraMutate, oraWithConnection, oraTransaction } from "../db/SqlManager.js";
+import {
+  dbQuery,
+  dbMutate,
+  oraQuery,
+  oraMutate,
+  oraWithConnection,
+  oraTransaction,
+} from "../db/SqlManager.js";
 import { getDialect } from "../db/dialect.js";
 import { getSql } from "../db/SqlManager.js";
 import { GameDbCsvImportSql } from "../db/sql/index.js";
@@ -166,8 +173,8 @@ export async function getGameDbCsvImportById(
 export async function getActiveGameDbCsvImportForUser(
   userId: string,
 ): Promise<IGameDbCsvImport | null> {
-  const rows = await oraQuery(
-    getSql(GameDbCsvImportSql.getActiveForUser, dialect),
+  const rows = await dbQuery(
+    GameDbCsvImportSql.getActiveForUser,
     { userId },
     mapImport,
   );
@@ -178,8 +185,8 @@ export async function setGameDbCsvImportStatus(
   importId: number,
   status: GameDbCsvImportStatus,
 ): Promise<void> {
-  await oraMutate(
-    getSql(GameDbCsvImportSql.setStatus, dialect),
+  await dbMutate(
+    GameDbCsvImportSql.setStatus,
     { status, importId },
   );
 }
@@ -188,8 +195,8 @@ export async function updateGameDbCsvImportIndex(
   importId: number,
   currentIndex: number,
 ): Promise<void> {
-  await oraMutate(
-    getSql(GameDbCsvImportSql.updateIndex, dialect),
+  await dbMutate(
+    GameDbCsvImportSql.updateIndex,
     { currentIndex, importId },
   );
 }
@@ -197,8 +204,8 @@ export async function updateGameDbCsvImportIndex(
 export async function getNextGameDbCsvImportItem(
   importId: number,
 ): Promise<IGameDbCsvImportItem | null> {
-  const rows = await oraQuery(
-    getSql(GameDbCsvImportSql.getNextPendingItem, dialect),
+  const rows = await dbQuery(
+    GameDbCsvImportSql.getNextPendingItem,
     { importId },
     mapItem,
   );
@@ -208,8 +215,8 @@ export async function getNextGameDbCsvImportItem(
 export async function getGameDbCsvImportItemById(
   itemId: number,
 ): Promise<IGameDbCsvImportItem | null> {
-  const rows = await oraQuery(
-    getSql(GameDbCsvImportSql.getItemById, dialect),
+  const rows = await dbQuery(
+    GameDbCsvImportSql.getItemById,
     { itemId },
     mapItem,
   );
@@ -242,8 +249,8 @@ export async function updateGameDbCsvImportItem(
 
   if (!fields.length) return;
 
-  await oraMutate(
-    GameDbCsvImportSql.updateItem(fields)[dialect],
+  await dbMutate(
+    GameDbCsvImportSql.updateItem(fields),
     binds,
   );
 }
@@ -255,8 +262,8 @@ export async function countGameDbCsvImportItems(importId: number): Promise<{
   error: number;
 }> {
   const stats = { pending: 0, skipped: 0, imported: 0, error: 0 };
-  const rows = await oraQuery(
-    getSql(GameDbCsvImportSql.countItems, dialect),
+  const rows = await dbQuery(
+    GameDbCsvImportSql.countItems,
     { importId },
     (row: { STATUS: string; CNT: number }) => row,
   );

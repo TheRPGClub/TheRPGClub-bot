@@ -1,7 +1,6 @@
 import oracledb from "oracledb";
-import { oraQuery, oraMutate, oraWithConnection } from "../db/SqlManager.js";
+import { dbMutate, oraQuery, oraMutate, oraWithConnection, getSql } from "../db/SqlManager.js";
 import { getDialect } from "../db/dialect.js";
-import { getSql } from "../db/SqlManager.js";
 import { RssFeedSql } from "../db/sql/index.js";
 
 const dialect = getDialect();
@@ -86,11 +85,8 @@ export async function addFeed(
 }
 
 export async function removeFeed(feedId: number): Promise<boolean> {
-  const result = await oraMutate(
-    getSql(RssFeedSql.removeFeed, dialect),
-    { id: feedId },
-  );
-  return (result.rowsAffected ?? 0) > 0;
+  const count = await dbMutate(RssFeedSql.removeFeed, { id: feedId });
+  return count > 0;
 }
 
 export async function updateFeed(
@@ -125,11 +121,8 @@ export async function updateFeed(
 
   if (!sets.length) return false;
 
-  const result = await oraMutate(
-    RssFeedSql.updateFeed(sets)[dialect],
-    params,
-  );
-  return (result.rowsAffected ?? 0) > 0;
+  const count = await dbMutate(RssFeedSql.updateFeed(sets), params);
+  return count > 0;
 }
 
 export async function markItemsSeen(

@@ -1,9 +1,5 @@
-import { oraQuery, oraMutate } from "../db/SqlManager.js";
-import { getDialect } from "../db/dialect.js";
-import { getSql } from "../db/SqlManager.js";
+import { dbQuery, dbMutate } from "../db/SqlManager.js";
 import { PresencePromptOptOutSql } from "../db/sql/index.js";
-
-const dialect = getDialect();
 
 const OPT_OUT_ALL_TOKEN = "__ALL__";
 
@@ -13,8 +9,8 @@ export function normalizePresenceGameTitle(title: string): string {
 
 export default class PresencePromptOptOut {
   static async isOptedOutAll(userId: string): Promise<boolean> {
-    const rows = await oraQuery(
-      getSql(PresencePromptOptOutSql.isOptedOutAll, dialect),
+    const rows = await dbQuery(
+      PresencePromptOptOutSql.isOptedOutAll,
       { userId, token: OPT_OUT_ALL_TOKEN },
       (row: { CNT: number }) => Number(row.CNT ?? 0),
     );
@@ -25,8 +21,8 @@ export default class PresencePromptOptOut {
     const normalized = normalizePresenceGameTitle(gameTitle);
     if (!normalized) return false;
 
-    const rows = await oraQuery(
-      getSql(PresencePromptOptOutSql.isOptedOutGame, dialect),
+    const rows = await dbQuery(
+      PresencePromptOptOutSql.isOptedOutGame,
       { userId, gameTitleNorm: normalized },
       (row: { CNT: number }) => Number(row.CNT ?? 0),
     );
@@ -50,8 +46,8 @@ export default class PresencePromptOptOut {
     gameTitle: string | null,
   ): Promise<void> {
     try {
-      await oraMutate(
-        getSql(PresencePromptOptOutSql.insertOptOut, dialect),
+      await dbMutate(
+        PresencePromptOptOutSql.insertOptOut,
         { userId, scope, gameTitle, gameTitleNorm: normalizedTitle },
       );
     } catch (err: any) {

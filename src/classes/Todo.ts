@@ -1,7 +1,6 @@
 import oracledb from "oracledb";
-import { oraQuery, oraMutate } from "../db/SqlManager.js";
+import { dbQuery, dbMutate, oraMutate, getSql } from "../db/SqlManager.js";
 import { getDialect } from "../db/dialect.js";
-import { getSql } from "../db/SqlManager.js";
 import { TodoSql } from "../db/sql/index.js";
 
 const dialect = getDialect();
@@ -53,8 +52,8 @@ function mapTodoRow(row: {
 }
 
 export async function fetchTodoById(todoId: number): Promise<ITodoItem | null> {
-  const rows = await oraQuery(
-    getSql(TodoSql.getById, dialect),
+  const rows = await dbQuery(
+    TodoSql.getById,
     { id: todoId },
     mapTodoRow,
   );
@@ -96,8 +95,8 @@ export async function listTodos(
 ): Promise<ITodoItem[]> {
   const safeLimit = Math.min(Math.max(limit, 1), 200);
   const whereClause = includeCompleted ? "" : "WHERE IS_COMPLETED = 0";
-  return oraQuery(
-    TodoSql.list(whereClause)[dialect],
+  return dbQuery(
+    TodoSql.list(whereClause),
     { limit: safeLimit },
     mapTodoRow,
   );
@@ -114,8 +113,8 @@ export async function updateTodo(
   const detailsProvided = details !== undefined ? 1 : 0;
   const categoryProvided = todoCategory !== undefined ? 1 : 0;
   const sizeProvided = todoSize !== undefined ? 1 : 0;
-  const result = await oraMutate(
-    getSql(TodoSql.update, dialect),
+  const count = await dbMutate(
+    TodoSql.update,
     {
       id: todoId,
       title,
@@ -128,31 +127,25 @@ export async function updateTodo(
       sizeProvided,
     },
   );
-  return (result.rowsAffected ?? 0) > 0;
+  return count > 0;
 }
 
 export async function deleteTodo(todoId: number): Promise<boolean> {
-  const result = await oraMutate(
-    getSql(TodoSql.delete, dialect),
-    { id: todoId },
-  );
-  return (result.rowsAffected ?? 0) > 0;
+  const count = await dbMutate(TodoSql.delete, { id: todoId });
+  return count > 0;
 }
 
 export async function completeTodo(
   todoId: number,
   completedBy: string | null,
 ): Promise<boolean> {
-  const result = await oraMutate(
-    getSql(TodoSql.complete, dialect),
-    { id: todoId, completedBy },
-  );
-  return (result.rowsAffected ?? 0) > 0;
+  const count = await dbMutate(TodoSql.complete, { id: todoId, completedBy });
+  return count > 0;
 }
 
 export async function countTodos(): Promise<{ open: number; completed: number }> {
-  const rows = await oraQuery(
-    getSql(TodoSql.countTodos, dialect),
+  const rows = await dbQuery(
+    TodoSql.countTodos,
     {},
     (row: { OPEN_COUNT: number | null; COMPLETED_COUNT: number | null }) => ({
       open: Number(row.OPEN_COUNT ?? 0),
@@ -173,8 +166,8 @@ export async function countTodoSummary(): Promise<{
     refactoring: number;
   };
 }> {
-  const rows = await oraQuery(
-    getSql(TodoSql.countTodoSummary, dialect),
+  const rows = await dbQuery(
+    TodoSql.countTodoSummary,
     {},
     (row: {
       OPEN_COUNT: number | null;

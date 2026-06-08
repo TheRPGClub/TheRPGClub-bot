@@ -1,5 +1,7 @@
 import oracledb from "oracledb";
 import {
+  dbQuery,
+  dbMutate,
   oraQuery,
   oraMutate,
   oraWithConnection,
@@ -256,8 +258,8 @@ function buildParams(record: IMemberRecord) {
 export default class Member {
   static async touchLastSeen(userId: string, when: Date = new Date()): Promise<void> {
     try {
-      await oraMutate(
-        getSql(MemberSql.touchLastSeen, dialect),
+      await dbMutate(
+        MemberSql.touchLastSeen,
         { userId, lastSeen: when },
       );
     } catch (err: any) {
@@ -405,9 +407,9 @@ export default class Member {
       binds[`id${idx}`] = id;
     });
 
-    return oraQuery<{ GAME_ID: number; TITLE: string; USER_ID: string },
+    return dbQuery<{ GAME_ID: number; TITLE: string; USER_ID: string },
       { gameId: number; title: string; userId: string }>(
-      MemberSql.getNowPlayingByGameIds(placeholders.join(", "))[dialect],
+      MemberSql.getNowPlayingByGameIds(placeholders.join(", ")),
       binds,
       (row) => ({
         gameId: Number(row.GAME_ID),
@@ -424,9 +426,9 @@ export default class Member {
     if (!trimmed) return [];
     const searchQuery = `%${trimmed}%`;
     const normalizedQuery = `%${trimmed.replace(/[^a-z0-9]/g, "")}%`;
-    return oraQuery<{ GAME_ID: number; TITLE: string; USER_ID: string },
+    return dbQuery<{ GAME_ID: number; TITLE: string; USER_ID: string },
       { gameId: number; title: string; userId: string }>(
-      getSql(MemberSql.getNowPlayingByTitleSearch, dialect),
+      MemberSql.getNowPlayingByTitleSearch,
       { searchQuery, normalizedQuery },
       (row) => ({
         gameId: Number(row.GAME_ID),
@@ -451,7 +453,7 @@ export default class Member {
     journalEnabled: boolean;
     hasJournalEntry: boolean;
   }[]> {
-    return oraQuery<{
+    return dbQuery<{
       GAME_ID: number;
       TITLE: string;
       PLATFORM_ID: number | null;
@@ -475,7 +477,7 @@ export default class Member {
       journalEnabled: boolean;
       hasJournalEntry: boolean;
     }>(
-      getSql(MemberSql.getNowPlayingEntries, dialect),
+      MemberSql.getNowPlayingEntries,
       { userId },
       (r) => ({
         gameId: Number(r.GAME_ID),
@@ -508,8 +510,8 @@ export default class Member {
     if (!Number.isInteger(gameId) || gameId <= 0) {
       throw new Error("Invalid GameDB id.");
     }
-    const rows = await oraQuery<{ ADDED_AT: Date | string | null }, { addedAt: Date | null }>(
-      getSql(MemberSql.getNowPlayingEntryMeta, dialect),
+    const rows = await dbQuery<{ ADDED_AT: Date | string | null }, { addedAt: Date | null }>(
+      MemberSql.getNowPlayingEntryMeta,
       { userId, gameId },
       (row) => ({
         addedAt: row.ADDED_AT instanceof Date
@@ -538,11 +540,11 @@ export default class Member {
     const noteValue = normalizedNote ? normalizedNote : null;
     const noteUpdatedAt = noteValue ? new Date() : null;
 
-    const res = await oraMutate(
-      getSql(MemberSql.updateNowPlayingNote, dialect),
+    const count = await dbMutate(
+      MemberSql.updateNowPlayingNote,
       { userId, gameId, note: noteValue, noteUpdatedAt },
     );
-    return (res.rowsAffected ?? 0) > 0;
+    return count > 0;
   }
 
   static async addNowPlaying(
@@ -606,12 +608,12 @@ export default class Member {
     userId: string,
     gameId: number,
   ): Promise<IGameJournalPreference | null> {
-    const rows = await oraQuery<{
+    const rows = await dbQuery<{
       USER_ID: string;
       GAMEDB_GAME_ID: number;
       IS_ENABLED: number;
     }, IGameJournalPreference>(
-      getSql(MemberSql.getGameJournalPreference, dialect),
+      MemberSql.getGameJournalPreference,
       { userId, gameId },
       (row) => ({
         userId: row.USER_ID,
@@ -629,8 +631,8 @@ export default class Member {
     gameId: number,
     isEnabled: boolean,
   ): Promise<void> {
-    await oraMutate(
-      getSql(MemberSql.upsertGameJournalPreference, dialect),
+    await dbMutate(
+      MemberSql.upsertGameJournalPreference,
       {
         userId,
         gameId,
@@ -659,12 +661,12 @@ export default class Member {
     uniqueIds.forEach((id, idx) => {
       binds[`id${idx}`] = id;
     });
-    return oraQuery<{
+    return dbQuery<{
       GAME_ID: number;
       JOURNAL_COUNT: number;
       LAST_JOURNAL_AT: Date | string | null;
     }, { gameId: number; journalCount: number; lastJournalAt: Date | null }>(
-      MemberSql.getJournalStatusForGames(inlineTable)[dialect],
+      MemberSql.getJournalStatusForGames(inlineTable),
       binds,
       (row) => ({
         gameId: Number(row.GAME_ID),
@@ -686,7 +688,7 @@ export default class Member {
   ): Promise<IGameJournalEntry[]> {
     const safeLimit = Math.min(Math.max(params?.limit ?? 5, 1), 25);
     const safeOffset = Math.max(params?.offset ?? 0, 0);
-    return oraQuery<{
+    return dbQuery<{
       ENTRY_ID: number;
       USER_ID: string;
       GAMEDB_GAME_ID: number;
@@ -696,7 +698,7 @@ export default class Member {
       UPDATED_AT: Date | string;
       ENTRY_NUMBER: number;
     }, IGameJournalEntry>(
-      getSql(MemberSql.getGameJournalEntries, dialect),
+      MemberSql.getGameJournalEntries,
       { userId, gameId, offset: safeOffset, limit: safeLimit },
       (row) => ({
         entryId: Number(row.ENTRY_ID),
@@ -712,8 +714,8 @@ export default class Member {
   }
 
   static async countGameJournalEntries(userId: string, gameId: number): Promise<number> {
-    const rows = await oraQuery<{ CNT: number }, number>(
-      getSql(MemberSql.countGameJournalEntries, dialect),
+    const rows = await dbQuery<{ CNT: number }, number>(
+      MemberSql.countGameJournalEntries,
       { userId, gameId },
       (row) => Number(row.CNT),
     );
@@ -731,8 +733,8 @@ export default class Member {
     if (!bodyValue) {
       throw new Error("Journal body cannot be empty.");
     }
-    await oraMutate(
-      getSql(MemberSql.addGameJournalEntry, dialect),
+    await dbMutate(
+      MemberSql.addGameJournalEntry,
       {
         userId: params.userId,
         gameId: params.gameId,
@@ -746,7 +748,7 @@ export default class Member {
     userId: string,
     entryId: number,
   ): Promise<IGameJournalEntry | null> {
-    const rows = await oraQuery<{
+    const rows = await dbQuery<{
       ENTRY_ID: number;
       USER_ID: string;
       GAMEDB_GAME_ID: number;
@@ -756,7 +758,7 @@ export default class Member {
       UPDATED_AT: Date | string;
       ENTRY_NUMBER: number;
     }, IGameJournalEntry>(
-      getSql(MemberSql.getGameJournalEntryForUser, dialect),
+      MemberSql.getGameJournalEntryForUser,
       { userId, entryId },
       (row) => ({
         entryId: Number(row.ENTRY_ID),
@@ -801,19 +803,19 @@ export default class Member {
     if (!fields.length) return false;
     fields.push("UPDATED_AT = SYSTIMESTAMP");
 
-    const res = await oraMutate(
-      MemberSql.updateGameJournalEntry(fields)[dialect],
+    const count = await dbMutate(
+      MemberSql.updateGameJournalEntry(fields),
       binds as Record<string, any>,
     );
-    return Number(res.rowsAffected ?? 0) > 0;
+    return count > 0;
   }
 
   static async deleteGameJournalEntry(userId: string, entryId: number): Promise<boolean> {
-    const res = await oraMutate(
-      getSql(MemberSql.deleteGameJournalEntry, dialect),
+    const count = await dbMutate(
+      MemberSql.deleteGameJournalEntry,
       { userId, entryId },
     );
-    return Number(res.rowsAffected ?? 0) > 0;
+    return count > 0;
   }
 
   static async updateNowPlayingSort(
@@ -841,12 +843,11 @@ export default class Member {
       throw new Error("Invalid GameDB id.");
     }
 
-    const res = await oraMutate(
-      getSql(MemberSql.removeNowPlaying, dialect),
+    const count = await dbMutate(
+      MemberSql.removeNowPlaying,
       { userId, gameId },
     );
-    const rows = (res as any).rowsAffected ?? 0;
-    return rows > 0;
+    return count > 0;
   }
 
   static async addCompletion(params: {
@@ -924,7 +925,7 @@ export default class Member {
   }
 
   static async getCompletion(completionId: number): Promise<ICompletionRecord | null> {
-    const rows = await oraQuery<{
+    const rows = await dbQuery<{
       COMPLETION_ID: number;
       GAME_ID: number;
       TITLE: string;
@@ -936,7 +937,7 @@ export default class Member {
       THREAD_ID: string | null;
       NOTE: string | null;
     }, ICompletionRecord>(
-      getSql(MemberSql.getCompletion, dialect),
+      MemberSql.getCompletion,
       { completionId },
       (row) => ({
         completionId: Number(row.COMPLETION_ID),
@@ -970,7 +971,7 @@ export default class Member {
     userId: string,
     completionId: number,
   ): Promise<ICompletionRecord | null> {
-    const rows = await oraQuery<{
+    const rows = await dbQuery<{
       COMPLETION_ID: number;
       GAME_ID: number;
       TITLE: string;
@@ -982,7 +983,7 @@ export default class Member {
       THREAD_ID: string | null;
       NOTE: string | null;
     }, ICompletionRecord>(
-      getSql(MemberSql.getCompletionForUser, dialect),
+      MemberSql.getCompletionForUser,
       { userId, completionId },
       (row) => ({
         completionId: Number(row.COMPLETION_ID),
@@ -1019,7 +1020,7 @@ export default class Member {
     if (!Number.isInteger(gameId) || gameId <= 0) {
       throw new Error("Invalid GameDB id.");
     }
-    const rows = await oraQuery<{
+    const rows = await dbQuery<{
       COMPLETION_ID: number;
       GAME_ID: number;
       TITLE: string;
@@ -1031,7 +1032,7 @@ export default class Member {
       THREAD_ID: string | null;
       NOTE: string | null;
     }, ICompletionRecord>(
-      getSql(MemberSql.getCompletionByGameId, dialect),
+      MemberSql.getCompletionByGameId,
       { userId, gameId },
       (row) => ({
         completionId: Number(row.COMPLETION_ID),
@@ -1085,7 +1086,7 @@ export default class Member {
       binds.title = title;
     }
 
-    return oraQuery<{
+    return dbQuery<{
       COMPLETION_ID: number;
       GAME_ID: number;
       TITLE: string;
@@ -1097,7 +1098,7 @@ export default class Member {
       THREAD_ID: string | null;
       NOTE: string | null;
     }, ICompletionRecord>(
-      MemberSql.getCompletions(clauses.join(" AND "))[dialect],
+      MemberSql.getCompletions(clauses.join(" AND ")),
       binds,
       (row) => ({
         completionId: Number(row.COMPLETION_ID),
@@ -1126,7 +1127,7 @@ export default class Member {
   }
 
   static async getAllCompletions(userId: string): Promise<ICompletionRecord[]> {
-    return oraQuery<{
+    return dbQuery<{
       COMPLETION_ID: number;
       GAME_ID: number;
       TITLE: string;
@@ -1138,7 +1139,7 @@ export default class Member {
       THREAD_ID: string | null;
       NOTE: string | null;
     }, ICompletionRecord>(
-      getSql(MemberSql.getAllCompletions, dialect),
+      MemberSql.getAllCompletions,
       { userId },
       (row) => ({
         completionId: Number(row.COMPLETION_ID),
@@ -1184,8 +1185,8 @@ export default class Member {
       binds.title = title;
     }
 
-    const rows = await oraQuery<{ CNT: number }, number>(
-      MemberSql.countCompletions(clauses.join(" AND "))[dialect],
+    const rows = await dbQuery<{ CNT: number }, number>(
+      MemberSql.countCompletions(clauses.join(" AND ")),
       binds,
       (row) => Number(row.CNT),
     );
@@ -1238,24 +1239,22 @@ export default class Member {
 
     if (!fields.length) return false;
 
-    const res = await oraMutate(
-      MemberSql.updateCompletion(fields)[dialect],
+    const count = await dbMutate(
+      MemberSql.updateCompletion(fields),
       binds,
     );
-    const rows = (res as any).rowsAffected ?? 0;
-    return rows > 0;
+    return count > 0;
   }
 
   static async deleteCompletion(userId: string, completionId: number): Promise<boolean> {
     if (!Number.isInteger(completionId) || completionId <= 0) {
       throw new Error("Invalid completion id.");
     }
-    const res = await oraMutate(
-      getSql(MemberSql.deleteCompletion, dialect),
+    const count = await dbMutate(
+      MemberSql.deleteCompletion,
       { completionId, userId },
     );
-    const rows = (res as any).rowsAffected ?? 0;
-    return rows > 0;
+    return count > 0;
   }
 
   static async getRecentNickHistory(
@@ -1264,12 +1263,12 @@ export default class Member {
   ): Promise<IMemberNickHistory[]> {
     const safeLimit = Math.min(Math.max(limit, 1), 20);
     try {
-      return await oraQuery<{
+      return await dbQuery<{
         OLD_NICK: string | null;
         NEW_NICK: string | null;
         CHANGED_AT: Date;
       }, IMemberNickHistory>(
-        getSql(MemberSql.getRecentNickHistory, dialect),
+        MemberSql.getRecentNickHistory,
         { userId, limit: safeLimit },
         (row) => ({
           oldNick: row.OLD_NICK ?? null,
@@ -1301,13 +1300,13 @@ export default class Member {
       binds.title = title;
     }
 
-    return oraQuery<{
+    return dbQuery<{
       USER_ID: string;
       USERNAME: string | null;
       GLOBAL_NAME: string | null;
       CNT: number;
     }, { userId: string; username: string | null; globalName: string | null; count: number }>(
-      MemberSql.getCompletionLeaderboard(clauses.join(" AND "))[dialect],
+      MemberSql.getCompletionLeaderboard(clauses.join(" AND ")),
       binds,
       (row) => ({
         userId: row.USER_ID,
@@ -1377,7 +1376,7 @@ export default class Member {
 
     const where = clauses.length ? clauses.join(" AND ") : "1=1";
 
-    return oraQuery<{
+    return dbQuery<{
       USER_ID: string;
       USERNAME: string | null;
       GLOBAL_NAME: string | null;
@@ -1396,7 +1395,7 @@ export default class Member {
       SERVER_JOINED_AT: Date | null;
       LAST_SEEN_AT: Date | null;
     }, IMemberSearchResult>(
-      MemberSql.searchMembers(where)[dialect],
+      MemberSql.searchMembers(where),
       params,
       (row) => ({
         userId: row.USER_ID,
@@ -1513,11 +1512,11 @@ export default class Member {
     if (!Number.isInteger(platformId) || platformId <= 0) {
       throw new Error("Invalid platform selection.");
     }
-    const res = await oraMutate(
-      getSql(MemberSql.updateNowPlayingPlatform, dialect),
+    const count = await dbMutate(
+      MemberSql.updateNowPlayingPlatform,
       { userId, gameId, platformId },
     );
-    return (res.rowsAffected ?? 0) > 0;
+    return count > 0;
   }
 
   static async getAvatarHistory(
@@ -1564,7 +1563,7 @@ export default class Member {
     if (!Number.isInteger(gameId) || gameId <= 0) {
       throw new Error("Invalid GameDB id.");
     }
-    return oraQuery<{
+    return dbQuery<{
       COMPLETION_ID: number;
       GAME_ID: number;
       TITLE: string;
@@ -1576,7 +1575,7 @@ export default class Member {
       THREAD_ID: string | null;
       NOTE: string | null;
     }, ICompletionRecord>(
-      getSql(MemberSql.getCompletionsForGame, dialect),
+      MemberSql.getCompletionsForGame,
       { userId, gameId },
       (row) => ({
         completionId: Number(row.COMPLETION_ID),
@@ -1618,7 +1617,7 @@ export default class Member {
     const startDate = new Date(ref.getTime() - windowMs);
     const endDate = new Date(ref.getTime() + windowMs);
 
-    const rows = await oraQuery<{
+    const rows = await dbQuery<{
       COMPLETION_ID: number;
       GAME_ID: number;
       TITLE: string;
@@ -1630,7 +1629,7 @@ export default class Member {
       THREAD_ID: string | null;
       NOTE: string | null;
     }, ICompletionRecord>(
-      getSql(MemberSql.getRecentCompletionForGame, dialect),
+      MemberSql.getRecentCompletionForGame,
       { userId, gameId, startDate, endDate },
       (row) => ({
         completionId: Number(row.COMPLETION_ID),
@@ -1661,8 +1660,8 @@ export default class Member {
   }
 
   static async getGiveawayDonorNotifySetting(userId: string): Promise<boolean> {
-    const rows = await oraQuery<{ DONOR_NOTIFY_ON_CLAIM: number | null }, boolean>(
-      getSql(MemberSql.getGiveawayDonorNotifySetting, dialect),
+    const rows = await dbQuery<{ DONOR_NOTIFY_ON_CLAIM: number | null }, boolean>(
+      MemberSql.getGiveawayDonorNotifySetting,
       { userId },
       (row) => Boolean(row.DONOR_NOTIFY_ON_CLAIM),
     );
@@ -1708,8 +1707,8 @@ export default class Member {
   }
 
   static async countAvatarHistory(userId: string): Promise<number> {
-    const rows = await oraQuery<{ TOTAL: number | null }, number>(
-      getSql(MemberSql.countAvatarHistory, dialect),
+    const rows = await dbQuery<{ TOTAL: number | null }, number>(
+      MemberSql.countAvatarHistory,
       { userId },
       (row) => Number(row.TOTAL ?? 0),
     );
@@ -1722,20 +1721,20 @@ export default class Member {
     avatarUrl: string,
     avatarBlob: Buffer | null,
   ): Promise<void> {
-    await oraMutate(
-      getSql(MemberSql.insertAvatarHistoryRecord, dialect),
+    await dbMutate(
+      MemberSql.insertAvatarHistoryRecord,
       { userId, avatarHash, avatarUrl, avatarBlob },
     );
   }
 
   static async getAllMembersAvatarHistoryCounts(): Promise<IMemberAvatarHistoryCount[]> {
-    return oraQuery<{
+    return dbQuery<{
       USER_ID: string;
       USERNAME: string | null;
       GLOBAL_NAME: string | null;
       TOTAL: number;
     }, IMemberAvatarHistoryCount>(
-      getSql(MemberSql.getAllMembersAvatarHistoryCounts, dialect),
+      MemberSql.getAllMembersAvatarHistoryCounts,
       {},
       (row) => ({
         userId: String(row.USER_ID),
@@ -1747,7 +1746,7 @@ export default class Member {
   }
 
   static async getMembersWithPlatforms(): Promise<IMemberPlatformRecord[]> {
-    const members = await oraQuery<{
+    const members = await dbQuery<{
       USER_ID: string;
       USERNAME: string | null;
       GLOBAL_NAME: string | null;
@@ -1757,7 +1756,7 @@ export default class Member {
       NSW_FRIEND_CODE: string | null;
       SERVER_LEFT_AT: Date | null;
     }, IMemberPlatformRecord>(
-      getSql(MemberSql.getMembersWithPlatforms, dialect),
+      MemberSql.getMembersWithPlatforms,
       {},
       (row) => ({
         userId: row.USER_ID,
@@ -1854,12 +1853,12 @@ export default class Member {
   }
 
   static async getGameJournalList(userId: string): Promise<IGameJournalListEntry[]> {
-    return oraQuery<{
+    return dbQuery<{
       GAME_ID: number;
       TITLE: string;
       TOTAL_ENTRIES: number;
     }, IGameJournalListEntry>(
-      getSql(MemberSql.getGameJournalList, dialect),
+      MemberSql.getGameJournalList,
       { userId },
       (row) => ({
         gameId: Number(row.GAME_ID),
@@ -1870,14 +1869,14 @@ export default class Member {
   }
 
   static async getAllJournalUsers(): Promise<IJournalUserSummary[]> {
-    return oraQuery<{
+    return dbQuery<{
       USER_ID: string;
       USERNAME: string | null;
       GLOBAL_NAME: string | null;
       GAME_COUNT: number;
       ENTRY_COUNT: number;
     }, IJournalUserSummary>(
-      getSql(MemberSql.getAllJournalUsers, dialect),
+      MemberSql.getAllJournalUsers,
       {},
       (row) => ({
         userId: row.USER_ID,
@@ -1899,7 +1898,7 @@ export default class Member {
     const safeLimit = Math.min(Math.max(params.limit, 1), 25);
     const safeOffset = Math.max(params.offset, 0);
     const searchTerm = params.query.trim();
-    const rows = await oraQuery<{
+    const rows = await dbQuery<{
       TOTAL_COUNT: number;
       ENTRY_ID: number;
       USER_ID: string;
@@ -1911,7 +1910,7 @@ export default class Member {
       ENTRY_BODY: string;
       CREATED_AT: Date | string;
     }, IJournalSearchResult & { totalCount: number }>(
-      getSql(MemberSql.searchJournalEntries, dialect),
+      MemberSql.searchJournalEntries,
       {
         searchTerm,
         userId: params.userId ?? null,
@@ -1952,16 +1951,16 @@ export default class Member {
   }
 
   static async updateEmojiName(userId: string, emojiName: string | null): Promise<void> {
-    await oraMutate(
-      getSql(MemberSql.updateEmojiName, dialect),
+    await dbMutate(
+      MemberSql.updateEmojiName,
       { userId, emojiName },
     );
   }
 
   static async getAllWithEmojiName(): Promise<Array<{ userId: string; emojiName: string }>> {
-    return oraQuery<{ USER_ID: string; EMOJI_NAME: string },
+    return dbQuery<{ USER_ID: string; EMOJI_NAME: string },
       { userId: string; emojiName: string }>(
-      getSql(MemberSql.getAllWithEmojiName, dialect),
+      MemberSql.getAllWithEmojiName,
       {},
       (row) => ({
         userId: row.USER_ID,
@@ -1977,15 +1976,15 @@ export default class Member {
     ownerUserId: string,
     gameId: number,
   ): Promise<void> {
-    await oraMutate(
-      getSql(MemberSql.upsertJournalMessageContext, dialect),
+    await dbMutate(
+      MemberSql.upsertJournalMessageContext,
       { channelId, messageId, createdAtMs, ownerUserId, gameId },
     );
   }
 
   static async deleteJournalMessageContext(channelId: string, messageId: string): Promise<void> {
-    await oraMutate(
-      getSql(MemberSql.deleteJournalMessageContext, dialect),
+    await dbMutate(
+      MemberSql.deleteJournalMessageContext,
       { channelId, messageId },
     );
   }
@@ -2000,7 +1999,7 @@ export default class Member {
     gameId: number;
   }>> {
     const cutoffMs = Date.now() - ttlMs;
-    return oraQuery<{
+    return dbQuery<{
       CHANNEL_ID: string;
       MESSAGE_ID: string;
       CREATED_AT_MS: number;
@@ -2008,7 +2007,7 @@ export default class Member {
       GAME_ID: number;
     }, { channelId: string; messageId: string; createdAt: number;
         ownerUserId: string; gameId: number }>(
-      getSql(MemberSql.loadActiveJournalMessageContexts, dialect),
+      MemberSql.loadActiveJournalMessageContexts,
       { cutoffMs },
       (row) => ({
         channelId: row.CHANNEL_ID,
@@ -2022,8 +2021,8 @@ export default class Member {
 
   static async pruneExpiredJournalMessageContexts(ttlMs: number): Promise<void> {
     const cutoffMs = Date.now() - ttlMs;
-    await oraMutate(
-      getSql(MemberSql.pruneExpiredJournalMessageContexts, dialect),
+    await dbMutate(
+      MemberSql.pruneExpiredJournalMessageContexts,
       { cutoffMs },
     );
   }

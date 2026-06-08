@@ -1,5 +1,5 @@
 import oracledb from "oracledb";
-import { oraQuery, oraMutate } from "../db/SqlManager.js";
+import { dbQuery, dbMutate, oraMutate } from "../db/SqlManager.js";
 import { getDialect } from "../db/dialect.js";
 import { getSql } from "../db/SqlManager.js";
 import { GameKeySql } from "../db/sql/index.js";
@@ -77,8 +77,8 @@ export async function createGameKey(
 }
 
 export async function getGameKeyById(keyId: number): Promise<IGameKey | null> {
-  const rows = await oraQuery(
-    getSql(GameKeySql.getById, dialect),
+  const rows = await dbQuery(
+    GameKeySql.getById,
     { id: keyId },
     mapGameKeyRow,
   );
@@ -86,8 +86,8 @@ export async function getGameKeyById(keyId: number): Promise<IGameKey | null> {
 }
 
 export async function countAvailableGameKeys(): Promise<number> {
-  const rows = await oraQuery(
-    getSql(GameKeySql.countAvailable, dialect),
+  const rows = await dbQuery(
+    GameKeySql.countAvailable,
     {},
     (row: { TOTAL: number | null }) => Number(row.TOTAL ?? 0),
   );
@@ -100,16 +100,16 @@ export async function listAvailableGameKeys(
 ): Promise<IGameKey[]> {
   const safeLimit = Math.min(Math.max(limit, 1), 50);
   const safeOffset = Math.max(offset, 0);
-  return oraQuery(
-    getSql(GameKeySql.listAvailable, dialect),
+  return dbQuery(
+    GameKeySql.listAvailable,
     { offset: safeOffset, limit: safeLimit },
     mapGameKeyRow,
   );
 }
 
 export async function listKeysByDonor(userId: string): Promise<IGameKey[]> {
-  return oraQuery(
-    getSql(GameKeySql.listByDonor, dialect),
+  return dbQuery(
+    GameKeySql.listByDonor,
     { userId },
     mapGameKeyRow,
   );
@@ -119,17 +119,17 @@ export async function claimGameKey(
   keyId: number,
   userId: string,
 ): Promise<boolean> {
-  const result = await oraMutate(
-    getSql(GameKeySql.claim, dialect),
+  const count = await dbMutate(
+    GameKeySql.claim,
     { keyId, userId },
   );
-  return (result.rowsAffected ?? 0) > 0;
+  return count > 0;
 }
 
 export async function revokeGameKey(keyId: number): Promise<boolean> {
-  const result = await oraMutate(
-    getSql(GameKeySql.revoke, dialect),
+  const count = await dbMutate(
+    GameKeySql.revoke,
     { keyId },
   );
-  return (result.rowsAffected ?? 0) > 0;
+  return count > 0;
 }
