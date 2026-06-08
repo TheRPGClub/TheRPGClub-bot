@@ -251,71 +251,52 @@ End-to-end (requires both DBs running):
 
 ### Fully Migrated (no inline SQL remaining)
 
+All domain classes now hold zero raw standalone SQL. Every class uses `getSql(XxxSql.key, dialect)`
+or `XxxSql.factory(args)[dialect]` for all database calls.
+
+Note: `Member.ts` and `Game.ts` retain a small number of code-generated SQL fragment strings
+(dynamic WHERE clause builders, IN-list expanders) that are constructed at runtime and are not
+standalone queries -- these are intentionally left inline.
+
+Previously fully migrated:
 - `GameSearchSynonym.ts`
 - `Gotm.ts`
 - `NrGotm.ts`
-- `PublicReminder.ts` (SQL lives in `reminder.sql.ts` as `PublicReminderSql`)
+- `PublicReminder.ts`
 - `RssFeed.ts`
 - `Starboard.ts`
 - `Thread.ts`
 - `UserActivityIcon.ts`
 - `UserChannelMessageCount.ts`
 
----
-
-### Phase A: SQL file exists, class not yet wired (zero `getSql` calls)
-
-Wire each class to its already-created `.sql.ts` file. Sorted by approximate SQL hit count (descending).
-
-| Class | Approx. raw SQL hits | SQL file |
-|---|---|---|
-| `GameReleaseAnnouncement.ts` | 24 | `gameReleaseAnnouncement.sql.ts` |
-| `AdminWizardSession.ts` | 19 | `adminWizardSession.sql.ts` |
-| `CollectionCsvImport.ts` | 18 | `collectionCsvImport.sql.ts` |
-| `CompletionatorImport.ts` | 16 | `completionatorImport.sql.ts` |
-| `GotmAuditImport.ts` | 15 | `gotmAuditImport.sql.ts` |
-| `GameDbCsvImport.ts` | 14 | `gameDbCsvImport.sql.ts` |
-| `GameKey.ts` | 10 | `gameKey.sql.ts` |
-| `BotVotingInfo.ts` | 10 | `botVotingInfo.sql.ts` |
-| `Nomination.ts` | 7 | `nomination.sql.ts` |
-| `PresencePromptHistory.ts` | 5 | `presencePrompt.sql.ts` |
-| `PresencePromptOptOut.ts` | 3 | `presencePrompt.sql.ts` |
-
----
-
-### Phase B: Partially wired (SQL file exists, but raw SQL still remains inline)
-
-| Class | Approx. remaining raw SQL hits | SQL file |
-|---|---|---|
-| `Member.ts` | 114 | `member.sql.ts` |
-| `Game.ts` | 25 | `game.sql.ts` |
-| `XboxCollectionImport.ts` | 6 | `xboxCollectionImport.sql.ts` |
-| `SteamCollectionImport.ts` | 6 | `steamCollectionImport.sql.ts` |
-| `Reminder.ts` | 3 | `reminder.sql.ts` |
-| `UserGameCollection.ts` | 2 | `userGameCollection.sql.ts` |
-| `Todo.ts` | 2 | `todo.sql.ts` |
-| `SuggestionReviewSession.ts` | 2 | `suggestion.sql.ts` |
-| `Suggestion.ts` | 2 | `suggestion.sql.ts` |
-| `HltbCache.ts` | 2 | `hltbCache.sql.ts` |
-| `GameSearchSynonymDraft.ts` | 1 | `gameSearchSynonym.sql.ts` |
+Migrated in this phase (Phases A/B/C):
+- `AdminWizardSession.ts`
+- `BotVotingInfo.ts`
+- `CollectionCsvImport.ts`
+- `CompletionatorImport.ts`
+- `Game.ts`
+- `GameDbCsvImport.ts`
+- `GameDbCsvImportMapping.ts` (new sql file: `gameDbCsvImportMapping.sql.ts`)
+- `GameKey.ts`
+- `GameReleaseAnnouncement.ts`
+- `GameSearchSynonymDraft.ts`
+- `GotmAuditImport.ts`
+- `HltbCache.ts`
+- `Member.ts`
+- `Nomination.ts`
+- `PresencePromptHistory.ts`
+- `PresencePromptOptOut.ts`
+- `Reminder.ts`
+- `Suggestion.ts`
+- `SuggestionReviewSession.ts`
+- `Todo.ts`
+- `UserGameCollection.ts`
+- `XboxCollectionImport.ts`
+- `SteamCollectionImport.ts`
 
 ---
 
-### Phase C: SQL file missing -- extract first, then wire
-
-| Class | Approx. raw SQL hits | Action |
-|---|---|---|
-| `GameDbCsvImportMapping.ts` | 8 | Create `gameDbCsvImportMapping.sql.ts` (or extend `gameDbCsvImport.sql.ts`), then wire the class |
-
----
-
-### Suggested Completion Order
-
-1. **Phase C first** -- `GameDbCsvImportMapping.ts` has no sql file yet; create it before wiring.
-2. **Phase B `Member.ts` and `Game.ts`** -- largest backlogs; finish these to clear the biggest debt.
-3. **Phase A batch** -- all sql files already exist; wire the remaining 11 classes in one pass.
-4. **Phase B tail** -- finish the 9 smaller partially-wired classes.
-5. **Phase D (below)** -- make the execution wrappers dialect-agnostic.
+### Next Step: Phase D -- Dialect-agnostic execution wrappers
 
 ---
 
