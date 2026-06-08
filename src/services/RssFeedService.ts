@@ -1,8 +1,8 @@
 import Parser from "rss-parser";
 import crypto from "node:crypto";
 import type { Client } from "discordx";
-import oracledb from "oracledb";
-import { getOraclePool } from "../db/oracleClient.js";
+import type oracledb from "oracledb";
+import { oraWithConnection } from "../db/SqlManager.js";
 import {
   listFeeds,
   markItemsSeen,
@@ -143,23 +143,16 @@ export function startRssFeedService(client: Client): void {
     }
     isPolling = true;
 
-    let connection: oracledb.Connection | null = null;
     try {
-      connection = await getOraclePool().getConnection();
-      const feeds = await listFeeds(connection);
-      for (const feed of feeds) {
-        await processFeed(client, feed, connection);
-      }
+      await oraWithConnection(async (conn) => {
+        const feeds = await listFeeds(conn);
+        for (const feed of feeds) {
+          await processFeed(client, feed, conn);
+        }
+      });
     } catch (err) {
       console.error("[RSS] Polling error:", err);
     } finally {
-      if (connection) {
-        try {
-          await connection.close();
-        } catch (closeErr) {
-          console.error("[RSS] Error closing connection:", closeErr);
-        }
-      }
       isPolling = false;
     }
   };

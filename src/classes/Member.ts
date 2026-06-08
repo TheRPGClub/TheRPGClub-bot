@@ -2538,7 +2538,17 @@ export default class Member {
     const total = rows.length > 0 ? rows[0].totalCount : 0;
     return {
       total,
-      rows: rows.map(({ totalCount: _tc, ...rest }) => rest),
+      rows: rows.map((row): IJournalSearchResult => ({
+        entryId: row.entryId,
+        userId: row.userId,
+        globalName: row.globalName,
+        username: row.username,
+        gameId: row.gameId,
+        gameTitle: row.gameTitle,
+        entryTitle: row.entryTitle,
+        body: row.body,
+        createdAt: row.createdAt,
+      })),
     };
   }
 

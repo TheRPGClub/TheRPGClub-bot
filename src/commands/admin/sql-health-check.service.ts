@@ -1,6 +1,6 @@
 import { EmbedBuilder, MessageFlags } from "discord.js";
 import type { CommandInteraction } from "discord.js";
-import { getOraclePool } from "../../db/oracleClient.js";
+import { oraWithConnection } from "../../db/SqlManager.js";
 import { getPostgresPool } from "../../db/postgresClient.js";
 import { safeReply } from "../../functions/InteractionUtils.js";
 
@@ -14,15 +14,13 @@ interface IHealthResult {
 
 async function checkOracle(): Promise<IHealthResult> {
   const start = Date.now();
-  let connection;
   try {
-    connection = await getOraclePool().getConnection();
-    await connection.execute("SELECT 1 FROM DUAL");
+    await oraWithConnection(async (conn) => {
+      await conn.execute("SELECT 1 FROM DUAL");
+    });
     return { ok: true, latencyMs: Date.now() - start, error: null };
   } catch (err) {
     return { ok: false, latencyMs: null, error: String(err) };
-  } finally {
-    try { await connection?.close(); } catch { /* ignore */ }
   }
 }
 

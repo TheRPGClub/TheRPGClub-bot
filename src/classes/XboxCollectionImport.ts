@@ -1,5 +1,5 @@
 import oracledb from "oracledb";
-import { getOraclePool } from "../db/oracleClient.js";
+import { oraQuery, oraMutate, oraWithConnection, oraTransaction } from "../db/SqlManager.js";
 
 export type XboxCollectionImportStatus = "ACTIVE" | "PAUSED" | "COMPLETED" | "CANCELED";
 export type XboxCollectionImportItemStatus =
@@ -78,7 +78,7 @@ function toDate(value: Date | string): Date {
   return value instanceof Date ? value : new Date(value);
 }
 
-function mapImport(row: {
+type ImportRow = {
   IMPORT_ID: number;
   USER_ID: string;
   STATUS: XboxCollectionImportStatus;
@@ -92,7 +92,9 @@ function mapImport(row: {
   TEMPLATE_VERSION: string | null;
   CREATED_AT: Date | string;
   UPDATED_AT: Date | string;
-}): IXboxCollectionImport {
+};
+
+function mapImport(row: ImportRow): IXboxCollectionImport {
   return {
     importId: Number(row.IMPORT_ID),
     userId: row.USER_ID,
@@ -110,7 +112,7 @@ function mapImport(row: {
   };
 }
 
-function mapItem(row: {
+type ItemRow = {
   ITEM_ID: number;
   IMPORT_ID: number;
   ROW_INDEX: number;
@@ -132,7 +134,9 @@ function mapItem(row: {
   COLLECTION_ENTRY_ID: number | null;
   RESULT_REASON: XboxCollectionImportResultReason | null;
   ERROR_TEXT: string | null;
-}): IXboxCollectionImportItem {
+};
+
+function mapItem(row: ItemRow): IXboxCollectionImportItem {
   return {
     itemId: Number(row.ITEM_ID),
     importId: Number(row.IMPORT_ID),
@@ -158,7 +162,7 @@ function mapItem(row: {
   };
 }
 
-function mapTitleMap(row: {
+type TitleMapRow = {
   MAP_ID: number;
   XBOX_TITLE_ID: string;
   GAMEDB_GAME_ID: number | null;
@@ -166,7 +170,9 @@ function mapTitleMap(row: {
   CREATED_BY: string | null;
   CREATED_AT: Date | string;
   UPDATED_AT: Date | string;
-}): IXboxTitleGameDbMap {
+};
+
+function mapTitleMap(row: TitleMapRow): IXboxTitleGameDbMap {
   return {
     mapId: Number(row.MAP_ID),
     xboxTitleId: row.XBOX_TITLE_ID,
@@ -178,6 +184,44 @@ function mapTitleMap(row: {
   };
 }
 
+const IMPORT_SELECT_SQL = `SELECT IMPORT_ID,
+       USER_ID,
+       STATUS,
+       CURRENT_INDEX,
+       TOTAL_COUNT,
+       XUID,
+       GAMERTAG,
+       SOURCE_TYPE,
+       SOURCE_FILE_NAME,
+       SOURCE_FILE_SIZE,
+       TEMPLATE_VERSION,
+       CREATED_AT,
+       UPDATED_AT
+  FROM RPG_CLUB_XBOX_COLLECTION_IMPORTS`;
+
+const ITEM_SELECT_SQL = `SELECT ITEM_ID,
+       IMPORT_ID,
+       ROW_INDEX,
+       XBOX_TITLE_ID,
+       XBOX_PRODUCT_ID,
+       XBOX_TITLE_NAME,
+       RAW_PLATFORM,
+       RAW_OWNERSHIP_TYPE,
+       RAW_NOTE,
+       RAW_GAMEDB_ID,
+       RAW_IGDB_ID,
+       PLATFORM_ID,
+       OWNERSHIP_TYPE,
+       NOTE,
+       STATUS,
+       MATCH_CONFIDENCE,
+       MATCH_CANDIDATE_JSON,
+       GAMEDB_GAME_ID,
+       COLLECTION_ENTRY_ID,
+       RESULT_REASON,
+       ERROR_TEXT
+  FROM RPG_CLUB_XBOX_COLLECTION_IMPORT_ITEMS`;
+
 export async function createXboxCollectionImportSession(params: {
   userId: string;
   totalCount: number;
@@ -188,9 +232,8 @@ export async function createXboxCollectionImportSession(params: {
   sourceFileSize: number | null;
   templateVersion: string | null;
 }): Promise<IXboxCollectionImport> {
-  const connection = await getOraclePool().getConnection();
-  try {
-    const result = await connection.execute(
+  return oraWithConnection(async (conn) => {
+    const insert = await oraMutate(
       `INSERT INTO RPG_CLUB_XBOX_COLLECTION_IMPORTS (
          USER_ID,
          STATUS,
@@ -225,23 +268,17 @@ export async function createXboxCollectionImportSession(params: {
         templateVersion: params.templateVersion,
         id: { dir: oracledb.BIND_OUT, type: oracledb.NUMBER },
       },
-      { autoCommit: true },
+      conn,
     );
+    await conn.commit();
 
-    const id = Number((result.outBinds as { id?: number[] }).id?.[0] ?? 0);
-    if (!id) {
-      throw new Error("Failed to create Xbox collection import session.");
-    }
+    const id = Number((insert.outBinds as { id?: number[] }).id?.[0] ?? 0);
+    if (!id) throw new Error("Failed to create Xbox collection import session.");
 
-    const session = await getXboxCollectionImportById(id, connection);
-    if (!session) {
-      throw new Error("Failed to load Xbox collection import session.");
-    }
-
+    const session = await getXboxCollectionImportById(id, conn);
+    if (!session) throw new Error("Failed to load Xbox collection import session.");
     return session;
-  } finally {
-    await connection.close();
-  }
+  });
 }
 
 export async function insertXboxCollectionImportItems(
@@ -263,10 +300,9 @@ export async function insertXboxCollectionImportItems(
 ): Promise<void> {
   if (!items.length) return;
 
-  const connection = await getOraclePool().getConnection();
-  try {
+  await oraTransaction(async (conn) => {
     for (const item of items) {
-      await connection.execute(
+      await oraMutate(
         `INSERT INTO RPG_CLUB_XBOX_COLLECTION_IMPORT_ITEMS (
            IMPORT_ID,
            ROW_INDEX,
@@ -313,268 +349,87 @@ export async function insertXboxCollectionImportItems(
           ownershipType: item.ownershipType,
           note: item.note,
         },
-        { autoCommit: true },
+        conn,
       );
     }
-  } finally {
-    await connection.close();
-  }
+  });
 }
 
 export async function getXboxCollectionImportById(
   importId: number,
   connectionOverride?: oracledb.Connection,
 ): Promise<IXboxCollectionImport | null> {
-  const connection = connectionOverride ?? await getOraclePool().getConnection();
-  try {
-    const result = await connection.execute<{
-      IMPORT_ID: number;
-      USER_ID: string;
-      STATUS: XboxCollectionImportStatus;
-      CURRENT_INDEX: number;
-      TOTAL_COUNT: number;
-      XUID: string | null;
-      GAMERTAG: string | null;
-      SOURCE_TYPE: "API" | "CSV";
-      SOURCE_FILE_NAME: string | null;
-      SOURCE_FILE_SIZE: number | null;
-      TEMPLATE_VERSION: string | null;
-      CREATED_AT: Date | string;
-      UPDATED_AT: Date | string;
-    }>(
-      `SELECT IMPORT_ID,
-              USER_ID,
-              STATUS,
-              CURRENT_INDEX,
-              TOTAL_COUNT,
-              XUID,
-              GAMERTAG,
-              SOURCE_TYPE,
-              SOURCE_FILE_NAME,
-              SOURCE_FILE_SIZE,
-              TEMPLATE_VERSION,
-              CREATED_AT,
-              UPDATED_AT
-         FROM RPG_CLUB_XBOX_COLLECTION_IMPORTS
-        WHERE IMPORT_ID = :importId`,
-      { importId },
-      { outFormat: oracledb.OUT_FORMAT_OBJECT },
-    );
-    const row = result.rows?.[0];
-    return row ? mapImport(row) : null;
-  } finally {
-    if (!connectionOverride) {
-      await connection.close();
-    }
-  }
+  const rows = await oraQuery(
+    `${IMPORT_SELECT_SQL} WHERE IMPORT_ID = :importId`,
+    { importId },
+    mapImport,
+    connectionOverride,
+  );
+  return rows[0] ?? null;
 }
 
 export async function getActiveXboxCollectionImportForUser(
   userId: string,
 ): Promise<IXboxCollectionImport | null> {
-  const connection = await getOraclePool().getConnection();
-  try {
-    const result = await connection.execute<{
-      IMPORT_ID: number;
-      USER_ID: string;
-      STATUS: XboxCollectionImportStatus;
-      CURRENT_INDEX: number;
-      TOTAL_COUNT: number;
-      XUID: string | null;
-      GAMERTAG: string | null;
-      SOURCE_TYPE: "API" | "CSV";
-      SOURCE_FILE_NAME: string | null;
-      SOURCE_FILE_SIZE: number | null;
-      TEMPLATE_VERSION: string | null;
-      CREATED_AT: Date | string;
-      UPDATED_AT: Date | string;
-    }>(
-      `SELECT IMPORT_ID,
-              USER_ID,
-              STATUS,
-              CURRENT_INDEX,
-              TOTAL_COUNT,
-              XUID,
-              GAMERTAG,
-              SOURCE_TYPE,
-              SOURCE_FILE_NAME,
-              SOURCE_FILE_SIZE,
-              TEMPLATE_VERSION,
-              CREATED_AT,
-              UPDATED_AT
-         FROM RPG_CLUB_XBOX_COLLECTION_IMPORTS
-        WHERE USER_ID = :userId
-          AND STATUS IN ('ACTIVE', 'PAUSED')
-        ORDER BY IMPORT_ID DESC`,
-      { userId },
-      { outFormat: oracledb.OUT_FORMAT_OBJECT },
-    );
-    const row = result.rows?.[0];
-    return row ? mapImport(row) : null;
-  } finally {
-    await connection.close();
-  }
+  const rows = await oraQuery(
+    `${IMPORT_SELECT_SQL}
+     WHERE USER_ID = :userId
+       AND STATUS IN ('ACTIVE', 'PAUSED')
+     ORDER BY IMPORT_ID DESC`,
+    { userId },
+    mapImport,
+  );
+  return rows[0] ?? null;
 }
 
 export async function setXboxCollectionImportStatus(
   importId: number,
   status: XboxCollectionImportStatus,
 ): Promise<void> {
-  const connection = await getOraclePool().getConnection();
-  try {
-    await connection.execute(
-      `UPDATE RPG_CLUB_XBOX_COLLECTION_IMPORTS
-          SET STATUS = :status
-        WHERE IMPORT_ID = :importId`,
-      { importId, status },
-      { autoCommit: true },
-    );
-  } finally {
-    await connection.close();
-  }
+  await oraMutate(
+    `UPDATE RPG_CLUB_XBOX_COLLECTION_IMPORTS
+        SET STATUS = :status
+      WHERE IMPORT_ID = :importId`,
+    { importId, status },
+  );
 }
 
 export async function updateXboxCollectionImportIndex(
   importId: number,
   currentIndex: number,
 ): Promise<void> {
-  const connection = await getOraclePool().getConnection();
-  try {
-    await connection.execute(
-      `UPDATE RPG_CLUB_XBOX_COLLECTION_IMPORTS
-          SET CURRENT_INDEX = :currentIndex
-        WHERE IMPORT_ID = :importId`,
-      { importId, currentIndex },
-      { autoCommit: true },
-    );
-  } finally {
-    await connection.close();
-  }
+  await oraMutate(
+    `UPDATE RPG_CLUB_XBOX_COLLECTION_IMPORTS
+        SET CURRENT_INDEX = :currentIndex
+      WHERE IMPORT_ID = :importId`,
+    { importId, currentIndex },
+  );
 }
 
 export async function getXboxCollectionImportItemById(
   itemId: number,
 ): Promise<IXboxCollectionImportItem | null> {
-  const connection = await getOraclePool().getConnection();
-  try {
-    const result = await connection.execute<{
-      ITEM_ID: number;
-      IMPORT_ID: number;
-      ROW_INDEX: number;
-      XBOX_TITLE_ID: string | null;
-      XBOX_PRODUCT_ID: string | null;
-      XBOX_TITLE_NAME: string;
-      RAW_PLATFORM: string | null;
-      RAW_OWNERSHIP_TYPE: string | null;
-      RAW_NOTE: string | null;
-      RAW_GAMEDB_ID: number | null;
-      RAW_IGDB_ID: number | null;
-      PLATFORM_ID: number | null;
-      OWNERSHIP_TYPE: string | null;
-      NOTE: string | null;
-      STATUS: XboxCollectionImportItemStatus;
-      MATCH_CONFIDENCE: XboxCollectionMatchConfidence | null;
-      MATCH_CANDIDATE_JSON: string | null;
-      GAMEDB_GAME_ID: number | null;
-      COLLECTION_ENTRY_ID: number | null;
-      RESULT_REASON: XboxCollectionImportResultReason | null;
-      ERROR_TEXT: string | null;
-    }>(
-      `SELECT ITEM_ID,
-              IMPORT_ID,
-              ROW_INDEX,
-              XBOX_TITLE_ID,
-              XBOX_PRODUCT_ID,
-              XBOX_TITLE_NAME,
-              RAW_PLATFORM,
-              RAW_OWNERSHIP_TYPE,
-              RAW_NOTE,
-              RAW_GAMEDB_ID,
-              RAW_IGDB_ID,
-              PLATFORM_ID,
-              OWNERSHIP_TYPE,
-              NOTE,
-              STATUS,
-              MATCH_CONFIDENCE,
-              MATCH_CANDIDATE_JSON,
-              GAMEDB_GAME_ID,
-              COLLECTION_ENTRY_ID,
-              RESULT_REASON,
-              ERROR_TEXT
-         FROM RPG_CLUB_XBOX_COLLECTION_IMPORT_ITEMS
-        WHERE ITEM_ID = :itemId`,
-      { itemId },
-      { outFormat: oracledb.OUT_FORMAT_OBJECT },
-    );
-    const row = result.rows?.[0];
-    return row ? mapItem(row) : null;
-  } finally {
-    await connection.close();
-  }
+  const rows = await oraQuery(
+    `${ITEM_SELECT_SQL} WHERE ITEM_ID = :itemId`,
+    { itemId },
+    mapItem,
+  );
+  return rows[0] ?? null;
 }
 
 export async function getNextPendingXboxCollectionImportItem(
   importId: number,
 ): Promise<IXboxCollectionImportItem | null> {
-  const connection = await getOraclePool().getConnection();
-  try {
-    const result = await connection.execute<{
-      ITEM_ID: number;
-      IMPORT_ID: number;
-      ROW_INDEX: number;
-      XBOX_TITLE_ID: string | null;
-      XBOX_PRODUCT_ID: string | null;
-      XBOX_TITLE_NAME: string;
-      RAW_PLATFORM: string | null;
-      RAW_OWNERSHIP_TYPE: string | null;
-      RAW_NOTE: string | null;
-      RAW_GAMEDB_ID: number | null;
-      RAW_IGDB_ID: number | null;
-      PLATFORM_ID: number | null;
-      OWNERSHIP_TYPE: string | null;
-      NOTE: string | null;
-      STATUS: XboxCollectionImportItemStatus;
-      MATCH_CONFIDENCE: XboxCollectionMatchConfidence | null;
-      MATCH_CANDIDATE_JSON: string | null;
-      GAMEDB_GAME_ID: number | null;
-      COLLECTION_ENTRY_ID: number | null;
-      RESULT_REASON: XboxCollectionImportResultReason | null;
-      ERROR_TEXT: string | null;
-    }>(
-      `SELECT ITEM_ID,
-              IMPORT_ID,
-              ROW_INDEX,
-              XBOX_TITLE_ID,
-              XBOX_PRODUCT_ID,
-              XBOX_TITLE_NAME,
-              RAW_PLATFORM,
-              RAW_OWNERSHIP_TYPE,
-              RAW_NOTE,
-              RAW_GAMEDB_ID,
-              RAW_IGDB_ID,
-              PLATFORM_ID,
-              OWNERSHIP_TYPE,
-              NOTE,
-              STATUS,
-              MATCH_CONFIDENCE,
-              MATCH_CANDIDATE_JSON,
-              GAMEDB_GAME_ID,
-              COLLECTION_ENTRY_ID,
-              RESULT_REASON,
-              ERROR_TEXT
-         FROM RPG_CLUB_XBOX_COLLECTION_IMPORT_ITEMS
-        WHERE IMPORT_ID = :importId
-          AND STATUS = 'PENDING'
-        ORDER BY ROW_INDEX ASC
-        FETCH FIRST 1 ROWS ONLY`,
-      { importId },
-      { outFormat: oracledb.OUT_FORMAT_OBJECT },
-    );
-    const row = result.rows?.[0];
-    return row ? mapItem(row) : null;
-  } finally {
-    await connection.close();
-  }
+  const rows = await oraQuery(
+    `${ITEM_SELECT_SQL}
+     WHERE IMPORT_ID = :importId
+       AND STATUS = 'PENDING'
+     ORDER BY ROW_INDEX ASC
+     FETCH FIRST 1 ROWS ONLY`,
+    { importId },
+    mapItem,
+  );
+  return rows[0] ?? null;
 }
 
 export async function updateXboxCollectionImportItem(
@@ -623,18 +478,12 @@ export async function updateXboxCollectionImportItem(
 
   if (!fields.length) return;
 
-  const connection = await getOraclePool().getConnection();
-  try {
-    await connection.execute(
-      `UPDATE RPG_CLUB_XBOX_COLLECTION_IMPORT_ITEMS
-          SET ${fields.join(", ")}
-        WHERE ITEM_ID = :itemId`,
-      binds,
-      { autoCommit: true },
-    );
-  } finally {
-    await connection.close();
-  }
+  await oraMutate(
+    `UPDATE RPG_CLUB_XBOX_COLLECTION_IMPORT_ITEMS
+        SET ${fields.join(", ")}
+      WHERE ITEM_ID = :itemId`,
+    binds,
+  );
 }
 
 export async function countXboxCollectionImportItems(
@@ -646,99 +495,64 @@ export async function countXboxCollectionImportItems(
   skipped: number;
   failed: number;
 }> {
-  const connection = await getOraclePool().getConnection();
-  try {
-    const result = await connection.execute<{
-      STATUS: XboxCollectionImportItemStatus;
-      CNT: number;
-    }>(
-      `SELECT STATUS, COUNT(*) AS CNT
-         FROM RPG_CLUB_XBOX_COLLECTION_IMPORT_ITEMS
-        WHERE IMPORT_ID = :importId
-        GROUP BY STATUS`,
-      { importId },
-      { outFormat: oracledb.OUT_FORMAT_OBJECT },
-    );
-    const counts = {
-      pending: 0,
-      added: 0,
-      updated: 0,
-      skipped: 0,
-      failed: 0,
-    };
-    for (const row of result.rows ?? []) {
-      const status = row.STATUS;
-      const count = Number(row.CNT ?? 0);
-      if (status === "PENDING") counts.pending = count;
-      if (status === "ADDED") counts.added = count;
-      if (status === "UPDATED") counts.updated = count;
-      if (status === "SKIPPED") counts.skipped = count;
-      if (status === "FAILED") counts.failed = count;
-    }
-    return counts;
-  } finally {
-    await connection.close();
+  const rows = await oraQuery(
+    `SELECT STATUS, COUNT(*) AS CNT
+       FROM RPG_CLUB_XBOX_COLLECTION_IMPORT_ITEMS
+      WHERE IMPORT_ID = :importId
+      GROUP BY STATUS`,
+    { importId },
+    (row: { STATUS: XboxCollectionImportItemStatus; CNT: number }) => row,
+  );
+  const counts = { pending: 0, added: 0, updated: 0, skipped: 0, failed: 0 };
+  for (const row of rows) {
+    const count = Number(row.CNT ?? 0);
+    if (row.STATUS === "PENDING") counts.pending = count;
+    if (row.STATUS === "ADDED") counts.added = count;
+    if (row.STATUS === "UPDATED") counts.updated = count;
+    if (row.STATUS === "SKIPPED") counts.skipped = count;
+    if (row.STATUS === "FAILED") counts.failed = count;
   }
+  return counts;
 }
 
 export async function countXboxCollectionImportResultReasons(
   importId: number,
 ): Promise<Record<string, number>> {
-  const connection = await getOraclePool().getConnection();
-  try {
-    const result = await connection.execute<{
-      RESULT_REASON: XboxCollectionImportResultReason | null;
-      CNT: number;
-    }>(
-      `SELECT RESULT_REASON, COUNT(*) AS CNT
-         FROM RPG_CLUB_XBOX_COLLECTION_IMPORT_ITEMS
-        WHERE IMPORT_ID = :importId
-        GROUP BY RESULT_REASON`,
-      { importId },
-      { outFormat: oracledb.OUT_FORMAT_OBJECT },
-    );
-    const counts: Record<string, number> = {};
-    for (const row of result.rows ?? []) {
-      if (!row.RESULT_REASON) continue;
-      counts[row.RESULT_REASON] = Number(row.CNT ?? 0);
-    }
-    return counts;
-  } finally {
-    await connection.close();
+  const rows = await oraQuery(
+    `SELECT RESULT_REASON, COUNT(*) AS CNT
+       FROM RPG_CLUB_XBOX_COLLECTION_IMPORT_ITEMS
+      WHERE IMPORT_ID = :importId
+      GROUP BY RESULT_REASON`,
+    { importId },
+    (row: { RESULT_REASON: XboxCollectionImportResultReason | null; CNT: number }) => row,
+  );
+  const counts: Record<string, number> = {};
+  for (const row of rows) {
+    if (!row.RESULT_REASON) continue;
+    counts[row.RESULT_REASON] = Number(row.CNT ?? 0);
   }
+  return counts;
 }
 
 export async function getXboxTitleGameDbMapByTitleId(
   xboxTitleId: string,
+  existingConnection?: oracledb.Connection,
 ): Promise<IXboxTitleGameDbMap | null> {
-  const connection = await getOraclePool().getConnection();
-  try {
-    const result = await connection.execute<{
-      MAP_ID: number;
-      XBOX_TITLE_ID: string;
-      GAMEDB_GAME_ID: number | null;
-      STATUS: XboxTitleGameDbMapStatus;
-      CREATED_BY: string | null;
-      CREATED_AT: Date | string;
-      UPDATED_AT: Date | string;
-    }>(
-      `SELECT MAP_ID,
-              XBOX_TITLE_ID,
-              GAMEDB_GAME_ID,
-              STATUS,
-              CREATED_BY,
-              CREATED_AT,
-              UPDATED_AT
-         FROM RPG_CLUB_XBOX_TITLE_GAMEDB_MAP
-        WHERE XBOX_TITLE_ID = :xboxTitleId`,
-      { xboxTitleId },
-      { outFormat: oracledb.OUT_FORMAT_OBJECT },
-    );
-    const row = result.rows?.[0];
-    return row ? mapTitleMap(row) : null;
-  } finally {
-    await connection.close();
-  }
+  const rows = await oraQuery(
+    `SELECT MAP_ID,
+            XBOX_TITLE_ID,
+            GAMEDB_GAME_ID,
+            STATUS,
+            CREATED_BY,
+            CREATED_AT,
+            UPDATED_AT
+       FROM RPG_CLUB_XBOX_TITLE_GAMEDB_MAP
+      WHERE XBOX_TITLE_ID = :xboxTitleId`,
+    { xboxTitleId },
+    mapTitleMap,
+    existingConnection,
+  );
+  return rows[0] ?? null;
 }
 
 export async function upsertXboxTitleGameDbMap(params: {
@@ -747,9 +561,8 @@ export async function upsertXboxTitleGameDbMap(params: {
   status: XboxTitleGameDbMapStatus;
   createdBy: string | null;
 }): Promise<IXboxTitleGameDbMap> {
-  const connection = await getOraclePool().getConnection();
-  try {
-    await connection.execute(
+  return oraWithConnection(async (conn) => {
+    await oraMutate(
       `MERGE INTO RPG_CLUB_XBOX_TITLE_GAMEDB_MAP m
        USING (
          SELECT :xboxTitleId AS xboxTitleId,
@@ -780,17 +593,14 @@ export async function upsertXboxTitleGameDbMap(params: {
         status: params.status,
         createdBy: params.createdBy,
       },
-      { autoCommit: true },
+      conn,
     );
+    await conn.commit();
 
-    const mapping = await getXboxTitleGameDbMapByTitleId(params.xboxTitleId);
-    if (!mapping) {
-      throw new Error("Failed to load Xbox title mapping.");
-    }
+    const mapping = await getXboxTitleGameDbMapByTitleId(params.xboxTitleId, conn);
+    if (!mapping) throw new Error("Failed to load Xbox title mapping.");
     return mapping;
-  } finally {
-    await connection.close();
-  }
+  });
 }
 
 export async function getXboxTitleHistoricalMappedGameIds(params: {
@@ -798,40 +608,32 @@ export async function getXboxTitleHistoricalMappedGameIds(params: {
   excludeUserId?: string;
   limit?: number;
 }): Promise<number[]> {
-  const limit = Number.isInteger(params.limit) && 
+  const limit = Number.isInteger(params.limit) &&
     (params.limit ?? 0) > 0 ? Number(params.limit) : 5;
-  const connection = await getOraclePool().getConnection();
-  try {
-    const result = await connection.execute<{
-      GAMEDB_GAME_ID: number;
-    }>(
-      `SELECT t.GAMEDB_GAME_ID
-         FROM (
-           SELECT ii.GAMEDB_GAME_ID,
-                  COUNT(*) AS CNT,
-                  MAX(ii.ITEM_ID) AS LAST_ITEM_ID
-             FROM RPG_CLUB_XBOX_COLLECTION_IMPORT_ITEMS ii
-             JOIN RPG_CLUB_XBOX_COLLECTION_IMPORTS i
-               ON i.IMPORT_ID = ii.IMPORT_ID
-            WHERE ii.XBOX_TITLE_ID = :xboxTitleId
-              AND ii.GAMEDB_GAME_ID IS NOT NULL
-              AND ii.RESULT_REASON = 'MANUAL_REMAP'
-              AND (:excludeUserId IS NULL OR i.USER_ID <> :excludeUserId)
-            GROUP BY ii.GAMEDB_GAME_ID
-            ORDER BY CNT DESC, LAST_ITEM_ID DESC
-         ) t
-        WHERE ROWNUM <= :limit`,
-      {
-        xboxTitleId: params.xboxTitleId,
-        excludeUserId: params.excludeUserId ?? null,
-        limit,
-      },
-      { outFormat: oracledb.OUT_FORMAT_OBJECT },
-    );
-    return (result.rows ?? [])
-      .map((row) => Number(row.GAMEDB_GAME_ID))
-      .filter((value) => Number.isInteger(value) && value > 0);
-  } finally {
-    await connection.close();
-  }
+
+  const rows = await oraQuery(
+    `SELECT t.GAMEDB_GAME_ID
+       FROM (
+         SELECT ii.GAMEDB_GAME_ID,
+                COUNT(*) AS CNT,
+                MAX(ii.ITEM_ID) AS LAST_ITEM_ID
+           FROM RPG_CLUB_XBOX_COLLECTION_IMPORT_ITEMS ii
+           JOIN RPG_CLUB_XBOX_COLLECTION_IMPORTS i
+             ON i.IMPORT_ID = ii.IMPORT_ID
+          WHERE ii.XBOX_TITLE_ID = :xboxTitleId
+            AND ii.GAMEDB_GAME_ID IS NOT NULL
+            AND ii.RESULT_REASON = 'MANUAL_REMAP'
+            AND (:excludeUserId IS NULL OR i.USER_ID <> :excludeUserId)
+          GROUP BY ii.GAMEDB_GAME_ID
+          ORDER BY CNT DESC, LAST_ITEM_ID DESC
+       ) t
+      WHERE ROWNUM <= :limit`,
+    {
+      xboxTitleId: params.xboxTitleId,
+      excludeUserId: params.excludeUserId ?? null,
+      limit,
+    },
+    (row: { GAMEDB_GAME_ID: number }) => Number(row.GAMEDB_GAME_ID),
+  );
+  return rows.filter((value) => Number.isInteger(value) && value > 0);
 }
