@@ -244,3 +244,179 @@ End-to-end (requires both DBs running):
 - Postgres schema creation / migration scripts (separate effort).
 - Switching the live bot off Oracle (happens after PostgreSQL schema is validated).
 - Any logic changes in domain classes beyond SQL extraction.
+
+---
+
+## Remaining Work (as of 2026-06-08)
+
+### Fully Migrated (no inline SQL remaining)
+
+- `GameSearchSynonym.ts`
+- `Gotm.ts`
+- `NrGotm.ts`
+- `PublicReminder.ts` (SQL lives in `reminder.sql.ts` as `PublicReminderSql`)
+- `RssFeed.ts`
+- `Starboard.ts`
+- `Thread.ts`
+- `UserActivityIcon.ts`
+- `UserChannelMessageCount.ts`
+
+---
+
+### Phase A: SQL file exists, class not yet wired (zero `getSql` calls)
+
+Wire each class to its already-created `.sql.ts` file. Sorted by approximate SQL hit count (descending).
+
+| Class | Approx. raw SQL hits | SQL file |
+|---|---|---|
+| `GameReleaseAnnouncement.ts` | 24 | `gameReleaseAnnouncement.sql.ts` |
+| `AdminWizardSession.ts` | 19 | `adminWizardSession.sql.ts` |
+| `CollectionCsvImport.ts` | 18 | `collectionCsvImport.sql.ts` |
+| `CompletionatorImport.ts` | 16 | `completionatorImport.sql.ts` |
+| `GotmAuditImport.ts` | 15 | `gotmAuditImport.sql.ts` |
+| `GameDbCsvImport.ts` | 14 | `gameDbCsvImport.sql.ts` |
+| `GameKey.ts` | 10 | `gameKey.sql.ts` |
+| `BotVotingInfo.ts` | 10 | `botVotingInfo.sql.ts` |
+| `Nomination.ts` | 7 | `nomination.sql.ts` |
+| `PresencePromptHistory.ts` | 5 | `presencePrompt.sql.ts` |
+| `PresencePromptOptOut.ts` | 3 | `presencePrompt.sql.ts` |
+
+---
+
+### Phase B: Partially wired (SQL file exists, but raw SQL still remains inline)
+
+| Class | Approx. remaining raw SQL hits | SQL file |
+|---|---|---|
+| `Member.ts` | 114 | `member.sql.ts` |
+| `Game.ts` | 25 | `game.sql.ts` |
+| `XboxCollectionImport.ts` | 6 | `xboxCollectionImport.sql.ts` |
+| `SteamCollectionImport.ts` | 6 | `steamCollectionImport.sql.ts` |
+| `Reminder.ts` | 3 | `reminder.sql.ts` |
+| `UserGameCollection.ts` | 2 | `userGameCollection.sql.ts` |
+| `Todo.ts` | 2 | `todo.sql.ts` |
+| `SuggestionReviewSession.ts` | 2 | `suggestion.sql.ts` |
+| `Suggestion.ts` | 2 | `suggestion.sql.ts` |
+| `HltbCache.ts` | 2 | `hltbCache.sql.ts` |
+| `GameSearchSynonymDraft.ts` | 1 | `gameSearchSynonym.sql.ts` |
+
+---
+
+### Phase C: SQL file missing -- extract first, then wire
+
+| Class | Approx. raw SQL hits | Action |
+|---|---|---|
+| `GameDbCsvImportMapping.ts` | 8 | Create `gameDbCsvImportMapping.sql.ts` (or extend `gameDbCsvImport.sql.ts`), then wire the class |
+
+---
+
+### Suggested Completion Order
+
+1. **Phase C first** -- `GameDbCsvImportMapping.ts` has no sql file yet; create it before wiring.
+2. **Phase B `Member.ts` and `Game.ts`** -- largest backlogs; finish these to clear the biggest debt.
+3. **Phase A batch** -- all sql files already exist; wire the remaining 11 classes in one pass.
+4. **Phase B tail** -- finish the 9 smaller partially-wired classes.
+5. **Phase D (below)** -- make the execution wrappers dialect-agnostic.
+
+---
+
+### Phase D: Dialect-agnostic execution wrappers
+
+#### Current state
+
+`SqlManager.ts` exposes four Oracle-specific helpers and re-exports two Postgres helpers:
+
+| Wrapper | Dialect | Call sites | Notes |
+|---|---|---|---|
+| `oraQuery(sql, params, mapper)` | Oracle only | 210 | Mapper function inline at call site |
+| `oraMutate(sql, params, conn?)` | Oracle only | 205 | Returns `oracledb.Result<unknown>` |
+| `oraWithConnection(callback)` | Oracle only | 84 | Callback receives `oracledb.Connection` |
+| `oraTransaction(callback)` | Oracle only | 26 | Callback receives `oracledb.Connection` |
+| `pgQuery(text, values?)` | Postgres only | 3 | No mapper -- returns raw rows |
+| `pgTransaction(callback)` | Postgres only | 2 | Callback receives `pg.PoolClient` |
+
+No `pgMutate` or `pgWithConnection` exists. The two sides also have incompatible signatures
+(e.g., `oraQuery` requires a mapper at the call site; `pgQuery` does not).
+
+#### What needs to be built
+
+**1. Add missing Postgres helpers to `postgresClient.ts`**
+
+```typescript
+/** Runs a DML statement and returns rowCount. */
+export async function pgMutate(
+  text: string,
+  values?: unknown[],
+): Promise<number> {
+  const result = await getPostgresPool().query(text, values);
+  return result.rowCount ?? 0;
+}
+
+/** Acquires a client, runs callback, then releases it. */
+export async function pgWithConnection<T>(
+  callback: (client: pg.PoolClient) => Promise<T>,
+): Promise<T> {
+  const client = await getPostgresPool().connect();
+  try {
+    return await callback(client);
+  } finally {
+    client.release();
+  }
+}
+```
+
+**2. Add dialect-agnostic wrappers to `SqlManager.ts`**
+
+These dispatch to `ora*` or `pg*` based on `getDialect()`. They accept a `SqlEntry` directly so
+`getSql` never needs to be called at the call site.
+
+```typescript
+/** SELECT: runs the dialect variant and maps each row. */
+export async function dbQuery<RowT extends object, R>(
+  entry: SqlEntry,
+  params: unknown[],
+  mapper: (row: RowT) => R,
+): Promise<R[]>
+
+/** DML: runs the dialect variant, returns rows-affected count. */
+export async function dbMutate(
+  entry: SqlEntry,
+  params: unknown[],
+): Promise<number>
+
+/** Acquire/release a single connection for multiple statements. */
+export async function dbWithConnection<T>(
+  callback: (conn: oracledb.Connection | pg.PoolClient) => Promise<T>,
+): Promise<T>
+
+/** Atomic transaction: commit on success, rollback on throw. */
+export async function dbTransaction<T>(
+  callback: (conn: oracledb.Connection | pg.PoolClient) => Promise<T>,
+): Promise<T>
+```
+
+**Design notes:**
+- `params` unifies Oracle `BindParameters` and Postgres `unknown[]`. Oracle named binds
+  (`:name`) and Postgres positional (`$1`) are already separated by the `SqlEntry` oracle/postgres
+  keys, so call sites can pass a plain array or object that matches their dialect's SQL.
+- The `dbWithConnection` / `dbTransaction` callback type is a union. Callers that need to issue
+  multiple statements inside one connection will need a small internal helper per dialect, or accept
+  the union and narrow with `instanceof`.
+- Oracle `RETURNING ... INTO :outVar` (bind-out) has no direct Postgres analogue in a shared
+  signature -- those call sites need individual attention when porting.
+
+**3. Migrate all call sites**
+
+Replace every `oraQuery` / `oraMutate` / `oraWithConnection` / `oraTransaction` call with the
+corresponding `db*` wrapper. Scope: ~525 call sites across 37+ files (see table above for per-file
+counts from the first column of Phase A/B).
+
+**4. Re-export `pgMutate` and `pgWithConnection` from `SqlManager.ts`**
+
+Keep `SqlManager.ts` as the single import point for all DB helpers.
+
+#### Suggested approach
+
+- Implement and test `dbQuery` / `dbMutate` first (covers 415 of the 525 call sites).
+- Tackle `dbWithConnection` next (84 sites, mostly bulk-import classes).
+- Do `dbTransaction` last (26 sites, already well-isolated in transaction-scoped methods).
+- Run `tsc --noEmit` after each batch.
