@@ -1,5 +1,5 @@
 import oracledb from "oracledb";
-import { getOraclePool } from "../db/oracleClient.js";
+import { oraQuery, oraMutate, oraWithConnection } from "../db/SqlManager.js";
 
 export interface ISuggestionReviewSession {
   sessionId: string;
@@ -70,10 +70,9 @@ export async function createSuggestionReviewSessionRecord(session: {
   index: number;
   totalCount: number;
 }): Promise<ISuggestionReviewSession> {
-  const connection = await getOraclePool().getConnection();
-  try {
+  return oraWithConnection(async (conn) => {
     const suggestionIds = serializeSuggestionIds(session.suggestionIds);
-    await connection.execute(
+    await oraMutate(
       `INSERT INTO RPG_CLUB_SUGGESTION_REVIEW_SESSIONS
          (SESSION_ID, REVIEWER_ID, SUGGESTION_IDS, CURRENT_INDEX, TOTAL_COUNT)
        VALUES (:sessionId, :reviewerId, :suggestionIds, :currentIndex, :totalCount)`,
@@ -84,116 +83,82 @@ export async function createSuggestionReviewSessionRecord(session: {
         currentIndex: Math.max(session.index, 0),
         totalCount: Math.max(session.totalCount, 0),
       },
-      { autoCommit: true },
+      conn,
     );
+    await conn.commit();
 
-    const saved = await getSuggestionReviewSession(session.sessionId, connection);
-    if (!saved) {
-      throw new Error("Failed to create suggestion review session.");
-    }
+    const saved = await getSuggestionReviewSession(session.sessionId, conn);
+    if (!saved) throw new Error("Failed to create suggestion review session.");
     return saved;
-  } finally {
-    await connection.close();
-  }
+  });
 }
 
 export async function getSuggestionReviewSession(
   sessionId: string,
   existingConnection?: oracledb.Connection,
 ): Promise<ISuggestionReviewSession | null> {
-  const connection = existingConnection ?? (await getOraclePool().getConnection());
-  try {
-    const result = await connection.execute<SuggestionReviewSessionRow>(
-      `SELECT SESSION_ID,
-              REVIEWER_ID,
-              SUGGESTION_IDS,
-              CURRENT_INDEX,
-              TOTAL_COUNT,
-              CREATED_AT,
-              UPDATED_AT
-         FROM RPG_CLUB_SUGGESTION_REVIEW_SESSIONS
-        WHERE SESSION_ID = :sessionId`,
-      { sessionId },
-      { outFormat: oracledb.OUT_FORMAT_OBJECT },
-    );
-    const row = result.rows?.[0];
-    return row ? mapSessionRow(row) : null;
-  } finally {
-    if (!existingConnection) {
-      await connection.close();
-    }
-  }
+  const rows = await oraQuery(
+    `SELECT SESSION_ID,
+            REVIEWER_ID,
+            SUGGESTION_IDS,
+            CURRENT_INDEX,
+            TOTAL_COUNT,
+            CREATED_AT,
+            UPDATED_AT
+       FROM RPG_CLUB_SUGGESTION_REVIEW_SESSIONS
+      WHERE SESSION_ID = :sessionId`,
+    { sessionId },
+    mapSessionRow,
+    existingConnection,
+  );
+  return rows[0] ?? null;
 }
 
 export async function updateSuggestionReviewSession(
   session: ISuggestionReviewSession,
 ): Promise<void> {
-  const connection = await getOraclePool().getConnection();
-  try {
-    const suggestionIds = serializeSuggestionIds(session.suggestionIds);
-    await connection.execute(
-      `UPDATE RPG_CLUB_SUGGESTION_REVIEW_SESSIONS
-          SET REVIEWER_ID = :reviewerId,
-              SUGGESTION_IDS = :suggestionIds,
-              CURRENT_INDEX = :currentIndex,
-              TOTAL_COUNT = :totalCount
-        WHERE SESSION_ID = :sessionId`,
-      {
-        reviewerId: session.reviewerId,
-        suggestionIds,
-        currentIndex: Math.max(session.index, 0),
-        totalCount: Math.max(session.totalCount, 0),
-        sessionId: session.sessionId,
-      },
-      { autoCommit: true },
-    );
-  } finally {
-    await connection.close();
-  }
+  const suggestionIds = serializeSuggestionIds(session.suggestionIds);
+  await oraMutate(
+    `UPDATE RPG_CLUB_SUGGESTION_REVIEW_SESSIONS
+        SET REVIEWER_ID = :reviewerId,
+            SUGGESTION_IDS = :suggestionIds,
+            CURRENT_INDEX = :currentIndex,
+            TOTAL_COUNT = :totalCount
+      WHERE SESSION_ID = :sessionId`,
+    {
+      reviewerId: session.reviewerId,
+      suggestionIds,
+      currentIndex: Math.max(session.index, 0),
+      totalCount: Math.max(session.totalCount, 0),
+      sessionId: session.sessionId,
+    },
+  );
 }
 
 export async function deleteSuggestionReviewSession(sessionId: string): Promise<boolean> {
-  const connection = await getOraclePool().getConnection();
-  try {
-    const result = await connection.execute(
-      `DELETE FROM RPG_CLUB_SUGGESTION_REVIEW_SESSIONS WHERE SESSION_ID = :sessionId`,
-      { sessionId },
-      { autoCommit: true },
-    );
-    return (result.rowsAffected ?? 0) > 0;
-  } finally {
-    await connection.close();
-  }
+  const result = await oraMutate(
+    `DELETE FROM RPG_CLUB_SUGGESTION_REVIEW_SESSIONS WHERE SESSION_ID = :sessionId`,
+    { sessionId },
+  );
+  return (result.rowsAffected ?? 0) > 0;
 }
 
 export async function deleteSuggestionReviewSessionsForReviewer(
   reviewerId: string,
 ): Promise<number> {
-  const connection = await getOraclePool().getConnection();
-  try {
-    const result = await connection.execute(
-      `DELETE FROM RPG_CLUB_SUGGESTION_REVIEW_SESSIONS WHERE REVIEWER_ID = :reviewerId`,
-      { reviewerId },
-      { autoCommit: true },
-    );
-    return Number(result.rowsAffected ?? 0);
-  } finally {
-    await connection.close();
-  }
+  const result = await oraMutate(
+    `DELETE FROM RPG_CLUB_SUGGESTION_REVIEW_SESSIONS WHERE REVIEWER_ID = :reviewerId`,
+    { reviewerId },
+  );
+  return Number(result.rowsAffected ?? 0);
 }
 
 export async function deleteExpiredSuggestionReviewSessions(
   cutoffDate: Date,
 ): Promise<number> {
-  const connection = await getOraclePool().getConnection();
-  try {
-    const result = await connection.execute(
-      `DELETE FROM RPG_CLUB_SUGGESTION_REVIEW_SESSIONS WHERE CREATED_AT < :cutoff`,
-      { cutoff: cutoffDate },
-      { autoCommit: true },
-    );
-    return Number(result.rowsAffected ?? 0);
-  } finally {
-    await connection.close();
-  }
+  const result = await oraMutate(
+    `DELETE FROM RPG_CLUB_SUGGESTION_REVIEW_SESSIONS WHERE CREATED_AT < :cutoff`,
+    { cutoff: cutoffDate },
+  );
+  return Number(result.rowsAffected ?? 0);
 }

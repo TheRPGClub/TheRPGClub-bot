@@ -1,5 +1,5 @@
 import oracledb from "oracledb";
-import { getOraclePool } from "../db/oracleClient.js";
+import { oraQuery, oraMutate, oraWithConnection } from "../db/SqlManager.js";
 
 export interface IRssFeed {
   feedId: number;
@@ -27,43 +27,40 @@ export function normalizeKeywords(
     .filter((k) => k.length > 0);
 }
 
-export async function listFeeds(existingConnection?: oracledb.Connection): Promise<IRssFeed[]> {
-  const connection = existingConnection ?? await getOraclePool().getConnection();
-  const shouldClose = !existingConnection;
-  try {
-    const result = await connection.execute<{
-      FEED_ID: number;
-      FEED_NAME: string | null;
-      FEED_URL: string;
-      CHANNEL_ID: string;
-      INCLUDE_KEYWORDS: string | null;
-      EXCLUDE_KEYWORDS: string | null;
-    }>(
-      `SELECT FEED_ID,
-              FEED_NAME,
-              FEED_URL,
-              CHANNEL_ID,
-              INCLUDE_KEYWORDS,
-              EXCLUDE_KEYWORDS
-         FROM RPG_CLUB_RSS_FEEDS
-        ORDER BY FEED_ID`,
-      [],
-      { outFormat: oracledb.OUT_FORMAT_OBJECT },
-    );
+type FeedRow = {
+  FEED_ID: number;
+  FEED_NAME: string | null;
+  FEED_URL: string;
+  CHANNEL_ID: string;
+  INCLUDE_KEYWORDS: string | null;
+  EXCLUDE_KEYWORDS: string | null;
+};
 
-    return (result.rows ?? []).map((row) => ({
-      feedId: row.FEED_ID,
-      feedName: row.FEED_NAME ?? null,
-      feedUrl: row.FEED_URL,
-      channelId: row.CHANNEL_ID,
-      includeKeywords: normalizeKeywords(row.INCLUDE_KEYWORDS),
-      excludeKeywords: normalizeKeywords(row.EXCLUDE_KEYWORDS),
-    }));
-  } finally {
-    if (shouldClose) {
-      await connection.close();
-    }
-  }
+function mapFeedRow(row: FeedRow): IRssFeed {
+  return {
+    feedId: row.FEED_ID,
+    feedName: row.FEED_NAME ?? null,
+    feedUrl: row.FEED_URL,
+    channelId: row.CHANNEL_ID,
+    includeKeywords: normalizeKeywords(row.INCLUDE_KEYWORDS),
+    excludeKeywords: normalizeKeywords(row.EXCLUDE_KEYWORDS),
+  };
+}
+
+export async function listFeeds(existingConnection?: oracledb.Connection): Promise<IRssFeed[]> {
+  return oraQuery(
+    `SELECT FEED_ID,
+            FEED_NAME,
+            FEED_URL,
+            CHANNEL_ID,
+            INCLUDE_KEYWORDS,
+            EXCLUDE_KEYWORDS
+       FROM RPG_CLUB_RSS_FEEDS
+      ORDER BY FEED_ID`,
+    {},
+    mapFeedRow,
+    existingConnection,
+  );
 }
 
 export async function addFeed(
@@ -73,54 +70,42 @@ export async function addFeed(
   includeKeywords: string[],
   excludeKeywords: string[],
 ): Promise<number> {
-  const connection = await getOraclePool().getConnection();
-  try {
-    const normalizedInclude = normalizeKeywords(includeKeywords);
-    const normalizedExclude = normalizeKeywords(excludeKeywords);
-    const result = await connection.execute(
-      `INSERT INTO RPG_CLUB_RSS_FEEDS (
-         FEED_NAME,
-         FEED_URL,
-         CHANNEL_ID,
-         INCLUDE_KEYWORDS,
-         EXCLUDE_KEYWORDS
-       ) VALUES (
-         :feedName,
-         :feedUrl,
-         :channelId,
-         :includes,
-         :excludes
-       )
-       RETURNING FEED_ID INTO :id`,
-      {
-        feedName,
-        feedUrl,
-        channelId,
-        includes: normalizedInclude.join(", "),
-        excludes: normalizedExclude.join(", "),
-        id: { dir: oracledb.BIND_OUT, type: oracledb.NUMBER },
-      },
-      { autoCommit: true },
-    );
-    const id = (result.outBinds as any)?.id?.[0];
-    return typeof id === "number" ? id : 0;
-  } finally {
-    await connection.close();
-  }
+  const normalizedInclude = normalizeKeywords(includeKeywords);
+  const normalizedExclude = normalizeKeywords(excludeKeywords);
+  const result = await oraMutate(
+    `INSERT INTO RPG_CLUB_RSS_FEEDS (
+       FEED_NAME,
+       FEED_URL,
+       CHANNEL_ID,
+       INCLUDE_KEYWORDS,
+       EXCLUDE_KEYWORDS
+     ) VALUES (
+       :feedName,
+       :feedUrl,
+       :channelId,
+       :includes,
+       :excludes
+     )
+     RETURNING FEED_ID INTO :id`,
+    {
+      feedName,
+      feedUrl,
+      channelId,
+      includes: normalizedInclude.join(", "),
+      excludes: normalizedExclude.join(", "),
+      id: { dir: oracledb.BIND_OUT, type: oracledb.NUMBER },
+    },
+  );
+  const id = (result.outBinds as { id?: number[] })?.id?.[0];
+  return typeof id === "number" ? id : 0;
 }
 
 export async function removeFeed(feedId: number): Promise<boolean> {
-  const connection = await getOraclePool().getConnection();
-  try {
-    const result = await connection.execute(
-      `DELETE FROM RPG_CLUB_RSS_FEEDS WHERE FEED_ID = :id`,
-      { id: feedId },
-      { autoCommit: true },
-    );
-    return (result.rowsAffected ?? 0) > 0;
-  } finally {
-    await connection.close();
-  }
+  const result = await oraMutate(
+    `DELETE FROM RPG_CLUB_RSS_FEEDS WHERE FEED_ID = :id`,
+    { id: feedId },
+  );
+  return (result.rowsAffected ?? 0) > 0;
 }
 
 export async function updateFeed(
@@ -129,9 +114,8 @@ export async function updateFeed(
     Pick<IRssFeed, "feedUrl" | "channelId" | "includeKeywords" | "excludeKeywords" | "feedName">
   >,
 ): Promise<boolean> {
-  const connection = await getOraclePool().getConnection();
   const sets: string[] = [];
-  const params: Record<string, any> = { feedId };
+  const params: Record<string, string | number | null> = { feedId };
 
   if (updates.feedUrl !== undefined) {
     sets.push("FEED_URL = :feedUrl");
@@ -146,110 +130,99 @@ export async function updateFeed(
     params.channelId = updates.channelId;
   }
   if (updates.includeKeywords !== undefined) {
-    const normalized = normalizeKeywords(updates.includeKeywords);
     sets.push("INCLUDE_KEYWORDS = :includes");
-    params.includes = normalized.join(", ");
+    params.includes = normalizeKeywords(updates.includeKeywords).join(", ");
   }
   if (updates.excludeKeywords !== undefined) {
-    const normalized = normalizeKeywords(updates.excludeKeywords);
     sets.push("EXCLUDE_KEYWORDS = :excludes");
-    params.excludes = normalized.join(", ");
+    params.excludes = normalizeKeywords(updates.excludeKeywords).join(", ");
   }
 
-  if (!sets.length) {
-    await connection.close();
-    return false;
-  }
+  if (!sets.length) return false;
 
-  try {
-    const result = await connection.execute(
-      `UPDATE RPG_CLUB_RSS_FEEDS
-          SET ${sets.join(", ")}
-        WHERE FEED_ID = :feedId`,
-      params,
-      { autoCommit: true },
-    );
-    return (result.rowsAffected ?? 0) > 0;
-  } finally {
-    await connection.close();
-  }
+  const result = await oraMutate(
+    `UPDATE RPG_CLUB_RSS_FEEDS
+        SET ${sets.join(", ")}
+      WHERE FEED_ID = :feedId`,
+    params,
+  );
+  return (result.rowsAffected ?? 0) > 0;
 }
 
 export async function markItemsSeen(
-  items: IRssFeedItem[], existingConnection?: oracledb.Connection): Promise<void> {
+  items: IRssFeedItem[],
+  existingConnection?: oracledb.Connection,
+): Promise<void> {
   if (!items.length) return;
-  const connection = existingConnection ?? await getOraclePool().getConnection();
-  const shouldClose = !existingConnection;
-  try {
-    const normalized = items.map((item) => ({
-      ...item,
-      itemGuid: item.itemGuid ? item.itemGuid.slice(0, 512) : null,
-      itemLink: item.itemLink ? item.itemLink.slice(0, 512) : null,
-    }));
-    await connection.executeMany(
-      `MERGE INTO RPG_CLUB_RSS_FEED_ITEMS t
-        USING (
-          SELECT :feedId AS feed_id,
-                 :itemIdHash AS item_id_hash,
-                 :itemGuid AS item_guid,
-                 :itemLink AS item_link,
-                 :publishedAt AS published_at
-            FROM dual
-        ) s
-           ON (t.FEED_ID = s.feed_id AND t.ITEM_ID_HASH = s.item_id_hash)
-         WHEN NOT MATCHED THEN
-           INSERT (FEED_ID, ITEM_ID_HASH, ITEM_GUID, ITEM_LINK, PUBLISHED_AT, FIRST_SEEN_AT)
-           VALUES (s.feed_id, s.item_id_hash, s.item_guid, s.item_link, s.published_at, SYSTIMESTAMP)`,
-      normalized as any,
-      {
-        autoCommit: true,
-        bindDefs: {
-          feedId: { type: oracledb.NUMBER },
-          itemIdHash: { type: oracledb.STRING, maxSize: 128 },
-          itemGuid: { type: oracledb.STRING, maxSize: 1024 },
-          itemLink: { type: oracledb.STRING, maxSize: 1024 },
-          publishedAt: { type: oracledb.DATE },
-        },
-      },
-    );
-  } finally {
-    if (shouldClose) {
-      await connection.close();
-    }
+  const normalized = items.map((item) => ({
+    ...item,
+    itemGuid: item.itemGuid ? item.itemGuid.slice(0, 512) : null,
+    itemLink: item.itemLink ? item.itemLink.slice(0, 512) : null,
+  }));
+  const sql = `MERGE INTO RPG_CLUB_RSS_FEED_ITEMS t
+    USING (
+      SELECT :feedId AS feed_id,
+             :itemIdHash AS item_id_hash,
+             :itemGuid AS item_guid,
+             :itemLink AS item_link,
+             :publishedAt AS published_at
+        FROM dual
+    ) s
+       ON (t.FEED_ID = s.feed_id AND t.ITEM_ID_HASH = s.item_id_hash)
+     WHEN NOT MATCHED THEN
+       INSERT (FEED_ID, ITEM_ID_HASH, ITEM_GUID, ITEM_LINK, PUBLISHED_AT, FIRST_SEEN_AT)
+       VALUES (s.feed_id, s.item_id_hash, s.item_guid, s.item_link, s.published_at, SYSTIMESTAMP)`;
+  const opts = {
+    autoCommit: true,
+    bindDefs: {
+      feedId: { type: oracledb.NUMBER },
+      itemIdHash: { type: oracledb.STRING, maxSize: 128 },
+      itemGuid: { type: oracledb.STRING, maxSize: 1024 },
+      itemLink: { type: oracledb.STRING, maxSize: 1024 },
+      publishedAt: { type: oracledb.DATE },
+    },
+  };
+  const doExecute = async (conn: oracledb.Connection): Promise<void> => {
+    await conn.executeMany(sql, normalized as never[], opts);
+  };
+  if (existingConnection) {
+    await doExecute(existingConnection);
+  } else {
+    await oraWithConnection(doExecute);
   }
 }
 
 export async function isItemSeen(
-  feedId: number, itemIdHash: string, existingConnection?: oracledb.Connection): Promise<boolean> {
-  const connection = existingConnection ?? await getOraclePool().getConnection();
-  const shouldClose = !existingConnection;
-  try {
-    const result = await connection.execute(
-      `SELECT 1 FROM RPG_CLUB_RSS_FEED_ITEMS WHERE FEED_ID = :feedId AND ITEM_ID_HASH = :hash`,
-      { feedId, hash: itemIdHash },
-    );
-    return (result.rows ?? []).length > 0;
-  } finally {
-    if (shouldClose) {
-      await connection.close();
-    }
-  }
+  feedId: number,
+  itemIdHash: string,
+  existingConnection?: oracledb.Connection,
+): Promise<boolean> {
+  const rows = await oraQuery(
+    `SELECT 1 AS FOUND
+       FROM RPG_CLUB_RSS_FEED_ITEMS
+      WHERE FEED_ID = :feedId
+        AND ITEM_ID_HASH = :hash`,
+    { feedId, hash: itemIdHash },
+    (row: { FOUND: number }) => row,
+    existingConnection,
+  );
+  return rows.length > 0;
 }
 
 export async function getSeenItemHashes(
-  feedId: number, itemIdHashes: string[], existingConnection?: oracledb.Connection): 
-  Promise<Set<string>> {
+  feedId: number,
+  itemIdHashes: string[],
+  existingConnection?: oracledb.Connection,
+): Promise<Set<string>> {
   if (!itemIdHashes.length) return new Set();
 
-  const connection = existingConnection ?? await getOraclePool().getConnection();
-  const shouldClose = !existingConnection;
-  try {
+  const doQuery = async (conn: oracledb.Connection): Promise<Set<string>> => {
     const foundHashes = new Set<string>();
     const CHUNK_SIZE = 900;
 
     for (let i = 0; i < itemIdHashes.length; i += CHUNK_SIZE) {
       const chunk = itemIdHashes.slice(i, i + CHUNK_SIZE);
-      const bindVars: Record<string, any> = { feedId };
+      const bindVars: Record<string, string | number> = { feedId };
       const bindPlaceholders: string[] = [];
 
       chunk.forEach((hash, idx) => {
@@ -258,22 +231,23 @@ export async function getSeenItemHashes(
         bindPlaceholders.push(`:${key}`);
       });
 
-      const result = await connection.execute<{ ITEM_ID_HASH: string }>(
+      const rows = await oraQuery(
         `SELECT ITEM_ID_HASH
            FROM RPG_CLUB_RSS_FEED_ITEMS
           WHERE FEED_ID = :feedId
             AND ITEM_ID_HASH IN (${bindPlaceholders.join(", ")})`,
         bindVars,
-        { outFormat: oracledb.OUT_FORMAT_OBJECT },
+        (row: { ITEM_ID_HASH: string }) => row,
+        conn,
       );
-
-      (result.rows ?? []).forEach((row) => foundHashes.add(row.ITEM_ID_HASH));
+      rows.forEach((row) => foundHashes.add(row.ITEM_ID_HASH));
     }
 
     return foundHashes;
-  } finally {
-    if (shouldClose) {
-      await connection.close();
-    }
+  };
+
+  if (existingConnection) {
+    return doQuery(existingConnection);
   }
+  return oraWithConnection(doQuery);
 }

@@ -1,5 +1,5 @@
 import oracledb from "oracledb";
-import { getOraclePool } from "../db/oracleClient.js";
+import { oraQuery, oraMutate, oraWithConnection, oraTransaction } from "../db/SqlManager.js";
 
 export type CollectionCsvImportStatus = "ACTIVE" | "PAUSED" | "COMPLETED" | "CANCELED";
 export type CollectionCsvImportItemStatus =
@@ -138,9 +138,8 @@ export async function createCollectionCsvImportSession(params: {
   sourceFileSize: number | null;
   templateVersion: string | null;
 }): Promise<ICollectionCsvImport> {
-  const connection = await getOraclePool().getConnection();
-  try {
-    const result = await connection.execute(
+  return oraWithConnection(async (conn) => {
+    const result = await oraMutate(
       `INSERT INTO RPG_CLUB_COLLECTION_CSV_IMPORTS (
          USER_ID,
          STATUS,
@@ -166,23 +165,17 @@ export async function createCollectionCsvImportSession(params: {
         templateVersion: params.templateVersion,
         id: { dir: oracledb.BIND_OUT, type: oracledb.NUMBER },
       },
-      { autoCommit: true },
+      conn,
     );
+    await conn.commit();
 
     const id = Number((result.outBinds as { id?: number[] }).id?.[0] ?? 0);
-    if (!id) {
-      throw new Error("Failed to create CSV collection import session.");
-    }
+    if (!id) throw new Error("Failed to create CSV collection import session.");
 
-    const session = await getCollectionCsvImportById(id, connection);
-    if (!session) {
-      throw new Error("Failed to load CSV collection import session.");
-    }
-
+    const session = await getCollectionCsvImportById(id, conn);
+    if (!session) throw new Error("Failed to load CSV collection import session.");
     return session;
-  } finally {
-    await connection.close();
-  }
+  });
 }
 
 export async function insertCollectionCsvImportItems(
@@ -202,10 +195,9 @@ export async function insertCollectionCsvImportItems(
 ): Promise<void> {
   if (!items.length) return;
 
-  const connection = await getOraclePool().getConnection();
-  try {
+  await oraTransaction(async (conn) => {
     for (const item of items) {
-      await connection.execute(
+      await oraMutate(
         `INSERT INTO RPG_CLUB_COLLECTION_CSV_IMPORT_ITEMS (
            IMPORT_ID,
            ROW_INDEX,
@@ -246,249 +238,148 @@ export async function insertCollectionCsvImportItems(
           ownershipType: item.ownershipType,
           note: item.note,
         },
-        { autoCommit: true },
+        conn,
       );
     }
-  } finally {
-    await connection.close();
-  }
+  });
 }
 
 export async function getCollectionCsvImportById(
   importId: number,
-  existingConnection?: oracledb.Connection,
+  existingConn?: oracledb.Connection,
 ): Promise<ICollectionCsvImport | null> {
-  const connection = existingConnection ?? await getOraclePool().getConnection();
-  try {
-    const result = await connection.execute<{
-      IMPORT_ID: number;
-      USER_ID: string;
-      STATUS: CollectionCsvImportStatus;
-      CURRENT_INDEX: number;
-      TOTAL_COUNT: number;
-      SOURCE_FILE_NAME: string | null;
-      SOURCE_FILE_SIZE: number | null;
-      TEMPLATE_VERSION: string | null;
-      CREATED_AT: Date | string;
-      UPDATED_AT: Date | string;
-    }>(
-      `SELECT IMPORT_ID,
-              USER_ID,
-              STATUS,
-              CURRENT_INDEX,
-              TOTAL_COUNT,
-              SOURCE_FILE_NAME,
-              SOURCE_FILE_SIZE,
-              TEMPLATE_VERSION,
-              CREATED_AT,
-              UPDATED_AT
-         FROM RPG_CLUB_COLLECTION_CSV_IMPORTS
-        WHERE IMPORT_ID = :importId`,
-      { importId },
-      { outFormat: oracledb.OUT_FORMAT_OBJECT },
-    );
-    const row = result.rows?.[0];
-    return row ? mapImport(row) : null;
-  } finally {
-    if (!existingConnection) {
-      await connection.close();
-    }
-  }
+  const rows = await oraQuery(
+    `SELECT IMPORT_ID,
+            USER_ID,
+            STATUS,
+            CURRENT_INDEX,
+            TOTAL_COUNT,
+            SOURCE_FILE_NAME,
+            SOURCE_FILE_SIZE,
+            TEMPLATE_VERSION,
+            CREATED_AT,
+            UPDATED_AT
+       FROM RPG_CLUB_COLLECTION_CSV_IMPORTS
+      WHERE IMPORT_ID = :importId`,
+    { importId },
+    mapImport,
+    existingConn,
+  );
+  return rows[0] ?? null;
 }
 
 export async function getActiveCollectionCsvImportForUser(
   userId: string,
 ): Promise<ICollectionCsvImport | null> {
-  const connection = await getOraclePool().getConnection();
-  try {
-    const result = await connection.execute<{
-      IMPORT_ID: number;
-      USER_ID: string;
-      STATUS: CollectionCsvImportStatus;
-      CURRENT_INDEX: number;
-      TOTAL_COUNT: number;
-      SOURCE_FILE_NAME: string | null;
-      SOURCE_FILE_SIZE: number | null;
-      TEMPLATE_VERSION: string | null;
-      CREATED_AT: Date | string;
-      UPDATED_AT: Date | string;
-    }>(
-      `SELECT IMPORT_ID,
-              USER_ID,
-              STATUS,
-              CURRENT_INDEX,
-              TOTAL_COUNT,
-              SOURCE_FILE_NAME,
-              SOURCE_FILE_SIZE,
-              TEMPLATE_VERSION,
-              CREATED_AT,
-              UPDATED_AT
-         FROM RPG_CLUB_COLLECTION_CSV_IMPORTS
-        WHERE USER_ID = :userId
-          AND STATUS IN ('ACTIVE', 'PAUSED')
-        ORDER BY CREATED_AT DESC, IMPORT_ID DESC
-        FETCH FIRST 1 ROWS ONLY`,
-      { userId },
-      { outFormat: oracledb.OUT_FORMAT_OBJECT },
-    );
-    const row = result.rows?.[0];
-    return row ? mapImport(row) : null;
-  } finally {
-    await connection.close();
-  }
+  const rows = await oraQuery(
+    `SELECT IMPORT_ID,
+            USER_ID,
+            STATUS,
+            CURRENT_INDEX,
+            TOTAL_COUNT,
+            SOURCE_FILE_NAME,
+            SOURCE_FILE_SIZE,
+            TEMPLATE_VERSION,
+            CREATED_AT,
+            UPDATED_AT
+       FROM RPG_CLUB_COLLECTION_CSV_IMPORTS
+      WHERE USER_ID = :userId
+        AND STATUS IN ('ACTIVE', 'PAUSED')
+      ORDER BY CREATED_AT DESC, IMPORT_ID DESC
+      FETCH FIRST 1 ROWS ONLY`,
+    { userId },
+    mapImport,
+  );
+  return rows[0] ?? null;
 }
 
 export async function setCollectionCsvImportStatus(
   importId: number,
   status: CollectionCsvImportStatus,
 ): Promise<void> {
-  const connection = await getOraclePool().getConnection();
-  try {
-    await connection.execute(
-      `UPDATE RPG_CLUB_COLLECTION_CSV_IMPORTS
-          SET STATUS = :status
-        WHERE IMPORT_ID = :importId`,
-      { status, importId },
-      { autoCommit: true },
-    );
-  } finally {
-    await connection.close();
-  }
+  await oraMutate(
+    `UPDATE RPG_CLUB_COLLECTION_CSV_IMPORTS
+        SET STATUS = :status
+      WHERE IMPORT_ID = :importId`,
+    { status, importId },
+  );
 }
 
 export async function updateCollectionCsvImportIndex(
   importId: number,
   currentIndex: number,
 ): Promise<void> {
-  const connection = await getOraclePool().getConnection();
-  try {
-    await connection.execute(
-      `UPDATE RPG_CLUB_COLLECTION_CSV_IMPORTS
-          SET CURRENT_INDEX = :currentIndex
-        WHERE IMPORT_ID = :importId`,
-      { currentIndex, importId },
-      { autoCommit: true },
-    );
-  } finally {
-    await connection.close();
-  }
+  await oraMutate(
+    `UPDATE RPG_CLUB_COLLECTION_CSV_IMPORTS
+        SET CURRENT_INDEX = :currentIndex
+      WHERE IMPORT_ID = :importId`,
+    { currentIndex, importId },
+  );
 }
 
 export async function getCollectionCsvImportItemById(
   itemId: number,
 ): Promise<ICollectionCsvImportItem | null> {
-  const connection = await getOraclePool().getConnection();
-  try {
-    const result = await connection.execute<{
-      ITEM_ID: number;
-      IMPORT_ID: number;
-      ROW_INDEX: number;
-      RAW_TITLE: string;
-      RAW_PLATFORM: string | null;
-      RAW_OWNERSHIP_TYPE: string | null;
-      RAW_NOTE: string | null;
-      RAW_GAMEDB_ID: number | null;
-      RAW_IGDB_ID: number | null;
-      PLATFORM_ID: number | null;
-      OWNERSHIP_TYPE: string | null;
-      NOTE: string | null;
-      STATUS: CollectionCsvImportItemStatus;
-      MATCH_CONFIDENCE: CollectionCsvMatchConfidence | null;
-      MATCH_CANDIDATE_JSON: string | null;
-      GAMEDB_GAME_ID: number | null;
-      COLLECTION_ENTRY_ID: number | null;
-      RESULT_REASON: CollectionCsvImportResultReason | null;
-      ERROR_TEXT: string | null;
-    }>(
-      `SELECT ITEM_ID,
-              IMPORT_ID,
-              ROW_INDEX,
-              RAW_TITLE,
-              RAW_PLATFORM,
-              RAW_OWNERSHIP_TYPE,
-              RAW_NOTE,
-              RAW_GAMEDB_ID,
-              RAW_IGDB_ID,
-              PLATFORM_ID,
-              OWNERSHIP_TYPE,
-              NOTE,
-              STATUS,
-              MATCH_CONFIDENCE,
-              MATCH_CANDIDATE_JSON,
-              GAMEDB_GAME_ID,
-              COLLECTION_ENTRY_ID,
-              RESULT_REASON,
-              ERROR_TEXT
-         FROM RPG_CLUB_COLLECTION_CSV_IMPORT_ITEMS
-        WHERE ITEM_ID = :itemId`,
-      { itemId },
-      { outFormat: oracledb.OUT_FORMAT_OBJECT },
-    );
-    const row = result.rows?.[0];
-    return row ? mapItem(row) : null;
-  } finally {
-    await connection.close();
-  }
+  const rows = await oraQuery(
+    `SELECT ITEM_ID,
+            IMPORT_ID,
+            ROW_INDEX,
+            RAW_TITLE,
+            RAW_PLATFORM,
+            RAW_OWNERSHIP_TYPE,
+            RAW_NOTE,
+            RAW_GAMEDB_ID,
+            RAW_IGDB_ID,
+            PLATFORM_ID,
+            OWNERSHIP_TYPE,
+            NOTE,
+            STATUS,
+            MATCH_CONFIDENCE,
+            MATCH_CANDIDATE_JSON,
+            GAMEDB_GAME_ID,
+            COLLECTION_ENTRY_ID,
+            RESULT_REASON,
+            ERROR_TEXT
+       FROM RPG_CLUB_COLLECTION_CSV_IMPORT_ITEMS
+      WHERE ITEM_ID = :itemId`,
+    { itemId },
+    mapItem,
+  );
+  return rows[0] ?? null;
 }
 
 export async function getNextPendingCollectionCsvImportItem(
   importId: number,
 ): Promise<ICollectionCsvImportItem | null> {
-  const connection = await getOraclePool().getConnection();
-  try {
-    const result = await connection.execute<{
-      ITEM_ID: number;
-      IMPORT_ID: number;
-      ROW_INDEX: number;
-      RAW_TITLE: string;
-      RAW_PLATFORM: string | null;
-      RAW_OWNERSHIP_TYPE: string | null;
-      RAW_NOTE: string | null;
-      RAW_GAMEDB_ID: number | null;
-      RAW_IGDB_ID: number | null;
-      PLATFORM_ID: number | null;
-      OWNERSHIP_TYPE: string | null;
-      NOTE: string | null;
-      STATUS: CollectionCsvImportItemStatus;
-      MATCH_CONFIDENCE: CollectionCsvMatchConfidence | null;
-      MATCH_CANDIDATE_JSON: string | null;
-      GAMEDB_GAME_ID: number | null;
-      COLLECTION_ENTRY_ID: number | null;
-      RESULT_REASON: CollectionCsvImportResultReason | null;
-      ERROR_TEXT: string | null;
-    }>(
-      `SELECT ITEM_ID,
-              IMPORT_ID,
-              ROW_INDEX,
-              RAW_TITLE,
-              RAW_PLATFORM,
-              RAW_OWNERSHIP_TYPE,
-              RAW_NOTE,
-              RAW_GAMEDB_ID,
-              RAW_IGDB_ID,
-              PLATFORM_ID,
-              OWNERSHIP_TYPE,
-              NOTE,
-              STATUS,
-              MATCH_CONFIDENCE,
-              MATCH_CANDIDATE_JSON,
-              GAMEDB_GAME_ID,
-              COLLECTION_ENTRY_ID,
-              RESULT_REASON,
-              ERROR_TEXT
-         FROM RPG_CLUB_COLLECTION_CSV_IMPORT_ITEMS
-        WHERE IMPORT_ID = :importId
-          AND STATUS = 'PENDING'
-        ORDER BY ROW_INDEX ASC, ITEM_ID ASC
-        FETCH FIRST 1 ROWS ONLY`,
-      { importId },
-      { outFormat: oracledb.OUT_FORMAT_OBJECT },
-    );
-    const row = result.rows?.[0];
-    return row ? mapItem(row) : null;
-  } finally {
-    await connection.close();
-  }
+  const rows = await oraQuery(
+    `SELECT ITEM_ID,
+            IMPORT_ID,
+            ROW_INDEX,
+            RAW_TITLE,
+            RAW_PLATFORM,
+            RAW_OWNERSHIP_TYPE,
+            RAW_NOTE,
+            RAW_GAMEDB_ID,
+            RAW_IGDB_ID,
+            PLATFORM_ID,
+            OWNERSHIP_TYPE,
+            NOTE,
+            STATUS,
+            MATCH_CONFIDENCE,
+            MATCH_CANDIDATE_JSON,
+            GAMEDB_GAME_ID,
+            COLLECTION_ENTRY_ID,
+            RESULT_REASON,
+            ERROR_TEXT
+       FROM RPG_CLUB_COLLECTION_CSV_IMPORT_ITEMS
+      WHERE IMPORT_ID = :importId
+        AND STATUS = 'PENDING'
+      ORDER BY ROW_INDEX ASC, ITEM_ID ASC
+      FETCH FIRST 1 ROWS ONLY`,
+    { importId },
+    mapItem,
+  );
+  return rows[0] ?? null;
 }
 
 export async function updateCollectionCsvImportItem(
@@ -537,18 +428,12 @@ export async function updateCollectionCsvImportItem(
 
   if (!setParts.length) return;
 
-  const connection = await getOraclePool().getConnection();
-  try {
-    await connection.execute(
-      `UPDATE RPG_CLUB_COLLECTION_CSV_IMPORT_ITEMS
-          SET ${setParts.join(", ")}
-        WHERE ITEM_ID = :itemId`,
-      binds,
-      { autoCommit: true },
-    );
-  } finally {
-    await connection.close();
-  }
+  await oraMutate(
+    `UPDATE RPG_CLUB_COLLECTION_CSV_IMPORT_ITEMS
+        SET ${setParts.join(", ")}
+      WHERE ITEM_ID = :itemId`,
+    binds,
+  );
 }
 
 export async function countCollectionCsvImportItems(
@@ -560,65 +445,48 @@ export async function countCollectionCsvImportItems(
   skipped: number;
   failed: number;
 }> {
-  const connection = await getOraclePool().getConnection();
-  try {
-    const result = await connection.execute<{
-      STATUS: CollectionCsvImportItemStatus;
-      TOTAL: number;
-    }>(
-      `SELECT STATUS, COUNT(*) AS TOTAL
-         FROM RPG_CLUB_COLLECTION_CSV_IMPORT_ITEMS
-        WHERE IMPORT_ID = :importId
-        GROUP BY STATUS`,
-      { importId },
-      { outFormat: oracledb.OUT_FORMAT_OBJECT },
-    );
-    const counts: Record<CollectionCsvImportItemStatus, number> = {
-      PENDING: 0,
-      ADDED: 0,
-      UPDATED: 0,
-      SKIPPED: 0,
-      FAILED: 0,
-    };
-    result.rows?.forEach((row) => {
-      const status = row.STATUS;
-      counts[status] = Number(row.TOTAL ?? 0);
-    });
-    return {
-      pending: counts.PENDING,
-      added: counts.ADDED,
-      updated: counts.UPDATED,
-      skipped: counts.SKIPPED,
-      failed: counts.FAILED,
-    };
-  } finally {
-    await connection.close();
-  }
+  const counts: Record<CollectionCsvImportItemStatus, number> = {
+    PENDING: 0,
+    ADDED: 0,
+    UPDATED: 0,
+    SKIPPED: 0,
+    FAILED: 0,
+  };
+  const rows = await oraQuery(
+    `SELECT STATUS, COUNT(*) AS TOTAL
+       FROM RPG_CLUB_COLLECTION_CSV_IMPORT_ITEMS
+      WHERE IMPORT_ID = :importId
+      GROUP BY STATUS`,
+    { importId },
+    (row: { STATUS: CollectionCsvImportItemStatus; TOTAL: number }) => row,
+  );
+  rows.forEach((row) => {
+    counts[row.STATUS] = Number(row.TOTAL ?? 0);
+  });
+  return {
+    pending: counts.PENDING,
+    added: counts.ADDED,
+    updated: counts.UPDATED,
+    skipped: counts.SKIPPED,
+    failed: counts.FAILED,
+  };
 }
 
 export async function countCollectionCsvImportResultReasons(
   importId: number,
 ): Promise<Record<string, number>> {
-  const connection = await getOraclePool().getConnection();
-  try {
-    const result = await connection.execute<{
-      RESULT_REASON: CollectionCsvImportResultReason;
-      TOTAL: number;
-    }>(
-      `SELECT RESULT_REASON, COUNT(*) AS TOTAL
-         FROM RPG_CLUB_COLLECTION_CSV_IMPORT_ITEMS
-        WHERE IMPORT_ID = :importId
-          AND RESULT_REASON IS NOT NULL
-        GROUP BY RESULT_REASON`,
-      { importId },
-      { outFormat: oracledb.OUT_FORMAT_OBJECT },
-    );
-    const counts: Record<string, number> = {};
-    result.rows?.forEach((row) => {
-      counts[String(row.RESULT_REASON)] = Number(row.TOTAL ?? 0);
-    });
-    return counts;
-  } finally {
-    await connection.close();
-  }
+  const counts: Record<string, number> = {};
+  const rows = await oraQuery(
+    `SELECT RESULT_REASON, COUNT(*) AS TOTAL
+       FROM RPG_CLUB_COLLECTION_CSV_IMPORT_ITEMS
+      WHERE IMPORT_ID = :importId
+        AND RESULT_REASON IS NOT NULL
+      GROUP BY RESULT_REASON`,
+    { importId },
+    (row: { RESULT_REASON: CollectionCsvImportResultReason; TOTAL: number }) => row,
+  );
+  rows.forEach((row) => {
+    counts[String(row.RESULT_REASON)] = Number(row.TOTAL ?? 0);
+  });
+  return counts;
 }

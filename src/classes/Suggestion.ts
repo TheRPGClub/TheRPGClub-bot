@@ -1,5 +1,5 @@
 import oracledb from "oracledb";
-import { getOraclePool } from "../db/oracleClient.js";
+import { oraQuery, oraMutate, oraWithConnection } from "../db/SqlManager.js";
 
 export interface ISuggestionItem {
   suggestionId: number;
@@ -16,7 +16,7 @@ function toDate(value: Date | string): Date {
   return value instanceof Date ? value : new Date(value);
 }
 
-function mapSuggestionRow(row: {
+type SuggestionRow = {
   SUGGESTION_ID: number;
   TITLE: string;
   DETAILS: string | null;
@@ -25,7 +25,9 @@ function mapSuggestionRow(row: {
   CREATED_BY_NAME: string | null;
   CREATED_AT: Date | string;
   UPDATED_AT: Date | string;
-}): ISuggestionItem {
+};
+
+function mapSuggestionRow(row: SuggestionRow): ISuggestionItem {
   return {
     suggestionId: Number(row.SUGGESTION_ID),
     title: row.TITLE,
@@ -45,9 +47,8 @@ export async function createSuggestion(
   createdBy: string | null,
   createdByName: string | null,
 ): Promise<ISuggestionItem> {
-  const connection = await getOraclePool().getConnection();
-  try {
-    const result = await connection.execute(
+  return oraWithConnection(async (conn) => {
+    const result = await oraMutate(
       `INSERT INTO RPG_CLUB_SUGGESTIONS (TITLE, DETAILS, LABELS, CREATED_BY, CREATED_BY_NAME)
        VALUES (:title, :details, :labels, :createdBy, :createdByName)
        RETURNING SUGGESTION_ID INTO :id`,
@@ -59,120 +60,73 @@ export async function createSuggestion(
         createdByName,
         id: { dir: oracledb.BIND_OUT, type: oracledb.NUMBER },
       },
-      { autoCommit: true },
+      conn,
     );
-    const id = Number((result.outBinds as any)?.id?.[0] ?? 0);
-    if (!id) {
-      throw new Error("Failed to create suggestion.");
-    }
-    const suggestion = await getSuggestionById(id, connection);
-    if (!suggestion) {
-      throw new Error("Failed to load suggestion after creation.");
-    }
+    await conn.commit();
+
+    const id = Number((result.outBinds as { id?: number[] })?.id?.[0] ?? 0);
+    if (!id) throw new Error("Failed to create suggestion.");
+
+    const suggestion = await getSuggestionById(id, conn);
+    if (!suggestion) throw new Error("Failed to load suggestion after creation.");
     return suggestion;
-  } finally {
-    await connection.close();
-  }
+  });
 }
 
 export async function listSuggestions(limit: number = 50): Promise<ISuggestionItem[]> {
   const safeLimit = Math.min(Math.max(limit, 1), 200);
-  const connection = await getOraclePool().getConnection();
-  try {
-    const result = await connection.execute<{
-      SUGGESTION_ID: number;
-      TITLE: string;
-      DETAILS: string | null;
-      LABELS: string | null;
-      CREATED_BY: string | null;
-      CREATED_BY_NAME: string | null;
-      CREATED_AT: Date | string;
-      UPDATED_AT: Date | string;
-    }>(
-      `SELECT SUGGESTION_ID,
-              TITLE,
-              DETAILS,
-              LABELS,
-              CREATED_BY,
-              CREATED_BY_NAME,
-              CREATED_AT,
-              UPDATED_AT
-         FROM RPG_CLUB_SUGGESTIONS
-        ORDER BY CREATED_AT DESC, SUGGESTION_ID DESC
-        FETCH FIRST :limit ROWS ONLY`,
-      { limit: safeLimit },
-      { outFormat: oracledb.OUT_FORMAT_OBJECT },
-    );
-    return (result.rows ?? []).map((row) => mapSuggestionRow(row));
-  } finally {
-    await connection.close();
-  }
+  return oraQuery(
+    `SELECT SUGGESTION_ID,
+            TITLE,
+            DETAILS,
+            LABELS,
+            CREATED_BY,
+            CREATED_BY_NAME,
+            CREATED_AT,
+            UPDATED_AT
+       FROM RPG_CLUB_SUGGESTIONS
+      ORDER BY CREATED_AT DESC, SUGGESTION_ID DESC
+      FETCH FIRST :limit ROWS ONLY`,
+    { limit: safeLimit },
+    mapSuggestionRow,
+  );
 }
 
 export async function countSuggestions(): Promise<number> {
-  const connection = await getOraclePool().getConnection();
-  try {
-    const result = await connection.execute<{ TOTAL: number | null }>(
-      "SELECT COUNT(*) AS TOTAL FROM RPG_CLUB_SUGGESTIONS",
-      {},
-      { outFormat: oracledb.OUT_FORMAT_OBJECT },
-    );
-    const row = result.rows?.[0];
-    return Number(row?.TOTAL ?? 0);
-  } finally {
-    await connection.close();
-  }
+  const rows = await oraQuery(
+    "SELECT COUNT(*) AS TOTAL FROM RPG_CLUB_SUGGESTIONS",
+    {},
+    (row: { TOTAL: number | null }) => row,
+  );
+  return Number(rows[0]?.TOTAL ?? 0);
 }
 
 export async function getSuggestionById(
   suggestionId: number,
   existingConnection?: oracledb.Connection,
 ): Promise<ISuggestionItem | null> {
-  const connection = existingConnection ?? (await getOraclePool().getConnection());
-  try {
-    const result = await connection.execute<{
-      SUGGESTION_ID: number;
-      TITLE: string;
-      DETAILS: string | null;
-      LABELS: string | null;
-      CREATED_BY: string | null;
-      CREATED_BY_NAME: string | null;
-      CREATED_AT: Date | string;
-      UPDATED_AT: Date | string;
-    }>(
-      `SELECT SUGGESTION_ID,
-              TITLE,
-              DETAILS,
-              LABELS,
-              CREATED_BY,
-              CREATED_BY_NAME,
-              CREATED_AT,
-              UPDATED_AT
-         FROM RPG_CLUB_SUGGESTIONS
-        WHERE SUGGESTION_ID = :id`,
-      { id: suggestionId },
-      { outFormat: oracledb.OUT_FORMAT_OBJECT },
-    );
-
-    const row = result.rows?.[0];
-    return row ? mapSuggestionRow(row) : null;
-  } finally {
-    if (!existingConnection) {
-      await connection.close();
-    }
-  }
+  const rows = await oraQuery(
+    `SELECT SUGGESTION_ID,
+            TITLE,
+            DETAILS,
+            LABELS,
+            CREATED_BY,
+            CREATED_BY_NAME,
+            CREATED_AT,
+            UPDATED_AT
+       FROM RPG_CLUB_SUGGESTIONS
+      WHERE SUGGESTION_ID = :id`,
+    { id: suggestionId },
+    mapSuggestionRow,
+    existingConnection,
+  );
+  return rows[0] ?? null;
 }
 
 export async function deleteSuggestion(suggestionId: number): Promise<boolean> {
-  const connection = await getOraclePool().getConnection();
-  try {
-    const result = await connection.execute(
-      `DELETE FROM RPG_CLUB_SUGGESTIONS WHERE SUGGESTION_ID = :id`,
-      { id: suggestionId },
-      { autoCommit: true },
-    );
-    return (result.rowsAffected ?? 0) > 0;
-  } finally {
-    await connection.close();
-  }
+  const result = await oraMutate(
+    `DELETE FROM RPG_CLUB_SUGGESTIONS WHERE SUGGESTION_ID = :id`,
+    { id: suggestionId },
+  );
+  return (result.rowsAffected ?? 0) > 0;
 }

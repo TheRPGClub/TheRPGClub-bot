@@ -1,5 +1,4 @@
-import oracledb from "oracledb";
-import { getOraclePool } from "../db/oracleClient.js";
+import { oraQuery, oraMutate, oraWithConnection, oraTransaction } from "../db/SqlManager.js";
 import Game from "./Game.js";
 import { getThreadsByGameId } from "./Thread.js";
 
@@ -54,91 +53,74 @@ async function getPrimaryThreadIdForGame(gameId: number): Promise<string | null>
   return threadIds[0] ?? null;
 }
 
+type GotmEntryRow = {
+  ROUND_NUMBER: number;
+  MONTH_YEAR: string;
+  GAME_INDEX: number;
+  REDDIT_URL: string | null;
+  VOTING_RESULTS_MESSAGE_ID: string | null;
+  GAMEDB_GAME_ID: number | null;
+};
+
 async function loadFromDatabaseInternal(): Promise<IGotmEntry[]> {
-  const pool = getOraclePool();
-  const connection = await pool.getConnection();
+  const rows = await oraQuery<GotmEntryRow, GotmEntryRow>(
+    `SELECT ROUND_NUMBER,
+            MONTH_YEAR,
+            GAME_INDEX,
+            REDDIT_URL,
+            VOTING_RESULTS_MESSAGE_ID,
+            GAMEDB_GAME_ID
+       FROM GOTM_ENTRIES
+      ORDER BY ROUND_NUMBER, GAME_INDEX`,
+    {},
+    (row) => row,
+  );
 
-  try {
-    const result = await connection.execute<{
-      ROUND_NUMBER: number;
-      MONTH_YEAR: string;
-      GAME_INDEX: number;
-      REDDIT_URL: string | null;
-      VOTING_RESULTS_MESSAGE_ID: string | null;
-      GAMEDB_GAME_ID: number | null;
-    }>(
-      `SELECT ROUND_NUMBER,
-              MONTH_YEAR,
-              GAME_INDEX,
-              REDDIT_URL,
-              VOTING_RESULTS_MESSAGE_ID,
-              GAMEDB_GAME_ID
-         FROM GOTM_ENTRIES
-        ORDER BY ROUND_NUMBER, GAME_INDEX`,
-      [],
-      {
-        outFormat: oracledb.OUT_FORMAT_OBJECT,
-      },
-    );
+  const byRound = new Map<number, IGotmEntry>();
 
-    const rows = result.rows ?? [];
-    const byRound = new Map<number, IGotmEntry>();
+  for (const row of rows) {
+    const round = Number(row.ROUND_NUMBER);
+    if (!Number.isFinite(round)) continue;
 
-    for (const anyRow of rows as any[]) {
-      const row = anyRow as {
-        ROUND_NUMBER: number;
-        MONTH_YEAR: string;
-        GAME_INDEX: number;
-        REDDIT_URL: string | null;
-        VOTING_RESULTS_MESSAGE_ID: string | null;
-        GAMEDB_GAME_ID: number | null;
+    const monthYear = row.MONTH_YEAR;
+    const votingId = row.VOTING_RESULTS_MESSAGE_ID ?? null;
+
+    let entry = byRound.get(round);
+    if (!entry) {
+      entry = {
+        round,
+        monthYear,
+        gameOfTheMonth: [],
       };
-
-      const round = Number(row.ROUND_NUMBER);
-      if (!Number.isFinite(round)) continue;
-
-      const monthYear = row.MONTH_YEAR;
-      const votingId = row.VOTING_RESULTS_MESSAGE_ID ?? null;
-
-      let entry = byRound.get(round);
-      if (!entry) {
-        entry = {
-          round,
-          monthYear,
-          gameOfTheMonth: [],
-        };
-        if (votingId) {
-          entry.votingResultsMessageId = votingId;
-        }
-        byRound.set(round, entry);
-      } else if (!entry.votingResultsMessageId && votingId) {
+      if (votingId) {
         entry.votingResultsMessageId = votingId;
       }
-
-      const gamedbGameId = Number(row.GAMEDB_GAME_ID);
-      if (!Number.isInteger(gamedbGameId) || gamedbGameId <= 0) {
-        throw new Error(`GOTM round ${round} game ${row.GAME_INDEX} is missing GAMEDB_GAME_ID.`);
-      }
-      const gameDetails = await getGameDetailsCached(gamedbGameId);
-      const derivedThreadId = await getPrimaryThreadIdForGame(gamedbGameId);
-
-      const game: IGotmGame = {
-        title: gameDetails.title,
-        threadId: derivedThreadId,
-        redditUrl: row.REDDIT_URL ?? null,
-        gamedbGameId,
-      };
-
-      entry.gameOfTheMonth.push(game);
+      byRound.set(round, entry);
+    } else if (!entry.votingResultsMessageId && votingId) {
+      entry.votingResultsMessageId = votingId;
     }
 
-    const data = Array.from(byRound.values()).sort((a, b) => a.round - b.round);
-    gotmData = data;
-    gotmLoaded = true;
-    return gotmData;
-  } finally {
-    await connection.close();
+    const gamedbGameId = Number(row.GAMEDB_GAME_ID);
+    if (!Number.isInteger(gamedbGameId) || gamedbGameId <= 0) {
+      throw new Error(`GOTM round ${round} game ${row.GAME_INDEX} is missing GAMEDB_GAME_ID.`);
+    }
+    const gameDetails = await getGameDetailsCached(gamedbGameId);
+    const derivedThreadId = await getPrimaryThreadIdForGame(gamedbGameId);
+
+    const game: IGotmGame = {
+      title: gameDetails.title,
+      threadId: derivedThreadId,
+      redditUrl: row.REDDIT_URL ?? null,
+      gamedbGameId,
+    };
+
+    entry.gameOfTheMonth.push(game);
   }
+
+  const data = Array.from(byRound.values()).sort((a, b) => a.round - b.round);
+  gotmData = data;
+  gotmLoaded = true;
+  return gotmData;
 }
 
 export async function loadGotmFromDb(): Promise<void> {
@@ -334,6 +316,8 @@ export default class Gotm {
 
 export type GotmDatabaseEditableField = "redditUrl" | "gamedbGameId";
 
+type GotmRowIndexRow = { ROUND_NUMBER: number; GAME_INDEX: number };
+
 export async function updateGotmGameFieldInDatabase(
   round: number,
   gameIndex: number,
@@ -341,31 +325,24 @@ export async function updateGotmGameFieldInDatabase(
   value: string | number | null,
 ): Promise<void> {
   ensureInitialized();
-  const pool = getOraclePool();
-  const connection = await pool.getConnection();
 
-  try {
-    const columnMap: Record<GotmDatabaseEditableField, string> = {
-      redditUrl: "REDDIT_URL",
-      gamedbGameId: "GAMEDB_GAME_ID",
-    };
+  const columnMap: Record<GotmDatabaseEditableField, string> = {
+    redditUrl: "REDDIT_URL",
+    gamedbGameId: "GAMEDB_GAME_ID",
+  };
+  const columnName = columnMap[field];
 
-    const columnName = columnMap[field];
-
-    const result = await connection.execute<{
-      ROUND_NUMBER: number;
-      GAME_INDEX: number;
-    }>(
+  await oraWithConnection(async (conn) => {
+    const rows = await oraQuery<GotmRowIndexRow, GotmRowIndexRow>(
       `SELECT ROUND_NUMBER,
               GAME_INDEX
          FROM GOTM_ENTRIES
         WHERE ROUND_NUMBER = :round
         ORDER BY GAME_INDEX`,
       { round },
-      { outFormat: oracledb.OUT_FORMAT_OBJECT },
+      (row) => row,
+      conn,
     );
-
-    const rows = (result.rows ?? []) as any[];
 
     if (!rows.length) {
       throw new Error(`No GOTM database rows found for round ${round}.`);
@@ -377,15 +354,9 @@ export async function updateGotmGameFieldInDatabase(
       );
     }
 
-    const targetRow = rows[gameIndex] as {
-      ROUND_NUMBER: number;
-      GAME_INDEX: number;
-    };
-
-    const dbGameIndex = targetRow.GAME_INDEX;
+    const dbGameIndex = rows[gameIndex].GAME_INDEX;
 
     let dbValue = value;
-
     if (field === "gamedbGameId") {
       const newId = Number(value);
       if (!Number.isInteger(newId) || newId <= 0) {
@@ -396,34 +367,29 @@ export async function updateGotmGameFieldInDatabase(
       dbValue = newId;
     }
 
-    await connection.execute(
+    await oraMutate(
       `UPDATE GOTM_ENTRIES
           SET ${columnName} = :value
         WHERE ROUND_NUMBER = :round
           AND GAME_INDEX = :gameIndex`,
-      {
-        round,
-        gameIndex: dbGameIndex,
-        value: dbValue,
-      },
-      { autoCommit: true },
+      { round, gameIndex: dbGameIndex, value: dbValue },
+      conn,
     );
+    await conn.commit();
+  });
 
-    const entry = gotmData.find((e) => e.round === round);
-    if (entry && entry.gameOfTheMonth[gameIndex]) {
-      const target = entry.gameOfTheMonth[gameIndex];
-      if (field === "gamedbGameId") {
-        const newId = value as number;
-        target.gamedbGameId = newId;
-        const meta = await getGameDetailsCached(newId);
-        target.title = meta.title;
-        target.threadId = await getPrimaryThreadIdForGame(newId);
-      } else if (field === "redditUrl") {
-        target.redditUrl = value as string | null;
-      }
+  const entry = gotmData.find((e) => e.round === round);
+  if (entry && entry.gameOfTheMonth[gameIndex]) {
+    const target = entry.gameOfTheMonth[gameIndex];
+    if (field === "gamedbGameId") {
+      const newId = value as number;
+      target.gamedbGameId = newId;
+      const meta = await getGameDetailsCached(newId);
+      target.title = meta.title;
+      target.threadId = await getPrimaryThreadIdForGame(newId);
+    } else if (field === "redditUrl") {
+      target.redditUrl = value as string | null;
     }
-  } finally {
-    await connection.close();
   }
 }
 
@@ -431,20 +397,12 @@ export async function updateGotmVotingResultsInDatabase(
   round: number,
   messageId: string | null,
 ): Promise<void> {
-  const pool = getOraclePool();
-  const connection = await pool.getConnection();
-
-  try {
-    await connection.execute(
-      `UPDATE GOTM_ENTRIES
-          SET VOTING_RESULTS_MESSAGE_ID = :value
-        WHERE ROUND_NUMBER = :round`,
-      { round, value: messageId },
-      { autoCommit: true },
-    );
-  } finally {
-    await connection.close();
-  }
+  await oraMutate(
+    `UPDATE GOTM_ENTRIES
+        SET VOTING_RESULTS_MESSAGE_ID = :value
+      WHERE ROUND_NUMBER = :round`,
+    { round, value: messageId },
+  );
 }
 
 export async function insertGotmRoundInDatabase(
@@ -459,32 +417,26 @@ export async function insertGotmRoundInDatabase(
     throw new Error("At least one game is required for a GOTM round.");
   }
 
-  const pool = getOraclePool();
-  const connection = await pool.getConnection();
+  const countRows = await oraQuery<{ CNT: number }, { CNT: number }>(
+    `SELECT COUNT(*) AS CNT
+       FROM GOTM_ENTRIES
+      WHERE ROUND_NUMBER = :round`,
+    { round },
+    (row) => row,
+  );
+  const count = countRows.length ? Number(countRows[0].CNT) : 0;
+  if (Number.isFinite(count) && count > 0) {
+    throw new Error(`GOTM round ${round} already exists in the database.`);
+  }
 
-  try {
-    // Optional safety check to avoid duplicate rounds in the database
-    const existing = await connection.execute<{ CNT: number }>(
-      `SELECT COUNT(*) AS CNT
-         FROM GOTM_ENTRIES
-        WHERE ROUND_NUMBER = :round`,
-      { round },
-      { outFormat: oracledb.OUT_FORMAT_OBJECT },
-    );
-
-    const rows = (existing.rows ?? []) as any[];
-    const count = rows.length ? Number((rows[0] as any).CNT) : 0;
-    if (Number.isFinite(count) && count > 0) {
-      throw new Error(`GOTM round ${round} already exists in the database.`);
-    }
-
+  await oraTransaction(async (conn) => {
     for (let i = 0; i < games.length; i++) {
       const g = games[i];
       if (!Number.isInteger(g.gamedbGameId) || g.gamedbGameId <= 0) {
         throw new Error(`GameDB id is required for GOTM round ${round}, game ${i + 1}.`);
       }
       const gameMeta = await getGameDetailsCached(g.gamedbGameId);
-      await connection.execute(
+      await oraMutate(
         `INSERT INTO GOTM_ENTRIES (
            ROUND_NUMBER,
            MONTH_YEAR,
@@ -507,13 +459,11 @@ export async function insertGotmRoundInDatabase(
           redditUrl: g.redditUrl ?? null,
           gamedbGameId: g.gamedbGameId,
         },
-        { autoCommit: true },
+        conn,
       );
       games[i].title = gameMeta.title;
     }
-  } finally {
-    await connection.close();
-  }
+  });
 }
 
 export async function deleteGotmRoundFromDatabase(round: number): Promise<number> {
@@ -521,20 +471,10 @@ export async function deleteGotmRoundFromDatabase(round: number): Promise<number
     throw new Error("Invalid round number for GOTM delete.");
   }
 
-  const pool = getOraclePool();
-  const connection = await pool.getConnection();
-
-  try {
-    const result = await connection.execute(
-      `DELETE FROM GOTM_ENTRIES
-        WHERE ROUND_NUMBER = :round`,
-      { round },
-      { autoCommit: true },
-    );
-
-    const rowsAffected = result.rowsAffected ?? 0;
-    return rowsAffected;
-  } finally {
-    await connection.close();
-  }
+  const result = await oraMutate(
+    `DELETE FROM GOTM_ENTRIES
+      WHERE ROUND_NUMBER = :round`,
+    { round },
+  );
+  return result.rowsAffected ?? 0;
 }

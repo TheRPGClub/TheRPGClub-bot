@@ -1,5 +1,5 @@
 import oracledb from "oracledb";
-import { getOraclePool } from "../db/oracleClient.js";
+import { oraQuery, oraMutate, oraWithConnection, oraTransaction } from "../db/SqlManager.js";
 
 export type GotmAuditStatus = "ACTIVE" | "PAUSED" | "COMPLETED" | "CANCELED";
 export type GotmAuditItemStatus = "PENDING" | "SKIPPED" | "IMPORTED" | "ERROR";
@@ -95,9 +95,8 @@ export async function createGotmAuditImportSession(params: {
   totalCount: number;
   sourceFilename: string | null;
 }): Promise<IGotmAuditImport> {
-  const connection = await getOraclePool().getConnection();
-  try {
-    const result = await connection.execute(
+  return oraWithConnection(async (conn) => {
+    const result = await oraMutate(
       `INSERT INTO RPG_CLUB_GOTM_AUDIT_IMPORTS (
          USER_ID, STATUS, CURRENT_INDEX, TOTAL_COUNT, SOURCE_FILENAME
        ) VALUES (
@@ -109,21 +108,17 @@ export async function createGotmAuditImportSession(params: {
         sourceFilename: params.sourceFilename,
         id: { dir: oracledb.BIND_OUT, type: oracledb.NUMBER },
       },
-      { autoCommit: true },
+      conn,
     );
-    const id = Number((result.outBinds as any)?.id?.[0] ?? 0);
-    if (!id) {
-      throw new Error("Failed to create GOTM audit session.");
-    }
+    await conn.commit();
 
-    const session = await getGotmAuditImportById(id, connection);
-    if (!session) {
-      throw new Error("Failed to load GOTM audit session.");
-    }
+    const id = Number((result.outBinds as { id?: number[] })?.id?.[0] ?? 0);
+    if (!id) throw new Error("Failed to create GOTM audit session.");
+
+    const session = await getGotmAuditImportById(id, conn);
+    if (!session) throw new Error("Failed to load GOTM audit session.");
     return session;
-  } finally {
-    await connection.close();
-  }
+  });
 }
 
 export async function insertGotmAuditImportItems(
@@ -141,10 +136,9 @@ export async function insertGotmAuditImportItems(
   }>,
 ): Promise<void> {
   if (!items.length) return;
-  const connection = await getOraclePool().getConnection();
-  try {
+  await oraTransaction(async (conn) => {
     for (const item of items) {
-      await connection.execute(
+      await oraMutate(
         `INSERT INTO RPG_CLUB_GOTM_AUDIT_ITEMS (
            IMPORT_ID,
            ROW_INDEX,
@@ -182,220 +176,131 @@ export async function insertGotmAuditImportItems(
           redditUrl: item.redditUrl,
           gameDbGameId: item.gameDbGameId,
         },
-        { autoCommit: false },
+        conn,
       );
     }
-    await connection.commit();
-  } catch (err) {
-    await connection.rollback().catch(() => {});
-    throw err;
-  } finally {
-    await connection.close();
-  }
+  });
 }
 
 export async function getGotmAuditImportById(
   importId: number,
-  existingConnection?: oracledb.Connection,
+  existingConn?: oracledb.Connection,
 ): Promise<IGotmAuditImport | null> {
-  const connection = existingConnection ?? (await getOraclePool().getConnection());
-  try {
-    const res = await connection.execute<{
-      IMPORT_ID: number;
-      USER_ID: string;
-      STATUS: GotmAuditStatus;
-      CURRENT_INDEX: number;
-      TOTAL_COUNT: number;
-      SOURCE_FILENAME: string | null;
-      CREATED_AT: Date | string;
-      UPDATED_AT: Date | string;
-    }>(
-      `SELECT IMPORT_ID,
-              USER_ID,
-              STATUS,
-              CURRENT_INDEX,
-              TOTAL_COUNT,
-              SOURCE_FILENAME,
-              CREATED_AT,
-              UPDATED_AT
-         FROM RPG_CLUB_GOTM_AUDIT_IMPORTS
-        WHERE IMPORT_ID = :id`,
-      { id: importId },
-      { outFormat: oracledb.OUT_FORMAT_OBJECT },
-    );
-    const row = res.rows?.[0];
-    return row ? mapImport(row) : null;
-  } finally {
-    if (!existingConnection) {
-      await connection.close();
-    }
-  }
+  const rows = await oraQuery(
+    `SELECT IMPORT_ID,
+            USER_ID,
+            STATUS,
+            CURRENT_INDEX,
+            TOTAL_COUNT,
+            SOURCE_FILENAME,
+            CREATED_AT,
+            UPDATED_AT
+       FROM RPG_CLUB_GOTM_AUDIT_IMPORTS
+      WHERE IMPORT_ID = :id`,
+    { id: importId },
+    mapImport,
+    existingConn,
+  );
+  return rows[0] ?? null;
 }
 
 export async function getActiveGotmAuditImportForUser(
   userId: string,
 ): Promise<IGotmAuditImport | null> {
-  const connection = await getOraclePool().getConnection();
-  try {
-    const res = await connection.execute<{
-      IMPORT_ID: number;
-      USER_ID: string;
-      STATUS: GotmAuditStatus;
-      CURRENT_INDEX: number;
-      TOTAL_COUNT: number;
-      SOURCE_FILENAME: string | null;
-      CREATED_AT: Date | string;
-      UPDATED_AT: Date | string;
-    }>(
-      `SELECT IMPORT_ID,
-              USER_ID,
-              STATUS,
-              CURRENT_INDEX,
-              TOTAL_COUNT,
-              SOURCE_FILENAME,
-              CREATED_AT,
-              UPDATED_AT
-         FROM RPG_CLUB_GOTM_AUDIT_IMPORTS
-        WHERE USER_ID = :userId
-          AND STATUS IN ('ACTIVE', 'PAUSED')
-        ORDER BY IMPORT_ID DESC`,
-      { userId },
-      { outFormat: oracledb.OUT_FORMAT_OBJECT },
-    );
-    const row = res.rows?.[0];
-    return row ? mapImport(row) : null;
-  } finally {
-    await connection.close();
-  }
+  const rows = await oraQuery(
+    `SELECT IMPORT_ID,
+            USER_ID,
+            STATUS,
+            CURRENT_INDEX,
+            TOTAL_COUNT,
+            SOURCE_FILENAME,
+            CREATED_AT,
+            UPDATED_AT
+       FROM RPG_CLUB_GOTM_AUDIT_IMPORTS
+      WHERE USER_ID = :userId
+        AND STATUS IN ('ACTIVE', 'PAUSED')
+      ORDER BY IMPORT_ID DESC`,
+    { userId },
+    mapImport,
+  );
+  return rows[0] ?? null;
 }
 
 export async function setGotmAuditImportStatus(
   importId: number,
   status: GotmAuditStatus,
 ): Promise<void> {
-  const connection = await getOraclePool().getConnection();
-  try {
-    await connection.execute(
-      `UPDATE RPG_CLUB_GOTM_AUDIT_IMPORTS
-          SET STATUS = :status
-        WHERE IMPORT_ID = :importId`,
-      { importId, status },
-      { autoCommit: true },
-    );
-  } finally {
-    await connection.close();
-  }
+  await oraMutate(
+    `UPDATE RPG_CLUB_GOTM_AUDIT_IMPORTS
+        SET STATUS = :status
+      WHERE IMPORT_ID = :importId`,
+    { importId, status },
+  );
 }
 
 export async function updateGotmAuditImportIndex(
   importId: number,
   currentIndex: number,
 ): Promise<void> {
-  const connection = await getOraclePool().getConnection();
-  try {
-    await connection.execute(
-      `UPDATE RPG_CLUB_GOTM_AUDIT_IMPORTS
-          SET CURRENT_INDEX = :currentIndex
-        WHERE IMPORT_ID = :importId`,
-      { importId, currentIndex },
-      { autoCommit: true },
-    );
-  } finally {
-    await connection.close();
-  }
+  await oraMutate(
+    `UPDATE RPG_CLUB_GOTM_AUDIT_IMPORTS
+        SET CURRENT_INDEX = :currentIndex
+      WHERE IMPORT_ID = :importId`,
+    { importId, currentIndex },
+  );
 }
 
 export async function getNextGotmAuditItem(
   importId: number,
 ): Promise<IGotmAuditItem | null> {
-  const connection = await getOraclePool().getConnection();
-  try {
-    const res = await connection.execute<{
-      ITEM_ID: number;
-      IMPORT_ID: number;
-      ROW_INDEX: number;
-      KIND: string;
-      ROUND_NUMBER: number;
-      MONTH_YEAR: string;
-      GAME_INDEX: number;
-      GAME_TITLE: string;
-      THREAD_ID: string | null;
-      REDDIT_URL: string | null;
-      STATUS: GotmAuditItemStatus;
-      GAMEDB_GAME_ID: number | null;
-      ERROR_TEXT: string | null;
-    }>(
-      `SELECT ITEM_ID,
-              IMPORT_ID,
-              ROW_INDEX,
-              KIND,
-              ROUND_NUMBER,
-              MONTH_YEAR,
-              GAME_INDEX,
-              GAME_TITLE,
-              THREAD_ID,
-              REDDIT_URL,
-              STATUS,
-              GAMEDB_GAME_ID,
-              ERROR_TEXT
-         FROM RPG_CLUB_GOTM_AUDIT_ITEMS
-        WHERE IMPORT_ID = :importId
-          AND STATUS = 'PENDING'
-        ORDER BY ROW_INDEX
-        FETCH FIRST 1 ROWS ONLY`,
-      { importId },
-      { outFormat: oracledb.OUT_FORMAT_OBJECT },
-    );
-    const row = res.rows?.[0];
-    return row ? mapItem(row) : null;
-  } finally {
-    await connection.close();
-  }
+  const rows = await oraQuery(
+    `SELECT ITEM_ID,
+            IMPORT_ID,
+            ROW_INDEX,
+            KIND,
+            ROUND_NUMBER,
+            MONTH_YEAR,
+            GAME_INDEX,
+            GAME_TITLE,
+            THREAD_ID,
+            REDDIT_URL,
+            STATUS,
+            GAMEDB_GAME_ID,
+            ERROR_TEXT
+       FROM RPG_CLUB_GOTM_AUDIT_ITEMS
+      WHERE IMPORT_ID = :importId
+        AND STATUS = 'PENDING'
+      ORDER BY ROW_INDEX
+      FETCH FIRST 1 ROWS ONLY`,
+    { importId },
+    mapItem,
+  );
+  return rows[0] ?? null;
 }
 
 export async function getGotmAuditItemById(
   itemId: number,
 ): Promise<IGotmAuditItem | null> {
-  const connection = await getOraclePool().getConnection();
-  try {
-    const res = await connection.execute<{
-      ITEM_ID: number;
-      IMPORT_ID: number;
-      ROW_INDEX: number;
-      KIND: string;
-      ROUND_NUMBER: number;
-      MONTH_YEAR: string;
-      GAME_INDEX: number;
-      GAME_TITLE: string;
-      THREAD_ID: string | null;
-      REDDIT_URL: string | null;
-      STATUS: GotmAuditItemStatus;
-      GAMEDB_GAME_ID: number | null;
-      ERROR_TEXT: string | null;
-    }>(
-      `SELECT ITEM_ID,
-              IMPORT_ID,
-              ROW_INDEX,
-              KIND,
-              ROUND_NUMBER,
-              MONTH_YEAR,
-              GAME_INDEX,
-              GAME_TITLE,
-              THREAD_ID,
-              REDDIT_URL,
-              STATUS,
-              GAMEDB_GAME_ID,
-              ERROR_TEXT
-         FROM RPG_CLUB_GOTM_AUDIT_ITEMS
-        WHERE ITEM_ID = :itemId`,
-      { itemId },
-      { outFormat: oracledb.OUT_FORMAT_OBJECT },
-    );
-    const row = res.rows?.[0];
-    return row ? mapItem(row) : null;
-  } finally {
-    await connection.close();
-  }
+  const rows = await oraQuery(
+    `SELECT ITEM_ID,
+            IMPORT_ID,
+            ROW_INDEX,
+            KIND,
+            ROUND_NUMBER,
+            MONTH_YEAR,
+            GAME_INDEX,
+            GAME_TITLE,
+            THREAD_ID,
+            REDDIT_URL,
+            STATUS,
+            GAMEDB_GAME_ID,
+            ERROR_TEXT
+       FROM RPG_CLUB_GOTM_AUDIT_ITEMS
+      WHERE ITEM_ID = :itemId`,
+    { itemId },
+    mapItem,
+  );
+  return rows[0] ?? null;
 }
 
 export async function updateGotmAuditItem(
@@ -407,18 +312,16 @@ export async function updateGotmAuditItem(
   }>,
 ): Promise<void> {
   const fields: string[] = [];
-  const binds: Record<string, any> = { itemId };
+  const binds: Record<string, string | number | null> = { itemId };
 
   if (changes.status) {
     fields.push("STATUS = :status");
     binds.status = changes.status;
   }
-
   if (changes.gameDbGameId !== undefined) {
     fields.push("GAMEDB_GAME_ID = :gameDbGameId");
     binds.gameDbGameId = changes.gameDbGameId;
   }
-
   if (changes.errorText !== undefined) {
     fields.push("ERROR_TEXT = :errorText");
     binds.errorText = changes.errorText;
@@ -426,18 +329,12 @@ export async function updateGotmAuditItem(
 
   if (!fields.length) return;
 
-  const connection = await getOraclePool().getConnection();
-  try {
-    await connection.execute(
-      `UPDATE RPG_CLUB_GOTM_AUDIT_ITEMS
-          SET ${fields.join(", ")}
-        WHERE ITEM_ID = :itemId`,
-      binds,
-      { autoCommit: true },
-    );
-  } finally {
-    await connection.close();
-  }
+  await oraMutate(
+    `UPDATE RPG_CLUB_GOTM_AUDIT_ITEMS
+        SET ${fields.join(", ")}
+      WHERE ITEM_ID = :itemId`,
+    binds,
+  );
 }
 
 export async function getGotmAuditItemsForRound(
@@ -445,48 +342,28 @@ export async function getGotmAuditItemsForRound(
   kind: GotmAuditKind,
   roundNumber: number,
 ): Promise<IGotmAuditItem[]> {
-  const connection = await getOraclePool().getConnection();
-  try {
-    const res = await connection.execute<{
-      ITEM_ID: number;
-      IMPORT_ID: number;
-      ROW_INDEX: number;
-      KIND: string;
-      ROUND_NUMBER: number;
-      MONTH_YEAR: string;
-      GAME_INDEX: number;
-      GAME_TITLE: string;
-      THREAD_ID: string | null;
-      REDDIT_URL: string | null;
-      STATUS: GotmAuditItemStatus;
-      GAMEDB_GAME_ID: number | null;
-      ERROR_TEXT: string | null;
-    }>(
-      `SELECT ITEM_ID,
-              IMPORT_ID,
-              ROW_INDEX,
-              KIND,
-              ROUND_NUMBER,
-              MONTH_YEAR,
-              GAME_INDEX,
-              GAME_TITLE,
-              THREAD_ID,
-              REDDIT_URL,
-              STATUS,
-              GAMEDB_GAME_ID,
-              ERROR_TEXT
-         FROM RPG_CLUB_GOTM_AUDIT_ITEMS
-        WHERE IMPORT_ID = :importId
-          AND KIND = :kind
-          AND ROUND_NUMBER = :roundNumber
-        ORDER BY GAME_INDEX`,
-      { importId, kind, roundNumber },
-      { outFormat: oracledb.OUT_FORMAT_OBJECT },
-    );
-    return (res.rows ?? []).map((row) => mapItem(row));
-  } finally {
-    await connection.close();
-  }
+  return oraQuery(
+    `SELECT ITEM_ID,
+            IMPORT_ID,
+            ROW_INDEX,
+            KIND,
+            ROUND_NUMBER,
+            MONTH_YEAR,
+            GAME_INDEX,
+            GAME_TITLE,
+            THREAD_ID,
+            REDDIT_URL,
+            STATUS,
+            GAMEDB_GAME_ID,
+            ERROR_TEXT
+       FROM RPG_CLUB_GOTM_AUDIT_ITEMS
+      WHERE IMPORT_ID = :importId
+        AND KIND = :kind
+        AND ROUND_NUMBER = :roundNumber
+      ORDER BY GAME_INDEX`,
+    { importId, kind, roundNumber },
+    mapItem,
+  );
 }
 
 export async function countGotmAuditItems(importId: number): Promise<{
@@ -495,35 +372,21 @@ export async function countGotmAuditItems(importId: number): Promise<{
   skipped: number;
   error: number;
 }> {
-  const connection = await getOraclePool().getConnection();
-  try {
-    const res = await connection.execute<{
-      STATUS: GotmAuditItemStatus;
-      CNT: number;
-    }>(
-      `SELECT STATUS, COUNT(*) AS CNT
-         FROM RPG_CLUB_GOTM_AUDIT_ITEMS
-        WHERE IMPORT_ID = :importId
-        GROUP BY STATUS`,
-      { importId },
-      { outFormat: oracledb.OUT_FORMAT_OBJECT },
-    );
-    const stats = {
-      pending: 0,
-      imported: 0,
-      skipped: 0,
-      error: 0,
-    };
-    for (const row of res.rows ?? []) {
-      const status = row.STATUS;
-      const count = Number(row.CNT ?? 0);
-      if (status === "PENDING") stats.pending = count;
-      else if (status === "IMPORTED") stats.imported = count;
-      else if (status === "SKIPPED") stats.skipped = count;
-      else if (status === "ERROR") stats.error = count;
-    }
-    return stats;
-  } finally {
-    await connection.close();
+  const stats = { pending: 0, imported: 0, skipped: 0, error: 0 };
+  const rows = await oraQuery(
+    `SELECT STATUS, COUNT(*) AS CNT
+       FROM RPG_CLUB_GOTM_AUDIT_ITEMS
+      WHERE IMPORT_ID = :importId
+      GROUP BY STATUS`,
+    { importId },
+    (row: { STATUS: GotmAuditItemStatus; CNT: number }) => row,
+  );
+  for (const row of rows) {
+    const count = Number(row.CNT ?? 0);
+    if (row.STATUS === "PENDING") stats.pending = count;
+    else if (row.STATUS === "IMPORTED") stats.imported = count;
+    else if (row.STATUS === "SKIPPED") stats.skipped = count;
+    else if (row.STATUS === "ERROR") stats.error = count;
   }
+  return stats;
 }
