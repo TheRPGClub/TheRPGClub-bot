@@ -1,13 +1,14 @@
 import oracledb from "oracledb";
 import axios from "axios";
 import {
+  dbQuery, dbMutate,
   oraQuery,
   oraMutate,
   oraWithConnection,
   oraTransaction,
+  getSql,
 } from "../db/SqlManager.js";
 import { getDialect } from "../db/dialect.js";
-import { getSql } from "../db/SqlManager.js";
 import { GameSql } from "../db/sql/index.js";
 
 const dialect = getDialect();
@@ -968,15 +969,15 @@ export default class Game {
   }
 
   static async updateInitialReleaseDate(gameId: number): Promise<void> {
-    const rows = await oraQuery(
-      getSql(GameSql.updateInitialReleaseDateSelect, dialect),
+    const rows = await dbQuery(
+      GameSql.updateInitialReleaseDateSelect,
       { gameId },
       (row: { MIN_DATE: Date | null }) => row.MIN_DATE,
     );
     const minDate = rows[0] ?? null;
     if (!minDate) return;
-    await oraMutate(
-      getSql(GameSql.updateInitialReleaseDateUpdate, dialect),
+    await dbMutate(
+      GameSql.updateInitialReleaseDateUpdate,
       { releaseDate: minDate, gameId },
     );
   }
@@ -991,8 +992,8 @@ export default class Game {
     }
 
     try {
-      await oraMutate(
-        getSql(GameSql.insertPlatform, dialect),
+      await dbMutate(
+        GameSql.insertPlatform,
         {
           code: buildPlatformCode(igdbPlatform.name, igdbPlatform.id),
           name: igdbPlatform.name ?? `IGDB Platform ${igdbPlatform.id}`,
@@ -1055,8 +1056,8 @@ export default class Game {
     gameId: number,
     role: string,
   ): Promise<string[]> {
-    return oraQuery(
-      getSql(GameSql.getGameCompanies, dialect),
+    return dbQuery(
+      GameSql.getGameCompanies,
       { gameId, role },
       (row: { NAME: string }) => row.NAME,
     );
@@ -1117,8 +1118,8 @@ export default class Game {
   }
 
   static async getGameSeries(gameId: number): Promise<string | null> {
-    const rows = await oraQuery(
-      getSql(GameSql.getGameSeries, dialect),
+    const rows = await dbQuery(
+      GameSql.getGameSeries,
       { gameId },
       (row: { NAME: string }) => row.NAME,
     );
@@ -1131,8 +1132,8 @@ export default class Game {
     mapTable: string,
     idCol: string,
   ): Promise<string[]> {
-    return oraQuery(
-      GameSql.getSimpleList(defTable, mapTable, idCol)[dialect],
+    return dbQuery(
+      GameSql.getSimpleList(defTable, mapTable, idCol),
       { gameId },
       (row: { NAME: string }) => row.NAME,
     );
@@ -1167,8 +1168,8 @@ export default class Game {
   }
 
   static async getReleaseById(id: number): Promise<IRelease | null> {
-    const rows = await oraQuery(
-      getSql(GameSql.getReleaseById, dialect),
+    const rows = await dbQuery(
+      GameSql.getReleaseById,
       { id },
       mapReleaseRow,
     );
@@ -1176,24 +1177,24 @@ export default class Game {
   }
 
   static async getGameReleases(gameId: number): Promise<IRelease[]> {
-    return oraQuery(
-      getSql(GameSql.getGameReleases, dialect),
+    return dbQuery(
+      GameSql.getGameReleases,
       { gameId },
       mapReleaseRow,
     );
   }
 
   static async getPlatformsForGame(gameId: number): Promise<IPlatformDef[]> {
-    return oraQuery(
-      getSql(GameSql.getPlatformsForGame, dialect),
+    return dbQuery(
+      GameSql.getPlatformsForGame,
       { gameId },
       mapPlatformDefRow,
     );
   }
 
   static async getAllPlatforms(): Promise<IPlatformDef[]> {
-    return oraQuery(
-      getSql(GameSql.getAllPlatforms, dialect),
+    return dbQuery(
+      GameSql.getAllPlatforms,
       {},
       mapPlatformDefRow,
     );
@@ -1217,8 +1218,8 @@ export default class Game {
       placeholders.push(`:${key}`);
     });
 
-    const platforms = await oraQuery(
-      GameSql.getPlatformsByIgdbIds(placeholders.join(", "))[dialect],
+    const platforms = await dbQuery(
+      GameSql.getPlatformsByIgdbIds(placeholders.join(", ")),
       binds,
       mapPlatformDefRow,
     );
@@ -1261,8 +1262,8 @@ export default class Game {
   }
 
   static async getPlatformByCode(code: string): Promise<IPlatformDef | null> {
-    const rows = await oraQuery(
-      getSql(GameSql.getPlatformByCode, dialect),
+    const rows = await dbQuery(
+      GameSql.getPlatformByCode,
       { code },
       mapPlatformDefRow,
     );
@@ -1270,8 +1271,8 @@ export default class Game {
   }
 
   static async getPlatformById(id: number): Promise<IPlatformDef | null> {
-    const rows = await oraQuery(
-      getSql(GameSql.getPlatformById, dialect),
+    const rows = await dbQuery(
+      GameSql.getPlatformById,
       { id },
       mapPlatformDefRow,
     );
@@ -1303,8 +1304,8 @@ export default class Game {
     const gameToPlatforms = new Map<number, IPlatformDef[]>();
     const missingPlatformIds = new Set<number>();
 
-    const rows = await oraQuery(
-      GameSql.attachPlatformsToGames(placeholders.join(", "))[dialect],
+    const rows = await dbQuery(
+      GameSql.attachPlatformsToGames(placeholders.join(", ")),
       binds,
       (row: {
         GAME_ID: number;
@@ -1354,8 +1355,8 @@ export default class Game {
   static async getPlatformByIgdbId(
     igdbId: number,
   ): Promise<IPlatformDef | null> {
-    const rows = await oraQuery(
-      getSql(GameSql.getPlatformByIgdbId, dialect),
+    const rows = await dbQuery(
+      GameSql.getPlatformByIgdbId,
       { igdbId },
       mapPlatformDefRow,
     );
@@ -1363,16 +1364,16 @@ export default class Game {
   }
 
   static async getAllRegions(): Promise<IRegionDef[]> {
-    return oraQuery(
-      getSql(GameSql.getAllRegions, dialect),
+    return dbQuery(
+      GameSql.getAllRegions,
       {},
       mapRegionDefRow,
     );
   }
 
   static async getRegionByCode(code: string): Promise<IRegionDef | null> {
-    const rows = await oraQuery(
-      getSql(GameSql.getRegionByCode, dialect),
+    const rows = await dbQuery(
+      GameSql.getRegionByCode,
       { code },
       mapRegionDefRow,
     );
@@ -1380,8 +1381,8 @@ export default class Game {
   }
 
   static async getRegionById(id: number): Promise<IRegionDef | null> {
-    const rows = await oraQuery(
-      getSql(GameSql.getRegionById, dialect),
+    const rows = await dbQuery(
+      GameSql.getRegionById,
       { id },
       mapRegionDefRow,
     );
@@ -1389,8 +1390,8 @@ export default class Game {
   }
 
   static async getRegionByIgdbId(igdbId: number): Promise<IRegionDef | null> {
-    const rows = await oraQuery(
-      getSql(GameSql.getRegionByIgdbId, dialect),
+    const rows = await dbQuery(
+      GameSql.getRegionByIgdbId,
       { igdbId },
       mapRegionDefRow,
     );
@@ -1481,8 +1482,8 @@ export default class Game {
   }
 
   static async getAllCompanies(): Promise<ICompany[]> {
-    return oraQuery(
-      getSql(GameSql.getAllCompanies, dialect),
+    return dbQuery(
+      GameSql.getAllCompanies,
       {},
       (row: {
         COMPANY_ID: number;
@@ -1497,8 +1498,8 @@ export default class Game {
   }
 
   static async getCompanyById(id: number): Promise<ICompany | null> {
-    const rows = await oraQuery(
-      getSql(GameSql.getCompanyById, dialect),
+    const rows = await dbQuery(
+      GameSql.getCompanyById,
       { id },
       (row: {
         COMPANY_ID: number;
@@ -1863,8 +1864,8 @@ export default class Game {
     gameId: number,
     imageData: Buffer,
   ): Promise<void> {
-    await oraMutate(
-      getSql(GameSql.updateGameImage, dialect),
+    await dbMutate(
+      GameSql.updateGameImage,
       { imageData, gameId },
     );
   }
@@ -1873,8 +1874,8 @@ export default class Game {
     gameId: number,
     isBad: boolean,
   ): Promise<void> {
-    await oraMutate(
-      getSql(GameSql.updateGameThumbnailBad, dialect),
+    await dbMutate(
+      GameSql.updateGameThumbnailBad,
       { thumbnailBad: isBad ? 1 : 0, gameId },
     );
   }
@@ -1883,8 +1884,8 @@ export default class Game {
     gameId: number,
     isApproved: boolean,
   ): Promise<void> {
-    await oraMutate(
-      getSql(GameSql.updateGameThumbnailApproved, dialect),
+    await dbMutate(
+      GameSql.updateGameThumbnailApproved,
       { thumbnailApproved: isApproved ? 1 : 0, gameId },
     );
   }
@@ -1903,8 +1904,8 @@ export default class Game {
       binds[`id${idx}`] = id;
     });
 
-    const rows = await oraQuery(
-      GameSql.getThreadStatusForGameIds(placeholders)[dialect],
+    const rows = await dbQuery(
+      GameSql.getThreadStatusForGameIds(placeholders),
       binds,
       (row: { GAME_ID: number }) => Number(row.GAME_ID),
     );
@@ -1915,8 +1916,8 @@ export default class Game {
     gameId: number,
     featuredVideoUrl: string | null,
   ): Promise<void> {
-    await oraMutate(
-      getSql(GameSql.updateFeaturedVideoUrl, dialect),
+    await dbMutate(
+      GameSql.updateFeaturedVideoUrl,
       { featuredVideoUrl, gameId },
     );
   }
@@ -1925,8 +1926,8 @@ export default class Game {
     gameId: number,
     description: string | null,
   ): Promise<void> {
-    await oraMutate(
-      getSql(GameSql.updateGameDescription, dialect),
+    await dbMutate(
+      GameSql.updateGameDescription,
       { description, gameId },
     );
   }
@@ -1967,8 +1968,8 @@ export default class Game {
   }
 
   static async touchGameUpdatedAt(gameId: number): Promise<void> {
-    await oraMutate(
-      getSql(GameSql.touchGameUpdatedAt, dialect),
+    await dbMutate(
+      GameSql.touchGameUpdatedAt,
       { gameId },
     );
   }
@@ -1991,7 +1992,7 @@ export default class Game {
 
     const [gotmWins, nrGotmWins, gotmNominations, nrGotmNominations] =
       await Promise.all([
-        oraQuery<
+        dbQuery<
           WinRow,
           {
             round: number;
@@ -2000,7 +2001,7 @@ export default class Game {
             monthYear: string;
           }
         >(
-          getSql(GameSql.getGotmWins, dialect),
+          GameSql.getGotmWins,
           { gameId },
           (row) => ({
             round: Number(row.ROUND_NUMBER),
@@ -2009,7 +2010,7 @@ export default class Game {
             monthYear: String(row.MONTH_YEAR),
           }),
         ),
-        oraQuery<
+        dbQuery<
           WinRow,
           {
             round: number;
@@ -2018,7 +2019,7 @@ export default class Game {
             monthYear: string;
           }
         >(
-          getSql(GameSql.getNrGotmWins, dialect),
+          GameSql.getNrGotmWins,
           { gameId },
           (row) => ({
             round: Number(row.ROUND_NUMBER),
@@ -2027,8 +2028,8 @@ export default class Game {
             monthYear: String(row.MONTH_YEAR),
           }),
         ),
-        oraQuery<NomRow, { round: number; userId: string; username: string }>(
-          getSql(GameSql.getGotmNominations, dialect),
+        dbQuery<NomRow, { round: number; userId: string; username: string }>(
+          GameSql.getGotmNominations,
           { gameId },
           (row) => ({
             round: Number(row.ROUND_NUMBER),
@@ -2036,8 +2037,8 @@ export default class Game {
             username: String(row.GLOBAL_NAME || row.USERNAME || row.USER_ID),
           }),
         ),
-        oraQuery<NomRow, { round: number; userId: string; username: string }>(
-          getSql(GameSql.getNrGotmNominations, dialect),
+        dbQuery<NomRow, { round: number; userId: string; username: string }>(
+          GameSql.getNrGotmNominations,
           { gameId },
           (row) => ({
             round: Number(row.ROUND_NUMBER),
@@ -2053,8 +2054,8 @@ export default class Game {
   static async getNowPlayingMembers(
     gameId: number,
   ): Promise<INowPlayingMember[]> {
-    return oraQuery(
-      getSql(GameSql.getNowPlayingMembers, dialect),
+    return dbQuery(
+      GameSql.getNowPlayingMembers,
       { gameId },
       (row: {
         USER_ID: string;
@@ -2078,8 +2079,8 @@ export default class Game {
   }
 
   static async getGameCompletions(gameId: number): Promise<ICompletedMember[]> {
-    return oraQuery(
-      getSql(GameSql.getGameCompletions, dialect),
+    return dbQuery(
+      GameSql.getGameCompletions,
       { gameId },
       (row: {
         USER_ID: string;
@@ -2110,8 +2111,8 @@ export default class Game {
   static async getGameCollectionOwners(
     gameId: number,
   ): Promise<ICollectionOwnerMember[]> {
-    return oraQuery(
-      getSql(GameSql.getGameCollectionOwners, dialect),
+    return dbQuery(
+      GameSql.getGameCollectionOwners,
       { gameId },
       (row: {
         USER_ID: string;

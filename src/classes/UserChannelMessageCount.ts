@@ -1,5 +1,5 @@
 import oracledb from "oracledb";
-import { oraQuery, oraWithConnection } from "../db/SqlManager.js";
+import { dbQuery, oraWithConnection } from "../db/SqlManager.js";
 import { getDialect } from "../db/dialect.js";
 import { getSql } from "../db/SqlManager.js";
 import { UserChannelMessageCountSql } from "../db/sql/index.js";
@@ -52,8 +52,8 @@ export default class UserChannelMessageCount {
 
   static async getScannedChannelIds(): Promise<Set<string>> {
     try {
-      const rows = await oraQuery(
-        getSql(UserChannelMessageCountSql.getScannedChannelIds, dialect),
+      const rows = await dbQuery(
+        UserChannelMessageCountSql.getScannedChannelIds,
         [],
         (row: { CHANNEL_ID: string }) => row.CHANNEL_ID,
       );
@@ -67,8 +67,8 @@ export default class UserChannelMessageCount {
 
   static async getChannelScanMeta(): Promise<Map<string, Date>> {
     try {
-      const rows = await oraQuery(
-        getSql(UserChannelMessageCountSql.getChannelScanMeta, dialect),
+      const rows = await dbQuery(
+        UserChannelMessageCountSql.getChannelScanMeta,
         [],
         (row: { CHANNEL_ID: string; LAST_SCANNED_AT: Date }) => row,
       );

@@ -1,7 +1,10 @@
 import oracledb from "oracledb";
-import { oraQuery, oraMutate, oraWithConnection } from "../db/SqlManager.js";
+import {
+  dbQuery, dbMutate,
+  oraQuery, oraMutate, oraWithConnection,
+  getSql,
+} from "../db/SqlManager.js";
 import { getDialect } from "../db/dialect.js";
-import { getSql } from "../db/SqlManager.js";
 import { UserGameCollectionSql } from "../db/sql/index.js";
 
 const dialect = getDialect();
@@ -182,8 +185,8 @@ export default class UserGameCollection {
     if (!Number.isInteger(entryId) || entryId <= 0) {
       throw new Error("Invalid entry id.");
     }
-    const rows = await oraQuery(
-      getSql(UserGameCollectionSql.getEntryForUser, dialect),
+    const rows = await dbQuery(
+      UserGameCollectionSql.getEntryForUser,
       { entryId, userId },
       mapEntry,
     );
@@ -261,11 +264,10 @@ export default class UserGameCollection {
     if (!Number.isInteger(entryId) || entryId <= 0) {
       throw new Error("Invalid entry id.");
     }
-    const result = await oraMutate(
-      getSql(UserGameCollectionSql.removeEntry, dialect),
+    return (await dbMutate(
+      UserGameCollectionSql.removeEntry,
       { entryId, userId },
-    );
-    return (result.rowsAffected ?? 0) > 0;
+    )) > 0;
   }
 
   static async searchEntries(filters: {
@@ -317,8 +319,8 @@ export default class UserGameCollection {
     }
     const fetchClause = hasLimit ? "FETCH FIRST :limit ROWS ONLY" : "";
 
-    return oraQuery(
-      UserGameCollectionSql.searchEntries(where.join(" AND "), fetchClause)[dialect],
+    return dbQuery(
+      UserGameCollectionSql.searchEntries(where.join(" AND "), fetchClause),
       binds,
       mapEntry,
     );
@@ -333,13 +335,13 @@ export default class UserGameCollection {
     }
 
     const [totalRows, platformRows] = await Promise.all([
-      oraQuery(
-        getSql(UserGameCollectionSql.getTotalCount, dialect),
+      dbQuery(
+        UserGameCollectionSql.getTotalCount,
         { userId },
         (row: { TOTAL_COUNT: number }) => row,
       ),
-      oraQuery(
-        getSql(UserGameCollectionSql.getPlatformCounts, dialect),
+      dbQuery(
+        UserGameCollectionSql.getPlatformCounts,
         { userId },
         (row: {
           PLATFORM_ID: number | null;
@@ -367,13 +369,13 @@ export default class UserGameCollection {
     users: IUserGameCollectionUserOverview[];
   }> {
     const [totalRows, platformRows, userRows] = await Promise.all([
-      oraQuery(
-        getSql(UserGameCollectionSql.getTotalAllCount, dialect),
+      dbQuery(
+        UserGameCollectionSql.getTotalAllCount,
         {},
         (row: { TOTAL_COUNT: number }) => row,
       ),
-      oraQuery(
-        getSql(UserGameCollectionSql.getAllPlatformCounts, dialect),
+      dbQuery(
+        UserGameCollectionSql.getAllPlatformCounts,
         {},
         (row: {
           PLATFORM_ID: number | null;
@@ -387,8 +389,8 @@ export default class UserGameCollection {
           total: Number(row.TOTAL_COUNT ?? 0),
         }),
       ),
-      oraQuery(
-        getSql(UserGameCollectionSql.getAllUserRows, dialect),
+      dbQuery(
+        UserGameCollectionSql.getAllUserRows,
         {},
         (row: {
           USER_ID: string;
@@ -461,8 +463,8 @@ export default class UserGameCollection {
       binds.query = `%${trimmed}%`;
     }
 
-    const rows = await oraQuery(
-      UserGameCollectionSql.autocompleteEntries(titleWhere)[dialect],
+    const rows = await dbQuery(
+      UserGameCollectionSql.autocompleteEntries(titleWhere),
       binds,
       mapEntry,
     );

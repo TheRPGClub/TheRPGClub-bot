@@ -1,7 +1,10 @@
 import oracledb from "oracledb";
-import { oraQuery, oraMutate, oraWithConnection, oraTransaction } from "../db/SqlManager.js";
+import {
+  dbQuery, dbMutate,
+  oraQuery, oraMutate, oraWithConnection, oraTransaction,
+  getSql,
+} from "../db/SqlManager.js";
 import { getDialect } from "../db/dialect.js";
-import { getSql } from "../db/SqlManager.js";
 import { SteamCollectionImportSql } from "../db/sql/index.js";
 
 const dialect = getDialect();
@@ -258,8 +261,8 @@ export async function getSteamCollectionImportById(
 export async function getActiveSteamCollectionImportForUser(
   userId: string,
 ): Promise<ISteamCollectionImport | null> {
-  const rows = await oraQuery(
-    getSql(SteamCollectionImportSql.getActiveForUser, dialect),
+  const rows = await dbQuery(
+    SteamCollectionImportSql.getActiveForUser,
     { userId },
     mapImport,
   );
@@ -270,8 +273,8 @@ export async function setSteamCollectionImportStatus(
   importId: number,
   status: SteamCollectionImportStatus,
 ): Promise<void> {
-  await oraMutate(
-    getSql(SteamCollectionImportSql.setStatus, dialect),
+  await dbMutate(
+    SteamCollectionImportSql.setStatus,
     { status, importId },
   );
 }
@@ -280,8 +283,8 @@ export async function updateSteamCollectionImportIndex(
   importId: number,
   currentIndex: number,
 ): Promise<void> {
-  await oraMutate(
-    getSql(SteamCollectionImportSql.updateIndex, dialect),
+  await dbMutate(
+    SteamCollectionImportSql.updateIndex,
     { currentIndex, importId },
   );
 }
@@ -361,8 +364,8 @@ export async function updateSteamCollectionImportItem(
 
   if (!setParts.length) return;
 
-  await oraMutate(
-    SteamCollectionImportSql.updateItem(setParts)[dialect],
+  await dbMutate(
+    SteamCollectionImportSql.updateItem(setParts),
     binds,
   );
 }
@@ -376,8 +379,8 @@ export async function countSteamCollectionImportItems(
   skipped: number;
   failed: number;
 }> {
-  const rows = await oraQuery(
-    getSql(SteamCollectionImportSql.countItemsByStatus, dialect),
+  const rows = await dbQuery(
+    SteamCollectionImportSql.countItemsByStatus,
     { importId },
     (row: { STATUS: SteamCollectionImportItemStatus; CNT: number }) => row,
   );
@@ -397,8 +400,8 @@ export async function countSteamCollectionImportItems(
 export async function countSteamCollectionImportResultReasons(
   importId: number,
 ): Promise<Record<string, number>> {
-  const rows = await oraQuery(
-    getSql(SteamCollectionImportSql.countItemsByReason, dialect),
+  const rows = await dbQuery(
+    SteamCollectionImportSql.countItemsByReason,
     { importId },
     (row: { RESULT_REASON: string | null; CNT: number }) => row,
   );
@@ -457,8 +460,8 @@ export async function getSteamAppHistoricalMappedGameIds(params: {
   const limit = Number.isInteger(params.limit) && (params.limit ?? 0) > 0
     ? Number(params.limit) : 5;
 
-  const rows = await oraQuery(
-    getSql(SteamCollectionImportSql.getHistoricalMappedIds, dialect),
+  const rows = await dbQuery(
+    SteamCollectionImportSql.getHistoricalMappedIds,
     {
       steamAppId: params.steamAppId,
       excludeUserId: params.excludeUserId ?? null,
