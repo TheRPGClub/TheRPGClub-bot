@@ -1,5 +1,4 @@
-import oracledb from "oracledb";
-import { getOraclePool } from "../db/oracleClient.js";
+import { oraQuery, oraMutate, oraWithConnection } from "../db/SqlManager.js";
 
 export interface IBotVotingInfoEntry {
   roundNumber: number;
@@ -9,13 +8,15 @@ export interface IBotVotingInfoEntry {
   oneDayReminderSent: boolean;
 }
 
-function mapRowToEntry(row: {
+type VotingRow = {
   ROUND_NUMBER: number;
   NOMINATION_LIST_ID: number | null;
   NEXT_VOTE_AT: Date | string;
   FIVE_DAY_REMINDER_SENT: number | null;
   ONE_DAY_REMINDER_SENT: number | null;
-}): IBotVotingInfoEntry {
+};
+
+function mapRowToEntry(row: VotingRow): IBotVotingInfoEntry {
   const roundNumber = Number(row.ROUND_NUMBER);
   const nominationListId =
     row.NOMINATION_LIST_ID === null || row.NOMINATION_LIST_ID === undefined
@@ -23,8 +24,7 @@ function mapRowToEntry(row: {
       : Number(row.NOMINATION_LIST_ID);
 
   const rawDate = row.NEXT_VOTE_AT;
-  const nextVoteAt =
-    rawDate instanceof Date ? rawDate : new Date(rawDate as string);
+  const nextVoteAt = rawDate instanceof Date ? rawDate : new Date(rawDate as string);
 
   const fiveDayReminderSent = Boolean(row.FIVE_DAY_REMINDER_SENT ?? 0);
   const oneDayReminderSent = Boolean(row.ONE_DAY_REMINDER_SENT ?? 0);
@@ -36,13 +36,7 @@ function mapRowToEntry(row: {
     throw new Error("Invalid NEXT_VOTE_AT value in BOT_VOTING_INFO row.");
   }
 
-  return {
-    roundNumber,
-    nominationListId,
-    nextVoteAt,
-    fiveDayReminderSent,
-    oneDayReminderSent,
-  };
+  return { roundNumber, nominationListId, nextVoteAt, fiveDayReminderSent, oneDayReminderSent };
 }
 
 function normalizeRoundNumber(roundNumber: number): number {
@@ -67,135 +61,48 @@ function normalizeDate(value: Date | string): Date {
   return d;
 }
 
-export default class BotVotingInfo {
-  static async getAll(): Promise<IBotVotingInfoEntry[]> {
-    const pool = getOraclePool();
-    const connection = await pool.getConnection();
-
-    try {
-      const result = await connection.execute<{
-        ROUND_NUMBER: number;
-        NOMINATION_LIST_ID: number | null;
-        NEXT_VOTE_AT: Date;
-        FIVE_DAY_REMINDER_SENT: number | null;
-        ONE_DAY_REMINDER_SENT: number | null;
-      }>(
-        `SELECT ROUND_NUMBER,
+const VOTING_COLS = `ROUND_NUMBER,
                 NOMINATION_LIST_ID,
                 NEXT_VOTE_AT,
                 FIVE_DAY_REMINDER_SENT,
-                ONE_DAY_REMINDER_SENT
-           FROM BOT_VOTING_INFO
-          ORDER BY ROUND_NUMBER`,
-        [],
-        { outFormat: oracledb.OUT_FORMAT_OBJECT },
-      );
+                ONE_DAY_REMINDER_SENT`;
 
-      const rows = (result.rows ?? []) as any[];
-      return rows.map((row) =>
-        mapRowToEntry(row as {
-          ROUND_NUMBER: number;
-          NOMINATION_LIST_ID: number | null;
-          NEXT_VOTE_AT: Date | string;
-          FIVE_DAY_REMINDER_SENT: number | null;
-          ONE_DAY_REMINDER_SENT: number | null;
-        }),
-      );
-    } finally {
-      await connection.close();
-    }
+export default class BotVotingInfo {
+  static async getAll(): Promise<IBotVotingInfoEntry[]> {
+    return oraQuery(
+      `SELECT ${VOTING_COLS}
+         FROM BOT_VOTING_INFO
+        ORDER BY ROUND_NUMBER`,
+      [],
+      mapRowToEntry,
+    );
   }
 
   static async getByRound(roundNumber: number): Promise<IBotVotingInfoEntry | null> {
     const round = normalizeRoundNumber(roundNumber);
-
-    const pool = getOraclePool();
-    const connection = await pool.getConnection();
-
-    try {
-      const result = await connection.execute<{
-        ROUND_NUMBER: number;
-        NOMINATION_LIST_ID: number | null;
-        NEXT_VOTE_AT: Date;
-        FIVE_DAY_REMINDER_SENT: number | null;
-        ONE_DAY_REMINDER_SENT: number | null;
-      }>(
-        `SELECT ROUND_NUMBER,
-                NOMINATION_LIST_ID,
-                NEXT_VOTE_AT,
-                FIVE_DAY_REMINDER_SENT,
-                ONE_DAY_REMINDER_SENT
-           FROM BOT_VOTING_INFO
-          WHERE ROUND_NUMBER = :round`,
-        { round },
-        { outFormat: oracledb.OUT_FORMAT_OBJECT },
-      );
-
-      const rows = (result.rows ?? []) as any[];
-      if (!rows.length) return null;
-
-      const row = rows[0] as {
-        ROUND_NUMBER: number;
-        NOMINATION_LIST_ID: number | null;
-        NEXT_VOTE_AT: Date | string;
-        FIVE_DAY_REMINDER_SENT: number | null;
-        ONE_DAY_REMINDER_SENT: number | null;
-      };
-      return mapRowToEntry(row);
-    } finally {
-      await connection.close();
-    }
+    const rows = await oraQuery(
+      `SELECT ${VOTING_COLS}
+         FROM BOT_VOTING_INFO
+        WHERE ROUND_NUMBER = :round`,
+      { round },
+      mapRowToEntry,
+    );
+    return rows[0] ?? null;
   }
 
-  /**
-   * Return the entry for the highest round number in BOT_VOTING_INFO,
-   * or null if the table is empty.
-   */
   static async getCurrentRound(): Promise<IBotVotingInfoEntry | null> {
-    const pool = getOraclePool();
-    const connection = await pool.getConnection();
-
-    try {
-      const result = await connection.execute<{
-        ROUND_NUMBER: number;
-        NOMINATION_LIST_ID: number | null;
-        NEXT_VOTE_AT: Date | string;
-      }>(
-        `SELECT ROUND_NUMBER,
-                NOMINATION_LIST_ID,
-                NEXT_VOTE_AT,
-                FIVE_DAY_REMINDER_SENT,
-                ONE_DAY_REMINDER_SENT
-           FROM BOT_VOTING_INFO
-          WHERE ROUND_NUMBER = (
-            SELECT MAX(ROUND_NUMBER) FROM BOT_VOTING_INFO
-          )`,
-        [],
-        { outFormat: oracledb.OUT_FORMAT_OBJECT },
-      );
-
-      const rows = (result.rows ?? []) as any[];
-      if (!rows.length) {
-        return null;
-      }
-
-      const row = rows[0] as {
-        ROUND_NUMBER: number;
-        NOMINATION_LIST_ID: number | null;
-        NEXT_VOTE_AT: Date | string;
-        FIVE_DAY_REMINDER_SENT: number | null;
-        ONE_DAY_REMINDER_SENT: number | null;
-      };
-
-      return mapRowToEntry(row);
-    } finally {
-      await connection.close();
-    }
+    const rows = await oraQuery(
+      `SELECT ${VOTING_COLS}
+         FROM BOT_VOTING_INFO
+        WHERE ROUND_NUMBER = (
+          SELECT MAX(ROUND_NUMBER) FROM BOT_VOTING_INFO
+        )`,
+      [],
+      mapRowToEntry,
+    );
+    return rows[0] ?? null;
   }
 
-  /**
-   * Create or update a voting info row for the given round.
-   */
   static async setRoundInfo(
     roundNumber: number,
     nextVoteAt: Date | string,
@@ -204,29 +111,18 @@ export default class BotVotingInfo {
     const round = normalizeRoundNumber(roundNumber);
     const nextVote = normalizeDate(nextVoteAt);
 
-    const pool = getOraclePool();
-    const connection = await pool.getConnection();
-
-    try {
-      const updateResult = await connection.execute(
+    await oraWithConnection(async (conn) => {
+      const updateResult = await conn.execute(
         `UPDATE BOT_VOTING_INFO
             SET NOMINATION_LIST_ID = :nominationListId,
                 NEXT_VOTE_AT = :nextVoteAt
           WHERE ROUND_NUMBER = :round`,
-        {
-          round,
-          nominationListId,
-          nextVoteAt: nextVote,
-        },
+        { round, nominationListId, nextVoteAt: nextVote },
         { autoCommit: true },
       );
+      if ((updateResult.rowsAffected ?? 0) > 0) return;
 
-      const rowsUpdated = updateResult.rowsAffected ?? 0;
-      if (rowsUpdated > 0) {
-        return;
-      }
-
-      await connection.execute(
+      await conn.execute(
         `INSERT INTO BOT_VOTING_INFO (
            ROUND_NUMBER,
            NOMINATION_LIST_ID,
@@ -240,16 +136,10 @@ export default class BotVotingInfo {
            0,
            0
          )`,
-        {
-          round,
-          nominationListId,
-          nextVoteAt: nextVote,
-        },
+        { round, nominationListId, nextVoteAt: nextVote },
         { autoCommit: true },
       );
-    } finally {
-      await connection.close();
-    }
+    });
   }
 
   static async markReminderSent(
@@ -260,26 +150,16 @@ export default class BotVotingInfo {
     const column =
       reminder === "fiveDay" ? "FIVE_DAY_REMINDER_SENT" : "ONE_DAY_REMINDER_SENT";
 
-    const pool = getOraclePool();
-    const connection = await pool.getConnection();
-
-    try {
-      const result = await connection.execute(
-        `UPDATE BOT_VOTING_INFO
-            SET ${column} = 1
-          WHERE ROUND_NUMBER = :round`,
-        { round },
-        { autoCommit: true },
+    const result = await oraMutate(
+      `UPDATE BOT_VOTING_INFO
+          SET ${column} = 1
+        WHERE ROUND_NUMBER = :round`,
+      { round },
+    );
+    if ((result.rowsAffected ?? 0) === 0) {
+      throw new Error(
+        `No BOT_VOTING_INFO row found for round ${round} when updating ${column}.`,
       );
-
-      const rowsUpdated = result.rowsAffected ?? 0;
-      if (rowsUpdated === 0) {
-        throw new Error(
-          `No BOT_VOTING_INFO row found for round ${round} when updating ${column}.`,
-        );
-      }
-    } finally {
-      await connection.close();
     }
   }
 
@@ -289,30 +169,16 @@ export default class BotVotingInfo {
   ): Promise<void> {
     const round = normalizeRoundNumber(roundNumber);
     const nextVote = normalizeDate(nextVoteAt);
-
-    const pool = getOraclePool();
-    const connection = await pool.getConnection();
-
-    try {
-      const result = await connection.execute(
-        `UPDATE BOT_VOTING_INFO
-            SET NEXT_VOTE_AT = :nextVoteAt
-          WHERE ROUND_NUMBER = :round`,
-        {
-          round,
-          nextVoteAt: nextVote,
-        },
-        { autoCommit: true },
+    const result = await oraMutate(
+      `UPDATE BOT_VOTING_INFO
+          SET NEXT_VOTE_AT = :nextVoteAt
+        WHERE ROUND_NUMBER = :round`,
+      { round, nextVoteAt: nextVote },
+    );
+    if ((result.rowsAffected ?? 0) === 0) {
+      throw new Error(
+        `No BOT_VOTING_INFO row found for round ${round} when updating NEXT_VOTE_AT.`,
       );
-
-      const rowsUpdated = result.rowsAffected ?? 0;
-      if (rowsUpdated === 0) {
-        throw new Error(
-          `No BOT_VOTING_INFO row found for round ${round} when updating NEXT_VOTE_AT.`,
-        );
-      }
-    } finally {
-      await connection.close();
     }
   }
 
@@ -321,50 +187,27 @@ export default class BotVotingInfo {
     nominationListId: number | null,
   ): Promise<void> {
     const round = normalizeRoundNumber(roundNumber);
-
-    const pool = getOraclePool();
-    const connection = await pool.getConnection();
-
-    try {
-      const result = await connection.execute(
-        `UPDATE BOT_VOTING_INFO
-            SET NOMINATION_LIST_ID = :nominationListId
-          WHERE ROUND_NUMBER = :round`,
-        {
-          round,
-          nominationListId,
-        },
-        { autoCommit: true },
+    const result = await oraMutate(
+      `UPDATE BOT_VOTING_INFO
+          SET NOMINATION_LIST_ID = :nominationListId
+        WHERE ROUND_NUMBER = :round`,
+      { round, nominationListId },
+    );
+    if ((result.rowsAffected ?? 0) === 0) {
+      throw new Error(
+        `No BOT_VOTING_INFO row found for round ${round}` +
+        ` when updating NOMINATION_LIST_ID.`,
       );
-
-      const rowsUpdated = result.rowsAffected ?? 0;
-      if (rowsUpdated === 0) {
-        throw new Error(
-          `No BOT_VOTING_INFO row found for round ${round} when updating NOMINATION_LIST_ID.`,
-        );
-      }
-    } finally {
-      await connection.close();
     }
   }
 
   static async deleteRound(roundNumber: number): Promise<number> {
     const round = normalizeRoundNumber(roundNumber);
-
-    const pool = getOraclePool();
-    const connection = await pool.getConnection();
-
-    try {
-      const result = await connection.execute(
-        `DELETE FROM BOT_VOTING_INFO
-          WHERE ROUND_NUMBER = :round`,
-        { round },
-        { autoCommit: true },
-      );
-
-      return result.rowsAffected ?? 0;
-    } finally {
-      await connection.close();
-    }
+    const result = await oraMutate(
+      `DELETE FROM BOT_VOTING_INFO
+        WHERE ROUND_NUMBER = :round`,
+      { round },
+    );
+    return result.rowsAffected ?? 0;
   }
 }

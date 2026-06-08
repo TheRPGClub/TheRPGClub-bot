@@ -1,5 +1,5 @@
 import oracledb from "oracledb";
-import { getOraclePool } from "../db/oracleClient.js";
+import { oraQuery, oraMutate, oraWithConnection } from "../db/SqlManager.js";
 
 export type IGameSearchSynonym = {
   termId: number;
@@ -25,6 +25,8 @@ function mapSynonymRow(row: any): IGameSearchSynonym {
   };
 }
 
+const SYNONYM_COLS = `TERM_ID, GROUP_ID, TERM_TEXT, TERM_NORM, CREATED_AT, CREATED_BY`;
+
 export default class GameSearchSynonym {
   static normalizeTerm(text: string): string {
     return normalizeSearchTerm(text);
@@ -32,68 +34,40 @@ export default class GameSearchSynonym {
 
   static async getGroupIdsForTerm(
     termText: string,
-    connection?: oracledb.Connection,
+    conn?: oracledb.Connection,
   ): Promise<number[]> {
     const norm = normalizeSearchTerm(termText);
     if (!norm) return [];
-    const pool = getOraclePool();
-    const activeConnection = connection ?? await pool.getConnection();
-    try {
-      const result = await activeConnection.execute(
-        `SELECT GROUP_ID
-           FROM GAMEDB_SEARCH_SYNONYMS
-          WHERE TERM_NORM = :termNorm`,
-        { termNorm: norm },
-        { outFormat: oracledb.OUT_FORMAT_OBJECT },
-      );
-      return (result.rows ?? []).map((row: any) => Number(row.GROUP_ID));
-    } finally {
-      if (!connection) {
-        await activeConnection.close();
-      }
-    }
+    return oraQuery(
+      `SELECT GROUP_ID
+         FROM GAMEDB_SEARCH_SYNONYMS
+        WHERE TERM_NORM = :termNorm`,
+      { termNorm: norm },
+      (row: { GROUP_ID: number }) => Number(row.GROUP_ID),
+      conn,
+    );
   }
 
   static async listGroupTerms(
     groupId: number,
-    connection?: oracledb.Connection,
+    conn?: oracledb.Connection,
   ): Promise<IGameSearchSynonym[]> {
-    const pool = getOraclePool();
-    const activeConnection = connection ?? await pool.getConnection();
-    try {
-      const result = await activeConnection.execute(
-        `SELECT TERM_ID, GROUP_ID, TERM_TEXT, TERM_NORM, CREATED_AT, CREATED_BY
-           FROM GAMEDB_SEARCH_SYNONYMS
-          WHERE GROUP_ID = :groupId
-          ORDER BY TERM_TEXT ASC`,
-        { groupId },
-        { outFormat: oracledb.OUT_FORMAT_OBJECT },
-      );
-      return (result.rows ?? []).map((row) => mapSynonymRow(row));
-    } finally {
-      if (!connection) {
-        await activeConnection.close();
-      }
-    }
+    return oraQuery(
+      `SELECT ${SYNONYM_COLS}
+         FROM GAMEDB_SEARCH_SYNONYMS
+        WHERE GROUP_ID = :groupId
+        ORDER BY TERM_TEXT ASC`,
+      { groupId },
+      mapSynonymRow,
+      conn,
+    );
   }
 
-  static async getTermsForQuery(
-    query: string,
-    connection?: oracledb.Connection,
-  ): Promise<string[]> {
+  static async getTermsForQuery(query: string): Promise<string[]> {
     const norm = normalizeSearchTerm(query);
     if (!norm) return [];
-    const pool = getOraclePool();
-    const activeConnection = connection ?? await pool.getConnection();
-    try {
-      const groupResult = await activeConnection.execute(
-        `SELECT GROUP_ID
-           FROM GAMEDB_SEARCH_SYNONYMS
-          WHERE TERM_NORM = :termNorm`,
-        { termNorm: norm },
-        { outFormat: oracledb.OUT_FORMAT_OBJECT },
-      );
-      const groupIds = (groupResult.rows ?? []).map((row: any) => Number(row.GROUP_ID));
+    return oraWithConnection(async (conn) => {
+      const groupIds = await GameSearchSynonym.getGroupIdsForTerm(query, conn);
       if (!groupIds.length) return [];
       const binds: Record<string, number> = {};
       const placeholders = groupIds.map((groupId, index) => {
@@ -101,85 +75,69 @@ export default class GameSearchSynonym {
         binds[key] = groupId;
         return `:${key}`;
       });
-      const termResult = await activeConnection.execute(
+      return oraQuery(
         `SELECT DISTINCT TERM_TEXT
            FROM GAMEDB_SEARCH_SYNONYMS
           WHERE GROUP_ID IN (${placeholders.join(", ")})
           ORDER BY TERM_TEXT ASC`,
         binds,
-        { outFormat: oracledb.OUT_FORMAT_OBJECT },
+        (row: { TERM_TEXT: string }) => String(row.TERM_TEXT),
+        conn,
       );
-      return (termResult.rows ?? []).map((row: any) => String(row.TERM_TEXT));
-    } finally {
-      if (!connection) {
-        await activeConnection.close();
-      }
-    }
+    });
   }
 
   static async listSynonyms(
     options: { query?: string; limit?: number } = {},
   ): Promise<IGameSearchSynonym[]> {
-    const pool = getOraclePool();
-    const connection = await pool.getConnection();
     const query = options.query?.trim().toLowerCase() ?? "";
     const searchQuery = query ? `%${query}%` : null;
     const normalizedQuery = query ? `%${normalizeSearchTerm(query)}%` : null;
     const limit = options.limit ?? 50;
-    try {
-      const result = await connection.execute(
-        `SELECT TERM_ID, GROUP_ID, TERM_TEXT, TERM_NORM, CREATED_AT, CREATED_BY
-           FROM GAMEDB_SEARCH_SYNONYMS
-          WHERE (:searchQuery IS NULL
-             OR LOWER(TERM_TEXT) LIKE :searchQuery
-             OR TERM_NORM LIKE :normalizedQuery)
-          ORDER BY GROUP_ID ASC, TERM_TEXT ASC
-          FETCH FIRST :limit ROWS ONLY`,
-        { searchQuery, normalizedQuery, limit },
-        { outFormat: oracledb.OUT_FORMAT_OBJECT },
-      );
-      return (result.rows ?? []).map((row) => mapSynonymRow(row));
-    } finally {
-      await connection.close();
-    }
+    return oraQuery(
+      `SELECT ${SYNONYM_COLS}
+         FROM GAMEDB_SEARCH_SYNONYMS
+        WHERE (:searchQuery IS NULL
+           OR LOWER(TERM_TEXT) LIKE :searchQuery
+           OR TERM_NORM LIKE :normalizedQuery)
+        ORDER BY GROUP_ID ASC, TERM_TEXT ASC
+        FETCH FIRST :limit ROWS ONLY`,
+      { searchQuery, normalizedQuery, limit },
+      mapSynonymRow,
+    );
   }
 
   static async countSynonymGroups(query?: string): Promise<number> {
-    const pool = getOraclePool();
-    const connection = await pool.getConnection();
     const cleanedQuery = query?.trim().toLowerCase() ?? "";
     const searchQuery = cleanedQuery ? `%${cleanedQuery}%` : null;
-    const normalizedQuery = cleanedQuery ? `%${normalizeSearchTerm(cleanedQuery)}%` : null;
-    try {
-      const result = await connection.execute(
-        `SELECT COUNT(DISTINCT GROUP_ID) AS CNT
-           FROM GAMEDB_SEARCH_SYNONYMS
-          WHERE (:searchQuery IS NULL
-             OR LOWER(TERM_TEXT) LIKE :searchQuery
-             OR TERM_NORM LIKE :normalizedQuery)`,
-        { searchQuery, normalizedQuery },
-        { outFormat: oracledb.OUT_FORMAT_OBJECT },
-      );
-      const row = (result.rows ?? [])[0] as any;
-      return Number(row?.CNT ?? 0);
-    } finally {
-      await connection.close();
-    }
+    const normalizedQuery = cleanedQuery
+      ? `%${normalizeSearchTerm(cleanedQuery)}%`
+      : null;
+    const rows = await oraQuery(
+      `SELECT COUNT(DISTINCT GROUP_ID) AS CNT
+         FROM GAMEDB_SEARCH_SYNONYMS
+        WHERE (:searchQuery IS NULL
+           OR LOWER(TERM_TEXT) LIKE :searchQuery
+           OR TERM_NORM LIKE :normalizedQuery)`,
+      { searchQuery, normalizedQuery },
+      (row: { CNT: number }) => Number(row.CNT ?? 0),
+    );
+    return rows[0] ?? 0;
   }
 
   static async listSynonymGroups(
     options: { query?: string; limit?: number; offset?: number } = {},
   ): Promise<IGameSearchSynonym[]> {
-    const pool = getOraclePool();
-    const connection = await pool.getConnection();
     const cleanedQuery = options.query?.trim().toLowerCase() ?? "";
     const searchQuery = cleanedQuery ? `%${cleanedQuery}%` : null;
-    const normalizedQuery = cleanedQuery ? `%${normalizeSearchTerm(cleanedQuery)}%` : null;
+    const normalizedQuery = cleanedQuery
+      ? `%${normalizeSearchTerm(cleanedQuery)}%`
+      : null;
     const limit = options.limit ?? 10;
     const offset = options.offset ?? 0;
 
-    try {
-      const groupResult = await connection.execute(
+    return oraWithConnection(async (conn) => {
+      const groupIds = await oraQuery(
         `SELECT DISTINCT GROUP_ID
            FROM GAMEDB_SEARCH_SYNONYMS
           WHERE (:searchQuery IS NULL
@@ -188,10 +146,9 @@ export default class GameSearchSynonym {
           ORDER BY GROUP_ID ASC
           OFFSET :offset ROWS FETCH NEXT :limit ROWS ONLY`,
         { searchQuery, normalizedQuery, offset, limit },
-        { outFormat: oracledb.OUT_FORMAT_OBJECT },
+        (row: { GROUP_ID: number }) => Number(row.GROUP_ID),
+        conn,
       );
-
-      const groupIds = (groupResult.rows ?? []).map((row: any) => Number(row.GROUP_ID));
       if (!groupIds.length) return [];
 
       const binds: Record<string, number> = {};
@@ -200,20 +157,16 @@ export default class GameSearchSynonym {
         binds[key] = groupId;
         return `:${key}`;
       });
-
-      const termResult = await connection.execute(
-        `SELECT TERM_ID, GROUP_ID, TERM_TEXT, TERM_NORM, CREATED_AT, CREATED_BY
+      return oraQuery(
+        `SELECT ${SYNONYM_COLS}
            FROM GAMEDB_SEARCH_SYNONYMS
           WHERE GROUP_ID IN (${placeholders.join(", ")})
           ORDER BY GROUP_ID ASC, TERM_TEXT ASC`,
         binds,
-        { outFormat: oracledb.OUT_FORMAT_OBJECT },
+        mapSynonymRow,
+        conn,
       );
-
-      return (termResult.rows ?? []).map((row) => mapSynonymRow(row));
-    } finally {
-      await connection.close();
-    }
+    });
   }
 
   static async addSynonymPair(
@@ -227,16 +180,14 @@ export default class GameSearchSynonym {
       throw new Error("Both term and match text are required.");
     }
 
-    const pool = getOraclePool();
-    const connection = await pool.getConnection();
-    try {
-      const termGroups = await this.getGroupIdsForTerm(trimmedTerm, connection);
-      const matchGroups = await this.getGroupIdsForTerm(trimmedMatch, connection);
+    return oraWithConnection(async (conn) => {
+      const termGroups = await GameSearchSynonym.getGroupIdsForTerm(trimmedTerm, conn);
+      const matchGroups = await GameSearchSynonym.getGroupIdsForTerm(trimmedMatch, conn);
       const sharedGroup = termGroups.find((groupId) => matchGroups.includes(groupId));
       let groupId = sharedGroup ?? null;
 
       if (!groupId) {
-        const groupResult = await connection.execute(
+        const groupResult = await oraMutate(
           `INSERT INTO GAMEDB_SEARCH_SYNONYM_GROUPS (CREATED_BY)
            VALUES (:createdBy)
            RETURNING GROUP_ID INTO :groupId`,
@@ -244,29 +195,26 @@ export default class GameSearchSynonym {
             createdBy,
             groupId: { dir: oracledb.BIND_OUT, type: oracledb.NUMBER },
           },
-          { autoCommit: true },
+          conn,
         );
         groupId = Number((groupResult.outBinds as any)?.groupId?.[0]);
+        await conn.commit();
       }
 
-      const inserts = [trimmedTerm, trimmedMatch];
-      for (const text of inserts) {
+      for (const text of [trimmedTerm, trimmedMatch]) {
         const norm = normalizeSearchTerm(text);
         if (!norm) {
           throw new Error("Synonyms must include letters or numbers.");
         }
         try {
-          await connection.execute(
-            `INSERT INTO GAMEDB_SEARCH_SYNONYMS (GROUP_ID, TERM_TEXT, TERM_NORM, CREATED_BY)
+          await oraMutate(
+            `INSERT INTO GAMEDB_SEARCH_SYNONYMS
+               (GROUP_ID, TERM_TEXT, TERM_NORM, CREATED_BY)
              VALUES (:groupId, :termText, :termNorm, :createdBy)`,
-            {
-              groupId,
-              termText: text,
-              termNorm: norm,
-              createdBy,
-            },
-            { autoCommit: true },
+            { groupId, termText: text, termNorm: norm, createdBy },
+            conn,
           );
+          await conn.commit();
         } catch (err: any) {
           const msg = err?.message ?? "";
           if (!/ORA-00001/i.test(msg)) {
@@ -275,11 +223,11 @@ export default class GameSearchSynonym {
         }
       }
 
-      const terms = await this.listGroupTerms(groupId, connection);
-      return { groupId, terms };
-    } finally {
-      await connection.close();
-    }
+      return {
+        groupId: groupId as number,
+        terms: await GameSearchSynonym.listGroupTerms(groupId as number, conn),
+      };
+    });
   }
 
   static async updateSynonym(
@@ -295,21 +243,18 @@ export default class GameSearchSynonym {
       throw new Error("Term text must include letters or numbers.");
     }
 
-    const pool = getOraclePool();
-    const connection = await pool.getConnection();
-    try {
-      await connection.execute(
+    return oraWithConnection(async (conn) => {
+      await oraMutate(
         `UPDATE GAMEDB_SEARCH_SYNONYMS
             SET TERM_TEXT = :termText,
                 TERM_NORM = :termNorm
           WHERE TERM_ID = :termId`,
         { termId, termText: trimmed, termNorm },
-        { autoCommit: true },
+        conn,
       );
-      return await this.getSynonymById(termId, connection);
-    } finally {
-      await connection.close();
-    }
+      await conn.commit();
+      return GameSearchSynonym.getSynonymById(termId, conn);
+    });
   }
 
   static async updateGroupTerms(
@@ -325,27 +270,25 @@ export default class GameSearchSynonym {
       throw new Error("A synonym group must contain at least two terms.");
     }
 
-    const pool = getOraclePool();
-    const connection = await pool.getConnection();
-    try {
-      const existsResult = await connection.execute(
+    return oraWithConnection(async (conn) => {
+      const existsRows = await oraQuery(
         `SELECT COUNT(*) AS CNT
            FROM GAMEDB_SEARCH_SYNONYM_GROUPS
           WHERE GROUP_ID = :groupId`,
         { groupId },
-        { outFormat: oracledb.OUT_FORMAT_OBJECT },
+        (row: { CNT: number }) => Number(row.CNT ?? 0),
+        conn,
       );
-      const existsRow = (existsResult.rows ?? [])[0] as any;
-      if (Number(existsRow?.CNT ?? 0) === 0) {
+      if ((existsRows[0] ?? 0) === 0) {
         throw new Error("Synonym group not found.");
       }
 
-      await connection.execute(
-        `DELETE FROM GAMEDB_SEARCH_SYNONYMS
-          WHERE GROUP_ID = :groupId`,
+      await oraMutate(
+        `DELETE FROM GAMEDB_SEARCH_SYNONYMS WHERE GROUP_ID = :groupId`,
         { groupId },
-        { autoCommit: true },
+        conn,
       );
+      await conn.commit();
 
       for (const text of cleaned) {
         const norm = normalizeSearchTerm(text);
@@ -353,17 +296,14 @@ export default class GameSearchSynonym {
           throw new Error("Synonym terms must include letters or numbers.");
         }
         try {
-          await connection.execute(
-            `INSERT INTO GAMEDB_SEARCH_SYNONYMS (GROUP_ID, TERM_TEXT, TERM_NORM, CREATED_BY)
+          await oraMutate(
+            `INSERT INTO GAMEDB_SEARCH_SYNONYMS
+               (GROUP_ID, TERM_TEXT, TERM_NORM, CREATED_BY)
              VALUES (:groupId, :termText, :termNorm, :createdBy)`,
-            {
-              groupId,
-              termText: text,
-              termNorm: norm,
-              createdBy: updatedBy,
-            },
-            { autoCommit: true },
+            { groupId, termText: text, termNorm: norm, createdBy: updatedBy },
+            conn,
           );
+          await conn.commit();
         } catch (err: any) {
           const msg = err?.message ?? "";
           if (!/ORA-00001/i.test(msg)) {
@@ -372,11 +312,11 @@ export default class GameSearchSynonym {
         }
       }
 
-      const updatedTerms = await this.listGroupTerms(groupId, connection);
-      return { groupId, terms: updatedTerms };
-    } finally {
-      await connection.close();
-    }
+      return {
+        groupId,
+        terms: await GameSearchSynonym.listGroupTerms(groupId, conn),
+      };
+    });
   }
 
   static async createGroupTerms(
@@ -393,15 +333,12 @@ export default class GameSearchSynonym {
       seen.add(norm);
       cleaned.push(trimmed);
     }
-
     if (cleaned.length < 2) {
       throw new Error("A synonym group must contain at least two terms.");
     }
 
-    const pool = getOraclePool();
-    const connection = await pool.getConnection();
-    try {
-      const groupResult = await connection.execute(
+    return oraWithConnection(async (conn) => {
+      const groupResult = await oraMutate(
         `INSERT INTO GAMEDB_SEARCH_SYNONYM_GROUPS (CREATED_BY)
          VALUES (:createdBy)
          RETURNING GROUP_ID INTO :groupId`,
@@ -409,134 +346,116 @@ export default class GameSearchSynonym {
           createdBy,
           groupId: { dir: oracledb.BIND_OUT, type: oracledb.NUMBER },
         },
-        { autoCommit: true },
+        conn,
       );
       const groupId = Number((groupResult.outBinds as any)?.groupId?.[0]);
       if (!Number.isInteger(groupId) || groupId <= 0) {
         throw new Error("Failed to create synonym group.");
       }
+      await conn.commit();
 
       for (const text of cleaned) {
         const norm = normalizeSearchTerm(text);
-        await connection.execute(
-          `INSERT INTO GAMEDB_SEARCH_SYNONYMS (GROUP_ID, TERM_TEXT, TERM_NORM, CREATED_BY)
+        await oraMutate(
+          `INSERT INTO GAMEDB_SEARCH_SYNONYMS
+             (GROUP_ID, TERM_TEXT, TERM_NORM, CREATED_BY)
            VALUES (:groupId, :termText, :termNorm, :createdBy)`,
-          {
-            groupId,
-            termText: text,
-            termNorm: norm,
-            createdBy,
-          },
-          { autoCommit: true },
+          { groupId, termText: text, termNorm: norm, createdBy },
+          conn,
         );
+        await conn.commit();
       }
 
-      const savedTerms = await this.listGroupTerms(groupId, connection);
-      return { groupId, terms: savedTerms };
-    } finally {
-      await connection.close();
-    }
+      return {
+        groupId,
+        terms: await GameSearchSynonym.listGroupTerms(groupId, conn),
+      };
+    });
   }
 
   static async deleteSynonym(termId: number): Promise<boolean> {
-    const pool = getOraclePool();
-    const connection = await pool.getConnection();
-    try {
-      const groupResult = await connection.execute(
+    return oraWithConnection(async (conn) => {
+      const groupRows = await oraQuery(
         `SELECT GROUP_ID
            FROM GAMEDB_SEARCH_SYNONYMS
           WHERE TERM_ID = :termId`,
         { termId },
-        { outFormat: oracledb.OUT_FORMAT_OBJECT },
+        (row: { GROUP_ID: number }) => Number(row.GROUP_ID),
+        conn,
       );
-      const groupRow = (groupResult.rows ?? [])[0] as any;
-      const groupId = groupRow ? Number(groupRow.GROUP_ID) : null;
+      const groupId = groupRows[0] ?? null;
 
-      const result = await connection.execute(
+      const result = await oraMutate(
         `DELETE FROM GAMEDB_SEARCH_SYNONYMS WHERE TERM_ID = :termId`,
         { termId },
-        { autoCommit: true },
+        conn,
       );
+      await conn.commit();
 
       if (groupId) {
-        const countResult = await connection.execute(
+        const countRows = await oraQuery(
           `SELECT COUNT(*) AS CNT
              FROM GAMEDB_SEARCH_SYNONYMS
             WHERE GROUP_ID = :groupId`,
           { groupId },
-          { outFormat: oracledb.OUT_FORMAT_OBJECT },
+          (row: { CNT: number }) => Number(row.CNT ?? 0),
+          conn,
         );
-        const countRow = (countResult.rows ?? [])[0] as any;
-        if (Number(countRow?.CNT ?? 0) === 0) {
-          await connection.execute(
+        if ((countRows[0] ?? 0) === 0) {
+          await oraMutate(
             `DELETE FROM GAMEDB_SEARCH_SYNONYM_GROUPS WHERE GROUP_ID = :groupId`,
             { groupId },
-            { autoCommit: true },
+            conn,
           );
+          await conn.commit();
         }
       }
 
       return (result.rowsAffected ?? 0) > 0;
-    } finally {
-      await connection.close();
-    }
+    });
   }
 
   static async deleteGroup(groupId: number): Promise<boolean> {
     if (!Number.isInteger(groupId) || groupId <= 0) return false;
-    const pool = getOraclePool();
-    const connection = await pool.getConnection();
-    try {
-      const existsResult = await connection.execute(
+    return oraWithConnection(async (conn) => {
+      const existsRows = await oraQuery(
         `SELECT COUNT(*) AS CNT
            FROM GAMEDB_SEARCH_SYNONYM_GROUPS
           WHERE GROUP_ID = :groupId`,
         { groupId },
-        { outFormat: oracledb.OUT_FORMAT_OBJECT },
+        (row: { CNT: number }) => Number(row.CNT ?? 0),
+        conn,
       );
-      const existsRow = (existsResult.rows ?? [])[0] as any;
-      if (Number(existsRow?.CNT ?? 0) === 0) {
-        return false;
-      }
+      if ((existsRows[0] ?? 0) === 0) return false;
 
-      await connection.execute(
-        `DELETE FROM GAMEDB_SEARCH_SYNONYMS
-          WHERE GROUP_ID = :groupId`,
+      await oraMutate(
+        `DELETE FROM GAMEDB_SEARCH_SYNONYMS WHERE GROUP_ID = :groupId`,
         { groupId },
-        { autoCommit: true },
+        conn,
       );
-      await connection.execute(
-        `DELETE FROM GAMEDB_SEARCH_SYNONYM_GROUPS
-          WHERE GROUP_ID = :groupId`,
+      await conn.commit();
+      await oraMutate(
+        `DELETE FROM GAMEDB_SEARCH_SYNONYM_GROUPS WHERE GROUP_ID = :groupId`,
         { groupId },
-        { autoCommit: true },
+        conn,
       );
+      await conn.commit();
       return true;
-    } finally {
-      await connection.close();
-    }
+    });
   }
 
   static async getSynonymById(
     termId: number,
-    connection?: oracledb.Connection,
+    conn?: oracledb.Connection,
   ): Promise<IGameSearchSynonym | null> {
-    const pool = getOraclePool();
-    const activeConnection = connection ?? await pool.getConnection();
-    try {
-      const result = await activeConnection.execute(
-        `SELECT TERM_ID, GROUP_ID, TERM_TEXT, TERM_NORM, CREATED_AT, CREATED_BY
-           FROM GAMEDB_SEARCH_SYNONYMS
-          WHERE TERM_ID = :termId`,
-        { termId },
-        { outFormat: oracledb.OUT_FORMAT_OBJECT },
-      );
-      const row = (result.rows ?? [])[0] as any;
-      return row ? mapSynonymRow(row) : null;
-    } finally {
-      if (!connection) {
-        await activeConnection.close();
-      }
-    }
+    const rows = await oraQuery(
+      `SELECT ${SYNONYM_COLS}
+         FROM GAMEDB_SEARCH_SYNONYMS
+        WHERE TERM_ID = :termId`,
+      { termId },
+      mapSynonymRow,
+      conn,
+    );
+    return rows[0] ?? null;
   }
 }
