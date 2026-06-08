@@ -148,8 +148,11 @@ export class GameDbViewCommand {
       if (!updatedMessage) {
         await safeDeferUpdate(interaction);
       }
+      // Exception: v1 plain-text reply used intentionally so Discord auto-embeds
+      // the YouTube URL, enabling inline video preview. Components V2 suppresses embeds.
+      // eslint-disable-next-line local/no-plain-text-v1-reply
       await safeReply(interaction, {
-        ...buildTextReply(`Warning: videos may contain spoilers. ${videoUrl}`, false),
+        content: `Warning: videos may contain spoilers. ${videoUrl}`,
         __forceFollowUp: true,
       });
       return;
