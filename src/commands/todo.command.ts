@@ -62,6 +62,7 @@ import {
 import { decodeBase64Url, encodeWithMaxLength } from "../functions/CustomIdUtils.js";
 import { safeV2TextContent } from "../functions/ComponentsV2Utils.js";
 import { formatDiscordTimestamp } from "../functions/DateFormatUtils.js";
+import { truncateWithEllipsis } from "../utilities/ValidationUtils.js";
 
 const TODO_LABELS = [
   "New Feature",
@@ -456,8 +457,7 @@ function formatIssueTitle(issue: IGithubIssue): string {
 function formatIssueSelectLabel(issue: IGithubIssue): string {
   const labelText = issue.labels.length ? ` [${issue.labels.join(", ")}]` : "";
   const text = `#${issue.number} ${issue.title}${labelText}`;
-  if (text.length <= 100) return text;
-  return `${text.slice(0, 97)}...`;
+  return truncateWithEllipsis(text, 100);
 }
 
 function sanitizeTodoText(value: string, preserveNewlines: boolean): string {
@@ -537,10 +537,7 @@ function renderTodoContent(rawValue: string, maxTextLength: number): {
 }
 
 function clampTextDisplayContent(value: string): string {
-  if (value.length <= MAX_TEXT_DISPLAY_CONTENT) {
-    return value;
-  }
-  return `${value.slice(0, MAX_TEXT_DISPLAY_CONTENT - 3)}...`;
+  return truncateWithEllipsis(value, MAX_TEXT_DISPLAY_CONTENT);
 }
 
 function trimToBudget(value: string, maxLength: number): string {

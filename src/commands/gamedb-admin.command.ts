@@ -63,7 +63,7 @@ import axios from "axios";
 import { igdbService } from "../services/IGDB/IgdbService.js";
 import { shouldRenderPrevNextButtons } from "../functions/PaginationUtils.js";
 import { parseSynonymQuickAddTerms } from "./gamedb-synonym.utils.js";
-import { isPositiveInt } from "../utilities/ValidationUtils.js";
+import { isPositiveInt, truncateWithEllipsis } from "../utilities/ValidationUtils.js";
 import { COLOR_PRIMARY, COLOR_SUCCESS, COLOR_HIGHLIGHT } from "../config/colors.js";
 import { AUDIT_PAGE_SIZE, SYNONYM_LIST_PAGE_SIZE } from "../config/pagination.js";
 
@@ -93,8 +93,7 @@ function decodeSynonymQuery(encoded: string): string {
 }
 
 function clampSynonymOptionText(value: string, maxLength = 100): string {
-  if (value.length <= maxLength) return value;
-  return value.slice(0, Math.max(0, maxLength - 3)) + "...";
+  return truncateWithEllipsis(value, maxLength);
 }
 
 function buildSynonymGroupEditModal(ownerId: string, groupId: number, terms: string): ModalBuilder {
