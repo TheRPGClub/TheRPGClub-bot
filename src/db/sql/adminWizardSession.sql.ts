@@ -70,11 +70,10 @@ export const AdminWizardSessionSql = {
         src.STATE_JSON,
         src.LAST_UPDATED_AT
       )`,
-    // Requires partial unique index: (command_key, owner_user_id, channel_id) WHERE status = 'ACTIVE'
     postgres: `INSERT INTO rpg_club_admin_wizard_sessions
         (session_id, command_key, owner_user_id, channel_id, guild_id, status, state_json, last_updated_at)
        VALUES (:sessionId, :commandKey, :ownerUserId, :channelId, :guildId, 'ACTIVE', :stateJson, :lastUpdatedAt)
-       ON CONFLICT (command_key, owner_user_id, channel_id) WHERE status = 'ACTIVE'
+       ON CONFLICT (command_key, owner_user_id, channel_id, status)
        DO UPDATE SET
          state_json = EXCLUDED.state_json,
          guild_id = EXCLUDED.guild_id,
