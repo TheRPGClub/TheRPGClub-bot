@@ -13,10 +13,23 @@ import {
   pgMutate,
   pgTransaction,
   pgWithConnection,
+  pgInsert,
+  pgQueryConn,
+  pgMutateConn,
+  pgInsertConn,
 } from "./postgresClient.js";
 
 export { oraQuery, oraMutate, oraWithConnection, oraTransaction } from "./oracleClient.js";
-export { pgQuery, pgMutate, pgTransaction, pgWithConnection } from "./postgresClient.js";
+export {
+  pgQuery,
+  pgMutate,
+  pgTransaction,
+  pgWithConnection,
+  pgInsert,
+  pgQueryConn,
+  pgMutateConn,
+  pgInsertConn,
+} from "./postgresClient.js";
 export type { Dialect, SqlEntry } from "./sql/types.js";
 export { getSql, getSqlDynamic } from "./sql/index.js";
 
@@ -82,4 +95,106 @@ export async function dbTransaction<T>(
     return oraTransaction(callback as (conn: oracledb.Connection) => Promise<T>);
   }
   return pgTransaction(callback as (client: pg.PoolClient) => Promise<T>);
+}
+
+/**
+ * Dialect-agnostic INSERT...RETURNING / BIND_OUT.
+ * On Oracle: runs the SQL with a BIND_OUT param for `bindOutKey` and returns the generated id.
+ * On Postgres: runs the SQL (which must end with RETURNING <col>) and returns the first column value.
+ * Pass `params` WITHOUT the BIND_OUT entry -- the function adds it for Oracle.
+ */
+export async function dbInsert(
+  entry: SqlEntry,
+  params: oracledb.BindParameters | Record<string, unknown>,
+  bindOutKey: string,
+): Promise<number> {
+  const dialect = getDialect();
+  if (dialect === "postgres") {
+    return pgInsert(entry.postgres, params as Record<string, unknown>);
+  }
+  const oraParams = {
+    ...(params as oracledb.BindParameters),
+    [bindOutKey]: { dir: oracledb.BIND_OUT, type: oracledb.NUMBER },
+  };
+  const result = await oraMutate(entry.oracle, oraParams);
+  return Number((result.outBinds as Record<string, number[]>)?.[bindOutKey]?.[0] ?? 0);
+}
+
+/**
+ * Dialect-agnostic SELECT on an existing connection.
+ * Use inside dbWithConnection / dbTransaction callbacks.
+ */
+export async function dbQueryConn<RowT extends object, R>(
+  conn: oracledb.Connection | pg.PoolClient,
+  entry: SqlEntry,
+  params: oracledb.BindParameters | Record<string, unknown> | unknown[],
+  mapper: (row: RowT) => R,
+): Promise<R[]> {
+  const dialect = getDialect();
+  if (dialect === "postgres") {
+    const rows = await pgQueryConn<RowT>(
+      conn as pg.PoolClient,
+      entry.postgres,
+      params as Record<string, unknown> | unknown[],
+    );
+    return rows.map(mapper);
+  }
+  return oraQuery(
+    entry.oracle,
+    params as oracledb.BindParameters,
+    mapper,
+    conn as oracledb.Connection,
+  );
+}
+
+/**
+ * Dialect-agnostic DML on an existing connection. Returns rows affected.
+ * Use inside dbWithConnection / dbTransaction callbacks.
+ */
+export async function dbMutateConn(
+  conn: oracledb.Connection | pg.PoolClient,
+  entry: SqlEntry,
+  params: oracledb.BindParameters | Record<string, unknown> | unknown[],
+): Promise<number> {
+  const dialect = getDialect();
+  if (dialect === "postgres") {
+    return pgMutateConn(
+      conn as pg.PoolClient,
+      entry.postgres,
+      params as Record<string, unknown> | unknown[],
+    );
+  }
+  const result = await oraMutate(
+    entry.oracle,
+    params as oracledb.BindParameters,
+    conn as oracledb.Connection,
+  );
+  return result.rowsAffected ?? 0;
+}
+
+/**
+ * Dialect-agnostic INSERT...RETURNING / BIND_OUT on an existing connection.
+ * Pass `params` WITHOUT the BIND_OUT entry -- the function adds it for Oracle.
+ * Use inside dbWithConnection / dbTransaction callbacks.
+ */
+export async function dbInsertConn(
+  conn: oracledb.Connection | pg.PoolClient,
+  entry: SqlEntry,
+  params: oracledb.BindParameters | Record<string, unknown>,
+  bindOutKey: string,
+): Promise<number> {
+  const dialect = getDialect();
+  if (dialect === "postgres") {
+    return pgInsertConn(conn as pg.PoolClient, entry.postgres, params as Record<string, unknown>);
+  }
+  const oraParams = {
+    ...(params as oracledb.BindParameters),
+    [bindOutKey]: { dir: oracledb.BIND_OUT, type: oracledb.NUMBER },
+  };
+  const result = await oraMutate(
+    entry.oracle,
+    oraParams,
+    conn as oracledb.Connection,
+  );
+  return Number((result.outBinds as Record<string, number[]>)?.[bindOutKey]?.[0] ?? 0);
 }

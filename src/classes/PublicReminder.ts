@@ -1,9 +1,5 @@
-import oracledb from "oracledb";
-import { dbQuery, dbMutate, oraMutate, getSql } from "../db/SqlManager.js";
-import { getDialect } from "../db/dialect.js";
+import { dbQuery, dbMutate, dbInsert } from "../db/SqlManager.js";
 import { PublicReminderSql } from "../db/sql/index.js";
-
-const dialect = getDialect();
 
 export type RecurrenceUnit = "minutes" | "hours" | "days" | "weeks" | "months" | "years";
 
@@ -26,21 +22,13 @@ export async function createReminder(
   recurUnit: RecurrenceUnit | null,
   createdBy: string | null,
 ): Promise<IPublicReminder> {
-  const result = await oraMutate(
-    getSql(PublicReminderSql.create, dialect),
-    {
-      channelId,
-      message,
-      dueAt,
-      recurEvery,
-      recurUnit,
-      createdBy,
-      id: { dir: oracledb.BIND_OUT, type: oracledb.NUMBER },
-    },
+  const reminderId = await dbInsert(
+    PublicReminderSql.create,
+    { channelId, message, dueAt, recurEvery, recurUnit, createdBy },
+    "id",
   );
-  const id = (result.outBinds as any)?.id?.[0] ?? 0;
   return {
-    reminderId: Number(id),
+    reminderId: Number(reminderId),
     channelId,
     message,
     dueAt,

@@ -308,7 +308,7 @@ Files completed: `starboard`, `hltbCache`, `gameDbCsvImportMapping`, `nomination
 
 ---
 
-### Next Step: Phase D2 -- Oracle-only blockers are now unblocked
+### Phase D2 -- IN PROGRESS (branch `feature/phase-d2-bind-out-and-conn-passing`)
 
 ---
 
@@ -334,42 +334,53 @@ All standalone `oraQuery`/`oraMutate` calls (no BIND_OUT, no connection-passing)
 converted to `dbQuery`/`dbMutate` across all domain classes. Every remaining `ora*` call in the
 codebase is now a D2 blocker.
 
-**Call sites -- current status:**
+**D2 new wrappers added to `postgresClient.ts` and `SqlManager.ts`:**
 
-| File | Status |
+- `pgInsert(sql, params)` -- runs INSERT RETURNING on pool, returns first column of first row
+- `pgInsertConn(client, sql, params)` -- same on an existing PoolClient
+- `pgQueryConn(client, sql, params)` -- SELECT on an existing PoolClient
+- `pgMutateConn(client, sql, params)` -- DML on an existing PoolClient
+- `dbInsert(entry, params, bindOutKey)` -- dialect-agnostic INSERT returning generated id
+- `dbInsertConn(conn, entry, params, bindOutKey)` -- same, inside a connection callback
+- `dbQueryConn(conn, entry, params, mapper)` -- dialect-agnostic SELECT inside a callback
+- `dbMutateConn(conn, entry, params)` -- dialect-agnostic DML inside a callback
+
+**Call sites -- D2 status as of 2026-06-08:**
+
+| File | D2 Status |
 |---|---|
-| `AdminWizardSession.ts` | Partial -- `getActive` and `saveSession` done; `closeActive` uses `conn.execute` directly (oracle-specific) |
-| `BotVotingInfo.ts` | Partial -- all `get*` and `mark*` done; `setRoundInfo` uses `conn.execute` (oracle-specific) |
-| `CollectionCsvImport.ts` | Partial -- `getImportById` done; `createImport` (BIND_OUT) and `insertItem` (conn-passing) remain |
-| `CompletionatorImport.ts` | Partial -- same pattern as CollectionCsvImport |
-| `GameDbCsvImport.ts` | Partial -- same pattern |
-| `GameDbCsvImportMapping.ts` | Fully migrated |
-| `Game.ts` | Partial -- all standalone get/update/mutate done; BIND_OUT inserts, conn-passing blocks, and oracle-specific `conn.execute` paths remain |
-| `GameKey.ts` | Partial -- `get*`, `list*`, `claim`, `revoke` done; `create` (BIND_OUT) remains |
-| `GameReleaseAnnouncement.ts` | Partial -- `mark*` and `list*` done; `syncReleaseAnnouncements` (conn-passing) remains |
-| `GameSearchSynonymDraft.ts` | Partial -- `getDraft`, `deleteDraft` done; `createDraft` (BIND_OUT), `appendPairs` (conn-passing) remain |
-| `GameSearchSynonym.ts` | Partial -- standalone `dbQuery` lookups done; all mutation/insert paths use oracle conn-passing and BIND_OUT |
-| `GotmAuditImport.ts` | Partial -- `getById` done; `createSession` (BIND_OUT) and bulk insert (conn-passing) remain |
-| `Gotm.ts` | Partial -- most `get*` done; `updateRowOrder` and `commitRound` use conn-passing |
-| `HltbCache.ts` | Fully migrated |
-| `Member.ts` | Partial -- large file; many `get*` done; connection-passing and BIND_OUT methods remain |
-| `Nomination.ts` | Fully migrated |
-| `NrGotm.ts` | Partial -- `loadAll`, `updateVotingResults`, `checkRoundExists`, `deleteRound` done; conn-passing update block and BIND_OUT insert remain |
-| `PresencePromptHistory.ts` | Fully migrated |
-| `PresencePromptOptOut.ts` | Fully migrated |
-| `PublicReminder.ts` | Partial -- `list*`, `delete`, `update*` done; `create` (BIND_OUT) remains |
-| `Reminder.ts` | Partial -- all done except `create` (BIND_OUT) and `getById` (optional conn) |
-| `RssFeed.ts` | Partial -- `removeFeed`, `updateFeed` done; `addFeed` (BIND_OUT), `markItemsSeen` (executeMany), `getSeenItemHashes` (conn-passing) remain |
-| `Starboard.ts` | Fully migrated |
-| `SteamCollectionImport.ts` | Partial -- `getActiveForUser`, `setStatus`, `updateIndex`, `updateItem`, `countItems*`, `getHistoricalMappedIds` done; `createImport` (BIND_OUT), `insertItems` (oraTransaction conn-passing), `getItemById`/`getNextPending` (fetchInfo conn), `getAppMap`/`upsertAppMap` (optional conn) remain |
-| `SuggestionReviewSession.ts` | Partial -- `update`, `delete*` done; `create` (conn-passing) and `getById` (optional conn) remain |
-| `Suggestion.ts` | Partial -- `list`, `count`, `delete` done; `create` (BIND_OUT) and `getById` (optional conn) remain |
-| `Thread.ts` | Partial -- `upsertThread`, `setSkipLinking`, `getThreadSkipLinking` done; transactions and conn-passing remain |
-| `Todo.ts` | Partial -- all done except `create` (BIND_OUT) |
-| `UserActivityIcon.ts` | No D1 conversions possible -- all calls use dynamic Oracle-style named binds or oraTransaction conn-passing |
-| `UserChannelMessageCount.ts` | Partial -- `getScannedChannelIds`, `getChannelScanMeta` done; `upsertChannelCounts` (executeMany) remains |
-| `UserGameCollection.ts` | Partial -- all standalone selects and `removeEntry` done; `addEntry` (BIND_OUT), `updateEntry` (conn-passing), `getEntryById` (required conn) remain |
-| `XboxCollectionImport.ts` | Partial -- `getActiveForUser`, `setStatus`, `updateIndex`, `getItemById`, `getNextPending`, `updateItem`, `countItems*`, `getHistoricalMappedIds` done; `createImport` (BIND_OUT), `insertItems` (oraTransaction), `getImportById`/`getTitleMap` (optional conn), `upsertTitleMap` (conn-passing) remain |
+| `AdminWizardSession.ts` | COMPLETE -- `closeActive` converted to `dbTransaction` + `dbMutateConn` |
+| `BotVotingInfo.ts` | COMPLETE -- `setRoundInfo` converted to `dbTransaction` + `dbMutateConn` |
+| `CollectionCsvImport.ts` | COMPLETE -- `createImport` uses `dbInsert`; bulk insert uses `dbTransaction` + `dbMutateConn` |
+| `CompletionatorImport.ts` | COMPLETE -- same pattern as CollectionCsvImport |
+| `GameDbCsvImport.ts` | COMPLETE -- same pattern |
+| `GameDbCsvImportMapping.ts` | COMPLETE (was already done) |
+| `Game.ts` | PENDING -- BIND_OUT inserts, conn-passing blocks remain |
+| `GameKey.ts` | COMPLETE -- `create` uses `dbInsert` |
+| `GameReleaseAnnouncement.ts` | PENDING -- `syncReleaseAnnouncements` conn-passing remains |
+| `GameSearchSynonymDraft.ts` | COMPLETE -- `createDraft` uses `dbInsert`; `appendPairs` uses `dbTransaction` + `dbMutateConn` |
+| `GameSearchSynonym.ts` | COMPLETE -- all methods use `dbTransaction`/`dbWithConnection` + `dbInsertConn`/`dbQueryConn`/`dbMutateConn` |
+| `GotmAuditImport.ts` | COMPLETE -- `createSession` uses `dbInsert`; bulk insert uses `dbTransaction` + `dbMutateConn` |
+| `Gotm.ts` | COMPLETE -- `updateRowOrder` and `insertGotmRound` use `dbTransaction` + conn-scoped wrappers |
+| `HltbCache.ts` | COMPLETE (was already done) |
+| `Member.ts` | PENDING -- large file; BIND_OUT and conn-passing methods remain |
+| `Nomination.ts` | COMPLETE (was already done) |
+| `NrGotm.ts` | COMPLETE -- `updateRowOrder` and `insertNrGotmRound` use `dbTransaction` + `dbInsertConn`/`dbMutateConn` |
+| `PresencePromptHistory.ts` | COMPLETE (was already done) |
+| `PresencePromptOptOut.ts` | COMPLETE (was already done) |
+| `PublicReminder.ts` | COMPLETE -- `create` uses `dbInsert` |
+| `Reminder.ts` | COMPLETE -- `create` uses `dbInsert`; `getById` accepts union conn type |
+| `RssFeed.ts` | PENDING -- `addFeed` (BIND_OUT), `markItemsSeen` (executeMany D3), `getSeenItemHashes` (conn-passing) remain |
+| `Starboard.ts` | COMPLETE (was already done) |
+| `SteamCollectionImport.ts` | PENDING -- `createImport`, `insertItems`, `getAppMap`/`upsertAppMap` remain |
+| `SuggestionReviewSession.ts` | COMPLETE -- `create` uses `dbMutate`; `getById` uses `dbQuery` |
+| `Suggestion.ts` | COMPLETE -- `create` uses `dbInsert`; `getById` uses `dbQuery` |
+| `Thread.ts` | COMPLETE -- all transactions use `dbTransaction`/`dbWithConnection` + conn-scoped wrappers |
+| `Todo.ts` | COMPLETE -- `create` uses `dbInsert` |
+| `UserActivityIcon.ts` | PENDING -- oraTransaction loop + dynamic oraQuery remain |
+| `UserChannelMessageCount.ts` | PENDING -- `upsertChannelCounts` (executeMany D3) remains |
+| `UserGameCollection.ts` | COMPLETE -- `addEntry` uses `dbInsertConn`; `updateEntry` uses `dbTransaction` + `dbMutateConn` |
+| `XboxCollectionImport.ts` | PENDING -- BIND_OUT, oraTransaction, optional-conn methods remain |
 
 ---
 
@@ -380,27 +391,26 @@ codebase is now a D2 blocker.
 All standalone `oraQuery`/`oraMutate` call sites (no BIND_OUT, no connection argument) have been
 converted to `dbQuery`/`dbMutate`. No D1 work remains.
 
-**D2 -- Oracle-only blockers (now unblocked -- postgres SQL is complete)**
+**D2 -- Remaining files (on branch `feature/phase-d2-bind-out-and-conn-passing`):**
 
-Two categories of calls cannot use `db*` wrappers yet:
+1. `GameReleaseAnnouncement.ts` -- `syncReleaseAnnouncements` conn-passing block
+2. `UserActivityIcon.ts` -- `oraTransaction` loop + dynamic `oraQuery`
+3. `UserChannelMessageCount.ts` -- `upsertChannelCounts` (D3 executeMany, replace with loop)
+4. `RssFeed.ts` -- `addFeed` (BIND_OUT), `markItemsSeen` (D3 executeMany), `getSeenItemHashes` (conn-passing)
+5. `XboxCollectionImport.ts` -- `createImport` (BIND_OUT), `insertItems` (oraTransaction), optional-conn getters, `upsertTitleMap`
+6. `SteamCollectionImport.ts` -- same patterns as Xbox
+7. `Member.ts` -- large file; BIND_OUT inserts, conn-passing blocks remain
+8. `Game.ts` -- large file; BIND_OUT inserts, conn-passing blocks remain
 
-1. **BIND_OUT** (`INSERT ... RETURNING x INTO :outVar`): Postgres SQL is now written as
-   `INSERT ... RETURNING x`. Needs a new `dbInsert(entry, params): Promise<number>` wrapper that
-   returns the generated id (uses `outBinds[0]` on Oracle, `rows[0].id` on Postgres).
+**D3 -- `executeMany` calls**
 
-2. **Connection-passing** (`oraWithConnection`/`oraTransaction` callbacks that call
-   `oraMutate(sql, params, conn)` or `oraQuery(sql, params, mapper, conn)`): Postgres SQL is now
-   written. Needs the callback rewritten to accept a union connection type, dispatching to
-   driver-specific calls inside.
+Oracle's `conn.executeMany` has no pg equivalent. Replace with per-row `dbMutateConn` loop inside
+`dbTransaction`. Affects `RssFeed.markItemsSeen` and `UserChannelMessageCount.upsertChannelCounts`.
 
-**D3 -- `executeMany` (RssFeed.markItemsSeen)**
+#### Approach (still valid)
 
-Oracle's `conn.executeMany` has no pg equivalent in the current wrappers. When porting, replace
-with a per-row `pgMutate` loop or a postgres multi-row INSERT ... ON CONFLICT pattern.
-
-#### Previously planned approach (still valid)
-
-- `dbQuery` / `dbMutate` first (covers the bulk of standalone call sites).
-- `dbWithConnection` / `dbTransaction` next (connection-scoped multi-statement blocks).
-- BIND_OUT cases last (require postgres SQL to be written first).
+- `dbQuery` / `dbMutate` for all standalone call sites.
+- `dbWithConnection` / `dbTransaction` for connection-scoped multi-statement blocks.
+- `dbInsert` / `dbInsertConn` for BIND_OUT INSERT patterns.
+- `dbQueryConn` / `dbMutateConn` inside connection callbacks.
 - Run `tsc --noEmit` after each batch.

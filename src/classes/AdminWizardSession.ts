@@ -1,9 +1,5 @@
-import { dbQuery, dbMutate, oraWithConnection } from "../db/SqlManager.js";
-import { getDialect } from "../db/dialect.js";
-import { getSql } from "../db/SqlManager.js";
+import { dbQuery, dbMutate, dbTransaction, dbMutateConn } from "../db/SqlManager.js";
 import { AdminWizardSessionSql } from "../db/sql/index.js";
-
-const dialect = getDialect();
 
 export const ADMIN_WIZARD_COMMANDS = ["nextround-setup"] as const;
 export type AdminWizardCommand = (typeof ADMIN_WIZARD_COMMANDS)[number];
@@ -254,31 +250,23 @@ export async function closeActiveAdminWizardSession(params: {
   channelId: string;
   status: Exclude<AdminWizardSessionStatus, "active">;
 }): Promise<boolean> {
-  return oraWithConnection(async (conn) => {
+  return dbTransaction(async (conn) => {
     // Remove any prior historical row to avoid unique index collision when
     // promoting ACTIVE -> CANCELLED/COMPLETED.
-    await conn.execute(
-      getSql(AdminWizardSessionSql.deleteHistorical, dialect),
-      {
-        commandKey: params.commandKey,
-        ownerUserId: params.ownerUserId,
-        channelId: params.channelId,
-        status: toDbStatus(params.status),
-      },
-      { autoCommit: true },
-    );
+    await dbMutateConn(conn, AdminWizardSessionSql.deleteHistorical, {
+      commandKey: params.commandKey,
+      ownerUserId: params.ownerUserId,
+      channelId: params.channelId,
+      status: toDbStatus(params.status),
+    });
 
-    const result = await conn.execute(
-      getSql(AdminWizardSessionSql.updateStatus, dialect),
-      {
-        status: toDbStatus(params.status),
-        lastUpdatedAt: new Date(),
-        commandKey: params.commandKey,
-        ownerUserId: params.ownerUserId,
-        channelId: params.channelId,
-      },
-      { autoCommit: true },
-    );
-    return Number(result.rowsAffected ?? 0) > 0;
+    const rowsAffected = await dbMutateConn(conn, AdminWizardSessionSql.updateStatus, {
+      status: toDbStatus(params.status),
+      lastUpdatedAt: new Date(),
+      commandKey: params.commandKey,
+      ownerUserId: params.ownerUserId,
+      channelId: params.channelId,
+    });
+    return rowsAffected > 0;
   });
 }

@@ -1,17 +1,5 @@
-import oracledb from "oracledb";
-import {
-  dbQuery,
-  dbMutate,
-  oraQuery,
-  oraMutate,
-  oraWithConnection,
-  oraTransaction,
-} from "../db/SqlManager.js";
-import { getDialect } from "../db/dialect.js";
-import { getSql } from "../db/SqlManager.js";
+import { dbQuery, dbMutate, dbInsert, dbTransaction, dbMutateConn } from "../db/SqlManager.js";
 import { CollectionCsvImportSql } from "../db/sql/index.js";
-
-const dialect = getDialect();
 
 export type CollectionCsvImportStatus = "ACTIVE" | "PAUSED" | "COMPLETED" | "CANCELED";
 export type CollectionCsvImportItemStatus =
@@ -150,28 +138,18 @@ export async function createCollectionCsvImportSession(params: {
   sourceFileSize: number | null;
   templateVersion: string | null;
 }): Promise<ICollectionCsvImport> {
-  return oraWithConnection(async (conn) => {
-    const result = await oraMutate(
-      getSql(CollectionCsvImportSql.createImport, dialect),
-      {
-        userId: params.userId,
-        totalCount: params.totalCount,
-        sourceFileName: params.sourceFileName,
-        sourceFileSize: params.sourceFileSize,
-        templateVersion: params.templateVersion,
-        id: { dir: oracledb.BIND_OUT, type: oracledb.NUMBER },
-      },
-      conn,
-    );
-    await conn.commit();
+  const id = await dbInsert(CollectionCsvImportSql.createImport, {
+    userId: params.userId,
+    totalCount: params.totalCount,
+    sourceFileName: params.sourceFileName,
+    sourceFileSize: params.sourceFileSize,
+    templateVersion: params.templateVersion,
+  }, "id");
+  if (!id) throw new Error("Failed to create CSV collection import session.");
 
-    const id = Number((result.outBinds as { id?: number[] }).id?.[0] ?? 0);
-    if (!id) throw new Error("Failed to create CSV collection import session.");
-
-    const session = await getCollectionCsvImportById(id, conn);
-    if (!session) throw new Error("Failed to load CSV collection import session.");
-    return session;
-  });
+  const session = await getCollectionCsvImportById(id);
+  if (!session) throw new Error("Failed to load CSV collection import session.");
+  return session;
 }
 
 export async function insertCollectionCsvImportItems(
@@ -191,39 +169,29 @@ export async function insertCollectionCsvImportItems(
 ): Promise<void> {
   if (!items.length) return;
 
-  await oraTransaction(async (conn) => {
+  await dbTransaction(async (conn) => {
     for (const item of items) {
-      await oraMutate(
-        getSql(CollectionCsvImportSql.insertItem, dialect),
-        {
-          importId,
-          rowIndex: item.rowIndex,
-          rawTitle: item.rawTitle,
-          rawPlatform: item.rawPlatform,
-          rawOwnershipType: item.rawOwnershipType,
-          rawNote: item.rawNote,
-          rawGameDbId: item.rawGameDbId,
-          rawIgdbId: item.rawIgdbId,
-          platformId: item.platformId,
-          ownershipType: item.ownershipType,
-          note: item.note,
-        },
-        conn,
-      );
+      await dbMutateConn(conn, CollectionCsvImportSql.insertItem, {
+        importId,
+        rowIndex: item.rowIndex,
+        rawTitle: item.rawTitle,
+        rawPlatform: item.rawPlatform,
+        rawOwnershipType: item.rawOwnershipType,
+        rawNote: item.rawNote,
+        rawGameDbId: item.rawGameDbId,
+        rawIgdbId: item.rawIgdbId,
+        platformId: item.platformId,
+        ownershipType: item.ownershipType,
+        note: item.note,
+      });
     }
   });
 }
 
 export async function getCollectionCsvImportById(
   importId: number,
-  existingConn?: oracledb.Connection,
 ): Promise<ICollectionCsvImport | null> {
-  const rows = await oraQuery(
-    getSql(CollectionCsvImportSql.getImportById, dialect),
-    { importId },
-    mapImport,
-    existingConn,
-  );
+  const rows = await dbQuery(CollectionCsvImportSql.getImportById, { importId }, mapImport);
   return rows[0] ?? null;
 }
 

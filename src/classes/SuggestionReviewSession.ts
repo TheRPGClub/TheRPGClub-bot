@@ -1,15 +1,5 @@
-import oracledb from "oracledb";
-import {
-  dbMutate,
-  oraQuery,
-  oraMutate,
-  oraWithConnection,
-  getSql,
-} from "../db/SqlManager.js";
-import { getDialect } from "../db/dialect.js";
+import { dbQuery, dbMutate } from "../db/SqlManager.js";
 import { SuggestionReviewSessionSql } from "../db/sql/index.js";
-
-const dialect = getDialect();
 
 export interface ISuggestionReviewSession {
   sessionId: string;
@@ -80,36 +70,27 @@ export async function createSuggestionReviewSessionRecord(session: {
   index: number;
   totalCount: number;
 }): Promise<ISuggestionReviewSession> {
-  return oraWithConnection(async (conn) => {
-    const suggestionIds = serializeSuggestionIds(session.suggestionIds);
-    await oraMutate(
-      getSql(SuggestionReviewSessionSql.create, dialect),
-      {
-        sessionId: session.sessionId,
-        reviewerId: session.reviewerId,
-        suggestionIds,
-        currentIndex: Math.max(session.index, 0),
-        totalCount: Math.max(session.totalCount, 0),
-      },
-      conn,
-    );
-    await conn.commit();
-
-    const saved = await getSuggestionReviewSession(session.sessionId, conn);
-    if (!saved) throw new Error("Failed to create suggestion review session.");
-    return saved;
+  const suggestionIds = serializeSuggestionIds(session.suggestionIds);
+  await dbMutate(SuggestionReviewSessionSql.create, {
+    sessionId: session.sessionId,
+    reviewerId: session.reviewerId,
+    suggestionIds,
+    currentIndex: Math.max(session.index, 0),
+    totalCount: Math.max(session.totalCount, 0),
   });
+
+  const saved = await getSuggestionReviewSession(session.sessionId);
+  if (!saved) throw new Error("Failed to create suggestion review session.");
+  return saved;
 }
 
 export async function getSuggestionReviewSession(
   sessionId: string,
-  existingConnection?: oracledb.Connection,
 ): Promise<ISuggestionReviewSession | null> {
-  const rows = await oraQuery(
-    getSql(SuggestionReviewSessionSql.getById, dialect),
+  const rows = await dbQuery(
+    SuggestionReviewSessionSql.getById,
     { sessionId },
     mapSessionRow,
-    existingConnection,
   );
   return rows[0] ?? null;
 }

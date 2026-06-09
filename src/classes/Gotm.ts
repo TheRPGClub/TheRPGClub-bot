@@ -1,10 +1,13 @@
-import { dbQuery, dbMutate, oraQuery, oraMutate, oraWithConnection, oraTransaction } from "../db/SqlManager.js";
-import { getDialect } from "../db/dialect.js";
-import { getSql } from "../db/SqlManager.js";
+import {
+  dbQuery,
+  dbMutate,
+  dbTransaction,
+  dbWithConnection,
+  dbQueryConn,
+  dbMutateConn,
+} from "../db/SqlManager.js";
 import { GotmSql } from "../db/sql/index.js";
 import Game from "./Game.js";
-
-const dialect = getDialect();
 import { getThreadsByGameId } from "./Thread.js";
 
 export interface IGotmGame {
@@ -330,12 +333,12 @@ export async function updateGotmGameFieldInDatabase(
   };
   const columnName = columnMap[field];
 
-  await oraWithConnection(async (conn) => {
-    const rows = await oraQuery<GotmRowIndexRow, GotmRowIndexRow>(
-      getSql(GotmSql.getRowsByRound, dialect),
+  await dbTransaction(async (conn) => {
+    const rows = await dbQueryConn<GotmRowIndexRow, GotmRowIndexRow>(
+      conn,
+      GotmSql.getRowsByRound,
       { round },
       (row) => row,
-      conn,
     );
 
     if (!rows.length) {
@@ -361,12 +364,11 @@ export async function updateGotmGameFieldInDatabase(
       dbValue = newId;
     }
 
-    await oraMutate(
-      GotmSql.updateField(columnName)[dialect],
-      { round, gameIndex: dbGameIndex, value: dbValue },
-      conn,
-    );
-    await conn.commit();
+    await dbMutateConn(conn, GotmSql.updateField(columnName), {
+      round,
+      gameIndex: dbGameIndex,
+      value: dbValue,
+    });
   });
 
   const entry = gotmData.find((e) => e.round === round);
@@ -416,24 +418,20 @@ export async function insertGotmRoundInDatabase(
     throw new Error(`GOTM round ${round} already exists in the database.`);
   }
 
-  await oraTransaction(async (conn) => {
+  await dbTransaction(async (conn) => {
     for (let i = 0; i < games.length; i++) {
       const g = games[i];
       if (!Number.isInteger(g.gamedbGameId) || g.gamedbGameId <= 0) {
         throw new Error(`GameDB id is required for GOTM round ${round}, game ${i + 1}.`);
       }
       const gameMeta = await getGameDetailsCached(g.gamedbGameId);
-      await oraMutate(
-        getSql(GotmSql.insertRound, dialect),
-        {
-          round,
-          monthYear,
-          gameIndex: i,
-          redditUrl: g.redditUrl ?? null,
-          gamedbGameId: g.gamedbGameId,
-        },
-        conn,
-      );
+      await dbMutateConn(conn, GotmSql.insertRound, {
+        round,
+        monthYear,
+        gameIndex: i,
+        redditUrl: g.redditUrl ?? null,
+        gamedbGameId: g.gamedbGameId,
+      });
       games[i].title = gameMeta.title;
     }
   });

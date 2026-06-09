@@ -1,16 +1,12 @@
 import {
   dbQuery,
   dbMutate,
-  oraQuery,
-  oraMutate,
-  oraTransaction,
-  oraWithConnection,
-  getSql,
+  dbTransaction,
+  dbWithConnection,
+  dbQueryConn,
+  dbMutateConn,
 } from "../db/SqlManager.js";
-import { getDialect } from "../db/dialect.js";
 import { ThreadSql } from "../db/sql/index.js";
-
-const dialect = getDialect();
 
 type NullableDate = Date | null;
 
@@ -46,26 +42,14 @@ export async function setThreadGameLink(
     throw new Error("Invalid GameDB game id.");
   }
 
-  await oraTransaction(async (conn) => {
+  await dbTransaction(async (conn) => {
     if (gameId === null) {
-      await oraMutate(
-        getSql(ThreadSql.deleteThreadGameLink, dialect),
-        { threadId },
-        conn,
-      );
+      await dbMutateConn(conn, ThreadSql.deleteThreadGameLink, { threadId });
     } else {
-      await oraMutate(
-        getSql(ThreadSql.mergeThreadGameLink, dialect),
-        { threadId, gameId },
-        conn,
-      );
+      await dbMutateConn(conn, ThreadSql.mergeThreadGameLink, { threadId, gameId });
     }
 
-    await oraMutate(
-      getSql(ThreadSql.updateThreadsGameId, dialect),
-      { threadId },
-      conn,
-    );
+    await dbMutateConn(conn, ThreadSql.updateThreadsGameId, { threadId });
   });
 }
 
@@ -80,20 +64,16 @@ export async function removeThreadGameLink(
     throw new Error("Invalid GameDB game id.");
   }
 
-  return oraTransaction(async (conn) => {
-    const res = await oraMutate(
-      ThreadSql.removeThreadGameLinks(!!gameId)[dialect],
+  return dbTransaction(async (conn) => {
+    const rowsAffected = await dbMutateConn(
+      conn,
+      ThreadSql.removeThreadGameLinks(!!gameId),
       gameId ? { threadId, gameId } : { threadId },
-      conn,
     );
 
-    await oraMutate(
-      getSql(ThreadSql.updateThreadsGameId, dialect),
-      { threadId },
-      conn,
-    );
+    await dbMutateConn(conn, ThreadSql.updateThreadsGameId, { threadId });
 
-    return res.rowsAffected ?? 0;
+    return rowsAffected;
   });
 }
 
@@ -116,29 +96,29 @@ export async function getThreadSkipLinking(threadId: string): Promise<boolean> {
 export async function getThreadLinkInfo(
   threadId: string,
 ): Promise<{ skipLinking: boolean; gamedbGameIds: number[] }> {
-  return oraWithConnection(async (conn) => {
-    const [skipFlag] = await oraQuery(
-      getSql(ThreadSql.getSkipLinking, dialect),
+  return dbWithConnection(async (conn) => {
+    const [skipFlag] = await dbQueryConn(
+      conn,
+      ThreadSql.getSkipLinking,
       { threadId },
       (row: { SKIP_LINKING: string }) =>
         String(row.SKIP_LINKING ?? "N").toUpperCase() === "Y",
-      conn,
     );
 
-    const gameIds = await oraQuery(
-      getSql(ThreadSql.getThreadGameLinks, dialect),
+    const gameIds = await dbQueryConn(
+      conn,
+      ThreadSql.getThreadGameLinks,
       { threadId },
       (row: { GAMEDB_GAME_ID: number }) => Number(row.GAMEDB_GAME_ID),
-      conn,
     );
 
     if (!gameIds.length) {
-      const legacyIds = await oraQuery(
-        getSql(ThreadSql.getLegacyGameId, dialect),
+      const legacyIds = await dbQueryConn(
+        conn,
+        ThreadSql.getLegacyGameId,
         { threadId },
         (row: { GAMEDB_GAME_ID: number | null }) =>
           row.GAMEDB_GAME_ID != null ? Number(row.GAMEDB_GAME_ID) : null,
-        conn,
       );
       for (const id of legacyIds) {
         if (id != null) gameIds.push(id);
@@ -158,19 +138,19 @@ export async function getThreadGameIds(threadId: string): Promise<number[]> {
 }
 
 export async function getThreadsByGameId(gameId: number): Promise<string[]> {
-  return oraWithConnection(async (conn) => {
-    const threadIds = await oraQuery(
-      getSql(ThreadSql.getThreadLinksForGame, dialect),
+  return dbWithConnection(async (conn) => {
+    const threadIds = await dbQueryConn(
+      conn,
+      ThreadSql.getThreadLinksForGame,
       { gameId },
       (row: { THREAD_ID: string }) => String(row.THREAD_ID),
-      conn,
     );
 
-    const legacyIds = await oraQuery(
-      getSql(ThreadSql.getLegacyThreadIdForGame, dialect),
+    const legacyIds = await dbQueryConn(
+      conn,
+      ThreadSql.getLegacyThreadIdForGame,
       { gameId },
       (row: { THREAD_ID: string }) => String(row.THREAD_ID),
-      conn,
     );
 
     return Array.from(new Set([...threadIds, ...legacyIds]));

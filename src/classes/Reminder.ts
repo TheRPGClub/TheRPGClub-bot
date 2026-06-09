@@ -1,10 +1,7 @@
-import oracledb from "oracledb";
-import type { Connection } from "oracledb";
-import { dbQuery, dbMutate, oraQuery, oraMutate, getSql } from "../db/SqlManager.js";
-import { getDialect } from "../db/dialect.js";
+import type oracledb from "oracledb";
+import type pg from "pg";
+import { dbQuery, dbMutate, dbInsert, dbQueryConn } from "../db/SqlManager.js";
 import { ReminderSql } from "../db/sql/index.js";
-
-const dialect = getDialect();
 
 export interface IReminderRecord {
   reminderId: number;
@@ -110,19 +107,13 @@ export default class Reminder {
     const normalizedContent = normalizeContent(content);
     const noisyVal = isNoisy ? 1 : 0;
 
-    const result = await oraMutate(
-      getSql(ReminderSql.create, dialect),
-      {
-        userId,
-        remindAt: normalizedDate,
-        content: normalizedContent,
-        noisyVal,
-        reminderId: { dir: oracledb.BIND_OUT, type: oracledb.NUMBER },
-      },
+    const reminderId = normalizeReminderId(
+      await dbInsert(
+        ReminderSql.create,
+        { userId, remindAt: normalizedDate, content: normalizedContent, noisyVal },
+        "reminderId",
+      ),
     );
-
-    const out = (result.outBinds ?? {}) as { reminderId?: number[] };
-    const reminderId = normalizeReminderId(out.reminderId?.[0] ?? 0);
 
     const inserted = await Reminder.getById(reminderId);
     if (!inserted) {
@@ -137,15 +128,19 @@ export default class Reminder {
 
   static async getById(
     reminderId: number,
-    opts?: { connection?: Connection },
+    opts?: { connection?: oracledb.Connection | pg.PoolClient },
   ): Promise<IReminderRecord | null> {
     const id = normalizeReminderId(reminderId);
-    const rows = await oraQuery(
-      getSql(ReminderSql.getById, dialect),
-      { reminderId: id },
-      mapRowToReminder,
-      opts?.connection,
-    );
+    if (opts?.connection) {
+      const rows = await dbQueryConn(
+        opts.connection,
+        ReminderSql.getById,
+        { reminderId: id },
+        mapRowToReminder,
+      );
+      return rows[0] ?? null;
+    }
+    const rows = await dbQuery(ReminderSql.getById, { reminderId: id }, mapRowToReminder);
     return rows[0] ?? null;
   }
 

@@ -1,17 +1,5 @@
-import oracledb from "oracledb";
-import {
-  dbQuery,
-  dbMutate,
-  oraQuery,
-  oraMutate,
-  oraWithConnection,
-  oraTransaction,
-} from "../db/SqlManager.js";
-import { getDialect } from "../db/dialect.js";
-import { getSql } from "../db/SqlManager.js";
+import { dbQuery, dbMutate, dbInsert, dbTransaction, dbMutateConn } from "../db/SqlManager.js";
 import { CompletionatorImportSql } from "../db/sql/index.js";
-
-const dialect = getDialect();
 
 export type ImportStatus = "ACTIVE" | "PAUSED" | "COMPLETED" | "CANCELED";
 export type ImportItemStatus =
@@ -121,26 +109,16 @@ export async function createImportSession(params: {
   totalCount: number;
   sourceFilename: string | null;
 }): Promise<ICompletionatorImport> {
-  return oraWithConnection(async (conn) => {
-    const result = await oraMutate(
-      getSql(CompletionatorImportSql.createImport, dialect),
-      {
-        userId: params.userId,
-        totalCount: params.totalCount,
-        sourceFilename: params.sourceFilename,
-        id: { dir: oracledb.BIND_OUT, type: oracledb.NUMBER },
-      },
-      conn,
-    );
-    await conn.commit();
+  const id = await dbInsert(CompletionatorImportSql.createImport, {
+    userId: params.userId,
+    totalCount: params.totalCount,
+    sourceFilename: params.sourceFilename,
+  }, "id");
+  if (!id) throw new Error("Failed to create import session.");
 
-    const id = Number((result.outBinds as { id?: number[] })?.id?.[0] ?? 0);
-    if (!id) throw new Error("Failed to create import session.");
-
-    const session = await getImportById(id, conn);
-    if (!session) throw new Error("Failed to load import session.");
-    return session;
-  });
+  const session = await getImportById(id);
+  if (!session) throw new Error("Failed to load import session.");
+  return session;
 }
 
 export async function insertImportItems(
@@ -158,38 +136,28 @@ export async function insertImportItems(
   }>,
 ): Promise<void> {
   if (!items.length) return;
-  await oraTransaction(async (conn) => {
+  await dbTransaction(async (conn) => {
     for (const item of items) {
-      await oraMutate(
-        getSql(CompletionatorImportSql.insertItem, dialect),
-        {
-          importId,
-          rowIndex: item.rowIndex,
-          gameTitle: item.gameTitle,
-          platformName: item.platformName,
-          regionName: item.regionName,
-          sourceType: item.sourceType,
-          timeText: item.timeText,
-          completedAt: item.completedAt,
-          completionType: item.completionType,
-          playtimeHours: item.playtimeHours,
-        },
-        conn,
-      );
+      await dbMutateConn(conn, CompletionatorImportSql.insertItem, {
+        importId,
+        rowIndex: item.rowIndex,
+        gameTitle: item.gameTitle,
+        platformName: item.platformName,
+        regionName: item.regionName,
+        sourceType: item.sourceType,
+        timeText: item.timeText,
+        completedAt: item.completedAt,
+        completionType: item.completionType,
+        playtimeHours: item.playtimeHours,
+      });
     }
   });
 }
 
 export async function getImportById(
   importId: number,
-  existingConn?: oracledb.Connection,
 ): Promise<ICompletionatorImport | null> {
-  const rows = await oraQuery(
-    getSql(CompletionatorImportSql.getImportById, dialect),
-    { id: importId },
-    mapImport,
-    existingConn,
-  );
+  const rows = await dbQuery(CompletionatorImportSql.getImportById, { id: importId }, mapImport);
   return rows[0] ?? null;
 }
 
