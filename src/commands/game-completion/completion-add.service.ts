@@ -21,7 +21,7 @@ import {
   safeReply,
   safeUpdate,
 } from "../../functions/InteractionUtils.js";
-import { formatDiscordTimestamp, formatPlaytimeHours } from "../profile.command.js";
+import { formatDiscordTimestamp, formatPlaytimeHours } from "../../functions/DateFormatUtils.js";
 import { igdbService } from "../../services/IGDB/IgdbService.js";
 import { createIgdbSession, type IgdbSelectOption } from "../../services/IGDB/IgdbSelectService.js";
 import { resolveNowPlayingRemoval } from "./completion-helpers.js";

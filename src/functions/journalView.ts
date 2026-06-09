@@ -13,7 +13,7 @@ import {
 import Member, { type ICompletionRecord } from "../classes/Member.js";
 import Game from "../classes/Game.js";
 import { getThreadsByGameId } from "../classes/Thread.js";
-import { formatTableDate, formatPlaytimeHours } from "../commands/profile.command.js";
+import { formatTableDate, formatPlaytimeHours } from "./DateFormatUtils.js";
 import { COMPONENTS_V2_FLAG } from "../config/flags.js";
 import { safeV2TextContent } from "./ComponentsV2Utils.js";
 import { buildUserHeaderContainer } from "./uiComponents.js";

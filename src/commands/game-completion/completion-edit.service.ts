@@ -14,10 +14,9 @@ import {
 import Member from "../../classes/Member.js";
 import {
   COMPLETION_TYPES,
-  formatDiscordTimestamp,
-  formatPlaytimeHours,
   parseCompletionDateInput,
 } from "../profile.command.js";
+import { formatDiscordTimestamp, formatPlaytimeHours } from "../../functions/DateFormatUtils.js";
 import {
   resolveGameCompletionPlatformId,
   resolveGameCompletionPlatformLabel,

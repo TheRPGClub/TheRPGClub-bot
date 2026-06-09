@@ -59,6 +59,7 @@ import {
 } from "../functions/ComponentsV2Utils.js";
 import { decodeBase64Url, encodeWithMaxLength } from "../functions/CustomIdUtils.js";
 import { safeV2TextContent } from "../functions/ComponentsV2Utils.js";
+import { formatDiscordTimestamp } from "../functions/DateFormatUtils.js";
 
 const TODO_LABELS = [
   "New Feature",
@@ -345,13 +346,6 @@ function toIssueState(filters: ListState[]): ListState {
   const normalized = normalizeStateFilters(filters);
   if (normalized.length > 1) return "all";
   return normalized[0] ?? "open";
-}
-
-function formatDiscordTimestamp(value: string | null | undefined): string {
-  if (!value) return "Unknown";
-  const ms = Date.parse(value);
-  if (Number.isNaN(ms)) return "Unknown";
-  return `<t:${Math.floor(ms / 1000)}:f>`;
 }
 
 function getTodoPermissionFlags(interaction: AnyRepliable): {

@@ -35,6 +35,13 @@ import {
 import { buildTextReply, safeV2TextContent } from "../functions/ComponentsV2Utils.js";
 import { buildUserHeaderContainer } from "../functions/uiComponents.js";
 import { buildComponentsV2Flags } from "../functions/NominationListComponents.js";
+import {
+  formatDiscordTimestamp,
+  formatPlaytimeHours,
+  formatTableDate,
+} from "../functions/DateFormatUtils.js";
+
+export { formatDiscordTimestamp, formatPlaytimeHours, formatTableDate };
 
 export const COMPLETION_TYPES = [
   "Main Story",
@@ -101,20 +108,6 @@ export function parseCompletionDateInput(value: string | undefined): Date | null
   return parsed;
 }
 
-export function formatPlaytimeHours(val: number | null | undefined): string | null {
-  if (val === null || val === undefined) return null;
-  const rounded = Math.round(val * 100) / 100;
-  return `${rounded} hours`;
-}
-
-export function formatTableDate(date: Date | null): string {
-  if (!date) return "No date";
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  const year = date.getFullYear();
-  return `${month}/${day}/${year}`;
-}
-
 function summarizeFilters(filters: IMemberSearchFilters): string {
   const parts: string[] = [];
   if (filters.userId) parts.push(`userId~${filters.userId}`);
@@ -146,12 +139,6 @@ function chunkOptions<T>(items: T[], size: number): T[][] {
     chunks.push(items.slice(i, i + size));
   }
   return chunks;
-}
-
-export function formatDiscordTimestamp(value: Date | null): string {
-  if (!value) return "Unknown";
-  const seconds = Math.floor(value.getTime() / 1000);
-  return `<t:${seconds}:F>`;
 }
 
 function buildProfileContentContainer(
