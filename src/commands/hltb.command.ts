@@ -6,8 +6,8 @@ import { searchHltb, type HltbSearchResult } from "../scripts/SearchHltb.js";
 import Game from "../classes/Game.js";
 import { getHltbCacheByGameId, upsertHltbCache } from "../classes/HltbCache.js";
 import {
+  deferWithShowInChat,
   ephemeralFlag,
-  safeDeferReply,
   safeReply,
   sanitizeUserInput,
 } from "../functions/InteractionUtils.js";
@@ -71,7 +71,7 @@ export class hltb {
   ): Promise<void> {
     title = sanitizeUserInput(title, { preserveNewlines: false });
     const ephemeral = !showInChat;
-    await safeDeferReply(interaction, { flags: ephemeralFlag(ephemeral) });
+    await deferWithShowInChat(interaction, showInChat);
 
     try {
       const result = await resolveHltbResult(title);

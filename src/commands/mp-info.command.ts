@@ -22,9 +22,9 @@ import {
 } from "discordx";
 import Member, { type IMemberPlatformRecord } from "../classes/Member.js";
 import {
+  deferWithShowInChat,
   ephemeralFlag,
   extractErrorMessage,
-  safeDeferReply,
   safeDeferUpdate,
   safeReply,
   safeUpdate,
@@ -310,7 +310,7 @@ export class MultiplayerInfoCommand {
           nsw: nsw ?? true,
         };
     const ephemeral = !showInChat;
-    await safeDeferReply(interaction, { flags: ephemeralFlag(ephemeral) });
+    await deferWithShowInChat(interaction, showInChat);
 
     const anyIncluded = filters.steam || filters.xbl || filters.psn || filters.nsw;
     if (!anyIncluded) {

@@ -25,6 +25,7 @@ import Member, {
   type IMemberSearchFilters,
 } from "../classes/Member.js";
 import {
+  deferWithShowInChat,
   ephemeralFlag,
   extractErrorMessage,
   safeDeferReply,
@@ -331,7 +332,7 @@ export class ProfileCommand {
   ): Promise<void> {
     const target = member ?? interaction.user;
     const ephemeral = !showInChat;
-    await safeDeferReply(interaction, { flags: buildComponentsV2Flags(ephemeral) });
+    await deferWithShowInChat(interaction, showInChat);
 
     const result = await buildProfileViewPayload(target);
 
@@ -588,7 +589,7 @@ export class ProfileCommand {
     interaction: CommandInteraction,
   ): Promise<void> {
     const ephemeral = !showInChat;
-    await safeDeferReply(interaction, { flags: ephemeralFlag(ephemeral) });
+    await deferWithShowInChat(interaction, showInChat);
 
     userId = userId ? sanitizeUserInput(userId, { preserveNewlines: false }) : undefined;
     username = username ? sanitizeUserInput(username, { preserveNewlines: false }) : undefined;

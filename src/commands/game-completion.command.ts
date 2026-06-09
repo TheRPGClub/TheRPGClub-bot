@@ -22,7 +22,7 @@ import {
   ModalComponent,
 } from "discordx";
 import {
-  ephemeralFlag,
+  deferWithShowInChat,
   safeDeferReply,
   safeReply,
   safeUpdate,
@@ -318,7 +318,7 @@ export class GameCompletionCommands {
     interaction: CommandInteraction,
   ): Promise<void> {
     const ephemeral = !showInChat;
-    await safeDeferReply(interaction, { flags: ephemeralFlag(ephemeral) });
+    await deferWithShowInChat(interaction, showInChat);
 
     const sanitizedQuery = query
       ? sanitizeUserInput(query, { preserveNewlines: false })
@@ -421,7 +421,7 @@ export class GameCompletionCommands {
     interaction: CommandInteraction,
   ): Promise<void> {
     const ephemeral = !showInChat;
-    await safeDeferReply(interaction, { flags: ephemeralFlag(ephemeral) });
+    await deferWithShowInChat(interaction, showInChat);
 
     let leftUserId = interaction.user.id;
     let rightUserId: string | null = null;

@@ -1,6 +1,10 @@
 import { type CommandInteraction, ApplicationCommandOptionType } from "discord.js";
 import { Discord, Slash, SlashOption } from "discordx";
-import { extractErrorMessage, safeDeferReply, safeReply } from "../functions/InteractionUtils.js";
+import {
+  deferWithShowInChat,
+  extractErrorMessage,
+  safeReply,
+} from "../functions/InteractionUtils.js";
 import { buildTextReply } from "../functions/ComponentsV2Utils.js";
 import BotVotingInfo from "../classes/BotVotingInfo.js";
 import Gotm from "../classes/Gotm.js";
@@ -28,7 +32,7 @@ export class CurrentRoundCommand {
     interaction: CommandInteraction,
   ): Promise<void> {
     const ephemeral = !showInChat;
-    await safeDeferReply(interaction, { flags: buildComponentsV2Flags(ephemeral) });
+    await deferWithShowInChat(interaction, showInChat);
 
     try {
       const current = await BotVotingInfo.getCurrentRound();
