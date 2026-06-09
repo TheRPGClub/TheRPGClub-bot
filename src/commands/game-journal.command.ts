@@ -67,6 +67,7 @@ import {
 import { NOW_PLAYING_HELP_PREFIX } from "./now-playing-help.js";
 import { EphemeralOwnerMenu } from "../functions/EphemeralOwnerMenu.js";
 import { isPositiveInt } from "../utilities/ValidationUtils.js";
+import { parseCustomIdSegments } from "../utilities/CustomIdUtils.js";
 import {
   JOURNAL_LIST_PAGE_SIZE as LIST_PAGE_SIZE,
   JOURNAL_ALL_PAGE_SIZE as ALL_PAGE_SIZE,
@@ -603,7 +604,9 @@ export class GameJournalCommand {
 
   @SelectMenuComponent({ id: new RegExp(`^${GJ_LIST_SELECT_PREFIX}:\\d+:\\d+:\\d+$`) })
   async handleListSelect(interaction: StringSelectMenuInteraction): Promise<void> {
-    const [, callerId, targetUserId] = interaction.customId.split(":");
+    const segments = parseCustomIdSegments(interaction.customId, 3);
+    if (!segments) return;
+    const [callerId, targetUserId] = segments;
     if (interaction.user.id !== callerId) {
       await safeReply(interaction, buildTextReply("This journal list isn't yours to navigate.", true));
       return;
@@ -634,7 +637,9 @@ export class GameJournalCommand {
 
   @ButtonComponent({ id: new RegExp(`^${GJ_LIST_PAGE_PREFIX}:\\d+:\\d+:\\d+$`) })
   async handleListPage(interaction: ButtonInteraction): Promise<void> {
-    const [, callerId, targetUserId, pageRaw] = interaction.customId.split(":");
+    const segments = parseCustomIdSegments(interaction.customId, 3);
+    if (!segments) return;
+    const [callerId, targetUserId, pageRaw] = segments;
     if (interaction.user.id !== callerId) {
       await safeReply(interaction, buildTextReply("This journal list isn't yours to navigate.", true));
       return;
@@ -664,7 +669,9 @@ export class GameJournalCommand {
 
   @SelectMenuComponent({ id: new RegExp(`^${GJ_ALL_SELECT_PREFIX}:\\d+:\\d+$`) })
   async handleAllSelect(interaction: StringSelectMenuInteraction): Promise<void> {
-    const [, callerId] = interaction.customId.split(":");
+    const segments = parseCustomIdSegments(interaction.customId, 2);
+    if (!segments) return;
+    const [callerId] = segments;
     if (interaction.user.id !== callerId) {
       await safeReply(interaction, buildTextReply("This member list isn't yours to navigate.", true));
       return;
@@ -701,7 +708,9 @@ export class GameJournalCommand {
 
   @ButtonComponent({ id: new RegExp(`^${GJ_ALL_PAGE_PREFIX}:\\d+:\\d+$`) })
   async handleAllPage(interaction: ButtonInteraction): Promise<void> {
-    const [, callerId, pageRaw] = interaction.customId.split(":");
+    const segments = parseCustomIdSegments(interaction.customId, 2);
+    if (!segments) return;
+    const [callerId, pageRaw] = segments;
     if (interaction.user.id !== callerId) {
       await safeReply(interaction, buildTextReply("This member list isn't yours to navigate.", true));
       return;
@@ -789,7 +798,9 @@ export class GameJournalCommand {
 
   @ButtonComponent({ id: new RegExp(`^${GJ_VIEW_PAGE_PREFIX}:\\d+:\\d+:\\d+:\\d+$`) })
   async handleViewPage(interaction: ButtonInteraction): Promise<void> {
-    const [, callerId, targetUserId, gameIdRaw, pageRaw] = interaction.customId.split(":");
+    const segments = parseCustomIdSegments(interaction.customId, 4);
+    if (!segments) return;
+    const [callerId, targetUserId, gameIdRaw, pageRaw] = segments;
     if (interaction.user.id !== callerId) {
       await safeReply(interaction, buildTextReply("This journal isn't yours to navigate.", true));
       return;
@@ -819,7 +830,9 @@ export class GameJournalCommand {
 
   @ButtonComponent({ id: /^game-journal-header-add:\d+:\d+:\d+$/ })
   async handleHeaderAdd(interaction: ButtonInteraction): Promise<void> {
-    const [, ownerId, gameIdRaw, pageRaw] = interaction.customId.split(":");
+    const segments = parseCustomIdSegments(interaction.customId, 3);
+    if (!segments) return;
+    const [ownerId, gameIdRaw, pageRaw] = segments;
     if (interaction.user.id !== ownerId) {
       await safeDeferUpdate(interaction);
       return;
@@ -835,7 +848,9 @@ export class GameJournalCommand {
 
   @ButtonComponent({ id: /^game-journal-hmenu-add:\d+:\d+$/ })
   async handleGjHmenuAdd(interaction: ButtonInteraction): Promise<void> {
-    const [, ownerId, gameIdRaw] = interaction.customId.split(":");
+    const segments = parseCustomIdSegments(interaction.customId, 2);
+    if (!segments) return;
+    const [ownerId, gameIdRaw] = segments;
     if (interaction.user.id !== ownerId) {
       await safeDeferUpdate(interaction);
       return;
@@ -849,7 +864,9 @@ export class GameJournalCommand {
 
   @ButtonComponent({ id: /^game-journal-hmenu-edit:\d+:\d+:\d+$/ })
   async handleGjHmenuEdit(interaction: ButtonInteraction): Promise<void> {
-    const [, ownerId, gameIdRaw, pageRaw] = interaction.customId.split(":");
+    const segments = parseCustomIdSegments(interaction.customId, 3);
+    if (!segments) return;
+    const [ownerId, gameIdRaw, pageRaw] = segments;
     if (interaction.user.id !== ownerId) {
       await safeDeferUpdate(interaction);
       return;
@@ -888,7 +905,9 @@ export class GameJournalCommand {
 
   @ButtonComponent({ id: /^game-journal-hmenu-delete:\d+:\d+$/ })
   async handleGjHmenuDelete(interaction: ButtonInteraction): Promise<void> {
-    const [, ownerId, gameIdRaw] = interaction.customId.split(":");
+    const segments = parseCustomIdSegments(interaction.customId, 2);
+    if (!segments) return;
+    const [ownerId, gameIdRaw] = segments;
     if (interaction.user.id !== ownerId) {
       await safeDeferUpdate(interaction);
       return;
@@ -946,7 +965,9 @@ export class GameJournalCommand {
   async handleGjHmenuDeleteSelect(
     interaction: StringSelectMenuInteraction,
   ): Promise<void> {
-    const [, ownerId, gameIdRaw] = interaction.customId.split(":");
+    const segments = parseCustomIdSegments(interaction.customId, 2);
+    if (!segments) return;
+    const [ownerId, gameIdRaw] = segments;
     if (interaction.user.id !== ownerId) {
       await safeDeferUpdate(interaction);
       return;
@@ -992,7 +1013,9 @@ export class GameJournalCommand {
 
   @ButtonComponent({ id: /^game-journal-hmenu-delete-confirm:(yes|no):\d+:\d+:\d+$/ })
   async handleGjHmenuDeleteConfirm(interaction: ButtonInteraction): Promise<void> {
-    const [, action, ownerId, gameIdRaw, entryIdRaw] = interaction.customId.split(":");
+    const segments = parseCustomIdSegments(interaction.customId, 4);
+    if (!segments) return;
+    const [action, ownerId, gameIdRaw, entryIdRaw] = segments;
     if (interaction.user.id !== ownerId) {
       await safeDeferUpdate(interaction);
       return;
@@ -1020,7 +1043,9 @@ export class GameJournalCommand {
 
   @ModalComponent({ id: /^game-journal-hmenu-add-modal:\d+:\d+$/ })
   async handleGjHmenuAddModal(interaction: ModalSubmitInteraction): Promise<void> {
-    const [, ownerId, gameIdRaw] = interaction.customId.split(":");
+    const segments = parseCustomIdSegments(interaction.customId, 2);
+    if (!segments) return;
+    const [ownerId, gameIdRaw] = segments;
     if (interaction.user.id !== ownerId) {
       await safeReply(interaction, buildTextReply("Only the owner can submit journal entries.", false));
       return;
@@ -1049,7 +1074,9 @@ export class GameJournalCommand {
 
   @ModalComponent({ id: /^game-journal-hmenu-edit-modal:\d+:\d+:\d+$/ })
   async handleGjHmenuEditModal(interaction: ModalSubmitInteraction): Promise<void> {
-    const [, ownerId, gameIdRaw, entryIdRaw] = interaction.customId.split(":");
+    const segments = parseCustomIdSegments(interaction.customId, 3);
+    if (!segments) return;
+    const [ownerId, gameIdRaw, entryIdRaw] = segments;
     if (interaction.user.id !== ownerId) {
       await safeReply(interaction, buildTextReply("Only the owner can edit journal entries.", false));
       return;
@@ -1083,7 +1110,9 @@ export class GameJournalCommand {
 
   @ButtonComponent({ id: new RegExp(`^${GJ_CLOSE_PREFIX}:\\d+$`) })
   async handlePublicClose(interaction: ButtonInteraction): Promise<void> {
-    const [, callerId] = interaction.customId.split(":");
+    const segments = parseCustomIdSegments(interaction.customId, 1);
+    if (!segments) return;
+    const [callerId] = segments;
     if (interaction.user.id !== callerId) {
       await safeReply(
         interaction,

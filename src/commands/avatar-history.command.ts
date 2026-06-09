@@ -39,6 +39,7 @@ import { getUserEmojiData, renderUsernameWithEmoji } from "../services/UserEmoji
 import { buildTitleHeaderContainer, buildUserHeaderContainer } from "../functions/uiComponents.js";
 import { safeDeferUpdate } from "../functions/InteractionUtils.js";
 import { recordCurrentAvatarIfNew } from "../utilities/AvatarLogUtils.js";
+import { parseCustomIdSegments } from "../utilities/CustomIdUtils.js";
 import { isAdmin } from "./admin/admin-auth.utils.js";
 import {
   AVATAR_HISTORY_PAGE_SIZE,
@@ -336,7 +337,9 @@ export class AvatarHistoryCommand {
 
   @ButtonComponent({ id: /^avatar-history-page:\d+:\d+:\d+:(prev|next)$/ })
   async handlePage(interaction: ButtonInteraction): Promise<void> {
-    const [, ownerId, targetId, pageRaw, dir] = interaction.customId.split(":");
+    const segments = parseCustomIdSegments(interaction.customId, 4);
+    if (!segments) return;
+    const [ownerId, targetId, pageRaw, dir] = segments;
     if (await replyIfNotOwner(interaction, ownerId)) return;
 
     const parsed = parseDirAndPage(pageRaw, dir);
@@ -372,7 +375,9 @@ export class AvatarHistoryCommand {
 
   @ButtonComponent({ id: /^avatar-history-all-page:\d+:\d+:(prev|next)$/ })
   async handleAllPage(interaction: ButtonInteraction): Promise<void> {
-    const [, ownerId, pageRaw, dir] = interaction.customId.split(":");
+    const segments = parseCustomIdSegments(interaction.customId, 3);
+    if (!segments) return;
+    const [ownerId, pageRaw, dir] = segments;
     if (await replyIfNotOwner(interaction, ownerId)) return;
     const parsed = parseDirAndPage(pageRaw, dir);
     if (!parsed) return;
@@ -402,7 +407,9 @@ export class AvatarHistoryCommand {
 
   @SelectMenuComponent({ id: /^avatar-history-all-select:\d+$/ })
   async handleAllSelect(interaction: StringSelectMenuInteraction): Promise<void> {
-    const [, ownerId] = interaction.customId.split(":");
+    const segments = parseCustomIdSegments(interaction.customId, 1);
+    if (!segments) return;
+    const [ownerId] = segments;
     if (await replyIfNotOwner(interaction, ownerId)) return;
     const targetId = interaction.values[0];
     if (!targetId) return;
