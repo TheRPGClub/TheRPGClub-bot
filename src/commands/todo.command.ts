@@ -31,6 +31,8 @@ import {
   SlashOption,
 } from "discordx";
 import {
+  ACCESS_DENIED_MOD_ADMIN,
+  ACCESS_DENIED_SERVER_OWNER,
   AnyRepliable,
   safeDeferReply,
   safeDeferUpdate,
@@ -388,7 +390,7 @@ async function requireModeratorOrAdminOrOwner(
   await safeReply(
     interaction,
     buildTodoTextReply(
-      "Access denied. Command requires Moderator, Administrator, or server owner.",
+      ACCESS_DENIED_MOD_ADMIN,
       true,
     ),
   );
@@ -411,7 +413,7 @@ async function requireOwner(interaction: AnyRepliable): Promise<boolean> {
 
   await safeReply(
     interaction,
-    buildTodoTextReply("Access denied. Command requires server owner.", true),
+    buildTodoTextReply(ACCESS_DENIED_SERVER_OWNER, true),
   );
   return false;
 }

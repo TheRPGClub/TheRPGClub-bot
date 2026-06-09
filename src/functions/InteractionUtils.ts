@@ -512,6 +512,13 @@ export function extractErrorMessage(err: unknown): string {
 }
 
 export const OWNER_ONLY_MESSAGE = "This list isn't for you.";
+export const ACCESS_DENIED_ADMIN = "Access denied. Command requires Administrator role.";
+export const ACCESS_DENIED_MOD = "Access denied. Command requires Moderator role or above.";
+export const ACCESS_DENIED_MOD_ADMIN =
+  "Access denied. Command requires Moderator, Administrator, or server owner.";
+export const ACCESS_DENIED_OWNER = "Access denied. Command is restricted to the server owner.";
+export const ACCESS_DENIED_SERVER_OWNER = "Access denied. Command requires server owner.";
+export const ACCESS_DENIED_REGULARS = "Access denied. Command requires the Regulars role.";
 export const SHOW_IN_CHAT_DESCRIPTION = "Show in chat (public) instead of ephemeral";
 
 /** Returns true and replies ephemerally if user is not the owner. */

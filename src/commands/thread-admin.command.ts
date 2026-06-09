@@ -5,7 +5,11 @@ import {
 import { Discord, Slash, SlashGroup, SlashOption } from "discordx";
 import { removeThreadGameLink, setThreadGameLink } from "../classes/Thread.js";
 import { REGULARS_ROLE_ID } from "../config/roles.js";
-import { safeReply, sanitizeUserInput } from "../functions/InteractionUtils.js";
+import {
+  ACCESS_DENIED_REGULARS,
+  safeReply,
+  sanitizeUserInput,
+} from "../functions/InteractionUtils.js";
 import { buildTextReply } from "../functions/ComponentsV2Utils.js";
 
 @Discord()
@@ -32,7 +36,7 @@ export class ThreadAdminCommands {
   ): Promise<void> {
     threadId = sanitizeUserInput(threadId, { preserveNewlines: false });
     if (!this.hasRegularsRole(interaction)) {
-      await safeReply(interaction, buildTextReply("Access denied. Command requires the Regulars role.", true));
+      await safeReply(interaction, buildTextReply(ACCESS_DENIED_REGULARS, true));
       return;
     }
 
@@ -60,7 +64,7 @@ export class ThreadAdminCommands {
   ): Promise<void> {
     threadId = sanitizeUserInput(threadId, { preserveNewlines: false });
     if (!this.hasRegularsRole(interaction)) {
-      await safeReply(interaction, buildTextReply("Access denied. Command requires the Regulars role.", true));
+      await safeReply(interaction, buildTextReply(ACCESS_DENIED_REGULARS, true));
       return;
     }
 
