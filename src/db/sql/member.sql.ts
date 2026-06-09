@@ -741,11 +741,6 @@ export const MemberSql = {
               username,
               global_name,
               is_bot,
-              completionator_url,
-              steam_url,
-              psn_username,
-              xbl_username,
-              nsw_friend_code,
               role_admin,
               role_moderator,
               role_regular,
@@ -798,11 +793,6 @@ export const MemberSql = {
                 role_member,
                 role_newcomer,
                 message_count,
-                completionator_url,
-                psn_username,
-                xbl_username,
-                nsw_friend_code,
-                steam_url,
                 profile_image,
                 profile_image_at
            FROM rpg_club_users
@@ -879,11 +869,6 @@ export const MemberSql = {
                 role_regular = :roleRegular,
                 role_member = :roleMember,
                 role_newcomer = :roleNewcomer,
-                completionator_url = :completionatorUrl,
-                psn_username = :psnUsername,
-                xbl_username = :xblUsername,
-                nsw_friend_code = :nswFriendCode,
-                steam_url = :steamUrl,
                 updated_at = NOW()
           WHERE user_id = :userId`,
   } satisfies SqlEntry,
@@ -908,15 +893,11 @@ export const MemberSql = {
              user_id, is_bot, username, global_name, avatar_blob,
              server_joined_at, server_left_at, last_seen_at, last_fetched_at,
              role_admin, role_moderator, role_regular, role_member, role_newcomer,
-             completionator_url, psn_username, xbl_username, nsw_friend_code,
-             steam_url,
              created_at, updated_at
            ) VALUES (
              :userId, :isBot, :username, :globalName, :avatarBlob,
              :joinedAt, :leftAt, :lastSeenAt, NOW(),
              :roleAdmin, :roleModerator, :roleRegular, :roleMember, :roleNewcomer,
-             :completionatorUrl, :psnUsername, :xblUsername,
-             :nswFriendCode, :steamUrl,
              NOW(), NOW()
            )`,
   } satisfies SqlEntry,
