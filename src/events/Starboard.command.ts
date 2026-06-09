@@ -1,4 +1,5 @@
 import { EmbedBuilder } from "discord.js";
+import { COLOR_DARK } from "../config/colors.js";
 import type { Message, MessageReaction, PartialMessageReaction } from "discord.js";
 import type { ArgsOf, Client } from "discordx";
 import { Discord, On } from "discordx";
@@ -84,7 +85,7 @@ export class StarboardHandler {
       .setFooter({
         text: `${message.id} • ${formatTimestampWithDay(message.createdTimestamp)}`,
       })
-      .setColor(0x2f3136);
+      .setColor(COLOR_DARK);
 
     if (imageUrl) {
       embed.setImage(imageUrl);
