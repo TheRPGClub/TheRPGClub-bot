@@ -51,6 +51,7 @@ import {
   refreshGiveawayHubMessage,
 } from "../services/GiveawayHubService.js";
 import { GIVEAWAY_HUB_CHANNEL_ID, GIVEAWAY_LOG_CHANNEL_ID } from "../config/channels.js";
+import { MEMBER_ROLE_ID } from "../config/roles.js";
 import { isPositiveInt } from "../utilities/ValidationUtils.js";
 import { COLOR_SUCCESS } from "../config/colors.js";
 import { CLAIM_MENU_CHUNK_SIZE } from "../config/pagination.js";
@@ -58,7 +59,6 @@ import { CLAIM_MENU_CHUNK_SIZE } from "../config/pagination.js";
 const MAX_TITLE_LENGTH = 200;
 const MAX_PLATFORM_LENGTH = 50;
 const MAX_KEY_LENGTH = 200;
-const MEMBER_ROLE_ID = "747520789003239530";
 const GIVEAWAY_DONATE_MODAL_ID = "giveaway-donate-modal";
 const GIVEAWAY_REVOKE_MODAL_ID = "giveaway-revoke-modal";
 const GIVEAWAY_DONATE_TITLE_ID = "giveaway-donate-title";
