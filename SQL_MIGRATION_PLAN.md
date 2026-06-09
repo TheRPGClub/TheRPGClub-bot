@@ -119,36 +119,31 @@ Dynamic parts (whereClause, orderBy) are always code-generated, never raw user i
 
 | Oracle | PostgreSQL |
 |---|---|
-| `:paramName` bind | `$1, $2, ...` positional |
-| `SYSDATE` | `NOW()` |
+| `:paramName` named bind | `:paramName` named bind (converted to `$N` at runtime by `namedToPositional`) |
+| `SYSDATE` | `CURRENT_DATE` |
 | `SYSTIMESTAMP` | `NOW()` |
+| `CURRENT_TIMESTAMP` | `CURRENT_TIMESTAMP` (works in both) |
 | `ROWNUM <= n` | `LIMIT n` |
+| `FETCH FIRST n ROWS ONLY` | `LIMIT n` |
+| `OFFSET n ROWS FETCH NEXT m ROWS ONLY` | `LIMIT m OFFSET n` |
 | `LISTAGG(x, ',') WITHIN GROUP (ORDER BY y)` | `STRING_AGG(x, ',' ORDER BY y)` |
 | `MERGE INTO t USING dual ON (...) WHEN NOT MATCHED THEN INSERT` | `INSERT INTO t ... ON CONFLICT (...) DO UPDATE SET ...` / `DO NOTHING` |
 | `INSERT ... RETURNING x INTO :outVar` (with `BIND_OUT`) | `INSERT ... RETURNING x` (result in `rows[0]`) |
 | `SELECT ... FROM dual` | `SELECT ...` (omit FROM dual) |
-| `VARCHAR2` | `TEXT` or `VARCHAR` |
-| `NUMBER` | `NUMERIC` or `INTEGER` |
-| `DATE` | `TIMESTAMP` |
 | `NVL(x, y)` | `COALESCE(x, y)` |
-| `DECODE(x, v, r, def)` | `CASE WHEN x = v THEN r ELSE def END` |
-| `CONNECT BY LEVEL` | `generate_series()` |
+| `NUMTODSINTERVAL(:days, 'DAY')` | `:days * INTERVAL '1 day'` |
+| `REGEXP_REPLACE(str, pat, '')` | `REGEXP_REPLACE(str, pat, '', 'g')` (requires `'g'` flag) |
+| `UPPER_TABLE_NAME` | `lower_table_name` |
+| `COLUMN_NAME` (uppercase) | `column_name` (lowercase) |
+| `ALL_TAB_COLUMNS` system catalog | `information_schema.columns` |
+| `SYS_CONTEXT('USERENV', 'CURRENT_SCHEMA')` | `current_schema()` |
+| Integer booleans `0`/`1` | Native booleans `false`/`true` |
 
-### Bind Parameter Offset for IN-list Builders
+### Named Bind Parameters
 
-Oracle uses named binds (`:id0`, `:id1`), which are order-independent.
-PostgreSQL uses positional (`$1`, `$2`), so IN-list factory functions must accept a `startOffset` parameter:
-
-```typescript
-buildInList: (ids: number[], startOffset = 1) => {
-  const oraPlaceholders = ids.map((_, i) => `:id${i}`).join(", ");
-  const pgPlaceholders  = ids.map((_, i) => `$${startOffset + i}`).join(", ");
-  return {
-    oracle:   `WHERE GAME_ID IN (${oraPlaceholders})`,
-    postgres: `WHERE game_id IN (${pgPlaceholders})`,
-  } satisfies SqlEntry;
-},
-```
+Both Oracle and Postgres SQL in the registry use `:paramName` syntax. At runtime,
+`namedToPositional` in `src/db/postgresClient.ts` converts `:name` -> `$N` before sending to the
+`pg` driver. This means call sites require zero changes between dialects.
 
 ---
 
@@ -296,7 +291,24 @@ Migrated in this phase (Phases A/B/C):
 
 ---
 
-### Next Step: Phase D (in progress) -- Dialect-agnostic execution wrappers
+---
+
+### Phase E: Postgres SQL variants -- COMPLETE (PR #546, 2026-06-08)
+
+All 23 domain SQL registry files now have complete `postgres:` variants. The `namedToPositional`
+helper in `postgresClient.ts` converts `:paramName` -> `$N` at runtime so call sites need no
+changes. `tsc --noEmit` passes clean.
+
+Files completed: `starboard`, `hltbCache`, `gameDbCsvImportMapping`, `nomination`,
+`adminWizardSession`, `presencePrompt`, `userActivity`, `todo`, `botVotingInfo`, `gameKey`,
+`reminder`, `rssFeed`, `suggestion`, `thread`, `gameReleaseAnnouncement`, `gotm`,
+`gameSearchSynonym`, `gameDbCsvImport`, `collectionCsvImport`, `completionatorImport`,
+`gotmAuditImport`, `userGameCollection`, `steamCollectionImport`, `xboxCollectionImport`,
+`member`, `game`.
+
+---
+
+### Next Step: Phase D2 -- Oracle-only blockers are now unblocked
 
 ---
 
@@ -368,18 +380,18 @@ codebase is now a D2 blocker.
 All standalone `oraQuery`/`oraMutate` call sites (no BIND_OUT, no connection argument) have been
 converted to `dbQuery`/`dbMutate`. No D1 work remains.
 
-**D2 -- Oracle-only blockers (defer until postgres SQL is written)**
+**D2 -- Oracle-only blockers (now unblocked -- postgres SQL is complete)**
 
 Two categories of calls cannot use `db*` wrappers yet:
 
-1. **BIND_OUT** (`INSERT ... RETURNING x INTO :outVar`): These need postgres SQL filled in as
-   `INSERT ... RETURNING x` and a new `dbInsert(entry, params): Promise<number>` wrapper that
+1. **BIND_OUT** (`INSERT ... RETURNING x INTO :outVar`): Postgres SQL is now written as
+   `INSERT ... RETURNING x`. Needs a new `dbInsert(entry, params): Promise<number>` wrapper that
    returns the generated id (uses `outBinds[0]` on Oracle, `rows[0].id` on Postgres).
 
 2. **Connection-passing** (`oraWithConnection`/`oraTransaction` callbacks that call
-   `oraMutate(sql, params, conn)` or `oraQuery(sql, params, mapper, conn)`): These multi-statement
-   blocks need the postgres SQL filled in and the callback rewritten to accept a union connection
-   type, dispatching to driver-specific calls inside.
+   `oraMutate(sql, params, conn)` or `oraQuery(sql, params, mapper, conn)`): Postgres SQL is now
+   written. Needs the callback rewritten to accept a union connection type, dispatching to
+   driver-specific calls inside.
 
 **D3 -- `executeMany` (RssFeed.markItemsSeen)**
 
