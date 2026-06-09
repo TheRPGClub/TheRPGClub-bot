@@ -73,6 +73,7 @@ import {
 } from "./gamedb-csv-import.service.js";
 import { processReleaseDates } from "./gamedb-add.command.js";
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
+import { DISCORD_AUTOCOMPLETE_DESC_MAX } from "../../config/textLimits.js";
 
 const GAMEDB_CSV_ACTIONS = ["start", "resume", "status", "pause", "cancel"] as const;
 type GameDbCsvAction = (typeof GAMEDB_CSV_ACTIONS)[number];
@@ -298,7 +299,7 @@ async function processNextGameDbCsvImportItem(
       return {
         id: game.id,
         label: `${game.name} (${year})`,
-        description: game.summary ? game.summary.slice(0, 95) : "No summary",
+        description: game.summary ? game.summary.slice(0, DISCORD_AUTOCOMPLETE_DESC_MAX) : "No summary",
       };
     })
     : [];
@@ -826,7 +827,7 @@ export class GameDbCsvImportCommand {
         return {
           id: game.id,
           label: `${game.name} (${year})`,
-          description: game.summary ? game.summary.slice(0, 95) : "No summary",
+          description: game.summary ? game.summary.slice(0, DISCORD_AUTOCOMPLETE_DESC_MAX) : "No summary",
         };
       })
       : [];

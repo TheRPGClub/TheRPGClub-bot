@@ -5,6 +5,7 @@ import { joinThreadIfTarget } from "../services/ForumThreadJoinService.js";
 import { NOW_PLAYING_FORUM_ID, WHATCHA_PLAYING_CHANNEL_ID } from "../config/channels.js";
 import { COLOR_PRIMARY } from "../config/colors.js";
 import { sleep } from "../utilities/DelayUtils.js";
+import { DISCORD_EMBED_FIELD_VALUE_MAX } from "../config/textLimits.js";
 
 @Discord()
 export class ThreadCreated {
@@ -153,7 +154,7 @@ export class ThreadCreated {
             if (tagNames.length) {
               nowPlayingEmbed.addFields({
                 name: tagNames.length > 1 ? 'Tags' : 'Tag',
-                value: tagNames.join(', ').slice(0, 1024),
+                value: tagNames.join(', ').slice(0, DISCORD_EMBED_FIELD_VALUE_MAX),
                 inline: false,
               });
             }

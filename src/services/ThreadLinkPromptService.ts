@@ -30,6 +30,7 @@ import {
 } from "../functions/ComponentsV2Utils.js";
 import { shouldPrompt, markPrompted, getGameReleaseYear } from "./ThreadLinkPromptCache.js";
 import { COLOR_BLUE_INFO } from "../config/colors.js";
+import { DISCORD_AUTOCOMPLETE_DESC_MAX } from "../config/textLimits.js";
 
 function hasIgdbConfig(): boolean {
   return Boolean(process.env.IGDB_CLIENT_ID && process.env.IGDB_CLIENT_SECRET);
@@ -191,7 +192,7 @@ export class ThreadLinkButtonHandlers {
             return {
               id: game.id,
               label: `${game.name} (${year})`,
-              description: (game.summary || "No summary").slice(0, 95),
+              description: (game.summary || "No summary").slice(0, DISCORD_AUTOCOMPLETE_DESC_MAX),
             };
           });
 

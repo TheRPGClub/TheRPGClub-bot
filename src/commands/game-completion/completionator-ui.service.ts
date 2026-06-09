@@ -46,7 +46,10 @@ import {
 } from "../imports/import-scaffold.service.js";
 import { safeV2TextContent } from "../../functions/ComponentsV2Utils.js";
 import { buildCompletionatorChooseId } from "./completion-helpers.js";
-import { DISCORD_SELECT_LABEL_MAX } from "../../config/textLimits.js";
+import {
+  DISCORD_AUTOCOMPLETE_DESC_MAX,
+  DISCORD_SELECT_LABEL_MAX,
+} from "../../config/textLimits.js";
 
 export class CompletionatorUiService {
   buildCompletionatorBaseLines(
@@ -213,7 +216,7 @@ export class CompletionatorUiService {
       return {
         id: game.id,
         label: `${game.name} (${year})`,
-        description: (game.summary || "No summary").slice(0, 95),
+        description: (game.summary || "No summary").slice(0, DISCORD_AUTOCOMPLETE_DESC_MAX),
       };
     });
 
@@ -565,7 +568,7 @@ export class CompletionatorUiService {
       return {
         id: game.id,
         label: `${game.name} (${year})`,
-        description: (game.summary || "No summary").slice(0, 95),
+        description: (game.summary || "No summary").slice(0, DISCORD_AUTOCOMPLETE_DESC_MAX),
       };
     });
 

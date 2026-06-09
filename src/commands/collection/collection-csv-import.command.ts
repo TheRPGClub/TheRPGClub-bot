@@ -98,6 +98,7 @@ import {
 } from "./collection-csv-import.service.js";
 import { createIgdbSession } from "../../services/IGDB/IgdbSelectService.js";
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
+import { DISCORD_EMBED_FIELD_VALUE_MAX } from "../../config/textLimits.js";
 
 @Discord()
 @SlashGroup("collection")
@@ -670,7 +671,7 @@ export class CollectionCsvImportCommand {
         if (reasonLines.length) {
           embed.addFields({
             name: "Reason breakdown",
-            value: reasonLines.join(" | ").slice(0, 1024),
+            value: reasonLines.join(" | ").slice(0, DISCORD_EMBED_FIELD_VALUE_MAX),
           });
         }
         await safeReply(interaction, { embeds: [embed] });

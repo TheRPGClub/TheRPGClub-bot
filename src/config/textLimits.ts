@@ -7,6 +7,9 @@ export const DISCORD_BUTTON_LABEL_MAX = 80;
 export const DISCORD_MODAL_TITLE_MAX = 45;
 export const DISCORD_TEXT_INPUT_MAX = 4000;
 
+export const DISCORD_AUTOCOMPLETE_DESC_MAX = 95;
+export const DISCORD_EMBED_FIELD_VALUE_MAX = 1024;
+
 // Application-defined limits
 export const MAX_QUERY_LENGTH = 50;
 export const MAX_CONTAINER_TEXT = 3500;

@@ -36,6 +36,7 @@ import { searchGameDbWithFallback } from "./completionator-parser.service.js";
 import { runDockerVolumeBackup } from "../../services/DockerVolumeBackupService.js";
 import { buildImportTextContainer } from "../imports/import-scaffold.service.js";
 import { canSafeReply, safeDeferReply, safeDeferUpdate } from "../../functions/InteractionUtils.js";
+import { DISCORD_AUTOCOMPLETE_DESC_MAX } from "../../config/textLimits.js";
 
 export class CompletionatorWorkflowService {
   private uiService: CompletionatorUiService;
@@ -918,7 +919,7 @@ export class CompletionatorWorkflowService {
     item: ICompletionatorItem,
   ): Array<{ label: string; value: string; description: string }> {
     const options: Array<{ label: string; value: string; description: string }> = [];
-    const clamp = (value: string): string => value.slice(0, 95);
+    const clamp = (value: string): string => value.slice(0, DISCORD_AUTOCOMPLETE_DESC_MAX);
 
     if (item.completionType && item.completionType !== existing?.completionType) {
       options.push({
