@@ -257,6 +257,58 @@ function buildParams(record: IMemberRecord) {
   };
 }
 
+type MemberRow = {
+  USER_ID: string; IS_BOT: number; USERNAME: string | null; GLOBAL_NAME: string | null;
+  AVATAR_BLOB: Buffer | null; SERVER_JOINED_AT: Date | null; SERVER_LEFT_AT: Date | null;
+  LAST_SEEN_AT: Date | null; ROLE_ADMIN: number; ROLE_MODERATOR: number;
+  ROLE_REGULAR: number; ROLE_MEMBER: number; ROLE_NEWCOMER: number;
+  MESSAGE_COUNT: number | null; COMPLETIONATOR_URL: string | null;
+  PSN_USERNAME: string | null; XBL_USERNAME: string | null; NSW_FRIEND_CODE: string | null;
+  STEAM_URL: string | null; PROFILE_IMAGE: Buffer | null; PROFILE_IMAGE_AT: Date | null;
+};
+
+function mapMemberRow(row: MemberRow): IMemberRecord {
+  return {
+    userId: row.USER_ID,
+    isBot: row.IS_BOT,
+    username: row.USERNAME ?? null,
+    globalName: row.GLOBAL_NAME ?? null,
+    avatarBlob: row.AVATAR_BLOB ?? null,
+    serverJoinedAt: row.SERVER_JOINED_AT ?? null,
+    serverLeftAt: row.SERVER_LEFT_AT ?? null,
+    lastSeenAt: row.LAST_SEEN_AT ?? null,
+    roleAdmin: row.ROLE_ADMIN,
+    roleModerator: row.ROLE_MODERATOR,
+    roleRegular: row.ROLE_REGULAR,
+    roleMember: row.ROLE_MEMBER,
+    roleNewcomer: row.ROLE_NEWCOMER,
+    messageCount: row.MESSAGE_COUNT ?? null,
+    completionatorUrl: row.COMPLETIONATOR_URL ?? null,
+    psnUsername: row.PSN_USERNAME ?? null,
+    xblUsername: row.XBL_USERNAME ?? null,
+    nswFriendCode: row.NSW_FRIEND_CODE ?? null,
+    steamUrl: row.STEAM_URL ?? null,
+    profileImage: row.PROFILE_IMAGE ?? null,
+    profileImageAt: row.PROFILE_IMAGE_AT ?? null,
+  };
+}
+
+type AvatarHistoryRow = {
+  EVENT_ID: number; USER_ID: string; AVATAR_HASH: string | null;
+  AVATAR_URL: string | null; AVATAR_BLOB: Buffer | null; CHANGED_AT: Date | string;
+};
+
+function mapAvatarHistoryRow(row: AvatarHistoryRow): IAvatarHistoryRecord {
+  return {
+    eventId: Number(row.EVENT_ID),
+    userId: String(row.USER_ID),
+    avatarHash: row.AVATAR_HASH ?? null,
+    avatarUrl: row.AVATAR_URL ?? null,
+    avatarBlob: row.AVATAR_BLOB ?? null,
+    changedAt: row.CHANGED_AT instanceof Date ? row.CHANGED_AT : new Date(row.CHANGED_AT as any),
+  };
+}
+
 export default class Member {
   static async touchLastSeen(userId: string, when: Date = new Date()): Promise<void> {
     try {
@@ -1389,38 +1441,6 @@ export default class Member {
   }
 
   static async getByUserId(userId: string): Promise<IMemberRecord | null> {
-    type MemberRow = {
-      USER_ID: string; IS_BOT: number; USERNAME: string | null; GLOBAL_NAME: string | null;
-      AVATAR_BLOB: Buffer | null; SERVER_JOINED_AT: Date | null; SERVER_LEFT_AT: Date | null;
-      LAST_SEEN_AT: Date | null; ROLE_ADMIN: number; ROLE_MODERATOR: number;
-      ROLE_REGULAR: number; ROLE_MEMBER: number; ROLE_NEWCOMER: number;
-      MESSAGE_COUNT: number | null; COMPLETIONATOR_URL: string | null;
-      PSN_USERNAME: string | null; XBL_USERNAME: string | null; NSW_FRIEND_CODE: string | null;
-      STEAM_URL: string | null; PROFILE_IMAGE: Buffer | null; PROFILE_IMAGE_AT: Date | null;
-    };
-    const mapRow = (row: MemberRow): IMemberRecord => ({
-      userId: row.USER_ID,
-      isBot: row.IS_BOT,
-      username: row.USERNAME ?? null,
-      globalName: row.GLOBAL_NAME ?? null,
-      avatarBlob: row.AVATAR_BLOB ?? null,
-      serverJoinedAt: row.SERVER_JOINED_AT ?? null,
-      serverLeftAt: row.SERVER_LEFT_AT ?? null,
-      lastSeenAt: row.LAST_SEEN_AT ?? null,
-      roleAdmin: row.ROLE_ADMIN,
-      roleModerator: row.ROLE_MODERATOR,
-      roleRegular: row.ROLE_REGULAR,
-      roleMember: row.ROLE_MEMBER,
-      roleNewcomer: row.ROLE_NEWCOMER,
-      messageCount: row.MESSAGE_COUNT ?? null,
-      completionatorUrl: row.COMPLETIONATOR_URL ?? null,
-      psnUsername: row.PSN_USERNAME ?? null,
-      xblUsername: row.XBL_USERNAME ?? null,
-      nswFriendCode: row.NSW_FRIEND_CODE ?? null,
-      steamUrl: row.STEAM_URL ?? null,
-      profileImage: row.PROFILE_IMAGE ?? null,
-      profileImageAt: row.PROFILE_IMAGE_AT ?? null,
-    });
     return dbWithConnection(async (conn) => {
       if (dialect === "oracle") {
         const result = await (conn as oracledb.Connection).execute<MemberRow>(
@@ -1435,10 +1455,10 @@ export default class Member {
           },
         );
         const row = (result.rows ?? [])[0];
-        return row ? mapRow(row) : null;
+        return row ? mapMemberRow(row) : null;
       }
       const rows = await dbQueryConn<MemberRow, IMemberRecord>(
-        conn, MemberSql.getByUserId, { userId }, mapRow,
+        conn, MemberSql.getByUserId, { userId }, mapMemberRow,
       );
       return rows[0] ?? null;
     });
@@ -1465,18 +1485,6 @@ export default class Member {
   ): Promise<IAvatarHistoryRecord[]> {
     const safeLimit = Math.min(Math.max(limit, 1), 50);
     const safeOffset = Math.max(offset, 0);
-    type AvatarHistoryRow = {
-      EVENT_ID: number; USER_ID: string; AVATAR_HASH: string | null;
-      AVATAR_URL: string | null; AVATAR_BLOB: Buffer | null; CHANGED_AT: Date | string;
-    };
-    const mapRow = (row: AvatarHistoryRow): IAvatarHistoryRecord => ({
-      eventId: Number(row.EVENT_ID),
-      userId: String(row.USER_ID),
-      avatarHash: row.AVATAR_HASH ?? null,
-      avatarUrl: row.AVATAR_URL ?? null,
-      avatarBlob: row.AVATAR_BLOB ?? null,
-      changedAt: row.CHANGED_AT instanceof Date ? row.CHANGED_AT : new Date(row.CHANGED_AT as any),
-    });
     return dbWithConnection(async (conn) => {
       if (dialect === "oracle") {
         const result = await (conn as oracledb.Connection).execute<AvatarHistoryRow>(
@@ -1487,13 +1495,13 @@ export default class Member {
             fetchInfo: { AVATAR_BLOB: { type: oracledb.BUFFER } },
           },
         );
-        return (result.rows ?? []).map(mapRow);
+        return (result.rows ?? []).map(mapAvatarHistoryRow);
       }
       return dbQueryConn<AvatarHistoryRow, IAvatarHistoryRecord>(
         conn,
         MemberSql.getAvatarHistory,
         { userId, limit: safeLimit, offset: safeOffset },
-        mapRow,
+        mapAvatarHistoryRow,
       );
     });
   }
