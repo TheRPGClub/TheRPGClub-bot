@@ -1,4 +1,4 @@
-import type { SqlEntry } from "./types.js";
+import type { ISqlEntry } from "./types.js";
 
 export const GotmSql = {
   loadAll: {
@@ -18,7 +18,7 @@ export const GotmSql = {
             gamedb_game_id
        FROM gotm_entries
       ORDER BY round_number, game_index`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   getRowsByRound: {
     oracle: `SELECT ROUND_NUMBER,
@@ -31,7 +31,7 @@ export const GotmSql = {
          FROM gotm_entries
         WHERE round_number = :round
         ORDER BY game_index`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   updateField: (columnName: string) =>
     ({
@@ -43,7 +43,7 @@ export const GotmSql = {
           SET ${columnName.toLowerCase()} = :value
         WHERE round_number = :round
           AND game_index = :gameIndex`,
-    }) satisfies SqlEntry,
+    }) satisfies ISqlEntry,
 
   updateVotingResults: {
     oracle: `UPDATE GOTM_ENTRIES
@@ -52,7 +52,7 @@ export const GotmSql = {
     postgres: `UPDATE gotm_entries
         SET voting_results_message_id = :value
       WHERE round_number = :round`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   checkRoundExists: {
     oracle: `SELECT COUNT(*) AS CNT
@@ -61,7 +61,7 @@ export const GotmSql = {
     postgres: `SELECT COUNT(*) AS cnt
        FROM gotm_entries
       WHERE round_number = :round`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   insertRound: {
     oracle: `INSERT INTO GOTM_ENTRIES (
@@ -94,14 +94,14 @@ export const GotmSql = {
            NULL,
            :gamedbGameId
          )`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   deleteRound: {
     oracle: `DELETE FROM GOTM_ENTRIES
       WHERE ROUND_NUMBER = :round`,
     postgres: `DELETE FROM gotm_entries
       WHERE round_number = :round`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 };
 
 export const NrGotmSql = {
@@ -122,7 +122,7 @@ export const NrGotmSql = {
             gamedb_game_id
        FROM nr_gotm_entries
       ORDER BY round_number, game_index`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   getRowsByRound: {
     oracle: `SELECT NR_GOTM_ID,
@@ -137,7 +137,7 @@ export const NrGotmSql = {
          FROM nr_gotm_entries
         WHERE round_number = :roundNumber
         ORDER BY game_index`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   updateByRowId: (columnName: string) =>
     ({
@@ -147,7 +147,7 @@ export const NrGotmSql = {
       postgres: `UPDATE nr_gotm_entries
             SET ${columnName.toLowerCase()} = :bindValue
           WHERE nr_gotm_id = :rowIdValue`,
-    }) satisfies SqlEntry,
+    }) satisfies ISqlEntry,
 
   updateByRound: (columnName: string) =>
     ({
@@ -157,7 +157,7 @@ export const NrGotmSql = {
       postgres: `UPDATE nr_gotm_entries
           SET ${columnName.toLowerCase()} = :bindValue
         WHERE nr_gotm_id = :rowIdValue`,
-    }) satisfies SqlEntry,
+    }) satisfies ISqlEntry,
 
   updateVotingResults: {
     oracle: `UPDATE NR_GOTM_ENTRIES
@@ -166,7 +166,7 @@ export const NrGotmSql = {
     postgres: `UPDATE nr_gotm_entries
         SET voting_results_message_id = :bindValue
       WHERE round_number = :roundNumber`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   checkRoundExists: {
     oracle: `SELECT COUNT(*) AS CNT
@@ -175,7 +175,7 @@ export const NrGotmSql = {
     postgres: `SELECT COUNT(*) AS cnt
        FROM nr_gotm_entries
       WHERE round_number = :roundNumber`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   insertRound: {
     oracle: `INSERT INTO NR_GOTM_ENTRIES (
@@ -210,12 +210,12 @@ export const NrGotmSql = {
            :gamedbGameId
          )
          RETURNING nr_gotm_id`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   deleteRound: {
     oracle: `DELETE FROM NR_GOTM_ENTRIES
       WHERE ROUND_NUMBER = :roundNumber`,
     postgres: `DELETE FROM nr_gotm_entries
       WHERE round_number = :roundNumber`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 };

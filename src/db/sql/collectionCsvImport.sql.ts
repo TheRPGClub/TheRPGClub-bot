@@ -1,4 +1,4 @@
-import type { SqlEntry } from "./types.js";
+import type { ISqlEntry } from "./types.js";
 
 const ITEM_COLS = `ITEM_ID,
             IMPORT_ID,
@@ -76,7 +76,7 @@ export const CollectionCsvImportSql = {
          :sourceFileSize,
          :templateVersion
        ) RETURNING import_id`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   insertItem: {
     oracle: `INSERT INTO RPG_CLUB_COLLECTION_CSV_IMPORT_ITEMS (
@@ -133,7 +133,7 @@ export const CollectionCsvImportSql = {
            :note,
            'PENDING'
          )`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   getImportById: {
     oracle: `SELECT IMPORT_ID,
@@ -160,7 +160,7 @@ export const CollectionCsvImportSql = {
             updated_at
        FROM rpg_club_collection_csv_imports
       WHERE import_id = :importId`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   getActiveForUser: {
     oracle: `SELECT IMPORT_ID,
@@ -193,7 +193,7 @@ export const CollectionCsvImportSql = {
         AND status IN ('ACTIVE', 'PAUSED')
       ORDER BY created_at DESC, import_id DESC
       LIMIT 1`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   setStatus: {
     oracle: `UPDATE RPG_CLUB_COLLECTION_CSV_IMPORTS
@@ -202,7 +202,7 @@ export const CollectionCsvImportSql = {
     postgres: `UPDATE rpg_club_collection_csv_imports
         SET status = :status
       WHERE import_id = :importId`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   updateIndex: {
     oracle: `UPDATE RPG_CLUB_COLLECTION_CSV_IMPORTS
@@ -211,7 +211,7 @@ export const CollectionCsvImportSql = {
     postgres: `UPDATE rpg_club_collection_csv_imports
         SET current_index = :currentIndex
       WHERE import_id = :importId`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   getItemById: {
     oracle: `SELECT ${ITEM_COLS}
@@ -220,7 +220,7 @@ export const CollectionCsvImportSql = {
     postgres: `SELECT ${ITEM_COLS_PG}
        FROM rpg_club_collection_csv_import_items
       WHERE item_id = :itemId`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   getNextPendingItem: {
     oracle: `SELECT ${ITEM_COLS}
@@ -235,7 +235,7 @@ export const CollectionCsvImportSql = {
         AND status = 'PENDING'
       ORDER BY row_index ASC, item_id ASC
       LIMIT 1`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   // Caller must pass lowercase column=value expressions for Postgres (e.g. "status = :status")
   updateItem: (setParts: string[]) =>
@@ -246,7 +246,7 @@ export const CollectionCsvImportSql = {
       postgres: `UPDATE rpg_club_collection_csv_import_items
         SET ${setParts.join(", ")}
       WHERE item_id = :itemId`,
-    }) satisfies SqlEntry,
+    }) satisfies ISqlEntry,
 
   countItemsByStatus: {
     oracle: `SELECT STATUS, COUNT(*) AS TOTAL
@@ -257,7 +257,7 @@ export const CollectionCsvImportSql = {
        FROM rpg_club_collection_csv_import_items
       WHERE import_id = :importId
       GROUP BY status`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   countItemsByReason: {
     oracle: `SELECT RESULT_REASON, COUNT(*) AS TOTAL
@@ -270,5 +270,5 @@ export const CollectionCsvImportSql = {
       WHERE import_id = :importId
         AND result_reason IS NOT NULL
       GROUP BY result_reason`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 };

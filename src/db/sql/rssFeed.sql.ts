@@ -1,4 +1,4 @@
-import type { SqlEntry } from "./types.js";
+import type { ISqlEntry } from "./types.js";
 
 export const RssFeedSql = {
   listFeeds: {
@@ -18,7 +18,7 @@ export const RssFeedSql = {
             exclude_keywords
        FROM rpg_club_rss_feeds
       ORDER BY feed_id`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   addFeed: {
     oracle: `INSERT INTO RPG_CLUB_RSS_FEEDS (
@@ -49,12 +49,12 @@ export const RssFeedSql = {
        :excludes
      )
      RETURNING feed_id`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   removeFeed: {
     oracle: `DELETE FROM RPG_CLUB_RSS_FEEDS WHERE FEED_ID = :id`,
     postgres: `DELETE FROM rpg_club_rss_feeds WHERE feed_id = :id`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   // Caller must pass lowercase column=value expressions for Postgres (e.g. "feed_name = :feedName")
   updateFeed: (sets: string[]) =>
@@ -65,7 +65,7 @@ export const RssFeedSql = {
       postgres: `UPDATE rpg_club_rss_feeds
         SET ${sets.join(", ")}
       WHERE feed_id = :feedId`,
-    }) satisfies SqlEntry,
+    }) satisfies ISqlEntry,
 
   markItemsSeen: {
     oracle: `MERGE INTO RPG_CLUB_RSS_FEED_ITEMS t
@@ -85,7 +85,7 @@ export const RssFeedSql = {
        (feed_id, item_id_hash, item_guid, item_link, published_at, first_seen_at)
        VALUES (:feedId, :itemIdHash, :itemGuid, :itemLink, :publishedAt, NOW())
        ON CONFLICT (feed_id, item_id_hash) DO NOTHING`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   isItemSeen: {
     oracle: `SELECT 1 AS FOUND
@@ -96,7 +96,7 @@ export const RssFeedSql = {
        FROM rpg_club_rss_feed_items
       WHERE feed_id = :feedId
         AND item_id_hash = :hash`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   getSeenItemHashes: (bindPlaceholders: string) =>
     ({
@@ -108,5 +108,5 @@ export const RssFeedSql = {
            FROM rpg_club_rss_feed_items
           WHERE feed_id = :feedId
             AND item_id_hash IN (${bindPlaceholders})`,
-    }) satisfies SqlEntry,
+    }) satisfies ISqlEntry,
 };

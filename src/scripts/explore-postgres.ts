@@ -11,14 +11,14 @@ const OUT_DIR = path.resolve(__dirname, "../../db/postgres");
 // Types
 // ---------------------------------------------------------------------------
 
-interface TableRow {
+interface ITableRow {
   table_schema: string;
   table_name: string;
   table_type: string;
   row_estimate: string;
 }
 
-interface ColumnRow {
+interface IColumnRow {
   column_name: string;
   ordinal_position: number;
   data_type: string;
@@ -33,7 +33,7 @@ interface ColumnRow {
   description: string | null;
 }
 
-interface IndexRow {
+interface IIndexRow {
   index_name: string;
   index_type: string;
   is_unique: boolean;
@@ -42,7 +42,7 @@ interface IndexRow {
   index_def: string;
 }
 
-interface FkRow {
+interface IFkRow {
   constraint_name: string;
   column_name: string;
   foreign_table_schema: string;
@@ -52,7 +52,7 @@ interface FkRow {
   on_delete: string;
 }
 
-interface TriggerRow {
+interface ITriggerRow {
   trigger_name: string;
   event_manipulation: string;
   action_timing: string;
@@ -60,12 +60,12 @@ interface TriggerRow {
   action_statement: string;
 }
 
-interface CheckRow {
+interface ICheckRow {
   constraint_name: string;
   check_clause: string;
 }
 
-interface ViewRow {
+interface IViewRow {
   table_schema: string;
   view_name: string;
   is_updatable: string;
@@ -73,7 +73,7 @@ interface ViewRow {
   definition: string;
 }
 
-interface SeqRow {
+interface ISeqRow {
   sequence_schema: string;
   sequence_name: string;
   data_type: string;
@@ -85,7 +85,7 @@ interface SeqRow {
   owned_by: string;
 }
 
-interface FuncRow {
+interface IFuncRow {
   routine_schema: string;
   routine_name: string;
   routine_type: string;
@@ -94,7 +94,7 @@ interface FuncRow {
   definition: string;
 }
 
-interface ExtRow {
+interface IExtRow {
   name: string;
   version: string;
   schema: string;
@@ -105,8 +105,8 @@ interface ExtRow {
 // Queries
 // ---------------------------------------------------------------------------
 
-async function fetchTables(schema: string): Promise<TableRow[]> {
-  return pgQuery<TableRow>(`
+async function fetchTables(schema: string): Promise<ITableRow[]> {
+  return pgQuery<ITableRow>(`
     SELECT
       t.table_schema,
       t.table_name,
@@ -121,8 +121,8 @@ async function fetchTables(schema: string): Promise<TableRow[]> {
   `, [schema]);
 }
 
-async function fetchColumns(schema: string, table: string): Promise<ColumnRow[]> {
-  return pgQuery<ColumnRow>(`
+async function fetchColumns(schema: string, table: string): Promise<IColumnRow[]> {
+  return pgQuery<IColumnRow>(`
     SELECT
       a.attname          AS column_name,
       a.attnum           AS ordinal_position,
@@ -157,8 +157,8 @@ async function fetchColumns(schema: string, table: string): Promise<ColumnRow[]>
   `, [schema, table]);
 }
 
-async function fetchIndexes(schema: string, table: string): Promise<IndexRow[]> {
-  return pgQuery<IndexRow>(`
+async function fetchIndexes(schema: string, table: string): Promise<IIndexRow[]> {
+  return pgQuery<IIndexRow>(`
     SELECT
       i.relname                           AS index_name,
       am.amname                           AS index_type,
@@ -185,8 +185,8 @@ async function fetchIndexes(schema: string, table: string): Promise<IndexRow[]> 
   `, [schema, table]);
 }
 
-async function fetchForeignKeys(schema: string, table: string): Promise<FkRow[]> {
-  return pgQuery<FkRow>(`
+async function fetchForeignKeys(schema: string, table: string): Promise<IFkRow[]> {
+  return pgQuery<IFkRow>(`
     SELECT
       kcu.constraint_name,
       kcu.column_name,
@@ -208,8 +208,8 @@ async function fetchForeignKeys(schema: string, table: string): Promise<FkRow[]>
   `, [schema, table]);
 }
 
-async function fetchTriggers(schema: string, table: string): Promise<TriggerRow[]> {
-  return pgQuery<TriggerRow>(`
+async function fetchTriggers(schema: string, table: string): Promise<ITriggerRow[]> {
+  return pgQuery<ITriggerRow>(`
     SELECT
       trigger_name,
       event_manipulation,
@@ -223,8 +223,8 @@ async function fetchTriggers(schema: string, table: string): Promise<TriggerRow[
   `, [schema, table]);
 }
 
-async function fetchChecks(schema: string, table: string): Promise<CheckRow[]> {
-  return pgQuery<CheckRow>(`
+async function fetchChecks(schema: string, table: string): Promise<ICheckRow[]> {
+  return pgQuery<ICheckRow>(`
     SELECT
       cc.constraint_name,
       cc.check_clause
@@ -238,8 +238,8 @@ async function fetchChecks(schema: string, table: string): Promise<CheckRow[]> {
   `, [schema, table]);
 }
 
-async function fetchViews(schema: string): Promise<ViewRow[]> {
-  return pgQuery<ViewRow>(`
+async function fetchViews(schema: string): Promise<IViewRow[]> {
+  return pgQuery<IViewRow>(`
     SELECT
       table_schema,
       table_name   AS view_name,
@@ -252,8 +252,8 @@ async function fetchViews(schema: string): Promise<ViewRow[]> {
   `, [schema]);
 }
 
-async function fetchSequences(schema: string): Promise<SeqRow[]> {
-  return pgQuery<SeqRow>(`
+async function fetchSequences(schema: string): Promise<ISeqRow[]> {
+  return pgQuery<ISeqRow>(`
     SELECT
       s.sequence_schema,
       s.sequence_name,
@@ -281,8 +281,8 @@ async function fetchSequences(schema: string): Promise<SeqRow[]> {
   `, [schema]);
 }
 
-async function fetchFunctions(schema: string): Promise<FuncRow[]> {
-  return pgQuery<FuncRow>(`
+async function fetchFunctions(schema: string): Promise<IFuncRow[]> {
+  return pgQuery<IFuncRow>(`
     SELECT
       routine_schema,
       routine_name,
@@ -297,8 +297,8 @@ async function fetchFunctions(schema: string): Promise<FuncRow[]> {
   `, [schema]);
 }
 
-async function fetchExtensions(): Promise<ExtRow[]> {
-  return pgQuery<ExtRow>(`
+async function fetchExtensions(): Promise<IExtRow[]> {
+  return pgQuery<IExtRow>(`
     SELECT
       e.extname AS name,
       e.extversion AS version,
@@ -325,12 +325,12 @@ function nullable(v: string): string {
 
 function buildTableMd(
   schema: string,
-  table: TableRow,
-  columns: ColumnRow[],
-  indexes: IndexRow[],
-  fks: FkRow[],
-  triggers: TriggerRow[],
-  checks: CheckRow[],
+  table: ITableRow,
+  columns: IColumnRow[],
+  indexes: IIndexRow[],
+  fks: IFkRow[],
+  triggers: ITriggerRow[],
+  checks: ICheckRow[],
 ): string {
   const lines: string[] = [];
   const fullName = `${schema}.${table.table_name}`;
@@ -427,7 +427,7 @@ function buildTableMd(
   return lines.join("\n");
 }
 
-function buildViewsMd(schema: string, views: ViewRow[]): string {
+function buildViewsMd(schema: string, views: IViewRow[]): string {
   const lines: string[] = [];
   lines.push(`# ${schema} -- Views`);
   lines.push("");
@@ -444,7 +444,7 @@ function buildViewsMd(schema: string, views: ViewRow[]): string {
   return lines.join("\n");
 }
 
-function buildSequencesMd(schema: string, seqs: SeqRow[]): string {
+function buildSequencesMd(schema: string, seqs: ISeqRow[]): string {
   const lines: string[] = [];
   lines.push(`# ${schema} -- Sequences`);
   lines.push("");
@@ -461,7 +461,7 @@ function buildSequencesMd(schema: string, seqs: SeqRow[]): string {
   return lines.join("\n");
 }
 
-function buildFunctionsMd(schema: string, funcs: FuncRow[]): string {
+function buildFunctionsMd(schema: string, funcs: IFuncRow[]): string {
   const lines: string[] = [];
   lines.push(`# ${schema} -- Functions & Procedures`);
   lines.push("");
@@ -482,7 +482,7 @@ function buildFunctionsMd(schema: string, funcs: FuncRow[]): string {
   return lines.join("\n");
 }
 
-function buildExtensionsMd(exts: ExtRow[]): string {
+function buildExtensionsMd(exts: IExtRow[]): string {
   const lines: string[] = [];
   lines.push("# Installed Extensions");
   lines.push("");
@@ -497,7 +497,7 @@ function buildExtensionsMd(exts: ExtRow[]): string {
   return lines.join("\n");
 }
 
-function buildIndexMd(schema: string, tables: TableRow[]): string {
+function buildIndexMd(schema: string, tables: ITableRow[]): string {
   const lines: string[] = [];
   lines.push(`# ${schema} -- Schema Index`);
   lines.push("");

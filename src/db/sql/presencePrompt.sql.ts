@@ -1,4 +1,4 @@
-import type { SqlEntry } from "./types.js";
+import type { ISqlEntry } from "./types.js";
 
 export const PresencePromptHistorySql = {
   createPrompt: {
@@ -8,7 +8,7 @@ export const PresencePromptHistorySql = {
     postgres: `INSERT INTO rpg_club_presence_prompt_history
         (prompt_id, user_id, game_title, game_title_norm, status)
        VALUES (:promptId, :userId, :gameTitle, :gameTitleNorm, 'PENDING')`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   markResolved: {
     oracle: `UPDATE RPG_CLUB_PRESENCE_PROMPT_HISTORY
@@ -19,7 +19,7 @@ export const PresencePromptHistorySql = {
           SET status = :status,
               resolved_at = NOW()
         WHERE prompt_id = :promptId`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   getLastPromptDate: {
     oracle: `SELECT CREATED_AT
@@ -34,7 +34,7 @@ export const PresencePromptHistorySql = {
           AND game_title_norm = :gameTitleNorm
         ORDER BY created_at DESC
         LIMIT 1`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   countPendingForGame: {
     oracle: `SELECT COUNT(*) AS CNT
@@ -47,7 +47,7 @@ export const PresencePromptHistorySql = {
         WHERE user_id = :userId
           AND game_title_norm = :gameTitleNorm
           AND status = 'PENDING'`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   countPendingForUser: {
     oracle: `SELECT COUNT(*) AS CNT
@@ -58,7 +58,7 @@ export const PresencePromptHistorySql = {
          FROM rpg_club_presence_prompt_history
         WHERE user_id = :userId
           AND status = 'PENDING'`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 };
 
 export const PresencePromptOptOutSql = {
@@ -73,7 +73,7 @@ export const PresencePromptOptOutSql = {
         WHERE user_id = :userId
           AND scope = 'ALL'
           AND game_title_norm = :token`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   isOptedOutGame: {
     oracle: `SELECT COUNT(*) AS CNT
@@ -86,7 +86,7 @@ export const PresencePromptOptOutSql = {
         WHERE user_id = :userId
           AND scope = 'GAME'
           AND game_title_norm = :gameTitleNorm`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   insertOptOut: {
     oracle: `INSERT INTO RPG_CLUB_PRESENCE_PROMPT_OPTS
@@ -95,5 +95,5 @@ export const PresencePromptOptOutSql = {
     postgres: `INSERT INTO rpg_club_presence_prompt_opts
           (user_id, scope, game_title, game_title_norm)
          VALUES (:userId, :scope, :gameTitle, :gameTitleNorm)`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 };

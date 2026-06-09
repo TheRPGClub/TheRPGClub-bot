@@ -1,4 +1,4 @@
-import type { SqlEntry } from "./types.js";
+import type { ISqlEntry } from "./types.js";
 
 const GAME_COLS = `GAME_ID, TITLE, DESCRIPTION, IMAGE_DATA, THUMBNAIL_BAD,
               THUMBNAIL_APPROVED, IGDB_ID, SLUG, TOTAL_RATING, IGDB_URL,
@@ -63,7 +63,7 @@ export const GameSql = {
            :featuredVideoUrl
          )
          RETURNING game_id`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   getGameById: {
     oracle: `SELECT GAME_ID, TITLE, DESCRIPTION, IMAGE_DATA, THUMBNAIL_BAD,
@@ -76,7 +76,7 @@ export const GameSql = {
                 initial_release_date, created_at, updated_at
            FROM gamedb_games
           WHERE game_id = :id`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   getGamesByIds: (placeholders: string) =>
     ({
@@ -86,7 +86,7 @@ export const GameSql = {
       postgres: `SELECT ${GAME_COLS_PG}
            FROM gamedb_games
           WHERE game_id IN (${placeholders})`,
-    }) satisfies SqlEntry,
+    }) satisfies ISqlEntry,
 
   getAlternateVersions: {
     oracle: `SELECT ${GAME_COLS}
@@ -111,7 +111,7 @@ export const GameSql = {
              WHERE game_id = :id OR alt_game_id = :id
           )
           ORDER BY UPPER(title)`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   linkAlternateVersions: {
     oracle: `MERGE INTO GAMEDB_GAME_ALTERNATES t
@@ -128,7 +128,7 @@ export const GameSql = {
     postgres: `INSERT INTO gamedb_game_alternates (game_id, alt_game_id, created_by)
            VALUES (:gameId, :altGameId, :createdBy)
            ON CONFLICT (game_id, alt_game_id) DO NOTHING`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   getGameByIgdbId: {
     oracle: `SELECT ${GAME_COLS}
@@ -137,7 +137,7 @@ export const GameSql = {
     postgres: `SELECT ${GAME_COLS_PG}
            FROM gamedb_games
           WHERE igdb_id = :igdbId`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   // Caller should pass lowercase identifiers for Postgres
   getOrInsertMetadataSelect: (
@@ -148,7 +148,7 @@ export const GameSql = {
     ({
       oracle: `SELECT ${idCol} FROM ${table} WHERE ${igdbIdCol} = :igdbId`,
       postgres: `SELECT ${idCol.toLowerCase()} FROM ${table.toLowerCase()} WHERE ${igdbIdCol.toLowerCase()} = :igdbId`,
-    }) satisfies SqlEntry,
+    }) satisfies ISqlEntry,
 
   // Caller should pass lowercase identifiers for Postgres
   getOrInsertMetadataInsert: (
@@ -164,53 +164,53 @@ export const GameSql = {
       postgres: `INSERT INTO ${table.toLowerCase()} (${nameCol.toLowerCase()}, ${igdbIdCol.toLowerCase()})
          VALUES (:name, :igdbId)
          RETURNING ${idCol.toLowerCase()}`,
-    }) satisfies SqlEntry,
+    }) satisfies ISqlEntry,
 
   insertGameCompany: {
     oracle: `INSERT INTO GAMEDB_GAME_COMPANIES (GAME_ID, COMPANY_ID, ROLE)
              VALUES (:gameId, :companyId, :role)`,
     postgres: `INSERT INTO gamedb_game_companies (game_id, company_id, role)
              VALUES (:gameId, :companyId, :role)`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   insertGameGenre: {
     oracle: `INSERT INTO GAMEDB_GAME_GENRES (GAME_ID, GENRE_ID) VALUES (:gameId, :genreId)`,
     postgres: `INSERT INTO gamedb_game_genres (game_id, genre_id) VALUES (:gameId, :genreId)`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   insertGameTheme: {
     oracle: `INSERT INTO GAMEDB_GAME_THEMES (GAME_ID, THEME_ID) VALUES (:gameId, :themeId)`,
     postgres: `INSERT INTO gamedb_game_themes (game_id, theme_id) VALUES (:gameId, :themeId)`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   insertGameMode: {
     oracle: `INSERT INTO GAMEDB_GAME_MODES (GAME_ID, MODE_ID) VALUES (:gameId, :modeId)`,
     postgres: `INSERT INTO gamedb_game_modes (game_id, mode_id) VALUES (:gameId, :modeId)`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   insertGamePerspective: {
     oracle: `INSERT INTO GAMEDB_GAME_PERSPECTIVES (GAME_ID, PERSPECTIVE_ID)
              VALUES (:gameId, :persId)`,
     postgres: `INSERT INTO gamedb_game_perspectives (game_id, perspective_id)
              VALUES (:gameId, :persId)`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   insertGameEngine: {
     oracle: `INSERT INTO GAMEDB_GAME_ENGINES (GAME_ID, ENGINE_ID) VALUES (:gameId, :engineId)`,
     postgres: `INSERT INTO gamedb_game_engines (game_id, engine_id) VALUES (:gameId, :engineId)`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   insertGameFranchise: {
     oracle: `INSERT INTO GAMEDB_GAME_FRANCHISES (GAME_ID, FRANCHISE_ID)
              VALUES (:gameId, :franchiseId)`,
     postgres: `INSERT INTO gamedb_game_franchises (game_id, franchise_id)
              VALUES (:gameId, :franchiseId)`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   updateCollectionId: {
     oracle: `UPDATE GAMEDB_GAMES SET COLLECTION_ID = :collectionId WHERE GAME_ID = :gameId`,
     postgres: `UPDATE gamedb_games SET collection_id = :collectionId WHERE game_id = :gameId`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   updateParentIgdbId: {
     oracle: `UPDATE GAMEDB_GAMES
@@ -221,7 +221,7 @@ export const GameSql = {
                SET parent_igdb_id = :parentId,
                    parent_game_name = :parentName
              WHERE game_id = :gameId`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   updateInitialReleaseDateSelect: {
     oracle: `SELECT MIN(RELEASE_DATE) AS MIN_DATE
@@ -232,7 +232,7 @@ export const GameSql = {
          FROM gamedb_releases
         WHERE game_id = :gameId
           AND release_date IS NOT NULL`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   updateInitialReleaseDateUpdate: {
     oracle: `UPDATE GAMEDB_GAMES
@@ -241,14 +241,14 @@ export const GameSql = {
     postgres: `UPDATE gamedb_games
           SET initial_release_date = :releaseDate
         WHERE game_id = :gameId`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   insertPlatform: {
     oracle: `INSERT INTO GAMEDB_PLATFORMS (PLATFORM_CODE, PLATFORM_NAME, IGDB_PLATFORM_ID)
          VALUES (:code, :name, :igdbId)`,
     postgres: `INSERT INTO gamedb_platforms (platform_code, platform_name, igdb_platform_id)
          VALUES (:code, :name, :igdbId)`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   insertRegion: {
     oracle: `INSERT INTO GAMEDB_REGIONS (REGION_CODE, REGION_NAME, IGDB_REGION_ID)
@@ -257,7 +257,7 @@ export const GameSql = {
     postgres: `INSERT INTO gamedb_regions (region_code, region_name, igdb_region_id)
          VALUES (:code, :name, :igdbId)
          RETURNING region_id`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   getGameCompanies: {
     oracle: `SELECT c.NAME FROM GAMEDB_COMPANIES c
@@ -266,7 +266,7 @@ export const GameSql = {
     postgres: `SELECT c.name FROM gamedb_companies c
        JOIN gamedb_game_companies gc ON c.company_id = gc.company_id
        WHERE gc.game_id = :gameId AND gc.role = :role`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   // Caller should pass lowercase identifiers for Postgres
   getSimpleList: (defTable: string, mapTable: string, idCol: string) =>
@@ -277,7 +277,7 @@ export const GameSql = {
       postgres: `SELECT t.name FROM ${defTable.toLowerCase()} t
        JOIN ${mapTable.toLowerCase()} m ON t.${idCol.toLowerCase()} = m.${idCol.toLowerCase()}
        WHERE m.game_id = :gameId`,
-    }) satisfies SqlEntry,
+    }) satisfies ISqlEntry,
 
   getGameSeries: {
     oracle: `SELECT c.NAME FROM GAMEDB_COLLECTIONS c
@@ -286,7 +286,7 @@ export const GameSql = {
     postgres: `SELECT c.name FROM gamedb_collections c
        JOIN gamedb_games g ON c.collection_id = g.collection_id
        WHERE g.game_id = :gameId`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   insertRelease: {
     oracle: `INSERT INTO GAMEDB_RELEASES
@@ -297,7 +297,7 @@ export const GameSql = {
        (game_id, platform_id, region_id, format, release_date, notes)
        VALUES (:gameId, :platformId, :regionId, :format, :releaseDate, :notes)
        RETURNING release_id`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   getReleaseById: {
     oracle: `SELECT RELEASE_ID, GAME_ID, PLATFORM_ID, REGION_ID, FORMAT, RELEASE_DATE, NOTES
@@ -306,7 +306,7 @@ export const GameSql = {
     postgres: `SELECT release_id, game_id, platform_id, region_id, format, release_date, notes
          FROM gamedb_releases
         WHERE release_id = :id`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   getGameReleases: {
     oracle: `SELECT RELEASE_ID, GAME_ID, PLATFORM_ID, REGION_ID, FORMAT, RELEASE_DATE, NOTES
@@ -317,7 +317,7 @@ export const GameSql = {
          FROM gamedb_releases
         WHERE game_id = :gameId
         ORDER BY release_date ASC`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   getPlatformsForGame: {
     oracle: `SELECT DISTINCT p.PLATFORM_ID,
@@ -338,7 +338,7 @@ export const GameSql = {
          JOIN gamedb_platforms p ON p.platform_id = r.platform_id
         WHERE r.game_id = :gameId
         ORDER BY p.platform_name ASC`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   getAllPlatforms: {
     oracle: `SELECT ${PLATFORM_COLS}
@@ -347,7 +347,7 @@ export const GameSql = {
     postgres: `SELECT ${PLATFORM_COLS_PG}
          FROM gamedb_platforms
         ORDER BY platform_name ASC`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   getPlatformsByIgdbIds: (placeholders: string) =>
     ({
@@ -357,7 +357,7 @@ export const GameSql = {
       postgres: `SELECT ${PLATFORM_COLS_PG}
          FROM gamedb_platforms
         WHERE igdb_platform_id IN (${placeholders})`,
-    }) satisfies SqlEntry,
+    }) satisfies ISqlEntry,
 
   attachPlatformsToGames: (placeholders: string) =>
     ({
@@ -379,7 +379,7 @@ export const GameSql = {
          FROM gamedb_game_platforms gp
          LEFT JOIN gamedb_platforms p ON p.platform_id = gp.platform_id
         WHERE gp.game_id IN (${placeholders})`,
-    }) satisfies SqlEntry,
+    }) satisfies ISqlEntry,
 
   getPlatformByIgdbId: {
     oracle: `SELECT ${PLATFORM_COLS}
@@ -388,7 +388,7 @@ export const GameSql = {
     postgres: `SELECT ${PLATFORM_COLS_PG}
          FROM gamedb_platforms
         WHERE igdb_platform_id = :igdbId`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   getAllRegions: {
     oracle: `SELECT ${REGION_COLS}
@@ -397,7 +397,7 @@ export const GameSql = {
     postgres: `SELECT ${REGION_COLS_PG}
          FROM gamedb_regions
         ORDER BY region_name ASC`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   getRegionByCode: {
     oracle: `SELECT ${REGION_COLS}
@@ -406,7 +406,7 @@ export const GameSql = {
     postgres: `SELECT ${REGION_COLS_PG}
          FROM gamedb_regions
         WHERE region_code = :code`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   getRegionById: {
     oracle: `SELECT ${REGION_COLS}
@@ -415,7 +415,7 @@ export const GameSql = {
     postgres: `SELECT ${REGION_COLS_PG}
          FROM gamedb_regions
         WHERE region_id = :id`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   getRegionByIgdbId: {
     oracle: `SELECT ${REGION_COLS}
@@ -424,7 +424,7 @@ export const GameSql = {
     postgres: `SELECT ${REGION_COLS_PG}
          FROM gamedb_regions
         WHERE igdb_region_id = :igdbId`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   // titleFoldExpr and titleNormExpr are dialect-specific SQL fragments
   searchGamesAutocomplete: (
@@ -468,7 +468,7 @@ export const GameSql = {
                    END,
                    title ASC
           LIMIT :limit`,
-    }) satisfies SqlEntry,
+    }) satisfies ISqlEntry,
 
   getAllCompanies: {
     oracle: `SELECT COMPANY_ID, NAME, IGDB_COMPANY_ID
@@ -477,7 +477,7 @@ export const GameSql = {
     postgres: `SELECT company_id, name, igdb_company_id
        FROM gamedb_companies
        ORDER BY name ASC`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   getCompanyById: {
     oracle: `SELECT COMPANY_ID, NAME, IGDB_COMPANY_ID
@@ -486,7 +486,7 @@ export const GameSql = {
     postgres: `SELECT company_id, name, igdb_company_id
        FROM gamedb_companies
        WHERE company_id = :id`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   // whereClause and orderPrefix are dialect-specific SQL fragments
   searchGames: (whereClause: string, orderPrefix: string) =>
@@ -531,7 +531,7 @@ export const GameSql = {
            LEFT JOIN upcoming u ON u.game_id = g.game_id
           WHERE ${whereClause}
           ORDER BY ${orderPrefix}g.title ASC`,
-    }) satisfies SqlEntry,
+    }) satisfies ISqlEntry,
 
   addGamePlatformMerge: {
     oracle: `MERGE INTO GAMEDB_GAME_PLATFORMS gp
@@ -542,7 +542,7 @@ export const GameSql = {
     postgres: `INSERT INTO gamedb_game_platforms (game_id, platform_id)
            VALUES (:gameId, :platformId)
            ON CONFLICT (game_id, platform_id) DO NOTHING`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   // combinedClause is a dialect-specific SQL fragment
   getGamesForAudit: (combinedClause: string) =>
@@ -559,7 +559,7 @@ export const GameSql = {
            FROM gamedb_games g
           WHERE ${combinedClause}
           ORDER BY g.title ASC`,
-    }) satisfies SqlEntry,
+    }) satisfies ISqlEntry,
 
   updateGameImage: {
     oracle: `UPDATE GAMEDB_GAMES
@@ -569,7 +569,7 @@ export const GameSql = {
     postgres: `UPDATE gamedb_games
          SET updated_at = NOW()
        WHERE game_id = :gameId`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   updateGameThumbnailBad: {
     oracle: `UPDATE GAMEDB_GAMES
@@ -580,7 +580,7 @@ export const GameSql = {
           SET thumbnail_bad = :thumbnailBad,
               updated_at = NOW()
         WHERE game_id = :gameId`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   updateGameThumbnailApproved: {
     oracle: `UPDATE GAMEDB_GAMES
@@ -591,7 +591,7 @@ export const GameSql = {
           SET thumbnail_approved = :thumbnailApproved,
               updated_at = NOW()
         WHERE game_id = :gameId`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   getThreadStatusForGameIds: (placeholders: string) =>
     ({
@@ -609,7 +609,7 @@ export const GameSql = {
             EXISTS (SELECT 1 FROM thread_game_links tgl WHERE tgl.gamedb_game_id = g.game_id)
             OR EXISTS (SELECT 1 FROM threads th WHERE th.gamedb_game_id = g.game_id)
           )`,
-    }) satisfies SqlEntry,
+    }) satisfies ISqlEntry,
 
   updateFeaturedVideoUrl: {
     oracle: `UPDATE GAMEDB_GAMES
@@ -620,7 +620,7 @@ export const GameSql = {
           SET featured_video_url = :featuredVideoUrl,
               updated_at = NOW()
         WHERE game_id = :gameId`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   updateGameDescription: {
     oracle: `UPDATE GAMEDB_GAMES
@@ -631,7 +631,7 @@ export const GameSql = {
           SET description = :description,
               updated_at = NOW()
         WHERE game_id = :gameId`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   clearReleaseAnnouncements: {
     oracle: `DELETE FROM GAMEDB_RELEASE_ANNOUNCEMENTS
@@ -642,12 +642,12 @@ export const GameSql = {
           WHERE release_id IN (
             SELECT release_id FROM gamedb_releases WHERE game_id = :gameId
           )`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   clearReleases: {
     oracle: `DELETE FROM GAMEDB_RELEASES WHERE GAME_ID = :gameId`,
     postgres: `DELETE FROM gamedb_releases WHERE game_id = :gameId`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   clearInitialReleaseDate: {
     oracle: `UPDATE GAMEDB_GAMES
@@ -656,12 +656,12 @@ export const GameSql = {
     postgres: `UPDATE gamedb_games
             SET initial_release_date = NULL, updated_at = NOW()
           WHERE game_id = :gameId`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   touchGameUpdatedAt: {
     oracle: `UPDATE GAMEDB_GAMES SET UPDATED_AT = SYSTIMESTAMP WHERE GAME_ID = :gameId`,
     postgres: `UPDATE gamedb_games SET updated_at = NOW() WHERE game_id = :gameId`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   getGotmWins: {
     oracle: `SELECT ge.ROUND_NUMBER,
@@ -690,7 +690,7 @@ export const GameSql = {
            FROM gotm_entries ge
           WHERE ge.gamedb_game_id = :gameId
           ORDER BY ge.round_number`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   getNrGotmWins: {
     oracle: `SELECT nge.ROUND_NUMBER,
@@ -719,7 +719,7 @@ export const GameSql = {
            FROM nr_gotm_entries nge
           WHERE nge.gamedb_game_id = :gameId
           ORDER BY nge.round_number`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   getGotmNominations: {
     oracle: `SELECT n.ROUND_NUMBER, n.USER_ID, u.USERNAME, u.GLOBAL_NAME
@@ -732,7 +732,7 @@ export const GameSql = {
            LEFT JOIN rpg_club_users u ON u.user_id = n.user_id
           WHERE n.gamedb_game_id = :gameId
           ORDER BY n.round_number`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   getNrGotmNominations: {
     oracle: `SELECT n.ROUND_NUMBER, n.USER_ID, u.USERNAME, u.GLOBAL_NAME
@@ -745,7 +745,7 @@ export const GameSql = {
            LEFT JOIN rpg_club_users u ON u.user_id = n.user_id
           WHERE n.gamedb_game_id = :gameId
           ORDER BY n.round_number`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   getNowPlayingMembers: {
     oracle: `SELECT u.USER_ID,
@@ -776,7 +776,7 @@ export const GameSql = {
          JOIN rpg_club_users ru ON ru.user_id = u.user_id
         WHERE u.gamedb_game_id = :gameId
         ORDER BY u.added_at DESC, u.entry_id DESC`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   getGameCompletions: {
     oracle: `SELECT c.USER_ID, u.USERNAME, u.GLOBAL_NAME,
@@ -791,7 +791,7 @@ export const GameSql = {
          LEFT JOIN rpg_club_users u ON u.user_id = c.user_id
         WHERE c.gamedb_game_id = :gameId
         ORDER BY c.completed_at DESC NULLS LAST, c.created_at DESC, c.completion_id DESC`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   getGameCollectionOwners: {
     oracle: `SELECT c.USER_ID, u.USERNAME, u.GLOBAL_NAME
@@ -806,7 +806,7 @@ export const GameSql = {
         WHERE c.gamedb_game_id = :gameId
         GROUP BY c.user_id, u.username, u.global_name
         ORDER BY LOWER(COALESCE(u.global_name, u.username, c.user_id))`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   getPlatformByCode: {
     oracle: `SELECT ${PLATFORM_COLS}
@@ -815,7 +815,7 @@ export const GameSql = {
     postgres: `SELECT ${PLATFORM_COLS_PG}
          FROM gamedb_platforms
         WHERE platform_code = :code`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   getPlatformById: {
     oracle: `SELECT ${PLATFORM_COLS}
@@ -824,5 +824,5 @@ export const GameSql = {
     postgres: `SELECT ${PLATFORM_COLS_PG}
          FROM gamedb_platforms
         WHERE platform_id = :id`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 };

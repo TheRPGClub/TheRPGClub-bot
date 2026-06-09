@@ -1,7 +1,7 @@
 import oracledb from "oracledb";
 import pg from "pg";
 import { getDialect } from "./dialect.js";
-import type { SqlEntry } from "./sql/types.js";
+import type { ISqlEntry } from "./sql/types.js";
 import {
   oraQuery,
   oraMutate,
@@ -30,7 +30,7 @@ export {
   pgMutateConn,
   pgInsertConn,
 } from "./postgresClient.js";
-export type { Dialect, SqlEntry } from "./sql/types.js";
+export type { Dialect, ISqlEntry } from "./sql/types.js";
 export { getSql, getSqlDynamic } from "./sql/index.js";
 
 /**
@@ -38,7 +38,7 @@ export { getSql, getSqlDynamic } from "./sql/index.js";
  * to the underlying driver and maps each row with `mapper`.
  */
 export async function dbQuery<RowT extends object, R>(
-  entry: SqlEntry,
+  entry: ISqlEntry,
   params: oracledb.BindParameters | Record<string, unknown> | unknown[],
   mapper: (row: RowT) => R,
 ): Promise<R[]> {
@@ -58,7 +58,7 @@ export async function dbQuery<RowT extends object, R>(
  * For Oracle INSERT...RETURNING (BIND_OUT) cases, use oraMutate directly.
  */
 export async function dbMutate(
-  entry: SqlEntry,
+  entry: ISqlEntry,
   params: oracledb.BindParameters | Record<string, unknown> | unknown[],
 ): Promise<number> {
   const dialect = getDialect();
@@ -104,7 +104,7 @@ export async function dbTransaction<T>(
  * Pass `params` WITHOUT the BIND_OUT entry -- the function adds it for Oracle.
  */
 export async function dbInsert(
-  entry: SqlEntry,
+  entry: ISqlEntry,
   params: oracledb.BindParameters | Record<string, unknown>,
   bindOutKey: string,
 ): Promise<number> {
@@ -126,7 +126,7 @@ export async function dbInsert(
  */
 export async function dbQueryConn<RowT extends object, R>(
   conn: oracledb.Connection | pg.PoolClient,
-  entry: SqlEntry,
+  entry: ISqlEntry,
   params: oracledb.BindParameters | Record<string, unknown> | unknown[],
   mapper: (row: RowT) => R,
 ): Promise<R[]> {
@@ -153,7 +153,7 @@ export async function dbQueryConn<RowT extends object, R>(
  */
 export async function dbMutateConn(
   conn: oracledb.Connection | pg.PoolClient,
-  entry: SqlEntry,
+  entry: ISqlEntry,
   params: oracledb.BindParameters | Record<string, unknown> | unknown[],
 ): Promise<number> {
   const dialect = getDialect();
@@ -179,7 +179,7 @@ export async function dbMutateConn(
  */
 export async function dbInsertConn(
   conn: oracledb.Connection | pg.PoolClient,
-  entry: SqlEntry,
+  entry: ISqlEntry,
   params: oracledb.BindParameters | Record<string, unknown>,
   bindOutKey: string,
 ): Promise<number> {

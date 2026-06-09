@@ -1,4 +1,4 @@
-import type { SqlEntry } from "./types.js";
+import type { ISqlEntry } from "./types.js";
 
 const IMPORT_COLS = `IMPORT_ID,
        USER_ID,
@@ -96,7 +96,7 @@ export const SteamCollectionImportSql = {
          :steamProfileRef,
          :sourceProfileName
        ) RETURNING import_id`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   insertItem: {
     oracle: `INSERT INTO RPG_CLUB_STEAM_COLLECTION_IMPORT_ITEMS (
@@ -149,14 +149,14 @@ export const SteamCollectionImportSql = {
            :lastPlayedAt,
            'PENDING'
          )`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   getImportById: {
     oracle: `SELECT ${IMPORT_COLS}
   FROM RPG_CLUB_STEAM_COLLECTION_IMPORTS WHERE IMPORT_ID = :importId`,
     postgres: `SELECT ${IMPORT_COLS_PG}
   FROM rpg_club_steam_collection_imports WHERE import_id = :importId`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   getActiveForUser: {
     oracle: `SELECT ${IMPORT_COLS}
@@ -171,7 +171,7 @@ export const SteamCollectionImportSql = {
        AND status IN ('ACTIVE', 'PAUSED')
      ORDER BY created_at DESC, import_id DESC
      LIMIT 1`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   setStatus: {
     oracle: `UPDATE RPG_CLUB_STEAM_COLLECTION_IMPORTS
@@ -180,7 +180,7 @@ export const SteamCollectionImportSql = {
     postgres: `UPDATE rpg_club_steam_collection_imports
         SET status = :status
       WHERE import_id = :importId`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   updateIndex: {
     oracle: `UPDATE RPG_CLUB_STEAM_COLLECTION_IMPORTS
@@ -189,14 +189,14 @@ export const SteamCollectionImportSql = {
     postgres: `UPDATE rpg_club_steam_collection_imports
         SET current_index = :currentIndex
       WHERE import_id = :importId`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   getItemById: {
     oracle: `SELECT ${ITEM_COLS}
   FROM RPG_CLUB_STEAM_COLLECTION_IMPORT_ITEMS WHERE ITEM_ID = :itemId`,
     postgres: `SELECT ${ITEM_COLS_PG}
   FROM rpg_club_steam_collection_import_items WHERE item_id = :itemId`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   getNextPendingItem: {
     oracle: `SELECT ${ITEM_COLS}
@@ -211,7 +211,7 @@ export const SteamCollectionImportSql = {
        AND status = 'PENDING'
      ORDER BY row_index ASC
      LIMIT 1`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   // Caller must pass lowercase column=value expressions for Postgres (e.g. "status = :status")
   updateItem: (setParts: string[]) =>
@@ -222,7 +222,7 @@ export const SteamCollectionImportSql = {
       postgres: `UPDATE rpg_club_steam_collection_import_items
         SET ${setParts.join(", ")}
       WHERE item_id = :itemId`,
-    }) satisfies SqlEntry,
+    }) satisfies ISqlEntry,
 
   countItemsByStatus: {
     oracle: `SELECT STATUS, COUNT(*) AS CNT
@@ -233,7 +233,7 @@ export const SteamCollectionImportSql = {
        FROM rpg_club_steam_collection_import_items
       WHERE import_id = :importId
       GROUP BY status`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   countItemsByReason: {
     oracle: `SELECT RESULT_REASON, COUNT(*) AS CNT
@@ -246,7 +246,7 @@ export const SteamCollectionImportSql = {
       WHERE import_id = :importId
         AND result_reason IS NOT NULL
       GROUP BY result_reason`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   getAppMap: {
     oracle: `SELECT MAP_ID,
@@ -267,7 +267,7 @@ export const SteamCollectionImportSql = {
             updated_at
        FROM rpg_club_steam_app_gamedb_map
       WHERE steam_app_id = :steamAppId`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   upsertAppMap: {
     oracle: `MERGE INTO RPG_CLUB_STEAM_APP_GAMEDB_MAP m
@@ -300,7 +300,7 @@ export const SteamCollectionImportSql = {
          gamedb_game_id = EXCLUDED.gamedb_game_id,
          status = EXCLUDED.status,
          created_by = EXCLUDED.created_by`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   getHistoricalMappedIds: {
     oracle: `SELECT t.GAMEDB_GAME_ID
@@ -329,5 +329,5 @@ export const SteamCollectionImportSql = {
         GROUP BY ii.gamedb_game_id
         ORDER BY COUNT(*) DESC, MAX(ii.item_id) DESC
         LIMIT :limit`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 };

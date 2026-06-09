@@ -1,4 +1,4 @@
-import type { SqlEntry } from "./types.js";
+import type { ISqlEntry } from "./types.js";
 
 export const GameReleaseAnnouncementSql = {
   syncReleaseAnnouncements: {
@@ -37,7 +37,7 @@ export const GameReleaseAnnouncementSql = {
          WHERE gamedb_release_announcements.sent_at IS NULL
            AND gamedb_release_announcements.skipped_at IS NULL
            AND gamedb_release_announcements.announce_at <> EXCLUDED.announce_at`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   restoreNonCanonical: {
     oracle: `UPDATE GAMEDB_RELEASE_ANNOUNCEMENTS a
@@ -95,7 +95,7 @@ export const GameReleaseAnnouncementSql = {
                  ))
                 AND ranked.release_id = gamedb_release_announcements.release_id
             )`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   markNonCanonical: {
     oracle: `MERGE INTO GAMEDB_RELEASE_ANNOUNCEMENTS a
@@ -160,7 +160,7 @@ export const GameReleaseAnnouncementSql = {
         WHERE a.release_id = src.release_id
           AND a.sent_at IS NULL
           AND a.skipped_at IS NULL`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   listDueAnnouncements: {
     oracle: `SELECT a.RELEASE_ID,
@@ -231,7 +231,7 @@ export const GameReleaseAnnouncementSql = {
           AND r.release_date > :referenceTime
         ORDER BY a.announce_at ASC, r.release_date ASC, r.game_id ASC, a.release_id ASC
         LIMIT :limit`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   markSent: {
     oracle: `UPDATE GAMEDB_RELEASE_ANNOUNCEMENTS
@@ -248,7 +248,7 @@ export const GameReleaseAnnouncementSql = {
         WHERE release_id = :releaseId
           AND sent_at IS NULL
           AND skipped_at IS NULL`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   markMissed: {
     oracle: `UPDATE GAMEDB_RELEASE_ANNOUNCEMENTS a
@@ -277,5 +277,5 @@ export const GameReleaseAnnouncementSql = {
             WHERE r.release_id = gamedb_release_announcements.release_id
               AND r.release_date <= :referenceTime
           )`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 };

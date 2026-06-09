@@ -1,4 +1,4 @@
-import type { SqlEntry } from "./types.js";
+import type { ISqlEntry } from "./types.js";
 
 export const ThreadSql = {
   upsertThread: {
@@ -35,12 +35,12 @@ export const ThreadSql = {
          forum_channel_id = EXCLUDED.forum_channel_id,
          is_archived = EXCLUDED.is_archived,
          last_seen_at = EXCLUDED.last_seen_at`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   deleteThreadGameLink: {
     oracle: `DELETE FROM THREAD_GAME_LINKS WHERE THREAD_ID = :threadId`,
     postgres: `DELETE FROM thread_game_links WHERE thread_id = :threadId`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   mergeThreadGameLink: {
     oracle: `MERGE INTO THREAD_GAME_LINKS tgt
@@ -54,7 +54,7 @@ export const ThreadSql = {
     postgres: `INSERT INTO thread_game_links (thread_id, gamedb_game_id, linked_at)
          VALUES (:threadId, :gameId, NOW())
          ON CONFLICT (thread_id, gamedb_game_id) DO NOTHING`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   updateThreadsGameId: {
     oracle: `UPDATE THREADS t
@@ -71,7 +71,7 @@ export const ThreadSql = {
           WHERE g.thread_id = threads.thread_id
        )
        WHERE thread_id = :threadId`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   removeThreadGameLinks: (withGameId: boolean) =>
     ({
@@ -81,7 +81,7 @@ export const ThreadSql = {
       postgres: `DELETE FROM thread_game_links
        WHERE thread_id = :threadId
        ${withGameId ? "AND gamedb_game_id = :gameId" : ""}`,
-    }) satisfies SqlEntry,
+    }) satisfies ISqlEntry,
 
   setSkipLinking: {
     oracle: `UPDATE THREADS
@@ -90,30 +90,30 @@ export const ThreadSql = {
     postgres: `UPDATE threads
         SET skip_linking = :skip
       WHERE thread_id = :threadId`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   getSkipLinking: {
     oracle: `SELECT SKIP_LINKING FROM THREADS WHERE THREAD_ID = :threadId`,
     postgres: `SELECT skip_linking FROM threads WHERE thread_id = :threadId`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   getThreadLinksForGame: {
     oracle: `SELECT THREAD_ID FROM THREAD_GAME_LINKS WHERE GAMEDB_GAME_ID = :gameId`,
     postgres: `SELECT thread_id FROM thread_game_links WHERE gamedb_game_id = :gameId`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   getLegacyGameId: {
     oracle: `SELECT GAMEDB_GAME_ID FROM THREADS WHERE THREAD_ID = :threadId`,
     postgres: `SELECT gamedb_game_id FROM threads WHERE thread_id = :threadId`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   getThreadGameLinks: {
     oracle: `SELECT GAMEDB_GAME_ID FROM THREAD_GAME_LINKS WHERE THREAD_ID = :threadId`,
     postgres: `SELECT gamedb_game_id FROM thread_game_links WHERE thread_id = :threadId`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   getLegacyThreadIdForGame: {
     oracle: `SELECT THREAD_ID FROM THREADS WHERE GAMEDB_GAME_ID = :gameId`,
     postgres: `SELECT thread_id FROM threads WHERE gamedb_game_id = :gameId`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 };

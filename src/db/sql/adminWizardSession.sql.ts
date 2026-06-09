@@ -1,4 +1,4 @@
-import type { SqlEntry } from "./types.js";
+import type { ISqlEntry } from "./types.js";
 
 export const AdminWizardSessionSql = {
   getActive: {
@@ -36,7 +36,7 @@ export const AdminWizardSessionSql = {
         AND status = 'ACTIVE'
       ORDER BY last_updated_at DESC
       LIMIT 1`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   saveSession: {
     oracle: `MERGE INTO RPG_CLUB_ADMIN_WIZARD_SESSIONS t
@@ -78,7 +78,7 @@ export const AdminWizardSessionSql = {
          state_json = EXCLUDED.state_json,
          guild_id = EXCLUDED.guild_id,
          last_updated_at = EXCLUDED.last_updated_at`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   deleteHistorical: {
     oracle: `DELETE FROM RPG_CLUB_ADMIN_WIZARD_SESSIONS
@@ -91,7 +91,7 @@ export const AdminWizardSessionSql = {
           AND owner_user_id = :ownerUserId
           AND channel_id = :channelId
           AND status = :status`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   updateStatus: {
     oracle: `UPDATE RPG_CLUB_ADMIN_WIZARD_SESSIONS
@@ -108,5 +108,5 @@ export const AdminWizardSessionSql = {
           AND owner_user_id = :ownerUserId
           AND channel_id = :channelId
           AND status = 'ACTIVE'`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 };

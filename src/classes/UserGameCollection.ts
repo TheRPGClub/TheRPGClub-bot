@@ -231,7 +231,9 @@ export default class UserGameCollection {
     return dbTransaction(async (conn) => {
       let rowsAffected: number;
       try {
-        rowsAffected = await dbMutateConn(conn, UserGameCollectionSql.updateEntry(updateParts), binds);
+        rowsAffected = await dbMutateConn(
+          conn, UserGameCollectionSql.updateEntry(updateParts), binds,
+        );
       } catch (err: any) {
         const msg = String(err?.message ?? "");
         if (/ORA-00001/i.test(msg) || /unique constraint/i.test(msg)) {

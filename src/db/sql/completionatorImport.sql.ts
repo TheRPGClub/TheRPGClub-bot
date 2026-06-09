@@ -1,4 +1,4 @@
-import type { SqlEntry } from "./types.js";
+import type { ISqlEntry } from "./types.js";
 
 const ITEM_COLS = `ITEM_ID,
             IMPORT_ID,
@@ -44,7 +44,7 @@ export const CompletionatorImportSql = {
        ) VALUES (
          :userId, 'ACTIVE', 0, :totalCount, :sourceFilename
        ) RETURNING import_id`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   insertItem: {
     oracle: `INSERT INTO RPG_CLUB_COMPLETIONATOR_IMPORT_ITEMS (
@@ -97,7 +97,7 @@ export const CompletionatorImportSql = {
            :playtimeHours,
            'PENDING'
          )`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   getImportById: {
     oracle: `SELECT IMPORT_ID,
@@ -120,7 +120,7 @@ export const CompletionatorImportSql = {
             updated_at
        FROM rpg_club_completionator_imports
       WHERE import_id = :id`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   getActiveForUser: {
     oracle: `SELECT IMPORT_ID,
@@ -149,7 +149,7 @@ export const CompletionatorImportSql = {
         AND status IN ('ACTIVE', 'PAUSED')
       ORDER BY created_at DESC, import_id DESC
       LIMIT 1`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   setStatus: {
     oracle: `UPDATE RPG_CLUB_COMPLETIONATOR_IMPORTS
@@ -158,7 +158,7 @@ export const CompletionatorImportSql = {
     postgres: `UPDATE rpg_club_completionator_imports
         SET status = :status
       WHERE import_id = :importId`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   updateIndex: {
     oracle: `UPDATE RPG_CLUB_COMPLETIONATOR_IMPORTS
@@ -167,7 +167,7 @@ export const CompletionatorImportSql = {
     postgres: `UPDATE rpg_club_completionator_imports
         SET current_index = :currentIndex
       WHERE import_id = :importId`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   getItemById: {
     oracle: `SELECT ${ITEM_COLS}
@@ -176,7 +176,7 @@ export const CompletionatorImportSql = {
     postgres: `SELECT ${ITEM_COLS_PG}
        FROM rpg_club_completionator_import_items
       WHERE item_id = :itemId`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   getNextPendingItem: {
     oracle: `SELECT ${ITEM_COLS}
@@ -191,7 +191,7 @@ export const CompletionatorImportSql = {
         AND status = 'PENDING'
       ORDER BY row_index ASC
       LIMIT 1`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   // Caller must pass lowercase column=value expressions for Postgres (e.g. "status = :status")
   updateItem: (fields: string[]) =>
@@ -202,7 +202,7 @@ export const CompletionatorImportSql = {
       postgres: `UPDATE rpg_club_completionator_import_items
         SET ${fields.join(", ")}
       WHERE item_id = :itemId`,
-    }) satisfies SqlEntry,
+    }) satisfies ISqlEntry,
 
   countItemsByStatus: {
     oracle: `SELECT STATUS, COUNT(*) AS CNT
@@ -213,5 +213,5 @@ export const CompletionatorImportSql = {
        FROM rpg_club_completionator_import_items
       WHERE import_id = :importId
       GROUP BY status`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 };

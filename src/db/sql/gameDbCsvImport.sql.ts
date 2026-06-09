@@ -1,4 +1,4 @@
-import type { SqlEntry } from "./types.js";
+import type { ISqlEntry } from "./types.js";
 
 const ITEM_COLS = `ITEM_ID,
             IMPORT_ID,
@@ -36,7 +36,7 @@ export const GameDbCsvImportSql = {
        ) VALUES (
          :userId, 'ACTIVE', 0, :totalCount, :sourceFilename
        ) RETURNING import_id`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   insertItem: {
     oracle: `INSERT INTO RPG_CLUB_GAMEDB_IMPORT_ITEMS (
@@ -77,7 +77,7 @@ export const GameDbCsvImportSql = {
            :initialReleaseDate,
            'PENDING'
          )`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   getImportById: {
     oracle: `SELECT IMPORT_ID,
@@ -100,7 +100,7 @@ export const GameDbCsvImportSql = {
             updated_at
        FROM rpg_club_gamedb_imports
       WHERE import_id = :id`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   getActiveForUser: {
     oracle: `SELECT IMPORT_ID,
@@ -129,7 +129,7 @@ export const GameDbCsvImportSql = {
         AND status IN ('ACTIVE', 'PAUSED')
       ORDER BY created_at DESC, import_id DESC
       LIMIT 1`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   setStatus: {
     oracle: `UPDATE RPG_CLUB_GAMEDB_IMPORTS
@@ -138,7 +138,7 @@ export const GameDbCsvImportSql = {
     postgres: `UPDATE rpg_club_gamedb_imports
         SET status = :status
       WHERE import_id = :importId`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   updateIndex: {
     oracle: `UPDATE RPG_CLUB_GAMEDB_IMPORTS
@@ -147,7 +147,7 @@ export const GameDbCsvImportSql = {
     postgres: `UPDATE rpg_club_gamedb_imports
         SET current_index = :currentIndex
       WHERE import_id = :importId`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   getNextPendingItem: {
     oracle: `SELECT ${ITEM_COLS}
@@ -162,7 +162,7 @@ export const GameDbCsvImportSql = {
         AND status = 'PENDING'
       ORDER BY row_index ASC
       LIMIT 1`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   getItemById: {
     oracle: `SELECT ${ITEM_COLS}
@@ -171,7 +171,7 @@ export const GameDbCsvImportSql = {
     postgres: `SELECT ${ITEM_COLS_PG}
        FROM rpg_club_gamedb_import_items
       WHERE item_id = :itemId`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   // Caller must pass lowercase column=value expressions for Postgres (e.g. "status = :status")
   updateItem: (fields: string[]) =>
@@ -182,7 +182,7 @@ export const GameDbCsvImportSql = {
       postgres: `UPDATE rpg_club_gamedb_import_items
         SET ${fields.join(", ")}
       WHERE item_id = :itemId`,
-    }) satisfies SqlEntry,
+    }) satisfies ISqlEntry,
 
   countItems: {
     oracle: `SELECT STATUS, COUNT(*) AS CNT
@@ -193,5 +193,5 @@ export const GameDbCsvImportSql = {
        FROM rpg_club_gamedb_import_items
       WHERE import_id = :importId
       GROUP BY status`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 };

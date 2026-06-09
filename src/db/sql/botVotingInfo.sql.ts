@@ -1,4 +1,4 @@
-import type { SqlEntry } from "./types.js";
+import type { ISqlEntry } from "./types.js";
 
 const VOTING_COLS = `ROUND_NUMBER,
                 NOMINATION_LIST_ID,
@@ -20,7 +20,7 @@ export const BotVotingInfoSql = {
     postgres: `SELECT ${VOTING_COLS_PG}
          FROM bot_voting_info
         ORDER BY round_number`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   getByRound: {
     oracle: `SELECT ${VOTING_COLS}
@@ -29,7 +29,7 @@ export const BotVotingInfoSql = {
     postgres: `SELECT ${VOTING_COLS_PG}
          FROM bot_voting_info
         WHERE round_number = :round`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   getCurrentRound: {
     oracle: `SELECT ${VOTING_COLS}
@@ -42,7 +42,7 @@ export const BotVotingInfoSql = {
         WHERE round_number = (
           SELECT MAX(round_number) FROM bot_voting_info
         )`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   updateRoundInfo: {
     oracle: `UPDATE BOT_VOTING_INFO
@@ -53,7 +53,7 @@ export const BotVotingInfoSql = {
             SET nomination_list_id = :nominationListId,
                 next_vote_at = :nextVoteAt
           WHERE round_number = :round`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   insertRoundInfo: {
     oracle: `INSERT INTO BOT_VOTING_INFO (
@@ -82,7 +82,7 @@ export const BotVotingInfoSql = {
            false,
            false
          )`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   markReminderSent: (column: string) =>
     ({
@@ -92,7 +92,7 @@ export const BotVotingInfoSql = {
       postgres: `UPDATE bot_voting_info
           SET ${column.toLowerCase()} = true
         WHERE round_number = :round`,
-    }) satisfies SqlEntry,
+    }) satisfies ISqlEntry,
 
   updateNextVoteAt: {
     oracle: `UPDATE BOT_VOTING_INFO
@@ -101,7 +101,7 @@ export const BotVotingInfoSql = {
     postgres: `UPDATE bot_voting_info
           SET next_vote_at = :nextVoteAt
         WHERE round_number = :round`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   updateNominationListId: {
     oracle: `UPDATE BOT_VOTING_INFO
@@ -110,12 +110,12 @@ export const BotVotingInfoSql = {
     postgres: `UPDATE bot_voting_info
           SET nomination_list_id = :nominationListId
         WHERE round_number = :round`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   deleteRound: {
     oracle: `DELETE FROM BOT_VOTING_INFO
         WHERE ROUND_NUMBER = :round`,
     postgres: `DELETE FROM bot_voting_info
         WHERE round_number = :round`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 };

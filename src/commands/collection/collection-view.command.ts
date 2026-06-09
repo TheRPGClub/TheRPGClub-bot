@@ -188,9 +188,12 @@ export class CollectionViewCommand {
     } catch (err) {
       console.error("[collection list] safeReply failed:", err);
       try {
-        await interaction.editReply({ content: "Failed to display collection. Please try again." });
+        await safeReply(
+          interaction,
+          buildTextReply("Failed to display collection. Please try again.", isEphemeral),
+        );
       } catch (fallbackErr) {
-        console.error("[collection list] fallback editReply also failed:", fallbackErr);
+        console.error("[collection list] fallback safeReply also failed:", fallbackErr);
       }
     }
     console.log("[collection list] step: reply sent");

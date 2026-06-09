@@ -1,4 +1,4 @@
-import type { SqlEntry } from "./types.js";
+import type { ISqlEntry } from "./types.js";
 
 export const StarboardSql = {
   getByMessageId: {
@@ -18,7 +18,7 @@ export const StarboardSql = {
               created_at
          FROM rpg_club_starboard
         WHERE message_id = :messageId`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   insert: {
     oracle: `INSERT INTO RPG_CLUB_STARBOARD
@@ -27,5 +27,5 @@ export const StarboardSql = {
     postgres: `INSERT INTO rpg_club_starboard
         (message_id, channel_id, starboard_message_id, author_id, star_count)
        VALUES (:messageId, :channelId, :starboardMessageId, :authorId, :starCount)`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 };
