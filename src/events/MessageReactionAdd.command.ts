@@ -33,6 +33,7 @@ import { notifyUnknownCompletionPlatform } from "../functions/CompletionHelpers.
 import { COMPLETION_REACTION_DEV_CHANNEL_ID } from "../config/channels.js";
 import { isPositiveInt } from "../utilities/ValidationUtils.js";
 import { DISCORD_AUTOCOMPLETE_DESC_MAX, DISCORD_SELECT_LABEL_MAX } from "../config/textLimits.js";
+import { parseCustomIdSegments } from "../utilities/CustomIdUtils.js";
 
 const PUSH_PIN_EMOJI = "📌";
 const PLUS_EMOJI = "➕";
@@ -264,7 +265,9 @@ export class MessageReactionAdd {
   async handleCompletionReactionType(
     interaction: StringSelectMenuInteraction,
   ): Promise<void> {
-    const [, sessionId] = interaction.customId.split(":");
+    const segs = parseCustomIdSegments(interaction.customId, 1);
+    if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+    const [sessionId] = segs;
     const session = completionReactionSessions.get(sessionId);
     if (!session) {
       await safeUpdate(interaction, {
@@ -320,7 +323,9 @@ export class MessageReactionAdd {
   async handleCompletionReactionGame(
     interaction: StringSelectMenuInteraction,
   ): Promise<void> {
-    const [, sessionId] = interaction.customId.split(":");
+    const segs = parseCustomIdSegments(interaction.customId, 1);
+    if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+    const [sessionId] = segs;
     const session = completionReactionSessions.get(sessionId);
     if (!session) {
       await safeUpdate(interaction, {
@@ -354,7 +359,9 @@ export class MessageReactionAdd {
   async handleCompletionReactionPlatform(
     interaction: StringSelectMenuInteraction,
   ): Promise<void> {
-    const [, sessionId] = interaction.customId.split(":");
+    const segs = parseCustomIdSegments(interaction.customId, 1);
+    if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+    const [sessionId] = segs;
     const session = completionReactionPlatformSessions.get(sessionId);
     if (!session) {
       await safeUpdate(interaction, {
@@ -451,7 +458,9 @@ export class MessageReactionAdd {
   async handleCompletionReactionTitle(
     interaction: ButtonInteraction,
   ): Promise<void> {
-    const [, sessionId] = interaction.customId.split(":");
+    const segs = parseCustomIdSegments(interaction.customId, 1);
+    if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+    const [sessionId] = segs;
     const session = completionReactionSessions.get(sessionId);
     if (!session) {
       await safeReply(interaction, buildTextReply("This completion prompt has expired.", false))
@@ -492,7 +501,9 @@ export class MessageReactionAdd {
   async handleCompletionReactionTitleModal(
     interaction: ModalSubmitInteraction,
   ): Promise<void> {
-    const [, sessionId] = interaction.customId.split(":");
+    const segs = parseCustomIdSegments(interaction.customId, 1);
+    if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+    const [sessionId] = segs;
     const session = completionReactionSessions.get(sessionId);
     if (!session) {
       await safeReply(interaction, buildTextReply("This completion prompt has expired.", true))

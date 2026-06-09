@@ -60,6 +60,7 @@ import {
   buildTextReply,
 } from "../functions/ComponentsV2Utils.js";
 import { decodeBase64Url, encodeWithMaxLength } from "../functions/CustomIdUtils.js";
+import { parseCustomIdSegments } from "../utilities/CustomIdUtils.js";
 import { safeV2TextContent } from "../functions/ComponentsV2Utils.js";
 import { formatDiscordTimestamp } from "../functions/DateFormatUtils.js";
 import { truncateWithEllipsis } from "../utilities/ValidationUtils.js";
@@ -767,32 +768,22 @@ function buildTodoViewId(payloadToken: string, page: number, issueNumber: number
 }
 
 function parseTodoListCustomId(id: string): { payloadToken: string; page: number } | null {
-  const parts = id.split(":");
-  if (parts.length !== 3 || parts[0] !== TODO_LIST_ID_PREFIX) {
-    return null;
-  }
-
-  const payloadToken = parts[1];
-  const page = Number(parts[2]);
-  if (!payloadToken || !page) {
-    return null;
-  }
-
+  if (!id.startsWith(`${TODO_LIST_ID_PREFIX}:`)) return null;
+  const segs = parseCustomIdSegments(id, 2);
+  if (!segs) return null;
+  const [payloadToken, pageStr] = segs;
+  const page = Number(pageStr);
+  if (!payloadToken || !page) return null;
   return { payloadToken, page };
 }
 
 function parseTodoListBackId(id: string): { payloadToken: string; page: number } | null {
-  const parts = id.split(":");
-  if (parts.length !== 3 || parts[0] !== TODO_LIST_BACK_ID_PREFIX) {
-    return null;
-  }
-
-  const payloadToken = parts[1];
-  const page = Number(parts[2]);
-  if (!payloadToken || !page) {
-    return null;
-  }
-
+  if (!id.startsWith(`${TODO_LIST_BACK_ID_PREFIX}:`)) return null;
+  const segs = parseCustomIdSegments(id, 2);
+  if (!segs) return null;
+  const [payloadToken, pageStr] = segs;
+  const page = Number(pageStr);
+  if (!payloadToken || !page) return null;
   return { payloadToken, page };
 }
 
@@ -800,17 +791,12 @@ function parseTodoCreateButtonId(
   id: string,
   prefix: string,
 ): { payloadToken: string; page: number } | null {
-  const parts = id.split(":");
-  if (parts.length !== 3 || parts[0] !== prefix) {
-    return null;
-  }
-
-  const payloadToken = parts[1];
-  const page = Number(parts[2]);
-  if (!payloadToken || !page) {
-    return null;
-  }
-
+  if (!id.startsWith(`${prefix}:`)) return null;
+  const segs = parseCustomIdSegments(id, 2);
+  if (!segs) return null;
+  const [payloadToken, pageStr] = segs;
+  const page = Number(pageStr);
+  if (!payloadToken || !page) return null;
   return { payloadToken, page };
 }
 
@@ -818,19 +804,12 @@ function parseTodoCreateModalId(
   id: string,
   prefix: string,
 ): { payloadToken: string; page: number; channelId: string; messageId: string } | null {
-  const parts = id.split(":");
-  if (parts.length !== 5 || parts[0] !== prefix) {
-    return null;
-  }
-
-  const payloadToken = parts[1];
-  const page = Number(parts[2]);
-  const channelId = parts[3];
-  const messageId = parts[4];
-  if (!payloadToken || !page || !channelId || !messageId) {
-    return null;
-  }
-
+  if (!id.startsWith(`${prefix}:`)) return null;
+  const segs = parseCustomIdSegments(id, 4);
+  if (!segs) return null;
+  const [payloadToken, pageStr, channelId, messageId] = segs;
+  const page = Number(pageStr);
+  if (!payloadToken || !page || !channelId || !messageId) return null;
   return { payloadToken, page, channelId, messageId };
 }
 
@@ -838,17 +817,12 @@ function parseTodoCloseId(
   id: string,
   prefix: string,
 ): { payloadToken: string; page: number } | null {
-  const parts = id.split(":");
-  if (parts.length !== 3 || parts[0] !== prefix) {
-    return null;
-  }
-
-  const payloadToken = parts[1];
-  const page = Number(parts[2]);
-  if (!payloadToken || !page) {
-    return null;
-  }
-
+  if (!id.startsWith(`${prefix}:`)) return null;
+  const segs = parseCustomIdSegments(id, 2);
+  if (!segs) return null;
+  const [payloadToken, pageStr] = segs;
+  const page = Number(pageStr);
+  if (!payloadToken || !page) return null;
   return { payloadToken, page };
 }
 
@@ -856,37 +830,25 @@ function parseTodoCloseSelectId(
   id: string,
   prefix: string,
 ): { payloadToken: string; page: number; channelId: string; messageId: string } | null {
-  const parts = id.split(":");
-  if (parts.length !== 5 || parts[0] !== prefix) {
-    return null;
-  }
-
-  const payloadToken = parts[1];
-  const page = Number(parts[2]);
-  const channelId = parts[3];
-  const messageId = parts[4];
-  if (!payloadToken || !page || !channelId || !messageId) {
-    return null;
-  }
-
+  if (!id.startsWith(`${prefix}:`)) return null;
+  const segs = parseCustomIdSegments(id, 4);
+  if (!segs) return null;
+  const [payloadToken, pageStr, channelId, messageId] = segs;
+  const page = Number(pageStr);
+  if (!payloadToken || !page || !channelId || !messageId) return null;
   return { payloadToken, page, channelId, messageId };
 }
 
 function parseTodoViewId(
   id: string,
 ): { payloadToken: string; page: number; issueNumber: number } | null {
-  const parts = id.split(":");
-  if (parts.length !== 4 || parts[0] !== TODO_VIEW_ID_PREFIX) {
-    return null;
-  }
-
-  const payloadToken = parts[1];
-  const page = Number(parts[2]);
-  const issueNumber = Number(parts[3]);
-  if (!payloadToken || !page || !issueNumber) {
-    return null;
-  }
-
+  if (!id.startsWith(`${TODO_VIEW_ID_PREFIX}:`)) return null;
+  const segs = parseCustomIdSegments(id, 3);
+  if (!segs) return null;
+  const [payloadToken, pageStr, issueStr] = segs;
+  const page = Number(pageStr);
+  const issueNumber = Number(issueStr);
+  if (!payloadToken || !page || !issueNumber) return null;
   return { payloadToken, page, issueNumber };
 }
 
@@ -894,18 +856,13 @@ function parseTodoIssueActionId(
   id: string,
   prefix: string,
 ): { payloadToken: string; page: number; issueNumber: number } | null {
-  const parts = id.split(":");
-  if (parts.length !== 4 || parts[0] !== prefix) {
-    return null;
-  }
-
-  const payloadToken = parts[1];
-  const page = Number(parts[2]);
-  const issueNumber = Number(parts[3]);
-  if (!payloadToken || !page || !issueNumber) {
-    return null;
-  }
-
+  if (!id.startsWith(`${prefix}:`)) return null;
+  const segs = parseCustomIdSegments(id, 3);
+  if (!segs) return null;
+  const [payloadToken, pageStr, issueStr] = segs;
+  const page = Number(pageStr);
+  const issueNumber = Number(issueStr);
+  if (!payloadToken || !page || !issueNumber) return null;
   return { payloadToken, page, issueNumber };
 }
 
@@ -919,20 +876,13 @@ function parseTodoIssueModalId(
   channelId: string;
   messageId: string;
 } | null {
-  const parts = id.split(":");
-  if (parts.length !== 6 || parts[0] !== prefix) {
-    return null;
-  }
-
-  const payloadToken = parts[1];
-  const page = Number(parts[2]);
-  const issueNumber = Number(parts[3]);
-  const channelId = parts[4];
-  const messageId = parts[5];
-  if (!payloadToken || !page || !issueNumber || !channelId || !messageId) {
-    return null;
-  }
-
+  if (!id.startsWith(`${prefix}:`)) return null;
+  const segs = parseCustomIdSegments(id, 5);
+  if (!segs) return null;
+  const [payloadToken, pageStr, issueStr, channelId, messageId] = segs;
+  const page = Number(pageStr);
+  const issueNumber = Number(issueStr);
+  if (!payloadToken || !page || !issueNumber || !channelId || !messageId) return null;
   return { payloadToken, page, issueNumber, channelId, messageId };
 }
 
@@ -974,17 +924,12 @@ function parseTodoQueryId(
   id: string,
   prefix: string,
 ): { payloadToken: string; page: number } | null {
-  const parts = id.split(":");
-  if (parts.length !== 3 || parts[0] !== prefix) {
-    return null;
-  }
-
-  const payloadToken = parts[1];
-  const page = Number(parts[2]);
-  if (!payloadToken || !page) {
-    return null;
-  }
-
+  if (!id.startsWith(`${prefix}:`)) return null;
+  const segs = parseCustomIdSegments(id, 2);
+  if (!segs) return null;
+  const [payloadToken, pageStr] = segs;
+  const page = Number(pageStr);
+  if (!payloadToken || !page) return null;
   return { payloadToken, page };
 }
 
@@ -992,19 +937,12 @@ function parseTodoQueryModalId(
   id: string,
   prefix: string,
 ): { payloadToken: string; page: number; channelId: string; messageId: string } | null {
-  const parts = id.split(":");
-  if (parts.length !== 5 || parts[0] !== prefix) {
-    return null;
-  }
-
-  const payloadToken = parts[1];
-  const page = Number(parts[2]);
-  const channelId = parts[3];
-  const messageId = parts[4];
-  if (!payloadToken || !page || !channelId || !messageId) {
-    return null;
-  }
-
+  if (!id.startsWith(`${prefix}:`)) return null;
+  const segs = parseCustomIdSegments(id, 4);
+  if (!segs) return null;
+  const [payloadToken, pageStr, channelId, messageId] = segs;
+  const page = Number(pageStr);
+  if (!payloadToken || !page || !channelId || !messageId) return null;
   return { payloadToken, page, channelId, messageId };
 }
 
@@ -1012,17 +950,12 @@ function parseTodoFilterId(
   id: string,
   prefix: string,
 ): { payloadToken: string; page: number } | null {
-  const parts = id.split(":");
-  if (parts.length !== 3 || parts[0] !== prefix) {
-    return null;
-  }
-
-  const payloadToken = parts[1];
-  const page = Number(parts[2]);
-  if (!payloadToken || !page) {
-    return null;
-  }
-
+  if (!id.startsWith(`${prefix}:`)) return null;
+  const segs = parseCustomIdSegments(id, 2);
+  if (!segs) return null;
+  const [payloadToken, pageStr] = segs;
+  const page = Number(pageStr);
+  if (!payloadToken || !page) return null;
   return { payloadToken, page };
 }
 

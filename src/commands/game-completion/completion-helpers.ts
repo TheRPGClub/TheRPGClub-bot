@@ -8,6 +8,7 @@ import type {
 } from "discord.js";
 import Member from "../../classes/Member.js";
 import { promptRemoveFromNowPlaying } from "../../functions/CompletionHelpers.js";
+import { parseCustomIdSegments } from "../../utilities/CustomIdUtils.js";
 
 function shouldPromptNowPlayingRemoval(
   addedAt: Date | null,
@@ -77,10 +78,10 @@ export function parseCompletionatorChooseId(customId: string): {
   itemId: number;
   gameId: number;
 } | null {
-  const parts = customId.split(":");
-  if (parts.length !== 5) return null;
-  const [prefix, ownerId, importIdRaw, itemIdRaw, gameIdRaw] = parts;
-  if (prefix !== "comp-import-choose-v1") return null;
+  if (!customId.startsWith("comp-import-choose-v1:")) return null;
+  const segs = parseCustomIdSegments(customId, 4);
+  if (!segs) return null;
+  const [ownerId, importIdRaw, itemIdRaw, gameIdRaw] = segs;
   const importId = Number(importIdRaw);
   const itemId = Number(itemIdRaw);
   const gameId = Number(gameIdRaw);

@@ -15,6 +15,7 @@ import { safeDeferUpdate, safeReply } from "../../functions/InteractionUtils.js"
 import { formatPlatformDisplayName } from "../../functions/PlatformDisplay.js";
 import { buildComponentsV2Flags, safeV2TextContent } from "../../functions/ComponentsV2Utils.js";
 import { decodeBase64Url, encodeWithMaxLength } from "../../functions/CustomIdUtils.js";
+import { parseCustomIdSegments } from "../../utilities/CustomIdUtils.js";
 import { renderUsernameWithEmoji } from "../../services/UserEmojiService.js";
 import {
   COMPLETION_PAGE_SIZE,
@@ -132,20 +133,22 @@ function buildCommonNavCustomId(
 function parseCommonBackCustomId(
   customId: string,
 ): { state: ICommonCompletionState; page: number } | null {
-  const parts = customId.split(":");
-  if (parts.length !== 8 || parts[0] !== "comp-common-back") return null;
-  const page = Number(parts[6]);
+  if (!customId.startsWith("comp-common-back:")) return null;
+  const segs = parseCustomIdSegments(customId, 7);
+  if (!segs) return null;
+  const [leftId, rightId, sortTok, yearTok, platformTok, pageStr, queryTok] = segs;
+  const page = Number(pageStr);
   if (!Number.isInteger(page) || page < 0) return null;
 
   return {
     page,
     state: {
-      leftId: parts[1],
-      rightId: parts[2],
-      sort: normalizeSort(parts[3]),
-      year: parseYearToken(parts[4]),
-      platformId: parsePlatformToken(parts[5]),
-      query: decodeQueryToken(parts[7]),
+      leftId,
+      rightId,
+      sort: normalizeSort(sortTok),
+      year: parseYearToken(yearTok),
+      platformId: parsePlatformToken(platformTok),
+      query: decodeQueryToken(queryTok),
     },
   };
 }
@@ -153,22 +156,22 @@ function parseCommonBackCustomId(
 function parseCommonNavCustomId(
   customId: string,
 ): { state: ICommonCompletionState; page: number; direction: "prev" | "next" } | null {
-  const parts = customId.split(":");
-  if (parts.length !== 9 || parts[0] !== "comp-common-nav") return null;
-
-  const page = Number(parts[6]);
-  const direction = parts[7];
+  if (!customId.startsWith("comp-common-nav:")) return null;
+  const segs = parseCustomIdSegments(customId, 8);
+  if (!segs) return null;
+  const [leftId, rightId, sortTok, yearTok, platformTok, pageStr, direction, queryTok] = segs;
+  const page = Number(pageStr);
   if (!Number.isInteger(page) || page < 0) return null;
   if (direction !== "prev" && direction !== "next") return null;
 
   return {
     state: {
-      leftId: parts[1],
-      rightId: parts[2],
-      sort: normalizeSort(parts[3]),
-      year: parseYearToken(parts[4]),
-      platformId: parsePlatformToken(parts[5]),
-      query: decodeQueryToken(parts[8]),
+      leftId,
+      rightId,
+      sort: normalizeSort(sortTok),
+      year: parseYearToken(yearTok),
+      platformId: parsePlatformToken(platformTok),
+      query: decodeQueryToken(queryTok),
     },
     page,
     direction,

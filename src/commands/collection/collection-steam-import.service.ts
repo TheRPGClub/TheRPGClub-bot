@@ -1,6 +1,7 @@
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle } from "discord.js";
 import { buildImportReasonSummary } from "./collection-import-ui.utils.js";
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
+import { parseCustomIdSegments } from "../../utilities/CustomIdUtils.js";
 
 export type CollectionSteamImportButtonAction = "skip" | "remap" | "game-id" | "pause";
 
@@ -49,16 +50,16 @@ export function parseCollectionSteamImportActionId(customId: string): {
   itemId: number;
   action: CollectionSteamImportButtonAction;
 } | null {
-  const parts = customId.split(":");
-  if (parts.length !== 5) return null;
-  if (parts[0] !== STEAM_IMPORT_ACTION_PREFIX) return null;
+  if (!customId.startsWith(`${STEAM_IMPORT_ACTION_PREFIX}:`)) return null;
+  const segs = parseCustomIdSegments(customId, 4);
+  if (!segs) return null;
+  const [ownerId, importIdStr, itemIdStr, actionCode] = segs;
 
-  const importId = Number(parts[2]);
-  const itemId = Number(parts[3]);
+  const importId = Number(importIdStr);
+  const itemId = Number(itemIdStr);
   if (!isPositiveInt(importId)) return null;
   if (!isPositiveInt(itemId)) return null;
 
-  const actionCode = parts[4];
   const action = actionCode === "s"
     ? "skip"
     : actionCode === "r"
@@ -70,7 +71,7 @@ export function parseCollectionSteamImportActionId(customId: string): {
         : null;
   if (!action) return null;
 
-  return { ownerId: parts[1], importId, itemId, action };
+  return { ownerId, importId, itemId, action };
 }
 
 export function buildCollectionSteamChooseId(params: {
@@ -94,16 +95,17 @@ export function parseCollectionSteamChooseId(customId: string): {
   itemId: number;
   gameId: number;
 } | null {
-  const parts = customId.split(":");
-  if (parts.length !== 5) return null;
-  if (parts[0] !== STEAM_CHOOSE_PREFIX) return null;
-  const importId = Number(parts[2]);
-  const itemId = Number(parts[3]);
-  const gameId = Number(parts[4]);
+  if (!customId.startsWith(`${STEAM_CHOOSE_PREFIX}:`)) return null;
+  const segs = parseCustomIdSegments(customId, 4);
+  if (!segs) return null;
+  const [ownerId, importIdStr, itemIdStr, gameIdStr] = segs;
+  const importId = Number(importIdStr);
+  const itemId = Number(itemIdStr);
+  const gameId = Number(gameIdStr);
   if (!isPositiveInt(importId)) return null;
   if (!isPositiveInt(itemId)) return null;
   if (!isPositiveInt(gameId)) return null;
-  return { ownerId: parts[1], importId, itemId, gameId };
+  return { ownerId, importId, itemId, gameId };
 }
 
 export function buildCollectionSteamRemapModalId(params: {
@@ -124,16 +126,16 @@ export function parseCollectionSteamRemapModalId(customId: string): {
   importId: number;
   itemId: number;
 } | null {
-  const parts = customId.split(":");
-  if (parts.length !== 4) return null;
-  if (parts[0] !== STEAM_REMAP_MODAL_PREFIX) return null;
-
-  const importId = Number(parts[2]);
-  const itemId = Number(parts[3]);
+  if (!customId.startsWith(`${STEAM_REMAP_MODAL_PREFIX}:`)) return null;
+  const segs = parseCustomIdSegments(customId, 3);
+  if (!segs) return null;
+  const [ownerId, importIdStr, itemIdStr] = segs;
+  const importId = Number(importIdStr);
+  const itemId = Number(itemIdStr);
   if (!isPositiveInt(importId)) return null;
   if (!isPositiveInt(itemId)) return null;
 
-  return { ownerId: parts[1], importId, itemId };
+  return { ownerId, importId, itemId };
 }
 
 export function buildCollectionSteamGameIdModalId(params: {
@@ -154,14 +156,15 @@ export function parseCollectionSteamGameIdModalId(customId: string): {
   importId: number;
   itemId: number;
 } | null {
-  const parts = customId.split(":");
-  if (parts.length !== 4) return null;
-  if (parts[0] !== STEAM_GAME_ID_MODAL_PREFIX) return null;
-  const importId = Number(parts[2]);
-  const itemId = Number(parts[3]);
+  if (!customId.startsWith(`${STEAM_GAME_ID_MODAL_PREFIX}:`)) return null;
+  const segs = parseCustomIdSegments(customId, 3);
+  if (!segs) return null;
+  const [ownerId, importIdStr, itemIdStr] = segs;
+  const importId = Number(importIdStr);
+  const itemId = Number(itemIdStr);
   if (!isPositiveInt(importId)) return null;
   if (!isPositiveInt(itemId)) return null;
-  return { ownerId: parts[1], importId, itemId };
+  return { ownerId, importId, itemId };
 }
 
 export function buildSteamImportItemMessage(params: {

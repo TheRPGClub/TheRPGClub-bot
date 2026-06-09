@@ -38,6 +38,7 @@ import {
 } from "../functions/InteractionUtils.js";
 import { buildComponentsV2Flags, buildTextReply } from "../functions/ComponentsV2Utils.js";
 import { decodeBase64Url, encodeBase64Url } from "../functions/CustomIdUtils.js";
+import { parseCustomIdSegments } from "../utilities/CustomIdUtils.js";
 import {
   buildRawModalCustomId,
   parseRawModalCustomId,
@@ -300,17 +301,13 @@ function buildRoundHistoryPageCustomId(state: IRoundHistoryFilterState): string 
 }
 
 function parseRoundHistoryPageCustomId(customId: string): IRoundHistoryFilterState | null {
-  const parts = customId.split(":");
-  if (parts.length !== 7 || parts[0] !== "round-history-page") {
-    return null;
-  }
-
-  const ownerUserId = parts[1];
-  const kindToken = parts[2];
-  const year = Number(parts[3]);
-  const sortToken = parts[4];
-  const page = Number(parts[5]);
-  const query = decodeQueryToken(parts[6] ?? "");
+  if (!customId.startsWith("round-history-page:")) return null;
+  const segs = parseCustomIdSegments(customId, 6);
+  if (!segs) return null;
+  const [ownerUserId, kindToken, yearStr, sortToken, pageStr, queryStr] = segs;
+  const year = Number(yearStr);
+  const page = Number(pageStr);
+  const query = decodeQueryToken(queryStr ?? "");
   if (
     !ownerUserId || !Number.isInteger(year) || !Number.isInteger(page) || page < 0 || query === null
   ) {

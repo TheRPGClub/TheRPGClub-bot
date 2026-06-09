@@ -20,6 +20,7 @@ import { buildSuperAdminHelpResponse, isSuperAdmin } from "./superadmin.command.
 import { buildTextReply } from "../functions/ComponentsV2Utils.js";
 import { safeDeferReply, safeReply, safeUpdate } from "../functions/InteractionUtils.js";
 import { decodeBase64Url, encodeBase64Url } from "../functions/CustomIdUtils.js";
+import { parseCustomIdSegments } from "../utilities/CustomIdUtils.js";
 import { GIVEAWAY_HUB_CHANNEL_ID } from "../config/channels.js";
 import { DISCORD_AUTOCOMPLETE_DESC_MAX } from "../config/textLimits.js";
 
@@ -392,9 +393,11 @@ function buildHelpCustomId(view: HelpMenuView, state: HelpStatePayload = {}): st
 function parseHelpCustomId(
   customId: string,
 ): { view: HelpMenuView; state: HelpStatePayload } | null {
-  const [prefix, view, encodedState] = customId.split(":");
-  if (prefix !== HELP_CUSTOM_ID_PREFIX || !view || !encodedState) return null;
-  if (!isHelpView(view)) return null;
+  if (!customId.startsWith(`${HELP_CUSTOM_ID_PREFIX}:`)) return null;
+  const segs = parseCustomIdSegments(customId, 2);
+  if (!segs) return null;
+  const [view, encodedState] = segs;
+  if (!view || !encodedState || !isHelpView(view)) return null;
 
   try {
     const state = JSON.parse(decodeBase64Url(encodedState)) as HelpStatePayload;

@@ -32,6 +32,7 @@ import { COMPLETIONATOR_SKIP_SENTINEL } from "./completion.types.js";
 import { parseCompletionDateInput } from "../profile.command.js";
 import { searchGameDbWithFallback, importGameFromIgdb } from "./completionator-parser.service.js";
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
+import { parseCustomIdSegments } from "../../utilities/CustomIdUtils.js";
 
 export class CompletionatorHandlersService {
   private workflowService: CompletionatorWorkflowService;
@@ -43,7 +44,9 @@ export class CompletionatorHandlersService {
   }
 
   async handleCompletionatorSelect(interaction: StringSelectMenuInteraction): Promise<void> {
-    const [, ownerId, importIdRaw, itemIdRaw] = interaction.customId.split(":");
+    const segs = parseCustomIdSegments(interaction.customId, 3);
+    if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+    const [ownerId, importIdRaw, itemIdRaw] = segs;
     if (interaction.user.id !== ownerId) {
       await safeReply(interaction, buildTextReply("This import prompt isn't for you.", true));
       return;
@@ -165,7 +168,9 @@ export class CompletionatorHandlersService {
   }
 
   async handleCompletionatorUpdateFields(interaction: StringSelectMenuInteraction): Promise<void> {
-    const [, ownerId, importIdRaw, itemIdRaw] = interaction.customId.split(":");
+    const segs = parseCustomIdSegments(interaction.customId, 3);
+    if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+    const [ownerId, importIdRaw, itemIdRaw] = segs;
     if (interaction.user.id !== ownerId) {
       await safeReply(interaction, buildTextReply("This import prompt isn't for you.", true));
       return;
@@ -241,7 +246,9 @@ export class CompletionatorHandlersService {
   }
 
   async handleCompletionatorAction(interaction: ButtonInteraction): Promise<void> {
-    const [, ownerId, importIdRaw, itemIdRaw, action] = interaction.customId.split(":");
+    const segs = parseCustomIdSegments(interaction.customId, 4);
+    if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+    const [ownerId, importIdRaw, itemIdRaw, action] = segs;
     if (interaction.user.id !== ownerId) {
       await safeReply(interaction, buildTextReply("This import prompt isn't for you.", true));
       return;
@@ -487,7 +494,9 @@ export class CompletionatorHandlersService {
   }
 
   async handleCompletionatorFormSelect(interaction: StringSelectMenuInteraction): Promise<void> {
-    const [, ownerId, importIdRaw, itemIdRaw, field] = interaction.customId.split(":");
+    const segs = parseCustomIdSegments(interaction.customId, 4);
+    if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+    const [ownerId, importIdRaw, itemIdRaw, field] = segs;
     if (interaction.user.id !== ownerId) {
       await safeReply(interaction, buildTextReply("This import prompt is not for you.", true));
       return;
@@ -586,7 +595,9 @@ export class CompletionatorHandlersService {
   }
 
   async handleCompletionatorDateModal(interaction: ModalSubmitInteraction): Promise<void> {
-    const [, ownerId, importIdRaw, itemIdRaw] = interaction.customId.split(":");
+    const segs = parseCustomIdSegments(interaction.customId, 3);
+    if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+    const [ownerId, importIdRaw, itemIdRaw] = segs;
     if (interaction.user.id !== ownerId) {
       await safeReply(interaction, buildTextReply("This import prompt is not for you.", true));
       return;
@@ -656,11 +667,12 @@ export class CompletionatorHandlersService {
   }
 
   async handleCompletionatorInputModal(interaction: ModalSubmitInteraction): Promise<void> {
-    const parts = interaction.customId.split(":");
-    const kind = parts[1] as CompletionatorModalKind;
-    const ownerId = parts[2];
-    const importId = Number(parts[3]);
-    const itemId = Number(parts[4]);
+    const segs = parseCustomIdSegments(interaction.customId, 4);
+    if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+    const [kindRaw, ownerId, importIdRaw2, itemIdRaw2] = segs;
+    const kind = kindRaw as CompletionatorModalKind;
+    const importId = Number(importIdRaw2);
+    const itemId = Number(itemIdRaw2);
 
     if (interaction.user.id !== ownerId) {
       await safeReply(interaction, buildTextReply("This import prompt is not for you.", true));
