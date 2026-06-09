@@ -1,4 +1,5 @@
 import { isPositiveInt } from "../utilities/ValidationUtils.js";
+import { sleep } from "../utilities/DelayUtils.js";
 
 type SteamIdentifierKind = "steamid64" | "profiles-url" | "vanity-url" | "vanity";
 export type SteamApiErrorCode =
@@ -92,10 +93,6 @@ const APP_STORE_METADATA_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 
 function getSteamApiKey(): string {
   return process.env.STEAM_WEB_API_KEY ?? process.env.STEAM_API_KEY ?? "";
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function jitter(maxMs: number): number {

@@ -4,6 +4,7 @@ import { Discord, On } from "discordx";
 import { joinThreadIfTarget } from "../services/ForumThreadJoinService.js";
 import { NOW_PLAYING_FORUM_ID, WHATCHA_PLAYING_CHANNEL_ID } from "../config/channels.js";
 import { COLOR_PRIMARY } from "../config/colors.js";
+import { sleep } from "../utilities/DelayUtils.js";
 
 @Discord()
 export class ThreadCreated {
@@ -17,10 +18,6 @@ export class ThreadCreated {
     // New Threads in Now Playing forum channel get announced in the Whatcha Playing channel
     if (thread.parentId === NOW_PLAYING_FORUM_ID) {
       // Always wait 10 seconds before fetching the starter message
-      const sleep = (ms: number): Promise<void> =>
-        new Promise<void>((resolve): void => {
-          setTimeout(resolve, ms);
-        });
       await sleep(10_000);
       // Resolve thread author (prefer starter message author; fallback to thread.ownerId)
       let authorName: string = 'Unknown';

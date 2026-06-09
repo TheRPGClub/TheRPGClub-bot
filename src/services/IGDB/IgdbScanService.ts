@@ -2,6 +2,7 @@ import oracledb from "oracledb";
 import { oraWithConnection } from "../../db/SqlManager.js";
 import Game from "../../classes/Game.js";
 import { igdbService } from "./IgdbService.js";
+import { sleep } from "../../utilities/DelayUtils.js";
 
 type IgdbScanConfig = {
   enabled: boolean;
@@ -22,8 +23,6 @@ const DEFAULT_SCAN_INTERVAL_MINUTES = 15;
 const DEFAULT_SCAN_BATCH_SIZE = 25;
 const DEFAULT_SCAN_MIN_AGE_DAYS = 30;
 const DEFAULT_SCAN_THROTTLE_MS = 300;
-
-const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
 function parseNumberEnv(name: string, fallback: number, min?: number): number {
   const raw = process.env[name];

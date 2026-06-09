@@ -4,6 +4,7 @@ import axios from "axios";
 import Game from "../classes/Game.js";
 import { igdbService } from "./IGDB/IgdbService.js";
 import { COLOR_PRIMARY, COLOR_SUCCESS } from "../config/colors.js";
+import { sleep, AUDIT_STEP_DELAY_MS } from "../utilities/DelayUtils.js";
 
 export type AutoAcceptResult = {
   updated: number;
@@ -83,7 +84,7 @@ async function performAutoAcceptImages(
       break;
     }
 
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+    await sleep(AUDIT_STEP_DELAY_MS);
   }
 
   return { updated, skipped, failed, logs };
@@ -162,7 +163,7 @@ async function performAutoAcceptVideos(
       break;
     }
 
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+    await sleep(AUDIT_STEP_DELAY_MS);
   }
 
   return { updated, skipped, failed, logs };
@@ -234,7 +235,7 @@ async function performAutoAcceptReleaseData(
       break;
     }
 
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+    await sleep(AUDIT_STEP_DELAY_MS);
   }
 
   return { updated, skipped, failed, logs };
@@ -305,7 +306,7 @@ async function performAutoAcceptDescriptions(
       break;
     }
 
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+    await sleep(AUDIT_STEP_DELAY_MS);
   }
 
   return { updated, skipped, failed, logs };
@@ -373,7 +374,7 @@ async function performAutoAcceptAll(
         `❌ Failed **${game.title}**: IGDB fetch error: ${err?.message ?? String(err)}`,
       );
       if (shouldStop?.()) break;
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      await sleep(AUDIT_STEP_DELAY_MS);
       continue;
     }
 
@@ -383,7 +384,7 @@ async function performAutoAcceptAll(
       stats.descriptions.skipped++;
       stats.releases.skipped++;
       if (shouldStop?.()) break;
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      await sleep(AUDIT_STEP_DELAY_MS);
       continue;
     }
 
@@ -471,7 +472,7 @@ async function performAutoAcceptAll(
     }
 
     if (shouldStop?.()) break;
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+    await sleep(AUDIT_STEP_DELAY_MS);
   }
 
   return stats;

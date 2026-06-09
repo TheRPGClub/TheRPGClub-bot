@@ -1,5 +1,6 @@
 import axios from "axios";
 import crypto from "node:crypto";
+import { sleep } from "../utilities/DelayUtils.js";
 
 const BACKBLAZE_AUTH_URL = "https://api.backblazeb2.com/b2api/v2/b2_authorize_account";
 
@@ -100,7 +101,7 @@ async function withRetry<T>(fn: () => Promise<T>, label: string): Promise<T> {
         `[Backblaze] ${label} failed (attempt ${attempt}/${RETRY_MAX_ATTEMPTS}), ` +
         `retrying in ${delay}ms...`,
       );
-      await new Promise((resolve) => setTimeout(resolve, delay));
+      await sleep(delay);
     }
   }
   throw lastError;

@@ -1,6 +1,7 @@
 import sharp from "sharp";
 import type { Client, GuildMember } from "discord.js";
 import Member from "../classes/Member.js";
+import { sleep } from "../utilities/DelayUtils.js";
 import {
   ADMIN_ROLE_ID,
   MEMBER_ROLE_ID,
@@ -186,7 +187,7 @@ async function syncAllUserEmoji(client: Client, forceRefresh = false): Promise<v
           emojiCache.set(userId, { emojiId: emoji.id, emojiName: storedName });
           claimedNames.add(storedName);
           created++;
-          await new Promise((resolve) => setTimeout(resolve, CREATION_THROTTLE_MS));
+          await sleep(CREATION_THROTTLE_MS);
         }
       } catch (err) {
         console.error(`[UserEmojiService] Failed to recreate emoji for ${member.displayName}:`, err);
@@ -200,7 +201,7 @@ async function syncAllUserEmoji(client: Client, forceRefresh = false): Promise<v
     const success = await createEmojiForMember(app, member);
     if (success) {
       created++;
-      await new Promise((resolve) => setTimeout(resolve, CREATION_THROTTLE_MS));
+      await sleep(CREATION_THROTTLE_MS);
     }
   }
 
