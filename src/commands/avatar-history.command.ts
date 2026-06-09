@@ -18,6 +18,7 @@ import {
 } from "@discordjs/builders";
 import { ButtonComponent, Discord, SelectMenuComponent, Slash, SlashOption } from "discordx";
 import {
+  deferWithShowInChat,
   replyIfNotOwner,
   safeDeferReply,
   safeReply,
@@ -271,7 +272,7 @@ export class AvatarHistoryCommand {
     }
 
     if (showAll === true) {
-      await safeDeferReply(interaction, { flags: buildComponentsV2Flags(ephemeral) });
+      await deferWithShowInChat(interaction, showInChat);
       const pageResult = await buildAvatarHistoryAllPage(
         interaction.guild,
         0,
@@ -304,7 +305,7 @@ export class AvatarHistoryCommand {
       return;
     }
 
-    await safeDeferReply(interaction, { flags: buildComponentsV2Flags(ephemeral) });
+    await deferWithShowInChat(interaction, showInChat);
 
     const target = member ?? interaction.user;
     const pageResult = await buildAvatarHistoryV2Page(target, 0);

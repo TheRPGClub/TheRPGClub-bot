@@ -31,6 +31,7 @@ import {
   getUpcomingNominationWindow,
 } from "../functions/NominationWindow.js";
 import {
+  deferWithShowInChat,
   safeDeferReply,
   safeReply,
   sanitizeUserInput,
@@ -303,7 +304,7 @@ export class NominateCommand {
       return;
     }
 
-    await safeDeferReply(interaction, { flags: buildComponentsV2Flags(ephemeral) });
+    await deferWithShowInChat(interaction, showInChat);
 
     try {
       const window = await getUpcomingNominationWindow();

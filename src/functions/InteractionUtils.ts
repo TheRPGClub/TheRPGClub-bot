@@ -7,7 +7,7 @@ import type {
 } from "discord.js";
 import { BOT_DEV_CHANNEL_ID } from "../config/channels.js";
 import { COMPONENTS_V2_FLAG } from "../config/flags.js";
-import { buildTextReply, safeV2TextContent } from "./ComponentsV2Utils.js";
+import { buildComponentsV2Flags, buildTextReply, safeV2TextContent } from "./ComponentsV2Utils.js";
 
 export type AnyRepliable = RepliableInteraction | CommandInteraction;
 
@@ -478,6 +478,14 @@ export async function safeUpdate(interaction: AnyRepliable, options: any): Promi
 
 export function ephemeralFlag(isEphemeral: boolean | undefined): number | undefined {
   return isEphemeral ? MessageFlags.Ephemeral : undefined;
+}
+
+/** Defers reply with ephemeral controlled by the showInChat option. */
+export async function deferWithShowInChat(
+  interaction: AnyRepliable,
+  showInChat: boolean | null | undefined,
+): Promise<void> {
+  await safeDeferReply(interaction, { flags: buildComponentsV2Flags(!showInChat) });
 }
 
 export function extractErrorMessage(err: unknown): string {

@@ -537,7 +537,7 @@ export class GiveawayCommand {
     interaction: CommandInteraction,
   ): Promise<void> {
     const ephemeral = !showInChat;
-    await safeDeferReply(interaction, { flags: ephemeral ? MessageFlags.Ephemeral : undefined });
+    await deferWithShowInChat(interaction, showInChat);
 
     const sessionId = `giveaway-${Date.now()}-${Math.floor(Math.random() * 100000)}`;
     const payload = await buildKeyListPayload(
