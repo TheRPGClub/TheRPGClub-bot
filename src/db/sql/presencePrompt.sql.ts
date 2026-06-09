@@ -5,7 +5,9 @@ export const PresencePromptHistorySql = {
     oracle: `INSERT INTO RPG_CLUB_PRESENCE_PROMPT_HISTORY
         (PROMPT_ID, USER_ID, GAME_TITLE, GAME_TITLE_NORM, STATUS)
        VALUES (:promptId, :userId, :gameTitle, :gameTitleNorm, 'PENDING')`,
-    postgres: ``,
+    postgres: `INSERT INTO rpg_club_presence_prompt_history
+        (prompt_id, user_id, game_title, game_title_norm, status)
+       VALUES (:promptId, :userId, :gameTitle, :gameTitleNorm, 'PENDING')`,
   } satisfies SqlEntry,
 
   markResolved: {
@@ -13,7 +15,10 @@ export const PresencePromptHistorySql = {
           SET STATUS = :status,
               RESOLVED_AT = SYSTIMESTAMP
         WHERE PROMPT_ID = :promptId`,
-    postgres: ``,
+    postgres: `UPDATE rpg_club_presence_prompt_history
+          SET status = :status,
+              resolved_at = NOW()
+        WHERE prompt_id = :promptId`,
   } satisfies SqlEntry,
 
   getLastPromptDate: {
@@ -23,7 +28,12 @@ export const PresencePromptHistorySql = {
           AND GAME_TITLE_NORM = :gameTitleNorm
         ORDER BY CREATED_AT DESC
         FETCH NEXT 1 ROWS ONLY`,
-    postgres: ``,
+    postgres: `SELECT created_at
+         FROM rpg_club_presence_prompt_history
+        WHERE user_id = :userId
+          AND game_title_norm = :gameTitleNorm
+        ORDER BY created_at DESC
+        LIMIT 1`,
   } satisfies SqlEntry,
 
   countPendingForGame: {
@@ -32,7 +42,11 @@ export const PresencePromptHistorySql = {
         WHERE USER_ID = :userId
           AND GAME_TITLE_NORM = :gameTitleNorm
           AND STATUS = 'PENDING'`,
-    postgres: ``,
+    postgres: `SELECT COUNT(*) AS cnt
+         FROM rpg_club_presence_prompt_history
+        WHERE user_id = :userId
+          AND game_title_norm = :gameTitleNorm
+          AND status = 'PENDING'`,
   } satisfies SqlEntry,
 
   countPendingForUser: {
@@ -40,7 +54,10 @@ export const PresencePromptHistorySql = {
          FROM RPG_CLUB_PRESENCE_PROMPT_HISTORY
         WHERE USER_ID = :userId
           AND STATUS = 'PENDING'`,
-    postgres: ``,
+    postgres: `SELECT COUNT(*) AS cnt
+         FROM rpg_club_presence_prompt_history
+        WHERE user_id = :userId
+          AND status = 'PENDING'`,
   } satisfies SqlEntry,
 };
 
@@ -51,7 +68,11 @@ export const PresencePromptOptOutSql = {
         WHERE USER_ID = :userId
           AND SCOPE = 'ALL'
           AND GAME_TITLE_NORM = :token`,
-    postgres: ``,
+    postgres: `SELECT COUNT(*) AS cnt
+         FROM rpg_club_presence_prompt_opts
+        WHERE user_id = :userId
+          AND scope = 'ALL'
+          AND game_title_norm = :token`,
   } satisfies SqlEntry,
 
   isOptedOutGame: {
@@ -60,13 +81,19 @@ export const PresencePromptOptOutSql = {
         WHERE USER_ID = :userId
           AND SCOPE = 'GAME'
           AND GAME_TITLE_NORM = :gameTitleNorm`,
-    postgres: ``,
+    postgres: `SELECT COUNT(*) AS cnt
+         FROM rpg_club_presence_prompt_opts
+        WHERE user_id = :userId
+          AND scope = 'GAME'
+          AND game_title_norm = :gameTitleNorm`,
   } satisfies SqlEntry,
 
   insertOptOut: {
     oracle: `INSERT INTO RPG_CLUB_PRESENCE_PROMPT_OPTS
           (USER_ID, SCOPE, GAME_TITLE, GAME_TITLE_NORM)
          VALUES (:userId, :scope, :gameTitle, :gameTitleNorm)`,
-    postgres: ``,
+    postgres: `INSERT INTO rpg_club_presence_prompt_opts
+          (user_id, scope, game_title, game_title_norm)
+         VALUES (:userId, :scope, :gameTitle, :gameTitleNorm)`,
   } satisfies SqlEntry,
 };

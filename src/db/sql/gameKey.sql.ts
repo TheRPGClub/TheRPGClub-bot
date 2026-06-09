@@ -10,26 +10,42 @@ const GAME_KEY_COLS = `KEY_ID,
         CREATED_AT,
         UPDATED_AT`;
 
+const GAME_KEY_COLS_PG = `key_id,
+        game_title,
+        platform,
+        key_value,
+        donor_user_id,
+        claimed_by_user_id,
+        claimed_at,
+        created_at,
+        updated_at`;
+
 export const GameKeySql = {
   create: {
     oracle: `INSERT INTO RPG_CLUB_GAME_KEYS (GAME_TITLE, PLATFORM, KEY_VALUE, DONOR_USER_ID)
      VALUES (:title, :platform, :keyValue, :donorUserId)
      RETURNING KEY_ID INTO :id`,
-    postgres: ``,
+    postgres: `INSERT INTO rpg_club_game_keys (game_title, platform, key_value, donor_user_id)
+     VALUES (:title, :platform, :keyValue, :donorUserId)
+     RETURNING key_id`,
   } satisfies SqlEntry,
 
   getById: {
     oracle: `SELECT ${GAME_KEY_COLS}
        FROM RPG_CLUB_GAME_KEYS
       WHERE KEY_ID = :id`,
-    postgres: ``,
+    postgres: `SELECT ${GAME_KEY_COLS_PG}
+       FROM rpg_club_game_keys
+      WHERE key_id = :id`,
   } satisfies SqlEntry,
 
   countAvailable: {
     oracle: `SELECT COUNT(*) AS TOTAL
        FROM RPG_CLUB_GAME_KEYS
       WHERE CLAIMED_BY_USER_ID IS NULL`,
-    postgres: ``,
+    postgres: `SELECT COUNT(*) AS total
+       FROM rpg_club_game_keys
+      WHERE claimed_by_user_id IS NULL`,
   } satisfies SqlEntry,
 
   listAvailable: {
@@ -38,7 +54,11 @@ export const GameKeySql = {
       WHERE CLAIMED_BY_USER_ID IS NULL
       ORDER BY UPPER(GAME_TITLE), KEY_ID
       OFFSET :offset ROWS FETCH NEXT :limit ROWS ONLY`,
-    postgres: ``,
+    postgres: `SELECT ${GAME_KEY_COLS_PG}
+       FROM rpg_club_game_keys
+      WHERE claimed_by_user_id IS NULL
+      ORDER BY UPPER(game_title), key_id
+      LIMIT :limit OFFSET :offset`,
   } satisfies SqlEntry,
 
   listByDonor: {
@@ -46,7 +66,10 @@ export const GameKeySql = {
        FROM RPG_CLUB_GAME_KEYS
       WHERE DONOR_USER_ID = :userId
       ORDER BY CREATED_AT DESC, KEY_ID DESC`,
-    postgres: ``,
+    postgres: `SELECT ${GAME_KEY_COLS_PG}
+       FROM rpg_club_game_keys
+      WHERE donor_user_id = :userId
+      ORDER BY created_at DESC, key_id DESC`,
   } satisfies SqlEntry,
 
   claim: {
@@ -55,11 +78,15 @@ export const GameKeySql = {
             CLAIMED_AT = SYSTIMESTAMP
       WHERE KEY_ID = :keyId
         AND CLAIMED_BY_USER_ID IS NULL`,
-    postgres: ``,
+    postgres: `UPDATE rpg_club_game_keys
+        SET claimed_by_user_id = :userId,
+            claimed_at = NOW()
+      WHERE key_id = :keyId
+        AND claimed_by_user_id IS NULL`,
   } satisfies SqlEntry,
 
   revoke: {
     oracle: `DELETE FROM RPG_CLUB_GAME_KEYS WHERE KEY_ID = :keyId`,
-    postgres: ``,
+    postgres: `DELETE FROM rpg_club_game_keys WHERE key_id = :keyId`,
   } satisfies SqlEntry,
 };

@@ -37,7 +37,16 @@ WHEN NOT MATCHED THEN
     s.ICON_TYPE, s.SOURCE_REF, s.ICON_URL,
     SYSTIMESTAMP, SYSTIMESTAMP, 1
   )`,
-    postgres: ``,
+    postgres: `INSERT INTO rpg_club_user_activity_icons
+  (user_id, username, activity_name, activity_name_norm, icon_type, source_ref, icon_url,
+   first_seen_at, last_seen_at, seen_count)
+  VALUES (:userId, :username, :activityName, :activityNameNorm, :iconType, :sourceRef, :iconUrl,
+          NOW(), NOW(), 1)
+  ON CONFLICT (user_id, activity_name_norm, icon_type, source_ref) DO UPDATE SET
+    username = EXCLUDED.username,
+    icon_url = EXCLUDED.icon_url,
+    last_seen_at = NOW(),
+    seen_count = rpg_club_user_activity_icons.seen_count + 1`,
   } satisfies SqlEntry,
 
   getRecentForUsers: (userGroupClauses: string) =>
@@ -55,7 +64,19 @@ WHEN NOT MATCHED THEN
          AND (:activityNameNorm IS NULL OR ACTIVITY_NAME_NORM = :activityNameNorm)
          AND (:iconType IS NULL OR ICON_TYPE = :iconType)
        ORDER BY LAST_SEEN_AT DESC`,
-      postgres: ``,
+      postgres: `SELECT
+         user_id,
+         activity_name,
+         icon_type,
+         source_ref,
+         icon_url,
+         last_seen_at
+       FROM rpg_club_user_activity_icons
+       WHERE (${userGroupClauses})
+         AND last_seen_at >= NOW() - (:days * INTERVAL '1 day')
+         AND (:activityNameNorm IS NULL OR activity_name_norm = :activityNameNorm)
+         AND (:iconType IS NULL OR icon_type = :iconType)
+       ORDER BY last_seen_at DESC`,
     }) satisfies SqlEntry,
 };
 
@@ -79,16 +100,22 @@ export const UserChannelMessageCountSql = {
                        CREATED_AT, UPDATED_AT)
                VALUES (s.user_id, s.channel_id, s.message_count, s.scanned,
                        SYSTIMESTAMP, SYSTIMESTAMP)`,
-    postgres: ``,
+    postgres: `INSERT INTO rpg_club_user_channel_counts
+              (user_id, channel_id, message_count, last_scanned_at, created_at, updated_at)
+              VALUES (:userId, :channelId, :count, :scanned, NOW(), NOW())
+              ON CONFLICT (user_id, channel_id) DO UPDATE SET
+                message_count = COALESCE(rpg_club_user_channel_counts.message_count, 0) + :count,
+                last_scanned_at = :scanned,
+                updated_at = NOW()`,
   } satisfies SqlEntry,
 
   getScannedChannelIds: {
     oracle: `SELECT DISTINCT CHANNEL_ID FROM RPG_CLUB_USER_CHANNEL_COUNTS`,
-    postgres: ``,
+    postgres: `SELECT DISTINCT channel_id FROM rpg_club_user_channel_counts`,
   } satisfies SqlEntry,
 
   getChannelScanMeta: {
     oracle: `SELECT CHANNEL_ID, LAST_SCANNED_AT FROM RPG_CLUB_USER_CHANNEL_COUNTS`,
-    postgres: ``,
+    postgres: `SELECT channel_id, last_scanned_at FROM rpg_club_user_channel_counts`,
   } satisfies SqlEntry,
 };

@@ -12,7 +12,16 @@ export const GameDbCsvImportMappingSql = {
             UPDATED_AT
        FROM RPG_CLUB_GAMEDB_IMPORT_TITLE_MAP
       WHERE TITLE_NORM = :titleNorm`,
-    postgres: ``,
+    postgres: `SELECT map_id,
+            title_raw,
+            title_norm,
+            gamedb_game_id,
+            status,
+            created_by,
+            created_at,
+            updated_at
+       FROM rpg_club_gamedb_import_title_map
+      WHERE title_norm = :titleNorm`,
   } satisfies SqlEntry,
 
   upsert: {
@@ -30,6 +39,12 @@ export const GameDbCsvImportMappingSql = {
      WHEN NOT MATCHED THEN
        INSERT (TITLE_RAW, TITLE_NORM, GAMEDB_GAME_ID, STATUS, CREATED_BY)
        VALUES (:titleRaw, :titleNorm, :gameDbGameId, :status, :createdBy)`,
-    postgres: ``,
+    postgres: `INSERT INTO rpg_club_gamedb_import_title_map (title_raw, title_norm, gamedb_game_id, status, created_by)
+       VALUES (:titleRaw, :titleNorm, :gameDbGameId, :status, :createdBy)
+       ON CONFLICT (title_norm) DO UPDATE SET
+         title_raw = EXCLUDED.title_raw,
+         gamedb_game_id = EXCLUDED.gamedb_game_id,
+         status = EXCLUDED.status,
+         created_by = EXCLUDED.created_by`,
   } satisfies SqlEntry,
 };

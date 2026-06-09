@@ -5,7 +5,9 @@ export const SuggestionSql = {
     oracle: `INSERT INTO RPG_CLUB_SUGGESTIONS (TITLE, DETAILS, LABELS, CREATED_BY, CREATED_BY_NAME)
        VALUES (:title, :details, :labels, :createdBy, :createdByName)
        RETURNING SUGGESTION_ID INTO :id`,
-    postgres: ``,
+    postgres: `INSERT INTO rpg_club_suggestions (title, details, labels, created_by, created_by_name)
+       VALUES (:title, :details, :labels, :createdBy, :createdByName)
+       RETURNING suggestion_id`,
   } satisfies SqlEntry,
 
   list: {
@@ -20,12 +22,22 @@ export const SuggestionSql = {
        FROM RPG_CLUB_SUGGESTIONS
       ORDER BY CREATED_AT DESC, SUGGESTION_ID DESC
       FETCH FIRST :limit ROWS ONLY`,
-    postgres: ``,
+    postgres: `SELECT suggestion_id,
+            title,
+            details,
+            labels,
+            created_by,
+            created_by_name,
+            created_at,
+            updated_at
+       FROM rpg_club_suggestions
+      ORDER BY created_at DESC, suggestion_id DESC
+      LIMIT :limit`,
   } satisfies SqlEntry,
 
   count: {
     oracle: `SELECT COUNT(*) AS TOTAL FROM RPG_CLUB_SUGGESTIONS`,
-    postgres: ``,
+    postgres: `SELECT COUNT(*) AS total FROM rpg_club_suggestions`,
   } satisfies SqlEntry,
 
   getById: {
@@ -39,12 +51,21 @@ export const SuggestionSql = {
             UPDATED_AT
        FROM RPG_CLUB_SUGGESTIONS
       WHERE SUGGESTION_ID = :id`,
-    postgres: ``,
+    postgres: `SELECT suggestion_id,
+            title,
+            details,
+            labels,
+            created_by,
+            created_by_name,
+            created_at,
+            updated_at
+       FROM rpg_club_suggestions
+      WHERE suggestion_id = :id`,
   } satisfies SqlEntry,
 
   delete: {
     oracle: `DELETE FROM RPG_CLUB_SUGGESTIONS WHERE SUGGESTION_ID = :id`,
-    postgres: ``,
+    postgres: `DELETE FROM rpg_club_suggestions WHERE suggestion_id = :id`,
   } satisfies SqlEntry,
 };
 
@@ -53,7 +74,9 @@ export const SuggestionReviewSessionSql = {
     oracle: `INSERT INTO RPG_CLUB_SUGGESTION_REVIEW_SESSIONS
          (SESSION_ID, REVIEWER_ID, SUGGESTION_IDS, CURRENT_INDEX, TOTAL_COUNT)
        VALUES (:sessionId, :reviewerId, :suggestionIds, :currentIndex, :totalCount)`,
-    postgres: ``,
+    postgres: `INSERT INTO rpg_club_suggestion_review_sessions
+         (session_id, reviewer_id, suggestion_ids, current_index, total_count)
+       VALUES (:sessionId, :reviewerId, :suggestionIds, :currentIndex, :totalCount)`,
   } satisfies SqlEntry,
 
   getById: {
@@ -66,7 +89,15 @@ export const SuggestionReviewSessionSql = {
             UPDATED_AT
        FROM RPG_CLUB_SUGGESTION_REVIEW_SESSIONS
       WHERE SESSION_ID = :sessionId`,
-    postgres: ``,
+    postgres: `SELECT session_id,
+            reviewer_id,
+            suggestion_ids,
+            current_index,
+            total_count,
+            created_at,
+            updated_at
+       FROM rpg_club_suggestion_review_sessions
+      WHERE session_id = :sessionId`,
   } satisfies SqlEntry,
 
   update: {
@@ -76,21 +107,26 @@ export const SuggestionReviewSessionSql = {
             CURRENT_INDEX = :currentIndex,
             TOTAL_COUNT = :totalCount
       WHERE SESSION_ID = :sessionId`,
-    postgres: ``,
+    postgres: `UPDATE rpg_club_suggestion_review_sessions
+        SET reviewer_id = :reviewerId,
+            suggestion_ids = :suggestionIds,
+            current_index = :currentIndex,
+            total_count = :totalCount
+      WHERE session_id = :sessionId`,
   } satisfies SqlEntry,
 
   delete: {
     oracle: `DELETE FROM RPG_CLUB_SUGGESTION_REVIEW_SESSIONS WHERE SESSION_ID = :sessionId`,
-    postgres: ``,
+    postgres: `DELETE FROM rpg_club_suggestion_review_sessions WHERE session_id = :sessionId`,
   } satisfies SqlEntry,
 
   deleteForReviewer: {
     oracle: `DELETE FROM RPG_CLUB_SUGGESTION_REVIEW_SESSIONS WHERE REVIEWER_ID = :reviewerId`,
-    postgres: ``,
+    postgres: `DELETE FROM rpg_club_suggestion_review_sessions WHERE reviewer_id = :reviewerId`,
   } satisfies SqlEntry,
 
   deleteExpired: {
     oracle: `DELETE FROM RPG_CLUB_SUGGESTION_REVIEW_SESSIONS WHERE CREATED_AT < :cutoff`,
-    postgres: ``,
+    postgres: `DELETE FROM rpg_club_suggestion_review_sessions WHERE created_at < :cutoff`,
   } satisfies SqlEntry,
 };

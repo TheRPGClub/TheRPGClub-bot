@@ -10,7 +10,14 @@ export const RssFeedSql = {
             EXCLUDE_KEYWORDS
        FROM RPG_CLUB_RSS_FEEDS
       ORDER BY FEED_ID`,
-    postgres: ``,
+    postgres: `SELECT feed_id,
+            feed_name,
+            feed_url,
+            channel_id,
+            include_keywords,
+            exclude_keywords
+       FROM rpg_club_rss_feeds
+      ORDER BY feed_id`,
   } satisfies SqlEntry,
 
   addFeed: {
@@ -28,20 +35,36 @@ export const RssFeedSql = {
        :excludes
      )
      RETURNING FEED_ID INTO :id`,
-    postgres: ``,
+    postgres: `INSERT INTO rpg_club_rss_feeds (
+       feed_name,
+       feed_url,
+       channel_id,
+       include_keywords,
+       exclude_keywords
+     ) VALUES (
+       :feedName,
+       :feedUrl,
+       :channelId,
+       :includes,
+       :excludes
+     )
+     RETURNING feed_id`,
   } satisfies SqlEntry,
 
   removeFeed: {
     oracle: `DELETE FROM RPG_CLUB_RSS_FEEDS WHERE FEED_ID = :id`,
-    postgres: ``,
+    postgres: `DELETE FROM rpg_club_rss_feeds WHERE feed_id = :id`,
   } satisfies SqlEntry,
 
+  // Caller must pass lowercase column=value expressions for Postgres (e.g. "feed_name = :feedName")
   updateFeed: (sets: string[]) =>
     ({
       oracle: `UPDATE RPG_CLUB_RSS_FEEDS
         SET ${sets.join(", ")}
       WHERE FEED_ID = :feedId`,
-      postgres: ``,
+      postgres: `UPDATE rpg_club_rss_feeds
+        SET ${sets.join(", ")}
+      WHERE feed_id = :feedId`,
     }) satisfies SqlEntry,
 
   markItemsSeen: {
@@ -58,7 +81,10 @@ export const RssFeedSql = {
      WHEN NOT MATCHED THEN
        INSERT (FEED_ID, ITEM_ID_HASH, ITEM_GUID, ITEM_LINK, PUBLISHED_AT, FIRST_SEEN_AT)
        VALUES (s.feed_id, s.item_id_hash, s.item_guid, s.item_link, s.published_at, SYSTIMESTAMP)`,
-    postgres: ``,
+    postgres: `INSERT INTO rpg_club_rss_feed_items
+       (feed_id, item_id_hash, item_guid, item_link, published_at, first_seen_at)
+       VALUES (:feedId, :itemIdHash, :itemGuid, :itemLink, :publishedAt, NOW())
+       ON CONFLICT (feed_id, item_id_hash) DO NOTHING`,
   } satisfies SqlEntry,
 
   isItemSeen: {
@@ -66,7 +92,10 @@ export const RssFeedSql = {
        FROM RPG_CLUB_RSS_FEED_ITEMS
       WHERE FEED_ID = :feedId
         AND ITEM_ID_HASH = :hash`,
-    postgres: ``,
+    postgres: `SELECT 1 AS found
+       FROM rpg_club_rss_feed_items
+      WHERE feed_id = :feedId
+        AND item_id_hash = :hash`,
   } satisfies SqlEntry,
 
   getSeenItemHashes: (bindPlaceholders: string) =>
@@ -75,6 +104,9 @@ export const RssFeedSql = {
            FROM RPG_CLUB_RSS_FEED_ITEMS
           WHERE FEED_ID = :feedId
             AND ITEM_ID_HASH IN (${bindPlaceholders})`,
-      postgres: ``,
+      postgres: `SELECT item_id_hash
+           FROM rpg_club_rss_feed_items
+          WHERE feed_id = :feedId
+            AND item_id_hash IN (${bindPlaceholders})`,
     }) satisfies SqlEntry,
 };
