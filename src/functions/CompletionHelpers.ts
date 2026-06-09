@@ -248,7 +248,7 @@ export async function promptRemoveFromNowPlaying(
     | ModalSubmitInteraction,
   gameTitle: string,
 ): Promise<boolean> {
-  const promptId = `np-remove:${interaction.user.id}`;
+  const promptId = `np-remove-confirm:${interaction.user.id}`;
   const yesId = `${promptId}:yes`;
   const noId = `${promptId}:no`;
   const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
