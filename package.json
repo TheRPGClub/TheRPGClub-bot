@@ -53,7 +53,7 @@
   "devDependencies": {
     "@types/fast-levenshtein": "^0.0.4",
     "@types/luxon": "^3.7.1",
-    "@types/node": "^20.14.4",
+    "@types/node": "^20.19.42",
     "@types/oracledb": "^6.10.0",
     "@types/pg": "^8.20.0",
     "@types/user-agents": "^1.0.4",
