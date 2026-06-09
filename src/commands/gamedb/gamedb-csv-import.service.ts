@@ -15,7 +15,7 @@ import {
 } from "../../functions/CsvUtils.js";
 import { safeV2TextContent } from "../../functions/ComponentsV2Utils.js";
 import { formatPlatformDisplayName } from "../../functions/PlatformDisplay.js";
-import { formatTableDate } from "../profile.command.js";
+import { formatTableDate } from "../../functions/DateFormatUtils.js";
 import { igdbService, type IGDBGame } from "../../services/IGDB/IgdbService.js";
 import { type IgdbSelectOption } from "../../services/IGDB/IgdbSelectService.js";
 import Game from "../../classes/Game.js";

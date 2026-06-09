@@ -10,7 +10,7 @@ import {
   renderUsernameWithEmoji,
 } from "../services/UserEmojiService.js";
 import { safeV2TextContent } from "./ComponentsV2Utils.js";
-import { formatTableDate } from "../commands/profile.command.js";
+import { formatTableDate } from "./DateFormatUtils.js";
 
 export interface IJournalSelectEntry {
   gameId: number;

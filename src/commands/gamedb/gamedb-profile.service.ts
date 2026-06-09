@@ -20,7 +20,7 @@ import { SeparatorSpacingSize } from "discord-api-types/v10";
 import { safeReply } from "../../functions/InteractionUtils.js";
 import { buildTextReply, safeV2TextContent } from "../../functions/ComponentsV2Utils.js";
 import { formatPlatformDisplayName } from "../../functions/PlatformDisplay.js";
-import { formatTableDate } from "../profile.command.js";
+import { formatTableDate } from "../../functions/DateFormatUtils.js";
 import { getHltbCacheByGameId } from "../../classes/HltbCache.js";
 import { getThreadsByGameId } from "../../classes/Thread.js";
 import { renderUsernameWithEmoji } from "../../services/UserEmojiService.js";

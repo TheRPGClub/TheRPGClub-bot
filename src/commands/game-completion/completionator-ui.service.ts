@@ -34,7 +34,7 @@ import type {
 } from "./completion.types.js";
 import { COMPLETION_TYPES } from "../profile.command.js";
 import { GAMEDB_CSV_PLATFORM_MAP } from "../../config/gamedbCsvPlatformMap.js";
-import { formatTableDate } from "../profile.command.js";
+import { formatTableDate } from "../../functions/DateFormatUtils.js";
 import { formatPlatformDisplayName } from "../../functions/PlatformDisplay.js";
 import { COMPLETIONATOR_MATCH_THUMBNAIL_NAME } from "./completion.types.js";
 import { isInteractionSettled, safeReply, safeUpdate } from "../../functions/InteractionUtils.js";

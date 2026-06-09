@@ -44,11 +44,7 @@ import {
   AVATAR_HISTORY_PAGE_SIZE,
   AVATAR_ALL_VIEW_PAGE_SIZE as ALL_VIEW_PAGE_SIZE,
 } from "../config/pagination.js";
-
-function formatTimestamp(date: Date): string {
-  const seconds = Math.floor(date.getTime() / 1000);
-  return `<t:${seconds}:F>`;
-}
+import { formatDiscordTimestamp } from "../functions/DateFormatUtils.js";
 
 type AvatarHistoryV2Page = {
   containers: ContainerBuilder[];
@@ -77,7 +73,7 @@ async function buildAvatarHistoryV2Page(
 
   history.forEach((entry, idx) => {
     const number = offset + idx + 1;
-    const description = `#${number} of ${totalCount} - ${formatTimestamp(entry.changedAt)}`;
+    const description = `#${number} of ${totalCount} - ${formatDiscordTimestamp(entry.changedAt)}`;
     if (entry.avatarUrl) {
       gallery.addItems(
         new MediaGalleryItemBuilder().setURL(entry.avatarUrl).setDescription(description),

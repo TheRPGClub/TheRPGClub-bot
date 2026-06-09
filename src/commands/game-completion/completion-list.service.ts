@@ -13,11 +13,8 @@ import {
 import { ContainerBuilder, TextDisplayBuilder } from "@discordjs/builders";
 import Member from "../../classes/Member.js";
 import Game from "../../classes/Game.js";
-import {
-  COMPLETION_PAGE_SIZE,
-  formatDiscordTimestamp,
-  formatTableDate,
-} from "../profile.command.js";
+import { COMPLETION_PAGE_SIZE } from "../profile.command.js";
+import { formatDiscordTimestamp, formatTableDate } from "../../functions/DateFormatUtils.js";
 import { formatPlatformDisplayName } from "../../functions/PlatformDisplay.js";
 import { safeReply, safeUpdate } from "../../functions/InteractionUtils.js";
 import { buildTextReply, safeV2TextContent } from "../../functions/ComponentsV2Utils.js";

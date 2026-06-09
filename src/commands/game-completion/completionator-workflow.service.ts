@@ -27,8 +27,8 @@ import {
   resolveNowPlayingRemoval,
 } from "./completion-helpers.js";
 import { notifyUnknownCompletionPlatform } from "../../functions/CompletionHelpers.js";
-import { formatTableDate } from "../profile.command.js";
 import { COMPLETION_TYPES, type CompletionType } from "../profile.command.js";
+import { formatTableDate } from "../../functions/DateFormatUtils.js";
 import { STANDARD_PLATFORM_IDS } from "../../config/standardPlatforms.js";
 import { igdbService } from "../../services/IGDB/IgdbService.js";
 import { importGameFromIgdb } from "./completionator-parser.service.js";

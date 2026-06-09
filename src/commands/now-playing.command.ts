@@ -79,11 +79,13 @@ import {
 import {
   COMPLETION_TYPES,
   type CompletionType,
+  parseCompletionDateInput,
+} from "../commands/profile.command.js";
+import {
   formatDiscordTimestamp,
   formatPlaytimeHours,
   formatTableDate,
-  parseCompletionDateInput,
-} from "../commands/profile.command.js";
+} from "../functions/DateFormatUtils.js";
 import { parseTitleWithYear } from "../functions/GameTitleAutocompleteUtils.js";
 import { COMPONENTS_V2_FLAG } from "../config/flags.js";
 import { STANDARD_PLATFORM_IDS } from "../config/standardPlatforms.js";

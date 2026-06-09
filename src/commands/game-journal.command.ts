@@ -59,7 +59,7 @@ import {
   JOURNAL_TITLE_INPUT_ID,
   JOURNAL_BODY_INPUT_ID,
 } from "../config/journalConstants.js";
-import { formatTableDate } from "./profile.command.js";
+import { formatTableDate } from "../functions/DateFormatUtils.js";
 import {
   trackNowPlayingJournalContext,
   refreshJournalMessages,
