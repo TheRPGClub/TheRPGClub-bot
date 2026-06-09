@@ -13,9 +13,9 @@ import {
   MessageFlags,
 } from "discord.js";
 import { ButtonComponent, Discord, SelectMenuComponent, Slash } from "discordx";
-import { isAdmin } from "./admin.command.js";
+import { isAdmin, isModerator } from "./admin/admin-auth.utils.js";
 import { buildAdminHelpResponse } from "./admin/admin-help.service.js";
-import { buildModHelpResponse, isModerator } from "./mod.command.js";
+import { buildModHelpResponse } from "./mod.command.js";
 import { buildSuperAdminHelpResponse, isSuperAdmin } from "./superadmin.command.js";
 import { buildTextReply } from "../functions/ComponentsV2Utils.js";
 import { safeDeferReply, safeReply, safeUpdate } from "../functions/InteractionUtils.js";

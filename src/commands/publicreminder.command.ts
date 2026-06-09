@@ -8,7 +8,7 @@ import {
   sanitizeUserInput,
 } from "../functions/InteractionUtils.js";
 import { buildTextReply } from "../functions/ComponentsV2Utils.js";
-import { isAdmin } from "./admin.command.js";
+import { isAdmin } from "./admin/admin-auth.utils.js";
 import {
   createReminder,
   deleteReminder,

@@ -423,6 +423,3 @@ export class Admin {
     });
   }
 }
-
-// Export isAdmin for external use
-export { isAdmin };
