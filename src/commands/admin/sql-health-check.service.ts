@@ -1,4 +1,5 @@
 import { EmbedBuilder, MessageFlags } from "discord.js";
+import { COLOR_HEALTH_OK, COLOR_HEALTH_FAIL } from "../../config/colors.js";
 import type { CommandInteraction } from "discord.js";
 import { oraWithConnection } from "../../db/SqlManager.js";
 import { getPostgresPool } from "../../db/postgresClient.js";
@@ -48,7 +49,7 @@ export async function handleSqlHealthCheck(
 
   const embed = new EmbedBuilder()
     .setTitle(`${result.ok ? "✅" : "❌"} ${label} Health Check`)
-    .setColor(result.ok ? 0x57f287 : 0xed4245)
+    .setColor(result.ok ? COLOR_HEALTH_OK : COLOR_HEALTH_FAIL)
     .setTimestamp();
 
   if (result.ok && result.latencyMs !== null) {

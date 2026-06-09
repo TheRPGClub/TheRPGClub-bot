@@ -29,6 +29,7 @@ import {
   buildTextContainer,
 } from "../functions/ComponentsV2Utils.js";
 import { shouldPrompt, markPrompted, getGameReleaseYear } from "./ThreadLinkPromptCache.js";
+import { COLOR_BLUE_INFO } from "../config/colors.js";
 
 function hasIgdbConfig(): boolean {
   return Boolean(process.env.IGDB_CLIENT_ID && process.env.IGDB_CLIENT_SECRET);
@@ -42,7 +43,7 @@ function buildPromptEmbed(thread: ThreadChannel): EmbedBuilder {
         "Linking helps show the right cover art, metadata, and GOTM/NR-GOTM info.\n\n" +
         "Choose an option below.",
     )
-    .setColor(0x2d7ff9)
+    .setColor(COLOR_BLUE_INFO)
     .setFooter({ text: thread.name ?? thread.id });
 }
 

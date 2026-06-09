@@ -3,7 +3,7 @@ import type { ArgsOf, Client } from "discordx";
 import { Discord, On } from "discordx";
 import { formatTimestampWithDay } from "../utilities/DiscordLogUtils.js";
 import { JOIN_LEAVE_LOG_CHANNEL_ID } from "../config/channels.js";
-import { COLOR_WARNING } from "../config/colors.js";
+import { COLOR_WARNING, COLOR_NEUTRAL } from "../config/colors.js";
 import { sleep } from "../utilities/DelayUtils.js";
 const KICK_LOG_WINDOW_MS = 30_000;
 const KICK_LOG_RETRY_COUNT = 3;
@@ -94,7 +94,7 @@ export class GuildMemberRemove {
 
     const embed = new EmbedBuilder()
       .setTitle("User Left")
-      .setColor(0x95a5a6)
+      .setColor(COLOR_NEUTRAL)
       .addFields(
         { name: "User", value: `<@${member.user.id}>\n${username}` },
         {
