@@ -92,6 +92,7 @@ import {
 } from "./game-completion/completion.types.js";
 import Game from "../classes/Game.js";
 import Member from "../classes/Member.js";
+import { isPositiveInt } from "../utilities/ValidationUtils.js";
 
 // Note: This is a simplified working version that delegates complex Completionator logic
 // to service files. The full implementation would import and delegate all handlers.
@@ -339,7 +340,7 @@ export class GameCompletionCommands {
         yearFilter = "unknown";
       } else {
         const parsed = Number(trimmed);
-        if (!Number.isInteger(parsed) || parsed <= 0) {
+        if (!isPositiveInt(parsed)) {
           await safeReply(interaction, 
             "Year must be a valid integer (e.g., 2024) or 'unknown'.",
           );
@@ -457,7 +458,7 @@ export class GameCompletionCommands {
         yearFilter = "unknown";
       } else {
         const parsed = Number(trimmed);
-        if (!Number.isInteger(parsed) || parsed <= 0) {
+        if (!isPositiveInt(parsed)) {
           await safeReply(interaction, 
             "Year must be a valid integer (e.g., 2024) or 'unknown'.",
           );

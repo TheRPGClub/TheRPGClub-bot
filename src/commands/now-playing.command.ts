@@ -97,6 +97,7 @@ import {
 } from "./now-playing-help.js";
 
 import { renderUsernameWithEmoji } from "../services/UserEmojiService.js";
+import { isPositiveInt } from "../utilities/ValidationUtils.js";
 
 const MAX_NOW_PLAYING_NOTE_LEN = 500;
 const NOW_PLAYING_SEARCH_LIMIT = 10;
@@ -1782,7 +1783,7 @@ export class NowPlayingCommand {
     }
 
     const gameId = Number(gameIdRaw);
-    if (!Number.isInteger(gameId) || gameId <= 0) {
+    if (!isPositiveInt(gameId)) {
       const container = new ContainerBuilder().addTextDisplayComponents(
         new TextDisplayBuilder().setContent("Invalid selection."),
       );
@@ -2073,7 +2074,7 @@ export class NowPlayingCommand {
       return;
     }
     const gameId = Number(choice);
-    if (!Number.isInteger(gameId) || gameId <= 0) {
+    if (!isPositiveInt(gameId)) {
       const container = new ContainerBuilder().addTextDisplayComponents(
         new TextDisplayBuilder().setContent("Invalid selection. Please try again."),
       );
@@ -2136,7 +2137,7 @@ export class NowPlayingCommand {
     }
 
     const platformId = Number(interaction.values?.[0]);
-    if (!Number.isInteger(platformId) || platformId <= 0) {
+    if (!isPositiveInt(platformId)) {
       const container = new ContainerBuilder().addTextDisplayComponents(
         new TextDisplayBuilder().setContent("Invalid platform selection."),
       );
@@ -2684,12 +2685,7 @@ export class NowPlayingCommand {
 
     const gameId = Number(gameIdRaw);
     const platformId = Number(interaction.values?.[0]);
-    if (
-      !Number.isInteger(gameId) ||
-      gameId <= 0 ||
-      !Number.isInteger(platformId) ||
-      platformId <= 0
-    ) {
+    if (!isPositiveInt(gameId) || !isPositiveInt(platformId)) {
       await safeReply(interaction, buildTextReply("Invalid platform selection.", true));
       return;
     }
@@ -2760,7 +2756,7 @@ export class NowPlayingCommand {
     }
 
     const gameId = Number(interaction.values?.[0]);
-    if (!Number.isInteger(gameId) || gameId <= 0) {
+    if (!isPositiveInt(gameId)) {
       await safeReply(interaction, buildTextReply("Invalid selection.", true));
       return;
     }
@@ -2792,7 +2788,7 @@ export class NowPlayingCommand {
       return;
     }
     const gameId = Number(gameIdRaw);
-    if (!Number.isInteger(gameId) || gameId <= 0) {
+    if (!isPositiveInt(gameId)) {
       await safeReply(interaction, buildTextReply("Invalid selection.", true));
       return;
     }
@@ -3008,7 +3004,7 @@ export class NowPlayingCommand {
     let updated = false;
     if (legacyGameIdRaw) {
       const gameId = Number(legacyGameIdRaw);
-      if (!Number.isInteger(gameId) || gameId <= 0) {
+      if (!isPositiveInt(gameId)) {
         await safeReply(interaction, buildTextReply("Invalid selection.", true));
         return;
       }
@@ -3100,7 +3096,7 @@ export class NowPlayingCommand {
     }
 
     const gameId = Number(interaction.values?.[0]);
-    if (!Number.isInteger(gameId) || gameId <= 0) {
+    if (!isPositiveInt(gameId)) {
       await safeReply(interaction, buildTextReply("Invalid selection.", true));
       return;
     }
@@ -3152,7 +3148,7 @@ export class NowPlayingCommand {
     }
 
     const gameId = Number(gameIdRaw);
-    if (!Number.isInteger(gameId) || gameId <= 0) {
+    if (!isPositiveInt(gameId)) {
       await safeReply(interaction, buildTextReply("Invalid selection.", true));
       return;
     }
@@ -3180,7 +3176,7 @@ export class NowPlayingCommand {
     }
 
     const gameId = Number(gameIdRaw);
-    if (!Number.isInteger(gameId) || gameId <= 0) {
+    if (!isPositiveInt(gameId)) {
       const container = new ContainerBuilder().addTextDisplayComponents(
         new TextDisplayBuilder().setContent("Invalid selection."),
       );
@@ -3952,7 +3948,7 @@ export class NowPlayingCommand {
       return;
     }
     const gameId = Number(gameIdRaw);
-    if (!Number.isInteger(gameId) || gameId <= 0) {
+    if (!isPositiveInt(gameId)) {
       await safeReply(interaction, buildTextReply("Invalid selection.", true));
       return;
     }
@@ -4798,7 +4794,7 @@ export class NowPlayingCommand {
     );
 
     const selectOptions = entries
-      .filter((entry) => Number.isInteger(entry.gameId))
+      .filter((entry) => isPositiveInt(entry.gameId))
       .slice(0, 25)
       .map((entry) => ({
         label: formatEntryTitleWithPlatform(entry).slice(0, 100),
@@ -4832,7 +4828,7 @@ export class NowPlayingCommand {
       return;
     }
     const gameId = Number(interaction.values?.[0]);
-    if (!Number.isInteger(gameId) || gameId <= 0) {
+    if (!isPositiveInt(gameId)) {
       const container = new ContainerBuilder().addTextDisplayComponents(
         new TextDisplayBuilder().setContent("Invalid game selection."),
       );

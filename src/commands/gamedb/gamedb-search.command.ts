@@ -49,6 +49,7 @@ import {
   trimTextDisplayContent,
 } from "./gamedb-profile.service.js";
 import { handleNoResults } from "./gamedb-add.command.js";
+import { isPositiveInt } from "../../utilities/ValidationUtils.js";
 
 function formatUpcomingDate(date: Date | null | undefined): string {
   if (!date) return "";
@@ -302,16 +303,16 @@ export class GameDbSearchCommand {
       const filters: ISearchFilters = {};
       if (upcomingRelease === true) filters.upcomingRelease = true;
       const platformId = platformValue ? Number(platformValue) : null;
-      if (platformId && Number.isInteger(platformId) && platformId > 0) {
+      if (platformId && isPositiveInt(platformId)) {
         filters.platformId = platformId;
       }
-      if (year && Number.isInteger(year) && year > 0) filters.year = year;
+      if (year && isPositiveInt(year)) filters.year = year;
       const developerId = developerValue ? Number(developerValue) : null;
-      if (developerId && Number.isInteger(developerId) && developerId > 0) {
+      if (developerId && isPositiveInt(developerId)) {
         filters.developerId = developerId;
       }
       const publisherId = publisherValue ? Number(publisherValue) : null;
-      if (publisherId && Number.isInteger(publisherId) && publisherId > 0) {
+      if (publisherId && isPositiveInt(publisherId)) {
         filters.publisherId = publisherId;
       }
       const hasFilters =

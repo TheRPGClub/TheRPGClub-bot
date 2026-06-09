@@ -47,6 +47,7 @@ import { BOT_DEV_PING_USER_ID } from "../config/users.js";
 import { COMPONENTS_V2_FLAG } from "../config/flags.js";
 import { buildTextReply, safeV2TextContent } from "../functions/ComponentsV2Utils.js";
 import { logRawModal } from "../services/raw-modal/RawModalLogging.js";
+import { isPositiveInt } from "../utilities/ValidationUtils.js";
 
 const SUGGESTION_APPROVE_PREFIX = "suggestion-approve";
 const SUGGESTION_CREATE_MODAL_ID = "suggestion-create-modal";
@@ -127,7 +128,7 @@ function parseSuggestionReviewDecisionModalId(
     return null;
   }
   const suggestionId = Number(parts[2]);
-  if (!Number.isInteger(suggestionId) || suggestionId <= 0) {
+  if (!isPositiveInt(suggestionId)) {
     return null;
   }
   const reviewerId = parts[1];
@@ -440,7 +441,7 @@ function parseSuggestionApproveId(id: string): number | null {
     return null;
   }
   const suggestionId = Number(parts[1]);
-  return Number.isInteger(suggestionId) && suggestionId > 0 ? suggestionId : null;
+  return isPositiveInt(suggestionId) ? suggestionId : null;
 }
 
 async function openSuggestionCreateModal(interaction: CommandInteraction): Promise<void> {

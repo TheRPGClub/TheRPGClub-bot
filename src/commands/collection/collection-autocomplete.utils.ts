@@ -5,6 +5,7 @@ import UserGameCollection, {
 } from "../../classes/UserGameCollection.js";
 import { sanitizeUserInput } from "../../functions/InteractionUtils.js";
 import { formatGameTitleWithYear } from "../../functions/GameTitleAutocompleteUtils.js";
+import { isPositiveInt } from "../../utilities/ValidationUtils.js";
 
 export const COLLECTION_ENTRY_VALUE_PREFIX = "collection";
 
@@ -13,7 +14,7 @@ export function parseCollectionEntryAutocompleteValue(raw: string): number | nul
   const match = /^collection:(\d+)$/i.exec(value);
   if (!match) return null;
   const entryId = Number(match[1]);
-  if (!Number.isInteger(entryId) || entryId <= 0) return null;
+  if (!isPositiveInt(entryId)) return null;
   return entryId;
 }
 

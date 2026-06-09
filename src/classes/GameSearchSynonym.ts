@@ -9,6 +9,7 @@ import {
   dbInsertConn,
 } from "../db/SqlManager.js";
 import { GameSearchSynonymSql } from "../db/sql/index.js";
+import { isPositiveInt, requirePositiveInt } from "../utilities/ValidationUtils.js";
 
 export type IGameSearchSynonym = {
   termId: number;
@@ -234,9 +235,7 @@ export default class GameSearchSynonym {
     terms: string[],
     updatedBy: string | null,
   ): Promise<{ groupId: number; terms: IGameSearchSynonym[] }> {
-    if (!Number.isInteger(groupId) || groupId <= 0) {
-      throw new Error("Invalid synonym group.");
-    }
+    requirePositiveInt(groupId, "synonym group");
     const cleaned = terms.map((term) => term.trim()).filter(Boolean);
     if (cleaned.length < 2) {
       throw new Error("A synonym group must contain at least two terms.");
@@ -306,7 +305,7 @@ export default class GameSearchSynonym {
         { createdBy },
         "groupId",
       );
-      if (!Number.isInteger(groupId) || groupId <= 0) {
+      if (!isPositiveInt(groupId)) {
         throw new Error("Failed to create synonym group.");
       }
 
@@ -359,7 +358,7 @@ export default class GameSearchSynonym {
   }
 
   static async deleteGroup(groupId: number): Promise<boolean> {
-    if (!Number.isInteger(groupId) || groupId <= 0) return false;
+    if (!isPositiveInt(groupId)) return false;
     return dbTransaction(async (conn) => {
       const existsRows = await dbQueryConn(
         conn,

@@ -4,6 +4,7 @@ import {
 } from "../db/SqlManager.js";
 import { getDialect } from "../db/dialect.js";
 import { SteamCollectionImportSql } from "../db/sql/index.js";
+import { isPositiveInt } from "../utilities/ValidationUtils.js";
 
 export type SteamCollectionImportStatus = "ACTIVE" | "PAUSED" | "COMPLETED" | "CANCELED";
 export type SteamCollectionImportItemStatus =
@@ -424,8 +425,7 @@ export async function getSteamAppHistoricalMappedGameIds(params: {
   excludeUserId?: string;
   limit?: number;
 }): Promise<number[]> {
-  const limit = Number.isInteger(params.limit) && (params.limit ?? 0) > 0
-    ? Number(params.limit) : 5;
+  const limit = isPositiveInt(params.limit) ? Number(params.limit) : 5;
 
   const rows = await dbQuery(
     SteamCollectionImportSql.getHistoricalMappedIds,
@@ -436,5 +436,5 @@ export async function getSteamAppHistoricalMappedGameIds(params: {
     },
     (row: { GAMEDB_GAME_ID: number }) => Number(row.GAMEDB_GAME_ID),
   );
-  return rows.filter((value) => Number.isInteger(value) && value > 0);
+  return rows.filter(isPositiveInt);
 }

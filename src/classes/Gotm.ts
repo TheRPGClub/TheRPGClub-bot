@@ -8,6 +8,7 @@ import {
 import { GotmSql } from "../db/sql/index.js";
 import Game from "./Game.js";
 import { getThreadsByGameId } from "./Thread.js";
+import { isPositiveInt, requirePositiveInt } from "../utilities/ValidationUtils.js";
 
 export interface IGotmGame {
   title: string;
@@ -101,7 +102,7 @@ async function loadFromDatabaseInternal(): Promise<IGotmEntry[]> {
     }
 
     const gamedbGameId = Number(row.GAMEDB_GAME_ID);
-    if (!Number.isInteger(gamedbGameId) || gamedbGameId <= 0) {
+    if (!isPositiveInt(gamedbGameId)) {
       throw new Error(`GOTM round ${round} game ${row.GAME_INDEX} is missing GAMEDB_GAME_ID.`);
     }
     const gameDetails = await getGameDetailsCached(gamedbGameId);
@@ -214,9 +215,7 @@ export default class Gotm {
       round: r,
       monthYear,
       gameOfTheMonth: games.map((g) => {
-        if (!Number.isInteger(g.gamedbGameId) || g.gamedbGameId <= 0) {
-          throw new Error("GameDB id is required for GOTM entries.");
-        }
+        requirePositiveInt(g.gamedbGameId, "GameDB id");
         return {
           title: g.title,
           threadId: g.threadId ?? null,
@@ -284,9 +283,7 @@ export default class Gotm {
   ): IGotmEntry | null {
     const entry = this.getRoundEntry(round);
     if (!entry) return null;
-    if (!Number.isInteger(gamedbGameId) || gamedbGameId <= 0) {
-      throw new Error("GameDB id must be a positive integer.");
-    }
+    requirePositiveInt(gamedbGameId, "GameDB id");
     const i = this.resolveIndex(entry, index);
     entry.gameOfTheMonth[i].gamedbGameId = gamedbGameId;
     void getGameDetailsCached(gamedbGameId).then((meta) => {
@@ -355,9 +352,7 @@ export async function updateGotmGameFieldInDatabase(
     let dbValue = value;
     if (field === "gamedbGameId") {
       const newId = Number(value);
-      if (!Number.isInteger(newId) || newId <= 0) {
-        throw new Error("GameDB id must be a positive integer.");
-      }
+      requirePositiveInt(newId, "GameDB id");
       const exists = await getGameDetailsCached(newId);
       gameCache.set(newId, exists);
       dbValue = newId;
@@ -420,7 +415,7 @@ export async function insertGotmRoundInDatabase(
   await dbTransaction(async (conn) => {
     for (let i = 0; i < games.length; i++) {
       const g = games[i];
-      if (!Number.isInteger(g.gamedbGameId) || g.gamedbGameId <= 0) {
+      if (!isPositiveInt(g.gamedbGameId)) {
         throw new Error(`GameDB id is required for GOTM round ${round}, game ${i + 1}.`);
       }
       const gameMeta = await getGameDetailsCached(g.gamedbGameId);

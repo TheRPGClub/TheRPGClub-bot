@@ -31,6 +31,7 @@ import {
   buildTextReply,
 } from "../../functions/ComponentsV2Utils.js";
 import { COMPONENTS_V2_FLAG } from "../../config/flags.js";
+import { isPositiveInt } from "../../utilities/ValidationUtils.js";
 
 /**
  * Creates a completion session and returns the session ID
@@ -249,7 +250,7 @@ export async function processCompletionSelection(
 
     if (value.startsWith("igdb:")) {
       const igdbId = Number(value.split(":")[1]);
-      if (!Number.isInteger(igdbId) || igdbId <= 0) {
+      if (!isPositiveInt(igdbId)) {
         await safeReply(interaction, {
           components: [buildTextContainer("Invalid IGDB selection.")],
           flags: buildComponentsV2Flags(true),
@@ -262,7 +263,7 @@ export async function processCompletionSelection(
       gameTitle = imported.title;
     } else {
       const parsedId = Number(value);
-      if (!Number.isInteger(parsedId) || parsedId <= 0) {
+      if (!isPositiveInt(parsedId)) {
         await safeReply(interaction, {
           components: [buildTextContainer("Invalid selection.")],
           flags: buildComponentsV2Flags(true),

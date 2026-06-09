@@ -93,6 +93,7 @@ import {
 import { buildCollectionIgdbSelectOptions } from "./collection-game-resolve.utils.js";
 import { SteamApiError, steamApiService } from "../../services/SteamApiService.js";
 import { createIgdbSession } from "../../services/IGDB/IgdbSelectService.js";
+import { isPositiveInt } from "../../utilities/ValidationUtils.js";
 
 @Discord()
 @SlashGroup("collection")
@@ -974,7 +975,7 @@ export class CollectionSteamImportCommand {
       { preserveNewlines: false, maxLength: 20 },
     ).trim();
     const enteredId = Number(gameIdRaw);
-    if (!Number.isInteger(enteredId) || enteredId <= 0) {
+    if (!isPositiveInt(enteredId)) {
       await safeUpdate(interaction, {
         content: "Game ID must be a positive integer.",
         components: [],

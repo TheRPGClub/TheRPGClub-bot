@@ -96,6 +96,7 @@ import {
   parseCollectionCsvImportText,
 } from "./collection-csv-import.service.js";
 import { createIgdbSession } from "../../services/IGDB/IgdbSelectService.js";
+import { isPositiveInt } from "../../utilities/ValidationUtils.js";
 
 @Discord()
 @SlashGroup("collection")
@@ -1039,7 +1040,7 @@ export class CollectionCsvImportCommand {
       { preserveNewlines: false, maxLength: 20 },
     ).trim();
     const enteredId = Number(gameIdRaw);
-    if (!Number.isInteger(enteredId) || enteredId <= 0) {
+    if (!isPositiveInt(enteredId)) {
       await safeUpdate(interaction, {
         content: "Game ID must be a positive integer.",
         components: [],

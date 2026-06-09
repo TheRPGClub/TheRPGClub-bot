@@ -45,6 +45,7 @@ import {
   saveCompletion,
 } from "../functions/CompletionHelpers.js";
 import { buildTextReply } from "../functions/ComponentsV2Utils.js";
+import { isPositiveInt } from "../utilities/ValidationUtils.js";
 
 type CompletionAddContext = {
   targetUserId: string;
@@ -636,7 +637,7 @@ export class SuperAdmin {
 
     try {
       const parsedId = Number(value);
-      if (!Number.isInteger(parsedId) || parsedId <= 0) {
+      if (!isPositiveInt(parsedId)) {
         await safeReply(interaction, { ...buildTextReply("Invalid selection.", true), __forceFollowUp: true });
         return false;
       }

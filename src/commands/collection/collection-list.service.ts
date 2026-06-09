@@ -15,6 +15,7 @@ import { flattenErrorMessages } from "../imports/import-scaffold.service.js";
 import { safeV2TextContent } from "../../functions/ComponentsV2Utils.js";
 import { safeDeferUpdate } from "../../functions/InteractionUtils.js";
 import { buildUserHeaderContainer } from "../../functions/uiComponents.js";
+import { isPositiveInt } from "../../utilities/ValidationUtils.js";
 
 const COLLECTION_LIST_PAGE_SIZE = 20;
 const COLLECTION_LIST_NAV_PREFIX = "collection-list-nav-v2";
@@ -388,7 +389,7 @@ export function parseCollectionFiltersFromListMessage(message: any): {
   return {
     title: titleMatch?.[1]?.trim() || undefined,
     platform: platformMatch?.[1]?.trim() || undefined,
-    platformId: Number.isInteger(platformId) && (platformId as number) > 0 ? platformId : undefined,
+    platformId: isPositiveInt(platformId) ? platformId : undefined,
     ownershipType,
   };
 }

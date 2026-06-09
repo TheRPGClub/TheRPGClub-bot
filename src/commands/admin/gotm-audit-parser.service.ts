@@ -7,6 +7,7 @@ import {
 } from "../../functions/CsvUtils.js";
 import { type GotmAuditKind } from "../../classes/GotmAuditImport.js";
 import { type GotmAuditParsedRow } from "./admin.types.js";
+import { isPositiveInt } from "../../utilities/ValidationUtils.js";
 
 export async function fetchGotmAuditCsvText(url: string): Promise<string | null> {
   try {
@@ -60,7 +61,7 @@ export function parseGotmAuditCsv(csvText: string): GotmAuditParsedRow[] {
 
     const roundRaw = fields[roundIndex]?.trim() ?? "";
     const roundNumber = Number(roundRaw);
-    if (!Number.isInteger(roundNumber) || roundNumber <= 0) return;
+    if (!isPositiveInt(roundNumber)) return;
 
     const titleRaw = fields[titleIndex]?.trim() ?? "";
     const gameTitle = titleRaw.trim();
@@ -92,7 +93,7 @@ export function parseGotmAuditCsv(csvText: string): GotmAuditParsedRow[] {
     const gameDbRaw = gameDbIndex >= 0 ? fields[gameDbIndex]?.trim() ?? "" : "";
     const gameDbParsed = Number(gameDbRaw);
     const gameDbGameId =
-      Number.isInteger(gameDbParsed) && gameDbParsed > 0 ? gameDbParsed : null;
+      isPositiveInt(gameDbParsed) ? gameDbParsed : null;
 
     items.push({
       rowIndex: idx + 1,

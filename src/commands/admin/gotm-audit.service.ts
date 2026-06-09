@@ -43,6 +43,7 @@ import {
   buildGotmAuditPromptContainer,
   buildGotmAuditPromptComponents,
 } from "./gotm-audit-ui.service.js";
+import { isPositiveInt } from "../../utilities/ValidationUtils.js";
 
 export async function handleGotmAudit(
   interaction: CommandInteraction,
@@ -307,7 +308,7 @@ export async function tryInsertGotmAuditRound(
       gamedbGameId: entry.gameDbGameId ?? 0,
     }));
 
-  if (games.some((game) => !Number.isInteger(game.gamedbGameId) || game.gamedbGameId <= 0)) {
+  if (games.some((game) => !isPositiveInt(game.gamedbGameId))) {
     await markGotmAuditRoundError(
       session.importId,
       item.kind,
@@ -328,7 +329,7 @@ export async function tryInsertGotmAuditRound(
     }
 
     for (const game of games) {
-      if (game.threadId && Number.isInteger(game.gamedbGameId) && game.gamedbGameId > 0) {
+      if (game.threadId && isPositiveInt(game.gamedbGameId)) {
         await setThreadGameLink(game.threadId, game.gamedbGameId);
       }
     }

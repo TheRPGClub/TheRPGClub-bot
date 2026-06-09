@@ -19,6 +19,7 @@ import { renderUsernameWithEmoji } from "../../services/UserEmojiService.js";
 import {
   COMPLETION_PAGE_SIZE,
 } from "../profile.command.js";
+import { isPositiveInt } from "../../utilities/ValidationUtils.js";
 
 export type CommonCompletionSort =
   | "title_asc"
@@ -88,7 +89,7 @@ function parseYearToken(raw: string): number | "unknown" | null {
   if (!raw || raw === YEAR_ALL_TOKEN) return null;
   if (raw === YEAR_UNKNOWN_TOKEN) return "unknown";
   const parsed = Number(raw);
-  if (!Number.isInteger(parsed) || parsed <= 0) return null;
+  if (!isPositiveInt(parsed)) return null;
   return parsed;
 }
 
@@ -100,7 +101,7 @@ function normalizePlatformToken(platformId: number | null): string {
 function parsePlatformToken(raw: string): number | null {
   if (!raw || raw === PLATFORM_ALL_TOKEN) return null;
   const parsed = Number(raw);
-  if (!Number.isInteger(parsed) || parsed <= 0) return null;
+  if (!isPositiveInt(parsed)) return null;
   return parsed;
 }
 

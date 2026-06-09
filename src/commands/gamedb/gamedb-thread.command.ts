@@ -26,6 +26,7 @@ import { NOW_PLAYING_FORUM_ID } from "../../config/channels.js";
 import { NOW_PLAYING_SIDEGAME_TAG_ID } from "../../config/tags.js";
 import Game from "../../classes/Game.js";
 import { updateGameProfileMessageById } from "./gamedb-profile.service.js";
+import { isPositiveInt } from "../../utilities/ValidationUtils.js";
 
 const GAMEDB_THREAD_MODAL_PREFIX = "gamedb-thread-modal";
 const GAMEDB_THREAD_TITLE_INPUT_ID = "gamedb-thread-title";
@@ -231,7 +232,7 @@ export class GameDbThreadCommand {
 
     await safeDeferReply(interaction, { flags: MessageFlags.Ephemeral });
 
-    if (!Number.isInteger(gameId) || gameId <= 0 || !sourceChannelId || !sourceMessageId) {
+    if (!isPositiveInt(gameId) || !sourceChannelId || !sourceMessageId) {
       await safeReply(interaction, buildTextReply("Invalid thread request payload.", false))
         .catch(() => {});
       return;

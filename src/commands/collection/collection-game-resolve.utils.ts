@@ -2,6 +2,7 @@ import Game from "../../classes/Game.js";
 import { igdbService, type IGDBGame } from "../../services/IGDB/IgdbService.js";
 import type { IgdbSelectOption } from "../../services/IGDB/IgdbSelectService.js";
 import { sanitizeUserInput } from "../../functions/InteractionUtils.js";
+import { isPositiveInt } from "../../utilities/ValidationUtils.js";
 
 export type ResolvedCollectionGame =
   | { kind: "resolved"; gameId: number; title: string }
@@ -14,7 +15,7 @@ export async function buildCollectionIgdbSelectOptions(
   const platformIds = Array.from(new Set(
     trimmedResults
       .flatMap((game) => game.platforms?.map((platform) => Number(platform.id)) ?? [])
-      .filter((id) => Number.isInteger(id) && id > 0),
+      .filter(isPositiveInt),
   ));
   const platformMap = platformIds.length
     ? await Game.getPlatformsByIgdbIds(platformIds)
@@ -46,7 +47,7 @@ export async function resolveCollectionGameForAdd(
   gameIdRaw: string,
 ): Promise<ResolvedCollectionGame> {
   const numericValue = Number(gameIdRaw);
-  if (Number.isInteger(numericValue) && numericValue > 0) {
+  if (isPositiveInt(numericValue)) {
     const localGame = await Game.getGameById(numericValue);
     if (localGame) {
       return { kind: "resolved", gameId: localGame.id, title: localGame.title };

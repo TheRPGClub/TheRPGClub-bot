@@ -40,6 +40,7 @@ import {
   buildGotmAuditPromptContainer,
   buildGotmAuditPromptComponents,
 } from "./gotm-audit-ui.service.js";
+import { isPositiveInt } from "../../utilities/ValidationUtils.js";
 
 export async function handleGotmAuditSelect(
   interaction: StringSelectMenuInteraction): Promise<void> {
@@ -58,7 +59,7 @@ export async function handleGotmAuditSelect(
 
   const selectedRaw = interaction.values?.[0];
   const gameDbId = Number(selectedRaw);
-  if (!Number.isInteger(gameDbId) || gameDbId <= 0) {
+  if (!isPositiveInt(gameDbId)) {
     await safeReply(interaction, buildTextReply("Invalid GameDB selection.", true));
     return;
   }
@@ -277,7 +278,7 @@ export async function handleGotmAuditManualModal(
   const raw = interaction.fields.getTextInputValue(GOTM_AUDIT_MANUAL_INPUT_ID);
   const cleaned = stripModalInput(raw);
   const gameDbId = Number(cleaned);
-  if (!Number.isInteger(gameDbId) || gameDbId <= 0) {
+  if (!isPositiveInt(gameDbId)) {
     await safeReply(interaction, buildTextReply("Please provide a valid GameDB id.", true));
     return;
   }

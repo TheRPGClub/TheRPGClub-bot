@@ -1,4 +1,5 @@
 import sharp from "sharp";
+import { requirePositiveInt } from "../utilities/ValidationUtils.js";
 
 export type VoteImageType = "GOTM" | "NR-GOTM";
 
@@ -227,9 +228,7 @@ function resolveGridDimensions(count: number): GridDimensions {
 }
 
 export async function composeVoteImage(params: IComposeVoteImageParams): Promise<Buffer> {
-  if (!Number.isInteger(params.roundNumber) || params.roundNumber <= 0) {
-    throw new Error("Invalid round number.");
-  }
+  requirePositiveInt(params.roundNumber, "round number");
   if (!params.covers.length) {
     throw new Error("No covers were supplied for image generation.");
   }

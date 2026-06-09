@@ -23,6 +23,7 @@ import { type IGameDbCsvImportItem } from "../../classes/GameDbCsvImport.js";
 import { GAMEDB_CSV_PLATFORM_MAP } from "../../config/gamedbCsvPlatformMap.js";
 import { buildIgdbSearchLink } from "./gamedb-utils.js";
 import { type IGameDbCsvImport } from "../../classes/GameDbCsvImport.js";
+import { isPositiveInt } from "../../utilities/ValidationUtils.js";
 
 export const GAMEDB_CSV_RESULT_LIMIT = 15;
 
@@ -246,7 +247,7 @@ export async function buildIgdbSelectOptions(
   for (const game of results) {
     const ids = (game.platforms ?? [])
       .map((platform) => platform.id)
-      .filter((id) => Number.isInteger(id) && id > 0);
+      .filter(isPositiveInt);
     platformIds.push(...ids);
   }
 
@@ -265,7 +266,7 @@ export async function buildIgdbSelectOptions(
       : "TBD";
     const ids = (game.platforms ?? [])
       .map((platform) => platform.id)
-      .filter((id) => Number.isInteger(id) && id > 0);
+      .filter(isPositiveInt);
     const platformNames = ids
       .map((id) => formatPlatformDisplayName(platformMap.get(id)?.name))
       .filter((name): name is string => Boolean(name));

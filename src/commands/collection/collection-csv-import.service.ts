@@ -15,6 +15,7 @@ import { GAMEDB_CSV_PLATFORM_MAP } from "../../config/gamedbCsvPlatformMap.js";
 import { sanitizeUserInput } from "../../functions/InteractionUtils.js";
 import { resolveGameCompletionPlatformId } from "../game-completion/completion-autocomplete.utils.js";
 import { buildImportReasonSummary } from "./collection-import-ui.utils.js";
+import { isPositiveInt } from "../../utilities/ValidationUtils.js";
 
 export type CollectionCsvImportButtonAction = "skip" | "remap" | "game-id" | "pause";
 
@@ -113,7 +114,7 @@ export function parseCollectionCsvChooseId(customId: string): {
   const itemId = Number(parts[3]);
   const gameId = Number(parts[4]);
   if (!Number.isInteger(importId) || !Number.isInteger(itemId)) return null;
-  if (!Number.isInteger(gameId) || gameId <= 0) return null;
+  if (!isPositiveInt(gameId)) return null;
   if (!parts[1]) return null;
   return { ownerId: parts[1], importId, itemId, gameId };
 }
@@ -676,7 +677,7 @@ function sanitizeValue(value: string): string {
 
 function parsePositiveInteger(value: string): number | null {
   const numeric = Number(value);
-  if (!Number.isInteger(numeric) || numeric <= 0) return null;
+  if (!isPositiveInt(numeric)) return null;
   return numeric;
 }
 

@@ -41,6 +41,7 @@ import {
 import { runSearchFlow } from "./gamedb-search.command.js";
 import { startCompletionWizard } from "./gamedb-completion.command.js";
 import { showNowPlayingThreadModal } from "./gamedb-thread.command.js";
+import { isPositiveInt } from "../../utilities/ValidationUtils.js";
 
 @Discord()
 @SlashGroup("gamedb")
@@ -72,7 +73,7 @@ export class GameDbViewCommand {
 
     if (source === "API") {
       const gameId = /^\d+$/.test(searchTerm) ? Number(searchTerm) : NaN;
-      if (!Number.isInteger(gameId) || gameId <= 0) {
+      if (!isPositiveInt(gameId)) {
         await safeReply(interaction, buildTextReply("API source requires a numeric game ID.", false));
         return;
       }
@@ -82,7 +83,7 @@ export class GameDbViewCommand {
 
     if (/^\d+$/.test(searchTerm)) {
       const gameId = Number(searchTerm);
-      if (Number.isInteger(gameId) && gameId > 0) {
+      if (isPositiveInt(gameId)) {
         const game = await Game.getGameById(gameId, source);
         if (game) {
           await showGameProfile(interaction, gameId, undefined, source);
@@ -99,7 +100,7 @@ export class GameDbViewCommand {
   async handleGameDbAction(interaction: ButtonInteraction): Promise<void> {
     const [, action, gameIdRaw] = interaction.customId.split(":");
     const gameId = Number(gameIdRaw);
-    if (!Number.isInteger(gameId) || gameId <= 0) {
+    if (!isPositiveInt(gameId)) {
       await safeReply(interaction, buildTextReply("Invalid GameDB id.", true));
       return;
     }

@@ -5,6 +5,7 @@ import {
   buildProgressiveTitleVariants,
   normalizeTitleWithSteps,
 } from "./ImportTitleNormalization.js";
+import { isPositiveInt } from "../utilities/ValidationUtils.js";
 
 export type ImportCandidate = {
   gameId: number;
@@ -51,7 +52,7 @@ export function parseImportCandidates(raw: unknown): ImportCandidate[] {
         }))
         .filter(
           (value) =>
-            Number.isInteger(value.gameId) && value.gameId > 0 && value.title.length > 0,
+            isPositiveInt(value.gameId) && value.title.length > 0,
         ),
     );
   } catch {
@@ -109,7 +110,7 @@ export async function buildImportCandidatesFromMappedIds(
 ): Promise<ImportCandidate[]> {
   if (!gameIds.length) return [];
   const uniqueIds = Array.from(
-    new Set(gameIds.filter((value) => Number.isInteger(value) && value > 0)),
+    new Set(gameIds.filter(isPositiveInt)),
   );
   if (!uniqueIds.length) return [];
   const games = await Game.getGamesByIds(uniqueIds);

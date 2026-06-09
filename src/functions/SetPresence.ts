@@ -1,6 +1,7 @@
 import { ActivityType, Client } from "discord.js";
 import type { AnyRepliable } from "./InteractionUtils.js";
 import { oraQuery, oraMutate } from "../db/SqlManager.js";
+import { isPositiveInt } from "../utilities/ValidationUtils.js";
 
 const PRESENCE_TABLE: string = "BOT_PRESENCE_HISTORY";
 
@@ -72,7 +73,7 @@ export interface IPresenceHistoryEntry {
 }
 
 export async function getPresenceHistory(limit: number): Promise<IPresenceHistoryEntry[]> {
-  const safeLimit: number = Number.isInteger(limit) && limit > 0 ? Math.min(limit, 50) : 5;
+  const safeLimit: number = isPositiveInt(limit) ? Math.min(limit, 50) : 5;
 
   try {
     return oraQuery(

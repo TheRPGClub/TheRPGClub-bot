@@ -1,5 +1,6 @@
 import { dbQuery, dbMutate } from "../db/SqlManager.js";
 import { NominationSql } from "../db/sql/index.js";
+import { isPositiveInt } from "../utilities/ValidationUtils.js";
 
 export type NominationKind = "gotm" | "nr-gotm";
 
@@ -72,7 +73,7 @@ export async function upsertNomination(
   gamedbGameId: number,
   reason: string | null,
 ): Promise<INominationEntry> {
-  if (!Number.isInteger(gamedbGameId) || gamedbGameId <= 0) {
+  if (!isPositiveInt(gamedbGameId)) {
     throw new Error("A valid GameDB game id is required to save a nomination.");
   }
 
