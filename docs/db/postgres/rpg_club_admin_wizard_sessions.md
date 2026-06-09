@@ -24,14 +24,14 @@
 | ---- | ---- | ------ | ------- | ------- |
 | ix_rpg_club_admin_wiz_owner_status | btree | No | No | owner_user_id, status, last_updated_at |
 | rpg_club_admin_wizard_sessions_pkey | btree | Yes | Yes | session_id |
-| ux_rpg_club_admin_wiz_active | btree | Yes | No | command_key, owner_user_id, channel_id, status |
+| ux_rpg_club_admin_wiz_active | btree | Yes | No | command_key, owner_user_id, channel_id (partial: WHERE status = 'ACTIVE') |
 
 ### Index Definitions
 
 ```sql
 CREATE INDEX ix_rpg_club_admin_wiz_owner_status ON public.rpg_club_admin_wizard_sessions USING btree (owner_user_id, status, last_updated_at);
 CREATE UNIQUE INDEX rpg_club_admin_wizard_sessions_pkey ON public.rpg_club_admin_wizard_sessions USING btree (session_id);
-CREATE UNIQUE INDEX ux_rpg_club_admin_wiz_active ON public.rpg_club_admin_wizard_sessions USING btree (command_key, owner_user_id, channel_id, status);
+CREATE UNIQUE INDEX ux_rpg_club_admin_wiz_active ON public.rpg_club_admin_wizard_sessions (command_key, owner_user_id, channel_id) WHERE status = 'ACTIVE';
 ```
 
 ## Check Constraints
