@@ -4,7 +4,7 @@ const GAME_COLS = `GAME_ID, TITLE, DESCRIPTION, IMAGE_DATA, THUMBNAIL_BAD,
               THUMBNAIL_APPROVED, IGDB_ID, SLUG, TOTAL_RATING, IGDB_URL,
               FEATURED_VIDEO_URL, INITIAL_RELEASE_DATE, CREATED_AT, UPDATED_AT`;
 
-const GAME_COLS_PG = `game_id, title, description, image_data, thumbnail_bad,
+const GAME_COLS_PG = `game_id, title, description, thumbnail_bad,
               thumbnail_approved, igdb_id, slug, total_rating, igdb_url,
               featured_video_url, initial_release_date, created_at, updated_at`;
 
@@ -48,7 +48,6 @@ export const GameSql = {
     postgres: `INSERT INTO gamedb_games (
            title,
            description,
-           image_data,
            igdb_id,
            slug,
            total_rating,
@@ -57,7 +56,6 @@ export const GameSql = {
          ) VALUES (
            :title,
            :description,
-           :imageData,
            :igdbId,
            :slug,
            :totalRating,
@@ -73,7 +71,7 @@ export const GameSql = {
                 INITIAL_RELEASE_DATE, CREATED_AT, UPDATED_AT
            FROM GAMEDB_GAMES
           WHERE GAME_ID = :id`,
-    postgres: `SELECT game_id, title, description, image_data, thumbnail_bad,
+    postgres: `SELECT game_id, title, description, thumbnail_bad,
                 thumbnail_approved, igdb_id, slug, total_rating, igdb_url, featured_video_url,
                 initial_release_date, created_at, updated_at
            FROM gamedb_games
@@ -555,7 +553,7 @@ export const GameSql = {
            FROM GAMEDB_GAMES g
           WHERE ${combinedClause}
           ORDER BY g.TITLE ASC`,
-      postgres: `SELECT g.game_id, g.title, g.description, g.image_data, g.igdb_id, g.slug,
+      postgres: `SELECT g.game_id, g.title, g.description, g.igdb_id, g.slug,
                 g.total_rating, g.igdb_url, g.featured_video_url,
                 g.initial_release_date, g.created_at, g.updated_at
            FROM gamedb_games g
@@ -569,8 +567,7 @@ export const GameSql = {
              UPDATED_AT = SYSTIMESTAMP
        WHERE GAME_ID = :gameId`,
     postgres: `UPDATE gamedb_games
-         SET image_data = :imageData,
-             updated_at = NOW()
+         SET updated_at = NOW()
        WHERE game_id = :gameId`,
   } satisfies SqlEntry,
 
