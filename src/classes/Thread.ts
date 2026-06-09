@@ -7,6 +7,7 @@ import {
   dbMutateConn,
 } from "../db/SqlManager.js";
 import { ThreadSql } from "../db/sql/index.js";
+import { isPositiveInt } from "../utilities/ValidationUtils.js";
 
 type NullableDate = Date | null;
 
@@ -38,7 +39,7 @@ export async function setThreadGameLink(
   threadId: string,
   gameId: number | null,
 ): Promise<void> {
-  if (gameId !== null && (!Number.isInteger(gameId) || gameId <= 0)) {
+  if (gameId !== null && !isPositiveInt(gameId)) {
     throw new Error("Invalid GameDB game id.");
   }
 
@@ -59,7 +60,7 @@ export async function removeThreadGameLink(
 ): Promise<number> {
   if (
     gameId !== undefined &&
-    (gameId === null || !Number.isInteger(gameId) || gameId <= 0)
+    (gameId === null || !isPositiveInt(gameId))
   ) {
     throw new Error("Invalid GameDB game id.");
   }

@@ -49,6 +49,7 @@ import {
 } from "./gamedb-utils.js";
 import { trimTextDisplayContent } from "./gamedb-profile.service.js";
 import { updateGameProfileMessageById } from "./gamedb-profile.service.js";
+import { isPositiveInt } from "../../utilities/ValidationUtils.js";
 
 const COMPLETION_WIZARD_SESSIONS = new Map<string, CompletionWizardSession>();
 
@@ -475,7 +476,7 @@ export class GameDbCompletionCommand {
     let platformId: number | null = null;
     if (!isOtherPlatform) {
       const parsedId = Number(session.platformChoice);
-      if (!Number.isInteger(parsedId) || parsedId <= 0) {
+      if (!isPositiveInt(parsedId)) {
         await safeReply(interaction, buildTextReply("Invalid platform selection.", false)).catch(() => {});
         return;
       }
@@ -520,7 +521,7 @@ export class GameDbCompletionCommand {
     const [, gameIdRaw] = interaction.customId.split(":");
     const gameId = Number(gameIdRaw);
     await safeDeferReply(interaction, { flags: MessageFlags.Ephemeral });
-    if (!Number.isInteger(gameId) || gameId <= 0) {
+    if (!isPositiveInt(gameId)) {
       await safeReply(interaction, buildTextReply("Invalid GameDB id.", false)).catch(() => {});
       return;
     }

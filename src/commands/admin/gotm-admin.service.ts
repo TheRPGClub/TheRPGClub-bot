@@ -18,6 +18,7 @@ import {
   buildNumberChoiceOptions,
   addCancelOption,
 } from "./admin-prompt.utils.js";
+import { isPositiveInt } from "../../utilities/ValidationUtils.js";
 
 export async function handleAddGotm(interaction: CommandInteraction): Promise<void> {
   let allEntries: IGotmEntry[];
@@ -82,7 +83,7 @@ export async function handleAddGotm(interaction: CommandInteraction): Promise<vo
     );
     if (gamedbRaw === null) return;
     const gamedbId = Number(gamedbRaw.trim());
-    if (!Number.isInteger(gamedbId) || gamedbId <= 0) {
+    if (!isPositiveInt(gamedbId)) {
       await safeReply(
         interaction,
         buildTextReply("Invalid GameDB id. Creation cancelled.", false),
@@ -244,7 +245,7 @@ export async function handleEditGotm(
     newValue = null;
   } else if (field === "gamedbGameId") {
     const parsed = Number(valueTrimmed);
-    if (!Number.isInteger(parsed) || parsed <= 0) {
+    if (!isPositiveInt(parsed)) {
       await safeReply(
         interaction,
         buildTextReply("Please provide a valid numeric GameDB id.", false),

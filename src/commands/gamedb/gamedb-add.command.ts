@@ -33,6 +33,7 @@ import {
 } from "./gamedb-utils.js";
 import { buildIgdbSelectOptions } from "./gamedb-csv-import.service.js";
 import { showGameProfile, trimTextDisplayContent } from "./gamedb-profile.service.js";
+import { isPositiveInt } from "../../utilities/ValidationUtils.js";
 
 async function fetchIgdbCoverImage(details: IGDBGameDetails): Promise<Buffer | null> {
   if (!details.cover?.image_id) return null;
@@ -170,7 +171,7 @@ export async function addGameToDatabase(
 
   const igdbPlatformIds: number[] = (details.platforms ?? [])
     .map((platform) => platform.id)
-    .filter((id) => Number.isInteger(id) && id > 0);
+    .filter(isPositiveInt);
   await Game.addGamePlatformsByIgdbIds(newGame.id, igdbPlatformIds);
 
   await processReleaseDates(newGame.id, details.release_dates || []);
@@ -366,7 +367,7 @@ export class GameDbAddCommand {
     let game: IGame | null = null;
     if (/^\d+$/.test(searchTerm)) {
       const gameId = Number(searchTerm);
-      if (Number.isInteger(gameId) && gameId > 0) {
+      if (isPositiveInt(gameId)) {
         game = await Game.getGameById(gameId);
       }
     } else {

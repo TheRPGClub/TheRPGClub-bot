@@ -1,5 +1,6 @@
 import { dbQuery, dbMutate } from "../db/SqlManager.js";
 import { SuggestionReviewSessionSql } from "../db/sql/index.js";
+import { isPositiveInt } from "../utilities/ValidationUtils.js";
 
 export interface ISuggestionReviewSession {
   sessionId: string;
@@ -28,7 +29,7 @@ function toDate(value: Date | string): Date {
 function normalizeSuggestionIds(ids: number[]): number[] {
   return ids
     .map((id) => Number(id))
-    .filter((id) => Number.isInteger(id) && id > 0);
+    .filter(isPositiveInt);
 }
 
 function serializeSuggestionIds(ids: number[]): string {

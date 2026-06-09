@@ -44,6 +44,7 @@ import {
   toNominationOptionMap,
   type WizardNominationOption,
 } from "./round-setup-wizard.utils.js";
+import { isPositiveInt } from "../../utilities/ValidationUtils.js";
 
 const NEXT_ROUND_SETUP_COMMAND_KEY = "nextround-setup";
 const MAX_SELECT_OPTIONS = 25;
@@ -212,7 +213,7 @@ async function promptSelectNomination(
     await promptMessage.delete().catch(async () => {
       await promptMessage.edit({ components: [] }).catch(() => {});
     });
-    if (!Number.isInteger(pickedValue) || pickedValue <= 0) {
+    if (!isPositiveInt(pickedValue)) {
       return null;
     }
     return pickedValue;
@@ -465,7 +466,7 @@ export async function handleNextRoundSetup(
       const roundInput = await wizardPrompt("Enter the round number to load nominations from.");
       if (!roundInput) return;
       const parsedRound = Number(roundInput.trim());
-      if (!Number.isInteger(parsedRound) || parsedRound <= 0) {
+      if (!isPositiveInt(parsedRound)) {
         await wizardLog("Invalid round number. Cancelling.");
         await closeWizardState("cancelled");
         return;
@@ -545,7 +546,7 @@ export async function handleNextRoundSetup(
         selectedGotmOrder: [],
       });
     }
-    if (!Number.isInteger(gotmPickCount) || gotmPickCount <= 0) {
+    if (!isPositiveInt(gotmPickCount)) {
       await wizardLog("Invalid GOTM pick count.");
       await closeWizardState("cancelled");
       return;

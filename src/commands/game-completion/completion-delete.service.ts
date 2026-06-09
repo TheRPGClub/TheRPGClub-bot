@@ -3,6 +3,7 @@ import Member from "../../classes/Member.js";
 import { safeReply } from "../../functions/InteractionUtils.js";
 import { buildTextReply } from "../../functions/ComponentsV2Utils.js";
 import { COMPONENTS_V2_FLAG } from "../../config/flags.js";
+import { isPositiveInt } from "../../utilities/ValidationUtils.js";
 
 /**
  * Handles completion deletion from the selection menu
@@ -17,7 +18,7 @@ export async function handleCompletionDeleteMenu(
   }
 
   const completionId = Number(interaction.values[0]);
-  if (!Number.isInteger(completionId) || completionId <= 0) {
+  if (!isPositiveInt(completionId)) {
     await safeReply(interaction, buildTextReply("Invalid selection.", true));
     return;
   }

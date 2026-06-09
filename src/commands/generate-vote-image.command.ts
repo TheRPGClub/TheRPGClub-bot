@@ -11,6 +11,7 @@ import { buildTextReply } from "../functions/ComponentsV2Utils.js";
 import { getUpcomingNominationWindow } from "../functions/NominationWindow.js";
 import { isAdmin } from "./admin/admin-auth.utils.js";
 import { composeVoteImage, type VoteImageType } from "../services/collageGenerator.js";
+import { isPositiveInt } from "../utilities/ValidationUtils.js";
 
 const GENERATION_LOCK_TTL_MS = 2 * 60 * 1000;
 
@@ -98,7 +99,7 @@ export class GenerateVoteImageCommand {
     }
 
     const defaultRound = round ?? (await getUpcomingNominationWindow()).targetRound;
-    if (!Number.isInteger(defaultRound) || Number(defaultRound) <= 0) {
+    if (!isPositiveInt(defaultRound)) {
       await safeReply(interaction, buildTextReply(
         "No upcoming nomination round could be resolved from BOT_VOTING_INFO.",
         true,

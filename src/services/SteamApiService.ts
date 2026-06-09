@@ -1,3 +1,5 @@
+import { isPositiveInt } from "../utilities/ValidationUtils.js";
+
 type SteamIdentifierKind = "steamid64" | "profiles-url" | "vanity-url" | "vanity";
 export type SteamApiErrorCode =
   | "invalid-identifier"
@@ -156,7 +158,7 @@ function toOwnedGame(rawGame: {
 }): SteamOwnedGame | null {
   const appId = Number(rawGame.appid ?? 0);
   const name = String(rawGame.name ?? "").trim();
-  if (!Number.isInteger(appId) || appId <= 0 || !name.length) {
+  if (!isPositiveInt(appId) || !name.length) {
     return null;
   }
 
@@ -399,7 +401,7 @@ export class SteamApiService {
     year: number | null;
     headerImageUrl: string | null;
   }> {
-    if (!Number.isInteger(appId) || appId <= 0) {
+    if (!isPositiveInt(appId)) {
       return { year: null, headerImageUrl: null };
     }
 

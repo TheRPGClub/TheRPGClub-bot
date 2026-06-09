@@ -8,6 +8,7 @@ import {
 } from "discord.js";
 import { safeDeferUpdate, safeReply, safeUpdate } from "../../functions/InteractionUtils.js";
 import { buildTextReply } from "../../functions/ComponentsV2Utils.js";
+import { isPositiveInt } from "../../utilities/ValidationUtils.js";
 
 export type IgdbSelectOption = { id: number; label: string; description?: string };
 
@@ -267,6 +268,6 @@ function resolveIgdbSelection(
   }
 
   const gameId = Number(value);
-  if (!Number.isInteger(gameId) || gameId <= 0) return null;
+  if (!isPositiveInt(gameId)) return null;
   return { kind: "select", gameId };
 }

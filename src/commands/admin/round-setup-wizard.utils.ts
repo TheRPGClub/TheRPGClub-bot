@@ -3,6 +3,7 @@ import type { IGotmGame } from "../../classes/Gotm.js";
 import type { INrGotmGame } from "../../classes/NrGotm.js";
 import Game from "../../classes/Game.js";
 import type { INextRoundWizardState } from "../../classes/AdminWizardSession.js";
+import { isPositiveInt } from "../../utilities/ValidationUtils.js";
 
 export type WizardNominationOption = {
   nominationId: number;
@@ -33,7 +34,7 @@ export function splitEligibleNominations(nominations: INominationEntry[]): {
   const ineligible: IneligibleNomination[] = [];
 
   for (const nomination of nominations) {
-    if (!Number.isInteger(nomination.id) || nomination.id <= 0) {
+    if (!isPositiveInt(nomination.id)) {
       ineligible.push({
         nominationId: null,
         gamedbGameId: Number.isFinite(nomination.gamedbGameId) ? nomination.gamedbGameId : null,
@@ -49,7 +50,7 @@ export function splitEligibleNominations(nominations: INominationEntry[]): {
       });
       continue;
     }
-    if (!Number.isInteger(nomination.gamedbGameId) || nomination.gamedbGameId <= 0) {
+    if (!isPositiveInt(nomination.gamedbGameId)) {
       ineligible.push({
         nominationId: nomination.id,
         gamedbGameId: nomination.gamedbGameId,
@@ -247,7 +248,7 @@ export async function mapSelectedNominationsToRoundPayloads(params: {
 
   const uniqueIds = [...new Set([...gotmGameIds, ...nrGameIds])];
   for (const gameId of uniqueIds) {
-    if (!Number.isInteger(gameId) || gameId <= 0) {
+    if (!isPositiveInt(gameId)) {
       throw new Error(`Invalid GameDB id detected in selection: ${gameId}.`);
     }
     const game = await Game.getGameById(gameId);

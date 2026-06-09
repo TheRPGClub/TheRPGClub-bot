@@ -7,6 +7,7 @@ import Game, { type IPlatformDef } from "../../classes/Game.js";
 import Member from "../../classes/Member.js";
 import { formatTableDate } from "../profile.command.js";
 import { STANDARD_PLATFORM_IDS } from "../../config/standardPlatforms.js";
+import { isPositiveInt } from "../../utilities/ValidationUtils.js";
 
 const PLATFORM_CACHE_TTL_MS = 5 * 60 * 1000;
 const COMPLETION_TITLE_VALUE_PREFIX = "completion";
@@ -97,7 +98,7 @@ export function parseCompletionTitleAutocompleteValue(raw: string): number | nul
   const match = /^completion:(\d+)$/.exec(normalized);
   if (!match) return null;
   const completionId = Number(match[1]);
-  if (!Number.isInteger(completionId) || completionId <= 0) return null;
+  if (!isPositiveInt(completionId)) return null;
   return completionId;
 }
 
@@ -179,7 +180,7 @@ export async function resolveGameCompletionPlatformId(
   const platforms = await getCachedPlatforms();
 
   const asId = Number(value);
-  if (Number.isInteger(asId) && asId > 0) {
+  if (isPositiveInt(asId)) {
     return platforms.some((platform) => platform.id === asId) ? asId : null;
   }
 

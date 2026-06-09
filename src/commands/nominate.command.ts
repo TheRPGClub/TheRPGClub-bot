@@ -43,6 +43,7 @@ import {
   NR_GOTM_NOMINATION_CHANNEL_ID,
 } from "../config/nominationChannels.js";
 import { showGameProfileFromNomination } from "./gamedb.command.js";
+import { isPositiveInt } from "../utilities/ValidationUtils.js";
 
 const NOMINATE_REASON_MAX_LENGTH = 1500;
 
@@ -346,7 +347,7 @@ export class NominateCommand {
     interaction: StringSelectMenuInteraction,
   ): Promise<void> {
     const gameId = Number(interaction.values?.[0]);
-    if (!Number.isInteger(gameId) || gameId <= 0) {
+    if (!isPositiveInt(gameId)) {
       await safeReply(interaction, buildTextReply("Invalid GameDB id.", true));
       return;
     }

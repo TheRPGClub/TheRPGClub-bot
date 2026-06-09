@@ -25,6 +25,7 @@ import {
 import { buildTextReply, safeV2TextContent } from "../../functions/ComponentsV2Utils.js";
 import { COMPONENTS_V2_FLAG } from "../../config/flags.js";
 import { replyIfNotOwner, safeReply, safeUpdate } from "../../functions/InteractionUtils.js";
+import { isPositiveInt } from "../../utilities/ValidationUtils.js";
 
 const MAX_NOTE_LENGTH = 500;
 type CompletionEditField = "type" | "date" | "platform" | "playtime" | "note";
@@ -44,7 +45,7 @@ export async function handleCompletionEditMenu(
   if (await replyIfNotOwner(interaction, ownerId)) return;
 
   const completionId = Number(interaction.values[0]);
-  if (!Number.isInteger(completionId) || completionId <= 0) {
+  if (!isPositiveInt(completionId)) {
     await safeReply(interaction, buildTextReply("Invalid selection.", true));
     return;
   }
@@ -88,7 +89,7 @@ export async function handleCompletionFieldEdit(interaction: ButtonInteraction):
   if (await replyIfNotOwner(interaction, ownerId)) return;
 
   const completionId = Number(completionIdRaw);
-  if (!Number.isInteger(completionId) || completionId <= 0) {
+  if (!isPositiveInt(completionId)) {
     await safeReply(interaction, buildTextReply("Invalid selection.", true));
     return;
   }

@@ -11,6 +11,7 @@ import {
 } from "../db/SqlManager.js";
 import { getDialect } from "../db/dialect.js";
 import { MemberSql } from "../db/sql/index.js";
+import { isPositiveInt, requirePositiveInt } from "../utilities/ValidationUtils.js";
 
 const dialect = getDialect();
 
@@ -485,9 +486,7 @@ export default class Member {
     userId: string,
     gameId: number,
   ): Promise<{ addedAt: Date | null } | null> {
-    if (!Number.isInteger(gameId) || gameId <= 0) {
-      throw new Error("Invalid GameDB id.");
-    }
+    requirePositiveInt(gameId, "GameDB id");
     const rows = await dbQuery<{ ADDED_AT: Date | string | null }, { addedAt: Date | null }>(
       MemberSql.getNowPlayingEntryMeta,
       { userId, gameId },
@@ -511,9 +510,7 @@ export default class Member {
     gameId: number,
     note: string | null,
   ): Promise<boolean> {
-    if (!Number.isInteger(gameId) || gameId <= 0) {
-      throw new Error("Invalid GameDB id.");
-    }
+    requirePositiveInt(gameId, "GameDB id");
     const normalizedNote = note?.trim();
     const noteValue = normalizedNote ? normalizedNote : null;
     const noteUpdatedAt = noteValue ? new Date() : null;
@@ -531,12 +528,8 @@ export default class Member {
     platformId: number,
     note: string | null = null,
   ): Promise<void> {
-    if (!Number.isInteger(gameId) || gameId <= 0) {
-      throw new Error("Invalid GameDB id.");
-    }
-    if (!Number.isInteger(platformId) || platformId <= 0) {
-      throw new Error("Invalid platform selection.");
-    }
+    requirePositiveInt(gameId, "GameDB id");
+    requirePositiveInt(platformId, "platform selection");
     const normalizedNote = note?.trim();
     const noteValue = normalizedNote ? normalizedNote : null;
     const noteUpdatedAt = noteValue ? new Date() : null;
@@ -626,7 +619,7 @@ export default class Member {
     }>
   > {
     if (!gameIds.length) return [];
-    const uniqueIds = [...new Set(gameIds.filter((id) => Number.isInteger(id) && id > 0))];
+    const uniqueIds = [...new Set(gameIds.filter(isPositiveInt))];
     if (!uniqueIds.length) return [];
     const inlineTable = uniqueIds
       .map((_, idx) => `SELECT :id${idx} AS GAME_ID FROM DUAL`)
@@ -812,9 +805,7 @@ export default class Member {
   }
 
   static async removeNowPlaying(userId: string, gameId: number): Promise<boolean> {
-    if (!Number.isInteger(gameId) || gameId <= 0) {
-      throw new Error("Invalid GameDB id.");
-    }
+    requirePositiveInt(gameId, "GameDB id");
 
     const count = await dbMutate(
       MemberSql.removeNowPlaying,
@@ -841,10 +832,8 @@ export default class Member {
       finalPlaytimeHours,
       note,
     } = params;
-    if (!Number.isInteger(gameId) || gameId <= 0) {
-      throw new Error("Invalid GameDB id.");
-    }
-    if (platformId != null && (!Number.isInteger(platformId) || platformId <= 0)) {
+    requirePositiveInt(gameId, "GameDB id");
+    if (platformId != null && !isPositiveInt(platformId)) {
       throw new Error("Invalid platform selection.");
     }
     if (finalPlaytimeHours != null) {
@@ -989,9 +978,7 @@ export default class Member {
     userId: string,
     gameId: number,
   ): Promise<ICompletionRecord | null> {
-    if (!Number.isInteger(gameId) || gameId <= 0) {
-      throw new Error("Invalid GameDB id.");
-    }
+    requirePositiveInt(gameId, "GameDB id");
     const rows = await dbQuery<{
       COMPLETION_ID: number;
       GAME_ID: number;
@@ -1176,9 +1163,7 @@ export default class Member {
       note: string | null;
     }>,
   ): Promise<boolean> {
-    if (!Number.isInteger(completionId) || completionId <= 0) {
-      throw new Error("Invalid completion id.");
-    }
+    requirePositiveInt(completionId, "completion id");
 
     const fields: string[] = [];
     const binds: Record<string, any> = { userId, completionId };
@@ -1192,8 +1177,7 @@ export default class Member {
       binds.completedAt = updates.completedAt;
     }
     if (updates.platformId !== undefined) {
-      if (updates.platformId != null &&
-        (!Number.isInteger(updates.platformId) || updates.platformId <= 0)) {
+      if (updates.platformId != null && !isPositiveInt(updates.platformId)) {
         throw new Error("Invalid platform selection.");
       }
       fields.push("PLATFORM_ID = :platformId");
@@ -1219,9 +1203,7 @@ export default class Member {
   }
 
   static async deleteCompletion(userId: string, completionId: number): Promise<boolean> {
-    if (!Number.isInteger(completionId) || completionId <= 0) {
-      throw new Error("Invalid completion id.");
-    }
+    requirePositiveInt(completionId, "completion id");
     const count = await dbMutate(
       MemberSql.deleteCompletion,
       { completionId, userId },
@@ -1467,12 +1449,8 @@ export default class Member {
     gameId: number,
     platformId: number,
   ): Promise<boolean> {
-    if (!Number.isInteger(gameId) || gameId <= 0) {
-      throw new Error("Invalid GameDB id.");
-    }
-    if (!Number.isInteger(platformId) || platformId <= 0) {
-      throw new Error("Invalid platform selection.");
-    }
+    requirePositiveInt(gameId, "GameDB id");
+    requirePositiveInt(platformId, "platform selection");
     const count = await dbMutate(
       MemberSql.updateNowPlayingPlatform,
       { userId, gameId, platformId },
@@ -1524,9 +1502,7 @@ export default class Member {
     userId: string,
     gameId: number,
   ): Promise<ICompletionRecord[]> {
-    if (!Number.isInteger(gameId) || gameId <= 0) {
-      throw new Error("Invalid GameDB id.");
-    }
+    requirePositiveInt(gameId, "GameDB id");
     return dbQuery<{
       COMPLETION_ID: number;
       GAME_ID: number;
@@ -1573,9 +1549,7 @@ export default class Member {
     referenceDate: Date,
     windowDays: number = 7,
   ): Promise<ICompletionRecord | null> {
-    if (!Number.isInteger(gameId) || gameId <= 0) {
-      throw new Error("Invalid GameDB id.");
-    }
+    requirePositiveInt(gameId, "GameDB id");
     const ref = referenceDate instanceof Date ? referenceDate : new Date(referenceDate);
     const windowMs = windowDays * 24 * 60 * 60 * 1000;
     const startDate = new Date(ref.getTime() - windowMs);

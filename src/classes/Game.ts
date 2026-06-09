@@ -13,6 +13,7 @@ import {
   apiGetRaw,
   type ApiGetRawMeta,
 } from "../services/RpgClubApiClient.js";
+import { isPositiveInt } from "../utilities/ValidationUtils.js";
 
 // Interfaces
 export interface IGame {
@@ -414,7 +415,7 @@ export default class Game {
 
   static async getGamesByIds(ids: number[]): Promise<IGame[]> {
     const uniqueIds = Array.from(
-      new Set(ids.filter((id) => Number.isInteger(id) && id > 0)),
+      new Set(ids.filter(isPositiveInt)),
     );
     if (!uniqueIds.length) return [];
 
@@ -443,7 +444,7 @@ export default class Game {
   }
 
   static async getAlternateVersions(gameId: number): Promise<IGame[]> {
-    if (!Number.isInteger(gameId) || gameId <= 0) return [];
+    if (!isPositiveInt(gameId)) return [];
     return dbWithConnection(async (conn) => {
       if (getDialect() === "oracle") {
         const result = await (conn as oracledb.Connection).execute(
@@ -468,7 +469,7 @@ export default class Game {
     createdBy: string | null,
   ): Promise<number> {
     const uniqueIds = Array.from(
-      new Set(gameIds.filter((id) => Number.isInteger(id) && id > 0)),
+      new Set(gameIds.filter(isPositiveInt)),
     ).sort((a, b) => a - b);
     if (uniqueIds.length < 2) {
       throw new Error("At least two GameDB ids are required to link versions.");
@@ -1022,7 +1023,7 @@ export default class Game {
     igdbIds: number[],
   ): Promise<Map<number, IPlatformDef>> {
     const uniqueIds = Array.from(
-      new Set(igdbIds.filter((id) => Number.isInteger(id) && id > 0)),
+      new Set(igdbIds.filter(isPositiveInt)),
     );
     if (!uniqueIds.length) {
       return new Map();
@@ -1104,7 +1105,7 @@ export default class Game {
       new Set(
         games
           .map((game) => game.id)
-          .filter((id) => Number.isInteger(id) && id > 0),
+          .filter(isPositiveInt),
       ),
     );
     if (!gameIds.length) {
@@ -1525,9 +1526,9 @@ export default class Game {
     gameId: number,
     igdbPlatformIds: number[],
   ): Promise<void> {
-    if (!Number.isInteger(gameId) || gameId <= 0) return;
+    if (!isPositiveInt(gameId)) return;
     const uniqueIds = Array.from(
-      new Set(igdbPlatformIds.filter((id) => Number.isInteger(id) && id > 0)),
+      new Set(igdbPlatformIds.filter(isPositiveInt)),
     );
     if (!uniqueIds.length) return;
 
@@ -1664,7 +1665,7 @@ export default class Game {
     gameIds: number[],
   ): Promise<Set<number>> {
     const ids = Array.from(
-      new Set(gameIds.filter((id) => Number.isInteger(id) && id > 0)),
+      new Set(gameIds.filter(isPositiveInt)),
     );
     if (!ids.length) return new Set();
 

@@ -66,6 +66,7 @@ import {
 } from "./now-playing.command.js";
 import { NOW_PLAYING_HELP_PREFIX } from "./now-playing-help.js";
 import { EphemeralOwnerMenu } from "../functions/EphemeralOwnerMenu.js";
+import { isPositiveInt } from "../utilities/ValidationUtils.js";
 
 const gjHmenu = new EphemeralOwnerMenu();
 
@@ -513,9 +514,7 @@ export class GameJournalCommand {
       }
       const targetUserId = member?.id ?? "0";
       const gameIdParsed = gameRaw ? Number(gameRaw) : NaN;
-      const gameId = Number.isInteger(gameIdParsed) && gameIdParsed > 0
-        ? gameIdParsed
-        : undefined;
+      const gameId = isPositiveInt(gameIdParsed) ? gameIdParsed : undefined;
       const gameIdStr = gameId ? String(gameId) : "0";
       const callerId = interaction.user.id;
 

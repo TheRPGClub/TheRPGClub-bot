@@ -31,6 +31,7 @@ import {
 import { buildTextReply } from "../functions/ComponentsV2Utils.js";
 import { notifyUnknownCompletionPlatform } from "../functions/CompletionHelpers.js";
 import { COMPLETION_REACTION_DEV_CHANNEL_ID } from "../config/channels.js";
+import { isPositiveInt } from "../utilities/ValidationUtils.js";
 
 const PUSH_PIN_EMOJI = "📌";
 const PLUS_EMOJI = "➕";
@@ -336,7 +337,7 @@ export class MessageReactionAdd {
 
     const value = interaction.values?.[0];
     const gameId = value ? Number(value) : Number.NaN;
-    if (!Number.isInteger(gameId) || gameId <= 0) {
+    if (!isPositiveInt(gameId)) {
       await safeUpdate(interaction, {
         content: "Invalid game selection.",
         components: [],

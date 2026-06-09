@@ -71,6 +71,7 @@ import {
   shouldAutoAcceptFirstCsvMatch,
 } from "./gamedb-csv-import.service.js";
 import { processReleaseDates } from "./gamedb-add.command.js";
+import { isPositiveInt } from "../../utilities/ValidationUtils.js";
 
 const GAMEDB_CSV_ACTIONS = ["start", "resume", "status", "pause", "cancel"] as const;
 type GameDbCsvAction = (typeof GAMEDB_CSV_ACTIONS)[number];
@@ -148,7 +149,7 @@ async function importGameFromCsv(igdbId: number): Promise<{ gameId: number; titl
   if (existing) {
     const igdbPlatformIds: number[] = (details.platforms ?? [])
       .map((platform) => platform.id)
-      .filter((id) => Number.isInteger(id) && id > 0);
+      .filter(isPositiveInt);
     await Game.addGamePlatformsByIgdbIds(existing.id, igdbPlatformIds);
     await processReleaseDates(existing.id, details.release_dates ?? []);
 
@@ -182,7 +183,7 @@ async function importGameFromCsv(igdbId: number): Promise<{ gameId: number; titl
   await Game.saveFullGameMetadata(newGame.id, details);
   const igdbPlatformIds: number[] = (details.platforms ?? [])
     .map((platform) => platform.id)
-    .filter((id) => Number.isInteger(id) && id > 0);
+    .filter(isPositiveInt);
   await Game.addGamePlatformsByIgdbIds(newGame.id, igdbPlatformIds);
   await processReleaseDates(newGame.id, details.release_dates ?? []);
 
@@ -489,7 +490,7 @@ export class GameDbCsvImportCommand {
 
     const igdbIdRaw = interaction.values?.[0];
     const igdbId = Number(igdbIdRaw);
-    if (!Number.isInteger(igdbId) || igdbId <= 0) {
+    if (!isPositiveInt(igdbId)) {
       await safeReply(interaction, buildTextReply("Invalid IGDB selection.", true));
       return;
     }
@@ -715,7 +716,7 @@ export class GameDbCsvImportCommand {
     const raw = interaction.fields.getTextInputValue(GAMEDB_CSV_MANUAL_INPUT_ID);
     const cleaned = stripModalInput(raw);
     const igdbId = Number(cleaned);
-    if (!Number.isInteger(igdbId) || igdbId <= 0) {
+    if (!isPositiveInt(igdbId)) {
       await safeReply(interaction, buildTextReply("Please provide a valid IGDB id.", true));
       return;
     }

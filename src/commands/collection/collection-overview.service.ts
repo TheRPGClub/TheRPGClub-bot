@@ -9,6 +9,7 @@ import UserGameCollection, {
 import { COLLECTION_OVERVIEW_EMOJIS } from "../../config/emojis.js";
 import { safeV2TextContent } from "../../functions/ComponentsV2Utils.js";
 import { formatPlatformDisplayName } from "../../functions/PlatformDisplay.js";
+import { isPositiveInt } from "../../utilities/ValidationUtils.js";
 
 export const COLLECTION_OVERVIEW_SELECT_PREFIX = "collection-overview-select-v1";
 const COLLECTION_OVERVIEW_SELECT_OVERVIEW = "overview";
@@ -188,7 +189,7 @@ export function parseCollectionOverviewSelectValue(
   const [prefix, idRaw] = value.split(":");
   if (prefix !== COLLECTION_OVERVIEW_SELECT_PLATFORM_PREFIX) return null;
   const platformId = Number(idRaw);
-  if (!Number.isInteger(platformId) || platformId <= 0) return null;
+  if (!isPositiveInt(platformId)) return null;
   return { platformId };
 }
 

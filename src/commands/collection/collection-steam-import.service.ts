@@ -1,5 +1,6 @@
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle } from "discord.js";
 import { buildImportReasonSummary } from "./collection-import-ui.utils.js";
+import { isPositiveInt } from "../../utilities/ValidationUtils.js";
 
 export type CollectionSteamImportButtonAction = "skip" | "remap" | "game-id" | "pause";
 
@@ -54,8 +55,8 @@ export function parseCollectionSteamImportActionId(customId: string): {
 
   const importId = Number(parts[2]);
   const itemId = Number(parts[3]);
-  if (!Number.isInteger(importId) || importId <= 0) return null;
-  if (!Number.isInteger(itemId) || itemId <= 0) return null;
+  if (!isPositiveInt(importId)) return null;
+  if (!isPositiveInt(itemId)) return null;
 
   const actionCode = parts[4];
   const action = actionCode === "s"
@@ -99,9 +100,9 @@ export function parseCollectionSteamChooseId(customId: string): {
   const importId = Number(parts[2]);
   const itemId = Number(parts[3]);
   const gameId = Number(parts[4]);
-  if (!Number.isInteger(importId) || importId <= 0) return null;
-  if (!Number.isInteger(itemId) || itemId <= 0) return null;
-  if (!Number.isInteger(gameId) || gameId <= 0) return null;
+  if (!isPositiveInt(importId)) return null;
+  if (!isPositiveInt(itemId)) return null;
+  if (!isPositiveInt(gameId)) return null;
   return { ownerId: parts[1], importId, itemId, gameId };
 }
 
@@ -129,8 +130,8 @@ export function parseCollectionSteamRemapModalId(customId: string): {
 
   const importId = Number(parts[2]);
   const itemId = Number(parts[3]);
-  if (!Number.isInteger(importId) || importId <= 0) return null;
-  if (!Number.isInteger(itemId) || itemId <= 0) return null;
+  if (!isPositiveInt(importId)) return null;
+  if (!isPositiveInt(itemId)) return null;
 
   return { ownerId: parts[1], importId, itemId };
 }
@@ -158,8 +159,8 @@ export function parseCollectionSteamGameIdModalId(customId: string): {
   if (parts[0] !== STEAM_GAME_ID_MODAL_PREFIX) return null;
   const importId = Number(parts[2]);
   const itemId = Number(parts[3]);
-  if (!Number.isInteger(importId) || importId <= 0) return null;
-  if (!Number.isInteger(itemId) || itemId <= 0) return null;
+  if (!isPositiveInt(importId)) return null;
+  if (!isPositiveInt(itemId)) return null;
   return { ownerId: parts[1], importId, itemId };
 }
 

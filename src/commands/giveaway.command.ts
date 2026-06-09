@@ -51,6 +51,7 @@ import {
   refreshGiveawayHubMessage,
 } from "../services/GiveawayHubService.js";
 import { GIVEAWAY_HUB_CHANNEL_ID, GIVEAWAY_LOG_CHANNEL_ID } from "../config/channels.js";
+import { isPositiveInt } from "../utilities/ValidationUtils.js";
 
 const MAX_TITLE_LENGTH = 200;
 const MAX_PLATFORM_LENGTH = 50;
@@ -209,7 +210,7 @@ async function handleDonation(
 }
 
 async function handleRevoke(interaction: AnyRepliable, keyId: number): Promise<boolean> {
-  if (!Number.isInteger(keyId) || keyId <= 0) {
+  if (!isPositiveInt(keyId)) {
     await safeReply(interaction, buildTextReply("Invalid key id.", true));
     return false;
   }
@@ -752,7 +753,7 @@ export class GiveawayCommand {
     if (Number.isNaN(page)) return;
 
     const keyId = Number(interaction.values?.[0]);
-    if (!Number.isInteger(keyId) || keyId <= 0) {
+    if (!isPositiveInt(keyId)) {
       await safeReply(interaction, buildTextReply("Invalid selection.", true));
       return;
     }
@@ -792,7 +793,7 @@ export class GiveawayCommand {
     const page = 0;
 
     const keyId = Number(interaction.values?.[0]);
-    if (!Number.isInteger(keyId) || keyId <= 0) {
+    if (!isPositiveInt(keyId)) {
       await safeReply(interaction, buildTextReply("Invalid selection.", true));
       return;
     }
@@ -833,7 +834,7 @@ export class GiveawayCommand {
     if (Number.isNaN(page)) return;
 
     const keyId = Number(interaction.values?.[0]);
-    if (!Number.isInteger(keyId) || keyId <= 0) {
+    if (!isPositiveInt(keyId)) {
       await safeReply(interaction, buildTextReply("Invalid selection.", true));
       return;
     }
@@ -865,7 +866,7 @@ export class GiveawayCommand {
     const keyId = Number(parts[2]);
     const page = Number(parts[3]);
 
-    if (!Number.isInteger(keyId) || keyId <= 0) {
+    if (!isPositiveInt(keyId)) {
       await safeUpdate(interaction, {
         content: "Invalid selection.",
         embeds: [],

@@ -9,6 +9,7 @@ import {
   dbMutateConn,
 } from "../db/SqlManager.js";
 import { UserGameCollectionSql } from "../db/sql/index.js";
+import { isPositiveInt, requirePositiveInt } from "../utilities/ValidationUtils.js";
 
 export const COLLECTION_OWNERSHIP_TYPES = [
   "Digital",
@@ -131,10 +132,8 @@ export default class UserGameCollection {
     const note = params.note?.trim() ? params.note.trim() : null;
     const isShared = 1;
 
-    if (!Number.isInteger(gameId) || gameId <= 0) {
-      throw new Error("Invalid GameDB id.");
-    }
-    if (platformId != null && (!Number.isInteger(platformId) || platformId <= 0)) {
+    requirePositiveInt(gameId, "GameDB id");
+    if (platformId != null && !isPositiveInt(platformId)) {
       throw new Error("Invalid platform id.");
     }
     if (note && note.length > 500) {
@@ -174,9 +173,7 @@ export default class UserGameCollection {
     entryId: number,
     userId: string,
   ): Promise<IUserGameCollectionEntry | null> {
-    if (!Number.isInteger(entryId) || entryId <= 0) {
-      throw new Error("Invalid entry id.");
-    }
+    requirePositiveInt(entryId, "entry id");
     const rows = await dbQuery(
       UserGameCollectionSql.getEntryForUser,
       { entryId, userId },
@@ -194,16 +191,13 @@ export default class UserGameCollection {
       note?: string | null;
     },
   ): Promise<IUserGameCollectionEntry | null> {
-    if (!Number.isInteger(entryId) || entryId <= 0) {
-      throw new Error("Invalid entry id.");
-    }
+    requirePositiveInt(entryId, "entry id");
 
     const updateParts: string[] = [];
     const binds: Record<string, string | number | null> = { entryId, userId };
 
     if (updates.platformId !== undefined) {
-      if (updates.platformId != null &&
-        (!Number.isInteger(updates.platformId) || updates.platformId <= 0)) {
+      if (updates.platformId != null && !isPositiveInt(updates.platformId)) {
         throw new Error("Invalid platform id.");
       }
       updateParts.push("PLATFORM_ID = :platformId");
@@ -250,9 +244,7 @@ export default class UserGameCollection {
   }
 
   static async removeEntryForUser(entryId: number, userId: string): Promise<boolean> {
-    if (!Number.isInteger(entryId) || entryId <= 0) {
-      throw new Error("Invalid entry id.");
-    }
+    requirePositiveInt(entryId, "entry id");
     return (await dbMutate(
       UserGameCollectionSql.removeEntry,
       { entryId, userId },
@@ -288,7 +280,7 @@ export default class UserGameCollection {
     if (filters.platformId !== undefined) {
       if (filters.platformId == null) {
         where.push("c.PLATFORM_ID IS NULL");
-      } else if (Number.isInteger(filters.platformId) && filters.platformId > 0) {
+      } else if (isPositiveInt(filters.platformId)) {
         where.push("c.PLATFORM_ID = :platformId");
         binds.platformId = Math.trunc(filters.platformId);
       } else {
@@ -302,7 +294,7 @@ export default class UserGameCollection {
     }
 
     const requestedLimit = Number(filters.limit ?? 0);
-    const hasLimit = Number.isInteger(requestedLimit) && requestedLimit > 0;
+    const hasLimit = isPositiveInt(requestedLimit);
     if (hasLimit) {
       binds.limit = Math.trunc(requestedLimit);
     }

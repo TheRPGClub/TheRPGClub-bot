@@ -31,6 +31,7 @@ import { STANDARD_PLATFORM_IDS } from "../../config/standardPlatforms.js";
 import { COMPLETIONATOR_SKIP_SENTINEL } from "./completion.types.js";
 import { parseCompletionDateInput } from "../profile.command.js";
 import { searchGameDbWithFallback, importGameFromIgdb } from "./completionator-parser.service.js";
+import { isPositiveInt } from "../../utilities/ValidationUtils.js";
 
 export class CompletionatorHandlersService {
   private workflowService: CompletionatorWorkflowService;
@@ -89,7 +90,7 @@ export class CompletionatorHandlersService {
     }
 
     const gameId = Number(choice);
-    if (!Number.isInteger(gameId) || gameId <= 0) {
+    if (!isPositiveInt(gameId)) {
       await safeReply(interaction, buildTextReply("Invalid game selection.", Boolean(ephemeral)));
       return;
     }
@@ -773,7 +774,7 @@ export class CompletionatorHandlersService {
 
       if (kind === "igdb-manual") {
         const igdbId = Number(rawValue);
-        if (!Number.isInteger(igdbId) || igdbId <= 0) {
+        if (!isPositiveInt(igdbId)) {
           await updateImportItem(item.itemId, {
             status: "ERROR",
             errorText: "Invalid IGDB id entered.",
@@ -798,7 +799,7 @@ export class CompletionatorHandlersService {
 
       if (kind === "gamedb-manual") {
         const manualId = Number(rawValue);
-        if (!Number.isInteger(manualId) || manualId <= 0) {
+        if (!isPositiveInt(manualId)) {
           await updateImportItem(item.itemId, {
             status: "ERROR",
             errorText: "Invalid GameDB id entered.",

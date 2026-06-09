@@ -1,5 +1,6 @@
 import { dbQuery, dbMutate, dbTransaction, dbMutateConn } from "../db/SqlManager.js";
 import { AdminWizardSessionSql } from "../db/sql/index.js";
+import { isPositiveInt } from "../utilities/ValidationUtils.js";
 
 export const ADMIN_WIZARD_COMMANDS = ["nextround-setup"] as const;
 export type AdminWizardCommand = (typeof ADMIN_WIZARD_COMMANDS)[number];
@@ -83,7 +84,7 @@ function sanitizeNumberArray(values: unknown): number[] {
   if (!Array.isArray(values)) return [];
   return values
     .map((value) => Number(value))
-    .filter((value) => Number.isInteger(value) && value > 0);
+    .filter(isPositiveInt);
 }
 
 function parseNextRoundWizardState(raw: string): INextRoundWizardState {
@@ -101,7 +102,7 @@ function parseNextRoundWizardState(raw: string): INextRoundWizardState {
 
   const roundNumber = parsed?.roundNumber == null ? null : Number(parsed.roundNumber);
   const normalizedRoundNumber =
-    roundNumber !== null && Number.isInteger(roundNumber) && roundNumber > 0
+    roundNumber !== null && isPositiveInt(roundNumber)
       ? roundNumber
       : null;
 
@@ -130,12 +131,11 @@ function parseNextRoundWizardState(raw: string): INextRoundWizardState {
     selectedGotmOrder: sanitizeNumberArray(parsed?.selectedGotmOrder),
     selectedNrGotmOrder: sanitizeNumberArray(parsed?.selectedNrGotmOrder),
     gotmPickCount:
-      Number.isInteger(Number(parsed?.gotmPickCount)) &&
-      Number(parsed?.gotmPickCount) > 0
+      isPositiveInt(Number(parsed?.gotmPickCount))
         ? Number(parsed?.gotmPickCount)
         : null,
     nrPickCount:
-      Number.isInteger(Number(parsed?.nrPickCount)) && Number(parsed?.nrPickCount) > 0
+      isPositiveInt(Number(parsed?.nrPickCount))
         ? Number(parsed?.nrPickCount)
         : null,
     chosenVoteDateIso,

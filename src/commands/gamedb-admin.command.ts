@@ -63,6 +63,7 @@ import axios from "axios";
 import { igdbService } from "../services/IGDB/IgdbService.js";
 import { shouldRenderPrevNextButtons } from "../functions/PaginationUtils.js";
 import { parseSynonymQuickAddTerms } from "./gamedb-synonym.utils.js";
+import { isPositiveInt } from "../utilities/ValidationUtils.js";
 
 const AUDIT_PAGE_SIZE = 20;
 const AUDIT_VIDEO_MODAL_ID = "audit-video-modal";
@@ -209,7 +210,7 @@ const AUTO_ACCEPT_RUNS = new Map<
 
 function parseGameIdList(raw: string): number[] {
   const matches = raw.split(/[^0-9]+/).filter(Boolean);
-  const ids = matches.map((part) => Number(part)).filter((id) => Number.isInteger(id) && id > 0);
+  const ids = matches.map((part) => Number(part)).filter(isPositiveInt);
   return Array.from(new Set(ids));
 }
 
@@ -1621,7 +1622,7 @@ export class GameDbAdmin {
   async synonymAddModal(interaction: ModalSubmitInteraction): Promise<void> {
     const parts = interaction.customId.split(":");
     const draftId = Number(parts[1]);
-    if (!Number.isInteger(draftId) || draftId <= 0) {
+    if (!isPositiveInt(draftId)) {
       await safeReply(interaction, buildTextReply("This synonym draft is no longer valid.", true));
       return;
     }
@@ -1689,7 +1690,7 @@ export class GameDbAdmin {
   async synonymAddMore(interaction: ButtonInteraction): Promise<void> {
     const parts = interaction.customId.split(":");
     const draftId = Number(parts[1]);
-    if (!Number.isInteger(draftId) || draftId <= 0) {
+    if (!isPositiveInt(draftId)) {
       await safeReply(interaction, buildTextReply("This synonym draft is no longer valid.", true));
       return;
     }
@@ -1707,7 +1708,7 @@ export class GameDbAdmin {
   async synonymAddDone(interaction: ButtonInteraction): Promise<void> {
     const parts = interaction.customId.split(":");
     const draftId = Number(parts[1]);
-    if (!Number.isInteger(draftId) || draftId <= 0) {
+    if (!isPositiveInt(draftId)) {
       await safeReply(interaction, buildTextReply("This synonym draft is no longer valid.", true));
       return;
     }
@@ -1731,7 +1732,7 @@ export class GameDbAdmin {
     if (await replyIfNotOwner(interaction, ownerId)) return;
 
     const groupId = Number(interaction.values[0]);
-    if (!Number.isInteger(groupId) || groupId <= 0) {
+    if (!isPositiveInt(groupId)) {
       await safeReply(interaction, buildTextReply("Invalid synonym group selected.", true));
       return;
     }
@@ -1765,7 +1766,7 @@ export class GameDbAdmin {
     if (await replyIfNotOwner(interaction, ownerId)) return;
 
     const groupId = Number(interaction.values[0]);
-    if (!Number.isInteger(groupId) || groupId <= 0) {
+    if (!isPositiveInt(groupId)) {
       await safeReply(interaction, buildTextReply("Invalid synonym group selected.", true));
       return;
     }
@@ -1812,7 +1813,7 @@ export class GameDbAdmin {
       await safeReply(interaction, buildTextReply("This edit request isn't for you.", true));
       return;
     }
-    if (!Number.isInteger(groupId) || groupId <= 0) {
+    if (!isPositiveInt(groupId)) {
       await safeReply(interaction, buildTextReply("Invalid synonym group selected.", true));
       return;
     }
