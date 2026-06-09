@@ -36,7 +36,6 @@ export {
   UserChannelMessageCountSql,
 } from "./userActivity.sql.js";
 export { UserGameCollectionSql } from "./userGameCollection.sql.js";
-export { XboxCollectionImportSql } from "./xboxCollectionImport.sql.js";
 
 /**
  * Selects the SQL string for the active dialect from a static SqlEntry.
