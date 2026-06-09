@@ -104,7 +104,7 @@ async function processFeed(
 
   if (!newItems.length) return;
 
-  await markItemsSeen(newItems, connection);
+  await markItemsSeen(newItems);
 
   try {
     const channel = await client.channels.fetch(feed.channelId).catch(() => null);
