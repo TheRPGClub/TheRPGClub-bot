@@ -48,6 +48,7 @@ import {
 } from "../functions/CompletionHelpers.js";
 import { buildTextReply } from "../functions/ComponentsV2Utils.js";
 import { isPositiveInt } from "../utilities/ValidationUtils.js";
+import { sleep } from "../utilities/DelayUtils.js";
 
 type CompletionAddContext = {
   targetUserId: string;
@@ -755,7 +756,6 @@ export class SuperAdmin {
     let successCount = 0;
     let failCount = 0;
 
-    const delay = async (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
     const avatarBuffersDifferent = (a: Buffer | null, b: Buffer | null): boolean => {
       if (!a && !b) return false;
       if (!!a !== !!b) return true;
@@ -833,12 +833,12 @@ export class SuperAdmin {
           try {
             await Member.upsert({ ...baseRecord, avatarBlob: null });
             successCount++;
-            await delay(1000);
+            await sleep(1000);
             continue;
           } catch (retryErr) {
             failCount++;
             console.error(`Failed to upsert user ${user.id} after stripping avatar`, retryErr);
-            await delay(1000);
+            await sleep(1000);
             continue;
           }
         }
@@ -846,7 +846,7 @@ export class SuperAdmin {
         console.error(`Failed to upsert user ${user.id}`, err);
       }
 
-      await delay(1000);
+      await sleep(1000);
     }
 
     await safeReply(interaction, buildTextReply(`Member scan complete. Upserts succeeded: ${successCount}. Failed: ${failCount}. ` +
@@ -906,9 +906,6 @@ export class SuperAdmin {
     });
   }
 
-  private async delay(ms: number): Promise<void> {
-    await new Promise((resolve) => setTimeout(resolve, ms));
-  }
 }
 
 export const AUDIT_NO_VALUE_SENTINEL = "__NO_VALUE__";

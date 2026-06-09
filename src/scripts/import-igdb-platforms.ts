@@ -3,15 +3,13 @@ import oracledb from "oracledb";
 import { initOraclePool, getOraclePool } from "../db/oracleClient.js";
 import { oraQuery, oraMutate, oraWithConnection } from "../db/SqlManager.js";
 import { igdbService, type IGDBPlatform } from "../services/IGDB/IgdbService.js";
+import { sleep } from "../utilities/DelayUtils.js";
 
 type UpsertResult = "inserted" | "updated" | "unchanged";
 type WriteMode = "write" | "dry-run";
 
 const DEFAULT_LIMIT: number = 500;
 const RATE_LIMIT_DELAY_MS: number = 300;
-
-const sleep = (ms: number): Promise<void> =>
-  new Promise((resolve) => setTimeout(resolve, ms));
 
 const normalizeCode = (input: string): string =>
   input.replace(/[^A-Za-z0-9]/g, "").toUpperCase();
