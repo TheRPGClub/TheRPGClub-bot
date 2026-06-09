@@ -40,6 +40,7 @@ import {
   formatPlaytimeHours,
   formatTableDate,
 } from "../functions/DateFormatUtils.js";
+import { DISCORD_SELECT_LABEL_MAX } from "../config/textLimits.js";
 
 export { formatDiscordTimestamp, formatPlaytimeHours, formatTableDate };
 
@@ -668,12 +669,12 @@ export class ProfileCommand {
     const description = `Filters: ${filterSummary}\n\n${lines.join("\n")}`;
 
     const selectOptions = results.map((record, idx) => {
-      const label = (record.globalName ?? record.username ?? `Member ${idx + 1}`).slice(0, 100);
+      const label = (record.globalName ?? record.username ?? `Member ${idx + 1}`).slice(0, DISCORD_SELECT_LABEL_MAX);
       const descriptionText = `ID: ${record.userId}${record.isBot ? " | Bot" : ""}`;
       return {
         label,
         value: record.userId,
-        description: descriptionText.slice(0, 100),
+        description: descriptionText.slice(0, DISCORD_SELECT_LABEL_MAX),
       };
     });
 

@@ -18,11 +18,12 @@ import {
   getReleaseYear,
   parseTitleWithYear,
 } from "../functions/GameTitleAutocompleteUtils.js";
+import { DISCORD_SELECT_LABEL_MAX } from "../config/textLimits.js";
 
 function buildKeepTypingOption(query: string): { name: string; value: string } {
   const label = `Keep typing: "${query}"`;
   return {
-    name: label.slice(0, 100),
+    name: label.slice(0, DISCORD_SELECT_LABEL_MAX),
     value: query,
   };
 }
@@ -41,7 +42,7 @@ async function autocompleteHltbTitle(
   const resultOptions = results.slice(0, 24).map((game) => {
     const label = formatGameTitleWithYear(game);
     return {
-      name: label.slice(0, 100),
+      name: label.slice(0, DISCORD_SELECT_LABEL_MAX),
       value: label,
     };
   });

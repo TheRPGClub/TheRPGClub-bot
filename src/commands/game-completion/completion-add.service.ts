@@ -34,6 +34,7 @@ import {
 } from "../../functions/ComponentsV2Utils.js";
 import { COMPONENTS_V2_FLAG } from "../../config/flags.js";
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
+import { DISCORD_SELECT_LABEL_MAX } from "../../config/textLimits.js";
 
 /**
  * Creates a completion session and returns the session ID
@@ -56,7 +57,7 @@ export async function promptCompletionSelection(
   if (localResults.length) {
     const sessionId = createCompletionSession(ctx);
     const options = localResults.slice(0, 24).map((game) => ({
-      label: game.title.slice(0, 100),
+      label: game.title.slice(0, DISCORD_SELECT_LABEL_MAX),
       value: String(game.id),
       description: `GameDB #${game.id}`,
     }));

@@ -41,6 +41,7 @@ import {
   MP_INFO_PAGE_SIZE as PAGE_SIZE,
 } from "../config/pagination.js";
 import { parseCustomIdSegments } from "../utilities/CustomIdUtils.js";
+import { DISCORD_SELECT_LABEL_MAX } from "../config/textLimits.js";
 
 const MAX_OPTIONS = 25;
 
@@ -174,9 +175,9 @@ function buildPageComponents(
     const name = member.globalName ?? member.username ?? "Unknown member";
     const platforms = formatPlatforms(member, filters) || "Platforms not listed";
     return {
-      label: name.slice(0, 100),
+      label: name.slice(0, DISCORD_SELECT_LABEL_MAX),
       value: member.userId,
-      description: platforms.slice(0, 100),
+      description: platforms.slice(0, DISCORD_SELECT_LABEL_MAX),
     };
   });
 

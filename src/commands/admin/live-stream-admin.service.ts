@@ -23,6 +23,7 @@ import {
   sanitizeUserInput,
 } from "../../functions/InteractionUtils.js";
 import { buildTextReply } from "../../functions/ComponentsV2Utils.js";
+import { DISCORD_SELECT_LABEL_MAX } from "../../config/textLimits.js";
 
 const LIVE_STREAM_MODAL_PREFIX = "admin-live-stream-create";
 const LIVE_STREAM_TOPIC_ID = "live-stream-topic";
@@ -281,7 +282,7 @@ export async function handleLiveStreamCreateModal(interaction: ModalSubmitIntera
         content: `Live event discussion for **${topic}**`,
         embeds: imageUrl ? [new EmbedBuilder().setImage(imageUrl)] : [],
       },
-      name: topic.slice(0, 100),
+      name: topic.slice(0, DISCORD_SELECT_LABEL_MAX),
     });
     threadUrl = thread.url;
     threadId = thread.id;

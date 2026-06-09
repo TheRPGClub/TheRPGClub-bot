@@ -102,6 +102,7 @@ import {
 import { renderUsernameWithEmoji } from "../services/UserEmojiService.js";
 import { isPositiveInt, isValidPlaytimeHours } from "../utilities/ValidationUtils.js";
 import { formatStructuredLog } from "../utilities/LogUtils.js";
+import { DISCORD_SELECT_LABEL_MAX } from "../config/textLimits.js";
 
 const MAX_NOW_PLAYING_NOTE_LEN = 500;
 const NOW_PLAYING_SEARCH_LIMIT = 10;
@@ -1630,7 +1631,7 @@ export class NowPlayingCommand {
     });
 
     const baseOptions = platformOptions.map((platform) => ({
-      label: platform.name.slice(0, 100),
+      label: platform.name.slice(0, DISCORD_SELECT_LABEL_MAX),
       value: String(platform.id),
     }));
     const options = [
@@ -2249,7 +2250,7 @@ export class NowPlayingCommand {
       sourceSessionId,
     });
     const options = platforms.slice(0, 25).map((platform) => ({
-      label: platform.name.slice(0, 100),
+      label: platform.name.slice(0, DISCORD_SELECT_LABEL_MAX),
       value: String(platform.id),
     }));
     const select = new StringSelectMenuBuilder()
@@ -2606,7 +2607,7 @@ export class NowPlayingCommand {
           });
         }
         return deduped.map((platform, optionIndex) => ({
-          label: platform.name.slice(0, 100),
+          label: platform.name.slice(0, DISCORD_SELECT_LABEL_MAX),
           value: String(optionIndex),
           platformId: platform.id,
         }));
@@ -2656,7 +2657,7 @@ export class NowPlayingCommand {
     }
 
     const options = platforms.slice(0, 25).map((platform) => ({
-      label: platform.name.slice(0, 100),
+      label: platform.name.slice(0, DISCORD_SELECT_LABEL_MAX),
       value: String(platform.id),
     }));
     const select = new StringSelectMenuBuilder()
@@ -3565,7 +3566,7 @@ export class NowPlayingCommand {
       return;
     }
     const options = entries.map((entry) => ({
-      label: (entry.title ?? `Entry #${entry.entryNumber}`).slice(0, 100),
+      label: (entry.title ?? `Entry #${entry.entryNumber}`).slice(0, DISCORD_SELECT_LABEL_MAX),
       value: String(entry.entryId),
       description: formatTableDate(entry.createdAt),
     }));
@@ -3861,7 +3862,7 @@ export class NowPlayingCommand {
       return;
     }
     const options = gamesWithoutJournal.map((e) => ({
-      label: e.title.slice(0, 100),
+      label: e.title.slice(0, DISCORD_SELECT_LABEL_MAX),
       value: String(e.gameId),
     }));
     const select = new StringSelectMenuBuilder()
@@ -4810,7 +4811,7 @@ export class NowPlayingCommand {
       .filter((entry) => isPositiveInt(entry.gameId))
       .slice(0, 25)
       .map((entry) => ({
-        label: formatEntryTitleWithPlatform(entry).slice(0, 100),
+        label: formatEntryTitleWithPlatform(entry).slice(0, DISCORD_SELECT_LABEL_MAX),
         value: String(entry.gameId),
       }));
     const removeSelect = new StringSelectMenuBuilder()
@@ -4963,8 +4964,8 @@ export class NowPlayingCommand {
       const currentPlatformName =
         selectedIndex >= 0 ? (options[selectedIndex]?.label ?? null) : null;
       const placeholder = currentPlatformName
-        ? `${entry.title.slice(0, 50)} - ${currentPlatformName}`.slice(0, 100)
-        : entry.title.slice(0, 100);
+        ? `${entry.title.slice(0, 50)} - ${currentPlatformName}`.slice(0, DISCORD_SELECT_LABEL_MAX)
+        : entry.title.slice(0, DISCORD_SELECT_LABEL_MAX);
       const select = new StringSelectMenuBuilder()
         .setCustomId(`${NOW_PLAYING_EDIT_PLATFORM_SLOT_PREFIX}:${ownerId}:${slotIndex}:${stateToken}`)
         .setPlaceholder(placeholder)
@@ -4972,7 +4973,7 @@ export class NowPlayingCommand {
         .setMaxValues(1)
         .addOptions(options.map((option, optionIndex) => ({
           label: optionIndex === selectedIndex
-            ? `${entry.title.slice(0, 50)} - ${option.label}`.slice(0, 100)
+            ? `${entry.title.slice(0, 50)} - ${option.label}`.slice(0, DISCORD_SELECT_LABEL_MAX)
             : option.label,
           value: option.value,
           default: selectedIndex === optionIndex,
@@ -5039,7 +5040,7 @@ export class NowPlayingCommand {
         .setMinValues(1)
         .setMaxValues(1)
         .addOptions(entries.map((entry, entryIndex) => ({
-          label: formatEntryTitleWithPlatform(entry).slice(0, 100),
+          label: formatEntryTitleWithPlatform(entry).slice(0, DISCORD_SELECT_LABEL_MAX),
           value: String(entryIndex),
           default: selectedIndex === entryIndex,
         })));
@@ -5665,7 +5666,7 @@ export class NowPlayingCommand {
     const options = sorted.slice(0, 25).map((record) => {
       const displayName = record.globalName ?? record.username ?? record.userId;
       return {
-        label: displayName.slice(0, 100),
+        label: displayName.slice(0, DISCORD_SELECT_LABEL_MAX),
         value: record.userId,
         description: `${record.entries.length} ${record.entries.length === 1 ? "game" : "games"}`,
         default: record.userId === selectedUserId,

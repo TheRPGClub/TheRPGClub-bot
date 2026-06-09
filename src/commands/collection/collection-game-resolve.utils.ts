@@ -3,6 +3,7 @@ import { igdbService, type IGDBGame } from "../../services/IGDB/IgdbService.js";
 import type { IgdbSelectOption } from "../../services/IGDB/IgdbSelectService.js";
 import { sanitizeUserInput } from "../../functions/InteractionUtils.js";
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
+import { DISCORD_SELECT_LABEL_MAX } from "../../config/textLimits.js";
 
 export type ResolvedCollectionGame =
   | { kind: "resolved"; gameId: number; title: string }
@@ -33,11 +34,11 @@ export async function buildCollectionIgdbSelectOptions(
       .join(", ");
     const summary = (game.summary ?? "No summary").replace(/\s+/g, " ").trim();
     const description = platformText
-      ? `${platformText} | ${summary}`.slice(0, 100)
-      : summary.slice(0, 100);
+      ? `${platformText} | ${summary}`.slice(0, DISCORD_SELECT_LABEL_MAX)
+      : summary.slice(0, DISCORD_SELECT_LABEL_MAX);
     return {
       id: game.id,
-      label: `${game.name} (${year})`.slice(0, 100),
+      label: `${game.name} (${year})`.slice(0, DISCORD_SELECT_LABEL_MAX),
       description,
     };
   });

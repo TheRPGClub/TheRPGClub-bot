@@ -6,6 +6,7 @@ import UserGameCollection, {
 import { sanitizeUserInput } from "../../functions/InteractionUtils.js";
 import { formatGameTitleWithYear } from "../../functions/GameTitleAutocompleteUtils.js";
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
+import { DISCORD_SELECT_LABEL_MAX } from "../../config/textLimits.js";
 
 export const COLLECTION_ENTRY_VALUE_PREFIX = "collection";
 
@@ -28,7 +29,7 @@ export function formatCollectionEntryAutocompleteName(entry: {
   ownershipType: CollectionOwnershipType;
 }): string {
   const platform = entry.platformName ?? "Unknown platform";
-  return `${entry.title} | ${platform} | ${entry.ownershipType}`.slice(0, 100);
+  return `${entry.title} | ${platform} | ${entry.ownershipType}`.slice(0, DISCORD_SELECT_LABEL_MAX);
 }
 
 export async function autocompleteCollectionGameTitle(
@@ -45,7 +46,7 @@ export async function autocompleteCollectionGameTitle(
   const results = await Game.searchGamesAutocomplete(query);
   await interaction.respond(
     results.slice(0, 25).map((game) => ({
-      name: formatGameTitleWithYear(game).slice(0, 100),
+      name: formatGameTitleWithYear(game).slice(0, DISCORD_SELECT_LABEL_MAX),
       value: String(game.id),
     })),
   );

@@ -19,6 +19,7 @@ import {
   completionPlatformSessions,
   type CompletionPlatformContext,
 } from "./completion.types.js";
+import { DISCORD_SELECT_LABEL_MAX } from "../../config/textLimits.js";
 
 export function createCompletionPlatformSession(
   ctx: CompletionPlatformContext,
@@ -57,7 +58,7 @@ export async function promptCompletionPlatformSelection(
   }, interaction.user.id);
 
   const baseOptions = platformOptions.map((platform) => ({
-    label: platform.name.slice(0, 100),
+    label: platform.name.slice(0, DISCORD_SELECT_LABEL_MAX),
     value: String(platform.id),
   }));
   const options = [

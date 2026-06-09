@@ -24,6 +24,7 @@ import { GAMEDB_CSV_PLATFORM_MAP } from "../../config/gamedbCsvPlatformMap.js";
 import { buildIgdbSearchLink } from "./gamedb-utils.js";
 import { type IGameDbCsvImport } from "../../classes/GameDbCsvImport.js";
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
+import { DISCORD_SELECT_LABEL_MAX } from "../../config/textLimits.js";
 
 export const GAMEDB_CSV_RESULT_LIMIT = 15;
 
@@ -124,9 +125,9 @@ export function buildCsvPromptComponents(
       .setPlaceholder("Select a match from IGDB")
       .addOptions(
         options.slice(0, GAMEDB_CSV_RESULT_LIMIT).map((opt, idx) => ({
-          label: opt.label.slice(0, 100),
+          label: opt.label.slice(0, DISCORD_SELECT_LABEL_MAX),
           value: String(opt.id),
-          description: opt.description?.slice(0, 100),
+          description: opt.description?.slice(0, DISCORD_SELECT_LABEL_MAX),
           default: idx === 0,
         })),
       );

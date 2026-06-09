@@ -14,6 +14,7 @@ import {
 } from "../../functions/InteractionUtils.js";
 import { buildTextReply } from "../../functions/ComponentsV2Utils.js";
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
+import { DISCORD_SELECT_LABEL_MAX } from "../../config/textLimits.js";
 
 export type IgdbSelectOption = { id: number; label: string; description?: string };
 
@@ -94,9 +95,9 @@ export function buildIgdbComponents(
     .addOptions(
       hasOptions
         ? pageOptions.map((opt, index) => ({
-          label: opt.label.slice(0, 100),
+          label: opt.label.slice(0, DISCORD_SELECT_LABEL_MAX),
           value: String(opt.id),
-          description: opt.description?.slice(0, 100),
+          description: opt.description?.slice(0, DISCORD_SELECT_LABEL_MAX),
           default: page === 0 && index === 0,
         }))
         : [{

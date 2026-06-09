@@ -17,6 +17,7 @@ import { formatGameTitleWithYear } from "../../functions/GameTitleAutocompleteUt
 import { buildComponentsV2Flags, buildTextReply } from "../../functions/ComponentsV2Utils.js";
 import { decodeBase64Url, encodeBase64Url } from "../../functions/CustomIdUtils.js";
 import Game from "../../classes/Game.js";
+import { DISCORD_SELECT_LABEL_MAX } from "../../config/textLimits.js";
 
 export interface ISearchFilters {
   upcomingRelease?: boolean;
@@ -230,7 +231,7 @@ export function getSearchRowsFromComponents(
 export function buildKeepTypingOption(query: string): { name: string; value: string } {
   const label = `Keep typing: "${query}"`;
   return {
-    name: label.slice(0, 100),
+    name: label.slice(0, DISCORD_SELECT_LABEL_MAX),
     value: query,
   };
 }
@@ -250,7 +251,7 @@ export async function autocompleteSearchPlatform(
     )
     : platforms;
   const options = filtered.slice(0, 25).map((p) => ({
-    name: (p.abbreviation ? `${p.name} (${p.abbreviation})` : p.name).slice(0, 100),
+    name: (p.abbreviation ? `${p.name} (${p.abbreviation})` : p.name).slice(0, DISCORD_SELECT_LABEL_MAX),
     value: String(p.id),
   }));
   await interaction.respond(options);
@@ -267,7 +268,7 @@ export async function autocompleteSearchCompany(
     ? companies.filter((c) => c.name.toLowerCase().includes(query))
     : companies;
   const options = filtered.slice(0, 25).map((c) => ({
-    name: c.name.slice(0, 100),
+    name: c.name.slice(0, DISCORD_SELECT_LABEL_MAX),
     value: String(c.id),
   }));
   await interaction.respond(options);
@@ -287,7 +288,7 @@ export async function autocompleteGameDbViewTitle(
   const resultOptions = results.slice(0, 24).map((game) => {
     const label = formatGameTitleWithYear(game);
     return {
-      name: label.slice(0, 100),
+      name: label.slice(0, DISCORD_SELECT_LABEL_MAX),
       value: String(game.id),
     };
   });
