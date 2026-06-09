@@ -741,11 +741,6 @@ export const MemberSql = {
               username,
               global_name,
               is_bot,
-              completionator_url,
-              steam_url,
-              psn_username,
-              xbl_username,
-              nsw_friend_code,
               role_admin,
               role_moderator,
               role_regular,
@@ -798,11 +793,6 @@ export const MemberSql = {
                 role_member,
                 role_newcomer,
                 message_count,
-                completionator_url,
-                psn_username,
-                xbl_username,
-                nsw_friend_code,
-                steam_url,
                 profile_image,
                 profile_image_at
            FROM rpg_club_users
@@ -879,11 +869,6 @@ export const MemberSql = {
                 role_regular = :roleRegular,
                 role_member = :roleMember,
                 role_newcomer = :roleNewcomer,
-                completionator_url = :completionatorUrl,
-                psn_username = :psnUsername,
-                xbl_username = :xblUsername,
-                nsw_friend_code = :nswFriendCode,
-                steam_url = :steamUrl,
                 updated_at = NOW()
           WHERE user_id = :userId`,
   } satisfies SqlEntry,
@@ -908,15 +893,11 @@ export const MemberSql = {
              user_id, is_bot, username, global_name, avatar_blob,
              server_joined_at, server_left_at, last_seen_at, last_fetched_at,
              role_admin, role_moderator, role_regular, role_member, role_newcomer,
-             completionator_url, psn_username, xbl_username, nsw_friend_code,
-             steam_url,
              created_at, updated_at
            ) VALUES (
              :userId, :isBot, :username, :globalName, :avatarBlob,
              :joinedAt, :leftAt, :lastSeenAt, NOW(),
              :roleAdmin, :roleModerator, :roleRegular, :roleMember, :roleNewcomer,
-             :completionatorUrl, :psnUsername, :xblUsername,
-             :nswFriendCode, :steamUrl,
              NOW(), NOW()
            )`,
   } satisfies SqlEntry,
@@ -1182,21 +1163,31 @@ export const MemberSql = {
                OR NSW_FRIEND_CODE IS NOT NULL)
           AND NVL(IS_BOT, 0) = 0
           AND SERVER_LEFT_AT IS NULL`,
-    postgres: `SELECT user_id,
-              username,
-              global_name,
-              steam_url,
-              psn_username,
-              xbl_username,
-              nsw_friend_code,
-              server_left_at
-         FROM rpg_club_users
-        WHERE (steam_url IS NOT NULL
-               OR psn_username IS NOT NULL
-               OR xbl_username IS NOT NULL
-               OR nsw_friend_code IS NOT NULL)
-          AND COALESCE(is_bot, false) = false
-          AND server_left_at IS NULL`,
+    postgres: `SELECT u.user_id AS "USER_ID",
+              u.username AS "USERNAME",
+              u.global_name AS "GLOBAL_NAME",
+              MAX(CASE WHEN LOWER(sp.label) LIKE '%steam%'
+                       THEN us.display_text END) AS "STEAM_URL",
+              MAX(CASE WHEN LOWER(sp.label) LIKE '%psn%'
+                        OR LOWER(sp.label) LIKE '%playstation%'
+                       THEN us.display_text END) AS "PSN_USERNAME",
+              MAX(CASE WHEN LOWER(sp.label) LIKE '%xbox%'
+                       THEN us.display_text END) AS "XBL_USERNAME",
+              MAX(CASE WHEN LOWER(sp.label) LIKE '%nintendo%'
+                        OR LOWER(sp.label) LIKE '%switch%'
+                       THEN us.display_text END) AS "NSW_FRIEND_CODE"
+         FROM rpg_club_users u
+         JOIN user_socials us ON us.user_id = u.user_id
+         JOIN social_platforms sp ON sp.id = us.platform_id
+        WHERE COALESCE(u.is_bot, false) = false
+          AND u.server_left_at IS NULL
+          AND (LOWER(sp.label) LIKE '%steam%'
+            OR LOWER(sp.label) LIKE '%psn%'
+            OR LOWER(sp.label) LIKE '%playstation%'
+            OR LOWER(sp.label) LIKE '%xbox%'
+            OR LOWER(sp.label) LIKE '%nintendo%'
+            OR LOWER(sp.label) LIKE '%switch%')
+        GROUP BY u.user_id, u.username, u.global_name`,
   } satisfies SqlEntry,
 
   checkLinkedThreadColumn: {
