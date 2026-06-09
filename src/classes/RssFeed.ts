@@ -160,7 +160,9 @@ export async function isItemSeen(
 ): Promise<boolean> {
   const mapper = (row: { FOUND: number }) => row;
   const rows = existingConnection
-    ? await dbQueryConn(existingConnection, RssFeedSql.isItemSeen, { feedId, hash: itemIdHash }, mapper)
+    ? await dbQueryConn(
+        existingConnection, RssFeedSql.isItemSeen, { feedId, hash: itemIdHash }, mapper,
+      )
     : await dbQuery(RssFeedSql.isItemSeen, { feedId, hash: itemIdHash }, mapper);
   return rows.length > 0;
 }

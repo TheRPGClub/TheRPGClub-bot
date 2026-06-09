@@ -396,8 +396,13 @@ export default class Game {
         const result = await (conn as oracledb.Connection).execute(
           GameSql.getGameById.oracle,
           { id },
-          { outFormat: oracledb.OUT_FORMAT_OBJECT,
-            fetchInfo: { IMAGE_DATA: { type: oracledb.BUFFER }, DESCRIPTION: { type: oracledb.STRING } } },
+          {
+            outFormat: oracledb.OUT_FORMAT_OBJECT,
+            fetchInfo: {
+              IMAGE_DATA: { type: oracledb.BUFFER },
+              DESCRIPTION: { type: oracledb.STRING },
+            },
+          },
         );
         const row = (result.rows ?? [])[0] as any;
         return row ? mapGameRow(row) : null;
@@ -426,7 +431,10 @@ export default class Game {
       if (getDialect() === "oracle") {
         const result = await (conn as oracledb.Connection).execute(entry.oracle, binds, {
           outFormat: oracledb.OUT_FORMAT_OBJECT,
-          fetchInfo: { IMAGE_DATA: { type: oracledb.BUFFER }, DESCRIPTION: { type: oracledb.STRING } },
+          fetchInfo: {
+            IMAGE_DATA: { type: oracledb.BUFFER },
+            DESCRIPTION: { type: oracledb.STRING },
+          },
         });
         return (result.rows ?? []).map((row) => mapGameRow(row as any));
       }
@@ -441,8 +449,13 @@ export default class Game {
         const result = await (conn as oracledb.Connection).execute(
           GameSql.getAlternateVersions.oracle,
           { id: gameId },
-          { outFormat: oracledb.OUT_FORMAT_OBJECT,
-            fetchInfo: { IMAGE_DATA: { type: oracledb.BUFFER }, DESCRIPTION: { type: oracledb.STRING } } },
+          {
+            outFormat: oracledb.OUT_FORMAT_OBJECT,
+            fetchInfo: {
+              IMAGE_DATA: { type: oracledb.BUFFER },
+              DESCRIPTION: { type: oracledb.STRING },
+            },
+          },
         );
         return (result.rows ?? []).map((row) => mapGameRow(row as any));
       }
@@ -490,8 +503,13 @@ export default class Game {
         const result = await (conn as oracledb.Connection).execute(
           GameSql.getGameByIgdbId.oracle,
           { igdbId },
-          { outFormat: oracledb.OUT_FORMAT_OBJECT,
-            fetchInfo: { IMAGE_DATA: { type: oracledb.BUFFER }, DESCRIPTION: { type: oracledb.STRING } } },
+          {
+            outFormat: oracledb.OUT_FORMAT_OBJECT,
+            fetchInfo: {
+              IMAGE_DATA: { type: oracledb.BUFFER },
+              DESCRIPTION: { type: oracledb.STRING },
+            },
+          },
         );
         const row = (result.rows ?? [])[0] as any;
         return row ? mapGameRow(row) : null;

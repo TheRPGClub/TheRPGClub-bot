@@ -1504,7 +1504,10 @@ export default class Member {
         const result = await (conn as oracledb.Connection).execute<AvatarHistoryRow>(
           MemberSql.getAvatarHistory.oracle,
           { userId, limit: safeLimit, offset: safeOffset },
-          { outFormat: oracledb.OUT_FORMAT_OBJECT, fetchInfo: { AVATAR_BLOB: { type: oracledb.BUFFER } } },
+          {
+            outFormat: oracledb.OUT_FORMAT_OBJECT,
+            fetchInfo: { AVATAR_BLOB: { type: oracledb.BUFFER } },
+          },
         );
         return (result.rows ?? []).map(mapRow);
       }

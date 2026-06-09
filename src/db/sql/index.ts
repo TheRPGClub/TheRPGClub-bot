@@ -1,6 +1,6 @@
-import type { Dialect, SqlEntry } from "./types.js";
+import type { Dialect, ISqlEntry } from "./types.js";
 
-export type { Dialect, SqlEntry };
+export type { Dialect, ISqlEntry };
 
 export { AdminWizardSessionSql } from "./adminWizardSession.sql.js";
 export { BotVotingInfoSql } from "./botVotingInfo.sql.js";
@@ -38,15 +38,15 @@ export {
 export { UserGameCollectionSql } from "./userGameCollection.sql.js";
 
 /**
- * Selects the SQL string for the active dialect from a static SqlEntry.
+ * Selects the SQL string for the active dialect from a static ISqlEntry.
  */
-export function getSql(entry: SqlEntry, dialect: Dialect): string {
+export function getSql(entry: ISqlEntry, dialect: Dialect): string {
   return entry[dialect];
 }
 
 /**
- * Selects the SQL string for the active dialect from a factory-produced SqlEntry.
+ * Selects the SQL string for the active dialect from a factory-produced ISqlEntry.
  */
-export function getSqlDynamic(entry: SqlEntry, dialect: Dialect): string {
+export function getSqlDynamic(entry: ISqlEntry, dialect: Dialect): string {
   return entry[dialect];
 }

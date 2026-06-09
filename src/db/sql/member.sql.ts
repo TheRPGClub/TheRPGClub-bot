@@ -1,4 +1,4 @@
-import type { SqlEntry } from "./types.js";
+import type { ISqlEntry } from "./types.js";
 
 const COMPLETION_SELECT_SQL = `SELECT c.COMPLETION_ID,
              g.GAME_ID,
@@ -58,7 +58,7 @@ export const MemberSql = {
             SET last_seen_at = :lastSeen,
                 updated_at = NOW()
           WHERE user_id = :userId`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   // threadIdSql is a dialect-specific SQL fragment; caller must supply appropriate version
   getNowPlaying: (threadIdSql: string) =>
@@ -137,7 +137,7 @@ export const MemberSql = {
           WHERE u.user_id = :userId
             AND u.gamedb_game_id IS NOT NULL
           ORDER BY u.sort_order NULLS LAST, u.added_at DESC, u.entry_id DESC`,
-    }) satisfies SqlEntry,
+    }) satisfies ISqlEntry,
 
   // threadIdSql is a dialect-specific SQL fragment; caller must supply appropriate version
   getAllNowPlaying: (threadIdSql: string) =>
@@ -186,7 +186,7 @@ export const MemberSql = {
           ORDER BY COALESCE(ru.global_name, ru.username, ru.user_id),
                    u.added_at DESC,
                    u.entry_id DESC`,
-    }) satisfies SqlEntry,
+    }) satisfies ISqlEntry,
 
   getNowPlayingByGameIds: (placeholders: string) =>
     ({
@@ -210,7 +210,7 @@ export const MemberSql = {
           AND COALESCE(ru.is_bot, false) = false
           AND ru.server_left_at IS NULL
         ORDER BY g.title, u.user_id`,
-    }) satisfies SqlEntry,
+    }) satisfies ISqlEntry,
 
   getNowPlayingByTitleSearch: {
     oracle: `SELECT u.GAMEDB_GAME_ID AS GAME_ID,
@@ -235,7 +235,7 @@ export const MemberSql = {
           AND COALESCE(ru.is_bot, false) = false
           AND ru.server_left_at IS NULL
         ORDER BY g.title, u.user_id`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   getNowPlayingEntries: {
     oracle: `SELECT u.GAMEDB_GAME_ID AS GAME_ID,
@@ -276,7 +276,7 @@ export const MemberSql = {
         WHERE u.user_id = :userId
           AND u.gamedb_game_id IS NOT NULL
         ORDER BY u.sort_order NULLS LAST, u.added_at DESC, u.entry_id DESC`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   getNowPlayingEntryMeta: {
     oracle: `SELECT ADDED_AT
@@ -287,7 +287,7 @@ export const MemberSql = {
          FROM user_now_playing
         WHERE user_id = :userId
           AND gamedb_game_id = :gameId`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   updateNowPlayingNote: {
     oracle: `UPDATE USER_NOW_PLAYING
@@ -300,12 +300,12 @@ export const MemberSql = {
               note_updated_at = :noteUpdatedAt
         WHERE user_id = :userId
           AND gamedb_game_id = :gameId`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   countNowPlaying: {
     oracle: `SELECT COUNT(*) AS CNT FROM USER_NOW_PLAYING WHERE USER_ID = :userId`,
     postgres: `SELECT COUNT(*) AS cnt FROM user_now_playing WHERE user_id = :userId`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   getNowPlayingMaxSort: {
     oracle: `SELECT MAX(SORT_ORDER) AS MAX_SORT
@@ -314,7 +314,7 @@ export const MemberSql = {
     postgres: `SELECT MAX(sort_order) AS max_sort
              FROM user_now_playing
             WHERE user_id = :userId`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   insertNowPlaying: {
     oracle: `INSERT INTO USER_NOW_PLAYING
@@ -323,7 +323,7 @@ export const MemberSql = {
     postgres: `INSERT INTO user_now_playing
             (user_id, gamedb_game_id, platform_id, note, note_updated_at, sort_order)
            VALUES (:userId, :gameId, :platformId, :note, :noteUpdatedAt, :sortOrder)`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   mergeJournalPrefs: {
     oracle: `MERGE INTO USER_GAME_JOURNAL_PREFS p
@@ -339,7 +339,7 @@ export const MemberSql = {
            ON CONFLICT (user_id, gamedb_game_id) DO UPDATE SET
              is_enabled = true,
              updated_at = NOW()`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   getGameJournalPreference: {
     oracle: `SELECT USER_ID,
@@ -354,7 +354,7 @@ export const MemberSql = {
          FROM user_game_journal_prefs
         WHERE user_id = :userId
           AND gamedb_game_id = :gameId`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   upsertGameJournalPreference: {
     oracle: `MERGE INTO USER_GAME_JOURNAL_PREFS p
@@ -373,7 +373,7 @@ export const MemberSql = {
             is_enabled = EXCLUDED.is_enabled,
             default_is_public = true,
             updated_at = NOW()`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   getJournalStatusForGames: (inlineTable: string) =>
     ({
@@ -393,7 +393,7 @@ export const MemberSql = {
            ON je.user_id = :userId
           AND je.gamedb_game_id = gids.game_id
         GROUP BY gids.game_id`,
-    }) satisfies SqlEntry,
+    }) satisfies ISqlEntry,
 
   getGameJournalEntries: {
     oracle: `WITH all_entries AS (
@@ -444,7 +444,7 @@ export const MemberSql = {
          FROM all_entries
         ORDER BY created_at DESC, entry_id DESC
         LIMIT :limit OFFSET :offset`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   countGameJournalEntries: {
     oracle: `SELECT COUNT(*) AS CNT
@@ -455,7 +455,7 @@ export const MemberSql = {
          FROM user_game_journal_entries
         WHERE user_id = :userId
           AND gamedb_game_id = :gameId`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   addGameJournalEntry: {
     oracle: `INSERT INTO USER_GAME_JOURNAL_ENTRIES
@@ -466,7 +466,7 @@ export const MemberSql = {
         (user_id, gamedb_game_id, entry_title, entry_body, is_public)
        VALUES
         (:userId, :gameId, :title, :body, true)`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   getGameJournalEntryForUser: {
     oracle: `SELECT e.ENTRY_ID,
@@ -505,7 +505,7 @@ export const MemberSql = {
         WHERE e.user_id = :userId
           AND e.entry_id = :entryId
         LIMIT 1`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   // Caller must pass lowercase column=value expressions for Postgres
   updateGameJournalEntry: (fields: string[]) =>
@@ -518,7 +518,7 @@ export const MemberSql = {
           SET ${fields.join(", ")}
         WHERE user_id = :userId
           AND entry_id = :entryId`,
-    }) satisfies SqlEntry,
+    }) satisfies ISqlEntry,
 
   deleteGameJournalEntry: {
     oracle: `DELETE FROM USER_GAME_JOURNAL_ENTRIES
@@ -527,7 +527,7 @@ export const MemberSql = {
     postgres: `DELETE FROM user_game_journal_entries
         WHERE user_id = :userId
           AND entry_id = :entryId`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   updateNowPlayingSort: {
     oracle: `UPDATE USER_NOW_PLAYING
@@ -538,12 +538,12 @@ export const MemberSql = {
             SET sort_order = :sortOrder
           WHERE user_id = :userId
             AND gamedb_game_id = :gameId`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   removeNowPlaying: {
     oracle: `DELETE FROM USER_NOW_PLAYING WHERE USER_ID = :userId AND GAMEDB_GAME_ID = :gameId`,
     postgres: `DELETE FROM user_now_playing WHERE user_id = :userId AND gamedb_game_id = :gameId`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   addCompletion: {
     oracle: `INSERT INTO USER_GAME_COMPLETIONS (
@@ -560,21 +560,21 @@ export const MemberSql = {
           :userId, :gameId, :type, :platformId, :completedAt, :playtime, :note
         )
         RETURNING completion_id`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   verifyCompletion: {
     oracle: `SELECT COUNT(*) AS CNT FROM USER_GAME_COMPLETIONS
           WHERE COMPLETION_ID = :id AND USER_ID = :userId`,
     postgres: `SELECT COUNT(*) AS cnt FROM user_game_completions
           WHERE completion_id = :id AND user_id = :userId`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   getCompletion: {
     oracle: `${COMPLETION_SELECT_SQL}
        WHERE c.COMPLETION_ID = :completionId`,
     postgres: `${COMPLETION_SELECT_SQL_PG}
        WHERE c.completion_id = :completionId`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   getCompletionForUser: {
     oracle: `${COMPLETION_SELECT_SQL}
@@ -583,7 +583,7 @@ export const MemberSql = {
     postgres: `${COMPLETION_SELECT_SQL_PG}
        WHERE c.user_id = :userId
          AND c.completion_id = :completionId`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   getCompletionByGameId: {
     oracle: `${COMPLETION_SELECT_SQL}
@@ -594,7 +594,7 @@ export const MemberSql = {
        WHERE c.user_id = :userId
          AND c.gamedb_game_id = :gameId
        LIMIT 1`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   // Caller must pass dialect-appropriate whereClause
   getCompletions: (whereClause: string) =>
@@ -607,7 +607,7 @@ export const MemberSql = {
        WHERE ${whereClause}
        ORDER BY c.completed_at DESC NULLS LAST, c.completion_id DESC
        LIMIT :limit OFFSET :offset`,
-    }) satisfies SqlEntry,
+    }) satisfies ISqlEntry,
 
   getAllCompletions: {
     oracle: `${COMPLETION_SELECT_SQL}
@@ -616,7 +616,7 @@ export const MemberSql = {
     postgres: `${COMPLETION_SELECT_SQL_PG}
        WHERE c.user_id = :userId
        ORDER BY c.completed_at DESC NULLS LAST, c.created_at DESC, c.completion_id DESC`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   // Caller must pass dialect-appropriate whereClause
   countCompletions: (whereClause: string) =>
@@ -629,7 +629,7 @@ export const MemberSql = {
         FROM user_game_completions c
         JOIN gamedb_games g ON g.game_id = c.gamedb_game_id
        WHERE ${whereClause}`,
-    }) satisfies SqlEntry,
+    }) satisfies ISqlEntry,
 
   // Caller must pass lowercase column=value expressions for Postgres
   updateCompletion: (fields: string[]) =>
@@ -642,7 +642,7 @@ export const MemberSql = {
          SET ${fields.join(", ")}
        WHERE completion_id = :completionId
          AND user_id = :userId`,
-    }) satisfies SqlEntry,
+    }) satisfies ISqlEntry,
 
   deleteCompletion: {
     oracle: `DELETE FROM USER_GAME_COMPLETIONS
@@ -651,7 +651,7 @@ export const MemberSql = {
     postgres: `DELETE FROM user_game_completions
        WHERE completion_id = :completionId
          AND user_id = :userId`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   getCompletionsForGame: {
     oracle: `${COMPLETION_SELECT_SQL}
@@ -662,7 +662,7 @@ export const MemberSql = {
        WHERE c.user_id = :userId
          AND c.gamedb_game_id = :gameId
        ORDER BY c.completed_at DESC NULLS LAST, c.completion_id DESC`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   getRecentCompletionForGame: {
     oracle: `${COMPLETION_SELECT_SQL}
@@ -677,7 +677,7 @@ export const MemberSql = {
          AND COALESCE(c.completed_at, c.created_at) BETWEEN :startDate AND :endDate
        ORDER BY COALESCE(c.completed_at, c.created_at) DESC
        LIMIT 1`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   getRecentNickHistory: {
     oracle: `SELECT OLD_NICK, NEW_NICK, CHANGED_AT
@@ -690,7 +690,7 @@ export const MemberSql = {
           WHERE user_id = :userId
           ORDER BY changed_at DESC
           LIMIT :limit`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   // Caller must pass dialect-appropriate whereClause
   getCompletionLeaderboard: (whereClause: string) =>
@@ -711,7 +711,7 @@ export const MemberSql = {
        GROUP BY c.user_id, u.username, u.global_name
        ORDER BY cnt DESC
        LIMIT :limit`,
-    }) satisfies SqlEntry,
+    }) satisfies ISqlEntry,
 
   // Caller must pass dialect-appropriate where clause
   searchMembers: (where: string) =>
@@ -753,7 +753,7 @@ export const MemberSql = {
         WHERE ${where}
         ORDER BY COALESCE(UPPER(global_name), UPPER(username), user_id)
         LIMIT :limit`,
-    }) satisfies SqlEntry,
+    }) satisfies ISqlEntry,
 
   getByUserId: {
     oracle: `SELECT USER_ID,
@@ -797,7 +797,7 @@ export const MemberSql = {
                 profile_image_at
            FROM rpg_club_users
           WHERE user_id = :userId`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   updateNowPlayingPlatform: {
     oracle: `UPDATE USER_NOW_PLAYING
@@ -808,7 +808,7 @@ export const MemberSql = {
           SET platform_id = :platformId
         WHERE user_id = :userId
           AND gamedb_game_id = :gameId`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   getAvatarHistory: {
     oracle: `SELECT EVENT_ID,
@@ -831,7 +831,7 @@ export const MemberSql = {
           WHERE user_id = :userId
           ORDER BY changed_at DESC, event_id DESC
           LIMIT :limit OFFSET :offset`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   updateMember: {
     oracle: `UPDATE RPG_CLUB_USERS
@@ -871,7 +871,7 @@ export const MemberSql = {
                 role_newcomer = :roleNewcomer,
                 updated_at = NOW()
           WHERE user_id = :userId`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   insertMember: {
     oracle: `INSERT INTO RPG_CLUB_USERS (
@@ -900,7 +900,7 @@ export const MemberSql = {
              :roleAdmin, :roleModerator, :roleRegular, :roleMember, :roleNewcomer,
              NOW(), NOW()
            )`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   markDepartedNotIn: (placeholders: string) =>
     ({
@@ -914,7 +914,7 @@ export const MemberSql = {
                  updated_at = NOW()
            WHERE server_left_at IS NULL
              AND user_id NOT IN (${placeholders})`,
-    }) satisfies SqlEntry,
+    }) satisfies ISqlEntry,
 
   getGameJournalList: {
     oracle: `SELECT g.GAME_ID,
@@ -943,7 +943,7 @@ export const MemberSql = {
         GROUP BY g.game_id, g.title
        HAVING COUNT(e.entry_id) > 0
         ORDER BY g.title`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   getAllJournalUsers: {
     oracle: `SELECT u.USER_ID,
@@ -972,7 +972,7 @@ export const MemberSql = {
         ORDER BY COUNT(DISTINCT je.gamedb_game_id) DESC,
                  u.global_name NULLS LAST,
                  u.username NULLS LAST`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   searchJournalEntries: {
     oracle: `SELECT COUNT(*) OVER () AS TOTAL_COUNT,
@@ -1017,7 +1017,7 @@ export const MemberSql = {
           AND (:gameId IS NULL OR je.gamedb_game_id = :gameId)
         ORDER BY je.created_at DESC, je.entry_id DESC
         LIMIT :limit OFFSET :offset`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   updateEmojiName: {
     oracle: `UPDATE RPG_CLUB_USERS
@@ -1028,7 +1028,7 @@ export const MemberSql = {
           SET emoji_name = :emojiName,
               updated_at = NOW()
         WHERE user_id = :userId`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   getAllWithEmojiName: {
     oracle: `SELECT USER_ID, EMOJI_NAME
@@ -1037,7 +1037,7 @@ export const MemberSql = {
     postgres: `SELECT user_id, emoji_name
          FROM rpg_club_users
         WHERE emoji_name IS NOT NULL`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   upsertJournalMessageContext: {
     oracle: `MERGE INTO JOURNAL_MESSAGE_CONTEXTS dst
@@ -1056,7 +1056,7 @@ export const MemberSql = {
             created_at_ms = EXCLUDED.created_at_ms,
             owner_user_id = EXCLUDED.owner_user_id,
             game_id = EXCLUDED.game_id`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   deleteJournalMessageContext: {
     oracle: `DELETE FROM JOURNAL_MESSAGE_CONTEXTS
@@ -1065,7 +1065,7 @@ export const MemberSql = {
     postgres: `DELETE FROM journal_message_contexts
         WHERE channel_id = :channelId
           AND message_id = :messageId`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   loadActiveJournalMessageContexts: {
     oracle: `SELECT CHANNEL_ID, MESSAGE_ID, CREATED_AT_MS, OWNER_USER_ID, GAME_ID
@@ -1074,12 +1074,12 @@ export const MemberSql = {
     postgres: `SELECT channel_id, message_id, created_at_ms, owner_user_id, game_id
          FROM journal_message_contexts
         WHERE created_at_ms >= :cutoffMs`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   pruneExpiredJournalMessageContexts: {
     oracle: `DELETE FROM JOURNAL_MESSAGE_CONTEXTS WHERE CREATED_AT_MS < :cutoffMs`,
     postgres: `DELETE FROM journal_message_contexts WHERE created_at_ms < :cutoffMs`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   getGiveawayDonorNotifySetting: {
     oracle: `SELECT DONOR_NOTIFY_ON_CLAIM
@@ -1088,7 +1088,7 @@ export const MemberSql = {
     postgres: `SELECT donor_notify_on_claim
          FROM rpg_club_users
         WHERE user_id = :userId`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   updateGiveawayDonorNotifySetting: {
     oracle: `UPDATE RPG_CLUB_USERS
@@ -1097,14 +1097,14 @@ export const MemberSql = {
     postgres: `UPDATE rpg_club_users
             SET donor_notify_on_claim = :enabled
           WHERE user_id = :userId`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   insertGiveawayDonorNotifySetting: {
     oracle: `INSERT INTO RPG_CLUB_USERS (USER_ID, DONOR_NOTIFY_ON_CLAIM)
            VALUES (:userId, :enabled)`,
     postgres: `INSERT INTO rpg_club_users (user_id, donor_notify_on_claim)
            VALUES (:userId, :enabled)`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   countAvatarHistory: {
     oracle: `SELECT COUNT(*) AS TOTAL
@@ -1113,7 +1113,7 @@ export const MemberSql = {
     postgres: `SELECT COUNT(*) AS total
          FROM rpg_club_user_avatar_history
         WHERE user_id = :userId`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   insertAvatarHistoryRecord: {
     oracle: `INSERT INTO RPG_CLUB_USER_AVATAR_HISTORY
@@ -1122,7 +1122,7 @@ export const MemberSql = {
     postgres: `INSERT INTO rpg_club_user_avatar_history
        (user_id, avatar_hash, avatar_url, avatar_blob)
        VALUES (:userId, :avatarHash, :avatarUrl, :avatarBlob)`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   getAllMembersAvatarHistoryCounts: {
     oracle: `SELECT h.USER_ID,
@@ -1145,7 +1145,7 @@ export const MemberSql = {
           AND u.server_left_at IS NULL
         GROUP BY h.user_id, u.username, u.global_name
         ORDER BY COALESCE(u.global_name, u.username, h.user_id)`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   getMembersWithPlatforms: {
     oracle: `SELECT USER_ID,
@@ -1188,7 +1188,7 @@ export const MemberSql = {
             OR LOWER(sp.label) LIKE '%nintendo%'
             OR LOWER(sp.label) LIKE '%switch%')
         GROUP BY u.user_id, u.username, u.global_name`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   checkLinkedThreadColumn: {
     oracle: `SELECT COUNT(*) AS CNT
@@ -1201,5 +1201,5 @@ export const MemberSql = {
           WHERE table_schema = current_schema()
             AND table_name = 'gamedb_games'
             AND column_name = 'linked_thread_id'`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 };

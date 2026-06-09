@@ -1,4 +1,4 @@
-import type { SqlEntry } from "./types.js";
+import type { ISqlEntry } from "./types.js";
 
 const REMINDER_COLS =
   "REMINDER_ID, USER_ID, REMIND_AT, CONTENT, IS_NOISY, SENT_AT," +
@@ -26,7 +26,7 @@ export const ReminderSql = {
          NOW(), NOW()
        )
        RETURNING reminder_id`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   listByUser: {
     oracle: `SELECT ${REMINDER_COLS}
@@ -37,7 +37,7 @@ export const ReminderSql = {
          FROM user_reminders
         WHERE user_id = :userId
         ORDER BY remind_at`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   getById: {
     oracle: `SELECT ${REMINDER_COLS}
@@ -46,7 +46,7 @@ export const ReminderSql = {
     postgres: `SELECT ${REMINDER_COLS_PG}
          FROM user_reminders
         WHERE reminder_id = :reminderId`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   delete: {
     oracle: `DELETE FROM USER_REMINDERS
@@ -55,7 +55,7 @@ export const ReminderSql = {
     postgres: `DELETE FROM user_reminders
         WHERE reminder_id = :reminderId
           AND user_id = :userId`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   snooze: {
     oracle: `UPDATE USER_REMINDERS
@@ -74,7 +74,7 @@ export const ReminderSql = {
               updated_at = NOW()
         WHERE reminder_id = :reminderId
           AND user_id = :userId`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   markSent: {
     oracle: `UPDATE USER_REMINDERS
@@ -89,7 +89,7 @@ export const ReminderSql = {
               failed_at = NULL,
               updated_at = NOW()
         WHERE reminder_id = :reminderId`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   recordFailure: {
     oracle: `UPDATE USER_REMINDERS
@@ -102,7 +102,7 @@ export const ReminderSql = {
               failed_at = NOW(),
               updated_at = NOW()
         WHERE reminder_id = :reminderId`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   markFailedPermanently: {
     oracle: `UPDATE USER_REMINDERS
@@ -113,7 +113,7 @@ export const ReminderSql = {
           SET sent_at = NOW(),
               updated_at = NOW()
         WHERE reminder_id = :reminderId`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   getDueUndelivered: {
     oracle: `SELECT ${REMINDER_COLS}
@@ -133,7 +133,7 @@ export const ReminderSql = {
           AND failure_count < 5
         ORDER BY remind_at
         LIMIT :limit`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 };
 
 export const PublicReminderSql = {
@@ -174,7 +174,7 @@ export const PublicReminderSql = {
        :createdBy
      )
      RETURNING reminder_id`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   listUpcoming: {
     oracle: `SELECT REMINDER_ID,
@@ -201,12 +201,12 @@ export const PublicReminderSql = {
       WHERE enabled = true
       ORDER BY due_at ASC
       LIMIT :limit`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   delete: {
     oracle: `DELETE FROM RPG_CLUB_PUBLIC_REMINDERS WHERE REMINDER_ID = :id`,
     postgres: `DELETE FROM rpg_club_public_reminders WHERE reminder_id = :id`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   updateDueDate: {
     oracle: `UPDATE RPG_CLUB_PUBLIC_REMINDERS
@@ -215,7 +215,7 @@ export const PublicReminderSql = {
     postgres: `UPDATE rpg_club_public_reminders
         SET due_at = :nextDue
       WHERE reminder_id = :id`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   disable: {
     oracle: `UPDATE RPG_CLUB_PUBLIC_REMINDERS
@@ -224,5 +224,5 @@ export const PublicReminderSql = {
     postgres: `UPDATE rpg_club_public_reminders
         SET enabled = false
       WHERE reminder_id = :id`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 };

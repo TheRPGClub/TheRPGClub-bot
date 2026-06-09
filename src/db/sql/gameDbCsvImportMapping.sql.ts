@@ -1,4 +1,4 @@
-import type { SqlEntry } from "./types.js";
+import type { ISqlEntry } from "./types.js";
 
 export const GameDbCsvImportMappingSql = {
   getByTitleNorm: {
@@ -22,7 +22,7 @@ export const GameDbCsvImportMappingSql = {
             updated_at
        FROM rpg_club_gamedb_import_title_map
       WHERE title_norm = :titleNorm`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   upsert: {
     oracle: `MERGE INTO RPG_CLUB_GAMEDB_IMPORT_TITLE_MAP t
@@ -46,5 +46,5 @@ export const GameDbCsvImportMappingSql = {
          gamedb_game_id = EXCLUDED.gamedb_game_id,
          status = EXCLUDED.status,
          created_by = EXCLUDED.created_by`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 };

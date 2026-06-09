@@ -1,4 +1,4 @@
-import type { SqlEntry } from "./types.js";
+import type { ISqlEntry } from "./types.js";
 
 export const NominationSql = {
   getNominationForUser: (table: string) =>
@@ -25,7 +25,7 @@ export const NominationSql = {
        LEFT JOIN gamedb_games g ON g.game_id = n.gamedb_game_id
       WHERE n.round_number = :roundNumber
         AND n.user_id = :userId`,
-    }) satisfies SqlEntry,
+    }) satisfies ISqlEntry,
 
   upsertNomination: (table: string) =>
     ({
@@ -52,7 +52,7 @@ export const NominationSql = {
         gamedb_game_id = EXCLUDED.gamedb_game_id,
         nominated_at = EXCLUDED.nominated_at,
         reason = EXCLUDED.reason`,
-    }) satisfies SqlEntry,
+    }) satisfies ISqlEntry,
 
   deleteNomination: (table: string) =>
     ({
@@ -62,7 +62,7 @@ export const NominationSql = {
       postgres: `DELETE FROM ${table.toLowerCase()}
       WHERE round_number = :roundNumber
         AND user_id = :userId`,
-    }) satisfies SqlEntry,
+    }) satisfies ISqlEntry,
 
   listNominationsForRound: (table: string) =>
     ({
@@ -88,5 +88,5 @@ export const NominationSql = {
        LEFT JOIN gamedb_games g ON g.game_id = n.gamedb_game_id
       WHERE n.round_number = :roundNumber
       ORDER BY g.title ASC`,
-    }) satisfies SqlEntry,
+    }) satisfies ISqlEntry,
 };

@@ -1,4 +1,4 @@
-import type { SqlEntry } from "./types.js";
+import type { ISqlEntry } from "./types.js";
 
 const ITEM_COLS = `ITEM_ID,
             IMPORT_ID,
@@ -40,7 +40,7 @@ export const GotmAuditImportSql = {
        ) VALUES (
          :userId, 'ACTIVE', 0, :totalCount, :sourceFilename
        ) RETURNING import_id`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   insertItems: {
     oracle: `INSERT INTO RPG_CLUB_GOTM_AUDIT_ITEMS (
@@ -93,7 +93,7 @@ export const GotmAuditImportSql = {
            'PENDING',
            :gameDbGameId
          )`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   getById: {
     oracle: `SELECT IMPORT_ID,
@@ -116,7 +116,7 @@ export const GotmAuditImportSql = {
             updated_at
        FROM rpg_club_gotm_audit_imports
       WHERE import_id = :id`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   getActiveForUser: {
     oracle: `SELECT IMPORT_ID,
@@ -143,7 +143,7 @@ export const GotmAuditImportSql = {
       WHERE user_id = :userId
         AND status IN ('ACTIVE', 'PAUSED')
       ORDER BY import_id DESC`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   setStatus: {
     oracle: `UPDATE RPG_CLUB_GOTM_AUDIT_IMPORTS
@@ -152,7 +152,7 @@ export const GotmAuditImportSql = {
     postgres: `UPDATE rpg_club_gotm_audit_imports
         SET status = :status
       WHERE import_id = :importId`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   updateIndex: {
     oracle: `UPDATE RPG_CLUB_GOTM_AUDIT_IMPORTS
@@ -161,7 +161,7 @@ export const GotmAuditImportSql = {
     postgres: `UPDATE rpg_club_gotm_audit_imports
         SET current_index = :currentIndex
       WHERE import_id = :importId`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   getNextPendingItem: {
     oracle: `SELECT ${ITEM_COLS}
@@ -176,7 +176,7 @@ export const GotmAuditImportSql = {
         AND status = 'PENDING'
       ORDER BY row_index
       LIMIT 1`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   getItemById: {
     oracle: `SELECT ${ITEM_COLS}
@@ -185,7 +185,7 @@ export const GotmAuditImportSql = {
     postgres: `SELECT ${ITEM_COLS_PG}
        FROM rpg_club_gotm_audit_items
       WHERE item_id = :itemId`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   // Caller must pass lowercase column=value expressions for Postgres (e.g. "status = :status")
   updateItem: (fields: string[]) =>
@@ -196,7 +196,7 @@ export const GotmAuditImportSql = {
       postgres: `UPDATE rpg_club_gotm_audit_items
         SET ${fields.join(", ")}
       WHERE item_id = :itemId`,
-    }) satisfies SqlEntry,
+    }) satisfies ISqlEntry,
 
   getItemsForRound: {
     oracle: `SELECT ${ITEM_COLS}
@@ -211,7 +211,7 @@ export const GotmAuditImportSql = {
         AND kind = :kind
         AND round_number = :roundNumber
       ORDER BY game_index`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   countItems: {
     oracle: `SELECT STATUS, COUNT(*) AS CNT
@@ -222,5 +222,5 @@ export const GotmAuditImportSql = {
        FROM rpg_club_gotm_audit_items
       WHERE import_id = :importId
       GROUP BY status`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 };

@@ -1,4 +1,4 @@
-import type { SqlEntry } from "./types.js";
+import type { ISqlEntry } from "./types.js";
 
 const TODO_COLS = `TODO_ID,
               TITLE,
@@ -32,7 +32,7 @@ export const TodoSql = {
     postgres: `SELECT ${TODO_COLS_PG}
        FROM rpg_club_todos
       WHERE todo_id = :id`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   create: {
     oracle: `INSERT INTO RPG_CLUB_TODOS (TITLE, DETAILS, TODO_CATEGORY, TODO_SIZE, CREATED_BY)
@@ -41,7 +41,7 @@ export const TodoSql = {
     postgres: `INSERT INTO rpg_club_todos (title, details, todo_category, todo_size, created_by)
      VALUES (:title, :details, :todoCategory, :todoSize, :createdBy)
      RETURNING todo_id`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   list: (whereClause: string) =>
     ({
@@ -55,7 +55,7 @@ export const TodoSql = {
        ${whereClause}
       ORDER BY is_completed ASC, created_at ASC
       LIMIT :limit`,
-    }) satisfies SqlEntry,
+    }) satisfies ISqlEntry,
 
   update: {
     oracle: `UPDATE RPG_CLUB_TODOS
@@ -82,12 +82,12 @@ export const TodoSql = {
               ELSE todo_size
             END
       WHERE todo_id = :id`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   delete: {
     oracle: `DELETE FROM RPG_CLUB_TODOS WHERE TODO_ID = :id`,
     postgres: `DELETE FROM rpg_club_todos WHERE todo_id = :id`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   complete: {
     oracle: `UPDATE RPG_CLUB_TODOS
@@ -102,7 +102,7 @@ export const TodoSql = {
             completed_by = :completedBy
       WHERE todo_id = :id
         AND is_completed = false`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   countTodos: {
     oracle: `SELECT SUM(CASE WHEN IS_COMPLETED = 1 THEN 0 ELSE 1 END) AS OPEN_COUNT,
@@ -111,7 +111,7 @@ export const TodoSql = {
     postgres: `SELECT SUM(CASE WHEN is_completed THEN 0 ELSE 1 END) AS open_count,
             SUM(CASE WHEN is_completed THEN 1 ELSE 0 END) AS completed_count
        FROM rpg_club_todos`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   countTodoSummary: {
     oracle: `SELECT SUM(CASE WHEN IS_COMPLETED = 1 THEN 0 ELSE 1 END) AS OPEN_COUNT,
@@ -180,5 +180,5 @@ export const TodoSql = {
               END
             ) AS open_refactoring
        FROM rpg_club_todos`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 };

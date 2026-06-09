@@ -47,7 +47,6 @@ async function fetchIgdbCoverImage(details: IGDBGameDetails): Promise<Buffer | n
   }
 }
 
-
 export async function processReleaseDates(
   gameId: number,
   releaseDates: any[],

@@ -1,4 +1,4 @@
-import type { SqlEntry } from "./types.js";
+import type { ISqlEntry } from "./types.js";
 
 const GAME_KEY_COLS = `KEY_ID,
         GAME_TITLE,
@@ -28,7 +28,7 @@ export const GameKeySql = {
     postgres: `INSERT INTO rpg_club_game_keys (game_title, platform, key_value, donor_user_id)
      VALUES (:title, :platform, :keyValue, :donorUserId)
      RETURNING key_id`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   getById: {
     oracle: `SELECT ${GAME_KEY_COLS}
@@ -37,7 +37,7 @@ export const GameKeySql = {
     postgres: `SELECT ${GAME_KEY_COLS_PG}
        FROM rpg_club_game_keys
       WHERE key_id = :id`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   countAvailable: {
     oracle: `SELECT COUNT(*) AS TOTAL
@@ -46,7 +46,7 @@ export const GameKeySql = {
     postgres: `SELECT COUNT(*) AS total
        FROM rpg_club_game_keys
       WHERE claimed_by_user_id IS NULL`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   listAvailable: {
     oracle: `SELECT ${GAME_KEY_COLS}
@@ -59,7 +59,7 @@ export const GameKeySql = {
       WHERE claimed_by_user_id IS NULL
       ORDER BY UPPER(game_title), key_id
       LIMIT :limit OFFSET :offset`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   listByDonor: {
     oracle: `SELECT ${GAME_KEY_COLS}
@@ -70,7 +70,7 @@ export const GameKeySql = {
        FROM rpg_club_game_keys
       WHERE donor_user_id = :userId
       ORDER BY created_at DESC, key_id DESC`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   claim: {
     oracle: `UPDATE RPG_CLUB_GAME_KEYS
@@ -83,10 +83,10 @@ export const GameKeySql = {
             claimed_at = NOW()
       WHERE key_id = :keyId
         AND claimed_by_user_id IS NULL`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   revoke: {
     oracle: `DELETE FROM RPG_CLUB_GAME_KEYS WHERE KEY_ID = :keyId`,
     postgres: `DELETE FROM rpg_club_game_keys WHERE key_id = :keyId`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 };

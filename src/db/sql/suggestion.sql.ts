@@ -1,4 +1,4 @@
-import type { SqlEntry } from "./types.js";
+import type { ISqlEntry } from "./types.js";
 
 export const SuggestionSql = {
   create: {
@@ -8,7 +8,7 @@ export const SuggestionSql = {
     postgres: `INSERT INTO rpg_club_suggestions (title, details, labels, created_by, created_by_name)
        VALUES (:title, :details, :labels, :createdBy, :createdByName)
        RETURNING suggestion_id`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   list: {
     oracle: `SELECT SUGGESTION_ID,
@@ -33,12 +33,12 @@ export const SuggestionSql = {
        FROM rpg_club_suggestions
       ORDER BY created_at DESC, suggestion_id DESC
       LIMIT :limit`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   count: {
     oracle: `SELECT COUNT(*) AS TOTAL FROM RPG_CLUB_SUGGESTIONS`,
     postgres: `SELECT COUNT(*) AS total FROM rpg_club_suggestions`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   getById: {
     oracle: `SELECT SUGGESTION_ID,
@@ -61,12 +61,12 @@ export const SuggestionSql = {
             updated_at
        FROM rpg_club_suggestions
       WHERE suggestion_id = :id`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   delete: {
     oracle: `DELETE FROM RPG_CLUB_SUGGESTIONS WHERE SUGGESTION_ID = :id`,
     postgres: `DELETE FROM rpg_club_suggestions WHERE suggestion_id = :id`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 };
 
 export const SuggestionReviewSessionSql = {
@@ -77,7 +77,7 @@ export const SuggestionReviewSessionSql = {
     postgres: `INSERT INTO rpg_club_suggestion_review_sessions
          (session_id, reviewer_id, suggestion_ids, current_index, total_count)
        VALUES (:sessionId, :reviewerId, :suggestionIds, :currentIndex, :totalCount)`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   getById: {
     oracle: `SELECT SESSION_ID,
@@ -98,7 +98,7 @@ export const SuggestionReviewSessionSql = {
             updated_at
        FROM rpg_club_suggestion_review_sessions
       WHERE session_id = :sessionId`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   update: {
     oracle: `UPDATE RPG_CLUB_SUGGESTION_REVIEW_SESSIONS
@@ -113,20 +113,20 @@ export const SuggestionReviewSessionSql = {
             current_index = :currentIndex,
             total_count = :totalCount
       WHERE session_id = :sessionId`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   delete: {
     oracle: `DELETE FROM RPG_CLUB_SUGGESTION_REVIEW_SESSIONS WHERE SESSION_ID = :sessionId`,
     postgres: `DELETE FROM rpg_club_suggestion_review_sessions WHERE session_id = :sessionId`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   deleteForReviewer: {
     oracle: `DELETE FROM RPG_CLUB_SUGGESTION_REVIEW_SESSIONS WHERE REVIEWER_ID = :reviewerId`,
     postgres: `DELETE FROM rpg_club_suggestion_review_sessions WHERE reviewer_id = :reviewerId`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   deleteExpired: {
     oracle: `DELETE FROM RPG_CLUB_SUGGESTION_REVIEW_SESSIONS WHERE CREATED_AT < :cutoff`,
     postgres: `DELETE FROM rpg_club_suggestion_review_sessions WHERE created_at < :cutoff`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 };

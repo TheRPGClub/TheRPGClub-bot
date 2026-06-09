@@ -1,4 +1,4 @@
-import type { SqlEntry } from "./types.js";
+import type { ISqlEntry } from "./types.js";
 
 export const HltbCacheSql = {
   getByGameId: {
@@ -32,7 +32,7 @@ export const HltbCacheSql = {
             updated_at
        FROM rpg_club_hltb_cache
       WHERE gamedb_game_id = :gameId`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   upsertCache: {
     oracle: `MERGE INTO RPG_CLUB_HLTB_CACHE t
@@ -124,5 +124,5 @@ export const HltbCacheSql = {
          source_query = EXCLUDED.source_query,
          scraped_at = NOW(),
          updated_at = NOW()`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 };

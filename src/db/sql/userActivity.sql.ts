@@ -1,4 +1,4 @@
-import type { SqlEntry } from "./types.js";
+import type { ISqlEntry } from "./types.js";
 
 export const UserActivityIconSql = {
   mergeActivity: {
@@ -47,7 +47,7 @@ WHEN NOT MATCHED THEN
     icon_url = EXCLUDED.icon_url,
     last_seen_at = NOW(),
     seen_count = rpg_club_user_activity_icons.seen_count + 1`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   getRecentForUsers: (userGroupClauses: string) =>
     ({
@@ -77,7 +77,7 @@ WHEN NOT MATCHED THEN
          AND (:activityNameNorm IS NULL OR activity_name_norm = :activityNameNorm)
          AND (:iconType IS NULL OR icon_type = :iconType)
        ORDER BY last_seen_at DESC`,
-    }) satisfies SqlEntry,
+    }) satisfies ISqlEntry,
 };
 
 export const UserChannelMessageCountSql = {
@@ -107,15 +107,15 @@ export const UserChannelMessageCountSql = {
                 message_count = COALESCE(rpg_club_user_channel_counts.message_count, 0) + :count,
                 last_scanned_at = :scanned,
                 updated_at = NOW()`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   getScannedChannelIds: {
     oracle: `SELECT DISTINCT CHANNEL_ID FROM RPG_CLUB_USER_CHANNEL_COUNTS`,
     postgres: `SELECT DISTINCT channel_id FROM rpg_club_user_channel_counts`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   getChannelScanMeta: {
     oracle: `SELECT CHANNEL_ID, LAST_SCANNED_AT FROM RPG_CLUB_USER_CHANNEL_COUNTS`,
     postgres: `SELECT channel_id, last_scanned_at FROM rpg_club_user_channel_counts`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 };

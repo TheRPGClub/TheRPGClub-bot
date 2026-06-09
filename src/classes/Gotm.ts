@@ -2,7 +2,6 @@ import {
   dbQuery,
   dbMutate,
   dbTransaction,
-  dbWithConnection,
   dbQueryConn,
   dbMutateConn,
 } from "../db/SqlManager.js";

@@ -171,7 +171,6 @@ function mapAppMap(row: AppMapRow): ISteamAppGameDbMap {
   };
 }
 
-
 export async function createSteamCollectionImportSession(params: {
   userId: string;
   totalCount: number;

@@ -1,4 +1,4 @@
-import type { SqlEntry } from "./types.js";
+import type { ISqlEntry } from "./types.js";
 
 const ENTRY_SELECT_SQL = `SELECT c.ENTRY_ID,
        c.USER_ID,
@@ -66,7 +66,7 @@ export const UserGameCollectionSql = {
              :isShared
            )
            RETURNING entry_id`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   getEntryById: {
     oracle: `${ENTRY_SELECT_SQL}
@@ -75,7 +75,7 @@ export const UserGameCollectionSql = {
     postgres: `${ENTRY_SELECT_SQL_PG}
      WHERE c.entry_id = :entryId
        AND c.user_id = :userId`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   getEntryForUser: {
     oracle: `${ENTRY_SELECT_SQL}
@@ -84,7 +84,7 @@ export const UserGameCollectionSql = {
     postgres: `${ENTRY_SELECT_SQL_PG}
        WHERE c.entry_id = :entryId
          AND c.user_id = :userId`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   // Caller must pass lowercase column=value expressions for Postgres (e.g. "note = :note")
   updateEntry: (updateParts: string[]) =>
@@ -97,7 +97,7 @@ export const UserGameCollectionSql = {
               SET ${updateParts.join(", ")}
             WHERE entry_id = :entryId
               AND user_id = :userId`,
-    }) satisfies SqlEntry,
+    }) satisfies ISqlEntry,
 
   removeEntry: {
     oracle: `DELETE FROM USER_GAME_COLLECTIONS
@@ -106,7 +106,7 @@ export const UserGameCollectionSql = {
     postgres: `DELETE FROM user_game_collections
         WHERE entry_id = :entryId
           AND user_id = :userId`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   // Caller must pass dialect-appropriate whereClause and fetchClause
   searchEntries: (whereClause: string, fetchClause: string) =>
@@ -147,7 +147,7 @@ export const UserGameCollectionSql = {
         WHERE ${whereClause}
         ORDER BY LOWER(g.title), LOWER(COALESCE(p.platform_name, '')), c.entry_id
         ${fetchClause}`,
-    }) satisfies SqlEntry,
+    }) satisfies ISqlEntry,
 
   getTotalCount: {
     oracle: `SELECT COUNT(*) AS TOTAL_COUNT
@@ -156,7 +156,7 @@ export const UserGameCollectionSql = {
     postgres: `SELECT COUNT(*) AS total_count
            FROM user_game_collections
           WHERE user_id = :userId`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   getPlatformCounts: {
     oracle: `SELECT c.PLATFORM_ID,
@@ -181,7 +181,7 @@ export const UserGameCollectionSql = {
           ORDER BY COUNT(*) DESC,
                    LOWER(COALESCE(p.platform_name, 'Unknown')),
                    c.platform_id`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   getAllPlatformCounts: {
     oracle: `SELECT c.PLATFORM_ID,
@@ -204,7 +204,7 @@ export const UserGameCollectionSql = {
           ORDER BY COUNT(*) DESC,
                    LOWER(COALESCE(p.platform_name, 'Unknown')),
                    c.platform_id`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   getAllUserRows: {
     oracle: `SELECT c.USER_ID,
@@ -251,12 +251,12 @@ export const UserGameCollectionSql = {
                    COUNT(*) DESC,
                    LOWER(COALESCE(p.platform_name, 'Unknown')),
                    c.platform_id`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   getTotalAllCount: {
     oracle: `SELECT COUNT(*) AS TOTAL_COUNT FROM USER_GAME_COLLECTIONS`,
     postgres: `SELECT COUNT(*) AS total_count FROM user_game_collections`,
-  } satisfies SqlEntry,
+  } satisfies ISqlEntry,
 
   autocompleteEntries: (titleWhere: string) =>
     ({
@@ -298,5 +298,5 @@ export const UserGameCollectionSql = {
           ${titleWhere}
         ORDER BY LOWER(g.title), LOWER(COALESCE(p.platform_name, '')), c.entry_id
         LIMIT :limit`,
-    }) satisfies SqlEntry,
+    }) satisfies ISqlEntry,
 };
