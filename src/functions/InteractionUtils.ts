@@ -324,6 +324,16 @@ export async function safeDeferUpdate(interaction: AnyRepliable): Promise<void> 
   }
 }
 
+/** Defers the update. Returns false if deferral failed (caller should return). */
+export async function safeDeferUpdateOrBail(interaction: AnyRepliable): Promise<boolean> {
+  try {
+    await safeDeferUpdate(interaction);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 // Ensure we do not hit "Interaction already acknowledged" when replying
 const isAckError = (err: any): boolean => {
   const code = err?.code ?? err?.rawError?.code;

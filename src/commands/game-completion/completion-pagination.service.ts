@@ -12,6 +12,7 @@ import {
   replyIfNotOwner,
   safeDeferReply,
   safeDeferUpdate,
+  safeDeferUpdateOrBail,
   safeReply,
 } from "../../functions/InteractionUtils.js";
 import {
@@ -49,11 +50,7 @@ export async function handleCompletionPageSelect(
   const year = parseCompletionYearFilter(yearRaw);
   const ephemeral = interaction.message?.flags?.has(MessageFlags.Ephemeral) ?? true;
 
-  try {
-    await safeDeferUpdate(interaction);
-  } catch {
-    return;
-  }
+  if (!await safeDeferUpdateOrBail(interaction)) return;
 
   if (mode === "list") {
     await renderCompletionPage(
@@ -88,11 +85,7 @@ export async function handleCompletionPaging(interaction: ButtonInteraction): Pr
   const year = parseCompletionYearFilter(yearRaw);
   const ephemeral = interaction.message?.flags?.has(MessageFlags.Ephemeral) ?? true;
 
-  try {
-    await safeDeferUpdate(interaction);
-  } catch {
-    return;
-  }
+  if (!await safeDeferUpdateOrBail(interaction)) return;
 
   if (mode === "list") {
     await renderCompletionPage(
@@ -207,11 +200,7 @@ export async function handleCompletionClearYearFilter(
   const userId = parts[1];
   const ephemeral = interaction.message?.flags?.has(MessageFlags.Ephemeral) ?? true;
 
-  try {
-    await safeDeferUpdate(interaction);
-  } catch {
-    return;
-  }
+  if (!await safeDeferUpdateOrBail(interaction)) return;
 
   const firstPage = 0;
   const noYearFilter = null;
@@ -230,11 +219,7 @@ export async function handleCompletionYearSelect(
   const year = parseCompletionYearFilter(selectedYear);
   const ephemeral = interaction.message?.flags?.has(MessageFlags.Ephemeral) ?? true;
 
-  try {
-    await safeDeferUpdate(interaction);
-  } catch {
-    return;
-  }
+  if (!await safeDeferUpdateOrBail(interaction)) return;
 
   const firstPage = 0;
   await renderCompletionPage(interaction, userId, firstPage, year, ephemeral);
