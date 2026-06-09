@@ -10,6 +10,7 @@ import { COLLECTION_OVERVIEW_EMOJIS } from "../../config/emojis.js";
 import { safeV2TextContent } from "../../functions/ComponentsV2Utils.js";
 import { formatPlatformDisplayName } from "../../functions/PlatformDisplay.js";
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
+import { parseCustomIdSegments } from "../../utilities/CustomIdUtils.js";
 
 export const COLLECTION_OVERVIEW_SELECT_PREFIX = "collection-overview-select-v1";
 const COLLECTION_OVERVIEW_SELECT_OVERVIEW = "overview";
@@ -164,15 +165,15 @@ export function parseCollectionOverviewSelectId(customId: string): {
   targetUserId: string;
   isEphemeral: boolean;
 } | null {
-  const parts = customId.split(":");
-  if (parts.length !== 4) return null;
-  if (parts[0] !== COLLECTION_OVERVIEW_SELECT_PREFIX) return null;
-  const visibility = parts[3];
+  if (!customId.startsWith(`${COLLECTION_OVERVIEW_SELECT_PREFIX}:`)) return null;
+  const segs = parseCustomIdSegments(customId, 3);
+  if (!segs) return null;
+  const [viewerUserId, targetUserId, visibility] = segs;
   if (visibility !== "e" && visibility !== "p") return null;
 
   return {
-    viewerUserId: parts[1],
-    targetUserId: parts[2],
+    viewerUserId,
+    targetUserId,
     isEphemeral: visibility === "e",
   };
 }

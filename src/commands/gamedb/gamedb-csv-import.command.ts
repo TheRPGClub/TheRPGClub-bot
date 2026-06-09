@@ -74,6 +74,7 @@ import {
 import { processReleaseDates } from "./gamedb-add.command.js";
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
 import { DISCORD_AUTOCOMPLETE_DESC_MAX } from "../../config/textLimits.js";
+import { parseCustomIdSegments } from "../../utilities/CustomIdUtils.js";
 
 const GAMEDB_CSV_ACTIONS = ["start", "resume", "status", "pause", "cancel"] as const;
 type GameDbCsvAction = (typeof GAMEDB_CSV_ACTIONS)[number];
@@ -484,7 +485,9 @@ export class GameDbCsvImportCommand {
 
   @SelectMenuComponent({ id: /^gamedb-csv-select:\d+:\d+:\d+$/ })
   async handleGameDbCsvSelect(interaction: StringSelectMenuInteraction): Promise<void> {
-    const [, ownerId, importIdRaw, itemIdRaw] = interaction.customId.split(":");
+    const segs = parseCustomIdSegments(interaction.customId, 3);
+    if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+    const [ownerId, importIdRaw, itemIdRaw] = segs;
     if (interaction.user.id !== ownerId) {
       await safeReply(interaction, buildTextReply("This import prompt is not for you.", true));
       return;
@@ -553,7 +556,9 @@ export class GameDbCsvImportCommand {
     id: /^gamedb-csv-action:\d+:\d+:\d+:(manual|query|accept|skip|pause)$/,
   })
   async handleGameDbCsvAction(interaction: ButtonInteraction): Promise<void> {
-    const [, ownerId, importIdRaw, itemIdRaw, action] = interaction.customId.split(":");
+    const segs = parseCustomIdSegments(interaction.customId, 4);
+    if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+    const [ownerId, importIdRaw, itemIdRaw, action] = segs;
     if (interaction.user.id !== ownerId) {
       await safeReply(interaction, buildTextReply("This import prompt is not for you.", true));
       return;
@@ -702,7 +707,9 @@ export class GameDbCsvImportCommand {
 
   @ModalComponent({ id: /^gamedb-csv-manual:\d+:\d+:\d+$/ })
   async handleGameDbCsvManualModal(interaction: ModalSubmitInteraction): Promise<void> {
-    const [, ownerId, importIdRaw, itemIdRaw] = interaction.customId.split(":");
+    const segs = parseCustomIdSegments(interaction.customId, 3);
+    if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+    const [ownerId, importIdRaw, itemIdRaw] = segs;
     if (interaction.user.id !== ownerId) {
       await safeReply(interaction, buildTextReply("This import prompt is not for you.", true));
       return;
@@ -769,7 +776,9 @@ export class GameDbCsvImportCommand {
 
   @ModalComponent({ id: /^gamedb-csv-query:\d+:\d+:\d+$/ })
   async handleGameDbCsvQueryModal(interaction: ModalSubmitInteraction): Promise<void> {
-    const [, ownerId, importIdRaw, itemIdRaw] = interaction.customId.split(":");
+    const segs = parseCustomIdSegments(interaction.customId, 3);
+    if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+    const [ownerId, importIdRaw, itemIdRaw] = segs;
     if (interaction.user.id !== ownerId) {
       await safeReply(interaction, buildTextReply("This import prompt is not for you.", true));
       return;

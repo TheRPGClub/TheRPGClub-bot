@@ -38,6 +38,7 @@ import {
   DISCORD_AUTOCOMPLETE_DESC_MAX,
   DISCORD_SELECT_LABEL_MAX,
 } from "../../config/textLimits.js";
+import { parseCustomIdSegments } from "../../utilities/CustomIdUtils.js";
 
 /**
  * Creates a completion session and returns the session ID
@@ -370,7 +371,9 @@ export async function processCompletionSelection(
 export async function handleCompletionAddSelect(
   interaction: StringSelectMenuInteraction,
 ): Promise<void> {
-  const [, sessionId] = interaction.customId.split(":");
+  const segs = parseCustomIdSegments(interaction.customId, 1);
+  if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+  const [sessionId] = segs;
   const ctx = completionAddSessions.get(sessionId);
 
   if (!ctx) {

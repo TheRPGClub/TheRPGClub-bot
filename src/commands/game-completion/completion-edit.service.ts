@@ -30,6 +30,7 @@ import {
   safeUpdate,
 } from "../../functions/InteractionUtils.js";
 import { isPositiveInt, isValidPlaytimeHours } from "../../utilities/ValidationUtils.js";
+import { parseCustomIdSegments } from "../../utilities/CustomIdUtils.js";
 
 const MAX_NOTE_LENGTH = 500;
 type CompletionEditField = "type" | "date" | "platform" | "playtime" | "note";
@@ -45,7 +46,9 @@ type EditPromptPayload = {
 export async function handleCompletionEditMenu(
   interaction: StringSelectMenuInteraction,
 ): Promise<void> {
-  const [, ownerId] = interaction.customId.split(":");
+  const segs = parseCustomIdSegments(interaction.customId, 1);
+  if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+  const [ownerId] = segs;
   if (await replyIfNotOwner(interaction, ownerId)) return;
 
   const completionId = Number(interaction.values[0]);
@@ -72,7 +75,9 @@ export async function handleCompletionEditMenu(
  * Handles the "Done" button when finishing editing
  */
 export async function handleCompletionEditDone(interaction: ButtonInteraction): Promise<void> {
-  const [, ownerId] = interaction.customId.split(":");
+  const segs = parseCustomIdSegments(interaction.customId, 1);
+  if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+  const [ownerId] = segs;
   if (await replyIfNotOwner(interaction, ownerId)) return;
 
   await safeUpdate(interaction, {
@@ -89,7 +94,9 @@ export async function handleCompletionEditDone(interaction: ButtonInteraction): 
  * Handles editing individual completion fields (type, date, playtime, note)
  */
 export async function handleCompletionFieldEdit(interaction: ButtonInteraction): Promise<void> {
-  const [, ownerId, completionIdRaw, field] = interaction.customId.split(":");
+  const segs = parseCustomIdSegments(interaction.customId, 3);
+  if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+  const [ownerId, completionIdRaw, field] = segs;
   if (await replyIfNotOwner(interaction, ownerId)) return;
 
   const completionId = Number(completionIdRaw);
@@ -248,7 +255,9 @@ export async function handleCompletionFieldEdit(interaction: ButtonInteraction):
 export async function handleCompletionTypeSelect(
   interaction: StringSelectMenuInteraction,
 ): Promise<void> {
-  const [, ownerId, completionIdRaw] = interaction.customId.split(":");
+  const segs = parseCustomIdSegments(interaction.customId, 2);
+  if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+  const [ownerId, completionIdRaw] = segs;
   if (await replyIfNotOwner(interaction, ownerId)) return;
 
   const completionId = Number(completionIdRaw);

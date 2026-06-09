@@ -48,6 +48,7 @@ import { COMPONENTS_V2_FLAG } from "../config/flags.js";
 import { buildTextReply, safeV2TextContent } from "../functions/ComponentsV2Utils.js";
 import { logRawModal } from "../services/raw-modal/RawModalLogging.js";
 import { isPositiveInt } from "../utilities/ValidationUtils.js";
+import { parseCustomIdSegments } from "../utilities/CustomIdUtils.js";
 
 const SUGGESTION_APPROVE_PREFIX = "suggestion-approve";
 const SUGGESTION_CREATE_MODAL_ID = "suggestion-create-modal";
@@ -105,11 +106,10 @@ function buildComponentsV2Flags(isEphemeral: boolean): number {
 function parseSuggestionReviewActionId(
   customId: string,
 ): { action: string; sessionId: string; reviewerId: string } | null {
-  const parts = customId.split(":");
-  if (parts.length !== 4 || parts[0] !== SUGGESTION_REVIEW_PREFIX) {
-    return null;
-  }
-  const [, action, sessionId, reviewerId] = parts;
+  if (!customId.startsWith(`${SUGGESTION_REVIEW_PREFIX}:`)) return null;
+  const segs = parseCustomIdSegments(customId, 3);
+  if (!segs) return null;
+  const [action, sessionId, reviewerId] = segs;
   return action && sessionId && reviewerId ? { action, sessionId, reviewerId } : null;
 }
 
@@ -123,15 +123,12 @@ function buildSuggestionReviewDecisionModalId(
 function parseSuggestionReviewDecisionModalId(
   customId: string,
 ): { reviewerId: string; suggestionId: number } | null {
-  const parts = customId.split(":");
-  if (parts.length !== 3 || parts[0] !== SUGGESTION_REVIEW_DECISION_MODAL_PREFIX) {
-    return null;
-  }
-  const suggestionId = Number(parts[2]);
-  if (!isPositiveInt(suggestionId)) {
-    return null;
-  }
-  const reviewerId = parts[1];
+  if (!customId.startsWith(`${SUGGESTION_REVIEW_DECISION_MODAL_PREFIX}:`)) return null;
+  const segs = parseCustomIdSegments(customId, 2);
+  if (!segs) return null;
+  const [reviewerId, suggestionIdStr] = segs;
+  const suggestionId = Number(suggestionIdStr);
+  if (!isPositiveInt(suggestionId)) return null;
   return reviewerId ? { reviewerId, suggestionId } : null;
 }
 
@@ -436,11 +433,10 @@ function buildSuggestionApproveId(suggestionId: number): string {
 }
 
 function parseSuggestionApproveId(id: string): number | null {
-  const parts = id.split(":");
-  if (parts.length !== 2 || parts[0] !== SUGGESTION_APPROVE_PREFIX) {
-    return null;
-  }
-  const suggestionId = Number(parts[1]);
+  if (!id.startsWith(`${SUGGESTION_APPROVE_PREFIX}:`)) return null;
+  const segs = parseCustomIdSegments(id, 1);
+  if (!segs) return null;
+  const suggestionId = Number(segs[0]);
   return isPositiveInt(suggestionId) ? suggestionId : null;
 }
 

@@ -1,3 +1,4 @@
+import { parseCustomIdSegments } from "../../utilities/CustomIdUtils.js";
 import {
   RAW_MODAL_ADMIN_FLOWS,
   RAW_MODAL_CUSTOM_ID_PREFIX,
@@ -70,12 +71,11 @@ export function buildRawModalCustomId(parts: IRawModalCustomIdParts): string {
 }
 
 export function parseRawModalCustomId(customId: string): IRawModalParsedCustomId | null {
-  const [prefix, feature, versionPart, flow, sessionId] = customId.split(":");
-
-  if (!prefix || !feature || !versionPart || !flow || !sessionId) {
-    return null;
-  }
-  if (prefix !== RAW_MODAL_CUSTOM_ID_PREFIX) {
+  if (!customId.startsWith(`${RAW_MODAL_CUSTOM_ID_PREFIX}:`)) return null;
+  const segs = parseCustomIdSegments(customId, 4);
+  if (!segs) return null;
+  const [feature, versionPart, flow, sessionId] = segs;
+  if (!feature || !versionPart || !flow || !sessionId) {
     return null;
   }
   if (!isSupportedFeature(feature) || !isSupportedFlow(flow)) {

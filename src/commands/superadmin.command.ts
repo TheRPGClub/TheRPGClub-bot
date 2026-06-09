@@ -51,6 +51,7 @@ import { buildTextReply } from "../functions/ComponentsV2Utils.js";
 import { isPositiveInt, isValidPlaytimeHours } from "../utilities/ValidationUtils.js";
 import { sleep } from "../utilities/DelayUtils.js";
 import { DISCORD_AUTOCOMPLETE_DESC_MAX, DISCORD_SELECT_LABEL_MAX } from "../config/textLimits.js";
+import { parseCustomIdSegments } from "../utilities/CustomIdUtils.js";
 
 type CompletionAddContext = {
   targetUserId: string;
@@ -263,7 +264,9 @@ export class SuperAdmin {
 
   @SelectMenuComponent({ id: /^sa-comp-add-select:.+/ })
   async handleSuperAdminCompletionSelect(interaction: StringSelectMenuInteraction): Promise<void> {
-    const [, sessionId] = interaction.customId.split(":");
+    const segs = parseCustomIdSegments(interaction.customId, 1);
+    if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+    const [sessionId] = segs;
     const ctx = superadminCompletionAddSessions.get(sessionId);
 
     if (!ctx) {
@@ -300,7 +303,9 @@ export class SuperAdmin {
   async handleSuperAdminCompletionPlatformSelect(
     interaction: StringSelectMenuInteraction,
   ): Promise<void> {
-    const [, sessionId] = interaction.customId.split(":");
+    const segs = parseCustomIdSegments(interaction.customId, 1);
+    if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+    const [sessionId] = segs;
     const ctx = superadminCompletionPlatformSessions.get(sessionId);
 
     if (!ctx) {

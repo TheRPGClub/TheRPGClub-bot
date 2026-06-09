@@ -66,6 +66,7 @@ import { parseSynonymQuickAddTerms } from "./gamedb-synonym.utils.js";
 import { isPositiveInt, truncateWithEllipsis } from "../utilities/ValidationUtils.js";
 import { COLOR_PRIMARY, COLOR_SUCCESS, COLOR_HIGHLIGHT } from "../config/colors.js";
 import { AUDIT_PAGE_SIZE, SYNONYM_LIST_PAGE_SIZE } from "../config/pagination.js";
+import { parseCustomIdSegments } from "../utilities/CustomIdUtils.js";
 
 const AUDIT_VIDEO_MODAL_ID = "audit-video-modal";
 const AUDIT_VIDEO_INPUT_ID = "audit-video-url";
@@ -218,11 +219,10 @@ function buildAutoAcceptStopId(runId: string): string {
 }
 
 function parseAutoAcceptStopId(id: string): string | null {
-  const parts = id.split(":");
-  if (parts.length !== 2 || parts[0] !== AUDIT_AUTO_STOP_PREFIX) {
-    return null;
-  }
-  return parts[1] || null;
+  if (!id.startsWith(`${AUDIT_AUTO_STOP_PREFIX}:`)) return null;
+  const segs = parseCustomIdSegments(id, 1);
+  if (!segs) return null;
+  return segs[0] || null;
 }
 
 function buildAutoAcceptFollowUpPayload(
@@ -638,9 +638,9 @@ export class GameDbAdmin {
 
   @ButtonComponent({ id: /^audit-page:[^:]+:(next|prev)$/ })
   async handleAuditPage(interaction: ButtonInteraction): Promise<void> {
-    const parts = interaction.customId.split(":");
-    const sessionId = parts[1];
-    const direction = parts[2];
+    const segs = parseCustomIdSegments(interaction.customId, 2);
+    if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+    const [sessionId, direction] = segs;
 
     const session = AUDIT_SESSIONS.get(sessionId);
     if (!session) {
@@ -663,8 +663,9 @@ export class GameDbAdmin {
 
   @SelectMenuComponent({ id: /^audit-select:[^:]+$/ })
   async handleAuditSelect(interaction: StringSelectMenuInteraction): Promise<void> {
-    const parts = interaction.customId.split(":");
-    const sessionId = parts[1];
+    const segs = parseCustomIdSegments(interaction.customId, 1);
+    if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+    const [sessionId] = segs;
 
     const session = AUDIT_SESSIONS.get(sessionId);
     if (!session) {
@@ -688,7 +689,9 @@ export class GameDbAdmin {
 
   @ButtonComponent({ id: /^audit-back:[^:]+$/ })
   async handleAuditBack(interaction: ButtonInteraction): Promise<void> {
-    const sessionId = interaction.customId.split(":")[1];
+    const segs = parseCustomIdSegments(interaction.customId, 1);
+    if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+    const [sessionId] = segs;
     const session = AUDIT_SESSIONS.get(sessionId);
     if (!session) {
       await safeUpdate(interaction, { content: "Session expired.", components: [] });
@@ -700,7 +703,9 @@ export class GameDbAdmin {
 
   @ButtonComponent({ id: /^audit-next:[^:]+:\d+$/ })
   async handleAuditNext(interaction: ButtonInteraction): Promise<void> {
-    const [, sessionId, gameIdStr] = interaction.customId.split(":");
+    const segs = parseCustomIdSegments(interaction.customId, 2);
+    if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+    const [sessionId, gameIdStr] = segs;
     const gameId = Number(gameIdStr);
     const session = AUDIT_SESSIONS.get(sessionId);
     if (!session || session.userId !== interaction.user.id) return;
@@ -720,7 +725,9 @@ export class GameDbAdmin {
 
   @ButtonComponent({ id: /^audit-accept-igdb:[^:]+:\d+$/ })
   async handleAuditAcceptIgdb(interaction: ButtonInteraction): Promise<void> {
-    const [, sessionId, gameIdStr] = interaction.customId.split(":");
+    const segs = parseCustomIdSegments(interaction.customId, 2);
+    if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+    const [sessionId, gameIdStr] = segs;
     const gameId = Number(gameIdStr);
 
     const session = AUDIT_SESSIONS.get(sessionId);
@@ -765,7 +772,9 @@ export class GameDbAdmin {
 
   @ButtonComponent({ id: /^audit-img:[^:]+:\d+$/ })
   async handleAuditImage(interaction: ButtonInteraction): Promise<void> {
-    const [, sessionId, gameIdStr] = interaction.customId.split(":");
+    const segs = parseCustomIdSegments(interaction.customId, 2);
+    if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+    const [sessionId, gameIdStr] = segs;
     const gameId = Number(gameIdStr);
     
     // We need to use a collector in the channel to get the image
@@ -842,7 +851,9 @@ export class GameDbAdmin {
 
   @ButtonComponent({ id: /^audit-accept-video:[^:]+:\d+$/ })
   async handleAuditAcceptVideo(interaction: ButtonInteraction): Promise<void> {
-    const [, sessionId, gameIdStr] = interaction.customId.split(":");
+    const segs = parseCustomIdSegments(interaction.customId, 2);
+    if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+    const [sessionId, gameIdStr] = segs;
     const gameId = Number(gameIdStr);
 
     const session = AUDIT_SESSIONS.get(sessionId);
@@ -887,7 +898,9 @@ export class GameDbAdmin {
 
   @ButtonComponent({ id: /^audit-video:[^:]+:\d+$/ })
   async handleAuditVideo(interaction: ButtonInteraction): Promise<void> {
-    const [, sessionId, gameIdStr] = interaction.customId.split(":");
+    const segs = parseCustomIdSegments(interaction.customId, 2);
+    if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+    const [sessionId, gameIdStr] = segs;
     const session = AUDIT_SESSIONS.get(sessionId);
     if (!session || session.userId !== interaction.user.id) return;
 
@@ -910,7 +923,9 @@ export class GameDbAdmin {
 
   @ButtonComponent({ id: /^audit-description:[^:]+:\d+$/ })
   async handleAuditDescription(interaction: ButtonInteraction): Promise<void> {
-    const [, sessionId, gameIdStr] = interaction.customId.split(":");
+    const segs = parseCustomIdSegments(interaction.customId, 2);
+    if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+    const [sessionId, gameIdStr] = segs;
     const session = AUDIT_SESSIONS.get(sessionId);
     if (!session || session.userId !== interaction.user.id) return;
 
@@ -933,7 +948,9 @@ export class GameDbAdmin {
 
   @ModalComponent({ id: /^audit-video-modal:[^:]+:\d+$/ })
   async handleAuditVideoModal(interaction: ModalSubmitInteraction): Promise<void> {
-    const [, sessionId, gameIdStr] = interaction.customId.split(":");
+    const segs = parseCustomIdSegments(interaction.customId, 2);
+    if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+    const [sessionId, gameIdStr] = segs;
     const gameId = Number(gameIdStr);
     const session = AUDIT_SESSIONS.get(sessionId);
     if (!session || session.userId !== interaction.user.id) return;
@@ -968,7 +985,9 @@ export class GameDbAdmin {
 
   @ModalComponent({ id: /^audit-description-modal:[^:]+:\d+$/ })
   async handleAuditDescriptionModal(interaction: ModalSubmitInteraction): Promise<void> {
-    const [, sessionId, gameIdStr] = interaction.customId.split(":");
+    const segs = parseCustomIdSegments(interaction.customId, 2);
+    if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+    const [sessionId, gameIdStr] = segs;
     const gameId = Number(gameIdStr);
     const session = AUDIT_SESSIONS.get(sessionId);
     if (!session || session.userId !== interaction.user.id) return;
@@ -1619,8 +1638,9 @@ export class GameDbAdmin {
 
   @ModalComponent({ id: /^gamedb-syn-add:\d+$/ })
   async synonymAddModal(interaction: ModalSubmitInteraction): Promise<void> {
-    const parts = interaction.customId.split(":");
-    const draftId = Number(parts[1]);
+    const segs = parseCustomIdSegments(interaction.customId, 1);
+    if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+    const draftId = Number(segs[0]);
     if (!isPositiveInt(draftId)) {
       await safeReply(interaction, buildTextReply("This synonym draft is no longer valid.", true));
       return;
@@ -1687,8 +1707,9 @@ export class GameDbAdmin {
 
   @ButtonComponent({ id: /^gamedb-syn-more:\d+$/ })
   async synonymAddMore(interaction: ButtonInteraction): Promise<void> {
-    const parts = interaction.customId.split(":");
-    const draftId = Number(parts[1]);
+    const segs = parseCustomIdSegments(interaction.customId, 1);
+    if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+    const draftId = Number(segs[0]);
     if (!isPositiveInt(draftId)) {
       await safeReply(interaction, buildTextReply("This synonym draft is no longer valid.", true));
       return;
@@ -1705,8 +1726,9 @@ export class GameDbAdmin {
 
   @ButtonComponent({ id: /^gamedb-syn-done:\d+$/ })
   async synonymAddDone(interaction: ButtonInteraction): Promise<void> {
-    const parts = interaction.customId.split(":");
-    const draftId = Number(parts[1]);
+    const segs = parseCustomIdSegments(interaction.customId, 1);
+    if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+    const draftId = Number(segs[0]);
     if (!isPositiveInt(draftId)) {
       await safeReply(interaction, buildTextReply("This synonym draft is no longer valid.", true));
       return;
@@ -1726,8 +1748,9 @@ export class GameDbAdmin {
   async synonymGroupEditSelect(
     interaction: StringSelectMenuInteraction,
   ): Promise<void> {
-    const parts = interaction.customId.split(":");
-    const ownerId = parts[1];
+    const segs = parseCustomIdSegments(interaction.customId, 3);
+    if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+    const [ownerId] = segs;
     if (await replyIfNotOwner(interaction, ownerId)) return;
 
     const groupId = Number(interaction.values[0]);
@@ -1758,10 +1781,10 @@ export class GameDbAdmin {
   async synonymGroupDeleteSelect(
     interaction: StringSelectMenuInteraction,
   ): Promise<void> {
-    const parts = interaction.customId.split(":");
-    const ownerId = parts[1];
-    const page = Number(parts[2]);
-    const encodedQuery = parts[3] ?? "";
+    const segs = parseCustomIdSegments(interaction.customId, 3);
+    if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+    const [ownerId, pageRaw, encodedQuery] = segs;
+    const page = Number(pageRaw);
     if (await replyIfNotOwner(interaction, ownerId)) return;
 
     const groupId = Number(interaction.values[0]);
@@ -1789,8 +1812,9 @@ export class GameDbAdmin {
 
   @ButtonComponent({ id: /^gamedb-syn-add-from-list:\d+:\d+:[A-Za-z0-9_-]*$/ })
   async synonymAddFromList(interaction: ButtonInteraction): Promise<void> {
-    const parts = interaction.customId.split(":");
-    const ownerId = parts[1];
+    const segs = parseCustomIdSegments(interaction.customId, 3);
+    if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+    const [ownerId] = segs;
     if (await replyIfNotOwner(interaction, ownerId)) return;
 
     const draft = await GameSearchSynonymDraft.createDraft(interaction.user.id);
@@ -1805,9 +1829,10 @@ export class GameDbAdmin {
   async synonymGroupEditModal(
     interaction: ModalSubmitInteraction,
   ): Promise<void> {
-    const parts = interaction.customId.split(":");
-    const ownerId = parts[1];
-    const groupId = Number(parts[2]);
+    const segs = parseCustomIdSegments(interaction.customId, 2);
+    if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+    const [ownerId, groupIdRaw] = segs;
+    const groupId = Number(groupIdRaw);
     if (interaction.user.id !== ownerId) {
       await safeReply(interaction, buildTextReply("This edit request isn't for you.", true));
       return;
@@ -1854,11 +1879,10 @@ export class GameDbAdmin {
 
   @ButtonComponent({ id: /^gamedb-syn-page:\d+:\d+:[A-Za-z0-9_-]*:(next|prev)$/ })
   async synonymListPage(interaction: ButtonInteraction): Promise<void> {
-    const parts = interaction.customId.split(":");
-    const ownerId = parts[1];
-    const page = Number(parts[2]);
-    const encodedQuery = parts[3] ?? "";
-    const direction = parts[4];
+    const segs = parseCustomIdSegments(interaction.customId, 4);
+    if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+    const [ownerId, pageRaw, encodedQuery, direction] = segs;
+    const page = Number(pageRaw);
 
     if (await replyIfNotOwner(interaction, ownerId)) return;
 

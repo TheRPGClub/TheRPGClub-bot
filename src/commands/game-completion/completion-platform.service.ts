@@ -20,6 +20,7 @@ import {
   type CompletionPlatformContext,
 } from "./completion.types.js";
 import { DISCORD_SELECT_LABEL_MAX } from "../../config/textLimits.js";
+import { parseCustomIdSegments } from "../../utilities/CustomIdUtils.js";
 
 export function createCompletionPlatformSession(
   ctx: CompletionPlatformContext,
@@ -78,7 +79,9 @@ export async function promptCompletionPlatformSelection(
 export async function handleCompletionPlatformSelect(
   interaction: StringSelectMenuInteraction,
 ): Promise<void> {
-  const [, sessionId] = interaction.customId.split(":");
+  const segs = parseCustomIdSegments(interaction.customId, 1);
+  if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+  const [sessionId] = segs;
   const ctx = completionPlatformSessions.get(sessionId);
 
   if (!ctx) {

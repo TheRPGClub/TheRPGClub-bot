@@ -16,6 +16,7 @@ import { safeV2TextContent } from "../../functions/ComponentsV2Utils.js";
 import { safeDeferUpdate } from "../../functions/InteractionUtils.js";
 import { buildUserHeaderContainer } from "../../functions/uiComponents.js";
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
+import { parseCustomIdSegments } from "../../utilities/CustomIdUtils.js";
 
 const COLLECTION_LIST_PAGE_SIZE = 20;
 const COLLECTION_LIST_NAV_PREFIX = "collection-list-nav-v2";
@@ -72,15 +73,11 @@ export function parseCollectionListNavId(customId: string): {
   isEphemeral: boolean;
   direction: "prev" | "next";
 } | null {
-  const parts = customId.split(":");
-  if (parts.length !== 6) return null;
-  if (parts[0] !== COLLECTION_LIST_NAV_PREFIX) return null;
-
-  const viewerUserId = parts[1];
-  const targetUserId = parts[2];
-  const page = Number(parts[3]);
-  const visibility = parts[4];
-  const direction = parts[5] as "prev" | "next";
+  if (!customId.startsWith(`${COLLECTION_LIST_NAV_PREFIX}:`)) return null;
+  const segs = parseCustomIdSegments(customId, 5);
+  if (!segs) return null;
+  const [viewerUserId, targetUserId, pageStr, visibility, direction] = segs;
+  const page = Number(pageStr);
   if (!Number.isInteger(page) || page < 0) return null;
   if (visibility !== "e" && visibility !== "p") return null;
   if (direction !== "prev" && direction !== "next") return null;
@@ -90,7 +87,7 @@ export function parseCollectionListNavId(customId: string): {
     targetUserId,
     page,
     isEphemeral: visibility === "e",
-    direction,
+    direction: direction as "prev" | "next",
   };
 }
 
@@ -115,17 +112,16 @@ export function parseCollectionFilterActionId(customId: string): {
   isEphemeral: boolean;
   action: "open";
 } | null {
-  const parts = customId.split(":");
-  if (parts.length !== 5) return null;
-  if (parts[0] !== COLLECTION_LIST_FILTER_PREFIX) return null;
-  const visibility = parts[3];
-  const action = parts[4] as "open";
+  if (!customId.startsWith(`${COLLECTION_LIST_FILTER_PREFIX}:`)) return null;
+  const segs = parseCustomIdSegments(customId, 4);
+  if (!segs) return null;
+  const [viewerUserId, targetUserId, visibility, action] = segs;
   if (visibility !== "e" && visibility !== "p") return null;
   if (action !== "open") return null;
 
   return {
-    viewerUserId: parts[1],
-    targetUserId: parts[2],
+    viewerUserId,
+    targetUserId,
     isEphemeral: visibility === "e",
     action,
   };
@@ -176,18 +172,18 @@ export function parseCollectionFilterPanelActionId(customId: string): {
   isEphemeral: boolean;
   action: "text" | "ownership" | "apply" | "clear" | "cancel";
 } | null {
-  const parts = customId.split(":");
-  if (parts.length !== 6) return null;
-  if (parts[0] !== COLLECTION_LIST_FILTER_PANEL_PREFIX) return null;
-  const visibility = parts[4];
-  const action = decodeFilterPanelAction(parts[5]);
+  if (!customId.startsWith(`${COLLECTION_LIST_FILTER_PANEL_PREFIX}:`)) return null;
+  const segs = parseCustomIdSegments(customId, 5);
+  if (!segs) return null;
+  const [viewerUserId, targetUserId, sourceMessageId, visibility, actionCode] = segs;
+  const action = decodeFilterPanelAction(actionCode);
   if (visibility !== "e" && visibility !== "p") return null;
   if (!action) return null;
 
   return {
-    viewerUserId: parts[1],
-    targetUserId: parts[2],
-    sourceMessageId: parts[3],
+    viewerUserId,
+    targetUserId,
+    sourceMessageId,
     isEphemeral: visibility === "e",
     action,
   };
@@ -217,17 +213,17 @@ export function parseCollectionFilterModalId(customId: string): {
   isEphemeral: boolean;
   ownershipType: CollectionOwnershipType | undefined;
 } | null {
-  const parts = customId.split(":");
-  if (parts.length !== 6) return null;
-  if (parts[0] !== COLLECTION_LIST_FILTER_MODAL_PREFIX) return null;
-  const visibility = parts[4];
+  if (!customId.startsWith(`${COLLECTION_LIST_FILTER_MODAL_PREFIX}:`)) return null;
+  const segs = parseCustomIdSegments(customId, 5);
+  if (!segs) return null;
+  const [viewerUserId, targetUserId, sourceMessageId, visibility, ownershipCode] = segs;
   if (visibility !== "e" && visibility !== "p") return null;
   return {
-    viewerUserId: parts[1],
-    targetUserId: parts[2],
-    sourceMessageId: parts[3],
+    viewerUserId,
+    targetUserId,
+    sourceMessageId,
     isEphemeral: visibility === "e",
-    ownershipType: ownershipCodeToType(parts[5]),
+    ownershipType: ownershipCodeToType(ownershipCode),
   };
 }
 

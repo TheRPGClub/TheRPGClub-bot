@@ -51,6 +51,7 @@ import {
 import { handleNoResults } from "./gamedb-add.command.js";
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
 import { MAX_CONTAINER_TEXT } from "../../config/textLimits.js";
+import { parseCustomIdSegments } from "../../utilities/CustomIdUtils.js";
 
 function formatUpcomingDate(date: Date | null | undefined): string {
   if (!date) return "";
@@ -337,10 +338,10 @@ export class GameDbSearchCommand {
 
   @SelectMenuComponent({ id: /^gamedb-search-select:\d+:\d+:[A-Za-z0-9_-]*$/ })
   async handleSearchSelect(interaction: StringSelectMenuInteraction): Promise<void> {
-    const parts = interaction.customId.split(":");
-    const ownerId = parts[1];
-    const page = Number(parts[2]);
-    const encodedQuery = parts[3] ?? "";
+    const segs = parseCustomIdSegments(interaction.customId, 3);
+    if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+    const [ownerId, pageRaw, encodedQuery] = segs;
+    const page = Number(pageRaw);
 
     if (interaction.user.id !== ownerId) {
       await safeReply(interaction, buildTextReply("This menu isn't for you.", true));
@@ -412,11 +413,10 @@ export class GameDbSearchCommand {
 
   @ButtonComponent({ id: /^gamedb-search-page:\d+:\d+:[A-Za-z0-9_-]*:(next|prev)$/ })
   async handleSearchPage(interaction: ButtonInteraction): Promise<void> {
-    const parts = interaction.customId.split(":");
-    const ownerId = parts[1];
-    const page = Number(parts[2]);
-    const encodedQuery = parts[3] ?? "";
-    const direction = parts[4];
+    const segs = parseCustomIdSegments(interaction.customId, 4);
+    if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+    const [ownerId, pageRaw, encodedQuery, direction] = segs;
+    const page = Number(pageRaw);
 
     if (interaction.user.id !== ownerId) {
       await safeReply(interaction, buildTextReply("This menu isn't for you.", true));
@@ -473,9 +473,9 @@ export class GameDbSearchCommand {
 
   @ButtonComponent({ id: /^gamedb-search-refresh:\d+:[A-Za-z0-9_-]*$/ })
   async handleSearchRefresh(interaction: ButtonInteraction): Promise<void> {
-    const parts = interaction.customId.split(":");
-    const ownerId = parts[1];
-    const encodedQuery = parts[2] ?? "";
+    const segs = parseCustomIdSegments(interaction.customId, 2);
+    if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+    const [ownerId, encodedQuery] = segs;
 
     if (interaction.user.id !== ownerId) {
       await safeReply(interaction, {
