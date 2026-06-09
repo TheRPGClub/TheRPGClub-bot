@@ -24,7 +24,10 @@ import { GAMEDB_CSV_PLATFORM_MAP } from "../../config/gamedbCsvPlatformMap.js";
 import { buildIgdbSearchLink } from "./gamedb-utils.js";
 import { type IGameDbCsvImport } from "../../classes/GameDbCsvImport.js";
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
-import { DISCORD_SELECT_LABEL_MAX } from "../../config/textLimits.js";
+import {
+  DISCORD_AUTOCOMPLETE_DESC_MAX,
+  DISCORD_SELECT_LABEL_MAX,
+} from "../../config/textLimits.js";
 
 export const GAMEDB_CSV_RESULT_LIMIT = 15;
 
@@ -179,7 +182,7 @@ export async function scoreCsvImportResults(
     return {
       id: game.id,
       label: `${game.name} (${year})`,
-      description: game.summary ? game.summary.slice(0, 95) : "No summary",
+      description: game.summary ? game.summary.slice(0, DISCORD_AUTOCOMPLETE_DESC_MAX) : "No summary",
     };
   });
 }

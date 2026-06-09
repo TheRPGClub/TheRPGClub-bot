@@ -102,7 +102,7 @@ import {
 import { renderUsernameWithEmoji } from "../services/UserEmojiService.js";
 import { isPositiveInt, isValidPlaytimeHours } from "../utilities/ValidationUtils.js";
 import { formatStructuredLog } from "../utilities/LogUtils.js";
-import { DISCORD_SELECT_LABEL_MAX } from "../config/textLimits.js";
+import { DISCORD_AUTOCOMPLETE_DESC_MAX, DISCORD_SELECT_LABEL_MAX } from "../config/textLimits.js";
 
 const MAX_NOW_PLAYING_NOTE_LEN = 500;
 const NOW_PLAYING_SEARCH_LIMIT = 10;
@@ -5723,7 +5723,7 @@ export class NowPlayingCommand {
         return {
           id: game.id,
           label: `${game.name} (${year})`,
-          description: (game.summary || "No summary").slice(0, 95),
+          description: (game.summary || "No summary").slice(0, DISCORD_AUTOCOMPLETE_DESC_MAX),
         };
       });
 

@@ -21,6 +21,7 @@ import { buildTextReply } from "../functions/ComponentsV2Utils.js";
 import { safeDeferReply, safeReply, safeUpdate } from "../functions/InteractionUtils.js";
 import { decodeBase64Url, encodeBase64Url } from "../functions/CustomIdUtils.js";
 import { GIVEAWAY_HUB_CHANNEL_ID } from "../config/channels.js";
+import { DISCORD_AUTOCOMPLETE_DESC_MAX } from "../config/textLimits.js";
 
 type HelpTopicId =
   | "noms"
@@ -463,7 +464,7 @@ function buildProfileHelpButtons(
       PROFILE_HELP_TOPICS.map((topic) => ({
         label: topic.label,
         value: topic.id,
-        description: topic.summary.slice(0, 95),
+        description: topic.summary.slice(0, DISCORD_AUTOCOMPLETE_DESC_MAX),
         default: topic.id === activeId,
       })),
     )
@@ -495,7 +496,7 @@ function buildNowPlayingHelpButtons(
       NOW_PLAYING_HELP_TOPICS.map((topic) => ({
         label: topic.label,
         value: topic.id,
-        description: topic.summary.slice(0, 95),
+        description: topic.summary.slice(0, DISCORD_AUTOCOMPLETE_DESC_MAX),
         default: topic.id === activeId,
       })),
     )
@@ -539,7 +540,7 @@ function buildGamedbHelpButtons(
       GAMEDB_HELP_TOPICS.map((topic) => ({
         label: topic.label,
         value: topic.id,
-        description: topic.summary.slice(0, 95),
+        description: topic.summary.slice(0, DISCORD_AUTOCOMPLETE_DESC_MAX),
         default: topic.id === activeId,
       })),
     )
@@ -735,7 +736,7 @@ function buildGameCompletionHelpButtons(
       GAME_COMPLETION_HELP_TOPICS.map((topic) => ({
         label: topic.label,
         value: topic.id,
-        description: topic.summary.slice(0, 95),
+        description: topic.summary.slice(0, DISCORD_AUTOCOMPLETE_DESC_MAX),
         default: topic.id === activeId,
       })),
     )
@@ -873,7 +874,7 @@ function buildRssHelpButtons(
       RSS_HELP_TOPICS.map((topic) => ({
         label: topic.label,
         value: topic.id,
-        description: topic.summary.slice(0, 95),
+        description: topic.summary.slice(0, DISCORD_AUTOCOMPLETE_DESC_MAX),
         default: topic.id === activeId,
       })),
     )

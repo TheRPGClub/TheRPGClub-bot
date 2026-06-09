@@ -50,7 +50,7 @@ import {
 import { buildTextReply } from "../functions/ComponentsV2Utils.js";
 import { isPositiveInt, isValidPlaytimeHours } from "../utilities/ValidationUtils.js";
 import { sleep } from "../utilities/DelayUtils.js";
-import { DISCORD_SELECT_LABEL_MAX } from "../config/textLimits.js";
+import { DISCORD_AUTOCOMPLETE_DESC_MAX, DISCORD_SELECT_LABEL_MAX } from "../config/textLimits.js";
 
 type CompletionAddContext = {
   targetUserId: string;
@@ -123,7 +123,7 @@ function buildSuperAdminHelpButtons(
       SUPERADMIN_HELP_TOPICS.map((topic) => ({
         label: topic.label,
         value: topic.id,
-        description: topic.summary.slice(0, 95),
+        description: topic.summary.slice(0, DISCORD_AUTOCOMPLETE_DESC_MAX),
         default: topic.id === activeId,
       })),
     )
@@ -493,7 +493,7 @@ export class SuperAdmin {
       return {
         id: game.id,
         label: `${game.name} (${year})`,
-        description: (game.summary || "No summary").slice(0, 95),
+        description: (game.summary || "No summary").slice(0, DISCORD_AUTOCOMPLETE_DESC_MAX),
       };
     });
 

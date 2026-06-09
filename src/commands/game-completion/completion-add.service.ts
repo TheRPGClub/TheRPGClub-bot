@@ -34,7 +34,10 @@ import {
 } from "../../functions/ComponentsV2Utils.js";
 import { COMPONENTS_V2_FLAG } from "../../config/flags.js";
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
-import { DISCORD_SELECT_LABEL_MAX } from "../../config/textLimits.js";
+import {
+  DISCORD_AUTOCOMPLETE_DESC_MAX,
+  DISCORD_SELECT_LABEL_MAX,
+} from "../../config/textLimits.js";
 
 /**
  * Creates a completion session and returns the session ID
@@ -131,7 +134,7 @@ export async function promptIgdbSelection(
     return {
       id: game.id,
       label: `${game.name} (${year})`,
-      description: (game.summary || "No summary").slice(0, 95),
+      description: (game.summary || "No summary").slice(0, DISCORD_AUTOCOMPLETE_DESC_MAX),
     };
   });
 

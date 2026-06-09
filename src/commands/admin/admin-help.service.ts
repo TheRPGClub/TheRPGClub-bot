@@ -4,6 +4,7 @@ import {
   StringSelectMenuBuilder,
 } from "discord.js";
 import { type AdminHelpTopic, type AdminHelpTopicId } from "./admin.types.js";
+import { DISCORD_AUTOCOMPLETE_DESC_MAX } from "../../config/textLimits.js";
 
 export const ADMIN_HELP_TOPICS: AdminHelpTopic[] = [
   {
@@ -105,7 +106,7 @@ export function buildAdminHelpButtons(
       ADMIN_HELP_TOPICS.map((topic) => ({
         label: topic.label,
         value: topic.id,
-        description: topic.summary.slice(0, 95),
+        description: topic.summary.slice(0, DISCORD_AUTOCOMPLETE_DESC_MAX),
         default: topic.id === activeId,
       })),
     )
