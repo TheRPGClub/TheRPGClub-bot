@@ -12,6 +12,7 @@ import { getUpcomingNominationWindow } from "../functions/NominationWindow.js";
 import { isAdmin } from "./admin/admin-auth.utils.js";
 import { composeVoteImage, type VoteImageType } from "../services/collageGenerator.js";
 import { isPositiveInt } from "../utilities/ValidationUtils.js";
+import { formatStructuredLog } from "../utilities/LogUtils.js";
 
 const GENERATION_LOCK_TTL_MS = 2 * 60 * 1000;
 
@@ -49,10 +50,6 @@ function toVoteKind(value: string):
     return { nominationKind: "nr-gotm", label: "NR-GOTM" };
   }
   return null;
-}
-
-function formatStructuredLog(fields: Record<string, unknown>): string {
-  return JSON.stringify(fields);
 }
 
 @Discord()
