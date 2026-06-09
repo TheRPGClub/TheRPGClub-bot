@@ -7,7 +7,12 @@ import {
   type MessageActionRowComponent,
   type AutocompleteInteraction,
 } from "discord.js";
-import { AnyRepliable, safeReply, sanitizeUserInput } from "../../functions/InteractionUtils.js";
+import {
+  ACCESS_DENIED_MOD_ADMIN,
+  AnyRepliable,
+  safeReply,
+  sanitizeUserInput,
+} from "../../functions/InteractionUtils.js";
 import { formatGameTitleWithYear } from "../../functions/GameTitleAutocompleteUtils.js";
 import { buildComponentsV2Flags, buildTextReply } from "../../functions/ComponentsV2Utils.js";
 import { decodeBase64Url, encodeBase64Url } from "../../functions/CustomIdUtils.js";
@@ -129,10 +134,7 @@ export async function requireModeratorOrAdminOrOwner(
     return true;
   }
 
-  await safeReply(interaction, buildTextReply(
-    "Access denied. Action requires Moderator, Administrator, or server owner.",
-    true,
-  ));
+  await safeReply(interaction, buildTextReply(ACCESS_DENIED_MOD_ADMIN, true));
   return false;
 }
 

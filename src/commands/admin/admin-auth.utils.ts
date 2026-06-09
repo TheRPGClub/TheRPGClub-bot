@@ -1,5 +1,5 @@
 import { PermissionsBitField } from "discord.js";
-import { AnyRepliable, safeReply } from "../../functions/InteractionUtils.js";
+import { ACCESS_DENIED_ADMIN, AnyRepliable, safeReply } from "../../functions/InteractionUtils.js";
 import { buildTextReply } from "../../functions/ComponentsV2Utils.js";
 
 export async function isAdmin(interaction: AnyRepliable): Promise<boolean> {
@@ -12,7 +12,7 @@ export async function isAdmin(interaction: AnyRepliable): Promise<boolean> {
 
   if (!isAdmin) {
     try {
-      await safeReply(interaction, buildTextReply("Access denied. Command requires Administrator role.", true));
+      await safeReply(interaction, buildTextReply(ACCESS_DENIED_ADMIN, true));
     } catch {
       // swallow to avoid leaking
     }

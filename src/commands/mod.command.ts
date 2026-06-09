@@ -12,6 +12,7 @@ import { Discord, SelectMenuComponent, Slash, SlashGroup, SlashOption } from "di
 import { getPresenceHistory, setPresence } from "../functions/SetPresence.js";
 import {
   AnyRepliable,
+  ACCESS_DENIED_MOD,
   safeDeferReply,
   safeReply,
   safeUpdate,
@@ -214,7 +215,7 @@ export async function isModerator(interaction: AnyRepliable) {
 
     if (!isAdmin) {
       const denial = {
-        content: "Access denied. Command requires Moderator role or above.",
+        content: ACCESS_DENIED_MOD,
         flags: MessageFlags.Ephemeral,
       };
 

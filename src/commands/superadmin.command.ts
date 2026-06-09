@@ -19,6 +19,7 @@ import {
   SlashChoice,
 } from "discordx";
 import {
+  ACCESS_DENIED_OWNER,
   AnyRepliable,
   canSafeReply,
   extractErrorMessage,
@@ -924,7 +925,7 @@ export async function isSuperAdmin(interaction: AnyRepliable): Promise<boolean> 
 
   if (!isOwner) {
     const denial = {
-      content: "Access denied. Command is restricted to the server owner.",
+      content: ACCESS_DENIED_OWNER,
       flags: MessageFlags.Ephemeral,
     };
 

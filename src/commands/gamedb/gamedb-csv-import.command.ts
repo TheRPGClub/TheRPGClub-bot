@@ -26,6 +26,7 @@ import axios from "axios";
 import {
   safeDeferReply,
   getModalField,
+  ACCESS_DENIED_SERVER_OWNER,
   safeDeferUpdate,
   safeReply,
   safeUpdate,
@@ -365,7 +366,7 @@ export class GameDbCsvImportCommand {
     }
 
     await safeReply(interaction,
-      buildTextReply("Access denied. Command requires server owner.", true));
+      buildTextReply(ACCESS_DENIED_SERVER_OWNER, true));
     return false;
   }
 
