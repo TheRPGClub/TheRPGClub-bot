@@ -6,11 +6,11 @@ const VOTING_COLS = `ROUND_NUMBER,
                 FIVE_DAY_REMINDER_SENT,
                 ONE_DAY_REMINDER_SENT`;
 
-const VOTING_COLS_PG = `round_number,
-                nomination_list_id,
-                next_vote_at,
-                five_day_reminder_sent,
-                one_day_reminder_sent`;
+const VOTING_COLS_PG = `round_number AS "ROUND_NUMBER",
+                nomination_list_id AS "NOMINATION_LIST_ID",
+                next_vote_at AS "NEXT_VOTE_AT",
+                five_day_reminder_sent AS "FIVE_DAY_REMINDER_SENT",
+                one_day_reminder_sent AS "ONE_DAY_REMINDER_SENT"`;
 
 export const BotVotingInfoSql = {
   getAll: {
