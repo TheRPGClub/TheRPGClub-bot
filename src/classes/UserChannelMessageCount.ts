@@ -1,10 +1,5 @@
-import oracledb from "oracledb";
-import { dbQuery, oraWithConnection } from "../db/SqlManager.js";
-import { getDialect } from "../db/dialect.js";
-import { getSql } from "../db/SqlManager.js";
+import { dbQuery, dbTransaction, dbMutateConn } from "../db/SqlManager.js";
 import { UserChannelMessageCountSql } from "../db/sql/index.js";
-
-const dialect = getDialect();
 
 type ChannelCountBind = {
   userId: string;
@@ -25,29 +20,19 @@ export default class UserChannelMessageCount {
       ([userId, count]) => ({ userId, channelId, count, scanned: scannedAt }),
     );
 
-    await oraWithConnection(async (conn) => {
-      try {
-        await conn.executeMany(
-          getSql(UserChannelMessageCountSql.upsertChannelCounts, dialect),
-          rows,
-          {
-            autoCommit: true,
-            bindDefs: {
-              userId: { type: oracledb.STRING, maxSize: 30 },
-              channelId: { type: oracledb.STRING, maxSize: 30 },
-              count: { type: oracledb.NUMBER },
-              scanned: { type: oracledb.DATE },
-            },
-          },
-        );
-      } catch (err: any) {
-        const msg = err?.message ?? String(err);
-        console.error(
-          `[UserChannelMessageCount] Failed to upsert counts for channel` +
-          ` ${channelId}: ${msg}`,
-        );
-      }
-    });
+    try {
+      await dbTransaction(async (conn) => {
+        for (const row of rows) {
+          await dbMutateConn(conn, UserChannelMessageCountSql.upsertChannelCounts, row);
+        }
+      });
+    } catch (err: any) {
+      const msg = err?.message ?? String(err);
+      console.error(
+        `[UserChannelMessageCount] Failed to upsert counts for channel` +
+        ` ${channelId}: ${msg}`,
+      );
+    }
   }
 
   static async getScannedChannelIds(): Promise<Set<string>> {

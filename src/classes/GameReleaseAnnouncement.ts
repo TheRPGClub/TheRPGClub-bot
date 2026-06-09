@@ -1,9 +1,5 @@
-import { dbQuery, dbMutate, oraMutate, oraWithConnection } from "../db/SqlManager.js";
-import { getDialect } from "../db/dialect.js";
-import { getSql } from "../db/SqlManager.js";
+import { dbQuery, dbMutate } from "../db/SqlManager.js";
 import { GameReleaseAnnouncementSql } from "../db/sql/index.js";
-
-const dialect = getDialect();
 
 export interface IReleaseAnnouncementCandidate {
   releaseId: number;
@@ -65,21 +61,11 @@ function mapCandidateRow(row: ReleaseAnnouncementRow): IReleaseAnnouncementCandi
 
 export default class GameReleaseAnnouncement {
   static async syncReleaseAnnouncements(): Promise<void> {
-    await oraWithConnection(async (conn) => {
-      await oraMutate(
-        getSql(GameReleaseAnnouncementSql.syncReleaseAnnouncements, dialect),
-        {},
-        conn,
-      );
-      await conn.commit();
-
-      await oraMutate(
-        getSql(GameReleaseAnnouncementSql.restoreNonCanonical, dialect),
-        { portOnlyReason: PORT_ONLY_RELEASE_REASON, sameDayReason: SAME_DAY_DUPLICATE_REASON },
-        conn,
-      );
-      await conn.commit();
-    });
+    await dbMutate(GameReleaseAnnouncementSql.syncReleaseAnnouncements, {});
+    await dbMutate(
+      GameReleaseAnnouncementSql.restoreNonCanonical,
+      { portOnlyReason: PORT_ONLY_RELEASE_REASON, sameDayReason: SAME_DAY_DUPLICATE_REASON },
+    );
   }
 
   static async markNonCanonicalAnnouncements(): Promise<number> {

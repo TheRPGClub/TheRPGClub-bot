@@ -2,7 +2,8 @@ import Parser from "rss-parser";
 import crypto from "node:crypto";
 import type { Client } from "discordx";
 import type oracledb from "oracledb";
-import { oraWithConnection } from "../db/SqlManager.js";
+import type pg from "pg";
+import { dbWithConnection } from "../db/SqlManager.js";
 import {
   listFeeds,
   markItemsSeen,
@@ -42,7 +43,7 @@ function matchesKeywords(
 async function processFeed(
   client: Client,
   feed: IRssFeed,
-  connection: oracledb.Connection,
+  connection: oracledb.Connection | pg.PoolClient,
 ): Promise<void> {
   let parsed;
   try {
@@ -144,7 +145,7 @@ export function startRssFeedService(client: Client): void {
     isPolling = true;
 
     try {
-      await oraWithConnection(async (conn) => {
+      await dbWithConnection(async (conn) => {
         const feeds = await listFeeds(conn);
         for (const feed of feeds) {
           await processFeed(client, feed, conn);
