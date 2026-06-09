@@ -27,6 +27,9 @@ export interface IRssFeedItem {
   publishedAt: Date | null;
 }
 
+function mapIsItemSeenRow(row: { FOUND: number }) { return row; }
+function mapSeenItemHashRow(row: { ITEM_ID_HASH: string }) { return row; }
+
 export function normalizeKeywords(
   input: string | (string | null | undefined)[] | null | undefined): string[] {
   if (!input) return [];
@@ -158,12 +161,11 @@ export async function isItemSeen(
   itemIdHash: string,
   existingConnection?: AnyConn,
 ): Promise<boolean> {
-  const mapper = (row: { FOUND: number }) => row;
   const rows = existingConnection
     ? await dbQueryConn(
-        existingConnection, RssFeedSql.isItemSeen, { feedId, hash: itemIdHash }, mapper,
+        existingConnection, RssFeedSql.isItemSeen, { feedId, hash: itemIdHash }, mapIsItemSeenRow,
       )
-    : await dbQuery(RssFeedSql.isItemSeen, { feedId, hash: itemIdHash }, mapper);
+    : await dbQuery(RssFeedSql.isItemSeen, { feedId, hash: itemIdHash }, mapIsItemSeenRow);
   return rows.length > 0;
 }
 
@@ -176,8 +178,6 @@ export async function getSeenItemHashes(
 
   const CHUNK_SIZE = 900;
   const foundHashes = new Set<string>();
-  const mapper = (row: { ITEM_ID_HASH: string }) => row;
-
   for (let i = 0; i < itemIdHashes.length; i += CHUNK_SIZE) {
     const chunk = itemIdHashes.slice(i, i + CHUNK_SIZE);
     const bindVars: Record<string, string | number> = { feedId };
@@ -191,8 +191,8 @@ export async function getSeenItemHashes(
 
     const entry = RssFeedSql.getSeenItemHashes(bindPlaceholders.join(", "));
     const rows = existingConnection
-      ? await dbQueryConn(existingConnection, entry, bindVars, mapper)
-      : await dbQuery(entry, bindVars, mapper);
+      ? await dbQueryConn(existingConnection, entry, bindVars, mapSeenItemHashRow)
+      : await dbQuery(entry, bindVars, mapSeenItemHashRow);
     rows.forEach((row) => foundHashes.add(row.ITEM_ID_HASH));
   }
 
