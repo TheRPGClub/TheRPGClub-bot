@@ -11,3 +11,5 @@ export const COMPLETION_PAGE_SIZE      = 20;
 export const MP_INFO_PAGE_SIZE         = 25;
 export const GUILD_FETCH_CHUNK_SIZE    = 100;
 export const CLAIM_MENU_CHUNK_SIZE     = 25;
+export const TODO_DEFAULT_PAGE_SIZE    = 9;
+export const TODO_MAX_PAGE_SIZE        = 9;

@@ -64,6 +64,8 @@ import { parseCustomIdSegments } from "../utilities/CustomIdUtils.js";
 import { safeV2TextContent } from "../functions/ComponentsV2Utils.js";
 import { formatDiscordTimestamp } from "../functions/DateFormatUtils.js";
 import { truncateWithEllipsis } from "../utilities/ValidationUtils.js";
+import { DISCORD_TEXT_INPUT_MAX } from "../config/textLimits.js";
+import { TODO_DEFAULT_PAGE_SIZE, TODO_MAX_PAGE_SIZE } from "../config/pagination.js";
 
 const TODO_LABELS = [
   "New Feature",
@@ -85,13 +87,8 @@ type ListState = (typeof LIST_STATES)[number];
 type ListSort = (typeof LIST_SORTS)[number];
 type ListDirection = (typeof LIST_DIRECTIONS)[number];
 
-const MAX_ISSUE_BODY = 4000;
 const MAX_COMMENT_PREVIEW_LENGTH = 500;
 const MAX_TODO_IMAGES_PER_VIEW = 10;
-const MAX_TEXT_DISPLAY_CONTENT = 4000;
-const MAX_COMPONENT_DISPLAYABLE_TEXT_SIZE = 4000;
-const DEFAULT_PAGE_SIZE = 9;
-const MAX_PAGE_SIZE = 9;
 const ISSUE_LIST_TITLE = "RPGClub GameDB GitHub Issues";
 const TODO_LIST_ID_PREFIX = "todo-list-page";
 const TODO_LIST_BACK_ID_PREFIX = "todo-list-back";
@@ -538,7 +535,7 @@ function renderTodoContent(rawValue: string, maxTextLength: number): {
 }
 
 function clampTextDisplayContent(value: string): string {
-  return truncateWithEllipsis(value, MAX_TEXT_DISPLAY_CONTENT);
+  return truncateWithEllipsis(value, DISCORD_TEXT_INPUT_MAX);
 }
 
 function trimToBudget(value: string, maxLength: number): string {
@@ -563,7 +560,7 @@ function addTextDisplayWithBudget(
   }
   container.addTextDisplayComponents(
     new TextDisplayBuilder().setContent(
-      safeV2TextContent(clipped, MAX_TEXT_DISPLAY_CONTENT),
+      safeV2TextContent(clipped, DISCORD_TEXT_INPUT_MAX),
     ),
   );
   budget.remaining -= clipped.length;
@@ -1002,7 +999,7 @@ function buildIssueListComponents(
   const container = new ContainerBuilder()
     .addTextDisplayComponents(
       new TextDisplayBuilder().setContent(
-        safeV2TextContent(`## ${ISSUE_LIST_TITLE}`, MAX_TEXT_DISPLAY_CONTENT),
+        safeV2TextContent(`## ${ISSUE_LIST_TITLE}`, DISCORD_TEXT_INPUT_MAX),
       ),
     );
 
@@ -1010,7 +1007,7 @@ function buildIssueListComponents(
     issues.forEach((issue) => {
       const section = new SectionBuilder().addTextDisplayComponents(
         new TextDisplayBuilder().setContent(
-          safeV2TextContent(formatIssueLink(issue), MAX_TEXT_DISPLAY_CONTENT),
+          safeV2TextContent(formatIssueLink(issue), DISCORD_TEXT_INPUT_MAX),
         ),
       );
       section.setButtonAccessory(
@@ -1031,7 +1028,7 @@ function buildIssueListComponents(
     new TextDisplayBuilder().setContent(
       safeV2TextContent(
         `${summaryParts.join(" | ")} | Total: ${totalIssues}`,
-        MAX_TEXT_DISPLAY_CONTENT,
+        DISCORD_TEXT_INPUT_MAX,
       ),
     ),
   );
@@ -1125,14 +1122,14 @@ function buildIssueViewComponents(
   payloadToken: string,
 ): { components: Array<ContainerBuilder | ActionRowBuilder<ButtonBuilder>> } {
   const container = new ContainerBuilder();
-  const textBudget = { remaining: MAX_COMPONENT_DISPLAYABLE_TEXT_SIZE };
+  const textBudget = { remaining: DISCORD_TEXT_INPUT_MAX };
   const titleText = issue.htmlUrl
     ? `## [${formatIssueTitle(issue)}](${issue.htmlUrl})`
     : `## ${formatIssueTitle(issue)}`;
   addTextDisplayWithBudget(container, textBudget, titleText);
 
   const issueBody = issue.body ?? "";
-  const renderedBody = renderTodoContent(issueBody, MAX_ISSUE_BODY);
+  const renderedBody = renderTodoContent(issueBody, DISCORD_TEXT_INPUT_MAX);
   if (renderedBody.text) {
     addTextDisplayWithBudget(container, textBudget, renderedBody.text);
   } else {
@@ -1260,7 +1257,7 @@ export class TodoCommand {
     const isPublic = showInChat !== false;
     await safeDeferReply(interaction, { flags: buildComponentsV2Flags(!isPublic) });
 
-    const resolvedPerPage = clampNumber(perPage ?? DEFAULT_PAGE_SIZE, 1, MAX_PAGE_SIZE);
+    const resolvedPerPage = clampNumber(perPage ?? TODO_DEFAULT_PAGE_SIZE, 1, TODO_MAX_PAGE_SIZE);
     const parsedLabels = parseTodoLabels(labelsRaw);
     const query = normalizeQuery(queryRaw);
     if (parsedLabels.invalid.length) {
@@ -1361,7 +1358,7 @@ export class TodoCommand {
       ...basePayload,
       page,
     };
-    const safePerPage = clampNumber(payload.perPage, 1, MAX_PAGE_SIZE);
+    const safePerPage = clampNumber(payload.perPage, 1, TODO_MAX_PAGE_SIZE);
     if (safePerPage !== payload.perPage) {
       payload.perPage = safePerPage;
       payload.perPage = safePerPage;
@@ -1493,7 +1490,7 @@ export class TodoCommand {
       .setLabel("Description")
       .setStyle(TextInputStyle.Paragraph)
       .setRequired(true)
-      .setMaxLength(MAX_ISSUE_BODY);
+      .setMaxLength(DISCORD_TEXT_INPUT_MAX);
 
     modal.addComponents(
       new ActionRowBuilder<TextInputBuilder>().addComponents(titleInput),
@@ -1820,7 +1817,7 @@ export class TodoCommand {
     const baseBody = trimmedBody;
     const isOwner = interaction.guild?.ownerId === interaction.user.id;
     const prefixedBody = isOwner ? baseBody : `${interaction.user.username}: ${baseBody}`;
-    const finalBody = prefixedBody.length ? prefixedBody.slice(0, MAX_ISSUE_BODY) : null;
+    const finalBody = prefixedBody.length ? prefixedBody.slice(0, DISCORD_TEXT_INPUT_MAX) : null;
 
     let created: IGithubIssue;
     try {
@@ -1885,7 +1882,7 @@ export class TodoCommand {
 
     const prefixedComment = `${interaction.user.username}: ${finalCommentBody}`.slice(
       0,
-      MAX_ISSUE_BODY,
+      DISCORD_TEXT_INPUT_MAX,
     );
 
     try {
@@ -2003,7 +2000,7 @@ export class TodoCommand {
     try {
       await updateIssue(parsed.issueNumber, {
         title: trimmedTitle,
-        body: trimmedBody.slice(0, MAX_ISSUE_BODY),
+        body: trimmedBody.slice(0, DISCORD_TEXT_INPUT_MAX),
       });
       await setIssueLabels(parsed.issueNumber, selectedTypes);
     } catch (err: any) {
@@ -2179,7 +2176,7 @@ export class TodoCommand {
 
     try {
       await updateIssue(parsed.issueNumber, {
-        body: trimmedBody.slice(0, MAX_ISSUE_BODY),
+        body: trimmedBody.slice(0, DISCORD_TEXT_INPUT_MAX),
       });
     } catch (err: any) {
       await safeReply(interaction, buildTodoTextReply(getGithubErrorMessage(err), true));
@@ -2597,10 +2594,10 @@ export class TodoCommand {
       .setLabel("Description")
       .setStyle(TextInputStyle.Paragraph)
       .setRequired(true)
-      .setMaxLength(MAX_ISSUE_BODY);
+      .setMaxLength(DISCORD_TEXT_INPUT_MAX);
 
     if (issue.body) {
-      bodyInput.setValue(issue.body.slice(0, MAX_ISSUE_BODY));
+      bodyInput.setValue(issue.body.slice(0, DISCORD_TEXT_INPUT_MAX));
     }
 
     modal.addComponents(
@@ -2654,7 +2651,7 @@ export class TodoCommand {
       .setLabel("Comment")
       .setStyle(TextInputStyle.Paragraph)
       .setRequired(true)
-      .setMaxLength(MAX_ISSUE_BODY);
+      .setMaxLength(DISCORD_TEXT_INPUT_MAX);
 
     modal.addComponents(new ActionRowBuilder<TextInputBuilder>().addComponents(commentInput));
 
@@ -2755,10 +2752,10 @@ export class TodoCommand {
       .setLabel("Description")
       .setStyle(TextInputStyle.Paragraph)
       .setRequired(true)
-      .setMaxLength(MAX_ISSUE_BODY);
+      .setMaxLength(DISCORD_TEXT_INPUT_MAX);
 
     if (issue.body) {
-      descriptionInput.setValue(issue.body.slice(0, MAX_ISSUE_BODY));
+      descriptionInput.setValue(issue.body.slice(0, DISCORD_TEXT_INPUT_MAX));
     }
 
     modal.addComponents(
