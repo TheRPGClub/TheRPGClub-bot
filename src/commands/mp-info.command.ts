@@ -40,6 +40,7 @@ import {
   GUILD_FETCH_CHUNK_SIZE,
   MP_INFO_PAGE_SIZE as PAGE_SIZE,
 } from "../config/pagination.js";
+import { parseCustomIdSegments } from "../utilities/CustomIdUtils.js";
 
 const MAX_OPTIONS = 25;
 
@@ -325,7 +326,9 @@ export class MultiplayerInfoCommand {
 
   @SelectMenuComponent({ id: /^mpinfo-select:\d+:[01]{4}:\d+$/ })
   async handleProfileSelect(interaction: StringSelectMenuInteraction): Promise<void> {
-    const [, ownerId, filterKey, pageRaw] = interaction.customId.split(":");
+    const segments = parseCustomIdSegments(interaction.customId, 3);
+    if (!segments) return;
+    const [ownerId, filterKey, pageRaw] = segments;
     if (interaction.user.id !== ownerId) {
       await safeReply(interaction, buildTextReply("This menu isn't for you.", true));
       return;
@@ -396,7 +399,9 @@ export class MultiplayerInfoCommand {
 
   @ButtonComponent({ id: /^mpinfo-back:\d+:[01]{4}:\d+$/ })
   async handleBackToList(interaction: ButtonInteraction): Promise<void> {
-    const [, ownerId, filterKey, pageRaw] = interaction.customId.split(":");
+    const segments = parseCustomIdSegments(interaction.customId, 3);
+    if (!segments) return;
+    const [ownerId, filterKey, pageRaw] = segments;
     if (interaction.user.id !== ownerId) {
       await safeReply(interaction, buildTextReply("This menu isn't for you.", true));
       return;
@@ -411,7 +416,9 @@ export class MultiplayerInfoCommand {
 
   @ButtonComponent({ id: /^mpinfo-page:\d+:[01]{4}:\d+:(prev|next)$/ })
   async handlePageButton(interaction: ButtonInteraction): Promise<void> {
-    const [, ownerId, filterKey, pageRaw, dir] = interaction.customId.split(":");
+    const segments = parseCustomIdSegments(interaction.customId, 4);
+    if (!segments) return;
+    const [ownerId, filterKey, pageRaw, dir] = segments;
     if (interaction.user.id !== ownerId) {
       await safeReply(interaction, buildTextReply("This menu isn't for you.", true));
       return;
