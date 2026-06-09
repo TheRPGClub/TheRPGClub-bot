@@ -37,6 +37,7 @@ import {
   safeReply,
   safeUpdate,
   sanitizeUserInput,
+  SHOW_IN_CHAT_DESCRIPTION,
 } from "../functions/InteractionUtils.js";
 import { countSuggestions } from "../classes/Suggestion.js";
 import {
@@ -1322,7 +1323,7 @@ export class TodoCommand {
     })
     perPage: number | undefined,
     @SlashOption({
-      description: "Show in chat (public) instead of ephemeral",
+      description: SHOW_IN_CHAT_DESCRIPTION,
       name: "showinchat",
       required: false,
       type: ApplicationCommandOptionType.Boolean,

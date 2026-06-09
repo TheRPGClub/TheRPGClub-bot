@@ -35,6 +35,7 @@ import {
   safeDeferReply,
   safeReply,
   sanitizeUserInput,
+  SHOW_IN_CHAT_DESCRIPTION,
 } from "../functions/InteractionUtils.js";
 import { buildTextReply, safeV2TextContent } from "../functions/ComponentsV2Utils.js";
 import {
@@ -288,7 +289,7 @@ export class NominateCommand {
     })
     rawKind: string,
     @SlashOption({
-      description: "Show in chat (public) instead of ephemeral",
+      description: SHOW_IN_CHAT_DESCRIPTION,
       name: "showinchat",
       required: false,
       type: ApplicationCommandOptionType.Boolean,

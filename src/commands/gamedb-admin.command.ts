@@ -32,6 +32,7 @@ import {
   safeReply,
   safeUpdate,
   sanitizeUserInput,
+  SHOW_IN_CHAT_DESCRIPTION,
 } from "../functions/InteractionUtils.js";
 import { decodeBase64Url, encodeWithMaxLength } from "../functions/CustomIdUtils.js";
 import {
@@ -444,7 +445,7 @@ export class GameDbAdmin {
     })
     showCompleteGames: boolean | undefined,
     @SlashOption({
-      description: "Show in chat (public) instead of ephemeral",
+      description: SHOW_IN_CHAT_DESCRIPTION,
       name: "showinchat",
       required: false,
       type: ApplicationCommandOptionType.Boolean,
@@ -587,7 +588,7 @@ export class GameDbAdmin {
     })
     gameIdsRaw: string,
     @SlashOption({
-      description: "Show in chat (public) instead of ephemeral",
+      description: SHOW_IN_CHAT_DESCRIPTION,
       name: "showinchat",
       required: false,
       type: ApplicationCommandOptionType.Boolean,
@@ -1539,7 +1540,7 @@ export class GameDbAdmin {
     })
     additionalSynonyms: string | undefined,
     @SlashOption({
-      description: "Show in chat (public) instead of ephemeral",
+      description: SHOW_IN_CHAT_DESCRIPTION,
       name: "showinchat",
       required: false,
       type: ApplicationCommandOptionType.Boolean,
@@ -1594,7 +1595,7 @@ export class GameDbAdmin {
     })
     query: string | undefined,
     @SlashOption({
-      description: "Show in chat (public) instead of ephemeral",
+      description: SHOW_IN_CHAT_DESCRIPTION,
       name: "showinchat",
       required: false,
       type: ApplicationCommandOptionType.Boolean,
