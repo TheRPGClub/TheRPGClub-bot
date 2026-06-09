@@ -3,6 +3,7 @@ import { AttachmentBuilder, EmbedBuilder } from "discord.js";
 import type { GuildMember, User } from "discord.js";
 import Member, { type IMemberRecord } from "../classes/Member.js";
 import { formatTimestampWithDay, resolveLogChannel } from "./DiscordLogUtils.js";
+import { COLOR_INFO } from "../config/colors.js";
 
 type AvatarHistoryRecord = Awaited<ReturnType<typeof Member.getAvatarHistory>>[number];
 
@@ -118,7 +119,7 @@ export async function logAvatarChange(
     })
     .setTitle(title)
     .setDescription(`**Before:** ${beforeLabel}\n**+After:** ${afterLabel}`)
-    .setColor(0x3498db)
+    .setColor(COLOR_INFO)
     .setFooter({
       text: `ID: ${user.id} • ${formatTimestampWithDay(afterRecord.changedAt.getTime())}`,
     })

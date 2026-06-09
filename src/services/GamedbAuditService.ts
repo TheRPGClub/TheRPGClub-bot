@@ -3,6 +3,7 @@ import type { Client, TextBasedChannel } from "discord.js";
 import axios from "axios";
 import Game from "../classes/Game.js";
 import { igdbService } from "./IGDB/IgdbService.js";
+import { COLOR_PRIMARY, COLOR_SUCCESS } from "../config/colors.js";
 
 export type AutoAcceptResult = {
   updated: number;
@@ -510,7 +511,7 @@ export async function runAutoAcceptImagesAudit(
   let currentEmbed = new EmbedBuilder()
     .setTitle("GameDB Auto Accept Images")
     .setDescription("Starting auto accept run...")
-    .setColor(0x0099ff);
+    .setColor(COLOR_PRIMARY);
 
   let message = await (channel as any).send({ embeds: [currentEmbed] });
   let currentChunk = 0;
@@ -524,7 +525,7 @@ export async function runAutoAcceptImagesAudit(
         currentEmbed = new EmbedBuilder()
           .setTitle("GameDB Auto Accept Images")
           .setDescription("Processing...")
-          .setColor(0x0099ff);
+          .setColor(COLOR_PRIMARY);
         message = await (channel as any).send({ embeds: [currentEmbed] });
         logLines = [];
       }
@@ -545,7 +546,7 @@ export async function runAutoAcceptImagesAudit(
   if (!logs.length) {
     currentEmbed
       .setDescription("No games found with missing images and valid IGDB IDs.")
-      .setColor(0x2ecc71);
+      .setColor(COLOR_SUCCESS);
     await message.edit({ embeds: [currentEmbed] }).catch(() => {});
     return;
   }
@@ -554,7 +555,7 @@ export async function runAutoAcceptImagesAudit(
     `\n**Run Complete**\n✅ Updated: ${updated}\n` +
     `⏭️ Skipped: ${skipped}\n❌ Failed: ${failed}`;
   await updateEmbed(summary);
-  currentEmbed.setColor(0x2ecc71);
+  currentEmbed.setColor(COLOR_SUCCESS);
   await message.edit({ embeds: [currentEmbed] }).catch(() => {});
 }
 

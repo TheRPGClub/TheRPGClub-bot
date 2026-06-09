@@ -3,6 +3,7 @@ import type { ArgsOf, Client } from "discordx";
 import { Discord, On } from "discordx";
 import { joinThreadIfTarget } from "../services/ForumThreadJoinService.js";
 import { NOW_PLAYING_FORUM_ID, WHATCHA_PLAYING_CHANNEL_ID } from "../config/channels.js";
+import { COLOR_PRIMARY } from "../config/colors.js";
 
 @Discord()
 export class ThreadCreated {
@@ -130,7 +131,7 @@ export class ThreadCreated {
       }
 
       const nowPlayingEmbed = new EmbedBuilder()
-        .setColor(0x0099ff)
+        .setColor(COLOR_PRIMARY)
         .setTitle(`${thread.name}`)
         .setURL(`https://discord.com/channels/${thread.guildId}/${thread.id}`)
         .setDescription(`New "Now Playing" Forum Post`)

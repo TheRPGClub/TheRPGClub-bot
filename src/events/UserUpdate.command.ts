@@ -4,6 +4,7 @@ import { Discord, On } from "discordx";
 import { formatTimestampWithDay, resolveLogChannel } from "../utilities/DiscordLogUtils.js";
 import { logAvatarChange, updateAvatarRecordFromUrl } from "../utilities/AvatarLogUtils.js";
 import { syncUserEmojiFromAvatarChange } from "../services/UserEmojiService.js";
+import { COLOR_INFO } from "../config/colors.js";
 
 @Discord()
 export class UserUpdate {
@@ -64,7 +65,7 @@ export class UserUpdate {
         })
         .setTitle(title)
         .setDescription(`**Before:** ${beforeValue}\n**+After:** ${afterValue}`)
-        .setColor(0x3498db)
+        .setColor(COLOR_INFO)
         .setFooter({ text: `ID: ${newUser.id} • ${timestamp}` });
       await (logChannel as any).send({ embeds: [embed] });
     };

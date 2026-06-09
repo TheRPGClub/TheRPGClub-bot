@@ -1,4 +1,5 @@
 import type { CommandInteraction, StringSelectMenuInteraction } from "discord.js";
+import { COLOR_PRIMARY } from "../../config/colors.js";
 import {
   ActionRowBuilder,
   AttachmentBuilder,
@@ -281,7 +282,7 @@ export async function handleNextRoundSetup(
 
   const embed = new EmbedBuilder()
     .setTitle("Round Setup Wizard")
-    .setColor(0x0099ff)
+    .setColor(COLOR_PRIMARY)
     .setDescription("Initializing...");
   if (testMode) {
     embed.setFooter({ text: "TEST MODE ENABLED" });

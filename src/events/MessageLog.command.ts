@@ -3,6 +3,7 @@ import type { Message } from "discord.js";
 import type { ArgsOf, Client } from "discordx";
 import { Discord, On } from "discordx";
 import { formatTimestampWithDay, resolveLogChannel } from "../utilities/DiscordLogUtils.js";
+import { COLOR_INFO, COLOR_ERROR } from "../config/colors.js";
 const MAX_FIELD_LENGTH = 1000;
 const MAX_DESCRIPTION_LENGTH = 3500;
 
@@ -64,7 +65,7 @@ export class MessageLog {
     const embed = buildAuthorEmbed(
       resolved,
       `Message deleted in ${channelMention}`,
-      0xe74c3c,
+      COLOR_ERROR,
     );
     embed.setDescription(truncate(formatMessageContent(resolved)));
 
@@ -103,7 +104,7 @@ export class MessageLog {
     const embed = buildAuthorEmbed(
       resolvedNew,
       title,
-      0x3498db,
+      COLOR_INFO,
     );
     embed.setFields([]);
     const beforeValue = truncate(beforeText || "No text content.");

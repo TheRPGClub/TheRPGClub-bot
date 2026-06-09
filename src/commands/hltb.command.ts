@@ -3,6 +3,7 @@ import { ApplicationCommandOptionType } from "discord.js";
 import { Discord, Slash, SlashOption } from "discordx";
 import { EmbedBuilder } from "discord.js";
 import { searchHltb, type HltbSearchResult } from "../scripts/SearchHltb.js";
+import { COLOR_PRIMARY } from "../config/colors.js";
 import Game from "../classes/Game.js";
 import { getHltbCacheByGameId, upsertHltbCache } from "../classes/HltbCache.js";
 import {
@@ -146,7 +147,7 @@ async function outputHltbResultsAsEmbed(
     }
 
     const hltbEmbed = new EmbedBuilder()
-      .setColor(0x0099ff)
+      .setColor(COLOR_PRIMARY)
       .setTitle(`How Long to Beat ${hltb_result.name}`)
       .setAuthor({
         name: 'HowLongToBeat™',

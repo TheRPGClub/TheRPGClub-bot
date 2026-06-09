@@ -4,6 +4,7 @@ import { Discord, On } from "discordx";
 import { formatTimestampWithDay } from "../utilities/DiscordLogUtils.js";
 import { JOIN_LEAVE_LOG_CHANNEL_ID } from "../config/channels.js";
 import { recordCurrentAvatarIfNew } from "../utilities/AvatarLogUtils.js";
+import { COLOR_SUCCESS } from "../config/colors.js";
 
 function formatDiscordDateTime(date: Date): string {
   return `<t:${Math.floor(date.getTime() / 1000)}:F>`;
@@ -31,7 +32,7 @@ export class GuildMemberAdd {
         const username = member.user.tag ?? member.user.username ?? member.user.id;
         const embed = new EmbedBuilder()
           .setTitle("User Joined")
-          .setColor(0x2ecc71)
+          .setColor(COLOR_SUCCESS)
           .addFields(
             { name: "User", value: `<@${member.user.id}>\n${username}` },
             {

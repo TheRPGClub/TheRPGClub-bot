@@ -15,6 +15,7 @@ import {
   MODERATOR_ROLE_ID,
   REGULARS_ROLE_ID,
 } from "../config/roles.js";
+import { COLOR_INFO, COLOR_ERROR } from "../config/colors.js";
 
 const QUALIFYING_ROLE_IDS_SET = new Set(
   [REGULARS_ROLE_ID, ADMIN_ROLE_ID, MODERATOR_ROLE_ID, MEMBER_ROLE_ID].filter(
@@ -68,11 +69,11 @@ export class GuildMemberUpdate {
         };
 
         for (const role of addedRoles.values()) {
-          await sendRoleLog("Role added", role.id, 0x3498db);
+          await sendRoleLog("Role added", role.id, COLOR_INFO);
         }
 
         for (const role of removedRoles.values()) {
-          await sendRoleLog("Role removed", role.id, 0xe74c3c);
+          await sendRoleLog("Role removed", role.id, COLOR_ERROR);
         }
       }
     }
@@ -136,7 +137,7 @@ export class GuildMemberUpdate {
             ? "Nickname added"
             : "Nickname changed";
         const nicknameColor =
-          oldMember.nickname && !newMember.nickname ? 0xe74c3c : 0x3498db;
+          oldMember.nickname && !newMember.nickname ? COLOR_ERROR : COLOR_INFO;
         await sendNameLog(
           nicknameTitle,
           oldNicknameValue,
