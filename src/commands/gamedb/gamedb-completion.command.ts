@@ -21,10 +21,10 @@ import {
 import { ModalBuilder } from "discord.js";
 import { ContainerBuilder, TextDisplayBuilder } from "@discordjs/builders";
 import {
+  getModalField,
   safeDeferReply,
   safeReply,
   safeUpdate,
-  stripModalInput,
 } from "../../functions/InteractionUtils.js";
 import { buildTextReply, safeV2TextContent } from "../../functions/ComponentsV2Utils.js";
 import {
@@ -438,9 +438,7 @@ export class GameDbCompletionCommand {
     } else if (session.dateChoice === "unknown") {
       completedAt = null;
     } else if (session.dateChoice === "date") {
-      const dateInput = stripModalInput(
-        interaction.fields.getTextInputValue("completion-date"),
-      );
+      const dateInput = getModalField(interaction, "completion-date");
       try {
         completedAt = parseCompletionDateInput(dateInput);
       } catch (err: any) {
@@ -449,9 +447,7 @@ export class GameDbCompletionCommand {
       }
     }
 
-    const playtimeInput = stripModalInput(
-      interaction.fields.getTextInputValue("completion-playtime"),
-    );
+    const playtimeInput = getModalField(interaction, "completion-playtime");
     const playtimeCheck = validateCompletionPlaytimeInput(playtimeInput);
     if (playtimeCheck.error) {
       await safeReply(interaction, buildTextReply(playtimeCheck.error, false)).catch(() => {});
@@ -459,9 +455,7 @@ export class GameDbCompletionCommand {
     }
     const playtime = playtimeCheck.value;
 
-    const noteInput = stripModalInput(
-      interaction.fields.getTextInputValue("completion-note"),
-    );
+    const noteInput = getModalField(interaction, "completion-note");
     const note = noteInput ? noteInput : null;
     if (note && note.length > MAX_COMPLETION_NOTE_LEN) {
       await safeReply(interaction, buildTextReply(`Note must be ${MAX_COMPLETION_NOTE_LEN} characters or fewer.`, false)).catch(() => {});
@@ -532,9 +526,7 @@ export class GameDbCompletionCommand {
       return;
     }
 
-    const noteRaw = stripModalInput(
-      interaction.fields.getTextInputValue("gamedb-nowplaying-note"),
-    );
+    const noteRaw = getModalField(interaction, "gamedb-nowplaying-note");
     if (noteRaw.length > MAX_NOW_PLAYING_NOTE_LEN) {
       await safeReply(interaction, buildTextReply(`Note must be ${MAX_NOW_PLAYING_NOTE_LEN} characters or fewer.`, false)).catch(() => {});
       return;
