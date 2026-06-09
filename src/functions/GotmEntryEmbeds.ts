@@ -3,6 +3,7 @@ import type { IGotmEntry, IGotmGame } from "../classes/Gotm.js";
 import type { INrGotmEntry, INrGotmGame } from "../classes/NrGotm.js";
 import Game from "../classes/Game.js";
 import { COLOR_PRIMARY } from "../config/colors.js";
+import { truncateWithEllipsis } from "../utilities/ValidationUtils.js";
 
 const ANNOUNCEMENTS_CHANNEL_ID: string | undefined = process.env.ANNOUNCEMENTS_CHANNEL_ID;
 
@@ -55,9 +56,7 @@ async function formatGames(games: AnyGame[]): Promise<string> {
 }
 
 function truncateField(value: string): string {
-  const MAX = 1024;
-  if (value.length <= MAX) return value;
-  return value.slice(0, MAX - 3) + "...";
+  return truncateWithEllipsis(value, 1024);
 }
 
 function appendWithTailTruncate(body: string, tail: string): string {
@@ -67,7 +66,7 @@ function appendWithTailTruncate(body: string, tail: string): string {
   if (total <= MAX) return body + sep + tail;
   const availForBody = MAX - tail.length - sep.length;
   if (availForBody <= 0) return tail.slice(0, MAX);
-  const trimmedBody = body.slice(0, Math.max(0, availForBody - 3)) + "...";
+  const trimmedBody = truncateWithEllipsis(body, availForBody);
   return trimmedBody + sep + tail;
 }
 

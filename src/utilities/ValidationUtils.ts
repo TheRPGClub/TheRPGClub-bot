@@ -18,3 +18,8 @@ export function parsePageNumber(raw: string | null | undefined): number | null {
 export function isValidPlaytimeHours(value: unknown): value is number {
   return typeof value === "number" && !Number.isNaN(value) && value >= 0;
 }
+
+export function truncateWithEllipsis(text: string, maxLength: number): string {
+  if (text.length <= maxLength) return text;
+  return text.slice(0, Math.max(0, maxLength - 3)) + "...";
+}
