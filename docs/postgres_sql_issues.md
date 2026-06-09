@@ -6,24 +6,6 @@ schema migration or query redesign.
 
 ---
 
-## 1. `getMembersWithPlatforms` -- query must be rewritten
-
-**File:** `src/db/sql/member.sql.ts`
-**Function:** `getMembersWithPlatforms`
-
-The postgres variant SELECTs `steam_url`, `psn_username`, `xbl_username`, and
-`nsw_friend_code` from `rpg_club_users`, and its WHERE clause filters on those same
-columns (`WHERE steam_url IS NOT NULL OR ...`).
-
-Those columns no longer exist on `rpg_club_users` in postgres. They were migrated out
-to the `user_socials` table (backed up in `_rpg_club_users_socials_backup`).
-
-The query needs to be rewritten to JOIN with `user_socials` and filter by `platform_id`
-using values from the `social_platforms` table. The correct platform IDs for Steam, PSN,
-Xbox, and NSW are required to do this.
-
----
-
 ## 2. `user_game_journal_prefs` -- table not in postgres schema
 
 **File:** `src/db/sql/member.sql.ts`
@@ -92,7 +74,13 @@ The following issues were corrected in this same PR:
 | `getByUserId` (postgres) | Removed non-existent social columns from SELECT |
 | `updateMember` (postgres) | Removed non-existent social columns from SET clause |
 | `insertMember` (postgres) | Removed non-existent social columns from INSERT |
+| `getMembersWithPlatforms` (postgres) | Rewrote to JOIN `user_socials`/`social_platforms` |
 
-All four queries referenced `completionator_url`, `psn_username`, `xbl_username`,
-`nsw_friend_code`, and `steam_url` on `rpg_club_users`, which no longer has those
-columns in postgres (they were migrated to `user_socials`).
+All five queries previously referenced `completionator_url`, `psn_username`,
+`xbl_username`, `nsw_friend_code`, and/or `steam_url` on `rpg_club_users`, which no
+longer has those columns in postgres (they were migrated to `user_socials`).
+
+`getMembersWithPlatforms` uses conditional aggregation on `social_platforms.label` with
+ILIKE matching (`%steam%`, `%psn%`/`%playstation%`, `%xbox%`, `%nintendo%`/`%switch%`)
+to reconstruct the original per-platform column structure. Platform matching depends on
+the labels in `social_platforms` at runtime.
