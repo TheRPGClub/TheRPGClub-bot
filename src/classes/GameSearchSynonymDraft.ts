@@ -1,10 +1,14 @@
-import oracledb from "oracledb";
-import { dbQuery, dbMutate, oraQuery, oraMutate, oraWithConnection } from "../db/SqlManager.js";
-import { getDialect } from "../db/dialect.js";
-import { getSql } from "../db/SqlManager.js";
+import type oracledb from "oracledb";
+import type pg from "pg";
+import {
+  dbQuery,
+  dbMutate,
+  dbInsert,
+  dbTransaction,
+  dbQueryConn,
+  dbMutateConn,
+} from "../db/SqlManager.js";
 import { GameSearchSynonymDraftSql } from "../db/sql/index.js";
-
-const dialect = getDialect();
 
 export type ISynonymDraftPair = {
   term: string;
@@ -49,15 +53,11 @@ function mapDraftRow(row: any): ISynonymDraft {
 
 export default class GameSearchSynonymDraft {
   static async createDraft(userId: string): Promise<ISynonymDraft> {
-    const result = await oraMutate(
-      getSql(GameSearchSynonymDraftSql.createDraft, dialect),
-      {
-        userId,
-        pairsJson: JSON.stringify([]),
-        draftId: { dir: oracledb.BIND_OUT, type: oracledb.NUMBER },
-      },
+    const draftId = await dbInsert(
+      GameSearchSynonymDraftSql.createDraft,
+      { userId, pairsJson: JSON.stringify([]) },
+      "draftId",
     );
-    const draftId = Number((result.outBinds as any)?.draftId?.[0]);
     const draft = await this.getDraft(draftId);
     if (!draft) {
       throw new Error("Failed to load synonym draft after creation.");
@@ -78,16 +78,16 @@ export default class GameSearchSynonymDraft {
     draftId: number,
     pairs: ISynonymDraftPair[],
   ): Promise<ISynonymDraft | null> {
-    return oraWithConnection(async (conn) => {
-      const existing = await GameSearchSynonymDraft.getDraftWithConn(draftId, conn);
+    return dbTransaction(async (conn) => {
+      const existing = await this.getDraftWithConn(draftId, conn);
       if (!existing) return null;
       const combined = [...existing.pairs, ...pairs];
-      await oraMutate(
-        getSql(GameSearchSynonymDraftSql.updateDraft, dialect),
-        { draftId, pairsJson: JSON.stringify(combined) },
+      await dbMutateConn(
         conn,
+        GameSearchSynonymDraftSql.updateDraft,
+        { draftId, pairsJson: JSON.stringify(combined) },
       );
-      return GameSearchSynonymDraft.getDraftWithConn(draftId, conn);
+      return this.getDraftWithConn(draftId, conn);
     });
   }
 
@@ -100,13 +100,13 @@ export default class GameSearchSynonymDraft {
 
   private static async getDraftWithConn(
     draftId: number,
-    conn: oracledb.Connection,
+    conn: oracledb.Connection | pg.PoolClient,
   ): Promise<ISynonymDraft | null> {
-    const rows = await oraQuery(
-      getSql(GameSearchSynonymDraftSql.getDraft, dialect),
+    const rows = await dbQueryConn(
+      conn,
+      GameSearchSynonymDraftSql.getDraft,
       { draftId },
       mapDraftRow,
-      conn,
     );
     return rows[0] ?? null;
   }

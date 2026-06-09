@@ -1,9 +1,5 @@
-import oracledb from "oracledb";
-import { dbQuery, dbMutate, oraMutate, getSql } from "../db/SqlManager.js";
-import { getDialect } from "../db/dialect.js";
+import { dbQuery, dbMutate, dbInsert } from "../db/SqlManager.js";
 import { TodoSql } from "../db/sql/index.js";
-
-const dialect = getDialect();
 
 export interface ITodoItem {
   todoId: number;
@@ -67,18 +63,7 @@ export async function createTodo(
   todoSize: string | null,
   createdBy: string | null,
 ): Promise<ITodoItem> {
-  const result = await oraMutate(
-    getSql(TodoSql.create, dialect),
-    {
-      title,
-      details,
-      todoCategory,
-      todoSize,
-      createdBy,
-      id: { dir: oracledb.BIND_OUT, type: oracledb.NUMBER },
-    },
-  );
-  const id = Number((result.outBinds as any)?.id?.[0] ?? 0);
+  const id = await dbInsert(TodoSql.create, { title, details, todoCategory, todoSize, createdBy }, "id");
   if (!id) {
     throw new Error("Failed to create TODO.");
   }

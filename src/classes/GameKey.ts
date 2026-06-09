@@ -1,10 +1,5 @@
-import oracledb from "oracledb";
-import { dbQuery, dbMutate, oraMutate } from "../db/SqlManager.js";
-import { getDialect } from "../db/dialect.js";
-import { getSql } from "../db/SqlManager.js";
+import { dbQuery, dbMutate, dbInsert } from "../db/SqlManager.js";
 import { GameKeySql } from "../db/sql/index.js";
-
-const dialect = getDialect();
 
 export interface IGameKey {
   keyId: number;
@@ -55,17 +50,7 @@ export async function createGameKey(
   keyValue: string,
   donorUserId: string,
 ): Promise<IGameKey> {
-  const result = await oraMutate(
-    getSql(GameKeySql.create, dialect),
-    {
-      title,
-      platform,
-      keyValue,
-      donorUserId,
-      id: { dir: oracledb.BIND_OUT, type: oracledb.NUMBER },
-    },
-  );
-  const id = Number((result.outBinds as any)?.id?.[0] ?? 0);
+  const id = await dbInsert(GameKeySql.create, { title, platform, keyValue, donorUserId }, "id");
   if (!id) {
     throw new Error("Failed to create game key.");
   }

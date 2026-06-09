@@ -1,9 +1,5 @@
-import { dbQuery, dbMutate, oraWithConnection } from "../db/SqlManager.js";
-import { getDialect } from "../db/dialect.js";
-import { getSql } from "../db/SqlManager.js";
+import { dbQuery, dbMutate, dbTransaction, dbMutateConn } from "../db/SqlManager.js";
 import { BotVotingInfoSql } from "../db/sql/index.js";
-
-const dialect = getDialect();
 
 export interface IBotVotingInfoEntry {
   roundNumber: number;
@@ -102,18 +98,17 @@ export default class BotVotingInfo {
     const round = normalizeRoundNumber(roundNumber);
     const nextVote = normalizeDate(nextVoteAt);
 
-    await oraWithConnection(async (conn) => {
-      const updateResult = await conn.execute(
-        getSql(BotVotingInfoSql.updateRoundInfo, dialect),
+    await dbTransaction(async (conn) => {
+      const rowsAffected = await dbMutateConn(
+        conn,
+        BotVotingInfoSql.updateRoundInfo,
         { round, nominationListId, nextVoteAt: nextVote },
-        { autoCommit: true },
       );
-      if ((updateResult.rowsAffected ?? 0) > 0) return;
-
-      await conn.execute(
-        getSql(BotVotingInfoSql.insertRoundInfo, dialect),
+      if (rowsAffected > 0) return;
+      await dbMutateConn(
+        conn,
+        BotVotingInfoSql.insertRoundInfo,
         { round, nominationListId, nextVoteAt: nextVote },
-        { autoCommit: true },
       );
     });
   }

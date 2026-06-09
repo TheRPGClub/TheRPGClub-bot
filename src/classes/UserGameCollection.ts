@@ -1,13 +1,14 @@
-import oracledb from "oracledb";
+import type oracledb from "oracledb";
+import type pg from "pg";
 import {
-  dbQuery, dbMutate,
-  oraQuery, oraMutate, oraWithConnection,
-  getSql,
+  dbQuery,
+  dbMutate,
+  dbTransaction,
+  dbQueryConn,
+  dbInsertConn,
+  dbMutateConn,
 } from "../db/SqlManager.js";
-import { getDialect } from "../db/dialect.js";
 import { UserGameCollectionSql } from "../db/sql/index.js";
-
-const dialect = getDialect();
 
 export const COLLECTION_OWNERSHIP_TYPES = [
   "Digital",
@@ -106,13 +107,13 @@ function mapEntry(row: CollectionRow): IUserGameCollectionEntry {
 async function getEntryById(
   entryId: number,
   userId: string,
-  conn: oracledb.Connection,
+  conn: oracledb.Connection | pg.PoolClient,
 ): Promise<IUserGameCollectionEntry | null> {
-  const rows = await oraQuery(
-    getSql(UserGameCollectionSql.getEntryById, dialect),
+  const rows = await dbQueryConn(
+    conn,
+    UserGameCollectionSql.getEntryById,
     { entryId, userId },
     mapEntry,
-    conn,
   );
   return rows[0] ?? null;
 }
@@ -140,23 +141,17 @@ export default class UserGameCollection {
       throw new Error("Note must be 500 characters or fewer.");
     }
 
-    return oraWithConnection(async (conn) => {
-      let insert: oracledb.Result<unknown>;
+    return dbTransaction(async (conn) => {
+      let entryId: number;
       try {
-        insert = await oraMutate(
-          getSql(UserGameCollectionSql.addEntry, dialect),
-          {
-            userId,
-            gameId,
-            platformId,
-            ownershipType,
-            note,
-            isShared,
-            entryId: { dir: oracledb.BIND_OUT, type: oracledb.NUMBER },
-          },
-          conn,
-        );
-        await conn.commit();
+        entryId = await dbInsertConn(conn, UserGameCollectionSql.addEntry, {
+          userId,
+          gameId,
+          platformId,
+          ownershipType,
+          note,
+          isShared,
+        }, "entryId");
       } catch (err: any) {
         const msg = String(err?.message ?? "");
         if (/ORA-00001/i.test(msg) || /unique constraint/i.test(msg)) {
@@ -167,9 +162,6 @@ export default class UserGameCollection {
         throw err;
       }
 
-      const entryId = Number(
-        (insert.outBinds as { entryId?: number[] })?.entryId?.[0] ?? 0,
-      );
       if (!entryId) throw new Error("Failed to create collection entry.");
 
       const saved = await getEntryById(entryId, userId, conn);
@@ -236,15 +228,10 @@ export default class UserGameCollection {
       throw new Error("No collection fields were provided to update.");
     }
 
-    return oraWithConnection(async (conn) => {
-      let result: oracledb.Result<unknown>;
+    return dbTransaction(async (conn) => {
+      let rowsAffected: number;
       try {
-        result = await oraMutate(
-          UserGameCollectionSql.updateEntry(updateParts)[dialect],
-          binds,
-          conn,
-        );
-        await conn.commit();
+        rowsAffected = await dbMutateConn(conn, UserGameCollectionSql.updateEntry(updateParts), binds);
       } catch (err: any) {
         const msg = String(err?.message ?? "");
         if (/ORA-00001/i.test(msg) || /unique constraint/i.test(msg)) {
@@ -255,7 +242,7 @@ export default class UserGameCollection {
         throw err;
       }
 
-      if ((result.rowsAffected ?? 0) <= 0) return null;
+      if (rowsAffected <= 0) return null;
       return getEntryById(entryId, userId, conn);
     });
   }

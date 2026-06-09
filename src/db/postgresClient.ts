@@ -144,3 +144,54 @@ export async function pgWithConnection<T>(
     client.release();
   }
 }
+
+/** Runs a SELECT on an existing PoolClient and returns all rows. */
+export async function pgQueryConn<T extends pg.QueryResultRow = pg.QueryResultRow>(
+  client: pg.PoolClient,
+  sql: string,
+  params?: Record<string, unknown> | unknown[],
+): Promise<T[]> {
+  const { text, values } = namedToPositional(sql, params ?? []);
+  const result = await client.query<T>(text, values);
+  return result.rows;
+}
+
+/** Runs a DML statement on an existing PoolClient and returns rows affected. */
+export async function pgMutateConn(
+  client: pg.PoolClient,
+  sql: string,
+  params?: Record<string, unknown> | unknown[],
+): Promise<number> {
+  const { text, values } = namedToPositional(sql, params ?? []);
+  const result = await client.query(text, values);
+  return result.rowCount ?? 0;
+}
+
+/**
+ * Runs an INSERT...RETURNING on a pool (no existing connection) and returns
+ * the first column of the first returned row as a number (the generated id).
+ */
+export async function pgInsert(
+  sql: string,
+  params?: Record<string, unknown> | unknown[],
+): Promise<number> {
+  const { text, values } = namedToPositional(sql, params ?? []);
+  const result = await getPostgresPool().query(text, values);
+  const row = result.rows[0];
+  return Number(Object.values(row ?? {})[0] ?? 0);
+}
+
+/**
+ * Runs an INSERT...RETURNING on an existing PoolClient and returns
+ * the first column of the first returned row as a number.
+ */
+export async function pgInsertConn(
+  client: pg.PoolClient,
+  sql: string,
+  params?: Record<string, unknown> | unknown[],
+): Promise<number> {
+  const { text, values } = namedToPositional(sql, params ?? []);
+  const result = await client.query(text, values);
+  const row = result.rows[0];
+  return Number(Object.values(row ?? {})[0] ?? 0);
+}

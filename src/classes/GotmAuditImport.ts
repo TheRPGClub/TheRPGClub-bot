@@ -1,17 +1,5 @@
-import oracledb from "oracledb";
-import {
-  dbQuery,
-  dbMutate,
-  oraQuery,
-  oraMutate,
-  oraWithConnection,
-  oraTransaction,
-} from "../db/SqlManager.js";
-import { getDialect } from "../db/dialect.js";
-import { getSql } from "../db/SqlManager.js";
+import { dbQuery, dbMutate, dbInsert, dbTransaction, dbMutateConn } from "../db/SqlManager.js";
 import { GotmAuditImportSql } from "../db/sql/index.js";
-
-const dialect = getDialect();
 
 export type GotmAuditStatus = "ACTIVE" | "PAUSED" | "COMPLETED" | "CANCELED";
 export type GotmAuditItemStatus = "PENDING" | "SKIPPED" | "IMPORTED" | "ERROR";
@@ -107,26 +95,16 @@ export async function createGotmAuditImportSession(params: {
   totalCount: number;
   sourceFilename: string | null;
 }): Promise<IGotmAuditImport> {
-  return oraWithConnection(async (conn) => {
-    const result = await oraMutate(
-      getSql(GotmAuditImportSql.createSession, dialect),
-      {
-        userId: params.userId,
-        totalCount: params.totalCount,
-        sourceFilename: params.sourceFilename,
-        id: { dir: oracledb.BIND_OUT, type: oracledb.NUMBER },
-      },
-      conn,
-    );
-    await conn.commit();
+  const id = await dbInsert(GotmAuditImportSql.createSession, {
+    userId: params.userId,
+    totalCount: params.totalCount,
+    sourceFilename: params.sourceFilename,
+  }, "id");
+  if (!id) throw new Error("Failed to create GOTM audit session.");
 
-    const id = Number((result.outBinds as { id?: number[] })?.id?.[0] ?? 0);
-    if (!id) throw new Error("Failed to create GOTM audit session.");
-
-    const session = await getGotmAuditImportById(id, conn);
-    if (!session) throw new Error("Failed to load GOTM audit session.");
-    return session;
-  });
+  const session = await getGotmAuditImportById(id);
+  if (!session) throw new Error("Failed to load GOTM audit session.");
+  return session;
 }
 
 export async function insertGotmAuditImportItems(
@@ -144,38 +122,28 @@ export async function insertGotmAuditImportItems(
   }>,
 ): Promise<void> {
   if (!items.length) return;
-  await oraTransaction(async (conn) => {
+  await dbTransaction(async (conn) => {
     for (const item of items) {
-      await oraMutate(
-        getSql(GotmAuditImportSql.insertItems, dialect),
-        {
-          importId,
-          rowIndex: item.rowIndex,
-          kind: item.kind,
-          roundNumber: item.roundNumber,
-          monthYear: item.monthYear,
-          gameIndex: item.gameIndex,
-          gameTitle: item.gameTitle,
-          threadId: item.threadId,
-          redditUrl: item.redditUrl,
-          gameDbGameId: item.gameDbGameId,
-        },
-        conn,
-      );
+      await dbMutateConn(conn, GotmAuditImportSql.insertItems, {
+        importId,
+        rowIndex: item.rowIndex,
+        kind: item.kind,
+        roundNumber: item.roundNumber,
+        monthYear: item.monthYear,
+        gameIndex: item.gameIndex,
+        gameTitle: item.gameTitle,
+        threadId: item.threadId,
+        redditUrl: item.redditUrl,
+        gameDbGameId: item.gameDbGameId,
+      });
     }
   });
 }
 
 export async function getGotmAuditImportById(
   importId: number,
-  existingConn?: oracledb.Connection,
 ): Promise<IGotmAuditImport | null> {
-  const rows = await oraQuery(
-    getSql(GotmAuditImportSql.getById, dialect),
-    { id: importId },
-    mapImport,
-    existingConn,
-  );
+  const rows = await dbQuery(GotmAuditImportSql.getById, { id: importId }, mapImport);
   return rows[0] ?? null;
 }
 

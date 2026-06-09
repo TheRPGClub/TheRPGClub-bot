@@ -1,17 +1,5 @@
-import oracledb from "oracledb";
-import {
-  dbQuery,
-  dbMutate,
-  oraQuery,
-  oraMutate,
-  oraWithConnection,
-  oraTransaction,
-} from "../db/SqlManager.js";
-import { getDialect } from "../db/dialect.js";
-import { getSql } from "../db/SqlManager.js";
+import { dbQuery, dbMutate, dbInsert, dbTransaction, dbMutateConn } from "../db/SqlManager.js";
 import { GameDbCsvImportSql } from "../db/sql/index.js";
-
-const dialect = getDialect();
 
 export type GameDbCsvImportStatus = "ACTIVE" | "PAUSED" | "COMPLETED" | "CANCELED";
 export type GameDbCsvItemStatus = "PENDING" | "SKIPPED" | "IMPORTED" | "ERROR";
@@ -104,26 +92,16 @@ export async function createGameDbCsvImportSession(params: {
   totalCount: number;
   sourceFilename: string | null;
 }): Promise<IGameDbCsvImport> {
-  return oraWithConnection(async (conn) => {
-    const result = await oraMutate(
-      getSql(GameDbCsvImportSql.createImport, dialect),
-      {
-        userId: params.userId,
-        totalCount: params.totalCount,
-        sourceFilename: params.sourceFilename,
-        id: { dir: oracledb.BIND_OUT, type: oracledb.NUMBER },
-      },
-      conn,
-    );
-    await conn.commit();
+  const id = await dbInsert(GameDbCsvImportSql.createImport, {
+    userId: params.userId,
+    totalCount: params.totalCount,
+    sourceFilename: params.sourceFilename,
+  }, "id");
+  if (!id) throw new Error("Failed to create import session.");
 
-    const id = Number((result.outBinds as { id?: number[] })?.id?.[0] ?? 0);
-    if (!id) throw new Error("Failed to create import session.");
-
-    const session = await getGameDbCsvImportById(id, conn);
-    if (!session) throw new Error("Failed to load import session.");
-    return session;
-  });
+  const session = await getGameDbCsvImportById(id);
+  if (!session) throw new Error("Failed to load import session.");
+  return session;
 }
 
 export async function insertGameDbCsvImportItems(
@@ -138,35 +116,25 @@ export async function insertGameDbCsvImportItems(
   }>,
 ): Promise<void> {
   if (!items.length) return;
-  await oraTransaction(async (conn) => {
+  await dbTransaction(async (conn) => {
     for (const item of items) {
-      await oraMutate(
-        getSql(GameDbCsvImportSql.insertItem, dialect),
-        {
-          importId,
-          rowIndex: item.rowIndex,
-          gameTitle: item.gameTitle,
-          rawGameTitle: item.rawGameTitle,
-          platformName: item.platformName,
-          regionName: item.regionName,
-          initialReleaseDate: item.initialReleaseDate,
-        },
-        conn,
-      );
+      await dbMutateConn(conn, GameDbCsvImportSql.insertItem, {
+        importId,
+        rowIndex: item.rowIndex,
+        gameTitle: item.gameTitle,
+        rawGameTitle: item.rawGameTitle,
+        platformName: item.platformName,
+        regionName: item.regionName,
+        initialReleaseDate: item.initialReleaseDate,
+      });
     }
   });
 }
 
 export async function getGameDbCsvImportById(
   importId: number,
-  existingConn?: oracledb.Connection,
 ): Promise<IGameDbCsvImport | null> {
-  const rows = await oraQuery(
-    getSql(GameDbCsvImportSql.getImportById, dialect),
-    { id: importId },
-    mapImport,
-    existingConn,
-  );
+  const rows = await dbQuery(GameDbCsvImportSql.getImportById, { id: importId }, mapImport);
   return rows[0] ?? null;
 }
 

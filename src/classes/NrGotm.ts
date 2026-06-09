@@ -1,10 +1,13 @@
-import oracledb from "oracledb";
-import { dbQuery, dbMutate, oraQuery, oraMutate, oraWithConnection, getSql } from "../db/SqlManager.js";
-import { getDialect } from "../db/dialect.js";
+import {
+  dbQuery,
+  dbMutate,
+  dbTransaction,
+  dbQueryConn,
+  dbMutateConn,
+  dbInsertConn,
+} from "../db/SqlManager.js";
 import { NrGotmSql } from "../db/sql/index.js";
 import Game from "./Game.js";
-
-const dialect = getDialect();
 import { getThreadsByGameId } from "./Thread.js";
 
 export interface INrGotmGame {
@@ -353,14 +356,12 @@ export async function updateNrGotmGameFieldInDatabase(
     dbValue = newId;
   }
 
-  await oraWithConnection(async (conn) => {
+  await dbTransaction(async (conn) => {
     if (opts.rowId) {
-      await oraMutate(
-        NrGotmSql.updateByRowId(columnName)[dialect],
-        { rowIdValue: opts.rowId, bindValue: dbValue },
-        conn,
-      );
-      await conn.commit();
+      await dbMutateConn(conn, NrGotmSql.updateByRowId(columnName), {
+        rowIdValue: opts.rowId,
+        bindValue: dbValue,
+      });
 
       const entryWithRow = nrGotmData.find((e) =>
         e.gameOfTheMonth.some((g) => Number(g.id) === Number(opts.rowId)),
@@ -391,11 +392,11 @@ export async function updateNrGotmGameFieldInDatabase(
       throw new Error("gameIndex is required when rowId is not provided.");
     }
 
-    const rows = await oraQuery<NrGotmRowRef, NrGotmRowRef>(
-      getSql(NrGotmSql.getRowsByRound, dialect),
+    const rows = await dbQueryConn<NrGotmRowRef, NrGotmRowRef>(
+      conn,
+      NrGotmSql.getRowsByRound,
       { roundNumber: round },
       (row) => row,
-      conn,
     );
 
     if (!rows.length) {
@@ -412,12 +413,10 @@ export async function updateNrGotmGameFieldInDatabase(
 
     const rowId = rows[gi].NR_GOTM_ID;
 
-    await oraMutate(
-      NrGotmSql.updateByRowId(columnName)[dialect],
-      { rowIdValue: rowId, bindValue: dbValue },
-      conn,
-    );
-    await conn.commit();
+    await dbMutateConn(conn, NrGotmSql.updateByRowId(columnName), {
+      rowIdValue: rowId,
+      bindValue: dbValue,
+    });
 
     const entry = nrGotmData.find((e) => e.round === round);
     if (entry && entry.gameOfTheMonth[gi]) {
@@ -467,7 +466,7 @@ export async function insertNrGotmRoundInDatabase(
     throw new Error(`NR-GOTM round ${round} already exists in the database.`);
   }
 
-  return oraWithConnection(async (conn) => {
+  return dbTransaction(async (conn) => {
     const insertedIds: number[] = [];
 
     for (let i = 0; i < games.length; i++) {
@@ -476,26 +475,15 @@ export async function insertNrGotmRoundInDatabase(
         throw new Error(`GameDB id is required for NR-GOTM round ${round}, game ${i + 1}.`);
       }
       const meta = await getNrGameDetailsCached(g.gamedbGameId);
-      const result = await oraMutate(
-        getSql(NrGotmSql.insertRound, dialect),
-        {
-          roundNumber: round,
-          monthYear,
-          gameIndex: i,
-          redditUrl: g.redditUrl ?? null,
-          gamedbGameId: g.gamedbGameId,
-          outId: { dir: oracledb.BIND_OUT, type: oracledb.NUMBER },
-        },
-        conn,
-      );
-      await conn.commit();
+      const newId = await dbInsertConn(conn, NrGotmSql.insertRound, {
+        roundNumber: round,
+        monthYear,
+        gameIndex: i,
+        redditUrl: g.redditUrl ?? null,
+        gamedbGameId: g.gamedbGameId,
+      }, "outId");
 
-      const outIdVal = (result.outBinds as { outId?: number[] })?.outId;
-      const newId = Array.isArray(outIdVal) ? outIdVal[0] : outIdVal;
-      if (newId != null) {
-        insertedIds.push(Number(newId));
-      }
-
+      if (newId) insertedIds.push(newId);
       games[i].title = meta.title;
     }
 
