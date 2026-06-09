@@ -3,6 +3,7 @@ import { ContainerBuilder, TextDisplayBuilder } from "@discordjs/builders";
 import type {
   CommandInteraction,
   InteractionDeferReplyOptions,
+  ModalSubmitInteraction,
   RepliableInteraction,
 } from "discord.js";
 import { BOT_DEV_CHANNEL_ID } from "../config/channels.js";
@@ -115,6 +116,13 @@ export function sanitizeOptionalInput(
 
 export function stripModalInput(value: string): string {
   return sanitizeUserInput(value);
+}
+
+export function getModalField(
+  interaction: ModalSubmitInteraction,
+  customId: string,
+): string {
+  return stripModalInput(interaction.fields.getTextInputValue(customId));
 }
 
 function normalizeOptions(options: any): any {

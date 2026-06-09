@@ -16,9 +16,9 @@ import {
   SlashGroup,
 } from "discordx";
 import {
+  getModalField,
   safeDeferReply,
   safeReply,
-  stripModalInput,
 } from "../../functions/InteractionUtils.js";
 import { buildTextReply } from "../../functions/ComponentsV2Utils.js";
 import { getThreadsByGameId, setThreadGameLink, upsertThreadRecord } from "../../classes/Thread.js";
@@ -250,12 +250,8 @@ export class GameDbThreadCommand {
     const defaultTitle = buildDefaultNowPlayingThreadTitle(game.title);
     const defaultBody = buildDefaultNowPlayingThreadBody(memberDisplayName);
 
-    const titleInput = stripModalInput(
-      interaction.fields.getTextInputValue(GAMEDB_THREAD_TITLE_INPUT_ID),
-    );
-    const bodyInput = stripModalInput(
-      interaction.fields.getTextInputValue(GAMEDB_THREAD_BODY_INPUT_ID),
-    );
+    const titleInput = getModalField(interaction, GAMEDB_THREAD_TITLE_INPUT_ID);
+    const bodyInput = getModalField(interaction, GAMEDB_THREAD_BODY_INPUT_ID);
     const threadTitle = titleInput || defaultTitle;
     const threadBody = bodyInput || defaultBody;
 

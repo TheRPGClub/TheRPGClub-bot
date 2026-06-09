@@ -25,10 +25,10 @@ import {
 import axios from "axios";
 import {
   safeDeferReply,
+  getModalField,
   safeDeferUpdate,
   safeReply,
   safeUpdate,
-  stripModalInput,
 } from "../../functions/InteractionUtils.js";
 import {
   normalizeCsvHeader,
@@ -713,8 +713,7 @@ export class GameDbCsvImportCommand {
       return;
     }
 
-    const raw = interaction.fields.getTextInputValue(GAMEDB_CSV_MANUAL_INPUT_ID);
-    const cleaned = stripModalInput(raw);
+    const cleaned = getModalField(interaction, GAMEDB_CSV_MANUAL_INPUT_ID);
     const igdbId = Number(cleaned);
     if (!isPositiveInt(igdbId)) {
       await safeReply(interaction, buildTextReply("Please provide a valid IGDB id.", true));
@@ -781,8 +780,7 @@ export class GameDbCsvImportCommand {
       return;
     }
 
-    const raw = interaction.fields.getTextInputValue(GAMEDB_CSV_QUERY_INPUT_ID);
-    const query = stripModalInput(raw).trim();
+    const query = getModalField(interaction, GAMEDB_CSV_QUERY_INPUT_ID);
     if (!query) {
       await safeReply(interaction, buildTextReply("Please provide a search query.", true));
       return;

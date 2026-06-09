@@ -47,12 +47,12 @@ import crypto from "node:crypto";
 import Member, { type IMemberNowPlayingEntry } from "../classes/Member.js";
 import {
   extractErrorMessage,
+  getModalField,
   safeDeferReply,
   safeDeferUpdate,
   safeReply,
   safeUpdate,
   sanitizeUserInput,
-  stripModalInput,
   type AnyRepliable,
 } from "../functions/InteractionUtils.js";
 import Game, { type IGame } from "../classes/Game.js";
@@ -929,12 +929,8 @@ export class NowPlayingCommand {
 
   @ModalComponent({ id: NOW_PLAYING_ADD_MODAL_ID })
   async handleAddNowPlayingModal(interaction: ModalSubmitInteraction): Promise<void> {
-    const query = stripModalInput(
-      interaction.fields.getTextInputValue(NOW_PLAYING_ADD_TITLE_INPUT_ID),
-    );
-    const noteRaw = stripModalInput(
-      interaction.fields.getTextInputValue(NOW_PLAYING_ADD_NOTE_INPUT_ID),
-    );
+    const query = getModalField(interaction, NOW_PLAYING_ADD_TITLE_INPUT_ID);
+    const noteRaw = getModalField(interaction, NOW_PLAYING_ADD_NOTE_INPUT_ID);
     if (!query) {
       const container = new ContainerBuilder().addTextDisplayComponents(
         new TextDisplayBuilder().setContent("Please provide a title to search."),
@@ -1378,16 +1374,10 @@ export class NowPlayingCommand {
       return;
     }
 
-    const completionDateInput = stripModalInput(
-      interaction.fields.getTextInputValue(NOW_PLAYING_COMPLETE_DATE_INPUT_ID),
-    );
-    const finalPlaytimeRaw = stripModalInput(
-      interaction.fields.getTextInputValue(NOW_PLAYING_COMPLETE_HOURS_INPUT_ID),
-    );
+    const completionDateInput = getModalField(interaction, NOW_PLAYING_COMPLETE_DATE_INPUT_ID);
+    const finalPlaytimeRaw = getModalField(interaction, NOW_PLAYING_COMPLETE_HOURS_INPUT_ID);
     const noteInput = session.addCompletionNote
-      ? stripModalInput(
-        interaction.fields.getTextInputValue(NOW_PLAYING_COMPLETE_NOTE_INPUT_ID),
-      )
+      ? getModalField(interaction, NOW_PLAYING_COMPLETE_NOTE_INPUT_ID)
       : "";
 
     let completedAt: Date | null = null;
@@ -3009,9 +2999,7 @@ export class NowPlayingCommand {
         return;
       }
 
-      const noteInput = stripModalInput(
-        interaction.fields.getTextInputValue(NOW_PLAYING_NOTE_INPUT_ID),
-      );
+      const noteInput = getModalField(interaction, NOW_PLAYING_NOTE_INPUT_ID);
       const note = noteInput.trim();
       const nextNote = note ? note : null;
       if (note && note.length > MAX_NOW_PLAYING_NOTE_LEN) {
@@ -3031,7 +3019,7 @@ export class NowPlayingCommand {
         const fieldId = `${NOW_PLAYING_NOTE_INPUT_ID}:${entry.gameId}`;
         let noteInput = "";
         try {
-          noteInput = stripModalInput(interaction.fields.getTextInputValue(fieldId));
+          noteInput = getModalField(interaction, fieldId);
         } catch {
           noteInput = "";
         }
