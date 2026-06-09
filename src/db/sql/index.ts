@@ -3,6 +3,7 @@ import type { Dialect, ISqlEntry } from "./types.js";
 export type { Dialect, ISqlEntry };
 
 export { AdminWizardSessionSql } from "./adminWizardSession.sql.js";
+export { BotPresenceHistorySql } from "./botPresenceHistory.sql.js";
 export { BotVotingInfoSql } from "./botVotingInfo.sql.js";
 export { CollectionCsvImportSql } from "./collectionCsvImport.sql.js";
 export { CompletionatorImportSql } from "./completionatorImport.sql.js";
