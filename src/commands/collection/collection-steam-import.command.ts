@@ -44,6 +44,7 @@ import {
   resolveGameCompletionPlatformId,
 } from "../game-completion/completion-autocomplete.utils.js";
 import {
+  canSafeReply,
   safeDeferReply,
   safeDeferUpdate,
   safeReply,
@@ -164,8 +165,7 @@ export class CollectionSteamImportCommand {
   ): Promise<void> {
     const shouldUseInteractionUpdate =
       (interaction.isButton() || interaction.isStringSelectMenu()) &&
-      !interaction.deferred &&
-      !interaction.replied;
+      canSafeReply(interaction);
     const shouldUseModalUpdate = interaction.isModalSubmit();
 
     const session = await getSteamCollectionImportById(importId);

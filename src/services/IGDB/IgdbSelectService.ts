@@ -6,7 +6,12 @@ import {
   type ButtonInteraction,
   type StringSelectMenuInteraction,
 } from "discord.js";
-import { safeDeferUpdate, safeReply, safeUpdate } from "../../functions/InteractionUtils.js";
+import {
+  canSafeReply,
+  safeDeferUpdate,
+  safeReply,
+  safeUpdate,
+} from "../../functions/InteractionUtils.js";
 import { buildTextReply } from "../../functions/ComponentsV2Utils.js";
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
 
@@ -191,7 +196,7 @@ export async function handleIgdbSelectInteraction(
   }
 
   try {
-    if (!interaction.deferred && !interaction.replied) {
+    if (canSafeReply(interaction)) {
       await safeDeferUpdate(interaction);
     }
     await session.onSelect(interaction, selected.gameId);
@@ -226,7 +231,7 @@ export async function handleIgdbFirstMatchInteraction(
   }
 
   try {
-    if (!interaction.deferred && !interaction.replied) {
+    if (canSafeReply(interaction)) {
       await safeDeferUpdate(interaction);
     }
     await session.onSelect(interaction as unknown as StringSelectMenuInteraction, firstOption.id);

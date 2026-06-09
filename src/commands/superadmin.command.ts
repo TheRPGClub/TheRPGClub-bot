@@ -20,7 +20,9 @@ import {
 } from "discordx";
 import {
   AnyRepliable,
+  canSafeReply,
   extractErrorMessage,
+  isInteractionSettled,
   safeDeferReply,
   safeDeferUpdate,
   safeReply,
@@ -464,7 +466,7 @@ export class SuperAdmin {
   ): Promise<void> {
     if ("isMessageComponent" in interaction && interaction.isMessageComponent()) {
       const loading = { content: `Searching IGDB for "${searchTerm}"...`, components: [] };
-      if (interaction.deferred || interaction.replied) {
+      if (isInteractionSettled(interaction)) {
         await safeReply(interaction, loading).catch(() => {});
       } else {
         await safeUpdate(interaction, loading).catch(() => {});
@@ -717,7 +719,7 @@ export class SuperAdmin {
 
   @ButtonComponent({ id: /^(gotm|nr-gotm)-audit(img)?-(stop|skip|novalue).*-/ })
   async handleAuditButtons(interaction: ButtonInteraction): Promise<void> {
-    if (!interaction.deferred && !interaction.replied) {
+    if (canSafeReply(interaction)) {
       await safeDeferUpdate(interaction);
     }
   }

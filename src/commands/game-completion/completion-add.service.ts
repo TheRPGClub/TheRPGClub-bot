@@ -14,7 +14,9 @@ import Game from "../../classes/Game.js";
 import Member from "../../classes/Member.js";
 import { saveCompletion } from "../../functions/CompletionHelpers.js";
 import {
+  canSafeReply,
   extractErrorMessage,
+  isInteractionSettled,
   safeDeferUpdate,
   safeReply,
   safeUpdate,
@@ -94,7 +96,7 @@ export async function promptIgdbSelection(
 ): Promise<void> {
   if (interaction.isMessageComponent()) {
     const loadingComponents = [buildTextContainer(`Searching IGDB for "${searchTerm}"...`)];
-    if (interaction.deferred || interaction.replied) {
+    if (isInteractionSettled(interaction)) {
       await safeReply(interaction, {
         components: loadingComponents,
         flags: COMPONENTS_V2_FLAG,
@@ -236,7 +238,7 @@ export async function processCompletionSelection(
     return true;
   }
 
-  if (!interaction.deferred && !interaction.replied) {
+  if (canSafeReply(interaction)) {
     try {
       await safeDeferUpdate(interaction);
     } catch {
@@ -439,7 +441,7 @@ async function confirmDuplicateCompletion(
   try {
     const reply = await safeReply(interaction, {
       ...payload,
-      __forceFollowUp: interaction.deferred || interaction.replied,
+      __forceFollowUp: isInteractionSettled(interaction),
     });
     message = (reply as any)?.resource?.message ?? (reply as Message) ?? null;
   } catch {
