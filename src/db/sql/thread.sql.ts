@@ -27,12 +27,19 @@ export const ThreadSql = {
        s.THREAD_ID, s.FORUM_CHANNEL_ID, s.THREAD_NAME, s.IS_ARCHIVED,
        s.CREATED_AT, s.LAST_SEEN_AT, s.SKIP_LINKING
      )`,
-    postgres: ``,
+    postgres: `INSERT INTO threads
+       (thread_id, forum_channel_id, thread_name, is_archived, created_at, last_seen_at, skip_linking)
+       VALUES (:threadId, :forumChannelId, :threadName, :isArchived, :createdAt, :lastSeenAt, :skipLinking)
+       ON CONFLICT (thread_id) DO UPDATE SET
+         thread_name = EXCLUDED.thread_name,
+         forum_channel_id = EXCLUDED.forum_channel_id,
+         is_archived = EXCLUDED.is_archived,
+         last_seen_at = EXCLUDED.last_seen_at`,
   } satisfies SqlEntry,
 
   deleteThreadGameLink: {
     oracle: `DELETE FROM THREAD_GAME_LINKS WHERE THREAD_ID = :threadId`,
-    postgres: ``,
+    postgres: `DELETE FROM thread_game_links WHERE thread_id = :threadId`,
   } satisfies SqlEntry,
 
   mergeThreadGameLink: {
@@ -44,7 +51,9 @@ export const ThreadSql = {
          WHEN NOT MATCHED THEN
            INSERT (THREAD_ID, GAMEDB_GAME_ID, LINKED_AT)
            VALUES (src.THREAD_ID, src.GAMEDB_GAME_ID, SYSTIMESTAMP)`,
-    postgres: ``,
+    postgres: `INSERT INTO thread_game_links (thread_id, gamedb_game_id, linked_at)
+         VALUES (:threadId, :gameId, NOW())
+         ON CONFLICT (thread_id, gamedb_game_id) DO NOTHING`,
   } satisfies SqlEntry,
 
   updateThreadsGameId: {
@@ -55,7 +64,13 @@ export const ThreadSql = {
           WHERE g.THREAD_ID = t.THREAD_ID
        )
        WHERE t.THREAD_ID = :threadId`,
-    postgres: ``,
+    postgres: `UPDATE threads
+       SET gamedb_game_id = (
+         SELECT MIN(g.gamedb_game_id)
+           FROM thread_game_links g
+          WHERE g.thread_id = threads.thread_id
+       )
+       WHERE thread_id = :threadId`,
   } satisfies SqlEntry,
 
   removeThreadGameLinks: (withGameId: boolean) =>
@@ -63,38 +78,42 @@ export const ThreadSql = {
       oracle: `DELETE FROM THREAD_GAME_LINKS
        WHERE THREAD_ID = :threadId
        ${withGameId ? "AND GAMEDB_GAME_ID = :gameId" : ""}`,
-      postgres: ``,
+      postgres: `DELETE FROM thread_game_links
+       WHERE thread_id = :threadId
+       ${withGameId ? "AND gamedb_game_id = :gameId" : ""}`,
     }) satisfies SqlEntry,
 
   setSkipLinking: {
     oracle: `UPDATE THREADS
         SET SKIP_LINKING = :skip
       WHERE THREAD_ID = :threadId`,
-    postgres: ``,
+    postgres: `UPDATE threads
+        SET skip_linking = :skip
+      WHERE thread_id = :threadId`,
   } satisfies SqlEntry,
 
   getSkipLinking: {
     oracle: `SELECT SKIP_LINKING FROM THREADS WHERE THREAD_ID = :threadId`,
-    postgres: ``,
+    postgres: `SELECT skip_linking FROM threads WHERE thread_id = :threadId`,
   } satisfies SqlEntry,
 
   getThreadLinksForGame: {
     oracle: `SELECT THREAD_ID FROM THREAD_GAME_LINKS WHERE GAMEDB_GAME_ID = :gameId`,
-    postgres: ``,
+    postgres: `SELECT thread_id FROM thread_game_links WHERE gamedb_game_id = :gameId`,
   } satisfies SqlEntry,
 
   getLegacyGameId: {
     oracle: `SELECT GAMEDB_GAME_ID FROM THREADS WHERE THREAD_ID = :threadId`,
-    postgres: ``,
+    postgres: `SELECT gamedb_game_id FROM threads WHERE thread_id = :threadId`,
   } satisfies SqlEntry,
 
   getThreadGameLinks: {
     oracle: `SELECT GAMEDB_GAME_ID FROM THREAD_GAME_LINKS WHERE THREAD_ID = :threadId`,
-    postgres: ``,
+    postgres: `SELECT gamedb_game_id FROM thread_game_links WHERE thread_id = :threadId`,
   } satisfies SqlEntry,
 
   getLegacyThreadIdForGame: {
     oracle: `SELECT THREAD_ID FROM THREADS WHERE GAMEDB_GAME_ID = :gameId`,
-    postgres: ``,
+    postgres: `SELECT thread_id FROM threads WHERE gamedb_game_id = :gameId`,
   } satisfies SqlEntry,
 };

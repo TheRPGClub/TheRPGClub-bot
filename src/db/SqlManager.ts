@@ -26,14 +26,17 @@ export { getSql, getSqlDynamic } from "./sql/index.js";
  */
 export async function dbQuery<RowT extends object, R>(
   entry: SqlEntry,
-  params: oracledb.BindParameters | unknown[],
+  params: oracledb.BindParameters | Record<string, unknown> | unknown[],
   mapper: (row: RowT) => R,
 ): Promise<R[]> {
   const dialect = getDialect();
   if (dialect === "oracle") {
     return oraQuery(entry.oracle, params as oracledb.BindParameters, mapper);
   }
-  const rows = await pgQuery<RowT>(entry.postgres, params as unknown[]);
+  const rows = await pgQuery<RowT>(
+    entry.postgres,
+    params as Record<string, unknown> | unknown[],
+  );
   return rows.map(mapper);
 }
 
@@ -43,14 +46,14 @@ export async function dbQuery<RowT extends object, R>(
  */
 export async function dbMutate(
   entry: SqlEntry,
-  params: oracledb.BindParameters | unknown[],
+  params: oracledb.BindParameters | Record<string, unknown> | unknown[],
 ): Promise<number> {
   const dialect = getDialect();
   if (dialect === "oracle") {
     const result = await oraMutate(entry.oracle, params as oracledb.BindParameters);
     return result.rowsAffected ?? 0;
   }
-  return pgMutate(entry.postgres, params as unknown[]);
+  return pgMutate(entry.postgres, params as Record<string, unknown> | unknown[]);
 }
 
 /**

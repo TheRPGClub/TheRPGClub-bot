@@ -12,19 +12,35 @@ const TODO_COLS = `TODO_ID,
               COMPLETED_BY,
               IS_COMPLETED`;
 
+const TODO_COLS_PG = `todo_id,
+              title,
+              details,
+              todo_category,
+              todo_size,
+              created_by,
+              created_at,
+              updated_at,
+              completed_at,
+              completed_by,
+              is_completed`;
+
 export const TodoSql = {
   getById: {
     oracle: `SELECT ${TODO_COLS}
        FROM RPG_CLUB_TODOS
       WHERE TODO_ID = :id`,
-    postgres: ``,
+    postgres: `SELECT ${TODO_COLS_PG}
+       FROM rpg_club_todos
+      WHERE todo_id = :id`,
   } satisfies SqlEntry,
 
   create: {
     oracle: `INSERT INTO RPG_CLUB_TODOS (TITLE, DETAILS, TODO_CATEGORY, TODO_SIZE, CREATED_BY)
      VALUES (:title, :details, :todoCategory, :todoSize, :createdBy)
      RETURNING TODO_ID INTO :id`,
-    postgres: ``,
+    postgres: `INSERT INTO rpg_club_todos (title, details, todo_category, todo_size, created_by)
+     VALUES (:title, :details, :todoCategory, :todoSize, :createdBy)
+     RETURNING todo_id`,
   } satisfies SqlEntry,
 
   list: (whereClause: string) =>
@@ -34,7 +50,11 @@ export const TodoSql = {
        ${whereClause}
       ORDER BY IS_COMPLETED ASC, CREATED_AT ASC
       FETCH FIRST :limit ROWS ONLY`,
-      postgres: ``,
+      postgres: `SELECT ${TODO_COLS_PG}
+       FROM rpg_club_todos
+       ${whereClause}
+      ORDER BY is_completed ASC, created_at ASC
+      LIMIT :limit`,
     }) satisfies SqlEntry,
 
   update: {
@@ -50,12 +70,23 @@ export const TodoSql = {
               ELSE TODO_SIZE
             END
       WHERE TODO_ID = :id`,
-    postgres: ``,
+    postgres: `UPDATE rpg_club_todos
+        SET title = CASE WHEN :titleProvided = 1 THEN :title ELSE title END,
+            details = CASE WHEN :detailsProvided = 1 THEN :details ELSE details END,
+            todo_category = CASE
+              WHEN :categoryProvided = 1 THEN :todoCategory
+              ELSE todo_category
+            END,
+            todo_size = CASE
+              WHEN :sizeProvided = 1 THEN :todoSize
+              ELSE todo_size
+            END
+      WHERE todo_id = :id`,
   } satisfies SqlEntry,
 
   delete: {
     oracle: `DELETE FROM RPG_CLUB_TODOS WHERE TODO_ID = :id`,
-    postgres: ``,
+    postgres: `DELETE FROM rpg_club_todos WHERE todo_id = :id`,
   } satisfies SqlEntry,
 
   complete: {
@@ -65,14 +96,21 @@ export const TodoSql = {
             COMPLETED_BY = :completedBy
       WHERE TODO_ID = :id
         AND IS_COMPLETED = 0`,
-    postgres: ``,
+    postgres: `UPDATE rpg_club_todos
+        SET is_completed = true,
+            completed_at = NOW(),
+            completed_by = :completedBy
+      WHERE todo_id = :id
+        AND is_completed = false`,
   } satisfies SqlEntry,
 
   countTodos: {
     oracle: `SELECT SUM(CASE WHEN IS_COMPLETED = 1 THEN 0 ELSE 1 END) AS OPEN_COUNT,
             SUM(CASE WHEN IS_COMPLETED = 1 THEN 1 ELSE 0 END) AS COMPLETED_COUNT
        FROM RPG_CLUB_TODOS`,
-    postgres: ``,
+    postgres: `SELECT SUM(CASE WHEN is_completed THEN 0 ELSE 1 END) AS open_count,
+            SUM(CASE WHEN is_completed THEN 1 ELSE 0 END) AS completed_count
+       FROM rpg_club_todos`,
   } satisfies SqlEntry,
 
   countTodoSummary: {
@@ -109,6 +147,38 @@ export const TodoSql = {
               END
             ) AS OPEN_REFACTORING
        FROM RPG_CLUB_TODOS`,
-    postgres: ``,
+    postgres: `SELECT SUM(CASE WHEN is_completed THEN 0 ELSE 1 END) AS open_count,
+            SUM(CASE WHEN is_completed THEN 1 ELSE 0 END) AS completed_count,
+            SUM(
+              CASE
+                WHEN NOT is_completed AND todo_category = 'New Features' THEN 1
+                ELSE 0
+              END
+            ) AS open_new_features,
+            SUM(
+              CASE
+                WHEN NOT is_completed AND todo_category = 'Improvements' THEN 1
+                ELSE 0
+              END
+            ) AS open_improvements,
+            SUM(
+              CASE
+                WHEN NOT is_completed AND todo_category = 'Defects' THEN 1
+                ELSE 0
+              END
+            ) AS open_defects,
+            SUM(
+              CASE
+                WHEN NOT is_completed AND todo_category = 'Blocked' THEN 1
+                ELSE 0
+              END
+            ) AS open_blocked,
+            SUM(
+              CASE
+                WHEN NOT is_completed AND todo_category = 'Refactoring' THEN 1
+                ELSE 0
+              END
+            ) AS open_refactoring
+       FROM rpg_club_todos`,
   } satisfies SqlEntry,
 };

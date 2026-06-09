@@ -61,15 +61,42 @@ export function getPostgresPool(): pg.Pool {
 }
 
 /**
+ * Converts a SQL string using Oracle-style `:name` placeholders and a named
+ * bind object into a positional `$N` SQL string and ordered values array.
+ * Repeated uses of the same name get the same `$N`. Array params are returned
+ * unchanged so callers that already use positional style still work.
+ */
+export function namedToPositional(
+  sql: string,
+  params: Record<string, unknown> | unknown[],
+): { text: string; values: unknown[] } {
+  if (Array.isArray(params)) {
+    return { text: sql, values: params };
+  }
+  const values: unknown[] = [];
+  const seen = new Map<string, number>();
+  const text = sql.replace(/:([A-Za-z_]\w*)/g, (_, name: string) => {
+    if (!seen.has(name)) {
+      seen.set(name, values.length + 1);
+      values.push(params[name]);
+    }
+    return `$${seen.get(name)}`;
+  });
+  return { text, values };
+}
+
+/**
  * Convenience helper -- runs a parameterised query and returns all rows.
+ * Accepts either positional `unknown[]` or named `:param` bind objects.
  *
  * @example
- * const rows = await pgQuery<{ id: number }>("SELECT id FROM users WHERE name = $1", ["alice"]);
+ * const rows = await pgQuery<{ id: number }>("SELECT id FROM users WHERE name = :name", { name: "alice" });
  */
 export async function pgQuery<T extends pg.QueryResultRow = pg.QueryResultRow>(
-  text: string,
-  values?: unknown[],
+  sql: string,
+  params?: Record<string, unknown> | unknown[],
 ): Promise<T[]> {
+  const { text, values } = namedToPositional(sql, params ?? []);
   const result = await getPostgresPool().query<T>(text, values);
   return result.rows;
 }
@@ -98,9 +125,10 @@ export async function pgTransaction<T>(
 
 /** Runs a DML statement and returns the number of rows affected. */
 export async function pgMutate(
-  text: string,
-  values?: unknown[],
+  sql: string,
+  params?: Record<string, unknown> | unknown[],
 ): Promise<number> {
+  const { text, values } = namedToPositional(sql, params ?? []);
   const result = await getPostgresPool().query(text, values);
   return result.rowCount ?? 0;
 }

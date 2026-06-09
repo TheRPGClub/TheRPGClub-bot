@@ -14,7 +14,17 @@ export const NominationSql = {
        LEFT JOIN GAMEDB_GAMES g ON g.GAME_ID = n.GAMEDB_GAME_ID
       WHERE n.ROUND_NUMBER = :roundNumber
         AND n.USER_ID = :userId`,
-      postgres: ``,
+      postgres: `SELECT n.nomination_id,
+            n.round_number,
+            n.user_id,
+            n.gamedb_game_id,
+            g.title AS gamedb_title,
+            n.nominated_at,
+            n.reason
+       FROM ${table.toLowerCase()} n
+       LEFT JOIN gamedb_games g ON g.game_id = n.gamedb_game_id
+      WHERE n.round_number = :roundNumber
+        AND n.user_id = :userId`,
     }) satisfies SqlEntry,
 
   upsertNomination: (table: string) =>
@@ -36,7 +46,12 @@ export const NominationSql = {
     WHEN NOT MATCHED THEN
       INSERT (ROUND_NUMBER, USER_ID, GAMEDB_GAME_ID, NOMINATED_AT, REASON)
       VALUES (src.ROUND_NUMBER, src.USER_ID, src.GAMEDB_GAME_ID, src.NOMINATED_AT, src.REASON)`,
-      postgres: ``,
+      postgres: `INSERT INTO ${table.toLowerCase()} (round_number, user_id, gamedb_game_id, nominated_at, reason)
+      VALUES (:roundNumber, :userId, :gamedbGameId, :nominatedAt, :reason)
+      ON CONFLICT (round_number, user_id) DO UPDATE SET
+        gamedb_game_id = EXCLUDED.gamedb_game_id,
+        nominated_at = EXCLUDED.nominated_at,
+        reason = EXCLUDED.reason`,
     }) satisfies SqlEntry,
 
   deleteNomination: (table: string) =>
@@ -44,7 +59,9 @@ export const NominationSql = {
       oracle: `DELETE FROM ${table}
       WHERE ROUND_NUMBER = :roundNumber
         AND USER_ID = :userId`,
-      postgres: ``,
+      postgres: `DELETE FROM ${table.toLowerCase()}
+      WHERE round_number = :roundNumber
+        AND user_id = :userId`,
     }) satisfies SqlEntry,
 
   listNominationsForRound: (table: string) =>
@@ -60,6 +77,16 @@ export const NominationSql = {
        LEFT JOIN GAMEDB_GAMES g ON g.GAME_ID = n.GAMEDB_GAME_ID
       WHERE n.ROUND_NUMBER = :roundNumber
       ORDER BY g.TITLE ASC`,
-      postgres: ``,
+      postgres: `SELECT n.nomination_id,
+            n.round_number,
+            n.user_id,
+            n.gamedb_game_id,
+            g.title AS gamedb_title,
+            n.nominated_at,
+            n.reason
+       FROM ${table.toLowerCase()} n
+       LEFT JOIN gamedb_games g ON g.game_id = n.gamedb_game_id
+      WHERE n.round_number = :roundNumber
+      ORDER BY g.title ASC`,
     }) satisfies SqlEntry,
 };
