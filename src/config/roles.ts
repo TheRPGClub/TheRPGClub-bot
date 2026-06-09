@@ -5,3 +5,5 @@ export const ADMIN_ROLE_ID =
 export const MODERATOR_ROLE_ID =
   process.env.MODERATOR_ROLE_ID?.replace(/[<@&>]/g, "").trim() ?? null;
 export const MEMBER_ROLE_ID = "747520789003239530";
+export const MEMBER_ROLE_NAME = "members";
+export const NEWCOMERS_ROLE_NAME = "newcomers";
