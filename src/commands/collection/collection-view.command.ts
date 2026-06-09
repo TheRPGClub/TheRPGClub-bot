@@ -40,6 +40,7 @@ import {
 } from "../../functions/ComponentsV2Utils.js";
 import { flattenErrorMessages } from "../imports/import-scaffold.service.js";
 import { formatStructuredLog } from "../../utilities/LogUtils.js";
+import { safeIgnore } from "../../utilities/AsyncUtils.js";
 import {
   buildAllCollectionsOverviewMessages,
   buildCollectionOverviewResponse,
@@ -287,18 +288,18 @@ export class CollectionViewCommand {
   ): Promise<void> {
     const parsed = parseCollectionOverviewSelectId(interaction.customId);
     if (!parsed) {
-      await safeReply(interaction, buildTextReply("This collection overview control is invalid.", true)).catch(() => {});
+      safeIgnore(safeReply(interaction, buildTextReply("This collection overview control is invalid.", true)));
       return;
     }
 
     if (interaction.user.id !== parsed.viewerUserId) {
-      await safeReply(interaction, buildTextReply("This collection overview is not for you.", true)).catch(() => {});
+      safeIgnore(safeReply(interaction, buildTextReply("This collection overview is not for you.", true)));
       return;
     }
 
     const selection = parseCollectionOverviewSelectValue(interaction.values?.[0] ?? "");
     if (!selection) {
-      await safeReply(interaction, buildTextReply("That collection selection is invalid.", true)).catch(() => {});
+      safeIgnore(safeReply(interaction, buildTextReply("That collection selection is invalid.", true)));
       return;
     }
 
@@ -319,10 +320,10 @@ export class CollectionViewCommand {
         titleOverride: overviewTitle ?? undefined,
       });
 
-      await safeReply(interaction, {
+      safeIgnore(safeReply(interaction, {
         components,
         flags: buildComponentsV2EditFlags(),
-      }).catch(() => {});
+      }));
       return;
     }
 
@@ -341,17 +342,17 @@ export class CollectionViewCommand {
       });
 
       if (response.content) {
-        await safeReply(interaction, {
+        safeIgnore(safeReply(interaction, {
           content: response.content,
           components: [],
-        }).catch(() => {});
+        }));
         return;
       }
 
-      await safeReply(interaction, {
+      safeIgnore(safeReply(interaction, {
         components: response.components,
         flags: buildComponentsV2EditFlags(),
-      }).catch(() => {});
+      }));
       return;
     }
 
@@ -376,17 +377,17 @@ export class CollectionViewCommand {
     });
 
     if (response.content) {
-      await safeReply(interaction, {
+      safeIgnore(safeReply(interaction, {
         content: response.content,
         components: [],
-      }).catch(() => {});
+      }));
       return;
     }
 
-    await safeReply(interaction, {
+    safeIgnore(safeReply(interaction, {
       components: response.components,
       flags: buildComponentsV2EditFlags(),
-    }).catch(() => {});
+    }));
   }
 
   @ButtonComponent({
@@ -395,12 +396,12 @@ export class CollectionViewCommand {
   async onCollectionListNav(interaction: ButtonInteraction): Promise<void> {
     const parsed = parseCollectionListNavId(interaction.customId);
     if (!parsed) {
-      await safeReply(interaction, buildTextReply("This collection view control is invalid.", true)).catch(() => {});
+      safeIgnore(safeReply(interaction, buildTextReply("This collection view control is invalid.", true)));
       return;
     }
 
     if (interaction.user.id !== parsed.viewerUserId) {
-      await safeReply(interaction, buildTextReply("This collection view is not for you.", true)).catch(() => {});
+      safeIgnore(safeReply(interaction, buildTextReply("This collection view is not for you.", true)));
       return;
     }
 
@@ -472,12 +473,12 @@ export class CollectionViewCommand {
   async onCollectionFilterOpen(interaction: ButtonInteraction): Promise<void> {
     const parsed = parseCollectionFilterActionId(interaction.customId);
     if (!parsed || parsed.action !== "open") {
-      await safeReply(interaction, buildTextReply("This filter control is invalid.", true)).catch(() => {});
+      safeIgnore(safeReply(interaction, buildTextReply("This filter control is invalid.", true)));
       return;
     }
 
     if (interaction.user.id !== parsed.viewerUserId) {
-      await safeReply(interaction, buildTextReply("This collection view is not for you.", true)).catch(() => {});
+      safeIgnore(safeReply(interaction, buildTextReply("This collection view is not for you.", true)));
       return;
     }
 
@@ -491,7 +492,7 @@ export class CollectionViewCommand {
       }),
       true,
     );
-    await safeReply(interaction, {
+    safeIgnore(safeReply(interaction, {
       ...filterPanelReply,
       components: [
         ...filterPanelReply.components,
@@ -503,7 +504,7 @@ export class CollectionViewCommand {
           ownershipType: currentFilters.ownershipType,
         }),
       ],
-    }).catch(() => {});
+    }));
   }
 
   @ButtonComponent({
@@ -512,12 +513,12 @@ export class CollectionViewCommand {
   async onCollectionFilterAction(interaction: ButtonInteraction): Promise<void> {
     const parsed = parseCollectionFilterPanelActionId(interaction.customId);
     if (!parsed) {
-      await safeReply(interaction, buildTextReply("This filter control is invalid.", true)).catch(() => {});
+      safeIgnore(safeReply(interaction, buildTextReply("This filter control is invalid.", true)));
       return;
     }
 
     if (interaction.user.id !== parsed.viewerUserId) {
-      await safeReply(interaction, buildTextReply("This filter control is not for you.", true)).catch(() => {});
+      safeIgnore(safeReply(interaction, buildTextReply("This filter control is not for you.", true)));
       return;
     }
 
@@ -560,7 +561,7 @@ export class CollectionViewCommand {
         new ActionRowBuilder<TextInputBuilder>().addComponents(titleInput),
         new ActionRowBuilder<TextInputBuilder>().addComponents(platformInput),
       );
-      await interaction.showModal(modal).catch(() => {});
+      safeIgnore(interaction.showModal(modal));
       return;
     }
 
@@ -594,7 +595,7 @@ export class CollectionViewCommand {
         platform: nextState.platform,
         ownershipType: nextState.ownershipType,
       });
-      await (interaction.message as any)?.delete?.().catch(() => {});
+      safeIgnore((interaction.message as any)?.delete?.() ?? Promise.resolve());
       if (!applied) {
         await safeReply(interaction, { ...buildTextReply("Could not update that collection message.", true), __forceFollowUp: true });
         return;
@@ -624,12 +625,12 @@ export class CollectionViewCommand {
   async onCollectionFilterTextModal(interaction: ModalSubmitInteraction): Promise<void> {
     const parsed = parseCollectionFilterModalId(interaction.customId);
     if (!parsed) {
-      await safeReply(interaction, buildTextReply("This filter modal is invalid.", true)).catch(() => {});
+      safeIgnore(safeReply(interaction, buildTextReply("This filter modal is invalid.", true)));
       return;
     }
 
     if (interaction.user.id !== parsed.viewerUserId) {
-      await safeReply(interaction, buildTextReply("This filter modal is not for you.", true)).catch(() => {});
+      safeIgnore(safeReply(interaction, buildTextReply("This filter modal is not for you.", true)));
       return;
     }
 
