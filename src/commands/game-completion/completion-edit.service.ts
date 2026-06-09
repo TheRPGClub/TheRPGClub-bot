@@ -24,7 +24,12 @@ import {
 } from "./completion-autocomplete.utils.js";
 import { buildTextReply, safeV2TextContent } from "../../functions/ComponentsV2Utils.js";
 import { COMPONENTS_V2_FLAG } from "../../config/flags.js";
-import { replyIfNotOwner, safeReply, safeUpdate } from "../../functions/InteractionUtils.js";
+import {
+  isInteractionSettled,
+  replyIfNotOwner,
+  safeReply,
+  safeUpdate,
+} from "../../functions/InteractionUtils.js";
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
 
 const MAX_NOTE_LENGTH = 500;
@@ -57,7 +62,7 @@ export async function handleCompletionEditMenu(
   }
 
   const response = buildCompletionEditPrompt(ownerId, completionId, completion);
-  if (interaction.deferred || interaction.replied) {
+  if (isInteractionSettled(interaction)) {
     await safeReply(interaction, response);
   } else {
     await safeUpdate(interaction, response);

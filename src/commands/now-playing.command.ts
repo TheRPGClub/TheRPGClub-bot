@@ -48,6 +48,7 @@ import Member, { type IMemberNowPlayingEntry } from "../classes/Member.js";
 import {
   extractErrorMessage,
   getModalField,
+  isInteractionSettled,
   safeDeferReply,
   safeDeferUpdate,
   safeReply,
@@ -358,7 +359,7 @@ async function confirmDuplicateCompletion(
 
   let message: Message | null = null;
   try {
-    if (interaction.deferred || interaction.replied) {
+    if (isInteractionSettled(interaction)) {
       const reply = await safeReply(interaction, { ...payload, __forceFollowUp: true } as any);
       message = reply as Message;
     } else {

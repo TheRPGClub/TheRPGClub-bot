@@ -35,7 +35,7 @@ import { importGameFromIgdb } from "./completionator-parser.service.js";
 import { searchGameDbWithFallback } from "./completionator-parser.service.js";
 import { runDockerVolumeBackup } from "../../services/DockerVolumeBackupService.js";
 import { buildImportTextContainer } from "../imports/import-scaffold.service.js";
-import { safeDeferReply, safeDeferUpdate } from "../../functions/InteractionUtils.js";
+import { canSafeReply, safeDeferReply, safeDeferUpdate } from "../../functions/InteractionUtils.js";
 
 export class CompletionatorWorkflowService {
   private uiService: CompletionatorUiService;
@@ -533,7 +533,7 @@ export class CompletionatorWorkflowService {
   ): Promise<void> {
     const isComponent =
       "isMessageComponent" in interaction && interaction.isMessageComponent();
-    if (!interaction.deferred && !interaction.replied) {
+    if (canSafeReply(interaction)) {
       if (isComponent) {
         await safeDeferUpdate(interaction);
       } else {

@@ -12,6 +12,16 @@ import { buildComponentsV2Flags, buildTextReply, safeV2TextContent } from "./Com
 
 export type AnyRepliable = RepliableInteraction | CommandInteraction;
 
+/** True if the interaction has already been deferred or replied to. */
+export function isInteractionSettled(interaction: AnyRepliable): boolean {
+  return interaction.deferred || interaction.replied;
+}
+
+/** True if the interaction can still receive an initial reply or deferral. */
+export function canSafeReply(interaction: AnyRepliable): boolean {
+  return !interaction.deferred && !interaction.replied;
+}
+
 type SanitizeOptions = {
   maxLength?: number;
   preserveNewlines?: boolean;

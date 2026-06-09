@@ -27,7 +27,7 @@ import Member from "../classes/Member.js";
 import { ANNOUNCEMENT_CHANNEL_ID, BOT_DEV_CHANNEL_ID } from "../config/channels.js";
 import { COMPONENTS_V2_FLAG } from "../config/flags.js";
 import { buildComponentsV2Flags, buildTextContainer } from "./ComponentsV2Utils.js";
-import { safeReply, safeUpdate } from "./InteractionUtils.js";
+import { isInteractionSettled, safeReply, safeUpdate } from "./InteractionUtils.js";
 
 const MAX_PLAYTIME_HOURS = 999999.99;
 const COMPLETION_COVER_ATTACHMENT_PREFIX = "completion-cover";
@@ -272,7 +272,7 @@ export async function promptRemoveFromNowPlaying(
 
   let message: Message | null = null;
   try {
-    if (interaction.deferred || interaction.replied) {
+    if (isInteractionSettled(interaction)) {
       const reply = await safeReply(interaction, { ...payload, __forceFollowUp: true } as any);
       message = reply as Message;
     } else {

@@ -42,6 +42,7 @@ import {
   resolveGameCompletionPlatformLabel,
 } from "../game-completion/completion-autocomplete.utils.js";
 import {
+  canSafeReply,
   safeDeferReply,
   safeDeferUpdate,
   safeReply,
@@ -153,10 +154,9 @@ export class CollectionCsvImportCommand {
     importId: number,
     ownerId: string,
   ): Promise<void> {
-    const shouldUseInteractionUpdate = 
+    const shouldUseInteractionUpdate =
       (interaction.isButton() || interaction.isStringSelectMenu()) &&
-      !interaction.deferred &&
-      !interaction.replied;
+      canSafeReply(interaction);
     const shouldUseModalUpdate = interaction.isModalSubmit();
 
     const session = await getCollectionCsvImportById(importId);

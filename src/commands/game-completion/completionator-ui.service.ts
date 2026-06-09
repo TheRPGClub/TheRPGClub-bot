@@ -37,7 +37,7 @@ import { GAMEDB_CSV_PLATFORM_MAP } from "../../config/gamedbCsvPlatformMap.js";
 import { formatTableDate } from "../profile.command.js";
 import { formatPlatformDisplayName } from "../../functions/PlatformDisplay.js";
 import { COMPLETIONATOR_MATCH_THUMBNAIL_NAME } from "./completion.types.js";
-import { safeReply, safeUpdate } from "../../functions/InteractionUtils.js";
+import { isInteractionSettled, safeReply, safeUpdate } from "../../functions/InteractionUtils.js";
 import { buildComponentsV2Flags } from "../../functions/NominationListComponents.js";
 import { createIgdbSession } from "../../services/IGDB/IgdbSelectService.js";
 import {
@@ -658,7 +658,7 @@ export class CompletionatorUiService {
     }
 
     if ("isMessageComponent" in interaction && interaction.isMessageComponent()) {
-      if (interaction.deferred || interaction.replied) {
+      if (isInteractionSettled(interaction)) {
         await safeReply(interaction, { ...payload, files, flags });
       } else {
         await safeUpdate(interaction, { ...payload, files, flags });

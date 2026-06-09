@@ -17,6 +17,7 @@ import {
 } from "discordx";
 import {
   getModalField,
+  isInteractionSettled,
   safeDeferReply,
   safeReply,
 } from "../../functions/InteractionUtils.js";
@@ -121,7 +122,7 @@ async function runNowPlayingThreadWizard(
     typeof interaction.isModalSubmit === "function" &&
     interaction.isModalSubmit();
   const sendStatus = async (content: string): Promise<void> => {
-    if (isModalInteraction && (interaction.deferred || interaction.replied)) {
+    if (isModalInteraction && isInteractionSettled(interaction)) {
       await safeReply(interaction, buildTextReply(content, false)).catch(() => {});
       return;
     }
