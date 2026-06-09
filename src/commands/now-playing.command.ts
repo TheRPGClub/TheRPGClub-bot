@@ -99,6 +99,7 @@ import {
 
 import { renderUsernameWithEmoji } from "../services/UserEmojiService.js";
 import { isPositiveInt } from "../utilities/ValidationUtils.js";
+import { formatStructuredLog } from "../utilities/LogUtils.js";
 
 const MAX_NOW_PLAYING_NOTE_LEN = 500;
 const NOW_PLAYING_SEARCH_LIMIT = 10;
@@ -226,7 +227,11 @@ export async function restoreJournalMessageContextsFromDb(): Promise<void> {
     }
     console.log(`[Journal] Restored ${rows.length} message context(s) from DB.`);
   } catch (err) {
-    console.error("[Journal] Failed to restore message contexts from DB:", err);
+    console.error(formatStructuredLog({
+      context: "Journal",
+      event: "restore_contexts_failed",
+      error: err instanceof Error ? err.message : String(err),
+    }));
   }
 }
 
@@ -487,7 +492,11 @@ export async function trackNowPlayingJournalContext(
     createdAt,
     ownerUserId,
     gameId,
-  ).catch((err) => console.error("[Journal] Failed to persist message context:", err));
+  ).catch((err) => console.error(formatStructuredLog({
+    context: "Journal",
+    event: "persist_context_failed",
+    error: err instanceof Error ? err.message : String(err),
+  })));
 }
 
 export async function refreshJournalMessages(
@@ -506,7 +515,11 @@ export async function refreshJournalMessages(
     if (now - ctx.createdAt > NOW_PLAYING_JOURNAL_CONTEXT_TTL_MS) {
       nowPlayingJournalContexts.delete(key);
       await Member.deleteJournalMessageContext(ctx.channelId, ctx.messageId)
-        .catch((err) => console.error("[Journal] Failed to delete expired context:", err));
+        .catch((err) => console.error(formatStructuredLog({
+          context: "Journal",
+          event: "delete_expired_context_failed",
+          error: err instanceof Error ? err.message : String(err),
+        })));
       continue;
     }
     const existing = latestByChannel.get(ctx.channelId);
@@ -522,7 +535,11 @@ export async function refreshJournalMessages(
       const key = `${ctx.channelId}:${ctx.messageId}`;
       nowPlayingJournalContexts.delete(key);
       await Member.deleteJournalMessageContext(ctx.channelId, ctx.messageId)
-        .catch((err) => console.error("[Journal] Failed to delete unreachable context:", err));
+        .catch((err) => console.error(formatStructuredLog({
+          context: "Journal",
+          event: "delete_unreachable_context_failed",
+          error: err instanceof Error ? err.message : String(err),
+        })));
       continue;
     }
     const message = await channel.messages.fetch(ctx.messageId).catch(() => null);
@@ -530,7 +547,11 @@ export async function refreshJournalMessages(
       const key = `${ctx.channelId}:${ctx.messageId}`;
       nowPlayingJournalContexts.delete(key);
       await Member.deleteJournalMessageContext(ctx.channelId, ctx.messageId)
-        .catch((err) => console.error("[Journal] Failed to delete missing context:", err));
+        .catch((err) => console.error(formatStructuredLog({
+          context: "Journal",
+          event: "delete_missing_context_failed",
+          error: err instanceof Error ? err.message : String(err),
+        })));
       continue;
     }
     const guildId = channel.isDMBased() ? null : (channel as any).guildId as string;
@@ -551,7 +572,11 @@ export async function refreshJournalMessages(
     await message.edit({
       components: payload.components as any[],
       files: payload.files,
-    }).catch((err) => console.error("[Journal] Failed to refresh public message:", err));
+    }).catch((err) => console.error(formatStructuredLog({
+      context: "Journal",
+      event: "refresh_public_message_failed",
+      error: err instanceof Error ? err.message : String(err),
+    })));
   }
 }
 
@@ -5338,7 +5363,11 @@ export class NowPlayingCommand {
       if (now - context.createdAt > NOW_PLAYING_JOURNAL_CONTEXT_TTL_MS) {
         nowPlayingJournalContexts.delete(key);
         await Member.deleteJournalMessageContext(context.channelId, context.messageId)
-          .catch((err) => console.error("[Journal] Failed to delete expired context from DB:", err));
+          .catch((err) => console.error(formatStructuredLog({
+            context: "Journal",
+            event: "delete_expired_context_from_db_failed",
+            error: err instanceof Error ? err.message : String(err),
+          })));
         continue;
       }
       if (context.channelId !== channelId) continue;
@@ -5357,7 +5386,11 @@ export class NowPlayingCommand {
     if (!channel?.isTextBased()) {
       nowPlayingJournalContexts.delete(latestKey);
       await Member.deleteJournalMessageContext(latestContext.channelId, latestContext.messageId)
-        .catch((err) => console.error("[Journal] Failed to delete unreachable context from DB:", err));
+        .catch((err) => console.error(formatStructuredLog({
+          context: "Journal",
+          event: "delete_unreachable_context_from_db_failed",
+          error: err instanceof Error ? err.message : String(err),
+        })));
       return;
     }
 
@@ -5365,14 +5398,22 @@ export class NowPlayingCommand {
     if (!message) {
       nowPlayingJournalContexts.delete(latestKey);
       await Member.deleteJournalMessageContext(latestContext.channelId, latestContext.messageId)
-        .catch((err) => console.error("[Journal] Failed to delete missing context from DB:", err));
+        .catch((err) => console.error(formatStructuredLog({
+          context: "Journal",
+          event: "delete_missing_context_from_db_failed",
+          error: err instanceof Error ? err.message : String(err),
+        })));
       return;
     }
 
     await message.delete().catch(() => null);
     nowPlayingJournalContexts.delete(latestKey);
     await Member.deleteJournalMessageContext(latestContext.channelId, latestContext.messageId)
-      .catch((err) => console.error("[Journal] Failed to delete context from DB after message delete:", err));
+      .catch((err) => console.error(formatStructuredLog({
+        context: "Journal",
+        event: "delete_context_from_db_after_message_delete_failed",
+        error: err instanceof Error ? err.message : String(err),
+      })));
   }
 
   private async trackJournalReply(
