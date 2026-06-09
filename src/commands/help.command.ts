@@ -20,6 +20,7 @@ import { buildSuperAdminHelpResponse, isSuperAdmin } from "./superadmin.command.
 import { buildTextReply } from "../functions/ComponentsV2Utils.js";
 import { safeDeferReply, safeReply, safeUpdate } from "../functions/InteractionUtils.js";
 import { decodeBase64Url, encodeBase64Url } from "../functions/CustomIdUtils.js";
+import { GIVEAWAY_HUB_CHANNEL_ID } from "../config/channels.js";
 
 type HelpTopicId =
   | "noms"
@@ -261,7 +262,7 @@ const HELP_TOPICS: HelpTopic[] = [
     syntax:
       "Syntax: /gamegiveaway (returns a link to the hub list).",
     notes:
-      "The giveaway list is kept in <#1461101188572254351> with claim/donate buttons. " +
+      `The giveaway list is kept in <#${GIVEAWAY_HUB_CHANNEL_ID}> with claim/donate buttons. ` +
       "Claims are handled from the list menu; keys are sent by DM.",
   },
   {
