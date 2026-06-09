@@ -5,7 +5,7 @@ import { buildTextReply } from "../../functions/ComponentsV2Utils.js";
 import { listNominationsForRound } from "../../classes/Nomination.js";
 import { getUpcomingNominationWindow } from "../../functions/NominationWindow.js";
 import { calculateNextVoteDateEt } from "../../functions/VoteDateUtils.js";
-import { ADMIN_CHANNEL_ID } from "../../config/channels.js";
+import { ADMIN_CHANNEL_ID, ANNOUNCEMENT_CHANNEL_NAME } from "../../config/channels.js";
 import { promptUserForInput } from "./admin-prompt.utils.js";
 import { VOTING_TITLE_MAX_LEN } from "./admin.types.js";
 
@@ -58,7 +58,7 @@ export async function handleVotingSetup(interaction: CommandInteraction): Promis
         timeLimitOutput = diff.toFormat("h'h'm'm's's");
       }
 
-      return `/poll question:${question} answers:${answersJoined} max_select:${maxSelect} start:${startOutput} time_limit:${timeLimitOutput} vote_change:Yes realtime_results:🙈 Hidden privacy:🤐 Semi-private role_required:@members channel:#announcements name:${pollName} final_reveal:Yes chart_emoji:🟩 voting_button:Full Answer`;
+      return `/poll question:${question} answers:${answersJoined} max_select:${maxSelect} start:${startOutput} time_limit:${timeLimitOutput} vote_change:Yes realtime_results:🙈 Hidden privacy:🤐 Semi-private role_required:@members channel:#${ANNOUNCEMENT_CHANNEL_NAME} name:${pollName} final_reveal:Yes chart_emoji:🟩 voting_button:Full Answer`;
     };
 
     const gotmAnswers = gotmNoms.map((n) => n.gameTitle).map((t) => t.trim()).filter(Boolean);
