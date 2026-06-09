@@ -104,6 +104,7 @@ import { isPositiveInt, isValidPlaytimeHours } from "../utilities/ValidationUtil
 import { formatStructuredLog } from "../utilities/LogUtils.js";
 import { DISCORD_AUTOCOMPLETE_DESC_MAX, DISCORD_SELECT_LABEL_MAX } from "../config/textLimits.js";
 import { parseCustomIdSegments } from "../utilities/CustomIdUtils.js";
+import { safeIgnore } from "../utilities/AsyncUtils.js";
 
 const MAX_NOW_PLAYING_NOTE_LEN = 500;
 const NOW_PLAYING_SEARCH_LIMIT = 10;
@@ -812,7 +813,7 @@ export class NowPlayingCommand {
     const replacedCurrentChannelMessage = !ephemeral && interaction.channelId
       ? await this.replaceNowPlayingMessageInCurrentChannel(interaction, interaction.user.id)
       : false;
-    await this.refreshNowPlayingListFromContext(interaction, interaction.user.id).catch(() => {});
+    safeIgnore(this.refreshNowPlayingListFromContext(interaction, interaction.user.id));
     if (replacedCurrentChannelMessage) {
       return;
     }
@@ -1698,7 +1699,7 @@ export class NowPlayingCommand {
     }
 
     if (session.removeFromNowPlaying) {
-      await Member.removeNowPlaying(session.userId, game.id).catch(() => {});
+      safeIgnore(Member.removeNowPlaying(session.userId, game.id));
     }
 
     if (session.announce) {
@@ -1713,7 +1714,7 @@ export class NowPlayingCommand {
     }
 
     if (session.removeFromNowPlaying) {
-      await this.refreshNowPlayingListFromContext(interaction, session.userId).catch(() => {});
+      safeIgnore(this.refreshNowPlayingListFromContext(interaction, session.userId));
     }
 
     if (session.returnToList) {
@@ -2081,7 +2082,7 @@ export class NowPlayingCommand {
       modalRows.push(new ActionRowBuilder<TextInputBuilder>().addComponents(noteInput));
     }
     modal.addComponents(...modalRows);
-    await interaction.showModal(modal).catch(() => {});
+    safeIgnore(interaction.showModal(modal));
   }
 
   @SelectMenuComponent({ id: /^nowplaying-add-select:.+$/ })
@@ -2735,7 +2736,7 @@ export class NowPlayingCommand {
       return;
     }
 
-    await this.refreshNowPlayingListFromContext(interaction, ownerId).catch(() => {});
+    safeIgnore(this.refreshNowPlayingListFromContext(interaction, ownerId));
     await this.returnToNowPlayingEditMenu(interaction, ownerId);
   }
 
@@ -2933,10 +2934,10 @@ export class NowPlayingCommand {
       const container = new ContainerBuilder().addTextDisplayComponents(
         new TextDisplayBuilder().setContent("Could not update the sort form right now."),
       );
-      await safeUpdate(interaction, {
+      safeIgnore(safeUpdate(interaction, {
         components: [container],
         flags: buildComponentsV2Flags(isEphemeral),
-      }).catch(() => {});
+      }));
     }
   }
 
@@ -3018,7 +3019,7 @@ export class NowPlayingCommand {
       return;
     }
 
-    await this.refreshNowPlayingListFromContext(interaction, ownerId).catch(() => {});
+    safeIgnore(this.refreshNowPlayingListFromContext(interaction, ownerId));
     await this.returnToNowPlayingEditMenu(interaction, ownerId);
   }
 
@@ -3103,14 +3104,14 @@ export class NowPlayingCommand {
             components: dmComponents,
             flags: buildComponentsV2Flags(false),
           });
-          await interaction.deleteReply().catch(() => {});
+          safeIgnore(interaction.deleteReply());
           return;
         } catch {
           // Fall through to existing fallback response if DM message edit fails.
         }
       }
       if (refreshed) {
-        await interaction.deleteReply().catch(() => {});
+        safeIgnore(interaction.deleteReply());
         return;
       }
       const list = await Member.getNowPlaying(ownerId);
@@ -3193,10 +3194,10 @@ export class NowPlayingCommand {
     }
 
     if (choice === "no") {
-      await safeUpdate(interaction, {
+      safeIgnore(safeUpdate(interaction, {
         content: "Cancelled.",
         components: [],
-      }).catch(() => {});
+      }));
       return;
     }
 
@@ -3207,10 +3208,10 @@ export class NowPlayingCommand {
     }
 
     const updated = await Member.updateNowPlayingNote(ownerId, gameId, null);
-    await safeUpdate(interaction, {
+    safeIgnore(safeUpdate(interaction, {
       content: updated ? "Note deleted." : "Could not update that entry.",
       components: [],
-    }).catch(() => {});
+    }));
   }
 
   @ButtonComponent({ id: /^np-remove:[^:]+:\d+$/ })
@@ -3256,7 +3257,7 @@ export class NowPlayingCommand {
         });
         return;
       }
-      await this.refreshNowPlayingListFromContext(interaction, ownerId).catch(() => {});
+      safeIgnore(this.refreshNowPlayingListFromContext(interaction, ownerId));
 
       const entries = getDisplayNowPlayingEntries(await Member.getNowPlaying(ownerId));
       if (!entries.length) {
@@ -4023,7 +4024,7 @@ export class NowPlayingCommand {
       return;
     }
     setNowPlayingListContext(ownerId, interaction.message);
-    await interaction.showModal(this.buildNowPlayingAddModal()).catch(() => {});
+    safeIgnore(interaction.showModal(this.buildNowPlayingAddModal()));
   }
 
   @ButtonComponent({ id: /^nowplaying-list-edit-platform:\d+$/ })
@@ -4120,7 +4121,7 @@ export class NowPlayingCommand {
         return;
       }
     }
-    await this.refreshNowPlayingListFromContext(interaction, ownerId).catch(() => {});
+    safeIgnore(this.refreshNowPlayingListFromContext(interaction, ownerId));
     await this.returnToNowPlayingEditMenu(interaction, ownerId);
   }
 
@@ -4784,9 +4785,9 @@ export class NowPlayingCommand {
       anyInteraction.deferred ?? anyInteraction.replied,
     );
     if (isAcked) {
-      await safeReply(interaction, { components: [row], flags }).catch(() => {});
+      safeIgnore(safeReply(interaction, { components: [row], flags }));
     } else {
-      await safeUpdate(interaction, { components: [row], flags }).catch(() => {});
+      safeIgnore(safeUpdate(interaction, { components: [row], flags }));
     }
   }
 
@@ -4973,13 +4974,13 @@ export class NowPlayingCommand {
             "Failed to remove that game (it may have been removed already).",
           ),
         );
-        await safeReply(interaction, {
+        safeIgnore(safeReply(interaction, {
           components: [container],
           flags: buildComponentsV2Flags(isEphemeral),
-        }).catch(() => {});
+        }));
         return;
       }
-      await this.refreshNowPlayingListFromContext(interaction, ownerId).catch(() => {});
+      safeIgnore(this.refreshNowPlayingListFromContext(interaction, ownerId));
       const entries = getDisplayNowPlayingEntries(await Member.getNowPlaying(ownerId));
       if (!entries.length) {
         const container = new ContainerBuilder().addTextDisplayComponents(
@@ -4990,10 +4991,10 @@ export class NowPlayingCommand {
           interaction.guildId,
           [container],
         );
-        await safeReply(interaction, {
+        safeIgnore(safeReply(interaction, {
           components: pmComponents,
           flags: buildComponentsV2Flags(isEphemeral),
-        }).catch(() => {});
+        }));
         return;
       }
       const includeImages = interaction.guildId != null;
@@ -5012,10 +5013,10 @@ export class NowPlayingCommand {
         interaction.guildId,
         components,
       );
-      await safeReply(interaction, {
+      safeIgnore(safeReply(interaction, {
         ...this.buildComponentPayload(pmComponents as any, files),
         flags: buildComponentsV2Flags(isEphemeral),
-      }).catch(() => {});
+      }));
     } catch (err: any) {
       const msg = extractErrorMessage(err);
       const container = new ContainerBuilder().addTextDisplayComponents(
@@ -5023,10 +5024,10 @@ export class NowPlayingCommand {
           safeV2TextContent(`Could not remove from Now Playing: ${msg}`, 1000),
         ),
       );
-      await safeReply(interaction, {
+      safeIgnore(safeReply(interaction, {
         components: [container],
         flags: buildComponentsV2Flags(isEphemeral),
-      }).catch(() => {});
+      }));
     }
   }
 
@@ -5850,10 +5851,10 @@ export class NowPlayingCommand {
           const container = new ContainerBuilder().addTextDisplayComponents(
             new TextDisplayBuilder().setContent(safeV2TextContent(msg, 1000)),
           );
-          await safeReply(sel, {
+          safeIgnore(safeReply(sel, {
             components: [container],
             flags: buildComponentsV2Flags(true),
-          }).catch(() => {});
+          }));
         }
       });
 

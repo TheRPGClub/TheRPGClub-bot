@@ -34,6 +34,7 @@ import { COMPLETION_REACTION_DEV_CHANNEL_ID } from "../config/channels.js";
 import { isPositiveInt } from "../utilities/ValidationUtils.js";
 import { DISCORD_AUTOCOMPLETE_DESC_MAX, DISCORD_SELECT_LABEL_MAX } from "../config/textLimits.js";
 import { parseCustomIdSegments } from "../utilities/CustomIdUtils.js";
+import { safeIgnore } from "../utilities/AsyncUtils.js";
 
 const PUSH_PIN_EMOJI = "📌";
 const PLUS_EMOJI = "➕";
@@ -190,9 +191,9 @@ export class MessageReactionAdd {
       const content = message.content ?? "";
       const query = parseCompletionQuery(content);
       if (!query) {
-        await user.send({
+        safeIgnore(user.send({
           content: "That message has no text to use as a game title.",
-        }).catch(() => {});
+        }));
         return;
       }
 
@@ -215,9 +216,9 @@ export class MessageReactionAdd {
         .fetch(COMPLETION_REACTION_DEV_CHANNEL_ID)
         .catch(() => null);
       if (!targetChannel || !("send" in targetChannel)) {
-        await user.send({
+        safeIgnore(user.send({
           content: "Bot dev channel not found. Cannot start completion flow.",
-        }).catch(() => {});
+        }));
         return;
       }
       const prompt = await targetChannel.send({
@@ -233,7 +234,7 @@ export class MessageReactionAdd {
           promptChannelId: null,
         }, user.id),
         components: [row, titleRow],
-      }).catch(() => {});
+      }).catch(() => null);
       const session = completionReactionSessions.get(sessionId);
       if (session) {
         session.promptMessageId = prompt?.id ?? null;
@@ -254,9 +255,9 @@ export class MessageReactionAdd {
       if (!limitReached) return;
       const channel: any = message.channel;
       if (channel && typeof channel.send === "function") {
-        await channel.send({
+        safeIgnore(channel.send({
           content: "Pin limit reached for this channel. Unpin something to pin this message.",
-        }).catch(() => {});
+        }));
       }
     }
   }
@@ -270,25 +271,24 @@ export class MessageReactionAdd {
     const [sessionId] = segs;
     const session = completionReactionSessions.get(sessionId);
     if (!session) {
-      await safeUpdate(interaction, {
+      safeIgnore(safeUpdate(interaction, {
         content: "This completion prompt has expired.",
         components: [],
-      }).catch(() => {});
+      }));
       return;
     }
 
     if (interaction.user.id !== session.requesterId) {
-      await safeReply(interaction, buildTextReply("This completion prompt is not for you.", false))
-        .catch(() => {});
+      safeIgnore(safeReply(interaction, buildTextReply("This completion prompt is not for you.", false)));
       return;
     }
 
     const value = interaction.values?.[0];
     if (!value || !COMPLETION_TYPES.includes(value as CompletionType)) {
-      await safeUpdate(interaction, {
+      safeIgnore(safeUpdate(interaction, {
         content: "Invalid completion type.",
         components: [],
-      }).catch(() => {});
+      }));
       completionReactionSessions.delete(sessionId);
       return;
     }
@@ -313,10 +313,10 @@ export class MessageReactionAdd {
       description: `GameDB #${game.id}`,
     }));
     const row = buildCompletionGameRow(sessionId, options);
-    await safeUpdate(interaction, {
+    safeIgnore(safeUpdate(interaction, {
       content: `Select the game for "${session.query}".`,
       components: [row, buildCompletionTitleRow(sessionId)],
-    }).catch(() => {});
+    }));
   }
    
   @SelectMenuComponent({ id: /^completion-react-game:.+$/ })
@@ -328,26 +328,25 @@ export class MessageReactionAdd {
     const [sessionId] = segs;
     const session = completionReactionSessions.get(sessionId);
     if (!session) {
-      await safeUpdate(interaction, {
+      safeIgnore(safeUpdate(interaction, {
         content: "This completion prompt has expired.",
         components: [],
-      }).catch(() => {});
+      }));
       return;
     }
 
     if (interaction.user.id !== session.requesterId) {
-      await safeReply(interaction, buildTextReply("This completion prompt is not for you.", false))
-        .catch(() => {});
+      safeIgnore(safeReply(interaction, buildTextReply("This completion prompt is not for you.", false)));
       return;
     }
 
     const value = interaction.values?.[0];
     const gameId = value ? Number(value) : Number.NaN;
     if (!isPositiveInt(gameId)) {
-      await safeUpdate(interaction, {
+      safeIgnore(safeUpdate(interaction, {
         content: "Invalid game selection.",
         components: [],
-      }).catch(() => {});
+      }));
       completionReactionSessions.delete(sessionId);
       return;
     }
@@ -364,16 +363,15 @@ export class MessageReactionAdd {
     const [sessionId] = segs;
     const session = completionReactionPlatformSessions.get(sessionId);
     if (!session) {
-      await safeUpdate(interaction, {
+      safeIgnore(safeUpdate(interaction, {
         content: "This completion prompt has expired.",
         components: [],
-      }).catch(() => {});
+      }));
       return;
     }
 
     if (interaction.user.id !== session.requesterId) {
-      await safeReply(interaction, buildTextReply("This completion prompt is not for you.", false))
-        .catch(() => {});
+      safeIgnore(safeReply(interaction, buildTextReply("This completion prompt is not for you.", false)));
       return;
     }
 
@@ -391,10 +389,10 @@ export class MessageReactionAdd {
       session.platforms.some((platform) => platform.id === platformId)
     );
     if (!valid) {
-      await safeUpdate(interaction, {
+      safeIgnore(safeUpdate(interaction, {
         content: "Invalid platform selection.",
         components: [],
-      }).catch(() => {});
+      }));
       completionReactionPlatformSessions.delete(sessionId);
       completionReactionSessions.delete(sessionId);
       return;
@@ -403,10 +401,10 @@ export class MessageReactionAdd {
     const completionType = session.completionType ?? (COMPLETION_TYPES[0] as CompletionType);
     const game = await Game.getGameById(session.gameId);
     if (!game) {
-      await safeUpdate(interaction, {
+      safeIgnore(safeUpdate(interaction, {
         content: "Selected game was not found in GameDB.",
         components: [],
-      }).catch(() => {});
+      }));
       completionReactionPlatformSessions.delete(sessionId);
       completionReactionSessions.delete(sessionId);
       return;
@@ -428,17 +426,17 @@ export class MessageReactionAdd {
       });
     } catch (err: any) {
       const msg = err?.message ?? "Failed to save completion.";
-      await safeUpdate(interaction, {
+      safeIgnore(safeUpdate(interaction, {
         content: `Could not save completion: ${msg}`,
         components: [],
-      }).catch(() => {});
+      }));
       completionReactionPlatformSessions.delete(sessionId);
       completionReactionSessions.delete(sessionId);
       return;
     }
 
     const completedAtUnix = Math.floor(session.completedAt.getTime() / 1000);
-    await safeUpdate(interaction, {
+    safeIgnore(safeUpdate(interaction, {
       content: [
         "Completion added.",
         `Member: <@${session.targetUserId}>`,
@@ -448,7 +446,7 @@ export class MessageReactionAdd {
         `Message: ${session.messageUrl}`,
       ].join("\n"),
       components: [],
-    }).catch(() => {});
+    }));
 
     completionReactionPlatformSessions.delete(sessionId);
     completionReactionSessions.delete(sessionId);
@@ -463,14 +461,12 @@ export class MessageReactionAdd {
     const [sessionId] = segs;
     const session = completionReactionSessions.get(sessionId);
     if (!session) {
-      await safeReply(interaction, buildTextReply("This completion prompt has expired.", false))
-        .catch(() => {});
+        safeIgnore(safeReply(interaction, buildTextReply("This completion prompt has expired.", false)));
       return;
     }
 
     if (interaction.user.id !== session.requesterId) {
-      await safeReply(interaction, buildTextReply("This completion prompt is not for you.", false))
-        .catch(() => {});
+        safeIgnore(safeReply(interaction, buildTextReply("This completion prompt is not for you.", false)));
       return;
     }
 
@@ -494,7 +490,7 @@ export class MessageReactionAdd {
         ),
       );
 
-    await interaction.showModal(modal).catch(() => {});
+    safeIgnore(interaction.showModal(modal));
   }
    
   @ModalComponent({ id: /^completion-react-title-modal:.+$/ })
@@ -506,14 +502,12 @@ export class MessageReactionAdd {
     const [sessionId] = segs;
     const session = completionReactionSessions.get(sessionId);
     if (!session) {
-      await safeReply(interaction, buildTextReply("This completion prompt has expired.", true))
-        .catch(() => {});
+        safeIgnore(safeReply(interaction, buildTextReply("This completion prompt has expired.", true)));
       return;
     }
 
     if (interaction.user.id !== session.requesterId) {
-      await safeReply(interaction, buildTextReply("This completion prompt is not for you.", true))
-        .catch(() => {});
+        safeIgnore(safeReply(interaction, buildTextReply("This completion prompt is not for you.", true)));
       return;
     }
 
@@ -521,27 +515,26 @@ export class MessageReactionAdd {
       interaction.fields.getTextInputValue("completion-react-title-input"),
     );
     if (!newTitle) {
-      await safeReply(interaction, buildTextReply("Game title is required.", true))
-        .catch(() => {});
+        safeIgnore(safeReply(interaction, buildTextReply("Game title is required.", true)));
       return;
     }
 
     session.query = newTitle;
-    await safeDeferReply(interaction, { flags: MessageFlags.Ephemeral }).catch(() => {});
+    safeIgnore(safeDeferReply(interaction, { flags: MessageFlags.Ephemeral }));
     const channelId = session.promptChannelId;
     const messageId = session.promptMessageId;
     if (channelId && messageId) {
       const channel = await interaction.client.channels.fetch(channelId).catch(() => null);
       if (channel?.isTextBased()) {
-        await channel.messages.fetch(messageId)
-          .then((message) => message.edit({
+        safeIgnore(
+          channel.messages.fetch(messageId).then((message) => message.edit({
             content: buildCompletionPromptContent(session, session.requesterId),
             components: [buildCompletionTypeRow(sessionId), buildCompletionTitleRow(sessionId)],
-          }))
-          .catch(() => {});
+          })),
+        );
       }
     }
-    await interaction.deleteReply().catch(() => {});
+    safeIgnore(interaction.deleteReply());
   }
 
   private async saveCompletionFromReaction(
@@ -553,7 +546,7 @@ export class MessageReactionAdd {
       content: string,
       components: ActionRowBuilder<StringSelectMenuBuilder>[] = [],
     ): Promise<void> => {
-      await safeUpdate(interaction, { content, components }).catch(() => {});
+      safeIgnore(safeUpdate(interaction, { content, components }));
     };
 
     const game = await Game.getGameById(gameId);
@@ -599,19 +592,19 @@ export class MessageReactionAdd {
       searchRes = await igdbService.searchGames(session.query);
     } catch (err: any) {
       const msg = err?.message ?? "Failed to search IGDB.";
-      await safeUpdate(interaction, {
+      safeIgnore(safeUpdate(interaction, {
         content: `IGDB search failed: ${msg}`,
         components: [],
-      }).catch(() => {});
+      }));
       completionReactionSessions.delete(session.sessionId);
       return;
     }
 
     if (!searchRes.results.length) {
-      await safeUpdate(interaction, {
+      safeIgnore(safeUpdate(interaction, {
         content: `No IGDB results found for "${session.query}".`,
         components: [],
-      }).catch(() => {});
+      }));
       completionReactionSessions.delete(session.sessionId);
       return;
     }
@@ -622,27 +615,27 @@ export class MessageReactionAdd {
         if (!sel.deferred && !sel.replied) {
           await safeDeferUpdate(sel);
         }
-        await safeReply(sel, {
+        safeIgnore(safeReply(sel, {
           content: "Importing game details from IGDB...",
           components: [],
-        }).catch(() => {});
+        }));
         const imported = await this.importGameFromIgdb(igdbId);
         await this.saveCompletionFromReaction(sel, session, imported.gameId);
         completionReactionSessions.delete(session.sessionId);
       } catch (err: any) {
         const msg = err?.message ?? "Failed to import from IGDB.";
-        await safeReply(sel, {
+        safeIgnore(safeReply(sel, {
           content: msg,
           components: [],
-        }).catch(() => {});
+        }));
         completionReactionSessions.delete(session.sessionId);
       }
     });
 
-    await safeUpdate(interaction, {
+    safeIgnore(safeUpdate(interaction, {
       content: `No GameDB match. Select an IGDB result for "${session.query}".`,
       components: [...components, buildCompletionTitleRow(session.sessionId)],
-    }).catch(() => {});
+    }));
     session.promptMessageId = interaction.message?.id ?? session.promptMessageId;
     session.promptChannelId = interaction.channelId ?? session.promptChannelId;
   }
