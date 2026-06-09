@@ -100,7 +100,7 @@ import {
 } from "./now-playing-help.js";
 
 import { renderUsernameWithEmoji } from "../services/UserEmojiService.js";
-import { isPositiveInt } from "../utilities/ValidationUtils.js";
+import { isPositiveInt, isValidPlaytimeHours } from "../utilities/ValidationUtils.js";
 import { formatStructuredLog } from "../utilities/LogUtils.js";
 
 const MAX_NOW_PLAYING_NOTE_LEN = 500;
@@ -1427,10 +1427,7 @@ export class NowPlayingCommand {
     const finalPlaytimeHours = finalPlaytimeRaw
       ? Number(finalPlaytimeRaw)
       : null;
-    if (
-      finalPlaytimeHours !== null &&
-      (Number.isNaN(finalPlaytimeHours) || finalPlaytimeHours < 0)
-    ) {
+    if (finalPlaytimeHours !== null && !isValidPlaytimeHours(finalPlaytimeHours)) {
       const container = new ContainerBuilder().addTextDisplayComponents(
         new TextDisplayBuilder().setContent(
           "Final playtime must be a non-negative number of hours.",

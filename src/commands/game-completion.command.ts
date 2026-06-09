@@ -92,7 +92,7 @@ import {
 } from "./game-completion/completion.types.js";
 import Game from "../classes/Game.js";
 import Member from "../classes/Member.js";
-import { isPositiveInt } from "../utilities/ValidationUtils.js";
+import { isPositiveInt, isValidPlaytimeHours } from "../utilities/ValidationUtils.js";
 
 // Note: This is a simplified working version that delegates complex Completionator logic
 // to service files. The full implementation would import and delegate all handlers.
@@ -185,10 +185,7 @@ export class GameCompletionCommands {
       return;
     }
 
-    if (
-      finalPlaytimeHours !== undefined &&
-      (Number.isNaN(finalPlaytimeHours) || finalPlaytimeHours < 0)
-    ) {
+    if (finalPlaytimeHours !== undefined && !isValidPlaytimeHours(finalPlaytimeHours)) {
       await safeReply(interaction, "Final playtime must be a non-negative number of hours.");
       return;
     }
@@ -630,7 +627,7 @@ export class GameCompletionCommands {
     if (clearFinalPlaytime) {
       updates.finalPlaytimeHours = null;
     } else if (finalPlaytimeHours !== undefined) {
-      if (Number.isNaN(finalPlaytimeHours) || finalPlaytimeHours < 0) {
+      if (!isValidPlaytimeHours(finalPlaytimeHours)) {
         await safeReply(interaction, "Final playtime must be a non-negative number of hours.");
         return;
       }

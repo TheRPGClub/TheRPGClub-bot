@@ -48,7 +48,7 @@ import {
   saveCompletion,
 } from "../functions/CompletionHelpers.js";
 import { buildTextReply } from "../functions/ComponentsV2Utils.js";
-import { isPositiveInt } from "../utilities/ValidationUtils.js";
+import { isPositiveInt, isValidPlaytimeHours } from "../utilities/ValidationUtils.js";
 import { sleep } from "../utilities/DelayUtils.js";
 
 type CompletionAddContext = {
@@ -242,10 +242,7 @@ export class SuperAdmin {
       return;
     }
 
-    if (
-      finalPlaytimeHours !== undefined &&
-      (Number.isNaN(finalPlaytimeHours) || finalPlaytimeHours < 0)
-    ) {
+    if (finalPlaytimeHours !== undefined && !isValidPlaytimeHours(finalPlaytimeHours)) {
       await safeReply(interaction, buildTextReply("Final playtime must be a non-negative number of hours.", true));
       return;
     }
