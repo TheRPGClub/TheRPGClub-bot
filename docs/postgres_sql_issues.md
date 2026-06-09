@@ -6,7 +6,7 @@ schema migration or query redesign.
 
 ---
 
-## 2. `user_game_journal_prefs` -- table not in postgres schema
+## 1. `user_game_journal_prefs` -- table not in postgres schema
 
 **File:** `src/db/sql/member.sql.ts`
 **Affected functions:**
@@ -27,7 +27,7 @@ before these queries can work.
 
 ---
 
-## 3. `user_game_journal_entries` -- table not in postgres schema
+## 2. `user_game_journal_entries` -- table not in postgres schema
 
 **File:** `src/db/sql/member.sql.ts`
 **Affected functions:**
@@ -47,7 +47,7 @@ before these queries can work.
 
 ---
 
-## 4. `journal_message_contexts` -- table not in postgres schema
+## 3. `journal_message_contexts` -- table not in postgres schema
 
 **File:** `src/db/sql/member.sql.ts`
 **Affected functions:**
@@ -68,13 +68,11 @@ before these queries can work.
 
 The following issues were corrected in this same PR:
 
-| Query | Fix |
-| ----- | --- |
-| `searchMembers` (postgres) | Removed non-existent social columns from SELECT |
-| `getByUserId` (postgres) | Removed non-existent social columns from SELECT |
-| `updateMember` (postgres) | Removed non-existent social columns from SET clause |
-| `insertMember` (postgres) | Removed non-existent social columns from INSERT |
-| `getMembersWithPlatforms` (postgres) | Rewrote to JOIN `user_socials`/`social_platforms` |
+- `searchMembers` (postgres) -- removed non-existent social columns from SELECT
+- `getByUserId` (postgres) -- removed non-existent social columns from SELECT
+- `updateMember` (postgres) -- removed non-existent social columns from SET clause
+- `insertMember` (postgres) -- removed non-existent social columns from INSERT
+- `getMembersWithPlatforms` (postgres) -- rewrote to JOIN `user_socials`/`social_platforms`
 
 All five queries previously referenced `completionator_url`, `psn_username`,
 `xbl_username`, `nsw_friend_code`, and/or `steam_url` on `rpg_club_users`, which no
