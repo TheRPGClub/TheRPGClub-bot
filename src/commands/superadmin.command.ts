@@ -50,6 +50,7 @@ import {
 import { buildTextReply } from "../functions/ComponentsV2Utils.js";
 import { isPositiveInt, isValidPlaytimeHours } from "../utilities/ValidationUtils.js";
 import { sleep } from "../utilities/DelayUtils.js";
+import { DISCORD_SELECT_LABEL_MAX } from "../config/textLimits.js";
 
 type CompletionAddContext = {
   targetUserId: string;
@@ -365,7 +366,7 @@ export class SuperAdmin {
       superadminCompletionAddSessions.set(sessionId, ctx);
 
       const options = localResults.slice(0, 24).map((game) => ({
-        label: game.title.slice(0, 100),
+        label: game.title.slice(0, DISCORD_SELECT_LABEL_MAX),
         value: String(game.id),
         description: `GameDB #${game.id}`,
       }));
@@ -437,7 +438,7 @@ export class SuperAdmin {
       interaction.id,
     );
     const baseOptions = platformOptions.map((platform) => ({
-      label: platform.name.slice(0, 100),
+      label: platform.name.slice(0, DISCORD_SELECT_LABEL_MAX),
       value: String(platform.id),
     }));
     const options = [

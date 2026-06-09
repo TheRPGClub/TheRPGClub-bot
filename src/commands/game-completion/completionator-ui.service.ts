@@ -46,6 +46,7 @@ import {
 } from "../imports/import-scaffold.service.js";
 import { safeV2TextContent } from "../../functions/ComponentsV2Utils.js";
 import { buildCompletionatorChooseId } from "./completion-helpers.js";
+import { DISCORD_SELECT_LABEL_MAX } from "../../config/textLimits.js";
 
 export class CompletionatorUiService {
   buildCompletionatorBaseLines(
@@ -367,7 +368,7 @@ export class CompletionatorUiService {
       .setPlaceholder("Completion type")
       .addOptions(
         COMPLETION_TYPES.map((value: string) => ({
-          label: value.slice(0, 100),
+          label: value.slice(0, DISCORD_SELECT_LABEL_MAX),
           value,
           default: state.completionType === value,
         })),
@@ -415,7 +416,7 @@ export class CompletionatorUiService {
       a.name.localeCompare(b.name, "en", { sensitivity: "base" }),
     );
     const platformOptions = sortedPlatforms.map((platform) => ({
-      label: platform.name.slice(0, 100),
+      label: platform.name.slice(0, DISCORD_SELECT_LABEL_MAX),
       value: String(platform.id),
       default: state.platformId === platform.id,
     }));
@@ -719,7 +720,7 @@ export class CompletionatorUiService {
        
       .setCustomId("completionator-input")
       .setLabel(label.slice(0, 45))
-      .setPlaceholder((itemTitle ?? placeholder).slice(0, 100))
+      .setPlaceholder((itemTitle ?? placeholder).slice(0, DISCORD_SELECT_LABEL_MAX))
       .setStyle(TextInputStyle.Short)
       .setRequired(true);
     modal.addComponents(new ActionRowBuilder<TextInputBuilder>().addComponents(input));

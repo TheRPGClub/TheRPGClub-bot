@@ -73,6 +73,7 @@ import {
   JOURNAL_ALL_PAGE_SIZE as ALL_PAGE_SIZE,
   JOURNAL_SEARCH_PAGE_SIZE as SEARCH_PAGE_SIZE,
 } from "../config/pagination.js";
+import { DISCORD_SELECT_LABEL_MAX } from "../config/textLimits.js";
 
 const gjHmenu = new EphemeralOwnerMenu();
 
@@ -210,7 +211,7 @@ function buildListSelectRow(
   const pageEntries = entries.slice(start, start + LIST_PAGE_SIZE);
 
   const options = pageEntries.map((e) => ({
-    label: e.title.slice(0, 100),
+    label: e.title.slice(0, DISCORD_SELECT_LABEL_MAX),
     value: String(e.gameId),
     description: `${e.totalEntries} ${entryLabel(e.totalEntries)}`,
   }));
@@ -311,7 +312,7 @@ function buildAllSelectRow(
   const start = page * ALL_PAGE_SIZE;
   const pageSummaries = summaries.slice(start, start + ALL_PAGE_SIZE);
   const options = pageSummaries.map((s) => ({
-    label: (s.globalName ?? s.username ?? s.userId).slice(0, 100),
+    label: (s.globalName ?? s.username ?? s.userId).slice(0, DISCORD_SELECT_LABEL_MAX),
     value: s.userId,
     description: `${s.gameCount} ${gameLabel(s.gameCount)}`,
   }));
@@ -364,7 +365,7 @@ async function autocompleteJournalSearchGame(
   const results = await Game.searchGamesAutocomplete(query);
   await interaction.respond(
     results.slice(0, 25).map((game) => ({
-      name: formatGameTitleWithYear(game).slice(0, 100),
+      name: formatGameTitleWithYear(game).slice(0, DISCORD_SELECT_LABEL_MAX),
       value: String(game.id),
     })),
   );
@@ -935,7 +936,7 @@ export class GameJournalCommand {
       return;
     }
     const options = entries.map((e) => ({
-      label: (e.title ?? `Entry #${e.entryNumber}`).slice(0, 100),
+      label: (e.title ?? `Entry #${e.entryNumber}`).slice(0, DISCORD_SELECT_LABEL_MAX),
       value: String(e.entryId),
       description: formatTableDate(e.createdAt),
     }));

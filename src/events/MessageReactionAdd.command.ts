@@ -32,6 +32,7 @@ import { buildTextReply } from "../functions/ComponentsV2Utils.js";
 import { notifyUnknownCompletionPlatform } from "../functions/CompletionHelpers.js";
 import { COMPLETION_REACTION_DEV_CHANNEL_ID } from "../config/channels.js";
 import { isPositiveInt } from "../utilities/ValidationUtils.js";
+import { DISCORD_SELECT_LABEL_MAX } from "../config/textLimits.js";
 
 const PUSH_PIN_EMOJI = "📌";
 const PLUS_EMOJI = "➕";
@@ -304,7 +305,7 @@ export class MessageReactionAdd {
     }
 
     const options = matches.slice(0, 24).map((game) => ({
-      label: game.title.slice(0, 100),
+      label: game.title.slice(0, DISCORD_SELECT_LABEL_MAX),
       value: String(game.id),
       description: `GameDB #${game.id}`,
     }));
@@ -480,7 +481,7 @@ export class MessageReactionAdd {
             .setStyle(TextInputStyle.Short)
             .setRequired(true)
             .setMaxLength(100)
-            .setValue(session.query.slice(0, 100)),
+            .setValue(session.query.slice(0, DISCORD_SELECT_LABEL_MAX)),
         ),
       );
 
@@ -557,7 +558,7 @@ export class MessageReactionAdd {
     }
 
     const baseOptions = platforms.map((platform) => ({
-      label: platform.name.slice(0, 100),
+      label: platform.name.slice(0, DISCORD_SELECT_LABEL_MAX),
       value: String(platform.id),
     }));
     const platformOptions = [

@@ -50,6 +50,7 @@ import {
 import { trimTextDisplayContent } from "./gamedb-profile.service.js";
 import { updateGameProfileMessageById } from "./gamedb-profile.service.js";
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
+import { DISCORD_SELECT_LABEL_MAX } from "../../config/textLimits.js";
 
 const COMPLETION_WIZARD_SESSIONS = new Map<string, CompletionWizardSession>();
 
@@ -129,7 +130,7 @@ function buildCompletionPlatformOptions(
     a.name.localeCompare(b.name, "en", { sensitivity: "base" }),
   );
   const baseOptions = sortedPlatforms.map((platform) => ({
-    label: platform.name.slice(0, 100),
+    label: platform.name.slice(0, DISCORD_SELECT_LABEL_MAX),
     value: String(platform.id),
   }));
   return [
@@ -148,7 +149,7 @@ function buildCompletionWizardComponents(
     .setPlaceholder("Completion type")
     .addOptions(
       COMPLETION_TYPES.map((value) => ({
-        label: value.slice(0, 100),
+        label: value.slice(0, DISCORD_SELECT_LABEL_MAX),
         value,
         default: session.completionType === value,
       })),

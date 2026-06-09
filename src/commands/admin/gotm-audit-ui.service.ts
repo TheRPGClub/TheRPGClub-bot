@@ -12,6 +12,7 @@ import {
   GOTM_AUDIT_RESULT_LIMIT,
 } from "./admin.types.js";
 import { safeV2TextContent } from "../../functions/ComponentsV2Utils.js";
+import { DISCORD_SELECT_LABEL_MAX } from "../../config/textLimits.js";
 
 export function buildGotmAuditPromptContent(
   session: IGotmAuditImport,
@@ -67,9 +68,9 @@ export function buildGotmAuditPromptComponents(
       .setPlaceholder("Select a GameDB match")
       .addOptions(
         options.slice(0, GOTM_AUDIT_RESULT_LIMIT).map((opt, idx) => ({
-          label: opt.label.slice(0, 100),
+          label: opt.label.slice(0, DISCORD_SELECT_LABEL_MAX),
           value: String(opt.id),
-          description: opt.description?.slice(0, 100),
+          description: opt.description?.slice(0, DISCORD_SELECT_LABEL_MAX),
           default: idx === 0,
         })),
       );

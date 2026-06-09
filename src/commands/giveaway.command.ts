@@ -55,6 +55,7 @@ import { MEMBER_ROLE_ID } from "../config/roles.js";
 import { isPositiveInt } from "../utilities/ValidationUtils.js";
 import { COLOR_SUCCESS } from "../config/colors.js";
 import { CLAIM_MENU_CHUNK_SIZE } from "../config/pagination.js";
+import { DISCORD_SELECT_LABEL_MAX } from "../config/textLimits.js";
 
 const MAX_TITLE_LENGTH = 200;
 const MAX_PLATFORM_LENGTH = 50;
@@ -93,7 +94,7 @@ function buildKeySelectMenus(
       continue;
     }
     const options = chunk.map((key) => ({
-      label: key.gameTitle.slice(0, 100),
+      label: key.gameTitle.slice(0, DISCORD_SELECT_LABEL_MAX),
       value: String(key.keyId),
     }));
     const range = getKeyRangeLabel(chunk);

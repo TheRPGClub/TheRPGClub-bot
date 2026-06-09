@@ -13,6 +13,7 @@ import { safeDeferReply, safeReply, sanitizeOptionalInput, sanitizeUserInput } f
   "../functions/InteractionUtils.js";
 import { buildTextReply } from "../functions/ComponentsV2Utils.js";
 import { formatGameTitleWithYear } from "../functions/GameTitleAutocompleteUtils.js";
+import { DISCORD_SELECT_LABEL_MAX } from "../config/textLimits.js";
 
 const DEFAULT_FIRST_POST_PREFIX = "Thread created by";
 
@@ -34,7 +35,7 @@ async function autocompleteCreateThreadTitle(
   const results = await Game.searchGamesAutocomplete(query);
   await interaction.respond(
     results.slice(0, 25).map((game) => ({
-      name: formatGameTitleWithYear(game).slice(0, 100),
+      name: formatGameTitleWithYear(game).slice(0, DISCORD_SELECT_LABEL_MAX),
       value: String(game.id),
     })),
   );
@@ -58,8 +59,8 @@ async function autocompleteCreateThreadTag(
     .filter((tag) => !query || tag.name.toLowerCase().includes(query))
     .slice(0, 25)
     .map((tag) => ({
-      name: tag.name.slice(0, 100),
-      value: tag.name.slice(0, 100),
+      name: tag.name.slice(0, DISCORD_SELECT_LABEL_MAX),
+      value: tag.name.slice(0, DISCORD_SELECT_LABEL_MAX),
     }));
   await interaction.respond(filtered);
 }
@@ -166,7 +167,7 @@ export class CreateThreadCommand {
     const thread = await forum.threads.create({
       appliedTags: [selectedTag.id],
       message: messagePayload,
-      name: game.title.slice(0, 100),
+      name: game.title.slice(0, DISCORD_SELECT_LABEL_MAX),
     });
     await upsertThreadRecord({
       createdAt: thread.createdAt ?? new Date(),
@@ -175,7 +176,7 @@ export class CreateThreadCommand {
       lastSeenAt: null,
       skipLinking: "Y",
       threadId: thread.id,
-      threadName: thread.name ?? game.title.slice(0, 100),
+      threadName: thread.name ?? game.title.slice(0, DISCORD_SELECT_LABEL_MAX),
     });
     await setThreadGameLink(thread.id, game.id);
 
