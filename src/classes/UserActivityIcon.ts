@@ -1,10 +1,6 @@
 import type { Activity } from "discord.js";
-import { oraQuery, oraTransaction } from "../db/SqlManager.js";
-import { getDialect } from "../db/dialect.js";
-import { getSql } from "../db/SqlManager.js";
+import { dbQuery, dbTransaction, dbMutateConn } from "../db/SqlManager.js";
 import { UserActivityIconSql } from "../db/sql/index.js";
-
-const dialect = getDialect();
 
 export type IUserActivityIconRow = {
   userId: string;
@@ -107,9 +103,9 @@ export default class UserActivityIcon {
     const records = collectActivityRecords(activities);
     if (!records.length) return;
 
-    await oraTransaction(async (conn) => {
+    await dbTransaction(async (conn) => {
       for (const record of records) {
-        await conn.execute(getSql(UserActivityIconSql.mergeActivity, dialect), {
+        await dbMutateConn(conn, UserActivityIconSql.mergeActivity, {
           userId,
           username,
           activityName: record.activityName,
@@ -162,8 +158,8 @@ export default class UserActivityIcon {
       userGroupClauses.push(`USER_ID IN (${groupKeys.join(", ")})`);
     }
 
-    return oraQuery(
-      UserActivityIconSql.getRecentForUsers(userGroupClauses.join(" OR "))[dialect],
+    return dbQuery(
+      UserActivityIconSql.getRecentForUsers(userGroupClauses.join(" OR ")),
       binds,
       (row: {
         USER_ID: string;

@@ -1,13 +1,9 @@
 import oracledb from "oracledb";
 import {
-  dbQuery, dbMutate,
-  oraQuery, oraMutate, oraWithConnection, oraTransaction,
-  getSql,
+  dbQuery, dbMutate, dbInsert, dbTransaction, dbMutateConn, dbWithConnection,
 } from "../db/SqlManager.js";
 import { getDialect } from "../db/dialect.js";
 import { SteamCollectionImportSql } from "../db/sql/index.js";
-
-const dialect = getDialect();
 
 export type SteamCollectionImportStatus = "ACTIVE" | "PAUSED" | "COMPLETED" | "CANCELED";
 export type SteamCollectionImportItemStatus =
@@ -183,28 +179,22 @@ export async function createSteamCollectionImportSession(params: {
   steamProfileRef: string | null;
   sourceProfileName: string | null;
 }): Promise<ISteamCollectionImport> {
-  return oraWithConnection(async (conn) => {
-    const insert = await oraMutate(
-      getSql(SteamCollectionImportSql.createImport, dialect),
-      {
-        userId: params.userId,
-        totalCount: params.totalCount,
-        steamId64: params.steamId64,
-        steamProfileRef: params.steamProfileRef,
-        sourceProfileName: params.sourceProfileName,
-        id: { dir: oracledb.BIND_OUT, type: oracledb.NUMBER },
-      },
-      conn,
-    );
-    await conn.commit();
+  const id = await dbInsert(
+    SteamCollectionImportSql.createImport,
+    {
+      userId: params.userId,
+      totalCount: params.totalCount,
+      steamId64: params.steamId64,
+      steamProfileRef: params.steamProfileRef,
+      sourceProfileName: params.sourceProfileName,
+    },
+    "id",
+  );
+  if (!id) throw new Error("Failed to create Steam collection import session.");
 
-    const id = Number((insert.outBinds as { id?: number[] }).id?.[0] ?? 0);
-    if (!id) throw new Error("Failed to create Steam collection import session.");
-
-    const session = await getSteamCollectionImportById(id, conn);
-    if (!session) throw new Error("Failed to load Steam collection import session.");
-    return session;
-  });
+  const session = await getSteamCollectionImportById(id);
+  if (!session) throw new Error("Failed to load Steam collection import session.");
+  return session;
 }
 
 export async function insertSteamCollectionImportItems(
@@ -223,38 +213,28 @@ export async function insertSteamCollectionImportItems(
 ): Promise<void> {
   if (!items.length) return;
 
-  await oraTransaction(async (conn) => {
+  await dbTransaction(async (conn) => {
     for (const item of items) {
-      await oraMutate(
-        getSql(SteamCollectionImportSql.insertItem, dialect),
-        {
-          importId,
-          rowIndex: item.rowIndex,
-          steamAppId: item.steamAppId,
-          steamAppName: item.steamAppName,
-          playtimeForeverMin: item.playtimeForeverMin,
-          playtimeWindowsMin: item.playtimeWindowsMin,
-          playtimeMacMin: item.playtimeMacMin,
-          playtimeLinuxMin: item.playtimeLinuxMin,
-          playtimeDeckMin: item.playtimeDeckMin,
-          lastPlayedAt: item.lastPlayedAt,
-        },
-        conn,
-      );
+      await dbMutateConn(conn, SteamCollectionImportSql.insertItem, {
+        importId,
+        rowIndex: item.rowIndex,
+        steamAppId: item.steamAppId,
+        steamAppName: item.steamAppName,
+        playtimeForeverMin: item.playtimeForeverMin,
+        playtimeWindowsMin: item.playtimeWindowsMin,
+        playtimeMacMin: item.playtimeMacMin,
+        playtimeLinuxMin: item.playtimeLinuxMin,
+        playtimeDeckMin: item.playtimeDeckMin,
+        lastPlayedAt: item.lastPlayedAt,
+      });
     }
   });
 }
 
 export async function getSteamCollectionImportById(
   importId: number,
-  existingConnection?: oracledb.Connection,
 ): Promise<ISteamCollectionImport | null> {
-  const rows = await oraQuery(
-    getSql(SteamCollectionImportSql.getImportById, dialect),
-    { importId },
-    mapImport,
-    existingConnection,
-  );
+  const rows = await dbQuery(SteamCollectionImportSql.getImportById, { importId }, mapImport);
   return rows[0] ?? null;
 }
 
@@ -290,32 +270,33 @@ export async function updateSteamCollectionImportIndex(
 }
 
 async function fetchItemWithJsonCol(
-  sql: string,
+  entry: { oracle: string; postgres: string },
   binds: Record<string, string | number>,
 ): Promise<ISteamCollectionImportItem | null> {
-  return oraWithConnection(async (conn) => {
-    const result = await conn.execute<ItemRow>(sql, binds, {
-      outFormat: oracledb.OUT_FORMAT_OBJECT,
-      fetchInfo: { MATCH_CANDIDATE_JSON: { type: oracledb.STRING } },
-    });
-    const row = result.rows?.[0];
-    return row ? mapItem(row) : null;
+  return dbWithConnection(async (conn) => {
+    if (getDialect() === "oracle") {
+      const result = await (conn as oracledb.Connection).execute<ItemRow>(entry.oracle, binds, {
+        outFormat: oracledb.OUT_FORMAT_OBJECT,
+        fetchInfo: { MATCH_CANDIDATE_JSON: { type: oracledb.STRING } },
+      });
+      const row = result.rows?.[0];
+      return row ? mapItem(row) : null;
+    }
+    const rows = await dbQuery(entry, binds, mapItem);
+    return rows[0] ?? null;
   });
 }
 
 export async function getSteamCollectionImportItemById(
   itemId: number,
 ): Promise<ISteamCollectionImportItem | null> {
-  return fetchItemWithJsonCol(getSql(SteamCollectionImportSql.getItemById, dialect), { itemId });
+  return fetchItemWithJsonCol(SteamCollectionImportSql.getItemById, { itemId });
 }
 
 export async function getNextPendingSteamCollectionImportItem(
   importId: number,
 ): Promise<ISteamCollectionImportItem | null> {
-  return fetchItemWithJsonCol(
-    getSql(SteamCollectionImportSql.getNextPendingItem, dialect),
-    { importId },
-  );
+  return fetchItemWithJsonCol(SteamCollectionImportSql.getNextPendingItem, { importId });
 }
 
 export async function updateSteamCollectionImportItem(
@@ -416,14 +397,8 @@ export async function countSteamCollectionImportResultReasons(
 
 export async function getSteamAppGameDbMapByAppId(
   steamAppId: number,
-  existingConnection?: oracledb.Connection,
 ): Promise<ISteamAppGameDbMap | null> {
-  const rows = await oraQuery(
-    getSql(SteamCollectionImportSql.getAppMap, dialect),
-    { steamAppId },
-    mapAppMap,
-    existingConnection,
-  );
+  const rows = await dbQuery(SteamCollectionImportSql.getAppMap, { steamAppId }, mapAppMap);
   return rows[0] ?? null;
 }
 
@@ -433,23 +408,16 @@ export async function upsertSteamAppGameDbMap(params: {
   status: SteamAppGameDbMapStatus;
   createdBy: string | null;
 }): Promise<ISteamAppGameDbMap> {
-  return oraWithConnection(async (conn) => {
-    await oraMutate(
-      getSql(SteamCollectionImportSql.upsertAppMap, dialect),
-      {
-        steamAppId: params.steamAppId,
-        gameDbGameId: params.gameDbGameId,
-        status: params.status,
-        createdBy: params.createdBy,
-      },
-      conn,
-    );
-    await conn.commit();
-
-    const mapping = await getSteamAppGameDbMapByAppId(params.steamAppId, conn);
-    if (!mapping) throw new Error("Failed to load Steam app mapping.");
-    return mapping;
+  await dbMutate(SteamCollectionImportSql.upsertAppMap, {
+    steamAppId: params.steamAppId,
+    gameDbGameId: params.gameDbGameId,
+    status: params.status,
+    createdBy: params.createdBy,
   });
+
+  const mapping = await getSteamAppGameDbMapByAppId(params.steamAppId);
+  if (!mapping) throw new Error("Failed to load Steam app mapping.");
+  return mapping;
 }
 
 export async function getSteamAppHistoricalMappedGameIds(params: {

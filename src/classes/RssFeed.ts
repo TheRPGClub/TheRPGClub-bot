@@ -1,9 +1,14 @@
-import oracledb from "oracledb";
-import { dbMutate, oraQuery, oraMutate, oraWithConnection, getSql } from "../db/SqlManager.js";
-import { getDialect } from "../db/dialect.js";
+import type oracledb from "oracledb";
+import type pg from "pg";
+import {
+  dbQuery,
+  dbMutate,
+  dbInsert,
+  dbQueryConn,
+  dbMutateConn,
+  dbTransaction,
+} from "../db/SqlManager.js";
 import { RssFeedSql } from "../db/sql/index.js";
-
-const dialect = getDialect();
 
 export interface IRssFeed {
   feedId: number;
@@ -51,13 +56,13 @@ function mapFeedRow(row: FeedRow): IRssFeed {
   };
 }
 
-export async function listFeeds(existingConnection?: oracledb.Connection): Promise<IRssFeed[]> {
-  return oraQuery(
-    getSql(RssFeedSql.listFeeds, dialect),
-    {},
-    mapFeedRow,
-    existingConnection,
-  );
+type AnyConn = oracledb.Connection | pg.PoolClient;
+
+export async function listFeeds(existingConnection?: AnyConn): Promise<IRssFeed[]> {
+  if (existingConnection) {
+    return dbQueryConn(existingConnection, RssFeedSql.listFeeds, {}, mapFeedRow);
+  }
+  return dbQuery(RssFeedSql.listFeeds, {}, mapFeedRow);
 }
 
 export async function addFeed(
@@ -69,19 +74,17 @@ export async function addFeed(
 ): Promise<number> {
   const normalizedInclude = normalizeKeywords(includeKeywords);
   const normalizedExclude = normalizeKeywords(excludeKeywords);
-  const result = await oraMutate(
-    getSql(RssFeedSql.addFeed, dialect),
+  return dbInsert(
+    RssFeedSql.addFeed,
     {
       feedName,
       feedUrl,
       channelId,
       includes: normalizedInclude.join(", "),
       excludes: normalizedExclude.join(", "),
-      id: { dir: oracledb.BIND_OUT, type: oracledb.NUMBER },
     },
+    "id",
   );
-  const id = (result.outBinds as { id?: number[] })?.id?.[0];
-  return typeof id === "number" ? id : 0;
 }
 
 export async function removeFeed(feedId: number): Promise<boolean> {
@@ -127,7 +130,7 @@ export async function updateFeed(
 
 export async function markItemsSeen(
   items: IRssFeedItem[],
-  existingConnection?: oracledb.Connection,
+  existingConnection?: AnyConn,
 ): Promise<void> {
   if (!items.length) return;
   const normalized = items.map((item) => ({
@@ -135,77 +138,61 @@ export async function markItemsSeen(
     itemGuid: item.itemGuid ? item.itemGuid.slice(0, 512) : null,
     itemLink: item.itemLink ? item.itemLink.slice(0, 512) : null,
   }));
-  const sql = getSql(RssFeedSql.markItemsSeen, dialect);
-  const opts = {
-    autoCommit: true,
-    bindDefs: {
-      feedId: { type: oracledb.NUMBER },
-      itemIdHash: { type: oracledb.STRING, maxSize: 128 },
-      itemGuid: { type: oracledb.STRING, maxSize: 1024 },
-      itemLink: { type: oracledb.STRING, maxSize: 1024 },
-      publishedAt: { type: oracledb.DATE },
-    },
-  };
-  const doExecute = async (conn: oracledb.Connection): Promise<void> => {
-    await conn.executeMany(sql, normalized as never[], opts);
-  };
+
   if (existingConnection) {
-    await doExecute(existingConnection);
-  } else {
-    await oraWithConnection(doExecute);
+    for (const row of normalized) {
+      await dbMutateConn(existingConnection, RssFeedSql.markItemsSeen, row);
+    }
+    return;
   }
+
+  await dbTransaction(async (conn) => {
+    for (const row of normalized) {
+      await dbMutateConn(conn, RssFeedSql.markItemsSeen, row);
+    }
+  });
 }
 
 export async function isItemSeen(
   feedId: number,
   itemIdHash: string,
-  existingConnection?: oracledb.Connection,
+  existingConnection?: AnyConn,
 ): Promise<boolean> {
-  const rows = await oraQuery(
-    getSql(RssFeedSql.isItemSeen, dialect),
-    { feedId, hash: itemIdHash },
-    (row: { FOUND: number }) => row,
-    existingConnection,
-  );
+  const mapper = (row: { FOUND: number }) => row;
+  const rows = existingConnection
+    ? await dbQueryConn(existingConnection, RssFeedSql.isItemSeen, { feedId, hash: itemIdHash }, mapper)
+    : await dbQuery(RssFeedSql.isItemSeen, { feedId, hash: itemIdHash }, mapper);
   return rows.length > 0;
 }
 
 export async function getSeenItemHashes(
   feedId: number,
   itemIdHashes: string[],
-  existingConnection?: oracledb.Connection,
+  existingConnection?: AnyConn,
 ): Promise<Set<string>> {
   if (!itemIdHashes.length) return new Set();
 
-  const doQuery = async (conn: oracledb.Connection): Promise<Set<string>> => {
-    const foundHashes = new Set<string>();
-    const CHUNK_SIZE = 900;
+  const CHUNK_SIZE = 900;
+  const foundHashes = new Set<string>();
+  const mapper = (row: { ITEM_ID_HASH: string }) => row;
 
-    for (let i = 0; i < itemIdHashes.length; i += CHUNK_SIZE) {
-      const chunk = itemIdHashes.slice(i, i + CHUNK_SIZE);
-      const bindVars: Record<string, string | number> = { feedId };
-      const bindPlaceholders: string[] = [];
+  for (let i = 0; i < itemIdHashes.length; i += CHUNK_SIZE) {
+    const chunk = itemIdHashes.slice(i, i + CHUNK_SIZE);
+    const bindVars: Record<string, string | number> = { feedId };
+    const bindPlaceholders: string[] = [];
 
-      chunk.forEach((hash, idx) => {
-        const key = `h${idx}`;
-        bindVars[key] = hash;
-        bindPlaceholders.push(`:${key}`);
-      });
+    chunk.forEach((hash, idx) => {
+      const key = `h${idx}`;
+      bindVars[key] = hash;
+      bindPlaceholders.push(`:${key}`);
+    });
 
-      const rows = await oraQuery(
-        RssFeedSql.getSeenItemHashes(bindPlaceholders.join(", "))[dialect],
-        bindVars,
-        (row: { ITEM_ID_HASH: string }) => row,
-        conn,
-      );
-      rows.forEach((row) => foundHashes.add(row.ITEM_ID_HASH));
-    }
-
-    return foundHashes;
-  };
-
-  if (existingConnection) {
-    return doQuery(existingConnection);
+    const entry = RssFeedSql.getSeenItemHashes(bindPlaceholders.join(", "));
+    const rows = existingConnection
+      ? await dbQueryConn(existingConnection, entry, bindVars, mapper)
+      : await dbQuery(entry, bindVars, mapper);
+    rows.forEach((row) => foundHashes.add(row.ITEM_ID_HASH));
   }
-  return oraWithConnection(doQuery);
+
+  return foundHashes;
 }

@@ -1,14 +1,15 @@
 import oracledb from "oracledb";
+import type pg from "pg";
 import {
   dbQuery,
   dbMutate,
-  oraQuery,
-  oraMutate,
-  oraWithConnection,
-  oraTransaction,
+  dbWithConnection,
+  dbTransaction,
+  dbQueryConn,
+  dbMutateConn,
+  dbInsertConn,
 } from "../db/SqlManager.js";
 import { getDialect } from "../db/dialect.js";
-import { getSql } from "../db/SqlManager.js";
 import { MemberSql } from "../db/sql/index.js";
 
 const dialect = getDialect();
@@ -192,7 +193,7 @@ export interface ICompletionRecord {
   note: string | null;
 }
 
-type Connection = oracledb.Connection;
+type AnyConn = oracledb.Connection | pg.PoolClient;
 const MAX_NOW_PLAYING = 10;
 const LEGACY_THREAD_ID_SQL = `COALESCE(
                   (
@@ -208,14 +209,14 @@ const LEGACY_THREAD_ID_SQL = `COALESCE(
                 )`;
 let nowPlayingLinkedThreadColumnAvailable: boolean | null = null;
 
-async function getNowPlayingThreadIdSql(connection: Connection): Promise<string> {
+async function getNowPlayingThreadIdSql(connection: AnyConn): Promise<string> {
   if (nowPlayingLinkedThreadColumnAvailable === null) {
     try {
-      const res = await oraQuery<{ CNT: number }, number>(
-        getSql(MemberSql.checkLinkedThreadColumn, dialect),
-        {},
-        (row) => Number(row.CNT),
+      const res = await dbQueryConn(
         connection,
+        MemberSql.checkLinkedThreadColumn,
+        {},
+        (row: { CNT: number }) => Number(row.CNT),
       );
       nowPlayingLinkedThreadColumnAvailable = (res[0] ?? 0) > 0;
     } catch (err) {
@@ -271,30 +272,22 @@ export default class Member {
   static async getNowPlaying(
     userId: string,
   ): Promise<IMemberNowPlayingEntry[]> {
-    return oraWithConnection(async (conn) => {
+    return dbWithConnection(async (conn) => {
       const threadIdSql = await getNowPlayingThreadIdSql(conn);
-      const res = await conn.execute<{
-        GAME_ID: number;
-        TITLE: string;
-        PLATFORM_ID: number | null;
-        PLATFORM_NAME: string | null;
-        PLATFORM_ABBREVIATION: string | null;
-        THREAD_ID: string | null;
-        NOTE: string | null;
-        ADDED_AT: Date | string | null;
-        NOTE_UPDATED_AT: Date | string | null;
-        SORT_ORDER: number | null;
-        JOURNAL_ENABLED: number | null;
-        HAS_JOURNAL_ENTRY: number | null;
-        JOURNAL_COUNT: number | null;
+      type NowPlayingRow = {
+        GAME_ID: number; TITLE: string; PLATFORM_ID: number | null;
+        PLATFORM_NAME: string | null; PLATFORM_ABBREVIATION: string | null;
+        THREAD_ID: string | null; NOTE: string | null;
+        ADDED_AT: Date | string | null; NOTE_UPDATED_AT: Date | string | null;
+        SORT_ORDER: number | null; JOURNAL_ENABLED: number | null;
+        HAS_JOURNAL_ENTRY: number | null; JOURNAL_COUNT: number | null;
         LAST_JOURNAL_AT: Date | string | null;
-      }>(
-        MemberSql.getNowPlaying(threadIdSql)[dialect],
+      };
+      return dbQueryConn<NowPlayingRow, IMemberNowPlayingEntry>(
+        conn,
+        MemberSql.getNowPlaying(threadIdSql),
         { userId },
-        { outFormat: oracledb.OUT_FORMAT_OBJECT },
-      );
-      return (res.rows ?? [])
-        .map((r) => ({
+        (r) => ({
           gameId: Number(r.GAME_ID),
           title: r.TITLE,
           platformId: r.PLATFORM_ID == null ? null : Number(r.PLATFORM_ID),
@@ -304,52 +297,41 @@ export default class Member {
           note: r.NOTE ?? null,
           addedAt: r.ADDED_AT instanceof Date
             ? r.ADDED_AT
-            : r.ADDED_AT
-              ? new Date(r.ADDED_AT as any)
-              : null,
+            : r.ADDED_AT ? new Date(r.ADDED_AT as any) : null,
           noteUpdatedAt: r.NOTE_UPDATED_AT instanceof Date
             ? r.NOTE_UPDATED_AT
-            : r.NOTE_UPDATED_AT
-              ? new Date(r.NOTE_UPDATED_AT as any)
-              : null,
+            : r.NOTE_UPDATED_AT ? new Date(r.NOTE_UPDATED_AT as any) : null,
           sortOrder: r.SORT_ORDER == null ? null : Number(r.SORT_ORDER),
           journalEnabled: Number(r.JOURNAL_ENABLED ?? 0) === 1,
           hasJournalEntry: Number(r.HAS_JOURNAL_ENTRY ?? 0) === 1,
           journalCount: Number(r.JOURNAL_COUNT ?? 0),
           lastJournalAt: r.LAST_JOURNAL_AT instanceof Date
             ? r.LAST_JOURNAL_AT
-            : r.LAST_JOURNAL_AT
-              ? new Date(r.LAST_JOURNAL_AT as any)
-              : null,
-        }))
-        .slice(0, MAX_NOW_PLAYING);
+            : r.LAST_JOURNAL_AT ? new Date(r.LAST_JOURNAL_AT as any) : null,
+        }),
+      ).then((rows) => rows.slice(0, MAX_NOW_PLAYING));
     });
   }
 
   static async getAllNowPlaying(): Promise<IMemberNowPlayingList[]> {
-    return oraWithConnection(async (conn) => {
+    return dbWithConnection(async (conn) => {
       const threadIdSql = await getNowPlayingThreadIdSql(conn);
-      const res = await conn.execute<{
-        USER_ID: string;
-        USERNAME: string | null;
-        GLOBAL_NAME: string | null;
-        GAME_ID: number;
-        TITLE: string;
-        PLATFORM_ID: number | null;
-        PLATFORM_NAME: string | null;
-        PLATFORM_ABBREVIATION: string | null;
-        THREAD_ID: string | null;
-        NOTE: string | null;
-        ADDED_AT: Date | string | null;
-        NOTE_UPDATED_AT: Date | string | null;
-      }>(
-        MemberSql.getAllNowPlaying(threadIdSql)[dialect],
+      type AllNowPlayingRow = {
+        USER_ID: string; USERNAME: string | null; GLOBAL_NAME: string | null;
+        GAME_ID: number; TITLE: string; PLATFORM_ID: number | null;
+        PLATFORM_NAME: string | null; PLATFORM_ABBREVIATION: string | null;
+        THREAD_ID: string | null; NOTE: string | null;
+        ADDED_AT: Date | string | null; NOTE_UPDATED_AT: Date | string | null;
+      };
+      const rows = await dbQueryConn<AllNowPlayingRow, AllNowPlayingRow>(
+        conn,
+        MemberSql.getAllNowPlaying(threadIdSql),
         {},
-        { outFormat: oracledb.OUT_FORMAT_OBJECT },
+        (r) => r,
       );
 
       const grouped = new Map<string, IMemberNowPlayingList>();
-      for (const row of res.rows ?? []) {
+      for (const row of rows) {
         let record = grouped.get(row.USER_ID);
         if (!record) {
           record = {
@@ -372,14 +354,10 @@ export default class Member {
             note: row.NOTE ?? null,
             addedAt: row.ADDED_AT instanceof Date
               ? row.ADDED_AT
-              : row.ADDED_AT
-                ? new Date(row.ADDED_AT as any)
-                : null,
+              : row.ADDED_AT ? new Date(row.ADDED_AT as any) : null,
             noteUpdatedAt: row.NOTE_UPDATED_AT instanceof Date
               ? row.NOTE_UPDATED_AT
-              : row.NOTE_UPDATED_AT
-                ? new Date(row.NOTE_UPDATED_AT as any)
-                : null,
+              : row.NOTE_UPDATED_AT ? new Date(row.NOTE_UPDATED_AT as any) : null,
             sortOrder: null,
             journalEnabled: false,
             hasJournalEntry: false,
@@ -564,36 +542,32 @@ export default class Member {
     const noteUpdatedAt = noteValue ? new Date() : null;
 
     try {
-      await oraWithConnection(async (conn) => {
-        const countRes = await conn.execute<{ CNT: number }>(
-          getSql(MemberSql.countNowPlaying, dialect),
+      await dbTransaction(async (conn) => {
+        const countRows = await dbQueryConn(
+          conn,
+          MemberSql.countNowPlaying,
           { userId },
-          { outFormat: oracledb.OUT_FORMAT_OBJECT },
+          (row: { CNT: number }) => Number(row.CNT),
         );
-        const count = Number((countRes.rows ?? [])[0]?.CNT ?? 0);
+        const count = countRows[0] ?? 0;
         if (count >= MAX_NOW_PLAYING) {
           throw new Error(`You can only track up to ${MAX_NOW_PLAYING} Now Playing titles.`);
         }
 
-        const sortRes = await conn.execute<{ MAX_SORT: number | null }>(
-          getSql(MemberSql.getNowPlayingMaxSort, dialect),
+        const sortRows = await dbQueryConn(
+          conn,
+          MemberSql.getNowPlayingMaxSort,
           { userId },
-          { outFormat: oracledb.OUT_FORMAT_OBJECT },
+          (row: { MAX_SORT: number | null }) => Number(row.MAX_SORT ?? 0),
         );
-        const maxSort = Number((sortRes.rows ?? [])[0]?.MAX_SORT ?? 0);
-        const nextSort = maxSort + 1;
+        const nextSort = (sortRows[0] ?? 0) + 1;
 
-        await oraMutate(
-          getSql(MemberSql.insertNowPlaying, dialect),
+        await dbMutateConn(
+          conn,
+          MemberSql.insertNowPlaying,
           { userId, gameId, platformId, note: noteValue, noteUpdatedAt, sortOrder: nextSort },
-          conn,
         );
-        await oraMutate(
-          getSql(MemberSql.mergeJournalPrefs, dialect),
-          { userId, gameId },
-          conn,
-        );
-        await conn.commit();
+        await dbMutateConn(conn, MemberSql.mergeJournalPrefs, { userId, gameId });
       });
     } catch (err: any) {
       const msg = err?.message ?? String(err);
@@ -823,19 +797,18 @@ export default class Member {
     orderedGameIds: number[],
   ): Promise<boolean> {
     if (!orderedGameIds.length) return false;
-    return oraWithConnection(async (conn) => {
-      const binds = orderedGameIds.map((gameId, idx) => ({
-        userId,
-        gameId,
-        sortOrder: idx + 1,
-      }));
-      const result = await conn.executeMany(
-        getSql(MemberSql.updateNowPlayingSort, dialect),
-        binds,
-      );
-      await conn.commit();
-      return (result.rowsAffected ?? 0) > 0;
+    let totalAffected = 0;
+    await dbTransaction(async (conn) => {
+      for (let idx = 0; idx < orderedGameIds.length; idx += 1) {
+        const affected = await dbMutateConn(
+          conn,
+          MemberSql.updateNowPlayingSort,
+          { userId, gameId: orderedGameIds[idx], sortOrder: idx + 1 },
+        );
+        totalAffected += affected;
+      }
     });
+    return totalAffected > 0;
   }
 
   static async removeNowPlaying(userId: string, gameId: number): Promise<boolean> {
@@ -890,9 +863,10 @@ export default class Member {
     const normalizedNote = note?.trim();
     const noteValue = normalizedNote ? normalizedNote : null;
 
-    return oraTransaction(async (conn) => {
-      const result = await oraMutate(
-        getSql(MemberSql.addCompletion, dialect),
+    return dbTransaction(async (conn) => {
+      const id = await dbInsertConn(
+        conn,
+        MemberSql.addCompletion,
         {
           userId,
           gameId,
@@ -901,19 +875,17 @@ export default class Member {
           completedAt: completedAt ?? null,
           playtime: finalPlaytimeHours ?? null,
           note: noteValue,
-          completionId: { dir: oracledb.BIND_OUT, type: oracledb.NUMBER },
         },
-        conn,
+        "completionId",
       );
 
-      const id = (result.outBinds as any)?.completionId?.[0];
       if (!id) throw new Error("Failed to save completion (no id returned).");
 
-      const verify = await oraQuery<{ CNT: number }, number>(
-        getSql(MemberSql.verifyCompletion, dialect),
-        { id, userId },
-        (row) => Number(row.CNT),
+      const verify = await dbQueryConn(
         conn,
+        MemberSql.verifyCompletion,
+        { id, userId },
+        (row: { CNT: number }) => Number(row.CNT),
       );
       const exists = (verify[0] ?? 0) > 0;
       if (!exists) {
@@ -1435,69 +1407,58 @@ export default class Member {
   }
 
   static async getByUserId(userId: string): Promise<IMemberRecord | null> {
-    return oraWithConnection(async (conn) => {
-      const result = await conn.execute<{
-        USER_ID: string;
-        IS_BOT: number;
-        USERNAME: string | null;
-        GLOBAL_NAME: string | null;
-        AVATAR_BLOB: Buffer | null;
-        SERVER_JOINED_AT: Date | null;
-        SERVER_LEFT_AT: Date | null;
-        LAST_SEEN_AT: Date | null;
-        ROLE_ADMIN: number;
-        ROLE_MODERATOR: number;
-        ROLE_REGULAR: number;
-        ROLE_MEMBER: number;
-        ROLE_NEWCOMER: number;
-        MESSAGE_COUNT: number | null;
-        COMPLETIONATOR_URL: string | null;
-        PSN_USERNAME: string | null;
-        XBL_USERNAME: string | null;
-        NSW_FRIEND_CODE: string | null;
-        STEAM_URL: string | null;
-        PROFILE_IMAGE: Buffer | null;
-        PROFILE_IMAGE_AT: Date | null;
-      }>(
-        getSql(MemberSql.getByUserId, dialect),
-        { userId },
-        {
-          outFormat: oracledb.OUT_FORMAT_OBJECT,
-          fetchInfo: {
-            AVATAR_BLOB: { type: oracledb.BUFFER },
-            PROFILE_IMAGE: { type: oracledb.BUFFER },
+    type MemberRow = {
+      USER_ID: string; IS_BOT: number; USERNAME: string | null; GLOBAL_NAME: string | null;
+      AVATAR_BLOB: Buffer | null; SERVER_JOINED_AT: Date | null; SERVER_LEFT_AT: Date | null;
+      LAST_SEEN_AT: Date | null; ROLE_ADMIN: number; ROLE_MODERATOR: number;
+      ROLE_REGULAR: number; ROLE_MEMBER: number; ROLE_NEWCOMER: number;
+      MESSAGE_COUNT: number | null; COMPLETIONATOR_URL: string | null;
+      PSN_USERNAME: string | null; XBL_USERNAME: string | null; NSW_FRIEND_CODE: string | null;
+      STEAM_URL: string | null; PROFILE_IMAGE: Buffer | null; PROFILE_IMAGE_AT: Date | null;
+    };
+    const mapRow = (row: MemberRow): IMemberRecord => ({
+      userId: row.USER_ID,
+      isBot: row.IS_BOT,
+      username: row.USERNAME ?? null,
+      globalName: row.GLOBAL_NAME ?? null,
+      avatarBlob: row.AVATAR_BLOB ?? null,
+      serverJoinedAt: row.SERVER_JOINED_AT ?? null,
+      serverLeftAt: row.SERVER_LEFT_AT ?? null,
+      lastSeenAt: row.LAST_SEEN_AT ?? null,
+      roleAdmin: row.ROLE_ADMIN,
+      roleModerator: row.ROLE_MODERATOR,
+      roleRegular: row.ROLE_REGULAR,
+      roleMember: row.ROLE_MEMBER,
+      roleNewcomer: row.ROLE_NEWCOMER,
+      messageCount: row.MESSAGE_COUNT ?? null,
+      completionatorUrl: row.COMPLETIONATOR_URL ?? null,
+      psnUsername: row.PSN_USERNAME ?? null,
+      xblUsername: row.XBL_USERNAME ?? null,
+      nswFriendCode: row.NSW_FRIEND_CODE ?? null,
+      steamUrl: row.STEAM_URL ?? null,
+      profileImage: row.PROFILE_IMAGE ?? null,
+      profileImageAt: row.PROFILE_IMAGE_AT ?? null,
+    });
+    return dbWithConnection(async (conn) => {
+      if (dialect === "oracle") {
+        const result = await (conn as oracledb.Connection).execute<MemberRow>(
+          MemberSql.getByUserId.oracle,
+          { userId },
+          {
+            outFormat: oracledb.OUT_FORMAT_OBJECT,
+            fetchInfo: {
+              AVATAR_BLOB: { type: oracledb.BUFFER },
+              PROFILE_IMAGE: { type: oracledb.BUFFER },
+            },
           },
-        },
-      );
-
-      const row = (result.rows ?? [])[0];
-      if (!row) {
-        return null;
+        );
+        const row = (result.rows ?? [])[0];
+        return row ? mapRow(row) : null;
       }
-
-      return {
-        userId: row.USER_ID,
-        isBot: row.IS_BOT,
-        username: row.USERNAME ?? null,
-        globalName: row.GLOBAL_NAME ?? null,
-        avatarBlob: row.AVATAR_BLOB ?? null,
-        serverJoinedAt: row.SERVER_JOINED_AT ?? null,
-        serverLeftAt: row.SERVER_LEFT_AT ?? null,
-        lastSeenAt: row.LAST_SEEN_AT ?? null,
-        roleAdmin: row.ROLE_ADMIN,
-        roleModerator: row.ROLE_MODERATOR,
-        roleRegular: row.ROLE_REGULAR,
-        roleMember: row.ROLE_MEMBER,
-        roleNewcomer: row.ROLE_NEWCOMER,
-        messageCount: row.MESSAGE_COUNT ?? null,
-        completionatorUrl: row.COMPLETIONATOR_URL ?? null,
-        psnUsername: row.PSN_USERNAME ?? null,
-        xblUsername: row.XBL_USERNAME ?? null,
-        nswFriendCode: row.NSW_FRIEND_CODE ?? null,
-        steamUrl: row.STEAM_URL ?? null,
-        profileImage: row.PROFILE_IMAGE ?? null,
-        profileImageAt: row.PROFILE_IMAGE_AT ?? null,
-      };
+      const rows = await dbQueryConn<MemberRow, IMemberRecord>(
+        conn, MemberSql.getByUserId, { userId }, mapRow,
+      );
+      return rows[0] ?? null;
     });
   }
 
@@ -1526,33 +1487,33 @@ export default class Member {
   ): Promise<IAvatarHistoryRecord[]> {
     const safeLimit = Math.min(Math.max(limit, 1), 50);
     const safeOffset = Math.max(offset, 0);
-    return oraWithConnection(async (conn) => {
-      const result = await conn.execute<{
-        EVENT_ID: number;
-        USER_ID: string;
-        AVATAR_HASH: string | null;
-        AVATAR_URL: string | null;
-        AVATAR_BLOB: Buffer | null;
-        CHANGED_AT: Date | string;
-      }>(
-        getSql(MemberSql.getAvatarHistory, dialect),
+    type AvatarHistoryRow = {
+      EVENT_ID: number; USER_ID: string; AVATAR_HASH: string | null;
+      AVATAR_URL: string | null; AVATAR_BLOB: Buffer | null; CHANGED_AT: Date | string;
+    };
+    const mapRow = (row: AvatarHistoryRow): IAvatarHistoryRecord => ({
+      eventId: Number(row.EVENT_ID),
+      userId: String(row.USER_ID),
+      avatarHash: row.AVATAR_HASH ?? null,
+      avatarUrl: row.AVATAR_URL ?? null,
+      avatarBlob: row.AVATAR_BLOB ?? null,
+      changedAt: row.CHANGED_AT instanceof Date ? row.CHANGED_AT : new Date(row.CHANGED_AT as any),
+    });
+    return dbWithConnection(async (conn) => {
+      if (dialect === "oracle") {
+        const result = await (conn as oracledb.Connection).execute<AvatarHistoryRow>(
+          MemberSql.getAvatarHistory.oracle,
+          { userId, limit: safeLimit, offset: safeOffset },
+          { outFormat: oracledb.OUT_FORMAT_OBJECT, fetchInfo: { AVATAR_BLOB: { type: oracledb.BUFFER } } },
+        );
+        return (result.rows ?? []).map(mapRow);
+      }
+      return dbQueryConn<AvatarHistoryRow, IAvatarHistoryRecord>(
+        conn,
+        MemberSql.getAvatarHistory,
         { userId, limit: safeLimit, offset: safeOffset },
-        {
-          outFormat: oracledb.OUT_FORMAT_OBJECT,
-          fetchInfo: { AVATAR_BLOB: { type: oracledb.BUFFER } },
-        },
+        mapRow,
       );
-      return (result.rows ?? []).map((row) => ({
-        eventId: Number(row.EVENT_ID),
-        userId: String(row.USER_ID),
-        avatarHash: row.AVATAR_HASH ?? null,
-        avatarUrl: row.AVATAR_URL ?? null,
-        avatarBlob: row.AVATAR_BLOB ?? null,
-        changedAt:
-          row.CHANGED_AT instanceof Date
-            ? row.CHANGED_AT
-            : new Date(row.CHANGED_AT as any),
-      }));
     });
   }
 
@@ -1672,38 +1633,20 @@ export default class Member {
     userId: string,
     enabled: boolean,
   ): Promise<void> {
-    await oraWithConnection(async (conn) => {
-      const result = await oraMutate(
-        getSql(MemberSql.updateGiveawayDonorNotifySetting, dialect),
-        { userId, enabled: enabled ? 1 : 0 },
-        conn,
-      );
-      await conn.commit();
-      if ((result.rowsAffected ?? 0) > 0) {
-        return;
-      }
+    const params = { userId, enabled: enabled ? 1 : 0 };
+    const updated = await dbMutate(MemberSql.updateGiveawayDonorNotifySetting, params);
+    if (updated > 0) return;
 
-      try {
-        await oraMutate(
-          getSql(MemberSql.insertGiveawayDonorNotifySetting, dialect),
-          { userId, enabled: enabled ? 1 : 0 },
-          conn,
-        );
-        await conn.commit();
-      } catch (err: any) {
-        const code = err?.code ?? err?.errorNum;
-        if (code === "ORA-00001") {
-          await oraMutate(
-            getSql(MemberSql.updateGiveawayDonorNotifySetting, dialect),
-            { userId, enabled: enabled ? 1 : 0 },
-            conn,
-          );
-          await conn.commit();
-        } else {
-          throw err;
-        }
+    try {
+      await dbMutate(MemberSql.insertGiveawayDonorNotifySetting, params);
+    } catch (err: any) {
+      const code = err?.code ?? err?.errorNum;
+      if (code === "ORA-00001") {
+        await dbMutate(MemberSql.updateGiveawayDonorNotifySetting, params);
+      } else {
+        throw err;
       }
-    });
+    }
   }
 
   static async countAvatarHistory(userId: string): Promise<number> {
@@ -1776,50 +1719,21 @@ export default class Member {
     });
   }
 
-  static async upsert(
-    record: IMemberRecord,
-    opts?: { connection?: Connection },
-  ): Promise<void> {
-    const externalConn = opts?.connection ?? null;
+  static async upsert(record: IMemberRecord): Promise<void> {
     const params = buildParams(record);
 
-    async function doUpsert(conn: oracledb.Connection): Promise<void> {
-      const update = await oraMutate(
-        getSql(MemberSql.updateMember, dialect),
-        params,
-        conn,
-      );
-      await conn.commit();
+    const rowsUpdated = await dbMutate(MemberSql.updateMember, params);
+    if (rowsUpdated > 0) return;
 
-      const rowsUpdated = update.rowsAffected ?? 0;
-      if (rowsUpdated > 0) return;
-
-      try {
-        await oraMutate(
-          getSql(MemberSql.insertMember, dialect),
-          params,
-          conn,
-        );
-        await conn.commit();
-      } catch (insErr: any) {
-        const code = insErr?.code ?? insErr?.errorNum;
-        if (code === "ORA-00001") {
-          await oraMutate(
-            getSql(MemberSql.updateMember, dialect),
-            params,
-            conn,
-          );
-          await conn.commit();
-        } else {
-          throw insErr;
-        }
+    try {
+      await dbMutate(MemberSql.insertMember, params);
+    } catch (insErr: any) {
+      const code = insErr?.code ?? insErr?.errorNum;
+      if (code === "ORA-00001") {
+        await dbMutate(MemberSql.updateMember, params);
+      } else {
+        throw insErr;
       }
-    }
-
-    if (externalConn) {
-      await doUpsert(externalConn);
-    } else {
-      await oraWithConnection(doUpsert);
     }
   }
 
@@ -1829,25 +1743,18 @@ export default class Member {
     const chunkSize = 999; // Oracle IN clause limit per statement (safe)
     let totalUpdated = 0;
 
-    await oraWithConnection(async (conn) => {
-      for (let i = 0; i < userIds.length; i += chunkSize) {
-        const chunk = userIds.slice(i, i + chunkSize);
-        const binds: Record<string, string> = {};
-        const placeholders = chunk.map((id, idx) => {
-          const key = `id${idx}`;
-          binds[key] = id;
-          return `:${key}`;
-        });
+    for (let i = 0; i < userIds.length; i += chunkSize) {
+      const chunk = userIds.slice(i, i + chunkSize);
+      const binds: Record<string, string> = {};
+      const placeholders = chunk.map((id, idx) => {
+        const key = `id${idx}`;
+        binds[key] = id;
+        return `:${key}`;
+      });
 
-        const result = await oraMutate(
-          MemberSql.markDepartedNotIn(placeholders.join(", "))[dialect],
-          binds,
-          conn,
-        );
-        totalUpdated += result.rowsAffected ?? 0;
-        await conn.commit();
-      }
-    });
+      const affected = await dbMutate(MemberSql.markDepartedNotIn(placeholders.join(", ")), binds);
+      totalUpdated += affected;
+    }
 
     return totalUpdated;
   }

@@ -1,13 +1,7 @@
-import oracledb from "oracledb";
 import {
-  dbQuery, dbMutate,
-  oraQuery, oraMutate, oraWithConnection, oraTransaction,
-  getSql,
+  dbQuery, dbMutate, dbInsert, dbTransaction, dbMutateConn,
 } from "../db/SqlManager.js";
-import { getDialect } from "../db/dialect.js";
 import { XboxCollectionImportSql } from "../db/sql/index.js";
-
-const dialect = getDialect();
 
 export type XboxCollectionImportStatus = "ACTIVE" | "PAUSED" | "COMPLETED" | "CANCELED";
 export type XboxCollectionImportItemStatus =
@@ -203,31 +197,25 @@ export async function createXboxCollectionImportSession(params: {
   sourceFileSize: number | null;
   templateVersion: string | null;
 }): Promise<IXboxCollectionImport> {
-  return oraWithConnection(async (conn) => {
-    const insert = await oraMutate(
-      getSql(XboxCollectionImportSql.createImport, dialect),
-      {
-        userId: params.userId,
-        totalCount: params.totalCount,
-        xuid: params.xuid,
-        gamertag: params.gamertag,
-        sourceType: params.sourceType,
-        sourceFileName: params.sourceFileName,
-        sourceFileSize: params.sourceFileSize,
-        templateVersion: params.templateVersion,
-        id: { dir: oracledb.BIND_OUT, type: oracledb.NUMBER },
-      },
-      conn,
-    );
-    await conn.commit();
+  const id = await dbInsert(
+    XboxCollectionImportSql.createImport,
+    {
+      userId: params.userId,
+      totalCount: params.totalCount,
+      xuid: params.xuid,
+      gamertag: params.gamertag,
+      sourceType: params.sourceType,
+      sourceFileName: params.sourceFileName,
+      sourceFileSize: params.sourceFileSize,
+      templateVersion: params.templateVersion,
+    },
+    "id",
+  );
+  if (!id) throw new Error("Failed to create Xbox collection import session.");
 
-    const id = Number((insert.outBinds as { id?: number[] }).id?.[0] ?? 0);
-    if (!id) throw new Error("Failed to create Xbox collection import session.");
-
-    const session = await getXboxCollectionImportById(id, conn);
-    if (!session) throw new Error("Failed to load Xbox collection import session.");
-    return session;
-  });
+  const session = await getXboxCollectionImportById(id);
+  if (!session) throw new Error("Failed to load Xbox collection import session.");
+  return session;
 }
 
 export async function insertXboxCollectionImportItems(
@@ -249,41 +237,31 @@ export async function insertXboxCollectionImportItems(
 ): Promise<void> {
   if (!items.length) return;
 
-  await oraTransaction(async (conn) => {
+  await dbTransaction(async (conn) => {
     for (const item of items) {
-      await oraMutate(
-        getSql(XboxCollectionImportSql.insertItem, dialect),
-        {
-          importId,
-          rowIndex: item.rowIndex,
-          xboxTitleId: item.xboxTitleId,
-          xboxProductId: item.xboxProductId,
-          xboxTitleName: item.xboxTitleName,
-          rawPlatform: item.rawPlatform,
-          rawOwnershipType: item.rawOwnershipType,
-          rawNote: item.rawNote,
-          rawGameDbId: item.rawGameDbId,
-          rawIgdbId: item.rawIgdbId,
-          platformId: item.platformId,
-          ownershipType: item.ownershipType,
-          note: item.note,
-        },
-        conn,
-      );
+      await dbMutateConn(conn, XboxCollectionImportSql.insertItem, {
+        importId,
+        rowIndex: item.rowIndex,
+        xboxTitleId: item.xboxTitleId,
+        xboxProductId: item.xboxProductId,
+        xboxTitleName: item.xboxTitleName,
+        rawPlatform: item.rawPlatform,
+        rawOwnershipType: item.rawOwnershipType,
+        rawNote: item.rawNote,
+        rawGameDbId: item.rawGameDbId,
+        rawIgdbId: item.rawIgdbId,
+        platformId: item.platformId,
+        ownershipType: item.ownershipType,
+        note: item.note,
+      });
     }
   });
 }
 
 export async function getXboxCollectionImportById(
   importId: number,
-  connectionOverride?: oracledb.Connection,
 ): Promise<IXboxCollectionImport | null> {
-  const rows = await oraQuery(
-    getSql(XboxCollectionImportSql.getImportById, dialect),
-    { importId },
-    mapImport,
-    connectionOverride,
-  );
+  const rows = await dbQuery(XboxCollectionImportSql.getImportById, { importId }, mapImport);
   return rows[0] ?? null;
 }
 
@@ -436,14 +414,8 @@ export async function countXboxCollectionImportResultReasons(
 
 export async function getXboxTitleGameDbMapByTitleId(
   xboxTitleId: string,
-  existingConnection?: oracledb.Connection,
 ): Promise<IXboxTitleGameDbMap | null> {
-  const rows = await oraQuery(
-    getSql(XboxCollectionImportSql.getTitleMap, dialect),
-    { xboxTitleId },
-    mapTitleMap,
-    existingConnection,
-  );
+  const rows = await dbQuery(XboxCollectionImportSql.getTitleMap, { xboxTitleId }, mapTitleMap);
   return rows[0] ?? null;
 }
 
@@ -453,23 +425,16 @@ export async function upsertXboxTitleGameDbMap(params: {
   status: XboxTitleGameDbMapStatus;
   createdBy: string | null;
 }): Promise<IXboxTitleGameDbMap> {
-  return oraWithConnection(async (conn) => {
-    await oraMutate(
-      getSql(XboxCollectionImportSql.upsertTitleMap, dialect),
-      {
-        xboxTitleId: params.xboxTitleId,
-        gameDbGameId: params.gameDbGameId,
-        status: params.status,
-        createdBy: params.createdBy,
-      },
-      conn,
-    );
-    await conn.commit();
-
-    const mapping = await getXboxTitleGameDbMapByTitleId(params.xboxTitleId, conn);
-    if (!mapping) throw new Error("Failed to load Xbox title mapping.");
-    return mapping;
+  await dbMutate(XboxCollectionImportSql.upsertTitleMap, {
+    xboxTitleId: params.xboxTitleId,
+    gameDbGameId: params.gameDbGameId,
+    status: params.status,
+    createdBy: params.createdBy,
   });
+
+  const mapping = await getXboxTitleGameDbMapByTitleId(params.xboxTitleId);
+  if (!mapping) throw new Error("Failed to load Xbox title mapping.");
+  return mapping;
 }
 
 export async function getXboxTitleHistoricalMappedGameIds(params: {

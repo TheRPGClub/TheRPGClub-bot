@@ -1,17 +1,11 @@
 import oracledb from "oracledb";
 import axios from "axios";
 import {
-  dbQuery, dbMutate,
-  oraQuery,
-  oraMutate,
-  oraWithConnection,
-  oraTransaction,
-  getSql,
+  dbQuery, dbMutate, dbInsert, dbWithConnection, dbTransaction,
+  dbQueryConn, dbMutateConn,
 } from "../db/SqlManager.js";
 import { getDialect } from "../db/dialect.js";
 import { GameSql } from "../db/sql/index.js";
-
-const dialect = getDialect();
 import { IGDBGameDetails, igdbService } from "../services/IGDB/IgdbService.js";
 import GameSearchSynonym from "./GameSearchSynonym.js";
 import {
@@ -234,34 +228,34 @@ function mapGameFromApi(data: any): IGame {
 }
 
 function mapGameRow(row: any): IGame {
+  const imageRaw = row.IMAGE_DATA ?? row.image_data;
+  const ird = row.INITIAL_RELEASE_DATE ?? row.initial_release_date;
+  const cat = row.CREATED_AT ?? row.created_at;
+  const uat = row.UPDATED_AT ?? row.updated_at;
   return {
-    id: Number(row.GAME_ID),
-    title: String(row.TITLE),
-    description: row.DESCRIPTION ? String(row.DESCRIPTION) : null,
-    imageData: row.IMAGE_DATA instanceof Buffer ? row.IMAGE_DATA : null,
-    thumbnailBad: Number(row.THUMBNAIL_BAD ?? 0) === 1,
-    thumbnailApproved: Number(row.THUMBNAIL_APPROVED ?? 0) === 1,
-    igdbId: row.IGDB_ID ? Number(row.IGDB_ID) : null,
-    slug: row.SLUG ? String(row.SLUG) : null,
-    totalRating: row.TOTAL_RATING ? Number(row.TOTAL_RATING) : null,
-    igdbUrl: row.IGDB_URL ? String(row.IGDB_URL) : null,
-    featuredVideoUrl: row.FEATURED_VIDEO_URL
-      ? String(row.FEATURED_VIDEO_URL)
+    id: Number(row.GAME_ID ?? row.game_id),
+    title: String(row.TITLE ?? row.title),
+    description: (row.DESCRIPTION ?? row.description)
+      ? String(row.DESCRIPTION ?? row.description)
       : null,
-    initialReleaseDate:
-      row.INITIAL_RELEASE_DATE instanceof Date
-        ? row.INITIAL_RELEASE_DATE
-        : row.INITIAL_RELEASE_DATE
-          ? new Date(row.INITIAL_RELEASE_DATE)
-          : null,
-    createdAt:
-      row.CREATED_AT instanceof Date
-        ? row.CREATED_AT
-        : new Date(row.CREATED_AT),
-    updatedAt:
-      row.UPDATED_AT instanceof Date
-        ? row.UPDATED_AT
-        : new Date(row.UPDATED_AT),
+    imageData: imageRaw instanceof Buffer ? imageRaw : null,
+    thumbnailBad: Number(row.THUMBNAIL_BAD ?? row.thumbnail_bad ?? 0) === 1,
+    thumbnailApproved:
+      Number(row.THUMBNAIL_APPROVED ?? row.thumbnail_approved ?? 0) === 1,
+    igdbId: (row.IGDB_ID ?? row.igdb_id) ? Number(row.IGDB_ID ?? row.igdb_id) : null,
+    slug: (row.SLUG ?? row.slug) ? String(row.SLUG ?? row.slug) : null,
+    totalRating: (row.TOTAL_RATING ?? row.total_rating)
+      ? Number(row.TOTAL_RATING ?? row.total_rating)
+      : null,
+    igdbUrl: (row.IGDB_URL ?? row.igdb_url)
+      ? String(row.IGDB_URL ?? row.igdb_url)
+      : null,
+    featuredVideoUrl: (row.FEATURED_VIDEO_URL ?? row.featured_video_url)
+      ? String(row.FEATURED_VIDEO_URL ?? row.featured_video_url)
+      : null,
+    initialReleaseDate: ird instanceof Date ? ird : ird ? new Date(ird) : null,
+    createdAt: cat instanceof Date ? cat : new Date(cat),
+    updatedAt: uat instanceof Date ? uat : new Date(uat),
     coverUrl: null,
   };
 }
@@ -342,25 +336,20 @@ export default class Game {
     igdbUrl: string | null = null,
     featuredVideoUrl: string | null = null,
   ): Promise<IGame> {
-    const gameId = await oraWithConnection(async (conn) => {
-      const result = await oraMutate(
-        getSql(GameSql.createGame, dialect),
-        {
-          title,
-          description,
-          imageData: imageData || null,
-          igdbId: igdbId || null,
-          slug: slug || null,
-          totalRating: totalRating || null,
-          igdbUrl: igdbUrl || null,
-          featuredVideoUrl: featuredVideoUrl || null,
-          id: { type: oracledb.NUMBER, dir: oracledb.BIND_OUT },
-        },
-        conn,
-      );
-      await conn.commit();
-      return (result.outBinds as { id: number[] }).id[0];
-    });
+    const gameId = await dbInsert(
+      GameSql.createGame,
+      {
+        title,
+        description,
+        imageData: imageData || null,
+        igdbId: igdbId || null,
+        slug: slug || null,
+        totalRating: totalRating || null,
+        igdbUrl: igdbUrl || null,
+        featuredVideoUrl: featuredVideoUrl || null,
+      },
+      "id",
+    );
 
     if (!gameId) throw new Error("Failed to retrieve GAME_ID after insert.");
 
@@ -402,36 +391,19 @@ export default class Game {
       return data ? mapGameFromApi(data) : null;
     }
 
-    return oraWithConnection(async (conn) => {
-      const result = await conn.execute<{
-        GAME_ID: number;
-        TITLE: string;
-        DESCRIPTION: string | null;
-        IMAGE_DATA: Buffer | null;
-        THUMBNAIL_BAD: number | null;
-        THUMBNAIL_APPROVED: number | null;
-        IGDB_ID: number | null;
-        SLUG: string | null;
-        TOTAL_RATING: number | null;
-        IGDB_URL: string | null;
-        FEATURED_VIDEO_URL: string | null;
-        INITIAL_RELEASE_DATE: Date | null;
-        CREATED_AT: Date;
-        UPDATED_AT: Date;
-      }>(
-        getSql(GameSql.getGameById, dialect),
-        { id },
-        {
-          outFormat: oracledb.OUT_FORMAT_OBJECT,
-          fetchInfo: {
-            IMAGE_DATA: { type: oracledb.BUFFER },
-            DESCRIPTION: { type: oracledb.STRING },
-          },
-        },
-      );
-
-      const row = (result.rows ?? [])[0] as any;
-      return row ? mapGameRow(row) : null;
+    return dbWithConnection(async (conn) => {
+      if (getDialect() === "oracle") {
+        const result = await (conn as oracledb.Connection).execute(
+          GameSql.getGameById.oracle,
+          { id },
+          { outFormat: oracledb.OUT_FORMAT_OBJECT,
+            fetchInfo: { IMAGE_DATA: { type: oracledb.BUFFER }, DESCRIPTION: { type: oracledb.STRING } } },
+        );
+        const row = (result.rows ?? [])[0] as any;
+        return row ? mapGameRow(row) : null;
+      }
+      const rows = await dbQueryConn(conn, GameSql.getGameById, { id }, mapGameRow);
+      return rows[0] ?? null;
     });
   }
 
@@ -449,67 +421,32 @@ export default class Game {
       placeholders.push(`:${key}`);
     });
 
-    return oraWithConnection(async (conn) => {
-      const result = await conn.execute<{
-        GAME_ID: number;
-        TITLE: string;
-        DESCRIPTION: string | null;
-        IMAGE_DATA: Buffer | null;
-        THUMBNAIL_BAD: number | null;
-        THUMBNAIL_APPROVED: number | null;
-        IGDB_ID: number | null;
-        SLUG: string | null;
-        TOTAL_RATING: number | null;
-        IGDB_URL: string | null;
-        FEATURED_VIDEO_URL: string | null;
-        INITIAL_RELEASE_DATE: Date | null;
-        CREATED_AT: Date;
-        UPDATED_AT: Date;
-      }>(
-        GameSql.getGamesByIds(placeholders.join(", "))[dialect],
-        binds,
-        {
+    return dbWithConnection(async (conn) => {
+      const entry = GameSql.getGamesByIds(placeholders.join(", "));
+      if (getDialect() === "oracle") {
+        const result = await (conn as oracledb.Connection).execute(entry.oracle, binds, {
           outFormat: oracledb.OUT_FORMAT_OBJECT,
-          fetchInfo: {
-            IMAGE_DATA: { type: oracledb.BUFFER },
-            DESCRIPTION: { type: oracledb.STRING },
-          },
-        },
-      );
-      return (result.rows ?? []).map((row) => mapGameRow(row));
+          fetchInfo: { IMAGE_DATA: { type: oracledb.BUFFER }, DESCRIPTION: { type: oracledb.STRING } },
+        });
+        return (result.rows ?? []).map((row) => mapGameRow(row as any));
+      }
+      return dbQueryConn(conn, entry, binds, mapGameRow);
     });
   }
 
   static async getAlternateVersions(gameId: number): Promise<IGame[]> {
     if (!Number.isInteger(gameId) || gameId <= 0) return [];
-    return oraWithConnection(async (conn) => {
-      const result = await conn.execute<{
-        GAME_ID: number;
-        TITLE: string;
-        DESCRIPTION: string | null;
-        IMAGE_DATA: Buffer | null;
-        THUMBNAIL_BAD: number | null;
-        THUMBNAIL_APPROVED: number | null;
-        IGDB_ID: number | null;
-        SLUG: string | null;
-        TOTAL_RATING: number | null;
-        IGDB_URL: string | null;
-        FEATURED_VIDEO_URL: string | null;
-        INITIAL_RELEASE_DATE: Date | null;
-        CREATED_AT: Date;
-        UPDATED_AT: Date;
-      }>(
-        getSql(GameSql.getAlternateVersions, dialect),
-        { id: gameId },
-        {
-          outFormat: oracledb.OUT_FORMAT_OBJECT,
-          fetchInfo: {
-            IMAGE_DATA: { type: oracledb.BUFFER },
-            DESCRIPTION: { type: oracledb.STRING },
-          },
-        },
-      );
-      return (result.rows ?? []).map((row) => mapGameRow(row));
+    return dbWithConnection(async (conn) => {
+      if (getDialect() === "oracle") {
+        const result = await (conn as oracledb.Connection).execute(
+          GameSql.getAlternateVersions.oracle,
+          { id: gameId },
+          { outFormat: oracledb.OUT_FORMAT_OBJECT,
+            fetchInfo: { IMAGE_DATA: { type: oracledb.BUFFER }, DESCRIPTION: { type: oracledb.STRING } } },
+        );
+        return (result.rows ?? []).map((row) => mapGameRow(row as any));
+      }
+      return dbQueryConn(conn, GameSql.getAlternateVersions, { id: gameId }, mapGameRow);
     });
   }
 
@@ -539,47 +476,28 @@ export default class Game {
       }
     }
 
-    return oraWithConnection(async (conn) => {
-      await conn.executeMany(
-        getSql(GameSql.linkAlternateVersions, dialect),
-        pairs,
-        { autoCommit: true },
-      );
-      return pairs.length;
+    await dbTransaction(async (conn) => {
+      for (const pair of pairs) {
+        await dbMutateConn(conn, GameSql.linkAlternateVersions, pair);
+      }
     });
+    return pairs.length;
   }
 
   static async getGameByIgdbId(igdbId: number): Promise<IGame | null> {
-    return oraWithConnection(async (conn) => {
-      const result = await conn.execute<{
-        GAME_ID: number;
-        TITLE: string;
-        DESCRIPTION: string | null;
-        IMAGE_DATA: Buffer | null;
-        THUMBNAIL_BAD: number | null;
-        THUMBNAIL_APPROVED: number | null;
-        IGDB_ID: number | null;
-        SLUG: string | null;
-        TOTAL_RATING: number | null;
-        IGDB_URL: string | null;
-        FEATURED_VIDEO_URL: string | null;
-        INITIAL_RELEASE_DATE: Date | null;
-        CREATED_AT: Date;
-        UPDATED_AT: Date;
-      }>(
-        getSql(GameSql.getGameByIgdbId, dialect),
-        { igdbId },
-        {
-          outFormat: oracledb.OUT_FORMAT_OBJECT,
-          fetchInfo: {
-            IMAGE_DATA: { type: oracledb.BUFFER },
-            DESCRIPTION: { type: oracledb.STRING },
-          },
-        },
-      );
-
-      const row = (result.rows ?? [])[0] as any;
-      return row ? mapGameRow(row) : null;
+    return dbWithConnection(async (conn) => {
+      if (getDialect() === "oracle") {
+        const result = await (conn as oracledb.Connection).execute(
+          GameSql.getGameByIgdbId.oracle,
+          { igdbId },
+          { outFormat: oracledb.OUT_FORMAT_OBJECT,
+            fetchInfo: { IMAGE_DATA: { type: oracledb.BUFFER }, DESCRIPTION: { type: oracledb.STRING } } },
+        );
+        const row = (result.rows ?? [])[0] as any;
+        return row ? mapGameRow(row) : null;
+      }
+      const rows = await dbQueryConn(conn, GameSql.getGameByIgdbId, { igdbId }, mapGameRow);
+      return rows[0] ?? null;
     });
   }
 
@@ -664,7 +582,6 @@ export default class Game {
   // --- Metadata Handlers ---
 
   private static async getOrInsertMetadata(
-    conn: oracledb.Connection,
     table: string,
     idCol: string,
     nameCol: string,
@@ -672,214 +589,111 @@ export default class Game {
     name: string,
     igdbId: number,
   ): Promise<number> {
-    const rows = await oraQuery(
-      GameSql.getOrInsertMetadataSelect(idCol, table, igdbIdCol)[dialect],
+    const rows = await dbQuery(
+      GameSql.getOrInsertMetadataSelect(idCol, table, igdbIdCol),
       { igdbId },
-      (row: Record<string, number>) => Number(row[idCol]),
-      conn,
+      (row: Record<string, number>) => {
+        const val = row[idCol] ?? row[idCol.toLowerCase()];
+        return Number(val);
+      },
     );
     if (rows.length > 0) return rows[0];
 
-    const insertRes = await oraMutate(
-      GameSql.getOrInsertMetadataInsert(table, nameCol, idCol, igdbIdCol)[dialect],
-      { name, igdbId, id: { type: oracledb.NUMBER, dir: oracledb.BIND_OUT } },
-      conn,
+    return dbInsert(
+      GameSql.getOrInsertMetadataInsert(table, nameCol, idCol, igdbIdCol),
+      { name, igdbId },
+      "id",
     );
-    await conn.commit();
-    return (insertRes.outBinds as { id: number[] }).id[0];
   }
 
   static async saveFullGameMetadata(
     gameId: number,
     details: IGDBGameDetails,
   ): Promise<void> {
-    await oraWithConnection(async (conn) => {
-      if (details.involved_companies) {
-        for (const ic of details.involved_companies) {
-          const companyId = await Game.getOrInsertMetadata(
-            conn,
-            "GAMEDB_COMPANIES",
-            "COMPANY_ID",
-            "NAME",
-            "IGDB_COMPANY_ID",
-            ic.company.name,
-            ic.company.id,
-          );
-          await oraMutate(
-            getSql(GameSql.insertGameCompany, dialect),
-            {
-              gameId,
-              companyId,
-              role: ic.developer
-                ? "Developer"
-                : ic.publisher
-                  ? "Publisher"
-                  : null,
-            },
-            conn,
-          )
-            .then(() => conn.commit())
-            .catch(() => {});
-        }
-      }
-
-      if (details.genres) {
-        for (const g of details.genres) {
-          const genreId = await Game.getOrInsertMetadata(
-            conn,
-            "GAMEDB_GENRES",
-            "GENRE_ID",
-            "NAME",
-            "IGDB_GENRE_ID",
-            g.name,
-            g.id,
-          );
-          await oraMutate(
-            getSql(GameSql.insertGameGenre, dialect),
-            { gameId, genreId },
-            conn,
-          )
-            .then(() => conn.commit())
-            .catch(() => {});
-        }
-      }
-
-      if (details.themes) {
-        for (const t of details.themes) {
-          const themeId = await Game.getOrInsertMetadata(
-            conn,
-            "GAMEDB_THEMES",
-            "THEME_ID",
-            "NAME",
-            "IGDB_THEME_ID",
-            t.name,
-            t.id,
-          );
-          await oraMutate(
-            getSql(GameSql.insertGameTheme, dialect),
-            { gameId, themeId },
-            conn,
-          )
-            .then(() => conn.commit())
-            .catch(() => {});
-        }
-      }
-
-      if (details.game_modes) {
-        for (const gm of details.game_modes) {
-          const modeId = await Game.getOrInsertMetadata(
-            conn,
-            "GAMEDB_GAME_MODES_DEF",
-            "MODE_ID",
-            "NAME",
-            "IGDB_GAME_MODE_ID",
-            gm.name,
-            gm.id,
-          );
-          await oraMutate(
-            getSql(GameSql.insertGameMode, dialect),
-            { gameId, modeId },
-            conn,
-          )
-            .then(() => conn.commit())
-            .catch(() => {});
-        }
-      }
-
-      if (details.player_perspectives) {
-        for (const pp of details.player_perspectives) {
-          const persId = await Game.getOrInsertMetadata(
-            conn,
-            "GAMEDB_PERSPECTIVES",
-            "PERSPECTIVE_ID",
-            "NAME",
-            "IGDB_PERSPECTIVE_ID",
-            pp.name,
-            pp.id,
-          );
-          await oraMutate(
-            getSql(GameSql.insertGamePerspective, dialect),
-            { gameId, persId },
-            conn,
-          )
-            .then(() => conn.commit())
-            .catch(() => {});
-        }
-      }
-
-      if (details.game_engines) {
-        for (const e of details.game_engines) {
-          const engineId = await Game.getOrInsertMetadata(
-            conn,
-            "GAMEDB_ENGINES",
-            "ENGINE_ID",
-            "NAME",
-            "IGDB_ENGINE_ID",
-            e.name,
-            e.id,
-          );
-          await oraMutate(
-            getSql(GameSql.insertGameEngine, dialect),
-            { gameId, engineId },
-            conn,
-          )
-            .then(() => conn.commit())
-            .catch(() => {});
-        }
-      }
-
-      if (details.franchises) {
-        for (const f of details.franchises) {
-          const franchiseId = await Game.getOrInsertMetadata(
-            conn,
-            "GAMEDB_FRANCHISES",
-            "FRANCHISE_ID",
-            "NAME",
-            "IGDB_FRANCHISE_ID",
-            f.name,
-            f.id,
-          );
-          await oraMutate(
-            getSql(GameSql.insertGameFranchise, dialect),
-            { gameId, franchiseId },
-            conn,
-          )
-            .then(() => conn.commit())
-            .catch(() => {});
-        }
-      }
-
-      if (details.collection) {
-        const collectionId = await Game.getOrInsertMetadata(
-          conn,
-          "GAMEDB_COLLECTIONS",
-          "COLLECTION_ID",
-          "NAME",
-          "IGDB_COLLECTION_ID",
-          details.collection.name,
-          details.collection.id,
+    if (details.involved_companies) {
+      for (const ic of details.involved_companies) {
+        const companyId = await Game.getOrInsertMetadata(
+          "GAMEDB_COMPANIES", "COMPANY_ID", "NAME", "IGDB_COMPANY_ID",
+          ic.company.name, ic.company.id,
         );
-        await oraMutate(
-          getSql(GameSql.updateCollectionId, dialect),
-          { collectionId, gameId },
-          conn,
-        );
-        await conn.commit();
+        await dbMutate(GameSql.insertGameCompany, {
+          gameId,
+          companyId,
+          role: ic.developer ? "Developer" : ic.publisher ? "Publisher" : null,
+        }).catch(() => {});
       }
+    }
 
-      if (details.parent_game) {
-        await oraMutate(
-          getSql(GameSql.updateParentIgdbId, dialect),
-          {
-            parentId: details.parent_game.id,
-            parentName: details.parent_game.name,
-            gameId,
-          },
-          conn,
+    if (details.genres) {
+      for (const g of details.genres) {
+        const genreId = await Game.getOrInsertMetadata(
+          "GAMEDB_GENRES", "GENRE_ID", "NAME", "IGDB_GENRE_ID", g.name, g.id,
         );
-        await conn.commit();
+        await dbMutate(GameSql.insertGameGenre, { gameId, genreId }).catch(() => {});
       }
-    });
+    }
+
+    if (details.themes) {
+      for (const t of details.themes) {
+        const themeId = await Game.getOrInsertMetadata(
+          "GAMEDB_THEMES", "THEME_ID", "NAME", "IGDB_THEME_ID", t.name, t.id,
+        );
+        await dbMutate(GameSql.insertGameTheme, { gameId, themeId }).catch(() => {});
+      }
+    }
+
+    if (details.game_modes) {
+      for (const gm of details.game_modes) {
+        const modeId = await Game.getOrInsertMetadata(
+          "GAMEDB_GAME_MODES_DEF", "MODE_ID", "NAME", "IGDB_GAME_MODE_ID", gm.name, gm.id,
+        );
+        await dbMutate(GameSql.insertGameMode, { gameId, modeId }).catch(() => {});
+      }
+    }
+
+    if (details.player_perspectives) {
+      for (const pp of details.player_perspectives) {
+        const persId = await Game.getOrInsertMetadata(
+          "GAMEDB_PERSPECTIVES", "PERSPECTIVE_ID", "NAME", "IGDB_PERSPECTIVE_ID",
+          pp.name, pp.id,
+        );
+        await dbMutate(GameSql.insertGamePerspective, { gameId, persId }).catch(() => {});
+      }
+    }
+
+    if (details.game_engines) {
+      for (const e of details.game_engines) {
+        const engineId = await Game.getOrInsertMetadata(
+          "GAMEDB_ENGINES", "ENGINE_ID", "NAME", "IGDB_ENGINE_ID", e.name, e.id,
+        );
+        await dbMutate(GameSql.insertGameEngine, { gameId, engineId }).catch(() => {});
+      }
+    }
+
+    if (details.franchises) {
+      for (const f of details.franchises) {
+        const franchiseId = await Game.getOrInsertMetadata(
+          "GAMEDB_FRANCHISES", "FRANCHISE_ID", "NAME", "IGDB_FRANCHISE_ID", f.name, f.id,
+        );
+        await dbMutate(GameSql.insertGameFranchise, { gameId, franchiseId }).catch(() => {});
+      }
+    }
+
+    if (details.collection) {
+      const collectionId = await Game.getOrInsertMetadata(
+        "GAMEDB_COLLECTIONS", "COLLECTION_ID", "NAME", "IGDB_COLLECTION_ID",
+        details.collection.name, details.collection.id,
+      );
+      await dbMutate(GameSql.updateCollectionId, { collectionId, gameId });
+    }
+
+    if (details.parent_game) {
+      await dbMutate(GameSql.updateParentIgdbId, {
+        parentId: details.parent_game.id,
+        parentName: details.parent_game.name,
+        gameId,
+      });
+    }
 
     await Game.saveReleaseDates(gameId, details.release_dates ?? []);
   }
@@ -1022,16 +836,11 @@ export default class Game {
     }
 
     try {
-      const insertRes = await oraMutate(
-        getSql(GameSql.insertRegion, dialect),
-        {
-          code: regionConfig.code,
-          name: regionConfig.name,
-          igdbId: igdbRegionId,
-          id: { type: oracledb.NUMBER, dir: oracledb.BIND_OUT },
-        },
-      );
-      const regionId = (insertRes.outBinds as { id: number[] }).id[0];
+      const regionId = await dbInsert(GameSql.insertRegion, {
+        code: regionConfig.code,
+        name: regionConfig.name,
+        igdbId: igdbRegionId,
+      }, "id");
       return Game.getRegionById(regionId);
     } catch (err) {
       console.error(
@@ -1147,21 +956,12 @@ export default class Game {
     releaseDate: Date | null,
     notes: string | null,
   ): Promise<IRelease> {
-    const result = await oraMutate(
-      getSql(GameSql.insertRelease, dialect),
-      {
-        gameId,
-        platformId,
-        regionId,
-        format,
-        releaseDate: releaseDate || null,
-        notes: notes || null,
-        id: { type: oracledb.NUMBER, dir: oracledb.BIND_OUT },
-      },
-    );
-    const releaseId = (result.outBinds as { id: number[] }).id[0];
-    if (!releaseId)
-      throw new Error("Failed to retrieve RELEASE_ID after insert.");
+    const releaseId = await dbInsert(GameSql.insertRelease, {
+      gameId, platformId, regionId, format,
+      releaseDate: releaseDate || null,
+      notes: notes || null,
+    }, "id");
+    if (!releaseId) throw new Error("Failed to retrieve RELEASE_ID after insert.");
     const newRelease = await Game.getReleaseById(releaseId);
     if (!newRelease) throw new Error("Failed to fetch newly created release.");
     return newRelease;
@@ -1428,7 +1228,13 @@ export default class Game {
       return [];
     }
 
-    const queryPromise = oraWithConnection(async (conn) => {
+    const queryPromise = dbWithConnection(async (conn) => {
+      const isOracle = getDialect() === "oracle";
+      const titleCol = isOracle ? "TITLE" : "title";
+      const titleFoldExpr =
+        `REPLACE(REPLACE(REPLACE(REPLACE(LOWER(${titleCol}), 'é', 'e'), 'è', 'e'), 'ê', 'e'), 'ë', 'e')`;
+      const titleNormExpr = `REGEXP_REPLACE(${titleFoldExpr}, '[^a-z0-9]', '')`;
+
       const binds = {
         exactRaw: foldedLowerQuery,
         rawPrefix: `${foldedLowerQuery}%`,
@@ -1438,31 +1244,20 @@ export default class Game {
         normContains: normalizedQuery ? `%${normalizedQuery}%` : null,
         limit: safeLimit,
       };
-      const titleFoldExpr =
-        "REPLACE(REPLACE(REPLACE(REPLACE(LOWER(TITLE), 'é', 'e'), 'è', 'e'), 'ê', 'e'), 'ë', 'e')";
-      const titleNormExpr = `REGEXP_REPLACE(${titleFoldExpr}, '[^a-z0-9]', '')`;
 
-      const result = await conn.execute<{
-        GAME_ID: number;
-        TITLE: string;
-        INITIAL_RELEASE_DATE: Date | null;
-      }>(
-        GameSql.searchGamesAutocomplete(titleFoldExpr, titleNormExpr)[dialect],
+      const games = await dbQueryConn(
+        conn,
+        GameSql.searchGamesAutocomplete(titleFoldExpr, titleNormExpr),
         binds,
-        { outFormat: oracledb.OUT_FORMAT_OBJECT },
+        (row: any): IGameAutocompleteResult => {
+          const ird = row.INITIAL_RELEASE_DATE ?? row.initial_release_date;
+          return {
+            id: Number(row.GAME_ID ?? row.game_id),
+            title: String(row.TITLE ?? row.title),
+            initialReleaseDate: ird instanceof Date ? ird : ird ? new Date(ird) : null,
+          };
+        },
       );
-
-      const resultRows = result.rows ?? [];
-      const games: IGameAutocompleteResult[] = resultRows.map((row: any) => ({
-        id: Number(row.GAME_ID),
-        title: String(row.TITLE),
-        initialReleaseDate:
-          row.INITIAL_RELEASE_DATE instanceof Date
-            ? row.INITIAL_RELEASE_DATE
-            : row.INITIAL_RELEASE_DATE
-              ? new Date(row.INITIAL_RELEASE_DATE)
-              : null,
-      }));
 
       autocompleteSearchCache.set(cacheKey, {
         expiresAt: Date.now() + AUTOCOMPLETE_CACHE_TTL_MS,
@@ -1524,7 +1319,7 @@ export default class Game {
       publisherId?: number;
     } = {},
   ): Promise<IGameSearchResult[]> {
-    return oraWithConnection(async (connection) => {
+    return dbWithConnection(async (connection) => {
       const baseQuery = query.trim();
       const hasFilters =
         filters.upcomingRelease ||
@@ -1535,6 +1330,12 @@ export default class Game {
       if (!baseQuery && !hasFilters) {
         return [];
       }
+
+      const isOracle = getDialect() === "oracle";
+      const titleCol = isOracle ? "TITLE" : "title";
+      const titleFoldExpr =
+        `REPLACE(REPLACE(REPLACE(REPLACE(LOWER(${titleCol}), 'é', 'e'), 'è', 'e'), 'ê', 'e'), 'ë', 'e')`;
+      const titleNormExpr = `REGEXP_REPLACE(${titleFoldExpr}, '[^a-z0-9]', '')`;
 
       const clauses: string[] = [];
       const binds: Record<string, string | number> = {};
@@ -1593,9 +1394,6 @@ export default class Game {
           return [];
         }
 
-        const titleFoldExpr =
-          "REPLACE(REPLACE(REPLACE(REPLACE(LOWER(TITLE), 'é', 'e'), 'è', 'e'), 'ê', 'e'), 'ë', 'e')";
-        const titleNormExpr = `REGEXP_REPLACE(${titleFoldExpr}, '[^a-z0-9]', '')`;
         Array.from(termSet.entries()).forEach(([norm, term], index) => {
           const rawKey = `searchQuery${index}`;
           const normKey = `normalizedQuery${index}`;
@@ -1609,35 +1407,35 @@ export default class Game {
 
       const filterClauses: string[] = [];
       if (filters.upcomingRelease) {
-        filterClauses.push("u.UPCOMING_DATE IS NOT NULL");
+        filterClauses.push(
+          isOracle ? "u.UPCOMING_DATE IS NOT NULL" : "u.upcoming_date IS NOT NULL",
+        );
       }
       if (filters.platformId) {
-        filterClauses.push(
-          "g.GAME_ID IN (SELECT GAME_ID FROM GAMEDB_GAME_PLATFORMS WHERE PLATFORM_ID = :filterPlatformId)",
+        filterClauses.push(isOracle
+          ? "g.GAME_ID IN (SELECT GAME_ID FROM GAMEDB_GAME_PLATFORMS WHERE PLATFORM_ID = :filterPlatformId)"
+          : "g.game_id IN (SELECT game_id FROM gamedb_game_platforms WHERE platform_id = :filterPlatformId)",
         );
         binds["filterPlatformId"] = filters.platformId;
       }
       if (filters.year) {
-        filterClauses.push(
-          "EXTRACT(YEAR FROM g.INITIAL_RELEASE_DATE) = :filterYear",
+        filterClauses.push(isOracle
+          ? "EXTRACT(YEAR FROM g.INITIAL_RELEASE_DATE) = :filterYear"
+          : "EXTRACT(YEAR FROM g.initial_release_date) = :filterYear",
         );
         binds["filterYear"] = filters.year;
       }
       if (filters.developerId) {
-        filterClauses.push(
-          `g.GAME_ID IN (
-            SELECT GAME_ID FROM GAMEDB_GAME_COMPANIES
-             WHERE COMPANY_ID = :filterDeveloperId AND ROLE = 'Developer'
-          )`,
+        filterClauses.push(isOracle
+          ? `g.GAME_ID IN (SELECT GAME_ID FROM GAMEDB_GAME_COMPANIES WHERE COMPANY_ID = :filterDeveloperId AND ROLE = 'Developer')`
+          : `g.game_id IN (SELECT game_id FROM gamedb_game_companies WHERE company_id = :filterDeveloperId AND role = 'Developer')`,
         );
         binds["filterDeveloperId"] = filters.developerId;
       }
       if (filters.publisherId) {
-        filterClauses.push(
-          `g.GAME_ID IN (
-            SELECT GAME_ID FROM GAMEDB_GAME_COMPANIES
-             WHERE COMPANY_ID = :filterPublisherId AND ROLE = 'Publisher'
-          )`,
+        filterClauses.push(isOracle
+          ? `g.GAME_ID IN (SELECT GAME_ID FROM GAMEDB_GAME_COMPANIES WHERE COMPANY_ID = :filterPublisherId AND ROLE = 'Publisher')`
+          : `g.game_id IN (SELECT game_id FROM gamedb_game_companies WHERE company_id = :filterPublisherId AND role = 'Publisher')`,
         );
         binds["filterPublisherId"] = filters.publisherId;
       }
@@ -1651,81 +1449,50 @@ export default class Game {
           ? `${titlePart} AND ${filterPart}`
           : titlePart || filterPart || "1=0";
 
+      const upcomingCol = isOracle ? "u.UPCOMING_DATE" : "u.upcoming_date";
       const orderPrefix = filters.upcomingRelease
-        ? "u.UPCOMING_DATE ASC NULLS LAST, "
+        ? `${upcomingCol} ASC NULLS LAST, `
         : "";
-      const result = await connection.execute<{
-        GAME_ID: number;
-        TITLE: string;
-        DESCRIPTION: string | null;
-        IMAGE_DATA: Buffer | null;
-        IGDB_ID: number | null;
-        SLUG: string | null;
-        TOTAL_RATING: number | null;
-        IGDB_URL: string | null;
-        FEATURED_VIDEO_URL: string | null;
-        INITIAL_RELEASE_DATE: Date | null;
-        CREATED_AT: Date;
-        UPDATED_AT: Date;
-        UPCOMING_RELEASE_DATE: Date | null;
-        UPCOMING_PLATFORMS: string | null;
-      }>(
-        GameSql.searchGames(whereClause, orderPrefix)[dialect],
-        binds,
-        {
-          outFormat: oracledb.OUT_FORMAT_OBJECT,
-          fetchInfo: { DESCRIPTION: { type: oracledb.STRING } },
-        },
-      );
+
+      const entry = GameSql.searchGames(whereClause, orderPrefix);
 
       const upcomingDates = new Map<number, Date | null>();
       const upcomingPlatforms = new Map<number, string[]>();
-      const games: IGame[] = (result.rows ?? []).map((row) => {
-        const id = Number(row.GAME_ID);
-        const upcomingDate =
-          row.UPCOMING_RELEASE_DATE instanceof Date
-            ? row.UPCOMING_RELEASE_DATE
-            : row.UPCOMING_RELEASE_DATE
-              ? new Date(row.UPCOMING_RELEASE_DATE)
-              : null;
-        upcomingDates.set(id, upcomingDate);
-        const platforms = row.UPCOMING_PLATFORMS
-          ? row.UPCOMING_PLATFORMS.split(",")
-              .map((s: string) => s.trim())
-              .filter(Boolean)
-          : [];
-        upcomingPlatforms.set(id, platforms);
-        return {
-          id,
-          title: String(row.TITLE),
-          description: row.DESCRIPTION ? String(row.DESCRIPTION) : null,
-          imageData: null,
-          thumbnailBad: false,
-          thumbnailApproved: false,
-          igdbId: row.IGDB_ID ? Number(row.IGDB_ID) : null,
-          slug: row.SLUG ? String(row.SLUG) : null,
-          totalRating: row.TOTAL_RATING ? Number(row.TOTAL_RATING) : null,
-          igdbUrl: row.IGDB_URL ? String(row.IGDB_URL) : null,
-          featuredVideoUrl: row.FEATURED_VIDEO_URL
-            ? String(row.FEATURED_VIDEO_URL)
-            : null,
-          initialReleaseDate:
-            row.INITIAL_RELEASE_DATE instanceof Date
-              ? row.INITIAL_RELEASE_DATE
-              : row.INITIAL_RELEASE_DATE
-                ? new Date(row.INITIAL_RELEASE_DATE)
-                : null,
-          createdAt:
-            row.CREATED_AT instanceof Date
-              ? row.CREATED_AT
-              : new Date(row.CREATED_AT),
-          updatedAt:
-            row.UPDATED_AT instanceof Date
-              ? row.UPDATED_AT
-              : new Date(row.UPDATED_AT),
-          coverUrl: null,
-        };
-      });
+
+      let games: IGame[];
+
+      if (isOracle) {
+        const result = await (connection as oracledb.Connection).execute<any>(entry.oracle, binds, {
+          outFormat: oracledb.OUT_FORMAT_OBJECT,
+          fetchInfo: { DESCRIPTION: { type: oracledb.STRING } },
+        });
+        games = (result.rows ?? []).map((row: any) => {
+          const id = Number(row.GAME_ID);
+          const urd = row.UPCOMING_RELEASE_DATE;
+          upcomingDates.set(id, urd instanceof Date ? urd : urd ? new Date(urd) : null);
+          upcomingPlatforms.set(
+            id,
+            row.UPCOMING_PLATFORMS
+              ? String(row.UPCOMING_PLATFORMS).split(",").map((s: string) => s.trim()).filter(Boolean)
+              : [],
+          );
+          return mapGameRow(row);
+        });
+      } else {
+        const rows = await dbQueryConn(connection, entry, binds, (row: any) => {
+          const id = Number(row.game_id);
+          const urd = row.upcoming_release_date;
+          upcomingDates.set(id, urd instanceof Date ? urd : urd ? new Date(urd) : null);
+          upcomingPlatforms.set(
+            id,
+            row.upcoming_platforms
+              ? String(row.upcoming_platforms).split(",").map((s: string) => s.trim()).filter(Boolean)
+              : [],
+          );
+          return mapGameRow(row);
+        });
+        games = rows;
+      }
 
       const withPlatforms = await Game.attachPlatformsToGames(games);
       return withPlatforms.map((g) => ({
@@ -1754,15 +1521,11 @@ export default class Game {
       );
     }
 
-    await oraTransaction(async (conn) => {
+    await dbTransaction(async (conn) => {
       for (const igdbId of uniqueIds) {
         const platform = platformMap.get(igdbId);
         if (!platform) continue;
-        await oraMutate(
-          getSql(GameSql.addGamePlatformMerge, dialect),
-          { gameId, platformId: platform.id },
-          conn,
-        );
+        await dbMutateConn(conn, GameSql.addGamePlatformMerge, { gameId, platformId: platform.id });
       }
     });
   }
@@ -1775,32 +1538,35 @@ export default class Game {
     titleWords?: string[],
     showCompleteOnly: boolean = false,
   ): Promise<IGame[]> {
-    return oraWithConnection(async (connection) => {
+    return dbWithConnection(async (connection) => {
+      const isOracle = getDialect() === "oracle";
+      const imageCol = isOracle ? "IMAGE_DATA" : "image_data";
+      const videoCol = isOracle ? "FEATURED_VIDEO_URL" : "featured_video_url";
+      const descCol = isOracle ? "DESCRIPTION" : "description";
+      const gameIdCol = isOracle ? "g.GAME_ID" : "g.game_id";
+      const releasesTable = isOracle ? "GAMEDB_RELEASES" : "gamedb_releases";
+      const releaseGameIdCol = isOracle ? "r.GAME_ID" : "r.game_id";
+      const titleCol = isOracle ? "g.TITLE" : "g.title";
+
       const whereClauses: string[] = [];
       if (missingImage) {
-        whereClauses.push("IMAGE_DATA IS NULL");
+        whereClauses.push(`${imageCol} IS NULL`);
       }
       if (missingFeaturedVideo) {
-        whereClauses.push("FEATURED_VIDEO_URL IS NULL");
+        whereClauses.push(`${videoCol} IS NULL`);
       }
       if (missingDescription) {
-        whereClauses.push("DESCRIPTION IS NULL");
+        whereClauses.push(`${descCol} IS NULL`);
       }
       if (missingReleaseData) {
         whereClauses.push(
-          "NOT EXISTS (SELECT 1 FROM GAMEDB_RELEASES r WHERE r.GAME_ID = g.GAME_ID)",
+          `NOT EXISTS (SELECT 1 FROM ${releasesTable} r WHERE ${releaseGameIdCol} = ${gameIdCol})`,
         );
       }
 
       if (whereClauses.length === 0) {
         return [];
       }
-
-      // If both are true, we want games that have missing image OR missing thread?
-      // "check for missing images and thread links" -> usually implies Union or OR logic in an audit.
-      // If I say "audit images", I get missing images.
-      // If I say "audit threads", I get missing threads.
-      // If I say "audit both", I probably want anything that is missing either.
 
       const whereClause = whereClauses.join(" OR ");
       const binds: Record<string, any> = {};
@@ -1810,7 +1576,7 @@ export default class Game {
         titleWords.forEach((word, index) => {
           const key = `titleWord${index}`;
           binds[key] = `%${word.toLowerCase()}%`;
-          wordClauses.push(`LOWER(g.TITLE) LIKE :${key}`);
+          wordClauses.push(`LOWER(${titleCol}) LIKE :${key}`);
         });
         titleClause = wordClauses.length ? `(${wordClauses.join(" OR ")})` : "";
       }
@@ -1820,43 +1586,29 @@ export default class Game {
         : whereClause;
 
       if (showCompleteOnly) {
-        const completeClause = `
-          IMAGE_DATA IS NOT NULL
-          AND FEATURED_VIDEO_URL IS NOT NULL
-          AND DESCRIPTION IS NOT NULL
-          AND EXISTS (SELECT 1 FROM GAMEDB_RELEASES r WHERE r.GAME_ID = g.GAME_ID)
-        `;
+        const completeClause = `${imageCol} IS NOT NULL
+          AND ${videoCol} IS NOT NULL
+          AND ${descCol} IS NOT NULL
+          AND EXISTS (SELECT 1 FROM ${releasesTable} r WHERE ${releaseGameIdCol} = ${gameIdCol})`;
         combinedClause = titleClause
           ? `(${completeClause}) AND ${titleClause}`
           : completeClause;
       }
 
-      const result = await connection.execute<{
-        GAME_ID: number;
-        TITLE: string;
-        DESCRIPTION: string | null;
-        IMAGE_DATA: Buffer | null;
-        IGDB_ID: number | null;
-        SLUG: string | null;
-        TOTAL_RATING: number | null;
-        IGDB_URL: string | null;
-        FEATURED_VIDEO_URL: string | null;
-        INITIAL_RELEASE_DATE: Date | null;
-        CREATED_AT: Date;
-        UPDATED_AT: Date;
-      }>(
-        GameSql.getGamesForAudit(combinedClause)[dialect],
-        binds,
-        {
+      const entry = GameSql.getGamesForAudit(combinedClause);
+
+      if (isOracle) {
+        const result = await (connection as oracledb.Connection).execute<any>(entry.oracle, binds, {
           outFormat: oracledb.OUT_FORMAT_OBJECT,
           fetchInfo: {
             IMAGE_DATA: { type: oracledb.BUFFER },
             DESCRIPTION: { type: oracledb.STRING },
           },
-        },
-      );
+        });
+        return (result.rows ?? []).map(mapGameRow);
+      }
 
-      return (result.rows ?? []).map(mapGameRow);
+      return dbQueryConn(connection, entry, binds, mapGameRow);
     });
   }
 
@@ -1935,25 +1687,13 @@ export default class Game {
   static async clearReleaseDates(
     gameId: number,
   ): Promise<{ releases: number; announcements: number }> {
-    return oraTransaction(async (conn) => {
-      const announceResult = await oraMutate(
-        getSql(GameSql.clearReleaseAnnouncements, dialect),
-        { gameId },
-        conn,
-      );
-      const releaseResult = await oraMutate(
-        getSql(GameSql.clearReleases, dialect),
-        { gameId },
-        conn,
-      );
-      await oraMutate(
-        getSql(GameSql.clearInitialReleaseDate, dialect),
-        { gameId },
-        conn,
-      );
+    return dbTransaction(async (conn) => {
+      const announceCount = await dbMutateConn(conn, GameSql.clearReleaseAnnouncements, { gameId });
+      const releaseCount = await dbMutateConn(conn, GameSql.clearReleases, { gameId });
+      await dbMutateConn(conn, GameSql.clearInitialReleaseDate, { gameId });
       return {
-        releases: Number(releaseResult.rowsAffected ?? 0),
-        announcements: Number(announceResult.rowsAffected ?? 0),
+        releases: Number(releaseCount),
+        announcements: Number(announceCount),
       };
     });
   }
