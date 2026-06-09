@@ -1,0 +1,13 @@
+export const DEFAULT_PAGE_SIZE        = 20;
+export const AVATAR_HISTORY_PAGE_SIZE  = 20;
+export const AVATAR_ALL_VIEW_PAGE_SIZE = 50;
+export const ROUND_HISTORY_PAGE_SIZE   = 10;
+export const AUDIT_PAGE_SIZE           = 10;
+export const SYNONYM_LIST_PAGE_SIZE    = 25;
+export const JOURNAL_LIST_PAGE_SIZE    = 20;
+export const JOURNAL_ALL_PAGE_SIZE     = 50;
+export const JOURNAL_SEARCH_PAGE_SIZE  = 1;
+export const COMPLETION_PAGE_SIZE      = 20;
+export const MP_INFO_PAGE_SIZE         = 25;
+export const GUILD_FETCH_CHUNK_SIZE    = 100;
+export const CLAIM_MENU_CHUNK_SIZE     = 25;

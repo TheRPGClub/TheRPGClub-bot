@@ -67,12 +67,14 @@ import {
 import { NOW_PLAYING_HELP_PREFIX } from "./now-playing-help.js";
 import { EphemeralOwnerMenu } from "../functions/EphemeralOwnerMenu.js";
 import { isPositiveInt } from "../utilities/ValidationUtils.js";
+import {
+  JOURNAL_LIST_PAGE_SIZE as LIST_PAGE_SIZE,
+  JOURNAL_ALL_PAGE_SIZE as ALL_PAGE_SIZE,
+  JOURNAL_SEARCH_PAGE_SIZE as SEARCH_PAGE_SIZE,
+} from "../config/pagination.js";
 
 const gjHmenu = new EphemeralOwnerMenu();
 
-const LIST_PAGE_SIZE = 15;
-const ALL_PAGE_SIZE = 20;
-const SEARCH_PAGE_SIZE = 1;
 const SEARCH_QUERY_MAX_LENGTH = 35;
 
 const GJ_LIST_SELECT_PREFIX = "game-journal-list-select";

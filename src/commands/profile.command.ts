@@ -44,7 +44,7 @@ export const COMPLETION_TYPES = [
 
 export type CompletionType = (typeof COMPLETION_TYPES)[number];
 
-export const COMPLETION_PAGE_SIZE = 20;
+export { COMPLETION_PAGE_SIZE } from "../config/pagination.js";
 
 export type ProfileViewPayload = {
   payload?: {

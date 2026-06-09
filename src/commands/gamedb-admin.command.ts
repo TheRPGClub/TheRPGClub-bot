@@ -65,8 +65,8 @@ import { shouldRenderPrevNextButtons } from "../functions/PaginationUtils.js";
 import { parseSynonymQuickAddTerms } from "./gamedb-synonym.utils.js";
 import { isPositiveInt } from "../utilities/ValidationUtils.js";
 import { COLOR_PRIMARY, COLOR_SUCCESS, COLOR_HIGHLIGHT } from "../config/colors.js";
+import { AUDIT_PAGE_SIZE, SYNONYM_LIST_PAGE_SIZE } from "../config/pagination.js";
 
-const AUDIT_PAGE_SIZE = 20;
 const AUDIT_VIDEO_MODAL_ID = "audit-video-modal";
 const AUDIT_VIDEO_INPUT_ID = "audit-video-url";
 const AUDIT_DESCRIPTION_MODAL_ID = "audit-description-modal";
@@ -82,7 +82,6 @@ const SYNONYM_EDIT_GROUP_MODAL_PREFIX = "gamedb-syn-edit-group-modal";
 const SYNONYM_EDIT_GROUP_INPUT_ID = "gamedb-syn-edit-group-input";
 const SYNONYM_DELETE_GROUP_SELECT_PREFIX = "gamedb-syn-delete-group";
 const SYNONYM_ADD_FROM_LIST_PREFIX = "gamedb-syn-add-from-list";
-const SYNONYM_LIST_PAGE_SIZE = 20;
 const MAX_COMPONENT_CUSTOM_ID_LENGTH = 100;
 
 function encodeSynonymQuery(query: string, maxLength: number): string {

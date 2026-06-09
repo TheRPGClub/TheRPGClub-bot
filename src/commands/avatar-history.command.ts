@@ -40,9 +40,10 @@ import { buildTitleHeaderContainer, buildUserHeaderContainer } from "../function
 import { safeDeferUpdate } from "../functions/InteractionUtils.js";
 import { recordCurrentAvatarIfNew } from "../utilities/AvatarLogUtils.js";
 import { isAdmin } from "./admin/admin-auth.utils.js";
-
-const AVATAR_HISTORY_PAGE_SIZE = 10;
-const ALL_VIEW_PAGE_SIZE = 15;
+import {
+  AVATAR_HISTORY_PAGE_SIZE,
+  AVATAR_ALL_VIEW_PAGE_SIZE as ALL_VIEW_PAGE_SIZE,
+} from "../config/pagination.js";
 
 function formatTimestamp(date: Date): string {
   const seconds = Math.floor(date.getTime() / 1000);
