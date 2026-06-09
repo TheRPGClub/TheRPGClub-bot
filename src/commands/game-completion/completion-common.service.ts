@@ -20,6 +20,7 @@ import {
   COMPLETION_PAGE_SIZE,
 } from "../profile.command.js";
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
+import { MAX_CONTAINER_TEXT, MAX_SECTION_TEXT } from "../../config/textLimits.js";
 
 export type CommonCompletionSort =
   | "title_asc"
@@ -331,7 +332,7 @@ function buildV2Flags(ephemeral: boolean): number {
   return buildComponentsV2Flags(ephemeral);
 }
 
-const CHUNK_LIMIT = 3500;
+const CHUNK_LIMIT = MAX_CONTAINER_TEXT;
 
 function pushChunked(containers: ContainerBuilder[], lines: string[]): void {
   let buffer = "";
@@ -417,7 +418,7 @@ export async function renderCommonCompletionPage(
   containers.push(
     new ContainerBuilder().addTextDisplayComponents(
       new TextDisplayBuilder().setContent(
-        safeV2TextContent(`## Shared Completions\n### ${leftDisplay} & ${rightDisplay}`, 3500),
+        safeV2TextContent(`## Shared Completions\n### ${leftDisplay} & ${rightDisplay}`, MAX_CONTAINER_TEXT),
       ),
     ),
   );
@@ -443,7 +444,7 @@ export async function renderCommonCompletionPage(
   }
   containers.push(
     new ContainerBuilder().addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(safeV2TextContent(footerLines.join("\n"), 1000)),
+      new TextDisplayBuilder().setContent(safeV2TextContent(footerLines.join("\n"), MAX_SECTION_TEXT)),
     ),
   );
 

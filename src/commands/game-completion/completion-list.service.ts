@@ -21,6 +21,11 @@ import { buildTextReply, safeV2TextContent } from "../../functions/ComponentsV2U
 import { renderUsernameWithEmoji } from "../../services/UserEmojiService.js";
 import { COMPONENTS_V2_FLAG } from "../../config/flags.js";
 import {
+  DISCORD_SELECT_LABEL_MAX,
+  DISCORD_SELECT_OPTIONS_MAX,
+  MAX_QUERY_LENGTH,
+} from "../../config/textLimits.js";
+import {
   buildJournalSelectRow,
   buildUserHeaderContainer,
   type IJournalSelectEntry,
@@ -71,7 +76,7 @@ export async function renderCompletionLeaderboard(
   );
 
   const options = leaderboard.map((m) => ({
-    label: (m.globalName ?? m.username ?? m.userId).slice(0, 100),
+    label: (m.globalName ?? m.username ?? m.userId).slice(0, DISCORD_SELECT_LABEL_MAX),
     value: m.userId,
     description: `${m.count} ${m.count === 1 ? "completion" : "completions"}`,
   }));
@@ -79,7 +84,7 @@ export async function renderCompletionLeaderboard(
   const select = new StringSelectMenuBuilder()
     .setCustomId(
       // eslint-disable-next-line local/custom-id-has-matching-handler
-      `comp-leaderboard-select${trimmedQuery ? `:${trimmedQuery.slice(0, 50)}` : ""}`,
+      `comp-leaderboard-select${trimmedQuery ? `:${trimmedQuery.slice(0, MAX_QUERY_LENGTH)}` : ""}`,
     )
     .setPlaceholder("View completions for a member")
     .addOptions(options);
@@ -145,7 +150,7 @@ export async function renderCompletionPage(
 
   const { containers, totalPages, safePage, sortedYears, yearCounts, journalEntries } = result;
   const yearPart = year == null ? "" : String(year);
-  const queryPart = query ? `:${query.slice(0, 50)}` : "";
+  const queryPart = query ? `:${query.slice(0, MAX_QUERY_LENGTH)}` : "";
   const clearFilterCustomId = year !== null ? `comp-clear-year-filter:${userId}` : undefined;
   const paginationRows = buildPaginationRows(
     totalPages,
@@ -207,11 +212,11 @@ export async function renderSelectionPage(
   const { containers, totalPages, safePage, pageCompletions } = result;
 
   const selectOptions = pageCompletions.map((c) => ({
-    label: c.title.slice(0, 100),
+    label: c.title.slice(0, DISCORD_SELECT_LABEL_MAX),
     value: String(c.completionId),
     description: `${c.completionType} (${
       c.completedAt ? formatDiscordTimestamp(c.completedAt) : "No date"
-    })`.slice(0, 100),
+    })`.slice(0, DISCORD_SELECT_LABEL_MAX),
   }));
 
   const selectId = mode === "edit" ? "comp-edit-menu" : "comp-del-menu";
@@ -223,7 +228,7 @@ export async function renderSelectionPage(
   const selectRow = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select);
 
   const yearPart = year == null ? "" : String(year);
-  const queryPart = query ? `:${query.slice(0, 50)}` : "";
+  const queryPart = query ? `:${query.slice(0, MAX_QUERY_LENGTH)}` : "";
   const paginationRows = buildPaginationRows(
     totalPages,
     safePage,
@@ -255,7 +260,7 @@ function buildYearJumpRow(
 ): ActionRowBuilder<StringSelectMenuBuilder> | null {
   if (activeYear !== null || query || totalPages <= 5 || sortedYears.length <= 3) return null;
 
-  const options = sortedYears.slice(0, 25).map((yr) => {
+  const options = sortedYears.slice(0, DISCORD_SELECT_OPTIONS_MAX).map((yr) => {
     const count = yearCounts[yr] ?? 0;
     const label = yr === "Unknown" ? "Unknown Date" : yr;
     const gameWord = count === 1 ? "game" : "games";

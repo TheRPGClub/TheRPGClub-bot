@@ -11,6 +11,7 @@ import {
 } from "../services/UserEmojiService.js";
 import { safeV2TextContent } from "./ComponentsV2Utils.js";
 import { formatTableDate } from "./DateFormatUtils.js";
+import { DISCORD_SELECT_LABEL_MAX } from "../config/textLimits.js";
 
 export interface IJournalSelectEntry {
   gameId: number;
@@ -27,10 +28,13 @@ export function buildJournalSelectRow(
   const sorted = [...entries].sort((a, b) => a.title.localeCompare(b.title));
   const options = sorted.map((e) => {
     const rawLabel = `${e.title} Game Journal`;
-    const label = rawLabel.length > 100 ? `${rawLabel.slice(0, 97)}...` : rawLabel;
+    const label =
+      rawLabel.length > DISCORD_SELECT_LABEL_MAX
+        ? `${rawLabel.slice(0, DISCORD_SELECT_LABEL_MAX - 3)}...`
+        : rawLabel;
     const countText = e.journalCount === 1 ? "1 entry" : `${e.journalCount} entries`;
     const lastPart = e.lastJournalAt ? ` · Last entry ${formatTableDate(e.lastJournalAt)}` : "";
-    const description = `${countText}${lastPart}`.slice(0, 100);
+    const description = `${countText}${lastPart}`.slice(0, DISCORD_SELECT_LABEL_MAX);
     return { label, description, value: String(e.gameId) };
   });
   const select = new StringSelectMenuBuilder()

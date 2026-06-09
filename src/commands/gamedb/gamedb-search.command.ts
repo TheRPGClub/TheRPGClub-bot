@@ -50,6 +50,7 @@ import {
 } from "./gamedb-profile.service.js";
 import { handleNoResults } from "./gamedb-add.command.js";
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
+import { MAX_CONTAINER_TEXT } from "../../config/textLimits.js";
 
 function formatUpcomingDate(date: Date | null | undefined): string {
   if (!date) return "";
@@ -220,7 +221,7 @@ function buildSearchResponse(
       `## ${title}\n\n${listText}\n\n*${results.length} results total*${filterNote}`,
     );
     const container = new ContainerBuilder().addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(safeV2TextContent(content, 3500)),
+      new TextDisplayBuilder().setContent(safeV2TextContent(content, MAX_CONTAINER_TEXT)),
     );
     components.push(container);
   }
