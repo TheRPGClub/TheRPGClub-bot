@@ -39,6 +39,7 @@ import {
 } from "./collection-autocomplete.utils.js";
 import { resolveCollectionGameForAdd } from "./collection-game-resolve.utils.js";
 import { buildTextReply } from "../../functions/ComponentsV2Utils.js";
+import { isValidPlaytimeHours } from "../../utilities/ValidationUtils.js";
 
 @Discord()
 @SlashGroup({ description: "Manage your game collection", name: "collection" })
@@ -454,10 +455,7 @@ export class CollectionCrudCommand {
       return;
     }
 
-    if (
-      finalPlaytimeHours !== undefined &&
-      (Number.isNaN(finalPlaytimeHours) || finalPlaytimeHours < 0)
-    ) {
+    if (finalPlaytimeHours !== undefined && !isValidPlaytimeHours(finalPlaytimeHours)) {
       await safeReply(interaction, "Final playtime must be a non-negative number.");
       return;
     }

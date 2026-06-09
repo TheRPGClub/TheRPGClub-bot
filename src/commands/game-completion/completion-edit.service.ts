@@ -29,7 +29,7 @@ import {
   safeReply,
   safeUpdate,
 } from "../../functions/InteractionUtils.js";
-import { isPositiveInt } from "../../utilities/ValidationUtils.js";
+import { isPositiveInt, isValidPlaytimeHours } from "../../utilities/ValidationUtils.js";
 
 const MAX_NOTE_LENGTH = 500;
 type CompletionEditField = "type" | "date" | "platform" | "playtime" | "note";
@@ -200,7 +200,7 @@ export async function handleCompletionFieldEdit(interaction: ButtonInteraction):
       }
     } else if (field === "playtime") {
       const num = Number(value);
-      if (Number.isNaN(num) || num < 0)
+      if (!isValidPlaytimeHours(num))
         throw new Error("Playtime must be a non-negative number.");
       await Member.updateCompletion(ownerId, completionId, { finalPlaytimeHours: num });
     } else if (field === "note") {
