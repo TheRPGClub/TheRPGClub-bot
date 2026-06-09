@@ -23,6 +23,7 @@ import {
   safeDeferReply,
   safeReply,
   safeUpdate,
+  SHOW_IN_CHAT_DESCRIPTION,
 } from "../functions/InteractionUtils.js";
 import {
   buildOptionalPrevNextRow,
@@ -200,7 +201,7 @@ export class AvatarHistoryCommand {
     })
     member: User | undefined,
     @SlashOption({
-      description: "Show in chat (public) instead of ephemeral",
+      description: SHOW_IN_CHAT_DESCRIPTION,
       name: "showinchat",
       required: false,
       type: ApplicationCommandOptionType.Boolean,

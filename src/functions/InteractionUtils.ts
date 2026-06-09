@@ -494,6 +494,7 @@ export function extractErrorMessage(err: unknown): string {
 }
 
 export const OWNER_ONLY_MESSAGE = "This list isn't for you.";
+export const SHOW_IN_CHAT_DESCRIPTION = "Show in chat (public) instead of ephemeral";
 
 /** Returns true and replies ephemerally if user is not the owner. */
 export async function replyIfNotOwner(
