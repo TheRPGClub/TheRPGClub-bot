@@ -3,6 +3,7 @@ import type { ArgsOf, Client } from "discordx";
 import { Discord, On } from "discordx";
 import { formatTimestampWithDay } from "../utilities/DiscordLogUtils.js";
 import { BAN_LOG_CHANNEL_ID, UNBAN_LOG_CHANNEL_ID } from "../config/channels.js";
+import { COLOR_INFO, COLOR_ERROR } from "../config/colors.js";
 
 async function resolveLogChannel(client: Client, channelId: string): Promise<any | null> {
   const channel = await client.channels.fetch(channelId).catch(() => null);
@@ -56,7 +57,7 @@ export class GuildBanLog {
       username,
       user.displayAvatarURL?.() ?? null,
       user.createdAt ?? new Date(),
-      0xe74c3c,
+      COLOR_ERROR,
     );
 
     await (logChannel as any).send({ embeds: [embed] });
@@ -77,7 +78,7 @@ export class GuildBanLog {
       username,
       user.displayAvatarURL?.() ?? null,
       user.createdAt ?? new Date(),
-      0x3498db,
+      COLOR_INFO,
     );
 
     await (logChannel as any).send({ embeds: [embed] });

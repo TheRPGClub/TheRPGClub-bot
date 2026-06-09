@@ -3,6 +3,7 @@ import type { ArgsOf, Client } from "discordx";
 import { Discord, On } from "discordx";
 import { formatTimestampWithDay } from "../utilities/DiscordLogUtils.js";
 import { JOIN_LEAVE_LOG_CHANNEL_ID } from "../config/channels.js";
+import { COLOR_WARNING } from "../config/colors.js";
 const KICK_LOG_WINDOW_MS = 30_000;
 const KICK_LOG_RETRY_COUNT = 3;
 const KICK_LOG_RETRY_DELAY_MS = 750;
@@ -68,7 +69,7 @@ export class GuildMemberRemove {
     if (kickAudit) {
       const embed = new EmbedBuilder()
         .setTitle("User Kicked")
-        .setColor(0xf39c12)
+        .setColor(COLOR_WARNING)
         .addFields(
           { name: "User", value: `<@${member.user.id}>\n${username}` },
           {

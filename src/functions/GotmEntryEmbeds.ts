@@ -2,6 +2,7 @@ import { AttachmentBuilder, EmbedBuilder, type Client } from "discord.js";
 import type { IGotmEntry, IGotmGame } from "../classes/Gotm.js";
 import type { INrGotmEntry, INrGotmGame } from "../classes/NrGotm.js";
 import Game from "../classes/Game.js";
+import { COLOR_PRIMARY } from "../config/colors.js";
 
 const ANNOUNCEMENTS_CHANNEL_ID: string | undefined = process.env.ANNOUNCEMENTS_CHANNEL_ID;
 
@@ -164,7 +165,7 @@ export async function buildGotmEntryEmbed(
 ): Promise<IEmbedWithAttachments> {
   const desc = await formatGamesWithJump(entry as AnyEntry, guildId);
   const embed = new EmbedBuilder()
-    .setColor(0x0099ff)
+    .setColor(COLOR_PRIMARY)
     .setTitle(`Round ${entry.round} - ${entry.monthYear}`)
     .setDescription(desc);
 
@@ -186,7 +187,7 @@ export async function buildNrGotmEntryEmbed(
 ): Promise<IEmbedWithAttachments> {
   const desc = await formatGamesWithJump(entry as AnyEntry, guildId);
   const embed = new EmbedBuilder()
-    .setColor(0x0099ff)
+    .setColor(COLOR_PRIMARY)
     .setTitle(`NR-GOTM Round ${entry.round} - ${entry.monthYear}`)
     .setDescription(desc);
 

@@ -9,8 +9,9 @@ import {
 import type { ArgsOf, Client } from "discordx";
 import { Discord, On } from "discordx";
 import { formatTimestampWithDay, resolveLogChannel } from "../utilities/DiscordLogUtils.js";
+import { COLOR_INFO, COLOR_ERROR } from "../config/colors.js";
 
-function buildBaseEmbed(title: string, color = 0x3498db): EmbedBuilder {
+function buildBaseEmbed(title: string, color = COLOR_INFO): EmbedBuilder {
   return new EmbedBuilder()
     .setTitle(title)
     .setColor(color)
@@ -70,7 +71,7 @@ export class ServerChangeLog {
     const logChannel = await resolveLogChannel(client);
     if (!logChannel) return;
 
-    const embed = buildBaseEmbed("Channel deleted", 0xe74c3c);
+    const embed = buildBaseEmbed("Channel deleted", COLOR_ERROR);
     embed.setDescription(`${channel.name ?? channel.id} (${channel.id})`);
 
     await (logChannel as any).send({ embeds: [embed] });
@@ -133,7 +134,7 @@ export class ServerChangeLog {
     const logChannel = await resolveLogChannel(client);
     if (!logChannel) return;
 
-    const embed = buildBaseEmbed("Role deleted", 0xe74c3c);
+    const embed = buildBaseEmbed("Role deleted", COLOR_ERROR);
     embed.setDescription(`${role.name ?? role.id} (${role.id})`);
     await (logChannel as any).send({ embeds: [embed] });
   }
@@ -173,7 +174,7 @@ export class ServerChangeLog {
     const logChannel = await resolveLogChannel(client);
     if (!logChannel) return;
 
-    const embed = buildBaseEmbed("Emoji deleted", 0xe74c3c);
+    const embed = buildBaseEmbed("Emoji deleted", COLOR_ERROR);
     embed.setDescription(`${emoji.name ?? "emoji"} (${emoji.id})`);
     await (logChannel as any).send({ embeds: [embed] });
   }

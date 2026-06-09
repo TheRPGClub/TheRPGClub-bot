@@ -6,12 +6,13 @@ import { DISCORD_CONSOLE_LOG_CHANNEL_ID } from "../config/channels.js";
 import { BOT_DEV_PING_USER_ID } from "../config/users.js";
 import { COMPONENTS_V2_FLAG } from "../config/flags.js";
 import { safeV2TextContent } from "../functions/ComponentsV2Utils.js";
+import { COLOR_INFO, COLOR_WARNING, COLOR_ERROR } from "../config/colors.js";
 const MAX_DESCRIPTION_LENGTH = 3900;
 const LEVEL_COLORS: Record<string, number> = {
   log: 0x95a5a6,
-  info: 0x3498db,
-  warn: 0xf39c12,
-  error: 0xe74c3c,
+  info: COLOR_INFO,
+  warn: COLOR_WARNING,
+  error: COLOR_ERROR,
   debug: 0x9b59b6,
 };
 const LOG_BATCH_INTERVAL_MS = 5 * 1000;

@@ -52,6 +52,7 @@ import {
 } from "../services/GiveawayHubService.js";
 import { GIVEAWAY_HUB_CHANNEL_ID, GIVEAWAY_LOG_CHANNEL_ID } from "../config/channels.js";
 import { isPositiveInt } from "../utilities/ValidationUtils.js";
+import { COLOR_SUCCESS } from "../config/colors.js";
 
 const MAX_TITLE_LENGTH = 200;
 const MAX_PLATFORM_LENGTH = 50;
@@ -127,7 +128,7 @@ async function logGiveawayClaim(
     const embed = new EmbedBuilder()
       .setTitle("Giveaway claim")
       .setDescription(message)
-      .setColor(0x2ecc71)
+      .setColor(COLOR_SUCCESS)
       .setTimestamp(new Date());
     await channel.send({ embeds: [embed] }).catch(() => {});
   }

@@ -64,6 +64,7 @@ import { igdbService } from "../services/IGDB/IgdbService.js";
 import { shouldRenderPrevNextButtons } from "../functions/PaginationUtils.js";
 import { parseSynonymQuickAddTerms } from "./gamedb-synonym.utils.js";
 import { isPositiveInt } from "../utilities/ValidationUtils.js";
+import { COLOR_PRIMARY, COLOR_SUCCESS, COLOR_HIGHLIGHT } from "../config/colors.js";
 
 const AUDIT_PAGE_SIZE = 20;
 const AUDIT_VIDEO_MODAL_ID = "audit-video-modal";
@@ -1143,7 +1144,7 @@ export class GameDbAdmin {
     const embed = new EmbedBuilder()
       .setTitle(`Audit: ${game.title}`)
       .setDescription(`Game ID: ${game.id}\nIGDB ID: ${game.igdbId ?? "N/A"}`)
-      .setColor(0xFFA500); // Orange for audit
+      .setColor(COLOR_HIGHLIGHT);
 
     const files: AttachmentBuilder[] = [];
 
@@ -1315,7 +1316,7 @@ export class GameDbAdmin {
     let currentEmbed = new EmbedBuilder()
       .setTitle(title)
       .setDescription("Starting auto accept run...")
-      .setColor(0x0099ff);
+      .setColor(COLOR_PRIMARY);
     const stopRow = this.buildAutoAcceptStopRow(runId, false);
 
     const followUpPayload = buildAutoAcceptFollowUpPayload([currentEmbed], [stopRow], isPublic);
@@ -1349,7 +1350,7 @@ export class GameDbAdmin {
           currentEmbed = new EmbedBuilder()
             .setTitle(title)
             .setDescription("Processing...")
-            .setColor(0x0099ff);
+            .setColor(COLOR_PRIMARY);
           logLines.length = 0;
           try {
             currentMessage = await safeReply(interaction, {
@@ -1399,7 +1400,7 @@ export class GameDbAdmin {
       `\n**Run Complete**\n✅ Updated: ${updated}\n` +
       `⏭️ Skipped: ${skipped}\n❌ Failed: ${failed}`;
     await updateEmbed(summary);
-    currentEmbed.setColor(0x2ecc71);
+    currentEmbed.setColor(COLOR_SUCCESS);
     const stopped = shouldStop();
     const finalStopRow = this.buildAutoAcceptStopRow(runId, true, stopped ? "Stopped" : "Stop");
     if (currentMessage?.edit) {
@@ -1423,7 +1424,7 @@ export class GameDbAdmin {
     let currentEmbed = new EmbedBuilder()
       .setTitle(title)
       .setDescription("Starting sweep...")
-      .setColor(0x0099ff);
+      .setColor(COLOR_PRIMARY);
     const stopRow = this.buildAutoAcceptStopRow(runId, false);
 
     let currentMessage: any = null;
@@ -1448,7 +1449,7 @@ export class GameDbAdmin {
           currentEmbed = new EmbedBuilder()
             .setTitle(title)
             .setDescription("Processing...")
-            .setColor(0x0099ff);
+            .setColor(COLOR_PRIMARY);
           logLines.length = 0;
           try {
             currentMessage = await safeReply(interaction, {
@@ -1505,7 +1506,7 @@ export class GameDbAdmin {
         ` | ❌ ${stats.releases.failed}`,
     ].join("\n");
     await updateEmbed(summary);
-    currentEmbed.setColor(0x2ecc71);
+    currentEmbed.setColor(COLOR_SUCCESS);
     const stopped = shouldStop();
     const finalStopRow = this.buildAutoAcceptStopRow(runId, true, stopped ? "Stopped" : "Stop");
     if (currentMessage?.edit) {
