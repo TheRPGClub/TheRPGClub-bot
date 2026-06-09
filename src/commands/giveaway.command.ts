@@ -55,12 +55,13 @@ import { MEMBER_ROLE_ID } from "../config/roles.js";
 import { isPositiveInt } from "../utilities/ValidationUtils.js";
 import { COLOR_SUCCESS } from "../config/colors.js";
 import { CLAIM_MENU_CHUNK_SIZE } from "../config/pagination.js";
-import { DISCORD_SELECT_LABEL_MAX } from "../config/textLimits.js";
+import {
+  DISCORD_SELECT_LABEL_MAX,
+  GIVEAWAY_MAX_TITLE_LENGTH,
+  GIVEAWAY_MAX_PLATFORM_LENGTH,
+  GIVEAWAY_MAX_KEY_LENGTH,
+} from "../config/textLimits.js";
 import { parseCustomIdSegments } from "../utilities/CustomIdUtils.js";
-
-const MAX_TITLE_LENGTH = 200;
-const MAX_PLATFORM_LENGTH = 50;
-const MAX_KEY_LENGTH = 200;
 const GIVEAWAY_DONATE_MODAL_ID = "giveaway-donate-modal";
 const GIVEAWAY_REVOKE_MODAL_ID = "giveaway-revoke-modal";
 const GIVEAWAY_DONATE_TITLE_ID = "giveaway-donate-title";
@@ -169,16 +170,16 @@ function normalizeDonationInput(
     return { error: "Title, platform, and key are all required." };
   }
 
-  if (trimmedTitle.length > MAX_TITLE_LENGTH) {
-    return { error: `Title must be ${MAX_TITLE_LENGTH} characters or fewer.` };
+  if (trimmedTitle.length > GIVEAWAY_MAX_TITLE_LENGTH) {
+    return { error: `Title must be ${GIVEAWAY_MAX_TITLE_LENGTH} characters or fewer.` };
   }
 
-  if (trimmedPlatform.length > MAX_PLATFORM_LENGTH) {
-    return { error: `Platform must be ${MAX_PLATFORM_LENGTH} characters or fewer.` };
+  if (trimmedPlatform.length > GIVEAWAY_MAX_PLATFORM_LENGTH) {
+    return { error: `Platform must be ${GIVEAWAY_MAX_PLATFORM_LENGTH} characters or fewer.` };
   }
 
-  if (trimmedKey.length > MAX_KEY_LENGTH) {
-    return { error: `Key must be ${MAX_KEY_LENGTH} characters or fewer.` };
+  if (trimmedKey.length > GIVEAWAY_MAX_KEY_LENGTH) {
+    return { error: `Key must be ${GIVEAWAY_MAX_KEY_LENGTH} characters or fewer.` };
   }
 
   return { trimmedTitle, trimmedPlatform, trimmedKey };
@@ -359,21 +360,21 @@ function buildDonateModal(): ModalBuilder {
     .setLabel("Game title")
     .setStyle(TextInputStyle.Short)
     .setRequired(true)
-    .setMaxLength(MAX_TITLE_LENGTH);
+    .setMaxLength(GIVEAWAY_MAX_TITLE_LENGTH);
   const platformInput = new TextInputBuilder()
      
     .setCustomId(GIVEAWAY_DONATE_PLATFORM_ID)
     .setLabel("Platform (Steam, Epic, GOG, etc.)")
     .setStyle(TextInputStyle.Short)
     .setRequired(true)
-    .setMaxLength(MAX_PLATFORM_LENGTH);
+    .setMaxLength(GIVEAWAY_MAX_PLATFORM_LENGTH);
   const keyInput = new TextInputBuilder()
      
     .setCustomId(GIVEAWAY_DONATE_KEY_ID)
     .setLabel("Game key")
     .setStyle(TextInputStyle.Short)
     .setRequired(true)
-    .setMaxLength(MAX_KEY_LENGTH);
+    .setMaxLength(GIVEAWAY_MAX_KEY_LENGTH);
 
   return new ModalBuilder()
      

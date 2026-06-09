@@ -14,3 +14,8 @@ export const DISCORD_EMBED_FIELD_VALUE_MAX = 1024;
 export const MAX_QUERY_LENGTH = 50;
 export const MAX_CONTAINER_TEXT = 3500;
 export const MAX_SECTION_TEXT = 1000;
+
+// Application-defined field limits
+export const GIVEAWAY_MAX_TITLE_LENGTH    = 200;
+export const GIVEAWAY_MAX_PLATFORM_LENGTH = 50;
+export const GIVEAWAY_MAX_KEY_LENGTH      = 200;
