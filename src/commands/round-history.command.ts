@@ -42,6 +42,7 @@ import {
   buildRawModalCustomId,
   parseRawModalCustomId,
 } from "../services/raw-modal/RawModalCustomId.js";
+import { ROUND_HISTORY_PAGE_SIZE } from "../config/pagination.js";
 
 const ROUND_HISTORY_MODAL_TITLE = "Round History";
 const ROUND_HISTORY_HELP_ID = "round-history-help";
@@ -49,7 +50,6 @@ const ROUND_HISTORY_KIND_ID = "round-history-kind";
 const ROUND_HISTORY_QUERY_ID = "round-history-query";
 const ROUND_HISTORY_YEAR_ID = "round-history-year";
 const ROUND_HISTORY_SORT_ID = "round-history-sort";
-const ROUND_HISTORY_PAGE_SIZE = 5;
 
 type RoundHistoryKind = "gotm" | "nr-gotm" | "both";
 type RoundHistorySort = "asc" | "desc";

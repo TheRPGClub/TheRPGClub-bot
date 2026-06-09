@@ -36,10 +36,12 @@ import {
   safeV2TextContent,
 } from "../functions/ComponentsV2Utils.js";
 import { shouldRenderPrevNextButtons } from "../functions/PaginationUtils.js";
+import {
+  GUILD_FETCH_CHUNK_SIZE,
+  MP_INFO_PAGE_SIZE as PAGE_SIZE,
+} from "../config/pagination.js";
 
 const MAX_OPTIONS = 25;
-const PAGE_SIZE = 20;
-const GUILD_FETCH_CHUNK_SIZE = 100;
 
 type PlatformFilters = {
   steam: boolean;

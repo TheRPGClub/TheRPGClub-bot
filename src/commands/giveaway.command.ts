@@ -53,6 +53,7 @@ import {
 import { GIVEAWAY_HUB_CHANNEL_ID, GIVEAWAY_LOG_CHANNEL_ID } from "../config/channels.js";
 import { isPositiveInt } from "../utilities/ValidationUtils.js";
 import { COLOR_SUCCESS } from "../config/colors.js";
+import { CLAIM_MENU_CHUNK_SIZE } from "../config/pagination.js";
 
 const MAX_TITLE_LENGTH = 200;
 const MAX_PLATFORM_LENGTH = 50;
@@ -72,8 +73,6 @@ type GiveawayListPayload = {
   embeds?: EmbedBuilder[];
   components?: ActionRowBuilder<ButtonBuilder | StringSelectMenuBuilder>[];
 };
-
-const CLAIM_MENU_CHUNK_SIZE = 20;
 
 function getKeyRangeLabel(keys: Awaited<ReturnType<typeof listAvailableGameKeys>>): string {
   const startRaw = keys[0]?.gameTitle?.trim()?.[0] ?? "?";
