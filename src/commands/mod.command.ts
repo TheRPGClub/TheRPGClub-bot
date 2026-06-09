@@ -3,16 +3,14 @@ import {
   ApplicationCommandOptionType,
   EmbedBuilder,
   MessageFlags,
-  PermissionsBitField,
   StringSelectMenuBuilder,
   type StringSelectMenuInteraction,
 } from "discord.js";
 import type { CommandInteraction } from "discord.js";
 import { Discord, SelectMenuComponent, Slash, SlashGroup, SlashOption } from "discordx";
 import { getPresenceHistory, setPresence } from "../functions/SetPresence.js";
+import { isModerator } from "./admin/admin-auth.utils.js";
 import {
-  AnyRepliable,
-  ACCESS_DENIED_MOD,
   safeDeferReply,
   safeReply,
   safeUpdate,
@@ -200,33 +198,6 @@ export class Mod {
   }
 }
 
-export async function isModerator(interaction: AnyRepliable) {
-  const member: any = (interaction as any).member;
-  const canCheck =
-    member && typeof member.permissionsIn === "function" && interaction.channel;
-  let isMod = canCheck
-    ? member.permissionsIn(interaction.channel).has(PermissionsBitField.Flags.ManageMessages)
-    : false;
-
-  if (!isMod) {
-    const isAdmin = canCheck
-      ? member.permissionsIn(interaction.channel).has(PermissionsBitField.Flags.Administrator)
-      : false;
-
-    if (!isAdmin) {
-      const denial = {
-        content: ACCESS_DENIED_MOD,
-        flags: MessageFlags.Ephemeral,
-      };
-
-      await safeReply(interaction, denial as any);
-    } else {
-      isMod = true;
-    }
-  }
-
-  return isMod;
-}
 export function buildModHelpResponse(
   activeTopicId?: ModHelpTopicId,
 ): {

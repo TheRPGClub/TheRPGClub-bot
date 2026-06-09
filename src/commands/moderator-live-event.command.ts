@@ -1,6 +1,6 @@
 import type { CommandInteraction, ModalSubmitInteraction } from "discord.js";
 import { Discord, ModalComponent, Slash, SlashGroup } from "discordx";
-import { isModerator } from "./mod.command.js";
+import { isModerator } from "./admin/admin-auth.utils.js";
 import {
   handleLiveStreamCreateModal,
   openLiveStreamCreateModal,

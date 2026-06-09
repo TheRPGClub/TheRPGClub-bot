@@ -43,7 +43,7 @@ import {
   revokeGameKey,
 } from "../classes/GameKey.js";
 import Member from "../classes/Member.js";
-import { isAdmin } from "./admin.command.js";
+import { isAdmin } from "./admin/admin-auth.utils.js";
 import {
   buildKeyListEmbed,
   getAvailableKeysPage,
