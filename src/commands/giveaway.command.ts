@@ -24,6 +24,7 @@ import {
   AnyRepliable,
   safeDeferReply,
   safeDeferUpdate,
+  replyIfNotOwner,
   safeReply,
   safeUpdate,
   stripModalInput,
@@ -609,10 +610,7 @@ export class GiveawayCommand {
   @ButtonComponent({ id: /^giveaway-page:[^:]+:\d+:\d+:(prev|next)$/ })
   async handlePage(interaction: ButtonInteraction): Promise<void> {
     const [, sessionId, ownerId, pageRaw, dir] = interaction.customId.split(":");
-    if (interaction.user.id !== ownerId) {
-      await safeReply(interaction, buildTextReply("This giveaway list isn't for you.", true));
-      return;
-    }
+    if (await replyIfNotOwner(interaction, ownerId)) return;
 
     const parsed = parseDirAndPage(pageRaw, dir);
     if (!parsed) return;
@@ -690,10 +688,7 @@ export class GiveawayCommand {
   @ButtonComponent({ id: /^giveaway-donor-notify:\d+:(yes|no)$/ })
   async handleDonorNotifyUpdate(interaction: ButtonInteraction): Promise<void> {
     const [, ownerId, choice] = interaction.customId.split(":");
-    if (interaction.user.id !== ownerId) {
-      await safeReply(interaction, buildTextReply("This donor setting isn't for you.", true));
-      return;
-    }
+    if (await replyIfNotOwner(interaction, ownerId)) return;
 
     const enabled = choice === "yes";
     await Member.setGiveawayDonorNotifySetting(interaction.user.id, enabled);
@@ -746,10 +741,7 @@ export class GiveawayCommand {
   @SelectMenuComponent({ id: /^giveaway-claim:[^:]+:\d+:\d+:\d+$/ })
   async handleClaim(interaction: StringSelectMenuInteraction): Promise<void> {
     const [, sessionId, ownerId, pageRaw] = interaction.customId.split(":");
-    if (interaction.user.id !== ownerId) {
-      await safeReply(interaction, buildTextReply("This giveaway list isn't for you.", true));
-      return;
-    }
+    if (await replyIfNotOwner(interaction, ownerId)) return;
 
     if (!hasMemberRole(interaction.member)) {
       await safeReply(interaction, buildTextReply("Claiming keys requires the Member role.", true));
@@ -901,18 +893,12 @@ export class GiveawayCommand {
 
     if (scope === "private") {
       const ownerId = parts[5];
-      if (interaction.user.id !== ownerId) {
-        await safeReply(interaction, buildTextReply("This giveaway claim isn't for you.", true));
-        return;
-      }
+      if (await replyIfNotOwner(interaction, ownerId)) return;
     }
 
     if (scope === "public") {
       const userId = parts[6];
-      if (interaction.user.id !== userId) {
-        await safeReply(interaction, buildTextReply("This giveaway claim isn't for you.", true));
-        return;
-      }
+      if (await replyIfNotOwner(interaction, userId)) return;
     }
 
     await safeDeferUpdate(interaction);

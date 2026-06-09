@@ -9,6 +9,7 @@ import Member from "../../classes/Member.js";
 import { buildJournalView } from "../../functions/journalView.js";
 import {
   ephemeralFlag,
+  replyIfNotOwner,
   safeDeferReply,
   safeDeferUpdate,
   safeReply,
@@ -41,10 +42,7 @@ export async function handleCompletionPageSelect(
   const mode = parts[3] as "list" | "edit" | "delete";
   const query = parts.slice(4).join(":") || undefined;
 
-  if (mode !== "list" && interaction.user.id !== ownerId) {
-    await safeReply(interaction, buildTextReply("This list isn't for you.", true));
-    return;
-  }
+  if (mode !== "list" && await replyIfNotOwner(interaction, ownerId)) return;
 
   const page = Number(interaction.values[0]);
   if (Number.isNaN(page)) return;
@@ -83,10 +81,7 @@ export async function handleCompletionPaging(interaction: ButtonInteraction): Pr
   const dir = parts[4];
   const query = parts.slice(5).join(":") || undefined;
 
-  if (mode !== "list" && interaction.user.id !== ownerId) {
-    await safeReply(interaction, buildTextReply("This list isn't for you.", true));
-    return;
-  }
+  if (mode !== "list" && await replyIfNotOwner(interaction, ownerId)) return;
   const page = Number(pageRaw);
   if (Number.isNaN(page)) return;
   const nextPage = dir === "next" ? page + 1 : Math.max(page - 1, 0);

@@ -27,6 +27,7 @@ import {
 } from "discordx";
 import {
   safeDeferReply,
+  replyIfNotOwner,
   safeDeferUpdate,
   safeReply,
   safeUpdate,
@@ -1726,10 +1727,7 @@ export class GameDbAdmin {
   ): Promise<void> {
     const parts = interaction.customId.split(":");
     const ownerId = parts[1];
-    if (interaction.user.id !== ownerId) {
-      await safeReply(interaction, buildTextReply("This list isn't for you.", true));
-      return;
-    }
+    if (await replyIfNotOwner(interaction, ownerId)) return;
 
     const groupId = Number(interaction.values[0]);
     if (!Number.isInteger(groupId) || groupId <= 0) {
@@ -1763,10 +1761,7 @@ export class GameDbAdmin {
     const ownerId = parts[1];
     const page = Number(parts[2]);
     const encodedQuery = parts[3] ?? "";
-    if (interaction.user.id !== ownerId) {
-      await safeReply(interaction, buildTextReply("This list isn't for you.", true));
-      return;
-    }
+    if (await replyIfNotOwner(interaction, ownerId)) return;
 
     const groupId = Number(interaction.values[0]);
     if (!Number.isInteger(groupId) || groupId <= 0) {
@@ -1795,10 +1790,7 @@ export class GameDbAdmin {
   async synonymAddFromList(interaction: ButtonInteraction): Promise<void> {
     const parts = interaction.customId.split(":");
     const ownerId = parts[1];
-    if (interaction.user.id !== ownerId) {
-      await safeReply(interaction, buildTextReply("This list isn't for you.", true));
-      return;
-    }
+    if (await replyIfNotOwner(interaction, ownerId)) return;
 
     const draft = await GameSearchSynonymDraft.createDraft(interaction.user.id);
     await interaction
@@ -1867,10 +1859,7 @@ export class GameDbAdmin {
     const encodedQuery = parts[3] ?? "";
     const direction = parts[4];
 
-    if (interaction.user.id !== ownerId) {
-      await safeReply(interaction, buildTextReply("This list isn't for you.", true));
-      return;
-    }
+    if (await replyIfNotOwner(interaction, ownerId)) return;
 
     const query = sanitizeUserInput(decodeSynonymQuery(encodedQuery), { preserveNewlines: false });
     const delta = direction === "next" ? 1 : -1;

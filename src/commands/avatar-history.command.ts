@@ -17,7 +17,12 @@ import {
   TextDisplayBuilder,
 } from "@discordjs/builders";
 import { ButtonComponent, Discord, SelectMenuComponent, Slash, SlashOption } from "discordx";
-import { safeDeferReply, safeReply, safeUpdate } from "../functions/InteractionUtils.js";
+import {
+  replyIfNotOwner,
+  safeDeferReply,
+  safeReply,
+  safeUpdate,
+} from "../functions/InteractionUtils.js";
 import {
   buildOptionalPrevNextRow,
   parseDirAndPage,
@@ -26,7 +31,6 @@ import Member from "../classes/Member.js";
 import {
   buildComponentsV2EditFlags,
   buildComponentsV2Flags,
-  buildTextReply,
   safeV2TextContent,
 } from "../functions/ComponentsV2Utils.js";
 import { getUserEmojiData, renderUsernameWithEmoji } from "../services/UserEmojiService.js";
@@ -334,13 +338,7 @@ export class AvatarHistoryCommand {
   @ButtonComponent({ id: /^avatar-history-page:\d+:\d+:\d+:(prev|next)$/ })
   async handlePage(interaction: ButtonInteraction): Promise<void> {
     const [, ownerId, targetId, pageRaw, dir] = interaction.customId.split(":");
-    if (interaction.user.id !== ownerId) {
-      await safeReply(interaction, buildTextReply(
-        "This avatar history list isn't for you.",
-        true,
-      ));
-      return;
-    }
+    if (await replyIfNotOwner(interaction, ownerId)) return;
 
     const parsed = parseDirAndPage(pageRaw, dir);
     if (!parsed) return;
@@ -376,13 +374,7 @@ export class AvatarHistoryCommand {
   @ButtonComponent({ id: /^avatar-history-all-page:\d+:\d+:(prev|next)$/ })
   async handleAllPage(interaction: ButtonInteraction): Promise<void> {
     const [, ownerId, pageRaw, dir] = interaction.customId.split(":");
-    if (interaction.user.id !== ownerId) {
-      await safeReply(interaction, buildTextReply(
-        "This avatar history list isn't for you.",
-        true,
-      ));
-      return;
-    }
+    if (await replyIfNotOwner(interaction, ownerId)) return;
     const parsed = parseDirAndPage(pageRaw, dir);
     if (!parsed) return;
     const pageResult = await buildAvatarHistoryAllPage(interaction.guild, parsed.nextPage, ownerId);
@@ -412,13 +404,7 @@ export class AvatarHistoryCommand {
   @SelectMenuComponent({ id: /^avatar-history-all-select:\d+$/ })
   async handleAllSelect(interaction: StringSelectMenuInteraction): Promise<void> {
     const [, ownerId] = interaction.customId.split(":");
-    if (interaction.user.id !== ownerId) {
-      await safeReply(interaction, buildTextReply(
-        "This avatar history list isn't for you.",
-        true,
-      ));
-      return;
-    }
+    if (await replyIfNotOwner(interaction, ownerId)) return;
     const targetId = interaction.values[0];
     if (!targetId) return;
     await safeDeferUpdate(interaction);

@@ -24,7 +24,7 @@ import {
 } from "./completion-autocomplete.utils.js";
 import { buildTextReply, safeV2TextContent } from "../../functions/ComponentsV2Utils.js";
 import { COMPONENTS_V2_FLAG } from "../../config/flags.js";
-import { safeReply, safeUpdate } from "../../functions/InteractionUtils.js";
+import { replyIfNotOwner, safeReply, safeUpdate } from "../../functions/InteractionUtils.js";
 
 const MAX_NOTE_LENGTH = 500;
 type CompletionEditField = "type" | "date" | "platform" | "playtime" | "note";
@@ -41,10 +41,7 @@ export async function handleCompletionEditMenu(
   interaction: StringSelectMenuInteraction,
 ): Promise<void> {
   const [, ownerId] = interaction.customId.split(":");
-  if (interaction.user.id !== ownerId) {
-    await safeReply(interaction, buildTextReply("This edit prompt isn't for you.", true));
-    return;
-  }
+  if (await replyIfNotOwner(interaction, ownerId)) return;
 
   const completionId = Number(interaction.values[0]);
   if (!Number.isInteger(completionId) || completionId <= 0) {
@@ -71,10 +68,7 @@ export async function handleCompletionEditMenu(
  */
 export async function handleCompletionEditDone(interaction: ButtonInteraction): Promise<void> {
   const [, ownerId] = interaction.customId.split(":");
-  if (interaction.user.id !== ownerId) {
-    await safeReply(interaction, buildTextReply("This edit prompt isn't for you.", true));
-    return;
-  }
+  if (await replyIfNotOwner(interaction, ownerId)) return;
 
   await safeUpdate(interaction, {
     components: [
@@ -91,10 +85,7 @@ export async function handleCompletionEditDone(interaction: ButtonInteraction): 
  */
 export async function handleCompletionFieldEdit(interaction: ButtonInteraction): Promise<void> {
   const [, ownerId, completionIdRaw, field] = interaction.customId.split(":");
-  if (interaction.user.id !== ownerId) {
-    await safeReply(interaction, buildTextReply("This edit prompt isn't for you.", true));
-    return;
-  }
+  if (await replyIfNotOwner(interaction, ownerId)) return;
 
   const completionId = Number(completionIdRaw);
   if (!Number.isInteger(completionId) || completionId <= 0) {
@@ -253,10 +244,7 @@ export async function handleCompletionTypeSelect(
   interaction: StringSelectMenuInteraction,
 ): Promise<void> {
   const [, ownerId, completionIdRaw] = interaction.customId.split(":");
-  if (interaction.user.id !== ownerId) {
-    await safeReply(interaction, buildTextReply("This edit prompt isn't for you.", true));
-    return;
-  }
+  if (await replyIfNotOwner(interaction, ownerId)) return;
 
   const completionId = Number(completionIdRaw);
   const value = interaction.values[0];

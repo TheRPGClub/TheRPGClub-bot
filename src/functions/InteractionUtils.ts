@@ -475,6 +475,20 @@ export function extractErrorMessage(err: unknown): string {
   return e?.message ?? String(e);
 }
 
+export const OWNER_ONLY_MESSAGE = "This list isn't for you.";
+
+/** Returns true and replies ephemerally if user is not the owner. */
+export async function replyIfNotOwner(
+  interaction: AnyRepliable,
+  ownerId: string,
+): Promise<boolean> {
+  if (interaction.user.id !== ownerId) {
+    await safeReply(interaction, buildTextReply(OWNER_ONLY_MESSAGE, true));
+    return true;
+  }
+  return false;
+}
+
 export function resolveMemberLabel(
   member: import("discord.js").User | import("discord.js").GuildMember | undefined,
   fallback: import("discord.js").User,
