@@ -101,9 +101,9 @@ import {
 
 import { renderUsernameWithEmoji } from "../services/UserEmojiService.js";
 import { isPositiveInt, isValidPlaytimeHours } from "../utilities/ValidationUtils.js";
-import { formatStructuredLog } from "../utilities/LogUtils.js";
+import { formatStructuredLog, logError } from "../utilities/LogUtils.js";
 import { DISCORD_AUTOCOMPLETE_DESC_MAX, DISCORD_SELECT_LABEL_MAX } from "../config/textLimits.js";
-import { parseCustomIdSegments } from "../utilities/CustomIdUtils.js";
+import { assertCustomIdSegments } from "../utilities/CustomIdUtils.js";
 import { safeIgnore } from "../utilities/AsyncUtils.js";
 
 const MAX_NOW_PLAYING_NOTE_LEN = 500;
@@ -1370,8 +1370,8 @@ export class NowPlayingCommand {
     interaction: ModalSubmitInteraction,
   ): Promise<void> {
     await safeDeferReply(interaction, { flags: buildComponentsV2Flags(true) });
-    const segs = parseCustomIdSegments(interaction.customId, 1);
-    if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+    const segs = assertCustomIdSegments(interaction, 1);
+    if (!segs) return;
     const [sessionId] = segs;
     const session = nowPlayingCompletionWizardSessions.get(sessionId);
     if (!session) {
@@ -1518,8 +1518,8 @@ export class NowPlayingCommand {
   async handleNowPlayingCompletionPlatformSelect(
     interaction: StringSelectMenuInteraction,
   ): Promise<void> {
-    const segs = parseCustomIdSegments(interaction.customId, 1);
-    if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+    const segs = assertCustomIdSegments(interaction, 1);
+    if (!segs) return;
     const [platformSessionId] = segs;
     const session = nowPlayingCompletionPlatformSessions.get(platformSessionId);
     if (!session) {
@@ -1780,8 +1780,8 @@ export class NowPlayingCommand {
 
   @ButtonComponent({ id: /^np-complete-pick:[^:]+:\d+$/ })
   async handleNowPlayingCompletionPick(interaction: ButtonInteraction): Promise<void> {
-    const segs = parseCustomIdSegments(interaction.customId, 2);
-    if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+    const segs = assertCustomIdSegments(interaction, 2);
+    if (!segs) return;
     const [sessionId, gameIdRaw] = segs;
     const session = nowPlayingCompletionWizardSessions.get(sessionId);
     if (!session) {
@@ -1826,8 +1826,8 @@ export class NowPlayingCommand {
   async handleNowPlayingCompletionTypeSelect(
     interaction: StringSelectMenuInteraction,
   ): Promise<void> {
-    const segs = parseCustomIdSegments(interaction.customId, 1);
-    if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+    const segs = assertCustomIdSegments(interaction, 1);
+    if (!segs) return;
     const [sessionId] = segs;
     const session = nowPlayingCompletionWizardSessions.get(sessionId);
     if (!session) {
@@ -1872,8 +1872,8 @@ export class NowPlayingCommand {
   async handleNowPlayingCompletionRemoveSelect(
     interaction: StringSelectMenuInteraction,
   ): Promise<void> {
-    const segs = parseCustomIdSegments(interaction.customId, 1);
-    if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+    const segs = assertCustomIdSegments(interaction, 1);
+    if (!segs) return;
     const [sessionId] = segs;
     const session = nowPlayingCompletionWizardSessions.get(sessionId);
     if (!session) {
@@ -1918,8 +1918,8 @@ export class NowPlayingCommand {
   async handleNowPlayingCompletionAnnounceSelect(
     interaction: StringSelectMenuInteraction,
   ): Promise<void> {
-    const segs = parseCustomIdSegments(interaction.customId, 1);
-    if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+    const segs = assertCustomIdSegments(interaction, 1);
+    if (!segs) return;
     const [sessionId] = segs;
     const session = nowPlayingCompletionWizardSessions.get(sessionId);
     if (!session) {
@@ -1964,8 +1964,8 @@ export class NowPlayingCommand {
   async handleNowPlayingCompletionNoteSelect(
     interaction: StringSelectMenuInteraction,
   ): Promise<void> {
-    const segs = parseCustomIdSegments(interaction.customId, 1);
-    if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+    const segs = assertCustomIdSegments(interaction, 1);
+    if (!segs) return;
     const [sessionId] = segs;
     const session = nowPlayingCompletionWizardSessions.get(sessionId);
     if (!session) {
@@ -2008,8 +2008,8 @@ export class NowPlayingCommand {
 
   @ButtonComponent({ id: /^np-complete-details:[^:]+$/ })
   async handleNowPlayingCompletionDetails(interaction: ButtonInteraction): Promise<void> {
-    const segs = parseCustomIdSegments(interaction.customId, 1);
-    if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+    const segs = assertCustomIdSegments(interaction, 1);
+    if (!segs) return;
     const [sessionId] = segs;
     const session = nowPlayingCompletionWizardSessions.get(sessionId);
     if (!session) {
@@ -2087,8 +2087,8 @@ export class NowPlayingCommand {
 
   @SelectMenuComponent({ id: /^nowplaying-add-select:.+$/ })
   async handleAddNowPlayingSelect(interaction: StringSelectMenuInteraction): Promise<void> {
-    const segs = parseCustomIdSegments(interaction.customId, 1);
-    if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+    const segs = assertCustomIdSegments(interaction, 1);
+    if (!segs) return;
     const [sessionId] = segs;
     const session = nowPlayingAddSessions.get(sessionId);
     const ownerId = session?.userId;
@@ -2148,8 +2148,8 @@ export class NowPlayingCommand {
 
   @SelectMenuComponent({ id: /^nowplaying-add-platform-select:[^:]+$/ })
   async handleAddNowPlayingPlatformSelect(interaction: StringSelectMenuInteraction): Promise<void> {
-    const segs = parseCustomIdSegments(interaction.customId, 1);
-    if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+    const segs = assertCustomIdSegments(interaction, 1);
+    if (!segs) return;
     const [platformSessionId] = segs;
     const session = nowPlayingAddPlatformSessions.get(platformSessionId);
     if (!session) {
@@ -2715,8 +2715,8 @@ export class NowPlayingCommand {
   async handleNowPlayingEditPlatformSelect(
     interaction: StringSelectMenuInteraction,
   ): Promise<void> {
-    const segs = parseCustomIdSegments(interaction.customId, 2);
-    if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+    const segs = assertCustomIdSegments(interaction, 2);
+    if (!segs) return;
     const [ownerId, gameIdRaw] = segs;
     if (interaction.user.id !== ownerId) {
       await safeReply(interaction, buildTextReply("This platform prompt isn't for you.", true));
@@ -2743,8 +2743,8 @@ export class NowPlayingCommand {
   @SelectMenuComponent({ id: /^nowplaying-edit-platform-slot:\d+:\d+:[a-z0-9_]+$/ })
   async handleEditPlatformSlot(interaction: StringSelectMenuInteraction): Promise<void> {
     const isEphemeral = interaction.message.flags?.has(MessageFlags.Ephemeral) ?? false;
-    const segs = parseCustomIdSegments(interaction.customId, 3);
-    if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+    const segs = assertCustomIdSegments(interaction, 3);
+    if (!segs) return;
     const [ownerId, slotRaw, stateToken] = segs;
     if (interaction.user.id !== ownerId) {
       await safeReply(interaction, buildTextReply("This platform prompt isn't for you.", true));
@@ -2791,8 +2791,8 @@ export class NowPlayingCommand {
 
   @SelectMenuComponent({ id: /^nowplaying-edit-note-select:\d+$/ })
   async handleEditNoteSelect(interaction: StringSelectMenuInteraction): Promise<void> {
-    const segs = parseCustomIdSegments(interaction.customId, 1);
-    if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+    const segs = assertCustomIdSegments(interaction, 1);
+    if (!segs) return;
     const [ownerId] = segs;
     if (interaction.user.id !== ownerId) {
       await safeReply(interaction, buildTextReply("This note prompt isn't for you.", true));
@@ -2826,8 +2826,8 @@ export class NowPlayingCommand {
 
   @ButtonComponent({ id: /^nowplaying-edit-note-direct:\d+:\d+$/ })
   async handleEditNoteDirect(interaction: ButtonInteraction): Promise<void> {
-    const segs = parseCustomIdSegments(interaction.customId, 2);
-    if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+    const segs = assertCustomIdSegments(interaction, 2);
+    if (!segs) return;
     const [ownerId, gameIdRaw] = segs;
     if (interaction.user.id !== ownerId) {
       await safeReply(interaction, buildTextReply("This note prompt isn't for you.", true));
@@ -2864,8 +2864,8 @@ export class NowPlayingCommand {
   @SelectMenuComponent({ id: /^nowplaying-sort-slot:\d+:\d+:[a-z0-9_]+$/ })
   async handleNowPlayingSortSlot(interaction: StringSelectMenuInteraction): Promise<void> {
     const isEphemeral = interaction.message.flags?.has(MessageFlags.Ephemeral) ?? false;
-    const segs = parseCustomIdSegments(interaction.customId, 3);
-    if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+    const segs = assertCustomIdSegments(interaction, 3);
+    if (!segs) return;
     const [ownerId, slotRaw, stateToken] = segs;
     if (interaction.user.id !== ownerId) {
       const container = new ContainerBuilder().addTextDisplayComponents(
@@ -2943,8 +2943,8 @@ export class NowPlayingCommand {
 
   @ButtonComponent({ id: /^nowplaying-sort-save:\d+:[a-z0-9_]+$/ })
   async handleNowPlayingSortSave(interaction: ButtonInteraction): Promise<void> {
-    const segs = parseCustomIdSegments(interaction.customId, 2);
-    if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+    const segs = assertCustomIdSegments(interaction, 2);
+    if (!segs) return;
     const [ownerId, stateToken] = segs;
     if (interaction.user.id !== ownerId) {
       const container = new ContainerBuilder().addTextDisplayComponents(
@@ -3025,8 +3025,8 @@ export class NowPlayingCommand {
 
   @ButtonComponent({ id: /^nowplaying-sort-reset:\d+$/ })
   async handleNowPlayingSortReset(interaction: ButtonInteraction): Promise<void> {
-    const segs = parseCustomIdSegments(interaction.customId, 1);
-    if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+    const segs = assertCustomIdSegments(interaction, 1);
+    if (!segs) return;
     const [ownerId] = segs;
     if (interaction.user.id !== ownerId) {
       await safeReply(interaction, buildTextReply("This sort prompt isn't for you.", true));
@@ -3139,8 +3139,8 @@ export class NowPlayingCommand {
 
   @SelectMenuComponent({ id: /^nowplaying-delete-note-select:\d+$/ })
   async handleDeleteNoteSelect(interaction: StringSelectMenuInteraction): Promise<void> {
-    const segs = parseCustomIdSegments(interaction.customId, 1);
-    if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+    const segs = assertCustomIdSegments(interaction, 1);
+    if (!segs) return;
     const [ownerId] = segs;
     if (interaction.user.id !== ownerId) {
       await safeReply(interaction, buildTextReply("This note prompt isn't for you.", true));
@@ -3185,8 +3185,8 @@ export class NowPlayingCommand {
 
   @ButtonComponent({ id: /^nowplaying-delete-note-confirm:\d+:\d+:(yes|no)$/ })
   async handleDeleteNoteConfirm(interaction: ButtonInteraction): Promise<void> {
-    const segs = parseCustomIdSegments(interaction.customId, 3);
-    if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+    const segs = assertCustomIdSegments(interaction, 3);
+    if (!segs) return;
     const [ownerId, gameIdRaw, choice] = segs;
     if (interaction.user.id !== ownerId) {
       await safeReply(interaction, buildTextReply("This note prompt isn't for you.", true));
@@ -3217,8 +3217,8 @@ export class NowPlayingCommand {
   @ButtonComponent({ id: /^np-remove:[^:]+:\d+$/ })
   async handleRemoveNowPlayingButton(interaction: ButtonInteraction): Promise<void> {
     const isEphemeral = interaction.message.flags?.has(MessageFlags.Ephemeral) ?? false;
-    const segs = parseCustomIdSegments(interaction.customId, 2);
-    if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+    const segs = assertCustomIdSegments(interaction, 2);
+    if (!segs) return;
     const [ownerId, gameIdRaw] = segs;
     if (interaction.user.id !== ownerId) {
       const container = new ContainerBuilder().addTextDisplayComponents(
@@ -3308,8 +3308,8 @@ export class NowPlayingCommand {
   async handleNowPlayingListNotesToggle(interaction: ButtonInteraction): Promise<void> {
     await safeDeferUpdate(interaction);
 
-    const segs = parseCustomIdSegments(interaction.customId, 2);
-    if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+    const segs = assertCustomIdSegments(interaction, 2);
+    if (!segs) return;
     const [ownerId, action] = segs;
     const showNotes = action === "show";
     const isEphemeral = interaction.message.flags?.has(MessageFlags.Ephemeral) ?? false;
@@ -3399,8 +3399,8 @@ export class NowPlayingCommand {
 
   @ButtonComponent({ id: /^nowplaying-journal-header:\d+:\d+:\d+$/ })
   async handleNowPlayingJournalHeader(interaction: ButtonInteraction): Promise<void> {
-    const segs = parseCustomIdSegments(interaction.customId, 3);
-    if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+    const segs = assertCustomIdSegments(interaction, 3);
+    if (!segs) return;
     const [ownerId, gameIdRaw, pageRaw] = segs;
     if (interaction.user.id !== ownerId) {
       await safeDeferUpdate(interaction);
@@ -3414,8 +3414,8 @@ export class NowPlayingCommand {
 
   @ButtonComponent({ id: /^nowplaying-journal-open:\d+:\d+:\d+$/ })
   async handleNowPlayingJournalOpen(interaction: ButtonInteraction): Promise<void> {
-    const segs = parseCustomIdSegments(interaction.customId, 3);
-    if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+    const segs = assertCustomIdSegments(interaction, 3);
+    if (!segs) return;
     const [ownerId, gameIdRaw, pageRaw] = segs;
     const gameId = Number(gameIdRaw);
     const nowPlayingEntries = getDisplayNowPlayingEntries(await Member.getNowPlaying(ownerId));
@@ -3455,8 +3455,8 @@ export class NowPlayingCommand {
   async handleNowPlayingJournalViewSelect(
     interaction: StringSelectMenuInteraction,
   ): Promise<void> {
-    const segs = parseCustomIdSegments(interaction.customId, 1);
-    if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+    const segs = assertCustomIdSegments(interaction, 1);
+    if (!segs) return;
     const [ownerId] = segs;
     const gameId = Number(interaction.values?.[0]);
     if (!gameId) return;
@@ -3491,8 +3491,8 @@ export class NowPlayingCommand {
 
   @ButtonComponent({ id: /^nowplaying-journal-page:\d+:\d+:(prev|next):\d+$/ })
   async handleNowPlayingJournalPage(interaction: ButtonInteraction): Promise<void> {
-    const segs = parseCustomIdSegments(interaction.customId, 4);
-    if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+    const segs = assertCustomIdSegments(interaction, 4);
+    if (!segs) return;
     const [ownerId, gameIdRaw, , pageRaw] = segs;
     const gameId = Number(gameIdRaw);
     const nowPlayingEntries = getDisplayNowPlayingEntries(await Member.getNowPlaying(ownerId));
@@ -3530,8 +3530,8 @@ export class NowPlayingCommand {
 
   @ButtonComponent({ id: /^nowplaying-journal-add:\d+:\d+:\d+$/ })
   async handleNowPlayingJournalAdd(interaction: ButtonInteraction): Promise<void> {
-    const segs = parseCustomIdSegments(interaction.customId, 3);
-    if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+    const segs = assertCustomIdSegments(interaction, 3);
+    if (!segs) return;
     const [ownerId, gameIdRaw, pageRaw] = segs;
     if (interaction.user.id !== ownerId) {
       await safeReply(interaction, buildTextReply("Only the owner can add journal entries.", false));
@@ -3564,8 +3564,8 @@ export class NowPlayingCommand {
 
   @ButtonComponent({ id: /^nowplaying-journal-edit:\d+:\d+:\d+$/ })
   async handleNowPlayingJournalEdit(interaction: ButtonInteraction): Promise<void> {
-    const segs = parseCustomIdSegments(interaction.customId, 3);
-    if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+    const segs = assertCustomIdSegments(interaction, 3);
+    if (!segs) return;
     const [ownerId, gameIdRaw, pageRaw] = segs;
     if (interaction.user.id !== ownerId) {
       await safeReply(interaction, buildTextReply("Only the owner can edit journal entries.", false));
@@ -3608,8 +3608,8 @@ export class NowPlayingCommand {
 
   @ButtonComponent({ id: /^nowplaying-journal-delete:\d+:\d+:\d+$/ })
   async handleNowPlayingJournalDelete(interaction: ButtonInteraction): Promise<void> {
-    const segs = parseCustomIdSegments(interaction.customId, 3);
-    if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+    const segs = assertCustomIdSegments(interaction, 3);
+    if (!segs) return;
     const [ownerId, gameIdRaw, pageRaw] = segs;
     if (interaction.user.id !== ownerId) {
       await safeReply(interaction, buildTextReply("Only the owner can delete journal entries.", false));
@@ -3654,8 +3654,8 @@ export class NowPlayingCommand {
   async handleNowPlayingJournalDeleteSelect(
     interaction: StringSelectMenuInteraction,
   ): Promise<void> {
-    const segs = parseCustomIdSegments(interaction.customId, 3);
-    if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+    const segs = assertCustomIdSegments(interaction, 3);
+    if (!segs) return;
     const [ownerId, gameIdRaw, pageRaw] = segs;
     if (interaction.user.id !== ownerId) {
       await safeReply(interaction, buildTextReply("Only the owner can delete journal entries.", false));
@@ -3704,8 +3704,8 @@ export class NowPlayingCommand {
 
   @ButtonComponent({ id: /^nowplaying-journal-delete-confirm:(yes|no):\d+:\d+:\d+:\d+$/ })
   async handleNowPlayingJournalDeleteConfirm(interaction: ButtonInteraction): Promise<void> {
-    const segs = parseCustomIdSegments(interaction.customId, 5);
-    if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+    const segs = assertCustomIdSegments(interaction, 5);
+    if (!segs) return;
     const [action, ownerId, gameIdRaw, pageRaw, entryIdRaw] = segs;
     if (interaction.user.id !== ownerId) {
       await safeReply(interaction, buildTextReply("Only the owner can delete journal entries.", false));
@@ -3734,8 +3734,8 @@ export class NowPlayingCommand {
 
   @ModalComponent({ id: /^nowplaying-journal-modal:\d+:\d+:\d+$/ })
   async handleNowPlayingJournalModal(interaction: ModalSubmitInteraction): Promise<void> {
-    const segs = parseCustomIdSegments(interaction.customId, 3);
-    if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+    const segs = assertCustomIdSegments(interaction, 3);
+    if (!segs) return;
     const [ownerId, gameIdRaw, pageRaw] = segs;
     if (interaction.user.id !== ownerId) {
       await safeReply(interaction, buildTextReply("Only the owner can submit journal entries.", false));
@@ -3794,8 +3794,8 @@ export class NowPlayingCommand {
 
   @ModalComponent({ id: /^nowplaying-journal-edit-modal:\d+:\d+:\d+:\d+$/ })
   async handleNowPlayingJournalEditModal(interaction: ModalSubmitInteraction): Promise<void> {
-    const segs = parseCustomIdSegments(interaction.customId, 4);
-    if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+    const segs = assertCustomIdSegments(interaction, 4);
+    if (!segs) return;
     const [ownerId, gameIdRaw, pageRaw, entryIdRaw] = segs;
     const gameId = Number(gameIdRaw);
     if (interaction.user.id !== ownerId) {
@@ -3830,8 +3830,8 @@ export class NowPlayingCommand {
 
   @ButtonComponent({ id: /^nowplaying-list-edit:\d+$/ })
   async handleNowPlayingListEdit(interaction: ButtonInteraction): Promise<void> {
-    const segs = parseCustomIdSegments(interaction.customId, 1);
-    if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+    const segs = assertCustomIdSegments(interaction, 1);
+    if (!segs) return;
     const [ownerId] = segs;
     if (interaction.user.id !== ownerId) {
       const container = new ContainerBuilder().addTextDisplayComponents(
@@ -3856,8 +3856,8 @@ export class NowPlayingCommand {
 
   @ButtonComponent({ id: /^nowplaying-help:[a-z-]+:\d+$/ })
   async handleNowPlayingHelp(interaction: ButtonInteraction): Promise<void> {
-    const segs = parseCustomIdSegments(interaction.customId, 2);
-    if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+    const segs = assertCustomIdSegments(interaction, 2);
+    if (!segs) return;
     const [screenType, ownerId] = segs;
     if (interaction.user.id !== ownerId) {
       await safeReply(interaction, buildTextReply("This help button isn't for you.", true));
@@ -3876,8 +3876,8 @@ export class NowPlayingCommand {
 
   @ButtonComponent({ id: /^nowplaying-edit-menu-sort:\d+$/ })
   async handleNowPlayingEditMenuSort(interaction: ButtonInteraction): Promise<void> {
-    const segs = parseCustomIdSegments(interaction.customId, 1);
-    if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+    const segs = assertCustomIdSegments(interaction, 1);
+    if (!segs) return;
     const [ownerId] = segs;
     if (interaction.user.id !== ownerId) {
       await safeReply(interaction, buildTextReply("This edit menu isn't for you.", true));
@@ -3888,8 +3888,8 @@ export class NowPlayingCommand {
 
   @ButtonComponent({ id: /^nowplaying-edit-menu-platform:\d+$/ })
   async handleNowPlayingEditMenuPlatform(interaction: ButtonInteraction): Promise<void> {
-    const segs = parseCustomIdSegments(interaction.customId, 1);
-    if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+    const segs = assertCustomIdSegments(interaction, 1);
+    if (!segs) return;
     const [ownerId] = segs;
     if (interaction.user.id !== ownerId) {
       await safeReply(interaction, buildTextReply("This edit menu isn't for you.", true));
@@ -3900,8 +3900,8 @@ export class NowPlayingCommand {
 
   @ButtonComponent({ id: /^nowplaying-edit-menu-complete:\d+$/ })
   async handleNowPlayingEditMenuComplete(interaction: ButtonInteraction): Promise<void> {
-    const segs = parseCustomIdSegments(interaction.customId, 1);
-    if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+    const segs = assertCustomIdSegments(interaction, 1);
+    if (!segs) return;
     const [ownerId] = segs;
     if (interaction.user.id !== ownerId) {
       await safeReply(interaction, buildTextReply("This edit menu isn't for you.", true));
@@ -3913,8 +3913,8 @@ export class NowPlayingCommand {
 
   @ButtonComponent({ id: /^nowplaying-edit-menu-remove:\d+$/ })
   async handleNowPlayingEditMenuRemove(interaction: ButtonInteraction): Promise<void> {
-    const segs = parseCustomIdSegments(interaction.customId, 1);
-    if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+    const segs = assertCustomIdSegments(interaction, 1);
+    if (!segs) return;
     const [ownerId] = segs;
     if (interaction.user.id !== ownerId) {
       await safeReply(interaction, buildTextReply("This edit menu isn't for you.", true));
@@ -3925,8 +3925,8 @@ export class NowPlayingCommand {
 
   @ButtonComponent({ id: /^nowplaying-edit-menu-start-journal:\d+$/ })
   async handleNowPlayingEditMenuStartJournal(interaction: ButtonInteraction): Promise<void> {
-    const segs = parseCustomIdSegments(interaction.customId, 1);
-    if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+    const segs = assertCustomIdSegments(interaction, 1);
+    if (!segs) return;
     const [ownerId] = segs;
     if (interaction.user.id !== ownerId) {
       await safeReply(interaction, buildTextReply("This edit menu isn't for you.", true));
@@ -3965,8 +3965,8 @@ export class NowPlayingCommand {
   async handleNowPlayingEditMenuStartJournalSelect(
     interaction: StringSelectMenuInteraction,
   ): Promise<void> {
-    const segs = parseCustomIdSegments(interaction.customId, 1);
-    if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+    const segs = assertCustomIdSegments(interaction, 1);
+    if (!segs) return;
     const [ownerId] = segs;
     if (interaction.user.id !== ownerId) {
       await safeReply(interaction, buildTextReply("This edit menu isn't for you.", true));
@@ -4010,8 +4010,8 @@ export class NowPlayingCommand {
 
   @ButtonComponent({ id: /^nowplaying-list-add:\d+$/ })
   async handleNowPlayingListAdd(interaction: ButtonInteraction): Promise<void> {
-    const segs = parseCustomIdSegments(interaction.customId, 1);
-    if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+    const segs = assertCustomIdSegments(interaction, 1);
+    if (!segs) return;
     const [ownerId] = segs;
     if (interaction.user.id !== ownerId) {
       const container = new ContainerBuilder().addTextDisplayComponents(
@@ -4029,8 +4029,8 @@ export class NowPlayingCommand {
 
   @ButtonComponent({ id: /^nowplaying-list-edit-platform:\d+$/ })
   async handleNowPlayingListEditPlatform(interaction: ButtonInteraction): Promise<void> {
-    const segs = parseCustomIdSegments(interaction.customId, 1);
-    if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+    const segs = assertCustomIdSegments(interaction, 1);
+    if (!segs) return;
     const [ownerId] = segs;
     if (interaction.user.id !== ownerId) {
       await safeReply(interaction, buildTextReply("This platform prompt isn't for you.", true));
@@ -4042,8 +4042,8 @@ export class NowPlayingCommand {
 
   @ButtonComponent({ id: /^np-edit-platform:\d+:\d+$/ })
   async handleNowPlayingEditPlatformPick(interaction: ButtonInteraction): Promise<void> {
-    const segs = parseCustomIdSegments(interaction.customId, 2);
-    if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+    const segs = assertCustomIdSegments(interaction, 2);
+    if (!segs) return;
     const [ownerId, gameIdRaw] = segs;
     if (interaction.user.id !== ownerId) {
       await safeReply(interaction, buildTextReply("This platform prompt isn't for you.", true));
@@ -4059,8 +4059,8 @@ export class NowPlayingCommand {
 
   @ButtonComponent({ id: /^nowplaying-edit-platform-save:\d+:[a-z0-9_]+$/ })
   async handleNowPlayingEditPlatformSave(interaction: ButtonInteraction): Promise<void> {
-    const segs = parseCustomIdSegments(interaction.customId, 2);
-    if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+    const segs = assertCustomIdSegments(interaction, 2);
+    if (!segs) return;
     const [ownerId, stateToken] = segs;
     if (interaction.user.id !== ownerId) {
       await safeReply(interaction, buildTextReply("This platform prompt isn't for you.", true));
@@ -4127,8 +4127,8 @@ export class NowPlayingCommand {
 
   @ButtonComponent({ id: /^nowplaying-edit-platform-reset:\d+$/ })
   async handleNowPlayingEditPlatformReset(interaction: ButtonInteraction): Promise<void> {
-    const segs = parseCustomIdSegments(interaction.customId, 1);
-    if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+    const segs = assertCustomIdSegments(interaction, 1);
+    if (!segs) return;
     const [ownerId] = segs;
     if (interaction.user.id !== ownerId) {
       await safeReply(interaction, buildTextReply("This platform prompt isn't for you.", true));
@@ -4152,8 +4152,8 @@ export class NowPlayingCommand {
 
   @ButtonComponent({ id: /^nowplaying-list-sort:\d+$/ })
   async handleNowPlayingListSort(interaction: ButtonInteraction): Promise<void> {
-    const segs = parseCustomIdSegments(interaction.customId, 1);
-    if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+    const segs = assertCustomIdSegments(interaction, 1);
+    if (!segs) return;
     const [ownerId] = segs;
     if (interaction.user.id !== ownerId) {
       await safeReply(interaction, buildTextReply("This sort prompt isn't for you.", true));
@@ -4165,8 +4165,8 @@ export class NowPlayingCommand {
 
   @ButtonComponent({ id: /^nowplaying-list-complete:\d+$/ })
   async handleNowPlayingListComplete(interaction: ButtonInteraction): Promise<void> {
-    const segs = parseCustomIdSegments(interaction.customId, 1);
-    if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+    const segs = assertCustomIdSegments(interaction, 1);
+    if (!segs) return;
     const [ownerId] = segs;
     if (interaction.user.id !== ownerId) {
       await safeReply(interaction, buildTextReply("This completion prompt isn't for you.", true));
@@ -4179,8 +4179,8 @@ export class NowPlayingCommand {
 
   @ButtonComponent({ id: /^nowplaying-complete-done:\d+$/ })
   async handleNowPlayingCompleteDone(interaction: ButtonInteraction): Promise<void> {
-    const segs = parseCustomIdSegments(interaction.customId, 1);
-    if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+    const segs = assertCustomIdSegments(interaction, 1);
+    if (!segs) return;
     const [ownerId] = segs;
     if (interaction.user.id !== ownerId) {
       await safeReply(interaction, buildTextReply("This completion prompt isn't for you.", true));
@@ -4191,8 +4191,8 @@ export class NowPlayingCommand {
 
   @ButtonComponent({ id: /^nowplaying-list-remove:\d+$/ })
   async handleNowPlayingListRemove(interaction: ButtonInteraction): Promise<void> {
-    const segs = parseCustomIdSegments(interaction.customId, 1);
-    if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+    const segs = assertCustomIdSegments(interaction, 1);
+    if (!segs) return;
     const [ownerId] = segs;
     if (interaction.user.id !== ownerId) {
       const container = new ContainerBuilder().addTextDisplayComponents(
@@ -4210,8 +4210,8 @@ export class NowPlayingCommand {
 
   @ButtonComponent({ id: /^nowplaying-remove-done:\d+$/ })
   async handleNowPlayingRemoveDone(interaction: ButtonInteraction): Promise<void> {
-    const segs = parseCustomIdSegments(interaction.customId, 1);
-    if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+    const segs = assertCustomIdSegments(interaction, 1);
+    if (!segs) return;
     const [ownerId] = segs;
     if (interaction.user.id !== ownerId) {
       await safeReply(interaction, buildTextReply("This remove prompt isn't for you.", true));
@@ -4222,8 +4222,8 @@ export class NowPlayingCommand {
 
   @ButtonComponent({ id: /^nowplaying-list-cancel:\d+$/ })
   async handleNowPlayingListCancel(interaction: ButtonInteraction): Promise<void> {
-    const segs = parseCustomIdSegments(interaction.customId, 1);
-    if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+    const segs = assertCustomIdSegments(interaction, 1);
+    if (!segs) return;
     const [ownerId] = segs;
     if (interaction.user.id !== ownerId) {
       await safeReply(interaction, buildTextReply("This prompt isn't for you.", true));
@@ -4629,7 +4629,7 @@ export class NowPlayingCommand {
         );
         return stored.url;
       } catch (error) {
-        console.error("Backblaze upload failed for now-playing composite image:", error);
+        logError("now-playing/backblazeUpload", error);
       }
     }
 
@@ -4940,8 +4940,8 @@ export class NowPlayingCommand {
   @SelectMenuComponent({ id: /^nowplaying-remove-select:\d+$/ })
   async handleNowPlayingRemoveSelect(interaction: StringSelectMenuInteraction): Promise<void> {
     const isEphemeral = interaction.message.flags?.has(MessageFlags.Ephemeral) ?? false;
-    const segs = parseCustomIdSegments(interaction.customId, 1);
-    if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+    const segs = assertCustomIdSegments(interaction, 1);
+    if (!segs) return;
     const [ownerId] = segs;
     if (interaction.user.id !== ownerId) {
       await safeReply(interaction, buildTextReply("This remove prompt isn't for you.", true));
