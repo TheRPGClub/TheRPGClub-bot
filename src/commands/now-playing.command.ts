@@ -11,7 +11,6 @@ import {
   ActionRowBuilder,
   StringSelectMenuBuilder,
   StringSelectMenuInteraction,
-  TextInputBuilder,
   TextInputStyle,
   ButtonBuilder,
   ButtonStyle,
@@ -59,7 +58,11 @@ import {
 } from "../functions/InteractionUtils.js";
 import Game, { type IGame } from "../classes/Game.js";
 import { buildJournalView } from "../functions/journalView.js";
-import { buildJournalSelectRow, buildUserHeaderContainer } from "../functions/uiComponents.js";
+import {
+  buildJournalSelectRow,
+  buildTextInputRow,
+  buildUserHeaderContainer,
+} from "../functions/uiComponents.js";
 import { EphemeralOwnerMenu } from "../functions/EphemeralOwnerMenu.js";
 import { igdbService } from "../services/IGDB/IgdbService.js";
 import {
@@ -652,18 +655,17 @@ function buildEditNoteModal(
   title: string,
   currentNote: string | null,
 ): ModalBuilder {
-  const input = new TextInputBuilder()
-    .setCustomId(NOW_PLAYING_NOTE_INPUT_ID)
-    .setLabel(title.slice(0, 45))
-    .setStyle(TextInputStyle.Paragraph)
-    .setRequired(false)
-    .setMaxLength(MAX_NOW_PLAYING_NOTE_LEN)
-    .setValue(currentNote ?? "");
-
   return new ModalBuilder()
     .setCustomId(`${NOW_PLAYING_NOTE_MODAL_ID}:${ownerId}:${gameId}`)
     .setTitle("Edit Now Playing Note")
-    .addComponents(new ActionRowBuilder<TextInputBuilder>().addComponents(input));
+    .addComponents(buildTextInputRow({
+      customId: NOW_PLAYING_NOTE_INPUT_ID,
+      label: title.slice(0, 45),
+      style: TextInputStyle.Paragraph,
+      required: false,
+      maxLength: MAX_NOW_PLAYING_NOTE_LEN,
+      value: currentNote ?? "",
+    }));
 }
 
 function buildEditNotesModal(
@@ -681,14 +683,14 @@ function buildEditNotesModal(
     .setTitle("Edit Now Playing Notes");
 
   entries.forEach((entry) => {
-    const input = new TextInputBuilder()
-      .setCustomId(`${NOW_PLAYING_NOTE_INPUT_ID}:${entry.gameId}`)
-      .setLabel(formatEntryTitleWithPlatform(entry).slice(0, 45))
-      .setStyle(TextInputStyle.Paragraph)
-      .setRequired(false)
-      .setMaxLength(MAX_NOW_PLAYING_NOTE_LEN)
-      .setValue(entry.note ?? "");
-    modal.addComponents(new ActionRowBuilder<TextInputBuilder>().addComponents(input));
+    modal.addComponents(buildTextInputRow({
+      customId: `${NOW_PLAYING_NOTE_INPUT_ID}:${entry.gameId}`,
+      label: formatEntryTitleWithPlatform(entry).slice(0, 45),
+      style: TextInputStyle.Paragraph,
+      required: false,
+      maxLength: MAX_NOW_PLAYING_NOTE_LEN,
+      value: entry.note ?? "",
+    }));
   });
 
   return modal;
@@ -1105,22 +1107,14 @@ export class NowPlayingCommand {
       .setCustomId(NOW_PLAYING_ADD_MODAL_ID)
       .setTitle("Add Now Playing Game")
       .addComponents(
-        new ActionRowBuilder<TextInputBuilder>().addComponents(
-          new TextInputBuilder()
-            .setCustomId(NOW_PLAYING_ADD_TITLE_INPUT_ID)
-            .setLabel("Game title")
-            .setStyle(TextInputStyle.Short)
-            .setRequired(true)
-            .setMaxLength(100),
-        ),
-        new ActionRowBuilder<TextInputBuilder>().addComponents(
-          new TextInputBuilder()
-            .setCustomId(NOW_PLAYING_ADD_NOTE_INPUT_ID)
-            .setLabel("Note (optional)")
-            .setStyle(TextInputStyle.Paragraph)
-            .setRequired(false)
-            .setMaxLength(MAX_NOW_PLAYING_NOTE_LEN),
-        ),
+        buildTextInputRow({ customId: NOW_PLAYING_ADD_TITLE_INPUT_ID, label: "Game title", maxLength: 100 }),
+        buildTextInputRow({
+          customId: NOW_PLAYING_ADD_NOTE_INPUT_ID,
+          label: "Note (optional)",
+          style: TextInputStyle.Paragraph,
+          required: false,
+          maxLength: MAX_NOW_PLAYING_NOTE_LEN,
+        }),
       );
   }
 
@@ -2057,34 +2051,28 @@ export class NowPlayingCommand {
     const modal = new ModalBuilder()
       .setCustomId(`${NOW_PLAYING_COMPLETE_MODAL_ID}:${sessionId}`)
       .setTitle("Add Completion Details");
-    const modalRows: ActionRowBuilder<TextInputBuilder>[] = [
-      new ActionRowBuilder<TextInputBuilder>().addComponents(
-        new TextInputBuilder()
-          .setCustomId(NOW_PLAYING_COMPLETE_DATE_INPUT_ID)
-          .setLabel("Completion date (blank unknown)")
-          .setStyle(TextInputStyle.Short)
-          .setRequired(false)
-          .setPlaceholder("today or 03/10/2025"),
-      ),
-      new ActionRowBuilder<TextInputBuilder>().addComponents(
-        new TextInputBuilder()
-          .setCustomId(NOW_PLAYING_COMPLETE_HOURS_INPUT_ID)
-          .setLabel("Final playtime hours (optional)")
-          .setStyle(TextInputStyle.Short)
-          .setRequired(false),
-      ),
+    const modalRows = [
+      buildTextInputRow({
+        customId: NOW_PLAYING_COMPLETE_DATE_INPUT_ID,
+        label: "Completion date (blank unknown)",
+        required: false,
+        placeholder: "today or 03/10/2025",
+      }),
+      buildTextInputRow({
+        customId: NOW_PLAYING_COMPLETE_HOURS_INPUT_ID,
+        label: "Final playtime hours (optional)",
+        required: false,
+      }),
     ];
     if (session.addCompletionNote) {
-      const noteInput = new TextInputBuilder()
-        .setCustomId(NOW_PLAYING_COMPLETE_NOTE_INPUT_ID)
-        .setLabel("Note (optional)")
-        .setStyle(TextInputStyle.Paragraph)
-        .setRequired(false)
-        .setMaxLength(MAX_NOW_PLAYING_NOTE_LEN);
-      if (noteValue) {
-        noteInput.setValue(noteValue.slice(0, MAX_NOW_PLAYING_NOTE_LEN));
-      }
-      modalRows.push(new ActionRowBuilder<TextInputBuilder>().addComponents(noteInput));
+      modalRows.push(buildTextInputRow({
+        customId: NOW_PLAYING_COMPLETE_NOTE_INPUT_ID,
+        label: "Note (optional)",
+        style: TextInputStyle.Paragraph,
+        required: false,
+        maxLength: MAX_NOW_PLAYING_NOTE_LEN,
+        value: noteValue ? noteValue.slice(0, MAX_NOW_PLAYING_NOTE_LEN) : undefined,
+      }));
     }
     modal.addComponents(...modalRows);
     safeIgnore(interaction.showModal(modal));

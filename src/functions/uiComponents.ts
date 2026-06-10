@@ -1,10 +1,42 @@
-import { ActionRowBuilder, ButtonStyle, StringSelectMenuBuilder } from "discord.js";
+import {
+  ActionRowBuilder,
+  ButtonStyle,
+  StringSelectMenuBuilder,
+  TextInputBuilder,
+  TextInputStyle,
+} from "discord.js";
 import {
   ButtonBuilder,
   ContainerBuilder,
   SectionBuilder,
   TextDisplayBuilder,
 } from "@discordjs/builders";
+
+export interface IModalTextInputOptions {
+  customId: string;
+  label: string;
+  style?: TextInputStyle;
+  required?: boolean;
+  placeholder?: string;
+  minLength?: number;
+  maxLength?: number;
+  value?: string;
+}
+
+export function buildTextInputRow(
+  options: IModalTextInputOptions,
+): ActionRowBuilder<TextInputBuilder> {
+  const input = new TextInputBuilder()
+    .setCustomId(options.customId)
+    .setLabel(options.label)
+    .setStyle(options.style ?? TextInputStyle.Short)
+    .setRequired(options.required ?? true);
+  if (options.placeholder != null) input.setPlaceholder(options.placeholder);
+  if (options.minLength != null) input.setMinLength(options.minLength);
+  if (options.maxLength != null) input.setMaxLength(options.maxLength);
+  if (options.value != null) input.setValue(options.value);
+  return new ActionRowBuilder<TextInputBuilder>().addComponents(input);
+}
 
 type ButtonAction = "add" | "edit" | "delete" | "confirm" | "cancel" | "close";
 

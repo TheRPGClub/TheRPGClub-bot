@@ -7,8 +7,6 @@ import {
   ModalBuilder,
   ModalSubmitInteraction,
   StringSelectMenuInteraction,
-  TextInputBuilder,
-  TextInputStyle,
   ActionRowBuilder,
 } from "discord.js";
 import {
@@ -96,6 +94,7 @@ import { SteamApiError, steamApiService } from "../../services/SteamApiService.j
 import { createIgdbSession } from "../../services/IGDB/IgdbSelectService.js";
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
 import { DISCORD_EMBED_FIELD_VALUE_MAX } from "../../config/textLimits.js";
+import { buildTextInputRow } from "../../functions/uiComponents.js";
 
 @Discord()
 @SlashGroup("collection")
@@ -760,18 +759,13 @@ export class CollectionSteamImportCommand {
         )
         .setTitle("Steam import remap");
 
-      const remapInput = new TextInputBuilder()
-        .setCustomId(STEAM_REMAP_INPUT_ID)
-        .setLabel("Search title")
-        .setStyle(TextInputStyle.Short)
-        .setRequired(true)
-        .setMaxLength(120)
-        .setValue(item.steamAppName.slice(0, 120))
-        .setPlaceholder("Call of Duty Classic");
-
-      modal.addComponents(
-        new ActionRowBuilder<TextInputBuilder>().addComponents(remapInput),
-      );
+      modal.addComponents(buildTextInputRow({
+        customId: STEAM_REMAP_INPUT_ID,
+        label: "Search title",
+        maxLength: 120,
+        value: item.steamAppName.slice(0, 120),
+        placeholder: "Call of Duty Classic",
+      }));
       await interaction.showModal(modal).catch(() => {});
       return;
     }
@@ -787,17 +781,12 @@ export class CollectionSteamImportCommand {
         )
         .setTitle("Steam import: Enter GameDB ID");
 
-      const gameIdInput = new TextInputBuilder()
-        .setCustomId(STEAM_GAME_ID_INPUT_ID)
-        .setLabel("GameDB ID (or IGDB numeric ID)")
-        .setStyle(TextInputStyle.Short)
-        .setRequired(true)
-        .setMaxLength(20)
-        .setPlaceholder("12345");
-
-      modal.addComponents(
-        new ActionRowBuilder<TextInputBuilder>().addComponents(gameIdInput),
-      );
+      modal.addComponents(buildTextInputRow({
+        customId: STEAM_GAME_ID_INPUT_ID,
+        label: "GameDB ID (or IGDB numeric ID)",
+        maxLength: 20,
+        placeholder: "12345",
+      }));
       await interaction.showModal(modal).catch(() => {});
       return;
     }

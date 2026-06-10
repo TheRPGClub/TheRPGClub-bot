@@ -7,9 +7,6 @@ import type {
 } from "discord.js";
 import {
   ModalBuilder,
-  ActionRowBuilder,
-  TextInputBuilder,
-  TextInputStyle,
 } from "discord.js";
 import {
   safeDeferUpdate,
@@ -42,6 +39,7 @@ import {
 } from "./gotm-audit-ui.service.js";
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
 import { assertCustomIdSegments } from "../../utilities/CustomIdUtils.js";
+import { buildTextInputRow } from "../../functions/uiComponents.js";
 
 export async function handleGotmAuditSelect(
   interaction: StringSelectMenuInteraction): Promise<void> {
@@ -140,14 +138,7 @@ export async function handleGotmAuditAction(interaction: ButtonInteraction): Pro
        
       .setCustomId(`${GOTM_AUDIT_MANUAL_PREFIX}:${ownerId}:${importId}:${itemId}`)
       .setTitle("Manual GameDB Entry");
-    const input = new TextInputBuilder()
-       
-      .setCustomId(GOTM_AUDIT_MANUAL_INPUT_ID)
-      .setLabel("GameDB ID")
-      .setStyle(TextInputStyle.Short)
-      .setRequired(true);
-    const row = new ActionRowBuilder<TextInputBuilder>().addComponents(input);
-    modal.addComponents(row);
+    modal.addComponents(buildTextInputRow({ customId: GOTM_AUDIT_MANUAL_INPUT_ID, label: "GameDB ID" }));
     await interaction.showModal(modal);
     return;
   }
@@ -157,14 +148,7 @@ export async function handleGotmAuditAction(interaction: ButtonInteraction): Pro
        
       .setCustomId(`${GOTM_AUDIT_QUERY_PREFIX}:${ownerId}:${importId}:${itemId}`)
       .setTitle("Manual GameDB Search");
-    const input = new TextInputBuilder()
-       
-      .setCustomId(GOTM_AUDIT_QUERY_INPUT_ID)
-      .setLabel("Search query")
-      .setStyle(TextInputStyle.Short)
-      .setRequired(true);
-    const row = new ActionRowBuilder<TextInputBuilder>().addComponents(input);
-    modal.addComponents(row);
+    modal.addComponents(buildTextInputRow({ customId: GOTM_AUDIT_QUERY_INPUT_ID, label: "Search query" }));
     await interaction.showModal(modal);
     return;
   }

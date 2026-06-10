@@ -5,8 +5,6 @@ import {
   MessageFlags,
   ModalBuilder,
   StringSelectMenuBuilder,
-  TextInputBuilder,
-  TextInputStyle,
   userMention,
 } from "discord.js";
 import type {
@@ -36,6 +34,7 @@ import { isPositiveInt, truncateWithEllipsis } from "../utilities/ValidationUtil
 import { DISCORD_AUTOCOMPLETE_DESC_MAX, DISCORD_SELECT_LABEL_MAX } from "../config/textLimits.js";
 import { assertCustomIdSegments } from "../utilities/CustomIdUtils.js";
 import { safeIgnore } from "../utilities/AsyncUtils.js";
+import { buildTextInputRow } from "../functions/uiComponents.js";
 
 const PUSH_PIN_EMOJI = "📌";
 const PLUS_EMOJI = "➕";
@@ -476,18 +475,12 @@ export class MessageReactionAdd {
        
       .setCustomId(`completion-react-title-modal:${sessionId}`)
       .setTitle("Change completion title")
-      .addComponents(
-        new ActionRowBuilder<TextInputBuilder>().addComponents(
-          new TextInputBuilder()
-             
-            .setCustomId("completion-react-title-input")
-            .setLabel("Game title")
-            .setStyle(TextInputStyle.Short)
-            .setRequired(true)
-            .setMaxLength(100)
-            .setValue(session.query.slice(0, DISCORD_SELECT_LABEL_MAX)),
-        ),
-      );
+      .addComponents(buildTextInputRow({
+        customId: "completion-react-title-input",
+        label: "Game title",
+        maxLength: 100,
+        value: session.query.slice(0, DISCORD_SELECT_LABEL_MAX),
+      }));
 
     safeIgnore(interaction.showModal(modal));
   }

@@ -1,11 +1,9 @@
 import {
-  ActionRowBuilder,
   AttachmentBuilder,
   ButtonInteraction,
   MessageFlags,
   ModalBuilder,
   ModalSubmitInteraction,
-  TextInputBuilder,
   TextInputStyle,
   type ForumChannel,
   type MessageCreateOptions,
@@ -31,6 +29,7 @@ import Game from "../../classes/Game.js";
 import { updateGameProfileMessageById } from "./gamedb-profile.service.js";
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
 import { assertCustomIdSegments } from "../../utilities/CustomIdUtils.js";
+import { buildTextInputRow } from "../../functions/uiComponents.js";
 
 const GAMEDB_THREAD_MODAL_PREFIX = "gamedb-thread-modal";
 const GAMEDB_THREAD_TITLE_INPUT_ID = "gamedb-thread-title";
@@ -80,26 +79,19 @@ export async function showNowPlayingThreadModal(
     )
     .setTitle("Create Now Playing Thread")
     .addComponents(
-      new ActionRowBuilder<TextInputBuilder>().addComponents(
-        new TextInputBuilder()
-           
-          .setCustomId(GAMEDB_THREAD_TITLE_INPUT_ID)
-          .setLabel("Thread Title")
-          .setStyle(TextInputStyle.Short)
-          .setRequired(true)
-          .setMaxLength(MAX_THREAD_TITLE_LEN)
-          .setValue(defaultTitle),
-      ),
-      new ActionRowBuilder<TextInputBuilder>().addComponents(
-        new TextInputBuilder()
-           
-          .setCustomId(GAMEDB_THREAD_BODY_INPUT_ID)
-          .setLabel("Initial Post")
-          .setStyle(TextInputStyle.Paragraph)
-          .setRequired(true)
-          .setMaxLength(MAX_THREAD_BODY_LEN)
-          .setValue(defaultBody),
-      ),
+      buildTextInputRow({
+        customId: GAMEDB_THREAD_TITLE_INPUT_ID,
+        label: "Thread Title",
+        maxLength: MAX_THREAD_TITLE_LEN,
+        value: defaultTitle,
+      }),
+      buildTextInputRow({
+        customId: GAMEDB_THREAD_BODY_INPUT_ID,
+        label: "Initial Post",
+        style: TextInputStyle.Paragraph,
+        maxLength: MAX_THREAD_BODY_LEN,
+        value: defaultBody,
+      }),
     );
 
   await interaction.showModal(modal).catch(async () => {

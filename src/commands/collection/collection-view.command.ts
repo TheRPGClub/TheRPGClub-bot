@@ -5,9 +5,6 @@ import {
   ModalBuilder,
   ModalSubmitInteraction,
   StringSelectMenuInteraction,
-  TextInputBuilder,
-  TextInputStyle,
-  ActionRowBuilder,
   type GuildMember,
   type User,
 } from "discord.js";
@@ -41,6 +38,7 @@ import {
 import { flattenErrorMessages } from "../imports/import-scaffold.service.js";
 import { formatStructuredLog } from "../../utilities/LogUtils.js";
 import { safeIgnore } from "../../utilities/AsyncUtils.js";
+import { buildTextInputRow } from "../../functions/uiComponents.js";
 import {
   buildAllCollectionsOverviewMessages,
   buildCollectionOverviewResponse,
@@ -542,24 +540,21 @@ export class CollectionViewCommand {
         )
         .setTitle("Collection filters");
 
-      const titleInput = new TextInputBuilder()
-        .setCustomId(COLLECTION_FILTER_TITLE_INPUT_ID)
-        .setLabel("Title contains")
-        .setStyle(TextInputStyle.Short)
-        .setRequired(false)
-        .setMaxLength(100)
-        .setValue(currentState.title ?? "");
-      const platformInput = new TextInputBuilder()
-        .setCustomId(COLLECTION_FILTER_PLATFORM_INPUT_ID)
-        .setLabel("Platform contains")
-        .setStyle(TextInputStyle.Short)
-        .setRequired(false)
-        .setMaxLength(100)
-        .setValue(currentState.platform ?? "");
-
       modal.addComponents(
-        new ActionRowBuilder<TextInputBuilder>().addComponents(titleInput),
-        new ActionRowBuilder<TextInputBuilder>().addComponents(platformInput),
+        buildTextInputRow({
+          customId: COLLECTION_FILTER_TITLE_INPUT_ID,
+          label: "Title contains",
+          required: false,
+          maxLength: 100,
+          value: currentState.title ?? "",
+        }),
+        buildTextInputRow({
+          customId: COLLECTION_FILTER_PLATFORM_INPUT_ID,
+          label: "Platform contains",
+          required: false,
+          maxLength: 100,
+          value: currentState.platform ?? "",
+        }),
       );
       safeIgnore(interaction.showModal(modal));
       return;

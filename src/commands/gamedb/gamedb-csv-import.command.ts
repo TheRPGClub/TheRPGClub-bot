@@ -8,9 +8,6 @@ import {
   ModalBuilder,
   ModalSubmitInteraction,
   StringSelectMenuInteraction,
-  TextInputBuilder,
-  TextInputStyle,
-  ActionRowBuilder,
 } from "discord.js";
 import {
   ButtonComponent,
@@ -75,6 +72,7 @@ import { processReleaseDates } from "./gamedb-add.command.js";
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
 import { DISCORD_AUTOCOMPLETE_DESC_MAX } from "../../config/textLimits.js";
 import { assertCustomIdSegments } from "../../utilities/CustomIdUtils.js";
+import { buildTextInputRow } from "../../functions/uiComponents.js";
 
 const GAMEDB_CSV_ACTIONS = ["start", "resume", "status", "pause", "cancel"] as const;
 type GameDbCsvAction = (typeof GAMEDB_CSV_ACTIONS)[number];
@@ -581,13 +579,7 @@ export class GameDbCsvImportCommand {
       const modal = new ModalBuilder()
         .setCustomId(`${GAMEDB_CSV_MANUAL_PREFIX}:${ownerId}:${importId}:${itemId}`)
         .setTitle("Manual IGDB Import");
-      const input = new TextInputBuilder()
-        .setCustomId(GAMEDB_CSV_MANUAL_INPUT_ID)
-        .setLabel("IGDB game ID")
-        .setStyle(TextInputStyle.Short)
-        .setRequired(true);
-      const row = new ActionRowBuilder<TextInputBuilder>().addComponents(input);
-      modal.addComponents(row);
+      modal.addComponents(buildTextInputRow({ customId: GAMEDB_CSV_MANUAL_INPUT_ID, label: "IGDB game ID" }));
       await interaction.showModal(modal);
       return;
     }
@@ -596,13 +588,7 @@ export class GameDbCsvImportCommand {
       const modal = new ModalBuilder()
         .setCustomId(`${GAMEDB_CSV_QUERY_PREFIX}:${ownerId}:${importId}:${itemId}`)
         .setTitle("Manual IGDB Search");
-      const input = new TextInputBuilder()
-        .setCustomId(GAMEDB_CSV_QUERY_INPUT_ID)
-        .setLabel("Search query")
-        .setStyle(TextInputStyle.Short)
-        .setRequired(true);
-      const row = new ActionRowBuilder<TextInputBuilder>().addComponents(input);
-      modal.addComponents(row);
+      modal.addComponents(buildTextInputRow({ customId: GAMEDB_CSV_QUERY_INPUT_ID, label: "Search query" }));
       await interaction.showModal(modal);
       return;
     }
