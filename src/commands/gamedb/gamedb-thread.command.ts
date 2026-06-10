@@ -28,7 +28,7 @@ import { NOW_PLAYING_SIDEGAME_TAG_ID } from "../../config/tags.js";
 import Game from "../../classes/Game.js";
 import { updateGameProfileMessageById } from "./gamedb-profile.service.js";
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
-import { parseCustomIdSegments } from "../../utilities/CustomIdUtils.js";
+import { assertCustomIdSegments } from "../../utilities/CustomIdUtils.js";
 
 const GAMEDB_THREAD_MODAL_PREFIX = "gamedb-thread-modal";
 const GAMEDB_THREAD_TITLE_INPUT_ID = "gamedb-thread-title";
@@ -227,8 +227,8 @@ export class GameDbThreadCommand {
    
   @ModalComponent({ id: /^gamedb-thread-modal:\d+:\d+:\d+$/ })
   async handleGameDbThreadModal(interaction: ModalSubmitInteraction): Promise<void> {
-    const segs = parseCustomIdSegments(interaction.customId, 3);
-    if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+    const segs = assertCustomIdSegments(interaction, 3);
+    if (!segs) return;
     const [gameIdRaw, sourceChannelId, sourceMessageId] = segs;
     const gameId = Number(gameIdRaw);
 

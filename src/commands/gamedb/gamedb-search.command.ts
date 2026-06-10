@@ -51,7 +51,7 @@ import {
 import { handleNoResults } from "./gamedb-add.command.js";
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
 import { MAX_CONTAINER_TEXT } from "../../config/textLimits.js";
-import { parseCustomIdSegments } from "../../utilities/CustomIdUtils.js";
+import { assertCustomIdSegments } from "../../utilities/CustomIdUtils.js";
 
 function formatUpcomingDate(date: Date | null | undefined): string {
   if (!date) return "";
@@ -338,8 +338,8 @@ export class GameDbSearchCommand {
 
   @SelectMenuComponent({ id: /^gamedb-search-select:\d+:\d+:[A-Za-z0-9_-]*$/ })
   async handleSearchSelect(interaction: StringSelectMenuInteraction): Promise<void> {
-    const segs = parseCustomIdSegments(interaction.customId, 3);
-    if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+    const segs = assertCustomIdSegments(interaction, 3);
+    if (!segs) return;
     const [ownerId, pageRaw, encodedQuery] = segs;
     const page = Number(pageRaw);
 
@@ -413,8 +413,8 @@ export class GameDbSearchCommand {
 
   @ButtonComponent({ id: /^gamedb-search-page:\d+:\d+:[A-Za-z0-9_-]*:(next|prev)$/ })
   async handleSearchPage(interaction: ButtonInteraction): Promise<void> {
-    const segs = parseCustomIdSegments(interaction.customId, 4);
-    if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+    const segs = assertCustomIdSegments(interaction, 4);
+    if (!segs) return;
     const [ownerId, pageRaw, encodedQuery, direction] = segs;
     const page = Number(pageRaw);
 
@@ -473,8 +473,8 @@ export class GameDbSearchCommand {
 
   @ButtonComponent({ id: /^gamedb-search-refresh:\d+:[A-Za-z0-9_-]*$/ })
   async handleSearchRefresh(interaction: ButtonInteraction): Promise<void> {
-    const segs = parseCustomIdSegments(interaction.customId, 2);
-    if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+    const segs = assertCustomIdSegments(interaction, 2);
+    if (!segs) return;
     const [ownerId, encodedQuery] = segs;
 
     if (interaction.user.id !== ownerId) {

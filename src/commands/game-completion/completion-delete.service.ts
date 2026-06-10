@@ -4,7 +4,7 @@ import { safeReply } from "../../functions/InteractionUtils.js";
 import { buildTextReply } from "../../functions/ComponentsV2Utils.js";
 import { COMPONENTS_V2_FLAG } from "../../config/flags.js";
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
-import { parseCustomIdSegments } from "../../utilities/CustomIdUtils.js";
+import { assertCustomIdSegments } from "../../utilities/CustomIdUtils.js";
 
 /**
  * Handles completion deletion from the selection menu
@@ -12,8 +12,8 @@ import { parseCustomIdSegments } from "../../utilities/CustomIdUtils.js";
 export async function handleCompletionDeleteMenu(
   interaction: StringSelectMenuInteraction,
 ): Promise<void> {
-  const segs = parseCustomIdSegments(interaction.customId, 1);
-  if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+  const segs = assertCustomIdSegments(interaction, 1);
+  if (!segs) return;
   const [ownerId] = segs;
   if (interaction.user.id !== ownerId) {
     await safeReply(interaction, buildTextReply("This delete prompt isn't for you.", true));

@@ -41,12 +41,12 @@ import {
   buildGotmAuditPromptComponents,
 } from "./gotm-audit-ui.service.js";
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
-import { parseCustomIdSegments } from "../../utilities/CustomIdUtils.js";
+import { assertCustomIdSegments } from "../../utilities/CustomIdUtils.js";
 
 export async function handleGotmAuditSelect(
   interaction: StringSelectMenuInteraction): Promise<void> {
-  const segs = parseCustomIdSegments(interaction.customId, 3);
-  if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+  const segs = assertCustomIdSegments(interaction, 3);
+  if (!segs) return;
   const [ownerId, importIdRaw, itemIdRaw] = segs;
   if (interaction.user.id !== ownerId) {
     await safeReply(interaction, buildTextReply("This audit prompt is not for you.", true));
@@ -120,8 +120,8 @@ export async function handleGotmAuditSelect(
 }
 
 export async function handleGotmAuditAction(interaction: ButtonInteraction): Promise<void> {
-  const segs = parseCustomIdSegments(interaction.customId, 4);
-  if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+  const segs = assertCustomIdSegments(interaction, 4);
+  if (!segs) return;
   const [ownerId, importIdRaw, itemIdRaw, action] = segs;
   if (interaction.user.id !== ownerId) {
     await safeReply(interaction, buildTextReply("This audit prompt is not for you.", true));
@@ -267,8 +267,8 @@ export async function handleGotmAuditAction(interaction: ButtonInteraction): Pro
 export async function handleGotmAuditManualModal(
   interaction: ModalSubmitInteraction,
 ): Promise<void> {
-  const segs = parseCustomIdSegments(interaction.customId, 3);
-  if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+  const segs = assertCustomIdSegments(interaction, 3);
+  if (!segs) return;
   const [ownerId, importIdRaw, itemIdRaw] = segs;
   if (interaction.user.id !== ownerId) {
     await safeReply(interaction, buildTextReply("This audit prompt is not for you.", true));
@@ -345,8 +345,8 @@ export async function handleGotmAuditManualModal(
 export async function handleGotmAuditQueryModal(
   interaction: ModalSubmitInteraction,
 ): Promise<void> {
-  const segs = parseCustomIdSegments(interaction.customId, 3);
-  if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+  const segs = assertCustomIdSegments(interaction, 3);
+  if (!segs) return;
   const [ownerId, importIdRaw, itemIdRaw] = segs;
   if (interaction.user.id !== ownerId) {
     await safeReply(interaction, buildTextReply("This audit prompt is not for you.", true));

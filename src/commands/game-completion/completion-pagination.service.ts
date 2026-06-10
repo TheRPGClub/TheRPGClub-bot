@@ -20,7 +20,7 @@ import {
   buildTextReply,
   safeV2TextContent,
 } from "../../functions/ComponentsV2Utils.js";
-import { parseCustomIdSegments } from "../../utilities/CustomIdUtils.js";
+import { assertCustomIdSegments } from "../../utilities/CustomIdUtils.js";
 
 /**
  * Parses a year filter string into a number, "unknown", or null
@@ -138,8 +138,8 @@ async function openCompletionJournalView(
 export async function handleCompletionJournalViewSelect(
   interaction: StringSelectMenuInteraction,
 ): Promise<void> {
-  const segs = parseCustomIdSegments(interaction.customId, 1);
-  if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+  const segs = assertCustomIdSegments(interaction, 1);
+  if (!segs) return;
   const [ownerId] = segs;
   const gameId = Number(interaction.values[0]);
   if (!gameId) return;
@@ -153,8 +153,8 @@ export async function handleCompletionJournalViewSelect(
 export async function handleCompletionJournalPage(
   interaction: ButtonInteraction,
 ): Promise<void> {
-  const segs = parseCustomIdSegments(interaction.customId, 4);
-  if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+  const segs = assertCustomIdSegments(interaction, 4);
+  if (!segs) return;
   const [ownerId, gameIdRaw, , pageRaw] = segs;
   const gameId = Number(gameIdRaw);
   const page = Number(pageRaw);
@@ -178,8 +178,8 @@ const COMPLETION_HELP_TEXT = [
 export async function handleCompletionListHeader(
   interaction: ButtonInteraction,
 ): Promise<void> {
-  const segs = parseCustomIdSegments(interaction.customId, 1);
-  if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+  const segs = assertCustomIdSegments(interaction, 1);
+  if (!segs) return;
   const [ownerId] = segs;
   if (interaction.user.id !== ownerId) {
     await safeDeferUpdate(interaction).catch(() => {});
@@ -201,8 +201,8 @@ export async function handleCompletionListHeader(
 export async function handleCompletionClearYearFilter(
   interaction: ButtonInteraction,
 ): Promise<void> {
-  const segs = parseCustomIdSegments(interaction.customId, 1);
-  if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+  const segs = assertCustomIdSegments(interaction, 1);
+  if (!segs) return;
   const [userId] = segs;
   const ephemeral = interaction.message?.flags?.has(MessageFlags.Ephemeral) ?? true;
 
@@ -219,8 +219,8 @@ export async function handleCompletionClearYearFilter(
 export async function handleCompletionYearSelect(
   interaction: StringSelectMenuInteraction,
 ): Promise<void> {
-  const segs = parseCustomIdSegments(interaction.customId, 1);
-  if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+  const segs = assertCustomIdSegments(interaction, 1);
+  if (!segs) return;
   const [userId] = segs;
   const selectedYear = interaction.values[0];
   const year = parseCompletionYearFilter(selectedYear);

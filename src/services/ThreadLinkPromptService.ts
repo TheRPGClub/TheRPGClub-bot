@@ -31,7 +31,7 @@ import {
 import { shouldPrompt, markPrompted, getGameReleaseYear } from "./ThreadLinkPromptCache.js";
 import { COLOR_BLUE_INFO } from "../config/colors.js";
 import { DISCORD_AUTOCOMPLETE_DESC_MAX } from "../config/textLimits.js";
-import { parseCustomIdSegments } from "../utilities/CustomIdUtils.js";
+import { assertCustomIdSegments } from "../utilities/CustomIdUtils.js";
 
 function hasIgdbConfig(): boolean {
   return Boolean(process.env.IGDB_CLIENT_ID && process.env.IGDB_CLIENT_SECRET);
@@ -92,8 +92,8 @@ async function promptThread(thread: ThreadChannel): Promise<void> {
 export class ThreadLinkButtonHandlers {
   @ButtonComponent({ id: /^thread-link:.+$/ })
   async handleLinkButton(interaction: ButtonInteraction): Promise<void> {
-    const segs = parseCustomIdSegments(interaction.customId, 1);
-    if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+    const segs = assertCustomIdSegments(interaction, 1);
+    if (!segs) return;
     const [threadId] = segs;
     if (!interaction.guild || !interaction.channel) return;
 
@@ -228,8 +228,8 @@ export class ThreadLinkButtonHandlers {
 
   @ButtonComponent({ id: /^thread-skip:.+$/ })
   async handleSkipButton(interaction: ButtonInteraction): Promise<void> {
-    const segs = parseCustomIdSegments(interaction.customId, 1);
-    if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+    const segs = assertCustomIdSegments(interaction, 1);
+    if (!segs) return;
     const [threadId] = segs;
     try {
       await setThreadSkipLinking(threadId, true);

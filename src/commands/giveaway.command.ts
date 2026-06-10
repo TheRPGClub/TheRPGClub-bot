@@ -61,7 +61,7 @@ import {
   GIVEAWAY_MAX_PLATFORM_LENGTH,
   GIVEAWAY_MAX_KEY_LENGTH,
 } from "../config/textLimits.js";
-import { parseCustomIdSegments } from "../utilities/CustomIdUtils.js";
+import { assertCustomIdSegments } from "../utilities/CustomIdUtils.js";
 const GIVEAWAY_DONATE_MODAL_ID = "giveaway-donate-modal";
 const GIVEAWAY_REVOKE_MODAL_ID = "giveaway-revoke-modal";
 const GIVEAWAY_DONATE_TITLE_ID = "giveaway-donate-title";
@@ -613,8 +613,8 @@ export class GiveawayCommand {
    
   @ButtonComponent({ id: /^giveaway-page:[^:]+:\d+:\d+:(prev|next)$/ })
   async handlePage(interaction: ButtonInteraction): Promise<void> {
-    const segs = parseCustomIdSegments(interaction.customId, 4);
-    if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+    const segs = assertCustomIdSegments(interaction, 4);
+    if (!segs) return;
     const [sessionId, ownerId, pageRaw, dir] = segs;
     if (await replyIfNotOwner(interaction, ownerId)) return;
 
@@ -625,8 +625,8 @@ export class GiveawayCommand {
    
   @ButtonComponent({ id: /^giveaway-page-public:[^:]+:\d+:(prev|next)$/ })
   async handlePublicPage(interaction: ButtonInteraction): Promise<void> {
-    const segs = parseCustomIdSegments(interaction.customId, 3);
-    if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+    const segs = assertCustomIdSegments(interaction, 3);
+    if (!segs) return;
     const [sessionId, pageRaw, dir] = segs;
     const parsed = parseDirAndPage(pageRaw, dir);
     if (!parsed) return;
@@ -636,8 +636,8 @@ export class GiveawayCommand {
    
   @ButtonComponent({ id: /^giveaway-hub-claim:\d+$/ })
   async handleHubClaim(interaction: ButtonInteraction): Promise<void> {
-    const segs = parseCustomIdSegments(interaction.customId, 1);
-    if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+    const segs = assertCustomIdSegments(interaction, 1);
+    if (!segs) return;
     const [pageRaw] = segs;
     const page = Number(pageRaw);
     if (Number.isNaN(page)) return;
@@ -697,8 +697,8 @@ export class GiveawayCommand {
    
   @ButtonComponent({ id: /^giveaway-donor-notify:\d+:(yes|no)$/ })
   async handleDonorNotifyUpdate(interaction: ButtonInteraction): Promise<void> {
-    const segs = parseCustomIdSegments(interaction.customId, 2);
-    if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+    const segs = assertCustomIdSegments(interaction, 2);
+    if (!segs) return;
     const [ownerId, choice] = segs;
     if (await replyIfNotOwner(interaction, ownerId)) return;
 
@@ -721,8 +721,8 @@ export class GiveawayCommand {
    
   @ButtonComponent({ id: /^giveaway-claim-button:[^:]+:\d+$/ })
   async handleClaimButton(interaction: ButtonInteraction): Promise<void> {
-    const segs = parseCustomIdSegments(interaction.customId, 2);
-    if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+    const segs = assertCustomIdSegments(interaction, 2);
+    if (!segs) return;
     const [sessionId, pageRaw] = segs;
     const page = Number(pageRaw);
     if (Number.isNaN(page)) return;
@@ -754,8 +754,8 @@ export class GiveawayCommand {
    
   @SelectMenuComponent({ id: /^giveaway-claim:[^:]+:\d+:\d+:\d+$/ })
   async handleClaim(interaction: StringSelectMenuInteraction): Promise<void> {
-    const segs = parseCustomIdSegments(interaction.customId, 3);
-    if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+    const segs = assertCustomIdSegments(interaction, 3);
+    if (!segs) return;
     const [sessionId, ownerId, pageRaw] = segs;
     if (await replyIfNotOwner(interaction, ownerId)) return;
 
@@ -794,8 +794,8 @@ export class GiveawayCommand {
    
   @SelectMenuComponent({ id: /^giveaway-hub-claim-select:\d+:\d+$/ })
   async handleHubClaimSelect(interaction: StringSelectMenuInteraction): Promise<void> {
-    const segs = parseCustomIdSegments(interaction.customId, 1);
-    if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+    const segs = assertCustomIdSegments(interaction, 1);
+    if (!segs) return;
     const [userId] = segs;
     if (interaction.user.id !== userId) {
       await safeReply(interaction, buildTextReply("This giveaway claim isn't for you.", true));
@@ -836,8 +836,8 @@ export class GiveawayCommand {
    
   @SelectMenuComponent({ id: /^giveaway-claim-public:[^:]+:\d+:\d+:\d+:\d+$/ })
   async handlePublicClaim(interaction: StringSelectMenuInteraction): Promise<void> {
-    const segs = parseCustomIdSegments(interaction.customId, 4);
-    if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+    const segs = assertCustomIdSegments(interaction, 4);
+    if (!segs) return;
     const [sessionId, pageRaw, messageId, userId] = segs;
     if (interaction.user.id !== userId) {
       await safeReply(interaction, buildTextReply("This giveaway claim isn't for you.", true));
@@ -973,8 +973,8 @@ export class GiveawayCommand {
    
   @ButtonComponent({ id: /^giveaway-claim-cancel:\d+$/ })
   async handleClaimCancel(interaction: ButtonInteraction): Promise<void> {
-    const segs = parseCustomIdSegments(interaction.customId, 1);
-    if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+    const segs = assertCustomIdSegments(interaction, 1);
+    if (!segs) return;
     const [userId] = segs;
     if (interaction.user.id !== userId) {
       await safeReply(interaction, buildTextReply("This giveaway claim isn't for you.", true));
