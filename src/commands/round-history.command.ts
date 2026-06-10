@@ -71,12 +71,12 @@ type IRoundHistoryFilterState = {
   page: number;
 };
 
-function buildRoundHistorySessionId(userId: string, showInChat: boolean): string {
-  const visibility = showInChat ? "1" : "0";
+function buildRoundHistorySessionId(userId: string, isPrivate: boolean): string {
+  const visibility = isPrivate ? "1" : "0";
   return `u${userId}_c${visibility}`;
 }
 
-function parseShowInChatFromSessionId(sessionId: string): boolean | null {
+function parsePrivateFlagFromSessionId(sessionId: string): boolean | null {
   const match = /^u\d+_c([01])$/.exec(sessionId);
   if (!match || !match[1]) {
     return null;
@@ -498,15 +498,15 @@ export class RoundHistoryCommand {
   @Slash({ description: "Query historical GOTM/NR-GOTM rounds", name: "round-history" })
   async roundHistory(
     @SlashOption({
-      description: "If true, show results in the channel instead of ephemerally.",
-      name: "showinchat",
+      description: "Send reply privately (only visible to you).",
+      name: "private",
       required: false,
       type: ApplicationCommandOptionType.Boolean,
     })
-    showInChat: boolean | undefined,
+    privateFlag: boolean | undefined,
     interaction: CommandInteraction,
   ): Promise<void> {
-    const sessionId = buildRoundHistorySessionId(interaction.user.id, Boolean(showInChat));
+    const sessionId = buildRoundHistorySessionId(interaction.user.id, Boolean(privateFlag));
     let modal: ModalBuilder | null = null;
     let modalJson: unknown = null;
 
@@ -515,7 +515,7 @@ export class RoundHistoryCommand {
       modalJson = modal.toJSON();
       logRoundHistoryModalDebug("open.before_show", {
         sessionId,
-        showInChat: Boolean(showInChat),
+        privateFlag: Boolean(privateFlag),
         modalConstructor: modal.constructor.name,
         hasToJson: typeof modal.toJSON === "function",
         customId: (modalJson as { custom_id?: unknown }).custom_id,
@@ -539,7 +539,7 @@ export class RoundHistoryCommand {
       }
       logRoundHistoryModalDebug("open.show_failed", {
         sessionId,
-        showInChat: Boolean(showInChat),
+        privateFlag: Boolean(privateFlag),
         error: error instanceof Error ? error : String(error),
         modalConstructor: modal?.constructor.name ?? "none",
         hasModalToJson: modal ? typeof modal.toJSON === "function" : false,
@@ -574,8 +574,8 @@ export class RoundHistoryCommand {
     }
 
     const year = Number.isInteger(selectedYear) ? selectedYear : getCurrentYear();
-    const showInChat = parseShowInChatFromSessionId(parsedCustomId.sessionId);
-    const ephemeral = showInChat === null ? true : !showInChat;
+    const privateFlag = parsePrivateFlagFromSessionId(parsedCustomId.sessionId);
+    const ephemeral = privateFlag === null ? true : (privateFlag ?? false);
     await safeDeferReply(interaction, { flags: buildComponentsV2Flags(ephemeral) });
 
     const response = await buildRoundHistoryResponse(interaction, {
