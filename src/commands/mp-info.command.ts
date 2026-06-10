@@ -362,7 +362,6 @@ export class MultiplayerInfoCommand {
         components: [...result.payload.components, backRow],
         flags: buildComponentsV2Flags(false),
         content: null,
-        embeds: [],
       });
     } catch (err: any) {
       const msg = extractErrorMessage(err);
