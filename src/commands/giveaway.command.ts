@@ -71,6 +71,7 @@ import {
   buildSelectOptions,
   buildTextInputRow,
   buildButtonRow,
+  buildSelectRow,
 } from "../functions/uiComponents.js";
 import { safeIgnore } from "../utilities/AsyncUtils.js";
 const GIVEAWAY_DONATE_MODAL_ID = "giveaway-donate-modal";
@@ -117,7 +118,7 @@ function buildKeySelectMenus(
       .setMinValues(1)
       .setMaxValues(1)
       .addOptions(options);
-    rows.push(new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select));
+    rows.push(buildSelectRow(select));
   }
   return rows;
 }

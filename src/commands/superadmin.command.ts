@@ -61,6 +61,7 @@ import { DISCORD_AUTOCOMPLETE_DESC_MAX, DISCORD_SELECT_LABEL_MAX } from "../conf
 import { assertCustomIdSegments } from "../utilities/CustomIdUtils.js";
 import { safeIgnore } from "../utilities/AsyncUtils.js";
 import { logError } from "../utilities/LogUtils.js";
+import { buildSelectRow } from "../functions/uiComponents.js";
 
 type CompletionAddContext = {
   targetUserId: string;
@@ -139,7 +140,7 @@ function buildSuperAdminHelpButtons(
     )
     .addOptions({ label: "Back to Help Main Menu", value: "help-main" });
 
-  return [new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select)];
+  return [buildSelectRow(select)];
 }
 
 type ImageBufferResult = { buffer: Buffer; mimeType: string | null };
@@ -384,7 +385,7 @@ export class SuperAdmin {
 
       await safeReply(interaction, {
         content: `Select the game for "${searchTerm}".`,
-        components: [new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select)],
+        components: [buildSelectRow(select)],
         flags: MessageFlags.Ephemeral,
       });
       return;
@@ -454,7 +455,7 @@ export class SuperAdmin {
       : `Select the platform for **${game.title}**.`;
     await safeReply(interaction, {
       content,
-      components: [new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select)],
+      components: [buildSelectRow(select)],
       flags: MessageFlags.Ephemeral,
     });
   }

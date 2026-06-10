@@ -44,6 +44,7 @@ import {
   buildSelectOptions,
   buildTitleHeaderContainer,
   buildUserHeaderContainer,
+  buildSelectRow,
 } from "../functions/uiComponents.js";
 import { recordCurrentAvatarIfNew } from "../utilities/AvatarLogUtils.js";
 import { parseCustomIdSegments } from "../utilities/CustomIdUtils.js";
@@ -189,7 +190,7 @@ async function buildAvatarHistoryAllPage(
         ...(emojiData ? { emoji: emojiData } : {}),
       };
     })));
-  const selectRow = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(selectMenu);
+  const selectRow = buildSelectRow(selectMenu);
 
   return { headerContainer, contentContainer, selectRow, totalPages, safePage };
 }

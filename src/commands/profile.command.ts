@@ -3,7 +3,6 @@ import {
   ApplicationCommandOptionType,
   type User,
   PermissionsBitField,
-  ActionRowBuilder,
   StringSelectMenuBuilder,
   StringSelectMenuInteraction,
   userMention,
@@ -36,7 +35,7 @@ import {
   buildTitledContainer,
   safeV2TextContent,
 } from "../functions/ComponentsV2Utils.js";
-import { buildUserHeaderContainer } from "../functions/uiComponents.js";
+import { buildUserHeaderContainer , buildSelectRow } from "../functions/uiComponents.js";
 import {
   formatDiscordTimestamp,
   formatPlaytimeHours,
@@ -661,7 +660,7 @@ export class ProfileCommand {
 
     const selectChunks = chunk(selectOptions, 25);
     const components = selectChunks.slice(0, 5).map((chunkPart, idx) =>
-      new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
+      buildSelectRow(
         new StringSelectMenuBuilder()
           .setCustomId(`profile-search-select-${idx}`)
           .setPlaceholder("Select a member to view their profile")

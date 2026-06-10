@@ -30,7 +30,7 @@ import { decodeBase64Url, encodeBase64Url } from "../functions/CustomIdUtils.js"
 import { parseCustomIdSegments } from "../utilities/CustomIdUtils.js";
 import { GIVEAWAY_HUB_CHANNEL_ID } from "../config/channels.js";
 import { DISCORD_AUTOCOMPLETE_DESC_MAX } from "../config/textLimits.js";
-import { buildActionButton, buildButtonRow } from "../functions/uiComponents.js";
+import { buildActionButton, buildButtonRow , buildSelectRow } from "../functions/uiComponents.js";
 
 type HelpTopicId =
   | "noms"
@@ -466,7 +466,7 @@ function buildProfileHelpButtons(
     )
     .addOptions({ label: "Back to Help Main Menu", value: "help-main" });
 
-  return [new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select)];
+  return [buildSelectRow(select)];
 }
 
 function buildProfileHelpContainer(topic: ProfileHelpTopic): ContainerBuilder {
@@ -491,7 +491,7 @@ function buildNowPlayingHelpButtons(
     )
     .addOptions({ label: "Back to Help Main Menu", value: "help-main" });
 
-  return [new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select)];
+  return [buildSelectRow(select)];
 }
 
 function buildNowPlayingHelpContainer(topic: NowPlayingHelpTopic): ContainerBuilder {
@@ -528,7 +528,7 @@ function buildGamedbHelpButtons(
     )
     .addOptions({ label: "Back to Help Main Menu", value: "help-main" });
 
-  return [new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select)];
+  return [buildSelectRow(select)];
 }
 
 function buildGamedbHelpContainer(topic: GameDbHelpTopic): ContainerBuilder {
@@ -717,7 +717,7 @@ function buildGameCompletionHelpButtons(
     )
     .addOptions({ label: "Back to Help Main Menu", value: "help-main" });
 
-  return [new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select)];
+  return [buildSelectRow(select)];
 }
 
 function buildGameCompletionHelpContainer(topic: GameCompletionHelpTopic): ContainerBuilder {
@@ -848,7 +848,7 @@ function buildRssHelpButtons(
     )
     .addOptions({ label: "Back to Help Main Menu", value: "help-main" });
 
-  return [new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select)];
+  return [buildSelectRow(select)];
 }
 
 function buildRssHelpContainer(topic: RssHelpTopic): ContainerBuilder {
@@ -1282,7 +1282,7 @@ function buildCategoryComponents(
     select.addOptions({ label: "Back to Help Main Menu", value: "help-main" });
   }
 
-  return [new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select)];
+  return [buildSelectRow(select)];
 }
 
 function buildCategoryHelpResponse(

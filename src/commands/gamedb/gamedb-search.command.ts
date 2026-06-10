@@ -53,7 +53,11 @@ import { handleNoResults } from "./gamedb-add.command.js";
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
 import { MAX_CONTAINER_TEXT } from "../../config/textLimits.js";
 import { assertCustomIdSegments } from "../../utilities/CustomIdUtils.js";
-import { buildActionButton, buildButtonRow } from "../../functions/uiComponents.js";
+import {
+  buildActionButton,
+  buildButtonRow,
+  buildSelectRow,
+} from "../../functions/uiComponents.js";
 
 function formatUpcomingDate(date: Date | null | undefined): string {
   if (!date) return "";
@@ -196,7 +200,7 @@ function buildSearchResponse(
     .setPlaceholder("Select a game to view details")
     .addOptions(options);
 
-  const selectRow = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(selectMenu);
+  const selectRow = buildSelectRow(selectMenu);
 
   const prevDisabled = safePage === 0;
   const nextDisabled = safePage >= totalPages - 1;

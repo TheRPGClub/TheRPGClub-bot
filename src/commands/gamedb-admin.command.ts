@@ -65,7 +65,12 @@ import GameSearchSynonymDraft, {
 import axios from "axios";
 import { igdbService } from "../services/IGDB/IgdbService.js";
 import { buildPageFooterText, shouldRenderPrevNextButtons } from "../functions/PaginationUtils.js";
-import { buildActionButton, buildButtonRow, buildTextInputRow } from "../functions/uiComponents.js";
+import {
+  buildActionButton,
+  buildButtonRow,
+  buildTextInputRow,
+  buildSelectRow,
+} from "../functions/uiComponents.js";
 import { parseSynonymQuickAddTerms } from "./gamedb-synonym.utils.js";
 import { isPositiveInt, truncateWithEllipsis } from "../utilities/ValidationUtils.js";
 import { COLOR_PRIMARY, COLOR_SUCCESS, COLOR_HIGHLIGHT } from "../config/colors.js";
@@ -332,7 +337,7 @@ export class GameDbAdmin {
         };
       });
       select.addOptions(selectOptions);
-      components.push(new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select));
+      components.push(buildSelectRow(select));
 
       const deleteSelect = new StringSelectMenuBuilder()
         .setCustomId(buildSynonymGroupSelectCustomId(
@@ -343,7 +348,7 @@ export class GameDbAdmin {
         ))
         .setPlaceholder("Select a group to delete");
       deleteSelect.addOptions(selectOptions);
-      components.push(new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(deleteSelect));
+      components.push(buildSelectRow(deleteSelect));
     }
     components.push(buttonRow);
 
@@ -1114,7 +1119,7 @@ export class GameDbAdmin {
       buildActionButton({ customId: `audit-page:${sessionId}:next`, label: "Next", style: ButtonStyle.Secondary }).setDisabled(nextDisabled),
     );
 
-    const row = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select);
+    const row = buildSelectRow(select);
 
     const actionRows: ActionRowBuilder<any>[] = [row];
     if (shouldRenderPrevNextButtons(prevDisabled, nextDisabled)) {

@@ -1,5 +1,4 @@
 import {
-  ActionRowBuilder,
   StringSelectMenuBuilder,
   ButtonStyle,
   ComponentType,
@@ -39,6 +38,7 @@ import {
   buildActionButton,
   buildButtonRow,
   buildSelectOptions,
+  buildSelectRow,
 } from "../../functions/uiComponents.js";
 import { assertCustomIdSegments, parseCustomIdSegments } from "../../utilities/CustomIdUtils.js";
 import { logError } from "../../utilities/LogUtils.js";
@@ -84,7 +84,7 @@ export async function promptCompletionSelection(
     await safeReply(interaction, {
       components: [
         ...buildTextReply(`Select the game for "${searchTerm}".`, true).components,
-        new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select),
+        buildSelectRow(select),
       ],
       flags: buildComponentsV2Flags(true),
     });

@@ -62,7 +62,12 @@ import { decodeBase64Url, encodeWithMaxLength } from "../functions/CustomIdUtils
 import { parseCustomIdSegments } from "../utilities/CustomIdUtils.js";
 import { safeV2TextContent } from "../functions/ComponentsV2Utils.js";
 import { formatDiscordTimestamp } from "../functions/DateFormatUtils.js";
-import { buildActionButton, buildButtonRow, buildTextInputRow } from "../functions/uiComponents.js";
+import {
+  buildActionButton,
+  buildButtonRow,
+  buildTextInputRow,
+  buildSelectRow,
+} from "../functions/uiComponents.js";
 import { truncateWithEllipsis } from "../utilities/ValidationUtils.js";
 import { DISCORD_TEXT_INPUT_MAX } from "../config/textLimits.js";
 import { TODO_DEFAULT_PAGE_SIZE, TODO_MAX_PAGE_SIZE } from "../config/pagination.js";
@@ -1057,7 +1062,7 @@ function buildIssueListComponents(
         })),
       ],
     );
-  const labelRow = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(labelSelect);
+  const labelRow = buildSelectRow(labelSelect);
 
   const queryButton = buildActionButton({
     customId: buildTodoQueryButtonId(payloadToken, payload.page),
@@ -1545,7 +1550,7 @@ export class TodoCommand {
           value: String(issue.number),
         })),
       );
-    const selectRow = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select);
+    const selectRow = buildSelectRow(select);
 
     const cancelRow = buildButtonRow(
       buildActionButton({
@@ -2489,7 +2494,7 @@ export class TodoCommand {
     await safeReply(
       interaction,
       buildTodoTextReply("Select labels to apply to this issue.", true, [
-        new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select),
+        buildSelectRow(select),
       ]),
     );
   }

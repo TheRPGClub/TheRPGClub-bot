@@ -21,7 +21,7 @@ import {
   buildTextContainer,
   safeV2TextContent,
 } from "./ComponentsV2Utils.js";
-import { buildActionButton } from "./uiComponents.js";
+import { buildActionButton , buildSelectRow } from "./uiComponents.js";
 import { composeVoteImage, type VoteImageType } from "../services/collageGenerator.js";
 import { getUserEmojiString } from "../services/UserEmojiService.js";
 import {
@@ -192,7 +192,7 @@ function buildNominationSelectRows(
       .setMinValues(1)
       .setMaxValues(1)
       .addOptions(slice);
-    rows.push(new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select));
+    rows.push(buildSelectRow(select));
   }
   return rows;
 }

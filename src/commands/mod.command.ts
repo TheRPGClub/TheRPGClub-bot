@@ -24,6 +24,7 @@ import {
   type EmbedField,
 } from "../functions/ComponentsV2Utils.js";
 import { DISCORD_AUTOCOMPLETE_DESC_MAX } from "../config/textLimits.js";
+import { buildSelectRow } from "../functions/uiComponents.js";
 
 type ModHelpTopicId = "presence" | "presence-history";
 
@@ -68,7 +69,7 @@ function buildModHelpButtons(
     )
     .addOptions({ label: "Back to Help Main Menu", value: "help-main" });
 
-  return [new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select)];
+  return [buildSelectRow(select)];
 }
 
 export function buildModHelpContainer(topic: ModHelpTopic): ContainerBuilder {

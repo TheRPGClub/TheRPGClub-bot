@@ -15,6 +15,7 @@ import { formatLocalNumber } from "../../functions/DateFormatUtils.js";
 import { formatPlatformDisplayName } from "../../functions/PlatformDisplay.js";
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
 import { parseCustomIdSegments } from "../../utilities/CustomIdUtils.js";
+import { buildSelectRow } from "../../functions/uiComponents.js";
 
 export const COLLECTION_OVERVIEW_SELECT_PREFIX = "collection-overview-select-v1";
 const COLLECTION_OVERVIEW_SELECT_OVERVIEW = "overview";
@@ -272,7 +273,7 @@ export async function buildCollectionOverviewResponse(params: {
     .setPlaceholder("View collection by platform")
     .addOptions(options);
 
-  const row = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select);
+  const row = buildSelectRow(select);
   return [container, row];
 }
 

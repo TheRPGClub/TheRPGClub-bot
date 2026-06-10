@@ -60,6 +60,7 @@ import {
   buildActionButton,
   buildButtonRow,
   buildTextInputRow,
+  buildSelectRow,
 } from "../../functions/uiComponents.js";
 import { safeIgnore } from "../../utilities/AsyncUtils.js";
 
@@ -200,9 +201,9 @@ function buildCompletionWizardComponents(
   const rows: Array<
     ActionRowBuilder<StringSelectMenuBuilder> | ActionRowBuilder<ButtonBuilder>
   > = [
-    new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(typeSelect),
-    new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(dateSelect),
-    new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(platformSelect),
+    buildSelectRow(typeSelect),
+    buildSelectRow(dateSelect),
+    buildSelectRow(platformSelect),
   ];
 
   if (session.requiresRemoveChoice) {
@@ -222,7 +223,7 @@ function buildCompletionWizardComponents(
           default: session.removeChoice === "no",
         },
       );
-    rows.push(new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(removeSelect));
+    rows.push(buildSelectRow(removeSelect));
   }
 
   const nextButton = buildActionButton({ customId: `gamedb-completion-next:${session.id}`, label: "Next", style: ButtonStyle.Primary });

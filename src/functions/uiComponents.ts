@@ -146,6 +146,12 @@ export function buildJournalSelectRow(
   return new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select);
 }
 
+export function buildSelectRow(
+  select: StringSelectMenuBuilder,
+): ActionRowBuilder<StringSelectMenuBuilder> {
+  return new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select);
+}
+
 export function buildTitleHeaderContainer(title: string): ContainerBuilder {
   return buildTextContainer(safeV2TextContent(`## ${title}`, 250));
 }

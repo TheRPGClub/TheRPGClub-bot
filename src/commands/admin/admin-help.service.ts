@@ -10,6 +10,7 @@ import {
   buildComponentsV2EditFlags,
   buildFieldsText,
 } from "../../functions/ComponentsV2Utils.js";
+import { buildSelectRow } from "../../functions/uiComponents.js";
 
 export const ADMIN_HELP_TOPICS: AdminHelpTopic[] = [
   {
@@ -117,7 +118,7 @@ export function buildAdminHelpButtons(
     )
     .addOptions({ label: "Back to Help Main Menu", value: "help-main" });
 
-  return [new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select)];
+  return [buildSelectRow(select)];
 }
 
 export function buildAdminHelpEmbed(topic: AdminHelpTopic): ContainerBuilder {
