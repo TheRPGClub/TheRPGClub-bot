@@ -1,4 +1,3 @@
-import { EmbedBuilder } from "discord.js";
 import type { ArgsOf, Client } from "discordx";
 import { Discord, On } from "discordx";
 import Member, { type IMemberRecord } from "../classes/Member.js";
@@ -18,6 +17,10 @@ import {
 } from "../config/roles.js";
 import { COLOR_INFO, COLOR_ERROR } from "../config/colors.js";
 import { buildIdTimestampFooter } from "../functions/InteractionUtils.js";
+import {
+  buildTitledContainer,
+  buildContainerSend,
+} from "../functions/ComponentsV2Utils.js";
 
 const QUALIFYING_ROLE_IDS_SET = new Set(
   [REGULARS_ROLE_ID, ADMIN_ROLE_ID, MODERATOR_ROLE_ID, MEMBER_ROLE_ID].filter(
@@ -50,7 +53,6 @@ export class GuildMemberUpdate {
     if (!user.bot && (addedRoles.size > 0 || removedRoles.size > 0)) {
       const logChannel = await resolveLogChannel(_client);
       if (logChannel) {
-        const authorName = user.globalName ?? user.username;
         const timestamp = formatTimestampWithDay(Date.now());
         const sendRoleLog = async (
           label: string,
@@ -58,16 +60,11 @@ export class GuildMemberUpdate {
           color: number,
         ): Promise<void> => {
           if (roleId === newMember.guild.id) return;
-          const embed = new EmbedBuilder()
-            .setAuthor({
-              name: authorName,
-              iconURL: user.displayAvatarURL(),
-            })
-            .setTitle(label)
-            .setDescription(`<@&${roleId}>`)
-            .setColor(color)
-            .setFooter({ text: buildIdTimestampFooter(user.id, timestamp) });
-          await (logChannel as any).send({ embeds: [embed] });
+          const container = buildTitledContainer(label, `<@&${roleId}>`, {
+            color,
+            footer: buildIdTimestampFooter(user.id, timestamp),
+          });
+          await (logChannel as any).send({ ...buildContainerSend(container) });
         };
 
         for (const role of addedRoles.values()) {
@@ -108,7 +105,6 @@ export class GuildMemberUpdate {
     if (!user.bot && nicknameChanged) {
       const logChannel = await resolveLogChannel(_client);
       if (logChannel) {
-        const authorName = user.globalName ?? user.username;
         const timestamp = formatTimestampWithDay(Date.now());
         const sendNameLog = async (
           title: string,
@@ -116,16 +112,12 @@ export class GuildMemberUpdate {
           afterValue: string,
           color: number,
         ): Promise<void> => {
-          const embed = new EmbedBuilder()
-            .setAuthor({
-              name: authorName,
-              iconURL: user.displayAvatarURL(),
-            })
-            .setTitle(title)
-            .setDescription(`**Before:** ${beforeValue}\n**+After:** ${afterValue}`)
-            .setColor(color)
-            .setFooter({ text: buildIdTimestampFooter(user.id, timestamp) });
-          await (logChannel as any).send({ embeds: [embed] });
+          const container = buildTitledContainer(
+            title,
+            `**Before:** ${beforeValue}\n**+After:** ${afterValue}`,
+            { color, footer: buildIdTimestampFooter(user.id, timestamp) },
+          );
+          await (logChannel as any).send({ ...buildContainerSend(container) });
         };
 
         const oldNicknameValue =

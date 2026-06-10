@@ -1,6 +1,5 @@
 import {
   ChannelType,
-  EmbedBuilder,
   PermissionsBitField,
   type GuildChannel,
   type GuildEmoji,
@@ -11,12 +10,13 @@ import type { ArgsOf, Client } from "discordx";
 import { Discord, On } from "discordx";
 import { formatTimestampWithDay, resolveLogChannel } from "../utilities/DiscordLogUtils.js";
 import { COLOR_INFO, COLOR_ERROR } from "../config/colors.js";
+import {
+  buildTitledContainer,
+  buildContainerSend,
+} from "../functions/ComponentsV2Utils.js";
 
-function buildBaseEmbed(title: string, color = COLOR_INFO): EmbedBuilder {
-  return new EmbedBuilder()
-    .setTitle(title)
-    .setColor(color)
-    .setFooter({ text: formatTimestampWithDay(Date.now()) });
+function buildBaseContainer(title: string, body: string, color = COLOR_INFO) {
+  return buildTitledContainer(title, body, { color, footer: formatTimestampWithDay(Date.now()) });
 }
 
 function isGuildChannel(channel: any): channel is GuildChannel {
@@ -60,10 +60,11 @@ export class ServerChangeLog {
     const logChannel = await resolveLogChannel(client);
     if (!logChannel) return;
 
-    const embed = buildBaseEmbed("Channel created");
-    embed.setDescription(`${channelLabel(channel)} (${channel.id})`);
-
-    await (logChannel as any).send({ embeds: [embed] });
+    const container = buildBaseContainer(
+      "Channel created",
+      `${channelLabel(channel)} (${channel.id})`,
+    );
+    await (logChannel as any).send({ ...buildContainerSend(container) });
   }
 
   @On()
@@ -72,10 +73,12 @@ export class ServerChangeLog {
     const logChannel = await resolveLogChannel(client);
     if (!logChannel) return;
 
-    const embed = buildBaseEmbed("Channel deleted", COLOR_ERROR);
-    embed.setDescription(`${channel.name ?? channel.id} (${channel.id})`);
-
-    await (logChannel as any).send({ embeds: [embed] });
+    const container = buildBaseContainer(
+      "Channel deleted",
+      `${channel.name ?? channel.id} (${channel.id})`,
+      COLOR_ERROR,
+    );
+    await (logChannel as any).send({ ...buildContainerSend(container) });
   }
 
   @On()
@@ -113,9 +116,9 @@ export class ServerChangeLog {
     const filtered = changes.filter((line) => line);
     if (!filtered.length) return;
 
-    const embed = buildBaseEmbed("Channel updated");
-    embed.setDescription(`${channelLabel(newChannel)} (${newChannel.id})\n${filtered.join("\n")}`);
-    await (logChannel as any).send({ embeds: [embed] });
+    const body = `${channelLabel(newChannel)} (${newChannel.id})\n${filtered.join("\n")}`;
+    const container = buildBaseContainer("Channel updated", body);
+    await (logChannel as any).send({ ...buildContainerSend(container) });
   }
 
   @On()
@@ -124,9 +127,8 @@ export class ServerChangeLog {
     const logChannel = await resolveLogChannel(client);
     if (!logChannel) return;
 
-    const embed = buildBaseEmbed("Role created");
-    embed.setDescription(`${roleLabel(role)} (${role.id})`);
-    await (logChannel as any).send({ embeds: [embed] });
+    const container = buildBaseContainer("Role created", `${roleLabel(role)} (${role.id})`);
+    await (logChannel as any).send({ ...buildContainerSend(container) });
   }
 
   @On()
@@ -135,9 +137,12 @@ export class ServerChangeLog {
     const logChannel = await resolveLogChannel(client);
     if (!logChannel) return;
 
-    const embed = buildBaseEmbed("Role deleted", COLOR_ERROR);
-    embed.setDescription(`${role.name ?? role.id} (${role.id})`);
-    await (logChannel as any).send({ embeds: [embed] });
+    const container = buildBaseContainer(
+      "Role deleted",
+      `${role.name ?? role.id} (${role.id})`,
+      COLOR_ERROR,
+    );
+    await (logChannel as any).send({ ...buildContainerSend(container) });
   }
 
   @On()
@@ -150,14 +155,18 @@ export class ServerChangeLog {
     changes.push(diffLines("Name", oldRole.name ?? null, newRole.name ?? null) ?? "");
     changes.push(diffLines("Color", String(oldRole.color), String(newRole.color)) ?? "");
     changes.push(diffLines("Hoist", String(oldRole.hoist), String(newRole.hoist)) ?? "");
-    changes.push(diffLines("Mentionable", String(oldRole.mentionable), String(newRole.mentionable)) ?? "");
-    changes.push(diffLines("Permissions", formatPermissions(oldRole), formatPermissions(newRole)) ?? "");
+    changes.push(
+      diffLines("Mentionable", String(oldRole.mentionable), String(newRole.mentionable)) ?? "",
+    );
+    changes.push(
+      diffLines("Permissions", formatPermissions(oldRole), formatPermissions(newRole)) ?? "",
+    );
     const filtered = changes.filter((line) => line);
     if (!filtered.length) return;
 
-    const embed = buildBaseEmbed("Role updated");
-    embed.setDescription(`${roleLabel(newRole)} (${newRole.id})\n${filtered.join("\n")}`);
-    await (logChannel as any).send({ embeds: [embed] });
+    const body = `${roleLabel(newRole)} (${newRole.id})\n${filtered.join("\n")}`;
+    const container = buildBaseContainer("Role updated", body);
+    await (logChannel as any).send({ ...buildContainerSend(container) });
   }
 
   @On()
@@ -165,9 +174,8 @@ export class ServerChangeLog {
     const logChannel = await resolveLogChannel(client);
     if (!logChannel) return;
 
-    const embed = buildBaseEmbed("Emoji created");
-    embed.setDescription(`${emojiLabel(emoji)} (${emoji.id})`);
-    await (logChannel as any).send({ embeds: [embed] });
+    const container = buildBaseContainer("Emoji created", `${emojiLabel(emoji)} (${emoji.id})`);
+    await (logChannel as any).send({ ...buildContainerSend(container) });
   }
 
   @On()
@@ -175,9 +183,12 @@ export class ServerChangeLog {
     const logChannel = await resolveLogChannel(client);
     if (!logChannel) return;
 
-    const embed = buildBaseEmbed("Emoji deleted", COLOR_ERROR);
-    embed.setDescription(`${emoji.name ?? "emoji"} (${emoji.id})`);
-    await (logChannel as any).send({ embeds: [embed] });
+    const container = buildBaseContainer(
+      "Emoji deleted",
+      `${emoji.name ?? "emoji"} (${emoji.id})`,
+      COLOR_ERROR,
+    );
+    await (logChannel as any).send({ ...buildContainerSend(container) });
   }
 
   @On()
@@ -190,14 +201,18 @@ export class ServerChangeLog {
 
     const changes: string[] = [];
     changes.push(diffLines("Name", oldEmoji.name ?? null, newEmoji.name ?? null) ?? "");
-    changes.push(diffLines("Animated", String(oldEmoji.animated), String(newEmoji.animated)) ?? "");
-    changes.push(diffLines("Available", String(oldEmoji.available), String(newEmoji.available)) ?? "");
+    changes.push(
+      diffLines("Animated", String(oldEmoji.animated), String(newEmoji.animated)) ?? "",
+    );
+    changes.push(
+      diffLines("Available", String(oldEmoji.available), String(newEmoji.available)) ?? "",
+    );
     const filtered = changes.filter((line) => line);
     if (!filtered.length) return;
 
-    const embed = buildBaseEmbed("Emoji updated");
-    embed.setDescription(`${emojiLabel(newEmoji)} (${newEmoji.id})\n${filtered.join("\n")}`);
-    await (logChannel as any).send({ embeds: [embed] });
+    const body = `${emojiLabel(newEmoji)} (${newEmoji.id})\n${filtered.join("\n")}`;
+    const container = buildBaseContainer("Emoji updated", body);
+    await (logChannel as any).send({ ...buildContainerSend(container) });
   }
 
   @On()
@@ -207,8 +222,12 @@ export class ServerChangeLog {
 
     const changes: string[] = [];
     changes.push(diffLines("Name", oldGuild.name ?? null, newGuild.name ?? null) ?? "");
-    changes.push(diffLines("Description", oldGuild.description ?? null, newGuild.description ?? null) ?? "");
-    changes.push(diffLines("Locale", oldGuild.preferredLocale ?? null, newGuild.preferredLocale ?? null) ?? "");
+    changes.push(
+      diffLines("Description", oldGuild.description ?? null, newGuild.description ?? null) ?? "",
+    );
+    changes.push(
+      diffLines("Locale", oldGuild.preferredLocale ?? null, newGuild.preferredLocale ?? null) ?? "",
+    );
     const oldIcon = oldGuild.iconURL({ size: 128, extension: "png" }) ?? null;
     const newIcon = newGuild.iconURL({ size: 128, extension: "png" }) ?? null;
     changes.push(diffLines("Icon", oldIcon, newIcon) ?? "");
@@ -219,8 +238,8 @@ export class ServerChangeLog {
     const filtered = changes.filter((line) => line);
     if (!filtered.length) return;
 
-    const embed = buildBaseEmbed("Server updated");
-    embed.setDescription(`${newGuild.name ?? newGuild.id}\n${filtered.join("\n")}`);
-    await (logChannel as any).send({ embeds: [embed] });
+    const body = `${newGuild.name ?? newGuild.id}\n${filtered.join("\n")}`;
+    const container = buildBaseContainer("Server updated", body);
+    await (logChannel as any).send({ ...buildContainerSend(container) });
   }
 }

@@ -1,12 +1,16 @@
-import { EmbedBuilder } from "discord.js";
 import { COLOR_DARK } from "../config/colors.js";
 import type { Message, MessageReaction, PartialMessageReaction } from "discord.js";
 import type { ArgsOf, Client } from "discordx";
 import { Discord, On } from "discordx";
+import { MediaGalleryBuilder, MediaGalleryItemBuilder } from "@discordjs/builders";
 import Starboard from "../classes/Starboard.js";
 import { formatTimestampWithDay } from "../utilities/DiscordLogUtils.js";
 import { QUOTABLES_CHANNEL_ID } from "../config/channels.js";
 import { safeIgnore } from "../utilities/AsyncUtils.js";
+import {
+  buildTitledContainer,
+  buildContainerSend,
+} from "../functions/ComponentsV2Utils.js";
 
 const STAR_EMOJI = "⭐";
 const STAR_EMOJI_NAME = "star";
@@ -76,23 +80,20 @@ export class StarboardHandler {
     const imageUrl = getImageUrl(message);
     const channelName = (message.channel as { name?: string } | null)?.name ?? "channel";
     const channelLabel = `#${channelName}`;
-    const embed = new EmbedBuilder()
-      .setAuthor({
-        name: message.author.globalName ?? message.author.username,
-        iconURL: message.author.displayAvatarURL(),
-      })
-      .setDescription(content)
-      .addFields({ name: "Source", value: `[${channelLabel}](${message.url})` })
-      .setFooter({
-        text: `${message.id} • ${formatTimestampWithDay(message.createdTimestamp)}`,
-      })
-      .setColor(COLOR_DARK);
+    const authorName = message.author.globalName ?? message.author.username;
+    const body = `${content}\n\n**Source:** [${channelLabel}](${message.url})`;
+    const container = buildTitledContainer(authorName, body, {
+      color: COLOR_DARK,
+      footer: `${message.id} • ${formatTimestampWithDay(message.createdTimestamp)}`,
+    });
 
     if (imageUrl) {
-      embed.setImage(imageUrl);
+      container.addMediaGalleryComponents(
+        new MediaGalleryBuilder().addItems(new MediaGalleryItemBuilder().setURL(imageUrl)),
+      );
     }
 
-    const posted = await quotablesChannel.send({ embeds: [embed] });
+    const posted = await quotablesChannel.send({ ...buildContainerSend(container) });
     await Starboard.insert({
       messageId: message.id,
       channelId: message.channelId,

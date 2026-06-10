@@ -1,10 +1,15 @@
-import { EmbedBuilder, userMention } from "discord.js";
+import { userMention } from "discord.js";
 import type { ArgsOf, Client } from "discordx";
 import { Discord, On } from "discordx";
 import { formatTimestampWithDay } from "../utilities/DiscordLogUtils.js";
 import { BAN_LOG_CHANNEL_ID, UNBAN_LOG_CHANNEL_ID } from "../config/channels.js";
 import { buildIdTimestampFooter } from "../functions/InteractionUtils.js";
 import { COLOR_INFO, COLOR_ERROR } from "../config/colors.js";
+import {
+  buildTitledContainer,
+  buildContainerSend,
+  buildFieldsText,
+} from "../functions/ComponentsV2Utils.js";
 
 async function resolveLogChannel(client: Client, channelId: string): Promise<any | null> {
   const channel = await client.channels.fetch(channelId).catch(() => null);
@@ -17,28 +22,21 @@ function formatAccountCreated(date: Date): string {
   return `<t:${Math.floor(date.getTime() / 1000)}:F>`;
 }
 
-function buildBanEmbed(
+function buildBanContainer(
   title: string,
   userId: string,
   username: string,
-  avatarUrl: string | null,
   createdAt: Date,
   color: number,
-): EmbedBuilder {
-  const embed = new EmbedBuilder()
-    .setTitle(title)
-    .setColor(color)
-    .addFields(
-      { name: "User", value: `${userMention(userId)}\n${username}` },
-      { name: "Account Created On", value: formatAccountCreated(createdAt) },
-    )
-    .setFooter({ text: buildIdTimestampFooter(userId, formatTimestampWithDay(Date.now())) });
-
-  if (avatarUrl) {
-    embed.setThumbnail(avatarUrl);
-  }
-
-  return embed;
+) {
+  const body = buildFieldsText([
+    { name: "User", value: `${userMention(userId)}\n${username}` },
+    { name: "Account Created On", value: formatAccountCreated(createdAt) },
+  ]);
+  return buildTitledContainer(title, body, {
+    color,
+    footer: buildIdTimestampFooter(userId, formatTimestampWithDay(Date.now())),
+  });
 }
 
 @Discord()
@@ -52,16 +50,15 @@ export class GuildBanLog {
     if (!logChannel) return;
 
     const username = user.tag ?? user.username ?? user.id;
-    const embed = buildBanEmbed(
+    const container = buildBanContainer(
       "User Banned",
       user.id,
       username,
-      user.displayAvatarURL?.() ?? null,
       user.createdAt ?? new Date(),
       COLOR_ERROR,
     );
 
-    await (logChannel as any).send({ embeds: [embed] });
+    await (logChannel as any).send({ ...buildContainerSend(container) });
   }
 
   @On()
@@ -73,15 +70,14 @@ export class GuildBanLog {
     if (!logChannel) return;
 
     const username = user.tag ?? user.username ?? user.id;
-    const embed = buildBanEmbed(
+    const container = buildBanContainer(
       "User Unbanned",
       user.id,
       username,
-      user.displayAvatarURL?.() ?? null,
       user.createdAt ?? new Date(),
       COLOR_INFO,
     );
 
-    await (logChannel as any).send({ embeds: [embed] });
+    await (logChannel as any).send({ ...buildContainerSend(container) });
   }
 }
