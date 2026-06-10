@@ -45,8 +45,11 @@ import {
 import { createIssue } from "../services/GithubIssuesService.js";
 import { BOT_DEV_CHANNEL_ID, GAMEDB_UPDATES_CHANNEL_ID } from "../config/channels.js";
 import { BOT_DEV_PING_USER_ID } from "../config/users.js";
-import { COMPONENTS_V2_FLAG } from "../config/flags.js";
-import { buildTextReply, safeV2TextContent } from "../functions/ComponentsV2Utils.js";
+import {
+  buildComponentsV2Flags,
+  buildTextReply,
+  safeV2TextContent,
+} from "../functions/ComponentsV2Utils.js";
 import { logRawModal } from "../services/raw-modal/RawModalLogging.js";
 import { isPositiveInt, truncateWithEllipsis } from "../utilities/ValidationUtils.js";
 import { parseCustomIdSegments } from "../utilities/CustomIdUtils.js";
@@ -98,10 +101,6 @@ async function loadSuggestionReviewSession(
     return null;
   }
   return session;
-}
-
-function buildComponentsV2Flags(isEphemeral: boolean): number {
-  return (isEphemeral ? MessageFlags.Ephemeral : 0) | COMPONENTS_V2_FLAG;
 }
 
 function parseSuggestionReviewActionId(

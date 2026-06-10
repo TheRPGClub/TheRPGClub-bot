@@ -1,5 +1,5 @@
 import axios from "axios";
-import { logError } from "../../utilities/LogUtils.js";
+import { logError, logWarn } from "../../utilities/LogUtils.js";
 
 interface ITwitchAuthResponse {
   access_token: string;
@@ -267,7 +267,7 @@ class IgdbService {
           const releases = await this.fetchReleaseDates(igdbId, token);
           details.release_dates = releases;
         } catch (err) {
-          console.warn("IGDB: Failed to fetch release_dates via fallback endpoint:", err);
+          logWarn("IgdbService.getGameDetails", `Failed to fetch release_dates via fallback endpoint: ${err}`);
         }
       }
 

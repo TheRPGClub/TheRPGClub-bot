@@ -3,7 +3,7 @@ import { oraWithConnection } from "../../db/SqlManager.js";
 import Game from "../../classes/Game.js";
 import { igdbService } from "./IgdbService.js";
 import { sleep } from "../../utilities/DelayUtils.js";
-import { logError } from "../../utilities/LogUtils.js";
+import { logError, logWarn } from "../../utilities/LogUtils.js";
 
 type IgdbScanConfig = {
   enabled: boolean;
@@ -99,7 +99,7 @@ export async function igdbScanTick(): Promise<void> {
   const config = getScanConfig();
   if (!config.enabled) return;
   if (!hasIgdbConfig()) {
-    console.warn("[IGDB Scan] IGDB credentials not configured; skipping scan.");
+    logWarn("IgdbScanService.tick", "IGDB credentials not configured; skipping scan.");
     return;
   }
 
@@ -130,10 +130,7 @@ export async function igdbScanTick(): Promise<void> {
         try {
           const details = await igdbService.getGameDetails(candidate.igdbId);
           if (!details) {
-            console.warn(
-              `[IGDB Scan] No IGDB details returned for ${candidate.title}` +
-              ` (ID: ${candidate.gameId}).`,
-            );
+            logWarn("IgdbScanService.refreshCandidate", `No IGDB details returned for ${candidate.title} (ID: ${candidate.gameId}).`);
             await Game.touchGameUpdatedAt(candidate.gameId);
             continue;
           }
@@ -191,7 +188,7 @@ export function startIgdbScanService(): void {
   let isRunning = false;
   const tick = async () => {
     if (isRunning) {
-      console.warn("[IGDB Scan] Previous scan still running; skipping.");
+      logWarn("IgdbScanService.tick", "Previous scan still running; skipping.");
       return;
     }
     isRunning = true;

@@ -28,6 +28,7 @@ import {
   DISCORD_AUTOCOMPLETE_DESC_MAX,
   DISCORD_SELECT_LABEL_MAX,
 } from "../../config/textLimits.js";
+import { logWarn } from "../../utilities/LogUtils.js";
 
 export const GAMEDB_CSV_RESULT_LIMIT = 15;
 
@@ -257,9 +258,7 @@ export async function buildIgdbSelectOptions(
   const platformMap = await Game.getPlatformsByIgdbIds(uniquePlatformIds);
   const missingPlatformIds = uniquePlatformIds.filter((id) => !platformMap.has(id));
   if (missingPlatformIds.length) {
-    console.warn(
-      `[GameDB] Missing IGDB platform IDs in GAMEDB_PLATFORMS: ${missingPlatformIds.join(", ")}`,
-    );
+    logWarn("GamedbCsvImport", `Missing IGDB platform IDs in GAMEDB_PLATFORMS: ${missingPlatformIds.join(", ")}`);
   }
 
   return results.map((game) => {

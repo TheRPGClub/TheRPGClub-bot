@@ -1,4 +1,4 @@
-import { formatStructuredLog } from "./LogUtils.js";
+import { logError } from "./LogUtils.js";
 
 /**
  * Splits a colon-delimited custom ID and returns the segments after the prefix.
@@ -15,7 +15,7 @@ export function parseCustomIdSegments(
 }
 
 export function logUnexpectedCustomId(customId: string): void {
-  console.error(formatStructuredLog({ context: "UnexpectedCustomId", customId }));
+  logError("UnexpectedCustomId", customId);
 }
 
 export function assertCustomIdSegments(

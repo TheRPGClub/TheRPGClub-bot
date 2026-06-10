@@ -1,6 +1,6 @@
 import { type StringSelectMenuInteraction } from "discord.js";
 import Member from "../../classes/Member.js";
-import { safeReply } from "../../functions/InteractionUtils.js";
+import { replyIfNotOwner, safeReply } from "../../functions/InteractionUtils.js";
 import { buildTextReply } from "../../functions/ComponentsV2Utils.js";
 import { COMPONENTS_V2_FLAG } from "../../config/flags.js";
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
@@ -16,10 +16,7 @@ export async function handleCompletionDeleteMenu(
   const segs = assertCustomIdSegments(interaction, 1);
   if (!segs) return;
   const [ownerId] = segs;
-  if (interaction.user.id !== ownerId) {
-    await safeReply(interaction, buildTextReply("This delete prompt isn't for you.", true));
-    return;
-  }
+  if (await replyIfNotOwner(interaction, ownerId)) return;
 
   const completionId = Number(interaction.values[0]);
   if (!isPositiveInt(completionId)) {

@@ -12,7 +12,7 @@ import { getUpcomingNominationWindow } from "../functions/NominationWindow.js";
 import { isAdmin } from "./admin/admin-auth.utils.js";
 import { composeVoteImage, type VoteImageType } from "../services/collageGenerator.js";
 import { isPositiveInt } from "../utilities/ValidationUtils.js";
-import { formatStructuredLog } from "../utilities/LogUtils.js";
+import { formatStructuredLog, logError } from "../utilities/LogUtils.js";
 
 const GENERATION_LOCK_TTL_MS = 2 * 60 * 1000;
 
@@ -226,8 +226,7 @@ export class GenerateVoteImageCommand {
         ));
       }
 
-      console.error(formatStructuredLog({
-        event: "vote_image_generation_failed",
+      logError("vote_image_generation_failed", {
         guildId: interaction.guildId,
         round: roundNumber,
         voteType: voteKind.label,
@@ -235,7 +234,7 @@ export class GenerateVoteImageCommand {
         durationMs: Date.now() - startedAt,
         errorCode: "GENERATION_FAILED",
         error: errorMessage,
-      }));
+      });
     } finally {
       releaseLock(interaction.guildId, roundNumber, voteKind.label);
       console.info(formatStructuredLog({

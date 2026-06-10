@@ -12,7 +12,7 @@ import {
 import { getDialect } from "../db/dialect.js";
 import { MemberSql } from "../db/sql/index.js";
 import { isPositiveInt, requirePositiveInt } from "../utilities/ValidationUtils.js";
-import { logError } from "../utilities/LogUtils.js";
+import { logError, logWarn } from "../utilities/LogUtils.js";
 
 const dialect = getDialect();
 
@@ -224,9 +224,7 @@ async function getNowPlayingThreadIdSql(connection: AnyConn): Promise<string> {
     } catch (err) {
       nowPlayingLinkedThreadColumnAvailable = false;
       const msg = err instanceof Error ? err.message : String(err);
-      console.warn(
-        `[Member] Failed to detect LINKED_THREAD_ID column; using legacy links: ${msg}`,
-      );
+      logWarn("Member.detectLinkedThreadColumn", `Failed to detect LINKED_THREAD_ID column; using legacy links: ${msg}`);
     }
   }
 

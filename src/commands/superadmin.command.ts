@@ -25,6 +25,7 @@ import {
   extractErrorMessage,
   isInteractionSettled,
   safeDeferReply,
+  replyIfNotOwner,
   safeDeferUpdate,
   safeReply,
   safeUpdate,
@@ -317,10 +318,7 @@ export class SuperAdmin {
     const okToUseCommand: boolean = await isSuperAdmin(interaction as any);
     if (!okToUseCommand) return;
 
-    if (interaction.user.id !== ctx.userId) {
-      safeIgnore(safeReply(interaction, buildTextReply("This completion prompt isn't for you.", true)));
-      return;
-    }
+    if (await replyIfNotOwner(interaction, ctx.userId)) return;
 
     const selected = interaction.values?.[0];
     const isOther = selected === "other";

@@ -9,7 +9,7 @@ import { NEW_GAME_ANNOUNCEMENT_CHANNEL_ID } from "../config/channels.js";
 import { buildGameProfileMessagePayload } from "../commands/gamedb.command.js";
 import { COMPONENTS_V2_FLAG } from "../config/flags.js";
 import { resolveAssetPath } from "../functions/AssetPath.js";
-import { logError } from "../utilities/LogUtils.js";
+import { logError, logWarn } from "../utilities/LogUtils.js";
 
 const CHECK_INTERVAL_MS = 60_000;
 const BATCH_SIZE = 25;
@@ -61,9 +61,7 @@ async function checkAndSendReleaseAnnouncements(client: Client): Promise<void> {
 
   const channel = await fetchGameNewsChannel(client);
   if (!channel) {
-    console.warn(
-      `[GameReleaseAnnouncementService] Game news channel ${NEW_GAME_ANNOUNCEMENT_CHANNEL_ID} is unavailable.`,
-    );
+    logWarn("GameReleaseAnnouncementService.announceRelease", `Game news channel ${NEW_GAME_ANNOUNCEMENT_CHANNEL_ID} is unavailable.`);
     return;
   }
 
@@ -75,9 +73,7 @@ async function checkAndSendReleaseAnnouncements(client: Client): Promise<void> {
         prefaceText: buildAnnouncementPreface(candidate),
       });
       if (!payload) {
-        console.warn(
-          `[GameReleaseAnnouncementService] Missing GameDB profile for release ${candidate.releaseId}.`,
-        );
+        logWarn("GameReleaseAnnouncementService.announceRelease", `Missing GameDB profile for release ${candidate.releaseId}.`);
         continue;
       }
       await channel.send({

@@ -3,7 +3,7 @@ import type { Client } from "discordx";
 import { DateTime } from "luxon";
 import BotVotingInfo, { type IBotVotingInfoEntry } from "../classes/BotVotingInfo.js";
 import { NOMINATION_DISCUSSION_CHANNEL_IDS } from "../config/nominationChannels.js";
-import { logError } from "../utilities/LogUtils.js";
+import { logError, logWarn } from "../utilities/LogUtils.js";
 
 const CHECK_INTERVAL_MS = 60_000;
 const REMINDER_ZONE = "America/New_York";
@@ -118,7 +118,7 @@ async function sendReminderToAllChannels(client: Client, content: string): Promi
     try {
       const channel = await client.channels.fetch(channelId);
       if (!channel) {
-        console.warn(`Nomination reminder skipped channel ${channelId}: not found.`);
+        logWarn("NominationReminderService.sendReminder", `Skipped channel ${channelId}: not found.`);
         continue;
       }
 
@@ -127,7 +127,7 @@ async function sendReminderToAllChannels(client: Client, content: string): Promi
         : null;
 
       if (!textChannel || !isSendableTextChannel(textChannel)) {
-        console.warn(`Nomination reminder skipped channel ${channelId}: not text-based or cannot send.`);
+        logWarn("NominationReminderService.sendReminder", `Skipped channel ${channelId}: not text-based or cannot send.`);
         continue;
       }
 

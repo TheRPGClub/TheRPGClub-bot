@@ -38,6 +38,7 @@ import Game from "../classes/Game.js";
 import { getThreadsByGameId } from "../classes/Thread.js";
 import {
   ephemeralFlag,
+  replyIfNotOwner,
   safeDeferReply,
   safeDeferUpdate,
   sanitizeUserInput,
@@ -787,10 +788,7 @@ export class GameJournalCommand {
     const segments = parseCustomIdSegments(interaction.customId, 3);
     if (!segments) return;
     const [ownerId, gameIdRaw, pageRaw] = segments;
-    if (interaction.user.id !== ownerId) {
-      await safeDeferUpdate(interaction);
-      return;
-    }
+    if (await replyIfNotOwner(interaction, ownerId)) return;
     const gameId = Number(gameIdRaw);
     const page = Number(pageRaw);
     const container = new ContainerBuilder().addTextDisplayComponents(
@@ -805,10 +803,7 @@ export class GameJournalCommand {
     const segments = parseCustomIdSegments(interaction.customId, 2);
     if (!segments) return;
     const [ownerId, gameIdRaw] = segments;
-    if (interaction.user.id !== ownerId) {
-      await safeDeferUpdate(interaction);
-      return;
-    }
+    if (await replyIfNotOwner(interaction, ownerId)) return;
     const modal = buildHmenuModal(
       `${GJ_HMENU_ADD_MODAL_ID}:${ownerId}:${gameIdRaw}`,
       "Add Journal Entry",
@@ -821,10 +816,7 @@ export class GameJournalCommand {
     const segments = parseCustomIdSegments(interaction.customId, 3);
     if (!segments) return;
     const [ownerId, gameIdRaw, pageRaw] = segments;
-    if (interaction.user.id !== ownerId) {
-      await safeDeferUpdate(interaction);
-      return;
-    }
+    if (await replyIfNotOwner(interaction, ownerId)) return;
     const gameId = Number(gameIdRaw);
     const page = Number(pageRaw);
     const offset = Math.max(0, page - 1);
@@ -859,10 +851,7 @@ export class GameJournalCommand {
     const segments = parseCustomIdSegments(interaction.customId, 2);
     if (!segments) return;
     const [ownerId, gameIdRaw] = segments;
-    if (interaction.user.id !== ownerId) {
-      await safeDeferUpdate(interaction);
-      return;
-    }
+    if (await replyIfNotOwner(interaction, ownerId)) return;
     const gameId = Number(gameIdRaw);
     const entries = await Member.getGameJournalEntries(ownerId, gameId, {
       limit: 5,
@@ -916,10 +905,7 @@ export class GameJournalCommand {
     const segments = parseCustomIdSegments(interaction.customId, 2);
     if (!segments) return;
     const [ownerId, gameIdRaw] = segments;
-    if (interaction.user.id !== ownerId) {
-      await safeDeferUpdate(interaction);
-      return;
-    }
+    if (await replyIfNotOwner(interaction, ownerId)) return;
     const entryId = Number(interaction.values[0]);
     const entry = await Member.getGameJournalEntryForUser(ownerId, entryId);
     if (!entry || entry.gameId !== Number(gameIdRaw)) {
@@ -960,10 +946,7 @@ export class GameJournalCommand {
     const segments = parseCustomIdSegments(interaction.customId, 4);
     if (!segments) return;
     const [action, ownerId, gameIdRaw, entryIdRaw] = segments;
-    if (interaction.user.id !== ownerId) {
-      await safeDeferUpdate(interaction);
-      return;
-    }
+    if (await replyIfNotOwner(interaction, ownerId)) return;
     if (action === "yes") {
       const removed = await Member.deleteGameJournalEntry(ownerId, Number(entryIdRaw));
       if (!removed) {
@@ -990,10 +973,7 @@ export class GameJournalCommand {
     const segments = parseCustomIdSegments(interaction.customId, 2);
     if (!segments) return;
     const [ownerId, gameIdRaw] = segments;
-    if (interaction.user.id !== ownerId) {
-      await safeReply(interaction, buildTextReply("Only the owner can submit journal entries.", false));
-      return;
-    }
+    if (await replyIfNotOwner(interaction, ownerId)) return;
     const title = sanitizeUserInput(
       interaction.fields.getTextInputValue(JOURNAL_TITLE_INPUT_ID) ?? "",
       { preserveNewlines: true, maxLength: 120 },
@@ -1021,10 +1001,7 @@ export class GameJournalCommand {
     const segments = parseCustomIdSegments(interaction.customId, 3);
     if (!segments) return;
     const [ownerId, gameIdRaw, entryIdRaw] = segments;
-    if (interaction.user.id !== ownerId) {
-      await safeReply(interaction, buildTextReply("Only the owner can edit journal entries.", false));
-      return;
-    }
+    if (await replyIfNotOwner(interaction, ownerId)) return;
     const gameId = Number(gameIdRaw);
     const entryId = Number(entryIdRaw);
     const existing = await Member.getGameJournalEntryForUser(ownerId, entryId);

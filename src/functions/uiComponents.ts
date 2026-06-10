@@ -51,15 +51,25 @@ const ACTION_DEFAULTS: Record<ButtonAction, { label: string; style: ButtonStyle 
 };
 
 export function buildActionButton(
-  action: ButtonAction,
-  customId: string,
+  action: ButtonAction, customId: string, label?: string): ButtonBuilder;
+export function buildActionButton(
+  opts: { customId: string; label: string; style: ButtonStyle }): ButtonBuilder;
+export function buildActionButton(
+  actionOrOpts: ButtonAction | { customId: string; label: string; style: ButtonStyle },
+  customId?: string,
   label?: string,
 ): ButtonBuilder {
-  const d = ACTION_DEFAULTS[action];
+  if (typeof actionOrOpts === "string") {
+    const d = ACTION_DEFAULTS[actionOrOpts];
+    return new ButtonBuilder()
+      .setCustomId(customId!)
+      .setLabel(label ?? d.label)
+      .setStyle(d.style);
+  }
   return new ButtonBuilder()
-    .setCustomId(customId)
-    .setLabel(label ?? d.label)
-    .setStyle(d.style);
+    .setCustomId(actionOrOpts.customId)
+    .setLabel(actionOrOpts.label)
+    .setStyle(actionOrOpts.style);
 }
 import {
   getUserEmojiString,
