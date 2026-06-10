@@ -533,6 +533,10 @@ export const ACCESS_DENIED_SERVER_OWNER = "Access denied. Command requires serve
 export const ACCESS_DENIED_REGULARS = "Access denied. Command requires the Regulars role.";
 export const SHOW_IN_CHAT_DESCRIPTION = "Show in chat (public) instead of ephemeral";
 export const PRIVATE_OPTION_DESCRIPTION = "Send reply privately (only visible to you).";
+export const NO_RESULTS_MESSAGE = "No results found.";
+export const NOTHING_TO_DISPLAY = "Nothing to display.";
+export const GAME_NOT_FOUND_MESSAGE = "Could not find that game.";
+export const USER_NOT_FOUND_MESSAGE = "Could not find that user.";
 
 /** Returns true and replies ephemerally if user is not the owner. */
 export async function replyIfNotOwner(
