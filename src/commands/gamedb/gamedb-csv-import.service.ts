@@ -8,16 +8,13 @@ import {
   buildButtonRow,
   buildSelectRow,
 } from "../../functions/uiComponents.js";
-import {
-  ContainerBuilder,
-  TextDisplayBuilder,
-} from "@discordjs/builders";
+import { ContainerBuilder } from "@discordjs/builders";
 import {
   normalizePlatformKey,
   normalizeTitleKey,
   stripTitleDateSuffix,
 } from "../../functions/CsvUtils.js";
-import { safeV2TextContent } from "../../functions/ComponentsV2Utils.js";
+import { buildTextContainer } from "../../functions/ComponentsV2Utils.js";
 import { formatPlatformDisplayName } from "../../functions/PlatformDisplay.js";
 import { formatTableDate } from "../../functions/DateFormatUtils.js";
 import { igdbService, type IGDBGame } from "../../services/IGDB/IgdbService.js";
@@ -27,7 +24,7 @@ import { type IGameDbCsvImportItem } from "../../classes/GameDbCsvImport.js";
 import { GAMEDB_CSV_PLATFORM_MAP } from "../../config/gamedbCsvPlatformMap.js";
 import { buildIgdbSearchLink } from "./gamedb-utils.js";
 import { type IGameDbCsvImport } from "../../classes/GameDbCsvImport.js";
-import { isPositiveInt, truncateWithEllipsis } from "../../utilities/ValidationUtils.js";
+import { isPositiveInt } from "../../utilities/ValidationUtils.js";
 import {
   DISCORD_AUTOCOMPLETE_DESC_MAX,
   DISCORD_SELECT_LABEL_MAX,
@@ -108,12 +105,7 @@ export function buildCsvPromptContent(
 }
 
 export function buildCsvPromptContainer(content: string): ContainerBuilder {
-  const container = new ContainerBuilder();
-  const safeContent = truncateWithEllipsis(content, 4000);
-  container.addTextDisplayComponents(
-    new TextDisplayBuilder().setContent(safeV2TextContent(safeContent, 3500)),
-  );
-  return container;
+  return buildTextContainer(content);
 }
 
 export function buildCsvPromptComponents(
