@@ -111,7 +111,11 @@ import {
   truncateWithEllipsis,
 } from "../utilities/ValidationUtils.js";
 import { formatStructuredLog, logError } from "../utilities/LogUtils.js";
-import { DISCORD_AUTOCOMPLETE_DESC_MAX, DISCORD_SELECT_LABEL_MAX } from "../config/textLimits.js";
+import {
+  DISCORD_AUTOCOMPLETE_DESC_MAX,
+  DISCORD_SELECT_LABEL_MAX,
+  DISCORD_SELECT_OPTIONS_MAX,
+} from "../config/textLimits.js";
 import { assertCustomIdSegments } from "../utilities/CustomIdUtils.js";
 import { safeIgnore } from "../utilities/AsyncUtils.js";
 
@@ -2265,7 +2269,7 @@ export class NowPlayingCommand {
       note,
       sourceSessionId,
     });
-    const options = platforms.slice(0, 25).map((platform) => ({
+    const options = platforms.slice(0, DISCORD_SELECT_OPTIONS_MAX).map((platform) => ({
       label: platform.name.slice(0, DISCORD_SELECT_LABEL_MAX),
       value: String(platform.id),
     }));
@@ -2615,7 +2619,7 @@ export class NowPlayingCommand {
             uniqueById.set(platform.id, platform);
           }
         });
-        const deduped = Array.from(uniqueById.values()).slice(0, 25);
+        const deduped = Array.from(uniqueById.values()).slice(0, DISCORD_SELECT_OPTIONS_MAX);
         if (!deduped.length && entry.platformId) {
           deduped.push({
             id: entry.platformId,
@@ -2672,7 +2676,7 @@ export class NowPlayingCommand {
       return;
     }
 
-    const options = platforms.slice(0, 25).map((platform) => ({
+    const options = platforms.slice(0, DISCORD_SELECT_OPTIONS_MAX).map((platform) => ({
       label: platform.name.slice(0, DISCORD_SELECT_LABEL_MAX),
       value: String(platform.id),
     }));
@@ -4907,7 +4911,7 @@ export class NowPlayingCommand {
 
     const selectOptions = entries
       .filter((entry) => isPositiveInt(entry.gameId))
-      .slice(0, 25)
+      .slice(0, DISCORD_SELECT_OPTIONS_MAX)
       .map((entry) => ({
         label: formatEntryTitleWithPlatform(entry).slice(0, DISCORD_SELECT_LABEL_MAX),
         value: String(entry.gameId),
@@ -5763,7 +5767,7 @@ export class NowPlayingCommand {
       return nameA.localeCompare(nameB);
     });
 
-    const options = sorted.slice(0, 25).map((record) => {
+    const options = sorted.slice(0, DISCORD_SELECT_OPTIONS_MAX).map((record) => {
       const displayName = record.globalName ?? record.username ?? record.userId;
       return {
         label: displayName.slice(0, DISCORD_SELECT_LABEL_MAX),

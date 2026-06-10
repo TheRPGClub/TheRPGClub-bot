@@ -45,7 +45,7 @@ import {
 } from "../config/nominationChannels.js";
 import { showGameProfileFromNomination } from "./gamedb.command.js";
 import { isPositiveInt } from "../utilities/ValidationUtils.js";
-import { DISCORD_SELECT_LABEL_MAX } from "../config/textLimits.js";
+import { DISCORD_SELECT_LABEL_MAX, DISCORD_SELECT_OPTIONS_MAX } from "../config/textLimits.js";
 import { logError } from "../utilities/LogUtils.js";
 
 const NOMINATE_REASON_MAX_LENGTH = 1500;
@@ -63,7 +63,7 @@ async function autocompleteNominationTitle(
 
   const results = await Game.searchGamesAutocomplete(query);
   await interaction.respond(
-    results.slice(0, 25).map((game) => ({
+    results.slice(0, DISCORD_SELECT_OPTIONS_MAX).map((game) => ({
       name: formatGameTitleWithYear(game).slice(0, DISCORD_SELECT_LABEL_MAX),
       value: formatGameTitleWithYear(game).slice(0, DISCORD_SELECT_LABEL_MAX),
     })),

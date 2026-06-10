@@ -44,6 +44,7 @@ import {
   parseRawModalCustomId,
 } from "../services/raw-modal/RawModalCustomId.js";
 import { ROUND_HISTORY_PAGE_SIZE } from "../config/pagination.js";
+import { DISCORD_SELECT_OPTIONS_MAX } from "../config/textLimits.js";
 import { buildDisabledPrevNextRowWithIds } from "../functions/PaginationUtils.js";
 
 const ROUND_HISTORY_MODAL_TITLE = "Round History";
@@ -108,7 +109,7 @@ function getModalYearOptions(): APISelectMenuOption[] {
 
   return Array.from(years)
     .sort((a, b) => b - a)
-    .slice(0, 25)
+    .slice(0, DISCORD_SELECT_OPTIONS_MAX)
     .map((year) => ({
       label: String(year),
       value: String(year),
