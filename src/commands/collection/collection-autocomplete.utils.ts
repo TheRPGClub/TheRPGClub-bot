@@ -6,7 +6,7 @@ import UserGameCollection, {
 import { sanitizeUserInput } from "../../functions/InteractionUtils.js";
 import { formatGameTitleWithYear } from "../../functions/GameTitleAutocompleteUtils.js";
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
-import { DISCORD_SELECT_LABEL_MAX } from "../../config/textLimits.js";
+import { DISCORD_SELECT_LABEL_MAX, DISCORD_SELECT_OPTIONS_MAX } from "../../config/textLimits.js";
 
 export const COLLECTION_ENTRY_VALUE_PREFIX = "collection";
 
@@ -45,7 +45,7 @@ export async function autocompleteCollectionGameTitle(
 
   const results = await Game.searchGamesAutocomplete(query);
   await interaction.respond(
-    results.slice(0, 25).map((game) => ({
+    results.slice(0, DISCORD_SELECT_OPTIONS_MAX).map((game) => ({
       name: formatGameTitleWithYear(game).slice(0, DISCORD_SELECT_LABEL_MAX),
       value: String(game.id),
     })),

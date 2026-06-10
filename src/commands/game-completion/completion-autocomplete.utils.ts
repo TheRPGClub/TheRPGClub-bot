@@ -8,7 +8,7 @@ import Member from "../../classes/Member.js";
 import { formatTableDate } from "../../functions/DateFormatUtils.js";
 import { STANDARD_PLATFORM_IDS } from "../../config/standardPlatforms.js";
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
-import { DISCORD_SELECT_LABEL_MAX } from "../../config/textLimits.js";
+import { DISCORD_SELECT_LABEL_MAX, DISCORD_SELECT_OPTIONS_MAX } from "../../config/textLimits.js";
 
 const PLATFORM_CACHE_TTL_MS = 5 * 60 * 1000;
 const COMPLETION_TITLE_VALUE_PREFIX = "completion";
@@ -121,7 +121,7 @@ export async function autocompleteUserCompletionTitle(
     value: buildCompletionTitleAutocompleteValue(completion.completionId),
   }));
 
-  await interaction.respond(options.slice(0, 25));
+  await interaction.respond(options.slice(0, DISCORD_SELECT_OPTIONS_MAX));
 }
 
 export async function autocompleteGameCompletionPlatform(
@@ -157,7 +157,7 @@ async function autocompleteGameCompletionPlatformWithOptions(
     : platforms;
 
   const options = sortPlatformsForAutocomplete(filtered, standardFirstIds)
-    .slice(0, 25)
+    .slice(0, DISCORD_SELECT_OPTIONS_MAX)
     .map((platform) => ({
       name: buildPlatformAutocompleteLabel(platform),
       value: String(platform.id),

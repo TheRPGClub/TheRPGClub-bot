@@ -19,7 +19,7 @@ import { safeDeferReply, safeReply, sanitizeOptionalInput, sanitizeUserInput } f
   "../functions/InteractionUtils.js";
 import { buildTextReply } from "../functions/ComponentsV2Utils.js";
 import { formatGameTitleWithYear } from "../functions/GameTitleAutocompleteUtils.js";
-import { DISCORD_SELECT_LABEL_MAX } from "../config/textLimits.js";
+import { DISCORD_SELECT_LABEL_MAX, DISCORD_SELECT_OPTIONS_MAX } from "../config/textLimits.js";
 
 const DEFAULT_FIRST_POST_PREFIX = "Thread created by";
 
@@ -40,7 +40,7 @@ async function autocompleteCreateThreadTitle(
 
   const results = await Game.searchGamesAutocomplete(query);
   await interaction.respond(
-    results.slice(0, 25).map((game) => ({
+    results.slice(0, DISCORD_SELECT_OPTIONS_MAX).map((game) => ({
       name: formatGameTitleWithYear(game).slice(0, DISCORD_SELECT_LABEL_MAX),
       value: String(game.id),
     })),
@@ -63,7 +63,7 @@ async function autocompleteCreateThreadTag(
 
   const filtered = forum.availableTags
     .filter((tag) => !query || tag.name.toLowerCase().includes(query))
-    .slice(0, 25)
+    .slice(0, DISCORD_SELECT_OPTIONS_MAX)
     .map((tag) => ({
       name: tag.name.slice(0, DISCORD_SELECT_LABEL_MAX),
       value: tag.name.slice(0, DISCORD_SELECT_LABEL_MAX),

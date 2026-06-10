@@ -17,7 +17,7 @@ import { formatGameTitleWithYear } from "../../functions/GameTitleAutocompleteUt
 import { buildComponentsV2Flags, buildTextReply } from "../../functions/ComponentsV2Utils.js";
 import { decodeBase64Url, encodeBase64Url } from "../../functions/CustomIdUtils.js";
 import Game from "../../classes/Game.js";
-import { DISCORD_SELECT_LABEL_MAX } from "../../config/textLimits.js";
+import { DISCORD_SELECT_LABEL_MAX, DISCORD_SELECT_OPTIONS_MAX } from "../../config/textLimits.js";
 
 export interface ISearchFilters {
   upcomingRelease?: boolean;
@@ -250,7 +250,7 @@ export async function autocompleteSearchPlatform(
         || p.code.toLowerCase().includes(query),
     )
     : platforms;
-  const options = filtered.slice(0, 25).map((p) => ({
+  const options = filtered.slice(0, DISCORD_SELECT_OPTIONS_MAX).map((p) => ({
     name: (p.abbreviation ? `${p.name} (${p.abbreviation})` : p.name).slice(0, DISCORD_SELECT_LABEL_MAX),
     value: String(p.id),
   }));
@@ -267,7 +267,7 @@ export async function autocompleteSearchCompany(
   const filtered = query
     ? companies.filter((c) => c.name.toLowerCase().includes(query))
     : companies;
-  const options = filtered.slice(0, 25).map((c) => ({
+  const options = filtered.slice(0, DISCORD_SELECT_OPTIONS_MAX).map((c) => ({
     name: c.name.slice(0, DISCORD_SELECT_LABEL_MAX),
     value: String(c.id),
   }));
