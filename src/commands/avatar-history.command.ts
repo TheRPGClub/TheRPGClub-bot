@@ -18,12 +18,12 @@ import {
 } from "@discordjs/builders";
 import { ButtonComponent, Discord, SelectMenuComponent, Slash, SlashOption } from "discordx";
 import {
-  deferWithShowInChat,
+  deferWithPrivateFlag,
+  PRIVATE_OPTION_DESCRIPTION,
   replyIfNotOwner,
   safeDeferReply,
   safeReply,
   safeUpdate,
-  SHOW_IN_CHAT_DESCRIPTION,
 } from "../functions/InteractionUtils.js";
 import {
   buildOptionalPrevNextRow,
@@ -199,12 +199,12 @@ export class AvatarHistoryCommand {
     })
     member: User | undefined,
     @SlashOption({
-      description: SHOW_IN_CHAT_DESCRIPTION,
-      name: "showinchat",
+      description: PRIVATE_OPTION_DESCRIPTION,
+      name: "private",
       required: false,
       type: ApplicationCommandOptionType.Boolean,
     })
-    showInChat: boolean | undefined,
+    privateFlag: boolean | undefined,
     @SlashOption({
       description: "List all members with avatar history and their stored count.",
       name: "all",
@@ -221,7 +221,7 @@ export class AvatarHistoryCommand {
     scan: boolean | undefined,
     interaction: CommandInteraction,
   ): Promise<void> {
-    const ephemeral = !showInChat;
+    const ephemeral = privateFlag ?? false;
 
     if (scan === true) {
       await safeDeferReply(interaction, { flags: buildComponentsV2Flags(true) });
@@ -271,7 +271,7 @@ export class AvatarHistoryCommand {
     }
 
     if (showAll === true) {
-      await deferWithShowInChat(interaction, showInChat);
+      await deferWithPrivateFlag(interaction, privateFlag);
       const pageResult = await buildAvatarHistoryAllPage(
         interaction.guild,
         0,
@@ -304,7 +304,7 @@ export class AvatarHistoryCommand {
       return;
     }
 
-    await deferWithShowInChat(interaction, showInChat);
+    await deferWithPrivateFlag(interaction, privateFlag);
 
     const target = member ?? interaction.user;
     const pageResult = await buildAvatarHistoryV2Page(target, 0);
