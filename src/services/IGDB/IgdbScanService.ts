@@ -3,7 +3,7 @@ import { oraWithConnection } from "../../db/SqlManager.js";
 import Game from "../../classes/Game.js";
 import { igdbService } from "./IgdbService.js";
 import { sleep } from "../../utilities/DelayUtils.js";
-import { logError, logWarn } from "../../utilities/LogUtils.js";
+import { logError, logInfo, logWarn } from "../../utilities/LogUtils.js";
 
 type IgdbScanConfig = {
   enabled: boolean;
@@ -110,13 +110,13 @@ export async function igdbScanTick(): Promise<void> {
       const totalEligible = await countScanCandidates(conn, cutoff);
       const candidates = await listScanCandidates(conn, cutoff, config.batchSize);
       if (!candidates.length) {
-        console.log(
-          "[IGDB Scan] No games queued for refresh.",
-          `Interval: ${(config.intervalMs / 60000).toFixed(1)}m,`,
-          `Batch: ${config.batchSize},`,
-          `Min age: ${config.minAgeDays}d,`,
-          `Remaining: ${totalEligible}.`,
-        );
+        logInfo("IgdbScanService", {
+          message: "No games queued for refresh.",
+          intervalMin: (config.intervalMs / 60000).toFixed(1),
+          batch: config.batchSize,
+          minAgeDays: config.minAgeDays,
+          remaining: totalEligible,
+        });
         return;
       }
 
@@ -161,17 +161,19 @@ export async function igdbScanTick(): Promise<void> {
 
       const elapsedMs = Date.now() - startedAt;
       const remaining = Math.max(totalEligible - candidates.length, 0);
-      console.log(
-        "[IGDB Scan] Completed batch.",
-        `Interval: ${(config.intervalMs / 60000).toFixed(1)}m,`,
-        `Batch: ${config.batchSize},`,
-        `Min age: ${config.minAgeDays}d,`,
-        `Total eligible: ${totalEligible},`,
-        `Remaining: ${remaining},`,
-        `Success: ${successCount}, Failed: ${failCount},`,
-        `Descriptions: ${descriptionUpdated}, Releases: ${releaseUpdated},`,
-        `Elapsed: ${(elapsedMs / 1000).toFixed(1)}s.`,
-      );
+      logInfo("IgdbScanService", {
+        message: "Completed batch.",
+        intervalMin: (config.intervalMs / 60000).toFixed(1),
+        batch: config.batchSize,
+        minAgeDays: config.minAgeDays,
+        totalEligible,
+        remaining,
+        success: successCount,
+        failed: failCount,
+        descriptions: descriptionUpdated,
+        releases: releaseUpdated,
+        elapsedSec: (elapsedMs / 1000).toFixed(1),
+      });
     });
   } catch (err) {
     logError("IgdbScanService.batch", err);
@@ -181,7 +183,7 @@ export async function igdbScanTick(): Promise<void> {
 export function startIgdbScanService(): void {
   const config = getScanConfig();
   if (!config.enabled) {
-    console.log("[IGDB Scan] IGDB_SCAN_ENABLED is false; service disabled.");
+    logInfo("IgdbScanService", "IGDB_SCAN_ENABLED is false; service disabled.");
     return;
   }
 

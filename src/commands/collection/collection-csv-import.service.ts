@@ -6,6 +6,7 @@ import {
   ButtonStyle,
   type Attachment,
 } from "discord.js";
+import { buildButtonRow } from "../../functions/uiComponents.js";
 import ExcelJS from "exceljs";
 import {
   COLLECTION_OWNERSHIP_TYPES,
@@ -216,7 +217,7 @@ export function buildCsvImportItemButtons(params: {
   importId: number;
   itemId: number;
 }): ActionRowBuilder<ButtonBuilder> {
-  return new ActionRowBuilder<ButtonBuilder>().addComponents(
+  return buildButtonRow(
     new ButtonBuilder()
       .setCustomId(
          

@@ -18,6 +18,7 @@ import { buildComponentsV2Flags, buildTextReply } from "../../functions/Componen
 import { decodeBase64Url, encodeBase64Url } from "../../functions/CustomIdUtils.js";
 import Game from "../../classes/Game.js";
 import { DISCORD_SELECT_LABEL_MAX, DISCORD_SELECT_OPTIONS_MAX } from "../../config/textLimits.js";
+import { buildButtonRow } from "../../functions/uiComponents.js";
 
 export interface ISearchFilters {
   upcomingRelease?: boolean;
@@ -184,7 +185,7 @@ export function buildSearchRecoveryComponents(
     .setLabel("Refresh search")
     .setStyle(ButtonStyle.Primary);
 
-  return [new ActionRowBuilder<ButtonBuilder>().addComponents(button)];
+  return [buildButtonRow(button)];
 }
 
 export function isUniqueConstraintError(err: any): boolean {
@@ -303,10 +304,10 @@ export function buildChoiceRows(
   const rows: ActionRowBuilder<ButtonBuilder>[] = [];
   for (let i = 0; i < options.length; i += 5) {
     const slice = options.slice(i, i + 5);
-    const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
-      slice.map((opt) =>
+    const row = buildButtonRow(
+      ...slice.map((opt) =>
         new ButtonBuilder()
-           
+
           .setCustomId(`${customIdPrefix}:${opt.value}`)
           .setLabel(opt.label)
           .setStyle(opt.style ?? ButtonStyle.Secondary),

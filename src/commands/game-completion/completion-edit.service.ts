@@ -35,7 +35,7 @@ import {
   truncateWithEllipsis,
 } from "../../utilities/ValidationUtils.js";
 import { assertCustomIdSegments } from "../../utilities/CustomIdUtils.js";
-import { buildActionButton } from "../../functions/uiComponents.js";
+import { buildActionButton, buildButtonRow } from "../../functions/uiComponents.js";
 import { safeIgnore } from "../../utilities/AsyncUtils.js";
 
 const MAX_NOTE_LENGTH = 500;
@@ -418,8 +418,8 @@ function buildCompletionEditPrompt(
   return {
     components: [
       infoContainer,
-      new ActionRowBuilder<ButtonBuilder>().addComponents(fieldButtons),
-      new ActionRowBuilder<ButtonBuilder>().addComponents(secondaryButtons),
+      buildButtonRow(...fieldButtons),
+      buildButtonRow(...secondaryButtons),
     ],
     flags: COMPONENTS_V2_FLAG,
   };

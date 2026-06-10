@@ -23,6 +23,7 @@ import UserGameCollection, {
   type CollectionOwnershipType,
 } from "../../classes/UserGameCollection.js";
 import {
+  replyIfNotOwner,
   safeDeferReply,
   safeDeferUpdate,
   safeReply,
@@ -36,7 +37,7 @@ import {
   buildComponentsV2EditFlags,
 } from "../../functions/ComponentsV2Utils.js";
 import { flattenErrorMessages } from "../imports/import-scaffold.service.js";
-import { logError } from "../../utilities/LogUtils.js";
+import { logError, logInfo } from "../../utilities/LogUtils.js";
 import { safeIgnore } from "../../utilities/AsyncUtils.js";
 import { buildTextInputRow } from "../../functions/uiComponents.js";
 import {
@@ -172,7 +173,8 @@ export class CollectionViewCommand {
       return;
     }
 
-    console.log("[collection list] step: sending reply", {
+    logInfo("collection-list", {
+      step: "sending reply",
       hasContent: Boolean(response.content),
       componentCount: response.components?.length,
     });
@@ -196,7 +198,7 @@ export class CollectionViewCommand {
         logError("collection list.fallback_safe_reply_failed", fallbackErr);
       }
     }
-    console.log("[collection list] step: reply sent");
+    logInfo("collection-list", { step: "reply sent" });
   }
 
   @Slash({ name: "overview", description: "Show a summary of your collection by platform" })
@@ -278,10 +280,7 @@ export class CollectionViewCommand {
       return;
     }
 
-    if (interaction.user.id !== parsed.viewerUserId) {
-      safeIgnore(safeReply(interaction, buildTextReply("This collection overview is not for you.", true)));
-      return;
-    }
+    if (await replyIfNotOwner(interaction, parsed.viewerUserId, "This collection overview is not for you.")) return;
 
     const selection = parseCollectionOverviewSelectValue(interaction.values?.[0] ?? "");
     if (!selection) {
@@ -386,10 +385,7 @@ export class CollectionViewCommand {
       return;
     }
 
-    if (interaction.user.id !== parsed.viewerUserId) {
-      safeIgnore(safeReply(interaction, buildTextReply("This collection view is not for you.", true)));
-      return;
-    }
+    if (await replyIfNotOwner(interaction, parsed.viewerUserId, "This collection view is not for you.")) return;
 
     const nextPage = parsed.direction === "next"
       ? parsed.page + 1
@@ -460,10 +456,7 @@ export class CollectionViewCommand {
       return;
     }
 
-    if (interaction.user.id !== parsed.viewerUserId) {
-      safeIgnore(safeReply(interaction, buildTextReply("This collection view is not for you.", true)));
-      return;
-    }
+    if (await replyIfNotOwner(interaction, parsed.viewerUserId, "This collection view is not for you.")) return;
 
     const currentFilters = parseCollectionFiltersFromListMessage(interaction.message);
 
@@ -500,10 +493,7 @@ export class CollectionViewCommand {
       return;
     }
 
-    if (interaction.user.id !== parsed.viewerUserId) {
-      safeIgnore(safeReply(interaction, buildTextReply("This filter control is not for you.", true)));
-      return;
-    }
+    if (await replyIfNotOwner(interaction, parsed.viewerUserId, "This filter control is not for you.")) return;
 
     if (parsed.action === "cancel") {
       await closeFilterPanel(interaction);
@@ -609,10 +599,7 @@ export class CollectionViewCommand {
       return;
     }
 
-    if (interaction.user.id !== parsed.viewerUserId) {
-      safeIgnore(safeReply(interaction, buildTextReply("This filter modal is not for you.", true)));
-      return;
-    }
+    if (await replyIfNotOwner(interaction, parsed.viewerUserId, "This filter modal is not for you.")) return;
 
     const titleInput = sanitizeUserInput(
       interaction.fields.getTextInputValue(COLLECTION_FILTER_TITLE_INPUT_ID) ?? "",
@@ -661,7 +648,7 @@ function buildPlatformLabel(entry: {
 }
 
 function logNavDebug(event: string, details: Record<string, unknown>): void {
-  console.log("[CollectionListNavDebug]", event, JSON.stringify(details));
+  logInfo("CollectionListNavDebug", { event, details });
 }
 
 export { buildCollectionListNavId };

@@ -36,7 +36,11 @@ import {
 import { COMPONENTS_V2_FLAG } from "../../config/flags.js";
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
 import { DISCORD_AUTOCOMPLETE_DESC_MAX } from "../../config/textLimits.js";
-import { buildActionButton, buildSelectOptions } from "../../functions/uiComponents.js";
+import {
+  buildActionButton,
+  buildButtonRow,
+  buildSelectOptions,
+} from "../../functions/uiComponents.js";
 import { assertCustomIdSegments, parseCustomIdSegments } from "../../utilities/CustomIdUtils.js";
 import { logError } from "../../utilities/LogUtils.js";
 
@@ -419,9 +423,9 @@ async function confirmDuplicateCompletion(
   const detailParts = [existing.completionType, dateText, playtimeText].filter(Boolean);
   const noteLine = existing.note ? `\n> ${existing.note}` : "";
 
-  const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
+  const row = buildButtonRow(
     new ButtonBuilder()
-       
+
       .setCustomId(yesId)
       .setLabel("Add Another")
       .setStyle(ButtonStyle.Danger),

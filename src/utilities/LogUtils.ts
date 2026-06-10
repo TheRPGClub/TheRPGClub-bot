@@ -9,3 +9,7 @@ export function logError(context: string, error: unknown): void {
 export function logWarn(context: string, message: unknown): void {
   console.warn(formatStructuredLog({ context, message }));
 }
+
+export function logInfo(context: string, message: unknown): void {
+  console.log(formatStructuredLog({ context, message }));
+}

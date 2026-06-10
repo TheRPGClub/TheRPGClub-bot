@@ -2,7 +2,7 @@ import sharp from "sharp";
 import type { Client, GuildMember } from "discord.js";
 import Member from "../classes/Member.js";
 import { sleep } from "../utilities/DelayUtils.js";
-import { logError } from "../utilities/LogUtils.js";
+import { logError, logInfo } from "../utilities/LogUtils.js";
 import {
   ADMIN_ROLE_ID,
   MEMBER_ROLE_ID,
@@ -121,7 +121,7 @@ export async function startUserEmojiService(client: Client): Promise<void> {
   initialized = true;
   const forceRefresh = process.env["FORCE_EMOJI_REFRESH"] === "true";
   if (forceRefresh) {
-    console.log("[UserEmojiService] FORCE_EMOJI_REFRESH detected -- all emojis will be re-uploaded.");
+    logInfo("UserEmojiService", "FORCE_EMOJI_REFRESH detected -- all emojis will be re-uploaded.");
   }
   syncAllUserEmoji(client, forceRefresh).catch((err) => {
     logError("UserEmojiService.initialSync", err);
@@ -211,7 +211,7 @@ async function syncAllUserEmoji(client: Client, forceRefresh = false): Promise<v
     if (claimedNames.has(emojiName)) continue;
     try {
       await app.emojis.delete(emojiId);
-      console.log(`[UserEmojiService] Deleted orphaned emoji: ${emojiName}`);
+      logInfo("UserEmojiService", `Deleted orphaned emoji: ${emojiName}`);
     } catch (err) {
       logError("UserEmojiService.deleteOrphanEmoji", err);
     }
@@ -223,9 +223,7 @@ async function syncAllUserEmoji(client: Client, forceRefresh = false): Promise<v
     }
   }
 
-  console.log(
-    `[UserEmojiService] Sync complete. Created ${created} emoji. Cache: ${emojiCache.size}`,
-  );
+  logInfo("UserEmojiService", `Sync complete. Created ${created} emoji. Cache: ${emojiCache.size}`);
 }
 
 async function createEmojiForMember(

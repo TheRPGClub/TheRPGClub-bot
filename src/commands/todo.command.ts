@@ -62,7 +62,7 @@ import { decodeBase64Url, encodeWithMaxLength } from "../functions/CustomIdUtils
 import { parseCustomIdSegments } from "../utilities/CustomIdUtils.js";
 import { safeV2TextContent } from "../functions/ComponentsV2Utils.js";
 import { formatDiscordTimestamp } from "../functions/DateFormatUtils.js";
-import { buildActionButton, buildTextInputRow } from "../functions/uiComponents.js";
+import { buildActionButton, buildButtonRow, buildTextInputRow } from "../functions/uiComponents.js";
 import { truncateWithEllipsis } from "../utilities/ValidationUtils.js";
 import { DISCORD_TEXT_INPUT_MAX } from "../config/textLimits.js";
 import { TODO_DEFAULT_PAGE_SIZE, TODO_MAX_PAGE_SIZE } from "../config/pagination.js";
@@ -1100,7 +1100,7 @@ function buildIssueListComponents(
   if (totalPages > 1) {
     const prevDisabled = payload.page <= 1;
     const nextDisabled = payload.page >= totalPages;
-    const pagingRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+    const pagingRow = buildButtonRow(
       buildActionButton({
         customId: buildTodoListCustomId(payloadToken, payload.page - 1),
         label: "Prev Page",
@@ -1172,7 +1172,7 @@ function buildIssueViewComponents(
         style: ButtonStyle.Success,
       });
 
-  const actionRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+  const actionRow = buildButtonRow(
     buildActionButton({
       customId: buildTodoCommentButtonId(payloadToken, payload.page, issue.number),
       label: "Add Comment",
@@ -1186,7 +1186,7 @@ function buildIssueViewComponents(
     stateButton,
   );
 
-  const backRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+  const backRow = buildButtonRow(
     buildActionButton({
       customId: buildTodoListBackId(payloadToken, payload.page),
       label: "Back",
@@ -1550,7 +1550,7 @@ export class TodoCommand {
       );
     const selectRow = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select);
 
-    const cancelRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+    const cancelRow = buildButtonRow(
       buildActionButton({
         customId: buildTodoCloseCancelId(parsed.payloadToken, parsed.page),
         label: "Cancel",

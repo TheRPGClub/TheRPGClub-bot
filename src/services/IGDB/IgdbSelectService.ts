@@ -8,6 +8,7 @@ import {
 } from "discord.js";
 import {
   canSafeReply,
+  replyIfNotOwner,
   safeDeferUpdate,
   safeReply,
   safeUpdate,
@@ -16,6 +17,7 @@ import { buildTextReply } from "../../functions/ComponentsV2Utils.js";
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
 import { DISCORD_SELECT_LABEL_MAX } from "../../config/textLimits.js";
 import { assertCustomIdSegments } from "../../utilities/CustomIdUtils.js";
+import { buildButtonRow } from "../../functions/uiComponents.js";
 
 export type IgdbSelectOption = { id: number; label: string; description?: string };
 
@@ -130,7 +132,7 @@ export function buildIgdbComponents(
   ];
 
   if (hasOptions) {
-    rows.push(new ActionRowBuilder<ButtonBuilder>().addComponents(
+    rows.push(buildButtonRow(
       new ButtonBuilder()
         // eslint-disable-next-line local/custom-id-has-matching-handler
         .setCustomId(`${IGDB_FIRST_MATCH_PREFIX}:${sessionId}`)
@@ -163,10 +165,7 @@ export async function handleIgdbSelectInteraction(
     return true;
   }
 
-  if (interaction.user.id !== session.ownerId) {
-    await safeReply(interaction, buildTextReply("This selection isn't for you.", true));
-    return true;
-  }
+  if (await replyIfNotOwner(interaction, session.ownerId, "This selection isn't for you.")) return true;
 
   const page = Number(pageRaw) || 0;
   const value = interaction.values?.[0];
@@ -221,10 +220,7 @@ export async function handleIgdbFirstMatchInteraction(
     return true;
   }
 
-  if (interaction.user.id !== session.ownerId) {
-    await safeReply(interaction, buildTextReply("This selection isn't for you.", true));
-    return true;
-  }
+  if (await replyIfNotOwner(interaction, session.ownerId, "This selection isn't for you.")) return true;
 
   const firstOption = session.options[0];
   if (!firstOption) {

@@ -26,6 +26,7 @@ import {
   MAX_QUERY_LENGTH,
 } from "../../config/textLimits.js";
 import {
+  buildButtonRow,
   buildJournalSelectRow,
   buildUserHeaderContainer,
   type IJournalSelectEntry,
@@ -313,7 +314,7 @@ function buildPaginationRows(
         .setStyle(ButtonStyle.Secondary),
     );
   }
-  return [new ActionRowBuilder<ButtonBuilder>().addComponents(...buttons)];
+  return [buildButtonRow(...buttons)];
 }
 
 const CHUNK_LIMIT = 3500;

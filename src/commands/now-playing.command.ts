@@ -62,6 +62,7 @@ import Game, { type IGame } from "../classes/Game.js";
 import { buildJournalView } from "../functions/journalView.js";
 import {
   buildActionButton,
+  buildButtonRow,
   buildJournalSelectRow,
   buildTextInputRow,
   buildUserHeaderContainer,
@@ -112,7 +113,7 @@ import {
   isValidPlaytimeHours,
   truncateWithEllipsis,
 } from "../utilities/ValidationUtils.js";
-import { logError } from "../utilities/LogUtils.js";
+import { logError, logInfo } from "../utilities/LogUtils.js";
 import {
   DISCORD_AUTOCOMPLETE_DESC_MAX,
   DISCORD_SELECT_LABEL_MAX,
@@ -245,7 +246,7 @@ export async function restoreJournalMessageContextsFromDb(): Promise<void> {
       const key = `${row.channelId}:${row.messageId}`;
       nowPlayingJournalContexts.set(key, row);
     }
-    console.log(`[Journal] Restored ${rows.length} message context(s) from DB.`);
+    logInfo("Journal", `Restored ${rows.length} message context(s) from DB.`);
   } catch (err) {
     logError("Journal.restore_contexts_failed", err);
   }
@@ -362,7 +363,7 @@ async function confirmDuplicateCompletion(
       ),
     ),
   );
-  const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
+  const row = buildButtonRow(
     new ButtonBuilder()
       .setCustomId(yesId)
       .setLabel("Add Another")
@@ -1223,7 +1224,7 @@ export class NowPlayingCommand {
       .setCustomId(`${NOW_PLAYING_HELP_PREFIX}:completion-config:${session.userId}`)
       .setLabel("?")
       .setStyle(ButtonStyle.Secondary);
-    const buttonRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+    const buttonRow = buildButtonRow(
       detailsButton,
       cancelButton,
       helpButton,
@@ -3114,7 +3115,7 @@ export class NowPlayingCommand {
       .setTitle(`Delete Note: ${currentEntry.title}`)
       .setDescription(currentEntry.note ? `> ${currentNote}` : "No note set.");
 
-    const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
+    const row = buildButtonRow(
       buildActionButton("delete", `nowplaying-delete-note-confirm:${ownerId}:${gameId}:yes`, "Delete Note"),
       buildActionButton("cancel", `nowplaying-delete-note-confirm:${ownerId}:${gameId}:no`),
     );
@@ -3319,7 +3320,7 @@ export class NowPlayingCommand {
   ): Promise<ActionRowBuilder<ButtonBuilder>> {
     const entries = await Member.getGameJournalEntries(ownerId, gameId, { limit: 1, offset: 0 });
     const hasEntries = entries.length > 0;
-    return new ActionRowBuilder<ButtonBuilder>().addComponents(
+    return buildButtonRow(
       buildActionButton("add", `${NOW_PLAYING_JOURNAL_ADD_PREFIX}:${ownerId}:${gameId}:${page}`, "Add Entry"),
       buildActionButton("edit", `${NOW_PLAYING_JOURNAL_EDIT_PREFIX}:${ownerId}:${gameId}:${page}`, "Edit Entry")
         .setDisabled(!hasEntries),
@@ -3567,7 +3568,7 @@ export class NowPlayingCommand {
     const container = new ContainerBuilder().addTextDisplayComponents(
       new TextDisplayBuilder().setContent("## Delete Journal Entry\nSelect an entry to delete."),
     );
-    const helpRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+    const helpRow = buildButtonRow(
       new ButtonBuilder()
         .setCustomId(`${NOW_PLAYING_HELP_PREFIX}:journal-delete:${ownerId}`)
         .setLabel("?")
@@ -3607,7 +3608,7 @@ export class NowPlayingCommand {
         ),
       ),
     );
-    const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
+    const row = buildButtonRow(
       buildActionButton(
         "delete",
         `${NOW_PLAYING_JOURNAL_DELETE_CONFIRM_PREFIX}:yes:${ownerId}:${gameIdRaw}:${pageRaw}:${entryId}`,
@@ -4561,7 +4562,7 @@ export class NowPlayingCommand {
   }
 
   private buildNowPlayingCancelRow(ownerId: string): ActionRowBuilder<ButtonBuilder> {
-    return new ActionRowBuilder<ButtonBuilder>().addComponents(
+    return buildButtonRow(
       buildActionButton("cancel", `nowplaying-list-cancel:${ownerId}`),
     );
   }
@@ -4598,7 +4599,7 @@ export class NowPlayingCommand {
         .setLabel("Remove Game")
         .setStyle(ButtonStyle.Danger),
     );
-    return new ActionRowBuilder<ButtonBuilder>().addComponents(...buttons);
+    return buildButtonRow(...buttons);
   }
 
   private buildNowPlayingEditMenuComponents(
@@ -4626,7 +4627,7 @@ export class NowPlayingCommand {
         "Your Now Playing List",
         "Your Now Playing list is empty.",
       );
-    const firstRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+    const firstRow = buildButtonRow(
       new ButtonBuilder()
         .setCustomId(`${NOW_PLAYING_EDIT_MENU_SORT_PREFIX}:${ownerId}`)
         .setLabel("Sort")
@@ -4636,7 +4637,7 @@ export class NowPlayingCommand {
         .setLabel("Edit Platform")
         .setStyle(ButtonStyle.Secondary),
     );
-    const secondRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+    const secondRow = buildButtonRow(
       new ButtonBuilder()
         .setCustomId(`${NOW_PLAYING_EDIT_MENU_COMPLETE_PREFIX}:${ownerId}`)
         .setLabel("Add Completion")
@@ -4755,7 +4756,7 @@ export class NowPlayingCommand {
       container.addSectionComponents(section);
     });
 
-    const doneRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+    const doneRow = buildButtonRow(
       new ButtonBuilder()
         .setCustomId(`nowplaying-complete-done:${ownerId}`)
         .setLabel("Done")
@@ -4800,7 +4801,7 @@ export class NowPlayingCommand {
       .addOptions(selectOptions);
     const selectRow = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(removeSelect);
 
-    const doneRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+    const doneRow = buildButtonRow(
       new ButtonBuilder()
         .setCustomId(`nowplaying-remove-done:${ownerId}`)
         .setLabel("Done")
@@ -4966,7 +4967,7 @@ export class NowPlayingCommand {
       ...rows,
     ];
 
-    const actionRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+    const actionRow = buildButtonRow(
       new ButtonBuilder()
         .setCustomId(`${NOW_PLAYING_EDIT_PLATFORM_SAVE_PREFIX}:${ownerId}:${stateToken}`)
         .setLabel("Save")
@@ -5023,7 +5024,7 @@ export class NowPlayingCommand {
       rows.push(new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(menu));
     }
 
-    const actionRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+    const actionRow = buildButtonRow(
       new ButtonBuilder()
         .setCustomId(`${NOW_PLAYING_SORT_SAVE_PREFIX}:${ownerId}:${stateToken}`)
         .setLabel("Save")

@@ -1,5 +1,4 @@
 import {
-  ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
   MessageFlags,
@@ -23,6 +22,7 @@ import {
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
 import { MAX_CONTAINER_TEXT, MAX_SECTION_TEXT } from "../../config/textLimits.js";
 import { safeIgnore } from "../../utilities/AsyncUtils.js";
+import { buildButtonRow } from "../../functions/uiComponents.js";
 
 export type CommonCompletionSort =
   | "title_asc"
@@ -476,7 +476,7 @@ export async function renderCommonCompletionPage(
     components: [
       ...containers,
       ...(paginationButtons.length
-        ? [new ActionRowBuilder<ButtonBuilder>().addComponents(...paginationButtons)]
+        ? [buildButtonRow(...paginationButtons)]
         : []),
     ],
     flags: buildV2Flags(ephemeral),

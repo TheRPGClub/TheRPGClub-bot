@@ -1,6 +1,5 @@
 import type { ButtonInteraction, CommandInteraction } from "discord.js";
 import {
-  ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
   ContainerBuilder,
@@ -53,6 +52,7 @@ import {
 import { logRawModal } from "../services/raw-modal/RawModalLogging.js";
 import { isPositiveInt, truncateWithEllipsis } from "../utilities/ValidationUtils.js";
 import { parseCustomIdSegments } from "../utilities/CustomIdUtils.js";
+import { buildButtonRow } from "../functions/uiComponents.js";
 
 const SUGGESTION_APPROVE_PREFIX = "suggestion-approve";
 const SUGGESTION_CREATE_MODAL_ID = "suggestion-create-modal";
@@ -673,7 +673,7 @@ export class SuggestionCommand {
       `${authorMention} Your suggestion was accepted and logged as GitHub issue #${issue.number}: ${issue.htmlUrl}`,
     );
 
-    const approvedRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+    const approvedRow = buildButtonRow(
       new ButtonBuilder()
         .setCustomId(buildSuggestionApproveId(suggestionId))
         .setLabel("Approved")

@@ -44,7 +44,11 @@ import {
 } from "../imports/import-scaffold.service.js";
 import { safeV2TextContent } from "../../functions/ComponentsV2Utils.js";
 import { buildCompletionatorChooseId } from "./completion-helpers.js";
-import { buildActionButton, buildTextInputRow } from "../../functions/uiComponents.js";
+import {
+  buildActionButton,
+  buildButtonRow,
+  buildTextInputRow,
+} from "../../functions/uiComponents.js";
 import {
   DISCORD_AUTOCOMPLETE_DESC_MAX,
   DISCORD_SELECT_LABEL_MAX,
@@ -354,7 +358,7 @@ export class CompletionatorUiService {
       .setCustomId(`comp-import-action:${userId}:${session.importId}:${item.itemId}:igdb`)
       .setLabel("Choose a Different Game")
       .setStyle(ButtonStyle.Secondary);
-    const changeRow = new ActionRowBuilder<ButtonBuilder>().addComponents(changeButton);
+    const changeRow = buildButtonRow(changeButton);
     return { container, files, changeRow };
   }
 
@@ -455,7 +459,7 @@ export class CompletionatorUiService {
       new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(typeSelect),
       new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(dateSelect),
       new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(platformSelect),
-      new ActionRowBuilder<ButtonBuilder>().addComponents(addButton, skipButton, pauseButton),
+      buildButtonRow(addButton, skipButton, pauseButton),
     ];
   }
 
@@ -464,7 +468,7 @@ export class CompletionatorUiService {
     importId: number,
     itemId: number,
   ): ActionRowBuilder<ButtonBuilder> {
-    return new ActionRowBuilder<ButtonBuilder>().addComponents(
+    return buildButtonRow(
       new ButtonBuilder()
         // eslint-disable-next-line local/custom-id-has-matching-handler
         .setCustomId(`comp-import-action:${userId}:${importId}:${itemId}:same-yes`)
@@ -495,7 +499,7 @@ export class CompletionatorUiService {
       .setMaxValues(updateOptions.length)
       .addOptions(updateOptions);
 
-    const buttons = new ActionRowBuilder<ButtonBuilder>().addComponents(
+    const buttons = buildButtonRow(
       new ButtonBuilder()
         // eslint-disable-next-line local/custom-id-has-matching-handler
         .setCustomId(`comp-import-action:${userId}:${importId}:${itemId}:skip`)
@@ -519,7 +523,7 @@ export class CompletionatorUiService {
     importId: number,
     itemId: number,
   ): ActionRowBuilder<ButtonBuilder>[] {
-    const primaryRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+    const primaryRow = buildButtonRow(
       new ButtonBuilder()
         // eslint-disable-next-line local/custom-id-has-matching-handler
         .setCustomId(`comp-import-action:${userId}:${importId}:${itemId}:igdb-manual`)
@@ -536,7 +540,7 @@ export class CompletionatorUiService {
         .setLabel("Enter GameDB ID")
         .setStyle(ButtonStyle.Primary),
     );
-    const secondaryRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+    const secondaryRow = buildButtonRow(
       new ButtonBuilder()
         // eslint-disable-next-line local/custom-id-has-matching-handler
         .setCustomId(`comp-import-action:${userId}:${importId}:${itemId}:skip`)
@@ -588,7 +592,7 @@ export class CompletionatorUiService {
       .setLabel("New IGDB Search")
       .setStyle(ButtonStyle.Secondary);
     const extraRows = [
-      new ActionRowBuilder<ButtonBuilder>().addComponents(pauseButton, skipButton, queryButton),
+      buildButtonRow(pauseButton, skipButton, queryButton),
     ];
 
     const { components } = createIgdbSession(userId, opts, onSelect, extraRows);
@@ -604,7 +608,7 @@ export class CompletionatorUiService {
     importId: number,
     itemId: number,
   ): ActionRowBuilder<ButtonBuilder> {
-    return new ActionRowBuilder<ButtonBuilder>().addComponents(
+    return buildButtonRow(
       new ButtonBuilder()
         // eslint-disable-next-line local/custom-id-has-matching-handler
         .setCustomId(`comp-import-action:${userId}:${importId}:${itemId}:igdb-query`)

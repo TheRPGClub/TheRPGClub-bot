@@ -1,7 +1,7 @@
 import { ActivityType, Client } from "discord.js";
 import type { AnyRepliable } from "./InteractionUtils.js";
 import BotPresenceHistory, { type IPresenceHistoryEntry } from "../classes/BotPresenceHistory.js";
-import { logError } from "../utilities/LogUtils.js";
+import { logError, logInfo } from "../utilities/LogUtils.js";
 
 export type { IPresenceHistoryEntry };
 
@@ -25,7 +25,7 @@ async function internalSetPresence(
   if (saveToDb) {
     try {
       await BotPresenceHistory.savePresence(activityName, userId, username);
-      console.log("Presence saved to database.");
+      logInfo("SetPresence", "Presence saved to database.");
     } catch (error) {
       logError("SetPresence.save", error);
     }
@@ -60,7 +60,7 @@ export async function updateBotPresence(bot: Client): Promise<void> {
     if (activityName) {
       await internalSetPresence(bot, activityName);
     } else {
-      console.log("No presence data found in database.");
+      logInfo("SetPresence", "No presence data found in database.");
     }
   } catch (error) {
     logError("SetPresence.read", error);

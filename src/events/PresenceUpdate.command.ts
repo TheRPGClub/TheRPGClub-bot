@@ -20,6 +20,7 @@ import { replyIfNotOwner, safeReply, safeUpdate } from "../functions/Interaction
 import { buildTextReply } from "../functions/ComponentsV2Utils.js";
 import { PRESENCE_PROMPT_CHANNEL_ID } from "../config/channels.js";
 import { logError } from "../utilities/LogUtils.js";
+import { buildButtonRow } from "../functions/uiComponents.js";
 
 const YES_PREFIX = "presence-np-yes";
 const NO_PREFIX = "presence-np-no";
@@ -104,7 +105,7 @@ function buildPromptButtons(sessionId: string): ActionRowBuilder<ButtonBuilder> 
     .setCustomId(`${OPT_OUT_ALL_PREFIX}:${sessionId}`)
     .setLabel("Don't ask again for any game")
     .setStyle(ButtonStyle.Danger);
-  return new ActionRowBuilder<ButtonBuilder>().addComponents(yes, no, optOutGame, optOutAll);
+  return buildButtonRow(yes, no, optOutGame, optOutAll);
 }
 
 @Discord()

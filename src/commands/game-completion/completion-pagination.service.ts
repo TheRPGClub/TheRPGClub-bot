@@ -20,7 +20,11 @@ import {
   buildTextReply,
   safeV2TextContent,
 } from "../../functions/ComponentsV2Utils.js";
-import { assertCustomIdSegments } from "../../utilities/CustomIdUtils.js";
+import {
+  assertCustomIdSegments,
+  logUnexpectedCustomId,
+  parseCustomIdSegmentsMin,
+} from "../../utilities/CustomIdUtils.js";
 import { safeIgnore } from "../../utilities/AsyncUtils.js";
 
 /**
@@ -39,7 +43,9 @@ export function parseCompletionYearFilter(yearRaw: string): number | "unknown" |
 export async function handleCompletionPageSelect(
   interaction: StringSelectMenuInteraction,
 ): Promise<void> {
-  const [, ownerId, yearRaw, modeRaw, ...queryParts] = interaction.customId.split(":");
+  const segs = parseCustomIdSegmentsMin(interaction.customId, 3);
+  if (!segs) { logUnexpectedCustomId(interaction.customId); return; }
+  const [ownerId, yearRaw, modeRaw, ...queryParts] = segs;
   const mode = modeRaw as "list" | "edit" | "delete";
   const query = queryParts.join(":") || undefined;
 
@@ -70,7 +76,10 @@ export async function handleCompletionPageSelect(
  * Handles prev/next button clicks for list, edit, or delete pagination
  */
 export async function handleCompletionPaging(interaction: ButtonInteraction): Promise<void> {
-  const [prefixPart, ownerId, yearRaw, pageRaw, dir, ...queryParts] = interaction.customId.split(":");
+  const prefixPart = interaction.customId.split(":")[0];
+  const segs = parseCustomIdSegmentsMin(interaction.customId, 4);
+  if (!segs) { logUnexpectedCustomId(interaction.customId); return; }
+  const [ownerId, yearRaw, pageRaw, dir, ...queryParts] = segs;
   const mode = prefixPart.split("-")[1] as "list" | "edit" | "delete";
   const query = queryParts.join(":") || undefined;
 
@@ -233,7 +242,7 @@ export async function handleCompletionYearSelect(
 export async function handleCompletionLeaderboardSelect(
   interaction: StringSelectMenuInteraction,
 ): Promise<void> {
-  const [, ...queryParts] = interaction.customId.split(":");
+  const queryParts = parseCustomIdSegmentsMin(interaction.customId, 0) ?? [];
   const query = queryParts.join(":") || undefined;
   const userId = interaction.values[0];
   const ephemeral = interaction.message?.flags?.has(MessageFlags.Ephemeral) ?? true;

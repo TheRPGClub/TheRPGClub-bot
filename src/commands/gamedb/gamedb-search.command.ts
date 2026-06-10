@@ -53,6 +53,7 @@ import { handleNoResults } from "./gamedb-add.command.js";
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
 import { MAX_CONTAINER_TEXT } from "../../config/textLimits.js";
 import { assertCustomIdSegments } from "../../utilities/CustomIdUtils.js";
+import { buildButtonRow } from "../../functions/uiComponents.js";
 
 function formatUpcomingDate(date: Date | null | undefined): string {
   if (!date) return "";
@@ -214,7 +215,7 @@ function buildSearchResponse(
     .setStyle(ButtonStyle.Secondary)
     .setDisabled(nextDisabled);
 
-  const buttonRow = new ActionRowBuilder<ButtonBuilder>().addComponents(prevButton, nextButton);
+  const buttonRow = buildButtonRow(prevButton, nextButton);
   const components: Array<ContainerBuilder | ActionRowBuilder<any>> = [];
   if (includeList) {
     const filterNote = filterSummary ? `\n*Filters: ${filterSummary}*` : "";

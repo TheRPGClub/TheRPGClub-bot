@@ -21,6 +21,7 @@ import { ModalBuilder } from "discord.js";
 import { ContainerBuilder, TextDisplayBuilder } from "@discordjs/builders";
 import {
   getModalField,
+  replyIfNotOwner,
   safeDeferReply,
   safeReply,
   safeUpdate,
@@ -51,7 +52,7 @@ import { trimTextDisplayContent } from "./gamedb-profile.service.js";
 import { updateGameProfileMessageById } from "./gamedb-profile.service.js";
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
 import { DISCORD_SELECT_LABEL_MAX } from "../../config/textLimits.js";
-import { buildTextInputRow } from "../../functions/uiComponents.js";
+import { buildButtonRow, buildTextInputRow } from "../../functions/uiComponents.js";
 import { safeIgnore } from "../../utilities/AsyncUtils.js";
 
 const COMPLETION_WIZARD_SESSIONS = new Map<string, CompletionWizardSession>();
@@ -223,7 +224,7 @@ function buildCompletionWizardComponents(
     .setCustomId(`gamedb-completion-next:${session.id}`)
     .setLabel("Next")
     .setStyle(ButtonStyle.Primary);
-  rows.push(new ActionRowBuilder<ButtonBuilder>().addComponents(nextButton));
+  rows.push(buildButtonRow(nextButton));
 
   return rows;
 }
@@ -312,10 +313,7 @@ export class GameDbCompletionCommand {
       safeIgnore(safeReply(interaction, buildTextReply("This completion request has expired.", true)));
       return;
     }
-    if (interaction.user.id !== session.userId) {
-      safeIgnore(safeReply(interaction, buildTextReply("This menu isn't for you.", true)));
-      return;
-    }
+    if (await replyIfNotOwner(interaction, session.userId, "This menu isn't for you.")) return;
 
     const value = interaction.values?.[0];
     if (!value) {
@@ -356,10 +354,7 @@ export class GameDbCompletionCommand {
       safeIgnore(safeReply(interaction, buildTextReply("This completion request has expired.", true)));
       return;
     }
-    if (interaction.user.id !== session.userId) {
-      safeIgnore(safeReply(interaction, buildTextReply("This action isn't for you.", true)));
-      return;
-    }
+    if (await replyIfNotOwner(interaction, session.userId, "This action isn't for you.")) return;
 
     const missing = getCompletionWizardMissingSelections(session);
     const platforms = await Game.getPlatformsForGameWithStandard(

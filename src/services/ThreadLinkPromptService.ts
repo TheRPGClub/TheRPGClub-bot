@@ -33,7 +33,8 @@ import { COLOR_BLUE_INFO } from "../config/colors.js";
 import { DISCORD_AUTOCOMPLETE_DESC_MAX } from "../config/textLimits.js";
 import { assertCustomIdSegments } from "../utilities/CustomIdUtils.js";
 import { safeIgnore } from "../utilities/AsyncUtils.js";
-import { logError, logWarn } from "../utilities/LogUtils.js";
+import { logError, logInfo, logWarn } from "../utilities/LogUtils.js";
+import { buildButtonRow } from "../functions/uiComponents.js";
 
 function hasIgdbConfig(): boolean {
   return Boolean(process.env.IGDB_CLIENT_ID && process.env.IGDB_CLIENT_SECRET);
@@ -52,7 +53,7 @@ function buildPromptEmbed(thread: ThreadChannel): EmbedBuilder {
 }
 
 function buildButtons(threadId: string): ActionRowBuilder<ButtonBuilder> {
-  return new ActionRowBuilder<ButtonBuilder>().addComponents(
+  return buildButtonRow(
     new ButtonBuilder()
       .setCustomId(`thread-link:${threadId}`)
       .setLabel("Link a game")
@@ -264,5 +265,5 @@ export function startThreadLinkPromptService(client: Client): void {
     await promptThread(channel);
   });
 
-  console.log("[ThreadLinkPrompt] Service started");
+  logInfo("ThreadLinkPromptService", "Service started");
 }

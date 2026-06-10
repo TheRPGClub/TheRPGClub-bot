@@ -1,4 +1,4 @@
-import { logError, logWarn } from "../../utilities/LogUtils.js";
+import { logError, logInfo, logWarn } from "../../utilities/LogUtils.js";
 
 type RawModalLogLevel = "info" | "warn" | "error";
 
@@ -53,5 +53,5 @@ export function logRawModal(
     logWarn("[RawModal]", line);
     return;
   }
-  console.log(line);
+  logInfo("RawModal", line);
 }

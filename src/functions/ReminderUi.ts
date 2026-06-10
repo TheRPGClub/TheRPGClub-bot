@@ -1,8 +1,9 @@
 import {
-  ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
 } from "discord.js";
+import type { ActionRowBuilder } from "discord.js";
+import { buildButtonRow } from "./uiComponents.js";
 import type { IReminderRecord } from "../classes/Reminder.js";
 
 export const REMINDER_DONE_PREFIX = "remind-done-";
@@ -18,7 +19,7 @@ export function formatReminderTime(date: Date): string {
 }
 
 export function buildReminderButtons(reminderId: number): ActionRowBuilder<ButtonBuilder>[] {
-  const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
+  const row = buildButtonRow(
     new ButtonBuilder()
       .setCustomId(formatSnoozeId(60, reminderId))
       .setLabel("Snooze 1h")

@@ -40,6 +40,12 @@ export function buildTextInputRow(
   return new ActionRowBuilder<TextInputBuilder>().addComponents(input);
 }
 
+export function buildButtonRow(
+  ...buttons: ButtonBuilder[]
+): ActionRowBuilder<ButtonBuilder> {
+  return new ActionRowBuilder<ButtonBuilder>().addComponents(...buttons);
+}
+
 type ButtonAction = "add" | "edit" | "delete" | "confirm" | "cancel" | "close";
 
 const ACTION_DEFAULTS: Record<ButtonAction, { label: string; style: ButtonStyle }> = {

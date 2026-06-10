@@ -11,6 +11,7 @@ import { GIVEAWAY_HUB_CHANNEL_ID } from "../config/channels.js";
 import { buildPageFooterText } from "../functions/PaginationUtils.js";
 import { safeIgnore } from "../utilities/AsyncUtils.js";
 import { logError, logWarn } from "../utilities/LogUtils.js";
+import { buildButtonRow } from "../functions/uiComponents.js";
 const GIVEAWAY_HUB_SCAN_LIMIT = 50;
 
 export const KEYS_PAGE_SIZE = 20;
@@ -183,11 +184,7 @@ function buildGiveawayHubComponents(hasKeys: boolean): ActionRowBuilder<ButtonBu
     .setStyle(ButtonStyle.Secondary);
 
   rows.push(
-    new ActionRowBuilder<ButtonBuilder>().addComponents(
-      claimButton,
-      donateButton,
-      donorSettingsButton,
-    ),
+    buildButtonRow(claimButton, donateButton, donorSettingsButton),
   );
 
   return rows;

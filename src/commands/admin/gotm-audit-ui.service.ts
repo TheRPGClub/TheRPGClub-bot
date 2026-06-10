@@ -4,6 +4,7 @@ import {
   ButtonStyle,
   StringSelectMenuBuilder,
 } from "discord.js";
+import { buildButtonRow } from "../../functions/uiComponents.js";
 import { ContainerBuilder, TextDisplayBuilder } from "@discordjs/builders";
 import { type IGotmAuditImport, type IGotmAuditItem } from "../../classes/GotmAuditImport.js";
 import {
@@ -77,7 +78,7 @@ export function buildGotmAuditPromptComponents(
     rows.push(new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select));
   }
 
-  const actionRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+  const actionRow = buildButtonRow(
     new ButtonBuilder()
       .setCustomId(`${GOTM_AUDIT_ACTION_PREFIX}:${ownerId}:${importId}:${itemId}:manual`)
       .setLabel("Manual GameDB ID")
@@ -92,7 +93,7 @@ export function buildGotmAuditPromptComponents(
       .setStyle(ButtonStyle.Success)
       .setDisabled(!options.length),
   );
-  const controlRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+  const controlRow = buildButtonRow(
     new ButtonBuilder()
       .setCustomId(`${GOTM_AUDIT_ACTION_PREFIX}:${ownerId}:${importId}:${itemId}:skip`)
       .setLabel("Skip")

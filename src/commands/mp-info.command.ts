@@ -44,6 +44,7 @@ import {
 import { parseCustomIdSegments } from "../utilities/CustomIdUtils.js";
 import { DISCORD_SELECT_LABEL_MAX } from "../config/textLimits.js";
 import { chunk } from "../utilities/ArrayUtils.js";
+import { buildButtonRow } from "../functions/uiComponents.js";
 
 const MAX_OPTIONS = 25;
 
@@ -359,7 +360,7 @@ export class MultiplayerInfoCommand {
         .setCustomId(`mpinfo-back:${ownerId}:${filterKey}:${pageRaw}`)
         .setLabel("Back to List")
         .setStyle(ButtonStyle.Secondary);
-      const backRow = new ActionRowBuilder<ButtonBuilder>().addComponents(backButton);
+      const backRow = buildButtonRow(backButton);
       await safeUpdate(interaction, {
         components: [...result.payload.components, backRow],
         flags: buildComponentsV2Flags(false),

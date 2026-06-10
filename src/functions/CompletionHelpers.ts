@@ -1,5 +1,4 @@
 import {
-  ActionRowBuilder,
   AttachmentBuilder,
   ButtonBuilder,
   ButtonStyle,
@@ -28,6 +27,7 @@ import { buildComponentsV2Flags, buildTextContainer } from "./ComponentsV2Utils.
 import { isInteractionSettled, safeReply, safeUpdate, safeUserFetch } from "./InteractionUtils.js";
 import { safeIgnore } from "../utilities/AsyncUtils.js";
 import { logError } from "../utilities/LogUtils.js";
+import { buildButtonRow } from "./uiComponents.js";
 
 const MAX_PLAYTIME_HOURS = 999999.99;
 const COMPLETION_COVER_ATTACHMENT_PREFIX = "completion-cover";
@@ -251,7 +251,7 @@ export async function promptRemoveFromNowPlaying(
   const promptId = `np-remove-confirm:${interaction.user.id}`;
   const yesId = `${promptId}:yes`;
   const noId = `${promptId}:no`;
-  const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
+  const row = buildButtonRow(
     new ButtonBuilder()
       .setCustomId(yesId)
       .setLabel("Yes")

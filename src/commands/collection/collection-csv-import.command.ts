@@ -41,6 +41,7 @@ import {
 } from "../game-completion/completion-autocomplete.utils.js";
 import {
   canSafeReply,
+  replyIfNotOwner,
   safeDeferReply,
   safeDeferUpdate,
   safeReply,
@@ -727,13 +728,7 @@ export class CollectionCsvImportCommand {
       return;
     }
 
-    if (interaction.user.id !== parsed.ownerId) {
-      safeIgnore(safeReply(interaction, buildTextReply(
-        "This CSV import control is not for you.",
-        true,
-      )));
-      return;
-    }
+    if (await replyIfNotOwner(interaction, parsed.ownerId, "This CSV import control is not for you.")) return;
 
     const session = await getCollectionCsvImportById(parsed.importId);
     if (!session || session.userId !== parsed.ownerId) {
@@ -848,13 +843,7 @@ export class CollectionCsvImportCommand {
       return;
     }
 
-    if (interaction.user.id !== parsed.ownerId) {
-      safeIgnore(safeReply(interaction, buildTextReply(
-        "This CSV import choice is not for you.",
-        true,
-      )));
-      return;
-    }
+    if (await replyIfNotOwner(interaction, parsed.ownerId, "This CSV import choice is not for you.")) return;
 
     const session = await getCollectionCsvImportById(parsed.importId);
     if (!session || session.userId !== parsed.ownerId || session.status !== "ACTIVE") {
@@ -905,13 +894,7 @@ export class CollectionCsvImportCommand {
       return;
     }
 
-    if (interaction.user.id !== parsed.ownerId) {
-      safeIgnore(safeReply(interaction, buildTextReply(
-        "This remap form is not for you.",
-        true,
-      )));
-      return;
-    }
+    if (await replyIfNotOwner(interaction, parsed.ownerId, "This remap form is not for you.")) return;
 
     const session = await getCollectionCsvImportById(parsed.importId);
     if (!session || session.userId !== parsed.ownerId || session.status !== "ACTIVE") {
@@ -998,13 +981,7 @@ export class CollectionCsvImportCommand {
       return;
     }
 
-    if (interaction.user.id !== parsed.ownerId) {
-      safeIgnore(safeReply(interaction, buildTextReply(
-        "This GameDB ID form is not for you.",
-        true,
-      )));
-      return;
-    }
+    if (await replyIfNotOwner(interaction, parsed.ownerId, "This GameDB ID form is not for you.")) return;
 
     const session = await getCollectionCsvImportById(parsed.importId);
     if (!session || session.userId !== parsed.ownerId || session.status !== "ACTIVE") {

@@ -58,6 +58,7 @@ import {
   buildActionButton,
   buildSelectOptions,
   buildUserHeaderContainer,
+  buildButtonRow,
 } from "../functions/uiComponents.js";
 import {
   GJ_CLOSE_PREFIX,
@@ -122,7 +123,7 @@ function buildHmenuActionRow(
   gameId: number,
   page = 1,
 ): ActionRowBuilder<ButtonBuilder> {
-  return new ActionRowBuilder<ButtonBuilder>().addComponents(
+  return buildButtonRow(
     buildActionButton("add", `${GJ_HMENU_ADD_PREFIX}:${ownerId}:${gameId}`, "Add Entry"),
     buildActionButton("edit", `${GJ_HMENU_EDIT_PREFIX}:${ownerId}:${gameId}:${page}`, "Edit Entry"),
     buildActionButton("delete", `${GJ_HMENU_DELETE_PREFIX}:${ownerId}:${gameId}`, "Delete Entry"),
@@ -811,7 +812,7 @@ export class GameJournalCommand {
           new ContainerBuilder().addTextDisplayComponents(
             new TextDisplayBuilder().setContent("No journal entries to edit."),
           ),
-          new ActionRowBuilder<ButtonBuilder>().addComponents(
+          buildButtonRow(
             buildActionButton("add", `${GJ_HMENU_ADD_PREFIX}:${ownerId}:${gameId}`, "Add Entry"),
           ),
         ],
@@ -847,7 +848,7 @@ export class GameJournalCommand {
           new ContainerBuilder().addTextDisplayComponents(
             new TextDisplayBuilder().setContent("No journal entries to delete."),
           ),
-          new ActionRowBuilder<ButtonBuilder>().addComponents(
+          buildButtonRow(
             buildActionButton("add", `${GJ_HMENU_ADD_PREFIX}:${ownerId}:${gameId}`, "Add Entry"),
           ),
         ],
@@ -870,7 +871,7 @@ export class GameJournalCommand {
       ),
     );
     const row = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select);
-    const helpRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+    const helpRow = buildButtonRow(
       new ButtonBuilder()
         .setCustomId(`${NOW_PLAYING_HELP_PREFIX}:journal-delete:${ownerId}`)
         .setLabel("?")
@@ -905,7 +906,7 @@ export class GameJournalCommand {
         ),
       ),
     );
-    const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
+    const row = buildButtonRow(
       buildActionButton(
         "delete",
         `${GJ_HMENU_DELETE_CONFIRM_PREFIX}:yes:${ownerId}:${gameIdRaw}:${entryId}`,
@@ -1018,13 +1019,9 @@ export class GameJournalCommand {
     const segments = parseCustomIdSegments(interaction.customId, 1);
     if (!segments) return;
     const [callerId] = segments;
-    if (interaction.user.id !== callerId) {
-      await safeReply(
-        interaction,
-        buildTextReply("Only the person who opened this journal can close it.", true),
-      );
-      return;
-    }
+    if (await replyIfNotOwner(
+      interaction, callerId, "Only the person who opened this journal can close it.",
+    )) return;
     await safeDeferUpdate(interaction);
     await interaction.message.delete();
   }
