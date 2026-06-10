@@ -39,11 +39,9 @@ export function parseCompletionYearFilter(yearRaw: string): number | "unknown" |
 export async function handleCompletionPageSelect(
   interaction: StringSelectMenuInteraction,
 ): Promise<void> {
-  const parts = interaction.customId.split(":");
-  const ownerId = parts[1];
-  const yearRaw = parts[2];
-  const mode = parts[3] as "list" | "edit" | "delete";
-  const query = parts.slice(4).join(":") || undefined;
+  const [, ownerId, yearRaw, modeRaw, ...queryParts] = interaction.customId.split(":");
+  const mode = modeRaw as "list" | "edit" | "delete";
+  const query = queryParts.join(":") || undefined;
 
   if (mode !== "list" && await replyIfNotOwner(interaction, ownerId)) return;
 
@@ -72,13 +70,9 @@ export async function handleCompletionPageSelect(
  * Handles prev/next button clicks for list, edit, or delete pagination
  */
 export async function handleCompletionPaging(interaction: ButtonInteraction): Promise<void> {
-  const parts = interaction.customId.split(":");
-  const mode = parts[0].split("-")[1] as "list" | "edit" | "delete";
-  const ownerId = parts[1];
-  const yearRaw = parts[2];
-  const pageRaw = parts[3];
-  const dir = parts[4];
-  const query = parts.slice(5).join(":") || undefined;
+  const [prefixPart, ownerId, yearRaw, pageRaw, dir, ...queryParts] = interaction.customId.split(":");
+  const mode = prefixPart.split("-")[1] as "list" | "edit" | "delete";
+  const query = queryParts.join(":") || undefined;
 
   if (mode !== "list" && await replyIfNotOwner(interaction, ownerId)) return;
   const page = Number(pageRaw);
@@ -239,8 +233,8 @@ export async function handleCompletionYearSelect(
 export async function handleCompletionLeaderboardSelect(
   interaction: StringSelectMenuInteraction,
 ): Promise<void> {
-  const parts = interaction.customId.split(":");
-  const query = parts.slice(1).join(":") || undefined;
+  const [, ...queryParts] = interaction.customId.split(":");
+  const query = queryParts.join(":") || undefined;
   const userId = interaction.values[0];
   const ephemeral = interaction.message?.flags?.has(MessageFlags.Ephemeral) ?? true;
   await safeDeferReply(interaction, { flags: ephemeralFlag(ephemeral) });
