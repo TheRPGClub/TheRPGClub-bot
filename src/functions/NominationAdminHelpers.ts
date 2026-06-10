@@ -3,7 +3,6 @@ import {
   ContainerBuilder,
   ModalBuilder,
   StringSelectMenuBuilder,
-  TextDisplayBuilder,
   TextInputStyle,
   type RepliableInteraction,
   type TextBasedChannel,
@@ -17,7 +16,10 @@ import {
   type INominationEntry,
   type NominationKind,
 } from "../classes/Nomination.js";
-import { safeV2TextContent } from "./ComponentsV2Utils.js";
+import {
+  buildTextContainer,
+  safeV2TextContent,
+} from "./ComponentsV2Utils.js";
 import { truncateWithEllipsis } from "../utilities/ValidationUtils.js";
 import { buildTextInputRow } from "./uiComponents.js";
 import {
@@ -196,9 +198,7 @@ function buildDeletionReasonStateId(kind: NominationKind, round: number, userId:
 }
 
 function buildNominationNoticeContainer(content: string): ContainerBuilder {
-  return new ContainerBuilder().addTextDisplayComponents(
-    new TextDisplayBuilder().setContent(safeV2TextContent(content, 3500)),
-  );
+  return buildTextContainer(safeV2TextContent(content, 3500));
 }
 
 function isSendableTextChannel(channel: TextBasedChannel | null): channel is TextBasedChannel & {

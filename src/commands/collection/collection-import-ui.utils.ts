@@ -9,7 +9,10 @@ import Game from "../../classes/Game.js";
 import {
   flattenErrorMessages,
 } from "../imports/import-scaffold.service.js";
-import { safeV2TextContent } from "../../functions/ComponentsV2Utils.js";
+import {
+  buildTextContainer,
+  safeV2TextContent,
+} from "../../functions/ComponentsV2Utils.js";
 import type { ImportCandidate } from "../../functions/ImportCandidateUtils.js";
 import { logError } from "../../utilities/LogUtils.js";
 
@@ -117,9 +120,7 @@ export function buildImportIgdbContainer(params: {
   const igdbSearchUrl =
     `https://www.igdb.com/search?utf8=%E2%9C%93&type=1&q=${encodeURIComponent(params.searchTitle)}`;
   const igdbLink = `[Search IGDB for ${params.searchTitle}](${igdbSearchUrl})`;
-  const container = new ContainerBuilder().addTextDisplayComponents(
-    new TextDisplayBuilder().setContent("### Import Game From IGDB"),
-  );
+  const container = buildTextContainer("### Import Game From IGDB");
   for (const row of params.igdbRows) {
     container.addActionRowComponents(row.toJSON());
   }

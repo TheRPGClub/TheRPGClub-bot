@@ -37,13 +37,11 @@ import {
 import { decodeBase64Url, encodeWithMaxLength } from "../functions/CustomIdUtils.js";
 import {
   buildComponentsV2Flags,
+  buildTextContainer,
   buildTextReply,
   safeV2TextContent,
 } from "../functions/ComponentsV2Utils.js";
-import {
-  ContainerBuilder,
-  TextDisplayBuilder,
-} from "@discordjs/builders";
+import { ContainerBuilder } from "@discordjs/builders";
 import {
   performAutoAcceptImages,
   performAutoAcceptReleaseData,
@@ -279,9 +277,7 @@ export class GameDbAdmin {
       ? `${titleLine}\n\n${groupLines.join("\n")}`
       : `${titleLine}\n\nNo search synonyms found.`;
 
-    const container = new ContainerBuilder().addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(safeV2TextContent(content, 3500)),
-    );
+    const container = buildTextContainer(safeV2TextContent(content, 3500));
 
     const prevDisabled = safePage === 0;
     const nextDisabled = safePage >= totalPages - 1;

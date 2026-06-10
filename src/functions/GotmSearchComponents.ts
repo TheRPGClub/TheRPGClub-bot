@@ -6,7 +6,10 @@ import {
   ThumbnailBuilder,
 } from "@discordjs/builders";
 import Game from "../classes/Game.js";
-import { safeV2TextContent } from "./ComponentsV2Utils.js";
+import {
+  buildTextContainer,
+  safeV2TextContent,
+} from "./ComponentsV2Utils.js";
 
 const ANNOUNCEMENTS_CHANNEL_ID: string | undefined = process.env.ANNOUNCEMENTS_CHANNEL_ID;
 const MAX_GAMES_PER_CONTAINER = 10;
@@ -87,9 +90,7 @@ export async function buildGotmSearchMessages(
   const chunks = chunkCards(cards, maxGamesPerContainer);
 
   if (!chunks.length) {
-    const container = new ContainerBuilder().addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(safeV2TextContent(`## ${options.title}`, 250)),
-    );
+    const container = buildTextContainer(safeV2TextContent(`## ${options.title}`, 250));
     if (options.introText) {
       container.addTextDisplayComponents(
         new TextDisplayBuilder().setContent(safeV2TextContent(options.introText, 1000)),

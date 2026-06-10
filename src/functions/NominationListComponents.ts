@@ -17,7 +17,10 @@ import crypto from "node:crypto";
 import Member from "../classes/Member.js";
 import type { INominationEntry } from "../classes/Nomination.js";
 import Game from "../classes/Game.js";
-import { safeV2TextContent } from "./ComponentsV2Utils.js";
+import {
+  buildTextContainer,
+  safeV2TextContent,
+} from "./ComponentsV2Utils.js";
 import { buildActionButton } from "./uiComponents.js";
 import { composeVoteImage, type VoteImageType } from "../services/collageGenerator.js";
 import { getUserEmojiString } from "../services/UserEmojiService.js";
@@ -81,11 +84,9 @@ async function buildNominationContainers(
 ): Promise<Array<ContainerBuilder | ActionRowBuilder<StringSelectMenuBuilder>>> {
   const nominatorDisplayNames = await buildNominatorDisplayNames(nominations);
   const containers: ContainerBuilder[] = [];
-  const headerContainer = new ContainerBuilder().addTextDisplayComponents(
-    new TextDisplayBuilder().setContent(
+  const headerContainer = buildTextContainer(
       safeV2TextContent(buildHeaderContent(kindLabel, window), 250),
-    ),
-  );
+    );
   containers.push(headerContainer);
   let container = new ContainerBuilder();
   void altLayout;

@@ -1,6 +1,5 @@
 import type { CommandInteraction, Attachment } from "discord.js";
 import { channelMention } from "discord.js";
-import { ContainerBuilder, TextDisplayBuilder } from "@discordjs/builders";
 import type { CompletionatorAction } from "./completion.types.js";
 import { ephemeralFlag, safeDeferReply, safeReply } from "../../functions/InteractionUtils.js";
 import { fetchCsv, parseCompletionatorCsv } from "./completionator-parser.service.js";
@@ -16,6 +15,7 @@ import { CompletionatorWorkflowService } from "./completionator-workflow.service
 import { BOT_DEV_CHANNEL_ID } from "../../config/channels.js";
 import {
   buildComponentsV2Flags,
+  buildTextContainer,
   buildTextReply,
   safeV2TextContent,
 } from "../../functions/ComponentsV2Utils.js";
@@ -97,18 +97,16 @@ export async function handleCompletionatorImport(
     }
 
     const stats = await countImportItems(session.importId);
-    const statusContainer = new ContainerBuilder().addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(
-        safeV2TextContent(
-          `## Completionator Import #${session.importId}\n` +
-          `Status: ${session.status}\n\n` +
-          `**Pending:** ${stats.pending} | **Imported:** ${stats.imported} | ` +
-          `**Updated:** ${stats.updated} | **Skipped:** ${stats.skipped} | ` +
-          `**Errors:** ${stats.error}`,
-          1000,
+    const statusContainer = buildTextContainer(
+    safeV2TextContent(
+      `## Completionator Import #${session.importId}\n` +
+      `Status: ${session.status}\n\n` +
+      `**Pending:** ${stats.pending} | **Imported:** ${stats.imported} | ` +
+      `**Updated:** ${stats.updated} | **Skipped:** ${stats.skipped} | ` +
+      `**Errors:** ${stats.error}`,
+      1000,
         ),
-      ),
-    );
+      );
 
     await safeReply(interaction, {
       components: [statusContainer],

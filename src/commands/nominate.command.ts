@@ -6,9 +6,7 @@ import type {
 } from "discord.js";
 import {
   ApplicationCommandOptionType,
-  ContainerBuilder,
   MessageFlags,
-  TextDisplayBuilder,
   userMention,
 } from "discord.js";
 import { Discord, SelectMenuComponent, Slash, SlashChoice, SlashOption } from "discordx";
@@ -20,7 +18,10 @@ import {
 } from "../classes/Nomination.js";
 import Game, { type IGame } from "../classes/Game.js";
 import { buildNominationListPayload } from "../functions/NominationListComponents.js";
-import { buildComponentsV2Flags } from "../functions/ComponentsV2Utils.js";
+import {
+  buildComponentsV2Flags,
+  buildTextContainer,
+} from "../functions/ComponentsV2Utils.js";
 import {
   formatGameTitleWithYear,
   parseTitleWithYear,
@@ -123,11 +124,9 @@ async function announceNominationList(
       return;
     }
 
-    const nominationNotice = new ContainerBuilder().addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(
+    const nominationNotice = buildTextContainer(
         safeV2TextContent(`${userMention(nominatorUserId)} Nominated "${nominatedTitle}"!`, 1000),
-      ),
-    );
+      );
 
     await textChannel.send({
       components: [nominationNotice, ...payload.components],

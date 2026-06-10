@@ -7,12 +7,16 @@ import {
   type ModalSubmitInteraction,
   type User,
 } from "discord.js";
-import { ContainerBuilder, TextDisplayBuilder } from "@discordjs/builders";
+import { ContainerBuilder } from "@discordjs/builders";
 import Member, { type ICompletionRecord } from "../../classes/Member.js";
 import Game from "../../classes/Game.js";
 import { safeDeferUpdate, safeReply } from "../../functions/InteractionUtils.js";
 import { formatPlatformDisplayName } from "../../functions/PlatformDisplay.js";
-import { buildComponentsV2Flags, safeV2TextContent } from "../../functions/ComponentsV2Utils.js";
+import {
+  buildComponentsV2Flags,
+  buildTextContainer,
+  safeV2TextContent,
+} from "../../functions/ComponentsV2Utils.js";
 import { decodeBase64Url, encodeWithMaxLength } from "../../functions/CustomIdUtils.js";
 import { parseCustomIdSegments } from "../../utilities/CustomIdUtils.js";
 import { renderUsernameWithEmoji } from "../../services/UserEmojiService.js";
@@ -344,9 +348,7 @@ function pushChunked(containers: ContainerBuilder[], lines: string[]): void {
     const next = buffer ? `${buffer}\n${line}` : line;
     if (next.length > CHUNK_LIMIT) {
       containers.push(
-        new ContainerBuilder().addTextDisplayComponents(
-          new TextDisplayBuilder().setContent(safeV2TextContent(buffer, CHUNK_LIMIT)),
-        ),
+        buildTextContainer(safeV2TextContent(buffer, CHUNK_LIMIT)),
       );
       buffer = line;
     } else {
@@ -355,9 +357,7 @@ function pushChunked(containers: ContainerBuilder[], lines: string[]): void {
   }
   if (buffer) {
     containers.push(
-      new ContainerBuilder().addTextDisplayComponents(
-        new TextDisplayBuilder().setContent(safeV2TextContent(buffer, CHUNK_LIMIT)),
-      ),
+      buildTextContainer(safeV2TextContent(buffer, CHUNK_LIMIT)),
     );
   }
 }
@@ -397,9 +397,7 @@ export async function renderCommonCompletionPage(
   if (!sorted.length) {
     await safeReply(interaction, {
       components: [
-        new ContainerBuilder().addTextDisplayComponents(
-          new TextDisplayBuilder().setContent("No shared completions matched those filters."),
-        ),
+        buildTextContainer("No shared completions matched those filters."),
       ],
       flags: buildV2Flags(ephemeral),
     });
@@ -420,11 +418,9 @@ export async function renderCommonCompletionPage(
   const leftDisplay = renderUsernameWithEmoji(state.leftId, leftLabel);
   const rightDisplay = renderUsernameWithEmoji(state.rightId, rightLabel);
   containers.push(
-    new ContainerBuilder().addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(
+    buildTextContainer(
         safeV2TextContent(`## Shared Completions\n### ${leftDisplay} & ${rightDisplay}`, MAX_CONTAINER_TEXT),
       ),
-    ),
   );
 
   const lines = pageRows.map((row, index) => `${offset + index + 1}. **${row.title}**`);
@@ -447,9 +443,7 @@ export async function renderCommonCompletionPage(
     footerLines.push(`-# ${total} game completions in common.`);
   }
   containers.push(
-    new ContainerBuilder().addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(safeV2TextContent(footerLines.join("\n"), MAX_SECTION_TEXT)),
-    ),
+    buildTextContainer(safeV2TextContent(footerLines.join("\n"), MAX_SECTION_TEXT)),
   );
 
   const showPrev = totalPages > 1 && safePage > 0;

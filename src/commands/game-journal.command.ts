@@ -14,10 +14,9 @@ import {
   User,
 } from "discord.js";
 import {
-  ContainerBuilder,
-  TextDisplayBuilder,
-  ModalBuilder as ComponentsModalBuilder,
   ActionRowBuilder as ComponentsActionRowBuilder,
+  ContainerBuilder,
+  ModalBuilder as ComponentsModalBuilder,
   TextInputBuilder as ComponentsTextInputBuilder,
 } from "@discordjs/builders";
 import { TextInputStyle as ApiTextInputStyle } from "discord-api-types/v10";
@@ -51,6 +50,7 @@ import { renderUsernameWithEmoji } from "../services/UserEmojiService.js";
 import { buildJournalView } from "../functions/journalView.js";
 import {
   buildComponentsV2Flags,
+  buildTextContainer,
   buildTextReply,
   safeV2TextContent,
 } from "../functions/ComponentsV2Utils.js";
@@ -190,9 +190,7 @@ function buildListComponents(
   const pageInfo = totalPages > 1 ? ` • Page ${page + 1}/${totalPages}` : "";
   lines.push(`-# ${entries.length} ${gameLabel(entries.length)}${pageInfo}`);
 
-  const listContainer = new ContainerBuilder().addTextDisplayComponents(
-    new TextDisplayBuilder().setContent(safeV2TextContent(lines.join("\n"), 3500)),
-  );
+  const listContainer = buildTextContainer(safeV2TextContent(lines.join("\n"), 3500));
 
   return [userHeader, listContainer];
 }
@@ -278,9 +276,7 @@ function buildAllComponents(
     }),
   );
   return [
-    new ContainerBuilder().addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(safeV2TextContent(lines.join("\n"), 3500)),
-    ),
+    buildTextContainer(safeV2TextContent(lines.join("\n"), 3500)),
   ];
 }
 
@@ -361,9 +357,7 @@ function buildSearchResultComponents(
 
   const headerContainer = targetUser
     ? buildUserHeaderContainer(targetUser.id, targetUser.displayName, headerTitle)
-    : new ContainerBuilder().addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(safeV2TextContent(`## ${headerTitle}`, 250)),
-    );
+    : buildTextContainer(safeV2TextContent(`## ${headerTitle}`, 250));
 
   const result = results[0];
   const resultLines: string[] = [];
@@ -388,9 +382,7 @@ function buildSearchResultComponents(
   const resultInfo = total > 0 ? `-# Result ${page + 1} of ${total}` : `-# 0 ${resultCountLabel}`;
   resultLines.push(resultInfo);
 
-  const resultsContainer = new ContainerBuilder().addTextDisplayComponents(
-    new TextDisplayBuilder().setContent(safeV2TextContent(resultLines.join("\n\n"), 3500)),
-  );
+  const resultsContainer = buildTextContainer(safeV2TextContent(resultLines.join("\n\n"), 3500));
 
   return [headerContainer, resultsContainer];
 }
@@ -773,9 +765,7 @@ export class GameJournalCommand {
     if (await replyIfNotOwner(interaction, ownerId)) return;
     const gameId = Number(gameIdRaw);
     const page = Number(pageRaw);
-    const container = new ContainerBuilder().addTextDisplayComponents(
-      new TextDisplayBuilder().setContent("## Manage Journal"),
-    );
+    const container = buildTextContainer("## Manage Journal");
     const row = buildHmenuActionRow(ownerId, gameId, page);
     await gjHmenu.show(interaction, ownerId, [container, row]);
   }
@@ -806,9 +796,7 @@ export class GameJournalCommand {
     if (!entries.length) {
       await safeUpdate(interaction, {
         components: [
-          new ContainerBuilder().addTextDisplayComponents(
-            new TextDisplayBuilder().setContent("No journal entries to edit."),
-          ),
+          buildTextContainer("No journal entries to edit."),
           buildButtonRow(
             buildActionButton("add", `${GJ_HMENU_ADD_PREFIX}:${ownerId}:${gameId}`, "Add Entry"),
           ),
@@ -842,9 +830,7 @@ export class GameJournalCommand {
     if (!entries.length) {
       await safeUpdate(interaction, {
         components: [
-          new ContainerBuilder().addTextDisplayComponents(
-            new TextDisplayBuilder().setContent("No journal entries to delete."),
-          ),
+          buildTextContainer("No journal entries to delete."),
           buildButtonRow(
             buildActionButton("add", `${GJ_HMENU_ADD_PREFIX}:${ownerId}:${gameId}`, "Add Entry"),
           ),
@@ -862,11 +848,9 @@ export class GameJournalCommand {
       .setCustomId(`${GJ_HMENU_DELETE_SELECT_PREFIX}:${ownerId}:${gameId}`)
       .setPlaceholder("Choose an entry to delete")
       .addOptions(options);
-    const container = new ContainerBuilder().addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(
-        "## Delete Journal Entry\nSelect an entry to delete.",
-      ),
-    );
+    const container = buildTextContainer(
+    "## Delete Journal Entry\nSelect an entry to delete.",
+      );
     const row = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select);
     const helpRow = buildButtonRow(
       buildActionButton({ customId: `${NOW_PLAYING_HELP_PREFIX}:journal-delete:${ownerId}`, label: "?", style: ButtonStyle.Secondary }),
@@ -892,14 +876,12 @@ export class GameJournalCommand {
       return;
     }
     const entryTitle = entry.title?.trim() ? entry.title.trim() : `Entry #${entry.entryNumber}`;
-    const container = new ContainerBuilder().addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(
-        safeV2TextContent(
-          `## Confirm Delete\nDelete **${entryTitle}** from ${formatTableDate(entry.createdAt)}?`,
-          1000,
+    const container = buildTextContainer(
+    safeV2TextContent(
+      `## Confirm Delete\nDelete **${entryTitle}** from ${formatTableDate(entry.createdAt)}?`,
+      1000,
         ),
-      ),
-    );
+      );
     const row = buildButtonRow(
       buildActionButton(
         "delete",
@@ -931,9 +913,7 @@ export class GameJournalCommand {
       }
     }
     const gameId = Number(gameIdRaw);
-    const container = new ContainerBuilder().addTextDisplayComponents(
-      new TextDisplayBuilder().setContent("## Manage Journal"),
-    );
+    const container = buildTextContainer("## Manage Journal");
     const row = buildHmenuActionRow(ownerId, gameId);
     await safeUpdate(interaction, {
       components: [container, row],
@@ -961,9 +941,7 @@ export class GameJournalCommand {
     const gameId = Number(gameIdRaw);
     await Member.addGameJournalEntry({ userId: ownerId, gameId, title: title || null, body });
     await Member.upsertGameJournalPreference(ownerId, gameId, true);
-    const container = new ContainerBuilder().addTextDisplayComponents(
-      new TextDisplayBuilder().setContent("## Manage Journal"),
-    );
+    const container = buildTextContainer("## Manage Journal");
     const row = buildHmenuActionRow(ownerId, gameId);
     await safeUpdate(interaction, {
       components: [container, row],
@@ -994,9 +972,7 @@ export class GameJournalCommand {
       { preserveNewlines: true, maxLength: 2000 },
     );
     await Member.updateGameJournalEntry({ userId: ownerId, entryId, title: title || null, body });
-    const container = new ContainerBuilder().addTextDisplayComponents(
-      new TextDisplayBuilder().setContent("## Manage Journal"),
-    );
+    const container = buildTextContainer("## Manage Journal");
     const row = buildHmenuActionRow(ownerId, gameId);
     await safeUpdate(interaction, {
       components: [container, row],

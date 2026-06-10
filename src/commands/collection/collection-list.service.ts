@@ -4,15 +4,15 @@ import {
   ButtonInteraction,
   ButtonStyle,
 } from "discord.js";
-import {
-  ContainerBuilder,
-  TextDisplayBuilder,
-} from "@discordjs/builders";
+import { ContainerBuilder } from "@discordjs/builders";
 import UserGameCollection, {
   type CollectionOwnershipType,
 } from "../../classes/UserGameCollection.js";
 import { flattenErrorMessages } from "../imports/import-scaffold.service.js";
-import { safeV2TextContent } from "../../functions/ComponentsV2Utils.js";
+import {
+  buildTextContainer,
+  safeV2TextContent,
+} from "../../functions/ComponentsV2Utils.js";
 import { safeDeferUpdate } from "../../functions/InteractionUtils.js";
 import {
   buildActionButton,
@@ -500,9 +500,7 @@ async function buildCollectionListResponse(params: {
   );
 
   components.push(
-    new ContainerBuilder().addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(safeV2TextContent(listText, 3500)),
-    ),
+    buildTextContainer(safeV2TextContent(listText, 3500)),
   );
 
   const footerParts = [`Page ${safePage + 1}/${pageCount}`, `${total} total entries`];
@@ -510,9 +508,7 @@ async function buildCollectionListResponse(params: {
     footerParts.push(`Filters: ${filtersText}`);
   }
   components.push(
-    new ContainerBuilder().addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(safeV2TextContent(`-# ${footerParts.join(" | ")}`, 1000)),
-    ),
+    buildTextContainer(safeV2TextContent(`-# ${footerParts.join(" | ")}`, 1000)),
   );
 
   const row = buildDisabledPrevNextRowWithIds(

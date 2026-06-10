@@ -16,10 +16,7 @@ import {
   SlashGroup,
   SlashOption,
 } from "discordx";
-import {
-  ContainerBuilder,
-  TextDisplayBuilder,
-} from "@discordjs/builders";
+import { ContainerBuilder } from "@discordjs/builders";
 import {
   safeDeferReply,
   safeDeferUpdate,
@@ -28,7 +25,11 @@ import {
   sanitizeUserInput,
   replyIfNotOwner,
 } from "../../functions/InteractionUtils.js";
-import { buildTextReply, safeV2TextContent } from "../../functions/ComponentsV2Utils.js";
+import {
+  buildTextContainer,
+  buildTextReply,
+  safeV2TextContent,
+} from "../../functions/ComponentsV2Utils.js";
 import { shouldRenderPrevNextButtons } from "../../functions/PaginationUtils.js";
 import Game from "../../classes/Game.js";
 import {
@@ -219,9 +220,7 @@ function buildSearchResponse(
     const content = trimTextDisplayContent(
       `## ${title}\n\n${listText}\n\n*${results.length} results total*${filterNote}`,
     );
-    const container = new ContainerBuilder().addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(safeV2TextContent(content, MAX_CONTAINER_TEXT)),
-    );
+    const container = buildTextContainer(safeV2TextContent(content, MAX_CONTAINER_TEXT));
     components.push(container);
   }
   components.push(selectRow);

@@ -82,7 +82,10 @@ import {
   getUserEmojiString,
   renderUsernameWithEmoji,
 } from "../services/UserEmojiService.js";
-import { safeV2TextContent } from "./ComponentsV2Utils.js";
+import {
+  buildTextContainer,
+  safeV2TextContent,
+} from "./ComponentsV2Utils.js";
 import { formatTableDate } from "./DateFormatUtils.js";
 import {
   DISCORD_AUTOCOMPLETE_DESC_MAX,
@@ -144,9 +147,7 @@ export function buildJournalSelectRow(
 }
 
 export function buildTitleHeaderContainer(title: string): ContainerBuilder {
-  return new ContainerBuilder().addTextDisplayComponents(
-    new TextDisplayBuilder().setContent(safeV2TextContent(`## ${title}`, 250)),
-  );
+  return buildTextContainer(safeV2TextContent(`## ${title}`, 250));
 }
 
 export function buildUserHeaderContainer(
@@ -178,7 +179,5 @@ export function buildUserHeaderContainer(
   }
 
   const userText = renderUsernameWithEmoji(userId, displayName);
-  return new ContainerBuilder().addTextDisplayComponents(
-    new TextDisplayBuilder().setContent(safeV2TextContent(userText, 500)),
-  );
+  return buildTextContainer(safeV2TextContent(userText, 500));
 }

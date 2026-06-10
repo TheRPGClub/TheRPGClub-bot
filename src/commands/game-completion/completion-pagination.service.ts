@@ -4,7 +4,6 @@ import {
   type StringSelectMenuInteraction,
 } from "discord.js";
 import { renderCompletionPage, renderSelectionPage } from "./completion-list.service.js";
-import { ContainerBuilder, TextDisplayBuilder } from "@discordjs/builders";
 import Member from "../../classes/Member.js";
 import { buildJournalView } from "../../functions/journalView.js";
 import {
@@ -17,6 +16,7 @@ import {
 } from "../../functions/InteractionUtils.js";
 import {
   buildComponentsV2Flags,
+  buildTextContainer,
   buildTextReply,
   safeV2TextContent,
 } from "../../functions/ComponentsV2Utils.js";
@@ -192,9 +192,7 @@ export async function handleCompletionListHeader(
   }
   await safeReply(interaction, {
     components: [
-      new ContainerBuilder().addTextDisplayComponents(
-        new TextDisplayBuilder().setContent(safeV2TextContent(COMPLETION_HELP_TEXT, 1000)),
-      ),
+      buildTextContainer(safeV2TextContent(COMPLETION_HELP_TEXT, 1000)),
     ],
     flags: buildComponentsV2Flags(true),
   });

@@ -18,7 +18,7 @@ import {
   SlashGroup,
 } from "discordx";
 import { ModalBuilder } from "discord.js";
-import { ContainerBuilder, TextDisplayBuilder } from "@discordjs/builders";
+import { ContainerBuilder } from "@discordjs/builders";
 import {
   getModalField,
   replyIfNotOwner,
@@ -26,7 +26,11 @@ import {
   safeReply,
   safeUpdate,
 } from "../../functions/InteractionUtils.js";
-import { buildTextReply, safeV2TextContent } from "../../functions/ComponentsV2Utils.js";
+import {
+  buildTextContainer,
+  buildTextReply,
+  safeV2TextContent,
+} from "../../functions/ComponentsV2Utils.js";
 import { assertCustomIdSegments } from "../../utilities/CustomIdUtils.js";
 import {
   notifyUnknownCompletionPlatform,
@@ -125,9 +129,7 @@ function buildCompletionWizardContainer(
     lines.push("", `**Missing:** ${missingSelections.join(", ")}`);
   }
   const content = trimTextDisplayContent(lines.join("\n"));
-  return new ContainerBuilder().addTextDisplayComponents(
-    new TextDisplayBuilder().setContent(safeV2TextContent(content, 3500)),
-  );
+  return buildTextContainer(safeV2TextContent(content, 3500));
 }
 
 function buildCompletionPlatformOptions(

@@ -5,10 +5,6 @@ import {
   StringSelectMenuInteraction,
 } from "discord.js";
 import {
-  ContainerBuilder,
-  TextDisplayBuilder,
-} from "@discordjs/builders";
-import {
   Discord,
   Slash,
   SlashGroup,
@@ -24,7 +20,11 @@ import {
 import { igdbService, type IGDBGameDetails } from "../../services/IGDB/IgdbService.js";
 import { createIgdbSession } from "../../services/IGDB/IgdbSelectService.js";
 import Game, { type IGame } from "../../classes/Game.js";
-import { buildTextReply, safeV2TextContent } from "../../functions/ComponentsV2Utils.js";
+import {
+  buildTextContainer,
+  buildTextReply,
+  safeV2TextContent,
+} from "../../functions/ComponentsV2Utils.js";
 import {
   autocompleteGameDbViewTitle,
   buildComponentsV2Flags,
@@ -250,9 +250,7 @@ export async function handleNoResults(
       contentParts.push(`**Existing GameDB matches**\n${existingText}`);
     }
     const content = trimTextDisplayContent(contentParts.join("\n\n"));
-    const container = new ContainerBuilder().addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(safeV2TextContent(content, 3500)),
-    );
+    const container = buildTextContainer(safeV2TextContent(content, 3500));
 
     await safeReply(interaction, {
       components: [container, ...components],
@@ -469,9 +467,7 @@ export class GameDbAddCommand {
       const content = trimTextDisplayContent(
         `## IGDB Results for "${title}"\nFound ${results.length} results. Please select one:`,
       );
-      const container = new ContainerBuilder().addTextDisplayComponents(
-        new TextDisplayBuilder().setContent(safeV2TextContent(content, 3500)),
-      );
+      const container = buildTextContainer(safeV2TextContent(content, 3500));
       await safeReply(interaction, {
         components: [container, ...components],
         flags: buildComponentsV2Flags(false),

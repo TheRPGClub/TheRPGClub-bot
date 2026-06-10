@@ -45,6 +45,7 @@ import { BOT_DEV_CHANNEL_ID, GAMEDB_UPDATES_CHANNEL_ID } from "../config/channel
 import { BOT_DEV_PING_USER_ID } from "../config/users.js";
 import {
   buildComponentsV2Flags,
+  buildTextContainer,
   buildTextReply,
   safeV2TextContent,
 } from "../functions/ComponentsV2Utils.js";
@@ -696,11 +697,9 @@ export class SuggestionCommand {
 
     const session = await loadSuggestionReviewSession(parsed.sessionId, parsed.reviewerId);
     if (!session) {
-      const container = new ContainerBuilder().addTextDisplayComponents(
-        new TextDisplayBuilder().setContent(
+      const container = buildTextContainer(
           "This suggestion review has expired. Start again from /todo.",
-        ),
-      );
+        );
       await safeUpdate(interaction, {
         components: [container],
         flags: buildComponentsV2Flags(true),
@@ -710,9 +709,7 @@ export class SuggestionCommand {
 
     if (parsed.action === "cancel") {
       await deleteSuggestionReviewSession(parsed.sessionId);
-      const container = new ContainerBuilder().addTextDisplayComponents(
-        new TextDisplayBuilder().setContent("Suggestion review closed."),
-      );
+      const container = buildTextContainer("Suggestion review closed.");
       await safeUpdate(interaction, {
         components: [container],
         flags: buildComponentsV2Flags(true),
