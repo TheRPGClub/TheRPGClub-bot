@@ -12,7 +12,10 @@ import { buildPageFooterText } from "../functions/PaginationUtils.js";
 import { safeIgnore } from "../utilities/AsyncUtils.js";
 import { logError, logWarn } from "../utilities/LogUtils.js";
 import { buildActionButton, buildButtonRow } from "../functions/uiComponents.js";
-import { buildTitledContainer, buildComponentsV2EditFlags } from "../functions/ComponentsV2Utils.js";
+import {
+  buildTitledContainer,
+  buildComponentsV2EditFlags,
+} from "../functions/ComponentsV2Utils.js";
 import { COMPONENTS_V2_FLAG } from "../config/flags.js";
 const GIVEAWAY_HUB_SCAN_LIMIT = 50;
 
@@ -167,14 +170,12 @@ async function buildGiveawayHubPayload(page: number): Promise<GiveawayHubPayload
   if (!keys.length) {
     return {
       containers: [buildTitledContainer("Game Key Giveaway", "There are no available game keys right now.")],
-      // eslint-disable-next-line local/dynamic-components-require-chunking
       actionRows: buildGiveawayHubComponents(false),
     };
   }
 
   return {
     containers: buildGiveawayHubContainers(keys),
-    // eslint-disable-next-line local/dynamic-components-require-chunking
     actionRows: buildGiveawayHubComponents(true),
   };
 }
@@ -241,7 +242,7 @@ async function updateGiveawayHubMessages(
       flags: options?.suppressNotifications
         ? COMPONENTS_V2_FLAG | MessageFlags.SuppressNotifications
         : COMPONENTS_V2_FLAG,
-    }).catch((err) => {
+    }).catch((err: unknown) => {
       logError("GiveawayHubService.send", err);
     });
   }

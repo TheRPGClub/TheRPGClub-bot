@@ -118,9 +118,10 @@ export async function handleAddGotm(interaction: CommandInteraction): Promise<vo
       interaction.client as any,
     );
 
+    const createReply = buildTextReply(`Created GOTM round ${nextRound}.`, false);
     await safeReply(interaction, {
-      ...buildTextReply(`Created GOTM round ${nextRound}.`, false),
-      embeds: [embedAssets.embed],
+      ...createReply,
+      components: [...createReply.components, embedAssets.container],
       files: embedAssets.files?.length ? embedAssets.files : undefined,
     });
   } catch (err: any) {
@@ -170,9 +171,10 @@ export async function handleEditGotm(
     interaction.client as any,
   );
 
+  const editReply = buildTextReply(`Editing GOTM round ${roundNumber}.`, false);
   await safeReply(interaction, {
-    ...buildTextReply(`Editing GOTM round ${roundNumber}.`, false),
-    embeds: [embedAssets.embed],
+    ...editReply,
+    components: [...editReply.components, embedAssets.container],
     files: embedAssets.files?.length ? embedAssets.files : undefined,
   });
 
@@ -280,9 +282,10 @@ export async function handleEditGotm(
       interaction.client as any,
     );
 
+    const updatedReply = buildTextReply(`GOTM round ${roundNumber} updated successfully.`, false);
     await safeReply(interaction, {
-      ...buildTextReply(`GOTM round ${roundNumber} updated successfully.`, false),
-      embeds: [updatedAssets.embed],
+      ...updatedReply,
+      components: [...updatedReply.components, updatedAssets.container],
       files: updatedAssets.files?.length ? updatedAssets.files : undefined,
     });
   } catch (err: any) {

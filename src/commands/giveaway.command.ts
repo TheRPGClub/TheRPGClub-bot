@@ -29,6 +29,7 @@ import {
 } from "../functions/InteractionUtils.js";
 import {
   buildTextReply,
+  buildTextContainer,
   buildTitledContainer,
   buildComponentsV2Flags,
   buildComponentsV2EditFlags,
@@ -426,7 +427,6 @@ async function buildKeyListPayload(
     keys,
     isPublic,
   );
-  // eslint-disable-next-line local/dynamic-components-require-chunking
   return { components: [container, ...actionRows], flags: buildComponentsV2EditFlags() };
 }
 
@@ -598,12 +598,11 @@ export class GiveawayCommand {
     }
 
     await safeReply(interaction, {
-      content: "Pick a key to claim:",
-      components: buildKeySelectMenus(
-        `giveaway-hub-claim-select:${interaction.user.id}`,
-        keys,
-      ),
-      flags: MessageFlags.Ephemeral,
+      components: [
+        buildTextContainer("Pick a key to claim:"),
+        ...buildKeySelectMenus(`giveaway-hub-claim-select:${interaction.user.id}`, keys),
+      ],
+      flags: buildComponentsV2Flags(true),
     });
   }
    
@@ -618,16 +617,19 @@ export class GiveawayCommand {
     const donatedKeys = await listKeysByDonor(interaction.user.id);
     const inventory = buildDonorInventorySummary(donatedKeys);
     await safeReply(interaction, {
-      content:
-        [
-          "Your donated keys:",
-          inventory,
-          "",
-          "Notify you when your donated keys are claimed? " +
-            `Current setting: **${formatDonorNotifyStatus(enabled)}**.`,
-        ].join("\n"),
-      components: [buildDonorSettingsRow(interaction.user.id, enabled)],
-      flags: MessageFlags.Ephemeral,
+      components: [
+        buildTextContainer(
+          [
+            "Your donated keys:",
+            inventory,
+            "",
+            "Notify you when your donated keys are claimed? " +
+              `Current setting: **${formatDonorNotifyStatus(enabled)}**.`,
+          ].join("\n"),
+        ),
+        buildDonorSettingsRow(interaction.user.id, enabled),
+      ],
+      flags: buildComponentsV2Flags(true),
     });
   }
    

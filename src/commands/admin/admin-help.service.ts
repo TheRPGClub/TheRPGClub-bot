@@ -141,7 +141,6 @@ export function buildAdminHelpResponse(
   const actionRows = buildAdminHelpButtons(activeTopicId);
 
   return {
-    // eslint-disable-next-line local/dynamic-components-require-chunking
     components: [container, ...actionRows],
     flags: buildComponentsV2EditFlags(),
   };

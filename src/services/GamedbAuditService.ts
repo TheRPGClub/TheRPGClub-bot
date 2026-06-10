@@ -1,4 +1,3 @@
-import { EmbedBuilder } from "discord.js";
 import type { Client, TextBasedChannel } from "discord.js";
 import axios from "axios";
 import Game from "../classes/Game.js";
@@ -7,6 +6,11 @@ import { COLOR_PRIMARY, COLOR_SUCCESS } from "../config/colors.js";
 import { sleep, AUDIT_STEP_DELAY_MS } from "../utilities/DelayUtils.js";
 import { safeIgnore } from "../utilities/AsyncUtils.js";
 import { logError } from "../utilities/LogUtils.js";
+import {
+  buildTitledContainer,
+  buildComponentsV2EditFlags,
+} from "../functions/ComponentsV2Utils.js";
+import { COMPONENTS_V2_FLAG } from "../config/flags.js";
 
 export type AutoAcceptResult = {
   updated: number;
@@ -511,55 +515,60 @@ export async function runAutoAcceptImagesAudit(
     return;
   }
 
-  let currentEmbed = new EmbedBuilder()
-    .setTitle("GameDB Auto Accept Images")
-    .setDescription("Starting auto accept run...")
-    .setColor(COLOR_PRIMARY);
-
-  let message = await (channel as any).send({ embeds: [currentEmbed] });
+  const AUDIT_TITLE = "GameDB Auto Accept Images";
+  let message = await (channel as any).send({
+    components: [buildTitledContainer(AUDIT_TITLE, "Starting auto accept run...", { color: COLOR_PRIMARY })],
+    flags: COMPONENTS_V2_FLAG,
+  });
   let currentChunk = 0;
   let logLines: string[] = [];
+  let lastContent = "Processing...";
 
-  const updateEmbed = async (line?: string, processed?: number): Promise<void> => {
+  const updateContainer = async (line?: string, processed?: number): Promise<void> => {
     if (processed && processed > 0) {
       const chunk = Math.floor((processed - 1) / 50);
       if (chunk !== currentChunk) {
         currentChunk = chunk;
-        currentEmbed = new EmbedBuilder()
-          .setTitle("GameDB Auto Accept Images")
-          .setDescription("Processing...")
-          .setColor(COLOR_PRIMARY);
-        message = await (channel as any).send({ embeds: [currentEmbed] });
+        message = await (channel as any).send({
+          components: [buildTitledContainer(AUDIT_TITLE, "Processing...", { color: COLOR_PRIMARY })],
+          flags: COMPONENTS_V2_FLAG,
+        });
         logLines = [];
       }
     }
 
-    if (line) {
-      logLines.push(line);
-    }
+    if (line) logLines.push(line);
     const trimmed = trimLogLines(logLines);
-    const content = trimmed.length ? trimmed.join("\n") : "Processing...";
-    currentEmbed.setDescription(content);
-    safeIgnore(message.edit({ embeds: [currentEmbed] }));
+    lastContent = trimmed.length ? trimmed.join("\n") : "Processing...";
+    safeIgnore(message.edit({
+      components: [buildTitledContainer(AUDIT_TITLE, lastContent, { color: COLOR_PRIMARY })],
+      flags: buildComponentsV2EditFlags(),
+    }));
   };
 
   const { updated, skipped, failed, logs } = await performAutoAcceptImages(
-    updateEmbed, undefined, titleWords,
+    updateContainer, undefined, titleWords,
   );
   if (!logs.length) {
-    currentEmbed
-      .setDescription("No games found with missing images and valid IGDB IDs.")
-      .setColor(COLOR_SUCCESS);
-    safeIgnore(message.edit({ embeds: [currentEmbed] }));
+    safeIgnore(message.edit({
+      components: [buildTitledContainer(
+        AUDIT_TITLE,
+        "No games found with missing images and valid IGDB IDs.",
+        { color: COLOR_SUCCESS },
+      )],
+      flags: buildComponentsV2EditFlags(),
+    }));
     return;
   }
 
   const summary =
     `\n**Run Complete**\n✅ Updated: ${updated}\n` +
     `⏭️ Skipped: ${skipped}\n❌ Failed: ${failed}`;
-  await updateEmbed(summary);
-  currentEmbed.setColor(COLOR_SUCCESS);
-  safeIgnore(message.edit({ embeds: [currentEmbed] }));
+  await updateContainer(summary);
+  safeIgnore(message.edit({
+    components: [buildTitledContainer(AUDIT_TITLE, lastContent, { color: COLOR_SUCCESS })],
+    flags: buildComponentsV2EditFlags(),
+  }));
 }
 
 export function startGamedbAutoImageAuditService(

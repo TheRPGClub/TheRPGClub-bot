@@ -298,7 +298,11 @@ export async function handleNextRoundSetup(
 
   const replyResult = await safeReply(
     interaction,
-    { components: [initialContainer], flags: buildComponentsV2Flags(false), withResponse: true } as any,
+    {
+      components: [initialContainer],
+      flags: buildComponentsV2Flags(false),
+      withResponse: true,
+    } as any,
   );
   const message = replyResult?.resource?.message ?? null;
   let logHistory = "";

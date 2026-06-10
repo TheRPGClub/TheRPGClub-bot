@@ -1,18 +1,22 @@
 import type { AutocompleteInteraction, CommandInteraction } from "discord.js";
 import { ApplicationCommandOptionType } from "discord.js";
 import { Discord, Slash, SlashOption } from "discordx";
-import { EmbedBuilder } from "discord.js";
+import { MediaGalleryBuilder, MediaGalleryItemBuilder } from "@discordjs/builders";
 import { searchHltb, type HltbSearchResult } from "../scripts/SearchHltb.js";
 import { COLOR_PRIMARY } from "../config/colors.js";
 import Game from "../classes/Game.js";
 import { getHltbCacheByGameId, upsertHltbCache } from "../classes/HltbCache.js";
 import {
   deferWithPrivateFlag,
-  ephemeralFlag,
   safeReply,
   sanitizeUserInput,
 } from "../functions/InteractionUtils.js";
-import { buildTextReply } from "../functions/ComponentsV2Utils.js";
+import {
+  buildTextReply,
+  buildTitledContainer,
+  buildFieldsText,
+  buildComponentsV2Flags,
+} from "../functions/ComponentsV2Utils.js";
 import {
   formatGameTitleWithYear,
   getReleaseYear,
@@ -98,75 +102,30 @@ async function outputHltbResultsAsEmbed(
     const hltb_result = result;
 
     const fields = [];
+    if (hltb_result.singlePlayer) fields.push({ name: 'Single-Player', value: hltb_result.singlePlayer });
+    if (hltb_result.coOp) fields.push({ name: 'Co-Op', value: hltb_result.coOp });
+    if (hltb_result.vs) fields.push({ name: 'Vs.', value: hltb_result.vs });
+    if (hltb_result.main) fields.push({ name: 'Main', value: hltb_result.main });
+    if (hltb_result.mainSides) fields.push({ name: 'Main + Sides', value: hltb_result.mainSides });
+    if (hltb_result.completionist) fields.push({ name: 'Completionist', value: hltb_result.completionist });
 
-    if (hltb_result.singlePlayer) {
-      fields.push({
-        name: 'Single-Player',
-        value: hltb_result.singlePlayer,
-        inline: true,
-      });
-    }
-
-    if (hltb_result.coOp) {
-      fields.push({
-        name: 'Co-Op',
-        value: hltb_result.coOp,
-        inline: true,
-      });
-    }
-
-    if (hltb_result.vs) {
-      fields.push({
-        name: 'Vs.',
-        value: hltb_result.vs,
-        inline: true,
-      });
-    }
-
-    if (hltb_result.main) {
-      fields.push({
-        name: 'Main',
-        value: hltb_result.main,
-        inline: true,
-      });
-    }
-
-    if (hltb_result.mainSides) {
-      fields.push({
-        name: 'Main + Sides',
-        value: hltb_result.mainSides,
-        inline: true,
-      });
-    }
-
-    if (hltb_result.completionist) {
-      fields.push({
-        name: 'Completionist',
-        value: hltb_result.completionist,
-        inline: true,
-      });
-    }
-
-    const hltbEmbed = new EmbedBuilder()
-      .setColor(COLOR_PRIMARY)
-      .setTitle(`How Long to Beat ${hltb_result.name}`)
-      .setAuthor({
-        name: 'HowLongToBeat™',
-        iconURL: 'https://howlongtobeat.com/img/hltb_brand.png',
-        url: 'https://howlongtobeat.com',
-      })
-      .setFields(fields);
-
-    if (hltb_result.url) {
-      hltbEmbed.setURL(hltb_result.url);
-    }
+    const titleText = hltb_result.url
+      ? `[How Long to Beat ${hltb_result.name}](${hltb_result.url})`
+      : `How Long to Beat ${hltb_result.name}`;
+    const bodyParts = [`*[HowLongToBeat™](https://howlongtobeat.com)*`];
+    if (fields.length) bodyParts.push(buildFieldsText(fields));
+    const container = buildTitledContainer(titleText, bodyParts.join("\n\n"), { color: COLOR_PRIMARY });
     if (hltb_result.imageUrl) {
-      hltbEmbed.setImage(hltb_result.imageUrl);
+      container.addMediaGalleryComponents(
+        new MediaGalleryBuilder().addItems(
+          new MediaGalleryItemBuilder().setURL(hltb_result.imageUrl),
+        ),
+      );
     }
 
     await safeReply(interaction, {
-      embeds: [hltbEmbed],
-      flags: ephemeralFlag(options.ephemeral),
+      components: [container],
+      flags: buildComponentsV2Flags(options.ephemeral),
     });
   } else {
     await safeReply(interaction, buildTextReply(

@@ -4,7 +4,6 @@ import {
   ButtonInteraction,
   ButtonStyle,
   Client,
-  EmbedBuilder,
   MessageFlags,
   ThreadChannel,
 } from "discord.js";
@@ -27,6 +26,7 @@ import {
   buildTextReply,
   buildComponentsV2Flags,
   buildTextContainer,
+  buildTitledContainer,
 } from "../functions/ComponentsV2Utils.js";
 import { shouldPrompt, markPrompted, getGameReleaseYear } from "./ThreadLinkPromptCache.js";
 import { COLOR_BLUE_INFO } from "../config/colors.js";
@@ -40,16 +40,14 @@ function hasIgdbConfig(): boolean {
   return Boolean(process.env.IGDB_CLIENT_ID && process.env.IGDB_CLIENT_SECRET);
 }
 
-function buildPromptEmbed(thread: ThreadChannel): EmbedBuilder {
-  return new EmbedBuilder()
-    .setTitle("Link this thread to a game?")
-    .setDescription(
-      "This Now Playing thread doesn't have a linked GameDB entry yet. " +
-        "Linking helps show the right cover art, metadata, and GOTM/NR-GOTM info.\n\n" +
-        "Choose an option below.",
-    )
-    .setColor(COLOR_BLUE_INFO)
-    .setFooter({ text: thread.name ?? thread.id });
+function buildPromptContainer(thread: ThreadChannel) {
+  return buildTitledContainer(
+    "Link this thread to a game?",
+    "This Now Playing thread doesn't have a linked GameDB entry yet. " +
+      "Linking helps show the right cover art, metadata, and GOTM/NR-GOTM info.\n\n" +
+      "Choose an option below.",
+    { color: COLOR_BLUE_INFO, footer: thread.name ?? thread.id },
+  );
 }
 
 function buildButtons(threadId: string): ActionRowBuilder<ButtonBuilder> {
@@ -77,8 +75,8 @@ async function promptThread(thread: ThreadChannel): Promise<void> {
 
   try {
     await thread.send({
-      embeds: [buildPromptEmbed(thread)],
-      components: [buildButtons(thread.id)],
+      components: [buildPromptContainer(thread), buildButtons(thread.id)],
+      flags: buildComponentsV2Flags(false),
     });
   } catch (err) {
     logError("ThreadLinkPromptService.postPrompt", err);

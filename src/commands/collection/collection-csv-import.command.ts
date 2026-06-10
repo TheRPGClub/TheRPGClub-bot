@@ -100,7 +100,6 @@ import {
 } from "./collection-csv-import.service.js";
 import { createIgdbSession } from "../../services/IGDB/IgdbSelectService.js";
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
-import { DISCORD_EMBED_FIELD_VALUE_MAX } from "../../config/textLimits.js";
 import { buildTextInputRow } from "../../functions/uiComponents.js";
 import { safeIgnore } from "../../utilities/AsyncUtils.js";
 import { logError } from "../../utilities/LogUtils.js";

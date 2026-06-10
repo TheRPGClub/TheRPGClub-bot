@@ -226,7 +226,6 @@ function buildAutoAcceptFollowUpPayload(
   isPublic: boolean,
 ): { components: (ContainerBuilder | ActionRowBuilder<ButtonBuilder>)[]; flags: number } {
   return {
-    // eslint-disable-next-line local/dynamic-components-require-chunking
     components: [container, ...components],
     flags: buildComponentsV2Flags(!isPublic),
   };
@@ -1122,9 +1121,12 @@ export class GameDbAdmin {
       actionRows.push(buttons);
     }
 
+    type V2Row =
+      | ContainerBuilder
+      | ActionRowBuilder<StringSelectMenuBuilder>
+      | ActionRowBuilder<ButtonBuilder>;
     return {
-      components: [container, ...actionRows] as
-        (ContainerBuilder | ActionRowBuilder<StringSelectMenuBuilder> | ActionRowBuilder<ButtonBuilder>)[],
+      components: [container, ...actionRows] as V2Row[],
       flags: buildComponentsV2EditFlags(),
     };
   }

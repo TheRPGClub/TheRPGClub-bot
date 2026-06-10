@@ -1,9 +1,11 @@
 import axios from "axios";
-import { AttachmentBuilder, EmbedBuilder } from "discord.js";
+import { AttachmentBuilder } from "discord.js";
 import type { GuildMember, User } from "discord.js";
+import { MediaGalleryBuilder, MediaGalleryItemBuilder } from "@discordjs/builders";
 import Member, { type IMemberRecord } from "../classes/Member.js";
 import { formatTimestampWithDay, resolveLogChannel } from "./DiscordLogUtils.js";
 import { COLOR_INFO } from "../config/colors.js";
+import { buildTitledContainer, buildContainerSend } from "../functions/ComponentsV2Utils.js";
 
 type AvatarHistoryRecord = Awaited<ReturnType<typeof Member.getAvatarHistory>>[number];
 
@@ -110,26 +112,28 @@ export async function logAvatarChange(
 
   if (!afterImage.url) return;
 
+  const authorName = user.globalName ?? user.username;
   const beforeLabel = beforeImage.url ? "" : "Unknown";
   const afterLabel = afterImage.url ? "" : "Unknown";
-  const embed = new EmbedBuilder()
-    .setAuthor({
-      name: user.globalName ?? user.username,
-      iconURL: user.displayAvatarURL(),
-    })
-    .setTitle(title)
-    .setDescription(`**Before:** ${beforeLabel}\n**+After:** ${afterLabel}`)
-    .setColor(COLOR_INFO)
-    .setFooter({
-      text: `ID: ${user.id} • ${formatTimestampWithDay(afterRecord.changedAt.getTime())}`,
-    })
-    .setImage(afterImage.url);
+  const body =
+    `*${authorName}* (<@${user.id}>)\n` +
+    `**Before:** ${beforeLabel}\n**After:** ${afterLabel}\n` +
+    `-# ID: ${user.id} • ${formatTimestampWithDay(afterRecord.changedAt.getTime())}`;
+  const container = buildTitledContainer(title, body, { color: COLOR_INFO });
 
-  if (beforeImage.url) {
-    embed.setThumbnail(beforeImage.url);
+  const galleryItems = [afterImage.url, beforeImage.url].filter(Boolean) as string[];
+  if (galleryItems.length) {
+    container.addMediaGalleryComponents(
+      new MediaGalleryBuilder().addItems(
+        ...galleryItems.map((url) => new MediaGalleryItemBuilder().setURL(url)),
+      ),
+    );
   }
 
   const files = [beforeImage.attachment, afterImage.attachment]
     .filter(Boolean) as AttachmentBuilder[];
-  await (logChannel as any).send({ embeds: [embed], files: files.length ? files : undefined });
+  await (logChannel as any).send({
+    ...buildContainerSend(container),
+    files: files.length ? files : undefined,
+  });
 }
