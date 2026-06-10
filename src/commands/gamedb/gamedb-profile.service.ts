@@ -601,7 +601,6 @@ export async function showGameProfile(
   }
 
   await safeReply(interaction, {
-    embeds: [],
     files: profile.files,
     components,
     flags: buildComponentsV2Flags(false),
@@ -627,7 +626,6 @@ export async function showGameProfileFromNomination(
     ),
   ];
   await safeReply(interaction, {
-    embeds: [],
     files: profile.files,
     components,
     flags: buildComponentsV2Flags(true),
@@ -689,7 +687,6 @@ export async function refreshGameProfileMessage(
   const existingComponents = interaction.message?.components ?? [];
   const searchRows = getSearchRowsFromComponents(existingComponents);
   await safeReply(interaction, {
-    embeds: [],
     files: profile.files,
     components: [...profile.components, ...actionRows, ...searchRows],
     flags: buildComponentsV2Flags(false),

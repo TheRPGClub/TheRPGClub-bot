@@ -396,7 +396,6 @@ export class GameDbSearchCommand {
 
     try {
       await safeReply(interaction, {
-        embeds: [],
         files: profile.files,
         components: [...profile.components, ...actionRows, ...response.components],
         flags: response.flags,

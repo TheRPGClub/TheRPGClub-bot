@@ -139,7 +139,6 @@ export class GameDbViewCommand {
         const searchRows = getSearchRowsFromComponents(existingComponents);
         try {
           await safeUpdate(interaction, {
-            embeds: [],
             files: profile.files,
             components: [...profile.components, ...actionRows, ...searchRows],
             flags: buildComponentsV2Flags(false),

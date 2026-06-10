@@ -508,7 +508,7 @@ export class GameJournalCommand {
       const allComponents = pageRow
         ? [...searchComponents, pageRow]
         : searchComponents;
-      await safeReply(interaction, { embeds: [], components: allComponents, flags: cvFlags });
+      await safeReply(interaction, { components: allComponents, flags: cvFlags });
       return;
     }
 
@@ -529,7 +529,7 @@ export class GameJournalCommand {
       const components = pageRow
         ? [...allContainers, selectRow, pageRow]
         : [...allContainers, selectRow];
-      await safeReply(interaction, { embeds: [], components, flags: cvFlags });
+      await safeReply(interaction, { components, flags: cvFlags });
       return;
     }
 
@@ -553,7 +553,7 @@ export class GameJournalCommand {
       ? [...listComponents, selectRow, pageRow]
       : [...listComponents, selectRow];
 
-    await safeReply(interaction, { embeds: [], components, flags: cvFlags });
+    await safeReply(interaction, { components, flags: cvFlags });
   }
 
   @SelectMenuComponent({ id: new RegExp(`^${GJ_LIST_SELECT_PREFIX}:\\d+:\\d+:\\d+$`) })
@@ -573,7 +573,6 @@ export class GameJournalCommand {
       callerId, targetUserId, gameId, 1, interaction.guildId, isOwner,
     );
     await safeUpdate(interaction, {
-      embeds: [],
       components: payload.components,
       files: payload.files,
       flags: payload.flags,
@@ -612,7 +611,7 @@ export class GameJournalCommand {
     const components = pageRow
       ? [...listComponents, selectRow, pageRow]
       : [...listComponents, selectRow];
-    await safeUpdate(interaction, { embeds: [], components, flags: buildComponentsV2Flags(false) });
+    await safeUpdate(interaction, { components, flags: buildComponentsV2Flags(false) });
   }
 
   @SelectMenuComponent({ id: new RegExp(`^${GJ_ALL_SELECT_PREFIX}:\\d+:\\d+$`) })
@@ -648,7 +647,7 @@ export class GameJournalCommand {
     const components = pageRow
       ? [...listComponents, selectRow, pageRow]
       : [...listComponents, selectRow];
-    await safeUpdate(interaction, { embeds: [], components, flags: buildComponentsV2Flags(false) });
+    await safeUpdate(interaction, { components, flags: buildComponentsV2Flags(false) });
   }
 
   @ButtonComponent({ id: new RegExp(`^${GJ_ALL_PAGE_PREFIX}:\\d+:\\d+$`) })
@@ -672,7 +671,7 @@ export class GameJournalCommand {
     const components = pageRow
       ? [...allContainers, selectRow, pageRow]
       : [...allContainers, selectRow];
-    await safeUpdate(interaction, { embeds: [], components, flags: buildComponentsV2Flags(false) });
+    await safeUpdate(interaction, { components, flags: buildComponentsV2Flags(false) });
   }
 
   @ButtonComponent({ id: new RegExp(`^${GJ_SEARCH_PAGE_PREFIX}:\\d+:\\d+:\\d+:\\d+:.+$`) })
@@ -732,8 +731,9 @@ export class GameJournalCommand {
     const allComponents = nextPageRow
       ? [...searchComponents, nextPageRow]
       : searchComponents;
-    await safeUpdate(interaction, { 
-      embeds: [], components: allComponents, flags: buildComponentsV2Flags(false) });
+    await safeUpdate(interaction, {
+      components: allComponents, flags: buildComponentsV2Flags(false),
+    });
   }
 
   @ButtonComponent({ id: new RegExp(`^${GJ_VIEW_PAGE_PREFIX}:\\d+:\\d+:\\d+:\\d+$`) })
