@@ -20,7 +20,7 @@ import { replyIfNotOwner, safeReply, safeUpdate } from "../functions/Interaction
 import { buildTextReply } from "../functions/ComponentsV2Utils.js";
 import { PRESENCE_PROMPT_CHANNEL_ID } from "../config/channels.js";
 import { logError } from "../utilities/LogUtils.js";
-import { buildButtonRow } from "../functions/uiComponents.js";
+import { buildActionButton, buildButtonRow } from "../functions/uiComponents.js";
 
 const YES_PREFIX = "presence-np-yes";
 const NO_PREFIX = "presence-np-no";
@@ -89,22 +89,10 @@ async function resolvePresenceGame(
 }
 
 function buildPromptButtons(sessionId: string): ActionRowBuilder<ButtonBuilder> {
-  const yes = new ButtonBuilder()
-    .setCustomId(`${YES_PREFIX}:${sessionId}`)
-    .setLabel("Yes")
-    .setStyle(ButtonStyle.Success);
-  const no = new ButtonBuilder()
-    .setCustomId(`${NO_PREFIX}:${sessionId}`)
-    .setLabel("No")
-    .setStyle(ButtonStyle.Secondary);
-  const optOutGame = new ButtonBuilder()
-    .setCustomId(`${OPT_OUT_GAME_PREFIX}:${sessionId}`)
-    .setLabel("Don't ask again for this game")
-    .setStyle(ButtonStyle.Secondary);
-  const optOutAll = new ButtonBuilder()
-    .setCustomId(`${OPT_OUT_ALL_PREFIX}:${sessionId}`)
-    .setLabel("Don't ask again for any game")
-    .setStyle(ButtonStyle.Danger);
+  const yes = buildActionButton("confirm", `${YES_PREFIX}:${sessionId}`, "Yes");
+  const no = buildActionButton("cancel", `${NO_PREFIX}:${sessionId}`, "No");
+  const optOutGame = buildActionButton({ customId: `${OPT_OUT_GAME_PREFIX}:${sessionId}`, label: "Don't ask again for this game", style: ButtonStyle.Secondary });
+  const optOutAll = buildActionButton({ customId: `${OPT_OUT_ALL_PREFIX}:${sessionId}`, label: "Don't ask again for any game", style: ButtonStyle.Danger });
   return buildButtonRow(yes, no, optOutGame, optOutAll);
 }
 

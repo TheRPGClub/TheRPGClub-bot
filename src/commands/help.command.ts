@@ -24,7 +24,7 @@ import { decodeBase64Url, encodeBase64Url } from "../functions/CustomIdUtils.js"
 import { parseCustomIdSegments } from "../utilities/CustomIdUtils.js";
 import { GIVEAWAY_HUB_CHANNEL_ID } from "../config/channels.js";
 import { DISCORD_AUTOCOMPLETE_DESC_MAX } from "../config/textLimits.js";
-import { buildButtonRow } from "../functions/uiComponents.js";
+import { buildActionButton, buildButtonRow } from "../functions/uiComponents.js";
 
 type HelpTopicId =
   | "noms"
@@ -410,10 +410,7 @@ function parseHelpCustomId(
 }
 
 function buildHelpRefreshComponents(): ActionRowBuilder<ButtonBuilder>[] {
-  const button = new ButtonBuilder()
-    .setCustomId(buildHelpCustomId("refresh"))
-    .setLabel("Refresh help menu")
-    .setStyle(ButtonStyle.Primary);
+  const button = buildActionButton({ customId: buildHelpCustomId("refresh"), label: "Refresh help menu", style: ButtonStyle.Primary });
 
   return [buildButtonRow(button)];
 }

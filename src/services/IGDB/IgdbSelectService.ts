@@ -1,6 +1,5 @@
 import {
   ActionRowBuilder,
-  ButtonBuilder,
   ButtonStyle,
   StringSelectMenuBuilder,
   type ButtonInteraction,
@@ -17,7 +16,7 @@ import { buildTextReply } from "../../functions/ComponentsV2Utils.js";
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
 import { DISCORD_SELECT_LABEL_MAX } from "../../config/textLimits.js";
 import { assertCustomIdSegments } from "../../utilities/CustomIdUtils.js";
-import { buildButtonRow } from "../../functions/uiComponents.js";
+import { buildActionButton, buildButtonRow } from "../../functions/uiComponents.js";
 
 export type IgdbSelectOption = { id: number; label: string; description?: string };
 
@@ -133,11 +132,8 @@ export function buildIgdbComponents(
 
   if (hasOptions) {
     rows.push(buildButtonRow(
-      new ButtonBuilder()
-        // eslint-disable-next-line local/custom-id-has-matching-handler
-        .setCustomId(`${IGDB_FIRST_MATCH_PREFIX}:${sessionId}`)
-        .setLabel("Import First Match")
-        .setStyle(ButtonStyle.Primary),
+       
+      buildActionButton({ customId: `${IGDB_FIRST_MATCH_PREFIX}:${sessionId}`, label: "Import First Match", style: ButtonStyle.Primary }),
     ));
   }
 

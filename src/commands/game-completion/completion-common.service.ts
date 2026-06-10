@@ -22,7 +22,7 @@ import {
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
 import { MAX_CONTAINER_TEXT, MAX_SECTION_TEXT } from "../../config/textLimits.js";
 import { safeIgnore } from "../../utilities/AsyncUtils.js";
-import { buildButtonRow } from "../../functions/uiComponents.js";
+import { buildActionButton, buildButtonRow } from "../../functions/uiComponents.js";
 
 export type CommonCompletionSort =
   | "title_asc"
@@ -456,20 +456,10 @@ export async function renderCommonCompletionPage(
   const showNext = totalPages > 1 && safePage < totalPages - 1;
   const paginationButtons: ButtonBuilder[] = [];
   if (showPrev) {
-    paginationButtons.push(
-      new ButtonBuilder()
-        .setCustomId(buildCommonNavCustomId(state, safePage, "prev"))
-        .setLabel("Previous Page")
-        .setStyle(ButtonStyle.Secondary),
-    );
+    paginationButtons.push(buildActionButton({ customId: buildCommonNavCustomId(state, safePage, "prev"), label: "Previous Page", style: ButtonStyle.Secondary }));
   }
   if (showNext) {
-    paginationButtons.push(
-      new ButtonBuilder()
-        .setCustomId(buildCommonNavCustomId(state, safePage, "next"))
-        .setLabel("Next Page")
-        .setStyle(ButtonStyle.Secondary),
-    );
+    paginationButtons.push(buildActionButton({ customId: buildCommonNavCustomId(state, safePage, "next"), label: "Next Page", style: ButtonStyle.Secondary }));
   }
 
   await safeReply(interaction, {

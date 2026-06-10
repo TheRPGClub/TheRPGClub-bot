@@ -4,7 +4,7 @@
 import type { CommandInteraction, Attachment } from "discord.js";
 import { EmbedBuilder, MessageFlags } from "discord.js";
 import { safeReply } from "../../functions/InteractionUtils.js";
-import { buildTextReply } from "../../functions/ComponentsV2Utils.js";
+import { buildComponentsV2Flags, buildTextReply } from "../../functions/ComponentsV2Utils.js";
 import type { IGameWithPlatforms } from "../../classes/Game.js";
 import Game from "../../classes/Game.js";
 import Gotm, {
@@ -31,7 +31,6 @@ import {
   type IGotmAuditImport,
   type IGotmAuditItem,
 } from "../../classes/GotmAuditImport.js";
-import { buildComponentsV2Flags } from "../../functions/NominationListComponents.js";
 import { type GotmAuditAction, GOTM_AUDIT_RESULT_LIMIT } from "./admin.types.js";
 import {
   fetchGotmAuditCsvText,

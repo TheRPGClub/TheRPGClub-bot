@@ -35,3 +35,7 @@ export function assertCustomIdSegments(
   if (!segs) logUnexpectedCustomId(interaction.customId);
   return segs;
 }
+
+export function getCustomIdPrefix(customId: string): string {
+  return customId.split(":")[0];
+}

@@ -19,10 +19,8 @@ import {
   upsertNomination,
 } from "../classes/Nomination.js";
 import Game, { type IGame } from "../classes/Game.js";
-import {
-  buildComponentsV2Flags,
-  buildNominationListPayload,
-} from "../functions/NominationListComponents.js";
+import { buildNominationListPayload } from "../functions/NominationListComponents.js";
+import { buildComponentsV2Flags } from "../functions/ComponentsV2Utils.js";
 import {
   formatGameTitleWithYear,
   parseTitleWithYear,

@@ -34,7 +34,7 @@ import { DISCORD_AUTOCOMPLETE_DESC_MAX } from "../config/textLimits.js";
 import { assertCustomIdSegments } from "../utilities/CustomIdUtils.js";
 import { safeIgnore } from "../utilities/AsyncUtils.js";
 import { logError, logInfo, logWarn } from "../utilities/LogUtils.js";
-import { buildButtonRow } from "../functions/uiComponents.js";
+import { buildActionButton, buildButtonRow } from "../functions/uiComponents.js";
 
 function hasIgdbConfig(): boolean {
   return Boolean(process.env.IGDB_CLIENT_ID && process.env.IGDB_CLIENT_SECRET);
@@ -54,14 +54,8 @@ function buildPromptEmbed(thread: ThreadChannel): EmbedBuilder {
 
 function buildButtons(threadId: string): ActionRowBuilder<ButtonBuilder> {
   return buildButtonRow(
-    new ButtonBuilder()
-      .setCustomId(`thread-link:${threadId}`)
-      .setLabel("Link a game")
-      .setStyle(ButtonStyle.Primary),
-    new ButtonBuilder()
-      .setCustomId(`thread-skip:${threadId}`)
-      .setLabel("Skip Linking Game")
-      .setStyle(ButtonStyle.Secondary),
+    buildActionButton({ customId: `thread-link:${threadId}`, label: "Link a game", style: ButtonStyle.Primary }),
+    buildActionButton({ customId: `thread-skip:${threadId}`, label: "Skip Linking Game", style: ButtonStyle.Secondary }),
   );
 }
 

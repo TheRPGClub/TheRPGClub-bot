@@ -1,10 +1,9 @@
 import {
   ActionRowBuilder,
-  ButtonBuilder,
   ButtonStyle,
   StringSelectMenuBuilder,
 } from "discord.js";
-import { buildButtonRow } from "../../functions/uiComponents.js";
+import { buildActionButton, buildButtonRow } from "../../functions/uiComponents.js";
 import {
   ContainerBuilder,
   TextDisplayBuilder,
@@ -136,36 +135,38 @@ export function buildCsvPromptComponents(
       );
     rows.push(new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select));
   }
-
-  const actionRow = buildButtonRow(
-    new ButtonBuilder()
-      // eslint-disable-next-line local/custom-id-has-matching-handler
-      .setCustomId(`${GAMEDB_CSV_ACTION_PREFIX}:${ownerId}:${importId}:${itemId}:manual`)
-      .setLabel("Manual IGDB ID")
-      .setStyle(ButtonStyle.Primary),
-    new ButtonBuilder()
-      // eslint-disable-next-line local/custom-id-has-matching-handler
-      .setCustomId(`${GAMEDB_CSV_ACTION_PREFIX}:${ownerId}:${importId}:${itemId}:query`)
-      .setLabel("Manual IGDB Query")
-      .setStyle(ButtonStyle.Primary),
-    new ButtonBuilder()
-      // eslint-disable-next-line local/custom-id-has-matching-handler
-      .setCustomId(`${GAMEDB_CSV_ACTION_PREFIX}:${ownerId}:${importId}:${itemId}:accept`)
-      .setLabel("Accept First Option")
-      .setStyle(ButtonStyle.Success),
-  );
-  const controlRow = buildButtonRow(
-    new ButtonBuilder()
-      // eslint-disable-next-line local/custom-id-has-matching-handler
-      .setCustomId(`${GAMEDB_CSV_ACTION_PREFIX}:${ownerId}:${importId}:${itemId}:skip`)
-      .setLabel("Skip")
-      .setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder()
-      // eslint-disable-next-line local/custom-id-has-matching-handler
-      .setCustomId(`${GAMEDB_CSV_ACTION_PREFIX}:${ownerId}:${importId}:${itemId}:pause`)
-      .setLabel("Pause")
-      .setStyle(ButtonStyle.Secondary),
-  );
+   
+  const manualBtn = buildActionButton({
+    customId: `${GAMEDB_CSV_ACTION_PREFIX}:${ownerId}:${importId}:${itemId}:manual`,
+    label: "Manual IGDB ID",
+    style: ButtonStyle.Primary,
+  });
+   
+  const queryBtn = buildActionButton({
+    customId: `${GAMEDB_CSV_ACTION_PREFIX}:${ownerId}:${importId}:${itemId}:query`,
+    label: "Manual IGDB Query",
+    style: ButtonStyle.Primary,
+  });
+   
+  const acceptBtn = buildActionButton({
+    customId: `${GAMEDB_CSV_ACTION_PREFIX}:${ownerId}:${importId}:${itemId}:accept`,
+    label: "Accept First Option",
+    style: ButtonStyle.Success,
+  });
+  const actionRow = buildButtonRow(manualBtn, queryBtn, acceptBtn);
+   
+  const skipBtn = buildActionButton({
+    customId: `${GAMEDB_CSV_ACTION_PREFIX}:${ownerId}:${importId}:${itemId}:skip`,
+    label: "Skip",
+    style: ButtonStyle.Secondary,
+  });
+   
+  const pauseBtn = buildActionButton({
+    customId: `${GAMEDB_CSV_ACTION_PREFIX}:${ownerId}:${importId}:${itemId}:pause`,
+    label: "Pause",
+    style: ButtonStyle.Secondary,
+  });
+  const controlRow = buildButtonRow(skipBtn, pauseBtn);
   rows.push(actionRow, controlRow);
   return rows;
 }

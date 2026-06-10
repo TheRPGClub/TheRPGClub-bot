@@ -6,7 +6,7 @@ import {
   ButtonStyle,
   type Attachment,
 } from "discord.js";
-import { buildButtonRow } from "../../functions/uiComponents.js";
+import { buildActionButton, buildButtonRow } from "../../functions/uiComponents.js";
 import ExcelJS from "exceljs";
 import {
   COLLECTION_OWNERSHIP_TYPES,
@@ -217,55 +217,28 @@ export function buildCsvImportItemButtons(params: {
   importId: number;
   itemId: number;
 }): ActionRowBuilder<ButtonBuilder> {
+  const base = { ownerId: params.ownerId, importId: params.importId, itemId: params.itemId };
   return buildButtonRow(
-    new ButtonBuilder()
-      .setCustomId(
-         
-        buildCollectionCsvImportActionId({
-          ownerId: params.ownerId,
-          importId: params.importId,
-          itemId: params.itemId,
-          action: "remap",
-        }),
-      )
-      .setLabel("Search a different title")
-      .setStyle(ButtonStyle.Primary),
-    new ButtonBuilder()
-      .setCustomId(
-         
-        buildCollectionCsvImportActionId({
-          ownerId: params.ownerId,
-          importId: params.importId,
-          itemId: params.itemId,
-          action: "game-id",
-        }),
-      )
-      .setLabel("Enter GameDB or IGDB ID")
-      .setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder()
-      .setCustomId(
-         
-        buildCollectionCsvImportActionId({
-          ownerId: params.ownerId,
-          importId: params.importId,
-          itemId: params.itemId,
-          action: "skip",
-        }),
-      )
-      .setLabel("Skip")
-      .setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder()
-      .setCustomId(
-         
-        buildCollectionCsvImportActionId({
-          ownerId: params.ownerId,
-          importId: params.importId,
-          itemId: params.itemId,
-          action: "pause",
-        }),
-      )
-      .setLabel("Pause")
-      .setStyle(ButtonStyle.Danger),
+    buildActionButton({
+      customId: buildCollectionCsvImportActionId({ ...base, action: "remap" }),
+      label: "Search a different title",
+      style: ButtonStyle.Primary,
+    }),
+    buildActionButton({
+      customId: buildCollectionCsvImportActionId({ ...base, action: "game-id" }),
+      label: "Enter GameDB or IGDB ID",
+      style: ButtonStyle.Secondary,
+    }),
+    buildActionButton({
+      customId: buildCollectionCsvImportActionId({ ...base, action: "skip" }),
+      label: "Skip",
+      style: ButtonStyle.Secondary,
+    }),
+    buildActionButton({
+      customId: buildCollectionCsvImportActionId({ ...base, action: "pause" }),
+      label: "Pause",
+      style: ButtonStyle.Danger,
+    }),
   );
 }
 

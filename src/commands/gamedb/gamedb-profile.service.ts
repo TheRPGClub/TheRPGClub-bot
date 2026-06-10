@@ -34,7 +34,7 @@ import {
 } from "./gamedb-utils.js";
 import { safeIgnore } from "../../utilities/AsyncUtils.js";
 import { logError } from "../../utilities/LogUtils.js";
-import { buildButtonRow } from "../../functions/uiComponents.js";
+import { buildActionButton, buildButtonRow } from "../../functions/uiComponents.js";
 
 export type GameProfileRenderContext = {
   guildId?: string;
@@ -124,37 +124,40 @@ export function buildGameProfileActionRow(
   isReleased: boolean,
   disableVideo = false,
 ): ActionRowBuilder<ButtonBuilder>[] {
-  const addNowPlaying = new ButtonBuilder()
-    .setCustomId(`gamedb-action:nowplaying:${gameId}`) // eslint-disable-line local/custom-id-has-matching-handler
-    .setLabel("Add to Now Playing List")
-    .setStyle(ButtonStyle.Primary);
-  const viewFeaturedVideo = new ButtonBuilder()
-    .setCustomId(`gamedb-action:video:${gameId}`) // eslint-disable-line local/custom-id-has-matching-handler
-    .setLabel("View Featured Video")
-    .setStyle(ButtonStyle.Secondary)
-    .setDisabled(disableVideo);
+   
+  const addNowPlaying = buildActionButton({
+    customId: `gamedb-action:nowplaying:${gameId}`,
+    label: "Add to Now Playing List",
+    style: ButtonStyle.Primary,
+  });
+   
+  const viewFeaturedVideo = buildActionButton({
+    customId: `gamedb-action:video:${gameId}`,
+    label: "View Featured Video",
+    style: ButtonStyle.Secondary,
+  }).setDisabled(disableVideo);
   const rows: ActionRowBuilder<ButtonBuilder>[] = [];
-  const primaryRow = buildButtonRow(addNowPlaying);
+  const primaryButtons: ButtonBuilder[] = [addNowPlaying];
   if (isReleased) {
-    const addCompletion = new ButtonBuilder()
-      // eslint-disable-next-line local/custom-id-has-matching-handler
-      .setCustomId(`gamedb-action:completion:${gameId}`)
-      .setLabel("Add Completion")
-      .setStyle(ButtonStyle.Primary);
-    primaryRow.addComponents(addCompletion);
+     
+    primaryButtons.push(buildActionButton({
+      customId: `gamedb-action:completion:${gameId}`,
+      label: "Add Completion",
+      style: ButtonStyle.Primary,
+    }));
   }
   if (!hasThread) {
-    const addThread = new ButtonBuilder()
-      // eslint-disable-next-line local/custom-id-has-matching-handler
-      .setCustomId(`gamedb-action:thread:${gameId}`)
-      .setLabel("Create Now Playing Thread")
-      .setStyle(ButtonStyle.Primary);
-    primaryRow.addComponents(addThread);
+     
+    primaryButtons.push(buildActionButton({
+      customId: `gamedb-action:thread:${gameId}`,
+      label: "Create Now Playing Thread",
+      style: ButtonStyle.Primary,
+    }));
   }
   if (featuredVideoUrl) {
-    primaryRow.addComponents(viewFeaturedVideo);
+    primaryButtons.push(viewFeaturedVideo);
   }
-  rows.push(primaryRow);
+  rows.push(buildButtonRow(...primaryButtons));
   return rows;
 }
 

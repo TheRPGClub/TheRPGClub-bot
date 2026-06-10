@@ -22,10 +22,8 @@ import {
   parseDeletionSelectCustomId,
   announceNominationChange,
 } from "../../functions/NominationAdminHelpers.js";
-import {
-  buildComponentsV2Flags,
-  buildNominationListPayload,
-} from "../../functions/NominationListComponents.js";
+import { buildNominationListPayload } from "../../functions/NominationListComponents.js";
+import { buildComponentsV2Flags } from "../../functions/ComponentsV2Utils.js";
 
 export async function handleDeleteGotmNomsPanel(interaction: CommandInteraction): Promise<void> {
   const window = await getUpcomingNominationWindow();

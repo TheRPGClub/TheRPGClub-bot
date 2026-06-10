@@ -33,9 +33,12 @@ import {
   safeReply,
   sanitizeUserInput,
 } from "../functions/InteractionUtils.js";
-import { buildTextReply, safeV2TextContent } from "../functions/ComponentsV2Utils.js";
+import {
+  buildComponentsV2Flags,
+  buildTextReply,
+  safeV2TextContent,
+} from "../functions/ComponentsV2Utils.js";
 import { buildUserHeaderContainer } from "../functions/uiComponents.js";
-import { buildComponentsV2Flags } from "../functions/NominationListComponents.js";
 import {
   formatDiscordTimestamp,
   formatPlaytimeHours,

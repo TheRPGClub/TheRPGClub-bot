@@ -1,5 +1,5 @@
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle } from "discord.js";
-import { buildButtonRow } from "../../functions/uiComponents.js";
+import { buildActionButton, buildButtonRow } from "../../functions/uiComponents.js";
 import { buildImportReasonSummary } from "./collection-import-ui.utils.js";
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
 import { parseCustomIdSegments } from "../../utilities/CustomIdUtils.js";
@@ -191,51 +191,28 @@ export function buildSteamImportItemButtons(params: {
   importId: number;
   itemId: number;
 }): ActionRowBuilder<ButtonBuilder> {
+  const base = { ownerId: params.ownerId, importId: params.importId, itemId: params.itemId };
   return buildButtonRow(
-    new ButtonBuilder()
-      .setCustomId(
-        buildCollectionSteamImportActionId({
-          ownerId: params.ownerId,
-          importId: params.importId,
-          itemId: params.itemId,
-          action: "remap",
-        }),
-      )
-      .setLabel("Search a different title")
-      .setStyle(ButtonStyle.Primary),
-    new ButtonBuilder()
-      .setCustomId(
-        buildCollectionSteamImportActionId({
-          ownerId: params.ownerId,
-          importId: params.importId,
-          itemId: params.itemId,
-          action: "game-id",
-        }),
-      )
-      .setLabel("Enter GameDB or IGDB ID")
-      .setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder()
-      .setCustomId(
-        buildCollectionSteamImportActionId({
-          ownerId: params.ownerId,
-          importId: params.importId,
-          itemId: params.itemId,
-          action: "skip",
-        }),
-      )
-      .setLabel("Skip")
-      .setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder()
-      .setCustomId(
-        buildCollectionSteamImportActionId({
-          ownerId: params.ownerId,
-          importId: params.importId,
-          itemId: params.itemId,
-          action: "pause",
-        }),
-      )
-      .setLabel("Pause")
-      .setStyle(ButtonStyle.Danger),
+    buildActionButton({
+      customId: buildCollectionSteamImportActionId({ ...base, action: "remap" }),
+      label: "Search a different title",
+      style: ButtonStyle.Primary,
+    }),
+    buildActionButton({
+      customId: buildCollectionSteamImportActionId({ ...base, action: "game-id" }),
+      label: "Enter GameDB or IGDB ID",
+      style: ButtonStyle.Secondary,
+    }),
+    buildActionButton({
+      customId: buildCollectionSteamImportActionId({ ...base, action: "skip" }),
+      label: "Skip",
+      style: ButtonStyle.Secondary,
+    }),
+    buildActionButton({
+      customId: buildCollectionSteamImportActionId({ ...base, action: "pause" }),
+      label: "Pause",
+      style: ButtonStyle.Danger,
+    }),
   );
 }
 

@@ -15,7 +15,7 @@ import {
   stripModalInput,
   replyIfNotOwner,
 } from "../../functions/InteractionUtils.js";
-import { buildTextReply } from "../../functions/ComponentsV2Utils.js";
+import { buildComponentsV2Flags, buildTextReply } from "../../functions/ComponentsV2Utils.js";
 import type { IGameWithPlatforms } from "../../classes/Game.js";
 import Game from "../../classes/Game.js";
 import {
@@ -24,7 +24,6 @@ import {
   updateGotmAuditItem,
   setGotmAuditImportStatus,
 } from "../../classes/GotmAuditImport.js";
-import { buildComponentsV2Flags } from "../../functions/NominationListComponents.js";
 import { processNextGotmAuditItem, tryInsertGotmAuditRound } from "./gotm-audit.service.js";
 import {
   GOTM_AUDIT_MANUAL_PREFIX,

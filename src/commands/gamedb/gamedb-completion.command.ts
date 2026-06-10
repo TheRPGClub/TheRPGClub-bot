@@ -52,7 +52,11 @@ import { trimTextDisplayContent } from "./gamedb-profile.service.js";
 import { updateGameProfileMessageById } from "./gamedb-profile.service.js";
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
 import { DISCORD_SELECT_LABEL_MAX } from "../../config/textLimits.js";
-import { buildButtonRow, buildTextInputRow } from "../../functions/uiComponents.js";
+import {
+  buildActionButton,
+  buildButtonRow,
+  buildTextInputRow,
+} from "../../functions/uiComponents.js";
 import { safeIgnore } from "../../utilities/AsyncUtils.js";
 
 const COMPLETION_WIZARD_SESSIONS = new Map<string, CompletionWizardSession>();
@@ -219,11 +223,7 @@ function buildCompletionWizardComponents(
     rows.push(new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(removeSelect));
   }
 
-  const nextButton = new ButtonBuilder()
-     
-    .setCustomId(`gamedb-completion-next:${session.id}`)
-    .setLabel("Next")
-    .setStyle(ButtonStyle.Primary);
+  const nextButton = buildActionButton({ customId: `gamedb-completion-next:${session.id}`, label: "Next", style: ButtonStyle.Primary });
   rows.push(buildButtonRow(nextButton));
 
   return rows;
@@ -405,10 +405,7 @@ export class GameDbCompletionCommand {
       safeIgnore(safeReply(interaction, buildTextReply("This completion request has expired.", false)));
       return;
     }
-    if (interaction.user.id !== session.userId) {
-      safeIgnore(safeReply(interaction, buildTextReply("This action isn't for you.", false)));
-      return;
-    }
+    if (await replyIfNotOwner(interaction, session.userId, "This action isn't for you.")) return;
 
     let completedAt: Date | null = null;
     if (session.dateChoice === "today") {

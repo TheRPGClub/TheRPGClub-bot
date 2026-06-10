@@ -26,6 +26,7 @@ import {
   MAX_QUERY_LENGTH,
 } from "../../config/textLimits.js";
 import {
+  buildActionButton,
   buildButtonRow,
   buildJournalSelectRow,
   buildUserHeaderContainer,
@@ -291,28 +292,13 @@ function buildPaginationRows(
 
   const buttons: ButtonBuilder[] = [];
   if (showPrev) {
-    buttons.push(
-      new ButtonBuilder()
-        .setCustomId(prevCustomId)
-        .setLabel("Previous Page")
-        .setStyle(ButtonStyle.Secondary),
-    );
+    buttons.push(buildActionButton({ customId: prevCustomId, label: "Previous Page", style: ButtonStyle.Secondary }));
   }
   if (clearFilterCustomId) {
-    buttons.push(
-      new ButtonBuilder()
-        .setCustomId(clearFilterCustomId)
-        .setLabel("Clear Filter")
-        .setStyle(ButtonStyle.Secondary),
-    );
+    buttons.push(buildActionButton({ customId: clearFilterCustomId, label: "Clear Filter", style: ButtonStyle.Secondary }));
   }
   if (showNext) {
-    buttons.push(
-      new ButtonBuilder()
-        .setCustomId(nextCustomId)
-        .setLabel("Next Page")
-        .setStyle(ButtonStyle.Secondary),
-    );
+    buttons.push(buildActionButton({ customId: nextCustomId, label: "Next Page", style: ButtonStyle.Secondary }));
   }
   return [buildButtonRow(...buttons)];
 }

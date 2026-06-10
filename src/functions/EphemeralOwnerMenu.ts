@@ -1,6 +1,6 @@
 import type { RepliableInteraction } from "discord.js";
 import { safeReply } from "./InteractionUtils.js";
-import { buildComponentsV2Flags } from "./NominationListComponents.js";
+import { buildComponentsV2Flags } from "./ComponentsV2Utils.js";
 
 /**
  * Manages a single ephemeral "owner action menu" per key (typically a user ID).

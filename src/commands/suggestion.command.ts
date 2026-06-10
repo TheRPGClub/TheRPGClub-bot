@@ -1,6 +1,5 @@
 import type { ButtonInteraction, CommandInteraction } from "discord.js";
 import {
-  ButtonBuilder,
   ButtonStyle,
   ContainerBuilder,
   MessageFlags,
@@ -52,7 +51,7 @@ import {
 import { logRawModal } from "../services/raw-modal/RawModalLogging.js";
 import { isPositiveInt, truncateWithEllipsis } from "../utilities/ValidationUtils.js";
 import { parseCustomIdSegments } from "../utilities/CustomIdUtils.js";
-import { buildButtonRow } from "../functions/uiComponents.js";
+import { buildActionButton, buildButtonRow } from "../functions/uiComponents.js";
 
 const SUGGESTION_APPROVE_PREFIX = "suggestion-approve";
 const SUGGESTION_CREATE_MODAL_ID = "suggestion-create-modal";
@@ -674,11 +673,7 @@ export class SuggestionCommand {
     );
 
     const approvedRow = buildButtonRow(
-      new ButtonBuilder()
-        .setCustomId(buildSuggestionApproveId(suggestionId))
-        .setLabel("Approved")
-        .setStyle(ButtonStyle.Success)
-        .setDisabled(true),
+      buildActionButton({ customId: buildSuggestionApproveId(suggestionId), label: "Approved", style: ButtonStyle.Success }).setDisabled(true),
     );
 
     await safeUpdate(interaction, {

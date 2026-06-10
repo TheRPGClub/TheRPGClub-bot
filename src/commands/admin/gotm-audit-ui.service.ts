@@ -1,10 +1,9 @@
 import {
   ActionRowBuilder,
-  ButtonBuilder,
   ButtonStyle,
   StringSelectMenuBuilder,
 } from "discord.js";
-import { buildButtonRow } from "../../functions/uiComponents.js";
+import { buildActionButton, buildButtonRow } from "../../functions/uiComponents.js";
 import { ContainerBuilder, TextDisplayBuilder } from "@discordjs/builders";
 import { type IGotmAuditImport, type IGotmAuditItem } from "../../classes/GotmAuditImport.js";
 import {
@@ -78,31 +77,33 @@ export function buildGotmAuditPromptComponents(
     rows.push(new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select));
   }
 
-  const actionRow = buildButtonRow(
-    new ButtonBuilder()
-      .setCustomId(`${GOTM_AUDIT_ACTION_PREFIX}:${ownerId}:${importId}:${itemId}:manual`)
-      .setLabel("Manual GameDB ID")
-      .setStyle(ButtonStyle.Primary),
-    new ButtonBuilder()
-      .setCustomId(`${GOTM_AUDIT_ACTION_PREFIX}:${ownerId}:${importId}:${itemId}:query`)
-      .setLabel("Manual GameDB Search")
-      .setStyle(ButtonStyle.Primary),
-    new ButtonBuilder()
-      .setCustomId(`${GOTM_AUDIT_ACTION_PREFIX}:${ownerId}:${importId}:${itemId}:accept`)
-      .setLabel("Accept First Option")
-      .setStyle(ButtonStyle.Success)
-      .setDisabled(!options.length),
-  );
-  const controlRow = buildButtonRow(
-    new ButtonBuilder()
-      .setCustomId(`${GOTM_AUDIT_ACTION_PREFIX}:${ownerId}:${importId}:${itemId}:skip`)
-      .setLabel("Skip")
-      .setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder()
-      .setCustomId(`${GOTM_AUDIT_ACTION_PREFIX}:${ownerId}:${importId}:${itemId}:pause`)
-      .setLabel("Pause")
-      .setStyle(ButtonStyle.Secondary),
-  );
+  const manualBtn = buildActionButton({
+    customId: `${GOTM_AUDIT_ACTION_PREFIX}:${ownerId}:${importId}:${itemId}:manual`,
+    label: "Manual GameDB ID",
+    style: ButtonStyle.Primary,
+  });
+  const queryBtn = buildActionButton({
+    customId: `${GOTM_AUDIT_ACTION_PREFIX}:${ownerId}:${importId}:${itemId}:query`,
+    label: "Manual GameDB Search",
+    style: ButtonStyle.Primary,
+  });
+  const acceptBtn = buildActionButton({
+    customId: `${GOTM_AUDIT_ACTION_PREFIX}:${ownerId}:${importId}:${itemId}:accept`,
+    label: "Accept First Option",
+    style: ButtonStyle.Success,
+  }).setDisabled(!options.length);
+  const actionRow = buildButtonRow(manualBtn, queryBtn, acceptBtn);
+  const skipBtn = buildActionButton({
+    customId: `${GOTM_AUDIT_ACTION_PREFIX}:${ownerId}:${importId}:${itemId}:skip`,
+    label: "Skip",
+    style: ButtonStyle.Secondary,
+  });
+  const pauseBtn = buildActionButton({
+    customId: `${GOTM_AUDIT_ACTION_PREFIX}:${ownerId}:${importId}:${itemId}:pause`,
+    label: "Pause",
+    style: ButtonStyle.Secondary,
+  });
+  const controlRow = buildButtonRow(skipBtn, pauseBtn);
 
   rows.push(actionRow, controlRow);
   return rows;

@@ -35,7 +35,7 @@ import { isPositiveInt, truncateWithEllipsis } from "../utilities/ValidationUtil
 import { DISCORD_AUTOCOMPLETE_DESC_MAX, DISCORD_SELECT_LABEL_MAX } from "../config/textLimits.js";
 import { assertCustomIdSegments } from "../utilities/CustomIdUtils.js";
 import { safeIgnore } from "../utilities/AsyncUtils.js";
-import { buildButtonRow, buildTextInputRow } from "../functions/uiComponents.js";
+import { buildActionButton, buildButtonRow, buildTextInputRow } from "../functions/uiComponents.js";
 import { logError } from "../utilities/LogUtils.js";
 
 const PUSH_PIN_EMOJI = "📌";
@@ -78,11 +78,7 @@ const buildCompletionTypeRow = (sessionId: string): ActionRowBuilder<StringSelec
 
 const buildCompletionTitleRow = (sessionId: string): ActionRowBuilder<ButtonBuilder> =>
   buildButtonRow(
-    new ButtonBuilder()
-
-      .setCustomId(`completion-react-title:${sessionId}`)
-      .setLabel("Change title")
-      .setStyle(ButtonStyle.Secondary),
+    buildActionButton({ customId: `completion-react-title:${sessionId}`, label: "Change title", style: ButtonStyle.Secondary }),
   );
 
 const buildCompletionGameRow = (
@@ -278,10 +274,7 @@ export class MessageReactionAdd {
       return;
     }
 
-    if (interaction.user.id !== session.requesterId) {
-      safeIgnore(safeReply(interaction, buildTextReply("This completion prompt is not for you.", false)));
-      return;
-    }
+    if (await replyIfNotOwner(interaction, session.requesterId, "This completion prompt is not for you.")) return;
 
     const value = interaction.values?.[0];
     if (!value || !COMPLETION_TYPES.includes(value as CompletionType)) {
@@ -335,10 +328,7 @@ export class MessageReactionAdd {
       return;
     }
 
-    if (interaction.user.id !== session.requesterId) {
-      safeIgnore(safeReply(interaction, buildTextReply("This completion prompt is not for you.", false)));
-      return;
-    }
+    if (await replyIfNotOwner(interaction, session.requesterId, "This completion prompt is not for you.")) return;
 
     const value = interaction.values?.[0];
     const gameId = value ? Number(value) : Number.NaN;
@@ -370,10 +360,7 @@ export class MessageReactionAdd {
       return;
     }
 
-    if (interaction.user.id !== session.requesterId) {
-      safeIgnore(safeReply(interaction, buildTextReply("This completion prompt is not for you.", false)));
-      return;
-    }
+    if (await replyIfNotOwner(interaction, session.requesterId, "This completion prompt is not for you.")) return;
 
     const selected = interaction.values?.[0];
     const isOther = selected === "other";

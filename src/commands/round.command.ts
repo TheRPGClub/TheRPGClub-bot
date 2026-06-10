@@ -5,7 +5,7 @@ import {
   extractErrorMessage,
   safeReply,
 } from "../functions/InteractionUtils.js";
-import { buildTextReply } from "../functions/ComponentsV2Utils.js";
+import { buildComponentsV2Flags, buildTextReply } from "../functions/ComponentsV2Utils.js";
 import BotVotingInfo from "../classes/BotVotingInfo.js";
 import Gotm from "../classes/Gotm.js";
 import NrGotm from "../classes/NrGotm.js";
@@ -13,7 +13,6 @@ import {
   buildGotmCardsFromEntries,
   buildGotmSearchMessages,
 } from "../functions/GotmSearchComponents.js";
-import { buildComponentsV2Flags } from "../functions/NominationListComponents.js";
 
 @Discord()
 export class CurrentRoundCommand {

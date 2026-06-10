@@ -127,10 +127,7 @@ function buildHmenuActionRow(
     buildActionButton("add", `${GJ_HMENU_ADD_PREFIX}:${ownerId}:${gameId}`, "Add Entry"),
     buildActionButton("edit", `${GJ_HMENU_EDIT_PREFIX}:${ownerId}:${gameId}:${page}`, "Edit Entry"),
     buildActionButton("delete", `${GJ_HMENU_DELETE_PREFIX}:${ownerId}:${gameId}`, "Delete Entry"),
-    new ButtonBuilder()
-      .setCustomId(`${NOW_PLAYING_HELP_PREFIX}:journal-add:${ownerId}`)
-      .setLabel("?")
-      .setStyle(ButtonStyle.Secondary),
+    buildActionButton({ customId: `${NOW_PLAYING_HELP_PREFIX}:journal-add:${ownerId}`, label: "?", style: ButtonStyle.Secondary }),
   );
 }
 
@@ -872,10 +869,7 @@ export class GameJournalCommand {
     );
     const row = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select);
     const helpRow = buildButtonRow(
-      new ButtonBuilder()
-        .setCustomId(`${NOW_PLAYING_HELP_PREFIX}:journal-delete:${ownerId}`)
-        .setLabel("?")
-        .setStyle(ButtonStyle.Secondary),
+      buildActionButton({ customId: `${NOW_PLAYING_HELP_PREFIX}:journal-delete:${ownerId}`, label: "?", style: ButtonStyle.Secondary }),
     );
     await safeUpdate(interaction, {
       components: [container, row, helpRow],
@@ -915,10 +909,7 @@ export class GameJournalCommand {
         "cancel",
         `${GJ_HMENU_DELETE_CONFIRM_PREFIX}:no:${ownerId}:${gameIdRaw}:${entryId}`,
       ),
-      new ButtonBuilder()
-        .setCustomId(`${NOW_PLAYING_HELP_PREFIX}:journal-delete-confirm:${ownerId}`)
-        .setLabel("?")
-        .setStyle(ButtonStyle.Secondary),
+      buildActionButton({ customId: `${NOW_PLAYING_HELP_PREFIX}:journal-delete-confirm:${ownerId}`, label: "?", style: ButtonStyle.Secondary }),
     );
     await safeUpdate(interaction, {
       components: [container, row],
