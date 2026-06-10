@@ -22,7 +22,7 @@ import {
 } from "discordx";
 import Member, { type IMemberPlatformRecord } from "../classes/Member.js";
 import {
-  deferWithShowInChat,
+  deferWithPrivateFlag,
   ephemeralFlag,
   extractErrorMessage,
   safeDeferUpdate,
@@ -254,12 +254,12 @@ export class MultiplayerInfoCommand {
   @Slash({ description: "Show members with multiplayer handles", name: "mp-info" })
   async mpInfo(
     @SlashOption({
-      description: "If true, post in channel instead of ephemerally.",
-      name: "showinchat",
+      description: "Send reply privately (only visible to you).",
+      name: "private",
       required: false,
       type: ApplicationCommandOptionType.Boolean,
     })
-    showInChat: boolean | undefined,
+    privateFlag: boolean | undefined,
     @SlashOption({
       description: "Include Steam users.",
       name: "steam",
@@ -304,8 +304,8 @@ export class MultiplayerInfoCommand {
           psn: psn ?? true,
           nsw: nsw ?? true,
         };
-    const ephemeral = !showInChat;
-    await deferWithShowInChat(interaction, showInChat);
+    const ephemeral = privateFlag ?? false;
+    await deferWithPrivateFlag(interaction, privateFlag);
 
     const anyIncluded = filters.steam || filters.xbl || filters.psn || filters.nsw;
     if (!anyIncluded) {
