@@ -73,7 +73,7 @@ import {
 import { NOW_PLAYING_HELP_PREFIX } from "./now-playing-help.js";
 import { EphemeralOwnerMenu } from "../functions/EphemeralOwnerMenu.js";
 import { isPositiveInt } from "../utilities/ValidationUtils.js";
-import { parseCustomIdSegments } from "../utilities/CustomIdUtils.js";
+import { parseCustomIdSegments, parseCustomIdSegmentsMin } from "../utilities/CustomIdUtils.js";
 import { buildOptionalPrevNextRowWithIds } from "../functions/PaginationUtils.js";
 import {
   JOURNAL_LIST_PAGE_SIZE as LIST_PAGE_SIZE,
@@ -691,7 +691,9 @@ export class GameJournalCommand {
 
   @ButtonComponent({ id: new RegExp(`^${GJ_SEARCH_PAGE_PREFIX}:\\d+:\\d+:\\d+:\\d+:.+$`) })
   async handleSearchPage(interaction: ButtonInteraction): Promise<void> {
-    const [, callerId, targetUserId, gameIdStr, pageRaw, ...queryParts] = interaction.customId.split(":");
+    const segs = parseCustomIdSegmentsMin(interaction.customId, 5);
+    if (!segs) return;
+    const [callerId, targetUserId, gameIdStr, pageRaw, ...queryParts] = segs;
     if (interaction.user.id !== callerId) {
       await safeReply(interaction, buildTextReply("This search isn't yours to navigate.", true));
       return;

@@ -7,7 +7,6 @@ import {
   Guild,
   StringSelectMenuBuilder,
   StringSelectMenuInteraction,
-  StringSelectMenuOptionBuilder,
   User,
   userMention,
 } from "discord.js";
@@ -40,7 +39,11 @@ import {
   safeV2TextContent,
 } from "../functions/ComponentsV2Utils.js";
 import { getUserEmojiData, renderUsernameWithEmoji } from "../services/UserEmojiService.js";
-import { buildTitleHeaderContainer, buildUserHeaderContainer } from "../functions/uiComponents.js";
+import {
+  buildSelectOptions,
+  buildTitleHeaderContainer,
+  buildUserHeaderContainer,
+} from "../functions/uiComponents.js";
 import { recordCurrentAvatarIfNew } from "../utilities/AvatarLogUtils.js";
 import { parseCustomIdSegments } from "../utilities/CustomIdUtils.js";
 import { isAdmin } from "./admin/admin-auth.utils.js";
@@ -173,18 +176,18 @@ async function buildAvatarHistoryAllPage(
 
   const selectMenu = new StringSelectMenuBuilder()
     .setCustomId(`avatar-history-all-select:${ownerId}`)
-    .setPlaceholder("View a member's avatar history");
-  pageMembers.forEach((record) => {
-    const displayName = record.globalName ?? record.username ?? record.userId;
-    const suffix = record.count === 1 ? "avatar" : "avatars";
-    const option = new StringSelectMenuOptionBuilder()
-      .setValue(record.userId)
-      .setLabel(displayName)
-      .setDescription(`${record.count} ${suffix}`);
-    const emojiData = getUserEmojiData(record.userId);
-    if (emojiData) option.setEmoji(emojiData);
-    selectMenu.addOptions(option);
-  });
+    .setPlaceholder("View a member's avatar history")
+    .addOptions(buildSelectOptions(pageMembers.map((record) => {
+      const displayName = record.globalName ?? record.username ?? record.userId;
+      const suffix = record.count === 1 ? "avatar" : "avatars";
+      const emojiData = getUserEmojiData(record.userId);
+      return {
+        value: record.userId,
+        label: displayName,
+        description: `${record.count} ${suffix}`,
+        ...(emojiData ? { emoji: emojiData } : {}),
+      };
+    })));
   const selectRow = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(selectMenu);
 
   return { headerContainer, contentContainer, selectRow, totalPages, safePage };

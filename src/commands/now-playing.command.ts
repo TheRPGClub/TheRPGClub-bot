@@ -116,7 +116,7 @@ import {
   DISCORD_SELECT_LABEL_MAX,
   DISCORD_SELECT_OPTIONS_MAX,
 } from "../config/textLimits.js";
-import { assertCustomIdSegments } from "../utilities/CustomIdUtils.js";
+import { assertCustomIdSegments, parseCustomIdSegmentsMin } from "../utilities/CustomIdUtils.js";
 import { safeIgnore } from "../utilities/AsyncUtils.js";
 
 const MAX_NOW_PLAYING_NOTE_LEN = 500;
@@ -3019,7 +3019,9 @@ export class NowPlayingCommand {
   @ModalComponent({ id: /^nowplaying-note-modal:\d+(?::\d+)?$/ })
   async handleEditNoteModal(interaction: ModalSubmitInteraction): Promise<void> {
     await safeDeferReply(interaction, { flags: MessageFlags.Ephemeral });
-    const [, ownerId, legacyGameIdRaw = null] = interaction.customId.split(":");
+    const segs = parseCustomIdSegmentsMin(interaction.customId, 1);
+    if (!segs) return;
+    const [ownerId, legacyGameIdRaw = null] = segs;
     if (interaction.user.id !== ownerId) {
       await safeReply(interaction, buildTextReply("This note prompt isn't for you.", true));
       return;

@@ -59,7 +59,7 @@ import {
   GIVEAWAY_MAX_PLATFORM_LENGTH,
   GIVEAWAY_MAX_KEY_LENGTH,
 } from "../config/textLimits.js";
-import { assertCustomIdSegments } from "../utilities/CustomIdUtils.js";
+import { assertCustomIdSegments, parseCustomIdSegmentsMin } from "../utilities/CustomIdUtils.js";
 import {
   buildActionButton,
   buildSelectOptions,
@@ -845,7 +845,9 @@ export class GiveawayCommand {
    
   @ButtonComponent({ id: /^giveaway-claim-confirm:(hub|private|public):/ })
   async handleClaimConfirm(interaction: ButtonInteraction): Promise<void> {
-    const [, scope, keyIdStr, pageStr, ...extraSegs] = interaction.customId.split(":");
+    const segs = parseCustomIdSegmentsMin(interaction.customId, 4);
+    if (!segs) return;
+    const [scope, keyIdStr, pageStr, ...extraSegs] = segs;
     const keyId = Number(keyIdStr);
     const page = Number(pageStr);
 
