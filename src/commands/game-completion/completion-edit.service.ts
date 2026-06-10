@@ -365,34 +365,39 @@ function buildCompletionEditPrompt(
   }
 
   const fieldButtons = [
-    new ButtonBuilder()
-      // eslint-disable-next-line local/custom-id-has-matching-handler
-      .setCustomId(`comp-edit-field:${ownerId}:${completionId}:type`)
-      .setLabel("Completion Type")
-      .setStyle(ButtonStyle.Primary),
-    new ButtonBuilder()
-      // eslint-disable-next-line local/custom-id-has-matching-handler
-      .setCustomId(`comp-edit-field:${ownerId}:${completionId}:date`)
-      .setLabel("Completion Date")
-      .setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder()
-      // eslint-disable-next-line local/custom-id-has-matching-handler
-      .setCustomId(`comp-edit-field:${ownerId}:${completionId}:platform`)
-      .setLabel("Platform")
-      .setStyle(ButtonStyle.Secondary),
+     
+    buildActionButton({
+      customId: `comp-edit-field:${ownerId}:${completionId}:type`,
+      label: "Completion Type",
+      style: ButtonStyle.Primary,
+    }),
+     
+    buildActionButton({
+      customId: `comp-edit-field:${ownerId}:${completionId}:date`,
+      label: "Completion Date",
+      style: ButtonStyle.Secondary,
+    }),
+     
+    buildActionButton({
+      customId: `comp-edit-field:${ownerId}:${completionId}:platform`,
+      label: "Platform",
+      style: ButtonStyle.Secondary,
+    }),
   ];
 
   const secondaryButtons = [
-    new ButtonBuilder()
-      // eslint-disable-next-line local/custom-id-has-matching-handler
-      .setCustomId(`comp-edit-field:${ownerId}:${completionId}:playtime`)
-      .setLabel("Final Playtime")
-      .setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder()
-      // eslint-disable-next-line local/custom-id-has-matching-handler
-      .setCustomId(`comp-edit-field:${ownerId}:${completionId}:note`)
-      .setLabel("Note")
-      .setStyle(ButtonStyle.Secondary),
+     
+    buildActionButton({
+      customId: `comp-edit-field:${ownerId}:${completionId}:playtime`,
+      label: "Final Playtime",
+      style: ButtonStyle.Secondary,
+    }),
+     
+    buildActionButton({
+      customId: `comp-edit-field:${ownerId}:${completionId}:note`,
+      label: "Note",
+      style: ButtonStyle.Secondary,
+    }),
     buildActionButton("confirm", `comp-edit-done:${ownerId}:${completionId}`, "Done"),
   ];
 

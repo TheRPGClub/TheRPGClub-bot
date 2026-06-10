@@ -1077,13 +1077,9 @@ function buildIssueListComponents(
     style: ButtonStyle.Danger,
   });
 
-  const actionRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
-    createButton,
-    closeButton,
-    queryButton,
-  );
+  const actionRowButtons: ButtonBuilder[] = [createButton, closeButton, queryButton];
   if (suggestionCount > 0) {
-    actionRow.addComponents(
+    actionRowButtons.push(
       buildActionButton({
         customId: TODO_REVIEW_SUGGESTIONS_BUTTON_ID,
         label: "Review Suggestions",
@@ -1091,6 +1087,7 @@ function buildIssueListComponents(
       }),
     );
   }
+  const actionRow = buildButtonRow(...actionRowButtons);
 
   const components: Array<ContainerBuilder | ActionRowBuilder<any>> = [
     container,

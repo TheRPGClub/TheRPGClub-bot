@@ -1,7 +1,6 @@
 import {
   ActionRowBuilder,
   StringSelectMenuBuilder,
-  ButtonBuilder,
   ButtonStyle,
   ComponentType,
   type CommandInteraction,
@@ -424,11 +423,7 @@ async function confirmDuplicateCompletion(
   const noteLine = existing.note ? `\n> ${existing.note}` : "";
 
   const row = buildButtonRow(
-    new ButtonBuilder()
-
-      .setCustomId(yesId)
-      .setLabel("Add Another")
-      .setStyle(ButtonStyle.Danger),
+    buildActionButton({ customId: yesId, label: "Add Another", style: ButtonStyle.Danger }),
     buildActionButton("cancel", noId),
   );
 

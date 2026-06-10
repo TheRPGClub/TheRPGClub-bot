@@ -36,13 +36,12 @@ import { formatTableDate } from "../../functions/DateFormatUtils.js";
 import { formatPlatformDisplayName } from "../../functions/PlatformDisplay.js";
 import { COMPLETIONATOR_MATCH_THUMBNAIL_NAME } from "./completion.types.js";
 import { isInteractionSettled, safeReply, safeUpdate } from "../../functions/InteractionUtils.js";
-import { buildComponentsV2Flags } from "../../functions/NominationListComponents.js";
 import { createIgdbSession } from "../../services/IGDB/IgdbSelectService.js";
 import {
   buildImportMessageContainer,
   buildImportTextContainer,
 } from "../imports/import-scaffold.service.js";
-import { safeV2TextContent } from "../../functions/ComponentsV2Utils.js";
+import { buildComponentsV2Flags, safeV2TextContent } from "../../functions/ComponentsV2Utils.js";
 import { buildCompletionatorChooseId } from "./completion-helpers.js";
 import {
   buildActionButton,
@@ -353,11 +352,12 @@ export class CompletionatorUiService {
         rowIndex: item.rowIndex,
       },
     });
-    const changeButton = new ButtonBuilder()
-      // eslint-disable-next-line local/custom-id-has-matching-handler
-      .setCustomId(`comp-import-action:${userId}:${session.importId}:${item.itemId}:igdb`)
-      .setLabel("Choose a Different Game")
-      .setStyle(ButtonStyle.Secondary);
+     
+    const changeButton = buildActionButton({
+      customId: `comp-import-action:${userId}:${session.importId}:${item.itemId}:igdb`,
+      label: "Choose a Different Game",
+      style: ButtonStyle.Secondary,
+    });
     const changeRow = buildButtonRow(changeButton);
     return { container, files, changeRow };
   }
@@ -444,16 +444,18 @@ export class CompletionatorUiService {
       `comp-import-action:${state.ownerId}:${state.importId}:${state.itemId}:add`,
       "Add Completion",
     );
-    const skipButton = new ButtonBuilder()
-      // eslint-disable-next-line local/custom-id-has-matching-handler
-      .setCustomId(`comp-import-action:${state.ownerId}:${state.importId}:${state.itemId}:skip`)
-      .setLabel("Skip")
-      .setStyle(ButtonStyle.Secondary);
-    const pauseButton = new ButtonBuilder()
-      // eslint-disable-next-line local/custom-id-has-matching-handler
-      .setCustomId(`comp-import-action:${state.ownerId}:${state.importId}:${state.itemId}:pause`)
-      .setLabel("Pause")
-      .setStyle(ButtonStyle.Secondary);
+     
+    const skipButton = buildActionButton({
+      customId: `comp-import-action:${state.ownerId}:${state.importId}:${state.itemId}:skip`,
+      label: "Skip",
+      style: ButtonStyle.Secondary,
+    });
+     
+    const pauseButton = buildActionButton({
+      customId: `comp-import-action:${state.ownerId}:${state.importId}:${state.itemId}:pause`,
+      label: "Pause",
+      style: ButtonStyle.Secondary,
+    });
 
     return [
       new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(typeSelect),
@@ -469,16 +471,18 @@ export class CompletionatorUiService {
     itemId: number,
   ): ActionRowBuilder<ButtonBuilder> {
     return buildButtonRow(
-      new ButtonBuilder()
-        // eslint-disable-next-line local/custom-id-has-matching-handler
-        .setCustomId(`comp-import-action:${userId}:${importId}:${itemId}:same-yes`)
-        .setLabel("Yes")
-        .setStyle(ButtonStyle.Success),
-      new ButtonBuilder()
-        // eslint-disable-next-line local/custom-id-has-matching-handler
-        .setCustomId(`comp-import-action:${userId}:${importId}:${itemId}:same-no`)
-        .setLabel("No")
-        .setStyle(ButtonStyle.Secondary),
+      buildActionButton(
+        "confirm",
+         
+        `comp-import-action:${userId}:${importId}:${itemId}:same-yes`,
+        "Yes",
+      ),
+      buildActionButton(
+        "cancel",
+         
+        `comp-import-action:${userId}:${importId}:${itemId}:same-no`,
+        "No",
+      ),
     );
   }
 
@@ -498,19 +502,19 @@ export class CompletionatorUiService {
       .setMinValues(1)
       .setMaxValues(updateOptions.length)
       .addOptions(updateOptions);
-
-    const buttons = buildButtonRow(
-      new ButtonBuilder()
-        // eslint-disable-next-line local/custom-id-has-matching-handler
-        .setCustomId(`comp-import-action:${userId}:${importId}:${itemId}:skip`)
-        .setLabel("Skip")
-        .setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder()
-        // eslint-disable-next-line local/custom-id-has-matching-handler
-        .setCustomId(`comp-import-action:${userId}:${importId}:${itemId}:pause`)
-        .setLabel("Pause")
-        .setStyle(ButtonStyle.Secondary),
-    );
+     
+    const skipBtn = buildActionButton({
+      customId: `comp-import-action:${userId}:${importId}:${itemId}:skip`,
+      label: "Skip",
+      style: ButtonStyle.Secondary,
+    });
+     
+    const pauseBtn = buildActionButton({
+      customId: `comp-import-action:${userId}:${importId}:${itemId}:pause`,
+      label: "Pause",
+      style: ButtonStyle.Secondary,
+    });
+    const buttons = buildButtonRow(skipBtn, pauseBtn);
 
     return {
       updateRow: new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(updateSelect),
@@ -523,35 +527,38 @@ export class CompletionatorUiService {
     importId: number,
     itemId: number,
   ): ActionRowBuilder<ButtonBuilder>[] {
-    const primaryRow = buildButtonRow(
-      new ButtonBuilder()
-        // eslint-disable-next-line local/custom-id-has-matching-handler
-        .setCustomId(`comp-import-action:${userId}:${importId}:${itemId}:igdb-manual`)
-        .setLabel("Enter IGDB ID")
-        .setStyle(ButtonStyle.Primary),
-      new ButtonBuilder()
-        // eslint-disable-next-line local/custom-id-has-matching-handler
-        .setCustomId(`comp-import-action:${userId}:${importId}:${itemId}:query`)
-        .setLabel("Query GameDB")
-        .setStyle(ButtonStyle.Primary),
-      new ButtonBuilder()
-        // eslint-disable-next-line local/custom-id-has-matching-handler
-        .setCustomId(`comp-import-action:${userId}:${importId}:${itemId}:manual`)
-        .setLabel("Enter GameDB ID")
-        .setStyle(ButtonStyle.Primary),
-    );
-    const secondaryRow = buildButtonRow(
-      new ButtonBuilder()
-        // eslint-disable-next-line local/custom-id-has-matching-handler
-        .setCustomId(`comp-import-action:${userId}:${importId}:${itemId}:skip`)
-        .setLabel("Skip")
-        .setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder()
-        // eslint-disable-next-line local/custom-id-has-matching-handler
-        .setCustomId(`comp-import-action:${userId}:${importId}:${itemId}:pause`)
-        .setLabel("Pause")
-        .setStyle(ButtonStyle.Secondary),
-    );
+     
+    const igdbManualBtn = buildActionButton({
+      customId: `comp-import-action:${userId}:${importId}:${itemId}:igdb-manual`,
+      label: "Enter IGDB ID",
+      style: ButtonStyle.Primary,
+    });
+     
+    const queryBtn = buildActionButton({
+      customId: `comp-import-action:${userId}:${importId}:${itemId}:query`,
+      label: "Query GameDB",
+      style: ButtonStyle.Primary,
+    });
+     
+    const manualBtn = buildActionButton({
+      customId: `comp-import-action:${userId}:${importId}:${itemId}:manual`,
+      label: "Enter GameDB ID",
+      style: ButtonStyle.Primary,
+    });
+    const primaryRow = buildButtonRow(igdbManualBtn, queryBtn, manualBtn);
+     
+    const noMatchSkipBtn = buildActionButton({
+      customId: `comp-import-action:${userId}:${importId}:${itemId}:skip`,
+      label: "Skip",
+      style: ButtonStyle.Secondary,
+    });
+     
+    const noMatchPauseBtn = buildActionButton({
+      customId: `comp-import-action:${userId}:${importId}:${itemId}:pause`,
+      label: "Pause",
+      style: ButtonStyle.Secondary,
+    });
+    const secondaryRow = buildButtonRow(noMatchSkipBtn, noMatchPauseBtn);
     return [primaryRow, secondaryRow];
   }
 
@@ -575,22 +582,24 @@ export class CompletionatorUiService {
         description: (game.summary || "No summary").slice(0, DISCORD_AUTOCOMPLETE_DESC_MAX),
       };
     });
-
-    const pauseButton = new ButtonBuilder()
-      // eslint-disable-next-line local/custom-id-has-matching-handler
-      .setCustomId(`comp-import-action:${userId}:${session.importId}:${item.itemId}:pause`)
-      .setLabel("Pause")
-      .setStyle(ButtonStyle.Secondary);
-    const skipButton = new ButtonBuilder()
-      // eslint-disable-next-line local/custom-id-has-matching-handler
-      .setCustomId(`comp-import-action:${userId}:${session.importId}:${item.itemId}:skip`)
-      .setLabel("Skip")
-      .setStyle(ButtonStyle.Secondary);
-    const queryButton = new ButtonBuilder()
-      // eslint-disable-next-line local/custom-id-has-matching-handler
-      .setCustomId(`comp-import-action:${userId}:${session.importId}:${item.itemId}:igdb-query`)
-      .setLabel("New IGDB Search")
-      .setStyle(ButtonStyle.Secondary);
+     
+    const pauseButton = buildActionButton({
+      customId: `comp-import-action:${userId}:${session.importId}:${item.itemId}:pause`,
+      label: "Pause",
+      style: ButtonStyle.Secondary,
+    });
+     
+    const skipButton = buildActionButton({
+      customId: `comp-import-action:${userId}:${session.importId}:${item.itemId}:skip`,
+      label: "Skip",
+      style: ButtonStyle.Secondary,
+    });
+     
+    const queryButton = buildActionButton({
+      customId: `comp-import-action:${userId}:${session.importId}:${item.itemId}:igdb-query`,
+      label: "New IGDB Search",
+      style: ButtonStyle.Secondary,
+    });
     const extraRows = [
       buildButtonRow(pauseButton, skipButton, queryButton),
     ];
@@ -608,23 +617,25 @@ export class CompletionatorUiService {
     importId: number,
     itemId: number,
   ): ActionRowBuilder<ButtonBuilder> {
-    return buildButtonRow(
-      new ButtonBuilder()
-        // eslint-disable-next-line local/custom-id-has-matching-handler
-        .setCustomId(`comp-import-action:${userId}:${importId}:${itemId}:igdb-query`)
-        .setLabel("New IGDB Search")
-        .setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder()
-        // eslint-disable-next-line local/custom-id-has-matching-handler
-        .setCustomId(`comp-import-action:${userId}:${importId}:${itemId}:skip`)
-        .setLabel("Skip")
-        .setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder()
-        // eslint-disable-next-line local/custom-id-has-matching-handler
-        .setCustomId(`comp-import-action:${userId}:${importId}:${itemId}:pause`)
-        .setLabel("Pause")
-        .setStyle(ButtonStyle.Secondary),
-    );
+     
+    const igdbQueryBtn = buildActionButton({
+      customId: `comp-import-action:${userId}:${importId}:${itemId}:igdb-query`,
+      label: "New IGDB Search",
+      style: ButtonStyle.Secondary,
+    });
+     
+    const retrySkipBtn = buildActionButton({
+      customId: `comp-import-action:${userId}:${importId}:${itemId}:skip`,
+      label: "Skip",
+      style: ButtonStyle.Secondary,
+    });
+     
+    const retryPauseBtn = buildActionButton({
+      customId: `comp-import-action:${userId}:${importId}:${itemId}:pause`,
+      label: "Pause",
+      style: ButtonStyle.Secondary,
+    });
+    return buildButtonRow(igdbQueryBtn, retrySkipBtn, retryPauseBtn);
   }
 
   resolvePlatformId(

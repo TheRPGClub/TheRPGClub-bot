@@ -22,6 +22,7 @@ import {
 } from "../../functions/ComponentsV2Utils.js";
 import {
   assertCustomIdSegments,
+  getCustomIdPrefix,
   logUnexpectedCustomId,
   parseCustomIdSegmentsMin,
 } from "../../utilities/CustomIdUtils.js";
@@ -76,7 +77,7 @@ export async function handleCompletionPageSelect(
  * Handles prev/next button clicks for list, edit, or delete pagination
  */
 export async function handleCompletionPaging(interaction: ButtonInteraction): Promise<void> {
-  const prefixPart = interaction.customId.split(":")[0];
+  const prefixPart = getCustomIdPrefix(interaction.customId);
   const segs = parseCustomIdSegmentsMin(interaction.customId, 4);
   if (!segs) { logUnexpectedCustomId(interaction.customId); return; }
   const [ownerId, yearRaw, pageRaw, dir, ...queryParts] = segs;

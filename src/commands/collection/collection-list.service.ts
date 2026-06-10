@@ -271,54 +271,50 @@ export function buildCollectionFilterPanelComponents(params: {
         }),
         "Edit Text",
       ),
-      new ButtonBuilder()
-        .setCustomId(
-          buildCollectionFilterPanelActionId({
-            viewerUserId: params.viewerUserId,
-            targetUserId: params.targetUserId,
-            sourceMessageId: params.sourceMessageId,
-            isEphemeral: params.isEphemeral,
-            action: "ownership",
-          }),
-        )
-        .setLabel(`Ownership: ${params.ownershipType ?? "Any"}`)
-        .setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder()
-        .setCustomId(
-          buildCollectionFilterPanelActionId({
-            viewerUserId: params.viewerUserId,
-            targetUserId: params.targetUserId,
-            sourceMessageId: params.sourceMessageId,
-            isEphemeral: params.isEphemeral,
-            action: "apply",
-          }),
-        )
-        .setLabel("Apply")
-        .setStyle(ButtonStyle.Success),
-      new ButtonBuilder()
-        .setCustomId(
-          buildCollectionFilterPanelActionId({
-            viewerUserId: params.viewerUserId,
-            targetUserId: params.targetUserId,
-            sourceMessageId: params.sourceMessageId,
-            isEphemeral: params.isEphemeral,
-            action: "clear",
-          }),
-        )
-        .setLabel("Clear")
-        .setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder()
-        .setCustomId(
-          buildCollectionFilterPanelActionId({
-            viewerUserId: params.viewerUserId,
-            targetUserId: params.targetUserId,
-            sourceMessageId: params.sourceMessageId,
-            isEphemeral: params.isEphemeral,
-            action: "cancel",
-          }),
-        )
-        .setLabel("Cancel")
-        .setStyle(ButtonStyle.Danger),
+      buildActionButton({
+        customId: buildCollectionFilterPanelActionId({
+          viewerUserId: params.viewerUserId,
+          targetUserId: params.targetUserId,
+          sourceMessageId: params.sourceMessageId,
+          isEphemeral: params.isEphemeral,
+          action: "ownership",
+        }),
+        label: `Ownership: ${params.ownershipType ?? "Any"}`,
+        style: ButtonStyle.Secondary,
+      }),
+      buildActionButton(
+        "confirm",
+        buildCollectionFilterPanelActionId({
+          viewerUserId: params.viewerUserId,
+          targetUserId: params.targetUserId,
+          sourceMessageId: params.sourceMessageId,
+          isEphemeral: params.isEphemeral,
+          action: "apply",
+        }),
+        "Apply",
+      ),
+      buildActionButton({
+        customId: buildCollectionFilterPanelActionId({
+          viewerUserId: params.viewerUserId,
+          targetUserId: params.targetUserId,
+          sourceMessageId: params.sourceMessageId,
+          isEphemeral: params.isEphemeral,
+          action: "clear",
+        }),
+        label: "Clear",
+        style: ButtonStyle.Secondary,
+      }),
+      buildActionButton({
+        customId: buildCollectionFilterPanelActionId({
+          viewerUserId: params.viewerUserId,
+          targetUserId: params.targetUserId,
+          sourceMessageId: params.sourceMessageId,
+          isEphemeral: params.isEphemeral,
+          action: "cancel",
+        }),
+        label: "Cancel",
+        style: ButtonStyle.Danger,
+      }),
     ),
   ];
 }
@@ -536,20 +532,19 @@ async function buildCollectionListResponse(params: {
     }),
     safePage,
     pageCount,
-  ) ?? new ActionRowBuilder<ButtonBuilder>();
+  ) ?? buildButtonRow();
 
   row.addComponents(
-    new ButtonBuilder()
-      .setCustomId(
-        buildCollectionFilterActionId({
-          viewerUserId: params.viewerUserId,
-          targetUserId: params.targetUserId,
-          isEphemeral: params.isEphemeral,
-          action: "open",
-        }),
-      )
-      .setLabel("Filter Results")
-      .setStyle(ButtonStyle.Primary),
+    buildActionButton({
+      customId: buildCollectionFilterActionId({
+        viewerUserId: params.viewerUserId,
+        targetUserId: params.targetUserId,
+        isEphemeral: params.isEphemeral,
+        action: "open",
+      }),
+      label: "Filter Results",
+      style: ButtonStyle.Primary,
+    }),
   );
   components.push(row);
 

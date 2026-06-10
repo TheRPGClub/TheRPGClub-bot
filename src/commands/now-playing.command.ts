@@ -364,10 +364,7 @@ async function confirmDuplicateCompletion(
     ),
   );
   const row = buildButtonRow(
-    new ButtonBuilder()
-      .setCustomId(yesId)
-      .setLabel("Add Another")
-      .setStyle(ButtonStyle.Danger),
+    buildActionButton({ customId: yesId, label: "Add Another", style: ButtonStyle.Danger }),
     buildActionButton("cancel", noId),
   );
 
@@ -1209,10 +1206,11 @@ export class NowPlayingCommand {
           default: !session.addCompletionNote,
         },
       );
-    const detailsButton = new ButtonBuilder()
-      .setCustomId(`${NOW_PLAYING_COMPLETE_DETAILS_PREFIX}:${sessionId}`)
-      .setLabel("Continue")
-      .setStyle(ButtonStyle.Primary);
+    const detailsButton = buildActionButton({
+      customId: `${NOW_PLAYING_COMPLETE_DETAILS_PREFIX}:${sessionId}`,
+      label: "Continue",
+      style: ButtonStyle.Primary,
+    });
     const cancelButton = buildActionButton("cancel", `nowplaying-list-cancel:${session.userId}`);
 
     const typeRow = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(typeSelect);
@@ -1220,10 +1218,11 @@ export class NowPlayingCommand {
     const announceRow = new ActionRowBuilder<StringSelectMenuBuilder>()
       .addComponents(announceSelect);
     const noteRow = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(noteSelect);
-    const helpButton = new ButtonBuilder()
-      .setCustomId(`${NOW_PLAYING_HELP_PREFIX}:completion-config:${session.userId}`)
-      .setLabel("?")
-      .setStyle(ButtonStyle.Secondary);
+    const helpButton = buildActionButton({
+      customId: `${NOW_PLAYING_HELP_PREFIX}:completion-config:${session.userId}`,
+      label: "?",
+      style: ButtonStyle.Secondary,
+    });
     const buttonRow = buildButtonRow(
       detailsButton,
       cancelButton,
@@ -1362,16 +1361,7 @@ export class NowPlayingCommand {
       return;
     }
 
-    if (interaction.user.id !== session.userId) {
-      const container = new ContainerBuilder().addTextDisplayComponents(
-        new TextDisplayBuilder().setContent("This completion prompt isn't for you."),
-      );
-      await safeReply(interaction, {
-        components: [container],
-        flags: buildComponentsV2Flags(true),
-      });
-      return;
-    }
+    if (await replyIfNotOwner(interaction, session.userId, "This completion prompt isn't for you.")) return;
 
     if (!session.gameId) {
       const container = new ContainerBuilder().addTextDisplayComponents(
@@ -1510,16 +1500,7 @@ export class NowPlayingCommand {
       return;
     }
 
-    if (interaction.user.id !== session.userId) {
-      const container = new ContainerBuilder().addTextDisplayComponents(
-        new TextDisplayBuilder().setContent("This completion prompt isn't for you."),
-      );
-      await safeReply(interaction, {
-        components: [container],
-        flags: buildComponentsV2Flags(true),
-      });
-      return;
-    }
+    if (await replyIfNotOwner(interaction, session.userId, "This completion prompt isn't for you.")) return;
 
     const selected = interaction.values?.[0];
     const isOther = selected === "other";
@@ -1772,16 +1753,7 @@ export class NowPlayingCommand {
       return;
     }
 
-    if (interaction.user.id !== session.userId) {
-      const container = new ContainerBuilder().addTextDisplayComponents(
-        new TextDisplayBuilder().setContent("This completion prompt isn't for you."),
-      );
-      await safeReply(interaction, {
-        components: [container],
-        flags: buildComponentsV2Flags(true),
-      });
-      return;
-    }
+    if (await replyIfNotOwner(interaction, session.userId, "This completion prompt isn't for you.")) return;
 
     const gameId = Number(gameIdRaw);
     if (!isPositiveInt(gameId)) {
@@ -1818,16 +1790,7 @@ export class NowPlayingCommand {
       return;
     }
 
-    if (interaction.user.id !== session.userId) {
-      const container = new ContainerBuilder().addTextDisplayComponents(
-        new TextDisplayBuilder().setContent("This completion prompt isn't for you."),
-      );
-      await safeReply(interaction, {
-        components: [container],
-        flags: buildComponentsV2Flags(true),
-      });
-      return;
-    }
+    if (await replyIfNotOwner(interaction, session.userId, "This completion prompt isn't for you.")) return;
 
     const value = interaction.values?.[0];
     if (!value || !COMPLETION_TYPES.includes(value as CompletionType)) {
@@ -1864,16 +1827,7 @@ export class NowPlayingCommand {
       return;
     }
 
-    if (interaction.user.id !== session.userId) {
-      const container = new ContainerBuilder().addTextDisplayComponents(
-        new TextDisplayBuilder().setContent("This completion prompt isn't for you."),
-      );
-      await safeReply(interaction, {
-        components: [container],
-        flags: buildComponentsV2Flags(true),
-      });
-      return;
-    }
+    if (await replyIfNotOwner(interaction, session.userId, "This completion prompt isn't for you.")) return;
 
     const value = interaction.values?.[0];
     if (value !== "yes" && value !== "no") {
@@ -1910,16 +1864,7 @@ export class NowPlayingCommand {
       return;
     }
 
-    if (interaction.user.id !== session.userId) {
-      const container = new ContainerBuilder().addTextDisplayComponents(
-        new TextDisplayBuilder().setContent("This completion prompt isn't for you."),
-      );
-      await safeReply(interaction, {
-        components: [container],
-        flags: buildComponentsV2Flags(true),
-      });
-      return;
-    }
+    if (await replyIfNotOwner(interaction, session.userId, "This completion prompt isn't for you.")) return;
 
     const value = interaction.values?.[0];
     if (value !== "yes" && value !== "no") {
@@ -1956,16 +1901,7 @@ export class NowPlayingCommand {
       return;
     }
 
-    if (interaction.user.id !== session.userId) {
-      const container = new ContainerBuilder().addTextDisplayComponents(
-        new TextDisplayBuilder().setContent("This completion prompt isn't for you."),
-      );
-      await safeReply(interaction, {
-        components: [container],
-        flags: buildComponentsV2Flags(true),
-      });
-      return;
-    }
+    if (await replyIfNotOwner(interaction, session.userId, "This completion prompt isn't for you.")) return;
 
     const value = interaction.values?.[0];
     if (value !== "yes" && value !== "no") {
@@ -2000,16 +1936,7 @@ export class NowPlayingCommand {
       return;
     }
 
-    if (interaction.user.id !== session.userId) {
-      const container = new ContainerBuilder().addTextDisplayComponents(
-        new TextDisplayBuilder().setContent("This completion prompt isn't for you."),
-      );
-      await safeReply(interaction, {
-        components: [container],
-        flags: buildComponentsV2Flags(true),
-      });
-      return;
-    }
+    if (await replyIfNotOwner(interaction, session.userId, "This completion prompt isn't for you.")) return;
 
     if (!session.gameId) {
       const container = new ContainerBuilder().addTextDisplayComponents(
@@ -2134,16 +2061,7 @@ export class NowPlayingCommand {
       return;
     }
 
-    if (interaction.user.id !== session.userId) {
-      const container = new ContainerBuilder().addTextDisplayComponents(
-        new TextDisplayBuilder().setContent("This platform prompt isn't for you."),
-      );
-      await safeReply(interaction, {
-        components: [container],
-        flags: buildComponentsV2Flags(true),
-      });
-      return;
-    }
+    if (await replyIfNotOwner(interaction, session.userId, "This platform prompt isn't for you.")) return;
 
     const platformId = Number(interaction.values?.[0]);
     if (!isPositiveInt(platformId)) {
@@ -2826,16 +2744,7 @@ export class NowPlayingCommand {
     const segs = assertCustomIdSegments(interaction, 3);
     if (!segs) return;
     const [ownerId, slotRaw, stateToken] = segs;
-    if (interaction.user.id !== ownerId) {
-      const container = new ContainerBuilder().addTextDisplayComponents(
-        new TextDisplayBuilder().setContent("This sort prompt isn't for you."),
-      );
-      await safeReply(interaction, {
-        components: [container],
-        flags: buildComponentsV2Flags(true),
-      });
-      return;
-    }
+    if (await replyIfNotOwner(interaction, ownerId, "This sort prompt isn't for you.")) return;
 
     const slotIndex = Number(slotRaw);
     if (!Number.isInteger(slotIndex) || slotIndex < 0) {
@@ -2905,16 +2814,7 @@ export class NowPlayingCommand {
     const segs = assertCustomIdSegments(interaction, 2);
     if (!segs) return;
     const [ownerId, stateToken] = segs;
-    if (interaction.user.id !== ownerId) {
-      const container = new ContainerBuilder().addTextDisplayComponents(
-        new TextDisplayBuilder().setContent("This sort prompt isn't for you."),
-      );
-      await safeReply(interaction, {
-        components: [container],
-        flags: buildComponentsV2Flags(true),
-      });
-      return;
-    }
+    if (await replyIfNotOwner(interaction, ownerId, "This sort prompt isn't for you.")) return;
     await safeDeferUpdate(interaction);
     const isEphemeral = interaction.message.flags?.has(MessageFlags.Ephemeral) ?? false;
     const responseFlags = buildComponentsV2Flags(isEphemeral);
@@ -3161,16 +3061,7 @@ export class NowPlayingCommand {
     const segs = assertCustomIdSegments(interaction, 2);
     if (!segs) return;
     const [ownerId, gameIdRaw] = segs;
-    if (interaction.user.id !== ownerId) {
-      const container = new ContainerBuilder().addTextDisplayComponents(
-        new TextDisplayBuilder().setContent("This remove prompt isn't for you."),
-      );
-      await safeReply(interaction, {
-        components: [container],
-        flags: buildComponentsV2Flags(true),
-      });
-      return;
-    }
+    if (await replyIfNotOwner(interaction, ownerId, "This remove prompt isn't for you.")) return;
 
     const gameId = Number(gameIdRaw);
     if (!isPositiveInt(gameId)) {
@@ -3569,10 +3460,7 @@ export class NowPlayingCommand {
       new TextDisplayBuilder().setContent("## Delete Journal Entry\nSelect an entry to delete."),
     );
     const helpRow = buildButtonRow(
-      new ButtonBuilder()
-        .setCustomId(`${NOW_PLAYING_HELP_PREFIX}:journal-delete:${ownerId}`)
-        .setLabel("?")
-        .setStyle(ButtonStyle.Secondary),
+      buildActionButton({ customId: `${NOW_PLAYING_HELP_PREFIX}:journal-delete:${ownerId}`, label: "?", style: ButtonStyle.Secondary }),
     );
     await safeUpdate(interaction, {
       components: [container, row, helpRow],
@@ -3617,10 +3505,7 @@ export class NowPlayingCommand {
         "cancel",
         `${NOW_PLAYING_JOURNAL_DELETE_CONFIRM_PREFIX}:no:${ownerId}:${gameIdRaw}:${pageRaw}:${entryId}`,
       ),
-      new ButtonBuilder()
-        .setCustomId(`${NOW_PLAYING_HELP_PREFIX}:journal-delete-confirm:${ownerId}`)
-        .setLabel("?")
-        .setStyle(ButtonStyle.Secondary),
+      buildActionButton({ customId: `${NOW_PLAYING_HELP_PREFIX}:journal-delete-confirm:${ownerId}`, label: "?", style: ButtonStyle.Secondary }),
     );
     await safeUpdate(interaction, {
       components: [container, row],
@@ -3761,18 +3646,7 @@ export class NowPlayingCommand {
     const segs = assertCustomIdSegments(interaction, 1);
     if (!segs) return;
     const [ownerId] = segs;
-    if (interaction.user.id !== ownerId) {
-      const container = new ContainerBuilder().addTextDisplayComponents(
-        new TextDisplayBuilder().setContent(
-          "Only the owner of this Now Playing list can use Edit.",
-        ),
-      );
-      await safeReply(interaction, {
-        components: [container],
-        flags: buildComponentsV2Flags(true),
-      });
-      return;
-    }
+    if (await replyIfNotOwner(interaction, ownerId, "Only the owner of this Now Playing list can use Edit.")) return;
 
     setNowPlayingListContext(ownerId, interaction.message);
     await nowPlayingOwnerMenu.show(
@@ -3920,16 +3794,7 @@ export class NowPlayingCommand {
     const segs = assertCustomIdSegments(interaction, 1);
     if (!segs) return;
     const [ownerId] = segs;
-    if (interaction.user.id !== ownerId) {
-      const container = new ContainerBuilder().addTextDisplayComponents(
-        new TextDisplayBuilder().setContent("This add prompt isn't for you."),
-      );
-      await safeReply(interaction, {
-        components: [container],
-        flags: buildComponentsV2Flags(true),
-      });
-      return;
-    }
+    if (await replyIfNotOwner(interaction, ownerId, "This add prompt isn't for you.")) return;
     setNowPlayingListContext(ownerId, interaction.message);
     safeIgnore(interaction.showModal(this.buildNowPlayingAddModal()));
   }
@@ -4080,16 +3945,7 @@ export class NowPlayingCommand {
     const segs = assertCustomIdSegments(interaction, 1);
     if (!segs) return;
     const [ownerId] = segs;
-    if (interaction.user.id !== ownerId) {
-      const container = new ContainerBuilder().addTextDisplayComponents(
-        new TextDisplayBuilder().setContent("This remove prompt isn't for you."),
-      );
-      await safeReply(interaction, {
-        components: [container],
-        flags: buildComponentsV2Flags(true),
-      });
-      return;
-    }
+    if (await replyIfNotOwner(interaction, ownerId, "This remove prompt isn't for you.")) return;
     setNowPlayingListContext(ownerId, interaction.message);
     await this.promptRemoveNowPlaying(interaction, "update");
   }
@@ -4547,18 +4403,18 @@ export class NowPlayingCommand {
     includeEditButton: boolean = true,
   ): ActionRowBuilder<ButtonBuilder> | null {
     void includeEditButton;
-    const row = new ActionRowBuilder<ButtonBuilder>();
+    const buttons: ButtonBuilder[] = [];
     if (hasDisplayableNotes) {
       const notesAction = showNotes ? "hide" : "show";
       const notesLabel = showNotes ? "Hide Notes" : "Show Notes";
-      row.addComponents(
+      buttons.push(
         new ButtonBuilder()
           .setCustomId(`${NOW_PLAYING_LIST_NOTES_PREFIX}:${ownerId}:${notesAction}`)
           .setLabel(notesLabel)
           .setStyle(ButtonStyle.Secondary),
       );
     }
-    return row.components.length > 0 ? row : null;
+    return buttons.length > 0 ? buildButtonRow(...buttons) : null;
   }
 
   private buildNowPlayingCancelRow(ownerId: string): ActionRowBuilder<ButtonBuilder> {
@@ -4575,29 +4431,14 @@ export class NowPlayingCommand {
     const buttons: ButtonBuilder[] = [];
     if (hasGamesWithoutJournal) {
       buttons.push(
-        new ButtonBuilder()
-          .setCustomId(`${NOW_PLAYING_EDIT_MENU_START_JOURNAL_PREFIX}:${ownerId}`)
-          .setLabel("Start a Game Journal")
-          .setStyle(ButtonStyle.Success),
+        buildActionButton("add", `${NOW_PLAYING_EDIT_MENU_START_JOURNAL_PREFIX}:${ownerId}`, "Start a Game Journal"),
       );
     }
     buttons.push(
-      new ButtonBuilder()
-        .setCustomId(`${NOW_PLAYING_EDIT_MENU_SORT_PREFIX}:${ownerId}`)
-        .setLabel("Sort")
-        .setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder()
-        .setCustomId(`${NOW_PLAYING_EDIT_MENU_PLATFORM_PREFIX}:${ownerId}`)
-        .setLabel("Edit Platform")
-        .setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder()
-        .setCustomId(`${NOW_PLAYING_EDIT_MENU_COMPLETE_PREFIX}:${ownerId}`)
-        .setLabel("Add Completion")
-        .setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder()
-        .setCustomId(`${NOW_PLAYING_EDIT_MENU_REMOVE_PREFIX}:${ownerId}`)
-        .setLabel("Remove Game")
-        .setStyle(ButtonStyle.Danger),
+      buildActionButton({ customId: `${NOW_PLAYING_EDIT_MENU_SORT_PREFIX}:${ownerId}`, label: "Sort", style: ButtonStyle.Secondary }),
+      buildActionButton({ customId: `${NOW_PLAYING_EDIT_MENU_PLATFORM_PREFIX}:${ownerId}`, label: "Edit Platform", style: ButtonStyle.Secondary }),
+      buildActionButton({ customId: `${NOW_PLAYING_EDIT_MENU_COMPLETE_PREFIX}:${ownerId}`, label: "Add Completion", style: ButtonStyle.Secondary }),
+      buildActionButton("delete", `${NOW_PLAYING_EDIT_MENU_REMOVE_PREFIX}:${ownerId}`, "Remove Game"),
     );
     return buildButtonRow(...buttons);
   }
@@ -4628,24 +4469,12 @@ export class NowPlayingCommand {
         "Your Now Playing list is empty.",
       );
     const firstRow = buildButtonRow(
-      new ButtonBuilder()
-        .setCustomId(`${NOW_PLAYING_EDIT_MENU_SORT_PREFIX}:${ownerId}`)
-        .setLabel("Sort")
-        .setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder()
-        .setCustomId(`${NOW_PLAYING_EDIT_MENU_PLATFORM_PREFIX}:${ownerId}`)
-        .setLabel("Edit Platform")
-        .setStyle(ButtonStyle.Secondary),
+      buildActionButton({ customId: `${NOW_PLAYING_EDIT_MENU_SORT_PREFIX}:${ownerId}`, label: "Sort", style: ButtonStyle.Secondary }),
+      buildActionButton({ customId: `${NOW_PLAYING_EDIT_MENU_PLATFORM_PREFIX}:${ownerId}`, label: "Edit Platform", style: ButtonStyle.Secondary }),
     );
     const secondRow = buildButtonRow(
-      new ButtonBuilder()
-        .setCustomId(`${NOW_PLAYING_EDIT_MENU_COMPLETE_PREFIX}:${ownerId}`)
-        .setLabel("Add Completion")
-        .setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder()
-        .setCustomId(`${NOW_PLAYING_EDIT_MENU_REMOVE_PREFIX}:${ownerId}`)
-        .setLabel("Remove Game")
-        .setStyle(ButtonStyle.Danger),
+      buildActionButton({ customId: `${NOW_PLAYING_EDIT_MENU_COMPLETE_PREFIX}:${ownerId}`, label: "Add Completion", style: ButtonStyle.Secondary }),
+      buildActionButton("delete", `${NOW_PLAYING_EDIT_MENU_REMOVE_PREFIX}:${ownerId}`, "Remove Game"),
     );
     return [introContainer, listContainer, firstRow, secondRow];
   }
@@ -4757,14 +4586,8 @@ export class NowPlayingCommand {
     });
 
     const doneRow = buildButtonRow(
-      new ButtonBuilder()
-        .setCustomId(`nowplaying-complete-done:${ownerId}`)
-        .setLabel("Done")
-        .setStyle(ButtonStyle.Success),
-      new ButtonBuilder()
-        .setCustomId(`${NOW_PLAYING_HELP_PREFIX}:completion-pick:${ownerId}`)
-        .setLabel("?")
-        .setStyle(ButtonStyle.Secondary),
+      buildActionButton("confirm", `nowplaying-complete-done:${ownerId}`, "Done"),
+      buildActionButton({ customId: `${NOW_PLAYING_HELP_PREFIX}:completion-pick:${ownerId}`, label: "?", style: ButtonStyle.Secondary }),
     );
     return [container, doneRow];
   }
@@ -4802,14 +4625,8 @@ export class NowPlayingCommand {
     const selectRow = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(removeSelect);
 
     const doneRow = buildButtonRow(
-      new ButtonBuilder()
-        .setCustomId(`nowplaying-remove-done:${ownerId}`)
-        .setLabel("Done")
-        .setStyle(ButtonStyle.Success),
-      new ButtonBuilder()
-        .setCustomId(`${NOW_PLAYING_HELP_PREFIX}:remove:${ownerId}`)
-        .setLabel("?")
-        .setStyle(ButtonStyle.Secondary),
+      buildActionButton("confirm", `nowplaying-remove-done:${ownerId}`, "Done"),
+      buildActionButton({ customId: `${NOW_PLAYING_HELP_PREFIX}:remove:${ownerId}`, label: "?", style: ButtonStyle.Secondary }),
     );
     return [container, selectRow, doneRow];
   }
@@ -4968,19 +4785,14 @@ export class NowPlayingCommand {
     ];
 
     const actionRow = buildButtonRow(
-      new ButtonBuilder()
-        .setCustomId(`${NOW_PLAYING_EDIT_PLATFORM_SAVE_PREFIX}:${ownerId}:${stateToken}`)
-        .setLabel("Save")
-        .setStyle(ButtonStyle.Success),
-      new ButtonBuilder()
-        .setCustomId(`${NOW_PLAYING_EDIT_PLATFORM_RESET_PREFIX}:${ownerId}`)
-        .setLabel("Reset to current platforms")
-        .setStyle(ButtonStyle.Secondary),
+      buildActionButton(
+        "confirm",
+        `${NOW_PLAYING_EDIT_PLATFORM_SAVE_PREFIX}:${ownerId}:${stateToken}`,
+        "Save",
+      ),
+      buildActionButton({ customId: `${NOW_PLAYING_EDIT_PLATFORM_RESET_PREFIX}:${ownerId}`, label: "Reset to current platforms", style: ButtonStyle.Secondary }),
       buildActionButton("cancel", `nowplaying-list-cancel:${ownerId}`),
-      new ButtonBuilder()
-        .setCustomId(`${NOW_PLAYING_HELP_PREFIX}:platform:${ownerId}`)
-        .setLabel("?")
-        .setStyle(ButtonStyle.Secondary),
+      buildActionButton({ customId: `${NOW_PLAYING_HELP_PREFIX}:platform:${ownerId}`, label: "?", style: ButtonStyle.Secondary }),
     );
     components.push(actionRow);
     return components;
@@ -5025,19 +4837,14 @@ export class NowPlayingCommand {
     }
 
     const actionRow = buildButtonRow(
-      new ButtonBuilder()
-        .setCustomId(`${NOW_PLAYING_SORT_SAVE_PREFIX}:${ownerId}:${stateToken}`)
-        .setLabel("Save")
-        .setStyle(ButtonStyle.Success),
-      new ButtonBuilder()
-        .setCustomId(`${NOW_PLAYING_SORT_RESET_PREFIX}:${ownerId}`)
-        .setLabel("Reset to current order")
-        .setStyle(ButtonStyle.Secondary),
+      buildActionButton(
+        "confirm",
+        `${NOW_PLAYING_SORT_SAVE_PREFIX}:${ownerId}:${stateToken}`,
+        "Save",
+      ),
+      buildActionButton({ customId: `${NOW_PLAYING_SORT_RESET_PREFIX}:${ownerId}`, label: "Reset to current order", style: ButtonStyle.Secondary }),
       buildActionButton("cancel", `nowplaying-list-cancel:${ownerId}`),
-      new ButtonBuilder()
-        .setCustomId(`${NOW_PLAYING_HELP_PREFIX}:sort:${ownerId}`)
-        .setLabel("?")
-        .setStyle(ButtonStyle.Secondary),
+      buildActionButton({ customId: `${NOW_PLAYING_HELP_PREFIX}:sort:${ownerId}`, label: "?", style: ButtonStyle.Secondary }),
     );
     rows.push(actionRow);
     return [container, ...rows];
@@ -5588,10 +5395,7 @@ export class NowPlayingCommand {
         : undefined,
       navRowTrailingButtons: !guildId
         ? [
-            new ButtonBuilder()
-              .setCustomId(`${NOW_PLAYING_HELP_PREFIX}:journal-view:${ownerId}`)
-              .setLabel("?")
-              .setStyle(ButtonStyle.Secondary),
+            buildActionButton({ customId: `${NOW_PLAYING_HELP_PREFIX}:journal-view:${ownerId}`, label: "?", style: ButtonStyle.Secondary }),
           ]
         : undefined,
       includeNowPlayingMeta: true,

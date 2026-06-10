@@ -18,7 +18,7 @@ import { buildComponentsV2Flags, buildTextReply } from "../../functions/Componen
 import { decodeBase64Url, encodeBase64Url } from "../../functions/CustomIdUtils.js";
 import Game from "../../classes/Game.js";
 import { DISCORD_SELECT_LABEL_MAX, DISCORD_SELECT_OPTIONS_MAX } from "../../config/textLimits.js";
-import { buildButtonRow } from "../../functions/uiComponents.js";
+import { buildActionButton, buildButtonRow } from "../../functions/uiComponents.js";
 
 export interface ISearchFilters {
   upcomingRelease?: boolean;
@@ -179,12 +179,11 @@ export function buildSearchRecoveryComponents(
   ownerId: string,
   encodedQuery: string,
 ): ActionRowBuilder<ButtonBuilder>[] {
-  const button = new ButtonBuilder()
-     
-    .setCustomId(buildSearchRefreshCustomId(ownerId, encodedQuery))
-    .setLabel("Refresh search")
-    .setStyle(ButtonStyle.Primary);
-
+  const button = buildActionButton({
+    customId: buildSearchRefreshCustomId(ownerId, encodedQuery),
+    label: "Refresh search",
+    style: ButtonStyle.Primary,
+  });
   return [buildButtonRow(button)];
 }
 
@@ -306,11 +305,7 @@ export function buildChoiceRows(
     const slice = options.slice(i, i + 5);
     const row = buildButtonRow(
       ...slice.map((opt) =>
-        new ButtonBuilder()
-
-          .setCustomId(`${customIdPrefix}:${opt.value}`)
-          .setLabel(opt.label)
-          .setStyle(opt.style ?? ButtonStyle.Secondary),
+        buildActionButton({ customId: `${customIdPrefix}:${opt.value}`, label: opt.label, style: opt.style ?? ButtonStyle.Secondary }),
       ),
     );
     rows.push(row);

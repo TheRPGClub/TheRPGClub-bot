@@ -3,7 +3,6 @@ import { COLOR_PRIMARY } from "../../config/colors.js";
 import {
   ActionRowBuilder,
   AttachmentBuilder,
-  ButtonBuilder,
   ButtonStyle,
   ComponentType,
   EmbedBuilder,
@@ -15,7 +14,7 @@ import {
   userMention,
 } from "discord.js";
 import { safeDeferUpdate, safeReply } from "../../functions/InteractionUtils.js";
-import { buildButtonRow } from "../../functions/uiComponents.js";
+import { buildActionButton, buildButtonRow } from "../../functions/uiComponents.js";
 import { buildTextReply } from "../../functions/ComponentsV2Utils.js";
 import { ADMIN_CHANNEL_ID, NOW_PLAYING_FORUM_ID } from "../../config/channels.js";
 import Gotm, { insertGotmRoundInDatabase, type IGotmGame } from "../../classes/Gotm.js";
@@ -197,7 +196,7 @@ async function promptSelectNomination(
   const selectRow = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select);
   const buttonRow = buildButtonRow(
 
-    new ButtonBuilder().setCustomId(cancelId).setLabel("Cancel").setStyle(ButtonStyle.Danger),
+    buildActionButton({ customId: cancelId, label: "Cancel", style: ButtonStyle.Danger }),
   );
 
   const promptMessage: Message | null = await channel.send({
@@ -950,12 +949,12 @@ export async function handleNextRoundSetup(
     );
 
     const row = buildButtonRow(
-      // eslint-disable-next-line local/custom-id-has-matching-handler
-      new ButtonBuilder().setCustomId("wiz-commit").setLabel("Commit").setStyle(ButtonStyle.Success),
-      // eslint-disable-next-line local/custom-id-has-matching-handler
-      new ButtonBuilder().setCustomId("wiz-edit").setLabel("Edit").setStyle(ButtonStyle.Secondary),
-      // eslint-disable-next-line local/custom-id-has-matching-handler
-      new ButtonBuilder().setCustomId("wiz-cancel").setLabel("Cancel").setStyle(ButtonStyle.Danger),
+       
+      buildActionButton({ customId: "wiz-commit", label: "Commit", style: ButtonStyle.Success }),
+       
+      buildActionButton({ customId: "wiz-edit", label: "Edit", style: ButtonStyle.Secondary }),
+       
+      buildActionButton({ customId: "wiz-cancel", label: "Cancel", style: ButtonStyle.Danger }),
     );
     await safeReply(interaction, { components: [row] });
 

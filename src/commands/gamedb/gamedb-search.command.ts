@@ -2,7 +2,6 @@ import {
   ActionRowBuilder,
   ApplicationCommandOptionType,
   AutocompleteInteraction,
-  ButtonBuilder,
   ButtonStyle,
   CommandInteraction,
   StringSelectMenuBuilder,
@@ -53,7 +52,7 @@ import { handleNoResults } from "./gamedb-add.command.js";
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
 import { MAX_CONTAINER_TEXT } from "../../config/textLimits.js";
 import { assertCustomIdSegments } from "../../utilities/CustomIdUtils.js";
-import { buildButtonRow } from "../../functions/uiComponents.js";
+import { buildActionButton, buildButtonRow } from "../../functions/uiComponents.js";
 
 function formatUpcomingDate(date: Date | null | undefined): string {
   if (!date) return "";
@@ -201,19 +200,16 @@ function buildSearchResponse(
   const prevDisabled = safePage === 0;
   const nextDisabled = safePage >= totalPages - 1;
 
-  const prevButton = new ButtonBuilder()
-
-    .setCustomId(buildSearchCustomId("page", ownerId, safePage, searchTerm, "prev", filters))
-    .setLabel("Previous Page")
-    .setStyle(ButtonStyle.Secondary)
-    .setDisabled(prevDisabled);
-
-  const nextButton = new ButtonBuilder()
-
-    .setCustomId(buildSearchCustomId("page", ownerId, safePage, searchTerm, "next", filters))
-    .setLabel("Next Page")
-    .setStyle(ButtonStyle.Secondary)
-    .setDisabled(nextDisabled);
+  const prevButton = buildActionButton({
+    customId: buildSearchCustomId("page", ownerId, safePage, searchTerm, "prev", filters),
+    label: "Previous Page",
+    style: ButtonStyle.Secondary,
+  }).setDisabled(prevDisabled);
+  const nextButton = buildActionButton({
+    customId: buildSearchCustomId("page", ownerId, safePage, searchTerm, "next", filters),
+    label: "Next Page",
+    style: ButtonStyle.Secondary,
+  }).setDisabled(nextDisabled);
 
   const buttonRow = buildButtonRow(prevButton, nextButton);
   const components: Array<ContainerBuilder | ActionRowBuilder<any>> = [];

@@ -62,7 +62,7 @@ import GameSearchSynonymDraft, {
 import axios from "axios";
 import { igdbService } from "../services/IGDB/IgdbService.js";
 import { buildPageFooterText, shouldRenderPrevNextButtons } from "../functions/PaginationUtils.js";
-import { buildButtonRow, buildTextInputRow } from "../functions/uiComponents.js";
+import { buildActionButton, buildButtonRow, buildTextInputRow } from "../functions/uiComponents.js";
 import { parseSynonymQuickAddTerms } from "./gamedb-synonym.utils.js";
 import { isPositiveInt, truncateWithEllipsis } from "../utilities/ValidationUtils.js";
 import { COLOR_PRIMARY, COLOR_SUCCESS, COLOR_HIGHLIGHT } from "../config/colors.js";
@@ -188,14 +188,8 @@ function buildSynonymAddModal(draftId: number): ModalBuilder {
 }
 
 function buildSynonymContinueComponents(draftId: number): Array<ActionRowBuilder<ButtonBuilder>> {
-  const addMore = new ButtonBuilder()
-    .setCustomId(`${SYNONYM_ADD_MORE_PREFIX}:${draftId}`)
-    .setLabel("Add More")
-    .setStyle(ButtonStyle.Primary);
-  const done = new ButtonBuilder()
-    .setCustomId(`${SYNONYM_ADD_DONE_PREFIX}:${draftId}`)
-    .setLabel("Done")
-    .setStyle(ButtonStyle.Secondary);
+  const addMore = buildActionButton({ customId: `${SYNONYM_ADD_MORE_PREFIX}:${draftId}`, label: "Add More", style: ButtonStyle.Primary });
+  const done = buildActionButton({ customId: `${SYNONYM_ADD_DONE_PREFIX}:${draftId}`, label: "Done", style: ButtonStyle.Secondary });
   return [buildButtonRow(addMore, done)];
 }
 const AUTO_ACCEPT_RUNS = new Map<
@@ -291,27 +285,26 @@ export class GameDbAdmin {
 
     const prevDisabled = safePage === 0;
     const nextDisabled = safePage >= totalPages - 1;
-    const prevButton = new ButtonBuilder()
-      .setCustomId(buildSynonymListCustomId(ownerId, safePage, query, "prev"))
-      .setLabel("Previous Page")
-      .setStyle(ButtonStyle.Secondary)
-      .setDisabled(prevDisabled);
-    const nextButton = new ButtonBuilder()
-      .setCustomId(buildSynonymListCustomId(ownerId, safePage, query, "next"))
-      .setLabel("Next Page")
-      .setStyle(ButtonStyle.Secondary)
-      .setDisabled(nextDisabled);
-    const addGroupButton = new ButtonBuilder()
-      .setCustomId(
-        buildSynonymGroupSelectCustomId(
-          SYNONYM_ADD_FROM_LIST_PREFIX,
-          ownerId,
-          safePage,
-          query,
-        ),
-      )
-      .setLabel("Add New Group")
-      .setStyle(ButtonStyle.Primary);
+    const prevButton = buildActionButton({
+      customId: buildSynonymListCustomId(ownerId, safePage, query, "prev"),
+      label: "Previous Page",
+      style: ButtonStyle.Secondary,
+    }).setDisabled(prevDisabled);
+    const nextButton = buildActionButton({
+      customId: buildSynonymListCustomId(ownerId, safePage, query, "next"),
+      label: "Next Page",
+      style: ButtonStyle.Secondary,
+    }).setDisabled(nextDisabled);
+    const addGroupButton = buildActionButton({
+      customId: buildSynonymGroupSelectCustomId(
+        SYNONYM_ADD_FROM_LIST_PREFIX,
+        ownerId,
+        safePage,
+        query,
+      ),
+      label: "Add New Group",
+      style: ButtonStyle.Primary,
+    });
     const buttonRowItems: ButtonBuilder[] = [addGroupButton];
     if (shouldRenderPrevNextButtons(prevDisabled, nextDisabled)) {
       buttonRowItems.push(prevButton, nextButton);
@@ -1049,11 +1042,11 @@ export class GameDbAdmin {
     label: string = "Stop",
   ): ActionRowBuilder<ButtonBuilder> {
     return buildButtonRow(
-      new ButtonBuilder()
-        .setCustomId(buildAutoAcceptStopId(runId))
-        .setLabel(label)
-        .setStyle(ButtonStyle.Danger)
-        .setDisabled(disabled),
+      buildActionButton({
+        customId: buildAutoAcceptStopId(runId),
+        label,
+        style: ButtonStyle.Danger,
+      }).setDisabled(disabled),
     );
   }
 
@@ -1120,16 +1113,8 @@ export class GameDbAdmin {
     const nextDisabled = page >= totalPages - 1;
 
     const buttons = buildButtonRow(
-      new ButtonBuilder()
-        .setCustomId(`audit-page:${sessionId}:prev`)
-        .setLabel("Previous")
-        .setStyle(ButtonStyle.Secondary)
-        .setDisabled(prevDisabled),
-      new ButtonBuilder()
-        .setCustomId(`audit-page:${sessionId}:next`)
-        .setLabel("Next")
-        .setStyle(ButtonStyle.Secondary)
-        .setDisabled(nextDisabled),
+      buildActionButton({ customId: `audit-page:${sessionId}:prev`, label: "Previous", style: ButtonStyle.Secondary }).setDisabled(prevDisabled),
+      buildActionButton({ customId: `audit-page:${sessionId}:next`, label: "Next", style: ButtonStyle.Secondary }).setDisabled(nextDisabled),
     );
 
     const row = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select);
@@ -1231,66 +1216,44 @@ export class GameDbAdmin {
     }
 
     const navRow = buildButtonRow(
-      new ButtonBuilder()
-        .setCustomId(`audit-back:${sessionId}`)
-        .setLabel("Back to List")
-        .setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder()
-        .setCustomId(`audit-next:${sessionId}:${game.id}`)
-        .setLabel("Go to Next Game")
-        .setStyle(ButtonStyle.Secondary),
+      buildActionButton({ customId: `audit-back:${sessionId}`, label: "Back to List", style: ButtonStyle.Secondary }),
+      buildActionButton({ customId: `audit-next:${sessionId}:${game.id}`, label: "Go to Next Game", style: ButtonStyle.Secondary }),
     );
 
-    const actionRow = new ActionRowBuilder<ButtonBuilder>();
+    const actionButtons: ButtonBuilder[] = [];
     if (!game.imageData && igdbImageAvailable) {
-      actionRow.addComponents(
-        new ButtonBuilder()
-          .setCustomId(`audit-accept-igdb:${sessionId}:${game.id}`)
-          .setLabel("Accept IGDB Image")
-          .setStyle(ButtonStyle.Success),
+      actionButtons.push(
+        buildActionButton({ customId: `audit-accept-igdb:${sessionId}:${game.id}`, label: "Accept IGDB Image", style: ButtonStyle.Success }),
       );
     }
 
     if (!game.featuredVideoUrl && (igdbVideoUrl || igdbDetailsLoaded)) {
-      actionRow.addComponents(
-        new ButtonBuilder()
-          .setCustomId(`audit-accept-video:${sessionId}:${game.id}`)
-          .setLabel("Accept IGDB Video")
-          .setStyle(ButtonStyle.Secondary)
-          .setDisabled(!igdbVideoUrl),
+      actionButtons.push(
+        buildActionButton({ customId: `audit-accept-video:${sessionId}:${game.id}`, label: "Accept IGDB Video", style: ButtonStyle.Secondary }).setDisabled(!igdbVideoUrl),
       );
     }
 
     const session = AUDIT_SESSIONS.get(sessionId);
     if (session) {
       if (!game.featuredVideoUrl && ["video", "mixed", "all"].includes(session.filter)) {
-        actionRow.addComponents(
-          new ButtonBuilder()
-            .setCustomId(`audit-video:${sessionId}:${game.id}`)
-            .setLabel("Add YouTube Video")
-            .setStyle(ButtonStyle.Primary),
+        actionButtons.push(
+          buildActionButton({ customId: `audit-video:${sessionId}:${game.id}`, label: "Add YouTube Video", style: ButtonStyle.Primary }),
         );
       }
       if (!game.description && ["description", "mixed", "all"].includes(session.filter)) {
-        actionRow.addComponents(
-          new ButtonBuilder()
-            .setCustomId(`audit-description:${sessionId}:${game.id}`)
-            .setLabel("Add Description")
-            .setStyle(ButtonStyle.Primary),
+        actionButtons.push(
+          buildActionButton({ customId: `audit-description:${sessionId}:${game.id}`, label: "Add Description", style: ButtonStyle.Primary }),
         );
       }
     }
 
     const editRow = buildButtonRow(
-      new ButtonBuilder()
-        .setCustomId(`audit-img:${sessionId}:${game.id}`)
-        .setLabel("Upload Image")
-        .setStyle(ButtonStyle.Primary),
+      buildActionButton({ customId: `audit-img:${sessionId}:${game.id}`, label: "Upload Image", style: ButtonStyle.Primary }),
     );
 
     const components: ActionRowBuilder<ButtonBuilder>[] = [navRow];
-    if (actionRow.components.length) {
-      components.push(actionRow);
+    if (actionButtons.length) {
+      components.push(buildButtonRow(...actionButtons));
     }
     components.push(editRow);
 

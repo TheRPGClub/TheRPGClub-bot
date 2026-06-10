@@ -1,4 +1,5 @@
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle } from "discord.js";
+import { buildActionButton, buildButtonRow } from "./uiComponents.js";
 
 export function buildPageFooterText(page: number, totalPages: number, suffix?: string): string {
   const base = `Page ${page + 1}/${totalPages}`;
@@ -42,23 +43,13 @@ export function buildOptionalPrevNextRow(
 ): ActionRowBuilder<ButtonBuilder> | null {
   const buttons: ButtonBuilder[] = [];
   if (page > 0) {
-    buttons.push(
-      new ButtonBuilder()
-        .setCustomId(`${customIdBase}:${page}:prev`)
-        .setLabel("Previous")
-        .setStyle(ButtonStyle.Secondary),
-    );
+    buttons.push(buildActionButton({ customId: `${customIdBase}:${page}:prev`, label: "Previous", style: ButtonStyle.Secondary }));
   }
   if (page < totalPages - 1) {
-    buttons.push(
-      new ButtonBuilder()
-        .setCustomId(`${customIdBase}:${page}:next`)
-        .setLabel("Next")
-        .setStyle(ButtonStyle.Secondary),
-    );
+    buttons.push(buildActionButton({ customId: `${customIdBase}:${page}:next`, label: "Next", style: ButtonStyle.Secondary }));
   }
   if (!buttons.length) return null;
-  return new ActionRowBuilder<ButtonBuilder>().addComponents(buttons);
+  return buildButtonRow(...buttons);
 }
 
 /**
@@ -76,23 +67,13 @@ export function buildOptionalPrevNextRowWithIds(
   if (totalPages <= 1) return null;
   const buttons: ButtonBuilder[] = [];
   if (page > 0) {
-    buttons.push(
-      new ButtonBuilder()
-        .setCustomId(prevCustomId)
-        .setLabel(labels?.prev ?? "Previous")
-        .setStyle(ButtonStyle.Secondary),
-    );
+    buttons.push(buildActionButton({ customId: prevCustomId, label: labels?.prev ?? "Previous", style: ButtonStyle.Secondary }));
   }
   if (page < totalPages - 1) {
-    buttons.push(
-      new ButtonBuilder()
-        .setCustomId(nextCustomId)
-        .setLabel(labels?.next ?? "Next")
-        .setStyle(ButtonStyle.Secondary),
-    );
+    buttons.push(buildActionButton({ customId: nextCustomId, label: labels?.next ?? "Next", style: ButtonStyle.Secondary }));
   }
   if (!buttons.length) return null;
-  return new ActionRowBuilder<ButtonBuilder>().addComponents(buttons);
+  return buildButtonRow(...buttons);
 }
 
 /**
@@ -110,17 +91,9 @@ export function buildDisabledPrevNextRow(
   const prevDisabled = page <= 0;
   const nextDisabled = page >= totalPages - 1;
   if (!shouldRenderPrevNextButtons(prevDisabled, nextDisabled)) return null;
-  return new ActionRowBuilder<ButtonBuilder>().addComponents(
-    new ButtonBuilder()
-      .setCustomId(`${customIdBase}:${page}:prev`)
-      .setLabel(labels?.prev ?? "Previous")
-      .setStyle(ButtonStyle.Secondary)
-      .setDisabled(prevDisabled),
-    new ButtonBuilder()
-      .setCustomId(`${customIdBase}:${page}:next`)
-      .setLabel(labels?.next ?? "Next")
-      .setStyle(ButtonStyle.Secondary)
-      .setDisabled(nextDisabled),
+  return buildButtonRow(
+    buildActionButton({ customId: `${customIdBase}:${page}:prev`, label: labels?.prev ?? "Previous", style: ButtonStyle.Secondary }).setDisabled(prevDisabled),
+    buildActionButton({ customId: `${customIdBase}:${page}:next`, label: labels?.next ?? "Next", style: ButtonStyle.Secondary }).setDisabled(nextDisabled),
   );
 }
 
@@ -143,16 +116,8 @@ export function buildDisabledPrevNextRowWithIds(
   const prevDisabled = page <= 0;
   const nextDisabled = page >= totalPages - 1;
   if (!shouldRenderPrevNextButtons(prevDisabled, nextDisabled)) return null;
-  return new ActionRowBuilder<ButtonBuilder>().addComponents(
-    new ButtonBuilder()
-      .setCustomId(prevCustomId)
-      .setLabel(options?.labels?.prev ?? "Previous")
-      .setStyle(options?.styles?.prev ?? ButtonStyle.Secondary)
-      .setDisabled(prevDisabled),
-    new ButtonBuilder()
-      .setCustomId(nextCustomId)
-      .setLabel(options?.labels?.next ?? "Next")
-      .setStyle(options?.styles?.next ?? ButtonStyle.Secondary)
-      .setDisabled(nextDisabled),
+  return buildButtonRow(
+    buildActionButton({ customId: prevCustomId, label: options?.labels?.prev ?? "Previous", style: options?.styles?.prev ?? ButtonStyle.Secondary }).setDisabled(prevDisabled),
+    buildActionButton({ customId: nextCustomId, label: options?.labels?.next ?? "Next", style: options?.styles?.next ?? ButtonStyle.Secondary }).setDisabled(nextDisabled),
   );
 }

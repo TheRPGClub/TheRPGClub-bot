@@ -11,7 +11,7 @@ import { GIVEAWAY_HUB_CHANNEL_ID } from "../config/channels.js";
 import { buildPageFooterText } from "../functions/PaginationUtils.js";
 import { safeIgnore } from "../utilities/AsyncUtils.js";
 import { logError, logWarn } from "../utilities/LogUtils.js";
-import { buildButtonRow } from "../functions/uiComponents.js";
+import { buildActionButton, buildButtonRow } from "../functions/uiComponents.js";
 const GIVEAWAY_HUB_SCAN_LIMIT = 50;
 
 export const KEYS_PAGE_SIZE = 20;
@@ -165,23 +165,12 @@ export async function listAllAvailableKeys(): Promise<
 
 function buildGiveawayHubComponents(hasKeys: boolean): ActionRowBuilder<ButtonBuilder>[] {
   const rows: ActionRowBuilder<ButtonBuilder>[] = [];
-
-  const claimButton = new ButtonBuilder()
-    // eslint-disable-next-line local/custom-id-has-matching-handler
-    .setCustomId("giveaway-hub-claim:0")
-    .setLabel("Claim a Game")
-    .setStyle(ButtonStyle.Primary)
-    .setDisabled(!hasKeys);
-  const donateButton = new ButtonBuilder()
-    // eslint-disable-next-line local/custom-id-has-matching-handler
-    .setCustomId("giveaway-hub-donate")
-    .setLabel("Donate a Game")
-    .setStyle(ButtonStyle.Success);
-  const donorSettingsButton = new ButtonBuilder()
-    // eslint-disable-next-line local/custom-id-has-matching-handler
-    .setCustomId("giveaway-hub-settings")
-    .setLabel("Donor Settings")
-    .setStyle(ButtonStyle.Secondary);
+   
+  const claimButton = buildActionButton({ customId: "giveaway-hub-claim:0", label: "Claim a Game", style: ButtonStyle.Primary }).setDisabled(!hasKeys);
+   
+  const donateButton = buildActionButton({ customId: "giveaway-hub-donate", label: "Donate a Game", style: ButtonStyle.Success });
+   
+  const donorSettingsButton = buildActionButton({ customId: "giveaway-hub-settings", label: "Donor Settings", style: ButtonStyle.Secondary });
 
   rows.push(
     buildButtonRow(claimButton, donateButton, donorSettingsButton),

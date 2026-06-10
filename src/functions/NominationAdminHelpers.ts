@@ -21,10 +21,10 @@ import { safeV2TextContent } from "./ComponentsV2Utils.js";
 import { truncateWithEllipsis } from "../utilities/ValidationUtils.js";
 import { buildTextInputRow } from "./uiComponents.js";
 import {
-  buildComponentsV2Flags,
   buildNominationListPayload,
   type NominationListPayload,
 } from "./NominationListComponents.js";
+import { buildComponentsV2Flags } from "./ComponentsV2Utils.js";
 import {
   getUpcomingNominationWindow,
 } from "./NominationWindow.js";

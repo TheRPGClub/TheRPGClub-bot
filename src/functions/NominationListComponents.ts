@@ -5,7 +5,6 @@ import {
   StringSelectMenuBuilder,
 } from "discord.js";
 import {
-  ButtonBuilder,
   ContainerBuilder,
   MediaGalleryBuilder,
   MediaGalleryItemBuilder,
@@ -18,7 +17,8 @@ import crypto from "node:crypto";
 import Member from "../classes/Member.js";
 import type { INominationEntry } from "../classes/Nomination.js";
 import Game from "../classes/Game.js";
-import { buildComponentsV2Flags, safeV2TextContent } from "./ComponentsV2Utils.js";
+import { safeV2TextContent } from "./ComponentsV2Utils.js";
+import { buildActionButton } from "./uiComponents.js";
 import { composeVoteImage, type VoteImageType } from "../services/collageGenerator.js";
 import { getUserEmojiString } from "../services/UserEmojiService.js";
 import {
@@ -42,8 +42,6 @@ export type NominationListPayload = {
   components: Array<ContainerBuilder | ActionRowBuilder<StringSelectMenuBuilder>>;
   files: AttachmentBuilder[];
 };
-
-export { buildComponentsV2Flags };
 
 export async function buildNominationListPayload(
   kindLabel: string,
@@ -144,11 +142,8 @@ function addNominationContent(
       safeV2TextContent(buildNominationText(nomination), 1800),
     ),
   );
-  let button = new ButtonBuilder()
-    // eslint-disable-next-line local/custom-id-has-matching-handler
-    .setCustomId(`user-header-label:${nomination.userId}`)
-    .setLabel(displayName)
-    .setStyle(ButtonStyle.Secondary);
+   
+  let button = buildActionButton({ customId: `user-header-label:${nomination.userId}`, label: displayName, style: ButtonStyle.Secondary });
   const emojiString = getUserEmojiString(nomination.userId);
   if (emojiString) {
     const match = emojiString.match(/^<:([^:]+):(\d+)>$/);

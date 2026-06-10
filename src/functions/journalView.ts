@@ -16,7 +16,7 @@ import Thread from "../classes/Thread.js";
 import { formatTableDate, formatPlaytimeHours } from "./DateFormatUtils.js";
 import { COMPONENTS_V2_FLAG } from "../config/flags.js";
 import { safeV2TextContent } from "./ComponentsV2Utils.js";
-import { buildUserHeaderContainer } from "./uiComponents.js";
+import { buildActionButton, buildButtonRow, buildUserHeaderContainer } from "./uiComponents.js";
 import { truncateWithEllipsis } from "../utilities/ValidationUtils.js";
 
 const JOURNAL_PAGE_SIZE = 1;
@@ -189,36 +189,26 @@ export async function buildJournalView(options: IJournalViewOptions): Promise<{
   }
 
   // Nav row
-  const navRow = new ActionRowBuilder<ButtonBuilder>();
+  const navButtons: ButtonBuilder[] = [];
   if (buildOwnerButtons) {
-    navRow.addComponents(...buildOwnerButtons(safePage, entries.length > 0));
+    navButtons.push(...buildOwnerButtons(safePage, entries.length > 0));
   }
   if (safePage > 1) {
-    navRow.addComponents(
-      new ButtonBuilder()
-        .setCustomId(prevPageCustomId(safePage - 1))
-        .setLabel("Next Entry")
-        .setStyle(ButtonStyle.Secondary),
-    );
+    navButtons.push(buildActionButton({ customId: prevPageCustomId(safePage - 1), label: "Next Entry", style: ButtonStyle.Secondary }));
   }
   if (safePage < totalPages) {
-    navRow.addComponents(
-      new ButtonBuilder()
-        .setCustomId(nextPageCustomId(safePage + 1))
-        .setLabel("Previous Entry")
-        .setStyle(ButtonStyle.Secondary),
-    );
+    navButtons.push(buildActionButton({ customId: nextPageCustomId(safePage + 1), label: "Previous Entry", style: ButtonStyle.Secondary }));
   }
   if (navRowTrailingButtons?.length) {
-    navRow.addComponents(...navRowTrailingButtons);
+    navButtons.push(...navRowTrailingButtons);
   }
 
   const components: Array<ContainerBuilder | ActionRowBuilder<ButtonBuilder>> = [
     userHeaderContainer,
     gameContainer,
   ];
-  if (navRow.components.length > 0) {
-    components.push(navRow);
+  if (navButtons.length > 0) {
+    components.push(buildButtonRow(...navButtons));
   }
   if (extraRows?.length) {
     components.push(...extraRows);
