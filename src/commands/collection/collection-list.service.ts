@@ -17,6 +17,7 @@ import { safeDeferUpdate } from "../../functions/InteractionUtils.js";
 import { buildUserHeaderContainer } from "../../functions/uiComponents.js";
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
 import { parseCustomIdSegments } from "../../utilities/CustomIdUtils.js";
+import { buildDisabledPrevNextRowWithIds } from "../../functions/PaginationUtils.js";
 
 const COLLECTION_LIST_PAGE_SIZE = 20;
 const COLLECTION_LIST_NAV_PREFIX = "collection-list-nav-v2";
@@ -516,37 +517,24 @@ async function buildCollectionListResponse(params: {
     ),
   );
 
-  const row = new ActionRowBuilder<ButtonBuilder>();
-  if (pageCount > 1) {
-    row.addComponents(
-      new ButtonBuilder()
-        .setCustomId(
-          buildCollectionListNavId({
-            viewerUserId: params.viewerUserId,
-            targetUserId: params.targetUserId,
-            page: safePage,
-            isEphemeral: params.isEphemeral,
-            direction: "prev",
-          }),
-        )
-        .setLabel("Previous")
-        .setStyle(ButtonStyle.Secondary)
-        .setDisabled(safePage <= 0),
-      new ButtonBuilder()
-        .setCustomId(
-          buildCollectionListNavId({
-            viewerUserId: params.viewerUserId,
-            targetUserId: params.targetUserId,
-            page: safePage,
-            isEphemeral: params.isEphemeral,
-            direction: "next",
-          }),
-        )
-        .setLabel("Next")
-        .setStyle(ButtonStyle.Secondary)
-        .setDisabled(safePage >= pageCount - 1),
-    );
-  }
+  const row = buildDisabledPrevNextRowWithIds(
+    buildCollectionListNavId({
+      viewerUserId: params.viewerUserId,
+      targetUserId: params.targetUserId,
+      page: safePage,
+      isEphemeral: params.isEphemeral,
+      direction: "prev",
+    }),
+    buildCollectionListNavId({
+      viewerUserId: params.viewerUserId,
+      targetUserId: params.targetUserId,
+      page: safePage,
+      isEphemeral: params.isEphemeral,
+      direction: "next",
+    }),
+    safePage,
+    pageCount,
+  ) ?? new ActionRowBuilder<ButtonBuilder>();
 
   row.addComponents(
     new ButtonBuilder()

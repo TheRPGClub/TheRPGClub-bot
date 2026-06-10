@@ -68,6 +68,7 @@ import { NOW_PLAYING_HELP_PREFIX } from "./now-playing-help.js";
 import { EphemeralOwnerMenu } from "../functions/EphemeralOwnerMenu.js";
 import { isPositiveInt } from "../utilities/ValidationUtils.js";
 import { parseCustomIdSegments } from "../utilities/CustomIdUtils.js";
+import { buildOptionalPrevNextRowWithIds } from "../functions/PaginationUtils.js";
 import {
   JOURNAL_LIST_PAGE_SIZE as LIST_PAGE_SIZE,
   JOURNAL_ALL_PAGE_SIZE as ALL_PAGE_SIZE,
@@ -231,28 +232,12 @@ function buildListPageRow(
   page: number,
   totalPages: number,
 ): ActionRowBuilder<ButtonBuilder> | null {
-  if (totalPages <= 1) return null;
-
-  const row = new ActionRowBuilder<ButtonBuilder>();
-  if (page > 0) {
-    row.addComponents(
-      new ButtonBuilder()
-        // eslint-disable-next-line local/custom-id-has-matching-handler
-        .setCustomId(`${GJ_LIST_PAGE_PREFIX}:${callerId}:${targetUserId}:${page - 1}`)
-        .setLabel("Previous")
-        .setStyle(ButtonStyle.Secondary),
-    );
-  }
-  if (page < totalPages - 1) {
-    row.addComponents(
-      new ButtonBuilder()
-        // eslint-disable-next-line local/custom-id-has-matching-handler
-        .setCustomId(`${GJ_LIST_PAGE_PREFIX}:${callerId}:${targetUserId}:${page + 1}`)
-        .setLabel("Next")
-        .setStyle(ButtonStyle.Secondary),
-    );
-  }
-  return row.components.length > 0 ? row : null;
+  return buildOptionalPrevNextRowWithIds(
+    `${GJ_LIST_PAGE_PREFIX}:${callerId}:${targetUserId}:${page - 1}`,
+    `${GJ_LIST_PAGE_PREFIX}:${callerId}:${targetUserId}:${page + 1}`,
+    page,
+    totalPages,
+  );
 }
 
 function buildJournalViewPayload(
@@ -329,27 +314,12 @@ function buildAllPageRow(
   page: number,
   totalPages: number,
 ): ActionRowBuilder<ButtonBuilder> | null {
-  if (totalPages <= 1) return null;
-  const row = new ActionRowBuilder<ButtonBuilder>();
-  if (page > 0) {
-    row.addComponents(
-      new ButtonBuilder()
-        // eslint-disable-next-line local/custom-id-has-matching-handler
-        .setCustomId(`${GJ_ALL_PAGE_PREFIX}:${callerId}:${page - 1}`)
-        .setLabel("Previous")
-        .setStyle(ButtonStyle.Secondary),
-    );
-  }
-  if (page < totalPages - 1) {
-    row.addComponents(
-      new ButtonBuilder()
-        // eslint-disable-next-line local/custom-id-has-matching-handler
-        .setCustomId(`${GJ_ALL_PAGE_PREFIX}:${callerId}:${page + 1}`)
-        .setLabel("Next")
-        .setStyle(ButtonStyle.Secondary),
-    );
-  }
-  return row.components.length > 0 ? row : null;
+  return buildOptionalPrevNextRowWithIds(
+    `${GJ_ALL_PAGE_PREFIX}:${callerId}:${page - 1}`,
+    `${GJ_ALL_PAGE_PREFIX}:${callerId}:${page + 1}`,
+    page,
+    totalPages,
+  );
 }
 
 async function autocompleteJournalSearchGame(
@@ -438,25 +408,13 @@ function buildSearchPageRow(
   page: number,
   totalPages: number,
 ): ActionRowBuilder<ButtonBuilder> | null {
-  if (totalPages <= 1) return null;
-  const row = new ActionRowBuilder<ButtonBuilder>();
-  if (page > 0) {
-    row.addComponents(
-      new ButtonBuilder()
-        .setCustomId(buildSearchCustomId(callerId, targetUserId, gameId, page - 1, query))
-        .setLabel("Previous Result")
-        .setStyle(ButtonStyle.Secondary),
-    );
-  }
-  if (page < totalPages - 1) {
-    row.addComponents(
-      new ButtonBuilder()
-        .setCustomId(buildSearchCustomId(callerId, targetUserId, gameId, page + 1, query))
-        .setLabel("Next Result")
-        .setStyle(ButtonStyle.Secondary),
-    );
-  }
-  return row.components.length > 0 ? row : null;
+  return buildOptionalPrevNextRowWithIds(
+    buildSearchCustomId(callerId, targetUserId, gameId, page - 1, query),
+    buildSearchCustomId(callerId, targetUserId, gameId, page + 1, query),
+    page,
+    totalPages,
+    { prev: "Previous Result", next: "Next Result" },
+  );
 }
 
 @Discord()

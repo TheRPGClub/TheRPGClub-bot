@@ -35,7 +35,7 @@ import {
   buildTextReply,
   safeV2TextContent,
 } from "../functions/ComponentsV2Utils.js";
-import { shouldRenderPrevNextButtons } from "../functions/PaginationUtils.js";
+import { buildDisabledPrevNextRow } from "../functions/PaginationUtils.js";
 import {
   GUILD_FETCH_CHUNK_SIZE,
   MP_INFO_PAGE_SIZE as PAGE_SIZE,
@@ -191,23 +191,14 @@ function buildPageComponents(
     .setMaxValues(1);
   components.push(new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select));
 
-  if (totalPages > 1) {
-    const prevDisabled = page <= 0;
-    const nextDisabled = page >= totalPages - 1;
-    const prev = new ButtonBuilder()
-      .setCustomId(`mpinfo-page:${ownerId}:${filterKey}:${page}:prev`)
-      .setLabel("Previous Page")
-      .setStyle(ButtonStyle.Secondary)
-      .setDisabled(prevDisabled);
-    const next = new ButtonBuilder()
-      .setCustomId(`mpinfo-page:${ownerId}:${filterKey}:${page}:next`)
-      .setLabel("Next Page")
-      .setStyle(ButtonStyle.Secondary)
-      .setDisabled(nextDisabled);
-
-    if (shouldRenderPrevNextButtons(prevDisabled, nextDisabled)) {
-      components.push(new ActionRowBuilder<ButtonBuilder>().addComponents(prev, next));
-    }
+  const navRow = buildDisabledPrevNextRow(
+    `mpinfo-page:${ownerId}:${filterKey}`,
+    page,
+    totalPages,
+    { prev: "Previous Page", next: "Next Page" },
+  );
+  if (navRow) {
+    components.push(navRow);
   }
 
   return components;
