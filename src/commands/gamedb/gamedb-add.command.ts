@@ -34,6 +34,7 @@ import {
 import { buildIgdbSelectOptions } from "./gamedb-csv-import.service.js";
 import { showGameProfile, trimTextDisplayContent } from "./gamedb-profile.service.js";
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
+import { logError } from "../../utilities/LogUtils.js";
 
 async function fetchIgdbCoverImage(details: IGDBGameDetails): Promise<Buffer | null> {
   if (!details.cover?.image_id) return null;
@@ -43,7 +44,7 @@ async function fetchIgdbCoverImage(details: IGDBGameDetails): Promise<Buffer | n
     const imageResponse = await axios.get(imageUrl, { responseType: "arraybuffer" });
     return Buffer.from(imageResponse.data);
   } catch (err) {
-    console.error("Failed to download cover image:", err);
+    logError("GamedbAddCommand.downloadCoverImage", err);
     return null;
   }
 }
@@ -99,7 +100,7 @@ export async function processReleaseDates(
         null,
       );
     } catch (err) {
-      console.error(`Failed to add release for game ${gameId}:`, err);
+      logError("GamedbAddCommand.addRelease", err);
     }
   }
 }

@@ -23,8 +23,11 @@ import {
   PRIVATE_OPTION_DESCRIPTION,
   replyIfNotOwner,
   safeDeferReply,
+  safeDeferUpdate,
+  safeMemberFetch,
   safeReply,
   safeUpdate,
+  safeUserFetch,
 } from "../functions/InteractionUtils.js";
 import {
   buildOptionalPrevNextRow,
@@ -38,7 +41,6 @@ import {
 } from "../functions/ComponentsV2Utils.js";
 import { getUserEmojiData, renderUsernameWithEmoji } from "../services/UserEmojiService.js";
 import { buildTitleHeaderContainer, buildUserHeaderContainer } from "../functions/uiComponents.js";
-import { safeDeferUpdate } from "../functions/InteractionUtils.js";
 import { recordCurrentAvatarIfNew } from "../utilities/AvatarLogUtils.js";
 import { parseCustomIdSegments } from "../utilities/CustomIdUtils.js";
 import { isAdmin } from "./admin/admin-auth.utils.js";
@@ -132,7 +134,7 @@ async function buildAvatarHistoryAllPage(
     const checks = await Promise.all(
       allRecords.map(async (record) => {
         if (guild.members.cache.has(record.userId)) return record;
-        const fetched = await guild.members.fetch(record.userId).catch(() => null);
+        const fetched = await safeMemberFetch(guild, record.userId);
         return fetched ? record : null;
       }),
     );
@@ -415,7 +417,7 @@ export class AvatarHistoryCommand {
     const targetId = interaction.values[0];
     if (!targetId) return;
     await safeDeferUpdate(interaction);
-    const target = await interaction.client.users.fetch(targetId).catch(() => null);
+    const target = await safeUserFetch(interaction.client, targetId);
     if (!target) return;
     const pageResult = await buildAvatarHistoryV2Page(target, 0);
     if (!pageResult) {

@@ -50,6 +50,7 @@ import {
 } from "./round-setup-wizard.utils.js";
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
 import { DISCORD_SELECT_LABEL_MAX } from "../../config/textLimits.js";
+import { safeIgnore } from "../../utilities/AsyncUtils.js";
 
 const NEXT_ROUND_SETUP_COMMAND_KEY = "nextround-setup";
 const MAX_SELECT_OPTIONS = 25;
@@ -216,7 +217,7 @@ async function promptSelectNomination(
     const pickedValue = Number(component.values?.[0] ?? "");
     await safeDeferUpdate(component);
     await promptMessage.delete().catch(async () => {
-      await promptMessage.edit({ components: [] }).catch(() => {});
+      safeIgnore(promptMessage.edit({ components: [] }));
     });
     if (!isPositiveInt(pickedValue)) {
       return null;
@@ -232,7 +233,7 @@ async function promptSelectNomination(
       await safeDeferUpdate(cancel);
     }
     await promptMessage.delete().catch(async () => {
-      await promptMessage.edit({ components: [] }).catch(() => {});
+      safeIgnore(promptMessage.edit({ components: [] }));
     });
     return null;
   }
@@ -365,7 +366,7 @@ export async function handleNextRoundSetup(
       const value = selection.customId.slice(promptId.length + 1);
       const chosenLabel = options.find((opt) => opt.value === value)?.label ?? value;
       await promptMessage.delete().catch(async () => {
-        await promptMessage.edit({ components: [] }).catch(() => {});
+        safeIgnore(promptMessage.edit({ components: [] }));
       });
       await updateEmbed(`> *${chosenLabel}*`);
       if (value === "cancel") {
@@ -376,7 +377,7 @@ export async function handleNextRoundSetup(
       return value;
     } catch {
       await promptMessage.delete().catch(async () => {
-        await promptMessage.edit({ components: [] }).catch(() => {});
+        safeIgnore(promptMessage.edit({ components: [] }));
       });
       await updateEmbed("❌ Timed out waiting for a selection.");
       await closeWizardState("cancelled");
@@ -399,7 +400,7 @@ export async function handleNextRoundSetup(
         return null;
       }
       const content = first.content.trim();
-      await first.delete().catch(() => {});
+      safeIgnore(first.delete());
       await updateEmbed(`> *${content}*`);
       if (/^cancel$/i.test(content)) {
         await updateEmbed("❌ Cancelled by user.");

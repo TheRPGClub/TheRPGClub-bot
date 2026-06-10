@@ -1,4 +1,5 @@
 import pg from "pg";
+import { logError } from "../utilities/LogUtils.js";
 
 const { Pool } = pg;
 
@@ -43,7 +44,7 @@ export async function initPostgresPool(): Promise<void> {
   });
 
   pool.on("error", (err: Error) => {
-    console.error("[PostgreSQL] Unexpected client error:", err);
+    logError("postgresClient.clientError", err);
   });
 
   // Verify connectivity immediately so startup fails fast on bad credentials.

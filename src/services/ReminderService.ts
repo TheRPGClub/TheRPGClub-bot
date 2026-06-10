@@ -5,6 +5,7 @@ import {
   buildReminderButtons,
   buildReminderMessage,
 } from "../functions/ReminderUi.js";
+import { logError } from "../utilities/LogUtils.js";
 
 const CHECK_INTERVAL_MS = 60_000;
 const MAX_REMINDERS_PER_CYCLE = 25;
@@ -26,7 +27,7 @@ export function startReminderService(client: Client): void {
     try {
       await processDueReminders(client);
     } catch (err) {
-      console.error("Reminder delivery failed:", err);
+      logError("ReminderService.delivery", err);
     } finally {
       currentlyChecking = false;
     }
@@ -70,7 +71,7 @@ async function deliverReminder(
       await Reminder.markSent(reminder.reminderId);
     }
   } catch (err: any) {
-    console.error(`Failed to deliver reminder ${reminder.reminderId} (attempt ${reminder.failureCount + 1}):`, err);
+    logError("ReminderService.deliverReminder", err);
     
     await Reminder.recordFailure(reminder.reminderId);
     

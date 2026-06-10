@@ -3,6 +3,7 @@ import { oraWithConnection } from "../../db/SqlManager.js";
 import Game from "../../classes/Game.js";
 import { igdbService } from "./IgdbService.js";
 import { sleep } from "../../utilities/DelayUtils.js";
+import { logError } from "../../utilities/LogUtils.js";
 
 type IgdbScanConfig = {
   enabled: boolean;
@@ -157,10 +158,7 @@ export async function igdbScanTick(): Promise<void> {
           }
         } catch (err: any) {
           failCount++;
-          console.error(
-            `[IGDB Scan] Failed to refresh ${candidate.title} (ID: ${candidate.gameId}):`,
-            err?.message ?? err,
-          );
+          logError("IgdbScanService.refreshCandidate", err?.message ?? err);
         }
       }
 
@@ -179,7 +177,7 @@ export async function igdbScanTick(): Promise<void> {
       );
     });
   } catch (err) {
-    console.error("[IGDB Scan] Batch failed:", err);
+    logError("IgdbScanService.batch", err);
   }
 }
 

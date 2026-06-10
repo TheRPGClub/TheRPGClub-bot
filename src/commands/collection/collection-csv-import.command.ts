@@ -98,6 +98,8 @@ import { createIgdbSession } from "../../services/IGDB/IgdbSelectService.js";
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
 import { DISCORD_EMBED_FIELD_VALUE_MAX } from "../../config/textLimits.js";
 import { buildTextInputRow } from "../../functions/uiComponents.js";
+import { safeIgnore } from "../../utilities/AsyncUtils.js";
+import { logError } from "../../utilities/LogUtils.js";
 
 @Discord()
 @SlashGroup("collection")
@@ -483,16 +485,13 @@ export class CollectionCsvImportCommand {
         itemId: nextItem.itemId,
         rowIndex: nextItem.rowIndex,
       });
-      console.error(
-        "[CsvImport] message render failed",
-        JSON.stringify({
-          importId: session.importId,
-          itemId: nextItem.itemId,
-          rowIndex: nextItem.rowIndex,
-          candidateCount: candidates.length,
-          messages,
-        }),
-      );
+      logError("CsvImport.messageRender", {
+        importId: session.importId,
+        itemId: nextItem.itemId,
+        rowIndex: nextItem.rowIndex,
+        candidateCount: candidates.length,
+        messages,
+      });
       throw error;
     }
   }
@@ -526,10 +525,10 @@ export class CollectionCsvImportCommand {
   ): Promise<void> {
     const guild = interaction.guild;
     if (!guild) {
-      await safeReply(interaction, buildTextReply(
+      safeIgnore(safeReply(interaction, buildTextReply(
         "This command can only be used inside a server.",
         true,
-      )).catch(() => {});
+      )));
       return;
     }
 
@@ -721,18 +720,18 @@ export class CollectionCsvImportCommand {
   async onCsvImportAction(interaction: ButtonInteraction): Promise<void> {
     const parsed = parseCollectionCsvImportActionId(interaction.customId);
     if (!parsed) {
-      await safeReply(interaction, buildTextReply(
+      safeIgnore(safeReply(interaction, buildTextReply(
         "This CSV import control is invalid.",
         true,
-      )).catch(() => {});
+      )));
       return;
     }
 
     if (interaction.user.id !== parsed.ownerId) {
-      await safeReply(interaction, buildTextReply(
+      safeIgnore(safeReply(interaction, buildTextReply(
         "This CSV import control is not for you.",
         true,
-      )).catch(() => {});
+      )));
       return;
     }
 
@@ -758,7 +757,7 @@ export class CollectionCsvImportCommand {
 
     const item = await getNextPendingCollectionCsvImportItem(session.importId);
     if (!item || item.itemId !== parsed.itemId) {
-      await safeDeferUpdate(interaction).catch(() => {});
+      safeIgnore(safeDeferUpdate(interaction));
       await this.renderNextCsvImportItem(interaction, session.importId, parsed.ownerId);
       return;
     }
@@ -777,7 +776,7 @@ export class CollectionCsvImportCommand {
     }
 
     if (parsed.action === "skip") {
-      await safeDeferUpdate(interaction).catch(() => {});
+      safeIgnore(safeDeferUpdate(interaction));
       await updateCollectionCsvImportItem(item.itemId, {
         status: "SKIPPED",
         resultReason: "MANUAL_SKIP",
@@ -810,7 +809,7 @@ export class CollectionCsvImportCommand {
         value: item.rawTitle.slice(0, 120),
         placeholder: "Call of Duty Classic",
       }));
-      await interaction.showModal(modal).catch(() => {});
+      safeIgnore(interaction.showModal(modal));
       return;
     }
 
@@ -831,7 +830,7 @@ export class CollectionCsvImportCommand {
         maxLength: 20,
         placeholder: "12345",
       }));
-      await interaction.showModal(modal).catch(() => {});
+      safeIgnore(interaction.showModal(modal));
       return;
     }
   }
@@ -842,18 +841,18 @@ export class CollectionCsvImportCommand {
   async onCsvImportChoose(interaction: ButtonInteraction): Promise<void> {
     const parsed = parseCollectionCsvChooseId(interaction.customId);
     if (!parsed) {
-      await safeReply(interaction, buildTextReply(
+      safeIgnore(safeReply(interaction, buildTextReply(
         "This CSV import choice is invalid.",
         true,
-      )).catch(() => {});
+      )));
       return;
     }
 
     if (interaction.user.id !== parsed.ownerId) {
-      await safeReply(interaction, buildTextReply(
+      safeIgnore(safeReply(interaction, buildTextReply(
         "This CSV import choice is not for you.",
         true,
-      )).catch(() => {});
+      )));
       return;
     }
 
@@ -871,12 +870,12 @@ export class CollectionCsvImportCommand {
 
     const item = await getNextPendingCollectionCsvImportItem(session.importId);
     if (!item || item.itemId !== parsed.itemId) {
-      await safeDeferUpdate(interaction).catch(() => {});
+      safeIgnore(safeDeferUpdate(interaction));
       await this.renderNextCsvImportItem(interaction, session.importId, parsed.ownerId);
       return;
     }
 
-    await safeDeferUpdate(interaction).catch(() => {});
+    safeIgnore(safeDeferUpdate(interaction));
     await this.applyCsvImportSelection({
       ownerId: parsed.ownerId,
       item,
@@ -899,27 +898,27 @@ export class CollectionCsvImportCommand {
   async onCsvImportRemapModal(interaction: ModalSubmitInteraction): Promise<void> {
     const parsed = parseCollectionCsvRemapModalId(interaction.customId);
     if (!parsed) {
-      await safeReply(interaction, buildTextReply(
+      safeIgnore(safeReply(interaction, buildTextReply(
         "This remap form is invalid.",
         true,
-      )).catch(() => {});
+      )));
       return;
     }
 
     if (interaction.user.id !== parsed.ownerId) {
-      await safeReply(interaction, buildTextReply(
+      safeIgnore(safeReply(interaction, buildTextReply(
         "This remap form is not for you.",
         true,
-      )).catch(() => {});
+      )));
       return;
     }
 
     const session = await getCollectionCsvImportById(parsed.importId);
     if (!session || session.userId !== parsed.ownerId || session.status !== "ACTIVE") {
-      await safeReply(interaction, buildTextReply(
+      safeIgnore(safeReply(interaction, buildTextReply(
         "This CSV import session is no longer active.",
         true,
-      )).catch(() => {});
+      )));
       return;
     }
 
@@ -992,27 +991,27 @@ export class CollectionCsvImportCommand {
   async onCsvImportGameIdModal(interaction: ModalSubmitInteraction): Promise<void> {
     const parsed = parseCollectionCsvGameIdModalId(interaction.customId);
     if (!parsed) {
-      await safeReply(interaction, buildTextReply(
+      safeIgnore(safeReply(interaction, buildTextReply(
         "This GameDB ID form is invalid.",
         true,
-      )).catch(() => {});
+      )));
       return;
     }
 
     if (interaction.user.id !== parsed.ownerId) {
-      await safeReply(interaction, buildTextReply(
+      safeIgnore(safeReply(interaction, buildTextReply(
         "This GameDB ID form is not for you.",
         true,
-      )).catch(() => {});
+      )));
       return;
     }
 
     const session = await getCollectionCsvImportById(parsed.importId);
     if (!session || session.userId !== parsed.ownerId || session.status !== "ACTIVE") {
-      await safeReply(interaction, buildTextReply(
+      safeIgnore(safeReply(interaction, buildTextReply(
         "This CSV import session is no longer active.",
         true,
-      )).catch(() => {});
+      )));
       return;
     }
 

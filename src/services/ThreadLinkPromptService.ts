@@ -32,6 +32,8 @@ import { shouldPrompt, markPrompted, getGameReleaseYear } from "./ThreadLinkProm
 import { COLOR_BLUE_INFO } from "../config/colors.js";
 import { DISCORD_AUTOCOMPLETE_DESC_MAX } from "../config/textLimits.js";
 import { assertCustomIdSegments } from "../utilities/CustomIdUtils.js";
+import { safeIgnore } from "../utilities/AsyncUtils.js";
+import { logError } from "../utilities/LogUtils.js";
 
 function hasIgdbConfig(): boolean {
   return Boolean(process.env.IGDB_CLIENT_ID && process.env.IGDB_CLIENT_SECRET);
@@ -84,7 +86,7 @@ async function promptThread(thread: ThreadChannel): Promise<void> {
       components: [buildButtons(thread.id)],
     });
   } catch (err) {
-    console.error("[ThreadLinkPrompt] Failed to post prompt:", err);
+    logError("ThreadLinkPromptService.postPrompt", err);
   }
 }
 
@@ -110,7 +112,7 @@ export class ThreadLinkButtonHandlers {
     const title = threadName.split("(")[0].trim() || threadName;
 
     await safeDeferReply(interaction, { flags: MessageFlags.Ephemeral });
-    await interaction.message.edit({ components: [] }).catch(() => {});
+    safeIgnore(interaction.message.edit({ components: [] }));
 
     try {
       const localMatches = (await Game.searchGames(title)).filter((g) =>
@@ -162,7 +164,7 @@ export class ThreadLinkButtonHandlers {
 
         try {
           await interaction.message.delete().catch(async () => {
-            await interaction.message.edit({ components: [] }).catch(() => {});
+            safeIgnore(interaction.message.edit({ components: [] }));
           });
         } catch {
           // ignore
@@ -237,7 +239,7 @@ export class ThreadLinkButtonHandlers {
         "Okay, I'll skip linking a game for this thread going forward.",
         true,
       ));
-      await interaction.message.edit({ components: [] }).catch(() => {});
+      safeIgnore(interaction.message.edit({ components: [] }));
     } catch (err: any) {
       const msg = err?.message ?? String(err);
       await safeReply(interaction, buildTextReply(`Failed to update skip flag: ${msg}`, true));

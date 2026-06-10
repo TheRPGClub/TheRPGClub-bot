@@ -1,4 +1,5 @@
 import axios from "axios";
+import { logError } from "../../utilities/LogUtils.js";
 
 interface ITwitchAuthResponse {
   access_token: string;
@@ -78,7 +79,7 @@ class IgdbService {
   constructor() {
     // Config is read lazily via getters to allow dotenv to populate env before use
     if (!process.env.IGDB_CLIENT_ID || !process.env.IGDB_CLIENT_SECRET) {
-      console.error("IGDB_CLIENT_ID or IGDB_CLIENT_SECRET not set in environment variables.");
+      logError("IgdbService", "IGDB_CLIENT_ID or IGDB_CLIENT_SECRET not configured");
     }
   }
 
@@ -107,7 +108,7 @@ class IgdbService {
       this.tokenExpiry = Date.now() + (response.data.expires_in * 1000) - 60000;
       return this.accessToken;
     } catch (error) {
-      console.error("IGDB: Failed to fetch Twitch access token:", error);
+      logError("IgdbService.fetchToken", error);
       throw new Error("IGDB service unavailable: Could not authenticate with Twitch.");
     }
   }
@@ -150,7 +151,7 @@ class IgdbService {
         total: parseInt(response.headers?.["x-count"] as string, 10) || response.data.length,
       };
     } catch (error: any) {
-      console.error("IGDB: Failed to search games:", error);
+      logError("IgdbService.searchGames", error);
       throw new Error(`IGDB service unavailable: Could not search for games. Error: ${error.message}`);
     }
   }
@@ -272,7 +273,7 @@ class IgdbService {
 
       return details;
     } catch (error: any) {
-      console.error("IGDB: Failed to get game details:", error);
+      logError("IgdbService.getGameDetails", error);
       throw new Error(`IGDB service unavailable: Could not retrieve game details. Error: ${error.message}`);
     }
   }
@@ -308,7 +309,7 @@ class IgdbService {
 
       return response.data ?? [];
     } catch (error: any) {
-      console.error("IGDB: Failed to fetch platforms:", error);
+      logError("IgdbService.fetchPlatforms", error);
       throw new Error(
         `IGDB service unavailable: Could not fetch platforms. Error: ${error.message}`,
       );

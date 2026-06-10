@@ -3,6 +3,7 @@ import type { Client } from "discordx";
 import { DateTime } from "luxon";
 import BotVotingInfo, { type IBotVotingInfoEntry } from "../classes/BotVotingInfo.js";
 import { NOMINATION_DISCUSSION_CHANNEL_IDS } from "../config/nominationChannels.js";
+import { logError } from "../utilities/LogUtils.js";
 
 const CHECK_INTERVAL_MS = 60_000;
 const REMINDER_ZONE = "America/New_York";
@@ -50,7 +51,7 @@ export function startNominationReminderService(client: Client): void {
     try {
       await checkAndSendReminders(client);
     } catch (err) {
-      console.error("Nomination reminder check failed:", err);
+      logError("NominationReminderService.check", err);
     } finally {
       currentlyChecking = false;
     }
@@ -133,7 +134,7 @@ async function sendReminderToAllChannels(client: Client, content: string): Promi
       await textChannel.send(content);
       successCount += 1;
     } catch (err) {
-      console.error(`Failed to send nomination reminder to channel ${channelId}:`, err);
+      logError("NominationReminderService.sendReminder", err);
     }
   }
 

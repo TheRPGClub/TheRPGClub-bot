@@ -11,6 +11,7 @@ import {
   type IRssFeedItem,
   type IRssFeed,
 } from "../classes/RssFeed.js";
+import { logError } from "../utilities/LogUtils.js";
 
 const POLL_INTERVAL_MS: number = 5 * 60 * 1000;
 const ERROR_LOG_COOLDOWN = 60 * 60 * 1000; // 1 hour
@@ -53,12 +54,12 @@ async function processFeed(
     if (msg.includes("Status code 500")) {
       const last = lastErrorLog.get(feed.feedUrl) || 0;
       if (Date.now() - last > ERROR_LOG_COOLDOWN) {
-        console.error(`[RSS] 500 Error for ${feed.feedUrl} (logged once/hr).`);
+        logError("RssFeedService.500Error", feed.feedUrl);
         lastErrorLog.set(feed.feedUrl, Date.now());
       }
       return;
     }
-    console.error(`[RSS] Failed to parse feed ${feed.feedUrl}:`, err);
+    logError("RssFeedService.parseFeed", err);
     return;
   }
 
@@ -127,10 +128,10 @@ async function processFeed(
         await textChannel.send(`${item.title}\n${item.link}`);
       }
     } catch (err) {
-      console.error(`[RSS] Failed to send items for feed ${feed.feedUrl}:`, err);
+      logError("RssFeedService.sendItems", err);
     }
   } catch (err) {
-    console.error(`[RSS] Failed to fetch channel ${feed.channelId}:`, err);
+    logError("RssFeedService.fetchChannel", err);
   }
 }
 
@@ -152,7 +153,7 @@ export function startRssFeedService(client: Client): void {
         }
       });
     } catch (err) {
-      console.error("[RSS] Polling error:", err);
+      logError("RssFeedService.polling", err);
     } finally {
       isPolling = false;
     }

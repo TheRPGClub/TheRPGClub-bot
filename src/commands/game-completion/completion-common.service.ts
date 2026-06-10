@@ -22,6 +22,7 @@ import {
 } from "../profile.command.js";
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
 import { MAX_CONTAINER_TEXT, MAX_SECTION_TEXT } from "../../config/textLimits.js";
+import { safeIgnore } from "../../utilities/AsyncUtils.js";
 
 export type CommonCompletionSort =
   | "title_asc"
@@ -490,7 +491,7 @@ export async function handleCommonCompletionNav(
 
   const targetPage = parsed.direction === "next" ? parsed.page + 1 : Math.max(parsed.page - 1, 0);
 
-  await safeDeferUpdate(interaction).catch(() => {});
+  safeIgnore(safeDeferUpdate(interaction));
 
   const ephemeral = interaction.message?.flags?.has(MessageFlags.Ephemeral) ?? true;
   await renderCommonCompletionPage(interaction, parsed.state, targetPage, ephemeral);
@@ -502,7 +503,7 @@ export async function handleCommonCompletionBack(
   const parsed = parseCommonBackCustomId(interaction.customId);
   if (!parsed) return;
 
-  await safeDeferUpdate(interaction).catch(() => {});
+  safeIgnore(safeDeferUpdate(interaction));
 
   const ephemeral = interaction.message?.flags?.has(MessageFlags.Ephemeral) ?? true;
   await renderCommonCompletionPage(interaction, parsed.state, parsed.page, ephemeral);

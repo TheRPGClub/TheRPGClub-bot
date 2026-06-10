@@ -12,6 +12,7 @@ import {
 import { getDialect } from "../db/dialect.js";
 import { MemberSql } from "../db/sql/index.js";
 import { isPositiveInt, requirePositiveInt } from "../utilities/ValidationUtils.js";
+import { logError } from "../utilities/LogUtils.js";
 
 const dialect = getDialect();
 
@@ -318,7 +319,7 @@ export default class Member {
       );
     } catch (err: any) {
       const msg = err?.message ?? String(err);
-      console.error(`[Member] Failed to update last seen for ${userId}: ${msg}`);
+      logError("Member.updateLastSeen", msg);
     }
   }
 
@@ -1290,7 +1291,7 @@ export default class Member {
       );
     } catch (err: any) {
       const msg = err?.message ?? String(err);
-      console.error(`[Member] Failed to load nick history for ${userId}: ${msg}`);
+      logError("Member.loadNickHistory", msg);
       return [];
     }
   }

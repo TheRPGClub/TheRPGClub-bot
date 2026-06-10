@@ -5,6 +5,7 @@ import {
   disableReminder,
   type IPublicReminder,
 } from "../classes/PublicReminder.js";
+import { logError } from "../utilities/LogUtils.js";
 
 const PUBLIC_REMINDER_INTERVAL_MS: number = 60_000;
 const MAX_PER_CYCLE = 50;
@@ -21,7 +22,7 @@ export function startPublicReminderService(client: Client): void {
     try {
       await checkPublicReminders(client);
     } catch (err) {
-      console.error("[PublicReminderService] Error checking reminders:", err);
+      logError("PublicReminderService.check", err);
     } finally {
       checkingPublic = false;
     }
@@ -46,7 +47,7 @@ async function checkPublicReminders(client: Client): Promise<void> {
       if (!channel || !(channel as any).isTextBased?.()) continue;
       await (channel as any).send(reminder.message);
     } catch (err) {
-      console.error(`[PublicReminderService] Failed to send reminder #${reminder.reminderId}:`, err);
+      logError("PublicReminderService.sendReminder", err);
     }
 
     await handleRecurrence(reminder);

@@ -34,11 +34,10 @@ import {
 } from "../../functions/ComponentsV2Utils.js";
 import { COMPONENTS_V2_FLAG } from "../../config/flags.js";
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
-import {
-  DISCORD_AUTOCOMPLETE_DESC_MAX,
-  DISCORD_SELECT_LABEL_MAX,
-} from "../../config/textLimits.js";
+import { DISCORD_AUTOCOMPLETE_DESC_MAX } from "../../config/textLimits.js";
+import { buildSelectOptions } from "../../functions/uiComponents.js";
 import { assertCustomIdSegments } from "../../utilities/CustomIdUtils.js";
+import { logError } from "../../utilities/LogUtils.js";
 
 /**
  * Creates a completion session and returns the session ID
@@ -60,17 +59,17 @@ export async function promptCompletionSelection(
   const localResults = await Game.searchGames(searchTerm);
   if (localResults.length) {
     const sessionId = createCompletionSession(ctx);
-    const options = localResults.slice(0, 24).map((game) => ({
-      label: game.title.slice(0, DISCORD_SELECT_LABEL_MAX),
+    const gameOptions = localResults.map((game) => ({
+      label: game.title,
       value: String(game.id),
       description: `GameDB #${game.id}`,
     }));
-
-    options.push({
+    gameOptions.push({
       label: "Import another game from IGDB",
       value: "import-igdb",
       description: "Search IGDB and import a new GameDB entry",
     });
+    const options = buildSelectOptions(gameOptions);
 
     const select = new StringSelectMenuBuilder()
       // eslint-disable-next-line local/custom-id-has-matching-handler
@@ -508,7 +507,7 @@ export async function importGameFromIgdb(
       const imageResponse = await axios.get(imageUrl, { responseType: "arraybuffer" });
       imageData = Buffer.from(imageResponse.data);
     } catch (err) {
-      console.error("Failed to download cover image:", err);
+      logError("CompletionAddService.downloadCoverImage", err);
     }
   }
 

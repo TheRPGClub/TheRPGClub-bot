@@ -2,6 +2,7 @@ import sharp from "sharp";
 import type { Client, GuildMember } from "discord.js";
 import Member from "../classes/Member.js";
 import { sleep } from "../utilities/DelayUtils.js";
+import { logError } from "../utilities/LogUtils.js";
 import {
   ADMIN_ROLE_ID,
   MEMBER_ROLE_ID,
@@ -123,14 +124,14 @@ export async function startUserEmojiService(client: Client): Promise<void> {
     console.log("[UserEmojiService] FORCE_EMOJI_REFRESH detected -- all emojis will be re-uploaded.");
   }
   syncAllUserEmoji(client, forceRefresh).catch((err) => {
-    console.error("[UserEmojiService] Initial sync failed:", err);
+    logError("UserEmojiService.initialSync", err);
   });
 }
 
 async function syncAllUserEmoji(client: Client, forceRefresh = false): Promise<void> {
   const app = client.application;
   if (!app) {
-    console.error("[UserEmojiService] client.application not available.");
+    logError("UserEmojiService", "client.application not available");
     return;
   }
 
@@ -149,7 +150,7 @@ async function syncAllUserEmoji(client: Client, forceRefresh = false): Promise<v
 
   const guild = client.guilds.cache.first();
   if (!guild) {
-    console.error("[UserEmojiService] No guild found.");
+    logError("UserEmojiService", "no guild found");
     return;
   }
 
@@ -174,7 +175,7 @@ async function syncAllUserEmoji(client: Client, forceRefresh = false): Promise<v
         try {
           await app.emojis.delete(emojiId);
         } catch (err) {
-          console.error(`[UserEmojiService] Failed to delete emoji for refresh (${member.displayName}):`, err);
+          logError("UserEmojiService.deleteEmojiForRefresh", err);
         }
       }
       const avatarUrl = member.displayAvatarURL({ extension: "png", size: 128, forceStatic: true });
@@ -190,7 +191,7 @@ async function syncAllUserEmoji(client: Client, forceRefresh = false): Promise<v
           await sleep(CREATION_THROTTLE_MS);
         }
       } catch (err) {
-        console.error(`[UserEmojiService] Failed to recreate emoji for ${member.displayName}:`, err);
+        logError("UserEmojiService.recreateEmoji", err);
       }
     }
   }
@@ -212,12 +213,12 @@ async function syncAllUserEmoji(client: Client, forceRefresh = false): Promise<v
       await app.emojis.delete(emojiId);
       console.log(`[UserEmojiService] Deleted orphaned emoji: ${emojiName}`);
     } catch (err) {
-      console.error(`[UserEmojiService] Failed to delete orphan ${emojiName}:`, err);
+      logError("UserEmojiService.deleteOrphanEmoji", err);
     }
     const orphanUserId = dbNameToUser.get(emojiName);
     if (orphanUserId) {
       await Member.updateEmojiName(orphanUserId, null).catch((err) => {
-        console.error(`[UserEmojiService] Failed to clear emoji name for ${orphanUserId}:`, err);
+        logError("UserEmojiService.clearEmojiName", err);
       });
     }
   }
@@ -241,12 +242,12 @@ async function createEmojiForMember(
     if (emoji.id) {
       emojiCache.set(member.id, { emojiId: emoji.id, emojiName });
       await Member.updateEmojiName(member.id, emojiName).catch((err) => {
-        console.error(`[UserEmojiService] Failed to save emoji name for ${member.id}:`, err);
+        logError("UserEmojiService.saveEmojiName", err);
       });
       return true;
     }
   } catch (err) {
-    console.error(`[UserEmojiService] Failed to create emoji for ${member.displayName}:`, err);
+    logError("UserEmojiService.createEmoji", err);
   }
   return false;
 }
@@ -265,7 +266,7 @@ export async function syncUserEmojiFromAvatarChange(
   try {
     await app.emojis.delete(existing.emojiId);
   } catch (err) {
-    console.error(`[UserEmojiService] Failed to delete old emoji for ${userId}:`, err);
+    logError("UserEmojiService.deleteOldEmoji", err);
   }
   emojiCache.delete(userId);
 
@@ -278,7 +279,7 @@ export async function syncUserEmojiFromAvatarChange(
       emojiCache.set(userId, { emojiId: emoji.id, emojiName: existing.emojiName });
     }
   } catch (err) {
-    console.error(`[UserEmojiService] Failed to recreate emoji for ${userId}:`, err);
+    logError("UserEmojiService.recreateEmoji", err);
   }
 }
 
@@ -298,7 +299,7 @@ export async function syncUserEmojiFromDisplayNameChange(
     try {
       await app.emojis.delete(existing.emojiId);
     } catch (err) {
-      console.error(`[UserEmojiService] Failed to delete old emoji for ${member.id}:`, err);
+      logError("UserEmojiService.deleteOldEmoji", err);
     }
     emojiCache.delete(member.id);
   }
@@ -312,11 +313,11 @@ export async function syncUserEmojiFromDisplayNameChange(
     if (emoji.id) {
       emojiCache.set(member.id, { emojiId: emoji.id, emojiName: newEmojiName });
       await Member.updateEmojiName(member.id, newEmojiName).catch((err) => {
-        console.error(`[UserEmojiService] Failed to save emoji name for ${member.id}:`, err);
+        logError("UserEmojiService.saveEmojiName", err);
       });
     }
   } catch (err) {
-    console.error(`[UserEmojiService] Failed to recreate emoji for ${member.id}:`, err);
+    logError("UserEmojiService.recreateEmoji", err);
   }
 }
 

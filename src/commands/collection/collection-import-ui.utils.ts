@@ -11,6 +11,7 @@ import {
 } from "../imports/import-scaffold.service.js";
 import { safeV2TextContent } from "../../functions/ComponentsV2Utils.js";
 import type { ImportCandidate } from "../../functions/ImportCandidateUtils.js";
+import { logError } from "../../utilities/LogUtils.js";
 
 export async function buildImportCandidatesContainer(params: {
   ownerId: string;
@@ -89,17 +90,14 @@ export async function buildImportCandidatesContainer(params: {
       container.addSectionComponents(section);
     } catch (error) {
       const messages = flattenErrorMessages(error);
-      console.error(
-        `[${params.logPrefix}] candidate section validation failed`,
-        JSON.stringify({
-          importId: params.importId,
-          itemId: params.itemId,
-          gameDbGameId: entry.gameId,
-          titleLength: entry.title.length,
-          sectionTextLength: sectionText.length,
-          messages,
-        }),
-      );
+      logError(`${params.logPrefix}.sectionValidation`, {
+        importId: params.importId,
+        itemId: params.itemId,
+        gameDbGameId: entry.gameId,
+        titleLength: entry.title.length,
+        sectionTextLength: sectionText.length,
+        messages,
+      });
       container.addTextDisplayComponents(
         new TextDisplayBuilder().setContent(
           safeV2TextContent(`**${entry.title}** | #${entry.gameId}`, 300),

@@ -52,6 +52,8 @@ import { isPositiveInt, isValidPlaytimeHours } from "../utilities/ValidationUtil
 import { sleep } from "../utilities/DelayUtils.js";
 import { DISCORD_AUTOCOMPLETE_DESC_MAX, DISCORD_SELECT_LABEL_MAX } from "../config/textLimits.js";
 import { assertCustomIdSegments } from "../utilities/CustomIdUtils.js";
+import { safeIgnore } from "../utilities/AsyncUtils.js";
+import { logError } from "../utilities/LogUtils.js";
 
 type CompletionAddContext = {
   targetUserId: string;
@@ -270,8 +272,7 @@ export class SuperAdmin {
     const ctx = superadminCompletionAddSessions.get(sessionId);
 
     if (!ctx) {
-      await safeReply(interaction, buildTextReply("This completion prompt has expired.", true))
-        .catch(() => {});
+      safeIgnore(safeReply(interaction, buildTextReply("This completion prompt has expired.", true)));
       return;
     }
 
@@ -281,7 +282,7 @@ export class SuperAdmin {
 
     const value = interaction.values?.[0];
     if (!value) {
-      await safeReply(interaction, buildTextReply("No selection received.", true)).catch(() => {});
+      safeIgnore(safeReply(interaction, buildTextReply("No selection received.", true)));
       return;
     }
 
@@ -292,7 +293,7 @@ export class SuperAdmin {
     } finally {
       superadminCompletionAddSessions.delete(sessionId);
       try {
-        await safeReply(interaction, { components: [] }).catch(() => {});
+        safeIgnore(safeReply(interaction, { components: [] }));
       } catch {
         // ignore
       }
@@ -309,7 +310,7 @@ export class SuperAdmin {
     const ctx = superadminCompletionPlatformSessions.get(sessionId);
 
     if (!ctx) {
-      await safeReply(interaction, buildTextReply("This completion prompt has expired.", true)).catch(() => {});
+      safeIgnore(safeReply(interaction, buildTextReply("This completion prompt has expired.", true)));
       return;
     }
 
@@ -317,7 +318,7 @@ export class SuperAdmin {
     if (!okToUseCommand) return;
 
     if (interaction.user.id !== ctx.userId) {
-      await safeReply(interaction, buildTextReply("This completion prompt isn't for you.", true)).catch(() => {});
+      safeIgnore(safeReply(interaction, buildTextReply("This completion prompt isn't for you.", true)));
       return;
     }
 
@@ -335,7 +336,7 @@ export class SuperAdmin {
       ctx.platforms.some((platform) => platform.id === platformId)
     );
     if (!valid) {
-      await safeReply(interaction, buildTextReply("Invalid platform selection.", true)).catch(() => {});
+      safeIgnore(safeReply(interaction, buildTextReply("Invalid platform selection.", true)));
       return;
     }
 
@@ -472,9 +473,9 @@ export class SuperAdmin {
     if ("isMessageComponent" in interaction && interaction.isMessageComponent()) {
       const loading = { content: `Searching IGDB for "${searchTerm}"...`, components: [] };
       if (isInteractionSettled(interaction)) {
-        await safeReply(interaction, loading).catch(() => {});
+        safeIgnore(safeReply(interaction, loading));
       } else {
-        await safeUpdate(interaction, loading).catch(() => {});
+        safeIgnore(safeUpdate(interaction, loading));
       }
     } else {
       await safeReply(interaction, buildTextReply(`Searching IGDB for "${searchTerm}"...`, true));
@@ -484,7 +485,7 @@ export class SuperAdmin {
     if (!igdbSearch.results.length) {
       const content = `No GameDB or IGDB matches found for "${searchTerm}".`;
       if ("isMessageComponent" in interaction && interaction.isMessageComponent()) {
-        await safeReply(interaction, buildTextReply(content, false)).catch(() => {});
+        safeIgnore(safeReply(interaction, buildTextReply(content, false)));
       } else {
         await safeReply(interaction, buildTextReply(content, true));
       }
@@ -509,10 +510,10 @@ export class SuperAdmin {
         if (!sel.deferred && !sel.replied) {
           await safeDeferUpdate(sel);
         }
-        await safeReply(sel, {
+        safeIgnore(safeReply(sel, {
           content: "Importing game details from IGDB...",
           components: [],
-        }).catch(() => {});
+        }));
 
         const imported = await this.importGameFromIgdbForCompletion(gameId);
         const game = await Game.getGameById(imported.gameId);
@@ -624,7 +625,7 @@ export class SuperAdmin {
       return;
     }
 
-    await (targetChannel as any).send({ content: sanitizedMessage }).catch(() => {});
+    safeIgnore((targetChannel as any).send({ content: sanitizedMessage }));
     await safeReply(interaction, buildTextReply("Message sent.", true));
   }
 
@@ -683,7 +684,7 @@ export class SuperAdmin {
         const imageResponse = await axios.get(imageUrl, { responseType: "arraybuffer" });
         imageData = Buffer.from(imageResponse.data);
       } catch (err) {
-        console.error("Failed to download cover image:", err);
+        logError("SuperadminCommand.downloadCoverImage", err);
       }
     }
 
@@ -841,13 +842,13 @@ export class SuperAdmin {
             continue;
           } catch (retryErr) {
             failCount++;
-            console.error(`Failed to upsert user ${user.id} after stripping avatar`, retryErr);
+            logError("SuperadminCommand.upsertUserAfterStrippingAvatar", retryErr);
             await sleep(1000);
             continue;
           }
         }
         failCount++;
-        console.error(`Failed to upsert user ${user.id}`, err);
+        logError("SuperadminCommand.upsertUser", err);
       }
 
       await sleep(1000);

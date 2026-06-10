@@ -19,6 +19,7 @@ import { igdbService } from "../services/IGDB/IgdbService.js";
 import { safeReply, safeUpdate } from "../functions/InteractionUtils.js";
 import { buildTextReply } from "../functions/ComponentsV2Utils.js";
 import { PRESENCE_PROMPT_CHANNEL_ID } from "../config/channels.js";
+import { logError } from "../utilities/LogUtils.js";
 
 const YES_PREFIX = "presence-np-yes";
 const NO_PREFIX = "presence-np-no";
@@ -123,7 +124,7 @@ export class PresenceUpdate {
         user.username ?? user.globalName ?? "",
         newPresence.activities,
       ).catch((err) => {
-        console.error("Failed to record user activity icons:", err);
+        logError("PresenceUpdate.recordActivityIcons", err);
       });
     }
 

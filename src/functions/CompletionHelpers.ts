@@ -25,7 +25,9 @@ import Member from "../classes/Member.js";
 import { ANNOUNCEMENT_CHANNEL_ID, BOT_DEV_CHANNEL_ID } from "../config/channels.js";
 import { COMPONENTS_V2_FLAG } from "../config/flags.js";
 import { buildComponentsV2Flags, buildTextContainer } from "./ComponentsV2Utils.js";
-import { isInteractionSettled, safeReply, safeUpdate } from "./InteractionUtils.js";
+import { isInteractionSettled, safeReply, safeUpdate, safeUserFetch } from "./InteractionUtils.js";
+import { safeIgnore } from "../utilities/AsyncUtils.js";
+import { logError } from "../utilities/LogUtils.js";
 
 const MAX_PLAYTIME_HOURS = 999999.99;
 const COMPLETION_COVER_ATTACHMENT_PREFIX = "completion-cover";
@@ -178,7 +180,7 @@ export async function announceCompletion(
       return;
     }
 
-    const user = await interaction.client.users.fetch(userId).catch(() => null);
+    const user = await safeUserFetch(interaction.client, userId);
     if (!user) {
       return;
     }
@@ -234,7 +236,7 @@ export async function announceCompletion(
       flags: COMPONENTS_V2_FLAG,
     });
   } catch (err) {
-    console.error("Failed to announce completion:", err);
+    logError("CompletionHelpers.announceCompletion", err);
   }
 }
 
@@ -297,20 +299,20 @@ export async function promptRemoveFromNowPlaying(
       time: 120_000,
     });
     const remove = selection.customId.endsWith(":yes");
-    await safeUpdate(selection, {
+    safeIgnore(safeUpdate(selection, {
       components: [buildTextContainer(
         remove
           ? "Okay, I'll remove it from Now Playing."
           : "Okay, I'll leave it in your Now Playing list.",
       )],
       flags: buildComponentsV2Flags(false),
-    }).catch(() => {});
+    }));
     return remove;
   } catch {
-    await message.edit({
+    safeIgnore(message.edit({
       components: [buildTextContainer("No response received. Leaving it in your Now Playing list.")],
       flags: buildComponentsV2Flags(false),
-    }).catch(() => {});
+    }));
     return false;
   }
 }

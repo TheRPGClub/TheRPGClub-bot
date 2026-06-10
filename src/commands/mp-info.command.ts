@@ -43,6 +43,7 @@ import {
 } from "../config/pagination.js";
 import { parseCustomIdSegments } from "../utilities/CustomIdUtils.js";
 import { DISCORD_SELECT_LABEL_MAX } from "../config/textLimits.js";
+import { chunk } from "../utilities/ArrayUtils.js";
 
 const MAX_OPTIONS = 25;
 
@@ -91,14 +92,6 @@ function decodeFilters(key: string): PlatformFilters {
   };
 }
 
-function chunkIds(ids: string[], size: number): string[][] {
-  const chunks: string[][] = [];
-  for (let i = 0; i < ids.length; i += size) {
-    chunks.push(ids.slice(i, i + size));
-  }
-  return chunks;
-}
-
 async function filterActiveGuildMembers(
   members: IMemberPlatformRecord[],
   guild: CommandInteraction["guild"],
@@ -106,7 +99,7 @@ async function filterActiveGuildMembers(
   if (!guild || members.length === 0) return members;
 
   const ids = members.map((member) => member.userId);
-  const chunks = chunkIds(ids, GUILD_FETCH_CHUNK_SIZE);
+  const chunks = chunk(ids, GUILD_FETCH_CHUNK_SIZE);
   const present = new Set<string>();
 
   for (const chunk of chunks) {

@@ -2,6 +2,7 @@ import type { ForumChannel, ThreadChannel } from "discord.js";
 import { ChannelType } from "discord.js";
 import type { Client } from "discordx";
 import { LIVE_EVENT_FORUM_ID, NOW_PLAYING_FORUM_ID } from "../config/channels.js";
+import { logError } from "../utilities/LogUtils.js";
 
 const TARGET_FORUM_IDS: string[] = [
   NOW_PLAYING_FORUM_ID,
@@ -18,8 +19,7 @@ async function joinThread(thread: ThreadChannel): Promise<void> {
       await thread.join();
     }
   } catch (err) {
-    const name = thread?.name ?? thread?.id ?? "unknown";
-    console.error(`[ForumJoin] Failed to join thread ${name}:`, err);
+    logError("ForumThreadJoinService.joinThread", err);
   }
 }
 
@@ -41,7 +41,7 @@ export async function joinAllTargetForumThreads(client: Client): Promise<void> {
         await joinThread(thread);
       }
     } catch (err) {
-      console.error(`[ForumJoin] Failed to join threads for forum ${forumId}:`, err);
+      logError("ForumThreadJoinService.joinThreadsForForum", err);
     }
   }
 }

@@ -49,6 +49,7 @@ import {
   DISCORD_AUTOCOMPLETE_DESC_MAX,
   DISCORD_SELECT_LABEL_MAX,
 } from "../../config/textLimits.js";
+import { safeIgnore } from "../../utilities/AsyncUtils.js";
 
 export class CompletionatorUiService {
   buildCompletionatorBaseLines(
@@ -656,7 +657,7 @@ export class CompletionatorUiService {
     const flags = buildComponentsV2Flags(Boolean(ephemeral));
     const files = payload.files ?? [];
     if (context?.message) {
-      await context.message.edit({ ...payload, files, flags }).catch(() => {});
+      safeIgnore(context.message.edit({ ...payload, files, flags }));
       return;
     }
 

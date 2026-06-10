@@ -14,6 +14,8 @@ import {
   type ApiGetRawMeta,
 } from "../services/RpgClubApiClient.js";
 import { isPositiveInt } from "../utilities/ValidationUtils.js";
+import { safeIgnore } from "../utilities/AsyncUtils.js";
+import { logError } from "../utilities/LogUtils.js";
 
 // Interfaces
 export interface IGame {
@@ -551,7 +553,7 @@ export default class Game {
         });
         imageData = Buffer.from(imageResponse.data);
       } catch (err) {
-        console.error("Failed to download cover image:", err);
+        logError("Game.downloadCoverImage", err);
       }
     }
 
@@ -635,11 +637,11 @@ export default class Game {
           "GAMEDB_COMPANIES", "COMPANY_ID", "NAME", "IGDB_COMPANY_ID",
           ic.company.name, ic.company.id,
         );
-        await dbMutate(GameSql.insertGameCompany, {
+        safeIgnore(dbMutate(GameSql.insertGameCompany, {
           gameId,
           companyId,
           role: ic.developer ? "Developer" : ic.publisher ? "Publisher" : null,
-        }).catch(() => {});
+        }));
       }
     }
 
@@ -648,7 +650,7 @@ export default class Game {
         const genreId = await Game.getOrInsertMetadata(
           "GAMEDB_GENRES", "GENRE_ID", "NAME", "IGDB_GENRE_ID", g.name, g.id,
         );
-        await dbMutate(GameSql.insertGameGenre, { gameId, genreId }).catch(() => {});
+        safeIgnore(dbMutate(GameSql.insertGameGenre, { gameId, genreId }));
       }
     }
 
@@ -657,7 +659,7 @@ export default class Game {
         const themeId = await Game.getOrInsertMetadata(
           "GAMEDB_THEMES", "THEME_ID", "NAME", "IGDB_THEME_ID", t.name, t.id,
         );
-        await dbMutate(GameSql.insertGameTheme, { gameId, themeId }).catch(() => {});
+        safeIgnore(dbMutate(GameSql.insertGameTheme, { gameId, themeId }));
       }
     }
 
@@ -666,7 +668,7 @@ export default class Game {
         const modeId = await Game.getOrInsertMetadata(
           "GAMEDB_GAME_MODES_DEF", "MODE_ID", "NAME", "IGDB_GAME_MODE_ID", gm.name, gm.id,
         );
-        await dbMutate(GameSql.insertGameMode, { gameId, modeId }).catch(() => {});
+        safeIgnore(dbMutate(GameSql.insertGameMode, { gameId, modeId }));
       }
     }
 
@@ -676,7 +678,7 @@ export default class Game {
           "GAMEDB_PERSPECTIVES", "PERSPECTIVE_ID", "NAME", "IGDB_PERSPECTIVE_ID",
           pp.name, pp.id,
         );
-        await dbMutate(GameSql.insertGamePerspective, { gameId, persId }).catch(() => {});
+        safeIgnore(dbMutate(GameSql.insertGamePerspective, { gameId, persId }));
       }
     }
 
@@ -685,7 +687,7 @@ export default class Game {
         const engineId = await Game.getOrInsertMetadata(
           "GAMEDB_ENGINES", "ENGINE_ID", "NAME", "IGDB_ENGINE_ID", e.name, e.id,
         );
-        await dbMutate(GameSql.insertGameEngine, { gameId, engineId }).catch(() => {});
+        safeIgnore(dbMutate(GameSql.insertGameEngine, { gameId, engineId }));
       }
     }
 
@@ -694,7 +696,7 @@ export default class Game {
         const franchiseId = await Game.getOrInsertMetadata(
           "GAMEDB_FRANCHISES", "FRANCHISE_ID", "NAME", "IGDB_FRANCHISE_ID", f.name, f.id,
         );
-        await dbMutate(GameSql.insertGameFranchise, { gameId, franchiseId }).catch(() => {});
+        safeIgnore(dbMutate(GameSql.insertGameFranchise, { gameId, franchiseId }));
       }
     }
 
@@ -835,10 +837,7 @@ export default class Game {
       );
       return Game.getPlatformByIgdbId(igdbPlatform.id);
     } catch (err) {
-      console.error(
-        `Failed to insert platform ${igdbPlatform.name} (${igdbPlatform.id})`,
-        err,
-      );
+      logError("Game.insertPlatform", err);
       return null;
     }
   }
@@ -862,10 +861,7 @@ export default class Game {
       }, "id");
       return Game.getRegionById(regionId);
     } catch (err) {
-      console.error(
-        `Failed to insert region for IGDB region ${igdbRegionId}`,
-        err,
-      );
+      logError("Game.insertRegion", err);
       return null;
     }
   }

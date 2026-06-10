@@ -9,6 +9,7 @@ import { NEW_GAME_ANNOUNCEMENT_CHANNEL_ID } from "../config/channels.js";
 import { buildGameProfileMessagePayload } from "../commands/gamedb.command.js";
 import { COMPONENTS_V2_FLAG } from "../config/flags.js";
 import { resolveAssetPath } from "../functions/AssetPath.js";
+import { logError } from "../utilities/LogUtils.js";
 
 const CHECK_INTERVAL_MS = 60_000;
 const BATCH_SIZE = 25;
@@ -89,10 +90,7 @@ async function checkAndSendReleaseAnnouncements(client: Client): Promise<void> {
       });
       await GameReleaseAnnouncement.markAnnouncementSent(candidate.releaseId, new Date());
     } catch (err) {
-      console.error(
-        `[GameReleaseAnnouncementService] Failed release announcement ${candidate.releaseId}:`,
-        err,
-      );
+      logError("GameReleaseAnnouncementService.releaseAnnouncement", err);
     }
   }
 }
@@ -110,7 +108,7 @@ export function startGameReleaseAnnouncementService(client: Client): void {
     try {
       await checkAndSendReleaseAnnouncements(client);
     } catch (err) {
-      console.error("[GameReleaseAnnouncementService] Announcement cycle failed:", err);
+      logError("GameReleaseAnnouncementService.announcementCycle", err);
     } finally {
       currentlyChecking = false;
     }

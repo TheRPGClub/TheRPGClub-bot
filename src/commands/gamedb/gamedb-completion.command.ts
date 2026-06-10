@@ -52,6 +52,7 @@ import { updateGameProfileMessageById } from "./gamedb-profile.service.js";
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
 import { DISCORD_SELECT_LABEL_MAX } from "../../config/textLimits.js";
 import { buildTextInputRow } from "../../functions/uiComponents.js";
+import { safeIgnore } from "../../utilities/AsyncUtils.js";
 
 const COMPLETION_WIZARD_SESSIONS = new Map<string, CompletionWizardSession>();
 
@@ -244,7 +245,7 @@ async function deleteCompletionWizardMessage(session: CompletionWizardSession): 
     id: session.applicationId,
     token: session.interactionToken,
   });
-  await webhook.deleteMessage(session.ephemeralMessageId).catch(() => {});
+  safeIgnore(webhook.deleteMessage(session.ephemeralMessageId));
 }
 
 export async function startCompletionWizard(
@@ -308,17 +309,17 @@ export class GameDbCompletionCommand {
     const [sessionId, field] = segs;
     const session = COMPLETION_WIZARD_SESSIONS.get(sessionId);
     if (!session) {
-      await safeReply(interaction, buildTextReply("This completion request has expired.", true)).catch(() => {});
+      safeIgnore(safeReply(interaction, buildTextReply("This completion request has expired.", true)));
       return;
     }
     if (interaction.user.id !== session.userId) {
-      await safeReply(interaction, buildTextReply("This menu isn't for you.", true)).catch(() => {});
+      safeIgnore(safeReply(interaction, buildTextReply("This menu isn't for you.", true)));
       return;
     }
 
     const value = interaction.values?.[0];
     if (!value) {
-      await safeReply(interaction, buildTextReply("No selection made.", true)).catch(() => {});
+      safeIgnore(safeReply(interaction, buildTextReply("No selection made.", true)));
       return;
     }
 
@@ -352,11 +353,11 @@ export class GameDbCompletionCommand {
     const [sessionId] = segs;
     const session = COMPLETION_WIZARD_SESSIONS.get(sessionId);
     if (!session) {
-      await safeReply(interaction, buildTextReply("This completion request has expired.", true)).catch(() => {});
+      safeIgnore(safeReply(interaction, buildTextReply("This completion request has expired.", true)));
       return;
     }
     if (interaction.user.id !== session.userId) {
-      await safeReply(interaction, buildTextReply("This action isn't for you.", true)).catch(() => {});
+      safeIgnore(safeReply(interaction, buildTextReply("This action isn't for you.", true)));
       return;
     }
 
@@ -395,7 +396,7 @@ export class GameDbCompletionCommand {
       maxLength: MAX_COMPLETION_NOTE_LEN,
     }));
 
-    await interaction.showModal(modal).catch(() => {});
+    safeIgnore(interaction.showModal(modal));
   }
    
   @ModalComponent({ id: /^gamedb-completion-modal:\d+$/ })
@@ -404,13 +405,13 @@ export class GameDbCompletionCommand {
     if (!segs) return;
     const [sessionId] = segs;
     const session = COMPLETION_WIZARD_SESSIONS.get(sessionId);
-    await safeDeferReply(interaction, { flags: MessageFlags.Ephemeral }).catch(() => {});
+    safeIgnore(safeDeferReply(interaction, { flags: MessageFlags.Ephemeral }));
     if (!session) {
-      await safeReply(interaction, buildTextReply("This completion request has expired.", false)).catch(() => {});
+      safeIgnore(safeReply(interaction, buildTextReply("This completion request has expired.", false)));
       return;
     }
     if (interaction.user.id !== session.userId) {
-      await safeReply(interaction, buildTextReply("This action isn't for you.", false)).catch(() => {});
+      safeIgnore(safeReply(interaction, buildTextReply("This action isn't for you.", false)));
       return;
     }
 
@@ -424,7 +425,7 @@ export class GameDbCompletionCommand {
       try {
         completedAt = parseCompletionDateInput(dateInput);
       } catch (err: any) {
-        await safeReply(interaction, buildTextReply(err?.message ?? "Invalid completion date.", false)).catch(() => {});
+        safeIgnore(safeReply(interaction, buildTextReply(err?.message ?? "Invalid completion date.", false)));
         return;
       }
     }
@@ -432,7 +433,7 @@ export class GameDbCompletionCommand {
     const playtimeInput = getModalField(interaction, "completion-playtime");
     const playtimeCheck = validateCompletionPlaytimeInput(playtimeInput);
     if (playtimeCheck.error) {
-      await safeReply(interaction, buildTextReply(playtimeCheck.error, false)).catch(() => {});
+      safeIgnore(safeReply(interaction, buildTextReply(playtimeCheck.error, false)));
       return;
     }
     const playtime = playtimeCheck.value;
@@ -440,12 +441,12 @@ export class GameDbCompletionCommand {
     const noteInput = getModalField(interaction, "completion-note");
     const note = noteInput ? noteInput : null;
     if (note && note.length > MAX_COMPLETION_NOTE_LEN) {
-      await safeReply(interaction, buildTextReply(`Note must be ${MAX_COMPLETION_NOTE_LEN} characters or fewer.`, false)).catch(() => {});
+      safeIgnore(safeReply(interaction, buildTextReply(`Note must be ${MAX_COMPLETION_NOTE_LEN} characters or fewer.`, false)));
       return;
     }
 
     if (!session.platformChoice) {
-      await safeReply(interaction, buildTextReply("Platform selection missing.", false)).catch(() => {});
+      safeIgnore(safeReply(interaction, buildTextReply("Platform selection missing.", false)));
       return;
     }
     const isOtherPlatform = session.platformChoice === "other";
@@ -453,7 +454,7 @@ export class GameDbCompletionCommand {
     if (!isOtherPlatform) {
       const parsedId = Number(session.platformChoice);
       if (!isPositiveInt(parsedId)) {
-        await safeReply(interaction, buildTextReply("Invalid platform selection.", false)).catch(() => {});
+        safeIgnore(safeReply(interaction, buildTextReply("Invalid platform selection.", false)));
         return;
       }
       platformId = parsedId;
@@ -474,7 +475,7 @@ export class GameDbCompletionCommand {
         note,
       });
       if (removeFromNowPlaying) {
-        await Member.removeNowPlaying(interaction.user.id, session.gameId).catch(() => {});
+        safeIgnore(Member.removeNowPlaying(interaction.user.id, session.gameId));
       }
 
       await updateGameProfileMessageById(
@@ -486,9 +487,9 @@ export class GameDbCompletionCommand {
 
       await deleteCompletionWizardMessage(session);
       COMPLETION_WIZARD_SESSIONS.delete(sessionId);
-      await interaction.deleteReply().catch(() => {});
+      safeIgnore(interaction.deleteReply());
     } catch (err: any) {
-      await safeReply(interaction, buildTextReply(`Failed to add completion: ${err?.message ?? String(err)}`, false)).catch(() => {});
+      safeIgnore(safeReply(interaction, buildTextReply(`Failed to add completion: ${err?.message ?? String(err)}`, false)));
     }
   }
    
@@ -500,19 +501,19 @@ export class GameDbCompletionCommand {
     const gameId = Number(gameIdRaw);
     await safeDeferReply(interaction, { flags: MessageFlags.Ephemeral });
     if (!isPositiveInt(gameId)) {
-      await safeReply(interaction, buildTextReply("Invalid GameDB id.", false)).catch(() => {});
+      safeIgnore(safeReply(interaction, buildTextReply("Invalid GameDB id.", false)));
       return;
     }
 
     const game = await Game.getGameById(gameId);
     if (!game) {
-      await safeReply(interaction, buildTextReply("That game was not found in GameDB.", false)).catch(() => {});
+      safeIgnore(safeReply(interaction, buildTextReply("That game was not found in GameDB.", false)));
       return;
     }
 
     const noteRaw = getModalField(interaction, "gamedb-nowplaying-note");
     if (noteRaw.length > MAX_NOW_PLAYING_NOTE_LEN) {
-      await safeReply(interaction, buildTextReply(`Note must be ${MAX_NOW_PLAYING_NOTE_LEN} characters or fewer.`, false)).catch(() => {});
+      safeIgnore(safeReply(interaction, buildTextReply(`Note must be ${MAX_NOW_PLAYING_NOTE_LEN} characters or fewer.`, false)));
       return;
     }
 
@@ -520,8 +521,8 @@ export class GameDbCompletionCommand {
     try {
       const platforms = await Game.getPlatformsForGame(gameId);
       if (!platforms.length) {
-        await safeReply(interaction, buildTextReply("This game has no platform data yet. Add to Now Playing from `/now-playing list` " +
-            "after platform data is available.", false)).catch(() => {});
+        safeIgnore(safeReply(interaction, buildTextReply("This game has no platform data yet. Add to Now Playing from `/now-playing list` " +
+            "after platform data is available.", false)));
         return;
       }
       const defaultPlatform = platforms[0];
@@ -530,11 +531,11 @@ export class GameDbCompletionCommand {
       await nowPlaying.showSingle(interaction, interaction.user, true);
     } catch (err: any) {
       if (isUniqueConstraintError(err)) {
-        await safeReply(interaction, buildTextReply(`**${game.title}** is already in your Now Playing list.`, false)).catch(() => {});
+        safeIgnore(safeReply(interaction, buildTextReply(`**${game.title}** is already in your Now Playing list.`, false)));
         return;
       }
       const msg = err?.message ?? "Failed to add to Now Playing.";
-      await safeReply(interaction, buildTextReply(`Failed to add: ${msg}`, false)).catch(() => {});
+      safeIgnore(safeReply(interaction, buildTextReply(`Failed to add: ${msg}`, false)));
     }
   }
 }

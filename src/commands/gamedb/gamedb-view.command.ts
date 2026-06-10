@@ -42,6 +42,7 @@ import { showNowPlayingThreadModal } from "./gamedb-thread.command.js";
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
 import { assertCustomIdSegments } from "../../utilities/CustomIdUtils.js";
 import { buildTextInputRow } from "../../functions/uiComponents.js";
+import { safeIgnore } from "../../utilities/AsyncUtils.js";
 
 @Discord()
 @SlashGroup("gamedb")
@@ -175,7 +176,7 @@ export class GameDbViewCommand {
             maxLength: 500,
           }),
         );
-      await interaction.showModal(modal).catch(() => {});
+      safeIgnore(interaction.showModal(modal));
       return;
     }
 

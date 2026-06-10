@@ -68,6 +68,7 @@ import { isPositiveInt, truncateWithEllipsis } from "../utilities/ValidationUtil
 import { COLOR_PRIMARY, COLOR_SUCCESS, COLOR_HIGHLIGHT } from "../config/colors.js";
 import { AUDIT_PAGE_SIZE, SYNONYM_LIST_PAGE_SIZE } from "../config/pagination.js";
 import { assertCustomIdSegments, parseCustomIdSegments } from "../utilities/CustomIdUtils.js";
+import { safeIgnore } from "../utilities/AsyncUtils.js";
 
 const AUDIT_VIDEO_MODAL_ID = "audit-video-modal";
 const AUDIT_VIDEO_INPUT_ID = "audit-video-url";
@@ -820,7 +821,7 @@ export class GameDbAdmin {
         const buffer = Buffer.from(resp.data);
 
         await Game.updateGameImage(gameId, buffer);
-        await msg.delete().catch(() => {});
+        safeIgnore(msg.delete());
 
         // Update session data locally so UI reflects change if we go back/refresh
         const game = session.games.find(g => g.id === gameId);
@@ -910,7 +911,7 @@ export class GameDbAdmin {
         placeholder: "https://www.youtube.com/watch?v=...",
       }));
 
-    await interaction.showModal(modal).catch(() => {});
+    safeIgnore(interaction.showModal(modal));
   }
 
   @ButtonComponent({ id: /^audit-description:[^:]+:\d+$/ })
@@ -931,7 +932,7 @@ export class GameDbAdmin {
         maxLength: 2000,
       }));
 
-    await interaction.showModal(modal).catch(() => {});
+    safeIgnore(interaction.showModal(modal));
   }
 
   @ModalComponent({ id: /^audit-video-modal:[^:]+:\d+$/ })
@@ -965,10 +966,10 @@ export class GameDbAdmin {
     const refreshed = await Game.getGameById(gameId);
     if (refreshed && interaction.message) {
       const response = await this.buildAuditDetailResponse(sessionId, refreshed);
-      await interaction.message.edit(response).catch(() => {});
+      safeIgnore(interaction.message.edit(response));
     }
 
-    await interaction.deleteReply().catch(() => {});
+    safeIgnore(interaction.deleteReply());
   }
 
   @ModalComponent({ id: /^audit-description-modal:[^:]+:\d+$/ })
@@ -1002,10 +1003,10 @@ export class GameDbAdmin {
     const refreshed = await Game.getGameById(gameId);
     if (refreshed && interaction.message) {
       const response = await this.buildAuditDetailResponse(sessionId, refreshed);
-      await interaction.message.edit(response).catch(() => {});
+      safeIgnore(interaction.message.edit(response));
     }
 
-    await interaction.deleteReply().catch(() => {});
+    safeIgnore(interaction.deleteReply());
   }
 
   @ButtonComponent({ id: /^audit-auto-stop:[^:]+$/ })
@@ -1704,7 +1705,7 @@ export class GameDbAdmin {
       return;
     }
 
-    await interaction.showModal(buildSynonymAddModal(draftId)).catch(() => {});
+    safeIgnore(interaction.showModal(buildSynonymAddModal(draftId)));
   }
 
   @ButtonComponent({ id: /^gamedb-syn-done:\d+$/ })

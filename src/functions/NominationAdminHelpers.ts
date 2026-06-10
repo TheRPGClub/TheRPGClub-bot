@@ -28,6 +28,7 @@ import {
 import {
   getUpcomingNominationWindow,
 } from "./NominationWindow.js";
+import { logError } from "../utilities/LogUtils.js";
 
 export const ADMIN_NOMINATION_DELETE_SELECT_PREFIX = "admin-nom-del-select";
 export const ADMIN_NOMINATION_DELETE_REASON_MODAL_PREFIX = "admin-nom-del-reason";
@@ -148,7 +149,7 @@ export async function announceNominationChange(
       allowedMentions: { parse: [] },
     });
   } catch (err) {
-    console.error(`Failed to announce nomination change in channel ${channelId}:`, err);
+    logError("NominationAdminHelpers.announceChange", err);
   }
 }
 

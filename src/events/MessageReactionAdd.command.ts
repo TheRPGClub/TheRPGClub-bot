@@ -35,6 +35,7 @@ import { DISCORD_AUTOCOMPLETE_DESC_MAX, DISCORD_SELECT_LABEL_MAX } from "../conf
 import { assertCustomIdSegments } from "../utilities/CustomIdUtils.js";
 import { safeIgnore } from "../utilities/AsyncUtils.js";
 import { buildTextInputRow } from "../functions/uiComponents.js";
+import { logError } from "../utilities/LogUtils.js";
 
 const PUSH_PIN_EMOJI = "📌";
 const PLUS_EMOJI = "➕";
@@ -650,7 +651,7 @@ export class MessageReactionAdd {
         const imageResponse = await axios.get(imageUrl, { responseType: "arraybuffer" });
         imageData = Buffer.from(imageResponse.data);
       } catch (err) {
-        console.error("Failed to download cover image:", err);
+        logError("MessageReactionAdd.downloadCoverImage", err);
       }
     }
 

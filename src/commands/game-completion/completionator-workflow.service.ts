@@ -38,6 +38,7 @@ import { buildImportTextContainer } from "../imports/import-scaffold.service.js"
 import { canSafeReply, safeDeferReply, safeDeferUpdate } from "../../functions/InteractionUtils.js";
 import { logError } from "../../utilities/LogUtils.js";
 import { DISCORD_AUTOCOMPLETE_DESC_MAX } from "../../config/textLimits.js";
+import { safeIgnore } from "../../utilities/AsyncUtils.js";
 
 export class CompletionatorWorkflowService {
   private uiService: CompletionatorUiService;
@@ -727,7 +728,7 @@ export class CompletionatorWorkflowService {
     });
 
     if (removeFromNowPlaying) {
-      await Member.removeNowPlaying(interaction.user.id, item.gameDbGameId!).catch(() => {});
+      safeIgnore(Member.removeNowPlaying(interaction.user.id, item.gameDbGameId!));
     }
 
     completionatorAddFormStates.delete(getCompletionatorFormKey(session.importId, item.itemId));

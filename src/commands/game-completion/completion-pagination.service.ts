@@ -21,6 +21,7 @@ import {
   safeV2TextContent,
 } from "../../functions/ComponentsV2Utils.js";
 import { assertCustomIdSegments } from "../../utilities/CustomIdUtils.js";
+import { safeIgnore } from "../../utilities/AsyncUtils.js";
 
 /**
  * Parses a year filter string into a number, "unknown", or null
@@ -182,7 +183,7 @@ export async function handleCompletionListHeader(
   if (!segs) return;
   const [ownerId] = segs;
   if (interaction.user.id !== ownerId) {
-    await safeDeferUpdate(interaction).catch(() => {});
+    safeIgnore(safeDeferUpdate(interaction));
     return;
   }
   await safeReply(interaction, {
