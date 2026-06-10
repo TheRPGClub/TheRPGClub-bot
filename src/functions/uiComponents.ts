@@ -1,6 +1,7 @@
 import {
   ActionRowBuilder,
   ButtonStyle,
+  ComponentEmojiResolvable,
   StringSelectMenuBuilder,
   StringSelectMenuOptionBuilder,
   TextInputBuilder,
@@ -88,18 +89,21 @@ export interface ISelectOptionInput {
   label: string;
   value: string;
   description?: string;
+  emoji?: ComponentEmojiResolvable;
 }
 
 export function buildSelectOptions(
   inputs: ISelectOptionInput[],
   maxOptions = DISCORD_SELECT_OPTIONS_MAX,
 ): StringSelectMenuOptionBuilder[] {
-  return inputs.slice(0, maxOptions).map((item) =>
-    new StringSelectMenuOptionBuilder()
+  return inputs.slice(0, maxOptions).map((item) => {
+    const option = new StringSelectMenuOptionBuilder()
       .setLabel(item.label.slice(0, DISCORD_SELECT_LABEL_MAX))
       .setValue(item.value)
-      .setDescription((item.description ?? "").slice(0, DISCORD_AUTOCOMPLETE_DESC_MAX)),
-  );
+      .setDescription((item.description ?? "").slice(0, DISCORD_AUTOCOMPLETE_DESC_MAX));
+    if (item.emoji != null) option.setEmoji(item.emoji);
+    return option;
+  });
 }
 
 export interface IJournalSelectEntry {

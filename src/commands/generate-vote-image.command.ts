@@ -177,16 +177,13 @@ export class GenerateVoteImageCommand {
       try {
         await safeReply(interaction, { ...buildTextReply(summary, false), files: [attachment] });
       } catch (uploadErr) {
-        console.error(
-          formatStructuredLog({
-            event: "vote_image_upload_failed",
-            guildId: interaction.guildId,
-            round: roundNumber,
-            voteType: voteKind.label,
-            errorCode: "UPLOAD_FAILED",
-            error: uploadErr instanceof Error ? uploadErr.message : String(uploadErr),
-          }),
-        );
+        logError("vote_image_upload_failed", {
+          guildId: interaction.guildId,
+          round: roundNumber,
+          voteType: voteKind.label,
+          errorCode: "UPLOAD_FAILED",
+          error: uploadErr,
+        });
         await safeReply(interaction, buildTextReply(
           "Image generation failed. Please try again.",
           true,

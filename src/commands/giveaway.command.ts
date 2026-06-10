@@ -59,7 +59,7 @@ import {
   GIVEAWAY_MAX_PLATFORM_LENGTH,
   GIVEAWAY_MAX_KEY_LENGTH,
 } from "../config/textLimits.js";
-import { assertCustomIdSegments } from "../utilities/CustomIdUtils.js";
+import { assertCustomIdSegments, parseCustomIdSegmentsMin } from "../utilities/CustomIdUtils.js";
 import {
   buildActionButton,
   buildSelectOptions,
@@ -762,10 +762,7 @@ export class GiveawayCommand {
     const segs = assertCustomIdSegments(interaction, 1);
     if (!segs) return;
     const [userId] = segs;
-    if (interaction.user.id !== userId) {
-      await safeReply(interaction, buildTextReply("This giveaway claim isn't for you.", true));
-      return;
-    }
+    if (await replyIfNotOwner(interaction, userId, "This giveaway claim isn't for you.")) return;
 
     if (!hasMemberRole(interaction.member)) {
       await safeReply(interaction, buildTextReply("Claiming keys requires the Member role.", true));
@@ -804,10 +801,7 @@ export class GiveawayCommand {
     const segs = assertCustomIdSegments(interaction, 4);
     if (!segs) return;
     const [sessionId, pageRaw, messageId, userId] = segs;
-    if (interaction.user.id !== userId) {
-      await safeReply(interaction, buildTextReply("This giveaway claim isn't for you.", true));
-      return;
-    }
+    if (await replyIfNotOwner(interaction, userId, "This giveaway claim isn't for you.")) return;
 
     if (!hasMemberRole(interaction.member)) {
       await safeReply(interaction, buildTextReply("Claiming keys requires the Member role.", true));
@@ -845,7 +839,9 @@ export class GiveawayCommand {
    
   @ButtonComponent({ id: /^giveaway-claim-confirm:(hub|private|public):/ })
   async handleClaimConfirm(interaction: ButtonInteraction): Promise<void> {
-    const [, scope, keyIdStr, pageStr, ...extraSegs] = interaction.customId.split(":");
+    const segs = parseCustomIdSegmentsMin(interaction.customId, 4);
+    if (!segs) return;
+    const [scope, keyIdStr, pageStr, ...extraSegs] = segs;
     const keyId = Number(keyIdStr);
     const page = Number(pageStr);
 
@@ -869,10 +865,7 @@ export class GiveawayCommand {
 
     if (scope === "hub") {
       const userId = extraSegs[0];
-      if (interaction.user.id !== userId) {
-        await safeReply(interaction, buildTextReply("This giveaway claim isn't for you.", true));
-        return;
-      }
+      if (await replyIfNotOwner(interaction, userId, "This giveaway claim isn't for you.")) return;
     }
 
     if (scope === "private") {
@@ -939,10 +932,7 @@ export class GiveawayCommand {
     const segs = assertCustomIdSegments(interaction, 1);
     if (!segs) return;
     const [userId] = segs;
-    if (interaction.user.id !== userId) {
-      await safeReply(interaction, buildTextReply("This giveaway claim isn't for you.", true));
-      return;
-    }
+    if (await replyIfNotOwner(interaction, userId, "This giveaway claim isn't for you.")) return;
 
     await safeUpdate(interaction, {
       content: "Claim cancelled.",

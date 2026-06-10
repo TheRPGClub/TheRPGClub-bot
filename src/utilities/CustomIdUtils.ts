@@ -18,6 +18,15 @@ export function logUnexpectedCustomId(customId: string): void {
   logError("UnexpectedCustomId", customId);
 }
 
+export function parseCustomIdSegmentsMin(
+  customId: string,
+  minCount: number,
+): string[] | null {
+  const segments = customId.split(":").slice(1);
+  if (segments.length < minCount) return null;
+  return segments;
+}
+
 export function assertCustomIdSegments(
   interaction: { customId: string },
   expectedCount: number,

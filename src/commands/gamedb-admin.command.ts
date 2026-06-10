@@ -1817,10 +1817,7 @@ export class GameDbAdmin {
     if (!segs) return;
     const [ownerId, groupIdRaw] = segs;
     const groupId = Number(groupIdRaw);
-    if (interaction.user.id !== ownerId) {
-      await safeReply(interaction, buildTextReply("This edit request isn't for you.", true));
-      return;
-    }
+    if (await replyIfNotOwner(interaction, ownerId, "This edit request isn't for you.")) return;
     if (!isPositiveInt(groupId)) {
       await safeReply(interaction, buildTextReply("Invalid synonym group selected.", true));
       return;

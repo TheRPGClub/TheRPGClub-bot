@@ -44,7 +44,7 @@ import {
 } from "../imports/import-scaffold.service.js";
 import { safeV2TextContent } from "../../functions/ComponentsV2Utils.js";
 import { buildCompletionatorChooseId } from "./completion-helpers.js";
-import { buildTextInputRow } from "../../functions/uiComponents.js";
+import { buildActionButton, buildTextInputRow } from "../../functions/uiComponents.js";
 import {
   DISCORD_AUTOCOMPLETE_DESC_MAX,
   DISCORD_SELECT_LABEL_MAX,
@@ -434,12 +434,12 @@ export class CompletionatorUiService {
       )
       .setPlaceholder("Platform")
       .addOptions(options);
-
-    const addButton = new ButtonBuilder()
-      // eslint-disable-next-line local/custom-id-has-matching-handler
-      .setCustomId(`comp-import-action:${state.ownerId}:${state.importId}:${state.itemId}:add`)
-      .setLabel("Add Completion")
-      .setStyle(ButtonStyle.Success);
+     
+    const addButton = buildActionButton(
+      "add",
+      `comp-import-action:${state.ownerId}:${state.importId}:${state.itemId}:add`,
+      "Add Completion",
+    );
     const skipButton = new ButtonBuilder()
       // eslint-disable-next-line local/custom-id-has-matching-handler
       .setCustomId(`comp-import-action:${state.ownerId}:${state.importId}:${state.itemId}:skip`)

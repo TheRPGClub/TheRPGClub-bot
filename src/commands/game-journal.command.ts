@@ -73,7 +73,7 @@ import {
 import { NOW_PLAYING_HELP_PREFIX } from "./now-playing-help.js";
 import { EphemeralOwnerMenu } from "../functions/EphemeralOwnerMenu.js";
 import { isPositiveInt } from "../utilities/ValidationUtils.js";
-import { parseCustomIdSegments } from "../utilities/CustomIdUtils.js";
+import { parseCustomIdSegments, parseCustomIdSegmentsMin } from "../utilities/CustomIdUtils.js";
 import { buildOptionalPrevNextRowWithIds } from "../functions/PaginationUtils.js";
 import {
   JOURNAL_LIST_PAGE_SIZE as LIST_PAGE_SIZE,
@@ -563,10 +563,7 @@ export class GameJournalCommand {
     const segments = parseCustomIdSegments(interaction.customId, 3);
     if (!segments) return;
     const [callerId, targetUserId] = segments;
-    if (interaction.user.id !== callerId) {
-      await safeReply(interaction, buildTextReply("This journal list isn't yours to navigate.", true));
-      return;
-    }
+    if (await replyIfNotOwner(interaction, callerId, "This journal list isn't yours to navigate.")) return;
 
     const gameId = Number(interaction.values[0]);
     if (!gameId) return;
@@ -596,10 +593,7 @@ export class GameJournalCommand {
     const segments = parseCustomIdSegments(interaction.customId, 3);
     if (!segments) return;
     const [callerId, targetUserId, pageRaw] = segments;
-    if (interaction.user.id !== callerId) {
-      await safeReply(interaction, buildTextReply("This journal list isn't yours to navigate.", true));
-      return;
-    }
+    if (await replyIfNotOwner(interaction, callerId, "This journal list isn't yours to navigate.")) return;
 
     const page = Number(pageRaw);
     if (Number.isNaN(page)) return;
@@ -628,10 +622,7 @@ export class GameJournalCommand {
     const segments = parseCustomIdSegments(interaction.customId, 2);
     if (!segments) return;
     const [callerId] = segments;
-    if (interaction.user.id !== callerId) {
-      await safeReply(interaction, buildTextReply("This member list isn't yours to navigate.", true));
-      return;
-    }
+    if (await replyIfNotOwner(interaction, callerId, "This member list isn't yours to navigate.")) return;
 
     const targetUserId = interaction.values[0];
     if (!targetUserId) return;
@@ -667,10 +658,7 @@ export class GameJournalCommand {
     const segments = parseCustomIdSegments(interaction.customId, 2);
     if (!segments) return;
     const [callerId, pageRaw] = segments;
-    if (interaction.user.id !== callerId) {
-      await safeReply(interaction, buildTextReply("This member list isn't yours to navigate.", true));
-      return;
-    }
+    if (await replyIfNotOwner(interaction, callerId, "This member list isn't yours to navigate.")) return;
 
     const page = Number(pageRaw);
     if (Number.isNaN(page)) return;
@@ -691,11 +679,10 @@ export class GameJournalCommand {
 
   @ButtonComponent({ id: new RegExp(`^${GJ_SEARCH_PAGE_PREFIX}:\\d+:\\d+:\\d+:\\d+:.+$`) })
   async handleSearchPage(interaction: ButtonInteraction): Promise<void> {
-    const [, callerId, targetUserId, gameIdStr, pageRaw, ...queryParts] = interaction.customId.split(":");
-    if (interaction.user.id !== callerId) {
-      await safeReply(interaction, buildTextReply("This search isn't yours to navigate.", true));
-      return;
-    }
+    const segs = parseCustomIdSegmentsMin(interaction.customId, 5);
+    if (!segs) return;
+    const [callerId, targetUserId, gameIdStr, pageRaw, ...queryParts] = segs;
+    if (await replyIfNotOwner(interaction, callerId, "This search isn't yours to navigate.")) return;
 
     const page = Number(pageRaw);
     if (Number.isNaN(page)) return;
@@ -756,10 +743,7 @@ export class GameJournalCommand {
     const segments = parseCustomIdSegments(interaction.customId, 4);
     if (!segments) return;
     const [callerId, targetUserId, gameIdRaw, pageRaw] = segments;
-    if (interaction.user.id !== callerId) {
-      await safeReply(interaction, buildTextReply("This journal isn't yours to navigate.", true));
-      return;
-    }
+    if (await replyIfNotOwner(interaction, callerId, "This journal isn't yours to navigate.")) return;
 
     const gameId = Number(gameIdRaw);
     const page = Number(pageRaw);

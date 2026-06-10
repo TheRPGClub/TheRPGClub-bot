@@ -27,6 +27,7 @@ import {
   safeReply,
   safeUpdate,
   sanitizeUserInput,
+  replyIfNotOwner,
 } from "../../functions/InteractionUtils.js";
 import { buildTextReply, safeV2TextContent } from "../../functions/ComponentsV2Utils.js";
 import { shouldRenderPrevNextButtons } from "../../functions/PaginationUtils.js";
@@ -343,10 +344,7 @@ export class GameDbSearchCommand {
     const [ownerId, pageRaw, encodedQuery] = segs;
     const page = Number(pageRaw);
 
-    if (interaction.user.id !== ownerId) {
-      await safeReply(interaction, buildTextReply("This menu isn't for you.", true));
-      return;
-    }
+    if (await replyIfNotOwner(interaction, ownerId, "This menu isn't for you.")) return;
 
     const searchTerm = sanitizeUserInput(
       decodeSearchQuery(encodedQuery),
@@ -418,10 +416,7 @@ export class GameDbSearchCommand {
     const [ownerId, pageRaw, encodedQuery, direction] = segs;
     const page = Number(pageRaw);
 
-    if (interaction.user.id !== ownerId) {
-      await safeReply(interaction, buildTextReply("This menu isn't for you.", true));
-      return;
-    }
+    if (await replyIfNotOwner(interaction, ownerId, "This menu isn't for you.")) return;
 
     const searchTerm = sanitizeUserInput(
       decodeSearchQuery(encodedQuery),

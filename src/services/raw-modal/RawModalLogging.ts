@@ -1,3 +1,5 @@
+import { logError, logWarn } from "../../utilities/LogUtils.js";
+
 type RawModalLogLevel = "info" | "warn" | "error";
 
 type RawModalLogMeta = {
@@ -44,11 +46,11 @@ export function logRawModal(
   const line = `[RawModal] ${event}${formatMeta(meta)}`;
 
   if (level === "error") {
-    console.error(line);
+    logError("[RawModal]", line);
     return;
   }
   if (level === "warn") {
-    console.warn(line);
+    logWarn("[RawModal]", line);
     return;
   }
   console.log(line);

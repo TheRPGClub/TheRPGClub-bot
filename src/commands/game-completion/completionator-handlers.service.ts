@@ -8,6 +8,7 @@ import {
   safeDeferReply,
   safeDeferUpdate,
   safeReply,
+  replyIfNotOwner,
 } from "../../functions/InteractionUtils.js";
 import { buildComponentsV2Flags, buildTextReply } from "../../functions/ComponentsV2Utils.js";
 import Member from "../../classes/Member.js";
@@ -48,10 +49,7 @@ export class CompletionatorHandlersService {
     const segs = assertCustomIdSegments(interaction, 3);
     if (!segs) return;
     const [ownerId, importIdRaw, itemIdRaw] = segs;
-    if (interaction.user.id !== ownerId) {
-      await safeReply(interaction, buildTextReply("This import prompt isn't for you.", true));
-      return;
-    }
+    if (await replyIfNotOwner(interaction, ownerId, "This import prompt isn't for you.")) return;
 
     const ephemeral = this.uiService.isInteractionEphemeral(interaction);
     const importId = Number(importIdRaw);
@@ -129,10 +127,7 @@ export class CompletionatorHandlersService {
       return;
     }
 
-    if (interaction.user.id !== parsed.ownerId) {
-      await safeReply(interaction, buildTextReply("This import prompt isn't for you.", true));
-      return;
-    }
+    if (await replyIfNotOwner(interaction, parsed.ownerId, "This import prompt isn't for you.")) return;
 
     await safeDeferUpdate(interaction);
 
@@ -172,10 +167,7 @@ export class CompletionatorHandlersService {
     const segs = assertCustomIdSegments(interaction, 3);
     if (!segs) return;
     const [ownerId, importIdRaw, itemIdRaw] = segs;
-    if (interaction.user.id !== ownerId) {
-      await safeReply(interaction, buildTextReply("This import prompt isn't for you.", true));
-      return;
-    }
+    if (await replyIfNotOwner(interaction, ownerId, "This import prompt isn't for you.")) return;
 
     const ephemeral = this.uiService.isInteractionEphemeral(interaction);
     const importId = Number(importIdRaw);
@@ -250,10 +242,7 @@ export class CompletionatorHandlersService {
     const segs = assertCustomIdSegments(interaction, 4);
     if (!segs) return;
     const [ownerId, importIdRaw, itemIdRaw, action] = segs;
-    if (interaction.user.id !== ownerId) {
-      await safeReply(interaction, buildTextReply("This import prompt isn't for you.", true));
-      return;
-    }
+    if (await replyIfNotOwner(interaction, ownerId, "This import prompt isn't for you.")) return;
 
     const ephemeral = this.uiService.isInteractionEphemeral(interaction);
     const importId = Number(importIdRaw);
@@ -498,10 +487,7 @@ export class CompletionatorHandlersService {
     const segs = assertCustomIdSegments(interaction, 4);
     if (!segs) return;
     const [ownerId, importIdRaw, itemIdRaw, field] = segs;
-    if (interaction.user.id !== ownerId) {
-      await safeReply(interaction, buildTextReply("This import prompt is not for you.", true));
-      return;
-    }
+    if (await replyIfNotOwner(interaction, ownerId, "This import prompt is not for you.")) return;
 
     const importId = Number(importIdRaw);
     const itemId = Number(itemIdRaw);
@@ -599,10 +585,7 @@ export class CompletionatorHandlersService {
     const segs = assertCustomIdSegments(interaction, 3);
     if (!segs) return;
     const [ownerId, importIdRaw, itemIdRaw] = segs;
-    if (interaction.user.id !== ownerId) {
-      await safeReply(interaction, buildTextReply("This import prompt is not for you.", true));
-      return;
-    }
+    if (await replyIfNotOwner(interaction, ownerId, "This import prompt is not for you.")) return;
 
     const importId = Number(importIdRaw);
     const itemId = Number(itemIdRaw);
@@ -673,10 +656,7 @@ export class CompletionatorHandlersService {
     const importId = Number(importIdRaw2);
     const itemId = Number(itemIdRaw2);
 
-    if (interaction.user.id !== ownerId) {
-      await safeReply(interaction, buildTextReply("This import prompt is not for you.", true));
-      return;
-    }
+    if (await replyIfNotOwner(interaction, ownerId, "This import prompt is not for you.")) return;
 
     if (!Number.isInteger(importId) || !Number.isInteger(itemId)) {
       await safeReply(interaction, buildTextReply("Invalid import request.", true));

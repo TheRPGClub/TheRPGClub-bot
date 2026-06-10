@@ -56,10 +56,12 @@ import {
   safeUserFetch,
   sanitizeUserInput,
   type AnyRepliable,
+  replyIfNotOwner,
 } from "../functions/InteractionUtils.js";
 import Game, { type IGame } from "../classes/Game.js";
 import { buildJournalView } from "../functions/journalView.js";
 import {
+  buildActionButton,
   buildJournalSelectRow,
   buildTextInputRow,
   buildUserHeaderContainer,
@@ -116,7 +118,7 @@ import {
   DISCORD_SELECT_LABEL_MAX,
   DISCORD_SELECT_OPTIONS_MAX,
 } from "../config/textLimits.js";
-import { assertCustomIdSegments } from "../utilities/CustomIdUtils.js";
+import { assertCustomIdSegments, parseCustomIdSegmentsMin } from "../utilities/CustomIdUtils.js";
 import { safeIgnore } from "../utilities/AsyncUtils.js";
 
 const MAX_NOW_PLAYING_NOTE_LEN = 500;
@@ -365,10 +367,7 @@ async function confirmDuplicateCompletion(
       .setCustomId(yesId)
       .setLabel("Add Another")
       .setStyle(ButtonStyle.Danger),
-    new ButtonBuilder()
-      .setCustomId(noId)
-      .setLabel("Cancel")
-      .setStyle(ButtonStyle.Secondary),
+    buildActionButton("cancel", noId),
   );
 
   const payload = {
@@ -1213,10 +1212,7 @@ export class NowPlayingCommand {
       .setCustomId(`${NOW_PLAYING_COMPLETE_DETAILS_PREFIX}:${sessionId}`)
       .setLabel("Continue")
       .setStyle(ButtonStyle.Primary);
-    const cancelButton = new ButtonBuilder()
-      .setCustomId(`nowplaying-list-cancel:${session.userId}`)
-      .setLabel("Cancel")
-      .setStyle(ButtonStyle.Secondary);
+    const cancelButton = buildActionButton("cancel", `nowplaying-list-cancel:${session.userId}`);
 
     const typeRow = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(typeSelect);
     const removeRow = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(removeSelect);
@@ -2692,10 +2688,7 @@ export class NowPlayingCommand {
     const segs = assertCustomIdSegments(interaction, 2);
     if (!segs) return;
     const [ownerId, gameIdRaw] = segs;
-    if (interaction.user.id !== ownerId) {
-      await safeReply(interaction, buildTextReply("This platform prompt isn't for you.", true));
-      return;
-    }
+    if (await replyIfNotOwner(interaction, ownerId, "This platform prompt isn't for you.")) return;
 
     const gameId = Number(gameIdRaw);
     const platformId = Number(interaction.values?.[0]);
@@ -2720,10 +2713,7 @@ export class NowPlayingCommand {
     const segs = assertCustomIdSegments(interaction, 3);
     if (!segs) return;
     const [ownerId, slotRaw, stateToken] = segs;
-    if (interaction.user.id !== ownerId) {
-      await safeReply(interaction, buildTextReply("This platform prompt isn't for you.", true));
-      return;
-    }
+    if (await replyIfNotOwner(interaction, ownerId, "This platform prompt isn't for you.")) return;
 
     const slotIndex = Number(slotRaw);
     const selectedOptionIndex = Number(interaction.values?.[0]);
@@ -2768,10 +2758,7 @@ export class NowPlayingCommand {
     const segs = assertCustomIdSegments(interaction, 1);
     if (!segs) return;
     const [ownerId] = segs;
-    if (interaction.user.id !== ownerId) {
-      await safeReply(interaction, buildTextReply("This note prompt isn't for you.", true));
-      return;
-    }
+    if (await replyIfNotOwner(interaction, ownerId, "This note prompt isn't for you.")) return;
 
     const gameId = Number(interaction.values?.[0]);
     if (!isPositiveInt(gameId)) {
@@ -2803,10 +2790,7 @@ export class NowPlayingCommand {
     const segs = assertCustomIdSegments(interaction, 2);
     if (!segs) return;
     const [ownerId, gameIdRaw] = segs;
-    if (interaction.user.id !== ownerId) {
-      await safeReply(interaction, buildTextReply("This note prompt isn't for you.", true));
-      return;
-    }
+    if (await replyIfNotOwner(interaction, ownerId, "This note prompt isn't for you.")) return;
     const gameId = Number(gameIdRaw);
     if (!isPositiveInt(gameId)) {
       await safeReply(interaction, buildTextReply("Invalid selection.", true));
@@ -3002,10 +2986,7 @@ export class NowPlayingCommand {
     const segs = assertCustomIdSegments(interaction, 1);
     if (!segs) return;
     const [ownerId] = segs;
-    if (interaction.user.id !== ownerId) {
-      await safeReply(interaction, buildTextReply("This sort prompt isn't for you.", true));
-      return;
-    }
+    if (await replyIfNotOwner(interaction, ownerId, "This sort prompt isn't for you.")) return;
     await safeDeferUpdate(interaction);
     const isEphemeral = interaction.message.flags?.has(MessageFlags.Ephemeral) ?? false;
     const responseFlags = buildComponentsV2Flags(isEphemeral);
@@ -3019,11 +3000,10 @@ export class NowPlayingCommand {
   @ModalComponent({ id: /^nowplaying-note-modal:\d+(?::\d+)?$/ })
   async handleEditNoteModal(interaction: ModalSubmitInteraction): Promise<void> {
     await safeDeferReply(interaction, { flags: MessageFlags.Ephemeral });
-    const [, ownerId, legacyGameIdRaw = null] = interaction.customId.split(":");
-    if (interaction.user.id !== ownerId) {
-      await safeReply(interaction, buildTextReply("This note prompt isn't for you.", true));
-      return;
-    }
+    const segs = parseCustomIdSegmentsMin(interaction.customId, 1);
+    if (!segs) return;
+    const [ownerId, legacyGameIdRaw = null] = segs;
+    if (await replyIfNotOwner(interaction, ownerId, "This note prompt isn't for you.")) return;
 
     let updated = false;
     if (legacyGameIdRaw) {
@@ -3114,10 +3094,7 @@ export class NowPlayingCommand {
     const segs = assertCustomIdSegments(interaction, 1);
     if (!segs) return;
     const [ownerId] = segs;
-    if (interaction.user.id !== ownerId) {
-      await safeReply(interaction, buildTextReply("This note prompt isn't for you.", true));
-      return;
-    }
+    if (await replyIfNotOwner(interaction, ownerId, "This note prompt isn't for you.")) return;
 
     const gameId = Number(interaction.values?.[0]);
     if (!isPositiveInt(gameId)) {
@@ -3138,14 +3115,8 @@ export class NowPlayingCommand {
       .setDescription(currentEntry.note ? `> ${currentNote}` : "No note set.");
 
     const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
-      new ButtonBuilder()
-        .setCustomId(`nowplaying-delete-note-confirm:${ownerId}:${gameId}:yes`)
-        .setLabel("Delete Note")
-        .setStyle(ButtonStyle.Danger),
-      new ButtonBuilder()
-        .setCustomId(`nowplaying-delete-note-confirm:${ownerId}:${gameId}:no`)
-        .setLabel("Cancel")
-        .setStyle(ButtonStyle.Secondary),
+      buildActionButton("delete", `nowplaying-delete-note-confirm:${ownerId}:${gameId}:yes`, "Delete Note"),
+      buildActionButton("cancel", `nowplaying-delete-note-confirm:${ownerId}:${gameId}:no`),
     );
 
     await safeUpdate(interaction, {
@@ -3160,10 +3131,7 @@ export class NowPlayingCommand {
     const segs = assertCustomIdSegments(interaction, 3);
     if (!segs) return;
     const [ownerId, gameIdRaw, choice] = segs;
-    if (interaction.user.id !== ownerId) {
-      await safeReply(interaction, buildTextReply("This note prompt isn't for you.", true));
-      return;
-    }
+    if (await replyIfNotOwner(interaction, ownerId, "This note prompt isn't for you.")) return;
 
     if (choice === "no") {
       safeIgnore(safeUpdate(interaction, {
@@ -3352,19 +3320,10 @@ export class NowPlayingCommand {
     const entries = await Member.getGameJournalEntries(ownerId, gameId, { limit: 1, offset: 0 });
     const hasEntries = entries.length > 0;
     return new ActionRowBuilder<ButtonBuilder>().addComponents(
-      new ButtonBuilder()
-        .setCustomId(`${NOW_PLAYING_JOURNAL_ADD_PREFIX}:${ownerId}:${gameId}:${page}`)
-        .setLabel("Add Entry")
-        .setStyle(ButtonStyle.Success),
-      new ButtonBuilder()
-        .setCustomId(`${NOW_PLAYING_JOURNAL_EDIT_PREFIX}:${ownerId}:${gameId}:${page}`)
-        .setLabel("Edit Entry")
-        .setStyle(ButtonStyle.Primary)
+      buildActionButton("add", `${NOW_PLAYING_JOURNAL_ADD_PREFIX}:${ownerId}:${gameId}:${page}`, "Add Entry"),
+      buildActionButton("edit", `${NOW_PLAYING_JOURNAL_EDIT_PREFIX}:${ownerId}:${gameId}:${page}`, "Edit Entry")
         .setDisabled(!hasEntries),
-      new ButtonBuilder()
-        .setCustomId(`${NOW_PLAYING_JOURNAL_DELETE_PREFIX}:${ownerId}:${gameId}:${page}`)
-        .setLabel("Delete Entry")
-        .setStyle(ButtonStyle.Danger)
+      buildActionButton("delete", `${NOW_PLAYING_JOURNAL_DELETE_PREFIX}:${ownerId}:${gameId}:${page}`, "Delete Entry")
         .setDisabled(!hasEntries),
     );
   }
@@ -3649,18 +3608,14 @@ export class NowPlayingCommand {
       ),
     );
     const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
-      new ButtonBuilder()
-        .setCustomId(
-          `${NOW_PLAYING_JOURNAL_DELETE_CONFIRM_PREFIX}:yes:${ownerId}:${gameIdRaw}:${pageRaw}:${entryId}`,
-        )
-        .setLabel("Delete")
-        .setStyle(ButtonStyle.Danger),
-      new ButtonBuilder()
-        .setCustomId(
-          `${NOW_PLAYING_JOURNAL_DELETE_CONFIRM_PREFIX}:no:${ownerId}:${gameIdRaw}:${pageRaw}:${entryId}`,
-        )
-        .setLabel("Cancel")
-        .setStyle(ButtonStyle.Secondary),
+      buildActionButton(
+        "delete",
+        `${NOW_PLAYING_JOURNAL_DELETE_CONFIRM_PREFIX}:yes:${ownerId}:${gameIdRaw}:${pageRaw}:${entryId}`,
+      ),
+      buildActionButton(
+        "cancel",
+        `${NOW_PLAYING_JOURNAL_DELETE_CONFIRM_PREFIX}:no:${ownerId}:${gameIdRaw}:${pageRaw}:${entryId}`,
+      ),
       new ButtonBuilder()
         .setCustomId(`${NOW_PLAYING_HELP_PREFIX}:journal-delete-confirm:${ownerId}`)
         .setLabel("?")
@@ -3831,10 +3786,7 @@ export class NowPlayingCommand {
     const segs = assertCustomIdSegments(interaction, 2);
     if (!segs) return;
     const [screenType, ownerId] = segs;
-    if (interaction.user.id !== ownerId) {
-      await safeReply(interaction, buildTextReply("This help button isn't for you.", true));
-      return;
-    }
+    if (await replyIfNotOwner(interaction, ownerId, "This help button isn't for you.")) return;
     const helpText = NOW_PLAYING_HELP_TEXTS[screenType]
       ?? "No help available for this screen.";
     const container = new ContainerBuilder().addTextDisplayComponents(
@@ -3851,10 +3803,7 @@ export class NowPlayingCommand {
     const segs = assertCustomIdSegments(interaction, 1);
     if (!segs) return;
     const [ownerId] = segs;
-    if (interaction.user.id !== ownerId) {
-      await safeReply(interaction, buildTextReply("This edit menu isn't for you.", true));
-      return;
-    }
+    if (await replyIfNotOwner(interaction, ownerId, "This edit menu isn't for you.")) return;
     await this.promptSortNowPlayingButtons(interaction, ownerId);
   }
 
@@ -3863,10 +3812,7 @@ export class NowPlayingCommand {
     const segs = assertCustomIdSegments(interaction, 1);
     if (!segs) return;
     const [ownerId] = segs;
-    if (interaction.user.id !== ownerId) {
-      await safeReply(interaction, buildTextReply("This edit menu isn't for you.", true));
-      return;
-    }
+    if (await replyIfNotOwner(interaction, ownerId, "This edit menu isn't for you.")) return;
     await this.promptEditNowPlayingPlatform(interaction, "update");
   }
 
@@ -3875,10 +3821,7 @@ export class NowPlayingCommand {
     const segs = assertCustomIdSegments(interaction, 1);
     if (!segs) return;
     const [ownerId] = segs;
-    if (interaction.user.id !== ownerId) {
-      await safeReply(interaction, buildTextReply("This edit menu isn't for you.", true));
-      return;
-    }
+    if (await replyIfNotOwner(interaction, ownerId, "This edit menu isn't for you.")) return;
     const sessionId = createNowPlayingCompletionWizardSession(ownerId, true);
     await this.promptNowPlayingCompletionPick(interaction, ownerId, sessionId);
   }
@@ -3888,10 +3831,7 @@ export class NowPlayingCommand {
     const segs = assertCustomIdSegments(interaction, 1);
     if (!segs) return;
     const [ownerId] = segs;
-    if (interaction.user.id !== ownerId) {
-      await safeReply(interaction, buildTextReply("This edit menu isn't for you.", true));
-      return;
-    }
+    if (await replyIfNotOwner(interaction, ownerId, "This edit menu isn't for you.")) return;
     await this.promptRemoveNowPlaying(interaction, "update");
   }
 
@@ -3900,10 +3840,7 @@ export class NowPlayingCommand {
     const segs = assertCustomIdSegments(interaction, 1);
     if (!segs) return;
     const [ownerId] = segs;
-    if (interaction.user.id !== ownerId) {
-      await safeReply(interaction, buildTextReply("This edit menu isn't for you.", true));
-      return;
-    }
+    if (await replyIfNotOwner(interaction, ownerId, "This edit menu isn't for you.")) return;
     const entries = await Member.getNowPlaying(ownerId).then(getDisplayNowPlayingEntries);
     const gamesWithoutJournal = entries.filter((e) => !e.hasJournalEntry);
     if (!gamesWithoutJournal.length) {
@@ -3940,10 +3877,7 @@ export class NowPlayingCommand {
     const segs = assertCustomIdSegments(interaction, 1);
     if (!segs) return;
     const [ownerId] = segs;
-    if (interaction.user.id !== ownerId) {
-      await safeReply(interaction, buildTextReply("This edit menu isn't for you.", true));
-      return;
-    }
+    if (await replyIfNotOwner(interaction, ownerId, "This edit menu isn't for you.")) return;
     const gameId = Number(interaction.values[0]);
     if (!gameId) return;
     const entries = await Member.getNowPlaying(ownerId).then(getDisplayNowPlayingEntries);
@@ -4004,10 +3938,7 @@ export class NowPlayingCommand {
     const segs = assertCustomIdSegments(interaction, 1);
     if (!segs) return;
     const [ownerId] = segs;
-    if (interaction.user.id !== ownerId) {
-      await safeReply(interaction, buildTextReply("This platform prompt isn't for you.", true));
-      return;
-    }
+    if (await replyIfNotOwner(interaction, ownerId, "This platform prompt isn't for you.")) return;
     setNowPlayingListContext(ownerId, interaction.message);
     await this.promptEditNowPlayingPlatform(interaction, "update");
   }
@@ -4017,10 +3948,7 @@ export class NowPlayingCommand {
     const segs = assertCustomIdSegments(interaction, 2);
     if (!segs) return;
     const [ownerId, gameIdRaw] = segs;
-    if (interaction.user.id !== ownerId) {
-      await safeReply(interaction, buildTextReply("This platform prompt isn't for you.", true));
-      return;
-    }
+    if (await replyIfNotOwner(interaction, ownerId, "This platform prompt isn't for you.")) return;
     const gameId = Number(gameIdRaw);
     if (!isPositiveInt(gameId)) {
       await safeReply(interaction, buildTextReply("Invalid selection.", true));
@@ -4034,10 +3962,7 @@ export class NowPlayingCommand {
     const segs = assertCustomIdSegments(interaction, 2);
     if (!segs) return;
     const [ownerId, stateToken] = segs;
-    if (interaction.user.id !== ownerId) {
-      await safeReply(interaction, buildTextReply("This platform prompt isn't for you.", true));
-      return;
-    }
+    if (await replyIfNotOwner(interaction, ownerId, "This platform prompt isn't for you.")) return;
 
     await safeDeferUpdate(interaction);
     const isEphemeral = interaction.message.flags?.has(MessageFlags.Ephemeral) ?? false;
@@ -4102,10 +4027,7 @@ export class NowPlayingCommand {
     const segs = assertCustomIdSegments(interaction, 1);
     if (!segs) return;
     const [ownerId] = segs;
-    if (interaction.user.id !== ownerId) {
-      await safeReply(interaction, buildTextReply("This platform prompt isn't for you.", true));
-      return;
-    }
+    if (await replyIfNotOwner(interaction, ownerId, "This platform prompt isn't for you.")) return;
     await safeDeferUpdate(interaction);
     const isEphemeral = interaction.message.flags?.has(MessageFlags.Ephemeral) ?? false;
     const responseFlags = buildComponentsV2Flags(isEphemeral);
@@ -4127,10 +4049,7 @@ export class NowPlayingCommand {
     const segs = assertCustomIdSegments(interaction, 1);
     if (!segs) return;
     const [ownerId] = segs;
-    if (interaction.user.id !== ownerId) {
-      await safeReply(interaction, buildTextReply("This sort prompt isn't for you.", true));
-      return;
-    }
+    if (await replyIfNotOwner(interaction, ownerId, "This sort prompt isn't for you.")) return;
     setNowPlayingListContext(ownerId, interaction.message);
     await this.promptSortNowPlayingButtons(interaction, ownerId);
   }
@@ -4140,10 +4059,7 @@ export class NowPlayingCommand {
     const segs = assertCustomIdSegments(interaction, 1);
     if (!segs) return;
     const [ownerId] = segs;
-    if (interaction.user.id !== ownerId) {
-      await safeReply(interaction, buildTextReply("This completion prompt isn't for you.", true));
-      return;
-    }
+    if (await replyIfNotOwner(interaction, ownerId, "This completion prompt isn't for you.")) return;
     setNowPlayingListContext(ownerId, interaction.message);
     const sessionId = createNowPlayingCompletionWizardSession(ownerId, true);
     await this.promptNowPlayingCompletionPick(interaction, ownerId, sessionId);
@@ -4154,10 +4070,7 @@ export class NowPlayingCommand {
     const segs = assertCustomIdSegments(interaction, 1);
     if (!segs) return;
     const [ownerId] = segs;
-    if (interaction.user.id !== ownerId) {
-      await safeReply(interaction, buildTextReply("This completion prompt isn't for you.", true));
-      return;
-    }
+    if (await replyIfNotOwner(interaction, ownerId, "This completion prompt isn't for you.")) return;
     await this.returnToNowPlayingEditMenu(interaction, ownerId);
   }
 
@@ -4185,10 +4098,7 @@ export class NowPlayingCommand {
     const segs = assertCustomIdSegments(interaction, 1);
     if (!segs) return;
     const [ownerId] = segs;
-    if (interaction.user.id !== ownerId) {
-      await safeReply(interaction, buildTextReply("This remove prompt isn't for you.", true));
-      return;
-    }
+    if (await replyIfNotOwner(interaction, ownerId, "This remove prompt isn't for you.")) return;
     await this.returnToNowPlayingEditMenu(interaction, ownerId);
   }
 
@@ -4197,10 +4107,7 @@ export class NowPlayingCommand {
     const segs = assertCustomIdSegments(interaction, 1);
     if (!segs) return;
     const [ownerId] = segs;
-    if (interaction.user.id !== ownerId) {
-      await safeReply(interaction, buildTextReply("This prompt isn't for you.", true));
-      return;
-    }
+    if (await replyIfNotOwner(interaction, ownerId, "This prompt isn't for you.")) return;
     await this.returnToNowPlayingEditMenu(interaction, ownerId);
   }
 
@@ -4655,10 +4562,7 @@ export class NowPlayingCommand {
 
   private buildNowPlayingCancelRow(ownerId: string): ActionRowBuilder<ButtonBuilder> {
     return new ActionRowBuilder<ButtonBuilder>().addComponents(
-      new ButtonBuilder()
-        .setCustomId(`nowplaying-list-cancel:${ownerId}`)
-        .setLabel("Cancel")
-        .setStyle(ButtonStyle.Secondary),
+      buildActionButton("cancel", `nowplaying-list-cancel:${ownerId}`),
     );
   }
 
@@ -4915,10 +4819,7 @@ export class NowPlayingCommand {
     const segs = assertCustomIdSegments(interaction, 1);
     if (!segs) return;
     const [ownerId] = segs;
-    if (interaction.user.id !== ownerId) {
-      await safeReply(interaction, buildTextReply("This remove prompt isn't for you.", true));
-      return;
-    }
+    if (await replyIfNotOwner(interaction, ownerId, "This remove prompt isn't for you.")) return;
     const gameId = Number(interaction.values?.[0]);
     if (!isPositiveInt(gameId)) {
       const container = new ContainerBuilder().addTextDisplayComponents(
@@ -5074,10 +4975,7 @@ export class NowPlayingCommand {
         .setCustomId(`${NOW_PLAYING_EDIT_PLATFORM_RESET_PREFIX}:${ownerId}`)
         .setLabel("Reset to current platforms")
         .setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder()
-        .setCustomId(`nowplaying-list-cancel:${ownerId}`)
-        .setLabel("Cancel")
-        .setStyle(ButtonStyle.Secondary),
+      buildActionButton("cancel", `nowplaying-list-cancel:${ownerId}`),
       new ButtonBuilder()
         .setCustomId(`${NOW_PLAYING_HELP_PREFIX}:platform:${ownerId}`)
         .setLabel("?")
@@ -5134,10 +5032,7 @@ export class NowPlayingCommand {
         .setCustomId(`${NOW_PLAYING_SORT_RESET_PREFIX}:${ownerId}`)
         .setLabel("Reset to current order")
         .setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder()
-        .setCustomId(`nowplaying-list-cancel:${ownerId}`)
-        .setLabel("Cancel")
-        .setStyle(ButtonStyle.Secondary),
+      buildActionButton("cancel", `nowplaying-list-cancel:${ownerId}`),
       new ButtonBuilder()
         .setCustomId(`${NOW_PLAYING_HELP_PREFIX}:sort:${ownerId}`)
         .setLabel("?")
@@ -5679,22 +5574,15 @@ export class NowPlayingCommand {
         : undefined,
       buildOwnerButtons: isOwnerView
         ? (safePage, hasEntries) => [
-            new ButtonBuilder()
-              .setCustomId(`${NOW_PLAYING_JOURNAL_ADD_PREFIX}:${ownerId}:${gameId}:${safePage}`)
-              .setLabel("Add Entry")
-              .setStyle(ButtonStyle.Success),
-            new ButtonBuilder()
-              .setCustomId(`${NOW_PLAYING_JOURNAL_EDIT_PREFIX}:${ownerId}:${gameId}:${safePage}`)
-              .setLabel("Edit Entry")
-              .setStyle(ButtonStyle.Primary)
-              .setDisabled(!hasEntries),
-            new ButtonBuilder()
-              .setCustomId(
-                `${NOW_PLAYING_JOURNAL_DELETE_PREFIX}:${ownerId}:${gameId}:${safePage}`,
-              )
-              .setLabel("Delete Entry")
-              .setStyle(ButtonStyle.Danger)
-              .setDisabled(!hasEntries),
+            buildActionButton(
+              "add", `${NOW_PLAYING_JOURNAL_ADD_PREFIX}:${ownerId}:${gameId}:${safePage}`, "Add Entry",
+            ),
+            buildActionButton(
+              "edit", `${NOW_PLAYING_JOURNAL_EDIT_PREFIX}:${ownerId}:${gameId}:${safePage}`, "Edit Entry",
+            ).setDisabled(!hasEntries),
+            buildActionButton(
+              "delete", `${NOW_PLAYING_JOURNAL_DELETE_PREFIX}:${ownerId}:${gameId}:${safePage}`, "Delete Entry",
+            ).setDisabled(!hasEntries),
           ]
         : undefined,
       navRowTrailingButtons: !guildId
