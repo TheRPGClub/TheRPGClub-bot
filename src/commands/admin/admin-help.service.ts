@@ -1,10 +1,15 @@
 import {
   ActionRowBuilder,
-  EmbedBuilder,
   StringSelectMenuBuilder,
 } from "discord.js";
+import { ContainerBuilder } from "@discordjs/builders";
 import { type AdminHelpTopic, type AdminHelpTopicId } from "./admin.types.js";
 import { DISCORD_AUTOCOMPLETE_DESC_MAX } from "../../config/textLimits.js";
+import {
+  buildTitledContainer,
+  buildComponentsV2EditFlags,
+  buildFieldsText,
+} from "../../functions/ComponentsV2Utils.js";
 
 export const ADMIN_HELP_TOPICS: AdminHelpTopic[] = [
   {
@@ -115,38 +120,29 @@ export function buildAdminHelpButtons(
   return [new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select)];
 }
 
-export function buildAdminHelpEmbed(topic: AdminHelpTopic): EmbedBuilder {
-  const embed = new EmbedBuilder()
-    .setTitle(`${topic.label} help`)
-    .setDescription(topic.summary)
-    .addFields({ name: "Syntax", value: topic.syntax });
-
-  if (topic.parameters) {
-    embed.addFields({ name: "Parameters", value: topic.parameters });
-  }
-
-  if (topic.notes) {
-    embed.addFields({ name: "Notes", value: topic.notes });
-  }
-
-  return embed;
+export function buildAdminHelpEmbed(topic: AdminHelpTopic): ContainerBuilder {
+  const fields = [{ name: "Syntax", value: topic.syntax }];
+  if (topic.parameters) fields.push({ name: "Parameters", value: topic.parameters });
+  if (topic.notes) fields.push({ name: "Notes", value: topic.notes });
+  const body = [topic.summary, buildFieldsText(fields)].join("\n\n");
+  return buildTitledContainer(`${topic.label} help`, body);
 }
 
 export function buildAdminHelpResponse(
   activeTopicId?: AdminHelpTopicId,
 ): {
-  embeds: EmbedBuilder[];
-  components: ActionRowBuilder<StringSelectMenuBuilder>[];
+  components: (ContainerBuilder | ActionRowBuilder<StringSelectMenuBuilder>)[];
+  flags: number;
 } {
-  const embed = new EmbedBuilder()
-    .setTitle("Admin Commands Help")
-    .setDescription("Pick an `/admin` command below to see what it does and how to use it.");
-
-  const components = buildAdminHelpButtons(activeTopicId);
+  const container = buildTitledContainer(
+    "Admin Commands Help",
+    "Pick an `/admin` command below to see what it does and how to use it.",
+  );
+  const actionRows = buildAdminHelpButtons(activeTopicId);
 
   return {
-    embeds: [embed],
     // eslint-disable-next-line local/dynamic-components-require-chunking
-    components,
+    components: [container, ...actionRows],
+    flags: buildComponentsV2EditFlags(),
   };
 }

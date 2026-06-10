@@ -6,8 +6,6 @@ import {
   ButtonInteraction,
   ButtonStyle,
   CommandInteraction,
-  EmbedBuilder,
-  InteractionReplyOptions,
   MessageFlags,
   ModalSubmitInteraction,
   ModalBuilder,
@@ -37,11 +35,18 @@ import {
 import { decodeBase64Url, encodeWithMaxLength } from "../functions/CustomIdUtils.js";
 import {
   buildComponentsV2Flags,
+  buildComponentsV2EditFlags,
   buildTextContainer,
   buildTextReply,
+  buildTitledContainer,
   safeV2TextContent,
 } from "../functions/ComponentsV2Utils.js";
-import { ContainerBuilder } from "@discordjs/builders";
+import {
+  ContainerBuilder,
+  MediaGalleryBuilder,
+  MediaGalleryItemBuilder,
+  TextDisplayBuilder,
+} from "@discordjs/builders";
 import {
   performAutoAcceptImages,
   performAutoAcceptReleaseData,
@@ -216,15 +221,14 @@ function parseAutoAcceptStopId(id: string): string | null {
 }
 
 function buildAutoAcceptFollowUpPayload(
-  embeds: EmbedBuilder[],
+  container: ContainerBuilder,
   components: ActionRowBuilder<ButtonBuilder>[],
   isPublic: boolean,
-): InteractionReplyOptions {
+): { components: (ContainerBuilder | ActionRowBuilder<ButtonBuilder>)[]; flags: number } {
   return {
-    embeds,
     // eslint-disable-next-line local/dynamic-components-require-chunking
-    components,
-    ...(isPublic ? {} : { flags: MessageFlags.Ephemeral }),
+    components: [container, ...components],
+    flags: buildComponentsV2Flags(!isPublic),
   };
 }
 
@@ -561,7 +565,7 @@ export class GameDbAdmin {
     const response = await this.buildAuditListResponse(sessionId);
     await safeReply(interaction, {
       ...response,
-      flags: isPublic ? undefined : MessageFlags.Ephemeral,
+      flags: buildComponentsV2Flags(!isPublic),
     });
   }
 
@@ -613,13 +617,10 @@ export class GameDbAdmin {
     const lines = games
       .sort((a, b) => a.title.localeCompare(b.title))
       .map((game) => `• **${game.title}** (GameDB #${game.id})`);
-    const embed = new EmbedBuilder()
-      .setTitle("Linked Alternate Versions")
-      .setDescription(lines.join("\n"));
-
+    const container = buildTitledContainer("Linked Alternate Versions", lines.join("\n"));
     await safeReply(interaction, {
-      embeds: [embed],
-      flags: isPublic ? undefined : MessageFlags.Ephemeral,
+      components: [container],
+      flags: buildComponentsV2Flags(!isPublic),
     });
   }
 
@@ -1079,20 +1080,21 @@ export class GameDbAdmin {
     const end = start + AUDIT_PAGE_SIZE;
     const slice = games.slice(start, end);
 
-    const embed = new EmbedBuilder()
-      .setTitle(`GameDB Audit (${session.filter})`)
-      .setDescription(
-        `Showing items ${start + 1}-${Math.min(end, games.length)} of ${games.length}\n\n` +
-        slice.map((g) => {
-          const imageStatus = g.imageData ? "✅Img" : "❌Img";
-          const videoStatus = g.featuredVideoUrl ? "✅Vid" : "❌Vid";
-          const descStatus = g.description ? "✅Desc" : "❌Desc";
-          const releaseStatus = g.initialReleaseDate ? "✅Rel" : "❌Rel";
-          return `• **${g.title}** (ID: ${g.id}) ` +
-            `${imageStatus} ${videoStatus} ${descStatus} ${releaseStatus}`;
-        }).join("\n"),
-      )
-      .setFooter({ text: buildPageFooterText(page, totalPages) });
+    const body =
+      `Showing items ${start + 1}-${Math.min(end, games.length)} of ${games.length}\n\n` +
+      slice.map((g) => {
+        const imageStatus = g.imageData ? "✅Img" : "❌Img";
+        const videoStatus = g.featuredVideoUrl ? "✅Vid" : "❌Vid";
+        const descStatus = g.description ? "✅Desc" : "❌Desc";
+        const releaseStatus = g.initialReleaseDate ? "✅Rel" : "❌Rel";
+        return `• **${g.title}** (ID: ${g.id}) ` +
+          `${imageStatus} ${videoStatus} ${descStatus} ${releaseStatus}`;
+      }).join("\n");
+    const container = buildTitledContainer(
+      `GameDB Audit (${session.filter})`,
+      body,
+      { footer: buildPageFooterText(page, totalPages) },
+    );
 
     const select = new StringSelectMenuBuilder()
       .setCustomId(`audit-select:${sessionId}`)
@@ -1115,44 +1117,38 @@ export class GameDbAdmin {
 
     const row = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select);
 
-    const components: ActionRowBuilder<any>[] = [row];
+    const actionRows: ActionRowBuilder<any>[] = [row];
     if (shouldRenderPrevNextButtons(prevDisabled, nextDisabled)) {
-      components.push(buttons);
+      actionRows.push(buttons);
     }
 
     return {
-      embeds: [embed],
-      components,
-      files: [],
+      components: [container, ...actionRows] as
+        (ContainerBuilder | ActionRowBuilder<StringSelectMenuBuilder> | ActionRowBuilder<ButtonBuilder>)[],
+      flags: buildComponentsV2EditFlags(),
     };
   }
 
   private async buildAuditDetailResponse(sessionId: string, game: IGame) {
-    const embed = new EmbedBuilder()
-      .setTitle(`Audit: ${game.title}`)
-      .setDescription(`Game ID: ${game.id}\nIGDB ID: ${game.igdbId ?? "N/A"}`)
-      .setColor(COLOR_HIGHLIGHT);
-
     const files: AttachmentBuilder[] = [];
+    const fieldLines: string[] = [
+      `Game ID: ${game.id} | IGDB ID: ${game.igdbId ?? "N/A"}`,
+    ];
 
     let igdbImageAvailable = false;
     let igdbImageUrl = "";
     let igdbVideoUrl: string | null = null;
     let igdbDetailsLoaded = false;
 
-    // Check IGDB for image if missing
     if ((!game.imageData || !game.featuredVideoUrl) && game.igdbId) {
       try {
         const details = await igdbService.getGameDetails(game.igdbId);
         igdbDetailsLoaded = true;
         if (!game.imageData && details?.cover?.image_id) {
           igdbImageAvailable = true;
-          igdbImageUrl = `https://images.igdb.com/igdb/image/upload/t_cover_big/${details.cover.image_id}.jpg`;
-          embed.addFields({
-            name: "IGDB Suggestion",
-            value: "[Link to Image](" + igdbImageUrl + ")",
-            inline: true,
-          });
+          igdbImageUrl =
+            `https://images.igdb.com/igdb/image/upload/t_cover_big/${details.cover.image_id}.jpg`;
+          fieldLines.push(`**IGDB Suggestion** [Link to Image](${igdbImageUrl})`);
         }
         if (details && !game.featuredVideoUrl) {
           igdbVideoUrl = Game.getFeaturedVideoUrl(details);
@@ -1163,69 +1159,81 @@ export class GameDbAdmin {
     }
 
     if (game.imageData) {
-        embed.addFields({ name: "Image", value: "✅ Present", inline: true });
-        // Optionally show it
-        const attach = new AttachmentBuilder(game.imageData, { name: "cover.jpg" });
-        files.push(attach);
-        embed.setImage("attachment://cover.jpg");
+      const attach = new AttachmentBuilder(game.imageData, { name: "cover.jpg" });
+      files.push(attach);
+      fieldLines.push("**Image** ✅ Present");
     } else {
-        embed.addFields({ name: "Image", value: "❌ Missing", inline: true });
+      fieldLines.push("**Image** ❌ Missing");
     }
 
-    if (game.featuredVideoUrl) {
-        embed.addFields({ name: "Featured Video", value: "✅ Present", inline: true });
-    } else {
-        embed.addFields({ name: "Featured Video", value: "❌ Missing", inline: true });
-    }
-
-    if (game.description) {
-      embed.addFields({ name: "Description", value: "✅ Present", inline: true });
-    } else {
-      embed.addFields({ name: "Description", value: "❌ Missing", inline: true });
-    }
+    fieldLines.push(`**Featured Video** ${game.featuredVideoUrl ? "✅ Present" : "❌ Missing"}`);
+    fieldLines.push(`**Description** ${game.description ? "✅ Present" : "❌ Missing"}`);
 
     const releases = await Game.getGameReleases(game.id);
     if (releases.length) {
-      embed.addFields({
-        name: "Release Data",
-        value: `✅ ${releases.length} release${releases.length === 1 ? "" : "s"}`,
-        inline: true,
-      });
+      fieldLines.push(
+        `**Release Data** ✅ ${releases.length} release${releases.length === 1 ? "" : "s"}`,
+      );
     } else {
-      embed.addFields({ name: "Release Data", value: "❌ Missing", inline: true });
+      fieldLines.push("**Release Data** ❌ Missing");
     }
 
-    // Check thread link
     const associations = await Game.getGameAssociations(game.id);
-    const nowPlaying = await Game.getNowPlayingMembers(game.id); // Also checks for thread links in its query
-    
-    // Find any thread
-    const threadId = 
-        associations.gotmWins.find(w => w.threadId)?.threadId ??
-        associations.nrGotmWins.find(w => w.threadId)?.threadId ??
-        nowPlaying.find(p => p.threadId)?.threadId;
+    const nowPlaying = await Game.getNowPlayingMembers(game.id);
 
-    if (threadId) {
-        embed.addFields({ name: "Thread", value: `✅ ${channelMention(threadId)}`, inline: true });
-    } else {
-        embed.addFields({ name: "Thread", value: "❌ Missing", inline: true });
+    const threadId =
+      associations.gotmWins.find((w) => w.threadId)?.threadId ??
+      associations.nrGotmWins.find((w) => w.threadId)?.threadId ??
+      nowPlaying.find((p) => p.threadId)?.threadId;
+
+    fieldLines.push(`**Thread** ${threadId ? `✅ ${channelMention(threadId)}` : "❌ Missing"}`);
+
+    const container = new ContainerBuilder()
+      .addTextDisplayComponents(
+        new TextDisplayBuilder().setContent(
+          safeV2TextContent(`# Audit: ${game.title}\n${fieldLines.join("\n")}`, 3500),
+        ),
+      );
+    container.setAccentColor(COLOR_HIGHLIGHT);
+    if (files.length > 0) {
+      container.addMediaGalleryComponents(
+        new MediaGalleryBuilder().addItems(
+          new MediaGalleryItemBuilder().setURL("attachment://cover.jpg"),
+        ),
+      );
     }
 
     const navRow = buildButtonRow(
-      buildActionButton({ customId: `audit-back:${sessionId}`, label: "Back to List", style: ButtonStyle.Secondary }),
-      buildActionButton({ customId: `audit-next:${sessionId}:${game.id}`, label: "Go to Next Game", style: ButtonStyle.Secondary }),
+      buildActionButton({
+        customId: `audit-back:${sessionId}`,
+        label: "Back to List",
+        style: ButtonStyle.Secondary,
+      }),
+      buildActionButton({
+        customId: `audit-next:${sessionId}:${game.id}`,
+        label: "Go to Next Game",
+        style: ButtonStyle.Secondary,
+      }),
     );
 
     const actionButtons: ButtonBuilder[] = [];
     if (!game.imageData && igdbImageAvailable) {
       actionButtons.push(
-        buildActionButton({ customId: `audit-accept-igdb:${sessionId}:${game.id}`, label: "Accept IGDB Image", style: ButtonStyle.Success }),
+        buildActionButton({
+          customId: `audit-accept-igdb:${sessionId}:${game.id}`,
+          label: "Accept IGDB Image",
+          style: ButtonStyle.Success,
+        }),
       );
     }
 
     if (!game.featuredVideoUrl && (igdbVideoUrl || igdbDetailsLoaded)) {
       actionButtons.push(
-        buildActionButton({ customId: `audit-accept-video:${sessionId}:${game.id}`, label: "Accept IGDB Video", style: ButtonStyle.Secondary }).setDisabled(!igdbVideoUrl),
+        buildActionButton({
+          customId: `audit-accept-video:${sessionId}:${game.id}`,
+          label: "Accept IGDB Video",
+          style: ButtonStyle.Secondary,
+        }).setDisabled(!igdbVideoUrl),
       );
     }
 
@@ -1233,30 +1241,43 @@ export class GameDbAdmin {
     if (session) {
       if (!game.featuredVideoUrl && ["video", "mixed", "all"].includes(session.filter)) {
         actionButtons.push(
-          buildActionButton({ customId: `audit-video:${sessionId}:${game.id}`, label: "Add YouTube Video", style: ButtonStyle.Primary }),
+          buildActionButton({
+            customId: `audit-video:${sessionId}:${game.id}`,
+            label: "Add YouTube Video",
+            style: ButtonStyle.Primary,
+          }),
         );
       }
       if (!game.description && ["description", "mixed", "all"].includes(session.filter)) {
         actionButtons.push(
-          buildActionButton({ customId: `audit-description:${sessionId}:${game.id}`, label: "Add Description", style: ButtonStyle.Primary }),
+          buildActionButton({
+            customId: `audit-description:${sessionId}:${game.id}`,
+            label: "Add Description",
+            style: ButtonStyle.Primary,
+          }),
         );
       }
     }
 
     const editRow = buildButtonRow(
-      buildActionButton({ customId: `audit-img:${sessionId}:${game.id}`, label: "Upload Image", style: ButtonStyle.Primary }),
+      buildActionButton({
+        customId: `audit-img:${sessionId}:${game.id}`,
+        label: "Upload Image",
+        style: ButtonStyle.Primary,
+      }),
     );
 
-    const components: ActionRowBuilder<ButtonBuilder>[] = [navRow];
+    const actionRows: ActionRowBuilder<ButtonBuilder>[] = [navRow];
     if (actionButtons.length) {
-      components.push(buildButtonRow(...actionButtons));
+      actionRows.push(buildButtonRow(...actionButtons));
     }
-    components.push(editRow);
+    actionRows.push(editRow);
 
     return {
-      embeds: [embed],
-      components,
+      components: [container, ...actionRows] as
+        (ContainerBuilder | ActionRowBuilder<ButtonBuilder>)[],
       files: files.length ? files : undefined,
+      flags: buildComponentsV2EditFlags(),
     };
   }
 
@@ -1278,18 +1299,21 @@ export class GameDbAdmin {
       ownerId: interaction.guild?.ownerId ?? null,
     });
 
-    let currentEmbed = new EmbedBuilder()
-      .setTitle(title)
-      .setDescription("Starting auto accept run...")
-      .setColor(COLOR_PRIMARY);
     const stopRow = this.buildAutoAcceptStopRow(runId, false);
-
-    const followUpPayload = buildAutoAcceptFollowUpPayload([currentEmbed], [stopRow], isPublic);
+    const initialContainer = buildTitledContainer(
+      title,
+      "Starting auto accept run...",
+      { color: COLOR_PRIMARY },
+    );
+    const followUpPayload = buildAutoAcceptFollowUpPayload(initialContainer, [stopRow], isPublic);
     let currentMessage: any = null;
     try {
       currentMessage = useFollowUp
         ? await safeReply(interaction, { ...followUpPayload, __forceFollowUp: true })
-        : await safeReply(interaction, { embeds: [currentEmbed], components: [stopRow] });
+        : await safeReply(interaction, {
+          components: [initialContainer, stopRow],
+          flags: buildComponentsV2Flags(!isPublic),
+        });
     } catch {
       // ignore
     }
@@ -1307,20 +1331,17 @@ export class GameDbAdmin {
     const logLines: string[] = [];
     let currentChunk = 0;
     const shouldStop = (): boolean => AUTO_ACCEPT_RUNS.get(runId)?.canceled ?? true;
-    const updateEmbed = async (log?: string, processed?: number) => {
+    const updateEmbed = async (log?: string, processed?: number, color?: number) => {
       if (processed && processed > 0) {
         const chunk = Math.floor((processed - 1) / 50);
         if (chunk !== currentChunk) {
           currentChunk = chunk;
-          currentEmbed = new EmbedBuilder()
-            .setTitle(title)
-            .setDescription("Processing...")
-            .setColor(COLOR_PRIMARY);
           logLines.length = 0;
+          const chunkContainer = buildTitledContainer(title, "Processing...", { color: COLOR_PRIMARY });
           try {
             currentMessage = await safeReply(interaction, {
               ...buildAutoAcceptFollowUpPayload(
-                [currentEmbed],
+                chunkContainer,
                 [this.buildAutoAcceptStopRow(runId, shouldStop())],
                 isPublic,
               ),
@@ -1338,12 +1359,16 @@ export class GameDbAdmin {
         logLines.shift();
         content = logLines.join("\n");
       }
-      currentEmbed.setDescription(content || "Processing...");
+      const updatedContainer = buildTitledContainer(
+        title,
+        content || "Processing...",
+        { color: color ?? COLOR_PRIMARY },
+      );
       try {
         if (currentMessage?.edit) {
           await currentMessage.edit({
-            embeds: [currentEmbed],
-            components: [this.buildAutoAcceptStopRow(runId, shouldStop())],
+            components: [updatedContainer, this.buildAutoAcceptStopRow(runId, shouldStop())],
+            flags: buildComponentsV2EditFlags(),
           });
         }
       } catch {
@@ -1364,12 +1389,20 @@ export class GameDbAdmin {
     const summary =
       `\n**Run Complete**\n✅ Updated: ${updated}\n` +
       `⏭️ Skipped: ${skipped}\n❌ Failed: ${failed}`;
-    await updateEmbed(summary);
-    currentEmbed.setColor(COLOR_SUCCESS);
+    await updateEmbed(summary, undefined, COLOR_SUCCESS);
     const stopped = shouldStop();
     const finalStopRow = this.buildAutoAcceptStopRow(runId, true, stopped ? "Stopped" : "Stop");
     if (currentMessage?.edit) {
-      await currentMessage.edit({ embeds: [currentEmbed], components: [finalStopRow] });
+      const finalContent = logLines.join("\n");
+      const finalContainer = buildTitledContainer(
+        title,
+        finalContent || "Processing...",
+        { color: COLOR_SUCCESS },
+      );
+      await currentMessage.edit({
+        components: [finalContainer, finalStopRow],
+        flags: buildComponentsV2EditFlags(),
+      });
     }
     AUTO_ACCEPT_RUNS.delete(runId);
   }
@@ -1386,18 +1419,14 @@ export class GameDbAdmin {
     });
 
     const title = "GameDB IGDB Sweep (All Fields)";
-    let currentEmbed = new EmbedBuilder()
-      .setTitle(title)
-      .setDescription("Starting sweep...")
-      .setColor(COLOR_PRIMARY);
     const stopRow = this.buildAutoAcceptStopRow(runId, false);
+    const initialContainer = buildTitledContainer(title, "Starting sweep...", { color: COLOR_PRIMARY });
 
     let currentMessage: any = null;
     try {
       currentMessage = await safeReply(interaction, {
-        embeds: [currentEmbed],
-        components: [stopRow],
-        flags: isPublic ? undefined : MessageFlags.Ephemeral,
+        components: [initialContainer, stopRow],
+        flags: buildComponentsV2Flags(!isPublic),
       });
     } catch {
       // ignore
@@ -1406,20 +1435,17 @@ export class GameDbAdmin {
     const logLines: string[] = [];
     let currentChunk = 0;
     const shouldStop = (): boolean => AUTO_ACCEPT_RUNS.get(runId)?.canceled ?? true;
-    const updateEmbed = async (log?: string, processed?: number) => {
+    const updateEmbed = async (log?: string, processed?: number, color?: number) => {
       if (processed && processed > 0) {
         const chunk = Math.floor((processed - 1) / 50);
         if (chunk !== currentChunk) {
           currentChunk = chunk;
-          currentEmbed = new EmbedBuilder()
-            .setTitle(title)
-            .setDescription("Processing...")
-            .setColor(COLOR_PRIMARY);
           logLines.length = 0;
+          const chunkContainer = buildTitledContainer(title, "Processing...", { color: COLOR_PRIMARY });
           try {
             currentMessage = await safeReply(interaction, {
               ...buildAutoAcceptFollowUpPayload(
-                [currentEmbed],
+                chunkContainer,
                 [this.buildAutoAcceptStopRow(runId, shouldStop())],
                 isPublic,
               ),
@@ -1437,12 +1463,16 @@ export class GameDbAdmin {
         logLines.shift();
         content = logLines.join("\n");
       }
-      currentEmbed.setDescription(content || "Processing...");
+      const updatedContainer = buildTitledContainer(
+        title,
+        content || "Processing...",
+        { color: color ?? COLOR_PRIMARY },
+      );
       try {
         if (currentMessage?.edit) {
           await currentMessage.edit({
-            embeds: [currentEmbed],
-            components: [this.buildAutoAcceptStopRow(runId, shouldStop())],
+            components: [updatedContainer, this.buildAutoAcceptStopRow(runId, shouldStop())],
+            flags: buildComponentsV2EditFlags(),
           });
         }
       } catch {
@@ -1470,12 +1500,20 @@ export class GameDbAdmin {
       `Releases:     ✅ ${stats.releases.updated} | ⏭️ ${stats.releases.skipped}` +
         ` | ❌ ${stats.releases.failed}`,
     ].join("\n");
-    await updateEmbed(summary);
-    currentEmbed.setColor(COLOR_SUCCESS);
+    await updateEmbed(summary, undefined, COLOR_SUCCESS);
     const stopped = shouldStop();
     const finalStopRow = this.buildAutoAcceptStopRow(runId, true, stopped ? "Stopped" : "Stop");
     if (currentMessage?.edit) {
-      await currentMessage.edit({ embeds: [currentEmbed], components: [finalStopRow] });
+      const finalContent = logLines.join("\n");
+      const finalContainer = buildTitledContainer(
+        title,
+        finalContent || "Processing...",
+        { color: COLOR_SUCCESS },
+      );
+      await currentMessage.edit({
+        components: [finalContainer, finalStopRow],
+        flags: buildComponentsV2EditFlags(),
+      });
     }
     AUTO_ACCEPT_RUNS.delete(runId);
   }

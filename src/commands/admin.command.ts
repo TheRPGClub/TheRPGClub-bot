@@ -24,7 +24,11 @@ import {
   safeUpdate,
   sanitizeUserInput,
 } from "../functions/InteractionUtils.js";
-import { buildTextReply } from "../functions/ComponentsV2Utils.js";
+import {
+  buildTextReply,
+  buildComponentsV2Flags,
+  buildComponentsV2EditFlags,
+} from "../functions/ComponentsV2Utils.js";
 import {
   parseVoteDateInput,
 } from "../functions/VoteDateUtils.js";
@@ -33,6 +37,7 @@ import BotVotingInfo from "../classes/BotVotingInfo.js";
 import { isAdmin } from "./admin/admin-auth.utils.js";
 import {
   ADMIN_HELP_TOPICS,
+  buildAdminHelpButtons,
   buildAdminHelpEmbed,
   buildAdminHelpResponse,
 } from "./admin/admin-help.service.js";
@@ -381,10 +386,9 @@ export class Admin {
     }
 
     const response = buildAdminHelpResponse();
-
     await safeReply(interaction, {
-      ...response,
-      flags: MessageFlags.Ephemeral,
+      components: response.components,
+      flags: buildComponentsV2Flags(true),
     });
   }
 
@@ -414,12 +418,11 @@ export class Admin {
       return;
     }
 
-    const helpEmbed = buildAdminHelpEmbed(topic);
-    const response = buildAdminHelpResponse(topic.id);
-
+    const topicContainer = buildAdminHelpEmbed(topic);
+    const actionRows = buildAdminHelpButtons(topic.id);
     await safeUpdate(interaction, {
-      embeds: [helpEmbed],
-      components: response.components,
+      components: [topicContainer, ...actionRows],
+      flags: buildComponentsV2EditFlags(),
     });
   }
 }

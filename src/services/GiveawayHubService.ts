@@ -3,34 +3,32 @@ import {
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
-  EmbedBuilder,
   MessageFlags,
 } from "discord.js";
+import { ContainerBuilder } from "@discordjs/builders";
 import { countAvailableGameKeys, listAvailableGameKeys } from "../classes/GameKey.js";
 import { GIVEAWAY_HUB_CHANNEL_ID } from "../config/channels.js";
 import { buildPageFooterText } from "../functions/PaginationUtils.js";
 import { safeIgnore } from "../utilities/AsyncUtils.js";
 import { logError, logWarn } from "../utilities/LogUtils.js";
 import { buildActionButton, buildButtonRow } from "../functions/uiComponents.js";
+import { buildTitledContainer, buildComponentsV2EditFlags } from "../functions/ComponentsV2Utils.js";
+import { COMPONENTS_V2_FLAG } from "../config/flags.js";
 const GIVEAWAY_HUB_SCAN_LIMIT = 50;
 
 export const KEYS_PAGE_SIZE = 20;
 
 type GiveawayHubPayload = {
-  content?: string;
-  embeds?: EmbedBuilder[];
-  components?: ActionRowBuilder<ButtonBuilder>[];
+  containers: ContainerBuilder[];
+  actionRows: ActionRowBuilder<ButtonBuilder>[];
 };
-
-type EmbedField = { name: string; value: string };
 
 type GiveawayMessage = {
   id: string;
   createdTimestamp: number;
   edit: (options: {
-    content?: string | null;
-    embeds?: EmbedBuilder[];
-    components?: ActionRowBuilder<ButtonBuilder>[];
+    components?: (ContainerBuilder | ActionRowBuilder<ButtonBuilder>)[];
+    flags?: number;
   }) => Promise<unknown>;
   delete: () => Promise<unknown>;
   author?: { id?: string };
@@ -43,69 +41,30 @@ export function buildKeyListEmbed(
   page: number,
   totalPages: number,
   totalCount: number,
-): EmbedBuilder {
-  const embed = new EmbedBuilder()
-    .setTitle("Game Key Giveaway")
-    .setDescription("Available keys:")
-    .setFooter({ text: buildPageFooterText(page, totalPages, `${totalCount} total`) });
+): ContainerBuilder {
+  if (!keys.length) {
+    return buildTitledContainer(
+      "Game Key Giveaway",
+      "No keys are available right now.",
+      { footer: buildPageFooterText(page, totalPages, `${totalCount} total`) },
+    );
+  }
 
   const lines = keys.map((key, idx) => {
     const number = page * KEYS_PAGE_SIZE + idx + 1;
     return `${number}. **${key.gameTitle}** (${key.platform})`;
   });
 
-  if (!lines.length) {
-    return embed.setDescription("No keys are available right now.");
-  }
-
-  const fields: { name: string; value: string }[] = [];
-  let buffer = "";
-  for (const line of lines) {
-    const next = buffer ? `${buffer}\n${line}` : line;
-    if (next.length > 1024) {
-      if (buffer) {
-        fields.push({ name: fields.length ? "\u200B" : "Keys", value: buffer });
-      }
-      buffer = line;
-    } else {
-      buffer = next;
-    }
-  }
-
-  if (buffer) {
-    fields.push({ name: fields.length ? "\u200B" : "Keys", value: buffer });
-  }
-
-  embed.addFields(fields);
-
-  return embed;
+  return buildTitledContainer(
+    "Game Key Giveaway",
+    lines.join("\n"),
+    { footer: buildPageFooterText(page, totalPages, `${totalCount} total`) },
+  );
 }
 
-function buildKeyListFields(lines: string[]): EmbedField[] {
-  const fields: EmbedField[] = [];
-  let buffer = "";
-  for (const line of lines) {
-    const next = buffer ? `${buffer}\n${line}` : line;
-    if (next.length > 1024) {
-      if (buffer) {
-        fields.push({ name: fields.length ? "\u200B" : "Keys", value: buffer });
-      }
-      buffer = line;
-    } else {
-      buffer = next;
-    }
-  }
-
-  if (buffer) {
-    fields.push({ name: fields.length ? "\u200B" : "Keys", value: buffer });
-  }
-
-  return fields;
-}
-
-function buildGiveawayHubEmbeds(
+function buildGiveawayHubContainers(
   keys: Awaited<ReturnType<typeof listAvailableGameKeys>>,
-): EmbedBuilder[] {
+): ContainerBuilder[] {
   if (!keys.length) {
     return [];
   }
@@ -113,19 +72,36 @@ function buildGiveawayHubEmbeds(
   const lines = keys.map((key, idx) =>
     `${idx + 1}. **${key.gameTitle}** (${key.platform})`,
   );
-  const fields = buildKeyListFields(lines);
-  const embeds: EmbedBuilder[] = [];
-  for (let i = 0; i < fields.length; i += 25) {
-    const chunk = fields.slice(i, i + 25);
-    const embed = new EmbedBuilder()
-      .setTitle(i === 0 ? "Game Key Giveaway" : "Game Key Giveaway (continued)")
-      .addFields(chunk);
-    embeds.push(embed);
+
+  const containers: ContainerBuilder[] = [];
+  let chunk: string[] = [];
+  let chunkLen = 0;
+  const CHUNK_MAX = 3000;
+
+  for (const line of lines) {
+    if (chunkLen + line.length + 1 > CHUNK_MAX && chunk.length > 0) {
+      const isFirst = containers.length === 0;
+      containers.push(buildTitledContainer(
+        isFirst ? "Game Key Giveaway" : "Game Key Giveaway (continued)",
+        chunk.join("\n"),
+      ));
+      chunk = [];
+      chunkLen = 0;
+    }
+    chunk.push(line);
+    chunkLen += line.length + 1;
   }
 
-  const footer = `Total keys: ${keys.length}`;
-  embeds[embeds.length - 1]?.setFooter({ text: footer });
-  return embeds;
+  if (chunk.length > 0) {
+    const isFirst = containers.length === 0;
+    containers.push(buildTitledContainer(
+      isFirst ? "Game Key Giveaway" : "Game Key Giveaway (continued)",
+      chunk.join("\n"),
+      { footer: `Total keys: ${keys.length}` },
+    ));
+  }
+
+  return containers;
 }
 
 export async function getAvailableKeysPage(page: number): Promise<{
@@ -164,19 +140,25 @@ export async function listAllAvailableKeys(): Promise<
 }
 
 function buildGiveawayHubComponents(hasKeys: boolean): ActionRowBuilder<ButtonBuilder>[] {
-  const rows: ActionRowBuilder<ButtonBuilder>[] = [];
-   
-  const claimButton = buildActionButton({ customId: "giveaway-hub-claim:0", label: "Claim a Game", style: ButtonStyle.Primary }).setDisabled(!hasKeys);
-   
-  const donateButton = buildActionButton({ customId: "giveaway-hub-donate", label: "Donate a Game", style: ButtonStyle.Success });
-   
-  const donorSettingsButton = buildActionButton({ customId: "giveaway-hub-settings", label: "Donor Settings", style: ButtonStyle.Secondary });
+  const claimButton = buildActionButton({
+    customId: "giveaway-hub-claim:0",
+    label: "Claim a Game",
+    style: ButtonStyle.Primary,
+  }).setDisabled(!hasKeys);
 
-  rows.push(
-    buildButtonRow(claimButton, donateButton, donorSettingsButton),
-  );
+  const donateButton = buildActionButton({
+    customId: "giveaway-hub-donate",
+    label: "Donate a Game",
+    style: ButtonStyle.Success,
+  });
 
-  return rows;
+  const donorSettingsButton = buildActionButton({
+    customId: "giveaway-hub-settings",
+    label: "Donor Settings",
+    style: ButtonStyle.Secondary,
+  });
+
+  return [buildButtonRow(claimButton, donateButton, donorSettingsButton)];
 }
 
 async function buildGiveawayHubPayload(page: number): Promise<GiveawayHubPayload> {
@@ -184,17 +166,16 @@ async function buildGiveawayHubPayload(page: number): Promise<GiveawayHubPayload
   const keys = await listAllAvailableKeys();
   if (!keys.length) {
     return {
-      content: "There are no available game keys right now.",
-      embeds: [],
+      containers: [buildTitledContainer("Game Key Giveaway", "There are no available game keys right now.")],
       // eslint-disable-next-line local/dynamic-components-require-chunking
-      components: buildGiveawayHubComponents(false),
+      actionRows: buildGiveawayHubComponents(false),
     };
   }
 
   return {
-    embeds: buildGiveawayHubEmbeds(keys),
+    containers: buildGiveawayHubContainers(keys),
     // eslint-disable-next-line local/dynamic-components-require-chunking
-    components: buildGiveawayHubComponents(true),
+    actionRows: buildGiveawayHubComponents(true),
   };
 }
 
@@ -215,19 +196,11 @@ function isGiveawayHubMessage(client: Client, message: GiveawayMessage): boolean
     return false;
   }
 
-  const hasComponent = message.components?.some((row) =>
+  return message.components?.some((row) =>
     row.components?.some((component) =>
       typeof component.customId === "string" &&
       component.customId.startsWith("giveaway-hub"),
     ),
-  );
-  if (hasComponent) {
-    return true;
-  }
-
-  return message.embeds?.some((embed) =>
-    typeof embed.title === "string" &&
-    embed.title.startsWith("Game Key Giveaway"),
   ) ?? false;
 }
 
@@ -253,41 +226,31 @@ async function updateGiveawayHubMessages(
       .sort((a, b) => a.createdTimestamp - b.createdTimestamp)
     : [];
 
-  const embeds = payload.embeds ?? [];
-  const batches: EmbedBuilder[][] = [];
-  for (let i = 0; i < embeds.length; i += 10) {
-    batches.push(embeds.slice(i, i + 10));
+  const allComponents = [...payload.containers, ...payload.actionRows];
+  const existing = hubMessages[0];
+  if (existing) {
+    await (existing as GiveawayMessage).edit({
+      components: allComponents,
+      flags: buildComponentsV2EditFlags(),
+    }).catch((err) => {
+      logError("GiveawayHubService.edit", err);
+    });
+  } else {
+    await (channel as any).send({
+      components: allComponents,
+      flags: options?.suppressNotifications
+        ? COMPONENTS_V2_FLAG | MessageFlags.SuppressNotifications
+        : COMPONENTS_V2_FLAG,
+    }).catch((err) => {
+      logError("GiveawayHubService.send", err);
+    });
   }
 
-  const totalMessages = Math.max(1, batches.length);
-  for (let i = 0; i < totalMessages; i += 1) {
-    const batch = batches[i] ?? [];
-    const content = i === 0 ? payload.content ?? null : null;
-    const components = i === 0 ? payload.components ?? [] : [];
-    const existing = hubMessages[i];
-    if (existing) {
-      await existing.edit({ content, embeds: batch, components }).catch((err) => {
-        logError("GiveawayHubService.edit", err);
-      });
-    } else {
-      await channel.send({
-        content: content ?? undefined,
-        embeds: batch,
-        components,
-        flags: options?.suppressNotifications ? MessageFlags.SuppressNotifications : undefined,
-      }).catch((err) => {
-        logError("GiveawayHubService.send", err);
-      });
-    }
-  }
-
-  if (hubMessages.length > totalMessages) {
-    const extras = hubMessages.slice(totalMessages);
-    for (const extra of extras) {
-      await extra.delete().catch((err) => {
-        logError("GiveawayHubService.delete", err);
-      });
-    }
+  const extras = hubMessages.slice(1);
+  for (const extra of extras) {
+    await extra.delete().catch((err) => {
+      logError("GiveawayHubService.delete", err);
+    });
   }
 }
 
@@ -308,7 +271,10 @@ export async function refreshGiveawayHubMessage(
     });
   const textChannel = channel?.isTextBased() ? channel : null;
   if (!textChannel) {
-    logWarn("GiveawayHubService.updateHub", `Giveaway hub channel ${GIVEAWAY_HUB_CHANNEL_ID} not found or not text-based.`);
+    logWarn(
+      "GiveawayHubService.updateHub",
+      `Giveaway hub channel ${GIVEAWAY_HUB_CHANNEL_ID} not found or not text-based.`,
+    );
     return;
   }
 
