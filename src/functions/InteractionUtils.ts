@@ -12,6 +12,10 @@ import { buildComponentsV2Flags, buildTextReply, safeV2TextContent } from "./Com
 
 export type AnyRepliable = RepliableInteraction | CommandInteraction;
 
+export function buildIdTimestampFooter(id: string, timestamp: string): string {
+  return `ID: ${id} • ${timestamp}`;
+}
+
 /** True if the interaction has already been deferred or replied to. */
 export function isInteractionSettled(interaction: AnyRepliable): boolean {
   return interaction.deferred || interaction.replied;

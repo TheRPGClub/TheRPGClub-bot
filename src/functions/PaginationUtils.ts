@@ -1,5 +1,10 @@
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle } from "discord.js";
 
+export function buildPageFooterText(page: number, totalPages: number, suffix?: string): string {
+  const base = `Page ${page + 1}/${totalPages}`;
+  return suffix ? `${base} • ${suffix}` : base;
+}
+
 export function shouldRenderPrevNextButtons(
   prevDisabled: boolean,
   nextDisabled: boolean,

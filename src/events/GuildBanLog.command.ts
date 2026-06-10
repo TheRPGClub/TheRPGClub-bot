@@ -3,6 +3,7 @@ import type { ArgsOf, Client } from "discordx";
 import { Discord, On } from "discordx";
 import { formatTimestampWithDay } from "../utilities/DiscordLogUtils.js";
 import { BAN_LOG_CHANNEL_ID, UNBAN_LOG_CHANNEL_ID } from "../config/channels.js";
+import { buildIdTimestampFooter } from "../functions/InteractionUtils.js";
 import { COLOR_INFO, COLOR_ERROR } from "../config/colors.js";
 
 async function resolveLogChannel(client: Client, channelId: string): Promise<any | null> {
@@ -31,7 +32,7 @@ function buildBanEmbed(
       { name: "User", value: `<@${userId}>\n${username}` },
       { name: "Account Created On", value: formatAccountCreated(createdAt) },
     )
-    .setFooter({ text: `ID: ${userId} • ${formatTimestampWithDay(Date.now())}` });
+    .setFooter({ text: buildIdTimestampFooter(userId, formatTimestampWithDay(Date.now())) });
 
   if (avatarUrl) {
     embed.setThumbnail(avatarUrl);

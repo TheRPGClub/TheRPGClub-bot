@@ -35,7 +35,7 @@ import {
   buildTextReply,
   safeV2TextContent,
 } from "../functions/ComponentsV2Utils.js";
-import { buildDisabledPrevNextRow } from "../functions/PaginationUtils.js";
+import { buildDisabledPrevNextRow, buildPageFooterText } from "../functions/PaginationUtils.js";
 import {
   GUILD_FETCH_CHUNK_SIZE,
   MP_INFO_PAGE_SIZE as PAGE_SIZE,
@@ -154,7 +154,7 @@ function buildSummaryEmbed(
   if (totalPages > 1) {
     const footerText = [
       "Want to list your multiplayer info? Use /profile edit",
-      `Page ${safePage + 1} of ${totalPages}.`,
+      buildPageFooterText(safePage, totalPages),
     ].join("\n");
     embed.setFooter({ text: footerText });
   }
