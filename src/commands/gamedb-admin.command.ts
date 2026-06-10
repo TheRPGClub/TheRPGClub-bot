@@ -61,7 +61,7 @@ import GameSearchSynonymDraft, {
 } from "../classes/GameSearchSynonymDraft.js";
 import axios from "axios";
 import { igdbService } from "../services/IGDB/IgdbService.js";
-import { shouldRenderPrevNextButtons } from "../functions/PaginationUtils.js";
+import { buildPageFooterText, shouldRenderPrevNextButtons } from "../functions/PaginationUtils.js";
 import { parseSynonymQuickAddTerms } from "./gamedb-synonym.utils.js";
 import { isPositiveInt, truncateWithEllipsis } from "../utilities/ValidationUtils.js";
 import { COLOR_PRIMARY, COLOR_SUCCESS, COLOR_HIGHLIGHT } from "../config/colors.js";
@@ -1114,7 +1114,7 @@ export class GameDbAdmin {
             `${imageStatus} ${videoStatus} ${descStatus} ${releaseStatus}`;
         }).join("\n"),
       )
-      .setFooter({ text: `Page ${page + 1}/${totalPages}` });
+      .setFooter({ text: buildPageFooterText(page, totalPages) });
 
     const select = new StringSelectMenuBuilder()
       .setCustomId(`audit-select:${sessionId}`)

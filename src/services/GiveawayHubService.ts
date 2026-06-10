@@ -8,6 +8,7 @@ import {
 } from "discord.js";
 import { countAvailableGameKeys, listAvailableGameKeys } from "../classes/GameKey.js";
 import { GIVEAWAY_HUB_CHANNEL_ID } from "../config/channels.js";
+import { buildPageFooterText } from "../functions/PaginationUtils.js";
 const GIVEAWAY_HUB_SCAN_LIMIT = 50;
 
 export const KEYS_PAGE_SIZE = 20;
@@ -43,7 +44,7 @@ export function buildKeyListEmbed(
   const embed = new EmbedBuilder()
     .setTitle("Game Key Giveaway")
     .setDescription("Available keys:")
-    .setFooter({ text: `Page ${page + 1}/${totalPages} • ${totalCount} total` });
+    .setFooter({ text: buildPageFooterText(page, totalPages, `${totalCount} total`) });
 
   const lines = keys.map((key, idx) => {
     const number = page * KEYS_PAGE_SIZE + idx + 1;

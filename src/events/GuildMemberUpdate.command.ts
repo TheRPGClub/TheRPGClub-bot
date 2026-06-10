@@ -16,6 +16,7 @@ import {
   REGULARS_ROLE_ID,
 } from "../config/roles.js";
 import { COLOR_INFO, COLOR_ERROR } from "../config/colors.js";
+import { buildIdTimestampFooter } from "../functions/InteractionUtils.js";
 
 const QUALIFYING_ROLE_IDS_SET = new Set(
   [REGULARS_ROLE_ID, ADMIN_ROLE_ID, MODERATOR_ROLE_ID, MEMBER_ROLE_ID].filter(
@@ -64,7 +65,7 @@ export class GuildMemberUpdate {
             .setTitle(label)
             .setDescription(`<@&${roleId}>`)
             .setColor(color)
-            .setFooter({ text: `ID: ${user.id} • ${timestamp}` });
+            .setFooter({ text: buildIdTimestampFooter(user.id, timestamp) });
           await (logChannel as any).send({ embeds: [embed] });
         };
 
@@ -122,7 +123,7 @@ export class GuildMemberUpdate {
             .setTitle(title)
             .setDescription(`**Before:** ${beforeValue}\n**+After:** ${afterValue}`)
             .setColor(color)
-            .setFooter({ text: `ID: ${user.id} • ${timestamp}` });
+            .setFooter({ text: buildIdTimestampFooter(user.id, timestamp) });
           await (logChannel as any).send({ embeds: [embed] });
         };
 
