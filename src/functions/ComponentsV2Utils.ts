@@ -3,6 +3,8 @@ import { ContainerBuilder, TextDisplayBuilder } from "@discordjs/builders";
 import { COMPONENTS_V2_FLAG } from "../config/flags.js";
 import { truncateWithEllipsis } from "../utilities/ValidationUtils.js";
 
+export type EmbedField = { name: string; value: string };
+
 export function safeV2TextContent(value: string, maxLength: number): string {
   const normalized = value.split("\0").join("").trim();
   if (normalized.length <= maxLength) return normalized;
@@ -31,4 +33,58 @@ export function buildTextReply(
     components: [buildTextContainer(content)],
     flags: buildComponentsV2Flags(isEphemeral),
   };
+}
+
+export function buildTextSend(
+  content: string,
+): { components: ContainerBuilder[]; flags: number } {
+  return {
+    components: [buildTextContainer(content)],
+    flags: COMPONENTS_V2_FLAG,
+  };
+}
+
+export function buildContainerSend(
+  container: ContainerBuilder,
+): { components: ContainerBuilder[]; flags: number } {
+  return {
+    components: [container],
+    flags: COMPONENTS_V2_FLAG,
+  };
+}
+
+export function buildAccentContainer(
+  content: string,
+  color?: number,
+): ContainerBuilder {
+  const container = new ContainerBuilder().addTextDisplayComponents(
+    new TextDisplayBuilder().setContent(safeV2TextContent(content, 3500)),
+  );
+  if (color !== undefined) container.setAccentColor(color);
+  return container;
+}
+
+export function buildTitledContainer(
+  title: string,
+  body: string,
+  options?: { color?: number; footer?: string },
+): ContainerBuilder {
+  const container = new ContainerBuilder().addTextDisplayComponents(
+    new TextDisplayBuilder().setContent(
+      safeV2TextContent(`# ${title}\n${body}`, 3500),
+    ),
+  );
+  if (options?.footer) {
+    container.addTextDisplayComponents(
+      new TextDisplayBuilder().setContent(
+        safeV2TextContent(`-# ${options.footer}`, 1000),
+      ),
+    );
+  }
+  if (options?.color !== undefined) container.setAccentColor(options.color);
+  return container;
+}
+
+export function buildFieldsText(fields: EmbedField[]): string {
+  return fields.map((f) => `**${f.name}**\n${f.value}`).join("\n\n");
 }
