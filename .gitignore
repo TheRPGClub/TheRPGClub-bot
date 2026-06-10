@@ -12,3 +12,4 @@ build
 .node
 .tmp
 .claude
+!.claude/skills/
