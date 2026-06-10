@@ -27,12 +27,12 @@ import {
 } from "discordx";
 import {
   safeDeferReply,
+  PRIVATE_OPTION_DESCRIPTION,
   replyIfNotOwner,
   safeDeferUpdate,
   safeReply,
   safeUpdate,
   sanitizeUserInput,
-  SHOW_IN_CHAT_DESCRIPTION,
 } from "../functions/InteractionUtils.js";
 import { decodeBase64Url, encodeWithMaxLength } from "../functions/CustomIdUtils.js";
 import {
@@ -445,15 +445,15 @@ export class GameDbAdmin {
     })
     showCompleteGames: boolean | undefined,
     @SlashOption({
-      description: SHOW_IN_CHAT_DESCRIPTION,
-      name: "showinchat",
+      description: PRIVATE_OPTION_DESCRIPTION,
+      name: "private",
       required: false,
       type: ApplicationCommandOptionType.Boolean,
     })
-    showInChat: boolean | undefined,
+    privateFlag: boolean | undefined,
     interaction: CommandInteraction,
   ): Promise<void> {
-    const isPublic = !!showInChat;
+    const isPublic = !(privateFlag ?? false);
     await safeDeferReply(interaction, { flags: isPublic ? undefined : MessageFlags.Ephemeral });
 
     if (!(await isAdmin(interaction))) return;
@@ -588,15 +588,15 @@ export class GameDbAdmin {
     })
     gameIdsRaw: string,
     @SlashOption({
-      description: SHOW_IN_CHAT_DESCRIPTION,
-      name: "showinchat",
+      description: PRIVATE_OPTION_DESCRIPTION,
+      name: "private",
       required: false,
       type: ApplicationCommandOptionType.Boolean,
     })
-    showInChat: boolean | undefined,
+    privateFlag: boolean | undefined,
     interaction: CommandInteraction,
   ): Promise<void> {
-    const isPublic = !!showInChat;
+    const isPublic = !(privateFlag ?? false);
     await safeDeferReply(interaction, { flags: isPublic ? undefined : MessageFlags.Ephemeral });
 
     if (!(await isAdmin(interaction))) return;
@@ -1559,15 +1559,15 @@ export class GameDbAdmin {
     })
     additionalSynonyms: string | undefined,
     @SlashOption({
-      description: SHOW_IN_CHAT_DESCRIPTION,
-      name: "showinchat",
+      description: PRIVATE_OPTION_DESCRIPTION,
+      name: "private",
       required: false,
       type: ApplicationCommandOptionType.Boolean,
     })
-    showInChat: boolean | undefined,
+    privateFlag: boolean | undefined,
     interaction: CommandInteraction,
   ): Promise<void> {
-    const isPublic = !!showInChat;
+    const isPublic = !(privateFlag ?? false);
     await safeDeferReply(interaction, { flags: isPublic ? undefined : MessageFlags.Ephemeral });
     if (!(await isAdmin(interaction))) return;
 
@@ -1614,15 +1614,15 @@ export class GameDbAdmin {
     })
     query: string | undefined,
     @SlashOption({
-      description: SHOW_IN_CHAT_DESCRIPTION,
-      name: "showinchat",
+      description: PRIVATE_OPTION_DESCRIPTION,
+      name: "private",
       required: false,
       type: ApplicationCommandOptionType.Boolean,
     })
-    showInChat: boolean | undefined,
+    privateFlag: boolean | undefined,
     interaction: CommandInteraction,
   ): Promise<void> {
-    const isPublic = !!showInChat;
+    const isPublic = !(privateFlag ?? false);
     await safeDeferReply(interaction, { flags: isPublic ? undefined : MessageFlags.Ephemeral });
     if (!(await isAdmin(interaction))) return;
 

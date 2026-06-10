@@ -510,6 +510,14 @@ export async function deferWithShowInChat(
   await safeDeferReply(interaction, { flags: buildComponentsV2Flags(!showInChat) });
 }
 
+/** Defers reply; defaults to public. Pass privateFlag=true to send ephemerally. */
+export async function deferWithPrivateFlag(
+  interaction: AnyRepliable,
+  privateFlag?: boolean,
+): Promise<void> {
+  await safeDeferReply(interaction, { flags: buildComponentsV2Flags(privateFlag ?? false) });
+}
+
 export function extractErrorMessage(err: unknown): string {
   const e = err as any;
   return e?.message ?? String(e);
@@ -524,6 +532,7 @@ export const ACCESS_DENIED_OWNER = "Access denied. Command is restricted to the 
 export const ACCESS_DENIED_SERVER_OWNER = "Access denied. Command requires server owner.";
 export const ACCESS_DENIED_REGULARS = "Access denied. Command requires the Regulars role.";
 export const SHOW_IN_CHAT_DESCRIPTION = "Show in chat (public) instead of ephemeral";
+export const PRIVATE_OPTION_DESCRIPTION = "Send reply privately (only visible to you).";
 
 /** Returns true and replies ephemerally if user is not the owner. */
 export async function replyIfNotOwner(

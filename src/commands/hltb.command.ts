@@ -7,7 +7,7 @@ import { COLOR_PRIMARY } from "../config/colors.js";
 import Game from "../classes/Game.js";
 import { getHltbCacheByGameId, upsertHltbCache } from "../classes/HltbCache.js";
 import {
-  deferWithShowInChat,
+  deferWithPrivateFlag,
   ephemeralFlag,
   safeReply,
   sanitizeUserInput,
@@ -63,17 +63,17 @@ export class hltb {
     })
     title: string,
     @SlashOption({
-      description: "If set to true, show the results in the channel instead of ephemerally.",
-      name: "showinchat",
+      description: "Send reply privately (only visible to you).",
+      name: "private",
       required: false,
       type: ApplicationCommandOptionType.Boolean,
     })
-    showInChat: boolean | undefined,
+    privateFlag: boolean | undefined,
     interaction: CommandInteraction,
   ): Promise<void> {
     title = sanitizeUserInput(title, { preserveNewlines: false });
-    const ephemeral = !showInChat;
-    await deferWithShowInChat(interaction, showInChat);
+    const ephemeral = privateFlag ?? false;
+    await deferWithPrivateFlag(interaction, privateFlag);
 
     try {
       const result = await resolveHltbResult(title);

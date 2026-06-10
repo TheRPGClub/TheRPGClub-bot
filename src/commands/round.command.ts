@@ -1,7 +1,7 @@
 import { type CommandInteraction, ApplicationCommandOptionType } from "discord.js";
 import { Discord, Slash, SlashOption } from "discordx";
 import {
-  deferWithShowInChat,
+  deferWithPrivateFlag,
   extractErrorMessage,
   safeReply,
 } from "../functions/InteractionUtils.js";
@@ -23,16 +23,16 @@ export class CurrentRoundCommand {
   })
   async round(
     @SlashOption({
-      description: "If true, show results in the channel instead of ephemerally.",
-      name: "showinchat",
+      description: "Send reply privately (only visible to you).",
+      name: "private",
       required: false,
       type: ApplicationCommandOptionType.Boolean,
     })
-    showInChat: boolean | undefined,
+    privateFlag: boolean | undefined,
     interaction: CommandInteraction,
   ): Promise<void> {
-    const ephemeral = !showInChat;
-    await deferWithShowInChat(interaction, showInChat);
+    const ephemeral = privateFlag ?? false;
+    await deferWithPrivateFlag(interaction, privateFlag);
 
     try {
       const current = await BotVotingInfo.getCurrentRound();

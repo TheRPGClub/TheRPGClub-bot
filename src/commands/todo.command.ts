@@ -35,11 +35,11 @@ import {
   ACCESS_DENIED_SERVER_OWNER,
   AnyRepliable,
   safeDeferReply,
+  PRIVATE_OPTION_DESCRIPTION,
   safeDeferUpdate,
   safeReply,
   safeUpdate,
   sanitizeUserInput,
-  SHOW_IN_CHAT_DESCRIPTION,
 } from "../functions/InteractionUtils.js";
 import { countSuggestions } from "../classes/Suggestion.js";
 import {
@@ -1246,15 +1246,15 @@ export class TodoCommand {
     })
     perPage: number | undefined,
     @SlashOption({
-      description: SHOW_IN_CHAT_DESCRIPTION,
-      name: "showinchat",
+      description: PRIVATE_OPTION_DESCRIPTION,
+      name: "private",
       required: false,
       type: ApplicationCommandOptionType.Boolean,
     })
-    showInChat: boolean | undefined,
+    privateFlag: boolean | undefined,
     interaction: CommandInteraction,
   ): Promise<void> {
-    const isPublic = showInChat !== false;
+    const isPublic = !(privateFlag ?? false);
     await safeDeferReply(interaction, { flags: buildComponentsV2Flags(!isPublic) });
 
     const resolvedPerPage = clampNumber(perPage ?? TODO_DEFAULT_PAGE_SIZE, 1, TODO_MAX_PAGE_SIZE);

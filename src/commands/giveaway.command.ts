@@ -532,23 +532,23 @@ export class GiveawayCommand {
   @Slash({ description: "List available donated game keys", name: "list" })
   async listKeys(
     @SlashOption({
-      description: "Show in chat (public) instead of ephemeral",
-      name: "showinchat",
+      description: "Send reply privately (only visible to you).",
+      name: "private",
       required: false,
       type: ApplicationCommandOptionType.Boolean,
     })
-    showInChat: boolean | undefined,
+    privateFlag: boolean | undefined,
     interaction: CommandInteraction,
   ): Promise<void> {
-    const ephemeral = !showInChat;
-    await deferWithShowInChat(interaction, showInChat);
+    const ephemeral = privateFlag ?? false;
+    await deferWithPrivateFlag(interaction, privateFlag);
 
     const sessionId = `giveaway-${Date.now()}-${Math.floor(Math.random() * 100000)}`;
     const payload = await buildKeyListPayload(
       0,
       sessionId,
       interaction.user.id,
-      Boolean(showInChat),
+      !(privateFlag ?? false),
     );
 
     await safeReply(interaction, {

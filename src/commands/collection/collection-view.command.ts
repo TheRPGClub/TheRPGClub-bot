@@ -125,15 +125,15 @@ export class CollectionViewCommand {
     })
     ownershipType: CollectionOwnershipType | undefined,
     @SlashOption({
-      name: "showinchat",
-      description: "If true, show results in channel instead of private response.",
+      name: "private",
+      description: "Send reply privately (only visible to you).",
       type: ApplicationCommandOptionType.Boolean,
       required: false,
     })
-    showInChat: boolean | undefined,
+    privateFlag: boolean | undefined,
     interaction: CommandInteraction,
   ): Promise<void> {
-    const isEphemeral = !showInChat;
+    const isEphemeral = privateFlag ?? false;
     await safeDeferReply(interaction, { flags: buildComponentsV2Flags(isEphemeral) });
 
     const targetUserId = member?.id ?? interaction.user.id;
@@ -230,15 +230,15 @@ export class CollectionViewCommand {
     })
     showAll: boolean | undefined,
     @SlashOption({
-      name: "showinchat",
-      description: "If true, show results in channel instead of private response.",
+      name: "private",
+      description: "Send reply privately (only visible to you).",
       type: ApplicationCommandOptionType.Boolean,
       required: false,
     })
-    showInChat: boolean | undefined,
+    privateFlag: boolean | undefined,
     interaction: CommandInteraction,
   ): Promise<void> {
-    const isEphemeral = !showInChat;
+    const isEphemeral = privateFlag ?? false;
     await safeDeferReply(interaction, { flags: buildComponentsV2Flags(isEphemeral) });
 
     if (showAll) {

@@ -22,7 +22,7 @@ import {
   ModalComponent,
 } from "discordx";
 import {
-  deferWithShowInChat,
+  deferWithPrivateFlag,
   safeDeferReply,
   safeReply,
   safeUpdate,
@@ -307,16 +307,16 @@ export class GameCompletionCommands {
     })
     member: User | undefined,
     @SlashOption({
-      description: "If true, show in channel instead of ephemerally.",
-      name: "showinchat",
+      description: "Send reply privately (only visible to you).",
+      name: "private",
       required: false,
       type: ApplicationCommandOptionType.Boolean,
     })
-    showInChat: boolean | undefined,
+    privateFlag: boolean | undefined,
     interaction: CommandInteraction,
   ): Promise<void> {
-    const ephemeral = !showInChat;
-    await deferWithShowInChat(interaction, showInChat);
+    const ephemeral = privateFlag ?? false;
+    await deferWithPrivateFlag(interaction, privateFlag);
 
     const sanitizedQuery = query
       ? sanitizeUserInput(query, { preserveNewlines: false })
@@ -410,16 +410,16 @@ export class GameCompletionCommands {
     })
     query: string | undefined,
     @SlashOption({
-      description: "If true, show in channel instead of ephemerally.",
-      name: "showinchat",
+      description: "Send reply privately (only visible to you).",
+      name: "private",
       required: false,
       type: ApplicationCommandOptionType.Boolean,
     })
-    showInChat: boolean | undefined,
+    privateFlag: boolean | undefined,
     interaction: CommandInteraction,
   ): Promise<void> {
-    const ephemeral = !showInChat;
-    await deferWithShowInChat(interaction, showInChat);
+    const ephemeral = privateFlag ?? false;
+    await deferWithPrivateFlag(interaction, privateFlag);
 
     let leftUserId = interaction.user.id;
     let rightUserId: string | null = null;
