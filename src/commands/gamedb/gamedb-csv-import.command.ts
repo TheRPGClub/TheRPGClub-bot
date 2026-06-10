@@ -27,6 +27,7 @@ import {
   safeDeferUpdate,
   safeReply,
   safeUpdate,
+  replyIfNotOwner,
 } from "../../functions/InteractionUtils.js";
 import {
   normalizeCsvHeader,
@@ -486,10 +487,7 @@ export class GameDbCsvImportCommand {
     const segs = assertCustomIdSegments(interaction, 3);
     if (!segs) return;
     const [ownerId, importIdRaw, itemIdRaw] = segs;
-    if (interaction.user.id !== ownerId) {
-      await safeReply(interaction, buildTextReply("This import prompt is not for you.", true));
-      return;
-    }
+    if (await replyIfNotOwner(interaction, ownerId, "This import prompt is not for you.")) return;
 
     const igdbIdRaw = interaction.values?.[0];
     const igdbId = Number(igdbIdRaw);
@@ -557,10 +555,7 @@ export class GameDbCsvImportCommand {
     const segs = assertCustomIdSegments(interaction, 4);
     if (!segs) return;
     const [ownerId, importIdRaw, itemIdRaw, action] = segs;
-    if (interaction.user.id !== ownerId) {
-      await safeReply(interaction, buildTextReply("This import prompt is not for you.", true));
-      return;
-    }
+    if (await replyIfNotOwner(interaction, ownerId, "This import prompt is not for you.")) return;
 
     const importId = Number(importIdRaw);
     const itemId = Number(itemIdRaw);
@@ -696,10 +691,7 @@ export class GameDbCsvImportCommand {
     const segs = assertCustomIdSegments(interaction, 3);
     if (!segs) return;
     const [ownerId, importIdRaw, itemIdRaw] = segs;
-    if (interaction.user.id !== ownerId) {
-      await safeReply(interaction, buildTextReply("This import prompt is not for you.", true));
-      return;
-    }
+    if (await replyIfNotOwner(interaction, ownerId, "This import prompt is not for you.")) return;
 
     const importId = Number(importIdRaw);
     const itemId = Number(itemIdRaw);
@@ -765,10 +757,7 @@ export class GameDbCsvImportCommand {
     const segs = assertCustomIdSegments(interaction, 3);
     if (!segs) return;
     const [ownerId, importIdRaw, itemIdRaw] = segs;
-    if (interaction.user.id !== ownerId) {
-      await safeReply(interaction, buildTextReply("This import prompt is not for you.", true));
-      return;
-    }
+    if (await replyIfNotOwner(interaction, ownerId, "This import prompt is not for you.")) return;
 
     const importId = Number(importIdRaw);
     const itemId = Number(itemIdRaw);

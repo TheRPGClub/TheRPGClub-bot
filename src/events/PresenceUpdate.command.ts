@@ -16,7 +16,7 @@ import PresencePromptOptOut, { normalizePresenceGameTitle } from "../classes/Pre
 import PresencePromptHistory from "../classes/PresencePromptHistory.js";
 import UserActivityIcon from "../classes/UserActivityIcon.js";
 import { igdbService } from "../services/IGDB/IgdbService.js";
-import { safeReply, safeUpdate } from "../functions/InteractionUtils.js";
+import { replyIfNotOwner, safeReply, safeUpdate } from "../functions/InteractionUtils.js";
 import { buildTextReply } from "../functions/ComponentsV2Utils.js";
 import { PRESENCE_PROMPT_CHANNEL_ID } from "../config/channels.js";
 import { logError } from "../utilities/LogUtils.js";
@@ -212,10 +212,7 @@ export class PresenceUpdate {
       await safeReply(interaction, buildTextReply("That prompt has expired.", true));
       return;
     }
-    if (interaction.user.id !== session.userId) {
-      await safeReply(interaction, buildTextReply("This prompt isn't for you.", true));
-      return;
-    }
+    if (await replyIfNotOwner(interaction, session.userId, "This prompt isn't for you.")) return;
 
     try {
       await PresencePromptHistory.markResolved(sessionId, "ACCEPTED");
@@ -268,10 +265,7 @@ export class PresenceUpdate {
       await safeReply(interaction, buildTextReply("That prompt has expired.", true));
       return;
     }
-    if (interaction.user.id !== session.userId) {
-      await safeReply(interaction, buildTextReply("This prompt isn't for you.", true));
-      return;
-    }
+    if (await replyIfNotOwner(interaction, session.userId, "This prompt isn't for you.")) return;
 
     await PresencePromptHistory.markResolved(sessionId, "DECLINED");
     await safeUpdate(interaction, {
@@ -288,10 +282,7 @@ export class PresenceUpdate {
       await safeReply(interaction, buildTextReply("That prompt has expired.", true));
       return;
     }
-    if (interaction.user.id !== session.userId) {
-      await safeReply(interaction, buildTextReply("This prompt isn't for you.", true));
-      return;
-    }
+    if (await replyIfNotOwner(interaction, session.userId, "This prompt isn't for you.")) return;
 
     await PresencePromptOptOut.addOptOutGame(session.userId, session.gameTitle);
     await PresencePromptHistory.markResolved(sessionId, "OPT_OUT_GAME");
@@ -310,10 +301,7 @@ export class PresenceUpdate {
       await safeReply(interaction, buildTextReply("That prompt has expired.", true));
       return;
     }
-    if (interaction.user.id !== session.userId) {
-      await safeReply(interaction, buildTextReply("This prompt isn't for you.", true));
-      return;
-    }
+    if (await replyIfNotOwner(interaction, session.userId, "This prompt isn't for you.")) return;
 
     await PresencePromptOptOut.addOptOutAll(session.userId);
     await PresencePromptHistory.markResolved(sessionId, "OPT_OUT_ALL");

@@ -20,6 +20,7 @@ import {
   safeDeferUpdate,
   safeReply,
   safeUpdate,
+  replyIfNotOwner,
 } from "../../functions/InteractionUtils.js";
 import { formatDiscordTimestamp, formatPlaytimeHours } from "../../functions/DateFormatUtils.js";
 import { igdbService } from "../../services/IGDB/IgdbService.js";
@@ -35,7 +36,7 @@ import {
 import { COMPONENTS_V2_FLAG } from "../../config/flags.js";
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
 import { DISCORD_AUTOCOMPLETE_DESC_MAX } from "../../config/textLimits.js";
-import { buildSelectOptions } from "../../functions/uiComponents.js";
+import { buildActionButton, buildSelectOptions } from "../../functions/uiComponents.js";
 import { assertCustomIdSegments, parseCustomIdSegments } from "../../utilities/CustomIdUtils.js";
 import { logError } from "../../utilities/LogUtils.js";
 
@@ -381,10 +382,7 @@ export async function handleCompletionAddSelect(
     return;
   }
 
-  if (interaction.user.id !== ctx.userId) {
-    await safeReply(interaction, buildTextReply("This completion prompt isn't for you.", true));
-    return;
-  }
+  if (await replyIfNotOwner(interaction, ctx.userId, "This completion prompt isn't for you.")) return;
 
   const value = interaction.values?.[0];
   if (!value) {
@@ -427,11 +425,7 @@ async function confirmDuplicateCompletion(
       .setCustomId(yesId)
       .setLabel("Add Another")
       .setStyle(ButtonStyle.Danger),
-    new ButtonBuilder()
-       
-      .setCustomId(noId)
-      .setLabel("Cancel")
-      .setStyle(ButtonStyle.Secondary),
+    buildActionButton("cancel", noId),
   );
 
   const promptText =

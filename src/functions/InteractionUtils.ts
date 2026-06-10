@@ -547,9 +547,10 @@ export const USER_NOT_FOUND_MESSAGE = "Could not find that user.";
 export async function replyIfNotOwner(
   interaction: AnyRepliable,
   ownerId: string,
+  message?: string,
 ): Promise<boolean> {
   if (interaction.user.id !== ownerId) {
-    await safeReply(interaction, buildTextReply(OWNER_ONLY_MESSAGE, true));
+    await safeReply(interaction, buildTextReply(message ?? OWNER_ONLY_MESSAGE, true));
     return true;
   }
   return false;

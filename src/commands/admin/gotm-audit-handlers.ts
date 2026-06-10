@@ -13,6 +13,7 @@ import {
   safeReply,
   safeUpdate,
   stripModalInput,
+  replyIfNotOwner,
 } from "../../functions/InteractionUtils.js";
 import { buildTextReply } from "../../functions/ComponentsV2Utils.js";
 import type { IGameWithPlatforms } from "../../classes/Game.js";
@@ -46,10 +47,7 @@ export async function handleGotmAuditSelect(
   const segs = assertCustomIdSegments(interaction, 3);
   if (!segs) return;
   const [ownerId, importIdRaw, itemIdRaw] = segs;
-  if (interaction.user.id !== ownerId) {
-    await safeReply(interaction, buildTextReply("This audit prompt is not for you.", true));
-    return;
-  }
+  if (await replyIfNotOwner(interaction, ownerId, "This audit prompt is not for you.")) return;
 
   const importId = Number(importIdRaw);
   const itemId = Number(itemIdRaw);
@@ -121,10 +119,7 @@ export async function handleGotmAuditAction(interaction: ButtonInteraction): Pro
   const segs = assertCustomIdSegments(interaction, 4);
   if (!segs) return;
   const [ownerId, importIdRaw, itemIdRaw, action] = segs;
-  if (interaction.user.id !== ownerId) {
-    await safeReply(interaction, buildTextReply("This audit prompt is not for you.", true));
-    return;
-  }
+  if (await replyIfNotOwner(interaction, ownerId, "This audit prompt is not for you.")) return;
 
   const importId = Number(importIdRaw);
   const itemId = Number(itemIdRaw);
@@ -254,10 +249,7 @@ export async function handleGotmAuditManualModal(
   const segs = assertCustomIdSegments(interaction, 3);
   if (!segs) return;
   const [ownerId, importIdRaw, itemIdRaw] = segs;
-  if (interaction.user.id !== ownerId) {
-    await safeReply(interaction, buildTextReply("This audit prompt is not for you.", true));
-    return;
-  }
+  if (await replyIfNotOwner(interaction, ownerId, "This audit prompt is not for you.")) return;
 
   const importId = Number(importIdRaw);
   const itemId = Number(itemIdRaw);
@@ -332,10 +324,7 @@ export async function handleGotmAuditQueryModal(
   const segs = assertCustomIdSegments(interaction, 3);
   if (!segs) return;
   const [ownerId, importIdRaw, itemIdRaw] = segs;
-  if (interaction.user.id !== ownerId) {
-    await safeReply(interaction, buildTextReply("This audit prompt is not for you.", true));
-    return;
-  }
+  if (await replyIfNotOwner(interaction, ownerId, "This audit prompt is not for you.")) return;
 
   const importId = Number(importIdRaw);
   const itemId = Number(itemIdRaw);

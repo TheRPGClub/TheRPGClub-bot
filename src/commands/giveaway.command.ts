@@ -762,10 +762,7 @@ export class GiveawayCommand {
     const segs = assertCustomIdSegments(interaction, 1);
     if (!segs) return;
     const [userId] = segs;
-    if (interaction.user.id !== userId) {
-      await safeReply(interaction, buildTextReply("This giveaway claim isn't for you.", true));
-      return;
-    }
+    if (await replyIfNotOwner(interaction, userId, "This giveaway claim isn't for you.")) return;
 
     if (!hasMemberRole(interaction.member)) {
       await safeReply(interaction, buildTextReply("Claiming keys requires the Member role.", true));
@@ -804,10 +801,7 @@ export class GiveawayCommand {
     const segs = assertCustomIdSegments(interaction, 4);
     if (!segs) return;
     const [sessionId, pageRaw, messageId, userId] = segs;
-    if (interaction.user.id !== userId) {
-      await safeReply(interaction, buildTextReply("This giveaway claim isn't for you.", true));
-      return;
-    }
+    if (await replyIfNotOwner(interaction, userId, "This giveaway claim isn't for you.")) return;
 
     if (!hasMemberRole(interaction.member)) {
       await safeReply(interaction, buildTextReply("Claiming keys requires the Member role.", true));
@@ -871,10 +865,7 @@ export class GiveawayCommand {
 
     if (scope === "hub") {
       const userId = extraSegs[0];
-      if (interaction.user.id !== userId) {
-        await safeReply(interaction, buildTextReply("This giveaway claim isn't for you.", true));
-        return;
-      }
+      if (await replyIfNotOwner(interaction, userId, "This giveaway claim isn't for you.")) return;
     }
 
     if (scope === "private") {
@@ -941,10 +932,7 @@ export class GiveawayCommand {
     const segs = assertCustomIdSegments(interaction, 1);
     if (!segs) return;
     const [userId] = segs;
-    if (interaction.user.id !== userId) {
-      await safeReply(interaction, buildTextReply("This giveaway claim isn't for you.", true));
-      return;
-    }
+    if (await replyIfNotOwner(interaction, userId, "This giveaway claim isn't for you.")) return;
 
     await safeUpdate(interaction, {
       content: "Claim cancelled.",
