@@ -79,6 +79,7 @@ import {
 } from "../functions/CompletionHelpers.js";
 import {
   buildComponentsV2Flags,
+  buildTextContainer,
   buildTextReply,
   safeV2TextContent,
 } from "../functions/ComponentsV2Utils.js";
@@ -352,16 +353,9 @@ async function confirmDuplicateCompletion(
   const detailParts = [existing.completionType, dateText, playtimeText].filter(Boolean);
   const noteLine = existing.note ? `\n> ${existing.note}` : "";
 
-  const container = new ContainerBuilder().addTextDisplayComponents(
-    new TextDisplayBuilder().setContent(
-      safeV2TextContent(
-        `We found a completion for **${gameTitle}** within the last week:\n` +
+  const container = buildTextContainer(`We found a completion for **${gameTitle}** within the last week:\n` +
           `• ${detailParts.join(" - ")} (Completion #${existing.completionId})${noteLine}\n\n` +
-          "Add another completion anyway?",
-        3500,
-      ),
-    ),
-  );
+          "Add another completion anyway?");
   const row = buildButtonRow(
     buildActionButton({ customId: yesId, label: "Add Another", style: ButtonStyle.Danger }),
     buildActionButton("cancel", noId),
@@ -402,11 +396,7 @@ async function confirmDuplicateCompletion(
       time: 120_000,
     });
     const confirmed = selection.customId.endsWith(":yes");
-    const resultContainer = new ContainerBuilder().addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(
-        safeV2TextContent(confirmed ? "Adding another completion." : "Cancelled.", 1000),
-      ),
-    );
+    const resultContainer = buildTextContainer(confirmed ? "Adding another completion." : "Cancelled.");
     await safeUpdate(selection, {
       components: [resultContainer],
       flags: buildComponentsV2Flags(true),
@@ -719,9 +709,7 @@ export class NowPlayingCommand {
     await safeDeferReply(interaction, { flags: buildComponentsV2Flags(ephemeral) });
 
     if (!title) {
-      const container = new ContainerBuilder().addTextDisplayComponents(
-        new TextDisplayBuilder().setContent("Please provide a game title from autocomplete."),
-      );
+      const container = buildTextContainer("Please provide a game title from autocomplete.");
       await safeReply(interaction, {
         components: [container],
         flags: buildComponentsV2Flags(ephemeral),
@@ -731,14 +719,7 @@ export class NowPlayingCommand {
 
     const game = await this.resolveNowPlayingGameByTitle(title);
     if (!game) {
-      const container = new ContainerBuilder().addTextDisplayComponents(
-        new TextDisplayBuilder().setContent(
-          safeV2TextContent(
-            `I could not find a unique GameDB match for "${title}". Please choose from autocomplete.`,
-            1000,
-          ),
-        ),
-      );
+      const container = buildTextContainer(`I could not find a unique GameDB match for "${title}". Please choose from autocomplete.`);
       await safeReply(interaction, {
         components: [container],
         flags: buildComponentsV2Flags(ephemeral),
@@ -748,9 +729,7 @@ export class NowPlayingCommand {
 
     const platformId = await resolveGameCompletionPlatformId(rawPlatform);
     if (!platformId) {
-      const container = new ContainerBuilder().addTextDisplayComponents(
-        new TextDisplayBuilder().setContent("Please choose a platform from autocomplete."),
-      );
+      const container = buildTextContainer("Please choose a platform from autocomplete.");
       await safeReply(interaction, {
         components: [container],
         flags: buildComponentsV2Flags(ephemeral),
@@ -760,9 +739,7 @@ export class NowPlayingCommand {
 
     const platform = await Game.getPlatformById(platformId);
     if (!platform) {
-      const container = new ContainerBuilder().addTextDisplayComponents(
-        new TextDisplayBuilder().setContent("Selected platform was not found."),
-      );
+      const container = buildTextContainer("Selected platform was not found.");
       await safeReply(interaction, {
         components: [container],
         flags: buildComponentsV2Flags(ephemeral),
@@ -782,11 +759,7 @@ export class NowPlayingCommand {
       }
     } catch (err: any) {
       const msg = extractErrorMessage(err);
-      const container = new ContainerBuilder().addTextDisplayComponents(
-        new TextDisplayBuilder().setContent(
-          safeV2TextContent(`Could not add to Now Playing: ${msg}`, 1000),
-        ),
-      );
+      const container = buildTextContainer(`Could not add to Now Playing: ${msg}`);
       await safeReply(interaction, {
         components: [container],
         flags: buildComponentsV2Flags(ephemeral),
@@ -874,9 +847,7 @@ export class NowPlayingCommand {
     await safeDeferReply(interaction, { flags: buildComponentsV2Flags(ephemeral) });
 
     if (!query) {
-      const container = new ContainerBuilder().addTextDisplayComponents(
-        new TextDisplayBuilder().setContent("Please provide a title to search."),
-      );
+      const container = buildTextContainer("Please provide a title to search.");
       await safeReply(interaction, {
         components: [container],
         flags: buildComponentsV2Flags(ephemeral),
@@ -886,11 +857,7 @@ export class NowPlayingCommand {
 
     const nowPlayingRows = await Member.getNowPlayingByTitleSearch(query);
     if (!nowPlayingRows.length) {
-      const container = new ContainerBuilder().addTextDisplayComponents(
-        new TextDisplayBuilder().setContent(
-          safeV2TextContent(`No one is currently playing GameDB titles matching "${query}".`, 1000),
-        ),
-      );
+      const container = buildTextContainer(`No one is currently playing GameDB titles matching "${query}".`);
       await safeReply(interaction, {
         components: [container],
         flags: buildComponentsV2Flags(ephemeral),
@@ -932,9 +899,7 @@ export class NowPlayingCommand {
       );
     }
     const content = this.trimTextDisplayContent(contentLines.join("\n"));
-    const container = new ContainerBuilder().addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(safeV2TextContent(content, 3500)),
-    );
+    const container = buildTextContainer(content);
 
     await safeReply(interaction, {
       components: [container],
@@ -947,9 +912,7 @@ export class NowPlayingCommand {
     const query = getModalField(interaction, NOW_PLAYING_ADD_TITLE_INPUT_ID);
     const noteRaw = getModalField(interaction, NOW_PLAYING_ADD_NOTE_INPUT_ID);
     if (!query) {
-      const container = new ContainerBuilder().addTextDisplayComponents(
-        new TextDisplayBuilder().setContent("Please provide a title to search."),
-      );
+      const container = buildTextContainer("Please provide a title to search.");
       await safeReply(interaction, {
         components: [container],
         flags: buildComponentsV2Flags(true),
@@ -957,11 +920,7 @@ export class NowPlayingCommand {
       return;
     }
     if (noteRaw.length > MAX_NOW_PLAYING_NOTE_LEN) {
-      const container = new ContainerBuilder().addTextDisplayComponents(
-        new TextDisplayBuilder().setContent(
-          safeV2TextContent(`Note must be ${MAX_NOW_PLAYING_NOTE_LEN} characters or fewer.`, 1000),
-        ),
-      );
+      const container = buildTextContainer(`Note must be ${MAX_NOW_PLAYING_NOTE_LEN} characters or fewer.`);
       await safeReply(interaction, {
         components: [container],
         flags: buildComponentsV2Flags(true),
@@ -1019,10 +978,7 @@ export class NowPlayingCommand {
         contentLines.push(`Showing first ${options.length - 1} results.`);
       }
       const content = this.trimTextDisplayContent(contentLines.join("\n"));
-      const container = new ContainerBuilder()
-        .addTextDisplayComponents(
-          new TextDisplayBuilder().setContent(safeV2TextContent(content, 3500)),
-        )
+      const container = buildTextContainer(content)
         .addActionRowComponents(selectRow.toJSON());
 
       const reply = await safeReply(interaction, {
@@ -1051,11 +1007,7 @@ export class NowPlayingCommand {
           });
           if (!hasMatchingSelect) return;
 
-          const timeoutContainer = new ContainerBuilder().addTextDisplayComponents(
-            new TextDisplayBuilder().setContent(
-              safeV2TextContent("Timed out waiting for a selection. No changes made.", 1000),
-            ),
-          );
+          const timeoutContainer = buildTextContainer("Timed out waiting for a selection. No changes made.");
           await safeReply(interaction, {
             components: [timeoutContainer],
             flags: buildComponentsV2Flags(true),
@@ -1067,11 +1019,7 @@ export class NowPlayingCommand {
       }, 60_000);
     } catch (err: any) {
       const msg = extractErrorMessage(err);
-      const container = new ContainerBuilder().addTextDisplayComponents(
-        new TextDisplayBuilder().setContent(
-          safeV2TextContent(`Could not add to Now Playing: ${msg}`, 1000),
-        ),
-      );
+      const container = buildTextContainer(`Could not add to Now Playing: ${msg}`);
       await safeReply(interaction, {
         components: [container],
         flags: buildComponentsV2Flags(true),
@@ -1256,9 +1204,7 @@ export class NowPlayingCommand {
     const entries = await Member.getNowPlaying(session.userId);
     const entry = entries.find((item) => item.gameId === session.gameId);
     if (!entry) {
-      const container = new ContainerBuilder().addTextDisplayComponents(
-        new TextDisplayBuilder().setContent("That game is no longer in your Now Playing list."),
-      );
+      const container = buildTextContainer("That game is no longer in your Now Playing list.");
       await safeUpdate(interaction, { components: [container] });
       return;
     }
@@ -1298,9 +1244,7 @@ export class NowPlayingCommand {
   ): Promise<void> {
     const current = await Member.getNowPlaying(ownerId);
     if (!current.length) {
-      const container = new ContainerBuilder().addTextDisplayComponents(
-        new TextDisplayBuilder().setContent("Your Now Playing list is empty."),
-      );
+      const container = buildTextContainer("Your Now Playing list is empty.");
       const pmComponents = await this.withPmNowPlayingList(
         ownerId, interaction.guildId, [container],
       );
@@ -1312,9 +1256,7 @@ export class NowPlayingCommand {
       const session = nowPlayingCompletionWizardSessions.get(sessionId);
       const entry = current[0];
       if (!session || !entry?.gameId) {
-        const container = new ContainerBuilder().addTextDisplayComponents(
-          new TextDisplayBuilder().setContent("Unable to start completion flow."),
-        );
+        const container = buildTextContainer("Unable to start completion flow.");
         await safeUpdate(interaction, { components: [container] });
         return;
       }
@@ -1350,9 +1292,7 @@ export class NowPlayingCommand {
     const [sessionId] = segs;
     const session = nowPlayingCompletionWizardSessions.get(sessionId);
     if (!session) {
-      const container = new ContainerBuilder().addTextDisplayComponents(
-        new TextDisplayBuilder().setContent("This completion prompt has expired."),
-      );
+      const container = buildTextContainer("This completion prompt has expired.");
       await safeReply(interaction, {
         components: [container],
         flags: buildComponentsV2Flags(true),
@@ -1363,9 +1303,7 @@ export class NowPlayingCommand {
     if (await replyIfNotOwner(interaction, session.userId, "This completion prompt isn't for you.")) return;
 
     if (!session.gameId) {
-      const container = new ContainerBuilder().addTextDisplayComponents(
-        new TextDisplayBuilder().setContent("Select a game first before submitting details."),
-      );
+      const container = buildTextContainer("Select a game first before submitting details.");
       await safeReply(interaction, {
         components: [container],
         flags: buildComponentsV2Flags(true),
@@ -1383,11 +1321,7 @@ export class NowPlayingCommand {
     try {
       completedAt = this.parseNowPlayingCompletionDate(completionDateInput);
     } catch (err: any) {
-      const container = new ContainerBuilder().addTextDisplayComponents(
-        new TextDisplayBuilder().setContent(
-          safeV2TextContent(err?.message ?? "Invalid completion date.", 1000),
-        ),
-      );
+      const container = buildTextContainer(err?.message ?? "Invalid completion date.");
       await safeReply(interaction, {
         components: [container],
         flags: buildComponentsV2Flags(true),
@@ -1399,11 +1333,7 @@ export class NowPlayingCommand {
       ? Number(finalPlaytimeRaw)
       : null;
     if (finalPlaytimeHours !== null && !isValidPlaytimeHours(finalPlaytimeHours)) {
-      const container = new ContainerBuilder().addTextDisplayComponents(
-        new TextDisplayBuilder().setContent(
-          "Final playtime must be a non-negative number of hours.",
-        ),
-      );
+      const container = buildTextContainer("Final playtime must be a non-negative number of hours.");
       await safeReply(interaction, {
         components: [container],
         flags: buildComponentsV2Flags(true),
@@ -1415,9 +1345,7 @@ export class NowPlayingCommand {
 
     const game = await Game.getGameById(session.gameId);
     if (!game) {
-      const container = new ContainerBuilder().addTextDisplayComponents(
-        new TextDisplayBuilder().setContent("That game could not be found."),
-      );
+      const container = buildTextContainer("That game could not be found.");
       await safeReply(interaction, {
         components: [container],
         flags: buildComponentsV2Flags(true),
@@ -1489,9 +1417,7 @@ export class NowPlayingCommand {
     const [platformSessionId] = segs;
     const session = nowPlayingCompletionPlatformSessions.get(platformSessionId);
     if (!session) {
-      const container = new ContainerBuilder().addTextDisplayComponents(
-        new TextDisplayBuilder().setContent("This completion prompt has expired."),
-      );
+      const container = buildTextContainer("This completion prompt has expired.");
       await safeReply(interaction, {
         components: [container],
         flags: buildComponentsV2Flags(true),
@@ -1515,9 +1441,7 @@ export class NowPlayingCommand {
       session.platforms.some((platform) => platform.id === platformId)
     );
     if (!valid) {
-      const container = new ContainerBuilder().addTextDisplayComponents(
-        new TextDisplayBuilder().setContent("Invalid platform selection."),
-      );
+      const container = buildTextContainer("Invalid platform selection.");
       await safeReply(interaction, {
         components: [container],
         flags: buildComponentsV2Flags(true),
@@ -1530,9 +1454,7 @@ export class NowPlayingCommand {
 
     const game = await Game.getGameById(session.gameId);
     if (!game) {
-      const container = new ContainerBuilder().addTextDisplayComponents(
-        new TextDisplayBuilder().setContent("That game could not be found."),
-      );
+      const container = buildTextContainer("That game could not be found.");
       await safeReply(interaction, {
         components: [container],
         flags: buildComponentsV2Flags(true),
@@ -1564,9 +1486,7 @@ export class NowPlayingCommand {
   ): Promise<void> {
     const platforms = await Game.getPlatformsForGameWithStandard(game.id, STANDARD_PLATFORM_IDS);
     if (!platforms.length) {
-      const container = new ContainerBuilder().addTextDisplayComponents(
-        new TextDisplayBuilder().setContent("No platform data is available for this game."),
-      );
+      const container = buildTextContainer("No platform data is available for this game.");
       await safeReply(interaction, {
         components: [container],
         flags: buildComponentsV2Flags(true),
@@ -1608,9 +1528,7 @@ export class NowPlayingCommand {
     const content = platformOptions.length > 24
       ? `Select the platform for **${game.title}** (showing first 24).`
       : `Select the platform for **${game.title}**.`;
-    const container = new ContainerBuilder().addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(safeV2TextContent(content, 1000)),
-    );
+    const container = buildTextContainer(content);
     await safeReply(interaction, {
       components: await this.withPmNowPlayingList(
         session.userId,
@@ -1643,11 +1561,7 @@ export class NowPlayingCommand {
       });
     } catch (err: any) {
       const msg = err?.message ?? "Failed to save completion.";
-      const container = new ContainerBuilder().addTextDisplayComponents(
-        new TextDisplayBuilder().setContent(
-          safeV2TextContent(`Could not save completion: ${msg}`, 1000),
-        ),
-      );
+      const container = buildTextContainer(`Could not save completion: ${msg}`);
       await safeReply(interaction, {
         components: [container],
         flags: buildComponentsV2Flags(true),
@@ -1679,9 +1593,7 @@ export class NowPlayingCommand {
         await Member.getNowPlaying(session.userId),
       );
       if (!entries.length) {
-        const container = new ContainerBuilder().addTextDisplayComponents(
-          new TextDisplayBuilder().setContent("Your Now Playing list is empty."),
-        );
+        const container = buildTextContainer("Your Now Playing list is empty.");
         await safeReply(interaction, {
           components: [container],
           flags: buildComponentsV2Flags(true),
@@ -1725,9 +1637,7 @@ export class NowPlayingCommand {
       `**Announced:** ${session.announce ? "Yes" : "No"}`,
     );
     const content = this.trimTextDisplayContent(detailLines.join("\n"));
-    const container = new ContainerBuilder().addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(safeV2TextContent(content, 1000)),
-    );
+    const container = buildTextContainer(content);
     await safeReply(interaction, {
       components: [container],
       flags: buildComponentsV2Flags(true),
@@ -1742,9 +1652,7 @@ export class NowPlayingCommand {
     const [sessionId, gameIdRaw] = segs;
     const session = nowPlayingCompletionWizardSessions.get(sessionId);
     if (!session) {
-      const container = new ContainerBuilder().addTextDisplayComponents(
-        new TextDisplayBuilder().setContent("This completion prompt has expired."),
-      );
+      const container = buildTextContainer("This completion prompt has expired.");
       await safeReply(interaction, {
         components: [container],
         flags: buildComponentsV2Flags(true),
@@ -1756,9 +1664,7 @@ export class NowPlayingCommand {
 
     const gameId = Number(gameIdRaw);
     if (!isPositiveInt(gameId)) {
-      const container = new ContainerBuilder().addTextDisplayComponents(
-        new TextDisplayBuilder().setContent("Invalid selection."),
-      );
+      const container = buildTextContainer("Invalid selection.");
       await safeReply(interaction, {
         components: [container],
         flags: buildComponentsV2Flags(true),
@@ -1779,9 +1685,7 @@ export class NowPlayingCommand {
     const [sessionId] = segs;
     const session = nowPlayingCompletionWizardSessions.get(sessionId);
     if (!session) {
-      const container = new ContainerBuilder().addTextDisplayComponents(
-        new TextDisplayBuilder().setContent("This completion prompt has expired."),
-      );
+      const container = buildTextContainer("This completion prompt has expired.");
       await safeReply(interaction, {
         components: [container],
         flags: buildComponentsV2Flags(true),
@@ -1793,9 +1697,7 @@ export class NowPlayingCommand {
 
     const value = interaction.values?.[0];
     if (!value || !COMPLETION_TYPES.includes(value as CompletionType)) {
-      const container = new ContainerBuilder().addTextDisplayComponents(
-        new TextDisplayBuilder().setContent("Invalid completion type."),
-      );
+      const container = buildTextContainer("Invalid completion type.");
       await safeReply(interaction, {
         components: [container],
         flags: buildComponentsV2Flags(true),
@@ -1816,9 +1718,7 @@ export class NowPlayingCommand {
     const [sessionId] = segs;
     const session = nowPlayingCompletionWizardSessions.get(sessionId);
     if (!session) {
-      const container = new ContainerBuilder().addTextDisplayComponents(
-        new TextDisplayBuilder().setContent("This completion prompt has expired."),
-      );
+      const container = buildTextContainer("This completion prompt has expired.");
       await safeReply(interaction, {
         components: [container],
         flags: buildComponentsV2Flags(true),
@@ -1830,9 +1730,7 @@ export class NowPlayingCommand {
 
     const value = interaction.values?.[0];
     if (value !== "yes" && value !== "no") {
-      const container = new ContainerBuilder().addTextDisplayComponents(
-        new TextDisplayBuilder().setContent("Invalid selection."),
-      );
+      const container = buildTextContainer("Invalid selection.");
       await safeReply(interaction, {
         components: [container],
         flags: buildComponentsV2Flags(true),
@@ -1853,9 +1751,7 @@ export class NowPlayingCommand {
     const [sessionId] = segs;
     const session = nowPlayingCompletionWizardSessions.get(sessionId);
     if (!session) {
-      const container = new ContainerBuilder().addTextDisplayComponents(
-        new TextDisplayBuilder().setContent("This completion prompt has expired."),
-      );
+      const container = buildTextContainer("This completion prompt has expired.");
       await safeReply(interaction, {
         components: [container],
         flags: buildComponentsV2Flags(true),
@@ -1867,9 +1763,7 @@ export class NowPlayingCommand {
 
     const value = interaction.values?.[0];
     if (value !== "yes" && value !== "no") {
-      const container = new ContainerBuilder().addTextDisplayComponents(
-        new TextDisplayBuilder().setContent("Invalid selection."),
-      );
+      const container = buildTextContainer("Invalid selection.");
       await safeReply(interaction, {
         components: [container],
         flags: buildComponentsV2Flags(true),
@@ -1890,9 +1784,7 @@ export class NowPlayingCommand {
     const [sessionId] = segs;
     const session = nowPlayingCompletionWizardSessions.get(sessionId);
     if (!session) {
-      const container = new ContainerBuilder().addTextDisplayComponents(
-        new TextDisplayBuilder().setContent("This completion prompt has expired."),
-      );
+      const container = buildTextContainer("This completion prompt has expired.");
       await safeReply(interaction, {
         components: [container],
         flags: buildComponentsV2Flags(true),
@@ -1904,9 +1796,7 @@ export class NowPlayingCommand {
 
     const value = interaction.values?.[0];
     if (value !== "yes" && value !== "no") {
-      const container = new ContainerBuilder().addTextDisplayComponents(
-        new TextDisplayBuilder().setContent("Invalid selection."),
-      );
+      const container = buildTextContainer("Invalid selection.");
       await safeReply(interaction, {
         components: [container],
         flags: buildComponentsV2Flags(true),
@@ -1925,9 +1815,7 @@ export class NowPlayingCommand {
     const [sessionId] = segs;
     const session = nowPlayingCompletionWizardSessions.get(sessionId);
     if (!session) {
-      const container = new ContainerBuilder().addTextDisplayComponents(
-        new TextDisplayBuilder().setContent("This completion prompt has expired."),
-      );
+      const container = buildTextContainer("This completion prompt has expired.");
       await safeReply(interaction, {
         components: [container],
         flags: buildComponentsV2Flags(true),
@@ -1938,9 +1826,7 @@ export class NowPlayingCommand {
     if (await replyIfNotOwner(interaction, session.userId, "This completion prompt isn't for you.")) return;
 
     if (!session.gameId) {
-      const container = new ContainerBuilder().addTextDisplayComponents(
-        new TextDisplayBuilder().setContent("Select a game first."),
-      );
+      const container = buildTextContainer("Select a game first.");
       await safeReply(interaction, {
         components: [container],
         flags: buildComponentsV2Flags(true),
@@ -1991,9 +1877,7 @@ export class NowPlayingCommand {
     const ownerId = session?.userId;
 
     if (!session || interaction.user.id !== ownerId) {
-      const container = new ContainerBuilder().addTextDisplayComponents(
-        new TextDisplayBuilder().setContent("This add prompt isn't for you."),
-      );
+      const container = buildTextContainer("This add prompt isn't for you.");
       await safeReply(interaction, {
         components: [container],
         flags: buildComponentsV2Flags(true),
@@ -2008,9 +1892,7 @@ export class NowPlayingCommand {
     }
     const gameId = Number(choice);
     if (!isPositiveInt(gameId)) {
-      const container = new ContainerBuilder().addTextDisplayComponents(
-        new TextDisplayBuilder().setContent("Invalid selection. Please try again."),
-      );
+      const container = buildTextContainer("Invalid selection. Please try again.");
       await safeUpdate(interaction, {
         components: [container],
         flags: buildComponentsV2Flags(true),
@@ -2030,11 +1912,7 @@ export class NowPlayingCommand {
       );
     } catch (err: any) {
       const msg = extractErrorMessage(err);
-      const container = new ContainerBuilder().addTextDisplayComponents(
-        new TextDisplayBuilder().setContent(
-          safeV2TextContent(`Could not add to Now Playing: ${msg}`, 1000),
-        ),
-      );
+      const container = buildTextContainer(`Could not add to Now Playing: ${msg}`);
       await safeUpdate(interaction, {
         components: [container],
         flags: buildComponentsV2Flags(true),
@@ -2050,9 +1928,7 @@ export class NowPlayingCommand {
     const [platformSessionId] = segs;
     const session = nowPlayingAddPlatformSessions.get(platformSessionId);
     if (!session) {
-      const container = new ContainerBuilder().addTextDisplayComponents(
-        new TextDisplayBuilder().setContent("This platform prompt has expired."),
-      );
+      const container = buildTextContainer("This platform prompt has expired.");
       await safeReply(interaction, {
         components: [container],
         flags: buildComponentsV2Flags(true),
@@ -2064,9 +1940,7 @@ export class NowPlayingCommand {
 
     const platformId = Number(interaction.values?.[0]);
     if (!isPositiveInt(platformId)) {
-      const container = new ContainerBuilder().addTextDisplayComponents(
-        new TextDisplayBuilder().setContent("Invalid platform selection."),
-      );
+      const container = buildTextContainer("Invalid platform selection.");
       await safeReply(interaction, {
         components: [container],
         flags: buildComponentsV2Flags(true),
@@ -2075,11 +1949,7 @@ export class NowPlayingCommand {
     }
 
     await safeDeferUpdate(interaction);
-    const loadingContainer = new ContainerBuilder().addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(
-        "## Now Loading\nGenerating cover layout and loading the selected member list...",
-      ),
-    );
+    const loadingContainer = buildTextContainer("## Now Loading\nGenerating cover layout and loading the selected member list...");
     await safeUpdate(interaction, {
       components: [loadingContainer],
       flags: buildComponentsV2Flags(true),
@@ -2122,11 +1992,7 @@ export class NowPlayingCommand {
       }
     } catch (err: any) {
       const msg = extractErrorMessage(err);
-      const container = new ContainerBuilder().addTextDisplayComponents(
-        new TextDisplayBuilder().setContent(
-          safeV2TextContent(`Could not add to Now Playing: ${msg}`, 1000),
-        ),
-      );
+      const container = buildTextContainer(`Could not add to Now Playing: ${msg}`);
       await safeUpdate(interaction, {
         components: [container],
         flags: buildComponentsV2Flags(true),
@@ -2170,9 +2036,7 @@ export class NowPlayingCommand {
     const titleWithCap = platforms.length > options.length
       ? `Select the platform for **${game.title}** (showing first ${options.length}).`
       : `Select the platform for **${game.title}**.`;
-    const container = new ContainerBuilder().addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(safeV2TextContent(titleWithCap, 1000)),
-    );
+    const container = buildTextContainer(titleWithCap);
     const payload = {
       components: [
         container,
@@ -2203,9 +2067,7 @@ export class NowPlayingCommand {
     try {
       const entries = getDisplayNowPlayingEntries(await Member.getNowPlaying(userId));
       if (!entries.length) {
-        const container = new ContainerBuilder().addTextDisplayComponents(
-          new TextDisplayBuilder().setContent("Your Now Playing list is empty."),
-        );
+        const container = buildTextContainer("Your Now Playing list is empty.");
         const pmComponents = await this.withPmNowPlayingList(
           userId,
           interaction.guildId,
@@ -2264,11 +2126,7 @@ export class NowPlayingCommand {
       }
     } catch (err: any) {
       const msg = extractErrorMessage(err);
-      const container = new ContainerBuilder().addTextDisplayComponents(
-        new TextDisplayBuilder().setContent(
-          safeV2TextContent(`Could not remove from Now Playing: ${msg}`, 1000),
-        ),
-      );
+      const container = buildTextContainer(`Could not remove from Now Playing: ${msg}`);
       const pmComponents = await this.withPmNowPlayingList(
         userId,
         interaction.guildId,
@@ -2302,9 +2160,7 @@ export class NowPlayingCommand {
       await Member.getNowPlaying(ownerId),
     ).slice(0, 10);
     if (!entries.length) {
-      const container = new ContainerBuilder().addTextDisplayComponents(
-        new TextDisplayBuilder().setContent("Your Now Playing list is empty."),
-      );
+      const container = buildTextContainer("Your Now Playing list is empty.");
       const pmComponents = await this.withPmNowPlayingList(
         ownerId, interaction.guildId, [container],
       );
@@ -2375,9 +2231,7 @@ export class NowPlayingCommand {
 
     const current = await Member.getNowPlayingEntries(interaction.user.id);
     if (!current.length) {
-      const container = new ContainerBuilder().addTextDisplayComponents(
-        new TextDisplayBuilder().setContent("Your Now Playing list is empty."),
-      );
+      const container = buildTextContainer("Your Now Playing list is empty.");
       const pmComponents = await this.withPmNowPlayingList(
         interaction.user.id,
         interaction.guildId,
@@ -2402,11 +2256,7 @@ export class NowPlayingCommand {
 
     const editableEntries = current.filter((e) => !e.journalEnabled);
     if (!editableEntries.length) {
-      const container = new ContainerBuilder().addTextDisplayComponents(
-        new TextDisplayBuilder().setContent(
-          "All of your games use Game Journal for notes.",
-        ),
-      );
+      const container = buildTextContainer("All of your games use Game Journal for notes.");
       const pmComponents = await this.withPmNowPlayingList(
         interaction.user.id,
         interaction.guildId,
@@ -2446,9 +2296,7 @@ export class NowPlayingCommand {
 
     const entries = getDisplayNowPlayingEntries(await Member.getNowPlaying(interaction.user.id));
     if (!entries.length) {
-      const container = new ContainerBuilder().addTextDisplayComponents(
-        new TextDisplayBuilder().setContent("Your Now Playing list is empty."),
-      );
+      const container = buildTextContainer("Your Now Playing list is empty.");
       const pmComponents = await this.withPmNowPlayingList(
         interaction.user.id,
         interaction.guildId,
@@ -2534,9 +2382,7 @@ export class NowPlayingCommand {
   ): Promise<void> {
     const game = await Game.getGameById(gameId);
     if (!game) {
-      const container = new ContainerBuilder().addTextDisplayComponents(
-        new TextDisplayBuilder().setContent("That game could not be found."),
-      );
+      const container = buildTextContainer("That game could not be found.");
       if (mode === "update" && "update" in interaction) {
         await safeUpdate(interaction, { 
           components: [container], flags: buildComponentsV2Flags(true) });
@@ -2551,9 +2397,7 @@ export class NowPlayingCommand {
 
     const platforms = await Game.getPlatformsForGameWithStandard(gameId, STANDARD_PLATFORM_IDS);
     if (!platforms.length) {
-      const container = new ContainerBuilder().addTextDisplayComponents(
-        new TextDisplayBuilder().setContent("No platform data is available for this game."),
-      );
+      const container = buildTextContainer("No platform data is available for this game.");
       if (mode === "update" && "update" in interaction) {
         await safeUpdate(interaction, { 
           components: [container], flags: buildComponentsV2Flags(true) });
@@ -2577,9 +2421,7 @@ export class NowPlayingCommand {
     const content = platforms.length > options.length
       ? `Select the platform for **${game.title}** (showing first ${options.length}).`
       : `Select the platform for **${game.title}**.`;
-    const container = new ContainerBuilder().addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(safeV2TextContent(content, 1000)),
-    );
+    const container = buildTextContainer(content);
     const payload = {
       components: [
         container,
@@ -2747,9 +2589,7 @@ export class NowPlayingCommand {
 
     const slotIndex = Number(slotRaw);
     if (!Number.isInteger(slotIndex) || slotIndex < 0) {
-      const container = new ContainerBuilder().addTextDisplayComponents(
-        new TextDisplayBuilder().setContent("Invalid selection."),
-      );
+      const container = buildTextContainer("Invalid selection.");
       await safeReply(interaction, {
         components: [container],
         flags: buildComponentsV2Flags(true),
@@ -2769,9 +2609,7 @@ export class NowPlayingCommand {
         selectedIndex >= entries.length ||
         slotIndex >= entries.length
       ) {
-        const container = new ContainerBuilder().addTextDisplayComponents(
-          new TextDisplayBuilder().setContent("This sort form has expired. Open Sort again."),
-        );
+        const container = buildTextContainer("This sort form has expired. Open Sort again.");
         await safeUpdate(interaction, {
           components: [container],
           flags: buildComponentsV2Flags(isEphemeral),
@@ -2798,9 +2636,7 @@ export class NowPlayingCommand {
         flags: buildComponentsV2Flags(isEphemeral),
       });
     } catch {
-      const container = new ContainerBuilder().addTextDisplayComponents(
-        new TextDisplayBuilder().setContent("Could not update the sort form right now."),
-      );
+      const container = buildTextContainer("Could not update the sort form right now.");
       safeIgnore(safeUpdate(interaction, {
         components: [container],
         flags: buildComponentsV2Flags(isEphemeral),
@@ -2821,9 +2657,7 @@ export class NowPlayingCommand {
     const entries = getDisplayNowPlayingEntries(await Member.getNowPlaying(ownerId)).slice(0, 10);
     const parsed = parseNowPlayingSortStateToken(stateToken, entries.length);
     if (!parsed) {
-      const container = new ContainerBuilder().addTextDisplayComponents(
-        new TextDisplayBuilder().setContent("This sort form has expired. Open Sort again."),
-      );
+      const container = buildTextContainer("This sort form has expired. Open Sort again.");
       const pmComponents = await this.withPmNowPlayingList(
         ownerId, interaction.guildId, [container],
       );
@@ -2857,19 +2691,13 @@ export class NowPlayingCommand {
       return;
     }
 
-    const loadingContainer = new ContainerBuilder().addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(
-        "## Now Loading\nSaving sort order and generating cover layout...",
-      ),
-    );
+    const loadingContainer = buildTextContainer("## Now Loading\nSaving sort order and generating cover layout...");
     await safeUpdate(interaction, { components: [loadingContainer], flags: responseFlags });
 
     const orderedIds = parsed.map((index) => entries[index].gameId);
     const updated = await Member.updateNowPlayingSort(ownerId, orderedIds);
     if (!updated) {
-      const container = new ContainerBuilder().addTextDisplayComponents(
-        new TextDisplayBuilder().setContent("Could not update the sort order."),
-      );
+      const container = buildTextContainer("Could not update the sort order.");
       const pmComponents = await this.withPmNowPlayingList(
         ownerId, interaction.guildId, [container],
       );
@@ -3064,9 +2892,7 @@ export class NowPlayingCommand {
 
     const gameId = Number(gameIdRaw);
     if (!isPositiveInt(gameId)) {
-      const container = new ContainerBuilder().addTextDisplayComponents(
-        new TextDisplayBuilder().setContent("Invalid selection."),
-      );
+      const container = buildTextContainer("Invalid selection.");
       await safeReply(interaction, {
         components: [container],
         flags: buildComponentsV2Flags(true),
@@ -3077,11 +2903,7 @@ export class NowPlayingCommand {
     try {
       const removed = await Member.removeNowPlaying(ownerId, gameId);
       if (!removed) {
-        const container = new ContainerBuilder().addTextDisplayComponents(
-          new TextDisplayBuilder().setContent(
-            "Failed to remove that game (it may have been removed already).",
-          ),
-        );
+        const container = buildTextContainer("Failed to remove that game (it may have been removed already).");
         await safeReply(interaction, {
           components: [container],
           flags: buildComponentsV2Flags(true),
@@ -3092,9 +2914,7 @@ export class NowPlayingCommand {
 
       const entries = getDisplayNowPlayingEntries(await Member.getNowPlaying(ownerId));
       if (!entries.length) {
-        const container = new ContainerBuilder().addTextDisplayComponents(
-          new TextDisplayBuilder().setContent("Your Now Playing list is empty."),
-        );
+        const container = buildTextContainer("Your Now Playing list is empty.");
         await safeUpdate(interaction, {
           components: [container],
           flags: buildComponentsV2Flags(isEphemeral),
@@ -3123,11 +2943,7 @@ export class NowPlayingCommand {
       });
     } catch (err: any) {
       const msg = extractErrorMessage(err);
-      const container = new ContainerBuilder().addTextDisplayComponents(
-        new TextDisplayBuilder().setContent(
-          safeV2TextContent(`Could not remove from Now Playing: ${msg}`, 1000),
-        ),
-      );
+      const container = buildTextContainer(`Could not remove from Now Playing: ${msg}`);
       await safeReply(interaction, {
         components: [container],
         flags: buildComponentsV2Flags(true),
@@ -3455,9 +3271,7 @@ export class NowPlayingCommand {
       .setPlaceholder("Choose an entry to delete")
       .addOptions(options);
     const row = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select);
-    const container = new ContainerBuilder().addTextDisplayComponents(
-      new TextDisplayBuilder().setContent("## Delete Journal Entry\nSelect an entry to delete."),
-    );
+    const container = buildTextContainer("## Delete Journal Entry\nSelect an entry to delete.");
     const helpRow = buildButtonRow(
       buildActionButton({ customId: `${NOW_PLAYING_HELP_PREFIX}:journal-delete:${ownerId}`, label: "?", style: ButtonStyle.Secondary }),
     );
@@ -3487,14 +3301,7 @@ export class NowPlayingCommand {
       return;
     }
     const entryTitle = entry.title?.trim() ? entry.title.trim() : `Entry #${entry.entryNumber}`;
-    const container = new ContainerBuilder().addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(
-        safeV2TextContent(
-          `## Confirm Delete\nDelete **${entryTitle}** from ${formatTableDate(entry.createdAt)}?`,
-          1000,
-        ),
-      ),
-    );
+    const container = buildTextContainer(`## Confirm Delete\nDelete **${entryTitle}** from ${formatTableDate(entry.createdAt)}?`);
     const row = buildButtonRow(
       buildActionButton(
         "delete",
@@ -3663,9 +3470,7 @@ export class NowPlayingCommand {
     if (await replyIfNotOwner(interaction, ownerId, "This help button isn't for you.")) return;
     const helpText = NOW_PLAYING_HELP_TEXTS[screenType]
       ?? "No help available for this screen.";
-    const container = new ContainerBuilder().addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(safeV2TextContent(helpText, 1000)),
-    );
+    const container = buildTextContainer(helpText);
     await safeReply(interaction, {
       components: [container],
       flags: buildComponentsV2Flags(true),
@@ -3733,11 +3538,7 @@ export class NowPlayingCommand {
       .setPlaceholder("Select a game to start a journal")
       .addOptions(options);
     const selectRow = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select);
-    const container = new ContainerBuilder().addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(
-        "## Start a Game Journal\nSelect a game to write your first entry.",
-      ),
-    );
+    const container = buildTextContainer("## Start a Game Journal\nSelect a game to write your first entry.");
     await safeUpdate(interaction, {
       components: [container, selectRow],
       flags: buildComponentsV2Flags(true),
@@ -4068,11 +3869,7 @@ export class NowPlayingCommand {
     if (!selectedUserId) return;
     const isEphemeral = interaction.message.flags?.has(MessageFlags.Ephemeral) ?? false;
 
-    const loadingContainer = new ContainerBuilder().addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(
-        "## Now Loading\nGenerating cover layout and loading the selected member list...",
-      ),
-    );
+    const loadingContainer = buildTextContainer("## Now Loading\nGenerating cover layout and loading the selected member list...");
     await safeUpdate(interaction, {
       components: [loadingContainer],
       flags: buildComponentsV2Flags(isEphemeral),
@@ -4451,9 +4248,7 @@ export class NowPlayingCommand {
     if (statusMessage) {
       introLines.push(`-# ${statusMessage}`);
     }
-    const introContainer = new ContainerBuilder().addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(safeV2TextContent(introLines.join("\n"), 1000)),
-    );
+    const introContainer = buildTextContainer(introLines.join("\n"));
     const listContainer = entries.length
       ? this.buildNowPlayingEntryComponents(
         entries,
@@ -4639,18 +4434,14 @@ export class NowPlayingCommand {
     if (await replyIfNotOwner(interaction, ownerId, "This remove prompt isn't for you.")) return;
     const gameId = Number(interaction.values?.[0]);
     if (!isPositiveInt(gameId)) {
-      const container = new ContainerBuilder().addTextDisplayComponents(
-        new TextDisplayBuilder().setContent("Invalid game selection."),
-      );
+      const container = buildTextContainer("Invalid game selection.");
       await safeReply(interaction, {
         components: [container],
         flags: buildComponentsV2Flags(true),
       });
       return;
     }
-    const loadingContainer = new ContainerBuilder().addTextDisplayComponents(
-      new TextDisplayBuilder().setContent("Updating your Now Playing remove list..."),
-    );
+    const loadingContainer = buildTextContainer("Updating your Now Playing remove list...");
     await safeUpdate(interaction, {
       components: [loadingContainer],
       flags: buildComponentsV2Flags(isEphemeral),
@@ -4659,11 +4450,7 @@ export class NowPlayingCommand {
     try {
       const removed = await Member.removeNowPlaying(ownerId, gameId);
       if (!removed) {
-        const container = new ContainerBuilder().addTextDisplayComponents(
-          new TextDisplayBuilder().setContent(
-            "Failed to remove that game (it may have been removed already).",
-          ),
-        );
+        const container = buildTextContainer("Failed to remove that game (it may have been removed already).");
         safeIgnore(safeReply(interaction, {
           components: [container],
           flags: buildComponentsV2Flags(isEphemeral),
@@ -4673,9 +4460,7 @@ export class NowPlayingCommand {
       safeIgnore(this.refreshNowPlayingListFromContext(interaction, ownerId));
       const entries = getDisplayNowPlayingEntries(await Member.getNowPlaying(ownerId));
       if (!entries.length) {
-        const container = new ContainerBuilder().addTextDisplayComponents(
-          new TextDisplayBuilder().setContent("Your Now Playing list is empty."),
-        );
+        const container = buildTextContainer("Your Now Playing list is empty.");
         const pmComponents = await this.withPmNowPlayingList(
           ownerId,
           interaction.guildId,
@@ -4709,11 +4494,7 @@ export class NowPlayingCommand {
       }));
     } catch (err: any) {
       const msg = extractErrorMessage(err);
-      const container = new ContainerBuilder().addTextDisplayComponents(
-        new TextDisplayBuilder().setContent(
-          safeV2TextContent(`Could not remove from Now Playing: ${msg}`, 1000),
-        ),
-      );
+      const container = buildTextContainer(`Could not remove from Now Playing: ${msg}`);
       safeIgnore(safeReply(interaction, {
         components: [container],
         flags: buildComponentsV2Flags(isEphemeral),
@@ -5454,11 +5235,7 @@ export class NowPlayingCommand {
     try {
       const searchRes = await igdbService.searchGames(session.query);
       if (!searchRes.results.length) {
-        const container = new ContainerBuilder().addTextDisplayComponents(
-          new TextDisplayBuilder().setContent(
-            safeV2TextContent(`No IGDB results found for "${session.query}".`, 1000),
-          ),
-        );
+        const container = buildTextContainer(`No IGDB results found for "${session.query}".`);
         if (mode === "update" && "update" in interaction) {
           await safeUpdate(interaction, { components: [container] });
         } else {
@@ -5496,9 +5273,7 @@ export class NowPlayingCommand {
           );
         } catch (err: any) {
           const msg = err?.message ?? "Failed to import from IGDB.";
-          const container = new ContainerBuilder().addTextDisplayComponents(
-            new TextDisplayBuilder().setContent(safeV2TextContent(msg, 1000)),
-          );
+          const container = buildTextContainer(msg);
           safeIgnore(safeReply(sel, {
             components: [container],
             flags: buildComponentsV2Flags(true),
@@ -5506,12 +5281,7 @@ export class NowPlayingCommand {
         }
       });
 
-      const container = new ContainerBuilder()
-        .addTextDisplayComponents(
-          new TextDisplayBuilder().setContent(
-            safeV2TextContent("Select an IGDB result to import and add to Now Playing:", 1000),
-          ),
-        )
+      const container = buildTextContainer("Select an IGDB result to import and add to Now Playing:")
         .addActionRowComponents(components.map((row) => row.toJSON()));
       if (mode === "update" && "update" in interaction) {
         await safeUpdate(interaction, { components: [container] });
@@ -5523,9 +5293,7 @@ export class NowPlayingCommand {
       }
     } catch (err: any) {
       const msg = err?.message ?? "Failed to search IGDB.";
-      const container = new ContainerBuilder().addTextDisplayComponents(
-        new TextDisplayBuilder().setContent(safeV2TextContent(msg, 1000)),
-      );
+      const container = buildTextContainer(msg);
       if (mode === "update" && "update" in interaction) {
         await safeUpdate(interaction, { components: [container] });
       } else {

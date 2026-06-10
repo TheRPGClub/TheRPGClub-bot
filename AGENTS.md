@@ -24,3 +24,5 @@ All interactions should use stable identifiers and include the ability to resume
 You are forbidden from using deprecated commands/functions/etc.
 You are forbidden from committing code to git or reverting changes without being asked to do so directly.
 You are forbidden from reading my .env file.
+When doing implementation work, always pull main, then open a fresh branch and commit your changes there. When finished, push to the branch and open a PR.
+

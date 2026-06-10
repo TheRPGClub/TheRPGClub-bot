@@ -31,3 +31,4 @@ You are forbidden from using emdashes (—)
 Just before opening a PR at the end of a task, run `npm run lint` and correct any violations.  The fixes for lint issues should be in the PR for any work.
 When a PR closes more than one issue, each issue must be linked in the GitHub Development field. Use separate `Closes #X` lines (one per issue) in the PR body -- comma-separated closes on a single line are not reliably picked up. After opening, verify with `gh pr view <N> --json closingIssuesReferences`.
 Do not use tables in markdown files.
+When doing implementation work, always pull main, then open a fresh branch and commit your changes there. When finished, push to the branch and open a PR.
