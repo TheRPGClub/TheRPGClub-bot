@@ -44,6 +44,7 @@ import {
   parseRawModalCustomId,
 } from "../services/raw-modal/RawModalCustomId.js";
 import { ROUND_HISTORY_PAGE_SIZE } from "../config/pagination.js";
+import { buildDisabledPrevNextRowWithIds } from "../functions/PaginationUtils.js";
 
 const ROUND_HISTORY_MODAL_TITLE = "Round History";
 const ROUND_HISTORY_HELP_ID = "round-history-help";
@@ -418,26 +419,15 @@ function buildRoundHistoryPaginationRow(
   state: IRoundHistoryFilterState,
   totalPages: number,
 ): ActionRowBuilder<ButtonBuilder> | null {
-  if (totalPages <= 1) {
-    return null;
-  }
-
   const prevPage = Math.max(0, state.page - 1);
   const nextPage = Math.min(totalPages - 1, state.page + 1);
-
-  const prevButton = new ButtonBuilder()
-    .setCustomId(buildRoundHistoryPageCustomId({ ...state, page: prevPage }))
-    .setLabel("Previous")
-    .setStyle(ButtonStyle.Secondary)
-    .setDisabled(state.page <= 0);
-
-  const nextButton = new ButtonBuilder()
-    .setCustomId(buildRoundHistoryPageCustomId({ ...state, page: nextPage }))
-    .setLabel("Next")
-    .setStyle(ButtonStyle.Primary)
-    .setDisabled(state.page >= totalPages - 1);
-
-  return new ActionRowBuilder<ButtonBuilder>().addComponents(prevButton, nextButton);
+  return buildDisabledPrevNextRowWithIds(
+    buildRoundHistoryPageCustomId({ ...state, page: prevPage }),
+    buildRoundHistoryPageCustomId({ ...state, page: nextPage }),
+    state.page,
+    totalPages,
+    { styles: { next: ButtonStyle.Primary } },
+  );
 }
 
 async function buildRoundHistoryResponse(
