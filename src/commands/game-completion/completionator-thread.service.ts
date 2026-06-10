@@ -1,4 +1,5 @@
 import type { CommandInteraction, Message, ThreadChannel } from "discord.js";
+import { userMention } from "discord.js";
 import type { CompletionatorThreadContext, ICompletionatorImport } from "./completion.types.js";
 import { completionatorThreadContexts } from "./completion.types.js";
 import { getCompletionatorThreadKey } from "./completion-helpers.js";
@@ -34,7 +35,7 @@ export class CompletionatorThreadService {
 
     if (channel.id === BOT_DEV_CHANNEL_ID) {
       const introLines = [
-        `<@${session.userId}>`,
+        userMention(session.userId),
         `## Completionator Import #${session.importId}`,
         "Preparing import...",
       ];
@@ -59,7 +60,7 @@ export class CompletionatorThreadService {
     if ("isThread" in channel && typeof channel.isThread === "function" && channel.isThread()) {
       const threadChannel: ThreadChannel = channel as ThreadChannel;
       const introLines = [
-        `<@${session.userId}>`,
+        userMention(session.userId),
         `## Completionator Import #${session.importId}`,
         "Preparing import...",
       ];
@@ -83,7 +84,7 @@ export class CompletionatorThreadService {
     }
 
     const parentMessage: Message = await channel.send({
-      content: `Completionator Import #${session.importId} started by <@${session.userId}>.`,
+      content: `Completionator Import #${session.importId} started by ${userMention(session.userId)}.`,
     });
     if (typeof parentMessage.startThread !== "function") {
       await safeReply(
@@ -100,7 +101,7 @@ export class CompletionatorThreadService {
     });
 
     const introLines = [
-      `<@${session.userId}>`,
+      userMention(session.userId),
       `## Completionator Import #${session.importId}`,
       "Preparing import...",
     ];

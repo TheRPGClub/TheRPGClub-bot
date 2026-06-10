@@ -5,6 +5,7 @@ import {
   type GuildChannel,
   type GuildEmoji,
   type Role,
+  channelMention,
 } from "discord.js";
 import type { ArgsOf, Client } from "discordx";
 import { Discord, On } from "discordx";
@@ -26,7 +27,7 @@ function isGuildChannel(channel: any): channel is GuildChannel {
 
 function channelLabel(channel: GuildChannel): string {
   if (channel.type === ChannelType.GuildText || channel.type === ChannelType.GuildAnnouncement) {
-    return `<#${channel.id}>`;
+    return channelMention(channel.id);
   }
   return `${channel.name ?? channel.id}`;
 }

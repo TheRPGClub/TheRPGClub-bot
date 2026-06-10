@@ -9,6 +9,7 @@ import {
   type Message,
   type ModalSubmitInteraction,
   type StringSelectMenuInteraction,
+  userMention,
 } from "discord.js";
 import {
   ContainerBuilder,
@@ -149,7 +150,7 @@ export async function notifyUnknownCompletionPlatform(
     await (channel as any).send({
       content:
         `Unknown completion platform selected.\n` +
-        `User: ${username} (<@${interaction.user.id}>)\n` +
+        `User: ${username} (${userMention(interaction.user.id)})\n` +
         `Game: ${gameTitle} (GameDB #${gameId})`,
       allowedMentions: { parse: [] },
     });
@@ -195,12 +196,12 @@ export async function announceCompletion(
       yearlySummary = `\nGame completion #${yearlyCount} for ${completionYear}`;
     }
     let desc =
-      `<@${user.id}> has added a game completion: **${game.title}** - ` +
+      `${userMention(user.id)} has added a game completion: **${game.title}** - ` +
       `${completionType} - ${dateStr}${hoursStr}` +
       yearlySummary;
     if (isAdminOverride && interaction.user.id !== userId) {
       desc =
-        `<@${interaction.user.id}> added a game completion for <@${user.id}>: ` +
+        `${userMention(interaction.user.id)} added a game completion for ${userMention(user.id)}: ` +
         `**${game.title}** - ${completionType} - ${dateStr}${hoursStr}` +
         yearlySummary;
     }

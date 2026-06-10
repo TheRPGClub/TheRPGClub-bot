@@ -1,4 +1,4 @@
-import { AttachmentBuilder, EmbedBuilder, type Client } from "discord.js";
+import { AttachmentBuilder, channelMention, EmbedBuilder, type Client } from "discord.js";
 import type { IGotmEntry, IGotmGame } from "../classes/Gotm.js";
 import type { INrGotmEntry, INrGotmGame } from "../classes/NrGotm.js";
 import Game from "../classes/Game.js";
@@ -44,7 +44,7 @@ async function formatGames(games: AnyGame[]): Promise<string> {
     const redditUrl = displayAuditValue((g as any).redditUrl);
     const parts: string[] = [];
     const title = g.gamedbGameId ? (await getGameMeta(g.gamedbGameId))?.title ?? g.title : g.title;
-    const titleWithThread = threadId ? `${title} - <#${threadId}>` : title;
+    const titleWithThread = threadId ? `${title} - ${channelMention(threadId)}` : title;
     parts.push(titleWithThread);
     if (redditUrl) {
       parts.push(`[Reddit](${redditUrl})`);

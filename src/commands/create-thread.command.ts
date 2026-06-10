@@ -4,7 +4,13 @@ import type {
   ForumChannel,
   MessageCreateOptions,
 } from "discord.js";
-import { ApplicationCommandOptionType, AttachmentBuilder, MessageFlags } from "discord.js";
+import {
+  ApplicationCommandOptionType,
+  AttachmentBuilder,
+  channelMention,
+  MessageFlags,
+  userMention,
+} from "discord.js";
 import { Discord, Slash, SlashOption } from "discordx";
 import Game from "../classes/Game.js";
 import { getThreadsByGameId, setThreadGameLink, upsertThreadRecord } from "../classes/Thread.js";
@@ -18,7 +24,7 @@ import { DISCORD_SELECT_LABEL_MAX } from "../config/textLimits.js";
 const DEFAULT_FIRST_POST_PREFIX = "Thread created by";
 
 function buildDefaultFirstPostText(userId: string): string {
-  return `${DEFAULT_FIRST_POST_PREFIX} <@${userId}>`;
+  return `${DEFAULT_FIRST_POST_PREFIX} ${userMention(userId)}`;
 }
 
 async function autocompleteCreateThreadTitle(
@@ -118,7 +124,7 @@ export class CreateThreadCommand {
     const existingThreadId = existingThreads[0] ?? null;
     if (existingThreadId) {
       await safeReply(interaction, buildTextReply(
-        `A thread is already linked for "${game.title}": <#${existingThreadId}>`,
+        `A thread is already linked for "${game.title}": ${channelMention(existingThreadId)}`,
         true,
       ));
       return;
@@ -181,7 +187,7 @@ export class CreateThreadCommand {
     await setThreadGameLink(thread.id, game.id);
 
     await safeReply(interaction, buildTextReply(
-      `Created thread <#${thread.id}> for "${game.title}" with tag "${selectedTag.name}".`,
+      `Created thread ${channelMention(thread.id)} for "${game.title}" with tag "${selectedTag.name}".`,
       true,
     ));
   }

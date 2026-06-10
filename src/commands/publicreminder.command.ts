@@ -1,5 +1,5 @@
 import type { Channel, CommandInteraction } from "discord.js";
-import { ApplicationCommandOptionType, MessageFlags } from "discord.js";
+import { ApplicationCommandOptionType, channelMention, MessageFlags } from "discord.js";
 import { Discord, Slash, SlashChoice, SlashGroup, SlashOption } from "discordx";
 import {
   extractErrorMessage,
@@ -153,7 +153,7 @@ export class PublicReminderCommand {
 
       const timestamp = Math.floor(parsedDate.getTime() / 1000);
       const createdMsg =
-        `Created reminder #${reminder.reminderId} for <#${channel.id}> at <t:${timestamp}:F>.` +
+        `Created reminder #${reminder.reminderId} for ${channelMention(channel.id)} at <t:${timestamp}:F>.` +
         `${recurEvery && recurUnit ? ` (repeats every ${recurEvery} ${recurUnit})` : ""}`;
       await safeReply(interaction, buildTextReply(createdMsg, true));
     } catch (err: any) {
@@ -183,7 +183,7 @@ export class PublicReminderCommand {
         const recur =
           r.recurEvery && r.recurUnit ? ` (repeats every ${r.recurEvery} ${r.recurUnit})` : "";
         const timestamp = Math.floor(r.dueAt.getTime() / 1000);
-        return `#${r.reminderId}: <#${r.channelId}> at <t:${timestamp}:F>${recur} - ${r.message}`;
+        return `#${r.reminderId}: ${channelMention(r.channelId)} at <t:${timestamp}:F>${recur} - ${r.message}`;
       });
 
       await safeReply(interaction, buildTextReply(lines.join("\n"), true));

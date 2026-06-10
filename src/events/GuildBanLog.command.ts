@@ -1,4 +1,4 @@
-import { EmbedBuilder } from "discord.js";
+import { EmbedBuilder, userMention } from "discord.js";
 import type { ArgsOf, Client } from "discordx";
 import { Discord, On } from "discordx";
 import { formatTimestampWithDay } from "../utilities/DiscordLogUtils.js";
@@ -29,7 +29,7 @@ function buildBanEmbed(
     .setTitle(title)
     .setColor(color)
     .addFields(
-      { name: "User", value: `<@${userId}>\n${username}` },
+      { name: "User", value: `${userMention(userId)}\n${username}` },
       { name: "Account Created On", value: formatAccountCreated(createdAt) },
     )
     .setFooter({ text: buildIdTimestampFooter(userId, formatTimestampWithDay(Date.now())) });

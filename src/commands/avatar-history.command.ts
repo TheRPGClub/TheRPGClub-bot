@@ -9,6 +9,7 @@ import {
   StringSelectMenuInteraction,
   StringSelectMenuOptionBuilder,
   User,
+  userMention,
 } from "discord.js";
 import {
   ContainerBuilder,
@@ -311,7 +312,7 @@ export class AvatarHistoryCommand {
     if (!pageResult) {
       const noResultContainer = new ContainerBuilder().addTextDisplayComponents(
         new TextDisplayBuilder().setContent(
-          safeV2TextContent(`No avatar history found for <@${target.id}>.`, 1000),
+          safeV2TextContent(`No avatar history found for ${userMention(target.id)}.`, 1000),
         ),
       );
       await safeReply(interaction, {
@@ -422,7 +423,7 @@ export class AvatarHistoryCommand {
         components: [
           new ContainerBuilder().addTextDisplayComponents(
             new TextDisplayBuilder().setContent(
-              safeV2TextContent(`No avatar history found for <@${targetId}>.`, 1000),
+              safeV2TextContent(`No avatar history found for ${userMention(targetId)}.`, 1000),
             ),
           ),
         ],

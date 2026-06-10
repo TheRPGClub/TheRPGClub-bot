@@ -3,6 +3,7 @@ import type { IGotmGame } from "../../classes/Gotm.js";
 import type { INrGotmGame } from "../../classes/NrGotm.js";
 import Game from "../../classes/Game.js";
 import type { INextRoundWizardState } from "../../classes/AdminWizardSession.js";
+import { userMention } from "discord.js";
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
 
 export type WizardNominationOption = {
@@ -108,7 +109,7 @@ export function toNominationOptionMap(
 }
 
 export function buildNominationPreviewLine(index: number, option: WizardNominationOption): string {
-  const nominators = option.userIds.map((userId) => `<@${userId}>`).join(", ");
+  const nominators = option.userIds.map((userId) => userMention(userId)).join(", ");
   return `${index + 1}. **${option.gameTitle}** (GameDB ${option.gamedbGameId}) by ${nominators}`;
 }
 

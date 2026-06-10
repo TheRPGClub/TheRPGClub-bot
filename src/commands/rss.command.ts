@@ -1,5 +1,10 @@
 import type { CommandInteraction } from "discord.js";
-import { ApplicationCommandOptionType, MessageFlags, type Channel } from "discord.js";
+import {
+  ApplicationCommandOptionType,
+  channelMention,
+  MessageFlags,
+  type Channel,
+} from "discord.js";
 import { Discord, Slash, SlashGroup, SlashOption } from "discordx";
 import {
   extractErrorMessage,
@@ -99,7 +104,7 @@ export class RssCommand {
         excludeKeywords,
       );
       const addedMsg =
-        `Added feed #${id} (${sanitizedName ?? "unnamed"}) -> <#${channelId}> (url=${url}).`;
+        `Added feed #${id} (${sanitizedName ?? "unnamed"}) -> ${channelMention(channelId)} (url=${url}).`;
       await safeReply(interaction, buildTextReply(addedMsg, true));
     } catch (err: any) {
       const msg = extractErrorMessage(err);
@@ -247,7 +252,7 @@ export class RssCommand {
 
       const lines = feeds.map(
         (f) =>
-          `#${f.feedId}: ${f.feedName ?? "(no name)"} ${f.feedUrl} -> <#${f.channelId}>` +
+          `#${f.feedId}: ${f.feedName ?? "(no name)"} ${f.feedUrl} -> ${channelMention(f.channelId)}` +
           (f.includeKeywords.length ? ` include=[${f.includeKeywords.join(", ")}]` : "") +
           (f.excludeKeywords.length ? ` exclude=[${f.excludeKeywords.join(", ")}]` : ""),
       );

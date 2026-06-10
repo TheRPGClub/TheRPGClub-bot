@@ -8,6 +8,7 @@ import {
   ButtonBuilder,
   ButtonStyle,
   ButtonInteraction,
+  userMention,
 } from "discord.js";
 import {
   ContainerBuilder,
@@ -143,7 +144,7 @@ function buildSummaryEmbed(
   const lines = pageMembers.map((member, idx) => {
     const displayIndex = offset + idx + 1;
     const platforms = formatPlatforms(member, filters);
-    return `${displayIndex}. <@${member.userId}> - ${platforms}`;
+    return `${displayIndex}. ${userMention(member.userId)} - ${platforms}`;
   });
 
   const embed = new EmbedBuilder()
@@ -352,7 +353,7 @@ export class MultiplayerInfoCommand {
         const notFoundContainer = new ContainerBuilder().addTextDisplayComponents(
           new TextDisplayBuilder().setContent(
             safeV2TextContent(
-              result.notFoundMessage ?? `No profile data found for <@${userId}>.`,
+              result.notFoundMessage ?? `No profile data found for ${userMention(userId)}.`,
               1000,
             ),
           ),

@@ -9,6 +9,8 @@ import {
   TextInputStyle,
   type ForumChannel,
   type MessageCreateOptions,
+  channelMention,
+  userMention,
 } from "discord.js";
 import {
   Discord,
@@ -179,7 +181,7 @@ async function runNowPlayingThreadWizard(
       skipLinking: "Y",
     });
     await setThreadGameLink(thread.id, gameId);
-    await sendStatus(`Created and linked <#${thread.id}>.`);
+    await sendStatus(`Created and linked ${channelMention(thread.id)}.`);
     const nowPlayingMembers = await Game.getNowPlayingMembers(gameId);
     const completions = await Game.getGameCompletions(gameId);
     const mentionIds = new Set<string>([interaction.user.id]);
@@ -187,7 +189,7 @@ async function runNowPlayingThreadWizard(
     completions.forEach((member) => mentionIds.add(member.userId));
 
     if (mentionIds.size) {
-      const mentions = Array.from(mentionIds).map((id) => `<@${id}>`);
+      const mentions = Array.from(mentionIds).map((id) => userMention(id));
       const lines: string[] = [];
       let buffer = "";
       for (const mention of mentions) {

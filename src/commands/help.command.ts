@@ -11,6 +11,7 @@ import {
   StringSelectMenuBuilder,
   StringSelectMenuInteraction,
   MessageFlags,
+  channelMention,
 } from "discord.js";
 import { ButtonComponent, Discord, SelectMenuComponent, Slash } from "discordx";
 import { isAdmin, isModerator } from "./admin/admin-auth.utils.js";
@@ -264,7 +265,7 @@ const HELP_TOPICS: HelpTopic[] = [
     syntax:
       "Syntax: /gamegiveaway (returns a link to the hub list).",
     notes:
-      `The giveaway list is kept in <#${GIVEAWAY_HUB_CHANNEL_ID}> with claim/donate buttons. ` +
+      `The giveaway list is kept in ${channelMention(GIVEAWAY_HUB_CHANNEL_ID)} with claim/donate buttons. ` +
       "Claims are handled from the list menu; keys are sent by DM.",
   },
   {

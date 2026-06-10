@@ -1,4 +1,4 @@
-import { EmbedBuilder, Role } from "discord.js";
+import { EmbedBuilder, Role, userMention } from "discord.js";
 import type { ArgsOf, Client } from "discordx";
 import { Discord, On } from "discordx";
 import { formatTimestampWithDay } from "../utilities/DiscordLogUtils.js";
@@ -34,7 +34,7 @@ export class GuildMemberAdd {
           .setTitle("User Joined")
           .setColor(COLOR_SUCCESS)
           .addFields(
-            { name: "User", value: `<@${member.user.id}>\n${username}` },
+            { name: "User", value: `${userMention(member.user.id)}\n${username}` },
             {
               name: "Account Created On",
               value: formatDiscordDateTime(member.user.createdAt),

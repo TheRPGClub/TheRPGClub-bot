@@ -7,6 +7,7 @@ import {
   MessageFlags,
   ModalSubmitInteraction,
   TextDisplayBuilder,
+  userMention,
 } from "discord.js";
 import {
   ActionRowBuilder as ModalActionRowBuilder,
@@ -409,7 +410,7 @@ async function getCurrentSuggestionForReview(
 function getSuggestionAuthorMention(
   suggestion: Awaited<ReturnType<typeof getSuggestionById>>,
 ): string {
-  return suggestion?.createdBy ? `<@${suggestion.createdBy}>` : "Unknown user";
+  return suggestion?.createdBy ? userMention(suggestion.createdBy) : "Unknown user";
 }
 
 async function sendSuggestionUpdateMessage(
@@ -539,7 +540,7 @@ export class SuggestionCommand {
       if (channel && "send" in channel) {
         await (channel as any).send({
           content:
-            `<@${BOT_DEV_PING_USER_ID}> ${interaction.user.username} has submitted a suggestion!`,
+            `${userMention(BOT_DEV_PING_USER_ID)} ${interaction.user.username} has submitted a suggestion!`,
         });
       }
     } catch {
