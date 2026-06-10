@@ -67,7 +67,6 @@ test("now-playing list components serialize with mixed journal-enabled entries",
   }];
 
   const components = command.buildNowPlayingEntryComponents(
-    "Your Now Playing List",
     entries,
     "123456789012345678",
     null,
@@ -120,7 +119,6 @@ test("owner list shows journal buttons for multiple journal-enabled entries", ()
   }];
 
   const components = command.buildNowPlayingEntryComponents(
-    "Your Now Playing List",
     entries,
     "123456789012345678",
     null,
@@ -154,7 +152,6 @@ test("owner list with 10 entries stays serializable and keeps journal buttons", 
   }));
 
   const components = command.buildNowPlayingEntryComponents(
-    "Your Now Playing List",
     entries,
     "123456789012345678",
     null,
@@ -351,16 +348,14 @@ test("journal edit modal submit shows manage journal buttons", async () => {
   }
 });
 
-test("journal edit select in guild deletes prompt message after opening modal", async () => {
+test("journal edit button opens modal for current page entry", async () => {
   const command = new NowPlayingCommand() as any;
-  command.canUseJournalFeature = () => true;
 
-  const originalGetEntry = Member.getGameJournalEntryForUser;
-  let deleted = false;
+  const originalGetEntries = Member.getGameJournalEntries;
   let showModalCalled = false;
 
   try {
-    Member.getGameJournalEntryForUser = (async () => ({
+    Member.getGameJournalEntries = (async () => ([{
       entryId: 10,
       userId: "123",
       gameId: 1,
@@ -368,28 +363,21 @@ test("journal edit select in guild deletes prompt message after opening modal", 
       body: "Top secret body.",
       createdAt: new Date("2026-05-11T00:00:00.000Z"),
       updatedAt: new Date("2026-05-11T00:00:00.000Z"),
-    })) as any;
+    }])) as any;
 
     const interaction: any = {
-      customId: "nowplaying-journal-edit-select:123:1:1",
+      customId: "nowplaying-journal-edit:123:1:1",
       user: { id: "123" },
       guildId: "987654321",
-      values: ["10"],
       showModal: async () => {
         showModalCalled = true;
       },
-      message: {
-        delete: async () => {
-          deleted = true;
-        },
-      },
     };
 
-    await command.handleNowPlayingJournalEditSelect(interaction);
+    await command.handleNowPlayingJournalEdit(interaction);
     assert.equal(showModalCalled, true);
-    assert.equal(deleted, true);
   } finally {
-    Member.getGameJournalEntryForUser = originalGetEntry;
+    Member.getGameJournalEntries = originalGetEntries;
   }
 });
 

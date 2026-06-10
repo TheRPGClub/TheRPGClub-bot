@@ -142,8 +142,6 @@ test("nowplaying completion config renders with no image accessory", async () =>
 
 test("nowplaying completion modal reuses existing now-playing platform and skips platform picker", async () => {
   const command = new NowPlayingCommand() as any;
-  const originalDateNow = Date.now;
-  const originalMathRandom = Math.random;
   const originalGetNowPlaying = Member.getNowPlaying;
   const originalGetRecentCompletionForGame = Member.getRecentCompletionForGame;
   const originalAddCompletion = Member.addCompletion;
@@ -157,8 +155,6 @@ test("nowplaying completion modal reuses existing now-playing platform and skips
   let platformLookupCalls = 0;
 
   try {
-    Date.now = () => 1700000000000;
-    Math.random = () => 0.12345;
 
     Member.getNowPlaying = (async () => ([
       {
@@ -227,7 +223,7 @@ test("nowplaying completion modal reuses existing now-playing platform and skips
     assert.equal(listUpdatePayloads.length, 1, "completion setup should update once");
 
     const modalInteraction: any = {
-      customId: "nowplaying-complete-modal:np-comp-ui-1700000000000-12345",
+      customId: "nowplaying-complete-modal:np-comp-ui-123",
       user: { id: "123" },
       guildId: "guild-1",
       client: { channels: { cache: new Map(), fetch: async () => null } },
@@ -262,8 +258,6 @@ test("nowplaying completion modal reuses existing now-playing platform and skips
     assert.equal(addCompletionCalls[0]?.platformId, 77, "should reuse existing now-playing platform");
     assert.equal(modalReplyPayloads.length, 1, "should complete with a single final response");
   } finally {
-    Date.now = originalDateNow;
-    Math.random = originalMathRandom;
     Member.getNowPlaying = originalGetNowPlaying;
     Member.getRecentCompletionForGame = originalGetRecentCompletionForGame;
     Member.addCompletion = originalAddCompletion;
