@@ -122,6 +122,9 @@ After producing the report, create one GitHub issue per non-empty category using
 titles and body templates below exactly -- substitute `N` / `M` and the file lists
 from the grep results.
 
+**Formatting rule: do not use markdown tables anywhere in issue bodies.** Use
+bullet lists or plain `file:line` lines instead.
+
 **EmbedBuilder interactive replies** (if > 0 interactive hits):
 ```
 Title: Migrate raw EmbedBuilder to v2 container helpers (interactive replies)
@@ -195,7 +198,7 @@ Note: `buildJournalSelectRow` already exists for the journal-specific pattern an
 should remain.
 
 ## Files (N hits across M files)
-<list top files with hit counts, then full file:line list>
+<bullet list of top files with hit counts, e.g. "- `path/to/file.ts` -- N hits", then full file:line list>
 ```
 
 **ContainerBuilder / TextDisplayBuilder simple cases** (if > 0 simple candidates):
@@ -214,7 +217,7 @@ Complex multi-section layouts should stay as-is.
 `buildTextContainer(content, accentColor?)` -- `src/functions/ComponentsV2Utils.ts`
 ```
 
-After creating all issues, print a summary table:
+After creating all issues, print a summary list:
 
 ```
 ## Issues created
