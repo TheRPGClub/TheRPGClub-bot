@@ -23,11 +23,12 @@ RPGClub GameDB Bot is a Discord bot that powers GameDB lookups, Monthly Games wo
 
 Use `/help` in Discord for full syntax and parameters. Major command groups include:
 
-- Monthly games: `/gotm`, `/nr-gotm`, `/round`
-- GameDB: `/gamedb`, `/collection`, `/now-playing`, `/game-completion`
+- Monthly games: `/nominate`, `/noms`, `/round`, `/round-history`
+- GameDB: `/gamedb`, `/collection`, `/now-playing`, `/game-completion`, `/game-journal`, `/create-thread`
 - Members: `/profile`, `/mp-info`
-- Utilities: `/hltb`, `/activity-emoji`, `/remindme`, `/gamegiveaway`, `/avatar-history`
-- Admin tools: `/mod`, `/admin`, `/superadmin`, `/todo`, `/publicreminder`, `/rss`, `/suggestion-review`
+- Utilities: `/hltb`, `/gamegiveaway`, `/avatar-history`, `/timestamp`
+- Admin tools: `/mod`, `/admin`, `/superadmin`, `/todo`, `/publicreminder`, `/rss`, `/suggestion`,
+  `/generate-vote-image`, `/moderator`
 - Regulars tools: `/thread`
 
 ## Database Docs
@@ -89,8 +90,7 @@ These are required or commonly used by the bot. Values depend on your deployment
 - `npm run start:prod` - Run compiled output with pm2.
 - `npm run buildProd` - Build and restart or start pm2.
 - `npm run import:igdb-platforms` - Sync IGDB platforms into GameDB.
-- `npm run script:reimport-releases` - Reimport release data from IGDB.
-- `npm run snapshot:url` - Snapshot a URL.
+- `npm run script:explore-postgres` - Explore the PostgreSQL schema and data.
 - `npm run session:start` - Run session startup tasks.
 - `npm run backup:docker-volumes` - Backup docker volumes.
 

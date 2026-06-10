@@ -1,4 +1,4 @@
-export const DEFAULT_PAGE_SIZE        = 20;
+export const DEFAULT_PAGE_SIZE         = 20;
 export const AVATAR_HISTORY_PAGE_SIZE  = 20;
 export const AVATAR_ALL_VIEW_PAGE_SIZE = 50;
 export const ROUND_HISTORY_PAGE_SIZE   = 10;
