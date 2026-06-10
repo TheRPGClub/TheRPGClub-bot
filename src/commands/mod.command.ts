@@ -1,12 +1,12 @@
 import {
   ActionRowBuilder,
   ApplicationCommandOptionType,
-  EmbedBuilder,
   MessageFlags,
   StringSelectMenuBuilder,
   type StringSelectMenuInteraction,
 } from "discord.js";
 import type { CommandInteraction } from "discord.js";
+import type { ContainerBuilder } from "@discordjs/builders";
 import { Discord, SelectMenuComponent, Slash, SlashGroup, SlashOption } from "discordx";
 import { getPresenceHistory, setPresence } from "../functions/SetPresence.js";
 import { isModerator } from "./admin/admin-auth.utils.js";
@@ -16,7 +16,13 @@ import {
   safeUpdate,
   sanitizeUserInput,
 } from "../functions/InteractionUtils.js";
-import { buildTextReply } from "../functions/ComponentsV2Utils.js";
+import {
+  buildTextReply,
+  buildTitledContainer,
+  buildFieldsText,
+  buildComponentsV2EditFlags,
+  type EmbedField,
+} from "../functions/ComponentsV2Utils.js";
 import { DISCORD_AUTOCOMPLETE_DESC_MAX } from "../config/textLimits.js";
 
 type ModHelpTopicId = "presence" | "presence-history";
@@ -65,17 +71,10 @@ function buildModHelpButtons(
   return [new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select)];
 }
 
-export function buildModHelpEmbed(topic: ModHelpTopic): EmbedBuilder {
-  const embed = new EmbedBuilder()
-    .setTitle(`${topic.label} help`)
-    .setDescription(topic.summary)
-    .addFields({ name: "Syntax", value: topic.syntax });
-
-  if (topic.parameters) {
-    embed.addFields({ name: "Parameters", value: topic.parameters });
-  }
-
-  return embed;
+export function buildModHelpContainer(topic: ModHelpTopic): ContainerBuilder {
+  const fields: EmbedField[] = [{ name: "Syntax", value: topic.syntax }];
+  if (topic.parameters) fields.push({ name: "Parameters", value: topic.parameters });
+  return buildTitledContainer(`${topic.label} help`, buildFieldsText(fields));
 }
 
 @Discord()
@@ -166,7 +165,7 @@ export class Mod {
 
     await safeReply(interaction, {
       ...response,
-      flags: MessageFlags.Ephemeral,
+      flags: response.flags | MessageFlags.Ephemeral,
     });
   }
 
@@ -189,12 +188,12 @@ export class Mod {
       return;
     }
 
-    const helpEmbed = buildModHelpEmbed(topic);
+    const container = buildModHelpContainer(topic);
     const response = buildModHelpResponse(topic.id);
 
     await safeUpdate(interaction, {
-      embeds: [helpEmbed],
-      components: response.components,
+      components: [container, ...response.components],
+      flags: response.flags,
     });
   }
 }
@@ -202,18 +201,18 @@ export class Mod {
 export function buildModHelpResponse(
   activeTopicId?: ModHelpTopicId,
 ): {
-  embeds: EmbedBuilder[];
-  components: ActionRowBuilder<StringSelectMenuBuilder>[];
+  components: (ContainerBuilder | ActionRowBuilder<StringSelectMenuBuilder>)[];
+  flags: number;
 } {
-  const embed = new EmbedBuilder()
-    .setTitle("Moderator Commands Help")
-    .setDescription("Pick a `/mod` command to see what it does and how to run it.");
-   
-  const components = buildModHelpButtons(activeTopicId);
+  const container = buildTitledContainer(
+    "Moderator Commands Help",
+    "Pick a `/mod` command to see what it does and how to run it.",
+  );
+  const buttons = buildModHelpButtons(activeTopicId);
 
   return {
-    embeds: [embed],
-    // eslint-disable-next-line local/dynamic-components-require-chunking
-    components,
+     
+    components: [container, ...buttons],
+    flags: buildComponentsV2EditFlags(),
   };
 }
