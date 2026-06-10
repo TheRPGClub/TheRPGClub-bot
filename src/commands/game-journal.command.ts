@@ -71,7 +71,7 @@ import { formatTableDate } from "../functions/DateFormatUtils.js";
 import {
   trackNowPlayingJournalContext,
   refreshJournalMessages,
-} from "./now-playing.command.js";
+} from "./now-playing/nowPlayingContexts.js";
 import { NOW_PLAYING_HELP_PREFIX } from "./now-playing-help.js";
 import { EphemeralOwnerMenu } from "../functions/EphemeralOwnerMenu.js";
 import { isPositiveInt } from "../utilities/ValidationUtils.js";

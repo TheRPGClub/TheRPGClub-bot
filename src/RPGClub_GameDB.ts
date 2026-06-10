@@ -33,7 +33,7 @@ import { startGameReleaseAnnouncementService } from "./services/GameReleaseAnnou
 import { startIgdbScanService } from "./services/IGDB/IgdbScanService.js";
 import { startUserEmojiService } from "./services/UserEmojiService.js";
 import { tryHandleManagedRawModalInteraction } from "./services/raw-modal/RawModalInteractionRouter.js";
-import { restoreJournalMessageContextsFromDb } from "./commands/now-playing.command.js";
+import { restoreJournalMessageContextsFromDb } from "./commands/now-playing/nowPlayingContexts.js";
 import { truncateWithEllipsis } from "./utilities/ValidationUtils.js";
 import { logError } from "./utilities/LogUtils.js";
 installConsoleLogging();

@@ -67,7 +67,6 @@ import {
   buildUserHeaderContainer,
   buildSelectRow,
 } from "../functions/uiComponents.js";
-import { EphemeralOwnerMenu } from "../functions/EphemeralOwnerMenu.js";
 import { igdbService } from "../services/IGDB/IgdbService.js";
 import {
   createIgdbSession,
@@ -85,7 +84,6 @@ import {
   buildTitledContainer,
   safeV2TextContent,
 } from "../functions/ComponentsV2Utils.js";
-import { formatPlatformDisplayName } from "../functions/PlatformDisplay.js";
 import {
   autocompleteGameCompletionPlatform,
   autocompleteGameCompletionTitle,
@@ -119,7 +117,7 @@ import {
   isValidPlaytimeHours,
   truncateWithEllipsis,
 } from "../utilities/ValidationUtils.js";
-import { logError, logInfo } from "../utilities/LogUtils.js";
+import { logError } from "../utilities/LogUtils.js";
 import {
   DISCORD_AUTOCOMPLETE_DESC_MAX,
   DISCORD_SELECT_LABEL_MAX,
@@ -128,215 +126,99 @@ import {
 import { assertCustomIdSegments, parseCustomIdSegmentsMin } from "../utilities/CustomIdUtils.js";
 import { safeIgnore } from "../utilities/AsyncUtils.js";
 
-const MAX_NOW_PLAYING_NOTE_LEN = 500;
-const NOW_PLAYING_SEARCH_LIMIT = 10;
-const NOW_PLAYING_SORT_SLOT_PREFIX = "nowplaying-sort-slot";
-const NOW_PLAYING_SORT_SAVE_PREFIX = "nowplaying-sort-save";
-const NOW_PLAYING_SORT_RESET_PREFIX = "nowplaying-sort-reset";
-const NOW_PLAYING_NOTE_MODAL_ID = "nowplaying-note-modal";
-const NOW_PLAYING_NOTE_INPUT_ID = "nowplaying-note-input";
-const NOW_PLAYING_NOTE_MODAL_MAX_FIELDS = 5;
-const NOW_PLAYING_ADD_MODAL_ID = "nowplaying-add-modal";
-const NOW_PLAYING_ADD_TITLE_INPUT_ID = "nowplaying-add-title";
-const NOW_PLAYING_ADD_NOTE_INPUT_ID = "nowplaying-add-note";
-const NOW_PLAYING_ADD_PLATFORM_SELECT_PREFIX = "nowplaying-add-platform-select";
-const NOW_PLAYING_EDIT_PLATFORM_SLOT_PREFIX = "nowplaying-edit-platform-slot";
-const NOW_PLAYING_EDIT_PLATFORM_SAVE_PREFIX = "nowplaying-edit-platform-save";
-const NOW_PLAYING_EDIT_PLATFORM_RESET_PREFIX = "nowplaying-edit-platform-reset";
-const NOW_PLAYING_COMPLETE_MODAL_ID = "nowplaying-complete-modal";
-const NOW_PLAYING_COMPLETE_DATE_INPUT_ID = "nowplaying-complete-date";
-const NOW_PLAYING_COMPLETE_HOURS_INPUT_ID = "nowplaying-complete-hours";
-const NOW_PLAYING_COMPLETE_NOTE_INPUT_ID = "nowplaying-complete-note";
-const NOW_PLAYING_COMPLETE_PICK_PREFIX = "np-complete-pick";
-const NOW_PLAYING_COMPLETE_TYPE_SELECT_PREFIX = "np-complete-type";
-const NOW_PLAYING_COMPLETE_REMOVE_SELECT_PREFIX = "np-complete-remove";
-const NOW_PLAYING_COMPLETE_ANNOUNCE_SELECT_PREFIX = "np-complete-announce";
-const NOW_PLAYING_COMPLETE_NOTE_SELECT_PREFIX = "np-complete-note";
-const NOW_PLAYING_COMPLETE_DETAILS_PREFIX = "np-complete-details";
-const NOW_PLAYING_COMPLETE_PLATFORM_SELECT_PREFIX = "np-complete-platform";
-const NOW_PLAYING_GALLERY_MAX = 5;
-const NOW_PLAYING_COMPOSITE_MAX = 10;
-const NOW_PLAYING_ALL_SELECT_ID = "nowplaying-all-select:v1";
-const NOW_PLAYING_LIST_NOTES_PREFIX = "nowplaying-list-notes";
-const NOW_PLAYING_LIST_EDIT_PREFIX = "nowplaying-list-edit";
-const NOW_PLAYING_EDIT_MENU_SORT_PREFIX = "nowplaying-edit-menu-sort";
-const NOW_PLAYING_EDIT_MENU_PLATFORM_PREFIX = "nowplaying-edit-menu-platform";
-const NOW_PLAYING_EDIT_MENU_COMPLETE_PREFIX = "nowplaying-edit-menu-complete";
-const NOW_PLAYING_EDIT_MENU_REMOVE_PREFIX = "nowplaying-edit-menu-remove";
-const NOW_PLAYING_EDIT_MENU_START_JOURNAL_PREFIX = "nowplaying-edit-menu-start-journal";
-const NOW_PLAYING_EDIT_MENU_START_JOURNAL_SELECT_PREFIX = "nowplaying-edit-menu-start-journal-select";
-const NOW_PLAYING_REMOVE_SELECT_PREFIX = "nowplaying-remove-select";
-const NOW_PLAYING_JOURNAL_OPEN_PREFIX = "nowplaying-journal-open";
-const NOW_PLAYING_JOURNAL_VIEW_SELECT_PREFIX = "nowplaying-journal-view-select";
-const NOW_PLAYING_JOURNAL_ADD_PREFIX = "nowplaying-journal-add";
-const NOW_PLAYING_JOURNAL_EDIT_PREFIX = "nowplaying-journal-edit";
-const NOW_PLAYING_JOURNAL_DELETE_PREFIX = "nowplaying-journal-delete";
-const NOW_PLAYING_JOURNAL_DELETE_SELECT_PREFIX = "nowplaying-journal-delete-select";
-const NOW_PLAYING_JOURNAL_DELETE_CONFIRM_PREFIX = "nowplaying-journal-delete-confirm";
-const NOW_PLAYING_JOURNAL_PAGE_PREFIX = "nowplaying-journal-page";
-const NOW_PLAYING_JOURNAL_HEADER_PREFIX = "nowplaying-journal-header";
-const NOW_PLAYING_JOURNAL_MODAL_ID = "nowplaying-journal-modal";
-const NOW_PLAYING_JOURNAL_EDIT_MODAL_ID = "nowplaying-journal-edit-modal";
-const NOW_PLAYING_JOURNAL_TITLE_INPUT_ID = "nowplaying-journal-title";
-const NOW_PLAYING_JOURNAL_BODY_INPUT_ID = "nowplaying-journal-body";
-type NowPlayingAddSession = {
-  userId: string;
-  query: string;
-  note: string | null;
-  timeoutId?: ReturnType<typeof setTimeout>;
-};
-type NowPlayingAddPlatformSession = {
-  userId: string;
-  gameId: number;
-  note: string | null;
-  sourceSessionId: string;
-};
-const nowPlayingAddSessions = new Map<string, NowPlayingAddSession>();
-const nowPlayingAddPlatformSessions = new Map<string, NowPlayingAddPlatformSession>();
-
-type NowPlayingCompletionWizardSession = {
-  userId: string;
-  gameId: number | null;
-  completionType: CompletionType;
-  removeFromNowPlaying: boolean;
-  announce: boolean;
-  addCompletionNote: boolean;
-  returnToList: boolean;
-};
-const nowPlayingCompletionWizardSessions = new Map<string, NowPlayingCompletionWizardSession>();
-type NowPlayingCompletionPlatformSession = {
-  sessionId: string;
-  userId: string;
-  gameId: number;
-  completionType: CompletionType;
-  completedAt: Date | null;
-  finalPlaytimeHours: number | null;
-  note: string | null;
-  removeFromNowPlaying: boolean;
-  announce: boolean;
-  returnToList: boolean;
-  platforms: Array<{ id: number; name: string }>;
-};
-const nowPlayingCompletionPlatformSessions = new Map<
-  string,
-  NowPlayingCompletionPlatformSession
->();
-type NowPlayingTrackedView = "single" | "everyone" | "everyone-selected";
-type NowPlayingListContext = {
-  channelId: string;
-  messageId: string;
-  createdAt: number;
-  view: NowPlayingTrackedView;
-  ownerUserId: string | null;
-  selectedUserId: string | null;
-};
-const nowPlayingListContexts = new Map<string, NowPlayingListContext>();
-const NOW_PLAYING_CONTEXT_TTL_MS = 3 * 60 * 60 * 1000;
-type NowPlayingJournalContext = {
-  channelId: string;
-  messageId: string;
-  createdAt: number;
-  ownerUserId: string;
-  gameId: number;
-};
-const nowPlayingJournalContexts = new Map<string, NowPlayingJournalContext>();
-const NOW_PLAYING_JOURNAL_CONTEXT_TTL_MS = 2 * 60 * 60 * 1000;
-const journalOwnerMenu = new EphemeralOwnerMenu();
-const nowPlayingOwnerMenu = new EphemeralOwnerMenu();
-
-export async function restoreJournalMessageContextsFromDb(): Promise<void> {
-  try {
-    await Member.pruneExpiredJournalMessageContexts(NOW_PLAYING_JOURNAL_CONTEXT_TTL_MS);
-    const rows = await Member.loadActiveJournalMessageContexts(NOW_PLAYING_JOURNAL_CONTEXT_TTL_MS);
-    for (const row of rows) {
-      const key = `${row.channelId}:${row.messageId}`;
-      nowPlayingJournalContexts.set(key, row);
-    }
-    logInfo("Journal", `Restored ${rows.length} message context(s) from DB.`);
-  } catch (err) {
-    logError("Journal.restore_contexts_failed", err);
-  }
-}
-
-type NowPlayingMessageComponents = Array<
-  | ContainerBuilder
-  | MediaGalleryBuilder
-  | ActionRowBuilder<ButtonBuilder>
-  | ActionRowBuilder<StringSelectMenuBuilder>
->;
-
-type NowPlayingListComponents = ContainerBuilder[];
-type NowPlayingPayloadComponents = Array<
-  ContainerBuilder | ActionRowBuilder<StringSelectMenuBuilder>
->;
-
-function buildNowPlayingSortStateToken(entryCount: number): string {
-  return Array.from({ length: entryCount }, (_, index) => index.toString(36)).join("");
-}
-
-function parseNowPlayingSortStateToken(
-  token: string,
-  entryCount: number,
-): number[] | null {
-  if (token.length !== entryCount) {
-    return null;
-  }
-  const parsed: number[] = [];
-  for (const character of token) {
-    if (character === "_") {
-      parsed.push(-1);
-      continue;
-    }
-    const value = Number.parseInt(character, 36);
-    if (!Number.isInteger(value) || value < 0 || value >= entryCount) {
-      return null;
-    }
-    parsed.push(value);
-  }
-  return parsed;
-}
-
-function encodeNowPlayingSortState(state: number[]): string {
-  return state.map((value) => (value < 0 ? "_" : value.toString(36))).join("");
-}
-
-function parseNowPlayingPlatformStateToken(
-  token: string,
-  entryCount: number,
-): number[] | null {
-  if (token.length !== entryCount) {
-    return null;
-  }
-  const parsed: number[] = [];
-  for (const character of token) {
-    if (character === "_") {
-      parsed.push(-1);
-      continue;
-    }
-    const value = Number.parseInt(character, 36);
-    if (!Number.isInteger(value) || value < 0 || value > 24) {
-      return null;
-    }
-    parsed.push(value);
-  }
-  return parsed;
-}
-
-function encodeNowPlayingPlatformState(state: number[]): string {
-  return state.map((value) => (value < 0 ? "_" : value.toString(36))).join("");
-}
-
-function buildNowPlayingPlatformStateFromCurrent(
-  entries: IMemberNowPlayingEntry[],
-  platformOptions: Array<Array<{ label: string; value: string; platformId: number }>>,
-): string {
-  const state = entries.map((entry, slotIndex) => {
-    const options = platformOptions[slotIndex] ?? [];
-    const selectedIndex = options.findIndex((option) => option.platformId === entry.platformId);
-    return selectedIndex >= 0 ? selectedIndex : -1;
-  });
-  return encodeNowPlayingPlatformState(state);
-}
+import {
+  MAX_NOW_PLAYING_NOTE_LEN,
+  NOW_PLAYING_SEARCH_LIMIT,
+  NOW_PLAYING_SORT_SLOT_PREFIX,
+  NOW_PLAYING_SORT_SAVE_PREFIX,
+  NOW_PLAYING_SORT_RESET_PREFIX,
+  NOW_PLAYING_NOTE_MODAL_ID,
+  NOW_PLAYING_NOTE_INPUT_ID,
+  NOW_PLAYING_NOTE_MODAL_MAX_FIELDS,
+  NOW_PLAYING_ADD_MODAL_ID,
+  NOW_PLAYING_ADD_TITLE_INPUT_ID,
+  NOW_PLAYING_ADD_NOTE_INPUT_ID,
+  NOW_PLAYING_ADD_PLATFORM_SELECT_PREFIX,
+  NOW_PLAYING_EDIT_PLATFORM_SLOT_PREFIX,
+  NOW_PLAYING_EDIT_PLATFORM_SAVE_PREFIX,
+  NOW_PLAYING_EDIT_PLATFORM_RESET_PREFIX,
+  NOW_PLAYING_COMPLETE_MODAL_ID,
+  NOW_PLAYING_COMPLETE_DATE_INPUT_ID,
+  NOW_PLAYING_COMPLETE_HOURS_INPUT_ID,
+  NOW_PLAYING_COMPLETE_NOTE_INPUT_ID,
+  NOW_PLAYING_COMPLETE_PICK_PREFIX,
+  NOW_PLAYING_COMPLETE_TYPE_SELECT_PREFIX,
+  NOW_PLAYING_COMPLETE_REMOVE_SELECT_PREFIX,
+  NOW_PLAYING_COMPLETE_ANNOUNCE_SELECT_PREFIX,
+  NOW_PLAYING_COMPLETE_NOTE_SELECT_PREFIX,
+  NOW_PLAYING_COMPLETE_DETAILS_PREFIX,
+  NOW_PLAYING_COMPLETE_PLATFORM_SELECT_PREFIX,
+  NOW_PLAYING_GALLERY_MAX,
+  NOW_PLAYING_COMPOSITE_MAX,
+  NOW_PLAYING_ALL_SELECT_ID,
+  NOW_PLAYING_LIST_NOTES_PREFIX,
+  NOW_PLAYING_LIST_EDIT_PREFIX,
+  NOW_PLAYING_EDIT_MENU_SORT_PREFIX,
+  NOW_PLAYING_EDIT_MENU_PLATFORM_PREFIX,
+  NOW_PLAYING_EDIT_MENU_COMPLETE_PREFIX,
+  NOW_PLAYING_EDIT_MENU_REMOVE_PREFIX,
+  NOW_PLAYING_EDIT_MENU_START_JOURNAL_PREFIX,
+  NOW_PLAYING_EDIT_MENU_START_JOURNAL_SELECT_PREFIX,
+  NOW_PLAYING_REMOVE_SELECT_PREFIX,
+  NOW_PLAYING_JOURNAL_OPEN_PREFIX,
+  NOW_PLAYING_JOURNAL_VIEW_SELECT_PREFIX,
+  NOW_PLAYING_JOURNAL_ADD_PREFIX,
+  NOW_PLAYING_JOURNAL_EDIT_PREFIX,
+  NOW_PLAYING_JOURNAL_DELETE_PREFIX,
+  NOW_PLAYING_JOURNAL_DELETE_SELECT_PREFIX,
+  NOW_PLAYING_JOURNAL_DELETE_CONFIRM_PREFIX,
+  NOW_PLAYING_JOURNAL_PAGE_PREFIX,
+  NOW_PLAYING_JOURNAL_HEADER_PREFIX,
+  NOW_PLAYING_JOURNAL_MODAL_ID,
+  NOW_PLAYING_JOURNAL_EDIT_MODAL_ID,
+  NOW_PLAYING_JOURNAL_TITLE_INPUT_ID,
+  NOW_PLAYING_JOURNAL_BODY_INPUT_ID,
+} from "./now-playing/nowPlayingIds.js";
+import {
+  type NowPlayingAddSession,
+  type NowPlayingCompletionWizardSession,
+  type NowPlayingCompletionPlatformSession,
+  type NowPlayingListContext,
+  type NowPlayingJournalContext,
+  type NowPlayingMessageComponents,
+  type NowPlayingListComponents,
+  type NowPlayingPayloadComponents,
+} from "./now-playing/nowPlayingTypes.js";
+import {
+  nowPlayingAddSessions,
+  nowPlayingAddPlatformSessions,
+  nowPlayingCompletionWizardSessions,
+  nowPlayingCompletionPlatformSessions,
+  nowPlayingListContexts,
+  nowPlayingJournalContexts,
+  journalOwnerMenu,
+  nowPlayingOwnerMenu,
+  createNowPlayingCompletionWizardSession,
+  clearNowPlayingAddSession,
+  buildNowPlayingContextKey,
+  trackNowPlayingListContext,
+  setNowPlayingListContext,
+  trackNowPlayingJournalContext,
+  refreshJournalMessages,
+  NOW_PLAYING_CONTEXT_TTL_MS,
+  NOW_PLAYING_JOURNAL_CONTEXT_TTL_MS,
+} from "./now-playing/nowPlayingContexts.js";
+import {
+  buildNowPlayingSortStateToken,
+  parseNowPlayingSortStateToken,
+  encodeNowPlayingSortState,
+  parseNowPlayingPlatformStateToken,
+  encodeNowPlayingPlatformState,
+  buildNowPlayingPlatformStateFromCurrent,
+  formatEntry,
+  formatEntryTitleWithPlatform,
+  getDisplayNowPlayingEntries,
+} from "../functions/NowPlayingUtils.js";
 
 async function confirmDuplicateCompletion(
   interaction: CommandInteraction | ModalSubmitInteraction | ButtonInteraction,
@@ -409,214 +291,6 @@ async function confirmDuplicateCompletion(
   }
 }
 
-function createNowPlayingCompletionWizardSession(
-  userId: string,
-  returnToList: boolean = false,
-): string {
-  const sessionId = `np-comp-ui-${userId}`;
-  const defaultType = (COMPLETION_TYPES[0] ?? "Main Story") as CompletionType;
-  nowPlayingCompletionWizardSessions.set(sessionId, {
-    userId,
-    gameId: null,
-    completionType: defaultType,
-    removeFromNowPlaying: true,
-    announce: true,
-    addCompletionNote: true,
-    returnToList,
-  });
-  return sessionId;
-}
-
-function clearNowPlayingAddSession(sessionId: string): void {
-  const session = nowPlayingAddSessions.get(sessionId);
-  if (session?.timeoutId) {
-    clearTimeout(session.timeoutId);
-  }
-  nowPlayingAddSessions.delete(sessionId);
-}
-
-function buildNowPlayingContextKey(channelId: string, messageId: string): string {
-  return `${channelId}:${messageId}`;
-}
-
-function buildNowPlayingJournalContextKey(channelId: string, messageId: string): string {
-  return `${channelId}:${messageId}`;
-}
-
-function trackNowPlayingListContext(message: Message<boolean>, context: {
-  view: NowPlayingTrackedView;
-  ownerUserId?: string | null;
-  selectedUserId?: string | null;
-}): void {
-  if (message.flags.has(MessageFlags.Ephemeral)) {
-    return;
-  }
-  const key = buildNowPlayingContextKey(message.channelId, message.id);
-  const existing = nowPlayingListContexts.get(key);
-  nowPlayingListContexts.set(key, {
-    channelId: message.channelId,
-    messageId: message.id,
-    createdAt: existing?.createdAt ?? Date.now(),
-    view: context.view,
-    ownerUserId: context.ownerUserId ?? null,
-    selectedUserId: context.selectedUserId ?? null,
-  });
-}
-
-function setNowPlayingListContext(userId: string, message: Message<boolean>): void {
-  trackNowPlayingListContext(message, {
-    view: "single",
-    ownerUserId: userId,
-  });
-}
-
-export async function trackNowPlayingJournalContext(
-  message: Message<boolean>,
-  ownerUserId: string,
-  gameId: number,
-): Promise<void> {
-  if (message.flags.has(MessageFlags.Ephemeral)) {
-    return;
-  }
-  const key = buildNowPlayingJournalContextKey(message.channelId, message.id);
-  const existing = nowPlayingJournalContexts.get(key);
-  const createdAt = existing?.createdAt ?? Date.now();
-  nowPlayingJournalContexts.set(key, {
-    channelId: message.channelId,
-    messageId: message.id,
-    createdAt,
-    ownerUserId,
-    gameId,
-  });
-  await Member.upsertJournalMessageContext(
-    message.channelId,
-    message.id,
-    createdAt,
-    ownerUserId,
-    gameId,
-  ).catch((err) => logError("Journal.persist_context_failed", err));
-}
-
-export async function refreshJournalMessages(
-  client: Client,
-  ownerId: string,
-  gameId: number,
-  excludeMessageId?: string,
-): Promise<void> {
-  const now = Date.now();
-
-  // First pass: expire stale contexts and collect the most recent context per channel.
-  const latestByChannel = new Map<string, NowPlayingJournalContext>();
-  for (const [key, ctx] of nowPlayingJournalContexts.entries()) {
-    if (ctx.ownerUserId !== ownerId || ctx.gameId !== gameId) continue;
-    if (ctx.messageId === excludeMessageId) continue;
-    if (now - ctx.createdAt > NOW_PLAYING_JOURNAL_CONTEXT_TTL_MS) {
-      nowPlayingJournalContexts.delete(key);
-      await Member.deleteJournalMessageContext(ctx.channelId, ctx.messageId)
-        .catch((err) => logError("Journal.delete_expired_context_failed", err));
-      continue;
-    }
-    const existing = latestByChannel.get(ctx.channelId);
-    if (!existing || ctx.createdAt > existing.createdAt) {
-      latestByChannel.set(ctx.channelId, ctx);
-    }
-  }
-
-  // Second pass: update only the single most recent message per channel.
-  for (const ctx of latestByChannel.values()) {
-    const channel = await client.channels.fetch(ctx.channelId).catch(() => null);
-    if (!channel?.isTextBased()) {
-      const key = `${ctx.channelId}:${ctx.messageId}`;
-      nowPlayingJournalContexts.delete(key);
-      await Member.deleteJournalMessageContext(ctx.channelId, ctx.messageId)
-        .catch((err) => logError("Journal.delete_unreachable_context_failed", err));
-      continue;
-    }
-    const message = await channel.messages.fetch(ctx.messageId).catch(() => null);
-    if (!message) {
-      const key = `${ctx.channelId}:${ctx.messageId}`;
-      nowPlayingJournalContexts.delete(key);
-      await Member.deleteJournalMessageContext(ctx.channelId, ctx.messageId)
-        .catch((err) => logError("Journal.delete_missing_context_failed", err));
-      continue;
-    }
-    const guildId = channel.isDMBased() ? null : (channel as any).guildId as string;
-    const payload = await buildJournalView({
-      ownerId,
-      viewerId: null,
-      gameId,
-      page: 1,
-      guildId,
-      prevPageCustomId: (p) =>
-        `${NOW_PLAYING_JOURNAL_PAGE_PREFIX}:${ownerId}:${gameId}:prev:${p}`,
-      nextPageCustomId: (p) =>
-        `${NOW_PLAYING_JOURNAL_PAGE_PREFIX}:${ownerId}:${gameId}:next:${p}`,
-      headerButtonCustomId: `${NOW_PLAYING_JOURNAL_HEADER_PREFIX}:${ownerId}:${gameId}:1`,
-      includeNowPlayingMeta: true,
-      includeCompletions: true,
-    });
-    await message.edit({
-      components: payload.components as any[],
-      files: payload.files,
-    }).catch((err) => logError("Journal.refresh_public_message_failed", err));
-  }
-}
-
-function resolvePlatformLabel(entry: IMemberNowPlayingEntry): string | null {
-  const candidate =
-    entry.platformAbbreviation ??
-    formatPlatformDisplayName(entry.platformName) ??
-    entry.platformName ??
-    "Unknown Platform";
-  if (candidate === "Unknown Platform") {
-    return null;
-  }
-  return candidate;
-}
-
-function formatEntry(
-  entry: IMemberNowPlayingEntry,
-  guildId: string | null,
-): string {
-  const platformLabel = resolvePlatformLabel(entry);
-  const baseTitle = platformLabel
-    ? `${entry.title} (${platformLabel})`
-    : entry.title;
-  if (entry.threadId && guildId) {
-    return `[${baseTitle}](https://discord.com/channels/${guildId}/${entry.threadId})`;
-  }
-  return baseTitle;
-}
-
-function formatEntryTitleWithPlatform(
-  entry: { title: string; platformName: string | null },
-): string {
-  const platformLabel = resolvePlatformLabel(entry as IMemberNowPlayingEntry);
-  return platformLabel
-    ? `${entry.title} (${platformLabel})`
-    : entry.title;
-}
-
-function sortNowPlayingEntries(
-  entries: IMemberNowPlayingEntry[],
-): IMemberNowPlayingEntry[] {
-  return [...entries].sort((a, b) => {
-    const titleA = a.title.toLowerCase();
-    const titleB = b.title.toLowerCase();
-    const titleCompare = titleA.localeCompare(titleB);
-    if (titleCompare !== 0) return titleCompare;
-    const gameIdA = a.gameId ?? 0;
-    const gameIdB = b.gameId ?? 0;
-    return gameIdA - gameIdB;
-  });
-}
-
-function getDisplayNowPlayingEntries(
-  entries: IMemberNowPlayingEntry[],
-): IMemberNowPlayingEntry[] {
-  const hasManualOrder = entries.some((entry) => entry.sortOrder != null);
-  return hasManualOrder ? entries : sortNowPlayingEntries(entries);
-}
 
 function buildEditNoteModal(
   ownerId: string,
