@@ -7,6 +7,7 @@ import {
   StringSelectMenuBuilder,
   TextInputBuilder,
   TextInputStyle,
+  userMention,
 } from "discord.js";
 import type {
   ButtonInteraction,
@@ -122,9 +123,9 @@ const buildCompletionPromptContent = (
   const trimmedQuery = truncateWithEllipsis(session.query, 120);
   return [
     "Add completion from reaction.",
-    `Requested by: <@${requesterId}>`,
+    `Requested by: ${userMention(requesterId)}`,
     `Message: ${session.messageUrl}`,
-    `Member: <@${session.targetUserId}>`,
+    `Member: ${userMention(session.targetUserId)}`,
     `Game title guess: ${trimmedQuery}`,
     "",
     "Select the completion type to continue.",
@@ -437,7 +438,7 @@ export class MessageReactionAdd {
     safeIgnore(safeUpdate(interaction, {
       content: [
         "Completion added.",
-        `Member: <@${session.targetUserId}>`,
+        `Member: ${userMention(session.targetUserId)}`,
         `Game: ${game.title}`,
         `Type: ${completionType}`,
         `Date: <t:${completedAtUnix}:D>`,

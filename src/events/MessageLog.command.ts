@@ -1,4 +1,4 @@
-import { EmbedBuilder } from "discord.js";
+import { channelMention, EmbedBuilder } from "discord.js";
 import type { Message } from "discord.js";
 import type { ArgsOf, Client } from "discordx";
 import { Discord, On } from "discordx";
@@ -61,10 +61,10 @@ export class MessageLog {
     const logChannel = await resolveLogChannel(client);
     if (!logChannel) return;
 
-    const channelMention = `<#${resolved.channelId}>`;
+    const deletedChannelMention = channelMention(resolved.channelId);
     const embed = buildAuthorEmbed(
       resolved,
-      `Message deleted in ${channelMention}`,
+      `Message deleted in ${deletedChannelMention}`,
       COLOR_ERROR,
     );
     embed.setDescription(truncate(formatMessageContent(resolved)));

@@ -7,6 +7,7 @@ import {
   ActionRowBuilder,
   StringSelectMenuBuilder,
   StringSelectMenuInteraction,
+  userMention,
 } from "discord.js";
 import {
   Discord,
@@ -267,7 +268,7 @@ export async function buildProfileViewPayload(
     }
 
     if (!record) {
-      return { notFoundMessage: `No profile data found for <@${target.id}>.` };
+      return { notFoundMessage: `No profile data found for ${userMention(target.id)}.` };
     }
 
     const nickHistory: string[] = [];
@@ -339,7 +340,7 @@ export class ProfileCommand {
       const notFoundContainer = new ContainerBuilder().addTextDisplayComponents(
         new TextDisplayBuilder().setContent(
           safeV2TextContent(
-            result.notFoundMessage ?? `No profile data found for <@${target.id}>.`,
+            result.notFoundMessage ?? `No profile data found for ${userMention(target.id)}.`,
             1000,
           ),
         ),
@@ -394,7 +395,7 @@ export class ProfileCommand {
         const notFoundContainer = new ContainerBuilder().addTextDisplayComponents(
           new TextDisplayBuilder().setContent(
             safeV2TextContent(
-              result.notFoundMessage ?? `No profile data found for <@${userId}>.`,
+              result.notFoundMessage ?? `No profile data found for ${userMention(userId)}.`,
               1000,
             ),
           ),
@@ -663,7 +664,7 @@ export class ProfileCommand {
       const name = record.globalName ?? record.username;
       const label = name ? `(${name})` : "";
       const botTag = record.isBot ? " [Bot]" : "";
-      return `${idx + 1}. <@${record.userId}> ${label}${botTag}`;
+      return `${idx + 1}. ${userMention(record.userId)} ${label}${botTag}`;
     });
 
     const description = `Filters: ${filterSummary}\n\n${lines.join("\n")}`;
@@ -812,7 +813,7 @@ export class ProfileCommand {
       if (nsw !== undefined) changedFields.push("Switch");
       if (steam !== undefined) changedFields.push("Steam");
 
-      await safeReply(interaction, buildTextReply(`Updated profile for <@${target.id}> (${changedFields.join(", ")}).`, true));
+      await safeReply(interaction, buildTextReply(`Updated profile for ${userMention(target.id)} (${changedFields.join(", ")}).`, true));
     } catch (err: any) {
       const msg = extractErrorMessage(err);
       await safeReply(interaction, buildTextReply(`Error updating profile: ${msg}`, true));

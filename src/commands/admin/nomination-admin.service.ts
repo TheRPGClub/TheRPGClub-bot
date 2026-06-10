@@ -3,7 +3,7 @@ import type {
   ModalSubmitInteraction,
   StringSelectMenuInteraction,
 } from "discord.js";
-import { MessageFlags } from "discord.js";
+import { MessageFlags, userMention } from "discord.js";
 import { safeDeferReply, safeReply, sanitizeUserInput } from "../../functions/InteractionUtils.js";
 import { buildTextReply } from "../../functions/ComponentsV2Utils.js";
 import {
@@ -162,7 +162,7 @@ export async function handleAdminNominationDeleteReasonModal(
     false,
   );
   const content =
-    `<@${interaction.user.id}> deleted <@${sessionState.userId}>'s nomination ` +
+    `${userMention(interaction.user.id)} deleted ${userMention(sessionState.userId)}'s nomination ` +
     `"${sessionState.gameTitle}" for ${sessionState.kind.toUpperCase()} Round ${sessionState.round}. ` +
     `Reason: ${reason}`;
 

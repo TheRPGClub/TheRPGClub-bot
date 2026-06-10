@@ -15,6 +15,7 @@ import {
   StringSelectMenuInteraction,
   TextInputBuilder,
   TextInputStyle,
+  channelMention,
 } from "discord.js";
 import {
   ButtonComponent,
@@ -1236,7 +1237,7 @@ export class GameDbAdmin {
         nowPlaying.find(p => p.threadId)?.threadId;
 
     if (threadId) {
-        embed.addFields({ name: "Thread", value: `✅ <#${threadId}>`, inline: true });
+        embed.addFields({ name: "Thread", value: `✅ ${channelMention(threadId)}`, inline: true });
     } else {
         embed.addFields({ name: "Thread", value: "❌ Missing", inline: true });
     }

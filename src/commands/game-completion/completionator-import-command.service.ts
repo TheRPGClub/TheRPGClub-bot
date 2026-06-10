@@ -1,4 +1,5 @@
 import type { CommandInteraction, Attachment } from "discord.js";
+import { channelMention } from "discord.js";
 import { ContainerBuilder, TextDisplayBuilder } from "@discordjs/builders";
 import type { CompletionatorAction } from "./completion.types.js";
 import { ephemeralFlag, safeDeferReply, safeReply } from "../../functions/InteractionUtils.js";
@@ -72,7 +73,7 @@ export async function handleCompletionatorImport(
     const threadService = new CompletionatorThreadService();
     const context = await threadService.getOrCreateCompletionatorThread(interaction, session);
     if (!context) return;
-    const threadMention: string = `<#${context.threadId}>`;
+    const threadMention: string = channelMention(context.threadId);
 
     await safeReply(interaction, buildTextReply(
       `Import session #${session.importId} created with ${parsed.length} rows. ` +
@@ -148,7 +149,7 @@ export async function handleCompletionatorImport(
   const context = await threadService.getOrCreateCompletionatorThread(interaction, session);
   if (!context) return;
   await safeReply(interaction, buildTextReply(
-    `Import #${session.importId} resumed. Continue in <#${context.threadId}>.`,
+    `Import #${session.importId} resumed. Continue in ${channelMention(context.threadId)}.`,
     ephemeral,
   ));
 

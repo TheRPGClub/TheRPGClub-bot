@@ -12,6 +12,7 @@ import {
   StringSelectMenuInteraction,
   TextInputBuilder,
   TextInputStyle,
+  userMention,
 } from "discord.js";
 import {
   ButtonComponent,
@@ -125,7 +126,7 @@ async function logGiveawayClaim(
   keyId: number,
 ): Promise<void> {
   const message =
-    `<@${userId}> claimed **${keyTitle}** (${platform}) [Key ID: ${keyId}].`;
+    `${userMention(userId)} claimed **${keyTitle}** (${platform}) [Key ID: ${keyId}].`;
   if (channel && typeof channel.send === "function") {
     const embed = new EmbedBuilder()
       .setTitle("Giveaway claim")
@@ -330,10 +331,10 @@ async function claimKey(
   const donorUser = await interaction.client.users
     .fetch(key.donorUserId)
     .catch(() => null);
-  const donorName = donorUser?.username ?? `<@${key.donorUserId}>`;
+  const donorName = donorUser?.username ?? userMention(key.donorUserId);
   const notifyDonor = await Member.getGiveawayDonorNotifySetting(key.donorUserId);
   if (notifyDonor && donorUser && key.donorUserId !== interaction.user.id) {
-    const claimantMention = `<@${interaction.user.id}>`;
+    const claimantMention = userMention(interaction.user.id);
     await donorUser.send({
       content:
         `Your donated key for **${key.gameTitle}** (${key.platform}) was claimed by ` +

@@ -11,6 +11,8 @@ import {
   StringSelectMenuBuilder,
   type Message,
   type MessageCreateOptions,
+  channelMention,
+  userMention,
 } from "discord.js";
 import { safeDeferUpdate, safeReply } from "../../functions/InteractionUtils.js";
 import { buildTextReply } from "../../functions/ComponentsV2Utils.js";
@@ -82,7 +84,7 @@ function buildNominationCountPreview(
   options: WizardNominationOption[],
 ): string {
   const lines = options.map((option, index) => {
-    const nominators = option.userIds.map((userId) => `<@${userId}>`).join(", ");
+    const nominators = option.userIds.map((userId) => userMention(userId)).join(", ");
     return `${index + 1}. ${option.gameTitle} (GameDB ${option.gamedbGameId}) - ${nominators}`;
   });
   return `**${kindLabel} nomination pool (${options.length})**\n${lines.join("\n")}`;
@@ -197,7 +199,7 @@ async function promptSelectNomination(
   );
 
   const promptMessage: Message | null = await channel.send({
-    content: `<@${userId}> ${promptText}`,
+    content: `${userMention(userId)} ${promptText}`,
     components: [selectRow, buttonRow],
     allowedMentions: { users: [userId] },
   }).catch(() => null);
@@ -266,7 +268,7 @@ export async function handleNextRoundSetup(
   if (interaction.channelId !== ADMIN_CHANNEL_ID) {
     await safeReply(
       interaction,
-      buildTextReply(`This command can only be used in <#${ADMIN_CHANNEL_ID}>.`, false),
+      buildTextReply(`This command can only be used in ${channelMention(ADMIN_CHANNEL_ID)}.`, false),
     );
     return;
   }
@@ -344,7 +346,7 @@ export async function handleNextRoundSetup(
     const promptId = `nrs:${interaction.user.id}:${interaction.channelId}`;
     const rows = buildChoiceRows(promptId, options);
     const promptMessage: Message | null = await channel.send({
-      content: `<@${interaction.user.id}> ${question}`,
+      content: `${userMention(interaction.user.id)} ${question}`,
       components: rows,
       allowedMentions: { users: [interaction.user.id] },
     }).catch(() => null);
@@ -779,7 +781,7 @@ export async function handleNextRoundSetup(
             if (plan.existingThreadId) {
               await wizardLog(
                 `[Test] Existing GOTM thread found for "${game.title}": ` +
-                `<#${plan.existingThreadId}>.`,
+                `${channelMention(plan.existingThreadId)}.`,
               );
             } else {
               await wizardLog(
@@ -801,9 +803,9 @@ export async function handleNextRoundSetup(
             kindLabel: "GOTM",
           });
           if (threadResult.threadId && threadResult.created) {
-            await wizardLog(`Linked GOTM thread <#${threadResult.threadId}> for "${game.title}".`);
+            await wizardLog(`Linked GOTM thread ${channelMention(threadResult.threadId)} for "${game.title}".`);
           } else if (threadResult.threadId) {
-            await wizardLog(`Existing GOTM thread found for "${game.title}": <#${threadResult.threadId}>.`);
+            await wizardLog(`Existing GOTM thread found for "${game.title}": ${channelMention(threadResult.threadId)}.`);
           } else {
             await wizardLog(`Checked GOTM thread link for "${game.title}" (none found and none created).`);
           }
@@ -827,7 +829,7 @@ export async function handleNextRoundSetup(
             if (plan.existingThreadId) {
               await wizardLog(
                 `[Test] Existing NR-GOTM thread found for "${game.title}": ` +
-                `<#${plan.existingThreadId}>.`,
+                `${channelMention(plan.existingThreadId)}.`,
               );
             } else {
               await wizardLog(
@@ -853,9 +855,9 @@ export async function handleNextRoundSetup(
             kindLabel: "NR-GOTM",
           });
           if (threadResult.threadId && threadResult.created) {
-            await wizardLog(`Linked NR-GOTM thread <#${threadResult.threadId}> for "${game.title}".`);
+            await wizardLog(`Linked NR-GOTM thread ${channelMention(threadResult.threadId)} for "${game.title}".`);
           } else if (threadResult.threadId) {
-            await wizardLog(`Existing NR-GOTM thread found for "${game.title}": <#${threadResult.threadId}>.`);
+            await wizardLog(`Existing NR-GOTM thread found for "${game.title}": ${channelMention(threadResult.threadId)}.`);
           } else {
             await wizardLog(`Checked NR-GOTM thread link for "${game.title}" (none found and none created).`);
           }
@@ -903,7 +905,7 @@ export async function handleNextRoundSetup(
         });
         if (plan.existingThreadId) {
           threadPlanLines.push(
-            `- GOTM ${game.title}: existing <#${plan.existingThreadId}>`,
+            `- GOTM ${game.title}: existing ${channelMention(plan.existingThreadId)}`,
           );
         } else {
           threadPlanLines.push(
@@ -922,7 +924,7 @@ export async function handleNextRoundSetup(
         });
         if (plan.existingThreadId) {
           threadPlanLines.push(
-            `- NR-GOTM ${game.title}: existing <#${plan.existingThreadId}>`,
+            `- NR-GOTM ${game.title}: existing ${channelMention(plan.existingThreadId)}`,
           );
         } else {
           threadPlanLines.push(

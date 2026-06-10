@@ -5,6 +5,7 @@ import {
   ComponentType,
   type Message,
   type CommandInteraction,
+  userMention,
 } from "discord.js";
 import {
   extractErrorMessage,
@@ -69,7 +70,7 @@ export async function promptUserForChoice(
 
   const promptId = `admin-choice:${userId}`;
   const rows = buildChoiceRows(promptId, options);
-  const content = `<@${userId}> ${question}`;
+  const content = `${userMention(userId)} ${question}`;
 
   let promptMessage: Message | null = null;
   try {
@@ -139,7 +140,7 @@ export async function promptUserForInput(
   }
 
   try {
-    await safeReply(interaction, buildTextReply(`<@${userId}> ${question}`, false));
+    await safeReply(interaction, buildTextReply(`${userMention(userId)} ${question}`, false));
   } catch (err) {
     console.error("Failed to send prompt message:", err);
   }

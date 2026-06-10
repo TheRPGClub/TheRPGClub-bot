@@ -1,4 +1,4 @@
-import { type MessageCreateOptions, type TextBasedChannel } from "discord.js";
+import { type MessageCreateOptions, type TextBasedChannel, userMention } from "discord.js";
 import { ContainerBuilder, TextDisplayBuilder } from "@discordjs/builders";
 import type { Client } from "discordx";
 
@@ -223,7 +223,7 @@ async function flushLogBuffer(targetLevel?: BufferedLevel): Promise<void> {
         containers.push(buildLogContainer(level, currentDescription));
       }
 
-      const pingContent = level === "error" ? `<@${BOT_DEV_PING_USER_ID}>` : undefined;
+      const pingContent = level === "error" ? userMention(BOT_DEV_PING_USER_ID) : undefined;
       for (let i = 0; i < containers.length; i++) {
         await sendContainerToChannel(channel, containers[i], i === 0 ? pingContent : undefined);
       }

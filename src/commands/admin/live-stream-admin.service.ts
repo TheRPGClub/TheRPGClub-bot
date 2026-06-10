@@ -8,6 +8,7 @@ import {
   MessageFlags,
   ModalSubmitInteraction,
   type ForumChannel,
+  channelMention,
 } from "discord.js";
 import {
   ActionRowBuilder as ModalActionRowBuilder,
@@ -309,7 +310,7 @@ export async function handleLiveStreamCreateModal(interaction: ModalSubmitIntera
     const eventUrl = `https://discord.com/events/${interaction.guildId}/${event.id}`;
     await safeReply(interaction, buildTextReply(
       `Created live event resources.\n` +
-      `Thread: <#${threadId}>\n` +
+      `Thread: ${channelMention(threadId)}\n` +
       `Event: ${eventUrl}\n` +
       `Scheduled: ${timeZone}`,
       true,
@@ -318,7 +319,7 @@ export async function handleLiveStreamCreateModal(interaction: ModalSubmitIntera
     const msg = error instanceof Error ? error.message : String(error);
     await safeReply(interaction, buildTextReply(
       `Scheduled event creation failed: ${msg}\n` +
-      `Thread was created successfully: <#${threadId}>`,
+      `Thread was created successfully: ${channelMention(threadId)}`,
       true,
     ));
   }

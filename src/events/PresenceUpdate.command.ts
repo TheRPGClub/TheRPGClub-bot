@@ -4,6 +4,7 @@ import {
   ButtonBuilder,
   ButtonInteraction,
   ButtonStyle,
+  userMention,
 } from "discord.js";
 import crypto from "node:crypto";
 import type { Presence } from "discord.js";
@@ -189,7 +190,7 @@ export class PresenceUpdate {
     await PresencePromptHistory.createPrompt(sessionId, user.id, newGame);
 
     const content =
-      `<@${user.id}>, I see that you started playing **${newGame}**. ` +
+      `${userMention(user.id)}, I see that you started playing **${newGame}**. ` +
       "Would you like me to add it to your Now Playing list? Choose an option below.";
     const message = await sendableChannel.send({
       content,
@@ -273,7 +274,7 @@ export class PresenceUpdate {
 
     await PresencePromptHistory.markResolved(sessionId, "DECLINED");
     await safeUpdate(interaction, {
-      content: `<@${session.userId}>, no problem. I won't add it.`,
+      content: `${userMention(session.userId)}, no problem. I won't add it.`,
       components: [],
     });
   }
@@ -294,7 +295,7 @@ export class PresenceUpdate {
     await PresencePromptOptOut.addOptOutGame(session.userId, session.gameTitle);
     await PresencePromptHistory.markResolved(sessionId, "OPT_OUT_GAME");
     await safeUpdate(interaction, {
-      content: `<@${session.userId}>, got it. I won't ask again about **${session.gameTitle}**.`,
+      content: `${userMention(session.userId)}, got it. I won't ask again about **${session.gameTitle}**.`,
       components: [],
     });
     presencePromptSessions.delete(sessionId);
@@ -316,7 +317,7 @@ export class PresenceUpdate {
     await PresencePromptOptOut.addOptOutAll(session.userId);
     await PresencePromptHistory.markResolved(sessionId, "OPT_OUT_ALL");
     await safeUpdate(interaction, {
-      content: `<@${session.userId}>, got it. I won't ask again about any games.`,
+      content: `${userMention(session.userId)}, got it. I won't ask again about any games.`,
       components: [],
     });
     presencePromptSessions.delete(sessionId);

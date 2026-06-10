@@ -9,6 +9,7 @@ import {
   ContainerBuilder,
   MessageFlags,
   TextDisplayBuilder,
+  userMention,
 } from "discord.js";
 import { Discord, SelectMenuComponent, Slash, SlashChoice, SlashOption } from "discordx";
 import type { NominationKind } from "../classes/Nomination.js";
@@ -125,7 +126,7 @@ async function announceNominationList(
 
     const nominationNotice = new ContainerBuilder().addTextDisplayComponents(
       new TextDisplayBuilder().setContent(
-        safeV2TextContent(`<@${nominatorUserId}> Nominated "${nominatedTitle}"!`, 1000),
+        safeV2TextContent(`${userMention(nominatorUserId)} Nominated "${nominatedTitle}"!`, 1000),
       ),
     );
 

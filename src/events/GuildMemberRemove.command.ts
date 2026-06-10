@@ -1,4 +1,4 @@
-import { AuditLogEvent, EmbedBuilder } from "discord.js";
+import { AuditLogEvent, EmbedBuilder, userMention } from "discord.js";
 import type { ArgsOf, Client } from "discordx";
 import { Discord, On } from "discordx";
 import { formatTimestampWithDay } from "../utilities/DiscordLogUtils.js";
@@ -72,12 +72,12 @@ export class GuildMemberRemove {
         .setTitle("User Kicked")
         .setColor(COLOR_WARNING)
         .addFields(
-          { name: "User", value: `<@${member.user.id}>\n${username}` },
+          { name: "User", value: `${userMention(member.user.id)}\n${username}` },
           {
             name: "Account Created On",
             value: formatDiscordDateTime(member.user.createdAt),
           },
-          { name: "Moderator", value: `<@${kickAudit.moderatorId}>` },
+          { name: "Moderator", value: userMention(kickAudit.moderatorId) },
           {
             name: "Reason",
             value: kickAudit.reason ?? "No reason provided.",
@@ -96,7 +96,7 @@ export class GuildMemberRemove {
       .setTitle("User Left")
       .setColor(COLOR_NEUTRAL)
       .addFields(
-        { name: "User", value: `<@${member.user.id}>\n${username}` },
+        { name: "User", value: `${userMention(member.user.id)}\n${username}` },
         {
           name: "Account Created On",
           value: formatDiscordDateTime(member.user.createdAt),

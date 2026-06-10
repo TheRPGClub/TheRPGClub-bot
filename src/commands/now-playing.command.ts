@@ -20,6 +20,7 @@ import {
   type MessageActionRowComponent,
   type Client,
   type Message,
+  userMention,
 } from "discord.js";
 import {
   Discord,
@@ -921,7 +922,7 @@ export class NowPlayingCommand {
     const usersByGameId = new Map<number, { title: string; users: string[] }>();
     for (const row of nowPlayingRows) {
       const record = usersByGameId.get(row.gameId) ?? { title: row.title, users: [] };
-      record.users.push(`<@${row.userId}>`);
+      record.users.push(userMention(row.userId));
       usersByGameId.set(row.gameId, record);
     }
 
@@ -3335,7 +3336,7 @@ export class NowPlayingCommand {
     if (!entries.length) {
       const emptyMessage = ownerId === interaction.user.id
         ? "Your Now Playing list is empty."
-        : `No Now Playing entries found for <@${ownerId}>.`;
+        : `No Now Playing entries found for ${userMention(ownerId)}.`;
       const container = this.buildNowPlayingMessageContainer(
         title,
         emptyMessage,
@@ -4278,7 +4279,7 @@ export class NowPlayingCommand {
 
       const container = this.buildNowPlayingMessageContainer(
         "Now Playing",
-        `No Now Playing entries found for <@${target.id}>.`,
+        `No Now Playing entries found for ${userMention(target.id)}.`,
       );
       const reply = await safeReply(interaction, {
         components: [container],
@@ -4362,7 +4363,7 @@ export class NowPlayingCommand {
       );
       const container = this.buildNowPlayingMessageContainer(
         "Now Playing - Everyone",
-        `No Now Playing entries found for <@${selectedUserId}>.`,
+        `No Now Playing entries found for ${userMention(selectedUserId)}.`,
       );
       const components = this.withNowPlayingActions(
         true,
@@ -5274,7 +5275,7 @@ export class NowPlayingCommand {
             );
             const emptyMessage = ownerId === interaction.user.id
               ? "Your Now Playing list is empty."
-              : `No Now Playing entries found for <@${ownerId}>.`;
+              : `No Now Playing entries found for ${userMention(ownerId)}.`;
             const container = this.buildNowPlayingMessageContainer(title, emptyMessage);
             const components = [header, container];
             await message.edit({
@@ -5362,7 +5363,7 @@ export class NowPlayingCommand {
             );
             const container = this.buildNowPlayingMessageContainer(
               "Now Playing - Everyone",
-              `No Now Playing entries found for <@${selectedUserId}>.`,
+              `No Now Playing entries found for ${userMention(selectedUserId)}.`,
             );
             const components = this.withNowPlayingActions(
               false,
