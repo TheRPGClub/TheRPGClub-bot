@@ -690,8 +690,7 @@ export class GameJournalCommand {
 
   @ButtonComponent({ id: new RegExp(`^${GJ_SEARCH_PAGE_PREFIX}:\\d+:\\d+:\\d+:\\d+:.+$`) })
   async handleSearchPage(interaction: ButtonInteraction): Promise<void> {
-    const parts = interaction.customId.split(":");
-    const [, callerId, targetUserId, gameIdStr, pageRaw, ...queryParts] = parts;
+    const [, callerId, targetUserId, gameIdStr, pageRaw, ...queryParts] = interaction.customId.split(":");
     if (interaction.user.id !== callerId) {
       await safeReply(interaction, buildTextReply("This search isn't yours to navigate.", true));
       return;

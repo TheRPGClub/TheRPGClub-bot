@@ -851,10 +851,9 @@ export class GiveawayCommand {
    
   @ButtonComponent({ id: /^giveaway-claim-confirm:(hub|private|public):/ })
   async handleClaimConfirm(interaction: ButtonInteraction): Promise<void> {
-    const parts = interaction.customId.split(":");
-    const scope = parts[1];
-    const keyId = Number(parts[2]);
-    const page = Number(parts[3]);
+    const [, scope, keyIdStr, pageStr, ...extraSegs] = interaction.customId.split(":");
+    const keyId = Number(keyIdStr);
+    const page = Number(pageStr);
 
     if (!isPositiveInt(keyId)) {
       await safeUpdate(interaction, {
@@ -875,7 +874,7 @@ export class GiveawayCommand {
     }
 
     if (scope === "hub") {
-      const userId = parts[4];
+      const userId = extraSegs[0];
       if (interaction.user.id !== userId) {
         await safeReply(interaction, buildTextReply("This giveaway claim isn't for you.", true));
         return;
@@ -883,12 +882,12 @@ export class GiveawayCommand {
     }
 
     if (scope === "private") {
-      const ownerId = parts[5];
+      const ownerId = extraSegs[1];
       if (await replyIfNotOwner(interaction, ownerId)) return;
     }
 
     if (scope === "public") {
-      const userId = parts[6];
+      const userId = extraSegs[2];
       if (await replyIfNotOwner(interaction, userId)) return;
     }
 
@@ -926,9 +925,9 @@ export class GiveawayCommand {
     }
 
     if (scope === "public") {
-      const sessionId = parts[4];
-      const messageId = parts[5];
-      const ownerId = parts[6];
+      const sessionId = extraSegs[0];
+      const messageId = extraSegs[1];
+      const ownerId = extraSegs[2];
       await updatePublicListMessage(
         interaction as unknown as StringSelectMenuInteraction,
         sessionId,

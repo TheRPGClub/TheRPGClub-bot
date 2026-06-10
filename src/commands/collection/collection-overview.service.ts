@@ -188,9 +188,10 @@ export function parseCollectionOverviewSelectValue(
 ): { platformId: number } | "overview" | "all-games" | null {
   if (value === COLLECTION_OVERVIEW_SELECT_OVERVIEW) return "overview";
   if (value === COLLECTION_OVERVIEW_SELECT_ALL_GAMES) return "all-games";
-  const [prefix, idRaw] = value.split(":");
-  if (prefix !== COLLECTION_OVERVIEW_SELECT_PLATFORM_PREFIX) return null;
-  const platformId = Number(idRaw);
+  if (!value.startsWith(`${COLLECTION_OVERVIEW_SELECT_PLATFORM_PREFIX}:`)) return null;
+  const segs = parseCustomIdSegments(value, 1);
+  if (!segs) return null;
+  const platformId = Number(segs[0]);
   if (!isPositiveInt(platformId)) return null;
   return { platformId };
 }

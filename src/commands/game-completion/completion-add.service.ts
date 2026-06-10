@@ -36,7 +36,7 @@ import { COMPONENTS_V2_FLAG } from "../../config/flags.js";
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
 import { DISCORD_AUTOCOMPLETE_DESC_MAX } from "../../config/textLimits.js";
 import { buildSelectOptions } from "../../functions/uiComponents.js";
-import { assertCustomIdSegments } from "../../utilities/CustomIdUtils.js";
+import { assertCustomIdSegments, parseCustomIdSegments } from "../../utilities/CustomIdUtils.js";
 import { logError } from "../../utilities/LogUtils.js";
 
 /**
@@ -255,7 +255,8 @@ export async function processCompletionSelection(
     let gameTitle: string | null = null;
 
     if (value.startsWith("igdb:")) {
-      const igdbId = Number(value.split(":")[1]);
+      const segs = parseCustomIdSegments(value, 1);
+      const igdbId = Number(segs?.[0]);
       if (!isPositiveInt(igdbId)) {
         await safeReply(interaction, {
           components: [buildTextContainer("Invalid IGDB selection.")],

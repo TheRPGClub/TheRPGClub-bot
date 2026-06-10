@@ -3043,9 +3043,7 @@ export class NowPlayingCommand {
   @ModalComponent({ id: /^nowplaying-note-modal:\d+(?::\d+)?$/ })
   async handleEditNoteModal(interaction: ModalSubmitInteraction): Promise<void> {
     await safeDeferReply(interaction, { flags: MessageFlags.Ephemeral });
-    const parts = interaction.customId.split(":");
-    const ownerId = parts[1];
-    const legacyGameIdRaw = parts[2] ?? null;
+    const [, ownerId, legacyGameIdRaw = null] = interaction.customId.split(":");
     if (interaction.user.id !== ownerId) {
       await safeReply(interaction, buildTextReply("This note prompt isn't for you.", true));
       return;
