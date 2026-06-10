@@ -5,6 +5,7 @@ import { formatTimestampWithDay } from "../utilities/DiscordLogUtils.js";
 import { JOIN_LEAVE_LOG_CHANNEL_ID } from "../config/channels.js";
 import { recordCurrentAvatarIfNew } from "../utilities/AvatarLogUtils.js";
 import { COLOR_SUCCESS } from "../config/colors.js";
+import { logError } from "../utilities/LogUtils.js";
 
 function formatDiscordDateTime(date: Date): string {
   return `<t:${Math.floor(date.getTime() / 1000)}:F>`;
@@ -51,9 +52,7 @@ export class GuildMemberAdd {
 
     if (!member.user.bot) {
       recordCurrentAvatarIfNew(member).catch((err: any) => {
-        console.error(
-          `[GuildMemberAdd] Failed to record avatar for ${member.user.id}: ${err?.message ?? err}`,
-        );
+        logError("GuildMemberAdd.recordAvatar", err?.message ?? err);
       });
     }
 

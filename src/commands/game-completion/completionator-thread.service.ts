@@ -8,6 +8,7 @@ import { buildComponentsV2Flags, buildTextReply } from "../../functions/Componen
 import { BOT_DEV_CHANNEL_ID } from "../../config/channels.js";
 import { safeReply } from "../../functions/InteractionUtils.js";
 import { DISCORD_SELECT_LABEL_MAX } from "../../config/textLimits.js";
+import { safeIgnore } from "../../utilities/AsyncUtils.js";
 
 export class CompletionatorThreadService {
   private uiService: CompletionatorUiService;
@@ -132,10 +133,10 @@ export class CompletionatorThreadService {
     completionatorThreadContexts.delete(key);
 
     if (context.thread && "delete" in context.thread) {
-      await context.thread.delete().catch(() => {});
+      safeIgnore(context.thread.delete());
     }
     if (context.parentMessage && "delete" in context.parentMessage) {
-      await context.parentMessage.delete().catch(() => {});
+      safeIgnore(context.parentMessage.delete());
     }
   }
 }

@@ -2,6 +2,7 @@ import {
   ActionRowBuilder,
   ButtonStyle,
   StringSelectMenuBuilder,
+  StringSelectMenuOptionBuilder,
   TextInputBuilder,
   TextInputStyle,
 } from "discord.js";
@@ -66,8 +67,30 @@ import {
 } from "../services/UserEmojiService.js";
 import { safeV2TextContent } from "./ComponentsV2Utils.js";
 import { formatTableDate } from "./DateFormatUtils.js";
-import { DISCORD_SELECT_LABEL_MAX } from "../config/textLimits.js";
+import {
+  DISCORD_AUTOCOMPLETE_DESC_MAX,
+  DISCORD_SELECT_LABEL_MAX,
+  DISCORD_SELECT_OPTIONS_MAX,
+} from "../config/textLimits.js";
 import { truncateWithEllipsis } from "../utilities/ValidationUtils.js";
+
+export interface ISelectOptionInput {
+  label: string;
+  value: string;
+  description?: string;
+}
+
+export function buildSelectOptions(
+  inputs: ISelectOptionInput[],
+  maxOptions = DISCORD_SELECT_OPTIONS_MAX,
+): StringSelectMenuOptionBuilder[] {
+  return inputs.slice(0, maxOptions).map((item) =>
+    new StringSelectMenuOptionBuilder()
+      .setLabel(item.label.slice(0, DISCORD_SELECT_LABEL_MAX))
+      .setValue(item.value)
+      .setDescription((item.description ?? "").slice(0, DISCORD_AUTOCOMPLETE_DESC_MAX)),
+  );
+}
 
 export interface IJournalSelectEntry {
   gameId: number;

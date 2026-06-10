@@ -5,6 +5,7 @@ import { buildTextReply } from "../../functions/ComponentsV2Utils.js";
 import { COMPONENTS_V2_FLAG } from "../../config/flags.js";
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
 import { assertCustomIdSegments } from "../../utilities/CustomIdUtils.js";
+import { safeIgnore } from "../../utilities/AsyncUtils.js";
 
 /**
  * Handles completion deletion from the selection menu
@@ -37,12 +38,8 @@ export async function handleCompletionDeleteMenu(
 
   await safeReply(interaction, buildTextReply(`Deleted completion #${completionId}.`, true));
 
-  try {
-    await interaction.message.edit({
-      components: [],
-      flags: COMPONENTS_V2_FLAG,
-    }).catch(() => {});
-  } catch {
-    // ignore
-  }
+  safeIgnore(interaction.message.edit({
+    components: [],
+    flags: COMPONENTS_V2_FLAG,
+  }));
 }

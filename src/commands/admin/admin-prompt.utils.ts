@@ -14,6 +14,8 @@ import {
 } from "../../functions/InteractionUtils.js";
 import { buildTextReply } from "../../functions/ComponentsV2Utils.js";
 import { type PromptChoiceOption } from "./admin.types.js";
+import { safeIgnore } from "../../utilities/AsyncUtils.js";
+import { logError } from "../../utilities/LogUtils.js";
 
 export function buildChoiceRows(
   customIdPrefix: string,
@@ -107,14 +109,14 @@ export async function promptUserForChoice(
     });
     await safeDeferUpdate(selection);
     const value = selection.customId.slice(promptId.length + 1);
-    await promptMessage.edit({ components: [] }).catch(() => {});
+    safeIgnore(promptMessage.edit({ components: [] }));
     if (value === "cancel") {
       await safeReply(interaction, buildTextReply(cancelMessage, false));
       return null;
     }
     return value;
   } catch {
-    await promptMessage.edit({ components: [] }).catch(() => {});
+    safeIgnore(promptMessage.edit({ components: [] }));
     await safeReply(interaction, buildTextReply("Timed out waiting for a selection. Cancelled.", false));
     return null;
   }
@@ -142,7 +144,7 @@ export async function promptUserForInput(
   try {
     await safeReply(interaction, buildTextReply(`${userMention(userId)} ${question}`, false));
   } catch (err) {
-    console.error("Failed to send prompt message:", err);
+    logError("AdminPromptUtils.sendPromptMessage", err);
   }
 
   try {

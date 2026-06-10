@@ -42,6 +42,7 @@ import {
   formatTableDate,
 } from "../functions/DateFormatUtils.js";
 import { DISCORD_SELECT_LABEL_MAX } from "../config/textLimits.js";
+import { chunk } from "../utilities/ArrayUtils.js";
 
 export { formatDiscordTimestamp, formatPlaytimeHours, formatTableDate };
 
@@ -133,14 +134,6 @@ function summarizeFilters(filters: IMemberSearchFilters): string {
   if (filters.lastSeenBefore) parts.push(`seen<=${filters.lastSeenBefore.toISOString()}`);
   parts.push(`includeDeparted=${filters.includeDeparted ? "yes" : "no"}`);
   return parts.join(" | ") || "none";
-}
-
-function chunkOptions<T>(items: T[], size: number): T[][] {
-  const chunks: T[][] = [];
-  for (let i = 0; i < items.length; i += size) {
-    chunks.push(items.slice(i, i + size));
-  }
-  return chunks;
 }
 
 function buildProfileContentContainer(
@@ -679,13 +672,13 @@ export class ProfileCommand {
       };
     });
 
-    const selectChunks = chunkOptions(selectOptions, 25);
-    const components = selectChunks.slice(0, 5).map((chunk, idx) =>
+    const selectChunks = chunk(selectOptions, 25);
+    const components = selectChunks.slice(0, 5).map((chunkPart, idx) =>
       new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
         new StringSelectMenuBuilder()
           .setCustomId(`profile-search-select-${idx}`)
           .setPlaceholder("Select a member to view their profile")
-          .addOptions(chunk)
+          .addOptions(chunkPart)
           .setMinValues(1)
           .setMaxValues(1),
       ),

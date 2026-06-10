@@ -1,10 +1,15 @@
 import { MessageFlags, MessageFlagsBitField } from "discord.js";
+import { logError } from "../utilities/LogUtils.js";
 import { ContainerBuilder, TextDisplayBuilder } from "@discordjs/builders";
 import type {
+  Client,
   CommandInteraction,
+  Guild,
+  GuildMember,
   InteractionDeferReplyOptions,
   ModalSubmitInteraction,
   RepliableInteraction,
+  User,
 } from "discord.js";
 import { BOT_DEV_CHANNEL_ID } from "../config/channels.js";
 import { COMPONENTS_V2_FLAG } from "../config/flags.js";
@@ -407,7 +412,7 @@ export async function safeReply(interaction: AnyRepliable, options: any): Promis
     } catch (err: any) {
       if (!isAckError(err)) throw err;
       const ackCode = err?.code ?? err?.rawError?.code;
-      console.error("[safeReply] editReply ack error", {
+      logError("InteractionUtils.safeReply", {
         code: err?.code,
         status: err?.status,
         message: err?.message,
@@ -565,4 +570,12 @@ export function resolveMemberLabel(
     return (member as import("discord.js").User).username;
   }
   return fallback.username;
+}
+
+export async function safeUserFetch(client: Client, userId: string): Promise<User | null> {
+  return client.users.fetch(userId).catch(() => null);
+}
+
+export async function safeMemberFetch(guild: Guild, userId: string): Promise<GuildMember | null> {
+  return guild.members.fetch(userId).catch(() => null);
 }

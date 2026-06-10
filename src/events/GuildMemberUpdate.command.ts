@@ -3,6 +3,7 @@ import type { ArgsOf, Client } from "discordx";
 import { Discord, On } from "discordx";
 import Member, { type IMemberRecord } from "../classes/Member.js";
 import { formatTimestampWithDay, resolveLogChannel } from "../utilities/DiscordLogUtils.js";
+import { logError } from "../utilities/LogUtils.js";
 import { logAvatarChange, updateAvatarRecordFromUrl } from "../utilities/AvatarLogUtils.js";
 import {
   ensureUserEmojiForMember,
@@ -183,7 +184,7 @@ export class GuildMemberUpdate {
       await Member.upsert(record);
     } catch (err: any) {
       const msg = err?.message ?? String(err);
-      console.error(`[GuildMemberUpdate] Failed to upsert nickname change for ${user.id}: ${msg}`);
+      logError("GuildMemberUpdate.upsertNicknameChange", msg);
     }
   }
 }

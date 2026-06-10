@@ -55,13 +55,13 @@ import { isPositiveInt } from "../utilities/ValidationUtils.js";
 import { COLOR_SUCCESS } from "../config/colors.js";
 import { CLAIM_MENU_CHUNK_SIZE } from "../config/pagination.js";
 import {
-  DISCORD_SELECT_LABEL_MAX,
   GIVEAWAY_MAX_TITLE_LENGTH,
   GIVEAWAY_MAX_PLATFORM_LENGTH,
   GIVEAWAY_MAX_KEY_LENGTH,
 } from "../config/textLimits.js";
 import { assertCustomIdSegments } from "../utilities/CustomIdUtils.js";
-import { buildTextInputRow } from "../functions/uiComponents.js";
+import { buildSelectOptions, buildTextInputRow } from "../functions/uiComponents.js";
+import { safeIgnore } from "../utilities/AsyncUtils.js";
 const GIVEAWAY_DONATE_MODAL_ID = "giveaway-donate-modal";
 const GIVEAWAY_REVOKE_MODAL_ID = "giveaway-revoke-modal";
 const GIVEAWAY_DONATE_TITLE_ID = "giveaway-donate-title";
@@ -95,10 +95,10 @@ function buildKeySelectMenus(
     if (!chunk.length) {
       continue;
     }
-    const options = chunk.map((key) => ({
-      label: key.gameTitle.slice(0, DISCORD_SELECT_LABEL_MAX),
+    const options = buildSelectOptions(chunk.map((key) => ({
+      label: key.gameTitle,
       value: String(key.keyId),
-    }));
+    })));
     const range = getKeyRangeLabel(chunk);
     const select = new StringSelectMenuBuilder()
        
@@ -132,7 +132,7 @@ async function logGiveawayClaim(
       .setDescription(message)
       .setColor(COLOR_SUCCESS)
       .setTimestamp(new Date());
-    await channel.send({ embeds: [embed] }).catch(() => {});
+    safeIgnore(channel.send({ embeds: [embed] }));
   }
 }
 
@@ -334,11 +334,11 @@ async function claimKey(
   const notifyDonor = await Member.getGiveawayDonorNotifySetting(key.donorUserId);
   if (notifyDonor && donorUser && key.donorUserId !== interaction.user.id) {
     const claimantMention = userMention(interaction.user.id);
-    await donorUser.send({
+    safeIgnore(donorUser.send({
       content:
         `Your donated key for **${key.gameTitle}** (${key.platform}) was claimed by ` +
         `${claimantMention}. Thanks for contributing!`,
-    }).catch(() => {});
+    }));
   }
 
   return {
@@ -483,18 +483,18 @@ async function updatePublicListMessage(
   }
 
   if (payload.content) {
-    await message.edit({
+    safeIgnore(message.edit({
       content: payload.content,
       embeds: [],
       components: [],
-    }).catch(() => {});
+    }));
     return;
   }
 
-  await message.edit({
+  safeIgnore(message.edit({
     embeds: payload.embeds,
     components: payload.components,
-  }).catch(() => {});
+  }));
 }
 
 @Discord()
@@ -559,7 +559,7 @@ export class GiveawayCommand {
     keyValue = sanitizeUserInput(keyValue, { preserveNewlines: false });
     const created = await handleDonation(interaction, title, platform, keyValue);
     if (created) {
-      await refreshGiveawayHubMessage(interaction.client).catch(() => {});
+      safeIgnore(refreshGiveawayHubMessage(interaction.client));
     }
   }
 
@@ -577,7 +577,7 @@ export class GiveawayCommand {
     await safeDeferReply(interaction, { flags: MessageFlags.Ephemeral });
     const removed = await handleRevoke(interaction, keyId);
     if (removed) {
-      await refreshGiveawayHubMessage(interaction.client).catch(() => {});
+      safeIgnore(refreshGiveawayHubMessage(interaction.client));
     }
   }
   */
@@ -639,7 +639,7 @@ export class GiveawayCommand {
    
   @ButtonComponent({ id: "giveaway-hub-donate" })
   async handleHubDonate(interaction: ButtonInteraction): Promise<void> {
-    await interaction.showModal(buildDonateModal()).catch(() => {});
+    safeIgnore(interaction.showModal(buildDonateModal()));
   }
    
   @ButtonComponent({ id: GIVEAWAY_DONOR_SETTINGS_ID })
@@ -663,7 +663,7 @@ export class GiveawayCommand {
    
   @ButtonComponent({ id: "giveaway-hub-revoke" })
   async handleHubRevoke(interaction: ButtonInteraction): Promise<void> {
-    await interaction.showModal(buildRevokeModal()).catch(() => {});
+    safeIgnore(interaction.showModal(buildRevokeModal()));
   }
    
   @ButtonComponent({ id: /^giveaway-donor-notify:\d+:(yes|no)$/ })
@@ -938,8 +938,7 @@ export class GiveawayCommand {
       );
     }
 
-    await refreshGiveawayHubMessage(interaction.client)
-      .catch(() => {});
+    safeIgnore(refreshGiveawayHubMessage(interaction.client));
   }
    
   @ButtonComponent({ id: /^giveaway-claim-cancel:\d+$/ })
@@ -968,7 +967,7 @@ export class GiveawayCommand {
 
     const created = await handleDonation(interaction, title, platform, keyValue);
     if (created) {
-      await refreshGiveawayHubMessage(interaction.client).catch(() => {});
+      safeIgnore(refreshGiveawayHubMessage(interaction.client));
     }
   }
    
@@ -984,7 +983,7 @@ export class GiveawayCommand {
 
     const removed = await handleRevoke(interaction, keyId);
     if (removed) {
-      await refreshGiveawayHubMessage(interaction.client).catch(() => {});
+      safeIgnore(refreshGiveawayHubMessage(interaction.client));
     }
   }
 }

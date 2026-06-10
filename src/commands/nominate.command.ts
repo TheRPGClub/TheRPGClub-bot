@@ -46,6 +46,7 @@ import {
 import { showGameProfileFromNomination } from "./gamedb.command.js";
 import { isPositiveInt } from "../utilities/ValidationUtils.js";
 import { DISCORD_SELECT_LABEL_MAX } from "../config/textLimits.js";
+import { logError } from "../utilities/LogUtils.js";
 
 const NOMINATE_REASON_MAX_LENGTH = 1500;
 
@@ -137,7 +138,7 @@ async function announceNominationList(
       allowedMentions: { parse: [] },
     });
   } catch (error) {
-    console.error(`Failed to announce nomination list in channel ${channelId}:`, error);
+    logError("NominateCommand.announceNominationList", error);
   }
 }
 

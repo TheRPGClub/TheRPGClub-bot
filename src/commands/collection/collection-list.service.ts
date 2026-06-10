@@ -18,6 +18,8 @@ import { buildActionButton, buildUserHeaderContainer } from "../../functions/uiC
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
 import { parseCustomIdSegments } from "../../utilities/CustomIdUtils.js";
 import { buildDisabledPrevNextRowWithIds } from "../../functions/PaginationUtils.js";
+import { safeIgnore } from "../../utilities/AsyncUtils.js";
+import { logError } from "../../utilities/LogUtils.js";
 
 const COLLECTION_LIST_PAGE_SIZE = 20;
 const COLLECTION_LIST_NAV_PREFIX = "collection-list-nav-v2";
@@ -410,15 +412,12 @@ function validateComponentsForCollectionNavDebug(
         componentType: String((component as any)?.constructor?.name ?? "unknown"),
       });
     } catch (error) {
-      console.error(
-        "[CollectionListNavDebug] component_invalid",
-        JSON.stringify({
-          ...context,
-          componentIndex: index,
-          componentType: String((component as any)?.constructor?.name ?? "unknown"),
-          messages: flattenErrorMessages(error),
-        }),
-      );
+      logError("CollectionListNavDebug.componentInvalid", {
+        ...context,
+        componentIndex: index,
+        componentType: String((component as any)?.constructor?.name ?? "unknown"),
+        messages: flattenErrorMessages(error),
+      });
     }
   }
 }
@@ -638,7 +637,7 @@ export async function applyFiltersToSourceMessage(params: {
 
 export async function closeFilterPanel(interaction: ButtonInteraction): Promise<void> {
   await safeDeferUpdate(interaction);
-  await (interaction.message as any)?.delete?.().catch(() => {});
+  safeIgnore((interaction.message as any)?.delete?.());
 }
 
 function collectTextDisplayContent(

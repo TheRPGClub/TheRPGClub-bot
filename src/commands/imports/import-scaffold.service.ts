@@ -7,6 +7,7 @@ import {
   ThumbnailBuilder,
 } from "@discordjs/builders";
 import { safeV2TextContent } from "../../functions/ComponentsV2Utils.js";
+import { logError } from "../../utilities/LogUtils.js";
 
 type ImportLogEvent = (message: string, meta: Record<string, string | number>) => void;
 
@@ -125,15 +126,12 @@ export function buildImportMessageContainer(
     container.addSectionComponents(section);
   } catch (error) {
     const messages = flattenErrorMessages(error);
-    console.error(
-      `[${params.logPrefix}] header section validation failed`,
-      JSON.stringify({
-        ...params.logMeta,
-        contentLength: safeContent.length,
-        hasThumbnail: Boolean(params.thumbnailUrl),
-        messages,
-      }),
-    );
+    logError(`${params.logPrefix}.headerSectionValidation`, {
+      ...params.logMeta,
+      contentLength: safeContent.length,
+      hasThumbnail: Boolean(params.thumbnailUrl),
+      messages,
+    });
     container.addTextDisplayComponents(
       new TextDisplayBuilder().setContent(safeV2TextContent(params.content, 1000)),
     );
@@ -173,17 +171,14 @@ export function logImportComponentDiagnostics(
         rowIndex: params.rowIndex,
         componentIndex: index,
       });
-      console.error(
-        `[${params.logPrefix}] component validation failed`,
-        JSON.stringify({
-          importId: params.importId,
-          itemId: params.itemId,
-          rowIndex: params.rowIndex,
-          componentIndex: index,
-          componentType: describeComponentForDebug(component),
-          messages,
-        }),
-      );
+      logError(`${params.logPrefix}.componentValidation`, {
+        importId: params.importId,
+        itemId: params.itemId,
+        rowIndex: params.rowIndex,
+        componentIndex: index,
+        componentType: describeComponentForDebug(component),
+        messages,
+      });
     }
   });
 }

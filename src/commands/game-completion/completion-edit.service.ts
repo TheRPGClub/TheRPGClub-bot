@@ -36,6 +36,7 @@ import {
 } from "../../utilities/ValidationUtils.js";
 import { assertCustomIdSegments } from "../../utilities/CustomIdUtils.js";
 import { buildActionButton } from "../../functions/uiComponents.js";
+import { safeIgnore } from "../../utilities/AsyncUtils.js";
 
 const MAX_NOTE_LENGTH = 500;
 type CompletionEditField = "type" | "date" | "platform" | "playtime" | "note";
@@ -157,14 +158,12 @@ export async function handleCompletionFieldEdit(interaction: ButtonInteraction):
   if (!channel || !("awaitMessages" in channel)) {
     const updated = await Member.getCompletion(completionId);
     if (updated) {
-      await interaction.message
-        .edit(buildCompletionEditPrompt(
-          ownerId,
-          completionId,
-          updated,
-          "I couldn't listen for your response in this channel.",
-        ))
-        .catch(() => {});
+      safeIgnore(interaction.message.edit(buildCompletionEditPrompt(
+        ownerId,
+        completionId,
+        updated,
+        "I couldn't listen for your response in this channel.",
+      )));
     }
     return;
   }
@@ -181,14 +180,12 @@ export async function handleCompletionFieldEdit(interaction: ButtonInteraction):
   if (!message) {
     const updated = await Member.getCompletion(completionId);
     if (updated) {
-      await interaction.message
-        .edit(buildCompletionEditPrompt(
-          ownerId,
-          completionId,
-          updated,
-          "Timed out waiting for your response.",
-        ))
-        .catch(() => {});
+      safeIgnore(interaction.message.edit(buildCompletionEditPrompt(
+        ownerId,
+        completionId,
+        updated,
+        "Timed out waiting for your response.",
+      )));
     }
     return;
   }
@@ -227,27 +224,23 @@ export async function handleCompletionFieldEdit(interaction: ButtonInteraction):
     const updated = await Member.getCompletion(completionId);
     if (updated) {
       const notice = await buildCompletionEditSuccessNotice(updated, field as CompletionEditField);
-      await interaction.message
-        .edit(buildCompletionEditPrompt(ownerId, completionId, updated, notice))
-        .catch(() => {});
+      safeIgnore(interaction.message.edit(
+        buildCompletionEditPrompt(ownerId, completionId, updated, notice),
+      ));
     }
   } catch (err: any) {
     const updated = await Member.getCompletion(completionId);
     if (updated) {
-      await interaction.message
-        .edit(
-          buildCompletionEditPrompt(
-            ownerId,
-            completionId,
-            updated,
-            err?.message ?? "Failed to update completion.",
-          ),
-        )
-        .catch(() => {});
+      safeIgnore(interaction.message.edit(buildCompletionEditPrompt(
+        ownerId,
+        completionId,
+        updated,
+        err?.message ?? "Failed to update completion.",
+      )));
     }
   } finally {
     try {
-      await message.delete().catch(() => {});
+      safeIgnore(message.delete());
     } catch {
       // ignore
     }

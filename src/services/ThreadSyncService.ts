@@ -6,6 +6,7 @@ import type {
 } from "discord.js";
 import { upsertThreadRecord } from "../classes/Thread.js";
 import { NOW_PLAYING_FORUM_ID } from "../config/channels.js";
+import { logError } from "../utilities/LogUtils.js";
 const DEFAULT_SYNC_INTERVAL_MS = 10 * 60 * 1000;
 
 function isTargetForum(thread: AnyThreadChannel | ThreadChannel | null): boolean {
@@ -49,7 +50,7 @@ async function syncForumThreads(client: Client): Promise<void> {
       await captureThread(thread);
     }
   } catch (err) {
-    console.error("[ThreadSync] Sync failed:", err);
+    logError("ThreadSyncService.sync", err);
   }
 }
 
@@ -60,7 +61,7 @@ export function startThreadSyncService(client: Client): void {
       if (!isTargetForum(thread)) return;
       await captureThread(thread);
     } catch (err) {
-      console.error("[ThreadSync] threadCreate handler failed:", err);
+      logError("ThreadSyncService.threadCreate", err);
     }
   });
 
@@ -79,7 +80,7 @@ export function startThreadSyncService(client: Client): void {
         lastSeenAt: message.createdAt ?? new Date(),
       });
     } catch (err) {
-      console.error("[ThreadSync] messageCreate handler failed:", err);
+      logError("ThreadSyncService.messageCreate", err);
     }
   });
 

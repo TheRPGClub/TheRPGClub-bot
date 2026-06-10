@@ -53,6 +53,7 @@ import {
   safeDeferUpdate,
   safeReply,
   safeUpdate,
+  safeUserFetch,
   sanitizeUserInput,
   type AnyRepliable,
 } from "../functions/InteractionUtils.js";
@@ -3314,7 +3315,7 @@ export class NowPlayingCommand {
     const ownerUser =
       interaction.user.id === ownerId
         ? interaction.user
-        : await interaction.client.users.fetch(ownerId).catch(() => null);
+        : await safeUserFetch(interaction.client, ownerId);
     const target = ownerUser ?? interaction.user;
     const title = ownerId === interaction.user.id && isEphemeral
       ? "Your Now Playing List"
@@ -4338,7 +4339,7 @@ export class NowPlayingCommand {
 
     const entries = await Member.getNowPlaying(selectedUserId);
     const target =
-      (await interaction.client.users.fetch(selectedUserId).catch(() => null)) ??
+      (await safeUserFetch(interaction.client, selectedUserId)) ??
       interaction.user;
 
     if (!entries.length) {
@@ -5242,7 +5243,7 @@ export class NowPlayingCommand {
           const ownerId = context.ownerUserId;
           const target = ownerId === interaction.user.id
             ? interaction.user
-            : await interaction.client.users.fetch(ownerId).catch(() => null);
+            : await safeUserFetch(interaction.client, ownerId);
           if (!target) {
             continue;
           }
@@ -5336,7 +5337,7 @@ export class NowPlayingCommand {
         if (context.view === "everyone-selected" && context.selectedUserId) {
           const selectedUserId = context.selectedUserId;
           const target =
-            (await interaction.client.users.fetch(selectedUserId).catch(() => null)) ??
+            (await safeUserFetch(interaction.client, selectedUserId)) ??
             interaction.user;
           const entries = getDisplayNowPlayingEntries(
             await Member.getNowPlaying(selectedUserId),

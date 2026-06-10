@@ -21,6 +21,7 @@ import {
 } from "./completion.types.js";
 import { DISCORD_SELECT_LABEL_MAX } from "../../config/textLimits.js";
 import { assertCustomIdSegments } from "../../utilities/CustomIdUtils.js";
+import { safeIgnore } from "../../utilities/AsyncUtils.js";
 
 export function createCompletionPlatformSession(
   ctx: CompletionPlatformContext,
@@ -85,18 +86,18 @@ export async function handleCompletionPlatformSelect(
   const ctx = completionPlatformSessions.get(sessionId);
 
   if (!ctx) {
-    await safeReply(
+    safeIgnore(safeReply(
       interaction,
       buildTextReply("This completion prompt has expired.", true),
-    ).catch(() => {});
+    ));
     return;
   }
 
   if (interaction.user.id !== ctx.userId) {
-    await safeReply(
+    safeIgnore(safeReply(
       interaction,
       buildTextReply("This completion prompt isn't for you.", true),
-    ).catch(() => {});
+    ));
     return;
   }
 
@@ -114,14 +115,14 @@ export async function handleCompletionPlatformSelect(
     ctx.platforms.some((platform) => platform.id === platformId)
   );
   if (!valid) {
-    await safeReply(
+    safeIgnore(safeReply(
       interaction,
       buildTextReply("Invalid platform selection.", true),
-    ).catch(() => {});
+    ));
     return;
   }
 
-  await safeDeferUpdate(interaction).catch(() => {});
+  safeIgnore(safeDeferUpdate(interaction));
   completionPlatformSessions.delete(sessionId);
 
   if (isOther) {
@@ -143,7 +144,7 @@ export async function handleCompletionPlatformSelect(
     ctx.removeFromNowPlaying,
   );
 
-  await safeReply(interaction, { components: [] }).catch(() => {});
+  safeIgnore(safeReply(interaction, { components: [] }));
 }
 
 export async function resolveDefaultCompletionPlatformId(gameId: number): Promise<number | null> {

@@ -43,6 +43,7 @@ import {
   sanitizeUserInput,
   safeReply,
   safeUpdate,
+  safeUserFetch,
 } from "../functions/InteractionUtils.js";
 import { formatGameTitleWithYear } from "../functions/GameTitleAutocompleteUtils.js";
 import { renderUsernameWithEmoji } from "../services/UserEmojiService.js";
@@ -52,7 +53,11 @@ import {
   buildTextReply,
   safeV2TextContent,
 } from "../functions/ComponentsV2Utils.js";
-import { buildActionButton, buildUserHeaderContainer } from "../functions/uiComponents.js";
+import {
+  buildActionButton,
+  buildSelectOptions,
+  buildUserHeaderContainer,
+} from "../functions/uiComponents.js";
 import {
   GJ_CLOSE_PREFIX,
   GJ_SEARCH_PAGE_PREFIX,
@@ -202,11 +207,11 @@ function buildListSelectRow(
   const start = page * LIST_PAGE_SIZE;
   const pageEntries = entries.slice(start, start + LIST_PAGE_SIZE);
 
-  const options = pageEntries.map((e) => ({
-    label: e.title.slice(0, DISCORD_SELECT_LABEL_MAX),
+  const options = buildSelectOptions(pageEntries.map((e) => ({
+    label: e.title,
     value: String(e.gameId),
     description: `${e.totalEntries} ${entryLabel(e.totalEntries)}`,
-  }));
+  })));
 
   const select = new StringSelectMenuBuilder()
     // eslint-disable-next-line local/custom-id-has-matching-handler
@@ -287,11 +292,11 @@ function buildAllSelectRow(
 ): ActionRowBuilder<StringSelectMenuBuilder> {
   const start = page * ALL_PAGE_SIZE;
   const pageSummaries = summaries.slice(start, start + ALL_PAGE_SIZE);
-  const options = pageSummaries.map((s) => ({
-    label: (s.globalName ?? s.username ?? s.userId).slice(0, DISCORD_SELECT_LABEL_MAX),
+  const options = buildSelectOptions(pageSummaries.map((s) => ({
+    label: s.globalName ?? s.username ?? s.userId,
     value: s.userId,
     description: `${s.gameCount} ${gameLabel(s.gameCount)}`,
-  }));
+  })));
   const select = new StringSelectMenuBuilder()
     // eslint-disable-next-line local/custom-id-has-matching-handler
     .setCustomId(`${GJ_ALL_SELECT_PREFIX}:${callerId}:${page}`)
@@ -600,7 +605,7 @@ export class GameJournalCommand {
 
     await safeDeferUpdate(interaction);
 
-    const target = await interaction.client.users.fetch(targetUserId).catch(() => null);
+    const target = await safeUserFetch(interaction.client, targetUserId);
     if (!target) return;
 
     const entries = await Member.getGameJournalList(targetUserId);
@@ -632,7 +637,7 @@ export class GameJournalCommand {
 
     await safeDeferUpdate(interaction);
 
-    const target = await interaction.client.users.fetch(targetUserId).catch(() => null);
+    const target = await safeUserFetch(interaction.client, targetUserId);
     if (!target) return;
 
     const entries = await Member.getGameJournalList(targetUserId);
@@ -725,7 +730,7 @@ export class GameJournalCommand {
         : rawGameTitle)
       : null;
     const fetchedUser = targetUserId !== "0"
-      ? await interaction.client.users.fetch(targetUserId).catch(() => null)
+      ? await safeUserFetch(interaction.client, targetUserId)
       : null;
     const targetUser = fetchedUser
       ? { id: fetchedUser.id, displayName: fetchedUser.displayName ?? fetchedUser.username }
@@ -878,11 +883,11 @@ export class GameJournalCommand {
       });
       return;
     }
-    const options = entries.map((e) => ({
-      label: (e.title ?? `Entry #${e.entryNumber}`).slice(0, DISCORD_SELECT_LABEL_MAX),
+    const options = buildSelectOptions(entries.map((e) => ({
+      label: e.title ?? `Entry #${e.entryNumber}`,
       value: String(e.entryId),
       description: formatTableDate(e.createdAt),
-    }));
+    })));
     const select = new StringSelectMenuBuilder()
       .setCustomId(`${GJ_HMENU_DELETE_SELECT_PREFIX}:${ownerId}:${gameId}`)
       .setPlaceholder("Choose an entry to delete")

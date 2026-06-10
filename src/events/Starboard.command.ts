@@ -6,6 +6,7 @@ import { Discord, On } from "discordx";
 import Starboard from "../classes/Starboard.js";
 import { formatTimestampWithDay } from "../utilities/DiscordLogUtils.js";
 import { QUOTABLES_CHANNEL_ID } from "../config/channels.js";
+import { safeIgnore } from "../utilities/AsyncUtils.js";
 
 const STAR_EMOJI = "⭐";
 const STAR_EMOJI_NAME = "star";
@@ -52,7 +53,7 @@ export class StarboardHandler {
     if (user.bot) return;
 
     if (reaction.partial) {
-      await reaction.fetch().catch(() => {});
+      safeIgnore(reaction.fetch());
     }
     const message = reaction.message?.partial
       ? await reaction.message.fetch().catch(() => null)

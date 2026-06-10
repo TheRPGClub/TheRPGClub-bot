@@ -26,6 +26,7 @@ import {
   hasBackblazeB2Config,
 } from "../services/BackblazeB2Service.js";
 import { truncateWithEllipsis } from "../utilities/ValidationUtils.js";
+import { logError } from "../utilities/LogUtils.js";
 
 const MAX_SECTIONS_PER_CONTAINER = 10;
 const MAX_REASON_LENGTH = 1500;
@@ -307,7 +308,7 @@ async function appendVoteImageAttachment(
       );
       return stored.url;
     } catch (error) {
-      console.error("Backblaze upload failed for nomination vote image:", error);
+      logError("NominationListComponents.backblazeUpload", error);
     }
   }
 

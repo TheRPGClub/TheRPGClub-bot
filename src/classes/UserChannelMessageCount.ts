@@ -1,5 +1,6 @@
 import { dbQuery, dbTransaction, dbMutateConn } from "../db/SqlManager.js";
 import { UserChannelMessageCountSql } from "../db/sql/index.js";
+import { logError } from "../utilities/LogUtils.js";
 
 type ChannelCountBind = {
   userId: string;
@@ -28,10 +29,7 @@ export default class UserChannelMessageCount {
       });
     } catch (err: any) {
       const msg = err?.message ?? String(err);
-      console.error(
-        `[UserChannelMessageCount] Failed to upsert counts for channel` +
-        ` ${channelId}: ${msg}`,
-      );
+      logError("UserChannelMessageCount.upsertCounts", msg);
     }
   }
 
@@ -45,7 +43,7 @@ export default class UserChannelMessageCount {
       return new Set(rows.filter(Boolean));
     } catch (err: any) {
       const msg = err?.message ?? String(err);
-      console.error(`[UserChannelMessageCount] Failed to load scanned channel ids: ${msg}`);
+      logError("UserChannelMessageCount.loadScannedChannelIds", msg);
       return new Set<string>();
     }
   }
@@ -66,9 +64,7 @@ export default class UserChannelMessageCount {
       return map;
     } catch (err: any) {
       const msg = err?.message ?? String(err);
-      console.error(
-        `[UserChannelMessageCount] Failed to load channel scan metadata: ${msg}`,
-      );
+      logError("UserChannelMessageCount.loadChannelScanMetadata", msg);
       return new Map<string, Date>();
     }
   }

@@ -35,6 +35,7 @@ import { startUserEmojiService } from "./services/UserEmojiService.js";
 import { tryHandleManagedRawModalInteraction } from "./services/raw-modal/RawModalInteractionRouter.js";
 import { restoreJournalMessageContextsFromDb } from "./commands/now-playing.command.js";
 import { truncateWithEllipsis } from "./utilities/ValidationUtils.js";
+import { logError } from "./utilities/LogUtils.js";
 installConsoleLogging();
 
 const PRESENCE_CHECK_INTERVAL_MS: number = 30 * 60 * 1000;
@@ -50,7 +51,7 @@ async function refreshPresence(): Promise<void> {
   try {
     await updateBotPresence(bot);
   } catch (err) {
-    console.error("Failed to refresh presence:", err);
+    logError("RPGClub_GameDB.refreshPresence", err);
   }
 }
 
@@ -260,7 +261,7 @@ bot.on("error", (err: unknown) => {
     // Ignore ack/unknown-interaction noise
     return;
   }
-  console.error("Discord client error:", err);
+  logError("RPGClub_GameDB.discordClientError", err);
 });
 
 async function run(): Promise<void> {

@@ -9,6 +9,8 @@ import {
 import { countAvailableGameKeys, listAvailableGameKeys } from "../classes/GameKey.js";
 import { GIVEAWAY_HUB_CHANNEL_ID } from "../config/channels.js";
 import { buildPageFooterText } from "../functions/PaginationUtils.js";
+import { safeIgnore } from "../utilities/AsyncUtils.js";
+import { logError } from "../utilities/LogUtils.js";
 const GIVEAWAY_HUB_SCAN_LIMIT = 50;
 
 export const KEYS_PAGE_SIZE = 20;
@@ -216,7 +218,7 @@ async function deleteAllGiveawayHubMessages(
   let fetched = await channel.messages.fetch({ limit: GIVEAWAY_HUB_SCAN_LIMIT }).catch(() => null);
   while (fetched && fetched.size) {
     for (const message of fetched.values()) {
-      await message.delete().catch(() => {});
+      safeIgnore(message.delete());
     }
     fetched = await channel.messages.fetch({ limit: GIVEAWAY_HUB_SCAN_LIMIT }).catch(() => null);
   }
@@ -256,7 +258,7 @@ async function updateGiveawayHubMessages(
   const messages = await channel.messages
     .fetch({ limit: GIVEAWAY_HUB_SCAN_LIMIT })
     .catch((err) => {
-      console.error("Giveaway hub fetch failed:", err);
+      logError("GiveawayHubService.fetch", err);
       return null;
     });
   const hubMessages = messages
@@ -279,7 +281,7 @@ async function updateGiveawayHubMessages(
     const existing = hubMessages[i];
     if (existing) {
       await existing.edit({ content, embeds: batch, components }).catch((err) => {
-        console.error("Giveaway hub edit failed:", err);
+        logError("GiveawayHubService.edit", err);
       });
     } else {
       await channel.send({
@@ -288,7 +290,7 @@ async function updateGiveawayHubMessages(
         components,
         flags: options?.suppressNotifications ? MessageFlags.SuppressNotifications : undefined,
       }).catch((err) => {
-        console.error("Giveaway hub send failed:", err);
+        logError("GiveawayHubService.send", err);
       });
     }
   }
@@ -297,7 +299,7 @@ async function updateGiveawayHubMessages(
     const extras = hubMessages.slice(totalMessages);
     for (const extra of extras) {
       await extra.delete().catch((err) => {
-        console.error("Giveaway hub delete failed:", err);
+        logError("GiveawayHubService.delete", err);
       });
     }
   }
@@ -315,7 +317,7 @@ export async function refreshGiveawayHubMessage(
   const channel = await client.channels
     .fetch(GIVEAWAY_HUB_CHANNEL_ID)
     .catch((err) => {
-      console.error("Giveaway hub channel fetch failed:", err);
+      logError("GiveawayHubService.channelFetch", err);
       return null;
     });
   const textChannel = channel?.isTextBased() ? channel : null;

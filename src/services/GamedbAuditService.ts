@@ -5,6 +5,8 @@ import Game from "../classes/Game.js";
 import { igdbService } from "./IGDB/IgdbService.js";
 import { COLOR_PRIMARY, COLOR_SUCCESS } from "../config/colors.js";
 import { sleep, AUDIT_STEP_DELAY_MS } from "../utilities/DelayUtils.js";
+import { safeIgnore } from "../utilities/AsyncUtils.js";
+import { logError } from "../utilities/LogUtils.js";
 
 export type AutoAcceptResult = {
   updated: number;
@@ -538,7 +540,7 @@ export async function runAutoAcceptImagesAudit(
     const trimmed = trimLogLines(logLines);
     const content = trimmed.length ? trimmed.join("\n") : "Processing...";
     currentEmbed.setDescription(content);
-    await message.edit({ embeds: [currentEmbed] }).catch(() => {});
+    safeIgnore(message.edit({ embeds: [currentEmbed] }));
   };
 
   const { updated, skipped, failed, logs } = await performAutoAcceptImages(
@@ -548,7 +550,7 @@ export async function runAutoAcceptImagesAudit(
     currentEmbed
       .setDescription("No games found with missing images and valid IGDB IDs.")
       .setColor(COLOR_SUCCESS);
-    await message.edit({ embeds: [currentEmbed] }).catch(() => {});
+    safeIgnore(message.edit({ embeds: [currentEmbed] }));
     return;
   }
 
@@ -557,7 +559,7 @@ export async function runAutoAcceptImagesAudit(
     `⏭️ Skipped: ${skipped}\n❌ Failed: ${failed}`;
   await updateEmbed(summary);
   currentEmbed.setColor(COLOR_SUCCESS);
-  await message.edit({ embeds: [currentEmbed] }).catch(() => {});
+  safeIgnore(message.edit({ embeds: [currentEmbed] }));
 }
 
 export function startGamedbAutoImageAuditService(
@@ -574,7 +576,7 @@ export function startGamedbAutoImageAuditService(
     try {
       await runAutoAcceptImagesAudit(client, channelId, titleWords);
     } catch (err) {
-      console.error("GameDB auto accept image audit failed:", err);
+      logError("GamedbAuditService.autoAcceptImageAudit", err);
     } finally {
       running = false;
     }

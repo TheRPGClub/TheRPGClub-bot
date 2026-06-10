@@ -36,7 +36,7 @@ import {
   buildComponentsV2EditFlags,
 } from "../../functions/ComponentsV2Utils.js";
 import { flattenErrorMessages } from "../imports/import-scaffold.service.js";
-import { formatStructuredLog } from "../../utilities/LogUtils.js";
+import { formatStructuredLog, logError } from "../../utilities/LogUtils.js";
 import { safeIgnore } from "../../utilities/AsyncUtils.js";
 import { buildTextInputRow } from "../../functions/uiComponents.js";
 import {
@@ -454,13 +454,10 @@ export class CollectionViewCommand {
       });
       logNavDebug("nav_update_success", debugContext);
     } catch (error) {
-      console.error(
-        "[CollectionListNavDebug] nav_update_failed",
-        JSON.stringify({
-          ...debugContext,
-          messages: flattenErrorMessages(error),
-        }),
-      );
+      logError("CollectionListNavDebug.navUpdateFailed", {
+        ...debugContext,
+        messages: flattenErrorMessages(error),
+      });
       throw error;
     }
   }

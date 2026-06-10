@@ -33,6 +33,7 @@ import { parseCompletionDateInput } from "../profile.command.js";
 import { searchGameDbWithFallback, importGameFromIgdb } from "./completionator-parser.service.js";
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
 import { assertCustomIdSegments } from "../../utilities/CustomIdUtils.js";
+import { safeIgnore } from "../../utilities/AsyncUtils.js";
 
 export class CompletionatorHandlersService {
   private workflowService: CompletionatorWorkflowService;
@@ -137,13 +138,13 @@ export class CompletionatorHandlersService {
 
     const session = await getImportById(parsed.importId);
     if (!session) {
-      await safeReply(interaction, buildTextReply("Import session not found.", true)).catch(() => {});
+      safeIgnore(safeReply(interaction, buildTextReply("Import session not found.", true)));
       return;
     }
 
     const item = await getImportItemById(parsed.itemId);
     if (!item) {
-      await safeReply(interaction, buildTextReply("Import item not found.", true)).catch(() => {});
+      safeIgnore(safeReply(interaction, buildTextReply("Import item not found.", true)));
       return;
     }
 
@@ -654,13 +655,11 @@ export class CompletionatorHandlersService {
       ownerId,
     );
     if (context?.message) {
-      await context.message
-        .edit({
-          components: payload.components,
-          files: payload.files,
-          flags: buildComponentsV2Flags(false),
-        })
-        .catch(() => {});
+      safeIgnore(context.message.edit({
+        components: payload.components,
+        files: payload.files,
+        flags: buildComponentsV2Flags(false),
+      }));
     }
 
     await safeReply(interaction, buildTextReply("Completion date saved.", true));
@@ -711,7 +710,7 @@ export class CompletionatorHandlersService {
     }
     const cleanupDeferredReply = async (): Promise<void> => {
       if (shouldDeferForContext) {
-        await interaction.deleteReply().catch(() => {});
+        safeIgnore(interaction.deleteReply());
       }
     };
 
@@ -847,10 +846,10 @@ export class CompletionatorHandlersService {
     if (context) {
       completionatorThreadContexts.delete(key);
       if (context.thread && "delete" in context.thread) {
-        await context.thread.delete().catch(() => {});
+        safeIgnore(context.thread.delete());
       }
       if (context.parentMessage && "delete" in context.parentMessage) {
-        await context.parentMessage.delete().catch(() => {});
+        safeIgnore(context.parentMessage.delete());
       }
     }
 
@@ -858,7 +857,7 @@ export class CompletionatorHandlersService {
       `Import #${session.importId} paused. ` +
       "Resume with `/game-completion import-completionator action:resume`.";
 
-    await safeReply(interaction, buildTextReply(content, true)).catch(() => {});
+    safeIgnore(safeReply(interaction, buildTextReply(content, true)));
   }
 }
 

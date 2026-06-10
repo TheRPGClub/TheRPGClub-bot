@@ -95,6 +95,8 @@ import { createIgdbSession } from "../../services/IGDB/IgdbSelectService.js";
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
 import { DISCORD_EMBED_FIELD_VALUE_MAX } from "../../config/textLimits.js";
 import { buildTextInputRow } from "../../functions/uiComponents.js";
+import { safeIgnore } from "../../utilities/AsyncUtils.js";
+import { logError } from "../../utilities/LogUtils.js";
 
 @Discord()
 @SlashGroup("collection")
@@ -458,18 +460,15 @@ export class CollectionSteamImportCommand {
         itemId: nextItem.itemId,
         rowIndex: nextItem.rowIndex,
       });
-      console.error(
-        "[SteamImport] message render failed",
-        JSON.stringify({
-          importId: session.importId,
-          itemId: nextItem.itemId,
-          rowIndex: nextItem.rowIndex,
-          steamAppId: nextItem.steamAppId,
-          steamAppName: nextItem.steamAppName,
-          candidateCount: candidates.length,
-          messages,
-        }),
-      );
+      logError("SteamImport.messageRender", {
+        importId: session.importId,
+        itemId: nextItem.itemId,
+        rowIndex: nextItem.rowIndex,
+        steamAppId: nextItem.steamAppId,
+        steamAppName: nextItem.steamAppName,
+        candidateCount: candidates.length,
+        messages,
+      });
       throw error;
     }
   }
@@ -500,7 +499,7 @@ export class CollectionSteamImportCommand {
   ): Promise<void> {
     const guild = interaction.guild;
     if (!guild) {
-      await safeReply(interaction, buildTextReply("This command can only be used inside a server.", true)).catch(() => {});
+      safeIgnore(safeReply(interaction, buildTextReply("This command can only be used inside a server.", true)));
       return;
     }
 
@@ -676,12 +675,12 @@ export class CollectionSteamImportCommand {
   async onSteamImportAction(interaction: ButtonInteraction): Promise<void> {
     const parsed = parseCollectionSteamImportActionId(interaction.customId);
     if (!parsed) {
-      await safeReply(interaction, buildTextReply("This Steam import control is invalid.", true)).catch(() => {});
+      safeIgnore(safeReply(interaction, buildTextReply("This Steam import control is invalid.", true)));
       return;
     }
 
     if (interaction.user.id !== parsed.ownerId) {
-      await safeReply(interaction, buildTextReply("This Steam import control is not for you.", true)).catch(() => {});
+      safeIgnore(safeReply(interaction, buildTextReply("This Steam import control is not for you.", true)));
       return;
     }
 
@@ -707,7 +706,7 @@ export class CollectionSteamImportCommand {
 
     const item = await getNextPendingSteamCollectionImportItem(session.importId);
     if (!item || item.itemId !== parsed.itemId) {
-      await safeDeferUpdate(interaction).catch(() => {});
+      safeIgnore(safeDeferUpdate(interaction));
       await this.renderNextSteamImportItem(interaction, session.importId, parsed.ownerId);
       return;
     }
@@ -726,7 +725,7 @@ export class CollectionSteamImportCommand {
     }
 
     if (parsed.action === "skip") {
-      await safeDeferUpdate(interaction).catch(() => {});
+      safeIgnore(safeDeferUpdate(interaction));
       await updateSteamCollectionImportItem(item.itemId, {
         status: "SKIPPED",
         resultReason: "MANUAL_SKIP",
@@ -766,7 +765,7 @@ export class CollectionSteamImportCommand {
         value: item.steamAppName.slice(0, 120),
         placeholder: "Call of Duty Classic",
       }));
-      await interaction.showModal(modal).catch(() => {});
+      safeIgnore(interaction.showModal(modal));
       return;
     }
 
@@ -787,7 +786,7 @@ export class CollectionSteamImportCommand {
         maxLength: 20,
         placeholder: "12345",
       }));
-      await interaction.showModal(modal).catch(() => {});
+      safeIgnore(interaction.showModal(modal));
       return;
     }
   }
@@ -798,12 +797,12 @@ export class CollectionSteamImportCommand {
   async onSteamImportChoose(interaction: ButtonInteraction): Promise<void> {
     const parsed = parseCollectionSteamChooseId(interaction.customId);
     if (!parsed) {
-      await safeReply(interaction, buildTextReply("This Steam import choice is invalid.", true)).catch(() => {});
+      safeIgnore(safeReply(interaction, buildTextReply("This Steam import choice is invalid.", true)));
       return;
     }
 
     if (interaction.user.id !== parsed.ownerId) {
-      await safeReply(interaction, buildTextReply("This Steam import choice is not for you.", true)).catch(() => {});
+      safeIgnore(safeReply(interaction, buildTextReply("This Steam import choice is not for you.", true)));
       return;
     }
 
@@ -821,12 +820,12 @@ export class CollectionSteamImportCommand {
 
     const item = await getNextPendingSteamCollectionImportItem(session.importId);
     if (!item || item.itemId !== parsed.itemId) {
-      await safeDeferUpdate(interaction).catch(() => {});
+      safeIgnore(safeDeferUpdate(interaction));
       await this.renderNextSteamImportItem(interaction, session.importId, parsed.ownerId);
       return;
     }
 
-    await safeDeferUpdate(interaction).catch(() => {});
+    safeIgnore(safeDeferUpdate(interaction));
     await this.applySteamImportSelection({
       ownerId: parsed.ownerId,
       gameId: parsed.gameId,
@@ -851,18 +850,18 @@ export class CollectionSteamImportCommand {
   async onSteamImportRemapModal(interaction: ModalSubmitInteraction): Promise<void> {
     const parsed = parseCollectionSteamRemapModalId(interaction.customId);
     if (!parsed) {
-      await safeReply(interaction, buildTextReply("This remap form is invalid.", true)).catch(() => {});
+      safeIgnore(safeReply(interaction, buildTextReply("This remap form is invalid.", true)));
       return;
     }
 
     if (interaction.user.id !== parsed.ownerId) {
-      await safeReply(interaction, buildTextReply("This remap form is not for you.", true)).catch(() => {});
+      safeIgnore(safeReply(interaction, buildTextReply("This remap form is not for you.", true)));
       return;
     }
 
     const session = await getSteamCollectionImportById(parsed.importId);
     if (!session || session.userId !== parsed.ownerId || session.status !== "ACTIVE") {
-      await safeReply(interaction, buildTextReply("This Steam import session is no longer active.", true)).catch(() => {});
+      safeIgnore(safeReply(interaction, buildTextReply("This Steam import session is no longer active.", true)));
       return;
     }
 
@@ -936,18 +935,18 @@ export class CollectionSteamImportCommand {
   async onSteamImportGameIdModal(interaction: ModalSubmitInteraction): Promise<void> {
     const parsed = parseCollectionSteamGameIdModalId(interaction.customId);
     if (!parsed) {
-      await safeReply(interaction, buildTextReply("This GameDB ID form is invalid.", true)).catch(() => {});
+      safeIgnore(safeReply(interaction, buildTextReply("This GameDB ID form is invalid.", true)));
       return;
     }
 
     if (interaction.user.id !== parsed.ownerId) {
-      await safeReply(interaction, buildTextReply("This GameDB ID form is not for you.", true)).catch(() => {});
+      safeIgnore(safeReply(interaction, buildTextReply("This GameDB ID form is not for you.", true)));
       return;
     }
 
     const session = await getSteamCollectionImportById(parsed.importId);
     if (!session || session.userId !== parsed.ownerId || session.status !== "ACTIVE") {
-      await safeReply(interaction, buildTextReply("This Steam import session is no longer active.", true)).catch(() => {});
+      safeIgnore(safeReply(interaction, buildTextReply("This Steam import session is no longer active.", true)));
       return;
     }
 

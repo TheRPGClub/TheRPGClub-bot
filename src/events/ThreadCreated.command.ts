@@ -6,6 +6,7 @@ import { NOW_PLAYING_FORUM_ID, WHATCHA_PLAYING_CHANNEL_ID } from "../config/chan
 import { COLOR_PRIMARY } from "../config/colors.js";
 import { sleep } from "../utilities/DelayUtils.js";
 import { DISCORD_EMBED_FIELD_VALUE_MAX } from "../config/textLimits.js";
+import { logError } from "../utilities/LogUtils.js";
 
 @Discord()
 export class ThreadCreated {
@@ -161,7 +162,7 @@ export class ThreadCreated {
           }
         }
       } catch (err) {
-        console.error('Failed to resolve forum tag names:', err);
+        logError("ThreadCreated.resolveForumTagNames", err);
       }
 
       const channel = await client.channels.fetch(WHATCHA_PLAYING_CHANNEL_ID);
@@ -169,7 +170,7 @@ export class ThreadCreated {
         try {
           await (channel as TextChannel).send({ embeds: [nowPlayingEmbed] });
         } catch (err) {
-          console.error('Failed to send Now Playing embed:', err);
+          logError("ThreadCreated.sendNowPlayingEmbed", err);
         }
       }
     }

@@ -32,6 +32,8 @@ import {
   getSearchRowsFromComponents,
   isHltbImportEligible,
 } from "./gamedb-utils.js";
+import { safeIgnore } from "../../utilities/AsyncUtils.js";
+import { logError } from "../../utilities/LogUtils.js";
 
 export type GameProfileRenderContext = {
   guildId?: string;
@@ -561,7 +563,7 @@ export async function buildGameProfile(
       isReleased,
     };
   } catch (error: any) {
-    console.error("Failed to build game profile:", error);
+    logError("GamedbProfileService.buildGameProfile", error);
     return null;
   }
 }
@@ -711,9 +713,9 @@ export async function updateGameProfileMessageById(
     profile.isReleased,
   );
   const searchRows = getSearchRowsFromComponents(message.components ?? []);
-  await message.edit({
+  safeIgnore(message.edit({
     embeds: [],
     files: profile.files,
     components: [...profile.components, ...actionRows, ...searchRows],
-  }).catch(() => {});
+  }));
 }
