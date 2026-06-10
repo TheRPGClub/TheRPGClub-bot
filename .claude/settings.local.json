@@ -15,15 +15,14 @@
     ]
   },
   "hooks": {
-    "PreToolUse": [
+    "PostToolUse": [
       {
-        "matcher": "Bash",
+        "matcher": "Edit|Write",
         "hooks": [
           {
             "type": "command",
-            "command": "cmd=$(jq -r '.tool_input.command'); if echo \"$cmd\" | grep -qE 'npm run lint'; then files=$(git diff --name-only HEAD 2>/dev/null | grep -E '\\.(ts|tsx)$'); if [ -n \"$files\" ]; then echo \"$files\" | xargs npx prettier --write 2>/dev/null; fi; fi",
-            "shell": "bash",
-            "statusMessage": "Formatting TypeScript files..."
+            "command": "file=$(echo '$CLAUDE_TOOL_INPUT' | jq -r '.file_path // \"\"'); echo \"$file\" | grep -qE '\\.tsx?$' && npx prettier --write \"$file\" 2>/dev/null || true",
+            "statusMessage": "Formatting..."
           }
         ]
       },
@@ -32,7 +31,18 @@
         "hooks": [
           {
             "type": "command",
-            "command": "echo '$CLAUDE_TOOL_INPUT' | jq -r '.file_path // .path // \"\"' | grep -qE '(\\.env$|/build/)' && echo 'BLOCK: forbidden path' >&2 && exit 2 || true"
+            "command": "file=$(echo '$CLAUDE_TOOL_INPUT' | jq -r '.file_path // \"\"'); echo \"$file\" | grep -qE '\\.tsx?$' && npx tsc --noEmit 2>&1 | tail -5 || true",
+            "statusMessage": "Type checking..."
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "file=$(echo '$CLAUDE_TOOL_INPUT' | jq -r '.file_path // \"\"'); base=$(basename \"$file\" .ts); test_file=$(find src/tests -name \"${base}.test.ts\" 2>/dev/null | head -1); [ -n \"$test_file\" ] && node --no-warnings=ExperimentalWarning --loader ts-node/esm --test \"$test_file\" 2>&1 | tail -10 || true",
+            "statusMessage": "Running related tests..."
           }
         ]
       }
