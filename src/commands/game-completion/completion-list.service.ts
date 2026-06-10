@@ -242,7 +242,10 @@ export async function renderSelectionPage(
   const allComponents = [header, ...containers, selectRow, ...paginationRows];
 
   if (interaction.isMessageComponent()) {
-    await safeUpdate(interaction, { components: allComponents, flags: buildComponentsV2EditFlags() });
+    await safeUpdate(interaction, {
+      components: allComponents,
+      flags: buildComponentsV2EditFlags(),
+    });
   } else {
     await safeReply(interaction, {
       components: allComponents,

@@ -4,8 +4,7 @@ import type { Client } from "discordx";
 
 import { DISCORD_CONSOLE_LOG_CHANNEL_ID } from "../config/channels.js";
 import { BOT_DEV_PING_USER_ID } from "../config/users.js";
-import { COMPONENTS_V2_FLAG } from "../config/flags.js";
-import { safeV2TextContent } from "../functions/ComponentsV2Utils.js";
+import { buildComponentsV2EditFlags, safeV2TextContent } from "../functions/ComponentsV2Utils.js";
 import {
   COLOR_INFO,
   COLOR_WARNING,
@@ -149,7 +148,7 @@ async function sendContainerToChannel(
 ): Promise<void> {
   await channel.send({
     components: [container],
-    flags: COMPONENTS_V2_FLAG,
+    flags: buildComponentsV2EditFlags(),
     ...(content ? { content } : {}),
   });
 }

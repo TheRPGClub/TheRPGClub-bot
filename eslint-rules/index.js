@@ -2435,7 +2435,8 @@ export default {
             if (
               current.type === "CallExpression" &&
               current.callee.type === "Identifier" &&
-              current.callee.name === "buildComponentsV2Flags"
+              (current.callee.name === "buildComponentsV2Flags" ||
+                current.callee.name === "buildComponentsV2EditFlags")
             ) {
               return true;
             }

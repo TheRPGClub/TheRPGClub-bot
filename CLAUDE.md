@@ -25,7 +25,6 @@ All interactions should use stable identifiers and include the ability to resume
 You are forbidden from using deprecated commands/functions/etc.
 You may commit and push code to feature/fix branches without asking permission or prompting the user. You are forbidden from committing directly to main or reverting changes without being asked to do so directly.
 You are forbidden from reading my .env file.
-After completing a task, restate the prompt before your completion message.
 I develop on a laptop, but run the bot on my desktop.  Do not assume anything based on this machine's environment
 Do all coding tasks in branches. When you're finished, open a PR without prompting and link it to me for approval/merging.
 You are forbidden from using emdashes (—)

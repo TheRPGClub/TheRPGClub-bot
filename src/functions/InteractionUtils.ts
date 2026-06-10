@@ -168,7 +168,6 @@ function normalizeOptions(options: any): any {
   return normalizeComponentsV2Payload(restOptions);
 }
 
-
 function normalizeComponentsV2Payload(options: any): any {
   if (!options || typeof options !== "object") {
     return options;

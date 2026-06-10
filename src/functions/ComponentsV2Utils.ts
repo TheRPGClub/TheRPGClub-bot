@@ -40,7 +40,7 @@ export function buildTextSend(
 ): { components: ContainerBuilder[]; flags: number } {
   return {
     components: [buildTextContainer(content)],
-    flags: COMPONENTS_V2_FLAG,
+    flags: buildComponentsV2EditFlags(),
   };
 }
 
@@ -49,7 +49,7 @@ export function buildContainerSend(
 ): { components: ContainerBuilder[]; flags: number } {
   return {
     components: [container],
-    flags: COMPONENTS_V2_FLAG,
+    flags: buildComponentsV2EditFlags(),
   };
 }
 
