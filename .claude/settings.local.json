@@ -15,6 +15,28 @@
     ]
   },
   "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cmd=$(jq -r '.tool_input.command'); if echo \"$cmd\" | grep -qE 'npm run lint'; then files=$(git diff --name-only HEAD 2>/dev/null | grep -E '\\.(ts|tsx)$'); if [ -n \"$files\" ]; then echo \"$files\" | xargs npx prettier --write 2>/dev/null; fi; fi",
+            "shell": "bash",
+            "statusMessage": "Formatting TypeScript files..."
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '$CLAUDE_TOOL_INPUT' | jq -r '.file_path // .path // \"\"' | grep -qE '(\\.env$|/build/)' && echo 'BLOCK: forbidden path' >&2 && exit 2 || true"
+          }
+        ]
+      }
+    ],
     "UserPromptSubmit": [
       {
         "hooks": [
