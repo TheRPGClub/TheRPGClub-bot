@@ -32,7 +32,7 @@ import { COMPLETIONATOR_SKIP_SENTINEL } from "./completion.types.js";
 import { parseCompletionDateInput } from "../profile.command.js";
 import { searchGameDbWithFallback, importGameFromIgdb } from "./completionator-parser.service.js";
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
-import { parseCustomIdSegments } from "../../utilities/CustomIdUtils.js";
+import { assertCustomIdSegments } from "../../utilities/CustomIdUtils.js";
 
 export class CompletionatorHandlersService {
   private workflowService: CompletionatorWorkflowService;
@@ -44,8 +44,8 @@ export class CompletionatorHandlersService {
   }
 
   async handleCompletionatorSelect(interaction: StringSelectMenuInteraction): Promise<void> {
-    const segs = parseCustomIdSegments(interaction.customId, 3);
-    if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+    const segs = assertCustomIdSegments(interaction, 3);
+    if (!segs) return;
     const [ownerId, importIdRaw, itemIdRaw] = segs;
     if (interaction.user.id !== ownerId) {
       await safeReply(interaction, buildTextReply("This import prompt isn't for you.", true));
@@ -168,8 +168,8 @@ export class CompletionatorHandlersService {
   }
 
   async handleCompletionatorUpdateFields(interaction: StringSelectMenuInteraction): Promise<void> {
-    const segs = parseCustomIdSegments(interaction.customId, 3);
-    if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+    const segs = assertCustomIdSegments(interaction, 3);
+    if (!segs) return;
     const [ownerId, importIdRaw, itemIdRaw] = segs;
     if (interaction.user.id !== ownerId) {
       await safeReply(interaction, buildTextReply("This import prompt isn't for you.", true));
@@ -246,8 +246,8 @@ export class CompletionatorHandlersService {
   }
 
   async handleCompletionatorAction(interaction: ButtonInteraction): Promise<void> {
-    const segs = parseCustomIdSegments(interaction.customId, 4);
-    if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+    const segs = assertCustomIdSegments(interaction, 4);
+    if (!segs) return;
     const [ownerId, importIdRaw, itemIdRaw, action] = segs;
     if (interaction.user.id !== ownerId) {
       await safeReply(interaction, buildTextReply("This import prompt isn't for you.", true));
@@ -494,8 +494,8 @@ export class CompletionatorHandlersService {
   }
 
   async handleCompletionatorFormSelect(interaction: StringSelectMenuInteraction): Promise<void> {
-    const segs = parseCustomIdSegments(interaction.customId, 4);
-    if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+    const segs = assertCustomIdSegments(interaction, 4);
+    if (!segs) return;
     const [ownerId, importIdRaw, itemIdRaw, field] = segs;
     if (interaction.user.id !== ownerId) {
       await safeReply(interaction, buildTextReply("This import prompt is not for you.", true));
@@ -595,8 +595,8 @@ export class CompletionatorHandlersService {
   }
 
   async handleCompletionatorDateModal(interaction: ModalSubmitInteraction): Promise<void> {
-    const segs = parseCustomIdSegments(interaction.customId, 3);
-    if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+    const segs = assertCustomIdSegments(interaction, 3);
+    if (!segs) return;
     const [ownerId, importIdRaw, itemIdRaw] = segs;
     if (interaction.user.id !== ownerId) {
       await safeReply(interaction, buildTextReply("This import prompt is not for you.", true));
@@ -667,8 +667,8 @@ export class CompletionatorHandlersService {
   }
 
   async handleCompletionatorInputModal(interaction: ModalSubmitInteraction): Promise<void> {
-    const segs = parseCustomIdSegments(interaction.customId, 4);
-    if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+    const segs = assertCustomIdSegments(interaction, 4);
+    if (!segs) return;
     const [kindRaw, ownerId, importIdRaw2, itemIdRaw2] = segs;
     const kind = kindRaw as CompletionatorModalKind;
     const importId = Number(importIdRaw2);

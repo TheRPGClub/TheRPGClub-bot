@@ -1,3 +1,5 @@
+import { formatStructuredLog } from "./LogUtils.js";
+
 /**
  * Splits a colon-delimited custom ID and returns the segments after the prefix.
  * Returns null if the segment count does not match expectedCount.
@@ -10,4 +12,17 @@ export function parseCustomIdSegments(
   const segments = parts.slice(1);
   if (segments.length !== expectedCount) return null;
   return segments;
+}
+
+export function logUnexpectedCustomId(customId: string): void {
+  console.error(formatStructuredLog({ context: "UnexpectedCustomId", customId }));
+}
+
+export function assertCustomIdSegments(
+  interaction: { customId: string },
+  expectedCount: number,
+): string[] | null {
+  const segs = parseCustomIdSegments(interaction.customId, expectedCount);
+  if (!segs) logUnexpectedCustomId(interaction.customId);
+  return segs;
 }

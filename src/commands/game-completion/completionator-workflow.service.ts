@@ -36,6 +36,7 @@ import { searchGameDbWithFallback } from "./completionator-parser.service.js";
 import { runDockerVolumeBackup } from "../../services/DockerVolumeBackupService.js";
 import { buildImportTextContainer } from "../imports/import-scaffold.service.js";
 import { canSafeReply, safeDeferReply, safeDeferUpdate } from "../../functions/InteractionUtils.js";
+import { logError } from "../../utilities/LogUtils.js";
 import { DISCORD_AUTOCOMPLETE_DESC_MAX } from "../../config/textLimits.js";
 
 export class CompletionatorWorkflowService {
@@ -79,11 +80,10 @@ export class CompletionatorWorkflowService {
       }
       const backupReason = `completionator-import-${session.importId}`;
       void runDockerVolumeBackup({ reason: backupReason }).catch((error) => {
-        console.error(
-          "Failed to run Docker backup after completionator import.",
-          session.importId,
+        logError("completionator-workflow/runDockerVolumeBackup", {
+          importId: session.importId,
           error,
-        );
+        });
       });
       return;
     }
