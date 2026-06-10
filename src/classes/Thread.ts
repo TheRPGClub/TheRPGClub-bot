@@ -157,3 +157,7 @@ export async function getThreadsByGameId(gameId: number): Promise<string[]> {
     return Array.from(new Set([...threadIds, ...legacyIds]));
   });
 }
+
+export default class Thread {
+  static getThreadsByGameId = getThreadsByGameId;
+}

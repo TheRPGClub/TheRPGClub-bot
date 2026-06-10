@@ -12,7 +12,7 @@ import {
 } from "@discordjs/builders";
 import Member, { type ICompletionRecord } from "../classes/Member.js";
 import Game from "../classes/Game.js";
-import { getThreadsByGameId } from "../classes/Thread.js";
+import Thread from "../classes/Thread.js";
 import { formatTableDate, formatPlaytimeHours } from "./DateFormatUtils.js";
 import { COMPONENTS_V2_FLAG } from "../config/flags.js";
 import { safeV2TextContent } from "./ComponentsV2Utils.js";
@@ -61,6 +61,7 @@ export async function buildJournalView(options: IJournalViewOptions): Promise<{
 }> {
   const {
     ownerId,
+    viewerId,
     gameId,
     page,
     guildId,
@@ -76,8 +77,8 @@ export async function buildJournalView(options: IJournalViewOptions): Promise<{
 
   const [game, total, threadIds, memberRecord] = await Promise.all([
     Game.getGameById(gameId),
-    Member.countGameJournalEntries(ownerId, gameId),
-    getThreadsByGameId(gameId),
+    Member.countGameJournalEntries(ownerId, gameId, viewerId),
+    Thread.getThreadsByGameId(gameId),
     Member.getByUserId(ownerId),
   ]);
 
@@ -89,6 +90,7 @@ export async function buildJournalView(options: IJournalViewOptions): Promise<{
     Member.getGameJournalEntries(ownerId, gameId, {
       limit: JOURNAL_PAGE_SIZE,
       offset,
+      viewerUserId: viewerId,
     }),
     includeNowPlayingMeta
       ? Member.getNowPlayingEntryMeta(ownerId, gameId)

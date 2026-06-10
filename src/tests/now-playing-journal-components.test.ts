@@ -4,6 +4,7 @@ import { NowPlayingCommand } from "../commands/now-playing.command.js";
 import type { IMemberNowPlayingEntry } from "../classes/Member.js";
 import Member from "../classes/Member.js";
 import Game from "../classes/Game.js";
+import Thread from "../classes/Thread.js";
 
 function collectBuilderField(value: unknown, key: "content" | "custom_id"): string[] {
   const found: string[] = [];
@@ -67,7 +68,6 @@ test("now-playing list components serialize with mixed journal-enabled entries",
   }];
 
   const components = command.buildNowPlayingEntryComponents(
-    "Your Now Playing List",
     entries,
     "123456789012345678",
     null,
@@ -120,7 +120,6 @@ test("owner list shows journal buttons for multiple journal-enabled entries", ()
   }];
 
   const components = command.buildNowPlayingEntryComponents(
-    "Your Now Playing List",
     entries,
     "123456789012345678",
     null,
@@ -154,7 +153,6 @@ test("owner list with 10 entries stays serializable and keeps journal buttons", 
   }));
 
   const components = command.buildNowPlayingEntryComponents(
-    "Your Now Playing List",
     entries,
     "123456789012345678",
     null,
@@ -181,6 +179,7 @@ test("journal single-page view omits pager buttons and page count", async () => 
   const originalGetPref = Member.getGameJournalPreference;
   const originalCount = Member.countGameJournalEntries;
   const originalEntries = Member.getGameJournalEntries;
+  const originalGetThreads = Thread.getThreadsByGameId;
 
   try {
     Game.getGameById = (async () => ({ id: 1, title: "Test Game" })) as any;
@@ -202,6 +201,7 @@ test("journal single-page view omits pager buttons and page count", async () => 
       createdAt: new Date(),
       updatedAt: new Date(),
     }])) as any;
+    Thread.getThreadsByGameId = (async () => []) as any;
 
     const payload = await command.buildJournalComponents("123", "123", 1, 1);
     const customIds = collectBuilderField(payload.components, "custom_id");
@@ -219,6 +219,7 @@ test("journal single-page view omits pager buttons and page count", async () => 
     Member.getGameJournalPreference = originalGetPref;
     Member.countGameJournalEntries = originalCount;
     Member.getGameJournalEntries = originalEntries;
+    Thread.getThreadsByGameId = originalGetThreads;
   }
 });
 
@@ -231,6 +232,7 @@ test("journal public view redacts private entry content and count", async () => 
   const originalGetPref = Member.getGameJournalPreference;
   const originalCount = Member.countGameJournalEntries;
   const originalEntries = Member.getGameJournalEntries;
+  const originalGetThreads = Thread.getThreadsByGameId;
   let countViewerArg: string | null | undefined;
   let entriesViewerArg: string | null | undefined;
 
@@ -244,7 +246,7 @@ test("journal public view redacts private entry content and count", async () => 
       gameId: 1,
       isEnabled: true,
     })) as any;
-    Member.countGameJournalEntries = 
+    Member.countGameJournalEntries =
       (async (_userId: string, _gameId: number, viewerUserId?: string | null) => {
       countViewerArg = viewerUserId;
       return 1;
@@ -271,6 +273,7 @@ test("journal public view redacts private entry content and count", async () => 
       updatedAt: new Date("2026-05-11T00:00:00.000Z"),
     }];
     }) as any;
+    Thread.getThreadsByGameId = (async () => []) as any;
 
     const payload = await command.buildJournalComponents("123", "__public__", 1, 1);
     assert.ok(payload.components.length > 0);
@@ -284,6 +287,7 @@ test("journal public view redacts private entry content and count", async () => 
     Member.getGameJournalPreference = originalGetPref;
     Member.countGameJournalEntries = originalCount;
     Member.getGameJournalEntries = originalEntries;
+    Thread.getThreadsByGameId = originalGetThreads;
   }
 });
 
@@ -351,16 +355,14 @@ test("journal edit modal submit shows manage journal buttons", async () => {
   }
 });
 
-test("journal edit select in guild deletes prompt message after opening modal", async () => {
+test("journal edit button opens modal for current page entry", async () => {
   const command = new NowPlayingCommand() as any;
-  command.canUseJournalFeature = () => true;
 
-  const originalGetEntry = Member.getGameJournalEntryForUser;
-  let deleted = false;
+  const originalGetEntries = Member.getGameJournalEntries;
   let showModalCalled = false;
 
   try {
-    Member.getGameJournalEntryForUser = (async () => ({
+    Member.getGameJournalEntries = (async () => ([{
       entryId: 10,
       userId: "123",
       gameId: 1,
@@ -368,28 +370,21 @@ test("journal edit select in guild deletes prompt message after opening modal", 
       body: "Top secret body.",
       createdAt: new Date("2026-05-11T00:00:00.000Z"),
       updatedAt: new Date("2026-05-11T00:00:00.000Z"),
-    })) as any;
+    }])) as any;
 
     const interaction: any = {
-      customId: "nowplaying-journal-edit-select:123:1:1",
+      customId: "nowplaying-journal-edit:123:1:1",
       user: { id: "123" },
       guildId: "987654321",
-      values: ["10"],
       showModal: async () => {
         showModalCalled = true;
       },
-      message: {
-        delete: async () => {
-          deleted = true;
-        },
-      },
     };
 
-    await command.handleNowPlayingJournalEditSelect(interaction);
+    await command.handleNowPlayingJournalEdit(interaction);
     assert.equal(showModalCalled, true);
-    assert.equal(deleted, true);
   } finally {
-    Member.getGameJournalEntryForUser = originalGetEntry;
+    Member.getGameJournalEntries = originalGetEntries;
   }
 });
 

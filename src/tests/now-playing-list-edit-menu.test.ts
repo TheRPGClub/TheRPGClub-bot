@@ -1,37 +1,45 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { NowPlayingCommand } from "../commands/now-playing.command.js";
+import Member from "../classes/Member.js";
 
 test("nowplaying list edit opens ephemeral manage menu for owner", async () => {
   const command = new NowPlayingCommand() as any;
   const replies: any[] = [];
+  const originalGetNowPlaying = Member.getNowPlaying;
 
-  const interaction: any = {
-    customId: "nowplaying-list-edit:123",
-    user: { id: "123" },
-    message: {
-      id: "message-1",
-      channelId: "channel-1",
-      flags: { has: () => false },
-    },
-    deferred: false,
-    replied: false,
-    reply: async (payload: any) => {
-      replies.push(payload);
-    },
-    followUp: async () => {
-      throw new Error("followUp should not be called");
-    },
-    editReply: async () => {
-      throw new Error("editReply should not be called");
-    },
-    deleteReply: async () => {},
-  };
+  try {
+    Member.getNowPlaying = (async () => []) as any;
 
-  await command.handleNowPlayingListEdit(interaction);
+    const interaction: any = {
+      customId: "nowplaying-list-edit:123",
+      user: { id: "123" },
+      message: {
+        id: "message-1",
+        channelId: "channel-1",
+        flags: { has: () => false },
+      },
+      deferred: false,
+      replied: false,
+      reply: async (payload: any) => {
+        replies.push(payload);
+      },
+      followUp: async () => {
+        throw new Error("followUp should not be called");
+      },
+      editReply: async () => {
+        throw new Error("editReply should not be called");
+      },
+      deleteReply: async () => {},
+    };
 
-  assert.equal(replies.length, 1, "should reply once");
-  assert.ok(Array.isArray(replies[0]?.components), "reply should include components");
+    await command.handleNowPlayingListEdit(interaction);
+
+    assert.equal(replies.length, 1, "should reply once");
+    assert.ok(Array.isArray(replies[0]?.components), "reply should include components");
+  } finally {
+    Member.getNowPlaying = originalGetNowPlaying;
+  }
 });
 
 test("nowplaying list edit rejects non-owner", async () => {
