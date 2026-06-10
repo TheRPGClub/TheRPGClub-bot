@@ -1,4 +1,15 @@
 {
+  "enabledPlugins": {
+    "typescript-lsp@claude-plugins-official": true,
+    "code-simplifier@claude-plugins-official": true,
+    "context7@claude-plugins-official": true,
+    "claude-code-setup@claude-plugins-official": true
+  },
+  "statusLine": {
+		"type": "command",
+		"command": "npx -y ccusage statusline",
+		"padding": 0
+	},
   "permissions": {
     "allow": [
       "Bash(gh issue edit *)",
@@ -43,17 +54,6 @@
             "type": "command",
             "command": "file=$(echo '$CLAUDE_TOOL_INPUT' | jq -r '.file_path // \"\"'); base=$(basename \"$file\" .ts); test_file=$(find src/tests -name \"${base}.test.ts\" 2>/dev/null | head -1); [ -n \"$test_file\" ] && node --no-warnings=ExperimentalWarning --loader ts-node/esm --test \"$test_file\" 2>&1 | tail -10 || true",
             "statusMessage": "Running related tests..."
-          }
-        ]
-      }
-    ],
-    "UserPromptSubmit": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "jq -r '.prompt // \"\"' | grep -iEq '(accepted|merged)' && (cd \"C:/code/RPGClubBotTs\" && git checkout main && git pull) || true",
-            "shell": "bash"
           }
         ]
       }
