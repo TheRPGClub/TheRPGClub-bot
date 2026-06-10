@@ -3,6 +3,7 @@
 .env.local
 package-lock.json
 yarn.lock
+test-results.txt
 
 # folders
 node_modules
@@ -11,5 +12,5 @@ build
 .qodo
 .node
 .tmp
-.claude
+.claude/*
 !.claude/skills/
