@@ -4,17 +4,12 @@ import {
   ButtonBuilder,
   ButtonStyle,
 } from "discord.js";
-import {
-  ContainerBuilder,
-  SectionBuilder,
-  TextDisplayBuilder,
-  ThumbnailBuilder,
-} from "@discordjs/builders";
+import { ContainerBuilder } from "@discordjs/builders";
 import Member, { type ICompletionRecord } from "../classes/Member.js";
 import Game from "../classes/Game.js";
 import Thread from "../classes/Thread.js";
 import { formatTableDate, formatPlaytimeHours } from "./DateFormatUtils.js";
-import { buildComponentsV2EditFlags, safeV2TextContent } from "./ComponentsV2Utils.js";
+import { buildComponentsV2EditFlags, buildContentContainer } from "./ComponentsV2Utils.js";
 import { buildActionButton, buildButtonRow, buildUserHeaderContainer } from "./uiComponents.js";
 import { truncateWithEllipsis } from "../utilities/ValidationUtils.js";
 
@@ -175,17 +170,7 @@ export async function buildJournalView(options: IJournalViewOptions): Promise<{
 
   entryParts.push(footer);
 
-  const gameContainer = new ContainerBuilder();
-  const entriesText = new TextDisplayBuilder().setContent(
-    safeV2TextContent(entryParts.join(`\n\u00A0\n`), 3500),
-  );
-  if (coverUrl) {
-    const section = new SectionBuilder().addTextDisplayComponents(entriesText);
-    section.setThumbnailAccessory(new ThumbnailBuilder().setURL(coverUrl));
-    gameContainer.addSectionComponents(section);
-  } else {
-    gameContainer.addTextDisplayComponents(entriesText);
-  }
+  const gameContainer = buildContentContainer(entryParts.join(`\n\u00A0\n`), coverUrl);
 
   // Nav row
   const navButtons: ButtonBuilder[] = [];

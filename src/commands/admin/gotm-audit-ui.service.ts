@@ -8,14 +8,14 @@ import {
   buildButtonRow,
   buildSelectRow,
 } from "../../functions/uiComponents.js";
-import { ContainerBuilder, TextDisplayBuilder } from "@discordjs/builders";
+import { ContainerBuilder } from "@discordjs/builders";
 import { type IGotmAuditImport, type IGotmAuditItem } from "../../classes/GotmAuditImport.js";
 import {
   GOTM_AUDIT_SELECT_PREFIX,
   GOTM_AUDIT_ACTION_PREFIX,
   GOTM_AUDIT_RESULT_LIMIT,
 } from "./admin.types.js";
-import { safeV2TextContent } from "../../functions/ComponentsV2Utils.js";
+import { buildTextContainer } from "../../functions/ComponentsV2Utils.js";
 import { DISCORD_SELECT_LABEL_MAX } from "../../config/textLimits.js";
 
 export function buildGotmAuditPromptContent(
@@ -51,11 +51,7 @@ export function buildGotmAuditPromptContent(
 }
 
 export function buildGotmAuditPromptContainer(content: string): ContainerBuilder {
-  const container = new ContainerBuilder();
-  container.addTextDisplayComponents(
-    new TextDisplayBuilder().setContent(safeV2TextContent(content, 3500)),
-  );
-  return container;
+  return buildTextContainer(content);
 }
 
 export function buildGotmAuditPromptComponents(

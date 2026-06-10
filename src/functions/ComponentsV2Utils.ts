@@ -1,5 +1,10 @@
 import { MessageFlags, MessageFlagsBitField } from "discord.js";
-import { ContainerBuilder, TextDisplayBuilder } from "@discordjs/builders";
+import {
+  ContainerBuilder,
+  SectionBuilder,
+  TextDisplayBuilder,
+  ThumbnailBuilder,
+} from "@discordjs/builders";
 import { COMPONENTS_V2_FLAG } from "../config/flags.js";
 import { truncateWithEllipsis } from "../utilities/ValidationUtils.js";
 
@@ -23,6 +28,22 @@ export function buildTextContainer(content: string): ContainerBuilder {
   return new ContainerBuilder().addTextDisplayComponents(
     new TextDisplayBuilder().setContent(safeV2TextContent(content, 3500)),
   );
+}
+
+export function buildContentContainer(
+  content: string,
+  thumbnailUrl?: string | null,
+): ContainerBuilder {
+  const text = new TextDisplayBuilder().setContent(safeV2TextContent(content, 3500));
+  const container = new ContainerBuilder();
+  if (thumbnailUrl) {
+    const section = new SectionBuilder().addTextDisplayComponents(text);
+    section.setThumbnailAccessory(new ThumbnailBuilder().setURL(thumbnailUrl));
+    container.addSectionComponents(section);
+  } else {
+    container.addTextDisplayComponents(text);
+  }
+  return container;
 }
 
 export function buildTextReply(
