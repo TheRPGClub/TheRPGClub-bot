@@ -14,10 +14,10 @@ import {
   MessageFlags,
 } from "discord.js";
 import {
+  ButtonBuilder as V2ButtonBuilder,
   ContainerBuilder,
   SectionBuilder,
   TextDisplayBuilder,
-  ButtonBuilder as V2ButtonBuilder,
 } from "@discordjs/builders";
 import Game, { type IGameWithPlatforms, type IPlatformDef } from "../../classes/Game.js";
 import Member, { type ICompletionRecord } from "../../classes/Member.js";
@@ -41,7 +41,11 @@ import {
   buildImportMessageContainer,
   buildImportTextContainer,
 } from "../imports/import-scaffold.service.js";
-import { buildComponentsV2Flags, safeV2TextContent } from "../../functions/ComponentsV2Utils.js";
+import {
+  buildComponentsV2Flags,
+  buildTextContainer,
+  safeV2TextContent,
+} from "../../functions/ComponentsV2Utils.js";
 import { buildCompletionatorChooseId } from "./completion-helpers.js";
 import {
   buildActionButton,
@@ -185,9 +189,7 @@ export class CompletionatorUiService {
       encodeURIComponent(params.searchTitle)
     }`;
     const igdbLink = `[Search IGDB for ${params.searchTitle}](${igdbSearchUrl})`;
-    const container = new ContainerBuilder().addTextDisplayComponents(
-      new TextDisplayBuilder().setContent("### Import Game From IGDB"),
-    );
+    const container = buildTextContainer("### Import Game From IGDB");
     for (const row of params.igdbRows) {
       container.addActionRowComponents(row.toJSON());
     }

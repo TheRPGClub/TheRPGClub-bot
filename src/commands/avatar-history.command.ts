@@ -36,6 +36,7 @@ import Member from "../classes/Member.js";
 import {
   buildComponentsV2EditFlags,
   buildComponentsV2Flags,
+  buildTextContainer,
   safeV2TextContent,
 } from "../functions/ComponentsV2Utils.js";
 import { getUserEmojiData, renderUsernameWithEmoji } from "../services/UserEmojiService.js";
@@ -235,9 +236,7 @@ export class AvatarHistoryCommand {
       if (!interaction.guild) {
         await safeReply(interaction, {
           components: [
-            new ContainerBuilder().addTextDisplayComponents(
-              new TextDisplayBuilder().setContent("This command can only be used in a server."),
-            ),
+            buildTextContainer("This command can only be used in a server."),
           ],
           flags: buildComponentsV2Flags(true),
         });
@@ -286,9 +285,7 @@ export class AvatarHistoryCommand {
       if (!pageResult) {
         await safeReply(interaction, {
           components: [
-            new ContainerBuilder().addTextDisplayComponents(
-              new TextDisplayBuilder().setContent("No avatar history found for any members."),
-            ),
+            buildTextContainer("No avatar history found for any members."),
           ],
           flags: buildComponentsV2Flags(ephemeral),
         });
@@ -315,11 +312,9 @@ export class AvatarHistoryCommand {
     const target = member ?? interaction.user;
     const pageResult = await buildAvatarHistoryV2Page(target, 0);
     if (!pageResult) {
-      const noResultContainer = new ContainerBuilder().addTextDisplayComponents(
-        new TextDisplayBuilder().setContent(
+      const noResultContainer = buildTextContainer(
           safeV2TextContent(`No avatar history found for ${userMention(target.id)}.`, 1000),
-        ),
-      );
+        );
       await safeReply(interaction, {
         components: [noResultContainer],
         flags: buildComponentsV2Flags(ephemeral),
@@ -355,9 +350,7 @@ export class AvatarHistoryCommand {
     if (!pageResult) {
       await safeUpdate(interaction, {
         components: [
-          new ContainerBuilder().addTextDisplayComponents(
-            new TextDisplayBuilder().setContent("No avatar history found."),
-          ),
+          buildTextContainer("No avatar history found."),
         ],
         files: [],
         flags: buildComponentsV2EditFlags(),
@@ -391,9 +384,7 @@ export class AvatarHistoryCommand {
     if (!pageResult) {
       await safeUpdate(interaction, {
         components: [
-          new ContainerBuilder().addTextDisplayComponents(
-            new TextDisplayBuilder().setContent("No avatar history found."),
-          ),
+          buildTextContainer("No avatar history found."),
         ],
         flags: buildComponentsV2EditFlags(),
       });
@@ -426,11 +417,9 @@ export class AvatarHistoryCommand {
     if (!pageResult) {
       await safeUpdate(interaction, {
         components: [
-          new ContainerBuilder().addTextDisplayComponents(
-            new TextDisplayBuilder().setContent(
+          buildTextContainer(
               safeV2TextContent(`No avatar history found for ${userMention(targetId)}.`, 1000),
             ),
-          ),
         ],
         flags: buildComponentsV2EditFlags(),
       });

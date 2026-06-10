@@ -1,6 +1,5 @@
 import { MessageFlags, MessageFlagsBitField } from "discord.js";
 import { logError, logInfo } from "../utilities/LogUtils.js";
-import { ContainerBuilder, TextDisplayBuilder } from "@discordjs/builders";
 import type {
   Client,
   CommandInteraction,
@@ -14,6 +13,7 @@ import type {
 import { BOT_DEV_CHANNEL_ID } from "../config/channels.js";
 import {
   buildComponentsV2Flags,
+  buildTextContainer,
   buildTextReply,
   hasComponentsV2Flag,
   safeV2TextContent,
@@ -191,9 +191,7 @@ function normalizeComponentsV2Payload(options: any): any {
     return { ...rest, components };
   }
 
-  const textContainer = new ContainerBuilder().addTextDisplayComponents(
-    new TextDisplayBuilder().setContent(safeV2TextContent(content, 3500)),
-  );
+  const textContainer = buildTextContainer(safeV2TextContent(content, 3500));
   const mergedComponents = Array.isArray(components)
     ? [textContainer, ...components]
     : [textContainer];

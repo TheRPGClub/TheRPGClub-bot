@@ -6,7 +6,10 @@ import {
   TextDisplayBuilder,
   ThumbnailBuilder,
 } from "@discordjs/builders";
-import { safeV2TextContent } from "../../functions/ComponentsV2Utils.js";
+import {
+  buildTextContainer,
+  safeV2TextContent,
+} from "../../functions/ComponentsV2Utils.js";
 import { logError } from "../../utilities/LogUtils.js";
 
 type ImportLogEvent = (message: string, meta: Record<string, string | number>) => void;
@@ -140,19 +143,14 @@ export function buildImportMessageContainer(
 }
 
 export function buildImportTextContainer(content: string): ContainerBuilder {
-  return new ContainerBuilder().addTextDisplayComponents(
-    new TextDisplayBuilder().setContent(safeV2TextContent(content, 3500)),
-  );
+  return buildTextContainer(safeV2TextContent(content, 3500));
 }
 
 export function buildImportActionsContainer(params: {
   helpText: string;
   controlRow: ActionRowBuilder<ButtonBuilder>;
 }): ContainerBuilder {
-  const container = new ContainerBuilder().addTextDisplayComponents(
-    new TextDisplayBuilder().setContent("### Actions"),
-    new TextDisplayBuilder().setContent(safeV2TextContent(params.helpText, 900)),
-  );
+  const container = buildTextContainer("### Actions");
   container.addActionRowComponents(params.controlRow.toJSON());
   return container;
 }

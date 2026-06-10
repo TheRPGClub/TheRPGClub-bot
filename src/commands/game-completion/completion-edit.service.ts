@@ -23,6 +23,7 @@ import {
 } from "./completion-autocomplete.utils.js";
 import {
   buildComponentsV2EditFlags,
+  buildTextContainer,
   buildTextReply,
   safeV2TextContent,
 } from "../../functions/ComponentsV2Utils.js";
@@ -91,9 +92,7 @@ export async function handleCompletionEditDone(interaction: ButtonInteraction): 
 
   await safeUpdate(interaction, {
     components: [
-      new ContainerBuilder().addTextDisplayComponents(
-        new TextDisplayBuilder().setContent("Edit complete."),
-      ),
+      buildTextContainer("Edit complete."),
     ],
     flags: buildComponentsV2EditFlags(),
   });
@@ -150,9 +149,7 @@ export async function handleCompletionFieldEdit(interaction: ButtonInteraction):
 
   await safeUpdate(interaction, {
     components: [
-      new ContainerBuilder().addTextDisplayComponents(
-        new TextDisplayBuilder().setContent(safeV2TextContent(prompt, 1000)),
-      ),
+      buildTextContainer(safeV2TextContent(prompt, 1000)),
     ],
     flags: buildComponentsV2EditFlags(),
   });
@@ -287,9 +284,7 @@ export async function handleCompletionTypeSelect(
   if (!updated) {
     await safeUpdate(interaction, {
       components: [
-        new ContainerBuilder().addTextDisplayComponents(
-          new TextDisplayBuilder().setContent("Completion not found."),
-        ),
+        buildTextContainer("Completion not found."),
       ],
       flags: buildComponentsV2EditFlags(),
     });
@@ -359,9 +354,7 @@ function buildCompletionEditPrompt(
   if (!completion) {
     return {
       components: [
-        new ContainerBuilder().addTextDisplayComponents(
-          new TextDisplayBuilder().setContent("Completion not found."),
-        ),
+        buildTextContainer("Completion not found."),
       ],
       flags: buildComponentsV2EditFlags(),
     };

@@ -7,7 +7,10 @@ import UserGameCollection, {
   type IUserGameCollectionOverviewEntry,
 } from "../../classes/UserGameCollection.js";
 import { COLLECTION_OVERVIEW_EMOJIS } from "../../config/emojis.js";
-import { safeV2TextContent } from "../../functions/ComponentsV2Utils.js";
+import {
+  buildTextContainer,
+  safeV2TextContent,
+} from "../../functions/ComponentsV2Utils.js";
 import { formatLocalNumber } from "../../functions/DateFormatUtils.js";
 import { formatPlatformDisplayName } from "../../functions/PlatformDisplay.js";
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
@@ -278,9 +281,7 @@ export function buildCollectionOverviewContainer(params: {
   totalCount: number;
   platformCounts: IUserGameCollectionOverviewEntry[];
 }): ContainerBuilder {
-  const container = new ContainerBuilder().addTextDisplayComponents(
-    new TextDisplayBuilder().setContent(safeV2TextContent(`## ${params.title}`, 250)),
-  );
+  const container = buildTextContainer(safeV2TextContent(`## ${params.title}`, 250));
 
   if (params.totalCount <= 0) {
     container.addTextDisplayComponents(
@@ -360,9 +361,7 @@ export function buildAllCollectionsSummaryContainers(params: {
   platformCounts: IUserGameCollectionOverviewEntry[];
 }): ContainerBuilder[] {
   const createBaseContainer = (title: string): ContainerBuilder =>
-    new ContainerBuilder().addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(safeV2TextContent(`## ${title}`, 250)),
-    );
+    buildTextContainer(safeV2TextContent(`## ${title}`, 250));
 
   if (params.totalCount <= 0) {
     const empty = createBaseContainer(params.title);

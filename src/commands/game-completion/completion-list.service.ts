@@ -9,7 +9,7 @@ import {
   type ModalSubmitInteraction,
   type User,
 } from "discord.js";
-import { ContainerBuilder, TextDisplayBuilder } from "@discordjs/builders";
+import { ContainerBuilder } from "@discordjs/builders";
 import Member from "../../classes/Member.js";
 import Game from "../../classes/Game.js";
 import { COMPLETION_PAGE_SIZE } from "../profile.command.js";
@@ -19,6 +19,7 @@ import { safeReply, safeUpdate } from "../../functions/InteractionUtils.js";
 import {
   buildComponentsV2EditFlags,
   buildComponentsV2Flags,
+  buildTextContainer,
   buildTextReply,
   safeV2TextContent,
 } from "../../functions/ComponentsV2Utils.js";
@@ -51,9 +52,7 @@ export async function renderCompletionLeaderboard(
       : "No completions recorded yet.";
     await safeReply(interaction, {
       components: [
-        new ContainerBuilder().addTextDisplayComponents(
-          new TextDisplayBuilder().setContent(safeV2TextContent(text, 1000)),
-        ),
+        buildTextContainer(safeV2TextContent(text, 1000)),
       ],
       flags: buildComponentsV2Flags(ephemeral),
     });
@@ -72,9 +71,7 @@ export async function renderCompletionLeaderboard(
     contentParts.push(`-# Filter: "${trimmedQuery}"`);
   }
 
-  const container = new ContainerBuilder().addTextDisplayComponents(
-    new TextDisplayBuilder().setContent(safeV2TextContent(contentParts.join("\n"), 3500)),
-  );
+  const container = buildTextContainer(safeV2TextContent(contentParts.join("\n"), 3500));
 
   const options = leaderboard.map((m) => ({
     label: (m.globalName ?? m.username ?? m.userId).slice(0, DISCORD_SELECT_LABEL_MAX),
@@ -125,11 +122,9 @@ export async function renderCompletionPage(
     if (year === "unknown") {
       await safeReply(interaction as any, {
         components: [
-        new ContainerBuilder().addTextDisplayComponents(
-          new TextDisplayBuilder().setContent(
+        buildTextContainer(
             safeV2TextContent("You have no recorded completions with unknown dates.", 1000),
           ),
-        ),
         ],
         flags: buildComponentsV2Flags(ephemeral),
       });
@@ -140,9 +135,7 @@ export async function renderCompletionPage(
       : "You have no recorded completions yet.";
     await safeReply(interaction as any, {
       components: [
-        new ContainerBuilder().addTextDisplayComponents(
-          new TextDisplayBuilder().setContent(safeV2TextContent(text, 1000)),
-        ),
+        buildTextContainer(safeV2TextContent(text, 1000)),
       ],
       flags: buildComponentsV2Flags(ephemeral),
     });
@@ -388,9 +381,7 @@ async function buildCompletionComponents(
       const next = buffer ? `${buffer}\n${line}` : line;
       if (next.length > CHUNK_LIMIT) {
         containers.push(
-          new ContainerBuilder().addTextDisplayComponents(
-            new TextDisplayBuilder().setContent(safeV2TextContent(buffer, CHUNK_LIMIT)),
-          ),
+          buildTextContainer(safeV2TextContent(buffer, CHUNK_LIMIT)),
         );
         buffer = line;
       } else {
@@ -399,9 +390,7 @@ async function buildCompletionComponents(
     }
     if (buffer) {
       containers.push(
-        new ContainerBuilder().addTextDisplayComponents(
-          new TextDisplayBuilder().setContent(safeV2TextContent(buffer, CHUNK_LIMIT)),
-        ),
+        buildTextContainer(safeV2TextContent(buffer, CHUNK_LIMIT)),
       );
     }
   };
@@ -474,9 +463,7 @@ async function buildCompletionComponents(
   }
 
   containers.push(
-    new ContainerBuilder().addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(safeV2TextContent(footerLines.join("\n"), 1000)),
-    ),
+    buildTextContainer(safeV2TextContent(footerLines.join("\n"), 1000)),
   );
 
   const journalEntries: IJournalSelectEntry[] = pageCompletions

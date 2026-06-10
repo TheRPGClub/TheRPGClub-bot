@@ -11,10 +11,6 @@ import {
   userMention,
 } from "discord.js";
 import {
-  ContainerBuilder,
-  TextDisplayBuilder,
-} from "@discordjs/builders";
-import {
   ButtonComponent,
   Discord,
   SelectMenuComponent,
@@ -33,6 +29,7 @@ import {
 import { buildProfileViewPayload } from "./profile.command.js";
 import {
   buildComponentsV2Flags,
+  buildTextContainer,
   buildTextReply,
   safeV2TextContent,
 } from "../functions/ComponentsV2Utils.js";
@@ -330,9 +327,7 @@ export class MultiplayerInfoCommand {
       const result = await buildProfileViewPayload(user);
 
       if (result.errorMessage) {
-        const errContainer = new ContainerBuilder().addTextDisplayComponents(
-          new TextDisplayBuilder().setContent(safeV2TextContent(result.errorMessage, 1000)),
-        );
+        const errContainer = buildTextContainer(safeV2TextContent(result.errorMessage, 1000));
         await safeReply(interaction, {
           components: [errContainer],
           flags: buildComponentsV2Flags(true),
@@ -341,14 +336,12 @@ export class MultiplayerInfoCommand {
       }
 
       if (!result.payload) {
-        const notFoundContainer = new ContainerBuilder().addTextDisplayComponents(
-          new TextDisplayBuilder().setContent(
-            safeV2TextContent(
-              result.notFoundMessage ?? `No profile data found for ${userMention(userId)}.`,
-              1000,
+        const notFoundContainer = buildTextContainer(
+        safeV2TextContent(
+          result.notFoundMessage ?? `No profile data found for ${userMention(userId)}.`,
+          1000,
             ),
-          ),
-        );
+          );
         await safeReply(interaction, {
           components: [notFoundContainer],
           flags: buildComponentsV2Flags(true),
@@ -365,11 +358,9 @@ export class MultiplayerInfoCommand {
       });
     } catch (err: any) {
       const msg = extractErrorMessage(err);
-      const errContainer = new ContainerBuilder().addTextDisplayComponents(
-        new TextDisplayBuilder().setContent(
-          safeV2TextContent(`Could not load that profile: ${msg}`, 1000),
-        ),
-      );
+      const errContainer = buildTextContainer(
+      safeV2TextContent(`Could not load that profile: ${msg}`, 1000),
+        );
       await safeReply(interaction, {
         components: [errContainer],
         flags: buildComponentsV2Flags(true),
