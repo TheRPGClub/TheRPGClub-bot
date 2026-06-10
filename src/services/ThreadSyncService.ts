@@ -6,7 +6,7 @@ import type {
 } from "discord.js";
 import { upsertThreadRecord } from "../classes/Thread.js";
 import { NOW_PLAYING_FORUM_ID } from "../config/channels.js";
-import { logError, logWarn } from "../utilities/LogUtils.js";
+import { logError, logInfo, logWarn } from "../utilities/LogUtils.js";
 const DEFAULT_SYNC_INTERVAL_MS = 10 * 60 * 1000;
 
 function isTargetForum(thread: AnyThreadChannel | ThreadChannel | null): boolean {
@@ -90,5 +90,5 @@ export function startThreadSyncService(client: Client): void {
     void syncForumThreads(client);
   }, DEFAULT_SYNC_INTERVAL_MS);
 
-  console.log("[ThreadSync] Service started");
+  logInfo("ThreadSyncService", "Service started");
 }

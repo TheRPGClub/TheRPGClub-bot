@@ -2,6 +2,7 @@ import { Role } from "discord.js";
 import type { ArgsOf, Client } from "discordx";
 import { Discord, On } from "discordx";
 import { MEMBER_ROLE_ID, NEWCOMERS_ROLE_ID } from "../config/roles.js";
+import { logInfo } from "../utilities/LogUtils.js";
 
 @Discord()
 export class MessageCreated {
@@ -20,11 +21,11 @@ export class MessageCreated {
       const newcomersRole: Role | undefined =
         message.member!.guild.roles.cache.get(NEWCOMERS_ROLE_ID);
       if (membersRole) {
-        console.log(`Granting member role to ${userName}`);
+        logInfo("MessageCreated", `Granting member role to ${userName}`);
         message.member!.roles.add(membersRole);
       }
       if (newcomersRole) {
-        console.log(`Removing newcomers role from ${userName}`);
+        logInfo("MessageCreated", `Removing newcomers role from ${userName}`);
         message.member!.roles.remove(newcomersRole);
       }
     }

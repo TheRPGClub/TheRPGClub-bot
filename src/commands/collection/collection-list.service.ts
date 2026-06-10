@@ -14,12 +14,16 @@ import UserGameCollection, {
 import { flattenErrorMessages } from "../imports/import-scaffold.service.js";
 import { safeV2TextContent } from "../../functions/ComponentsV2Utils.js";
 import { safeDeferUpdate } from "../../functions/InteractionUtils.js";
-import { buildActionButton, buildUserHeaderContainer } from "../../functions/uiComponents.js";
+import {
+  buildActionButton,
+  buildButtonRow,
+  buildUserHeaderContainer,
+} from "../../functions/uiComponents.js";
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
 import { parseCustomIdSegments } from "../../utilities/CustomIdUtils.js";
 import { buildDisabledPrevNextRowWithIds } from "../../functions/PaginationUtils.js";
 import { safeIgnore } from "../../utilities/AsyncUtils.js";
-import { logError } from "../../utilities/LogUtils.js";
+import { logError, logInfo } from "../../utilities/LogUtils.js";
 
 const COLLECTION_LIST_PAGE_SIZE = 20;
 const COLLECTION_LIST_NAV_PREFIX = "collection-list-nav-v2";
@@ -255,7 +259,7 @@ export function buildCollectionFilterPanelComponents(params: {
   ownershipType: CollectionOwnershipType | undefined;
 }): ActionRowBuilder<ButtonBuilder>[] {
   return [
-    new ActionRowBuilder<ButtonBuilder>().addComponents(
+    buildButtonRow(
       buildActionButton(
         "edit",
         buildCollectionFilterPanelActionId({
@@ -396,7 +400,7 @@ function logCollectionListNavDebug(
   event: string,
   details: Record<string, unknown>,
 ): void {
-  console.log("[CollectionListNavDebug]", event, JSON.stringify(details));
+  logInfo("CollectionListNavDebug", { event, details });
 }
 
 function validateComponentsForCollectionNavDebug(
@@ -438,7 +442,7 @@ async function buildCollectionListResponse(params: {
   components: Array<ContainerBuilder | ActionRowBuilder<any>>;
   content?: string;
 }> {
-  console.log("[collection-list] step: searchEntries start", { targetUserId: params.targetUserId });
+  logInfo("collection-list", { step: "searchEntries start", targetUserId: params.targetUserId });
   const entries = await UserGameCollection.searchEntries({
     targetUserId: params.targetUserId,
     title: params.title,
@@ -446,7 +450,7 @@ async function buildCollectionListResponse(params: {
     platformId: params.platformId,
     ownershipType: params.ownershipType,
   });
-  console.log("[collection-list] step: searchEntries done", { count: entries.length });
+  logInfo("collection-list", { step: "searchEntries done", count: entries.length });
 
   const total = entries.length;
   if (!total) {
@@ -559,7 +563,7 @@ async function buildCollectionListResponse(params: {
     });
   }
 
-  console.log("[collection-list] step: components built", { count: components.length });
+  logInfo("collection-list", { step: "components built", count: components.length });
   // eslint-disable-next-line local/dynamic-components-require-chunking
   return { components };
 }

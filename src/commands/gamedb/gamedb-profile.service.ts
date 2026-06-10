@@ -34,6 +34,7 @@ import {
 } from "./gamedb-utils.js";
 import { safeIgnore } from "../../utilities/AsyncUtils.js";
 import { logError } from "../../utilities/LogUtils.js";
+import { buildButtonRow } from "../../functions/uiComponents.js";
 
 export type GameProfileRenderContext = {
   guildId?: string;
@@ -133,7 +134,7 @@ export function buildGameProfileActionRow(
     .setStyle(ButtonStyle.Secondary)
     .setDisabled(disableVideo);
   const rows: ActionRowBuilder<ButtonBuilder>[] = [];
-  const primaryRow = new ActionRowBuilder<ButtonBuilder>().addComponents(addNowPlaying);
+  const primaryRow = buildButtonRow(addNowPlaying);
   if (isReleased) {
     const addCompletion = new ButtonBuilder()
       // eslint-disable-next-line local/custom-id-has-matching-handler

@@ -1,5 +1,5 @@
 import { MessageFlags, MessageFlagsBitField } from "discord.js";
-import { logError } from "../utilities/LogUtils.js";
+import { logError, logInfo } from "../utilities/LogUtils.js";
 import { ContainerBuilder, TextDisplayBuilder } from "@discordjs/builders";
 import type {
   Client,
@@ -406,7 +406,7 @@ export async function safeReply(interaction: AnyRepliable, options: any): Promis
         return await interaction.editReply({ content: options });
       } else {
         const result = await interaction.editReply(normalizedOptions as any);
-        console.log("[safeReply] editReply success", { messageId: (result as any)?.id });
+        logInfo("InteractionUtils.safeReply", { step: "editReply success", messageId: (result as any)?.id });
         return result;
       }
     } catch (err: any) {

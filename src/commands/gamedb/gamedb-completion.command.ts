@@ -51,7 +51,7 @@ import { trimTextDisplayContent } from "./gamedb-profile.service.js";
 import { updateGameProfileMessageById } from "./gamedb-profile.service.js";
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
 import { DISCORD_SELECT_LABEL_MAX } from "../../config/textLimits.js";
-import { buildTextInputRow } from "../../functions/uiComponents.js";
+import { buildButtonRow, buildTextInputRow } from "../../functions/uiComponents.js";
 import { safeIgnore } from "../../utilities/AsyncUtils.js";
 
 const COMPLETION_WIZARD_SESSIONS = new Map<string, CompletionWizardSession>();
@@ -223,7 +223,7 @@ function buildCompletionWizardComponents(
     .setCustomId(`gamedb-completion-next:${session.id}`)
     .setLabel("Next")
     .setStyle(ButtonStyle.Primary);
-  rows.push(new ActionRowBuilder<ButtonBuilder>().addComponents(nextButton));
+  rows.push(buildButtonRow(nextButton));
 
   return rows;
 }

@@ -64,6 +64,7 @@ import {
   buildActionButton,
   buildSelectOptions,
   buildTextInputRow,
+  buildButtonRow,
 } from "../functions/uiComponents.js";
 import { safeIgnore } from "../utilities/AsyncUtils.js";
 const GIVEAWAY_DONATE_MODAL_ID = "giveaway-donate-modal";
@@ -257,7 +258,7 @@ function buildClaimConfirmComponents(
 ): ActionRowBuilder<ButtonBuilder>[] {
   const yesButton = buildActionButton({ customId: confirmId, label: "Yes", style: ButtonStyle.Success });
   const noButton = buildActionButton({ customId: cancelId, label: "No", style: ButtonStyle.Secondary });
-  return [new ActionRowBuilder<ButtonBuilder>().addComponents(yesButton, noButton)];
+  return [buildButtonRow(yesButton, noButton)];
 }
 
 function buildDonorInventorySummary(keys: Awaited<ReturnType<typeof listKeysByDonor>>): string {
@@ -292,7 +293,7 @@ function buildDonorSettingsRow(
     label: "No",
     style: ButtonStyle.Secondary,
   }).setDisabled(!enabled);
-  return new ActionRowBuilder<ButtonBuilder>().addComponents(yesButton, noButton);
+  return buildButtonRow(yesButton, noButton);
 }
 
 async function claimKey(
@@ -383,7 +384,7 @@ function buildKeyListComponents(
         label: "Claim a key",
         style: ButtonStyle.Primary,
       });
-      rows.push(new ActionRowBuilder<ButtonBuilder>().addComponents(claimButton));
+      rows.push(buildButtonRow(claimButton));
     } else {
       const selectRows = buildKeySelectMenus(
         `giveaway-claim:${sessionId}:${ownerId}:${page}`,

@@ -4,6 +4,7 @@ import {
   ButtonStyle,
   StringSelectMenuBuilder,
 } from "discord.js";
+import { buildButtonRow } from "../../functions/uiComponents.js";
 import {
   ContainerBuilder,
   TextDisplayBuilder,
@@ -136,7 +137,7 @@ export function buildCsvPromptComponents(
     rows.push(new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select));
   }
 
-  const actionRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+  const actionRow = buildButtonRow(
     new ButtonBuilder()
       // eslint-disable-next-line local/custom-id-has-matching-handler
       .setCustomId(`${GAMEDB_CSV_ACTION_PREFIX}:${ownerId}:${importId}:${itemId}:manual`)
@@ -153,7 +154,7 @@ export function buildCsvPromptComponents(
       .setLabel("Accept First Option")
       .setStyle(ButtonStyle.Success),
   );
-  const controlRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+  const controlRow = buildButtonRow(
     new ButtonBuilder()
       // eslint-disable-next-line local/custom-id-has-matching-handler
       .setCustomId(`${GAMEDB_CSV_ACTION_PREFIX}:${ownerId}:${importId}:${itemId}:skip`)

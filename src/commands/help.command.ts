@@ -24,6 +24,7 @@ import { decodeBase64Url, encodeBase64Url } from "../functions/CustomIdUtils.js"
 import { parseCustomIdSegments } from "../utilities/CustomIdUtils.js";
 import { GIVEAWAY_HUB_CHANNEL_ID } from "../config/channels.js";
 import { DISCORD_AUTOCOMPLETE_DESC_MAX } from "../config/textLimits.js";
+import { buildButtonRow } from "../functions/uiComponents.js";
 
 type HelpTopicId =
   | "noms"
@@ -414,7 +415,7 @@ function buildHelpRefreshComponents(): ActionRowBuilder<ButtonBuilder>[] {
     .setLabel("Refresh help menu")
     .setStyle(ButtonStyle.Primary);
 
-  return [new ActionRowBuilder<ButtonBuilder>().addComponents(button)];
+  return [buildButtonRow(button)];
 }
 
 async function sendHelpRefreshPrompt(

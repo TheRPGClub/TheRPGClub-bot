@@ -36,7 +36,7 @@ import {
   buildComponentsV2EditFlags,
 } from "../../functions/ComponentsV2Utils.js";
 import { flattenErrorMessages } from "../imports/import-scaffold.service.js";
-import { logError } from "../../utilities/LogUtils.js";
+import { logError, logInfo } from "../../utilities/LogUtils.js";
 import { safeIgnore } from "../../utilities/AsyncUtils.js";
 import { buildTextInputRow } from "../../functions/uiComponents.js";
 import {
@@ -172,7 +172,8 @@ export class CollectionViewCommand {
       return;
     }
 
-    console.log("[collection list] step: sending reply", {
+    logInfo("collection-list", {
+      step: "sending reply",
       hasContent: Boolean(response.content),
       componentCount: response.components?.length,
     });
@@ -196,7 +197,7 @@ export class CollectionViewCommand {
         logError("collection list.fallback_safe_reply_failed", fallbackErr);
       }
     }
-    console.log("[collection list] step: reply sent");
+    logInfo("collection-list", { step: "reply sent" });
   }
 
   @Slash({ name: "overview", description: "Show a summary of your collection by platform" })
@@ -661,7 +662,7 @@ function buildPlatformLabel(entry: {
 }
 
 function logNavDebug(event: string, details: Record<string, unknown>): void {
-  console.log("[CollectionListNavDebug]", event, JSON.stringify(details));
+  logInfo("CollectionListNavDebug", { event, details });
 }
 
 export { buildCollectionListNavId };

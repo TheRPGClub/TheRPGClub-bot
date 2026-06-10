@@ -1,4 +1,5 @@
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle } from "discord.js";
+import { buildButtonRow } from "../../functions/uiComponents.js";
 import { buildImportReasonSummary } from "./collection-import-ui.utils.js";
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
 import { parseCustomIdSegments } from "../../utilities/CustomIdUtils.js";
@@ -190,7 +191,7 @@ export function buildSteamImportItemButtons(params: {
   importId: number;
   itemId: number;
 }): ActionRowBuilder<ButtonBuilder> {
-  return new ActionRowBuilder<ButtonBuilder>().addComponents(
+  return buildButtonRow(
     new ButtonBuilder()
       .setCustomId(
         buildCollectionSteamImportActionId({

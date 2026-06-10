@@ -15,6 +15,7 @@ import {
   userMention,
 } from "discord.js";
 import { safeDeferUpdate, safeReply } from "../../functions/InteractionUtils.js";
+import { buildButtonRow } from "../../functions/uiComponents.js";
 import { buildTextReply } from "../../functions/ComponentsV2Utils.js";
 import { ADMIN_CHANNEL_ID, NOW_PLAYING_FORUM_ID } from "../../config/channels.js";
 import Gotm, { insertGotmRoundInDatabase, type IGotmGame } from "../../classes/Gotm.js";
@@ -194,8 +195,8 @@ async function promptSelectNomination(
     .setMaxValues(1)
     .addOptions(options);
   const selectRow = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select);
-  const buttonRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
-     
+  const buttonRow = buildButtonRow(
+
     new ButtonBuilder().setCustomId(cancelId).setLabel("Cancel").setStyle(ButtonStyle.Danger),
   );
 
@@ -948,7 +949,7 @@ export async function handleNextRoundSetup(
       threadPlanSection,
     );
 
-    const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
+    const row = buildButtonRow(
       // eslint-disable-next-line local/custom-id-has-matching-handler
       new ButtonBuilder().setCustomId("wiz-commit").setLabel("Commit").setStyle(ButtonStyle.Success),
       // eslint-disable-next-line local/custom-id-has-matching-handler

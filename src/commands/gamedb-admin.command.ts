@@ -62,7 +62,7 @@ import GameSearchSynonymDraft, {
 import axios from "axios";
 import { igdbService } from "../services/IGDB/IgdbService.js";
 import { buildPageFooterText, shouldRenderPrevNextButtons } from "../functions/PaginationUtils.js";
-import { buildTextInputRow } from "../functions/uiComponents.js";
+import { buildButtonRow, buildTextInputRow } from "../functions/uiComponents.js";
 import { parseSynonymQuickAddTerms } from "./gamedb-synonym.utils.js";
 import { isPositiveInt, truncateWithEllipsis } from "../utilities/ValidationUtils.js";
 import { COLOR_PRIMARY, COLOR_SUCCESS, COLOR_HIGHLIGHT } from "../config/colors.js";
@@ -196,7 +196,7 @@ function buildSynonymContinueComponents(draftId: number): Array<ActionRowBuilder
     .setCustomId(`${SYNONYM_ADD_DONE_PREFIX}:${draftId}`)
     .setLabel("Done")
     .setStyle(ButtonStyle.Secondary);
-  return [new ActionRowBuilder<ButtonBuilder>().addComponents(addMore, done)];
+  return [buildButtonRow(addMore, done)];
 }
 const AUTO_ACCEPT_RUNS = new Map<
   string,
@@ -316,7 +316,7 @@ export class GameDbAdmin {
     if (shouldRenderPrevNextButtons(prevDisabled, nextDisabled)) {
       buttonRowItems.push(prevButton, nextButton);
     }
-    const buttonRow = new ActionRowBuilder<ButtonBuilder>().addComponents(buttonRowItems);
+    const buttonRow = buildButtonRow(...buttonRowItems);
 
     const components: Array<
       ContainerBuilder | ActionRowBuilder<ButtonBuilder> | ActionRowBuilder<StringSelectMenuBuilder>
@@ -1048,7 +1048,7 @@ export class GameDbAdmin {
     disabled: boolean,
     label: string = "Stop",
   ): ActionRowBuilder<ButtonBuilder> {
-    return new ActionRowBuilder<ButtonBuilder>().addComponents(
+    return buildButtonRow(
       new ButtonBuilder()
         .setCustomId(buildAutoAcceptStopId(runId))
         .setLabel(label)
@@ -1119,7 +1119,7 @@ export class GameDbAdmin {
     const prevDisabled = page === 0;
     const nextDisabled = page >= totalPages - 1;
 
-    const buttons = new ActionRowBuilder<ButtonBuilder>().addComponents(
+    const buttons = buildButtonRow(
       new ButtonBuilder()
         .setCustomId(`audit-page:${sessionId}:prev`)
         .setLabel("Previous")
@@ -1230,7 +1230,7 @@ export class GameDbAdmin {
         embed.addFields({ name: "Thread", value: "❌ Missing", inline: true });
     }
 
-    const navRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+    const navRow = buildButtonRow(
       new ButtonBuilder()
         .setCustomId(`audit-back:${sessionId}`)
         .setLabel("Back to List")
@@ -1281,7 +1281,7 @@ export class GameDbAdmin {
       }
     }
 
-    const editRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+    const editRow = buildButtonRow(
       new ButtonBuilder()
         .setCustomId(`audit-img:${sessionId}:${game.id}`)
         .setLabel("Upload Image")

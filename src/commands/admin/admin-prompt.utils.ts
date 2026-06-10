@@ -16,6 +16,7 @@ import { buildTextReply } from "../../functions/ComponentsV2Utils.js";
 import { type PromptChoiceOption } from "./admin.types.js";
 import { safeIgnore } from "../../utilities/AsyncUtils.js";
 import { logError } from "../../utilities/LogUtils.js";
+import { buildButtonRow } from "../../functions/uiComponents.js";
 
 export function buildChoiceRows(
   customIdPrefix: string,
@@ -24,8 +25,8 @@ export function buildChoiceRows(
   const rows: ActionRowBuilder<ButtonBuilder>[] = [];
   for (let i = 0; i < options.length; i += 5) {
     const slice = options.slice(i, i + 5);
-    const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
-      slice.map((opt) =>
+    const row = buildButtonRow(
+      ...slice.map((opt) =>
         new ButtonBuilder()
           .setCustomId(`${customIdPrefix}:${opt.value}`)
           .setLabel(opt.label)
