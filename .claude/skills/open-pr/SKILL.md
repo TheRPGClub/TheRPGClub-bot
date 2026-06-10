@@ -10,7 +10,7 @@ This skill encodes the mandatory PR ceremony from CLAUDE.md. Run it every time a
 ### 1. Lint
 
 ```bash
-npm run lint
+npx eslint --fix
 ```
 
 If violations are reported, fix them before proceeding. The fixes must be committed to the branch as part of the PR.
