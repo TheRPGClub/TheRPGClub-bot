@@ -25,7 +25,7 @@ import Member, {
   type IMemberSearchFilters,
 } from "../classes/Member.js";
 import {
-  deferWithShowInChat,
+  deferWithPrivateFlag,
   ephemeralFlag,
   extractErrorMessage,
   safeDeferReply,
@@ -310,17 +310,17 @@ export class ProfileCommand {
     })
     member: User | undefined,
     @SlashOption({
-      description: "If true, post in channel instead of ephemerally.",
-      name: "showinchat",
+      description: "Send reply privately (only visible to you).",
+      name: "private",
       required: false,
       type: ApplicationCommandOptionType.Boolean,
     })
-    showInChat: boolean | undefined,
+    privateFlag: boolean | undefined,
     interaction: CommandInteraction,
   ): Promise<void> {
     const target = member ?? interaction.user;
-    const ephemeral = !showInChat;
-    await deferWithShowInChat(interaction, showInChat);
+    const ephemeral = privateFlag ?? false;
+    await deferWithPrivateFlag(interaction, privateFlag);
 
     const result = await buildProfileViewPayload(target);
 
@@ -428,12 +428,12 @@ export class ProfileCommand {
   @SlashGroup("profile")
   async profileSearch(
     @SlashOption({
-      description: "If true, post in channel instead of ephemerally.",
-      name: "showinchat",
+      description: "Send reply privately (only visible to you).",
+      name: "private",
       required: false,
       type: ApplicationCommandOptionType.Boolean,
     })
-    showInChat: boolean | undefined,
+    privateFlag: boolean | undefined,
     @SlashOption({
       description: "Filter by user id.",
       name: "userid",
@@ -576,8 +576,8 @@ export class ProfileCommand {
     includeDeparted: boolean | undefined,
     interaction: CommandInteraction,
   ): Promise<void> {
-    const ephemeral = !showInChat;
-    await deferWithShowInChat(interaction, showInChat);
+    const ephemeral = privateFlag ?? false;
+    await deferWithPrivateFlag(interaction, privateFlag);
 
     userId = userId ? sanitizeUserInput(userId, { preserveNewlines: false }) : undefined;
     username = username ? sanitizeUserInput(username, { preserveNewlines: false }) : undefined;
