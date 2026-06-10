@@ -17,11 +17,12 @@ import { formatTableDate, formatPlaytimeHours } from "./DateFormatUtils.js";
 import { COMPONENTS_V2_FLAG } from "../config/flags.js";
 import { safeV2TextContent } from "./ComponentsV2Utils.js";
 import { buildUserHeaderContainer } from "./uiComponents.js";
+import { truncateWithEllipsis } from "../utilities/ValidationUtils.js";
 
 const JOURNAL_PAGE_SIZE = 1;
 
 function trimContent(text: string): string {
-  return text.length <= 4000 ? text : `${text.slice(0, 3997)}...`;
+  return truncateWithEllipsis(text, 4000);
 }
 
 function entryLabel(n: number): string {

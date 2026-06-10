@@ -100,7 +100,11 @@ import {
 } from "./now-playing-help.js";
 
 import { renderUsernameWithEmoji } from "../services/UserEmojiService.js";
-import { isPositiveInt, isValidPlaytimeHours } from "../utilities/ValidationUtils.js";
+import {
+  isPositiveInt,
+  isValidPlaytimeHours,
+  truncateWithEllipsis,
+} from "../utilities/ValidationUtils.js";
 import { formatStructuredLog, logError } from "../utilities/LogUtils.js";
 import { DISCORD_AUTOCOMPLETE_DESC_MAX, DISCORD_SELECT_LABEL_MAX } from "../config/textLimits.js";
 import { assertCustomIdSegments } from "../utilities/CustomIdUtils.js";
@@ -5696,7 +5700,7 @@ export class NowPlayingCommand {
     if (content.length <= 4000) {
       return content;
     }
-    return `${content.slice(0, 3997)}...`;
+    return truncateWithEllipsis(content, 4000);
   }
 
   private buildJournalComponents(

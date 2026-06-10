@@ -19,6 +19,7 @@ import {
   type NominationKind,
 } from "../classes/Nomination.js";
 import { safeV2TextContent } from "./ComponentsV2Utils.js";
+import { truncateWithEllipsis } from "../utilities/ValidationUtils.js";
 import {
   buildComponentsV2Flags,
   buildNominationListPayload,
@@ -208,8 +209,5 @@ function isSendableTextChannel(channel: TextBasedChannel | null): channel is Tex
 }
 
 function truncateLabel(label: string, maxLength: number): string {
-  if (label.length <= maxLength) {
-    return label;
-  }
-  return `${label.slice(0, maxLength - 3)}...`;
+  return truncateWithEllipsis(label, maxLength);
 }

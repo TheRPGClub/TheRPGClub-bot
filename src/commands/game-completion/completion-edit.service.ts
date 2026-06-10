@@ -29,7 +29,11 @@ import {
   safeReply,
   safeUpdate,
 } from "../../functions/InteractionUtils.js";
-import { isPositiveInt, isValidPlaytimeHours } from "../../utilities/ValidationUtils.js";
+import {
+  isPositiveInt,
+  isValidPlaytimeHours,
+  truncateWithEllipsis,
+} from "../../utilities/ValidationUtils.js";
 import { assertCustomIdSegments } from "../../utilities/CustomIdUtils.js";
 
 const MAX_NOTE_LENGTH = 500;
@@ -337,7 +341,7 @@ async function getCompletionEditValueLabel(
   }
   if (!completion.note) return "No note";
   const compact = completion.note.replace(/\s+/g, " ").trim();
-  return compact.length > 80 ? `${compact.slice(0, 77)}...` : compact;
+  return truncateWithEllipsis(compact, 80);
 }
 
 function extractEditPromptText(interaction: ButtonInteraction): string | null {

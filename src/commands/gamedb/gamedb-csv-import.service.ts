@@ -23,7 +23,7 @@ import { type IGameDbCsvImportItem } from "../../classes/GameDbCsvImport.js";
 import { GAMEDB_CSV_PLATFORM_MAP } from "../../config/gamedbCsvPlatformMap.js";
 import { buildIgdbSearchLink } from "./gamedb-utils.js";
 import { type IGameDbCsvImport } from "../../classes/GameDbCsvImport.js";
-import { isPositiveInt } from "../../utilities/ValidationUtils.js";
+import { isPositiveInt, truncateWithEllipsis } from "../../utilities/ValidationUtils.js";
 import {
   DISCORD_AUTOCOMPLETE_DESC_MAX,
   DISCORD_SELECT_LABEL_MAX,
@@ -104,9 +104,7 @@ export function buildCsvPromptContent(
 
 export function buildCsvPromptContainer(content: string): ContainerBuilder {
   const container = new ContainerBuilder();
-  const safeContent = content.length > 4000
-    ? `${content.slice(0, 3997)}...`
-    : content;
+  const safeContent = truncateWithEllipsis(content, 4000);
   container.addTextDisplayComponents(
     new TextDisplayBuilder().setContent(safeV2TextContent(safeContent, 3500)),
   );

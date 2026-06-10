@@ -31,7 +31,7 @@ import {
 import { buildTextReply } from "../functions/ComponentsV2Utils.js";
 import { notifyUnknownCompletionPlatform } from "../functions/CompletionHelpers.js";
 import { COMPLETION_REACTION_DEV_CHANNEL_ID } from "../config/channels.js";
-import { isPositiveInt } from "../utilities/ValidationUtils.js";
+import { isPositiveInt, truncateWithEllipsis } from "../utilities/ValidationUtils.js";
 import { DISCORD_AUTOCOMPLETE_DESC_MAX, DISCORD_SELECT_LABEL_MAX } from "../config/textLimits.js";
 import { assertCustomIdSegments } from "../utilities/CustomIdUtils.js";
 import { safeIgnore } from "../utilities/AsyncUtils.js";
@@ -119,9 +119,7 @@ const buildCompletionPromptContent = (
   session: CompletionReactionSession,
   requesterId: string,
 ): string => {
-  const trimmedQuery = session.query.length > 120
-    ? `${session.query.slice(0, 117)}...`
-    : session.query;
+  const trimmedQuery = truncateWithEllipsis(session.query, 120);
   return [
     "Add completion from reaction.",
     `Requested by: <@${requesterId}>`,

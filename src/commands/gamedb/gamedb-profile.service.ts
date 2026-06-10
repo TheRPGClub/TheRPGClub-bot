@@ -19,6 +19,7 @@ import {
 import { SeparatorSpacingSize } from "discord-api-types/v10";
 import { safeReply } from "../../functions/InteractionUtils.js";
 import { buildTextReply, safeV2TextContent } from "../../functions/ComponentsV2Utils.js";
+import { truncateWithEllipsis } from "../../utilities/ValidationUtils.js";
 import { formatPlatformDisplayName } from "../../functions/PlatformDisplay.js";
 import { formatTableDate } from "../../functions/DateFormatUtils.js";
 import { getHltbCacheByGameId } from "../../classes/HltbCache.js";
@@ -86,10 +87,7 @@ export function buildListFieldValue(lines: string[], maxLength: number): string 
 }
 
 export function trimTextDisplayContent(content: string): string {
-  if (content.length <= 4000) {
-    return content;
-  }
-  return `${content.slice(0, 3997)}...`;
+  return truncateWithEllipsis(content, 4000);
 }
 
 export function isGameReleased(game: IGame, releases: IRelease[]): boolean {

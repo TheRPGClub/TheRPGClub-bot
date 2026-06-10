@@ -12,6 +12,7 @@ import {
 import { safeV2TextContent } from "./ComponentsV2Utils.js";
 import { formatTableDate } from "./DateFormatUtils.js";
 import { DISCORD_SELECT_LABEL_MAX } from "../config/textLimits.js";
+import { truncateWithEllipsis } from "../utilities/ValidationUtils.js";
 
 export interface IJournalSelectEntry {
   gameId: number;
@@ -30,7 +31,7 @@ export function buildJournalSelectRow(
     const rawLabel = `${e.title} Game Journal`;
     const label =
       rawLabel.length > DISCORD_SELECT_LABEL_MAX
-        ? `${rawLabel.slice(0, DISCORD_SELECT_LABEL_MAX - 3)}...`
+        ? truncateWithEllipsis(rawLabel, DISCORD_SELECT_LABEL_MAX)
         : rawLabel;
     const countText = e.journalCount === 1 ? "1 entry" : `${e.journalCount} entries`;
     const lastPart = e.lastJournalAt ? ` · Last entry ${formatTableDate(e.lastJournalAt)}` : "";
