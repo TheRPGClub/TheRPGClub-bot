@@ -47,7 +47,7 @@ import { BOT_DEV_PING_USER_ID } from "../config/users.js";
 import { COMPONENTS_V2_FLAG } from "../config/flags.js";
 import { buildTextReply, safeV2TextContent } from "../functions/ComponentsV2Utils.js";
 import { logRawModal } from "../services/raw-modal/RawModalLogging.js";
-import { isPositiveInt } from "../utilities/ValidationUtils.js";
+import { isPositiveInt, truncateWithEllipsis } from "../utilities/ValidationUtils.js";
 import { parseCustomIdSegments } from "../utilities/CustomIdUtils.js";
 
 const SUGGESTION_APPROVE_PREFIX = "suggestion-approve";
@@ -136,9 +136,7 @@ export function buildSuggestionReviewDecisionModal(
   customId: string,
   summaryText: string,
 ): ModalBuilder {
-  const summaryValue = summaryText.length > MAX_MODAL_TEXT_INPUT_VALUE
-    ? `${summaryText.slice(0, MAX_MODAL_TEXT_INPUT_VALUE - 3)}...`
-    : summaryText;
+  const summaryValue = truncateWithEllipsis(summaryText, MAX_MODAL_TEXT_INPUT_VALUE);
 
   return new ModalBuilder()
     .setCustomId(customId)

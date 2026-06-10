@@ -1,11 +1,12 @@
 import { MessageFlags } from "discord.js";
 import { ContainerBuilder, TextDisplayBuilder } from "@discordjs/builders";
 import { COMPONENTS_V2_FLAG } from "../config/flags.js";
+import { truncateWithEllipsis } from "../utilities/ValidationUtils.js";
 
 export function safeV2TextContent(value: string, maxLength: number): string {
   const normalized = value.split("\0").join("").trim();
   if (normalized.length <= maxLength) return normalized;
-  return `${normalized.slice(0, Math.max(0, maxLength - 3))}...`;
+  return truncateWithEllipsis(normalized, maxLength);
 }
 
 export function buildComponentsV2Flags(isEphemeral: boolean): number {

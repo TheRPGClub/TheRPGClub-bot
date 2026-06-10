@@ -34,6 +34,7 @@ import { startIgdbScanService } from "./services/IGDB/IgdbScanService.js";
 import { startUserEmojiService } from "./services/UserEmojiService.js";
 import { tryHandleManagedRawModalInteraction } from "./services/raw-modal/RawModalInteractionRouter.js";
 import { restoreJournalMessageContextsFromDb } from "./commands/now-playing.command.js";
+import { truncateWithEllipsis } from "./utilities/ValidationUtils.js";
 installConsoleLogging();
 
 const PRESENCE_CHECK_INTERVAL_MS: number = 30 * 60 * 1000;
@@ -113,7 +114,7 @@ function getChannelName(channel: Channel | TextBasedChannel | null): string {
 
 function sanitizeSlashValue(value: unknown): string {
   if (typeof value === "string") {
-    return JSON.stringify(value.length > 120 ? `${value.slice(0, 117)}...` : value);
+    return JSON.stringify(truncateWithEllipsis(value, 120));
   }
 
   if (typeof value === "number" || typeof value === "boolean" || typeof value === "bigint") {
@@ -127,7 +128,7 @@ function sanitizeSlashValue(value: unknown): string {
   try {
     const serialized = JSON.stringify(value);
     if (!serialized) return "\"\"";
-    return serialized.length > 200 ? `${serialized.slice(0, 197)}...` : serialized;
+    return truncateWithEllipsis(serialized, 200);
   } catch {
     return String(value);
   }

@@ -25,6 +25,7 @@ import {
   getOrReplaceBackblazeImage,
   hasBackblazeB2Config,
 } from "../services/BackblazeB2Service.js";
+import { truncateWithEllipsis } from "../utilities/ValidationUtils.js";
 
 const MAX_SECTIONS_PER_CONTAINER = 10;
 const MAX_REASON_LENGTH = 1500;
@@ -223,17 +224,11 @@ function buildNominationSelectId(kindLabel: string, index: number): string {
 }
 
 function truncateLabel(label: string, maxLength: number): string {
-  if (label.length <= maxLength) {
-    return label;
-  }
-  return `${label.slice(0, maxLength - 3)}...`;
+  return truncateWithEllipsis(label, maxLength);
 }
 
 function trimReason(reason: string): string {
-  if (reason.length <= MAX_REASON_LENGTH) {
-    return reason;
-  }
-  return `${reason.slice(0, MAX_REASON_LENGTH - 3)}...`;
+  return truncateWithEllipsis(reason, MAX_REASON_LENGTH);
 }
 
 function formatDate(date: Date): string {

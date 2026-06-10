@@ -1592,9 +1592,7 @@ export class GameDbAdmin {
       const result = await GameSearchSynonym.createGroupTerms(terms, interaction.user.id);
       const termList = result.terms.map((term) => `"${term.termText}"`).join(" | ");
       let content = `Saved synonym group #${result.groupId} with ${result.terms.length} terms:\n${termList}`;
-      if (content.length > 1900) {
-        content = `${content.slice(0, 1900)}...`;
-      }
+      content = truncateWithEllipsis(content, 1900);
       await safeReply(interaction, buildTextReply(content, !(isPublic)));
     } catch (err: any) {
       await safeReply(interaction, buildTextReply(`Failed to save synonym group. ${err?.message ?? "Unknown error."}`, !(isPublic)));
@@ -1690,10 +1688,7 @@ export class GameDbAdmin {
       "",
       "Use Add More to continue, or Done to finish.",
     ];
-    let content = summaryLines.join("\n");
-    if (content.length > 1900) {
-      content = `${content.slice(0, 1900)}...`;
-    }
+    const content = truncateWithEllipsis(summaryLines.join("\n"), 1900);
 
     const synonymSummaryReply = buildTextReply(content, true);
     await safeReply(interaction, {
@@ -1868,9 +1863,7 @@ export class GameDbAdmin {
       );
       const termList = result.terms.map((term) => `"${term.termText}"`).join(" | ");
       let content = `Updated synonym group with ${result.terms.length} terms:\n${termList}`;
-      if (content.length > 1900) {
-        content = `${content.slice(0, 1900)}...`;
-      }
+      content = truncateWithEllipsis(content, 1900);
       await safeReply(interaction, buildTextReply(content, true));
     } catch (err: any) {
       await safeReply(interaction, buildTextReply(err?.message ?? "Failed to update synonym group.", true));

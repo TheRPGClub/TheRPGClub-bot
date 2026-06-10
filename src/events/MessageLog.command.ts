@@ -4,12 +4,12 @@ import type { ArgsOf, Client } from "discordx";
 import { Discord, On } from "discordx";
 import { formatTimestampWithDay, resolveLogChannel } from "../utilities/DiscordLogUtils.js";
 import { COLOR_INFO, COLOR_ERROR } from "../config/colors.js";
+import { truncateWithEllipsis } from "../utilities/ValidationUtils.js";
 const MAX_FIELD_LENGTH = 1000;
 const MAX_DESCRIPTION_LENGTH = 3500;
 
 function truncate(text: string, maxLength = MAX_FIELD_LENGTH): string {
-  if (text.length <= maxLength) return text;
-  return `${text.slice(0, maxLength - 3)}...`;
+  return truncateWithEllipsis(text, maxLength);
 }
 
 function formatMessageContent(message: Message): string {
