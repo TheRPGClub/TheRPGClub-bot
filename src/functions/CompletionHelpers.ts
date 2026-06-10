@@ -1,6 +1,5 @@
 import {
   AttachmentBuilder,
-  ButtonBuilder,
   ButtonStyle,
   ComponentType,
   type ButtonInteraction,
@@ -30,7 +29,7 @@ import {
 import { isInteractionSettled, safeReply, safeUpdate, safeUserFetch } from "./InteractionUtils.js";
 import { safeIgnore } from "../utilities/AsyncUtils.js";
 import { logError } from "../utilities/LogUtils.js";
-import { buildButtonRow } from "./uiComponents.js";
+import { buildActionButton, buildButtonRow } from "./uiComponents.js";
 
 const MAX_PLAYTIME_HOURS = 999999.99;
 const COMPLETION_COVER_ATTACHMENT_PREFIX = "completion-cover";
@@ -255,14 +254,8 @@ export async function promptRemoveFromNowPlaying(
   const yesId = `${promptId}:yes`;
   const noId = `${promptId}:no`;
   const row = buildButtonRow(
-    new ButtonBuilder()
-      .setCustomId(yesId)
-      .setLabel("Yes")
-      .setStyle(ButtonStyle.Danger),
-    new ButtonBuilder()
-      .setCustomId(noId)
-      .setLabel("No")
-      .setStyle(ButtonStyle.Secondary),
+    buildActionButton({ customId: yesId, label: "Yes", style: ButtonStyle.Danger }),
+    buildActionButton({ customId: noId, label: "No", style: ButtonStyle.Secondary }),
   );
 
   const payload = {
