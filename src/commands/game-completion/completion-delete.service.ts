@@ -1,8 +1,7 @@
 import { type StringSelectMenuInteraction } from "discord.js";
 import Member from "../../classes/Member.js";
 import { replyIfNotOwner, safeReply } from "../../functions/InteractionUtils.js";
-import { buildTextReply } from "../../functions/ComponentsV2Utils.js";
-import { COMPONENTS_V2_FLAG } from "../../config/flags.js";
+import { buildComponentsV2EditFlags, buildTextReply } from "../../functions/ComponentsV2Utils.js";
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
 import { assertCustomIdSegments } from "../../utilities/CustomIdUtils.js";
 import { safeIgnore } from "../../utilities/AsyncUtils.js";
@@ -37,6 +36,6 @@ export async function handleCompletionDeleteMenu(
 
   safeIgnore(interaction.message.edit({
     components: [],
-    flags: COMPONENTS_V2_FLAG,
+    flags: buildComponentsV2EditFlags(),
   }));
 }

@@ -14,8 +14,7 @@ import Member, { type ICompletionRecord } from "../classes/Member.js";
 import Game from "../classes/Game.js";
 import Thread from "../classes/Thread.js";
 import { formatTableDate, formatPlaytimeHours } from "./DateFormatUtils.js";
-import { COMPONENTS_V2_FLAG } from "../config/flags.js";
-import { safeV2TextContent } from "./ComponentsV2Utils.js";
+import { buildComponentsV2EditFlags, safeV2TextContent } from "./ComponentsV2Utils.js";
 import { buildActionButton, buildButtonRow, buildUserHeaderContainer } from "./uiComponents.js";
 import { truncateWithEllipsis } from "../utilities/ValidationUtils.js";
 
@@ -218,6 +217,6 @@ export async function buildJournalView(options: IJournalViewOptions): Promise<{
     components,
     files,
     allowedMentions: { users: [] },
-    flags: COMPONENTS_V2_FLAG,
+    flags: buildComponentsV2EditFlags(),
   };
 }

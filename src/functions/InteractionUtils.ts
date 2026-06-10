@@ -12,8 +12,12 @@ import type {
   User,
 } from "discord.js";
 import { BOT_DEV_CHANNEL_ID } from "../config/channels.js";
-import { COMPONENTS_V2_FLAG } from "../config/flags.js";
-import { buildComponentsV2Flags, buildTextReply, safeV2TextContent } from "./ComponentsV2Utils.js";
+import {
+  buildComponentsV2Flags,
+  buildTextReply,
+  hasComponentsV2Flag,
+  safeV2TextContent,
+} from "./ComponentsV2Utils.js";
 
 export type AnyRepliable = RepliableInteraction | CommandInteraction;
 
@@ -162,16 +166,6 @@ function normalizeOptions(options: any): any {
   }
 
   return normalizeComponentsV2Payload(restOptions);
-}
-
-function hasComponentsV2Flag(flags: unknown): boolean {
-  try {
-    const bitfield = new MessageFlagsBitField(flags as any).bitfield;
-    const asBigInt = typeof bitfield === "bigint" ? bitfield : BigInt(bitfield);
-    return (asBigInt & BigInt(COMPONENTS_V2_FLAG)) === BigInt(COMPONENTS_V2_FLAG);
-  } catch {
-    return false;
-  }
 }
 
 function normalizeComponentsV2Payload(options: any): any {

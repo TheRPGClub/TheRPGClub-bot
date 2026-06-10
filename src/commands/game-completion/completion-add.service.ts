@@ -28,11 +28,11 @@ import { resolveNowPlayingRemoval } from "./completion-helpers.js";
 import { promptCompletionPlatformSelection } from "./completion-platform.service.js";
 import { completionAddSessions, type CompletionAddContext } from "./completion.types.js";
 import {
+  buildComponentsV2EditFlags,
   buildComponentsV2Flags,
   buildTextContainer,
   buildTextReply,
 } from "../../functions/ComponentsV2Utils.js";
-import { COMPONENTS_V2_FLAG } from "../../config/flags.js";
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
 import { DISCORD_AUTOCOMPLETE_DESC_MAX } from "../../config/textLimits.js";
 import {
@@ -107,12 +107,12 @@ export async function promptIgdbSelection(
     if (isInteractionSettled(interaction)) {
       await safeReply(interaction, {
         components: loadingComponents,
-        flags: COMPONENTS_V2_FLAG,
+        flags: buildComponentsV2EditFlags(),
       });
     } else {
       await safeUpdate(interaction, {
         components: loadingComponents,
-        flags: COMPONENTS_V2_FLAG,
+        flags: buildComponentsV2EditFlags(),
       });
     }
   }
@@ -123,7 +123,7 @@ export async function promptIgdbSelection(
     if (interaction.isMessageComponent()) {
       await safeReply(interaction, {
         components: [buildTextContainer(content)],
-        flags: COMPONENTS_V2_FLAG,
+        flags: buildComponentsV2EditFlags(),
       });
     } else {
       await safeReply(interaction, buildTextReply(content, true));
@@ -151,7 +151,7 @@ export async function promptIgdbSelection(
       }
       await safeReply(sel, {
         components: [buildTextContainer("Importing game details from IGDB...")],
-        flags: COMPONENTS_V2_FLAG,
+        flags: buildComponentsV2EditFlags(),
       });
 
       const imported = await importGameFromIgdb(gameId);
@@ -214,7 +214,7 @@ export async function promptIgdbSelection(
   if (interaction.isMessageComponent()) {
     await safeReply(interaction, {
       components: [buildTextContainer("Found results on IGDB. Please see the new message below.")],
-      flags: COMPONENTS_V2_FLAG,
+      flags: buildComponentsV2EditFlags(),
     });
     await safeReply(interaction, {
       components: [buildTextContainer(content), ...components],
