@@ -14,7 +14,7 @@ import UserGameCollection, {
 import { flattenErrorMessages } from "../imports/import-scaffold.service.js";
 import { safeV2TextContent } from "../../functions/ComponentsV2Utils.js";
 import { safeDeferUpdate } from "../../functions/InteractionUtils.js";
-import { buildUserHeaderContainer } from "../../functions/uiComponents.js";
+import { buildActionButton, buildUserHeaderContainer } from "../../functions/uiComponents.js";
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
 import { parseCustomIdSegments } from "../../utilities/CustomIdUtils.js";
 import { buildDisabledPrevNextRowWithIds } from "../../functions/PaginationUtils.js";
@@ -254,18 +254,17 @@ export function buildCollectionFilterPanelComponents(params: {
 }): ActionRowBuilder<ButtonBuilder>[] {
   return [
     new ActionRowBuilder<ButtonBuilder>().addComponents(
-      new ButtonBuilder()
-        .setCustomId(
-          buildCollectionFilterPanelActionId({
-            viewerUserId: params.viewerUserId,
-            targetUserId: params.targetUserId,
-            sourceMessageId: params.sourceMessageId,
-            isEphemeral: params.isEphemeral,
-            action: "text",
-          }),
-        )
-        .setLabel("Edit Text")
-        .setStyle(ButtonStyle.Primary),
+      buildActionButton(
+        "edit",
+        buildCollectionFilterPanelActionId({
+          viewerUserId: params.viewerUserId,
+          targetUserId: params.targetUserId,
+          sourceMessageId: params.sourceMessageId,
+          isEphemeral: params.isEphemeral,
+          action: "text",
+        }),
+        "Edit Text",
+      ),
       new ButtonBuilder()
         .setCustomId(
           buildCollectionFilterPanelActionId({

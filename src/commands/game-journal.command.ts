@@ -52,7 +52,7 @@ import {
   buildTextReply,
   safeV2TextContent,
 } from "../functions/ComponentsV2Utils.js";
-import { buildUserHeaderContainer } from "../functions/uiComponents.js";
+import { buildActionButton, buildUserHeaderContainer } from "../functions/uiComponents.js";
 import {
   GJ_CLOSE_PREFIX,
   GJ_SEARCH_PAGE_PREFIX,
@@ -117,18 +117,9 @@ function buildHmenuActionRow(
   page = 1,
 ): ActionRowBuilder<ButtonBuilder> {
   return new ActionRowBuilder<ButtonBuilder>().addComponents(
-    new ButtonBuilder()
-      .setCustomId(`${GJ_HMENU_ADD_PREFIX}:${ownerId}:${gameId}`)
-      .setLabel("Add Entry")
-      .setStyle(ButtonStyle.Success),
-    new ButtonBuilder()
-      .setCustomId(`${GJ_HMENU_EDIT_PREFIX}:${ownerId}:${gameId}:${page}`)
-      .setLabel("Edit Entry")
-      .setStyle(ButtonStyle.Primary),
-    new ButtonBuilder()
-      .setCustomId(`${GJ_HMENU_DELETE_PREFIX}:${ownerId}:${gameId}`)
-      .setLabel("Delete Entry")
-      .setStyle(ButtonStyle.Danger),
+    buildActionButton("add", `${GJ_HMENU_ADD_PREFIX}:${ownerId}:${gameId}`, "Add Entry"),
+    buildActionButton("edit", `${GJ_HMENU_EDIT_PREFIX}:${ownerId}:${gameId}:${page}`, "Edit Entry"),
+    buildActionButton("delete", `${GJ_HMENU_DELETE_PREFIX}:${ownerId}:${gameId}`, "Delete Entry"),
     new ButtonBuilder()
       .setCustomId(`${NOW_PLAYING_HELP_PREFIX}:journal-add:${ownerId}`)
       .setLabel("?")
@@ -841,10 +832,7 @@ export class GameJournalCommand {
             new TextDisplayBuilder().setContent("No journal entries to edit."),
           ),
           new ActionRowBuilder<ButtonBuilder>().addComponents(
-            new ButtonBuilder()
-              .setCustomId(`${GJ_HMENU_ADD_PREFIX}:${ownerId}:${gameId}`)
-              .setLabel("Add Entry")
-              .setStyle(ButtonStyle.Success),
+            buildActionButton("add", `${GJ_HMENU_ADD_PREFIX}:${ownerId}:${gameId}`, "Add Entry"),
           ),
         ],
         flags: buildComponentsV2Flags(true),
@@ -883,10 +871,7 @@ export class GameJournalCommand {
             new TextDisplayBuilder().setContent("No journal entries to delete."),
           ),
           new ActionRowBuilder<ButtonBuilder>().addComponents(
-            new ButtonBuilder()
-              .setCustomId(`${GJ_HMENU_ADD_PREFIX}:${ownerId}:${gameId}`)
-              .setLabel("Add Entry")
-              .setStyle(ButtonStyle.Success),
+            buildActionButton("add", `${GJ_HMENU_ADD_PREFIX}:${ownerId}:${gameId}`, "Add Entry"),
           ),
         ],
         flags: buildComponentsV2Flags(true),
@@ -947,18 +932,14 @@ export class GameJournalCommand {
       ),
     );
     const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
-      new ButtonBuilder()
-        .setCustomId(
-          `${GJ_HMENU_DELETE_CONFIRM_PREFIX}:yes:${ownerId}:${gameIdRaw}:${entryId}`,
-        )
-        .setLabel("Delete")
-        .setStyle(ButtonStyle.Danger),
-      new ButtonBuilder()
-        .setCustomId(
-          `${GJ_HMENU_DELETE_CONFIRM_PREFIX}:no:${ownerId}:${gameIdRaw}:${entryId}`,
-        )
-        .setLabel("Cancel")
-        .setStyle(ButtonStyle.Secondary),
+      buildActionButton(
+        "delete",
+        `${GJ_HMENU_DELETE_CONFIRM_PREFIX}:yes:${ownerId}:${gameIdRaw}:${entryId}`,
+      ),
+      buildActionButton(
+        "cancel",
+        `${GJ_HMENU_DELETE_CONFIRM_PREFIX}:no:${ownerId}:${gameIdRaw}:${entryId}`,
+      ),
       new ButtonBuilder()
         .setCustomId(`${NOW_PLAYING_HELP_PREFIX}:journal-delete-confirm:${ownerId}`)
         .setLabel("?")

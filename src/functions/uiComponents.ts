@@ -5,6 +5,29 @@ import {
   SectionBuilder,
   TextDisplayBuilder,
 } from "@discordjs/builders";
+
+type ButtonAction = "add" | "edit" | "delete" | "confirm" | "cancel" | "close";
+
+const ACTION_DEFAULTS: Record<ButtonAction, { label: string; style: ButtonStyle }> = {
+  add:     { label: "Add",     style: ButtonStyle.Success   },
+  edit:    { label: "Edit",    style: ButtonStyle.Primary   },
+  delete:  { label: "Delete",  style: ButtonStyle.Danger    },
+  confirm: { label: "Confirm", style: ButtonStyle.Success   },
+  cancel:  { label: "Cancel",  style: ButtonStyle.Secondary },
+  close:   { label: "Close",   style: ButtonStyle.Secondary },
+};
+
+export function buildActionButton(
+  action: ButtonAction,
+  customId: string,
+  label?: string,
+): ButtonBuilder {
+  const d = ACTION_DEFAULTS[action];
+  return new ButtonBuilder()
+    .setCustomId(customId)
+    .setLabel(label ?? d.label)
+    .setStyle(d.style);
+}
 import {
   getUserEmojiString,
   renderUsernameWithEmoji,

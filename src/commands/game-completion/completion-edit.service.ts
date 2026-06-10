@@ -35,6 +35,7 @@ import {
   truncateWithEllipsis,
 } from "../../utilities/ValidationUtils.js";
 import { assertCustomIdSegments } from "../../utilities/CustomIdUtils.js";
+import { buildActionButton } from "../../functions/uiComponents.js";
 
 const MAX_NOTE_LENGTH = 500;
 type CompletionEditField = "type" | "date" | "platform" | "playtime" | "note";
@@ -399,11 +400,7 @@ function buildCompletionEditPrompt(
       .setCustomId(`comp-edit-field:${ownerId}:${completionId}:note`)
       .setLabel("Note")
       .setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder()
-      // eslint-disable-next-line local/custom-id-has-matching-handler
-      .setCustomId(`comp-edit-done:${ownerId}:${completionId}`)
-      .setLabel("Done")
-      .setStyle(ButtonStyle.Success),
+    buildActionButton("confirm", `comp-edit-done:${ownerId}:${completionId}`, "Done"),
   ];
 
   const currentParts = [
