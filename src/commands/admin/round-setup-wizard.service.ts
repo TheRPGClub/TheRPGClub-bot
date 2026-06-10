@@ -19,6 +19,7 @@ import Gotm, { insertGotmRoundInDatabase, type IGotmGame } from "../../classes/G
 import NrGotm, { insertNrGotmRoundInDatabase, type INrGotmGame } from "../../classes/NrGotm.js";
 import BotVotingInfo from "../../classes/BotVotingInfo.js";
 import { calculateNextVoteDate } from "./voting-admin.service.js";
+import { formatMonthYear } from "../../functions/DateFormatUtils.js";
 import { formatVoteDateForDisplay, parseVoteDateInput } from "../../functions/VoteDateUtils.js";
 import {
   addCancelOption,
@@ -495,7 +496,7 @@ export async function handleNextRoundSetup(
 
   const nextMonthDate = new Date();
   nextMonthDate.setMonth(nextMonthDate.getMonth() + 1);
-  const monthYear = nextMonthDate.toLocaleString("en-US", { month: "long", year: "numeric" });
+  const monthYear = formatMonthYear(nextMonthDate);
   await persistWizardState({ monthYear });
   await wizardLog(`Auto-assigned label: **${monthYear}**`);
 

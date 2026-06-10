@@ -6,6 +6,7 @@ import { listNominationsForRound } from "../../classes/Nomination.js";
 import { getUpcomingNominationWindow } from "../../functions/NominationWindow.js";
 import { calculateNextVoteDateEt } from "../../functions/VoteDateUtils.js";
 import { ADMIN_CHANNEL_ID, ANNOUNCEMENT_CHANNEL_NAME } from "../../config/channels.js";
+import { formatMonthYear } from "../../functions/DateFormatUtils.js";
 import { promptUserForInput } from "./admin-prompt.utils.js";
 import { VOTING_TITLE_MAX_LEN } from "./admin.types.js";
 
@@ -16,7 +17,7 @@ export async function handleVotingSetup(interaction: CommandInteraction): Promis
     const nextMonth = (() => {
       const base = new Date();
       const d = new Date(Date.UTC(base.getUTCFullYear(), base.getUTCMonth() + 1, 1));
-      return d.toLocaleString("en-US", { month: "long", timeZone: "UTC" });
+      return formatMonthYear(d);
     })();
     const monthLabel = nextMonth || "the upcoming month";
 

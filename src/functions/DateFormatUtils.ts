@@ -19,3 +19,11 @@ export function formatDiscordTimestamp(value: Date | string | null | undefined):
   const seconds = Math.floor(date.getTime() / 1000);
   return `<t:${seconds}:F>`;
 }
+
+export function formatLocalNumber(value: number): string {
+  return value.toLocaleString("en-US");
+}
+
+export function formatMonthYear(date: Date, timeZone = "UTC"): string {
+  return date.toLocaleString("en-US", { month: "long", year: "numeric", timeZone });
+}

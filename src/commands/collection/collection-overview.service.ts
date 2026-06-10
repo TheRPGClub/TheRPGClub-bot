@@ -8,6 +8,7 @@ import UserGameCollection, {
 } from "../../classes/UserGameCollection.js";
 import { COLLECTION_OVERVIEW_EMOJIS } from "../../config/emojis.js";
 import { safeV2TextContent } from "../../functions/ComponentsV2Utils.js";
+import { formatLocalNumber } from "../../functions/DateFormatUtils.js";
 import { formatPlatformDisplayName } from "../../functions/PlatformDisplay.js";
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
 import { parseCustomIdSegments } from "../../utilities/CustomIdUtils.js";
@@ -143,7 +144,7 @@ function formatCollectionOverviewFixedLabel(label: string, width: number): strin
 }
 
 function formatCollectionOverviewFixedTotal(total: number, width: number): string {
-  const formatted = total.toLocaleString("en-US");
+  const formatted = formatLocalNumber(total);
   return `\`\` ${formatted.padStart(width, " ")} \`\``;
 }
 
@@ -289,14 +290,14 @@ export function buildCollectionOverviewContainer(params: {
 
   container.addTextDisplayComponents(
     new TextDisplayBuilder().setContent(
-      safeV2TextContent(`Total games: **${params.totalCount.toLocaleString("en-US")}**`, 1000),
+      safeV2TextContent(`Total games: **${formatLocalNumber(params.totalCount)}**`, 1000),
     ),
   );
 
   const platformLabels = params.platformCounts.map((entry) =>
     formatCollectionOverviewPlatformLabel(entry),
   );
-  const totals = params.platformCounts.map((entry) => entry.total.toLocaleString("en-US"));
+  const totals = params.platformCounts.map((entry) => formatLocalNumber(entry.total));
   const labelWidth = platformLabels.length
     ? Math.max(...platformLabels.map((label) => label.length), 8)
     : 8;
@@ -373,7 +374,7 @@ export function buildAllCollectionsSummaryContainers(params: {
   const platformLabels = params.platformCounts.map((entry) =>
     formatCollectionOverviewPlatformLabel(entry),
   );
-  const totals = params.platformCounts.map((entry) => entry.total.toLocaleString("en-US"));
+  const totals = params.platformCounts.map((entry) => formatLocalNumber(entry.total));
   const labelWidth = platformLabels.length
     ? Math.max(...platformLabels.map((label) => label.length), 8)
     : 8;
@@ -403,7 +404,7 @@ export function buildAllCollectionsSummaryContainers(params: {
     if (isFirst) {
       container.addTextDisplayComponents(
         new TextDisplayBuilder().setContent(
-          safeV2TextContent(`Total games: **${params.totalCount.toLocaleString("en-US")}**`, 1000),
+          safeV2TextContent(`Total games: **${formatLocalNumber(params.totalCount)}**`, 1000),
         ),
       );
     }
