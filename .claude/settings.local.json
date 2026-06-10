@@ -5,11 +5,6 @@
     "context7@claude-plugins-official": true,
     "claude-code-setup@claude-plugins-official": true
   },
-  "statusLine": {
-		"type": "command",
-		"command": "npx -y ccusage statusline",
-		"padding": 0
-	},
   "permissions": {
     "allow": [
       "Bash(gh issue edit *)",
