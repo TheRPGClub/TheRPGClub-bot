@@ -1,7 +1,6 @@
 import {
   ActionRowBuilder,
   CommandInteraction,
-  EmbedBuilder,
   StringSelectMenuBuilder,
   StringSelectMenuInteraction,
   ApplicationCommandOptionType,
@@ -29,8 +28,10 @@ import {
 import { buildProfileViewPayload } from "./profile.command.js";
 import {
   buildComponentsV2Flags,
+  buildComponentsV2EditFlags,
   buildTextContainer,
   buildTextReply,
+  buildTitledContainer,
   safeV2TextContent,
 } from "../functions/ComponentsV2Utils.js";
 import { buildDisabledPrevNextRow, buildPageFooterText } from "../functions/PaginationUtils.js";
@@ -122,7 +123,7 @@ function buildSummaryEmbed(
   filters: PlatformFilters,
   page: number,
 ): {
-  embed: EmbedBuilder;
+  container: ReturnType<typeof buildTitledContainer>;
   totalPages: number;
   safePage: number;
   pageMembers: IMemberPlatformRecord[];
@@ -138,20 +139,17 @@ function buildSummaryEmbed(
     return `${displayIndex}. ${userMention(member.userId)} - ${platforms}`;
   });
 
-  const embed = new EmbedBuilder()
-    .setTitle("Member Multiplayer Info")
-    .setDescription(lines.join("\n") || "No member platform data found.")
-    .setFooter({ text: "Want to list your multiplayer info? Use /profile edit" });
+  const footer = totalPages > 1
+    ? `Want to list your multiplayer info? Use /profile edit\n${buildPageFooterText(safePage, totalPages)}`
+    : "Want to list your multiplayer info? Use /profile edit";
 
-  if (totalPages > 1) {
-    const footerText = [
-      "Want to list your multiplayer info? Use /profile edit",
-      buildPageFooterText(safePage, totalPages),
-    ].join("\n");
-    embed.setFooter({ text: footerText });
-  }
+  const container = buildTitledContainer(
+    "Member Multiplayer Info",
+    lines.join("\n") || "No member platform data found.",
+    { footer },
+  );
 
-  return { embed, totalPages, safePage, pageMembers };
+  return { container, totalPages, safePage, pageMembers };
 }
 
 function buildPageComponents(
@@ -212,7 +210,7 @@ async function renderMpInfoPage(
     return;
   }
 
-  const { embed, totalPages, safePage, pageMembers } = buildSummaryEmbed(
+  const { container, totalPages, safePage, pageMembers } = buildSummaryEmbed(
     activeMembers,
     filters,
     page,
@@ -228,14 +226,13 @@ async function renderMpInfoPage(
 
   if (interaction.isMessageComponent()) {
     await safeUpdate(interaction as any, {
-      embeds: [embed],
-      components,
+      components: [container, ...components],
       attachments: [],
+      flags: buildComponentsV2EditFlags(),
     });
   } else {
     await safeReply(interaction as any, {
-      embeds: [embed],
-      components,
+      components: [container, ...components],
       flags: buildComponentsV2Flags(ephemeral),
     });
   }

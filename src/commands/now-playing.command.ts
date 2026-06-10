@@ -1,7 +1,6 @@
 import {
   ApplicationCommandOptionType,
   type CommandInteraction,
-  EmbedBuilder,
   type User,
   AttachmentBuilder,
   MessageFlags,
@@ -79,8 +78,10 @@ import {
 } from "../functions/CompletionHelpers.js";
 import {
   buildComponentsV2Flags,
+  buildComponentsV2EditFlags,
   buildTextContainer,
   buildTextReply,
+  buildTitledContainer,
   safeV2TextContent,
 } from "../functions/ComponentsV2Utils.js";
 import { formatPlatformDisplayName } from "../functions/PlatformDisplay.js";
@@ -2838,9 +2839,8 @@ export class NowPlayingCommand {
       return;
     }
 
-    const embed = new EmbedBuilder()
-      .setTitle(`Delete Note: ${currentEntry.title}`)
-      .setDescription(currentEntry.note ? `> ${currentNote}` : "No note set.");
+    const noteBody = currentEntry.note ? `> ${currentNote}` : "No note set.";
+    const container = buildTitledContainer(`Delete Note: ${currentEntry.title}`, noteBody);
 
     const row = buildButtonRow(
       buildActionButton("delete", `nowplaying-delete-note-confirm:${ownerId}:${gameId}:yes`, "Delete Note"),
@@ -2848,9 +2848,8 @@ export class NowPlayingCommand {
     );
 
     await safeUpdate(interaction, {
-      content: "Confirm note deletion:",
-      embeds: [embed],
-      components: [row],
+      components: [container, row],
+      flags: buildComponentsV2EditFlags(),
     });
   }
 

@@ -2,9 +2,12 @@
 // It uses the parser, UI, and database functions to process and import historical GOTM data
 
 import type { CommandInteraction, Attachment } from "discord.js";
-import { EmbedBuilder, MessageFlags } from "discord.js";
 import { safeReply } from "../../functions/InteractionUtils.js";
-import { buildComponentsV2Flags, buildTextReply } from "../../functions/ComponentsV2Utils.js";
+import {
+  buildComponentsV2Flags,
+  buildTextReply,
+  buildTitledContainer,
+} from "../../functions/ComponentsV2Utils.js";
 import type { IGameWithPlatforms } from "../../classes/Game.js";
 import Game from "../../classes/Game.js";
 import Gotm, {
@@ -96,19 +99,16 @@ export async function handleGotmAudit(
     }
 
     const stats = await countGotmAuditItems(session.importId);
-    const embed = new EmbedBuilder()
-      .setTitle(`GOTM Audit #${session.importId}`)
-      .setDescription(`Status: ${session.status}`)
-      .addFields(
-        { name: "Pending", value: String(stats.pending), inline: true },
-        { name: "Imported", value: String(stats.imported), inline: true },
-        { name: "Skipped", value: String(stats.skipped), inline: true },
-        { name: "Errors", value: String(stats.error), inline: true },
-      );
+    const body = [
+      `Status: ${session.status}`,
+      `**Pending** ${stats.pending} | **Imported** ${stats.imported}` +
+        ` | **Skipped** ${stats.skipped} | **Errors** ${stats.error}`,
+    ].join("\n\n");
+    const container = buildTitledContainer(`GOTM Audit #${session.importId}`, body);
 
     await safeReply(interaction, {
-      embeds: [embed],
-      flags: MessageFlags.Ephemeral,
+      components: [container],
+      flags: buildComponentsV2Flags(true),
     });
     return;
   }

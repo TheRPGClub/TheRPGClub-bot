@@ -1,16 +1,22 @@
-import { AttachmentBuilder, channelMention, EmbedBuilder, type Client } from "discord.js";
+import { AttachmentBuilder, channelMention, type Client } from "discord.js";
+import {
+  ContainerBuilder,
+  MediaGalleryBuilder,
+  MediaGalleryItemBuilder,
+} from "@discordjs/builders";
 import type { IGotmEntry, IGotmGame } from "../classes/Gotm.js";
 import type { INrGotmEntry, INrGotmGame } from "../classes/NrGotm.js";
 import Game from "../classes/Game.js";
 import { COLOR_PRIMARY } from "../config/colors.js";
 import { truncateWithEllipsis } from "../utilities/ValidationUtils.js";
+import { buildTitledContainer } from "./ComponentsV2Utils.js";
 
 const ANNOUNCEMENTS_CHANNEL_ID: string | undefined = process.env.ANNOUNCEMENTS_CHANNEL_ID;
 
 const AUDIT_NO_VALUE_SENTINEL = "__NO_VALUE__";
 
 export interface IEmbedWithAttachments {
-  embed: EmbedBuilder;
+  container: ContainerBuilder;
   files: AttachmentBuilder[];
 }
 
@@ -163,20 +169,20 @@ export async function buildGotmEntryEmbed(
   client: Client,
 ): Promise<IEmbedWithAttachments> {
   const desc = await formatGamesWithJump(entry as AnyEntry, guildId);
-  const embed = new EmbedBuilder()
-    .setColor(COLOR_PRIMARY)
-    .setTitle(`Round ${entry.round} - ${entry.monthYear}`)
-    .setDescription(desc);
-
-  const jumpLink = buildResultsJumpLink(entry, guildId);
-  if (jumpLink) embed.setURL(jumpLink);
+  const container = buildTitledContainer(
+    `Round ${entry.round} - ${entry.monthYear}`,
+    desc,
+    { color: COLOR_PRIMARY },
+  );
 
   const { thumbnailUrl, files } = await resolveEntryImage(entry, entry.gameOfTheMonth, client);
   if (thumbnailUrl) {
-    embed.setThumbnail(thumbnailUrl);
+    container.addMediaGalleryComponents(
+      new MediaGalleryBuilder().addItems(new MediaGalleryItemBuilder().setURL(thumbnailUrl)),
+    );
   }
 
-  return { embed, files };
+  return { container, files };
 }
 
 export async function buildNrGotmEntryEmbed(
@@ -185,18 +191,18 @@ export async function buildNrGotmEntryEmbed(
   client: Client,
 ): Promise<IEmbedWithAttachments> {
   const desc = await formatGamesWithJump(entry as AnyEntry, guildId);
-  const embed = new EmbedBuilder()
-    .setColor(COLOR_PRIMARY)
-    .setTitle(`NR-GOTM Round ${entry.round} - ${entry.monthYear}`)
-    .setDescription(desc);
-
-  const jumpLink = buildResultsJumpLink(entry, guildId);
-  if (jumpLink) embed.setURL(jumpLink);
+  const container = buildTitledContainer(
+    `NR-GOTM Round ${entry.round} - ${entry.monthYear}`,
+    desc,
+    { color: COLOR_PRIMARY },
+  );
 
   const { thumbnailUrl, files } = await resolveEntryImage(entry, entry.gameOfTheMonth, client);
   if (thumbnailUrl) {
-    embed.setThumbnail(thumbnailUrl);
+    container.addMediaGalleryComponents(
+      new MediaGalleryBuilder().addItems(new MediaGalleryItemBuilder().setURL(thumbnailUrl)),
+    );
   }
 
-  return { embed, files };
+  return { container, files };
 }

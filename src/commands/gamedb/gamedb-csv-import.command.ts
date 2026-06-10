@@ -3,7 +3,6 @@ import {
   Attachment,
   ButtonInteraction,
   CommandInteraction,
-  EmbedBuilder,
   MessageFlags,
   ModalBuilder,
   ModalSubmitInteraction,
@@ -60,7 +59,7 @@ import {
   pushAutoAcceptedTitle,
   consumeAutoAcceptedSummary,
 } from "./gamedb-utils.js";
-import { buildTextReply } from "../../functions/ComponentsV2Utils.js";
+import { buildTextReply, buildTitledContainer } from "../../functions/ComponentsV2Utils.js";
 import {
   buildCsvPromptComponents,
   buildCsvPromptContainer,
@@ -442,19 +441,16 @@ export class GameDbCsvImportCommand {
       }
 
       const stats = await countGameDbCsvImportItems(session.importId);
-      const embed = new EmbedBuilder()
-        .setTitle(`GameDB CSV Import #${session.importId}`)
-        .setDescription(`Status: ${session.status}`)
-        .addFields(
-          { name: "Pending", value: String(stats.pending), inline: true },
-          { name: "Imported", value: String(stats.imported), inline: true },
-          { name: "Skipped", value: String(stats.skipped), inline: true },
-          { name: "Errors", value: String(stats.error), inline: true },
-        );
+      const body = [
+        `Status: ${session.status}`,
+        `**Pending** ${stats.pending} | **Imported** ${stats.imported}` +
+          ` | **Skipped** ${stats.skipped} | **Errors** ${stats.error}`,
+      ].join("\n\n");
+      const container = buildTitledContainer(`GameDB CSV Import #${session.importId}`, body);
 
       await safeReply(interaction, {
-        embeds: [embed],
-        flags: MessageFlags.Ephemeral,
+        components: [container],
+        flags: buildComponentsV2Flags(true),
       });
       return;
     }

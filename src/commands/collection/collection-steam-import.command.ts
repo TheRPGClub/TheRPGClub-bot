@@ -2,7 +2,6 @@ import {
   ApplicationCommandOptionType,
   ButtonInteraction,
   CommandInteraction,
-  EmbedBuilder,
   MessageFlags,
   ModalBuilder,
   ModalSubmitInteraction,
@@ -60,7 +59,11 @@ import {
   searchIgdbWithProgressiveTitleVariants,
   type ImportCandidate,
 } from "../../functions/ImportCandidateUtils.js";
-import { buildComponentsV2Flags, buildTextReply } from "../../functions/ComponentsV2Utils.js";
+import {
+  buildComponentsV2Flags,
+  buildTextReply,
+  buildTitledContainer,
+} from "../../functions/ComponentsV2Utils.js";
 import {
   buildImportActionsContainer,
   buildImportMessageContainer,
@@ -94,7 +97,6 @@ import { buildCollectionIgdbSelectOptions } from "./collection-game-resolve.util
 import { SteamApiError, steamApiService } from "../../services/SteamApiService.js";
 import { createIgdbSession } from "../../services/IGDB/IgdbSelectService.js";
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
-import { DISCORD_EMBED_FIELD_VALUE_MAX } from "../../config/textLimits.js";
 import { buildTextInputRow } from "../../functions/uiComponents.js";
 import { safeIgnore } from "../../utilities/AsyncUtils.js";
 import { logError } from "../../utilities/LogUtils.js";
@@ -608,23 +610,24 @@ export class CollectionSteamImportCommand {
         const stats = await countSteamCollectionImportItems(session.importId);
         const reasonCounts = await countSteamCollectionImportResultReasons(session.importId);
         const reasonLines = buildSteamImportReasonSummary(reasonCounts);
-        const embed = new EmbedBuilder()
-          .setTitle(`Steam Collection Import #${session.importId}`)
-          .setDescription(`Status: ${session.status}`)
-          .addFields(
-            { name: "Pending", value: String(stats.pending), inline: true },
-            { name: "Added", value: String(stats.added), inline: true },
-            { name: "Updated", value: String(stats.updated), inline: true },
-            { name: "Skipped", value: String(stats.skipped), inline: true },
-            { name: "Failed", value: String(stats.failed), inline: true },
-          );
+        const statusLine = `Status: ${session.status}`;
+        const countsLine = `**Pending** ${stats.pending} | **Added** ${stats.added}` +
+          ` | **Updated** ${stats.updated} | **Skipped** ${stats.skipped}` +
+          ` | **Failed** ${stats.failed}`;
+        const parts = [statusLine, countsLine];
         if (reasonLines.length) {
-          embed.addFields({
-            name: "Reason breakdown",
-            value: reasonLines.join(" | ").slice(0, DISCORD_EMBED_FIELD_VALUE_MAX),
-          });
+          parts.push(
+            `**Reason breakdown** ${reasonLines.join(" | ").slice(0, 500)}`,
+          );
         }
-        await safeReply(interaction, { embeds: [embed] });
+        const container = buildTitledContainer(
+          `Steam Collection Import #${session.importId}`,
+          parts.join("\n\n"),
+        );
+        await safeReply(interaction, {
+          components: [container],
+          flags: buildComponentsV2Flags(false),
+        });
       },
       onPause: async (session) => {
         await setSteamCollectionImportStatus(session.importId, "PAUSED");

@@ -4,7 +4,6 @@ import {
   ButtonInteraction,
   ButtonStyle,
   CommandInteraction,
-  EmbedBuilder,
   MessageFlags,
   ModalBuilder,
   ModalSubmitInteraction,
@@ -28,11 +27,18 @@ import {
   safeUpdate,
   getModalField,
 } from "../functions/InteractionUtils.js";
-import { buildTextReply } from "../functions/ComponentsV2Utils.js";
+import {
+  buildTextReply,
+  buildTextContainer,
+  buildTitledContainer,
+  buildComponentsV2Flags,
+  buildComponentsV2EditFlags,
+} from "../functions/ComponentsV2Utils.js";
 import {
   buildOptionalPrevNextRow,
   parseDirAndPage,
 } from "../functions/PaginationUtils.js";
+import { ContainerBuilder } from "@discordjs/builders";
 import {
   claimGameKey,
   createGameKey,
@@ -77,9 +83,8 @@ const GIVEAWAY_DONOR_SETTINGS_ID = "giveaway-hub-settings";
 const GIVEAWAY_DONOR_NOTIFY_ID = "giveaway-donor-notify";
 
 type GiveawayListPayload = {
-  content?: string;
-  embeds?: EmbedBuilder[];
-  components?: ActionRowBuilder<ButtonBuilder | StringSelectMenuBuilder>[];
+  components: (ContainerBuilder | ActionRowBuilder<ButtonBuilder | StringSelectMenuBuilder>)[];
+  flags: number;
 };
 
 function getKeyRangeLabel(keys: Awaited<ReturnType<typeof listAvailableGameKeys>>): string {
@@ -132,12 +137,8 @@ async function logGiveawayClaim(
   const message =
     `${userMention(userId)} claimed **${keyTitle}** (${platform}) [Key ID: ${keyId}].`;
   if (channel && typeof channel.send === "function") {
-    const embed = new EmbedBuilder()
-      .setTitle("Giveaway claim")
-      .setDescription(message)
-      .setColor(COLOR_SUCCESS)
-      .setTimestamp(new Date());
-    safeIgnore(channel.send({ embeds: [embed] }));
+    const container = buildTitledContainer("Giveaway claim", message, { color: COLOR_SUCCESS });
+    safeIgnore(channel.send({ components: [container], flags: buildComponentsV2EditFlags() }));
   }
 }
 
@@ -412,14 +413,13 @@ async function buildKeyListPayload(
   const { keys, totalCount, totalPages, safePage } = await getAvailableKeysPage(page);
   if (!totalCount || !keys.length) {
     return {
-      content: "There are no available game keys right now.",
-      embeds: [],
-      components: [],
+      components: [buildTitledContainer("Game Key Giveaway", "There are no available game keys right now.")],
+      flags: buildComponentsV2EditFlags(),
     };
   }
 
-  const embed = buildKeyListEmbed(keys, safePage, totalPages, totalCount);
-  const components = buildKeyListComponents(
+  const container = buildKeyListEmbed(keys, safePage, totalPages, totalCount);
+  const actionRows = buildKeyListComponents(
     sessionId,
     ownerId,
     safePage,
@@ -427,8 +427,7 @@ async function buildKeyListPayload(
     keys,
     isPublic,
   );
-  // eslint-disable-next-line local/dynamic-components-require-chunking
-  return { embeds: [embed], components };
+  return { components: [container, ...actionRows], flags: buildComponentsV2EditFlags() };
 }
 
 async function updateKeyListInteraction(
@@ -439,19 +438,7 @@ async function updateKeyListInteraction(
   isPublic: boolean,
 ): Promise<void> {
   const payload = await buildKeyListPayload(page, sessionId, ownerId, isPublic);
-  if (payload.content) {
-    await safeUpdate(interaction, {
-      content: payload.content,
-      embeds: [],
-      components: [],
-    });
-    return;
-  }
-
-  await safeUpdate(interaction, {
-    embeds: payload.embeds,
-    components: payload.components,
-  });
+  await safeUpdate(interaction, payload);
 }
 
 async function updatePublicListMessage(
@@ -477,19 +464,7 @@ async function updatePublicListMessage(
     return;
   }
 
-  if (payload.content) {
-    safeIgnore(message.edit({
-      content: payload.content,
-      embeds: [],
-      components: [],
-    }));
-    return;
-  }
-
-  safeIgnore(message.edit({
-    embeds: payload.embeds,
-    components: payload.components,
-  }));
+  safeIgnore(message.edit(payload));
 }
 
 @Discord()
@@ -623,12 +598,11 @@ export class GiveawayCommand {
     }
 
     await safeReply(interaction, {
-      content: "Pick a key to claim:",
-      components: buildKeySelectMenus(
-        `giveaway-hub-claim-select:${interaction.user.id}`,
-        keys,
-      ),
-      flags: MessageFlags.Ephemeral,
+      components: [
+        buildTextContainer("Pick a key to claim:"),
+        ...buildKeySelectMenus(`giveaway-hub-claim-select:${interaction.user.id}`, keys),
+      ],
+      flags: buildComponentsV2Flags(true),
     });
   }
    
@@ -643,16 +617,19 @@ export class GiveawayCommand {
     const donatedKeys = await listKeysByDonor(interaction.user.id);
     const inventory = buildDonorInventorySummary(donatedKeys);
     await safeReply(interaction, {
-      content:
-        [
-          "Your donated keys:",
-          inventory,
-          "",
-          "Notify you when your donated keys are claimed? " +
-            `Current setting: **${formatDonorNotifyStatus(enabled)}**.`,
-        ].join("\n"),
-      components: [buildDonorSettingsRow(interaction.user.id, enabled)],
-      flags: MessageFlags.Ephemeral,
+      components: [
+        buildTextContainer(
+          [
+            "Your donated keys:",
+            inventory,
+            "",
+            "Notify you when your donated keys are claimed? " +
+              `Current setting: **${formatDonorNotifyStatus(enabled)}**.`,
+          ].join("\n"),
+        ),
+        buildDonorSettingsRow(interaction.user.id, enabled),
+      ],
+      flags: buildComponentsV2Flags(true),
     });
   }
    
@@ -707,14 +684,14 @@ export class GiveawayCommand {
       return;
     }
 
+    const claimContainer = buildKeyListEmbed(keys, safePage, totalPages, totalCount);
+    const claimSelectRows = buildKeySelectMenus(
+      `giveaway-claim-public:${sessionId}:${safePage}:${interaction.message.id}:${interaction.user.id}`,
+      keys,
+    );
     await safeReply(interaction, {
-      content: "Pick a key to claim:",
-      embeds: [buildKeyListEmbed(keys, safePage, totalPages, totalCount)],
-      components: buildKeySelectMenus(
-        `giveaway-claim-public:${sessionId}:${safePage}:${interaction.message.id}:${interaction.user.id}`,
-        keys,
-      ),
-      flags: MessageFlags.Ephemeral,
+      components: [claimContainer, ...claimSelectRows],
+      flags: buildComponentsV2Flags(true),
     });
   }
    

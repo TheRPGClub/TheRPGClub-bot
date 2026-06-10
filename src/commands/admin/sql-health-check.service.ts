@@ -1,9 +1,12 @@
-import { EmbedBuilder, MessageFlags } from "discord.js";
 import { COLOR_HEALTH_OK, COLOR_HEALTH_FAIL } from "../../config/colors.js";
 import type { CommandInteraction } from "discord.js";
 import { oraWithConnection } from "../../db/SqlManager.js";
 import { getPostgresPool } from "../../db/postgresClient.js";
 import { safeReply } from "../../functions/InteractionUtils.js";
+import {
+  buildTitledContainer,
+  buildComponentsV2Flags,
+} from "../../functions/ComponentsV2Utils.js";
 
 export type SqlTarget = "oracle" | "postgresql";
 
@@ -47,17 +50,17 @@ export async function handleSqlHealthCheck(
   const label = isOracle ? "Oracle" : "PostgreSQL";
   const result = isOracle ? await checkOracle() : await checkPostgres();
 
-  const embed = new EmbedBuilder()
-    .setTitle(`${result.ok ? "✅" : "❌"} ${label} Health Check`)
-    .setColor(result.ok ? COLOR_HEALTH_OK : COLOR_HEALTH_FAIL)
-    .setTimestamp();
-
+  let body: string;
   if (result.ok && result.latencyMs !== null) {
-    embed.setDescription(`Connection healthy -- round-trip latency: **${result.latencyMs} ms**`);
+    body = `Connection healthy -- round-trip latency: **${result.latencyMs} ms**`;
   } else {
-    embed.setDescription("Connection failed.");
-    embed.addFields({ name: "Error", value: `\`\`\`${result.error}\`\`\`` });
+    body = `Connection failed.\n\n**Error**\n\`\`\`${result.error}\`\`\``;
   }
+  const container = buildTitledContainer(
+    `${result.ok ? "✅" : "❌"} ${label} Health Check`,
+    body,
+    { color: result.ok ? COLOR_HEALTH_OK : COLOR_HEALTH_FAIL },
+  );
 
-  await safeReply(interaction, { embeds: [embed], flags: MessageFlags.Ephemeral });
+  await safeReply(interaction, { components: [container], flags: buildComponentsV2Flags(true) });
 }

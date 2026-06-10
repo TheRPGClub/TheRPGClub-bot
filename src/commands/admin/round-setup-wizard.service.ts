@@ -5,7 +5,6 @@ import {
   AttachmentBuilder,
   ButtonStyle,
   ComponentType,
-  EmbedBuilder,
   ForumChannel,
   StringSelectMenuBuilder,
   type Message,
@@ -15,7 +14,12 @@ import {
 } from "discord.js";
 import { safeDeferUpdate, safeReply } from "../../functions/InteractionUtils.js";
 import { buildActionButton, buildButtonRow } from "../../functions/uiComponents.js";
-import { buildTextReply } from "../../functions/ComponentsV2Utils.js";
+import {
+  buildTextReply,
+  buildTitledContainer,
+  buildComponentsV2EditFlags,
+  buildComponentsV2Flags,
+} from "../../functions/ComponentsV2Utils.js";
 import { ADMIN_CHANNEL_ID, NOW_PLAYING_FORUM_ID } from "../../config/channels.js";
 import Gotm, { insertGotmRoundInDatabase, type IGotmGame } from "../../classes/Gotm.js";
 import NrGotm, { insertNrGotmRoundInDatabase, type INrGotmGame } from "../../classes/NrGotm.js";
@@ -285,17 +289,20 @@ export async function handleNextRoundSetup(
 
   const testMode = !!testModeInput;
 
-  const embed = new EmbedBuilder()
-    .setTitle("Round Setup Wizard")
-    .setColor(COLOR_PRIMARY)
-    .setDescription("Initializing...");
-  if (testMode) {
-    embed.setFooter({ text: "TEST MODE ENABLED" });
-  }
+  const wizardFooter = testMode ? "TEST MODE ENABLED" : undefined;
+  const initialContainer = buildTitledContainer(
+    "Round Setup Wizard",
+    "Initializing...",
+    { color: COLOR_PRIMARY, footer: wizardFooter },
+  );
 
   const replyResult = await safeReply(
     interaction,
-    { embeds: [embed], withResponse: true } as any,
+    {
+      components: [initialContainer],
+      flags: buildComponentsV2Flags(false),
+      withResponse: true,
+    } as any,
   );
   const message = replyResult?.resource?.message ?? null;
   let logHistory = "";
@@ -308,8 +315,15 @@ export async function handleNextRoundSetup(
     if (logHistory.length > 3500) {
       logHistory = "..." + logHistory.slice(logHistory.length - 3500);
     }
-    embed.setDescription(logHistory || "Processing...");
-    await safeReply(interaction, { embeds: [embed] });
+    const updatedContainer = buildTitledContainer(
+      "Round Setup Wizard",
+      logHistory || "Processing...",
+      { color: COLOR_PRIMARY, footer: wizardFooter },
+    );
+    await safeReply(interaction, {
+      components: [updatedContainer],
+      flags: buildComponentsV2EditFlags(),
+    });
   };
 
   const wizardLog = async (msg: string) => {

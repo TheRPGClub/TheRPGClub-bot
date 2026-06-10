@@ -1,7 +1,6 @@
 import {
   type CommandInteraction,
   ApplicationCommandOptionType,
-  EmbedBuilder,
   type User,
   PermissionsBitField,
   ActionRowBuilder,
@@ -34,6 +33,7 @@ import {
   buildComponentsV2Flags,
   buildTextContainer,
   buildTextReply,
+  buildTitledContainer,
   safeV2TextContent,
 } from "../functions/ComponentsV2Utils.js";
 import { buildUserHeaderContainer } from "../functions/uiComponents.js";
@@ -671,23 +671,24 @@ export class ProfileCommand {
       ),
     );
 
-    const embed = new EmbedBuilder()
-      .setTitle(`Profile search (${results.length})`)
-      .setDescription(description.slice(0, 4000))
-      .setFooter({ text: "Choose a member below to view a profile." });
-
-    const content =
+    const notice =
       selectChunks.length > 5
         ? "Showing the first 125 selectable results (Discord limits). Refine filters to narrow further."
         : description.length > 4000
             ? "Showing truncated results (Discord length limits). Refine filters for more detail."
             : undefined;
+    const footer = notice
+      ? `Choose a member below to view a profile.\n${notice}`
+      : "Choose a member below to view a profile.";
+    const container = buildTitledContainer(
+      `Profile search (${results.length})`,
+      description.slice(0, 3500),
+      { footer },
+    );
 
     await safeReply(interaction, {
-      content,
-      embeds: [embed],
-      components,
-      ephemeral,
+      components: [container, ...components],
+      flags: buildComponentsV2Flags(ephemeral),
     });
   }
 

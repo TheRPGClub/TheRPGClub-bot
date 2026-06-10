@@ -2,7 +2,6 @@ import axios from "axios";
 import { DateTime } from "luxon";
 import {
   type CommandInteraction,
-  EmbedBuilder,
   GuildScheduledEventEntityType,
   GuildScheduledEventPrivacyLevel,
   MessageFlags,
@@ -14,6 +13,8 @@ import {
   ActionRowBuilder as ModalActionRowBuilder,
   ModalBuilder,
   TextInputBuilder as ModalTextInputBuilder,
+  MediaGalleryBuilder,
+  MediaGalleryItemBuilder,
 } from "@discordjs/builders";
 import { TextInputStyle as ApiTextInputStyle } from "discord-api-types/v10";
 import { LIVE_EVENT_FORUM_ID } from "../../config/channels.js";
@@ -23,7 +24,7 @@ import {
   sanitizeOptionalInput,
   sanitizeUserInput,
 } from "../../functions/InteractionUtils.js";
-import { buildTextReply } from "../../functions/ComponentsV2Utils.js";
+import { buildTextReply, buildComponentsV2Flags } from "../../functions/ComponentsV2Utils.js";
 import { DISCORD_SELECT_LABEL_MAX } from "../../config/textLimits.js";
 import { assertCustomIdSegments } from "../../utilities/CustomIdUtils.js";
 
@@ -277,11 +278,18 @@ export async function handleLiveStreamCreateModal(interaction: ModalSubmitIntera
   let threadUrl: string | null = null;
   let threadId: string | null = null;
   try {
+    const threadMessage: Record<string, unknown> = {
+      content: `Live event discussion for **${topic}**`,
+    };
+    if (imageUrl) {
+      const gallery = new MediaGalleryBuilder().addItems(
+        new MediaGalleryItemBuilder().setURL(imageUrl),
+      );
+      threadMessage.components = [gallery];
+      threadMessage.flags = buildComponentsV2Flags(false);
+    }
     const thread = await forum.threads.create({
-      message: {
-        content: `Live event discussion for **${topic}**`,
-        embeds: imageUrl ? [new EmbedBuilder().setImage(imageUrl)] : [],
-      },
+      message: threadMessage as any,
       name: topic.slice(0, DISCORD_SELECT_LABEL_MAX),
     });
     threadUrl = thread.url;
