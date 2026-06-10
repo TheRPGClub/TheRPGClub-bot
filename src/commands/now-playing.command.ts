@@ -4203,10 +4203,11 @@ export class NowPlayingCommand {
       const notesAction = showNotes ? "hide" : "show";
       const notesLabel = showNotes ? "Hide Notes" : "Show Notes";
       buttons.push(
-        new ButtonBuilder()
-          .setCustomId(`${NOW_PLAYING_LIST_NOTES_PREFIX}:${ownerId}:${notesAction}`)
-          .setLabel(notesLabel)
-          .setStyle(ButtonStyle.Secondary),
+        buildActionButton({
+          customId: `${NOW_PLAYING_LIST_NOTES_PREFIX}:${ownerId}:${notesAction}`,
+          label: notesLabel,
+          style: ButtonStyle.Secondary,
+        }),
       );
     }
     return buttons.length > 0 ? buildButtonRow(...buttons) : null;
