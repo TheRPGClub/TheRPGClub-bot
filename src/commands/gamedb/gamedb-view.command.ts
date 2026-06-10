@@ -42,7 +42,7 @@ import { runSearchFlow } from "./gamedb-search.command.js";
 import { startCompletionWizard } from "./gamedb-completion.command.js";
 import { showNowPlayingThreadModal } from "./gamedb-thread.command.js";
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
-import { parseCustomIdSegments } from "../../utilities/CustomIdUtils.js";
+import { assertCustomIdSegments } from "../../utilities/CustomIdUtils.js";
 
 @Discord()
 @SlashGroup("gamedb")
@@ -99,8 +99,8 @@ export class GameDbViewCommand {
     id: /^gamedb-action:(nowplaying|completion|thread|video|hltb-import):\d+$/,
   })
   async handleGameDbAction(interaction: ButtonInteraction): Promise<void> {
-    const segs = parseCustomIdSegments(interaction.customId, 2);
-    if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+    const segs = assertCustomIdSegments(interaction, 2);
+    if (!segs) return;
     const [action, gameIdRaw] = segs;
     const gameId = Number(gameIdRaw);
     if (!isPositiveInt(gameId)) {

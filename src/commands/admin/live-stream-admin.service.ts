@@ -24,7 +24,7 @@ import {
 } from "../../functions/InteractionUtils.js";
 import { buildTextReply } from "../../functions/ComponentsV2Utils.js";
 import { DISCORD_SELECT_LABEL_MAX } from "../../config/textLimits.js";
-import { parseCustomIdSegments } from "../../utilities/CustomIdUtils.js";
+import { assertCustomIdSegments } from "../../utilities/CustomIdUtils.js";
 
 const LIVE_STREAM_MODAL_PREFIX = "admin-live-stream-create";
 const LIVE_STREAM_TOPIC_ID = "live-stream-topic";
@@ -230,8 +230,8 @@ export async function openLiveStreamCreateModal(interaction: CommandInteraction)
 
 export async function handleLiveStreamCreateModal(interaction: ModalSubmitInteraction):
   Promise<void> {
-  const segs = parseCustomIdSegments(interaction.customId, 1);
-  if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+  const segs = assertCustomIdSegments(interaction, 1);
+  if (!segs) return;
   const [userId] = segs;
 
   if (userId !== interaction.user.id) {

@@ -27,7 +27,7 @@ import {
   safeUpdate,
 } from "../../functions/InteractionUtils.js";
 import { buildTextReply, safeV2TextContent } from "../../functions/ComponentsV2Utils.js";
-import { parseCustomIdSegments } from "../../utilities/CustomIdUtils.js";
+import { assertCustomIdSegments } from "../../utilities/CustomIdUtils.js";
 import {
   notifyUnknownCompletionPlatform,
   validateCompletionPlaytimeInput,
@@ -303,8 +303,8 @@ export class GameDbCompletionCommand {
    
   @SelectMenuComponent({ id: /^gamedb-completion-select:\d+:(type|date|platform|remove)$/ })
   async handleCompletionWizardSelect(interaction: StringSelectMenuInteraction): Promise<void> {
-    const segs = parseCustomIdSegments(interaction.customId, 2);
-    if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+    const segs = assertCustomIdSegments(interaction, 2);
+    if (!segs) return;
     const [sessionId, field] = segs;
     const session = COMPLETION_WIZARD_SESSIONS.get(sessionId);
     if (!session) {
@@ -347,8 +347,8 @@ export class GameDbCompletionCommand {
    
   @ButtonComponent({ id: /^gamedb-completion-next:\d+$/ })
   async handleCompletionWizardNext(interaction: ButtonInteraction): Promise<void> {
-    const segs = parseCustomIdSegments(interaction.customId, 1);
-    if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+    const segs = assertCustomIdSegments(interaction, 1);
+    if (!segs) return;
     const [sessionId] = segs;
     const session = COMPLETION_WIZARD_SESSIONS.get(sessionId);
     if (!session) {
@@ -422,8 +422,8 @@ export class GameDbCompletionCommand {
    
   @ModalComponent({ id: /^gamedb-completion-modal:\d+$/ })
   async handleCompletionWizardModal(interaction: ModalSubmitInteraction): Promise<void> {
-    const segs = parseCustomIdSegments(interaction.customId, 1);
-    if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+    const segs = assertCustomIdSegments(interaction, 1);
+    if (!segs) return;
     const [sessionId] = segs;
     const session = COMPLETION_WIZARD_SESSIONS.get(sessionId);
     await safeDeferReply(interaction, { flags: MessageFlags.Ephemeral }).catch(() => {});
@@ -516,8 +516,8 @@ export class GameDbCompletionCommand {
    
   @ModalComponent({ id: /^gamedb-nowplaying-modal:\d+$/ })
   async handleGameDbNowPlayingModal(interaction: ModalSubmitInteraction): Promise<void> {
-    const segs = parseCustomIdSegments(interaction.customId, 1);
-    if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return; }
+    const segs = assertCustomIdSegments(interaction, 1);
+    if (!segs) return;
     const [gameIdRaw] = segs;
     const gameId = Number(gameIdRaw);
     await safeDeferReply(interaction, { flags: MessageFlags.Ephemeral });

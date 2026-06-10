@@ -15,7 +15,7 @@ import {
 import { buildTextReply } from "../../functions/ComponentsV2Utils.js";
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
 import { DISCORD_SELECT_LABEL_MAX } from "../../config/textLimits.js";
-import { parseCustomIdSegments } from "../../utilities/CustomIdUtils.js";
+import { assertCustomIdSegments } from "../../utilities/CustomIdUtils.js";
 
 export type IgdbSelectOption = { id: number; label: string; description?: string };
 
@@ -154,8 +154,8 @@ export function deleteIgdbSession(sessionId: string): void {
 export async function handleIgdbSelectInteraction(
   interaction: StringSelectMenuInteraction,
 ): Promise<boolean> {
-  const segs = parseCustomIdSegments(interaction.customId, 2);
-  if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return false; }
+  const segs = assertCustomIdSegments(interaction, 2);
+  if (!segs) return false;
   const [sessionId, pageRaw] = segs;
   const session = getSessionStore().get(sessionId);
   if (!session) {
@@ -212,8 +212,8 @@ export async function handleIgdbSelectInteraction(
 export async function handleIgdbFirstMatchInteraction(
   interaction: ButtonInteraction,
 ): Promise<boolean> {
-  const segs = parseCustomIdSegments(interaction.customId, 1);
-  if (!segs) { console.error(`Unexpected customId: ${interaction.customId}`); return false; }
+  const segs = assertCustomIdSegments(interaction, 1);
+  if (!segs) return false;
   const [sessionId] = segs;
   const session = getSessionStore().get(sessionId);
   if (!session) {
