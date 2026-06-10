@@ -1,10 +1,11 @@
 ---
 name: component-audit
-description: Grep src/ for raw component builder patterns that should use shared helpers and report files + line numbers still needing migration. Use when asked to "component audit", "find raw component builders", or "what's left to standardize".
+description: Grep src/ for raw component builder patterns that should use shared helpers, report files + line numbers still needing migration, and create one labeled GitHub issue per non-empty category. Use when asked to "component audit", "find raw component builders", or "what's left to standardize".
 ---
 
 This skill audits `src/` for component builder patterns that have shared-helper replacements.
-It does NOT make changes -- it produces a prioritized report so you can decide what to migrate.
+It does NOT make changes to source code -- it produces a prioritized report and creates one
+GitHub issue per non-empty audit category (labeled "refactor") so each category is tracked.
 
 ## Background
 
@@ -114,7 +115,116 @@ Total: N hits across M files
 Priority order: EmbedBuilder > ButtonBuilder > ActionRowBuilder<Button> > rest
 ```
 
-### 7. Optional triage flag: `--by-file`
+### 7. Create GitHub issues
+
+After producing the report, create one GitHub issue per non-empty category using
+`gh issue create --label "refactor"`. Skip any category with zero hits. Use the
+titles and body templates below exactly -- substitute `N` / `M` and the file lists
+from the grep results.
+
+**EmbedBuilder interactive replies** (if > 0 interactive hits):
+```
+Title: Migrate raw EmbedBuilder to v2 container helpers (interactive replies)
+Body:
+## Summary
+N interactive-reply sites still use `new EmbedBuilder()` instead of the shared v2 helpers.
+
+Replacement targets:
+- `buildAccentContainer` -- color accent + body text
+- `buildTitledContainer` -- title + body + optional footer/color
+- Custom `ContainerBuilder` chain for complex layouts
+
+## Files (N hits in M files)
+<list each file:line from grep results>
+
+## Related helpers
+- `src/functions/ComponentsV2Utils.ts` -- `buildAccentContainer`, `buildTitledContainer`
+```
+
+**EmbedBuilder log-channel embeds** (if > 0 event hits):
+```
+Title: Migrate log-channel EmbedBuilder to v2 containers (low priority)
+Body:
+## Summary
+N event/log files still use `new EmbedBuilder()` to post to audit and log channels.
+Migrate after interactive-reply sites are done.
+
+Replacement: `buildAccentContainer` or `buildTitledContainer` from
+`src/functions/ComponentsV2Utils.ts`.
+
+## Files (N hits in M files)
+<list each file:line from grep results>
+```
+
+**ButtonBuilder** (if > 0 hits):
+```
+Title: Migrate raw ButtonBuilder chains to buildActionButton helper
+Body:
+## Summary
+N sites use `new ButtonBuilder()` directly outside `src/functions/uiComponents.ts`.
+
+Replacement: `buildActionButton` from `src/functions/uiComponents.ts`.
+
+## Files
+<list each file:line>
+```
+
+**ActionRowBuilder\<ButtonBuilder\>** (if > 0 hits):
+```
+Title: Migrate raw ActionRowBuilder<ButtonBuilder> to buildButtonRow helper
+Body:
+## Summary
+N sites inline `new ActionRowBuilder<ButtonBuilder>()`.
+
+Replacement: `buildButtonRow` from `src/functions/uiComponents.ts`.
+
+## Files
+<list each file:line>
+```
+
+**ActionRowBuilder\<StringSelectMenuBuilder\>** (if > 0 hits):
+```
+Title: Standardize ActionRowBuilder<StringSelectMenuBuilder> with a shared buildSelectRow helper
+Body:
+## Summary
+N sites inline `new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select)`.
+A generic `buildSelectRow(select)` helper in `src/functions/uiComponents.ts` would
+eliminate this repetition.
+
+Note: `buildJournalSelectRow` already exists for the journal-specific pattern and
+should remain.
+
+## Files (N hits across M files)
+<list top files with hit counts, then full file:line list>
+```
+
+**ContainerBuilder / TextDisplayBuilder simple cases** (if > 0 simple candidates):
+```
+Title: Migrate simple ContainerBuilder/TextDisplayBuilder patterns to buildTextContainer
+Body:
+## Summary
+N files use raw `new ContainerBuilder()` with one or two `TextDisplayBuilder` lines
+-- simple enough to replace with `buildTextContainer`.
+Complex multi-section layouts should stay as-is.
+
+## Simple candidates
+<list each file:line>
+
+## Helper
+`buildTextContainer(content, accentColor?)` -- `src/functions/ComponentsV2Utils.ts`
+```
+
+After creating all issues, print a summary table:
+
+```
+## Issues created
+- #NNN -- Migrate raw EmbedBuilder ... (interactive)
+- #NNN -- Migrate log-channel EmbedBuilder ...
+- #NNN -- Migrate raw ButtonBuilder ...
+...
+```
+
+### 8. Optional triage flag: `--by-file`
 
 If the user passes `--by-file`, group all hits by file instead of by category, sorted
 descending by hit count per file. This helps identify which single file would give the
