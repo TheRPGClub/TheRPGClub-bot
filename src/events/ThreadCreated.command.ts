@@ -1,12 +1,17 @@
-import { EmbedBuilder, ChannelType, type ForumChannel, type TextChannel } from "discord.js";
+import { ChannelType, type ForumChannel, type TextChannel } from "discord.js";
 import type { ArgsOf, Client } from "discordx";
 import { Discord, On } from "discordx";
+import { MediaGalleryBuilder, MediaGalleryItemBuilder } from "@discordjs/builders";
 import { joinThreadIfTarget } from "../services/ForumThreadJoinService.js";
 import { NOW_PLAYING_FORUM_ID, WHATCHA_PLAYING_CHANNEL_ID } from "../config/channels.js";
 import { COLOR_PRIMARY } from "../config/colors.js";
 import { sleep } from "../utilities/DelayUtils.js";
 import { DISCORD_EMBED_FIELD_VALUE_MAX } from "../config/textLimits.js";
 import { logError } from "../utilities/LogUtils.js";
+import {
+  buildTitledContainer,
+  buildContainerSend,
+} from "../functions/ComponentsV2Utils.js";
 
 @Discord()
 export class ThreadCreated {
@@ -23,7 +28,6 @@ export class ThreadCreated {
       await sleep(10_000);
       // Resolve thread author (prefer starter message author; fallback to thread.ownerId)
       let authorName: string = 'Unknown';
-      let authorIconUrl: string | undefined;
       let authorProfileUrl: string | undefined;
       let imageUrl: string | undefined;
 
@@ -31,7 +35,6 @@ export class ThreadCreated {
         const starter = await thread.fetchStarterMessage();
         if (starter) {
           authorName = starter.member?.displayName ?? starter.author.username;
-          authorIconUrl = starter.author.displayAvatarURL();
           authorProfileUrl = `https://discord.com/users/${starter.author.id}`;
 
           // try attachments first
@@ -121,7 +124,6 @@ export class ThreadCreated {
           const ownerUser = await client.users.fetch(thread.ownerId);
           if (ownerUser) {
             authorName = ownerUser.username;
-            authorIconUrl = ownerUser.displayAvatarURL();
             authorProfileUrl = `https://discord.com/users/${ownerUser.id}`;
           }
         } catch {
@@ -129,21 +131,14 @@ export class ThreadCreated {
         }
       }
 
-      const nowPlayingEmbed = new EmbedBuilder()
-        .setColor(COLOR_PRIMARY)
-        .setTitle(`${thread.name}`)
-        .setURL(`https://discord.com/channels/${thread.guildId}/${thread.id}`)
-        .setDescription(`New "Now Playing" Forum Post`)
-        .setAuthor({
-          name: authorName,
-          iconURL: authorIconUrl,
-          url: authorProfileUrl,
-        });
-      if (imageUrl) {
-        nowPlayingEmbed.setImage(imageUrl);
-      }
+      const threadUrl = `https://discord.com/channels/${thread.guildId}/${thread.id}`;
+      const authorLink = authorProfileUrl ? `[${authorName}](${authorProfileUrl})` : authorName;
+      const bodyParts: string[] = [
+        `New "Now Playing" Forum Post ([link](${threadUrl}))`,
+        `Posted by ${authorLink}`,
+      ];
 
-      // Add forum thread tag names as fields (if any)
+      // Add forum thread tag names (if any)
       try {
         if (thread.appliedTags && thread.appliedTags.length && thread.parentId) {
           const parent = await client.channels.fetch(thread.parentId);
@@ -153,11 +148,10 @@ export class ThreadCreated {
               .map((id) => forum.availableTags.find((t) => t.id === id)?.name)
               .filter((n): n is string => Boolean(n));
             if (tagNames.length) {
-              nowPlayingEmbed.addFields({
-                name: tagNames.length > 1 ? 'Tags' : 'Tag',
-                value: tagNames.join(', ').slice(0, DISCORD_EMBED_FIELD_VALUE_MAX),
-                inline: false,
-              });
+              const label = tagNames.length > 1 ? 'Tags' : 'Tag';
+              bodyParts.push(
+                `**${label}:** ${tagNames.join(', ').slice(0, DISCORD_EMBED_FIELD_VALUE_MAX)}`,
+              );
             }
           }
         }
@@ -165,10 +159,22 @@ export class ThreadCreated {
         logError("ThreadCreated.resolveForumTagNames", err);
       }
 
+      const container = buildTitledContainer(
+        thread.name,
+        bodyParts.join("\n"),
+        { color: COLOR_PRIMARY },
+      );
+
+      if (imageUrl) {
+        container.addMediaGalleryComponents(
+          new MediaGalleryBuilder().addItems(new MediaGalleryItemBuilder().setURL(imageUrl)),
+        );
+      }
+
       const channel = await client.channels.fetch(WHATCHA_PLAYING_CHANNEL_ID);
       if (channel && channel.isTextBased()) {
         try {
-          await (channel as TextChannel).send({ embeds: [nowPlayingEmbed] });
+          await (channel as TextChannel).send({ ...buildContainerSend(container) });
         } catch (err) {
           logError("ThreadCreated.sendNowPlayingEmbed", err);
         }

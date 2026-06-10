@@ -1,10 +1,15 @@
-import { channelMention, EmbedBuilder } from "discord.js";
+import { channelMention } from "discord.js";
 import type { Message } from "discord.js";
 import type { ArgsOf, Client } from "discordx";
 import { Discord, On } from "discordx";
 import { formatTimestampWithDay, resolveLogChannel } from "../utilities/DiscordLogUtils.js";
 import { COLOR_INFO, COLOR_ERROR } from "../config/colors.js";
 import { truncateWithEllipsis } from "../utilities/ValidationUtils.js";
+import {
+  buildTitledContainer,
+  buildContainerSend,
+} from "../functions/ComponentsV2Utils.js";
+
 const MAX_FIELD_LENGTH = 1000;
 const MAX_DESCRIPTION_LENGTH = 3500;
 
@@ -27,30 +32,6 @@ function formatTimestamp(timestamp: number | null | undefined): string {
   return `<t:${unixSeconds}:F>`;
 }
 
-function buildAuthorEmbed(
-  message: Message,
-  title: string,
-  color: number,
-): EmbedBuilder {
-  const embed = new EmbedBuilder()
-    .setTitle(title)
-    .setColor(color);
-
-  if (message.author) {
-    const name = message.author.globalName ?? message.author.username;
-    embed.setAuthor({
-      name,
-      iconURL: message.author.displayAvatarURL(),
-    });
-    embed.setFooter({
-      text: `ID: ${message.author.id} • ${formatTimestamp(message.createdTimestamp)}`,
-    });
-  }
-
-  embed.addFields({ name: "Message ID", value: message.id });
-  return embed;
-}
-
 @Discord()
 export class MessageLog {
   @On()
@@ -62,14 +43,17 @@ export class MessageLog {
     if (!logChannel) return;
 
     const deletedChannelMention = channelMention(resolved.channelId);
-    const embed = buildAuthorEmbed(
-      resolved,
+    const body = truncate(formatMessageContent(resolved));
+    const footer = resolved.author
+      ? `ID: ${resolved.author.id} • ${formatTimestamp(resolved.createdTimestamp)}`
+      : undefined;
+    const container = buildTitledContainer(
       `Message deleted in ${deletedChannelMention}`,
-      COLOR_ERROR,
+      body,
+      { color: COLOR_ERROR, footer },
     );
-    embed.setDescription(truncate(formatMessageContent(resolved)));
 
-    await logChannel.send({ embeds: [embed] });
+    await logChannel.send({ ...buildContainerSend(container) });
   }
 
   @On()
@@ -100,24 +84,19 @@ export class MessageLog {
       : null;
     const channelName = (resolvedNew.channel as { name?: string } | null)?.name ?? "channel";
     const channelLabel = `#${channelName}`;
-    const title = "Message edited";
-    const embed = buildAuthorEmbed(
-      resolvedNew,
-      title,
-      COLOR_INFO,
-    );
-    embed.setFields([]);
     const beforeValue = truncate(beforeText || "No text content.");
     const afterValue = truncate(afterText || "No text content.");
     const linkLine = jumpUrl ? `[${channelLabel}](${jumpUrl})` : "";
     const description =
       `**Before:** ${beforeValue}\n**+After:** ${afterValue}` +
       (linkLine ? `\n${linkLine}` : "");
-    embed.setDescription(truncate(description, MAX_DESCRIPTION_LENGTH));
-    embed.setFooter({
-      text: `ID: ${resolvedNew.id} • ${formatTimestampWithDay(resolvedNew.editedTimestamp)}`,
-    });
+    const footer = `ID: ${resolvedNew.id} • ${formatTimestampWithDay(resolvedNew.editedTimestamp)}`;
+    const container = buildTitledContainer(
+      "Message edited",
+      truncate(description, MAX_DESCRIPTION_LENGTH),
+      { color: COLOR_INFO, footer },
+    );
 
-    await logChannel.send({ embeds: [embed] });
+    await logChannel.send({ ...buildContainerSend(container) });
   }
 }

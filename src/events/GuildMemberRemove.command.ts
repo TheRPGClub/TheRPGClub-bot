@@ -1,10 +1,16 @@
-import { AuditLogEvent, EmbedBuilder, userMention } from "discord.js";
+import { AuditLogEvent, userMention } from "discord.js";
 import type { ArgsOf, Client } from "discordx";
 import { Discord, On } from "discordx";
 import { formatTimestampWithDay } from "../utilities/DiscordLogUtils.js";
 import { JOIN_LEAVE_LOG_CHANNEL_ID } from "../config/channels.js";
 import { COLOR_WARNING, COLOR_NEUTRAL } from "../config/colors.js";
 import { sleep } from "../utilities/DelayUtils.js";
+import {
+  buildTitledContainer,
+  buildContainerSend,
+  buildFieldsText,
+} from "../functions/ComponentsV2Utils.js";
+
 const KICK_LOG_WINDOW_MS = 30_000;
 const KICK_LOG_RETRY_COUNT = 3;
 const KICK_LOG_RETRY_DELAY_MS = 750;
@@ -66,47 +72,31 @@ export class GuildMemberRemove {
     if (!logChannel) return;
 
     const username = member.user.tag ?? member.user.username ?? member.user.id;
+    const footer = `ID: ${member.user.id} • ${formatTimestampWithDay(Date.now())}`;
     const kickAudit = await getKickAudit(_client, member.guild.id, member.user.id);
     if (kickAudit) {
-      const embed = new EmbedBuilder()
-        .setTitle("User Kicked")
-        .setColor(COLOR_WARNING)
-        .addFields(
-          { name: "User", value: `${userMention(member.user.id)}\n${username}` },
-          {
-            name: "Account Created On",
-            value: formatDiscordDateTime(member.user.createdAt),
-          },
-          { name: "Moderator", value: userMention(kickAudit.moderatorId) },
-          {
-            name: "Reason",
-            value: kickAudit.reason ?? "No reason provided.",
-          },
-        )
-        .setFooter({
-          text: `ID: ${member.user.id} • ${formatTimestampWithDay(Date.now())}`,
-        })
-        .setThumbnail(member.user.displayAvatarURL());
-
-      await (logChannel as any).send({ embeds: [embed] });
+      const body = buildFieldsText([
+        { name: "User", value: `${userMention(member.user.id)}\n${username}` },
+        { name: "Account Created On", value: formatDiscordDateTime(member.user.createdAt) },
+        { name: "Moderator", value: userMention(kickAudit.moderatorId) },
+        { name: "Reason", value: kickAudit.reason ?? "No reason provided." },
+      ]);
+      const container = buildTitledContainer("User Kicked", body, {
+        color: COLOR_WARNING,
+        footer,
+      });
+      await (logChannel as any).send({ ...buildContainerSend(container) });
       return;
     }
 
-    const embed = new EmbedBuilder()
-      .setTitle("User Left")
-      .setColor(COLOR_NEUTRAL)
-      .addFields(
-        { name: "User", value: `${userMention(member.user.id)}\n${username}` },
-        {
-          name: "Account Created On",
-          value: formatDiscordDateTime(member.user.createdAt),
-        },
-      )
-      .setFooter({
-        text: `ID: ${member.user.id} • ${formatTimestampWithDay(Date.now())}`,
-      })
-      .setThumbnail(member.user.displayAvatarURL());
-
-    await (logChannel as any).send({ embeds: [embed] });
+    const body = buildFieldsText([
+      { name: "User", value: `${userMention(member.user.id)}\n${username}` },
+      { name: "Account Created On", value: formatDiscordDateTime(member.user.createdAt) },
+    ]);
+    const container = buildTitledContainer("User Left", body, {
+      color: COLOR_NEUTRAL,
+      footer,
+    });
+    await (logChannel as any).send({ ...buildContainerSend(container) });
   }
 }

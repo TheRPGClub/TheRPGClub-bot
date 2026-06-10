@@ -1,10 +1,13 @@
-import { EmbedBuilder } from "discord.js";
 import type { ArgsOf, Client } from "discordx";
 import { Discord, On } from "discordx";
 import { formatTimestampWithDay, resolveLogChannel } from "../utilities/DiscordLogUtils.js";
 import { logAvatarChange, updateAvatarRecordFromUrl } from "../utilities/AvatarLogUtils.js";
 import { syncUserEmojiFromAvatarChange } from "../services/UserEmojiService.js";
 import { COLOR_INFO } from "../config/colors.js";
+import {
+  buildTitledContainer,
+  buildContainerSend,
+} from "../functions/ComponentsV2Utils.js";
 
 @Discord()
 export class UserUpdate {
@@ -50,7 +53,6 @@ export class UserUpdate {
     const logChannel = await resolveLogChannel(client);
     if (!logChannel) return;
 
-    const authorName = newUser.globalName ?? newUser.username;
     const timestamp = formatTimestampWithDay(Date.now());
 
     const sendNameLog = async (
@@ -58,16 +60,12 @@ export class UserUpdate {
       beforeValue: string,
       afterValue: string,
     ): Promise<void> => {
-      const embed = new EmbedBuilder()
-        .setAuthor({
-          name: authorName,
-          iconURL: newUser.displayAvatarURL(),
-        })
-        .setTitle(title)
-        .setDescription(`**Before:** ${beforeValue}\n**+After:** ${afterValue}`)
-        .setColor(COLOR_INFO)
-        .setFooter({ text: `ID: ${newUser.id} • ${timestamp}` });
-      await (logChannel as any).send({ embeds: [embed] });
+      const container = buildTitledContainer(
+        title,
+        `**Before:** ${beforeValue}\n**+After:** ${afterValue}`,
+        { color: COLOR_INFO, footer: `ID: ${newUser.id} • ${timestamp}` },
+      );
+      await (logChannel as any).send({ ...buildContainerSend(container) });
     };
 
     if (usernameChanged) {

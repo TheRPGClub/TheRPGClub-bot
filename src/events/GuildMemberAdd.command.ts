@@ -1,4 +1,4 @@
-import { EmbedBuilder, Role, userMention } from "discord.js";
+import { Role, userMention } from "discord.js";
 import type { ArgsOf, Client } from "discordx";
 import { Discord, On } from "discordx";
 import { formatTimestampWithDay } from "../utilities/DiscordLogUtils.js";
@@ -6,6 +6,11 @@ import { JOIN_LEAVE_LOG_CHANNEL_ID } from "../config/channels.js";
 import { recordCurrentAvatarIfNew } from "../utilities/AvatarLogUtils.js";
 import { COLOR_SUCCESS } from "../config/colors.js";
 import { logError } from "../utilities/LogUtils.js";
+import {
+  buildTitledContainer,
+  buildContainerSend,
+  buildFieldsText,
+} from "../functions/ComponentsV2Utils.js";
 
 function formatDiscordDateTime(date: Date): string {
   return `<t:${Math.floor(date.getTime() / 1000)}:F>`;
@@ -31,22 +36,16 @@ export class GuildMemberAdd {
       const logChannel = await resolveLogChannel(_client);
       if (logChannel) {
         const username = member.user.tag ?? member.user.username ?? member.user.id;
-        const embed = new EmbedBuilder()
-          .setTitle("User Joined")
-          .setColor(COLOR_SUCCESS)
-          .addFields(
-            { name: "User", value: `${userMention(member.user.id)}\n${username}` },
-            {
-              name: "Account Created On",
-              value: formatDiscordDateTime(member.user.createdAt),
-            },
-          )
-          .setFooter({
-            text: `ID: ${member.user.id} • ${formatTimestampWithDay(Date.now())}`,
-          })
-          .setThumbnail(member.user.displayAvatarURL());
+        const body = buildFieldsText([
+          { name: "User", value: `${userMention(member.user.id)}\n${username}` },
+          { name: "Account Created On", value: formatDiscordDateTime(member.user.createdAt) },
+        ]);
+        const container = buildTitledContainer("User Joined", body, {
+          color: COLOR_SUCCESS,
+          footer: `ID: ${member.user.id} • ${formatTimestampWithDay(Date.now())}`,
+        });
 
-        await (logChannel as any).send({ embeds: [embed] });
+        await (logChannel as any).send({ ...buildContainerSend(container) });
       }
     }
 
