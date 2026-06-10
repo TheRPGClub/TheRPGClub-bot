@@ -7,7 +7,7 @@ import GameReleaseAnnouncement, {
 } from "../classes/GameReleaseAnnouncement.js";
 import { NEW_GAME_ANNOUNCEMENT_CHANNEL_ID } from "../config/channels.js";
 import { buildGameProfileMessagePayload } from "../commands/gamedb.command.js";
-import { COMPONENTS_V2_FLAG } from "../config/flags.js";
+import { buildComponentsV2EditFlags } from "../functions/ComponentsV2Utils.js";
 import { resolveAssetPath } from "../functions/AssetPath.js";
 import { logError, logWarn } from "../utilities/LogUtils.js";
 
@@ -82,7 +82,7 @@ async function checkAndSendReleaseAnnouncements(client: Client): Promise<void> {
           new AttachmentBuilder(RELEASE_SPACER_IMAGE_PATH, { name: "force-message-width.png" }),
         ],
         components: payload.components,
-        flags: COMPONENTS_V2_FLAG,
+        flags: buildComponentsV2EditFlags(),
       });
       await GameReleaseAnnouncement.markAnnouncementSent(candidate.releaseId, new Date());
     } catch (err) {

@@ -22,8 +22,11 @@ import { formatPlaytimeHours, formatTableDate } from "./DateFormatUtils.js";
 import Game, { type IGame } from "../classes/Game.js";
 import Member from "../classes/Member.js";
 import { ANNOUNCEMENT_CHANNEL_ID, BOT_DEV_CHANNEL_ID } from "../config/channels.js";
-import { COMPONENTS_V2_FLAG } from "../config/flags.js";
-import { buildComponentsV2Flags, buildTextContainer } from "./ComponentsV2Utils.js";
+import {
+  buildComponentsV2EditFlags,
+  buildComponentsV2Flags,
+  buildTextContainer,
+} from "./ComponentsV2Utils.js";
 import { isInteractionSettled, safeReply, safeUpdate, safeUserFetch } from "./InteractionUtils.js";
 import { safeIgnore } from "../utilities/AsyncUtils.js";
 import { logError } from "../utilities/LogUtils.js";
@@ -233,7 +236,7 @@ export async function announceCompletion(
     await (channel as any).send({
       files,
       components: [container],
-      flags: COMPONENTS_V2_FLAG,
+      flags: buildComponentsV2EditFlags(),
     });
   } catch (err) {
     logError("CompletionHelpers.announceCompletion", err);

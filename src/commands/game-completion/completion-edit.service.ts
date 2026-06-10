@@ -21,8 +21,11 @@ import {
   resolveGameCompletionPlatformId,
   resolveGameCompletionPlatformLabel,
 } from "./completion-autocomplete.utils.js";
-import { buildTextReply, safeV2TextContent } from "../../functions/ComponentsV2Utils.js";
-import { COMPONENTS_V2_FLAG } from "../../config/flags.js";
+import {
+  buildComponentsV2EditFlags,
+  buildTextReply,
+  safeV2TextContent,
+} from "../../functions/ComponentsV2Utils.js";
 import {
   isInteractionSettled,
   replyIfNotOwner,
@@ -92,7 +95,7 @@ export async function handleCompletionEditDone(interaction: ButtonInteraction): 
         new TextDisplayBuilder().setContent("Edit complete."),
       ),
     ],
-    flags: COMPONENTS_V2_FLAG,
+    flags: buildComponentsV2EditFlags(),
   });
 }
 
@@ -131,7 +134,7 @@ export async function handleCompletionFieldEdit(interaction: ButtonInteraction):
         container,
         new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select),
       ],
-      flags: COMPONENTS_V2_FLAG,
+      flags: buildComponentsV2EditFlags(),
     });
     return;
   }
@@ -151,7 +154,7 @@ export async function handleCompletionFieldEdit(interaction: ButtonInteraction):
         new TextDisplayBuilder().setContent(safeV2TextContent(prompt, 1000)),
       ),
     ],
-    flags: COMPONENTS_V2_FLAG,
+    flags: buildComponentsV2EditFlags(),
   });
 
   const channel = interaction.channel;
@@ -288,7 +291,7 @@ export async function handleCompletionTypeSelect(
           new TextDisplayBuilder().setContent("Completion not found."),
         ),
       ],
-      flags: COMPONENTS_V2_FLAG,
+      flags: buildComponentsV2EditFlags(),
     });
     return;
   }
@@ -360,7 +363,7 @@ function buildCompletionEditPrompt(
           new TextDisplayBuilder().setContent("Completion not found."),
         ),
       ],
-      flags: COMPONENTS_V2_FLAG,
+      flags: buildComponentsV2EditFlags(),
     };
   }
 
@@ -426,6 +429,6 @@ function buildCompletionEditPrompt(
       buildButtonRow(...fieldButtons),
       buildButtonRow(...secondaryButtons),
     ],
-    flags: COMPONENTS_V2_FLAG,
+    flags: buildComponentsV2EditFlags(),
   };
 }

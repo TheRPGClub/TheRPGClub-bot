@@ -1,4 +1,4 @@
-import { MessageFlags } from "discord.js";
+import { MessageFlags, MessageFlagsBitField } from "discord.js";
 import { ContainerBuilder, TextDisplayBuilder } from "@discordjs/builders";
 import { COMPONENTS_V2_FLAG } from "../config/flags.js";
 import { truncateWithEllipsis } from "../utilities/ValidationUtils.js";
@@ -87,4 +87,14 @@ export function buildTitledContainer(
 
 export function buildFieldsText(fields: EmbedField[]): string {
   return fields.map((f) => `**${f.name}**\n${f.value}`).join("\n\n");
+}
+
+export function hasComponentsV2Flag(flags: unknown): boolean {
+  try {
+    const bitfield = new MessageFlagsBitField(flags as any).bitfield;
+    const asBigInt = typeof bitfield === "bigint" ? bitfield : BigInt(bitfield);
+    return (asBigInt & BigInt(COMPONENTS_V2_FLAG)) === BigInt(COMPONENTS_V2_FLAG);
+  } catch {
+    return false;
+  }
 }

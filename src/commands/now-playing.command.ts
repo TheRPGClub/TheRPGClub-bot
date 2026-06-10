@@ -77,7 +77,11 @@ import {
   announceCompletion,
   notifyUnknownCompletionPlatform,
 } from "../functions/CompletionHelpers.js";
-import { buildTextReply, safeV2TextContent } from "../functions/ComponentsV2Utils.js";
+import {
+  buildComponentsV2Flags,
+  buildTextReply,
+  safeV2TextContent,
+} from "../functions/ComponentsV2Utils.js";
 import { formatPlatformDisplayName } from "../functions/PlatformDisplay.js";
 import {
   autocompleteGameCompletionPlatform,
@@ -95,7 +99,6 @@ import {
   formatTableDate,
 } from "../functions/DateFormatUtils.js";
 import { parseTitleWithYear } from "../functions/GameTitleAutocompleteUtils.js";
-import { COMPONENTS_V2_FLAG } from "../config/flags.js";
 import { STANDARD_PLATFORM_IDS } from "../config/standardPlatforms.js";
 import { composeVoteImage } from "../services/collageGenerator.js";
 import {
@@ -263,10 +266,6 @@ type NowPlayingListComponents = ContainerBuilder[];
 type NowPlayingPayloadComponents = Array<
   ContainerBuilder | ActionRowBuilder<StringSelectMenuBuilder>
 >;
-
-function buildComponentsV2Flags(isEphemeral: boolean): number {
-  return (isEphemeral ? MessageFlags.Ephemeral : 0) | COMPONENTS_V2_FLAG;
-}
 
 function buildNowPlayingSortStateToken(entryCount: number): string {
   return Array.from({ length: entryCount }, (_, index) => index.toString(36)).join("");

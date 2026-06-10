@@ -3,7 +3,6 @@ import {
   StringSelectMenuBuilder,
   ButtonBuilder,
   ButtonStyle,
-  MessageFlags,
   type CommandInteraction,
   type ButtonInteraction,
   type StringSelectMenuInteraction,
@@ -17,9 +16,13 @@ import { COMPLETION_PAGE_SIZE } from "../profile.command.js";
 import { formatDiscordTimestamp, formatTableDate } from "../../functions/DateFormatUtils.js";
 import { formatPlatformDisplayName } from "../../functions/PlatformDisplay.js";
 import { safeReply, safeUpdate } from "../../functions/InteractionUtils.js";
-import { buildTextReply, safeV2TextContent } from "../../functions/ComponentsV2Utils.js";
+import {
+  buildComponentsV2EditFlags,
+  buildComponentsV2Flags,
+  buildTextReply,
+  safeV2TextContent,
+} from "../../functions/ComponentsV2Utils.js";
 import { renderUsernameWithEmoji } from "../../services/UserEmojiService.js";
-import { COMPONENTS_V2_FLAG } from "../../config/flags.js";
 import {
   DISCORD_SELECT_LABEL_MAX,
   DISCORD_SELECT_OPTIONS_MAX,
@@ -32,10 +35,6 @@ import {
   buildUserHeaderContainer,
   type IJournalSelectEntry,
 } from "../../functions/uiComponents.js";
-
-function buildCompletionV2Flags(ephemeral: boolean): number {
-  return (ephemeral ? MessageFlags.Ephemeral : 0) | COMPONENTS_V2_FLAG;
-}
 
 /**
  * Renders a leaderboard showing all members with completions, optionally filtered by game title
@@ -56,7 +55,7 @@ export async function renderCompletionLeaderboard(
           new TextDisplayBuilder().setContent(safeV2TextContent(text, 1000)),
         ),
       ],
-      flags: buildCompletionV2Flags(ephemeral),
+      flags: buildComponentsV2Flags(ephemeral),
     });
     return;
   }
@@ -96,7 +95,7 @@ export async function renderCompletionLeaderboard(
       container,
       new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select),
     ],
-    flags: buildCompletionV2Flags(ephemeral),
+    flags: buildComponentsV2Flags(ephemeral),
   });
 }
 
@@ -132,7 +131,7 @@ export async function renderCompletionPage(
           ),
         ),
         ],
-        flags: buildCompletionV2Flags(ephemeral),
+        flags: buildComponentsV2Flags(ephemeral),
       });
       return;
     }
@@ -145,7 +144,7 @@ export async function renderCompletionPage(
           new TextDisplayBuilder().setContent(safeV2TextContent(text, 1000)),
         ),
       ],
-      flags: buildCompletionV2Flags(ephemeral),
+      flags: buildComponentsV2Flags(ephemeral),
     });
     return;
   }
@@ -180,7 +179,7 @@ export async function renderCompletionPage(
       ...(journalSelectRow ? [journalSelectRow] : []),
       ...paginationRows,
     ],
-    flags: buildCompletionV2Flags(ephemeral),
+    flags: buildComponentsV2Flags(ephemeral),
   });
 }
 
@@ -243,11 +242,11 @@ export async function renderSelectionPage(
   const allComponents = [header, ...containers, selectRow, ...paginationRows];
 
   if (interaction.isMessageComponent()) {
-    await safeUpdate(interaction, { components: allComponents, flags: COMPONENTS_V2_FLAG });
+    await safeUpdate(interaction, { components: allComponents, flags: buildComponentsV2EditFlags() });
   } else {
     await safeReply(interaction, {
       components: allComponents,
-      flags: MessageFlags.Ephemeral | COMPONENTS_V2_FLAG,
+      flags: buildComponentsV2Flags(true),
     });
   }
 }
