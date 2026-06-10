@@ -16,7 +16,7 @@
     "start:prod": "pm2 start build/RPGClub_GameDB.js",
     "watch": "nodemon --exec npm run dev --watch src --ext ts",
     "compile": "npx tsc --noEmit",
-    "test": "node --no-warnings=ExperimentalWarning --loader ts-node/esm --test src/tests/*.test.ts",
+    "test": "node --no-warnings=ExperimentalWarning --loader ts-node/esm --test src/tests/*.test.ts 2>&1 | tee test-results.txt",
     "lint": "npx eslint",
     "session:start": "node --no-warnings=ExperimentalWarning --loader ts-node/esm scripts/session-start.ts",
     "backup:docker-volumes": "node --no-warnings=ExperimentalWarning --loader ts-node/esm/transpile-only scripts/backup-docker-volumes.ts",
