@@ -4,7 +4,6 @@ import {
   ButtonStyle,
   MessageFlags,
   StringSelectMenuBuilder,
-  TextInputBuilder,
   TextInputStyle,
   WebhookClient,
   type ButtonInteraction,
@@ -52,6 +51,7 @@ import { trimTextDisplayContent } from "./gamedb-profile.service.js";
 import { updateGameProfileMessageById } from "./gamedb-profile.service.js";
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
 import { DISCORD_SELECT_LABEL_MAX } from "../../config/textLimits.js";
+import { buildTextInputRow } from "../../functions/uiComponents.js";
 
 const COMPLETION_WIZARD_SESSIONS = new Map<string, CompletionWizardSession>();
 
@@ -382,40 +382,18 @@ export class GameDbCompletionCommand {
       .setTitle("Add Completion Details");
 
     if (session.dateChoice === "date") {
-      modal.addComponents(
-        new ActionRowBuilder<TextInputBuilder>().addComponents(
-          new TextInputBuilder()
-             
-            .setCustomId("completion-date")
-            .setLabel("Completion date (YYYY-MM-DD)")
-            .setStyle(TextInputStyle.Short)
-            .setRequired(true),
-        ),
-      );
+      modal.addComponents(buildTextInputRow({ customId: "completion-date", label: "Completion date (YYYY-MM-DD)" }));
     }
 
-    modal.addComponents(
-      new ActionRowBuilder<TextInputBuilder>().addComponents(
-        new TextInputBuilder()
-           
-          .setCustomId("completion-playtime")
-          .setLabel("Playtime hours (optional)")
-          .setStyle(TextInputStyle.Short)
-          .setRequired(false),
-      ),
-    );
+    modal.addComponents(buildTextInputRow({ customId: "completion-playtime", label: "Playtime hours (optional)", required: false }));
 
-    modal.addComponents(
-      new ActionRowBuilder<TextInputBuilder>().addComponents(
-        new TextInputBuilder()
-           
-          .setCustomId("completion-note")
-          .setLabel(`Note (optional, ${MAX_COMPLETION_NOTE_LEN} chars max)`)
-          .setStyle(TextInputStyle.Paragraph)
-          .setRequired(false)
-          .setMaxLength(MAX_COMPLETION_NOTE_LEN),
-      ),
-    );
+    modal.addComponents(buildTextInputRow({
+      customId: "completion-note",
+      label: `Note (optional, ${MAX_COMPLETION_NOTE_LEN} chars max)`,
+      style: TextInputStyle.Paragraph,
+      required: false,
+      maxLength: MAX_COMPLETION_NOTE_LEN,
+    }));
 
     await interaction.showModal(modal).catch(() => {});
   }

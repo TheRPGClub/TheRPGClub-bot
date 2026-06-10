@@ -10,7 +10,6 @@ import {
   PermissionsBitField,
   StringSelectMenuBuilder,
   StringSelectMenuInteraction,
-  TextInputBuilder,
   TextInputStyle,
 } from "discord.js";
 import {
@@ -63,6 +62,7 @@ import { decodeBase64Url, encodeWithMaxLength } from "../functions/CustomIdUtils
 import { parseCustomIdSegments } from "../utilities/CustomIdUtils.js";
 import { safeV2TextContent } from "../functions/ComponentsV2Utils.js";
 import { formatDiscordTimestamp } from "../functions/DateFormatUtils.js";
+import { buildTextInputRow } from "../functions/uiComponents.js";
 import { truncateWithEllipsis } from "../utilities/ValidationUtils.js";
 import { DISCORD_TEXT_INPUT_MAX } from "../config/textLimits.js";
 import { TODO_DEFAULT_PAGE_SIZE, TODO_MAX_PAGE_SIZE } from "../config/pagination.js";
@@ -1478,23 +1478,9 @@ export class TodoCommand {
       )
       .setTitle("Create GitHub Issue");
 
-    const titleInput = new TextInputBuilder()
-      .setCustomId(TODO_CREATE_TITLE_ID)
-      .setLabel("Title")
-      .setStyle(TextInputStyle.Short)
-      .setRequired(true)
-      .setMaxLength(256);
-
-    const bodyInput = new TextInputBuilder()
-      .setCustomId(TODO_CREATE_BODY_ID)
-      .setLabel("Description")
-      .setStyle(TextInputStyle.Paragraph)
-      .setRequired(true)
-      .setMaxLength(DISCORD_TEXT_INPUT_MAX);
-
     modal.addComponents(
-      new ActionRowBuilder<TextInputBuilder>().addComponents(titleInput),
-      new ActionRowBuilder<TextInputBuilder>().addComponents(bodyInput),
+      buildTextInputRow({ customId: TODO_CREATE_TITLE_ID, label: "Title", maxLength: 256 }),
+      buildTextInputRow({ customId: TODO_CREATE_BODY_ID, label: "Description", style: TextInputStyle.Paragraph, maxLength: DISCORD_TEXT_INPUT_MAX }),
     );
     modal.addLabelComponents((label) =>
       label
@@ -2527,18 +2513,13 @@ export class TodoCommand {
       )
       .setTitle(basePayload.query ? "Edit Query" : "Filter by Query");
 
-    const queryInput = new TextInputBuilder()
-      .setCustomId(TODO_QUERY_INPUT_ID)
-      .setLabel("Query")
-      .setStyle(TextInputStyle.Short)
-      .setRequired(false)
-      .setMaxLength(200);
-
-    if (basePayload.query) {
-      queryInput.setValue(basePayload.query);
-    }
-
-    modal.addComponents(new ActionRowBuilder<TextInputBuilder>().addComponents(queryInput));
+    modal.addComponents(buildTextInputRow({
+      customId: TODO_QUERY_INPUT_ID,
+      label: "Query",
+      required: false,
+      maxLength: 200,
+      value: basePayload.query || undefined,
+    }));
     await interaction.showModal(modal);
   }
 
@@ -2581,28 +2562,15 @@ export class TodoCommand {
       )
       .setTitle("Edit GitHub Issue");
 
-    const titleInput = new TextInputBuilder()
-      .setCustomId(TODO_CREATE_TITLE_ID)
-      .setLabel("Title")
-      .setStyle(TextInputStyle.Short)
-      .setRequired(true)
-      .setMaxLength(256)
-      .setValue(issue.title);
-
-    const bodyInput = new TextInputBuilder()
-      .setCustomId(TODO_CREATE_BODY_ID)
-      .setLabel("Description")
-      .setStyle(TextInputStyle.Paragraph)
-      .setRequired(true)
-      .setMaxLength(DISCORD_TEXT_INPUT_MAX);
-
-    if (issue.body) {
-      bodyInput.setValue(issue.body.slice(0, DISCORD_TEXT_INPUT_MAX));
-    }
-
     modal.addComponents(
-      new ActionRowBuilder<TextInputBuilder>().addComponents(titleInput),
-      new ActionRowBuilder<TextInputBuilder>().addComponents(bodyInput),
+      buildTextInputRow({ customId: TODO_CREATE_TITLE_ID, label: "Title", maxLength: 256, value: issue.title }),
+      buildTextInputRow({
+        customId: TODO_CREATE_BODY_ID,
+        label: "Description",
+        style: TextInputStyle.Paragraph,
+        maxLength: DISCORD_TEXT_INPUT_MAX,
+        value: issue.body?.slice(0, DISCORD_TEXT_INPUT_MAX) || undefined,
+      }),
     );
     modal.addLabelComponents((label) =>
       label
@@ -2646,14 +2614,12 @@ export class TodoCommand {
       )
       .setTitle("Add Comment");
 
-    const commentInput = new TextInputBuilder()
-      .setCustomId(TODO_COMMENT_INPUT_ID)
-      .setLabel("Comment")
-      .setStyle(TextInputStyle.Paragraph)
-      .setRequired(true)
-      .setMaxLength(DISCORD_TEXT_INPUT_MAX);
-
-    modal.addComponents(new ActionRowBuilder<TextInputBuilder>().addComponents(commentInput));
+    modal.addComponents(buildTextInputRow({
+      customId: TODO_COMMENT_INPUT_ID,
+      label: "Comment",
+      style: TextInputStyle.Paragraph,
+      maxLength: DISCORD_TEXT_INPUT_MAX,
+    }));
 
     await interaction.showModal(modal);
   }
@@ -2696,15 +2662,12 @@ export class TodoCommand {
       )
       .setTitle("Edit Title");
 
-    const titleInput = new TextInputBuilder()
-      .setCustomId(TODO_EDIT_TITLE_INPUT_ID)
-      .setLabel("Title")
-      .setStyle(TextInputStyle.Short)
-      .setRequired(true)
-      .setMaxLength(256)
-      .setValue(issue.title);
-
-    modal.addComponents(new ActionRowBuilder<TextInputBuilder>().addComponents(titleInput));
+    modal.addComponents(buildTextInputRow({
+      customId: TODO_EDIT_TITLE_INPUT_ID,
+      label: "Title",
+      maxLength: 256,
+      value: issue.title,
+    }));
 
     await interaction.showModal(modal);
   }
@@ -2747,20 +2710,13 @@ export class TodoCommand {
       )
       .setTitle("Edit Description");
 
-    const descriptionInput = new TextInputBuilder()
-      .setCustomId(TODO_EDIT_DESC_INPUT_ID)
-      .setLabel("Description")
-      .setStyle(TextInputStyle.Paragraph)
-      .setRequired(true)
-      .setMaxLength(DISCORD_TEXT_INPUT_MAX);
-
-    if (issue.body) {
-      descriptionInput.setValue(issue.body.slice(0, DISCORD_TEXT_INPUT_MAX));
-    }
-
-    modal.addComponents(
-      new ActionRowBuilder<TextInputBuilder>().addComponents(descriptionInput),
-    );
+    modal.addComponents(buildTextInputRow({
+      customId: TODO_EDIT_DESC_INPUT_ID,
+      label: "Description",
+      style: TextInputStyle.Paragraph,
+      maxLength: DISCORD_TEXT_INPUT_MAX,
+      value: issue.body?.slice(0, DISCORD_TEXT_INPUT_MAX) || undefined,
+    }));
 
     await interaction.showModal(modal);
   }

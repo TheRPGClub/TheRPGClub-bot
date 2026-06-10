@@ -4,7 +4,6 @@ import {
   ModalBuilder,
   StringSelectMenuBuilder,
   TextDisplayBuilder,
-  TextInputBuilder,
   TextInputStyle,
   type RepliableInteraction,
   type TextBasedChannel,
@@ -20,6 +19,7 @@ import {
 } from "../classes/Nomination.js";
 import { safeV2TextContent } from "./ComponentsV2Utils.js";
 import { truncateWithEllipsis } from "../utilities/ValidationUtils.js";
+import { buildTextInputRow } from "./uiComponents.js";
 import {
   buildComponentsV2Flags,
   buildNominationListPayload,
@@ -100,18 +100,16 @@ export function buildDeletionReasonModal(
   userId: string,
   gameTitle: string,
 ): ModalBuilder {
-  const reasonInput = new TextInputBuilder()
-    .setCustomId(ADMIN_NOMINATION_DELETE_REASON_INPUT_ID)
-    .setLabel("Deletion reason")
-    .setStyle(TextInputStyle.Paragraph)
-    .setRequired(true)
-    .setMaxLength(250)
-    .setPlaceholder(`Why should "${truncateLabel(gameTitle, 80)}" be removed?`);
-
   return new ModalBuilder()
     .setCustomId(buildDeletionReasonModalCustomId(kind, round, userId))
     .setTitle("Delete nomination")
-    .addComponents(new ActionRowBuilder<TextInputBuilder>().addComponents(reasonInput));
+    .addComponents(buildTextInputRow({
+      customId: ADMIN_NOMINATION_DELETE_REASON_INPUT_ID,
+      label: "Deletion reason",
+      style: TextInputStyle.Paragraph,
+      maxLength: 250,
+      placeholder: `Why should "${truncateLabel(gameTitle, 80)}" be removed?`,
+    }));
 }
 
 export function buildDeletionReasonState(

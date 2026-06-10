@@ -11,8 +11,6 @@ import {
   ButtonStyle,
   StringSelectMenuBuilder,
   ModalBuilder,
-  TextInputBuilder,
-  TextInputStyle,
   MessageFlags,
 } from "discord.js";
 import {
@@ -46,6 +44,7 @@ import {
 } from "../imports/import-scaffold.service.js";
 import { safeV2TextContent } from "../../functions/ComponentsV2Utils.js";
 import { buildCompletionatorChooseId } from "./completion-helpers.js";
+import { buildTextInputRow } from "../../functions/uiComponents.js";
 import {
   DISCORD_AUTOCOMPLETE_DESC_MAX,
   DISCORD_SELECT_LABEL_MAX,
@@ -694,14 +693,11 @@ export class CompletionatorUiService {
       // eslint-disable-next-line local/custom-id-has-matching-handler
       .setCustomId(`comp-import-date:${userId}:${importId}:${itemId}`)
       .setTitle("Completion Date");
-    const dateInput = new TextInputBuilder()
-       
-      .setCustomId("completion-date")
-      .setLabel("Completion date (YYYY-MM-DD)")
-      .setPlaceholder("2025-12-31")
-      .setStyle(TextInputStyle.Short)
-      .setRequired(true);
-    modal.addComponents(new ActionRowBuilder<TextInputBuilder>().addComponents(dateInput));
+    modal.addComponents(buildTextInputRow({
+      customId: "completion-date",
+      label: "Completion date (YYYY-MM-DD)",
+      placeholder: "2025-12-31",
+    }));
     return modal;
   }
 
@@ -719,14 +715,11 @@ export class CompletionatorUiService {
       // eslint-disable-next-line local/custom-id-has-matching-handler
       .setCustomId(`comp-import-modal:${kind}:${userId}:${importId}:${itemId}`)
       .setTitle(title);
-    const input = new TextInputBuilder()
-       
-      .setCustomId("completionator-input")
-      .setLabel(label.slice(0, 45))
-      .setPlaceholder((itemTitle ?? placeholder).slice(0, DISCORD_SELECT_LABEL_MAX))
-      .setStyle(TextInputStyle.Short)
-      .setRequired(true);
-    modal.addComponents(new ActionRowBuilder<TextInputBuilder>().addComponents(input));
+    modal.addComponents(buildTextInputRow({
+      customId: "completionator-input",
+      label: label.slice(0, 45),
+      placeholder: (itemTitle ?? placeholder).slice(0, DISCORD_SELECT_LABEL_MAX),
+    }));
     return modal;
   }
 }

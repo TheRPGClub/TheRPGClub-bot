@@ -13,7 +13,6 @@ import {
   ModalBuilder,
   StringSelectMenuBuilder,
   StringSelectMenuInteraction,
-  TextInputBuilder,
   TextInputStyle,
   channelMention,
 } from "discord.js";
@@ -63,6 +62,7 @@ import GameSearchSynonymDraft, {
 import axios from "axios";
 import { igdbService } from "../services/IGDB/IgdbService.js";
 import { buildPageFooterText, shouldRenderPrevNextButtons } from "../functions/PaginationUtils.js";
+import { buildTextInputRow } from "../functions/uiComponents.js";
 import { parseSynonymQuickAddTerms } from "./gamedb-synonym.utils.js";
 import { isPositiveInt, truncateWithEllipsis } from "../utilities/ValidationUtils.js";
 import { COLOR_PRIMARY, COLOR_SUCCESS, COLOR_HIGHLIGHT } from "../config/colors.js";
@@ -99,18 +99,16 @@ function clampSynonymOptionText(value: string, maxLength = 100): string {
 }
 
 function buildSynonymGroupEditModal(ownerId: string, groupId: number, terms: string): ModalBuilder {
-  const input = new TextInputBuilder()
-    .setCustomId(SYNONYM_EDIT_GROUP_INPUT_ID)
-    .setLabel("Synonym terms, one per line")
-    .setStyle(TextInputStyle.Paragraph)
-    .setRequired(true)
-    .setMaxLength(2000)
-    .setValue(terms);
-
   return new ModalBuilder()
     .setCustomId(`${SYNONYM_EDIT_GROUP_MODAL_PREFIX}:${ownerId}:${groupId}`)
     .setTitle("Edit Search Synonym Group")
-    .addComponents(new ActionRowBuilder<TextInputBuilder>().addComponents(input));
+    .addComponents(buildTextInputRow({
+      customId: SYNONYM_EDIT_GROUP_INPUT_ID,
+      label: "Synonym terms, one per line",
+      style: TextInputStyle.Paragraph,
+      maxLength: 2000,
+      value: terms,
+    }));
 }
 
 function buildSynonymListCustomId(
@@ -176,18 +174,16 @@ function parseSynonymPairs(
 }
 
 function buildSynonymAddModal(draftId: number): ModalBuilder {
-  const input = new TextInputBuilder()
-    .setCustomId(SYNONYM_ADD_BULK_INPUT_ID)
-    .setLabel("Synonym pairs, one per line")
-    .setStyle(TextInputStyle.Paragraph)
-    .setPlaceholder("GTA <-> Grand Theft Auto\nKH <-> Kingdom Hearts\n1 <-> one")
-    .setRequired(true)
-    .setMaxLength(2000);
-
   return new ModalBuilder()
     .setCustomId(`${SYNONYM_ADD_MODAL_PREFIX}:${draftId}`)
     .setTitle("Add GameDB Search Synonyms")
-    .addComponents(new ActionRowBuilder<TextInputBuilder>().addComponents(input));
+    .addComponents(buildTextInputRow({
+      customId: SYNONYM_ADD_BULK_INPUT_ID,
+      label: "Synonym pairs, one per line",
+      style: TextInputStyle.Paragraph,
+      placeholder: "GTA <-> Grand Theft Auto\nKH <-> Kingdom Hearts\n1 <-> one",
+      maxLength: 2000,
+    }));
 }
 
 function buildSynonymContinueComponents(draftId: number): Array<ActionRowBuilder<ButtonBuilder>> {
@@ -908,16 +904,11 @@ export class GameDbAdmin {
     const modal = new ModalBuilder()
       .setCustomId(`${AUDIT_VIDEO_MODAL_ID}:${sessionId}:${gameIdStr}`)
       .setTitle("Add YouTube Video")
-      .addComponents(
-        new ActionRowBuilder<TextInputBuilder>().addComponents(
-          new TextInputBuilder()
-            .setCustomId(AUDIT_VIDEO_INPUT_ID)
-            .setLabel("YouTube URL")
-            .setStyle(TextInputStyle.Short)
-            .setRequired(true)
-            .setPlaceholder("https://www.youtube.com/watch?v=..."),
-        ),
-      );
+      .addComponents(buildTextInputRow({
+        customId: AUDIT_VIDEO_INPUT_ID,
+        label: "YouTube URL",
+        placeholder: "https://www.youtube.com/watch?v=...",
+      }));
 
     await interaction.showModal(modal).catch(() => {});
   }
@@ -933,16 +924,12 @@ export class GameDbAdmin {
     const modal = new ModalBuilder()
       .setCustomId(`${AUDIT_DESCRIPTION_MODAL_ID}:${sessionId}:${gameIdStr}`)
       .setTitle("Add Description")
-      .addComponents(
-        new ActionRowBuilder<TextInputBuilder>().addComponents(
-          new TextInputBuilder()
-            .setCustomId(AUDIT_DESCRIPTION_INPUT_ID)
-            .setLabel("Description")
-            .setStyle(TextInputStyle.Paragraph)
-            .setRequired(true)
-            .setMaxLength(2000),
-        ),
-      );
+      .addComponents(buildTextInputRow({
+        customId: AUDIT_DESCRIPTION_INPUT_ID,
+        label: "Description",
+        style: TextInputStyle.Paragraph,
+        maxLength: 2000,
+      }));
 
     await interaction.showModal(modal).catch(() => {});
   }

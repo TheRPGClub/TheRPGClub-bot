@@ -1,10 +1,8 @@
 import {
-  ActionRowBuilder,
   ApplicationCommandOptionType,
   ButtonInteraction,
   CommandInteraction,
   ModalBuilder,
-  TextInputBuilder,
   TextInputStyle,
 } from "discord.js";
 import {
@@ -43,6 +41,7 @@ import { startCompletionWizard } from "./gamedb-completion.command.js";
 import { showNowPlayingThreadModal } from "./gamedb-thread.command.js";
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
 import { assertCustomIdSegments } from "../../utilities/CustomIdUtils.js";
+import { buildTextInputRow } from "../../functions/uiComponents.js";
 
 @Discord()
 @SlashGroup("gamedb")
@@ -168,14 +167,13 @@ export class GameDbViewCommand {
         .setCustomId(`gamedb-nowplaying-modal:${gameId}`)
         .setTitle("Add to Now Playing")
         .addComponents(
-          new ActionRowBuilder<TextInputBuilder>().addComponents(
-            new TextInputBuilder()
-              .setCustomId("gamedb-nowplaying-note")
-              .setLabel("Note (optional)")
-              .setStyle(TextInputStyle.Paragraph)
-              .setRequired(false)
-              .setMaxLength(500),
-          ),
+          buildTextInputRow({
+            customId: "gamedb-nowplaying-note",
+            label: "Note (optional)",
+            style: TextInputStyle.Paragraph,
+            required: false,
+            maxLength: 500,
+          }),
         );
       await interaction.showModal(modal).catch(() => {});
       return;

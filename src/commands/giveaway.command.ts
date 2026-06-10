@@ -10,8 +10,6 @@ import {
   ModalSubmitInteraction,
   StringSelectMenuBuilder,
   StringSelectMenuInteraction,
-  TextInputBuilder,
-  TextInputStyle,
   userMention,
 } from "discord.js";
 import {
@@ -63,6 +61,7 @@ import {
   GIVEAWAY_MAX_KEY_LENGTH,
 } from "../config/textLimits.js";
 import { assertCustomIdSegments } from "../utilities/CustomIdUtils.js";
+import { buildTextInputRow } from "../functions/uiComponents.js";
 const GIVEAWAY_DONATE_MODAL_ID = "giveaway-donate-modal";
 const GIVEAWAY_REVOKE_MODAL_ID = "giveaway-revoke-modal";
 const GIVEAWAY_DONATE_TITLE_ID = "giveaway-donate-title";
@@ -355,52 +354,23 @@ async function claimKey(
 }
 
 function buildDonateModal(): ModalBuilder {
-  const titleInput = new TextInputBuilder()
-     
-    .setCustomId(GIVEAWAY_DONATE_TITLE_ID)
-    .setLabel("Game title")
-    .setStyle(TextInputStyle.Short)
-    .setRequired(true)
-    .setMaxLength(GIVEAWAY_MAX_TITLE_LENGTH);
-  const platformInput = new TextInputBuilder()
-     
-    .setCustomId(GIVEAWAY_DONATE_PLATFORM_ID)
-    .setLabel("Platform (Steam, Epic, GOG, etc.)")
-    .setStyle(TextInputStyle.Short)
-    .setRequired(true)
-    .setMaxLength(GIVEAWAY_MAX_PLATFORM_LENGTH);
-  const keyInput = new TextInputBuilder()
-     
-    .setCustomId(GIVEAWAY_DONATE_KEY_ID)
-    .setLabel("Game key")
-    .setStyle(TextInputStyle.Short)
-    .setRequired(true)
-    .setMaxLength(GIVEAWAY_MAX_KEY_LENGTH);
-
   return new ModalBuilder()
-     
+
     .setCustomId(GIVEAWAY_DONATE_MODAL_ID)
     .setTitle("Donate a Game Key")
     .addComponents(
-      new ActionRowBuilder<TextInputBuilder>().addComponents(titleInput),
-      new ActionRowBuilder<TextInputBuilder>().addComponents(platformInput),
-      new ActionRowBuilder<TextInputBuilder>().addComponents(keyInput),
+      buildTextInputRow({ customId: GIVEAWAY_DONATE_TITLE_ID, label: "Game title", maxLength: GIVEAWAY_MAX_TITLE_LENGTH }),
+      buildTextInputRow({ customId: GIVEAWAY_DONATE_PLATFORM_ID, label: "Platform (Steam, Epic, GOG, etc.)", maxLength: GIVEAWAY_MAX_PLATFORM_LENGTH }),
+      buildTextInputRow({ customId: GIVEAWAY_DONATE_KEY_ID, label: "Game key", maxLength: GIVEAWAY_MAX_KEY_LENGTH }),
     );
 }
 
 function buildRevokeModal(): ModalBuilder {
-  const keyIdInput = new TextInputBuilder()
-     
-    .setCustomId(GIVEAWAY_REVOKE_KEY_ID)
-    .setLabel("Key ID")
-    .setStyle(TextInputStyle.Short)
-    .setRequired(true);
-
   return new ModalBuilder()
-     
+
     .setCustomId(GIVEAWAY_REVOKE_MODAL_ID)
     .setTitle("Revoke a Game Key")
-    .addComponents(new ActionRowBuilder<TextInputBuilder>().addComponents(keyIdInput));
+    .addComponents(buildTextInputRow({ customId: GIVEAWAY_REVOKE_KEY_ID, label: "Key ID" }));
 }
 
 function buildKeyListComponents(
