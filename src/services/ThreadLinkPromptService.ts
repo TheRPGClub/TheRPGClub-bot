@@ -33,7 +33,7 @@ import { COLOR_BLUE_INFO } from "../config/colors.js";
 import { DISCORD_AUTOCOMPLETE_DESC_MAX } from "../config/textLimits.js";
 import { assertCustomIdSegments } from "../utilities/CustomIdUtils.js";
 import { safeIgnore } from "../utilities/AsyncUtils.js";
-import { logError } from "../utilities/LogUtils.js";
+import { logError, logWarn } from "../utilities/LogUtils.js";
 
 function hasIgdbConfig(): boolean {
   return Boolean(process.env.IGDB_CLIENT_ID && process.env.IGDB_CLIENT_SECRET);
@@ -249,9 +249,7 @@ export class ThreadLinkButtonHandlers {
 
 export function startThreadLinkPromptService(client: Client): void {
   if (!hasIgdbConfig()) {
-    console.warn(
-      "[ThreadLinkPrompt] IGDB_CLIENT_ID/SECRET not set; skipping thread link prompts.",
-    );
+    logWarn("ThreadLinkPromptService.start", "IGDB_CLIENT_ID/SECRET not set; skipping thread link prompts.");
   }
 
   client.on("threadCreate", async (thread) => {

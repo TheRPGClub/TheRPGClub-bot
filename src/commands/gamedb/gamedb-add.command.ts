@@ -34,7 +34,7 @@ import {
 import { buildIgdbSelectOptions } from "./gamedb-csv-import.service.js";
 import { showGameProfile, trimTextDisplayContent } from "./gamedb-profile.service.js";
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
-import { logError } from "../../utilities/LogUtils.js";
+import { logError, logWarn } from "../../utilities/LogUtils.js";
 
 async function fetchIgdbCoverImage(details: IGDBGameDetails): Promise<Buffer | null> {
   if (!details.cover?.image_id) return null;
@@ -70,9 +70,7 @@ export async function processReleaseDates(
   const platformMap = await Game.getPlatformsByIgdbIds(uniquePlatformIds);
   const missingPlatformIds = uniquePlatformIds.filter((id) => !platformMap.has(id));
   if (missingPlatformIds.length) {
-    console.warn(
-      `[GameDB] Missing IGDB platform IDs in GAMEDB_PLATFORMS: ${missingPlatformIds.join(", ")}`,
-    );
+    logWarn("GamedbAdd.addGame", `Missing IGDB platform IDs in GAMEDB_PLATFORMS: ${missingPlatformIds.join(", ")}`);
   }
 
   for (const release of releaseDates) {

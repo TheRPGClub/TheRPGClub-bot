@@ -11,7 +11,7 @@ import {
   type IRssFeedItem,
   type IRssFeed,
 } from "../classes/RssFeed.js";
-import { logError } from "../utilities/LogUtils.js";
+import { logError, logWarn } from "../utilities/LogUtils.js";
 
 const POLL_INTERVAL_MS: number = 5 * 60 * 1000;
 const ERROR_LOG_COOLDOWN = 60 * 60 * 1000; // 1 hour
@@ -110,11 +110,11 @@ async function processFeed(
   try {
     const channel = await client.channels.fetch(feed.channelId).catch(() => null);
     if (!channel) {
-      console.warn(`[RSS] Channel ${feed.channelId} not found for feed #${feed.feedId}`);
+      logWarn("RssFeedService.processChannel", `Channel ${feed.channelId} not found for feed #${feed.feedId}`);
       return;
     }
     if (!(typeof (channel as any).isTextBased === "function" && (channel as any).isTextBased())) {
-      console.warn(`[RSS] Channel ${feed.channelId} is not text-based for feed #${feed.feedId}`);
+      logWarn("RssFeedService.processChannel", `Channel ${feed.channelId} is not text-based for feed #${feed.feedId}`);
       return;
     }
 
@@ -140,7 +140,7 @@ export function startRssFeedService(client: Client): void {
 
   const tick = async () => {
     if (isPolling) {
-      console.warn("[RSS] Previous poll still running, skipping this cycle.");
+      logWarn("RssFeedService.tick", "Previous poll still running, skipping this cycle.");
       return;
     }
     isPolling = true;

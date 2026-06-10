@@ -110,7 +110,7 @@ import {
   isValidPlaytimeHours,
   truncateWithEllipsis,
 } from "../utilities/ValidationUtils.js";
-import { formatStructuredLog, logError } from "../utilities/LogUtils.js";
+import { logError } from "../utilities/LogUtils.js";
 import {
   DISCORD_AUTOCOMPLETE_DESC_MAX,
   DISCORD_SELECT_LABEL_MAX,
@@ -245,11 +245,7 @@ export async function restoreJournalMessageContextsFromDb(): Promise<void> {
     }
     console.log(`[Journal] Restored ${rows.length} message context(s) from DB.`);
   } catch (err) {
-    console.error(formatStructuredLog({
-      context: "Journal",
-      event: "restore_contexts_failed",
-      error: err instanceof Error ? err.message : String(err),
-    }));
+    logError("Journal.restore_contexts_failed", err);
   }
 }
 
@@ -510,11 +506,7 @@ export async function trackNowPlayingJournalContext(
     createdAt,
     ownerUserId,
     gameId,
-  ).catch((err) => console.error(formatStructuredLog({
-    context: "Journal",
-    event: "persist_context_failed",
-    error: err instanceof Error ? err.message : String(err),
-  })));
+  ).catch((err) => logError("Journal.persist_context_failed", err));
 }
 
 export async function refreshJournalMessages(
@@ -533,11 +525,7 @@ export async function refreshJournalMessages(
     if (now - ctx.createdAt > NOW_PLAYING_JOURNAL_CONTEXT_TTL_MS) {
       nowPlayingJournalContexts.delete(key);
       await Member.deleteJournalMessageContext(ctx.channelId, ctx.messageId)
-        .catch((err) => console.error(formatStructuredLog({
-          context: "Journal",
-          event: "delete_expired_context_failed",
-          error: err instanceof Error ? err.message : String(err),
-        })));
+        .catch((err) => logError("Journal.delete_expired_context_failed", err));
       continue;
     }
     const existing = latestByChannel.get(ctx.channelId);
@@ -553,11 +541,7 @@ export async function refreshJournalMessages(
       const key = `${ctx.channelId}:${ctx.messageId}`;
       nowPlayingJournalContexts.delete(key);
       await Member.deleteJournalMessageContext(ctx.channelId, ctx.messageId)
-        .catch((err) => console.error(formatStructuredLog({
-          context: "Journal",
-          event: "delete_unreachable_context_failed",
-          error: err instanceof Error ? err.message : String(err),
-        })));
+        .catch((err) => logError("Journal.delete_unreachable_context_failed", err));
       continue;
     }
     const message = await channel.messages.fetch(ctx.messageId).catch(() => null);
@@ -565,11 +549,7 @@ export async function refreshJournalMessages(
       const key = `${ctx.channelId}:${ctx.messageId}`;
       nowPlayingJournalContexts.delete(key);
       await Member.deleteJournalMessageContext(ctx.channelId, ctx.messageId)
-        .catch((err) => console.error(formatStructuredLog({
-          context: "Journal",
-          event: "delete_missing_context_failed",
-          error: err instanceof Error ? err.message : String(err),
-        })));
+        .catch((err) => logError("Journal.delete_missing_context_failed", err));
       continue;
     }
     const guildId = channel.isDMBased() ? null : (channel as any).guildId as string;
@@ -590,11 +570,7 @@ export async function refreshJournalMessages(
     await message.edit({
       components: payload.components as any[],
       files: payload.files,
-    }).catch((err) => console.error(formatStructuredLog({
-      context: "Journal",
-      event: "refresh_public_message_failed",
-      error: err instanceof Error ? err.message : String(err),
-    })));
+    }).catch((err) => logError("Journal.refresh_public_message_failed", err));
   }
 }
 
@@ -5465,11 +5441,7 @@ export class NowPlayingCommand {
       if (now - context.createdAt > NOW_PLAYING_JOURNAL_CONTEXT_TTL_MS) {
         nowPlayingJournalContexts.delete(key);
         await Member.deleteJournalMessageContext(context.channelId, context.messageId)
-          .catch((err) => console.error(formatStructuredLog({
-            context: "Journal",
-            event: "delete_expired_context_from_db_failed",
-            error: err instanceof Error ? err.message : String(err),
-          })));
+          .catch((err) => logError("Journal.delete_expired_context_from_db_failed", err));
         continue;
       }
       if (context.channelId !== channelId) continue;
@@ -5488,11 +5460,7 @@ export class NowPlayingCommand {
     if (!channel?.isTextBased()) {
       nowPlayingJournalContexts.delete(latestKey);
       await Member.deleteJournalMessageContext(latestContext.channelId, latestContext.messageId)
-        .catch((err) => console.error(formatStructuredLog({
-          context: "Journal",
-          event: "delete_unreachable_context_from_db_failed",
-          error: err instanceof Error ? err.message : String(err),
-        })));
+        .catch((err) => logError("Journal.delete_unreachable_context_from_db_failed", err));
       return;
     }
 
@@ -5500,22 +5468,14 @@ export class NowPlayingCommand {
     if (!message) {
       nowPlayingJournalContexts.delete(latestKey);
       await Member.deleteJournalMessageContext(latestContext.channelId, latestContext.messageId)
-        .catch((err) => console.error(formatStructuredLog({
-          context: "Journal",
-          event: "delete_missing_context_from_db_failed",
-          error: err instanceof Error ? err.message : String(err),
-        })));
+        .catch((err) => logError("Journal.delete_missing_context_from_db_failed", err));
       return;
     }
 
     await message.delete().catch(() => null);
     nowPlayingJournalContexts.delete(latestKey);
     await Member.deleteJournalMessageContext(latestContext.channelId, latestContext.messageId)
-      .catch((err) => console.error(formatStructuredLog({
-        context: "Journal",
-        event: "delete_context_from_db_after_message_delete_failed",
-        error: err instanceof Error ? err.message : String(err),
-      })));
+      .catch((err) => logError("Journal.delete_context_from_db_after_message_delete_failed", err));
   }
 
   private async trackJournalReply(

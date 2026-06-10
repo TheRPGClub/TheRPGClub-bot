@@ -36,7 +36,7 @@ import {
   buildComponentsV2EditFlags,
 } from "../../functions/ComponentsV2Utils.js";
 import { flattenErrorMessages } from "../imports/import-scaffold.service.js";
-import { formatStructuredLog, logError } from "../../utilities/LogUtils.js";
+import { logError } from "../../utilities/LogUtils.js";
 import { safeIgnore } from "../../utilities/AsyncUtils.js";
 import { buildTextInputRow } from "../../functions/uiComponents.js";
 import {
@@ -164,11 +164,7 @@ export class CollectionViewCommand {
         ),
       ]);
     } catch (err) {
-      console.error(formatStructuredLog({
-        context: "collection list",
-        event: "build_response_failed",
-        error: err instanceof Error ? err.message : String(err),
-      }));
+      logError("collection list.build_response_failed", err);
       await safeReply(
         interaction,
         buildTextReply("Failed to load your collection. Please try again.", isEphemeral),
@@ -190,22 +186,14 @@ export class CollectionViewCommand {
         flags: buildComponentsV2Flags(isEphemeral),
       });
     } catch (err) {
-      console.error(formatStructuredLog({
-        context: "collection list",
-        event: "safe_reply_failed",
-        error: err instanceof Error ? err.message : String(err),
-      }));
+      logError("collection list.safe_reply_failed", err);
       try {
         await safeReply(
           interaction,
           buildTextReply("Failed to display collection. Please try again.", isEphemeral),
         );
       } catch (fallbackErr) {
-        console.error(formatStructuredLog({
-          context: "collection list",
-          event: "fallback_safe_reply_failed",
-          error: fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr),
-        }));
+        logError("collection list.fallback_safe_reply_failed", fallbackErr);
       }
     }
     console.log("[collection list] step: reply sent");

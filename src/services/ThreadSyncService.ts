@@ -6,7 +6,7 @@ import type {
 } from "discord.js";
 import { upsertThreadRecord } from "../classes/Thread.js";
 import { NOW_PLAYING_FORUM_ID } from "../config/channels.js";
-import { logError } from "../utilities/LogUtils.js";
+import { logError, logWarn } from "../utilities/LogUtils.js";
 const DEFAULT_SYNC_INTERVAL_MS = 10 * 60 * 1000;
 
 function isTargetForum(thread: AnyThreadChannel | ThreadChannel | null): boolean {
@@ -36,7 +36,7 @@ async function syncForumThreads(client: Client): Promise<void> {
   try {
     const forum = await client.channels.fetch(NOW_PLAYING_FORUM_ID);
     if (!forum || !("threads" in forum)) {
-      console.warn("[ThreadSync] Forum channel not found or invalid");
+      logWarn("ThreadSyncService.syncForumThreads", "Forum channel not found or invalid.");
       return;
     }
 

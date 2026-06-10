@@ -60,7 +60,11 @@ import {
   GIVEAWAY_MAX_KEY_LENGTH,
 } from "../config/textLimits.js";
 import { assertCustomIdSegments } from "../utilities/CustomIdUtils.js";
-import { buildSelectOptions, buildTextInputRow } from "../functions/uiComponents.js";
+import {
+  buildActionButton,
+  buildSelectOptions,
+  buildTextInputRow,
+} from "../functions/uiComponents.js";
 import { safeIgnore } from "../utilities/AsyncUtils.js";
 const GIVEAWAY_DONATE_MODAL_ID = "giveaway-donate-modal";
 const GIVEAWAY_REVOKE_MODAL_ID = "giveaway-revoke-modal";
@@ -251,16 +255,8 @@ function buildClaimConfirmComponents(
   confirmId: string,
   cancelId: string,
 ): ActionRowBuilder<ButtonBuilder>[] {
-  const yesButton = new ButtonBuilder()
-     
-    .setCustomId(confirmId)
-    .setLabel("Yes")
-    .setStyle(ButtonStyle.Success);
-  const noButton = new ButtonBuilder()
-     
-    .setCustomId(cancelId)
-    .setLabel("No")
-    .setStyle(ButtonStyle.Secondary);
+  const yesButton = buildActionButton({ customId: confirmId, label: "Yes", style: ButtonStyle.Success });
+  const noButton = buildActionButton({ customId: cancelId, label: "No", style: ButtonStyle.Secondary });
   return [new ActionRowBuilder<ButtonBuilder>().addComponents(yesButton, noButton)];
 }
 
@@ -286,18 +282,16 @@ function buildDonorSettingsRow(
   userId: string,
   enabled: boolean,
 ): ActionRowBuilder<ButtonBuilder> {
-  const yesButton = new ButtonBuilder()
-     
-    .setCustomId(`${GIVEAWAY_DONOR_NOTIFY_ID}:${userId}:yes`)
-    .setLabel("Yes")
-    .setStyle(ButtonStyle.Success)
-    .setDisabled(enabled);
-  const noButton = new ButtonBuilder()
-     
-    .setCustomId(`${GIVEAWAY_DONOR_NOTIFY_ID}:${userId}:no`)
-    .setLabel("No")
-    .setStyle(ButtonStyle.Secondary)
-    .setDisabled(!enabled);
+  const yesButton = buildActionButton({
+    customId: `${GIVEAWAY_DONOR_NOTIFY_ID}:${userId}:yes`,
+    label: "Yes",
+    style: ButtonStyle.Success,
+  }).setDisabled(enabled);
+  const noButton = buildActionButton({
+    customId: `${GIVEAWAY_DONOR_NOTIFY_ID}:${userId}:no`,
+    label: "No",
+    style: ButtonStyle.Secondary,
+  }).setDisabled(!enabled);
   return new ActionRowBuilder<ButtonBuilder>().addComponents(yesButton, noButton);
 }
 
@@ -384,11 +378,11 @@ function buildKeyListComponents(
   const rows: ActionRowBuilder<ButtonBuilder | StringSelectMenuBuilder>[] = [];
   if (keys.length) {
     if (isPublic) {
-      const claimButton = new ButtonBuilder()
-         
-        .setCustomId(`giveaway-claim-button:${sessionId}:${page}`)
-        .setLabel("Claim a key")
-        .setStyle(ButtonStyle.Primary);
+      const claimButton = buildActionButton({
+        customId: `giveaway-claim-button:${sessionId}:${page}`,
+        label: "Claim a key",
+        style: ButtonStyle.Primary,
+      });
       rows.push(new ActionRowBuilder<ButtonBuilder>().addComponents(claimButton));
     } else {
       const selectRows = buildKeySelectMenus(

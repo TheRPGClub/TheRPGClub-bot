@@ -24,8 +24,8 @@ import {
 import Member, { type IMemberPlatformRecord } from "../classes/Member.js";
 import {
   deferWithPrivateFlag,
-  ephemeralFlag,
   extractErrorMessage,
+  replyIfNotOwner,
   safeDeferUpdate,
   safeReply,
   safeUpdate,
@@ -238,7 +238,7 @@ async function renderMpInfoPage(
     await safeReply(interaction as any, {
       embeds: [embed],
       components,
-      flags: ephemeralFlag(ephemeral),
+      flags: buildComponentsV2Flags(ephemeral),
     });
   }
 }
@@ -315,10 +315,7 @@ export class MultiplayerInfoCommand {
     const segments = parseCustomIdSegments(interaction.customId, 3);
     if (!segments) return;
     const [ownerId, filterKey, pageRaw] = segments;
-    if (interaction.user.id !== ownerId) {
-      await safeReply(interaction, buildTextReply("This menu isn't for you.", true));
-      return;
-    }
+    if (await replyIfNotOwner(interaction, ownerId)) return;
 
     const userId = interaction.values?.[0];
     if (!userId) {
@@ -388,10 +385,7 @@ export class MultiplayerInfoCommand {
     const segments = parseCustomIdSegments(interaction.customId, 3);
     if (!segments) return;
     const [ownerId, filterKey, pageRaw] = segments;
-    if (interaction.user.id !== ownerId) {
-      await safeReply(interaction, buildTextReply("This menu isn't for you.", true));
-      return;
-    }
+    if (await replyIfNotOwner(interaction, ownerId)) return;
 
     const page = Number(pageRaw);
     if (Number.isNaN(page)) return;
@@ -405,10 +399,7 @@ export class MultiplayerInfoCommand {
     const segments = parseCustomIdSegments(interaction.customId, 4);
     if (!segments) return;
     const [ownerId, filterKey, pageRaw, dir] = segments;
-    if (interaction.user.id !== ownerId) {
-      await safeReply(interaction, buildTextReply("This menu isn't for you.", true));
-      return;
-    }
+    if (await replyIfNotOwner(interaction, ownerId)) return;
 
     const page = Number(pageRaw);
     if (Number.isNaN(page)) return;

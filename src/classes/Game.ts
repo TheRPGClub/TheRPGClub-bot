@@ -15,7 +15,7 @@ import {
 } from "../services/RpgClubApiClient.js";
 import { isPositiveInt } from "../utilities/ValidationUtils.js";
 import { safeIgnore } from "../utilities/AsyncUtils.js";
-import { logError } from "../utilities/LogUtils.js";
+import { logError, logWarn } from "../utilities/LogUtils.js";
 
 // Interfaces
 export interface IGame {
@@ -1156,9 +1156,7 @@ export default class Game {
     });
 
     if (missingPlatformIds.size) {
-      console.warn(
-        `Missing platform IDs in GAMEDB_PLATFORMS: ${Array.from(missingPlatformIds).join(", ")}`,
-      );
+      logWarn("Game.getPlatformsByIgdbIds", `Missing platform IDs in GAMEDB_PLATFORMS: ${Array.from(missingPlatformIds).join(", ")}`);
     }
 
     return games.map((game) => ({
@@ -1531,9 +1529,7 @@ export default class Game {
     const platformMap = await Game.getPlatformsByIgdbIds(uniqueIds);
     const missingIds = uniqueIds.filter((id) => !platformMap.has(id));
     if (missingIds.length) {
-      console.warn(
-        `Missing IGDB platform IDs in GAMEDB_PLATFORMS: ${missingIds.join(", ")}`,
-      );
+      logWarn("Game.syncIgdbPlatforms", `Missing IGDB platform IDs in GAMEDB_PLATFORMS: ${missingIds.join(", ")}`);
     }
 
     await dbTransaction(async (conn) => {

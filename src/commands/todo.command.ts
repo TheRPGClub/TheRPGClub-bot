@@ -62,7 +62,7 @@ import { decodeBase64Url, encodeWithMaxLength } from "../functions/CustomIdUtils
 import { parseCustomIdSegments } from "../utilities/CustomIdUtils.js";
 import { safeV2TextContent } from "../functions/ComponentsV2Utils.js";
 import { formatDiscordTimestamp } from "../functions/DateFormatUtils.js";
-import { buildTextInputRow } from "../functions/uiComponents.js";
+import { buildActionButton, buildTextInputRow } from "../functions/uiComponents.js";
 import { truncateWithEllipsis } from "../utilities/ValidationUtils.js";
 import { DISCORD_TEXT_INPUT_MAX } from "../config/textLimits.js";
 import { TODO_DEFAULT_PAGE_SIZE, TODO_MAX_PAGE_SIZE } from "../config/pagination.js";
@@ -1059,20 +1059,23 @@ function buildIssueListComponents(
     );
   const labelRow = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(labelSelect);
 
-  const queryButton = new ButtonBuilder()
-    .setCustomId(buildTodoQueryButtonId(payloadToken, payload.page))
-    .setLabel(payload.query ? "Edit Query" : "Filter by Query")
-    .setStyle(ButtonStyle.Secondary);
+  const queryButton = buildActionButton({
+    customId: buildTodoQueryButtonId(payloadToken, payload.page),
+    label: payload.query ? "Edit Query" : "Filter by Query",
+    style: ButtonStyle.Secondary,
+  });
 
-  const createButton = new ButtonBuilder()
-    .setCustomId(buildTodoCreateButtonId(payloadToken, payload.page))
-    .setLabel("Create Issue")
-    .setStyle(ButtonStyle.Success);
+  const createButton = buildActionButton({
+    customId: buildTodoCreateButtonId(payloadToken, payload.page),
+    label: "Create Issue",
+    style: ButtonStyle.Success,
+  });
 
-  const closeButton = new ButtonBuilder()
-    .setCustomId(buildTodoCloseButtonId(payloadToken, payload.page))
-    .setLabel("Close Issue")
-    .setStyle(ButtonStyle.Danger);
+  const closeButton = buildActionButton({
+    customId: buildTodoCloseButtonId(payloadToken, payload.page),
+    label: "Close Issue",
+    style: ButtonStyle.Danger,
+  });
 
   const actionRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
     createButton,
@@ -1081,11 +1084,11 @@ function buildIssueListComponents(
   );
   if (suggestionCount > 0) {
     actionRow.addComponents(
-      new ButtonBuilder()
-        // eslint-disable-next-line local/custom-id-has-matching-handler
-        .setCustomId(TODO_REVIEW_SUGGESTIONS_BUTTON_ID)
-        .setLabel("Review Suggestions")
-        .setStyle(ButtonStyle.Primary),
+      buildActionButton({
+        customId: TODO_REVIEW_SUGGESTIONS_BUTTON_ID,
+        label: "Review Suggestions",
+        style: ButtonStyle.Primary,
+      }),
     );
   }
 
@@ -1098,16 +1101,16 @@ function buildIssueListComponents(
     const prevDisabled = payload.page <= 1;
     const nextDisabled = payload.page >= totalPages;
     const pagingRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
-      new ButtonBuilder()
-        .setCustomId(buildTodoListCustomId(payloadToken, payload.page - 1))
-        .setLabel("Prev Page")
-        .setStyle(ButtonStyle.Secondary)
-        .setDisabled(prevDisabled),
-      new ButtonBuilder()
-        .setCustomId(buildTodoListCustomId(payloadToken, payload.page + 1))
-        .setLabel("Next Page")
-        .setStyle(ButtonStyle.Secondary)
-        .setDisabled(nextDisabled),
+      buildActionButton({
+        customId: buildTodoListCustomId(payloadToken, payload.page - 1),
+        label: "Prev Page",
+        style: ButtonStyle.Secondary,
+      }).setDisabled(prevDisabled),
+      buildActionButton({
+        customId: buildTodoListCustomId(payloadToken, payload.page + 1),
+        label: "Next Page",
+        style: ButtonStyle.Secondary,
+      }).setDisabled(nextDisabled),
     );
     components.push(pagingRow);
   }
@@ -1158,32 +1161,37 @@ function buildIssueViewComponents(
 
   const isOpen = issue.state === "open";
   const stateButton = isOpen
-    ? new ButtonBuilder()
-        .setCustomId(buildTodoCloseViewId(payloadToken, payload.page, issue.number))
-        .setLabel("Close Issue")
-        .setStyle(ButtonStyle.Danger)
-    : new ButtonBuilder()
-        .setCustomId(buildTodoReopenViewId(payloadToken, payload.page, issue.number))
-        .setLabel("Reopen Issue")
-        .setStyle(ButtonStyle.Success);
+    ? buildActionButton({
+        customId: buildTodoCloseViewId(payloadToken, payload.page, issue.number),
+        label: "Close Issue",
+        style: ButtonStyle.Danger,
+      })
+    : buildActionButton({
+        customId: buildTodoReopenViewId(payloadToken, payload.page, issue.number),
+        label: "Reopen Issue",
+        style: ButtonStyle.Success,
+      });
 
   const actionRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
-    new ButtonBuilder()
-      .setCustomId(buildTodoCommentButtonId(payloadToken, payload.page, issue.number))
-      .setLabel("Add Comment")
-      .setStyle(ButtonStyle.Primary),
-    new ButtonBuilder()
-      .setCustomId(buildTodoEditViewButtonId(payloadToken, payload.page, issue.number))
-      .setLabel("Edit")
-      .setStyle(ButtonStyle.Secondary),
+    buildActionButton({
+      customId: buildTodoCommentButtonId(payloadToken, payload.page, issue.number),
+      label: "Add Comment",
+      style: ButtonStyle.Primary,
+    }),
+    buildActionButton({
+      customId: buildTodoEditViewButtonId(payloadToken, payload.page, issue.number),
+      label: "Edit",
+      style: ButtonStyle.Secondary,
+    }),
     stateButton,
   );
 
   const backRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
-    new ButtonBuilder()
-      .setCustomId(buildTodoListBackId(payloadToken, payload.page))
-      .setLabel("Back")
-      .setStyle(ButtonStyle.Secondary),
+    buildActionButton({
+      customId: buildTodoListBackId(payloadToken, payload.page),
+      label: "Back",
+      style: ButtonStyle.Secondary,
+    }),
   );
 
   return { components: [container, actionRow, backRow] };
@@ -1543,10 +1551,11 @@ export class TodoCommand {
     const selectRow = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select);
 
     const cancelRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
-      new ButtonBuilder()
-        .setCustomId(buildTodoCloseCancelId(parsed.payloadToken, parsed.page))
-        .setLabel("Cancel")
-        .setStyle(ButtonStyle.Secondary),
+      buildActionButton({
+        customId: buildTodoCloseCancelId(parsed.payloadToken, parsed.page),
+        label: "Cancel",
+        style: ButtonStyle.Secondary,
+      }),
     );
 
     await safeReply(

@@ -5,7 +5,7 @@ import {
   buildReminderButtons,
   buildReminderMessage,
 } from "../functions/ReminderUi.js";
-import { logError } from "../utilities/LogUtils.js";
+import { logError, logWarn } from "../utilities/LogUtils.js";
 
 const CHECK_INTERVAL_MS = 60_000;
 const MAX_REMINDERS_PER_CYCLE = 25;
@@ -77,7 +77,7 @@ async function deliverReminder(
     
     // If we've failed 5 times, mark it as sent so it stops retrying forever.
     if (reminder.failureCount + 1 >= 5) {
-      console.warn(`Reminder ${reminder.reminderId} reached max failures. Disabling.`);
+      logWarn("ReminderService.deliverReminder", `Reminder ${reminder.reminderId} reached max failures. Disabling.`);
       await Reminder.markFailedPermanently(reminder.reminderId);
     }
   }

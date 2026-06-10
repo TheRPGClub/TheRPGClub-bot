@@ -10,7 +10,7 @@ import { countAvailableGameKeys, listAvailableGameKeys } from "../classes/GameKe
 import { GIVEAWAY_HUB_CHANNEL_ID } from "../config/channels.js";
 import { buildPageFooterText } from "../functions/PaginationUtils.js";
 import { safeIgnore } from "../utilities/AsyncUtils.js";
-import { logError } from "../utilities/LogUtils.js";
+import { logError, logWarn } from "../utilities/LogUtils.js";
 const GIVEAWAY_HUB_SCAN_LIMIT = 50;
 
 export const KEYS_PAGE_SIZE = 20;
@@ -322,9 +322,7 @@ export async function refreshGiveawayHubMessage(
     });
   const textChannel = channel?.isTextBased() ? channel : null;
   if (!textChannel) {
-    console.warn(
-      `Giveaway hub channel ${GIVEAWAY_HUB_CHANNEL_ID} not found or not text-based.`,
-    );
+    logWarn("GiveawayHubService.updateHub", `Giveaway hub channel ${GIVEAWAY_HUB_CHANNEL_ID} not found or not text-based.`);
     return;
   }
 
@@ -332,7 +330,7 @@ export async function refreshGiveawayHubMessage(
   const shouldRecreate = options?.forceRecreate ?? false;
   if (shouldRecreate) {
     if (!("send" in textChannel)) {
-      console.warn("Giveaway hub channel does not support send.");
+      logWarn("GiveawayHubService.updateHub", "Giveaway hub channel does not support send.");
       return;
     }
     await deleteAllGiveawayHubMessages(textChannel);
