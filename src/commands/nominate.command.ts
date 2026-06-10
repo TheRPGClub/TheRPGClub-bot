@@ -31,11 +31,11 @@ import {
   getUpcomingNominationWindow,
 } from "../functions/NominationWindow.js";
 import {
-  deferWithShowInChat,
+  deferWithPrivateFlag,
+  PRIVATE_OPTION_DESCRIPTION,
   safeDeferReply,
   safeReply,
   sanitizeUserInput,
-  SHOW_IN_CHAT_DESCRIPTION,
 } from "../functions/InteractionUtils.js";
 import { buildTextReply, safeV2TextContent } from "../functions/ComponentsV2Utils.js";
 import {
@@ -291,23 +291,23 @@ export class NominateCommand {
     })
     rawKind: string,
     @SlashOption({
-      description: SHOW_IN_CHAT_DESCRIPTION,
-      name: "showinchat",
+      description: PRIVATE_OPTION_DESCRIPTION,
+      name: "private",
       required: false,
       type: ApplicationCommandOptionType.Boolean,
     })
-    showInChat: boolean = false,
+    privateFlag: boolean = false,
     interaction: CommandInteraction,
   ): Promise<void> {
     const selectedKind = parseNominationKind(rawKind);
-    const ephemeral = !showInChat;
+    const ephemeral = privateFlag;
 
     if (!selectedKind) {
       await safeReply(interaction, buildTextReply("Please choose either GOTM or NR-GOTM.", true));
       return;
     }
 
-    await deferWithShowInChat(interaction, showInChat);
+    await deferWithPrivateFlag(interaction, privateFlag);
 
     try {
       const window = await getUpcomingNominationWindow();
