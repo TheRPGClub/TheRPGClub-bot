@@ -4,6 +4,7 @@ import { NowPlayingCommand } from "../commands/now-playing.command.js";
 import type { IMemberNowPlayingEntry } from "../classes/Member.js";
 import Member from "../classes/Member.js";
 import Game from "../classes/Game.js";
+import Thread from "../classes/Thread.js";
 
 function collectBuilderField(value: unknown, key: "content" | "custom_id"): string[] {
   const found: string[] = [];
@@ -178,6 +179,7 @@ test("journal single-page view omits pager buttons and page count", async () => 
   const originalGetPref = Member.getGameJournalPreference;
   const originalCount = Member.countGameJournalEntries;
   const originalEntries = Member.getGameJournalEntries;
+  const originalGetThreads = Thread.getThreadsByGameId;
 
   try {
     Game.getGameById = (async () => ({ id: 1, title: "Test Game" })) as any;
@@ -199,6 +201,7 @@ test("journal single-page view omits pager buttons and page count", async () => 
       createdAt: new Date(),
       updatedAt: new Date(),
     }])) as any;
+    Thread.getThreadsByGameId = (async () => []) as any;
 
     const payload = await command.buildJournalComponents("123", "123", 1, 1);
     const customIds = collectBuilderField(payload.components, "custom_id");
@@ -216,6 +219,7 @@ test("journal single-page view omits pager buttons and page count", async () => 
     Member.getGameJournalPreference = originalGetPref;
     Member.countGameJournalEntries = originalCount;
     Member.getGameJournalEntries = originalEntries;
+    Thread.getThreadsByGameId = originalGetThreads;
   }
 });
 
@@ -228,6 +232,7 @@ test("journal public view redacts private entry content and count", async () => 
   const originalGetPref = Member.getGameJournalPreference;
   const originalCount = Member.countGameJournalEntries;
   const originalEntries = Member.getGameJournalEntries;
+  const originalGetThreads = Thread.getThreadsByGameId;
   let countViewerArg: string | null | undefined;
   let entriesViewerArg: string | null | undefined;
 
@@ -241,7 +246,7 @@ test("journal public view redacts private entry content and count", async () => 
       gameId: 1,
       isEnabled: true,
     })) as any;
-    Member.countGameJournalEntries = 
+    Member.countGameJournalEntries =
       (async (_userId: string, _gameId: number, viewerUserId?: string | null) => {
       countViewerArg = viewerUserId;
       return 1;
@@ -268,6 +273,7 @@ test("journal public view redacts private entry content and count", async () => 
       updatedAt: new Date("2026-05-11T00:00:00.000Z"),
     }];
     }) as any;
+    Thread.getThreadsByGameId = (async () => []) as any;
 
     const payload = await command.buildJournalComponents("123", "__public__", 1, 1);
     assert.ok(payload.components.length > 0);
@@ -281,6 +287,7 @@ test("journal public view redacts private entry content and count", async () => 
     Member.getGameJournalPreference = originalGetPref;
     Member.countGameJournalEntries = originalCount;
     Member.getGameJournalEntries = originalEntries;
+    Thread.getThreadsByGameId = originalGetThreads;
   }
 });
 

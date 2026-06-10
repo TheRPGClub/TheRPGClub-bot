@@ -703,7 +703,7 @@ export default class Member {
   static async getGameJournalEntries(
     userId: string,
     gameId: number,
-    params?: { limit?: number; offset?: number },
+    params?: { limit?: number; offset?: number; viewerUserId?: string | null },
   ): Promise<IGameJournalEntry[]> {
     const safeLimit = Math.min(Math.max(params?.limit ?? 5, 1), 25);
     const safeOffset = Math.max(params?.offset ?? 0, 0);
@@ -732,7 +732,13 @@ export default class Member {
     );
   }
 
-  static async countGameJournalEntries(userId: string, gameId: number): Promise<number> {
+  static async countGameJournalEntries(
+    userId: string,
+    gameId: number,
+    viewerUserId?: string | null,
+  ): Promise<number> {
+    // viewerUserId is reserved for viewer-scoped filtering; not yet used in the query
+    void viewerUserId;
     const rows = await dbQuery<{ CNT: number }, number>(
       MemberSql.countGameJournalEntries,
       { userId, gameId },

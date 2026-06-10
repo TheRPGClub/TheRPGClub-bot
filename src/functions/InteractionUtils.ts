@@ -473,7 +473,7 @@ export async function safeUpdate(interaction: AnyRepliable, options: any): Promi
     try {
       await anyInteraction.update(normalizedOptions);
       anyInteraction.__rpgAcked = true;
-      anyInteraction.__rpgDeferred = false;
+      anyInteraction.__rpgDeferred = true;
       return;
     } catch (err: any) {
       if (isAckError(err)) {
