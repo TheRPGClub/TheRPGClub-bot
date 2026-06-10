@@ -23,6 +23,7 @@ import UserGameCollection, {
   type CollectionOwnershipType,
 } from "../../classes/UserGameCollection.js";
 import {
+  replyIfNotOwner,
   safeDeferReply,
   safeDeferUpdate,
   safeReply,
@@ -279,10 +280,7 @@ export class CollectionViewCommand {
       return;
     }
 
-    if (interaction.user.id !== parsed.viewerUserId) {
-      safeIgnore(safeReply(interaction, buildTextReply("This collection overview is not for you.", true)));
-      return;
-    }
+    if (await replyIfNotOwner(interaction, parsed.viewerUserId, "This collection overview is not for you.")) return;
 
     const selection = parseCollectionOverviewSelectValue(interaction.values?.[0] ?? "");
     if (!selection) {
@@ -387,10 +385,7 @@ export class CollectionViewCommand {
       return;
     }
 
-    if (interaction.user.id !== parsed.viewerUserId) {
-      safeIgnore(safeReply(interaction, buildTextReply("This collection view is not for you.", true)));
-      return;
-    }
+    if (await replyIfNotOwner(interaction, parsed.viewerUserId, "This collection view is not for you.")) return;
 
     const nextPage = parsed.direction === "next"
       ? parsed.page + 1
@@ -461,10 +456,7 @@ export class CollectionViewCommand {
       return;
     }
 
-    if (interaction.user.id !== parsed.viewerUserId) {
-      safeIgnore(safeReply(interaction, buildTextReply("This collection view is not for you.", true)));
-      return;
-    }
+    if (await replyIfNotOwner(interaction, parsed.viewerUserId, "This collection view is not for you.")) return;
 
     const currentFilters = parseCollectionFiltersFromListMessage(interaction.message);
 
@@ -501,10 +493,7 @@ export class CollectionViewCommand {
       return;
     }
 
-    if (interaction.user.id !== parsed.viewerUserId) {
-      safeIgnore(safeReply(interaction, buildTextReply("This filter control is not for you.", true)));
-      return;
-    }
+    if (await replyIfNotOwner(interaction, parsed.viewerUserId, "This filter control is not for you.")) return;
 
     if (parsed.action === "cancel") {
       await closeFilterPanel(interaction);
@@ -610,10 +599,7 @@ export class CollectionViewCommand {
       return;
     }
 
-    if (interaction.user.id !== parsed.viewerUserId) {
-      safeIgnore(safeReply(interaction, buildTextReply("This filter modal is not for you.", true)));
-      return;
-    }
+    if (await replyIfNotOwner(interaction, parsed.viewerUserId, "This filter modal is not for you.")) return;
 
     const titleInput = sanitizeUserInput(
       interaction.fields.getTextInputValue(COLLECTION_FILTER_TITLE_INPUT_ID) ?? "",

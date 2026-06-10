@@ -6,7 +6,7 @@ import type {
   ButtonInteraction,
 } from "discord.js";
 import { ActionRowBuilder, StringSelectMenuBuilder } from "discord.js";
-import { safeDeferUpdate, safeReply } from "../../functions/InteractionUtils.js";
+import { replyIfNotOwner, safeDeferUpdate, safeReply } from "../../functions/InteractionUtils.js";
 import {
   notifyUnknownCompletionPlatform,
   saveCompletion,
@@ -93,13 +93,7 @@ export async function handleCompletionPlatformSelect(
     return;
   }
 
-  if (interaction.user.id !== ctx.userId) {
-    safeIgnore(safeReply(
-      interaction,
-      buildTextReply("This completion prompt isn't for you.", true),
-    ));
-    return;
-  }
+  if (await replyIfNotOwner(interaction, ctx.userId, "This completion prompt isn't for you.")) return;
 
   const selected = interaction.values?.[0];
   const isOther = selected === "other";

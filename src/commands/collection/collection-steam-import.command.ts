@@ -43,6 +43,7 @@ import {
 } from "../game-completion/completion-autocomplete.utils.js";
 import {
   canSafeReply,
+  replyIfNotOwner,
   safeDeferReply,
   safeDeferUpdate,
   safeReply,
@@ -679,10 +680,7 @@ export class CollectionSteamImportCommand {
       return;
     }
 
-    if (interaction.user.id !== parsed.ownerId) {
-      safeIgnore(safeReply(interaction, buildTextReply("This Steam import control is not for you.", true)));
-      return;
-    }
+    if (await replyIfNotOwner(interaction, parsed.ownerId, "This Steam import control is not for you.")) return;
 
     const session = await getSteamCollectionImportById(parsed.importId);
     if (!session || session.userId !== parsed.ownerId) {
@@ -801,10 +799,7 @@ export class CollectionSteamImportCommand {
       return;
     }
 
-    if (interaction.user.id !== parsed.ownerId) {
-      safeIgnore(safeReply(interaction, buildTextReply("This Steam import choice is not for you.", true)));
-      return;
-    }
+    if (await replyIfNotOwner(interaction, parsed.ownerId, "This Steam import choice is not for you.")) return;
 
     const session = await getSteamCollectionImportById(parsed.importId);
     if (!session || session.userId !== parsed.ownerId || session.status !== "ACTIVE") {
@@ -854,10 +849,7 @@ export class CollectionSteamImportCommand {
       return;
     }
 
-    if (interaction.user.id !== parsed.ownerId) {
-      safeIgnore(safeReply(interaction, buildTextReply("This remap form is not for you.", true)));
-      return;
-    }
+    if (await replyIfNotOwner(interaction, parsed.ownerId, "This remap form is not for you.")) return;
 
     const session = await getSteamCollectionImportById(parsed.importId);
     if (!session || session.userId !== parsed.ownerId || session.status !== "ACTIVE") {
@@ -939,10 +931,7 @@ export class CollectionSteamImportCommand {
       return;
     }
 
-    if (interaction.user.id !== parsed.ownerId) {
-      safeIgnore(safeReply(interaction, buildTextReply("This GameDB ID form is not for you.", true)));
-      return;
-    }
+    if (await replyIfNotOwner(interaction, parsed.ownerId, "This GameDB ID form is not for you.")) return;
 
     const session = await getSteamCollectionImportById(parsed.importId);
     if (!session || session.userId !== parsed.ownerId || session.status !== "ACTIVE") {

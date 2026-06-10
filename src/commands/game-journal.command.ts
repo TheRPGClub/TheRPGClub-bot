@@ -1019,13 +1019,9 @@ export class GameJournalCommand {
     const segments = parseCustomIdSegments(interaction.customId, 1);
     if (!segments) return;
     const [callerId] = segments;
-    if (interaction.user.id !== callerId) {
-      await safeReply(
-        interaction,
-        buildTextReply("Only the person who opened this journal can close it.", true),
-      );
-      return;
-    }
+    if (await replyIfNotOwner(
+      interaction, callerId, "Only the person who opened this journal can close it.",
+    )) return;
     await safeDeferUpdate(interaction);
     await interaction.message.delete();
   }

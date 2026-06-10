@@ -21,6 +21,7 @@ import { ModalBuilder } from "discord.js";
 import { ContainerBuilder, TextDisplayBuilder } from "@discordjs/builders";
 import {
   getModalField,
+  replyIfNotOwner,
   safeDeferReply,
   safeReply,
   safeUpdate,
@@ -312,10 +313,7 @@ export class GameDbCompletionCommand {
       safeIgnore(safeReply(interaction, buildTextReply("This completion request has expired.", true)));
       return;
     }
-    if (interaction.user.id !== session.userId) {
-      safeIgnore(safeReply(interaction, buildTextReply("This menu isn't for you.", true)));
-      return;
-    }
+    if (await replyIfNotOwner(interaction, session.userId, "This menu isn't for you.")) return;
 
     const value = interaction.values?.[0];
     if (!value) {
@@ -356,10 +354,7 @@ export class GameDbCompletionCommand {
       safeIgnore(safeReply(interaction, buildTextReply("This completion request has expired.", true)));
       return;
     }
-    if (interaction.user.id !== session.userId) {
-      safeIgnore(safeReply(interaction, buildTextReply("This action isn't for you.", true)));
-      return;
-    }
+    if (await replyIfNotOwner(interaction, session.userId, "This action isn't for you.")) return;
 
     const missing = getCompletionWizardMissingSelections(session);
     const platforms = await Game.getPlatformsForGameWithStandard(
