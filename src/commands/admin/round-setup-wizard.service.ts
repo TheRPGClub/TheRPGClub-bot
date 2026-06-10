@@ -1,7 +1,6 @@
 import type { CommandInteraction, StringSelectMenuInteraction } from "discord.js";
 import { COLOR_PRIMARY } from "../../config/colors.js";
 import {
-  ActionRowBuilder,
   AttachmentBuilder,
   ButtonStyle,
   ComponentType,
@@ -13,7 +12,11 @@ import {
   userMention,
 } from "discord.js";
 import { safeDeferUpdate, safeReply } from "../../functions/InteractionUtils.js";
-import { buildActionButton, buildButtonRow } from "../../functions/uiComponents.js";
+import {
+  buildActionButton,
+  buildButtonRow,
+  buildSelectRow,
+} from "../../functions/uiComponents.js";
 import {
   buildTextReply,
   buildTitledContainer,
@@ -197,7 +200,7 @@ async function promptSelectNomination(
     .setMinValues(1)
     .setMaxValues(1)
     .addOptions(options);
-  const selectRow = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select);
+  const selectRow = buildSelectRow(select);
   const buttonRow = buildButtonRow(
 
     buildActionButton({ customId: cancelId, label: "Cancel", style: ButtonStyle.Danger }),

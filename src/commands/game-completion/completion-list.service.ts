@@ -35,6 +35,7 @@ import {
   buildJournalSelectRow,
   buildUserHeaderContainer,
   type IJournalSelectEntry,
+  buildSelectRow,
 } from "../../functions/uiComponents.js";
 
 /**
@@ -90,7 +91,7 @@ export async function renderCompletionLeaderboard(
   await safeReply(interaction, {
     components: [
       container,
-      new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select),
+      buildSelectRow(select),
     ],
     flags: buildComponentsV2Flags(ephemeral),
   });
@@ -219,7 +220,7 @@ export async function renderSelectionPage(
     .setPlaceholder(`Select a completion to ${mode}`)
     .addOptions(selectOptions);
 
-  const selectRow = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select);
+  const selectRow = buildSelectRow(select);
 
   const yearPart = year == null ? "" : String(year);
   const queryPart = query ? `:${query.slice(0, MAX_QUERY_LENGTH)}` : "";
@@ -270,7 +271,7 @@ function buildYearJumpRow(
     .setPlaceholder("Jump to year")
     .addOptions(options);
 
-  return new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select);
+  return buildSelectRow(select);
 }
 
 function buildPaginationRows(

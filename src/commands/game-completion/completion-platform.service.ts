@@ -5,7 +5,7 @@ import type {
   StringSelectMenuInteraction,
   ButtonInteraction,
 } from "discord.js";
-import { ActionRowBuilder, StringSelectMenuBuilder } from "discord.js";
+import { StringSelectMenuBuilder } from "discord.js";
 import { replyIfNotOwner, safeDeferUpdate, safeReply } from "../../functions/InteractionUtils.js";
 import {
   notifyUnknownCompletionPlatform,
@@ -22,6 +22,7 @@ import {
 import { DISCORD_SELECT_LABEL_MAX } from "../../config/textLimits.js";
 import { assertCustomIdSegments } from "../../utilities/CustomIdUtils.js";
 import { safeIgnore } from "../../utilities/AsyncUtils.js";
+import { buildSelectRow } from "../../functions/uiComponents.js";
 
 export function createCompletionPlatformSession(
   ctx: CompletionPlatformContext,
@@ -72,7 +73,7 @@ export async function promptCompletionPlatformSelection(
     .setPlaceholder("Select the platform")
     .addOptions(options);
   await safeReply(interaction, {
-    components: [new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select)],
+    components: [buildSelectRow(select)],
     flags: buildComponentsV2Flags(true),
   });
 }

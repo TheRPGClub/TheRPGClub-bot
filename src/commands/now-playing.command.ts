@@ -65,6 +65,7 @@ import {
   buildJournalSelectRow,
   buildTextInputRow,
   buildUserHeaderContainer,
+  buildSelectRow,
 } from "../functions/uiComponents.js";
 import { EphemeralOwnerMenu } from "../functions/EphemeralOwnerMenu.js";
 import { igdbService } from "../services/IGDB/IgdbService.js";
@@ -964,7 +965,7 @@ export class NowPlayingCommand {
       });
 
       const selectId = `nowplaying-add-select:${sessionId}`;
-      const selectRow = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
+      const selectRow = buildSelectRow(
         new StringSelectMenuBuilder()
           .setCustomId(selectId)
           .setPlaceholder("Select the game to add")
@@ -1161,11 +1162,10 @@ export class NowPlayingCommand {
     });
     const cancelButton = buildActionButton("cancel", `nowplaying-list-cancel:${session.userId}`);
 
-    const typeRow = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(typeSelect);
-    const removeRow = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(removeSelect);
-    const announceRow = new ActionRowBuilder<StringSelectMenuBuilder>()
-      .addComponents(announceSelect);
-    const noteRow = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(noteSelect);
+    const typeRow = buildSelectRow(typeSelect);
+    const removeRow = buildSelectRow(removeSelect);
+    const announceRow = buildSelectRow(announceSelect);
+    const noteRow = buildSelectRow(noteSelect);
     const helpButton = buildActionButton({
       customId: `${NOW_PLAYING_HELP_PREFIX}:completion-config:${session.userId}`,
       label: "?",
@@ -1536,7 +1536,7 @@ export class NowPlayingCommand {
         interaction.guildId,
         [
           container,
-          new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select),
+          buildSelectRow(select),
         ],
       ),
       flags: buildComponentsV2Flags(true),
@@ -2041,7 +2041,7 @@ export class NowPlayingCommand {
     const payload = {
       components: [
         container,
-        new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select),
+        buildSelectRow(select),
       ],
       flags: buildComponentsV2Flags(true),
     };
@@ -2426,7 +2426,7 @@ export class NowPlayingCommand {
     const payload = {
       components: [
         container,
-        new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select),
+        buildSelectRow(select),
       ],
       flags: buildComponentsV2Flags(true),
     };
@@ -3269,7 +3269,7 @@ export class NowPlayingCommand {
       .setCustomId(`${NOW_PLAYING_JOURNAL_DELETE_SELECT_PREFIX}:${ownerId}:${gameId}:${page}`)
       .setPlaceholder("Choose an entry to delete")
       .addOptions(options);
-    const row = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select);
+    const row = buildSelectRow(select);
     const container = buildTextContainer("## Delete Journal Entry\nSelect an entry to delete.");
     const helpRow = buildButtonRow(
       buildActionButton({ customId: `${NOW_PLAYING_HELP_PREFIX}:journal-delete:${ownerId}`, label: "?", style: ButtonStyle.Secondary }),
@@ -3536,7 +3536,7 @@ export class NowPlayingCommand {
       .setCustomId(`${NOW_PLAYING_EDIT_MENU_START_JOURNAL_SELECT_PREFIX}:${ownerId}`)
       .setPlaceholder("Select a game to start a journal")
       .addOptions(options);
-    const selectRow = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select);
+    const selectRow = buildSelectRow(select);
     const container = buildTextContainer("## Start a Game Journal\nSelect a game to write your first entry.");
     await safeUpdate(interaction, {
       components: [container, selectRow],
@@ -4416,7 +4416,7 @@ export class NowPlayingCommand {
       .setCustomId(`${NOW_PLAYING_REMOVE_SELECT_PREFIX}:${ownerId}`)
       .setPlaceholder("Select a game to remove")
       .addOptions(selectOptions);
-    const selectRow = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(removeSelect);
+    const selectRow = buildSelectRow(removeSelect);
 
     const doneRow = buildButtonRow(
       buildActionButton("confirm", `nowplaying-remove-done:${ownerId}`, "Done"),
@@ -4555,7 +4555,7 @@ export class NowPlayingCommand {
           value: option.value,
           default: selectedIndex === optionIndex,
         })));
-      rows.push(new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select));
+      rows.push(buildSelectRow(select));
     }
     const components: Array<
       ContainerBuilder | ActionRowBuilder<StringSelectMenuBuilder | ButtonBuilder>
@@ -4613,7 +4613,7 @@ export class NowPlayingCommand {
           value: String(entryIndex),
           default: selectedIndex === entryIndex,
         })));
-      rows.push(new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(menu));
+      rows.push(buildSelectRow(menu));
     }
 
     const actionRow = buildButtonRow(
@@ -5213,7 +5213,7 @@ export class NowPlayingCommand {
       .setPlaceholder("View a member's Now Playing list")
       .addOptions(options);
 
-    return new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select);
+    return buildSelectRow(select);
   }
 
   private async startNowPlayingIgdbImport(

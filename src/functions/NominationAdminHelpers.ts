@@ -21,7 +21,7 @@ import {
   safeV2TextContent,
 } from "./ComponentsV2Utils.js";
 import { truncateWithEllipsis } from "../utilities/ValidationUtils.js";
-import { buildTextInputRow } from "./uiComponents.js";
+import { buildTextInputRow , buildSelectRow } from "./uiComponents.js";
 import {
   buildNominationListPayload,
   type NominationListPayload,
@@ -84,7 +84,7 @@ export function buildDeletionSelectControls(
     .setMaxValues(1)
     .addOptions(options);
 
-  return [new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select)];
+  return [buildSelectRow(select)];
 }
 
 export function buildDeletionSelectCustomId(kind: NominationKind, round: number): string {

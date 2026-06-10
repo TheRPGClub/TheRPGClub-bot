@@ -42,7 +42,7 @@ import {
 import { parseCustomIdSegments } from "../utilities/CustomIdUtils.js";
 import { DISCORD_SELECT_LABEL_MAX } from "../config/textLimits.js";
 import { chunk } from "../utilities/ArrayUtils.js";
-import { buildActionButton, buildButtonRow } from "../functions/uiComponents.js";
+import { buildActionButton, buildButtonRow , buildSelectRow } from "../functions/uiComponents.js";
 
 const MAX_OPTIONS = 25;
 
@@ -179,7 +179,7 @@ function buildPageComponents(
     .addOptions(options)
     .setMinValues(1)
     .setMaxValues(1);
-  components.push(new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select));
+  components.push(buildSelectRow(select));
 
   const navRow = buildDisabledPrevNextRow(
     `mpinfo-page:${ownerId}:${filterKey}`,

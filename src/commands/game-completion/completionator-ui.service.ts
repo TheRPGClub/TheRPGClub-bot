@@ -51,6 +51,7 @@ import {
   buildActionButton,
   buildButtonRow,
   buildTextInputRow,
+  buildSelectRow,
 } from "../../functions/uiComponents.js";
 import {
   DISCORD_AUTOCOMPLETE_DESC_MAX,
@@ -460,9 +461,9 @@ export class CompletionatorUiService {
     });
 
     return [
-      new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(typeSelect),
-      new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(dateSelect),
-      new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(platformSelect),
+      buildSelectRow(typeSelect),
+      buildSelectRow(dateSelect),
+      buildSelectRow(platformSelect),
       buildButtonRow(addButton, skipButton, pauseButton),
     ];
   }
@@ -519,7 +520,7 @@ export class CompletionatorUiService {
     const buttons = buildButtonRow(skipBtn, pauseBtn);
 
     return {
-      updateRow: new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(updateSelect),
+      updateRow: buildSelectRow(updateSelect),
       buttonsRow: buttons,
     };
   }

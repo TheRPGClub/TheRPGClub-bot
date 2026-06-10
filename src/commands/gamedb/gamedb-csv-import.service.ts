@@ -3,7 +3,11 @@ import {
   ButtonStyle,
   StringSelectMenuBuilder,
 } from "discord.js";
-import { buildActionButton, buildButtonRow } from "../../functions/uiComponents.js";
+import {
+  buildActionButton,
+  buildButtonRow,
+  buildSelectRow,
+} from "../../functions/uiComponents.js";
 import {
   ContainerBuilder,
   TextDisplayBuilder,
@@ -133,7 +137,7 @@ export function buildCsvPromptComponents(
           default: idx === 0,
         })),
       );
-    rows.push(new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select));
+    rows.push(buildSelectRow(select));
   }
    
   const manualBtn = buildActionButton({

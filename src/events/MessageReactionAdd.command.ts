@@ -35,7 +35,12 @@ import { isPositiveInt, truncateWithEllipsis } from "../utilities/ValidationUtil
 import { DISCORD_AUTOCOMPLETE_DESC_MAX, DISCORD_SELECT_LABEL_MAX } from "../config/textLimits.js";
 import { assertCustomIdSegments } from "../utilities/CustomIdUtils.js";
 import { safeIgnore } from "../utilities/AsyncUtils.js";
-import { buildActionButton, buildButtonRow, buildTextInputRow } from "../functions/uiComponents.js";
+import {
+  buildActionButton,
+  buildButtonRow,
+  buildTextInputRow,
+  buildSelectRow,
+} from "../functions/uiComponents.js";
 import { logError } from "../utilities/LogUtils.js";
 
 const PUSH_PIN_EMOJI = "📌";
@@ -73,7 +78,7 @@ const buildCompletionTypeRow = (sessionId: string): ActionRowBuilder<StringSelec
         value: type,
       })),
     );
-  return new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select);
+  return buildSelectRow(select);
 };
 
 const buildCompletionTitleRow = (sessionId: string): ActionRowBuilder<ButtonBuilder> =>
@@ -90,7 +95,7 @@ const buildCompletionGameRow = (
     .setCustomId(`completion-react-game:${sessionId}`)
     .setPlaceholder("Select the game")
     .addOptions(gameOptions);
-  return new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select);
+  return buildSelectRow(select);
 };
 
 const buildCompletionPlatformRow = (
@@ -102,7 +107,7 @@ const buildCompletionPlatformRow = (
     .setCustomId(`${COMPLETION_REACTION_PLATFORM_SELECT_PREFIX}:${sessionId}`)
     .setPlaceholder("Select the platform")
     .addOptions(platformOptions);
-  return new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select);
+  return buildSelectRow(select);
 };
 
 const parseCompletionQuery = (content: string): string => {

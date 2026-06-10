@@ -59,6 +59,7 @@ import {
   buildSelectOptions,
   buildUserHeaderContainer,
   buildButtonRow,
+  buildSelectRow,
 } from "../functions/uiComponents.js";
 import {
   GJ_CLOSE_PREFIX,
@@ -216,7 +217,7 @@ function buildListSelectRow(
     .setPlaceholder("Select a game to read its journal")
     .addOptions(options);
 
-  return new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select);
+  return buildSelectRow(select);
 }
 
 function buildListPageRow(
@@ -297,7 +298,7 @@ function buildAllSelectRow(
     .setCustomId(`${GJ_ALL_SELECT_PREFIX}:${callerId}:${page}`)
     .setPlaceholder("Select a member to view their journals")
     .addOptions(options);
-  return new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select);
+  return buildSelectRow(select);
 }
 
 function buildAllPageRow(
@@ -851,7 +852,7 @@ export class GameJournalCommand {
     const container = buildTextContainer(
     "## Delete Journal Entry\nSelect an entry to delete.",
       );
-    const row = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select);
+    const row = buildSelectRow(select);
     const helpRow = buildButtonRow(
       buildActionButton({ customId: `${NOW_PLAYING_HELP_PREFIX}:journal-delete:${ownerId}`, label: "?", style: ButtonStyle.Secondary }),
     );
