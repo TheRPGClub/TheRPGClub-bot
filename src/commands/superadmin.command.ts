@@ -1,12 +1,12 @@
 import {
   ActionRowBuilder,
   ApplicationCommandOptionType,
-  EmbedBuilder,
   MessageFlags,
   StringSelectMenuBuilder,
   type StringSelectMenuInteraction,
 } from "discord.js";
 import type { ButtonInteraction, CommandInteraction, User } from "discord.js";
+import type { ContainerBuilder } from "@discordjs/builders";
 import axios from "axios";
 import crypto from "node:crypto";
 import {
@@ -48,7 +48,13 @@ import {
   notifyUnknownCompletionPlatform,
   saveCompletion,
 } from "../functions/CompletionHelpers.js";
-import { buildTextReply } from "../functions/ComponentsV2Utils.js";
+import {
+  buildTextReply,
+  buildTitledContainer,
+  buildFieldsText,
+  buildComponentsV2EditFlags,
+  type EmbedField,
+} from "../functions/ComponentsV2Utils.js";
 import { isPositiveInt, isValidPlaytimeHours } from "../utilities/ValidationUtils.js";
 import { sleep } from "../utilities/DelayUtils.js";
 import { DISCORD_AUTOCOMPLETE_DESC_MAX, DISCORD_SELECT_LABEL_MAX } from "../config/textLimits.js";
@@ -151,21 +157,11 @@ async function downloadImageBuffer(url: string): Promise<ImageBufferResult> {
   return { buffer: Buffer.from(resp.data), mimeType: mime ? String(mime) : null };
 }
 
-export function buildSuperAdminHelpEmbed(topic: SuperAdminHelpTopic): EmbedBuilder {
-  const embed = new EmbedBuilder()
-    .setTitle(`${topic.label} help`)
-    .setDescription(topic.summary)
-    .addFields({ name: "Syntax", value: topic.syntax });
-  
-  if (topic.parameters) {
-    embed.addFields({ name: "Parameters", value: topic.parameters });
-  }
-
-  if (topic.notes) {
-    embed.addFields({ name: "Notes", value: topic.notes });
-  }
-
-  return embed;
+export function buildSuperAdminHelpContainer(topic: SuperAdminHelpTopic): ContainerBuilder {
+  const fields: EmbedField[] = [{ name: "Syntax", value: topic.syntax }];
+  if (topic.parameters) fields.push({ name: "Parameters", value: topic.parameters });
+  if (topic.notes) fields.push({ name: "Notes", value: topic.notes });
+  return buildTitledContainer(`${topic.label} help`, buildFieldsText(fields));
 }
 
 @Discord()
@@ -869,7 +865,7 @@ export class SuperAdmin {
 
     await safeReply(interaction, {
       ...response,
-      flags: MessageFlags.Ephemeral,
+      flags: response.flags | MessageFlags.Ephemeral,
     });
   }
 
@@ -888,24 +884,25 @@ export class SuperAdmin {
 
     if (!topic) {
       const response = buildSuperAdminHelpResponse();
-      const textReply = buildTextReply(
-        "Sorry, I don't recognize that superadmin help topic. Showing the superadmin help menu.",
-        false,
-      );
       await safeUpdate(interaction, {
         ...response,
-        flags: textReply.flags,
-        components: [...textReply.components, ...response.components],
+        components: [
+          ...buildTextReply(
+            "Sorry, I don't recognize that superadmin help topic. Showing the superadmin help menu.",
+            false,
+          ).components,
+          ...response.components,
+        ],
       });
       return;
     }
 
-    const helpEmbed = buildSuperAdminHelpEmbed(topic);
+    const container = buildSuperAdminHelpContainer(topic);
     const response = buildSuperAdminHelpResponse(topic.id);
 
     await safeUpdate(interaction, {
-      embeds: [helpEmbed],
-      components: response.components,
+      components: [container, ...response.components],
+      flags: response.flags,
     });
   }
 
@@ -939,20 +936,18 @@ export async function isSuperAdmin(interaction: AnyRepliable): Promise<boolean> 
 export function buildSuperAdminHelpResponse(
   activeTopicId?: SuperAdminHelpTopicId,
 ): {
-  embeds: EmbedBuilder[];
-  components: ActionRowBuilder<StringSelectMenuBuilder>[];
+  components: (ContainerBuilder | ActionRowBuilder<StringSelectMenuBuilder>)[];
+  flags: number;
 } {
-  const embed = new EmbedBuilder()
-    .setTitle("Superadmin Commands Help")
-    .setDescription(
-      "Pick a `/superadmin` command to see what it does and how to run it (server owner only).",
-    );
-
-  const components = buildSuperAdminHelpButtons(activeTopicId);
+  const container = buildTitledContainer(
+    "Superadmin Commands Help",
+    "Pick a `/superadmin` command to see what it does and how to run it (server owner only).",
+  );
+  const buttons = buildSuperAdminHelpButtons(activeTopicId);
 
   return {
-    embeds: [embed],
-    // eslint-disable-next-line local/dynamic-components-require-chunking
-    components,
+     
+    components: [container, ...buttons],
+    flags: buildComponentsV2EditFlags(),
   };
 }

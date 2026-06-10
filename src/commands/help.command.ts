@@ -7,18 +7,24 @@ import {
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
-  EmbedBuilder,
   StringSelectMenuBuilder,
   StringSelectMenuInteraction,
   MessageFlags,
   channelMention,
 } from "discord.js";
+import type { ContainerBuilder } from "@discordjs/builders";
 import { ButtonComponent, Discord, SelectMenuComponent, Slash } from "discordx";
 import { isAdmin, isModerator } from "./admin/admin-auth.utils.js";
 import { buildAdminHelpResponse } from "./admin/admin-help.service.js";
 import { buildModHelpResponse } from "./mod.command.js";
 import { buildSuperAdminHelpResponse, isSuperAdmin } from "./superadmin.command.js";
-import { buildTextReply } from "../functions/ComponentsV2Utils.js";
+import {
+  buildTextContainer,
+  buildTitledContainer,
+  buildFieldsText,
+  buildComponentsV2EditFlags,
+  type EmbedField,
+} from "../functions/ComponentsV2Utils.js";
 import { safeDeferReply, safeReply, safeUpdate } from "../functions/InteractionUtils.js";
 import { decodeBase64Url, encodeBase64Url } from "../functions/CustomIdUtils.js";
 import { parseCustomIdSegments } from "../utilities/CustomIdUtils.js";
@@ -326,16 +332,14 @@ const HELP_TOPICS: HelpTopic[] = [
 ];
 
 function withHelpNotice<
-  T extends { components: ActionRowBuilder<MessageActionRowComponentBuilder>[] },
->(
-  response: T,
-  content: string,
-): T & { flags: number; components: Array<ActionRowBuilder<MessageActionRowComponentBuilder>> } {
-  const textReply = buildTextReply(content, false);
+  T extends {
+    components: (ContainerBuilder | ActionRowBuilder<MessageActionRowComponentBuilder>)[];
+    flags: number;
+  },
+>(response: T, content: string): T {
   return {
     ...response,
-    flags: textReply.flags,
-    components: [...textReply.components, ...response.components],
+    components: [buildTextContainer(content), ...response.components],
   };
 }
 
@@ -439,21 +443,11 @@ function formatCommandLine(label: string, summary: string, width = 15): string {
   return `> **\`\` ${padCommandName(label, width)} \`\`** ${summary}`;
 }
 
-function buildHelpDetailsEmbed(topic: HelpTopic): EmbedBuilder {
-  const embed = new EmbedBuilder()
-    .setTitle(`${topic.label} help`)
-    .setDescription(topic.summary)
-    .addFields({ name: "Syntax", value: topic.syntax });
-
-  if (topic.parameters) {
-    embed.addFields({ name: "Parameters", value: topic.parameters });
-  }
-
-  if (topic.notes) {
-    embed.addFields({ name: "Notes", value: topic.notes });
-  }
-
-  return embed;
+function buildHelpDetailsContainer(topic: HelpTopic): ContainerBuilder {
+  const fields: EmbedField[] = [{ name: "Syntax", value: topic.syntax }];
+  if (topic.parameters) fields.push({ name: "Parameters", value: topic.parameters });
+  if (topic.notes) fields.push({ name: "Notes", value: topic.notes });
+  return buildTitledContainer(`${topic.label} help`, buildFieldsText(fields));
 }
 
 function buildProfileHelpButtons(
@@ -475,17 +469,10 @@ function buildProfileHelpButtons(
   return [new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select)];
 }
 
-function buildProfileHelpEmbed(topic: ProfileHelpTopic): EmbedBuilder {
-  const embed = new EmbedBuilder()
-    .setTitle(`${topic.label} help`)
-    .setDescription(topic.summary)
-    .addFields({ name: "Syntax", value: topic.syntax });
-
-  if (topic.notes) {
-    embed.addFields({ name: "Notes", value: topic.notes });
-  }
-
-  return embed;
+function buildProfileHelpContainer(topic: ProfileHelpTopic): ContainerBuilder {
+  const fields: EmbedField[] = [{ name: "Syntax", value: topic.syntax }];
+  if (topic.notes) fields.push({ name: "Notes", value: topic.notes });
+  return buildTitledContainer(`${topic.label} help`, buildFieldsText(fields));
 }
 
 function buildNowPlayingHelpButtons(
@@ -507,29 +494,22 @@ function buildNowPlayingHelpButtons(
   return [new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select)];
 }
 
-function buildNowPlayingHelpEmbed(topic: NowPlayingHelpTopic): EmbedBuilder {
-  const embed = new EmbedBuilder()
-    .setTitle(`${topic.label} help`)
-    .setDescription(topic.summary)
-    .addFields({ name: "Syntax", value: topic.syntax });
-
-  if (topic.notes) {
-    embed.addFields({ name: "Notes", value: topic.notes });
-  }
-
-  return embed;
+function buildNowPlayingHelpContainer(topic: NowPlayingHelpTopic): ContainerBuilder {
+  const fields: EmbedField[] = [{ name: "Syntax", value: topic.syntax }];
+  if (topic.notes) fields.push({ name: "Notes", value: topic.notes });
+  return buildTitledContainer(`${topic.label} help`, buildFieldsText(fields));
 }
 
 export function buildNowPlayingHelpResponse(
   activeTopicId?: NowPlayingHelpTopicId,
-): { embeds: EmbedBuilder[]; components: ActionRowBuilder<StringSelectMenuBuilder>[] } {
-  const embed = new EmbedBuilder()
-    .setTitle("/now-playing commands")
-    .setDescription("Choose a subcommand from the dropdown to view details.");
-
-  const components = buildNowPlayingHelpButtons(activeTopicId);
-  // eslint-disable-next-line local/dynamic-components-require-chunking
-  return { embeds: [embed], components };
+): { components: (ContainerBuilder | ActionRowBuilder<StringSelectMenuBuilder>)[]; flags: number } {
+  const container = buildTitledContainer(
+    "/now-playing commands",
+    "Choose a subcommand from the dropdown to view details.",
+  );
+  const buttons = buildNowPlayingHelpButtons(activeTopicId);
+   
+  return { components: [container, ...buttons], flags: buildComponentsV2EditFlags() };
 }
 
 function buildGamedbHelpButtons(
@@ -551,17 +531,10 @@ function buildGamedbHelpButtons(
   return [new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select)];
 }
 
-function buildGamedbHelpEmbed(topic: GameDbHelpTopic): EmbedBuilder {
-  const embed = new EmbedBuilder()
-    .setTitle(`${topic.label} help`)
-    .setDescription(topic.summary)
-    .addFields({ name: "Syntax", value: topic.syntax });
-
-  if (topic.notes) {
-    embed.addFields({ name: "Notes", value: topic.notes });
-  }
-
-  return embed;
+function buildGamedbHelpContainer(topic: GameDbHelpTopic): ContainerBuilder {
+  const fields: EmbedField[] = [{ name: "Syntax", value: topic.syntax }];
+  if (topic.notes) fields.push({ name: "Notes", value: topic.notes });
+  return buildTitledContainer(`${topic.label} help`, buildFieldsText(fields));
 }
 
 type RssHelpTopicId = "add" | "remove" | "edit" | "list";
@@ -747,29 +720,22 @@ function buildGameCompletionHelpButtons(
   return [new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select)];
 }
 
-function buildGameCompletionHelpEmbed(topic: GameCompletionHelpTopic): EmbedBuilder {
-  const embed = new EmbedBuilder()
-    .setTitle(`${topic.label} help`)
-    .setDescription(topic.summary)
-    .addFields({ name: "Syntax", value: topic.syntax });
-
-  if (topic.notes) {
-    embed.addFields({ name: "Notes", value: topic.notes });
-  }
-
-  return embed;
+function buildGameCompletionHelpContainer(topic: GameCompletionHelpTopic): ContainerBuilder {
+  const fields: EmbedField[] = [{ name: "Syntax", value: topic.syntax }];
+  if (topic.notes) fields.push({ name: "Notes", value: topic.notes });
+  return buildTitledContainer(`${topic.label} help`, buildFieldsText(fields));
 }
 
 export function buildGameCompletionHelpResponse(
   activeTopicId?: GameCompletionHelpTopicId,
-): { embeds: EmbedBuilder[]; components: ActionRowBuilder<StringSelectMenuBuilder>[] } {
-  const embed = new EmbedBuilder()
-    .setTitle("/game-completion commands")
-    .setDescription("Choose a subcommand from the dropdown to view details.");
-
-  const components = buildGameCompletionHelpButtons(activeTopicId);
-  // eslint-disable-next-line local/dynamic-components-require-chunking
-  return { embeds: [embed], components };
+): { components: (ContainerBuilder | ActionRowBuilder<StringSelectMenuBuilder>)[]; flags: number } {
+  const container = buildTitledContainer(
+    "/game-completion commands",
+    "Choose a subcommand from the dropdown to view details.",
+  );
+  const buttons = buildGameCompletionHelpButtons(activeTopicId);
+   
+  return { components: [container, ...buttons], flags: buildComponentsV2EditFlags() };
 }
 
 const GAMEDB_HELP_TOPICS: GameDbHelpTopic[] = [
@@ -885,91 +851,88 @@ function buildRssHelpButtons(
   return [new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select)];
 }
 
-function buildRssHelpEmbed(topic: RssHelpTopic): EmbedBuilder {
-  return new EmbedBuilder()
-    .setTitle(`${topic.label} help`)
-    .setDescription(topic.summary)
-    .addFields({ name: "Syntax", value: topic.syntax });
+function buildRssHelpContainer(topic: RssHelpTopic): ContainerBuilder {
+  const fields: EmbedField[] = [{ name: "Syntax", value: topic.syntax }];
+  return buildTitledContainer(`${topic.label} help`, buildFieldsText(fields));
 }
 
 export function buildRssHelpResponse(
   activeTopicId?: RssHelpTopicId,
-): { embeds: EmbedBuilder[]; components: ActionRowBuilder<StringSelectMenuBuilder>[] } {
-  const embed = new EmbedBuilder()
-    .setTitle("/rss commands")
-    .setDescription("Choose an RSS subcommand from the dropdown to view details.");
-
-  const components = buildRssHelpButtons(activeTopicId);
-  // eslint-disable-next-line local/dynamic-components-require-chunking
-  return { embeds: [embed], components };
+): { components: (ContainerBuilder | ActionRowBuilder<StringSelectMenuBuilder>)[]; flags: number } {
+  const container = buildTitledContainer(
+    "/rss commands",
+    "Choose an RSS subcommand from the dropdown to view details.",
+  );
+  const buttons = buildRssHelpButtons(activeTopicId);
+   
+  return { components: [container, ...buttons], flags: buildComponentsV2EditFlags() };
 }
 
 export function buildMainHelpResponse(): {
-  embeds: EmbedBuilder[];
-  components: ActionRowBuilder<StringSelectMenuBuilder>[];
+  components: (ContainerBuilder | ActionRowBuilder<StringSelectMenuBuilder>)[];
+  flags: number;
 } {
-  const embed = new EmbedBuilder()
-    .setTitle("RPGClubUtils Commands")
-    .setDescription(
-      "Use the category dropdowns below to jump straight to a command’s details.\n\n" +
-        "**Monthly Games**\n" +
-        `${formatCommandLine("noms", "Show the current nomination list.")}\n` +
-        `${formatCommandLine("nominate", "Submit a GOTM or NR-GOTM nomination.")}\n` +
-        `${formatCommandLine("round", "See the current round and winners.")}\n` +
-        `${formatCommandLine("round-history", "Browse historical rounds with filters.")}\n` +
-        "\n" +
-        "**Members**\n" +
-        `${formatCommandLine("profile", "View and edit member profiles.")}\n` +
-        `${formatCommandLine("mp-info", "Find who has shared multiplayer info.")}\n\n` +
-        "**GameDB**\n" +
-        `${formatCommandLine("gamedb", "Search for games and view their details.")}\n` +
-        `${formatCommandLine("collection", "Track owned games by platform and ownership.")}\n` +
-        `${formatCommandLine("now-playing", "Show Now Playing lists and thread links.")}\n` +
-        `${formatCommandLine("game-completion", "Log and manage your completed games.")}\n\n` +
-        "**Utilities**\n" +
-        `${formatCommandLine("hltb", "Look up HowLongToBeat playtimes.")}\n` +
-        `${formatCommandLine("gamegiveaway", "Jump to the giveaway hub list.")}\n` +
-        `${formatCommandLine("avatar-history", "View a member's avatar history.")}\n` +
-        `${formatCommandLine("suggestion", "Submit a bot suggestion.")}\n\n` +
-        "**Server Administration**\n" +
-        `${formatCommandLine("mod", "Moderator tools.")}\n` +
-        `${formatCommandLine("admin", "Admin tools.")}\n` +
-        `${formatCommandLine("superadmin", "Server Owner tools.")}\n` +
-        `${formatCommandLine("todo", "Manage GitHub issues using the bot.")}\n` +
-        `${formatCommandLine("publicreminder", "Schedule public reminders.")}\n` +
-        `${formatCommandLine("thread", "Link threads to GameDB games.")}\n` +
-        `${formatCommandLine("rss", "Manage RSS relays with filters.")}`,
-    );
+  const body =
+    "Use the category dropdowns below to jump straight to a command’s details.\n\n" +
+    "**Monthly Games**\n" +
+    `${formatCommandLine("noms", "Show the current nomination list.")}\n` +
+    `${formatCommandLine("nominate", "Submit a GOTM or NR-GOTM nomination.")}\n` +
+    `${formatCommandLine("round", "See the current round and winners.")}\n` +
+    `${formatCommandLine("round-history", "Browse historical rounds with filters.")}\n` +
+    "\n" +
+    "**Members**\n" +
+    `${formatCommandLine("profile", "View and edit member profiles.")}\n` +
+    `${formatCommandLine("mp-info", "Find who has shared multiplayer info.")}\n\n` +
+    "**GameDB**\n" +
+    `${formatCommandLine("gamedb", "Search for games and view their details.")}\n` +
+    `${formatCommandLine("collection", "Track owned games by platform and ownership.")}\n` +
+    `${formatCommandLine("now-playing", "Show Now Playing lists and thread links.")}\n` +
+    `${formatCommandLine("game-completion", "Log and manage your completed games.")}\n\n` +
+    "**Utilities**\n" +
+    `${formatCommandLine("hltb", "Look up HowLongToBeat playtimes.")}\n` +
+    `${formatCommandLine("gamegiveaway", "Jump to the giveaway hub list.")}\n` +
+    `${formatCommandLine("avatar-history", "View a member’s avatar history.")}\n` +
+    `${formatCommandLine("suggestion", "Submit a bot suggestion.")}\n\n` +
+    "**Server Administration**\n" +
+    `${formatCommandLine("mod", "Moderator tools.")}\n` +
+    `${formatCommandLine("admin", "Admin tools.")}\n` +
+    `${formatCommandLine("superadmin", "Server Owner tools.")}\n` +
+    `${formatCommandLine("todo", "Manage GitHub issues using the bot.")}\n` +
+    `${formatCommandLine("publicreminder", "Schedule public reminders.")}\n` +
+    `${formatCommandLine("thread", "Link threads to GameDB games.")}\n` +
+    `${formatCommandLine("rss", "Manage RSS relays with filters.")}`;
+
+  const container = buildTitledContainer("RPGClubUtils Commands", body);
 
   return {
-    embeds: [embed],
-    // eslint-disable-next-line local/dynamic-components-require-chunking
-    components: buildMainHelpComponents(),
+     
+    components: [container, ...buildMainHelpComponents()],
+    flags: buildComponentsV2EditFlags(),
   };
 }
 
 export function buildProfileHelpResponse(
   activeTopicId?: ProfileHelpTopicId,
-): { embeds: EmbedBuilder[]; components: ActionRowBuilder<StringSelectMenuBuilder>[] } {
-  const embed = new EmbedBuilder()
-    .setTitle("/profile commands")
-    .setDescription("Choose a profile subcommand from the dropdown to view details.");
-
-  const components = buildProfileHelpButtons(activeTopicId);
-  // eslint-disable-next-line local/dynamic-components-require-chunking
-  return { embeds: [embed], components };
+): { components: (ContainerBuilder | ActionRowBuilder<StringSelectMenuBuilder>)[]; flags: number } {
+  const container = buildTitledContainer(
+    "/profile commands",
+    "Choose a profile subcommand from the dropdown to view details.",
+  );
+  const buttons = buildProfileHelpButtons(activeTopicId);
+   
+  return { components: [container, ...buttons], flags: buildComponentsV2EditFlags() };
 }
 
 export function buildGamedbHelpResponse(
   activeTopicId?: GameDbHelpTopicId,
-): { embeds: EmbedBuilder[]; components: ActionRowBuilder<StringSelectMenuBuilder>[] } {
-  const embed = new EmbedBuilder()
-    .setTitle("/gamedb commands")
-    .setDescription("Choose a GameDB subcommand from the dropdown to view details.");
-
-  const components = buildGamedbHelpButtons(activeTopicId);
-  // eslint-disable-next-line local/dynamic-components-require-chunking
-  return { embeds: [embed], components };
+): { components: (ContainerBuilder | ActionRowBuilder<StringSelectMenuBuilder>)[]; flags: number } {
+  const container = buildTitledContainer(
+    "/gamedb commands",
+    "Choose a GameDB subcommand from the dropdown to view details.",
+  );
+  const buttons = buildGamedbHelpButtons(activeTopicId);
+   
+  return { components: [container, ...buttons], flags: buildComponentsV2EditFlags() };
 }
 
 @Discord()
@@ -982,7 +945,7 @@ export class BotHelp {
 
     await safeReply(interaction, {
       ...response,
-      flags: MessageFlags.Ephemeral,
+      flags: response.flags | MessageFlags.Ephemeral,
     });
   }
 
@@ -1054,10 +1017,11 @@ export class BotHelp {
       return;
     }
 
-    const helpEmbed = buildHelpDetailsEmbed(topic);
+    const container = buildHelpDetailsContainer(topic);
+    const categoryComponents = buildCategoryComponents(category.id, topic.id);
     await safeUpdate(interaction, {
-      embeds: [helpEmbed],
-      components: buildCategoryComponents(category.id, topic.id),
+      components: [container, ...categoryComponents],
+      flags: buildComponentsV2EditFlags(),
     });
   }
 
@@ -1093,10 +1057,10 @@ export class BotHelp {
       return;
     }
 
-    const embed = buildRssHelpEmbed(topic);
+    const container = buildRssHelpContainer(topic);
     await safeUpdate(interaction, {
-      embeds: [embed],
-      components: buildRssHelpButtons(topic.id),
+      components: [container, ...buildRssHelpButtons(topic.id)],
+      flags: buildComponentsV2EditFlags(),
     });
   }
 
@@ -1132,10 +1096,10 @@ export class BotHelp {
       return;
     }
 
-    const embed = buildProfileHelpEmbed(topic);
+    const container = buildProfileHelpContainer(topic);
     await safeUpdate(interaction, {
-      embeds: [embed],
-      components: buildProfileHelpButtons(topic.id),
+      components: [container, ...buildProfileHelpButtons(topic.id)],
+      flags: buildComponentsV2EditFlags(),
     });
   }
 
@@ -1171,10 +1135,10 @@ export class BotHelp {
       return;
     }
 
-    const embed = buildNowPlayingHelpEmbed(topic);
+    const container = buildNowPlayingHelpContainer(topic);
     await safeUpdate(interaction, {
-      embeds: [embed],
-      components: buildNowPlayingHelpButtons(topic.id),
+      components: [container, ...buildNowPlayingHelpButtons(topic.id)],
+      flags: buildComponentsV2EditFlags(),
     });
   }
 
@@ -1210,10 +1174,10 @@ export class BotHelp {
       return;
     }
 
-    const embed = buildGamedbHelpEmbed(topic);
+    const container = buildGamedbHelpContainer(topic);
     await safeUpdate(interaction, {
-      embeds: [embed],
-      components: buildGamedbHelpButtons(topic.id),
+      components: [container, ...buildGamedbHelpButtons(topic.id)],
+      flags: buildComponentsV2EditFlags(),
     });
   }
 
@@ -1249,10 +1213,10 @@ export class BotHelp {
       return;
     }
 
-    const embed = buildGameCompletionHelpEmbed(topic);
+    const container = buildGameCompletionHelpContainer(topic);
     await safeUpdate(interaction, {
-      embeds: [embed],
-      components: buildGameCompletionHelpButtons(topic.id),
+      components: [container, ...buildGameCompletionHelpButtons(topic.id)],
+      flags: buildComponentsV2EditFlags(),
     });
   }
 
@@ -1269,12 +1233,7 @@ export class BotHelp {
   }
 }
 
-function buildTopicHelpResponse(
-  topicId: HelpTopicId,
-): {
-  embeds: EmbedBuilder[];
-  components: ActionRowBuilder<MessageActionRowComponentBuilder>[];
-} | null {
+function buildTopicHelpResponse(topicId: HelpTopicId): Record<string, unknown> | null {
   switch (topicId) {
     case "profile":
       return buildProfileHelpResponse();
@@ -1329,24 +1288,22 @@ function buildCategoryComponents(
 function buildCategoryHelpResponse(
   categoryId: string,
   activeTopicId?: HelpTopicId,
-): { embeds: EmbedBuilder[]; components: ActionRowBuilder<StringSelectMenuBuilder>[] } {
+): { components: (ContainerBuilder | ActionRowBuilder<StringSelectMenuBuilder>)[]; flags: number } {
   const category = getCategoryById(categoryId);
   const topics = category?.topicIds
     .map((id) => HELP_TOPICS.find((t) => t.id === id))
     .filter((t): t is HelpTopic => Boolean(t));
 
-  const embed = new EmbedBuilder()
-    .setTitle(`${category?.name ?? "Commands"}`)
-    .setDescription(
-      topics && topics.length
-        ? topics.map((t) => formatCommandLine(t.label, t.summary, 10)).join("\n")
-        : "No commands found for this category.",
-    );
+  const body = topics && topics.length
+    ? topics.map((t) => formatCommandLine(t.label, t.summary, 10)).join("\n")
+    : "No commands found for this category.";
+
+  const container = buildTitledContainer(category?.name ?? "Commands", body);
 
   return {
-    embeds: [embed],
-    // eslint-disable-next-line local/dynamic-components-require-chunking
-    components: buildCategoryComponents(categoryId, activeTopicId),
+     
+    components: [container, ...buildCategoryComponents(categoryId, activeTopicId)],
+    flags: buildComponentsV2EditFlags(),
   };
 }
 
