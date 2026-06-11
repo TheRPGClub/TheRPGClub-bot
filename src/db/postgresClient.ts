@@ -76,7 +76,7 @@ export function namedToPositional(
   }
   const values: unknown[] = [];
   const seen = new Map<string, number>();
-  const text = sql.replace(/:([A-Za-z_]\w*)/g, (_, name: string) => {
+  const text = sql.replace(/(?<!:):([A-Za-z_]\w*)/g, (_, name: string) => {
     if (!seen.has(name)) {
       seen.set(name, values.length + 1);
       values.push(params[name]);
