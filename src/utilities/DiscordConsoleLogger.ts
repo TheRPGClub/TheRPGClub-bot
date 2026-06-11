@@ -68,8 +68,8 @@ const logBufferCharCount: Record<BufferedLevel, number> = {
   debug: 0,
 };
 let logBufferTimer: NodeJS.Timeout | null = null;
-let startupLogFilterEnabled = false;
-let shutdownHooksRegistered = false;
+let startupLogFilterEnabled = true;
+let shutdownHooksRegistered = true;
 
 function formatArgs(args: unknown[]): string {
   return args
