@@ -77,14 +77,14 @@ export class GuildMemberUpdate {
       }
     }
 
-    if (!user.bot && guildAvatarChanged) {
+    if (!user.bot && guildAvatarChanged && newGuildAvatar) {
       const avatarUrl = newMember.displayAvatarURL({
         extension: "png",
         size: 512,
         forceStatic: true,
       });
       if (avatarUrl) {
-        const updated = await updateAvatarRecordFromUrl(user, avatarUrl);
+        const updated = await updateAvatarRecordFromUrl(user, avatarUrl, newGuildAvatar);
         if (updated) {
           await logAvatarChange(_client, user, "Server avatar changed");
         }
