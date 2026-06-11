@@ -1,13 +1,16 @@
 import axios from "axios";
-import { AttachmentBuilder } from "discord.js";
 import type { GuildMember, User } from "discord.js";
 import { MediaGalleryBuilder, MediaGalleryItemBuilder } from "@discordjs/builders";
-import Member, { type IMemberRecord } from "../classes/Member.js";
+import { AttachmentBuilder } from "discord.js";
+import Member, { type IAvatarHistoryRecord } from "../classes/Member.js";
 import { formatTimestampWithDay, resolveLogChannel } from "./DiscordLogUtils.js";
 import { COLOR_INFO } from "../config/colors.js";
 import { buildTitledContainer, buildContainerSend } from "../functions/ComponentsV2Utils.js";
-
-type AvatarHistoryRecord = Awaited<ReturnType<typeof Member.getAvatarHistory>>[number];
+import {
+  getOrReplaceBackblazeImage,
+  hasBackblazeB2Config,
+} from "../services/BackblazeB2Service.js";
+import { logWarn } from "./LogUtils.js";
 
 async function downloadAvatarBuffer(url: string): Promise<Buffer | null> {
   try {
@@ -19,63 +22,69 @@ async function downloadAvatarBuffer(url: string): Promise<Buffer | null> {
 }
 
 function resolveAvatarImage(
-  record: AvatarHistoryRecord | null | undefined,
+  record: IAvatarHistoryRecord | null | undefined,
   label: string,
   userId: string,
 ): { url: string | null; attachment: AttachmentBuilder | null } {
   if (!record) return { url: null, attachment: null };
+  if (record.avatarUrl) {
+    return { url: record.avatarUrl, attachment: null };
+  }
   if (record.avatarBlob) {
     const name = `avatar-${label}-${userId}.png`;
     const attachment = new AttachmentBuilder(record.avatarBlob, { name });
     return { url: `attachment://${name}`, attachment };
   }
-  if (record.avatarUrl) {
-    return { url: record.avatarUrl, attachment: null };
-  }
   return { url: null, attachment: null };
 }
 
-async function upsertAvatarRecord(
-  user: User,
-  avatarBlob: Buffer | null,
-  opts?: { username?: string | null; globalName?: string | null },
-): Promise<void> {
-  const existing = await Member.getByUserId(user.id);
-  const record: IMemberRecord = {
-    userId: user.id,
-    isBot: user.bot ? 1 : 0,
-    username: opts?.username ?? user.username ?? existing?.username ?? null,
-    globalName: opts?.globalName ?? user.globalName ?? existing?.globalName ?? null,
-    avatarBlob,
-    serverJoinedAt: existing?.serverJoinedAt ?? null,
-    serverLeftAt: existing?.serverLeftAt ?? null,
-    lastSeenAt: existing?.lastSeenAt ?? null,
-    roleAdmin: existing?.roleAdmin ?? 0,
-    roleModerator: existing?.roleModerator ?? 0,
-    roleRegular: existing?.roleRegular ?? 0,
-    roleMember: existing?.roleMember ?? 0,
-    roleNewcomer: existing?.roleNewcomer ?? 0,
-    messageCount: existing?.messageCount ?? null,
-    completionatorUrl: existing?.completionatorUrl ?? null,
-    psnUsername: existing?.psnUsername ?? null,
-    xblUsername: existing?.xblUsername ?? null,
-    nswFriendCode: existing?.nswFriendCode ?? null,
-    steamUrl: existing?.steamUrl ?? null,
-    profileImage: existing?.profileImage ?? null,
-    profileImageAt: existing?.profileImageAt ?? null,
-  };
+async function uploadAvatarToBackblaze(
+  userId: string,
+  avatarHash: string,
+  discordUrl: string,
+): Promise<string | null> {
+  try {
+    const { url } = await getOrReplaceBackblazeImage(
+      `avatars/${userId}/${avatarHash}`,
+      avatarHash,
+      async () => {
+        const buf = await downloadAvatarBuffer(discordUrl);
+        if (!buf) throw new Error("Failed to download avatar from Discord");
+        return buf;
+      },
+    );
+    return url;
+  } catch (err) {
+    logWarn("AvatarLogUtils.uploadToBackblaze", (err as Error).message ?? String(err));
+    return null;
+  }
+}
 
-  await Member.upsert(record);
+async function storeAvatarRecord(
+  userId: string,
+  avatarHash: string,
+  discordUrl: string,
+): Promise<boolean> {
+  if (hasBackblazeB2Config()) {
+    const storedUrl = await uploadAvatarToBackblaze(userId, avatarHash, discordUrl);
+    if (storedUrl) {
+      await Member.insertAvatarHistoryRecord(userId, avatarHash, storedUrl, null);
+      return true;
+    }
+  }
+
+  const blob = await downloadAvatarBuffer(discordUrl);
+  if (!blob) return false;
+  await Member.insertAvatarHistoryRecord(userId, avatarHash, discordUrl, blob);
+  return true;
 }
 
 export async function updateAvatarRecordFromUrl(
   user: User,
   avatarUrl: string,
+  avatarHash: string,
 ): Promise<boolean> {
-  const avatarBlob = await downloadAvatarBuffer(avatarUrl);
-  if (!avatarBlob) return false;
-  await upsertAvatarRecord(user, avatarBlob);
-  return true;
+  return storeAvatarRecord(user.id, avatarHash, avatarUrl);
 }
 
 export async function recordCurrentAvatarIfNew(member: GuildMember): Promise<boolean> {
@@ -86,12 +95,8 @@ export async function recordCurrentAvatarIfNew(member: GuildMember): Promise<boo
   const latest = await Member.getAvatarHistory(member.user.id, 1, 0);
   if (latest.length && latest[0].avatarHash === avatarHash) return false;
 
-  const avatarUrl = member.displayAvatarURL({ extension: "png", size: 512, forceStatic: true });
-  const avatarBlob = await downloadAvatarBuffer(avatarUrl);
-  if (!avatarBlob) return false;
-
-  await Member.insertAvatarHistoryRecord(member.user.id, avatarHash, avatarUrl, avatarBlob);
-  return true;
+  const discordUrl = member.displayAvatarURL({ extension: "png", size: 512, forceStatic: true });
+  return storeAvatarRecord(member.user.id, avatarHash, discordUrl);
 }
 
 export async function logAvatarChange(
@@ -116,7 +121,7 @@ export async function logAvatarChange(
   const beforeLabel = beforeImage.url ? "" : "Unknown";
   const afterLabel = afterImage.url ? "" : "Unknown";
   const body =
-    `*${authorName}* (<@${user.id}>)\n` +
+    `*${authorName}*\n` +
     `**Before:** ${beforeLabel}\n**After:** ${afterLabel}\n` +
     `-# ID: ${user.id} • ${formatTimestampWithDay(afterRecord.changedAt.getTime())}`;
   const container = buildTitledContainer(title, body, { color: COLOR_INFO });

@@ -26,14 +26,14 @@ export class UserUpdate {
     const usernameChanged = oldUsername !== newUsername;
     const globalNameChanged = oldGlobalName !== newGlobalName;
 
-    if (avatarChanged) {
+    if (avatarChanged && newAvatarHash) {
       const avatarUrl = newUser.displayAvatarURL({
         extension: "png",
         size: 512,
         forceStatic: true,
       });
       if (avatarUrl) {
-        const updated = await updateAvatarRecordFromUrl(newUser, avatarUrl);
+        const updated = await updateAvatarRecordFromUrl(newUser, avatarUrl, newAvatarHash);
         if (updated) {
           await logAvatarChange(client, newUser, "Avatar changed");
         }
