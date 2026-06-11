@@ -1,11 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { NowPlayingCommand } from "../commands/now-playing.command.js";
+import { NowPlayingCompletionHandlers } from "../commands/now-playing/nowPlayingCompletion.handler.js";
 import Member from "../classes/Member.js";
 import Game from "../classes/Game.js";
 
 test("nowplaying edit menu add completion uses safe update fallback", async () => {
-  const command = new NowPlayingCommand() as any;
+  const command = new NowPlayingCompletionHandlers() as any;
   const originalGetNowPlaying = Member.getNowPlaying;
   const edits: any[] = [];
   let updateCalls = 0;
@@ -35,14 +35,6 @@ test("nowplaying edit menu add completion uses safe update fallback", async () =
         sortOrder: null,
       },
     ])) as any;
-
-    command.buildNowPlayingAttachments = async () => ({
-      files: [],
-      thumbnailsByGameId: new Map<number, string>(),
-      covers: [],
-    });
-    command.buildNowPlayingCompletionComponents = () => [{ kind: "completion-components" }];
-    command.buildComponentPayload = (components: any[]) => ({ components });
 
     const interaction: any = {
       customId: "nowplaying-edit-menu-complete:123",
@@ -80,7 +72,7 @@ test("nowplaying edit menu add completion uses safe update fallback", async () =
 });
 
 test("nowplaying completion config renders with no image accessory", async () => {
-  const command = new NowPlayingCommand() as any;
+  const command = new NowPlayingCompletionHandlers() as any;
   const originalGetNowPlaying = Member.getNowPlaying;
   const originalGetGameById = Game.getGameById;
   const edits: any[] = [];
@@ -141,7 +133,7 @@ test("nowplaying completion config renders with no image accessory", async () =>
 });
 
 test("nowplaying completion modal reuses existing now-playing platform and skips platform picker", async () => {
-  const command = new NowPlayingCommand() as any;
+  const command = new NowPlayingCompletionHandlers() as any;
   const originalGetNowPlaying = Member.getNowPlaying;
   const originalGetRecentCompletionForGame = Member.getRecentCompletionForGame;
   const originalAddCompletion = Member.addCompletion;
