@@ -23,7 +23,7 @@ import {
   buildComponentsV2EditFlags,
   type EmbedField,
 } from "../functions/ComponentsV2Utils.js";
-import { DISCORD_AUTOCOMPLETE_DESC_MAX } from "../config/textLimits.js";
+import { truncateDescription } from "../config/textLimits.js";
 import { buildSelectRow } from "../functions/uiComponents.js";
 
 type ModHelpTopicId = "presence" | "presence-history";
@@ -63,7 +63,7 @@ function buildModHelpButtons(
       MOD_HELP_TOPICS.map((topic) => ({
         label: topic.label,
         value: topic.id,
-        description: topic.summary.slice(0, DISCORD_AUTOCOMPLETE_DESC_MAX),
+        description: truncateDescription(topic.summary),
         default: topic.id === activeId,
       })),
     )

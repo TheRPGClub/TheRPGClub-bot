@@ -70,7 +70,7 @@ import {
 } from "../../utilities/ValidationUtils.js";
 import { assertCustomIdSegments } from "../../utilities/CustomIdUtils.js";
 import { safeIgnore } from "../../utilities/AsyncUtils.js";
-import { DISCORD_SELECT_LABEL_MAX } from "../../config/textLimits.js";
+import { truncateLabel } from "../../config/textLimits.js";
 import {
   MAX_NOW_PLAYING_NOTE_LEN,
   NOW_PLAYING_COMPLETE_ANNOUNCE_SELECT_PREFIX,
@@ -502,7 +502,7 @@ async function promptNowPlayingCompletionPlatformSelection(
   });
 
   const baseOptions = platformOptions.map((platform) => ({
-    label: platform.name.slice(0, DISCORD_SELECT_LABEL_MAX),
+    label: truncateLabel(platform.name),
     value: String(platform.id),
   }));
   const options = [

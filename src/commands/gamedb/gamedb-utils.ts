@@ -17,7 +17,7 @@ import { formatGameTitleWithYear } from "../../functions/GameTitleAutocompleteUt
 import { buildComponentsV2Flags, buildTextReply } from "../../functions/ComponentsV2Utils.js";
 import { encodeWithMaxLength } from "../../functions/CustomIdUtils.js";
 import Game from "../../classes/Game.js";
-import { DISCORD_SELECT_LABEL_MAX, DISCORD_SELECT_OPTIONS_MAX } from "../../config/textLimits.js";
+import { DISCORD_SELECT_OPTIONS_MAX, truncateLabel } from "../../config/textLimits.js";
 import { buildActionButton, buildButtonRow } from "../../functions/uiComponents.js";
 import { GAMEDB_SEARCH_PREFIX } from "../../config/customIdPrefixes.js";
 
@@ -212,7 +212,7 @@ export function getSearchRowsFromComponents(
 export function buildKeepTypingOption(query: string): { name: string; value: string } {
   const label = `Keep typing: "${query}"`;
   return {
-    name: label.slice(0, DISCORD_SELECT_LABEL_MAX),
+    name: truncateLabel(label),
     value: query,
   };
 }
@@ -232,7 +232,7 @@ export async function autocompleteSearchPlatform(
     )
     : platforms;
   const options = filtered.slice(0, DISCORD_SELECT_OPTIONS_MAX).map((p) => ({
-    name: (p.abbreviation ? `${p.name} (${p.abbreviation})` : p.name).slice(0, DISCORD_SELECT_LABEL_MAX),
+    name: truncateLabel((p.abbreviation ? `${p.name} (${p.abbreviation})` : p.name)),
     value: String(p.id),
   }));
   await interaction.respond(options);
@@ -249,7 +249,7 @@ export async function autocompleteSearchCompany(
     ? companies.filter((c) => c.name.toLowerCase().includes(query))
     : companies;
   const options = filtered.slice(0, DISCORD_SELECT_OPTIONS_MAX).map((c) => ({
-    name: c.name.slice(0, DISCORD_SELECT_LABEL_MAX),
+    name: truncateLabel(c.name),
     value: String(c.id),
   }));
   await interaction.respond(options);
@@ -269,7 +269,7 @@ export async function autocompleteGameDbViewTitle(
   const resultOptions = results.slice(0, 24).map((game) => {
     const label = formatGameTitleWithYear(game);
     return {
-      name: label.slice(0, DISCORD_SELECT_LABEL_MAX),
+      name: truncateLabel(label),
       value: String(game.id),
     };
   });

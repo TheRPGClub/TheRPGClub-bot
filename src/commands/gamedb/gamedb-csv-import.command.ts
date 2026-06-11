@@ -70,7 +70,7 @@ import {
 import { GAMEDB_CSV_RESULT_LIMIT } from "../../config/pagination.js";
 import { processReleaseDates } from "./gamedb-add.command.js";
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
-import { DISCORD_AUTOCOMPLETE_DESC_MAX } from "../../config/textLimits.js";
+import { truncateDescription } from "../../config/textLimits.js";
 import { assertCustomIdSegments } from "../../utilities/CustomIdUtils.js";
 import { buildTextInputRow } from "../../functions/uiComponents.js";
 
@@ -298,7 +298,7 @@ async function processNextGameDbCsvImportItem(
       return {
         id: game.id,
         label: `${game.name} (${year})`,
-        description: game.summary ? game.summary.slice(0, DISCORD_AUTOCOMPLETE_DESC_MAX) : "No summary",
+        description: game.summary ? truncateDescription(game.summary) : "No summary",
       };
     })
     : [];
@@ -807,7 +807,7 @@ export class GameDbCsvImportCommand {
         return {
           id: game.id,
           label: `${game.name} (${year})`,
-          description: game.summary ? game.summary.slice(0, DISCORD_AUTOCOMPLETE_DESC_MAX) : "No summary",
+          description: game.summary ? truncateDescription(game.summary) : "No summary",
         };
       })
       : [];

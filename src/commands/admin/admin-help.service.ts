@@ -4,7 +4,7 @@ import {
 } from "discord.js";
 import { ContainerBuilder } from "@discordjs/builders";
 import { type AdminHelpTopic, type AdminHelpTopicId } from "./admin.types.js";
-import { DISCORD_AUTOCOMPLETE_DESC_MAX } from "../../config/textLimits.js";
+import { truncateDescription } from "../../config/textLimits.js";
 import {
   buildTitledContainer,
   buildComponentsV2EditFlags,
@@ -112,7 +112,7 @@ export function buildAdminHelpButtons(
       ADMIN_HELP_TOPICS.map((topic) => ({
         label: topic.label,
         value: topic.id,
-        description: topic.summary.slice(0, DISCORD_AUTOCOMPLETE_DESC_MAX),
+        description: truncateDescription(topic.summary),
         default: topic.id === activeId,
       })),
     )

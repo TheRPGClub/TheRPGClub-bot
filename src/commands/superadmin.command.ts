@@ -57,7 +57,7 @@ import {
 } from "../functions/ComponentsV2Utils.js";
 import { isPositiveInt, isValidPlaytimeHours } from "../utilities/ValidationUtils.js";
 import { sleep } from "../utilities/DelayUtils.js";
-import { DISCORD_AUTOCOMPLETE_DESC_MAX, DISCORD_SELECT_LABEL_MAX } from "../config/textLimits.js";
+import { truncateDescription, truncateLabel } from "../config/textLimits.js";
 import { assertCustomIdSegments } from "../utilities/CustomIdUtils.js";
 import { safeIgnore } from "../utilities/AsyncUtils.js";
 import { logError } from "../utilities/LogUtils.js";
@@ -134,7 +134,7 @@ function buildSuperAdminHelpButtons(
       SUPERADMIN_HELP_TOPICS.map((topic) => ({
         label: topic.label,
         value: topic.id,
-        description: topic.summary.slice(0, DISCORD_AUTOCOMPLETE_DESC_MAX),
+        description: truncateDescription(topic.summary),
         default: topic.id === activeId,
       })),
     )
@@ -367,7 +367,7 @@ export class SuperAdmin {
       superadminCompletionAddSessions.set(sessionId, ctx);
 
       const options = localResults.slice(0, 24).map((game) => ({
-        label: game.title.slice(0, DISCORD_SELECT_LABEL_MAX),
+        label: truncateLabel(game.title),
         value: String(game.id),
         description: `GameDB #${game.id}`,
       }));
@@ -439,7 +439,7 @@ export class SuperAdmin {
       interaction.id,
     );
     const baseOptions = platformOptions.map((platform) => ({
-      label: platform.name.slice(0, DISCORD_SELECT_LABEL_MAX),
+      label: truncateLabel(platform.name),
       value: String(platform.id),
     }));
     const options = [
@@ -494,7 +494,7 @@ export class SuperAdmin {
       return {
         id: game.id,
         label: `${game.name} (${year})`,
-        description: (game.summary || "No summary").slice(0, DISCORD_AUTOCOMPLETE_DESC_MAX),
+        description: truncateDescription(game.summary || "No summary"),
       };
     });
 

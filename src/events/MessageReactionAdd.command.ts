@@ -32,7 +32,7 @@ import { buildTextReply } from "../functions/ComponentsV2Utils.js";
 import { notifyUnknownCompletionPlatform } from "../functions/CompletionHelpers.js";
 import { COMPLETION_REACTION_DEV_CHANNEL_ID } from "../config/channels.js";
 import { isPositiveInt, truncateWithEllipsis } from "../utilities/ValidationUtils.js";
-import { DISCORD_AUTOCOMPLETE_DESC_MAX, DISCORD_SELECT_LABEL_MAX } from "../config/textLimits.js";
+import { truncateDescription, truncateLabel } from "../config/textLimits.js";
 import { assertCustomIdSegments } from "../utilities/CustomIdUtils.js";
 import { safeIgnore } from "../utilities/AsyncUtils.js";
 import {
@@ -144,7 +144,7 @@ const buildIgdbOptions = (
     return {
       id: game.id,
       label: `${game.name} (${year})`,
-      description: (game.summary || "No summary").slice(0, DISCORD_AUTOCOMPLETE_DESC_MAX),
+      description: truncateDescription((game.summary || "No summary")),
     };
   });
 
@@ -306,7 +306,7 @@ export class MessageReactionAdd {
     }
 
     const options = matches.slice(0, 24).map((game) => ({
-      label: game.title.slice(0, DISCORD_SELECT_LABEL_MAX),
+      label: truncateLabel(game.title),
       value: String(game.id),
       description: `GameDB #${game.id}`,
     }));
@@ -473,7 +473,7 @@ export class MessageReactionAdd {
         customId: "completion-react-title-input",
         label: "Game title",
         maxLength: 100,
-        value: session.query.slice(0, DISCORD_SELECT_LABEL_MAX),
+        value: truncateLabel(session.query),
       }));
 
     safeIgnore(interaction.showModal(modal));
@@ -545,7 +545,7 @@ export class MessageReactionAdd {
     }
 
     const baseOptions = platforms.map((platform) => ({
-      label: platform.name.slice(0, DISCORD_SELECT_LABEL_MAX),
+      label: truncateLabel(platform.name),
       value: String(platform.id),
     }));
     const platformOptions = [

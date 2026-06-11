@@ -87,9 +87,9 @@ import { renderUsernameWithEmoji } from "../services/UserEmojiService.js";
 import { isPositiveInt } from "../utilities/ValidationUtils.js";
 import { logError } from "../utilities/LogUtils.js";
 import {
-  DISCORD_AUTOCOMPLETE_DESC_MAX,
-  DISCORD_SELECT_LABEL_MAX,
   DISCORD_SELECT_OPTIONS_MAX,
+  truncateDescription,
+  truncateLabel,
 } from "../config/textLimits.js";
 import { assertCustomIdSegments, parseCustomIdSegmentsMin } from "../utilities/CustomIdUtils.js";
 import { safeIgnore } from "../utilities/AsyncUtils.js";
@@ -783,7 +783,7 @@ export class NowPlayingCommand {
       sourceSessionId,
     });
     const options = platforms.slice(0, DISCORD_SELECT_OPTIONS_MAX).map((platform) => ({
-      label: platform.name.slice(0, DISCORD_SELECT_LABEL_MAX),
+      label: truncateLabel(platform.name),
       value: String(platform.id),
     }));
     const select = new StringSelectMenuBuilder()
@@ -1084,7 +1084,7 @@ export class NowPlayingCommand {
           });
         }
         return deduped.map((platform, optionIndex) => ({
-          label: platform.name.slice(0, DISCORD_SELECT_LABEL_MAX),
+          label: truncateLabel(platform.name),
           value: String(optionIndex),
           platformId: platform.id,
         }));
@@ -1130,7 +1130,7 @@ export class NowPlayingCommand {
     }
 
     const options = platforms.slice(0, DISCORD_SELECT_OPTIONS_MAX).map((platform) => ({
-      label: platform.name.slice(0, DISCORD_SELECT_LABEL_MAX),
+      label: truncateLabel(platform.name),
       value: String(platform.id),
     }));
     const select = new StringSelectMenuBuilder()
@@ -1904,7 +1904,7 @@ export class NowPlayingCommand {
       return;
     }
     const options = entries.map((entry) => ({
-      label: (entry.title ?? `Entry #${entry.entryNumber}`).slice(0, DISCORD_SELECT_LABEL_MAX),
+      label: truncateLabel((entry.title ?? `Entry #${entry.entryNumber}`)),
       value: String(entry.entryId),
       description: formatTableDate(entry.createdAt),
     }));
@@ -2162,7 +2162,7 @@ export class NowPlayingCommand {
       return;
     }
     const options = gamesWithoutJournal.map((e) => ({
-      label: e.title.slice(0, DISCORD_SELECT_LABEL_MAX),
+      label: truncateLabel(e.title),
       value: String(e.gameId),
     }));
     const select = new StringSelectMenuBuilder()
@@ -2595,7 +2595,7 @@ export class NowPlayingCommand {
       .filter((entry) => isPositiveInt(entry.gameId))
       .slice(0, DISCORD_SELECT_OPTIONS_MAX)
       .map((entry) => ({
-        label: formatEntryTitleWithPlatform(entry).slice(0, DISCORD_SELECT_LABEL_MAX),
+        label: truncateLabel(formatEntryTitleWithPlatform(entry)),
         value: String(entry.gameId),
       }));
     const removeSelect = new StringSelectMenuBuilder()
@@ -2727,8 +2727,8 @@ export class NowPlayingCommand {
       const currentPlatformName =
         selectedIndex >= 0 ? (options[selectedIndex]?.label ?? null) : null;
       const placeholder = currentPlatformName
-        ? `${entry.title.slice(0, 50)} - ${currentPlatformName}`.slice(0, DISCORD_SELECT_LABEL_MAX)
-        : entry.title.slice(0, DISCORD_SELECT_LABEL_MAX);
+        ? truncateLabel(`${entry.title.slice(0, 50)} - ${currentPlatformName}`)
+        : truncateLabel(entry.title);
       const select = new StringSelectMenuBuilder()
         .setCustomId(`${NOW_PLAYING_EDIT_PLATFORM_SLOT_PREFIX}:${ownerId}:${slotIndex}:${stateToken}`)
         .setPlaceholder(placeholder)
@@ -2736,7 +2736,7 @@ export class NowPlayingCommand {
         .setMaxValues(1)
         .addOptions(options.map((option, optionIndex) => ({
           label: optionIndex === selectedIndex
-            ? `${entry.title.slice(0, 50)} - ${option.label}`.slice(0, DISCORD_SELECT_LABEL_MAX)
+            ? truncateLabel(`${entry.title.slice(0, 50)} - ${option.label}`)
             : option.label,
           value: option.value,
           default: selectedIndex === optionIndex,
@@ -2795,7 +2795,7 @@ export class NowPlayingCommand {
         .setMinValues(1)
         .setMaxValues(1)
         .addOptions(entries.map((entry, entryIndex) => ({
-          label: formatEntryTitleWithPlatform(entry).slice(0, DISCORD_SELECT_LABEL_MAX),
+          label: truncateLabel(formatEntryTitleWithPlatform(entry)),
           value: String(entryIndex),
           default: selectedIndex === entryIndex,
         })));
@@ -3001,7 +3001,7 @@ export class NowPlayingCommand {
         return {
           id: game.id,
           label: `${game.name} (${year})`,
-          description: (game.summary || "No summary").slice(0, DISCORD_AUTOCOMPLETE_DESC_MAX),
+          description: truncateDescription((game.summary || "No summary")),
         };
       });
 

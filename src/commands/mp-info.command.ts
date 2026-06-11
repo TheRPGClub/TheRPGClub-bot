@@ -40,7 +40,7 @@ import {
   MP_INFO_PAGE_SIZE as PAGE_SIZE,
 } from "../config/pagination.js";
 import { parseCustomIdSegments } from "../utilities/CustomIdUtils.js";
-import { DISCORD_SELECT_LABEL_MAX } from "../config/textLimits.js";
+import { truncateLabel } from "../config/textLimits.js";
 import { chunk } from "../utilities/ArrayUtils.js";
 import { buildActionButton, buildButtonRow , buildSelectRow } from "../functions/uiComponents.js";
 
@@ -165,9 +165,9 @@ function buildPageComponents(
     const name = member.globalName ?? member.username ?? "Unknown member";
     const platforms = formatPlatforms(member, filters) || "Platforms not listed";
     return {
-      label: name.slice(0, DISCORD_SELECT_LABEL_MAX),
+      label: truncateLabel(name),
       value: member.userId,
-      description: platforms.slice(0, DISCORD_SELECT_LABEL_MAX),
+      description: truncateLabel(platforms),
     };
   });
 

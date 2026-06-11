@@ -25,9 +25,9 @@ import {
 } from "../../functions/ComponentsV2Utils.js";
 import { renderUsernameWithEmoji } from "../../services/UserEmojiService.js";
 import {
-  DISCORD_SELECT_LABEL_MAX,
   DISCORD_SELECT_OPTIONS_MAX,
   MAX_QUERY_LENGTH,
+  truncateLabel,
 } from "../../config/textLimits.js";
 import {
   buildActionButton,
@@ -75,7 +75,7 @@ export async function renderCompletionLeaderboard(
   const container = buildTextContainer(safeV2TextContent(contentParts.join("\n"), 3500));
 
   const options = leaderboard.map((m) => ({
-    label: (m.globalName ?? m.username ?? m.userId).slice(0, DISCORD_SELECT_LABEL_MAX),
+    label: truncateLabel((m.globalName ?? m.username ?? m.userId)),
     value: m.userId,
     description: `${m.count} ${m.count === 1 ? "completion" : "completions"}`,
   }));
@@ -207,11 +207,11 @@ export async function renderSelectionPage(
   const { containers, totalPages, safePage, pageCompletions } = result;
 
   const selectOptions = pageCompletions.map((c) => ({
-    label: c.title.slice(0, DISCORD_SELECT_LABEL_MAX),
+    label: truncateLabel(c.title),
     value: String(c.completionId),
-    description: `${c.completionType} (${
+    description: truncateLabel(`${c.completionType} (${
       c.completedAt ? formatDiscordTimestamp(c.completedAt) : "No date"
-    })`.slice(0, DISCORD_SELECT_LABEL_MAX),
+    })`),
   }));
 
   const selectId = mode === "edit" ? "comp-edit-menu" : "comp-del-menu";

@@ -14,7 +14,7 @@ import {
 } from "../../functions/InteractionUtils.js";
 import { buildTextReply } from "../../functions/ComponentsV2Utils.js";
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
-import { DISCORD_SELECT_LABEL_MAX } from "../../config/textLimits.js";
+import { truncateLabel } from "../../config/textLimits.js";
 import { assertCustomIdSegments } from "../../utilities/CustomIdUtils.js";
 import {
   buildActionButton,
@@ -101,9 +101,9 @@ export function buildIgdbComponents(
     .addOptions(
       hasOptions
         ? pageOptions.map((opt, index) => ({
-          label: opt.label.slice(0, DISCORD_SELECT_LABEL_MAX),
+          label: truncateLabel(opt.label),
           value: String(opt.id),
-          description: opt.description?.slice(0, DISCORD_SELECT_LABEL_MAX),
+          description: opt.description ? truncateLabel(opt.description) : undefined,
           default: page === 0 && index === 0,
         }))
         : [{

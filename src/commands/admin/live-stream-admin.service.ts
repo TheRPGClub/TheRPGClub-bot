@@ -25,7 +25,7 @@ import {
   sanitizeUserInput,
 } from "../../functions/InteractionUtils.js";
 import { buildTextReply, buildComponentsV2Flags } from "../../functions/ComponentsV2Utils.js";
-import { DISCORD_SELECT_LABEL_MAX } from "../../config/textLimits.js";
+import { truncateLabel } from "../../config/textLimits.js";
 import { assertCustomIdSegments } from "../../utilities/CustomIdUtils.js";
 
 const LIVE_STREAM_MODAL_PREFIX = "admin-live-stream-create";
@@ -290,7 +290,7 @@ export async function handleLiveStreamCreateModal(interaction: ModalSubmitIntera
     }
     const thread = await forum.threads.create({
       message: threadMessage as any,
-      name: topic.slice(0, DISCORD_SELECT_LABEL_MAX),
+      name: truncateLabel(topic),
     });
     threadUrl = thread.url;
     threadId = thread.id;

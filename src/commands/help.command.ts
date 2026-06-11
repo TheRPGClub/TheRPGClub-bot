@@ -29,7 +29,7 @@ import { safeDeferReply, safeReply, safeUpdate } from "../functions/InteractionU
 import { decodeBase64Url, encodeBase64Url } from "../functions/CustomIdUtils.js";
 import { parseCustomIdSegments } from "../utilities/CustomIdUtils.js";
 import { GIVEAWAY_HUB_CHANNEL_ID } from "../config/channels.js";
-import { DISCORD_AUTOCOMPLETE_DESC_MAX } from "../config/textLimits.js";
+import { truncateDescription } from "../config/textLimits.js";
 import { buildActionButton, buildButtonRow , buildSelectRow } from "../functions/uiComponents.js";
 
 type HelpTopicId =
@@ -460,7 +460,7 @@ function buildProfileHelpButtons(
       PROFILE_HELP_TOPICS.map((topic) => ({
         label: topic.label,
         value: topic.id,
-        description: topic.summary.slice(0, DISCORD_AUTOCOMPLETE_DESC_MAX),
+        description: truncateDescription(topic.summary),
         default: topic.id === activeId,
       })),
     )
@@ -485,7 +485,7 @@ function buildNowPlayingHelpButtons(
       NOW_PLAYING_HELP_TOPICS.map((topic) => ({
         label: topic.label,
         value: topic.id,
-        description: topic.summary.slice(0, DISCORD_AUTOCOMPLETE_DESC_MAX),
+        description: truncateDescription(topic.summary),
         default: topic.id === activeId,
       })),
     )
@@ -522,7 +522,7 @@ function buildGamedbHelpButtons(
       GAMEDB_HELP_TOPICS.map((topic) => ({
         label: topic.label,
         value: topic.id,
-        description: topic.summary.slice(0, DISCORD_AUTOCOMPLETE_DESC_MAX),
+        description: truncateDescription(topic.summary),
         default: topic.id === activeId,
       })),
     )
@@ -711,7 +711,7 @@ function buildGameCompletionHelpButtons(
       GAME_COMPLETION_HELP_TOPICS.map((topic) => ({
         label: topic.label,
         value: topic.id,
-        description: topic.summary.slice(0, DISCORD_AUTOCOMPLETE_DESC_MAX),
+        description: truncateDescription(topic.summary),
         default: topic.id === activeId,
       })),
     )
@@ -842,7 +842,7 @@ function buildRssHelpButtons(
       RSS_HELP_TOPICS.map((topic) => ({
         label: topic.label,
         value: topic.id,
-        description: topic.summary.slice(0, DISCORD_AUTOCOMPLETE_DESC_MAX),
+        description: truncateDescription(topic.summary),
         default: topic.id === activeId,
       })),
     )

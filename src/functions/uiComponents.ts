@@ -88,9 +88,10 @@ import {
 } from "./ComponentsV2Utils.js";
 import { formatTableDate } from "./DateFormatUtils.js";
 import {
-  DISCORD_AUTOCOMPLETE_DESC_MAX,
   DISCORD_SELECT_LABEL_MAX,
   DISCORD_SELECT_OPTIONS_MAX,
+  truncateDescription,
+  truncateLabel,
 } from "../config/textLimits.js";
 import { truncateWithEllipsis } from "../utilities/ValidationUtils.js";
 
@@ -107,9 +108,9 @@ export function buildSelectOptions(
 ): StringSelectMenuOptionBuilder[] {
   return inputs.slice(0, maxOptions).map((item) => {
     const option = new StringSelectMenuOptionBuilder()
-      .setLabel(item.label.slice(0, DISCORD_SELECT_LABEL_MAX))
+      .setLabel(truncateLabel(item.label))
       .setValue(item.value)
-      .setDescription((item.description ?? "").slice(0, DISCORD_AUTOCOMPLETE_DESC_MAX));
+      .setDescription(truncateDescription((item.description ?? "")));
     if (item.emoji != null) option.setEmoji(item.emoji);
     return option;
   });
@@ -136,7 +137,7 @@ export function buildJournalSelectRow(
         : rawLabel;
     const countText = e.journalCount === 1 ? "1 entry" : `${e.journalCount} entries`;
     const lastPart = e.lastJournalAt ? ` · Last entry ${formatTableDate(e.lastJournalAt)}` : "";
-    const description = `${countText}${lastPart}`.slice(0, DISCORD_SELECT_LABEL_MAX);
+    const description = truncateLabel(`${countText}${lastPart}`);
     return { label, description, value: String(e.gameId) };
   });
   const select = new StringSelectMenuBuilder()
