@@ -454,15 +454,15 @@ export const GameSql = {
            FROM gamedb_games
           WHERE ${titleFoldExpr} LIKE :rawContains
              OR (
-               :exactNorm IS NOT NULL AND
+               (:exactNorm)::text IS NOT NULL AND
                ${titleNormExpr} LIKE :normContains
              )
           ORDER BY CASE
                      WHEN ${titleFoldExpr} = :exactRaw THEN 0
                      WHEN ${titleFoldExpr} LIKE :rawPrefix THEN 1
-                     WHEN :exactNorm IS NOT NULL AND
+                     WHEN (:exactNorm)::text IS NOT NULL AND
                           ${titleNormExpr} = :exactNorm THEN 2
-                     WHEN :exactNorm IS NOT NULL AND
+                     WHEN (:exactNorm)::text IS NOT NULL AND
                           ${titleNormExpr} LIKE :normPrefix THEN 3
                      ELSE 4
                    END,
