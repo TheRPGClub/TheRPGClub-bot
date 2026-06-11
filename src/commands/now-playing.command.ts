@@ -56,7 +56,6 @@ import {
   replyIfNotOwner,
 } from "../functions/InteractionUtils.js";
 import Game, { type IGame } from "../classes/Game.js";
-import { buildJournalView } from "../functions/journalView.js";
 import {
   buildActionButton,
   buildButtonRow,
@@ -153,8 +152,6 @@ import {
   NOW_PLAYING_JOURNAL_DELETE_PREFIX,
   NOW_PLAYING_JOURNAL_DELETE_SELECT_PREFIX,
   NOW_PLAYING_JOURNAL_DELETE_CONFIRM_PREFIX,
-  NOW_PLAYING_JOURNAL_PAGE_PREFIX,
-  NOW_PLAYING_JOURNAL_HEADER_PREFIX,
   NOW_PLAYING_JOURNAL_MODAL_ID,
   NOW_PLAYING_JOURNAL_EDIT_MODAL_ID,
   NOW_PLAYING_JOURNAL_TITLE_INPUT_ID,
@@ -214,6 +211,7 @@ import {
   trimTextDisplayContent,
   buildNowPlayingMemberSelect,
 } from "./now-playing/nowPlayingListRenderer.js";
+import { buildJournalComponents } from "./now-playing/nowPlayingRenderers.js";
 
 async function confirmDuplicateCompletion(
   interaction: CommandInteraction | ModalSubmitInteraction | ButtonInteraction,
@@ -2733,7 +2731,7 @@ export class NowPlayingCommand {
       await safeReply(interaction, buildTextReply("This game's journal has no public entries to show in channel.", true));
       return;
     }
-    const payload = await this.buildJournalComponents(
+    const payload = await buildJournalComponents(
       ownerId,
       interaction.guildId ? "__public__" : interaction.user.id,
       gameId,
@@ -2771,7 +2769,7 @@ export class NowPlayingCommand {
       await safeReply(interaction, buildTextReply("This game has no public journal entries.", true));
       return;
     }
-    const payload = await this.buildJournalComponents(
+    const payload = await buildJournalComponents(
       ownerId,
       interaction.guildId ? "__public__" : interaction.user.id,
       gameId,
@@ -2810,7 +2808,7 @@ export class NowPlayingCommand {
       await safeReply(interaction, buildTextReply("This game's journal has no public entries to show in channel.", true));
       return;
     }
-    const payload = await this.buildJournalComponents(
+    const payload = await buildJournalComponents(
       ownerId,
       interaction.guildId ? "__public__" : interaction.user.id,
       gameId,
@@ -3051,7 +3049,7 @@ export class NowPlayingCommand {
       // First entry: post the journal message first so it appears before the manage buttons.
       // Skip journalOwnerMenu here to avoid its deletor pointing at the journal post.
       await this.deleteLatestJournalMessageInChannel(interaction, ownerId, gameId);
-      const payload = await this.buildJournalComponents(
+      const payload = await buildJournalComponents(
         ownerId,
         "__public__",
         gameId,
@@ -4119,51 +4117,6 @@ export class NowPlayingCommand {
     }
 
     return false;
-  }
-
-  private buildJournalComponents(
-    ownerId: string,
-    viewerId: string,
-    gameId: number,
-    page: number,
-    guildId?: string | null,
-    showOwnerHeader?: boolean,
-  ) {
-    const isOwnerView = viewerId === ownerId;
-    return buildJournalView({
-      ownerId,
-      viewerId,
-      gameId,
-      page,
-      guildId,
-      prevPageCustomId: (p) =>
-        `${NOW_PLAYING_JOURNAL_PAGE_PREFIX}:${ownerId}:${gameId}:prev:${p}`,
-      nextPageCustomId: (p) =>
-        `${NOW_PLAYING_JOURNAL_PAGE_PREFIX}:${ownerId}:${gameId}:next:${p}`,
-      headerButtonCustomId: showOwnerHeader
-        ? `${NOW_PLAYING_JOURNAL_HEADER_PREFIX}:${ownerId}:${gameId}:${page}`
-        : undefined,
-      buildOwnerButtons: isOwnerView
-        ? (safePage, hasEntries) => [
-            buildActionButton(
-              "add", `${NOW_PLAYING_JOURNAL_ADD_PREFIX}:${ownerId}:${gameId}:${safePage}`, "Add Entry",
-            ),
-            buildActionButton(
-              "edit", `${NOW_PLAYING_JOURNAL_EDIT_PREFIX}:${ownerId}:${gameId}:${safePage}`, "Edit Entry",
-            ).setDisabled(!hasEntries),
-            buildActionButton(
-              "delete", `${NOW_PLAYING_JOURNAL_DELETE_PREFIX}:${ownerId}:${gameId}:${safePage}`, "Delete Entry",
-            ).setDisabled(!hasEntries),
-          ]
-        : undefined,
-      navRowTrailingButtons: !guildId
-        ? [
-            buildActionButton({ customId: `${NOW_PLAYING_HELP_PREFIX}:journal-view:${ownerId}`, label: "?", style: ButtonStyle.Secondary }),
-          ]
-        : undefined,
-      includeNowPlayingMeta: true,
-      includeCompletions: true,
-    });
   }
 
   private async startNowPlayingIgdbImport(
