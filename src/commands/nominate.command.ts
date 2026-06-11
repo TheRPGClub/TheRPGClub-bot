@@ -38,6 +38,7 @@ import {
   sanitizeUserInput,
 } from "../functions/InteractionUtils.js";
 import { buildTextReply, safeV2TextContent } from "../functions/ComponentsV2Utils.js";
+import { toUnixTimestamp } from "../functions/DateFormatUtils.js";
 import {
   GOTM_NOMINATION_CHANNEL_ID,
   NR_GOTM_NOMINATION_CHANNEL_ID,
@@ -212,7 +213,7 @@ export class NominateCommand {
     try {
       const window = await getUpcomingNominationWindow();
       if (areNominationsClosed(window)) {
-        const voteUnix = Math.floor(window.nextVoteAt.getTime() / 1000);
+        const voteUnix = toUnixTimestamp(window.nextVoteAt);
         const closedMsg =
           `Nominations for Round ${window.targetRound} are closed. ` +
           `Voting is scheduled for <t:${voteUnix}:F>.`;

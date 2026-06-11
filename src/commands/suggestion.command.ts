@@ -53,6 +53,7 @@ import { logRawModal } from "../services/raw-modal/RawModalLogging.js";
 import { isPositiveInt, truncateWithEllipsis } from "../utilities/ValidationUtils.js";
 import { parseCustomIdSegments } from "../utilities/CustomIdUtils.js";
 import { buildActionButton, buildButtonRow } from "../functions/uiComponents.js";
+import { toUnixTimestamp } from "../functions/DateFormatUtils.js";
 
 const SUGGESTION_APPROVE_PREFIX = "suggestion-approve";
 const SUGGESTION_CREATE_MODAL_ID = "suggestion-create-modal";
@@ -264,8 +265,7 @@ async function openSuggestionReviewDecisionModal(
 
 function formatSuggestionTimestampPlain(date: Date | null | undefined): string {
   if (!date) return "Unknown";
-  const unixSeconds = Math.floor(date.getTime() / 1000);
-  return `<t:${unixSeconds}:F>`;
+  return `<t:${toUnixTimestamp(date)}:F>`;
 }
 
 function buildSuggestionReviewSummaryText(

@@ -93,6 +93,7 @@ import {
 import Game from "../classes/Game.js";
 import Member from "../classes/Member.js";
 import { isPositiveInt, isValidPlaytimeHours } from "../utilities/ValidationUtils.js";
+import { toUnixTimestamp } from "../functions/DateFormatUtils.js";
 
 // Note: This is a simplified working version that delegates complex Completionator logic
 // to service files. The full implementation would import and delegate all handlers.
@@ -670,7 +671,7 @@ export class GameCompletionCommands {
     }
     if (updates.completedAt !== undefined) {
       const dateLabel = updated.completedAt
-        ? `<t:${Math.floor(updated.completedAt.getTime() / 1000)}:D>`
+        ? `<t:${toUnixTimestamp(updated.completedAt)}:D>`
         : "No date";
       changedLines.push(`- Completion Date: **${dateLabel}**`);
     }

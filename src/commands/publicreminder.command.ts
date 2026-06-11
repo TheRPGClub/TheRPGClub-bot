@@ -16,6 +16,7 @@ import {
   type RecurrenceUnit,
 } from "../classes/PublicReminder.js";
 import { DateTime } from "luxon";
+import { toUnixTimestamp } from "../functions/DateFormatUtils.js";
 
 const RECURRENCE_CHOICES: { name: string; value: RecurrenceUnit }[] = [
   { name: "Minutes", value: "minutes" },
@@ -151,7 +152,7 @@ export class PublicReminderCommand {
         interaction.user.id,
       );
 
-      const timestamp = Math.floor(parsedDate.getTime() / 1000);
+      const timestamp = toUnixTimestamp(parsedDate);
       const createdMsg =
         `Created reminder #${reminder.reminderId} for ${channelMention(channel.id)} at <t:${timestamp}:F>.` +
         `${recurEvery && recurUnit ? ` (repeats every ${recurEvery} ${recurUnit})` : ""}`;
@@ -179,7 +180,7 @@ export class PublicReminderCommand {
       const lines = reminders.map((r) => {
         const recur =
           r.recurEvery && r.recurUnit ? ` (repeats every ${r.recurEvery} ${r.recurUnit})` : "";
-        const timestamp = Math.floor(r.dueAt.getTime() / 1000);
+        const timestamp = toUnixTimestamp(r.dueAt);
         return `#${r.reminderId}: ${channelMention(r.channelId)} at <t:${timestamp}:F>${recur} - ${r.message}`;
       });
 

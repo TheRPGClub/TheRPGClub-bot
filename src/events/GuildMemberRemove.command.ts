@@ -5,6 +5,7 @@ import { formatTimestampWithDay } from "../utilities/DiscordLogUtils.js";
 import { JOIN_LEAVE_LOG_CHANNEL_ID } from "../config/channels.js";
 import { COLOR_WARNING, COLOR_NEUTRAL } from "../config/colors.js";
 import { sleep } from "../utilities/DelayUtils.js";
+import { toUnixTimestamp } from "../functions/DateFormatUtils.js";
 import {
   buildTitledContainer,
   buildContainerSend,
@@ -16,7 +17,7 @@ const KICK_LOG_RETRY_COUNT = 3;
 const KICK_LOG_RETRY_DELAY_MS = 750;
 
 function formatDiscordDateTime(date: Date): string {
-  return `<t:${Math.floor(date.getTime() / 1000)}:F>`;
+  return `<t:${toUnixTimestamp(date)}:F>`;
 }
 
 async function resolveLogChannel(client: Client): Promise<any | null> {

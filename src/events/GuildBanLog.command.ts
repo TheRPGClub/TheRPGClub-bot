@@ -4,6 +4,7 @@ import { Discord, On } from "discordx";
 import { formatTimestampWithDay } from "../utilities/DiscordLogUtils.js";
 import { BAN_LOG_CHANNEL_ID, UNBAN_LOG_CHANNEL_ID } from "../config/channels.js";
 import { buildIdTimestampFooter } from "../functions/InteractionUtils.js";
+import { toUnixTimestamp } from "../functions/DateFormatUtils.js";
 import { COLOR_INFO, COLOR_ERROR } from "../config/colors.js";
 import {
   buildTitledContainer,
@@ -19,7 +20,7 @@ async function resolveLogChannel(client: Client, channelId: string): Promise<any
 }
 
 function formatAccountCreated(date: Date): string {
-  return `<t:${Math.floor(date.getTime() / 1000)}:F>`;
+  return `<t:${toUnixTimestamp(date)}:F>`;
 }
 
 function buildBanContainer(
