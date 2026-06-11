@@ -1246,7 +1246,9 @@ export default class Game {
       const titleCol = isOracle ? "TITLE" : "title";
       const titleFoldExpr =
         `REPLACE(REPLACE(REPLACE(REPLACE(LOWER(${titleCol}), 'é', 'e'), 'è', 'e'), 'ê', 'e'), 'ë', 'e')`;
-      const titleNormExpr = `REGEXP_REPLACE(${titleFoldExpr}, '[^a-z0-9]', '')`;
+      const titleNormExpr = isOracle
+        ? `REGEXP_REPLACE(${titleFoldExpr}, '[^a-z0-9]', '')`
+        : `REGEXP_REPLACE(${titleFoldExpr}, '[^a-z0-9]', '', 'g')`;
 
       const binds = {
         exactRaw: foldedLowerQuery,
@@ -1348,7 +1350,9 @@ export default class Game {
       const titleCol = isOracle ? "TITLE" : "title";
       const titleFoldExpr =
         `REPLACE(REPLACE(REPLACE(REPLACE(LOWER(${titleCol}), 'é', 'e'), 'è', 'e'), 'ê', 'e'), 'ë', 'e')`;
-      const titleNormExpr = `REGEXP_REPLACE(${titleFoldExpr}, '[^a-z0-9]', '')`;
+      const titleNormExpr = isOracle
+        ? `REGEXP_REPLACE(${titleFoldExpr}, '[^a-z0-9]', '')`
+        : `REGEXP_REPLACE(${titleFoldExpr}, '[^a-z0-9]', '', 'g')`;
 
       const clauses: string[] = [];
       const binds: Record<string, string | number> = {};
