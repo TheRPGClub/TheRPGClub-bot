@@ -24,12 +24,14 @@ import { parseCustomIdSegments } from "../../utilities/CustomIdUtils.js";
 import { buildDisabledPrevNextRowWithIds } from "../../functions/PaginationUtils.js";
 import { safeIgnore } from "../../utilities/AsyncUtils.js";
 import { logError, logInfo } from "../../utilities/LogUtils.js";
+import {
+  COLLECTION_LIST_NAV_PREFIX,
+  COLLECTION_LIST_FILTER_PREFIX,
+  COLLECTION_LIST_FILTER_PANEL_PREFIX,
+  COLLECTION_LIST_FILTER_MODAL_PREFIX,
+} from "../../config/customIdPrefixes.js";
 
 const COLLECTION_LIST_PAGE_SIZE = 20;
-const COLLECTION_LIST_NAV_PREFIX = "collection-list-nav-v2";
-const COLLECTION_LIST_FILTER_PREFIX = "collection-list-filter-v1";
-const COLLECTION_LIST_FILTER_PANEL_PREFIX = "clf1";
-const COLLECTION_LIST_FILTER_MODAL_PREFIX = "clfm1";
 export const COLLECTION_FILTER_TITLE_INPUT_ID = "collection-filter-title";
 export const COLLECTION_FILTER_PLATFORM_INPUT_ID = "collection-filter-platform";
 

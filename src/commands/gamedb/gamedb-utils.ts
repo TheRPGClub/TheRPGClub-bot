@@ -19,6 +19,7 @@ import { decodeBase64Url, encodeBase64Url } from "../../functions/CustomIdUtils.
 import Game from "../../classes/Game.js";
 import { DISCORD_SELECT_LABEL_MAX, DISCORD_SELECT_OPTIONS_MAX } from "../../config/textLimits.js";
 import { buildActionButton, buildButtonRow } from "../../functions/uiComponents.js";
+import { GAMEDB_SEARCH_PREFIX } from "../../config/customIdPrefixes.js";
 
 export interface ISearchFilters {
   upcomingRelease?: boolean;
@@ -162,7 +163,7 @@ export function buildSearchCustomId(
   direction?: "next" | "prev",
   filters?: ISearchFilters,
 ): string {
-  const base = `gamedb-search-${type}:${ownerId}:${page}:`;
+  const base = `${GAMEDB_SEARCH_PREFIX}${type}:${ownerId}:${page}:`;
   const maxQueryLength =
     MAX_COMPONENT_CUSTOM_ID_LENGTH - base.length - (direction ? `:${direction}`.length : 0);
   const encodedQuery = encodeSearchQuery(query, Math.max(maxQueryLength, 0), filters);
@@ -172,7 +173,7 @@ export function buildSearchCustomId(
 }
 
 export function buildSearchRefreshCustomId(ownerId: string, encodedQuery: string): string {
-  return `gamedb-search-refresh:${ownerId}:${encodedQuery}`;
+  return `${GAMEDB_SEARCH_PREFIX}refresh:${ownerId}:${encodedQuery}`;
 }
 
 export function buildSearchRecoveryComponents(
@@ -223,7 +224,7 @@ export function getSearchRowsFromComponents(
     if (!row || typeof row !== "object") return false;
     const rowComponents = "components" in row ? (row as any).components : [];
     return Array.isArray(rowComponents) && rowComponents.some((component) =>
-      component.customId?.startsWith("gamedb-search-"),
+      component.customId?.startsWith(GAMEDB_SEARCH_PREFIX),
     );
   }) as ActionRow<MessageActionRowComponent>[];
 }
