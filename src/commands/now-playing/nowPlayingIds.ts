@@ -27,7 +27,6 @@ export const NOW_PLAYING_COMPLETE_PLATFORM_SELECT_PREFIX = "np-complete-platform
 export const NOW_PLAYING_GALLERY_MAX = 5;
 export const NOW_PLAYING_COMPOSITE_MAX = 10;
 export const NOW_PLAYING_ALL_SELECT_ID = "nowplaying-all-select:v1";
-export const NOW_PLAYING_LIST_NOTES_PREFIX = "nowplaying-list-notes";
 export const NOW_PLAYING_LIST_EDIT_PREFIX = "nowplaying-list-edit";
 export const NOW_PLAYING_EDIT_MENU_SORT_PREFIX = "nowplaying-edit-menu-sort";
 export const NOW_PLAYING_EDIT_MENU_PLATFORM_PREFIX = "nowplaying-edit-menu-platform";

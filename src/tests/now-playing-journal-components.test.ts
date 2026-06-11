@@ -5,6 +5,8 @@ import type { IMemberNowPlayingEntry } from "../classes/Member.js";
 import Member from "../classes/Member.js";
 import Game from "../classes/Game.js";
 import Thread from "../classes/Thread.js";
+import { buildNowPlayingEntryComponents } from "../commands/now-playing/nowPlayingListRenderer.js";
+import { buildJournalComponents } from "../commands/now-playing/nowPlayingRenderers.js";
 
 function collectBuilderField(value: unknown, key: "content" | "custom_id"): string[] {
   const found: string[] = [];
@@ -34,7 +36,6 @@ function collectBuilderField(value: unknown, key: "content" | "custom_id"): stri
 }
 
 test("now-playing list components serialize with mixed journal-enabled entries", () => {
-  const command = new NowPlayingCommand() as any;
   const entries: IMemberNowPlayingEntry[] = [{
     gameId: 101,
     title: "Journal Enabled Game",
@@ -67,7 +68,7 @@ test("now-playing list components serialize with mixed journal-enabled entries",
     lastJournalAt: null,
   }];
 
-  const components = command.buildNowPlayingEntryComponents(
+  const components = buildNowPlayingEntryComponents(
     entries,
     "123456789012345678",
     null,
@@ -85,8 +86,6 @@ test("now-playing list components serialize with mixed journal-enabled entries",
 });
 
 test("owner list shows journal buttons for multiple journal-enabled entries", () => {
-  const command = new NowPlayingCommand() as any;
-  command.canUseJournalFeature = () => true;
   const entries: IMemberNowPlayingEntry[] = [{
     gameId: 201,
     title: "Journal Entry One",
@@ -119,12 +118,11 @@ test("owner list shows journal buttons for multiple journal-enabled entries", ()
     lastJournalAt: null,
   }];
 
-  const components = command.buildNowPlayingEntryComponents(
+  const components = buildNowPlayingEntryComponents(
     entries,
     "123456789012345678",
     null,
     null,
-    false,
     true,
   );
   const json = JSON.stringify(components.map((component: any) => component.toJSON()));
@@ -133,8 +131,6 @@ test("owner list shows journal buttons for multiple journal-enabled entries", ()
 });
 
 test("owner list with 10 entries stays serializable and keeps journal buttons", () => {
-  const command = new NowPlayingCommand() as any;
-  command.canUseJournalFeature = () => true;
   const entries: IMemberNowPlayingEntry[] = Array.from({ length: 10 }, (_, index) => ({
     gameId: 300 + index,
     title: `Journal Entry ${index + 1}`,
@@ -152,12 +148,11 @@ test("owner list with 10 entries stays serializable and keeps journal buttons", 
     lastJournalAt: null,
   }));
 
-  const components = command.buildNowPlayingEntryComponents(
+  const components = buildNowPlayingEntryComponents(
     entries,
     "123456789012345678",
     null,
     null,
-    false,
     true,
   );
   assert.doesNotThrow(() => {
@@ -171,7 +166,6 @@ test("owner list with 10 entries stays serializable and keeps journal buttons", 
 });
 
 test("journal single-page view omits pager buttons and page count", async () => {
-  const command = new NowPlayingCommand() as any;
   const originalGetGameById = Game.getGameById;
   const originalGetByUserId = Member.getByUserId;
   const originalGetMeta = Member.getNowPlayingEntryMeta;
@@ -203,7 +197,7 @@ test("journal single-page view omits pager buttons and page count", async () => 
     }])) as any;
     Thread.getThreadsByGameId = (async () => []) as any;
 
-    const payload = await command.buildJournalComponents("123", "123", 1, 1);
+    const payload = await buildJournalComponents("123", "123", 1, 1);
     const customIds = collectBuilderField(payload.components, "custom_id");
     const unique = new Set(customIds);
     assert.equal(customIds.length, unique.size);
@@ -224,7 +218,6 @@ test("journal single-page view omits pager buttons and page count", async () => 
 });
 
 test("journal public view redacts private entry content and count", async () => {
-  const command = new NowPlayingCommand() as any;
   const originalGetGameById = Game.getGameById;
   const originalGetByUserId = Member.getByUserId;
   const originalGetMeta = Member.getNowPlayingEntryMeta;
@@ -275,7 +268,7 @@ test("journal public view redacts private entry content and count", async () => 
     }) as any;
     Thread.getThreadsByGameId = (async () => []) as any;
 
-    const payload = await command.buildJournalComponents("123", "__public__", 1, 1);
+    const payload = await buildJournalComponents("123", "__public__", 1, 1);
     assert.ok(payload.components.length > 0);
     assert.equal(countViewerArg, "__public__");
     assert.equal(entriesViewerArg, "__public__");
