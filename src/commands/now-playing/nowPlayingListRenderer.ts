@@ -21,7 +21,7 @@ import {
 import { SeparatorSpacingSize } from "discord-api-types/v10";
 import crypto from "node:crypto";
 import Member, { type IMemberNowPlayingEntry } from "../../classes/Member.js";
-import Game from "../../classes/Game.js";
+import { fetchGameCoverBuffer } from "../../services/GameImageService.js";
 import {
   safeReply,
   safeUpdate,
@@ -138,7 +138,7 @@ export async function buildNowPlayingAttachments(
 ): Promise<{
   files: AttachmentBuilder[];
   thumbnailsByGameId: Map<number, string>;
-  covers: Array<{ gameId: number; title: string; imageData: Buffer }>;
+  covers: Array<{ gameId: number; title: string; imageData: Buffer; imageUrl: string }>;
 }> {
   if (!includeImages) {
     return {
@@ -147,33 +147,27 @@ export async function buildNowPlayingAttachments(
       covers: [],
     };
   }
-  const files: AttachmentBuilder[] = [];
   const seen = new Set<number>();
-  const thumbnailsByGameId = new Map<number, string>();
-  const covers: Array<{ gameId: number; title: string; imageData: Buffer }> = [];
-  let imageCount = 0;
+  const uniqueEntries: IMemberNowPlayingEntry[] = [];
   for (const entry of entries) {
     if (!entry.gameId || seen.has(entry.gameId)) continue;
     seen.add(entry.gameId);
-    if (imageCount >= maxImages) {
-      break;
-    }
-    const gameRecord = await Game.getGameById(entry.gameId);
-    if (gameRecord?.imageData) {
-      covers.push({
-        gameId: entry.gameId,
-        title: entry.title,
-        imageData: gameRecord.imageData,
-      });
-      const filename = `now_playing_${entry.gameId}.png`;
-      files.push(
-        new AttachmentBuilder(gameRecord.imageData, { name: filename }),
-      );
-      thumbnailsByGameId.set(entry.gameId, `attachment://${filename}`);
-      imageCount += 1;
-    }
+    if (uniqueEntries.length >= maxImages) break;
+    uniqueEntries.push(entry);
   }
-  return { files, thumbnailsByGameId, covers };
+
+  const results = await Promise.all(
+    uniqueEntries.map(async (entry) => {
+      const cover = await fetchGameCoverBuffer(entry.gameId!);
+      if (!cover) return null;
+      return {
+        gameId: entry.gameId!, title: entry.title, imageData: cover.buffer, imageUrl: cover.url,
+      };
+    }),
+  );
+  const covers = results.filter((c): c is NonNullable<typeof c> => c !== null);
+
+  return { files: [], thumbnailsByGameId: new Map<number, string>(), covers };
 }
 
 export async function buildNowPlayingListPayload(
@@ -231,7 +225,7 @@ export function buildNowPlayingJournalSelectRow(
 
 export async function buildNowPlayingCompositeImageUrl(
   files: AttachmentBuilder[],
-  covers: Array<{ gameId: number; title: string; imageData: Buffer }>,
+  covers: Array<{ gameId: number; title: string; imageData: Buffer; imageUrl: string }>,
   ownerId: string,
 ): Promise<string | null> {
   if (!covers.length) {
@@ -270,16 +264,14 @@ export async function buildNowPlayingCompositeImageUrl(
 
 export function buildNowPlayingCompositeSourceHash(
   ownerId: string,
-  covers: Array<{ gameId: number; title: string; imageData: Buffer }>,
+  covers: Array<{ gameId: number; title: string; imageUrl: string }>,
 ): string {
   const hash = crypto.createHash("sha256");
   // eslint-disable-next-line local/no-direct-interaction-response-methods
   hash.update(`owner:${ownerId}|count:${covers.length}|`);
   covers.forEach((cover) => {
     // eslint-disable-next-line local/no-direct-interaction-response-methods
-    hash.update(`id:${cover.gameId}|title:${cover.title}|`);
-    // eslint-disable-next-line local/no-direct-interaction-response-methods
-    hash.update(cover.imageData);
+    hash.update(`id:${cover.gameId}|title:${cover.title}|url:${cover.imageUrl}|`);
   });
   return hash.digest("hex");
 }

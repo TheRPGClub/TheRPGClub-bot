@@ -16,7 +16,7 @@ import { SeparatorSpacingSize } from "discord-api-types/v10";
 import crypto from "node:crypto";
 import Member from "../classes/Member.js";
 import type { INominationEntry } from "../classes/Nomination.js";
-import Game from "../classes/Game.js";
+import { fetchGameCoverBuffer } from "../services/GameImageService.js";
 import {
   buildTextContainer,
   safeV2TextContent,
@@ -256,25 +256,26 @@ async function buildNominationAttachments(
   voteImageUrl: string | null;
 }> {
   const files: AttachmentBuilder[] = [];
-  const covers: Array<{ gameId: number; title: string; imageData: Buffer }> = [];
   const seen = new Set<number>();
+  const uniqueNominations = nominations.filter((nom) => {
+    if (!nom.gamedbGameId || seen.has(nom.gamedbGameId)) return false;
+    seen.add(nom.gamedbGameId);
+    return true;
+  });
 
-  for (const nomination of nominations) {
-    const gameId = nomination.gamedbGameId;
-    if (!gameId || seen.has(gameId)) {
-      continue;
-    }
-    seen.add(gameId);
-    const game = await Game.getGameById(gameId);
-    if (!game?.imageData) {
-      continue;
-    }
-    covers.push({
-      gameId,
-      title: nomination.gameTitle,
-      imageData: game.imageData,
-    });
-  }
+  const results = await Promise.all(
+    uniqueNominations.map(async (nom) => {
+      const cover = await fetchGameCoverBuffer(nom.gamedbGameId!);
+      if (!cover) return null;
+      return {
+        gameId: nom.gamedbGameId!,
+        title: nom.gameTitle,
+        imageData: cover.buffer,
+        imageUrl: cover.url,
+      };
+    }),
+  );
+  const covers = results.filter((c): c is NonNullable<typeof c> => c !== null);
 
   const voteImageUrl = await appendVoteImageAttachment(files, kindLabel, roundNumber, covers);
   return { files, voteImageUrl };
@@ -284,7 +285,7 @@ async function appendVoteImageAttachment(
   files: AttachmentBuilder[],
   kindLabel: string,
   roundNumber: number,
-  covers: Array<{ gameId: number; title: string; imageData: Buffer }>,
+  covers: Array<{ gameId: number; title: string; imageData: Buffer; imageUrl: string }>,
 ): Promise<string | null> {
   const voteType = toVoteImageType(kindLabel);
   if (!voteType || !covers.length) {
@@ -325,16 +326,14 @@ function toVoteImageType(kindLabel: string): VoteImageType | null {
 function buildNominationImageSourceHash(
   voteType: VoteImageType,
   roundNumber: number,
-  covers: Array<{ gameId: number; title: string; imageData: Buffer }>,
+  covers: Array<{ gameId: number; title: string; imageUrl: string }>,
 ): string {
   const hash = crypto.createHash("sha256");
   // eslint-disable-next-line local/no-direct-interaction-response-methods
   hash.update(`type:${voteType}|round:${roundNumber}|count:${covers.length}|`);
   covers.forEach((cover) => {
     // eslint-disable-next-line local/no-direct-interaction-response-methods
-    hash.update(`id:${cover.gameId}|title:${cover.title}|`);
-    // eslint-disable-next-line local/no-direct-interaction-response-methods
-    hash.update(cover.imageData);
+    hash.update(`id:${cover.gameId}|title:${cover.title}|url:${cover.imageUrl}|`);
   });
   return hash.digest("hex");
 }
