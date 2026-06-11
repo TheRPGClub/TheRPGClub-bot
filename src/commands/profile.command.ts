@@ -570,6 +570,19 @@ export class ProfileCommand {
     }
 
     await withErrorReply(interaction, async () => {
+      const userExists = await apiGet<{ data: unknown }>(`/api/v1/users/${target.id}`);
+      if (!userExists) {
+        await safeReply(
+          interaction,
+          buildTextReply(
+            `${userMention(target.id)} doesn't have a profile in the database yet. ` +
+            "They need to be seen by the bot first (send a message, have an admin sync them, etc.).",
+            true,
+          ),
+        );
+        return;
+      }
+
       const platforms = await getSocialPlatforms();
       if (!platforms.length) {
         await safeReply(
