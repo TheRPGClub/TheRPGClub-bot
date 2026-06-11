@@ -261,7 +261,9 @@ ${nickHistory.join(", ")}`);
 ${roles}`);
 
   for (const social of user.socials) {
-    const value = social.display_text ?? social.url;
+    const value = social.display_text && social.url
+      ? `[${social.display_text}](${social.url})`
+      : (social.display_text ?? social.url);
     if (value) {
       blocks.push(`**${social.social_platform.label}**
 ${value}`);
