@@ -170,7 +170,6 @@ test("journal single-page view omits pager buttons and page count", async () => 
   const originalGetByUserId = Member.getByUserId;
   const originalGetMeta = Member.getNowPlayingEntryMeta;
   const originalGetCompletions = Member.getCompletionsForGame;
-  const originalGetPref = Member.getGameJournalPreference;
   const originalCount = Member.countGameJournalEntries;
   const originalEntries = Member.getGameJournalEntries;
   const originalGetThreads = Thread.getThreadsByGameId;
@@ -180,11 +179,6 @@ test("journal single-page view omits pager buttons and page count", async () => 
     Member.getByUserId = (async () => ({ globalName: "owner", username: "owner" })) as any;
     Member.getNowPlayingEntryMeta = (async () => null) as any;
     Member.getCompletionsForGame = (async () => []) as any;
-    Member.getGameJournalPreference = (async () => ({
-      userId: "123",
-      gameId: 1,
-      isEnabled: true,
-    })) as any;
     Member.countGameJournalEntries = (async () => 1) as any;
     Member.getGameJournalEntries = (async () => ([{
       entryId: 10,
@@ -210,7 +204,6 @@ test("journal single-page view omits pager buttons and page count", async () => 
     Member.getByUserId = originalGetByUserId;
     Member.getNowPlayingEntryMeta = originalGetMeta;
     Member.getCompletionsForGame = originalGetCompletions;
-    Member.getGameJournalPreference = originalGetPref;
     Member.countGameJournalEntries = originalCount;
     Member.getGameJournalEntries = originalEntries;
     Thread.getThreadsByGameId = originalGetThreads;
@@ -222,7 +215,6 @@ test("journal public view redacts private entry content and count", async () => 
   const originalGetByUserId = Member.getByUserId;
   const originalGetMeta = Member.getNowPlayingEntryMeta;
   const originalGetCompletions = Member.getCompletionsForGame;
-  const originalGetPref = Member.getGameJournalPreference;
   const originalCount = Member.countGameJournalEntries;
   const originalEntries = Member.getGameJournalEntries;
   const originalGetThreads = Thread.getThreadsByGameId;
@@ -234,11 +226,6 @@ test("journal public view redacts private entry content and count", async () => 
     Member.getByUserId = (async () => ({ globalName: "merph518", username: "merph518" })) as any;
     Member.getNowPlayingEntryMeta = (async () => ({ addedAt: new Date("2026-05-07T00:00:00.000Z") })) as any;
     Member.getCompletionsForGame = (async () => []) as any;
-    Member.getGameJournalPreference = (async () => ({
-      userId: "123",
-      gameId: 1,
-      isEnabled: true,
-    })) as any;
     Member.countGameJournalEntries =
       (async (_userId: string, _gameId: number, viewerUserId?: string | null) => {
       countViewerArg = viewerUserId;
@@ -277,7 +264,6 @@ test("journal public view redacts private entry content and count", async () => 
     Member.getByUserId = originalGetByUserId;
     Member.getNowPlayingEntryMeta = originalGetMeta;
     Member.getCompletionsForGame = originalGetCompletions;
-    Member.getGameJournalPreference = originalGetPref;
     Member.countGameJournalEntries = originalCount;
     Member.getGameJournalEntries = originalEntries;
     Thread.getThreadsByGameId = originalGetThreads;
@@ -390,7 +376,6 @@ test("journal delete confirm removes entry on yes and skips removal on no", asyn
   const originalGetByUserId = Member.getByUserId;
   const originalGetMeta = Member.getNowPlayingEntryMeta;
   const originalGetCompletions = Member.getCompletionsForGame;
-  const originalGetPref = Member.getGameJournalPreference;
   const originalCount = Member.countGameJournalEntries;
   const originalEntries = Member.getGameJournalEntries;
 
@@ -405,11 +390,6 @@ test("journal delete confirm removes entry on yes and skips removal on no", asyn
     Member.getByUserId = (async () => ({ globalName: "merph518", username: "merph518" })) as any;
     Member.getNowPlayingEntryMeta = (async () => null) as any;
     Member.getCompletionsForGame = (async () => []) as any;
-    Member.getGameJournalPreference = (async () => ({
-      userId: "123",
-      gameId: 1,
-      isEnabled: true,
-    })) as any;
     Member.countGameJournalEntries = (async () => 1) as any;
     Member.getGameJournalEntries = (async () => ([{
       entryId: 10,
@@ -445,7 +425,6 @@ test("journal delete confirm removes entry on yes and skips removal on no", asyn
     Member.getByUserId = originalGetByUserId;
     Member.getNowPlayingEntryMeta = originalGetMeta;
     Member.getCompletionsForGame = originalGetCompletions;
-    Member.getGameJournalPreference = originalGetPref;
     Member.countGameJournalEntries = originalCount;
     Member.getGameJournalEntries = originalEntries;
   }

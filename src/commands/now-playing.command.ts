@@ -2019,7 +2019,6 @@ export class NowPlayingCommand {
       title: title || null,
       body,
     });
-    await Member.upsertGameJournalPreference(ownerId, gameId, true);
     const page = Number(pageRaw);
     const row = await this.buildManageJournalButtonRow(ownerId, gameId, page);
     if (!hasExistingTracked && interaction.guildId) {

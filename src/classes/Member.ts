@@ -134,12 +134,6 @@ export interface IGameJournalEntry {
   updatedAt: Date;
 }
 
-export interface IGameJournalPreference {
-  userId: string;
-  gameId: number;
-  isEnabled: boolean;
-}
-
 export interface IGameJournalListEntry {
   gameId: number;
   title: string;
@@ -611,7 +605,6 @@ export default class Member {
           MemberSql.insertNowPlaying,
           { userId, gameId, platformId, note: noteValue, noteUpdatedAt, sortOrder: nextSort },
         );
-        await dbMutateConn(conn, MemberSql.mergeJournalPrefs, { userId, gameId });
       });
     } catch (err: any) {
       const msg = err?.message ?? String(err);
@@ -620,43 +613,6 @@ export default class Member {
       }
       throw err;
     }
-  }
-
-  static async getGameJournalPreference(
-    userId: string,
-    gameId: number,
-  ): Promise<IGameJournalPreference | null> {
-    const rows = await dbQuery<{
-      USER_ID: string;
-      GAMEDB_GAME_ID: number;
-      IS_ENABLED: number;
-    }, IGameJournalPreference>(
-      MemberSql.getGameJournalPreference,
-      { userId, gameId },
-      (row) => ({
-        userId: row.USER_ID,
-        gameId: Number(row.GAMEDB_GAME_ID),
-        isEnabled: Number(row.IS_ENABLED) === 1,
-      }),
-    );
-    const row = rows[0];
-    if (!row) return null;
-    return row;
-  }
-
-  static async upsertGameJournalPreference(
-    userId: string,
-    gameId: number,
-    isEnabled: boolean,
-  ): Promise<void> {
-    await dbMutate(
-      MemberSql.upsertGameJournalPreference,
-      {
-        userId,
-        gameId,
-        isEnabled: isEnabled ? 1 : 0,
-      },
-    );
   }
 
   static async getJournalStatusForGames(

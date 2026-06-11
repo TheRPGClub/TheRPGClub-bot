@@ -313,56 +313,6 @@ export const MemberSql = {
            VALUES (:userId, :gameId, :platformId, :note, :noteUpdatedAt, :sortOrder)`,
   } satisfies ISqlEntry,
 
-  mergeJournalPrefs: {
-    oracle: `MERGE INTO USER_GAME_JOURNAL_PREFS p
-           USING (SELECT :userId AS USER_ID, :gameId AS GAMEDB_GAME_ID FROM dual) src
-              ON (p.USER_ID = src.USER_ID AND p.GAMEDB_GAME_ID = src.GAMEDB_GAME_ID)
-           WHEN MATCHED THEN
-             UPDATE SET IS_ENABLED = 1, UPDATED_AT = SYSTIMESTAMP
-           WHEN NOT MATCHED THEN
-             INSERT (USER_ID, GAMEDB_GAME_ID, IS_ENABLED, DEFAULT_IS_PUBLIC)
-             VALUES (:userId, :gameId, 1, 0)`,
-    postgres: `INSERT INTO user_game_journal_prefs (user_id, gamedb_game_id, is_enabled, default_is_public)
-           VALUES (:userId, :gameId, true, false)
-           ON CONFLICT (user_id, gamedb_game_id) DO UPDATE SET
-             is_enabled = true,
-             updated_at = NOW()`,
-  } satisfies ISqlEntry,
-
-  getGameJournalPreference: {
-    oracle: `SELECT USER_ID,
-              GAMEDB_GAME_ID,
-              IS_ENABLED
-         FROM USER_GAME_JOURNAL_PREFS
-        WHERE USER_ID = :userId
-          AND GAMEDB_GAME_ID = :gameId`,
-    postgres: `SELECT user_id,
-              gamedb_game_id,
-              is_enabled
-         FROM user_game_journal_prefs
-        WHERE user_id = :userId
-          AND gamedb_game_id = :gameId`,
-  } satisfies ISqlEntry,
-
-  upsertGameJournalPreference: {
-    oracle: `MERGE INTO USER_GAME_JOURNAL_PREFS p
-       USING (SELECT :userId AS USER_ID, :gameId AS GAMEDB_GAME_ID FROM dual) src
-          ON (p.USER_ID = src.USER_ID AND p.GAMEDB_GAME_ID = src.GAMEDB_GAME_ID)
-        WHEN MATCHED THEN
-          UPDATE SET IS_ENABLED = :isEnabled,
-                     DEFAULT_IS_PUBLIC = 1,
-                     UPDATED_AT = SYSTIMESTAMP
-        WHEN NOT MATCHED THEN
-          INSERT (USER_ID, GAMEDB_GAME_ID, IS_ENABLED, DEFAULT_IS_PUBLIC)
-          VALUES (:userId, :gameId, :isEnabled, 1)`,
-    postgres: `INSERT INTO user_game_journal_prefs (user_id, gamedb_game_id, is_enabled, default_is_public)
-          VALUES (:userId, :gameId, :isEnabled, true)
-          ON CONFLICT (user_id, gamedb_game_id) DO UPDATE SET
-            is_enabled = EXCLUDED.is_enabled,
-            default_is_public = true,
-            updated_at = NOW()`,
-  } satisfies ISqlEntry,
-
   getJournalStatusForGames: (inlineTable: string) =>
     ({
       oracle: `SELECT gids.GAME_ID,
