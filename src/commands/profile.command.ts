@@ -17,6 +17,7 @@ import {
 import { ContainerBuilder } from "@discordjs/builders";
 import {
   apiGet,
+  apiGetRaw,
   apiPost,
   apiPatch,
   apiDelete,
@@ -563,11 +564,30 @@ export class ProfileCommand {
     }
 
     await withErrorReply(interaction, async () => {
-      const [platforms, socialsResp] = await Promise.all([
-        getSocialPlatforms(),
-        apiGet<{ data: ApiUserSocial[] }>(`/api/v1/users/${target.id}/socials`),
-      ]);
-      const existing = socialsResp?.data ?? [];
+      const platforms = await getSocialPlatforms();
+      if (!platforms.length) {
+        await safeReply(
+          interaction,
+          buildTextReply("Could not load social platforms from the API. Try again later.", true),
+        );
+        return;
+      }
+
+      const socialsRaw = await apiGetRaw<{ data: ApiUserSocial[] }>(
+        `/api/v1/users/${target.id}/socials`,
+      );
+      if (socialsRaw.errorMessage) {
+        await safeReply(
+          interaction,
+          buildTextReply(
+            `Could not fetch existing socials (HTTP ${socialsRaw.status}): ${socialsRaw.errorMessage}`,
+            true,
+          ),
+        );
+        return;
+      }
+      const existing =
+        (socialsRaw.rawData as { data: ApiUserSocial[] } | null)?.data ?? [];
 
       type FieldSpec = {
         key: keyof typeof SOCIAL_MATCHERS;
@@ -585,10 +605,14 @@ export class ProfileCommand {
       ];
 
       const changedFields: string[] = [];
+      const skippedFields: string[] = [];
       for (const field of fields) {
         if (field.value === undefined) continue;
         const platformId = findPlatformId(platforms, field.key);
-        if (!platformId) continue;
+        if (!platformId) {
+          skippedFields.push(field.label);
+          continue;
+        }
         if (field.value) {
           await upsertUserSocial(target.id, existing, platformId, field.value, field.useUrl);
         } else {
@@ -597,10 +621,20 @@ export class ProfileCommand {
         changedFields.push(field.label);
       }
 
+      const parts: string[] = [];
+      if (changedFields.length) {
+        parts.push(`Updated: ${changedFields.join(", ")}`);
+      }
+      if (skippedFields.length) {
+        parts.push(`Skipped (platform not found): ${skippedFields.join(", ")}`);
+      }
+
       await safeReply(
         interaction,
         buildTextReply(
-          `Updated profile for ${userMention(target.id)} (${changedFields.join(", ")}).`,
+          parts.length
+            ? `Profile updated for ${userMention(target.id)} -- ${parts.join("; ")}.`
+            : `No fields were updated for ${userMention(target.id)}.`,
           true,
         ),
       );
