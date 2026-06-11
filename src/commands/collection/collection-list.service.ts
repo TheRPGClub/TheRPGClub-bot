@@ -30,8 +30,7 @@ import {
   COLLECTION_LIST_FILTER_PANEL_PREFIX,
   COLLECTION_LIST_FILTER_MODAL_PREFIX,
 } from "../../config/customIdPrefixes.js";
-
-const COLLECTION_LIST_PAGE_SIZE = 20;
+import { COLLECTION_LIST_PAGE_SIZE } from "../../config/pagination.js";
 export const COLLECTION_FILTER_TITLE_INPUT_ID = "collection-filter-title";
 export const COLLECTION_FILTER_PLATFORM_INPUT_ID = "collection-filter-platform";
 
