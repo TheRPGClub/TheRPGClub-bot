@@ -1,6 +1,6 @@
 import type { CommandInteraction } from "discord.js";
 import { ButtonStyle } from "discord.js";
-import { extractErrorMessage, safeReply } from "../../functions/InteractionUtils.js";
+import { withErrorReply, safeReply } from "../../functions/InteractionUtils.js";
 import { buildTextReply } from "../../functions/ComponentsV2Utils.js";
 import NrGotm, {
   type INrGotmEntry,
@@ -21,17 +21,10 @@ import {
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
 
 export async function handleAddNrGotm(interaction: CommandInteraction): Promise<void> {
-  let allEntries: INrGotmEntry[];
-  try {
-    allEntries = NrGotm.all();
-  } catch (err: any) {
-    const msg = extractErrorMessage(err);
-    await safeReply(
-      interaction,
-      buildTextReply(`Error loading existing NR-GOTM data: ${msg}`, false),
-    );
-    return;
-  }
+  const allEntries = await withErrorReply(
+    interaction, async () => NrGotm.all(), "Error loading existing NR-GOTM data", false,
+  );
+  if (allEntries === undefined) return;
 
   const nextRound =
     allEntries.length > 0 ? Math.max(...allEntries.map((e) => e.round)) + 1 : 1;
@@ -112,7 +105,7 @@ export async function handleAddNrGotm(interaction: CommandInteraction): Promise<
     });
   }
 
-  try {
+  await withErrorReply(interaction, async () => {
     const insertedIds = await insertNrGotmRoundInDatabase(nextRound, monthYear, games);
     const gamesWithIds = games.map((g, idx) => ({ ...g, id: insertedIds[idx] ?? null }));
     const newEntry = NrGotm.addRound(nextRound, monthYear, gamesWithIds);
@@ -128,13 +121,7 @@ export async function handleAddNrGotm(interaction: CommandInteraction): Promise<
       components: [...createReply.components, embedAssets.container],
       files: embedAssets.files?.length ? embedAssets.files : undefined,
     });
-  } catch (err: any) {
-    const msg = extractErrorMessage(err);
-    await safeReply(
-      interaction,
-      buildTextReply(`Failed to create NR-GOTM round ${nextRound}: ${msg}`, false),
-    );
-  }
+  }, `Failed to create NR-GOTM round ${nextRound}`, false);
 }
 
 export async function handleEditNrGotm(
@@ -147,17 +134,10 @@ export async function handleEditNrGotm(
     return;
   }
 
-  let entries: INrGotmEntry[];
-  try {
-    entries = NrGotm.getByRound(roundNumber);
-  } catch (err: any) {
-    const msg = extractErrorMessage(err);
-    await safeReply(
-      interaction,
-      buildTextReply(`Error loading NR-GOTM data: ${msg}`, false),
-    );
-    return;
-  }
+  const entries = await withErrorReply(
+    interaction, async () => NrGotm.getByRound(roundNumber), "Error loading NR-GOTM data", false,
+  );
+  if (entries === undefined) return;
 
   if (!entries.length) {
     await safeReply(
@@ -272,7 +252,7 @@ export async function handleEditNrGotm(
     newValue = parsed;
   }
 
-  try {
+  await withErrorReply(interaction, async () => {
     await updateNrGotmGameFieldInDatabase({
       rowId: entry.gameOfTheMonth?.[gameIndex]?.id ?? null,
       round: roundNumber,
@@ -296,17 +276,13 @@ export async function handleEditNrGotm(
       interaction.client as any,
     );
 
-    const updatedReply = buildTextReply(`NR-GOTM round ${roundNumber} updated successfully.`, false);
+    const updatedReply = buildTextReply(
+      `NR-GOTM round ${roundNumber} updated successfully.`, false,
+    );
     await safeReply(interaction, {
       ...updatedReply,
       components: [...updatedReply.components, updatedAssets.container],
       files: updatedAssets.files?.length ? updatedAssets.files : undefined,
     });
-  } catch (err: any) {
-    const msg = extractErrorMessage(err);
-    await safeReply(
-      interaction,
-      buildTextReply(`Failed to update NR-GOTM round ${roundNumber}: ${msg}`, false),
-    );
-  }
+  }, `Failed to update NR-GOTM round ${roundNumber}`, false);
 }

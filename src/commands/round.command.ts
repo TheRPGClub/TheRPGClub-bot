@@ -2,7 +2,7 @@ import { type CommandInteraction, ApplicationCommandOptionType } from "discord.j
 import { Discord, Slash, SlashOption } from "discordx";
 import {
   deferWithPrivateFlag,
-  extractErrorMessage,
+  withErrorReply,
   safeReply,
 } from "../functions/InteractionUtils.js";
 import { buildComponentsV2Flags, buildTextReply } from "../functions/ComponentsV2Utils.js";
@@ -33,7 +33,7 @@ export class CurrentRoundCommand {
     const ephemeral = privateFlag ?? false;
     await deferWithPrivateFlag(interaction, privateFlag);
 
-    try {
+    await withErrorReply(interaction, async () => {
       const current = await BotVotingInfo.getCurrentRound();
       if (!current) {
         await safeReply(interaction, buildTextReply("No voting round information is available.", true));
@@ -94,12 +94,6 @@ export class CurrentRoundCommand {
           ...(i > 0 ? { __forceFollowUp: true } : {}),
         });
       }
-    } catch (err: any) {
-      const msg = extractErrorMessage(err);
-      await safeReply(interaction, buildTextReply(
-        `Error fetching current round information: ${msg}`,
-        true,
-      ));
-    }
+    }, "Error fetching current round information");
   }
 }

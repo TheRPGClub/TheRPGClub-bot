@@ -18,7 +18,7 @@ import {
   SlashOption,
 } from "discordx";
 import {
-  extractErrorMessage,
+  withErrorReply,
   safeDeferReply,
   safeReply,
   safeUpdate,
@@ -81,13 +81,10 @@ export class Admin {
       return;
     }
 
-    try {
+    await withErrorReply(interaction, async () => {
       await bot.initApplicationCommands();
       await safeReply(interaction, buildTextReply("✅ Commands synchronized with Discord.", true));
-    } catch (err: any) {
-      const msg = extractErrorMessage(err);
-      await safeReply(interaction, buildTextReply(`Failed to sync commands: ${msg}`, true));
-    }
+    }, "Failed to sync commands");
   }
 
   @Slash({
@@ -126,7 +123,7 @@ export class Admin {
       return;
     }
 
-    try {
+    await withErrorReply(interaction, async () => {
       const current = await BotVotingInfo.getCurrentRound();
       if (!current) {
         await safeReply(
@@ -146,10 +143,7 @@ export class Admin {
         interaction,
         buildTextReply(`Next vote date updated to <t:${voteUnix}:D> (America/New_York).`, false),
       );
-    } catch (err: any) {
-      const msg = extractErrorMessage(err);
-      await safeReply(interaction, buildTextReply(`Error updating next vote date: ${msg}`, true));
-    }
+    }, "Error updating next vote date");
   }
 
   @Slash({

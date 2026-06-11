@@ -2,7 +2,7 @@ import type { Channel, CommandInteraction } from "discord.js";
 import { ApplicationCommandOptionType, channelMention, MessageFlags } from "discord.js";
 import { Discord, Slash, SlashChoice, SlashGroup, SlashOption } from "discordx";
 import {
-  extractErrorMessage,
+  withErrorReply,
   safeDeferReply,
   safeReply,
   sanitizeUserInput,
@@ -141,7 +141,7 @@ export class PublicReminderCommand {
       return;
     }
 
-    try {
+    await withErrorReply(interaction, async () => {
       const reminder = await createReminder(
         channel.id,
         message,
@@ -156,10 +156,7 @@ export class PublicReminderCommand {
         `Created reminder #${reminder.reminderId} for ${channelMention(channel.id)} at <t:${timestamp}:F>.` +
         `${recurEvery && recurUnit ? ` (repeats every ${recurEvery} ${recurUnit})` : ""}`;
       await safeReply(interaction, buildTextReply(createdMsg, true));
-    } catch (err: any) {
-      const msg = extractErrorMessage(err);
-      await safeReply(interaction, buildTextReply(`Failed to create reminder: ${msg}`, true));
-    }
+    }, "Failed to create reminder");
   }
 
   @Slash({ description: "List upcoming public reminders", name: "list" })
@@ -169,7 +166,7 @@ export class PublicReminderCommand {
     const ok = await isAdmin(interaction);
     if (!ok) return;
 
-    try {
+    await withErrorReply(interaction, async () => {
       const reminders = await listUpcomingReminders(20);
       if (!reminders.length) {
         await safeReply(
@@ -187,10 +184,7 @@ export class PublicReminderCommand {
       });
 
       await safeReply(interaction, buildTextReply(lines.join("\n"), true));
-    } catch (err: any) {
-      const msg = extractErrorMessage(err);
-      await safeReply(interaction, buildTextReply(`Failed to list reminders: ${msg}`, true));
-    }
+    }, "Failed to list reminders");
   }
 
   @Slash({ description: "Delete a public reminder", name: "delete" })
@@ -209,15 +203,12 @@ export class PublicReminderCommand {
     const ok = await isAdmin(interaction);
     if (!ok) return;
 
-    try {
+    await withErrorReply(interaction, async () => {
       const removed = await deleteReminder(reminderId);
       const deleteMsg = removed
         ? `Deleted reminder #${reminderId}.`
         : `Reminder #${reminderId} not found.`;
       await safeReply(interaction, buildTextReply(deleteMsg, true));
-    } catch (err: any) {
-      const msg = extractErrorMessage(err);
-      await safeReply(interaction, buildTextReply(`Failed to delete reminder: ${msg}`, true));
-    }
+    }, "Failed to delete reminder");
   }
 }
