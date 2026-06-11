@@ -267,30 +267,6 @@ async function sendToDiscord(level: ConsoleLevel, message: string): Promise<void
       return;
     }
 
-    // Filter out noisy Discord client acknowledgement errors
-    if (
-      level === "error" &&
-      message.includes("Discord client error:") &&
-      (message.includes("DiscordAPIError[40060]") || message.includes("DiscordAPIError[10062]"))
-    ) {
-      return;
-    }
-
-    // Suppress PostgreSQL idle-connection drops until PG is actively used
-    if (level === "error" && message.includes("[PostgreSQL] Unexpected client error:")) {
-      return;
-    }
-
-    // Suppress routine IGDB scan progress logs; only surface errors
-    if (level !== "error" && message.includes("[IGDB Scan]")) {
-      return;
-    }
-
-    // Suppress individual slash command invocation logs
-    if (level === "log" && message.includes("[SlashCommand]")) {
-      return;
-    }
-
     bufferLog(level, message);
     return;
   } catch {
