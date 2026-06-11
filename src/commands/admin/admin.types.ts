@@ -1,4 +1,7 @@
 import { ButtonStyle } from "discord.js";
+import { GOTM_AUDIT_RESULT_LIMIT } from "../../config/pagination.js";
+
+export { GOTM_AUDIT_RESULT_LIMIT };
 
 export type AdminHelpTopicId =
   | "add-gotm"
@@ -31,8 +34,6 @@ export const GOTM_AUDIT_MANUAL_PREFIX = "gotm-audit-manual";
 export const GOTM_AUDIT_MANUAL_INPUT_ID = "gotm-audit-manual-gamedb-id";
 export const GOTM_AUDIT_QUERY_PREFIX = "gotm-audit-query";
 export const GOTM_AUDIT_QUERY_INPUT_ID = "gotm-audit-query-text";
-export const GOTM_AUDIT_RESULT_LIMIT = 25;
-
 export type GotmAuditParsedRow = {
   rowIndex: number;
   kind: "gotm" | "nr-gotm";

@@ -64,10 +64,10 @@ import {
   buildCsvPromptComponents,
   buildCsvPromptContainer,
   buildCsvPromptContent,
-  GAMEDB_CSV_RESULT_LIMIT,
   scoreCsvImportGames,
   shouldAutoAcceptFirstCsvMatch,
 } from "./gamedb-csv-import.service.js";
+import { GAMEDB_CSV_RESULT_LIMIT } from "../../config/pagination.js";
 import { processReleaseDates } from "./gamedb-add.command.js";
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
 import { DISCORD_AUTOCOMPLETE_DESC_MAX } from "../../config/textLimits.js";

@@ -30,8 +30,7 @@ import {
   DISCORD_SELECT_LABEL_MAX,
 } from "../../config/textLimits.js";
 import { logWarn } from "../../utilities/LogUtils.js";
-
-export const GAMEDB_CSV_RESULT_LIMIT = 15;
+import { GAMEDB_CSV_RESULT_LIMIT } from "../../config/pagination.js";
 
 const GAMEDB_CSV_ACTION_PREFIX = "gamedb-csv-action";
 const GAMEDB_CSV_SELECT_PREFIX = "gamedb-csv-select";
