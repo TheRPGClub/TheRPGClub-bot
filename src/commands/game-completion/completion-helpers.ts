@@ -9,6 +9,7 @@ import type {
 import Member from "../../classes/Member.js";
 import { promptRemoveFromNowPlaying } from "../../functions/CompletionHelpers.js";
 import { parseCustomIdSegments } from "../../utilities/CustomIdUtils.js";
+import { COMPLETIONATOR_CHOOSE_PREFIX } from "../../config/customIdPrefixes.js";
 
 function shouldPromptNowPlayingRemoval(
   addedAt: Date | null,
@@ -69,7 +70,7 @@ export function buildCompletionatorChooseId(params: {
   itemId: number;
   gameId: number;
 }): string {
-  return `comp-import-choose-v1:${params.ownerId}:${params.importId}:${params.itemId}:${params.gameId}`;
+  return `${COMPLETIONATOR_CHOOSE_PREFIX}:${params.ownerId}:${params.importId}:${params.itemId}:${params.gameId}`;
 }
 
 export function parseCompletionatorChooseId(customId: string): {
@@ -78,7 +79,7 @@ export function parseCompletionatorChooseId(customId: string): {
   itemId: number;
   gameId: number;
 } | null {
-  if (!customId.startsWith("comp-import-choose-v1:")) return null;
+  if (!customId.startsWith(`${COMPLETIONATOR_CHOOSE_PREFIX}:`)) return null;
   const segs = parseCustomIdSegments(customId, 4);
   if (!segs) return null;
   const [ownerId, importIdRaw, itemIdRaw, gameIdRaw] = segs;
