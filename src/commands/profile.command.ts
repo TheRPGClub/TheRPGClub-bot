@@ -24,6 +24,7 @@ import {
   deferWithPrivateFlag,
   ephemeralFlag,
   extractErrorMessage,
+  withErrorReply,
   safeDeferReply,
   safeReply,
   sanitizeUserInput,
@@ -769,7 +770,7 @@ export class ProfileCommand {
       return;
     }
 
-    try {
+    await withErrorReply(interaction, async () => {
       const existing = (await Member.getByUserId(target.id)) ?? buildBaseMemberRecord(target);
 
       const updated: IMemberRecord = {
@@ -793,11 +794,14 @@ export class ProfileCommand {
       if (nsw !== undefined) changedFields.push("Switch");
       if (steam !== undefined) changedFields.push("Steam");
 
-      await safeReply(interaction, buildTextReply(`Updated profile for ${userMention(target.id)} (${changedFields.join(", ")}).`, true));
-    } catch (err: any) {
-      const msg = extractErrorMessage(err);
-      await safeReply(interaction, buildTextReply(`Error updating profile: ${msg}`, true));
-    }
+      await safeReply(
+        interaction,
+        buildTextReply(
+          `Updated profile for ${userMention(target.id)} (${changedFields.join(", ")}).`,
+          true,
+        ),
+      );
+    }, "Error updating profile");
   }
 
 }

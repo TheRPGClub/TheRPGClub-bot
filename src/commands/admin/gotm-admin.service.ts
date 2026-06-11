@@ -1,6 +1,6 @@
 import type { CommandInteraction } from "discord.js";
 import { ButtonStyle } from "discord.js";
-import { extractErrorMessage, safeReply } from "../../functions/InteractionUtils.js";
+import { withErrorReply, safeReply } from "../../functions/InteractionUtils.js";
 import { buildTextReply } from "../../functions/ComponentsV2Utils.js";
 import Gotm, {
   type IGotmEntry,
@@ -21,17 +21,10 @@ import {
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
 
 export async function handleAddGotm(interaction: CommandInteraction): Promise<void> {
-  let allEntries: IGotmEntry[];
-  try {
-    allEntries = Gotm.all();
-  } catch (err: any) {
-    const msg = extractErrorMessage(err);
-    await safeReply(
-      interaction,
-      buildTextReply(`Error loading existing GOTM data: ${msg}`, false),
-    );
-    return;
-  }
+  const allEntries = await withErrorReply(
+    interaction, async () => Gotm.all(), "Error loading existing GOTM data", false,
+  );
+  if (allEntries === undefined) return;
 
   const nextRound =
     allEntries.length > 0 ? Math.max(...allEntries.map((e) => e.round)) + 1 : 1;
@@ -109,7 +102,7 @@ export async function handleAddGotm(interaction: CommandInteraction): Promise<vo
     });
   }
 
-  try {
+  await withErrorReply(interaction, async () => {
     await insertGotmRoundInDatabase(nextRound, monthYear, games);
     const newEntry = Gotm.addRound(nextRound, monthYear, games);
     const embedAssets = await buildGotmEntryEmbed(
@@ -124,13 +117,7 @@ export async function handleAddGotm(interaction: CommandInteraction): Promise<vo
       components: [...createReply.components, embedAssets.container],
       files: embedAssets.files?.length ? embedAssets.files : undefined,
     });
-  } catch (err: any) {
-    const msg = extractErrorMessage(err);
-    await safeReply(
-      interaction,
-      buildTextReply(`Failed to create GOTM round ${nextRound}: ${msg}`, false),
-    );
-  }
+  }, `Failed to create GOTM round ${nextRound}`, false);
 }
 
 export async function handleEditGotm(
@@ -143,17 +130,10 @@ export async function handleEditGotm(
     return;
   }
 
-  let entries: IGotmEntry[];
-  try {
-    entries = Gotm.getByRound(roundNumber);
-  } catch (err: any) {
-    const msg = extractErrorMessage(err);
-    await safeReply(
-      interaction,
-      buildTextReply(`Error loading GOTM data: ${msg}`, false),
-    );
-    return;
-  }
+  const entries = await withErrorReply(
+    interaction, async () => Gotm.getByRound(roundNumber), "Error loading GOTM data", false,
+  );
+  if (entries === undefined) return;
 
   if (!entries.length) {
     await safeReply(
@@ -265,7 +245,7 @@ export async function handleEditGotm(
     newValue = parsed;
   }
 
-  try {
+  await withErrorReply(interaction, async () => {
     await updateGotmGameFieldInDatabase(roundNumber, gameIndex, field!, newValue);
 
     let updatedEntry: IGotmEntry | null = null;
@@ -288,11 +268,5 @@ export async function handleEditGotm(
       components: [...updatedReply.components, updatedAssets.container],
       files: updatedAssets.files?.length ? updatedAssets.files : undefined,
     });
-  } catch (err: any) {
-    const msg = extractErrorMessage(err);
-    await safeReply(
-      interaction,
-      buildTextReply(`Failed to update GOTM round ${roundNumber}: ${msg}`, false),
-    );
-  }
+  }, `Failed to update GOTM round ${roundNumber}`, false);
 }

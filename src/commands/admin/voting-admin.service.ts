@@ -1,6 +1,6 @@
 import { DateTime } from "luxon";
 import type { CommandInteraction } from "discord.js";
-import { extractErrorMessage, safeReply } from "../../functions/InteractionUtils.js";
+import { withErrorReply, safeReply } from "../../functions/InteractionUtils.js";
 import { buildTextReply } from "../../functions/ComponentsV2Utils.js";
 import { listNominationsForRound } from "../../classes/Nomination.js";
 import { getUpcomingNominationWindow } from "../../functions/NominationWindow.js";
@@ -11,7 +11,7 @@ import { promptUserForInput } from "./admin-prompt.utils.js";
 import { VOTING_TITLE_MAX_LEN } from "./admin.types.js";
 
 export async function handleVotingSetup(interaction: CommandInteraction): Promise<void> {
-  try {
+  await withErrorReply(interaction, async () => {
     const window = await getUpcomingNominationWindow();
     const roundNumber = window.targetRound;
     const nextMonth = (() => {
@@ -97,10 +97,7 @@ export async function handleVotingSetup(interaction: CommandInteraction): Promis
     } else {
       await safeReply(interaction, buildTextReply(messageContent, true));
     }
-  } catch (err: any) {
-    const msg = extractErrorMessage(err);
-    await safeReply(interaction, buildTextReply(`Could not generate vote commands: ${msg}`, true));
-  }
+  }, "Could not generate vote commands");
 }
 
 async function normalizeVotingTitles(

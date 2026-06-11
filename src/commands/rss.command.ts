@@ -7,7 +7,7 @@ import {
 } from "discord.js";
 import { Discord, Slash, SlashGroup, SlashOption } from "discordx";
 import {
-  extractErrorMessage,
+  withErrorReply,
   safeDeferReply,
   safeReply,
   sanitizeUserInput,
@@ -84,7 +84,7 @@ export class RssCommand {
     const ok = await isAdmin(interaction);
     if (!ok) return;
 
-    try {
+    await withErrorReply(interaction, async () => {
       url = sanitizeUserInput(url, { preserveNewlines: false });
       const sanitizedName = feedName
         ? sanitizeUserInput(feedName, { preserveNewlines: false })
@@ -106,10 +106,7 @@ export class RssCommand {
       const addedMsg =
         `Added feed #${id} (${sanitizedName ?? "unnamed"}) -> ${channelMention(channelId)} (url=${url}).`;
       await safeReply(interaction, buildTextReply(addedMsg, true));
-    } catch (err: any) {
-      const msg = extractErrorMessage(err);
-      await safeReply(interaction, buildTextReply(`Failed to add feed: ${msg}`, true));
-    }
+    }, "Failed to add feed");
   }
 
   @Slash({ description: "Remove an RSS feed relay", name: "remove" })
@@ -128,14 +125,11 @@ export class RssCommand {
     const ok = await isAdmin(interaction);
     if (!ok) return;
 
-    try {
+    await withErrorReply(interaction, async () => {
       const removed = await removeFeed(feedId);
       const removeMsg = removed ? `Removed feed #${feedId}.` : `Feed #${feedId} not found.`;
       await safeReply(interaction, buildTextReply(removeMsg, true));
-    } catch (err: any) {
-      const msg = extractErrorMessage(err);
-      await safeReply(interaction, buildTextReply(`Failed to remove feed: ${msg}`, true));
-    }
+    }, "Failed to remove feed");
   }
 
   @Slash({ description: "Edit an RSS feed relay", name: "edit" })
@@ -206,7 +200,7 @@ export class RssCommand {
       return;
     }
 
-    try {
+    await withErrorReply(interaction, async () => {
       const sanitizedUrl = url ? sanitizeUserInput(url, { preserveNewlines: false }) : undefined;
       const sanitizedName = feedName
         ? sanitizeUserInput(feedName, { preserveNewlines: false })
@@ -230,10 +224,7 @@ export class RssCommand {
         ? `Updated feed #${feedId}.`
         : `Feed #${feedId} not found or no changes applied.`;
       await safeReply(interaction, buildTextReply(editMsg, true));
-    } catch (err: any) {
-      const msg = extractErrorMessage(err);
-      await safeReply(interaction, buildTextReply(`Failed to edit feed: ${msg}`, true));
-    }
+    }, "Failed to edit feed");
   }
 
   @Slash({ description: "List RSS feed relays", name: "list" })
@@ -243,7 +234,7 @@ export class RssCommand {
     const ok = await isAdmin(interaction);
     if (!ok) return;
 
-    try {
+    await withErrorReply(interaction, async () => {
       const feeds = await listFeeds();
       if (!feeds.length) {
         await safeReply(interaction, buildTextReply("No feeds configured.", true));
@@ -258,9 +249,6 @@ export class RssCommand {
       );
 
       await safeReply(interaction, buildTextReply(lines.join("\n"), true));
-    } catch (err: any) {
-      const msg = extractErrorMessage(err);
-      await safeReply(interaction, buildTextReply(`Failed to list feeds: ${msg}`, true));
-    }
+    }, "Failed to list feeds");
   }
 }

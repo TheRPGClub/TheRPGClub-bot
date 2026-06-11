@@ -520,6 +520,20 @@ export function extractErrorMessage(err: unknown): string {
   return e?.message ?? String(e);
 }
 
+export async function withErrorReply<T>(
+  interaction: AnyRepliable,
+  fn: () => Promise<T>,
+  errorPrefix = "Error",
+  ephemeral = true,
+): Promise<T | void> {
+  try {
+    return await fn();
+  } catch (err: unknown) {
+    const msg = extractErrorMessage(err);
+    await safeReply(interaction, buildTextReply(`${errorPrefix}: ${msg}`, ephemeral));
+  }
+}
+
 export const OWNER_ONLY_MESSAGE = "This list isn't for you.";
 export const ACCESS_DENIED_ADMIN = "Access denied. Command requires Administrator role.";
 export const ACCESS_DENIED_MOD = "Access denied. Command requires Moderator role or above.";
