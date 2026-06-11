@@ -147,8 +147,10 @@ async function runNowPlayingThreadWizard(
   const initialPost =
     options?.initialPost ?? buildDefaultNowPlayingThreadBody(memberDisplayName);
   const game = await Game.getGameById(gameId);
-  const files = game?.imageData
-    ? [new AttachmentBuilder(game.imageData, { name: `gamedb_${gameId}.png` })]
+  const imageBuffer =
+    game?.imageData ?? await Game.getGamePrimaryImageBuffer(gameId).catch(() => null);
+  const files = imageBuffer
+    ? [new AttachmentBuilder(imageBuffer, { name: `gamedb_${gameId}.png` })]
     : [];
   const messagePayload: MessageCreateOptions = {
     content: initialPost,
