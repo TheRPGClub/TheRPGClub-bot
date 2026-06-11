@@ -15,11 +15,12 @@ import {
   SlashOption,
 } from "discordx";
 import { ContainerBuilder } from "@discordjs/builders";
-import { apiGet } from "../services/RpgClubApiClient.js";
-import Member, {
-  type IMemberRecord,
-  type IMemberSearchFilters,
-} from "../classes/Member.js";
+import {
+  apiGet,
+  apiPost,
+  apiPatch,
+  apiDelete,
+} from "../services/RpgClubApiClient.js";
 import {
   deferWithPrivateFlag,
   ephemeralFlag,
@@ -36,7 +37,7 @@ import {
   buildTitledContainer,
   safeV2TextContent,
 } from "../functions/ComponentsV2Utils.js";
-import { buildUserHeaderContainer , buildSelectRow } from "../functions/uiComponents.js";
+import { buildUserHeaderContainer, buildSelectRow } from "../functions/uiComponents.js";
 import {
   formatDiscordTimestamp,
   formatPlaytimeHours,
@@ -66,10 +67,77 @@ export type ProfileViewPayload = {
 };
 
 type ApiUserSocial = {
+  id: number;
+  social_platform_id: number;
   handle: string | null;
   url: string | null;
   social_platform: { label: string };
 };
+
+type ApiSocialPlatform = {
+  id: number;
+  label: string;
+};
+
+type ApiUserListItem = {
+  user_id: string;
+  username: string | null;
+  global_name: string | null;
+  is_bot: boolean;
+};
+
+let socialPlatformCache: ApiSocialPlatform[] | null = null;
+
+async function getSocialPlatforms(): Promise<ApiSocialPlatform[]> {
+  if (socialPlatformCache) return socialPlatformCache;
+  const resp = await apiGet<{ data: ApiSocialPlatform[] }>("/api/v1/social_platforms");
+  socialPlatformCache = resp?.data ?? [];
+  return socialPlatformCache;
+}
+
+const SOCIAL_MATCHERS: Record<string, (label: string) => boolean> = {
+  completionator: (l) => l.toLowerCase().includes("completionator"),
+  psn: (l) => l.toLowerCase().includes("psn") || l.toLowerCase().includes("playstation"),
+  xbl: (l) => l.toLowerCase().includes("xbox"),
+  nsw: (l) => l.toLowerCase().includes("nintendo") || l.toLowerCase().includes("switch"),
+  steam: (l) => l.toLowerCase().includes("steam"),
+};
+
+function findPlatformId(
+  platforms: ApiSocialPlatform[],
+  key: keyof typeof SOCIAL_MATCHERS,
+): number | null {
+  const matcher = SOCIAL_MATCHERS[key];
+  return platforms.find((p) => matcher(p.label))?.id ?? null;
+}
+
+async function upsertUserSocial(
+  userId: string,
+  existing: ApiUserSocial[],
+  platformId: number,
+  value: string,
+  useUrl: boolean,
+): Promise<void> {
+  const current = existing.find((s) => s.social_platform_id === platformId);
+  const body = useUrl
+    ? { data: { social_platform_id: platformId, url: value } }
+    : { data: { social_platform_id: platformId, handle: value } };
+  if (current) {
+    await apiPatch(`/api/v1/user_socials/${current.id}`, body);
+  } else {
+    await apiPost(`/api/v1/users/${userId}/socials`, body);
+  }
+}
+
+async function deleteUserSocial(
+  existing: ApiUserSocial[],
+  platformId: number,
+): Promise<void> {
+  const current = existing.find((s) => s.social_platform_id === platformId);
+  if (current) {
+    await apiDelete(`/api/v1/user_socials/${current.id}`);
+  }
+}
 
 type ApiUserMembership = {
   admin: boolean;
@@ -93,18 +161,6 @@ type ApiNickHistoryEntry = {
   old_nick: string | null;
   new_nick: string | null;
 };
-
-function parseDateInput(value: string | undefined): Date | null {
-  if (!value) return null;
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return null;
-  return parsed;
-}
-
-function clampLimit(limit: number | undefined, max: number): number {
-  if (!limit || Number.isNaN(limit)) return Math.min(50, max);
-  return Math.min(Math.max(limit, 1), max);
-}
 
 export function parseCompletionDateInput(value: string | undefined): Date | null {
   if (!value) return null;
@@ -139,31 +195,6 @@ export function parseCompletionDateInput(value: string | undefined): Date | null
     );
   }
   return parsed;
-}
-
-function summarizeFilters(filters: IMemberSearchFilters): string {
-  const parts: string[] = [];
-  if (filters.userId) parts.push(`userId~${filters.userId}`);
-  if (filters.username) parts.push(`username~${filters.username}`);
-  if (filters.globalName) parts.push(`globalName~${filters.globalName}`);
-  if (filters.completionatorUrl) parts.push(`completionator~${filters.completionatorUrl}`);
-  if (filters.steamUrl) parts.push(`steam~${filters.steamUrl}`);
-  if (filters.psnUsername) parts.push(`psn~${filters.psnUsername}`);
-  if (filters.xblUsername) parts.push(`xbl~${filters.xblUsername}`);
-  if (filters.nswFriendCode) parts.push(`switch~${filters.nswFriendCode}`);
-  if (filters.roleAdmin !== undefined) parts.push(`admin=${filters.roleAdmin ? 1 : 0}`);
-  if (filters.roleModerator !== undefined)
-    parts.push(`moderator=${filters.roleModerator ? 1 : 0}`);
-  if (filters.roleRegular !== undefined) parts.push(`regular=${filters.roleRegular ? 1 : 0}`);
-  if (filters.roleMember !== undefined) parts.push(`member=${filters.roleMember ? 1 : 0}`);
-  if (filters.roleNewcomer !== undefined) parts.push(`newcomer=${filters.roleNewcomer ? 1 : 0}`);
-  if (filters.isBot !== undefined) parts.push(`bot=${filters.isBot ? 1 : 0}`);
-  if (filters.joinedAfter) parts.push(`joined>=${filters.joinedAfter.toISOString()}`);
-  if (filters.joinedBefore) parts.push(`joined<=${filters.joinedBefore.toISOString()}`);
-  if (filters.lastSeenAfter) parts.push(`seen>=${filters.lastSeenAfter.toISOString()}`);
-  if (filters.lastSeenBefore) parts.push(`seen<=${filters.lastSeenBefore.toISOString()}`);
-  parts.push(`includeDeparted=${filters.includeDeparted ? "yes" : "no"}`);
-  return parts.join(" | ") || "none";
 }
 
 function buildProfileContentContainer(
@@ -207,32 +238,6 @@ ${value}`);
 ${" ".repeat(120)}
 `), 3500),
   );
-}
-
-function buildBaseMemberRecord(user: User): IMemberRecord {
-  return {
-    userId: user.id,
-    isBot: user.bot ? 1 : 0,
-    username: user.username ?? null,
-    globalName: (user as any).globalName ?? null,
-    avatarBlob: null,
-    serverJoinedAt: null,
-    serverLeftAt: null,
-    lastSeenAt: null,
-    roleAdmin: 0,
-    roleModerator: 0,
-    roleRegular: 0,
-    roleMember: 0,
-    roleNewcomer: 0,
-    messageCount: null,
-    completionatorUrl: null,
-    psnUsername: null,
-    xblUsername: null,
-    nswFriendCode: null,
-    steamUrl: null,
-    profileImage: null,
-    profileImageAt: null,
-  };
 }
 
 export async function buildProfileViewPayload(
@@ -407,248 +412,44 @@ export class ProfileCommand {
     })
     privateFlag: boolean | undefined,
     @SlashOption({
-      description: "Filter by user id.",
-      name: "userid",
+      description: "Search by username or display name.",
+      name: "query",
       required: false,
       type: ApplicationCommandOptionType.String,
     })
-    userId: string | undefined,
-    @SlashOption({
-      description: "Filter by username (contains).",
-      name: "username",
-      required: false,
-      type: ApplicationCommandOptionType.String,
-    })
-    username: string | undefined,
-    @SlashOption({
-      description: "Filter by global display name (contains).",
-      name: "globalname",
-      required: false,
-      type: ApplicationCommandOptionType.String,
-    })
-    globalName: string | undefined,
-    @SlashOption({
-      description: "Filter by Game Collection Tracker URL (contains).",
-      name: "completionator",
-      required: false,
-      type: ApplicationCommandOptionType.String,
-    })
-    completionator: string | undefined,
-    @SlashOption({
-      description: "Filter by Steam URL (contains).",
-      name: "steam",
-      required: false,
-      type: ApplicationCommandOptionType.String,
-    })
-    steam: string | undefined,
-    @SlashOption({
-      description: "Filter by PlayStation Network username (contains).",
-      name: "psn",
-      required: false,
-      type: ApplicationCommandOptionType.String,
-    })
-    psn: string | undefined,
-    @SlashOption({
-      description: "Filter by Xbox Live username (contains).",
-      name: "xbl",
-      required: false,
-      type: ApplicationCommandOptionType.String,
-    })
-    xbl: string | undefined,
-    @SlashOption({
-      description: "Filter by Nintendo Switch friend code (contains).",
-      name: "switch",
-      required: false,
-      type: ApplicationCommandOptionType.String,
-    })
-    nsw: string | undefined,
-    @SlashOption({
-      description: "Filter by Admin role flag (1 or 0).",
-      name: "admin",
-      required: false,
-      type: ApplicationCommandOptionType.Boolean,
-    })
-    roleAdmin: boolean | undefined,
-    @SlashOption({
-      description: "Filter by Moderator role flag (1 or 0).",
-      name: "moderator",
-      required: false,
-      type: ApplicationCommandOptionType.Boolean,
-    })
-    roleModerator: boolean | undefined,
-    @SlashOption({
-      description: "Filter by Regular role flag (1 or 0).",
-      name: "regular",
-      required: false,
-      type: ApplicationCommandOptionType.Boolean,
-    })
-    roleRegular: boolean | undefined,
-    @SlashOption({
-      description: "Filter by Member role flag (1 or 0).",
-      name: "member",
-      required: false,
-      type: ApplicationCommandOptionType.Boolean,
-    })
-    roleMember: boolean | undefined,
-    @SlashOption({
-      description: "Filter by Newcomer role flag (1 or 0).",
-      name: "newcomer",
-      required: false,
-      type: ApplicationCommandOptionType.Boolean,
-    })
-    roleNewcomer: boolean | undefined,
-    @SlashOption({
-      description: "Filter by bot flag (1 or 0).",
-      name: "bot",
-      required: false,
-      type: ApplicationCommandOptionType.Boolean,
-    })
-    isBot: boolean | undefined,
-    @SlashOption({
-      description: "Joined server on/after (ISO date/time).",
-      name: "joinedafter",
-      required: false,
-      type: ApplicationCommandOptionType.String,
-    })
-    joinedAfter: string | undefined,
-    @SlashOption({
-      description: "Joined server on/before (ISO date/time).",
-      name: "joinedbefore",
-      required: false,
-      type: ApplicationCommandOptionType.String,
-    })
-    joinedBefore: string | undefined,
-    @SlashOption({
-      description: "Last seen on/after (ISO date/time).",
-      name: "lastseenafter",
-      required: false,
-      type: ApplicationCommandOptionType.String,
-    })
-    lastSeenAfter: string | undefined,
-    @SlashOption({
-      description: "Last seen on/before (ISO date/time).",
-      name: "lastseenbefore",
-      required: false,
-      type: ApplicationCommandOptionType.String,
-    })
-    lastSeenBefore: string | undefined,
-    @SlashOption({
-      description: "Max results to return (1-50).",
-      name: "limit",
-      required: false,
-      type: ApplicationCommandOptionType.Integer,
-    })
-    limit: number | undefined,
-    @SlashOption({
-      description: "Include departed members (SERVER_LEFT_AT not null).",
-      name: "include-departed-members",
-      required: false,
-      type: ApplicationCommandOptionType.Boolean,
-    })
-    includeDeparted: boolean | undefined,
+    query: string | undefined,
     interaction: CommandInteraction,
   ): Promise<void> {
     const ephemeral = privateFlag ?? false;
     await deferWithPrivateFlag(interaction, privateFlag);
 
-    userId = userId ? sanitizeUserInput(userId, { preserveNewlines: false }) : undefined;
-    username = username ? sanitizeUserInput(username, { preserveNewlines: false }) : undefined;
-    globalName = globalName
-      ? sanitizeUserInput(globalName, { preserveNewlines: false })
-      : undefined;
-    completionator = completionator
-      ? sanitizeUserInput(completionator, { preserveNewlines: false })
-      : undefined;
-    steam = steam ? sanitizeUserInput(steam, { preserveNewlines: false }) : undefined;
-    psn = psn ? sanitizeUserInput(psn, { preserveNewlines: false }) : undefined;
-    xbl = xbl ? sanitizeUserInput(xbl, { preserveNewlines: false }) : undefined;
-    nsw = nsw ? sanitizeUserInput(nsw, { preserveNewlines: false }) : undefined;
-    joinedAfter = joinedAfter
-      ? sanitizeUserInput(joinedAfter, { preserveNewlines: false })
-      : undefined;
-    joinedBefore = joinedBefore
-      ? sanitizeUserInput(joinedBefore, { preserveNewlines: false })
-      : undefined;
-    lastSeenAfter = lastSeenAfter
-      ? sanitizeUserInput(lastSeenAfter, { preserveNewlines: false })
-      : undefined;
-    lastSeenBefore = lastSeenBefore
-      ? sanitizeUserInput(lastSeenBefore, { preserveNewlines: false })
-      : undefined;
+    const q = query ? sanitizeUserInput(query, { preserveNewlines: false }) : undefined;
 
-    const joinedAfterDate = parseDateInput(joinedAfter);
-    const joinedBeforeDate = parseDateInput(joinedBefore);
-    const lastSeenAfterDate = parseDateInput(lastSeenAfter);
-    const lastSeenBeforeDate = parseDateInput(lastSeenBefore);
+    const resp = await apiGet<{ data: ApiUserListItem[]; meta: { count: number } }>(
+      "/api/v1/users",
+      { params: { q, limit: 50 } },
+    );
 
-    if (joinedAfter && !joinedAfterDate) {
-      await safeReply(interaction, buildTextReply("Invalid joinedafter date/time. Please use an ISO format.", ephemeral));
-      return;
-    }
-
-    if (joinedBefore && !joinedBeforeDate) {
-      await safeReply(interaction, buildTextReply("Invalid joinedbefore date/time. Please use an ISO format.", ephemeral));
-      return;
-    }
-
-    if (lastSeenAfter && !lastSeenAfterDate) {
-      await safeReply(interaction, buildTextReply("Invalid lastseenafter date/time. Please use an ISO format.", ephemeral));
-      return;
-    }
-
-    if (lastSeenBefore && !lastSeenBeforeDate) {
-      await safeReply(interaction, buildTextReply("Invalid lastseenbefore date/time. Please use an ISO format.", ephemeral));
-      return;
-    }
-
-    const filters: IMemberSearchFilters = {
-      userId,
-      username,
-      globalName,
-      completionatorUrl: completionator,
-      steamUrl: steam,
-      psnUsername: psn,
-      xblUsername: xbl,
-      nswFriendCode: nsw,
-      roleAdmin,
-      roleModerator,
-      roleRegular,
-      roleMember,
-      roleNewcomer,
-      isBot,
-      joinedAfter: joinedAfterDate ?? undefined,
-      joinedBefore: joinedBeforeDate ?? undefined,
-      lastSeenAfter: lastSeenAfterDate ?? undefined,
-      lastSeenBefore: lastSeenBeforeDate ?? undefined,
-      limit: clampLimit(limit, 100),
-      includeDeparted: includeDeparted ?? false,
-    };
-
-    const results = await Member.search(filters);
+    const results = resp?.data ?? [];
     if (!results.length) {
-      await safeReply(interaction, buildTextReply("No members matched those filters.", ephemeral));
+      await safeReply(interaction, buildTextReply("No members matched that search.", ephemeral));
       return;
     }
 
-    const filterSummary = summarizeFilters(filters);
-    const lines = results.map((record, idx) => {
-      const name = record.globalName ?? record.username;
+    const lines = results.map((u, idx) => {
+      const name = u.global_name ?? u.username;
       const label = name ? `(${name})` : "";
-      const botTag = record.isBot ? " [Bot]" : "";
-      return `${idx + 1}. ${userMention(record.userId)} ${label}${botTag}`;
+      const botTag = u.is_bot ? " [Bot]" : "";
+      return `${idx + 1}. ${userMention(u.user_id)} ${label}${botTag}`;
     });
 
-    const description = `Filters: ${filterSummary}\n\n${lines.join("\n")}`;
+    const description = (q ? `Search: ${q}\n\n` : "") + lines.join("\n");
 
-    const selectOptions = results.map((record, idx) => {
-      const label = truncateLabel((record.globalName ?? record.username ?? `Member ${idx + 1}`));
-      const descriptionText = `ID: ${record.userId}${record.isBot ? " | Bot" : ""}`;
-      return {
-        label,
-        value: record.userId,
-        description: truncateLabel(descriptionText),
-      };
-    });
+    const selectOptions = results.map((u, idx) => ({
+      label: truncateLabel(u.global_name ?? u.username ?? `Member ${idx + 1}`),
+      value: u.user_id,
+      description: truncateLabel(`ID: ${u.user_id}${u.is_bot ? " | Bot" : ""}`),
+    }));
 
     const selectChunks = chunk(selectOptions, 25);
     const components = selectChunks.slice(0, 5).map((chunkPart, idx) =>
@@ -664,9 +465,9 @@ export class ProfileCommand {
 
     const notice =
       selectChunks.length > 5
-        ? "Showing the first 125 selectable results (Discord limits). Refine filters to narrow further."
+        ? "Showing the first 125 selectable results (Discord limits). Refine search to narrow further."
         : description.length > 4000
-            ? "Showing truncated results (Discord length limits). Refine filters for more detail."
+            ? "Showing truncated results (Discord length limits). Refine search for more detail."
             : undefined;
     const footer = notice
       ? `Choose a member below to view a profile.\n${notice}`
@@ -762,28 +563,39 @@ export class ProfileCommand {
     }
 
     await withErrorReply(interaction, async () => {
-      const existing = (await Member.getByUserId(target.id)) ?? buildBaseMemberRecord(target);
+      const [platforms, socialsResp] = await Promise.all([
+        getSocialPlatforms(),
+        apiGet<{ data: ApiUserSocial[] }>(`/api/v1/users/${target.id}/socials`),
+      ]);
+      const existing = socialsResp?.data ?? [];
 
-      const updated: IMemberRecord = {
-        ...existing,
-        username: existing.username ?? target.username ?? null,
-        globalName: existing.globalName ?? (target as any).globalName ?? null,
-        completionatorUrl:
-          completionator !== undefined ? completionator || null : existing.completionatorUrl,
-        psnUsername: psn !== undefined ? psn || null : existing.psnUsername,
-        xblUsername: xbl !== undefined ? xbl || null : existing.xblUsername,
-        nswFriendCode: nsw !== undefined ? nsw || null : existing.nswFriendCode,
-        steamUrl: steam !== undefined ? steam || null : existing.steamUrl,
+      type FieldSpec = {
+        key: keyof typeof SOCIAL_MATCHERS;
+        value: string | undefined;
+        useUrl: boolean;
+        label: string;
       };
 
-      await Member.upsert(updated);
+      const fields: FieldSpec[] = [
+        { key: "completionator", value: completionator, useUrl: true, label: "Completionator" },
+        { key: "psn", value: psn, useUrl: false, label: "PSN" },
+        { key: "xbl", value: xbl, useUrl: false, label: "Xbox" },
+        { key: "nsw", value: nsw, useUrl: false, label: "Switch" },
+        { key: "steam", value: steam, useUrl: true, label: "Steam" },
+      ];
 
       const changedFields: string[] = [];
-      if (completionator !== undefined) changedFields.push("Completionator");
-      if (psn !== undefined) changedFields.push("PSN");
-      if (xbl !== undefined) changedFields.push("Xbox");
-      if (nsw !== undefined) changedFields.push("Switch");
-      if (steam !== undefined) changedFields.push("Steam");
+      for (const field of fields) {
+        if (field.value === undefined) continue;
+        const platformId = findPlatformId(platforms, field.key);
+        if (!platformId) continue;
+        if (field.value) {
+          await upsertUserSocial(target.id, existing, platformId, field.value, field.useUrl);
+        } else {
+          await deleteUserSocial(existing, platformId);
+        }
+        changedFields.push(field.label);
+      }
 
       await safeReply(
         interaction,
