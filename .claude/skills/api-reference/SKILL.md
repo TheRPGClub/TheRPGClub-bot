@@ -43,6 +43,24 @@ Deletes: `{ deleted: true }`
 
 PUT endpoints are aliases for PATCH. Prefer PATCH.
 
+## Self-update
+
+When asked to refresh this reference or when the API may have changed:
+
+```bash
+bash .claude/skills/api-reference/refresh.sh
+```
+
+Then commit and push the updated `SKILL.md`:
+
+```bash
+git add .claude/skills/api-reference/SKILL.md
+git commit -m "chore: refresh api-reference skill from latest swagger spec"
+git push
+```
+
+Source spec: `swagger/v1/swagger.yaml` in https://github.com/TheRPGClub/TheRPGClub
+
 ---
 
 ## Endpoints by group
@@ -50,340 +68,414 @@ PUT endpoints are aliases for PATCH. Prefer PATCH.
 ### Auth
 
 ```
-GET    /auth/discord              Start Discord OAuth login
-GET    /auth/discord/callback     Discord OAuth callback
-DELETE /auth/logout               Log out
-GET    /api/v1/session            Current session info
-```
-
-### Health
-
-```
-GET  /api/v1/health             Health check
-```
-
-### Users
-
-```
-GET  /api/v1/users              List users (q, page, per)
-GET  /api/v1/users/{user_id}    Show user profile (preview_limit)
-GET  /api/v1/users/{user_id}/avatar         Stream user avatar
-GET  /api/v1/users/{user_id}/profile-image  Stream user profile image
-GET  /api/v1/users/{user_id}/activity_icons List user activity icons
-GET  /api/v1/users/{user_id}/channel_counts Per-channel message counts
-GET  /api/v1/users/{user_id}/nick_history   Nickname history
-GET  /api/v1/users/{user_id}/now_playing    Now-playing games (page, per, limit, offset)
-```
-
-### Games
-
-```
-GET  /api/v1/games              List games (q, winner, genre_id, engine_id, theme_id,
-                                perspective_id, mode_id, franchise_id, company_id,
-                                page, per, limit, offset)
-GET  /api/v1/games/{id}         Show game
-GET  /api/v1/games/{id}/relations       Game relations
-GET  /api/v1/games/{id}/releases        Game releases
-GET  /api/v1/games/{id}/completions     Completions for this game
-GET  /api/v1/games/{id}/reviews         Reviews for this game
-GET  /api/v1/games/{id}/now_playing     Users currently playing this game
-GET  /api/v1/games/{id}/journal         Journal entries for this game
-GET  /api/v1/games/{id}/threads         Discord threads linked to this game
-GET  /api/v1/games/{id}/release_announcements  Scheduled release announcements
-POST /api/v1/games/{id}/refresh-images  Refresh images from IGDB
+GET     /auth/discord  # Start Discord OAuth login
+GET     /auth/discord/callback  # Discord OAuth callback (code, state)
+DELETE  /auth/logout  # Log out
 ```
 
 ### Backlog
 
 ```
-GET  /api/v1/users/{user_id}/backlog    List user's backlog (page, per, limit, offset)
-POST /api/v1/users/{user_id}/backlog    Add to backlog
-  data: { gamedb_game_id, platform_id, sort_order, notes }
-
-GET    /api/v1/backlog/{id}             Show backlog entry
-PATCH  /api/v1/backlog/{id}            Update backlog entry
-DELETE /api/v1/backlog/{id}            Delete backlog entry
+GET     /api/v1/backlog/{id}  # Show a backlog entry
+PATCH   /api/v1/backlog/{id}  # Update a backlog entry
+PUT     /api/v1/backlog/{id}  # Replace a backlog entry (alias)
+DELETE  /api/v1/backlog/{id}  # Delete a backlog entry
+GET     /api/v1/users/{user_id}/backlog  # List a user's backlog (page, per, limit, offset)
+POST    /api/v1/users/{user_id}/backlog  # Add to backlog
+  data: { UserGameBacklog attributes (`gamedb_game_id`, `platform_id`, `sort_order`, `notes`). }
 ```
 
 ### Collections
 
 ```
-GET  /api/v1/users/{user_id}/collections   List user's collections (page, per, limit, offset)
-POST /api/v1/users/{user_id}/collections   Create collection entry
+GET     /api/v1/collections/{id}  # Show a collection entry
+PATCH   /api/v1/collections/{id}  # Update a collection entry
+PUT     /api/v1/collections/{id}  # Replace a collection entry (alias)
+DELETE  /api/v1/collections/{id}  # Delete a collection entry
+GET     /api/v1/users/{user_id}/collections  # List a user's collections (page, per, limit, offset)
+POST    /api/v1/users/{user_id}/collections  # Create a collection entry
+  data: { UserGameCollection attributes (e.g. `gamedb_game_id`, `platform_id`, `notes`). }
+```
 
-GET    /api/v1/collections/{id}            Show collection entry
-PATCH  /api/v1/collections/{id}           Update collection entry
-DELETE /api/v1/collections/{id}           Delete collection entry
+### Companies
+
+```
+GET     /api/v1/companies  # List companies (q, page, per, limit, offset)
+GET     /api/v1/companies/{id}  # Show company
 ```
 
 ### Completions
 
 ```
-GET  /api/v1/users/{user_id}/completions   List user's completions (page, per, limit, offset)
-POST /api/v1/users/{user_id}/completions   Record a completion
-  data: { gamedb_game_id, platform_id, completed_at, rating, notes }
-
-GET    /api/v1/completions/{id}            Show completion
-PATCH  /api/v1/completions/{id}           Update completion
-DELETE /api/v1/completions/{id}           Delete completion
-```
-
-### Reviews
-
-```
-GET  /api/v1/users/{user_id}/reviews   List user's reviews (page, per, limit, offset)
-POST /api/v1/users/{user_id}/reviews   Write a review
-  data: { gamedb_game_id, rating, body }
-
-GET    /api/v1/reviews/{id}            Show review
-PATCH  /api/v1/reviews/{id}           Update review
-DELETE /api/v1/reviews/{id}           Delete review
-```
-
-### Journal
-
-```
-GET  /api/v1/users/{user_id}/journal   List user's journaled games (page, per)
-POST /api/v1/users/{user_id}/journal   Write a journal entry
-  data: { gamedb_game_id, entry_body, entry_title (optional) }
-
-GET    /api/v1/journal_entries/{id}    Show journal entry
-PATCH  /api/v1/journal_entries/{id}   Update journal entry
-DELETE /api/v1/journal_entries/{id}   Delete journal entry
-```
-
-### Favorites
-
-```
-GET  /api/v1/users/{user_id}/favorites   List user's favorites (page, per, limit, offset)
-POST /api/v1/users/{user_id}/favorites   Add a favorite
-
-GET    /api/v1/favorites/{id}            Show favorite
-PATCH  /api/v1/favorites/{id}           Update favorite
-DELETE /api/v1/favorites/{id}           Delete favorite
-```
-
-### GOTM (Game of the Month)
-
-```
-GET  /api/v1/gotm_entries               List GOTM entries (round_number, include, page, per)
-GET  /api/v1/gotm_entries/{id}          Show GOTM entry (include)
-GET  /api/v1/gotm_entries/{round}/nominations  GOTM nominations for a round (page, per)
-
-GET  /api/v1/nr_gotm_entries            List Non-Retro GOTM entries (round_number, include, page, per)
-GET  /api/v1/nr_gotm_entries/{id}       Show Non-Retro GOTM entry
-GET  /api/v1/nr_gotm_entries/{round}/nominations  Non-Retro GOTM nominations (page, per)
-```
-
-### Voting Info
-
-```
-GET  /api/v1/voting_info            List voting info rounds (page, per, limit, offset)
-POST /api/v1/voting_info            Create voting info
-  data: { round_number, theme, voting_opens_at, voting_closes_at }
-
-GET    /api/v1/voting_info/{id}     Show voting info
-PATCH  /api/v1/voting_info/{id}    Update voting info
-DELETE /api/v1/voting_info/{id}    Delete voting info
-```
-
-### Reminders (personal)
-
-```
-GET  /api/v1/users/{user_id}/reminders   List user's reminders (page, per)
-POST /api/v1/users/{user_id}/reminders   Create a reminder
-  data: { remind_at, content, is_noisy (optional) }
-
-GET    /api/v1/reminders/{id}            Show reminder
-PATCH  /api/v1/reminders/{id}           Update / snooze reminder
-DELETE /api/v1/reminders/{id}           Delete reminder
-```
-
-### Public Reminders
-
-```
-GET  /api/v1/public_reminders           List public reminders (enabled, page, per, limit, offset)
-POST /api/v1/public_reminders           Create public reminder
-  data: { message, due_at, enabled }
-
-GET    /api/v1/public_reminders/{id}    Show public reminder
-PATCH  /api/v1/public_reminders/{id}   Update public reminder
-DELETE /api/v1/public_reminders/{id}   Delete public reminder
-```
-
-### Todos
-
-```
-GET  /api/v1/todos              List todos (completed, page, per, limit, offset)
-GET  /api/v1/todos/summary      Todo counts summary
-POST /api/v1/todos              Create a todo
-  data: { title, body, is_completed }
-
-GET    /api/v1/todos/{id}       Show todo
-PATCH  /api/v1/todos/{id}      Update todo
-DELETE /api/v1/todos/{id}      Delete todo
-```
-
-### Suggestions
-
-```
-GET  /api/v1/suggestions        List suggestions (page, per, limit, offset)
-POST /api/v1/suggestions        Create a suggestion
-  data: { title, body, submitted_by }
-
-GET    /api/v1/suggestions/{id} Show suggestion
-DELETE /api/v1/suggestions/{id} Delete suggestion
-```
-
-### Starboard
-
-```
-GET  /api/v1/starboard                  List starboard entries (page, per, limit, offset)
-POST /api/v1/starboard                  Create starboard entry
-  data: { message_id, channel_id, author_id, content }
-
-GET    /api/v1/starboard/{message_id}   Show starboard entry
-PATCH  /api/v1/starboard/{message_id}  Update starboard entry
-DELETE /api/v1/starboard/{message_id}  Delete starboard entry
-```
-
-### Threads
-
-```
-POST /api/v1/threads            Upsert a Discord thread
-  data: { thread_id, forum_channel_id, thread_name, is_archived, last_seen_at, skip_linking }
-
-GET  /api/v1/threads/{id}       Show thread and its game links
-PATCH /api/v1/threads/{id}     Update thread
-
-POST   /api/v1/threads/{id}/links           Link thread to a game
-DELETE /api/v1/threads/{id}/links           Remove all game links from thread
-DELETE /api/v1/threads/{id}/links/{game_id} Remove one game link from thread
-```
-
-### Game Keys
-
-```
-GET  /api/v1/game_keys          List available keys (page, per, limit, offset)
-POST /api/v1/game_keys          Donate a key
-  data: { platform*, key_value*, donor_user_id*, game_title, gamedb_game_id,
-          donor_notify_on_claim }
-  (* required; provide game_title OR gamedb_game_id)
-
-POST /api/v1/game_keys/{id}/claim  Claim a key
-  data: { claimed_by_user_id }
-
-GET  /api/v1/users/{user_id}/game_keys  List user's donated keys
-```
-
-### Release Announcements
-
-```
-POST /api/v1/release_announcements       Schedule a release announcement
-  data: { release_id, announce_at }
-
-GET    /api/v1/release_announcements/{id}       Show scheduled announcement
-PATCH  /api/v1/release_announcements/{id}      Reschedule announcement
-DELETE /api/v1/release_announcements/{id}      Delete announcement
-POST   /api/v1/release_announcements/{id}/skip Skip announcement
-  data: { skip_reason }
-
-GET  /api/v1/games/{id}/release_announcements  List game's scheduled announcements
-```
-
-### Game Images
-
-```
-GET  /api/v1/games/{game_id}/images             List images for a game
-POST /api/v1/games/{game_id}/images             Upload a game image
-
-PATCH  /api/v1/games/{game_id}/images/{id}     Update image
-  data: { is_primary, position }
-DELETE /api/v1/games/{game_id}/images/{id}     Delete image
-```
-
-### Presence Prompts
-
-```
-GET /api/v1/users/{user_id}/presence_prompts         Presence prompt history
-GET /api/v1/users/{user_id}/presence_prompt_opts     Show opt-out preference
-PUT /api/v1/users/{user_id}/presence_prompt_opts     Update opt-out preference
-  data: { all: boolean, games: string[] }
+GET     /api/v1/completions/{id}  # Show a completion
+PATCH   /api/v1/completions/{id}  # Update a completion
+PUT     /api/v1/completions/{id}  # Replace a completion (alias)
+DELETE  /api/v1/completions/{id}  # Delete a completion
+GET     /api/v1/users/{user_id}/completions  # List a user's completions (page, per, limit, offset)
+POST    /api/v1/users/{user_id}/completions  # Record a completion
+  data: { UserGameCompletion attributes (e.g. `gamedb_game_id`, `platform_id`, `completed_at`, `rating`, `notes`). }
 ```
 
 ### Dashboard
 
 ```
-GET /api/v1/dashboard           Front-page dashboard data
+GET     /api/v1/dashboard  # Front-page dashboard (limit)
 ```
 
-### Lookup / Reference data (read-only)
+### Engines
 
 ```
-GET /api/v1/companies           List companies
-GET /api/v1/companies/{id}
-GET /api/v1/engines             List engines
-GET /api/v1/engines/{id}
-GET /api/v1/franchises          List franchises
-GET /api/v1/franchises/{id}
-GET /api/v1/genres              List genres
-GET /api/v1/genres/{id}
-GET /api/v1/modes               List modes
-GET /api/v1/modes/{id}
-GET /api/v1/perspectives        List perspectives
-GET /api/v1/perspectives/{id}
-GET /api/v1/platforms           List platforms
-GET /api/v1/platforms/{id}
-GET /api/v1/regions             List regions
-GET /api/v1/regions/{id}
-GET /api/v1/themes              List themes
-GET /api/v1/themes/{id}
+GET     /api/v1/engines  # List engines (q, page, per, limit, offset)
+GET     /api/v1/engines/{id}  # Show engine
 ```
 
-### User Socials
+### Favorites
 
 ```
-GET  /api/v1/users/{user_id}/socials   List user's linked socials
-POST /api/v1/users/{user_id}/socials   Link a social account
-
-GET    /api/v1/user_socials/{id}       Show social link
-PATCH  /api/v1/user_socials/{id}      Update social link
-DELETE /api/v1/user_socials/{id}      Delete social link
-
-GET  /api/v1/social_platforms          List social platforms
-POST /api/v1/social_platforms          Create/upsert a social platform
+GET     /api/v1/favorites/{id}  # Show a favorite
+PATCH   /api/v1/favorites/{id}  # Update a favorite
+PUT     /api/v1/favorites/{id}  # Replace a favorite (alias)
+DELETE  /api/v1/favorites/{id}  # Delete a favorite
+GET     /api/v1/users/{user_id}/favorites  # List a user's favorites (page, per, limit, offset)
+POST    /api/v1/users/{user_id}/favorites  # Add a favorite
+  data: { UserGameFavorite attributes (`gamedb_game_id`, `sort_order`). }
 ```
 
-### Search Synonyms
+### Franchises
 
 ```
-GET  /api/v1/search_synonyms            List synonym terms
-POST /api/v1/search_synonyms            Create synonym term
-GET    /api/v1/search_synonyms/{id}
-PATCH  /api/v1/search_synonyms/{id}
-DELETE /api/v1/search_synonyms/{id}
+GET     /api/v1/franchises  # List franchises (q, page, per, limit, offset)
+GET     /api/v1/franchises/{id}  # Show franchise
+```
 
-GET  /api/v1/search_synonym_groups      List synonym groups
-POST /api/v1/search_synonym_groups      Create synonym group
-GET    /api/v1/search_synonym_groups/{id}
-PATCH  /api/v1/search_synonym_groups/{id}
-DELETE /api/v1/search_synonym_groups/{id}
+### GOTM
 
-GET  /api/v1/search_synonym_drafts      List synonym drafts
-POST /api/v1/search_synonym_drafts      Create synonym draft
-GET    /api/v1/search_synonym_drafts/{id}
-PATCH  /api/v1/search_synonym_drafts/{id}
-DELETE /api/v1/search_synonym_drafts/{id}
+```
+GET     /api/v1/gotm_entries  # List Game of the Month entries (round_number, include, page, per, limit, offset)
+GET     /api/v1/gotm_entries/{id}  # Show a Game of the Month entry (include)
+GET     /api/v1/gotm_entries/{round}/nominations  # List GOTM nominations for a round (page, per, limit, offset)
+GET     /api/v1/nr_gotm_entries/{round}/nominations  # List Non-RPG GOTM nominations for a round (page, per, limit, offset)
+```
+
+### Game Images
+
+```
+GET     /api/v1/games/{game_id}/images  # List images for a game
+POST    /api/v1/games/{game_id}/images  # Upload a game image
+PATCH   /api/v1/games/{game_id}/images/{id}  # Update a game image
+  data: { is_primary, position }
+PUT     /api/v1/games/{game_id}/images/{id}  # Update a game image (alias)
+  data: { is_primary, position }
+DELETE  /api/v1/games/{game_id}/images/{id}  # Delete a game image
+```
+
+### Game Keys
+
+```
+GET     /api/v1/game_keys  # List available game keys (page, per, limit, offset)
+POST    /api/v1/game_keys  # Donate a game key
+  data: { game_title, gamedb_game_id, platform*, key_value*, donor_user_id*, donor_notify_on_claim }
+POST    /api/v1/game_keys/{id}/claim  # Claim a game key
+  data: { claimed_by_user_id }
+GET     /api/v1/users/{user_id}/game_keys  # List a user's donated game keys (page, per)
+```
+
+### Games
+
+```
+GET     /api/v1/games  # List games (q, winner, genre_id, engine_id, theme_id, perspective_id, mode_id, franchise_id, company_id, page, per, limit, offset)
+GET     /api/v1/games/{id}  # Show game
+GET     /api/v1/games/{id}/completions  # List completions for this game (page, per, limit, offset)
+GET     /api/v1/games/{id}/now_playing  # List users currently playing this game (page, per, limit, offset)
+POST    /api/v1/games/{id}/refresh-images  # Refresh images from IGDB
+GET     /api/v1/games/{id}/relations  # Show game relations
+GET     /api/v1/games/{id}/releases  # List game releases
+GET     /api/v1/games/{id}/reviews  # List reviews for this game (page, per, limit, offset)
+```
+
+### Genres
+
+```
+GET     /api/v1/genres  # List genres (q, page, per, limit, offset)
+GET     /api/v1/genres/{id}  # Show genre
+```
+
+### Health
+
+```
+GET     /api/v1/health  # Health check
+```
+
+### Journal
+
+```
+GET     /api/v1/games/{id}/journal  # List journal entries for a game (user_id, page, per)
+GET     /api/v1/journal_entries/{id}  # Show a journal entry
+PATCH   /api/v1/journal_entries/{id}  # Update a journal entry
+PUT     /api/v1/journal_entries/{id}  # Replace a journal entry (alias)
+DELETE  /api/v1/journal_entries/{id}  # Delete a journal entry
+GET     /api/v1/users/{user_id}/journal  # List a user's journaled games (page, per)
+POST    /api/v1/users/{user_id}/journal  # Write a journal entry
+  data: { UserGameJournalEntry attributes (`gamedb_game_id`, `entry_body`, optional `entry_title`). }
+```
+
+### Modes
+
+```
+GET     /api/v1/modes  # List modes (q, page, per, limit, offset)
+GET     /api/v1/modes/{id}  # Show mode
+```
+
+### Non-Retro GOTM
+
+```
+GET     /api/v1/nr_gotm_entries  # List Non-Retro Game of the Month entries (round_number, include, page, per, limit, offset)
+GET     /api/v1/nr_gotm_entries/{id}  # Show a Non-Retro GOTM entry (include)
+```
+
+### Now Playing
+
+```
+GET     /api/v1/users/{user_id}/now_playing  # List a user's now-playing games (page, per, limit, offset)
+```
+
+### Perspectives
+
+```
+GET     /api/v1/perspectives  # List perspectives (q, page, per, limit, offset)
+GET     /api/v1/perspectives/{id}  # Show perspective
+```
+
+### Platforms
+
+```
+GET     /api/v1/platforms  # List platforms (q, page, per, limit, offset)
+GET     /api/v1/platforms/{id}  # Show platform
+```
+
+### Presence Prompts
+
+```
+GET     /api/v1/users/{user_id}/presence_prompt_opts  # Show a user's presence-prompt opt-out preference
+PUT     /api/v1/users/{user_id}/presence_prompt_opts  # Replace a user's presence-prompt opt-out preference
+  data: { all, games }
+GET     /api/v1/users/{user_id}/presence_prompts  # List a user's presence prompt history (page, per)
+```
+
+### Public Reminders
+
+```
+GET     /api/v1/public_reminders  # List public reminders (enabled, page, per, limit, offset)
+POST    /api/v1/public_reminders  # Create a public reminder
+  data: { RpgClubPublicReminder attributes (`message`, `due_at`, `enabled`). }
+GET     /api/v1/public_reminders/{id}  # Show a public reminder
+PATCH   /api/v1/public_reminders/{id}  # Update a public reminder
+PUT     /api/v1/public_reminders/{id}  # Replace a public reminder (alias)
+DELETE  /api/v1/public_reminders/{id}  # Delete a public reminder
 ```
 
 ### RSS Feeds
 
 ```
-GET  /api/v1/rss_feeds          List RSS feeds
-POST /api/v1/rss_feeds          Create RSS feed
-GET    /api/v1/rss_feeds/{id}
-PATCH  /api/v1/rss_feeds/{id}
-DELETE /api/v1/rss_feeds/{id}
+GET     /api/v1/rss_feeds  # List RSS feeds (page, per, limit, offset)
+POST    /api/v1/rss_feeds  # Create an RSS feed
+  data: { RpgClubRssFeed attributes (`feed_name`, `feed_url`, `enabled`). }
+GET     /api/v1/rss_feeds/{id}  # Show an RSS feed
+PATCH   /api/v1/rss_feeds/{id}  # Update an RSS feed
+PUT     /api/v1/rss_feeds/{id}  # Replace an RSS feed (alias)
+DELETE  /api/v1/rss_feeds/{id}  # Delete an RSS feed
+```
+
+### Regions
+
+```
+GET     /api/v1/regions  # List regions (page, per, limit, offset)
+GET     /api/v1/regions/{id}  # Show region
+```
+
+### Release Announcements
+
+```
+GET     /api/v1/games/{id}/release_announcements  # List a game's scheduled release announcements (page, per)
+POST    /api/v1/release_announcements  # Schedule a release announcement
+  data: { GamedbReleaseAnnouncement attributes (`release_id`, `announce_at`). }
+GET     /api/v1/release_announcements/{id}  # Show a scheduled release announcement
+PATCH   /api/v1/release_announcements/{id}  # Reschedule a release announcement
+PUT     /api/v1/release_announcements/{id}  # Replace a release announcement (alias)
+DELETE  /api/v1/release_announcements/{id}  # Delete a release announcement
+POST    /api/v1/release_announcements/{id}/skip  # Skip a release announcement
+  data: { skip_reason }
+```
+
+### Reminders
+
+```
+GET     /api/v1/reminders/{id}  # Show a personal reminder
+PATCH   /api/v1/reminders/{id}  # Update (or snooze) a personal reminder
+PUT     /api/v1/reminders/{id}  # Replace a personal reminder (alias)
+DELETE  /api/v1/reminders/{id}  # Delete a personal reminder
+GET     /api/v1/users/{user_id}/reminders  # List a user's personal reminders (page, per)
+POST    /api/v1/users/{user_id}/reminders  # Create a personal reminder
+  data: { UserReminder attributes (`remind_at`, `content`, optional `is_noisy`). }
+```
+
+### Reviews
+
+```
+GET     /api/v1/reviews/{id}  # Show a review
+PATCH   /api/v1/reviews/{id}  # Update a review
+PUT     /api/v1/reviews/{id}  # Replace a review (alias)
+DELETE  /api/v1/reviews/{id}  # Delete a review
+GET     /api/v1/users/{user_id}/reviews  # List a user's reviews (page, per, limit, offset)
+POST    /api/v1/users/{user_id}/reviews  # Write a review
+  data: { UserGameReview attributes (`gamedb_game_id`, `rating`, `body`). }
+```
+
+### Search Synonyms
+
+```
+GET     /api/v1/search_synonym_drafts  # List synonym drafts (user_id, page, per, limit, offset)
+POST    /api/v1/search_synonym_drafts  # Create a synonym draft
+  data: { GamedbSearchSynonymDraft attributes (`user_id`, `pairs_json`). }
+GET     /api/v1/search_synonym_drafts/{id}  # Show a synonym draft
+PATCH   /api/v1/search_synonym_drafts/{id}  # Update a synonym draft
+PUT     /api/v1/search_synonym_drafts/{id}  # Replace a synonym draft (alias)
+DELETE  /api/v1/search_synonym_drafts/{id}  # Delete a synonym draft
+GET     /api/v1/search_synonym_groups  # List synonym groups (page, per, limit, offset)
+POST    /api/v1/search_synonym_groups  # Create a synonym group
+  data: { GamedbSearchSynonymGroup attributes (`created_by`). }
+GET     /api/v1/search_synonym_groups/{id}  # Show a synonym group
+PATCH   /api/v1/search_synonym_groups/{id}  # Update a synonym group
+PUT     /api/v1/search_synonym_groups/{id}  # Replace a synonym group (alias)
+DELETE  /api/v1/search_synonym_groups/{id}  # Delete a synonym group
+GET     /api/v1/search_synonyms  # List search synonym terms (group_id, page, per, limit, offset)
+POST    /api/v1/search_synonyms  # Create a synonym term
+  data: { GamedbSearchSynonym attributes (`group_id`, `term_text`, `term_norm`, `created_by`). }
+GET     /api/v1/search_synonyms/{id}  # Show a synonym term
+PATCH   /api/v1/search_synonyms/{id}  # Update a synonym term
+PUT     /api/v1/search_synonyms/{id}  # Replace a synonym term (alias)
+DELETE  /api/v1/search_synonyms/{id}  # Delete a synonym term
+```
+
+### Sessions
+
+```
+GET     /api/v1/session  # Current session
+```
+
+### Social Platforms
+
+```
+GET     /api/v1/social_platforms  # List social platforms (page, per, limit, offset)
+POST    /api/v1/social_platforms  # Create or upsert a social platform
+  data: { SocialPlatform attributes (`label`, `icon`, `position`, etc.). }
+```
+
+### Starboard
+
+```
+GET     /api/v1/starboard  # List starboard entries (page, per, limit, offset)
+POST    /api/v1/starboard  # Create a starboard entry
+  data: { RpgClubStarboardEntry attributes (`message_id`, `channel_id`, `author_id`, `content`). }
+GET     /api/v1/starboard/{message_id}  # Show a starboard entry
+PATCH   /api/v1/starboard/{message_id}  # Update a starboard entry
+PUT     /api/v1/starboard/{message_id}  # Replace a starboard entry (alias)
+DELETE  /api/v1/starboard/{message_id}  # Delete a starboard entry
+```
+
+### Suggestions
+
+```
+GET     /api/v1/suggestions  # List suggestions (page, per, limit, offset)
+POST    /api/v1/suggestions  # Create a suggestion
+  data: { RpgClubSuggestion attributes (`title`, `body`, `submitted_by`). }
+GET     /api/v1/suggestions/{id}  # Show a suggestion
+DELETE  /api/v1/suggestions/{id}  # Delete a suggestion
+```
+
+### Themes
+
+```
+GET     /api/v1/themes  # List themes (q, page, per, limit, offset)
+GET     /api/v1/themes/{id}  # Show theme
+```
+
+### Threads
+
+```
+GET     /api/v1/games/{id}/threads  # List the Discord threads linked to a game (page, per, limit, offset)
+POST    /api/v1/threads  # Upsert a Discord thread
+  data: { Thread attributes (`thread_id`, `forum_channel_id`, `thread_name`, `is_archived`, `last_seen_at`, `skip_linking`). }
+GET     /api/v1/threads/{id}  # Show a thread and its game links
+PATCH   /api/v1/threads/{id}  # Update a thread
+POST    /api/v1/threads/{id}/links  # Link a thread to a game
+  data: { The link target (`gamedb_game_id`). }
+DELETE  /api/v1/threads/{id}/links  # Remove all of a thread's game links
+DELETE  /api/v1/threads/{id}/links/{game_id}  # Remove one game link from a thread
+```
+
+### Todos
+
+```
+GET     /api/v1/todos  # List todos (completed, page, per, limit, offset)
+POST    /api/v1/todos  # Create a todo
+  data: { RpgClubTodo attributes (`title`, `body`, `is_completed`). }
+GET     /api/v1/todos/summary  # Todo counts summary
+GET     /api/v1/todos/{id}  # Show a todo
+PATCH   /api/v1/todos/{id}  # Update a todo
+PUT     /api/v1/todos/{id}  # Replace a todo (alias)
+DELETE  /api/v1/todos/{id}  # Delete a todo
+```
+
+### User Activity Icons
+
+```
+GET     /api/v1/users/{user_id}/activity_icons  # List a user's activity icons (page, per)
+```
+
+### User Channel Counts
+
+```
+GET     /api/v1/users/{user_id}/channel_counts  # List a user's per-channel message counts (page, per)
+```
+
+### User Nick History
+
+```
+GET     /api/v1/users/{user_id}/nick_history  # List a user's nickname history (page, per)
+```
+
+### User Socials
+
+```
+GET     /api/v1/user_socials/{id}  # Show a user social link
+PATCH   /api/v1/user_socials/{id}  # Update a user social link
+PUT     /api/v1/user_socials/{id}  # Replace a user social link (alias)
+DELETE  /api/v1/user_socials/{id}  # Delete a user social link
+GET     /api/v1/users/{user_id}/socials  # List a user's linked socials (page, per, limit, offset)
+POST    /api/v1/users/{user_id}/socials  # Link a social account
+  data: { UserSocial attributes (`social_platform_id`, `handle`, `url`, etc.). }
+```
+
+### Users
+
+```
+GET     /api/v1/users  # List users (q, page, per, limit, offset)
+GET     /api/v1/users/{user_id}  # Show user profile (preview_limit)
+GET     /api/v1/users/{user_id}/avatar  # Stream user avatar
+GET     /api/v1/users/{user_id}/profile-image  # Stream user profile image
+```
+
+### Voting Info
+
+```
+GET     /api/v1/voting_info  # List voting info rounds (page, per, limit, offset)
+POST    /api/v1/voting_info  # Create voting info
+  data: { BotVotingInfo attributes (`round_number`, `theme`, `voting_opens_at`, `voting_closes_at`). }
+GET     /api/v1/voting_info/{id}  # Show voting info
+PATCH   /api/v1/voting_info/{id}  # Update voting info
+PUT     /api/v1/voting_info/{id}  # Replace voting info (alias)
+DELETE  /api/v1/voting_info/{id}  # Delete voting info
 ```
 
 ---
