@@ -1,4 +1,3 @@
-import type oracledb from "oracledb";
 import type pg from "pg";
 import {
   dbQuery,
@@ -100,7 +99,7 @@ export default class GameSearchSynonymDraft {
 
   private static async getDraftWithConn(
     draftId: number,
-    conn: oracledb.Connection | pg.PoolClient,
+    conn: pg.PoolClient,
   ): Promise<ISynonymDraft | null> {
     const rows = await dbQueryConn(
       conn,

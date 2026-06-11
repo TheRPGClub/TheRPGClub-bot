@@ -1,4 +1,3 @@
-import type oracledb from "oracledb";
 import type pg from "pg";
 import {
   dbQuery,
@@ -108,7 +107,7 @@ function mapEntry(row: CollectionRow): IUserGameCollectionEntry {
 async function getEntryById(
   entryId: number,
   userId: string,
-  conn: oracledb.Connection | pg.PoolClient,
+  conn: pg.PoolClient,
 ): Promise<IUserGameCollectionEntry | null> {
   const rows = await dbQueryConn(
     conn,

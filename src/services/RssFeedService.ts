@@ -1,7 +1,6 @@
 import Parser from "rss-parser";
 import crypto from "node:crypto";
 import type { Client } from "discordx";
-import type oracledb from "oracledb";
 import type pg from "pg";
 import { dbWithConnection } from "../db/SqlManager.js";
 import {
@@ -44,7 +43,7 @@ function matchesKeywords(
 async function processFeed(
   client: Client,
   feed: IRssFeed,
-  connection: oracledb.Connection | pg.PoolClient,
+  connection: pg.PoolClient,
 ): Promise<void> {
   let parsed;
   try {

@@ -1,10 +1,8 @@
-import oracledb from "oracledb";
 import axios from "axios";
 import {
   dbQuery, dbMutate, dbInsert, dbWithConnection, dbTransaction,
   dbQueryConn, dbMutateConn,
 } from "../db/SqlManager.js";
-import { getDialect } from "../db/dialect.js";
 import { GameSql } from "../db/sql/index.js";
 import { IGDBGameDetails, igdbService } from "../services/IGDB/IgdbService.js";
 import GameSearchSynonym from "./GameSearchSynonym.js";
@@ -395,21 +393,6 @@ export default class Game {
     }
 
     return dbWithConnection(async (conn) => {
-      if (getDialect() === "oracle") {
-        const result = await (conn as oracledb.Connection).execute(
-          GameSql.getGameById.oracle,
-          { id },
-          {
-            outFormat: oracledb.OUT_FORMAT_OBJECT,
-            fetchInfo: {
-              IMAGE_DATA: { type: oracledb.BUFFER },
-              DESCRIPTION: { type: oracledb.STRING },
-            },
-          },
-        );
-        const row = (result.rows ?? [])[0] as any;
-        return row ? mapGameRow(row) : null;
-      }
       const rows = await dbQueryConn(conn, GameSql.getGameById, { id }, mapGameRow);
       return rows[0] ?? null;
     });
@@ -431,16 +414,6 @@ export default class Game {
 
     return dbWithConnection(async (conn) => {
       const entry = GameSql.getGamesByIds(placeholders.join(", "));
-      if (getDialect() === "oracle") {
-        const result = await (conn as oracledb.Connection).execute(entry.oracle, binds, {
-          outFormat: oracledb.OUT_FORMAT_OBJECT,
-          fetchInfo: {
-            IMAGE_DATA: { type: oracledb.BUFFER },
-            DESCRIPTION: { type: oracledb.STRING },
-          },
-        });
-        return (result.rows ?? []).map((row) => mapGameRow(row as any));
-      }
       return dbQueryConn(conn, entry, binds, mapGameRow);
     });
   }
@@ -448,20 +421,6 @@ export default class Game {
   static async getAlternateVersions(gameId: number): Promise<IGame[]> {
     if (!isPositiveInt(gameId)) return [];
     return dbWithConnection(async (conn) => {
-      if (getDialect() === "oracle") {
-        const result = await (conn as oracledb.Connection).execute(
-          GameSql.getAlternateVersions.oracle,
-          { id: gameId },
-          {
-            outFormat: oracledb.OUT_FORMAT_OBJECT,
-            fetchInfo: {
-              IMAGE_DATA: { type: oracledb.BUFFER },
-              DESCRIPTION: { type: oracledb.STRING },
-            },
-          },
-        );
-        return (result.rows ?? []).map((row) => mapGameRow(row as any));
-      }
       return dbQueryConn(conn, GameSql.getAlternateVersions, { id: gameId }, mapGameRow);
     });
   }
@@ -502,21 +461,6 @@ export default class Game {
 
   static async getGameByIgdbId(igdbId: number): Promise<IGame | null> {
     return dbWithConnection(async (conn) => {
-      if (getDialect() === "oracle") {
-        const result = await (conn as oracledb.Connection).execute(
-          GameSql.getGameByIgdbId.oracle,
-          { igdbId },
-          {
-            outFormat: oracledb.OUT_FORMAT_OBJECT,
-            fetchInfo: {
-              IMAGE_DATA: { type: oracledb.BUFFER },
-              DESCRIPTION: { type: oracledb.STRING },
-            },
-          },
-        );
-        const row = (result.rows ?? [])[0] as any;
-        return row ? mapGameRow(row) : null;
-      }
       const rows = await dbQueryConn(conn, GameSql.getGameByIgdbId, { igdbId }, mapGameRow);
       return rows[0] ?? null;
     });
@@ -1242,13 +1186,10 @@ export default class Game {
     }
 
     const queryPromise = dbWithConnection(async (conn) => {
-      const isOracle = getDialect() === "oracle";
-      const titleCol = isOracle ? "TITLE" : "title";
       const titleFoldExpr =
-        `REPLACE(REPLACE(REPLACE(REPLACE(LOWER(${titleCol}), 'é', 'e'), 'è', 'e'), 'ê', 'e'), 'ë', 'e')`;
-      const titleNormExpr = isOracle
-        ? `REGEXP_REPLACE(${titleFoldExpr}, '[^a-z0-9]', '')`
-        : `REGEXP_REPLACE(${titleFoldExpr}, '[^a-z0-9]', '', 'g')`;
+        `REPLACE(REPLACE(REPLACE(REPLACE(LOWER(title), 'é', 'e'), 'è', 'e'), 'ê', 'e'), 'ë', 'e')`;
+      const titleNormExpr =
+        `REGEXP_REPLACE(${titleFoldExpr}, '[^a-z0-9]', '', 'g')`;
 
       const binds = {
         exactRaw: foldedLowerQuery,
@@ -1346,13 +1287,10 @@ export default class Game {
         return [];
       }
 
-      const isOracle = getDialect() === "oracle";
-      const titleCol = isOracle ? "TITLE" : "title";
       const titleFoldExpr =
-        `REPLACE(REPLACE(REPLACE(REPLACE(LOWER(${titleCol}), 'é', 'e'), 'è', 'e'), 'ê', 'e'), 'ë', 'e')`;
-      const titleNormExpr = isOracle
-        ? `REGEXP_REPLACE(${titleFoldExpr}, '[^a-z0-9]', '')`
-        : `REGEXP_REPLACE(${titleFoldExpr}, '[^a-z0-9]', '', 'g')`;
+        `REPLACE(REPLACE(REPLACE(REPLACE(LOWER(title), 'é', 'e'), 'è', 'e'), 'ê', 'e'), 'ë', 'e')`;
+      const titleNormExpr =
+        `REGEXP_REPLACE(${titleFoldExpr}, '[^a-z0-9]', '', 'g')`;
 
       const clauses: string[] = [];
       const binds: Record<string, string | number> = {};
