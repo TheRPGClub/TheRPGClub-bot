@@ -1,3 +1,4 @@
+import axios from "axios";
 import {
   type CommandInteraction,
   ApplicationCommandOptionType,
@@ -87,6 +88,21 @@ type ApiUserListItem = {
   is_bot: boolean;
 };
 
+function formatApiError(
+  method: string,
+  url: string,
+  requestBody: unknown,
+  status: number | undefined,
+  responseBody: unknown,
+): string {
+  const req = JSON.stringify(
+    { method: method.toUpperCase(), url, body: requestBody ?? null },
+    null, 2,
+  );
+  const res = JSON.stringify({ status: status ?? null, body: responseBody ?? null }, null, 2);
+  return `Request:\n\`\`\`json\n${req}\n\`\`\`\nResponse:\n\`\`\`json\n${res}\n\`\`\``;
+}
+
 let socialPlatformCache: ApiSocialPlatform[] | null = null;
 
 async function getSocialPlatforms(): Promise<ApiSocialPlatform[]> {
@@ -131,17 +147,18 @@ async function upsertUserSocial(
     }
     return { ok: true };
   } catch (err: unknown) {
-    const op = current ? `PATCH user_socials/${current.id}` : `POST users/${userId}/socials`;
-    let detail = err instanceof Error ? err.message : String(err);
-    if (
-      typeof err === "object" &&
-      err !== null &&
-      "response" in err &&
-      typeof (err as any).response?.data !== "undefined"
-    ) {
-      detail += ` | body: ${JSON.stringify((err as any).response.data).slice(0, 300)}`;
+    const method = current ? "PATCH" : "POST";
+    const url = current
+      ? `/api/v1/user_socials/${current.id}`
+      : `/api/v1/users/${userId}/socials`;
+    if (axios.isAxiosError(err)) {
+      return {
+        ok: false,
+        detail: formatApiError(method, url, body, err.response?.status, err.response?.data ?? null),
+      };
     }
-    return { ok: false, detail: `${op}: ${detail}` };
+    const msg = err instanceof Error ? err.message : String(err);
+    return { ok: false, detail: `${method} ${url}: ${msg}` };
   }
 }
 
@@ -297,6 +314,20 @@ export async function buildProfileViewPayload(
       },
     };
   } catch (err: any) {
+    if (axios.isAxiosError(err)) {
+      const method = err.config?.method ?? "GET";
+      const url = `${err.config?.baseURL ?? ""}${err.config?.url ?? ""}`;
+      let reqBody: unknown = null;
+      try {
+        reqBody = err.config?.data ? JSON.parse(err.config.data as string) : null;
+      } catch {
+        reqBody = err.config?.data ?? null;
+      }
+      const detail = formatApiError(
+        method, url, reqBody, err.response?.status, err.response?.data ?? null,
+      );
+      return { errorMessage: `Error loading profile:\n${detail}` };
+    }
     const msg = extractErrorMessage(err);
     return { errorMessage: `Error loading profile: ${msg}` };
   }
@@ -607,12 +638,12 @@ export class ProfileCommand {
         `/api/v1/users/${target.id}/socials`,
       );
       if (socialsRaw.errorMessage) {
+        const detail = formatApiError(
+          "GET", socialsRaw.url, null, socialsRaw.status, socialsRaw.rawData,
+        );
         await safeReply(
           interaction,
-          buildTextReply(
-            `Could not fetch existing socials (HTTP ${socialsRaw.status}): ${socialsRaw.errorMessage}`,
-            true,
-          ),
+          buildTextReply(`Could not fetch existing socials:\n${detail}`, true),
         );
         return;
       }
@@ -636,7 +667,7 @@ export class ProfileCommand {
 
       const changedFields: string[] = [];
       const skippedFields: string[] = [];
-      const failedFields: string[] = [];
+      const failedFields: { label: string; detail: string }[] = [];
       for (const field of fields) {
         if (field.value === undefined) continue;
         const platformId = findPlatformId(platforms, field.key);
@@ -651,7 +682,7 @@ export class ProfileCommand {
           if (result.ok) {
             changedFields.push(field.label);
           } else {
-            failedFields.push(`${field.label} (${result.detail})`);
+            failedFields.push({ label: field.label, detail: result.detail });
           }
         } else {
           await deleteUserSocial(existing, platformId);
@@ -659,20 +690,31 @@ export class ProfileCommand {
         }
       }
 
-      const parts: string[] = [];
-      if (changedFields.length) parts.push(`Updated: ${changedFields.join(", ")}`);
-      if (skippedFields.length) parts.push(`Skipped (platform not found): ${skippedFields.join(", ")}`);
-      if (failedFields.length) parts.push(`Failed: ${failedFields.join("; ")}`);
-
-      await safeReply(
-        interaction,
-        buildTextReply(
-          parts.length
-            ? `Profile result for ${renderUsernameWithEmoji(target.id, target.globalName ?? target.username ?? "Unknown")} -- ${parts.join(" | ")}.`
-            : `No fields were updated for ${renderUsernameWithEmoji(target.id, target.globalName ?? target.username ?? "Unknown")}.`,
-          true,
-        ),
+      const displayName = renderUsernameWithEmoji(
+        target.id, target.globalName ?? target.username ?? "Unknown",
       );
+      const summaryParts: string[] = [];
+      if (changedFields.length) summaryParts.push(`Updated: ${changedFields.join(", ")}`);
+      if (skippedFields.length) {
+        summaryParts.push(`Skipped (platform not found): ${skippedFields.join(", ")}`);
+      }
+
+      let msg: string;
+      if (failedFields.length) {
+        const failSection = failedFields
+          .map(f => `**${f.label}**\n${f.detail}`)
+          .join("\n\n");
+        const prefix = summaryParts.length
+          ? `Profile result for ${displayName} -- ${summaryParts.join(" | ")}\n\n`
+          : `Profile result for ${displayName}\n\n`;
+        msg = `${prefix}Failed:\n${failSection}`;
+      } else if (summaryParts.length) {
+        msg = `Profile result for ${displayName} -- ${summaryParts.join(" | ")}.`;
+      } else {
+        msg = `No fields were updated for ${displayName}.`;
+      }
+
+      await safeReply(interaction, buildTextReply(msg, true));
     }, "Error updating profile");
   }
 
