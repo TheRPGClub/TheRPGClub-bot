@@ -29,11 +29,11 @@ import { startPublicReminderService } from "./services/PublicReminderService.js"
 import { startThreadSyncService } from "./services/ThreadSyncService.js";
 import { startThreadLinkPromptService } from "./services/ThreadLinkPromptService.js";
 import { refreshGiveawayHubMessage } from "./services/GiveawayHubService.js";
-import { startGameReleaseAnnouncementService } from "./services/GameReleaseAnnouncementService.js";
+// import { startGameReleaseAnnouncementService } from "./services/GameReleaseAnnouncementService.js";
 import { startIgdbScanService } from "./services/IGDB/IgdbScanService.js";
 import { startUserEmojiService } from "./services/UserEmojiService.js";
 import { tryHandleManagedRawModalInteraction } from "./services/raw-modal/RawModalInteractionRouter.js";
-import { restoreJournalMessageContextsFromDb } from "./commands/now-playing/nowPlayingContexts.js";
+// import { restoreJournalMessageContextsFromDb } from "./commands/now-playing/nowPlayingContexts.js";
 import { truncateWithEllipsis } from "./utilities/ValidationUtils.js";
 import { logError } from "./utilities/LogUtils.js";
 installConsoleLogging();
@@ -193,13 +193,13 @@ bot.once("clientReady", async () => {
   startPublicReminderService(bot);
   startThreadSyncService(bot);
   startThreadLinkPromptService(bot);
-  startGameReleaseAnnouncementService(bot);
+  // startGameReleaseAnnouncementService(bot);
   startIgdbScanService();
   await joinAllTargetForumThreads(bot);
   startRssFeedService(bot);
   await refreshGiveawayHubMessage(bot);
   await startUserEmojiService(bot);
-  await restoreJournalMessageContextsFromDb();
+  // await restoreJournalMessageContextsFromDb();
   console.log("Startup sequence completed.");
 });
 
