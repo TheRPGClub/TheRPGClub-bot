@@ -1,514 +1,514 @@
-// import {
-//   ActionRowBuilder,
-//   ApplicationCommandOptionType,
-//   AutocompleteInteraction,
-//   ButtonStyle,
-//   CommandInteraction,
-//   StringSelectMenuBuilder,
-//   StringSelectMenuInteraction,
-//   type ButtonInteraction,
-// } from "discord.js";
-// import {
-//   ButtonComponent,
-//   Discord,
-//   SelectMenuComponent,
-//   Slash,
-//   SlashGroup,
-//   SlashOption,
-// } from "discordx";
-// import { ContainerBuilder } from "@discordjs/builders";
-// import {
-//   safeDeferReply,
-//   safeDeferUpdate,
-//   safeReply,
-//   safeUpdate,
-//   sanitizeUserInput,
-//   replyIfNotOwner,
-// } from "../../functions/InteractionUtils.js";
-// import {
-//   buildTextContainer,
-//   buildTextReply,
-//   safeV2TextContent,
-// } from "../../functions/ComponentsV2Utils.js";
-// import { shouldRenderPrevNextButtons } from "../../functions/PaginationUtils.js";
-// import Game from "../../classes/Game.js";
-// import { decodeBase64Url } from "../../functions/CustomIdUtils.js";
-// import {
-//   autocompleteSearchCompany,
-//   autocompleteSearchPlatform,
-//   buildComponentsV2Flags,
-//   buildSearchCustomId,
-//   buildSearchRecoveryComponents,
-//   decodeISearchFilters,
-//   GAME_SEARCH_PAGE_SIZE,
-//   type ISearchFilters,
-// } from "./gamedb-utils.js";
-// import {
-//   buildGameProfile,
-//   buildGameProfileActionRow,
-//   showGameProfile,
-//   trimTextDisplayContent,
-// } from "./gamedb-profile.service.js";
-// import { handleNoResults } from "./gamedb-add.command.js";
-// import { isPositiveInt } from "../../utilities/ValidationUtils.js";
-// import { MAX_CONTAINER_TEXT } from "../../config/textLimits.js";
-// import { assertCustomIdSegments } from "../../utilities/CustomIdUtils.js";
-// import {
-//   buildActionButton,
-//   buildButtonRow,
-//   buildSelectRow,
-// } from "../../functions/uiComponents.js";
+import {
+  ActionRowBuilder,
+  ApplicationCommandOptionType,
+  AutocompleteInteraction,
+  ButtonStyle,
+  CommandInteraction,
+  StringSelectMenuBuilder,
+  StringSelectMenuInteraction,
+  type ButtonInteraction,
+} from "discord.js";
+import {
+  ButtonComponent,
+  Discord,
+  SelectMenuComponent,
+  Slash,
+  SlashGroup,
+  SlashOption,
+} from "discordx";
+import { ContainerBuilder } from "@discordjs/builders";
+import {
+  safeDeferReply,
+  safeDeferUpdate,
+  safeReply,
+  safeUpdate,
+  sanitizeUserInput,
+  replyIfNotOwner,
+} from "../../functions/InteractionUtils.js";
+import {
+  buildTextContainer,
+  buildTextReply,
+  safeV2TextContent,
+} from "../../functions/ComponentsV2Utils.js";
+import { shouldRenderPrevNextButtons } from "../../functions/PaginationUtils.js";
+import Game from "../../classes/Game.js";
+import { decodeBase64Url } from "../../functions/CustomIdUtils.js";
+import {
+  autocompleteSearchCompany,
+  autocompleteSearchPlatform,
+  buildComponentsV2Flags,
+  buildSearchCustomId,
+  buildSearchRecoveryComponents,
+  decodeISearchFilters,
+  GAME_SEARCH_PAGE_SIZE,
+  type ISearchFilters,
+} from "./gamedb-utils.js";
+import {
+  buildGameProfile,
+  buildGameProfileActionRow,
+  showGameProfile,
+  trimTextDisplayContent,
+} from "./gamedb-profile.service.js";
+import { handleNoResults } from "./gamedb-add.command.js";
+import { isPositiveInt } from "../../utilities/ValidationUtils.js";
+import { MAX_CONTAINER_TEXT } from "../../config/textLimits.js";
+import { assertCustomIdSegments } from "../../utilities/CustomIdUtils.js";
+import {
+  buildActionButton,
+  buildButtonRow,
+  buildSelectRow,
+} from "../../functions/uiComponents.js";
 
-// function formatUpcomingDate(date: Date | null | undefined): string {
-//   if (!date) return "";
-//   const d = date instanceof Date ? date : new Date(date);
-//   if (Number.isNaN(d.getTime())) return "";
-//   const mm = String(d.getUTCMonth() + 1).padStart(2, "0");
-//   const dd = String(d.getUTCDate()).padStart(2, "0");
-//   const yyyy = d.getUTCFullYear();
-//   return `\`${mm}/${dd}/${yyyy}\``;
-// }
+function formatUpcomingDate(date: Date | null | undefined): string {
+  if (!date) return "";
+  const d = date instanceof Date ? date : new Date(date);
+  if (Number.isNaN(d.getTime())) return "";
+  const mm = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const dd = String(d.getUTCDate()).padStart(2, "0");
+  const yyyy = d.getUTCFullYear();
+  return `\`${mm}/${dd}/${yyyy}\``;
+}
 
-// async function buildFilterSummary(filters: ISearchFilters): Promise<string> {
-//   const parts: string[] = [];
-//   if (filters.upcomingRelease) parts.push("Upcoming release");
-//   if (filters.platformId) {
-//     const platform = await Game.getPlatformById(filters.platformId);
-//     parts.push(`Platform: ${platform?.name ?? `ID ${filters.platformId}`}`);
-//   }
-//   if (filters.year) parts.push(`Year: ${filters.year}`);
-//   if (filters.developerId) {
-//     const company = await Game.getCompanyById(filters.developerId);
-//     parts.push(`Developer: ${company?.name ?? `ID ${filters.developerId}`}`);
-//   }
-//   if (filters.publisherId) {
-//     const company = await Game.getCompanyById(filters.publisherId);
-//     parts.push(`Publisher: ${company?.name ?? `ID ${filters.publisherId}`}`);
-//   }
-//   return parts.join(" | ");
-// }
+async function buildFilterSummary(filters: ISearchFilters): Promise<string> {
+  const parts: string[] = [];
+  if (filters.upcomingRelease) parts.push("Upcoming release");
+  if (filters.platformId) {
+    const platform = await Game.getPlatformById(filters.platformId);
+    parts.push(`Platform: ${platform?.name ?? `ID ${filters.platformId}`}`);
+  }
+  if (filters.year) parts.push(`Year: ${filters.year}`);
+  if (filters.developerId) {
+    const company = await Game.getCompanyById(filters.developerId);
+    parts.push(`Developer: ${company?.name ?? `ID ${filters.developerId}`}`);
+  }
+  if (filters.publisherId) {
+    const company = await Game.getCompanyById(filters.publisherId);
+    parts.push(`Publisher: ${company?.name ?? `ID ${filters.publisherId}`}`);
+  }
+  return parts.join(" | ");
+}
 
-// export async function runSearchFlow(
-//   interaction: CommandInteraction,
-//   searchTerm: string,
-//   rawQuery?: string,
-//   filters?: ISearchFilters,
-// ): Promise<void> {
-//   const activeFilters = filters ?? {};
-//   const results = await Game.searchGames(searchTerm, activeFilters);
+export async function runSearchFlow(
+  interaction: CommandInteraction,
+  searchTerm: string,
+  rawQuery?: string,
+  filters?: ISearchFilters,
+): Promise<void> {
+  const activeFilters = filters ?? {};
+  const results = await Game.searchGames(searchTerm, activeFilters);
 
-//   if (results.length === 0) {
-//     if (!searchTerm) {
-//       await safeReply(interaction, buildTextReply("No games found matching your filters.", true));
-//     } else {
-//       await handleNoResults(interaction, searchTerm || rawQuery || "Unknown");
-//     }
-//     return;
-//   }
+  if (results.length === 0) {
+    if (!searchTerm) {
+      await safeReply(interaction, buildTextReply("No games found matching your filters.", true));
+    } else {
+      await handleNoResults(interaction, searchTerm || rawQuery || "Unknown");
+    }
+    return;
+  }
 
-//   if (results.length === 1 && searchTerm && !Object.keys(activeFilters).length) {
-//     await showGameProfile(interaction, results[0].id);
-//     return;
-//   }
+  if (results.length === 1 && searchTerm && !Object.keys(activeFilters).length) {
+    await showGameProfile(interaction, results[0].id);
+    return;
+  }
 
-//   const filterSummary = Object.keys(activeFilters).length
-//     ? await buildFilterSummary(activeFilters)
-//     : "";
-//   const response = buildSearchResponse(
-//     searchTerm, results, interaction.user.id, 0, true, activeFilters, filterSummary,
-//   );
+  const filterSummary = Object.keys(activeFilters).length
+    ? await buildFilterSummary(activeFilters)
+    : "";
+  const response = buildSearchResponse(
+    searchTerm, results, interaction.user.id, 0, true, activeFilters, filterSummary,
+  );
 
-//   await safeReply(interaction, response);
-// }
+  await safeReply(interaction, response);
+}
 
-// function buildSearchResponse(
-//   searchTerm: string,
-//   results: any[],
-//   ownerId: string,
-//   page: number,
-//   includeList: boolean,
-//   filters?: ISearchFilters,
-//   filterSummary?: string,
-// ): { components: Array<ContainerBuilder | ActionRowBuilder<any>>; flags: number } {
-//   const totalPages = Math.max(
-//     1,
-//     Math.ceil(results.length / GAME_SEARCH_PAGE_SIZE),
-//   );
-//   const safePage = Math.min(Math.max(page, 0), totalPages - 1);
-//   const start = safePage * GAME_SEARCH_PAGE_SIZE;
-//   const displayedResults = results.slice(start, start + GAME_SEARCH_PAGE_SIZE);
-//   const titleCounts = new Map<string, number>();
-//   results.forEach((game) => {
-//     const title = String(game.title ?? "");
-//     titleCounts.set(title, (titleCounts.get(title) ?? 0) + 1);
-//   });
-//   const showDates = filters?.upcomingRelease === true;
-//   const resultList = displayedResults.map((game) => {
-//     const title = String(game.title ?? "");
-//     const dateStr = showDates ? formatUpcomingDate(game.upcomingReleaseDate) : "";
-//     const platforms: string[] = game.upcomingReleasePlatforms?.length
-//       ? game.upcomingReleasePlatforms
-//       : (game.platforms ?? []).map((p: any) => p.abbreviation ?? p.name);
-//     const platformStr = platforms.length ? ` (${platforms.join(", ")})` : "";
-//     const datePart = dateStr ? `${dateStr} ` : "";
-//     return `• ${datePart}**${title}**${platformStr}`;
-//   }).join("\n");
+function buildSearchResponse(
+  searchTerm: string,
+  results: any[],
+  ownerId: string,
+  page: number,
+  includeList: boolean,
+  filters?: ISearchFilters,
+  filterSummary?: string,
+): { components: Array<ContainerBuilder | ActionRowBuilder<any>>; flags: number } {
+  const totalPages = Math.max(
+    1,
+    Math.ceil(results.length / GAME_SEARCH_PAGE_SIZE),
+  );
+  const safePage = Math.min(Math.max(page, 0), totalPages - 1);
+  const start = safePage * GAME_SEARCH_PAGE_SIZE;
+  const displayedResults = results.slice(start, start + GAME_SEARCH_PAGE_SIZE);
+  const titleCounts = new Map<string, number>();
+  results.forEach((game) => {
+    const title = String(game.title ?? "");
+    titleCounts.set(title, (titleCounts.get(title) ?? 0) + 1);
+  });
+  const showDates = filters?.upcomingRelease === true;
+  const resultList = displayedResults.map((game) => {
+    const title = String(game.title ?? "");
+    const dateStr = showDates ? formatUpcomingDate(game.upcomingReleaseDate) : "";
+    const platforms: string[] = game.upcomingReleasePlatforms?.length
+      ? game.upcomingReleasePlatforms
+      : (game.platforms ?? []).map((p: any) => p.abbreviation ?? p.name);
+    const platformStr = platforms.length ? ` (${platforms.join(", ")})` : "";
+    const datePart = dateStr ? `${dateStr} ` : "";
+    return `• ${datePart}**${title}**${platformStr}`;
+  }).join("\n");
 
-//   const title = searchTerm
-//     ? `Search Results for "${searchTerm}" (Page ${safePage + 1}/${totalPages})`
-//     : `GameDB Search (Page ${safePage + 1}/${totalPages})`;
+  const title = searchTerm
+    ? `Search Results for "${searchTerm}" (Page ${safePage + 1}/${totalPages})`
+    : `GameDB Search (Page ${safePage + 1}/${totalPages})`;
 
-//   const selectCustomId = buildSearchCustomId("select", ownerId, safePage, searchTerm, undefined, filters);
-//   const options = displayedResults.map((game) => {
-//     const gameTitle = String(game.title ?? "");
-//     const isDuplicate = (titleCounts.get(gameTitle) ?? 0) > 1;
-//     let label = gameTitle;
-//     if (isDuplicate) {
-//       const releaseDate = game.initialReleaseDate as Date | null | undefined;
-//       const year = releaseDate instanceof Date
-//         ? releaseDate.getFullYear()
-//         : releaseDate
-//           ? new Date(releaseDate).getFullYear()
-//           : null;
-//       const yearText = year ? ` (${year})` : " (Unknown Year)";
-//       label = `${gameTitle}${yearText}`;
-//     }
-//     const upcomingDate = showDates ? (game.upcomingReleaseDate as Date | null | undefined) : null;
-//     const dateLabel = upcomingDate
-//       ? (() => {
-//         const d = upcomingDate instanceof Date ? upcomingDate : new Date(upcomingDate);
-//         const mm = String(d.getUTCMonth() + 1).padStart(2, "0");
-//         const dd = String(d.getUTCDate()).padStart(2, "0");
-//         const yyyy = d.getUTCFullYear();
-//         return `${mm}/${dd}/${yyyy}`;
-//       })()
-//       : null;
-//     const releasePlatforms: string[] = game.upcomingReleasePlatforms
-//       ?? (game.platforms ?? []).map((p: any) => p.abbreviation ?? p.name);
-//     const platformLabel = releasePlatforms.length ? ` (${releasePlatforms.join(", ")})` : "";
-//     const description = dateLabel ? `${dateLabel}${platformLabel}` : undefined;
-//     return {
-//       label: label.substring(0, 100),
-//       value: String(game.id),
-//       ...(description ? { description: description.substring(0, 100) } : {}),
-//     };
-//   });
+  const selectCustomId = buildSearchCustomId("select", ownerId, safePage, searchTerm, undefined, filters);
+  const options = displayedResults.map((game) => {
+    const gameTitle = String(game.title ?? "");
+    const isDuplicate = (titleCounts.get(gameTitle) ?? 0) > 1;
+    let label = gameTitle;
+    if (isDuplicate) {
+      const releaseDate = game.initialReleaseDate as Date | null | undefined;
+      const year = releaseDate instanceof Date
+        ? releaseDate.getFullYear()
+        : releaseDate
+          ? new Date(releaseDate).getFullYear()
+          : null;
+      const yearText = year ? ` (${year})` : " (Unknown Year)";
+      label = `${gameTitle}${yearText}`;
+    }
+    const upcomingDate = showDates ? (game.upcomingReleaseDate as Date | null | undefined) : null;
+    const dateLabel = upcomingDate
+      ? (() => {
+        const d = upcomingDate instanceof Date ? upcomingDate : new Date(upcomingDate);
+        const mm = String(d.getUTCMonth() + 1).padStart(2, "0");
+        const dd = String(d.getUTCDate()).padStart(2, "0");
+        const yyyy = d.getUTCFullYear();
+        return `${mm}/${dd}/${yyyy}`;
+      })()
+      : null;
+    const releasePlatforms: string[] = game.upcomingReleasePlatforms
+      ?? (game.platforms ?? []).map((p: any) => p.abbreviation ?? p.name);
+    const platformLabel = releasePlatforms.length ? ` (${releasePlatforms.join(", ")})` : "";
+    const description = dateLabel ? `${dateLabel}${platformLabel}` : undefined;
+    return {
+      label: label.substring(0, 100),
+      value: String(game.id),
+      ...(description ? { description: description.substring(0, 100) } : {}),
+    };
+  });
 
-//   const selectMenu = new StringSelectMenuBuilder()
+  const selectMenu = new StringSelectMenuBuilder()
 
-//     .setCustomId(selectCustomId)
-//     .setPlaceholder("Select a game to view details")
-//     .addOptions(options);
+    .setCustomId(selectCustomId)
+    .setPlaceholder("Select a game to view details")
+    .addOptions(options);
 
-//   const selectRow = buildSelectRow(selectMenu);
+  const selectRow = buildSelectRow(selectMenu);
 
-//   const prevDisabled = safePage === 0;
-//   const nextDisabled = safePage >= totalPages - 1;
+  const prevDisabled = safePage === 0;
+  const nextDisabled = safePage >= totalPages - 1;
 
-//   const prevButton = buildActionButton({
-//     customId: buildSearchCustomId("page", ownerId, safePage, searchTerm, "prev", filters),
-//     label: "Previous Page",
-//     style: ButtonStyle.Secondary,
-//   }).setDisabled(prevDisabled);
-//   const nextButton = buildActionButton({
-//     customId: buildSearchCustomId("page", ownerId, safePage, searchTerm, "next", filters),
-//     label: "Next Page",
-//     style: ButtonStyle.Secondary,
-//   }).setDisabled(nextDisabled);
+  const prevButton = buildActionButton({
+    customId: buildSearchCustomId("page", ownerId, safePage, searchTerm, "prev", filters),
+    label: "Previous Page",
+    style: ButtonStyle.Secondary,
+  }).setDisabled(prevDisabled);
+  const nextButton = buildActionButton({
+    customId: buildSearchCustomId("page", ownerId, safePage, searchTerm, "next", filters),
+    label: "Next Page",
+    style: ButtonStyle.Secondary,
+  }).setDisabled(nextDisabled);
 
-//   const buttonRow = buildButtonRow(prevButton, nextButton);
-//   const components: Array<ContainerBuilder | ActionRowBuilder<any>> = [];
-//   if (includeList) {
-//     const filterNote = filterSummary ? `\n*Filters: ${filterSummary}*` : "";
-//     const listText = resultList || "No results.";
-//     const content = trimTextDisplayContent(
-//       `## ${title}\n\n${listText}\n\n*${results.length} results total*${filterNote}`,
-//     );
-//     const container = buildTextContainer(safeV2TextContent(content, MAX_CONTAINER_TEXT));
-//     components.push(container);
-//   }
-//   components.push(selectRow);
+  const buttonRow = buildButtonRow(prevButton, nextButton);
+  const components: Array<ContainerBuilder | ActionRowBuilder<any>> = [];
+  if (includeList) {
+    const filterNote = filterSummary ? `\n*Filters: ${filterSummary}*` : "";
+    const listText = resultList || "No results.";
+    const content = trimTextDisplayContent(
+      `## ${title}\n\n${listText}\n\n*${results.length} results total*${filterNote}`,
+    );
+    const container = buildTextContainer(safeV2TextContent(content, MAX_CONTAINER_TEXT));
+    components.push(container);
+  }
+  components.push(selectRow);
 
-//   if (shouldRenderPrevNextButtons(prevDisabled, nextDisabled)) {
+  if (shouldRenderPrevNextButtons(prevDisabled, nextDisabled)) {
 
-//     components.push(buttonRow);
-//   }
+    components.push(buttonRow);
+  }
 
-//   return {
-//     // eslint-disable-next-line local/dynamic-components-require-chunking
-//     components,
-//     flags: buildComponentsV2Flags(false),
-//   };
-// }
+  return {
+    // eslint-disable-next-line local/dynamic-components-require-chunking
+    components,
+    flags: buildComponentsV2Flags(false),
+  };
+}
 
-// @Discord()
-// @SlashGroup("gamedb")
-// export class GameDbSearchCommand {
-//   @Slash({ description: "Search for a game", name: "search" })
-//   async search(
-//     @SlashOption({
-//       description: "Search query (game title). Optional if other filters are provided.",
-//       name: "title",
-//       required: false,
-//       type: ApplicationCommandOptionType.String,
-//     })
-//     query: string | null,
-//     @SlashOption({
-//       description: "Filter to games with any upcoming release (including games already out on other platforms).",
-//       name: "upcoming_release",
-//       required: false,
-//       type: ApplicationCommandOptionType.Boolean,
-//     })
-//     upcomingRelease: boolean | null,
-//     @SlashOption({
-//       description: "Filter to a specific platform.",
-//       name: "platform",
-//       required: false,
-//       type: ApplicationCommandOptionType.String,
-//       autocomplete: async (interaction: AutocompleteInteraction) => {
-//         await autocompleteSearchPlatform(interaction);
-//       },
-//     })
-//     platformValue: string | null,
-//     @SlashOption({
-//       description: "Filter to a specific release year (uses first release date).",
-//       name: "year",
-//       required: false,
-//       type: ApplicationCommandOptionType.Integer,
-//     })
-//     year: number | null,
-//     @SlashOption({
-//       description: "Filter to games developed by a specific company.",
-//       name: "developer",
-//       required: false,
-//       type: ApplicationCommandOptionType.String,
-//       autocomplete: async (interaction: AutocompleteInteraction) => {
-//         await autocompleteSearchCompany(interaction);
-//       },
-//     })
-//     developerValue: string | null,
-//     @SlashOption({
-//       description: "Filter to games published by a specific company.",
-//       name: "publisher",
-//       required: false,
-//       type: ApplicationCommandOptionType.String,
-//       autocomplete: async (interaction: AutocompleteInteraction) => {
-//         await autocompleteSearchCompany(interaction);
-//       },
-//     })
-//     publisherValue: string | null,
-//     interaction: CommandInteraction,
-//   ): Promise<void> {
-//     await safeDeferReply(interaction, { flags: buildComponentsV2Flags(false) });
+@Discord()
+@SlashGroup("gamedb")
+export class GameDbSearchCommand {
+  @Slash({ description: "Search for a game", name: "search" })
+  async search(
+    @SlashOption({
+      description: "Search query (game title). Optional if other filters are provided.",
+      name: "title",
+      required: false,
+      type: ApplicationCommandOptionType.String,
+    })
+    query: string | null,
+    @SlashOption({
+      description: "Filter to games with any upcoming release (including games already out on other platforms).",
+      name: "upcoming_release",
+      required: false,
+      type: ApplicationCommandOptionType.Boolean,
+    })
+    upcomingRelease: boolean | null,
+    @SlashOption({
+      description: "Filter to a specific platform.",
+      name: "platform",
+      required: false,
+      type: ApplicationCommandOptionType.String,
+      autocomplete: async (interaction: AutocompleteInteraction) => {
+        await autocompleteSearchPlatform(interaction);
+      },
+    })
+    platformValue: string | null,
+    @SlashOption({
+      description: "Filter to a specific release year (uses first release date).",
+      name: "year",
+      required: false,
+      type: ApplicationCommandOptionType.Integer,
+    })
+    year: number | null,
+    @SlashOption({
+      description: "Filter to games developed by a specific company.",
+      name: "developer",
+      required: false,
+      type: ApplicationCommandOptionType.String,
+      autocomplete: async (interaction: AutocompleteInteraction) => {
+        await autocompleteSearchCompany(interaction);
+      },
+    })
+    developerValue: string | null,
+    @SlashOption({
+      description: "Filter to games published by a specific company.",
+      name: "publisher",
+      required: false,
+      type: ApplicationCommandOptionType.String,
+      autocomplete: async (interaction: AutocompleteInteraction) => {
+        await autocompleteSearchCompany(interaction);
+      },
+    })
+    publisherValue: string | null,
+    interaction: CommandInteraction,
+  ): Promise<void> {
+    await safeDeferReply(interaction, { flags: buildComponentsV2Flags(false) });
 
-//     try {
-//       const searchTerm = query ? sanitizeUserInput(query, { preserveNewlines: false }) : "";
-//       const filters: ISearchFilters = {};
-//       if (upcomingRelease === true) filters.upcomingRelease = true;
-//       const platformId = platformValue ? Number(platformValue) : null;
-//       if (platformId && isPositiveInt(platformId)) {
-//         filters.platformId = platformId;
-//       }
-//       if (year && isPositiveInt(year)) filters.year = year;
-//       const developerId = developerValue ? Number(developerValue) : null;
-//       if (developerId && isPositiveInt(developerId)) {
-//         filters.developerId = developerId;
-//       }
-//       const publisherId = publisherValue ? Number(publisherValue) : null;
-//       if (publisherId && isPositiveInt(publisherId)) {
-//         filters.publisherId = publisherId;
-//       }
-//       const hasFilters =
-//         filters.upcomingRelease || filters.platformId || filters.year ||
-//         filters.developerId || filters.publisherId;
-//       if (!searchTerm && !hasFilters) {
-//         await safeReply(interaction, buildTextReply(
-//           "Please provide a title or at least one filter " +
-//           "(upcoming_release, platform, year, developer, or publisher).",
-//           true,
-//         ));
-//         return;
-//       }
-//       await runSearchFlow(interaction, searchTerm, query ?? undefined, filters);
-//     } catch (error: any) {
-//       await safeReply(interaction, buildTextReply(
-//         `Failed to search games. Error: ${error.message}`, true,
-//       ));
-//     }
-//   }
+    try {
+      const searchTerm = query ? sanitizeUserInput(query, { preserveNewlines: false }) : "";
+      const filters: ISearchFilters = {};
+      if (upcomingRelease === true) filters.upcomingRelease = true;
+      const platformId = platformValue ? Number(platformValue) : null;
+      if (platformId && isPositiveInt(platformId)) {
+        filters.platformId = platformId;
+      }
+      if (year && isPositiveInt(year)) filters.year = year;
+      const developerId = developerValue ? Number(developerValue) : null;
+      if (developerId && isPositiveInt(developerId)) {
+        filters.developerId = developerId;
+      }
+      const publisherId = publisherValue ? Number(publisherValue) : null;
+      if (publisherId && isPositiveInt(publisherId)) {
+        filters.publisherId = publisherId;
+      }
+      const hasFilters =
+        filters.upcomingRelease || filters.platformId || filters.year ||
+        filters.developerId || filters.publisherId;
+      if (!searchTerm && !hasFilters) {
+        await safeReply(interaction, buildTextReply(
+          "Please provide a title or at least one filter " +
+          "(upcoming_release, platform, year, developer, or publisher).",
+          true,
+        ));
+        return;
+      }
+      await runSearchFlow(interaction, searchTerm, query ?? undefined, filters);
+    } catch (error: any) {
+      await safeReply(interaction, buildTextReply(
+        `Failed to search games. Error: ${error.message}`, true,
+      ));
+    }
+  }
 
-//   @SelectMenuComponent({ id: /^gamedb-search-select:\d+:\d+:[A-Za-z0-9_-]*:[a-z0-9]*$/ })
-//   async handleSearchSelect(interaction: StringSelectMenuInteraction): Promise<void> {
-//     const segs = assertCustomIdSegments(interaction, 4);
-//     if (!segs) return;
-//     const [ownerId, pageRaw, encodedQuery, filterStr] = segs;
-//     const page = Number(pageRaw);
+  @SelectMenuComponent({ id: /^gamedb-search-select:\d+:\d+:[A-Za-z0-9_-]*:[a-z0-9]*$/ })
+  async handleSearchSelect(interaction: StringSelectMenuInteraction): Promise<void> {
+    const segs = assertCustomIdSegments(interaction, 4);
+    if (!segs) return;
+    const [ownerId, pageRaw, encodedQuery, filterStr] = segs;
+    const page = Number(pageRaw);
 
-//     if (await replyIfNotOwner(interaction, ownerId, "This menu isn't for you.")) return;
+    if (await replyIfNotOwner(interaction, ownerId, "This menu isn't for you.")) return;
 
-//     const searchTerm = sanitizeUserInput(
-//       decodeBase64Url(encodedQuery),
-//       { preserveNewlines: false },
-//     );
-//     const filters = decodeISearchFilters(filterStr);
-//     const hasFilters =
-//       filters.upcomingRelease || filters.platformId || filters.year ||
-//       filters.developerId || filters.publisherId;
-//     if (!searchTerm && !hasFilters) {
-//       const recoveryComponents = buildSearchRecoveryComponents(ownerId, encodedQuery, filterStr);
-//       const textParts = buildTextReply(
-//         "This search request expired. Refresh to run it again.", true,
-//       );
-//       await safeReply(interaction, {
-//         components: [...textParts.components, ...recoveryComponents],
-//         flags: textParts.flags,
-//       });
-//       return;
-//     }
+    const searchTerm = sanitizeUserInput(
+      decodeBase64Url(encodedQuery),
+      { preserveNewlines: false },
+    );
+    const filters = decodeISearchFilters(filterStr);
+    const hasFilters =
+      filters.upcomingRelease || filters.platformId || filters.year ||
+      filters.developerId || filters.publisherId;
+    if (!searchTerm && !hasFilters) {
+      const recoveryComponents = buildSearchRecoveryComponents(ownerId, encodedQuery, filterStr);
+      const textParts = buildTextReply(
+        "This search request expired. Refresh to run it again.", true,
+      );
+      await safeReply(interaction, {
+        components: [...textParts.components, ...recoveryComponents],
+        flags: textParts.flags,
+      });
+      return;
+    }
 
-//     const results = await Game.searchGames(searchTerm, filters);
+    const results = await Game.searchGames(searchTerm, filters);
 
-//     const gameId = Number(interaction.values?.[0]);
-//     if (!Number.isFinite(gameId)) {
-//       await safeReply(interaction, buildTextReply("Invalid selection.", true));
-//       return;
-//     }
+    const gameId = Number(interaction.values?.[0]);
+    if (!Number.isFinite(gameId)) {
+      await safeReply(interaction, buildTextReply("Invalid selection.", true));
+      return;
+    }
 
-//     try {
-//       await safeDeferUpdate(interaction);
-//     } catch {
-//       // ignore
-//     }
+    try {
+      await safeDeferUpdate(interaction);
+    } catch {
+      // ignore
+    }
 
-//     const profile = await buildGameProfile(gameId, interaction);
-//     if (!profile) {
-//       await safeReply(interaction, {
-//         ...buildTextReply("Unable to load that game.", true),
-//         __forceFollowUp: true,
-//       });
-//       return;
-//     }
+    const profile = await buildGameProfile(gameId, interaction);
+    if (!profile) {
+      await safeReply(interaction, {
+        ...buildTextReply("Unable to load that game.", true),
+        __forceFollowUp: true,
+      });
+      return;
+    }
 
-//     const response = buildSearchResponse(searchTerm, results, ownerId, page, false, filters);
-//     const actionRows = buildGameProfileActionRow(
-//       gameId,
-//       profile.hasThread,
-//       profile.featuredVideoUrl,
-//       profile.isReleased,
-//     );
+    const response = buildSearchResponse(searchTerm, results, ownerId, page, false, filters);
+    const actionRows = buildGameProfileActionRow(
+      gameId,
+      profile.hasThread,
+      profile.featuredVideoUrl,
+      profile.isReleased,
+    );
 
-//     try {
-//       await safeReply(interaction, {
-//         files: profile.files,
-//         components: [...profile.components, ...actionRows, ...response.components],
-//         flags: response.flags,
-//       });
-//     } catch {
-//       // ignore update failures
-//     }
-//   }
+    try {
+      await safeReply(interaction, {
+        files: profile.files,
+        components: [...profile.components, ...actionRows, ...response.components],
+        flags: response.flags,
+      });
+    } catch {
+      // ignore update failures
+    }
+  }
 
-//   @ButtonComponent({ id: /^gamedb-search-page:\d+:\d+:[A-Za-z0-9_-]*:[a-z0-9]*:(next|prev)$/ })
-//   async handleSearchPage(interaction: ButtonInteraction): Promise<void> {
-//     const segs = assertCustomIdSegments(interaction, 5);
-//     if (!segs) return;
-//     const [ownerId, pageRaw, encodedQuery, filterStr, direction] = segs;
-//     const page = Number(pageRaw);
+  @ButtonComponent({ id: /^gamedb-search-page:\d+:\d+:[A-Za-z0-9_-]*:[a-z0-9]*:(next|prev)$/ })
+  async handleSearchPage(interaction: ButtonInteraction): Promise<void> {
+    const segs = assertCustomIdSegments(interaction, 5);
+    if (!segs) return;
+    const [ownerId, pageRaw, encodedQuery, filterStr, direction] = segs;
+    const page = Number(pageRaw);
 
-//     if (await replyIfNotOwner(interaction, ownerId, "This menu isn't for you.")) return;
+    if (await replyIfNotOwner(interaction, ownerId, "This menu isn't for you.")) return;
 
-//     const searchTerm = sanitizeUserInput(
-//       decodeBase64Url(encodedQuery),
-//       { preserveNewlines: false },
-//     );
-//     const filters = decodeISearchFilters(filterStr);
-//     const hasFilters =
-//       filters.upcomingRelease || filters.platformId || filters.year ||
-//       filters.developerId || filters.publisherId;
-//     if (!searchTerm && !hasFilters) {
-//       const recoveryComponents = buildSearchRecoveryComponents(ownerId, encodedQuery, filterStr);
-//       const textParts = buildTextReply(
-//         "This search request expired. Refresh to run it again.", true,
-//       );
-//       await safeReply(interaction, {
-//         components: [...textParts.components, ...recoveryComponents],
-//         flags: textParts.flags,
-//       });
-//       return;
-//     }
+    const searchTerm = sanitizeUserInput(
+      decodeBase64Url(encodedQuery),
+      { preserveNewlines: false },
+    );
+    const filters = decodeISearchFilters(filterStr);
+    const hasFilters =
+      filters.upcomingRelease || filters.platformId || filters.year ||
+      filters.developerId || filters.publisherId;
+    if (!searchTerm && !hasFilters) {
+      const recoveryComponents = buildSearchRecoveryComponents(ownerId, encodedQuery, filterStr);
+      const textParts = buildTextReply(
+        "This search request expired. Refresh to run it again.", true,
+      );
+      await safeReply(interaction, {
+        components: [...textParts.components, ...recoveryComponents],
+        flags: textParts.flags,
+      });
+      return;
+    }
 
-//     const results = await Game.searchGames(searchTerm, filters);
-//     const totalPages = Math.max(
-//       1,
-//       Math.ceil(results.length / GAME_SEARCH_PAGE_SIZE),
-//     );
-//     const delta = direction === "next" ? 1 : -1;
-//     const newPage = Math.min(Math.max(page + delta, 0), totalPages - 1);
+    const results = await Game.searchGames(searchTerm, filters);
+    const totalPages = Math.max(
+      1,
+      Math.ceil(results.length / GAME_SEARCH_PAGE_SIZE),
+    );
+    const delta = direction === "next" ? 1 : -1;
+    const newPage = Math.min(Math.max(page + delta, 0), totalPages - 1);
 
-//     try {
-//       await safeDeferUpdate(interaction);
-//     } catch {
-//       // ignore
-//     }
+    try {
+      await safeDeferUpdate(interaction);
+    } catch {
+      // ignore
+    }
 
-//     const filterSummary = Object.keys(filters).length
-//       ? await buildFilterSummary(filters)
-//       : "";
-//     const response = buildSearchResponse(
-//       searchTerm, results, ownerId, newPage, true, filters, filterSummary,
-//     );
+    const filterSummary = Object.keys(filters).length
+      ? await buildFilterSummary(filters)
+      : "";
+    const response = buildSearchResponse(
+      searchTerm, results, ownerId, newPage, true, filters, filterSummary,
+    );
 
-//     try {
-//       await safeReply(interaction, response);
-//     } catch {
-//       // ignore
-//     }
-//   }
+    try {
+      await safeReply(interaction, response);
+    } catch {
+      // ignore
+    }
+  }
 
-//   @ButtonComponent({ id: /^gamedb-search-refresh:\d+:[A-Za-z0-9_-]*:[a-z0-9]*$/ })
-//   async handleSearchRefresh(interaction: ButtonInteraction): Promise<void> {
-//     const segs = assertCustomIdSegments(interaction, 3);
-//     if (!segs) return;
-//     const [ownerId, encodedQuery, filterStr] = segs;
+  @ButtonComponent({ id: /^gamedb-search-refresh:\d+:[A-Za-z0-9_-]*:[a-z0-9]*$/ })
+  async handleSearchRefresh(interaction: ButtonInteraction): Promise<void> {
+    const segs = assertCustomIdSegments(interaction, 3);
+    if (!segs) return;
+    const [ownerId, encodedQuery, filterStr] = segs;
 
-//     if (interaction.user.id !== ownerId) {
-//       await safeReply(interaction, {
-//         ...buildTextReply("This refresh button isn't for you.", true),
-//         __forceFollowUp: true,
-//       });
-//       return;
-//     }
+    if (interaction.user.id !== ownerId) {
+      await safeReply(interaction, {
+        ...buildTextReply("This refresh button isn't for you.", true),
+        __forceFollowUp: true,
+      });
+      return;
+    }
 
-//     const searchTerm = sanitizeUserInput(
-//       decodeBase64Url(encodedQuery),
-//       { preserveNewlines: false },
-//     );
-//     const filters = decodeISearchFilters(filterStr);
-//     const hasFilters =
-//       filters.upcomingRelease || filters.platformId || filters.year ||
-//       filters.developerId || filters.publisherId;
-//     if (!searchTerm && !hasFilters) {
-//       await safeReply(interaction, buildTextReply(
-//         "Unable to refresh: search details were not found.", true,
-//       ));
-//       return;
-//     }
+    const searchTerm = sanitizeUserInput(
+      decodeBase64Url(encodedQuery),
+      { preserveNewlines: false },
+    );
+    const filters = decodeISearchFilters(filterStr);
+    const hasFilters =
+      filters.upcomingRelease || filters.platformId || filters.year ||
+      filters.developerId || filters.publisherId;
+    if (!searchTerm && !hasFilters) {
+      await safeReply(interaction, buildTextReply(
+        "Unable to refresh: search details were not found.", true,
+      ));
+      return;
+    }
 
-//     const results = await Game.searchGames(searchTerm, filters);
-//     if (results.length === 0) {
-//       const msg = searchTerm
-//         ? `No results found for "${searchTerm}".`
-//         : "No games found matching your filters.";
-//       await safeReply(interaction, buildTextReply(msg, true));
-//       return;
-//     }
+    const results = await Game.searchGames(searchTerm, filters);
+    if (results.length === 0) {
+      const msg = searchTerm
+        ? `No results found for "${searchTerm}".`
+        : "No games found matching your filters.";
+      await safeReply(interaction, buildTextReply(msg, true));
+      return;
+    }
 
-//     const filterSummary = Object.keys(filters).length
-//       ? await buildFilterSummary(filters)
-//       : "";
-//     const response = buildSearchResponse(
-//       searchTerm, results, ownerId, 0, true, filters, filterSummary,
-//     );
-//     await safeUpdate(interaction, response);
-//   }
-// }
+    const filterSummary = Object.keys(filters).length
+      ? await buildFilterSummary(filters)
+      : "";
+    const response = buildSearchResponse(
+      searchTerm, results, ownerId, 0, true, filters, filterSummary,
+    );
+    await safeUpdate(interaction, response);
+  }
+}

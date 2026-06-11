@@ -1,495 +1,495 @@
-// import {
-//   ActionRowBuilder,
-//   StringSelectMenuBuilder,
-//   ButtonBuilder,
-//   ButtonStyle,
-//   type CommandInteraction,
-//   type ButtonInteraction,
-//   type StringSelectMenuInteraction,
-//   type ModalSubmitInteraction,
-//   type User,
-// } from "discord.js";
-// import { ContainerBuilder } from "@discordjs/builders";
-// import Member from "../../classes/Member.js";
-// import Game from "../../classes/Game.js";
-// import { COMPLETION_PAGE_SIZE } from "../profile.command.js";
-// import { formatDiscordTimestamp, formatTableDate } from "../../functions/DateFormatUtils.js";
-// import { formatPlatformDisplayName } from "../../functions/PlatformDisplay.js";
-// import { safeReply, safeUpdate } from "../../functions/InteractionUtils.js";
-// import {
-//   buildComponentsV2EditFlags,
-//   buildComponentsV2Flags,
-//   buildTextContainer,
-//   buildTextReply,
-//   safeV2TextContent,
-// } from "../../functions/ComponentsV2Utils.js";
-// import { renderUsernameWithEmoji } from "../../services/UserEmojiService.js";
-// import {
-//   DISCORD_SELECT_OPTIONS_MAX,
-//   MAX_QUERY_LENGTH,
-//   truncateLabel,
-// } from "../../config/textLimits.js";
-// import {
-//   buildActionButton,
-//   buildButtonRow,
-//   buildJournalSelectRow,
-//   buildUserHeaderContainer,
-//   type IJournalSelectEntry,
-//   buildSelectRow,
-// } from "../../functions/uiComponents.js";
+import {
+  ActionRowBuilder,
+  StringSelectMenuBuilder,
+  ButtonBuilder,
+  ButtonStyle,
+  type CommandInteraction,
+  type ButtonInteraction,
+  type StringSelectMenuInteraction,
+  type ModalSubmitInteraction,
+  type User,
+} from "discord.js";
+import { ContainerBuilder } from "@discordjs/builders";
+import Member from "../../classes/Member.js";
+import Game from "../../classes/Game.js";
+import { COMPLETION_PAGE_SIZE } from "../profile.command.js";
+import { formatDiscordTimestamp, formatTableDate } from "../../functions/DateFormatUtils.js";
+import { formatPlatformDisplayName } from "../../functions/PlatformDisplay.js";
+import { safeReply, safeUpdate } from "../../functions/InteractionUtils.js";
+import {
+  buildComponentsV2EditFlags,
+  buildComponentsV2Flags,
+  buildTextContainer,
+  buildTextReply,
+  safeV2TextContent,
+} from "../../functions/ComponentsV2Utils.js";
+import { renderUsernameWithEmoji } from "../../services/UserEmojiService.js";
+import {
+  DISCORD_SELECT_OPTIONS_MAX,
+  MAX_QUERY_LENGTH,
+  truncateLabel,
+} from "../../config/textLimits.js";
+import {
+  buildActionButton,
+  buildButtonRow,
+  buildJournalSelectRow,
+  buildUserHeaderContainer,
+  type IJournalSelectEntry,
+  buildSelectRow,
+} from "../../functions/uiComponents.js";
 
-// /**
-//  * Renders a leaderboard showing all members with completions, optionally filtered by game title
-//  */
-// export async function renderCompletionLeaderboard(
-//   interaction: CommandInteraction,
-//   ephemeral: boolean,
-//   query?: string,
-// ): Promise<void> {
-//   const leaderboard = await Member.getCompletionLeaderboard(25, query);
-//   if (!leaderboard.length) {
-//     const text = query
-//       ? `No completions found matching "${query}".`
-//       : "No completions recorded yet.";
-//     await safeReply(interaction, {
-//       components: [
-//         buildTextContainer(safeV2TextContent(text, 1000)),
-//       ],
-//       flags: buildComponentsV2Flags(ephemeral),
-//     });
-//     return;
-//   }
+/**
+ * Renders a leaderboard showing all members with completions, optionally filtered by game title
+ */
+export async function renderCompletionLeaderboard(
+  interaction: CommandInteraction,
+  ephemeral: boolean,
+  query?: string,
+): Promise<void> {
+  const leaderboard = await Member.getCompletionLeaderboard(25, query);
+  if (!leaderboard.length) {
+    const text = query
+      ? `No completions found matching "${query}".`
+      : "No completions recorded yet.";
+    await safeReply(interaction, {
+      components: [
+        buildTextContainer(safeV2TextContent(text, 1000)),
+      ],
+      flags: buildComponentsV2Flags(ephemeral),
+    });
+    return;
+  }
 
-//   const lines = leaderboard.map((m, idx) => {
-//     const name = m.globalName ?? m.username ?? m.userId;
-//     const suffix = m.count === 1 ? "completion" : "completions";
-//     return `${idx + 1}. **${renderUsernameWithEmoji(m.userId, name)}**: ${m.count} ${suffix}`;
-//   });
+  const lines = leaderboard.map((m, idx) => {
+    const name = m.globalName ?? m.username ?? m.userId;
+    const suffix = m.count === 1 ? "completion" : "completions";
+    return `${idx + 1}. **${renderUsernameWithEmoji(m.userId, name)}**: ${m.count} ${suffix}`;
+  });
 
-//   const trimmedQuery = query?.trim();
-//   const contentParts = ["## Game Completion Leaderboard", lines.join("\n")];
-//   if (trimmedQuery) {
-//     contentParts.push(`-# Filter: "${trimmedQuery}"`);
-//   }
+  const trimmedQuery = query?.trim();
+  const contentParts = ["## Game Completion Leaderboard", lines.join("\n")];
+  if (trimmedQuery) {
+    contentParts.push(`-# Filter: "${trimmedQuery}"`);
+  }
 
-//   const container = buildTextContainer(safeV2TextContent(contentParts.join("\n"), 3500));
+  const container = buildTextContainer(safeV2TextContent(contentParts.join("\n"), 3500));
 
-//   const options = leaderboard.map((m) => ({
-//     label: truncateLabel((m.globalName ?? m.username ?? m.userId)),
-//     value: m.userId,
-//     description: `${m.count} ${m.count === 1 ? "completion" : "completions"}`,
-//   }));
+  const options = leaderboard.map((m) => ({
+    label: truncateLabel((m.globalName ?? m.username ?? m.userId)),
+    value: m.userId,
+    description: `${m.count} ${m.count === 1 ? "completion" : "completions"}`,
+  }));
 
-//   const select = new StringSelectMenuBuilder()
-//     .setCustomId(
-//       // eslint-disable-next-line local/custom-id-has-matching-handler
-//       `comp-leaderboard-select${trimmedQuery ? `:${trimmedQuery.slice(0, MAX_QUERY_LENGTH)}` : ""}`,
-//     )
-//     .setPlaceholder("View completions for a member")
-//     .addOptions(options);
+  const select = new StringSelectMenuBuilder()
+    .setCustomId(
+      // eslint-disable-next-line local/custom-id-has-matching-handler
+      `comp-leaderboard-select${trimmedQuery ? `:${trimmedQuery.slice(0, MAX_QUERY_LENGTH)}` : ""}`,
+    )
+    .setPlaceholder("View completions for a member")
+    .addOptions(options);
 
-//   await safeReply(interaction, {
-//     components: [
-//       container,
-//       buildSelectRow(select),
-//     ],
-//     flags: buildComponentsV2Flags(ephemeral),
-//   });
-// }
+  await safeReply(interaction, {
+    components: [
+      container,
+      buildSelectRow(select),
+    ],
+    flags: buildComponentsV2Flags(ephemeral),
+  });
+}
 
-// /**
-//  * Renders a paginated list of a user's game completions
-//  */
-// export async function renderCompletionPage(
-//   interaction:
-//     | CommandInteraction
-//     | ButtonInteraction
-//     | StringSelectMenuInteraction
-//     | ModalSubmitInteraction,
-//   userId: string,
-//   page: number,
-//   year: number | "unknown" | null,
-//   ephemeral: boolean,
-//   query?: string,
-// ): Promise<void> {
-//   const user =
-//     interaction.user.id === userId
-//       ? interaction.user
-//       : await interaction.client.users.fetch(userId).catch(() => interaction.user);
+/**
+ * Renders a paginated list of a user's game completions
+ */
+export async function renderCompletionPage(
+  interaction:
+    | CommandInteraction
+    | ButtonInteraction
+    | StringSelectMenuInteraction
+    | ModalSubmitInteraction,
+  userId: string,
+  page: number,
+  year: number | "unknown" | null,
+  ephemeral: boolean,
+  query?: string,
+): Promise<void> {
+  const user =
+    interaction.user.id === userId
+      ? interaction.user
+      : await interaction.client.users.fetch(userId).catch(() => interaction.user);
 
-//   const result = await buildCompletionComponents(userId, page, year, user, query);
+  const result = await buildCompletionComponents(userId, page, year, user, query);
 
-//   if (!result) {
-//     if (year === "unknown") {
-//       await safeReply(interaction as any, {
-//         components: [
-//         buildTextContainer(
-//             safeV2TextContent("You have no recorded completions with unknown dates.", 1000),
-//           ),
-//         ],
-//         flags: buildComponentsV2Flags(ephemeral),
-//       });
-//       return;
-//     }
-//     const text = year
-//       ? `You have no recorded completions for ${year}.`
-//       : "You have no recorded completions yet.";
-//     await safeReply(interaction as any, {
-//       components: [
-//         buildTextContainer(safeV2TextContent(text, 1000)),
-//       ],
-//       flags: buildComponentsV2Flags(ephemeral),
-//     });
-//     return;
-//   }
+  if (!result) {
+    if (year === "unknown") {
+      await safeReply(interaction as any, {
+        components: [
+        buildTextContainer(
+            safeV2TextContent("You have no recorded completions with unknown dates.", 1000),
+          ),
+        ],
+        flags: buildComponentsV2Flags(ephemeral),
+      });
+      return;
+    }
+    const text = year
+      ? `You have no recorded completions for ${year}.`
+      : "You have no recorded completions yet.";
+    await safeReply(interaction as any, {
+      components: [
+        buildTextContainer(safeV2TextContent(text, 1000)),
+      ],
+      flags: buildComponentsV2Flags(ephemeral),
+    });
+    return;
+  }
 
-//   const { containers, totalPages, safePage, sortedYears, yearCounts, journalEntries } = result;
-//   const yearPart = year == null ? "" : String(year);
-//   const queryPart = query ? `:${query.slice(0, MAX_QUERY_LENGTH)}` : "";
-//   const clearFilterCustomId = year !== null ? `comp-clear-year-filter:${userId}` : undefined;
-//   const paginationRows = buildPaginationRows(
-//     totalPages,
-//     safePage,
-//     `comp-list-page:${userId}:${yearPart}:${safePage}:prev${queryPart}`,
-//     `comp-list-page:${userId}:${yearPart}:${safePage}:next${queryPart}`,
-//     clearFilterCustomId,
-//   );
+  const { containers, totalPages, safePage, sortedYears, yearCounts, journalEntries } = result;
+  const yearPart = year == null ? "" : String(year);
+  const queryPart = query ? `:${query.slice(0, MAX_QUERY_LENGTH)}` : "";
+  const clearFilterCustomId = year !== null ? `comp-clear-year-filter:${userId}` : undefined;
+  const paginationRows = buildPaginationRows(
+    totalPages,
+    safePage,
+    `comp-list-page:${userId}:${yearPart}:${safePage}:prev${queryPart}`,
+    `comp-list-page:${userId}:${yearPart}:${safePage}:next${queryPart}`,
+    clearFilterCustomId,
+  );
 
-//   const yearJumpRow = buildYearJumpRow(userId, year, query, totalPages, sortedYears, yearCounts);
-//   const journalSelectRow = buildJournalSelectRow(
-//     `comp-journal-view-select:${userId}`,
-//     journalEntries,
-//   );
-//   const displayName = user.displayName ?? user.username ?? user.id;
-//   const isOwner = interaction.user.id === userId;
-//   const headerButtonCustomId = isOwner ? `comp-list-header:${userId}` : undefined;
-//   const header = buildUserHeaderContainer(userId, displayName, "Completed Games", headerButtonCustomId);
+  const yearJumpRow = buildYearJumpRow(userId, year, query, totalPages, sortedYears, yearCounts);
+  const journalSelectRow = buildJournalSelectRow(
+    `comp-journal-view-select:${userId}`,
+    journalEntries,
+  );
+  const displayName = user.displayName ?? user.username ?? user.id;
+  const isOwner = interaction.user.id === userId;
+  const headerButtonCustomId = isOwner ? `comp-list-header:${userId}` : undefined;
+  const header = buildUserHeaderContainer(userId, displayName, "Completed Games", headerButtonCustomId);
 
-//   await safeReply(interaction as any, {
-//     components: [
-//       header,
-//       ...containers,
-//       ...(yearJumpRow ? [yearJumpRow] : []),
-//       ...(journalSelectRow ? [journalSelectRow] : []),
-//       ...paginationRows,
-//     ],
-//     flags: buildComponentsV2Flags(ephemeral),
-//   });
-// }
+  await safeReply(interaction as any, {
+    components: [
+      header,
+      ...containers,
+      ...(yearJumpRow ? [yearJumpRow] : []),
+      ...(journalSelectRow ? [journalSelectRow] : []),
+      ...paginationRows,
+    ],
+    flags: buildComponentsV2Flags(ephemeral),
+  });
+}
 
-// /**
-//  * Renders a paginated list of completions with selection menu for editing or deleting
-//  */
-// export async function renderSelectionPage(
-//   interaction: CommandInteraction | ButtonInteraction | StringSelectMenuInteraction,
-//   userId: string,
-//   page: number,
-//   mode: "edit" | "delete",
-//   year: number | "unknown" | null = null,
-//   query?: string,
-// ): Promise<void> {
-//   const user =
-//     interaction.user.id === userId
-//       ? interaction.user
-//       : await interaction.client.users.fetch(userId).catch(() => interaction.user);
+/**
+ * Renders a paginated list of completions with selection menu for editing or deleting
+ */
+export async function renderSelectionPage(
+  interaction: CommandInteraction | ButtonInteraction | StringSelectMenuInteraction,
+  userId: string,
+  page: number,
+  mode: "edit" | "delete",
+  year: number | "unknown" | null = null,
+  query?: string,
+): Promise<void> {
+  const user =
+    interaction.user.id === userId
+      ? interaction.user
+      : await interaction.client.users.fetch(userId).catch(() => interaction.user);
 
-//   const result = await buildCompletionComponents(userId, page, year, user, query);
+  const result = await buildCompletionComponents(userId, page, year, user, query);
 
-//   if (!result) {
-//     const msg =
-//       mode === "edit"
-//         ? "You have no completions to edit matching your filters."
-//         : "You have no completions to delete matching your filters.";
-//     await safeReply(interaction, buildTextReply(msg, true));
-//     return;
-//   }
+  if (!result) {
+    const msg =
+      mode === "edit"
+        ? "You have no completions to edit matching your filters."
+        : "You have no completions to delete matching your filters.";
+    await safeReply(interaction, buildTextReply(msg, true));
+    return;
+  }
 
-//   const { containers, totalPages, safePage, pageCompletions } = result;
+  const { containers, totalPages, safePage, pageCompletions } = result;
 
-//   const selectOptions = pageCompletions.map((c) => ({
-//     label: truncateLabel(c.title),
-//     value: String(c.completionId),
-//     description: truncateLabel(`${c.completionType} (${
-//       c.completedAt ? formatDiscordTimestamp(c.completedAt) : "No date"
-//     })`),
-//   }));
+  const selectOptions = pageCompletions.map((c) => ({
+    label: truncateLabel(c.title),
+    value: String(c.completionId),
+    description: truncateLabel(`${c.completionType} (${
+      c.completedAt ? formatDiscordTimestamp(c.completedAt) : "No date"
+    })`),
+  }));
 
-//   const selectId = mode === "edit" ? "comp-edit-menu" : "comp-del-menu";
-//   const select = new StringSelectMenuBuilder()
-//     .setCustomId(`${selectId}:${userId}`)
-//     .setPlaceholder(`Select a completion to ${mode}`)
-//     .addOptions(selectOptions);
+  const selectId = mode === "edit" ? "comp-edit-menu" : "comp-del-menu";
+  const select = new StringSelectMenuBuilder()
+    .setCustomId(`${selectId}:${userId}`)
+    .setPlaceholder(`Select a completion to ${mode}`)
+    .addOptions(selectOptions);
 
-//   const selectRow = buildSelectRow(select);
+  const selectRow = buildSelectRow(select);
 
-//   const yearPart = year == null ? "" : String(year);
-//   const queryPart = query ? `:${query.slice(0, MAX_QUERY_LENGTH)}` : "";
-//   const paginationRows = buildPaginationRows(
-//     totalPages,
-//     safePage,
-//     `comp-${mode}-page:${userId}:${yearPart}:${safePage}:prev${queryPart}`,
-//     `comp-${mode}-page:${userId}:${yearPart}:${safePage}:next${queryPart}`,
-//   );
+  const yearPart = year == null ? "" : String(year);
+  const queryPart = query ? `:${query.slice(0, MAX_QUERY_LENGTH)}` : "";
+  const paginationRows = buildPaginationRows(
+    totalPages,
+    safePage,
+    `comp-${mode}-page:${userId}:${yearPart}:${safePage}:prev${queryPart}`,
+    `comp-${mode}-page:${userId}:${yearPart}:${safePage}:next${queryPart}`,
+  );
 
-//   const displayName = user.displayName ?? user.username ?? user.id;
-//   const header = buildUserHeaderContainer(userId, displayName, "Completed Games");
-//   const allComponents = [header, ...containers, selectRow, ...paginationRows];
+  const displayName = user.displayName ?? user.username ?? user.id;
+  const header = buildUserHeaderContainer(userId, displayName, "Completed Games");
+  const allComponents = [header, ...containers, selectRow, ...paginationRows];
 
-//   if (interaction.isMessageComponent()) {
-//     await safeUpdate(interaction, {
-//       components: allComponents,
-//       flags: buildComponentsV2EditFlags(),
-//     });
-//   } else {
-//     await safeReply(interaction, {
-//       components: allComponents,
-//       flags: buildComponentsV2Flags(true),
-//     });
-//   }
-// }
+  if (interaction.isMessageComponent()) {
+    await safeUpdate(interaction, {
+      components: allComponents,
+      flags: buildComponentsV2EditFlags(),
+    });
+  } else {
+    await safeReply(interaction, {
+      components: allComponents,
+      flags: buildComponentsV2Flags(true),
+    });
+  }
+}
 
-// function buildYearJumpRow(
-//   userId: string,
-//   activeYear: number | "unknown" | null,
-//   query: string | undefined,
-//   totalPages: number,
-//   sortedYears: string[],
-//   yearCounts: Record<string, number>,
-// ): ActionRowBuilder<StringSelectMenuBuilder> | null {
-//   if (activeYear !== null || query || totalPages <= 5 || sortedYears.length <= 3) return null;
+function buildYearJumpRow(
+  userId: string,
+  activeYear: number | "unknown" | null,
+  query: string | undefined,
+  totalPages: number,
+  sortedYears: string[],
+  yearCounts: Record<string, number>,
+): ActionRowBuilder<StringSelectMenuBuilder> | null {
+  if (activeYear !== null || query || totalPages <= 5 || sortedYears.length <= 3) return null;
 
-//   const options = sortedYears.slice(0, DISCORD_SELECT_OPTIONS_MAX).map((yr) => {
-//     const count = yearCounts[yr] ?? 0;
-//     const label = yr === "Unknown" ? "Unknown Date" : yr;
-//     const gameWord = count === 1 ? "game" : "games";
-//     return { label, value: yr === "Unknown" ? "unknown" : yr, description: `${count} ${gameWord}` };
-//   });
+  const options = sortedYears.slice(0, DISCORD_SELECT_OPTIONS_MAX).map((yr) => {
+    const count = yearCounts[yr] ?? 0;
+    const label = yr === "Unknown" ? "Unknown Date" : yr;
+    const gameWord = count === 1 ? "game" : "games";
+    return { label, value: yr === "Unknown" ? "unknown" : yr, description: `${count} ${gameWord}` };
+  });
 
-//   const select = new StringSelectMenuBuilder()
-//     // eslint-disable-next-line local/custom-id-has-matching-handler
-//     .setCustomId(`comp-year-select:${userId}`)
-//     .setPlaceholder("Jump to year")
-//     .addOptions(options);
+  const select = new StringSelectMenuBuilder()
+    // eslint-disable-next-line local/custom-id-has-matching-handler
+    .setCustomId(`comp-year-select:${userId}`)
+    .setPlaceholder("Jump to year")
+    .addOptions(options);
 
-//   return buildSelectRow(select);
-// }
+  return buildSelectRow(select);
+}
 
-// function buildPaginationRows(
-//   totalPages: number,
-//   safePage: number,
-//   prevCustomId: string,
-//   nextCustomId: string,
-//   clearFilterCustomId?: string,
-// ): ActionRowBuilder<ButtonBuilder>[] {
-//   const showPrev = totalPages > 1 && safePage > 0;
-//   const showNext = totalPages > 1 && safePage < totalPages - 1;
+function buildPaginationRows(
+  totalPages: number,
+  safePage: number,
+  prevCustomId: string,
+  nextCustomId: string,
+  clearFilterCustomId?: string,
+): ActionRowBuilder<ButtonBuilder>[] {
+  const showPrev = totalPages > 1 && safePage > 0;
+  const showNext = totalPages > 1 && safePage < totalPages - 1;
 
-//   if (!showPrev && !showNext && !clearFilterCustomId) return [];
+  if (!showPrev && !showNext && !clearFilterCustomId) return [];
 
-//   const buttons: ButtonBuilder[] = [];
-//   if (showPrev) {
-//     buttons.push(buildActionButton({ customId: prevCustomId, label: "Previous Page", style: ButtonStyle.Secondary }));
-//   }
-//   if (clearFilterCustomId) {
-//     buttons.push(buildActionButton({ customId: clearFilterCustomId, label: "Clear Filter", style: ButtonStyle.Secondary }));
-//   }
-//   if (showNext) {
-//     buttons.push(buildActionButton({ customId: nextCustomId, label: "Next Page", style: ButtonStyle.Secondary }));
-//   }
-//   return [buildButtonRow(...buttons)];
-// }
+  const buttons: ButtonBuilder[] = [];
+  if (showPrev) {
+    buttons.push(buildActionButton({ customId: prevCustomId, label: "Previous Page", style: ButtonStyle.Secondary }));
+  }
+  if (clearFilterCustomId) {
+    buttons.push(buildActionButton({ customId: clearFilterCustomId, label: "Clear Filter", style: ButtonStyle.Secondary }));
+  }
+  if (showNext) {
+    buttons.push(buildActionButton({ customId: nextCustomId, label: "Next Page", style: ButtonStyle.Secondary }));
+  }
+  return [buildButtonRow(...buttons)];
+}
 
-// const CHUNK_LIMIT = 3500;
+const CHUNK_LIMIT = 3500;
 
-// async function buildCompletionComponents(
-//   userId: string,
-//   page: number,
-//   year: number | "unknown" | null,
-//   interactionUser: User,
-//   query?: string,
-// ): Promise<{
-//   containers: ContainerBuilder[];
-//   total: number;
-//   totalPages: number;
-//   safePage: number;
-//   pageCompletions: any[];
-//   sortedYears: string[];
-//   yearCounts: Record<string, number>;
-//   journalEntries: IJournalSelectEntry[];
-// } | null> {
-//   const total = await Member.countCompletions(userId, year, query);
-//   if (total === 0) return null;
+async function buildCompletionComponents(
+  userId: string,
+  page: number,
+  year: number | "unknown" | null,
+  interactionUser: User,
+  query?: string,
+): Promise<{
+  containers: ContainerBuilder[];
+  total: number;
+  totalPages: number;
+  safePage: number;
+  pageCompletions: any[];
+  sortedYears: string[];
+  yearCounts: Record<string, number>;
+  journalEntries: IJournalSelectEntry[];
+} | null> {
+  const total = await Member.countCompletions(userId, year, query);
+  if (total === 0) return null;
 
-//   const totalPages = Math.max(1, Math.ceil(total / COMPLETION_PAGE_SIZE));
-//   const safePage = Math.min(Math.max(page, 0), totalPages - 1);
-//   const offset = safePage * COMPLETION_PAGE_SIZE;
+  const totalPages = Math.max(1, Math.ceil(total / COMPLETION_PAGE_SIZE));
+  const safePage = Math.min(Math.max(page, 0), totalPages - 1);
+  const offset = safePage * COMPLETION_PAGE_SIZE;
 
-//   const allCompletions = await Member.getCompletions({
-//     userId,
-//     limit: 1000,
-//     offset: 0,
-//     year,
-//     title: query,
-//   });
-//   const platforms = await Game.getAllPlatforms();
-//   const platformMap = new Map(
-//     platforms.map((platform) => [platform.id, platform.abbreviation ?? platform.name]),
-//   );
+  const allCompletions = await Member.getCompletions({
+    userId,
+    limit: 1000,
+    offset: 0,
+    year,
+    title: query,
+  });
+  const platforms = await Game.getAllPlatforms();
+  const platformMap = new Map(
+    platforms.map((platform) => [platform.id, platform.abbreviation ?? platform.name]),
+  );
 
-//   allCompletions.sort((a, b) => {
-//     const yearA = a.completedAt ? a.completedAt.getFullYear() : null;
-//     const yearB = b.completedAt ? b.completedAt.getFullYear() : null;
+  allCompletions.sort((a, b) => {
+    const yearA = a.completedAt ? a.completedAt.getFullYear() : null;
+    const yearB = b.completedAt ? b.completedAt.getFullYear() : null;
 
-//     if (yearA == null && yearB == null) return a.title.localeCompare(b.title);
-//     if (yearA == null) return 1;
-//     if (yearB == null) return -1;
-//     if (yearA !== yearB) return yearB - yearA;
+    if (yearA == null && yearB == null) return a.title.localeCompare(b.title);
+    if (yearA == null) return 1;
+    if (yearB == null) return -1;
+    if (yearA !== yearB) return yearB - yearA;
 
-//     const dateA = a.completedAt ? a.completedAt.getTime() : 0;
-//     const dateB = b.completedAt ? b.completedAt.getTime() : 0;
-//     return dateA - dateB;
-//   });
+    const dateA = a.completedAt ? a.completedAt.getTime() : 0;
+    const dateB = b.completedAt ? b.completedAt.getTime() : 0;
+    return dateA - dateB;
+  });
 
-//   if (!allCompletions.length) return null;
+  if (!allCompletions.length) return null;
 
-//   const pageCompletions = allCompletions.slice(offset, offset + COMPLETION_PAGE_SIZE);
+  const pageCompletions = allCompletions.slice(offset, offset + COMPLETION_PAGE_SIZE);
 
-//   const pageGameIds = [...new Set(pageCompletions.map((c) => c.gameId))];
-//   const journalStatuses = await Member.getJournalStatusForGames(userId, pageGameIds);
-//   const journalByGameId = new Map(journalStatuses.map((s) => [s.gameId, s]));
+  const pageGameIds = [...new Set(pageCompletions.map((c) => c.gameId))];
+  const journalStatuses = await Member.getJournalStatusForGames(userId, pageGameIds);
+  const journalByGameId = new Map(journalStatuses.map((s) => [s.gameId, s]));
 
-//   const buildEntryLine = (c: (typeof pageCompletions)[number], num: number): string => {
-//     const journal = journalByGameId.get(c.gameId);
-//     const journalEmoji = (journal?.journalCount ?? 0) > 1 ? " 📒" : "";
-//     const typeAbbrev =
-//       c.completionType === "Main Story"
-//         ? "M"
-//         : c.completionType === "Main Story + Side Content"
-//           ? "M+S"
-//           : "C";
-//     const rawPlatformName =
-//       c.platformId == null ? null : platformMap.get(c.platformId) ?? "Unknown Platform";
-//     const platformName = formatPlatformDisplayName(rawPlatformName);
-//     const platformLabel = platformName ? ` [${platformName}]` : "";
-//     const dateLabel = c.completedAt ? ` · ${formatTableDate(c.completedAt)}` : "";
-//     const hoursLabel = c.finalPlaytimeHours != null ? ` · ${c.finalPlaytimeHours} hrs` : "";
-//     return `${num}. **${c.title}**${journalEmoji}${platformLabel} (${typeAbbrev})${dateLabel}${hoursLabel}`;
-//   };
+  const buildEntryLine = (c: (typeof pageCompletions)[number], num: number): string => {
+    const journal = journalByGameId.get(c.gameId);
+    const journalEmoji = (journal?.journalCount ?? 0) > 1 ? " 📒" : "";
+    const typeAbbrev =
+      c.completionType === "Main Story"
+        ? "M"
+        : c.completionType === "Main Story + Side Content"
+          ? "M+S"
+          : "C";
+    const rawPlatformName =
+      c.platformId == null ? null : platformMap.get(c.platformId) ?? "Unknown Platform";
+    const platformName = formatPlatformDisplayName(rawPlatformName);
+    const platformLabel = platformName ? ` [${platformName}]` : "";
+    const dateLabel = c.completedAt ? ` · ${formatTableDate(c.completedAt)}` : "";
+    const hoursLabel = c.finalPlaytimeHours != null ? ` · ${c.finalPlaytimeHours} hrs` : "";
+    return `${num}. **${c.title}**${journalEmoji}${platformLabel} (${typeAbbrev})${dateLabel}${hoursLabel}`;
+  };
 
-//   const pushChunked = (containers: ContainerBuilder[], lines: string[]): void => {
-//     let buffer = "";
-//     for (const line of lines) {
-//       const next = buffer ? `${buffer}\n${line}` : line;
-//       if (next.length > CHUNK_LIMIT) {
-//         containers.push(
-//           buildTextContainer(safeV2TextContent(buffer, CHUNK_LIMIT)),
-//         );
-//         buffer = line;
-//       } else {
-//         buffer = next;
-//       }
-//     }
-//     if (buffer) {
-//       containers.push(
-//         buildTextContainer(safeV2TextContent(buffer, CHUNK_LIMIT)),
-//       );
-//     }
-//   };
+  const pushChunked = (containers: ContainerBuilder[], lines: string[]): void => {
+    let buffer = "";
+    for (const line of lines) {
+      const next = buffer ? `${buffer}\n${line}` : line;
+      if (next.length > CHUNK_LIMIT) {
+        containers.push(
+          buildTextContainer(safeV2TextContent(buffer, CHUNK_LIMIT)),
+        );
+        buffer = line;
+      } else {
+        buffer = next;
+      }
+    }
+    if (buffer) {
+      containers.push(
+        buildTextContainer(safeV2TextContent(buffer, CHUNK_LIMIT)),
+      );
+    }
+  };
 
-//   const queryLabel = query?.trim();
-//   const containers: ContainerBuilder[] = [];
+  const queryLabel = query?.trim();
+  const containers: ContainerBuilder[] = [];
 
-//   const knownYears = allCompletions
-//     .map((c) => c.completedAt?.getFullYear())
-//     .filter((y): y is number => y != null);
-//   const minYear = knownYears.length ? Math.min(...knownYears) : null;
-//   const maxYear = knownYears.length ? Math.max(...knownYears) : null;
+  const knownYears = allCompletions
+    .map((c) => c.completedAt?.getFullYear())
+    .filter((y): y is number => y != null);
+  const minYear = knownYears.length ? Math.min(...knownYears) : null;
+  const maxYear = knownYears.length ? Math.max(...knownYears) : null;
 
-//   const footerLines = [
-//     "-# M = Main Story • M+S = Main Story + Side Content • C = Completionist",
-//   ];
-//   if (year !== null) {
-//     const yearLabel = year === "unknown" ? "Unknown Date" : String(year);
-//     footerLines.push(`-# Year filter: ${yearLabel}`);
-//   }
-//   if (queryLabel) {
-//     footerLines.push(`-# Query: "${queryLabel}"`);
-//   }
-//   if (totalPages > 1) {
-//     let resultsText = `${total} results`;
-//     if (minYear !== null && maxYear !== null) {
-//       resultsText +=
-//         minYear === maxYear
-//           ? ` recorded in ${minYear}`
-//           : ` recorded between ${minYear}-${maxYear}`;
-//     }
-//     footerLines.push(`-# ${resultsText}. Page ${safePage + 1} of ${totalPages}.`);
-//   }
+  const footerLines = [
+    "-# M = Main Story • M+S = Main Story + Side Content • C = Completionist",
+  ];
+  if (year !== null) {
+    const yearLabel = year === "unknown" ? "Unknown Date" : String(year);
+    footerLines.push(`-# Year filter: ${yearLabel}`);
+  }
+  if (queryLabel) {
+    footerLines.push(`-# Query: "${queryLabel}"`);
+  }
+  if (totalPages > 1) {
+    let resultsText = `${total} results`;
+    if (minYear !== null && maxYear !== null) {
+      resultsText +=
+        minYear === maxYear
+          ? ` recorded in ${minYear}`
+          : ` recorded between ${minYear}-${maxYear}`;
+    }
+    footerLines.push(`-# ${resultsText}. Page ${safePage + 1} of ${totalPages}.`);
+  }
 
-//   let sortedYears: string[] = [];
-//   const yearCounts: Record<string, number> = {};
+  let sortedYears: string[] = [];
+  const yearCounts: Record<string, number> = {};
 
-//   if (queryLabel) {
-//     const lines = pageCompletions.map((c, i) => buildEntryLine(c, offset + i + 1));
-//     pushChunked(containers, lines);
-//   } else {
-//     const yearIndices = new Map<number, number>();
-//     for (const c of allCompletions) {
-//       const yr = c.completedAt ? String(c.completedAt.getFullYear()) : "Unknown";
-//       yearCounts[yr] = (yearCounts[yr] ?? 0) + 1;
-//       yearIndices.set(c.completionId, yearCounts[yr]);
-//     }
+  if (queryLabel) {
+    const lines = pageCompletions.map((c, i) => buildEntryLine(c, offset + i + 1));
+    pushChunked(containers, lines);
+  } else {
+    const yearIndices = new Map<number, number>();
+    for (const c of allCompletions) {
+      const yr = c.completedAt ? String(c.completedAt.getFullYear()) : "Unknown";
+      yearCounts[yr] = (yearCounts[yr] ?? 0) + 1;
+      yearIndices.set(c.completionId, yearCounts[yr]);
+    }
 
-//     const grouped = pageCompletions.reduce<Record<string, string[]>>((acc, c) => {
-//       const yr = c.completedAt ? String(c.completedAt.getFullYear()) : "Unknown";
-//       acc[yr] = acc[yr] || [];
-//       acc[yr].push(buildEntryLine(c, yearIndices.get(c.completionId)!));
-//       return acc;
-//     }, {});
+    const grouped = pageCompletions.reduce<Record<string, string[]>>((acc, c) => {
+      const yr = c.completedAt ? String(c.completedAt.getFullYear()) : "Unknown";
+      acc[yr] = acc[yr] || [];
+      acc[yr].push(buildEntryLine(c, yearIndices.get(c.completionId)!));
+      return acc;
+    }, {});
 
-//     sortedYears = Object.keys(yearCounts).sort((a, b) => {
-//       if (a === "Unknown") return 1;
-//       if (b === "Unknown") return -1;
-//       return Number(b) - Number(a);
-//     });
+    sortedYears = Object.keys(yearCounts).sort((a, b) => {
+      if (a === "Unknown") return 1;
+      if (b === "Unknown") return -1;
+      return Number(b) - Number(a);
+    });
 
-//     for (const yr of sortedYears) {
-//       if (!grouped[yr]) continue;
-//       const displayYear = yr === "Unknown" ? "Unknown Date" : yr;
-//       const count = yearCounts[yr] ?? 0;
-//       const gameWord = count === 1 ? "Game" : "Games";
-//       const heading = `### ${displayYear} (${count} ${gameWord} Completed)`;
-//       pushChunked(containers, [heading, ...(grouped[yr] ?? [])]);
-//     }
-//   }
+    for (const yr of sortedYears) {
+      if (!grouped[yr]) continue;
+      const displayYear = yr === "Unknown" ? "Unknown Date" : yr;
+      const count = yearCounts[yr] ?? 0;
+      const gameWord = count === 1 ? "Game" : "Games";
+      const heading = `### ${displayYear} (${count} ${gameWord} Completed)`;
+      pushChunked(containers, [heading, ...(grouped[yr] ?? [])]);
+    }
+  }
 
-//   containers.push(
-//     buildTextContainer(safeV2TextContent(footerLines.join("\n"), 1000)),
-//   );
+  containers.push(
+    buildTextContainer(safeV2TextContent(footerLines.join("\n"), 1000)),
+  );
 
-//   const journalEntries: IJournalSelectEntry[] = pageCompletions
-//     .filter((c) => {
-//       const s = journalByGameId.get(c.gameId);
-//       return (s?.journalCount ?? 0) > 1;
-//     })
-//     .map((c) => {
-//       const s = journalByGameId.get(c.gameId)!;
-//       return {
-//         gameId: c.gameId,
-//         title: c.title,
-//         journalCount: s.journalCount,
-//         lastJournalAt: s.lastJournalAt,
-//       };
-//     });
+  const journalEntries: IJournalSelectEntry[] = pageCompletions
+    .filter((c) => {
+      const s = journalByGameId.get(c.gameId);
+      return (s?.journalCount ?? 0) > 1;
+    })
+    .map((c) => {
+      const s = journalByGameId.get(c.gameId)!;
+      return {
+        gameId: c.gameId,
+        title: c.title,
+        journalCount: s.journalCount,
+        lastJournalAt: s.lastJournalAt,
+      };
+    });
 
-//   return {
-//     containers,
-//     total,
-//     totalPages,
-//     safePage,
-//     pageCompletions,
-//     sortedYears,
-//     yearCounts,
-//     journalEntries,
-//   };
-// }
+  return {
+    containers,
+    total,
+    totalPages,
+    safePage,
+    pageCompletions,
+    sortedYears,
+    yearCounts,
+    journalEntries,
+  };
+}

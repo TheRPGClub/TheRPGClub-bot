@@ -1,431 +1,431 @@
-// import {
-//   ActionRowBuilder,
-//   StringSelectMenuBuilder,
-//   ButtonBuilder,
-//   ButtonStyle,
-//   type StringSelectMenuInteraction,
-//   type ButtonInteraction,
-//   type Message,
-// } from "discord.js";
-// import {
-//   ContainerBuilder,
-//   TextDisplayBuilder,
-// } from "@discordjs/builders";
-// import Member from "../../classes/Member.js";
-// import {
-//   COMPLETION_TYPES,
-//   parseCompletionDateInput,
-// } from "../profile.command.js";
-// import { formatDiscordTimestamp, formatPlaytimeHours } from "../../functions/DateFormatUtils.js";
-// import {
-//   resolveGameCompletionPlatformId,
-//   resolveGameCompletionPlatformLabel,
-// } from "./completion-autocomplete.utils.js";
-// import {
-//   buildComponentsV2EditFlags,
-//   buildTextContainer,
-//   buildTextReply,
-//   safeV2TextContent,
-// } from "../../functions/ComponentsV2Utils.js";
-// import {
-//   isInteractionSettled,
-//   replyIfNotOwner,
-//   safeReply,
-//   safeUpdate,
-// } from "../../functions/InteractionUtils.js";
-// import {
-//   isPositiveInt,
-//   isValidPlaytimeHours,
-//   truncateWithEllipsis,
-// } from "../../utilities/ValidationUtils.js";
-// import { assertCustomIdSegments } from "../../utilities/CustomIdUtils.js";
-// import {
-//   buildActionButton,
-//   buildButtonRow,
-//   buildSelectRow,
-// } from "../../functions/uiComponents.js";
-// import { safeIgnore } from "../../utilities/AsyncUtils.js";
+import {
+  ActionRowBuilder,
+  StringSelectMenuBuilder,
+  ButtonBuilder,
+  ButtonStyle,
+  type StringSelectMenuInteraction,
+  type ButtonInteraction,
+  type Message,
+} from "discord.js";
+import {
+  ContainerBuilder,
+  TextDisplayBuilder,
+} from "@discordjs/builders";
+import Member from "../../classes/Member.js";
+import {
+  COMPLETION_TYPES,
+  parseCompletionDateInput,
+} from "../profile.command.js";
+import { formatDiscordTimestamp, formatPlaytimeHours } from "../../functions/DateFormatUtils.js";
+import {
+  resolveGameCompletionPlatformId,
+  resolveGameCompletionPlatformLabel,
+} from "./completion-autocomplete.utils.js";
+import {
+  buildComponentsV2EditFlags,
+  buildTextContainer,
+  buildTextReply,
+  safeV2TextContent,
+} from "../../functions/ComponentsV2Utils.js";
+import {
+  isInteractionSettled,
+  replyIfNotOwner,
+  safeReply,
+  safeUpdate,
+} from "../../functions/InteractionUtils.js";
+import {
+  isPositiveInt,
+  isValidPlaytimeHours,
+  truncateWithEllipsis,
+} from "../../utilities/ValidationUtils.js";
+import { assertCustomIdSegments } from "../../utilities/CustomIdUtils.js";
+import {
+  buildActionButton,
+  buildButtonRow,
+  buildSelectRow,
+} from "../../functions/uiComponents.js";
+import { safeIgnore } from "../../utilities/AsyncUtils.js";
 
-// const MAX_NOTE_LENGTH = 500;
-// type CompletionEditField = "type" | "date" | "platform" | "playtime" | "note";
+const MAX_NOTE_LENGTH = 500;
+type CompletionEditField = "type" | "date" | "platform" | "playtime" | "note";
 
-// type EditPromptPayload = {
-//   components: Array<ContainerBuilder | ActionRowBuilder<ButtonBuilder>>;
-//   flags: number;
-// };
+type EditPromptPayload = {
+  components: Array<ContainerBuilder | ActionRowBuilder<ButtonBuilder>>;
+  flags: number;
+};
 
-// /**
-//  * Handles completion edit menu selection
-//  */
-// export async function handleCompletionEditMenu(
-//   interaction: StringSelectMenuInteraction,
-// ): Promise<void> {
-//   const segs = assertCustomIdSegments(interaction, 1);
-//   if (!segs) return;
-//   const [ownerId] = segs;
-//   if (await replyIfNotOwner(interaction, ownerId)) return;
+/**
+ * Handles completion edit menu selection
+ */
+export async function handleCompletionEditMenu(
+  interaction: StringSelectMenuInteraction,
+): Promise<void> {
+  const segs = assertCustomIdSegments(interaction, 1);
+  if (!segs) return;
+  const [ownerId] = segs;
+  if (await replyIfNotOwner(interaction, ownerId)) return;
 
-//   const completionId = Number(interaction.values[0]);
-//   if (!isPositiveInt(completionId)) {
-//     await safeReply(interaction, buildTextReply("Invalid selection.", true));
-//     return;
-//   }
+  const completionId = Number(interaction.values[0]);
+  if (!isPositiveInt(completionId)) {
+    await safeReply(interaction, buildTextReply("Invalid selection.", true));
+    return;
+  }
 
-//   const completion = await Member.getCompletion(completionId);
-//   if (!completion) {
-//     await safeReply(interaction, buildTextReply("Completion not found.", true));
-//     return;
-//   }
+  const completion = await Member.getCompletion(completionId);
+  if (!completion) {
+    await safeReply(interaction, buildTextReply("Completion not found.", true));
+    return;
+  }
 
-//   const response = buildCompletionEditPrompt(ownerId, completionId, completion);
-//   if (isInteractionSettled(interaction)) {
-//     await safeReply(interaction, response);
-//   } else {
-//     await safeUpdate(interaction, response);
-//   }
-// }
+  const response = buildCompletionEditPrompt(ownerId, completionId, completion);
+  if (isInteractionSettled(interaction)) {
+    await safeReply(interaction, response);
+  } else {
+    await safeUpdate(interaction, response);
+  }
+}
 
-// /**
-//  * Handles the "Done" button when finishing editing
-//  */
-// export async function handleCompletionEditDone(interaction: ButtonInteraction): Promise<void> {
-//   const segs = assertCustomIdSegments(interaction, 1);
-//   if (!segs) return;
-//   const [ownerId] = segs;
-//   if (await replyIfNotOwner(interaction, ownerId)) return;
+/**
+ * Handles the "Done" button when finishing editing
+ */
+export async function handleCompletionEditDone(interaction: ButtonInteraction): Promise<void> {
+  const segs = assertCustomIdSegments(interaction, 1);
+  if (!segs) return;
+  const [ownerId] = segs;
+  if (await replyIfNotOwner(interaction, ownerId)) return;
 
-//   await safeUpdate(interaction, {
-//     components: [
-//       buildTextContainer("Edit complete."),
-//     ],
-//     flags: buildComponentsV2EditFlags(),
-//   });
-// }
+  await safeUpdate(interaction, {
+    components: [
+      buildTextContainer("Edit complete."),
+    ],
+    flags: buildComponentsV2EditFlags(),
+  });
+}
 
-// /**
-//  * Handles editing individual completion fields (type, date, playtime, note)
-//  */
-// export async function handleCompletionFieldEdit(interaction: ButtonInteraction): Promise<void> {
-//   const segs = assertCustomIdSegments(interaction, 3);
-//   if (!segs) return;
-//   const [ownerId, completionIdRaw, field] = segs;
-//   if (await replyIfNotOwner(interaction, ownerId)) return;
+/**
+ * Handles editing individual completion fields (type, date, playtime, note)
+ */
+export async function handleCompletionFieldEdit(interaction: ButtonInteraction): Promise<void> {
+  const segs = assertCustomIdSegments(interaction, 3);
+  if (!segs) return;
+  const [ownerId, completionIdRaw, field] = segs;
+  if (await replyIfNotOwner(interaction, ownerId)) return;
 
-//   const completionId = Number(completionIdRaw);
-//   if (!isPositiveInt(completionId)) {
-//     await safeReply(interaction, buildTextReply("Invalid selection.", true));
-//     return;
-//   }
+  const completionId = Number(completionIdRaw);
+  if (!isPositiveInt(completionId)) {
+    await safeReply(interaction, buildTextReply("Invalid selection.", true));
+    return;
+  }
 
-//   if (field === "type") {
-//     const select = new StringSelectMenuBuilder()
-//       // eslint-disable-next-line local/custom-id-has-matching-handler
-//       .setCustomId(`comp-edit-type-select:${ownerId}:${completionId}`)
-//       .setPlaceholder("Select completion type")
-//       .addOptions(COMPLETION_TYPES.map((t) => ({ label: t, value: t })));
+  if (field === "type") {
+    const select = new StringSelectMenuBuilder()
+      // eslint-disable-next-line local/custom-id-has-matching-handler
+      .setCustomId(`comp-edit-type-select:${ownerId}:${completionId}`)
+      .setPlaceholder("Select completion type")
+      .addOptions(COMPLETION_TYPES.map((t) => ({ label: t, value: t })));
 
-//     const currentEmbedText = extractEditPromptText(interaction);
-//     const container = new ContainerBuilder().addTextDisplayComponents(
-//       new TextDisplayBuilder().setContent("Select the new completion type:"),
-//       ...(currentEmbedText
-//         ? [new TextDisplayBuilder().setContent(safeV2TextContent(currentEmbedText, 1000))]
-//         : []),
-//     );
+    const currentEmbedText = extractEditPromptText(interaction);
+    const container = new ContainerBuilder().addTextDisplayComponents(
+      new TextDisplayBuilder().setContent("Select the new completion type:"),
+      ...(currentEmbedText
+        ? [new TextDisplayBuilder().setContent(safeV2TextContent(currentEmbedText, 1000))]
+        : []),
+    );
 
-//     await safeUpdate(interaction, {
-//       components: [
-//         container,
-//         buildSelectRow(select),
-//       ],
-//       flags: buildComponentsV2EditFlags(),
-//     });
-//     return;
-//   }
+    await safeUpdate(interaction, {
+      components: [
+        container,
+        buildSelectRow(select),
+      ],
+      flags: buildComponentsV2EditFlags(),
+    });
+    return;
+  }
 
-//   const prompt =
-//     field === "date"
-//       ? "Type the new completion date (e.g., 2025-12-11)."
-//       : field === "platform"
-//         ? "Type the new platform (or `clear` to remove it)."
-//       : field === "playtime"
-//         ? "Type the new final playtime in hours (e.g., 42.5)."
-//         : "Type the new note (or `clear` to remove it).";
+  const prompt =
+    field === "date"
+      ? "Type the new completion date (e.g., 2025-12-11)."
+      : field === "platform"
+        ? "Type the new platform (or `clear` to remove it)."
+      : field === "playtime"
+        ? "Type the new final playtime in hours (e.g., 42.5)."
+        : "Type the new note (or `clear` to remove it).";
 
-//   await safeUpdate(interaction, {
-//     components: [
-//       buildTextContainer(safeV2TextContent(prompt, 1000)),
-//     ],
-//     flags: buildComponentsV2EditFlags(),
-//   });
+  await safeUpdate(interaction, {
+    components: [
+      buildTextContainer(safeV2TextContent(prompt, 1000)),
+    ],
+    flags: buildComponentsV2EditFlags(),
+  });
 
-//   const channel = interaction.channel;
-//   if (!channel || !("awaitMessages" in channel)) {
-//     const updated = await Member.getCompletion(completionId);
-//     if (updated) {
-//       safeIgnore(interaction.message.edit(buildCompletionEditPrompt(
-//         ownerId,
-//         completionId,
-//         updated,
-//         "I couldn't listen for your response in this channel.",
-//       )));
-//     }
-//     return;
-//   }
+  const channel = interaction.channel;
+  if (!channel || !("awaitMessages" in channel)) {
+    const updated = await Member.getCompletion(completionId);
+    if (updated) {
+      safeIgnore(interaction.message.edit(buildCompletionEditPrompt(
+        ownerId,
+        completionId,
+        updated,
+        "I couldn't listen for your response in this channel.",
+      )));
+    }
+    return;
+  }
 
-//   const collected = await (channel as any)
-//     .awaitMessages({
-//       filter: (m: Message) => m.author.id === interaction.user.id,
-//       max: 1,
-//       time: 60_000,
-//     })
-//     .catch(() => null);
+  const collected = await (channel as any)
+    .awaitMessages({
+      filter: (m: Message) => m.author.id === interaction.user.id,
+      max: 1,
+      time: 60_000,
+    })
+    .catch(() => null);
 
-//   const message = collected?.first();
-//   if (!message) {
-//     const updated = await Member.getCompletion(completionId);
-//     if (updated) {
-//       safeIgnore(interaction.message.edit(buildCompletionEditPrompt(
-//         ownerId,
-//         completionId,
-//         updated,
-//         "Timed out waiting for your response.",
-//       )));
-//     }
-//     return;
-//   }
+  const message = collected?.first();
+  if (!message) {
+    const updated = await Member.getCompletion(completionId);
+    if (updated) {
+      safeIgnore(interaction.message.edit(buildCompletionEditPrompt(
+        ownerId,
+        completionId,
+        updated,
+        "Timed out waiting for your response.",
+      )));
+    }
+    return;
+  }
 
-//   const value = message.content.trim();
-//   try {
-//     if (field === "date") {
-//       const dt = parseCompletionDateInput(value);
-//       await Member.updateCompletion(ownerId, completionId, { completedAt: dt });
-//     } else if (field === "platform") {
-//       if (/^clear$/i.test(value)) {
-//         await Member.updateCompletion(ownerId, completionId, { platformId: null });
-//       } else {
-//         const platformId = await resolveGameCompletionPlatformId(value);
-//         if (platformId == null) {
-//           throw new Error(
-//             "Platform not found. Use the platform autocomplete in `/game-completion add`.",
-//           );
-//         }
-//         await Member.updateCompletion(ownerId, completionId, { platformId });
-//       }
-//     } else if (field === "playtime") {
-//       const num = Number(value);
-//       if (!isValidPlaytimeHours(num))
-//         throw new Error("Playtime must be a non-negative number.");
-//       await Member.updateCompletion(ownerId, completionId, { finalPlaytimeHours: num });
-//     } else if (field === "note") {
-//       if (/^clear$/i.test(value)) {
-//         await Member.updateCompletion(ownerId, completionId, { note: null });
-//       } else if (value.length > MAX_NOTE_LENGTH) {
-//         throw new Error(`Note must be ${MAX_NOTE_LENGTH} characters or fewer.`);
-//       } else {
-//         await Member.updateCompletion(ownerId, completionId, { note: value });
-//       }
-//     }
-//     const updated = await Member.getCompletion(completionId);
-//     if (updated) {
-//       const notice = await buildCompletionEditSuccessNotice(updated, field as CompletionEditField);
-//       safeIgnore(interaction.message.edit(
-//         buildCompletionEditPrompt(ownerId, completionId, updated, notice),
-//       ));
-//     }
-//   } catch (err: any) {
-//     const updated = await Member.getCompletion(completionId);
-//     if (updated) {
-//       safeIgnore(interaction.message.edit(buildCompletionEditPrompt(
-//         ownerId,
-//         completionId,
-//         updated,
-//         err?.message ?? "Failed to update completion.",
-//       )));
-//     }
-//   } finally {
-//     try {
-//       safeIgnore(message.delete());
-//     } catch {
-//       // ignore
-//     }
-//   }
-// }
+  const value = message.content.trim();
+  try {
+    if (field === "date") {
+      const dt = parseCompletionDateInput(value);
+      await Member.updateCompletion(ownerId, completionId, { completedAt: dt });
+    } else if (field === "platform") {
+      if (/^clear$/i.test(value)) {
+        await Member.updateCompletion(ownerId, completionId, { platformId: null });
+      } else {
+        const platformId = await resolveGameCompletionPlatformId(value);
+        if (platformId == null) {
+          throw new Error(
+            "Platform not found. Use the platform autocomplete in `/game-completion add`.",
+          );
+        }
+        await Member.updateCompletion(ownerId, completionId, { platformId });
+      }
+    } else if (field === "playtime") {
+      const num = Number(value);
+      if (!isValidPlaytimeHours(num))
+        throw new Error("Playtime must be a non-negative number.");
+      await Member.updateCompletion(ownerId, completionId, { finalPlaytimeHours: num });
+    } else if (field === "note") {
+      if (/^clear$/i.test(value)) {
+        await Member.updateCompletion(ownerId, completionId, { note: null });
+      } else if (value.length > MAX_NOTE_LENGTH) {
+        throw new Error(`Note must be ${MAX_NOTE_LENGTH} characters or fewer.`);
+      } else {
+        await Member.updateCompletion(ownerId, completionId, { note: value });
+      }
+    }
+    const updated = await Member.getCompletion(completionId);
+    if (updated) {
+      const notice = await buildCompletionEditSuccessNotice(updated, field as CompletionEditField);
+      safeIgnore(interaction.message.edit(
+        buildCompletionEditPrompt(ownerId, completionId, updated, notice),
+      ));
+    }
+  } catch (err: any) {
+    const updated = await Member.getCompletion(completionId);
+    if (updated) {
+      safeIgnore(interaction.message.edit(buildCompletionEditPrompt(
+        ownerId,
+        completionId,
+        updated,
+        err?.message ?? "Failed to update completion.",
+      )));
+    }
+  } finally {
+    try {
+      safeIgnore(message.delete());
+    } catch {
+      // ignore
+    }
+  }
+}
 
-// /**
-//  * Handles completion type selection from dropdown
-//  */
-// export async function handleCompletionTypeSelect(
-//   interaction: StringSelectMenuInteraction,
-// ): Promise<void> {
-//   const segs = assertCustomIdSegments(interaction, 2);
-//   if (!segs) return;
-//   const [ownerId, completionIdRaw] = segs;
-//   if (await replyIfNotOwner(interaction, ownerId)) return;
+/**
+ * Handles completion type selection from dropdown
+ */
+export async function handleCompletionTypeSelect(
+  interaction: StringSelectMenuInteraction,
+): Promise<void> {
+  const segs = assertCustomIdSegments(interaction, 2);
+  if (!segs) return;
+  const [ownerId, completionIdRaw] = segs;
+  if (await replyIfNotOwner(interaction, ownerId)) return;
 
-//   const completionId = Number(completionIdRaw);
-//   const value = interaction.values[0];
-//   const normalized = COMPLETION_TYPES.find((t) => t.toLowerCase() === value.toLowerCase());
+  const completionId = Number(completionIdRaw);
+  const value = interaction.values[0];
+  const normalized = COMPLETION_TYPES.find((t) => t.toLowerCase() === value.toLowerCase());
 
-//   if (!normalized) {
-//     const updated = await Member.getCompletion(completionId);
-//     if (updated) {
-//       await safeUpdate(
-//         interaction,
-//         buildCompletionEditPrompt(
-//           ownerId,
-//           completionId,
-//           updated,
-//           "Invalid completion type selected.",
-//         ),
-//       );
-//     }
-//     return;
-//   }
+  if (!normalized) {
+    const updated = await Member.getCompletion(completionId);
+    if (updated) {
+      await safeUpdate(
+        interaction,
+        buildCompletionEditPrompt(
+          ownerId,
+          completionId,
+          updated,
+          "Invalid completion type selected.",
+        ),
+      );
+    }
+    return;
+  }
 
-//   await Member.updateCompletion(ownerId, completionId, { completionType: normalized });
+  await Member.updateCompletion(ownerId, completionId, { completionType: normalized });
 
-//   const updated = await Member.getCompletion(completionId);
-//   if (!updated) {
-//     await safeUpdate(interaction, {
-//       components: [
-//         buildTextContainer("Completion not found."),
-//       ],
-//       flags: buildComponentsV2EditFlags(),
-//     });
-//     return;
-//   }
+  const updated = await Member.getCompletion(completionId);
+  if (!updated) {
+    await safeUpdate(interaction, {
+      components: [
+        buildTextContainer("Completion not found."),
+      ],
+      flags: buildComponentsV2EditFlags(),
+    });
+    return;
+  }
 
-//   const notice = await buildCompletionEditSuccessNotice(updated, "type");
-//   await safeUpdate(interaction, buildCompletionEditPrompt(ownerId, completionId, updated, notice));
-// }
+  const notice = await buildCompletionEditSuccessNotice(updated, "type");
+  await safeUpdate(interaction, buildCompletionEditPrompt(ownerId, completionId, updated, notice));
+}
 
-// async function buildCompletionEditSuccessNotice(
-//   completion: Awaited<ReturnType<typeof Member.getCompletion>>,
-//   field: CompletionEditField,
-// ): Promise<string> {
-//   if (!completion) return "Saved update.";
+async function buildCompletionEditSuccessNotice(
+  completion: Awaited<ReturnType<typeof Member.getCompletion>>,
+  field: CompletionEditField,
+): Promise<string> {
+  if (!completion) return "Saved update.";
 
-//   const fieldLabel = getCompletionEditFieldLabel(field);
-//   const valueLabel = await getCompletionEditValueLabel(completion, field);
-//   return `Saved: **${completion.title}** - ${fieldLabel} updated to **${valueLabel}**.`;
-// }
+  const fieldLabel = getCompletionEditFieldLabel(field);
+  const valueLabel = await getCompletionEditValueLabel(completion, field);
+  return `Saved: **${completion.title}** - ${fieldLabel} updated to **${valueLabel}**.`;
+}
 
-// function getCompletionEditFieldLabel(field: CompletionEditField): string {
-//   if (field === "type") return "Completion Type";
-//   if (field === "date") return "Completion Date";
-//   if (field === "platform") return "Platform";
-//   if (field === "playtime") return "Final Playtime";
-//   return "Note";
-// }
+function getCompletionEditFieldLabel(field: CompletionEditField): string {
+  if (field === "type") return "Completion Type";
+  if (field === "date") return "Completion Date";
+  if (field === "platform") return "Platform";
+  if (field === "playtime") return "Final Playtime";
+  return "Note";
+}
 
-// async function getCompletionEditValueLabel(
-//   completion: Awaited<ReturnType<typeof Member.getCompletion>>,
-//   field: CompletionEditField,
-// ): Promise<string> {
-//   if (!completion) return "Unknown";
-//   if (field === "type") return completion.completionType;
-//   if (field === "date") {
-//     return completion.completedAt ? formatDiscordTimestamp(completion.completedAt) : "No date";
-//   }
-//   if (field === "platform") {
-//     return await resolveGameCompletionPlatformLabel(completion.platformId);
-//   }
-//   if (field === "playtime") {
-//     return completion.finalPlaytimeHours != null
-//       ? (formatPlaytimeHours(completion.finalPlaytimeHours) ?? "No playtime")
-//       : "No playtime";
-//   }
-//   if (!completion.note) return "No note";
-//   const compact = completion.note.replace(/\s+/g, " ").trim();
-//   return truncateWithEllipsis(compact, 80);
-// }
+async function getCompletionEditValueLabel(
+  completion: Awaited<ReturnType<typeof Member.getCompletion>>,
+  field: CompletionEditField,
+): Promise<string> {
+  if (!completion) return "Unknown";
+  if (field === "type") return completion.completionType;
+  if (field === "date") {
+    return completion.completedAt ? formatDiscordTimestamp(completion.completedAt) : "No date";
+  }
+  if (field === "platform") {
+    return await resolveGameCompletionPlatformLabel(completion.platformId);
+  }
+  if (field === "playtime") {
+    return completion.finalPlaytimeHours != null
+      ? (formatPlaytimeHours(completion.finalPlaytimeHours) ?? "No playtime")
+      : "No playtime";
+  }
+  if (!completion.note) return "No note";
+  const compact = completion.note.replace(/\s+/g, " ").trim();
+  return truncateWithEllipsis(compact, 80);
+}
 
-// function extractEditPromptText(interaction: ButtonInteraction): string | null {
-//   const firstComponent = interaction.message?.components?.[0];
-//   if (!firstComponent) return null;
-//   return null;
-// }
+function extractEditPromptText(interaction: ButtonInteraction): string | null {
+  const firstComponent = interaction.message?.components?.[0];
+  if (!firstComponent) return null;
+  return null;
+}
 
-// /**
-//  * Builds the V2 edit prompt with current completion details and edit buttons
-//  */
-// function buildCompletionEditPrompt(
-//   ownerId: string,
-//   completionId: number,
-//   completion: Awaited<ReturnType<typeof Member.getCompletion>>,
-//   notice?: string | null,
-// ): EditPromptPayload {
-//   if (!completion) {
-//     return {
-//       components: [
-//         buildTextContainer("Completion not found."),
-//       ],
-//       flags: buildComponentsV2EditFlags(),
-//     };
-//   }
+/**
+ * Builds the V2 edit prompt with current completion details and edit buttons
+ */
+function buildCompletionEditPrompt(
+  ownerId: string,
+  completionId: number,
+  completion: Awaited<ReturnType<typeof Member.getCompletion>>,
+  notice?: string | null,
+): EditPromptPayload {
+  if (!completion) {
+    return {
+      components: [
+        buildTextContainer("Completion not found."),
+      ],
+      flags: buildComponentsV2EditFlags(),
+    };
+  }
 
-//   const fieldButtons = [
+  const fieldButtons = [
      
-//     buildActionButton({
-//       customId: `comp-edit-field:${ownerId}:${completionId}:type`,
-//       label: "Completion Type",
-//       style: ButtonStyle.Primary,
-//     }),
+    buildActionButton({
+      customId: `comp-edit-field:${ownerId}:${completionId}:type`,
+      label: "Completion Type",
+      style: ButtonStyle.Primary,
+    }),
      
-//     buildActionButton({
-//       customId: `comp-edit-field:${ownerId}:${completionId}:date`,
-//       label: "Completion Date",
-//       style: ButtonStyle.Secondary,
-//     }),
+    buildActionButton({
+      customId: `comp-edit-field:${ownerId}:${completionId}:date`,
+      label: "Completion Date",
+      style: ButtonStyle.Secondary,
+    }),
      
-//     buildActionButton({
-//       customId: `comp-edit-field:${ownerId}:${completionId}:platform`,
-//       label: "Platform",
-//       style: ButtonStyle.Secondary,
-//     }),
-//   ];
+    buildActionButton({
+      customId: `comp-edit-field:${ownerId}:${completionId}:platform`,
+      label: "Platform",
+      style: ButtonStyle.Secondary,
+    }),
+  ];
 
-//   const secondaryButtons = [
+  const secondaryButtons = [
      
-//     buildActionButton({
-//       customId: `comp-edit-field:${ownerId}:${completionId}:playtime`,
-//       label: "Final Playtime",
-//       style: ButtonStyle.Secondary,
-//     }),
+    buildActionButton({
+      customId: `comp-edit-field:${ownerId}:${completionId}:playtime`,
+      label: "Final Playtime",
+      style: ButtonStyle.Secondary,
+    }),
      
-//     buildActionButton({
-//       customId: `comp-edit-field:${ownerId}:${completionId}:note`,
-//       label: "Note",
-//       style: ButtonStyle.Secondary,
-//     }),
-//     buildActionButton("confirm", `comp-edit-done:${ownerId}:${completionId}`, "Done"),
-//   ];
+    buildActionButton({
+      customId: `comp-edit-field:${ownerId}:${completionId}:note`,
+      label: "Note",
+      style: ButtonStyle.Secondary,
+    }),
+    buildActionButton("confirm", `comp-edit-done:${ownerId}:${completionId}`, "Done"),
+  ];
 
-//   const currentParts = [
-//     completion.completionType,
-//     completion.completedAt ? formatDiscordTimestamp(completion.completedAt) : "No date",
-//     completion.platformId != null ? `Platform #${completion.platformId}` : "No platform",
-//     completion.finalPlaytimeHours != null
-//       ? formatPlaytimeHours(completion.finalPlaytimeHours)
-//       : null,
-//   ].filter(Boolean);
-//   const noteLine = completion.note ? `\n> ${completion.note}` : "";
+  const currentParts = [
+    completion.completionType,
+    completion.completedAt ? formatDiscordTimestamp(completion.completedAt) : "No date",
+    completion.platformId != null ? `Platform #${completion.platformId}` : "No platform",
+    completion.finalPlaytimeHours != null
+      ? formatPlaytimeHours(completion.finalPlaytimeHours)
+      : null,
+  ].filter(Boolean);
+  const noteLine = completion.note ? `\n> ${completion.note}` : "";
 
-//   const noticeLine = notice ? `${notice}\n` : "";
-//   const headerText = `${noticeLine}Editing **${completion.title}** - choose a field to update:`;
-//   const detailText = `Current: ${currentParts.join(" - ")}${noteLine}`;
+  const noticeLine = notice ? `${notice}\n` : "";
+  const headerText = `${noticeLine}Editing **${completion.title}** - choose a field to update:`;
+  const detailText = `Current: ${currentParts.join(" - ")}${noteLine}`;
 
-//   const infoContainer = new ContainerBuilder().addTextDisplayComponents(
-//     new TextDisplayBuilder().setContent(safeV2TextContent(headerText, 1000)),
-//     new TextDisplayBuilder().setContent(safeV2TextContent(detailText, 3500)),
-//   );
+  const infoContainer = new ContainerBuilder().addTextDisplayComponents(
+    new TextDisplayBuilder().setContent(safeV2TextContent(headerText, 1000)),
+    new TextDisplayBuilder().setContent(safeV2TextContent(detailText, 3500)),
+  );
 
-//   return {
-//     components: [
-//       infoContainer,
-//       buildButtonRow(...fieldButtons),
-//       buildButtonRow(...secondaryButtons),
-//     ],
-//     flags: buildComponentsV2EditFlags(),
-//   };
-// }
+  return {
+    components: [
+      infoContainer,
+      buildButtonRow(...fieldButtons),
+      buildButtonRow(...secondaryButtons),
+    ],
+    flags: buildComponentsV2EditFlags(),
+  };
+}
