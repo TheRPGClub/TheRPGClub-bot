@@ -423,7 +423,7 @@ export async function refreshNowPlayingListFromContext(
         const isEphemeral = message.flags?.has(MessageFlags.Ephemeral) ?? false;
         const title = ownerId === interaction.user.id && isEphemeral
           ? "Your Now Playing List"
-          : `${target.displayName ?? target.username ?? "User"}'s Now Playing List`;
+          : `**${renderUsernameWithEmoji(ownerId, target.displayName ?? target.username ?? "User")}**'s Now Playing List`;
         const entries = getDisplayNowPlayingEntries(await Member.getNowPlaying(ownerId));
 
         if (!entries.length) {

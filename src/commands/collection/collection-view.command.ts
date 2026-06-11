@@ -291,7 +291,7 @@ export class CollectionViewCommand {
     const overviewTitle = extractOverviewTitleFromMessage(interaction.message);
     const memberLabel = resolveMemberLabelFromOverviewTitle(
       overviewTitle ?? "",
-      interaction.user.username,
+      interaction.user.globalName ?? interaction.user.username,
     );
 
     await safeDeferUpdate(interaction);

@@ -530,8 +530,10 @@ export class GameJournalCommand {
     const entries = await Member.getGameJournalList(target.id);
 
     if (!entries.length) {
-      const name = target.displayName ?? target.username;
-      await safeReply(interaction, buildTextReply(`${name} has no game journals.`, ephemeral));
+      const name = renderUsernameWithEmoji(
+        target.id, target.displayName ?? target.username ?? "User",
+      );
+      await safeReply(interaction, buildTextReply(`**${name}** has no game journals.`, ephemeral));
       return;
     }
 
@@ -625,7 +627,7 @@ export class GameJournalCommand {
     const entries = await Member.getGameJournalList(targetUserId);
     if (!entries.length) {
       await safeUpdate(interaction, {
-        content: `${target.displayName ?? target.username} has no game journals.`,
+        content: `**${renderUsernameWithEmoji(target.id, target.displayName ?? target.username ?? "User")}** has no game journals.`,
         embeds: [],
         components: [],
       });
