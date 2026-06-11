@@ -172,11 +172,14 @@ async function syncAllUserEmoji(client: Client, forceRefresh = false): Promise<v
       }
       // Delete the existing emoji so it can be re-uploaded (force refresh or missing from Discord)
       if (emojiId) {
+        let deleted = true;
         try {
           await app.emojis.delete(emojiId);
         } catch (err) {
           logError("UserEmojiService.deleteEmojiForRefresh", err);
+          deleted = false;
         }
+        if (!deleted) continue;
       }
       const avatarUrl = member.displayAvatarURL({ extension: "png", size: 128, forceStatic: true });
       try {
@@ -265,6 +268,8 @@ export async function syncUserEmojiFromAvatarChange(
     await app.emojis.delete(existing.emojiId);
   } catch (err) {
     logError("UserEmojiService.deleteOldEmoji", err);
+    // If delete fails the old emoji still holds the name -- skip create to avoid ALREADY_TAKEN.
+    return;
   }
   emojiCache.delete(userId);
 
