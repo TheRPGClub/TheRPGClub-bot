@@ -73,7 +73,7 @@ export const MemberSql = {
                 u.ADDED_AT,
                 u.NOTE_UPDATED_AT,
                 u.SORT_ORDER,
-                NVL(jp.IS_ENABLED, 1) AS JOURNAL_ENABLED,
+                1 AS JOURNAL_ENABLED,
                 CASE
                   WHEN EXISTS (
                     SELECT 1
@@ -94,9 +94,6 @@ export const MemberSql = {
            FROM USER_NOW_PLAYING u
            JOIN GAMEDB_GAMES g ON g.GAME_ID = u.GAMEDB_GAME_ID
            LEFT JOIN GAMEDB_PLATFORMS p ON p.PLATFORM_ID = u.PLATFORM_ID
-           LEFT JOIN USER_GAME_JOURNAL_PREFS jp
-             ON jp.USER_ID = u.USER_ID
-            AND jp.GAMEDB_GAME_ID = u.GAMEDB_GAME_ID
           WHERE u.USER_ID = :userId
             AND u.GAMEDB_GAME_ID IS NOT NULL
           ORDER BY u.SORT_ORDER NULLS LAST, u.ADDED_AT DESC, u.ENTRY_ID DESC`,
@@ -110,7 +107,7 @@ export const MemberSql = {
                 u.added_at,
                 u.note_updated_at,
                 u.sort_order,
-                COALESCE(jp.is_enabled, true) AS journal_enabled,
+                true AS journal_enabled,
                 CASE
                   WHEN EXISTS (
                     SELECT 1
@@ -131,9 +128,6 @@ export const MemberSql = {
            FROM user_now_playing u
            JOIN gamedb_games g ON g.game_id = u.gamedb_game_id
            LEFT JOIN gamedb_platforms p ON p.platform_id = u.platform_id
-           LEFT JOIN user_game_journal_prefs jp
-             ON jp.user_id = u.user_id
-            AND jp.gamedb_game_id = u.gamedb_game_id
           WHERE u.user_id = :userId
             AND u.gamedb_game_id IS NOT NULL
           ORDER BY u.sort_order NULLS LAST, u.added_at DESC, u.entry_id DESC`,
@@ -247,13 +241,10 @@ export const MemberSql = {
               u.ADDED_AT,
               u.NOTE_UPDATED_AT,
               u.SORT_ORDER,
-              jp.IS_ENABLED AS JOURNAL_ENABLED
+              1 AS JOURNAL_ENABLED
          FROM USER_NOW_PLAYING u
          JOIN GAMEDB_GAMES g ON g.GAME_ID = u.GAMEDB_GAME_ID
          LEFT JOIN GAMEDB_PLATFORMS p ON p.PLATFORM_ID = u.PLATFORM_ID
-         LEFT JOIN USER_GAME_JOURNAL_PREFS jp
-           ON jp.USER_ID = u.USER_ID
-          AND jp.GAMEDB_GAME_ID = u.GAMEDB_GAME_ID
         WHERE u.USER_ID = :userId
           AND u.GAMEDB_GAME_ID IS NOT NULL
         ORDER BY u.SORT_ORDER NULLS LAST, u.ADDED_AT DESC, u.ENTRY_ID DESC`,
@@ -266,13 +257,10 @@ export const MemberSql = {
               u.added_at,
               u.note_updated_at,
               u.sort_order,
-              jp.is_enabled AS journal_enabled
+              true AS journal_enabled
          FROM user_now_playing u
          JOIN gamedb_games g ON g.game_id = u.gamedb_game_id
          LEFT JOIN gamedb_platforms p ON p.platform_id = u.platform_id
-         LEFT JOIN user_game_journal_prefs jp
-           ON jp.user_id = u.user_id
-          AND jp.gamedb_game_id = u.gamedb_game_id
         WHERE u.user_id = :userId
           AND u.gamedb_game_id IS NOT NULL
         ORDER BY u.sort_order NULLS LAST, u.added_at DESC, u.entry_id DESC`,
@@ -920,28 +908,26 @@ export const MemberSql = {
     oracle: `SELECT g.GAME_ID,
               g.TITLE,
               COUNT(e.ENTRY_ID) AS TOTAL_ENTRIES
-         FROM USER_GAME_JOURNAL_PREFS jp
-         JOIN GAMEDB_GAMES g ON g.GAME_ID = jp.GAMEDB_GAME_ID
-         LEFT JOIN USER_GAME_JOURNAL_ENTRIES e
-           ON e.USER_ID = jp.USER_ID
-          AND e.GAMEDB_GAME_ID = jp.GAMEDB_GAME_ID
-        WHERE jp.USER_ID = :userId
-          AND jp.IS_ENABLED = 1
+         FROM USER_NOW_PLAYING u
+         JOIN GAMEDB_GAMES g ON g.GAME_ID = u.GAMEDB_GAME_ID
+         JOIN USER_GAME_JOURNAL_ENTRIES e
+           ON e.USER_ID = u.USER_ID
+          AND e.GAMEDB_GAME_ID = u.GAMEDB_GAME_ID
+        WHERE u.USER_ID = :userId
+          AND u.GAMEDB_GAME_ID IS NOT NULL
         GROUP BY g.GAME_ID, g.TITLE
-       HAVING COUNT(e.ENTRY_ID) > 0
         ORDER BY g.TITLE`,
     postgres: `SELECT g.game_id,
               g.title,
               COUNT(e.entry_id) AS total_entries
-         FROM user_game_journal_prefs jp
-         JOIN gamedb_games g ON g.game_id = jp.gamedb_game_id
-         LEFT JOIN user_game_journal_entries e
-           ON e.user_id = jp.user_id
-          AND e.gamedb_game_id = jp.gamedb_game_id
-        WHERE jp.user_id = :userId
-          AND jp.is_enabled = true
+         FROM user_now_playing u
+         JOIN gamedb_games g ON g.game_id = u.gamedb_game_id
+         JOIN user_game_journal_entries e
+           ON e.user_id = u.user_id
+          AND e.gamedb_game_id = u.gamedb_game_id
+        WHERE u.user_id = :userId
+          AND u.gamedb_game_id IS NOT NULL
         GROUP BY g.game_id, g.title
-       HAVING COUNT(e.entry_id) > 0
         ORDER BY g.title`,
   } satisfies ISqlEntry,
 
