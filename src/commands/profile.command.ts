@@ -15,7 +15,7 @@ import {
   SlashOption,
 } from "discordx";
 import { ContainerBuilder } from "@discordjs/builders";
-import axios from "axios";
+import { apiGet } from "../services/RpgClubApiClient.js";
 import Member, {
   type IMemberRecord,
   type IMemberSearchFilters,
@@ -63,6 +63,35 @@ export type ProfileViewPayload = {
   };
   notFoundMessage?: string;
   errorMessage?: string;
+};
+
+type ApiUserSocial = {
+  handle: string | null;
+  url: string | null;
+  social_platform: { label: string };
+};
+
+type ApiUserMembership = {
+  admin: boolean;
+  moderator: boolean;
+  regular: boolean;
+  member: boolean;
+  newcomer: boolean;
+  active: boolean;
+};
+
+type ApiUserProfile = {
+  user_id: string;
+  username: string | null;
+  global_name: string | null;
+  is_bot: boolean;
+  membership: ApiUserMembership | null;
+  socials: ApiUserSocial[];
+};
+
+type ApiNickHistoryEntry = {
+  old_nick: string | null;
+  new_nick: string | null;
 };
 
 function parseDateInput(value: string | undefined): Date | null {
@@ -138,69 +167,46 @@ function summarizeFilters(filters: IMemberSearchFilters): string {
 }
 
 function buildProfileContentContainer(
-  record: NonNullable<Awaited<ReturnType<typeof Member.getByUserId>>>,
+  user: ApiUserProfile,
   nickHistory: string[],
 ): ContainerBuilder {
   const blocks: string[] = [];
 
-  if (record.isBot) {
+  if (user.is_bot) {
     blocks.push("**Bot**\nYes");
   }
 
   if (nickHistory.length > 0) {
-    blocks.push(`**AKA**\n${nickHistory.join(", ")}`);
+    blocks.push(`**AKA**
+${nickHistory.join(", ")}`);
   }
 
+  const m = user.membership;
   const roles = [
-    record.roleAdmin ? "Admin" : null,
-    record.roleModerator ? "Moderator" : null,
-    record.roleRegular ? "Regular" : null,
-    record.roleMember ? "Member" : null,
-    record.roleNewcomer ? "Newcomer" : null,
+    m?.admin ? "Admin" : null,
+    m?.moderator ? "Moderator" : null,
+    m?.regular ? "Regular" : null,
+    m?.member ? "Member" : null,
+    m?.newcomer ? "Newcomer" : null,
   ]
     .filter(Boolean)
     .join(", ") || "None";
-  blocks.push(`**Roles**\n${roles}`);
+  blocks.push(`**Roles**
+${roles}`);
 
-  blocks.push(`**Last Seen**\n${formatDiscordTimestamp(record.lastSeenAt)}`);
-  blocks.push(`**Joined Server**\n${formatDiscordTimestamp(record.serverJoinedAt)}`);
-
-  if (record.completionatorUrl) {
-    blocks.push(`**Game Collection Tracker**\n${record.completionatorUrl}`);
-  }
-  if (record.steamUrl) {
-    blocks.push(`**Steam**\n${record.steamUrl}`);
-  }
-  if (record.psnUsername) {
-    blocks.push(`**PSN**\n${record.psnUsername}`);
-  }
-  if (record.xblUsername) {
-    blocks.push(`**Xbox**\n${record.xblUsername}`);
-  }
-  if (record.nswFriendCode) {
-    blocks.push(`**Switch**\n${record.nswFriendCode}`);
+  for (const social of user.socials) {
+    const value = social.handle ?? social.url;
+    if (value) {
+      blocks.push(`**${social.social_platform.label}**
+${value}`);
+    }
   }
 
   return buildTextContainer(
-    safeV2TextContent(blocks.join(`\n${" ".repeat(120)}\n`), 3500),
+    safeV2TextContent(blocks.join(`
+${" ".repeat(120)}
+`), 3500),
   );
-}
-
-function avatarBuffersDifferent(a: Buffer | null, b: Buffer | null): boolean {
-  if (!a && !b) return false;
-  if (!!a !== !!b) return true;
-  if (!a || !b) return true;
-  if (a.length !== b.length) return true;
-  return !a.equals(b);
-}
-
-async function downloadAvatar(url: string): Promise<Buffer | null> {
-  try {
-    const resp = await axios.get<ArrayBuffer>(url, { responseType: "arraybuffer" });
-    return Buffer.from(resp.data);
-  } catch {
-    return null;
-  }
 }
 
 function buildBaseMemberRecord(user: User): IMemberRecord {
@@ -233,50 +239,35 @@ export async function buildProfileViewPayload(
   target: User,
 ): Promise<ProfileViewPayload> {
   try {
-    let record = await Member.getByUserId(target.id);
-    const nickHistoryEntries = await Member.getRecentNickHistory(target.id, 6);
-    const avatarUrl = target.displayAvatarURL({
-      extension: "png",
-      size: 512,
-      forceStatic: true,
-    });
+    const [profileResp, nickHistResp] = await Promise.all([
+      apiGet<{ data: ApiUserProfile }>(`/api/v1/users/${target.id}`),
+      apiGet<{ data: ApiNickHistoryEntry[] }>(
+        `/api/v1/users/${target.id}/nick_history`,
+        { params: { per: 6 } },
+      ),
+    ]);
 
-    if (avatarUrl) {
-      const newAvatar = await downloadAvatar(avatarUrl);
-      const baseRecord: IMemberRecord = record ?? buildBaseMemberRecord(target);
-
-      if (newAvatar && avatarBuffersDifferent(baseRecord.avatarBlob, newAvatar)) {
-        record = {
-          ...baseRecord,
-          avatarBlob: newAvatar,
-          username: target.username ?? baseRecord.username,
-          globalName: (target as any).globalName ?? baseRecord.globalName,
-          isBot: target.bot ? 1 : 0,
-        };
-        await Member.upsert(record);
-      } else if (!record) {
-        record = baseRecord;
-      }
-    }
-
-    if (!record) {
+    if (!profileResp) {
       return { notFoundMessage: `No profile data found for ${userMention(target.id)}.` };
     }
 
+    const user = profileResp.data;
+    const nickHistEntries = nickHistResp?.data ?? [];
+
     const nickHistory: string[] = [];
-    for (const entry of nickHistoryEntries) {
-      const candidateRaw = entry.oldNick ?? entry.newNick;
+    for (const entry of nickHistEntries) {
+      const candidateRaw = entry.old_nick ?? entry.new_nick;
       const candidate = candidateRaw?.trim();
       if (!candidate) continue;
-      if (candidate === record.globalName || candidate === record.username) continue;
+      if (candidate === user.global_name || candidate === user.username) continue;
       if (nickHistory.includes(candidate)) continue;
       nickHistory.push(candidate);
       if (nickHistory.length >= 5) break;
     }
 
-    const displayName = record.globalName ?? record.username ?? target.username ?? "Unknown";
+    const displayName = user.global_name ?? user.username ?? target.username ?? "Unknown";
     const headerContainer = buildUserHeaderContainer(target.id, displayName, "Member Profile");
-    const contentContainer = buildProfileContentContainer(record, nickHistory);
+    const contentContainer = buildProfileContentContainer(user, nickHistory);
 
     return {
       payload: {
