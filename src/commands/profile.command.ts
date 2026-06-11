@@ -70,8 +70,8 @@ export type ProfileViewPayload = {
 
 type ApiUserSocial = {
   id: number;
-  social_platform_id: number;
-  handle: string | null;
+  platform_id: number;
+  display_text: string | null;
   url: string | null;
   social_platform: { label: string };
 };
@@ -134,11 +134,13 @@ async function upsertUserSocial(
   platformId: number,
   value: string,
   useUrl: boolean,
+  displayText?: string,
 ): Promise<{ ok: true } | { ok: false; detail: string }> {
-  const current = existing.find((s) => s.social_platform_id === platformId);
+  const current = existing.find((s) => s.platform_id === platformId);
+  const extra = displayText ? { display_text: displayText } : {};
   const body = useUrl
-    ? { data: { social_platform_id: platformId, url: value } }
-    : { data: { social_platform_id: platformId, handle: value } };
+    ? { data: { platform_id: platformId, url: value, ...extra } }
+    : { data: { platform_id: platformId, display_text: displayText ?? value } };
   try {
     if (current) {
       await apiPatch(`/api/v1/user_socials/${current.id}`, body);
@@ -166,7 +168,7 @@ async function deleteUserSocial(
   existing: ApiUserSocial[],
   platformId: number,
 ): Promise<void> {
-  const current = existing.find((s) => s.social_platform_id === platformId);
+  const current = existing.find((s) => s.platform_id === platformId);
   if (current) {
     await apiDelete(`/api/v1/user_socials/${current.id}`);
   }
@@ -259,7 +261,9 @@ ${nickHistory.join(", ")}`);
 ${roles}`);
 
   for (const social of user.socials) {
-    const value = social.handle ?? social.url;
+    const value = social.display_text && social.url
+      ? `[${social.display_text}](${social.url})`
+      : (social.display_text ?? social.url);
     if (value) {
       blocks.push(`**${social.social_platform.label}**
 ${value}`);
@@ -543,7 +547,7 @@ export class ProfileCommand {
     })
     member: User | undefined,
     @SlashOption({
-      description: "Game Collection Tracker URL.",
+      description: "Completionator profile URL.",
       name: "completionator",
       required: false,
       type: ApplicationCommandOptionType.String,
@@ -655,14 +659,21 @@ export class ProfileCommand {
         value: string | undefined;
         useUrl: boolean;
         label: string;
+        displayText?: string;
       };
 
       const fields: FieldSpec[] = [
-        { key: "completionator", value: completionator, useUrl: true, label: "Completionator" },
+        {
+          key: "completionator", value: completionator, useUrl: true,
+          label: "Completionator", displayText: "Profile Link",
+        },
         { key: "psn", value: psn, useUrl: false, label: "PSN" },
         { key: "xbl", value: xbl, useUrl: false, label: "Xbox" },
         { key: "nsw", value: nsw, useUrl: false, label: "Switch" },
-        { key: "steam", value: steam, useUrl: true, label: "Steam" },
+        {
+          key: "steam", value: steam, useUrl: true,
+          label: "Steam", displayText: "Profile Link",
+        },
       ];
 
       const changedFields: string[] = [];
@@ -677,7 +688,7 @@ export class ProfileCommand {
         }
         if (field.value) {
           const result = await upsertUserSocial(
-            target.id, existing, platformId, field.value, field.useUrl,
+            target.id, existing, platformId, field.value, field.useUrl, field.displayText,
           );
           if (result.ok) {
             changedFields.push(field.label);
