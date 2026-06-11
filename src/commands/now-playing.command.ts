@@ -137,7 +137,6 @@ import {
   journalOwnerMenu,
   nowPlayingOwnerMenu,
   clearNowPlayingAddSession,
-  buildNowPlayingContextKey,
   trackNowPlayingListContext,
   setNowPlayingListContext,
   trackNowPlayingJournalContext,
@@ -162,13 +161,10 @@ import {
   buildComponentPayload,
   buildNowPlayingAttachments,
   buildNowPlayingListPayload,
-  buildNowPlayingActionRow,
   buildNowPlayingManageRow,
   returnToNowPlayingEditMenu,
   buildNowPlayingEditInitialComponents,
   withPmNowPlayingList,
-  withNowPlayingActions,
-  hasDisplayableNowPlayingNotes,
   refreshNowPlayingListFromContext,
   trimTextDisplayContent,
   buildNowPlayingMemberSelect,
@@ -745,15 +741,8 @@ export class NowPlayingCommand {
       if (refreshed) {
         return;
       } else {
-        const components = withNowPlayingActions(
-          true,
-          session.userId,
-          payload.components,
-          false,
-          hasDisplayableNowPlayingNotes(list),
-        );
         await safeUpdate(interaction, {
-          components,
+          components: payload.components,
           files: payload.files,
           flags: buildComponentsV2Flags(true),
         });
@@ -1530,15 +1519,8 @@ export class NowPlayingCommand {
         list,
         interaction.guildId,
       );
-      const components = withNowPlayingActions(
-        true,
-        ownerId,
-        payload.components,
-        false,
-        hasDisplayableNowPlayingNotes(list),
-      );
       await safeReply(interaction, {
-        components,
+        components: payload.components,
         files: payload.files,
         flags: buildComponentsV2Flags(true),
       });
@@ -1677,74 +1659,6 @@ export class NowPlayingCommand {
         flags: buildComponentsV2Flags(true),
       });
     }
-  }
-
-  @ButtonComponent({ id: /^nowplaying-list-notes:\d+:(show|hide)$/ })
-  async handleNowPlayingListNotesToggle(interaction: ButtonInteraction): Promise<void> {
-    await safeDeferUpdate(interaction);
-
-    const segs = assertCustomIdSegments(interaction, 2);
-    if (!segs) return;
-    const [ownerId, action] = segs;
-    const showNotes = action === "show";
-    const isEphemeral = interaction.message.flags?.has(MessageFlags.Ephemeral) ?? false;
-    const contextKey = buildNowPlayingContextKey(
-      interaction.message.channelId, interaction.message.id,
-    );
-    const trackedView = nowPlayingListContexts.get(contextKey)?.view ?? null;
-    const singleUserMode = trackedView === "single" || trackedView === "everyone-selected";
-    const ownerUser =
-      interaction.user.id === ownerId
-        ? interaction.user
-        : await safeUserFetch(interaction.client, ownerId);
-    const target = ownerUser ?? interaction.user;
-    const title = ownerId === interaction.user.id && isEphemeral
-      ? "Your Now Playing List"
-      : `${target.displayName ?? target.username ?? "User"}'s Now Playing List`;
-    const entries = getDisplayNowPlayingEntries(await Member.getNowPlaying(ownerId));
-
-    if (!entries.length) {
-      const emptyMessage = ownerId === interaction.user.id
-        ? "Your Now Playing list is empty."
-        : `No Now Playing entries found for ${userMention(ownerId)}.`;
-      const container = buildNowPlayingMessageContainer(
-        title,
-        emptyMessage,
-      );
-      const actionRow = buildNowPlayingActionRow(
-        ownerId,
-        showNotes,
-        hasDisplayableNowPlayingNotes(entries),
-        !singleUserMode,
-      );
-      await safeReply(interaction, {
-        components: actionRow ? [container, actionRow] : [container],
-        flags: buildComponentsV2Flags(isEphemeral),
-      });
-      return;
-    }
-
-    const payload = await buildNowPlayingListPayload(
-      target,
-      entries,
-      interaction.guildId,
-      showNotes,
-      false,
-      singleUserMode,
-    );
-    const components = withNowPlayingActions(
-      !singleUserMode,
-      ownerId,
-      payload.components,
-      showNotes,
-      hasDisplayableNowPlayingNotes(entries),
-      !singleUserMode,
-    );
-    await safeReply(interaction, {
-      components,
-      files: payload.files,
-      flags: buildComponentsV2Flags(isEphemeral),
-    });
   }
 
   private async buildManageJournalButtonRow(
@@ -2532,20 +2446,11 @@ export class NowPlayingCommand {
       target,
       sortedEntries,
       interaction.guildId,
-      false,
       isOwnList,
       true,
     );
-    const components = withNowPlayingActions(
-      false,
-      target.id,
-      payload.components,
-      false,
-      hasDisplayableNowPlayingNotes(sortedEntries),
-      false,
-    );
     const reply = await safeReply(interaction, {
-      components,
+      components: payload.components,
       files: payload.files,
       flags: buildComponentsV2Flags(ephemeral),
       withResponse: !ephemeral,
@@ -2590,15 +2495,8 @@ export class NowPlayingCommand {
         "Now Playing - Everyone",
         `No Now Playing entries found for ${userMention(selectedUserId)}.`,
       );
-      const components = withNowPlayingActions(
-        true,
-        selectedUserId,
-        [header, container],
-        false,
-        false,
-      );
       const updated = await safeReply(interaction, {
-        components,
+        components: [header, container],
       });
       trackNowPlayingListContext(updated as Message<boolean>, {
         view: "everyone-selected",
@@ -2613,18 +2511,10 @@ export class NowPlayingCommand {
       sortedEntries,
       interaction.guildId,
       false,
-      false,
       true,
     );
-    const components = withNowPlayingActions(
-      false,
-      selectedUserId,
-      payload.components,
-      false,
-      hasDisplayableNowPlayingNotes(sortedEntries),
-    );
     const updated = await safeReply(interaction, {
-      components,
+      components: payload.components,
       files: payload.files,
     });
     trackNowPlayingListContext(updated as Message<boolean>, {

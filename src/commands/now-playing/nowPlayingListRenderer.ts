@@ -7,7 +7,6 @@ import {
   ButtonBuilder,
   ButtonStyle,
   type Client,
-  type Message,
   userMention,
 } from "discord.js";
 import {
@@ -56,7 +55,6 @@ import {
 } from "../../config/textLimits.js";
 import {
   NOW_PLAYING_LIST_EDIT_PREFIX,
-  NOW_PLAYING_LIST_NOTES_PREFIX,
   NOW_PLAYING_JOURNAL_VIEW_SELECT_PREFIX,
   NOW_PLAYING_COMPOSITE_MAX,
   NOW_PLAYING_EDIT_MENU_SORT_PREFIX,
@@ -68,7 +66,6 @@ import {
   NOW_PLAYING_ALL_SELECT_ID,
 } from "./nowPlayingIds.js";
 import {
-  type NowPlayingMessageComponents,
   type NowPlayingListComponents,
   type NowPlayingPayloadComponents,
 } from "./nowPlayingTypes.js";
@@ -186,24 +183,20 @@ export async function buildNowPlayingListPayload(
   target: User,
   entries: IMemberNowPlayingEntry[],
   guildId: string | null,
-  showNotes: boolean = false,
   showPrivateOnlyJournalButtons: boolean = false,
   singleUserMode: boolean = false,
 ): Promise<{ components: NowPlayingPayloadComponents; files: AttachmentBuilder[] }> {
   const { files, covers } = await buildNowPlayingAttachments(
     entries, NOW_PLAYING_COMPOSITE_MAX,
   );
-  const hasDisplayableNotes = hasDisplayableNowPlayingNotes(entries);
   const listComponents = buildNowPlayingEntryComponents(
     entries,
     target.id,
     guildId,
     await buildNowPlayingCompositeImageUrl(files, covers, target.id),
-    showNotes,
     showPrivateOnlyJournalButtons,
     singleUserMode,
     singleUserMode,
-    hasDisplayableNotes,
   );
   const ownerName = target.displayName ?? target.username ?? target.id;
   const headerCustomId = singleUserMode
@@ -294,28 +287,6 @@ export function buildNowPlayingCompositeSourceHash(
   return hash.digest("hex");
 }
 
-export function buildNowPlayingActionRow(
-  ownerId: string,
-  showNotes: boolean,
-  hasDisplayableNotes: boolean,
-  includeEditButton: boolean = true,
-): ActionRowBuilder<ButtonBuilder> | null {
-  void includeEditButton;
-  const buttons: ButtonBuilder[] = [];
-  if (hasDisplayableNotes) {
-    const notesAction = showNotes ? "hide" : "show";
-    const notesLabel = showNotes ? "Hide Notes" : "Show Notes";
-    buttons.push(
-      buildActionButton({
-        customId: `${NOW_PLAYING_LIST_NOTES_PREFIX}:${ownerId}:${notesAction}`,
-        label: notesLabel,
-        style: ButtonStyle.Secondary,
-      }),
-    );
-  }
-  return buttons.length > 0 ? buildButtonRow(...buttons) : null;
-}
-
 export async function buildNowPlayingManageRow(
   ownerId: string,
 ): Promise<ActionRowBuilder<ButtonBuilder>> {
@@ -404,36 +375,6 @@ export async function withPmNowPlayingList(
   return components;
 }
 
-export function withNowPlayingActions(
-  isOwnList: boolean,
-  ownerId: string,
-  components: NowPlayingPayloadComponents,
-  showNotes: boolean,
-  hasDisplayableNotes: boolean = true,
-  includeEditButton: boolean = true,
-): NowPlayingMessageComponents {
-  if (!isOwnList) {
-    return components;
-  }
-  const actionRow = buildNowPlayingActionRow(
-    ownerId,
-    showNotes,
-    hasDisplayableNotes,
-    includeEditButton,
-  );
-  if (!actionRow) {
-    return components;
-  }
-  return [
-    ...components,
-    actionRow,
-  ];
-}
-
-export function hasDisplayableNowPlayingNotes(entries: IMemberNowPlayingEntry[]): boolean {
-  return entries.some((entry) => !entry.journalEnabled && Boolean(entry.note?.trim()));
-}
-
 export async function refreshNowPlayingListFromContext(
   interaction: { client: Client; guildId: string | null; user: User },
   userId: string,
@@ -487,7 +428,6 @@ export async function refreshNowPlayingListFromContext(
           ? "Your Now Playing List"
           : `${target.displayName ?? target.username ?? "User"}'s Now Playing List`;
         const entries = getDisplayNowPlayingEntries(await Member.getNowPlaying(ownerId));
-        const showNotes = getNowPlayingShowNotesState(message, ownerId);
 
         if (!entries.length) {
           const ownerName = target.displayName ?? target.username ?? target.id;
@@ -514,20 +454,11 @@ export async function refreshNowPlayingListFromContext(
           target,
           entries,
           message.guildId ?? interaction.guildId,
-          showNotes,
           ownerId === interaction.user.id,
           true,
         );
-        const components = withNowPlayingActions(
-          false,
-          ownerId,
-          payload.components,
-          showNotes,
-          hasDisplayableNowPlayingNotes(entries),
-          false,
-        );
         await message.edit({
-          components,
+          components: payload.components,
           files: payload.files,
           flags: buildComponentsV2Flags(isEphemeral),
         });
@@ -589,15 +520,8 @@ export async function refreshNowPlayingListFromContext(
             "Now Playing - Everyone",
             `No Now Playing entries found for ${userMention(selectedUserId)}.`,
           );
-          const components = withNowPlayingActions(
-            false,
-            selectedUserId,
-            [header, container],
-            false,
-            false,
-          );
           await message.edit({
-            components,
+            components: [header, container],
           });
           updatedAny = true;
           continue;
@@ -607,18 +531,10 @@ export async function refreshNowPlayingListFromContext(
           entries,
           message.guildId ?? interaction.guildId,
           false,
-          false,
           true,
         );
-        const components = withNowPlayingActions(
-          false,
-          selectedUserId,
-          payload.components,
-          false,
-          hasDisplayableNowPlayingNotes(entries),
-        );
         await message.edit({
-          components,
+          components: payload.components,
           files: payload.files,
         });
         updatedAny = true;
@@ -637,34 +553,14 @@ export async function refreshNowPlayingListFromContext(
   return updatedAny;
 }
 
-export function getNowPlayingShowNotesState(message: Message, ownerId: string): boolean {
-  const prefix = `${NOW_PLAYING_LIST_NOTES_PREFIX}:${ownerId}:`;
-  for (const topLevel of message.components) {
-    if (!("components" in topLevel) || !Array.isArray(topLevel.components)) {
-      continue;
-    }
-    for (const component of topLevel.components) {
-      const customId = (component as { customId?: string; custom_id?: string }).customId ??
-        (component as { customId?: string; custom_id?: string }).custom_id;
-      if (!customId || !customId.startsWith(prefix)) {
-        continue;
-      }
-      return customId.endsWith(":hide");
-    }
-  }
-  return false;
-}
-
 export function buildNowPlayingEntryComponents(
   entries: IMemberNowPlayingEntry[],
   ownerId: string,
   guildId: string | null,
   imageUrl: string | null,
-  showNotes: boolean,
   showPrivateOnlyJournalButtons: boolean = false,
   showHeaderEditHint: boolean = false,
   singleUserMode: boolean = false,
-  hasDisplayableNotes: boolean = false,
 ): NowPlayingListComponents {
   const container = new ContainerBuilder();
   if (imageUrl) {
@@ -683,35 +579,12 @@ export function buildNowPlayingEntryComponents(
     const entryBlocks = entries.map((entry, index) => {
       const entryTitle = formatEntry(entry, guildId);
       const journalMark = entry.hasJournalEntry ? " \u{1F4D2}" : "";
-      const lines = [`${index + 1}. ${entryTitle}${journalMark}`];
-      if (showNotes && entry.note && !entry.journalEnabled) {
-        const quotedNote = entry.note
-          .split("\n")
-          .map((noteLine) => `> ${noteLine}`)
-          .join("\n");
-        lines.push(quotedNote);
-      }
-      return lines.join("\n");
+      return `${index + 1}. ${entryTitle}${journalMark}`;
     });
     const combined = trimTextDisplayContent(entryBlocks.join("\n"));
-    if (hasDisplayableNotes) {
-      const notesAction = showNotes ? "hide" : "show";
-      const notesLabel = showNotes ? "Hide Notes" : "Show Notes";
-      const section = new SectionBuilder().addTextDisplayComponents(
-        new TextDisplayBuilder().setContent(safeV2TextContent(combined, 3500)),
-      );
-      section.setButtonAccessory(
-        new V2ButtonBuilder()
-          .setCustomId(`${NOW_PLAYING_LIST_NOTES_PREFIX}:${ownerId}:${notesAction}`)
-          .setLabel(notesLabel)
-          .setStyle(ButtonStyle.Secondary),
-      );
-      container.addSectionComponents(section);
-    } else {
-      container.addTextDisplayComponents(
-        new TextDisplayBuilder().setContent(safeV2TextContent(combined, 3500)),
-      );
-    }
+    container.addTextDisplayComponents(
+      new TextDisplayBuilder().setContent(safeV2TextContent(combined, 3500)),
+    );
   } else {
     entries.forEach((entry, index) => {
       if (index === 0) {
@@ -721,15 +594,7 @@ export function buildNowPlayingEntryComponents(
       }
       const entryTitle = formatEntry(entry, guildId);
       const journalMark = entry.hasJournalEntry ? " \u{1F4D2}" : "";
-      const lines = [`${index + 1}. ${entryTitle}${journalMark}`];
-      if (showNotes && entry.note && !entry.journalEnabled) {
-        const quotedNote = entry.note
-          .split("\n")
-          .map((noteLine) => `> ${noteLine}`)
-          .join("\n");
-        lines.push(quotedNote);
-      }
-      const content = trimTextDisplayContent(lines.join("\n"));
+      const content = trimTextDisplayContent(`${index + 1}. ${entryTitle}${journalMark}`);
       const shouldShowJournalButton = entry.journalEnabled &&
         (showPrivateOnlyJournalButtons || entry.hasJournalEntry);
       if (shouldShowJournalButton) {

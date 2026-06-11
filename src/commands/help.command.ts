@@ -192,7 +192,7 @@ const HELP_TOPICS: HelpTopic[] = [
       "Use /now-playing help for subcommands: list, search.",
     notes:
       "Responses are public by default. Use private:true for an ephemeral response. " +
-      "Your list includes Show/Hide Notes and an Edit header button for sort, platform, completions, and removals.",
+      "Your list includes an Edit header button for sort, platform, completions, and removals.",
   },
   {
     id: "game-completion",
@@ -622,7 +622,7 @@ const NOW_PLAYING_HELP_TOPICS: NowPlayingHelpTopic[] = [
     syntax: "Syntax: /now-playing list [member:<user>] [all:<boolean>] [private:<boolean>]",
     notes:
       "Public by default. Set private:true to send an ephemeral response. " +
-      "On your own list, use Show/Hide Notes and the header Edit button to manage sort, platform, completions, and removals.",
+      "On your own list, use the header Edit button to manage sort, platform, completions, and removals.",
   },
   {
     id: "search",

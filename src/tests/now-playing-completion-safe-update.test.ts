@@ -179,13 +179,6 @@ test("nowplaying completion modal reuses existing now-playing platform and skips
       return [];
     }) as any;
 
-    command.buildNowPlayingListPayload = async () => ({ components: [{ kind: "list" }], files: [] });
-    command.withNowPlayingActions = (
-      _isOwner: boolean,
-      _ownerId: string,
-      components: any[],
-    ) => components;
-
     const listInteraction: any = {
       customId: "nowplaying-list-complete:123",
       user: { id: "123" },
