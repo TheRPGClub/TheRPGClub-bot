@@ -4,6 +4,7 @@ import {
   ButtonBuilder,
   ButtonStyle,
   MessageFlags,
+  Routes,
 } from "discord.js";
 import { ContainerBuilder } from "@discordjs/builders";
 import { countAvailableGameKeys, listAvailableGameKeys } from "../classes/GameKey.js";
@@ -28,15 +29,11 @@ type GiveawayHubPayload = {
 
 type GiveawayMessage = {
   id: string;
+  channelId: string;
   createdTimestamp: number;
-  edit: (options: {
-    components?: (ContainerBuilder | ActionRowBuilder<ButtonBuilder>)[];
-    flags?: number;
-  }) => Promise<unknown>;
   delete: () => Promise<unknown>;
   author?: { id?: string };
   components?: Array<{ components?: Array<{ customId?: string }> }>;
-  embeds?: Array<{ title?: string }>;
 };
 
 export function buildKeyListEmbed(
@@ -230,10 +227,16 @@ async function updateGiveawayHubMessages(
   const allComponents = [...payload.containers, ...payload.actionRows];
   const existing = hubMessages[0];
   if (existing) {
-    await (existing as GiveawayMessage).edit({
-      components: allComponents,
-      flags: buildComponentsV2EditFlags(),
-    }).catch((err) => {
+    const hubMsg = existing as GiveawayMessage;
+    await client.rest.patch(
+      Routes.channelMessage(hubMsg.channelId, hubMsg.id),
+      {
+        body: {
+          components: allComponents.map((c) => c.toJSON()),
+          flags: buildComponentsV2EditFlags(),
+        },
+      },
+    ).catch((err) => {
       logError("GiveawayHubService.edit", err);
     });
   } else {
