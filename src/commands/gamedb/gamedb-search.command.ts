@@ -32,6 +32,7 @@ import {
 } from "../../functions/ComponentsV2Utils.js";
 import { shouldRenderPrevNextButtons } from "../../functions/PaginationUtils.js";
 import Game from "../../classes/Game.js";
+import { decodeBase64Url } from "../../functions/CustomIdUtils.js";
 import {
   autocompleteSearchCompany,
   autocompleteSearchPlatform,
@@ -39,7 +40,6 @@ import {
   buildSearchCustomId,
   buildSearchRecoveryComponents,
   decodeISearchFilters,
-  decodeSearchQuery,
   GAME_SEARCH_PAGE_SIZE,
   type ISearchFilters,
 } from "./gamedb-utils.js";
@@ -337,25 +337,25 @@ export class GameDbSearchCommand {
     }
   }
 
-  @SelectMenuComponent({ id: /^gamedb-search-select:\d+:\d+:[A-Za-z0-9_-]*$/ })
+  @SelectMenuComponent({ id: /^gamedb-search-select:\d+:\d+:[A-Za-z0-9_-]*:[a-z0-9]*$/ })
   async handleSearchSelect(interaction: StringSelectMenuInteraction): Promise<void> {
-    const segs = assertCustomIdSegments(interaction, 3);
+    const segs = assertCustomIdSegments(interaction, 4);
     if (!segs) return;
-    const [ownerId, pageRaw, encodedQuery] = segs;
+    const [ownerId, pageRaw, encodedQuery, filterStr] = segs;
     const page = Number(pageRaw);
 
     if (await replyIfNotOwner(interaction, ownerId, "This menu isn't for you.")) return;
 
     const searchTerm = sanitizeUserInput(
-      decodeSearchQuery(encodedQuery),
+      decodeBase64Url(encodedQuery),
       { preserveNewlines: false },
     );
-    const filters = decodeISearchFilters(encodedQuery);
+    const filters = decodeISearchFilters(filterStr);
     const hasFilters =
       filters.upcomingRelease || filters.platformId || filters.year ||
       filters.developerId || filters.publisherId;
     if (!searchTerm && !hasFilters) {
-      const recoveryComponents = buildSearchRecoveryComponents(ownerId, encodedQuery);
+      const recoveryComponents = buildSearchRecoveryComponents(ownerId, encodedQuery, filterStr);
       const textParts = buildTextReply(
         "This search request expired. Refresh to run it again.", true,
       );
@@ -408,25 +408,25 @@ export class GameDbSearchCommand {
     }
   }
 
-  @ButtonComponent({ id: /^gamedb-search-page:\d+:\d+:[A-Za-z0-9_-]*:(next|prev)$/ })
+  @ButtonComponent({ id: /^gamedb-search-page:\d+:\d+:[A-Za-z0-9_-]*:[a-z0-9]*:(next|prev)$/ })
   async handleSearchPage(interaction: ButtonInteraction): Promise<void> {
-    const segs = assertCustomIdSegments(interaction, 4);
+    const segs = assertCustomIdSegments(interaction, 5);
     if (!segs) return;
-    const [ownerId, pageRaw, encodedQuery, direction] = segs;
+    const [ownerId, pageRaw, encodedQuery, filterStr, direction] = segs;
     const page = Number(pageRaw);
 
     if (await replyIfNotOwner(interaction, ownerId, "This menu isn't for you.")) return;
 
     const searchTerm = sanitizeUserInput(
-      decodeSearchQuery(encodedQuery),
+      decodeBase64Url(encodedQuery),
       { preserveNewlines: false },
     );
-    const filters = decodeISearchFilters(encodedQuery);
+    const filters = decodeISearchFilters(filterStr);
     const hasFilters =
       filters.upcomingRelease || filters.platformId || filters.year ||
       filters.developerId || filters.publisherId;
     if (!searchTerm && !hasFilters) {
-      const recoveryComponents = buildSearchRecoveryComponents(ownerId, encodedQuery);
+      const recoveryComponents = buildSearchRecoveryComponents(ownerId, encodedQuery, filterStr);
       const textParts = buildTextReply(
         "This search request expired. Refresh to run it again.", true,
       );
@@ -465,11 +465,11 @@ export class GameDbSearchCommand {
     }
   }
 
-  @ButtonComponent({ id: /^gamedb-search-refresh:\d+:[A-Za-z0-9_-]*$/ })
+  @ButtonComponent({ id: /^gamedb-search-refresh:\d+:[A-Za-z0-9_-]*:[a-z0-9]*$/ })
   async handleSearchRefresh(interaction: ButtonInteraction): Promise<void> {
-    const segs = assertCustomIdSegments(interaction, 2);
+    const segs = assertCustomIdSegments(interaction, 3);
     if (!segs) return;
-    const [ownerId, encodedQuery] = segs;
+    const [ownerId, encodedQuery, filterStr] = segs;
 
     if (interaction.user.id !== ownerId) {
       await safeReply(interaction, {
@@ -480,10 +480,10 @@ export class GameDbSearchCommand {
     }
 
     const searchTerm = sanitizeUserInput(
-      decodeSearchQuery(encodedQuery),
+      decodeBase64Url(encodedQuery),
       { preserveNewlines: false },
     );
-    const filters = decodeISearchFilters(encodedQuery);
+    const filters = decodeISearchFilters(filterStr);
     const hasFilters =
       filters.upcomingRelease || filters.platformId || filters.year ||
       filters.developerId || filters.publisherId;

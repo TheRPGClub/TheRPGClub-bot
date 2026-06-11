@@ -15,7 +15,7 @@ import {
 } from "../../functions/InteractionUtils.js";
 import { formatGameTitleWithYear } from "../../functions/GameTitleAutocompleteUtils.js";
 import { buildComponentsV2Flags, buildTextReply } from "../../functions/ComponentsV2Utils.js";
-import { decodeBase64Url, encodeBase64Url } from "../../functions/CustomIdUtils.js";
+import { encodeWithMaxLength } from "../../functions/CustomIdUtils.js";
 import Game from "../../classes/Game.js";
 import { DISCORD_SELECT_LABEL_MAX, DISCORD_SELECT_OPTIONS_MAX } from "../../config/textLimits.js";
 import { buildActionButton, buildButtonRow } from "../../functions/uiComponents.js";
@@ -66,36 +66,8 @@ export type PromptChoiceOption = {
   style?: ButtonStyle;
 };
 
-export function decodeSearchQuery(encoded: string): string {
-  const decoded = decodeBase64Url(encoded);
-  const nullIdx = decoded.indexOf("\0");
-  return nullIdx >= 0 ? decoded.slice(0, nullIdx) : decoded;
-}
-
-export function decodeISearchFilters(encoded: string): ISearchFilters {
-  const decoded = decodeBase64Url(encoded);
-  const nullIdx = decoded.indexOf("\0");
-  if (nullIdx < 0) return {};
-  return parseCompactFilters(decoded.slice(nullIdx + 1));
-}
-
-export function encodeSearchQuery(
-  query: string,
-  maxLength: number,
-  filters?: ISearchFilters,
-): string {
-  const filterStr = filters ? compactFilters(filters) : "";
-  const suffix = filterStr ? `\0${filterStr}` : "";
-  if (!query && !suffix) return "";
-  if (maxLength <= 0) return "";
-  let trimmed = query.trim();
-  while (trimmed.length >= 0) {
-    const encoded = encodeBase64Url(trimmed + suffix);
-    if (encoded.length <= maxLength) return encoded;
-    if (trimmed.length === 0) return "";
-    trimmed = trimmed.slice(0, -1);
-  }
-  return "";
+export function decodeISearchFilters(filterStr: string): ISearchFilters {
+  return filterStr ? parseCompactFilters(filterStr) : {};
 }
 
 export function buildIgdbSearchLink(title: string): string {
@@ -164,24 +136,32 @@ export function buildSearchCustomId(
   filters?: ISearchFilters,
 ): string {
   const base = `${GAMEDB_SEARCH_PREFIX}${type}:${ownerId}:${page}:`;
+  const filterStr = filters ? compactFilters(filters) : "";
+  const filterSuffix = `:${filterStr}`;
+  const directionSuffix = direction ? `:${direction}` : "";
   const maxQueryLength =
-    MAX_COMPONENT_CUSTOM_ID_LENGTH - base.length - (direction ? `:${direction}`.length : 0);
-  const encodedQuery = encodeSearchQuery(query, Math.max(maxQueryLength, 0), filters);
+    MAX_COMPONENT_CUSTOM_ID_LENGTH - base.length - filterSuffix.length - directionSuffix.length;
+  const encodedQuery = encodeWithMaxLength(query, Math.max(maxQueryLength, 0));
   return direction
-    ? `${base}${encodedQuery}:${direction}`
-    : `${base}${encodedQuery}`;
+    ? `${base}${encodedQuery}${filterSuffix}${directionSuffix}`
+    : `${base}${encodedQuery}${filterSuffix}`;
 }
 
-export function buildSearchRefreshCustomId(ownerId: string, encodedQuery: string): string {
-  return `${GAMEDB_SEARCH_PREFIX}refresh:${ownerId}:${encodedQuery}`;
+export function buildSearchRefreshCustomId(
+  ownerId: string,
+  encodedQuery: string,
+  filterStr: string,
+): string {
+  return `${GAMEDB_SEARCH_PREFIX}refresh:${ownerId}:${encodedQuery}:${filterStr}`;
 }
 
 export function buildSearchRecoveryComponents(
   ownerId: string,
   encodedQuery: string,
+  filterStr: string,
 ): ActionRowBuilder<ButtonBuilder>[] {
   const button = buildActionButton({
-    customId: buildSearchRefreshCustomId(ownerId, encodedQuery),
+    customId: buildSearchRefreshCustomId(ownerId, encodedQuery, filterStr),
     label: "Refresh search",
     style: ButtonStyle.Primary,
   });
