@@ -132,9 +132,17 @@ async function upsertUserSocial(
     }
     return { ok: true };
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
     const op = current ? `PATCH user_socials/${current.id}` : `POST users/${userId}/socials`;
-    return { ok: false, detail: `${op}: ${msg}` };
+    let detail = err instanceof Error ? err.message : String(err);
+    if (
+      typeof err === "object" &&
+      err !== null &&
+      "response" in err &&
+      typeof (err as any).response?.data !== "undefined"
+    ) {
+      detail += ` | body: ${JSON.stringify((err as any).response.data).slice(0, 300)}`;
+    }
+    return { ok: false, detail: `${op}: ${detail}` };
   }
 }
 
