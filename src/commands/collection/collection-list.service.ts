@@ -594,7 +594,7 @@ export async function applyFiltersToSourceMessage(params: {
   }
 
   const memberLabel = params.targetUserId === params.viewerUserId
-    ? params.interaction.user.username
+    ? params.interaction.user.globalName ?? params.interaction.user.username
     : "Member";
   const response = await buildCollectionListResponse({
     viewerUserId: params.viewerUserId,

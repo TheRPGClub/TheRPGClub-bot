@@ -31,6 +31,7 @@ import { isPositiveInt } from "../../utilities/ValidationUtils.js";
 import { assertCustomIdSegments } from "../../utilities/CustomIdUtils.js";
 import { buildTextInputRow } from "../../functions/uiComponents.js";
 import { safeIgnore } from "../../utilities/AsyncUtils.js";
+import { renderUsernameWithEmoji } from "../../services/UserEmojiService.js";
 
 const GAMEDB_THREAD_MODAL_PREFIX = "gamedb-thread-modal";
 const GAMEDB_THREAD_TITLE_INPUT_ID = "gamedb-thread-title";
@@ -43,7 +44,7 @@ function buildDefaultNowPlayingThreadTitle(gameTitle: string): string {
 }
 
 function buildDefaultNowPlayingThreadBody(memberDisplayName: string): string {
-  return `Now Playing thread created by ${memberDisplayName}.`;
+  return `Now Playing thread created by **${memberDisplayName}**.`;
 }
 
 function buildNowPlayingThreadModalCustomId(
@@ -68,8 +69,11 @@ export async function showNowPlayingThreadModal(
     return;
   }
 
-  const memberDisplayName =
-    (interaction.member as any)?.displayName ?? interaction.user.username ?? "User";
+  const memberDisplayName = renderUsernameWithEmoji(
+    interaction.user.id,
+    (interaction.member as any)?.displayName
+      ?? interaction.user.globalName ?? interaction.user.username ?? "User",
+  );
   const defaultTitle = buildDefaultNowPlayingThreadTitle(gameTitle);
   const defaultBody = buildDefaultNowPlayingThreadBody(memberDisplayName);
 
@@ -142,8 +146,11 @@ async function runNowPlayingThreadWizard(
   const threadTitle =
     options?.threadTitle ?? buildDefaultNowPlayingThreadTitle(gameTitle);
 
-  const memberDisplayName =
-    (interaction.member as any)?.displayName ?? interaction.user.username ?? "User";
+  const memberDisplayName = renderUsernameWithEmoji(
+    interaction.user.id,
+    (interaction.member as any)?.displayName
+      ?? interaction.user.globalName ?? interaction.user.username ?? "User",
+  );
   const initialPost =
     options?.initialPost ?? buildDefaultNowPlayingThreadBody(memberDisplayName);
   const game = await Game.getGameById(gameId);
