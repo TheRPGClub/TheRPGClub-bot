@@ -232,6 +232,7 @@ async function updateGiveawayHubMessages(
       Routes.channelMessage(hubMsg.channelId, hubMsg.id),
       {
         body: {
+          embeds: [],
           components: allComponents.map((c) => c.toJSON()),
           flags: buildComponentsV2EditFlags(),
         },
