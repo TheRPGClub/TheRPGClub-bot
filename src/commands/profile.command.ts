@@ -39,6 +39,7 @@ import {
   safeV2TextContent,
 } from "../functions/ComponentsV2Utils.js";
 import { buildUserHeaderContainer, buildSelectRow } from "../functions/uiComponents.js";
+import { renderUsernameWithEmoji } from "../services/UserEmojiService.js";
 import {
   formatDiscordTimestamp,
   formatPlaytimeHours,
@@ -118,15 +119,22 @@ async function upsertUserSocial(
   platformId: number,
   value: string,
   useUrl: boolean,
-): Promise<void> {
+): Promise<{ ok: true } | { ok: false; detail: string }> {
   const current = existing.find((s) => s.social_platform_id === platformId);
   const body = useUrl
     ? { data: { social_platform_id: platformId, url: value } }
     : { data: { social_platform_id: platformId, handle: value } };
-  if (current) {
-    await apiPatch(`/api/v1/user_socials/${current.id}`, body);
-  } else {
-    await apiPost(`/api/v1/users/${userId}/socials`, body);
+  try {
+    if (current) {
+      await apiPatch(`/api/v1/user_socials/${current.id}`, body);
+    } else {
+      await apiPost(`/api/v1/users/${userId}/socials`, body);
+    }
+    return { ok: true };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    const op = current ? `PATCH user_socials/${current.id}` : `POST users/${userId}/socials`;
+    return { ok: false, detail: `${op}: ${msg}` };
   }
 }
 
@@ -438,10 +446,9 @@ export class ProfileCommand {
     }
 
     const lines = results.map((u, idx) => {
-      const name = u.global_name ?? u.username;
-      const label = name ? `(${name})` : "";
+      const name = u.global_name ?? u.username ?? u.user_id;
       const botTag = u.is_bot ? " [Bot]" : "";
-      return `${idx + 1}. ${userMention(u.user_id)} ${label}${botTag}`;
+      return `${idx + 1}. ${renderUsernameWithEmoji(u.user_id, name)}${botTag}`;
     });
 
     const description = (q ? `Search: ${q}\n\n` : "") + lines.join("\n");
@@ -606,6 +613,7 @@ export class ProfileCommand {
 
       const changedFields: string[] = [];
       const skippedFields: string[] = [];
+      const failedFields: string[] = [];
       for (const field of fields) {
         if (field.value === undefined) continue;
         const platformId = findPlatformId(platforms, field.key);
@@ -614,26 +622,30 @@ export class ProfileCommand {
           continue;
         }
         if (field.value) {
-          await upsertUserSocial(target.id, existing, platformId, field.value, field.useUrl);
+          const result = await upsertUserSocial(
+            target.id, existing, platformId, field.value, field.useUrl,
+          );
+          if (result.ok) {
+            changedFields.push(field.label);
+          } else {
+            failedFields.push(`${field.label} (${result.detail})`);
+          }
         } else {
           await deleteUserSocial(existing, platformId);
+          changedFields.push(field.label);
         }
-        changedFields.push(field.label);
       }
 
       const parts: string[] = [];
-      if (changedFields.length) {
-        parts.push(`Updated: ${changedFields.join(", ")}`);
-      }
-      if (skippedFields.length) {
-        parts.push(`Skipped (platform not found): ${skippedFields.join(", ")}`);
-      }
+      if (changedFields.length) parts.push(`Updated: ${changedFields.join(", ")}`);
+      if (skippedFields.length) parts.push(`Skipped (platform not found): ${skippedFields.join(", ")}`);
+      if (failedFields.length) parts.push(`Failed: ${failedFields.join("; ")}`);
 
       await safeReply(
         interaction,
         buildTextReply(
           parts.length
-            ? `Profile updated for ${userMention(target.id)} -- ${parts.join("; ")}.`
+            ? `Profile result for ${userMention(target.id)} -- ${parts.join(" | ")}.`
             : `No fields were updated for ${userMention(target.id)}.`,
           true,
         ),
