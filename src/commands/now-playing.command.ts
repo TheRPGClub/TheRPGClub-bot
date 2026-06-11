@@ -16,7 +16,6 @@ import {
   ButtonInteraction,
   type ActionRow,
   type MessageActionRowComponent,
-  type Client,
   type Message,
   userMention,
 } from "discord.js";
@@ -42,7 +41,6 @@ import {
   TextDisplayBuilder,
 } from "@discordjs/builders";
 import { SeparatorSpacingSize, TextInputStyle as ApiTextInputStyle } from "discord-api-types/v10";
-import crypto from "node:crypto";
 import Member, { type IMemberNowPlayingEntry } from "../classes/Member.js";
 import {
   extractErrorMessage,
@@ -62,7 +60,6 @@ import { buildJournalView } from "../functions/journalView.js";
 import {
   buildActionButton,
   buildButtonRow,
-  buildJournalSelectRow,
   buildTextInputRow,
   buildUserHeaderContainer,
   buildSelectRow,
@@ -101,11 +98,6 @@ import {
 } from "../functions/DateFormatUtils.js";
 import { parseTitleWithYear } from "../functions/GameTitleAutocompleteUtils.js";
 import { STANDARD_PLATFORM_IDS } from "../config/standardPlatforms.js";
-import { composeVoteImage } from "../services/collageGenerator.js";
-import {
-  getOrReplaceBackblazeImage,
-  hasBackblazeB2Config,
-} from "../services/BackblazeB2Service.js";
 import {
   NOW_PLAYING_HELP_PREFIX,
   NOW_PLAYING_HELP_TEXTS,
@@ -115,7 +107,6 @@ import { renderUsernameWithEmoji } from "../services/UserEmojiService.js";
 import {
   isPositiveInt,
   isValidPlaytimeHours,
-  truncateWithEllipsis,
 } from "../utilities/ValidationUtils.js";
 import { logError } from "../utilities/LogUtils.js";
 import {
@@ -154,19 +145,9 @@ import {
   NOW_PLAYING_COMPLETE_DETAILS_PREFIX,
   NOW_PLAYING_COMPLETE_PLATFORM_SELECT_PREFIX,
   NOW_PLAYING_GALLERY_MAX,
-  NOW_PLAYING_COMPOSITE_MAX,
-  NOW_PLAYING_ALL_SELECT_ID,
-  NOW_PLAYING_LIST_NOTES_PREFIX,
   NOW_PLAYING_LIST_EDIT_PREFIX,
-  NOW_PLAYING_EDIT_MENU_SORT_PREFIX,
-  NOW_PLAYING_EDIT_MENU_PLATFORM_PREFIX,
-  NOW_PLAYING_EDIT_MENU_COMPLETE_PREFIX,
-  NOW_PLAYING_EDIT_MENU_REMOVE_PREFIX,
-  NOW_PLAYING_EDIT_MENU_START_JOURNAL_PREFIX,
   NOW_PLAYING_EDIT_MENU_START_JOURNAL_SELECT_PREFIX,
   NOW_PLAYING_REMOVE_SELECT_PREFIX,
-  NOW_PLAYING_JOURNAL_OPEN_PREFIX,
-  NOW_PLAYING_JOURNAL_VIEW_SELECT_PREFIX,
   NOW_PLAYING_JOURNAL_ADD_PREFIX,
   NOW_PLAYING_JOURNAL_EDIT_PREFIX,
   NOW_PLAYING_JOURNAL_DELETE_PREFIX,
@@ -185,9 +166,6 @@ import {
   type NowPlayingCompletionPlatformSession,
   type NowPlayingListContext,
   type NowPlayingJournalContext,
-  type NowPlayingMessageComponents,
-  type NowPlayingListComponents,
-  type NowPlayingPayloadComponents,
 } from "./now-playing/nowPlayingTypes.js";
 import {
   nowPlayingAddSessions,
@@ -215,10 +193,27 @@ import {
   parseNowPlayingPlatformStateToken,
   encodeNowPlayingPlatformState,
   buildNowPlayingPlatformStateFromCurrent,
-  formatEntry,
   formatEntryTitleWithPlatform,
   getDisplayNowPlayingEntries,
 } from "../functions/NowPlayingUtils.js";
+import {
+  buildNowPlayingListLines,
+  buildNowPlayingListContainer,
+  buildNowPlayingMessageContainer,
+  buildComponentPayload,
+  buildNowPlayingAttachments,
+  buildNowPlayingListPayload,
+  buildNowPlayingActionRow,
+  buildNowPlayingManageRow,
+  returnToNowPlayingEditMenu,
+  buildNowPlayingEditInitialComponents,
+  withPmNowPlayingList,
+  withNowPlayingActions,
+  hasDisplayableNowPlayingNotes,
+  refreshNowPlayingListFromContext,
+  trimTextDisplayContent,
+  buildNowPlayingMemberSelect,
+} from "./now-playing/nowPlayingListRenderer.js";
 
 async function confirmDuplicateCompletion(
   interaction: CommandInteraction | ModalSubmitInteraction | ButtonInteraction,
@@ -290,7 +285,6 @@ async function confirmDuplicateCompletion(
     return false;
   }
 }
-
 
 function buildEditNoteModal(
   ownerId: string,
@@ -446,7 +440,7 @@ export class NowPlayingCommand {
     const replacedCurrentChannelMessage = !ephemeral && interaction.channelId
       ? await this.replaceNowPlayingMessageInCurrentChannel(interaction, interaction.user.id)
       : false;
-    safeIgnore(this.refreshNowPlayingListFromContext(interaction, interaction.user.id));
+    safeIgnore(refreshNowPlayingListFromContext(interaction, interaction.user.id));
     if (replacedCurrentChannelMessage) {
       return;
     }
@@ -574,7 +568,7 @@ export class NowPlayingCommand {
         `Showing first ${limitedGames.length} of ${totalGames} titles with active players.`,
       );
     }
-    const content = this.trimTextDisplayContent(contentLines.join("\n"));
+    const content = trimTextDisplayContent(contentLines.join("\n"));
     const container = buildTextContainer(content);
 
     await safeReply(interaction, {
@@ -653,7 +647,7 @@ export class NowPlayingCommand {
       if (results.length > options.length - 1) {
         contentLines.push(`Showing first ${options.length - 1} results.`);
       }
-      const content = this.trimTextDisplayContent(contentLines.join("\n"));
+      const content = trimTextDisplayContent(contentLines.join("\n"));
       const container = buildTextContainer(content)
         .addActionRowComponents(selectRow.toJSON());
 
@@ -770,7 +764,7 @@ export class NowPlayingCommand {
     }
     container.addTextDisplayComponents(
       new TextDisplayBuilder().setContent(
-        safeV2TextContent(this.trimTextDisplayContent(headerLines.join("\n")), 3500),
+        safeV2TextContent(trimTextDisplayContent(headerLines.join("\n")), 3500),
       ),
     );
 
@@ -900,7 +894,7 @@ export class NowPlayingCommand {
       session,
       thumbnailUrl,
     );
-    const pmComponents = await this.withPmNowPlayingList(
+    const pmComponents = await withPmNowPlayingList(
       session.userId,
       interaction.guildId,
       [container],
@@ -920,7 +914,7 @@ export class NowPlayingCommand {
     const current = await Member.getNowPlaying(ownerId);
     if (!current.length) {
       const container = buildTextContainer("Your Now Playing list is empty.");
-      const pmComponents = await this.withPmNowPlayingList(
+      const pmComponents = await withPmNowPlayingList(
         ownerId, interaction.guildId, [container],
       );
       await safeUpdate(interaction, { components: pmComponents });
@@ -942,7 +936,7 @@ export class NowPlayingCommand {
 
     const entries = getDisplayNowPlayingEntries(current);
     const includeImages = interaction.guildId != null;
-    const { files, thumbnailsByGameId } = await this.buildNowPlayingAttachments(
+    const { files, thumbnailsByGameId } = await buildNowPlayingAttachments(
       entries,
       NOW_PLAYING_GALLERY_MAX,
       includeImages,
@@ -953,8 +947,8 @@ export class NowPlayingCommand {
       sessionId,
       thumbnailsByGameId,
     );
-    const pmComponents = await this.withPmNowPlayingList(ownerId, interaction.guildId, components);
-    await safeUpdate(interaction, this.buildComponentPayload(pmComponents as any, files));
+    const pmComponents = await withPmNowPlayingList(ownerId, interaction.guildId, components);
+    await safeUpdate(interaction, buildComponentPayload(pmComponents as any, files));
   }
 
   @ModalComponent({ id: /^nowplaying-complete-modal:[^:]+$/ })
@@ -1205,7 +1199,7 @@ export class NowPlayingCommand {
       : `Select the platform for **${game.title}**.`;
     const container = buildTextContainer(content);
     await safeReply(interaction, {
-      components: await this.withPmNowPlayingList(
+      components: await withPmNowPlayingList(
         session.userId,
         interaction.guildId,
         [
@@ -1260,7 +1254,7 @@ export class NowPlayingCommand {
     }
 
     if (session.removeFromNowPlaying) {
-      safeIgnore(this.refreshNowPlayingListFromContext(interaction, session.userId));
+      safeIgnore(refreshNowPlayingListFromContext(interaction, session.userId));
     }
 
     if (session.returnToList) {
@@ -1275,7 +1269,7 @@ export class NowPlayingCommand {
         });
       } else {
         const includeImages = interaction.guildId != null;
-        const { files, thumbnailsByGameId } = await this.buildNowPlayingAttachments(
+        const { files, thumbnailsByGameId } = await buildNowPlayingAttachments(
           entries,
           NOW_PLAYING_GALLERY_MAX,
           includeImages,
@@ -1287,7 +1281,7 @@ export class NowPlayingCommand {
           thumbnailsByGameId,
         );
         await safeReply(interaction, {
-          ...this.buildComponentPayload(components, files),
+          ...buildComponentPayload(components, files),
           flags: buildComponentsV2Flags(true),
         });
       }
@@ -1311,7 +1305,7 @@ export class NowPlayingCommand {
       `**Removed from Now Playing:** ${session.removeFromNowPlaying ? "Yes" : "No"}`,
       `**Announced:** ${session.announce ? "Yes" : "No"}`,
     );
-    const content = this.trimTextDisplayContent(detailLines.join("\n"));
+    const content = trimTextDisplayContent(detailLines.join("\n"));
     const container = buildTextContainer(content);
     await safeReply(interaction, {
       components: [container],
@@ -1643,21 +1637,21 @@ export class NowPlayingCommand {
       nowPlayingAddPlatformSessions.delete(platformSessionId);
       clearNowPlayingAddSession(session.sourceSessionId);
       const list = await Member.getNowPlaying(session.userId);
-      const payload = await this.buildNowPlayingListPayload(
+      const payload = await buildNowPlayingListPayload(
         interaction.user,
         list,
         interaction.guildId,
       );
-      const refreshed = await this.refreshNowPlayingListFromContext(interaction, session.userId);
+      const refreshed = await refreshNowPlayingListFromContext(interaction, session.userId);
       if (refreshed) {
         return;
       } else {
-        const components = this.withNowPlayingActions(
+        const components = withNowPlayingActions(
           true,
           session.userId,
           payload.components,
           false,
-          this.hasDisplayableNowPlayingNotes(list),
+          hasDisplayableNowPlayingNotes(list),
         );
         await safeUpdate(interaction, {
           components,
@@ -1743,7 +1737,7 @@ export class NowPlayingCommand {
       const entries = getDisplayNowPlayingEntries(await Member.getNowPlaying(userId));
       if (!entries.length) {
         const container = buildTextContainer("Your Now Playing list is empty.");
-        const pmComponents = await this.withPmNowPlayingList(
+        const pmComponents = await withPmNowPlayingList(
           userId,
           interaction.guildId,
           [container],
@@ -1768,7 +1762,7 @@ export class NowPlayingCommand {
       }
 
       const includeImages = interaction.guildId != null;
-      const { files, thumbnailsByGameId } = await this.buildNowPlayingAttachments(
+      const { files, thumbnailsByGameId } = await buildNowPlayingAttachments(
         entries,
         NOW_PLAYING_GALLERY_MAX,
         includeImages,
@@ -1778,31 +1772,31 @@ export class NowPlayingCommand {
         userId,
         thumbnailsByGameId,
       );
-      const pmComponents = await this.withPmNowPlayingList(
+      const pmComponents = await withPmNowPlayingList(
         userId,
         interaction.guildId,
         components,
       );
       if (mode === "update" && !useDeferredEditPath) {
         await safeUpdate(interaction, {
-          ...this.buildComponentPayload(pmComponents as any, files),
+          ...buildComponentPayload(pmComponents as any, files),
           flags: buildComponentsV2Flags(isEphemeral),
         });
       } else if (mode === "update") {
         await safeReply(interaction, {
-          ...this.buildComponentPayload(pmComponents as any, files),
+          ...buildComponentPayload(pmComponents as any, files),
           flags: buildComponentsV2Flags(true),
         });
       } else {
         await safeReply(interaction, {
-          ...this.buildComponentPayload(pmComponents as any, files),
+          ...buildComponentPayload(pmComponents as any, files),
           flags: buildComponentsV2Flags(true),
         });
       }
     } catch (err: any) {
       const msg = extractErrorMessage(err);
       const container = buildTextContainer(`Could not remove from Now Playing: ${msg}`);
-      const pmComponents = await this.withPmNowPlayingList(
+      const pmComponents = await withPmNowPlayingList(
         userId,
         interaction.guildId,
         [container],
@@ -1836,7 +1830,7 @@ export class NowPlayingCommand {
     ).slice(0, 10);
     if (!entries.length) {
       const container = buildTextContainer("Your Now Playing list is empty.");
-      const pmComponents = await this.withPmNowPlayingList(
+      const pmComponents = await withPmNowPlayingList(
         ownerId, interaction.guildId, [container],
       );
       await safeUpdate(interaction, {
@@ -1847,7 +1841,7 @@ export class NowPlayingCommand {
     }
     const stateToken = buildNowPlayingSortStateToken(entries.length);
     const components = this.buildNowPlayingSortComponents(entries, ownerId, stateToken);
-    const pmComponents = await this.withPmNowPlayingList(
+    const pmComponents = await withPmNowPlayingList(
       ownerId,
       interaction.guildId,
       components,
@@ -1907,7 +1901,7 @@ export class NowPlayingCommand {
     const current = await Member.getNowPlayingEntries(interaction.user.id);
     if (!current.length) {
       const container = buildTextContainer("Your Now Playing list is empty.");
-      const pmComponents = await this.withPmNowPlayingList(
+      const pmComponents = await withPmNowPlayingList(
         interaction.user.id,
         interaction.guildId,
         [container],
@@ -1932,7 +1926,7 @@ export class NowPlayingCommand {
     const editableEntries = current.filter((e) => !e.journalEnabled);
     if (!editableEntries.length) {
       const container = buildTextContainer("All of your games use Game Journal for notes.");
-      const pmComponents = await this.withPmNowPlayingList(
+      const pmComponents = await withPmNowPlayingList(
         interaction.user.id,
         interaction.guildId,
         [container],
@@ -1972,7 +1966,7 @@ export class NowPlayingCommand {
     const entries = getDisplayNowPlayingEntries(await Member.getNowPlaying(interaction.user.id));
     if (!entries.length) {
       const container = buildTextContainer("Your Now Playing list is empty.");
-      const pmComponents = await this.withPmNowPlayingList(
+      const pmComponents = await withPmNowPlayingList(
         interaction.user.id,
         interaction.guildId,
         [container],
@@ -1997,7 +1991,7 @@ export class NowPlayingCommand {
       platformOptions,
       stateToken,
     );
-    const pmComponents = await this.withPmNowPlayingList(
+    const pmComponents = await withPmNowPlayingList(
       interaction.user.id,
       interaction.guildId,
       components,
@@ -2104,7 +2098,7 @@ export class NowPlayingCommand {
       ],
       flags: buildComponentsV2Flags(true),
     };
-    const pmComponents = await this.withPmNowPlayingList(
+    const pmComponents = await withPmNowPlayingList(
       ownerId,
       interaction.guildId,
       payload.components,
@@ -2138,8 +2132,8 @@ export class NowPlayingCommand {
       return;
     }
 
-    safeIgnore(this.refreshNowPlayingListFromContext(interaction, ownerId));
-    await this.returnToNowPlayingEditMenu(interaction, ownerId);
+    safeIgnore(refreshNowPlayingListFromContext(interaction, ownerId));
+    await returnToNowPlayingEditMenu(interaction, ownerId);
   }
 
   @SelectMenuComponent({ id: /^nowplaying-edit-platform-slot:\d+:\d+:[a-z0-9_]+$/ })
@@ -2181,7 +2175,7 @@ export class NowPlayingCommand {
       platformOptions,
       encodeNowPlayingPlatformState(parsed),
     );
-    const pmComponents = await this.withPmNowPlayingList(ownerId, interaction.guildId, components);
+    const pmComponents = await withPmNowPlayingList(ownerId, interaction.guildId, components);
     await safeUpdate(interaction, {
       components: pmComponents,
       flags: buildComponentsV2Flags(isEphemeral),
@@ -2303,7 +2297,7 @@ export class NowPlayingCommand {
         ownerId,
         encodeNowPlayingSortState(parsed),
       );
-      const pmComponents = await this.withPmNowPlayingList(
+      const pmComponents = await withPmNowPlayingList(
         ownerId, interaction.guildId, components,
       );
       await safeUpdate(interaction, {
@@ -2333,7 +2327,7 @@ export class NowPlayingCommand {
     const parsed = parseNowPlayingSortStateToken(stateToken, entries.length);
     if (!parsed) {
       const container = buildTextContainer("This sort form has expired. Open Sort again.");
-      const pmComponents = await this.withPmNowPlayingList(
+      const pmComponents = await withPmNowPlayingList(
         ownerId, interaction.guildId, [container],
       );
       await safeReply(interaction, { components: pmComponents, flags: responseFlags });
@@ -2346,7 +2340,7 @@ export class NowPlayingCommand {
         stateToken,
         "Assign a title to every visible position before saving.",
       );
-      const pmComponents = await this.withPmNowPlayingList(
+      const pmComponents = await withPmNowPlayingList(
         ownerId, interaction.guildId, components,
       );
       await safeReply(interaction, { components: pmComponents, flags: responseFlags });
@@ -2359,7 +2353,7 @@ export class NowPlayingCommand {
         stateToken,
         "Each title can only be used once. Remove duplicate assignments and try again.",
       );
-      const pmComponents = await this.withPmNowPlayingList(
+      const pmComponents = await withPmNowPlayingList(
         ownerId, interaction.guildId, components,
       );
       await safeReply(interaction, { components: pmComponents, flags: responseFlags });
@@ -2373,15 +2367,15 @@ export class NowPlayingCommand {
     const updated = await Member.updateNowPlayingSort(ownerId, orderedIds);
     if (!updated) {
       const container = buildTextContainer("Could not update the sort order.");
-      const pmComponents = await this.withPmNowPlayingList(
+      const pmComponents = await withPmNowPlayingList(
         ownerId, interaction.guildId, [container],
       );
       await safeReply(interaction, { components: pmComponents, flags: responseFlags });
       return;
     }
 
-    safeIgnore(this.refreshNowPlayingListFromContext(interaction, ownerId));
-    await this.returnToNowPlayingEditMenu(interaction, ownerId);
+    safeIgnore(refreshNowPlayingListFromContext(interaction, ownerId));
+    await returnToNowPlayingEditMenu(interaction, ownerId);
   }
 
   @ButtonComponent({ id: /^nowplaying-sort-reset:\d+$/ })
@@ -2396,7 +2390,7 @@ export class NowPlayingCommand {
     const entries = getDisplayNowPlayingEntries(await Member.getNowPlaying(ownerId)).slice(0, 10);
     const stateToken = buildNowPlayingSortStateToken(entries.length);
     const components = this.buildNowPlayingSortComponents(entries, ownerId, stateToken);
-    const pmComponents = await this.withPmNowPlayingList(ownerId, interaction.guildId, components);
+    const pmComponents = await withPmNowPlayingList(ownerId, interaction.guildId, components);
     await safeReply(interaction, { components: pmComponents, flags: responseFlags });
   }
 
@@ -2451,10 +2445,10 @@ export class NowPlayingCommand {
       }
     }
     if (updated) {
-      const refreshed = await this.refreshNowPlayingListFromContext(interaction, ownerId);
+      const refreshed = await refreshNowPlayingListFromContext(interaction, ownerId);
       if (!interaction.guildId && interaction.message) {
         try {
-          const dmComponents = await this.buildNowPlayingEditInitialComponents(ownerId);
+          const dmComponents = await buildNowPlayingEditInitialComponents(ownerId);
           await interaction.message.edit({
             components: dmComponents,
             flags: buildComponentsV2Flags(false),
@@ -2470,17 +2464,17 @@ export class NowPlayingCommand {
         return;
       }
       const list = await Member.getNowPlaying(ownerId);
-      const payload = await this.buildNowPlayingListPayload(
+      const payload = await buildNowPlayingListPayload(
         interaction.user,
         list,
         interaction.guildId,
       );
-      const components = this.withNowPlayingActions(
+      const components = withNowPlayingActions(
         true,
         ownerId,
         payload.components,
         false,
-        this.hasDisplayableNowPlayingNotes(list),
+        hasDisplayableNowPlayingNotes(list),
       );
       await safeReply(interaction, {
         components,
@@ -2583,7 +2577,7 @@ export class NowPlayingCommand {
         });
         return;
       }
-      safeIgnore(this.refreshNowPlayingListFromContext(interaction, ownerId));
+      safeIgnore(refreshNowPlayingListFromContext(interaction, ownerId));
 
       const entries = getDisplayNowPlayingEntries(await Member.getNowPlaying(ownerId));
       if (!entries.length) {
@@ -2595,7 +2589,7 @@ export class NowPlayingCommand {
         return;
       }
       const includeImages = interaction.guildId != null;
-      const { files, thumbnailsByGameId } = await this.buildNowPlayingAttachments(
+      const { files, thumbnailsByGameId } = await buildNowPlayingAttachments(
         entries,
         NOW_PLAYING_GALLERY_MAX,
         includeImages,
@@ -2605,13 +2599,13 @@ export class NowPlayingCommand {
         ownerId,
         thumbnailsByGameId,
       );
-      const pmComponents = await this.withPmNowPlayingList(
+      const pmComponents = await withPmNowPlayingList(
         ownerId,
         interaction.guildId,
         components,
       );
       await safeUpdate(interaction, {
-        ...this.buildComponentPayload(pmComponents as any, files),
+        ...buildComponentPayload(pmComponents as any, files),
         flags: buildComponentsV2Flags(isEphemeral),
       });
     } catch (err: any) {
@@ -2652,14 +2646,14 @@ export class NowPlayingCommand {
       const emptyMessage = ownerId === interaction.user.id
         ? "Your Now Playing list is empty."
         : `No Now Playing entries found for ${userMention(ownerId)}.`;
-      const container = this.buildNowPlayingMessageContainer(
+      const container = buildNowPlayingMessageContainer(
         title,
         emptyMessage,
       );
-      const actionRow = this.buildNowPlayingActionRow(
+      const actionRow = buildNowPlayingActionRow(
         ownerId,
         showNotes,
-        this.hasDisplayableNowPlayingNotes(entries),
+        hasDisplayableNowPlayingNotes(entries),
         !singleUserMode,
       );
       await safeReply(interaction, {
@@ -2669,7 +2663,7 @@ export class NowPlayingCommand {
       return;
     }
 
-    const payload = await this.buildNowPlayingListPayload(
+    const payload = await buildNowPlayingListPayload(
       target,
       entries,
       interaction.guildId,
@@ -2677,12 +2671,12 @@ export class NowPlayingCommand {
       false,
       singleUserMode,
     );
-    const components = this.withNowPlayingActions(
+    const components = withNowPlayingActions(
       !singleUserMode,
       ownerId,
       payload.components,
       showNotes,
-      this.hasDisplayableNowPlayingNotes(entries),
+      hasDisplayableNowPlayingNotes(entries),
       !singleUserMode,
     );
     await safeReply(interaction, {
@@ -3131,7 +3125,7 @@ export class NowPlayingCommand {
     await nowPlayingOwnerMenu.show(
       interaction,
       ownerId,
-      [await this.buildNowPlayingManageRow(ownerId)],
+      [await buildNowPlayingManageRow(ownerId)],
     );
   }
 
@@ -3197,7 +3191,7 @@ export class NowPlayingCommand {
     const gamesWithoutJournal = entries.filter((e) => !e.hasJournalEntry);
     if (!gamesWithoutJournal.length) {
       await safeUpdate(interaction, {
-        components: [await this.buildNowPlayingManageRow(ownerId)],
+        components: [await buildNowPlayingManageRow(ownerId)],
         flags: buildComponentsV2Flags(true),
       });
       return;
@@ -3232,7 +3226,7 @@ export class NowPlayingCommand {
     const selected = entries.find((e) => e.gameId === gameId);
     if (!selected || selected.hasJournalEntry) {
       await safeUpdate(interaction, {
-        components: [await this.buildNowPlayingManageRow(ownerId)],
+        components: [await buildNowPlayingManageRow(ownerId)],
         flags: buildComponentsV2Flags(true),
       });
       return;
@@ -3324,7 +3318,7 @@ export class NowPlayingCommand {
         stateToken,
         "Assign a platform for every visible game before saving.",
       );
-      const pmComponents = await this.withPmNowPlayingList(
+      const pmComponents = await withPmNowPlayingList(
         ownerId, interaction.guildId, components,
       );
       await safeReply(interaction, { components: pmComponents, flags: responseFlags });
@@ -3357,8 +3351,8 @@ export class NowPlayingCommand {
         return;
       }
     }
-    safeIgnore(this.refreshNowPlayingListFromContext(interaction, ownerId));
-    await this.returnToNowPlayingEditMenu(interaction, ownerId);
+    safeIgnore(refreshNowPlayingListFromContext(interaction, ownerId));
+    await returnToNowPlayingEditMenu(interaction, ownerId);
   }
 
   @ButtonComponent({ id: /^nowplaying-edit-platform-reset:\d+$/ })
@@ -3379,7 +3373,7 @@ export class NowPlayingCommand {
       platformOptions,
       stateTokenReset,
     );
-    const pmComponents = await this.withPmNowPlayingList(ownerId, interaction.guildId, components);
+    const pmComponents = await withPmNowPlayingList(ownerId, interaction.guildId, components);
     await safeReply(interaction, { components: pmComponents, flags: responseFlags });
   }
 
@@ -3410,7 +3404,7 @@ export class NowPlayingCommand {
     if (!segs) return;
     const [ownerId] = segs;
     if (await replyIfNotOwner(interaction, ownerId, "This completion prompt isn't for you.")) return;
-    await this.returnToNowPlayingEditMenu(interaction, ownerId);
+    await returnToNowPlayingEditMenu(interaction, ownerId);
   }
 
   @ButtonComponent({ id: /^nowplaying-list-remove:\d+$/ })
@@ -3429,7 +3423,7 @@ export class NowPlayingCommand {
     if (!segs) return;
     const [ownerId] = segs;
     if (await replyIfNotOwner(interaction, ownerId, "This remove prompt isn't for you.")) return;
-    await this.returnToNowPlayingEditMenu(interaction, ownerId);
+    await returnToNowPlayingEditMenu(interaction, ownerId);
   }
 
   @ButtonComponent({ id: /^nowplaying-list-cancel:\d+$/ })
@@ -3438,7 +3432,7 @@ export class NowPlayingCommand {
     if (!segs) return;
     const [ownerId] = segs;
     if (await replyIfNotOwner(interaction, ownerId, "This prompt isn't for you.")) return;
-    await this.returnToNowPlayingEditMenu(interaction, ownerId);
+    await returnToNowPlayingEditMenu(interaction, ownerId);
   }
 
   async showSingle(
@@ -3457,7 +3451,7 @@ export class NowPlayingCommand {
           "Now Playing",
           `${NOW_PLAYING_LIST_EDIT_PREFIX}:${target.id}`,
         );
-        const container = this.buildNowPlayingMessageContainer(
+        const container = buildNowPlayingMessageContainer(
           "Your Now Playing List",
           [
             "Welcome. Your list is empty, so nothing shows yet.",
@@ -3481,7 +3475,7 @@ export class NowPlayingCommand {
         return;
       }
 
-      const container = this.buildNowPlayingMessageContainer(
+      const container = buildNowPlayingMessageContainer(
         "Now Playing",
         `No Now Playing entries found for ${userMention(target.id)}.`,
       );
@@ -3503,7 +3497,7 @@ export class NowPlayingCommand {
     }
 
     const sortedEntries = getDisplayNowPlayingEntries(entries);
-    const payload = await this.buildNowPlayingListPayload(
+    const payload = await buildNowPlayingListPayload(
       target,
       sortedEntries,
       interaction.guildId,
@@ -3511,12 +3505,12 @@ export class NowPlayingCommand {
       isOwnList,
       true,
     );
-    const components = this.withNowPlayingActions(
+    const components = withNowPlayingActions(
       false,
       target.id,
       payload.components,
       false,
-      this.hasDisplayableNowPlayingNotes(sortedEntries),
+      hasDisplayableNowPlayingNotes(sortedEntries),
       false,
     );
     const reply = await safeReply(interaction, {
@@ -3561,11 +3555,11 @@ export class NowPlayingCommand {
         "Now Playing",
         `${NOW_PLAYING_LIST_EDIT_PREFIX}:${selectedUserId}`,
       );
-      const container = this.buildNowPlayingMessageContainer(
+      const container = buildNowPlayingMessageContainer(
         "Now Playing - Everyone",
         `No Now Playing entries found for ${userMention(selectedUserId)}.`,
       );
-      const components = this.withNowPlayingActions(
+      const components = withNowPlayingActions(
         true,
         selectedUserId,
         [header, container],
@@ -3583,7 +3577,7 @@ export class NowPlayingCommand {
     }
 
     const sortedEntries = getDisplayNowPlayingEntries(entries);
-    const payload = await this.buildNowPlayingListPayload(
+    const payload = await buildNowPlayingListPayload(
       target,
       sortedEntries,
       interaction.guildId,
@@ -3591,12 +3585,12 @@ export class NowPlayingCommand {
       false,
       true,
     );
-    const components = this.withNowPlayingActions(
+    const components = withNowPlayingActions(
       false,
       selectedUserId,
       payload.components,
       false,
-      this.hasDisplayableNowPlayingNotes(sortedEntries),
+      hasDisplayableNowPlayingNotes(sortedEntries),
     );
     const updated = await safeReply(interaction, {
       components,
@@ -3614,7 +3608,7 @@ export class NowPlayingCommand {
   ): Promise<void> {
     const lists = await Member.getAllNowPlaying();
     if (!lists.length) {
-      const container = this.buildNowPlayingMessageContainer(
+      const container = buildNowPlayingMessageContainer(
         "Now Playing - Everyone",
         "No Now Playing data found for anyone yet.",
       );
@@ -3638,9 +3632,9 @@ export class NowPlayingCommand {
       return `**${renderUsernameWithEmoji(record.userId, displayName)}**: ${count} ${suffix}`;
     });
 
-    const container = this.buildNowPlayingListContainer("Now Playing - Everyone", lines);
+    const container = buildNowPlayingListContainer("Now Playing - Everyone", lines);
 
-    const selectRow = this.buildNowPlayingMemberSelect(sortedLists);
+    const selectRow = buildNowPlayingMemberSelect(sortedLists);
 
     const reply = await safeReply(interaction, {
       components: [container, selectRow],
@@ -3655,330 +3649,6 @@ export class NowPlayingCommand {
         });
       }
     }
-  }
-
-  private buildNowPlayingListLines(
-    entries: IMemberNowPlayingEntry[],
-    guildId: string | null,
-  ): string[] {
-    const lines: string[] = [];
-    entries.forEach((entry) => {
-      lines.push(`- ${formatEntry(entry, guildId)}`);
-      if (entry.note) {
-        lines.push(`  - ${entry.note}`);
-      }
-    });
-    return lines;
-  }
-
-  private buildNowPlayingListContainer(title: string, lines: string[]): ContainerBuilder {
-    const container = new ContainerBuilder();
-    container.addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(safeV2TextContent(`# ${title}`, 250)),
-    );
-    if (lines.length) {
-      container.addTextDisplayComponents(
-        new TextDisplayBuilder().setContent(safeV2TextContent(lines.join("\n"), 3500)),
-      );
-    }
-    return container;
-  }
-
-  private buildNowPlayingMessageContainer(title: string, message: string): ContainerBuilder {
-    const container = new ContainerBuilder();
-    container.addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(safeV2TextContent(`# ${title}`, 250)),
-    );
-    container.addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(safeV2TextContent(message, 1000)),
-    );
-    return container;
-  }
-
-  private buildComponentPayload(
-    components: Array<ContainerBuilder | ActionRowBuilder<ButtonBuilder>>,
-    files?: AttachmentBuilder[],
-  ): {
-    components: Array<ContainerBuilder | ActionRowBuilder<ButtonBuilder>>;
-    files?: AttachmentBuilder[];
-  } {
-    if (files && files.length) {
-      return { components, files };
-    }
-    return { components };
-  }
-
-  private async buildNowPlayingAttachments(
-    entries: IMemberNowPlayingEntry[],
-    maxImages: number = Number.POSITIVE_INFINITY,
-    includeImages: boolean = true,
-  ): Promise<{
-    files: AttachmentBuilder[];
-    thumbnailsByGameId: Map<number, string>;
-    covers: Array<{ gameId: number; title: string; imageData: Buffer }>;
-  }> {
-    if (!includeImages) {
-      return {
-        files: [],
-        thumbnailsByGameId: new Map<number, string>(),
-        covers: [],
-      };
-    }
-    const files: AttachmentBuilder[] = [];
-    const seen = new Set<number>();
-    const thumbnailsByGameId = new Map<number, string>();
-    const covers: Array<{ gameId: number; title: string; imageData: Buffer }> = [];
-    let imageCount = 0;
-    for (const entry of entries) {
-      if (!entry.gameId || seen.has(entry.gameId)) continue;
-      seen.add(entry.gameId);
-      if (imageCount >= maxImages) {
-        break;
-      }
-      const game = await Game.getGameById(entry.gameId);
-      if (game?.imageData) {
-        covers.push({
-          gameId: entry.gameId,
-          title: entry.title,
-          imageData: game.imageData,
-        });
-        const filename = `now_playing_${entry.gameId}.png`;
-        files.push(
-          new AttachmentBuilder(game.imageData, { name: filename }),
-        );
-        thumbnailsByGameId.set(entry.gameId, `attachment://${filename}`);
-        imageCount += 1;
-      }
-    }
-    return { files, thumbnailsByGameId, covers };
-  }
-
-  private async buildNowPlayingListPayload(
-    target: User,
-    entries: IMemberNowPlayingEntry[],
-    guildId: string | null,
-    showNotes: boolean = false,
-    showPrivateOnlyJournalButtons: boolean = false,
-    singleUserMode: boolean = false,
-  ): Promise<{ components: NowPlayingPayloadComponents; files: AttachmentBuilder[] }> {
-    const { files, covers } = await this.buildNowPlayingAttachments(
-      entries, NOW_PLAYING_COMPOSITE_MAX,
-    );
-    const hasDisplayableNotes = this.hasDisplayableNowPlayingNotes(entries);
-    const listComponents = this.buildNowPlayingEntryComponents(
-      entries,
-      target.id,
-      guildId,
-      await this.buildNowPlayingCompositeImageUrl(files, covers, target.id),
-      showNotes,
-      showPrivateOnlyJournalButtons,
-      singleUserMode,
-      singleUserMode,
-      hasDisplayableNotes,
-    );
-    const ownerName = target.displayName ?? target.username ?? target.id;
-    const headerCustomId = singleUserMode
-      ? `${NOW_PLAYING_LIST_EDIT_PREFIX}:${target.id}`
-      : undefined;
-    const headerContainer = buildUserHeaderContainer(
-      target.id,
-      ownerName,
-      "Now Playing",
-      headerCustomId,
-    );
-    const journalSelectRow = this.buildJournalSelectRow(entries, target.id);
-    const trailingComponents: NowPlayingPayloadComponents =
-      journalSelectRow ? [journalSelectRow] : [];
-    return { components: [headerContainer, ...listComponents, ...trailingComponents], files };
-  }
-
-  private buildJournalSelectRow(
-    entries: IMemberNowPlayingEntry[],
-    ownerId: string,
-  ): ActionRowBuilder<StringSelectMenuBuilder> | null {
-    const journalEntries = entries
-      .filter((e) => e.journalEnabled && e.hasJournalEntry)
-      .map((e) => ({
-        gameId: e.gameId,
-        title: e.title,
-        journalCount: e.journalCount,
-        lastJournalAt: e.lastJournalAt,
-      }));
-    return buildJournalSelectRow(
-      `${NOW_PLAYING_JOURNAL_VIEW_SELECT_PREFIX}:${ownerId}`,
-      journalEntries,
-    );
-  }
-
-  private async buildNowPlayingCompositeImageUrl(
-    files: AttachmentBuilder[],
-    covers: Array<{ gameId: number; title: string; imageData: Buffer }>,
-    ownerId: string,
-  ): Promise<string | null> {
-    if (!covers.length) {
-      return null;
-    }
-
-    const sourceHash = this.buildNowPlayingCompositeSourceHash(ownerId, covers);
-    if (hasBackblazeB2Config()) {
-      try {
-        const stored = await getOrReplaceBackblazeImage(
-          `generated/now-playing/${ownerId}/composite`,
-          sourceHash,
-          () => composeVoteImage({
-            roundNumber: 1,
-            voteType: "GOTM",
-            covers,
-            sortByTitle: false,
-          }),
-        );
-        return stored.url;
-      } catch (error) {
-        logError("now-playing/backblazeUpload", error);
-      }
-    }
-
-    const imageBuffer = await composeVoteImage({
-      roundNumber: 1,
-      voteType: "GOTM",
-      covers,
-      sortByTitle: false,
-    });
-    const filename = "now_playing_composite.png";
-    files.push(new AttachmentBuilder(imageBuffer, { name: filename }));
-    return `attachment://${filename}`;
-  }
-
-  private buildNowPlayingCompositeSourceHash(
-    ownerId: string,
-    covers: Array<{ gameId: number; title: string; imageData: Buffer }>,
-  ): string {
-    const hash = crypto.createHash("sha256");
-    // eslint-disable-next-line local/no-direct-interaction-response-methods
-    hash.update(`owner:${ownerId}|count:${covers.length}|`);
-    covers.forEach((cover) => {
-      // eslint-disable-next-line local/no-direct-interaction-response-methods
-      hash.update(`id:${cover.gameId}|title:${cover.title}|`);
-      // eslint-disable-next-line local/no-direct-interaction-response-methods
-      hash.update(cover.imageData);
-    });
-    return hash.digest("hex");
-  }
-
-  private buildNowPlayingActionRow(
-    ownerId: string,
-    showNotes: boolean,
-    hasDisplayableNotes: boolean,
-    includeEditButton: boolean = true,
-  ): ActionRowBuilder<ButtonBuilder> | null {
-    void includeEditButton;
-    const buttons: ButtonBuilder[] = [];
-    if (hasDisplayableNotes) {
-      const notesAction = showNotes ? "hide" : "show";
-      const notesLabel = showNotes ? "Hide Notes" : "Show Notes";
-      buttons.push(
-        buildActionButton({
-          customId: `${NOW_PLAYING_LIST_NOTES_PREFIX}:${ownerId}:${notesAction}`,
-          label: notesLabel,
-          style: ButtonStyle.Secondary,
-        }),
-      );
-    }
-    return buttons.length > 0 ? buildButtonRow(...buttons) : null;
-  }
-
-  private buildNowPlayingCancelRow(ownerId: string): ActionRowBuilder<ButtonBuilder> {
-    return buildButtonRow(
-      buildActionButton("cancel", `nowplaying-list-cancel:${ownerId}`),
-    );
-  }
-
-  private async buildNowPlayingManageRow(
-    ownerId: string,
-  ): Promise<ActionRowBuilder<ButtonBuilder>> {
-    const entries = await Member.getNowPlaying(ownerId).then(getDisplayNowPlayingEntries);
-    const hasGamesWithoutJournal = entries.some((e) => !e.hasJournalEntry);
-    const buttons: ButtonBuilder[] = [];
-    if (hasGamesWithoutJournal) {
-      buttons.push(
-        buildActionButton("add", `${NOW_PLAYING_EDIT_MENU_START_JOURNAL_PREFIX}:${ownerId}`, "Start a Game Journal"),
-      );
-    }
-    buttons.push(
-      buildActionButton({ customId: `${NOW_PLAYING_EDIT_MENU_SORT_PREFIX}:${ownerId}`, label: "Sort", style: ButtonStyle.Secondary }),
-      buildActionButton({ customId: `${NOW_PLAYING_EDIT_MENU_PLATFORM_PREFIX}:${ownerId}`, label: "Edit Platform", style: ButtonStyle.Secondary }),
-      buildActionButton({ customId: `${NOW_PLAYING_EDIT_MENU_COMPLETE_PREFIX}:${ownerId}`, label: "Add Completion", style: ButtonStyle.Secondary }),
-      buildActionButton("delete", `${NOW_PLAYING_EDIT_MENU_REMOVE_PREFIX}:${ownerId}`, "Remove Game"),
-    );
-    return buildButtonRow(...buttons);
-  }
-
-  private buildNowPlayingEditMenuComponents(
-    ownerId: string,
-    entries: IMemberNowPlayingEntry[],
-    statusMessage: string | null = null,
-  ): Array<ContainerBuilder | ActionRowBuilder<ButtonBuilder>> {
-    const introLines = ["## Manage Now Playing\nChoose an action."];
-    if (statusMessage) {
-      introLines.push(`-# ${statusMessage}`);
-    }
-    const introContainer = buildTextContainer(introLines.join("\n"));
-    const listContainer = entries.length
-      ? this.buildNowPlayingEntryComponents(
-        entries,
-        ownerId,
-        null,
-        null,
-        true,
-        true,
-      )[0]
-      : this.buildNowPlayingMessageContainer(
-        "Your Now Playing List",
-        "Your Now Playing list is empty.",
-      );
-    const firstRow = buildButtonRow(
-      buildActionButton({ customId: `${NOW_PLAYING_EDIT_MENU_SORT_PREFIX}:${ownerId}`, label: "Sort", style: ButtonStyle.Secondary }),
-      buildActionButton({ customId: `${NOW_PLAYING_EDIT_MENU_PLATFORM_PREFIX}:${ownerId}`, label: "Edit Platform", style: ButtonStyle.Secondary }),
-    );
-    const secondRow = buildButtonRow(
-      buildActionButton({ customId: `${NOW_PLAYING_EDIT_MENU_COMPLETE_PREFIX}:${ownerId}`, label: "Add Completion", style: ButtonStyle.Secondary }),
-      buildActionButton("delete", `${NOW_PLAYING_EDIT_MENU_REMOVE_PREFIX}:${ownerId}`, "Remove Game"),
-    );
-    return [introContainer, listContainer, firstRow, secondRow];
-  }
-
-  private async returnToNowPlayingEditMenu(
-    interaction: AnyRepliable,
-    ownerId: string,
-  ): Promise<void> {
-    const row = await this.buildNowPlayingManageRow(ownerId);
-    const flags = buildComponentsV2Flags(true);
-    const anyInteraction = interaction as any;
-    const isAcked = Boolean(
-      anyInteraction.__rpgDeferred ?? anyInteraction.__rpgAcked ??
-      anyInteraction.deferred ?? anyInteraction.replied,
-    );
-    if (isAcked) {
-      safeIgnore(safeReply(interaction, { components: [row], flags }));
-    } else {
-      safeIgnore(safeUpdate(interaction, { components: [row], flags }));
-    }
-  }
-
-  private async buildNowPlayingEditInitialComponents(
-    ownerId: string,
-    statusMessage: string | null = null,
-  ): Promise<Array<ContainerBuilder | ActionRowBuilder<ButtonBuilder>>> {
-    const entries = await Member.getNowPlaying(ownerId).then(getDisplayNowPlayingEntries);
-    return this.buildNowPlayingEditMenuComponents(ownerId, entries, statusMessage);
-  }
-
-  private async withPmNowPlayingList(
-    _ownerId: string,
-    _guildId: string | null,
-    components: Array<ContainerBuilder | ActionRowBuilder<any>>,
-  ): Promise<Array<ContainerBuilder | ActionRowBuilder<any>>> {
-    return components;
   }
 
   private buildNowPlayingCompletionComponents(
@@ -4041,7 +3711,7 @@ export class NowPlayingCommand {
       }
       const section = new SectionBuilder().addTextDisplayComponents(
         new TextDisplayBuilder().setContent(
-          safeV2TextContent(this.trimTextDisplayContent(lines.join("\n")), 3500),
+          safeV2TextContent(trimTextDisplayContent(lines.join("\n")), 3500),
         ),
       );
       section.setButtonAccessory(
@@ -4071,11 +3741,11 @@ export class NowPlayingCommand {
       "## Now Playing Remove",
       "Select a game below to remove it from your list.",
       "",
-      ...this.buildNowPlayingListLines(entries, null),
+      ...buildNowPlayingListLines(entries, null),
     ];
     container.addTextDisplayComponents(
       new TextDisplayBuilder().setContent(
-        safeV2TextContent(this.trimTextDisplayContent(textLines.join("\n")), 3500),
+        safeV2TextContent(trimTextDisplayContent(textLines.join("\n")), 3500),
       ),
     );
 
@@ -4131,11 +3801,11 @@ export class NowPlayingCommand {
         }));
         return;
       }
-      safeIgnore(this.refreshNowPlayingListFromContext(interaction, ownerId));
+      safeIgnore(refreshNowPlayingListFromContext(interaction, ownerId));
       const entries = getDisplayNowPlayingEntries(await Member.getNowPlaying(ownerId));
       if (!entries.length) {
         const container = buildTextContainer("Your Now Playing list is empty.");
-        const pmComponents = await this.withPmNowPlayingList(
+        const pmComponents = await withPmNowPlayingList(
           ownerId,
           interaction.guildId,
           [container],
@@ -4147,7 +3817,7 @@ export class NowPlayingCommand {
         return;
       }
       const includeImages = interaction.guildId != null;
-      const { files, thumbnailsByGameId } = await this.buildNowPlayingAttachments(
+      const { files, thumbnailsByGameId } = await buildNowPlayingAttachments(
         entries,
         NOW_PLAYING_GALLERY_MAX,
         includeImages,
@@ -4157,13 +3827,13 @@ export class NowPlayingCommand {
         ownerId,
         thumbnailsByGameId,
       );
-      const pmComponents = await this.withPmNowPlayingList(
+      const pmComponents = await withPmNowPlayingList(
         ownerId,
         interaction.guildId,
         components,
       );
       safeIgnore(safeReply(interaction, {
-        ...this.buildComponentPayload(pmComponents as any, files),
+        ...buildComponentPayload(pmComponents as any, files),
         flags: buildComponentsV2Flags(isEphemeral),
       }));
     } catch (err: any) {
@@ -4302,239 +3972,6 @@ export class NowPlayingCommand {
     );
     rows.push(actionRow);
     return [container, ...rows];
-  }
-
-  private withNowPlayingActions(
-    isOwnList: boolean,
-    ownerId: string,
-    components: NowPlayingPayloadComponents,
-    showNotes: boolean,
-    hasDisplayableNotes: boolean = true,
-    includeEditButton: boolean = true,
-  ): NowPlayingMessageComponents {
-    if (!isOwnList) {
-      return components;
-    }
-    const actionRow = this.buildNowPlayingActionRow(
-      ownerId,
-      showNotes,
-      hasDisplayableNotes,
-      includeEditButton,
-    );
-    if (!actionRow) {
-      return components;
-    }
-    return [
-      ...components,
-      actionRow,
-    ];
-  }
-
-  private hasDisplayableNowPlayingNotes(entries: IMemberNowPlayingEntry[]): boolean {
-    return entries.some((entry) => !entry.journalEnabled && Boolean(entry.note?.trim()));
-  }
-
-  private async refreshNowPlayingListFromContext(
-    interaction: { client: Client; guildId: string | null; user: User },
-    userId: string,
-  ): Promise<boolean> {
-    if (!nowPlayingListContexts.size) {
-      return false;
-    }
-    let updatedAny = false;
-    let allListsCache: Awaited<ReturnType<typeof Member.getAllNowPlaying>> | null = null;
-
-    for (const [key, context] of nowPlayingListContexts.entries()) {
-      if (Date.now() - context.createdAt > NOW_PLAYING_CONTEXT_TTL_MS) {
-        nowPlayingListContexts.delete(key);
-        continue;
-      }
-
-      const shouldRefresh = context.view === "everyone" ||
-        context.view === "everyone-selected" ||
-        context.ownerUserId === userId;
-      if (!shouldRefresh) {
-        continue;
-      }
-
-      const channel = await interaction.client.channels
-        .fetch(context.channelId)
-        .catch(() => null);
-      if (!channel?.isTextBased()) {
-        nowPlayingListContexts.delete(key);
-        continue;
-      }
-
-      const message = await channel.messages
-        .fetch(context.messageId)
-        .catch(() => null);
-      if (!message) {
-        nowPlayingListContexts.delete(key);
-        continue;
-      }
-
-      try {
-        if (context.view === "single" && context.ownerUserId) {
-          const ownerId = context.ownerUserId;
-          const target = ownerId === interaction.user.id
-            ? interaction.user
-            : await safeUserFetch(interaction.client, ownerId);
-          if (!target) {
-            continue;
-          }
-          const isEphemeral = message.flags?.has(MessageFlags.Ephemeral) ?? false;
-          const title = ownerId === interaction.user.id && isEphemeral
-            ? "Your Now Playing List"
-            : `${target.displayName ?? target.username ?? "User"}'s Now Playing List`;
-          const entries = getDisplayNowPlayingEntries(await Member.getNowPlaying(ownerId));
-          const showNotes = this.getNowPlayingShowNotesState(message, ownerId);
-
-          if (!entries.length) {
-            const ownerName = target.displayName ?? target.username ?? target.id;
-            const header = buildUserHeaderContainer(
-              ownerId,
-              ownerName,
-              "Now Playing",
-              `${NOW_PLAYING_LIST_EDIT_PREFIX}:${ownerId}`,
-            );
-            const emptyMessage = ownerId === interaction.user.id
-              ? "Your Now Playing list is empty."
-              : `No Now Playing entries found for ${userMention(ownerId)}.`;
-            const container = this.buildNowPlayingMessageContainer(title, emptyMessage);
-            const components = [header, container];
-            await message.edit({
-              components,
-              flags: buildComponentsV2Flags(isEphemeral),
-            });
-            updatedAny = true;
-            continue;
-          }
-
-          const payload = await this.buildNowPlayingListPayload(
-            target,
-            entries,
-            message.guildId ?? interaction.guildId,
-            showNotes,
-            ownerId === interaction.user.id,
-            true,
-          );
-          const components = this.withNowPlayingActions(
-            false,
-            ownerId,
-            payload.components,
-            showNotes,
-            this.hasDisplayableNowPlayingNotes(entries),
-            false,
-          );
-          await message.edit({
-            components,
-            files: payload.files,
-            flags: buildComponentsV2Flags(isEphemeral),
-          });
-          updatedAny = true;
-          continue;
-        }
-
-        if (!allListsCache) {
-          allListsCache = await Member.getAllNowPlaying();
-        }
-
-        if (context.view === "everyone") {
-          if (!allListsCache.length) {
-            const container = this.buildNowPlayingMessageContainer(
-              "Now Playing - Everyone",
-              "No Now Playing data found for anyone yet.",
-            );
-            await message.edit({ components: [container] });
-            updatedAny = true;
-            continue;
-          }
-          const sortedLists = [...allListsCache].sort((a, b) => {
-            const nameA = (a.globalName ?? a.username ?? a.userId).toLowerCase();
-            const nameB = (b.globalName ?? b.username ?? b.userId).toLowerCase();
-            return nameA.localeCompare(nameB);
-          });
-          const lines = sortedLists.map((record) => {
-            const displayName = record.globalName ?? record.username ?? record.userId;
-            const count = record.entries.length;
-            const suffix = count === 1 ? "game" : "games";
-            return `**${renderUsernameWithEmoji(record.userId, displayName)}**: ${count} ${suffix}`;
-          });
-          const container = this.buildNowPlayingListContainer("Now Playing - Everyone", lines);
-          const selectRow = this.buildNowPlayingMemberSelect(sortedLists);
-          await message.edit({
-            components: [container, selectRow],
-          });
-          updatedAny = true;
-          continue;
-        }
-
-        if (context.view === "everyone-selected" && context.selectedUserId) {
-          const selectedUserId = context.selectedUserId;
-          const target =
-            (await safeUserFetch(interaction.client, selectedUserId)) ??
-            interaction.user;
-          const entries = getDisplayNowPlayingEntries(
-            await Member.getNowPlaying(selectedUserId),
-          );
-          if (!entries.length) {
-            const ownerName = target.displayName ?? target.username ?? target.id;
-            const header = buildUserHeaderContainer(
-              selectedUserId,
-              ownerName,
-              "Now Playing",
-              `${NOW_PLAYING_LIST_EDIT_PREFIX}:${selectedUserId}`,
-            );
-            const container = this.buildNowPlayingMessageContainer(
-              "Now Playing - Everyone",
-              `No Now Playing entries found for ${userMention(selectedUserId)}.`,
-            );
-            const components = this.withNowPlayingActions(
-              false,
-              selectedUserId,
-              [header, container],
-              false,
-              false,
-            );
-            await message.edit({
-              components,
-            });
-            updatedAny = true;
-            continue;
-          }
-          const payload = await this.buildNowPlayingListPayload(
-            target,
-            entries,
-            message.guildId ?? interaction.guildId,
-            false,
-            false,
-            true,
-          );
-          const components = this.withNowPlayingActions(
-            false,
-            selectedUserId,
-            payload.components,
-            false,
-            this.hasDisplayableNowPlayingNotes(entries),
-          );
-          await message.edit({
-            components,
-            files: payload.files,
-          });
-          updatedAny = true;
-        }
-      } catch (err: unknown) {
-        const error = err as { code?: number; rawError?: { code?: number } };
-        const code = error?.code ?? error?.rawError?.code;
-        if (code === 10008) {
-          nowPlayingListContexts.delete(key);
-          continue;
-        }
-        throw err;
-      }
-    }
-
-    return updatedAny;
   }
 
   private async replaceNowPlayingMessageInCurrentChannel(
@@ -4684,134 +4121,6 @@ export class NowPlayingCommand {
     return false;
   }
 
-  private getNowPlayingShowNotesState(message: Message, ownerId: string): boolean {
-    const prefix = `${NOW_PLAYING_LIST_NOTES_PREFIX}:${ownerId}:`;
-    for (const topLevel of message.components) {
-      if (!("components" in topLevel) || !Array.isArray(topLevel.components)) {
-        continue;
-      }
-      for (const component of topLevel.components) {
-        const customId = (component as { customId?: string; custom_id?: string }).customId ??
-          (component as { customId?: string; custom_id?: string }).custom_id;
-        if (!customId || !customId.startsWith(prefix)) {
-          continue;
-        }
-        return customId.endsWith(":hide");
-      }
-    }
-    return false;
-  }
-
-  private buildNowPlayingEntryComponents(
-    entries: IMemberNowPlayingEntry[],
-    ownerId: string,
-    guildId: string | null,
-    imageUrl: string | null,
-    showNotes: boolean,
-    showPrivateOnlyJournalButtons: boolean = false,
-    showHeaderEditHint: boolean = false,
-    singleUserMode: boolean = false,
-    hasDisplayableNotes: boolean = false,
-  ): NowPlayingListComponents {
-    const container = new ContainerBuilder();
-    if (imageUrl) {
-      container.addMediaGalleryComponents(
-        new MediaGalleryBuilder().addItems(
-          new MediaGalleryItemBuilder()
-            .setURL(imageUrl)
-            .setDescription("Now Playing image"),
-        ),
-      );
-      container.addSeparatorComponents(
-        new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small).setDivider(false),
-      );
-    }
-    if (singleUserMode) {
-      const entryBlocks = entries.map((entry, index) => {
-        const entryTitle = formatEntry(entry, guildId);
-        const journalMark = entry.hasJournalEntry ? " 📒" : "";
-        const lines = [`${index + 1}. ${entryTitle}${journalMark}`];
-        if (showNotes && entry.note && !entry.journalEnabled) {
-          const quotedNote = entry.note
-            .split("\n")
-            .map((noteLine) => `> ${noteLine}`)
-            .join("\n");
-          lines.push(quotedNote);
-        }
-        return lines.join("\n");
-      });
-      const combined = this.trimTextDisplayContent(entryBlocks.join("\n"));
-      if (hasDisplayableNotes) {
-        const notesAction = showNotes ? "hide" : "show";
-        const notesLabel = showNotes ? "Hide Notes" : "Show Notes";
-        const section = new SectionBuilder().addTextDisplayComponents(
-          new TextDisplayBuilder().setContent(safeV2TextContent(combined, 3500)),
-        );
-        section.setButtonAccessory(
-          new V2ButtonBuilder()
-            .setCustomId(`${NOW_PLAYING_LIST_NOTES_PREFIX}:${ownerId}:${notesAction}`)
-            .setLabel(notesLabel)
-            .setStyle(ButtonStyle.Secondary),
-        );
-        container.addSectionComponents(section);
-      } else {
-        container.addTextDisplayComponents(
-          new TextDisplayBuilder().setContent(safeV2TextContent(combined, 3500)),
-        );
-      }
-    } else {
-      entries.forEach((entry, index) => {
-      if (index === 0) {
-        container.addSeparatorComponents(
-          new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small).setDivider(false),
-        );
-      }
-      const entryTitle = formatEntry(entry, guildId);
-      const journalMark = entry.hasJournalEntry ? " 📒" : "";
-      const lines = [`${index + 1}. ${entryTitle}${journalMark}`];
-      if (showNotes && entry.note && !entry.journalEnabled) {
-        const quotedNote = entry.note
-          .split("\n")
-          .map((noteLine) => `> ${noteLine}`)
-          .join("\n");
-        lines.push(quotedNote);
-      }
-      const content = this.trimTextDisplayContent(lines.join("\n"));
-      const shouldShowJournalButton = entry.journalEnabled &&
-        (showPrivateOnlyJournalButtons || entry.hasJournalEntry);
-      if (shouldShowJournalButton) {
-        const section = new SectionBuilder().addTextDisplayComponents(
-          new TextDisplayBuilder().setContent(safeV2TextContent(content, 3500)),
-        );
-        section.setButtonAccessory(
-          new V2ButtonBuilder()
-            .setCustomId(`${NOW_PLAYING_JOURNAL_OPEN_PREFIX}:${ownerId}:${entry.gameId}:1`)
-            .setLabel("Game Journal")
-            .setStyle(ButtonStyle.Secondary),
-        );
-        container.addSectionComponents(section);
-      } else {
-        container.addTextDisplayComponents(
-          new TextDisplayBuilder().setContent(safeV2TextContent(content, 3500)),
-        );
-      }
-      });
-    }
-    if (showHeaderEditHint) {
-      container.addTextDisplayComponents(
-        new TextDisplayBuilder().setContent("-# *Note: List owner can use button in the header to maintain this list.*"),
-      );
-    }
-    return [container];
-  }
-
-  private trimTextDisplayContent(content: string): string {
-    if (content.length <= 4000) {
-      return content;
-    }
-    return truncateWithEllipsis(content, 4000);
-  }
-
   private buildJournalComponents(
     ownerId: string,
     viewerId: string,
@@ -4855,39 +4164,6 @@ export class NowPlayingCommand {
       includeNowPlayingMeta: true,
       includeCompletions: true,
     });
-  }
-
-  private buildNowPlayingMemberSelect(
-    lists: Array<{
-      userId: string;
-      username: string | null;
-      globalName: string | null;
-      entries: Array<unknown>;
-    }>,
-    selectedUserId?: string,
-  ): ActionRowBuilder<StringSelectMenuBuilder> {
-    const sorted = [...lists].sort((a, b) => {
-      const nameA = (a.globalName ?? a.username ?? a.userId).toLowerCase();
-      const nameB = (b.globalName ?? b.username ?? b.userId).toLowerCase();
-      return nameA.localeCompare(nameB);
-    });
-
-    const options = sorted.slice(0, DISCORD_SELECT_OPTIONS_MAX).map((record) => {
-      const displayName = record.globalName ?? record.username ?? record.userId;
-      return {
-        label: displayName.slice(0, DISCORD_SELECT_LABEL_MAX),
-        value: record.userId,
-        description: `${record.entries.length} ${record.entries.length === 1 ? "game" : "games"}`,
-        default: record.userId === selectedUserId,
-      };
-    });
-
-    const select = new StringSelectMenuBuilder()
-      .setCustomId(NOW_PLAYING_ALL_SELECT_ID)
-      .setPlaceholder("View a member's Now Playing list")
-      .addOptions(options);
-
-    return buildSelectRow(select);
   }
 
   private async startNowPlayingIgdbImport(
