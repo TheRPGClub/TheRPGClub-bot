@@ -57,6 +57,7 @@ type BuildGotmSearchMessagesOptions = {
 
 const threadImageCache = new Map<string, Promise<string | undefined>>();
 const gameImageDataCache = new Map<number, Promise<Buffer | null>>();
+const gameApiImageUrlCache = new Map<number, Promise<string | null>>();
 
 export function buildGotmCardsFromEntries(
   entries: GotmLikeEntry[],
@@ -228,16 +229,14 @@ async function resolveAccessoryThumbnail(
   }
 
   const imageData = await getGameImageData(card.gamedbGameId);
-  if (!imageData) {
-    return { thumbnailUrl: undefined };
+  if (imageData) {
+    const fileName = `gotm-thumb-${chunkIndex}-${itemIndex}-${card.gamedbGameId}.png`;
+    const file = new AttachmentBuilder(imageData, { name: fileName });
+    return { file, thumbnailUrl: `attachment://${fileName}` };
   }
 
-  const fileName = `gotm-thumb-${chunkIndex}-${itemIndex}-${card.gamedbGameId}.png`;
-  const file = new AttachmentBuilder(imageData, { name: fileName });
-  return {
-    file,
-    thumbnailUrl: `attachment://${fileName}`,
-  };
+  const apiUrl = await getGameApiImageUrl(card.gamedbGameId);
+  return { thumbnailUrl: apiUrl ?? undefined };
 }
 
 async function getGameImageData(gameId: number): Promise<Buffer | null> {
@@ -251,6 +250,13 @@ async function getGameImageData(gameId: number): Promise<Buffer | null> {
     );
   }
   return gameImageDataCache.get(gameId) ?? Promise.resolve(null);
+}
+
+async function getGameApiImageUrl(gameId: number): Promise<string | null> {
+  if (!gameApiImageUrlCache.has(gameId)) {
+    gameApiImageUrlCache.set(gameId, Game.getGamePrimaryImageUrl(gameId).catch(() => null));
+  }
+  return gameApiImageUrlCache.get(gameId) ?? Promise.resolve(null);
 }
 
 async function getThreadStarterImage(

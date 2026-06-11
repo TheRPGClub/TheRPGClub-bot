@@ -202,6 +202,9 @@ export async function buildGameProfile(
     if (primaryArt) {
       files.push(new AttachmentBuilder(primaryArt, { name: "game_image.png" }));
     }
+    const apiImageUrl = primaryArt
+      ? null
+      : await Game.getGamePrimaryImageUrl(gameId).catch(() => null);
 
     const rpgClubSections: string[] = [];
     const pushRpgClubSection = (title: string, value: string | null): void => {
@@ -499,7 +502,9 @@ export async function buildGameProfile(
       );
     }
 
-    const thumbnailUrl = primaryArt ? "attachment://game_image.png" : (game.coverUrl ?? null);
+    const thumbnailUrl = primaryArt
+      ? "attachment://game_image.png"
+      : (apiImageUrl ?? game.coverUrl ?? null);
 
     if (thumbnailUrl) {
       if (headerBlock.length > 0) {

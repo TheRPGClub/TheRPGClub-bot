@@ -1623,6 +1623,30 @@ export default class Game {
     });
   }
 
+  static async getGamePrimaryImageUrl(gameId: number): Promise<string | null> {
+    type GameImage = {
+      image_id: number; kind: string; is_primary: boolean; position: number; url: string;
+    };
+    const result = await apiGet<{ data: GameImage[] }>(`/api/v1/games/${gameId}/images`);
+    if (!result?.data?.length) return null;
+    const primary =
+      result.data.find((img) => img.kind === "cover" && img.is_primary) ??
+      result.data.find((img) => img.is_primary) ??
+      result.data[0];
+    return primary?.url ?? null;
+  }
+
+  static async getGamePrimaryImageBuffer(gameId: number): Promise<Buffer | null> {
+    const url = await Game.getGamePrimaryImageUrl(gameId);
+    if (!url) return null;
+    try {
+      const resp = await axios.get<ArrayBuffer>(url, { responseType: "arraybuffer" });
+      return Buffer.from(resp.data);
+    } catch {
+      return null;
+    }
+  }
+
   static async updateGameImage(
     gameId: number,
     imageData: Buffer,

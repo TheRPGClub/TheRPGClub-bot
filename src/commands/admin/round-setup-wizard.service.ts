@@ -123,8 +123,10 @@ async function ensureWinnerThreadLinked(params: {
   }
 
   const threadTitle = `${params.gameTitle} [${params.kindLabel} Round ${params.roundNumber}]`;
-  const files = game.imageData
-    ? [new AttachmentBuilder(game.imageData, { name: `gamedb_${params.gameId}.png` })]
+  const imageBuffer =
+    game.imageData ?? await Game.getGamePrimaryImageBuffer(params.gameId).catch(() => null);
+  const files = imageBuffer
+    ? [new AttachmentBuilder(imageBuffer, { name: `gamedb_${params.gameId}.png` })]
     : [];
   const messagePayload: MessageCreateOptions = {
     allowedMentions: { parse: [] },
@@ -171,7 +173,10 @@ async function planWinnerThread(params: {
   const game = await Game.getGameById(params.gameId);
   const title = `${params.gameTitle} [${params.kindLabel} Round ${params.roundNumber}]`;
   const tagLabel = params.kindLabel;
-  const hasCoverImage = Boolean(game?.imageData);
+  const apiImageUrl = game?.imageData
+    ? null
+    : await Game.getGamePrimaryImageUrl(params.gameId).catch(() => null);
+  const hasCoverImage = Boolean(game?.imageData) || Boolean(apiImageUrl);
   return {
     existingThreadId,
     title,

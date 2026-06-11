@@ -158,6 +158,10 @@ async function resolveEntryImage(
       const file = new AttachmentBuilder(buf, { name });
       return { thumbnailUrl: `attachment://${name}`, files: [file] };
     }
+    const apiUrl = await Game.getGamePrimaryImageUrl(g.gamedbGameId).catch(() => null);
+    if (apiUrl) {
+      return { thumbnailUrl: apiUrl, files: [] };
+    }
   }
 
   return { thumbnailUrl: undefined, files: [] };
