@@ -448,7 +448,7 @@ export class ProfileCommand {
     const lines = results.map((u, idx) => {
       const name = u.global_name ?? u.username ?? u.user_id;
       const botTag = u.is_bot ? " [Bot]" : "";
-      return `${idx + 1}. ${renderUsernameWithEmoji(u.user_id, name)}${botTag}`;
+      return `${idx + 1}. **${renderUsernameWithEmoji(u.user_id, name)}**${botTag}`;
     });
 
     const description = (q ? `Search: ${q}\n\n` : "") + lines.join("\n");
