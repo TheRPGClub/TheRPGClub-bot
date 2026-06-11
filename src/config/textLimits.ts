@@ -19,3 +19,6 @@ export const MAX_SECTION_TEXT = 1000;
 export const GIVEAWAY_MAX_TITLE_LENGTH    = 200;
 export const GIVEAWAY_MAX_PLATFORM_LENGTH = 50;
 export const GIVEAWAY_MAX_KEY_LENGTH      = 200;
+
+export const truncateLabel = (s: string): string => s.slice(0, DISCORD_SELECT_LABEL_MAX);
+export const truncateDescription = (s: string): string => s.slice(0, DISCORD_AUTOCOMPLETE_DESC_MAX);

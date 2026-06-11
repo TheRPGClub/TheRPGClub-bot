@@ -53,10 +53,7 @@ import {
   buildTextInputRow,
   buildSelectRow,
 } from "../../functions/uiComponents.js";
-import {
-  DISCORD_AUTOCOMPLETE_DESC_MAX,
-  DISCORD_SELECT_LABEL_MAX,
-} from "../../config/textLimits.js";
+import { truncateDescription, truncateLabel } from "../../config/textLimits.js";
 import { safeIgnore } from "../../utilities/AsyncUtils.js";
 
 export class CompletionatorUiService {
@@ -222,7 +219,7 @@ export class CompletionatorUiService {
       return {
         id: game.id,
         label: `${game.name} (${year})`,
-        description: (game.summary || "No summary").slice(0, DISCORD_AUTOCOMPLETE_DESC_MAX),
+        description: truncateDescription((game.summary || "No summary")),
       };
     });
 
@@ -378,7 +375,7 @@ export class CompletionatorUiService {
       .setPlaceholder("Completion type")
       .addOptions(
         COMPLETION_TYPES.map((value: string) => ({
-          label: value.slice(0, DISCORD_SELECT_LABEL_MAX),
+          label: truncateLabel(value),
           value,
           default: state.completionType === value,
         })),
@@ -426,7 +423,7 @@ export class CompletionatorUiService {
       a.name.localeCompare(b.name, "en", { sensitivity: "base" }),
     );
     const platformOptions = sortedPlatforms.map((platform) => ({
-      label: platform.name.slice(0, DISCORD_SELECT_LABEL_MAX),
+      label: truncateLabel(platform.name),
       value: String(platform.id),
       default: state.platformId === platform.id,
     }));
@@ -582,7 +579,7 @@ export class CompletionatorUiService {
       return {
         id: game.id,
         label: `${game.name} (${year})`,
-        description: (game.summary || "No summary").slice(0, DISCORD_AUTOCOMPLETE_DESC_MAX),
+        description: truncateDescription((game.summary || "No summary")),
       };
     });
      
@@ -737,7 +734,7 @@ export class CompletionatorUiService {
     modal.addComponents(buildTextInputRow({
       customId: "completionator-input",
       label: label.slice(0, 45),
-      placeholder: (itemTitle ?? placeholder).slice(0, DISCORD_SELECT_LABEL_MAX),
+      placeholder: truncateLabel((itemTitle ?? placeholder)),
     }));
     return modal;
   }

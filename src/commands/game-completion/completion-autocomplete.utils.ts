@@ -8,7 +8,7 @@ import Member from "../../classes/Member.js";
 import { formatTableDate } from "../../functions/DateFormatUtils.js";
 import { STANDARD_PLATFORM_IDS } from "../../config/standardPlatforms.js";
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
-import { DISCORD_SELECT_LABEL_MAX, DISCORD_SELECT_OPTIONS_MAX } from "../../config/textLimits.js";
+import { DISCORD_SELECT_OPTIONS_MAX, truncateLabel } from "../../config/textLimits.js";
 
 const PLATFORM_CACHE_TTL_MS = 5 * 60 * 1000;
 const COMPLETION_TITLE_VALUE_PREFIX = "completion";
@@ -35,7 +35,7 @@ function normalizePlatformSearchText(value: string): string {
 
 function buildPlatformAutocompleteLabel(platform: IPlatformDef): string {
   const detail = platform.abbreviation ? `${platform.name} (${platform.abbreviation})` : platform.name;
-  return detail.slice(0, DISCORD_SELECT_LABEL_MAX);
+  return truncateLabel(detail);
 }
 
 function sortPlatformsForAutocomplete(
@@ -56,7 +56,7 @@ function sortPlatformsForAutocomplete(
 export function buildKeepTypingOption(query: string): { name: string; value: string } {
   const label = `Keep typing: "${query}"`;
   return {
-    name: label.slice(0, DISCORD_SELECT_LABEL_MAX),
+    name: truncateLabel(label),
     value: query,
   };
 }
@@ -73,7 +73,7 @@ export async function autocompleteGameCompletionTitle(
   }
   const results = await Game.searchGamesAutocomplete(query);
   const resultOptions = results.slice(0, 24).map((game) => ({
-    name: formatGameTitleWithYear(game).slice(0, DISCORD_SELECT_LABEL_MAX),
+    name: truncateLabel(formatGameTitleWithYear(game)),
     value: game.title,
   }));
   const options = [buildKeepTypingOption(query), ...resultOptions];
@@ -87,7 +87,7 @@ function buildCompletionTitleAutocompleteName(completion: {
 }): string {
   const dateLabel = completion.completedAt ? formatTableDate(completion.completedAt) : "No date";
   const line = `${completion.title} | ${completion.completionType} | ${dateLabel}`;
-  return line.slice(0, DISCORD_SELECT_LABEL_MAX);
+  return truncateLabel(line);
 }
 
 function buildCompletionTitleAutocompleteValue(completionId: number): string {

@@ -33,7 +33,7 @@ import {
   buildTextReply,
 } from "../../functions/ComponentsV2Utils.js";
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
-import { DISCORD_AUTOCOMPLETE_DESC_MAX } from "../../config/textLimits.js";
+import { truncateDescription } from "../../config/textLimits.js";
 import {
   buildActionButton,
   buildButtonRow,
@@ -138,7 +138,7 @@ export async function promptIgdbSelection(
     return {
       id: game.id,
       label: `${game.name} (${year})`,
-      description: (game.summary || "No summary").slice(0, DISCORD_AUTOCOMPLETE_DESC_MAX),
+      description: truncateDescription((game.summary || "No summary")),
     };
   });
 

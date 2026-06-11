@@ -56,7 +56,7 @@ import {
   type WizardNominationOption,
 } from "./round-setup-wizard.utils.js";
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
-import { DISCORD_SELECT_LABEL_MAX } from "../../config/textLimits.js";
+import { truncateLabel } from "../../config/textLimits.js";
 import { safeIgnore } from "../../utilities/AsyncUtils.js";
 
 const NEXT_ROUND_SETUP_COMMAND_KEY = "nextround-setup";
@@ -81,7 +81,7 @@ function buildSelectionOptions(
     .filter((option) => !pickedIds.includes(option.nominationId))
     .slice(0, MAX_SELECT_OPTIONS)
     .map((option) => ({
-      label: option.gameTitle.slice(0, DISCORD_SELECT_LABEL_MAX),
+      label: truncateLabel(option.gameTitle),
       value: String(option.nominationId),
       description: `GameDB ${option.gamedbGameId} | ${option.userIds.length} nominee(s)`,
     }));
@@ -256,7 +256,7 @@ async function promptOrderNomination(
 ): Promise<number | null> {
   const remainingOptions = options.filter((option) => remainingIds.includes(option.nominationId));
   const selectOptions = remainingOptions.slice(0, MAX_SELECT_OPTIONS).map((option) => ({
-    label: option.gameTitle.slice(0, DISCORD_SELECT_LABEL_MAX),
+    label: truncateLabel(option.gameTitle),
     value: String(option.nominationId),
     description: `GameDB ${option.gamedbGameId}`,
   }));

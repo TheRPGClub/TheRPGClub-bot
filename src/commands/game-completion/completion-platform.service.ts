@@ -19,7 +19,7 @@ import {
   completionPlatformSessions,
   type CompletionPlatformContext,
 } from "./completion.types.js";
-import { DISCORD_SELECT_LABEL_MAX } from "../../config/textLimits.js";
+import { truncateLabel } from "../../config/textLimits.js";
 import { assertCustomIdSegments } from "../../utilities/CustomIdUtils.js";
 import { safeIgnore } from "../../utilities/AsyncUtils.js";
 import { buildSelectRow } from "../../functions/uiComponents.js";
@@ -61,7 +61,7 @@ export async function promptCompletionPlatformSelection(
   }, interaction.user.id);
 
   const baseOptions = platformOptions.map((platform) => ({
-    label: platform.name.slice(0, DISCORD_SELECT_LABEL_MAX),
+    label: truncateLabel(platform.name),
     value: String(platform.id),
   }));
   const options = [

@@ -37,7 +37,7 @@ import { runDockerVolumeBackup } from "../../services/DockerVolumeBackupService.
 import { buildImportTextContainer } from "../imports/import-scaffold.service.js";
 import { canSafeReply, safeDeferReply, safeDeferUpdate } from "../../functions/InteractionUtils.js";
 import { logError } from "../../utilities/LogUtils.js";
-import { DISCORD_AUTOCOMPLETE_DESC_MAX } from "../../config/textLimits.js";
+import { truncateDescription } from "../../config/textLimits.js";
 import { safeIgnore } from "../../utilities/AsyncUtils.js";
 
 export class CompletionatorWorkflowService {
@@ -920,13 +920,13 @@ export class CompletionatorWorkflowService {
     item: ICompletionatorItem,
   ): Array<{ label: string; value: string; description: string }> {
     const options: Array<{ label: string; value: string; description: string }> = [];
-    const clamp = (value: string): string => value.slice(0, DISCORD_AUTOCOMPLETE_DESC_MAX);
-
     if (item.completionType && item.completionType !== existing?.completionType) {
       options.push({
         label: "Completion Type",
         value: "type",
-        description: clamp(`${existing?.completionType ?? "Unknown"} → ${item.completionType}`),
+        description: truncateDescription(
+          `${existing?.completionType ?? "Unknown"} → ${item.completionType}`,
+        ),
       });
     }
 
@@ -939,7 +939,7 @@ export class CompletionatorWorkflowService {
         options.push({
           label: "Completion Date",
           value: "date",
-          description: clamp(`${existingDate} → ${incomingDate}`),
+          description: truncateDescription(`${existingDate} → ${incomingDate}`),
         });
       }
     }
@@ -952,7 +952,7 @@ export class CompletionatorWorkflowService {
         options.push({
           label: "Playtime",
           value: "playtime",
-          description: clamp(
+          description: truncateDescription(
             `${existingPlaytime ?? "Unknown"} hrs → ${item.playtimeHours} hrs`,
           ),
         });

@@ -49,10 +49,7 @@ import { renderUsernameWithEmoji } from "../../services/UserEmojiService.js";
 import { truncateWithEllipsis } from "../../utilities/ValidationUtils.js";
 import { logError } from "../../utilities/LogUtils.js";
 import { safeIgnore } from "../../utilities/AsyncUtils.js";
-import {
-  DISCORD_SELECT_LABEL_MAX,
-  DISCORD_SELECT_OPTIONS_MAX,
-} from "../../config/textLimits.js";
+import { DISCORD_SELECT_OPTIONS_MAX, truncateLabel } from "../../config/textLimits.js";
 import {
   NOW_PLAYING_LIST_EDIT_PREFIX,
   NOW_PLAYING_JOURNAL_VIEW_SELECT_PREFIX,
@@ -650,7 +647,7 @@ export function buildNowPlayingMemberSelect(
   const options = sorted.slice(0, DISCORD_SELECT_OPTIONS_MAX).map((record) => {
     const displayName = record.globalName ?? record.username ?? record.userId;
     return {
-      label: displayName.slice(0, DISCORD_SELECT_LABEL_MAX),
+      label: truncateLabel(displayName),
       value: record.userId,
       description: `${record.entries.length} ${record.entries.length === 1 ? "game" : "games"}`,
       default: record.userId === selectedUserId,

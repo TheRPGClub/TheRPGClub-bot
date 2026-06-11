@@ -7,7 +7,7 @@ import { CompletionatorUiService } from "./completionator-ui.service.js";
 import { buildComponentsV2Flags, buildTextReply } from "../../functions/ComponentsV2Utils.js";
 import { BOT_DEV_CHANNEL_ID } from "../../config/channels.js";
 import { safeReply } from "../../functions/InteractionUtils.js";
-import { DISCORD_SELECT_LABEL_MAX } from "../../config/textLimits.js";
+import { truncateLabel } from "../../config/textLimits.js";
 import { safeIgnore } from "../../utilities/AsyncUtils.js";
 
 export class CompletionatorThreadService {
@@ -97,7 +97,7 @@ export class CompletionatorThreadService {
 
     const threadName: string = `Completionator Import #${session.importId}`;
     const thread: ThreadChannel = await parentMessage.startThread({
-      name: threadName.slice(0, DISCORD_SELECT_LABEL_MAX),
+      name: truncateLabel(threadName),
       autoArchiveDuration: 60,
     });
 

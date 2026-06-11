@@ -25,10 +25,7 @@ import { GAMEDB_CSV_PLATFORM_MAP } from "../../config/gamedbCsvPlatformMap.js";
 import { buildIgdbSearchLink } from "./gamedb-utils.js";
 import { type IGameDbCsvImport } from "../../classes/GameDbCsvImport.js";
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
-import {
-  DISCORD_AUTOCOMPLETE_DESC_MAX,
-  DISCORD_SELECT_LABEL_MAX,
-} from "../../config/textLimits.js";
+import { truncateDescription, truncateLabel } from "../../config/textLimits.js";
 import { logWarn } from "../../utilities/LogUtils.js";
 import { GAMEDB_CSV_RESULT_LIMIT } from "../../config/pagination.js";
 
@@ -122,9 +119,9 @@ export function buildCsvPromptComponents(
       .setPlaceholder("Select a match from IGDB")
       .addOptions(
         options.slice(0, GAMEDB_CSV_RESULT_LIMIT).map((opt, idx) => ({
-          label: opt.label.slice(0, DISCORD_SELECT_LABEL_MAX),
+          label: truncateLabel(opt.label),
           value: String(opt.id),
-          description: opt.description?.slice(0, DISCORD_SELECT_LABEL_MAX),
+          description: opt.description ? truncateLabel(opt.description) : undefined,
           default: idx === 0,
         })),
       );
@@ -178,7 +175,7 @@ export async function scoreCsvImportResults(
     return {
       id: game.id,
       label: `${game.name} (${year})`,
-      description: game.summary ? game.summary.slice(0, DISCORD_AUTOCOMPLETE_DESC_MAX) : "No summary",
+      description: game.summary ? truncateDescription(game.summary) : "No summary",
     };
   });
 }

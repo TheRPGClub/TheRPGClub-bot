@@ -30,7 +30,7 @@ import {
 } from "../functions/ComponentsV2Utils.js";
 import { shouldPrompt, markPrompted, getGameReleaseYear } from "./ThreadLinkPromptCache.js";
 import { COLOR_BLUE_INFO } from "../config/colors.js";
-import { DISCORD_AUTOCOMPLETE_DESC_MAX } from "../config/textLimits.js";
+import { truncateDescription } from "../config/textLimits.js";
 import { assertCustomIdSegments } from "../utilities/CustomIdUtils.js";
 import { safeIgnore } from "../utilities/AsyncUtils.js";
 import { logError, logInfo, logWarn } from "../utilities/LogUtils.js";
@@ -189,7 +189,7 @@ export class ThreadLinkButtonHandlers {
             return {
               id: game.id,
               label: `${game.name} (${year})`,
-              description: (game.summary || "No summary").slice(0, DISCORD_AUTOCOMPLETE_DESC_MAX),
+              description: truncateDescription((game.summary || "No summary")),
             };
           });
 
