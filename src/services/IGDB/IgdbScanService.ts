@@ -1,5 +1,4 @@
-import oracledb from "oracledb";
-import { oraWithConnection } from "../../db/SqlManager.js";
+import { pgQuery } from "../../db/postgresClient.js";
 import Game from "../../classes/Game.js";
 import { igdbService } from "./IgdbService.js";
 import { sleep } from "../../utilities/DelayUtils.js";
@@ -51,48 +50,41 @@ function hasIgdbConfig(): boolean {
 }
 
 async function listScanCandidates(
-  conn: oracledb.Connection,
   cutoff: Date,
   limit: number,
 ): Promise<IgdbScanCandidate[]> {
-  const result = await conn.execute<{
-    GAME_ID: number;
-    TITLE: string;
-    IGDB_ID: number;
-    UPDATED_AT: Date | null;
+  const rows = await pgQuery<{
+    game_id: number;
+    title: string;
+    igdb_id: number;
+    updated_at: Date | null;
   }>(
-    `SELECT *
-       FROM (
-            SELECT GAME_ID, TITLE, IGDB_ID, UPDATED_AT
-              FROM GAMEDB_GAMES
-             WHERE IGDB_ID IS NOT NULL
-               AND (UPDATED_AT IS NULL OR UPDATED_AT < :cutoff)
-             ORDER BY UPDATED_AT NULLS FIRST, GAME_ID
-       )
-      WHERE ROWNUM <= :limit`,
+    `SELECT game_id, title, igdb_id, updated_at
+       FROM gamedb_games
+      WHERE igdb_id IS NOT NULL
+        AND (updated_at IS NULL OR updated_at < :cutoff)
+      ORDER BY updated_at NULLS FIRST, game_id
+      LIMIT :limit`,
     { cutoff, limit },
-    { outFormat: oracledb.OUT_FORMAT_OBJECT },
   );
 
-  return (result.rows ?? []).map((row) => ({
-    gameId: Number(row.GAME_ID),
-    title: String(row.TITLE),
-    igdbId: Number(row.IGDB_ID),
-    updatedAt: row.UPDATED_AT ? new Date(row.UPDATED_AT) : null,
+  return rows.map((row) => ({
+    gameId: Number(row.game_id),
+    title: String(row.title),
+    igdbId: Number(row.igdb_id),
+    updatedAt: row.updated_at ? new Date(row.updated_at) : null,
   }));
 }
 
-async function countScanCandidates(conn: oracledb.Connection, cutoff: Date): Promise<number> {
-  const result = await conn.execute<{ TOTAL: number }>(
-    `SELECT COUNT(*) AS TOTAL
-       FROM GAMEDB_GAMES
-      WHERE IGDB_ID IS NOT NULL
-        AND (UPDATED_AT IS NULL OR UPDATED_AT < :cutoff)`,
+async function countScanCandidates(cutoff: Date): Promise<number> {
+  const rows = await pgQuery<{ total: string }>(
+    `SELECT COUNT(*) AS total
+       FROM gamedb_games
+      WHERE igdb_id IS NOT NULL
+        AND (updated_at IS NULL OR updated_at < :cutoff)`,
     { cutoff },
-    { outFormat: oracledb.OUT_FORMAT_OBJECT },
   );
-  const row = (result.rows ?? [])[0] as { TOTAL?: number } | undefined;
-  return Number(row?.TOTAL ?? 0);
+  return Number(rows[0]?.total ?? 0);
 }
 
 export async function igdbScanTick(): Promise<void> {
@@ -106,74 +98,75 @@ export async function igdbScanTick(): Promise<void> {
   const cutoff = new Date(Date.now() - (config.minAgeDays * 24 * 60 * 60 * 1000));
 
   try {
-    await oraWithConnection(async (conn) => {
-      const totalEligible = await countScanCandidates(conn, cutoff);
-      const candidates = await listScanCandidates(conn, cutoff, config.batchSize);
-      if (!candidates.length) {
-        logInfo("IgdbScanService", {
-          message: "No games queued for refresh.",
-          intervalMin: (config.intervalMs / 60000).toFixed(1),
-          batch: config.batchSize,
-          minAgeDays: config.minAgeDays,
-          remaining: totalEligible,
-        });
-        return;
-      }
-
-      let successCount = 0;
-      let failCount = 0;
-      let releaseUpdated = 0;
-      let descriptionUpdated = 0;
-      const startedAt = Date.now();
-
-      for (const candidate of candidates) {
-        try {
-          const details = await igdbService.getGameDetails(candidate.igdbId);
-          if (!details) {
-            logWarn("IgdbScanService.refreshCandidate", `No IGDB details returned for ${candidate.title} (ID: ${candidate.gameId}).`);
-            await Game.touchGameUpdatedAt(candidate.gameId);
-            continue;
-          }
-
-          const summary = details.summary?.trim() ?? "";
-          if (summary.length > 0) {
-            await Game.updateGameDescription(candidate.gameId, summary);
-            descriptionUpdated++;
-          }
-
-          const releases = details.release_dates ?? [];
-          if (releases.length > 0) {
-            await Game.refreshReleaseDates(candidate.gameId, releases);
-            releaseUpdated++;
-          }
-
-          await Game.touchGameUpdatedAt(candidate.gameId);
-          successCount++;
-
-          if (config.throttleMs > 0) {
-            await sleep(config.throttleMs);
-          }
-        } catch (err: any) {
-          failCount++;
-          logError("IgdbScanService.refreshCandidate", err?.message ?? err);
-        }
-      }
-
-      const elapsedMs = Date.now() - startedAt;
-      const remaining = Math.max(totalEligible - candidates.length, 0);
+    const totalEligible = await countScanCandidates(cutoff);
+    const candidates = await listScanCandidates(cutoff, config.batchSize);
+    if (!candidates.length) {
       logInfo("IgdbScanService", {
-        message: "Completed batch.",
+        message: "No games queued for refresh.",
         intervalMin: (config.intervalMs / 60000).toFixed(1),
         batch: config.batchSize,
         minAgeDays: config.minAgeDays,
-        totalEligible,
-        remaining,
-        success: successCount,
-        failed: failCount,
-        descriptions: descriptionUpdated,
-        releases: releaseUpdated,
-        elapsedSec: (elapsedMs / 1000).toFixed(1),
+        remaining: totalEligible,
       });
+      return;
+    }
+
+    let successCount = 0;
+    let failCount = 0;
+    let releaseUpdated = 0;
+    let descriptionUpdated = 0;
+    const startedAt = Date.now();
+
+    for (const candidate of candidates) {
+      try {
+        const details = await igdbService.getGameDetails(candidate.igdbId);
+        if (!details) {
+          logWarn(
+            "IgdbScanService.refreshCandidate",
+            `No IGDB details returned for ${candidate.title} (ID: ${candidate.gameId}).`,
+          );
+          await Game.touchGameUpdatedAt(candidate.gameId);
+          continue;
+        }
+
+        const summary = details.summary?.trim() ?? "";
+        if (summary.length > 0) {
+          await Game.updateGameDescription(candidate.gameId, summary);
+          descriptionUpdated++;
+        }
+
+        const releases = details.release_dates ?? [];
+        if (releases.length > 0) {
+          await Game.refreshReleaseDates(candidate.gameId, releases);
+          releaseUpdated++;
+        }
+
+        await Game.touchGameUpdatedAt(candidate.gameId);
+        successCount++;
+
+        if (config.throttleMs > 0) {
+          await sleep(config.throttleMs);
+        }
+      } catch (err: any) {
+        failCount++;
+        logError("IgdbScanService.refreshCandidate", err?.message ?? err);
+      }
+    }
+
+    const elapsedMs = Date.now() - startedAt;
+    const remaining = Math.max(totalEligible - candidates.length, 0);
+    logInfo("IgdbScanService", {
+      message: "Completed batch.",
+      intervalMin: (config.intervalMs / 60000).toFixed(1),
+      batch: config.batchSize,
+      minAgeDays: config.minAgeDays,
+      totalEligible,
+      remaining,
+      success: successCount,
+      failed: failCount,
+      descriptions: descriptionUpdated,
+      releases: releaseUpdated,
+      elapsedSec: (elapsedMs / 1000).toFixed(1),
     });
   } catch (err) {
     logError("IgdbScanService.batch", err);
