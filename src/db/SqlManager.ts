@@ -19,6 +19,10 @@ import {
   pgInsertConn,
 } from "./postgresClient.js";
 
+function toUpperCaseKeys(row: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(row).map(([k, v]) => [k.toUpperCase(), v]));
+}
+
 export { oraQuery, oraMutate, oraWithConnection, oraTransaction } from "./oracleClient.js";
 export {
   pgQuery,
@@ -46,11 +50,11 @@ export async function dbQuery<RowT extends object, R>(
   if (dialect === "oracle") {
     return oraQuery(entry.oracle, params as oracledb.BindParameters, mapper);
   }
-  const rows = await pgQuery<RowT>(
+  const rows = await pgQuery<Record<string, unknown>>(
     entry.postgres,
     params as Record<string, unknown> | unknown[],
   );
-  return rows.map(mapper);
+  return rows.map((row) => mapper(toUpperCaseKeys(row) as RowT));
 }
 
 /**
@@ -132,12 +136,12 @@ export async function dbQueryConn<RowT extends object, R>(
 ): Promise<R[]> {
   const dialect = getDialect();
   if (dialect === "postgres") {
-    const rows = await pgQueryConn<RowT>(
+    const rows = await pgQueryConn<Record<string, unknown>>(
       conn as pg.PoolClient,
       entry.postgres,
       params as Record<string, unknown> | unknown[],
     );
-    return rows.map(mapper);
+    return rows.map((row) => mapper(toUpperCaseKeys(row) as RowT));
   }
   return oraQuery(
     entry.oracle,
