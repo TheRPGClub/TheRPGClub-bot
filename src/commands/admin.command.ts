@@ -32,6 +32,7 @@ import {
 import {
   parseVoteDateInput,
 } from "../functions/VoteDateUtils.js";
+import { toUnixTimestamp } from "../functions/DateFormatUtils.js";
 import { bot } from "../RPGClub_GameDB.js";
 import BotVotingInfo from "../classes/BotVotingInfo.js";
 import { isAdmin } from "./admin/admin-auth.utils.js";
@@ -137,7 +138,7 @@ export class Admin {
       }
 
       await BotVotingInfo.updateNextVoteAt(current.roundNumber, parsed);
-      const voteUnix = Math.floor(parsed.getTime() / 1000);
+      const voteUnix = toUnixTimestamp(parsed);
 
       await safeReply(
         interaction,

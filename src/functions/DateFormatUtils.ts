@@ -12,12 +12,15 @@ export function formatTableDate(date: Date | null): string {
   return `${month}/${day}/${year}`;
 }
 
+export function toUnixTimestamp(date: Date): number {
+  return Math.floor(date.getTime() / 1000);
+}
+
 export function formatDiscordTimestamp(value: Date | string | null | undefined): string {
   if (!value) return "Unknown";
   const date = value instanceof Date ? value : new Date(value);
   if (isNaN(date.getTime())) return "Unknown";
-  const seconds = Math.floor(date.getTime() / 1000);
-  return `<t:${seconds}:F>`;
+  return `<t:${toUnixTimestamp(date)}:F>`;
 }
 
 export function formatLocalNumber(value: number): string {

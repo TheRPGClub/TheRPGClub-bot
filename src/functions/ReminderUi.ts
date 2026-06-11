@@ -1,6 +1,7 @@
 import {
   ButtonStyle,
 } from "discord.js";
+import { toUnixTimestamp } from "./DateFormatUtils.js";
 import type { ActionRowBuilder, ButtonBuilder } from "discord.js";
 import { buildActionButton, buildButtonRow } from "./uiComponents.js";
 import type { IReminderRecord } from "../classes/Reminder.js";
@@ -13,7 +14,7 @@ export type ReminderButton =
   | { kind: "snooze"; reminderId: number; minutes: number };
 
 export function formatReminderTime(date: Date): string {
-  const seconds = Math.floor(date.getTime() / 1000);
+  const seconds = toUnixTimestamp(date);
   return `<t:${seconds}:f> (<t:${seconds}:R>)`;
 }
 

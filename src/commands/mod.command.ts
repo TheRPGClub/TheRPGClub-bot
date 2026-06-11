@@ -25,6 +25,7 @@ import {
 } from "../functions/ComponentsV2Utils.js";
 import { truncateDescription } from "../config/textLimits.js";
 import { buildSelectRow } from "../functions/uiComponents.js";
+import { toUnixTimestamp } from "../functions/DateFormatUtils.js";
 
 type ModHelpTopicId = "presence" | "presence-history";
 
@@ -140,7 +141,7 @@ export class Mod {
     const lines = entries.map((entry) => {
       const timestamp =
         entry.setAt instanceof Date
-          ? `<t:${Math.floor(entry.setAt.getTime() / 1000)}:F>`
+          ? `<t:${toUnixTimestamp(entry.setAt)}:F>`
           : String(entry.setAt);
       const userDisplay = entry.setByUsername ?? entry.setByUserId ?? "unknown user";
       return `• ${timestamp} ${entry.activityName} (set by ${userDisplay})`;

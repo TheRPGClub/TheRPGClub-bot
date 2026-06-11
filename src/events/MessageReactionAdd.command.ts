@@ -42,6 +42,7 @@ import {
   buildSelectRow,
 } from "../functions/uiComponents.js";
 import { logError } from "../utilities/LogUtils.js";
+import { toUnixTimestamp } from "../functions/DateFormatUtils.js";
 
 const PUSH_PIN_EMOJI = "📌";
 const PLUS_EMOJI = "➕";
@@ -427,7 +428,7 @@ export class MessageReactionAdd {
       return;
     }
 
-    const completedAtUnix = Math.floor(session.completedAt.getTime() / 1000);
+    const completedAtUnix = toUnixTimestamp(session.completedAt);
     safeIgnore(safeUpdate(interaction, {
       content: [
         "Completion added.",

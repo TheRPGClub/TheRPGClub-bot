@@ -22,6 +22,7 @@ import {
   safeV2TextContent,
 } from "./ComponentsV2Utils.js";
 import { buildActionButton , buildSelectRow } from "./uiComponents.js";
+import { toUnixTimestamp } from "./DateFormatUtils.js";
 import { composeVoteImage, type VoteImageType } from "../services/collageGenerator.js";
 import { getUserEmojiString } from "../services/UserEmojiService.js";
 import {
@@ -229,7 +230,7 @@ function trimReason(reason: string): string {
 }
 
 function formatDate(date: Date): string {
-  return `<t:${Math.floor(date.getTime() / 1000)}:D>`;
+  return `<t:${toUnixTimestamp(date)}:D>`;
 }
 
 async function buildNominatorDisplayNames(

@@ -28,7 +28,7 @@ import Gotm, { insertGotmRoundInDatabase, type IGotmGame } from "../../classes/G
 import NrGotm, { insertNrGotmRoundInDatabase, type INrGotmGame } from "../../classes/NrGotm.js";
 import BotVotingInfo from "../../classes/BotVotingInfo.js";
 import { calculateNextVoteDate } from "./voting-admin.service.js";
-import { formatMonthYear } from "../../functions/DateFormatUtils.js";
+import { formatMonthYear, toUnixTimestamp } from "../../functions/DateFormatUtils.js";
 import { formatVoteDateForDisplay, parseVoteDateInput } from "../../functions/VoteDateUtils.js";
 import {
   addCancelOption,
@@ -443,7 +443,7 @@ export async function handleNextRoundSetup(
       testMode,
     };
     await wizardLog(
-      `Found unfinished setup from <t:${Math.floor(activeSession.lastUpdatedAt.getTime() / 1000)}:R>.`,
+      `Found unfinished setup from <t:${toUnixTimestamp(activeSession.lastUpdatedAt)}:R>.`,
     );
     const resumeChoice = await wizardChoice(
       "Resume previous setup state?",
@@ -888,7 +888,7 @@ export async function handleNextRoundSetup(
     },
     {
       description:
-        `Set next vote date to <t:${Math.floor(finalDate.getTime() / 1000)}:D> (America/New_York)`,
+        `Set next vote date to <t:${toUnixTimestamp(finalDate)}:D> (America/New_York)`,
       execute: async () => {
         if (testMode) {
           await wizardLog("[Test] Would set round info.");
@@ -957,7 +957,7 @@ export async function handleNextRoundSetup(
     await updateEmbed(
       `\n**Summary**\n` +
       `Month label: **${monthYear}**\n` +
-      `Next vote date: <t:${Math.floor(finalDate.getTime() / 1000)}:D>\n` +
+      `Next vote date: <t:${toUnixTimestamp(finalDate)}:D>\n` +
       `Test mode: **${testMode ? "ON" : "OFF"}**\n\n` +
       `**Selected GOTM**\n${gotmSummary}\n\n` +
       `**Selected NR-GOTM**\n${nrSummary}\n\n` +
