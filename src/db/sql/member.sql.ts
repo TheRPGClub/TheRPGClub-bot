@@ -858,25 +858,17 @@ export const MemberSql = {
     oracle: `SELECT g.GAME_ID,
               g.TITLE,
               COUNT(e.ENTRY_ID) AS TOTAL_ENTRIES
-         FROM USER_NOW_PLAYING u
-         JOIN GAMEDB_GAMES g ON g.GAME_ID = u.GAMEDB_GAME_ID
-         JOIN USER_GAME_JOURNAL_ENTRIES e
-           ON e.USER_ID = u.USER_ID
-          AND e.GAMEDB_GAME_ID = u.GAMEDB_GAME_ID
-        WHERE u.USER_ID = :userId
-          AND u.GAMEDB_GAME_ID IS NOT NULL
+         FROM USER_GAME_JOURNAL_ENTRIES e
+         JOIN GAMEDB_GAMES g ON g.GAME_ID = e.GAMEDB_GAME_ID
+        WHERE e.USER_ID = :userId
         GROUP BY g.GAME_ID, g.TITLE
         ORDER BY g.TITLE`,
     postgres: `SELECT g.game_id,
               g.title,
               COUNT(e.entry_id) AS total_entries
-         FROM user_now_playing u
-         JOIN gamedb_games g ON g.game_id = u.gamedb_game_id
-         JOIN user_game_journal_entries e
-           ON e.user_id = u.user_id
-          AND e.gamedb_game_id = u.gamedb_game_id
-        WHERE u.user_id = :userId
-          AND u.gamedb_game_id IS NOT NULL
+         FROM user_game_journal_entries e
+         JOIN gamedb_games g ON g.game_id = e.gamedb_game_id
+        WHERE e.user_id = :userId
         GROUP BY g.game_id, g.title
         ORDER BY g.title`,
   } satisfies ISqlEntry,
