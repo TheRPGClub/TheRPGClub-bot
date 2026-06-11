@@ -5,7 +5,6 @@ import {
   PermissionsBitField,
   StringSelectMenuBuilder,
   StringSelectMenuInteraction,
-  userMention,
 } from "discord.js";
 import {
   Discord,
@@ -270,7 +269,8 @@ export async function buildProfileViewPayload(
     ]);
 
     if (!profileResp) {
-      return { notFoundMessage: `No profile data found for ${userMention(target.id)}.` };
+      const name = target.globalName ?? target.username ?? "Unknown";
+      return { notFoundMessage: `No profile data found for ${renderUsernameWithEmoji(target.id, name)}.` };
     }
 
     const user = profileResp.data;
@@ -341,11 +341,12 @@ export class ProfileCommand {
 
     if (!result.payload) {
       const notFoundContainer = buildTextContainer(
-      safeV2TextContent(
-        result.notFoundMessage ?? `No profile data found for ${userMention(target.id)}.`,
-        1000,
-          ),
-        );
+        safeV2TextContent(
+          result.notFoundMessage ??
+            `No profile data found for ${renderUsernameWithEmoji(target.id, target.globalName ?? target.username ?? "Unknown")}.`,
+          1000,
+        ),
+      );
       await safeReply(interaction, {
         components: [notFoundContainer],
         flags: buildComponentsV2Flags(ephemeral),
@@ -390,11 +391,12 @@ export class ProfileCommand {
 
       if (!result.payload) {
         const notFoundContainer = buildTextContainer(
-        safeV2TextContent(
-          result.notFoundMessage ?? `No profile data found for ${userMention(userId)}.`,
-          1000,
-            ),
-          );
+          safeV2TextContent(
+            result.notFoundMessage ??
+              `No profile data found for ${renderUsernameWithEmoji(userId, user.globalName ?? user.username ?? "Unknown")}.`,
+            1000,
+          ),
+        );
         await safeReply(interaction, {
           components: [notFoundContainer],
           flags: buildComponentsV2Flags(true),
@@ -583,7 +585,8 @@ export class ProfileCommand {
         await safeReply(
           interaction,
           buildTextReply(
-            `${userMention(target.id)} doesn't have a profile in the database yet. ` +
+            `${renderUsernameWithEmoji(target.id, target.globalName ?? target.username ?? "Unknown")} ` +
+            "doesn't have a profile in the database yet. " +
             "They need to be seen by the bot first (send a message, have an admin sync them, etc.).",
             true,
           ),
@@ -665,8 +668,8 @@ export class ProfileCommand {
         interaction,
         buildTextReply(
           parts.length
-            ? `Profile result for ${userMention(target.id)} -- ${parts.join(" | ")}.`
-            : `No fields were updated for ${userMention(target.id)}.`,
+            ? `Profile result for ${renderUsernameWithEmoji(target.id, target.globalName ?? target.username ?? "Unknown")} -- ${parts.join(" | ")}.`
+            : `No fields were updated for ${renderUsernameWithEmoji(target.id, target.globalName ?? target.username ?? "Unknown")}.`,
           true,
         ),
       );
