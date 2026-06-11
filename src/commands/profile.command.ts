@@ -456,7 +456,6 @@ export class ProfileCommand {
     const selectOptions = results.map((u, idx) => ({
       label: truncateLabel(u.global_name ?? u.username ?? `Member ${idx + 1}`),
       value: u.user_id,
-      description: truncateLabel(`ID: ${u.user_id}${u.is_bot ? " | Bot" : ""}`),
     }));
 
     const selectChunks = chunk(selectOptions, 25);
