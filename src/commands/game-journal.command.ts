@@ -943,7 +943,6 @@ export class GameJournalCommand {
     );
     const gameId = Number(gameIdRaw);
     await Member.addGameJournalEntry({ userId: ownerId, gameId, title: title || null, body });
-    await Member.upsertGameJournalPreference(ownerId, gameId, true);
     const container = buildTextContainer("## Manage Journal");
     const row = buildHmenuActionRow(ownerId, gameId);
     await safeUpdate(interaction, {
