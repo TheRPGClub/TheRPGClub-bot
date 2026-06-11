@@ -33,4 +33,4 @@ Just before opening a PR at the end of a task, run `npm run lint` and correct an
 When a PR closes more than one issue, each issue must be linked in the GitHub Development field. Use separate `Closes #X` lines (one per issue) in the PR body -- comma-separated closes on a single line are not reliably picked up. After opening, verify with `gh pr view <N> --json closingIssuesReferences`.
 Do not use tables in markdown files.
 When doing implementation work, always pull main, then open a fresh branch and commit your changes there. When finished, push to the branch and open a PR.
-When catching API errors in bot commands, always capture the full HTTP response body from the error and include it in the user-facing error message (truncated to ~300 chars). Never surface just the status code or axios message alone.
+When catching API errors in bot commands, always include both the full request (method, URL, body) and the full response (status, body) in the user-facing error message, each formatted as a JSON code block. Never surface just the status code or axios message alone.
