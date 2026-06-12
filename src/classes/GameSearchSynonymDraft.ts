@@ -1,13 +1,4 @@
-import type pg from "pg";
-import {
-  dbQuery,
-  dbMutate,
-  dbInsert,
-  dbTransaction,
-  dbQueryConn,
-  dbMutateConn,
-} from "../db/SqlManager.js";
-import { GameSearchSynonymDraftSql } from "../db/sql/index.js";
+import { apiGet, apiPost, apiPatch, apiDelete } from "../services/RpgClubApiClient.js";
 
 export type ISynonymDraftPair = {
   term: string;
@@ -22,8 +13,26 @@ export type ISynonymDraft = {
   updatedAt: Date;
 };
 
-function parsePairsJson(raw: string | null | undefined): ISynonymDraftPair[] {
+type SearchSynonymDraftApiData = {
+  draft_id: number;
+  user_id: string;
+  pairs_json: string | ISynonymDraftPair[];
+  created_at: string;
+  updated_at: string;
+};
+
+type SearchSynonymDraftResponse = { data: SearchSynonymDraftApiData };
+
+function parsePairsJson(raw: string | ISynonymDraftPair[] | null | undefined): ISynonymDraftPair[] {
   if (!raw) return [];
+  if (Array.isArray(raw)) {
+    return raw
+      .map((item) => ({
+        term: typeof item?.term === "string" ? item.term : "",
+        match: typeof item?.match === "string" ? item.match : "",
+      }))
+      .filter((pair) => pair.term && pair.match);
+  }
   try {
     const parsed = JSON.parse(raw);
     if (Array.isArray(parsed)) {
@@ -40,73 +49,50 @@ function parsePairsJson(raw: string | null | undefined): ISynonymDraftPair[] {
   return [];
 }
 
-function mapDraftRow(row: any): ISynonymDraft {
+function mapDraftFromApi(d: SearchSynonymDraftApiData): ISynonymDraft {
   return {
-    draftId: Number(row.DRAFT_ID),
-    userId: String(row.USER_ID),
-    pairs: parsePairsJson(row.PAIRS_JSON ? String(row.PAIRS_JSON) : null),
-    createdAt: row.CREATED_AT instanceof Date ? row.CREATED_AT : new Date(row.CREATED_AT),
-    updatedAt: row.UPDATED_AT instanceof Date ? row.UPDATED_AT : new Date(row.UPDATED_AT),
+    draftId: Number(d.draft_id),
+    userId: String(d.user_id),
+    pairs: parsePairsJson(d.pairs_json),
+    createdAt: new Date(d.created_at),
+    updatedAt: new Date(d.updated_at),
   };
 }
 
 export default class GameSearchSynonymDraft {
   static async createDraft(userId: string): Promise<ISynonymDraft> {
-    const draftId = await dbInsert(
-      GameSearchSynonymDraftSql.createDraft,
-      { userId, pairsJson: JSON.stringify([]) },
-      "draftId",
+    const response = await apiPost<SearchSynonymDraftResponse>(
+      "/api/v1/search_synonym_drafts",
+      { data: { user_id: userId, pairs_json: JSON.stringify([]) } },
     );
-    const draft = await this.getDraft(draftId);
-    if (!draft) {
-      throw new Error("Failed to load synonym draft after creation.");
-    }
-    return draft;
+    if (!response) throw new Error("Failed to create synonym draft.");
+    return mapDraftFromApi(response.data);
   }
 
   static async getDraft(draftId: number): Promise<ISynonymDraft | null> {
-    const rows = await dbQuery(
-      GameSearchSynonymDraftSql.getDraft,
-      { draftId },
-      mapDraftRow,
+    const response = await apiGet<SearchSynonymDraftResponse>(
+      `/api/v1/search_synonym_drafts/${draftId}`,
     );
-    return rows[0] ?? null;
+    if (!response) return null;
+    return mapDraftFromApi(response.data);
   }
 
   static async appendPairs(
     draftId: number,
     pairs: ISynonymDraftPair[],
   ): Promise<ISynonymDraft | null> {
-    return dbTransaction(async (conn) => {
-      const existing = await this.getDraftWithConn(draftId, conn);
-      if (!existing) return null;
-      const combined = [...existing.pairs, ...pairs];
-      await dbMutateConn(
-        conn,
-        GameSearchSynonymDraftSql.updateDraft,
-        { draftId, pairsJson: JSON.stringify(combined) },
-      );
-      return this.getDraftWithConn(draftId, conn);
-    });
+    const existing = await this.getDraft(draftId);
+    if (!existing) return null;
+    const combined = [...existing.pairs, ...pairs];
+    const response = await apiPatch<SearchSynonymDraftResponse>(
+      `/api/v1/search_synonym_drafts/${draftId}`,
+      { data: { pairs_json: JSON.stringify(combined) } },
+    );
+    if (!response) return null;
+    return mapDraftFromApi(response.data);
   }
 
   static async deleteDraft(draftId: number): Promise<void> {
-    await dbMutate(
-      GameSearchSynonymDraftSql.deleteDraft,
-      { draftId },
-    );
-  }
-
-  private static async getDraftWithConn(
-    draftId: number,
-    conn: pg.PoolClient,
-  ): Promise<ISynonymDraft | null> {
-    const rows = await dbQueryConn(
-      conn,
-      GameSearchSynonymDraftSql.getDraft,
-      { draftId },
-      mapDraftRow,
-    );
-    return rows[0] ?? null;
+    await apiDelete(`/api/v1/search_synonym_drafts/${draftId}`);
   }
 }
