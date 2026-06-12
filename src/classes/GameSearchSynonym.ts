@@ -5,10 +5,10 @@ import {
   dbTransaction,
   dbQueryConn,
   dbMutateConn,
-  dbInsertConn,
 } from "../db/SqlManager.js";
 import { GameSearchSynonymSql } from "../db/sql/index.js";
-import { isPositiveInt, requirePositiveInt } from "../utilities/ValidationUtils.js";
+import { requirePositiveInt } from "../utilities/ValidationUtils.js";
+import { apiGet, apiPost, apiPatch } from "../services/RpgClubApiClient.js";
 
 export type IGameSearchSynonym = {
   termId: number;
@@ -18,6 +18,35 @@ export type IGameSearchSynonym = {
   createdAt: Date;
   createdBy: string | null;
 };
+
+type SearchSynonymApiData = {
+  term_id: number;
+  group_id: number;
+  term_text: string;
+  term_norm: string;
+  created_at: string;
+  created_by: string | null;
+};
+
+type SearchSynonymGroupApiData = {
+  group_id: number;
+  created_at: string;
+  created_by: string | null;
+};
+
+type SearchSynonymResponse = { data: SearchSynonymApiData };
+type SearchSynonymGroupResponse = { data: SearchSynonymGroupApiData };
+
+function mapSynonymFromApi(d: SearchSynonymApiData): IGameSearchSynonym {
+  return {
+    termId: Number(d.term_id),
+    groupId: Number(d.group_id),
+    termText: String(d.term_text),
+    termNorm: String(d.term_norm),
+    createdAt: new Date(d.created_at),
+    createdBy: d.created_by ?? null,
+  };
+}
 
 export function normalizeSearchTerm(text: string): string {
   return text.toLowerCase().replace(/[^a-z0-9]/g, "");
@@ -39,6 +68,7 @@ export default class GameSearchSynonym {
     return normalizeSearchTerm(text);
   }
 
+  // Blocked: needs GET /api/v1/search_synonyms?term=<text> endpoint
   static async getGroupIdsForTerm(
     termText: string,
     conn?: pg.PoolClient,
@@ -60,6 +90,7 @@ export default class GameSearchSynonym {
     );
   }
 
+  // Blocked: shares conn with addSynonymPair and updateGroupTerms (both still on SQL)
   static async listGroupTerms(
     groupId: number,
     conn?: pg.PoolClient,
@@ -70,6 +101,7 @@ export default class GameSearchSynonym {
     return dbQuery(GameSearchSynonymSql.listGroupTerms, { groupId }, mapSynonymRow);
   }
 
+  // Blocked: depends on getGroupIdsForTerm (needs term= filter endpoint)
   static async getTermsForQuery(query: string): Promise<string[]> {
     const norm = normalizeSearchTerm(query);
     if (!norm) return [];
@@ -91,6 +123,7 @@ export default class GameSearchSynonym {
     });
   }
 
+  // Blocked: needs q= text-search param on GET /api/v1/search_synonyms
   static async listSynonyms(
     options: { query?: string; limit?: number } = {},
   ): Promise<IGameSearchSynonym[]> {
@@ -105,6 +138,7 @@ export default class GameSearchSynonym {
     );
   }
 
+  // Blocked: needs q= text-search param on GET /api/v1/search_synonym_groups
   static async countSynonymGroups(query?: string): Promise<number> {
     const cleanedQuery = query?.trim().toLowerCase() ?? "";
     const searchQuery = cleanedQuery ? `%${cleanedQuery}%` : null;
@@ -119,6 +153,7 @@ export default class GameSearchSynonym {
     return rows[0] ?? 0;
   }
 
+  // Blocked: needs q= text-search param on GET /api/v1/search_synonym_groups
   static async listSynonymGroups(
     options: { query?: string; limit?: number; offset?: number } = {},
   ): Promise<IGameSearchSynonym[]> {
@@ -154,6 +189,8 @@ export default class GameSearchSynonym {
     });
   }
 
+  // Partially migrated: group/term creation via API; getGroupIdsForTerm still SQL
+  // (blocked by missing GET /api/v1/search_synonyms?term= endpoint)
   static async addSynonymPair(
     termText: string,
     matchText: string,
@@ -172,12 +209,12 @@ export default class GameSearchSynonym {
       let groupId: number | null = sharedGroup ?? null;
 
       if (!groupId) {
-        groupId = await dbInsertConn(
-          conn,
-          GameSearchSynonymSql.insertSynonymGroup,
-          { createdBy },
-          "groupId",
+        const groupResponse = await apiPost<SearchSynonymGroupResponse>(
+          "/api/v1/search_synonym_groups",
+          { data: { created_by: createdBy } },
         );
+        if (!groupResponse) throw new Error("Failed to create synonym group.");
+        groupId = groupResponse.data.group_id;
       }
 
       for (const text of [trimmedTerm, trimmedMatch]) {
@@ -186,16 +223,17 @@ export default class GameSearchSynonym {
           throw new Error("Synonyms must include letters or numbers.");
         }
         try {
-          await dbMutateConn(
-            conn,
-            GameSearchSynonymSql.insertSynonymTerm,
-            { groupId, termText: text, termNorm: norm, createdBy },
-          );
+          await apiPost<SearchSynonymResponse>("/api/v1/search_synonyms", {
+            data: {
+              group_id: groupId,
+              term_text: text,
+              term_norm: norm,
+              created_by: createdBy,
+            },
+          });
         } catch (err: any) {
-          const msg = err?.message ?? "";
-          if (!/ORA-00001/i.test(msg) && !/unique/i.test(msg)) {
-            throw err;
-          }
+          const status = err?.response?.status ?? 0;
+          if (status !== 422) throw err;
         }
       }
 
@@ -206,6 +244,7 @@ export default class GameSearchSynonym {
     });
   }
 
+  // Migrated to API
   static async updateSynonym(
     termId: number,
     termText: string,
@@ -219,16 +258,15 @@ export default class GameSearchSynonym {
       throw new Error("Term text must include letters or numbers.");
     }
 
-    return dbTransaction(async (conn) => {
-      await dbMutateConn(
-        conn,
-        GameSearchSynonymSql.updateSynonymTerm,
-        { termId, termText: trimmed, termNorm },
-      );
-      return GameSearchSynonym.getSynonymById(termId, conn);
-    });
+    const response = await apiPatch<SearchSynonymResponse>(
+      `/api/v1/search_synonyms/${termId}`,
+      { data: { term_text: trimmed, term_norm: termNorm } },
+    );
+    if (!response) return null;
+    return mapSynonymFromApi(response.data);
   }
 
+  // Blocked: needs DELETE /api/v1/search_synonym_groups/:id/terms (bulk delete)
   static async updateGroupTerms(
     groupId: number,
     terms: string[],
@@ -279,6 +317,7 @@ export default class GameSearchSynonym {
     });
   }
 
+  // Migrated to API
   static async createGroupTerms(
     terms: string[],
     createdBy: string | null,
@@ -297,33 +336,28 @@ export default class GameSearchSynonym {
       throw new Error("A synonym group must contain at least two terms.");
     }
 
-    return dbTransaction(async (conn) => {
-      const groupId = await dbInsertConn(
-        conn,
-        GameSearchSynonymSql.insertSynonymGroup,
-        { createdBy },
-        "groupId",
-      );
-      if (!isPositiveInt(groupId)) {
-        throw new Error("Failed to create synonym group.");
-      }
+    const groupResponse = await apiPost<SearchSynonymGroupResponse>(
+      "/api/v1/search_synonym_groups",
+      { data: { created_by: createdBy } },
+    );
+    if (!groupResponse) throw new Error("Failed to create synonym group.");
+    const groupId = groupResponse.data.group_id;
 
-      for (const text of cleaned) {
-        const norm = normalizeSearchTerm(text);
-        await dbMutateConn(
-          conn,
-          GameSearchSynonymSql.insertSynonymTerm,
-          { groupId, termText: text, termNorm: norm, createdBy },
-        );
-      }
+    for (const text of cleaned) {
+      const norm = normalizeSearchTerm(text);
+      await apiPost<SearchSynonymResponse>("/api/v1/search_synonyms", {
+        data: { group_id: groupId, term_text: text, term_norm: norm, created_by: createdBy },
+      });
+    }
 
-      return {
-        groupId,
-        terms: await GameSearchSynonym.listGroupTerms(groupId, conn),
-      };
-    });
+    return {
+      groupId,
+      terms: await GameSearchSynonym.listGroupTerms(groupId),
+    };
   }
 
+  // Blocked: group-cleanup logic needs atomic transaction; defer until
+  // DELETE /api/v1/search_synonym_groups/:id/terms endpoint is available
   static async deleteSynonym(termId: number): Promise<boolean> {
     return dbTransaction(async (conn) => {
       const groupRows = await dbQueryConn(
@@ -356,8 +390,9 @@ export default class GameSearchSynonym {
     });
   }
 
+  // Blocked: depends on DELETE /api/v1/search_synonym_groups/:id/terms
+  // or confirmed cascade behavior on DELETE /api/v1/search_synonym_groups/:id
   static async deleteGroup(groupId: number): Promise<boolean> {
-    if (!isPositiveInt(groupId)) return false;
     return dbTransaction(async (conn) => {
       const existsRows = await dbQueryConn(
         conn,
@@ -373,24 +408,14 @@ export default class GameSearchSynonym {
     });
   }
 
+  // Migrated to API
   static async getSynonymById(
     termId: number,
-    conn?: pg.PoolClient,
   ): Promise<IGameSearchSynonym | null> {
-    if (conn) {
-      const rows = await dbQueryConn(
-        conn,
-        GameSearchSynonymSql.getSynonymById,
-        { termId },
-        mapSynonymRow,
-      );
-      return rows[0] ?? null;
-    }
-    const rows = await dbQuery(
-      GameSearchSynonymSql.getSynonymById,
-      { termId },
-      mapSynonymRow,
+    const response = await apiGet<SearchSynonymResponse>(
+      `/api/v1/search_synonyms/${termId}`,
     );
-    return rows[0] ?? null;
+    if (!response) return null;
+    return mapSynonymFromApi(response.data);
   }
 }
