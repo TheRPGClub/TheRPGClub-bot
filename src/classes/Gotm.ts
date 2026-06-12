@@ -6,6 +6,7 @@ import {
   dbMutateConn,
 } from "../db/SqlManager.js";
 import { GotmSql } from "../db/sql/index.js";
+import { apiGet } from "../services/RpgClubApiClient.js";
 import Game from "./Game.js";
 import { getThreadsByGameId } from "./Thread.js";
 import { isPositiveInt, requirePositiveInt } from "../utilities/ValidationUtils.js";
@@ -61,30 +62,34 @@ async function getPrimaryThreadIdForGame(gameId: number): Promise<string | null>
   return threadIds[0] ?? null;
 }
 
-type GotmEntryRow = {
-  ROUND_NUMBER: number;
-  MONTH_YEAR: string;
-  GAME_INDEX: number;
-  REDDIT_URL: string | null;
-  VOTING_RESULTS_MESSAGE_ID: string | null;
-  GAMEDB_GAME_ID: number | null;
+type GotmEntryApiRow = {
+  gotm_id: number;
+  round_number: number;
+  month_year: string;
+  game_index: number;
+  reddit_url: string | null;
+  voting_results_message_id: string | null;
+  gamedb_game_id: number | null;
+  game?: { title?: string } | null;
 };
 
+type GotmEntryListResponse = { data: GotmEntryApiRow[] };
+
 async function loadFromDatabaseInternal(): Promise<IGotmEntry[]> {
-  const rows = await dbQuery<GotmEntryRow, GotmEntryRow>(
-    GotmSql.loadAll,
-    {},
-    (row) => row,
+  const response = await apiGet<GotmEntryListResponse>(
+    "/api/v1/gotm_entries",
+    { params: { include: "game", per: 500 } },
   );
+  const rows = response?.data ?? [];
 
   const byRound = new Map<number, IGotmEntry>();
 
   for (const row of rows) {
-    const round = Number(row.ROUND_NUMBER);
+    const round = Number(row.round_number);
     if (!Number.isFinite(round)) continue;
 
-    const monthYear = row.MONTH_YEAR;
-    const votingId = row.VOTING_RESULTS_MESSAGE_ID ?? null;
+    const monthYear = row.month_year;
+    const votingId = row.voting_results_message_id ?? null;
 
     let entry = byRound.get(round);
     if (!entry) {
@@ -101,17 +106,23 @@ async function loadFromDatabaseInternal(): Promise<IGotmEntry[]> {
       entry.votingResultsMessageId = votingId;
     }
 
-    const gamedbGameId = Number(row.GAMEDB_GAME_ID);
+    const gamedbGameId = Number(row.gamedb_game_id);
     if (!isPositiveInt(gamedbGameId)) {
-      throw new Error(`GOTM round ${round} game ${row.GAME_INDEX} is missing GAMEDB_GAME_ID.`);
+      throw new Error(`GOTM round ${round} game ${row.game_index} is missing gamedb_game_id.`);
     }
-    const gameDetails = await getGameDetailsCached(gamedbGameId);
+
+    const embeddedTitle = row.game?.title;
+    const title = embeddedTitle ?? (await getGameDetailsCached(gamedbGameId)).title;
+    if (embeddedTitle) {
+      gameCache.set(gamedbGameId, { title: embeddedTitle });
+    }
+
     const derivedThreadId = await getPrimaryThreadIdForGame(gamedbGameId);
 
     const game: IGotmGame = {
-      title: gameDetails.title,
+      title,
       threadId: derivedThreadId,
-      redditUrl: row.REDDIT_URL ?? null,
+      redditUrl: row.reddit_url ?? null,
       gamedbGameId,
     };
 

@@ -7,6 +7,7 @@ import {
   dbInsertConn,
 } from "../db/SqlManager.js";
 import { NrGotmSql } from "../db/sql/index.js";
+import { apiGet } from "../services/RpgClubApiClient.js";
 import Game from "./Game.js";
 import { getThreadsByGameId } from "./Thread.js";
 import { isPositiveInt, requirePositiveInt } from "../utilities/ValidationUtils.js";
@@ -63,31 +64,34 @@ async function getPrimaryThreadIdForGame(gameId: number): Promise<string | null>
   return threadIds[0] ?? null;
 }
 
-type NrGotmEntryRow = {
-  NR_GOTM_ID: number;
-  ROUND_NUMBER: number;
-  MONTH_YEAR: string;
-  GAME_INDEX: number;
-  REDDIT_URL: string | null;
-  VOTING_RESULTS_MESSAGE_ID: string | null;
-  GAMEDB_GAME_ID: number | null;
+type NrGotmEntryApiRow = {
+  nr_gotm_id: number;
+  round_number: number;
+  month_year: string;
+  game_index: number;
+  reddit_url: string | null;
+  voting_results_message_id: string | null;
+  gamedb_game_id: number | null;
+  game?: { title?: string } | null;
 };
 
+type NrGotmEntryListResponse = { data: NrGotmEntryApiRow[] };
+
 async function loadFromDatabaseInternal(): Promise<INrGotmEntry[]> {
-  const rows = await dbQuery<NrGotmEntryRow, NrGotmEntryRow>(
-    NrGotmSql.loadAll,
-    {},
-    (row) => row,
+  const response = await apiGet<NrGotmEntryListResponse>(
+    "/api/v1/nr_gotm_entries",
+    { params: { include: "game", per: 500 } },
   );
+  const rows = response?.data ?? [];
 
   const byRound = new Map<number, INrGotmEntry>();
 
   for (const row of rows) {
-    const round = Number(row.ROUND_NUMBER);
+    const round = Number(row.round_number);
     if (!Number.isFinite(round)) continue;
 
-    const monthYear = row.MONTH_YEAR;
-    const votingId = row.VOTING_RESULTS_MESSAGE_ID ?? null;
+    const monthYear = row.month_year;
+    const votingId = row.voting_results_message_id ?? null;
 
     let entry = byRound.get(round);
     if (!entry) {
@@ -104,20 +108,26 @@ async function loadFromDatabaseInternal(): Promise<INrGotmEntry[]> {
       entry.votingResultsMessageId = votingId;
     }
 
-    const gamedbGameId = Number(row.GAMEDB_GAME_ID);
+    const gamedbGameId = Number(row.gamedb_game_id);
     if (!isPositiveInt(gamedbGameId)) {
       throw new Error(
-        `NR-GOTM round ${round} game ${row.GAME_INDEX} is missing GAMEDB_GAME_ID.`,
+        `NR-GOTM round ${round} game ${row.game_index} is missing gamedb_game_id.`,
       );
     }
-    const gameDetails = await getNrGameDetailsCached(gamedbGameId);
+
+    const embeddedTitle = row.game?.title;
+    const title = embeddedTitle ?? (await getNrGameDetailsCached(gamedbGameId)).title;
+    if (embeddedTitle) {
+      nrGameCache.set(gamedbGameId, { title: embeddedTitle });
+    }
+
     const derivedThreadId = await getPrimaryThreadIdForGame(gamedbGameId);
 
     const game: INrGotmGame = {
-      id: Number(row.NR_GOTM_ID),
-      title: gameDetails.title,
+      id: Number(row.nr_gotm_id),
+      title,
       threadId: derivedThreadId,
-      redditUrl: row.REDDIT_URL ?? null,
+      redditUrl: row.reddit_url ?? null,
       gamedbGameId,
     };
 
