@@ -9,7 +9,6 @@ import {
   ButtonComponent,
   Discord,
   Slash,
-  SlashChoice,
   SlashGroup,
   SlashOption,
 } from "discordx";

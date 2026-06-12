@@ -81,6 +81,19 @@ function parsePrivateFlagFromSessionId(sessionId: string): boolean | null {
   return match[1] === "1";
 }
 
+const ROUND_HISTORY_MODAL_ID_PREFIX = "modal:round-history:v1:query";
+
+function buildRoundHistoryModalCustomId(sessionId: string): string {
+  return `${ROUND_HISTORY_MODAL_ID_PREFIX}:${sessionId}`;
+}
+
+function parseRoundHistoryModalCustomId(customId: string): { sessionId: string } | null {
+  const prefix = `${ROUND_HISTORY_MODAL_ID_PREFIX}:`;
+  if (!customId.startsWith(prefix)) return null;
+  const sessionId = customId.slice(prefix.length);
+  return sessionId ? { sessionId } : null;
+}
+
 function parseYearFromMonthYear(value: string): number | null {
   const match = /(\d{4})\s*$/.exec(value);
   if (!match || !match[1]) return null;
@@ -119,11 +132,7 @@ export function buildRoundHistoryModal(sessionId: string): ModalBuilder {
     "Sort controls round order. Results show up to 5 rounds per page.";
 
   return new ModalBuilder()
-    .setCustomId(buildRawModalCustomId({
-      feature: "round-history",
-      flow: "query",
-      sessionId,
-    }))
+    .setCustomId(buildRoundHistoryModalCustomId(sessionId))
     .setTitle(ROUND_HISTORY_MODAL_TITLE)
     .addActionRowComponents(
       new ModalActionRowBuilder<ModalTextInputBuilder>().addComponents(
@@ -550,7 +559,7 @@ export class RoundHistoryCommand {
 
   @ModalComponent({ id: /^modal:round-history:v1:query:[A-Za-z0-9_-]{1,64}$/ })
   async submitRoundHistoryModal(interaction: ModalSubmitInteraction): Promise<void> {
-    const parsedCustomId = parseRawModalCustomId(interaction.customId);
+    const parsedCustomId = parseRoundHistoryModalCustomId(interaction.customId);
     const query = sanitizeUserInput(
       interaction.fields.getTextInputValue(ROUND_HISTORY_QUERY_ID) ?? "",
       { preserveNewlines: false, maxLength: 30 },
@@ -560,7 +569,7 @@ export class RoundHistoryCommand {
     const selectedYearRaw = extractSingleValueFromModal(interaction, ROUND_HISTORY_YEAR_ID);
     const selectedYear = Number(selectedYearRaw);
 
-    if (!parsedCustomId || parsedCustomId.feature !== "round-history" || parsedCustomId.flow !== "query") {
+    if (!parsedCustomId) {
       await safeReply(interaction, buildTextReply("This round history form is invalid. Please run /round-history again.", true));
       return;
     }

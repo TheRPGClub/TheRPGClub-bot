@@ -10,7 +10,6 @@ const PLATFORM_COLS_PG = `platform_id,
               platform_abbreviation,
               igdb_platform_id`;
 
-const REGION_COLS = `REGION_ID, REGION_CODE, REGION_NAME, IGDB_REGION_ID`;
 const REGION_COLS_PG = `region_id, region_code, region_name, igdb_region_id`;
 
 export const GameSql = {
@@ -256,27 +255,18 @@ export const GameSql = {
   } satisfies ISqlEntry,
 
   getRegionByCode: {
-    oracle: `SELECT ${REGION_COLS}
-         FROM GAMEDB_REGIONS
-        WHERE REGION_CODE = :code`,
     postgres: `SELECT ${REGION_COLS_PG}
          FROM gamedb_regions
         WHERE region_code = :code`,
   } satisfies ISqlEntry,
 
   getRegionById: {
-    oracle: `SELECT ${REGION_COLS}
-         FROM GAMEDB_REGIONS
-        WHERE REGION_ID = :id`,
     postgres: `SELECT ${REGION_COLS_PG}
          FROM gamedb_regions
         WHERE region_id = :id`,
   } satisfies ISqlEntry,
 
   getRegionByIgdbId: {
-    oracle: `SELECT ${REGION_COLS}
-         FROM GAMEDB_REGIONS
-        WHERE IGDB_REGION_ID = :igdbId`,
     postgres: `SELECT ${REGION_COLS_PG}
          FROM gamedb_regions
         WHERE igdb_region_id = :igdbId`,
@@ -288,24 +278,6 @@ export const GameSql = {
     titleNormExpr: string,
   ) =>
     ({
-      oracle: `SELECT GAME_ID, TITLE, INITIAL_RELEASE_DATE
-           FROM GAMEDB_GAMES
-          WHERE ${titleFoldExpr} LIKE :rawContains
-             OR (
-               :exactNorm IS NOT NULL AND
-               ${titleNormExpr} LIKE :normContains
-             )
-          ORDER BY CASE
-                     WHEN ${titleFoldExpr} = :exactRaw THEN 0
-                     WHEN ${titleFoldExpr} LIKE :rawPrefix THEN 1
-                     WHEN :exactNorm IS NOT NULL AND
-                          ${titleNormExpr} = :exactNorm THEN 2
-                     WHEN :exactNorm IS NOT NULL AND
-                          ${titleNormExpr} LIKE :normPrefix THEN 3
-                     ELSE 4
-                   END,
-                   TITLE ASC
-          FETCH FIRST :limit ROWS ONLY`,
       postgres: `SELECT game_id, title, initial_release_date
            FROM gamedb_games
           WHERE ${titleFoldExpr} LIKE :rawContains
@@ -327,18 +299,12 @@ export const GameSql = {
     }) satisfies ISqlEntry,
 
   getAllCompanies: {
-    oracle: `SELECT COMPANY_ID, NAME, IGDB_COMPANY_ID
-       FROM GAMEDB_COMPANIES
-       ORDER BY NAME ASC`,
     postgres: `SELECT company_id, name, igdb_company_id
        FROM gamedb_companies
        ORDER BY name ASC`,
   } satisfies ISqlEntry,
 
   getCompanyById: {
-    oracle: `SELECT COMPANY_ID, NAME, IGDB_COMPANY_ID
-       FROM GAMEDB_COMPANIES
-       WHERE COMPANY_ID = :id`,
     postgres: `SELECT company_id, name, igdb_company_id
        FROM gamedb_companies
        WHERE company_id = :id`,
@@ -347,26 +313,6 @@ export const GameSql = {
   // whereClause and orderPrefix are dialect-specific SQL fragments
   searchGames: (whereClause: string, orderPrefix: string) =>
     ({
-      oracle: `WITH upcoming AS (
-           SELECT GAME_ID, MIN(RELEASE_DATE) AS UPCOMING_DATE
-             FROM GAMEDB_RELEASES
-            WHERE RELEASE_DATE > SYSDATE
-            GROUP BY GAME_ID
-         )
-         SELECT g.GAME_ID, g.TITLE, g.DESCRIPTION, g.IGDB_ID, g.SLUG, g.TOTAL_RATING,
-                g.IGDB_URL, g.FEATURED_VIDEO_URL, g.INITIAL_RELEASE_DATE,
-                g.CREATED_AT, g.UPDATED_AT,
-                u.UPCOMING_DATE AS UPCOMING_RELEASE_DATE,
-                (SELECT LISTAGG(COALESCE(p.PLATFORM_ABBREVIATION, p.PLATFORM_NAME), ',')
-                        WITHIN GROUP (ORDER BY p.PLATFORM_NAME)
-                   FROM GAMEDB_RELEASES r
-                   JOIN GAMEDB_PLATFORMS p ON p.PLATFORM_ID = r.PLATFORM_ID
-                  WHERE r.GAME_ID = g.GAME_ID AND r.RELEASE_DATE = u.UPCOMING_DATE
-                ) AS UPCOMING_PLATFORMS
-           FROM GAMEDB_GAMES g
-           LEFT JOIN upcoming u ON u.GAME_ID = g.GAME_ID
-          WHERE ${whereClause}
-          ORDER BY ${orderPrefix}g.TITLE ASC`,
       postgres: `WITH upcoming AS (
            SELECT game_id, MIN(release_date) AS upcoming_date
              FROM gamedb_releases
@@ -390,11 +336,6 @@ export const GameSql = {
     }) satisfies ISqlEntry,
 
   addGamePlatformMerge: {
-    oracle: `MERGE INTO GAMEDB_GAME_PLATFORMS gp
-           USING (SELECT :gameId AS GAME_ID, :platformId AS PLATFORM_ID FROM dual) src
-           ON (gp.GAME_ID = src.GAME_ID AND gp.PLATFORM_ID = src.PLATFORM_ID)
-           WHEN NOT MATCHED THEN
-             INSERT (GAME_ID, PLATFORM_ID) VALUES (src.GAME_ID, src.PLATFORM_ID)`,
     postgres: `INSERT INTO gamedb_game_platforms (game_id, platform_id)
            VALUES (:gameId, :platformId)
            ON CONFLICT (game_id, platform_id) DO NOTHING`,
@@ -403,12 +344,6 @@ export const GameSql = {
   // combinedClause is a dialect-specific SQL fragment
   getGamesForAudit: (combinedClause: string) =>
     ({
-      oracle: `SELECT g.GAME_ID, g.TITLE, g.DESCRIPTION, g.IMAGE_DATA, g.IGDB_ID, g.SLUG,
-                g.TOTAL_RATING, g.IGDB_URL, g.FEATURED_VIDEO_URL,
-                g.INITIAL_RELEASE_DATE, g.CREATED_AT, g.UPDATED_AT
-           FROM GAMEDB_GAMES g
-          WHERE ${combinedClause}
-          ORDER BY g.TITLE ASC`,
       postgres: `SELECT g.game_id, g.title, g.description, g.igdb_id, g.slug,
                 g.total_rating, g.igdb_url, g.featured_video_url,
                 g.initial_release_date, g.created_at, g.updated_at
@@ -418,20 +353,12 @@ export const GameSql = {
     }) satisfies ISqlEntry,
 
   updateGameImage: {
-    oracle: `UPDATE GAMEDB_GAMES
-         SET IMAGE_DATA = :imageData,
-             UPDATED_AT = SYSTIMESTAMP
-       WHERE GAME_ID = :gameId`,
     postgres: `UPDATE gamedb_games
          SET updated_at = NOW()
        WHERE game_id = :gameId`,
   } satisfies ISqlEntry,
 
   updateGameThumbnailBad: {
-    oracle: `UPDATE GAMEDB_GAMES
-          SET THUMBNAIL_BAD = :thumbnailBad,
-              UPDATED_AT = SYSTIMESTAMP
-        WHERE GAME_ID = :gameId`,
     postgres: `UPDATE gamedb_games
           SET thumbnail_bad = :thumbnailBad,
               updated_at = NOW()
@@ -439,10 +366,6 @@ export const GameSql = {
   } satisfies ISqlEntry,
 
   updateGameThumbnailApproved: {
-    oracle: `UPDATE GAMEDB_GAMES
-          SET THUMBNAIL_APPROVED = :thumbnailApproved,
-              UPDATED_AT = SYSTIMESTAMP
-        WHERE GAME_ID = :gameId`,
     postgres: `UPDATE gamedb_games
           SET thumbnail_approved = :thumbnailApproved,
               updated_at = NOW()
@@ -451,13 +374,6 @@ export const GameSql = {
 
   getThreadStatusForGameIds: (placeholders: string) =>
     ({
-      oracle: `SELECT DISTINCT g.GAME_ID
-         FROM GAMEDB_GAMES g
-        WHERE g.GAME_ID IN (${placeholders})
-          AND (
-            EXISTS (SELECT 1 FROM THREAD_GAME_LINKS tgl WHERE tgl.GAMEDB_GAME_ID = g.GAME_ID)
-            OR EXISTS (SELECT 1 FROM THREADS th WHERE th.GAMEDB_GAME_ID = g.GAME_ID)
-          )`,
       postgres: `SELECT DISTINCT g.game_id
          FROM gamedb_games g
         WHERE g.game_id IN (${placeholders})
@@ -468,10 +384,6 @@ export const GameSql = {
     }) satisfies ISqlEntry,
 
   updateFeaturedVideoUrl: {
-    oracle: `UPDATE GAMEDB_GAMES
-          SET FEATURED_VIDEO_URL = :featuredVideoUrl,
-              UPDATED_AT = SYSTIMESTAMP
-        WHERE GAME_ID = :gameId`,
     postgres: `UPDATE gamedb_games
           SET featured_video_url = :featuredVideoUrl,
               updated_at = NOW()
@@ -479,10 +391,6 @@ export const GameSql = {
   } satisfies ISqlEntry,
 
   updateGameDescription: {
-    oracle: `UPDATE GAMEDB_GAMES
-          SET DESCRIPTION = :description,
-              UPDATED_AT = SYSTIMESTAMP
-        WHERE GAME_ID = :gameId`,
     postgres: `UPDATE gamedb_games
           SET description = :description,
               updated_at = NOW()
@@ -490,10 +398,6 @@ export const GameSql = {
   } satisfies ISqlEntry,
 
   clearReleaseAnnouncements: {
-    oracle: `DELETE FROM GAMEDB_RELEASE_ANNOUNCEMENTS
-          WHERE RELEASE_ID IN (
-            SELECT RELEASE_ID FROM GAMEDB_RELEASES WHERE GAME_ID = :gameId
-          )`,
     postgres: `DELETE FROM gamedb_release_announcements
           WHERE release_id IN (
             SELECT release_id FROM gamedb_releases WHERE game_id = :gameId
@@ -501,38 +405,20 @@ export const GameSql = {
   } satisfies ISqlEntry,
 
   clearReleases: {
-    oracle: `DELETE FROM GAMEDB_RELEASES WHERE GAME_ID = :gameId`,
     postgres: `DELETE FROM gamedb_releases WHERE game_id = :gameId`,
   } satisfies ISqlEntry,
 
   clearInitialReleaseDate: {
-    oracle: `UPDATE GAMEDB_GAMES
-            SET INITIAL_RELEASE_DATE = NULL, UPDATED_AT = SYSTIMESTAMP
-          WHERE GAME_ID = :gameId`,
     postgres: `UPDATE gamedb_games
             SET initial_release_date = NULL, updated_at = NOW()
           WHERE game_id = :gameId`,
   } satisfies ISqlEntry,
 
   touchGameUpdatedAt: {
-    oracle: `UPDATE GAMEDB_GAMES SET UPDATED_AT = SYSTIMESTAMP WHERE GAME_ID = :gameId`,
     postgres: `UPDATE gamedb_games SET updated_at = NOW() WHERE game_id = :gameId`,
   } satisfies ISqlEntry,
 
   getGotmWins: {
-    oracle: `SELECT ge.ROUND_NUMBER,
-                COALESCE(
-                  (SELECT MIN(tgl.THREAD_ID)
-                     FROM THREAD_GAME_LINKS tgl
-                    WHERE tgl.GAMEDB_GAME_ID = ge.GAMEDB_GAME_ID),
-                  (SELECT MIN(th.THREAD_ID)
-                     FROM THREADS th
-                    WHERE th.GAMEDB_GAME_ID = ge.GAMEDB_GAME_ID)
-                ) AS THREAD_ID,
-                ge.REDDIT_URL, ge.MONTH_YEAR
-           FROM GOTM_ENTRIES ge
-          WHERE ge.GAMEDB_GAME_ID = :gameId
-          ORDER BY ge.ROUND_NUMBER`,
     postgres: `SELECT ge.round_number,
                 COALESCE(
                   (SELECT MIN(tgl.thread_id)
@@ -549,19 +435,6 @@ export const GameSql = {
   } satisfies ISqlEntry,
 
   getNrGotmWins: {
-    oracle: `SELECT nge.ROUND_NUMBER,
-                COALESCE(
-                  (SELECT MIN(tgl.THREAD_ID)
-                     FROM THREAD_GAME_LINKS tgl
-                    WHERE tgl.GAMEDB_GAME_ID = nge.GAMEDB_GAME_ID),
-                  (SELECT MIN(th.THREAD_ID)
-                     FROM THREADS th
-                    WHERE th.GAMEDB_GAME_ID = nge.GAMEDB_GAME_ID)
-                ) AS THREAD_ID,
-                nge.REDDIT_URL, nge.MONTH_YEAR
-           FROM NR_GOTM_ENTRIES nge
-          WHERE nge.GAMEDB_GAME_ID = :gameId
-          ORDER BY nge.ROUND_NUMBER`,
     postgres: `SELECT nge.round_number,
                 COALESCE(
                   (SELECT MIN(tgl.thread_id)
@@ -578,11 +451,6 @@ export const GameSql = {
   } satisfies ISqlEntry,
 
   getGotmNominations: {
-    oracle: `SELECT n.ROUND_NUMBER, n.USER_ID, u.USERNAME, u.GLOBAL_NAME
-           FROM GOTM_NOMINATIONS n
-           LEFT JOIN RPG_CLUB_USERS u ON u.USER_ID = n.USER_ID
-          WHERE n.GAMEDB_GAME_ID = :gameId
-          ORDER BY n.ROUND_NUMBER`,
     postgres: `SELECT n.round_number, n.user_id, u.username, u.global_name
            FROM gotm_nominations n
            LEFT JOIN rpg_club_users u ON u.user_id = n.user_id
@@ -591,11 +459,6 @@ export const GameSql = {
   } satisfies ISqlEntry,
 
   getNrGotmNominations: {
-    oracle: `SELECT n.ROUND_NUMBER, n.USER_ID, u.USERNAME, u.GLOBAL_NAME
-           FROM NR_GOTM_NOMINATIONS n
-           LEFT JOIN RPG_CLUB_USERS u ON u.USER_ID = n.USER_ID
-          WHERE n.GAMEDB_GAME_ID = :gameId
-          ORDER BY n.ROUND_NUMBER`,
     postgres: `SELECT n.round_number, n.user_id, u.username, u.global_name
            FROM nr_gotm_nominations n
            LEFT JOIN rpg_club_users u ON u.user_id = n.user_id
@@ -604,20 +467,6 @@ export const GameSql = {
   } satisfies ISqlEntry,
 
   getNowPlayingMembers: {
-    oracle: `SELECT u.USER_ID,
-              ru.USERNAME,
-              ru.GLOBAL_NAME,
-              COALESCE(
-                (SELECT MIN(tgl.THREAD_ID) FROM THREAD_GAME_LINKS tgl
-                  WHERE tgl.GAMEDB_GAME_ID = u.GAMEDB_GAME_ID),
-                (SELECT MIN(th.THREAD_ID) FROM THREADS th
-                  WHERE th.GAMEDB_GAME_ID = u.GAMEDB_GAME_ID)
-              ) AS THREAD_ID,
-              u.ADDED_AT
-         FROM USER_NOW_PLAYING u
-         JOIN RPG_CLUB_USERS ru ON ru.USER_ID = u.USER_ID
-        WHERE u.GAMEDB_GAME_ID = :gameId
-        ORDER BY u.ADDED_AT DESC, u.ENTRY_ID DESC`,
     postgres: `SELECT u.user_id,
               ru.username,
               ru.global_name,
@@ -635,12 +484,6 @@ export const GameSql = {
   } satisfies ISqlEntry,
 
   getGameCompletions: {
-    oracle: `SELECT c.USER_ID, u.USERNAME, u.GLOBAL_NAME,
-              c.COMPLETION_TYPE, c.COMPLETED_AT, c.FINAL_PLAYTIME_HRS
-         FROM USER_GAME_COMPLETIONS c
-         LEFT JOIN RPG_CLUB_USERS u ON u.USER_ID = c.USER_ID
-        WHERE c.GAMEDB_GAME_ID = :gameId
-        ORDER BY c.COMPLETED_AT DESC NULLS LAST, c.CREATED_AT DESC, c.COMPLETION_ID DESC`,
     postgres: `SELECT c.user_id, u.username, u.global_name,
               c.completion_type, c.completed_at, c.final_playtime_hrs
          FROM user_game_completions c
@@ -650,12 +493,6 @@ export const GameSql = {
   } satisfies ISqlEntry,
 
   getGameCollectionOwners: {
-    oracle: `SELECT c.USER_ID, u.USERNAME, u.GLOBAL_NAME
-         FROM USER_GAME_COLLECTIONS c
-         LEFT JOIN RPG_CLUB_USERS u ON u.USER_ID = c.USER_ID
-        WHERE c.GAMEDB_GAME_ID = :gameId
-        GROUP BY c.USER_ID, u.USERNAME, u.GLOBAL_NAME
-        ORDER BY LOWER(COALESCE(u.GLOBAL_NAME, u.USERNAME, c.USER_ID))`,
     postgres: `SELECT c.user_id, u.username, u.global_name
          FROM user_game_collections c
          LEFT JOIN rpg_club_users u ON u.user_id = c.user_id
@@ -665,18 +502,12 @@ export const GameSql = {
   } satisfies ISqlEntry,
 
   getPlatformByCode: {
-    oracle: `SELECT ${PLATFORM_COLS}
-         FROM GAMEDB_PLATFORMS
-        WHERE PLATFORM_CODE = :code`,
     postgres: `SELECT ${PLATFORM_COLS_PG}
          FROM gamedb_platforms
         WHERE platform_code = :code`,
   } satisfies ISqlEntry,
 
   getPlatformById: {
-    oracle: `SELECT ${PLATFORM_COLS}
-         FROM GAMEDB_PLATFORMS
-        WHERE PLATFORM_ID = :id`,
     postgres: `SELECT ${PLATFORM_COLS_PG}
          FROM gamedb_platforms
         WHERE platform_id = :id`,
