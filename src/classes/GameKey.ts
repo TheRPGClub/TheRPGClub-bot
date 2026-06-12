@@ -1,5 +1,6 @@
-import { dbQuery, dbMutate, dbInsert } from "../db/SqlManager.js";
+import { dbQuery, dbMutate } from "../db/SqlManager.js";
 import { GameKeySql } from "../db/sql/index.js";
+import { apiGet, apiPost } from "../services/RpgClubApiClient.js";
 
 export interface IGameKey {
   keyId: number;
@@ -13,10 +14,41 @@ export interface IGameKey {
   updatedAt: Date;
 }
 
-function toDate(value: Date | string | null): Date | null {
-  if (!value) return null;
-  return value instanceof Date ? value : new Date(value);
+// --- API types ---
+
+type GameKeyApiData = {
+  id: number;
+  game_title: string;
+  platform: string;
+  key_value: string;
+  donor_user_id: string;
+  claimed_by_user_id: string | null;
+  claimed_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+type GameKeyResponse = { data: GameKeyApiData };
+type GameKeyListResponse = {
+  data: GameKeyApiData[];
+  meta: { count: number; pages: number };
+};
+
+function mapGameKeyApi(d: GameKeyApiData): IGameKey {
+  return {
+    keyId: Number(d.id),
+    gameTitle: d.game_title,
+    platform: d.platform,
+    keyValue: d.key_value,
+    donorUserId: d.donor_user_id,
+    claimedByUserId: d.claimed_by_user_id ?? null,
+    claimedAt: d.claimed_at ? new Date(d.claimed_at) : null,
+    createdAt: new Date(d.created_at),
+    updatedAt: new Date(d.updated_at),
+  };
 }
+
+// --- SQL fallback types (used only for getGameKeyById / revokeGameKey) ---
 
 type GameKeyRow = {
   KEY_ID: number;
@@ -29,6 +61,11 @@ type GameKeyRow = {
   CREATED_AT: Date | string;
   UPDATED_AT: Date | string;
 };
+
+function toDate(value: Date | string | null): Date | null {
+  if (!value) return null;
+  return value instanceof Date ? value : new Date(value);
+}
 
 function mapGameKeyRow(row: GameKeyRow): IGameKey {
   return {
@@ -44,39 +81,31 @@ function mapGameKeyRow(row: GameKeyRow): IGameKey {
   };
 }
 
+// --- API-backed functions ---
+
 export async function createGameKey(
   title: string,
   platform: string,
   keyValue: string,
   donorUserId: string,
 ): Promise<IGameKey> {
-  const id = await dbInsert(GameKeySql.create, { title, platform, keyValue, donorUserId }, "id");
-  if (!id) {
-    throw new Error("Failed to create game key.");
-  }
-  const key = await getGameKeyById(id);
-  if (!key) {
-    throw new Error("Failed to load game key after creation.");
-  }
-  return key;
-}
-
-export async function getGameKeyById(keyId: number): Promise<IGameKey | null> {
-  const rows = await dbQuery(
-    GameKeySql.getById,
-    { id: keyId },
-    mapGameKeyRow,
-  );
-  return rows[0] ?? null;
+  const response = await apiPost<GameKeyResponse>("/api/v1/game_keys", {
+    data: {
+      game_title: title,
+      platform,
+      key_value: keyValue,
+      donor_user_id: donorUserId,
+    },
+  });
+  if (!response) throw new Error("Failed to create game key.");
+  return mapGameKeyApi(response.data);
 }
 
 export async function countAvailableGameKeys(): Promise<number> {
-  const rows = await dbQuery(
-    GameKeySql.countAvailable,
-    {},
-    (row: { TOTAL: number | null }) => Number(row.TOTAL ?? 0),
-  );
-  return rows[0] ?? 0;
+  const response = await apiGet<GameKeyListResponse>("/api/v1/game_keys", {
+    params: { per: 1 },
+  });
+  return response?.meta?.count ?? 0;
 }
 
 export async function listAvailableGameKeys(
@@ -85,30 +114,41 @@ export async function listAvailableGameKeys(
 ): Promise<IGameKey[]> {
   const safeLimit = Math.min(Math.max(limit, 1), 50);
   const safeOffset = Math.max(offset, 0);
-  return dbQuery(
-    GameKeySql.listAvailable,
-    { offset: safeOffset, limit: safeLimit },
-    mapGameKeyRow,
-  );
+  const response = await apiGet<GameKeyListResponse>("/api/v1/game_keys", {
+    params: { offset: safeOffset, limit: safeLimit },
+  });
+  if (!response) return [];
+  return response.data.map(mapGameKeyApi);
 }
 
 export async function listKeysByDonor(userId: string): Promise<IGameKey[]> {
-  return dbQuery(
-    GameKeySql.listByDonor,
-    { userId },
-    mapGameKeyRow,
+  const response = await apiGet<GameKeyListResponse>(
+    `/api/v1/users/${userId}/game_keys`,
   );
+  if (!response) return [];
+  return response.data.map(mapGameKeyApi);
 }
 
 export async function claimGameKey(
   keyId: number,
   userId: string,
 ): Promise<boolean> {
-  const count = await dbMutate(
-    GameKeySql.claim,
-    { keyId, userId },
+  const response = await apiPost<GameKeyResponse>(
+    `/api/v1/game_keys/${keyId}/claim`,
+    { data: { claimed_by_user_id: userId } },
   );
-  return count > 0;
+  return response !== null;
+}
+
+// --- SQL-backed (pending GET /api/v1/game_keys/:id and DELETE /api/v1/game_keys/:id) ---
+
+export async function getGameKeyById(keyId: number): Promise<IGameKey | null> {
+  const rows = await dbQuery(
+    GameKeySql.getById,
+    { id: keyId },
+    mapGameKeyRow,
+  );
+  return rows[0] ?? null;
 }
 
 export async function revokeGameKey(keyId: number): Promise<boolean> {
