@@ -1,8 +1,6 @@
 import Parser from "rss-parser";
 import crypto from "node:crypto";
 import type { Client } from "discordx";
-import type pg from "pg";
-import { dbWithConnection } from "../db/SqlManager.js";
 import {
   listFeeds,
   markItemsSeen,
@@ -43,7 +41,6 @@ function matchesKeywords(
 async function processFeed(
   client: Client,
   feed: IRssFeed,
-  connection: pg.PoolClient,
 ): Promise<void> {
   let parsed;
   try {
@@ -65,8 +62,7 @@ async function processFeed(
   const newItems: IRssFeedItem[] = [];
   const candidates: { item: IRssFeedItem; link: string; title: string }[] = [];
   const cutoff = Date.now() - 24 * 60 * 60 * 1000;
-  
-  // Feed keywords are already normalized by listFeeds
+
   const include = feed.includeKeywords;
   const exclude = feed.excludeKeywords;
 
@@ -93,7 +89,7 @@ async function processFeed(
   if (!candidates.length) return;
 
   const candidateHashes = candidates.map((c) => c.item.itemIdHash);
-  const seen = await getSeenItemHashes(feed.feedId, candidateHashes, connection);
+  const seen = await getSeenItemHashes(feed.feedId, candidateHashes);
 
   const toSend: { link: string; title: string }[] = [];
   for (const candidate of candidates) {
@@ -109,11 +105,17 @@ async function processFeed(
   try {
     const channel = await client.channels.fetch(feed.channelId).catch(() => null);
     if (!channel) {
-      logWarn("RssFeedService.processChannel", `Channel ${feed.channelId} not found for feed #${feed.feedId}`);
+      logWarn(
+        "RssFeedService.processChannel",
+        `Channel ${feed.channelId} not found for feed #${feed.feedId}`,
+      );
       return;
     }
     if (!(typeof (channel as any).isTextBased === "function" && (channel as any).isTextBased())) {
-      logWarn("RssFeedService.processChannel", `Channel ${feed.channelId} is not text-based for feed #${feed.feedId}`);
+      logWarn(
+        "RssFeedService.processChannel",
+        `Channel ${feed.channelId} is not text-based for feed #${feed.feedId}`,
+      );
       return;
     }
 
@@ -145,12 +147,10 @@ export function startRssFeedService(client: Client): void {
     isPolling = true;
 
     try {
-      await dbWithConnection(async (conn) => {
-        const feeds = await listFeeds(conn);
-        for (const feed of feeds) {
-          await processFeed(client, feed, conn);
-        }
-      });
+      const feeds = await listFeeds();
+      for (const feed of feeds) {
+        await processFeed(client, feed);
+      }
     } catch (err) {
       logError("RssFeedService.polling", err);
     } finally {
