@@ -15,7 +15,6 @@ import {
   type ActionRow,
   type MessageActionRowComponent,
   type Message,
-  userMention,
 } from "discord.js";
 import {
   Discord,
@@ -2433,7 +2432,7 @@ export class NowPlayingCommand {
 
       const container = buildNowPlayingMessageContainer(
         "Now Playing",
-        `No Now Playing entries found for ${userMention(target.id)}.`,
+        `No Now Playing entries found for ${renderUsernameWithEmoji(target.id, target.displayName ?? target.username ?? target.id)}.`,
       );
       const reply = await safeReply(interaction, {
         components: [container],
@@ -2504,7 +2503,7 @@ export class NowPlayingCommand {
       );
       const container = buildNowPlayingMessageContainer(
         "Now Playing - Everyone",
-        `No Now Playing entries found for ${userMention(selectedUserId)}.`,
+        `No Now Playing entries found for ${renderUsernameWithEmoji(selectedUserId, ownerName)}.`,
       );
       const updated = await safeReply(interaction, {
         components: [header, container],
