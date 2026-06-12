@@ -12,6 +12,17 @@ const GITHUB_APP_PRIVATE_KEY = process.env.GITHUB_APP_PRIVATE_KEY ?? "";
 
 type GithubIssueState = "open" | "closed";
 
+export interface IGithubRepoTarget {
+  owner: string;
+  name: string;
+}
+
+function repoPath(repo?: IGithubRepoTarget): string {
+  const owner = repo?.owner ?? GITHUB_REPO_OWNER;
+  const name = repo?.name ?? GITHUB_REPO_NAME;
+  return `/repos/${owner}/${name}`;
+}
+
 export interface IGithubIssue {
   number: number;
   title: string;
@@ -236,21 +247,27 @@ export async function listIssues(params: IssueListParams): Promise<IGithubIssue[
     .map((issue) => toIssue(issue));
 }
 
-export async function listIssueComments(issueNumber: number): Promise<IGithubIssueComment[]> {
+export async function listIssueComments(
+  issueNumber: number,
+  repo?: IGithubRepoTarget,
+): Promise<IGithubIssueComment[]> {
   const response = await githubRequest<any[]>(
     "get",
-    `/repos/${GITHUB_REPO_OWNER}/${GITHUB_REPO_NAME}/issues/${issueNumber}/comments`,
+    `${repoPath(repo)}/issues/${issueNumber}/comments`,
   );
   return (response ?? []).map((comment) => toIssueComment(comment));
 }
 
-export async function listAllIssues(params: IssueListParams): Promise<IGithubIssue[]> {
+export async function listAllIssues(
+  params: IssueListParams,
+  repo?: IGithubRepoTarget,
+): Promise<IGithubIssue[]> {
   const perPage = 100;
   const allIssues: IGithubIssue[] = [];
   for (let page = 1; page <= 100; page += 1) {
     const response = await githubRequest<any[]>(
       "get",
-      `/repos/${GITHUB_REPO_OWNER}/${GITHUB_REPO_NAME}/issues`,
+      `${repoPath(repo)}/issues`,
       undefined,
       {
         state: params.state ?? "open",
@@ -275,11 +292,14 @@ export async function listAllIssues(params: IssueListParams): Promise<IGithubIss
   return allIssues;
 }
 
-export async function getIssue(issueNumber: number): Promise<IGithubIssue | null> {
+export async function getIssue(
+  issueNumber: number,
+  repo?: IGithubRepoTarget,
+): Promise<IGithubIssue | null> {
   try {
     const response = await githubRequest<any>(
       "get",
-      `/repos/${GITHUB_REPO_OWNER}/${GITHUB_REPO_NAME}/issues/${issueNumber}`,
+      `${repoPath(repo)}/issues/${issueNumber}`,
     );
     if (response?.pull_request) {
       return null;
@@ -293,13 +313,20 @@ export async function getIssue(issueNumber: number): Promise<IGithubIssue | null
   }
 }
 
-export async function createIssue(input: IssueCreateInput): Promise<IGithubIssue> {
+export async function createIssue(
+  input: IssueCreateInput,
+  repo?: IGithubRepoTarget,
+): Promise<IGithubIssue> {
+  const targetOwner = repo?.owner ?? GITHUB_REPO_OWNER;
+  const autoAssign = targetOwner === GITHUB_REPO_OWNER && GITHUB_REPO_OWNER
+    ? [GITHUB_REPO_OWNER]
+    : [];
   const assignees = input.assignees && input.assignees.length
     ? input.assignees
-    : (GITHUB_REPO_OWNER ? [GITHUB_REPO_OWNER] : []);
+    : autoAssign;
   const response = await githubRequest<any>(
     "post",
-    `/repos/${GITHUB_REPO_OWNER}/${GITHUB_REPO_NAME}/issues`,
+    `${repoPath(repo)}/issues`,
     {
       title: input.title,
       body: input.body ?? null,
@@ -313,11 +340,12 @@ export async function createIssue(input: IssueCreateInput): Promise<IGithubIssue
 export async function updateIssue(
   issueNumber: number,
   input: IssueUpdateInput,
+  repo?: IGithubRepoTarget,
 ): Promise<IGithubIssue | null> {
   try {
     const response = await githubRequest<any>(
       "patch",
-      `/repos/${GITHUB_REPO_OWNER}/${GITHUB_REPO_NAME}/issues/${issueNumber}`,
+      `${repoPath(repo)}/issues/${issueNumber}`,
       {
         title: input.title,
         body: input.body,
@@ -335,11 +363,12 @@ export async function updateIssue(
 export async function setIssueLabels(
   issueNumber: number,
   labels: string[],
+  repo?: IGithubRepoTarget,
 ): Promise<IGithubIssue | null> {
   try {
     const response = await githubRequest<any>(
       "patch",
-      `/repos/${GITHUB_REPO_OWNER}/${GITHUB_REPO_NAME}/issues/${issueNumber}`,
+      `${repoPath(repo)}/issues/${issueNumber}`,
       { labels },
     );
     return toIssue(response);
@@ -351,11 +380,14 @@ export async function setIssueLabels(
   }
 }
 
-export async function closeIssue(issueNumber: number): Promise<IGithubIssue | null> {
+export async function closeIssue(
+  issueNumber: number,
+  repo?: IGithubRepoTarget,
+): Promise<IGithubIssue | null> {
   try {
     const response = await githubRequest<any>(
       "patch",
-      `/repos/${GITHUB_REPO_OWNER}/${GITHUB_REPO_NAME}/issues/${issueNumber}`,
+      `${repoPath(repo)}/issues/${issueNumber}`,
       { state: "closed" },
     );
     return toIssue(response);
@@ -367,11 +399,14 @@ export async function closeIssue(issueNumber: number): Promise<IGithubIssue | nu
   }
 }
 
-export async function reopenIssue(issueNumber: number): Promise<IGithubIssue | null> {
+export async function reopenIssue(
+  issueNumber: number,
+  repo?: IGithubRepoTarget,
+): Promise<IGithubIssue | null> {
   try {
     const response = await githubRequest<any>(
       "patch",
-      `/repos/${GITHUB_REPO_OWNER}/${GITHUB_REPO_NAME}/issues/${issueNumber}`,
+      `${repoPath(repo)}/issues/${issueNumber}`,
       { state: "open" },
     );
     return toIssue(response);
@@ -386,10 +421,11 @@ export async function reopenIssue(issueNumber: number): Promise<IGithubIssue | n
 export async function addComment(
   issueNumber: number,
   body: string,
+  repo?: IGithubRepoTarget,
 ): Promise<void> {
   await githubRequest(
     "post",
-    `/repos/${GITHUB_REPO_OWNER}/${GITHUB_REPO_NAME}/issues/${issueNumber}/comments`,
+    `${repoPath(repo)}/issues/${issueNumber}/comments`,
     { body },
   );
 }
