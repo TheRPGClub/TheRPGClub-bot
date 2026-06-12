@@ -39,10 +39,6 @@ import {
 import { buildComponentsV2Flags, buildTextReply } from "../functions/ComponentsV2Utils.js";
 import { decodeBase64Url, encodeBase64Url } from "../functions/CustomIdUtils.js";
 import { parseCustomIdSegments } from "../utilities/CustomIdUtils.js";
-import {
-  buildRawModalCustomId,
-  parseRawModalCustomId,
-} from "../services/raw-modal/RawModalCustomId.js";
 import { ROUND_HISTORY_PAGE_SIZE } from "../config/pagination.js";
 import { DISCORD_SELECT_OPTIONS_MAX } from "../config/textLimits.js";
 import { buildDisabledPrevNextRowWithIds } from "../functions/PaginationUtils.js";

@@ -1,8 +1,7 @@
-import oracledb from "oracledb";
 import {
   dbQuery, dbMutate, dbInsert, dbTransaction, dbMutateConn, dbWithConnection,
 } from "../db/SqlManager.js";
-import { getDialect } from "../db/dialect.js";
+
 import { SteamCollectionImportSql } from "../db/sql/index.js";
 import { isPositiveInt } from "../utilities/ValidationUtils.js";
 
@@ -270,18 +269,10 @@ export async function updateSteamCollectionImportIndex(
 }
 
 async function fetchItemWithJsonCol(
-  entry: { oracle: string; postgres: string },
+  entry: { postgres: string },
   binds: Record<string, string | number>,
 ): Promise<ISteamCollectionImportItem | null> {
-  return dbWithConnection(async (conn) => {
-    if (getDialect() === "oracle") {
-      const result = await (conn as oracledb.Connection).execute<ItemRow>(entry.oracle, binds, {
-        outFormat: oracledb.OUT_FORMAT_OBJECT,
-        fetchInfo: { MATCH_CANDIDATE_JSON: { type: oracledb.STRING } },
-      });
-      const row = result.rows?.[0];
-      return row ? mapItem(row) : null;
-    }
+  return dbWithConnection(async () => {
     const rows = await dbQuery(entry, binds, mapItem);
     return rows[0] ?? null;
   });
