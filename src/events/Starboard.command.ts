@@ -93,13 +93,12 @@ export class StarboardHandler {
       );
     }
 
-    const posted = await quotablesChannel.send({ ...buildContainerSend(container) });
+    await quotablesChannel.send({ ...buildContainerSend(container) });
     await Starboard.insert({
       messageId: message.id,
       channelId: message.channelId,
-      starboardMessageId: posted.id,
       authorId: message.author.id,
-      starCount: count,
+      content,
     });
   }
 }
