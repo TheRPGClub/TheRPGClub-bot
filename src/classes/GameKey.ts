@@ -17,7 +17,7 @@ export interface IGameKey {
 // --- API types ---
 
 type GameKeyApiData = {
-  id: number;
+  key_id: number;
   game_title: string;
   platform: string;
   key_value: string;
@@ -36,7 +36,7 @@ type GameKeyListResponse = {
 
 function mapGameKeyApi(d: GameKeyApiData): IGameKey {
   return {
-    keyId: Number(d.id),
+    keyId: Number(d.key_id),
     gameTitle: d.game_title,
     platform: d.platform,
     keyValue: d.key_value,
