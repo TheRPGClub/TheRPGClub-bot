@@ -1102,7 +1102,7 @@ function buildIssueListComponents(
   if (issues.length) {
     const openSelect = new StringSelectMenuBuilder()
       .setCustomId(buildTodoOpenSelectId(payloadToken, payload.page))
-      .setPlaceholder("Open an issue...")
+      .setPlaceholder("View an issue...")
       .setMinValues(1)
       .setMaxValues(1)
       .addOptions(
