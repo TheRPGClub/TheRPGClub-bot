@@ -2,7 +2,6 @@ export type { ISqlEntry } from "./types.js";
 
 export { AdminWizardSessionSql } from "./adminWizardSession.sql.js";
 export { BotPresenceHistorySql } from "./botPresenceHistory.sql.js";
-export { BotVotingInfoSql } from "./botVotingInfo.sql.js";
 export { CollectionCsvImportSql } from "./collectionCsvImport.sql.js";
 export { CompletionatorImportSql } from "./completionatorImport.sql.js";
 export { GameSql } from "./game.sql.js";

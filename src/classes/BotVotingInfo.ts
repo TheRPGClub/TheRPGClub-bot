@@ -1,5 +1,4 @@
-import { dbQuery, dbMutate, dbTransaction, dbMutateConn } from "../db/SqlManager.js";
-import { BotVotingInfoSql } from "../db/sql/index.js";
+import { apiGet, apiPost, apiPatch, apiDelete } from "../services/RpgClubApiClient.js";
 
 export interface IBotVotingInfoEntry {
   roundNumber: number;
@@ -9,35 +8,25 @@ export interface IBotVotingInfoEntry {
   oneDayReminderSent: boolean;
 }
 
-type VotingRow = {
-  ROUND_NUMBER: number;
-  NOMINATION_LIST_ID: number | null;
-  NEXT_VOTE_AT: Date | string;
-  FIVE_DAY_REMINDER_SENT: number | null;
-  ONE_DAY_REMINDER_SENT: number | null;
+type VotingInfoApiData = {
+  round_number: number;
+  nomination_list_id: number | null;
+  next_vote_at: string;
+  five_day_reminder_sent: boolean;
+  one_day_reminder_sent: boolean;
 };
 
-function mapRowToEntry(row: VotingRow): IBotVotingInfoEntry {
-  const roundNumber = Number(row.ROUND_NUMBER);
-  const nominationListId =
-    row.NOMINATION_LIST_ID === null || row.NOMINATION_LIST_ID === undefined
-      ? null
-      : Number(row.NOMINATION_LIST_ID);
+type VotingInfoResponse = { data: VotingInfoApiData };
+type VotingInfoListResponse = { data: VotingInfoApiData[] };
 
-  const rawDate = row.NEXT_VOTE_AT;
-  const nextVoteAt = rawDate instanceof Date ? rawDate : new Date(rawDate as string);
-
-  const fiveDayReminderSent = Boolean(row.FIVE_DAY_REMINDER_SENT ?? 0);
-  const oneDayReminderSent = Boolean(row.ONE_DAY_REMINDER_SENT ?? 0);
-
-  if (!Number.isFinite(roundNumber)) {
-    throw new Error("Invalid ROUND_NUMBER value in BOT_VOTING_INFO row.");
-  }
-  if (!(nextVoteAt instanceof Date) || Number.isNaN(nextVoteAt.getTime())) {
-    throw new Error("Invalid NEXT_VOTE_AT value in BOT_VOTING_INFO row.");
-  }
-
-  return { roundNumber, nominationListId, nextVoteAt, fiveDayReminderSent, oneDayReminderSent };
+function mapApiData(d: VotingInfoApiData): IBotVotingInfoEntry {
+  return {
+    roundNumber: Number(d.round_number),
+    nominationListId: d.nomination_list_id != null ? Number(d.nomination_list_id) : null,
+    nextVoteAt: new Date(d.next_vote_at),
+    fiveDayReminderSent: Boolean(d.five_day_reminder_sent),
+    oneDayReminderSent: Boolean(d.one_day_reminder_sent),
+  };
 }
 
 function normalizeRoundNumber(roundNumber: number): number {
@@ -64,30 +53,20 @@ function normalizeDate(value: Date | string): Date {
 
 export default class BotVotingInfo {
   static async getAll(): Promise<IBotVotingInfoEntry[]> {
-    return dbQuery(
-      BotVotingInfoSql.getAll,
-      [],
-      mapRowToEntry,
-    );
+    const response = await apiGet<VotingInfoListResponse>("/api/v1/voting_info");
+    return (response?.data ?? []).map(mapApiData);
   }
 
   static async getByRound(roundNumber: number): Promise<IBotVotingInfoEntry | null> {
     const round = normalizeRoundNumber(roundNumber);
-    const rows = await dbQuery(
-      BotVotingInfoSql.getByRound,
-      { round },
-      mapRowToEntry,
-    );
-    return rows[0] ?? null;
+    const response = await apiGet<VotingInfoResponse>(`/api/v1/voting_info/${round}`);
+    return response ? mapApiData(response.data) : null;
   }
 
   static async getCurrentRound(): Promise<IBotVotingInfoEntry | null> {
-    const rows = await dbQuery(
-      BotVotingInfoSql.getCurrentRound,
-      [],
-      mapRowToEntry,
-    );
-    return rows[0] ?? null;
+    // List is sorted desc by round_number; first record is current.
+    const all = await BotVotingInfo.getAll();
+    return all[0] ?? null;
   }
 
   static async setRoundInfo(
@@ -97,20 +76,18 @@ export default class BotVotingInfo {
   ): Promise<void> {
     const round = normalizeRoundNumber(roundNumber);
     const nextVote = normalizeDate(nextVoteAt);
-
-    await dbTransaction(async (conn) => {
-      const rowsAffected = await dbMutateConn(
-        conn,
-        BotVotingInfoSql.updateRoundInfo,
-        { round, nominationListId, nextVoteAt: nextVote },
-      );
-      if (rowsAffected > 0) return;
-      await dbMutateConn(
-        conn,
-        BotVotingInfoSql.insertRoundInfo,
-        { round, nominationListId, nextVoteAt: nextVote },
-      );
+    const updated = await apiPatch<VotingInfoResponse>(`/api/v1/voting_info/${round}`, {
+      data: { nomination_list_id: nominationListId, next_vote_at: nextVote.toISOString() },
     });
+    if (!updated) {
+      await apiPost<VotingInfoResponse>("/api/v1/voting_info", {
+        data: {
+          round_number: round,
+          nomination_list_id: nominationListId,
+          next_vote_at: nextVote.toISOString(),
+        },
+      });
+    }
   }
 
   static async markReminderSent(
@@ -118,17 +95,12 @@ export default class BotVotingInfo {
     reminder: "fiveDay" | "oneDay",
   ): Promise<void> {
     const round = normalizeRoundNumber(roundNumber);
-    const column =
-      reminder === "fiveDay" ? "FIVE_DAY_REMINDER_SENT" : "ONE_DAY_REMINDER_SENT";
-
-    const count = await dbMutate(
-      BotVotingInfoSql.markReminderSent(column),
-      { round },
-    );
-    if (count === 0) {
-      throw new Error(
-        `No BOT_VOTING_INFO row found for round ${round} when updating ${column}.`,
-      );
+    const field = reminder === "fiveDay" ? "five_day_reminder_sent" : "one_day_reminder_sent";
+    const result = await apiPatch<VotingInfoResponse>(`/api/v1/voting_info/${round}`, {
+      data: { [field]: true },
+    });
+    if (!result) {
+      throw new Error(`No voting_info record found for round ${round} when marking ${field}.`);
     }
   }
 
@@ -138,13 +110,12 @@ export default class BotVotingInfo {
   ): Promise<void> {
     const round = normalizeRoundNumber(roundNumber);
     const nextVote = normalizeDate(nextVoteAt);
-    const count = await dbMutate(
-      BotVotingInfoSql.updateNextVoteAt,
-      { round, nextVoteAt: nextVote },
-    );
-    if (count === 0) {
+    const result = await apiPatch<VotingInfoResponse>(`/api/v1/voting_info/${round}`, {
+      data: { next_vote_at: nextVote.toISOString() },
+    });
+    if (!result) {
       throw new Error(
-        `No BOT_VOTING_INFO row found for round ${round} when updating NEXT_VOTE_AT.`,
+        `No voting_info record found for round ${round} when updating next_vote_at.`,
       );
     }
   }
@@ -154,23 +125,19 @@ export default class BotVotingInfo {
     nominationListId: number | null,
   ): Promise<void> {
     const round = normalizeRoundNumber(roundNumber);
-    const count = await dbMutate(
-      BotVotingInfoSql.updateNominationListId,
-      { round, nominationListId },
-    );
-    if (count === 0) {
+    const result = await apiPatch<VotingInfoResponse>(`/api/v1/voting_info/${round}`, {
+      data: { nomination_list_id: nominationListId },
+    });
+    if (!result) {
       throw new Error(
-        `No BOT_VOTING_INFO row found for round ${round}` +
-        ` when updating NOMINATION_LIST_ID.`,
+        `No voting_info record found for round ${round} when updating nomination_list_id.`,
       );
     }
   }
 
   static async deleteRound(roundNumber: number): Promise<number> {
     const round = normalizeRoundNumber(roundNumber);
-    return dbMutate(
-      BotVotingInfoSql.deleteRound,
-      { round },
-    );
+    const result = await apiDelete<{ deleted: boolean }>(`/api/v1/voting_info/${round}`);
+    return result?.deleted ? 1 : 0;
   }
 }
