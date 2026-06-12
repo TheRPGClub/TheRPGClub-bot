@@ -7,7 +7,6 @@ import {
   ButtonBuilder,
   ButtonStyle,
   type Client,
-  userMention,
 } from "discord.js";
 import {
   ContainerBuilder,
@@ -428,7 +427,7 @@ export async function refreshNowPlayingListFromContext(
           );
           const emptyMessage = ownerId === interaction.user.id
             ? "Your Now Playing list is empty."
-            : `No Now Playing entries found for ${userMention(ownerId)}.`;
+            : `No Now Playing entries found for ${renderUsernameWithEmoji(ownerId, ownerName)}.`;
           const container = buildNowPlayingMessageContainer(title, emptyMessage);
           const components = [header, container];
           await message.edit({
@@ -507,7 +506,7 @@ export async function refreshNowPlayingListFromContext(
           );
           const container = buildNowPlayingMessageContainer(
             "Now Playing - Everyone",
-            `No Now Playing entries found for ${userMention(selectedUserId)}.`,
+            `No Now Playing entries found for ${renderUsernameWithEmoji(selectedUserId, ownerName)}.`,
           );
           await message.edit({
             components: [header, container],

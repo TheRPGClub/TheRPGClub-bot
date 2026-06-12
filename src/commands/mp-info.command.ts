@@ -7,7 +7,6 @@ import {
   ButtonBuilder,
   ButtonStyle,
   ButtonInteraction,
-  userMention,
 } from "discord.js";
 import {
   ButtonComponent,
@@ -43,6 +42,7 @@ import { parseCustomIdSegments } from "../utilities/CustomIdUtils.js";
 import { truncateLabel } from "../config/textLimits.js";
 import { chunk } from "../utilities/ArrayUtils.js";
 import { buildActionButton, buildButtonRow , buildSelectRow } from "../functions/uiComponents.js";
+import { renderUsernameWithEmoji } from "../services/UserEmojiService.js";
 
 const MAX_OPTIONS = 25;
 
@@ -136,7 +136,7 @@ function buildSummaryEmbed(
   const lines = pageMembers.map((member, idx) => {
     const displayIndex = offset + idx + 1;
     const platforms = formatPlatforms(member, filters);
-    return `${displayIndex}. ${userMention(member.userId)} - ${platforms}`;
+    return `${displayIndex}. ${renderUsernameWithEmoji(member.userId, member.globalName ?? member.username ?? member.userId)} - ${platforms}`;
   });
 
   const footer = totalPages > 1
@@ -335,7 +335,7 @@ export class MultiplayerInfoCommand {
       if (!result.payload) {
         const notFoundContainer = buildTextContainer(
         safeV2TextContent(
-          result.notFoundMessage ?? `No profile data found for ${userMention(userId)}.`,
+          result.notFoundMessage ?? `No profile data found for ${renderUsernameWithEmoji(userId, user.displayName ?? user.username ?? userId)}.`,
           1000,
             ),
           );

@@ -7,7 +7,6 @@ import {
   type Message,
   type ModalSubmitInteraction,
   type StringSelectMenuInteraction,
-  userMention,
 } from "discord.js";
 import {
   ContainerBuilder,
@@ -27,6 +26,7 @@ import {
   buildTextContainer,
 } from "./ComponentsV2Utils.js";
 import { isInteractionSettled, safeReply, safeUpdate, safeUserFetch } from "./InteractionUtils.js";
+import { renderUsernameWithEmoji } from "../services/UserEmojiService.js";
 import { safeIgnore } from "../utilities/AsyncUtils.js";
 import { logError } from "../utilities/LogUtils.js";
 import { buildActionButton, buildButtonRow } from "./uiComponents.js";
@@ -154,7 +154,7 @@ export async function notifyUnknownCompletionPlatform(
     await (channel as any).send({
       content:
         `Unknown completion platform selected.\n` +
-        `User: ${username} (${userMention(interaction.user.id)})\n` +
+        `User: ${renderUsernameWithEmoji(interaction.user.id, username)}\n` +
         `Game: ${gameTitle} (GameDB #${gameId})`,
       allowedMentions: { parse: [] },
     });
@@ -199,13 +199,18 @@ export async function announceCompletion(
       const yearlyCount = await Member.countCompletions(userId, completionYear);
       yearlySummary = `\nGame completion #${yearlyCount} for ${completionYear}`;
     }
+    const userName = user.displayName ?? user.username ?? user.id;
     let desc =
-      `${userMention(user.id)} has added a game completion: **${game.title}** - ` +
+      `${renderUsernameWithEmoji(user.id, userName)} has added a game completion: **${game.title}** - ` +
       `${completionType} - ${dateStr}${hoursStr}` +
       yearlySummary;
     if (isAdminOverride && interaction.user.id !== userId) {
+      const admin = interaction.user;
+      const adminName = admin.displayName ?? admin.username ?? admin.id;
+      const adminMention = renderUsernameWithEmoji(admin.id, adminName);
+      const userMentionStr = renderUsernameWithEmoji(user.id, userName);
       desc =
-        `${userMention(interaction.user.id)} added a game completion for ${userMention(user.id)}: ` +
+        `${adminMention} added a game completion for ${userMentionStr}: ` +
         `**${game.title}** - ${completionType} - ${dateStr}${hoursStr}` +
         yearlySummary;
     }
