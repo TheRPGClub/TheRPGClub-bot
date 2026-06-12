@@ -1,14 +1,8 @@
-import type pg from "pg";
-import {
-  dbQuery,
-  dbMutate,
-  dbTransaction,
-  dbQueryConn,
-  dbInsertConn,
-  dbMutateConn,
-} from "../db/SqlManager.js";
+import { dbQuery } from "../db/SqlManager.js";
 import { UserGameCollectionSql } from "../db/sql/index.js";
 import { isPositiveInt, requirePositiveInt } from "../utilities/ValidationUtils.js";
+import { apiGet, apiPost, apiPatch, apiDelete } from "../services/RpgClubApiClient.js";
+import Game from "./Game.js";
 
 export const COLLECTION_OWNERSHIP_TYPES = [
   "Digital",
@@ -104,18 +98,41 @@ function mapEntry(row: CollectionRow): IUserGameCollectionEntry {
   };
 }
 
-async function getEntryById(
-  entryId: number,
-  userId: string,
-  conn: pg.PoolClient,
-): Promise<IUserGameCollectionEntry | null> {
-  const rows = await dbQueryConn(
-    conn,
-    UserGameCollectionSql.getEntryById,
-    { entryId, userId },
-    mapEntry,
-  );
-  return rows[0] ?? null;
+// --- API types (GET /api/v1/collections/:id, POST/PATCH responses use as_json) ---
+
+type CollectionApiData = {
+  entry_id: number;
+  user_id: string;
+  gamedb_game_id: number;
+  platform_id: number | null;
+  ownership_type: string;
+  note: string | null;
+  is_shared: boolean | number;
+  created_at: string;
+  updated_at: string;
+};
+
+type CollectionResponse = { data: CollectionApiData };
+
+async function enrichEntry(raw: CollectionApiData): Promise<IUserGameCollectionEntry> {
+  const [game, platform] = await Promise.all([
+    Game.getGameById(raw.gamedb_game_id),
+    raw.platform_id != null ? Game.getPlatformById(raw.platform_id) : Promise.resolve(null),
+  ]);
+  return {
+    entryId: Number(raw.entry_id),
+    userId: raw.user_id,
+    gameId: Number(raw.gamedb_game_id),
+    title: game?.title ?? `Game #${raw.gamedb_game_id}`,
+    platformId: raw.platform_id != null ? Number(raw.platform_id) : null,
+    platformName: platform?.name ?? null,
+    platformAbbreviation: platform?.abbreviation ?? null,
+    ownershipType: normalizeOwnershipType(raw.ownership_type),
+    note: raw.note ?? null,
+    isShared: Boolean(raw.is_shared),
+    createdAt: new Date(raw.created_at),
+    updatedAt: new Date(raw.updated_at),
+  };
 }
 
 export default class UserGameCollection {
@@ -129,7 +146,6 @@ export default class UserGameCollection {
     const { userId, gameId, platformId } = params;
     const ownershipType = normalizeOwnershipType(params.ownershipType);
     const note = params.note?.trim() ? params.note.trim() : null;
-    const isShared = 1;
 
     requirePositiveInt(gameId, "GameDB id");
     if (platformId != null && !isPositiveInt(platformId)) {
@@ -139,33 +155,28 @@ export default class UserGameCollection {
       throw new Error("Note must be 500 characters or fewer.");
     }
 
-    return dbTransaction(async (conn) => {
-      let entryId: number;
-      try {
-        entryId = await dbInsertConn(conn, UserGameCollectionSql.addEntry, {
-          userId,
-          gameId,
-          platformId,
-          ownershipType,
+    let response: CollectionResponse | null;
+    try {
+      response = await apiPost<CollectionResponse>(`/api/v1/users/${userId}/collections`, {
+        data: {
+          gamedb_game_id: gameId,
+          platform_id: platformId,
+          ownership_type: ownershipType,
           note,
-          isShared,
-        }, "entryId");
-      } catch (err: any) {
-        const msg = String(err?.message ?? "");
-        if (/ORA-00001/i.test(msg) || /unique constraint/i.test(msg)) {
-          throw new Error(
-            "That game/platform/ownership entry already exists in your collection.",
-          );
-        }
-        throw err;
+        },
+      });
+    } catch (err: any) {
+      const msg = String(err?.response?.data?.error ?? err?.message ?? "");
+      if (/unique|duplicate|already been taken/i.test(msg)) {
+        throw new Error(
+          "That game/platform/ownership entry already exists in your collection.",
+        );
       }
+      throw err;
+    }
 
-      if (!entryId) throw new Error("Failed to create collection entry.");
-
-      const saved = await getEntryById(entryId, userId, conn);
-      if (!saved) throw new Error("Failed to load created collection entry.");
-      return saved;
-    });
+    if (!response) throw new Error("Failed to create collection entry.");
+    return enrichEntry(response.data);
   }
 
   static async getEntryForUser(
@@ -173,12 +184,10 @@ export default class UserGameCollection {
     userId: string,
   ): Promise<IUserGameCollectionEntry | null> {
     requirePositiveInt(entryId, "entry id");
-    const rows = await dbQuery(
-      UserGameCollectionSql.getEntryForUser,
-      { entryId, userId },
-      mapEntry,
-    );
-    return rows[0] ?? null;
+    const response = await apiGet<CollectionResponse>(`/api/v1/collections/${entryId}`);
+    if (!response) return null;
+    if (response.data.user_id !== userId) return null;
+    return enrichEntry(response.data);
   }
 
   static async updateEntryForUser(
@@ -192,20 +201,17 @@ export default class UserGameCollection {
   ): Promise<IUserGameCollectionEntry | null> {
     requirePositiveInt(entryId, "entry id");
 
-    const updateParts: string[] = [];
-    const binds: Record<string, string | number | null> = { entryId, userId };
+    const body: Record<string, string | number | null | undefined> = {};
 
     if (updates.platformId !== undefined) {
       if (updates.platformId != null && !isPositiveInt(updates.platformId)) {
         throw new Error("Invalid platform id.");
       }
-      updateParts.push("PLATFORM_ID = :platformId");
-      binds.platformId = updates.platformId;
+      body.platform_id = updates.platformId;
     }
 
     if (updates.ownershipType !== undefined) {
-      updateParts.push("OWNERSHIP_TYPE = :ownershipType");
-      binds.ownershipType = normalizeOwnershipType(updates.ownershipType);
+      body.ownership_type = normalizeOwnershipType(updates.ownershipType);
     }
 
     if (updates.note !== undefined) {
@@ -213,41 +219,43 @@ export default class UserGameCollection {
       if (note && note.length > 500) {
         throw new Error("Note must be 500 characters or fewer.");
       }
-      updateParts.push("NOTE = :note");
-      binds.note = note;
+      body.note = note;
     }
 
-    if (!updateParts.length) {
+    if (!Object.keys(body).length) {
       throw new Error("No collection fields were provided to update.");
     }
 
-    return dbTransaction(async (conn) => {
-      let rowsAffected: number;
-      try {
-        rowsAffected = await dbMutateConn(
-          conn, UserGameCollectionSql.updateEntry(updateParts), binds,
-        );
-      } catch (err: any) {
-        const msg = String(err?.message ?? "");
-        if (/ORA-00001/i.test(msg) || /unique constraint/i.test(msg)) {
-          throw new Error(
-            "That game/platform/ownership entry already exists in your collection.",
-          );
-        }
-        throw err;
-      }
+    // Verify ownership before mutating
+    const existing = await apiGet<CollectionResponse>(`/api/v1/collections/${entryId}`);
+    if (!existing || existing.data.user_id !== userId) return null;
 
-      if (rowsAffected <= 0) return null;
-      return getEntryById(entryId, userId, conn);
-    });
+    let response: CollectionResponse | null;
+    try {
+      response = await apiPatch<CollectionResponse>(`/api/v1/collections/${entryId}`, {
+        data: body,
+      });
+    } catch (err: any) {
+      const msg = String(err?.response?.data?.error ?? err?.message ?? "");
+      if (/unique|duplicate|already been taken/i.test(msg)) {
+        throw new Error(
+          "That game/platform/ownership entry already exists in your collection.",
+        );
+      }
+      throw err;
+    }
+
+    if (!response) return null;
+    return enrichEntry(response.data);
   }
 
   static async removeEntryForUser(entryId: number, userId: string): Promise<boolean> {
     requirePositiveInt(entryId, "entry id");
-    return (await dbMutate(
-      UserGameCollectionSql.removeEntry,
-      { entryId, userId },
-    )) > 0;
+    // Verify ownership before deleting
+    const existing = await apiGet<CollectionResponse>(`/api/v1/collections/${entryId}`);
+    if (!existing || existing.data.user_id !== userId) return false;
+    const result = await apiDelete<{ deleted: boolean }>(`/api/v1/collections/${entryId}`);
+    return result?.deleted === true;
   }
 
   static async searchEntries(filters: {

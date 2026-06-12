@@ -1,68 +1,8 @@
 import type { ISqlEntry } from "./types.js";
 
-const ENTRY_SELECT_SQL_PG = `SELECT c.entry_id,
-       c.user_id,
-       c.gamedb_game_id,
-       g.title,
-       c.platform_id,
-       p.platform_name,
-       p.platform_abbreviation,
-       c.ownership_type,
-       c.note,
-       c.is_shared,
-       c.created_at,
-       c.updated_at
-  FROM user_game_collections c
-  JOIN gamedb_games g ON g.game_id = c.gamedb_game_id
-  LEFT JOIN gamedb_platforms p ON p.platform_id = c.platform_id`;
+// addEntry, getEntryById, getEntryForUser, updateEntry, removeEntry migrated to API (issue #802).
 
 export const UserGameCollectionSql = {
-  addEntry: {
-    postgres: `INSERT INTO user_game_collections (
-             user_id,
-             gamedb_game_id,
-             platform_id,
-             ownership_type,
-             note,
-             is_shared
-           ) VALUES (
-             :userId,
-             :gameId,
-             :platformId,
-             :ownershipType,
-             :note,
-             :isShared
-           )
-           RETURNING entry_id`,
-  } satisfies ISqlEntry,
-
-  getEntryById: {
-    postgres: `${ENTRY_SELECT_SQL_PG}
-     WHERE c.entry_id = :entryId
-       AND c.user_id = :userId`,
-  } satisfies ISqlEntry,
-
-  getEntryForUser: {
-    postgres: `${ENTRY_SELECT_SQL_PG}
-       WHERE c.entry_id = :entryId
-         AND c.user_id = :userId`,
-  } satisfies ISqlEntry,
-
-  // Caller must pass lowercase column=value expressions for Postgres (e.g. "note = :note")
-  updateEntry: (updateParts: string[]) =>
-    ({
-      postgres: `UPDATE user_game_collections
-              SET ${updateParts.join(", ")}
-            WHERE entry_id = :entryId
-              AND user_id = :userId`,
-    }) satisfies ISqlEntry,
-
-  removeEntry: {
-    postgres: `DELETE FROM user_game_collections
-        WHERE entry_id = :entryId
-          AND user_id = :userId`,
-  } satisfies ISqlEntry,
-
   // Caller must pass dialect-appropriate whereClause and fetchClause
   searchEntries: (whereClause: string, fetchClause: string) =>
     ({
