@@ -96,6 +96,7 @@ def build_skill(spec: dict) -> str:
     return f"""\
 ---
 name: api-reference
+model: claude-haiku-4-5
 description: >
   Reference for The RPG Club API endpoints. Use when writing or reviewing code that calls the
   API, when asked what endpoints exist, or when choosing which endpoint to use for a feature.
