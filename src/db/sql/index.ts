@@ -18,10 +18,7 @@ export { GotmAuditImportSql } from "./gotmAuditImport.sql.js";
 export { HltbCacheSql } from "./hltbCache.sql.js";
 export { MemberSql } from "./member.sql.js";
 export { NominationSql } from "./nomination.sql.js";
-export {
-  PresencePromptHistorySql,
-  PresencePromptOptOutSql,
-} from "./presencePrompt.sql.js";
+export { PresencePromptHistorySql } from "./presencePrompt.sql.js";
 export { RssFeedSql } from "./rssFeed.sql.js";
 export { SteamCollectionImportSql } from "./steamCollectionImport.sql.js";
 export { SuggestionReviewSessionSql } from "./suggestion.sql.js";
