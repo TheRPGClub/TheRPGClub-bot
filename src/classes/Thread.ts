@@ -1,19 +1,29 @@
-import {
-  dbQuery,
-  dbMutate,
-  dbTransaction,
-  dbWithConnection,
-  dbQueryConn,
-  dbMutateConn,
-} from "../db/SqlManager.js";
-import { ThreadSql } from "../db/sql/index.js";
+import { apiGet, apiPost, apiPatch, apiDelete } from "../services/RpgClubApiClient.js";
 import { isPositiveInt } from "../utilities/ValidationUtils.js";
 
 type NullableDate = Date | null;
 
-function toYN(flag: boolean): string {
-  return flag ? "Y" : "N";
-}
+type ThreadLinkApiData = {
+  gamedb_game_id: number;
+};
+
+type ThreadApiData = {
+  thread_id: string;
+  thread_name: string;
+  forum_channel_id: string;
+  is_archived: boolean;
+  skip_linking: boolean;
+  last_seen_at: string | null;
+  gamedb_game_id: number | null;
+  created_at: string;
+  updated_at: string;
+  links: ThreadLinkApiData[];
+};
+
+type ThreadResponse = { data: ThreadApiData };
+type ThreadListApiData = { thread_id: string };
+type ThreadListResponse = { data: ThreadListApiData[]; meta: { count: number } };
+type ThreadLinkDeleteResponse = { deleted: boolean; count: number };
 
 export async function upsertThreadRecord(params: {
   threadId: string;
@@ -24,14 +34,15 @@ export async function upsertThreadRecord(params: {
   lastSeenAt: NullableDate;
   skipLinking?: "Y" | "N";
 }): Promise<void> {
-  await dbMutate(ThreadSql.upsertThread, {
-    threadId: params.threadId,
-    forumChannelId: params.forumChannelId,
-    threadName: params.threadName,
-    isArchived: toYN(params.isArchived),
-    createdAt: params.createdAt,
-    lastSeenAt: params.lastSeenAt,
-    skipLinking: params.skipLinking ?? "N",
+  await apiPost("/api/v1/threads", {
+    data: {
+      thread_id: params.threadId,
+      forum_channel_id: params.forumChannelId,
+      thread_name: params.threadName,
+      is_archived: params.isArchived,
+      last_seen_at: params.lastSeenAt?.toISOString() ?? null,
+      skip_linking: (params.skipLinking ?? "N") === "Y",
+    },
   });
 }
 
@@ -43,94 +54,57 @@ export async function setThreadGameLink(
     throw new Error("Invalid GameDB game id.");
   }
 
-  await dbTransaction(async (conn) => {
-    if (gameId === null) {
-      await dbMutateConn(conn, ThreadSql.deleteThreadGameLink, { threadId });
-    } else {
-      await dbMutateConn(conn, ThreadSql.mergeThreadGameLink, { threadId, gameId });
-    }
-
-    await dbMutateConn(conn, ThreadSql.updateThreadsGameId, { threadId });
-  });
+  if (gameId === null) {
+    await apiDelete(`/api/v1/threads/${threadId}/links`);
+  } else {
+    await apiPost(`/api/v1/threads/${threadId}/links`, {
+      data: { gamedb_game_id: gameId },
+    });
+  }
 }
 
 export async function removeThreadGameLink(
   threadId: string,
   gameId?: number,
 ): Promise<number> {
-  if (
-    gameId !== undefined &&
-    (gameId === null || !isPositiveInt(gameId))
-  ) {
+  if (gameId !== undefined && (gameId === null || !isPositiveInt(gameId))) {
     throw new Error("Invalid GameDB game id.");
   }
 
-  return dbTransaction(async (conn) => {
-    const rowsAffected = await dbMutateConn(
-      conn,
-      ThreadSql.removeThreadGameLinks(!!gameId),
-      gameId ? { threadId, gameId } : { threadId },
-    );
+  const path = gameId != null
+    ? `/api/v1/threads/${threadId}/links/${gameId}`
+    : `/api/v1/threads/${threadId}/links`;
 
-    await dbMutateConn(conn, ThreadSql.updateThreadsGameId, { threadId });
-
-    return rowsAffected;
-  });
+  const response = await apiDelete<ThreadLinkDeleteResponse>(path);
+  return response?.count ?? 0;
 }
 
 export async function setThreadSkipLinking(
   threadId: string,
   skip: boolean,
 ): Promise<void> {
-  await dbMutate(ThreadSql.setSkipLinking, { skip: toYN(skip), threadId });
+  await apiPatch(`/api/v1/threads/${threadId}`, {
+    data: { skip_linking: skip },
+  });
 }
 
 export async function getThreadSkipLinking(threadId: string): Promise<boolean> {
-  const rows = await dbQuery(
-    ThreadSql.getSkipLinking,
-    { threadId },
-    (row: { SKIP_LINKING: string }) => String(row.SKIP_LINKING ?? "N").toUpperCase() === "Y",
-  );
-  return rows[0] ?? false;
+  const response = await apiGet<ThreadResponse>(`/api/v1/threads/${threadId}`);
+  return response?.data.skip_linking ?? false;
 }
 
 export async function getThreadLinkInfo(
   threadId: string,
 ): Promise<{ skipLinking: boolean; gamedbGameIds: number[] }> {
-  return dbWithConnection(async (conn) => {
-    const [skipFlag] = await dbQueryConn(
-      conn,
-      ThreadSql.getSkipLinking,
-      { threadId },
-      (row: { SKIP_LINKING: string }) =>
-        String(row.SKIP_LINKING ?? "N").toUpperCase() === "Y",
-    );
-
-    const gameIds = await dbQueryConn(
-      conn,
-      ThreadSql.getThreadGameLinks,
-      { threadId },
-      (row: { GAMEDB_GAME_ID: number }) => Number(row.GAMEDB_GAME_ID),
-    );
-
-    if (!gameIds.length) {
-      const legacyIds = await dbQueryConn(
-        conn,
-        ThreadSql.getLegacyGameId,
-        { threadId },
-        (row: { GAMEDB_GAME_ID: number | null }) =>
-          row.GAMEDB_GAME_ID != null ? Number(row.GAMEDB_GAME_ID) : null,
-      );
-      for (const id of legacyIds) {
-        if (id != null) gameIds.push(id);
-      }
-    }
-
-    return {
-      skipLinking: skipFlag ?? false,
-      gamedbGameIds: Array.from(new Set(gameIds)),
-    };
-  });
+  const response = await apiGet<ThreadResponse>(`/api/v1/threads/${threadId}`);
+  if (!response) {
+    return { skipLinking: false, gamedbGameIds: [] };
+  }
+  const gameIds = response.data.links.map((l) => Number(l.gamedb_game_id));
+  return {
+    skipLinking: response.data.skip_linking ?? false,
+    gamedbGameIds: Array.from(new Set(gameIds)),
+  };
 }
 
 export async function getThreadGameIds(threadId: string): Promise<number[]> {
@@ -139,23 +113,11 @@ export async function getThreadGameIds(threadId: string): Promise<number[]> {
 }
 
 export async function getThreadsByGameId(gameId: number): Promise<string[]> {
-  return dbWithConnection(async (conn) => {
-    const threadIds = await dbQueryConn(
-      conn,
-      ThreadSql.getThreadLinksForGame,
-      { gameId },
-      (row: { THREAD_ID: string }) => String(row.THREAD_ID),
-    );
-
-    const legacyIds = await dbQueryConn(
-      conn,
-      ThreadSql.getLegacyThreadIdForGame,
-      { gameId },
-      (row: { THREAD_ID: string }) => String(row.THREAD_ID),
-    );
-
-    return Array.from(new Set([...threadIds, ...legacyIds]));
-  });
+  const response = await apiGet<ThreadListResponse>(
+    `/api/v1/games/${gameId}/threads`,
+  );
+  if (!response) return [];
+  return response.data.map((t) => String(t.thread_id));
 }
 
 export default class Thread {
