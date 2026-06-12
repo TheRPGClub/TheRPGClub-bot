@@ -23,7 +23,6 @@ export {
   PresencePromptHistorySql,
   PresencePromptOptOutSql,
 } from "./presencePrompt.sql.js";
-export { PublicReminderSql } from "./reminder.sql.js";
 export { RssFeedSql } from "./rssFeed.sql.js";
 export { SteamCollectionImportSql } from "./steamCollectionImport.sql.js";
 export { SuggestionReviewSessionSql } from "./suggestion.sql.js";
