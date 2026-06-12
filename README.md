@@ -1,6 +1,6 @@
 # RPGClub GameDB Bot
 
-RPGClub GameDB Bot is a Discord bot that powers GameDB lookups, Monthly Games workflows, and member utilities for the RPG Club community. It is built with TypeScript, Discord.js v14, and DiscordX, with an Oracle-backed data model and IGDB integration for game metadata.
+RPGClub GameDB Bot is a Discord bot that powers GameDB lookups, Monthly Games workflows, and member utilities for the RPG Club community. It is built with TypeScript, Discord.js v14, and DiscordX, with a Postgres-backed data model and IGDB integration for game metadata.
 
 ## What It Does
 
@@ -15,7 +15,6 @@ RPGClub GameDB Bot is a Discord bot that powers GameDB lookups, Monthly Games wo
 
 - Node.js with TypeScript and ESM
 - Discord.js v14 and DiscordX
-- Oracle DB via `oracledb`
 - IGDB API integration for metadata
 - GitHub App integration for issue workflows
 
@@ -53,15 +52,6 @@ The entrypoint is `src/RPGClub_GameDB.ts`, and the compiled output is `build/RPG
 These are required or commonly used by the bot. Values depend on your deployment.
 
 - `BOT_TOKEN`
-- `ORACLE_USER`
-- `ORACLE_PASSWORD`
-- `ORACLE_CONNECT_STRING`
-- `ORACLE_POOL_MIN`
-- `ORACLE_POOL_MAX`
-- `ORACLE_POOL_INCREMENT`
-- `ORACLE_POOL_QUEUE_TIMEOUT_MS`
-- `ORACLE_POOL_IDLE_TIMEOUT_SECONDS`
-- `ORACLE_STMT_CACHE_SIZE`
 - `IGDB_CLIENT_ID`
 - `IGDB_CLIENT_SECRET`
 - `IGDB_SCAN_ENABLED`

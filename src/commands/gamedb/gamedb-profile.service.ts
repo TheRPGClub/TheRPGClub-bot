@@ -478,9 +478,8 @@ export async function buildGameProfile(
     }
 
     const igdbIdText = game.igdbId ? String(game.igdbId) : "N/A";
-    const sourceLabel = source === "API" ? "API" : "OracleSQL";
     bodyParts.push({
-      content: `-# GameDB ID: ${game.id} | IGDB ID: ${igdbIdText} | Source: ${sourceLabel}`,
+      content: `-# GameDB ID: ${game.id} | IGDB ID: ${igdbIdText}`,
     });
 
     const headerBlock = trimTextDisplayContent(headerLines.join("\n"));

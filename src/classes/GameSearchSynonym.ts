@@ -1,4 +1,3 @@
-import type oracledb from "oracledb";
 import type pg from "pg";
 import {
   dbQuery,
@@ -42,7 +41,7 @@ export default class GameSearchSynonym {
 
   static async getGroupIdsForTerm(
     termText: string,
-    conn?: oracledb.Connection | pg.PoolClient,
+    conn?: pg.PoolClient,
   ): Promise<number[]> {
     const norm = normalizeSearchTerm(termText);
     if (!norm) return [];
@@ -63,7 +62,7 @@ export default class GameSearchSynonym {
 
   static async listGroupTerms(
     groupId: number,
-    conn?: oracledb.Connection | pg.PoolClient,
+    conn?: pg.PoolClient,
   ): Promise<IGameSearchSynonym[]> {
     if (conn) {
       return dbQueryConn(conn, GameSearchSynonymSql.listGroupTerms, { groupId }, mapSynonymRow);
@@ -376,7 +375,7 @@ export default class GameSearchSynonym {
 
   static async getSynonymById(
     termId: number,
-    conn?: oracledb.Connection | pg.PoolClient,
+    conn?: pg.PoolClient,
   ): Promise<IGameSearchSynonym | null> {
     if (conn) {
       const rows = await dbQueryConn(

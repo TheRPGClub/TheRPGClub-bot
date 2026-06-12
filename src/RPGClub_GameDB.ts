@@ -12,7 +12,6 @@ import { Client } from "discordx";
 
 import { updateBotPresence } from "./functions/SetPresence.js";
 
-import { initOraclePool } from "./db/oracleClient.js";
 import { initPostgresPool } from "./db/postgresClient.js";
 import { loadGotmFromDb } from "./classes/Gotm.js";
 import { loadNrGotmFromDb } from "./classes/NrGotm.js";
@@ -32,7 +31,6 @@ import { refreshGiveawayHubMessage } from "./services/GiveawayHubService.js";
 import { startGameReleaseAnnouncementService } from "./services/GameReleaseAnnouncementService.js";
 import { startIgdbScanService } from "./services/IGDB/IgdbScanService.js";
 import { startUserEmojiService } from "./services/UserEmojiService.js";
-import { tryHandleManagedRawModalInteraction } from "./services/raw-modal/RawModalInteractionRouter.js";
 import { restoreJournalMessageContextsFromDb } from "./commands/now-playing/nowPlayingContexts.js";
 import { truncateWithEllipsis } from "./utilities/ValidationUtils.js";
 import { logError } from "./utilities/LogUtils.js";
@@ -219,11 +217,6 @@ bot.on("interactionCreate", async (interaction: Interaction) => {
     }
   }
 
-  const handledByRawModalRouter = await tryHandleManagedRawModalInteraction(interaction);
-  if (handledByRawModalRouter) {
-    return;
-  }
-
   await bot.executeInteraction(interaction);
 });
 
@@ -269,7 +262,6 @@ async function run(): Promise<void> {
     throw Error("Could not find BOT_TOKEN in your environment");
   }
 
-  await initOraclePool();
   await initPostgresPool();
   await loadGotmFromDb();
   await loadNrGotmFromDb();

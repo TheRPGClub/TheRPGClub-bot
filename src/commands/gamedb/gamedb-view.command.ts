@@ -9,7 +9,6 @@ import {
   ButtonComponent,
   Discord,
   Slash,
-  SlashChoice,
   SlashGroup,
   SlashOption,
 } from "discordx";
@@ -57,19 +56,11 @@ export class GameDbViewCommand {
       autocomplete: autocompleteGameDbViewTitle,
     })
     query: string,
-    @SlashChoice({ name: "oracle", value: "oracle" }, { name: "api", value: "api" })
-    @SlashOption({
-      description: "Data source for the game lookup (default: oracle)",
-      name: "source",
-      required: false,
-      type: ApplicationCommandOptionType.String,
-    })
-    sourceChoice: string | undefined,
     interaction: CommandInteraction,
   ): Promise<void> {
     await safeDeferReply(interaction, { flags: buildComponentsV2Flags(false) });
 
-    const source: GameSource = sourceChoice === "api" ? "API" : "oracleSQL";
+    const source: GameSource = "API";
     const searchTerm = sanitizeUserInput(query, { preserveNewlines: false });
 
     if (source === "API") {

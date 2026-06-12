@@ -1,6 +1,5 @@
-export type Dialect = "oracle" | "postgres";
+export type Dialect = "postgres";
 
 export interface ISqlEntry {
-  oracle: string;
   postgres: string;
 }

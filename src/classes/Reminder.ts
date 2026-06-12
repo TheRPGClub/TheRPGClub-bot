@@ -1,4 +1,3 @@
-import type oracledb from "oracledb";
 import type pg from "pg";
 import { dbQuery, dbMutate, dbInsert, dbQueryConn } from "../db/SqlManager.js";
 import { ReminderSql } from "../db/sql/index.js";
@@ -128,7 +127,7 @@ export default class Reminder {
 
   static async getById(
     reminderId: number,
-    opts?: { connection?: oracledb.Connection | pg.PoolClient },
+    opts?: { connection?: pg.PoolClient },
   ): Promise<IReminderRecord | null> {
     const id = normalizeReminderId(reminderId);
     if (opts?.connection) {

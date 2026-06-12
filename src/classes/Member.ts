@@ -1,4 +1,3 @@
-import oracledb from "oracledb";
 import type pg from "pg";
 import {
   dbQuery,
@@ -9,12 +8,9 @@ import {
   dbMutateConn,
   dbInsertConn,
 } from "../db/SqlManager.js";
-import { getDialect } from "../db/dialect.js";
 import { MemberSql } from "../db/sql/index.js";
 import { isPositiveInt, requirePositiveInt } from "../utilities/ValidationUtils.js";
 import { logError, logWarn } from "../utilities/LogUtils.js";
-
-const dialect = getDialect();
 
 export interface IMemberRecord {
   userId: string;
@@ -189,7 +185,7 @@ export interface ICompletionRecord {
   note: string | null;
 }
 
-type AnyConn = oracledb.Connection | pg.PoolClient;
+type AnyConn = pg.PoolClient;
 const MAX_NOW_PLAYING = 10;
 const LEGACY_THREAD_ID_SQL = `COALESCE(
                   (
@@ -1403,21 +1399,6 @@ export default class Member {
 
   static async getByUserId(userId: string): Promise<IMemberRecord | null> {
     return dbWithConnection(async (conn) => {
-      if (dialect === "oracle") {
-        const result = await (conn as oracledb.Connection).execute<MemberRow>(
-          MemberSql.getByUserId.oracle,
-          { userId },
-          {
-            outFormat: oracledb.OUT_FORMAT_OBJECT,
-            fetchInfo: {
-              AVATAR_BLOB: { type: oracledb.BUFFER },
-              PROFILE_IMAGE: { type: oracledb.BUFFER },
-            },
-          },
-        );
-        const row = (result.rows ?? [])[0];
-        return row ? mapMemberRow(row) : null;
-      }
       const rows = await dbQueryConn<MemberRow, IMemberRecord>(
         conn, MemberSql.getByUserId, { userId }, mapMemberRow,
       );
@@ -1447,17 +1428,6 @@ export default class Member {
     const safeLimit = Math.min(Math.max(limit, 1), 50);
     const safeOffset = Math.max(offset, 0);
     return dbWithConnection(async (conn) => {
-      if (dialect === "oracle") {
-        const result = await (conn as oracledb.Connection).execute<AvatarHistoryRow>(
-          MemberSql.getAvatarHistory.oracle,
-          { userId, limit: safeLimit, offset: safeOffset },
-          {
-            outFormat: oracledb.OUT_FORMAT_OBJECT,
-            fetchInfo: { AVATAR_BLOB: { type: oracledb.BUFFER } },
-          },
-        );
-        return (result.rows ?? []).map(mapAvatarHistoryRow);
-      }
       return dbQueryConn<AvatarHistoryRow, IAvatarHistoryRecord>(
         conn,
         MemberSql.getAvatarHistory,
@@ -1686,7 +1656,7 @@ export default class Member {
   static async markDepartedNotIn(userIds: string[]): Promise<number> {
     if (!userIds.length) return 0;
 
-    const chunkSize = 999; // Oracle IN clause limit per statement (safe)
+    const chunkSize = 999; 
     let totalUpdated = 0;
 
     for (let i = 0; i < userIds.length; i += chunkSize) {

@@ -1,16 +1,5 @@
 import type { ISqlEntry } from "./types.js";
 
-const IMPORT_COLS = `IMPORT_ID,
-       USER_ID,
-       STATUS,
-       CURRENT_INDEX,
-       TOTAL_COUNT,
-       STEAM_ID64,
-       STEAM_PROFILE_REF,
-       SOURCE_PROFILE_NAME,
-       CREATED_AT,
-       UPDATED_AT`;
-
 const IMPORT_COLS_PG = `import_id,
        user_id,
        status,
@@ -21,25 +10,6 @@ const IMPORT_COLS_PG = `import_id,
        source_profile_name,
        created_at,
        updated_at`;
-
-const ITEM_COLS = `ITEM_ID,
-       IMPORT_ID,
-       ROW_INDEX,
-       STEAM_APP_ID,
-       STEAM_APP_NAME,
-       PLAYTIME_FOREVER_MIN,
-       PLAYTIME_WINDOWS_MIN,
-       PLAYTIME_MAC_MIN,
-       PLAYTIME_LINUX_MIN,
-       PLAYTIME_DECK_MIN,
-       LAST_PLAYED_AT,
-       STATUS,
-       MATCH_CONFIDENCE,
-       MATCH_CANDIDATE_JSON,
-       GAMEDB_GAME_ID,
-       COLLECTION_ENTRY_ID,
-       RESULT_REASON,
-       ERROR_TEXT`;
 
 const ITEM_COLS_PG = `item_id,
        import_id,
@@ -62,23 +32,6 @@ const ITEM_COLS_PG = `item_id,
 
 export const SteamCollectionImportSql = {
   createImport: {
-    oracle: `INSERT INTO RPG_CLUB_STEAM_COLLECTION_IMPORTS (
-         USER_ID,
-         STATUS,
-         CURRENT_INDEX,
-         TOTAL_COUNT,
-         STEAM_ID64,
-         STEAM_PROFILE_REF,
-         SOURCE_PROFILE_NAME
-       ) VALUES (
-         :userId,
-         'ACTIVE',
-         0,
-         :totalCount,
-         :steamId64,
-         :steamProfileRef,
-         :sourceProfileName
-       ) RETURNING IMPORT_ID INTO :id`,
     postgres: `INSERT INTO rpg_club_steam_collection_imports (
          user_id,
          status,
@@ -99,31 +52,6 @@ export const SteamCollectionImportSql = {
   } satisfies ISqlEntry,
 
   insertItem: {
-    oracle: `INSERT INTO RPG_CLUB_STEAM_COLLECTION_IMPORT_ITEMS (
-           IMPORT_ID,
-           ROW_INDEX,
-           STEAM_APP_ID,
-           STEAM_APP_NAME,
-           PLAYTIME_FOREVER_MIN,
-           PLAYTIME_WINDOWS_MIN,
-           PLAYTIME_MAC_MIN,
-           PLAYTIME_LINUX_MIN,
-           PLAYTIME_DECK_MIN,
-           LAST_PLAYED_AT,
-           STATUS
-         ) VALUES (
-           :importId,
-           :rowIndex,
-           :steamAppId,
-           :steamAppName,
-           :playtimeForeverMin,
-           :playtimeWindowsMin,
-           :playtimeMacMin,
-           :playtimeLinuxMin,
-           :playtimeDeckMin,
-           :lastPlayedAt,
-           'PENDING'
-         )`,
     postgres: `INSERT INTO rpg_club_steam_collection_import_items (
            import_id,
            row_index,
@@ -152,19 +80,11 @@ export const SteamCollectionImportSql = {
   } satisfies ISqlEntry,
 
   getImportById: {
-    oracle: `SELECT ${IMPORT_COLS}
-  FROM RPG_CLUB_STEAM_COLLECTION_IMPORTS WHERE IMPORT_ID = :importId`,
     postgres: `SELECT ${IMPORT_COLS_PG}
   FROM rpg_club_steam_collection_imports WHERE import_id = :importId`,
   } satisfies ISqlEntry,
 
   getActiveForUser: {
-    oracle: `SELECT ${IMPORT_COLS}
-  FROM RPG_CLUB_STEAM_COLLECTION_IMPORTS
-     WHERE USER_ID = :userId
-       AND STATUS IN ('ACTIVE', 'PAUSED')
-     ORDER BY CREATED_AT DESC, IMPORT_ID DESC
-     FETCH FIRST 1 ROWS ONLY`,
     postgres: `SELECT ${IMPORT_COLS_PG}
   FROM rpg_club_steam_collection_imports
      WHERE user_id = :userId
@@ -174,37 +94,23 @@ export const SteamCollectionImportSql = {
   } satisfies ISqlEntry,
 
   setStatus: {
-    oracle: `UPDATE RPG_CLUB_STEAM_COLLECTION_IMPORTS
-        SET STATUS = :status
-      WHERE IMPORT_ID = :importId`,
     postgres: `UPDATE rpg_club_steam_collection_imports
         SET status = :status
       WHERE import_id = :importId`,
   } satisfies ISqlEntry,
 
   updateIndex: {
-    oracle: `UPDATE RPG_CLUB_STEAM_COLLECTION_IMPORTS
-        SET CURRENT_INDEX = :currentIndex
-      WHERE IMPORT_ID = :importId`,
     postgres: `UPDATE rpg_club_steam_collection_imports
         SET current_index = :currentIndex
       WHERE import_id = :importId`,
   } satisfies ISqlEntry,
 
   getItemById: {
-    oracle: `SELECT ${ITEM_COLS}
-  FROM RPG_CLUB_STEAM_COLLECTION_IMPORT_ITEMS WHERE ITEM_ID = :itemId`,
     postgres: `SELECT ${ITEM_COLS_PG}
   FROM rpg_club_steam_collection_import_items WHERE item_id = :itemId`,
   } satisfies ISqlEntry,
 
   getNextPendingItem: {
-    oracle: `SELECT ${ITEM_COLS}
-  FROM RPG_CLUB_STEAM_COLLECTION_IMPORT_ITEMS
-     WHERE IMPORT_ID = :importId
-       AND STATUS = 'PENDING'
-     ORDER BY ROW_INDEX ASC
-     FETCH FIRST 1 ROWS ONLY`,
     postgres: `SELECT ${ITEM_COLS_PG}
   FROM rpg_club_steam_collection_import_items
      WHERE import_id = :importId
@@ -216,19 +122,12 @@ export const SteamCollectionImportSql = {
   // Caller must pass lowercase column=value expressions for Postgres (e.g. "status = :status")
   updateItem: (setParts: string[]) =>
     ({
-      oracle: `UPDATE RPG_CLUB_STEAM_COLLECTION_IMPORT_ITEMS
-        SET ${setParts.join(", ")}
-      WHERE ITEM_ID = :itemId`,
       postgres: `UPDATE rpg_club_steam_collection_import_items
         SET ${setParts.join(", ")}
       WHERE item_id = :itemId`,
     }) satisfies ISqlEntry,
 
   countItemsByStatus: {
-    oracle: `SELECT STATUS, COUNT(*) AS CNT
-       FROM RPG_CLUB_STEAM_COLLECTION_IMPORT_ITEMS
-      WHERE IMPORT_ID = :importId
-      GROUP BY STATUS`,
     postgres: `SELECT status, COUNT(*) AS cnt
        FROM rpg_club_steam_collection_import_items
       WHERE import_id = :importId
@@ -236,11 +135,6 @@ export const SteamCollectionImportSql = {
   } satisfies ISqlEntry,
 
   countItemsByReason: {
-    oracle: `SELECT RESULT_REASON, COUNT(*) AS CNT
-       FROM RPG_CLUB_STEAM_COLLECTION_IMPORT_ITEMS
-      WHERE IMPORT_ID = :importId
-        AND RESULT_REASON IS NOT NULL
-      GROUP BY RESULT_REASON`,
     postgres: `SELECT result_reason, COUNT(*) AS cnt
        FROM rpg_club_steam_collection_import_items
       WHERE import_id = :importId
@@ -249,15 +143,6 @@ export const SteamCollectionImportSql = {
   } satisfies ISqlEntry,
 
   getAppMap: {
-    oracle: `SELECT MAP_ID,
-            STEAM_APP_ID,
-            GAMEDB_GAME_ID,
-            STATUS,
-            CREATED_BY,
-            CREATED_AT,
-            UPDATED_AT
-       FROM RPG_CLUB_STEAM_APP_GAMEDB_MAP
-      WHERE STEAM_APP_ID = :steamAppId`,
     postgres: `SELECT map_id,
             steam_app_id,
             gamedb_game_id,
@@ -270,30 +155,6 @@ export const SteamCollectionImportSql = {
   } satisfies ISqlEntry,
 
   upsertAppMap: {
-    oracle: `MERGE INTO RPG_CLUB_STEAM_APP_GAMEDB_MAP m
-       USING (
-         SELECT :steamAppId AS steamAppId,
-                :gameDbGameId AS gameDbGameId,
-                :status AS status,
-                :createdBy AS createdBy
-           FROM dual
-       ) src
-          ON (m.STEAM_APP_ID = src.steamAppId)
-       WHEN MATCHED THEN UPDATE SET
-         m.GAMEDB_GAME_ID = src.gameDbGameId,
-         m.STATUS = src.status,
-         m.CREATED_BY = src.createdBy
-       WHEN NOT MATCHED THEN INSERT (
-         STEAM_APP_ID,
-         GAMEDB_GAME_ID,
-         STATUS,
-         CREATED_BY
-       ) VALUES (
-         src.steamAppId,
-         src.gameDbGameId,
-         src.status,
-         src.createdBy
-       )`,
     postgres: `INSERT INTO rpg_club_steam_app_gamedb_map (steam_app_id, gamedb_game_id, status, created_by)
        VALUES (:steamAppId, :gameDbGameId, :status, :createdBy)
        ON CONFLICT (steam_app_id) DO UPDATE SET
@@ -303,22 +164,6 @@ export const SteamCollectionImportSql = {
   } satisfies ISqlEntry,
 
   getHistoricalMappedIds: {
-    oracle: `SELECT t.GAMEDB_GAME_ID
-       FROM (
-         SELECT ii.GAMEDB_GAME_ID,
-                COUNT(*) AS CNT,
-                MAX(ii.ITEM_ID) AS LAST_ITEM_ID
-           FROM RPG_CLUB_STEAM_COLLECTION_IMPORT_ITEMS ii
-           JOIN RPG_CLUB_STEAM_COLLECTION_IMPORTS i
-             ON i.IMPORT_ID = ii.IMPORT_ID
-          WHERE ii.STEAM_APP_ID = :steamAppId
-            AND ii.GAMEDB_GAME_ID IS NOT NULL
-            AND ii.RESULT_REASON = 'MANUAL_REMAP'
-            AND (:excludeUserId IS NULL OR i.USER_ID <> :excludeUserId)
-          GROUP BY ii.GAMEDB_GAME_ID
-          ORDER BY CNT DESC, LAST_ITEM_ID DESC
-       ) t
-      WHERE ROWNUM <= :limit`,
     postgres: `SELECT ii.gamedb_game_id
          FROM rpg_club_steam_collection_import_items ii
          JOIN rpg_club_steam_collection_imports i ON i.import_id = ii.import_id

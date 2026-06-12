@@ -1,4 +1,3 @@
-import type oracledb from "oracledb";
 import type pg from "pg";
 import {
   dbQuery,
@@ -59,7 +58,7 @@ function mapFeedRow(row: FeedRow): IRssFeed {
   };
 }
 
-type AnyConn = oracledb.Connection | pg.PoolClient;
+type AnyConn = pg.PoolClient;
 
 export async function listFeeds(existingConnection?: AnyConn): Promise<IRssFeed[]> {
   if (existingConnection) {

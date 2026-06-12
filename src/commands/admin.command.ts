@@ -59,7 +59,7 @@ import {
   handleGotmAuditQueryModal,
 } from "./admin/gotm-audit-handlers.js";
 import { handleNextRoundSetup } from "./admin/round-setup-wizard.service.js";
-import { handleSqlHealthCheck, type SqlTarget } from "./admin/sql-health-check.service.js";
+import { handleSqlHealthCheck } from "./admin/sql-health-check.service.js";
 import {
   GOTM_AUDIT_ACTIONS,
   type AdminHelpTopicId,
@@ -353,14 +353,6 @@ export class Admin {
 
   @Slash({ description: "Check connectivity and latency for a database", name: "sql-health-check" })
   async sqlHealthCheck(
-    @SlashChoice({ name: "oracle", value: "oracle" }, { name: "postgresql", value: "postgresql" })
-    @SlashOption({
-      description: "Database to check",
-      name: "database",
-      required: true,
-      type: ApplicationCommandOptionType.String,
-    })
-    database: SqlTarget,
     interaction: CommandInteraction,
   ): Promise<void> {
     await safeDeferReply(interaction, { flags: MessageFlags.Ephemeral });
@@ -368,7 +360,7 @@ export class Admin {
     const okToUseCommand: boolean = await isAdmin(interaction);
     if (!okToUseCommand) return;
 
-    await handleSqlHealthCheck(interaction, database);
+    await handleSqlHealthCheck(interaction);
   }
 
   @Slash({ description: "Show help for admin commands", name: "help" })

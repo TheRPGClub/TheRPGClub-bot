@@ -1,10 +1,13 @@
-import oracledb from "oracledb";
 import axios from "axios";
 import {
-  dbQuery, dbMutate, dbInsert, dbWithConnection, dbTransaction,
-  dbQueryConn, dbMutateConn,
+  dbQuery,
+  dbMutate,
+  dbInsert,
+  dbWithConnection,
+  dbTransaction,
+  dbQueryConn,
+  dbMutateConn,
 } from "../db/SqlManager.js";
-import { getDialect } from "../db/dialect.js";
 import { GameSql } from "../db/sql/index.js";
 import { IGDBGameDetails, igdbService } from "../services/IGDB/IgdbService.js";
 import GameSearchSynonym from "./GameSearchSynonym.js";
@@ -194,17 +197,15 @@ function clearAutocompleteSearchCaches(): void {
   pendingAutocompleteSearches.clear();
 }
 
-export type GameSource = "oracleSQL" | "API";
+export type GameSource = "API";
 
 // Helper functions for mapping rows
 
 /**
  * Maps a Rails API JSON response (snake_case) to IGame.
- * imageData is always null from the API (blobs are not serialized).
+ * imageData is always null from the API.
  *
- * The Rails API uses its own auto-increment PK in `data.id` (which differs from
- * the Oracle GameDB GAME_ID). The Oracle ID is serialized as `data.game_id`, so
- * we prefer that field and fall back to `data.id` only if absent.
+ * The Rails API uses its own auto-increment PK in `data.id` 
  */
 function mapGameFromApi(data: any): IGame {
   return {
@@ -238,24 +239,29 @@ function mapGameRow(row: any): IGame {
   return {
     id: Number(row.GAME_ID ?? row.game_id),
     title: String(row.TITLE ?? row.title),
-    description: (row.DESCRIPTION ?? row.description)
-      ? String(row.DESCRIPTION ?? row.description)
-      : null,
+    description:
+      (row.DESCRIPTION ?? row.description)
+        ? String(row.DESCRIPTION ?? row.description)
+        : null,
     imageData: imageRaw instanceof Buffer ? imageRaw : null,
     thumbnailBad: Number(row.THUMBNAIL_BAD ?? row.thumbnail_bad ?? 0) === 1,
     thumbnailApproved:
       Number(row.THUMBNAIL_APPROVED ?? row.thumbnail_approved ?? 0) === 1,
-    igdbId: (row.IGDB_ID ?? row.igdb_id) ? Number(row.IGDB_ID ?? row.igdb_id) : null,
+    igdbId:
+      (row.IGDB_ID ?? row.igdb_id) ? Number(row.IGDB_ID ?? row.igdb_id) : null,
     slug: (row.SLUG ?? row.slug) ? String(row.SLUG ?? row.slug) : null,
-    totalRating: (row.TOTAL_RATING ?? row.total_rating)
-      ? Number(row.TOTAL_RATING ?? row.total_rating)
-      : null,
-    igdbUrl: (row.IGDB_URL ?? row.igdb_url)
-      ? String(row.IGDB_URL ?? row.igdb_url)
-      : null,
-    featuredVideoUrl: (row.FEATURED_VIDEO_URL ?? row.featured_video_url)
-      ? String(row.FEATURED_VIDEO_URL ?? row.featured_video_url)
-      : null,
+    totalRating:
+      (row.TOTAL_RATING ?? row.total_rating)
+        ? Number(row.TOTAL_RATING ?? row.total_rating)
+        : null,
+    igdbUrl:
+      (row.IGDB_URL ?? row.igdb_url)
+        ? String(row.IGDB_URL ?? row.igdb_url)
+        : null,
+    featuredVideoUrl:
+      (row.FEATURED_VIDEO_URL ?? row.featured_video_url)
+        ? String(row.FEATURED_VIDEO_URL ?? row.featured_video_url)
+        : null,
     initialReleaseDate: ird instanceof Date ? ird : ird ? new Date(ird) : null,
     createdAt: cat instanceof Date ? cat : new Date(cat),
     updatedAt: uat instanceof Date ? uat : new Date(uat),
@@ -386,7 +392,7 @@ export default class Game {
 
   static async getGameById(
     id: number,
-    source: GameSource = "oracleSQL",
+    source: GameSource = "API",
   ): Promise<IGame | null> {
     if (source === "API") {
       const result = await apiGet<{ data: unknown }>(`/api/v1/games/${id}`);
@@ -395,30 +401,18 @@ export default class Game {
     }
 
     return dbWithConnection(async (conn) => {
-      if (getDialect() === "oracle") {
-        const result = await (conn as oracledb.Connection).execute(
-          GameSql.getGameById.oracle,
-          { id },
-          {
-            outFormat: oracledb.OUT_FORMAT_OBJECT,
-            fetchInfo: {
-              IMAGE_DATA: { type: oracledb.BUFFER },
-              DESCRIPTION: { type: oracledb.STRING },
-            },
-          },
-        );
-        const row = (result.rows ?? [])[0] as any;
-        return row ? mapGameRow(row) : null;
-      }
-      const rows = await dbQueryConn(conn, GameSql.getGameById, { id }, mapGameRow);
+      const rows = await dbQueryConn(
+        conn,
+        GameSql.getGameById,
+        { id },
+        mapGameRow,
+      );
       return rows[0] ?? null;
     });
   }
 
   static async getGamesByIds(ids: number[]): Promise<IGame[]> {
-    const uniqueIds = Array.from(
-      new Set(ids.filter(isPositiveInt)),
-    );
+    const uniqueIds = Array.from(new Set(ids.filter(isPositiveInt)));
     if (!uniqueIds.length) return [];
 
     const binds: Record<string, number> = {};
@@ -431,16 +425,6 @@ export default class Game {
 
     return dbWithConnection(async (conn) => {
       const entry = GameSql.getGamesByIds(placeholders.join(", "));
-      if (getDialect() === "oracle") {
-        const result = await (conn as oracledb.Connection).execute(entry.oracle, binds, {
-          outFormat: oracledb.OUT_FORMAT_OBJECT,
-          fetchInfo: {
-            IMAGE_DATA: { type: oracledb.BUFFER },
-            DESCRIPTION: { type: oracledb.STRING },
-          },
-        });
-        return (result.rows ?? []).map((row) => mapGameRow(row as any));
-      }
       return dbQueryConn(conn, entry, binds, mapGameRow);
     });
   }
@@ -448,21 +432,12 @@ export default class Game {
   static async getAlternateVersions(gameId: number): Promise<IGame[]> {
     if (!isPositiveInt(gameId)) return [];
     return dbWithConnection(async (conn) => {
-      if (getDialect() === "oracle") {
-        const result = await (conn as oracledb.Connection).execute(
-          GameSql.getAlternateVersions.oracle,
-          { id: gameId },
-          {
-            outFormat: oracledb.OUT_FORMAT_OBJECT,
-            fetchInfo: {
-              IMAGE_DATA: { type: oracledb.BUFFER },
-              DESCRIPTION: { type: oracledb.STRING },
-            },
-          },
-        );
-        return (result.rows ?? []).map((row) => mapGameRow(row as any));
-      }
-      return dbQueryConn(conn, GameSql.getAlternateVersions, { id: gameId }, mapGameRow);
+      return dbQueryConn(
+        conn,
+        GameSql.getAlternateVersions,
+        { id: gameId },
+        mapGameRow,
+      );
     });
   }
 
@@ -470,9 +445,9 @@ export default class Game {
     gameIds: number[],
     createdBy: string | null,
   ): Promise<number> {
-    const uniqueIds = Array.from(
-      new Set(gameIds.filter(isPositiveInt)),
-    ).sort((a, b) => a - b);
+    const uniqueIds = Array.from(new Set(gameIds.filter(isPositiveInt))).sort(
+      (a, b) => a - b,
+    );
     if (uniqueIds.length < 2) {
       throw new Error("At least two GameDB ids are required to link versions.");
     }
@@ -502,22 +477,12 @@ export default class Game {
 
   static async getGameByIgdbId(igdbId: number): Promise<IGame | null> {
     return dbWithConnection(async (conn) => {
-      if (getDialect() === "oracle") {
-        const result = await (conn as oracledb.Connection).execute(
-          GameSql.getGameByIgdbId.oracle,
-          { igdbId },
-          {
-            outFormat: oracledb.OUT_FORMAT_OBJECT,
-            fetchInfo: {
-              IMAGE_DATA: { type: oracledb.BUFFER },
-              DESCRIPTION: { type: oracledb.STRING },
-            },
-          },
-        );
-        const row = (result.rows ?? [])[0] as any;
-        return row ? mapGameRow(row) : null;
-      }
-      const rows = await dbQueryConn(conn, GameSql.getGameByIgdbId, { igdbId }, mapGameRow);
+      const rows = await dbQueryConn(
+        conn,
+        GameSql.getGameByIgdbId,
+        { igdbId },
+        mapGameRow,
+      );
       return rows[0] ?? null;
     });
   }
@@ -634,21 +599,36 @@ export default class Game {
     if (details.involved_companies) {
       for (const ic of details.involved_companies) {
         const companyId = await Game.getOrInsertMetadata(
-          "GAMEDB_COMPANIES", "COMPANY_ID", "NAME", "IGDB_COMPANY_ID",
-          ic.company.name, ic.company.id,
+          "GAMEDB_COMPANIES",
+          "COMPANY_ID",
+          "NAME",
+          "IGDB_COMPANY_ID",
+          ic.company.name,
+          ic.company.id,
         );
-        safeIgnore(dbMutate(GameSql.insertGameCompany, {
-          gameId,
-          companyId,
-          role: ic.developer ? "Developer" : ic.publisher ? "Publisher" : null,
-        }));
+        safeIgnore(
+          dbMutate(GameSql.insertGameCompany, {
+            gameId,
+            companyId,
+            role: ic.developer
+              ? "Developer"
+              : ic.publisher
+                ? "Publisher"
+                : null,
+          }),
+        );
       }
     }
 
     if (details.genres) {
       for (const g of details.genres) {
         const genreId = await Game.getOrInsertMetadata(
-          "GAMEDB_GENRES", "GENRE_ID", "NAME", "IGDB_GENRE_ID", g.name, g.id,
+          "GAMEDB_GENRES",
+          "GENRE_ID",
+          "NAME",
+          "IGDB_GENRE_ID",
+          g.name,
+          g.id,
         );
         safeIgnore(dbMutate(GameSql.insertGameGenre, { gameId, genreId }));
       }
@@ -657,7 +637,12 @@ export default class Game {
     if (details.themes) {
       for (const t of details.themes) {
         const themeId = await Game.getOrInsertMetadata(
-          "GAMEDB_THEMES", "THEME_ID", "NAME", "IGDB_THEME_ID", t.name, t.id,
+          "GAMEDB_THEMES",
+          "THEME_ID",
+          "NAME",
+          "IGDB_THEME_ID",
+          t.name,
+          t.id,
         );
         safeIgnore(dbMutate(GameSql.insertGameTheme, { gameId, themeId }));
       }
@@ -666,7 +651,12 @@ export default class Game {
     if (details.game_modes) {
       for (const gm of details.game_modes) {
         const modeId = await Game.getOrInsertMetadata(
-          "GAMEDB_GAME_MODES_DEF", "MODE_ID", "NAME", "IGDB_GAME_MODE_ID", gm.name, gm.id,
+          "GAMEDB_GAME_MODES_DEF",
+          "MODE_ID",
+          "NAME",
+          "IGDB_GAME_MODE_ID",
+          gm.name,
+          gm.id,
         );
         safeIgnore(dbMutate(GameSql.insertGameMode, { gameId, modeId }));
       }
@@ -675,8 +665,12 @@ export default class Game {
     if (details.player_perspectives) {
       for (const pp of details.player_perspectives) {
         const persId = await Game.getOrInsertMetadata(
-          "GAMEDB_PERSPECTIVES", "PERSPECTIVE_ID", "NAME", "IGDB_PERSPECTIVE_ID",
-          pp.name, pp.id,
+          "GAMEDB_PERSPECTIVES",
+          "PERSPECTIVE_ID",
+          "NAME",
+          "IGDB_PERSPECTIVE_ID",
+          pp.name,
+          pp.id,
         );
         safeIgnore(dbMutate(GameSql.insertGamePerspective, { gameId, persId }));
       }
@@ -685,7 +679,12 @@ export default class Game {
     if (details.game_engines) {
       for (const e of details.game_engines) {
         const engineId = await Game.getOrInsertMetadata(
-          "GAMEDB_ENGINES", "ENGINE_ID", "NAME", "IGDB_ENGINE_ID", e.name, e.id,
+          "GAMEDB_ENGINES",
+          "ENGINE_ID",
+          "NAME",
+          "IGDB_ENGINE_ID",
+          e.name,
+          e.id,
         );
         safeIgnore(dbMutate(GameSql.insertGameEngine, { gameId, engineId }));
       }
@@ -694,16 +693,27 @@ export default class Game {
     if (details.franchises) {
       for (const f of details.franchises) {
         const franchiseId = await Game.getOrInsertMetadata(
-          "GAMEDB_FRANCHISES", "FRANCHISE_ID", "NAME", "IGDB_FRANCHISE_ID", f.name, f.id,
+          "GAMEDB_FRANCHISES",
+          "FRANCHISE_ID",
+          "NAME",
+          "IGDB_FRANCHISE_ID",
+          f.name,
+          f.id,
         );
-        safeIgnore(dbMutate(GameSql.insertGameFranchise, { gameId, franchiseId }));
+        safeIgnore(
+          dbMutate(GameSql.insertGameFranchise, { gameId, franchiseId }),
+        );
       }
     }
 
     if (details.collection) {
       const collectionId = await Game.getOrInsertMetadata(
-        "GAMEDB_COLLECTIONS", "COLLECTION_ID", "NAME", "IGDB_COLLECTION_ID",
-        details.collection.name, details.collection.id,
+        "GAMEDB_COLLECTIONS",
+        "COLLECTION_ID",
+        "NAME",
+        "IGDB_COLLECTION_ID",
+        details.collection.name,
+        details.collection.id,
       );
       await dbMutate(GameSql.updateCollectionId, { collectionId, gameId });
     }
@@ -811,10 +821,10 @@ export default class Game {
     );
     const minDate = rows[0] ?? null;
     if (!minDate) return;
-    await dbMutate(
-      GameSql.updateInitialReleaseDateUpdate,
-      { releaseDate: minDate, gameId },
-    );
+    await dbMutate(GameSql.updateInitialReleaseDateUpdate, {
+      releaseDate: minDate,
+      gameId,
+    });
   }
 
   static async ensurePlatform(igdbPlatform: {
@@ -827,14 +837,11 @@ export default class Game {
     }
 
     try {
-      await dbMutate(
-        GameSql.insertPlatform,
-        {
-          code: buildPlatformCode(igdbPlatform.name, igdbPlatform.id),
-          name: igdbPlatform.name ?? `IGDB Platform ${igdbPlatform.id}`,
-          igdbId: igdbPlatform.id,
-        },
-      );
+      await dbMutate(GameSql.insertPlatform, {
+        code: buildPlatformCode(igdbPlatform.name, igdbPlatform.id),
+        name: igdbPlatform.name ?? `IGDB Platform ${igdbPlatform.id}`,
+        igdbId: igdbPlatform.id,
+      });
       return Game.getPlatformByIgdbId(igdbPlatform.id);
     } catch (err) {
       logError("Game.insertPlatform", err);
@@ -854,11 +861,15 @@ export default class Game {
     }
 
     try {
-      const regionId = await dbInsert(GameSql.insertRegion, {
-        code: regionConfig.code,
-        name: regionConfig.name,
-        igdbId: igdbRegionId,
-      }, "id");
+      const regionId = await dbInsert(
+        GameSql.insertRegion,
+        {
+          code: regionConfig.code,
+          name: regionConfig.name,
+          igdbId: igdbRegionId,
+        },
+        "id",
+      );
       return Game.getRegionById(regionId);
     } catch (err) {
       logError("Game.insertRegion", err);
@@ -971,56 +982,46 @@ export default class Game {
     releaseDate: Date | null,
     notes: string | null,
   ): Promise<IRelease> {
-    const releaseId = await dbInsert(GameSql.insertRelease, {
-      gameId, platformId, regionId, format,
-      releaseDate: releaseDate || null,
-      notes: notes || null,
-    }, "id");
-    if (!releaseId) throw new Error("Failed to retrieve RELEASE_ID after insert.");
+    const releaseId = await dbInsert(
+      GameSql.insertRelease,
+      {
+        gameId,
+        platformId,
+        regionId,
+        format,
+        releaseDate: releaseDate || null,
+        notes: notes || null,
+      },
+      "id",
+    );
+    if (!releaseId)
+      throw new Error("Failed to retrieve RELEASE_ID after insert.");
     const newRelease = await Game.getReleaseById(releaseId);
     if (!newRelease) throw new Error("Failed to fetch newly created release.");
     return newRelease;
   }
 
   static async getReleaseById(id: number): Promise<IRelease | null> {
-    const rows = await dbQuery(
-      GameSql.getReleaseById,
-      { id },
-      mapReleaseRow,
-    );
+    const rows = await dbQuery(GameSql.getReleaseById, { id }, mapReleaseRow);
     return rows[0] ?? null;
   }
 
   static async getGameReleases(gameId: number): Promise<IRelease[]> {
-    return dbQuery(
-      GameSql.getGameReleases,
-      { gameId },
-      mapReleaseRow,
-    );
+    return dbQuery(GameSql.getGameReleases, { gameId }, mapReleaseRow);
   }
 
   static async getPlatformsForGame(gameId: number): Promise<IPlatformDef[]> {
-    return dbQuery(
-      GameSql.getPlatformsForGame,
-      { gameId },
-      mapPlatformDefRow,
-    );
+    return dbQuery(GameSql.getPlatformsForGame, { gameId }, mapPlatformDefRow);
   }
 
   static async getAllPlatforms(): Promise<IPlatformDef[]> {
-    return dbQuery(
-      GameSql.getAllPlatforms,
-      {},
-      mapPlatformDefRow,
-    );
+    return dbQuery(GameSql.getAllPlatforms, {}, mapPlatformDefRow);
   }
 
   static async getPlatformsByIgdbIds(
     igdbIds: number[],
   ): Promise<Map<number, IPlatformDef>> {
-    const uniqueIds = Array.from(
-      new Set(igdbIds.filter(isPositiveInt)),
-    );
+    const uniqueIds = Array.from(new Set(igdbIds.filter(isPositiveInt)));
     if (!uniqueIds.length) {
       return new Map();
     }
@@ -1098,11 +1099,7 @@ export default class Game {
     games: IGame[],
   ): Promise<IGameWithPlatforms[]> {
     const gameIds = Array.from(
-      new Set(
-        games
-          .map((game) => game.id)
-          .filter(isPositiveInt),
-      ),
+      new Set(games.map((game) => game.id).filter(isPositiveInt)),
     );
     if (!gameIds.length) {
       return games.map((game) => ({ ...game, platforms: [] }));
@@ -1156,7 +1153,10 @@ export default class Game {
     });
 
     if (missingPlatformIds.size) {
-      logWarn("Game.getPlatformsByIgdbIds", `Missing platform IDs in GAMEDB_PLATFORMS: ${Array.from(missingPlatformIds).join(", ")}`);
+      logWarn(
+        "Game.getPlatformsByIgdbIds",
+        `Missing platform IDs in GAMEDB_PLATFORMS: ${Array.from(missingPlatformIds).join(", ")}`,
+      );
     }
 
     return games.map((game) => ({
@@ -1177,11 +1177,7 @@ export default class Game {
   }
 
   static async getAllRegions(): Promise<IRegionDef[]> {
-    return dbQuery(
-      GameSql.getAllRegions,
-      {},
-      mapRegionDefRow,
-    );
+    return dbQuery(GameSql.getAllRegions, {}, mapRegionDefRow);
   }
 
   static async getRegionByCode(code: string): Promise<IRegionDef | null> {
@@ -1194,11 +1190,7 @@ export default class Game {
   }
 
   static async getRegionById(id: number): Promise<IRegionDef | null> {
-    const rows = await dbQuery(
-      GameSql.getRegionById,
-      { id },
-      mapRegionDefRow,
-    );
+    const rows = await dbQuery(GameSql.getRegionById, { id }, mapRegionDefRow);
     return rows[0] ?? null;
   }
 
@@ -1242,13 +1234,8 @@ export default class Game {
     }
 
     const queryPromise = dbWithConnection(async (conn) => {
-      const isOracle = getDialect() === "oracle";
-      const titleCol = isOracle ? "TITLE" : "title";
-      const titleFoldExpr =
-        `REPLACE(REPLACE(REPLACE(REPLACE(LOWER(${titleCol}), 'é', 'e'), 'è', 'e'), 'ê', 'e'), 'ë', 'e')`;
-      const titleNormExpr = isOracle
-        ? `REGEXP_REPLACE(${titleFoldExpr}, '[^a-z0-9]', '')`
-        : `REGEXP_REPLACE(${titleFoldExpr}, '[^a-z0-9]', '', 'g')`;
+      const titleFoldExpr = `REPLACE(REPLACE(REPLACE(REPLACE(LOWER(title), 'é', 'e'), 'è', 'e'), 'ê', 'e'), 'ë', 'e')`;
+      const titleNormExpr = `REGEXP_REPLACE(${titleFoldExpr}, '[^a-z0-9]', '', 'g')`;
 
       const binds = {
         exactRaw: foldedLowerQuery,
@@ -1269,7 +1256,8 @@ export default class Game {
           return {
             id: Number(row.GAME_ID ?? row.game_id),
             title: String(row.TITLE ?? row.title),
-            initialReleaseDate: ird instanceof Date ? ird : ird ? new Date(ird) : null,
+            initialReleaseDate:
+              ird instanceof Date ? ird : ird ? new Date(ird) : null,
           };
         },
       );
@@ -1346,13 +1334,8 @@ export default class Game {
         return [];
       }
 
-      const isOracle = getDialect() === "oracle";
-      const titleCol = isOracle ? "TITLE" : "title";
-      const titleFoldExpr =
-        `REPLACE(REPLACE(REPLACE(REPLACE(LOWER(${titleCol}), 'é', 'e'), 'è', 'e'), 'ê', 'e'), 'ë', 'e')`;
-      const titleNormExpr = isOracle
-        ? `REGEXP_REPLACE(${titleFoldExpr}, '[^a-z0-9]', '')`
-        : `REGEXP_REPLACE(${titleFoldExpr}, '[^a-z0-9]', '', 'g')`;
+      const titleFoldExpr = `REPLACE(REPLACE(REPLACE(REPLACE(LOWER(title), 'é', 'e'), 'è', 'e'), 'ê', 'e'), 'ë', 'e')`;
+      const titleNormExpr = `REGEXP_REPLACE(${titleFoldExpr}, '[^a-z0-9]', '', 'g')`;
 
       const clauses: string[] = [];
       const binds: Record<string, string | number> = {};
@@ -1424,35 +1407,29 @@ export default class Game {
 
       const filterClauses: string[] = [];
       if (filters.upcomingRelease) {
-        filterClauses.push(
-          isOracle ? "u.UPCOMING_DATE IS NOT NULL" : "u.upcoming_date IS NOT NULL",
-        );
+        filterClauses.push("u.upcoming_date IS NOT NULL");
       }
       if (filters.platformId) {
-        filterClauses.push(isOracle
-          ? "g.GAME_ID IN (SELECT GAME_ID FROM GAMEDB_GAME_PLATFORMS WHERE PLATFORM_ID = :filterPlatformId)"
-          : "g.game_id IN (SELECT game_id FROM gamedb_game_platforms WHERE platform_id = :filterPlatformId)",
+        filterClauses.push(
+          "g.game_id IN (SELECT game_id FROM gamedb_game_platforms WHERE platform_id = :filterPlatformId)",
         );
         binds["filterPlatformId"] = filters.platformId;
       }
       if (filters.year) {
-        filterClauses.push(isOracle
-          ? "EXTRACT(YEAR FROM g.INITIAL_RELEASE_DATE) = :filterYear"
-          : "EXTRACT(YEAR FROM g.initial_release_date) = :filterYear",
+        filterClauses.push(
+          "EXTRACT(YEAR FROM g.initial_release_date) = :filterYear",
         );
         binds["filterYear"] = filters.year;
       }
       if (filters.developerId) {
-        filterClauses.push(isOracle
-          ? `g.GAME_ID IN (SELECT GAME_ID FROM GAMEDB_GAME_COMPANIES WHERE COMPANY_ID = :filterDeveloperId AND ROLE = 'Developer')`
-          : `g.game_id IN (SELECT game_id FROM gamedb_game_companies WHERE company_id = :filterDeveloperId AND role = 'Developer')`,
+        filterClauses.push(
+          `g.game_id IN (SELECT game_id FROM gamedb_game_companies WHERE company_id = :filterDeveloperId AND role = 'Developer')`,
         );
         binds["filterDeveloperId"] = filters.developerId;
       }
       if (filters.publisherId) {
-        filterClauses.push(isOracle
-          ? `g.GAME_ID IN (SELECT GAME_ID FROM GAMEDB_GAME_COMPANIES WHERE COMPANY_ID = :filterPublisherId AND ROLE = 'Publisher')`
-          : `g.game_id IN (SELECT game_id FROM gamedb_game_companies WHERE company_id = :filterPublisherId AND role = 'Publisher')`,
+        filterClauses.push(
+          `g.game_id IN (SELECT game_id FROM gamedb_game_companies WHERE company_id = :filterPublisherId AND role = 'Publisher')`,
         );
         binds["filterPublisherId"] = filters.publisherId;
       }
@@ -1466,7 +1443,7 @@ export default class Game {
           ? `${titlePart} AND ${filterPart}`
           : titlePart || filterPart || "1=0";
 
-      const upcomingCol = isOracle ? "u.UPCOMING_DATE" : "u.upcoming_date";
+      const upcomingCol = "u.upcoming_date";
       const orderPrefix = filters.upcomingRelease
         ? `${upcomingCol} ASC NULLS LAST, `
         : "";
@@ -1476,40 +1453,25 @@ export default class Game {
       const upcomingDates = new Map<number, Date | null>();
       const upcomingPlatforms = new Map<number, string[]>();
 
-      let games: IGame[];
-
-      if (isOracle) {
-        const result = await (connection as oracledb.Connection).execute<any>(entry.oracle, binds, {
-          outFormat: oracledb.OUT_FORMAT_OBJECT,
-          fetchInfo: { DESCRIPTION: { type: oracledb.STRING } },
-        });
-        games = (result.rows ?? []).map((row: any) => {
-          const id = Number(row.GAME_ID);
-          const urd = row.UPCOMING_RELEASE_DATE;
-          upcomingDates.set(id, urd instanceof Date ? urd : urd ? new Date(urd) : null);
-          upcomingPlatforms.set(
-            id,
-            row.UPCOMING_PLATFORMS
-              ? String(row.UPCOMING_PLATFORMS).split(",").map((s: string) => s.trim()).filter(Boolean)
-              : [],
-          );
-          return mapGameRow(row);
-        });
-      } else {
-        const rows = await dbQueryConn(connection, entry, binds, (row: any) => {
-          const id = Number(row.game_id);
-          const urd = row.upcoming_release_date;
-          upcomingDates.set(id, urd instanceof Date ? urd : urd ? new Date(urd) : null);
-          upcomingPlatforms.set(
-            id,
-            row.upcoming_platforms
-              ? String(row.upcoming_platforms).split(",").map((s: string) => s.trim()).filter(Boolean)
-              : [],
-          );
-          return mapGameRow(row);
-        });
-        games = rows;
-      }
+      const rows = await dbQueryConn(connection, entry, binds, (row: any) => {
+        const id = Number(row.game_id);
+        const urd = row.upcoming_release_date;
+        upcomingDates.set(
+          id,
+          urd instanceof Date ? urd : urd ? new Date(urd) : null,
+        );
+        upcomingPlatforms.set(
+          id,
+          row.upcoming_platforms
+            ? String(row.upcoming_platforms)
+                .split(",")
+                .map((s: string) => s.trim())
+                .filter(Boolean)
+            : [],
+        );
+        return mapGameRow(row);
+      });
+      const games: IGame[] = rows;
 
       const withPlatforms = await Game.attachPlatformsToGames(games);
       return withPlatforms.map((g) => ({
@@ -1533,14 +1495,20 @@ export default class Game {
     const platformMap = await Game.getPlatformsByIgdbIds(uniqueIds);
     const missingIds = uniqueIds.filter((id) => !platformMap.has(id));
     if (missingIds.length) {
-      logWarn("Game.syncIgdbPlatforms", `Missing IGDB platform IDs in GAMEDB_PLATFORMS: ${missingIds.join(", ")}`);
+      logWarn(
+        "Game.syncIgdbPlatforms",
+        `Missing IGDB platform IDs in GAMEDB_PLATFORMS: ${missingIds.join(", ")}`,
+      );
     }
 
     await dbTransaction(async (conn) => {
       for (const igdbId of uniqueIds) {
         const platform = platformMap.get(igdbId);
         if (!platform) continue;
-        await dbMutateConn(conn, GameSql.addGamePlatformMerge, { gameId, platformId: platform.id });
+        await dbMutateConn(conn, GameSql.addGamePlatformMerge, {
+          gameId,
+          platformId: platform.id,
+        });
       }
     });
   }
@@ -1554,14 +1522,13 @@ export default class Game {
     showCompleteOnly: boolean = false,
   ): Promise<IGame[]> {
     return dbWithConnection(async (connection) => {
-      const isOracle = getDialect() === "oracle";
-      const imageCol = isOracle ? "IMAGE_DATA" : "image_data";
-      const videoCol = isOracle ? "FEATURED_VIDEO_URL" : "featured_video_url";
-      const descCol = isOracle ? "DESCRIPTION" : "description";
-      const gameIdCol = isOracle ? "g.GAME_ID" : "g.game_id";
-      const releasesTable = isOracle ? "GAMEDB_RELEASES" : "gamedb_releases";
-      const releaseGameIdCol = isOracle ? "r.GAME_ID" : "r.game_id";
-      const titleCol = isOracle ? "g.TITLE" : "g.title";
+      const imageCol = "image_data";
+      const videoCol = "featured_video_url";
+      const descCol = "description";
+      const gameIdCol =  "g.game_id";
+      const releasesTable = "gamedb_releases";
+      const releaseGameIdCol = "r.game_id";
+      const titleCol =  "g.title";
 
       const whereClauses: string[] = [];
       if (missingImage) {
@@ -1612,26 +1579,21 @@ export default class Game {
 
       const entry = GameSql.getGamesForAudit(combinedClause);
 
-      if (isOracle) {
-        const result = await (connection as oracledb.Connection).execute<any>(entry.oracle, binds, {
-          outFormat: oracledb.OUT_FORMAT_OBJECT,
-          fetchInfo: {
-            IMAGE_DATA: { type: oracledb.BUFFER },
-            DESCRIPTION: { type: oracledb.STRING },
-          },
-        });
-        return (result.rows ?? []).map(mapGameRow);
-      }
-
       return dbQueryConn(connection, entry, binds, mapGameRow);
     });
   }
 
   static async getGamePrimaryImageUrl(gameId: number): Promise<string | null> {
     type GameImage = {
-      image_id: number; kind: string; is_primary: boolean; position: number; url: string;
+      image_id: number;
+      kind: string;
+      is_primary: boolean;
+      position: number;
+      url: string;
     };
-    const result = await apiGet<{ data: GameImage[] }>(`/api/v1/games/${gameId}/images`);
+    const result = await apiGet<{ data: GameImage[] }>(
+      `/api/v1/games/${gameId}/images`,
+    );
     if (!result?.data?.length) return null;
     const primary =
       result.data.find((img) => img.kind === "cover" && img.is_primary) ??
@@ -1640,11 +1602,15 @@ export default class Game {
     return primary?.url ?? null;
   }
 
-  static async getGamePrimaryImageBuffer(gameId: number): Promise<Buffer | null> {
+  static async getGamePrimaryImageBuffer(
+    gameId: number,
+  ): Promise<Buffer | null> {
     const url = await Game.getGamePrimaryImageUrl(gameId);
     if (!url) return null;
     try {
-      const resp = await axios.get<ArrayBuffer>(url, { responseType: "arraybuffer" });
+      const resp = await axios.get<ArrayBuffer>(url, {
+        responseType: "arraybuffer",
+      });
       return Buffer.from(resp.data);
     } catch {
       return null;
@@ -1655,38 +1621,33 @@ export default class Game {
     gameId: number,
     imageData: Buffer,
   ): Promise<void> {
-    await dbMutate(
-      GameSql.updateGameImage,
-      { imageData, gameId },
-    );
+    await dbMutate(GameSql.updateGameImage, { imageData, gameId });
   }
 
   static async updateGameThumbnailBad(
     gameId: number,
     isBad: boolean,
   ): Promise<void> {
-    await dbMutate(
-      GameSql.updateGameThumbnailBad,
-      { thumbnailBad: isBad ? 1 : 0, gameId },
-    );
+    await dbMutate(GameSql.updateGameThumbnailBad, {
+      thumbnailBad: isBad ? 1 : 0,
+      gameId,
+    });
   }
 
   static async updateGameThumbnailApproved(
     gameId: number,
     isApproved: boolean,
   ): Promise<void> {
-    await dbMutate(
-      GameSql.updateGameThumbnailApproved,
-      { thumbnailApproved: isApproved ? 1 : 0, gameId },
-    );
+    await dbMutate(GameSql.updateGameThumbnailApproved, {
+      thumbnailApproved: isApproved ? 1 : 0,
+      gameId,
+    });
   }
 
   static async getThreadStatusForGameIds(
     gameIds: number[],
   ): Promise<Set<number>> {
-    const ids = Array.from(
-      new Set(gameIds.filter(isPositiveInt)),
-    );
+    const ids = Array.from(new Set(gameIds.filter(isPositiveInt)));
     if (!ids.length) return new Set();
 
     const placeholders = ids.map((_, idx) => `:id${idx}`).join(", ");
@@ -1707,28 +1668,31 @@ export default class Game {
     gameId: number,
     featuredVideoUrl: string | null,
   ): Promise<void> {
-    await dbMutate(
-      GameSql.updateFeaturedVideoUrl,
-      { featuredVideoUrl, gameId },
-    );
+    await dbMutate(GameSql.updateFeaturedVideoUrl, {
+      featuredVideoUrl,
+      gameId,
+    });
   }
 
   static async updateGameDescription(
     gameId: number,
     description: string | null,
   ): Promise<void> {
-    await dbMutate(
-      GameSql.updateGameDescription,
-      { description, gameId },
-    );
+    await dbMutate(GameSql.updateGameDescription, { description, gameId });
   }
 
   static async clearReleaseDates(
     gameId: number,
   ): Promise<{ releases: number; announcements: number }> {
     return dbTransaction(async (conn) => {
-      const announceCount = await dbMutateConn(conn, GameSql.clearReleaseAnnouncements, { gameId });
-      const releaseCount = await dbMutateConn(conn, GameSql.clearReleases, { gameId });
+      const announceCount = await dbMutateConn(
+        conn,
+        GameSql.clearReleaseAnnouncements,
+        { gameId },
+      );
+      const releaseCount = await dbMutateConn(conn, GameSql.clearReleases, {
+        gameId,
+      });
       await dbMutateConn(conn, GameSql.clearInitialReleaseDate, { gameId });
       return {
         releases: Number(releaseCount),
@@ -1747,10 +1711,7 @@ export default class Game {
   }
 
   static async touchGameUpdatedAt(gameId: number): Promise<void> {
-    await dbMutate(
-      GameSql.touchGameUpdatedAt,
-      { gameId },
-    );
+    await dbMutate(GameSql.touchGameUpdatedAt, { gameId });
   }
 
   static async getGameAssociations(
@@ -1779,16 +1740,12 @@ export default class Game {
             redditUrl: string | null;
             monthYear: string;
           }
-        >(
-          GameSql.getGotmWins,
-          { gameId },
-          (row) => ({
-            round: Number(row.ROUND_NUMBER),
-            threadId: row.THREAD_ID ?? null,
-            redditUrl: row.REDDIT_URL ?? null,
-            monthYear: String(row.MONTH_YEAR),
-          }),
-        ),
+        >(GameSql.getGotmWins, { gameId }, (row) => ({
+          round: Number(row.ROUND_NUMBER),
+          threadId: row.THREAD_ID ?? null,
+          redditUrl: row.REDDIT_URL ?? null,
+          monthYear: String(row.MONTH_YEAR),
+        })),
         dbQuery<
           WinRow,
           {
@@ -1797,16 +1754,12 @@ export default class Game {
             redditUrl: string | null;
             monthYear: string;
           }
-        >(
-          GameSql.getNrGotmWins,
-          { gameId },
-          (row) => ({
-            round: Number(row.ROUND_NUMBER),
-            threadId: row.THREAD_ID ?? null,
-            redditUrl: row.REDDIT_URL ?? null,
-            monthYear: String(row.MONTH_YEAR),
-          }),
-        ),
+        >(GameSql.getNrGotmWins, { gameId }, (row) => ({
+          round: Number(row.ROUND_NUMBER),
+          threadId: row.THREAD_ID ?? null,
+          redditUrl: row.REDDIT_URL ?? null,
+          monthYear: String(row.MONTH_YEAR),
+        })),
         dbQuery<NomRow, { round: number; userId: string; username: string }>(
           GameSql.getGotmNominations,
           { gameId },

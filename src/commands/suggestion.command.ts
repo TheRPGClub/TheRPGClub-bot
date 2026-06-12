@@ -49,7 +49,7 @@ import {
   buildTextReply,
   safeV2TextContent,
 } from "../functions/ComponentsV2Utils.js";
-import { logRawModal } from "../services/raw-modal/RawModalLogging.js";
+import { formatStructuredLog, logError, logInfo, logWarn } from "../utilities/LogUtils.js";
 import { isPositiveInt, truncateWithEllipsis } from "../utilities/ValidationUtils.js";
 import { parseCustomIdSegments } from "../utilities/CustomIdUtils.js";
 import { buildActionButton, buildButtonRow } from "../functions/uiComponents.js";
@@ -83,6 +83,23 @@ function formatErrorForLog(error: unknown): string {
   } catch {
     return String(error);
   }
+}
+
+function logSuggestion(
+  level: "info" | "warn" | "error",
+  event: string,
+  meta: Record<string, unknown> = {},
+): void {
+  const line = formatStructuredLog({ event, ...meta });
+  if (level === "error") {
+    logError("suggestion", line);
+    return;
+  }
+  if (level === "warn") {
+    logWarn("suggestion", line);
+    return;
+  }
+  logInfo("suggestion", line);
 }
 
 function isSuggestionReviewSessionExpired(session: SuggestionReviewSession): boolean {
@@ -235,7 +252,7 @@ async function openSuggestionReviewDecisionModal(
   summaryText: string,
 ): Promise<void> {
   const customId = buildSuggestionReviewDecisionModalId(reviewerId, suggestionId);
-  logRawModal("info", "suggestion.review_modal.open_attempt", {
+  logSuggestion("info", "suggestion.review_modal.open_attempt", {
     feature: "suggestion",
     flow: "review-decision",
     userId: interaction.user.id,
@@ -245,14 +262,14 @@ async function openSuggestionReviewDecisionModal(
 
   try {
     await interaction.showModal(buildSuggestionReviewDecisionModal(customId, summaryText));
-    logRawModal("info", "suggestion.review_modal.open_success", {
+    logSuggestion("info", "suggestion.review_modal.open_success", {
       feature: "suggestion",
       flow: "review-decision",
       userId: interaction.user.id,
       customId,
     });
   } catch (error: unknown) {
-    logRawModal("error", "suggestion.review_modal.open_failed", {
+    logSuggestion("error", "suggestion.review_modal.open_failed", {
       feature: "suggestion",
       flow: "review-decision",
       userId: interaction.user.id,
@@ -487,7 +504,7 @@ export class SuggestionCommand {
   @Slash({ description: "Submit a bot suggestion", name: "suggestion" })
   async suggestion(interaction: CommandInteraction): Promise<void> {
     await openSuggestionCreateModal(interaction).catch(async (error: unknown) => {
-      logRawModal("error", "suggestion.create_modal.open_failed", {
+      logSuggestion("error", "suggestion.create_modal.open_failed", {
         feature: "suggestion",
         flow: "review-decision",
         userId: interaction.user.id,
@@ -549,7 +566,7 @@ export class SuggestionCommand {
 
   @ButtonComponent({ id: /^todo-review-suggestions$/ })
   async reviewSuggestionsFromTodo(interaction: ButtonInteraction): Promise<void> {
-    logRawModal("info", "suggestion.review_button.clicked", {
+    logSuggestion("info", "suggestion.review_button.clicked", {
       feature: "suggestion",
       flow: "review-decision",
       userId: interaction.user.id,
@@ -560,7 +577,7 @@ export class SuggestionCommand {
     const isOwner = interaction.guild?.ownerId === interaction.user.id;
     const isBotDev = interaction.user.id === BOT_DEV_PING_USER_ID;
     if (!isOwner && !isBotDev) {
-      logRawModal("warn", "suggestion.review_button.denied", {
+      logSuggestion("warn", "suggestion.review_button.denied", {
         feature: "suggestion",
         flow: "review-decision",
         userId: interaction.user.id,
@@ -577,7 +594,7 @@ export class SuggestionCommand {
     ]);
 
     if (!suggestions.length) {
-      logRawModal("info", "suggestion.review_button.no_pending", {
+      logSuggestion("info", "suggestion.review_button.no_pending", {
         feature: "suggestion",
         flow: "review-decision",
         userId: interaction.user.id,
@@ -589,7 +606,7 @@ export class SuggestionCommand {
 
     const currentSuggestion = suggestions[0];
     if (!currentSuggestion) {
-      logRawModal("warn", "suggestion.review_button.missing_first", {
+      logSuggestion("warn", "suggestion.review_button.missing_first", {
         feature: "suggestion",
         flow: "review-decision",
         userId: interaction.user.id,
@@ -614,7 +631,7 @@ export class SuggestionCommand {
         summaryText,
       );
     } catch (error: unknown) {
-      logRawModal("error", "suggestion.review_button.open_failed", {
+      logSuggestion("error", "suggestion.review_button.open_failed", {
         feature: "suggestion",
         flow: "review-decision",
         userId: interaction.user.id,
@@ -739,7 +756,7 @@ export class SuggestionCommand {
           ),
         );
       } catch (error: unknown) {
-        logRawModal("error", "suggestion.review_action.open_failed", {
+        logSuggestion("error", "suggestion.review_action.open_failed", {
           feature: "suggestion",
           flow: "review-decision",
           userId: interaction.user.id,
