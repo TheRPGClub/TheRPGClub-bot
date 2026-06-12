@@ -278,32 +278,6 @@ export const MemberSql = {
     postgres: `DELETE FROM user_now_playing WHERE user_id = :userId AND gamedb_game_id = :gameId`,
   } satisfies ISqlEntry,
 
-  addCompletion: {
-    postgres: `INSERT INTO user_game_completions (
-          user_id, gamedb_game_id, completion_type, platform_id,
-          completed_at, final_playtime_hrs, note
-        ) VALUES (
-          :userId, :gameId, :type, :platformId, :completedAt, :playtime, :note
-        )
-        RETURNING completion_id`,
-  } satisfies ISqlEntry,
-
-  verifyCompletion: {
-    postgres: `SELECT COUNT(*) AS cnt FROM user_game_completions
-          WHERE completion_id = :id AND user_id = :userId`,
-  } satisfies ISqlEntry,
-
-  getCompletion: {
-    postgres: `${COMPLETION_SELECT_SQL_PG}
-       WHERE c.completion_id = :completionId`,
-  } satisfies ISqlEntry,
-
-  getCompletionForUser: {
-    postgres: `${COMPLETION_SELECT_SQL_PG}
-       WHERE c.user_id = :userId
-         AND c.completion_id = :completionId`,
-  } satisfies ISqlEntry,
-
   getCompletionByGameId: {
     postgres: `${COMPLETION_SELECT_SQL_PG}
        WHERE c.user_id = :userId
@@ -334,21 +308,6 @@ export const MemberSql = {
         JOIN gamedb_games g ON g.game_id = c.gamedb_game_id
        WHERE ${whereClause}`,
     }) satisfies ISqlEntry,
-
-  // Caller must pass lowercase column=value expressions for Postgres
-  updateCompletion: (fields: string[]) =>
-    ({
-      postgres: `UPDATE user_game_completions
-         SET ${fields.join(", ")}
-       WHERE completion_id = :completionId
-         AND user_id = :userId`,
-    }) satisfies ISqlEntry,
-
-  deleteCompletion: {
-    postgres: `DELETE FROM user_game_completions
-       WHERE completion_id = :completionId
-         AND user_id = :userId`,
-  } satisfies ISqlEntry,
 
   getCompletionsForGame: {
     postgres: `${COMPLETION_SELECT_SQL_PG}
