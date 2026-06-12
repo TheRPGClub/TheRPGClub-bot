@@ -6,11 +6,11 @@ import {
   dbTransaction,
   dbQueryConn,
   dbMutateConn,
-  dbInsertConn,
 } from "../db/SqlManager.js";
 import { MemberSql } from "../db/sql/index.js";
 import { isPositiveInt, requirePositiveInt } from "../utilities/ValidationUtils.js";
 import { logError, logWarn } from "../utilities/LogUtils.js";
+import { apiGet, apiPost, apiPatch, apiDelete } from "../services/RpgClubApiClient.js";
 
 export interface IMemberRecord {
   userId: string;
@@ -295,6 +295,39 @@ function mapAvatarHistoryRow(row: AvatarHistoryRow): IAvatarHistoryRecord {
     avatarUrl: row.AVATAR_URL ?? null,
     avatarBlob: row.AVATAR_BLOB ?? null,
     changedAt: row.CHANGED_AT instanceof Date ? row.CHANGED_AT : new Date(row.CHANGED_AT as any),
+  };
+}
+
+// --- API types for completion endpoints ---
+
+type CompletionApiData = {
+  completion_id: number;
+  user_id: string;
+  gamedb_game_id: number;
+  platform_id: number | null;
+  note: string | null;
+  completion_type: string;
+  completed_at: string | null;
+  final_playtime_hrs: number | null;
+  game: { game_id: number; title: string } | null;
+  platform: { platform_id: number; platform_name: string } | null;
+};
+
+type CompletionResponse = { data: CompletionApiData };
+
+function mapCompletionApiData(d: CompletionApiData): ICompletionRecord {
+  return {
+    completionId: Number(d.completion_id),
+    gameId: Number(d.gamedb_game_id),
+    title: d.game?.title ?? `Game #${d.gamedb_game_id}`,
+    completionType: String(d.completion_type),
+    platformId: d.platform_id != null ? Number(d.platform_id) : null,
+    completedAt: d.completed_at ? new Date(d.completed_at) : null,
+    finalPlaytimeHours: d.final_playtime_hrs != null ? Number(d.final_playtime_hrs) : null,
+    // created_at is dropped from the API response; callers of migrated methods do not use this
+    createdAt: new Date(0),
+    threadId: null,
+    note: d.note ?? null,
   };
 }
 
@@ -868,126 +901,40 @@ export default class Member {
     const normalizedNote = note?.trim();
     const noteValue = normalizedNote ? normalizedNote : null;
 
-    return dbTransaction(async (conn) => {
-      const id = await dbInsertConn(
-        conn,
-        MemberSql.addCompletion,
-        {
-          userId,
-          gameId,
-          type: completionType,
-          platformId,
-          completedAt: completedAt ?? null,
-          playtime: finalPlaytimeHours ?? null,
+    const response = await apiPost<CompletionResponse>(
+      `/api/v1/users/${userId}/completions`,
+      {
+        data: {
+          gamedb_game_id: gameId,
+          completion_type: completionType,
+          platform_id: platformId,
+          completed_at: completedAt ?? null,
+          final_playtime_hrs: finalPlaytimeHours ?? null,
           note: noteValue,
         },
-        "completionId",
-      );
+      },
+    );
 
-      if (!id) throw new Error("Failed to save completion (no id returned).");
-
-      const verify = await dbQueryConn(
-        conn,
-        MemberSql.verifyCompletion,
-        { id, userId },
-        (row: { CNT: number }) => Number(row.CNT),
-      );
-      const exists = (verify[0] ?? 0) > 0;
-      if (!exists) {
-        throw new Error("Completion insert verification failed (row not found after insert).");
-      }
-
-      return Number(id);
-    });
+    if (!response) throw new Error("Failed to save completion (no response from API).");
+    return Number(response.data.completion_id);
   }
 
   static async getCompletion(completionId: number): Promise<ICompletionRecord | null> {
-    const rows = await dbQuery<{
-      COMPLETION_ID: number;
-      GAME_ID: number;
-      TITLE: string;
-      COMPLETION_TYPE: string;
-      PLATFORM_ID: number | null;
-      COMPLETED_AT: Date | null;
-      FINAL_PLAYTIME_HRS: number | null;
-      CREATED_AT: Date;
-      THREAD_ID: string | null;
-      NOTE: string | null;
-    }, ICompletionRecord>(
-      MemberSql.getCompletion,
-      { completionId },
-      (row) => ({
-        completionId: Number(row.COMPLETION_ID),
-        gameId: Number(row.GAME_ID),
-        title: String(row.TITLE),
-        completionType: String(row.COMPLETION_TYPE),
-        platformId: row.PLATFORM_ID ? Number(row.PLATFORM_ID) : null,
-        completedAt:
-          row.COMPLETED_AT instanceof Date
-            ? row.COMPLETED_AT
-            : row.COMPLETED_AT
-              ? new Date(row.COMPLETED_AT as any)
-              : null,
-        finalPlaytimeHours:
-          row.FINAL_PLAYTIME_HRS == null ? null : Number(row.FINAL_PLAYTIME_HRS),
-        createdAt:
-          row.CREATED_AT instanceof Date
-            ? row.CREATED_AT
-            : row.CREATED_AT
-              ? new Date(row.CREATED_AT as any)
-              : new Date(),
-        threadId: row.THREAD_ID ?? null,
-        note: row.NOTE ?? null,
-      }),
-    );
-
-    return rows[0] ?? null;
+    requirePositiveInt(completionId, "completion id");
+    const response = await apiGet<CompletionResponse>(`/api/v1/completions/${completionId}`);
+    if (!response) return null;
+    return mapCompletionApiData(response.data);
   }
 
   static async getCompletionForUser(
     userId: string,
     completionId: number,
   ): Promise<ICompletionRecord | null> {
-    const rows = await dbQuery<{
-      COMPLETION_ID: number;
-      GAME_ID: number;
-      TITLE: string;
-      COMPLETION_TYPE: string;
-      PLATFORM_ID: number | null;
-      COMPLETED_AT: Date | null;
-      FINAL_PLAYTIME_HRS: number | null;
-      CREATED_AT: Date;
-      THREAD_ID: string | null;
-      NOTE: string | null;
-    }, ICompletionRecord>(
-      MemberSql.getCompletionForUser,
-      { userId, completionId },
-      (row) => ({
-        completionId: Number(row.COMPLETION_ID),
-        gameId: Number(row.GAME_ID),
-        title: String(row.TITLE),
-        completionType: String(row.COMPLETION_TYPE),
-        platformId: row.PLATFORM_ID ? Number(row.PLATFORM_ID) : null,
-        completedAt:
-          row.COMPLETED_AT instanceof Date
-            ? row.COMPLETED_AT
-            : row.COMPLETED_AT
-              ? new Date(row.COMPLETED_AT as any)
-              : null,
-        finalPlaytimeHours:
-          row.FINAL_PLAYTIME_HRS == null ? null : Number(row.FINAL_PLAYTIME_HRS),
-        createdAt:
-          row.CREATED_AT instanceof Date
-            ? row.CREATED_AT
-            : row.CREATED_AT
-              ? new Date(row.CREATED_AT as any)
-              : new Date(),
-        threadId: row.THREAD_ID ?? null,
-        note: row.NOTE ?? null,
-      }),
-    );
-
-    return rows[0] ?? null;
+    requirePositiveInt(completionId, "completion id");
+    const response = await apiGet<CompletionResponse>(`/api/v1/completions/${completionId}`);
+    if (!response) return null;
+    if (response.data.user_id !== userId) return null;
+    return mapCompletionApiData(response.data);
   }
 
   static async getCompletionByGameId(
@@ -1181,50 +1128,44 @@ export default class Member {
   ): Promise<boolean> {
     requirePositiveInt(completionId, "completion id");
 
-    const fields: string[] = [];
-    const binds: Record<string, any> = { userId, completionId };
-
-    if (updates.completionType !== undefined) {
-      fields.push("COMPLETION_TYPE = :type");
-      binds.type = updates.completionType;
-    }
-    if (updates.completedAt !== undefined) {
-      fields.push("COMPLETED_AT = :completedAt");
-      binds.completedAt = updates.completedAt;
-    }
     if (updates.platformId !== undefined) {
       if (updates.platformId != null && !isPositiveInt(updates.platformId)) {
         throw new Error("Invalid platform selection.");
       }
-      fields.push("PLATFORM_ID = :platformId");
-      binds.platformId = updates.platformId;
     }
+
+    const body: Record<string, string | number | Date | null | undefined> = {};
+    if (updates.completionType !== undefined) body.completion_type = updates.completionType;
+    if (updates.completedAt !== undefined) body.completed_at = updates.completedAt;
+    if (updates.platformId !== undefined) body.platform_id = updates.platformId;
     if (updates.finalPlaytimeHours !== undefined) {
-      fields.push("FINAL_PLAYTIME_HRS = :playtime");
-      binds.playtime = updates.finalPlaytimeHours;
+      body.final_playtime_hrs = updates.finalPlaytimeHours;
     }
     if (updates.note !== undefined) {
-      fields.push("NOTE = :note");
       const normalizedNote = updates.note?.trim();
-      binds.note = normalizedNote ? normalizedNote : null;
+      body.note = normalizedNote ? normalizedNote : null;
     }
 
-    if (!fields.length) return false;
+    if (!Object.keys(body).length) return false;
 
-    const count = await dbMutate(
-      MemberSql.updateCompletion(fields),
-      binds,
+    // Verify ownership before mutating (service token bypasses Rails require_owner! guard)
+    const existing = await apiGet<CompletionResponse>(`/api/v1/completions/${completionId}`);
+    if (!existing || existing.data.user_id !== userId) return false;
+
+    const response = await apiPatch<CompletionResponse>(
+      `/api/v1/completions/${completionId}`,
+      { data: body },
     );
-    return count > 0;
+    return response != null;
   }
 
   static async deleteCompletion(userId: string, completionId: number): Promise<boolean> {
     requirePositiveInt(completionId, "completion id");
-    const count = await dbMutate(
-      MemberSql.deleteCompletion,
-      { completionId, userId },
-    );
-    return count > 0;
+    // Verify ownership before deleting (service token bypasses Rails require_owner! guard)
+    const existing = await apiGet<CompletionResponse>(`/api/v1/completions/${completionId}`);
+    if (!existing || existing.data.user_id !== userId) return false;
+    const result = await apiDelete<{ deleted: boolean }>(`/api/v1/completions/${completionId}`);
+    return result?.deleted === true;
   }
 
   static async getRecentNickHistory(
