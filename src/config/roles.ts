@@ -13,3 +13,6 @@ export const MODERATOR_ROLE_NAME = "moderators";
 export const MEMBER_ROLE_ID = "747520789003239530";
 export const MEMBER_ROLE_NAME = "members";
 
+export const DEV_ROLE_ID = "1500977607473103039";
+export const DEV_ROLE_NAME = "dev";
+

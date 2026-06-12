@@ -11,6 +11,7 @@ import type {
   User,
 } from "discord.js";
 import { BOT_DEV_CHANNEL_ID } from "../config/channels.js";
+import { DEV_ROLE_ID } from "../config/roles.js";
 import {
   buildComponentsV2Flags,
   buildTextContainer,
@@ -225,6 +226,15 @@ function getCommandOwnerId(interaction: AnyRepliable): string | null {
   return ownerId ?? null;
 }
 
+function memberHasDevRole(interaction: AnyRepliable): boolean {
+  const roles = (interaction as any)?.member?.roles;
+  if (!roles) return false;
+  // Cached GuildMember exposes a role manager; raw API members expose a string[].
+  if (typeof roles.cache?.has === "function") return roles.cache.has(DEV_ROLE_ID);
+  if (Array.isArray(roles)) return roles.includes(DEV_ROLE_ID);
+  return false;
+}
+
 function shouldBlockDevChannelInteraction(interaction: AnyRepliable): boolean {
   const anyInteraction = interaction as any;
   const channelId = anyInteraction?.channelId;
@@ -235,17 +245,18 @@ function shouldBlockDevChannelInteraction(interaction: AnyRepliable): boolean {
     anyInteraction.isModalSubmit();
   if (!isComponent && !isModal) return false;
 
-  const ownerId = anyInteraction?.guild?.ownerId ?? null;
   const commandOwnerId = getCommandOwnerId(interaction);
   const userId = anyInteraction?.user?.id ?? null;
   if (!userId) return true;
-  return userId !== ownerId && userId !== commandOwnerId;
+  if (userId === commandOwnerId) return false;
+  return !memberHasDevRole(interaction);
 }
 
 async function sendDevChannelBlockResponse(interaction: AnyRepliable): Promise<void> {
   const anyInteraction = interaction as any;
   const payload = {
-    content: "Only the command owner or server owner can use controls in this channel.",
+    content:
+      "Only the command owner or members with the dev role can use controls in this channel.",
     flags: MessageFlags.Ephemeral,
   };
 
