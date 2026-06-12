@@ -1,13 +1,17 @@
 import type pg from "pg";
 import {
   dbQuery,
-  dbMutate,
-  dbInsert,
   dbQueryConn,
   dbMutateConn,
   dbTransaction,
 } from "../db/SqlManager.js";
 import { RssFeedSql } from "../db/sql/index.js";
+import {
+  apiGet,
+  apiPost,
+  apiPatch,
+  apiDelete,
+} from "../services/RpgClubApiClient.js";
 
 export interface IRssFeed {
   feedId: number;
@@ -26,6 +30,18 @@ export interface IRssFeedItem {
   publishedAt: Date | null;
 }
 
+type RssFeedApiData = {
+  feed_id: number;
+  feed_name: string | null;
+  feed_url: string;
+  channel_id: string;
+  include_keywords: string | null;
+  exclude_keywords: string | null;
+};
+
+type RssFeedApiSingleResponse = { data: RssFeedApiData };
+type RssFeedApiListResponse = { data: RssFeedApiData[] };
+
 function mapIsItemSeenRow(row: { FOUND: number }) { return row; }
 function mapSeenItemHashRow(row: { ITEM_ID_HASH: string }) { return row; }
 
@@ -38,33 +54,23 @@ export function normalizeKeywords(
     .filter((k) => k.length > 0);
 }
 
-type FeedRow = {
-  FEED_ID: number;
-  FEED_NAME: string | null;
-  FEED_URL: string;
-  CHANNEL_ID: string;
-  INCLUDE_KEYWORDS: string | null;
-  EXCLUDE_KEYWORDS: string | null;
-};
-
-function mapFeedRow(row: FeedRow): IRssFeed {
+function mapApiData(d: RssFeedApiData): IRssFeed {
   return {
-    feedId: row.FEED_ID,
-    feedName: row.FEED_NAME ?? null,
-    feedUrl: row.FEED_URL,
-    channelId: row.CHANNEL_ID,
-    includeKeywords: normalizeKeywords(row.INCLUDE_KEYWORDS),
-    excludeKeywords: normalizeKeywords(row.EXCLUDE_KEYWORDS),
+    feedId: d.feed_id,
+    feedName: d.feed_name ?? null,
+    feedUrl: d.feed_url,
+    channelId: d.channel_id,
+    includeKeywords: normalizeKeywords(d.include_keywords),
+    excludeKeywords: normalizeKeywords(d.exclude_keywords),
   };
 }
 
 type AnyConn = pg.PoolClient;
 
-export async function listFeeds(existingConnection?: AnyConn): Promise<IRssFeed[]> {
-  if (existingConnection) {
-    return dbQueryConn(existingConnection, RssFeedSql.listFeeds, {}, mapFeedRow);
-  }
-  return dbQuery(RssFeedSql.listFeeds, {}, mapFeedRow);
+export async function listFeeds(): Promise<IRssFeed[]> {
+  const response = await apiGet<RssFeedApiListResponse>("/api/v1/rss_feeds");
+  if (!response) return [];
+  return response.data.map(mapApiData);
 }
 
 export async function addFeed(
@@ -76,22 +82,22 @@ export async function addFeed(
 ): Promise<number> {
   const normalizedInclude = normalizeKeywords(includeKeywords);
   const normalizedExclude = normalizeKeywords(excludeKeywords);
-  return dbInsert(
-    RssFeedSql.addFeed,
-    {
-      feedName,
-      feedUrl,
-      channelId,
-      includes: normalizedInclude.join(", "),
-      excludes: normalizedExclude.join(", "),
+  const response = await apiPost<RssFeedApiSingleResponse>("/api/v1/rss_feeds", {
+    data: {
+      feed_name: feedName,
+      feed_url: feedUrl,
+      channel_id: channelId,
+      include_keywords: normalizedInclude.join(", ") || null,
+      exclude_keywords: normalizedExclude.join(", ") || null,
     },
-    "id",
-  );
+  });
+  if (!response) throw new Error("Failed to create RSS feed: API returned null");
+  return response.data.feed_id;
 }
 
 export async function removeFeed(feedId: number): Promise<boolean> {
-  const count = await dbMutate(RssFeedSql.removeFeed, { id: feedId });
-  return count > 0;
+  const response = await apiDelete<{ deleted: boolean }>(`/api/v1/rss_feeds/${feedId}`);
+  return response?.deleted === true;
 }
 
 export async function updateFeed(
@@ -100,34 +106,25 @@ export async function updateFeed(
     Pick<IRssFeed, "feedUrl" | "channelId" | "includeKeywords" | "excludeKeywords" | "feedName">
   >,
 ): Promise<boolean> {
-  const sets: string[] = [];
-  const params: Record<string, string | number | null> = { feedId };
+  const body: Record<string, string | null> = {};
 
-  if (updates.feedUrl !== undefined) {
-    sets.push("FEED_URL = :feedUrl");
-    params.feedUrl = updates.feedUrl;
-  }
-  if (updates.feedName !== undefined) {
-    sets.push("FEED_NAME = :feedName");
-    params.feedName = updates.feedName;
-  }
-  if (updates.channelId !== undefined) {
-    sets.push("CHANNEL_ID = :channelId");
-    params.channelId = updates.channelId;
-  }
+  if (updates.feedUrl !== undefined) body.feed_url = updates.feedUrl;
+  if (updates.feedName !== undefined) body.feed_name = updates.feedName;
+  if (updates.channelId !== undefined) body.channel_id = updates.channelId;
   if (updates.includeKeywords !== undefined) {
-    sets.push("INCLUDE_KEYWORDS = :includes");
-    params.includes = normalizeKeywords(updates.includeKeywords).join(", ");
+    body.include_keywords = normalizeKeywords(updates.includeKeywords).join(", ") || null;
   }
   if (updates.excludeKeywords !== undefined) {
-    sets.push("EXCLUDE_KEYWORDS = :excludes");
-    params.excludes = normalizeKeywords(updates.excludeKeywords).join(", ");
+    body.exclude_keywords = normalizeKeywords(updates.excludeKeywords).join(", ") || null;
   }
 
-  if (!sets.length) return false;
+  if (!Object.keys(body).length) return false;
 
-  const count = await dbMutate(RssFeedSql.updateFeed(sets), params);
-  return count > 0;
+  const response = await apiPatch<RssFeedApiSingleResponse>(
+    `/api/v1/rss_feeds/${feedId}`,
+    { data: body },
+  );
+  return response !== null;
 }
 
 export async function markItemsSeen(
