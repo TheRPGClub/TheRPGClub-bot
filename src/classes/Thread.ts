@@ -11,8 +11,8 @@ type ThreadApiData = {
   thread_id: string;
   thread_name: string;
   forum_channel_id: string;
-  is_archived: boolean;
-  skip_linking: boolean;
+  is_archived: "Y" | "N";
+  skip_linking: "Y" | "N";
   last_seen_at: string | null;
   gamedb_game_id: number | null;
   created_at: string;
@@ -39,9 +39,9 @@ export async function upsertThreadRecord(params: {
       thread_id: params.threadId,
       forum_channel_id: params.forumChannelId,
       thread_name: params.threadName,
-      is_archived: params.isArchived,
+      is_archived: params.isArchived ? "Y" : "N",
       last_seen_at: params.lastSeenAt?.toISOString() ?? null,
-      skip_linking: (params.skipLinking ?? "N") === "Y",
+      skip_linking: params.skipLinking ?? "N",
     },
   });
 }
@@ -84,13 +84,13 @@ export async function setThreadSkipLinking(
   skip: boolean,
 ): Promise<void> {
   await apiPatch(`/api/v1/threads/${threadId}`, {
-    data: { skip_linking: skip },
+    data: { skip_linking: skip ? "Y" : "N" },
   });
 }
 
 export async function getThreadSkipLinking(threadId: string): Promise<boolean> {
   const response = await apiGet<ThreadResponse>(`/api/v1/threads/${threadId}`);
-  return response?.data.skip_linking ?? false;
+  return (response?.data.skip_linking ?? "N") === "Y";
 }
 
 export async function getThreadLinkInfo(
@@ -102,7 +102,7 @@ export async function getThreadLinkInfo(
   }
   const gameIds = response.data.links.map((l) => Number(l.gamedb_game_id));
   return {
-    skipLinking: response.data.skip_linking ?? false,
+    skipLinking: response.data.skip_linking === "Y",
     gamedbGameIds: Array.from(new Set(gameIds)),
   };
 }
