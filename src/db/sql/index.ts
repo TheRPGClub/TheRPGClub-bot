@@ -25,7 +25,6 @@ export {
 } from "./presencePrompt.sql.js";
 export { ReminderSql, PublicReminderSql } from "./reminder.sql.js";
 export { RssFeedSql } from "./rssFeed.sql.js";
-export { StarboardSql } from "./starboard.sql.js";
 export { SteamCollectionImportSql } from "./steamCollectionImport.sql.js";
 export { SuggestionSql, SuggestionReviewSessionSql } from "./suggestion.sql.js";
 export { ThreadSql } from "./thread.sql.js";
