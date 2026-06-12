@@ -365,7 +365,7 @@ Each file exports named query objects consumed by the data access classes listed
 | File | Tables | Operation Types |
 |---|---|---|
 | `game.sql.ts` | `gamedb_games`, `gamedb_platforms`, `gamedb_releases`, `gamedb_regions`, `gamedb_game_alternates`, `gamedb_game_companies`, `gamedb_game_genres`, `gamedb_game_themes`, `gamedb_game_modes`, `gamedb_game_perspectives`, `gamedb_game_engines`, `gamedb_game_franchises`, `gamedb_game_platforms`, `gamedb_release_announcements`, `thread_game_links`, `threads`, `gotm_entries`, `nr_gotm_entries`, `user_now_playing`, `user_game_completions`, `user_game_collections` | SELECT, INSERT, UPDATE, DELETE |
-| `member.sql.ts` | `rpg_club_users`, `user_now_playing`, `gamedb_games`, `gamedb_platforms`, `user_game_journal_entries`, `rpg_club_user_nick_history`, `user_game_completions`, `rpg_club_user_avatar_history`, `journal_message_contexts`, `rpg_club_user_activity_icons`, `user_socials`, `social_platforms` | SELECT, INSERT, UPDATE, DELETE |
+| `member.sql.ts` | `rpg_club_users`, `user_now_playing`, `gamedb_games`, `gamedb_platforms`, `user_game_journal_entries`, `rpg_club_user_nick_history`, `user_game_completions`, `rpg_club_user_avatar_history`, `journal_message_contexts`, `user_socials`, `social_platforms` | SELECT, INSERT, UPDATE, DELETE |
 | `nomination.sql.ts` | `gotm_nominations`, `nr_gotm_nominations`, `gamedb_games` | SELECT, INSERT, UPDATE (upsert), DELETE |
 | `gotm.sql.ts` | `gotm_entries`, `nr_gotm_entries` | SELECT, INSERT, UPDATE, DELETE |
 | `userGameCollection.sql.ts` | `user_game_collections`, `gamedb_games`, `gamedb_platforms` | SELECT, INSERT, UPDATE, DELETE |
@@ -375,7 +375,6 @@ Each file exports named query objects consumed by the data access classes listed
 | `todo.sql.ts` | `rpg_club_todos` | SELECT, INSERT, UPDATE, DELETE |
 | `gameSearchSynonym.sql.ts` | `gamedb_search_synonyms`, `gamedb_search_synonym_groups`, `gamedb_search_synonym_drafts` | SELECT, INSERT, UPDATE, DELETE |
 | `botVotingInfo.sql.ts` | `bot_voting_info` | SELECT, INSERT, UPDATE, DELETE |
-| `userActivity.sql.ts` | `rpg_club_user_activity_icons`, `rpg_club_user_channel_counts` | SELECT, INSERT (upsert) |
 | `starboard.sql.ts` | `rpg_club_starboard` | SELECT, INSERT |
 | `gameKey.sql.ts` | `rpg_club_game_keys` | SELECT, INSERT, UPDATE (claim), DELETE (revoke) |
 | `rssFeed.sql.ts` | `rpg_club_rss_feeds`, `rpg_club_rss_feed_items` | SELECT, INSERT, UPDATE, DELETE |
