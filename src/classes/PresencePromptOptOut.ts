@@ -1,60 +1,60 @@
-import { dbQuery, dbMutate } from "../db/SqlManager.js";
-import { PresencePromptOptOutSql } from "../db/sql/index.js";
-
-const OPT_OUT_ALL_TOKEN = "__ALL__";
+import { apiGet, apiPatch } from "../services/RpgClubApiClient.js";
 
 export function normalizePresenceGameTitle(title: string): string {
   return title.toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 
+type PresencePromptOptGame = {
+  game_title: string;
+  game_title_norm: string;
+  created_at: string;
+};
+
+type PresencePromptOptsData = {
+  user_id: string;
+  all: boolean;
+  games: PresencePromptOptGame[];
+};
+
+type PresencePromptOptsResponse = { data: PresencePromptOptsData };
+
+async function fetchOpts(userId: string): Promise<PresencePromptOptsData | null> {
+  const response = await apiGet<PresencePromptOptsResponse>(
+    `/api/v1/users/${userId}/presence_prompt_opts`,
+  );
+  return response?.data ?? null;
+}
+
 export default class PresencePromptOptOut {
   static async isOptedOutAll(userId: string): Promise<boolean> {
-    const rows = await dbQuery(
-      PresencePromptOptOutSql.isOptedOutAll,
-      { userId, token: OPT_OUT_ALL_TOKEN },
-      (row: { CNT: number }) => Number(row.CNT ?? 0),
-    );
-    return (rows[0] ?? 0) > 0;
+    const opts = await fetchOpts(userId);
+    return opts?.all === true;
   }
 
   static async isOptedOutGame(userId: string, gameTitle: string): Promise<boolean> {
     const normalized = normalizePresenceGameTitle(gameTitle);
     if (!normalized) return false;
-
-    const rows = await dbQuery(
-      PresencePromptOptOutSql.isOptedOutGame,
-      { userId, gameTitleNorm: normalized },
-      (row: { CNT: number }) => Number(row.CNT ?? 0),
-    );
-    return (rows[0] ?? 0) > 0;
+    const opts = await fetchOpts(userId);
+    if (!opts) return false;
+    return opts.games.some((g) => g.game_title_norm === normalized);
   }
 
   static async addOptOutAll(userId: string): Promise<void> {
-    await this.insertOptOut(userId, "ALL", OPT_OUT_ALL_TOKEN, null);
+    const opts = await fetchOpts(userId);
+    const existingGames = (opts?.games ?? []).map((g) => g.game_title_norm);
+    await apiPatch(`/api/v1/users/${userId}/presence_prompt_opts`, {
+      data: { all: true, games: existingGames },
+    });
   }
 
   static async addOptOutGame(userId: string, gameTitle: string): Promise<void> {
     const normalized = normalizePresenceGameTitle(gameTitle);
     if (!normalized) return;
-    await this.insertOptOut(userId, "GAME", normalized, gameTitle);
-  }
-
-  private static async insertOptOut(
-    userId: string,
-    scope: "ALL" | "GAME",
-    normalizedTitle: string,
-    gameTitle: string | null,
-  ): Promise<void> {
-    try {
-      await dbMutate(
-        PresencePromptOptOutSql.insertOptOut,
-        { userId, scope, gameTitle, gameTitleNorm: normalizedTitle },
-      );
-    } catch (err: any) {
-      const code = err?.code ?? err?.errorNum;
-      if (code !== "ORA-00001") {
-        throw err;
-      }
-    }
+    const opts = await fetchOpts(userId);
+    const existingGames = (opts?.games ?? []).map((g) => g.game_title_norm);
+    if (existingGames.includes(normalized)) return;
+    await apiPatch(`/api/v1/users/${userId}/presence_prompt_opts`, {
+      data: { all: opts?.all ?? false, games: [...existingGames, normalized] },
+    });
   }
 }
