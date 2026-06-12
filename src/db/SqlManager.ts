@@ -25,13 +25,8 @@ export {
   pgMutateConn,
   pgInsertConn,
 } from "./postgresClient.js";
-export type { Dialect, ISqlEntry } from "./sql/types.js";
-export { getSql, getSqlDynamic } from "./sql/index.js";
+export type { ISqlEntry } from "./sql/types.js";
 
-/**
- * Dialect-agnostic SELECT. Passes the Postgres SQL from `entry`
- * to the driver and maps each row with `mapper`.
- */
 export async function dbQuery<RowT extends object, R>(
   entry: ISqlEntry,
   params: Record<string, unknown> | unknown[],
@@ -44,9 +39,6 @@ export async function dbQuery<RowT extends object, R>(
   return rows.map((row) => mapper(toUpperCaseKeys(row) as RowT));
 }
 
-/**
- * Dialect-agnostic DML. Returns the number of rows affected.
- */
 export async function dbMutate(
   entry: ISqlEntry,
   params: Record<string, unknown> | unknown[],
@@ -55,9 +47,8 @@ export async function dbMutate(
 }
 
 /**
- * Dialect-agnostic connection scope. Acquires a connection, runs callback,
- * then releases it. Each statement inside should commit individually.
- * For atomic multi-statement operations, use dbTransaction instead.
+ * Acquires a connection, runs callback, then releases it. Each statement inside
+ * should commit individually. For atomic multi-statement operations, use dbTransaction.
  */
 export async function dbWithConnection<T>(
   callback: (conn: pg.PoolClient) => Promise<T>,
@@ -65,9 +56,7 @@ export async function dbWithConnection<T>(
   return pgWithConnection(callback);
 }
 
-/**
- * Dialect-agnostic transaction. Commits on success, rolls back on throw.
- */
+/** Commits on success, rolls back on throw. */
 export async function dbTransaction<T>(
   callback: (conn: pg.PoolClient) => Promise<T>,
 ): Promise<T> {
@@ -75,7 +64,6 @@ export async function dbTransaction<T>(
 }
 
 /**
- * Dialect-agnostic INSERT...RETURNING.
  * Runs the SQL (which must end with RETURNING <col>) and returns the first column value.
  */
 export async function dbInsert(
@@ -87,10 +75,7 @@ export async function dbInsert(
   return pgInsert(entry.postgres, params as Record<string, unknown>);
 }
 
-/**
- * Dialect-agnostic SELECT on an existing connection.
- * Use inside dbWithConnection / dbTransaction callbacks.
- */
+/** Use inside dbWithConnection / dbTransaction callbacks. */
 export async function dbQueryConn<RowT extends object, R>(
   conn: pg.PoolClient,
   entry: ISqlEntry,
@@ -105,10 +90,7 @@ export async function dbQueryConn<RowT extends object, R>(
   return rows.map((row) => mapper(toUpperCaseKeys(row) as RowT));
 }
 
-/**
- * Dialect-agnostic DML on an existing connection. Returns rows affected.
- * Use inside dbWithConnection / dbTransaction callbacks.
- */
+/** Use inside dbWithConnection / dbTransaction callbacks. */
 export async function dbMutateConn(
   conn: pg.PoolClient,
   entry: ISqlEntry,
@@ -121,10 +103,7 @@ export async function dbMutateConn(
   );
 }
 
-/**
- * Dialect-agnostic INSERT...RETURNING on an existing connection.
- * Use inside dbWithConnection / dbTransaction callbacks.
- */
+/** Use inside dbWithConnection / dbTransaction callbacks. */
 export async function dbInsertConn(
   conn: pg.PoolClient,
   entry: ISqlEntry,
