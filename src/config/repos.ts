@@ -13,13 +13,10 @@ export interface ITodoRepo {
   name: string;
 }
 
-const BOT_OWNER = process.env.GITHUB_REPO_OWNER ?? "mfagerstrom";
-const BOT_NAME = process.env.GITHUB_REPO_NAME ?? "RPGClub_GameDB";
-
 export const DEFAULT_TODO_REPO_CODE: TodoRepoCode = "b";
 
 export const TODO_REPOS: Record<TodoRepoCode, ITodoRepo> = {
-  b: { code: "b", key: "bot", label: "bot", owner: BOT_OWNER, name: BOT_NAME },
+  b: { code: "b", key: "bot", label: "bot", owner: "TheRPGClub", name: "RPGClub_GameDB" },
   a: { code: "a", key: "api", label: "api", owner: "TheRPGClub", name: "TheRPGClub" },
   w: { code: "w", key: "www", label: "www", owner: "TheRPGClub", name: "TheRPGClub-www" },
 };
