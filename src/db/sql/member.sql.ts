@@ -248,14 +248,6 @@ export const MemberSql = {
        LIMIT 1`,
   } satisfies ISqlEntry,
 
-  getRecentNickHistory: {
-    postgres: `SELECT old_nick, new_nick, changed_at
-           FROM rpg_club_user_nick_history
-          WHERE user_id = :userId
-          ORDER BY changed_at DESC
-          LIMIT :limit`,
-  } satisfies ISqlEntry,
-
   // Caller must pass dialect-appropriate whereClause
   getCompletionLeaderboard: (whereClause: string) =>
     ({

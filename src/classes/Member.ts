@@ -89,12 +89,6 @@ export interface IMemberSearchResult {
   lastSeenAt: Date | null;
 }
 
-export interface IMemberNickHistory {
-  oldNick: string | null;
-  newNick: string | null;
-  changedAt: Date;
-}
-
 export interface IMemberNowPlayingEntry {
   gameId: number;
   title: string;
@@ -1214,32 +1208,6 @@ export default class Member {
     if (!existing || existing.data.user_id !== userId) return false;
     const result = await apiDelete<{ deleted: boolean }>(`/api/v1/completions/${completionId}`);
     return result?.deleted === true;
-  }
-
-  static async getRecentNickHistory(
-    userId: string,
-    limit: number = 5,
-  ): Promise<IMemberNickHistory[]> {
-    const safeLimit = Math.min(Math.max(limit, 1), 20);
-    try {
-      return await dbQuery<{
-        OLD_NICK: string | null;
-        NEW_NICK: string | null;
-        CHANGED_AT: Date;
-      }, IMemberNickHistory>(
-        MemberSql.getRecentNickHistory,
-        { userId, limit: safeLimit },
-        (row) => ({
-          oldNick: row.OLD_NICK ?? null,
-          newNick: row.NEW_NICK ?? null,
-          changedAt: row.CHANGED_AT,
-        }),
-      );
-    } catch (err: any) {
-      const msg = err?.message ?? String(err);
-      logError("Member.loadNickHistory", msg);
-      return [];
-    }
   }
 
   static async getCompletionLeaderboard(
