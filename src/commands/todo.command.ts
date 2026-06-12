@@ -13,11 +13,9 @@ import {
   TextInputStyle,
 } from "discord.js";
 import {
-  ButtonBuilder as V2ButtonBuilder,
   ContainerBuilder,
   MediaGalleryBuilder,
   MediaGalleryItemBuilder,
-  SectionBuilder,
   TextDisplayBuilder,
 } from "@discordjs/builders";
 import {
@@ -53,7 +51,15 @@ import {
   updateIssue,
   type IGithubIssueComment,
   type IGithubIssue,
+  type IGithubRepoTarget,
 } from "../services/GithubIssuesService.js";
+import {
+  getTodoRepo,
+  TODO_REPO_CODES,
+  DEFAULT_TODO_REPO_CODE,
+  isTodoRepoCode,
+  type TodoRepoCode,
+} from "../config/repos.js";
 import {
   buildComponentsV2Flags,
   buildTextReply,
@@ -118,9 +124,16 @@ const TODO_CLOSE_VIEW_PREFIX = "todo-close-view";
 const TODO_REOPEN_VIEW_PREFIX = "todo-reopen-view";
 const TODO_LABEL_EDIT_BUTTON_PREFIX = "todo-label-edit-button";
 const TODO_LABEL_EDIT_SELECT_PREFIX = "todo-label-edit-select";
-const TODO_QUERY_BUTTON_PREFIX = "todo-query-button";
-const TODO_QUERY_MODAL_PREFIX = "todo-query-modal";
-const TODO_QUERY_INPUT_ID = "todo-query-input";
+const TODO_FILTER_BUTTON_PREFIX = "todo-filter-button";
+const TODO_FILTER_MODAL_PREFIX = "todo-filter-modal";
+const TODO_FILTER_STATE_ID = "todo-filter-state";
+const TODO_FILTER_LABEL_ID = "todo-filter-label-field";
+const TODO_FILTER_QUERY_ID = "todo-filter-query";
+const TODO_FILTER_SORT_ID = "todo-filter-sort";
+const TODO_OPEN_SELECT_PREFIX = "todo-open-select";
+const TODO_REPO_SELECT_PREFIX = "todo-repo-select";
+const TODO_FILTER_LABEL_ALL = "__all__";
+const TODO_FILTER_LABEL_NOT_BLOCKED = "__not_blocked__";
 const TODO_REVIEW_SUGGESTIONS_BUTTON_ID = "todo-review-suggestions";
 const TODO_CREATE_TITLE_ID = "todo-create-title";
 const TODO_CREATE_BODY_ID = "todo-create-body";
@@ -152,7 +165,21 @@ type TodoListPayload = {
   sort: ListSort;
   direction: ListDirection;
   isPublic: boolean;
+  repo: TodoRepoCode;
 };
+
+function getRepoTarget(code: TodoRepoCode): IGithubRepoTarget {
+  const repo = getTodoRepo(code);
+  return { owner: repo.owner, name: repo.name };
+}
+
+function sortIssuesByNumber(
+  issues: IGithubIssue[],
+  direction: ListDirection,
+): IGithubIssue[] {
+  const sorted = [...issues].sort((a, b) => a.number - b.number);
+  return direction === "desc" ? sorted.reverse() : sorted;
+}
 
 const TODO_LABEL_CODE_MAP: Record<TodoLabel, string> = {
   "New Feature": "N",
@@ -224,6 +251,7 @@ function buildTodoPayloadToken(
     `l${labelToken}`,
     `b${payload.excludeBlocked ? "1" : "0"}`,
     `u${payload.isPublic ? "1" : "0"}`,
+    `r${payload.repo}`,
     "q",
   ].join(";");
   const maxQueryLength = Math.max(maxLength - base.length, 0);
@@ -252,6 +280,8 @@ function parseTodoPayloadToken(
   const labelToken = map.get("l") ?? "";
   const excludeBlocked = map.get("b") === "1";
   const isPublic = map.get("u") === "1";
+  const repoCode = map.get("r");
+  const repo = isTodoRepoCode(repoCode) ? repoCode : DEFAULT_TODO_REPO_CODE;
   const query = decodeTodoQuery(map.get("q"));
 
   const state = stateCode === "o" ? "open" : stateCode === "c" ? "closed" : "all";
@@ -273,6 +303,7 @@ function parseTodoPayloadToken(
     sort,
     direction,
     isPublic,
+    repo,
   };
 }
 
@@ -752,21 +783,25 @@ function buildTodoLabelEditSelectId(
   return [TODO_LABEL_EDIT_SELECT_PREFIX, payloadToken, page, issueNumber, channelId, messageId].join(":");
 }
 
-function buildTodoQueryButtonId(payloadToken: string, page: number): string {
-  return [TODO_QUERY_BUTTON_PREFIX, payloadToken, page].join(":");
+function buildTodoFilterButtonId(payloadToken: string, page: number): string {
+  return [TODO_FILTER_BUTTON_PREFIX, payloadToken, page].join(":");
 }
 
-function buildTodoQueryModalId(
+function buildTodoFilterModalId(
   payloadToken: string,
   page: number,
   channelId: string,
   messageId: string,
 ): string {
-  return [TODO_QUERY_MODAL_PREFIX, payloadToken, page, channelId, messageId].join(":");
+  return [TODO_FILTER_MODAL_PREFIX, payloadToken, page, channelId, messageId].join(":");
 }
 
-function buildTodoViewId(payloadToken: string, page: number, issueNumber: number): string {
-  return [TODO_VIEW_ID_PREFIX, payloadToken, page, issueNumber].join(":");
+function buildTodoOpenSelectId(payloadToken: string, page: number): string {
+  return [TODO_OPEN_SELECT_PREFIX, payloadToken, page].join(":");
+}
+
+function buildTodoRepoSelectId(payloadToken: string, page: number): string {
+  return [TODO_REPO_SELECT_PREFIX, payloadToken, page].join(":");
 }
 
 function parseTodoListCustomId(id: string): { payloadToken: string; page: number } | null {
@@ -922,7 +957,7 @@ function parseTodoLabelEditSelectId(
   return parseTodoIssueModalId(id, prefix);
 }
 
-function parseTodoQueryId(
+function parseTodoSelectId(
   id: string,
   prefix: string,
 ): { payloadToken: string; page: number } | null {
@@ -935,7 +970,14 @@ function parseTodoQueryId(
   return { payloadToken, page };
 }
 
-function parseTodoQueryModalId(
+function parseTodoFilterButtonId(
+  id: string,
+  prefix: string,
+): { payloadToken: string; page: number } | null {
+  return parseTodoSelectId(id, prefix);
+}
+
+function parseTodoFilterModalId(
   id: string,
   prefix: string,
 ): { payloadToken: string; page: number; channelId: string; messageId: string } | null {
@@ -946,19 +988,6 @@ function parseTodoQueryModalId(
   const page = Number(pageStr);
   if (!payloadToken || !page || !channelId || !messageId) return null;
   return { payloadToken, page, channelId, messageId };
-}
-
-function parseTodoFilterId(
-  id: string,
-  prefix: string,
-): { payloadToken: string; page: number } | null {
-  if (!id.startsWith(`${prefix}:`)) return null;
-  const segs = parseCustomIdSegments(id, 2);
-  if (!segs) return null;
-  const [payloadToken, pageStr] = segs;
-  const page = Number(pageStr);
-  if (!payloadToken || !page) return null;
-  return { payloadToken, page };
 }
 
 function parseTodoCreateTypeLabels(values: readonly string[]): TodoLabel[] {
@@ -991,10 +1020,11 @@ function buildIssueListComponents(
       ? `Label: ${payload.labels.join(", ")}`
       : "Label: Any";
   const summaryParts = [
-    `-# State: ${payload.state}`,
+    `-# Repo: ${getTodoRepo(payload.repo).label}`,
+    `State: ${payload.state}`,
     labelSummary,
     payload.query ? `Query: ${payload.query}` : "Query: Any",
-    `Sort: ${payload.sort} ${payload.direction}`,
+    `Sort: # ${payload.direction}`,
     `Page: ${payload.page} of ${totalPages}`,
   ];
   if (suggestionCount > 0) {
@@ -1010,18 +1040,11 @@ function buildIssueListComponents(
 
   if (issues.length) {
     issues.forEach((issue) => {
-      const section = new SectionBuilder().addTextDisplayComponents(
+      container.addTextDisplayComponents(
         new TextDisplayBuilder().setContent(
           safeV2TextContent(formatIssueLink(issue), DISCORD_TEXT_INPUT_MAX),
         ),
       );
-      section.setButtonAccessory(
-        new V2ButtonBuilder()
-          .setCustomId(buildTodoViewId(payloadToken, payload.page, issue.number))
-          .setLabel("View")
-          .setStyle(ButtonStyle.Primary),
-      );
-      container.addSectionComponents(section);
     });
   } else {
     container.addTextDisplayComponents(
@@ -1038,35 +1061,9 @@ function buildIssueListComponents(
     ),
   );
 
-  const labelSelect = new StringSelectMenuBuilder()
-    .setCustomId(`todo-filter-label:${payloadToken}:${payload.page}`)
-    .setPlaceholder("Filter by Label...")
-    .setMinValues(1)
-    .setMaxValues(1)
-    .addOptions(
-      [
-        {
-          label: "All Issues",
-          value: "all",
-          default: payload.labels.length === 0 && !payload.excludeBlocked,
-        },
-        {
-          label: "Not Blocked",
-          value: "not-blocked",
-          default: payload.excludeBlocked,
-        },
-        ...TODO_LABELS.map((label) => ({
-          label,
-          value: label,
-          default: payload.labels.includes(label),
-        })),
-      ],
-    );
-  const labelRow = buildSelectRow(labelSelect);
-
-  const queryButton = buildActionButton({
-    customId: buildTodoQueryButtonId(payloadToken, payload.page),
-    label: payload.query ? "Edit Query" : "Filter by Query",
+  const filterButton = buildActionButton({
+    customId: buildTodoFilterButtonId(payloadToken, payload.page),
+    label: "Filter",
     style: ButtonStyle.Secondary,
   });
 
@@ -1082,7 +1079,7 @@ function buildIssueListComponents(
     style: ButtonStyle.Danger,
   });
 
-  const actionRowButtons: ButtonBuilder[] = [createButton, closeButton, queryButton];
+  const actionRowButtons: ButtonBuilder[] = [createButton, closeButton, filterButton];
   if (suggestionCount > 0) {
     actionRowButtons.push(
       buildActionButton({
@@ -1094,11 +1091,41 @@ function buildIssueListComponents(
   }
   const actionRow = buildButtonRow(...actionRowButtons);
 
-  const components: Array<ContainerBuilder | ActionRowBuilder<any>> = [
-    container,
-    labelRow,
-    actionRow,
-  ];
+  const components: Array<ContainerBuilder | ActionRowBuilder<any>> = [container];
+
+  if (issues.length) {
+    const openSelect = new StringSelectMenuBuilder()
+      .setCustomId(buildTodoOpenSelectId(payloadToken, payload.page))
+      .setPlaceholder("Open an issue...")
+      .setMinValues(1)
+      .setMaxValues(1)
+      .addOptions(
+        issues.map((issue) => ({
+          label: formatIssueSelectLabel(issue),
+          value: String(issue.number),
+        })),
+      );
+    components.push(buildSelectRow(openSelect));
+  }
+
+  const repoSelect = new StringSelectMenuBuilder()
+    .setCustomId(buildTodoRepoSelectId(payloadToken, payload.page))
+    .setPlaceholder("Repository...")
+    .setMinValues(1)
+    .setMaxValues(1)
+    .addOptions(
+      TODO_REPO_CODES.map((code) => {
+        const repo = getTodoRepo(code);
+        return {
+          label: repo.label,
+          value: code,
+          description: `${repo.owner}/${repo.name}`,
+          default: code === payload.repo,
+        };
+      }),
+    );
+  components.push(buildSelectRow(repoSelect));
+  components.push(actionRow);
   if (totalPages > 1) {
     const prevDisabled = payload.page <= 1;
     const nextDisabled = payload.page >= totalPages;
@@ -1288,13 +1315,14 @@ export class TodoCommand {
     );
     const effectiveState = toIssueState(initialStateFilters);
 
+    const resolvedDirection = direction ?? "desc";
     let issues: IGithubIssue[];
     try {
       issues = await listAllIssues({
         state: effectiveState,
         sort: sort ?? "updated",
-        direction: direction ?? "desc",
-      });
+        direction: resolvedDirection,
+      }, getRepoTarget(DEFAULT_TODO_REPO_CODE));
     } catch (err: any) {
       await safeReply(interaction, buildTodoTextReply(getGithubErrorMessage(err), true));
       return;
@@ -1306,6 +1334,7 @@ export class TodoCommand {
     if (query) {
       issues = issues.filter((issue) => matchesIssueQuery(issue, query));
     }
+    issues = sortIssuesByNumber(issues, resolvedDirection);
 
     const totalIssues = issues.length;
     const totalPages = Math.max(1, Math.ceil(totalIssues / resolvedPerPage));
@@ -1322,21 +1351,12 @@ export class TodoCommand {
       excludeBlocked: parsedLabels.labels.length === 0,
       query,
       sort: sort ?? "updated",
-      direction: direction ?? "desc",
+      direction: resolvedDirection,
       isPublic,
+      repo: DEFAULT_TODO_REPO_CODE,
     };
     const suggestionCount = await getSuggestionReviewCount();
-    const payloadToken = buildTodoPayloadToken({
-      perPage: payload.perPage,
-      state: payload.state,
-      stateFilters: payload.stateFilters,
-      labels: payload.labels,
-      excludeBlocked: payload.excludeBlocked,
-      query: payload.query,
-      sort: payload.sort,
-      direction: payload.direction,
-      isPublic: payload.isPublic,
-    }, TODO_PAYLOAD_TOKEN_MAX_LENGTH);
+    const payloadToken = buildTodoPayloadToken(payload, TODO_PAYLOAD_TOKEN_MAX_LENGTH);
     const listPayload = buildIssueListComponents(
       pageIssues,
       totalIssues,
@@ -1380,7 +1400,7 @@ export class TodoCommand {
         state: payload.state,
         sort: payload.sort,
         direction: payload.direction,
-      });
+      }, getRepoTarget(payload.repo));
     } catch {
       return null;
     }
@@ -1394,6 +1414,7 @@ export class TodoCommand {
     if (payload.query) {
       issues = issues.filter((issue) => matchesIssueQuery(issue, payload.query as string));
     }
+    issues = sortIssuesByNumber(issues, payload.direction);
 
     const totalIssues = issues.length;
     const totalPages = Math.max(1, Math.ceil(totalIssues / payload.perPage));
@@ -1403,17 +1424,7 @@ export class TodoCommand {
 
     const suggestionCount = await getSuggestionReviewCount();
     const updatedPayload: TodoListPayload = { ...payload, page: safePage };
-    const nextToken = buildTodoPayloadToken({
-      perPage: updatedPayload.perPage,
-      state: updatedPayload.state,
-      stateFilters: updatedPayload.stateFilters,
-      labels: updatedPayload.labels,
-      excludeBlocked: updatedPayload.excludeBlocked,
-      query: updatedPayload.query,
-      sort: updatedPayload.sort,
-      direction: updatedPayload.direction,
-      isPublic: updatedPayload.isPublic,
-    }, TODO_PAYLOAD_TOKEN_MAX_LENGTH);
+    const nextToken = buildTodoPayloadToken(updatedPayload, TODO_PAYLOAD_TOKEN_MAX_LENGTH);
     const listPayload = buildIssueListComponents(
       pageIssues,
       totalIssues,
@@ -1436,7 +1447,18 @@ export class TodoCommand {
   ): Promise<void> {
     const listPayload = await this.buildTodoListPayload(payloadToken, page);
     if (!listPayload) {
-      await replyTodoExpired(interaction);
+      if (parseTodoPayloadToken(payloadToken)) {
+        await safeReply(
+          interaction,
+          buildTodoTextReply(
+            "Could not load issues for this repository. The bot's GitHub App may not " +
+              "have access to it.",
+            true,
+          ),
+        );
+      } else {
+        await replyTodoExpired(interaction);
+      }
       return;
     }
 
@@ -1566,9 +1588,9 @@ export class TodoCommand {
     );
   }
 
-  @SelectMenuComponent({ id: /^todo-filter-label:[^:]+:\d+$/ })
-  async filterLabel(interaction: StringSelectMenuInteraction): Promise<void> {
-    const parsed = parseTodoFilterId(interaction.customId, "todo-filter-label");
+  @SelectMenuComponent({ id: /^todo-repo-select:[^:]+:\d+$/ })
+  async repoSelect(interaction: StringSelectMenuInteraction): Promise<void> {
+    const parsed = parseTodoSelectId(interaction.customId, TODO_REPO_SELECT_PREFIX);
     if (!parsed) {
       await replyTodoExpired(interaction);
       return;
@@ -1581,21 +1603,68 @@ export class TodoCommand {
     }
 
     const selected = interaction.values[0];
-    if (selected === "all") {
-      basePayload.labels = [];
-      basePayload.excludeBlocked = false;
-    } else if (selected === "not-blocked") {
-      basePayload.labels = [];
-      basePayload.excludeBlocked = true;
-    } else {
-      basePayload.labels = selected && TODO_LABELS.includes(selected as TodoLabel)
-        ? [selected as TodoLabel]
-        : [];
-      basePayload.excludeBlocked = false;
-    }
+    basePayload.repo = isTodoRepoCode(selected) ? selected : DEFAULT_TODO_REPO_CODE;
 
     const nextToken = buildTodoPayloadToken(basePayload, TODO_PAYLOAD_TOKEN_MAX_LENGTH);
     await this.renderTodoListPage(interaction, nextToken, 1);
+  }
+
+  @SelectMenuComponent({ id: /^todo-open-select:[^:]+:\d+$/ })
+  async openSelect(interaction: StringSelectMenuInteraction): Promise<void> {
+    const parsed = parseTodoSelectId(interaction.customId, TODO_OPEN_SELECT_PREFIX);
+    if (!parsed) {
+      await replyTodoExpired(interaction);
+      return;
+    }
+
+    const basePayload = parseTodoPayloadToken(parsed.payloadToken);
+    if (!basePayload) {
+      await replyTodoExpired(interaction);
+      return;
+    }
+
+    const issueNumber = Number(interaction.values[0]);
+    if (!issueNumber) {
+      await replyTodoExpired(interaction);
+      return;
+    }
+
+    const repo = getRepoTarget(basePayload.repo);
+    let issue: IGithubIssue | null;
+    let comments: IGithubIssueComment[] = [];
+    try {
+      issue = await getIssue(issueNumber, repo);
+      if (issue) {
+        comments = await listIssueComments(issueNumber, repo);
+      }
+    } catch (err: any) {
+      await safeUpdate(
+        interaction,
+        buildTodoTextReply(getGithubErrorMessage(err), true),
+      );
+      return;
+    }
+
+    if (!issue) {
+      await safeUpdate(
+        interaction,
+        buildTodoTextReply(`Issue #${issueNumber} was not found.`, true),
+      );
+      return;
+    }
+
+    const payload: TodoListPayload = { ...basePayload, page: parsed.page };
+    const viewPayload = buildIssueViewComponents(
+      issue,
+      comments,
+      payload,
+      parsed.payloadToken,
+    );
+
+    await safeUpdate(interaction, {
+      components: viewPayload.components,
+      flags: buildComponentsV2Flags(!payload.isPublic),
+    });
   }
 
   @SelectMenuComponent({ id: /^todo-close-select:[^:]+:\d+:\d+:\d+$/ })
@@ -1623,9 +1692,12 @@ export class TodoCommand {
       return;
     }
 
+    const closeRepo = getRepoTarget(
+      parseTodoPayloadToken(parsed.payloadToken)?.repo ?? DEFAULT_TODO_REPO_CODE,
+    );
     let closed: IGithubIssue | null;
     try {
-      closed = await closeIssue(issueNumber);
+      closed = await closeIssue(issueNumber, closeRepo);
     } catch (err: any) {
       await safeUpdate(
         interaction,
@@ -1681,13 +1753,20 @@ export class TodoCommand {
 
     await safeDeferUpdate(interaction);
 
+    const basePayload = parseTodoPayloadToken(parsed.payloadToken);
+    if (!basePayload) {
+      await replyTodoExpired(interaction);
+      return;
+    }
+    const repo = getRepoTarget(basePayload.repo);
+
     const selectedLabels = interaction.values
       .map((value) => TODO_LABELS.find((label) => label === value))
       .filter((label): label is TodoLabel => Boolean(label));
 
     let updated: IGithubIssue | null;
     try {
-      updated = await setIssueLabels(parsed.issueNumber, selectedLabels);
+      updated = await setIssueLabels(parsed.issueNumber, selectedLabels, repo);
     } catch (err: any) {
       await safeUpdate(
         interaction,
@@ -1707,24 +1786,15 @@ export class TodoCommand {
     let issue: IGithubIssue | null;
     let comments: IGithubIssueComment[] = [];
     try {
-      issue = await getIssue(parsed.issueNumber);
+      issue = await getIssue(parsed.issueNumber, repo);
       if (issue) {
-        comments = await listIssueComments(parsed.issueNumber);
+        comments = await listIssueComments(parsed.issueNumber, repo);
       }
     } catch {
       issue = null;
     }
 
     if (issue) {
-      const basePayload = parseTodoPayloadToken(parsed.payloadToken);
-      if (!basePayload) {
-        try {
-          await interaction.deleteReply();
-        } catch {
-          // ignore
-        }
-        return;
-      }
       const payload: TodoListPayload = { ...basePayload, page: parsed.page };
 
       const viewPayload = buildIssueViewComponents(
@@ -1816,23 +1886,25 @@ export class TodoCommand {
     const prefixedBody = isOwner ? baseBody : `${interaction.user.username}: ${baseBody}`;
     const finalBody = prefixedBody.length ? prefixedBody.slice(0, DISCORD_TEXT_INPUT_MAX) : null;
 
+    const basePayload = parseTodoPayloadToken(parsed.payloadToken);
+    if (!basePayload) {
+      await replyTodoExpired(interaction);
+      return;
+    }
+    const repo = getRepoTarget(basePayload.repo);
+
     let created: IGithubIssue;
     try {
       created = await createIssue({
         title: trimmedTitle,
         body: finalBody,
         labels: selectedTypes,
-      });
+      }, repo);
     } catch (err: any) {
       await safeReply(interaction, buildTodoTextReply(getGithubErrorMessage(err), true));
       return;
     }
 
-    const basePayload = parseTodoPayloadToken(parsed.payloadToken);
-    if (!basePayload) {
-      await replyTodoExpired(interaction);
-      return;
-    }
     const payload: TodoListPayload = { ...basePayload, page: parsed.page };
     const viewPayload = buildIssueViewComponents(
       created,
@@ -1882,8 +1954,19 @@ export class TodoCommand {
       DISCORD_TEXT_INPUT_MAX,
     );
 
+    const basePayload = parseTodoPayloadToken(parsed.payloadToken);
+    if (!basePayload) {
+      try {
+        await interaction.deleteReply();
+      } catch {
+        // ignore
+      }
+      return;
+    }
+    const repo = getRepoTarget(basePayload.repo);
+
     try {
-      await addComment(parsed.issueNumber, prefixedComment);
+      await addComment(parsed.issueNumber, prefixedComment, repo);
     } catch (err: any) {
       await safeReply(interaction, buildTodoTextReply(getGithubErrorMessage(err), true));
       return;
@@ -1892,9 +1975,9 @@ export class TodoCommand {
     let issue: IGithubIssue | null;
     let comments: IGithubIssueComment[] = [];
     try {
-      issue = await getIssue(parsed.issueNumber);
+      issue = await getIssue(parsed.issueNumber, repo);
       if (issue) {
-        comments = await listIssueComments(parsed.issueNumber);
+        comments = await listIssueComments(parsed.issueNumber, repo);
       }
     } catch {
       issue = null;
@@ -1909,15 +1992,6 @@ export class TodoCommand {
       return;
     }
 
-    const basePayload = parseTodoPayloadToken(parsed.payloadToken);
-    if (!basePayload) {
-      try {
-        await interaction.deleteReply();
-      } catch {
-        // ignore
-      }
-      return;
-    }
     const payload: TodoListPayload = { ...basePayload, page: parsed.page };
 
     const viewPayload = buildIssueViewComponents(
@@ -1994,12 +2068,19 @@ export class TodoCommand {
       return;
     }
 
+    const basePayload = parseTodoPayloadToken(parsed.payloadToken);
+    if (!basePayload) {
+      await replyTodoExpired(interaction);
+      return;
+    }
+    const repo = getRepoTarget(basePayload.repo);
+
     try {
       await updateIssue(parsed.issueNumber, {
         title: trimmedTitle,
         body: trimmedBody.slice(0, DISCORD_TEXT_INPUT_MAX),
-      });
-      await setIssueLabels(parsed.issueNumber, selectedTypes);
+      }, repo);
+      await setIssueLabels(parsed.issueNumber, selectedTypes, repo);
     } catch (err: any) {
       await safeReply(interaction, buildTodoTextReply(getGithubErrorMessage(err), true));
       return;
@@ -2008,9 +2089,9 @@ export class TodoCommand {
     let issue: IGithubIssue | null;
     let comments: IGithubIssueComment[] = [];
     try {
-      issue = await getIssue(parsed.issueNumber);
+      issue = await getIssue(parsed.issueNumber, repo);
       if (issue) {
-        comments = await listIssueComments(parsed.issueNumber);
+        comments = await listIssueComments(parsed.issueNumber, repo);
       }
     } catch {
       issue = null;
@@ -2025,15 +2106,6 @@ export class TodoCommand {
       return;
     }
 
-    const basePayload = parseTodoPayloadToken(parsed.payloadToken);
-    if (!basePayload) {
-      try {
-        await interaction.deleteReply();
-      } catch {
-        // ignore
-      }
-      return;
-    }
     const payload: TodoListPayload = { ...basePayload, page: parsed.page };
 
     const viewPayload = buildIssueViewComponents(
@@ -2082,10 +2154,17 @@ export class TodoCommand {
       return;
     }
 
+    const basePayload = parseTodoPayloadToken(parsed.payloadToken);
+    if (!basePayload) {
+      await replyTodoExpired(interaction);
+      return;
+    }
+    const repo = getRepoTarget(basePayload.repo);
+
     try {
       await updateIssue(parsed.issueNumber, {
         title: trimmedTitle,
-      });
+      }, repo);
     } catch (err: any) {
       await safeReply(interaction, buildTodoTextReply(getGithubErrorMessage(err), true));
       return;
@@ -2094,9 +2173,9 @@ export class TodoCommand {
     let issue: IGithubIssue | null;
     let comments: IGithubIssueComment[] = [];
     try {
-      issue = await getIssue(parsed.issueNumber);
+      issue = await getIssue(parsed.issueNumber, repo);
       if (issue) {
-        comments = await listIssueComments(parsed.issueNumber);
+        comments = await listIssueComments(parsed.issueNumber, repo);
       }
     } catch {
       issue = null;
@@ -2111,15 +2190,6 @@ export class TodoCommand {
       return;
     }
 
-    const basePayload = parseTodoPayloadToken(parsed.payloadToken);
-    if (!basePayload) {
-      try {
-        await interaction.deleteReply();
-      } catch {
-        // ignore
-      }
-      return;
-    }
     const payload: TodoListPayload = { ...basePayload, page: parsed.page };
 
     const viewPayload = buildIssueViewComponents(
@@ -2171,10 +2241,17 @@ export class TodoCommand {
       return;
     }
 
+    const basePayload = parseTodoPayloadToken(parsed.payloadToken);
+    if (!basePayload) {
+      await replyTodoExpired(interaction);
+      return;
+    }
+    const repo = getRepoTarget(basePayload.repo);
+
     try {
       await updateIssue(parsed.issueNumber, {
         body: trimmedBody.slice(0, DISCORD_TEXT_INPUT_MAX),
-      });
+      }, repo);
     } catch (err: any) {
       await safeReply(interaction, buildTodoTextReply(getGithubErrorMessage(err), true));
       return;
@@ -2183,24 +2260,15 @@ export class TodoCommand {
     let issue: IGithubIssue | null;
     let comments: IGithubIssueComment[] = [];
     try {
-      issue = await getIssue(parsed.issueNumber);
+      issue = await getIssue(parsed.issueNumber, repo);
       if (issue) {
-        comments = await listIssueComments(parsed.issueNumber);
+        comments = await listIssueComments(parsed.issueNumber, repo);
       }
     } catch {
       issue = null;
     }
 
     if (!issue) {
-      try {
-        await interaction.deleteReply();
-      } catch {
-        // ignore
-      }
-      return;
-    }
-    const basePayload = parseTodoPayloadToken(parsed.payloadToken);
-    if (!basePayload) {
       try {
         await interaction.deleteReply();
       } catch {
@@ -2236,28 +2304,50 @@ export class TodoCommand {
     }
   }
 
-  @ModalComponent({ id: /^todo-query-modal:[^:]+:\d+:\d+:\d+$/ })
-  async submitQueryModal(interaction: ModalSubmitInteraction): Promise<void> {
-    const parsed = parseTodoQueryModalId(interaction.customId, TODO_QUERY_MODAL_PREFIX);
+  @ModalComponent({ id: /^todo-filter-modal:[^:]+:\d+:\d+:\d+$/ })
+  async submitFilterModal(interaction: ModalSubmitInteraction): Promise<void> {
+    const parsed = parseTodoFilterModalId(interaction.customId, TODO_FILTER_MODAL_PREFIX);
     if (!parsed) {
-      await safeReply(interaction, buildTodoTextReply("This query prompt expired.", true));
+      await safeReply(interaction, buildTodoTextReply("This filter prompt expired.", true));
       return;
     }
 
     await safeDeferReply(interaction, { flags: MessageFlags.Ephemeral });
-
-    const rawQuery = interaction.fields.getTextInputValue(TODO_QUERY_INPUT_ID);
-    const query = normalizeQuery(rawQuery);
 
     const basePayload = parseTodoPayloadToken(parsed.payloadToken);
     if (!basePayload) {
       await replyTodoExpired(interaction);
       return;
     }
-    basePayload.query = query;
+
+    const stateValue = interaction.fields.getStringSelectValues(TODO_FILTER_STATE_ID)[0];
+    const labelValue = interaction.fields.getStringSelectValues(TODO_FILTER_LABEL_ID)[0];
+    const sortValue = interaction.fields.getStringSelectValues(TODO_FILTER_SORT_ID)[0];
+    const rawQuery = interaction.fields.getTextInputValue(TODO_FILTER_QUERY_ID);
+
+    const stateFilters = normalizeStateFilters(
+      stateValue === "all" ? ["open", "closed"] : [stateValue as ListState],
+    );
+    basePayload.stateFilters = stateFilters;
+    basePayload.state = toIssueState(stateFilters);
+
+    if (labelValue === TODO_FILTER_LABEL_NOT_BLOCKED) {
+      basePayload.labels = [];
+      basePayload.excludeBlocked = true;
+    } else if (labelValue && labelValue !== TODO_FILTER_LABEL_ALL
+      && TODO_LABELS.includes(labelValue as TodoLabel)) {
+      basePayload.labels = [labelValue as TodoLabel];
+      basePayload.excludeBlocked = false;
+    } else {
+      basePayload.labels = [];
+      basePayload.excludeBlocked = false;
+    }
+
+    basePayload.query = normalizeQuery(rawQuery);
+    basePayload.direction = sortValue === "asc" ? "asc" : "desc";
 
     const nextToken = buildTodoPayloadToken(basePayload, TODO_PAYLOAD_TOKEN_MAX_LENGTH);
-    const listPayload = await this.buildTodoListPayload(nextToken, parsed.page);
+    const listPayload = await this.buildTodoListPayload(nextToken, 1);
     if (!listPayload) {
       await replyTodoExpired(interaction);
       return;
@@ -2290,12 +2380,19 @@ export class TodoCommand {
       return;
     }
 
+    const basePayload = parseTodoPayloadToken(parsed.payloadToken);
+    if (!basePayload) {
+      await replyTodoExpired(interaction);
+      return;
+    }
+    const repo = getRepoTarget(basePayload.repo);
+
     let issue: IGithubIssue | null;
     let comments: IGithubIssueComment[] = [];
     try {
-      issue = await getIssue(parsed.issueNumber);
+      issue = await getIssue(parsed.issueNumber, repo);
       if (issue) {
-        comments = await listIssueComments(parsed.issueNumber);
+        comments = await listIssueComments(parsed.issueNumber, repo);
       }
     } catch (err: any) {
       await safeUpdate(
@@ -2313,11 +2410,6 @@ export class TodoCommand {
       return;
     }
 
-    const basePayload = parseTodoPayloadToken(parsed.payloadToken);
-    if (!basePayload) {
-      await replyTodoExpired(interaction);
-      return;
-    }
     const payload: TodoListPayload = { ...basePayload, page: parsed.page };
     const viewPayload = buildIssueViewComponents(
       issue,
@@ -2345,9 +2437,16 @@ export class TodoCommand {
 
     await safeDeferUpdate(interaction);
 
+    const basePayload = parseTodoPayloadToken(parsed.payloadToken);
+    if (!basePayload) {
+      await replyTodoExpired(interaction);
+      return;
+    }
+    const repo = getRepoTarget(basePayload.repo);
+
     let closed: IGithubIssue | null;
     try {
-      closed = await closeIssue(parsed.issueNumber);
+      closed = await closeIssue(parsed.issueNumber, repo);
     } catch (err: any) {
       await safeUpdate(
         interaction,
@@ -2364,15 +2463,9 @@ export class TodoCommand {
       return;
     }
 
-    const basePayload = parseTodoPayloadToken(parsed.payloadToken);
-    if (!basePayload) {
-      await replyTodoExpired(interaction);
-      return;
-    }
-
     let comments: IGithubIssueComment[] = [];
     try {
-      comments = await listIssueComments(parsed.issueNumber);
+      comments = await listIssueComments(parsed.issueNumber, repo);
     } catch {
       comments = [];
     }
@@ -2408,9 +2501,12 @@ export class TodoCommand {
 
     await safeDeferUpdate(interaction);
 
+    const reopenRepo = getRepoTarget(
+      parseTodoPayloadToken(parsed.payloadToken)?.repo ?? DEFAULT_TODO_REPO_CODE,
+    );
     let reopened: IGithubIssue | null;
     try {
-      reopened = await reopenIssue(parsed.issueNumber);
+      reopened = await reopenIssue(parsed.issueNumber, reopenRepo);
     } catch (err: any) {
       await safeUpdate(
         interaction,
@@ -2454,9 +2550,12 @@ export class TodoCommand {
     const ok = await requireModeratorOrAdminOrOwner(interaction);
     if (!ok) return;
 
+    const labelRepo = getRepoTarget(
+      parseTodoPayloadToken(parsed.payloadToken)?.repo ?? DEFAULT_TODO_REPO_CODE,
+    );
     let issue: IGithubIssue | null;
     try {
-      issue = await getIssue(parsed.issueNumber);
+      issue = await getIssue(parsed.issueNumber, labelRepo);
     } catch (err: any) {
       await safeReply(interaction, buildTodoTextReply(getGithubErrorMessage(err), true));
       return;
@@ -2499,9 +2598,9 @@ export class TodoCommand {
     );
   }
 
-  @ButtonComponent({ id: /^todo-query-button:[^:]+:\d+$/ })
-  async queryFromList(interaction: ButtonInteraction): Promise<void> {
-    const parsed = parseTodoQueryId(interaction.customId, TODO_QUERY_BUTTON_PREFIX);
+  @ButtonComponent({ id: /^todo-filter-button:[^:]+:\d+$/ })
+  async filterFromList(interaction: ButtonInteraction): Promise<void> {
+    const parsed = parseTodoFilterButtonId(interaction.customId, TODO_FILTER_BUTTON_PREFIX);
     if (!parsed) {
       await replyTodoExpired(interaction);
       return;
@@ -2513,24 +2612,95 @@ export class TodoCommand {
       return;
     }
 
+    const currentLabelValue: string = basePayload.excludeBlocked
+      ? TODO_FILTER_LABEL_NOT_BLOCKED
+      : basePayload.labels[0] ?? TODO_FILTER_LABEL_ALL;
+
     const modal = new ModalBuilder()
       .setCustomId(
-        buildTodoQueryModalId(
+        buildTodoFilterModalId(
           parsed.payloadToken,
           parsed.page,
           interaction.channelId,
           interaction.message?.id ?? "",
         ),
       )
-      .setTitle(basePayload.query ? "Edit Query" : "Filter by Query");
+      .setTitle("Filter Issues");
 
-    modal.addComponents(buildTextInputRow({
-      customId: TODO_QUERY_INPUT_ID,
-      label: "Query",
-      required: false,
-      maxLength: 200,
-      value: basePayload.query || undefined,
-    }));
+    modal.addLabelComponents((label) =>
+      label
+        .setLabel("Issue State")
+        .setStringSelectMenuComponent((builder) =>
+          builder
+            .setCustomId(TODO_FILTER_STATE_ID)
+            .setMinValues(1)
+            .setMaxValues(1)
+            .addOptions([
+              { label: "Open", value: "open", default: basePayload.state === "open" },
+              { label: "Closed", value: "closed", default: basePayload.state === "closed" },
+              { label: "All", value: "all", default: basePayload.state === "all" },
+            ])));
+
+    modal.addLabelComponents((label) =>
+      label
+        .setLabel("Label")
+        .setStringSelectMenuComponent((builder) =>
+          builder
+            .setCustomId(TODO_FILTER_LABEL_ID)
+            .setMinValues(1)
+            .setMaxValues(1)
+            .addOptions([
+              {
+                label: "All",
+                value: TODO_FILTER_LABEL_ALL,
+                default: currentLabelValue === TODO_FILTER_LABEL_ALL,
+              },
+              {
+                label: "Not Blocked",
+                value: TODO_FILTER_LABEL_NOT_BLOCKED,
+                default: currentLabelValue === TODO_FILTER_LABEL_NOT_BLOCKED,
+              },
+              ...TODO_LABELS.map((todoLabel) => ({
+                label: todoLabel,
+                value: todoLabel,
+                default: currentLabelValue === todoLabel,
+              })),
+            ])));
+
+    modal.addLabelComponents((label) =>
+      label
+        .setLabel("Search Query")
+        .setTextInputComponent((builder) => {
+          builder
+            .setCustomId(TODO_FILTER_QUERY_ID)
+            .setStyle(TextInputStyle.Short)
+            .setRequired(false)
+            .setMaxLength(200);
+          if (basePayload.query) builder.setValue(basePayload.query);
+          return builder;
+        }));
+
+    modal.addLabelComponents((label) =>
+      label
+        .setLabel("Sort by Issue Number")
+        .setStringSelectMenuComponent((builder) =>
+          builder
+            .setCustomId(TODO_FILTER_SORT_ID)
+            .setMinValues(1)
+            .setMaxValues(1)
+            .addOptions([
+              {
+                label: "Descending (newest first)",
+                value: "desc",
+                default: basePayload.direction !== "asc",
+              },
+              {
+                label: "Ascending (oldest first)",
+                value: "asc",
+                default: basePayload.direction === "asc",
+              },
+            ])));
+
     await interaction.showModal(modal);
   }
 
@@ -2545,9 +2715,12 @@ export class TodoCommand {
     const ok = await requireOwner(interaction);
     if (!ok) return;
 
+    const editRepo = getRepoTarget(
+      parseTodoPayloadToken(parsed.payloadToken)?.repo ?? DEFAULT_TODO_REPO_CODE,
+    );
     let issue: IGithubIssue | null;
     try {
-      issue = await getIssue(parsed.issueNumber);
+      issue = await getIssue(parsed.issueNumber, editRepo);
     } catch {
       issue = null;
     }
@@ -2646,9 +2819,12 @@ export class TodoCommand {
     const ok = await requireOwner(interaction);
     if (!ok) return;
 
+    const titleRepo = getRepoTarget(
+      parseTodoPayloadToken(parsed.payloadToken)?.repo ?? DEFAULT_TODO_REPO_CODE,
+    );
     let issue: IGithubIssue | null;
     try {
-      issue = await getIssue(parsed.issueNumber);
+      issue = await getIssue(parsed.issueNumber, titleRepo);
     } catch {
       issue = null;
     }
@@ -2694,9 +2870,12 @@ export class TodoCommand {
     const ok = await requireOwner(interaction);
     if (!ok) return;
 
+    const descRepo = getRepoTarget(
+      parseTodoPayloadToken(parsed.payloadToken)?.repo ?? DEFAULT_TODO_REPO_CODE,
+    );
     let issue: IGithubIssue | null;
     try {
-      issue = await getIssue(parsed.issueNumber);
+      issue = await getIssue(parsed.issueNumber, descRepo);
     } catch {
       issue = null;
     }
