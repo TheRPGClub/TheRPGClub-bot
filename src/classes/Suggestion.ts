@@ -1,5 +1,4 @@
-import { dbQuery, dbMutate, dbInsert } from "../db/SqlManager.js";
-import { SuggestionSql } from "../db/sql/index.js";
+import { apiGet, apiPost, apiDelete } from "../services/RpgClubApiClient.js";
 
 export interface ISuggestionItem {
   suggestionId: number;
@@ -12,31 +11,33 @@ export interface ISuggestionItem {
   updatedAt: Date;
 }
 
-function toDate(value: Date | string): Date {
-  return value instanceof Date ? value : new Date(value);
-}
-
-type SuggestionRow = {
-  SUGGESTION_ID: number;
-  TITLE: string;
-  DETAILS: string | null;
-  LABELS: string | null;
-  CREATED_BY: string | null;
-  CREATED_BY_NAME: string | null;
-  CREATED_AT: Date | string;
-  UPDATED_AT: Date | string;
+type SuggestionApiData = {
+  suggestion_id: number;
+  title: string;
+  details: string | null;
+  labels: string | null;
+  created_by: string | null;
+  created_by_name: string | null;
+  created_at: string;
+  updated_at: string;
 };
 
-function mapSuggestionRow(row: SuggestionRow): ISuggestionItem {
+type SuggestionResponse = { data: SuggestionApiData };
+type SuggestionsListResponse = {
+  data: SuggestionApiData[];
+  meta: { count: number };
+};
+
+function mapSuggestion(d: SuggestionApiData): ISuggestionItem {
   return {
-    suggestionId: Number(row.SUGGESTION_ID),
-    title: row.TITLE,
-    details: row.DETAILS ?? null,
-    labels: row.LABELS ?? null,
-    createdBy: row.CREATED_BY ?? null,
-    createdByName: row.CREATED_BY_NAME ?? null,
-    createdAt: toDate(row.CREATED_AT),
-    updatedAt: toDate(row.UPDATED_AT),
+    suggestionId: Number(d.suggestion_id),
+    title: d.title,
+    details: d.details ?? null,
+    labels: d.labels ?? null,
+    createdBy: d.created_by ?? null,
+    createdByName: d.created_by_name ?? null,
+    createdAt: new Date(d.created_at),
+    updatedAt: new Date(d.updated_at),
   };
 }
 
@@ -47,40 +48,40 @@ export async function createSuggestion(
   createdBy: string | null,
   createdByName: string | null,
 ): Promise<ISuggestionItem> {
-  const id = await dbInsert(
-    SuggestionSql.create,
-    { title, details, labels, createdBy, createdByName },
-    "id",
-  );
-  if (!id) throw new Error("Failed to create suggestion.");
-
-  const suggestion = await getSuggestionById(id);
-  if (!suggestion) throw new Error("Failed to load suggestion after creation.");
-  return suggestion;
+  const response = await apiPost<SuggestionResponse>("/api/v1/suggestions", {
+    data: { title, details, labels, created_by: createdBy, created_by_name: createdByName },
+  });
+  if (!response) throw new Error("Failed to create suggestion.");
+  return mapSuggestion(response.data);
 }
 
 export async function listSuggestions(limit: number = 50): Promise<ISuggestionItem[]> {
   const safeLimit = Math.min(Math.max(limit, 1), 200);
-  return dbQuery(SuggestionSql.list, { limit: safeLimit }, mapSuggestionRow);
+  const response = await apiGet<SuggestionsListResponse>("/api/v1/suggestions", {
+    params: { per: safeLimit },
+  });
+  if (!response) return [];
+  return response.data.map(mapSuggestion);
 }
 
 export async function countSuggestions(): Promise<number> {
-  const rows = await dbQuery(
-    SuggestionSql.count,
-    {},
-    (row: { TOTAL: number | null }) => row,
-  );
-  return Number(rows[0]?.TOTAL ?? 0);
+  const response = await apiGet<SuggestionsListResponse>("/api/v1/suggestions", {
+    params: { per: 1 },
+  });
+  return response?.meta?.count ?? 0;
 }
 
 export async function getSuggestionById(
   suggestionId: number,
 ): Promise<ISuggestionItem | null> {
-  const rows = await dbQuery(SuggestionSql.getById, { id: suggestionId }, mapSuggestionRow);
-  return rows[0] ?? null;
+  const response = await apiGet<SuggestionResponse>(`/api/v1/suggestions/${suggestionId}`);
+  if (!response) return null;
+  return mapSuggestion(response.data);
 }
 
 export async function deleteSuggestion(suggestionId: number): Promise<boolean> {
-  const count = await dbMutate(SuggestionSql.delete, { id: suggestionId });
-  return count > 0;
+  const response = await apiDelete<{ deleted: boolean }>(
+    `/api/v1/suggestions/${suggestionId}`,
+  );
+  return response?.deleted === true;
 }
