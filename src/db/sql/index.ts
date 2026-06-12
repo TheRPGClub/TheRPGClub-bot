@@ -29,7 +29,6 @@ export { StarboardSql } from "./starboard.sql.js";
 export { SteamCollectionImportSql } from "./steamCollectionImport.sql.js";
 export { SuggestionSql, SuggestionReviewSessionSql } from "./suggestion.sql.js";
 export { ThreadSql } from "./thread.sql.js";
-export { TodoSql } from "./todo.sql.js";
 export {
   UserActivityIconSql,
   UserChannelMessageCountSql,
