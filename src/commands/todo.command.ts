@@ -100,7 +100,10 @@ type ListDirection = (typeof LIST_DIRECTIONS)[number];
 
 const MAX_COMMENT_PREVIEW_LENGTH = 500;
 const MAX_TODO_IMAGES_PER_VIEW = 10;
-const ISSUE_LIST_TITLE = "RPGClub GameDB GitHub Issues";
+function buildIssueListTitle(repo: TodoRepoCode): string {
+  const target = getTodoRepo(repo);
+  return `${target.owner}/${target.name} GitHub Issues`;
+}
 const TODO_LIST_ID_PREFIX = "todo-list-page";
 const TODO_LIST_BACK_ID_PREFIX = "todo-list-back";
 const TODO_VIEW_ID_PREFIX = "todo-view";
@@ -1034,7 +1037,10 @@ function buildIssueListComponents(
   const container = new ContainerBuilder()
     .addTextDisplayComponents(
       new TextDisplayBuilder().setContent(
-        safeV2TextContent(`## ${ISSUE_LIST_TITLE}`, DISCORD_TEXT_INPUT_MAX),
+        safeV2TextContent(
+          `## ${buildIssueListTitle(payload.repo)}`,
+          DISCORD_TEXT_INPUT_MAX,
+        ),
       ),
     );
 
