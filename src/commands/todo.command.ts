@@ -1161,6 +1161,9 @@ function buildIssueViewComponents(
 ): { components: Array<ContainerBuilder | ActionRowBuilder<ButtonBuilder>> } {
   const container = new ContainerBuilder();
   const textBudget = { remaining: DISCORD_TEXT_INPUT_MAX };
+  const repoTarget = getTodoRepo(payload.repo);
+  const repoLabel = `${repoTarget.owner}/${repoTarget.name}`;
+  addTextDisplayWithBudget(container, textBudget, `-# ${repoLabel}`);
   const titleText = issue.htmlUrl
     ? `## [${formatIssueTitle(issue)}](${issue.htmlUrl})`
     : `## ${formatIssueTitle(issue)}`;
@@ -1186,7 +1189,8 @@ function buildIssueViewComponents(
 
   const assignee = issue.assignee ?? "Unassigned";
   const footerLine = [
-    `-# **State:** ${issue.state}`,
+    `-# **Repo:** ${repoLabel}`,
+    `**State:** ${issue.state}`,
     `**Author:** ${issue.author ?? "Unknown"}`,
     `**Assignee:** ${assignee}`,
     `**Created:** ${formatDiscordTimestamp(issue.createdAt)}`,
