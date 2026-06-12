@@ -1,6 +1,7 @@
 import { dbQuery, dbMutate } from "../db/SqlManager.js";
 import { NominationSql } from "../db/sql/index.js";
 import { isPositiveInt } from "../utilities/ValidationUtils.js";
+import { apiGet } from "../services/RpgClubApiClient.js";
 
 export type NominationKind = "gotm" | "nr-gotm";
 
@@ -16,6 +17,36 @@ export interface INominationEntry {
 
 function tableName(kind: NominationKind): string {
   return kind === "gotm" ? "GOTM_NOMINATIONS" : "NR_GOTM_NOMINATIONS";
+}
+
+function apiPrefix(kind: NominationKind): string {
+  return kind === "gotm" ? "gotm_entries" : "nr_gotm_entries";
+}
+
+type NominationApiData = {
+  nomination_id: number;
+  round_number: number;
+  user_id: string;
+  gamedb_game_id: number | null;
+  reason: string | null;
+  nominated_at: string;
+  game: { title?: string } | null;
+};
+
+type NominationListApiResponse = { data: NominationApiData[] };
+
+function mapApiData(d: NominationApiData): INominationEntry {
+  const gamedbGameId = Number(d.gamedb_game_id);
+  const gameTitle = d.game?.title ?? `(missing GameDB title for id ${gamedbGameId})`;
+  return {
+    id: Number(d.nomination_id),
+    roundNumber: Number(d.round_number),
+    userId: String(d.user_id),
+    gameTitle,
+    gamedbGameId,
+    nominatedAt: new Date(d.nominated_at),
+    reason: d.reason ?? null,
+  };
 }
 
 type NominationRow = {
@@ -105,9 +136,9 @@ export async function listNominationsForRound(
   kind: NominationKind,
   roundNumber: number,
 ): Promise<INominationEntry[]> {
-  return dbQuery(
-    NominationSql.listNominationsForRound(tableName(kind)),
-    { roundNumber },
-    mapRow,
+  const response = await apiGet<NominationListApiResponse>(
+    `/api/v1/${apiPrefix(kind)}/${roundNumber}/nominations`,
+    { params: { per: 500 } },
   );
+  return (response?.data ?? []).map(mapApiData);
 }
