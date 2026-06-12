@@ -16,7 +16,7 @@ export interface ITodoRepo {
 export const DEFAULT_TODO_REPO_CODE: TodoRepoCode = "b";
 
 export const TODO_REPOS: Record<TodoRepoCode, ITodoRepo> = {
-  b: { code: "b", key: "bot", label: "bot", owner: "TheRPGClub", name: "RPGClub_GameDB" },
+  b: { code: "b", key: "bot", label: "bot", owner: "TheRPGClub", name: "TheRPGClub-bot" },
   a: { code: "a", key: "api", label: "api", owner: "TheRPGClub", name: "TheRPGClub" },
   w: { code: "w", key: "www", label: "www", owner: "TheRPGClub", name: "TheRPGClub-www" },
 };
