@@ -420,24 +420,36 @@ export class NowPlayingCommand {
       return;
     }
 
-    const usersByGameId = new Map<number, { title: string; users: string[] }>();
+    const usersByGameId = new Map<number, { title: string; userIds: Set<string>;
+      userMap: Map<string, string> }>();
     for (const row of nowPlayingRows) {
-      const record = usersByGameId.get(row.gameId) ?? { title: row.title, users: [] };
-      record.users.push(userMention(row.userId));
+      const record = usersByGameId.get(row.gameId) ?? {
+        title: row.title,
+        userIds: new Set<string>(),
+        userMap: new Map<string, string>(),
+      };
+      if (!record.userIds.has(row.userId)) {
+        record.userIds.add(row.userId);
+        const displayName = row.globalName ?? row.username ?? row.userId;
+        record.userMap.set(row.userId, renderUsernameWithEmoji(row.userId, displayName));
+      }
       usersByGameId.set(row.gameId, record);
     }
 
     const sortedGames = Array.from(usersByGameId.entries())
-      .map(([gameId, record]) => ({ gameId, title: record.title, users: record.users }))
+      .map(([gameId, record]) => ({
+        gameId,
+        title: record.title,
+        users: Array.from(record.userMap.values()),
+      }))
       .sort((a, b) => a.title.localeCompare(b.title));
     const totalGames = sortedGames.length;
     const limitedGames = sortedGames.slice(0, NOW_PLAYING_SEARCH_LIMIT);
 
     const lines: string[] = [];
     for (const game of limitedGames) {
-      const uniqueUsers = Array.from(new Set(game.users));
-      const displayedUsers = uniqueUsers.slice(0, 30);
-      const remaining = uniqueUsers.length - displayedUsers.length;
+      const displayedUsers = game.users.slice(0, 30);
+      const remaining = game.users.length - displayedUsers.length;
       const userList = `${displayedUsers.join(", ")}${remaining > 0 ? ` (+${remaining} more)` : ""}`;
       lines.push(`- **${game.title}**: ${userList}`);
     }
