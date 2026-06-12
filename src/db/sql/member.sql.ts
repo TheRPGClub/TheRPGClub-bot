@@ -190,83 +190,6 @@ export const MemberSql = {
         GROUP BY gids.game_id`,
     }) satisfies ISqlEntry,
 
-  getGameJournalEntries: {
-    postgres: `WITH all_entries AS (
-         SELECT entry_id,
-                user_id,
-                gamedb_game_id,
-                entry_title,
-                entry_body,
-                created_at,
-                updated_at,
-                ROW_NUMBER() OVER (ORDER BY created_at ASC, entry_id ASC) AS entry_number
-           FROM user_game_journal_entries
-          WHERE user_id = :userId
-            AND gamedb_game_id = :gameId
-       )
-       SELECT entry_id,
-              user_id,
-              gamedb_game_id,
-              entry_title,
-              entry_body,
-              created_at,
-              updated_at,
-              entry_number
-         FROM all_entries
-        ORDER BY created_at DESC, entry_id DESC
-        LIMIT :limit OFFSET :offset`,
-  } satisfies ISqlEntry,
-
-  countGameJournalEntries: {
-    postgres: `SELECT COUNT(*) AS cnt
-         FROM user_game_journal_entries
-        WHERE user_id = :userId
-          AND gamedb_game_id = :gameId`,
-  } satisfies ISqlEntry,
-
-  addGameJournalEntry: {
-    postgres: `INSERT INTO user_game_journal_entries
-        (user_id, gamedb_game_id, entry_title, entry_body, is_public)
-       VALUES
-        (:userId, :gameId, :title, :body, true)`,
-  } satisfies ISqlEntry,
-
-  getGameJournalEntryForUser: {
-    postgres: `SELECT e.entry_id,
-              e.user_id,
-              e.gamedb_game_id,
-              e.entry_title,
-              e.entry_body,
-              e.created_at,
-              e.updated_at,
-              (SELECT COUNT(*) + 1
-                 FROM user_game_journal_entries e2
-                WHERE e2.user_id = e.user_id
-                  AND e2.gamedb_game_id = e.gamedb_game_id
-                  AND (e2.created_at < e.created_at
-                       OR (e2.created_at = e.created_at AND e2.entry_id < e.entry_id))
-              ) AS entry_number
-         FROM user_game_journal_entries e
-        WHERE e.user_id = :userId
-          AND e.entry_id = :entryId
-        LIMIT 1`,
-  } satisfies ISqlEntry,
-
-  // Caller must pass lowercase column=value expressions for Postgres
-  updateGameJournalEntry: (fields: string[]) =>
-    ({
-      postgres: `UPDATE user_game_journal_entries
-          SET ${fields.join(", ")}
-        WHERE user_id = :userId
-          AND entry_id = :entryId`,
-    }) satisfies ISqlEntry,
-
-  deleteGameJournalEntry: {
-    postgres: `DELETE FROM user_game_journal_entries
-        WHERE user_id = :userId
-          AND entry_id = :entryId`,
-  } satisfies ISqlEntry,
-
   updateNowPlayingSort: {
     postgres: `UPDATE user_now_playing
             SET sort_order = :sortOrder
@@ -449,17 +372,6 @@ export const MemberSql = {
            WHERE server_left_at IS NULL
              AND user_id NOT IN (${placeholders})`,
     }) satisfies ISqlEntry,
-
-  getGameJournalList: {
-    postgres: `SELECT g.game_id,
-              g.title,
-              COUNT(e.entry_id) AS total_entries
-         FROM user_game_journal_entries e
-         JOIN gamedb_games g ON g.game_id = e.gamedb_game_id
-        WHERE e.user_id = :userId
-        GROUP BY g.game_id, g.title
-        ORDER BY g.title`,
-  } satisfies ISqlEntry,
 
   getAllJournalUsers: {
     postgres: `SELECT u.user_id,

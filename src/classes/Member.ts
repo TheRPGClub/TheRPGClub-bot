@@ -156,6 +156,54 @@ export interface IJournalSearchResult {
   createdAt: Date;
 }
 
+// --- Journal API types (data: as_json from JournalEntry*/JournaledGame) ---
+
+type JournalEntryApiData = {
+  entry_id: number;
+  user_id: string;
+  gamedb_game_id: number;
+  entry_title: string | null;
+  entry_body: string;
+  created_at: string;
+  updated_at: string;
+};
+
+type JournalEntryListResponse = {
+  data: JournalEntryApiData[];
+  meta: { count: number };
+};
+
+type JournalEntryShowResponse = {
+  data: JournalEntryApiData;
+};
+
+type JournaledGameApiData = {
+  game: { game_id: number; title: string };
+  entry_count: number;
+  last_entry_at: string | null;
+};
+
+type JournaledGameListResponse = {
+  data: JournaledGameApiData[];
+  meta: { count: number; pages: number };
+};
+
+function mapJournalEntry(
+  raw: JournalEntryApiData,
+  entryNumber: number,
+): IGameJournalEntry {
+  return {
+    entryId: Number(raw.entry_id),
+    entryNumber,
+    userId: raw.user_id,
+    gameId: Number(raw.gamedb_game_id),
+    title: raw.entry_title ?? null,
+    body: raw.entry_body,
+    createdAt: new Date(raw.created_at),
+    updatedAt: new Date(raw.updated_at),
+  };
+}
+
 export interface IAvatarHistoryRecord {
   eventId: number;
   userId: string;
@@ -698,28 +746,19 @@ export default class Member {
   ): Promise<IGameJournalEntry[]> {
     const safeLimit = Math.min(Math.max(params?.limit ?? 5, 1), 25);
     const safeOffset = Math.max(params?.offset ?? 0, 0);
-    return dbQuery<{
-      ENTRY_ID: number;
-      USER_ID: string;
-      GAMEDB_GAME_ID: number;
-      ENTRY_TITLE: string | null;
-      ENTRY_BODY: string;
-      CREATED_AT: Date | string;
-      UPDATED_AT: Date | string;
-      ENTRY_NUMBER: number;
-    }, IGameJournalEntry>(
-      MemberSql.getGameJournalEntries,
-      { userId, gameId, offset: safeOffset, limit: safeLimit },
-      (row) => ({
-        entryId: Number(row.ENTRY_ID),
-        entryNumber: Number(row.ENTRY_NUMBER),
-        userId: row.USER_ID,
-        gameId: Number(row.GAMEDB_GAME_ID),
-        title: row.ENTRY_TITLE ?? null,
-        body: row.ENTRY_BODY,
-        createdAt: row.CREATED_AT instanceof Date ? row.CREATED_AT : new Date(row.CREATED_AT),
-        updatedAt: row.UPDATED_AT instanceof Date ? row.UPDATED_AT : new Date(row.UPDATED_AT),
-      }),
+    // Callers always pass an offset that is a multiple of limit (page-aligned),
+    // so per/page slicing returns the same window as the old LIMIT/OFFSET query.
+    const page = Math.floor(safeOffset / safeLimit) + 1;
+    const response = await apiGet<JournalEntryListResponse>(
+      `/api/v1/games/${gameId}/journal`,
+      { params: { user_id: userId, page, per: safeLimit } },
+    );
+    if (!response) return [];
+    const total = Number(response.meta?.count ?? 0);
+    // API list is created_at DESC; entry_number is the ascending (oldest = 1)
+    // rank, so the newest entry carries the highest number.
+    return response.data.map((raw, idx) =>
+      mapJournalEntry(raw, total - safeOffset - idx),
     );
   }
 
@@ -728,14 +767,13 @@ export default class Member {
     gameId: number,
     viewerUserId?: string | null,
   ): Promise<number> {
-    // viewerUserId is reserved for viewer-scoped filtering; not yet used in the query
+    // viewerUserId is reserved for viewer-scoped filtering; not yet used here
     void viewerUserId;
-    const rows = await dbQuery<{ CNT: number }, number>(
-      MemberSql.countGameJournalEntries,
-      { userId, gameId },
-      (row) => Number(row.CNT),
+    const response = await apiGet<JournalEntryListResponse>(
+      `/api/v1/games/${gameId}/journal`,
+      { params: { user_id: userId, per: 1 } },
     );
-    return rows[0] ?? 0;
+    return Number(response?.meta?.count ?? 0);
   }
 
   static async addGameJournalEntry(params: {
@@ -749,13 +787,14 @@ export default class Member {
     if (!bodyValue) {
       throw new Error("Journal body cannot be empty.");
     }
-    await dbMutate(
-      MemberSql.addGameJournalEntry,
+    await apiPost<JournalEntryShowResponse>(
+      `/api/v1/users/${params.userId}/journal`,
       {
-        userId: params.userId,
-        gameId: params.gameId,
-        title: titleValue,
-        body: bodyValue,
+        data: {
+          gamedb_game_id: params.gameId,
+          entry_title: titleValue,
+          entry_body: bodyValue,
+        },
       },
     );
   }
@@ -764,32 +803,38 @@ export default class Member {
     userId: string,
     entryId: number,
   ): Promise<IGameJournalEntry | null> {
-    const rows = await dbQuery<{
-      ENTRY_ID: number;
-      USER_ID: string;
-      GAMEDB_GAME_ID: number;
-      ENTRY_TITLE: string | null;
-      ENTRY_BODY: string;
-      CREATED_AT: Date | string;
-      UPDATED_AT: Date | string;
-      ENTRY_NUMBER: number;
-    }, IGameJournalEntry>(
-      MemberSql.getGameJournalEntryForUser,
-      { userId, entryId },
-      (row) => ({
-        entryId: Number(row.ENTRY_ID),
-        entryNumber: Number(row.ENTRY_NUMBER),
-        userId: row.USER_ID,
-        gameId: Number(row.GAMEDB_GAME_ID),
-        title: row.ENTRY_TITLE ?? null,
-        body: row.ENTRY_BODY,
-        createdAt: row.CREATED_AT instanceof Date ? row.CREATED_AT : new Date(row.CREATED_AT),
-        updatedAt: row.UPDATED_AT instanceof Date ? row.UPDATED_AT : new Date(row.UPDATED_AT),
-      }),
+    const response = await apiGet<JournalEntryShowResponse>(
+      `/api/v1/journal_entries/${entryId}`,
     );
-    const row = rows[0];
-    if (!row) return null;
-    return row;
+    if (!response || response.data.user_id !== userId) return null;
+    const raw = response.data;
+    const entryNumber = await this.resolveJournalEntryNumber(
+      userId,
+      Number(raw.gamedb_game_id),
+      Number(raw.entry_id),
+    );
+    return mapJournalEntry(raw, entryNumber);
+  }
+
+  // entry_number is the ascending (oldest = 1) rank within the user's entries
+  // for a game; the API does not return it, so derive it from the DESC-ordered
+  // list. Approximate above 500 entries -- it only feeds an `Entry #N` label.
+  private static async resolveJournalEntryNumber(
+    userId: string,
+    gameId: number,
+    entryId: number,
+  ): Promise<number> {
+    const response = await apiGet<JournalEntryListResponse>(
+      `/api/v1/games/${gameId}/journal`,
+      { params: { user_id: userId, per: 500 } },
+    );
+    if (!response) return 1;
+    const total = Number(response.meta?.count ?? response.data.length);
+    const descIndex = response.data.findIndex(
+      (item) => Number(item.entry_id) === entryId,
+    );
+    if (descIndex < 0) return 1;
+    return total - descIndex;
   }
 
   static async updateGameJournalEntry(params: {
@@ -798,40 +843,43 @@ export default class Member {
     title?: string | null;
     body?: string;
   }): Promise<boolean> {
-    const fields: string[] = [];
-    const binds: Record<string, unknown> = {
-      userId: params.userId,
-      entryId: params.entryId,
-    };
+    const data: Record<string, string | null> = {};
 
     if (params.title !== undefined) {
-      fields.push("ENTRY_TITLE = :title");
-      binds.title = params.title?.trim() ? params.title.trim() : null;
+      data.entry_title = params.title?.trim() ? params.title.trim() : null;
     }
     if (params.body !== undefined) {
       const bodyValue = params.body.trim();
       if (!bodyValue) {
         throw new Error("Journal body cannot be empty.");
       }
-      fields.push("ENTRY_BODY = :body");
-      binds.body = bodyValue;
+      data.entry_body = bodyValue;
     }
-    if (!fields.length) return false;
-    fields.push("UPDATED_AT = SYSTIMESTAMP");
+    if (!Object.keys(data).length) return false;
 
-    const count = await dbMutate(
-      MemberSql.updateGameJournalEntry(fields),
-      binds as Record<string, any>,
+    // Verify ownership before mutating -- the API keys edits off the entry id.
+    const existing = await apiGet<JournalEntryShowResponse>(
+      `/api/v1/journal_entries/${params.entryId}`,
     );
-    return count > 0;
+    if (!existing || existing.data.user_id !== params.userId) return false;
+
+    const response = await apiPatch<JournalEntryShowResponse>(
+      `/api/v1/journal_entries/${params.entryId}`,
+      { data },
+    );
+    return response != null;
   }
 
   static async deleteGameJournalEntry(userId: string, entryId: number): Promise<boolean> {
-    const count = await dbMutate(
-      MemberSql.deleteGameJournalEntry,
-      { userId, entryId },
+    // Verify ownership before deleting -- the API keys deletes off the entry id.
+    const existing = await apiGet<JournalEntryShowResponse>(
+      `/api/v1/journal_entries/${entryId}`,
     );
-    return count > 0;
+    if (!existing || existing.data.user_id !== userId) return false;
+    const result = await apiDelete<{ deleted: boolean }>(
+      `/api/v1/journal_entries/${entryId}`,
+    );
+    return result?.deleted === true;
   }
 
   static async updateNowPlayingSort(
@@ -1624,19 +1672,27 @@ export default class Member {
   }
 
   static async getGameJournalList(userId: string): Promise<IGameJournalListEntry[]> {
-    return dbQuery<{
-      GAME_ID: number;
-      TITLE: string;
-      TOTAL_ENTRIES: number;
-    }, IGameJournalListEntry>(
-      MemberSql.getGameJournalList,
-      { userId },
-      (row) => ({
-        gameId: Number(row.GAME_ID),
-        title: row.TITLE,
-        totalEntries: Number(row.TOTAL_ENTRIES ?? 0),
-      }),
-    );
+    const perPage = 500;
+    const entries: IGameJournalListEntry[] = [];
+    let page = 1;
+    let pages = 1;
+    do {
+      const response = await apiGet<JournaledGameListResponse>(
+        `/api/v1/users/${userId}/journal`,
+        { params: { page, per: perPage } },
+      );
+      if (!response) break;
+      for (const row of response.data) {
+        entries.push({
+          gameId: Number(row.game.game_id),
+          title: row.game.title,
+          totalEntries: Number(row.entry_count ?? 0),
+        });
+      }
+      pages = Number(response.meta?.pages ?? 1);
+      page += 1;
+    } while (page <= pages);
+    return entries;
   }
 
   static async getAllJournalUsers(): Promise<IJournalUserSummary[]> {
