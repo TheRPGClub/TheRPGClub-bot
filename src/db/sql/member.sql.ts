@@ -115,7 +115,9 @@ export const MemberSql = {
   getNowPlayingByTitleSearch: {
     postgres: `SELECT u.gamedb_game_id AS game_id,
               g.title,
-              u.user_id
+              u.user_id,
+              ru.username,
+              ru.global_name
          FROM user_now_playing u
          JOIN rpg_club_users ru ON ru.user_id = u.user_id
          JOIN gamedb_games g ON g.game_id = u.gamedb_game_id

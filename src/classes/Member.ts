@@ -441,19 +441,26 @@ export default class Member {
 
   static async getNowPlayingByTitleSearch(
     query: string,
-  ): Promise<{ gameId: number; title: string; userId: string }[]> {
+  ): Promise<{ gameId: number; title: string; userId: string; username: string | null;
+    globalName: string | null }[]> {
     const trimmed = query.trim().toLowerCase();
     if (!trimmed) return [];
     const searchQuery = `%${trimmed}%`;
     const normalizedQuery = `%${trimmed.replace(/[^a-z0-9]/g, "")}%`;
-    return dbQuery<{ GAME_ID: number; TITLE: string; USER_ID: string },
-      { gameId: number; title: string; userId: string }>(
+    return dbQuery<
+      { GAME_ID: number; TITLE: string; USER_ID: string; USERNAME: string | null;
+        GLOBAL_NAME: string | null },
+      { gameId: number; title: string; userId: string; username: string | null;
+        globalName: string | null }
+    >(
       MemberSql.getNowPlayingByTitleSearch,
       { searchQuery, normalizedQuery },
       (row) => ({
         gameId: Number(row.GAME_ID),
         title: row.TITLE,
         userId: row.USER_ID,
+        username: row.USERNAME ?? null,
+        globalName: row.GLOBAL_NAME ?? null,
       }),
     );
   }
