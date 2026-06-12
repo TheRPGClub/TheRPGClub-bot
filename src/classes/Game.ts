@@ -334,6 +334,94 @@ function mapRegionDefRow(row: any): IRegionDef {
   };
 }
 
+// --- API response types ---
+
+type ReleaseApiData = {
+  release_id: number;
+  game_id: number;
+  platform_id: number;
+  region_id: number;
+  format: string | null;
+  release_date: string | null;
+  notes: string | null;
+};
+
+type PlatformApiData = {
+  platform_id: number;
+  platform_code: string;
+  platform_name: string;
+};
+
+type RegionApiData = {
+  region_id: number;
+  region_code: string;
+  region_name: string;
+  igdb_region_id: number | null;
+};
+
+type CompanyApiData = {
+  company_id: number;
+  name: string;
+  igdb_company_id: number | null;
+};
+
+type NowPlayingApiEntry = {
+  user_id: string;
+  user: { user_id: string; username: string | null; global_name: string | null };
+};
+
+type CompletionGameApiEntry = {
+  user_id: string;
+  completion_type: string;
+  completed_at: string | null;
+  final_playtime_hrs: number | null;
+  user: { user_id: string; username: string | null; global_name: string | null };
+};
+
+type GameRelationsApiData = {
+  companies: Array<CompanyApiData & { role: string | null }>;
+  franchises: Array<{ name: string }>;
+  genres: Array<{ name: string }>;
+  engines: Array<{ name: string }>;
+  modes: Array<{ name: string }>;
+  perspectives: Array<{ name: string }>;
+  themes: Array<{ name: string }>;
+  alternates: any[];
+};
+
+// --- API mapper functions ---
+
+function mapReleaseFromApi(data: ReleaseApiData): IRelease {
+  return {
+    id: Number(data.release_id),
+    gameId: Number(data.game_id),
+    platformId: Number(data.platform_id),
+    regionId: Number(data.region_id),
+    format: data.format ? (data.format as "Physical" | "Digital") : null,
+    releaseDate: data.release_date ? new Date(data.release_date) : null,
+    notes: data.notes ?? null,
+  };
+}
+
+function mapPlatformFromApi(data: PlatformApiData): IPlatformDef {
+  return {
+    id: Number(data.platform_id),
+    code: String(data.platform_code),
+    name: String(data.platform_name),
+    abbreviation: null,
+    igdbPlatformId: null,
+  };
+}
+
+function mapRegionFromApi(data: RegionApiData): IRegionDef {
+  return {
+    id: Number(data.region_id),
+    code: String(data.region_code),
+    name: String(data.region_name),
+    igdbRegionId: data.igdb_region_id != null ? Number(data.igdb_region_id) : null,
+  };
+}
+
 export default class Game {
   static async createGame(
     title: string,
@@ -431,14 +519,9 @@ export default class Game {
 
   static async getAlternateVersions(gameId: number): Promise<IGame[]> {
     if (!isPositiveInt(gameId)) return [];
-    return dbWithConnection(async (conn) => {
-      return dbQueryConn(
-        conn,
-        GameSql.getAlternateVersions,
-        { id: gameId },
-        mapGameRow,
-      );
-    });
+    const relations = await Game.getGameRelations(gameId);
+    if (!relations?.alternates?.length) return [];
+    return relations.alternates.map(mapGameFromApi);
   }
 
   static async linkAlternateVersions(
@@ -891,65 +974,41 @@ export default class Game {
     gameId: number,
     role: string,
   ): Promise<string[]> {
-    return dbQuery(
-      GameSql.getGameCompanies,
-      { gameId, role },
-      (row: { NAME: string }) => row.NAME,
-    );
+    const relations = await Game.getGameRelations(gameId);
+    if (!relations) return [];
+    return relations.companies
+      .filter((c) => c.role === role)
+      .map((c) => String(c.name));
   }
 
   static async getGameGenres(gameId: number): Promise<string[]> {
-    return Game.getSimpleList(
-      gameId,
-      "GAMEDB_GENRES",
-      "GAMEDB_GAME_GENRES",
-      "GENRE_ID",
-    );
+    const relations = await Game.getGameRelations(gameId);
+    return (relations?.genres ?? []).map((g) => String(g.name));
   }
 
   static async getGameThemes(gameId: number): Promise<string[]> {
-    return Game.getSimpleList(
-      gameId,
-      "GAMEDB_THEMES",
-      "GAMEDB_GAME_THEMES",
-      "THEME_ID",
-    );
+    const relations = await Game.getGameRelations(gameId);
+    return (relations?.themes ?? []).map((g) => String(g.name));
   }
 
   static async getGameModes(gameId: number): Promise<string[]> {
-    return Game.getSimpleList(
-      gameId,
-      "GAMEDB_GAME_MODES_DEF",
-      "GAMEDB_GAME_MODES",
-      "MODE_ID",
-    );
+    const relations = await Game.getGameRelations(gameId);
+    return (relations?.modes ?? []).map((g) => String(g.name));
   }
 
   static async getGamePerspectives(gameId: number): Promise<string[]> {
-    return Game.getSimpleList(
-      gameId,
-      "GAMEDB_PERSPECTIVES",
-      "GAMEDB_GAME_PERSPECTIVES",
-      "PERSPECTIVE_ID",
-    );
+    const relations = await Game.getGameRelations(gameId);
+    return (relations?.perspectives ?? []).map((g) => String(g.name));
   }
 
   static async getGameEngines(gameId: number): Promise<string[]> {
-    return Game.getSimpleList(
-      gameId,
-      "GAMEDB_ENGINES",
-      "GAMEDB_GAME_ENGINES",
-      "ENGINE_ID",
-    );
+    const relations = await Game.getGameRelations(gameId);
+    return (relations?.engines ?? []).map((g) => String(g.name));
   }
 
   static async getGameFranchises(gameId: number): Promise<string[]> {
-    return Game.getSimpleList(
-      gameId,
-      "GAMEDB_FRANCHISES",
-      "GAMEDB_GAME_FRANCHISES",
-      "FRANCHISE_ID",
-    );
+    const relations = await Game.getGameRelations(gameId);
+    return (relations?.franchises ?? []).map((g) => String(g.name));
   }
 
   static async getGameSeries(gameId: number): Promise<string | null> {
@@ -959,19 +1018,6 @@ export default class Game {
       (row: { NAME: string }) => row.NAME,
     );
     return rows[0] ?? null;
-  }
-
-  private static async getSimpleList(
-    gameId: number,
-    defTable: string,
-    mapTable: string,
-    idCol: string,
-  ): Promise<string[]> {
-    return dbQuery(
-      GameSql.getSimpleList(defTable, mapTable, idCol),
-      { gameId },
-      (row: { NAME: string }) => row.NAME,
-    );
   }
 
   static async addReleaseInfo(
@@ -1001,13 +1047,45 @@ export default class Game {
     return newRelease;
   }
 
+  private static async fetchAllPages<T>(
+    path: string,
+    params: Record<string, unknown> = {},
+  ): Promise<T[]> {
+    const results: T[] = [];
+    let page = 1;
+    for (;;) {
+      const result = await apiGet<{ data: T[]; meta: { next: number | null } }>(
+        path,
+        { params: { ...params, page, per: 500 } },
+      );
+      if (!result?.data?.length) break;
+      results.push(...result.data);
+      if (!result.meta?.next) break;
+      page++;
+    }
+    return results;
+  }
+
+  private static async getGameRelations(
+    gameId: number,
+  ): Promise<GameRelationsApiData | null> {
+    const result = await apiGet<{ data: GameRelationsApiData }>(
+      `/api/v1/games/${gameId}/relations`,
+    );
+    return result?.data ?? null;
+  }
+
   static async getReleaseById(id: number): Promise<IRelease | null> {
     const rows = await dbQuery(GameSql.getReleaseById, { id }, mapReleaseRow);
     return rows[0] ?? null;
   }
 
   static async getGameReleases(gameId: number): Promise<IRelease[]> {
-    return dbQuery(GameSql.getGameReleases, { gameId }, mapReleaseRow);
+    const result = await apiGet<{ data: ReleaseApiData[] }>(
+      `/api/v1/games/${gameId}/releases`,
+    );
+    if (!result?.data) return [];
+    return result.data.map(mapReleaseFromApi);
   }
 
   static async getPlatformsForGame(gameId: number): Promise<IPlatformDef[]> {
@@ -1087,12 +1165,9 @@ export default class Game {
   }
 
   static async getPlatformById(id: number): Promise<IPlatformDef | null> {
-    const rows = await dbQuery(
-      GameSql.getPlatformById,
-      { id },
-      mapPlatformDefRow,
-    );
-    return rows[0] ?? null;
+    const result = await apiGet<{ data: PlatformApiData }>(`/api/v1/platforms/${id}`);
+    if (!result?.data) return null;
+    return mapPlatformFromApi(result.data);
   }
 
   static async attachPlatformsToGames(
@@ -1177,7 +1252,8 @@ export default class Game {
   }
 
   static async getAllRegions(): Promise<IRegionDef[]> {
-    return dbQuery(GameSql.getAllRegions, {}, mapRegionDefRow);
+    const rows = await Game.fetchAllPages<RegionApiData>("/api/v1/regions");
+    return rows.map(mapRegionFromApi);
   }
 
   static async getRegionByCode(code: string): Promise<IRegionDef | null> {
@@ -1190,8 +1266,9 @@ export default class Game {
   }
 
   static async getRegionById(id: number): Promise<IRegionDef | null> {
-    const rows = await dbQuery(GameSql.getRegionById, { id }, mapRegionDefRow);
-    return rows[0] ?? null;
+    const result = await apiGet<{ data: RegionApiData }>(`/api/v1/regions/${id}`);
+    if (!result?.data) return null;
+    return mapRegionFromApi(result.data);
   }
 
   static async getRegionByIgdbId(igdbId: number): Promise<IRegionDef | null> {
@@ -1280,36 +1357,22 @@ export default class Game {
   }
 
   static async getAllCompanies(): Promise<ICompany[]> {
-    return dbQuery(
-      GameSql.getAllCompanies,
-      {},
-      (row: {
-        COMPANY_ID: number;
-        NAME: string;
-        IGDB_COMPANY_ID: number | null;
-      }) => ({
-        id: Number(row.COMPANY_ID),
-        name: String(row.NAME),
-        igdbId: row.IGDB_COMPANY_ID ? Number(row.IGDB_COMPANY_ID) : null,
-      }),
-    );
+    const rows = await Game.fetchAllPages<CompanyApiData>("/api/v1/companies");
+    return rows.map((d) => ({
+      id: Number(d.company_id),
+      name: String(d.name),
+      igdbId: d.igdb_company_id != null ? Number(d.igdb_company_id) : null,
+    }));
   }
 
   static async getCompanyById(id: number): Promise<ICompany | null> {
-    const rows = await dbQuery(
-      GameSql.getCompanyById,
-      { id },
-      (row: {
-        COMPANY_ID: number;
-        NAME: string;
-        IGDB_COMPANY_ID: number | null;
-      }) => ({
-        id: Number(row.COMPANY_ID),
-        name: String(row.NAME),
-        igdbId: row.IGDB_COMPANY_ID ? Number(row.IGDB_COMPANY_ID) : null,
-      }),
-    );
-    return rows[0] ?? null;
+    const result = await apiGet<{ data: CompanyApiData }>(`/api/v1/companies/${id}`);
+    if (!result?.data) return null;
+    return {
+      id: Number(result.data.company_id),
+      name: String(result.data.name),
+      igdbId: result.data.igdb_company_id != null ? Number(result.data.igdb_company_id) : null,
+    };
   }
 
   static async searchGames(
@@ -1786,58 +1849,30 @@ export default class Game {
   static async getNowPlayingMembers(
     gameId: number,
   ): Promise<INowPlayingMember[]> {
-    return dbQuery(
-      GameSql.getNowPlayingMembers,
-      { gameId },
-      (row: {
-        USER_ID: string;
-        USERNAME: string | null;
-        GLOBAL_NAME: string | null;
-        THREAD_ID: string | null;
-        ADDED_AT: Date | null;
-      }) => ({
-        userId: String(row.USER_ID),
-        username: row.USERNAME ?? null,
-        globalName: row.GLOBAL_NAME ?? null,
-        threadId: row.THREAD_ID ?? null,
-        addedAt:
-          row.ADDED_AT instanceof Date
-            ? row.ADDED_AT
-            : row.ADDED_AT
-              ? new Date(row.ADDED_AT as string)
-              : null,
-      }),
+    const rows = await Game.fetchAllPages<NowPlayingApiEntry>(
+      `/api/v1/games/${gameId}/now_playing`,
     );
+    return rows.map((d) => ({
+      userId: String(d.user_id),
+      username: d.user?.username ?? null,
+      globalName: d.user?.global_name ?? null,
+      threadId: null,
+      addedAt: null,
+    }));
   }
 
   static async getGameCompletions(gameId: number): Promise<ICompletedMember[]> {
-    return dbQuery(
-      GameSql.getGameCompletions,
-      { gameId },
-      (row: {
-        USER_ID: string;
-        USERNAME: string | null;
-        GLOBAL_NAME: string | null;
-        COMPLETION_TYPE: string;
-        COMPLETED_AT: Date | null;
-        FINAL_PLAYTIME_HRS: number | null;
-      }) => ({
-        userId: String(row.USER_ID),
-        username: row.USERNAME ?? null,
-        globalName: row.GLOBAL_NAME ?? null,
-        completionType: String(row.COMPLETION_TYPE),
-        completedAt:
-          row.COMPLETED_AT instanceof Date
-            ? row.COMPLETED_AT
-            : row.COMPLETED_AT
-              ? new Date(row.COMPLETED_AT as string)
-              : null,
-        finalPlaytimeHours:
-          row.FINAL_PLAYTIME_HRS == null
-            ? null
-            : Number(row.FINAL_PLAYTIME_HRS),
-      }),
+    const rows = await Game.fetchAllPages<CompletionGameApiEntry>(
+      `/api/v1/games/${gameId}/completions`,
     );
+    return rows.map((d) => ({
+      userId: String(d.user_id),
+      username: d.user?.username ?? null,
+      globalName: d.user?.global_name ?? null,
+      completionType: String(d.completion_type),
+      completedAt: d.completed_at ? new Date(d.completed_at) : null,
+      finalPlaytimeHours: d.final_playtime_hrs != null ? Number(d.final_playtime_hrs) : null,
+    }));
   }
 
   static async getGameCollectionOwners(
