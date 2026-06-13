@@ -7,10 +7,7 @@ import {
   type ButtonInteraction,
   type Message,
 } from "discord.js";
-import {
-  ContainerBuilder,
-  TextDisplayBuilder,
-} from "@discordjs/builders";
+import { ContainerBuilder } from "@discordjs/builders";
 import Member from "../../classes/Member.js";
 import {
   COMPLETION_TYPES,
@@ -125,12 +122,10 @@ export async function handleCompletionFieldEdit(interaction: ButtonInteraction):
       .addOptions(COMPLETION_TYPES.map((t) => ({ label: t, value: t })));
 
     const currentEmbedText = extractEditPromptText(interaction);
-    const container = new ContainerBuilder().addTextDisplayComponents(
-      new TextDisplayBuilder().setContent("Select the new completion type:"),
-      ...(currentEmbedText
-        ? [new TextDisplayBuilder().setContent(safeV2TextContent(currentEmbedText, 1000))]
-        : []),
-    );
+    const typeSelectContent = currentEmbedText
+      ? `Select the new completion type:\n${safeV2TextContent(currentEmbedText, 1000)}`
+      : "Select the new completion type:";
+    const container = buildTextContainer(typeSelectContent);
 
     await safeUpdate(interaction, {
       components: [
@@ -415,9 +410,8 @@ function buildCompletionEditPrompt(
   const headerText = `${noticeLine}Editing **${completion.title}** - choose a field to update:`;
   const detailText = `Current: ${currentParts.join(" - ")}${noteLine}`;
 
-  const infoContainer = new ContainerBuilder().addTextDisplayComponents(
-    new TextDisplayBuilder().setContent(safeV2TextContent(headerText, 1000)),
-    new TextDisplayBuilder().setContent(safeV2TextContent(detailText, 3500)),
+  const infoContainer = buildTextContainer(
+    `${safeV2TextContent(headerText, 1000)}\n${safeV2TextContent(detailText, 3500)}`,
   );
 
   return {
