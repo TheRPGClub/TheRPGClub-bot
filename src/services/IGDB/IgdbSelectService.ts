@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import {
   ActionRowBuilder,
   ButtonStyle,
@@ -33,6 +34,9 @@ type Session = {
 };
 
 const IGDB_FIRST_MATCH_PREFIX = "igdb-first";
+const IGDB_SESSION_EXPIRED_MESSAGE =
+  "This game selection has expired or was replaced by a newer one. " +
+  "Please re-run the command (or click \"Link a game\" again) to start a fresh selection.";
 // Leave room for prev/next navigation in the 25-option Discord limit.
 const PAGE_SIZE = 22; // 22 options + prev/next (up to 24) stays under 25
 const IGDB_SESSION_KEY = Symbol.for("igdbSelectSessions");
@@ -66,7 +70,10 @@ export function createIgdbSession(
   sessionId: string;
   components: ActionRowBuilder<any>[];
 } {
-  const sessionId = `igdb-${ownerId}`;
+  // Unique per call so concurrent or sequential IGDB selections from the same user
+  // do not clobber each other in the shared session store. The id never contains a
+  // colon, which the custom-id parser relies on for exact segment counting.
+  const sessionId = `igdb-${ownerId}-${crypto.randomUUID()}`;
   const sorted = [...options].sort((a, b) => {
     const lenDiff = a.label.length - b.label.length;
     if (lenDiff !== 0) return lenDiff;
@@ -161,7 +168,7 @@ export async function handleIgdbSelectInteraction(
   const [sessionId, pageRaw] = segs;
   const session = getSessionStore().get(sessionId);
   if (!session) {
-    await safeReply(interaction, buildTextReply("This selection session has expired.", true));
+    await safeReply(interaction, buildTextReply(IGDB_SESSION_EXPIRED_MESSAGE, true));
     return true;
   }
 
@@ -216,7 +223,7 @@ export async function handleIgdbFirstMatchInteraction(
   const [sessionId] = segs;
   const session = getSessionStore().get(sessionId);
   if (!session) {
-    await safeReply(interaction, buildTextReply("This selection session has expired.", true));
+    await safeReply(interaction, buildTextReply(IGDB_SESSION_EXPIRED_MESSAGE, true));
     return true;
   }
 

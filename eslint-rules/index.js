@@ -3133,5 +3133,47 @@ export default {
         };
       },
     },
+    "igdb-session-id-built-centrally": {
+      meta: {
+        type: "problem",
+        docs: {
+          description:
+            "Disallow constructing IGDB select session ids or custom ids outside " +
+            "IgdbSelectService. The session id must come from createIgdbSession so it " +
+            "stays unique per call and does not clobber concurrent same-user sessions.",
+        },
+        schema: [],
+        messages: {
+          builtElsewhere:
+            "Do not build IGDB session ids/custom ids here. Use the sessionId/components " +
+            "returned by createIgdbSession (see src/services/IGDB/IgdbSelectService.ts).",
+        },
+      },
+      create(context) {
+        const filename = context.getFilename().replace(/\\/g, "/");
+        if (filename.endsWith("src/services/IGDB/IgdbSelectService.ts")) {
+          return {};
+        }
+        const startsWithSessionCustomId = (value) =>
+          typeof value === "string" &&
+          (value.startsWith("igdb-select:") || value.startsWith("igdb-first:"));
+        return {
+          Literal(node) {
+            if (startsWithSessionCustomId(node.value)) {
+              context.report({ node, messageId: "builtElsewhere" });
+            }
+          },
+          TemplateLiteral(node) {
+            const firstQuasi = node.quasis[0]?.value?.cooked ?? "";
+            const reconstructsCustomId = startsWithSessionCustomId(firstQuasi);
+            const reconstructsSessionId =
+              firstQuasi === "igdb-" && node.expressions.length > 0;
+            if (reconstructsCustomId || reconstructsSessionId) {
+              context.report({ node, messageId: "builtElsewhere" });
+            }
+          },
+        };
+      },
+    },
   },
 };
