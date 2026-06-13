@@ -158,6 +158,13 @@ export function buildGameProfileActionRow(
     primaryButtons.push(viewFeaturedVideo);
   }
   rows.push(buildButtonRow(...primaryButtons));
+
+  const addBacklog = buildActionButton({
+    customId: `gamedb-action:backlog:${gameId}`,
+    label: "Add to Backlog",
+    style: ButtonStyle.Secondary,
+  });
+  rows.push(buildButtonRow(addBacklog));
   return rows;
 }
 
