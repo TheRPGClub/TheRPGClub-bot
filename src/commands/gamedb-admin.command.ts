@@ -34,6 +34,7 @@ import {
 } from "../functions/InteractionUtils.js";
 import { decodeBase64Url, encodeWithMaxLength } from "../functions/CustomIdUtils.js";
 import {
+  buildAccentContainer,
   buildComponentsV2Flags,
   buildComponentsV2EditFlags,
   buildTextContainer,
@@ -45,7 +46,6 @@ import {
   ContainerBuilder,
   MediaGalleryBuilder,
   MediaGalleryItemBuilder,
-  TextDisplayBuilder,
 } from "@discordjs/builders";
 import {
   performAutoAcceptImages,
@@ -1195,13 +1195,10 @@ export class GameDbAdmin {
 
     fieldLines.push(`**Thread** ${threadId ? `✅ ${channelMention(threadId)}` : "❌ Missing"}`);
 
-    const container = new ContainerBuilder()
-      .addTextDisplayComponents(
-        new TextDisplayBuilder().setContent(
-          safeV2TextContent(`# Audit: ${game.title}\n${fieldLines.join("\n")}`, 3500),
-        ),
-      );
-    container.setAccentColor(COLOR_HIGHLIGHT);
+    const container = buildAccentContainer(
+      `# Audit: ${game.title}\n${fieldLines.join("\n")}`,
+      COLOR_HIGHLIGHT,
+    );
     if (files.length > 0) {
       container.addMediaGalleryComponents(
         new MediaGalleryBuilder().addItems(
