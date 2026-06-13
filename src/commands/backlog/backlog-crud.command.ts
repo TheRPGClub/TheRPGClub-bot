@@ -28,6 +28,8 @@ import {
   autocompleteBacklogGameTitle,
   parseBacklogEntryAutocompleteValue,
 } from "./backlog-autocomplete.utils.js";
+import { buildApiErrorMessage } from "../../utilities/ApiErrorUtils.js";
+import { logError } from "../../utilities/LogUtils.js";
 
 @Discord()
 @SlashGroup({ description: "Manage your game backlog", name: "backlog" })
@@ -78,8 +80,10 @@ export class BacklogCrudCommand {
     let resolution;
     try {
       resolution = await resolveCollectionGameForAdd(gameIdRaw);
-    } catch (err: any) {
-      await safeReply(interaction, err?.message ?? "Invalid game selection.");
+    } catch (err: unknown) {
+      logError("backlog add.resolve_game_failed", err);
+      const msg = err instanceof Error ? err.message : "Invalid game selection.";
+      await safeReply(interaction, buildTextReply(msg, true));
       return;
     }
 
@@ -106,12 +110,11 @@ export class BacklogCrudCommand {
               ),
               __forceFollowUp: true,
             });
-          } catch (err: any) {
+          } catch (err: unknown) {
+            logError("backlog add.igdb_import_failed", err);
+            const detail = buildApiErrorMessage("Failed to import from IGDB and add backlog entry.", err);
             await safeReply(selectionInteraction, {
-              ...buildTextReply(
-                err?.message ?? "Failed to import from IGDB and add backlog entry.",
-                true,
-              ),
+              ...buildTextReply(detail, true),
               __forceFollowUp: true,
             });
           }
@@ -138,8 +141,12 @@ export class BacklogCrudCommand {
       const platformLabel = created.platformName ?? (platformId ? `Platform #${platformId}` : "");
       const platformSuffix = platformLabel ? ` (${platformLabel})` : "";
       await safeReply(interaction, `Added **${created.title}**${platformSuffix} to your backlog.`);
-    } catch (err: any) {
-      await safeReply(interaction, err?.message ?? "Failed to add backlog entry.");
+    } catch (err: unknown) {
+      logError("backlog add.add_entry_failed", err);
+      await safeReply(
+        interaction,
+        buildTextReply(buildApiErrorMessage("Failed to add backlog entry.", err), true),
+      );
     }
   }
 
@@ -235,8 +242,12 @@ export class BacklogCrudCommand {
 
       const platformLabel = updated.platformName ?? "No platform";
       await safeReply(interaction, `Updated **${updated.title}** (${platformLabel}) in your backlog.`);
-    } catch (err: any) {
-      await safeReply(interaction, err?.message ?? "Failed to update backlog entry.");
+    } catch (err: unknown) {
+      logError("backlog edit.update_entry_failed", err);
+      await safeReply(
+        interaction,
+        buildTextReply(buildApiErrorMessage("Failed to update backlog entry.", err), true),
+      );
     }
   }
 
