@@ -93,6 +93,7 @@ export default [
       "local/interactive-handler-requires-safe-interaction": "error",
       "local/no-igdb-session-callback-unsafe-response": "error",
       "local/igdb-session-id-built-centrally": "error",
+      "local/no-content-with-components-v2": "error",
       "local/no-empty-catch-on-interaction-response": "warn",
       "local/no-edit-reply-on-modal-union": "error",
       "local/require-relative-import-js-extension": "error",
