@@ -2,12 +2,16 @@ import {
   ApplicationCommandOptionType,
   ButtonInteraction,
   CommandInteraction,
+  MessageFlags,
   ModalBuilder,
+  StringSelectMenuBuilder,
+  StringSelectMenuInteraction,
   TextInputStyle,
 } from "discord.js";
 import {
   ButtonComponent,
   Discord,
+  SelectMenuComponent,
   Slash,
   SlashGroup,
   SlashOption,
@@ -40,8 +44,15 @@ import { startCompletionWizard } from "./gamedb-completion.command.js";
 import { showNowPlayingThreadModal } from "./gamedb-thread.command.js";
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
 import { assertCustomIdSegments } from "../../utilities/CustomIdUtils.js";
-import { buildTextInputRow } from "../../functions/uiComponents.js";
+import {
+  buildSelectOptions,
+  buildSelectRow,
+  buildTextInputRow,
+} from "../../functions/uiComponents.js";
 import { safeIgnore } from "../../utilities/AsyncUtils.js";
+import UserGameBacklog from "../../classes/UserGameBacklog.js";
+import { buildApiErrorMessage } from "../../utilities/ApiErrorUtils.js";
+import { logError } from "../../utilities/LogUtils.js";
 
 @Discord()
 @SlashGroup("gamedb")
@@ -87,7 +98,7 @@ export class GameDbViewCommand {
   }
 
   @ButtonComponent({
-    id: /^gamedb-action:(nowplaying|completion|thread|video|hltb-import):\d+$/,
+    id: /^gamedb-action:(nowplaying|completion|thread|video|hltb-import|backlog):\d+$/,
   })
   async handleGameDbAction(interaction: ButtonInteraction): Promise<void> {
     const segs = assertCustomIdSegments(interaction, 2);
@@ -202,6 +213,75 @@ export class GameDbViewCommand {
     if (action === "thread") {
       await showNowPlayingThreadModal(interaction, gameId, game.title);
       return;
+    }
+
+    if (action === "backlog") {
+      await this.handleAddToBacklog(interaction, gameId);
+      return;
+    }
+  }
+
+  private async handleAddToBacklog(
+    interaction: ButtonInteraction,
+    gameId: number,
+  ): Promise<void> {
+    const platforms = await Game.getPlatformsForGame(gameId);
+    if (!platforms.length) {
+      await this.addBacklogEntry(interaction, gameId, null);
+      return;
+    }
+
+    const options = buildSelectOptions(
+      platforms.map((p) => ({ label: p.name, value: String(p.id) })),
+    );
+    const select = new StringSelectMenuBuilder()
+      .setCustomId(`gamedb-backlog-platform:${gameId}`)
+      .setPlaceholder("Select a platform for your backlog")
+      .addOptions(options);
+
+    await safeReply(interaction, {
+      components: [buildSelectRow(select)],
+      flags: MessageFlags.Ephemeral,
+    });
+  }
+
+  @SelectMenuComponent({ id: /^gamedb-backlog-platform:\d+$/ })
+  async handleBacklogPlatformSelect(interaction: StringSelectMenuInteraction): Promise<void> {
+    const segs = assertCustomIdSegments(interaction, 1);
+    if (!segs) return;
+    const gameId = Number(segs[0]);
+    const platformId = Number(interaction.values[0]);
+    if (!isPositiveInt(gameId) || !isPositiveInt(platformId)) {
+      await safeReply(interaction, buildTextReply("Invalid backlog selection.", true));
+      return;
+    }
+    await this.addBacklogEntry(interaction, gameId, platformId);
+  }
+
+  private async addBacklogEntry(
+    interaction: ButtonInteraction | StringSelectMenuInteraction,
+    gameId: number,
+    platformId: number | null,
+  ): Promise<void> {
+    try {
+      const created = await UserGameBacklog.addEntry({
+        userId: interaction.user.id,
+        gameId,
+        platformId,
+      });
+      const platformLabel = created.platformName
+        ?? (platformId ? `Platform #${platformId}` : "");
+      const platformSuffix = platformLabel ? ` (${platformLabel})` : "";
+      await safeReply(
+        interaction,
+        buildTextReply(`Added **${created.title}**${platformSuffix} to your backlog.`, true),
+      );
+    } catch (err: unknown) {
+      logError("gamedb view.add_backlog_failed", err);
+      await safeReply(
+        interaction,
+        buildTextReply(buildApiErrorMessage("Failed to add backlog entry.", err), true),
+      );
     }
   }
 }
