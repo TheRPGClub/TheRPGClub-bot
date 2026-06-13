@@ -83,7 +83,16 @@ export class Admin {
     }
 
     await withErrorReply(interaction, async () => {
-      await bot.initApplicationCommands();
+      const timeoutMs = 30_000;
+      await Promise.race([
+        bot.initApplicationCommands(),
+        new Promise<never>((_, reject) =>
+          setTimeout(
+            () => reject(new Error(`initApplicationCommands timed out after ${timeoutMs}ms`)),
+            timeoutMs,
+          ),
+        ),
+      ]);
       await safeReply(interaction, buildTextReply("✅ Commands synchronized with Discord.", true));
     }, "Failed to sync commands");
   }
