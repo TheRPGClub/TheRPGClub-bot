@@ -541,7 +541,11 @@ export async function withErrorReply<T>(
     return await fn();
   } catch (err: unknown) {
     const msg = extractErrorMessage(err);
-    await safeReply(interaction, buildTextReply(`${errorPrefix}: ${msg}`, ephemeral));
+    try {
+      await safeReply(interaction, buildTextReply(`${errorPrefix}: ${msg}`, ephemeral));
+    } catch {
+      // error reply itself failed (e.g. interaction token expired); nothing more to do
+    }
   }
 }
 
