@@ -54,12 +54,12 @@ export class BacklogCrudCommand {
     })
     platformRaw: string | undefined,
     @SlashOption({
-      name: "notes",
-      description: "Optional notes",
+      name: "note",
+      description: "Optional note",
       type: ApplicationCommandOptionType.String,
       required: false,
     })
-    notes: string | undefined,
+    note: string | undefined,
     interaction: CommandInteraction,
   ): Promise<void> {
     await safeDeferReply(interaction, { flags: MessageFlags.Ephemeral });
@@ -73,8 +73,8 @@ export class BacklogCrudCommand {
       return;
     }
 
-    const sanitizedNotes = notes
-      ? sanitizeUserInput(notes, { preserveNewlines: true, maxLength: 500 })
+    const sanitizedNote = note
+      ? sanitizeUserInput(note, { preserveNewlines: true, maxLength: 500 })
       : null;
 
     let resolution;
@@ -98,7 +98,7 @@ export class BacklogCrudCommand {
               userId: interaction.user.id,
               gameId: imported.gameId,
               platformId,
-              notes: sanitizedNotes,
+              note: sanitizedNote,
             });
 
             const platformLabel = created.platformName ?? (platformId ? `Platform #${platformId}` : "");
@@ -135,7 +135,7 @@ export class BacklogCrudCommand {
         userId: interaction.user.id,
         gameId: resolution.gameId,
         platformId,
-        notes: sanitizedNotes,
+        note: sanitizedNote,
       });
 
       const platformLabel = created.platformName ?? (platformId ? `Platform #${platformId}` : "");
@@ -169,15 +169,15 @@ export class BacklogCrudCommand {
     })
     platformRaw: string | undefined,
     @SlashOption({
-      name: "notes",
-      description: "New notes",
+      name: "note",
+      description: "New note",
       type: ApplicationCommandOptionType.String,
       required: false,
     })
-    notes: string | undefined,
+    note: string | undefined,
     @SlashOption({
-      name: "clear_notes",
-      description: "Clear notes",
+      name: "clear_note",
+      description: "Clear note",
       type: ApplicationCommandOptionType.Boolean,
       required: false,
     })
@@ -201,7 +201,7 @@ export class BacklogCrudCommand {
 
     const updates: {
       platformId?: number | null;
-      notes?: string | null;
+      note?: string | null;
       sortOrder?: number | null;
     } = {};
 
@@ -215,9 +215,9 @@ export class BacklogCrudCommand {
     }
 
     if (clearNotes) {
-      updates.notes = null;
-    } else if (notes !== undefined) {
-      updates.notes = sanitizeUserInput(notes, { preserveNewlines: true, maxLength: 500 });
+      updates.note = null;
+    } else if (note !== undefined) {
+      updates.note = sanitizeUserInput(note, { preserveNewlines: true, maxLength: 500 });
     }
 
     if (sortOrder !== undefined) {

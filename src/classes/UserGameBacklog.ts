@@ -11,7 +11,7 @@ export interface IUserGameBacklogEntry {
   platformName: string | null;
   platformAbbreviation: string | null;
   sortOrder: number | null;
-  notes: string | null;
+  note: string | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -22,7 +22,7 @@ type BacklogApiData = {
   gamedb_game_id: number;
   platform_id: number | null;
   sort_order: number | null;
-  notes: string | null;
+  note: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -68,7 +68,7 @@ async function mapEntries(rawEntries: BacklogApiData[]): Promise<IUserGameBacklo
       platformName: platform?.name ?? null,
       platformAbbreviation: platform?.abbreviation ?? null,
       sortOrder: raw.sort_order != null ? Number(raw.sort_order) : null,
-      notes: raw.notes ?? null,
+      note: raw.note ?? null,
       createdAt: new Date(raw.created_at),
       updatedAt: new Date(raw.updated_at),
     };
@@ -80,7 +80,7 @@ export default class UserGameBacklog {
     userId: string;
     gameId: number;
     platformId?: number | null;
-    notes?: string | null;
+    note?: string | null;
     sortOrder?: number | null;
   }): Promise<IUserGameBacklogEntry> {
     const { userId, gameId, platformId } = params;
@@ -88,9 +88,9 @@ export default class UserGameBacklog {
     if (platformId != null && !isPositiveInt(platformId)) {
       throw new Error("Invalid platform id.");
     }
-    const notes = params.notes?.trim() ? params.notes.trim() : null;
-    if (notes && notes.length > 500) {
-      throw new Error("Notes must be 500 characters or fewer.");
+    const note = params.note?.trim() ? params.note.trim() : null;
+    if (note && note.length > 500) {
+      throw new Error("note must be 500 characters or fewer.");
     }
 
     let response: BacklogSingleResponse | null;
@@ -101,7 +101,7 @@ export default class UserGameBacklog {
           data: {
             gamedb_game_id: gameId,
             platform_id: platformId ?? null,
-            notes,
+            note,
             sort_order: params.sortOrder ?? null,
           },
         },
@@ -147,7 +147,7 @@ export default class UserGameBacklog {
     userId: string,
     updates: {
       platformId?: number | null;
-      notes?: string | null;
+      note?: string | null;
       sortOrder?: number | null;
     },
   ): Promise<IUserGameBacklogEntry | null> {
@@ -162,12 +162,12 @@ export default class UserGameBacklog {
       body.platform_id = updates.platformId;
     }
 
-    if (updates.notes !== undefined) {
-      const notes = updates.notes?.trim() ? updates.notes.trim() : null;
-      if (notes && notes.length > 500) {
-        throw new Error("Notes must be 500 characters or fewer.");
+    if (updates.note !== undefined) {
+      const note = updates.note?.trim() ? updates.note.trim() : null;
+      if (note && note.length > 500) {
+        throw new Error("note must be 500 characters or fewer.");
       }
-      body.notes = notes;
+      body.note = note;
     }
 
     if (updates.sortOrder !== undefined) {
