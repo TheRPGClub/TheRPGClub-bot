@@ -67,7 +67,6 @@ const SUGGESTION_REVIEW_DECISION_MODAL_PREFIX = "suggestion-review-decision";
 const SUGGESTION_REVIEW_SUMMARY_ID = "suggestion-review-summary";
 const SUGGESTION_REVIEW_DECISION_ID = "suggestion-review-decision-choice";
 const SUGGESTION_REVIEW_REASON_ID = "suggestion-review-decision-reason";
-const SUGGESTION_REVIEW_TTL_MS = 15 * 60 * 1000;
 type SuggestionReviewSession = ISuggestionReviewSession;
 const MAX_MODAL_TEXT_INPUT_VALUE = 4000;
 
@@ -102,11 +101,6 @@ function logSuggestion(
   logInfo("suggestion", line);
 }
 
-function isSuggestionReviewSessionExpired(session: SuggestionReviewSession): boolean {
-  const lastActivity = session.updatedAt ?? session.createdAt;
-  return Date.now() - lastActivity.getTime() > SUGGESTION_REVIEW_TTL_MS;
-}
-
 async function loadSuggestionReviewSession(
   sessionId: string,
   reviewerId: string,
@@ -114,10 +108,6 @@ async function loadSuggestionReviewSession(
   const session = await getSuggestionReviewSession(sessionId);
   if (!session) return null;
   if (session.reviewerId !== reviewerId) return null;
-  if (isSuggestionReviewSessionExpired(session)) {
-    await deleteSuggestionReviewSession(sessionId);
-    return null;
-  }
   return session;
 }
 
@@ -715,7 +705,7 @@ export class SuggestionCommand {
     const session = await loadSuggestionReviewSession(parsed.sessionId, parsed.reviewerId);
     if (!session) {
       const container = buildTextContainer(
-          "This suggestion review has expired. Start again from /todo.",
+          "This review session is no longer available. Start again from /todo.",
         );
       await safeUpdate(interaction, {
         components: [container],

@@ -35,8 +35,4 @@ export const SuggestionReviewSessionSql = {
   deleteForReviewer: {
     postgres: `DELETE FROM rpg_club_suggestion_review_sessions WHERE reviewer_id = :reviewerId`,
   } satisfies ISqlEntry,
-
-  deleteExpired: {
-    postgres: `DELETE FROM rpg_club_suggestion_review_sessions WHERE created_at < :cutoff`,
-  } satisfies ISqlEntry,
 };
