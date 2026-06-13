@@ -5,6 +5,8 @@ import {
   ButtonStyle,
   ComponentType,
   ForumChannel,
+  GuildScheduledEventEntityType,
+  GuildScheduledEventPrivacyLevel,
   StringSelectMenuBuilder,
   type Message,
   type MessageCreateOptions,
@@ -23,7 +25,11 @@ import {
   buildComponentsV2EditFlags,
   buildComponentsV2Flags,
 } from "../../functions/ComponentsV2Utils.js";
-import { ADMIN_CHANNEL_ID, NOW_PLAYING_FORUM_ID } from "../../config/channels.js";
+import {
+  ADMIN_CHANNEL_ID,
+  ANNOUNCEMENT_CHANNEL_ID,
+  NOW_PLAYING_FORUM_ID,
+} from "../../config/channels.js";
 import Gotm, { insertGotmRoundInDatabase, type IGotmGame } from "../../classes/Gotm.js";
 import NrGotm, { insertNrGotmRoundInDatabase, type INrGotmGame } from "../../classes/NrGotm.js";
 import BotVotingInfo from "../../classes/BotVotingInfo.js";
@@ -900,6 +906,42 @@ export async function handleNextRoundSetup(
           return;
         }
         await BotVotingInfo.setRoundInfo(nextRound, finalDate, null);
+      },
+    },
+    {
+      description:
+        `Create vote reminder event for <t:${toUnixTimestamp(finalDate)}:F>`,
+      execute: async () => {
+        if (testMode) {
+          await wizardLog("[Test] Would create vote reminder scheduled event.");
+          return;
+        }
+        const guild = interaction.guild;
+        if (!guild) {
+          await wizardLog("No guild context; skipping vote reminder event.");
+          return;
+        }
+        const voteChannelUrl =
+          `https://discord.com/channels/${guild.id}/${ANNOUNCEMENT_CHANNEL_ID}`;
+        // External events require an end time; give the reminder a 1-hour window.
+        const endsAt = new Date(finalDate.getTime() + 60 * 60 * 1000);
+        try {
+          const event = await guild.scheduledEvents.create({
+            description: `Cast your GOTM and NR-GOTM votes for ${monthYear}.`,
+            entityMetadata: { location: voteChannelUrl },
+            entityType: GuildScheduledEventEntityType.External,
+            name: `Round ${nextRound} Vote (${monthYear})`,
+            privacyLevel: GuildScheduledEventPrivacyLevel.GuildOnly,
+            scheduledEndTime: endsAt,
+            scheduledStartTime: finalDate,
+          });
+          const eventUrl = `https://discord.com/events/${guild.id}/${event.id}`;
+          await wizardLog(`Created vote reminder event: ${eventUrl}`);
+        } catch (err: any) {
+          await wizardLog(
+            `Vote reminder event creation failed: ${err?.message ?? String(err)}`,
+          );
+        }
       },
     },
     ];
