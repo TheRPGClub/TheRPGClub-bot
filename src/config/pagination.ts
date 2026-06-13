@@ -14,5 +14,6 @@ export const CLAIM_MENU_CHUNK_SIZE     = 25;
 export const TODO_DEFAULT_PAGE_SIZE        = 15;
 export const TODO_MAX_PAGE_SIZE            = 15;
 export const COLLECTION_LIST_PAGE_SIZE     = 20;
+export const BACKLOG_LIST_PAGE_SIZE        = 20;
 export const GAMEDB_CSV_RESULT_LIMIT       = 15;
 export const GOTM_AUDIT_RESULT_LIMIT       = 25;
