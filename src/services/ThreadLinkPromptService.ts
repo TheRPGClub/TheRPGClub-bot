@@ -200,7 +200,11 @@ export class ThreadLinkButtonHandlers {
               const finalId = await finalizeSelection(igdbId);
               if (!finalId) return;
               gameId = finalId;
-              await sel.editReply({ content: `Linked to GameDB #${finalId}.`, components: [] });
+              // The prompt was sent with IS_COMPONENTS_V2, so the edit must use a V2
+              // container; a legacy `content` field is rejected (Discord error 50035).
+              await sel.editReply({
+                components: [buildTextContainer(`Linked to GameDB #${finalId}.`)],
+              });
               await finishLink();
             },
           );

@@ -3175,5 +3175,90 @@ export default {
         };
       },
     },
+    "no-content-with-components-v2": {
+      meta: {
+        type: "problem",
+        docs: {
+          description:
+            "Disallow a legacy `content` field alongside Components V2 in the same reply " +
+            "options object. Discord rejects this with error 50035 " +
+            "(MESSAGE_CANNOT_USE_LEGACY_FIELDS_WITH_COMPONENTS_V2).",
+        },
+        schema: [],
+        messages: {
+          contentWithV2:
+            "Do not pass `content` with Components V2. Put the text in a V2 container " +
+            "(e.g. buildTextContainer) instead of a `content` field.",
+        },
+      },
+      create(context) {
+        const V2_FLAG_BUILDERS = new Set([
+          "buildComponentsV2Flags",
+          "buildComponentsV2EditFlags",
+        ]);
+        const V2_CONTAINER_BUILDERS = new Set([
+          "buildTextContainer",
+          "buildContentContainer",
+          "buildAccentContainer",
+          "buildTitledContainer",
+        ]);
+        const isV2FlagValue = (value) => {
+          if (!value) return false;
+          if (value.type === "CallExpression") {
+            const callee = value.callee;
+            if (callee.type === "Identifier" && V2_FLAG_BUILDERS.has(callee.name)) {
+              return true;
+            }
+            if (
+              callee.type === "MemberExpression" &&
+              callee.property.type === "Identifier" &&
+              V2_FLAG_BUILDERS.has(callee.property.name)
+            ) {
+              return true;
+            }
+          }
+          if (
+            value.type === "MemberExpression" &&
+            value.property.type === "Identifier" &&
+            value.property.name === "IsComponentsV2"
+          ) {
+            return true;
+          }
+          return false;
+        };
+        const arrayHasV2Container = (value) => {
+          if (!value || value.type !== "ArrayExpression") return false;
+          return value.elements.some((el) => {
+            if (!el || el.type !== "CallExpression") return false;
+            const callee = el.callee;
+            return callee.type === "Identifier" && V2_CONTAINER_BUILDERS.has(callee.name);
+          });
+        };
+        return {
+          ObjectExpression(node) {
+            const props = node.properties.filter(
+              (p) => p.type === "Property" && p.key.type === "Identifier",
+            );
+            const contentProp = props.find((p) => p.key.name === "content");
+            if (!contentProp) return;
+            // `content: null`/`undefined` is the valid way to clear prior content when
+            // switching to V2 components; only a non-null content value is rejected.
+            const contentValue = contentProp.value;
+            const isNullish =
+              (contentValue.type === "Literal" && contentValue.value === null) ||
+              (contentValue.type === "Identifier" && contentValue.name === "undefined");
+            if (isNullish) return;
+            const flagsProp = props.find((p) => p.key.name === "flags");
+            const componentsProp = props.find((p) => p.key.name === "components");
+            const usesV2 =
+              (flagsProp && isV2FlagValue(flagsProp.value)) ||
+              (componentsProp && arrayHasV2Container(componentsProp.value));
+            if (usesV2) {
+              context.report({ node: contentProp, messageId: "contentWithV2" });
+            }
+          },
+        };
+      },
+    },
   },
 };
