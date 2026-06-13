@@ -707,7 +707,7 @@ export default class Member {
     const uniqueIds = [...new Set(gameIds.filter(isPositiveInt))];
     if (!uniqueIds.length) return [];
     const inlineTable = uniqueIds
-      .map((_, idx) => `SELECT :id${idx} AS GAME_ID`)
+      .map((_, idx) => `SELECT :id${idx}::int AS GAME_ID`)
       .join(" UNION ALL ");
     const binds: Record<string, string | number> = { userId };
     uniqueIds.forEach((id, idx) => {
