@@ -119,9 +119,3 @@ export async function deleteSuggestionReviewSessionsForReviewer(
 ): Promise<number> {
   return dbMutate(SuggestionReviewSessionSql.deleteForReviewer, { reviewerId });
 }
-
-export async function deleteExpiredSuggestionReviewSessions(
-  cutoffDate: Date,
-): Promise<number> {
-  return dbMutate(SuggestionReviewSessionSql.deleteExpired, { cutoff: cutoffDate });
-}
