@@ -9,19 +9,23 @@ import UserGameCollection, {
   type CollectionOwnershipType,
 } from "../../classes/UserGameCollection.js";
 import { flattenErrorMessages } from "../imports/import-scaffold.service.js";
-import {
-  buildTextContainer,
-  safeV2TextContent,
-} from "../../functions/ComponentsV2Utils.js";
+import { safeV2TextContent } from "../../functions/ComponentsV2Utils.js";
 import { safeDeferUpdate } from "../../functions/InteractionUtils.js";
 import {
   buildActionButton,
   buildButtonRow,
-  buildUserHeaderContainer,
 } from "../../functions/uiComponents.js";
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
-import { parseCustomIdSegments } from "../../utilities/CustomIdUtils.js";
-import { buildDisabledPrevNextRowWithIds } from "../../functions/PaginationUtils.js";
+import {
+  parseCustomIdSegments,
+  encodeVisibility,
+  decodeVisibility,
+} from "../../utilities/CustomIdUtils.js";
+import {
+  buildUserListNavId,
+  parseUserListNavId,
+  buildPaginatedUserListResponse,
+} from "../../functions/PaginationUtils.js";
 import { safeIgnore } from "../../utilities/AsyncUtils.js";
 import { logError, logInfo } from "../../utilities/LogUtils.js";
 import {
@@ -64,14 +68,7 @@ export function buildCollectionListNavId(params: {
   isEphemeral: boolean;
   direction: "prev" | "next";
 }): string {
-  return [
-    COLLECTION_LIST_NAV_PREFIX,
-    params.viewerUserId,
-    params.targetUserId,
-    String(params.page),
-    params.isEphemeral ? "e" : "p",
-    params.direction,
-  ].join(":");
+  return buildUserListNavId(COLLECTION_LIST_NAV_PREFIX, params);
 }
 
 export function parseCollectionListNavId(customId: string): {
@@ -81,22 +78,7 @@ export function parseCollectionListNavId(customId: string): {
   isEphemeral: boolean;
   direction: "prev" | "next";
 } | null {
-  if (!customId.startsWith(`${COLLECTION_LIST_NAV_PREFIX}:`)) return null;
-  const segs = parseCustomIdSegments(customId, 5);
-  if (!segs) return null;
-  const [viewerUserId, targetUserId, pageStr, visibility, direction] = segs;
-  const page = Number(pageStr);
-  if (!Number.isInteger(page) || page < 0) return null;
-  if (visibility !== "e" && visibility !== "p") return null;
-  if (direction !== "prev" && direction !== "next") return null;
-
-  return {
-    viewerUserId,
-    targetUserId,
-    page,
-    isEphemeral: visibility === "e",
-    direction: direction as "prev" | "next",
-  };
+  return parseUserListNavId(COLLECTION_LIST_NAV_PREFIX, customId);
 }
 
 export function buildCollectionFilterActionId(params: {
@@ -109,7 +91,7 @@ export function buildCollectionFilterActionId(params: {
     COLLECTION_LIST_FILTER_PREFIX,
     params.viewerUserId,
     params.targetUserId,
-    params.isEphemeral ? "e" : "p",
+    encodeVisibility(params.isEphemeral),
     params.action,
   ].join(":");
 }
@@ -124,15 +106,10 @@ export function parseCollectionFilterActionId(customId: string): {
   const segs = parseCustomIdSegments(customId, 4);
   if (!segs) return null;
   const [viewerUserId, targetUserId, visibility, action] = segs;
-  if (visibility !== "e" && visibility !== "p") return null;
+  const isEphemeral = decodeVisibility(visibility);
+  if (isEphemeral === null) return null;
   if (action !== "open") return null;
-
-  return {
-    viewerUserId,
-    targetUserId,
-    isEphemeral: visibility === "e",
-    action,
-  };
+  return { viewerUserId, targetUserId, isEphemeral, action };
 }
 
 function encodeFilterPanelAction(
@@ -168,7 +145,7 @@ export function buildCollectionFilterPanelActionId(params: {
     params.viewerUserId,
     params.targetUserId,
     params.sourceMessageId,
-    params.isEphemeral ? "e" : "p",
+    encodeVisibility(params.isEphemeral),
     encodeFilterPanelAction(params.action),
   ].join(":");
 }
@@ -184,17 +161,10 @@ export function parseCollectionFilterPanelActionId(customId: string): {
   const segs = parseCustomIdSegments(customId, 5);
   if (!segs) return null;
   const [viewerUserId, targetUserId, sourceMessageId, visibility, actionCode] = segs;
+  const isEphemeral = decodeVisibility(visibility);
   const action = decodeFilterPanelAction(actionCode);
-  if (visibility !== "e" && visibility !== "p") return null;
-  if (!action) return null;
-
-  return {
-    viewerUserId,
-    targetUserId,
-    sourceMessageId,
-    isEphemeral: visibility === "e",
-    action,
-  };
+  if (isEphemeral === null || !action) return null;
+  return { viewerUserId, targetUserId, sourceMessageId, isEphemeral, action };
 }
 
 export function buildCollectionFilterModalId(params: {
@@ -209,7 +179,7 @@ export function buildCollectionFilterModalId(params: {
     params.viewerUserId,
     params.targetUserId,
     params.sourceMessageId,
-    params.isEphemeral ? "e" : "p",
+    encodeVisibility(params.isEphemeral),
     params.ownershipCode,
   ].join(":");
 }
@@ -225,12 +195,13 @@ export function parseCollectionFilterModalId(customId: string): {
   const segs = parseCustomIdSegments(customId, 5);
   if (!segs) return null;
   const [viewerUserId, targetUserId, sourceMessageId, visibility, ownershipCode] = segs;
-  if (visibility !== "e" && visibility !== "p") return null;
+  const isEphemeral = decodeVisibility(visibility);
+  if (isEphemeral === null) return null;
   return {
     viewerUserId,
     targetUserId,
     sourceMessageId,
-    isEphemeral: visibility === "e",
+    isEphemeral,
     ownershipType: ownershipCodeToType(ownershipCode),
   };
 }
@@ -494,56 +465,46 @@ async function buildCollectionListResponse(params: {
     })
     .join("\n");
 
-  const components: Array<ContainerBuilder | ActionRowBuilder<any>> = [];
-
-  components.push(
-    buildUserHeaderContainer(params.targetUserId, params.memberLabel, "Game Collection"),
-  );
-
-  components.push(
-    buildTextContainer(safeV2TextContent(listText, 3500)),
-  );
-
   const footerParts = [`Page ${safePage + 1}/${pageCount}`, `${total} total entries`];
   if (filtersText) {
     footerParts.push(`Filters: ${filtersText}`);
   }
-  components.push(
-    buildTextContainer(safeV2TextContent(`-# ${footerParts.join(" | ")}`, 1000)),
-  );
 
-  const row = buildDisabledPrevNextRowWithIds(
-    buildCollectionListNavId({
+  const components = buildPaginatedUserListResponse({
+    headerUserId: params.targetUserId,
+    headerLabel: params.memberLabel,
+    headerTitle: "Game Collection",
+    bodyText: listText,
+    footerParts,
+    prevCustomId: buildCollectionListNavId({
       viewerUserId: params.viewerUserId,
       targetUserId: params.targetUserId,
       page: safePage,
       isEphemeral: params.isEphemeral,
       direction: "prev",
     }),
-    buildCollectionListNavId({
+    nextCustomId: buildCollectionListNavId({
       viewerUserId: params.viewerUserId,
       targetUserId: params.targetUserId,
       page: safePage,
       isEphemeral: params.isEphemeral,
       direction: "next",
     }),
-    safePage,
+    page: safePage,
     pageCount,
-  ) ?? buildButtonRow();
-
-  row.addComponents(
-    buildActionButton({
-      customId: buildCollectionFilterActionId({
-        viewerUserId: params.viewerUserId,
-        targetUserId: params.targetUserId,
-        isEphemeral: params.isEphemeral,
-        action: "open",
+    extraButtons: [
+      buildActionButton({
+        customId: buildCollectionFilterActionId({
+          viewerUserId: params.viewerUserId,
+          targetUserId: params.targetUserId,
+          isEphemeral: params.isEphemeral,
+          action: "open",
+        }),
+        label: "Filter Results",
+        style: ButtonStyle.Primary,
       }),
-      label: "Filter Results",
-      style: ButtonStyle.Primary,
-    }),
-  );
-  components.push(row);
+    ],
+  });
 
   if (params.debugSource === "nav") {
     validateComponentsForCollectionNavDebug(components, {

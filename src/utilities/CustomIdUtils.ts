@@ -39,3 +39,13 @@ export function assertCustomIdSegments(
 export function getCustomIdPrefix(customId: string): string {
   return customId.split(":")[0];
 }
+
+export function encodeVisibility(isEphemeral: boolean): string {
+  return isEphemeral ? "e" : "p";
+}
+
+export function decodeVisibility(code: string): boolean | null {
+  if (code === "e") return true;
+  if (code === "p") return false;
+  return null;
+}

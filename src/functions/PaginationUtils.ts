@@ -1,5 +1,12 @@
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle } from "discord.js";
-import { buildActionButton, buildButtonRow } from "./uiComponents.js";
+import { ContainerBuilder } from "@discordjs/builders";
+import { buildActionButton, buildButtonRow, buildUserHeaderContainer } from "./uiComponents.js";
+import { buildTextContainer, safeV2TextContent } from "./ComponentsV2Utils.js";
+import {
+  encodeVisibility,
+  decodeVisibility,
+  parseCustomIdSegments,
+} from "../utilities/CustomIdUtils.js";
 
 export function buildPageFooterText(page: number, totalPages: number, suffix?: string): string {
   const base = `Page ${page + 1}/${totalPages}`;
@@ -97,6 +104,48 @@ export function buildDisabledPrevNextRow(
   );
 }
 
+export function buildUserListNavId(
+  prefix: string,
+  params: {
+    viewerUserId: string;
+    targetUserId: string;
+    page: number;
+    isEphemeral: boolean;
+    direction: "prev" | "next";
+  },
+): string {
+  return [
+    prefix,
+    params.viewerUserId,
+    params.targetUserId,
+    String(params.page),
+    encodeVisibility(params.isEphemeral),
+    params.direction,
+  ].join(":");
+}
+
+export function parseUserListNavId(
+  prefix: string,
+  customId: string,
+): {
+  viewerUserId: string;
+  targetUserId: string;
+  page: number;
+  isEphemeral: boolean;
+  direction: "prev" | "next";
+} | null {
+  if (!customId.startsWith(`${prefix}:`)) return null;
+  const segs = parseCustomIdSegments(customId, 5);
+  if (!segs) return null;
+  const [viewerUserId, targetUserId, pageStr, visibility, direction] = segs;
+  const page = Number(pageStr);
+  if (!Number.isInteger(page) || page < 0) return null;
+  const isEphemeral = decodeVisibility(visibility);
+  if (isEphemeral === null) return null;
+  if (direction !== "prev" && direction !== "next") return null;
+  return { viewerUserId, targetUserId, page, isEphemeral, direction: direction as "prev" | "next" };
+}
+
 /**
  * Builds a Previous / Next button row using explicit customIds where both
  * buttons are always included but disabled at the boundary pages. Returns null
@@ -120,4 +169,35 @@ export function buildDisabledPrevNextRowWithIds(
     buildActionButton({ customId: prevCustomId, label: options?.labels?.prev ?? "Previous", style: options?.styles?.prev ?? ButtonStyle.Secondary }).setDisabled(prevDisabled),
     buildActionButton({ customId: nextCustomId, label: options?.labels?.next ?? "Next", style: options?.styles?.next ?? ButtonStyle.Secondary }).setDisabled(nextDisabled),
   );
+}
+
+export function buildPaginatedUserListResponse(params: {
+  headerUserId: string;
+  headerLabel: string;
+  headerTitle: string;
+  bodyText: string;
+  footerParts: string[];
+  prevCustomId: string;
+  nextCustomId: string;
+  page: number;
+  pageCount: number;
+  extraButtons?: ButtonBuilder[];
+}): Array<ContainerBuilder | ActionRowBuilder<ButtonBuilder>> {
+  const components: Array<ContainerBuilder | ActionRowBuilder<ButtonBuilder>> = [];
+  components.push(
+    buildUserHeaderContainer(params.headerUserId, params.headerLabel, params.headerTitle),
+  );
+  components.push(buildTextContainer(safeV2TextContent(params.bodyText, 3500)));
+  components.push(buildTextContainer(safeV2TextContent(`-# ${params.footerParts.join(" | ")}`, 1000)));
+  const row = buildDisabledPrevNextRowWithIds(
+    params.prevCustomId,
+    params.nextCustomId,
+    params.page,
+    params.pageCount,
+  ) ?? buildButtonRow();
+  if (params.extraButtons?.length) {
+    row.addComponents(...params.extraButtons);
+  }
+  components.push(row);
+  return components;
 }
