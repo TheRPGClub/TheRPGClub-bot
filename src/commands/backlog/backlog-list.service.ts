@@ -237,10 +237,11 @@ export async function buildBacklogListResponse(params: {
   const pageEntries = filtered.slice(start, start + BACKLOG_LIST_PAGE_SIZE);
 
   const listText = pageEntries
-    .map((entry) => {
+    .map((entry, index) => {
+      const number = start + index + 1;
       const platform = entry.platformName ?? "No platform";
       const noteTag = entry.note ? ` · _${safeV2TextContent(entry.note, 500)}_` : "";
-      return `**${safeV2TextContent(entry.title, 100)}** · ${platform}${noteTag}`;
+      return `${number}. **${safeV2TextContent(entry.title, 100)}** · ${platform}${noteTag}`;
     })
     .join("\n");
 
