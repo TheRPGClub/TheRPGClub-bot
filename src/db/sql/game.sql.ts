@@ -69,6 +69,10 @@ export const GameSql = {
            ON CONFLICT (game_id, alt_game_id) DO NOTHING`,
   } satisfies ISqlEntry,
 
+  getAllGameIdsWithIgdb: {
+    postgres: `SELECT game_id FROM gamedb_games WHERE igdb_id IS NOT NULL ORDER BY game_id`,
+  } satisfies ISqlEntry,
+
   getGameByIgdbId: {
     postgres: `SELECT ${GAME_COLS_PG}
            FROM gamedb_games

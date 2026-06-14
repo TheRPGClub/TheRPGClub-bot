@@ -664,6 +664,15 @@ export default class Game {
     return pairs.length;
   }
 
+  static async getAllGameIdsWithIgdb(): Promise<number[]> {
+    const rows = await dbQuery<{ GAME_ID: number }, number>(
+      GameSql.getAllGameIdsWithIgdb,
+      {},
+      (row) => row.GAME_ID,
+    );
+    return rows;
+  }
+
   static async getGameByIgdbId(igdbId: number): Promise<IGame | null> {
     return dbWithConnection(async (conn) => {
       const rows = await dbQueryConn(
