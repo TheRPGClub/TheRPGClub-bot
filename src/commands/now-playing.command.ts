@@ -420,6 +420,7 @@ export class NowPlayingCommand {
             note: noteRaw.length ? noteRaw : null,
           },
           "reply",
+          this.promptNowPlayingAddPlatformSelection.bind(this),
         );
         return;
       }
