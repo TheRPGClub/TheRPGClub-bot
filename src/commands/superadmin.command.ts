@@ -57,6 +57,7 @@ import {
 } from "../functions/ComponentsV2Utils.js";
 import { isPositiveInt, isValidPlaytimeHours } from "../utilities/ValidationUtils.js";
 import { sleep } from "../utilities/DelayUtils.js";
+import { apiPost } from "../services/RpgClubApiClient.js";
 import { truncateDescription, truncateLabel } from "../config/textLimits.js";
 import { assertCustomIdSegments } from "../utilities/CustomIdUtils.js";
 import { safeIgnore } from "../utilities/AsyncUtils.js";
@@ -851,6 +852,51 @@ export class SuperAdmin {
 
     await safeReply(interaction, buildTextReply(`Member scan complete. Upserts succeeded: ${successCount}. Failed: ${failCount}. ` +
         `Marked departed: ${departedCount}.`, true));
+  }
+
+  @Slash({
+    description: "Fetch missing images from IGDB for all GameDB titles",
+    name: "gamedb-refresh-images",
+  })
+  async gamedbRefreshImages(interaction: CommandInteraction): Promise<void> {
+    await safeDeferReply(interaction, { flags: MessageFlags.Ephemeral });
+
+    const okToUseCommand = await isSuperAdmin(interaction);
+    if (!okToUseCommand) return;
+
+    const gameIds = await Game.getAllGameIdsWithIgdb();
+    const total = gameIds.length;
+    let successCount = 0;
+    let failCount = 0;
+
+    const progressText = (): string =>
+      `Refreshing GameDB images: ${successCount + failCount}/${total} processed` +
+      ` (${successCount} ok, ${failCount} failed)`;
+
+    await safeReply(interaction, buildTextReply(progressText(), true));
+
+    for (let i = 0; i < gameIds.length; i++) {
+      const gameId = gameIds[i];
+      try {
+        await apiPost(`/api/v1/games/${gameId}/refresh-images`);
+        successCount++;
+      } catch (err) {
+        failCount++;
+        logError("SuperadminCommand.gamedbRefreshImages", { gameId, err });
+      }
+
+      if ((i + 1) % 10 === 0 || i === gameIds.length - 1) {
+        await safeReply(interaction, buildTextReply(progressText(), true));
+      }
+
+      await sleep(250);
+    }
+
+    await safeReply(interaction, buildTextReply(
+      `GameDB image refresh complete. ${total} games processed:` +
+        ` ${successCount} succeeded, ${failCount} failed.`,
+      true,
+    ));
   }
 
   @Slash({ description: "Show help for server owner commands", name: "help" })
