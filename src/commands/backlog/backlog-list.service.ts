@@ -239,7 +239,7 @@ export async function buildBacklogListResponse(params: {
   const listText = pageEntries
     .map((entry) => {
       const platform = entry.platformName ?? "No platform";
-      const noteTag = entry.note ? ` · _${safeV2TextContent(entry.note, 60)}_` : "";
+      const noteTag = entry.note ? ` · _${safeV2TextContent(entry.note, 500)}_` : "";
       return `**${safeV2TextContent(entry.title, 100)}** · ${platform}${noteTag}`;
     })
     .join("\n");
