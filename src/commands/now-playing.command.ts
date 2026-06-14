@@ -3,12 +3,10 @@ import {
   type CommandInteraction,
   type User,
   MessageFlags,
-  ModalBuilder,
   ModalSubmitInteraction,
   ActionRowBuilder,
   StringSelectMenuBuilder,
   StringSelectMenuInteraction,
-  TextInputStyle,
   ButtonBuilder,
   ButtonStyle,
   ButtonInteraction,
@@ -26,11 +24,9 @@ import {
   ModalComponent,
 } from "discordx";
 import {
-  ContainerBuilder,
   ModalBuilder as ComponentsModalBuilder,
   ActionRowBuilder as ComponentsActionRowBuilder,
   TextInputBuilder as ComponentsTextInputBuilder,
-  TextDisplayBuilder,
 } from "@discordjs/builders";
 import { TextInputStyle as ApiTextInputStyle } from "discord-api-types/v10";
 import Member, { type IMemberNowPlayingEntry } from "../classes/Member.js";
@@ -50,7 +46,6 @@ import Game, { type IGame } from "../classes/Game.js";
 import {
   buildActionButton,
   buildButtonRow,
-  buildTextInputRow,
   buildUserHeaderContainer,
   buildSelectRow,
 } from "../functions/uiComponents.js";
@@ -65,7 +60,6 @@ import {
   buildTextContainer,
   buildTextReply,
   buildTitledContainer,
-  safeV2TextContent,
 } from "../functions/ComponentsV2Utils.js";
 import {
   autocompleteGameCompletionPlatform,
@@ -96,23 +90,15 @@ import { safeIgnore } from "../utilities/AsyncUtils.js";
 import {
   MAX_NOW_PLAYING_NOTE_LEN,
   NOW_PLAYING_SEARCH_LIMIT,
-  NOW_PLAYING_SORT_SLOT_PREFIX,
-  NOW_PLAYING_SORT_SAVE_PREFIX,
-  NOW_PLAYING_SORT_RESET_PREFIX,
-  NOW_PLAYING_NOTE_MODAL_ID,
   NOW_PLAYING_NOTE_INPUT_ID,
   NOW_PLAYING_NOTE_MODAL_MAX_FIELDS,
   NOW_PLAYING_ADD_MODAL_ID,
   NOW_PLAYING_ADD_TITLE_INPUT_ID,
   NOW_PLAYING_ADD_NOTE_INPUT_ID,
   NOW_PLAYING_ADD_PLATFORM_SELECT_PREFIX,
-  NOW_PLAYING_EDIT_PLATFORM_SLOT_PREFIX,
-  NOW_PLAYING_EDIT_PLATFORM_SAVE_PREFIX,
-  NOW_PLAYING_EDIT_PLATFORM_RESET_PREFIX,
   NOW_PLAYING_GALLERY_MAX,
   NOW_PLAYING_LIST_EDIT_PREFIX,
   NOW_PLAYING_EDIT_MENU_START_JOURNAL_SELECT_PREFIX,
-  NOW_PLAYING_REMOVE_SELECT_PREFIX,
   NOW_PLAYING_JOURNAL_ADD_PREFIX,
   NOW_PLAYING_JOURNAL_EDIT_PREFIX,
   NOW_PLAYING_JOURNAL_DELETE_PREFIX,
@@ -154,7 +140,6 @@ import {
   getDisplayNowPlayingEntries,
 } from "../functions/NowPlayingUtils.js";
 import {
-  buildNowPlayingListLines,
   buildNowPlayingListContainer,
   buildNowPlayingMessageContainer,
   buildComponentPayload,
@@ -167,55 +152,16 @@ import {
   refreshNowPlayingListFromContext,
   trimTextDisplayContent,
   buildNowPlayingMemberSelect,
+  buildNowPlayingRemoveComponents,
+  buildNowPlayingEditPlatformComponents,
+  buildNowPlayingSortComponents,
 } from "./now-playing/nowPlayingListRenderer.js";
 import { buildJournalComponents } from "./now-playing/nowPlayingRenderers.js";
-
-function buildEditNoteModal(
-  ownerId: string,
-  gameId: number,
-  title: string,
-  currentNote: string | null,
-): ModalBuilder {
-  return new ModalBuilder()
-    .setCustomId(`${NOW_PLAYING_NOTE_MODAL_ID}:${ownerId}:${gameId}`)
-    .setTitle("Edit Now Playing Note")
-    .addComponents(buildTextInputRow({
-      customId: NOW_PLAYING_NOTE_INPUT_ID,
-      label: title.slice(0, 45),
-      style: TextInputStyle.Paragraph,
-      required: false,
-      maxLength: MAX_NOW_PLAYING_NOTE_LEN,
-      value: currentNote ?? "",
-    }));
-}
-
-function buildEditNotesModal(
-  ownerId: string,
-  entries: Array<{
-    gameId: number;
-    title: string;
-    platformName: string | null;
-    platformAbbreviation: string | null;
-    note: string | null;
-  }>,
-): ModalBuilder {
-  const modal = new ModalBuilder()
-    .setCustomId(`${NOW_PLAYING_NOTE_MODAL_ID}:${ownerId}`)
-    .setTitle("Edit Now Playing Notes");
-
-  entries.forEach((entry) => {
-    modal.addComponents(buildTextInputRow({
-      customId: `${NOW_PLAYING_NOTE_INPUT_ID}:${entry.gameId}`,
-      label: formatEntryTitleWithPlatform(entry).slice(0, 45),
-      style: TextInputStyle.Paragraph,
-      required: false,
-      maxLength: MAX_NOW_PLAYING_NOTE_LEN,
-      value: entry.note ?? "",
-    }));
-  });
-
-  return modal;
-}
+import {
+  buildEditNoteModal,
+  buildEditNotesModal,
+  buildNowPlayingAddModal,
+} from "./now-playing/nowPlayingModals.js";
 
 @Discord()
 @SlashGroup({ description: "Show now playing data", name: "now-playing" })
@@ -593,22 +539,6 @@ export class NowPlayingCommand {
     }
   }
 
-  private buildNowPlayingAddModal(): ModalBuilder {
-    return new ModalBuilder()
-      .setCustomId(NOW_PLAYING_ADD_MODAL_ID)
-      .setTitle("Add Now Playing Game")
-      .addComponents(
-        buildTextInputRow({ customId: NOW_PLAYING_ADD_TITLE_INPUT_ID, label: "Game title", maxLength: 100 }),
-        buildTextInputRow({
-          customId: NOW_PLAYING_ADD_NOTE_INPUT_ID,
-          label: "Note (optional)",
-          style: TextInputStyle.Paragraph,
-          required: false,
-          maxLength: MAX_NOW_PLAYING_NOTE_LEN,
-        }),
-      );
-  }
-
   private async resolveNowPlayingGameByTitle(searchTerm: string): Promise<IGame | null> {
     const parsed = parseTitleWithYear(searchTerm);
     const normalizedSearchTerm = parsed.title.trim();
@@ -866,7 +796,7 @@ export class NowPlayingCommand {
         NOW_PLAYING_GALLERY_MAX,
         includeImages,
       );
-      const components = this.buildNowPlayingRemoveComponents(
+      const components = buildNowPlayingRemoveComponents(
         entries,
         userId,
         thumbnailsByGameId,
@@ -939,7 +869,7 @@ export class NowPlayingCommand {
       return;
     }
     const stateToken = buildNowPlayingSortStateToken(entries.length);
-    const components = this.buildNowPlayingSortComponents(entries, ownerId, stateToken);
+    const components = buildNowPlayingSortComponents(entries, ownerId, stateToken);
     const pmComponents = await withPmNowPlayingList(
       ownerId,
       interaction.guildId,
@@ -1046,7 +976,7 @@ export class NowPlayingCommand {
 
     const platformOptions = await this.getNowPlayingEditPlatformOptions(entries);
     const stateToken = buildNowPlayingPlatformStateFromCurrent(entries, platformOptions);
-    const components = this.buildNowPlayingEditPlatformComponents(
+    const components = buildNowPlayingEditPlatformComponents(
       entries,
       interaction.user.id,
       platformOptions,
@@ -1230,7 +1160,7 @@ export class NowPlayingCommand {
     }
 
     parsed[slotIndex] = selectedOptionIndex;
-    const components = this.buildNowPlayingEditPlatformComponents(
+    const components = buildNowPlayingEditPlatformComponents(
       entries,
       ownerId,
       platformOptions,
@@ -1353,7 +1283,7 @@ export class NowPlayingCommand {
         }
       }
       parsed[slotIndex] = selectedIndex;
-      const components = this.buildNowPlayingSortComponents(
+      const components = buildNowPlayingSortComponents(
         entries,
         ownerId,
         encodeNowPlayingSortState(parsed),
@@ -1395,7 +1325,7 @@ export class NowPlayingCommand {
       return;
     }
     if (parsed.some((value) => value < 0)) {
-      const components = this.buildNowPlayingSortComponents(
+      const components = buildNowPlayingSortComponents(
         entries,
         ownerId,
         stateToken,
@@ -1408,7 +1338,7 @@ export class NowPlayingCommand {
       return;
     }
     if (new Set(parsed).size !== parsed.length) {
-      const components = this.buildNowPlayingSortComponents(
+      const components = buildNowPlayingSortComponents(
         entries,
         ownerId,
         stateToken,
@@ -1450,7 +1380,7 @@ export class NowPlayingCommand {
     const responseFlags = buildComponentsV2Flags(isEphemeral);
     const entries = getDisplayNowPlayingEntries(await Member.getNowPlaying(ownerId)).slice(0, 10);
     const stateToken = buildNowPlayingSortStateToken(entries.length);
-    const components = this.buildNowPlayingSortComponents(entries, ownerId, stateToken);
+    const components = buildNowPlayingSortComponents(entries, ownerId, stateToken);
     const pmComponents = await withPmNowPlayingList(ownerId, interaction.guildId, components);
     await safeReply(interaction, { components: pmComponents, flags: responseFlags });
   }
@@ -1648,7 +1578,7 @@ export class NowPlayingCommand {
         NOW_PLAYING_GALLERY_MAX,
         includeImages,
       );
-      const components = this.buildNowPlayingRemoveComponents(
+      const components = buildNowPlayingRemoveComponents(
         entries,
         ownerId,
         thumbnailsByGameId,
@@ -2238,7 +2168,7 @@ export class NowPlayingCommand {
     const [ownerId] = segs;
     if (await replyIfNotOwner(interaction, ownerId, "This add prompt isn't for you.")) return;
     setNowPlayingListContext(ownerId, interaction.message);
-    safeIgnore(interaction.showModal(this.buildNowPlayingAddModal()));
+    safeIgnore(interaction.showModal(buildNowPlayingAddModal()));
   }
 
   @ButtonComponent({ id: /^nowplaying-list-edit-platform:\d+$/ })
@@ -2286,7 +2216,7 @@ export class NowPlayingCommand {
       return;
     }
     if (parsed.some((value) => value < 0)) {
-      const components = this.buildNowPlayingEditPlatformComponents(
+      const components = buildNowPlayingEditPlatformComponents(
         entries,
         ownerId,
         platformOptions,
@@ -2342,7 +2272,7 @@ export class NowPlayingCommand {
     const entries = getDisplayNowPlayingEntries(await Member.getNowPlaying(ownerId)).slice(0, 10);
     const platformOptions = await this.getNowPlayingEditPlatformOptions(entries);
     const stateTokenReset = buildNowPlayingPlatformStateFromCurrent(entries, platformOptions);
-    const components = this.buildNowPlayingEditPlatformComponents(
+    const components = buildNowPlayingEditPlatformComponents(
       entries,
       ownerId,
       platformOptions,
@@ -2582,45 +2512,6 @@ export class NowPlayingCommand {
     }
   }
 
-  private buildNowPlayingRemoveComponents(
-    entries: IMemberNowPlayingEntry[],
-    ownerId: string,
-    _thumbnailsByGameId: Map<number, string>,
-  ): Array<ContainerBuilder | ActionRowBuilder<ButtonBuilder | StringSelectMenuBuilder>> {
-    void _thumbnailsByGameId;
-    const container = new ContainerBuilder();
-    const textLines = [
-      "## Now Playing Remove",
-      "Select a game below to remove it from your list.",
-      "",
-      ...buildNowPlayingListLines(entries, null),
-    ];
-    container.addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(
-        safeV2TextContent(trimTextDisplayContent(textLines.join("\n")), 3500),
-      ),
-    );
-
-    const selectOptions = entries
-      .filter((entry) => isPositiveInt(entry.gameId))
-      .slice(0, DISCORD_SELECT_OPTIONS_MAX)
-      .map((entry) => ({
-        label: truncateLabel(formatEntryTitleWithPlatform(entry)),
-        value: String(entry.gameId),
-      }));
-    const removeSelect = new StringSelectMenuBuilder()
-      .setCustomId(`${NOW_PLAYING_REMOVE_SELECT_PREFIX}:${ownerId}`)
-      .setPlaceholder("Select a game to remove")
-      .addOptions(selectOptions);
-    const selectRow = buildSelectRow(removeSelect);
-
-    const doneRow = buildButtonRow(
-      buildActionButton("confirm", `nowplaying-remove-done:${ownerId}`, "Done"),
-      buildActionButton({ customId: `${NOW_PLAYING_HELP_PREFIX}:remove:${ownerId}`, label: "?", style: ButtonStyle.Secondary }),
-    );
-    return [container, selectRow, doneRow];
-  }
-
   @SelectMenuComponent({ id: /^nowplaying-remove-select:\d+$/ })
   async handleNowPlayingRemoveSelect(interaction: StringSelectMenuInteraction): Promise<void> {
     const isEphemeral = interaction.message.flags?.has(MessageFlags.Ephemeral) ?? false;
@@ -2674,7 +2565,7 @@ export class NowPlayingCommand {
         NOW_PLAYING_GALLERY_MAX,
         includeImages,
       );
-      const components = this.buildNowPlayingRemoveComponents(
+      const components = buildNowPlayingRemoveComponents(
         entries,
         ownerId,
         thumbnailsByGameId,
@@ -2696,134 +2587,6 @@ export class NowPlayingCommand {
         flags: buildComponentsV2Flags(isEphemeral),
       }));
     }
-  }
-
-  private buildNowPlayingEditPlatformComponents(
-    entries: IMemberNowPlayingEntry[],
-    ownerId: string,
-    platformOptions: Array<Array<{ label: string; value: string; platformId: number }>>,
-    stateToken: string,
-    validationMessage: string | null = null,
-  ): Array<ContainerBuilder | ActionRowBuilder<StringSelectMenuBuilder | ButtonBuilder>> {
-    const parsedState = parseNowPlayingPlatformStateToken(stateToken, entries.length) ??
-      Array.from({ length: entries.length }, () => -1);
-    const container = new ContainerBuilder();
-    const introLines = [
-      "## Now Playing Edit Platform",
-      "Pick one platform per game, then press Save.",
-    ];
-    if (validationMessage) {
-      introLines.push(`-# ${validationMessage}`);
-    }
-    container.addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(
-        safeV2TextContent(introLines.join("\n"), 1000),
-      ),
-    );
-
-    const rows: Array<ActionRowBuilder<StringSelectMenuBuilder>> = [];
-    for (let slotIndex = 0; slotIndex < entries.length; slotIndex += 1) {
-      const entry = entries[slotIndex];
-      const options = platformOptions[slotIndex] ?? [];
-      if (!options.length) {
-        container.addTextDisplayComponents(
-          new TextDisplayBuilder().setContent(
-            safeV2TextContent(`-# ${entry.title.slice(0, 80)}: No platform choices available.`, 1000),
-          ),
-        );
-        continue;
-      }
-      const selectedIndex = parsedState[slotIndex];
-      const currentPlatformName =
-        selectedIndex >= 0 ? (options[selectedIndex]?.label ?? null) : null;
-      const placeholder = currentPlatformName
-        ? truncateLabel(`${entry.title.slice(0, 50)} - ${currentPlatformName}`)
-        : truncateLabel(entry.title);
-      const select = new StringSelectMenuBuilder()
-        .setCustomId(`${NOW_PLAYING_EDIT_PLATFORM_SLOT_PREFIX}:${ownerId}:${slotIndex}:${stateToken}`)
-        .setPlaceholder(placeholder)
-        .setMinValues(1)
-        .setMaxValues(1)
-        .addOptions(options.map((option, optionIndex) => ({
-          label: optionIndex === selectedIndex
-            ? truncateLabel(`${entry.title.slice(0, 50)} - ${option.label}`)
-            : option.label,
-          value: option.value,
-          default: selectedIndex === optionIndex,
-        })));
-      rows.push(buildSelectRow(select));
-    }
-    const components: Array<
-      ContainerBuilder | ActionRowBuilder<StringSelectMenuBuilder | ButtonBuilder>
-    > = [
-      container,
-      ...rows,
-    ];
-
-    const actionRow = buildButtonRow(
-      buildActionButton(
-        "confirm",
-        `${NOW_PLAYING_EDIT_PLATFORM_SAVE_PREFIX}:${ownerId}:${stateToken}`,
-        "Save",
-      ),
-      buildActionButton({ customId: `${NOW_PLAYING_EDIT_PLATFORM_RESET_PREFIX}:${ownerId}`, label: "Reset to current platforms", style: ButtonStyle.Secondary }),
-      buildActionButton("cancel", `nowplaying-list-cancel:${ownerId}`),
-      buildActionButton({ customId: `${NOW_PLAYING_HELP_PREFIX}:platform:${ownerId}`, label: "?", style: ButtonStyle.Secondary }),
-    );
-    components.push(actionRow);
-    return components;
-  }
-
-  private buildNowPlayingSortComponents(
-    entries: IMemberNowPlayingEntry[],
-    ownerId: string,
-    stateToken: string,
-    validationMessage: string | null = null,
-  ): Array<ContainerBuilder | ActionRowBuilder<StringSelectMenuBuilder | ButtonBuilder>> {
-    const parsedState = parseNowPlayingSortStateToken(stateToken, entries.length) ??
-      Array.from({ length: entries.length }, () => -1);
-    const container = new ContainerBuilder();
-    const introLines = [
-      "## Sort Your Now Playing List",
-      "Pick one title for each position, then press Save.",
-    ];
-    if (validationMessage) {
-      introLines.push(`-# ${validationMessage}`);
-    }
-    container.addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(
-        safeV2TextContent(introLines.join("\n"), 1000),
-      ),
-    );
-
-    const rows: Array<ActionRowBuilder<StringSelectMenuBuilder | ButtonBuilder>> = [];
-    for (let slotIndex = 0; slotIndex < entries.length; slotIndex += 1) {
-      const selectedIndex = parsedState[slotIndex] ?? -1;
-      const menu = new StringSelectMenuBuilder()
-        .setCustomId(`${NOW_PLAYING_SORT_SLOT_PREFIX}:${ownerId}:${slotIndex}:${stateToken}`)
-        .setPlaceholder(`Position ${slotIndex + 1}`)
-        .setMinValues(1)
-        .setMaxValues(1)
-        .addOptions(entries.map((entry, entryIndex) => ({
-          label: truncateLabel(formatEntryTitleWithPlatform(entry)),
-          value: String(entryIndex),
-          default: selectedIndex === entryIndex,
-        })));
-      rows.push(buildSelectRow(menu));
-    }
-
-    const actionRow = buildButtonRow(
-      buildActionButton(
-        "confirm",
-        `${NOW_PLAYING_SORT_SAVE_PREFIX}:${ownerId}:${stateToken}`,
-        "Save",
-      ),
-      buildActionButton({ customId: `${NOW_PLAYING_SORT_RESET_PREFIX}:${ownerId}`, label: "Reset to current order", style: ButtonStyle.Secondary }),
-      buildActionButton("cancel", `nowplaying-list-cancel:${ownerId}`),
-      buildActionButton({ customId: `${NOW_PLAYING_HELP_PREFIX}:sort:${ownerId}`, label: "?", style: ButtonStyle.Secondary }),
-    );
-    rows.push(actionRow);
-    return [container, ...rows];
   }
 
   private async replaceNowPlayingMessageInCurrentChannel(
