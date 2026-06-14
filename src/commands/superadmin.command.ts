@@ -58,6 +58,10 @@ import {
 import { isPositiveInt, isValidPlaytimeHours } from "../utilities/ValidationUtils.js";
 import { sleep } from "../utilities/DelayUtils.js";
 import { apiPost } from "../services/RpgClubApiClient.js";
+import {
+  getBackblazeBucketConfig,
+  listGameIdsWithImages,
+} from "../services/BackblazeB2Service.js";
 import { truncateDescription, truncateLabel } from "../config/textLimits.js";
 import { assertCustomIdSegments } from "../utilities/CustomIdUtils.js";
 import { safeIgnore } from "../utilities/AsyncUtils.js";
@@ -864,28 +868,35 @@ export class SuperAdmin {
     const okToUseCommand = await isSuperAdmin(interaction);
     if (!okToUseCommand) return;
 
-    const gameIds = await Game.getAllGameIdsWithIgdb();
-    const total = gameIds.length;
+    await safeReply(interaction, buildTextReply("Scanning Backblaze for existing game images...", true));
+
+    const { bucketId } = getBackblazeBucketConfig();
+    const [gameIds, gamesWithImages] = await Promise.all([
+      Game.getAllGameIdsWithIgdb(),
+      listGameIdsWithImages(bucketId),
+    ]);
+
+    const missing = gameIds.filter((id) => !gamesWithImages.has(id));
+    const total = missing.length;
     let successCount = 0;
     let skipCount = 0;
     let failCount = 0;
 
     const progressText = (): string =>
-      `Downloading missing GameDB images: ${successCount + skipCount + failCount}/${total} checked` +
-      ` (${successCount} downloaded, ${skipCount} already have images, ${failCount} failed)`;
+      `Downloading missing GameDB images: ${successCount + skipCount + failCount}/${total} processed` +
+      ` (${successCount} downloaded, ${skipCount} skipped, ${failCount} failed)`;
 
-    await safeReply(interaction, buildTextReply(progressText(), true));
+    await safeReply(interaction, buildTextReply(
+      `Found ${gamesWithImages.size} games with images in Backblaze.` +
+        ` ${total} need downloading.\n\n${progressText()}`,
+      true,
+    ));
 
-    for (let i = 0; i < gameIds.length; i++) {
-      const gameId = gameIds[i];
+    for (let i = 0; i < missing.length; i++) {
+      const gameId = missing[i];
       try {
-        const existing = await Game.getGamePrimaryImageUrl(gameId);
-        if (existing) {
-          skipCount++;
-        } else {
-          await apiPost(`/api/v1/games/${gameId}/refresh-images`);
-          successCount++;
-        }
+        await apiPost(`/api/v1/games/${gameId}/refresh-images`);
+        successCount++;
       } catch (err) {
         const apiError = axios.isAxiosError(err) ? err.response?.data?.error : undefined;
         const apiMessage = axios.isAxiosError(err) ? err.response?.data?.message : undefined;
@@ -905,7 +916,7 @@ export class SuperAdmin {
         }
       }
 
-      if ((i + 1) % 10 === 0 || i === gameIds.length - 1) {
+      if ((i + 1) % 10 === 0 || i === missing.length - 1) {
         await safeReply(interaction, buildTextReply(progressText(), true));
       }
 
@@ -913,8 +924,8 @@ export class SuperAdmin {
     }
 
     await safeReply(interaction, buildTextReply(
-      `Done. ${total} games checked:` +
-        ` ${successCount} downloaded, ${skipCount} already had images, ${failCount} failed.`,
+      `Done. ${total} games processed:` +
+        ` ${successCount} downloaded, ${skipCount} skipped (no IGDB ID on API), ${failCount} failed.`,
       true,
     ));
   }
