@@ -61,7 +61,7 @@ import { apiPost } from "../services/RpgClubApiClient.js";
 import { truncateDescription, truncateLabel } from "../config/textLimits.js";
 import { assertCustomIdSegments } from "../utilities/CustomIdUtils.js";
 import { safeIgnore } from "../utilities/AsyncUtils.js";
-import { logError } from "../utilities/LogUtils.js";
+import { logError, logWarn } from "../utilities/LogUtils.js";
 import { buildSelectRow } from "../functions/uiComponents.js";
 
 type CompletionAddContext = {
@@ -867,11 +867,12 @@ export class SuperAdmin {
     const gameIds = await Game.getAllGameIdsWithIgdb();
     const total = gameIds.length;
     let successCount = 0;
+    let skipCount = 0;
     let failCount = 0;
 
     const progressText = (): string =>
-      `Refreshing GameDB images: ${successCount + failCount}/${total} processed` +
-      ` (${successCount} ok, ${failCount} failed)`;
+      `Refreshing GameDB images: ${successCount + skipCount + failCount}/${total} processed` +
+      ` (${successCount} ok, ${skipCount} skipped, ${failCount} failed)`;
 
     await safeReply(interaction, buildTextReply(progressText(), true));
 
@@ -881,8 +882,22 @@ export class SuperAdmin {
         await apiPost(`/api/v1/games/${gameId}/refresh-images`);
         successCount++;
       } catch (err) {
-        failCount++;
-        logError("SuperadminCommand.gamedbRefreshImages", { gameId, err });
+        const apiError = axios.isAxiosError(err) ? err.response?.data?.error : undefined;
+        const apiMessage = axios.isAxiosError(err) ? err.response?.data?.message : undefined;
+        const status = axios.isAxiosError(err) ? err.response?.status : undefined;
+
+        if (apiError === "missing_igdb_id") {
+          skipCount++;
+          logWarn("SuperadminCommand.gamedbRefreshImages", { gameId, apiError, apiMessage });
+        } else {
+          failCount++;
+          logError("SuperadminCommand.gamedbRefreshImages", {
+            gameId,
+            status,
+            apiError,
+            apiMessage,
+          });
+        }
       }
 
       if ((i + 1) % 10 === 0 || i === gameIds.length - 1) {
@@ -894,7 +909,7 @@ export class SuperAdmin {
 
     await safeReply(interaction, buildTextReply(
       `GameDB image refresh complete. ${total} games processed:` +
-        ` ${successCount} succeeded, ${failCount} failed.`,
+        ` ${successCount} succeeded, ${skipCount} skipped (no IGDB ID on API), ${failCount} failed.`,
       true,
     ));
   }
