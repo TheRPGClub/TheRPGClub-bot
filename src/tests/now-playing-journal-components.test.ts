@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { NowPlayingJournalHandlers } from "../commands/now-playing/nowPlayingJournal.handler.js";
+import { NowPlayingJournalCommand } from "../commands/now-playing/journal.command.js";
 import type { IMemberNowPlayingEntry } from "../classes/Member.js";
 import Member from "../classes/Member.js";
 import Game from "../classes/Game.js";
@@ -271,7 +271,7 @@ test("journal public view redacts private entry content and count", async () => 
 });
 
 test("journal edit modal submit shows manage journal buttons", async () => {
-  const command = new NowPlayingJournalHandlers() as any;
+  const command = new NowPlayingJournalCommand() as any;
   command.canUseJournalFeature = () => true;
 
   const originalGetEntry = Member.getGameJournalEntryForUser;
@@ -335,7 +335,7 @@ test("journal edit modal submit shows manage journal buttons", async () => {
 });
 
 test("journal edit button opens modal for current page entry", async () => {
-  const command = new NowPlayingJournalHandlers() as any;
+  const command = new NowPlayingJournalCommand() as any;
 
   const originalGetEntries = Member.getGameJournalEntries;
   let showModalCalled = false;
@@ -368,7 +368,7 @@ test("journal edit button opens modal for current page entry", async () => {
 });
 
 test("journal delete confirm removes entry on yes and skips removal on no", async () => {
-  const command = new NowPlayingJournalHandlers() as any;
+  const command = new NowPlayingJournalCommand() as any;
   command.canUseJournalFeature = () => true;
 
   const originalDelete = Member.deleteGameJournalEntry;

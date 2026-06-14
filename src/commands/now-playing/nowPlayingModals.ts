@@ -62,7 +62,11 @@ export function buildNowPlayingAddModal(): ModalBuilder {
     .setCustomId(NOW_PLAYING_ADD_MODAL_ID)
     .setTitle("Add Now Playing Game")
     .addComponents(
-      buildTextInputRow({ customId: NOW_PLAYING_ADD_TITLE_INPUT_ID, label: "Game title", maxLength: 100 }),
+      buildTextInputRow({
+        customId: NOW_PLAYING_ADD_TITLE_INPUT_ID,
+        label: "Game title",
+        maxLength: 100,
+      }),
       buildTextInputRow({
         customId: NOW_PLAYING_ADD_NOTE_INPUT_ID,
         label: "Note (optional)",

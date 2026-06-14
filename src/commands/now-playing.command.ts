@@ -20,12 +20,6 @@ import {
   ButtonComponent,
   ModalComponent,
 } from "discordx";
-import {
-  ModalBuilder as ComponentsModalBuilder,
-  ActionRowBuilder as ComponentsActionRowBuilder,
-  TextInputBuilder as ComponentsTextInputBuilder,
-} from "@discordjs/builders";
-import { TextInputStyle as ApiTextInputStyle } from "discord-api-types/v10";
 import Member, { type IMemberNowPlayingEntry } from "../classes/Member.js";
 import {
   extractErrorMessage,
@@ -81,13 +75,8 @@ import {
   NOW_PLAYING_ADD_MODAL_ID,
   NOW_PLAYING_ADD_TITLE_INPUT_ID,
   NOW_PLAYING_ADD_NOTE_INPUT_ID,
-  NOW_PLAYING_ADD_PLATFORM_SELECT_PREFIX,
   NOW_PLAYING_GALLERY_MAX,
   NOW_PLAYING_LIST_EDIT_PREFIX,
-  NOW_PLAYING_EDIT_MENU_START_JOURNAL_SELECT_PREFIX,
-  NOW_PLAYING_JOURNAL_MODAL_ID,
-  NOW_PLAYING_JOURNAL_TITLE_INPUT_ID,
-  NOW_PLAYING_JOURNAL_BODY_INPUT_ID,
 } from "./now-playing/nowPlayingIds.js";
 import {
   type NowPlayingAddSession,
@@ -125,6 +114,9 @@ import {
   refreshNowPlayingListFromContext,
   trimTextDisplayContent,
   buildNowPlayingMemberSelect,
+  buildNowPlayingRemoveComponents,
+  buildNowPlayingEditPlatformComponents,
+  buildNowPlayingSortComponents,
 } from "./now-playing/nowPlayingListRenderer.js";
 import {
   buildEditNoteModal,
@@ -132,17 +124,13 @@ import {
   buildNowPlayingAddModal,
 } from "./now-playing/nowPlayingModals.js";
 import {
-  buildNowPlayingRemoveComponents,
-  buildNowPlayingEditPlatformComponents,
-  buildNowPlayingSortComponents,
-} from "./now-playing/nowPlayingComponentBuilders.js";
-import {
   deleteEligibleNowPlayingMessageInCurrentChannel,
-} from "./now-playing/nowPlayingChannelUtils.js";
+} from "./now-playing/nowPlayingMessageService.js";
+import { promptNowPlayingAddPlatformSelection } from "./now-playing/nowPlayingAddService.js";
 import {
   startNowPlayingIgdbImport,
   startNowPlayingIgdbImportFromInteraction,
-} from "./now-playing/nowPlayingIgdbImport.js";
+} from "./now-playing/nowPlayingIgdbImport.service.js";
 
 @Discord()
 @SlashGroup({ description: "Show now playing data", name: "now-playing" })
@@ -574,11 +562,7 @@ export class NowPlayingCommand {
 
     const choice = interaction.values[0];
     if (choice === "import-igdb") {
-      await startNowPlayingIgdbImport(
-        interaction,
-        session,
-        this.promptNowPlayingAddPlatformSelection.bind(this),
-      );
+      await startNowPlayingIgdbImport(interaction, session);
       return;
     }
     const gameId = Number(choice);
@@ -593,7 +577,7 @@ export class NowPlayingCommand {
     }
 
     try {
-      await this.promptNowPlayingAddPlatformSelection(
+      await promptNowPlayingAddPlatformSelection(
         interaction,
         sessionId,
         ownerId,
@@ -683,55 +667,6 @@ export class NowPlayingCommand {
       });
       nowPlayingAddPlatformSessions.delete(platformSessionId);
       clearNowPlayingAddSession(session.sourceSessionId);
-    }
-  }
-
-  private async promptNowPlayingAddPlatformSelection(
-    interaction: StringSelectMenuInteraction,
-    sourceSessionId: string,
-    userId: string,
-    gameId: number,
-    note: string | null,
-    mode: "reply" | "update",
-  ): Promise<void> {
-    const game = await Game.getGameById(gameId);
-    if (!game) {
-      throw new Error("Selected game not found. Please try again.");
-    }
-    const platforms = await Game.getPlatformsForGameWithStandard(game.id, STANDARD_PLATFORM_IDS);
-    if (!platforms.length) {
-      throw new Error("No platform data is available for this game.");
-    }
-    const platformSessionId = `np-add-platform-${userId}`;
-    nowPlayingAddPlatformSessions.set(platformSessionId, {
-      userId,
-      gameId,
-      note,
-      sourceSessionId,
-    });
-    const options = platforms.slice(0, DISCORD_SELECT_OPTIONS_MAX).map((platform) => ({
-      label: truncateLabel(platform.name),
-      value: String(platform.id),
-    }));
-    const select = new StringSelectMenuBuilder()
-      .setCustomId(`${NOW_PLAYING_ADD_PLATFORM_SELECT_PREFIX}:${platformSessionId}`)
-      .setPlaceholder("Select the platform")
-      .addOptions(options);
-    const titleWithCap = platforms.length > options.length
-      ? `Select the platform for **${game.title}** (showing first ${options.length}).`
-      : `Select the platform for **${game.title}**.`;
-    const container = buildTextContainer(titleWithCap);
-    const payload = {
-      components: [
-        container,
-        buildSelectRow(select),
-      ],
-      flags: buildComponentsV2Flags(true),
-    };
-    if (mode === "update") {
-      await safeUpdate(interaction, payload);
-    } else {
-      await safeReply(interaction, payload);
     }
   }
 
@@ -1643,81 +1578,6 @@ export class NowPlayingCommand {
     const [ownerId] = segs;
     if (await replyIfNotOwner(interaction, ownerId, "This edit menu isn't for you.")) return;
     await this.promptRemoveNowPlaying(interaction, "update");
-  }
-
-  @ButtonComponent({ id: /^nowplaying-edit-menu-start-journal:\d+$/ })
-  async handleNowPlayingEditMenuStartJournal(interaction: ButtonInteraction): Promise<void> {
-    const segs = assertCustomIdSegments(interaction, 1);
-    if (!segs) return;
-    const [ownerId] = segs;
-    if (await replyIfNotOwner(interaction, ownerId, "This edit menu isn't for you.")) return;
-    const entries = await Member.getNowPlaying(ownerId).then(getDisplayNowPlayingEntries);
-    const gamesWithoutJournal = entries.filter((e) => !e.hasJournalEntry);
-    if (!gamesWithoutJournal.length) {
-      await safeUpdate(interaction, {
-        components: [await buildNowPlayingManageRow(ownerId)],
-        flags: buildComponentsV2Flags(true),
-      });
-      return;
-    }
-    const options = gamesWithoutJournal.map((e) => ({
-      label: truncateLabel(e.title),
-      value: String(e.gameId),
-    }));
-    const select = new StringSelectMenuBuilder()
-      .setCustomId(`${NOW_PLAYING_EDIT_MENU_START_JOURNAL_SELECT_PREFIX}:${ownerId}`)
-      .setPlaceholder("Select a game to start a journal")
-      .addOptions(options);
-    const selectRow = buildSelectRow(select);
-    const container = buildTextContainer("## Start a Game Journal\nSelect a game to write your first entry.");
-    await safeUpdate(interaction, {
-      components: [container, selectRow],
-      flags: buildComponentsV2Flags(true),
-    });
-  }
-
-  @SelectMenuComponent({ id: /^nowplaying-edit-menu-start-journal-select:\d+$/ })
-  async handleNowPlayingEditMenuStartJournalSelect(
-    interaction: StringSelectMenuInteraction,
-  ): Promise<void> {
-    const segs = assertCustomIdSegments(interaction, 1);
-    if (!segs) return;
-    const [ownerId] = segs;
-    if (await replyIfNotOwner(interaction, ownerId, "This edit menu isn't for you.")) return;
-    const gameId = Number(interaction.values[0]);
-    if (!gameId) return;
-    const entries = await Member.getNowPlaying(ownerId).then(getDisplayNowPlayingEntries);
-    const selected = entries.find((e) => e.gameId === gameId);
-    if (!selected || selected.hasJournalEntry) {
-      await safeUpdate(interaction, {
-        components: [await buildNowPlayingManageRow(ownerId)],
-        flags: buildComponentsV2Flags(true),
-      });
-      return;
-    }
-    const modal = new ComponentsModalBuilder()
-      .setCustomId(`${NOW_PLAYING_JOURNAL_MODAL_ID}:${ownerId}:${gameId}:1`)
-      .setTitle("Add Journal Entry");
-    modal.addActionRowComponents(
-      new ComponentsActionRowBuilder<ComponentsTextInputBuilder>().addComponents(
-        new ComponentsTextInputBuilder()
-          .setCustomId(NOW_PLAYING_JOURNAL_TITLE_INPUT_ID)
-          .setLabel("Title (optional)")
-          .setStyle(ApiTextInputStyle.Short)
-          .setRequired(false)
-          .setMaxLength(120),
-      ),
-      new ComponentsActionRowBuilder<ComponentsTextInputBuilder>().addComponents(
-        new ComponentsTextInputBuilder()
-          .setCustomId(NOW_PLAYING_JOURNAL_BODY_INPUT_ID)
-          .setLabel("Entry")
-          .setStyle(ApiTextInputStyle.Paragraph)
-          .setRequired(true)
-          .setMaxLength(2000),
-      ),
-    );
-    await interaction.showModal(modal);
-    await nowPlayingOwnerMenu.dismiss(ownerId);
   }
 
   @ButtonComponent({ id: /^nowplaying-list-add:\d+$/ })
