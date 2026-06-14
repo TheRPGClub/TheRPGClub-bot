@@ -1,23 +1,14 @@
 import type { ButtonInteraction, CommandInteraction } from "discord.js";
 import {
-  ActionRowBuilder,
   ApplicationCommandOptionType,
-  ButtonBuilder,
   ButtonStyle,
   MessageFlags,
   ModalBuilder,
   ModalSubmitInteraction,
-  PermissionsBitField,
   StringSelectMenuBuilder,
   StringSelectMenuInteraction,
   TextInputStyle,
 } from "discord.js";
-import {
-  ContainerBuilder,
-  MediaGalleryBuilder,
-  MediaGalleryItemBuilder,
-  TextDisplayBuilder,
-} from "@discordjs/builders";
 import {
   ButtonComponent,
   Discord,
@@ -27,16 +18,14 @@ import {
   SlashChoice,
   SlashOption,
 } from "discordx";
+import type { ContainerBuilder } from "@discordjs/builders";
+import type { ActionRowBuilder } from "discord.js";
 import {
-  ACCESS_DENIED_MOD_ADMIN,
-  ACCESS_DENIED_SERVER_OWNER,
-  AnyRepliable,
   safeDeferReply,
   PRIVATE_OPTION_DESCRIPTION,
   safeDeferUpdate,
   safeReply,
   safeUpdate,
-  sanitizeUserInput,
 } from "../functions/InteractionUtils.js";
 import { countSuggestions } from "../classes/Suggestion.js";
 import {
@@ -49,105 +38,126 @@ import {
   listIssueComments,
   setIssueLabels,
   updateIssue,
-  type IGithubIssueComment,
   type IGithubIssue,
-  type IGithubRepoTarget,
+  type IGithubIssueComment,
 } from "../services/GithubIssuesService.js";
 import {
-  getTodoRepo,
-  TODO_REPO_CODES,
   DEFAULT_TODO_REPO_CODE,
   isTodoRepoCode,
-  type TodoRepoCode,
 } from "../config/repos.js";
 import {
   buildComponentsV2Flags,
-  buildTextReply,
 } from "../functions/ComponentsV2Utils.js";
-import { decodeBase64Url, encodeWithMaxLength } from "../functions/CustomIdUtils.js";
-import { parseCustomIdSegments } from "../utilities/CustomIdUtils.js";
-import { safeV2TextContent } from "../functions/ComponentsV2Utils.js";
-import { formatDiscordTimestamp } from "../functions/DateFormatUtils.js";
 import {
+  buildSelectRow,
   buildActionButton,
   buildButtonRow,
   buildTextInputRow,
-  buildSelectRow,
 } from "../functions/uiComponents.js";
-import { truncateWithEllipsis } from "../utilities/ValidationUtils.js";
 import { DISCORD_TEXT_INPUT_MAX } from "../config/textLimits.js";
 import { TODO_DEFAULT_PAGE_SIZE, TODO_MAX_PAGE_SIZE } from "../config/pagination.js";
-
-const TODO_LABELS = [
-  "New Feature",
-  "Improvement",
-  "Bug",
-  "Blocked",
-  "refactor",
-  "documentation",
-  "duplicate",
-  "invalid",
-  "wontfix",
-] as const;
-const LIST_STATES = ["open", "closed", "all"] as const;
-const LIST_SORTS = ["created", "updated"] as const;
-const LIST_DIRECTIONS = ["asc", "desc"] as const;
-
-type TodoLabel = (typeof TODO_LABELS)[number];
-type ListState = (typeof LIST_STATES)[number];
-type ListSort = (typeof LIST_SORTS)[number];
-type ListDirection = (typeof LIST_DIRECTIONS)[number];
-
-const MAX_COMMENT_PREVIEW_LENGTH = 500;
-const MAX_TODO_IMAGES_PER_VIEW = 10;
-function buildIssueListTitle(repo: TodoRepoCode): string {
-  const target = getTodoRepo(repo);
-  return `${target.name} GitHub Issues`;
-}
-const TODO_LIST_ID_PREFIX = "todo-list-page";
-const TODO_LIST_BACK_ID_PREFIX = "todo-list-back";
-const TODO_VIEW_ID_PREFIX = "todo-view";
-const TODO_CREATE_BUTTON_PREFIX = "todo-create-button";
-const TODO_CREATE_MODAL_PREFIX = "todo-create-modal";
-const TODO_CLOSE_BUTTON_PREFIX = "todo-close-button";
-const TODO_CLOSE_SELECT_PREFIX = "todo-close-select";
-const TODO_CLOSE_CANCEL_PREFIX = "todo-close-cancel";
-const TODO_COMMENT_BUTTON_PREFIX = "todo-comment-button";
-const TODO_COMMENT_MODAL_PREFIX = "todo-comment-modal";
-const TODO_COMMENT_INPUT_ID = "todo-comment-input";
-const TODO_EDIT_VIEW_BUTTON_PREFIX = "todo-edit-view-button";
-const TODO_EDIT_VIEW_MODAL_PREFIX = "todo-edit-view-modal";
-const TODO_EDIT_TITLE_BUTTON_PREFIX = "todo-edit-title-button";
-const TODO_EDIT_TITLE_MODAL_PREFIX = "todo-edit-title-modal";
-const TODO_EDIT_TITLE_INPUT_ID = "todo-edit-title-input";
-const TODO_EDIT_DESC_BUTTON_PREFIX = "todo-edit-desc-button";
-const TODO_EDIT_DESC_MODAL_PREFIX = "todo-edit-desc-modal";
-const TODO_EDIT_DESC_INPUT_ID = "todo-edit-desc-input";
-const TODO_CLOSE_VIEW_PREFIX = "todo-close-view";
-const TODO_REOPEN_VIEW_PREFIX = "todo-reopen-view";
-const TODO_LABEL_EDIT_BUTTON_PREFIX = "todo-label-edit-button";
-const TODO_LABEL_EDIT_SELECT_PREFIX = "todo-label-edit-select";
-const TODO_FILTER_BUTTON_PREFIX = "todo-filter-button";
-const TODO_FILTER_MODAL_PREFIX = "todo-filter-modal";
-const TODO_FILTER_STATE_ID = "todo-filter-state";
-const TODO_FILTER_LABEL_ID = "todo-filter-label-field";
-const TODO_FILTER_QUERY_ID = "todo-filter-query";
-const TODO_FILTER_SORT_ID = "todo-filter-sort";
-const TODO_OPEN_SELECT_PREFIX = "todo-open-select";
-const TODO_REPO_SELECT_PREFIX = "todo-repo-select";
-const TODO_FILTER_LABEL_ALL = "__all__";
-const TODO_FILTER_LABEL_NOT_BLOCKED = "__not_blocked__";
-const TODO_REVIEW_SUGGESTIONS_BUTTON_ID = "todo-review-suggestions";
-const TODO_CREATE_TITLE_ID = "todo-create-title";
-const TODO_CREATE_BODY_ID = "todo-create-body";
-const TODO_CREATE_TYPE_ID = "todo-create-type";
-const TODO_PAYLOAD_TOKEN_MAX_LENGTH = 30;
-const TODO_CREATE_TYPE_LABELS = [
-  "New Feature",
-  "Improvement",
-  "Bug",
-  "Blocked",
-] as const;
+import {
+  TODO_LABELS,
+  LIST_STATES,
+  LIST_SORTS,
+  LIST_DIRECTIONS,
+  TODO_CREATE_TYPE_LABELS,
+  TODO_CREATE_BUTTON_PREFIX,
+  TODO_CREATE_MODAL_PREFIX,
+  TODO_CLOSE_BUTTON_PREFIX,
+  TODO_CLOSE_SELECT_PREFIX,
+  TODO_CLOSE_CANCEL_PREFIX,
+  TODO_COMMENT_BUTTON_PREFIX,
+  TODO_COMMENT_MODAL_PREFIX,
+  TODO_COMMENT_INPUT_ID,
+  TODO_EDIT_VIEW_BUTTON_PREFIX,
+  TODO_EDIT_VIEW_MODAL_PREFIX,
+  TODO_EDIT_TITLE_BUTTON_PREFIX,
+  TODO_EDIT_TITLE_MODAL_PREFIX,
+  TODO_EDIT_TITLE_INPUT_ID,
+  TODO_EDIT_DESC_BUTTON_PREFIX,
+  TODO_EDIT_DESC_MODAL_PREFIX,
+  TODO_EDIT_DESC_INPUT_ID,
+  TODO_CLOSE_VIEW_PREFIX,
+  TODO_REOPEN_VIEW_PREFIX,
+  TODO_LABEL_EDIT_BUTTON_PREFIX,
+  TODO_LABEL_EDIT_SELECT_PREFIX,
+  TODO_FILTER_BUTTON_PREFIX,
+  TODO_FILTER_MODAL_PREFIX,
+  TODO_FILTER_STATE_ID,
+  TODO_FILTER_LABEL_ID,
+  TODO_FILTER_QUERY_ID,
+  TODO_FILTER_SORT_ID,
+  TODO_OPEN_SELECT_PREFIX,
+  TODO_REPO_SELECT_PREFIX,
+  TODO_FILTER_LABEL_ALL,
+  TODO_FILTER_LABEL_NOT_BLOCKED,
+  TODO_CREATE_TITLE_ID,
+  TODO_CREATE_BODY_ID,
+  TODO_CREATE_TYPE_ID,
+  TODO_PAYLOAD_TOKEN_MAX_LENGTH,
+  type TodoLabel,
+  type ListState,
+  type ListSort,
+  type ListDirection,
+  type TodoListPayload,
+} from "./todo/todoTypes.js";
+import {
+  clampNumber,
+  getRepoTarget,
+  buildTodoPayloadToken,
+  parseTodoPayloadToken,
+} from "./todo/todoPayload.js";
+import {
+  parseTodoListCustomId,
+  parseTodoListBackId,
+  parseTodoCreateButtonId,
+  parseTodoCreateModalId,
+  parseTodoCloseId,
+  parseTodoCloseSelectId,
+  parseTodoViewId,
+  parseTodoIssueActionId,
+  parseTodoIssueModalId,
+  parseTodoCloseViewId,
+  parseTodoReopenViewId,
+  parseTodoLabelEditId,
+  parseTodoLabelEditSelectId,
+  parseTodoSelectId,
+  parseTodoFilterButtonId,
+  parseTodoFilterModalId,
+  buildTodoCreateModalId,
+  buildTodoCloseSelectId,
+  buildTodoCloseCancelId,
+  buildTodoLabelEditSelectId,
+  buildTodoFilterModalId,
+  buildTodoEditViewModalId,
+  buildTodoCommentModalId,
+  buildTodoEditTitleModalId,
+  buildTodoEditDescModalId,
+} from "./todo/todoCustomIds.js";
+import {
+  normalizeStateFilters,
+  toIssueState,
+  matchesIssueLabels,
+  matchesIssueQuery,
+  isBlockedIssue,
+  normalizeQuery,
+  parseTodoLabels,
+  parseTodoCreateTypeLabels,
+  sortIssuesByNumber,
+} from "./todo/todoFilters.js";
+import { getGithubErrorMessage } from "./todo/todoFormatters.js";
+import {
+  buildTodoTextReply,
+  replyTodoExpired,
+  buildIssueListComponents,
+  buildIssueViewComponents,
+} from "./todo/todoComponents.js";
+import {
+  requireModeratorOrAdminOrOwner,
+  requireOwner,
+} from "./todo/todoPermissions.js";
+import { sanitizeTodoRichText } from "./todo/todoRenderers.js";
 
 async function getSuggestionReviewCount(): Promise<number> {
   try {
@@ -155,1085 +165,6 @@ async function getSuggestionReviewCount(): Promise<number> {
   } catch {
     return 0;
   }
-}
-
-type TodoListPayload = {
-  page: number;
-  perPage: number;
-  state: ListState;
-  stateFilters: ListState[];
-  labels: TodoLabel[];
-  excludeBlocked: boolean;
-  query?: string;
-  sort: ListSort;
-  direction: ListDirection;
-  isPublic: boolean;
-  repo: TodoRepoCode;
-};
-
-function getRepoTarget(code: TodoRepoCode): IGithubRepoTarget {
-  const repo = getTodoRepo(code);
-  return { owner: repo.owner, name: repo.name };
-}
-
-function sortIssuesByNumber(
-  issues: IGithubIssue[],
-  direction: ListDirection,
-): IGithubIssue[] {
-  const sorted = [...issues].sort((a, b) => a.number - b.number);
-  return direction === "desc" ? sorted.reverse() : sorted;
-}
-
-const TODO_LABEL_CODE_MAP: Record<TodoLabel, string> = {
-  "New Feature": "N",
-  Improvement: "I",
-  Bug: "B",
-  Blocked: "K",
-  refactor: "R",
-  documentation: "D",
-  duplicate: "U",
-  invalid: "V",
-  wontfix: "W",
-};
-const TODO_LABEL_CODE_TO_LABEL: Record<string, TodoLabel> = {
-  N: "New Feature",
-  I: "Improvement",
-  B: "Bug",
-  K: "Blocked",
-  R: "refactor",
-  D: "documentation",
-  U: "duplicate",
-  V: "invalid",
-  W: "wontfix",
-};
-
-function clampNumber(value: number, min: number, max: number): number {
-  return Math.min(Math.max(value, min), max);
-}
-
-function encodeTodoLabels(labels: TodoLabel[]): string {
-  return labels.map((label) => TODO_LABEL_CODE_MAP[label]).sort().join("");
-}
-
-function decodeTodoLabels(value: string): TodoLabel[] {
-  if (!value) return [];
-  return value
-    .split("")
-    .map((token) => TODO_LABEL_CODE_TO_LABEL[token])
-    .filter((label): label is TodoLabel => Boolean(label));
-}
-
-function decodeTodoQuery(encoded: string | undefined): string | undefined {
-  if (!encoded) return undefined;
-  const decoded = decodeBase64Url(encoded);
-  return decoded.length ? decoded : undefined;
-}
-
-function encodeTodoQuery(query: string | undefined, maxLength: number): string {
-  if (!query) return "";
-  return encodeWithMaxLength(query, maxLength);
-}
-
-function buildTodoPayloadToken(
-  payload: Omit<TodoListPayload, "page">,
-  maxLength: number,
-): string {
-  const stateCode = payload.state === "open"
-    ? "o"
-    : payload.state === "closed"
-      ? "c"
-      : "a";
-  const sortCode = payload.sort === "created" ? "c" : "u";
-  const dirCode = payload.direction === "asc" ? "a" : "d";
-  const labelToken = encodeTodoLabels(payload.labels);
-  const base = [
-    `s${stateCode}`,
-    `o${sortCode}`,
-    `d${dirCode}`,
-    `p${payload.perPage}`,
-    `l${labelToken}`,
-    `b${payload.excludeBlocked ? "1" : "0"}`,
-    `u${payload.isPublic ? "1" : "0"}`,
-    `r${payload.repo}`,
-    "q",
-  ].join(";");
-  const maxQueryLength = Math.max(maxLength - base.length, 0);
-  const queryToken = encodeTodoQuery(payload.query, maxQueryLength);
-  return `${base}${queryToken}`;
-}
-
-function parseTodoPayloadToken(
-  token: string,
-): Omit<TodoListPayload, "page"> | null {
-  if (!token) return null;
-  const parts = token.split(";");
-  const map = new Map<string, string>();
-  parts.forEach((part) => {
-    if (!part) return;
-    const key = part.slice(0, 1);
-    const value = part.slice(1);
-    map.set(key, value);
-  });
-
-  const stateCode = map.get("s");
-  const sortCode = map.get("o");
-  const dirCode = map.get("d");
-  if (!stateCode || !sortCode || !dirCode) return null;
-  const perPage = Number(map.get("p"));
-  const labelToken = map.get("l") ?? "";
-  const excludeBlocked = map.get("b") === "1";
-  const isPublic = map.get("u") === "1";
-  const repoCode = map.get("r");
-  const repo = isTodoRepoCode(repoCode) ? repoCode : DEFAULT_TODO_REPO_CODE;
-  const query = decodeTodoQuery(map.get("q"));
-
-  const state = stateCode === "o" ? "open" : stateCode === "c" ? "closed" : "all";
-  const sort = sortCode === "c" ? "created" : "updated";
-  const direction = dirCode === "a" ? "asc" : "desc";
-
-  if (!Number.isFinite(perPage) || perPage <= 0) return null;
-
-  const labels = decodeTodoLabels(labelToken);
-  const stateFilters = normalizeStateFilters(state === "all" ? ["open", "closed"] : [state]);
-
-  return {
-    perPage,
-    state,
-    stateFilters,
-    labels,
-    excludeBlocked,
-    query,
-    sort,
-    direction,
-    isPublic,
-    repo,
-  };
-}
-
-function parseTodoLabels(rawValue: string | undefined): {
-  labels: TodoLabel[];
-  invalid: string[];
-} {
-  if (!rawValue) {
-    return { labels: [], invalid: [] };
-  }
-
-  const tokens = rawValue
-    .split(",")
-    .map((token) => token.trim())
-    .filter((token) => token.length > 0);
-
-  const invalid: string[] = [];
-  const labels: TodoLabel[] = [];
-
-  tokens.forEach((token) => {
-    const match = TODO_LABELS.find((label) => label.toLowerCase() === token.toLowerCase());
-    if (match) {
-      if (!labels.includes(match)) {
-        labels.push(match);
-      }
-    } else {
-      invalid.push(token);
-    }
-  });
-
-  return { labels, invalid };
-}
-
-function normalizeQuery(rawValue: string | undefined): string | undefined {
-  if (!rawValue) return undefined;
-  const sanitized = sanitizeTodoText(rawValue, false);
-  return sanitized.length ? sanitized : undefined;
-}
-
-function matchesIssueQuery(issue: IGithubIssue, query: string): boolean {
-  const haystackParts = [
-    issue.title,
-    issue.body ?? "",
-    issue.labels.join(" "),
-    issue.author ?? "",
-    issue.state,
-    String(issue.number),
-    issue.createdAt,
-    issue.updatedAt,
-    issue.closedAt ?? "",
-  ];
-
-  const haystack = haystackParts.join(" ").toLowerCase();
-  return haystack.includes(query.toLowerCase());
-}
-
-function matchesIssueLabels(issue: IGithubIssue, labels: TodoLabel[]): boolean {
-  if (!labels.length) return true;
-  const issueLabels = issue.labels.map((label) => label.toLowerCase());
-  return labels.some((label) => issueLabels.includes(label.toLowerCase()));
-}
-
-function isBlockedIssue(issue: IGithubIssue): boolean {
-  const issueLabels = issue.labels.map((label) => label.toLowerCase());
-  return issueLabels.includes("blocked");
-}
-
-function normalizeStateFilters(filters: ListState[]): ListState[] {
-  const normalized = filters.filter((state) => state === "open" || state === "closed");
-  if (!normalized.length) {
-    return ["open"];
-  }
-  return Array.from(new Set(normalized));
-}
-
-function toIssueState(filters: ListState[]): ListState {
-  const normalized = normalizeStateFilters(filters);
-  if (normalized.length > 1) return "all";
-  return normalized[0] ?? "open";
-}
-
-function getTodoPermissionFlags(interaction: AnyRepliable): {
-  isOwner: boolean;
-  isAdmin: boolean;
-  isModerator: boolean;
-} | null {
-  const guild = interaction.guild;
-  if (!guild) return null;
-
-  const member: any = interaction.member;
-  const canCheck = member && typeof member.permissionsIn === "function" && interaction.channel;
-  const isOwner = guild.ownerId === interaction.user.id;
-  const isAdmin = canCheck
-    ? member.permissionsIn(interaction.channel).has(PermissionsBitField.Flags.Administrator)
-    : false;
-  const isModerator = canCheck
-    ? member.permissionsIn(interaction.channel).has(PermissionsBitField.Flags.ManageMessages)
-    : false;
-
-  return { isOwner, isAdmin, isModerator };
-}
-
-async function requireModeratorOrAdminOrOwner(
-  interaction: AnyRepliable,
-): Promise<boolean> {
-  const permissions = getTodoPermissionFlags(interaction);
-  if (!permissions) {
-    await safeReply(
-      interaction,
-      buildTodoTextReply("This command can only be used inside a server.", true),
-    );
-    return false;
-  }
-
-  if (permissions.isOwner || permissions.isAdmin || permissions.isModerator) {
-    return true;
-  }
-
-  await safeReply(
-    interaction,
-    buildTodoTextReply(
-      ACCESS_DENIED_MOD_ADMIN,
-      true,
-    ),
-  );
-  return false;
-}
-
-async function requireOwner(interaction: AnyRepliable): Promise<boolean> {
-  const permissions = getTodoPermissionFlags(interaction);
-  if (!permissions) {
-    await safeReply(
-      interaction,
-      buildTodoTextReply("This command can only be used inside a server.", true),
-    );
-    return false;
-  }
-
-  if (permissions.isOwner) {
-    return true;
-  }
-
-  await safeReply(
-    interaction,
-    buildTodoTextReply(ACCESS_DENIED_SERVER_OWNER, true),
-  );
-  return false;
-}
-
-function getGithubErrorMessage(error: any): string {
-  const status = error?.response?.status as number | undefined;
-  const message = error?.response?.data?.message as string | undefined;
-  const errorMessage = error?.message as string | undefined;
-
-  const outputParts: string[] = [];
-  if (status) {
-    outputParts.push(`Github status: ${status}`);
-  }
-  if (message) {
-    outputParts.push(`Github error: ${message}`);
-  } else if (errorMessage) {
-    outputParts.push(`Github error: ${errorMessage}`);
-  }
-
-  if (outputParts.length) {
-    return outputParts.join("\n");
-  }
-  return "GitHub request failed. Check the GitHub App configuration.";
-}
-
-function formatIssueLink(issue: IGithubIssue): string {
-  const labelText = issue.labels.length ? ` [${issue.labels.join(", ")}]` : "";
-  const linkText = `#${issue.number}: ${issue.title}`;
-  if (issue.htmlUrl) {
-    return `[${linkText}](${issue.htmlUrl})${labelText}`;
-  }
-  return `${linkText}${labelText}`;
-}
-
-function formatIssueTitle(issue: IGithubIssue): string {
-  const labelText = issue.labels.length ? ` [${issue.labels.join(", ")}]` : "";
-  return `#${issue.number}: ${issue.title}${labelText}`;
-}
-
-function formatIssueSelectLabel(issue: IGithubIssue): string {
-  const labelText = issue.labels.length ? ` [${issue.labels.join(", ")}]` : "";
-  const text = `#${issue.number} ${issue.title}${labelText}`;
-  return truncateWithEllipsis(text, 100);
-}
-
-function sanitizeTodoText(value: string, preserveNewlines: boolean): string {
-  return sanitizeUserInput(value, { preserveNewlines, allowUnderscore: true });
-}
-
-function sanitizeTodoRichText(value: string): string {
-  return (value ?? "").replace(/\r\n/g, "\n");
-}
-
-function extractImageUrlsFromHtml(text: string): string[] {
-  const urls: string[] = [];
-  const imageTagPattern = /<img\b[^>]*\bsrc\s*=\s*(?:"([^"]+)"|'([^']+)'|([^\s>]+))/gi;
-  let match: RegExpExecArray | null = imageTagPattern.exec(text);
-  while (match) {
-    const raw = match[1] ?? match[2] ?? match[3] ?? "";
-    const decoded = raw.replace(/&amp;/gi, "&").trim();
-    try {
-      const parsed = new URL(decoded);
-      if (parsed.protocol === "http:" || parsed.protocol === "https:") {
-        urls.push(parsed.toString());
-      }
-    } catch {
-      // ignore invalid image URLs
-    }
-    match = imageTagPattern.exec(text);
-  }
-  return urls;
-}
-
-function extractImageUrlsFromMarkdown(text: string): string[] {
-  const urls: string[] = [];
-  const markdownPattern = /!\[[^\]]*]\((https?:\/\/[^)\s]+(?:\s+"[^"]*")?)\)/gi;
-  let match: RegExpExecArray | null = markdownPattern.exec(text);
-  while (match) {
-    const value = match[1] ?? "";
-    const trimmed = value.split(" ")[0]?.trim() ?? "";
-    try {
-      const parsed = new URL(trimmed);
-      if (parsed.protocol === "http:" || parsed.protocol === "https:") {
-        urls.push(parsed.toString());
-      }
-    } catch {
-      // ignore invalid image URLs
-    }
-    match = markdownPattern.exec(text);
-  }
-  return urls;
-}
-
-function extractTodoImageUrls(text: string): string[] {
-  const unique = new Set<string>();
-  [...extractImageUrlsFromHtml(text), ...extractImageUrlsFromMarkdown(text)]
-    .forEach((url) => unique.add(url));
-  return Array.from(unique);
-}
-
-function stripInlineImagesForText(value: string): string {
-  return value
-    .replace(/<img\b[^>]*>/gi, "")
-    .replace(/!\[[^\]]*]\((https?:\/\/[^)\s]+(?:\s+"[^"]*")?)\)/gi, "")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
-}
-
-function renderTodoContent(rawValue: string, maxTextLength: number): {
-  text: string;
-  imageUrls: string[];
-} {
-  const imageUrls = extractTodoImageUrls(rawValue);
-  const plainText = sanitizeTodoRichText(stripInlineImagesForText(rawValue))
-    .slice(0, maxTextLength);
-  return {
-    text: plainText,
-    imageUrls,
-  };
-}
-
-function clampTextDisplayContent(value: string): string {
-  return truncateWithEllipsis(value, DISCORD_TEXT_INPUT_MAX);
-}
-
-function trimToBudget(value: string, maxLength: number): string {
-  if (maxLength <= 0) return "";
-  if (value.length <= maxLength) return value;
-  if (maxLength <= 3) return value.slice(0, maxLength);
-  return `${value.slice(0, maxLength - 3)}...`;
-}
-
-function addTextDisplayWithBudget(
-  container: ContainerBuilder,
-  budget: { remaining: number },
-  content: string,
-): void {
-  if (budget.remaining <= 0) {
-    return;
-  }
-  const normalized = clampTextDisplayContent(content);
-  const clipped = trimToBudget(normalized, budget.remaining);
-  if (!clipped.length) {
-    return;
-  }
-  container.addTextDisplayComponents(
-    new TextDisplayBuilder().setContent(
-      safeV2TextContent(clipped, DISCORD_TEXT_INPUT_MAX),
-    ),
-  );
-  budget.remaining -= clipped.length;
-}
-
-function buildTodoTextReply(
-  content: string,
-  isEphemeral: boolean,
-  extraComponents: Array<ContainerBuilder | ActionRowBuilder<any>> = [],
-): {
-  components: Array<ContainerBuilder | ActionRowBuilder<any>>;
-  flags: number;
-} {
-  const textReply = buildTextReply(content, isEphemeral);
-  if (extraComponents.length === 0) {
-    return textReply;
-  }
-
-  return {
-    ...textReply,
-    components: [...textReply.components, ...extraComponents],
-  };
-}
-
-function buildIssueCommentsDisplay(comments: IGithubIssueComment[]): {
-  text: string;
-  imageUrls: string[];
-} {
-  if (!comments.length) {
-    return { text: "", imageUrls: [] };
-  }
-
-  const lines: string[] = ["**Comments:**"];
-  const imageUrls: string[] = [];
-  comments.forEach((comment) => {
-    const author = comment.author ?? "Unknown";
-    const createdAt = formatDiscordTimestamp(comment.createdAt);
-    const rendered = renderTodoContent(comment.body, MAX_COMMENT_PREVIEW_LENGTH);
-    imageUrls.push(...rendered.imageUrls);
-    lines.push(`**${author}** ${createdAt}`);
-    if (rendered.text) {
-      lines.push(rendered.text);
-    } else if (rendered.imageUrls.length) {
-      lines.push("*Image-only comment.*");
-    } else {
-      lines.push("*No comment content.*");
-    }
-  });
-
-  return {
-    text: lines.join("\n"),
-    imageUrls,
-  };
-}
-
-function addIssueImagesToContainer(
-  container: ContainerBuilder,
-  imageUrls: string[],
-  budget?: { remaining: number },
-): void {
-  const uniqueImages = Array.from(new Set(imageUrls)).slice(0, MAX_TODO_IMAGES_PER_VIEW);
-  if (!uniqueImages.length) return;
-
-  const galleryItems = uniqueImages.map((url, index) =>
-    new MediaGalleryItemBuilder()
-      .setURL(url)
-      .setDescription(`Issue image ${index + 1}`),
-  );
-  if (budget) {
-    addTextDisplayWithBudget(container, budget, "### Images");
-  } else {
-    container.addTextDisplayComponents(
-      new TextDisplayBuilder().setContent("### Images"),
-    );
-  }
-  container.addMediaGalleryComponents(
-    new MediaGalleryBuilder().addItems(galleryItems),
-  );
-}
-
-function buildTodoListCustomId(payloadToken: string, page: number): string {
-  return [TODO_LIST_ID_PREFIX, payloadToken, page].join(":");
-}
-
-function buildTodoListBackId(payloadToken: string, page: number): string {
-  return [TODO_LIST_BACK_ID_PREFIX, payloadToken, page].join(":");
-}
-
-function buildTodoCreateButtonId(payloadToken: string, page: number): string {
-  return [TODO_CREATE_BUTTON_PREFIX, payloadToken, page].join(":");
-}
-
-function buildTodoCreateModalId(
-  payloadToken: string,
-  page: number,
-  channelId: string,
-  messageId: string,
-): string {
-  return [TODO_CREATE_MODAL_PREFIX, payloadToken, page, channelId, messageId].join(":");
-}
-
-function buildTodoCloseButtonId(payloadToken: string, page: number): string {
-  return [TODO_CLOSE_BUTTON_PREFIX, payloadToken, page].join(":");
-}
-
-function buildTodoCloseSelectId(
-  payloadToken: string,
-  page: number,
-  channelId: string,
-  messageId: string,
-): string {
-  return [TODO_CLOSE_SELECT_PREFIX, payloadToken, page, channelId, messageId].join(":");
-}
-
-function buildTodoCloseCancelId(payloadToken: string, page: number): string {
-  return [TODO_CLOSE_CANCEL_PREFIX, payloadToken, page].join(":");
-}
-
-function buildTodoCommentButtonId(payloadToken: string, page: number, issueNumber: number): string {
-  return [TODO_COMMENT_BUTTON_PREFIX, payloadToken, page, issueNumber].join(":");
-}
-
-function buildTodoEditViewButtonId(
-  payloadToken: string, page: number, issueNumber: number,
-): string {
-  return [TODO_EDIT_VIEW_BUTTON_PREFIX, payloadToken, page, issueNumber].join(":");
-}
-
-function buildTodoEditViewModalId(
-  payloadToken: string,
-  page: number,
-  issueNumber: number,
-  channelId: string,
-  messageId: string,
-): string {
-  return [TODO_EDIT_VIEW_MODAL_PREFIX, payloadToken, page, issueNumber, channelId, messageId].join(":");
-}
-
-function buildTodoCommentModalId(
-  payloadToken: string,
-  page: number,
-  issueNumber: number,
-  channelId: string,
-  messageId: string,
-): string {
-  return [TODO_COMMENT_MODAL_PREFIX, payloadToken, page, issueNumber, channelId, messageId].join(":");
-}
-
-function buildTodoEditTitleModalId(
-  payloadToken: string,
-  page: number,
-  issueNumber: number,
-  channelId: string,
-  messageId: string,
-): string {
-  return [TODO_EDIT_TITLE_MODAL_PREFIX, payloadToken, page, issueNumber, channelId, messageId].join(":");
-}
-
-function buildTodoEditDescModalId(
-  payloadToken: string,
-  page: number,
-  issueNumber: number,
-  channelId: string,
-  messageId: string,
-): string {
-  return [TODO_EDIT_DESC_MODAL_PREFIX, payloadToken, page, issueNumber, channelId, messageId].join(":");
-}
-
-function buildTodoCloseViewId(payloadToken: string, page: number, issueNumber: number): string {
-  return [TODO_CLOSE_VIEW_PREFIX, payloadToken, page, issueNumber].join(":");
-}
-
-function buildTodoReopenViewId(payloadToken: string, page: number, issueNumber: number): string {
-  return [TODO_REOPEN_VIEW_PREFIX, payloadToken, page, issueNumber].join(":");
-}
-
-function buildTodoLabelEditSelectId(
-  payloadToken: string,
-  page: number,
-  issueNumber: number,
-  channelId: string,
-  messageId: string,
-): string {
-  return [TODO_LABEL_EDIT_SELECT_PREFIX, payloadToken, page, issueNumber, channelId, messageId].join(":");
-}
-
-function buildTodoFilterButtonId(payloadToken: string, page: number): string {
-  return [TODO_FILTER_BUTTON_PREFIX, payloadToken, page].join(":");
-}
-
-function buildTodoFilterModalId(
-  payloadToken: string,
-  page: number,
-  channelId: string,
-  messageId: string,
-): string {
-  return [TODO_FILTER_MODAL_PREFIX, payloadToken, page, channelId, messageId].join(":");
-}
-
-function buildTodoOpenSelectId(payloadToken: string, page: number): string {
-  return [TODO_OPEN_SELECT_PREFIX, payloadToken, page].join(":");
-}
-
-function buildTodoRepoSelectId(payloadToken: string, page: number): string {
-  return [TODO_REPO_SELECT_PREFIX, payloadToken, page].join(":");
-}
-
-function parseTodoListCustomId(id: string): { payloadToken: string; page: number } | null {
-  if (!id.startsWith(`${TODO_LIST_ID_PREFIX}:`)) return null;
-  const segs = parseCustomIdSegments(id, 2);
-  if (!segs) return null;
-  const [payloadToken, pageStr] = segs;
-  const page = Number(pageStr);
-  if (!payloadToken || !page) return null;
-  return { payloadToken, page };
-}
-
-function parseTodoListBackId(id: string): { payloadToken: string; page: number } | null {
-  if (!id.startsWith(`${TODO_LIST_BACK_ID_PREFIX}:`)) return null;
-  const segs = parseCustomIdSegments(id, 2);
-  if (!segs) return null;
-  const [payloadToken, pageStr] = segs;
-  const page = Number(pageStr);
-  if (!payloadToken || !page) return null;
-  return { payloadToken, page };
-}
-
-function parseTodoCreateButtonId(
-  id: string,
-  prefix: string,
-): { payloadToken: string; page: number } | null {
-  if (!id.startsWith(`${prefix}:`)) return null;
-  const segs = parseCustomIdSegments(id, 2);
-  if (!segs) return null;
-  const [payloadToken, pageStr] = segs;
-  const page = Number(pageStr);
-  if (!payloadToken || !page) return null;
-  return { payloadToken, page };
-}
-
-function parseTodoCreateModalId(
-  id: string,
-  prefix: string,
-): { payloadToken: string; page: number; channelId: string; messageId: string } | null {
-  if (!id.startsWith(`${prefix}:`)) return null;
-  const segs = parseCustomIdSegments(id, 4);
-  if (!segs) return null;
-  const [payloadToken, pageStr, channelId, messageId] = segs;
-  const page = Number(pageStr);
-  if (!payloadToken || !page || !channelId || !messageId) return null;
-  return { payloadToken, page, channelId, messageId };
-}
-
-function parseTodoCloseId(
-  id: string,
-  prefix: string,
-): { payloadToken: string; page: number } | null {
-  if (!id.startsWith(`${prefix}:`)) return null;
-  const segs = parseCustomIdSegments(id, 2);
-  if (!segs) return null;
-  const [payloadToken, pageStr] = segs;
-  const page = Number(pageStr);
-  if (!payloadToken || !page) return null;
-  return { payloadToken, page };
-}
-
-function parseTodoCloseSelectId(
-  id: string,
-  prefix: string,
-): { payloadToken: string; page: number; channelId: string; messageId: string } | null {
-  if (!id.startsWith(`${prefix}:`)) return null;
-  const segs = parseCustomIdSegments(id, 4);
-  if (!segs) return null;
-  const [payloadToken, pageStr, channelId, messageId] = segs;
-  const page = Number(pageStr);
-  if (!payloadToken || !page || !channelId || !messageId) return null;
-  return { payloadToken, page, channelId, messageId };
-}
-
-function parseTodoViewId(
-  id: string,
-): { payloadToken: string; page: number; issueNumber: number } | null {
-  if (!id.startsWith(`${TODO_VIEW_ID_PREFIX}:`)) return null;
-  const segs = parseCustomIdSegments(id, 3);
-  if (!segs) return null;
-  const [payloadToken, pageStr, issueStr] = segs;
-  const page = Number(pageStr);
-  const issueNumber = Number(issueStr);
-  if (!payloadToken || !page || !issueNumber) return null;
-  return { payloadToken, page, issueNumber };
-}
-
-function parseTodoIssueActionId(
-  id: string,
-  prefix: string,
-): { payloadToken: string; page: number; issueNumber: number } | null {
-  if (!id.startsWith(`${prefix}:`)) return null;
-  const segs = parseCustomIdSegments(id, 3);
-  if (!segs) return null;
-  const [payloadToken, pageStr, issueStr] = segs;
-  const page = Number(pageStr);
-  const issueNumber = Number(issueStr);
-  if (!payloadToken || !page || !issueNumber) return null;
-  return { payloadToken, page, issueNumber };
-}
-
-function parseTodoIssueModalId(
-  id: string,
-  prefix: string,
-): {
-  payloadToken: string;
-  page: number;
-  issueNumber: number;
-  channelId: string;
-  messageId: string;
-} | null {
-  if (!id.startsWith(`${prefix}:`)) return null;
-  const segs = parseCustomIdSegments(id, 5);
-  if (!segs) return null;
-  const [payloadToken, pageStr, issueStr, channelId, messageId] = segs;
-  const page = Number(pageStr);
-  const issueNumber = Number(issueStr);
-  if (!payloadToken || !page || !issueNumber || !channelId || !messageId) return null;
-  return { payloadToken, page, issueNumber, channelId, messageId };
-}
-
-function parseTodoCloseViewId(
-  id: string,
-  prefix: string,
-): { payloadToken: string; page: number; issueNumber: number } | null {
-  return parseTodoIssueActionId(id, prefix);
-}
-
-function parseTodoReopenViewId(
-  id: string,
-  prefix: string,
-): { payloadToken: string; page: number; issueNumber: number } | null {
-  return parseTodoIssueActionId(id, prefix);
-}
-
-function parseTodoLabelEditId(
-  id: string,
-  prefix: string,
-): { payloadToken: string; page: number; issueNumber: number } | null {
-  return parseTodoIssueActionId(id, prefix);
-}
-
-function parseTodoLabelEditSelectId(
-  id: string,
-  prefix: string,
-): {
-  payloadToken: string;
-  page: number;
-  issueNumber: number;
-  channelId: string;
-  messageId: string;
-} | null {
-  return parseTodoIssueModalId(id, prefix);
-}
-
-function parseTodoSelectId(
-  id: string,
-  prefix: string,
-): { payloadToken: string; page: number } | null {
-  if (!id.startsWith(`${prefix}:`)) return null;
-  const segs = parseCustomIdSegments(id, 2);
-  if (!segs) return null;
-  const [payloadToken, pageStr] = segs;
-  const page = Number(pageStr);
-  if (!payloadToken || !page) return null;
-  return { payloadToken, page };
-}
-
-function parseTodoFilterButtonId(
-  id: string,
-  prefix: string,
-): { payloadToken: string; page: number } | null {
-  return parseTodoSelectId(id, prefix);
-}
-
-function parseTodoFilterModalId(
-  id: string,
-  prefix: string,
-): { payloadToken: string; page: number; channelId: string; messageId: string } | null {
-  if (!id.startsWith(`${prefix}:`)) return null;
-  const segs = parseCustomIdSegments(id, 4);
-  if (!segs) return null;
-  const [payloadToken, pageStr, channelId, messageId] = segs;
-  const page = Number(pageStr);
-  if (!payloadToken || !page || !channelId || !messageId) return null;
-  return { payloadToken, page, channelId, messageId };
-}
-
-function parseTodoCreateTypeLabels(values: readonly string[]): TodoLabel[] {
-  const validValues = new Set(TODO_CREATE_TYPE_LABELS);
-  return values
-    .filter((value): value is (typeof TODO_CREATE_TYPE_LABELS)[number] => validValues.has(
-      value as (typeof TODO_CREATE_TYPE_LABELS)[number],
-    ))
-    .filter((value, index, arr) => arr.indexOf(value) === index);
-}
-
-async function replyTodoExpired(interaction: AnyRepliable): Promise<void> {
-  await safeReply(
-    interaction,
-    buildTodoTextReply("This /todo view expired. Run /todo again to refresh it.", true),
-  );
-}
-
-function buildIssueListComponents(
-  issues: IGithubIssue[],
-  totalIssues: number,
-  payload: TodoListPayload,
-  payloadToken: string,
-  suggestionCount: number,
-): { components: Array<ContainerBuilder | ActionRowBuilder<any>> } {
-  const totalPages = Math.max(1, Math.ceil(totalIssues / payload.perPage));
-  const labelSummary = payload.excludeBlocked
-    ? "Label: Not Blocked"
-    : payload.labels.length
-      ? `Label: ${payload.labels.join(", ")}`
-      : "Label: Any";
-  const summaryParts = [
-    `-# Repo: ${getTodoRepo(payload.repo).label}`,
-    `State: ${payload.state}`,
-    labelSummary,
-    payload.query ? `Query: ${payload.query}` : "Query: Any",
-    `Sort: # ${payload.direction}`,
-    `Page: ${payload.page} of ${totalPages}`,
-  ];
-  if (suggestionCount > 0) {
-    summaryParts.push(`${suggestionCount} suggestions awaiting review`);
-  }
-
-  const container = new ContainerBuilder()
-    .addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(
-        safeV2TextContent(
-          `## ${buildIssueListTitle(payload.repo)}`,
-          DISCORD_TEXT_INPUT_MAX,
-        ),
-      ),
-    );
-
-  if (issues.length) {
-    issues.forEach((issue) => {
-      container.addTextDisplayComponents(
-        new TextDisplayBuilder().setContent(
-          safeV2TextContent(formatIssueLink(issue), DISCORD_TEXT_INPUT_MAX),
-        ),
-      );
-    });
-  } else {
-    container.addTextDisplayComponents(
-      new TextDisplayBuilder().setContent("No issues found for this filter."),
-    );
-  }
-
-  container.addTextDisplayComponents(
-    new TextDisplayBuilder().setContent(
-      safeV2TextContent(
-        `${summaryParts.join(" | ")} | Total: ${totalIssues}`,
-        DISCORD_TEXT_INPUT_MAX,
-      ),
-    ),
-  );
-
-  const filterButton = buildActionButton({
-    customId: buildTodoFilterButtonId(payloadToken, payload.page),
-    label: "Filter",
-    style: ButtonStyle.Secondary,
-  });
-
-  const createButton = buildActionButton({
-    customId: buildTodoCreateButtonId(payloadToken, payload.page),
-    label: "Create Issue",
-    style: ButtonStyle.Success,
-  });
-
-  const closeButton = buildActionButton({
-    customId: buildTodoCloseButtonId(payloadToken, payload.page),
-    label: "Close Issue",
-    style: ButtonStyle.Danger,
-  });
-
-  const actionRowButtons: ButtonBuilder[] = [createButton, closeButton, filterButton];
-  if (suggestionCount > 0) {
-    actionRowButtons.push(
-      buildActionButton({
-        customId: TODO_REVIEW_SUGGESTIONS_BUTTON_ID,
-        label: "Review Suggestions",
-        style: ButtonStyle.Primary,
-      }),
-    );
-  }
-  const actionRow = buildButtonRow(...actionRowButtons);
-
-  const components: Array<ContainerBuilder | ActionRowBuilder<any>> = [container];
-
-  if (issues.length) {
-    const openSelect = new StringSelectMenuBuilder()
-      .setCustomId(buildTodoOpenSelectId(payloadToken, payload.page))
-      .setPlaceholder("View an issue...")
-      .setMinValues(1)
-      .setMaxValues(1)
-      .addOptions(
-        issues.map((issue) => ({
-          label: formatIssueSelectLabel(issue),
-          value: String(issue.number),
-        })),
-      );
-    components.push(buildSelectRow(openSelect));
-  }
-
-  const repoSelect = new StringSelectMenuBuilder()
-    .setCustomId(buildTodoRepoSelectId(payloadToken, payload.page))
-    .setPlaceholder("Repository...")
-    .setMinValues(1)
-    .setMaxValues(1)
-    .addOptions(
-      TODO_REPO_CODES.map((code) => {
-        const repo = getTodoRepo(code);
-        return {
-          label: repo.label,
-          value: code,
-          description: `${repo.owner}/${repo.name}`,
-          default: code === payload.repo,
-        };
-      }),
-    );
-  components.push(buildSelectRow(repoSelect));
-  components.push(actionRow);
-  if (totalPages > 1) {
-    const prevDisabled = payload.page <= 1;
-    const nextDisabled = payload.page >= totalPages;
-    const pagingRow = buildButtonRow(
-      buildActionButton({
-        customId: buildTodoListCustomId(payloadToken, payload.page - 1),
-        label: "Prev Page",
-        style: ButtonStyle.Secondary,
-      }).setDisabled(prevDisabled),
-      buildActionButton({
-        customId: buildTodoListCustomId(payloadToken, payload.page + 1),
-        label: "Next Page",
-        style: ButtonStyle.Secondary,
-      }).setDisabled(nextDisabled),
-    );
-    components.push(pagingRow);
-  }
-
-  return { components };
-}
-
-function buildIssueViewComponents(
-  issue: IGithubIssue,
-  comments: IGithubIssueComment[],
-  payload: TodoListPayload,
-  payloadToken: string,
-): { components: Array<ContainerBuilder | ActionRowBuilder<ButtonBuilder>> } {
-  const container = new ContainerBuilder();
-  const textBudget = { remaining: DISCORD_TEXT_INPUT_MAX };
-  const repoTarget = getTodoRepo(payload.repo);
-  const repoLabel = `${repoTarget.owner}/${repoTarget.name}`;
-  addTextDisplayWithBudget(container, textBudget, `-# ${repoLabel}`);
-  const titleText = issue.htmlUrl
-    ? `## [${formatIssueTitle(issue)}](${issue.htmlUrl})`
-    : `## ${formatIssueTitle(issue)}`;
-  addTextDisplayWithBudget(container, textBudget, titleText);
-
-  const issueBody = issue.body ?? "";
-  const renderedBody = renderTodoContent(issueBody, DISCORD_TEXT_INPUT_MAX);
-  if (renderedBody.text) {
-    addTextDisplayWithBudget(container, textBudget, renderedBody.text);
-  } else {
-    addTextDisplayWithBudget(container, textBudget, "*No description provided.*");
-  }
-
-  const commentsDisplay = buildIssueCommentsDisplay(comments);
-  if (commentsDisplay.text) {
-    addTextDisplayWithBudget(container, textBudget, commentsDisplay.text);
-  }
-  addIssueImagesToContainer(
-    container,
-    [...renderedBody.imageUrls, ...commentsDisplay.imageUrls],
-    textBudget,
-  );
-
-  const assignee = issue.assignee ?? "Unassigned";
-  const footerLine = [
-    `-# **Repo:** ${repoLabel}`,
-    `**State:** ${issue.state}`,
-    `**Author:** ${issue.author ?? "Unknown"}`,
-    `**Assignee:** ${assignee}`,
-    `**Created:** ${formatDiscordTimestamp(issue.createdAt)}`,
-    `**Updated:** ${formatDiscordTimestamp(issue.updatedAt)}`,
-  ].join(" | ");
-  addTextDisplayWithBudget(container, textBudget, footerLine);
-
-  const isOpen = issue.state === "open";
-  const stateButton = isOpen
-    ? buildActionButton({
-        customId: buildTodoCloseViewId(payloadToken, payload.page, issue.number),
-        label: "Close Issue",
-        style: ButtonStyle.Danger,
-      })
-    : buildActionButton({
-        customId: buildTodoReopenViewId(payloadToken, payload.page, issue.number),
-        label: "Reopen Issue",
-        style: ButtonStyle.Success,
-      });
-
-  const actionRow = buildButtonRow(
-    buildActionButton({
-      customId: buildTodoCommentButtonId(payloadToken, payload.page, issue.number),
-      label: "Add Comment",
-      style: ButtonStyle.Primary,
-    }),
-    buildActionButton({
-      customId: buildTodoEditViewButtonId(payloadToken, payload.page, issue.number),
-      label: "Edit",
-      style: ButtonStyle.Secondary,
-    }),
-    stateButton,
-  );
-
-  const backRow = buildButtonRow(
-    buildActionButton({
-      customId: buildTodoListBackId(payloadToken, payload.page),
-      label: "Back",
-      style: ButtonStyle.Secondary,
-    }),
-  );
-
-  return { components: [container, actionRow, backRow] };
 }
 
 @Discord()
@@ -1522,7 +453,12 @@ export class TodoCommand {
 
     modal.addComponents(
       buildTextInputRow({ customId: TODO_CREATE_TITLE_ID, label: "Title", maxLength: 256 }),
-      buildTextInputRow({ customId: TODO_CREATE_BODY_ID, label: "Description", style: TextInputStyle.Paragraph, maxLength: DISCORD_TEXT_INPUT_MAX }),
+      buildTextInputRow({
+        customId: TODO_CREATE_BODY_ID,
+        label: "Description",
+        style: TextInputStyle.Paragraph,
+        maxLength: DISCORD_TEXT_INPUT_MAX,
+      }),
     );
     modal.addLabelComponents((label) =>
       label
@@ -1578,7 +514,7 @@ export class TodoCommand {
       .setMaxValues(1)
       .addOptions(
         listPayload.pageIssues.map((issue) => ({
-          label: formatIssueSelectLabel(issue),
+          label: issue.title.slice(0, 100),
           value: String(issue.number),
         })),
       );
@@ -1752,7 +688,10 @@ export class TodoCommand {
 
   @SelectMenuComponent({ id: /^todo-label-edit-select:[^:]+:\d+:\d+:\d+:\d+$/ })
   async labelEditSelect(interaction: StringSelectMenuInteraction): Promise<void> {
-    const parsed = parseTodoLabelEditSelectId(interaction.customId, TODO_LABEL_EDIT_SELECT_PREFIX);
+    const parsed = parseTodoLabelEditSelectId(
+      interaction.customId,
+      TODO_LABEL_EDIT_SELECT_PREFIX,
+    );
     if (!parsed) {
       await safeReply(interaction, buildTodoTextReply("This label editor expired.", true));
       return;
@@ -2757,7 +1696,12 @@ export class TodoCommand {
       .setTitle("Edit GitHub Issue");
 
     modal.addComponents(
-      buildTextInputRow({ customId: TODO_CREATE_TITLE_ID, label: "Title", maxLength: 256, value: issue.title }),
+      buildTextInputRow({
+        customId: TODO_CREATE_TITLE_ID,
+        label: "Title",
+        maxLength: 256,
+        value: issue.title,
+      }),
       buildTextInputRow({
         customId: TODO_CREATE_BODY_ID,
         label: "Description",
