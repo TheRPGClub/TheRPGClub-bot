@@ -78,7 +78,7 @@ export class GameDbViewCommand {
         await safeReply(interaction, buildTextReply("API source requires a numeric game ID.", false));
         return;
       }
-      await showGameProfile(interaction, gameId, undefined, "API");
+      await showGameProfile(interaction, gameId, undefined);
       return;
     }
 
@@ -87,7 +87,7 @@ export class GameDbViewCommand {
       if (isPositiveInt(gameId)) {
         const game = await Game.getGameById(gameId, source);
         if (game) {
-          await showGameProfile(interaction, gameId, undefined, source);
+          await showGameProfile(interaction, gameId, undefined);
           return;
         }
       }

@@ -22,11 +22,9 @@ import { buildTextReply, safeV2TextContent } from "../../functions/ComponentsV2U
 import { truncateWithEllipsis } from "../../utilities/ValidationUtils.js";
 import { formatPlatformDisplayName } from "../../functions/PlatformDisplay.js";
 import { formatTableDate } from "../../functions/DateFormatUtils.js";
-import { getHltbCacheByGameId } from "../../classes/HltbCache.js";
-import { getThreadsByGameId } from "../../classes/Thread.js";
 import { renderUsernameWithEmoji } from "../../services/UserEmojiService.js";
 import { padCommandName } from "../help.command.js";
-import Game, { type GameSource, type IGame, type IRelease } from "../../classes/Game.js";
+import Game, { type IGame, type IRelease } from "../../classes/Game.js";
 import {
   buildComponentsV2Flags,
   getSearchRowsFromComponents,
@@ -156,21 +154,28 @@ export async function buildGameProfile(
     | ButtonInteraction
     | ModalSubmitInteraction
     | GameProfileRenderContext,
-  source?: GameSource,
 ): Promise<GameProfileResult | null> {
   try {
-    const game = await Game.getGameById(gameId, source);
-    if (!game) {
+    const profile = await Game.getGameProfile(gameId);
+    if (!profile) {
       return null;
     }
 
-    const releases = await Game.getGameReleasesDetailed(gameId);
-    const associations = await Game.getGameAssociations(gameId);
-    const nowPlayingMembers = await Game.getNowPlayingMembers(gameId);
-    const collectionOwners = await Game.getGameCollectionOwners(gameId);
-    const completions = await Game.getGameCompletions(gameId);
-    const alternateVersions = await Game.getAlternateVersions(gameId);
-    const linkedThreads = await getThreadsByGameId(gameId);
+    const {
+      game,
+      releases,
+      associations,
+      nowPlayingMembers,
+      collectionOwners,
+      completions,
+      alternateVersions,
+      threadIds,
+      hltbCache,
+      primaryImageUrl,
+      series,
+      developers,
+      publishers,
+    } = profile;
 
     const description = game.description || "No description available.";
     const container = new ContainerBuilder();
@@ -184,9 +189,7 @@ export async function buildGameProfile(
     if (primaryArt) {
       files.push(new AttachmentBuilder(primaryArt, { name: "game_image.png" }));
     }
-    const apiImageUrl = primaryArt
-      ? null
-      : await Game.getGamePrimaryImageUrl(gameId).catch(() => null);
+    const apiImageUrl = primaryArt ? null : primaryImageUrl;
 
     const rpgClubSections: string[] = [];
     const pushRpgClubSection = (title: string, value: string | null): void => {
@@ -229,12 +232,7 @@ export async function buildGameProfile(
       pushRpgClubSection("NR-GOTM Round(s)", lines.join("\n"));
     }
 
-    const threadId =
-      associations.gotmWins.find((w) => w.threadId)?.threadId ??
-      associations.nrGotmWins.find((w) => w.threadId)?.threadId ??
-      nowPlayingMembers.find((p) => p.threadId)?.threadId ??
-      linkedThreads[0] ??
-      null;
+    const threadId = threadIds[0] ?? null;
     const headerLink = threadId
       ? `https://discord.com/channels/${interaction?.guildId ?? "@me"}/${threadId}`
       : null;
@@ -355,7 +353,6 @@ export async function buildGameProfile(
       releasesByDate = releaseMap;
     }
 
-    const hltbCache = await getHltbCacheByGameId(gameId);
     const canImportHltb = isHltbImportEligible(game, Boolean(hltbCache));
     const hltbLabels: string[] = [];
 
@@ -426,11 +423,6 @@ export async function buildGameProfile(
       });
     }
 
-    const series = await Game.getGameSeries(gameId);
-    const [developers, publishers] = await Promise.all([
-      Game.getGameDevelopers(gameId),
-      Game.getGamePublishers(gameId),
-    ]);
     const detailSections: string[] = [];
 
     if (developers.length) {
@@ -562,9 +554,8 @@ export async function showGameProfile(
   interaction: CommandInteraction | StringSelectMenuInteraction,
   gameId: number,
   includeActionsOverride?: boolean,
-  source?: GameSource,
 ): Promise<void> {
-  const profile = await buildGameProfile(gameId, interaction, source);
+  const profile = await buildGameProfile(gameId, interaction);
   if (!profile) {
     await safeReply(interaction, buildTextReply(`No game found with ID ${gameId}.`, true));
     return;
