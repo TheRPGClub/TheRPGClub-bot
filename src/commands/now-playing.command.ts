@@ -49,11 +49,6 @@ import {
   buildUserHeaderContainer,
   buildSelectRow,
 } from "../functions/uiComponents.js";
-import { igdbService } from "../services/IGDB/IgdbService.js";
-import {
-  createIgdbSession,
-  type IgdbSelectOption,
-} from "../services/IGDB/IgdbSelectService.js";
 import {
   buildComponentsV2Flags,
   buildComponentsV2EditFlags,
@@ -80,7 +75,6 @@ import { renderUsernameWithEmoji } from "../services/UserEmojiService.js";
 import { isPositiveInt } from "../utilities/ValidationUtils.js";
 import {
   DISCORD_SELECT_OPTIONS_MAX,
-  truncateDescription,
   truncateLabel,
 } from "../config/textLimits.js";
 import { assertCustomIdSegments, parseCustomIdSegmentsMin } from "../utilities/CustomIdUtils.js";
@@ -94,7 +88,6 @@ import {
   NOW_PLAYING_ADD_MODAL_ID,
   NOW_PLAYING_ADD_TITLE_INPUT_ID,
   NOW_PLAYING_ADD_NOTE_INPUT_ID,
-  NOW_PLAYING_ADD_PLATFORM_SELECT_PREFIX,
   NOW_PLAYING_GALLERY_MAX,
   NOW_PLAYING_LIST_EDIT_PREFIX,
   NOW_PLAYING_EDIT_MENU_START_JOURNAL_SELECT_PREFIX,
@@ -162,6 +155,11 @@ import {
   trackJournalReply,
   deleteEligibleNowPlayingMessageInCurrentChannel,
 } from "./now-playing/nowPlayingMessageService.js";
+import { promptNowPlayingAddPlatformSelection } from "./now-playing/nowPlayingAddService.js";
+import {
+  startNowPlayingIgdbImport,
+  startNowPlayingIgdbImportFromInteraction,
+} from "./now-playing/nowPlayingIgdbImport.service.js";
 
 @Discord()
 @SlashGroup({ description: "Show now playing data", name: "now-playing" })
@@ -443,7 +441,7 @@ export class NowPlayingCommand {
     try {
       const results = await Game.searchGames(query);
       if (!results.length) {
-        await this.startNowPlayingIgdbImportFromInteraction(
+        await startNowPlayingIgdbImportFromInteraction(
           interaction,
           {
             userId: interaction.user.id,
@@ -592,7 +590,7 @@ export class NowPlayingCommand {
 
     const choice = interaction.values[0];
     if (choice === "import-igdb") {
-      await this.startNowPlayingIgdbImport(interaction, session);
+      await startNowPlayingIgdbImport(interaction, session);
       return;
     }
     const gameId = Number(choice);
@@ -607,7 +605,7 @@ export class NowPlayingCommand {
     }
 
     try {
-      await this.promptNowPlayingAddPlatformSelection(
+      await promptNowPlayingAddPlatformSelection(
         interaction,
         sessionId,
         ownerId,
@@ -697,55 +695,6 @@ export class NowPlayingCommand {
       });
       nowPlayingAddPlatformSessions.delete(platformSessionId);
       clearNowPlayingAddSession(session.sourceSessionId);
-    }
-  }
-
-  private async promptNowPlayingAddPlatformSelection(
-    interaction: StringSelectMenuInteraction,
-    sourceSessionId: string,
-    userId: string,
-    gameId: number,
-    note: string | null,
-    mode: "reply" | "update",
-  ): Promise<void> {
-    const game = await Game.getGameById(gameId);
-    if (!game) {
-      throw new Error("Selected game not found. Please try again.");
-    }
-    const platforms = await Game.getPlatformsForGameWithStandard(game.id, STANDARD_PLATFORM_IDS);
-    if (!platforms.length) {
-      throw new Error("No platform data is available for this game.");
-    }
-    const platformSessionId = `np-add-platform-${userId}`;
-    nowPlayingAddPlatformSessions.set(platformSessionId, {
-      userId,
-      gameId,
-      note,
-      sourceSessionId,
-    });
-    const options = platforms.slice(0, DISCORD_SELECT_OPTIONS_MAX).map((platform) => ({
-      label: truncateLabel(platform.name),
-      value: String(platform.id),
-    }));
-    const select = new StringSelectMenuBuilder()
-      .setCustomId(`${NOW_PLAYING_ADD_PLATFORM_SELECT_PREFIX}:${platformSessionId}`)
-      .setPlaceholder("Select the platform")
-      .addOptions(options);
-    const titleWithCap = platforms.length > options.length
-      ? `Select the platform for **${game.title}** (showing first ${options.length}).`
-      : `Select the platform for **${game.title}**.`;
-    const container = buildTextContainer(titleWithCap);
-    const payload = {
-      components: [
-        container,
-        buildSelectRow(select),
-      ],
-      flags: buildComponentsV2Flags(true),
-    };
-    if (mode === "update") {
-      await safeUpdate(interaction, payload);
-    } else {
-      await safeReply(interaction, payload);
     }
   }
 
@@ -2631,96 +2580,4 @@ export class NowPlayingCommand {
     return false;
   }
 
-  private async startNowPlayingIgdbImport(
-    interaction: StringSelectMenuInteraction,
-    session: { userId: string; query: string; note: string | null },
-  ): Promise<void> {
-    await this.startNowPlayingIgdbImportFromInteraction(interaction, session, "update");
-  }
-
-  private async startNowPlayingIgdbImportFromInteraction(
-    interaction: AnyRepliable,
-    session: { userId: string; query: string; note: string | null },
-    mode: "reply" | "update",
-  ): Promise<void> {
-    if (mode === "update" && "deferUpdate" in interaction) {
-      await safeDeferUpdate(interaction);
-    }
-
-    try {
-      const searchRes = await igdbService.searchGames(session.query);
-      if (!searchRes.results.length) {
-        const container = buildTextContainer(`No IGDB results found for "${session.query}".`);
-        if (mode === "update" && "update" in interaction) {
-          await safeUpdate(interaction, { components: [container] });
-        } else {
-          await safeReply(interaction, {
-            components: [container],
-            flags: buildComponentsV2Flags(true),
-          });
-        }
-        return;
-      }
-
-      const opts: IgdbSelectOption[] = searchRes.results.map((game) => {
-        const year = game.first_release_date
-          ? new Date(game.first_release_date * 1000).getFullYear()
-          : "TBD";
-        return {
-          id: game.id,
-          label: `${game.name} (${year})`,
-          description: truncateDescription((game.summary || "No summary")),
-        };
-      });
-
-      const { components } = createIgdbSession(session.userId, opts, async (sel, igdbId) => {
-        try {
-          await safeDeferUpdate(sel);
-          const imported = await this.importGameFromIgdb(igdbId);
-          const sourceSessionId = `np-igdb-add-${session.userId}`;
-          await this.promptNowPlayingAddPlatformSelection(
-            sel,
-            sourceSessionId,
-            session.userId,
-            imported.gameId,
-            session.note,
-            "reply",
-          );
-        } catch (err: any) {
-          const msg = err?.message ?? "Failed to import from IGDB.";
-          const container = buildTextContainer(msg);
-          safeIgnore(safeReply(sel, {
-            components: [container],
-            flags: buildComponentsV2Flags(true),
-          }));
-        }
-      });
-
-      const container = buildTextContainer("Select an IGDB result to import and add to Now Playing:")
-        .addActionRowComponents(components.map((row) => row.toJSON()));
-      if (mode === "update" && "update" in interaction) {
-        await safeUpdate(interaction, { components: [container] });
-      } else {
-        await safeReply(interaction, {
-          components: [container],
-          flags: buildComponentsV2Flags(true),
-        });
-      }
-    } catch (err: any) {
-      const msg = err?.message ?? "Failed to search IGDB.";
-      const container = buildTextContainer(msg);
-      if (mode === "update" && "update" in interaction) {
-        await safeUpdate(interaction, { components: [container] });
-      } else {
-        await safeReply(interaction, {
-          components: [container],
-          flags: buildComponentsV2Flags(true),
-        });
-      }
-    }
-  }
-
-  private async importGameFromIgdb(igdbId: number): Promise<{ gameId: number; title: string }> {
-    return Game.importGameFromIgdb(igdbId);
-  }
 }
