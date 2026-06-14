@@ -184,18 +184,13 @@ export async function buildGameProfile(
       return null;
     }
 
-    const releases = await Game.getGameReleases(gameId);
-    const platforms = await Game.getAllPlatforms();
-    const regions = await Game.getAllRegions();
+    const releases = await Game.getGameReleasesDetailed(gameId);
     const associations = await Game.getGameAssociations(gameId);
     const nowPlayingMembers = await Game.getNowPlayingMembers(gameId);
     const collectionOwners = await Game.getGameCollectionOwners(gameId);
     const completions = await Game.getGameCompletions(gameId);
     const alternateVersions = await Game.getAlternateVersions(gameId);
     const linkedThreads = await getThreadsByGameId(gameId);
-
-    const platformMap = new Map(platforms.map((p) => [p.id, p.name]));
-    const regionMap = new Map(regions.map((r) => [r.id, r.name]));
 
     const description = game.description || "No description available.";
     const container = new ContainerBuilder();
@@ -366,9 +361,9 @@ export async function buildGameProfile(
 
       const releaseMap = new Map<string, string[]>();
       sortedReleases.forEach((r) => {
-        const platformName = (formatPlatformDisplayName(platformMap.get(r.platformId))
+        const platformName = (formatPlatformDisplayName(r.platformName)
           ?? "Unknown Platform").trim();
-        const regionName = (regionMap.get(r.regionId) || "Unknown Region").trim();
+        const regionName = (r.regionName || "Unknown Region").trim();
         const regionSuffix = regionName === "Worldwide" ? "" : ` (${regionName})`;
         const releaseDate = r.releaseDate ? formatTableDate(r.releaseDate) : "TBD";
         const format = r.format ? `(${r.format}) ` : "";
