@@ -855,10 +855,10 @@ export class SuperAdmin {
   }
 
   @Slash({
-    description: "Fetch missing images from IGDB for all GameDB titles",
-    name: "gamedb-refresh-images",
+    description: "Download images from IGDB for GameDB titles that have no API images yet",
+    name: "download-missing-images",
   })
-  async gamedbRefreshImages(interaction: CommandInteraction): Promise<void> {
+  async downloadMissingImages(interaction: CommandInteraction): Promise<void> {
     await safeDeferReply(interaction, { flags: MessageFlags.Ephemeral });
 
     const okToUseCommand = await isSuperAdmin(interaction);
@@ -871,16 +871,21 @@ export class SuperAdmin {
     let failCount = 0;
 
     const progressText = (): string =>
-      `Refreshing GameDB images: ${successCount + skipCount + failCount}/${total} processed` +
-      ` (${successCount} ok, ${skipCount} skipped, ${failCount} failed)`;
+      `Downloading missing GameDB images: ${successCount + skipCount + failCount}/${total} checked` +
+      ` (${successCount} downloaded, ${skipCount} already have images, ${failCount} failed)`;
 
     await safeReply(interaction, buildTextReply(progressText(), true));
 
     for (let i = 0; i < gameIds.length; i++) {
       const gameId = gameIds[i];
       try {
-        await apiPost(`/api/v1/games/${gameId}/refresh-images`);
-        successCount++;
+        const existing = await Game.getGamePrimaryImageUrl(gameId);
+        if (existing) {
+          skipCount++;
+        } else {
+          await apiPost(`/api/v1/games/${gameId}/refresh-images`);
+          successCount++;
+        }
       } catch (err) {
         const apiError = axios.isAxiosError(err) ? err.response?.data?.error : undefined;
         const apiMessage = axios.isAxiosError(err) ? err.response?.data?.message : undefined;
@@ -888,10 +893,10 @@ export class SuperAdmin {
 
         if (apiError === "missing_igdb_id") {
           skipCount++;
-          logWarn("SuperadminCommand.gamedbRefreshImages", { gameId, apiError, apiMessage });
+          logWarn("SuperadminCommand.downloadMissingImages", { gameId, apiError, apiMessage });
         } else {
           failCount++;
-          logError("SuperadminCommand.gamedbRefreshImages", {
+          logError("SuperadminCommand.downloadMissingImages", {
             gameId,
             status,
             apiError,
@@ -908,8 +913,8 @@ export class SuperAdmin {
     }
 
     await safeReply(interaction, buildTextReply(
-      `GameDB image refresh complete. ${total} games processed:` +
-        ` ${successCount} succeeded, ${skipCount} skipped (no IGDB ID on API), ${failCount} failed.`,
+      `Done. ${total} games checked:` +
+        ` ${successCount} downloaded, ${skipCount} already had images, ${failCount} failed.`,
       true,
     ));
   }
