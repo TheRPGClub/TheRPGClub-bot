@@ -17,7 +17,7 @@ export interface IUserGameBacklogEntry {
 }
 
 type BacklogApiData = {
-  id: number;
+  entry_id: number;
   user_id: string;
   gamedb_game_id: number;
   platform_id: number | null;
@@ -60,7 +60,7 @@ async function mapEntries(rawEntries: BacklogApiData[]): Promise<IUserGameBacklo
       ? platformMap.get(Number(raw.platform_id))
       : null;
     return {
-      entryId: Number(raw.id),
+      entryId: Number(raw.entry_id),
       userId: raw.user_id,
       gameId: Number(raw.gamedb_game_id),
       title: game?.title ?? `Game #${raw.gamedb_game_id}`,

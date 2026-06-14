@@ -18,6 +18,9 @@ export function parseBacklogEntryAutocompleteValue(raw: string): number | null {
 }
 
 export function buildBacklogEntryAutocompleteValue(entryId: number): string {
+  if (!isPositiveInt(entryId)) {
+    throw new Error(`Cannot build backlog autocomplete value from invalid id: ${entryId}`);
+  }
   return `${BACKLOG_ENTRY_VALUE_PREFIX}:${entryId}`;
 }
 
@@ -59,13 +62,16 @@ export async function autocompleteBacklogEntry(
     : entries;
 
   await interaction.respond(
-    filtered.slice(0, DISCORD_SELECT_OPTIONS_MAX).map((entry) => {
-      const platform = entry.platformName ?? "No platform";
-      const label = truncateLabel(`${entry.title} | ${platform}`);
-      return {
-        name: label,
-        value: buildBacklogEntryAutocompleteValue(entry.entryId),
-      };
-    }),
+    filtered
+      .filter((entry) => isPositiveInt(entry.entryId))
+      .slice(0, DISCORD_SELECT_OPTIONS_MAX)
+      .map((entry) => {
+        const platform = entry.platformName ?? "No platform";
+        const label = truncateLabel(`${entry.title} | ${platform}`);
+        return {
+          name: label,
+          value: buildBacklogEntryAutocompleteValue(entry.entryId),
+        };
+      }),
   );
 }

@@ -3260,5 +3260,43 @@ export default {
         };
       },
     },
+    "entry-id-from-api-entry-id": {
+      meta: {
+        type: "problem",
+        docs: {
+          description:
+            "Require API row mappers to read entryId from `entry_id`, not `id`.",
+        },
+        schema: [],
+        messages: {
+          useEntryId:
+            "Map `entryId` from the API row's `entry_id` field, not `id`. RPG Club list serializers expose the primary key as `entry_id`; reading `id` yields NaN.",
+        },
+      },
+      create(context) {
+        const isNumberCall = (node) =>
+          node &&
+          node.type === "CallExpression" &&
+          node.callee.type === "Identifier" &&
+          node.callee.name === "Number";
+        const readsDotId = (node) =>
+          node &&
+          node.type === "MemberExpression" &&
+          node.property.type === "Identifier" &&
+          node.property.name === "id";
+        return {
+          Property(node) {
+            if (node.key.type !== "Identifier" || node.key.name !== "entryId") {
+              return;
+            }
+            if (!isNumberCall(node.value)) return;
+            const arg = node.value.arguments[0];
+            if (readsDotId(arg)) {
+              context.report({ node: node.value, messageId: "useEntryId" });
+            }
+          },
+        };
+      },
+    },
   },
 };
