@@ -47,6 +47,7 @@ type BackblazeB2ListFileNamesResponse = {
     fileName: string;
     fileInfo?: Record<string, string>;
   }>;
+  nextFileName?: string | null;
 };
 
 type BackblazeB2DownloadAuthorizationResponse = {
@@ -344,4 +345,34 @@ async function buildBackblazeDownloadUrl(
     },
   );
   return `${baseUrl}?Authorization=${encodeURIComponent(tokenResponse.data.authorizationToken)}&v=${encodeURIComponent(sourceHash)}`;
+}
+
+const GAME_ID_FROM_KEY = /^games\/(\d+)-/;
+
+export async function listGameIdsWithImages(bucketId: string): Promise<Set<number>> {
+  const auth = await authorizeBackblazeB2();
+  const gameIds = new Set<number>();
+  let startFileName: string | undefined;
+
+  do {
+    const response = await axios.post<BackblazeB2ListFileNamesResponse>(
+      `${auth.apiUrl}/b2api/v2/b2_list_file_names`,
+      {
+        bucketId,
+        maxFileCount: 10000,
+        prefix: "games/",
+        ...(startFileName ? { startFileName } : {}),
+      },
+      { headers: { Authorization: auth.authorizationToken } },
+    );
+
+    for (const file of response.data.files) {
+      const match = GAME_ID_FROM_KEY.exec(file.fileName);
+      if (match) gameIds.add(Number(match[1]));
+    }
+
+    startFileName = response.data.nextFileName ?? undefined;
+  } while (startFileName);
+
+  return gameIds;
 }
