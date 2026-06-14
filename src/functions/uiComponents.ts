@@ -109,8 +109,9 @@ export function buildSelectOptions(
   return inputs.slice(0, maxOptions).map((item) => {
     const option = new StringSelectMenuOptionBuilder()
       .setLabel(truncateLabel(item.label))
-      .setValue(item.value)
-      .setDescription(truncateDescription((item.description ?? "")));
+      .setValue(item.value);
+    const desc = truncateDescription(item.description ?? "");
+    if (desc) option.setDescription(desc);
     if (item.emoji != null) option.setEmoji(item.emoji);
     return option;
   });
