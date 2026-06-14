@@ -3,14 +3,9 @@ import {
   type CommandInteraction,
   type User,
   MessageFlags,
-  ModalBuilder,
   ModalSubmitInteraction,
-  ActionRowBuilder,
   StringSelectMenuBuilder,
   StringSelectMenuInteraction,
-  TextInputStyle,
-  ButtonBuilder,
-  ButtonStyle,
   ButtonInteraction,
   type ActionRow,
   type MessageActionRowComponent,
@@ -26,11 +21,9 @@ import {
   ModalComponent,
 } from "discordx";
 import {
-  ContainerBuilder,
   ModalBuilder as ComponentsModalBuilder,
   ActionRowBuilder as ComponentsActionRowBuilder,
   TextInputBuilder as ComponentsTextInputBuilder,
-  TextDisplayBuilder,
 } from "@discordjs/builders";
 import { TextInputStyle as ApiTextInputStyle } from "discord-api-types/v10";
 import Member, { type IMemberNowPlayingEntry } from "../classes/Member.js";
@@ -50,44 +43,31 @@ import Game, { type IGame } from "../classes/Game.js";
 import {
   buildActionButton,
   buildButtonRow,
-  buildTextInputRow,
   buildUserHeaderContainer,
   buildSelectRow,
 } from "../functions/uiComponents.js";
-import { igdbService } from "../services/IGDB/IgdbService.js";
-import {
-  createIgdbSession,
-  type IgdbSelectOption,
-} from "../services/IGDB/IgdbSelectService.js";
 import {
   buildComponentsV2Flags,
   buildComponentsV2EditFlags,
   buildTextContainer,
   buildTextReply,
   buildTitledContainer,
-  safeV2TextContent,
 } from "../functions/ComponentsV2Utils.js";
 import {
   autocompleteGameCompletionPlatform,
   autocompleteGameCompletionTitle,
   resolveGameCompletionPlatformId,
 } from "./game-completion/completion-autocomplete.utils.js";
-import {
-  formatTableDate,
-} from "../functions/DateFormatUtils.js";
 import { parseTitleWithYear } from "../functions/GameTitleAutocompleteUtils.js";
 import { STANDARD_PLATFORM_IDS } from "../config/standardPlatforms.js";
 import {
-  NOW_PLAYING_HELP_PREFIX,
   NOW_PLAYING_HELP_TEXTS,
 } from "./now-playing-help.js";
 
 import { renderUsernameWithEmoji } from "../services/UserEmojiService.js";
 import { isPositiveInt } from "../utilities/ValidationUtils.js";
-import { logError } from "../utilities/LogUtils.js";
 import {
   DISCORD_SELECT_OPTIONS_MAX,
-  truncateDescription,
   truncateLabel,
 } from "../config/textLimits.js";
 import { assertCustomIdSegments, parseCustomIdSegmentsMin } from "../utilities/CustomIdUtils.js";
@@ -96,52 +76,31 @@ import { safeIgnore } from "../utilities/AsyncUtils.js";
 import {
   MAX_NOW_PLAYING_NOTE_LEN,
   NOW_PLAYING_SEARCH_LIMIT,
-  NOW_PLAYING_SORT_SLOT_PREFIX,
-  NOW_PLAYING_SORT_SAVE_PREFIX,
-  NOW_PLAYING_SORT_RESET_PREFIX,
-  NOW_PLAYING_NOTE_MODAL_ID,
   NOW_PLAYING_NOTE_INPUT_ID,
   NOW_PLAYING_NOTE_MODAL_MAX_FIELDS,
   NOW_PLAYING_ADD_MODAL_ID,
   NOW_PLAYING_ADD_TITLE_INPUT_ID,
   NOW_PLAYING_ADD_NOTE_INPUT_ID,
   NOW_PLAYING_ADD_PLATFORM_SELECT_PREFIX,
-  NOW_PLAYING_EDIT_PLATFORM_SLOT_PREFIX,
-  NOW_PLAYING_EDIT_PLATFORM_SAVE_PREFIX,
-  NOW_PLAYING_EDIT_PLATFORM_RESET_PREFIX,
   NOW_PLAYING_GALLERY_MAX,
   NOW_PLAYING_LIST_EDIT_PREFIX,
   NOW_PLAYING_EDIT_MENU_START_JOURNAL_SELECT_PREFIX,
-  NOW_PLAYING_REMOVE_SELECT_PREFIX,
-  NOW_PLAYING_JOURNAL_ADD_PREFIX,
-  NOW_PLAYING_JOURNAL_EDIT_PREFIX,
-  NOW_PLAYING_JOURNAL_DELETE_PREFIX,
-  NOW_PLAYING_JOURNAL_DELETE_SELECT_PREFIX,
-  NOW_PLAYING_JOURNAL_DELETE_CONFIRM_PREFIX,
   NOW_PLAYING_JOURNAL_MODAL_ID,
-  NOW_PLAYING_JOURNAL_EDIT_MODAL_ID,
   NOW_PLAYING_JOURNAL_TITLE_INPUT_ID,
   NOW_PLAYING_JOURNAL_BODY_INPUT_ID,
 } from "./now-playing/nowPlayingIds.js";
 import {
   type NowPlayingAddSession,
-  type NowPlayingListContext,
-  type NowPlayingJournalContext,
 } from "./now-playing/nowPlayingTypes.js";
 import {
   nowPlayingAddSessions,
   nowPlayingAddPlatformSessions,
   nowPlayingListContexts,
-  nowPlayingJournalContexts,
-  journalOwnerMenu,
   nowPlayingOwnerMenu,
   clearNowPlayingAddSession,
   trackNowPlayingListContext,
   setNowPlayingListContext,
-  trackNowPlayingJournalContext,
-  refreshJournalMessages,
   NOW_PLAYING_CONTEXT_TTL_MS,
-  NOW_PLAYING_JOURNAL_CONTEXT_TTL_MS,
 } from "./now-playing/nowPlayingContexts.js";
 import {
   buildNowPlayingSortStateToken,
@@ -154,7 +113,6 @@ import {
   getDisplayNowPlayingEntries,
 } from "../functions/NowPlayingUtils.js";
 import {
-  buildNowPlayingListLines,
   buildNowPlayingListContainer,
   buildNowPlayingMessageContainer,
   buildComponentPayload,
@@ -168,54 +126,23 @@ import {
   trimTextDisplayContent,
   buildNowPlayingMemberSelect,
 } from "./now-playing/nowPlayingListRenderer.js";
-import { buildJournalComponents } from "./now-playing/nowPlayingRenderers.js";
-
-function buildEditNoteModal(
-  ownerId: string,
-  gameId: number,
-  title: string,
-  currentNote: string | null,
-): ModalBuilder {
-  return new ModalBuilder()
-    .setCustomId(`${NOW_PLAYING_NOTE_MODAL_ID}:${ownerId}:${gameId}`)
-    .setTitle("Edit Now Playing Note")
-    .addComponents(buildTextInputRow({
-      customId: NOW_PLAYING_NOTE_INPUT_ID,
-      label: title.slice(0, 45),
-      style: TextInputStyle.Paragraph,
-      required: false,
-      maxLength: MAX_NOW_PLAYING_NOTE_LEN,
-      value: currentNote ?? "",
-    }));
-}
-
-function buildEditNotesModal(
-  ownerId: string,
-  entries: Array<{
-    gameId: number;
-    title: string;
-    platformName: string | null;
-    platformAbbreviation: string | null;
-    note: string | null;
-  }>,
-): ModalBuilder {
-  const modal = new ModalBuilder()
-    .setCustomId(`${NOW_PLAYING_NOTE_MODAL_ID}:${ownerId}`)
-    .setTitle("Edit Now Playing Notes");
-
-  entries.forEach((entry) => {
-    modal.addComponents(buildTextInputRow({
-      customId: `${NOW_PLAYING_NOTE_INPUT_ID}:${entry.gameId}`,
-      label: formatEntryTitleWithPlatform(entry).slice(0, 45),
-      style: TextInputStyle.Paragraph,
-      required: false,
-      maxLength: MAX_NOW_PLAYING_NOTE_LEN,
-      value: entry.note ?? "",
-    }));
-  });
-
-  return modal;
-}
+import {
+  buildEditNoteModal,
+  buildEditNotesModal,
+  buildNowPlayingAddModal,
+} from "./now-playing/nowPlayingModals.js";
+import {
+  buildNowPlayingRemoveComponents,
+  buildNowPlayingEditPlatformComponents,
+  buildNowPlayingSortComponents,
+} from "./now-playing/nowPlayingComponentBuilders.js";
+import {
+  deleteEligibleNowPlayingMessageInCurrentChannel,
+} from "./now-playing/nowPlayingChannelUtils.js";
+import {
+  startNowPlayingIgdbImport,
+  startNowPlayingIgdbImportFromInteraction,
+} from "./now-playing/nowPlayingIgdbImport.js";
 
 @Discord()
 @SlashGroup({ description: "Show now playing data", name: "now-playing" })
@@ -362,7 +289,7 @@ export class NowPlayingCommand {
     await safeDeferReply(interaction, { flags: buildComponentsV2Flags(ephemeral) });
 
     if (!ephemeral) {
-      await this.deleteEligibleNowPlayingMessageInCurrentChannel(
+      await deleteEligibleNowPlayingMessageInCurrentChannel(
         interaction,
         showAllFlag
           ? (context) => context.view === "everyone" || context.view === "everyone-selected"
@@ -497,7 +424,7 @@ export class NowPlayingCommand {
     try {
       const results = await Game.searchGames(query);
       if (!results.length) {
-        await this.startNowPlayingIgdbImportFromInteraction(
+        await startNowPlayingIgdbImportFromInteraction(
           interaction,
           {
             userId: interaction.user.id,
@@ -505,6 +432,7 @@ export class NowPlayingCommand {
             note: noteRaw.length ? noteRaw : null,
           },
           "reply",
+          this.promptNowPlayingAddPlatformSelection.bind(this),
         );
         return;
       }
@@ -593,22 +521,6 @@ export class NowPlayingCommand {
     }
   }
 
-  private buildNowPlayingAddModal(): ModalBuilder {
-    return new ModalBuilder()
-      .setCustomId(NOW_PLAYING_ADD_MODAL_ID)
-      .setTitle("Add Now Playing Game")
-      .addComponents(
-        buildTextInputRow({ customId: NOW_PLAYING_ADD_TITLE_INPUT_ID, label: "Game title", maxLength: 100 }),
-        buildTextInputRow({
-          customId: NOW_PLAYING_ADD_NOTE_INPUT_ID,
-          label: "Note (optional)",
-          style: TextInputStyle.Paragraph,
-          required: false,
-          maxLength: MAX_NOW_PLAYING_NOTE_LEN,
-        }),
-      );
-  }
-
   private async resolveNowPlayingGameByTitle(searchTerm: string): Promise<IGame | null> {
     const parsed = parseTitleWithYear(searchTerm);
     const normalizedSearchTerm = parsed.title.trim();
@@ -662,7 +574,11 @@ export class NowPlayingCommand {
 
     const choice = interaction.values[0];
     if (choice === "import-igdb") {
-      await this.startNowPlayingIgdbImport(interaction, session);
+      await startNowPlayingIgdbImport(
+        interaction,
+        session,
+        this.promptNowPlayingAddPlatformSelection.bind(this),
+      );
       return;
     }
     const gameId = Number(choice);
@@ -866,7 +782,7 @@ export class NowPlayingCommand {
         NOW_PLAYING_GALLERY_MAX,
         includeImages,
       );
-      const components = this.buildNowPlayingRemoveComponents(
+      const components = buildNowPlayingRemoveComponents(
         entries,
         userId,
         thumbnailsByGameId,
@@ -939,7 +855,7 @@ export class NowPlayingCommand {
       return;
     }
     const stateToken = buildNowPlayingSortStateToken(entries.length);
-    const components = this.buildNowPlayingSortComponents(entries, ownerId, stateToken);
+    const components = buildNowPlayingSortComponents(entries, ownerId, stateToken);
     const pmComponents = await withPmNowPlayingList(
       ownerId,
       interaction.guildId,
@@ -1046,7 +962,7 @@ export class NowPlayingCommand {
 
     const platformOptions = await this.getNowPlayingEditPlatformOptions(entries);
     const stateToken = buildNowPlayingPlatformStateFromCurrent(entries, platformOptions);
-    const components = this.buildNowPlayingEditPlatformComponents(
+    const components = buildNowPlayingEditPlatformComponents(
       entries,
       interaction.user.id,
       platformOptions,
@@ -1230,7 +1146,7 @@ export class NowPlayingCommand {
     }
 
     parsed[slotIndex] = selectedOptionIndex;
-    const components = this.buildNowPlayingEditPlatformComponents(
+    const components = buildNowPlayingEditPlatformComponents(
       entries,
       ownerId,
       platformOptions,
@@ -1353,7 +1269,7 @@ export class NowPlayingCommand {
         }
       }
       parsed[slotIndex] = selectedIndex;
-      const components = this.buildNowPlayingSortComponents(
+      const components = buildNowPlayingSortComponents(
         entries,
         ownerId,
         encodeNowPlayingSortState(parsed),
@@ -1395,7 +1311,7 @@ export class NowPlayingCommand {
       return;
     }
     if (parsed.some((value) => value < 0)) {
-      const components = this.buildNowPlayingSortComponents(
+      const components = buildNowPlayingSortComponents(
         entries,
         ownerId,
         stateToken,
@@ -1408,7 +1324,7 @@ export class NowPlayingCommand {
       return;
     }
     if (new Set(parsed).size !== parsed.length) {
-      const components = this.buildNowPlayingSortComponents(
+      const components = buildNowPlayingSortComponents(
         entries,
         ownerId,
         stateToken,
@@ -1450,7 +1366,7 @@ export class NowPlayingCommand {
     const responseFlags = buildComponentsV2Flags(isEphemeral);
     const entries = getDisplayNowPlayingEntries(await Member.getNowPlaying(ownerId)).slice(0, 10);
     const stateToken = buildNowPlayingSortStateToken(entries.length);
-    const components = this.buildNowPlayingSortComponents(entries, ownerId, stateToken);
+    const components = buildNowPlayingSortComponents(entries, ownerId, stateToken);
     const pmComponents = await withPmNowPlayingList(ownerId, interaction.guildId, components);
     await safeReply(interaction, { components: pmComponents, flags: responseFlags });
   }
@@ -1648,7 +1564,7 @@ export class NowPlayingCommand {
         NOW_PLAYING_GALLERY_MAX,
         includeImages,
       );
-      const components = this.buildNowPlayingRemoveComponents(
+      const components = buildNowPlayingRemoveComponents(
         entries,
         ownerId,
         thumbnailsByGameId,
@@ -1670,433 +1586,6 @@ export class NowPlayingCommand {
         flags: buildComponentsV2Flags(true),
       });
     }
-  }
-
-  private async buildManageJournalButtonRow(
-    ownerId: string,
-    gameId: number,
-    page: number,
-  ): Promise<ActionRowBuilder<ButtonBuilder>> {
-    const entries = await Member.getGameJournalEntries(ownerId, gameId, { limit: 1, offset: 0 });
-    const hasEntries = entries.length > 0;
-    return buildButtonRow(
-      buildActionButton("add", `${NOW_PLAYING_JOURNAL_ADD_PREFIX}:${ownerId}:${gameId}:${page}`, "Add Entry"),
-      buildActionButton("edit", `${NOW_PLAYING_JOURNAL_EDIT_PREFIX}:${ownerId}:${gameId}:${page}`, "Edit Entry")
-        .setDisabled(!hasEntries),
-      buildActionButton("delete", `${NOW_PLAYING_JOURNAL_DELETE_PREFIX}:${ownerId}:${gameId}:${page}`, "Delete Entry")
-        .setDisabled(!hasEntries),
-    );
-  }
-
-  @ButtonComponent({ id: /^nowplaying-journal-header:\d+:\d+:\d+$/ })
-  async handleNowPlayingJournalHeader(interaction: ButtonInteraction): Promise<void> {
-    const segs = assertCustomIdSegments(interaction, 3);
-    if (!segs) return;
-    const [ownerId, gameIdRaw, pageRaw] = segs;
-    if (interaction.user.id !== ownerId) {
-      await safeDeferUpdate(interaction);
-      return;
-    }
-    const gameId = Number(gameIdRaw);
-    const page = Number(pageRaw);
-    const row = await this.buildManageJournalButtonRow(ownerId, gameId, page);
-    await journalOwnerMenu.show(interaction, ownerId, [row]);
-  }
-
-  @ButtonComponent({ id: /^nowplaying-journal-open:\d+:\d+:\d+$/ })
-  async handleNowPlayingJournalOpen(interaction: ButtonInteraction): Promise<void> {
-    const segs = assertCustomIdSegments(interaction, 3);
-    if (!segs) return;
-    const [ownerId, gameIdRaw, pageRaw] = segs;
-    const gameId = Number(gameIdRaw);
-    const nowPlayingEntries = getDisplayNowPlayingEntries(await Member.getNowPlaying(ownerId));
-    const selected = nowPlayingEntries.find((entry) => entry.gameId === Number(gameIdRaw));
-    if (!selected?.journalEnabled) {
-      await safeReply(interaction, buildTextReply("Journal is not enabled for this game.", true));
-      return;
-    }
-    if (interaction.guildId && !selected.hasJournalEntry) {
-      await safeReply(interaction, buildTextReply("This game's journal has no public entries to show in channel.", true));
-      return;
-    }
-    const payload = await buildJournalComponents(
-      ownerId,
-      interaction.guildId ? "__public__" : interaction.user.id,
-      gameId,
-      Number(pageRaw),
-      interaction.guildId,
-      interaction.user.id === ownerId,
-    );
-    if (interaction.guildId) {
-      await this.deleteLatestJournalMessageInChannel(interaction, ownerId, gameId);
-    }
-    const reply = await safeReply(interaction, {
-      components: payload.components,
-      files: payload.files,
-      flags: buildComponentsV2Flags(
-        interaction.message.flags?.has(MessageFlags.Ephemeral) ?? false,
-      ),
-      allowedMentions: payload.allowedMentions,
-      withResponse: true,
-    } as any);
-    await this.trackJournalReply(reply?.resource?.message ?? null, ownerId, gameId);
-  }
-
-  @SelectMenuComponent({ id: /^nowplaying-journal-view-select:\d+$/ })
-  async handleNowPlayingJournalViewSelect(
-    interaction: StringSelectMenuInteraction,
-  ): Promise<void> {
-    const segs = assertCustomIdSegments(interaction, 1);
-    if (!segs) return;
-    const [ownerId] = segs;
-    const gameId = Number(interaction.values?.[0]);
-    if (!gameId) return;
-    const nowPlayingEntries = getDisplayNowPlayingEntries(await Member.getNowPlaying(ownerId));
-    const selected = nowPlayingEntries.find((e) => e.gameId === gameId);
-    if (!selected?.journalEnabled || !selected.hasJournalEntry) {
-      await safeReply(interaction, buildTextReply("This game has no public journal entries.", true));
-      return;
-    }
-    const payload = await buildJournalComponents(
-      ownerId,
-      interaction.guildId ? "__public__" : interaction.user.id,
-      gameId,
-      1,
-      interaction.guildId,
-      interaction.user.id === ownerId,
-    );
-    if (interaction.guildId) {
-      await this.deleteLatestJournalMessageInChannel(interaction, ownerId, gameId);
-    }
-    const reply = await safeReply(interaction, {
-      components: payload.components,
-      files: payload.files,
-      flags: buildComponentsV2Flags(
-        interaction.message.flags?.has(MessageFlags.Ephemeral) ?? false,
-      ),
-      allowedMentions: payload.allowedMentions,
-      withResponse: true,
-    } as any);
-    await this.trackJournalReply(reply?.resource?.message ?? null, ownerId, gameId);
-  }
-
-  @ButtonComponent({ id: /^nowplaying-journal-page:\d+:\d+:(prev|next):\d+$/ })
-  async handleNowPlayingJournalPage(interaction: ButtonInteraction): Promise<void> {
-    const segs = assertCustomIdSegments(interaction, 4);
-    if (!segs) return;
-    const [ownerId, gameIdRaw, , pageRaw] = segs;
-    const gameId = Number(gameIdRaw);
-    const nowPlayingEntries = getDisplayNowPlayingEntries(await Member.getNowPlaying(ownerId));
-    const selected = nowPlayingEntries.find((entry) => entry.gameId === Number(gameIdRaw));
-    if (!selected?.journalEnabled) {
-      await safeReply(interaction, buildTextReply("Journal is not enabled for this game.", true));
-      return;
-    }
-    if (interaction.guildId && !selected.hasJournalEntry) {
-      await safeReply(interaction, buildTextReply("This game's journal has no public entries to show in channel.", true));
-      return;
-    }
-    const payload = await buildJournalComponents(
-      ownerId,
-      interaction.guildId ? "__public__" : interaction.user.id,
-      gameId,
-      Number(pageRaw),
-      interaction.guildId,
-      interaction.user.id === ownerId,
-    );
-    if (interaction.guildId) {
-      await this.deleteLatestJournalMessageInChannel(interaction, ownerId, gameId);
-    }
-    const reply = await safeReply(interaction, {
-      components: payload.components,
-      files: payload.files,
-      flags: buildComponentsV2Flags(
-        interaction.message.flags?.has(MessageFlags.Ephemeral) ?? false,
-      ),
-      allowedMentions: payload.allowedMentions,
-      withResponse: true,
-    } as any);
-    await this.trackJournalReply(reply?.resource?.message ?? null, ownerId, gameId);
-  }
-
-  @ButtonComponent({ id: /^nowplaying-journal-add:\d+:\d+:\d+$/ })
-  async handleNowPlayingJournalAdd(interaction: ButtonInteraction): Promise<void> {
-    const segs = assertCustomIdSegments(interaction, 3);
-    if (!segs) return;
-    const [ownerId, gameIdRaw, pageRaw] = segs;
-    if (interaction.user.id !== ownerId) {
-      await safeReply(interaction, buildTextReply("Only the owner can add journal entries.", false));
-      return;
-    }
-    const modal = new ComponentsModalBuilder()
-      .setCustomId(`${NOW_PLAYING_JOURNAL_MODAL_ID}:${ownerId}:${gameIdRaw}:${pageRaw}`)
-      .setTitle("Add Journal Entry");
-    modal.addActionRowComponents(
-      new ComponentsActionRowBuilder<ComponentsTextInputBuilder>().addComponents(
-        new ComponentsTextInputBuilder()
-          .setCustomId(NOW_PLAYING_JOURNAL_TITLE_INPUT_ID)
-          .setLabel("Title (optional)")
-          .setStyle(ApiTextInputStyle.Short)
-          .setRequired(false)
-          .setMaxLength(120),
-      ),
-      new ComponentsActionRowBuilder<ComponentsTextInputBuilder>().addComponents(
-        new ComponentsTextInputBuilder()
-          .setCustomId(NOW_PLAYING_JOURNAL_BODY_INPUT_ID)
-          .setLabel("Entry")
-          .setStyle(ApiTextInputStyle.Paragraph)
-          .setRequired(true)
-          .setMaxLength(2000),
-      ),
-    );
-    await interaction.showModal(modal);
-    await journalOwnerMenu.dismiss(ownerId);
-  }
-
-  @ButtonComponent({ id: /^nowplaying-journal-edit:\d+:\d+:\d+$/ })
-  async handleNowPlayingJournalEdit(interaction: ButtonInteraction): Promise<void> {
-    const segs = assertCustomIdSegments(interaction, 3);
-    if (!segs) return;
-    const [ownerId, gameIdRaw, pageRaw] = segs;
-    if (interaction.user.id !== ownerId) {
-      await safeReply(interaction, buildTextReply("Only the owner can edit journal entries.", false));
-      return;
-    }
-    const gameId = Number(gameIdRaw);
-    const page = Number(pageRaw);
-    const offset = Math.max(0, page - 1);
-    const entries = await Member.getGameJournalEntries(ownerId, gameId, { limit: 1, offset });
-    if (!entries.length) {
-      await safeReply(interaction, buildTextReply("No journal entries available to edit.", false));
-      return;
-    }
-    const entry = entries[0];
-    const modal = new ComponentsModalBuilder()
-      .setCustomId(`${NOW_PLAYING_JOURNAL_EDIT_MODAL_ID}:${ownerId}:${gameIdRaw}:${pageRaw}:${entry.entryId}`)
-      .setTitle("Edit Journal Entry");
-    modal.addActionRowComponents(
-      new ComponentsActionRowBuilder<ComponentsTextInputBuilder>().addComponents(
-        new ComponentsTextInputBuilder()
-          .setCustomId(NOW_PLAYING_JOURNAL_TITLE_INPUT_ID)
-          .setLabel("Title (optional)")
-          .setStyle(ApiTextInputStyle.Short)
-          .setRequired(false)
-          .setMaxLength(120)
-          .setValue((entry.title ?? "").slice(0, 120)),
-      ),
-      new ComponentsActionRowBuilder<ComponentsTextInputBuilder>().addComponents(
-        new ComponentsTextInputBuilder()
-          .setCustomId(NOW_PLAYING_JOURNAL_BODY_INPUT_ID)
-          .setLabel("Entry")
-          .setStyle(ApiTextInputStyle.Paragraph)
-          .setRequired(true)
-          .setMaxLength(2000)
-          .setValue(entry.body.slice(0, 2000)),
-      ),
-    );
-    await interaction.showModal(modal);
-  }
-
-  @ButtonComponent({ id: /^nowplaying-journal-delete:\d+:\d+:\d+$/ })
-  async handleNowPlayingJournalDelete(interaction: ButtonInteraction): Promise<void> {
-    const segs = assertCustomIdSegments(interaction, 3);
-    if (!segs) return;
-    const [ownerId, gameIdRaw, pageRaw] = segs;
-    if (interaction.user.id !== ownerId) {
-      await safeReply(interaction, buildTextReply("Only the owner can delete journal entries.", false));
-      return;
-    }
-    const gameId = Number(gameIdRaw);
-    const page = Number(pageRaw);
-    const offset = (Math.max(1, page) - 1) * 5;
-    const entries = await Member.getGameJournalEntries(ownerId, gameId, { limit: 5, offset });
-    if (!entries.length) {
-      await safeReply(interaction, buildTextReply("No journal entries available to delete.", false));
-      return;
-    }
-    const options = entries.map((entry) => ({
-      label: truncateLabel((entry.title ?? `Entry #${entry.entryNumber}`)),
-      value: String(entry.entryId),
-      description: formatTableDate(entry.createdAt),
-    }));
-    const select = new StringSelectMenuBuilder()
-      .setCustomId(`${NOW_PLAYING_JOURNAL_DELETE_SELECT_PREFIX}:${ownerId}:${gameId}:${page}`)
-      .setPlaceholder("Choose an entry to delete")
-      .addOptions(options);
-    const row = buildSelectRow(select);
-    const container = buildTextContainer("## Delete Journal Entry\nSelect an entry to delete.");
-    const helpRow = buildButtonRow(
-      buildActionButton({ customId: `${NOW_PLAYING_HELP_PREFIX}:journal-delete:${ownerId}`, label: "?", style: ButtonStyle.Secondary }),
-    );
-    await safeUpdate(interaction, {
-      components: [container, row, helpRow],
-      flags: buildComponentsV2Flags(
-        interaction.message.flags?.has(MessageFlags.Ephemeral) ?? false,
-      ),
-    });
-  }
-
-  @SelectMenuComponent({ id: /^nowplaying-journal-delete-select:\d+:\d+:\d+$/ })
-  async handleNowPlayingJournalDeleteSelect(
-    interaction: StringSelectMenuInteraction,
-  ): Promise<void> {
-    const segs = assertCustomIdSegments(interaction, 3);
-    if (!segs) return;
-    const [ownerId, gameIdRaw, pageRaw] = segs;
-    if (interaction.user.id !== ownerId) {
-      await safeReply(interaction, buildTextReply("Only the owner can delete journal entries.", false));
-      return;
-    }
-    const entryId = Number(interaction.values[0]);
-    const entry = await Member.getGameJournalEntryForUser(ownerId, entryId);
-    if (!entry || entry.gameId !== Number(gameIdRaw)) {
-      await safeReply(interaction, buildTextReply("That journal entry was not found.", false));
-      return;
-    }
-    const entryTitle = entry.title?.trim() ? entry.title.trim() : `Entry #${entry.entryNumber}`;
-    const container = buildTextContainer(`## Confirm Delete\nDelete **${entryTitle}** from ${formatTableDate(entry.createdAt)}?`);
-    const row = buildButtonRow(
-      buildActionButton(
-        "delete",
-        `${NOW_PLAYING_JOURNAL_DELETE_CONFIRM_PREFIX}:yes:${ownerId}:${gameIdRaw}:${pageRaw}:${entryId}`,
-      ),
-      buildActionButton(
-        "cancel",
-        `${NOW_PLAYING_JOURNAL_DELETE_CONFIRM_PREFIX}:no:${ownerId}:${gameIdRaw}:${pageRaw}:${entryId}`,
-      ),
-      buildActionButton({ customId: `${NOW_PLAYING_HELP_PREFIX}:journal-delete-confirm:${ownerId}`, label: "?", style: ButtonStyle.Secondary }),
-    );
-    await safeUpdate(interaction, {
-      components: [container, row],
-      flags: buildComponentsV2Flags(
-        interaction.message.flags?.has(MessageFlags.Ephemeral) ?? false,
-      ),
-    });
-  }
-
-  @ButtonComponent({ id: /^nowplaying-journal-delete-confirm:(yes|no):\d+:\d+:\d+:\d+$/ })
-  async handleNowPlayingJournalDeleteConfirm(interaction: ButtonInteraction): Promise<void> {
-    const segs = assertCustomIdSegments(interaction, 5);
-    if (!segs) return;
-    const [action, ownerId, gameIdRaw, pageRaw, entryIdRaw] = segs;
-    if (interaction.user.id !== ownerId) {
-      await safeReply(interaction, buildTextReply("Only the owner can delete journal entries.", false));
-      return;
-    }
-    if (action === "yes") {
-      const removed = await Member.deleteGameJournalEntry(ownerId, Number(entryIdRaw));
-      if (!removed) {
-        await safeReply(interaction, buildTextReply("That journal entry was not found.", false));
-        return;
-      }
-    }
-    const row = await this.buildManageJournalButtonRow(ownerId, Number(gameIdRaw), Number(pageRaw));
-    await safeUpdate(interaction, {
-      components: [row],
-      flags: buildComponentsV2Flags(
-        interaction.message.flags?.has(MessageFlags.Ephemeral) ?? false,
-      ),
-    });
-    if (action === "yes") {
-      await refreshJournalMessages(
-        interaction.client, ownerId, Number(gameIdRaw), interaction.message.id,
-      );
-    }
-  }
-
-  @ModalComponent({ id: /^nowplaying-journal-modal:\d+:\d+:\d+$/ })
-  async handleNowPlayingJournalModal(interaction: ModalSubmitInteraction): Promise<void> {
-    const segs = assertCustomIdSegments(interaction, 3);
-    if (!segs) return;
-    const [ownerId, gameIdRaw, pageRaw] = segs;
-    if (interaction.user.id !== ownerId) {
-      await safeReply(interaction, buildTextReply("Only the owner can submit journal entries.", false));
-      return;
-    }
-    const title = sanitizeUserInput(
-      interaction.fields.getTextInputValue(NOW_PLAYING_JOURNAL_TITLE_INPUT_ID) ?? "",
-      { preserveNewlines: true, maxLength: 120 },
-    );
-    const body = sanitizeUserInput(
-      interaction.fields.getTextInputValue(NOW_PLAYING_JOURNAL_BODY_INPUT_ID),
-      { preserveNewlines: true, maxLength: 2000 },
-    );
-    const gameId = Number(gameIdRaw);
-    const hasExistingTracked = Array.from(nowPlayingJournalContexts.values())
-      .some((ctx) => ctx.ownerUserId === ownerId && ctx.gameId === gameId);
-    await Member.addGameJournalEntry({
-      userId: ownerId,
-      gameId,
-      title: title || null,
-      body,
-    });
-    const page = Number(pageRaw);
-    const row = await this.buildManageJournalButtonRow(ownerId, gameId, page);
-    if (!hasExistingTracked && interaction.guildId) {
-      // First entry: post the journal message first so it appears before the manage buttons.
-      // Skip journalOwnerMenu here to avoid its deletor pointing at the journal post.
-      await this.deleteLatestJournalMessageInChannel(interaction, ownerId, gameId);
-      const payload = await buildJournalComponents(
-        ownerId,
-        "__public__",
-        gameId,
-        page,
-        interaction.guildId,
-        true,
-      );
-      const reply = await safeReply(interaction, {
-        components: payload.components as any[],
-        files: payload.files,
-        flags: buildComponentsV2Flags(false),
-        allowedMentions: payload.allowedMentions,
-        withResponse: true,
-      } as any);
-      await this.trackJournalReply(reply?.resource?.message ?? null, ownerId, gameId);
-      await safeReply(interaction, {
-        components: [row],
-        flags: buildComponentsV2Flags(true),
-        __forceFollowUp: true,
-      });
-    } else {
-      await journalOwnerMenu.show(interaction, ownerId, [row]);
-      await refreshJournalMessages(interaction.client, ownerId, gameId);
-    }
-  }
-
-  @ModalComponent({ id: /^nowplaying-journal-edit-modal:\d+:\d+:\d+:\d+$/ })
-  async handleNowPlayingJournalEditModal(interaction: ModalSubmitInteraction): Promise<void> {
-    const segs = assertCustomIdSegments(interaction, 4);
-    if (!segs) return;
-    const [ownerId, gameIdRaw, pageRaw, entryIdRaw] = segs;
-    const gameId = Number(gameIdRaw);
-    if (interaction.user.id !== ownerId) {
-      await safeReply(interaction, buildTextReply("Only the owner can edit journal entries.", false));
-      return;
-    }
-
-    const entryId = Number(entryIdRaw);
-    const existing = await Member.getGameJournalEntryForUser(ownerId, entryId);
-    if (!existing || existing.gameId !== gameId) {
-      await safeReply(interaction, buildTextReply("That journal entry was not found.", false));
-      return;
-    }
-
-    const title = sanitizeUserInput(
-      interaction.fields.getTextInputValue(NOW_PLAYING_JOURNAL_TITLE_INPUT_ID) ?? "",
-      { preserveNewlines: true, maxLength: 120 },
-    );
-    const body = sanitizeUserInput(
-      interaction.fields.getTextInputValue(NOW_PLAYING_JOURNAL_BODY_INPUT_ID),
-      { preserveNewlines: true, maxLength: 2000 },
-    );
-    await Member.updateGameJournalEntry({ userId: ownerId, entryId, title: title || null, body });
-    const page = Number(pageRaw);
-    const row = await this.buildManageJournalButtonRow(ownerId, gameId, page);
-    await safeReply(interaction, {
-      components: [row],
-      flags: buildComponentsV2Flags(true),
-    });
-    await refreshJournalMessages(interaction.client, ownerId, gameId);
   }
 
   @ButtonComponent({ id: /^nowplaying-list-edit:\d+$/ })
@@ -2238,7 +1727,7 @@ export class NowPlayingCommand {
     const [ownerId] = segs;
     if (await replyIfNotOwner(interaction, ownerId, "This add prompt isn't for you.")) return;
     setNowPlayingListContext(ownerId, interaction.message);
-    safeIgnore(interaction.showModal(this.buildNowPlayingAddModal()));
+    safeIgnore(interaction.showModal(buildNowPlayingAddModal()));
   }
 
   @ButtonComponent({ id: /^nowplaying-list-edit-platform:\d+$/ })
@@ -2286,7 +1775,7 @@ export class NowPlayingCommand {
       return;
     }
     if (parsed.some((value) => value < 0)) {
-      const components = this.buildNowPlayingEditPlatformComponents(
+      const components = buildNowPlayingEditPlatformComponents(
         entries,
         ownerId,
         platformOptions,
@@ -2342,7 +1831,7 @@ export class NowPlayingCommand {
     const entries = getDisplayNowPlayingEntries(await Member.getNowPlaying(ownerId)).slice(0, 10);
     const platformOptions = await this.getNowPlayingEditPlatformOptions(entries);
     const stateTokenReset = buildNowPlayingPlatformStateFromCurrent(entries, platformOptions);
-    const components = this.buildNowPlayingEditPlatformComponents(
+    const components = buildNowPlayingEditPlatformComponents(
       entries,
       ownerId,
       platformOptions,
@@ -2582,45 +2071,6 @@ export class NowPlayingCommand {
     }
   }
 
-  private buildNowPlayingRemoveComponents(
-    entries: IMemberNowPlayingEntry[],
-    ownerId: string,
-    _thumbnailsByGameId: Map<number, string>,
-  ): Array<ContainerBuilder | ActionRowBuilder<ButtonBuilder | StringSelectMenuBuilder>> {
-    void _thumbnailsByGameId;
-    const container = new ContainerBuilder();
-    const textLines = [
-      "## Now Playing Remove",
-      "Select a game below to remove it from your list.",
-      "",
-      ...buildNowPlayingListLines(entries, null),
-    ];
-    container.addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(
-        safeV2TextContent(trimTextDisplayContent(textLines.join("\n")), 3500),
-      ),
-    );
-
-    const selectOptions = entries
-      .filter((entry) => isPositiveInt(entry.gameId))
-      .slice(0, DISCORD_SELECT_OPTIONS_MAX)
-      .map((entry) => ({
-        label: truncateLabel(formatEntryTitleWithPlatform(entry)),
-        value: String(entry.gameId),
-      }));
-    const removeSelect = new StringSelectMenuBuilder()
-      .setCustomId(`${NOW_PLAYING_REMOVE_SELECT_PREFIX}:${ownerId}`)
-      .setPlaceholder("Select a game to remove")
-      .addOptions(selectOptions);
-    const selectRow = buildSelectRow(removeSelect);
-
-    const doneRow = buildButtonRow(
-      buildActionButton("confirm", `nowplaying-remove-done:${ownerId}`, "Done"),
-      buildActionButton({ customId: `${NOW_PLAYING_HELP_PREFIX}:remove:${ownerId}`, label: "?", style: ButtonStyle.Secondary }),
-    );
-    return [container, selectRow, doneRow];
-  }
-
   @SelectMenuComponent({ id: /^nowplaying-remove-select:\d+$/ })
   async handleNowPlayingRemoveSelect(interaction: StringSelectMenuInteraction): Promise<void> {
     const isEphemeral = interaction.message.flags?.has(MessageFlags.Ephemeral) ?? false;
@@ -2674,7 +2124,7 @@ export class NowPlayingCommand {
         NOW_PLAYING_GALLERY_MAX,
         includeImages,
       );
-      const components = this.buildNowPlayingRemoveComponents(
+      const components = buildNowPlayingRemoveComponents(
         entries,
         ownerId,
         thumbnailsByGameId,
@@ -2696,134 +2146,6 @@ export class NowPlayingCommand {
         flags: buildComponentsV2Flags(isEphemeral),
       }));
     }
-  }
-
-  private buildNowPlayingEditPlatformComponents(
-    entries: IMemberNowPlayingEntry[],
-    ownerId: string,
-    platformOptions: Array<Array<{ label: string; value: string; platformId: number }>>,
-    stateToken: string,
-    validationMessage: string | null = null,
-  ): Array<ContainerBuilder | ActionRowBuilder<StringSelectMenuBuilder | ButtonBuilder>> {
-    const parsedState = parseNowPlayingPlatformStateToken(stateToken, entries.length) ??
-      Array.from({ length: entries.length }, () => -1);
-    const container = new ContainerBuilder();
-    const introLines = [
-      "## Now Playing Edit Platform",
-      "Pick one platform per game, then press Save.",
-    ];
-    if (validationMessage) {
-      introLines.push(`-# ${validationMessage}`);
-    }
-    container.addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(
-        safeV2TextContent(introLines.join("\n"), 1000),
-      ),
-    );
-
-    const rows: Array<ActionRowBuilder<StringSelectMenuBuilder>> = [];
-    for (let slotIndex = 0; slotIndex < entries.length; slotIndex += 1) {
-      const entry = entries[slotIndex];
-      const options = platformOptions[slotIndex] ?? [];
-      if (!options.length) {
-        container.addTextDisplayComponents(
-          new TextDisplayBuilder().setContent(
-            safeV2TextContent(`-# ${entry.title.slice(0, 80)}: No platform choices available.`, 1000),
-          ),
-        );
-        continue;
-      }
-      const selectedIndex = parsedState[slotIndex];
-      const currentPlatformName =
-        selectedIndex >= 0 ? (options[selectedIndex]?.label ?? null) : null;
-      const placeholder = currentPlatformName
-        ? truncateLabel(`${entry.title.slice(0, 50)} - ${currentPlatformName}`)
-        : truncateLabel(entry.title);
-      const select = new StringSelectMenuBuilder()
-        .setCustomId(`${NOW_PLAYING_EDIT_PLATFORM_SLOT_PREFIX}:${ownerId}:${slotIndex}:${stateToken}`)
-        .setPlaceholder(placeholder)
-        .setMinValues(1)
-        .setMaxValues(1)
-        .addOptions(options.map((option, optionIndex) => ({
-          label: optionIndex === selectedIndex
-            ? truncateLabel(`${entry.title.slice(0, 50)} - ${option.label}`)
-            : option.label,
-          value: option.value,
-          default: selectedIndex === optionIndex,
-        })));
-      rows.push(buildSelectRow(select));
-    }
-    const components: Array<
-      ContainerBuilder | ActionRowBuilder<StringSelectMenuBuilder | ButtonBuilder>
-    > = [
-      container,
-      ...rows,
-    ];
-
-    const actionRow = buildButtonRow(
-      buildActionButton(
-        "confirm",
-        `${NOW_PLAYING_EDIT_PLATFORM_SAVE_PREFIX}:${ownerId}:${stateToken}`,
-        "Save",
-      ),
-      buildActionButton({ customId: `${NOW_PLAYING_EDIT_PLATFORM_RESET_PREFIX}:${ownerId}`, label: "Reset to current platforms", style: ButtonStyle.Secondary }),
-      buildActionButton("cancel", `nowplaying-list-cancel:${ownerId}`),
-      buildActionButton({ customId: `${NOW_PLAYING_HELP_PREFIX}:platform:${ownerId}`, label: "?", style: ButtonStyle.Secondary }),
-    );
-    components.push(actionRow);
-    return components;
-  }
-
-  private buildNowPlayingSortComponents(
-    entries: IMemberNowPlayingEntry[],
-    ownerId: string,
-    stateToken: string,
-    validationMessage: string | null = null,
-  ): Array<ContainerBuilder | ActionRowBuilder<StringSelectMenuBuilder | ButtonBuilder>> {
-    const parsedState = parseNowPlayingSortStateToken(stateToken, entries.length) ??
-      Array.from({ length: entries.length }, () => -1);
-    const container = new ContainerBuilder();
-    const introLines = [
-      "## Sort Your Now Playing List",
-      "Pick one title for each position, then press Save.",
-    ];
-    if (validationMessage) {
-      introLines.push(`-# ${validationMessage}`);
-    }
-    container.addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(
-        safeV2TextContent(introLines.join("\n"), 1000),
-      ),
-    );
-
-    const rows: Array<ActionRowBuilder<StringSelectMenuBuilder | ButtonBuilder>> = [];
-    for (let slotIndex = 0; slotIndex < entries.length; slotIndex += 1) {
-      const selectedIndex = parsedState[slotIndex] ?? -1;
-      const menu = new StringSelectMenuBuilder()
-        .setCustomId(`${NOW_PLAYING_SORT_SLOT_PREFIX}:${ownerId}:${slotIndex}:${stateToken}`)
-        .setPlaceholder(`Position ${slotIndex + 1}`)
-        .setMinValues(1)
-        .setMaxValues(1)
-        .addOptions(entries.map((entry, entryIndex) => ({
-          label: truncateLabel(formatEntryTitleWithPlatform(entry)),
-          value: String(entryIndex),
-          default: selectedIndex === entryIndex,
-        })));
-      rows.push(buildSelectRow(menu));
-    }
-
-    const actionRow = buildButtonRow(
-      buildActionButton(
-        "confirm",
-        `${NOW_PLAYING_SORT_SAVE_PREFIX}:${ownerId}:${stateToken}`,
-        "Save",
-      ),
-      buildActionButton({ customId: `${NOW_PLAYING_SORT_RESET_PREFIX}:${ownerId}`, label: "Reset to current order", style: ButtonStyle.Secondary }),
-      buildActionButton("cancel", `nowplaying-list-cancel:${ownerId}`),
-      buildActionButton({ customId: `${NOW_PLAYING_HELP_PREFIX}:sort:${ownerId}`, label: "?", style: ButtonStyle.Secondary }),
-    );
-    rows.push(actionRow);
-    return [container, ...rows];
   }
 
   private async replaceNowPlayingMessageInCurrentChannel(
@@ -2868,201 +2190,4 @@ export class NowPlayingCommand {
     return false;
   }
 
-  private async deleteLatestJournalMessageInChannel(
-    interaction: ButtonInteraction | ModalSubmitInteraction | StringSelectMenuInteraction,
-    ownerUserId: string,
-    gameId: number,
-  ): Promise<void> {
-    const channelId = interaction.channelId;
-    if (!channelId) {
-      return;
-    }
-
-    const now = Date.now();
-
-    // Expire stale entries and find the single most recent context for this channel.
-    let latestKey: string | null = null;
-    let latestContext: NowPlayingJournalContext | null = null;
-    for (const [key, context] of nowPlayingJournalContexts.entries()) {
-      if (now - context.createdAt > NOW_PLAYING_JOURNAL_CONTEXT_TTL_MS) {
-        nowPlayingJournalContexts.delete(key);
-        await Member.deleteJournalMessageContext(context.channelId, context.messageId)
-          .catch((err) => logError("Journal.delete_expired_context_from_db_failed", err));
-        continue;
-      }
-      if (context.channelId !== channelId) continue;
-      if (context.ownerUserId !== ownerUserId || context.gameId !== gameId) continue;
-      if (!latestContext || context.createdAt > latestContext.createdAt) {
-        latestKey = key;
-        latestContext = context;
-      }
-    }
-
-    if (!latestKey || !latestContext) return;
-
-    const channel = await interaction.client.channels
-      .fetch(latestContext.channelId)
-      .catch(() => null);
-    if (!channel?.isTextBased()) {
-      nowPlayingJournalContexts.delete(latestKey);
-      await Member.deleteJournalMessageContext(latestContext.channelId, latestContext.messageId)
-        .catch((err) => logError("Journal.delete_unreachable_context_from_db_failed", err));
-      return;
-    }
-
-    const message = await channel.messages.fetch(latestContext.messageId).catch(() => null);
-    if (!message) {
-      nowPlayingJournalContexts.delete(latestKey);
-      await Member.deleteJournalMessageContext(latestContext.channelId, latestContext.messageId)
-        .catch((err) => logError("Journal.delete_missing_context_from_db_failed", err));
-      return;
-    }
-
-    await message.delete().catch(() => null);
-    nowPlayingJournalContexts.delete(latestKey);
-    await Member.deleteJournalMessageContext(latestContext.channelId, latestContext.messageId)
-      .catch((err) => logError("Journal.delete_context_from_db_after_message_delete_failed", err));
-  }
-
-  private async trackJournalReply(
-    reply: Message | null,
-    ownerUserId: string,
-    gameId: number,
-  ): Promise<void> {
-    if (!reply) {
-      return;
-    }
-    await trackNowPlayingJournalContext(reply as Message<boolean>, ownerUserId, gameId);
-  }
-
-  private async deleteEligibleNowPlayingMessageInCurrentChannel(
-    interaction: CommandInteraction,
-    predicate: (context: NowPlayingListContext) => boolean,
-  ): Promise<boolean> {
-    const channelId = interaction.channelId;
-    if (!channelId) {
-      return false;
-    }
-
-    const now = Date.now();
-    for (const [key, context] of nowPlayingListContexts.entries()) {
-      if (now - context.createdAt > NOW_PLAYING_CONTEXT_TTL_MS) {
-        nowPlayingListContexts.delete(key);
-        continue;
-      }
-      if (context.channelId !== channelId || !predicate(context)) {
-        continue;
-      }
-
-      const channel = await interaction.client.channels.fetch(context.channelId).catch(() => null);
-      if (!channel?.isTextBased()) {
-        nowPlayingListContexts.delete(key);
-        continue;
-      }
-      const message = await channel.messages.fetch(context.messageId).catch(() => null);
-      if (!message) {
-        nowPlayingListContexts.delete(key);
-        continue;
-      }
-
-      await message.delete().catch(() => null);
-      nowPlayingListContexts.delete(key);
-      return true;
-    }
-
-    return false;
-  }
-
-  private async startNowPlayingIgdbImport(
-    interaction: StringSelectMenuInteraction,
-    session: { userId: string; query: string; note: string | null },
-  ): Promise<void> {
-    await this.startNowPlayingIgdbImportFromInteraction(interaction, session, "update");
-  }
-
-  private async startNowPlayingIgdbImportFromInteraction(
-    interaction: AnyRepliable,
-    session: { userId: string; query: string; note: string | null },
-    mode: "reply" | "update",
-  ): Promise<void> {
-    if (mode === "update" && "deferUpdate" in interaction) {
-      await safeDeferUpdate(interaction);
-    }
-
-    try {
-      const searchRes = await igdbService.searchGames(session.query);
-      if (!searchRes.results.length) {
-        const container = buildTextContainer(`No IGDB results found for "${session.query}".`);
-        if (mode === "update" && "update" in interaction) {
-          await safeUpdate(interaction, { components: [container] });
-        } else {
-          await safeReply(interaction, {
-            components: [container],
-            flags: buildComponentsV2Flags(true),
-          });
-        }
-        return;
-      }
-
-      const opts: IgdbSelectOption[] = searchRes.results.map((game) => {
-        const year = game.first_release_date
-          ? new Date(game.first_release_date * 1000).getFullYear()
-          : "TBD";
-        return {
-          id: game.id,
-          label: `${game.name} (${year})`,
-          description: truncateDescription((game.summary || "No summary")),
-        };
-      });
-
-      const { components } = createIgdbSession(session.userId, opts, async (sel, igdbId) => {
-        try {
-          await safeDeferUpdate(sel);
-          const imported = await this.importGameFromIgdb(igdbId);
-          const sourceSessionId = `np-igdb-add-${session.userId}`;
-          await this.promptNowPlayingAddPlatformSelection(
-            sel,
-            sourceSessionId,
-            session.userId,
-            imported.gameId,
-            session.note,
-            "reply",
-          );
-        } catch (err: any) {
-          const msg = err?.message ?? "Failed to import from IGDB.";
-          const container = buildTextContainer(msg);
-          safeIgnore(safeReply(sel, {
-            components: [container],
-            flags: buildComponentsV2Flags(true),
-          }));
-        }
-      });
-
-      const container = buildTextContainer("Select an IGDB result to import and add to Now Playing:")
-        .addActionRowComponents(components.map((row) => row.toJSON()));
-      if (mode === "update" && "update" in interaction) {
-        await safeUpdate(interaction, { components: [container] });
-      } else {
-        await safeReply(interaction, {
-          components: [container],
-          flags: buildComponentsV2Flags(true),
-        });
-      }
-    } catch (err: any) {
-      const msg = err?.message ?? "Failed to search IGDB.";
-      const container = buildTextContainer(msg);
-      if (mode === "update" && "update" in interaction) {
-        await safeUpdate(interaction, { components: [container] });
-      } else {
-        await safeReply(interaction, {
-          components: [container],
-          flags: buildComponentsV2Flags(true),
-        });
-      }
-    }
-  }
-
-  private async importGameFromIgdb(igdbId: number): Promise<{ gameId: number; title: string }> {
-    return Game.importGameFromIgdb(igdbId);
-  }
 }
