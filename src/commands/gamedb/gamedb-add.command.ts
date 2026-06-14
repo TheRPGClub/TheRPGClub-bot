@@ -35,6 +35,7 @@ import { buildIgdbSelectOptions } from "./gamedb-csv-import.service.js";
 import { showGameProfile, trimTextDisplayContent } from "./gamedb-profile.service.js";
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
 import { logError, logWarn } from "../../utilities/LogUtils.js";
+import { apiPost } from "../../services/RpgClubApiClient.js";
 
 async function fetchIgdbCoverImage(details: IGDBGameDetails): Promise<Buffer | null> {
   if (!details.cover?.image_id) return null;
@@ -182,6 +183,10 @@ export async function addGameToDatabase(
       // ignore cleanup failures
     }
   }
+
+  await apiPost(`/api/v1/games/${newGame.id}/refresh-images`).catch((err) => {
+    logError("GamedbAddCommand.addGameToDatabase.refreshImages", err);
+  });
 
   await showGameProfile(interaction, newGame.id, true);
 }
