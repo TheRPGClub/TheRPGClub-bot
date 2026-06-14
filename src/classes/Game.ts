@@ -19,6 +19,7 @@ import {
 import { isPositiveInt } from "../utilities/ValidationUtils.js";
 import { safeIgnore } from "../utilities/AsyncUtils.js";
 import { logError, logWarn } from "../utilities/LogUtils.js";
+import type { HltbCacheEntry } from "./HltbCache.js";
 
 // Interfaces
 export interface IGame {
@@ -165,6 +166,22 @@ export interface ICollectionOwnerMember {
   userId: string;
   username: string | null;
   globalName: string | null;
+}
+
+export interface IMappedGameProfile {
+  game: IGame;
+  releases: IReleaseWithNames[];
+  associations: IGameAssociationSummary;
+  nowPlayingMembers: INowPlayingMember[];
+  collectionOwners: ICollectionOwnerMember[];
+  completions: ICompletedMember[];
+  alternateVersions: IGame[];
+  threadIds: string[];
+  hltbCache: HltbCacheEntry | null;
+  primaryImageUrl: string | null;
+  series: string | null;
+  developers: string[];
+  publishers: string[];
 }
 
 const IGDB_REGION_MAP: Record<number, { code: string; name: string }> = {
@@ -404,6 +421,58 @@ type GameRelationsApiData = {
   alternates: Array<Record<string, unknown>>;
 };
 
+type HltbProfileApiData = {
+  name: string | null;
+  url: string | null;
+  image_url: string | null;
+  main: string | null;
+  main_sides: string | null;
+  completionist: string | null;
+  single_player: string | null;
+  co_op: string | null;
+  vs: string | null;
+  source_query: string | null;
+  scraped_at: string | null;
+  updated_at: string | null;
+};
+
+type ProfileCollectionOwnerApiData = {
+  user_id: string;
+  username: string | null;
+};
+
+type ProfileGotmWinApiData = {
+  round: number;
+};
+
+type ProfileGotmNominationApiData = {
+  round: number;
+  user_id: string;
+  username: string | null;
+};
+
+type ProfileThreadApiData = {
+  thread_id: string;
+  jump_url: string | null;
+};
+
+export type GameProfileApiData = {
+  game: Record<string, unknown>;
+  relations: GameRelationsApiData;
+  now_playing: NowPlayingApiEntry[];
+  completions: CompletionGameApiEntry[];
+  threads: ProfileThreadApiData[];
+  primary_image: { url: string } | null;
+  associations: {
+    gotm_wins: ProfileGotmWinApiData[];
+    nr_gotm_wins: ProfileGotmWinApiData[];
+    gotm_nominations: ProfileGotmNominationApiData[];
+    nr_gotm_nominations: ProfileGotmNominationApiData[];
+  };
+  collection_owners: ProfileCollectionOwnerApiData[];
+  hltb: HltbProfileApiData | null;
+};
+
 // --- API mapper functions ---
 
 function mapReleaseFromApi(data: ReleaseApiData): IRelease {
@@ -434,6 +503,28 @@ function mapRegionFromApi(data: RegionApiData): IRegionDef {
     code: String(data.region_code),
     name: String(data.region_name),
     igdbRegionId: data.igdb_region_id != null ? Number(data.igdb_region_id) : null,
+  };
+}
+
+function mapHltbFromProfileApi(
+  data: HltbProfileApiData,
+  gameId: number,
+): HltbCacheEntry {
+  const toDate = (v: string | null): Date | null => (v ? new Date(v) : null);
+  return {
+    gameId,
+    name: data.name ?? null,
+    url: data.url ?? null,
+    imageUrl: data.image_url ?? null,
+    main: data.main ?? null,
+    mainSides: data.main_sides ?? null,
+    completionist: data.completionist ?? null,
+    singlePlayer: data.single_player ?? null,
+    coOp: data.co_op ?? null,
+    vs: data.vs ?? null,
+    sourceQuery: data.source_query ?? null,
+    scrapedAt: toDate(data.scraped_at),
+    updatedAt: toDate(data.updated_at),
   };
 }
 
@@ -1934,5 +2025,102 @@ export default class Game {
         globalName: row.GLOBAL_NAME ?? null,
       }),
     );
+  }
+
+  static async getGameProfile(gameId: number): Promise<IMappedGameProfile | null> {
+    const result = await apiGet<{ data: GameProfileApiData }>(
+      `/api/v1/games/${gameId}/profile`,
+    );
+    const d = result?.data;
+    if (!d) return null;
+
+    const game = mapGameFromApi(d.game);
+    const relations = d.relations;
+
+    const releases: IReleaseWithNames[] = (relations.releases ?? []).map((r) => ({
+      ...mapReleaseFromApi(r),
+      platformName: r.platform_name ?? null,
+      regionName: r.region_name ?? null,
+    }));
+
+    const associations: IGameAssociationSummary = {
+      gotmWins: (d.associations.gotm_wins ?? []).map((w) => ({
+        round: Number(w.round),
+        threadId: null,
+        redditUrl: null,
+        monthYear: "",
+      })),
+      nrGotmWins: (d.associations.nr_gotm_wins ?? []).map((w) => ({
+        round: Number(w.round),
+        threadId: null,
+        redditUrl: null,
+        monthYear: "",
+      })),
+      gotmNominations: (d.associations.gotm_nominations ?? []).map((n) => ({
+        round: Number(n.round),
+        userId: String(n.user_id),
+        username: String(n.username || n.user_id),
+      })),
+      nrGotmNominations: (d.associations.nr_gotm_nominations ?? []).map((n) => ({
+        round: Number(n.round),
+        userId: String(n.user_id),
+        username: String(n.username || n.user_id),
+      })),
+    };
+
+    const nowPlayingMembers: INowPlayingMember[] = (d.now_playing ?? []).map((entry) => ({
+      userId: String(entry.user_id),
+      username: entry.user?.username ?? null,
+      globalName: entry.user?.global_name ?? null,
+      threadId: null,
+      addedAt: null,
+    }));
+
+    const collectionOwners: ICollectionOwnerMember[] = (d.collection_owners ?? []).map(
+      (o) => ({
+        userId: String(o.user_id),
+        username: o.username ?? null,
+        globalName: null,
+      }),
+    );
+
+    const completions: ICompletedMember[] = (d.completions ?? []).map((entry) => ({
+      userId: String(entry.user_id),
+      username: entry.user?.username ?? null,
+      globalName: entry.user?.global_name ?? null,
+      completionType: String(entry.completion_type),
+      completedAt: entry.completed_at ? new Date(entry.completed_at) : null,
+      finalPlaytimeHours: entry.final_playtime_hrs != null
+        ? Number(entry.final_playtime_hrs)
+        : null,
+    }));
+
+    const alternateVersions: IGame[] = (relations.alternates ?? []).map(mapGameFromApi);
+    const threadIds = (d.threads ?? []).map((t) => String(t.thread_id));
+    const hltbCache = d.hltb ? mapHltbFromProfileApi(d.hltb, gameId) : null;
+    const primaryImageUrl = d.primary_image?.url ?? null;
+    const series = relations.collection?.name ?? null;
+    const developers = (relations.companies ?? [])
+      .filter((c) => c.role === "Developer")
+      .map((c) => String(c.name));
+    const publishers = (relations.companies ?? [])
+      .filter((c) => c.role === "Publisher")
+      .map((c) => String(c.name));
+
+    return {
+      game,
+      releases,
+      associations,
+      nowPlayingMembers,
+      collectionOwners,
+      completions,
+      alternateVersions,
+      threadIds,
+      hltbCache,
+      primaryImageUrl,
+      series,
+      developers,
+      publishers,
+    };
   }
 }
