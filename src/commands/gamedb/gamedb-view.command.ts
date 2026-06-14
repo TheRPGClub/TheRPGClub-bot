@@ -234,11 +234,11 @@ export class GameDbViewCommand {
         flags: MessageFlags.Ephemeral,
       });
     } catch (err: unknown) {
+      logError("gamedb view.load_platform_options_failed", err);
       await safeReply(
         interaction,
         buildTextReply("Failed to load platform options. Please try again.", true),
       );
-      throw err;
     }
   }
 
