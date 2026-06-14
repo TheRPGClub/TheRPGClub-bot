@@ -58,14 +58,14 @@ export class BacklogViewCommand {
     title: string | undefined,
     @SlashOption({
       name: "private",
-      description: "Send reply privately (only visible to you). Defaults to true.",
+      description: "Send reply privately (only visible to you). Defaults to false.",
       type: ApplicationCommandOptionType.Boolean,
       required: false,
     })
     privateFlag: boolean | undefined,
     interaction: CommandInteraction,
   ): Promise<void> {
-    const isEphemeral = privateFlag ?? true;
+    const isEphemeral = privateFlag ?? false;
     await safeDeferReply(interaction, { flags: buildComponentsV2Flags(isEphemeral) });
 
     const userId = interaction.user.id;
