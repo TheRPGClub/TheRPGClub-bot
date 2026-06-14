@@ -49,6 +49,11 @@ export interface IRelease {
   notes: string | null;
 }
 
+export interface IReleaseWithNames extends IRelease {
+  platformName: string | null;
+  regionName: string | null;
+}
+
 export interface IPlatformDef {
   id: number;
   code: string;
@@ -378,7 +383,17 @@ type CompletionGameApiEntry = {
   user: { user_id: string; username: string | null; global_name: string | null };
 };
 
+type RelationReleaseApiData = ReleaseApiData & {
+  platform_name: string | null;
+  region_name: string | null;
+  platform_code: string | null;
+  region_code: string | null;
+};
+
 type GameRelationsApiData = {
+  releases: RelationReleaseApiData[];
+  platforms: PlatformApiData[];
+  collection: { name: string } | null;
   companies: Array<CompanyApiData & { role: string | null }>;
   franchises: Array<{ name: string }>;
   genres: Array<{ name: string }>;
@@ -386,7 +401,7 @@ type GameRelationsApiData = {
   modes: Array<{ name: string }>;
   perspectives: Array<{ name: string }>;
   themes: Array<{ name: string }>;
-  alternates: any[];
+  alternates: Array<Record<string, unknown>>;
 };
 
 // --- API mapper functions ---
@@ -1012,12 +1027,8 @@ export default class Game {
   }
 
   static async getGameSeries(gameId: number): Promise<string | null> {
-    const rows = await dbQuery(
-      GameSql.getGameSeries,
-      { gameId },
-      (row: { NAME: string }) => row.NAME,
-    );
-    return rows[0] ?? null;
+    const relations = await Game.getGameRelations(gameId);
+    return relations?.collection?.name ?? null;
   }
 
   static async addReleaseInfo(
@@ -1066,13 +1077,45 @@ export default class Game {
     return results;
   }
 
+  private static readonly relationsCache = new Map<
+    number,
+    { promise: Promise<GameRelationsApiData | null>; expires: number }
+  >();
+
+  private static readonly RELATIONS_CACHE_TTL_MS = 2000;
+
   private static async getGameRelations(
     gameId: number,
   ): Promise<GameRelationsApiData | null> {
-    const result = await apiGet<{ data: GameRelationsApiData }>(
-      `/api/v1/games/${gameId}/relations`,
-    );
-    return result?.data ?? null;
+    const now = Date.now();
+    const cached = Game.relationsCache.get(gameId);
+    if (cached && cached.expires > now) return cached.promise;
+
+    const promise = (async () => {
+      const result = await apiGet<{ data: GameRelationsApiData }>(
+        `/api/v1/games/${gameId}/relations`,
+      );
+      return result?.data ?? null;
+    })();
+    promise.catch(() => Game.relationsCache.delete(gameId));
+
+    Game.relationsCache.set(gameId, {
+      promise,
+      expires: now + Game.RELATIONS_CACHE_TTL_MS,
+    });
+    return promise;
+  }
+
+  static async getGameReleasesDetailed(
+    gameId: number,
+  ): Promise<IReleaseWithNames[]> {
+    const relations = await Game.getGameRelations(gameId);
+    if (!relations?.releases?.length) return [];
+    return relations.releases.map((r) => ({
+      ...mapReleaseFromApi(r),
+      platformName: r.platform_name ?? null,
+      regionName: r.region_name ?? null,
+    }));
   }
 
   static async getReleaseById(id: number): Promise<IRelease | null> {
