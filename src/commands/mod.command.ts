@@ -5,9 +5,20 @@ import {
   StringSelectMenuBuilder,
   type StringSelectMenuInteraction,
 } from "discord.js";
-import type { CommandInteraction } from "discord.js";
+import type { CommandInteraction, ModalSubmitInteraction } from "discord.js";
 import type { ContainerBuilder } from "@discordjs/builders";
-import { Discord, SelectMenuComponent, Slash, SlashGroup, SlashOption } from "discordx";
+import {
+  Discord,
+  ModalComponent,
+  SelectMenuComponent,
+  Slash,
+  SlashGroup,
+  SlashOption,
+} from "discordx";
+import {
+  handleLiveStreamCreateModal,
+  openLiveStreamCreateModal,
+} from "./admin/live-stream-admin.service.js";
 import { getPresenceHistory, setPresence } from "../functions/SetPresence.js";
 import { isModerator } from "./admin/admin-auth.utils.js";
 import {
@@ -169,6 +180,29 @@ export class Mod {
       ...response,
       flags: response.flags | MessageFlags.Ephemeral,
     });
+  }
+
+  @Slash({
+    description: "Create a Live Events thread and linked scheduled event from one modal",
+    name: "create-live-event",
+  })
+  async createLiveEvent(interaction: CommandInteraction): Promise<void> {
+    const okToUseCommand: boolean = await isModerator(interaction);
+    if (!okToUseCommand) {
+      return;
+    }
+
+    await openLiveStreamCreateModal(interaction);
+  }
+
+  @ModalComponent({ id: /^admin-live-stream-create:\d+$/ })
+  async handleCreateLiveEventModal(interaction: ModalSubmitInteraction): Promise<void> {
+    const okToUseCommand: boolean = await isModerator(interaction);
+    if (!okToUseCommand) {
+      return;
+    }
+
+    await handleLiveStreamCreateModal(interaction);
   }
 
   @SelectMenuComponent({ id: "mod-help-select" })
