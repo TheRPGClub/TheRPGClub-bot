@@ -392,9 +392,7 @@ export class GameDbSearchCommand {
     const response = buildSearchResponse(searchTerm, results, ownerId, page, false, filters);
     const actionRows = buildGameProfileActionRow(
       gameId,
-      profile.hasThread,
       profile.featuredVideoUrl,
-      profile.isReleased,
     );
 
     try {

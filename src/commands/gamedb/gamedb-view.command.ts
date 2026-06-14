@@ -40,8 +40,6 @@ import {
   showGameProfile,
 } from "./gamedb-profile.service.js";
 import { runSearchFlow } from "./gamedb-search.command.js";
-import { startCompletionWizard } from "./gamedb-completion.command.js";
-import { showNowPlayingThreadModal } from "./gamedb-thread.command.js";
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
 import { assertCustomIdSegments } from "../../utilities/CustomIdUtils.js";
 import {
@@ -98,7 +96,7 @@ export class GameDbViewCommand {
   }
 
   @ButtonComponent({
-    id: /^gamedb-action:(nowplaying|completion|thread|video|hltb-import|backlog):\d+$/,
+    id: /^gamedb-action:(nowplaying|video|hltb-import|backlog):\d+$/,
   })
   async handleGameDbAction(interaction: ButtonInteraction): Promise<void> {
     const segs = assertCustomIdSegments(interaction, 2);
@@ -132,9 +130,7 @@ export class GameDbViewCommand {
       if (profile) {
         const actionRows = buildGameProfileActionRow(
           gameId,
-          profile.hasThread,
           profile.featuredVideoUrl,
-          profile.isReleased,
           true,
         );
         const existingComponents = interaction.message?.components ?? [];
@@ -205,16 +201,6 @@ export class GameDbViewCommand {
       return;
     }
 
-    if (action === "completion") {
-      await startCompletionWizard(interaction, gameId, game.title);
-      return;
-    }
-
-    if (action === "thread") {
-      await showNowPlayingThreadModal(interaction, gameId, game.title);
-      return;
-    }
-
     if (action === "backlog") {
       await this.handleAddToBacklog(interaction, gameId);
       return;
@@ -225,24 +211,35 @@ export class GameDbViewCommand {
     interaction: ButtonInteraction,
     gameId: number,
   ): Promise<void> {
-    const platforms = await Game.getPlatformsForGame(gameId);
-    if (!platforms.length) {
-      await this.addBacklogEntry(interaction, gameId, null);
-      return;
+    try {
+      const platforms = await Game.getPlatformsForGame(gameId);
+      const validPlatforms = platforms.filter(
+        (p) => p.name?.trim() && String(p.id)?.trim(),
+      );
+      if (!validPlatforms.length) {
+        await this.addBacklogEntry(interaction, gameId, null);
+        return;
+      }
+
+      const options = buildSelectOptions(
+        validPlatforms.map((p) => ({ label: p.name, value: String(p.id) })),
+      );
+      const select = new StringSelectMenuBuilder()
+        .setCustomId(`gamedb-backlog-platform:${gameId}`)
+        .setPlaceholder("Select a platform for your backlog")
+        .addOptions(options);
+
+      await safeReply(interaction, {
+        components: [buildSelectRow(select)],
+        flags: MessageFlags.Ephemeral,
+      });
+    } catch (err: unknown) {
+      await safeReply(
+        interaction,
+        buildTextReply("Failed to load platform options. Please try again.", true),
+      );
+      throw err;
     }
-
-    const options = buildSelectOptions(
-      platforms.map((p) => ({ label: p.name, value: String(p.id) })),
-    );
-    const select = new StringSelectMenuBuilder()
-      .setCustomId(`gamedb-backlog-platform:${gameId}`)
-      .setPlaceholder("Select a platform for your backlog")
-      .addOptions(options);
-
-    await safeReply(interaction, {
-      components: [buildSelectRow(select)],
-      flags: MessageFlags.Ephemeral,
-    });
   }
 
   @SelectMenuComponent({ id: /^gamedb-backlog-platform:\d+$/ })

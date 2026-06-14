@@ -119,9 +119,7 @@ export function isGameReleased(game: IGame, releases: IRelease[]): boolean {
 
 export function buildGameProfileActionRow(
   gameId: number,
-  hasThread: boolean,
   featuredVideoUrl: string | null,
-  isReleased: boolean,
   disableVideo = false,
 ): ActionRowBuilder<ButtonBuilder>[] {
    
@@ -138,33 +136,15 @@ export function buildGameProfileActionRow(
   }).setDisabled(disableVideo);
   const rows: ActionRowBuilder<ButtonBuilder>[] = [];
   const primaryButtons: ButtonBuilder[] = [addNowPlaying];
-  if (isReleased) {
-     
-    primaryButtons.push(buildActionButton({
-      customId: `gamedb-action:completion:${gameId}`,
-      label: "Add Completion",
-      style: ButtonStyle.Primary,
-    }));
-  }
-  if (!hasThread) {
-     
-    primaryButtons.push(buildActionButton({
-      customId: `gamedb-action:thread:${gameId}`,
-      label: "Create Now Playing Thread",
-      style: ButtonStyle.Primary,
-    }));
-  }
   if (featuredVideoUrl) {
     primaryButtons.push(viewFeaturedVideo);
   }
-  rows.push(buildButtonRow(...primaryButtons));
-
-  const addBacklog = buildActionButton({
+  primaryButtons.push(buildActionButton({
     customId: `gamedb-action:backlog:${gameId}`,
     label: "Add to Backlog",
     style: ButtonStyle.Secondary,
-  });
-  rows.push(buildButtonRow(addBacklog));
+  }));
+  rows.push(buildButtonRow(...primaryButtons));
   return rows;
 }
 
@@ -599,9 +579,7 @@ export async function showGameProfile(
     components.push(
       ...buildGameProfileActionRow(
         gameId,
-        profile.hasThread,
         profile.featuredVideoUrl,
-        profile.isReleased,
       ),
     );
   }
@@ -626,9 +604,7 @@ export async function showGameProfileFromNomination(
     ...profile.components,
     ...buildGameProfileActionRow(
       gameId,
-      profile.hasThread,
       profile.featuredVideoUrl,
-      profile.isReleased,
     ),
   ];
   await safeReply(interaction, {
@@ -664,9 +640,7 @@ export async function buildGameProfileMessagePayload(
     components.push(
       ...buildGameProfileActionRow(
         gameId,
-        profile.hasThread,
         profile.featuredVideoUrl,
-        profile.isReleased,
       ),
     );
   }
@@ -686,9 +660,7 @@ export async function refreshGameProfileMessage(
   if (!profile) return;
   const actionRows = buildGameProfileActionRow(
     gameId,
-    profile.hasThread,
     profile.featuredVideoUrl,
-    profile.isReleased,
   );
   const existingComponents = interaction.message?.components ?? [];
   const searchRows = getSearchRowsFromComponents(existingComponents);
@@ -715,9 +687,7 @@ export async function updateGameProfileMessageById(
   if (!profile) return;
   const actionRows = buildGameProfileActionRow(
     gameId,
-    profile.hasThread,
     profile.featuredVideoUrl,
-    profile.isReleased,
   );
   const searchRows = getSearchRowsFromComponents(message.components ?? []);
   safeIgnore(message.edit({
