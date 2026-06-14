@@ -78,7 +78,6 @@ import {
 
 import { renderUsernameWithEmoji } from "../services/UserEmojiService.js";
 import { isPositiveInt } from "../utilities/ValidationUtils.js";
-import { logError } from "../utilities/LogUtils.js";
 import {
   DISCORD_SELECT_OPTIONS_MAX,
   truncateDescription,
@@ -111,8 +110,6 @@ import {
 } from "./now-playing/nowPlayingIds.js";
 import {
   type NowPlayingAddSession,
-  type NowPlayingListContext,
-  type NowPlayingJournalContext,
 } from "./now-playing/nowPlayingTypes.js";
 import {
   nowPlayingAddSessions,
@@ -124,10 +121,8 @@ import {
   clearNowPlayingAddSession,
   trackNowPlayingListContext,
   setNowPlayingListContext,
-  trackNowPlayingJournalContext,
   refreshJournalMessages,
   NOW_PLAYING_CONTEXT_TTL_MS,
-  NOW_PLAYING_JOURNAL_CONTEXT_TTL_MS,
 } from "./now-playing/nowPlayingContexts.js";
 import {
   buildNowPlayingSortStateToken,
@@ -162,6 +157,11 @@ import {
   buildEditNotesModal,
   buildNowPlayingAddModal,
 } from "./now-playing/nowPlayingModals.js";
+import {
+  deleteLatestJournalMessageInChannel,
+  trackJournalReply,
+  deleteEligibleNowPlayingMessageInCurrentChannel,
+} from "./now-playing/nowPlayingMessageService.js";
 
 @Discord()
 @SlashGroup({ description: "Show now playing data", name: "now-playing" })
@@ -308,7 +308,7 @@ export class NowPlayingCommand {
     await safeDeferReply(interaction, { flags: buildComponentsV2Flags(ephemeral) });
 
     if (!ephemeral) {
-      await this.deleteEligibleNowPlayingMessageInCurrentChannel(
+      await deleteEligibleNowPlayingMessageInCurrentChannel(
         interaction,
         showAllFlag
           ? (context) => context.view === "everyone" || context.view === "everyone-selected"
@@ -1658,7 +1658,7 @@ export class NowPlayingCommand {
       interaction.user.id === ownerId,
     );
     if (interaction.guildId) {
-      await this.deleteLatestJournalMessageInChannel(interaction, ownerId, gameId);
+      await deleteLatestJournalMessageInChannel(interaction, ownerId, gameId);
     }
     const reply = await safeReply(interaction, {
       components: payload.components,
@@ -1669,7 +1669,7 @@ export class NowPlayingCommand {
       allowedMentions: payload.allowedMentions,
       withResponse: true,
     } as any);
-    await this.trackJournalReply(reply?.resource?.message ?? null, ownerId, gameId);
+    await trackJournalReply(reply?.resource?.message ?? null, ownerId, gameId);
   }
 
   @SelectMenuComponent({ id: /^nowplaying-journal-view-select:\d+$/ })
@@ -1696,7 +1696,7 @@ export class NowPlayingCommand {
       interaction.user.id === ownerId,
     );
     if (interaction.guildId) {
-      await this.deleteLatestJournalMessageInChannel(interaction, ownerId, gameId);
+      await deleteLatestJournalMessageInChannel(interaction, ownerId, gameId);
     }
     const reply = await safeReply(interaction, {
       components: payload.components,
@@ -1707,7 +1707,7 @@ export class NowPlayingCommand {
       allowedMentions: payload.allowedMentions,
       withResponse: true,
     } as any);
-    await this.trackJournalReply(reply?.resource?.message ?? null, ownerId, gameId);
+    await trackJournalReply(reply?.resource?.message ?? null, ownerId, gameId);
   }
 
   @ButtonComponent({ id: /^nowplaying-journal-page:\d+:\d+:(prev|next):\d+$/ })
@@ -1735,7 +1735,7 @@ export class NowPlayingCommand {
       interaction.user.id === ownerId,
     );
     if (interaction.guildId) {
-      await this.deleteLatestJournalMessageInChannel(interaction, ownerId, gameId);
+      await deleteLatestJournalMessageInChannel(interaction, ownerId, gameId);
     }
     const reply = await safeReply(interaction, {
       components: payload.components,
@@ -1746,7 +1746,7 @@ export class NowPlayingCommand {
       allowedMentions: payload.allowedMentions,
       withResponse: true,
     } as any);
-    await this.trackJournalReply(reply?.resource?.message ?? null, ownerId, gameId);
+    await trackJournalReply(reply?.resource?.message ?? null, ownerId, gameId);
   }
 
   @ButtonComponent({ id: /^nowplaying-journal-add:\d+:\d+:\d+$/ })
@@ -1965,7 +1965,7 @@ export class NowPlayingCommand {
     if (!hasExistingTracked && interaction.guildId) {
       // First entry: post the journal message first so it appears before the manage buttons.
       // Skip journalOwnerMenu here to avoid its deletor pointing at the journal post.
-      await this.deleteLatestJournalMessageInChannel(interaction, ownerId, gameId);
+      await deleteLatestJournalMessageInChannel(interaction, ownerId, gameId);
       const payload = await buildJournalComponents(
         ownerId,
         "__public__",
@@ -1981,7 +1981,7 @@ export class NowPlayingCommand {
         allowedMentions: payload.allowedMentions,
         withResponse: true,
       } as any);
-      await this.trackJournalReply(reply?.resource?.message ?? null, ownerId, gameId);
+      await trackJournalReply(reply?.resource?.message ?? null, ownerId, gameId);
       await safeReply(interaction, {
         components: [row],
         flags: buildComponentsV2Flags(true),
@@ -2625,111 +2625,6 @@ export class NowPlayingCommand {
       await message.delete().catch(() => null);
       nowPlayingListContexts.delete(key);
       await this.showSingle(interaction, interaction.user, false);
-      return true;
-    }
-
-    return false;
-  }
-
-  private async deleteLatestJournalMessageInChannel(
-    interaction: ButtonInteraction | ModalSubmitInteraction | StringSelectMenuInteraction,
-    ownerUserId: string,
-    gameId: number,
-  ): Promise<void> {
-    const channelId = interaction.channelId;
-    if (!channelId) {
-      return;
-    }
-
-    const now = Date.now();
-
-    // Expire stale entries and find the single most recent context for this channel.
-    let latestKey: string | null = null;
-    let latestContext: NowPlayingJournalContext | null = null;
-    for (const [key, context] of nowPlayingJournalContexts.entries()) {
-      if (now - context.createdAt > NOW_PLAYING_JOURNAL_CONTEXT_TTL_MS) {
-        nowPlayingJournalContexts.delete(key);
-        await Member.deleteJournalMessageContext(context.channelId, context.messageId)
-          .catch((err) => logError("Journal.delete_expired_context_from_db_failed", err));
-        continue;
-      }
-      if (context.channelId !== channelId) continue;
-      if (context.ownerUserId !== ownerUserId || context.gameId !== gameId) continue;
-      if (!latestContext || context.createdAt > latestContext.createdAt) {
-        latestKey = key;
-        latestContext = context;
-      }
-    }
-
-    if (!latestKey || !latestContext) return;
-
-    const channel = await interaction.client.channels
-      .fetch(latestContext.channelId)
-      .catch(() => null);
-    if (!channel?.isTextBased()) {
-      nowPlayingJournalContexts.delete(latestKey);
-      await Member.deleteJournalMessageContext(latestContext.channelId, latestContext.messageId)
-        .catch((err) => logError("Journal.delete_unreachable_context_from_db_failed", err));
-      return;
-    }
-
-    const message = await channel.messages.fetch(latestContext.messageId).catch(() => null);
-    if (!message) {
-      nowPlayingJournalContexts.delete(latestKey);
-      await Member.deleteJournalMessageContext(latestContext.channelId, latestContext.messageId)
-        .catch((err) => logError("Journal.delete_missing_context_from_db_failed", err));
-      return;
-    }
-
-    await message.delete().catch(() => null);
-    nowPlayingJournalContexts.delete(latestKey);
-    await Member.deleteJournalMessageContext(latestContext.channelId, latestContext.messageId)
-      .catch((err) => logError("Journal.delete_context_from_db_after_message_delete_failed", err));
-  }
-
-  private async trackJournalReply(
-    reply: Message | null,
-    ownerUserId: string,
-    gameId: number,
-  ): Promise<void> {
-    if (!reply) {
-      return;
-    }
-    await trackNowPlayingJournalContext(reply as Message<boolean>, ownerUserId, gameId);
-  }
-
-  private async deleteEligibleNowPlayingMessageInCurrentChannel(
-    interaction: CommandInteraction,
-    predicate: (context: NowPlayingListContext) => boolean,
-  ): Promise<boolean> {
-    const channelId = interaction.channelId;
-    if (!channelId) {
-      return false;
-    }
-
-    const now = Date.now();
-    for (const [key, context] of nowPlayingListContexts.entries()) {
-      if (now - context.createdAt > NOW_PLAYING_CONTEXT_TTL_MS) {
-        nowPlayingListContexts.delete(key);
-        continue;
-      }
-      if (context.channelId !== channelId || !predicate(context)) {
-        continue;
-      }
-
-      const channel = await interaction.client.channels.fetch(context.channelId).catch(() => null);
-      if (!channel?.isTextBased()) {
-        nowPlayingListContexts.delete(key);
-        continue;
-      }
-      const message = await channel.messages.fetch(context.messageId).catch(() => null);
-      if (!message) {
-        nowPlayingListContexts.delete(key);
-        continue;
-      }
-
-      await message.delete().catch(() => null);
-      nowPlayingListContexts.delete(key);
       return true;
     }
 
