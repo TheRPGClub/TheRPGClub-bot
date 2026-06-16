@@ -36,6 +36,7 @@ import { safeIgnore } from "../utilities/AsyncUtils.js";
 import { logError, logInfo, logWarn } from "../utilities/LogUtils.js";
 import { buildActionButton, buildButtonRow } from "../functions/uiComponents.js";
 import { saveFullGameMetadata } from "../functions/GameIgdbSync.js";
+import GameSearchService from "../classes/GameSearchService.js";
 
 function hasIgdbConfig(): boolean {
   return Boolean(process.env.IGDB_CLIENT_ID && process.env.IGDB_CLIENT_SECRET);
@@ -109,7 +110,7 @@ export class ThreadLinkButtonHandlers {
     safeIgnore(interaction.message.edit({ components: [] }));
 
     try {
-      const localMatches = (await Game.searchGames(title)).filter((g) =>
+      const localMatches = (await GameSearchService.searchGames(title)).filter((g) =>
         g.title.toLowerCase() === title.toLowerCase(),
       );
       let gameId: number | null = localMatches[0]?.id ?? null;

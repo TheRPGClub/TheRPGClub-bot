@@ -83,6 +83,7 @@ import {
   JOURNAL_SEARCH_PAGE_SIZE as SEARCH_PAGE_SIZE,
 } from "../config/pagination.js";
 import { DISCORD_SELECT_OPTIONS_MAX, truncateLabel } from "../config/textLimits.js";
+import GameSearchService from "../classes/GameSearchService.js";
 
 const gjHmenu = new EphemeralOwnerMenu();
 
@@ -324,7 +325,7 @@ async function autocompleteJournalSearchGame(
     await interaction.respond([]);
     return;
   }
-  const results = await Game.searchGamesAutocomplete(query);
+  const results = await GameSearchService.searchGamesAutocomplete(query);
   await interaction.respond(
     results.slice(0, DISCORD_SELECT_OPTIONS_MAX).map((game) => ({
       name: truncateLabel(formatGameTitleWithYear(game)),

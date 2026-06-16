@@ -40,6 +40,7 @@ import {
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
 import { assertCustomIdSegments } from "../../utilities/CustomIdUtils.js";
 import { buildTextInputRow } from "../../functions/uiComponents.js";
+import GameSearchService from "../../classes/GameSearchService.js";
 
 export async function handleGotmAuditSelect(
   interaction: StringSelectMenuInteraction): Promise<void> {
@@ -167,7 +168,7 @@ export async function handleGotmAuditAction(interaction: ButtonInteraction): Pro
 
     let results: IGameWithPlatforms[] = [];
     try {
-      results = await Game.searchGames(item.gameTitle);
+      results = await GameSearchService.searchGames(item.gameTitle);
     } catch (err: any) {
       await safeReply(interaction, buildTextReply(
         `GameDB search failed: ${err?.message ?? "Unknown error"}`,
@@ -369,7 +370,7 @@ export async function handleGotmAuditQueryModal(
 
   let results: IGameWithPlatforms[] = [];
   try {
-    results = await Game.searchGames(query);
+    results = await GameSearchService.searchGames(query);
   } catch (err: any) {
     await safeReply(interaction, {
       ...buildTextReply(`GameDB search failed: ${err?.message ?? "Unknown error"}`, true),

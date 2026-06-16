@@ -17,7 +17,6 @@ import {
   upsertNomination,
 } from "../classes/Nomination.js";
 import type { IGame } from "../types/GameTypes.js";
-import Game from "../classes/Game.js";
 import { buildNominationListPayload } from "../functions/NominationListComponents.js";
 import {
   buildComponentsV2Flags,
@@ -48,6 +47,7 @@ import { showGameProfileFromNomination } from "./gamedb.command.js";
 import { isPositiveInt } from "../utilities/ValidationUtils.js";
 import { DISCORD_SELECT_OPTIONS_MAX, truncateLabel } from "../config/textLimits.js";
 import { logError } from "../utilities/LogUtils.js";
+import GameSearchService from "../classes/GameSearchService.js";
 
 const NOMINATE_REASON_MAX_LENGTH = 1500;
 
@@ -62,7 +62,7 @@ async function autocompleteNominationTitle(
     return;
   }
 
-  const results = await Game.searchGamesAutocomplete(query);
+  const results = await GameSearchService.searchGamesAutocomplete(query);
   await interaction.respond(
     results.slice(0, DISCORD_SELECT_OPTIONS_MAX).map((game) => ({
       name: truncateLabel(formatGameTitleWithYear(game)),
@@ -81,7 +81,7 @@ function parseNominationKind(value: string): NominationKind | null {
 async function resolveNominatedGameByTitle(searchTerm: string): Promise<IGame | null> {
   const parsed = parseTitleWithYear(searchTerm);
   const normalizedSearchTerm = parsed.title;
-  const existing = await Game.searchGames(normalizedSearchTerm);
+  const existing = await GameSearchService.searchGames(normalizedSearchTerm);
   const exact = existing.find((game) => {
     if (game.title.toLowerCase() !== normalizedSearchTerm.toLowerCase()) {
       return false;

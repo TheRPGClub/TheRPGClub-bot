@@ -10,7 +10,6 @@ import {
 } from "../db/SqlManager.js";
 import { GameSql } from "../db/sql/index.js";
 import type { IGDBGameDetails } from "../services/IGDB/IgdbService.js";
-import GameSearchSynonym from "./GameSearchSynonym.js";
 import {
   apiGet,
   apiGetRaw,
@@ -27,35 +26,12 @@ import {
 import type {
   IGame,
   IRelease,
-  IReleaseWithNames,
-  IGameSearchResult,
-  IGameAutocompleteResult,
-  ICompany,
-  IGameAssociationSummary,
-  INowPlayingMember,
-  ICompletedMember,
-  ICollectionOwnerMember,
-  IMappedGameProfile,
   GameSource,
 } from "../types/GameTypes.js";
 import {
   clearAutocompleteSearchCaches,
-  autocompleteSearchCache,
-  pendingAutocompleteSearches,
-  foldAccentE,
-  buildAutocompleteCacheKey,
-  pruneAutocompleteCache,
-  AUTOCOMPLETE_CACHE_TTL_MS,
 } from "../functions/GameAutocompleteCache.js";
-import {
-  type GameRelationsApiData,
-  type NowPlayingApiEntry,
-  type CompletionGameApiEntry,
-  type CompanyApiData,
-  type GameProfileApiData,
-  mapGameProfileFromApi,
-} from "../functions/GameProfileMapper.js";
-import GamePlatformRegionService from "./GamePlatformRegionService.js";
+import GameProfileService from "./GameProfileService.js";
 
 export default class Game {
   static async createGame(
@@ -154,7 +130,7 @@ export default class Game {
 
   static async getAlternateVersions(gameId: number): Promise<IGame[]> {
     if (!isPositiveInt(gameId)) return [];
-    const relations = await Game.getGameRelations(gameId);
+    const relations = await GameProfileService.getGameRelations(gameId);
     if (!relations?.alternates?.length) return [];
     return relations.alternates.map(mapGameFromApi);
   }
@@ -236,7 +212,7 @@ export default class Game {
     gameId: number,
     role: string,
   ): Promise<string[]> {
-    const relations = await Game.getGameRelations(gameId);
+    const relations = await GameProfileService.getGameRelations(gameId);
     if (!relations) return [];
     return relations.companies
       .filter((c) => c.role === role)
@@ -244,37 +220,37 @@ export default class Game {
   }
 
   static async getGameGenres(gameId: number): Promise<string[]> {
-    const relations = await Game.getGameRelations(gameId);
+    const relations = await GameProfileService.getGameRelations(gameId);
     return (relations?.genres ?? []).map((g) => String(g.name));
   }
 
   static async getGameThemes(gameId: number): Promise<string[]> {
-    const relations = await Game.getGameRelations(gameId);
+    const relations = await GameProfileService.getGameRelations(gameId);
     return (relations?.themes ?? []).map((g) => String(g.name));
   }
 
   static async getGameModes(gameId: number): Promise<string[]> {
-    const relations = await Game.getGameRelations(gameId);
+    const relations = await GameProfileService.getGameRelations(gameId);
     return (relations?.modes ?? []).map((g) => String(g.name));
   }
 
   static async getGamePerspectives(gameId: number): Promise<string[]> {
-    const relations = await Game.getGameRelations(gameId);
+    const relations = await GameProfileService.getGameRelations(gameId);
     return (relations?.perspectives ?? []).map((g) => String(g.name));
   }
 
   static async getGameEngines(gameId: number): Promise<string[]> {
-    const relations = await Game.getGameRelations(gameId);
+    const relations = await GameProfileService.getGameRelations(gameId);
     return (relations?.engines ?? []).map((g) => String(g.name));
   }
 
   static async getGameFranchises(gameId: number): Promise<string[]> {
-    const relations = await Game.getGameRelations(gameId);
+    const relations = await GameProfileService.getGameRelations(gameId);
     return (relations?.franchises ?? []).map((g) => String(g.name));
   }
 
   static async getGameSeries(gameId: number): Promise<string | null> {
-    const relations = await Game.getGameRelations(gameId);
+    const relations = await GameProfileService.getGameRelations(gameId);
     return relations?.collection?.name ?? null;
   }
 
@@ -305,66 +281,6 @@ export default class Game {
     return newRelease;
   }
 
-  private static async fetchAllPages<T>(
-    path: string,
-    params: Record<string, unknown> = {},
-  ): Promise<T[]> {
-    const results: T[] = [];
-    let page = 1;
-    for (;;) {
-      const result = await apiGet<{ data: T[]; meta: { next: number | null } }>(
-        path,
-        { params: { ...params, page, per: 500 } },
-      );
-      if (!result?.data?.length) break;
-      results.push(...result.data);
-      if (!result.meta?.next) break;
-      page++;
-    }
-    return results;
-  }
-
-  private static readonly relationsCache = new Map<
-    number,
-    { promise: Promise<GameRelationsApiData | null>; expires: number }
-  >();
-
-  private static readonly RELATIONS_CACHE_TTL_MS = 2000;
-
-  private static async getGameRelations(
-    gameId: number,
-  ): Promise<GameRelationsApiData | null> {
-    const now = Date.now();
-    const cached = Game.relationsCache.get(gameId);
-    if (cached && cached.expires > now) return cached.promise;
-
-    const promise = (async () => {
-      const result = await apiGet<{ data: GameRelationsApiData }>(
-        `/api/v1/games/${gameId}/relations`,
-      );
-      return result?.data ?? null;
-    })();
-    promise.catch(() => Game.relationsCache.delete(gameId));
-
-    Game.relationsCache.set(gameId, {
-      promise,
-      expires: now + Game.RELATIONS_CACHE_TTL_MS,
-    });
-    return promise;
-  }
-
-  static async getGameReleasesDetailed(
-    gameId: number,
-  ): Promise<IReleaseWithNames[]> {
-    const relations = await Game.getGameRelations(gameId);
-    if (!relations?.releases?.length) return [];
-    return relations.releases.map((r) => ({
-      ...mapReleaseFromApi(r),
-      platformName: r.platform_name ?? null,
-      regionName: r.region_name ?? null,
-    }));
-  }
-
   static async getReleaseById(id: number): Promise<IRelease | null> {
     const rows = await dbQuery(GameSql.getReleaseById, { id }, mapReleaseRow);
     return rows[0] ?? null;
@@ -376,271 +292,6 @@ export default class Game {
     );
     if (!result?.data) return [];
     return result.data.map(mapReleaseFromApi);
-  }
-
-  static async searchGamesAutocomplete(
-    query: string,
-    limit: number = 24,
-  ): Promise<IGameAutocompleteResult[]> {
-    const baseQuery = query.trim();
-    if (!baseQuery) {
-      return [];
-    }
-
-    const safeLimit = Math.min(24, Math.max(1, Math.trunc(limit) || 24));
-    const now = Date.now();
-    pruneAutocompleteCache(now);
-
-    const cacheKey = buildAutocompleteCacheKey(baseQuery, safeLimit);
-    const cached = autocompleteSearchCache.get(cacheKey);
-    if (cached && cached.expiresAt > now) {
-      return cached.results;
-    }
-    const pending = pendingAutocompleteSearches.get(cacheKey);
-    if (pending) {
-      return pending;
-    }
-
-    const lowerQuery = baseQuery.toLowerCase();
-    const foldedLowerQuery = foldAccentE(lowerQuery).toLowerCase();
-    const normalizedQuery = foldedLowerQuery.replace(/[^a-z0-9]/g, "");
-    if (!normalizedQuery && !/[a-z0-9]/.test(foldedLowerQuery)) {
-      return [];
-    }
-
-    const queryPromise = dbWithConnection(async (conn) => {
-      const titleFoldExpr = `REPLACE(REPLACE(REPLACE(REPLACE(LOWER(title), 'é', 'e'), 'è', 'e'), 'ê', 'e'), 'ë', 'e')`;
-      const titleNormExpr = `REGEXP_REPLACE(${titleFoldExpr}, '[^a-z0-9]', '', 'g')`;
-
-      const binds = {
-        exactRaw: foldedLowerQuery,
-        rawPrefix: `${foldedLowerQuery}%`,
-        rawContains: `%${foldedLowerQuery}%`,
-        exactNorm: normalizedQuery || null,
-        normPrefix: normalizedQuery ? `${normalizedQuery}%` : null,
-        normContains: normalizedQuery ? `%${normalizedQuery}%` : null,
-        limit: safeLimit,
-      };
-
-      const games = await dbQueryConn(
-        conn,
-        GameSql.searchGamesAutocomplete(titleFoldExpr, titleNormExpr),
-        binds,
-        (row: any): IGameAutocompleteResult => {
-          const ird = row.INITIAL_RELEASE_DATE ?? row.initial_release_date;
-          return {
-            id: Number(row.GAME_ID ?? row.game_id),
-            title: String(row.TITLE ?? row.title),
-            initialReleaseDate:
-              ird instanceof Date ? ird : ird ? new Date(ird) : null,
-          };
-        },
-      );
-
-      autocompleteSearchCache.set(cacheKey, {
-        expiresAt: Date.now() + AUTOCOMPLETE_CACHE_TTL_MS,
-        results: games,
-      });
-      pruneAutocompleteCache(Date.now());
-
-      return games;
-    });
-
-    pendingAutocompleteSearches.set(cacheKey, queryPromise);
-    try {
-      return await queryPromise;
-    } finally {
-      pendingAutocompleteSearches.delete(cacheKey);
-    }
-  }
-
-  static async getAllCompanies(): Promise<ICompany[]> {
-    const rows = await Game.fetchAllPages<CompanyApiData>("/api/v1/companies");
-    return rows.map((d) => ({
-      id: Number(d.company_id),
-      name: String(d.name),
-      igdbId: d.igdb_company_id != null ? Number(d.igdb_company_id) : null,
-    }));
-  }
-
-  static async getCompanyById(id: number): Promise<ICompany | null> {
-    const result = await apiGet<{ data: CompanyApiData }>(`/api/v1/companies/${id}`);
-    if (!result?.data) return null;
-    return {
-      id: Number(result.data.company_id),
-      name: String(result.data.name),
-      igdbId: result.data.igdb_company_id != null ? Number(result.data.igdb_company_id) : null,
-    };
-  }
-
-  static async searchGames(
-    query: string,
-    filters: {
-      upcomingRelease?: boolean;
-      platformId?: number;
-      year?: number;
-      developerId?: number;
-      publisherId?: number;
-    } = {},
-  ): Promise<IGameSearchResult[]> {
-    return dbWithConnection(async (connection) => {
-      const baseQuery = query.trim();
-      const hasFilters =
-        filters.upcomingRelease ||
-        filters.platformId ||
-        filters.year ||
-        filters.developerId ||
-        filters.publisherId;
-      if (!baseQuery && !hasFilters) {
-        return [];
-      }
-
-      const titleFoldExpr = `REPLACE(REPLACE(REPLACE(REPLACE(LOWER(title), 'é', 'e'), 'è', 'e'), 'ê', 'e'), 'ë', 'e')`;
-      const titleNormExpr = `REGEXP_REPLACE(${titleFoldExpr}, '[^a-z0-9]', '', 'g')`;
-
-      const clauses: string[] = [];
-      const binds: Record<string, string | number> = {};
-
-      if (baseQuery) {
-        const queryVariants = new Set<string>();
-        queryVariants.add(baseQuery);
-        const spacedQuery = baseQuery
-          .replace(/([a-zA-Z])(\d)/g, "$1 $2")
-          .replace(/(\d)([a-zA-Z])/g, "$1 $2");
-        queryVariants.add(spacedQuery);
-
-        const tokens = spacedQuery.split(/\s+/).filter(Boolean);
-        const tokenOptions: string[][] = [];
-        for (const token of tokens) {
-          const options = new Set<string>();
-          options.add(token);
-          const tokenSynonyms = await GameSearchSynonym.getTermsForQuery(token);
-          tokenSynonyms.forEach((synonym) => {
-            if (synonym.trim()) {
-              options.add(synonym.trim());
-            }
-          });
-          tokenOptions.push(Array.from(options));
-        }
-
-        if (tokenOptions.length) {
-          let variants: string[] = [""];
-          const MAX_VARIANTS = 50;
-          for (const options of tokenOptions) {
-            const nextVariants: string[] = [];
-            for (const prefix of variants) {
-              for (const option of options) {
-                const next = prefix ? `${prefix} ${option}` : option;
-                nextVariants.push(next);
-                if (nextVariants.length >= MAX_VARIANTS) break;
-              }
-              if (nextVariants.length >= MAX_VARIANTS) break;
-            }
-            variants = nextVariants;
-            if (variants.length >= MAX_VARIANTS) break;
-          }
-          variants.forEach((variant) => queryVariants.add(variant));
-        }
-
-        const termSet = new Map<string, string>();
-        Array.from(queryVariants).forEach((term) => {
-          const folded = foldAccentE(term).toLowerCase();
-          const norm = folded.replace(/[^a-z0-9]/g, "");
-          if (norm) {
-            termSet.set(norm, folded);
-          }
-        });
-
-        if (!termSet.size) {
-          return [];
-        }
-
-        Array.from(termSet.entries()).forEach(([norm, term], index) => {
-          const rawKey = `searchQuery${index}`;
-          const normKey = `normalizedQuery${index}`;
-          binds[rawKey] = `%${term}%`;
-          binds[normKey] = `%${norm}%`;
-          clauses.push(
-            `(${titleFoldExpr} LIKE :${rawKey} OR ${titleNormExpr} LIKE :${normKey})`,
-          );
-        });
-      }
-
-      const filterClauses: string[] = [];
-      if (filters.upcomingRelease) {
-        filterClauses.push("u.upcoming_date IS NOT NULL");
-      }
-      if (filters.platformId) {
-        filterClauses.push(
-          "g.game_id IN (SELECT game_id FROM gamedb_game_platforms WHERE platform_id = :filterPlatformId)",
-        );
-        binds["filterPlatformId"] = filters.platformId;
-      }
-      if (filters.year) {
-        filterClauses.push(
-          "EXTRACT(YEAR FROM g.initial_release_date) = :filterYear",
-        );
-        binds["filterYear"] = filters.year;
-      }
-      if (filters.developerId) {
-        filterClauses.push(
-          `g.game_id IN (SELECT game_id FROM gamedb_game_companies WHERE company_id = :filterDeveloperId AND role = 'Developer')`,
-        );
-        binds["filterDeveloperId"] = filters.developerId;
-      }
-      if (filters.publisherId) {
-        filterClauses.push(
-          `g.game_id IN (SELECT game_id FROM gamedb_game_companies WHERE company_id = :filterPublisherId AND role = 'Publisher')`,
-        );
-        binds["filterPublisherId"] = filters.publisherId;
-      }
-
-      const titlePart = clauses.length ? `(${clauses.join(" OR ")})` : "";
-      const filterPart = filterClauses.length
-        ? `(${filterClauses.join(" AND ")})`
-        : "";
-      const whereClause =
-        titlePart && filterPart
-          ? `${titlePart} AND ${filterPart}`
-          : titlePart || filterPart || "1=0";
-
-      const upcomingCol = "u.upcoming_date";
-      const orderPrefix = filters.upcomingRelease
-        ? `${upcomingCol} ASC NULLS LAST, `
-        : "";
-
-      const entry = GameSql.searchGames(whereClause, orderPrefix);
-
-      const upcomingDates = new Map<number, Date | null>();
-      const upcomingPlatforms = new Map<number, string[]>();
-
-      const rows = await dbQueryConn(connection, entry, binds, (row: any) => {
-        const id = Number(row.game_id);
-        const urd = row.upcoming_release_date;
-        upcomingDates.set(
-          id,
-          urd instanceof Date ? urd : urd ? new Date(urd) : null,
-        );
-        upcomingPlatforms.set(
-          id,
-          row.upcoming_platforms
-            ? String(row.upcoming_platforms)
-                .split(",")
-                .map((s: string) => s.trim())
-                .filter(Boolean)
-            : [],
-        );
-        return mapGameRow(row);
-      });
-      const games: IGame[] = rows;
-
-      const withPlatforms = await GamePlatformRegionService.attachPlatformsToGames(games);
-      return withPlatforms.map((g) => ({
-        ...g,
-        upcomingReleaseDate: upcomingDates.get(g.id) ?? null,
-        upcomingReleasePlatforms: upcomingPlatforms.get(g.id) ?? [],
-      }));
-    });
   }
 
   static async getGamesForAudit(
@@ -815,128 +466,4 @@ export default class Game {
     await dbMutate(GameSql.touchGameUpdatedAt, { gameId });
   }
 
-  static async getGameAssociations(
-    gameId: number,
-  ): Promise<IGameAssociationSummary> {
-    type WinRow = {
-      ROUND_NUMBER: number;
-      THREAD_ID: string | null;
-      REDDIT_URL: string | null;
-      MONTH_YEAR: string;
-    };
-    type NomRow = {
-      ROUND_NUMBER: number;
-      USER_ID: string;
-      USERNAME?: string | null;
-      GLOBAL_NAME?: string | null;
-    };
-
-    const [gotmWins, nrGotmWins, gotmNominations, nrGotmNominations] =
-      await Promise.all([
-        dbQuery<
-          WinRow,
-          {
-            round: number;
-            threadId: string | null;
-            redditUrl: string | null;
-            monthYear: string;
-          }
-        >(GameSql.getGotmWins, { gameId }, (row) => ({
-          round: Number(row.ROUND_NUMBER),
-          threadId: row.THREAD_ID ?? null,
-          redditUrl: row.REDDIT_URL ?? null,
-          monthYear: String(row.MONTH_YEAR),
-        })),
-        dbQuery<
-          WinRow,
-          {
-            round: number;
-            threadId: string | null;
-            redditUrl: string | null;
-            monthYear: string;
-          }
-        >(GameSql.getNrGotmWins, { gameId }, (row) => ({
-          round: Number(row.ROUND_NUMBER),
-          threadId: row.THREAD_ID ?? null,
-          redditUrl: row.REDDIT_URL ?? null,
-          monthYear: String(row.MONTH_YEAR),
-        })),
-        dbQuery<NomRow, { round: number; userId: string; username: string }>(
-          GameSql.getGotmNominations,
-          { gameId },
-          (row) => ({
-            round: Number(row.ROUND_NUMBER),
-            userId: String(row.USER_ID),
-            username: String(row.GLOBAL_NAME || row.USERNAME || row.USER_ID),
-          }),
-        ),
-        dbQuery<NomRow, { round: number; userId: string; username: string }>(
-          GameSql.getNrGotmNominations,
-          { gameId },
-          (row) => ({
-            round: Number(row.ROUND_NUMBER),
-            userId: String(row.USER_ID),
-            username: String(row.GLOBAL_NAME || row.USERNAME || row.USER_ID),
-          }),
-        ),
-      ]);
-
-    return { gotmWins, nrGotmWins, gotmNominations, nrGotmNominations };
-  }
-
-  static async getNowPlayingMembers(
-    gameId: number,
-  ): Promise<INowPlayingMember[]> {
-    const rows = await Game.fetchAllPages<NowPlayingApiEntry>(
-      `/api/v1/games/${gameId}/now_playing`,
-    );
-    return rows.map((d) => ({
-      userId: String(d.user_id),
-      username: d.user?.username ?? null,
-      globalName: d.user?.global_name ?? null,
-      threadId: null,
-      addedAt: null,
-    }));
-  }
-
-  static async getGameCompletions(gameId: number): Promise<ICompletedMember[]> {
-    const rows = await Game.fetchAllPages<CompletionGameApiEntry>(
-      `/api/v1/games/${gameId}/completions`,
-    );
-    return rows.map((d) => ({
-      userId: String(d.user_id),
-      username: d.user?.username ?? null,
-      globalName: d.user?.global_name ?? null,
-      completionType: String(d.completion_type),
-      completedAt: d.completed_at ? new Date(d.completed_at) : null,
-      finalPlaytimeHours: d.final_playtime_hrs != null ? Number(d.final_playtime_hrs) : null,
-    }));
-  }
-
-  static async getGameCollectionOwners(
-    gameId: number,
-  ): Promise<ICollectionOwnerMember[]> {
-    return dbQuery(
-      GameSql.getGameCollectionOwners,
-      { gameId },
-      (row: {
-        USER_ID: string;
-        USERNAME: string | null;
-        GLOBAL_NAME: string | null;
-      }) => ({
-        userId: String(row.USER_ID),
-        username: row.USERNAME ?? null,
-        globalName: row.GLOBAL_NAME ?? null,
-      }),
-    );
-  }
-
-  static async getGameProfile(gameId: number): Promise<IMappedGameProfile | null> {
-    const result = await apiGet<{ data: GameProfileApiData }>(
-      `/api/v1/games/${gameId}/profile`,
-    );
-    const d = result?.data;
-    if (!d) return null;
-    return mapGameProfileFromApi(d, gameId);
-  }
 }

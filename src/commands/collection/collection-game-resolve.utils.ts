@@ -6,6 +6,7 @@ import { isPositiveInt } from "../../utilities/ValidationUtils.js";
 import { truncateLabel } from "../../config/textLimits.js";
 import GamePlatformRegionService from "../../classes/GamePlatformRegionService.js";
 import { importGameFromIgdb } from "../../functions/GameIgdbSync.js";
+import GameSearchService from "../../classes/GameSearchService.js";
 
 export type ResolvedCollectionGame =
   | { kind: "resolved"; gameId: number; title: string }
@@ -65,7 +66,7 @@ export async function resolveCollectionGameForAdd(
     throw new Error("Invalid game selection.");
   }
 
-  const localResults = await Game.searchGames(titleQuery);
+  const localResults = await GameSearchService.searchGames(titleQuery);
   const exactLocal = localResults.find(
     (game) => game.title.toLowerCase() === titleQuery.toLowerCase(),
   );

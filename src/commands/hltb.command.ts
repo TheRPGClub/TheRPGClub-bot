@@ -4,7 +4,6 @@ import { Discord, Slash, SlashOption } from "discordx";
 import { MediaGalleryBuilder, MediaGalleryItemBuilder } from "@discordjs/builders";
 import { searchHltb, type HltbSearchResult } from "../scripts/SearchHltb.js";
 import { COLOR_PRIMARY } from "../config/colors.js";
-import Game from "../classes/Game.js";
 import { getHltbCacheByGameId, upsertHltbCache } from "../classes/HltbCache.js";
 import {
   deferWithPrivateFlag,
@@ -23,6 +22,7 @@ import {
   parseTitleWithYear,
 } from "../functions/GameTitleAutocompleteUtils.js";
 import { truncateLabel } from "../config/textLimits.js";
+import GameSearchService from "../classes/GameSearchService.js";
 
 function buildKeepTypingOption(query: string): { name: string; value: string } {
   const label = `Keep typing: "${query}"`;
@@ -42,7 +42,7 @@ async function autocompleteHltbTitle(
     await interaction.respond([]);
     return;
   }
-  const results = await Game.searchGamesAutocomplete(query);
+  const results = await GameSearchService.searchGamesAutocomplete(query);
   const resultOptions = results.slice(0, 24).map((game) => {
     const label = formatGameTitleWithYear(game);
     return {
@@ -140,7 +140,7 @@ async function resolveHltbResult(title: string): Promise<HltbSearchResult | null
   const searchTerm = parsedTitle.title.trim();
   if (!searchTerm) return null;
 
-  const matches = await Game.searchGames(searchTerm);
+  const matches = await GameSearchService.searchGames(searchTerm);
   const normalizedTitle = searchTerm.toLowerCase();
   const exactTitleMatches = matches.filter(
     (game) => game.title.toLowerCase() === normalizedTitle,

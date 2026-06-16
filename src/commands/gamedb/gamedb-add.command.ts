@@ -39,6 +39,7 @@ import { logError, logWarn } from "../../utilities/LogUtils.js";
 import { apiPost } from "../../services/RpgClubApiClient.js";
 import GamePlatformRegionService from "../../classes/GamePlatformRegionService.js";
 import { importReleaseDatesFromIgdb, saveFullGameMetadata } from "../../functions/GameIgdbSync.js";
+import GameSearchService from "../../classes/GameSearchService.js";
 
 async function fetchIgdbCoverImage(details: IGDBGameDetails): Promise<Buffer | null> {
   if (!details.cover?.image_id) return null;
@@ -199,7 +200,7 @@ export async function handleNoResults(
   query: string,
 ): Promise<void> {
   try {
-    const existing = await Game.searchGames(query);
+    const existing = await GameSearchService.searchGames(query);
     const existingList = existing
       .slice(0, 10)
       .map((g) => `• **${g.title}** (GameDB #${g.id})`);
@@ -376,7 +377,7 @@ export class GameDbAddCommand {
         game = await Game.getGameById(gameId);
       }
     } else {
-      const matches = await Game.searchGames(searchTerm);
+      const matches = await GameSearchService.searchGames(searchTerm);
       const exactMatches = matches.filter(
         (entry) => entry.title.trim().toLowerCase() === searchTerm.toLowerCase(),
       );

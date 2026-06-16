@@ -19,6 +19,7 @@ import { type CompletionType } from "../commands/profile.command.js";
 import { formatPlaytimeHours, formatTableDate } from "./DateFormatUtils.js";
 import type { IGame } from "../types/GameTypes.js";
 import Game from "../classes/Game.js";
+import GameProfileService from "../classes/GameProfileService.js";
 import Member from "../classes/Member.js";
 import { ANNOUNCEMENT_CHANNEL_ID, BOT_DEV_CHANNEL_ID } from "../config/channels.js";
 import {
@@ -188,7 +189,7 @@ export async function announceCompletion(
       return;
     }
 
-    const completions = await Game.getGameCompletions(game.id);
+    const completions = await GameProfileService.getGameCompletions(game.id);
     const isFirst = completions.length === 1;
 
     const playtimeText = formatPlaytimeHours(finalPlaytimeHours);

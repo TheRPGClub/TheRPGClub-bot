@@ -70,6 +70,7 @@ import { logError, logWarn } from "../utilities/LogUtils.js";
 import { buildSelectRow } from "../functions/uiComponents.js";
 import GamePlatformRegionService from "../classes/GamePlatformRegionService.js";
 import { saveFullGameMetadata } from "../functions/GameIgdbSync.js";
+import GameSearchService from "../classes/GameSearchService.js";
 
 type CompletionAddContext = {
   targetUserId: string;
@@ -364,7 +365,7 @@ export class SuperAdmin {
     searchTerm: string,
     ctx: CompletionAddContext,
   ): Promise<void> {
-    const localResults = await Game.searchGames(searchTerm);
+    const localResults = await GameSearchService.searchGames(searchTerm);
     if (localResults.length) {
       const sessionId = buildStableSuperAdminSessionId("sacomp", [
         interaction.id,

@@ -46,6 +46,7 @@ import {
   buildGotmAuditPromptComponents,
 } from "./gotm-audit-ui.service.js";
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
+import GameSearchService from "../../classes/GameSearchService.js";
 
 export async function handleGotmAudit(
   interaction: CommandInteraction,
@@ -191,7 +192,7 @@ export async function processNextGotmAuditItem(
 
   let results: IGameWithPlatforms[] = [];
   try {
-    results = await Game.searchGames(nextItem.gameTitle);
+    results = await GameSearchService.searchGames(nextItem.gameTitle);
   } catch (err: any) {
     await updateGotmAuditItem(nextItem.itemId, {
       status: "ERROR",

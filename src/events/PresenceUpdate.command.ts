@@ -10,7 +10,6 @@ import crypto from "node:crypto";
 import type { Presence } from "discord.js";
 import type { ArgsOf, Client } from "discordx";
 import { ButtonComponent, Discord, On } from "discordx";
-import Game from "../classes/Game.js";
 import Member from "../classes/Member.js";
 import PresencePromptOptOut, { normalizePresenceGameTitle } from "../classes/PresencePromptOptOut.js";
 import PresencePromptHistory from "../classes/PresencePromptHistory.js";
@@ -21,6 +20,7 @@ import { PRESENCE_PROMPT_CHANNEL_ID } from "../config/channels.js";
 import { buildActionButton, buildButtonRow } from "../functions/uiComponents.js";
 import GamePlatformRegionService from "../classes/GamePlatformRegionService.js";
 import { importGameFromIgdb } from "../functions/GameIgdbSync.js";
+import GameSearchService from "../classes/GameSearchService.js";
 
 const YES_PREFIX = "presence-np-yes";
 const NO_PREFIX = "presence-np-no";
@@ -67,7 +67,7 @@ async function resolvePresenceGame(
   title: string,
 ): Promise<{ gameId: number; title: string } | null> {
   const normalized = normalizePresenceGameTitle(title);
-  const searchResults = await Game.searchGames(title);
+  const searchResults = await GameSearchService.searchGames(title);
   const exact = searchResults.find(
     (game) => normalizePresenceGameTitle(game.title) === normalized,
   );

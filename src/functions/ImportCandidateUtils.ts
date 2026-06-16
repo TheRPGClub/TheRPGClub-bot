@@ -6,6 +6,7 @@ import {
   normalizeTitleWithSteps,
 } from "./ImportTitleNormalization.js";
 import { isPositiveInt } from "../utilities/ValidationUtils.js";
+import GameSearchService from "../classes/GameSearchService.js";
 
 export type ImportCandidate = {
   gameId: number;
@@ -84,7 +85,7 @@ export async function buildImportCandidates(title: string): Promise<ImportCandid
   if (!variants.length) return [];
 
   for (const variant of variants) {
-    const results = await Game.searchGames(variant);
+    const results = await GameSearchService.searchGames(variant);
     if (!results.length) continue;
 
     const normalizedSearch = normalizeCandidate(variant);

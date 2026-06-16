@@ -43,6 +43,7 @@ import {
 import { assertCustomIdSegments, parseCustomIdSegments } from "../../utilities/CustomIdUtils.js";
 import { logError } from "../../utilities/LogUtils.js";
 import { saveFullGameMetadata } from "../../functions/GameIgdbSync.js";
+import GameSearchService from "../../classes/GameSearchService.js";
 
 /**
  * Creates a completion session and returns the session ID
@@ -61,7 +62,7 @@ export async function promptCompletionSelection(
   searchTerm: string,
   ctx: CompletionAddContext,
 ): Promise<void> {
-  const localResults = await Game.searchGames(searchTerm);
+  const localResults = await GameSearchService.searchGames(searchTerm);
   if (localResults.length) {
     const sessionId = createCompletionSession(ctx);
     const gameOptions = localResults.map((game) => ({
@@ -521,7 +522,7 @@ export async function importGameFromIgdb(
       throw err;
     }
 
-    const matches = await Game.searchGames(details.name);
+    const matches = await GameSearchService.searchGames(details.name);
     const exact = matches.find(
       (game) => game.title.toLowerCase() === details.name.toLowerCase(),
     );

@@ -4,13 +4,13 @@ import type { AutocompleteInteraction } from "discord.js";
 import { sanitizeUserInput } from "../../functions/InteractionUtils.js";
 import { formatGameTitleWithYear } from "../../functions/GameTitleAutocompleteUtils.js";
 import type { IPlatformDef } from "../../types/GameTypes.js";
-import Game from "../../classes/Game.js";
 import Member from "../../classes/Member.js";
 import { formatTableDate } from "../../functions/DateFormatUtils.js";
 import { STANDARD_PLATFORM_IDS } from "../../config/standardPlatforms.js";
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
 import { DISCORD_SELECT_OPTIONS_MAX, truncateLabel } from "../../config/textLimits.js";
 import GamePlatformRegionService from "../../classes/GamePlatformRegionService.js";
+import GameSearchService from "../../classes/GameSearchService.js";
 
 const PLATFORM_CACHE_TTL_MS = 5 * 60 * 1000;
 const COMPLETION_TITLE_VALUE_PREFIX = "completion";
@@ -73,7 +73,7 @@ export async function autocompleteGameCompletionTitle(
     await interaction.respond([]);
     return;
   }
-  const results = await Game.searchGamesAutocomplete(query);
+  const results = await GameSearchService.searchGamesAutocomplete(query);
   const resultOptions = results.slice(0, 24).map((game) => ({
     name: truncateLabel(formatGameTitleWithYear(game)),
     value: game.title,

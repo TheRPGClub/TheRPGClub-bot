@@ -20,6 +20,7 @@ import { safeDeferReply, safeReply, sanitizeOptionalInput, sanitizeUserInput } f
 import { buildTextReply } from "../functions/ComponentsV2Utils.js";
 import { formatGameTitleWithYear } from "../functions/GameTitleAutocompleteUtils.js";
 import { DISCORD_SELECT_OPTIONS_MAX, truncateLabel } from "../config/textLimits.js";
+import GameSearchService from "../classes/GameSearchService.js";
 
 const DEFAULT_FIRST_POST_PREFIX = "Thread created by";
 
@@ -38,7 +39,7 @@ async function autocompleteCreateThreadTitle(
     return;
   }
 
-  const results = await Game.searchGamesAutocomplete(query);
+  const results = await GameSearchService.searchGamesAutocomplete(query);
   await interaction.respond(
     results.slice(0, DISCORD_SELECT_OPTIONS_MAX).map((game) => ({
       name: truncateLabel(formatGameTitleWithYear(game)),

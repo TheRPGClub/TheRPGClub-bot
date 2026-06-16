@@ -59,6 +59,7 @@ import {
 import { isAdmin } from "./admin/admin-auth.utils.js";
 import type { IGame } from "../types/GameTypes.js";
 import Game from "../classes/Game.js";
+import GameProfileService from "../classes/GameProfileService.js";
 import GameSearchSynonym from "../classes/GameSearchSynonym.js";
 import GameSearchSynonymDraft, {
   type ISynonymDraftPair,
@@ -1186,8 +1187,8 @@ export class GameDbAdmin {
       fieldLines.push("**Release Data** ❌ Missing");
     }
 
-    const associations = await Game.getGameAssociations(game.id);
-    const nowPlaying = await Game.getNowPlayingMembers(game.id);
+    const associations = await GameProfileService.getGameAssociations(game.id);
+    const nowPlaying = await GameProfileService.getNowPlayingMembers(game.id);
 
     const threadId =
       associations.gotmWins.find((w) => w.threadId)?.threadId ??

@@ -133,6 +133,7 @@ import {
   startNowPlayingIgdbImport,
   startNowPlayingIgdbImportFromInteraction,
 } from "./now-playing/nowPlayingIgdbImport.service.js";
+import GameSearchService from "../classes/GameSearchService.js";
 
 @Discord()
 @SlashGroup({ description: "Show now playing data", name: "now-playing" })
@@ -412,7 +413,7 @@ export class NowPlayingCommand {
     }
 
     try {
-      const results = await Game.searchGames(query);
+      const results = await GameSearchService.searchGames(query);
       if (!results.length) {
         await startNowPlayingIgdbImportFromInteraction(
           interaction,
@@ -517,7 +518,7 @@ export class NowPlayingCommand {
       return null;
     }
 
-    const existing = await Game.searchGames(normalizedSearchTerm);
+    const existing = await GameSearchService.searchGames(normalizedSearchTerm);
     const exact = existing.find((game) => {
       if (game.title.toLowerCase() !== normalizedSearchTerm.toLowerCase()) {
         return false;

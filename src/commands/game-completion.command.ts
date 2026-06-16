@@ -90,10 +90,10 @@ import {
   COMPLETIONATOR_STATUS_OPTIONS,
   type CompletionatorAction,
 } from "./game-completion/completion.types.js";
-import Game from "../classes/Game.js";
 import Member from "../classes/Member.js";
 import { isPositiveInt, isValidPlaytimeHours } from "../utilities/ValidationUtils.js";
 import { toUnixTimestamp } from "../functions/DateFormatUtils.js";
+import GameSearchService from "../classes/GameSearchService.js";
 
 // Note: This is a simplified working version that delegates complex Completionator logic
 // to service files. The full implementation would import and delegate all handlers.
@@ -211,7 +211,7 @@ export class GameCompletionCommands {
       return;
     }
 
-    const localResults = await Game.searchGames(searchTerm);
+    const localResults = await GameSearchService.searchGames(searchTerm);
     const exactMatch = localResults.find(
       (game) => game.title.toLowerCase() === searchTerm.toLowerCase(),
     );

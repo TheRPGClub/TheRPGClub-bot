@@ -26,6 +26,7 @@ import { getThreadsByGameId, setThreadGameLink, upsertThreadRecord } from "../..
 import { NOW_PLAYING_FORUM_ID } from "../../config/channels.js";
 import { NOW_PLAYING_SIDEGAME_TAG_ID } from "../../config/tags.js";
 import Game from "../../classes/Game.js";
+import GameProfileService from "../../classes/GameProfileService.js";
 import { updateGameProfileMessageById } from "./gamedb-profile.service.js";
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
 import { assertCustomIdSegments } from "../../utilities/CustomIdUtils.js";
@@ -184,8 +185,8 @@ async function runNowPlayingThreadWizard(
     });
     await setThreadGameLink(thread.id, gameId);
     await sendStatus(`Created and linked ${channelMention(thread.id)}.`);
-    const nowPlayingMembers = await Game.getNowPlayingMembers(gameId);
-    const completions = await Game.getGameCompletions(gameId);
+    const nowPlayingMembers = await GameProfileService.getNowPlayingMembers(gameId);
+    const completions = await GameProfileService.getGameCompletions(gameId);
     const mentionIds = new Set<string>([interaction.user.id]);
     nowPlayingMembers.forEach((member) => mentionIds.add(member.userId));
     completions.forEach((member) => mentionIds.add(member.userId));

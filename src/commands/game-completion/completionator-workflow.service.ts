@@ -41,6 +41,7 @@ import { logError } from "../../utilities/LogUtils.js";
 import { truncateDescription } from "../../config/textLimits.js";
 import { safeIgnore } from "../../utilities/AsyncUtils.js";
 import GamePlatformRegionService from "../../classes/GamePlatformRegionService.js";
+import GameSearchService from "../../classes/GameSearchService.js";
 
 export class CompletionatorWorkflowService {
   private uiService: CompletionatorUiService;
@@ -469,7 +470,7 @@ export class CompletionatorWorkflowService {
       | ModalSubmitInteraction,
     session: ICompletionatorImport,
     item: ICompletionatorItem,
-    results: Awaited<ReturnType<typeof Game.searchGames>>,
+    results: Awaited<ReturnType<typeof GameSearchService.searchGames>>,
     ephemeral?: boolean,
     context?: CompletionatorThreadContext,
   ): Promise<void> {
