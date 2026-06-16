@@ -9,7 +9,7 @@ import {
   dbMutateConn,
 } from "../db/SqlManager.js";
 import { GameSql } from "../db/sql/index.js";
-import { IGDBGameDetails, igdbService } from "../services/IGDB/IgdbService.js";
+import type { IGDBGameDetails } from "../services/IGDB/IgdbService.js";
 import GameSearchSynonym from "./GameSearchSynonym.js";
 import {
   apiGet,
@@ -17,9 +17,48 @@ import {
   type ApiGetRawMeta,
 } from "../services/RpgClubApiClient.js";
 import { isPositiveInt } from "../utilities/ValidationUtils.js";
-import { safeIgnore } from "../utilities/AsyncUtils.js";
 import { logError, logWarn } from "../utilities/LogUtils.js";
+import {
+  mapGameFromApi,
+  mapGameRow,
+  mapReleaseRow,
+  mapReleaseFromApi,
+  mapPlatformDefRow,
+  mapPlatformFromApi,
+  mapRegionDefRow,
+  mapRegionFromApi,
+  buildPlatformCode,
+  IGDB_REGION_MAP,
+  type ReleaseApiData,
+  type PlatformApiData,
+  type RegionApiData,
+} from "../functions/GameMappers.js";
 import type { HltbCacheEntry } from "./HltbCache.js";
+import {
+  clearAutocompleteSearchCaches,
+  autocompleteSearchCache,
+  pendingAutocompleteSearches,
+  foldAccentE,
+  buildAutocompleteCacheKey,
+  pruneAutocompleteCache,
+  AUTOCOMPLETE_CACHE_TTL_MS,
+} from "../functions/GameAutocompleteCache.js";
+import {
+  type GameRelationsApiData,
+  type NowPlayingApiEntry,
+  type CompletionGameApiEntry,
+  type CompanyApiData,
+  type GameProfileApiData,
+  mapGameProfileFromApi,
+} from "../functions/GameProfileMapper.js";
+import {
+  importGameFromIgdb as _importGameFromIgdb,
+  importReleaseDatesFromIgdb as _importReleaseDatesFromIgdb,
+  saveFullGameMetadata as _saveFullGameMetadata,
+  addGamePlatformsByIgdbIds as _addGamePlatformsByIgdbIds,
+  updateInitialReleaseDate as _updateInitialReleaseDate,
+  saveReleaseDates,
+} from "../functions/GameIgdbSync.js";
 
 // Interfaces
 export interface IGame {
@@ -143,8 +182,6 @@ export interface IGameAssociationSummary {
   nrGotmNominations: { round: number; userId: string; username: string }[];
 }
 
-type IGDBReleaseDate = NonNullable<IGDBGameDetails["release_dates"]>[number];
-
 export interface INowPlayingMember {
   userId: string;
   username: string | null;
@@ -184,349 +221,7 @@ export interface IMappedGameProfile {
   publishers: string[];
 }
 
-const IGDB_REGION_MAP: Record<number, { code: string; name: string }> = {
-  1: { code: "EU", name: "Europe" },
-  2: { code: "NA", name: "North America" },
-  3: { code: "AUS", name: "Australia" },
-  4: { code: "NZ", name: "New Zealand" },
-  5: { code: "JP", name: "Japan" },
-  6: { code: "CN", name: "China" },
-  7: { code: "AS", name: "Asia" },
-  8: { code: "WW", name: "Worldwide" },
-};
-
-const buildPlatformCode = (name: string | null, igdbId: number): string => {
-  const platformName = name ?? `IGDB Platform ${igdbId}`;
-  const sanitized = platformName.replace(/[^A-Za-z0-9]/g, "").toUpperCase();
-  const base = sanitized.slice(0, 12) || "PLATFORM";
-  const codeWithId = `${base}${igdbId}`;
-  return codeWithId.length > 20 ? codeWithId.slice(0, 20) : codeWithId;
-};
-
-const AUTOCOMPLETE_CACHE_TTL_MS = 60_000;
-const AUTOCOMPLETE_CACHE_MAX_ENTRIES = 300;
-const autocompleteSearchCache = new Map<
-  string,
-  { expiresAt: number; results: IGameAutocompleteResult[] }
->();
-const pendingAutocompleteSearches = new Map<
-  string,
-  Promise<IGameAutocompleteResult[]>
->();
-
-function clearAutocompleteSearchCaches(): void {
-  autocompleteSearchCache.clear();
-  pendingAutocompleteSearches.clear();
-}
-
 export type GameSource = "API";
-
-// Helper functions for mapping rows
-
-/**
- * Maps a Rails API JSON response (snake_case) to IGame.
- * imageData is always null from the API.
- *
- * The Rails API uses its own auto-increment PK in `data.id` 
- */
-function mapGameFromApi(data: any): IGame {
-  return {
-    id: Number(data.game_id ?? data.id),
-    title: String(data.title),
-    description: data.description ? String(data.description) : null,
-    imageData: null,
-    thumbnailBad: Boolean(data.thumbnail_bad ?? false),
-    thumbnailApproved: Boolean(data.thumbnail_approved ?? false),
-    igdbId: data.igdb_id != null ? Number(data.igdb_id) : null,
-    slug: data.slug ? String(data.slug) : null,
-    totalRating: data.total_rating != null ? Number(data.total_rating) : null,
-    igdbUrl: data.igdb_url ? String(data.igdb_url) : null,
-    featuredVideoUrl: data.featured_video_url
-      ? String(data.featured_video_url)
-      : null,
-    initialReleaseDate: data.initial_release_date
-      ? new Date(data.initial_release_date)
-      : null,
-    createdAt: new Date(data.created_at),
-    updatedAt: new Date(data.updated_at),
-    coverUrl: data.cover_url ? String(data.cover_url) : null,
-  };
-}
-
-function mapGameRow(row: any): IGame {
-  const imageRaw = row.IMAGE_DATA ?? row.image_data;
-  const ird = row.INITIAL_RELEASE_DATE ?? row.initial_release_date;
-  const cat = row.CREATED_AT ?? row.created_at;
-  const uat = row.UPDATED_AT ?? row.updated_at;
-  return {
-    id: Number(row.GAME_ID ?? row.game_id),
-    title: String(row.TITLE ?? row.title),
-    description:
-      (row.DESCRIPTION ?? row.description)
-        ? String(row.DESCRIPTION ?? row.description)
-        : null,
-    imageData: imageRaw instanceof Buffer ? imageRaw : null,
-    thumbnailBad: Number(row.THUMBNAIL_BAD ?? row.thumbnail_bad ?? 0) === 1,
-    thumbnailApproved:
-      Number(row.THUMBNAIL_APPROVED ?? row.thumbnail_approved ?? 0) === 1,
-    igdbId:
-      (row.IGDB_ID ?? row.igdb_id) ? Number(row.IGDB_ID ?? row.igdb_id) : null,
-    slug: (row.SLUG ?? row.slug) ? String(row.SLUG ?? row.slug) : null,
-    totalRating:
-      (row.TOTAL_RATING ?? row.total_rating)
-        ? Number(row.TOTAL_RATING ?? row.total_rating)
-        : null,
-    igdbUrl:
-      (row.IGDB_URL ?? row.igdb_url)
-        ? String(row.IGDB_URL ?? row.igdb_url)
-        : null,
-    featuredVideoUrl:
-      (row.FEATURED_VIDEO_URL ?? row.featured_video_url)
-        ? String(row.FEATURED_VIDEO_URL ?? row.featured_video_url)
-        : null,
-    initialReleaseDate: ird instanceof Date ? ird : ird ? new Date(ird) : null,
-    createdAt: cat instanceof Date ? cat : new Date(cat),
-    updatedAt: uat instanceof Date ? uat : new Date(uat),
-    coverUrl: null,
-  };
-}
-
-function normalizeAutocompleteQuery(query: string): string {
-  return query.trim().toLowerCase();
-}
-
-function foldAccentE(query: string): string {
-  return query.replace(/[éèêë]/g, "e").replace(/[ÉÈÊË]/g, "E");
-}
-
-function buildAutocompleteCacheKey(query: string, limit: number): string {
-  return `${limit}:${normalizeAutocompleteQuery(query)}`;
-}
-
-function pruneAutocompleteCache(now: number): void {
-  for (const [key, entry] of autocompleteSearchCache.entries()) {
-    if (entry.expiresAt <= now) {
-      autocompleteSearchCache.delete(key);
-    }
-  }
-  while (autocompleteSearchCache.size > AUTOCOMPLETE_CACHE_MAX_ENTRIES) {
-    const oldestKey = autocompleteSearchCache.keys().next().value as
-      | string
-      | undefined;
-    if (!oldestKey) break;
-    autocompleteSearchCache.delete(oldestKey);
-  }
-}
-
-function mapReleaseRow(row: any): IRelease {
-  return {
-    id: Number(row.RELEASE_ID),
-    gameId: Number(row.GAME_ID),
-    platformId: Number(row.PLATFORM_ID),
-    regionId: Number(row.REGION_ID),
-    format: row.FORMAT ? (String(row.FORMAT) as "Physical" | "Digital") : null,
-    releaseDate:
-      row.RELEASE_DATE instanceof Date
-        ? row.RELEASE_DATE
-        : row.RELEASE_DATE
-          ? new Date(row.RELEASE_DATE)
-          : null,
-    notes: row.NOTES ? String(row.NOTES) : null,
-  };
-}
-
-function mapPlatformDefRow(row: any): IPlatformDef {
-  return {
-    id: Number(row.PLATFORM_ID),
-    code: String(row.PLATFORM_CODE),
-    name: String(row.PLATFORM_NAME),
-    abbreviation: row.PLATFORM_ABBREVIATION
-      ? String(row.PLATFORM_ABBREVIATION)
-      : null,
-    igdbPlatformId: row.IGDB_PLATFORM_ID ? Number(row.IGDB_PLATFORM_ID) : null,
-  };
-}
-
-function mapRegionDefRow(row: any): IRegionDef {
-  return {
-    id: Number(row.REGION_ID),
-    code: String(row.REGION_CODE),
-    name: String(row.REGION_NAME),
-    igdbRegionId: row.IGDB_REGION_ID ? Number(row.IGDB_REGION_ID) : null,
-  };
-}
-
-// --- API response types ---
-
-type ReleaseApiData = {
-  release_id: number;
-  game_id: number;
-  platform_id: number;
-  region_id: number;
-  format: string | null;
-  release_date: string | null;
-  notes: string | null;
-};
-
-type PlatformApiData = {
-  platform_id: number;
-  platform_code: string;
-  platform_name: string;
-};
-
-type RegionApiData = {
-  region_id: number;
-  region_code: string;
-  region_name: string;
-  igdb_region_id: number | null;
-};
-
-type CompanyApiData = {
-  company_id: number;
-  name: string;
-  igdb_company_id: number | null;
-};
-
-type NowPlayingApiEntry = {
-  user_id: string;
-  user: { user_id: string; username: string | null; global_name: string | null };
-};
-
-type CompletionGameApiEntry = {
-  user_id: string;
-  completion_type: string;
-  completed_at: string | null;
-  final_playtime_hrs: number | null;
-  user: { user_id: string; username: string | null; global_name: string | null };
-};
-
-type RelationReleaseApiData = ReleaseApiData & {
-  platform_name: string | null;
-  region_name: string | null;
-  platform_code: string | null;
-  region_code: string | null;
-};
-
-type GameRelationsApiData = {
-  releases: RelationReleaseApiData[];
-  platforms: PlatformApiData[];
-  collection: { name: string } | null;
-  companies: Array<CompanyApiData & { role: string | null }>;
-  franchises: Array<{ name: string }>;
-  genres: Array<{ name: string }>;
-  engines: Array<{ name: string }>;
-  modes: Array<{ name: string }>;
-  perspectives: Array<{ name: string }>;
-  themes: Array<{ name: string }>;
-  alternates: Array<Record<string, unknown>>;
-};
-
-type HltbProfileApiData = {
-  name: string | null;
-  url: string | null;
-  image_url: string | null;
-  main: string | null;
-  main_sides: string | null;
-  completionist: string | null;
-  single_player: string | null;
-  co_op: string | null;
-  vs: string | null;
-  source_query: string | null;
-  scraped_at: string | null;
-  updated_at: string | null;
-};
-
-type ProfileCollectionOwnerApiData = {
-  user_id: string;
-  username: string | null;
-};
-
-type ProfileGotmWinApiData = {
-  round: number;
-};
-
-type ProfileGotmNominationApiData = {
-  round: number;
-  user_id: string;
-  username: string | null;
-};
-
-type ProfileThreadApiData = {
-  thread_id: string;
-  jump_url: string | null;
-};
-
-export type GameProfileApiData = {
-  game: Record<string, unknown>;
-  relations: GameRelationsApiData;
-  now_playing: NowPlayingApiEntry[];
-  completions: CompletionGameApiEntry[];
-  threads: ProfileThreadApiData[];
-  primary_image: { url: string } | null;
-  associations: {
-    gotm_wins: ProfileGotmWinApiData[];
-    nr_gotm_wins: ProfileGotmWinApiData[];
-    gotm_nominations: ProfileGotmNominationApiData[];
-    nr_gotm_nominations: ProfileGotmNominationApiData[];
-  };
-  collection_owners: ProfileCollectionOwnerApiData[];
-  hltb: HltbProfileApiData | null;
-};
-
-// --- API mapper functions ---
-
-function mapReleaseFromApi(data: ReleaseApiData): IRelease {
-  return {
-    id: Number(data.release_id),
-    gameId: Number(data.game_id),
-    platformId: Number(data.platform_id),
-    regionId: Number(data.region_id),
-    format: data.format ? (data.format as "Physical" | "Digital") : null,
-    releaseDate: data.release_date ? new Date(data.release_date) : null,
-    notes: data.notes ?? null,
-  };
-}
-
-function mapPlatformFromApi(data: PlatformApiData): IPlatformDef {
-  return {
-    id: Number(data.platform_id),
-    code: String(data.platform_code),
-    name: String(data.platform_name),
-    abbreviation: null,
-    igdbPlatformId: null,
-  };
-}
-
-function mapRegionFromApi(data: RegionApiData): IRegionDef {
-  return {
-    id: Number(data.region_id),
-    code: String(data.region_code),
-    name: String(data.region_name),
-    igdbRegionId: data.igdb_region_id != null ? Number(data.igdb_region_id) : null,
-  };
-}
-
-function mapHltbFromProfileApi(
-  data: HltbProfileApiData,
-  gameId: number,
-): HltbCacheEntry {
-  const toDate = (v: string | null): Date | null => (v ? new Date(v) : null);
-  return {
-    gameId,
-    name: data.name ?? null,
-    url: data.url ?? null,
-    imageUrl: data.image_url ?? null,
-    main: data.main ?? null,
-    mainSides: data.main_sides ?? null,
-    completionist: data.completionist ?? null,
-    singlePlayer: data.single_player ?? null,
-    coOp: data.co_op ?? null,
-    vs: data.vs ?? null,
-    sourceQuery: data.source_query ?? null,
-    scrapedAt: toDate(data.scraped_at),
-    updatedAt: toDate(data.updated_at),
-  };
-}
 
 export default class Game {
   static async createGame(
@@ -696,333 +391,25 @@ export default class Game {
   static async importGameFromIgdb(
     igdbId: number,
   ): Promise<{ gameId: number; title: string }> {
-    const existing = await Game.getGameByIgdbId(igdbId);
-    if (existing) {
-      clearAutocompleteSearchCaches();
-      return { gameId: existing.id, title: existing.title };
-    }
-
-    const details = await igdbService.getGameDetails(igdbId);
-    if (!details) {
-      throw new Error("Failed to load game details from IGDB.");
-    }
-
-    let imageData: Buffer | null = null;
-    if (details.cover?.image_id) {
-      try {
-        const imageUrl = `https://images.igdb.com/igdb/image/upload/t_cover_big/${details.cover.image_id}.jpg`;
-        const imageResponse = await axios.get(imageUrl, {
-          responseType: "arraybuffer",
-        });
-        imageData = Buffer.from(imageResponse.data);
-      } catch (err) {
-        logError("Game.downloadCoverImage", err);
-      }
-    }
-
-    let newGame: IGame | null = null;
-    try {
-      newGame = await Game.createGame(
-        details.name,
-        details.summary ?? "",
-        imageData,
-        details.id,
-        details.slug ?? null,
-        details.total_rating ?? null,
-        details.url ?? null,
-        Game.getFeaturedVideoUrl(details),
-      );
-    } catch (err: any) {
-      const message = err?.message ?? "";
-      const isUniqueViolation = message.includes("ORA-00001");
-      const isIgdbConstraint = message.includes("UQ_GAMEDB_GAMES_IGDB_ID");
-      if (isUniqueViolation && isIgdbConstraint) {
-        const existing = await Game.getGameByIgdbId(details.id);
-        if (existing) {
-          return { gameId: existing.id, title: existing.title };
-        }
-        throw new Error(
-          "Game already exists with this IGDB ID, but could not be loaded.",
-        );
-      }
-      throw err;
-    }
-    await Game.saveFullGameMetadata(newGame.id, details);
-    clearAutocompleteSearchCaches();
-    return { gameId: newGame.id, title: details.name };
+    return _importGameFromIgdb(igdbId);
   }
 
   static async importReleaseDatesFromIgdb(
     gameId: number,
     igdbId: number,
   ): Promise<void> {
-    const details = await igdbService.getGameDetails(igdbId);
-    if (!details) {
-      throw new Error("Failed to load game details from IGDB.");
-    }
-    await Game.saveReleaseDates(gameId, details.release_dates ?? []);
-  }
-
-  // --- Metadata Handlers ---
-
-  private static async getOrInsertMetadata(
-    table: string,
-    idCol: string,
-    nameCol: string,
-    igdbIdCol: string,
-    name: string,
-    igdbId: number,
-  ): Promise<number> {
-    const rows = await dbQuery(
-      GameSql.getOrInsertMetadataSelect(idCol, table, igdbIdCol),
-      { igdbId },
-      (row: Record<string, number>) => {
-        const val = row[idCol] ?? row[idCol.toLowerCase()];
-        return Number(val);
-      },
-    );
-    if (rows.length > 0) return rows[0];
-
-    return dbInsert(
-      GameSql.getOrInsertMetadataInsert(table, nameCol, idCol, igdbIdCol),
-      { name, igdbId },
-      "id",
-    );
+    return _importReleaseDatesFromIgdb(gameId, igdbId);
   }
 
   static async saveFullGameMetadata(
     gameId: number,
     details: IGDBGameDetails,
   ): Promise<void> {
-    if (details.involved_companies) {
-      for (const ic of details.involved_companies) {
-        const companyId = await Game.getOrInsertMetadata(
-          "GAMEDB_COMPANIES",
-          "COMPANY_ID",
-          "NAME",
-          "IGDB_COMPANY_ID",
-          ic.company.name,
-          ic.company.id,
-        );
-        safeIgnore(
-          dbMutate(GameSql.insertGameCompany, {
-            gameId,
-            companyId,
-            role: ic.developer
-              ? "Developer"
-              : ic.publisher
-                ? "Publisher"
-                : null,
-          }),
-        );
-      }
-    }
-
-    if (details.genres) {
-      for (const g of details.genres) {
-        const genreId = await Game.getOrInsertMetadata(
-          "GAMEDB_GENRES",
-          "GENRE_ID",
-          "NAME",
-          "IGDB_GENRE_ID",
-          g.name,
-          g.id,
-        );
-        safeIgnore(dbMutate(GameSql.insertGameGenre, { gameId, genreId }));
-      }
-    }
-
-    if (details.themes) {
-      for (const t of details.themes) {
-        const themeId = await Game.getOrInsertMetadata(
-          "GAMEDB_THEMES",
-          "THEME_ID",
-          "NAME",
-          "IGDB_THEME_ID",
-          t.name,
-          t.id,
-        );
-        safeIgnore(dbMutate(GameSql.insertGameTheme, { gameId, themeId }));
-      }
-    }
-
-    if (details.game_modes) {
-      for (const gm of details.game_modes) {
-        const modeId = await Game.getOrInsertMetadata(
-          "GAMEDB_GAME_MODES_DEF",
-          "MODE_ID",
-          "NAME",
-          "IGDB_GAME_MODE_ID",
-          gm.name,
-          gm.id,
-        );
-        safeIgnore(dbMutate(GameSql.insertGameMode, { gameId, modeId }));
-      }
-    }
-
-    if (details.player_perspectives) {
-      for (const pp of details.player_perspectives) {
-        const persId = await Game.getOrInsertMetadata(
-          "GAMEDB_PERSPECTIVES",
-          "PERSPECTIVE_ID",
-          "NAME",
-          "IGDB_PERSPECTIVE_ID",
-          pp.name,
-          pp.id,
-        );
-        safeIgnore(dbMutate(GameSql.insertGamePerspective, { gameId, persId }));
-      }
-    }
-
-    if (details.game_engines) {
-      for (const e of details.game_engines) {
-        const engineId = await Game.getOrInsertMetadata(
-          "GAMEDB_ENGINES",
-          "ENGINE_ID",
-          "NAME",
-          "IGDB_ENGINE_ID",
-          e.name,
-          e.id,
-        );
-        safeIgnore(dbMutate(GameSql.insertGameEngine, { gameId, engineId }));
-      }
-    }
-
-    if (details.franchises) {
-      for (const f of details.franchises) {
-        const franchiseId = await Game.getOrInsertMetadata(
-          "GAMEDB_FRANCHISES",
-          "FRANCHISE_ID",
-          "NAME",
-          "IGDB_FRANCHISE_ID",
-          f.name,
-          f.id,
-        );
-        safeIgnore(
-          dbMutate(GameSql.insertGameFranchise, { gameId, franchiseId }),
-        );
-      }
-    }
-
-    if (details.collection) {
-      const collectionId = await Game.getOrInsertMetadata(
-        "GAMEDB_COLLECTIONS",
-        "COLLECTION_ID",
-        "NAME",
-        "IGDB_COLLECTION_ID",
-        details.collection.name,
-        details.collection.id,
-      );
-      await dbMutate(GameSql.updateCollectionId, { collectionId, gameId });
-    }
-
-    if (details.parent_game) {
-      await dbMutate(GameSql.updateParentIgdbId, {
-        parentId: details.parent_game.id,
-        parentName: details.parent_game.name,
-        gameId,
-      });
-    }
-
-    await Game.saveReleaseDates(gameId, details.release_dates ?? []);
-  }
-
-  private static buildReleaseSignature(
-    platformId: number,
-    regionId: number,
-    releaseDate: Date | null,
-    format: "Physical" | "Digital" | null,
-  ): string {
-    const dateKey = releaseDate
-      ? releaseDate.toISOString().slice(0, 10)
-      : "none";
-    return [platformId, regionId, dateKey, format ?? "none"].join("|");
-  }
-
-  private static resolveReleaseDate(release: IGDBReleaseDate): Date | null {
-    if (release.date) {
-      return new Date(release.date * 1000);
-    }
-    if (!release.y) {
-      return null;
-    }
-    const month = release.m ? release.m - 1 : 0;
-    return new Date(Date.UTC(release.y, month, 1));
-  }
-
-  private static async saveReleaseDates(
-    gameId: number,
-    releases: NonNullable<IGDBGameDetails["release_dates"]>,
-  ): Promise<void> {
-    if (!releases.length) return;
-
-    const existing = await Game.getGameReleases(gameId);
-    const existingPlatformIds = new Set(
-      existing.map((release) => release.platformId),
-    );
-
-    const earliestByPlatform = new Map<
-      number,
-      { release: IGDBReleaseDate; date: Date }
-    >();
-    for (const release of releases) {
-      // Ignore Japanese release dates (region 5)
-      if (release.region === 5) continue;
-
-      const platformId = release.platform?.id;
-      if (!platformId) continue;
-      const releaseDate = Game.resolveReleaseDate(release);
-      if (!releaseDate) continue;
-
-      const current = earliestByPlatform.get(platformId);
-      if (!current || releaseDate < current.date) {
-        earliestByPlatform.set(platformId, { release, date: releaseDate });
-      }
-    }
-
-    for (const { release, date } of earliestByPlatform.values()) {
-      if (!release.platform?.id) continue;
-
-      const platform = await Game.ensurePlatform({
-        id: release.platform.id,
-        name: release.platform.name ?? null,
-      });
-      if (!platform) continue;
-
-      if (existingPlatformIds.has(platform.id)) {
-        continue;
-      }
-
-      const region = await Game.ensureRegion(release.region ?? 8);
-      if (!region) continue;
-
-      const format: "Physical" | "Digital" | null = null;
-
-      await Game.addReleaseInfo(
-        gameId,
-        platform.id,
-        region.id,
-        format,
-        date,
-        null,
-      );
-    }
-
-    await Game.updateInitialReleaseDate(gameId);
+    return _saveFullGameMetadata(gameId, details);
   }
 
   static async updateInitialReleaseDate(gameId: number): Promise<void> {
-    const rows = await dbQuery(
-      GameSql.updateInitialReleaseDateSelect,
-      { gameId },
-      (row: { MIN_DATE: Date | null }) => row.MIN_DATE,
-    );
-    const minDate = rows[0] ?? null;
-    if (!minDate) return;
-    await dbMutate(GameSql.updateInitialReleaseDateUpdate, {
-      releaseDate: minDate,
-      gameId,
-    });
+    return _updateInitialReleaseDate(gameId);
   }
 
   static async ensurePlatform(igdbPlatform: {
@@ -1692,31 +1079,7 @@ export default class Game {
     gameId: number,
     igdbPlatformIds: number[],
   ): Promise<void> {
-    if (!isPositiveInt(gameId)) return;
-    const uniqueIds = Array.from(
-      new Set(igdbPlatformIds.filter(isPositiveInt)),
-    );
-    if (!uniqueIds.length) return;
-
-    const platformMap = await Game.getPlatformsByIgdbIds(uniqueIds);
-    const missingIds = uniqueIds.filter((id) => !platformMap.has(id));
-    if (missingIds.length) {
-      logWarn(
-        "Game.syncIgdbPlatforms",
-        `Missing IGDB platform IDs in GAMEDB_PLATFORMS: ${missingIds.join(", ")}`,
-      );
-    }
-
-    await dbTransaction(async (conn) => {
-      for (const igdbId of uniqueIds) {
-        const platform = platformMap.get(igdbId);
-        if (!platform) continue;
-        await dbMutateConn(conn, GameSql.addGamePlatformMerge, {
-          gameId,
-          platformId: platform.id,
-        });
-      }
-    });
+    return _addGamePlatformsByIgdbIds(gameId, igdbPlatformIds);
   }
 
   static async getGamesForAudit(
@@ -1913,7 +1276,7 @@ export default class Game {
   ): Promise<void> {
     await Game.clearReleaseDates(gameId);
     if (!releases.length) return;
-    await Game.saveReleaseDates(gameId, releases);
+    await saveReleaseDates(gameId, releases);
   }
 
   static async touchGameUpdatedAt(gameId: number): Promise<void> {
@@ -2042,94 +1405,6 @@ export default class Game {
     );
     const d = result?.data;
     if (!d) return null;
-
-    const game = mapGameFromApi(d.game);
-    const relations = d.relations;
-
-    const releases: IReleaseWithNames[] = (relations.releases ?? []).map((r) => ({
-      ...mapReleaseFromApi(r),
-      platformName: r.platform_name ?? null,
-      regionName: r.region_name ?? null,
-    }));
-
-    const associations: IGameAssociationSummary = {
-      gotmWins: (d.associations.gotm_wins ?? []).map((w) => ({
-        round: Number(w.round),
-        threadId: null,
-        redditUrl: null,
-        monthYear: "",
-      })),
-      nrGotmWins: (d.associations.nr_gotm_wins ?? []).map((w) => ({
-        round: Number(w.round),
-        threadId: null,
-        redditUrl: null,
-        monthYear: "",
-      })),
-      gotmNominations: (d.associations.gotm_nominations ?? []).map((n) => ({
-        round: Number(n.round),
-        userId: String(n.user_id),
-        username: String(n.username || n.user_id),
-      })),
-      nrGotmNominations: (d.associations.nr_gotm_nominations ?? []).map((n) => ({
-        round: Number(n.round),
-        userId: String(n.user_id),
-        username: String(n.username || n.user_id),
-      })),
-    };
-
-    const nowPlayingMembers: INowPlayingMember[] = (d.now_playing ?? []).map((entry) => ({
-      userId: String(entry.user_id),
-      username: entry.user?.username ?? null,
-      globalName: entry.user?.global_name ?? null,
-      threadId: null,
-      addedAt: null,
-    }));
-
-    const collectionOwners: ICollectionOwnerMember[] = (d.collection_owners ?? []).map(
-      (o) => ({
-        userId: String(o.user_id),
-        username: o.username ?? null,
-        globalName: null,
-      }),
-    );
-
-    const completions: ICompletedMember[] = (d.completions ?? []).map((entry) => ({
-      userId: String(entry.user_id),
-      username: entry.user?.username ?? null,
-      globalName: entry.user?.global_name ?? null,
-      completionType: String(entry.completion_type),
-      completedAt: entry.completed_at ? new Date(entry.completed_at) : null,
-      finalPlaytimeHours: entry.final_playtime_hrs != null
-        ? Number(entry.final_playtime_hrs)
-        : null,
-    }));
-
-    const alternateVersions: IGame[] = (relations.alternates ?? []).map(mapGameFromApi);
-    const threadIds = (d.threads ?? []).map((t) => String(t.thread_id));
-    const hltbCache = d.hltb ? mapHltbFromProfileApi(d.hltb, gameId) : null;
-    const primaryImageUrl = d.primary_image?.url ?? null;
-    const series = relations.collection?.name ?? null;
-    const developers = (relations.companies ?? [])
-      .filter((c) => c.role === "Developer")
-      .map((c) => String(c.name));
-    const publishers = (relations.companies ?? [])
-      .filter((c) => c.role === "Publisher")
-      .map((c) => String(c.name));
-
-    return {
-      game,
-      releases,
-      associations,
-      nowPlayingMembers,
-      collectionOwners,
-      completions,
-      alternateVersions,
-      threadIds,
-      hltbCache,
-      primaryImageUrl,
-      series,
-      developers,
-      publishers,
-    };
+    return mapGameProfileFromApi(d, gameId);
   }
 }
