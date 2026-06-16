@@ -9,7 +9,13 @@ import { buildGameProfileMessagePayload } from "../commands/gamedb.command.js";
 import { buildComponentsV2EditFlags } from "../functions/ComponentsV2Utils.js";
 import { logError, logWarn } from "../utilities/LogUtils.js";
 
-const CHECK_INTERVAL_MS = 60_000;
+// Coarse safety-net sweep. Each cycle runs several queries against the GameDB
+// (now on Neon). At 60s this kept Neon's serverless compute permanently active
+// (never scaling to zero), which accounts for most of our Neon compute-hour
+// cost. Releases are date-scheduled, so hourly is more than enough. Immediate,
+// on-demand announcing will move to an API endpoint in therpgclub-api so admins
+// can trigger it manually instead of relying on a tight poll.
+const CHECK_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
 const BATCH_SIZE = 25;
 const RELEASE_SCHEDULING_ZONE = "UTC";
 
