@@ -20,13 +20,14 @@ type IgdbScanCandidate = {
   updatedAt: Date | null;
 };
 
-// Coarse safety-net sweep (default; override via IGDB_SCAN_INTERVAL_MINUTES).
-// Each scan queries the GameDB (now on Neon) for stale entries; at 15 min it
-// helped keep Neon's serverless compute from scaling to zero, adding to our
-// compute-hour cost. IGDB metadata is slow-moving, so hourly is plenty.
-// On-demand scanning will move to an API endpoint in therpgclub-api so admins
-// can trigger it manually instead of relying on a tight poll.
-const DEFAULT_SCAN_INTERVAL_MINUTES = 60; // 1 hour
+// Coarse safety-net sweep. Each scan queries the GameDB (now on Neon) directly
+// for stale entries; a tight interval kept Neon's serverless compute from
+// scaling to zero, adding to our compute-hour cost. IGDB metadata is slow-moving,
+// so hourly is plenty. Hardcoded with no env override (matching the other
+// sweeps) so a stray production value can't silently change it. On-demand
+// scanning will move to an API endpoint in therpgclub-api so admins can trigger
+// it manually instead of relying on a poll.
+const SCAN_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
 const DEFAULT_SCAN_BATCH_SIZE = 25;
 const DEFAULT_SCAN_MIN_AGE_DAYS = 30;
 const DEFAULT_SCAN_THROTTLE_MS = 300;
@@ -43,9 +44,7 @@ function parseNumberEnv(name: string, fallback: number, min?: number): number {
 function getScanConfig(): IgdbScanConfig {
   return {
     enabled: process.env.IGDB_SCAN_ENABLED !== "false",
-    intervalMs: parseNumberEnv("IGDB_SCAN_INTERVAL_MINUTES", DEFAULT_SCAN_INTERVAL_MINUTES, 1)
-      * 60
-      * 1000,
+    intervalMs: SCAN_INTERVAL_MS,
     batchSize: parseNumberEnv("IGDB_SCAN_BATCH_SIZE", DEFAULT_SCAN_BATCH_SIZE, 1),
     minAgeDays: parseNumberEnv("IGDB_SCAN_MIN_AGE_DAYS", DEFAULT_SCAN_MIN_AGE_DAYS, 0),
     throttleMs: parseNumberEnv("IGDB_SCAN_THROTTLE_MS", DEFAULT_SCAN_THROTTLE_MS, 0),

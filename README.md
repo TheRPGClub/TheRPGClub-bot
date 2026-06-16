@@ -55,7 +55,6 @@ These are required or commonly used by the bot. Values depend on your deployment
 - `IGDB_CLIENT_ID`
 - `IGDB_CLIENT_SECRET`
 - `IGDB_SCAN_ENABLED`
-- `IGDB_SCAN_INTERVAL_MINUTES`
 - `IGDB_SCAN_BATCH_SIZE`
 - `IGDB_SCAN_MIN_AGE_DAYS`
 - `IGDB_SCAN_THROTTLE_MS`
