@@ -42,6 +42,7 @@ import {
 } from "../../functions/uiComponents.js";
 import { assertCustomIdSegments, parseCustomIdSegments } from "../../utilities/CustomIdUtils.js";
 import { logError } from "../../utilities/LogUtils.js";
+import { saveFullGameMetadata } from "../../functions/GameIgdbSync.js";
 
 /**
  * Creates a completion session and returns the session ID
@@ -529,6 +530,6 @@ export async function importGameFromIgdb(
     }
     throw err;
   });
-  await Game.saveFullGameMetadata(newGame.id, details);
+  await saveFullGameMetadata(newGame.id, details);
   return { gameId: newGame.id, title: details.name };
 }

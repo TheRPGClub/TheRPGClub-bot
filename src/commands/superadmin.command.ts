@@ -68,6 +68,8 @@ import { assertCustomIdSegments } from "../utilities/CustomIdUtils.js";
 import { safeIgnore } from "../utilities/AsyncUtils.js";
 import { logError, logWarn } from "../utilities/LogUtils.js";
 import { buildSelectRow } from "../functions/uiComponents.js";
+import GamePlatformRegionService from "../classes/GamePlatformRegionService.js";
+import { saveFullGameMetadata } from "../functions/GameIgdbSync.js";
 
 type CompletionAddContext = {
   targetUserId: string;
@@ -419,7 +421,7 @@ export class SuperAdmin {
     ctx: CompletionAddContext,
     game: IGame,
   ): Promise<void> {
-    const platforms = await Game.getPlatformsForGameWithStandard(
+    const platforms = await GamePlatformRegionService.getPlatformsForGameWithStandard(
       game.id,
       STANDARD_PLATFORM_IDS,
     );
@@ -699,7 +701,7 @@ export class SuperAdmin {
       details.url ?? null,
       Game.getFeaturedVideoUrl(details),
     );
-    await Game.saveFullGameMetadata(newGame.id, details);
+    await saveFullGameMetadata(newGame.id, details);
     return { gameId: newGame.id, title: details.name };
   }
 

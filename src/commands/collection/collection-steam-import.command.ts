@@ -100,6 +100,7 @@ import { isPositiveInt } from "../../utilities/ValidationUtils.js";
 import { buildTextInputRow } from "../../functions/uiComponents.js";
 import { safeIgnore } from "../../utilities/AsyncUtils.js";
 import { logError } from "../../utilities/LogUtils.js";
+import { importGameFromIgdb } from "../../functions/GameIgdbSync.js";
 
 @Discord()
 @SlashGroup("collection")
@@ -304,7 +305,7 @@ export class CollectionSteamImportCommand {
           }
 
           try {
-            const imported = await Game.importGameFromIgdb(igdbId);
+            const imported = await importGameFromIgdb(igdbId);
             await updateSteamCollectionImportItem(currentItem.itemId, {
               matchCandidateJson: JSON.stringify([{
                 gameId: imported.gameId,
@@ -973,7 +974,7 @@ export class CollectionSteamImportCommand {
       source = "gamedb";
     } else {
       try {
-        const imported = await Game.importGameFromIgdb(enteredId);
+        const imported = await importGameFromIgdb(enteredId);
         resolvedGameId = imported.gameId;
         source = "igdb";
       } catch {

@@ -11,9 +11,8 @@ import {
   type IGDBGameDetails,
   igdbService,
 } from "../services/IGDB/IgdbService.js";
-import { isPositiveInt } from "../utilities/ValidationUtils.js";
 import { safeIgnore } from "../utilities/AsyncUtils.js";
-import { logError, logWarn } from "../utilities/LogUtils.js";
+import { logError } from "../utilities/LogUtils.js";
 import { clearAutocompleteSearchCaches } from "./GameAutocompleteCache.js";
 import Game from "../classes/Game.js";
 import GamePlatformRegionService from "../classes/GamePlatformRegionService.js";
@@ -354,35 +353,4 @@ export async function importReleaseDatesFromIgdb(
     throw new Error("Failed to load game details from IGDB.");
   }
   await saveReleaseDates(gameId, details.release_dates ?? []);
-}
-
-export async function addGamePlatformsByIgdbIds(
-  gameId: number,
-  igdbPlatformIds: number[],
-): Promise<void> {
-  if (!isPositiveInt(gameId)) return;
-  const uniqueIds = Array.from(
-    new Set(igdbPlatformIds.filter(isPositiveInt)),
-  );
-  if (!uniqueIds.length) return;
-
-  const platformMap = await GamePlatformRegionService.getPlatformsByIgdbIds(uniqueIds);
-  const missingIds = uniqueIds.filter((id) => !platformMap.has(id));
-  if (missingIds.length) {
-    logWarn(
-      "Game.syncIgdbPlatforms",
-      `Missing IGDB platform IDs in GAMEDB_PLATFORMS: ${missingIds.join(", ")}`,
-    );
-  }
-
-  await dbTransaction(async (conn) => {
-    for (const igdbId of uniqueIds) {
-      const platform = platformMap.get(igdbId);
-      if (!platform) continue;
-      await dbMutateConn(conn, GameSql.addGamePlatformMerge, {
-        gameId,
-        platformId: platform.id,
-      });
-    }
-  });
 }

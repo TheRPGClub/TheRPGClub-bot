@@ -20,6 +20,7 @@ import Game from "../../classes/Game.js";
 import { DISCORD_SELECT_OPTIONS_MAX, truncateLabel } from "../../config/textLimits.js";
 import { buildActionButton, buildButtonRow } from "../../functions/uiComponents.js";
 import { GAMEDB_SEARCH_PREFIX } from "../../config/customIdPrefixes.js";
+import GamePlatformRegionService from "../../classes/GamePlatformRegionService.js";
 
 export interface ISearchFilters {
   upcomingRelease?: boolean;
@@ -222,7 +223,7 @@ export async function autocompleteSearchPlatform(
 ): Promise<void> {
   const focused = interaction.options.getFocused(true);
   const rawQuery = focused?.value ? String(focused.value) : "";
-  const platforms = await Game.getAllPlatforms();
+  const platforms = await GamePlatformRegionService.getAllPlatforms();
   const query = rawQuery.toLowerCase().trim();
   const filtered = query
     ? platforms.filter((p) =>

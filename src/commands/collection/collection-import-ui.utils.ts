@@ -15,6 +15,7 @@ import {
 } from "../../functions/ComponentsV2Utils.js";
 import type { ImportCandidate } from "../../functions/ImportCandidateUtils.js";
 import { logError } from "../../utilities/LogUtils.js";
+import GamePlatformRegionService from "../../classes/GamePlatformRegionService.js";
 
 export async function buildImportCandidatesContainer(params: {
   ownerId: string;
@@ -46,7 +47,7 @@ export async function buildImportCandidatesContainer(params: {
 
   const gameIds = params.candidates.map((entry) => entry.gameId);
   const games = await Game.getGamesByIds(gameIds);
-  const gamesWithPlatforms = await Game.attachPlatformsToGames(games);
+  const gamesWithPlatforms = await GamePlatformRegionService.attachPlatformsToGames(games);
   const gameMeta = new Map<number, { year: string; platforms: string }>();
   for (const game of gamesWithPlatforms) {
     const year = game.initialReleaseDate

@@ -43,6 +43,8 @@ import {
 } from "../functions/uiComponents.js";
 import { logError } from "../utilities/LogUtils.js";
 import { toUnixTimestamp } from "../functions/DateFormatUtils.js";
+import GamePlatformRegionService from "../classes/GamePlatformRegionService.js";
+import { saveFullGameMetadata } from "../functions/GameIgdbSync.js";
 
 const PUSH_PIN_EMOJI = "📌";
 const PLUS_EMOJI = "➕";
@@ -539,7 +541,7 @@ export class MessageReactionAdd {
       return;
     }
 
-    const platforms = await Game.getPlatformsForGame(game.id);
+    const platforms = await GamePlatformRegionService.getPlatformsForGame(game.id);
     if (!platforms.length) {
       await updateMessage("No platform release data is available for this game.");
       return;
@@ -656,7 +658,7 @@ export class MessageReactionAdd {
       details.url ?? null,
       Game.getFeaturedVideoUrl(details),
     );
-    await Game.saveFullGameMetadata(newGame.id, details);
+    await saveFullGameMetadata(newGame.id, details);
     return { gameId: newGame.id, title: details.name };
   }
 }

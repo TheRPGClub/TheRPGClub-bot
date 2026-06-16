@@ -56,6 +56,7 @@ import {
 } from "../../functions/uiComponents.js";
 import { truncateDescription, truncateLabel } from "../../config/textLimits.js";
 import { safeIgnore } from "../../utilities/AsyncUtils.js";
+import GamePlatformRegionService from "../../classes/GamePlatformRegionService.js";
 
 export class CompletionatorUiService {
   buildCompletionatorBaseLines(
@@ -282,8 +283,8 @@ export class CompletionatorUiService {
   }> {
     const game = await Game.getGameById(gameId);
     const completions = await Member.getCompletionsForGame(userId, gameId);
-    const gamePlatforms = await Game.getPlatformsForGame(gameId);
-    const platforms = await Game.getAllPlatforms();
+    const gamePlatforms = await GamePlatformRegionService.getPlatformsForGame(gameId);
+    const platforms = await GamePlatformRegionService.getAllPlatforms();
     const platformMap = 
       new Map(platforms.map((platform: IPlatformDef) => [platform.id, platform.name]));
     const formattedPlatforms = gamePlatforms

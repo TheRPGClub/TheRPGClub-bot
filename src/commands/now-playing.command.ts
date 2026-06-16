@@ -128,6 +128,7 @@ import {
   deleteEligibleNowPlayingMessageInCurrentChannel,
 } from "./now-playing/nowPlayingMessageService.js";
 import { promptNowPlayingAddPlatformSelection } from "./now-playing/nowPlayingAddService.js";
+import GamePlatformRegionService from "../classes/GamePlatformRegionService.js";
 import {
   startNowPlayingIgdbImport,
   startNowPlayingIgdbImportFromInteraction,
@@ -207,7 +208,7 @@ export class NowPlayingCommand {
       return;
     }
 
-    const platform = await Game.getPlatformById(platformId);
+    const platform = await GamePlatformRegionService.getPlatformById(platformId);
     if (!platform) {
       const container = buildTextContainer("Selected platform was not found.");
       await safeReply(interaction, {
@@ -928,7 +929,7 @@ export class NowPlayingCommand {
     const limitedEntries = entries.slice(0, 10);
     const optionsPerEntry = await Promise.all(
       limitedEntries.map(async (entry) => {
-        const platforms = await Game.getPlatformsForGameWithStandard(
+        const platforms = await GamePlatformRegionService.getPlatformsForGameWithStandard(
           entry.gameId,
           STANDARD_PLATFORM_IDS,
         );
@@ -976,7 +977,8 @@ export class NowPlayingCommand {
       return;
     }
 
-    const platforms = await Game.getPlatformsForGameWithStandard(gameId, STANDARD_PLATFORM_IDS);
+    const platforms = await GamePlatformRegionService
+      .getPlatformsForGameWithStandard(gameId, STANDARD_PLATFORM_IDS);
     if (!platforms.length) {
       const container = buildTextContainer("No platform data is available for this game.");
       if (mode === "update" && "update" in interaction) {

@@ -52,6 +52,7 @@ import { safeIgnore } from "../../utilities/AsyncUtils.js";
 import UserGameBacklog from "../../classes/UserGameBacklog.js";
 import { buildApiErrorMessage } from "../../utilities/ApiErrorUtils.js";
 import { logError } from "../../utilities/LogUtils.js";
+import GamePlatformRegionService from "../../classes/GamePlatformRegionService.js";
 
 @Discord()
 @SlashGroup("gamedb")
@@ -213,7 +214,7 @@ export class GameDbViewCommand {
     gameId: number,
   ): Promise<void> {
     try {
-      const platforms = await Game.getPlatformsForGame(gameId);
+      const platforms = await GamePlatformRegionService.getPlatformsForGame(gameId);
       const validPlatforms = platforms.filter(
         (p) => p.name?.trim() && String(p.id)?.trim(),
       );

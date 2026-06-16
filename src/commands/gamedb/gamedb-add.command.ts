@@ -37,6 +37,8 @@ import { showGameProfile, trimTextDisplayContent } from "./gamedb-profile.servic
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
 import { logError, logWarn } from "../../utilities/LogUtils.js";
 import { apiPost } from "../../services/RpgClubApiClient.js";
+import GamePlatformRegionService from "../../classes/GamePlatformRegionService.js";
+import { importReleaseDatesFromIgdb, saveFullGameMetadata } from "../../functions/GameIgdbSync.js";
 
 async function fetchIgdbCoverImage(details: IGDBGameDetails): Promise<Buffer | null> {
   if (!details.cover?.image_id) return null;
@@ -69,7 +71,7 @@ export async function processReleaseDates(
     }
   }
   const uniquePlatformIds: number[] = Array.from(new Set(platformIds));
-  const platformMap = await Game.getPlatformsByIgdbIds(uniquePlatformIds);
+  const platformMap = await GamePlatformRegionService.getPlatformsByIgdbIds(uniquePlatformIds);
   const missingPlatformIds = uniquePlatformIds.filter((id) => !platformMap.has(id));
   if (missingPlatformIds.length) {
     logWarn("GamedbAdd.addGame", `Missing IGDB platform IDs in GAMEDB_PLATFORMS: ${missingPlatformIds.join(", ")}`);
@@ -84,7 +86,7 @@ export async function processReleaseDates(
     }
 
     const platform = platformMap.get(platformId);
-    const region = await Game.ensureRegion(release.region);
+    const region = await GamePlatformRegionService.ensureRegion(release.region);
 
     if (!platform || !region) {
       continue;
@@ -168,12 +170,12 @@ export async function addGameToDatabase(
     throw err;
   }
 
-  await Game.saveFullGameMetadata(newGame.id, details);
+  await saveFullGameMetadata(newGame.id, details);
 
   const igdbPlatformIds: number[] = (details.platforms ?? [])
     .map((platform) => platform.id)
     .filter(isPositiveInt);
-  await Game.addGamePlatformsByIgdbIds(newGame.id, igdbPlatformIds);
+  await GamePlatformRegionService.addGamePlatformsByIgdbIds(newGame.id, igdbPlatformIds);
 
   await processReleaseDates(newGame.id, details.release_dates || []);
 
@@ -414,7 +416,7 @@ export class GameDbAddCommand {
 
     try {
       const before = await Game.getGameReleases(game.id);
-      await Game.importReleaseDatesFromIgdb(game.id, game.igdbId);
+      await importReleaseDatesFromIgdb(game.id, game.igdbId);
       const after = await Game.getGameReleases(game.id);
       const added = after.length - before.length;
 

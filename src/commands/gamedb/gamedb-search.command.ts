@@ -53,6 +53,7 @@ import { handleNoResults } from "./gamedb-add.command.js";
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
 import { MAX_CONTAINER_TEXT } from "../../config/textLimits.js";
 import { assertCustomIdSegments } from "../../utilities/CustomIdUtils.js";
+import GamePlatformRegionService from "../../classes/GamePlatformRegionService.js";
 import {
   buildActionButton,
   buildButtonRow,
@@ -73,7 +74,7 @@ async function buildFilterSummary(filters: ISearchFilters): Promise<string> {
   const parts: string[] = [];
   if (filters.upcomingRelease) parts.push("Upcoming release");
   if (filters.platformId) {
-    const platform = await Game.getPlatformById(filters.platformId);
+    const platform = await GamePlatformRegionService.getPlatformById(filters.platformId);
     parts.push(`Platform: ${platform?.name ?? `ID ${filters.platformId}`}`);
   }
   if (filters.year) parts.push(`Year: ${filters.year}`);

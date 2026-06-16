@@ -40,6 +40,7 @@ import { canSafeReply, safeDeferReply, safeDeferUpdate } from "../../functions/I
 import { logError } from "../../utilities/LogUtils.js";
 import { truncateDescription } from "../../config/textLimits.js";
 import { safeIgnore } from "../../utilities/AsyncUtils.js";
+import GamePlatformRegionService from "../../classes/GamePlatformRegionService.js";
 
 export class CompletionatorWorkflowService {
   private uiService: CompletionatorUiService;
@@ -212,7 +213,7 @@ export class CompletionatorWorkflowService {
         gameDbGameId: gameId,
       });
       item.gameDbGameId = gameId;
-      let platforms = await Game.getPlatformsForGameWithStandard(
+      let platforms = await GamePlatformRegionService.getPlatformsForGameWithStandard(
         gameId,
         STANDARD_PLATFORM_IDS,
       );
@@ -414,7 +415,8 @@ export class CompletionatorWorkflowService {
     components: Array<any>;
     files: any[];
   }> {
-    let platforms = await Game.getPlatformsForGameWithStandard(gameId, STANDARD_PLATFORM_IDS);
+    let platforms = await GamePlatformRegionService
+      .getPlatformsForGameWithStandard(gameId, STANDARD_PLATFORM_IDS);
     const state = this.getOrCreateCompletionatorAddFormState(session, item, gameId, ownerId);
     const resolution = 
       await this.resolveCompletionatorPlatformState(state, item, gameId, platforms);
@@ -758,15 +760,13 @@ export class CompletionatorWorkflowService {
         return { platforms };
       }
 
-      const allPlatforms = await Game.getAllPlatforms();
+      const allPlatforms = await GamePlatformRegionService.getAllPlatforms();
       const mappedPlatformId = this.uiService.resolvePlatformId(item.platformName, allPlatforms);
       if (mappedPlatformId) {
         const wasAdded = await this.ensureCompletionatorPlatformRelease(gameId, mappedPlatformId);
         if (wasAdded) {
-          const refreshedPlatforms = await Game.getPlatformsForGameWithStandard(
-            gameId,
-            STANDARD_PLATFORM_IDS,
-          );
+          const refreshedPlatforms = await GamePlatformRegionService
+            .getPlatformsForGameWithStandard(gameId, STANDARD_PLATFORM_IDS);
           state.platformId = mappedPlatformId;
           state.otherPlatform = false;
           return { platforms: refreshedPlatforms };
@@ -791,9 +791,9 @@ export class CompletionatorWorkflowService {
     }
 
     const game = await Game.getGameById(gameId);
-    let region = await Game.getRegionByCode("WW");
+    let region = await GamePlatformRegionService.getRegionByCode("WW");
     if (!region) {
-      region = await Game.ensureRegion(8);
+      region = await GamePlatformRegionService.ensureRegion(8);
     }
     if (!region) {
       return false;

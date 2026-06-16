@@ -19,6 +19,8 @@ import { replyIfNotOwner, safeReply, safeUpdate } from "../functions/Interaction
 import { buildTextReply } from "../functions/ComponentsV2Utils.js";
 import { PRESENCE_PROMPT_CHANNEL_ID } from "../config/channels.js";
 import { buildActionButton, buildButtonRow } from "../functions/uiComponents.js";
+import GamePlatformRegionService from "../classes/GamePlatformRegionService.js";
+import { importGameFromIgdb } from "../functions/GameIgdbSync.js";
 
 const YES_PREFIX = "presence-np-yes";
 const NO_PREFIX = "presence-np-no";
@@ -83,7 +85,7 @@ async function resolvePresenceGame(
     return null;
   }
 
-  return Game.importGameFromIgdb(igdbGame.id);
+  return importGameFromIgdb(igdbGame.id);
 }
 
 function buildPromptButtons(sessionId: string): ActionRowBuilder<ButtonBuilder> {
@@ -205,7 +207,7 @@ export class PresenceUpdate {
         return;
       }
 
-      const platforms = await Game.getPlatformsForGame(resolved.gameId);
+      const platforms = await GamePlatformRegionService.getPlatformsForGame(resolved.gameId);
       if (!platforms.length) {
         await safeUpdate(interaction, {
           content:

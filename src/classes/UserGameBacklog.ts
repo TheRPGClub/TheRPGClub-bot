@@ -1,6 +1,7 @@
 import { apiGet, apiPost, apiPatch, apiDelete } from "../services/RpgClubApiClient.js";
 import Game from "./Game.js";
 import { isPositiveInt, requirePositiveInt } from "../utilities/ValidationUtils.js";
+import GamePlatformRegionService from "./GamePlatformRegionService.js";
 
 export interface IUserGameBacklogEntry {
   entryId: number;
@@ -48,7 +49,7 @@ async function mapEntries(rawEntries: BacklogApiData[]): Promise<IUserGameBacklo
     ),
   );
   const platformResults = await Promise.all(
-    uniquePlatformIds.map((id) => Game.getPlatformById(id)),
+    uniquePlatformIds.map((id) => GamePlatformRegionService.getPlatformById(id)),
   );
   const platformMap = new Map(
     uniquePlatformIds.map((id, idx) => [id, platformResults[idx]]),

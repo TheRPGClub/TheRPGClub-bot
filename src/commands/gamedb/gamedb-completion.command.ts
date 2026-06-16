@@ -63,6 +63,7 @@ import {
   buildSelectRow,
 } from "../../functions/uiComponents.js";
 import { safeIgnore } from "../../utilities/AsyncUtils.js";
+import GamePlatformRegionService from "../../classes/GamePlatformRegionService.js";
 
 const COMPLETION_WIZARD_SESSIONS = new Map<string, CompletionWizardSession>();
 
@@ -257,7 +258,7 @@ export async function startCompletionWizard(
   gameId: number,
   gameTitle: string,
 ): Promise<void> {
-  const platforms = await Game.getPlatformsForGameWithStandard(
+  const platforms = await GamePlatformRegionService.getPlatformsForGameWithStandard(
     gameId,
     STANDARD_PLATFORM_IDS,
   );
@@ -334,7 +335,7 @@ export class GameDbCompletionCommand {
       session.removeChoice = value as CompletionWizardSession["removeChoice"];
     }
 
-    const platforms = await Game.getPlatformsForGameWithStandard(
+    const platforms = await GamePlatformRegionService.getPlatformsForGameWithStandard(
       session.gameId,
       STANDARD_PLATFORM_IDS,
     );
@@ -360,7 +361,7 @@ export class GameDbCompletionCommand {
     if (await replyIfNotOwner(interaction, session.userId, "This action isn't for you.")) return;
 
     const missing = getCompletionWizardMissingSelections(session);
-    const platforms = await Game.getPlatformsForGameWithStandard(
+    const platforms = await GamePlatformRegionService.getPlatformsForGameWithStandard(
       session.gameId,
       STANDARD_PLATFORM_IDS,
     );
@@ -514,7 +515,7 @@ export class GameDbCompletionCommand {
 
     const note = noteRaw.length ? noteRaw : null;
     try {
-      const platforms = await Game.getPlatformsForGame(gameId);
+      const platforms = await GamePlatformRegionService.getPlatformsForGame(gameId);
       if (!platforms.length) {
         safeIgnore(safeReply(interaction, buildTextReply("This game has no platform data yet. Add to Now Playing from `/now-playing list` " +
             "after platform data is available.", false)));

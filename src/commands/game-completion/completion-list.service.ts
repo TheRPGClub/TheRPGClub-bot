@@ -11,7 +11,6 @@ import {
 } from "discord.js";
 import { ContainerBuilder } from "@discordjs/builders";
 import Member from "../../classes/Member.js";
-import Game from "../../classes/Game.js";
 import { COMPLETION_PAGE_SIZE } from "../profile.command.js";
 import { formatDiscordTimestamp, formatTableDate } from "../../functions/DateFormatUtils.js";
 import { formatPlatformDisplayName } from "../../functions/PlatformDisplay.js";
@@ -29,6 +28,7 @@ import {
   MAX_QUERY_LENGTH,
   truncateLabel,
 } from "../../config/textLimits.js";
+import GamePlatformRegionService from "../../classes/GamePlatformRegionService.js";
 import {
   buildActionButton,
   buildButtonRow,
@@ -331,7 +331,7 @@ async function buildCompletionComponents(
     year,
     title: query,
   });
-  const platforms = await Game.getAllPlatforms();
+  const platforms = await GamePlatformRegionService.getAllPlatforms();
   const platformMap = new Map(
     platforms.map((platform) => [platform.id, platform.abbreviation ?? platform.name]),
   );

@@ -110,6 +110,7 @@ import {
   withPmNowPlayingList,
 } from "./nowPlayingListRenderer.js";
 import { NOW_PLAYING_HELP_PREFIX } from "../now-playing-help.js";
+import GamePlatformRegionService from "../../classes/GamePlatformRegionService.js";
 
 async function confirmDuplicateCompletion(
   interaction: CommandInteraction | ModalSubmitInteraction | ButtonInteraction,
@@ -473,7 +474,8 @@ async function promptNowPlayingCompletionPlatformSelection(
   finalPlaytimeHours: number | null,
   note: string | null,
 ): Promise<void> {
-  const platforms = await Game.getPlatformsForGameWithStandard(game.id, STANDARD_PLATFORM_IDS);
+  const platforms = await GamePlatformRegionService
+    .getPlatformsForGameWithStandard(game.id, STANDARD_PLATFORM_IDS);
   if (!platforms.length) {
     const container = buildTextContainer("No platform data is available for this game.");
     await safeReply(interaction, {

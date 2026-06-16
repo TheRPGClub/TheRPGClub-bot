@@ -11,6 +11,7 @@ import {
   buildComponentsV2EditFlags,
 } from "../functions/ComponentsV2Utils.js";
 import { COMPONENTS_V2_FLAG } from "../config/flags.js";
+import { importReleaseDatesFromIgdb } from "../functions/GameIgdbSync.js";
 
 export type AutoAcceptResult = {
   updated: number;
@@ -215,7 +216,7 @@ async function performAutoAcceptReleaseData(
       }
 
       const beforeCount = (await Game.getGameReleases(game.id)).length;
-      await Game.importReleaseDatesFromIgdb(game.id, game.igdbId);
+      await importReleaseDatesFromIgdb(game.id, game.igdbId);
       const afterCount = (await Game.getGameReleases(game.id)).length;
 
       if (afterCount > beforeCount) {
@@ -456,7 +457,7 @@ async function performAutoAcceptAll(
     // Release dates
     const releasesBefore = (await Game.getGameReleases(game.id)).length;
     try {
-      await Game.importReleaseDatesFromIgdb(game.id, game.igdbId);
+      await importReleaseDatesFromIgdb(game.id, game.igdbId);
       const releasesAfter = (await Game.getGameReleases(game.id)).length;
       if (releasesAfter > releasesBefore) {
         stats.releases.updated++;

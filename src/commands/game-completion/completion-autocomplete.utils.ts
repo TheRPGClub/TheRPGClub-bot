@@ -10,6 +10,7 @@ import { formatTableDate } from "../../functions/DateFormatUtils.js";
 import { STANDARD_PLATFORM_IDS } from "../../config/standardPlatforms.js";
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
 import { DISCORD_SELECT_OPTIONS_MAX, truncateLabel } from "../../config/textLimits.js";
+import GamePlatformRegionService from "../../classes/GamePlatformRegionService.js";
 
 const PLATFORM_CACHE_TTL_MS = 5 * 60 * 1000;
 const COMPLETION_TITLE_VALUE_PREFIX = "completion";
@@ -22,7 +23,7 @@ async function getCachedPlatforms(): Promise<IPlatformDef[]> {
     return platformCache.platforms;
   }
 
-  const platforms = await Game.getAllPlatforms();
+  const platforms = await GamePlatformRegionService.getAllPlatforms();
   platformCache = {
     expiresAt: now + PLATFORM_CACHE_TTL_MS,
     platforms,

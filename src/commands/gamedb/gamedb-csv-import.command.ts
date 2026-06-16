@@ -73,6 +73,8 @@ import { isPositiveInt } from "../../utilities/ValidationUtils.js";
 import { truncateDescription } from "../../config/textLimits.js";
 import { assertCustomIdSegments } from "../../utilities/CustomIdUtils.js";
 import { buildTextInputRow } from "../../functions/uiComponents.js";
+import GamePlatformRegionService from "../../classes/GamePlatformRegionService.js";
+import { saveFullGameMetadata } from "../../functions/GameIgdbSync.js";
 
 const GAMEDB_CSV_ACTIONS = ["start", "resume", "status", "pause", "cancel"] as const;
 type GameDbCsvAction = (typeof GAMEDB_CSV_ACTIONS)[number];
@@ -151,7 +153,7 @@ async function importGameFromCsv(igdbId: number): Promise<{ gameId: number; titl
     const igdbPlatformIds: number[] = (details.platforms ?? [])
       .map((platform) => platform.id)
       .filter(isPositiveInt);
-    await Game.addGamePlatformsByIgdbIds(existing.id, igdbPlatformIds);
+    await GamePlatformRegionService.addGamePlatformsByIgdbIds(existing.id, igdbPlatformIds);
     await processReleaseDates(existing.id, details.release_dates ?? []);
 
     if (!existing.imageData) {
@@ -181,11 +183,11 @@ async function importGameFromCsv(igdbId: number): Promise<{ gameId: number; titl
     Game.getFeaturedVideoUrl(details),
   );
 
-  await Game.saveFullGameMetadata(newGame.id, details);
+  await saveFullGameMetadata(newGame.id, details);
   const igdbPlatformIds: number[] = (details.platforms ?? [])
     .map((platform) => platform.id)
     .filter(isPositiveInt);
-  await Game.addGamePlatformsByIgdbIds(newGame.id, igdbPlatformIds);
+  await GamePlatformRegionService.addGamePlatformsByIgdbIds(newGame.id, igdbPlatformIds);
   await processReleaseDates(newGame.id, details.release_dates ?? []);
 
   return { gameId: newGame.id, title: newGame.title };
