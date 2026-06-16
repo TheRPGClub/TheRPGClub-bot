@@ -1,5 +1,4 @@
 import type { TextBasedChannel } from "discord.js";
-import { AttachmentBuilder } from "discord.js";
 import type { Client } from "discordx";
 import { DateTime } from "luxon";
 import GameReleaseAnnouncement, {
@@ -8,13 +7,11 @@ import GameReleaseAnnouncement, {
 import { NEW_GAME_ANNOUNCEMENT_CHANNEL_ID } from "../config/channels.js";
 import { buildGameProfileMessagePayload } from "../commands/gamedb.command.js";
 import { buildComponentsV2EditFlags } from "../functions/ComponentsV2Utils.js";
-import { resolveAssetPath } from "../functions/AssetPath.js";
 import { logError, logWarn } from "../utilities/LogUtils.js";
 
 const CHECK_INTERVAL_MS = 60_000;
 const BATCH_SIZE = 25;
 const RELEASE_SCHEDULING_ZONE = "UTC";
-const RELEASE_SPACER_IMAGE_PATH = resolveAssetPath("images", "force-message-width.png");
 
 let gameReleaseTimer: NodeJS.Timeout | null = null;
 let currentlyChecking = false;
@@ -77,10 +74,7 @@ async function checkAndSendReleaseAnnouncements(client: Client): Promise<void> {
         continue;
       }
       await channel.send({
-        files: [
-          ...payload.files,
-          new AttachmentBuilder(RELEASE_SPACER_IMAGE_PATH, { name: "force-message-width.png" }),
-        ],
+        files: payload.files,
         components: payload.components,
         flags: buildComponentsV2EditFlags(),
       });
