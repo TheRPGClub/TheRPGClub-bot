@@ -12,7 +12,6 @@ import {
 } from "../../functions/InteractionUtils.js";
 import { buildComponentsV2Flags, buildTextReply } from "../../functions/ComponentsV2Utils.js";
 import Member from "../../classes/Member.js";
-import Game from "../../classes/Game.js";
 import type { CompletionatorModalKind, CompletionatorDateChoice } from "./completion.types.js";
 import { completionatorAddFormStates, completionatorThreadContexts } from "./completion.types.js";
 import {
@@ -35,6 +34,7 @@ import { searchGameDbWithFallback, importGameFromIgdb } from "./completionator-p
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
 import { assertCustomIdSegments } from "../../utilities/CustomIdUtils.js";
 import { safeIgnore } from "../../utilities/AsyncUtils.js";
+import GamePlatformRegionService from "../../classes/GamePlatformRegionService.js";
 
 export class CompletionatorHandlersService {
   private workflowService: CompletionatorWorkflowService;
@@ -553,7 +553,7 @@ export class CompletionatorHandlersService {
         state.platformId = null;
       } else {
         const platformId = Number(value);
-        const platforms = await Game.getPlatformsForGameWithStandard(
+        const platforms = await GamePlatformRegionService.getPlatformsForGameWithStandard(
           item.gameDbGameId,
           STANDARD_PLATFORM_IDS,
         );

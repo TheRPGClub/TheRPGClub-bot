@@ -19,7 +19,6 @@ import { formatPlatformDisplayName } from "../../functions/PlatformDisplay.js";
 import { formatTableDate } from "../../functions/DateFormatUtils.js";
 import { igdbService, type IGDBGame } from "../../services/IGDB/IgdbService.js";
 import { type IgdbSelectOption } from "../../services/IGDB/IgdbSelectService.js";
-import Game from "../../classes/Game.js";
 import { type IGameDbCsvImportItem } from "../../classes/GameDbCsvImport.js";
 import { GAMEDB_CSV_PLATFORM_MAP } from "../../config/gamedbCsvPlatformMap.js";
 import { buildIgdbSearchLink } from "./gamedb-utils.js";
@@ -28,6 +27,7 @@ import { isPositiveInt } from "../../utilities/ValidationUtils.js";
 import { truncateDescription, truncateLabel } from "../../config/textLimits.js";
 import { logWarn } from "../../utilities/LogUtils.js";
 import { GAMEDB_CSV_RESULT_LIMIT } from "../../config/pagination.js";
+import GamePlatformRegionService from "../../classes/GamePlatformRegionService.js";
 
 const GAMEDB_CSV_ACTION_PREFIX = "gamedb-csv-action";
 const GAMEDB_CSV_SELECT_PREFIX = "gamedb-csv-select";
@@ -36,7 +36,7 @@ let csvPlatformLookup: Map<string, number> | null = null;
 
 export async function getPlatformLookupMap(): Promise<Map<string, number>> {
   if (csvPlatformLookup) return csvPlatformLookup;
-  const platforms = await Game.getAllPlatforms();
+  const platforms = await GamePlatformRegionService.getAllPlatforms();
   const map = new Map<string, number>();
   for (const platform of platforms) {
     if (!platform.igdbPlatformId) continue;
@@ -249,7 +249,7 @@ export async function buildIgdbSelectOptions(
   }
 
   const uniquePlatformIds: number[] = Array.from(new Set(platformIds));
-  const platformMap = await Game.getPlatformsByIgdbIds(uniquePlatformIds);
+  const platformMap = await GamePlatformRegionService.getPlatformsByIgdbIds(uniquePlatformIds);
   const missingPlatformIds = uniquePlatformIds.filter((id) => !platformMap.has(id));
   if (missingPlatformIds.length) {
     logWarn("GamedbCsvImport", `Missing IGDB platform IDs in GAMEDB_PLATFORMS: ${missingPlatformIds.join(", ")}`);

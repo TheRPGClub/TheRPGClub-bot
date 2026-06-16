@@ -1,4 +1,4 @@
-import type { IGameAutocompleteResult } from "../classes/Game.js";
+import type { IGameAutocompleteResult } from "../types/GameTypes.js";
 
 export const AUTOCOMPLETE_CACHE_TTL_MS = 60_000;
 export const AUTOCOMPLETE_CACHE_MAX_ENTRIES = 300;

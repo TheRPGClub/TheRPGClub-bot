@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { NowPlayingCompletionHandlers } from "../commands/now-playing/nowPlayingCompletion.handler.js";
 import Member from "../classes/Member.js";
 import Game from "../classes/Game.js";
+import GamePlatformRegionService from "../classes/GamePlatformRegionService.js";
 
 test("nowplaying edit menu add completion uses safe update fallback", async () => {
   const command = new NowPlayingCompletionHandlers() as any;
@@ -139,7 +140,8 @@ test("nowplaying completion modal reuses existing now-playing platform and skips
   const originalAddCompletion = Member.addCompletion;
   const originalRemoveNowPlaying = Member.removeNowPlaying;
   const originalGetGameById = Game.getGameById;
-  const originalGetPlatformsForGameWithStandard = Game.getPlatformsForGameWithStandard;
+  const originalGetPlatformsForGameWithStandard =
+    GamePlatformRegionService.getPlatformsForGameWithStandard;
 
   const addCompletionCalls: any[] = [];
   const listUpdatePayloads: any[] = [];
@@ -174,7 +176,7 @@ test("nowplaying completion modal reuses existing now-playing platform and skips
       title: "Alpha",
       imageData: null,
     })) as any;
-    Game.getPlatformsForGameWithStandard = (async () => {
+    GamePlatformRegionService.getPlatformsForGameWithStandard = (async () => {
       platformLookupCalls += 1;
       return [];
     }) as any;
@@ -248,6 +250,7 @@ test("nowplaying completion modal reuses existing now-playing platform and skips
     Member.addCompletion = originalAddCompletion;
     Member.removeNowPlaying = originalRemoveNowPlaying;
     Game.getGameById = originalGetGameById;
-    Game.getPlatformsForGameWithStandard = originalGetPlatformsForGameWithStandard;
+    GamePlatformRegionService.getPlatformsForGameWithStandard =
+      originalGetPlatformsForGameWithStandard;
   }
 });

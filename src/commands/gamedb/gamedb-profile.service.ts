@@ -24,7 +24,8 @@ import { formatPlatformDisplayName } from "../../functions/PlatformDisplay.js";
 import { formatTableDate } from "../../functions/DateFormatUtils.js";
 import { renderUsernameWithEmoji } from "../../services/UserEmojiService.js";
 import { padCommandName } from "../help.command.js";
-import Game, { type IGame, type IRelease } from "../../classes/Game.js";
+import type { IGame, IRelease } from "../../types/GameTypes.js";
+import GameProfileService from "../../classes/GameProfileService.js";
 import {
   buildComponentsV2Flags,
   getSearchRowsFromComponents,
@@ -156,7 +157,7 @@ export async function buildGameProfile(
     | GameProfileRenderContext,
 ): Promise<GameProfileResult | null> {
   try {
-    const profile = await Game.getGameProfile(gameId);
+    const profile = await GameProfileService.getGameProfile(gameId);
     if (!profile) {
       return null;
     }

@@ -1,5 +1,6 @@
 import { pgQuery } from "../../db/postgresClient.js";
 import Game from "../../classes/Game.js";
+import { refreshReleaseDates } from "../../functions/GameIgdbSync.js";
 import { igdbService } from "./IgdbService.js";
 import { sleep } from "../../utilities/DelayUtils.js";
 import { logError, logInfo, logWarn } from "../../utilities/LogUtils.js";
@@ -137,7 +138,7 @@ export async function igdbScanTick(): Promise<void> {
 
         const releases = details.release_dates ?? [];
         if (releases.length > 0) {
-          await Game.refreshReleaseDates(candidate.gameId, releases);
+          await refreshReleaseDates(candidate.gameId, releases);
           releaseUpdated++;
         }
 

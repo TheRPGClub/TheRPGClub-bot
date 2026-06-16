@@ -1,4 +1,4 @@
-import type { IGame, IRelease, IPlatformDef, IRegionDef } from "../classes/Game.js";
+import type { IGame, IRelease, IPlatformDef, IRegionDef } from "../types/GameTypes.js";
 import type { HltbCacheEntry } from "../classes/HltbCache.js";
 
 export const IGDB_REGION_MAP: Record<number, { code: string; name: string }> = {

@@ -1,10 +1,10 @@
 import { type AutocompleteInteraction } from "discord.js";
-import Game from "../../classes/Game.js";
 import UserGameBacklog from "../../classes/UserGameBacklog.js";
 import { sanitizeUserInput } from "../../functions/InteractionUtils.js";
 import { DISCORD_SELECT_OPTIONS_MAX, truncateLabel } from "../../config/textLimits.js";
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
 import { formatGameTitleWithYear } from "../../functions/GameTitleAutocompleteUtils.js";
+import GameSearchService from "../../classes/GameSearchService.js";
 
 export const BACKLOG_ENTRY_VALUE_PREFIX = "backlog";
 
@@ -35,7 +35,7 @@ export async function autocompleteBacklogGameTitle(
     return;
   }
 
-  const results = await Game.searchGamesAutocomplete(query);
+  const results = await GameSearchService.searchGamesAutocomplete(query);
   await interaction.respond(
     results.slice(0, DISCORD_SELECT_OPTIONS_MAX).map((game) => ({
       name: truncateLabel(formatGameTitleWithYear(game)),

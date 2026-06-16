@@ -19,7 +19,8 @@ import {
 } from "../../functions/InteractionUtils.js";
 import { igdbService, type IGDBGameDetails } from "../../services/IGDB/IgdbService.js";
 import { createIgdbSession } from "../../services/IGDB/IgdbSelectService.js";
-import Game, { type IGame } from "../../classes/Game.js";
+import type { IGame } from "../../types/GameTypes.js";
+import Game from "../../classes/Game.js";
 import {
   buildTextContainer,
   buildTextReply,
@@ -36,6 +37,9 @@ import { showGameProfile, trimTextDisplayContent } from "./gamedb-profile.servic
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
 import { logError, logWarn } from "../../utilities/LogUtils.js";
 import { apiPost } from "../../services/RpgClubApiClient.js";
+import GamePlatformRegionService from "../../classes/GamePlatformRegionService.js";
+import { importReleaseDatesFromIgdb, saveFullGameMetadata } from "../../functions/GameIgdbSync.js";
+import GameSearchService from "../../classes/GameSearchService.js";
 
 async function fetchIgdbCoverImage(details: IGDBGameDetails): Promise<Buffer | null> {
   if (!details.cover?.image_id) return null;
@@ -68,7 +72,7 @@ export async function processReleaseDates(
     }
   }
   const uniquePlatformIds: number[] = Array.from(new Set(platformIds));
-  const platformMap = await Game.getPlatformsByIgdbIds(uniquePlatformIds);
+  const platformMap = await GamePlatformRegionService.getPlatformsByIgdbIds(uniquePlatformIds);
   const missingPlatformIds = uniquePlatformIds.filter((id) => !platformMap.has(id));
   if (missingPlatformIds.length) {
     logWarn("GamedbAdd.addGame", `Missing IGDB platform IDs in GAMEDB_PLATFORMS: ${missingPlatformIds.join(", ")}`);
@@ -83,7 +87,7 @@ export async function processReleaseDates(
     }
 
     const platform = platformMap.get(platformId);
-    const region = await Game.ensureRegion(release.region);
+    const region = await GamePlatformRegionService.ensureRegion(release.region);
 
     if (!platform || !region) {
       continue;
@@ -167,12 +171,12 @@ export async function addGameToDatabase(
     throw err;
   }
 
-  await Game.saveFullGameMetadata(newGame.id, details);
+  await saveFullGameMetadata(newGame.id, details);
 
   const igdbPlatformIds: number[] = (details.platforms ?? [])
     .map((platform) => platform.id)
     .filter(isPositiveInt);
-  await Game.addGamePlatformsByIgdbIds(newGame.id, igdbPlatformIds);
+  await GamePlatformRegionService.addGamePlatformsByIgdbIds(newGame.id, igdbPlatformIds);
 
   await processReleaseDates(newGame.id, details.release_dates || []);
 
@@ -196,7 +200,7 @@ export async function handleNoResults(
   query: string,
 ): Promise<void> {
   try {
-    const existing = await Game.searchGames(query);
+    const existing = await GameSearchService.searchGames(query);
     const existingList = existing
       .slice(0, 10)
       .map((g) => `• **${g.title}** (GameDB #${g.id})`);
@@ -373,7 +377,7 @@ export class GameDbAddCommand {
         game = await Game.getGameById(gameId);
       }
     } else {
-      const matches = await Game.searchGames(searchTerm);
+      const matches = await GameSearchService.searchGames(searchTerm);
       const exactMatches = matches.filter(
         (entry) => entry.title.trim().toLowerCase() === searchTerm.toLowerCase(),
       );
@@ -413,7 +417,7 @@ export class GameDbAddCommand {
 
     try {
       const before = await Game.getGameReleases(game.id);
-      await Game.importReleaseDatesFromIgdb(game.id, game.igdbId);
+      await importReleaseDatesFromIgdb(game.id, game.igdbId);
       const after = await Game.getGameReleases(game.id);
       const added = after.length - before.length;
 

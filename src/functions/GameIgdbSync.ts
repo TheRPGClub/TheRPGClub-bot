@@ -11,11 +11,11 @@ import {
   type IGDBGameDetails,
   igdbService,
 } from "../services/IGDB/IgdbService.js";
-import { isPositiveInt } from "../utilities/ValidationUtils.js";
 import { safeIgnore } from "../utilities/AsyncUtils.js";
-import { logError, logWarn } from "../utilities/LogUtils.js";
+import { logError } from "../utilities/LogUtils.js";
 import { clearAutocompleteSearchCaches } from "./GameAutocompleteCache.js";
 import Game from "../classes/Game.js";
+import GamePlatformRegionService from "../classes/GamePlatformRegionService.js";
 
 type IGDBReleaseDate = NonNullable<IGDBGameDetails["release_dates"]>[number];
 
@@ -101,7 +101,7 @@ export async function saveReleaseDates(
   for (const { release, date } of earliestByPlatform.values()) {
     if (!release.platform?.id) continue;
 
-    const platform = await Game.ensurePlatform({
+    const platform = await GamePlatformRegionService.ensurePlatform({
       id: release.platform.id,
       name: release.platform.name ?? null,
     });
@@ -111,7 +111,7 @@ export async function saveReleaseDates(
       continue;
     }
 
-    const region = await Game.ensureRegion(release.region ?? 8);
+    const region = await GamePlatformRegionService.ensureRegion(release.region ?? 8);
     if (!region) continue;
 
     const format: "Physical" | "Digital" | null = null;
@@ -120,6 +120,35 @@ export async function saveReleaseDates(
   }
 
   await updateInitialReleaseDate(gameId);
+}
+
+export async function clearReleaseDates(
+  gameId: number,
+): Promise<{ releases: number; announcements: number }> {
+  return dbTransaction(async (conn) => {
+    const announceCount = await dbMutateConn(
+      conn,
+      GameSql.clearReleaseAnnouncements,
+      { gameId },
+    );
+    const releaseCount = await dbMutateConn(conn, GameSql.clearReleases, {
+      gameId,
+    });
+    await dbMutateConn(conn, GameSql.clearInitialReleaseDate, { gameId });
+    return {
+      releases: Number(releaseCount),
+      announcements: Number(announceCount),
+    };
+  });
+}
+
+export async function refreshReleaseDates(
+  gameId: number,
+  releases: NonNullable<IGDBGameDetails["release_dates"]>,
+): Promise<void> {
+  await clearReleaseDates(gameId);
+  if (!releases.length) return;
+  await saveReleaseDates(gameId, releases);
 }
 
 export async function saveFullGameMetadata(
@@ -324,35 +353,4 @@ export async function importReleaseDatesFromIgdb(
     throw new Error("Failed to load game details from IGDB.");
   }
   await saveReleaseDates(gameId, details.release_dates ?? []);
-}
-
-export async function addGamePlatformsByIgdbIds(
-  gameId: number,
-  igdbPlatformIds: number[],
-): Promise<void> {
-  if (!isPositiveInt(gameId)) return;
-  const uniqueIds = Array.from(
-    new Set(igdbPlatformIds.filter(isPositiveInt)),
-  );
-  if (!uniqueIds.length) return;
-
-  const platformMap = await Game.getPlatformsByIgdbIds(uniqueIds);
-  const missingIds = uniqueIds.filter((id) => !platformMap.has(id));
-  if (missingIds.length) {
-    logWarn(
-      "Game.syncIgdbPlatforms",
-      `Missing IGDB platform IDs in GAMEDB_PLATFORMS: ${missingIds.join(", ")}`,
-    );
-  }
-
-  await dbTransaction(async (conn) => {
-    for (const igdbId of uniqueIds) {
-      const platform = platformMap.get(igdbId);
-      if (!platform) continue;
-      await dbMutateConn(conn, GameSql.addGamePlatformMerge, {
-        gameId,
-        platformId: platform.id,
-      });
-    }
-  });
 }

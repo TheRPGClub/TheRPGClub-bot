@@ -1,5 +1,4 @@
 import { type AutocompleteInteraction } from "discord.js";
-import Game from "../../classes/Game.js";
 import UserGameCollection, {
   type CollectionOwnershipType,
 } from "../../classes/UserGameCollection.js";
@@ -7,6 +6,7 @@ import { sanitizeUserInput } from "../../functions/InteractionUtils.js";
 import { formatGameTitleWithYear } from "../../functions/GameTitleAutocompleteUtils.js";
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
 import { DISCORD_SELECT_OPTIONS_MAX, truncateLabel } from "../../config/textLimits.js";
+import GameSearchService from "../../classes/GameSearchService.js";
 
 export const COLLECTION_ENTRY_VALUE_PREFIX = "collection";
 
@@ -43,7 +43,7 @@ export async function autocompleteCollectionGameTitle(
     return;
   }
 
-  const results = await Game.searchGamesAutocomplete(query);
+  const results = await GameSearchService.searchGamesAutocomplete(query);
   await interaction.respond(
     results.slice(0, DISCORD_SELECT_OPTIONS_MAX).map((game) => ({
       name: truncateLabel(formatGameTitleWithYear(game)),

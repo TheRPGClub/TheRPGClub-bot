@@ -1,5 +1,4 @@
 import { type StringSelectMenuInteraction } from "discord.js";
-import Game from "../../classes/Game.js";
 import {
   safeDeferUpdate,
   safeReply,
@@ -18,12 +17,7 @@ import {
 import { truncateDescription } from "../../config/textLimits.js";
 import { safeIgnore } from "../../utilities/AsyncUtils.js";
 import { promptNowPlayingAddPlatformSelection } from "./nowPlayingAddService.js";
-
-export async function importGameFromIgdb(
-  igdbId: number,
-): Promise<{ gameId: number; title: string }> {
-  return Game.importGameFromIgdb(igdbId);
-}
+import { importGameFromIgdb } from "../../functions/GameIgdbSync.js";
 
 export async function startNowPlayingIgdbImportFromInteraction(
   interaction: AnyRepliable,

@@ -33,7 +33,8 @@ import {
   type AnyRepliable,
   replyIfNotOwner,
 } from "../functions/InteractionUtils.js";
-import Game, { type IGame } from "../classes/Game.js";
+import type { IGame } from "../types/GameTypes.js";
+import Game from "../classes/Game.js";
 import {
   buildActionButton,
   buildButtonRow,
@@ -127,10 +128,12 @@ import {
   deleteEligibleNowPlayingMessageInCurrentChannel,
 } from "./now-playing/nowPlayingMessageService.js";
 import { promptNowPlayingAddPlatformSelection } from "./now-playing/nowPlayingAddService.js";
+import GamePlatformRegionService from "../classes/GamePlatformRegionService.js";
 import {
   startNowPlayingIgdbImport,
   startNowPlayingIgdbImportFromInteraction,
 } from "./now-playing/nowPlayingIgdbImport.service.js";
+import GameSearchService from "../classes/GameSearchService.js";
 
 @Discord()
 @SlashGroup({ description: "Show now playing data", name: "now-playing" })
@@ -206,7 +209,7 @@ export class NowPlayingCommand {
       return;
     }
 
-    const platform = await Game.getPlatformById(platformId);
+    const platform = await GamePlatformRegionService.getPlatformById(platformId);
     if (!platform) {
       const container = buildTextContainer("Selected platform was not found.");
       await safeReply(interaction, {
@@ -410,7 +413,7 @@ export class NowPlayingCommand {
     }
 
     try {
-      const results = await Game.searchGames(query);
+      const results = await GameSearchService.searchGames(query);
       if (!results.length) {
         await startNowPlayingIgdbImportFromInteraction(
           interaction,
@@ -515,7 +518,7 @@ export class NowPlayingCommand {
       return null;
     }
 
-    const existing = await Game.searchGames(normalizedSearchTerm);
+    const existing = await GameSearchService.searchGames(normalizedSearchTerm);
     const exact = existing.find((game) => {
       if (game.title.toLowerCase() !== normalizedSearchTerm.toLowerCase()) {
         return false;
@@ -927,7 +930,7 @@ export class NowPlayingCommand {
     const limitedEntries = entries.slice(0, 10);
     const optionsPerEntry = await Promise.all(
       limitedEntries.map(async (entry) => {
-        const platforms = await Game.getPlatformsForGameWithStandard(
+        const platforms = await GamePlatformRegionService.getPlatformsForGameWithStandard(
           entry.gameId,
           STANDARD_PLATFORM_IDS,
         );
@@ -975,7 +978,8 @@ export class NowPlayingCommand {
       return;
     }
 
-    const platforms = await Game.getPlatformsForGameWithStandard(gameId, STANDARD_PLATFORM_IDS);
+    const platforms = await GamePlatformRegionService
+      .getPlatformsForGameWithStandard(gameId, STANDARD_PLATFORM_IDS);
     if (!platforms.length) {
       const container = buildTextContainer("No platform data is available for this game.");
       if (mode === "update" && "update" in interaction) {

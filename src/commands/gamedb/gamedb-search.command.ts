@@ -31,7 +31,7 @@ import {
   safeV2TextContent,
 } from "../../functions/ComponentsV2Utils.js";
 import { shouldRenderPrevNextButtons } from "../../functions/PaginationUtils.js";
-import Game from "../../classes/Game.js";
+import GameProfileService from "../../classes/GameProfileService.js";
 import { decodeBase64Url } from "../../functions/CustomIdUtils.js";
 import {
   autocompleteSearchCompany,
@@ -53,11 +53,13 @@ import { handleNoResults } from "./gamedb-add.command.js";
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
 import { MAX_CONTAINER_TEXT } from "../../config/textLimits.js";
 import { assertCustomIdSegments } from "../../utilities/CustomIdUtils.js";
+import GamePlatformRegionService from "../../classes/GamePlatformRegionService.js";
 import {
   buildActionButton,
   buildButtonRow,
   buildSelectRow,
 } from "../../functions/uiComponents.js";
+import GameSearchService from "../../classes/GameSearchService.js";
 
 function formatUpcomingDate(date: Date | null | undefined): string {
   if (!date) return "";
@@ -73,16 +75,16 @@ async function buildFilterSummary(filters: ISearchFilters): Promise<string> {
   const parts: string[] = [];
   if (filters.upcomingRelease) parts.push("Upcoming release");
   if (filters.platformId) {
-    const platform = await Game.getPlatformById(filters.platformId);
+    const platform = await GamePlatformRegionService.getPlatformById(filters.platformId);
     parts.push(`Platform: ${platform?.name ?? `ID ${filters.platformId}`}`);
   }
   if (filters.year) parts.push(`Year: ${filters.year}`);
   if (filters.developerId) {
-    const company = await Game.getCompanyById(filters.developerId);
+    const company = await GameProfileService.getCompanyById(filters.developerId);
     parts.push(`Developer: ${company?.name ?? `ID ${filters.developerId}`}`);
   }
   if (filters.publisherId) {
-    const company = await Game.getCompanyById(filters.publisherId);
+    const company = await GameProfileService.getCompanyById(filters.publisherId);
     parts.push(`Publisher: ${company?.name ?? `ID ${filters.publisherId}`}`);
   }
   return parts.join(" | ");
@@ -95,7 +97,7 @@ export async function runSearchFlow(
   filters?: ISearchFilters,
 ): Promise<void> {
   const activeFilters = filters ?? {};
-  const results = await Game.searchGames(searchTerm, activeFilters);
+  const results = await GameSearchService.searchGames(searchTerm, activeFilters);
 
   if (results.length === 0) {
     if (!searchTerm) {
@@ -366,7 +368,7 @@ export class GameDbSearchCommand {
       return;
     }
 
-    const results = await Game.searchGames(searchTerm, filters);
+    const results = await GameSearchService.searchGames(searchTerm, filters);
 
     const gameId = Number(interaction.values?.[0]);
     if (!Number.isFinite(gameId)) {
@@ -435,7 +437,7 @@ export class GameDbSearchCommand {
       return;
     }
 
-    const results = await Game.searchGames(searchTerm, filters);
+    const results = await GameSearchService.searchGames(searchTerm, filters);
     const totalPages = Math.max(
       1,
       Math.ceil(results.length / GAME_SEARCH_PAGE_SIZE),
@@ -492,7 +494,7 @@ export class GameDbSearchCommand {
       return;
     }
 
-    const results = await Game.searchGames(searchTerm, filters);
+    const results = await GameSearchService.searchGames(searchTerm, filters);
     if (results.length === 0) {
       const msg = searchTerm
         ? `No results found for "${searchTerm}".`

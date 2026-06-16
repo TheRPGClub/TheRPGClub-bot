@@ -3,6 +3,7 @@ import { UserGameCollectionSql } from "../db/sql/index.js";
 import { isPositiveInt, requirePositiveInt } from "../utilities/ValidationUtils.js";
 import { apiGet, apiPost, apiPatch, apiDelete } from "../services/RpgClubApiClient.js";
 import Game from "./Game.js";
+import GamePlatformRegionService from "./GamePlatformRegionService.js";
 
 export const COLLECTION_OWNERSHIP_TYPES = [
   "Digital",
@@ -117,7 +118,9 @@ type CollectionResponse = { data: CollectionApiData };
 async function enrichEntry(raw: CollectionApiData): Promise<IUserGameCollectionEntry> {
   const [game, platform] = await Promise.all([
     Game.getGameById(raw.gamedb_game_id),
-    raw.platform_id != null ? Game.getPlatformById(raw.platform_id) : Promise.resolve(null),
+    raw.platform_id != null
+      ? GamePlatformRegionService.getPlatformById(raw.platform_id)
+      : Promise.resolve(null),
   ]);
   return {
     entryId: Number(raw.entry_id),

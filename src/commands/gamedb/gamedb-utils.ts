@@ -16,10 +16,12 @@ import {
 import { formatGameTitleWithYear } from "../../functions/GameTitleAutocompleteUtils.js";
 import { buildComponentsV2Flags, buildTextReply } from "../../functions/ComponentsV2Utils.js";
 import { encodeWithMaxLength } from "../../functions/CustomIdUtils.js";
-import Game from "../../classes/Game.js";
+import GameProfileService from "../../classes/GameProfileService.js";
 import { DISCORD_SELECT_OPTIONS_MAX, truncateLabel } from "../../config/textLimits.js";
 import { buildActionButton, buildButtonRow } from "../../functions/uiComponents.js";
 import { GAMEDB_SEARCH_PREFIX } from "../../config/customIdPrefixes.js";
+import GamePlatformRegionService from "../../classes/GamePlatformRegionService.js";
+import GameSearchService from "../../classes/GameSearchService.js";
 
 export interface ISearchFilters {
   upcomingRelease?: boolean;
@@ -222,7 +224,7 @@ export async function autocompleteSearchPlatform(
 ): Promise<void> {
   const focused = interaction.options.getFocused(true);
   const rawQuery = focused?.value ? String(focused.value) : "";
-  const platforms = await Game.getAllPlatforms();
+  const platforms = await GamePlatformRegionService.getAllPlatforms();
   const query = rawQuery.toLowerCase().trim();
   const filtered = query
     ? platforms.filter((p) =>
@@ -243,7 +245,7 @@ export async function autocompleteSearchCompany(
 ): Promise<void> {
   const focused = interaction.options.getFocused(true);
   const rawQuery = focused?.value ? String(focused.value) : "";
-  const companies = await Game.getAllCompanies();
+  const companies = await GameProfileService.getAllCompanies();
   const query = rawQuery.toLowerCase().trim();
   const filtered = query
     ? companies.filter((c) => c.name.toLowerCase().includes(query))
@@ -265,7 +267,7 @@ export async function autocompleteGameDbViewTitle(
     await interaction.respond([]);
     return;
   }
-  const results = await Game.searchGamesAutocomplete(query);
+  const results = await GameSearchService.searchGamesAutocomplete(query);
   const resultOptions = results.slice(0, 24).map((game) => {
     const label = formatGameTitleWithYear(game);
     return {

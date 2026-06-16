@@ -13,6 +13,7 @@ import {
 } from "../../functions/ComponentsV2Utils.js";
 import { nowPlayingAddPlatformSessions } from "./nowPlayingContexts.js";
 import { NOW_PLAYING_ADD_PLATFORM_SELECT_PREFIX } from "./nowPlayingIds.js";
+import GamePlatformRegionService from "../../classes/GamePlatformRegionService.js";
 
 export async function promptNowPlayingAddPlatformSelection(
   interaction: StringSelectMenuInteraction,
@@ -26,7 +27,8 @@ export async function promptNowPlayingAddPlatformSelection(
   if (!game) {
     throw new Error("Selected game not found. Please try again.");
   }
-  const platforms = await Game.getPlatformsForGameWithStandard(game.id, STANDARD_PLATFORM_IDS);
+  const platforms = await GamePlatformRegionService
+    .getPlatformsForGameWithStandard(game.id, STANDARD_PLATFORM_IDS);
   if (!platforms.length) {
     throw new Error("No platform data is available for this game.");
   }

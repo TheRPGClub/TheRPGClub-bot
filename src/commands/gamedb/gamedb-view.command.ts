@@ -24,7 +24,8 @@ import {
   sanitizeUserInput,
 } from "../../functions/InteractionUtils.js";
 import { getHltbCacheByGameId, upsertHltbCache } from "../../classes/HltbCache.js";
-import Game, { type GameSource } from "../../classes/Game.js";
+import type { GameSource } from "../../types/GameTypes.js";
+import Game from "../../classes/Game.js";
 import { searchHltb } from "../../scripts/SearchHltb.js";
 import { buildTextReply } from "../../functions/ComponentsV2Utils.js";
 import {
@@ -51,6 +52,7 @@ import { safeIgnore } from "../../utilities/AsyncUtils.js";
 import UserGameBacklog from "../../classes/UserGameBacklog.js";
 import { buildApiErrorMessage } from "../../utilities/ApiErrorUtils.js";
 import { logError } from "../../utilities/LogUtils.js";
+import GamePlatformRegionService from "../../classes/GamePlatformRegionService.js";
 
 @Discord()
 @SlashGroup("gamedb")
@@ -212,7 +214,7 @@ export class GameDbViewCommand {
     gameId: number,
   ): Promise<void> {
     try {
-      const platforms = await Game.getPlatformsForGame(gameId);
+      const platforms = await GamePlatformRegionService.getPlatformsForGame(gameId);
       const validPlatforms = platforms.filter(
         (p) => p.name?.trim() && String(p.id)?.trim(),
       );

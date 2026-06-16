@@ -9,7 +9,6 @@ import {
 } from "discord.js";
 import { ContainerBuilder } from "@discordjs/builders";
 import Member, { type ICompletionRecord } from "../../classes/Member.js";
-import Game from "../../classes/Game.js";
 import { safeDeferUpdate, safeReply } from "../../functions/InteractionUtils.js";
 import { formatPlatformDisplayName } from "../../functions/PlatformDisplay.js";
 import {
@@ -27,6 +26,7 @@ import { isPositiveInt } from "../../utilities/ValidationUtils.js";
 import { MAX_CONTAINER_TEXT, MAX_SECTION_TEXT } from "../../config/textLimits.js";
 import { safeIgnore } from "../../utilities/AsyncUtils.js";
 import { buildActionButton, buildButtonRow } from "../../functions/uiComponents.js";
+import GamePlatformRegionService from "../../classes/GamePlatformRegionService.js";
 
 export type CommonCompletionSort =
   | "title_asc"
@@ -383,7 +383,7 @@ export async function renderCommonCompletionPage(
     interaction.client.users.fetch(state.rightId).catch(() => interaction.user),
     Member.getAllCompletions(state.leftId),
     Member.getAllCompletions(state.rightId),
-    Game.getAllPlatforms(),
+    GamePlatformRegionService.getAllPlatforms(),
   ]);
 
   const platformMap = new Map(

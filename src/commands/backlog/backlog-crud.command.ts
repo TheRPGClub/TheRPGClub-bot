@@ -22,7 +22,6 @@ import {
 import { resolveCollectionGameForAdd } from "../collection/collection-game-resolve.utils.js";
 import { buildTextReply } from "../../functions/ComponentsV2Utils.js";
 import { createIgdbSession } from "../../services/IGDB/IgdbSelectService.js";
-import Game from "../../classes/Game.js";
 import {
   autocompleteBacklogEntry,
   autocompleteBacklogGameTitle,
@@ -30,6 +29,7 @@ import {
 } from "./backlog-autocomplete.utils.js";
 import { buildApiErrorMessage } from "../../utilities/ApiErrorUtils.js";
 import { logError } from "../../utilities/LogUtils.js";
+import { importGameFromIgdb } from "../../functions/GameIgdbSync.js";
 
 @Discord()
 @SlashGroup({ description: "Manage your game backlog", name: "backlog" })
@@ -93,7 +93,7 @@ export class BacklogCrudCommand {
         resolution.options,
         async (selectionInteraction, igdbId) => {
           try {
-            const imported = await Game.importGameFromIgdb(igdbId);
+            const imported = await importGameFromIgdb(igdbId);
             const created = await UserGameBacklog.addEntry({
               userId: interaction.user.id,
               gameId: imported.gameId,

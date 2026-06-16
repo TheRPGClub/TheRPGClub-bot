@@ -32,7 +32,8 @@ import {
   sanitizeUserInput,
 } from "../functions/InteractionUtils.js";
 import Member, { type IMemberRecord } from "../classes/Member.js";
-import Game, { type IGame } from "../classes/Game.js";
+import type { IGame } from "../types/GameTypes.js";
+import Game from "../classes/Game.js";
 import { STANDARD_PLATFORM_IDS } from "../config/standardPlatforms.js";
 import { igdbService } from "../services/IGDB/IgdbService.js";
 import {
@@ -67,6 +68,9 @@ import { assertCustomIdSegments } from "../utilities/CustomIdUtils.js";
 import { safeIgnore } from "../utilities/AsyncUtils.js";
 import { logError, logWarn } from "../utilities/LogUtils.js";
 import { buildSelectRow } from "../functions/uiComponents.js";
+import GamePlatformRegionService from "../classes/GamePlatformRegionService.js";
+import { saveFullGameMetadata } from "../functions/GameIgdbSync.js";
+import GameSearchService from "../classes/GameSearchService.js";
 
 type CompletionAddContext = {
   targetUserId: string;
@@ -361,7 +365,7 @@ export class SuperAdmin {
     searchTerm: string,
     ctx: CompletionAddContext,
   ): Promise<void> {
-    const localResults = await Game.searchGames(searchTerm);
+    const localResults = await GameSearchService.searchGames(searchTerm);
     if (localResults.length) {
       const sessionId = buildStableSuperAdminSessionId("sacomp", [
         interaction.id,
@@ -418,7 +422,7 @@ export class SuperAdmin {
     ctx: CompletionAddContext,
     game: IGame,
   ): Promise<void> {
-    const platforms = await Game.getPlatformsForGameWithStandard(
+    const platforms = await GamePlatformRegionService.getPlatformsForGameWithStandard(
       game.id,
       STANDARD_PLATFORM_IDS,
     );
@@ -698,7 +702,7 @@ export class SuperAdmin {
       details.url ?? null,
       Game.getFeaturedVideoUrl(details),
     );
-    await Game.saveFullGameMetadata(newGame.id, details);
+    await saveFullGameMetadata(newGame.id, details);
     return { gameId: newGame.id, title: details.name };
   }
 

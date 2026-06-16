@@ -31,7 +31,6 @@ import {
 } from "../profile.command.js";
 import { saveCompletion } from "../../functions/CompletionHelpers.js";
 import { createIgdbSession } from "../../services/IGDB/IgdbSelectService.js";
-import Game from "../../classes/Game.js";
 import {
   autocompleteCollectionEntry,
   autocompleteCollectionGameTitle,
@@ -40,6 +39,7 @@ import {
 import { resolveCollectionGameForAdd } from "./collection-game-resolve.utils.js";
 import { buildTextReply } from "../../functions/ComponentsV2Utils.js";
 import { isValidPlaytimeHours } from "../../utilities/ValidationUtils.js";
+import { importGameFromIgdb } from "../../functions/GameIgdbSync.js";
 
 @Discord()
 @SlashGroup({ description: "Manage your game collection", name: "collection" })
@@ -111,7 +111,7 @@ export class CollectionCrudCommand {
         resolution.options,
         async (selectionInteraction, igdbId) => {
           try {
-            const imported = await Game.importGameFromIgdb(igdbId);
+            const imported = await importGameFromIgdb(igdbId);
             const created = await UserGameCollection.addEntry({
               userId: interaction.user.id,
               gameId: imported.gameId,

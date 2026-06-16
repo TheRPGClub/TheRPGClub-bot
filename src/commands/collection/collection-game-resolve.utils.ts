@@ -4,6 +4,9 @@ import type { IgdbSelectOption } from "../../services/IGDB/IgdbSelectService.js"
 import { sanitizeUserInput } from "../../functions/InteractionUtils.js";
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
 import { truncateLabel } from "../../config/textLimits.js";
+import GamePlatformRegionService from "../../classes/GamePlatformRegionService.js";
+import { importGameFromIgdb } from "../../functions/GameIgdbSync.js";
+import GameSearchService from "../../classes/GameSearchService.js";
 
 export type ResolvedCollectionGame =
   | { kind: "resolved"; gameId: number; title: string }
@@ -19,7 +22,7 @@ export async function buildCollectionIgdbSelectOptions(
       .filter(isPositiveInt),
   ));
   const platformMap = platformIds.length
-    ? await Game.getPlatformsByIgdbIds(platformIds)
+    ? await GamePlatformRegionService.getPlatformsByIgdbIds(platformIds)
     : new Map<number, { name: string; abbreviation?: string }>();
 
   return trimmedResults.map((game) => {
@@ -54,7 +57,7 @@ export async function resolveCollectionGameForAdd(
       return { kind: "resolved", gameId: localGame.id, title: localGame.title };
     }
 
-    const importedById = await Game.importGameFromIgdb(numericValue);
+    const importedById = await importGameFromIgdb(numericValue);
     return { kind: "resolved", gameId: importedById.gameId, title: importedById.title };
   }
 
@@ -63,7 +66,7 @@ export async function resolveCollectionGameForAdd(
     throw new Error("Invalid game selection.");
   }
 
-  const localResults = await Game.searchGames(titleQuery);
+  const localResults = await GameSearchService.searchGames(titleQuery);
   const exactLocal = localResults.find(
     (game) => game.title.toLowerCase() === titleQuery.toLowerCase(),
   );

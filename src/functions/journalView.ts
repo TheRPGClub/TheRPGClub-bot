@@ -12,6 +12,7 @@ import { formatTableDate, formatPlaytimeHours } from "./DateFormatUtils.js";
 import { buildComponentsV2EditFlags, buildContentContainer } from "./ComponentsV2Utils.js";
 import { buildActionButton, buildButtonRow, buildUserHeaderContainer } from "./uiComponents.js";
 import { truncateWithEllipsis } from "../utilities/ValidationUtils.js";
+import GamePlatformRegionService from "../classes/GamePlatformRegionService.js";
 
 const JOURNAL_PAGE_SIZE = 1;
 
@@ -149,7 +150,7 @@ export async function buildJournalView(options: IJournalViewOptions): Promise<{
     const completionLines: string[] = [];
     for (const completion of completions) {
       const platform = completion.platformId
-        ? await Game.getPlatformById(completion.platformId).catch(() => null)
+        ? await GamePlatformRegionService.getPlatformById(completion.platformId).catch(() => null)
         : null;
       const platformName = platform?.abbreviation ?? platform?.name ?? "Unknown Platform";
       const completedDate = completion.completedAt

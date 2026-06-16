@@ -12,7 +12,6 @@ import {
   saveCompletion,
 } from "../../functions/CompletionHelpers.js";
 import { buildComponentsV2Flags, buildTextReply } from "../../functions/ComponentsV2Utils.js";
-import Game from "../../classes/Game.js";
 import { STANDARD_PLATFORM_IDS } from "../../config/standardPlatforms.js";
 import {
   COMPLETION_PLATFORM_SELECT_PREFIX,
@@ -23,6 +22,7 @@ import { truncateLabel } from "../../config/textLimits.js";
 import { assertCustomIdSegments } from "../../utilities/CustomIdUtils.js";
 import { safeIgnore } from "../../utilities/AsyncUtils.js";
 import { buildSelectRow } from "../../functions/uiComponents.js";
+import GamePlatformRegionService from "../../classes/GamePlatformRegionService.js";
 
 export function createCompletionPlatformSession(
   ctx: CompletionPlatformContext,
@@ -37,7 +37,7 @@ export async function promptCompletionPlatformSelection(
   interaction: CommandInteraction | StringSelectMenuInteraction | ButtonInteraction,
   ctx: Omit<CompletionPlatformContext, "platforms">,
 ): Promise<void> {
-  const platforms = await Game.getPlatformsForGameWithStandard(
+  const platforms = await GamePlatformRegionService.getPlatformsForGameWithStandard(
     ctx.gameId,
     STANDARD_PLATFORM_IDS,
   );
@@ -143,7 +143,7 @@ export async function handleCompletionPlatformSelect(
 }
 
 export async function resolveDefaultCompletionPlatformId(gameId: number): Promise<number | null> {
-  const platforms = await Game.getPlatformsForGameWithStandard(
+  const platforms = await GamePlatformRegionService.getPlatformsForGameWithStandard(
     gameId,
     STANDARD_PLATFORM_IDS,
   );

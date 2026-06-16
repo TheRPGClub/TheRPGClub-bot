@@ -2,11 +2,11 @@
 
 import axios from "axios";
 import type { CompletionType } from "../profile.command.js";
-import Game from "../../classes/Game.js";
 import {
   buildProgressiveTitleVariants,
   normalizeTitleWithSteps,
 } from "../../functions/ImportTitleNormalization.js";
+import GameSearchService from "../../classes/GameSearchService.js";
 
 export async function fetchCsv(url: string): Promise<string | null> {
   try {
@@ -133,10 +133,10 @@ export function parseCompletionatorDate(value: string | undefined): Date | null 
 
 export async function searchGameDbWithFallback(
   rawTitle: string,
-): Promise<Awaited<ReturnType<typeof Game.searchGames>>> {
+): Promise<Awaited<ReturnType<typeof GameSearchService.searchGames>>> {
   const variants = buildProgressiveTitleVariants(rawTitle);
   for (const variant of variants) {
-    const results = await Game.searchGames(variant);
+    const results = await GameSearchService.searchGames(variant);
     if (results.length) {
       return results;
     }
@@ -145,7 +145,7 @@ export async function searchGameDbWithFallback(
   const normalizedTitle = normalizeTitleWithSteps(rawTitle);
   const titleVariants = buildTitleVariants(rawTitle, normalizedTitle);
   for (const variant of titleVariants) {
-    const variantResults = await Game.searchGames(variant);
+    const variantResults = await GameSearchService.searchGames(variant);
     if (variantResults.length) {
       return variantResults;
     }
@@ -160,9 +160,11 @@ export async function searchGameDbWithFallback(
     return [];
   }
 
-  const resultMap = new Map<number, Awaited<ReturnType<typeof Game.searchGames>>[number]>();
+  type GameSearchResult =
+    Awaited<ReturnType<typeof GameSearchService.searchGames>>[number];
+  const resultMap = new Map<number, GameSearchResult>();
   for (const token of uniqueTokens) {
-    const matches = await Game.searchGames(token);
+    const matches = await GameSearchService.searchGames(token);
     for (const match of matches) {
       if (!resultMap.has(match.id)) {
         resultMap.set(match.id, match);
