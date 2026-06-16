@@ -8,10 +8,10 @@ import { upsertThreadRecord } from "../classes/Thread.js";
 import { NOW_PLAYING_FORUM_ID } from "../config/channels.js";
 import { logError, logInfo, logWarn } from "../utilities/LogUtils.js";
 
-// Coarse safety-net sweep. Each cycle reads forum threads and upserts them into
-// the GameDB (now on Neon); at 10 min it helped keep Neon's serverless compute
-// from scaling to zero, adding to our compute-hour cost. Thread state is not
-// time-critical, so hourly is fine. On-demand syncing will move to an API
+// Coarse safety-net sweep. Each cycle reads forum threads and upserts them via
+// therpgclub-api (which is backed by Neon), not the DB directly; at 10 min it
+// drove avoidable load on the API and its Neon-backed compute. Thread state is
+// not time-critical, so hourly is fine. On-demand syncing will move to an API
 // endpoint in therpgclub-api so admins can trigger it manually instead of
 // relying on a tight poll.
 const DEFAULT_SYNC_INTERVAL_MS = 60 * 60 * 1000; // 1 hour

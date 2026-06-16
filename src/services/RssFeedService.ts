@@ -10,7 +10,11 @@ import {
 } from "../classes/RssFeed.js";
 import { logError, logWarn } from "../utilities/LogUtils.js";
 
-const POLL_INTERVAL_MS: number = 5 * 60 * 1000;
+// Coarse safety-net sweep. Each tick queries the GameDB (now on Neon) directly
+// to dedupe RSS items (getSeenItemHashes / markItemsSeen); at 5 min it sat right
+// at Neon's 5-minute scale-to-zero threshold, keeping the serverless compute
+// permanently awake. RSS posts are not time-critical, so hourly is fine.
+const POLL_INTERVAL_MS: number = 60 * 60 * 1000; // 1 hour
 const ERROR_LOG_COOLDOWN = 60 * 60 * 1000; // 1 hour
 const lastErrorLog = new Map<string, number>();
 

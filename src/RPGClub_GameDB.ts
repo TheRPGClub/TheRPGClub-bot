@@ -35,7 +35,11 @@ import { truncateWithEllipsis } from "./utilities/ValidationUtils.js";
 import { logError } from "./utilities/LogUtils.js";
 installConsoleLogging();
 
-const PRESENCE_CHECK_INTERVAL_MS: number = 30 * 60 * 1000;
+// Re-asserts the bot's stored presence to Discord. Each tick reads it from the
+// GameDB (now on Neon) directly via BotPresenceHistory.getLatestPresenceActivity();
+// at 30 min this woke Neon's serverless compute twice an hour. Presence only
+// changes on an explicit command, so hourly re-assertion is plenty.
+const PRESENCE_CHECK_INTERVAL_MS: number = 60 * 60 * 1000; // 1 hour
 let presenceInterval: NodeJS.Timeout | null = null;
 
 function clearPresenceInterval(): void {
