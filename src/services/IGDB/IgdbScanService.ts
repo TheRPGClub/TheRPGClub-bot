@@ -20,7 +20,13 @@ type IgdbScanCandidate = {
   updatedAt: Date | null;
 };
 
-const DEFAULT_SCAN_INTERVAL_MINUTES = 15;
+// Coarse safety-net sweep (default; override via IGDB_SCAN_INTERVAL_MINUTES).
+// Each scan queries the GameDB (now on Neon) for stale entries; at 15 min it
+// helped keep Neon's serverless compute from scaling to zero, adding to our
+// compute-hour cost. IGDB metadata is slow-moving, so hourly is plenty.
+// On-demand scanning will move to an API endpoint in therpgclub-api so admins
+// can trigger it manually instead of relying on a tight poll.
+const DEFAULT_SCAN_INTERVAL_MINUTES = 60; // 1 hour
 const DEFAULT_SCAN_BATCH_SIZE = 25;
 const DEFAULT_SCAN_MIN_AGE_DAYS = 30;
 const DEFAULT_SCAN_THROTTLE_MS = 300;
