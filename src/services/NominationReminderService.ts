@@ -5,7 +5,13 @@ import BotVotingInfo, { type IBotVotingInfoEntry } from "../classes/BotVotingInf
 import { NOMINATION_DISCUSSION_CHANNEL_IDS } from "../config/nominationChannels.js";
 import { logError, logWarn } from "../utilities/LogUtils.js";
 
-const CHECK_INTERVAL_MS = 60_000;
+// Coarse safety-net sweep. Each cycle queries the GameDB (now on Neon); at 60s
+// this kept Neon's serverless compute permanently active (never scaling to
+// zero), driving most of our Neon compute-hour cost. Reminders fire on 5-day
+// and 1-day boundaries, so hourly granularity is ample. Immediate, on-demand
+// triggering will move to an API endpoint in therpgclub-api so admins can run
+// it manually instead of relying on a tight poll.
+const CHECK_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
 const REMINDER_ZONE = "America/New_York";
 
 type ReminderDefinition = {
