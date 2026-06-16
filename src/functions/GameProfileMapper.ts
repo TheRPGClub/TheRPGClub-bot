@@ -6,7 +6,7 @@ import type {
   ICompletedMember,
   ICollectionOwnerMember,
   IMappedGameProfile,
-} from "../classes/Game.js";
+} from "../types/GameTypes.js";
 import {
   mapGameFromApi,
   mapReleaseFromApi,

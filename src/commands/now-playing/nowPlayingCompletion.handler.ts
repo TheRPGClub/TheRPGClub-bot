@@ -37,7 +37,8 @@ import {
   safeReply,
   safeUpdate,
 } from "../../functions/InteractionUtils.js";
-import Game, { type IGame } from "../../classes/Game.js";
+import type { IGame } from "../../types/GameTypes.js";
+import Game from "../../classes/Game.js";
 import {
   buildActionButton,
   buildButtonRow,

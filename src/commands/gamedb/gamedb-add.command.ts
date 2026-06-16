@@ -19,7 +19,8 @@ import {
 } from "../../functions/InteractionUtils.js";
 import { igdbService, type IGDBGameDetails } from "../../services/IGDB/IgdbService.js";
 import { createIgdbSession } from "../../services/IGDB/IgdbSelectService.js";
-import Game, { type IGame } from "../../classes/Game.js";
+import type { IGame } from "../../types/GameTypes.js";
+import Game from "../../classes/Game.js";
 import {
   buildTextContainer,
   buildTextReply,

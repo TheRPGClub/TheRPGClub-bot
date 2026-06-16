@@ -57,7 +57,8 @@ import {
   type AllAcceptStats,
 } from "../services/GamedbAuditService.js";
 import { isAdmin } from "./admin/admin-auth.utils.js";
-import Game, { IGame } from "../classes/Game.js";
+import type { IGame } from "../types/GameTypes.js";
+import Game from "../classes/Game.js";
 import GameSearchSynonym from "../classes/GameSearchSynonym.js";
 import GameSearchSynonymDraft, {
   type ISynonymDraftPair,

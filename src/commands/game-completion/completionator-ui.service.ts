@@ -19,7 +19,8 @@ import {
   SectionBuilder,
   TextDisplayBuilder,
 } from "@discordjs/builders";
-import Game, { type IGameWithPlatforms, type IPlatformDef } from "../../classes/Game.js";
+import type { IGameWithPlatforms, IPlatformDef } from "../../types/GameTypes.js";
+import Game from "../../classes/Game.js";
 import Member, { type ICompletionRecord } from "../../classes/Member.js";
 import type {
   CompletionatorAddFormState,

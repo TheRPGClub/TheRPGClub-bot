@@ -8,7 +8,7 @@ import {
   buildTextReply,
   buildTitledContainer,
 } from "../../functions/ComponentsV2Utils.js";
-import type { IGameWithPlatforms } from "../../classes/Game.js";
+import type { IGameWithPlatforms } from "../../types/GameTypes.js";
 import Game from "../../classes/Game.js";
 import Gotm, {
   insertGotmRoundInDatabase,

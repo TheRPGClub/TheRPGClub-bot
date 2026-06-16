@@ -24,7 +24,8 @@ import {
   sanitizeUserInput,
 } from "../../functions/InteractionUtils.js";
 import { getHltbCacheByGameId, upsertHltbCache } from "../../classes/HltbCache.js";
-import Game, { type GameSource } from "../../classes/Game.js";
+import type { GameSource } from "../../types/GameTypes.js";
+import Game from "../../classes/Game.js";
 import { searchHltb } from "../../scripts/SearchHltb.js";
 import { buildTextReply } from "../../functions/ComponentsV2Utils.js";
 import {

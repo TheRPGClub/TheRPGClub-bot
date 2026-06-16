@@ -3,7 +3,8 @@
 import type { AutocompleteInteraction } from "discord.js";
 import { sanitizeUserInput } from "../../functions/InteractionUtils.js";
 import { formatGameTitleWithYear } from "../../functions/GameTitleAutocompleteUtils.js";
-import Game, { type IPlatformDef } from "../../classes/Game.js";
+import type { IPlatformDef } from "../../types/GameTypes.js";
+import Game from "../../classes/Game.js";
 import Member from "../../classes/Member.js";
 import { formatTableDate } from "../../functions/DateFormatUtils.js";
 import { STANDARD_PLATFORM_IDS } from "../../config/standardPlatforms.js";

@@ -5,7 +5,8 @@ import type {
   StringSelectMenuInteraction,
 } from "discord.js";
 import type { ContainerBuilder } from "@discordjs/builders";
-import Game, { type IPlatformDef } from "../../classes/Game.js";
+import type { IPlatformDef } from "../../types/GameTypes.js";
+import Game from "../../classes/Game.js";
 import Member from "../../classes/Member.js";
 import type {
   CompletionatorAddFormState,

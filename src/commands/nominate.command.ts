@@ -16,7 +16,8 @@ import {
   listNominationsForRound,
   upsertNomination,
 } from "../classes/Nomination.js";
-import Game, { type IGame } from "../classes/Game.js";
+import type { IGame } from "../types/GameTypes.js";
+import Game from "../classes/Game.js";
 import { buildNominationListPayload } from "../functions/NominationListComponents.js";
 import {
   buildComponentsV2Flags,

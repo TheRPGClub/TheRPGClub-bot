@@ -32,7 +32,8 @@ import {
   sanitizeUserInput,
 } from "../functions/InteractionUtils.js";
 import Member, { type IMemberRecord } from "../classes/Member.js";
-import Game, { type IGame } from "../classes/Game.js";
+import type { IGame } from "../types/GameTypes.js";
+import Game from "../classes/Game.js";
 import { STANDARD_PLATFORM_IDS } from "../config/standardPlatforms.js";
 import { igdbService } from "../services/IGDB/IgdbService.js";
 import {

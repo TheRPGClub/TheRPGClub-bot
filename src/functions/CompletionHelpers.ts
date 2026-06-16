@@ -17,7 +17,8 @@ import {
 import { safeV2TextContent } from "./ComponentsV2Utils.js";
 import { type CompletionType } from "../commands/profile.command.js";
 import { formatPlaytimeHours, formatTableDate } from "./DateFormatUtils.js";
-import Game, { type IGame } from "../classes/Game.js";
+import type { IGame } from "../types/GameTypes.js";
+import Game from "../classes/Game.js";
 import Member from "../classes/Member.js";
 import { ANNOUNCEMENT_CHANNEL_ID, BOT_DEV_CHANNEL_ID } from "../config/channels.js";
 import {
