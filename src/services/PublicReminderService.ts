@@ -7,13 +7,13 @@ import {
 } from "../classes/PublicReminder.js";
 import { logError } from "../utilities/LogUtils.js";
 
-// Coarse safety-net sweep. Each cycle queries the GameDB (now on Neon); at 60s
-// this kept Neon's serverless compute permanently active (never scaling to
-// zero), driving most of our Neon compute-hour cost. These are user-scheduled
-// reminders with specific times, so we keep this tighter than the hourly
-// services. 30 min bounds how late a reminder can fire. Immediate, on-demand
-// triggering will move to an API endpoint in therpgclub-api so users can run it
-// manually instead of relying on a tight poll.
+// Coarse safety-net sweep. Each cycle calls therpgclub-api (which is backed by
+// Neon), not the DB directly; at 60s this drove avoidable load on the API and
+// its Neon-backed compute. These are user-scheduled reminders with specific
+// times, so we keep this tighter than the hourly services. 30 min bounds how
+// late a reminder can fire. Immediate, on-demand triggering will move to an API
+// endpoint in therpgclub-api so users can run it manually instead of relying on
+// a tight poll.
 const PUBLIC_REMINDER_INTERVAL_MS: number = 30 * 60 * 1000; // 30 minutes
 const MAX_PER_CYCLE = 50;
 
