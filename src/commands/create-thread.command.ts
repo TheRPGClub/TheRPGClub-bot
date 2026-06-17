@@ -131,7 +131,7 @@ export class CreateThreadCommand {
       return;
     }
 
-    if (!game.imageData) {
+    if (!game.coverUrl) {
       await safeReply(interaction, buildTextReply(
         `Cannot create a thread for "${game.title}" because it has no cover image.`,
         true,
@@ -168,7 +168,7 @@ export class CreateThreadCommand {
     const fileName = `gamedb_${game.id}.png`;
     const messagePayload: MessageCreateOptions = {
       content: postText,
-      files: [new AttachmentBuilder(game.imageData, { name: fileName })],
+      files: [new AttachmentBuilder(game.coverUrl, { name: fileName })],
     };
 
     const thread = await forum.threads.create({
