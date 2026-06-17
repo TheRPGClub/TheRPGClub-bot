@@ -10,6 +10,7 @@ import {
   buildTextContainer,
   safeV2TextContent,
 } from "./ComponentsV2Utils.js";
+import { chunk } from "../utilities/ArrayUtils.js";
 
 const ANNOUNCEMENTS_CHANNEL_ID: string | undefined = process.env.ANNOUNCEMENTS_CHANNEL_ID;
 const MAX_GAMES_PER_CONTAINER = 10;
@@ -88,7 +89,7 @@ export async function buildGotmSearchMessages(
 ): Promise<GotmSearchMessagePayload[]> {
   const maxGamesPerContainer = Math.max(1, options.maxGamesPerContainer ?? MAX_GAMES_PER_CONTAINER);
   const maxContainersPerMessage = Math.max(1, options.maxContainersPerMessage ?? 2);
-  const chunks = chunkCards(cards, maxGamesPerContainer);
+  const chunks = chunk(cards, maxGamesPerContainer);
 
   if (!chunks.length) {
     const container = buildTextContainer(safeV2TextContent(`## ${options.title}`, 250));
@@ -201,14 +202,6 @@ function buildVotingResultsLink(card: GotmDisplayCard, guildId?: string): string
     return null;
   }
   return `https://discord.com/channels/${guildId}/${ANNOUNCEMENTS_CHANNEL_ID}/${card.votingResultsMessageId}`;
-}
-
-function chunkCards(cards: GotmDisplayCard[], size: number): GotmDisplayCard[][] {
-  const out: GotmDisplayCard[][] = [];
-  for (let i = 0; i < cards.length; i += size) {
-    out.push(cards.slice(i, i + size));
-  }
-  return out;
 }
 
 async function resolveAccessoryThumbnail(
