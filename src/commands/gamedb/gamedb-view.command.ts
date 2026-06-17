@@ -24,8 +24,8 @@ import {
   sanitizeUserInput,
 } from "../../functions/InteractionUtils.js";
 import { getHltbCacheByGameId, upsertHltbCache } from "../../classes/HltbCache.js";
-import type { GameSource } from "../../types/GameTypes.js";
 import Game from "../../classes/Game.js";
+import { apiPost } from "../../services/RpgClubApiClient.js";
 import { searchHltb } from "../../scripts/SearchHltb.js";
 import { buildTextReply } from "../../functions/ComponentsV2Utils.js";
 import {
@@ -71,45 +71,57 @@ export class GameDbViewCommand {
   ): Promise<void> {
     await safeDeferReply(interaction, { flags: buildComponentsV2Flags(false) });
 
-    const source: GameSource = "API";
     const searchTerm = sanitizeUserInput(query, { preserveNewlines: false });
+    const gameId = /^\d+$/.test(searchTerm) ? Number(searchTerm) : NaN;
 
-    if (source === "API") {
-      const gameId = /^\d+$/.test(searchTerm) ? Number(searchTerm) : NaN;
-      if (!isPositiveInt(gameId)) {
-        await safeReply(interaction, buildTextReply("API source requires a numeric game ID.", false));
-        return;
-      }
+    if (isPositiveInt(gameId)) {
       await showGameProfile(interaction, gameId, undefined);
       return;
     }
 
-    if (/^\d+$/.test(searchTerm)) {
-      const gameId = Number(searchTerm);
-      if (isPositiveInt(gameId)) {
-        const game = await Game.getGameById(gameId, source);
-        if (game) {
-          await showGameProfile(interaction, gameId, undefined);
-          return;
-        }
-      }
-    }
     await runSearchFlow(interaction, searchTerm);
   }
 
   @ButtonComponent({
-    id: /^gamedb-action:(nowplaying|video|hltb-import|backlog):\d+$/,
+    id: /^gamedb-action:(nowplaying|video|hltb-import|backlog|igdb-import):\d+$/,
   })
   async handleGameDbAction(interaction: ButtonInteraction): Promise<void> {
     const segs = assertCustomIdSegments(interaction, 2);
     if (!segs) return;
-    const [action, gameIdRaw] = segs;
-    const gameId = Number(gameIdRaw);
-    if (!isPositiveInt(gameId)) {
-      await safeReply(interaction, buildTextReply("Invalid GameDB id.", true));
+    const [action, idRaw] = segs;
+    const numericId = Number(idRaw);
+    if (!isPositiveInt(numericId)) {
+      await safeReply(interaction, buildTextReply("Invalid id.", true));
       return;
     }
 
+    if (action === "igdb-import") {
+      await safeDeferUpdate(interaction);
+      let result: { data: { id: number } } | null;
+      try {
+        result = await apiPost<{ data: { id: number } }>(
+          "/api/v1/games",
+          { igdb_id: numericId },
+        );
+      } catch (err) {
+        await safeReply(interaction, {
+          ...buildTextReply(buildApiErrorMessage("Failed to import game.", err), true),
+          __forceFollowUp: true,
+        });
+        return;
+      }
+      if (!result) {
+        await safeReply(interaction, {
+          ...buildTextReply(`No IGDB game found with id ${numericId}.`, true),
+          __forceFollowUp: true,
+        });
+        return;
+      }
+      await refreshGameProfileMessage(interaction, result.data.id);
+      return;
+    }
+
+    const gameId = numericId;
     const game = await Game.getGameById(gameId);
     if (!game) {
       await safeReply(interaction, {

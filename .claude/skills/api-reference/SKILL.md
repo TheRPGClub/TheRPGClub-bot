@@ -1,6 +1,5 @@
 ---
 name: api-reference
-model: claude-haiku-4-5
 description: >
   Reference for The RPG Club API endpoints. Use when writing or reviewing code that calls the
   API, when asked what endpoints exist, or when choosing which endpoint to use for a feature.
@@ -185,9 +184,11 @@ GET     /api/v1/users/{user_id}/game_keys  # List a user's donated game keys (pa
 
 ```
 GET     /api/v1/games  # List games (q, winner, genre_id, engine_id, theme_id, perspective_id, mode_id, franchise_id, company_id, page, per, limit, offset)
+POST    /api/v1/games  # Create a game from IGDB
 GET     /api/v1/games/{id}  # Show game
 GET     /api/v1/games/{id}/completions  # List completions for this game (page, per, limit, offset)
 GET     /api/v1/games/{id}/now_playing  # List users currently playing this game (page, per, limit, offset)
+GET     /api/v1/games/{id}/profile  # Show aggregate game profile
 POST    /api/v1/games/{id}/refresh-images  # Refresh images from IGDB
 GET     /api/v1/games/{id}/relations  # Show game relations
 GET     /api/v1/games/{id}/releases  # List game releases
@@ -205,6 +206,12 @@ GET     /api/v1/genres/{id}  # Show genre
 
 ```
 GET     /api/v1/health  # Health check
+```
+
+### IGDB
+
+```
+GET     /api/v1/igdb/search  # Search IGDB for games (q, per)
 ```
 
 ### Journal
@@ -269,6 +276,7 @@ GET     /api/v1/users/{user_id}/presence_prompts  # List a user's presence promp
 GET     /api/v1/public_reminders  # List public reminders (enabled, page, per, limit, offset)
 POST    /api/v1/public_reminders  # Create a public reminder
   data: { RpgClubPublicReminder attributes (`message`, `due_at`, `enabled`). }
+GET     /api/v1/public_reminders/due  # List due public reminders
 GET     /api/v1/public_reminders/{id}  # Show a public reminder
 PATCH   /api/v1/public_reminders/{id}  # Update a public reminder
 PUT     /api/v1/public_reminders/{id}  # Replace a public reminder (alias)
@@ -285,6 +293,9 @@ GET     /api/v1/rss_feeds/{id}  # Show an RSS feed
 PATCH   /api/v1/rss_feeds/{id}  # Update an RSS feed
 PUT     /api/v1/rss_feeds/{id}  # Replace an RSS feed (alias)
 DELETE  /api/v1/rss_feeds/{id}  # Delete an RSS feed
+GET     /api/v1/rss_feeds/{rss_feed_id}/items  # List seen item hashes for a feed (hashes[])
+POST    /api/v1/rss_feeds/{rss_feed_id}/items  # Bulk-mark items as seen
+  data: { Items to mark seen. }
 ```
 
 ### Regions
@@ -451,11 +462,12 @@ GET     /api/v1/users/{user_id}/nick_history  # List a user's nickname history (
 ```
 GET     /api/v1/user_socials/{id}  # Show a user social link
 PATCH   /api/v1/user_socials/{id}  # Update a user social link
+  data: { UserSocial attributes: `platform_id`, `url` (optional, deduped per user+platform), `display_text` (optional label). }
 PUT     /api/v1/user_socials/{id}  # Replace a user social link (alias)
 DELETE  /api/v1/user_socials/{id}  # Delete a user social link
 GET     /api/v1/users/{user_id}/socials  # List a user's linked socials (page, per, limit, offset)
 POST    /api/v1/users/{user_id}/socials  # Link a social account
-  data: { UserSocial attributes (`social_platform_id`, `handle`, `url`, etc.). }
+  data: { UserSocial attributes: `platform_id` (required), `url` (optional, deduped per user+platform), `display_text` (optional label). }
 ```
 
 ### Users

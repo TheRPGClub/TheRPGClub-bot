@@ -1,5 +1,6 @@
 import {
   ApplicationCommandOptionType,
+  ButtonStyle,
   CommandInteraction,
   MessageFlags,
   StringSelectMenuInteraction,
@@ -10,15 +11,12 @@ import {
   SlashGroup,
   SlashOption,
 } from "discordx";
-import axios from "axios";
 import {
   safeDeferReply,
   safeDeferUpdate,
   safeReply,
   sanitizeUserInput,
 } from "../../functions/InteractionUtils.js";
-import { igdbService, type IGDBGameDetails } from "../../services/IGDB/IgdbService.js";
-import { createIgdbSession } from "../../services/IGDB/IgdbSelectService.js";
 import type { IGame } from "../../types/GameTypes.js";
 import Game from "../../classes/Game.js";
 import {
@@ -29,29 +27,55 @@ import {
 import {
   autocompleteGameDbViewTitle,
   buildComponentsV2Flags,
-  isUniqueConstraintError,
-  isUnknownWebhookError,
 } from "./gamedb-utils.js";
-import { buildIgdbSelectOptions } from "./gamedb-csv-import.service.js";
+import {
+  createIgdbSession,
+  type IgdbSelectOption,
+} from "../../services/IGDB/IgdbSelectService.js";
 import { showGameProfile, trimTextDisplayContent } from "./gamedb-profile.service.js";
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
 import { logError, logWarn } from "../../utilities/LogUtils.js";
-import { apiPost } from "../../services/RpgClubApiClient.js";
+import { apiGet, apiPost } from "../../services/RpgClubApiClient.js";
 import GamePlatformRegionService from "../../classes/GamePlatformRegionService.js";
-import { importReleaseDatesFromIgdb, saveFullGameMetadata } from "../../functions/GameIgdbSync.js";
+import { importReleaseDatesFromIgdb } from "../../functions/GameIgdbSync.js";
 import GameSearchService from "../../classes/GameSearchService.js";
+import { buildApiErrorMessage } from "../../utilities/ApiErrorUtils.js";
+import {
+  buildActionButton,
+  buildButtonRow,
+} from "../../functions/uiComponents.js";
 
-async function fetchIgdbCoverImage(details: IGDBGameDetails): Promise<Buffer | null> {
-  if (!details.cover?.image_id) return null;
-  try {
-    const imageUrl =
-      `https://images.igdb.com/igdb/image/upload/t_cover_big/${details.cover.image_id}.jpg`;
-    const imageResponse = await axios.get(imageUrl, { responseType: "arraybuffer" });
-    return Buffer.from(imageResponse.data);
-  } catch (err) {
-    logError("GamedbAddCommand.downloadCoverImage", err);
-    return null;
-  }
+export interface IGdbApiCandidate {
+  igdb_id: number;
+  name: string;
+  slug?: string | null;
+  summary?: string | null;
+  url?: string | null;
+  total_rating?: number | null;
+  first_release_date?: string | null;
+  cover_url?: string | null;
+  already_imported: boolean;
+}
+
+async function searchIgdbViaApi(query: string): Promise<IGdbApiCandidate[]> {
+  const res = await apiGet<{ data: IGdbApiCandidate[] }>(
+    "/api/v1/igdb/search",
+    { params: { q: query } },
+  );
+  return res?.data ?? [];
+}
+
+function buildApiCandidateSelectOptions(candidates: IGdbApiCandidate[]): IgdbSelectOption[] {
+  return candidates.map((c) => {
+    const year = c.first_release_date
+      ? new Date(c.first_release_date).getFullYear()
+      : "TBD";
+    return {
+      id: c.igdb_id,
+      label: `${c.name} (${year})`,
+      description: c.summary ? c.summary.substring(0, 100) : "No summary",
+    };
+  });
 }
 
 export async function processReleaseDates(
@@ -75,7 +99,10 @@ export async function processReleaseDates(
   const platformMap = await GamePlatformRegionService.getPlatformsByIgdbIds(uniquePlatformIds);
   const missingPlatformIds = uniquePlatformIds.filter((id) => !platformMap.has(id));
   if (missingPlatformIds.length) {
-    logWarn("GamedbAdd.addGame", `Missing IGDB platform IDs in GAMEDB_PLATFORMS: ${missingPlatformIds.join(", ")}`);
+    logWarn(
+      "GamedbAdd.addGame",
+      `Missing IGDB platform IDs in GAMEDB_PLATFORMS: ${missingPlatformIds.join(", ")}`,
+    );
   }
 
   for (const release of releaseDates) {
@@ -113,72 +140,27 @@ export async function addGameToDatabase(
   igdbId: number,
   opts?: { selectionMessage?: import("discord.js").Message | null; showProfile?: boolean },
 ): Promise<void> {
-  const details = await igdbService.getGameDetails(igdbId);
-  if (!details) {
-    const msg = "Failed to fetch details from IGDB.";
-    const payload = { content: msg };
-    try {
-      if (interaction.isMessageComponent()) {
-        await safeReply(interaction, { ...payload, __forceFollowUp: true });
-      } else {
-        await safeReply(interaction, payload);
-      }
-    } catch (err) {
-      if (isUnknownWebhookError(err)) {
-        await safeReply(interaction, { ...payload, __forceFollowUp: true });
-      } else {
-        throw err;
-      }
-    }
+  let result: { data: { id: number } } | null;
+  try {
+    result = await apiPost<{ data: { id: number } }>(
+      "/api/v1/games",
+      { igdb_id: igdbId },
+    );
+  } catch (err) {
+    await safeReply(interaction, {
+      ...buildTextReply(buildApiErrorMessage("Failed to import game.", err), false),
+      __forceFollowUp: true,
+    });
     return;
   }
 
-  const imageData = await fetchIgdbCoverImage(details);
-
-  const igdbUrl = details.url
-    || (details.slug ? `https://www.igdb.com/games/${details.slug}` : null);
-  let newGame;
-  try {
-    newGame = await Game.createGame(
-      details.name,
-      details.summary || null,
-      imageData,
-      details.id,
-      details.slug,
-      details.total_rating ?? null,
-      igdbUrl,
-      Game.getFeaturedVideoUrl(details),
-    );
-  } catch (err: any) {
-    if (isUniqueConstraintError(err)) {
-      const msg = "This game has already been imported.";
-      const payload = { content: msg };
-      try {
-        if (interaction.isMessageComponent()) {
-          await safeReply(interaction, { ...payload, __forceFollowUp: true });
-        } else {
-          await safeReply(interaction, payload);
-        }
-      } catch (e) {
-        if (isUnknownWebhookError(e)) {
-          await safeReply(interaction, { ...payload, __forceFollowUp: true });
-        } else {
-          throw e;
-        }
-      }
-      return;
-    }
-    throw err;
+  if (!result) {
+    await safeReply(interaction, {
+      ...buildTextReply(`No IGDB game found with id ${igdbId}.`, false),
+      __forceFollowUp: true,
+    });
+    return;
   }
-
-  await saveFullGameMetadata(newGame.id, details);
-
-  const igdbPlatformIds: number[] = (details.platforms ?? [])
-    .map((platform) => platform.id)
-    .filter(isPositiveInt);
-  await GamePlatformRegionService.addGamePlatformsByIgdbIds(newGame.id, igdbPlatformIds);
-
-  await processReleaseDates(newGame.id, details.release_dates || []);
 
   if (opts?.selectionMessage) {
     try {
@@ -188,11 +170,7 @@ export async function addGameToDatabase(
     }
   }
 
-  await apiPost(`/api/v1/games/${newGame.id}/refresh-images`).catch((err) => {
-    logError("GamedbAddCommand.addGameToDatabase.refreshImages", err);
-  });
-
-  await showGameProfile(interaction, newGame.id, true);
+  await showGameProfile(interaction, result.data.id, true);
 }
 
 export async function handleNoResults(
@@ -208,10 +186,9 @@ export async function handleNoResults(
       ? `${existingList.join("\n")}${existing.length > 10 ? "\n(and more...)" : ""}`
       : null;
 
-    const searchRes = await igdbService.searchGames(query);
-    const results = searchRes.results;
+    const candidates = await searchIgdbViaApi(query);
 
-    if (!results.length) {
+    if (!candidates.length) {
       const noResultsMsg = existingText
         ? `No games found on IGDB matching "${query}".\nSimilar GameDB entries:\n${existingText}`
         : `No games found on IGDB matching "${query}".`;
@@ -222,16 +199,41 @@ export async function handleNoResults(
       return;
     }
 
-    if (results.length === 1) {
-      await addGameToDatabase(interaction, results[0].id, {
-        selectionMessage: null,
-        showProfile: true,
+    if (candidates.length === 1) {
+      const candidate = candidates[0];
+      if (candidate.already_imported) {
+        const existingGame = await Game.getGameByIgdbId(candidate.igdb_id);
+        if (existingGame) {
+          await showGameProfile(interaction, existingGame.id, undefined);
+          return;
+        }
+      }
+      const year = candidate.first_release_date
+        ? new Date(candidate.first_release_date).getFullYear()
+        : "TBD";
+      const label = `${candidate.name} (${year})`;
+      const statusMsg = candidate.already_imported
+        ? `**${label}** is already in GameDB but could not be located. ` +
+          `Use the button to refresh it.`
+        : `**${label}** was found on IGDB but is not yet in GameDB.`;
+      const fullText = existingText
+        ? `${statusMsg}\n\nSimilar GameDB entries:\n${existingText}`
+        : statusMsg;
+      const container = buildTextContainer(safeV2TextContent(fullText, 3500));
+      const importButton = buildActionButton({
+        customId: `gamedb-action:igdb-import:${candidate.igdb_id}`,
+        label: "Import to GameDB",
+        style: ButtonStyle.Primary,
+      });
+      await safeReply(interaction, {
+        components: [container, buildButtonRow(importButton)],
+        flags: buildComponentsV2Flags(false),
+        __forceFollowUp: true,
       });
       return;
     }
 
-    const opts = await buildIgdbSelectOptions(results);
-
+    const opts = buildApiCandidateSelectOptions(candidates);
     const { components } = createIgdbSession(
       interaction.user.id,
       opts,
@@ -243,17 +245,14 @@ export async function handleNoResults(
       },
     );
 
-    const totalLabel =
-      typeof searchRes.total === "number" ? searchRes.total : results.length;
-    const needsPaging = totalLabel > 22;
+    const needsPaging = candidates.length > 22;
     const pagingHint = needsPaging
-      ? "\nUse the dropdown's Next page option to see more results."
+      ? " Use the dropdown's Next page option to see more results."
       : "";
-
     const baseText =
       `## IGDB Results for "${query}"\n` +
-      `Found ${totalLabel} results. Showing first ${Math.min(results.length, 22)}.` +
-      `${pagingHint ? ` ${pagingHint}` : ""}`;
+      `Found ${candidates.length} results. Showing first ${Math.min(candidates.length, 22)}.` +
+      pagingHint;
     const contentParts = [baseText];
     if (existingText) {
       contentParts.push(`**Existing GameDB matches**\n${existingText}`);
@@ -268,7 +267,10 @@ export async function handleNoResults(
     });
   } catch (err: any) {
     await safeReply(interaction, {
-      ...buildTextReply(`Auto-import failed: ${err?.message ?? err}`, false),
+      ...buildTextReply(
+        buildApiErrorMessage(`Auto-import failed for "${query}".`, err),
+        false,
+      ),
       __forceFollowUp: true,
     });
   }
@@ -409,7 +411,8 @@ export class GameDbAddCommand {
 
     if (!game.igdbId) {
       await safeReply(interaction, buildTextReply(
-        `GameDB #${game.id} (${game.title}) has no IGDB ID, so release data cannot be refreshed.`,
+        `GameDB #${game.id} (${game.title}) has no IGDB ID, ` +
+        `so release data cannot be refreshed.`,
         true,
       ));
       return;
@@ -444,24 +447,36 @@ export class GameDbAddCommand {
     title: string,
   ): Promise<void> {
     try {
-      const searchRes = await igdbService.searchGames(title);
-      const results = searchRes.results;
+      const candidates = await searchIgdbViaApi(title);
 
-      if (!results || results.length === 0) {
-        await handleNoResults(interaction, title);
+      if (!candidates.length) {
+        const existing = await GameSearchService.searchGames(title);
+        const existingList = existing
+          .slice(0, 10)
+          .map((g) => `• **${g.title}** (GameDB #${g.id})`);
+        const existingText = existingList.length
+          ? `${existingList.join("\n")}${existing.length > 10 ? "\n(and more...)" : ""}`
+          : null;
+        const noResultsMsg = existingText
+          ? `No games found on IGDB matching "${title}".\n` +
+            `Similar GameDB entries:\n${existingText}`
+          : `No games found on IGDB matching "${title}".`;
+        await safeReply(interaction, {
+          ...buildTextReply(noResultsMsg, false),
+          __forceFollowUp: true,
+        });
         return;
       }
 
-      if (results.length === 1) {
-        await addGameToDatabase(interaction, results[0].id, {
+      if (candidates.length === 1) {
+        await addGameToDatabase(interaction, candidates[0].igdb_id, {
           selectionMessage: null,
           showProfile: true,
         });
         return;
       }
 
-      const opts = await buildIgdbSelectOptions(results);
-
+      const opts = buildApiCandidateSelectOptions(candidates);
       const { components } = createIgdbSession(
         interaction.user.id,
         opts,
@@ -474,7 +489,8 @@ export class GameDbAddCommand {
       );
 
       const content = trimTextDisplayContent(
-        `## IGDB Results for "${title}"\nFound ${results.length} results. Please select one:`,
+        `## IGDB Results for "${title}"\n` +
+        `Found ${candidates.length} results. Please select one:`,
       );
       const container = buildTextContainer(safeV2TextContent(content, 3500));
       await safeReply(interaction, {
@@ -485,7 +501,10 @@ export class GameDbAddCommand {
 
     } catch (error: any) {
       await safeReply(interaction, {
-        ...buildTextReply(`Failed to search IGDB. Error: ${error.message}`, false),
+        ...buildTextReply(
+          buildApiErrorMessage(`Failed to search IGDB for "${title}".`, error),
+          false,
+        ),
         __forceFollowUp: true,
       });
     }
