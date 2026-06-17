@@ -5,6 +5,7 @@ import type {
   CommandInteraction,
   Guild,
   GuildMember,
+  GuildMemberRoleManager,
   InteractionDeferReplyOptions,
   ModalSubmitInteraction,
   PermissionResolvable,
@@ -23,14 +24,23 @@ import {
 
 export type AnyRepliable = RepliableInteraction | CommandInteraction;
 
+/** Augments AnyRepliable with RPG-bot-internal ack flags set at runtime. */
+type AugmentedInteraction = AnyRepliable & {
+  __rpgAcked?: boolean;
+  __rpgDeferred?: boolean;
+};
+
 export function memberHasPermission(
   interaction: AnyRepliable,
   flag: PermissionResolvable,
 ): boolean {
-  const member: any = (interaction as any).member;
+  const member = interaction.member;
+  // permissionsIn exists on cached GuildMember but not on the raw API member shape.
   const canCheck =
-    member && typeof member.permissionsIn === "function" && interaction.channel;
-  return canCheck ? member.permissionsIn(interaction.channel).has(flag) : false;
+    member && typeof (member as GuildMember).permissionsIn === "function" && interaction.channelId;
+  return canCheck
+    ? (member as GuildMember).permissionsIn(interaction.channelId!).has(flag)
+    : false;
 }
 
 export function buildIdTimestampFooter(id: string, timestamp: string): string {
@@ -168,11 +178,11 @@ function normalizeOptions(options: any): any {
   const {
     __forceFollowUp: _forceFollowUp,
     ...restOptions
-  } = options as any;
+  } = options;
   void _forceFollowUp;
 
   if ("ephemeral" in options) {
-    const { ephemeral, flags, ...rest } = restOptions as any;
+    const { ephemeral, flags, ...rest } = restOptions;
     const newFlags = ephemeral ? ((flags ?? 0) | MessageFlags.Ephemeral) : flags;
     return normalizeComponentsV2Payload({ ...rest, flags: newFlags });
   }
@@ -223,62 +233,62 @@ function stripEphemeralFlag(flags: any): number {
 }
 
 function shouldForcePublicInDevChannel(interaction: AnyRepliable): boolean {
-  const anyInteraction = interaction as any;
-  const channelId = anyInteraction?.channelId;
+  const channelId = interaction.channelId;
   if (!channelId || channelId !== BOT_DEV_CHANNEL_ID) return false;
-  const ownerId = anyInteraction?.guild?.ownerId;
-  return Boolean(ownerId && anyInteraction?.user?.id === ownerId);
+  const ownerId = interaction.guild?.ownerId;
+  return Boolean(ownerId && interaction.user.id === ownerId);
 }
 
+type MessageWithInteraction = {
+  interaction?: { user?: { id?: string } } | null;
+};
+
 function getCommandOwnerId(interaction: AnyRepliable): string | null {
-  const anyInteraction = interaction as any;
-  const message = anyInteraction?.message;
-  const ownerId = message?.interaction?.user?.id;
-  return ownerId ?? null;
+  // message exists on MessageComponentInteraction; use structural check to avoid import.
+  const msg = (interaction as unknown as { message?: MessageWithInteraction | null }).message;
+  return msg?.interaction?.user?.id ?? null;
 }
 
 function memberHasDevRole(interaction: AnyRepliable): boolean {
-  const roles = (interaction as any)?.member?.roles;
+  const roles = interaction.member?.roles;
   if (!roles) return false;
   // Cached GuildMember exposes a role manager; raw API members expose a string[].
-  if (typeof roles.cache?.has === "function") return roles.cache.has(DEV_ROLE_ID);
-  if (Array.isArray(roles)) return roles.includes(DEV_ROLE_ID);
+  if (typeof (roles as GuildMemberRoleManager).cache?.has === "function") {
+    return (roles as GuildMemberRoleManager).cache.has(DEV_ROLE_ID);
+  }
+  if (Array.isArray(roles)) return (roles as string[]).includes(DEV_ROLE_ID);
   return false;
 }
 
 function shouldBlockDevChannelInteraction(interaction: AnyRepliable): boolean {
-  const anyInteraction = interaction as any;
-  const channelId = anyInteraction?.channelId;
+  const channelId = interaction.channelId;
   if (!channelId || channelId !== BOT_DEV_CHANNEL_ID) return false;
-  const isComponent = typeof anyInteraction.isMessageComponent === "function" &&
-    anyInteraction.isMessageComponent();
-  const isModal = typeof anyInteraction.isModalSubmit === "function" &&
-    anyInteraction.isModalSubmit();
+  const isComponent = interaction.isMessageComponent();
+  const isModal = interaction.isModalSubmit();
   if (!isComponent && !isModal) return false;
 
   const commandOwnerId = getCommandOwnerId(interaction);
-  const userId = anyInteraction?.user?.id ?? null;
+  const userId = interaction.user?.id ?? null;
   if (!userId) return true;
   if (userId === commandOwnerId) return false;
   return !memberHasDevRole(interaction);
 }
 
 async function sendDevChannelBlockResponse(interaction: AnyRepliable): Promise<void> {
-  const anyInteraction = interaction as any;
-  const payload = {
-    content:
-      "Only the command owner or members with the dev role can use controls in this channel.",
-    flags: MessageFlags.Ephemeral,
-  };
+  const aug = interaction as AugmentedInteraction;
+  const payload = buildTextReply(
+    "Only the command owner or members with the dev role can use controls in this channel.",
+    true,
+  );
 
   try {
-    if (anyInteraction.deferred || anyInteraction.replied) {
-      await anyInteraction.followUp(payload);
+    if (aug.deferred || aug.replied) {
+      await aug.followUp(payload);
     } else {
-      await anyInteraction.reply(payload);
+      await aug.reply(payload);
     }
-    anyInteraction.__rpgAcked = true;
-  } catch (err: any) {
+    aug.__rpgAcked = true;
+  } catch (err: unknown) {
     if (!isAckError(err)) throw err;
   }
 }
@@ -296,7 +306,7 @@ export async function safeDeferReply(
   interaction: AnyRepliable,
   options?: InteractionDeferReplyOptions,
 ): Promise<void> {
-  const anyInteraction = interaction as any;
+  const aug = interaction as AugmentedInteraction;
 
   if (shouldBlockDevChannelInteraction(interaction)) {
     await sendDevChannelBlockResponse(interaction);
@@ -307,9 +317,8 @@ export async function safeDeferReply(
   try {
     if (
       !deferOptions &&
-      typeof (interaction as any).isChatInputCommand === "function" &&
-      (interaction as any).isChatInputCommand() &&
-      ["admin", "mod", "superadmin"].includes((interaction as any).commandName)
+      interaction.isChatInputCommand() &&
+      ["admin", "mod", "superadmin"].includes(interaction.commandName)
     ) {
       deferOptions = { flags: MessageFlags.Ephemeral };
     }
@@ -323,18 +332,16 @@ export async function safeDeferReply(
   }
 
   // Custom flag so our helpers can reliably detect an acknowledgement
-  if (anyInteraction.__rpgAcked || anyInteraction.deferred || anyInteraction.replied) {
+  if (aug.__rpgAcked || aug.deferred || aug.replied) {
     return;
   }
 
   try {
-    if (typeof anyInteraction.deferReply === "function") {
-      const normalized = deferOptions ? normalizeOptions(deferOptions) : deferOptions;
-      const overridden = applyDevChannelOverrides(interaction, normalized);
-      await anyInteraction.deferReply(overridden as any);
-      anyInteraction.__rpgAcked = true;
-      anyInteraction.__rpgDeferred = true;
-    }
+    const normalized = deferOptions ? normalizeOptions(deferOptions) : deferOptions;
+    const overridden = applyDevChannelOverrides(interaction, normalized);
+    await interaction.deferReply(overridden as InteractionDeferReplyOptions);
+    aug.__rpgAcked = true;
+    aug.__rpgDeferred = true;
   } catch {
     // ignore errors from deferReply (e.g., already acknowledged)
   }
@@ -342,24 +349,24 @@ export async function safeDeferReply(
 
 // Safely defer a component update, ignoring acknowledgement races.
 export async function safeDeferUpdate(interaction: AnyRepliable): Promise<void> {
-  const anyInteraction = interaction as any;
+  const aug = interaction as AugmentedInteraction;
   if (shouldBlockDevChannelInteraction(interaction)) {
     await sendDevChannelBlockResponse(interaction);
     return;
   }
 
-  if (anyInteraction.__rpgAcked || anyInteraction.deferred || anyInteraction.replied) {
+  if (aug.__rpgAcked || aug.deferred || aug.replied) {
     return;
   }
 
-  if (typeof anyInteraction.deferUpdate !== "function") {
+  if (!interaction.isMessageComponent()) {
     return;
   }
 
   try {
-    await anyInteraction.deferUpdate();
-    anyInteraction.__rpgAcked = true;
-    anyInteraction.__rpgDeferred = true;
+    await interaction.deferUpdate();
+    aug.__rpgAcked = true;
+    aug.__rpgDeferred = true;
   } catch {
     // ignore acknowledgement races
   }
@@ -376,13 +383,14 @@ export async function safeDeferUpdateOrBail(interaction: AnyRepliable): Promise<
 }
 
 // Ensure we do not hit "Interaction already acknowledged" when replying
-const isAckError = (err: any): boolean => {
-  const code = err?.code ?? err?.rawError?.code;
+const isAckError = (err: unknown): boolean => {
+  const code = (err as { code?: number; rawError?: { code?: number } })?.code
+    ?? (err as { rawError?: { code?: number } })?.rawError?.code;
   return code === 40060 || code === 10062;
 };
 
 export async function safeReply(interaction: AnyRepliable, options: any): Promise<any> {
-  const anyInteraction = interaction as any;
+  const aug = interaction as AugmentedInteraction;
   if (shouldBlockDevChannelInteraction(interaction)) {
     await sendDevChannelBlockResponse(interaction);
     return;
@@ -391,12 +399,10 @@ export async function safeReply(interaction: AnyRepliable, options: any): Promis
   const normalizedOptions = applyDevChannelOverrides(interaction, normalizeOptions(options));
 
   const deferred: boolean = Boolean(
-    anyInteraction.__rpgDeferred !== undefined
-      ? anyInteraction.__rpgDeferred
-      : anyInteraction.deferred,
+    aug.__rpgDeferred !== undefined ? aug.__rpgDeferred : aug.deferred,
   );
-  const replied: boolean = Boolean(anyInteraction.replied);
-  const acked: boolean = Boolean(anyInteraction.__rpgAcked ?? deferred ?? replied);
+  const replied: boolean = Boolean(aug.replied);
+  const acked: boolean = Boolean(aug.__rpgAcked ?? deferred ?? replied);
 
   if (forceFollowUp) {
     try {
@@ -404,9 +410,9 @@ export async function safeReply(interaction: AnyRepliable, options: any): Promis
         // eslint-disable-next-line local/no-plain-text-v1-reply
         return await interaction.followUp({ content: options });
       } else {
-        return await interaction.followUp(normalizedOptions as any);
+        return await interaction.followUp(normalizedOptions);
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       if (!isAckError(err)) throw err;
     }
     return;
@@ -419,18 +425,19 @@ export async function safeReply(interaction: AnyRepliable, options: any): Promis
         // eslint-disable-next-line local/no-plain-text-v1-reply
         return await interaction.editReply({ content: options });
       } else {
-        const result = await interaction.editReply(normalizedOptions as any);
-        logInfo("InteractionUtils.safeReply", { step: "editReply success", messageId: (result as any)?.id });
+        const result = await interaction.editReply(normalizedOptions);
+        logInfo("InteractionUtils.safeReply", { step: "editReply success", messageId: result?.id });
         return result;
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       if (!isAckError(err)) throw err;
-      const ackCode = err?.code ?? err?.rawError?.code;
+      const ackCode = (err as { code?: number; rawError?: { code?: number } })?.code
+        ?? (err as { rawError?: { code?: number } })?.rawError?.code;
       logError("InteractionUtils.safeReply", {
-        code: err?.code,
-        status: err?.status,
-        message: err?.message,
-        rawError: JSON.stringify(err?.rawError),
+        code: (err as { code?: number })?.code,
+        status: (err as { status?: number })?.status,
+        message: (err as { message?: string })?.message,
+        rawError: JSON.stringify((err as { rawError?: unknown })?.rawError),
       });
       // 40060 = already replied; a followUp can still deliver the content
       if (ackCode === 40060) {
@@ -439,7 +446,7 @@ export async function safeReply(interaction: AnyRepliable, options: any): Promis
             // eslint-disable-next-line local/no-plain-text-v1-reply
             return await interaction.followUp({ content: options });
           } else {
-            return await interaction.followUp(normalizedOptions as any);
+            return await interaction.followUp(normalizedOptions);
           }
         } catch {
           // followUp also failed; nothing more to do
@@ -457,9 +464,9 @@ export async function safeReply(interaction: AnyRepliable, options: any): Promis
         // eslint-disable-next-line local/no-plain-text-v1-reply
         return await interaction.followUp({ content: options });
       } else {
-        return await interaction.followUp(normalizedOptions as any);
+        return await interaction.followUp(normalizedOptions);
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       if (!isAckError(err)) throw err;
     }
     return;
@@ -471,34 +478,33 @@ export async function safeReply(interaction: AnyRepliable, options: any): Promis
       ? { content: options }
       : { ...normalizedOptions };
 
-    const result = await interaction.reply(replyOptions as any);
-    anyInteraction.__rpgAcked = true;
+    const result = await interaction.reply(replyOptions);
+    aug.__rpgAcked = true;
     return result;
-  } catch (err: any) {
+  } catch (err: unknown) {
     if (!isAckError(err)) throw err;
   }
 }
 
 // Try to update an existing interaction message; fall back to a normal reply if needed.
 export async function safeUpdate(interaction: AnyRepliable, options: any): Promise<void> {
-  const anyInteraction = interaction as any;
+  const aug = interaction as AugmentedInteraction;
   if (shouldBlockDevChannelInteraction(interaction)) {
     await sendDevChannelBlockResponse(interaction);
     return;
   }
   const normalizedOptions = applyDevChannelOverrides(interaction, normalizeOptions(options));
 
-  if (typeof anyInteraction.update === "function") {
+  if (interaction.isMessageComponent()) {
     try {
-      await anyInteraction.update(normalizedOptions);
-      anyInteraction.__rpgAcked = true;
-      anyInteraction.__rpgDeferred = true;
+      await interaction.update(normalizedOptions);
+      aug.__rpgAcked = true;
+      aug.__rpgDeferred = true;
       return;
-    } catch (err: any) {
+    } catch (err: unknown) {
       if (isAckError(err)) {
         const alreadyAcked = Boolean(
-          anyInteraction.__rpgAcked ?? anyInteraction.__rpgDeferred ?? anyInteraction.deferred ??
-            anyInteraction.replied,
+          aug.__rpgAcked ?? aug.__rpgDeferred ?? aug.deferred ?? aug.replied,
         );
         if (!alreadyAcked) {
           return;
@@ -538,8 +544,7 @@ export async function deferWithPrivateFlag(
 }
 
 export function extractErrorMessage(err: unknown): string {
-  const e = err as any;
-  return e?.message ?? String(e);
+  return err instanceof Error ? err.message : String(err);
 }
 
 export async function withErrorReply<T>(

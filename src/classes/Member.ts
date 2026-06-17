@@ -336,7 +336,7 @@ function mapAvatarHistoryRow(row: AvatarHistoryRow): IAvatarHistoryRecord {
     avatarHash: row.AVATAR_HASH ?? null,
     avatarUrl: row.AVATAR_URL ?? null,
     avatarBlob: row.AVATAR_BLOB ?? null,
-    changedAt: row.CHANGED_AT instanceof Date ? row.CHANGED_AT : new Date(row.CHANGED_AT as any),
+    changedAt: row.CHANGED_AT instanceof Date ? row.CHANGED_AT : new Date(row.CHANGED_AT as string),
   };
 }
 
@@ -414,17 +414,17 @@ export default class Member {
           note: r.NOTE ?? null,
           addedAt: r.ADDED_AT instanceof Date
             ? r.ADDED_AT
-            : r.ADDED_AT ? new Date(r.ADDED_AT as any) : null,
+            : r.ADDED_AT ? new Date(r.ADDED_AT as string) : null,
           noteUpdatedAt: r.NOTE_UPDATED_AT instanceof Date
             ? r.NOTE_UPDATED_AT
-            : r.NOTE_UPDATED_AT ? new Date(r.NOTE_UPDATED_AT as any) : null,
+            : r.NOTE_UPDATED_AT ? new Date(r.NOTE_UPDATED_AT as string) : null,
           sortOrder: r.SORT_ORDER == null ? null : Number(r.SORT_ORDER),
           journalEnabled: Number(r.JOURNAL_ENABLED ?? 0) === 1,
           hasJournalEntry: Number(r.HAS_JOURNAL_ENTRY ?? 0) === 1,
           journalCount: Number(r.JOURNAL_COUNT ?? 0),
           lastJournalAt: r.LAST_JOURNAL_AT instanceof Date
             ? r.LAST_JOURNAL_AT
-            : r.LAST_JOURNAL_AT ? new Date(r.LAST_JOURNAL_AT as any) : null,
+            : r.LAST_JOURNAL_AT ? new Date(r.LAST_JOURNAL_AT as string) : null,
         }),
       ).then((rows) => rows.slice(0, MAX_NOW_PLAYING));
     });
@@ -471,10 +471,10 @@ export default class Member {
             note: row.NOTE ?? null,
             addedAt: row.ADDED_AT instanceof Date
               ? row.ADDED_AT
-              : row.ADDED_AT ? new Date(row.ADDED_AT as any) : null,
+              : row.ADDED_AT ? new Date(row.ADDED_AT as string) : null,
             noteUpdatedAt: row.NOTE_UPDATED_AT instanceof Date
               ? row.NOTE_UPDATED_AT
-              : row.NOTE_UPDATED_AT ? new Date(row.NOTE_UPDATED_AT as any) : null,
+              : row.NOTE_UPDATED_AT ? new Date(row.NOTE_UPDATED_AT as string) : null,
             sortOrder: null,
             journalEnabled: false,
             hasJournalEntry: false,
@@ -591,12 +591,12 @@ export default class Member {
         addedAt: r.ADDED_AT instanceof Date
           ? r.ADDED_AT
           : r.ADDED_AT
-            ? new Date(r.ADDED_AT as any)
+            ? new Date(r.ADDED_AT as string)
             : null,
         noteUpdatedAt: r.NOTE_UPDATED_AT instanceof Date
           ? r.NOTE_UPDATED_AT
           : r.NOTE_UPDATED_AT
-            ? new Date(r.NOTE_UPDATED_AT as any)
+            ? new Date(r.NOTE_UPDATED_AT as string)
             : null,
         sortOrder: r.SORT_ORDER == null ? null : Number(r.SORT_ORDER),
         journalEnabled: Number(r.JOURNAL_ENABLED ?? 0) === 1,
@@ -617,7 +617,7 @@ export default class Member {
         addedAt: row.ADDED_AT instanceof Date
           ? row.ADDED_AT
           : row.ADDED_AT
-            ? new Date(row.ADDED_AT as any)
+            ? new Date(row.ADDED_AT as string)
             : null,
       }),
     );
@@ -727,7 +727,7 @@ export default class Member {
           row.LAST_JOURNAL_AT instanceof Date
             ? row.LAST_JOURNAL_AT
             : row.LAST_JOURNAL_AT
-              ? new Date(row.LAST_JOURNAL_AT as any)
+              ? new Date(row.LAST_JOURNAL_AT as string)
               : null,
       }),
     );
@@ -1008,7 +1008,7 @@ export default class Member {
           row.COMPLETED_AT instanceof Date
             ? row.COMPLETED_AT
             : row.COMPLETED_AT
-              ? new Date(row.COMPLETED_AT as any)
+              ? new Date(row.COMPLETED_AT as string)
               : null,
         finalPlaytimeHours:
           row.FINAL_PLAYTIME_HRS == null ? null : Number(row.FINAL_PLAYTIME_HRS),
@@ -1016,7 +1016,7 @@ export default class Member {
           row.CREATED_AT instanceof Date
             ? row.CREATED_AT
             : row.CREATED_AT
-              ? new Date(row.CREATED_AT as any)
+              ? new Date(row.CREATED_AT as string)
               : new Date(),
         threadId: row.THREAD_ID ?? null,
         note: row.NOTE ?? null,
@@ -1074,7 +1074,7 @@ export default class Member {
           row.COMPLETED_AT instanceof Date
             ? row.COMPLETED_AT
             : row.COMPLETED_AT
-              ? new Date(row.COMPLETED_AT as any)
+              ? new Date(row.COMPLETED_AT as string)
               : null,
         finalPlaytimeHours:
           row.FINAL_PLAYTIME_HRS == null ? null : Number(row.FINAL_PLAYTIME_HRS),
@@ -1082,7 +1082,7 @@ export default class Member {
           row.CREATED_AT instanceof Date
             ? row.CREATED_AT
             : row.CREATED_AT
-              ? new Date(row.CREATED_AT as any)
+              ? new Date(row.CREATED_AT as string)
               : new Date(),
         threadId: row.THREAD_ID ?? null,
         note: row.NOTE ?? null,
@@ -1115,7 +1115,7 @@ export default class Member {
           row.COMPLETED_AT instanceof Date
             ? row.COMPLETED_AT
             : row.COMPLETED_AT
-              ? new Date(row.COMPLETED_AT as any)
+              ? new Date(row.COMPLETED_AT as string)
               : null,
         finalPlaytimeHours:
           row.FINAL_PLAYTIME_HRS == null ? null : Number(row.FINAL_PLAYTIME_HRS),
@@ -1123,7 +1123,7 @@ export default class Member {
           row.CREATED_AT instanceof Date
             ? row.CREATED_AT
             : row.CREATED_AT
-              ? new Date(row.CREATED_AT as any)
+              ? new Date(row.CREATED_AT as string)
               : new Date(),
         threadId: row.THREAD_ID ?? null,
         note: row.NOTE ?? null,
@@ -1430,7 +1430,7 @@ export default class Member {
           row.COMPLETED_AT instanceof Date
             ? row.COMPLETED_AT
             : row.COMPLETED_AT
-              ? new Date(row.COMPLETED_AT as any)
+              ? new Date(row.COMPLETED_AT as string)
               : null,
         finalPlaytimeHours:
           row.FINAL_PLAYTIME_HRS == null ? null : Number(row.FINAL_PLAYTIME_HRS),
@@ -1438,7 +1438,7 @@ export default class Member {
           row.CREATED_AT instanceof Date
             ? row.CREATED_AT
             : row.CREATED_AT
-              ? new Date(row.CREATED_AT as any)
+              ? new Date(row.CREATED_AT as string)
               : new Date(),
         threadId: row.THREAD_ID ?? null,
         note: row.NOTE ?? null,
@@ -1482,7 +1482,7 @@ export default class Member {
           row.COMPLETED_AT instanceof Date
             ? row.COMPLETED_AT
             : row.COMPLETED_AT
-              ? new Date(row.COMPLETED_AT as any)
+              ? new Date(row.COMPLETED_AT as string)
               : null,
         finalPlaytimeHours:
           row.FINAL_PLAYTIME_HRS == null ? null : Number(row.FINAL_PLAYTIME_HRS),
@@ -1490,7 +1490,7 @@ export default class Member {
           row.CREATED_AT instanceof Date
             ? row.CREATED_AT
             : row.CREATED_AT
-              ? new Date(row.CREATED_AT as any)
+              ? new Date(row.CREATED_AT as string)
               : new Date(),
         threadId: row.THREAD_ID ?? null,
         note: row.NOTE ?? null,
