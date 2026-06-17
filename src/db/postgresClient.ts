@@ -62,6 +62,25 @@ export function getPostgresPool(): pg.Pool {
 }
 
 /**
+ * Returns true for transient TCP/connection errors that are safe to retry on
+ * read-only queries. Write operations must NOT use this -- the server may have
+ * already committed before the socket died, so retrying would double-apply the
+ * mutation.
+ *
+ * Covered cases:
+ *   57P01 -- admin_shutdown (Postgres sent a termination notice)
+ *   57P02 -- crash_shutdown
+ *   ECONNRESET -- TCP reset mid-query
+ *   "Connection terminated unexpectedly" -- pg client idle timeout / NAT drop
+ */
+export function isTransientConnectionError(err: unknown): boolean {
+  if (!(err instanceof Error)) return false;
+  const code = (err as Error & { code?: string }).code;
+  if (code === "57P01" || code === "57P02" || code === "ECONNRESET") return true;
+  return err.message.includes("Connection terminated unexpectedly");
+}
+
+/**
  * Converts a SQL string using Oracle-style `:name` placeholders and a named
  * bind object into a positional `$N` SQL string and ordered values array.
  * Repeated uses of the same name get the same `$N`. Array params are returned
@@ -89,6 +108,9 @@ export function namedToPositional(
 /**
  * Convenience helper -- runs a parameterised query and returns all rows.
  * Accepts either positional `unknown[]` or named `:param` bind objects.
+ * Retries once on transient connection errors (reset/terminated) since SELECT
+ * queries are idempotent. Write operations use pgMutate/pgInsert instead and
+ * do not retry -- the server may have committed before the socket dropped.
  *
  * @example
  * const rows = await pgQuery<{ id: number }>("SELECT id FROM users WHERE name = :name", { name: "alice" });
@@ -98,8 +120,15 @@ export async function pgQuery<T extends pg.QueryResultRow = pg.QueryResultRow>(
   params?: Record<string, unknown> | unknown[],
 ): Promise<T[]> {
   const { text, values } = namedToPositional(sql, params ?? []);
-  const result = await getPostgresPool().query<T>(text, values);
-  return result.rows;
+  try {
+    const result = await getPostgresPool().query<T>(text, values);
+    return result.rows;
+  } catch (err) {
+    if (!isTransientConnectionError(err)) throw err;
+    logError("postgresClient.queryRetry", err);
+    const result = await getPostgresPool().query<T>(text, values);
+    return result.rows;
+  }
 }
 
 /**
