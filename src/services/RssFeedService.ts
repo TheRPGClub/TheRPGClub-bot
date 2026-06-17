@@ -10,10 +10,10 @@ import {
 } from "../classes/RssFeed.js";
 import { logError, logWarn } from "../utilities/LogUtils.js";
 
-// Coarse safety-net sweep. Each tick queries the GameDB (now on Neon) directly
-// to dedupe RSS items (getSeenItemHashes / markItemsSeen); at 5 min it sat right
-// at Neon's 5-minute scale-to-zero threshold, keeping the serverless compute
-// permanently awake. RSS posts are not time-critical, so hourly is fine.
+// Coarse safety-net sweep. Each tick dedupes RSS items through the API
+// (getSeenItemHashes / markItemsSeen), which is backed by Neon; at 5 min it sat
+// right at Neon's 5-minute scale-to-zero threshold, keeping the serverless
+// compute permanently awake. RSS posts are not time-critical, so hourly is fine.
 const POLL_INTERVAL_MS: number = 60 * 60 * 1000; // 1 hour
 const ERROR_LOG_COOLDOWN = 60 * 60 * 1000; // 1 hour
 const lastErrorLog = new Map<string, number>();
@@ -83,8 +83,7 @@ async function processFeed(
     const itemRecord: IRssFeedItem = {
       feedId: feed.feedId,
       itemIdHash: hash,
-      itemGuid: item.guid ?? null,
-      itemLink: item.link ?? null,
+      url: item.link ?? null,
       publishedAt,
     };
     candidates.push({ item: itemRecord, link: link || "No link provided", title });
