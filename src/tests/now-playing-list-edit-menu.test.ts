@@ -1,10 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { NowPlayingCommand } from "../commands/now-playing.command.js";
+import { NowPlayingNavHandlers } from "../commands/now-playing/nowPlayingNav.handler.js";
 import Member from "../classes/Member.js";
 
 test("nowplaying list edit opens ephemeral manage menu for owner", async () => {
-  const command = new NowPlayingCommand() as any;
+  const command = new NowPlayingNavHandlers() as any;
   const replies: any[] = [];
   const originalGetNowPlaying = Member.getNowPlaying;
 
@@ -43,7 +43,7 @@ test("nowplaying list edit opens ephemeral manage menu for owner", async () => {
 });
 
 test("nowplaying list edit rejects non-owner", async () => {
-  const command = new NowPlayingCommand() as any;
+  const command = new NowPlayingNavHandlers() as any;
   const replies: any[] = [];
 
   const interaction: any = {
