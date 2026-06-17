@@ -1,18 +1,24 @@
 ---
 name: next-refactor
-description: Find the oldest open refactor GitHub issue, implement the change, push to a new branch, and open a PR. Use when asked to "do the next refactor", "work on the oldest refactor issue", or "next-refactor".
+description: Find the oldest open, non-blocked refactor GitHub issue, implement the change, push to a new branch, and open a PR. Use when asked to "do the next refactor", "work on the oldest refactor issue", or "next-refactor".
 ---
 
-This skill picks up the oldest open refactor issue, does the full implementation, and ships a PR -- no prompting required.
+This skill picks up the oldest open, non-blocked refactor issue, does the full implementation, and ships a PR -- no prompting required.
 
 ## Steps (always run in order)
 
-### 1. Find the oldest open refactor issue
+### 1. Find the oldest open, non-blocked refactor issue
+
+Exclude any issue carrying the `blocked` label -- those depend on other work and must not be picked up.
 
 ```bash
-gh issue list --label refactor --state open --limit 50 --json number,title,createdAt \
-  | jq 'sort_by(.createdAt) | .[0]'
+gh issue list --label refactor --state open --limit 50 \
+  --json number,title,createdAt,labels \
+  | jq 'map(select(any(.labels[]; .name == "blocked") | not))
+        | sort_by(.createdAt) | .[0]'
 ```
+
+If the result is `null`, every open refactor issue is blocked -- stop and report that to the user.
 
 Capture the issue number and title. Then fetch the full body:
 
