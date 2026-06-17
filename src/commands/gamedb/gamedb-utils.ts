@@ -62,12 +62,6 @@ export const MAX_NOW_PLAYING_NOTE_LEN = 500;
 
 export const GAMEDB_CSV_AUTO_ACCEPTED = new Map<number, string[]>();
 
-export type PromptChoiceOption = {
-  label: string;
-  value: string;
-  style?: ButtonStyle;
-};
-
 export function decodeISearchFilters(filterStr: string): ISearchFilters {
   return filterStr ? parseCompactFilters(filterStr) : {};
 }
@@ -277,21 +271,4 @@ export async function autocompleteGameDbViewTitle(
   });
   const options = [buildKeepTypingOption(query), ...resultOptions];
   await interaction.respond(options);
-}
-
-export function buildChoiceRows(
-  customIdPrefix: string,
-  options: PromptChoiceOption[],
-): ActionRowBuilder<ButtonBuilder>[] {
-  const rows: ActionRowBuilder<ButtonBuilder>[] = [];
-  for (let i = 0; i < options.length; i += 5) {
-    const slice = options.slice(i, i + 5);
-    const row = buildButtonRow(
-      ...slice.map((opt) =>
-        buildActionButton({ customId: `${customIdPrefix}:${opt.value}`, label: opt.label, style: opt.style ?? ButtonStyle.Secondary }),
-      ),
-    );
-    rows.push(row);
-  }
-  return rows;
 }
