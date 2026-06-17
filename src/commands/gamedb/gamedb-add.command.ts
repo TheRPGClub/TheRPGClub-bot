@@ -140,9 +140,9 @@ export async function addGameToDatabase(
   igdbId: number,
   opts?: { selectionMessage?: import("discord.js").Message | null; showProfile?: boolean },
 ): Promise<void> {
-  let result: { data: { id: number } } | null;
+  let result: { data: { game_id: number } } | null;
   try {
-    result = await apiPost<{ data: { id: number } }>(
+    result = await apiPost<{ data: { game_id: number } }>(
       "/api/v1/games",
       { igdb_id: igdbId },
     );
@@ -170,7 +170,7 @@ export async function addGameToDatabase(
     }
   }
 
-  await showGameProfile(interaction, result.data.id, true);
+  await showGameProfile(interaction, result.data.game_id, true);
 }
 
 export async function handleNoResults(

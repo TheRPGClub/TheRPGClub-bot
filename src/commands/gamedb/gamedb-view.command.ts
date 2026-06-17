@@ -97,9 +97,9 @@ export class GameDbViewCommand {
 
     if (action === "igdb-import") {
       await safeDeferUpdate(interaction);
-      let result: { data: { id: number } } | null;
+      let result: { data: { game_id: number } } | null;
       try {
-        result = await apiPost<{ data: { id: number } }>(
+        result = await apiPost<{ data: { game_id: number } }>(
           "/api/v1/games",
           { igdb_id: numericId },
         );
@@ -117,7 +117,7 @@ export class GameDbViewCommand {
         });
         return;
       }
-      await refreshGameProfileMessage(interaction, result.data.id);
+      await refreshGameProfileMessage(interaction, result.data.game_id);
       return;
     }
 
