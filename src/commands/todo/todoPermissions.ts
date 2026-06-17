@@ -3,6 +3,7 @@ import {
   ACCESS_DENIED_MOD_ADMIN,
   ACCESS_DENIED_SERVER_OWNER,
   AnyRepliable,
+  memberHasPermission,
   safeReply,
 } from "../../functions/InteractionUtils.js";
 import { buildTodoTextReply } from "./todoComponents.js";
@@ -15,15 +16,15 @@ export function getTodoPermissionFlags(interaction: AnyRepliable): {
   const guild = interaction.guild;
   if (!guild) return null;
 
-  const member: any = interaction.member;
-  const canCheck = member && typeof member.permissionsIn === "function" && interaction.channel;
   const isOwner = guild.ownerId === interaction.user.id;
-  const isAdmin = canCheck
-    ? member.permissionsIn(interaction.channel).has(PermissionsBitField.Flags.Administrator)
-    : false;
-  const isModerator = canCheck
-    ? member.permissionsIn(interaction.channel).has(PermissionsBitField.Flags.ManageMessages)
-    : false;
+  const isAdmin = memberHasPermission(
+    interaction,
+    PermissionsBitField.Flags.Administrator,
+  );
+  const isModerator = memberHasPermission(
+    interaction,
+    PermissionsBitField.Flags.ManageMessages,
+  );
 
   return { isOwner, isAdmin, isModerator };
 }
