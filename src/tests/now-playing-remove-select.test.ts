@@ -1,10 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { NowPlayingCommand } from "../commands/now-playing.command.js";
+import { NowPlayingRemoveHandlers } from "../commands/now-playing/nowPlayingRemove.handler.js";
 import Member from "../classes/Member.js";
 
 test("nowplaying remove select acknowledges interaction and refreshes same message", async () => {
-  const command = new NowPlayingCommand() as any;
+  const command = new NowPlayingRemoveHandlers() as any;
 
   const originalRemoveNowPlaying = Member.removeNowPlaying;
   const originalGetNowPlaying = Member.getNowPlaying;
@@ -75,7 +75,7 @@ test("nowplaying remove select acknowledges interaction and refreshes same messa
 });
 
 test("nowplaying remove select acknowledges interaction and shows error on failed removal", async () => {
-  const command = new NowPlayingCommand() as any;
+  const command = new NowPlayingRemoveHandlers() as any;
 
   const originalRemoveNowPlaying = Member.removeNowPlaying;
 
