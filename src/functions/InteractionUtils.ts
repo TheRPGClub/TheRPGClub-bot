@@ -7,6 +7,7 @@ import type {
   GuildMember,
   InteractionDeferReplyOptions,
   ModalSubmitInteraction,
+  PermissionResolvable,
   RepliableInteraction,
   User,
 } from "discord.js";
@@ -21,6 +22,16 @@ import {
 } from "./ComponentsV2Utils.js";
 
 export type AnyRepliable = RepliableInteraction | CommandInteraction;
+
+export function memberHasPermission(
+  interaction: AnyRepliable,
+  flag: PermissionResolvable,
+): boolean {
+  const member: any = (interaction as any).member;
+  const canCheck =
+    member && typeof member.permissionsIn === "function" && interaction.channel;
+  return canCheck ? member.permissionsIn(interaction.channel).has(flag) : false;
+}
 
 export function buildIdTimestampFooter(id: string, timestamp: string): string {
   return `ID: ${id} • ${timestamp}`;

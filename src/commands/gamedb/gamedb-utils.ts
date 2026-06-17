@@ -10,6 +10,7 @@ import {
 import {
   ACCESS_DENIED_MOD_ADMIN,
   AnyRepliable,
+  memberHasPermission,
   safeReply,
   sanitizeUserInput,
 } from "../../functions/InteractionUtils.js";
@@ -79,15 +80,15 @@ export function getModeratorPermissionFlags(interaction: AnyRepliable): {
   const guild = interaction.guild;
   if (!guild) return null;
 
-  const member: any = interaction.member;
-  const canCheck = member && typeof member.permissionsIn === "function" && interaction.channel;
   const isOwner = guild.ownerId === interaction.user.id;
-  const isAdmin = canCheck
-    ? member.permissionsIn(interaction.channel).has(PermissionsBitField.Flags.Administrator)
-    : false;
-  const isModerator = canCheck
-    ? member.permissionsIn(interaction.channel).has(PermissionsBitField.Flags.ManageMessages)
-    : false;
+  const isAdmin = memberHasPermission(
+    interaction,
+    PermissionsBitField.Flags.Administrator,
+  );
+  const isModerator = memberHasPermission(
+    interaction,
+    PermissionsBitField.Flags.ManageMessages,
+  );
 
   return { isOwner, isAdmin, isModerator };
 }
