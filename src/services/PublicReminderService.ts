@@ -1,6 +1,6 @@
 import type { Client } from "discordx";
 import {
-  listUpcomingReminders,
+  listDueReminders,
   updateReminderDueDate,
   disableReminder,
   type IPublicReminder,
@@ -42,13 +42,8 @@ export function startPublicReminderService(client: Client): void {
 }
 
 async function checkPublicReminders(client: Client): Promise<void> {
-  const now = Date.now();
-  const reminders = await listUpcomingReminders(MAX_PER_CYCLE);
+  const reminders = await listDueReminders(MAX_PER_CYCLE);
   for (const reminder of reminders) {
-    if (!reminder.enabled) continue;
-    const due = reminder.dueAt.getTime();
-    if (due > now) continue;
-
     try {
       const channel = await client.channels.fetch(reminder.channelId).catch(() => null);
       if (!channel || !(channel as any).isTextBased?.()) continue;
