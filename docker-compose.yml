@@ -1,0 +1,13 @@
+services:
+  bot:
+    image: ghcr.io/therpgclub/therpgclub-bot:latest
+    env_file: .env
+    environment:
+      DOCKER_BACKUP_ENABLED: "false"
+    restart: unless-stopped
+    init: true
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
