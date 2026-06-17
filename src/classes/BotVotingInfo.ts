@@ -64,9 +64,8 @@ export default class BotVotingInfo {
   }
 
   static async getCurrentRound(): Promise<IBotVotingInfoEntry | null> {
-    // List is sorted desc by round_number; first record is current.
-    const all = await BotVotingInfo.getAll();
-    return all[0] ?? null;
+    const response = await apiGet<VotingInfoResponse>("/api/v1/voting_info/current");
+    return response ? mapApiData(response.data) : null;
   }
 
   static async setRoundInfo(
