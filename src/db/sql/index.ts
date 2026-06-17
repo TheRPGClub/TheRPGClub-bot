@@ -20,6 +20,5 @@ export { MemberSql } from "./member.sql.js";
 export { NominationSql } from "./nomination.sql.js";
 export { PresencePromptHistorySql } from "./presencePrompt.sql.js";
 export { SteamCollectionImportSql } from "./steamCollectionImport.sql.js";
-export { SuggestionReviewSessionSql } from "./suggestion.sql.js";
 export { UserGameCollectionSql } from "./userGameCollection.sql.js";
 

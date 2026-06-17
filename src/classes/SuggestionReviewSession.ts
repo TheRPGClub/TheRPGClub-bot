@@ -1,5 +1,9 @@
-import { dbQuery, dbMutate } from "../db/SqlManager.js";
-import { SuggestionReviewSessionSql } from "../db/sql/index.js";
+import {
+  apiDelete,
+  apiGet,
+  apiPatch,
+  apiPost,
+} from "../services/RpgClubApiClient.js";
 import { isPositiveInt } from "../utilities/ValidationUtils.js";
 
 export interface ISuggestionReviewSession {
@@ -12,19 +16,18 @@ export interface ISuggestionReviewSession {
   updatedAt: Date;
 }
 
-type SuggestionReviewSessionRow = {
-  SESSION_ID: string;
-  REVIEWER_ID: string;
-  SUGGESTION_IDS: string | null;
-  CURRENT_INDEX: number | null;
-  TOTAL_COUNT: number | null;
-  CREATED_AT: Date | string;
-  UPDATED_AT: Date | string;
+type ApiSessionData = {
+  session_id: string;
+  reviewer_id: string;
+  suggestion_ids: string;
+  current_index: number;
+  total_count: number;
+  created_at: string;
+  updated_at: string;
 };
 
-function toDate(value: Date | string): Date {
-  return value instanceof Date ? value : new Date(value);
-}
+type ApiSessionResponse = { data: ApiSessionData };
+type ApiDeleteResponse = { deleted: boolean; count?: number };
 
 function normalizeSuggestionIds(ids: number[]): number[] {
   return ids
@@ -52,17 +55,19 @@ function parseSuggestionIds(value: string | null): number[] {
   }
 }
 
-function mapSessionRow(row: SuggestionReviewSessionRow): ISuggestionReviewSession {
+function mapApiData(data: ApiSessionData): ISuggestionReviewSession {
   return {
-    sessionId: row.SESSION_ID,
-    reviewerId: row.REVIEWER_ID,
-    suggestionIds: parseSuggestionIds(row.SUGGESTION_IDS),
-    index: Number(row.CURRENT_INDEX ?? 0),
-    totalCount: Number(row.TOTAL_COUNT ?? 0),
-    createdAt: toDate(row.CREATED_AT),
-    updatedAt: toDate(row.UPDATED_AT),
+    sessionId: data.session_id,
+    reviewerId: data.reviewer_id,
+    suggestionIds: parseSuggestionIds(data.suggestion_ids),
+    index: Number(data.current_index ?? 0),
+    totalCount: Number(data.total_count ?? 0),
+    createdAt: new Date(data.created_at),
+    updatedAt: new Date(data.updated_at),
   };
 }
+
+const BASE = "/api/v1/suggestions/review_sessions";
 
 export async function createSuggestionReviewSessionRecord(session: {
   sessionId: string;
@@ -72,50 +77,51 @@ export async function createSuggestionReviewSessionRecord(session: {
   totalCount: number;
 }): Promise<ISuggestionReviewSession> {
   const suggestionIds = serializeSuggestionIds(session.suggestionIds);
-  await dbMutate(SuggestionReviewSessionSql.create, {
-    sessionId: session.sessionId,
-    reviewerId: session.reviewerId,
-    suggestionIds,
-    currentIndex: Math.max(session.index, 0),
-    totalCount: Math.max(session.totalCount, 0),
+  const response = await apiPost<ApiSessionResponse>(BASE, {
+    data: {
+      session_id: session.sessionId,
+      reviewer_id: session.reviewerId,
+      suggestion_ids: suggestionIds,
+      current_index: Math.max(session.index, 0),
+      total_count: Math.max(session.totalCount, 0),
+    },
   });
-
-  const saved = await getSuggestionReviewSession(session.sessionId);
-  if (!saved) throw new Error("Failed to create suggestion review session.");
-  return saved;
+  if (!response?.data) throw new Error("Failed to create suggestion review session.");
+  return mapApiData(response.data);
 }
 
 export async function getSuggestionReviewSession(
   sessionId: string,
 ): Promise<ISuggestionReviewSession | null> {
-  const rows = await dbQuery(
-    SuggestionReviewSessionSql.getById,
-    { sessionId },
-    mapSessionRow,
-  );
-  return rows[0] ?? null;
+  const response = await apiGet<ApiSessionResponse>(`${BASE}/${sessionId}`);
+  if (!response?.data) return null;
+  return mapApiData(response.data);
 }
 
 export async function updateSuggestionReviewSession(
   session: ISuggestionReviewSession,
 ): Promise<void> {
   const suggestionIds = serializeSuggestionIds(session.suggestionIds);
-  await dbMutate(SuggestionReviewSessionSql.update, {
-    reviewerId: session.reviewerId,
-    suggestionIds,
-    currentIndex: Math.max(session.index, 0),
-    totalCount: Math.max(session.totalCount, 0),
-    sessionId: session.sessionId,
+  await apiPatch(`${BASE}/${session.sessionId}`, {
+    data: {
+      reviewer_id: session.reviewerId,
+      suggestion_ids: suggestionIds,
+      current_index: Math.max(session.index, 0),
+      total_count: Math.max(session.totalCount, 0),
+    },
   });
 }
 
 export async function deleteSuggestionReviewSession(sessionId: string): Promise<boolean> {
-  const count = await dbMutate(SuggestionReviewSessionSql.delete, { sessionId });
-  return count > 0;
+  const response = await apiDelete<ApiDeleteResponse>(`${BASE}/${sessionId}`);
+  return response?.deleted === true;
 }
 
 export async function deleteSuggestionReviewSessionsForReviewer(
   reviewerId: string,
 ): Promise<number> {
-  return dbMutate(SuggestionReviewSessionSql.deleteForReviewer, { reviewerId });
+  const response = await apiDelete<ApiDeleteResponse>(BASE, {
+    params: { reviewer_id: reviewerId },
+  });
+  return response?.count ?? 0;
 }
