@@ -2,6 +2,7 @@ import { execFile } from "node:child_process";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { promisify } from "node:util";
+import { logInfo } from "../utilities/LogUtils.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -88,12 +89,12 @@ async function backupVolume(
     "/volume",
     ".",
   ]);
-  console.info(`Docker volume backup created: ${archivePath}`);
+  logInfo("DockerVolumeBackupService", `Docker volume backup created: ${archivePath}`);
 }
 
 async function runBackup(options: DockerBackupOptions): Promise<void> {
   if (!DEFAULT_BACKUP_ENABLED) {
-    console.info("Docker volume backups are disabled by DOCKER_BACKUP_ENABLED.");
+    logInfo("DockerVolumeBackupService", "Docker volume backups are disabled by DOCKER_BACKUP_ENABLED.");
     return;
   }
 
@@ -116,14 +117,15 @@ async function runBackup(options: DockerBackupOptions): Promise<void> {
     .sort((a, b) => a.localeCompare(b));
 
   if (!filtered.length) {
-    console.info("No Docker volumes found to back up.");
+    logInfo("DockerVolumeBackupService", "No Docker volumes found to back up.");
     return;
   }
 
   const backupDirDocker = toDockerPath(backupDir);
   const timestamp = formatTimestamp(new Date());
 
-  console.info(
+  logInfo(
+    "DockerVolumeBackupService",
     `Starting Docker volume backup for ${filtered.length} volume(s). Reason: ${reason}.`,
   );
 
@@ -136,7 +138,7 @@ export async function runDockerVolumeBackup(
   options: DockerBackupOptions = {},
 ): Promise<void> {
   if (activeBackup) {
-    console.info("Docker volume backup already running. Skipping duplicate request.");
+    logInfo("DockerVolumeBackupService", "Docker volume backup already running. Skipping duplicate request.");
     return activeBackup;
   }
 

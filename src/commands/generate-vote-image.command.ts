@@ -12,7 +12,7 @@ import { getUpcomingNominationWindow } from "../functions/NominationWindow.js";
 import { isAdmin } from "./admin/admin-auth.utils.js";
 import { composeVoteImage, type VoteImageType } from "../services/collageGenerator.js";
 import { isPositiveInt } from "../utilities/ValidationUtils.js";
-import { formatStructuredLog, logError } from "../utilities/LogUtils.js";
+import { logError, logInfo } from "../utilities/LogUtils.js";
 
 const GENERATION_LOCK_TTL_MS = 2 * 60 * 1000;
 
@@ -114,20 +114,18 @@ export class GenerateVoteImageCommand {
     }
 
     const startedAt = Date.now();
-    console.info(formatStructuredLog({
-      event: "vote_image_lock_acquired",
+    logInfo("vote_image_lock_acquired", {
       guildId: interaction.guildId,
       round: roundNumber,
       voteType: voteKind.label,
-    }));
+    });
 
     try {
-      console.info(formatStructuredLog({
-        event: "vote_image_generation_started",
+      logInfo("vote_image_generation_started", {
         guildId: interaction.guildId,
         round: roundNumber,
         voteType: voteKind.label,
-      }));
+      });
 
       const nominations = await listNominationsForRound(voteKind.nominationKind, roundNumber);
       if (!nominations.length) {
@@ -191,15 +189,14 @@ export class GenerateVoteImageCommand {
         return;
       }
 
-      console.info(formatStructuredLog({
-        event: "vote_image_generation_succeeded",
+      logInfo("vote_image_generation_succeeded", {
         guildId: interaction.guildId,
         round: roundNumber,
         voteType: voteKind.label,
         count: orderedNominations.length,
         durationMs: Date.now() - startedAt,
         errorCode: null,
-      }));
+      });
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
       const lower = errorMessage.toLowerCase();
@@ -234,12 +231,11 @@ export class GenerateVoteImageCommand {
       });
     } finally {
       releaseLock(interaction.guildId, roundNumber, voteKind.label);
-      console.info(formatStructuredLog({
-        event: "vote_image_lock_released",
+      logInfo("vote_image_lock_released", {
         guildId: interaction.guildId,
         round: roundNumber,
         voteType: voteKind.label,
-      }));
+      });
     }
   }
 }
