@@ -443,23 +443,6 @@ export const MemberSql = {
     postgres: `DELETE FROM journal_message_contexts WHERE created_at_ms < :cutoffMs`,
   } satisfies ISqlEntry,
 
-  getGiveawayDonorNotifySetting: {
-    postgres: `SELECT donor_notify_on_claim
-         FROM rpg_club_users
-        WHERE user_id = :userId`,
-  } satisfies ISqlEntry,
-
-  updateGiveawayDonorNotifySetting: {
-    postgres: `UPDATE rpg_club_users
-            SET donor_notify_on_claim = :enabled
-          WHERE user_id = :userId`,
-  } satisfies ISqlEntry,
-
-  insertGiveawayDonorNotifySetting: {
-    postgres: `INSERT INTO rpg_club_users (user_id, donor_notify_on_claim)
-           VALUES (:userId, :enabled)`,
-  } satisfies ISqlEntry,
-
   countAvatarHistory: {
     postgres: `SELECT COUNT(*) AS total
          FROM rpg_club_user_avatar_history

@@ -1,6 +1,4 @@
-import { dbQuery, dbMutate } from "../db/SqlManager.js";
-import { GameKeySql } from "../db/sql/index.js";
-import { apiGet, apiPost } from "../services/RpgClubApiClient.js";
+import { apiGet, apiPost, apiDelete } from "../services/RpgClubApiClient.js";
 
 export interface IGameKey {
   keyId: number;
@@ -13,8 +11,6 @@ export interface IGameKey {
   createdAt: Date;
   updatedAt: Date;
 }
-
-// --- API types ---
 
 type GameKeyApiData = {
   key_id: number;
@@ -47,41 +43,6 @@ function mapGameKeyApi(d: GameKeyApiData): IGameKey {
     updatedAt: new Date(d.updated_at),
   };
 }
-
-// --- SQL fallback types (used only for getGameKeyById / revokeGameKey) ---
-
-type GameKeyRow = {
-  KEY_ID: number;
-  GAME_TITLE: string;
-  PLATFORM: string;
-  KEY_VALUE: string;
-  DONOR_USER_ID: string;
-  CLAIMED_BY_USER_ID: string | null;
-  CLAIMED_AT: Date | string | null;
-  CREATED_AT: Date | string;
-  UPDATED_AT: Date | string;
-};
-
-function toDate(value: Date | string | null): Date | null {
-  if (!value) return null;
-  return value instanceof Date ? value : new Date(value);
-}
-
-function mapGameKeyRow(row: GameKeyRow): IGameKey {
-  return {
-    keyId: Number(row.KEY_ID),
-    gameTitle: row.GAME_TITLE,
-    platform: row.PLATFORM,
-    keyValue: row.KEY_VALUE,
-    donorUserId: row.DONOR_USER_ID,
-    claimedByUserId: row.CLAIMED_BY_USER_ID ?? null,
-    claimedAt: toDate(row.CLAIMED_AT),
-    createdAt: toDate(row.CREATED_AT) ?? new Date(),
-    updatedAt: toDate(row.UPDATED_AT) ?? new Date(),
-  };
-}
-
-// --- API-backed functions ---
 
 export async function createGameKey(
   title: string,
@@ -140,21 +101,15 @@ export async function claimGameKey(
   return response !== null;
 }
 
-// --- SQL-backed (pending GET /api/v1/game_keys/:id and DELETE /api/v1/game_keys/:id) ---
-
 export async function getGameKeyById(keyId: number): Promise<IGameKey | null> {
-  const rows = await dbQuery(
-    GameKeySql.getById,
-    { id: keyId },
-    mapGameKeyRow,
-  );
-  return rows[0] ?? null;
+  const response = await apiGet<GameKeyResponse>(`/api/v1/game_keys/${keyId}`);
+  if (!response) return null;
+  return mapGameKeyApi(response.data);
 }
 
 export async function revokeGameKey(keyId: number): Promise<boolean> {
-  const count = await dbMutate(
-    GameKeySql.revoke,
-    { keyId },
+  const response = await apiDelete<{ deleted: boolean }>(
+    `/api/v1/game_keys/${keyId}`,
   );
-  return count > 0;
+  return response?.deleted === true;
 }

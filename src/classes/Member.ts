@@ -1501,32 +1501,19 @@ export default class Member {
   }
 
   static async getGiveawayDonorNotifySetting(userId: string): Promise<boolean> {
-    const rows = await dbQuery<{ DONOR_NOTIFY_ON_CLAIM: number | null }, boolean>(
-      MemberSql.getGiveawayDonorNotifySetting,
-      { userId },
-      (row) => Boolean(row.DONOR_NOTIFY_ON_CLAIM),
+    const response = await apiGet<{ data: { notify_on_claim: boolean } }>(
+      `/api/v1/users/${userId}/giveaway_settings`,
     );
-    return rows[0] ?? false;
+    return response?.data?.notify_on_claim ?? false;
   }
 
   static async setGiveawayDonorNotifySetting(
     userId: string,
     enabled: boolean,
   ): Promise<void> {
-    const params = { userId, enabled: enabled ? 1 : 0 };
-    const updated = await dbMutate(MemberSql.updateGiveawayDonorNotifySetting, params);
-    if (updated > 0) return;
-
-    try {
-      await dbMutate(MemberSql.insertGiveawayDonorNotifySetting, params);
-    } catch (err: any) {
-      const code = err?.code ?? err?.errorNum;
-      if (code === "ORA-00001") {
-        await dbMutate(MemberSql.updateGiveawayDonorNotifySetting, params);
-      } else {
-        throw err;
-      }
-    }
+    await apiPatch(`/api/v1/users/${userId}/giveaway_settings`, {
+      data: { notify_on_claim: enabled },
+    });
   }
 
   static async countAvatarHistory(userId: string): Promise<number> {
