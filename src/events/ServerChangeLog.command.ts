@@ -64,7 +64,7 @@ export class ServerChangeLog {
       "Channel created",
       `${channelLabel(channel)} (${channel.id})`,
     );
-    await (logChannel as any).send({ ...buildContainerSend(container) });
+    await logChannel.send({ ...buildContainerSend(container) });
   }
 
   @On()
@@ -78,7 +78,7 @@ export class ServerChangeLog {
       `${channel.name ?? channel.id} (${channel.id})`,
       COLOR_ERROR,
     );
-    await (logChannel as any).send({ ...buildContainerSend(container) });
+    await logChannel.send({ ...buildContainerSend(container) });
   }
 
   @On()
@@ -118,7 +118,7 @@ export class ServerChangeLog {
 
     const body = `${channelLabel(newChannel)} (${newChannel.id})\n${filtered.join("\n")}`;
     const container = buildBaseContainer("Channel updated", body);
-    await (logChannel as any).send({ ...buildContainerSend(container) });
+    await logChannel.send({ ...buildContainerSend(container) });
   }
 
   @On()
@@ -128,7 +128,7 @@ export class ServerChangeLog {
     if (!logChannel) return;
 
     const container = buildBaseContainer("Role created", `${roleLabel(role)} (${role.id})`);
-    await (logChannel as any).send({ ...buildContainerSend(container) });
+    await logChannel.send({ ...buildContainerSend(container) });
   }
 
   @On()
@@ -142,7 +142,7 @@ export class ServerChangeLog {
       `${role.name ?? role.id} (${role.id})`,
       COLOR_ERROR,
     );
-    await (logChannel as any).send({ ...buildContainerSend(container) });
+    await logChannel.send({ ...buildContainerSend(container) });
   }
 
   @On()
@@ -166,7 +166,7 @@ export class ServerChangeLog {
 
     const body = `${roleLabel(newRole)} (${newRole.id})\n${filtered.join("\n")}`;
     const container = buildBaseContainer("Role updated", body);
-    await (logChannel as any).send({ ...buildContainerSend(container) });
+    await logChannel.send({ ...buildContainerSend(container) });
   }
 
   @On()
@@ -175,7 +175,7 @@ export class ServerChangeLog {
     if (!logChannel) return;
 
     const container = buildBaseContainer("Emoji created", `${emojiLabel(emoji)} (${emoji.id})`);
-    await (logChannel as any).send({ ...buildContainerSend(container) });
+    await logChannel.send({ ...buildContainerSend(container) });
   }
 
   @On()
@@ -188,7 +188,7 @@ export class ServerChangeLog {
       `${emoji.name ?? "emoji"} (${emoji.id})`,
       COLOR_ERROR,
     );
-    await (logChannel as any).send({ ...buildContainerSend(container) });
+    await logChannel.send({ ...buildContainerSend(container) });
   }
 
   @On()
@@ -212,7 +212,7 @@ export class ServerChangeLog {
 
     const body = `${emojiLabel(newEmoji)} (${newEmoji.id})\n${filtered.join("\n")}`;
     const container = buildBaseContainer("Emoji updated", body);
-    await (logChannel as any).send({ ...buildContainerSend(container) });
+    await logChannel.send({ ...buildContainerSend(container) });
   }
 
   @On()
@@ -240,6 +240,6 @@ export class ServerChangeLog {
 
     const body = `${newGuild.name ?? newGuild.id}\n${filtered.join("\n")}`;
     const container = buildBaseContainer("Server updated", body);
-    await (logChannel as any).send({ ...buildContainerSend(container) });
+    await logChannel.send({ ...buildContainerSend(container) });
   }
 }

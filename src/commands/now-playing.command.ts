@@ -453,7 +453,7 @@ export class NowPlayingCommand {
         components: [header, container],
         flags: buildComponentsV2Flags(ephemeral),
         withResponse: !ephemeral,
-      } as any);
+      });
       if (!ephemeral) {
         const message = reply?.resource?.message ?? null;
         if (message) {
@@ -474,7 +474,7 @@ export class NowPlayingCommand {
         components: [container],
         flags: buildComponentsV2Flags(ephemeral),
         withResponse: !ephemeral,
-      } as any);
+      });
       if (!ephemeral) {
         const message = reply?.resource?.message ?? null;
         if (message) {
@@ -500,7 +500,7 @@ export class NowPlayingCommand {
       files: payload.files,
       flags: buildComponentsV2Flags(ephemeral),
       withResponse: !ephemeral,
-    } as any);
+    });
     if (!ephemeral) {
       const message = reply?.resource?.message ?? null;
       if (message) {
@@ -550,7 +550,7 @@ export class NowPlayingCommand {
       components: [container, selectRow],
       flags: buildComponentsV2Flags(ephemeral),
       withResponse: !ephemeral,
-    } as any);
+    });
     if (!ephemeral) {
       const message = reply?.resource?.message ?? null;
       if (message) {
