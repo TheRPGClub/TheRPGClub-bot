@@ -72,6 +72,15 @@ export async function listUpcomingReminders(limit: number = 20): Promise<IPublic
   return response.data.map(mapReminder);
 }
 
+export async function listDueReminders(limit: number = 20): Promise<IPublicReminder[]> {
+  const safeLimit = Math.min(Math.max(limit, 1), 100);
+  const response = await apiGet<PublicReminderListResponse>("/api/v1/public_reminders/due", {
+    params: { per: safeLimit },
+  });
+  if (!response) return [];
+  return response.data.map(mapReminder);
+}
+
 export async function deleteReminder(reminderId: number): Promise<boolean> {
   const response = await apiDelete<{ deleted: boolean }>(
     `/api/v1/public_reminders/${reminderId}`,
