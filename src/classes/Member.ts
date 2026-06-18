@@ -353,6 +353,18 @@ type AvatarHistoryApiListResponse = {
   meta: { count: number; pages: number };
 };
 
+type AvatarHistoryCountApiRecord = {
+  user_id: string;
+  username: string | null;
+  global_name: string | null;
+  avatar_change_count: number;
+};
+
+type AvatarHistoryCountListResponse = {
+  data: AvatarHistoryCountApiRecord[];
+  meta: { pages: number };
+};
+
 function mapUserApiRecord(raw: UserApiRecord): IMemberRecord {
   return {
     userId: raw.user_id,
@@ -1287,21 +1299,27 @@ export default class Member {
   }
 
   static async getAllMembersAvatarHistoryCounts(): Promise<IMemberAvatarHistoryCount[]> {
-    return dbQuery<{
-      USER_ID: string;
-      USERNAME: string | null;
-      GLOBAL_NAME: string | null;
-      TOTAL: number;
-    }, IMemberAvatarHistoryCount>(
-      MemberSql.getAllMembersAvatarHistoryCounts,
-      {},
-      (row) => ({
-        userId: String(row.USER_ID),
-        username: row.USERNAME ?? null,
-        globalName: row.GLOBAL_NAME ?? null,
-        count: Number(row.TOTAL),
-      }),
-    );
+    const results: IMemberAvatarHistoryCount[] = [];
+    let page = 1;
+    let pages = 1;
+    do {
+      const response = await apiGet<AvatarHistoryCountListResponse>(
+        "/api/v1/users/avatar_history_counts",
+        { params: { page, per: 500 } },
+      );
+      if (!response) break;
+      for (const row of response.data) {
+        results.push({
+          userId: row.user_id,
+          username: row.username ?? null,
+          globalName: row.global_name ?? null,
+          count: row.avatar_change_count,
+        });
+      }
+      pages = Number(response.meta?.pages ?? 1);
+      page += 1;
+    } while (page <= pages);
+    return results;
   }
 
   static async upsert(record: IMemberRecord): Promise<void> {
