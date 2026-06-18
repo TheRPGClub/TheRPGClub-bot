@@ -360,10 +360,16 @@ GET     /api/v1/platforms/{id}  # Show platform
 ### Presence Prompts
 
 ```
+PATCH   /api/v1/presence_prompts/{id}  # Resolve a presence prompt
+  data: { status, resolved_at }
+PUT     /api/v1/presence_prompts/{id}  # Resolve a presence prompt (alias)
+  data: { status, resolved_at }
 GET     /api/v1/users/{user_id}/presence_prompt_opts  # Show a user's presence-prompt opt-out preference
 PUT     /api/v1/users/{user_id}/presence_prompt_opts  # Replace a user's presence-prompt opt-out preference
   data: { all, games }
-GET     /api/v1/users/{user_id}/presence_prompts  # List a user's presence prompt history (page, per)
+GET     /api/v1/users/{user_id}/presence_prompts  # List a user's presence prompt history (game_title_norm, status, page, per)
+POST    /api/v1/users/{user_id}/presence_prompts  # Create a presence prompt
+  data: { prompt_id*, game_title*, game_title_norm* }
 ```
 
 ### Public Reminders
@@ -412,13 +418,15 @@ GET     /api/v1/regions/{id}  # Show region
 ```
 GET     /api/v1/games/{id}/release_announcements  # List a game's scheduled release announcements (page, per)
 PATCH   /api/v1/games/{id}/release_announcements  # Bulk-sync a game's release announcement schedule
+PUT     /api/v1/games/{id}/release_announcements  # Bulk-sync a game's release announcement schedule (alias)
 POST    /api/v1/release_announcements  # Schedule a release announcement
   data: { release_id*, announce_at* }
+GET     /api/v1/release_announcements/due  # List release announcements that are due to post (limit)
 GET     /api/v1/release_announcements/{id}  # Show a scheduled release announcement
-PATCH   /api/v1/release_announcements/{id}  # Reschedule a release announcement
-  data: { release_id, announce_at }
+PATCH   /api/v1/release_announcements/{id}  # Reschedule or mark a release announcement
+  data: { announce_at, sent_at, skipped_at, skip_reason }
 PUT     /api/v1/release_announcements/{id}  # Replace a release announcement (alias)
-  data: { release_id, announce_at }
+  data: { announce_at, sent_at, skipped_at, skip_reason }
 DELETE  /api/v1/release_announcements/{id}  # Delete a release announcement
 POST    /api/v1/release_announcements/{id}/skip  # Skip a release announcement
   data: { skip_reason }
@@ -464,7 +472,7 @@ PATCH   /api/v1/search_synonym_drafts/{id}  # Update a synonym draft
 PUT     /api/v1/search_synonym_drafts/{id}  # Replace a synonym draft (alias)
   data: { user_id, pairs_json }
 DELETE  /api/v1/search_synonym_drafts/{id}  # Delete a synonym draft
-GET     /api/v1/search_synonym_groups  # List synonym groups (page, per, limit, offset)
+GET     /api/v1/search_synonym_groups  # List synonym groups (q, page, per, limit, offset)
 POST    /api/v1/search_synonym_groups  # Create a synonym group
   data: { created_by }
 GET     /api/v1/search_synonym_groups/{id}  # Show a synonym group
@@ -473,7 +481,8 @@ PATCH   /api/v1/search_synonym_groups/{id}  # Update a synonym group
 PUT     /api/v1/search_synonym_groups/{id}  # Replace a synonym group (alias)
   data: { created_by }
 DELETE  /api/v1/search_synonym_groups/{id}  # Delete a synonym group
-GET     /api/v1/search_synonyms  # List search synonym terms (group_id, page, per, limit, offset)
+DELETE  /api/v1/search_synonym_groups/{id}/terms  # Delete all terms in a synonym group
+GET     /api/v1/search_synonyms  # List search synonym terms (group_id, term, q, page, per, limit, offset)
 POST    /api/v1/search_synonyms  # Create a synonym term
   data: { group_id*, term_text*, term_norm*, created_by }
 GET     /api/v1/search_synonyms/{id}  # Show a synonym term
@@ -613,6 +622,7 @@ POST    /api/v1/users/{user_id}/socials  # Link a social account
 
 ```
 GET     /api/v1/users  # List users (q, discord_id, has_platform, has_emoji_name, page, per, limit, offset)
+GET     /api/v1/users/avatar_history_counts  # Avatar-history counts per member (page, per, limit, offset)
 POST    /api/v1/users/mark_departed  # Bulk-mark departed users
 POST    /api/v1/users/upsert  # Upsert a user by Discord id
   data: { discord_id*, username, global_name, is_bot, server_joined_at, server_left_at }
