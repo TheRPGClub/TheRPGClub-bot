@@ -182,6 +182,39 @@ type JournaledGameListResponse = {
   meta: { count: number; pages: number };
 };
 
+type JournalStatusApiData = {
+  gamedb_game_id: number;
+  entry_count: number;
+  last_entry_at: string | null;
+};
+
+type JournalStatusListResponse = {
+  data: JournalStatusApiData[];
+};
+
+type JournalContributorApiData = {
+  user_id: string;
+  username: string | null;
+  global_name: string | null;
+  game_count: number;
+  entry_count: number;
+};
+
+type JournalContributorListResponse = {
+  data: JournalContributorApiData[];
+  meta: { pages: number };
+};
+
+type JournalEntryGameUserApiData = JournalEntryApiData & {
+  game: { game_id: number; title: string };
+  user: { user_id: string; username: string | null; global_name: string | null };
+};
+
+type JournalEntrySearchResponse = {
+  data: JournalEntryGameUserApiData[];
+  meta: { count: number; pages: number };
+};
+
 function mapJournalEntry(
   raw: JournalEntryApiData,
   entryNumber: number,
@@ -721,31 +754,21 @@ export default class Member {
     if (!gameIds.length) return [];
     const uniqueIds = [...new Set(gameIds.filter(isPositiveInt))];
     if (!uniqueIds.length) return [];
-    const inlineTable = uniqueIds
-      .map((_, idx) => `SELECT :id${idx}::int AS GAME_ID`)
-      .join(" UNION ALL ");
-    const binds: Record<string, string | number> = { userId };
-    uniqueIds.forEach((id, idx) => {
-      binds[`id${idx}`] = id;
-    });
-    return dbQuery<{
-      GAME_ID: number;
-      JOURNAL_COUNT: number;
-      LAST_JOURNAL_AT: Date | string | null;
-    }, { gameId: number; journalCount: number; lastJournalAt: Date | null }>(
-      MemberSql.getJournalStatusForGames(inlineTable),
-      binds,
-      (row) => ({
-        gameId: Number(row.GAME_ID),
-        journalCount: Number(row.JOURNAL_COUNT),
-        lastJournalAt:
-          row.LAST_JOURNAL_AT instanceof Date
-            ? row.LAST_JOURNAL_AT
-            : row.LAST_JOURNAL_AT
-              ? new Date(row.LAST_JOURNAL_AT as string)
-              : null,
-      }),
+    const response = await apiGet<JournalStatusListResponse>(
+      `/api/v1/users/${userId}/journal/status`,
+      { params: { "game_ids[]": uniqueIds } },
     );
+    const byGameId = new Map(
+      (response?.data ?? []).map((row) => [Number(row.gamedb_game_id), row]),
+    );
+    return uniqueIds.map((gameId) => {
+      const row = byGameId.get(gameId);
+      return {
+        gameId,
+        journalCount: row ? Number(row.entry_count) : 0,
+        lastJournalAt: row?.last_entry_at ? new Date(row.last_entry_at) : null,
+      };
+    });
   }
 
   static async getGameJournalEntries(
@@ -1507,23 +1530,28 @@ export default class Member {
   }
 
   static async getAllJournalUsers(): Promise<IJournalUserSummary[]> {
-    return dbQuery<{
-      USER_ID: string;
-      USERNAME: string | null;
-      GLOBAL_NAME: string | null;
-      GAME_COUNT: number;
-      ENTRY_COUNT: number;
-    }, IJournalUserSummary>(
-      MemberSql.getAllJournalUsers,
-      {},
-      (row) => ({
-        userId: row.USER_ID,
-        username: row.USERNAME ?? null,
-        globalName: row.GLOBAL_NAME ?? null,
-        gameCount: Number(row.GAME_COUNT ?? 0),
-        entryCount: Number(row.ENTRY_COUNT ?? 0),
-      }),
-    );
+    const results: IJournalUserSummary[] = [];
+    let page = 1;
+    let pages = 1;
+    do {
+      const response = await apiGet<JournalContributorListResponse>(
+        `/api/v1/journal_entries/contributors`,
+        { params: { page, per: 500 } },
+      );
+      if (!response) break;
+      for (const row of response.data) {
+        results.push({
+          userId: row.user_id,
+          username: row.username ?? null,
+          globalName: row.global_name ?? null,
+          gameCount: Number(row.game_count ?? 0),
+          entryCount: Number(row.entry_count ?? 0),
+        });
+      }
+      pages = Number(response.meta?.pages ?? 1);
+      page += 1;
+    } while (page <= pages);
+    return results;
   }
 
   static async searchJournalEntries(params: {
@@ -1535,57 +1563,32 @@ export default class Member {
   }): Promise<{ rows: IJournalSearchResult[]; total: number }> {
     const safeLimit = Math.min(Math.max(params.limit, 1), 25);
     const safeOffset = Math.max(params.offset, 0);
-    const searchTerm = params.query.trim();
-    const rows = await dbQuery<{
-      TOTAL_COUNT: number;
-      ENTRY_ID: number;
-      USER_ID: string;
-      GLOBAL_NAME: string | null;
-      USERNAME: string | null;
-      GAMEDB_GAME_ID: number;
-      GAME_TITLE: string;
-      ENTRY_TITLE: string | null;
-      ENTRY_BODY: string;
-      CREATED_AT: Date | string;
-    }, IJournalSearchResult & { totalCount: number }>(
-      MemberSql.searchJournalEntries,
-      {
-        searchTerm,
-        userId: params.userId ?? null,
-        gameId: params.gameId ?? null,
-        offset: safeOffset,
-        limit: safeLimit,
-      },
-      (row) => ({
-        totalCount: Number(row.TOTAL_COUNT),
-        entryId: Number(row.ENTRY_ID),
-        userId: row.USER_ID,
-        globalName: row.GLOBAL_NAME ?? null,
-        username: row.USERNAME ?? null,
-        gameId: Number(row.GAMEDB_GAME_ID),
-        gameTitle: row.GAME_TITLE,
-        entryTitle: row.ENTRY_TITLE ?? null,
-        body: row.ENTRY_BODY,
-        createdAt: row.CREATED_AT instanceof Date
-          ? row.CREATED_AT
-          : new Date(row.CREATED_AT),
-      }),
-    );
-    const total = rows.length > 0 ? rows[0].totalCount : 0;
-    return {
-      total,
-      rows: rows.map((row): IJournalSearchResult => ({
-        entryId: row.entryId,
-        userId: row.userId,
-        globalName: row.globalName,
-        username: row.username,
-        gameId: row.gameId,
-        gameTitle: row.gameTitle,
-        entryTitle: row.entryTitle,
-        body: row.body,
-        createdAt: row.createdAt,
-      })),
+    const page = Math.floor(safeOffset / safeLimit) + 1;
+    const queryParams: Record<string, string | number | undefined> = {
+      q: params.query.trim(),
+      page,
+      per: safeLimit,
     };
+    if (params.userId) queryParams.user_id = params.userId;
+    if (params.gameId) queryParams.game_id = params.gameId;
+    const response = await apiGet<JournalEntrySearchResponse>(
+      `/api/v1/journal_entries`,
+      { params: queryParams },
+    );
+    if (!response) return { rows: [], total: 0 };
+    const total = Number(response.meta?.count ?? 0);
+    const rows = response.data.map((raw): IJournalSearchResult => ({
+      entryId: Number(raw.entry_id),
+      userId: raw.user_id,
+      globalName: raw.user?.global_name ?? null,
+      username: raw.user?.username ?? null,
+      gameId: Number(raw.gamedb_game_id),
+      gameTitle: raw.game?.title ?? "",
+      entryTitle: raw.entry_title ?? null,
+      body: raw.entry_body,
+      createdAt: new Date(raw.created_at),
+    }));
+    return { rows, total };
   }
 
   static async updateEmojiName(userId: string, emojiName: string | null): Promise<void> {
