@@ -25,7 +25,6 @@ import {
   safeDeferReply,
   PRIVATE_OPTION_DESCRIPTION,
   replyIfNotOwner,
-  safeDeferUpdate,
   safeReply,
   safeUpdate,
   sanitizeUserInput,
@@ -33,7 +32,6 @@ import {
 import { decodeBase64Url, encodeWithMaxLength } from "../functions/CustomIdUtils.js";
 import {
   buildComponentsV2Flags,
-  buildComponentsV2EditFlags,
   buildTextContainer,
   buildTextReply,
   buildTitledContainer,
@@ -49,7 +47,7 @@ import GameSearchSynonym from "../classes/GameSearchSynonym.js";
 import GameSearchSynonymDraft, {
   type ISynonymDraftPair,
 } from "../classes/GameSearchSynonymDraft.js";
-import { buildPageFooterText, shouldRenderPrevNextButtons } from "../functions/PaginationUtils.js";
+import { shouldRenderPrevNextButtons } from "../functions/PaginationUtils.js";
 import {
   buildActionButton,
   buildButtonRow,
@@ -59,7 +57,7 @@ import {
 import { parseSynonymQuickAddTerms } from "./gamedb-synonym.utils.js";
 import { isPositiveInt, truncateWithEllipsis } from "../utilities/ValidationUtils.js";
 import { SYNONYM_LIST_PAGE_SIZE } from "../config/pagination.js";
-import { assertCustomIdSegments, parseCustomIdSegments } from "../utilities/CustomIdUtils.js";
+import { assertCustomIdSegments } from "../utilities/CustomIdUtils.js";
 import { safeIgnore } from "../utilities/AsyncUtils.js";
 
 const SYNONYM_ADD_MODAL_PREFIX = "gamedb-syn-add";
