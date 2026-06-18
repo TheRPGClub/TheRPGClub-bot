@@ -143,6 +143,8 @@ GET     /api/v1/dashboard  # Front-page dashboard (limit)
 
 ```
 GET     /api/v1/engines  # List engines (q, page, per, limit, offset)
+POST    /api/v1/engines  # Create or upsert an engine
+  data: { name, igdb_engine_id* }
 GET     /api/v1/engines/{id}  # Show engine
 ```
 
@@ -164,6 +166,8 @@ POST    /api/v1/users/{user_id}/favorites  # Add a favorite
 
 ```
 GET     /api/v1/franchises  # List franchises (q, page, per, limit, offset)
+POST    /api/v1/franchises  # Create or upsert a franchise
+  data: { name, igdb_franchise_id* }
 GET     /api/v1/franchises/{id}  # Show franchise
 ```
 
@@ -227,13 +231,20 @@ PATCH   /api/v1/users/{user_id}/giveaway_settings  # Update a user's giveaway no
 GET     /api/v1/games  # List games (q, winner, genre_id, engine_id, theme_id, perspective_id, mode_id, franchise_id, company_id, page, per, limit, offset)
 POST    /api/v1/games  # Create a game from IGDB
 GET     /api/v1/games/{id}  # Show game
+PATCH   /api/v1/games/{id}  # Update a game
+  data: { description, featured_video_url }
+POST    /api/v1/games/{id}/alternates  # Link an alternate version
+  data: { alt_game_id* }
 GET     /api/v1/games/{id}/collections  # List collection entries for this game (page, per, limit, offset)
 GET     /api/v1/games/{id}/completions  # List completions for this game (page, per, limit, offset)
 GET     /api/v1/games/{id}/now_playing  # List users currently playing this game (page, per, limit, offset)
 GET     /api/v1/games/{id}/profile  # Show aggregate game profile
 POST    /api/v1/games/{id}/refresh-images  # Refresh images from IGDB
+POST    /api/v1/games/{id}/refresh-releases  # Refresh releases from IGDB
 GET     /api/v1/games/{id}/relations  # Show game relations
 GET     /api/v1/games/{id}/releases  # List game releases
+POST    /api/v1/games/{id}/releases  # Add a release
+  data: { platform_id*, region_id*, format, release_date, notes }
 GET     /api/v1/games/{id}/reviews  # List reviews for this game (page, per, limit, offset)
 ```
 
@@ -241,6 +252,8 @@ GET     /api/v1/games/{id}/reviews  # List reviews for this game (page, per, lim
 
 ```
 GET     /api/v1/genres  # List genres (q, page, per, limit, offset)
+POST    /api/v1/genres  # Create or upsert a genre
+  data: { name, igdb_genre_id* }
 GET     /api/v1/genres/{id}  # Show genre
 ```
 
@@ -292,6 +305,8 @@ DELETE  /api/v1/journal_message_contexts/{message_id}  # Delete a journal messag
 
 ```
 GET     /api/v1/modes  # List modes (q, page, per, limit, offset)
+POST    /api/v1/modes  # Create or upsert a mode
+  data: { name, igdb_game_mode_id* }
 GET     /api/v1/modes/{id}  # Show mode
 ```
 
@@ -328,13 +343,17 @@ POST    /api/v1/users/{user_id}/now_playing  # Add a now-playing entry
 
 ```
 GET     /api/v1/perspectives  # List perspectives (q, page, per, limit, offset)
+POST    /api/v1/perspectives  # Create or upsert a perspective
+  data: { name, igdb_perspective_id* }
 GET     /api/v1/perspectives/{id}  # Show perspective
 ```
 
 ### Platforms
 
 ```
-GET     /api/v1/platforms  # List platforms (q, page, per, limit, offset)
+GET     /api/v1/platforms  # List platforms (q, code, igdb_ids[], igdb_id, page, per, limit, offset)
+POST    /api/v1/platforms  # Create or upsert a platform
+  data: { code, name, igdb_id* }
 GET     /api/v1/platforms/{id}  # Show platform
 ```
 
@@ -382,7 +401,9 @@ POST    /api/v1/rss_feeds/{rss_feed_id}/items  # Bulk-mark items as seen
 ### Regions
 
 ```
-GET     /api/v1/regions  # List regions (page, per, limit, offset)
+GET     /api/v1/regions  # List regions (code, igdb_id, page, per, limit, offset)
+POST    /api/v1/regions  # Create or upsert a region
+  data: { code, name, igdb_id* }
 GET     /api/v1/regions/{id}  # Show region
 ```
 
@@ -390,6 +411,7 @@ GET     /api/v1/regions/{id}  # Show region
 
 ```
 GET     /api/v1/games/{id}/release_announcements  # List a game's scheduled release announcements (page, per)
+PATCH   /api/v1/games/{id}/release_announcements  # Bulk-sync a game's release announcement schedule
 POST    /api/v1/release_announcements  # Schedule a release announcement
   data: { release_id*, announce_at* }
 GET     /api/v1/release_announcements/{id}  # Show a scheduled release announcement
@@ -520,6 +542,8 @@ DELETE  /api/v1/suggestions/{id}  # Delete a suggestion
 
 ```
 GET     /api/v1/themes  # List themes (q, page, per, limit, offset)
+POST    /api/v1/themes  # Create or upsert a theme
+  data: { name, igdb_theme_id* }
 GET     /api/v1/themes/{id}  # Show theme
 ```
 
@@ -588,9 +612,17 @@ POST    /api/v1/users/{user_id}/socials  # Link a social account
 ### Users
 
 ```
-GET     /api/v1/users  # List users (q, discord_id, has_platform, page, per, limit, offset)
+GET     /api/v1/users  # List users (q, discord_id, has_platform, has_emoji_name, page, per, limit, offset)
+POST    /api/v1/users/mark_departed  # Bulk-mark departed users
+POST    /api/v1/users/upsert  # Upsert a user by Discord id
+  data: { discord_id*, username, global_name, is_bot, server_joined_at, server_left_at }
 GET     /api/v1/users/{user_id}  # Show user profile (preview_limit)
+PATCH   /api/v1/users/{user_id}  # Update service-managed user fields
+  data: { emoji_name, last_seen, departed }
 GET     /api/v1/users/{user_id}/avatar  # Stream user avatar
+GET     /api/v1/users/{user_id}/avatar_history  # List a user's avatar history (page, per)
+POST    /api/v1/users/{user_id}/avatar_history  # Record an avatar change
+  data: { avatar_hash, avatar_url }
 GET     /api/v1/users/{user_id}/profile-image  # Stream user profile image
 ```
 
