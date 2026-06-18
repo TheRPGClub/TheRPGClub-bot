@@ -54,8 +54,6 @@ function getGuildId(channel: SendableTextChannel): string | undefined {
 async function checkAndSendReleaseAnnouncements(client: Client): Promise<void> {
   const now = DateTime.utc().toJSDate();
   await GameReleaseAnnouncement.syncReleaseAnnouncements();
-  await GameReleaseAnnouncement.markNonCanonicalAnnouncements();
-  await GameReleaseAnnouncement.markMissedAnnouncements(now);
 
   const due = await GameReleaseAnnouncement.listDueAnnouncements(now, BATCH_SIZE);
   if (!due.length) {
@@ -84,7 +82,7 @@ async function checkAndSendReleaseAnnouncements(client: Client): Promise<void> {
         components: payload.components,
         flags: buildComponentsV2EditFlags(),
       });
-      await GameReleaseAnnouncement.markAnnouncementSent(candidate.releaseId, new Date());
+      await GameReleaseAnnouncement.markAnnouncementSent(candidate.announcementId, new Date());
     } catch (err) {
       logError("GameReleaseAnnouncementService.releaseAnnouncement", err);
     }
