@@ -128,7 +128,7 @@ PATCH   /api/v1/completions/{id}  # Update a completion
 PUT     /api/v1/completions/{id}  # Replace a completion (alias)
   data: { gamedb_game_id, completion_type, completed_at, final_playtime_hrs, platform_id, note }
 DELETE  /api/v1/completions/{id}  # Delete a completion
-GET     /api/v1/users/{user_id}/completions  # List a user's completions (page, per, limit, offset)
+GET     /api/v1/users/{user_id}/completions  # List a user's completions (game_id, year, q, completed_after, completed_before, page, per, limit, offset)
 POST    /api/v1/users/{user_id}/completions  # Record a completion
   data: { gamedb_game_id*, completion_type*, completed_at, final_playtime_hrs, platform_id, note }
 ```
@@ -260,15 +260,18 @@ GET     /api/v1/igdb/search  # Search IGDB for games (q, igdb_id, per)
 
 ```
 GET     /api/v1/games/{id}/journal  # List journal entries for a game (user_id, page, per)
+GET     /api/v1/journal_entries  # Search journal entries across users (q, game_id, user_id, page, per)
+GET     /api/v1/journal_entries/contributors  # List journal contributors (page, per)
 GET     /api/v1/journal_entries/{id}  # Show a journal entry
 PATCH   /api/v1/journal_entries/{id}  # Update a journal entry
   data: { gamedb_game_id, entry_body, entry_title }
 PUT     /api/v1/journal_entries/{id}  # Replace a journal entry (alias)
   data: { gamedb_game_id, entry_body, entry_title }
 DELETE  /api/v1/journal_entries/{id}  # Delete a journal entry
-GET     /api/v1/users/{user_id}/journal  # List a user's journaled games (page, per)
+GET     /api/v1/users/{user_id}/journal  # List a user's journaled games (game_id, q, page, per)
 POST    /api/v1/users/{user_id}/journal  # Write a journal entry
   data: { gamedb_game_id*, entry_body*, entry_title }
+GET     /api/v1/users/{user_id}/journal/status  # Per-game journal status for a user (game_ids[])
 ```
 
 ### Journal Message Contexts
@@ -309,7 +312,16 @@ DELETE  /api/v1/nr_gotm_entries/{id}  # Delete a Non-Retro GOTM entry
 ### Now Playing
 
 ```
+GET     /api/v1/now_playing  # List all members' now-playing entries (game_ids[], q, page, per, limit, offset)
+GET     /api/v1/now_playing/{id}  # Show a now-playing entry
+PATCH   /api/v1/now_playing/{id}  # Update a now-playing entry
+  data: { note, platform_id, sort_order }
+PUT     /api/v1/now_playing/{id}  # Replace a now-playing entry (alias)
+  data: { note, platform_id, sort_order }
+DELETE  /api/v1/now_playing/{id}  # Delete a now-playing entry
 GET     /api/v1/users/{user_id}/now_playing  # List a user's now-playing games (page, per, limit, offset)
+POST    /api/v1/users/{user_id}/now_playing  # Add a now-playing entry
+  data: { gamedb_game_id*, platform_id, note }
 ```
 
 ### Perspectives
