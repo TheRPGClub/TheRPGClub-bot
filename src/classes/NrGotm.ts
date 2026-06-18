@@ -1,13 +1,4 @@
-import {
-  dbQuery,
-  dbMutate,
-  dbTransaction,
-  dbQueryConn,
-  dbMutateConn,
-  dbInsertConn,
-} from "../db/SqlManager.js";
-import { NrGotmSql } from "../db/sql/index.js";
-import { apiGet } from "../services/RpgClubApiClient.js";
+import { apiGet, apiPost, apiPatch, apiDelete } from "../services/RpgClubApiClient.js";
 import Game from "./Game.js";
 import { getThreadsByGameId } from "./Thread.js";
 import { isPositiveInt, requirePositiveInt } from "../utilities/ValidationUtils.js";
@@ -333,7 +324,32 @@ export default class NrGotm {
 
 export type NrGotmDatabaseEditableField = "redditUrl" | "gamedbGameId";
 
-type NrGotmRowRef = { NR_GOTM_ID: number; ROUND_NUMBER: number; GAME_INDEX: number };
+type NrGotmEntrySingleResponse = { data: NrGotmEntryApiRow };
+
+async function fetchNrGotmRowsByRound(round: number): Promise<NrGotmEntryApiRow[]> {
+  const response = await apiGet<NrGotmEntryListResponse>(
+    "/api/v1/nr_gotm_entries",
+    { params: { round_number: round, per: 500 } },
+  );
+  const rows = response?.data ?? [];
+  return rows
+    .filter((r) => Number(r.round_number) === round)
+    .sort((a, b) => Number(a.game_index) - Number(b.game_index));
+}
+
+async function patchNrGotmRow(
+  rowId: number,
+  field: NrGotmDatabaseEditableField,
+  value: string | number | null,
+): Promise<void> {
+  const data: Record<string, string | number | null> = {};
+  if (field === "gamedbGameId") {
+    data.gamedb_game_id = value as number;
+  } else {
+    data.reddit_url = value as string | null;
+  }
+  await apiPatch(`/api/v1/nr_gotm_entries/${rowId}`, { data });
+}
 
 export async function updateNrGotmGameFieldInDatabase(
   opts: {
@@ -346,107 +362,88 @@ export async function updateNrGotmGameFieldInDatabase(
 ): Promise<void> {
   ensureInitialized();
 
-  const columnMap: Record<NrGotmDatabaseEditableField, string> = {
-    redditUrl: "REDDIT_URL",
-    gamedbGameId: "GAMEDB_GAME_ID",
-  };
-  const columnName = columnMap[opts.field];
-
-  let dbValue = opts.value;
+  let value = opts.value;
   if (opts.field === "gamedbGameId") {
     const newId = Number(opts.value);
     requirePositiveInt(newId, "GameDB id");
     const exists = await getNrGameDetailsCached(newId);
     nrGameCache.set(newId, exists);
-    dbValue = newId;
+    value = newId;
   }
 
-  await dbTransaction(async (conn) => {
-    if (opts.rowId) {
-      await dbMutateConn(conn, NrGotmSql.updateByRowId(columnName), {
-        rowIdValue: opts.rowId,
-        bindValue: dbValue,
-      });
+  if (opts.rowId) {
+    await patchNrGotmRow(opts.rowId, opts.field, value);
 
-      const entryWithRow = nrGotmData.find((e) =>
-        e.gameOfTheMonth.some((g) => Number(g.id) === Number(opts.rowId)),
-      );
-      if (entryWithRow) {
-        for (const g of entryWithRow.gameOfTheMonth) {
-          if (Number(g.id) === Number(opts.rowId)) {
-            if (opts.field === "gamedbGameId") {
-              const newId = dbValue as number;
-              g.gamedbGameId = newId;
-              const meta = await getNrGameDetailsCached(newId);
-              g.title = meta.title;
-              g.threadId = await getPrimaryThreadIdForGame(newId);
-            } else if (opts.field === "redditUrl") {
-              g.redditUrl = opts.value as string | null;
-            }
+    const entryWithRow = nrGotmData.find((e) =>
+      e.gameOfTheMonth.some((g) => Number(g.id) === Number(opts.rowId)),
+    );
+    if (entryWithRow) {
+      for (const g of entryWithRow.gameOfTheMonth) {
+        if (Number(g.id) === Number(opts.rowId)) {
+          if (opts.field === "gamedbGameId") {
+            const newId = value as number;
+            g.gamedbGameId = newId;
+            const meta = await getNrGameDetailsCached(newId);
+            g.title = meta.title;
+            g.threadId = await getPrimaryThreadIdForGame(newId);
+          } else if (opts.field === "redditUrl") {
+            g.redditUrl = opts.value as string | null;
           }
         }
       }
-      return;
     }
+    return;
+  }
 
-    const { round, gameIndex } = opts;
-    if (!Number.isInteger(round)) {
-      throw new Error("round is required when rowId is not provided.");
-    }
-    if (!Number.isInteger(gameIndex)) {
-      throw new Error("gameIndex is required when rowId is not provided.");
-    }
+  const { round, gameIndex } = opts;
+  if (!Number.isInteger(round)) {
+    throw new Error("round is required when rowId is not provided.");
+  }
+  if (!Number.isInteger(gameIndex)) {
+    throw new Error("gameIndex is required when rowId is not provided.");
+  }
 
-    const rows = await dbQueryConn<NrGotmRowRef, NrGotmRowRef>(
-      conn,
-      NrGotmSql.getRowsByRound,
-      { roundNumber: round },
-      (row) => row,
+  const rows = await fetchNrGotmRowsByRound(round as number);
+  if (!rows.length) {
+    throw new Error(`No NR-GOTM database rows found for round ${round}.`);
+  }
+
+  const gi = Number(gameIndex);
+  if (!Number.isInteger(gi) || gi < 0 || gi >= rows.length) {
+    throw new Error(
+      `Game index ${gameIndex} is out of range for NR-GOTM round ${round} ` +
+      `(have ${rows.length} games).`,
     );
+  }
 
-    if (!rows.length) {
-      throw new Error(`No NR-GOTM database rows found for round ${round}.`);
+  const rowId = rows[gi].nr_gotm_id;
+  await patchNrGotmRow(rowId, opts.field, value);
+
+  const entry = nrGotmData.find((e) => e.round === round);
+  if (entry && entry.gameOfTheMonth[gi]) {
+    const target = entry.gameOfTheMonth[gi];
+    if (opts.field === "gamedbGameId") {
+      const newId = value as number;
+      target.gamedbGameId = newId;
+      const meta = await getNrGameDetailsCached(newId);
+      target.title = meta.title;
+      target.threadId = await getPrimaryThreadIdForGame(newId);
+    } else if (opts.field === "redditUrl") {
+      target.redditUrl = opts.value as string | null;
     }
-
-    const gi = Number(gameIndex);
-    if (!Number.isInteger(gi) || gi < 0 || gi >= rows.length) {
-      throw new Error(
-        `Game index ${gameIndex} is out of range for NR-GOTM round ${round} ` +
-        `(have ${rows.length} games).`,
-      );
-    }
-
-    const rowId = rows[gi].NR_GOTM_ID;
-
-    await dbMutateConn(conn, NrGotmSql.updateByRowId(columnName), {
-      rowIdValue: rowId,
-      bindValue: dbValue,
-    });
-
-    const entry = nrGotmData.find((e) => e.round === round);
-    if (entry && entry.gameOfTheMonth[gi]) {
-      const target = entry.gameOfTheMonth[gi];
-      if (opts.field === "gamedbGameId") {
-        const newId = dbValue as number;
-        target.gamedbGameId = newId;
-        const meta = await getNrGameDetailsCached(newId);
-        target.title = meta.title;
-        target.threadId = await getPrimaryThreadIdForGame(newId);
-      } else if (opts.field === "redditUrl") {
-        target.redditUrl = opts.value as string | null;
-      }
-    }
-  });
+  }
 }
 
 export async function updateNrGotmVotingResultsInDatabase(
   round: number,
   messageId: string | null,
 ): Promise<void> {
-  await dbMutate(
-    NrGotmSql.updateVotingResults,
-    { roundNumber: round, bindValue: messageId },
-  );
+  const rows = await fetchNrGotmRowsByRound(round);
+  for (const row of rows) {
+    await apiPatch(`/api/v1/nr_gotm_entries/${row.nr_gotm_id}`, {
+      data: { voting_results_message_id: messageId },
+    });
+  }
 }
 
 export async function insertNrGotmRoundInDatabase(
@@ -461,39 +458,35 @@ export async function insertNrGotmRoundInDatabase(
     throw new Error("At least one game is required for an NR-GOTM round.");
   }
 
-  const countRows = await dbQuery<{ CNT: number }, { CNT: number }>(
-    NrGotmSql.checkRoundExists,
-    { roundNumber: round },
-    (row) => row,
-  );
-  const count = countRows.length ? Number(countRows[0].CNT) : 0;
-  if (Number.isFinite(count) && count > 0) {
+  const existing = await fetchNrGotmRowsByRound(round);
+  if (existing.length > 0) {
     throw new Error(`NR-GOTM round ${round} already exists in the database.`);
   }
 
-  return dbTransaction(async (conn) => {
-    const insertedIds: number[] = [];
+  const insertedIds: number[] = [];
 
-    for (let i = 0; i < games.length; i++) {
-      const g = games[i];
-      if (!isPositiveInt(g.gamedbGameId)) {
-        throw new Error(`GameDB id is required for NR-GOTM round ${round}, game ${i + 1}.`);
-      }
-      const meta = await getNrGameDetailsCached(g.gamedbGameId);
-      const newId = await dbInsertConn(conn, NrGotmSql.insertRound, {
-        roundNumber: round,
-        monthYear,
-        gameIndex: i,
-        redditUrl: g.redditUrl ?? null,
-        gamedbGameId: g.gamedbGameId,
-      }, "outId");
-
-      if (newId) insertedIds.push(newId);
-      games[i].title = meta.title;
+  for (let i = 0; i < games.length; i++) {
+    const g = games[i];
+    if (!isPositiveInt(g.gamedbGameId)) {
+      throw new Error(`GameDB id is required for NR-GOTM round ${round}, game ${i + 1}.`);
     }
+    const meta = await getNrGameDetailsCached(g.gamedbGameId);
+    const created = await apiPost<NrGotmEntrySingleResponse>("/api/v1/nr_gotm_entries", {
+      data: {
+        round_number: round,
+        month_year: monthYear,
+        game_index: i,
+        reddit_url: g.redditUrl ?? null,
+        gamedb_game_id: g.gamedbGameId,
+      },
+    });
 
-    return insertedIds;
-  });
+    const newId = Number(created?.data?.nr_gotm_id);
+    if (Number.isFinite(newId)) insertedIds.push(newId);
+    games[i].title = meta.title;
+  }
+
+  return insertedIds;
 }
 
 export async function deleteNrGotmRoundFromDatabase(round: number): Promise<number> {
@@ -501,8 +494,9 @@ export async function deleteNrGotmRoundFromDatabase(round: number): Promise<numb
     throw new Error("Invalid round number for NR-GOTM delete.");
   }
 
-  return dbMutate(
-    NrGotmSql.deleteRound,
-    { roundNumber: round },
-  );
+  const rows = await fetchNrGotmRowsByRound(round);
+  for (const row of rows) {
+    await apiDelete(`/api/v1/nr_gotm_entries/${row.nr_gotm_id}`);
+  }
+  return rows.length;
 }
