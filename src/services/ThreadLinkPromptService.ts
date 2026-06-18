@@ -14,7 +14,7 @@ import {
   getThreadLinkInfo,
 } from "../classes/Thread.js";
 import Game from "../classes/Game.js";
-import { igdbService, type IGDBGameDetails } from "./IGDB/IgdbService.js";
+import { igdbService } from "./IGDB/IgdbService.js";
 import {
   createIgdbSession,
   type IgdbSelectOption,
@@ -35,7 +35,6 @@ import { assertCustomIdSegments } from "../utilities/CustomIdUtils.js";
 import { safeIgnore } from "../utilities/AsyncUtils.js";
 import { logError, logInfo, logWarn } from "../utilities/LogUtils.js";
 import { buildActionButton, buildButtonRow } from "../functions/uiComponents.js";
-import { saveFullGameMetadata } from "../functions/GameIgdbSync.js";
 import GameSearchService from "../classes/GameSearchService.js";
 
 function hasIgdbConfig(): boolean {
@@ -125,26 +124,8 @@ export class ThreadLinkButtonHandlers {
           chosenName = existing.title;
           return existing.id;
         }
-        const details: IGDBGameDetails | null = await igdbService.getGameDetails(igdbId);
-        if (!details) {
-          await safeReply(interaction, buildTextReply(
-            "Failed to load game details from IGDB.",
-            true,
-          ));
-          return null;
-        }
-        const newGame = await Game.createGame(
-          details.name,
-          details.summary ?? "",
-          null,
-          details.id,
-          details.slug ?? null,
-          details.total_rating ?? null,
-          details.url ?? null,
-          Game.getFeaturedVideoUrl(details),
-        );
-        await saveFullGameMetadata(newGame.id, details);
-        chosenName = nameHint ?? details.name;
+        const newGame = await Game.createGame(igdbId);
+        chosenName = nameHint ?? newGame.title;
         return newGame.id;
       };
 

@@ -163,6 +163,27 @@ export async function apiPatch<T>(
 }
 
 /**
+ * POST to a resource with multipart/form-data. Returns the parsed response body,
+ * or `null` on 404. Throws for all other non-2xx responses.
+ */
+export async function apiPostForm<T>(
+  path: string,
+  form: FormData,
+): Promise<T | null> {
+  try {
+    const response = await getClient().post<T>(path, form, {
+      headers: { "Content-Type": undefined },
+    });
+    return response.data;
+  } catch (err: unknown) {
+    if (axios.isAxiosError(err) && err.response?.status === 404) {
+      return null;
+    }
+    throw err;
+  }
+}
+
+/**
  * DELETE a resource. Returns the parsed response body, or `null` on 404.
  * Throws for all other non-2xx responses.
  */

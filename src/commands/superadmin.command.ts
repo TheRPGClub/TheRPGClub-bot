@@ -69,7 +69,6 @@ import { safeIgnore } from "../utilities/AsyncUtils.js";
 import { logError, logWarn } from "../utilities/LogUtils.js";
 import { buildSelectRow } from "../functions/uiComponents.js";
 import GamePlatformRegionService from "../classes/GamePlatformRegionService.js";
-import { saveFullGameMetadata } from "../functions/GameIgdbSync.js";
 import GameSearchService from "../classes/GameSearchService.js";
 
 type CompletionAddContext = {
@@ -668,34 +667,8 @@ export class SuperAdmin {
       return { gameId: existing.id, title: existing.title };
     }
 
-    const details = await igdbService.getGameDetails(igdbId);
-    if (!details) {
-      throw new Error("Failed to load game details from IGDB.");
-    }
-
-    let imageData: Buffer | null = null;
-    if (details.cover?.image_id) {
-      try {
-        const imageUrl = `https://images.igdb.com/igdb/image/upload/t_cover_big/${details.cover.image_id}.jpg`;
-        const imageResponse = await axios.get(imageUrl, { responseType: "arraybuffer" });
-        imageData = Buffer.from(imageResponse.data);
-      } catch (err) {
-        logError("SuperadminCommand.downloadCoverImage", err);
-      }
-    }
-
-    const newGame = await Game.createGame(
-      details.name,
-      details.summary ?? "",
-      imageData,
-      details.id,
-      details.slug ?? null,
-      details.total_rating ?? null,
-      details.url ?? null,
-      Game.getFeaturedVideoUrl(details),
-    );
-    await saveFullGameMetadata(newGame.id, details);
-    return { gameId: newGame.id, title: details.name };
+    const newGame = await Game.createGame(igdbId);
+    return { gameId: newGame.id, title: newGame.title };
   }
 
   private async saveCompletionForContext(

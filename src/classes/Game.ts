@@ -2,24 +2,23 @@ import axios from "axios";
 import {
   dbQuery,
   dbMutate,
-  dbInsert,
   dbWithConnection,
-  dbTransaction,
   dbQueryConn,
-  dbMutateConn,
 } from "../db/SqlManager.js";
 import { GameSql } from "../db/sql/index.js";
 import type { IGDBGameDetails } from "../services/IGDB/IgdbService.js";
 import {
   apiGet,
   apiGetRaw,
+  apiPost,
+  apiPatch,
+  apiPostForm,
   type ApiGetRawMeta,
 } from "../services/RpgClubApiClient.js";
 import { isPositiveInt } from "../utilities/ValidationUtils.js";
 import {
   mapGameFromApi,
   mapGameRow,
-  mapReleaseRow,
   mapReleaseFromApi,
   type ReleaseApiData,
 } from "../functions/GameMappers.js";
@@ -34,34 +33,13 @@ import {
 import GameProfileService from "./GameProfileService.js";
 
 export default class Game {
-  static async createGame(
-    title: string,
-    description: string | null,
-    imageData: Buffer | null,
-    igdbId: number | null = null,
-    slug: string | null = null,
-    totalRating: number | null = null,
-    igdbUrl: string | null = null,
-    featuredVideoUrl: string | null = null,
-  ): Promise<IGame> {
-    const gameId = await dbInsert(
-      GameSql.createGame,
-      {
-        title,
-        description,
-        imageData: imageData || null,
-        igdbId: igdbId || null,
-        slug: slug || null,
-        totalRating: totalRating || null,
-        igdbUrl: igdbUrl || null,
-        featuredVideoUrl: featuredVideoUrl || null,
-      },
-      "id",
+  static async createGame(igdbId: number): Promise<IGame> {
+    const result = await apiPost<{ data: { game_id: number } }>(
+      "/api/v1/games",
+      { igdb_id: igdbId },
     );
-
-    if (!gameId) throw new Error("Failed to retrieve GAME_ID after insert.");
-
-    const newGame = await Game.getGameById(gameId);
+    if (!result) throw new Error("No IGDB game found with that id.");
+    const newGame = await Game.getGameById(result.data.game_id);
     if (!newGame) throw new Error("Failed to fetch newly created game.");
     clearAutocompleteSearchCaches();
     return newGame;
@@ -135,10 +113,7 @@ export default class Game {
     return relations.alternates.map(mapGameFromApi);
   }
 
-  static async linkAlternateVersions(
-    gameIds: number[],
-    createdBy: string | null,
-  ): Promise<number> {
+  static async linkAlternateVersions(gameIds: number[]): Promise<number> {
     const uniqueIds = Array.from(new Set(gameIds.filter(isPositiveInt))).sort(
       (a, b) => a - b,
     );
@@ -146,27 +121,16 @@ export default class Game {
       throw new Error("At least two GameDB ids are required to link versions.");
     }
 
-    const pairs: Array<{
-      gameId: number;
-      altGameId: number;
-      createdBy: string | null;
-    }> = [];
+    let count = 0;
     for (let i = 0; i < uniqueIds.length; i += 1) {
       for (let j = i + 1; j < uniqueIds.length; j += 1) {
-        pairs.push({
-          gameId: uniqueIds[i],
-          altGameId: uniqueIds[j],
-          createdBy,
+        await apiPost(`/api/v1/games/${uniqueIds[i]}/alternates`, {
+          data: { alt_game_id: uniqueIds[j] },
         });
+        count++;
       }
     }
-
-    await dbTransaction(async (conn) => {
-      for (const pair of pairs) {
-        await dbMutateConn(conn, GameSql.linkAlternateVersions, pair);
-      }
-    });
-    return pairs.length;
+    return count;
   }
 
   static async getAllGameIdsWithIgdb(): Promise<number[]> {
@@ -262,28 +226,20 @@ export default class Game {
     releaseDate: Date | null,
     notes: string | null,
   ): Promise<IRelease> {
-    const releaseId = await dbInsert(
-      GameSql.insertRelease,
+    const result = await apiPost<{ data: ReleaseApiData }>(
+      `/api/v1/games/${gameId}/releases`,
       {
-        gameId,
-        platformId,
-        regionId,
-        format,
-        releaseDate: releaseDate || null,
-        notes: notes || null,
+        data: {
+          platform_id: platformId,
+          region_id: regionId,
+          format: format ?? null,
+          release_date: releaseDate ? releaseDate.toISOString().split("T")[0] : null,
+          notes: notes ?? null,
+        },
       },
-      "id",
     );
-    if (!releaseId)
-      throw new Error("Failed to retrieve RELEASE_ID after insert.");
-    const newRelease = await Game.getReleaseById(releaseId);
-    if (!newRelease) throw new Error("Failed to fetch newly created release.");
-    return newRelease;
-  }
-
-  static async getReleaseById(id: number): Promise<IRelease | null> {
-    const rows = await dbQuery(GameSql.getReleaseById, { id }, mapReleaseRow);
-    return rows[0] ?? null;
+    if (!result?.data) throw new Error("Failed to create release via API.");
+    return mapReleaseFromApi(result.data);
   }
 
   static async getGameReleases(gameId: number): Promise<IRelease[]> {
@@ -398,11 +354,14 @@ export default class Game {
     }
   }
 
-  static async updateGameImage(
-    gameId: number,
-    imageData: Buffer,
-  ): Promise<void> {
-    await dbMutate(GameSql.updateGameImage, { imageData, gameId });
+  static async updateGameImage(gameId: number, imageData: Buffer): Promise<void> {
+    const form = new FormData();
+    form.append("image", new Blob([new Uint8Array(imageData)], { type: "image/jpeg" }), "cover.jpg");
+    await apiPostForm(`/api/v1/games/${gameId}/images`, form);
+  }
+
+  static async refreshImageFromIgdb(gameId: number): Promise<void> {
+    await apiPost(`/api/v1/games/${gameId}/refresh-images`);
   }
 
   static async updateGameThumbnailBad(
@@ -449,17 +408,14 @@ export default class Game {
     gameId: number,
     featuredVideoUrl: string | null,
   ): Promise<void> {
-    await dbMutate(GameSql.updateFeaturedVideoUrl, {
-      featuredVideoUrl,
-      gameId,
-    });
+    await apiPatch(`/api/v1/games/${gameId}`, { data: { featured_video_url: featuredVideoUrl } });
   }
 
   static async updateGameDescription(
     gameId: number,
     description: string | null,
   ): Promise<void> {
-    await dbMutate(GameSql.updateGameDescription, { description, gameId });
+    await apiPatch(`/api/v1/games/${gameId}`, { data: { description } });
   }
 
   static async touchGameUpdatedAt(gameId: number): Promise<void> {

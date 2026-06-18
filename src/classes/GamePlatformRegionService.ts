@@ -1,7 +1,5 @@
 import {
   dbQuery,
-  dbMutate,
-  dbInsert,
   dbTransaction,
   dbMutateConn,
 } from "../db/SqlManager.js";
@@ -17,9 +15,9 @@ import {
   type RegionApiData,
 } from "../functions/GameMappers.js";
 import type { IPlatformDef, IRegionDef, IGame, IGameWithPlatforms } from "../types/GameTypes.js";
-import { apiGet } from "../services/RpgClubApiClient.js";
+import { apiGet, apiPost } from "../services/RpgClubApiClient.js";
 import { isPositiveInt } from "../utilities/ValidationUtils.js";
-import { logError, logWarn } from "../utilities/LogUtils.js";
+import { logWarn } from "../utilities/LogUtils.js";
 
 export default class GamePlatformRegionService {
   private static async fetchAllPages<T>(
@@ -45,50 +43,36 @@ export default class GamePlatformRegionService {
     id: number;
     name: string | null;
   }): Promise<IPlatformDef | null> {
-    const existing = await GamePlatformRegionService.getPlatformByIgdbId(igdbPlatform.id);
-    if (existing) {
-      return existing;
-    }
-
-    try {
-      await dbMutate(GameSql.insertPlatform, {
-        code: buildPlatformCode(igdbPlatform.name, igdbPlatform.id),
-        name: igdbPlatform.name ?? `IGDB Platform ${igdbPlatform.id}`,
-        igdbId: igdbPlatform.id,
-      });
-      return GamePlatformRegionService.getPlatformByIgdbId(igdbPlatform.id);
-    } catch (err) {
-      logError("GamePlatformRegionService.insertPlatform", err);
-      return null;
-    }
+    const result = await apiPost<{ data: PlatformApiData }>(
+      "/api/v1/platforms",
+      {
+        data: {
+          code: buildPlatformCode(igdbPlatform.name, igdbPlatform.id),
+          name: igdbPlatform.name ?? `IGDB Platform ${igdbPlatform.id}`,
+          igdb_id: igdbPlatform.id,
+        },
+      },
+    );
+    if (!result?.data) return null;
+    return mapPlatformFromApi(result.data);
   }
 
   static async ensureRegion(igdbRegionId: number): Promise<IRegionDef | null> {
-    const existing = await GamePlatformRegionService.getRegionByIgdbId(igdbRegionId);
-    if (existing) {
-      return existing;
-    }
-
     const regionConfig = IGDB_REGION_MAP[igdbRegionId];
-    if (!regionConfig) {
-      return null;
-    }
+    if (!regionConfig) return null;
 
-    try {
-      const regionId = await dbInsert(
-        GameSql.insertRegion,
-        {
+    const result = await apiPost<{ data: RegionApiData }>(
+      "/api/v1/regions",
+      {
+        data: {
           code: regionConfig.code,
           name: regionConfig.name,
-          igdbId: igdbRegionId,
+          igdb_id: igdbRegionId,
         },
-        "id",
-      );
-      return GamePlatformRegionService.getRegionById(regionId);
-    } catch (err) {
-      logError("GamePlatformRegionService.insertRegion", err);
-      return null;
-    }
+      },
+    );
+    if (!result?.data) return null;
+    return mapRegionFromApi(result.data);
   }
 
   static async getPlatformsForGame(gameId: number): Promise<IPlatformDef[]> {
@@ -243,15 +227,13 @@ export default class GamePlatformRegionService {
     }));
   }
 
-  static async getPlatformByIgdbId(
-    igdbId: number,
-  ): Promise<IPlatformDef | null> {
-    const rows = await dbQuery(
-      GameSql.getPlatformByIgdbId,
-      { igdbId },
-      mapPlatformDefRow,
+  static async getPlatformByIgdbId(igdbId: number): Promise<IPlatformDef | null> {
+    const result = await apiGet<{ data: PlatformApiData[] }>(
+      "/api/v1/platforms",
+      { params: { igdb_id: igdbId } },
     );
-    return rows[0] ?? null;
+    const first = result?.data?.[0];
+    return first ? mapPlatformFromApi(first) : null;
   }
 
   static async getAllRegions(): Promise<IRegionDef[]> {
@@ -275,12 +257,12 @@ export default class GamePlatformRegionService {
   }
 
   static async getRegionByIgdbId(igdbId: number): Promise<IRegionDef | null> {
-    const rows = await dbQuery(
-      GameSql.getRegionByIgdbId,
-      { igdbId },
-      mapRegionDefRow,
+    const result = await apiGet<{ data: RegionApiData[] }>(
+      "/api/v1/regions",
+      { params: { igdb_id: igdbId } },
     );
-    return rows[0] ?? null;
+    const first = result?.data?.[0];
+    return first ? mapRegionFromApi(first) : null;
   }
 
   static async addGamePlatformsByIgdbIds(

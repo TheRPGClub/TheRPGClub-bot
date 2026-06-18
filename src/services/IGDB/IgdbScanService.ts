@@ -141,9 +141,8 @@ export async function igdbScanTick(): Promise<void> {
           descriptionUpdated++;
         }
 
-        const releases = details.release_dates ?? [];
-        if (releases.length > 0) {
-          await refreshReleaseDates(candidate.gameId, releases);
+        if ((details.release_dates ?? []).length > 0) {
+          await refreshReleaseDates(candidate.gameId);
           releaseUpdated++;
         }
 
