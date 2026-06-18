@@ -68,6 +68,7 @@ type ProfileCollectionOwnerApiData = {
 
 type ProfileGotmWinApiData = {
   round: number;
+  reddit_url: string | null;
 };
 
 type ProfileGotmNominationApiData = {
@@ -115,13 +116,13 @@ export function mapGameProfileFromApi(
     gotmWins: (d.associations.gotm_wins ?? []).map((w) => ({
       round: Number(w.round),
       threadId: null,
-      redditUrl: null,
+      redditUrl: w.reddit_url ?? null,
       monthYear: "",
     })),
     nrGotmWins: (d.associations.nr_gotm_wins ?? []).map((w) => ({
       round: Number(w.round),
       threadId: null,
-      redditUrl: null,
+      redditUrl: w.reddit_url ?? null,
       monthYear: "",
     })),
     gotmNominations: (d.associations.gotm_nominations ?? []).map((n) => ({
