@@ -47,18 +47,4 @@ export const MemberSql = {
     postgres: `DELETE FROM journal_message_contexts WHERE created_at_ms < :cutoffMs`,
   } satisfies ISqlEntry,
 
-  // No API aggregate endpoint available yet -- see issue #849
-  getAllMembersAvatarHistoryCounts: {
-    postgres: `SELECT h.user_id,
-              u.username,
-              u.global_name,
-              COUNT(*) AS total
-         FROM rpg_club_user_avatar_history h
-         JOIN rpg_club_users u ON u.user_id = h.user_id
-        WHERE COALESCE(u.is_bot, false) = false
-          AND u.server_left_at IS NULL
-        GROUP BY h.user_id, u.username, u.global_name
-        ORDER BY COALESCE(u.global_name, u.username, h.user_id)`,
-  } satisfies ISqlEntry,
-
 };
