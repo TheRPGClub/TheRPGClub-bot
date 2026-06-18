@@ -351,11 +351,26 @@ type CompletionApiData = {
   completion_type: string;
   completed_at: string | null;
   final_playtime_hrs: number | null;
+  created_at: string;
   game: { game_id: number; title: string } | null;
   platform: { platform_id: number; platform_name: string } | null;
 };
 
 type CompletionResponse = { data: CompletionApiData };
+
+type CompletionListResponse = {
+  data: CompletionApiData[];
+  meta: { count: number };
+};
+
+type CompletionLeaderboardApiData = {
+  user_id: string;
+  username: string | null;
+  global_name: string | null;
+  completion_count: number;
+};
+
+type CompletionLeaderboardResponse = { data: CompletionLeaderboardApiData[] };
 
 function mapCompletionApiData(d: CompletionApiData): ICompletionRecord {
   return {
@@ -366,8 +381,8 @@ function mapCompletionApiData(d: CompletionApiData): ICompletionRecord {
     platformId: d.platform_id != null ? Number(d.platform_id) : null,
     completedAt: d.completed_at ? new Date(d.completed_at) : null,
     finalPlaytimeHours: d.final_playtime_hrs != null ? Number(d.final_playtime_hrs) : null,
-    // created_at is dropped from the API response; callers of migrated methods do not use this
-    createdAt: new Date(0),
+    createdAt: d.created_at ? new Date(d.created_at) : new Date(0),
+    // thread_id is not part of the API serializer; no completion caller reads it
     threadId: null,
     note: d.note ?? null,
   };
@@ -979,50 +994,52 @@ export default class Member {
     return mapCompletionApiData(response.data);
   }
 
+  // Fetch a user's completions from the API, paging in blocks of `per` (max 500).
+  // `maxRecords` undefined means fetch every page; `skip` drops leading records.
+  private static async fetchUserCompletions(
+    userId: string,
+    params: Record<string, string | number>,
+    opts: { maxRecords?: number; skip?: number } = {},
+  ): Promise<ICompletionRecord[]> {
+    const { maxRecords, skip = 0 } = opts;
+    const PER = 500;
+    const need = maxRecords == null ? Infinity : skip + maxRecords;
+    const per = Number.isFinite(need) ? Math.min(need, PER) : PER;
+    const out: ICompletionRecord[] = [];
+    let page = 1;
+    while (out.length < need) {
+      const response = await apiGet<CompletionListResponse>(
+        `/api/v1/users/${userId}/completions`,
+        { params: { ...params, page, per } },
+      );
+      if (!response || response.data.length === 0) break;
+      for (const d of response.data) out.push(mapCompletionApiData(d));
+      if (response.data.length < per) break;
+      page += 1;
+    }
+    return Number.isFinite(need) ? out.slice(skip, need) : out.slice(skip);
+  }
+
+  // Translate the year filter into the API `year` query param: a numeric year as a
+  // string, or the literal "unknown" for completions with no `completed_at`.
+  private static completionYearParam(
+    year?: number | "unknown" | null,
+  ): string | undefined {
+    if (year === "unknown") return "unknown";
+    if (typeof year === "number") return String(year);
+    return undefined;
+  }
+
   static async getCompletionByGameId(
     userId: string,
     gameId: number,
   ): Promise<ICompletionRecord | null> {
     requirePositiveInt(gameId, "GameDB id");
-    const rows = await dbQuery<{
-      COMPLETION_ID: number;
-      GAME_ID: number;
-      TITLE: string;
-      COMPLETION_TYPE: string;
-      PLATFORM_ID: number | null;
-      COMPLETED_AT: Date | null;
-      FINAL_PLAYTIME_HRS: number | null;
-      CREATED_AT: Date;
-      THREAD_ID: string | null;
-      NOTE: string | null;
-    }, ICompletionRecord>(
-      MemberSql.getCompletionByGameId,
-      { userId, gameId },
-      (row) => ({
-        completionId: Number(row.COMPLETION_ID),
-        gameId: Number(row.GAME_ID),
-        title: String(row.TITLE),
-        completionType: String(row.COMPLETION_TYPE),
-        platformId: row.PLATFORM_ID ? Number(row.PLATFORM_ID) : null,
-        completedAt:
-          row.COMPLETED_AT instanceof Date
-            ? row.COMPLETED_AT
-            : row.COMPLETED_AT
-              ? new Date(row.COMPLETED_AT as string)
-              : null,
-        finalPlaytimeHours:
-          row.FINAL_PLAYTIME_HRS == null ? null : Number(row.FINAL_PLAYTIME_HRS),
-        createdAt:
-          row.CREATED_AT instanceof Date
-            ? row.CREATED_AT
-            : row.CREATED_AT
-              ? new Date(row.CREATED_AT as string)
-              : new Date(),
-        threadId: row.THREAD_ID ?? null,
-        note: row.NOTE ?? null,
-      }),
+    const rows = await Member.fetchUserCompletions(
+      userId,
+      { game_id: gameId },
+      { maxRecords: 1 },
     );
-
     return rows[0] ?? null;
   }
 
@@ -1037,98 +1054,19 @@ export default class Member {
     const safeLimit = Math.min(Math.max(limit, 1), 1000);
     const safeOffset = Math.max(offset, 0);
 
-    const clauses: string[] = ["c.USER_ID = :userId"];
-    const binds: Record<string, any> = { userId, limit: safeLimit, offset: safeOffset };
-    if (year === "unknown") {
-      clauses.push("c.COMPLETED_AT IS NULL");
-    } else if (typeof year === "number") {
-      clauses.push("EXTRACT(YEAR FROM c.COMPLETED_AT) = :year");
-      binds.year = year;
-    }
-    if (title) {
-      clauses.push("UPPER(g.TITLE) LIKE '%' || UPPER(:title) || '%'");
-      binds.title = title;
-    }
+    const query: Record<string, string | number> = {};
+    const yearParam = Member.completionYearParam(year);
+    if (yearParam !== undefined) query.year = yearParam;
+    if (title) query.q = title;
 
-    return dbQuery<{
-      COMPLETION_ID: number;
-      GAME_ID: number;
-      TITLE: string;
-      COMPLETION_TYPE: string;
-      PLATFORM_ID: number | null;
-      COMPLETED_AT: Date | null;
-      FINAL_PLAYTIME_HRS: number | null;
-      CREATED_AT: Date;
-      THREAD_ID: string | null;
-      NOTE: string | null;
-    }, ICompletionRecord>(
-      MemberSql.getCompletions(clauses.join(" AND ")),
-      binds,
-      (row) => ({
-        completionId: Number(row.COMPLETION_ID),
-        gameId: Number(row.GAME_ID),
-        title: String(row.TITLE),
-        completionType: String(row.COMPLETION_TYPE),
-        platformId: row.PLATFORM_ID ? Number(row.PLATFORM_ID) : null,
-        completedAt:
-          row.COMPLETED_AT instanceof Date
-            ? row.COMPLETED_AT
-            : row.COMPLETED_AT
-              ? new Date(row.COMPLETED_AT as string)
-              : null,
-        finalPlaytimeHours:
-          row.FINAL_PLAYTIME_HRS == null ? null : Number(row.FINAL_PLAYTIME_HRS),
-        createdAt:
-          row.CREATED_AT instanceof Date
-            ? row.CREATED_AT
-            : row.CREATED_AT
-              ? new Date(row.CREATED_AT as string)
-              : new Date(),
-        threadId: row.THREAD_ID ?? null,
-        note: row.NOTE ?? null,
-      }),
-    );
+    return Member.fetchUserCompletions(userId, query, {
+      maxRecords: safeLimit,
+      skip: safeOffset,
+    });
   }
 
   static async getAllCompletions(userId: string): Promise<ICompletionRecord[]> {
-    return dbQuery<{
-      COMPLETION_ID: number;
-      GAME_ID: number;
-      TITLE: string;
-      COMPLETION_TYPE: string;
-      PLATFORM_ID: number | null;
-      COMPLETED_AT: Date | null;
-      FINAL_PLAYTIME_HRS: number | null;
-      CREATED_AT: Date;
-      THREAD_ID: string | null;
-      NOTE: string | null;
-    }, ICompletionRecord>(
-      MemberSql.getAllCompletions,
-      { userId },
-      (row) => ({
-        completionId: Number(row.COMPLETION_ID),
-        gameId: Number(row.GAME_ID),
-        title: String(row.TITLE),
-        completionType: String(row.COMPLETION_TYPE),
-        platformId: row.PLATFORM_ID ? Number(row.PLATFORM_ID) : null,
-        completedAt:
-          row.COMPLETED_AT instanceof Date
-            ? row.COMPLETED_AT
-            : row.COMPLETED_AT
-              ? new Date(row.COMPLETED_AT as string)
-              : null,
-        finalPlaytimeHours:
-          row.FINAL_PLAYTIME_HRS == null ? null : Number(row.FINAL_PLAYTIME_HRS),
-        createdAt:
-          row.CREATED_AT instanceof Date
-            ? row.CREATED_AT
-            : row.CREATED_AT
-              ? new Date(row.CREATED_AT as string)
-              : new Date(),
-        threadId: row.THREAD_ID ?? null,
-        note: row.NOTE ?? null,
-      }),
-    );
+    return Member.fetchUserCompletions(userId, {});
   }
 
   static async countCompletions(
@@ -1136,25 +1074,16 @@ export default class Member {
     year?: number | "unknown" | null,
     title?: string,
   ): Promise<number> {
-    const clauses: string[] = ["c.USER_ID = :userId"];
-    const binds: Record<string, any> = { userId };
-    if (year === "unknown") {
-      clauses.push("c.COMPLETED_AT IS NULL");
-    } else if (typeof year === "number") {
-      clauses.push("EXTRACT(YEAR FROM c.COMPLETED_AT) = :year");
-      binds.year = year;
-    }
-    if (title) {
-      clauses.push("UPPER(g.TITLE) LIKE '%' || UPPER(:title) || '%'");
-      binds.title = title;
-    }
+    const query: Record<string, string | number> = { per: 1 };
+    const yearParam = Member.completionYearParam(year);
+    if (yearParam !== undefined) query.year = yearParam;
+    if (title) query.q = title;
 
-    const rows = await dbQuery<{ CNT: number }, number>(
-      MemberSql.countCompletions(clauses.join(" AND ")),
-      binds,
-      (row) => Number(row.CNT),
+    const response = await apiGet<CompletionListResponse>(
+      `/api/v1/users/${userId}/completions`,
+      { params: query },
     );
-    return rows[0] ?? 0;
+    return Number(response?.meta?.count ?? 0);
   }
 
   static async updateCompletion(
@@ -1220,28 +1149,20 @@ export default class Member {
     count: number;
   }[]> {
     const safeLimit = Math.min(Math.max(limit, 1), 100);
-    const clauses: string[] = ["u.SERVER_LEFT_AT IS NULL"];
-    const binds: Record<string, any> = { limit: safeLimit };
-    if (title) {
-      clauses.push("UPPER(g.TITLE) LIKE '%' || UPPER(:title) || '%'");
-      binds.title = title;
-    }
+    const query: Record<string, string | number> = { per: safeLimit };
+    if (title) query.q = title;
 
-    return dbQuery<{
-      USER_ID: string;
-      USERNAME: string | null;
-      GLOBAL_NAME: string | null;
-      CNT: number;
-    }, { userId: string; username: string | null; globalName: string | null; count: number }>(
-      MemberSql.getCompletionLeaderboard(clauses.join(" AND ")),
-      binds,
-      (row) => ({
-        userId: row.USER_ID,
-        username: row.USERNAME ?? null,
-        globalName: row.GLOBAL_NAME ?? null,
-        count: Number(row.CNT),
-      }),
+    const response = await apiGet<CompletionLeaderboardResponse>(
+      "/api/v1/completions/leaderboard",
+      { params: query },
     );
+    if (!response) return [];
+    return response.data.map((row) => ({
+      userId: row.user_id,
+      username: row.username ?? null,
+      globalName: row.global_name ?? null,
+      count: Number(row.completion_count),
+    }));
   }
 
   static async search(filters: IMemberSearchFilters): Promise<IMemberSearchResult[]> {
@@ -1406,44 +1327,7 @@ export default class Member {
     gameId: number,
   ): Promise<ICompletionRecord[]> {
     requirePositiveInt(gameId, "GameDB id");
-    return dbQuery<{
-      COMPLETION_ID: number;
-      GAME_ID: number;
-      TITLE: string;
-      COMPLETION_TYPE: string;
-      PLATFORM_ID: number | null;
-      COMPLETED_AT: Date | null;
-      FINAL_PLAYTIME_HRS: number | null;
-      CREATED_AT: Date;
-      THREAD_ID: string | null;
-      NOTE: string | null;
-    }, ICompletionRecord>(
-      MemberSql.getCompletionsForGame,
-      { userId, gameId },
-      (row) => ({
-        completionId: Number(row.COMPLETION_ID),
-        gameId: Number(row.GAME_ID),
-        title: String(row.TITLE),
-        completionType: String(row.COMPLETION_TYPE),
-        platformId: row.PLATFORM_ID ? Number(row.PLATFORM_ID) : null,
-        completedAt:
-          row.COMPLETED_AT instanceof Date
-            ? row.COMPLETED_AT
-            : row.COMPLETED_AT
-              ? new Date(row.COMPLETED_AT as string)
-              : null,
-        finalPlaytimeHours:
-          row.FINAL_PLAYTIME_HRS == null ? null : Number(row.FINAL_PLAYTIME_HRS),
-        createdAt:
-          row.CREATED_AT instanceof Date
-            ? row.CREATED_AT
-            : row.CREATED_AT
-              ? new Date(row.CREATED_AT as string)
-              : new Date(),
-        threadId: row.THREAD_ID ?? null,
-        note: row.NOTE ?? null,
-      }),
-    );
+    return Member.fetchUserCompletions(userId, { game_id: gameId });
   }
 
   static async getRecentCompletionForGame(
@@ -1458,45 +1342,17 @@ export default class Member {
     const startDate = new Date(ref.getTime() - windowMs);
     const endDate = new Date(ref.getTime() + windowMs);
 
-    const rows = await dbQuery<{
-      COMPLETION_ID: number;
-      GAME_ID: number;
-      TITLE: string;
-      COMPLETION_TYPE: string;
-      PLATFORM_ID: number | null;
-      COMPLETED_AT: Date | null;
-      FINAL_PLAYTIME_HRS: number | null;
-      CREATED_AT: Date;
-      THREAD_ID: string | null;
-      NOTE: string | null;
-    }, ICompletionRecord>(
-      MemberSql.getRecentCompletionForGame,
-      { userId, gameId, startDate, endDate },
-      (row) => ({
-        completionId: Number(row.COMPLETION_ID),
-        gameId: Number(row.GAME_ID),
-        title: String(row.TITLE),
-        completionType: String(row.COMPLETION_TYPE),
-        platformId: row.PLATFORM_ID ? Number(row.PLATFORM_ID) : null,
-        completedAt:
-          row.COMPLETED_AT instanceof Date
-            ? row.COMPLETED_AT
-            : row.COMPLETED_AT
-              ? new Date(row.COMPLETED_AT as string)
-              : null,
-        finalPlaytimeHours:
-          row.FINAL_PLAYTIME_HRS == null ? null : Number(row.FINAL_PLAYTIME_HRS),
-        createdAt:
-          row.CREATED_AT instanceof Date
-            ? row.CREATED_AT
-            : row.CREATED_AT
-              ? new Date(row.CREATED_AT as string)
-              : new Date(),
-        threadId: row.THREAD_ID ?? null,
-        note: row.NOTE ?? null,
-      }),
+    // The API filters on completed_at only; the prior SQL fell back to created_at
+    // for entries with no completed_at, which this window cannot replicate.
+    const rows = await Member.fetchUserCompletions(
+      userId,
+      {
+        game_id: gameId,
+        completed_after: startDate.toISOString(),
+        completed_before: endDate.toISOString(),
+      },
+      { maxRecords: 1 },
     );
-
     return rows[0] ?? null;
   }
 

@@ -1,29 +1,5 @@
 import type { ISqlEntry } from "./types.js";
 
-const COMPLETION_SELECT_SQL_PG = `SELECT c.completion_id,
-             g.game_id,
-             g.title,
-             c.completion_type,
-             c.platform_id,
-             c.completed_at,
-             c.final_playtime_hrs,
-             c.created_at,
-             c.note,
-             COALESCE(
-                (
-                  SELECT MIN(tgl.thread_id)
-                  FROM thread_game_links tgl
-                  WHERE tgl.gamedb_game_id = c.gamedb_game_id
-                ),
-                (
-                  SELECT MIN(th.thread_id)
-                  FROM threads th
-                  WHERE th.gamedb_game_id = c.gamedb_game_id
-                )
-              ) AS thread_id
-        FROM user_game_completions c
-        JOIN gamedb_games g ON g.game_id = c.gamedb_game_id`;
-
 export const MemberSql = {
   touchLastSeen: {
     postgres: `UPDATE rpg_club_users
@@ -200,66 +176,6 @@ export const MemberSql = {
   removeNowPlaying: {
     postgres: `DELETE FROM user_now_playing WHERE user_id = :userId AND gamedb_game_id = :gameId`,
   } satisfies ISqlEntry,
-
-  getCompletionByGameId: {
-    postgres: `${COMPLETION_SELECT_SQL_PG}
-       WHERE c.user_id = :userId
-         AND c.gamedb_game_id = :gameId
-       LIMIT 1`,
-  } satisfies ISqlEntry,
-
-  // Caller must pass dialect-appropriate whereClause
-  getCompletions: (whereClause: string) =>
-    ({
-      postgres: `${COMPLETION_SELECT_SQL_PG}
-       WHERE ${whereClause}
-       ORDER BY c.completed_at DESC NULLS LAST, c.completion_id DESC
-       LIMIT :limit OFFSET :offset`,
-    }) satisfies ISqlEntry,
-
-  getAllCompletions: {
-    postgres: `${COMPLETION_SELECT_SQL_PG}
-       WHERE c.user_id = :userId
-       ORDER BY c.completed_at DESC NULLS LAST, c.created_at DESC, c.completion_id DESC`,
-  } satisfies ISqlEntry,
-
-  // Caller must pass dialect-appropriate whereClause
-  countCompletions: (whereClause: string) =>
-    ({
-      postgres: `SELECT COUNT(*) AS cnt
-        FROM user_game_completions c
-        JOIN gamedb_games g ON g.game_id = c.gamedb_game_id
-       WHERE ${whereClause}`,
-    }) satisfies ISqlEntry,
-
-  getCompletionsForGame: {
-    postgres: `${COMPLETION_SELECT_SQL_PG}
-       WHERE c.user_id = :userId
-         AND c.gamedb_game_id = :gameId
-       ORDER BY c.completed_at DESC NULLS LAST, c.completion_id DESC`,
-  } satisfies ISqlEntry,
-
-  getRecentCompletionForGame: {
-    postgres: `${COMPLETION_SELECT_SQL_PG}
-       WHERE c.user_id = :userId
-         AND c.gamedb_game_id = :gameId
-         AND COALESCE(c.completed_at, c.created_at) BETWEEN :startDate AND :endDate
-       ORDER BY COALESCE(c.completed_at, c.created_at) DESC
-       LIMIT 1`,
-  } satisfies ISqlEntry,
-
-  // Caller must pass dialect-appropriate whereClause
-  getCompletionLeaderboard: (whereClause: string) =>
-    ({
-      postgres: `SELECT c.user_id, u.username, u.global_name, COUNT(*) AS cnt
-        FROM user_game_completions c
-        JOIN rpg_club_users u ON u.user_id = c.user_id
-        JOIN gamedb_games g ON g.game_id = c.gamedb_game_id
-       WHERE ${whereClause}
-       GROUP BY c.user_id, u.username, u.global_name
-       ORDER BY cnt DESC
-       LIMIT :limit`,
-    }) satisfies ISqlEntry,
 
   // Caller must pass dialect-appropriate where clause
   searchMembers: (where: string) =>
