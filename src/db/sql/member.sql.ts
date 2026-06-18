@@ -154,18 +154,6 @@ export const MemberSql = {
            VALUES (:userId, :gameId, :platformId, :note, :noteUpdatedAt, :sortOrder)`,
   } satisfies ISqlEntry,
 
-  getJournalStatusForGames: (inlineTable: string) =>
-    ({
-      postgres: `SELECT gids.game_id,
-              COUNT(*) AS journal_count,
-              MAX(je.created_at) AS last_journal_at
-         FROM (${inlineTable}) gids
-         LEFT JOIN user_game_journal_entries je
-           ON je.user_id = :userId
-          AND je.gamedb_game_id = gids.game_id
-        GROUP BY gids.game_id`,
-    }) satisfies ISqlEntry,
-
   updateNowPlayingSort: {
     postgres: `UPDATE user_now_playing
             SET sort_order = :sortOrder
@@ -280,46 +268,6 @@ export const MemberSql = {
            WHERE server_left_at IS NULL
              AND user_id NOT IN (${placeholders})`,
     }) satisfies ISqlEntry,
-
-  getAllJournalUsers: {
-    postgres: `SELECT u.user_id,
-              u.username,
-              u.global_name,
-              COUNT(DISTINCT je.gamedb_game_id) AS game_count,
-              COUNT(je.entry_id) AS entry_count
-         FROM user_game_journal_entries je
-         JOIN rpg_club_users u ON u.user_id = je.user_id
-        WHERE COALESCE(u.is_bot, false) = false
-          AND u.server_left_at IS NULL
-        GROUP BY u.user_id, u.username, u.global_name
-        ORDER BY COUNT(DISTINCT je.gamedb_game_id) DESC,
-                 u.global_name NULLS LAST,
-                 u.username NULLS LAST`,
-  } satisfies ISqlEntry,
-
-  searchJournalEntries: {
-    postgres: `SELECT COUNT(*) OVER () AS total_count,
-              je.entry_id,
-              je.user_id,
-              u.global_name,
-              u.username,
-              je.gamedb_game_id,
-              g.title         AS game_title,
-              je.entry_title,
-              je.entry_body,
-              je.created_at
-         FROM user_game_journal_entries je
-         JOIN gamedb_games g ON g.game_id = je.gamedb_game_id
-         JOIN rpg_club_users u ON u.user_id = je.user_id
-        WHERE (
-                je.entry_title ILIKE '%' || :searchTerm || '%'
-             OR je.entry_body  ILIKE '%' || :searchTerm || '%'
-              )
-          AND (:userId IS NULL OR je.user_id = :userId)
-          AND (:gameId IS NULL OR je.gamedb_game_id = :gameId)
-        ORDER BY je.created_at DESC, je.entry_id DESC
-        LIMIT :limit OFFSET :offset`,
-  } satisfies ISqlEntry,
 
   updateEmojiName: {
     postgres: `UPDATE rpg_club_users
