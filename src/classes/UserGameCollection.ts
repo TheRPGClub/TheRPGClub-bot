@@ -1,9 +1,6 @@
-import { dbQuery } from "../db/SqlManager.js";
-import { UserGameCollectionSql } from "../db/sql/index.js";
 import { isPositiveInt, requirePositiveInt } from "../utilities/ValidationUtils.js";
 import { apiGet, apiPost, apiPatch, apiDelete } from "../services/RpgClubApiClient.js";
 import Game from "./Game.js";
-import GamePlatformRegionService from "./GamePlatformRegionService.js";
 
 export const COLLECTION_OWNERSHIP_TYPES = [
   "Digital",
@@ -44,33 +41,6 @@ export interface IUserGameCollectionOverviewEntry {
   total: number;
 }
 
-export interface IUserGameCollectionUserOverview {
-  userId: string;
-  username: string | null;
-  globalName: string | null;
-  totalCount: number;
-  platformCounts: IUserGameCollectionOverviewEntry[];
-}
-
-type CollectionRow = {
-  ENTRY_ID: number;
-  USER_ID: string;
-  GAMEDB_GAME_ID: number;
-  TITLE: string;
-  PLATFORM_ID: number | null;
-  PLATFORM_NAME: string | null;
-  PLATFORM_ABBREVIATION: string | null;
-  OWNERSHIP_TYPE: CollectionOwnershipType;
-  NOTE: string | null;
-  IS_SHARED: number;
-  CREATED_AT: Date | string;
-  UPDATED_AT: Date | string;
-};
-
-function toDate(value: Date | string): Date {
-  return value instanceof Date ? value : new Date(value);
-}
-
 function normalizeOwnershipType(value: string): CollectionOwnershipType {
   const trimmed = value.trim();
   const match = COLLECTION_OWNERSHIP_TYPES.find((item) =>
@@ -82,24 +52,10 @@ function normalizeOwnershipType(value: string): CollectionOwnershipType {
   return match;
 }
 
-function mapEntry(row: CollectionRow): IUserGameCollectionEntry {
-  return {
-    entryId: Number(row.ENTRY_ID),
-    userId: row.USER_ID,
-    gameId: Number(row.GAMEDB_GAME_ID),
-    title: row.TITLE,
-    platformId: row.PLATFORM_ID == null ? null : Number(row.PLATFORM_ID),
-    platformName: row.PLATFORM_NAME ?? null,
-    platformAbbreviation: row.PLATFORM_ABBREVIATION ?? null,
-    ownershipType: row.OWNERSHIP_TYPE,
-    note: row.NOTE ?? null,
-    isShared: Number(row.IS_SHARED ?? 0) === 1,
-    createdAt: toDate(row.CREATED_AT),
-    updatedAt: toDate(row.UPDATED_AT),
-  };
-}
-
-// --- API types (GET /api/v1/collections/:id, POST/PATCH responses use as_json) ---
+// --- API types ---
+// List items (CollectionEntry) omit is_shared/timestamps; detail/create/patch
+// responses (CollectionEntryDetail) include them. Both carry the joined platform
+// name/abbreviation.
 
 type CollectionApiData = {
   entry_id: number;
@@ -108,37 +64,89 @@ type CollectionApiData = {
   platform_id: number | null;
   ownership_type: string;
   note: string | null;
-  is_shared: boolean | number;
-  created_at: string;
-  updated_at: string;
+  platform_name?: string | null;
+  platform_abbreviation?: string | null;
+  is_shared?: boolean | number;
+  created_at?: string;
+  updated_at?: string;
 };
 
 type CollectionResponse = { data: CollectionApiData };
 
-async function enrichEntry(raw: CollectionApiData): Promise<IUserGameCollectionEntry> {
-  const [game, platform] = await Promise.all([
-    Game.getGameById(raw.gamedb_game_id),
-    raw.platform_id != null
-      ? GamePlatformRegionService.getPlatformById(raw.platform_id)
-      : Promise.resolve(null),
-  ]);
+type PlatformCountApiData = {
+  platform_id: number | null;
+  platform_name: string | null;
+  platform_abbreviation: string | null;
+  count: number;
+};
+
+type PlatformSummaryResponse = {
+  data: { total_count: number; platform_counts: PlatformCountApiData[] };
+};
+
+function mapApiEntry(raw: CollectionApiData, title: string): IUserGameCollectionEntry {
   return {
     entryId: Number(raw.entry_id),
     userId: raw.user_id,
     gameId: Number(raw.gamedb_game_id),
-    title: game?.title ?? `Game #${raw.gamedb_game_id}`,
+    title,
     platformId: raw.platform_id != null ? Number(raw.platform_id) : null,
-    platformName: platform?.name ?? null,
-    platformAbbreviation: platform?.abbreviation ?? null,
+    platformName: raw.platform_name ?? null,
+    platformAbbreviation: raw.platform_abbreviation ?? null,
     ownershipType: normalizeOwnershipType(raw.ownership_type),
     note: raw.note ?? null,
     isShared: Boolean(raw.is_shared),
-    createdAt: new Date(raw.created_at),
-    updatedAt: new Date(raw.updated_at),
+    createdAt: raw.created_at ? new Date(raw.created_at) : new Date(0),
+    updatedAt: raw.updated_at ? new Date(raw.updated_at) : new Date(0),
   };
 }
 
+function mapPlatformCount(raw: PlatformCountApiData): IUserGameCollectionOverviewEntry {
+  return {
+    platformId: raw.platform_id == null ? null : Number(raw.platform_id),
+    platformName: raw.platform_name ?? null,
+    platformAbbreviation: raw.platform_abbreviation ?? null,
+    total: Number(raw.count ?? 0),
+  };
+}
+
+async function enrichEntry(raw: CollectionApiData): Promise<IUserGameCollectionEntry> {
+  const game = await Game.getGameById(raw.gamedb_game_id);
+  return mapApiEntry(raw, game?.title ?? `Game #${raw.gamedb_game_id}`);
+}
+
 export default class UserGameCollection {
+  private static async fetchAllPages<T>(
+    path: string,
+    params: Record<string, unknown> = {},
+  ): Promise<T[]> {
+    const results: T[] = [];
+    let page = 1;
+    for (;;) {
+      const result = await apiGet<{ data: T[]; meta: { next: number | null } }>(
+        path,
+        { params: { ...params, page, per: 500 } },
+      );
+      if (!result?.data?.length) break;
+      results.push(...result.data);
+      if (!result.meta?.next) break;
+      page++;
+    }
+    return results;
+  }
+
+  private static async fetchTitles(
+    rows: Array<{ gamedb_game_id: number }>,
+  ): Promise<Map<number, string>> {
+    const ids = Array.from(new Set(rows.map((row) => Number(row.gamedb_game_id))));
+    const games = await Game.getGamesByIds(ids);
+    const titles = new Map<number, string>();
+    for (const game of games) {
+      titles.set(Number(game.id), game.title);
+    }
+    return titles;
+  }
+
   static async addEntry(params: {
     userId: string;
     gameId: number;
@@ -269,52 +277,52 @@ export default class UserGameCollection {
     ownershipType?: string;
     limit?: number;
   }): Promise<IUserGameCollectionEntry[]> {
-    const targetUserId = filters.targetUserId;
-    const where: string[] = ["c.USER_ID = :targetUserId"];
-    const binds: Record<string, string | number | null> = { targetUserId };
-
-    if (filters.title?.trim()) {
-      where.push("LOWER(g.TITLE) LIKE :title");
-      binds.title = `%${filters.title.trim().toLowerCase()}%`;
+    const params: Record<string, string> = {};
+    if (filters.title?.trim()) params.q = filters.title.trim();
+    if (filters.platform?.trim()) params.platform = filters.platform.trim();
+    if (filters.ownershipType?.trim()) {
+      params.ownership_type = normalizeOwnershipType(filters.ownershipType);
     }
 
-    if (filters.platform?.trim()) {
-      where.push(
-        "(LOWER(NVL(p.PLATFORM_NAME, '')) LIKE :platform " +
-        "OR LOWER(NVL(p.PLATFORM_CODE, '')) LIKE :platform " +
-        "OR LOWER(NVL(p.PLATFORM_ABBREVIATION, '')) LIKE :platform)",
-      );
-      binds.platform = `%${filters.platform.trim().toLowerCase()}%`;
-    }
+    let rows = await UserGameCollection.fetchAllPages<CollectionApiData>(
+      `/api/v1/users/${filters.targetUserId}/collections`,
+      params,
+    );
 
+    // The list endpoint has no platform_id filter, so apply it client-side.
     if (filters.platformId !== undefined) {
-      if (filters.platformId == null) {
-        where.push("c.PLATFORM_ID IS NULL");
+      if (filters.platformId === null) {
+        rows = rows.filter((row) => row.platform_id == null);
       } else if (isPositiveInt(filters.platformId)) {
-        where.push("c.PLATFORM_ID = :platformId");
-        binds.platformId = Math.trunc(filters.platformId);
+        const platformId = Math.trunc(filters.platformId);
+        rows = rows.filter((row) => Number(row.platform_id) === platformId);
       } else {
         throw new Error("Invalid platform id.");
       }
     }
 
-    if (filters.ownershipType?.trim()) {
-      where.push("c.OWNERSHIP_TYPE = :ownershipType");
-      binds.ownershipType = normalizeOwnershipType(filters.ownershipType);
-    }
+    const titles = await UserGameCollection.fetchTitles(rows);
+    const entries = rows.map((row) =>
+      mapApiEntry(
+        row,
+        titles.get(Number(row.gamedb_game_id)) ?? `Game #${row.gamedb_game_id}`,
+      ),
+    );
+
+    entries.sort((a, b) => {
+      const titleCmp = a.title.toLowerCase().localeCompare(b.title.toLowerCase());
+      if (titleCmp !== 0) return titleCmp;
+      const platCmp = (a.platformName ?? "").toLowerCase()
+        .localeCompare((b.platformName ?? "").toLowerCase());
+      if (platCmp !== 0) return platCmp;
+      return a.entryId - b.entryId;
+    });
 
     const requestedLimit = Number(filters.limit ?? 0);
-    const hasLimit = isPositiveInt(requestedLimit);
-    if (hasLimit) {
-      binds.limit = Math.trunc(requestedLimit);
+    if (isPositiveInt(requestedLimit)) {
+      return entries.slice(0, Math.trunc(requestedLimit));
     }
-    const fetchClause = hasLimit ? "FETCH FIRST :limit ROWS ONLY" : "";
-
-    return dbQuery(
-      UserGameCollectionSql.searchEntries(where.join(" AND "), fetchClause),
-      binds,
-      mapEntry,
-    );
+    return entries;
   }
 
   static async getOverviewForUser(userId: string): Promise<{
@@ -325,112 +333,68 @@ export default class UserGameCollection {
       throw new Error("Invalid user id.");
     }
 
-    const [totalRows, platformRows] = await Promise.all([
-      dbQuery(
-        UserGameCollectionSql.getTotalCount,
-        { userId },
-        (row: { TOTAL_COUNT: number }) => row,
-      ),
-      dbQuery(
-        UserGameCollectionSql.getPlatformCounts,
-        { userId },
-        (row: {
-          PLATFORM_ID: number | null;
-          PLATFORM_NAME: string | null;
-          PLATFORM_ABBREVIATION: string | null;
-          TOTAL_COUNT: number;
-        }) => ({
-          platformId: row.PLATFORM_ID == null ? null : Number(row.PLATFORM_ID),
-          platformName: row.PLATFORM_NAME ?? null,
-          platformAbbreviation: row.PLATFORM_ABBREVIATION ?? null,
-          total: Number(row.TOTAL_COUNT ?? 0),
-        }),
-      ),
-    ]);
+    const response = await apiGet<PlatformSummaryResponse>(
+      `/api/v1/users/${userId}/collections/platform_summary`,
+    );
+    const summary = response?.data;
 
     return {
-      totalCount: Number(totalRows[0]?.TOTAL_COUNT ?? 0),
-      platformCounts: platformRows,
+      totalCount: Number(summary?.total_count ?? 0),
+      platformCounts: (summary?.platform_counts ?? []).map(mapPlatformCount),
     };
   }
 
   static async getOverviewForAllUsers(): Promise<{
     totalCount: number;
     platformCounts: IUserGameCollectionOverviewEntry[];
-    users: IUserGameCollectionUserOverview[];
   }> {
-    const [totalRows, platformRows, userRows] = await Promise.all([
-      dbQuery(
-        UserGameCollectionSql.getTotalAllCount,
-        {},
-        (row: { TOTAL_COUNT: number }) => row,
-      ),
-      dbQuery(
-        UserGameCollectionSql.getAllPlatformCounts,
-        {},
-        (row: {
-          PLATFORM_ID: number | null;
-          PLATFORM_NAME: string | null;
-          PLATFORM_ABBREVIATION: string | null;
-          TOTAL_COUNT: number;
-        }) => ({
-          platformId: row.PLATFORM_ID == null ? null : Number(row.PLATFORM_ID),
-          platformName: row.PLATFORM_NAME ?? null,
-          platformAbbreviation: row.PLATFORM_ABBREVIATION ?? null,
-          total: Number(row.TOTAL_COUNT ?? 0),
-        }),
-      ),
-      dbQuery(
-        UserGameCollectionSql.getAllUserRows,
-        {},
-        (row: {
-          USER_ID: string;
-          USERNAME: string | null;
-          GLOBAL_NAME: string | null;
-          PLATFORM_ID: number | null;
-          PLATFORM_NAME: string | null;
-          PLATFORM_ABBREVIATION: string | null;
-          TOTAL_COUNT: number;
-        }) => row,
-      ),
-    ]);
+    const users = await UserGameCollection.fetchAllPages<{
+      user_id: string;
+      is_bot?: boolean;
+    }>("/api/v1/users");
+    const userIds = users
+      .filter((user) => user.is_bot !== true)
+      .map((user) => user.user_id);
 
-    const usersById = new Map<string, IUserGameCollectionUserOverview>();
-    for (const row of userRows) {
-      const userId = row.USER_ID;
-      const existing = usersById.get(userId);
-      const platformEntry: IUserGameCollectionOverviewEntry = {
-        platformId: row.PLATFORM_ID == null ? null : Number(row.PLATFORM_ID),
-        platformName: row.PLATFORM_NAME ?? null,
-        platformAbbreviation: row.PLATFORM_ABBREVIATION ?? null,
-        total: Number(row.TOTAL_COUNT ?? 0),
-      };
+    let totalCount = 0;
+    const platformsByKey = new Map<string, IUserGameCollectionOverviewEntry>();
 
-      if (existing) {
-        existing.platformCounts.push(platformEntry);
-        existing.totalCount += platformEntry.total;
-      } else {
-        usersById.set(userId, {
-          userId,
-          username: row.USERNAME ?? null,
-          globalName: row.GLOBAL_NAME ?? null,
-          totalCount: platformEntry.total,
-          platformCounts: [platformEntry],
-        });
+    const chunkSize = 10;
+    for (let i = 0; i < userIds.length; i += chunkSize) {
+      const chunk = userIds.slice(i, i + chunkSize);
+      const summaries = await Promise.all(
+        chunk.map((userId) =>
+          apiGet<PlatformSummaryResponse>(
+            `/api/v1/users/${userId}/collections/platform_summary`,
+          ),
+        ),
+      );
+
+      for (const response of summaries) {
+        const summary = response?.data;
+        if (!summary) continue;
+        totalCount += Number(summary.total_count ?? 0);
+        for (const raw of summary.platform_counts ?? []) {
+          const entry = mapPlatformCount(raw);
+          const key = entry.platformId == null ? "null" : String(entry.platformId);
+          const existing = platformsByKey.get(key);
+          if (existing) {
+            existing.total += entry.total;
+          } else {
+            platformsByKey.set(key, { ...entry });
+          }
+        }
       }
     }
 
-    const users = Array.from(usersById.values()).sort((a, b) => {
-      const aName = (a.globalName ?? a.username ?? a.userId).toLowerCase();
-      const bName = (b.globalName ?? b.username ?? b.userId).toLowerCase();
+    const platformCounts = Array.from(platformsByKey.values()).sort((a, b) => {
+      if (b.total !== a.total) return b.total - a.total;
+      const aName = (a.platformName ?? "Unknown").toLowerCase();
+      const bName = (b.platformName ?? "Unknown").toLowerCase();
       return aName.localeCompare(bName);
     });
 
-    return {
-      totalCount: Number(totalRows[0]?.TOTAL_COUNT ?? 0),
-      platformCounts: platformRows,
-      users,
-    };
+    return { totalCount, platformCounts };
   }
 
   static async autocompleteEntries(
@@ -438,34 +402,25 @@ export default class UserGameCollection {
     query: string,
     limit: number = 25,
   ): Promise<IUserGameCollectionAutocompleteEntry[]> {
-    const trimmed = query.trim().toLowerCase();
-    const binds: Record<string, string | number> = {
-      userId,
+    const trimmed = query.trim();
+    const params: Record<string, string | number> = {
       limit: Math.max(1, Math.min(limit, 25)),
     };
+    if (trimmed) params.q = trimmed;
 
-    const titleWhere = trimmed
-      ? "AND (LOWER(g.TITLE) LIKE :query " +
-        "OR LOWER(NVL(p.PLATFORM_NAME, '')) LIKE :query " +
-        "OR LOWER(c.OWNERSHIP_TYPE) LIKE :query)"
-      : "";
-
-    if (trimmed) {
-      binds.query = `%${trimmed}%`;
-    }
-
-    const rows = await dbQuery(
-      UserGameCollectionSql.autocompleteEntries(titleWhere),
-      binds,
-      mapEntry,
+    const response = await apiGet<{ data: CollectionApiData[] }>(
+      `/api/v1/users/${userId}/collections`,
+      { params },
     );
+    const rows = response?.data ?? [];
 
+    const titles = await UserGameCollection.fetchTitles(rows);
     return rows.map((row) => ({
-      entryId: row.entryId,
-      gameId: row.gameId,
-      title: row.title,
-      platformName: row.platformName,
-      ownershipType: row.ownershipType,
+      entryId: Number(row.entry_id),
+      gameId: Number(row.gamedb_game_id),
+      title: titles.get(Number(row.gamedb_game_id)) ?? `Game #${row.gamedb_game_id}`,
+      platformName: row.platform_name ?? null,
+      ownershipType: normalizeOwnershipType(row.ownership_type),
     }));
   }
 }

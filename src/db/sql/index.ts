@@ -16,5 +16,4 @@ export { HltbCacheSql } from "./hltbCache.sql.js";
 export { MemberSql } from "./member.sql.js";
 export { PresencePromptHistorySql } from "./presencePrompt.sql.js";
 export { SteamCollectionImportSql } from "./steamCollectionImport.sql.js";
-export { UserGameCollectionSql } from "./userGameCollection.sql.js";
 
