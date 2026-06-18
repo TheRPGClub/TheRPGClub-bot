@@ -12,14 +12,13 @@ import type {
   ModalSubmitInteraction,
   StringSelectMenuInteraction,
 } from "discord.js";
-import axios from "axios";
 import type { ArgsOf, Client } from "discordx";
 import { ButtonComponent, Discord, ModalComponent, On, SelectMenuComponent } from "discordx";
 import Game from "../classes/Game.js";
 import Member from "../classes/Member.js";
 import { COMPLETION_TYPES, type CompletionType } from "../commands/profile.command.js";
 import { createIgdbSession, type IgdbSelectOption } from "../services/IGDB/IgdbSelectService.js";
-import { igdbService, type IGDBGameDetails } from "../services/IGDB/IgdbService.js";
+import { igdbService } from "../services/IGDB/IgdbService.js";
 import {
   replyIfNotOwner,
   safeDeferReply,
@@ -41,10 +40,8 @@ import {
   buildTextInputRow,
   buildSelectRow,
 } from "../functions/uiComponents.js";
-import { logError } from "../utilities/LogUtils.js";
 import { toUnixTimestamp } from "../functions/DateFormatUtils.js";
 import GamePlatformRegionService from "../classes/GamePlatformRegionService.js";
-import { saveFullGameMetadata } from "../functions/GameIgdbSync.js";
 import GameSearchService from "../classes/GameSearchService.js";
 
 const PUSH_PIN_EMOJI = "📌";
@@ -633,33 +630,7 @@ export class MessageReactionAdd {
       return { gameId: existing.id, title: existing.title };
     }
 
-    const details: IGDBGameDetails | null = await igdbService.getGameDetails(igdbId);
-    if (!details) {
-      throw new Error("Failed to load game details from IGDB.");
-    }
-
-    let imageData: Buffer | null = null;
-    if (details.cover?.image_id) {
-      try {
-        const imageUrl = `https://images.igdb.com/igdb/image/upload/t_cover_big/${details.cover.image_id}.jpg`;
-        const imageResponse = await axios.get(imageUrl, { responseType: "arraybuffer" });
-        imageData = Buffer.from(imageResponse.data);
-      } catch (err) {
-        logError("MessageReactionAdd.downloadCoverImage", err);
-      }
-    }
-
-    const newGame = await Game.createGame(
-      details.name,
-      details.summary ?? "",
-      imageData,
-      details.id,
-      details.slug ?? null,
-      details.total_rating ?? null,
-      details.url ?? null,
-      Game.getFeaturedVideoUrl(details),
-    );
-    await saveFullGameMetadata(newGame.id, details);
-    return { gameId: newGame.id, title: details.name };
+    const newGame = await Game.createGame(igdbId);
+    return { gameId: newGame.id, title: newGame.title };
   }
 }

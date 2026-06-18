@@ -74,7 +74,6 @@ import { truncateDescription } from "../../config/textLimits.js";
 import { assertCustomIdSegments } from "../../utilities/CustomIdUtils.js";
 import { buildTextInputRow } from "../../functions/uiComponents.js";
 import GamePlatformRegionService from "../../classes/GamePlatformRegionService.js";
-import { saveFullGameMetadata } from "../../functions/GameIgdbSync.js";
 
 const GAMEDB_CSV_ACTIONS = ["start", "resume", "status", "pause", "cancel"] as const;
 type GameDbCsvAction = (typeof GAMEDB_CSV_ACTIONS)[number];
@@ -143,53 +142,25 @@ async function fetchCsvText(url: string): Promise<string | null> {
 }
 
 async function importGameFromCsv(igdbId: number): Promise<{ gameId: number; title: string }> {
-  const details = await igdbService.getGameDetails(igdbId);
-  if (!details) {
-    throw new Error("Failed to fetch IGDB details for this game.");
-  }
-
   const existing = await Game.getGameByIgdbId(igdbId);
   if (existing) {
-    const igdbPlatformIds: number[] = (details.platforms ?? [])
-      .map((platform) => platform.id)
-      .filter(isPositiveInt);
-    await GamePlatformRegionService.addGamePlatformsByIgdbIds(existing.id, igdbPlatformIds);
-    await processReleaseDates(existing.id, details.release_dates ?? []);
-
+    const details = await igdbService.getGameDetails(igdbId);
+    if (details) {
+      const igdbPlatformIds: number[] = (details.platforms ?? [])
+        .map((platform) => platform.id)
+        .filter(isPositiveInt);
+      await GamePlatformRegionService.addGamePlatformsByIgdbIds(existing.id, igdbPlatformIds);
+      await processReleaseDates(existing.id, details.release_dates ?? []);
+    }
     if (!existing.imageData) {
-      const coverRes = await igdbService.getGameDetails(igdbId);
-      if (coverRes?.cover?.image_id) {
-        try {
-          const url = `https://images.igdb.com/igdb/image/upload/t_cover_big/${coverRes.cover.image_id}.jpg`;
-          const imgRes = await axios.get(url, { responseType: "arraybuffer" });
-          await Game.updateGameImage(existing.id, Buffer.from(imgRes.data));
-        } catch { /* ignore */ }
-      }
+      try {
+        await Game.refreshImageFromIgdb(existing.id);
+      } catch { /* ignore */ }
     }
     return { gameId: existing.id, title: existing.title };
   }
 
-  const igdbUrl = details.url
-    || (details.slug ? `https://www.igdb.com/games/${details.slug}` : null);
-
-  const newGame = await Game.createGame(
-    details.name,
-    details.summary || null,
-    null,
-    details.id,
-    details.slug,
-    details.total_rating ?? null,
-    igdbUrl,
-    Game.getFeaturedVideoUrl(details),
-  );
-
-  await saveFullGameMetadata(newGame.id, details);
-  const igdbPlatformIds: number[] = (details.platforms ?? [])
-    .map((platform) => platform.id)
-    .filter(isPositiveInt);
-  await GamePlatformRegionService.addGamePlatformsByIgdbIds(newGame.id, igdbPlatformIds);
-  await processReleaseDates(newGame.id, details.release_dates ?? []);
-
+  const newGame = await Game.createGame(igdbId);
   return { gameId: newGame.id, title: newGame.title };
 }
 

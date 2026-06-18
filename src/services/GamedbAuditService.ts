@@ -61,19 +61,7 @@ async function performAutoAcceptImages(
         continue;
       }
 
-      const details = await igdbService.getGameDetails(game.igdbId);
-      if (!details || !details.cover?.image_id) {
-        skipped++;
-        logged = true;
-        await addLog(`⏭️ Skipped **${game.title}** (No IGDB cover found)`, processed);
-        continue;
-      }
-
-      const imageUrl = `https://images.igdb.com/igdb/image/upload/t_cover_big/${details.cover.image_id}.jpg`;
-      const resp = await axios.get(imageUrl, { responseType: "arraybuffer" });
-      const buffer = Buffer.from(resp.data);
-
-      await Game.updateGameImage(game.id, buffer);
+      await Game.refreshImageFromIgdb(game.id);
       updated++;
       logged = true;
       await addLog(`✅ Updated **${game.title}**`, processed);
@@ -216,7 +204,7 @@ async function performAutoAcceptReleaseData(
       }
 
       const beforeCount = (await Game.getGameReleases(game.id)).length;
-      await importReleaseDatesFromIgdb(game.id, game.igdbId);
+      await importReleaseDatesFromIgdb(game.id);
       const afterCount = (await Game.getGameReleases(game.id)).length;
 
       if (afterCount > beforeCount) {
@@ -457,7 +445,7 @@ async function performAutoAcceptAll(
     // Release dates
     const releasesBefore = (await Game.getGameReleases(game.id)).length;
     try {
-      await importReleaseDatesFromIgdb(game.id, game.igdbId);
+      await importReleaseDatesFromIgdb(game.id);
       const releasesAfter = (await Game.getGameReleases(game.id)).length;
       if (releasesAfter > releasesBefore) {
         stats.releases.updated++;

@@ -420,7 +420,7 @@ export class GameDbAddCommand {
 
     try {
       const before = await Game.getGameReleases(game.id);
-      await importReleaseDatesFromIgdb(game.id, game.igdbId);
+      await importReleaseDatesFromIgdb(game.id);
       const after = await Game.getGameReleases(game.id);
       const added = after.length - before.length;
 

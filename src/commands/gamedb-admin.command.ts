@@ -619,7 +619,7 @@ export class GameDbAdmin {
       return;
     }
 
-    await Game.linkAlternateVersions(gameIds, interaction.user.id);
+    await Game.linkAlternateVersions(gameIds);
     const lines = games
       .sort((a, b) => a.title.localeCompare(b.title))
       .map((game) => `• **${game.title}** (GameDB #${game.id})`);
@@ -736,26 +736,12 @@ export class GameDbAdmin {
     await safeReply(interaction, buildTextReply("Fetching image from IGDB...", true));
 
     try {
-      const details = await igdbService.getGameDetails(game.igdbId);
-      if (!details || !details.cover?.image_id) {
-        await safeReply(interaction, buildTextReply("Failed to find cover image on IGDB.", true));
-        return;
+      await Game.refreshImageFromIgdb(gameId);
+      const refreshed = await Game.getGameById(gameId);
+      if (refreshed && game) {
+        game.imageData = await Game.getGamePrimaryImageBuffer(gameId);
       }
-
-      const imageUrl =
-        `https://images.igdb.com/igdb/image/upload/t_cover_big/${details.cover.image_id}.jpg`;
-      const resp = await axios.get(imageUrl, { responseType: "arraybuffer" });
-      const buffer = Buffer.from(resp.data);
-
-      await Game.updateGameImage(gameId, buffer);
-
-      // Update session data
-      if (game) {
-        game.imageData = buffer;
-      }
-
       await safeReply(interaction, buildTextReply("IGDB Image accepted and saved!", true));
-
     } catch (err: any) {
       await safeReply(interaction, buildTextReply(
         `Error fetching IGDB image: ${err.message}`,
