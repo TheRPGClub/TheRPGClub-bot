@@ -1,7 +1,5 @@
-import { dbQuery, dbMutate } from "../db/SqlManager.js";
-import { NominationSql } from "../db/sql/index.js";
 import { isPositiveInt } from "../utilities/ValidationUtils.js";
-import { apiGet } from "../services/RpgClubApiClient.js";
+import { apiGet, apiPost, apiDelete } from "../services/RpgClubApiClient.js";
 
 export type NominationKind = "gotm" | "nr-gotm";
 
@@ -13,10 +11,6 @@ export interface INominationEntry {
   gamedbGameId: number;
   nominatedAt: Date;
   reason: string | null;
-}
-
-function tableName(kind: NominationKind): string {
-  return kind === "gotm" ? "GOTM_NOMINATIONS" : "NR_GOTM_NOMINATIONS";
 }
 
 function apiPrefix(kind: NominationKind): string {
@@ -34,6 +28,7 @@ type NominationApiData = {
 };
 
 type NominationListApiResponse = { data: NominationApiData[] };
+type NominationSingleApiResponse = { data: NominationApiData };
 
 function mapApiData(d: NominationApiData): INominationEntry {
   const gamedbGameId = Number(d.gamedb_game_id);
@@ -49,52 +44,15 @@ function mapApiData(d: NominationApiData): INominationEntry {
   };
 }
 
-type NominationRow = {
-  NOMINATION_ID: number;
-  ROUND_NUMBER: number;
-  USER_ID: string;
-  GAMEDB_GAME_ID?: number | null;
-  GAMEDB_TITLE?: string | null;
-  NOMINATED_AT: Date | string;
-  REASON?: string | null;
-};
-
-function mapRow(row: NominationRow): INominationEntry {
-  const nominatedAt =
-    row.NOMINATED_AT instanceof Date ? row.NOMINATED_AT : new Date(row.NOMINATED_AT);
-
-  if (row.GAMEDB_GAME_ID === null || row.GAMEDB_GAME_ID === undefined) {
-    throw new Error("Nomination row is missing a GameDB game id.");
-  }
-
-  const gamedbGameId = Number(row.GAMEDB_GAME_ID);
-  const gameTitle =
-    row.GAMEDB_TITLE !== undefined && row.GAMEDB_TITLE !== null
-      ? String(row.GAMEDB_TITLE)
-      : `(missing GameDB title for id ${gamedbGameId})`;
-
-  return {
-    id: Number(row.NOMINATION_ID),
-    roundNumber: Number(row.ROUND_NUMBER),
-    userId: String(row.USER_ID),
-    gameTitle,
-    gamedbGameId,
-    nominatedAt,
-    reason: row.REASON ?? null,
-  };
-}
-
 export async function getNominationForUser(
   kind: NominationKind,
   roundNumber: number,
   userId: string,
 ): Promise<INominationEntry | null> {
-  const rows = await dbQuery(
-    NominationSql.getNominationForUser(tableName(kind)),
-    { roundNumber, userId },
-    mapRow,
+  const response = await apiGet<NominationSingleApiResponse>(
+    `/api/v1/${apiPrefix(kind)}/${roundNumber}/nominations/${userId}`,
   );
-  return rows[0] ?? null;
+  return response ? mapApiData(response.data) : null;
 }
 
 export async function upsertNomination(
@@ -108,16 +66,14 @@ export async function upsertNomination(
     throw new Error("A valid GameDB game id is required to save a nomination.");
   }
 
-  await dbMutate(
-    NominationSql.upsertNomination(tableName(kind)),
-    { roundNumber, userId, gamedbGameId, nominatedAt: new Date(), reason },
+  const response = await apiPost<NominationSingleApiResponse>(
+    `/api/v1/${apiPrefix(kind)}/${roundNumber}/nominations`,
+    { data: { user_id: userId, gamedb_game_id: gamedbGameId, reason } },
   );
-
-  const refreshed = await getNominationForUser(kind, roundNumber, userId);
-  if (!refreshed) {
+  if (!response) {
     throw new Error("Nomination upsert failed to return a row.");
   }
-  return refreshed;
+  return mapApiData(response.data);
 }
 
 export async function deleteNominationForUser(
@@ -125,11 +81,10 @@ export async function deleteNominationForUser(
   roundNumber: number,
   userId: string,
 ): Promise<boolean> {
-  const count = await dbMutate(
-    NominationSql.deleteNomination(tableName(kind)),
-    { roundNumber, userId },
+  const response = await apiDelete<{ deleted: boolean }>(
+    `/api/v1/${apiPrefix(kind)}/${roundNumber}/nominations/${userId}`,
   );
-  return count > 0;
+  return response?.deleted === true;
 }
 
 export async function listNominationsForRound(
