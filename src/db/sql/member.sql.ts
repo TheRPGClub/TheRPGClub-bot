@@ -8,163 +8,6 @@ export const MemberSql = {
           WHERE user_id = :userId`,
   } satisfies ISqlEntry,
 
-  // threadIdSql is a dialect-specific SQL fragment; caller must supply appropriate version
-  getNowPlaying: (threadIdSql: string) =>
-    ({
-      postgres: `SELECT g.game_id,
-                g.title,
-                u.platform_id,
-                p.platform_name,
-                p.platform_abbreviation,
-                ${threadIdSql} AS thread_id,
-                u.note,
-                u.added_at,
-                u.note_updated_at,
-                u.sort_order,
-                true AS journal_enabled,
-                CASE
-                  WHEN EXISTS (
-                    SELECT 1
-                    FROM user_game_journal_entries je
-                    WHERE je.user_id = u.user_id
-                      AND je.gamedb_game_id = u.gamedb_game_id
-                  ) THEN 1
-                  ELSE 0
-                END AS has_journal_entry,
-                (SELECT COUNT(*)
-                   FROM user_game_journal_entries je2
-                  WHERE je2.user_id = u.user_id
-                    AND je2.gamedb_game_id = u.gamedb_game_id) AS journal_count,
-                (SELECT MAX(je3.created_at)
-                   FROM user_game_journal_entries je3
-                  WHERE je3.user_id = u.user_id
-                    AND je3.gamedb_game_id = u.gamedb_game_id) AS last_journal_at
-           FROM user_now_playing u
-           JOIN gamedb_games g ON g.game_id = u.gamedb_game_id
-           LEFT JOIN gamedb_platforms p ON p.platform_id = u.platform_id
-          WHERE u.user_id = :userId
-            AND u.gamedb_game_id IS NOT NULL
-          ORDER BY u.sort_order NULLS LAST, u.added_at DESC, u.entry_id DESC`,
-    }) satisfies ISqlEntry,
-
-  // threadIdSql is a dialect-specific SQL fragment; caller must supply appropriate version
-  getAllNowPlaying: (threadIdSql: string) =>
-    ({
-      postgres: `SELECT u.user_id,
-                ru.username,
-                ru.global_name,
-                g.game_id,
-                g.title,
-                u.platform_id,
-                p.platform_name,
-                p.platform_abbreviation,
-                ${threadIdSql} AS thread_id,
-                u.note,
-                u.added_at,
-                u.note_updated_at,
-                u.entry_id
-           FROM user_now_playing u
-           JOIN rpg_club_users ru ON ru.user_id = u.user_id
-           JOIN gamedb_games g ON g.game_id = u.gamedb_game_id
-           LEFT JOIN gamedb_platforms p ON p.platform_id = u.platform_id
-          WHERE COALESCE(ru.is_bot, false) = false
-            AND ru.server_left_at IS NULL
-          ORDER BY COALESCE(ru.global_name, ru.username, ru.user_id),
-                   u.added_at DESC,
-                   u.entry_id DESC`,
-    }) satisfies ISqlEntry,
-
-  getNowPlayingByGameIds: (placeholders: string) =>
-    ({
-      postgres: `SELECT u.gamedb_game_id AS game_id,
-              g.title,
-              u.user_id
-         FROM user_now_playing u
-         JOIN rpg_club_users ru ON ru.user_id = u.user_id
-         JOIN gamedb_games g ON g.game_id = u.gamedb_game_id
-        WHERE u.gamedb_game_id IN (${placeholders})
-          AND COALESCE(ru.is_bot, false) = false
-          AND ru.server_left_at IS NULL
-        ORDER BY g.title, u.user_id`,
-    }) satisfies ISqlEntry,
-
-  getNowPlayingByTitleSearch: {
-    postgres: `SELECT u.gamedb_game_id AS game_id,
-              g.title,
-              u.user_id,
-              ru.username,
-              ru.global_name
-         FROM user_now_playing u
-         JOIN rpg_club_users ru ON ru.user_id = u.user_id
-         JOIN gamedb_games g ON g.game_id = u.gamedb_game_id
-        WHERE (LOWER(g.title) LIKE :searchQuery
-            OR REGEXP_REPLACE(LOWER(g.title), '[^a-z0-9]', '', 'g') LIKE :normalizedQuery)
-          AND COALESCE(ru.is_bot, false) = false
-          AND ru.server_left_at IS NULL
-        ORDER BY g.title, u.user_id`,
-  } satisfies ISqlEntry,
-
-  getNowPlayingEntries: {
-    postgres: `SELECT u.gamedb_game_id AS game_id,
-              g.title,
-              u.platform_id,
-              p.platform_name,
-              p.platform_abbreviation,
-              u.note,
-              u.added_at,
-              u.note_updated_at,
-              u.sort_order,
-              true AS journal_enabled
-         FROM user_now_playing u
-         JOIN gamedb_games g ON g.game_id = u.gamedb_game_id
-         LEFT JOIN gamedb_platforms p ON p.platform_id = u.platform_id
-        WHERE u.user_id = :userId
-          AND u.gamedb_game_id IS NOT NULL
-        ORDER BY u.sort_order NULLS LAST, u.added_at DESC, u.entry_id DESC`,
-  } satisfies ISqlEntry,
-
-  getNowPlayingEntryMeta: {
-    postgres: `SELECT added_at
-         FROM user_now_playing
-        WHERE user_id = :userId
-          AND gamedb_game_id = :gameId`,
-  } satisfies ISqlEntry,
-
-  updateNowPlayingNote: {
-    postgres: `UPDATE user_now_playing
-          SET note = :note,
-              note_updated_at = :noteUpdatedAt
-        WHERE user_id = :userId
-          AND gamedb_game_id = :gameId`,
-  } satisfies ISqlEntry,
-
-  countNowPlaying: {
-    postgres: `SELECT COUNT(*) AS cnt FROM user_now_playing WHERE user_id = :userId`,
-  } satisfies ISqlEntry,
-
-  getNowPlayingMaxSort: {
-    postgres: `SELECT MAX(sort_order) AS max_sort
-             FROM user_now_playing
-            WHERE user_id = :userId`,
-  } satisfies ISqlEntry,
-
-  insertNowPlaying: {
-    postgres: `INSERT INTO user_now_playing
-            (user_id, gamedb_game_id, platform_id, note, note_updated_at, sort_order)
-           VALUES (:userId, :gameId, :platformId, :note, :noteUpdatedAt, :sortOrder)`,
-  } satisfies ISqlEntry,
-
-  updateNowPlayingSort: {
-    postgres: `UPDATE user_now_playing
-            SET sort_order = :sortOrder
-          WHERE user_id = :userId
-            AND gamedb_game_id = :gameId`,
-  } satisfies ISqlEntry,
-
-  removeNowPlaying: {
-    postgres: `DELETE FROM user_now_playing WHERE user_id = :userId AND gamedb_game_id = :gameId`,
-  } satisfies ISqlEntry,
-
   // Caller must pass dialect-appropriate where clause
   searchMembers: (where: string) =>
     ({
@@ -205,13 +48,6 @@ export const MemberSql = {
                 profile_image_at
            FROM rpg_club_users
           WHERE user_id = :userId`,
-  } satisfies ISqlEntry,
-
-  updateNowPlayingPlatform: {
-    postgres: `UPDATE user_now_playing
-          SET platform_id = :platformId
-        WHERE user_id = :userId
-          AND gamedb_game_id = :gameId`,
   } satisfies ISqlEntry,
 
   getAvatarHistory: {
@@ -360,11 +196,4 @@ export const MemberSql = {
         GROUP BY u.user_id, u.username, u.global_name`,
   } satisfies ISqlEntry,
 
-  checkLinkedThreadColumn: {
-    postgres: `SELECT COUNT(*) AS cnt
-           FROM information_schema.columns
-          WHERE table_schema = current_schema()
-            AND table_name = 'gamedb_games'
-            AND column_name = 'linked_thread_id'`,
-  } satisfies ISqlEntry,
 };

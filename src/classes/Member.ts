@@ -1,15 +1,12 @@
-import type pg from "pg";
 import {
   dbQuery,
   dbMutate,
   dbWithConnection,
-  dbTransaction,
   dbQueryConn,
-  dbMutateConn,
 } from "../db/SqlManager.js";
 import { MemberSql } from "../db/sql/index.js";
 import { isPositiveInt, requirePositiveInt } from "../utilities/ValidationUtils.js";
-import { logError, logWarn } from "../utilities/LogUtils.js";
+import { logError } from "../utilities/LogUtils.js";
 import { apiGet, apiPost, apiPatch, apiDelete } from "../services/RpgClubApiClient.js";
 
 export interface IMemberRecord {
@@ -215,6 +212,73 @@ type JournalEntrySearchResponse = {
   meta: { count: number; pages: number };
 };
 
+// --- Now Playing API types ---
+
+type NowPlayingGameApiData = {
+  game_id: number;
+  title: string;
+  linked_thread_id: string | null;
+};
+
+type NowPlayingPlatformApiData = {
+  platform_id: number;
+  platform_name: string;
+  platform_abbreviation: string | null;
+};
+
+type NowPlayingEntryApiData = {
+  entry_id: number;
+  user_id: string;
+  gamedb_game_id: number | null;
+  platform_id: number | null;
+  note: string | null;
+  sort_order: number | null;
+  added_at: string;
+  note_updated_at: string | null;
+  has_journal_entry: boolean;
+  journal_count: number;
+  last_journal_at: string | null;
+  game: NowPlayingGameApiData | null;
+  platform: NowPlayingPlatformApiData | null;
+};
+
+type NowPlayingEntryListResponse = {
+  data: NowPlayingEntryApiData[];
+  meta: { count: number; pages: number };
+};
+
+type NowPlayingMemberEntryApiData = NowPlayingEntryApiData & {
+  user: {
+    user_id: string;
+    username: string | null;
+    global_name: string | null;
+  };
+};
+
+type NowPlayingMemberListResponse = {
+  data: NowPlayingMemberEntryApiData[];
+  meta: { count: number; pages: number; next: string | null };
+};
+
+function mapNowPlayingEntry(raw: NowPlayingEntryApiData): IMemberNowPlayingEntry {
+  return {
+    gameId: Number(raw.gamedb_game_id),
+    title: raw.game?.title ?? "",
+    platformId: raw.platform_id == null ? null : Number(raw.platform_id),
+    platformName: raw.platform?.platform_name ?? null,
+    platformAbbreviation: raw.platform?.platform_abbreviation ?? null,
+    threadId: raw.game?.linked_thread_id ?? null,
+    note: raw.note ?? null,
+    addedAt: new Date(raw.added_at),
+    noteUpdatedAt: raw.note_updated_at ? new Date(raw.note_updated_at) : null,
+    sortOrder: raw.sort_order == null ? null : Number(raw.sort_order),
+    journalEnabled: true,
+    hasJournalEntry: raw.has_journal_entry,
+    journalCount: Number(raw.journal_count),
+    lastJournalAt: raw.last_journal_at ? new Date(raw.last_journal_at) : null,
+  };
+}
+
 function mapJournalEntry(
   raw: JournalEntryApiData,
   entryNumber: number,
@@ -260,43 +324,7 @@ export interface ICompletionRecord {
   note: string | null;
 }
 
-type AnyConn = pg.PoolClient;
 const MAX_NOW_PLAYING = 10;
-const LEGACY_THREAD_ID_SQL = `COALESCE(
-                  (
-                    SELECT MIN(tgl.THREAD_ID)
-                    FROM THREAD_GAME_LINKS tgl
-                    WHERE tgl.GAMEDB_GAME_ID = u.GAMEDB_GAME_ID
-                  ),
-                  (
-                    SELECT MIN(th.THREAD_ID)
-                    FROM THREADS th
-                    WHERE th.GAMEDB_GAME_ID = u.GAMEDB_GAME_ID
-                  )
-                )`;
-let nowPlayingLinkedThreadColumnAvailable: boolean | null = null;
-
-async function getNowPlayingThreadIdSql(connection: AnyConn): Promise<string> {
-  if (nowPlayingLinkedThreadColumnAvailable === null) {
-    try {
-      const res = await dbQueryConn(
-        connection,
-        MemberSql.checkLinkedThreadColumn,
-        {},
-        (row: { CNT: number }) => Number(row.CNT),
-      );
-      nowPlayingLinkedThreadColumnAvailable = (res[0] ?? 0) > 0;
-    } catch (err) {
-      nowPlayingLinkedThreadColumnAvailable = false;
-      const msg = err instanceof Error ? err.message : String(err);
-      logWarn("Member.detectLinkedThreadColumn", `Failed to detect LINKED_THREAD_ID column; using legacy links: ${msg}`);
-    }
-  }
-
-  return nowPlayingLinkedThreadColumnAvailable
-    ? "g.LINKED_THREAD_ID"
-    : LEGACY_THREAD_ID_SQL;
-}
 
 function buildParams(record: IMemberRecord) {
   return {
@@ -434,158 +462,82 @@ export default class Member {
     }
   }
 
+  private static async fetchNowPlayingRaw(
+    userId: string,
+  ): Promise<NowPlayingEntryApiData[]> {
+    const response = await apiGet<NowPlayingEntryListResponse>(
+      `/api/v1/users/${userId}/now_playing`,
+      { params: { per: 50 } },
+    );
+    return response?.data ?? [];
+  }
+
   static async getNowPlaying(
     userId: string,
   ): Promise<IMemberNowPlayingEntry[]> {
-    return dbWithConnection(async (conn) => {
-      const threadIdSql = await getNowPlayingThreadIdSql(conn);
-      type NowPlayingRow = {
-        GAME_ID: number; TITLE: string; PLATFORM_ID: number | null;
-        PLATFORM_NAME: string | null; PLATFORM_ABBREVIATION: string | null;
-        THREAD_ID: string | null; NOTE: string | null;
-        ADDED_AT: Date | string | null; NOTE_UPDATED_AT: Date | string | null;
-        SORT_ORDER: number | null; JOURNAL_ENABLED: number | null;
-        HAS_JOURNAL_ENTRY: number | null; JOURNAL_COUNT: number | null;
-        LAST_JOURNAL_AT: Date | string | null;
-      };
-      return dbQueryConn<NowPlayingRow, IMemberNowPlayingEntry>(
-        conn,
-        MemberSql.getNowPlaying(threadIdSql),
-        { userId },
-        (r) => ({
-          gameId: Number(r.GAME_ID),
-          title: r.TITLE,
-          platformId: r.PLATFORM_ID == null ? null : Number(r.PLATFORM_ID),
-          platformName: r.PLATFORM_NAME ?? null,
-          platformAbbreviation: r.PLATFORM_ABBREVIATION ?? null,
-          threadId: r.THREAD_ID ?? null,
-          note: r.NOTE ?? null,
-          addedAt: r.ADDED_AT instanceof Date
-            ? r.ADDED_AT
-            : r.ADDED_AT ? new Date(r.ADDED_AT as string) : null,
-          noteUpdatedAt: r.NOTE_UPDATED_AT instanceof Date
-            ? r.NOTE_UPDATED_AT
-            : r.NOTE_UPDATED_AT ? new Date(r.NOTE_UPDATED_AT as string) : null,
-          sortOrder: r.SORT_ORDER == null ? null : Number(r.SORT_ORDER),
-          journalEnabled: Number(r.JOURNAL_ENABLED ?? 0) === 1,
-          hasJournalEntry: Number(r.HAS_JOURNAL_ENTRY ?? 0) === 1,
-          journalCount: Number(r.JOURNAL_COUNT ?? 0),
-          lastJournalAt: r.LAST_JOURNAL_AT instanceof Date
-            ? r.LAST_JOURNAL_AT
-            : r.LAST_JOURNAL_AT ? new Date(r.LAST_JOURNAL_AT as string) : null,
-        }),
-      ).then((rows) => rows.slice(0, MAX_NOW_PLAYING));
-    });
+    const entries = await Member.fetchNowPlayingRaw(userId);
+    return entries
+      .filter((e) => e.gamedb_game_id != null)
+      .map(mapNowPlayingEntry);
   }
 
   static async getAllNowPlaying(): Promise<IMemberNowPlayingList[]> {
-    return dbWithConnection(async (conn) => {
-      const threadIdSql = await getNowPlayingThreadIdSql(conn);
-      type AllNowPlayingRow = {
-        USER_ID: string; USERNAME: string | null; GLOBAL_NAME: string | null;
-        GAME_ID: number; TITLE: string; PLATFORM_ID: number | null;
-        PLATFORM_NAME: string | null; PLATFORM_ABBREVIATION: string | null;
-        THREAD_ID: string | null; NOTE: string | null;
-        ADDED_AT: Date | string | null; NOTE_UPDATED_AT: Date | string | null;
-      };
-      const rows = await dbQueryConn<AllNowPlayingRow, AllNowPlayingRow>(
-        conn,
-        MemberSql.getAllNowPlaying(threadIdSql),
-        {},
-        (r) => r,
-      );
+    const grouped = new Map<string, IMemberNowPlayingList>();
+    let page = 1;
+    const per = 100;
 
-      const grouped = new Map<string, IMemberNowPlayingList>();
-      for (const row of rows) {
-        let record = grouped.get(row.USER_ID);
+    while (true) {
+      const response = await apiGet<NowPlayingMemberListResponse>(
+        "/api/v1/now_playing",
+        { params: { page, per } },
+      );
+      if (!response) break;
+
+      for (const raw of response.data) {
+        if (raw.gamedb_game_id == null) continue;
+        let record = grouped.get(raw.user_id);
         if (!record) {
           record = {
-            userId: row.USER_ID,
-            username: row.USERNAME ?? null,
-            globalName: row.GLOBAL_NAME ?? null,
+            userId: raw.user_id,
+            username: raw.user?.username ?? null,
+            globalName: raw.user?.global_name ?? null,
             entries: [],
           };
-          grouped.set(row.USER_ID, record);
+          grouped.set(raw.user_id, record);
         }
-
-        if (record.entries.length < MAX_NOW_PLAYING) {
-          record.entries.push({
-            gameId: Number(row.GAME_ID),
-            title: row.TITLE,
-            platformId: row.PLATFORM_ID == null ? null : Number(row.PLATFORM_ID),
-            platformName: row.PLATFORM_NAME ?? null,
-            platformAbbreviation: row.PLATFORM_ABBREVIATION ?? null,
-            threadId: row.THREAD_ID ?? null,
-            note: row.NOTE ?? null,
-            addedAt: row.ADDED_AT instanceof Date
-              ? row.ADDED_AT
-              : row.ADDED_AT ? new Date(row.ADDED_AT as string) : null,
-            noteUpdatedAt: row.NOTE_UPDATED_AT instanceof Date
-              ? row.NOTE_UPDATED_AT
-              : row.NOTE_UPDATED_AT ? new Date(row.NOTE_UPDATED_AT as string) : null,
-            sortOrder: null,
-            journalEnabled: false,
-            hasJournalEntry: false,
-            journalCount: 0,
-            lastJournalAt: null,
-          });
-        }
+        record.entries.push(mapNowPlayingEntry(raw));
       }
 
-      return Array.from(grouped.values()).sort((a, b) => {
-        const aName = (a.globalName ?? a.username ?? a.userId).toLowerCase();
-        const bName = (b.globalName ?? b.username ?? b.userId).toLowerCase();
-        return aName.localeCompare(bName);
-      });
-    });
-  }
+      if (page >= response.meta.pages) break;
+      page += 1;
+    }
 
-  static async getNowPlayingByGameIds(
-    gameIds: number[],
-  ): Promise<{ gameId: number; title: string; userId: string }[]> {
-    if (!gameIds.length) return [];
-    const placeholders = gameIds.map((_, idx) => `:id${idx}`);
-    const binds: Record<string, number> = {};
-    gameIds.forEach((id, idx) => {
-      binds[`id${idx}`] = id;
+    return Array.from(grouped.values()).sort((a, b) => {
+      const aName = (a.globalName ?? a.username ?? a.userId).toLowerCase();
+      const bName = (b.globalName ?? b.username ?? b.userId).toLowerCase();
+      return aName.localeCompare(bName);
     });
-
-    return dbQuery<{ GAME_ID: number; TITLE: string; USER_ID: string },
-      { gameId: number; title: string; userId: string }>(
-      MemberSql.getNowPlayingByGameIds(placeholders.join(", ")),
-      binds,
-      (row) => ({
-        gameId: Number(row.GAME_ID),
-        title: row.TITLE,
-        userId: row.USER_ID,
-      }),
-    );
   }
 
   static async getNowPlayingByTitleSearch(
     query: string,
   ): Promise<{ gameId: number; title: string; userId: string; username: string | null;
     globalName: string | null }[]> {
-    const trimmed = query.trim().toLowerCase();
+    const trimmed = query.trim();
     if (!trimmed) return [];
-    const searchQuery = `%${trimmed}%`;
-    const normalizedQuery = `%${trimmed.replace(/[^a-z0-9]/g, "")}%`;
-    return dbQuery<
-      { GAME_ID: number; TITLE: string; USER_ID: string; USERNAME: string | null;
-        GLOBAL_NAME: string | null },
-      { gameId: number; title: string; userId: string; username: string | null;
-        globalName: string | null }
-    >(
-      MemberSql.getNowPlayingByTitleSearch,
-      { searchQuery, normalizedQuery },
-      (row) => ({
-        gameId: Number(row.GAME_ID),
-        title: row.TITLE,
-        userId: row.USER_ID,
-        username: row.USERNAME ?? null,
-        globalName: row.GLOBAL_NAME ?? null,
-      }),
+    const response = await apiGet<NowPlayingMemberListResponse>(
+      "/api/v1/now_playing",
+      { params: { q: trimmed, per: 50 } },
     );
+    return (response?.data ?? [])
+      .filter((e) => e.gamedb_game_id != null)
+      .map((e) => ({
+        gameId: Number(e.gamedb_game_id),
+        title: e.game?.title ?? "",
+        userId: e.user_id,
+        username: e.user?.username ?? null,
+        globalName: e.user?.global_name ?? null,
+      }));
   }
 
   static async getNowPlayingEntries(
@@ -603,54 +555,22 @@ export default class Member {
     journalEnabled: boolean;
     hasJournalEntry: boolean;
   }[]> {
-    return dbQuery<{
-      GAME_ID: number;
-      TITLE: string;
-      PLATFORM_ID: number | null;
-      PLATFORM_NAME: string | null;
-      PLATFORM_ABBREVIATION: string | null;
-      NOTE: string | null;
-      ADDED_AT: Date | string | null;
-      NOTE_UPDATED_AT: Date | string | null;
-      SORT_ORDER: number | null;
-      JOURNAL_ENABLED: number | null;
-    }, {
-      gameId: number;
-      title: string;
-      platformId: number | null;
-      platformName: string | null;
-      platformAbbreviation: string | null;
-      note: string | null;
-      addedAt: Date | null;
-      noteUpdatedAt: Date | null;
-      sortOrder: number | null;
-      journalEnabled: boolean;
-      hasJournalEntry: boolean;
-    }>(
-      MemberSql.getNowPlayingEntries,
-      { userId },
-      (r) => ({
-        gameId: Number(r.GAME_ID),
-        title: r.TITLE,
-        platformId: r.PLATFORM_ID == null ? null : Number(r.PLATFORM_ID),
-        platformName: r.PLATFORM_NAME ?? null,
-        platformAbbreviation: r.PLATFORM_ABBREVIATION ?? null,
-        note: r.NOTE ?? null,
-        addedAt: r.ADDED_AT instanceof Date
-          ? r.ADDED_AT
-          : r.ADDED_AT
-            ? new Date(r.ADDED_AT as string)
-            : null,
-        noteUpdatedAt: r.NOTE_UPDATED_AT instanceof Date
-          ? r.NOTE_UPDATED_AT
-          : r.NOTE_UPDATED_AT
-            ? new Date(r.NOTE_UPDATED_AT as string)
-            : null,
-        sortOrder: r.SORT_ORDER == null ? null : Number(r.SORT_ORDER),
-        journalEnabled: Number(r.JOURNAL_ENABLED ?? 0) === 1,
-        hasJournalEntry: false,
-      }),
-    );
+    const entries = await Member.fetchNowPlayingRaw(userId);
+    return entries
+      .filter((e) => e.gamedb_game_id != null)
+      .map((e) => ({
+        gameId: Number(e.gamedb_game_id),
+        title: e.game?.title ?? "",
+        platformId: e.platform_id == null ? null : Number(e.platform_id),
+        platformName: e.platform?.platform_name ?? null,
+        platformAbbreviation: e.platform?.platform_abbreviation ?? null,
+        note: e.note ?? null,
+        addedAt: new Date(e.added_at),
+        noteUpdatedAt: e.note_updated_at ? new Date(e.note_updated_at) : null,
+        sortOrder: e.sort_order == null ? null : Number(e.sort_order),
+        journalEnabled: true,
+        hasJournalEntry: e.has_journal_entry,
+      }));
   }
 
   static async getNowPlayingEntryMeta(
@@ -658,22 +578,10 @@ export default class Member {
     gameId: number,
   ): Promise<{ addedAt: Date | null } | null> {
     requirePositiveInt(gameId, "GameDB id");
-    const rows = await dbQuery<{ ADDED_AT: Date | string | null }, { addedAt: Date | null }>(
-      MemberSql.getNowPlayingEntryMeta,
-      { userId, gameId },
-      (row) => ({
-        addedAt: row.ADDED_AT instanceof Date
-          ? row.ADDED_AT
-          : row.ADDED_AT
-            ? new Date(row.ADDED_AT as string)
-            : null,
-      }),
-    );
-    const row = rows[0];
-    if (!row) {
-      return null;
-    }
-    return row;
+    const entries = await Member.fetchNowPlayingRaw(userId);
+    const entry = entries.find((e) => Number(e.gamedb_game_id) === gameId);
+    if (!entry) return null;
+    return { addedAt: new Date(entry.added_at) };
   }
 
   static async updateNowPlayingNote(
@@ -682,15 +590,15 @@ export default class Member {
     note: string | null,
   ): Promise<boolean> {
     requirePositiveInt(gameId, "GameDB id");
-    const normalizedNote = note?.trim();
-    const noteValue = normalizedNote ? normalizedNote : null;
-    const noteUpdatedAt = noteValue ? new Date() : null;
-
-    const count = await dbMutate(
-      MemberSql.updateNowPlayingNote,
-      { userId, gameId, note: noteValue, noteUpdatedAt },
+    const entries = await Member.fetchNowPlayingRaw(userId);
+    const entry = entries.find((e) => Number(e.gamedb_game_id) === gameId);
+    if (!entry) return false;
+    const noteValue = note?.trim() || null;
+    const result = await apiPatch<{ data: NowPlayingEntryApiData }>(
+      `/api/v1/now_playing/${entry.entry_id}`,
+      { data: { note: noteValue } },
     );
-    return count > 0;
+    return result != null;
   }
 
   static async addNowPlaying(
@@ -701,44 +609,20 @@ export default class Member {
   ): Promise<void> {
     requirePositiveInt(gameId, "GameDB id");
     requirePositiveInt(platformId, "platform selection");
-    const normalizedNote = note?.trim();
-    const noteValue = normalizedNote ? normalizedNote : null;
-    const noteUpdatedAt = noteValue ? new Date() : null;
+    const noteValue = note?.trim() || null;
 
-    try {
-      await dbTransaction(async (conn) => {
-        const countRows = await dbQueryConn(
-          conn,
-          MemberSql.countNowPlaying,
-          { userId },
-          (row: { CNT: number }) => Number(row.CNT),
-        );
-        const count = countRows[0] ?? 0;
-        if (count >= MAX_NOW_PLAYING) {
-          throw new Error(`You can only track up to ${MAX_NOW_PLAYING} Now Playing titles.`);
-        }
-
-        const sortRows = await dbQueryConn(
-          conn,
-          MemberSql.getNowPlayingMaxSort,
-          { userId },
-          (row: { MAX_SORT: number | null }) => Number(row.MAX_SORT ?? 0),
-        );
-        const nextSort = (sortRows[0] ?? 0) + 1;
-
-        await dbMutateConn(
-          conn,
-          MemberSql.insertNowPlaying,
-          { userId, gameId, platformId, note: noteValue, noteUpdatedAt, sortOrder: nextSort },
-        );
-      });
-    } catch (err: any) {
-      const msg = err?.message ?? String(err);
-      if (/unique/i.test(msg) || /UQ_USER_NOW_PLAYING/i.test(msg)) {
-        throw new Error("That title is already in your Now Playing list.");
-      }
-      throw err;
+    const existing = await Member.fetchNowPlayingRaw(userId);
+    if (existing.length >= MAX_NOW_PLAYING) {
+      throw new Error(`You can only track up to ${MAX_NOW_PLAYING} Now Playing titles.`);
     }
+    if (existing.some((e) => Number(e.gamedb_game_id) === gameId)) {
+      throw new Error("That title is already in your Now Playing list.");
+    }
+
+    await apiPost<{ data: NowPlayingEntryApiData }>(
+      `/api/v1/users/${userId}/now_playing`,
+      { data: { gamedb_game_id: gameId, platform_id: platformId, note: noteValue } },
+    );
   }
 
   static async getJournalStatusForGames(
@@ -919,28 +803,34 @@ export default class Member {
     orderedGameIds: number[],
   ): Promise<boolean> {
     if (!orderedGameIds.length) return false;
-    let totalAffected = 0;
-    await dbTransaction(async (conn) => {
-      for (let idx = 0; idx < orderedGameIds.length; idx += 1) {
-        const affected = await dbMutateConn(
-          conn,
-          MemberSql.updateNowPlayingSort,
-          { userId, gameId: orderedGameIds[idx], sortOrder: idx + 1 },
-        );
-        totalAffected += affected;
-      }
-    });
-    return totalAffected > 0;
+    const entries = await Member.fetchNowPlayingRaw(userId);
+    const entryIdByGameId = new Map(
+      entries
+        .filter((e) => e.gamedb_game_id != null)
+        .map((e) => [Number(e.gamedb_game_id), e.entry_id]),
+    );
+    let patched = 0;
+    for (let idx = 0; idx < orderedGameIds.length; idx += 1) {
+      const entryId = entryIdByGameId.get(orderedGameIds[idx]);
+      if (!entryId) continue;
+      const result = await apiPatch<{ data: NowPlayingEntryApiData }>(
+        `/api/v1/now_playing/${entryId}`,
+        { data: { sort_order: idx + 1 } },
+      );
+      if (result != null) patched += 1;
+    }
+    return patched > 0;
   }
 
   static async removeNowPlaying(userId: string, gameId: number): Promise<boolean> {
     requirePositiveInt(gameId, "GameDB id");
-
-    const count = await dbMutate(
-      MemberSql.removeNowPlaying,
-      { userId, gameId },
+    const entries = await Member.fetchNowPlayingRaw(userId);
+    const entry = entries.find((e) => Number(e.gamedb_game_id) === gameId);
+    if (!entry) return false;
+    const result = await apiDelete<{ deleted: boolean }>(
+      `/api/v1/now_playing/${entry.entry_id}`,
     );
-    return count > 0;
+    return result?.deleted === true;
   }
 
   static async addCompletion(params: {
@@ -1321,11 +1211,14 @@ export default class Member {
   ): Promise<boolean> {
     requirePositiveInt(gameId, "GameDB id");
     requirePositiveInt(platformId, "platform selection");
-    const count = await dbMutate(
-      MemberSql.updateNowPlayingPlatform,
-      { userId, gameId, platformId },
+    const entries = await Member.fetchNowPlayingRaw(userId);
+    const entry = entries.find((e) => Number(e.gamedb_game_id) === gameId);
+    if (!entry) return false;
+    const result = await apiPatch<{ data: NowPlayingEntryApiData }>(
+      `/api/v1/now_playing/${entry.entry_id}`,
+      { data: { platform_id: platformId } },
     );
-    return count > 0;
+    return result != null;
   }
 
   static async getAvatarHistory(
