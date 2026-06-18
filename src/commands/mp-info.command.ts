@@ -15,7 +15,7 @@ import {
   Slash,
   SlashOption,
 } from "discordx";
-import Member, { type IMemberPlatformRecord } from "../classes/Member.js";
+import { apiGet } from "../services/RpgClubApiClient.js";
 import {
   deferWithPrivateFlag,
   extractErrorMessage,
@@ -53,22 +53,97 @@ type PlatformFilters = {
   nsw: boolean;
 };
 
-function hasAnyPlatform(record: IMemberPlatformRecord, filters: PlatformFilters): boolean {
-  if (filters.steam && record.steamUrl) return true;
-  if (filters.xbl && record.xblUsername) return true;
-  if (filters.psn && record.psnUsername) return true;
-  if (filters.nsw && record.nswFriendCode) return true;
-  return false;
+type PlatformKey = keyof PlatformFilters;
+
+type MpInfoMember = {
+  userId: string;
+  username: string | null;
+  globalName: string | null;
+  platforms: PlatformFilters;
+};
+
+type ApiUserSocial = {
+  social_platform?: { label: string } | null;
+};
+
+type ApiUserWithSocials = {
+  user_id: string;
+  username: string | null;
+  global_name: string | null;
+  is_bot: boolean;
+  server_left_at: string | null;
+  socials?: ApiUserSocial[];
+};
+
+const USERS_FETCH_PER = 500;
+
+// Label matchers mirror the API's has_platform canonical tokens so the platforms
+// we render always agree with the users the API returns.
+const PLATFORM_LABEL_MATCHERS: Record<PlatformKey, (label: string) => boolean> = {
+  steam: (l) => l.includes("steam"),
+  xbl: (l) => l.includes("xbox"),
+  psn: (l) => l.includes("psn") || l.includes("playstation"),
+  nsw: (l) => l.includes("nintendo") || l.includes("switch"),
+};
+
+const PLATFORM_DISPLAY_LABELS: Record<PlatformKey, string> = {
+  steam: "Steam",
+  xbl: "Xbox Live",
+  psn: "PSN",
+  nsw: "Switch",
+};
+
+function derivePlatforms(socials: ApiUserSocial[]): PlatformFilters {
+  const platforms: PlatformFilters = { steam: false, xbl: false, psn: false, nsw: false };
+  for (const social of socials) {
+    const label = social.social_platform?.label?.toLowerCase();
+    if (!label) continue;
+    for (const key of Object.keys(PLATFORM_LABEL_MATCHERS) as PlatformKey[]) {
+      if (PLATFORM_LABEL_MATCHERS[key](label)) platforms[key] = true;
+    }
+  }
+  return platforms;
 }
 
-function formatPlatforms(record: IMemberPlatformRecord, filters: PlatformFilters): string {
+async function fetchMembersWithPlatforms(filters: PlatformFilters): Promise<MpInfoMember[]> {
+  const tokens = (Object.keys(filters) as PlatformKey[]).filter((key) => filters[key]);
+  if (tokens.length === 0) return [];
+  const hasPlatform = tokens.join(",");
+
+  const members: MpInfoMember[] = [];
+  let page = 1;
+  let totalPages = 1;
+  do {
+    const resp = await apiGet<{ data: ApiUserWithSocials[]; meta?: { pages?: number } }>(
+      "/api/v1/users",
+      { params: { has_platform: hasPlatform, per: USERS_FETCH_PER, page } },
+    );
+    const data = resp?.data ?? [];
+    totalPages = resp?.meta?.pages ?? page;
+    for (const user of data) {
+      if (user.is_bot || user.server_left_at) continue;
+      members.push({
+        userId: user.user_id,
+        username: user.username,
+        globalName: user.global_name,
+        platforms: derivePlatforms(user.socials ?? []),
+      });
+    }
+    page += 1;
+  } while (page <= totalPages);
+
+  return members.sort((a, b) => {
+    const aName = (a.globalName ?? a.username ?? a.userId).toLowerCase();
+    const bName = (b.globalName ?? b.username ?? b.userId).toLowerCase();
+    return aName.localeCompare(bName);
+  });
+}
+
+function formatPlatforms(member: MpInfoMember, filters: PlatformFilters): string {
   const platforms: string[] = [];
-
-  if (filters.steam && record.steamUrl) platforms.push("Steam");
-  if (filters.xbl && record.xblUsername) platforms.push("Xbox Live");
-  if (filters.psn && record.psnUsername) platforms.push("PSN");
-  if (filters.nsw && record.nswFriendCode) platforms.push("Switch");
-
+  for (const key of Object.keys(PLATFORM_DISPLAY_LABELS) as PlatformKey[]) {
+    if (filters[key] && member.platforms[key]) platforms.push(PLATFORM_DISPLAY_LABELS[key]);
+  }
   return platforms.join(", ");
 }
 
@@ -92,9 +167,9 @@ function decodeFilters(key: string): PlatformFilters {
 }
 
 async function filterActiveGuildMembers(
-  members: IMemberPlatformRecord[],
+  members: MpInfoMember[],
   guild: CommandInteraction["guild"],
-): Promise<IMemberPlatformRecord[]> {
+): Promise<MpInfoMember[]> {
   if (!guild || members.length === 0) return members;
 
   const ids = members.map((member) => member.userId);
@@ -119,14 +194,14 @@ async function filterActiveGuildMembers(
 }
 
 function buildSummaryEmbed(
-  members: IMemberPlatformRecord[],
+  members: MpInfoMember[],
   filters: PlatformFilters,
   page: number,
 ): {
   container: ReturnType<typeof buildTitledContainer>;
   totalPages: number;
   safePage: number;
-  pageMembers: IMemberPlatformRecord[];
+  pageMembers: MpInfoMember[];
 } {
   const totalPages = Math.max(1, Math.ceil(members.length / PAGE_SIZE));
   const safePage = Math.min(Math.max(page, 0), totalPages - 1);
@@ -153,12 +228,12 @@ function buildSummaryEmbed(
 }
 
 function buildPageComponents(
-  members: IMemberPlatformRecord[],
+  members: MpInfoMember[],
   filters: PlatformFilters,
   ownerId: string,
   page: number,
   totalPages: number,
-  pageMembers: IMemberPlatformRecord[],
+  pageMembers: MpInfoMember[],
 ): ActionRowBuilder<StringSelectMenuBuilder | ButtonBuilder>[] {
   const filterKey = encodeFilters(filters);
   const options = pageMembers.slice(0, MAX_OPTIONS).map((member) => {
@@ -201,9 +276,8 @@ async function renderMpInfoPage(
   page: number,
   ephemeral: boolean,
 ): Promise<void> {
-  const members = await Member.getMembersWithPlatforms();
-  const filtered = members.filter((member) => hasAnyPlatform(member, filters));
-  const activeMembers = await filterActiveGuildMembers(filtered, interaction.guild);
+  const members = await fetchMembersWithPlatforms(filters);
+  const activeMembers = await filterActiveGuildMembers(members, interaction.guild);
 
   if (!activeMembers.length) {
     await safeReply(interaction as any, buildTextReply("No members match the selected platforms.", ephemeral));
