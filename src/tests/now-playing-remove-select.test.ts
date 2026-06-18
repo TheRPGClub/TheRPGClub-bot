@@ -39,6 +39,7 @@ test("nowplaying remove select acknowledges interaction and refreshes same messa
 
     const interaction: any = {
       customId: "nowplaying-remove-select:123",
+      isMessageComponent: () => true,
       user: { id: "123" },
       values: ["11"],
       guildId: null,
@@ -87,6 +88,7 @@ test("nowplaying remove select acknowledges interaction and shows error on faile
 
     const interaction: any = {
       customId: "nowplaying-remove-select:123",
+      isMessageComponent: () => true,
       user: { id: "123" },
       values: ["11"],
       guildId: null,

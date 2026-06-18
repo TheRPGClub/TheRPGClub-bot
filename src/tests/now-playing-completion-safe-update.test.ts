@@ -39,6 +39,7 @@ test("nowplaying edit menu add completion uses safe update fallback", async () =
 
     const interaction: any = {
       customId: "nowplaying-edit-menu-complete:123",
+      isMessageComponent: () => true,
       user: { id: "123" },
       guildId: null,
       deferred: true,
@@ -101,6 +102,7 @@ test("nowplaying completion config renders with no image accessory", async () =>
 
     const interaction: any = {
       customId: "nowplaying-edit-menu-complete:123",
+      isMessageComponent: () => true,
       user: { id: "123" },
       guildId: null,
       deferred: true,
@@ -183,6 +185,7 @@ test("nowplaying completion modal reuses existing now-playing platform and skips
 
     const listInteraction: any = {
       customId: "nowplaying-list-complete:123",
+      isMessageComponent: () => true,
       user: { id: "123" },
       guildId: "guild-1",
       message: {

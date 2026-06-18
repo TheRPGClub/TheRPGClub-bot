@@ -77,6 +77,7 @@ test("Import First Match on a missing/expired session replies with the expired n
       interaction.replied = true;
     },
     deferUpdate: async () => {},
+    isMessageComponent: () => true,
   };
 
   const handled = await handleIgdbFirstMatchInteraction(interaction);
@@ -105,6 +106,7 @@ test("Import First Match on a live session imports the first sorted option", asy
     deferred: false,
     reply: async () => {},
     deferUpdate: async () => {},
+    isMessageComponent: () => true,
   };
 
   const handled = await handleIgdbFirstMatchInteraction(interaction);

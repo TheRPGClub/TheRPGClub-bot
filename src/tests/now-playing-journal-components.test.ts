@@ -403,6 +403,7 @@ test("journal delete confirm removes entry on yes and skips removal on no", asyn
 
     const makeInteraction = (action: "yes" | "no") => ({
       customId: `nowplaying-journal-delete-confirm:${action}:123:1:1:10`,
+      isMessageComponent: () => true,
       user: { id: "123" },
       guildId: "987654321",
       message: { flags: { has: () => false } },
