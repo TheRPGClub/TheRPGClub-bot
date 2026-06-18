@@ -148,29 +148,28 @@ export class GuildMemberUpdate {
     await syncUserEmojiFromDisplayNameChange(_client, newMember);
 
     try {
-      const existing = await Member.getByUserId(user.id);
       const record: IMemberRecord = {
         userId: user.id,
         isBot: user.bot ? 1 : 0,
-        username: user.username ?? existing?.username ?? null,
-        globalName: newNick ?? existing?.globalName ?? null,
-        avatarBlob: existing?.avatarBlob ?? null,
-        serverJoinedAt: newMember.joinedAt ?? existing?.serverJoinedAt ?? null,
-        serverLeftAt: existing?.serverLeftAt ?? null,
-        lastSeenAt: existing?.lastSeenAt ?? null,
-        roleAdmin: existing?.roleAdmin ?? 0,
-        roleModerator: existing?.roleModerator ?? 0,
-        roleRegular: existing?.roleRegular ?? 0,
-        roleMember: existing?.roleMember ?? 0,
-        roleNewcomer: existing?.roleNewcomer ?? 0,
-        messageCount: existing?.messageCount ?? null,
-        completionatorUrl: existing?.completionatorUrl ?? null,
-        psnUsername: existing?.psnUsername ?? null,
-        xblUsername: existing?.xblUsername ?? null,
-        nswFriendCode: existing?.nswFriendCode ?? null,
-        steamUrl: existing?.steamUrl ?? null,
-        profileImage: existing?.profileImage ?? null,
-        profileImageAt: existing?.profileImageAt ?? null,
+        username: user.username ?? null,
+        globalName: newNick ?? null,
+        avatarBlob: null,
+        serverJoinedAt: newMember.joinedAt ?? null,
+        serverLeftAt: null,
+        lastSeenAt: null,
+        roleAdmin: 0,
+        roleModerator: 0,
+        roleRegular: 0,
+        roleMember: 0,
+        roleNewcomer: 0,
+        messageCount: null,
+        completionatorUrl: null,
+        psnUsername: null,
+        xblUsername: null,
+        nswFriendCode: null,
+        steamUrl: null,
+        profileImage: null,
+        profileImageAt: null,
       };
 
       await Member.upsert(record);

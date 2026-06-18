@@ -1,8 +1,6 @@
 import {
   dbQuery,
   dbMutate,
-  dbWithConnection,
-  dbQueryConn,
 } from "../db/SqlManager.js";
 import { MemberSql } from "../db/sql/index.js";
 import { isPositiveInt, requirePositiveInt } from "../utilities/ValidationUtils.js";
@@ -31,16 +29,6 @@ export interface IMemberRecord {
   steamUrl: string | null;
   profileImage: Buffer | null;
   profileImageAt: Date | null;
-}
-
-export interface IMemberPlatformRecord {
-  userId: string;
-  username: string | null;
-  globalName: string | null;
-  steamUrl: string | null;
-  psnUsername: string | null;
-  xblUsername: string | null;
-  nswFriendCode: string | null;
 }
 
 export interface IMemberSearchFilters {
@@ -326,78 +314,79 @@ export interface ICompletionRecord {
 
 const MAX_NOW_PLAYING = 10;
 
-function buildParams(record: IMemberRecord) {
+type UserApiRecord = {
+  user_id: string;
+  username: string | null;
+  global_name: string | null;
+  is_bot: boolean;
+  server_joined_at: string | null;
+  last_seen_at: string | null;
+  server_left_at: string | null;
+  emoji_name: string | null;
+};
+
+type UserApiResponse = { data: UserApiRecord };
+
+type UserServiceApiRecord = {
+  user_id: string;
+  username: string | null;
+  global_name: string | null;
+  emoji_name: string | null;
+  server_left_at: string | null;
+};
+
+type UserServiceListResponse = {
+  data: UserServiceApiRecord[];
+  meta: { pages: number; count: number };
+};
+
+type AvatarHistoryApiRecord = {
+  event_id: number;
+  user_id: string;
+  avatar_hash: string | null;
+  avatar_url: string | null;
+  changed_at: string;
+};
+
+type AvatarHistoryApiListResponse = {
+  data: AvatarHistoryApiRecord[];
+  meta: { count: number; pages: number };
+};
+
+function mapUserApiRecord(raw: UserApiRecord): IMemberRecord {
   return {
-    userId: record.userId,
-    isBot: record.isBot ? 1 : 0,
-    username: record.username,
-    globalName: record.globalName,
-    avatarBlob: record.avatarBlob,
-    joinedAt: record.serverJoinedAt,
-    leftAt: record.serverLeftAt,
-    lastSeenAt: record.lastSeenAt,
-    roleAdmin: record.roleAdmin ? 1 : 0,
-    roleModerator: record.roleModerator ? 1 : 0,
-    roleRegular: record.roleRegular ? 1 : 0,
-    roleMember: record.roleMember ? 1 : 0,
-    roleNewcomer: record.roleNewcomer ? 1 : 0,
-    completionatorUrl: record.completionatorUrl,
-    psnUsername: record.psnUsername,
-    xblUsername: record.xblUsername,
-    nswFriendCode: record.nswFriendCode,
-    steamUrl: record.steamUrl,
+    userId: raw.user_id,
+    isBot: raw.is_bot ? 1 : 0,
+    username: raw.username,
+    globalName: raw.global_name,
+    avatarBlob: null,
+    serverJoinedAt: raw.server_joined_at ? new Date(raw.server_joined_at) : null,
+    serverLeftAt: raw.server_left_at ? new Date(raw.server_left_at) : null,
+    lastSeenAt: raw.last_seen_at ? new Date(raw.last_seen_at) : null,
+    roleAdmin: 0,
+    roleModerator: 0,
+    roleRegular: 0,
+    roleMember: 0,
+    roleNewcomer: 0,
+    messageCount: null,
+    completionatorUrl: null,
+    psnUsername: null,
+    xblUsername: null,
+    nswFriendCode: null,
+    steamUrl: null,
+    profileImage: null,
+    profileImageAt: null,
   };
 }
 
-type MemberRow = {
-  USER_ID: string; IS_BOT: number; USERNAME: string | null; GLOBAL_NAME: string | null;
-  AVATAR_BLOB: Buffer | null; SERVER_JOINED_AT: Date | null; SERVER_LEFT_AT: Date | null;
-  LAST_SEEN_AT: Date | null; ROLE_ADMIN: number; ROLE_MODERATOR: number;
-  ROLE_REGULAR: number; ROLE_MEMBER: number; ROLE_NEWCOMER: number;
-  MESSAGE_COUNT: number | null; COMPLETIONATOR_URL: string | null;
-  PSN_USERNAME: string | null; XBL_USERNAME: string | null; NSW_FRIEND_CODE: string | null;
-  STEAM_URL: string | null; PROFILE_IMAGE: Buffer | null; PROFILE_IMAGE_AT: Date | null;
-};
-
-function mapMemberRow(row: MemberRow): IMemberRecord {
+function mapAvatarHistoryApiRecord(raw: AvatarHistoryApiRecord): IAvatarHistoryRecord {
   return {
-    userId: row.USER_ID,
-    isBot: row.IS_BOT,
-    username: row.USERNAME ?? null,
-    globalName: row.GLOBAL_NAME ?? null,
-    avatarBlob: row.AVATAR_BLOB ?? null,
-    serverJoinedAt: row.SERVER_JOINED_AT ?? null,
-    serverLeftAt: row.SERVER_LEFT_AT ?? null,
-    lastSeenAt: row.LAST_SEEN_AT ?? null,
-    roleAdmin: row.ROLE_ADMIN,
-    roleModerator: row.ROLE_MODERATOR,
-    roleRegular: row.ROLE_REGULAR,
-    roleMember: row.ROLE_MEMBER,
-    roleNewcomer: row.ROLE_NEWCOMER,
-    messageCount: row.MESSAGE_COUNT ?? null,
-    completionatorUrl: row.COMPLETIONATOR_URL ?? null,
-    psnUsername: row.PSN_USERNAME ?? null,
-    xblUsername: row.XBL_USERNAME ?? null,
-    nswFriendCode: row.NSW_FRIEND_CODE ?? null,
-    steamUrl: row.STEAM_URL ?? null,
-    profileImage: row.PROFILE_IMAGE ?? null,
-    profileImageAt: row.PROFILE_IMAGE_AT ?? null,
-  };
-}
-
-type AvatarHistoryRow = {
-  EVENT_ID: number; USER_ID: string; AVATAR_HASH: string | null;
-  AVATAR_URL: string | null; AVATAR_BLOB: Buffer | null; CHANGED_AT: Date | string;
-};
-
-function mapAvatarHistoryRow(row: AvatarHistoryRow): IAvatarHistoryRecord {
-  return {
-    eventId: Number(row.EVENT_ID),
-    userId: String(row.USER_ID),
-    avatarHash: row.AVATAR_HASH ?? null,
-    avatarUrl: row.AVATAR_URL ?? null,
-    avatarBlob: row.AVATAR_BLOB ?? null,
-    changedAt: row.CHANGED_AT instanceof Date ? row.CHANGED_AT : new Date(row.CHANGED_AT as string),
+    eventId: Number(raw.event_id),
+    userId: String(raw.user_id),
+    avatarHash: raw.avatar_hash ?? null,
+    avatarUrl: raw.avatar_url ?? null,
+    avatarBlob: null,
+    changedAt: new Date(raw.changed_at),
   };
 }
 
@@ -452,13 +441,9 @@ function mapCompletionApiData(d: CompletionApiData): ICompletionRecord {
 export default class Member {
   static async touchLastSeen(userId: string, when: Date = new Date()): Promise<void> {
     try {
-      await dbMutate(
-        MemberSql.touchLastSeen,
-        { userId, lastSeen: when },
-      );
+      await apiPatch(`/api/v1/users/${userId}`, { data: { last_seen: when.toISOString() } });
     } catch (err: any) {
-      const msg = err?.message ?? String(err);
-      logError("Member.updateLastSeen", msg);
+      logError("Member.touchLastSeen", err?.message ?? String(err));
     }
   }
 
@@ -1196,12 +1181,9 @@ export default class Member {
   }
 
   static async getByUserId(userId: string): Promise<IMemberRecord | null> {
-    return dbWithConnection(async (conn) => {
-      const rows = await dbQueryConn<MemberRow, IMemberRecord>(
-        conn, MemberSql.getByUserId, { userId }, mapMemberRow,
-      );
-      return rows[0] ?? null;
-    });
+    const response = await apiGet<UserApiResponse>(`/api/v1/users/${userId}`);
+    if (!response) return null;
+    return mapUserApiRecord(response.data);
   }
 
   static async updateNowPlayingPlatform(
@@ -1228,14 +1210,12 @@ export default class Member {
   ): Promise<IAvatarHistoryRecord[]> {
     const safeLimit = Math.min(Math.max(limit, 1), 50);
     const safeOffset = Math.max(offset, 0);
-    return dbWithConnection(async (conn) => {
-      return dbQueryConn<AvatarHistoryRow, IAvatarHistoryRecord>(
-        conn,
-        MemberSql.getAvatarHistory,
-        { userId, limit: safeLimit, offset: safeOffset },
-        mapAvatarHistoryRow,
-      );
-    });
+    const page = Math.floor(safeOffset / safeLimit) + 1;
+    const response = await apiGet<AvatarHistoryApiListResponse>(
+      `/api/v1/users/${userId}/avatar_history`,
+      { params: { page, per: safeLimit } },
+    );
+    return response?.data?.map(mapAvatarHistoryApiRecord) ?? [];
   }
 
   static async getCompletionsForGame(
@@ -1289,24 +1269,21 @@ export default class Member {
   }
 
   static async countAvatarHistory(userId: string): Promise<number> {
-    const rows = await dbQuery<{ TOTAL: number | null }, number>(
-      MemberSql.countAvatarHistory,
-      { userId },
-      (row) => Number(row.TOTAL ?? 0),
+    const response = await apiGet<AvatarHistoryApiListResponse>(
+      `/api/v1/users/${userId}/avatar_history`,
+      { params: { per: 1, page: 1 } },
     );
-    return rows[0] ?? 0;
+    return response?.meta?.count ?? 0;
   }
 
   static async insertAvatarHistoryRecord(
     userId: string,
     avatarHash: string,
     avatarUrl: string,
-    avatarBlob: Buffer | null,
   ): Promise<void> {
-    await dbMutate(
-      MemberSql.insertAvatarHistoryRecord,
-      { userId, avatarHash, avatarUrl, avatarBlob },
-    );
+    await apiPost(`/api/v1/users/${userId}/avatar_history`, {
+      data: { avatar_hash: avatarHash, avatar_url: avatarUrl },
+    });
   }
 
   static async getAllMembersAvatarHistoryCounts(): Promise<IMemberAvatarHistoryCount[]> {
@@ -1327,75 +1304,27 @@ export default class Member {
     );
   }
 
-  static async getMembersWithPlatforms(): Promise<IMemberPlatformRecord[]> {
-    const members = await dbQuery<{
-      USER_ID: string;
-      USERNAME: string | null;
-      GLOBAL_NAME: string | null;
-      STEAM_URL: string | null;
-      PSN_USERNAME: string | null;
-      XBL_USERNAME: string | null;
-      NSW_FRIEND_CODE: string | null;
-      SERVER_LEFT_AT: Date | null;
-    }, IMemberPlatformRecord>(
-      MemberSql.getMembersWithPlatforms,
-      {},
-      (row) => ({
-        userId: row.USER_ID,
-        username: row.USERNAME ?? null,
-        globalName: row.GLOBAL_NAME ?? null,
-        steamUrl: row.STEAM_URL ?? null,
-        psnUsername: row.PSN_USERNAME ?? null,
-        xblUsername: row.XBL_USERNAME ?? null,
-        nswFriendCode: row.NSW_FRIEND_CODE ?? null,
-      }),
-    );
-
-    return members.sort((a, b) => {
-      const aName = (a.globalName ?? a.username ?? a.userId).toLowerCase();
-      const bName = (b.globalName ?? b.username ?? b.userId).toLowerCase();
-      return aName.localeCompare(bName);
-    });
-  }
-
   static async upsert(record: IMemberRecord): Promise<void> {
-    const params = buildParams(record);
-
-    const rowsUpdated = await dbMutate(MemberSql.updateMember, params);
-    if (rowsUpdated > 0) return;
-
-    try {
-      await dbMutate(MemberSql.insertMember, params);
-    } catch (insErr: any) {
-      const code = insErr?.code ?? insErr?.errorNum;
-      if (code === "ORA-00001") {
-        await dbMutate(MemberSql.updateMember, params);
-      } else {
-        throw insErr;
-      }
+    const body: Record<string, unknown> = {
+      discord_id: record.userId,
+      username: record.username,
+      global_name: record.globalName,
+      is_bot: Boolean(record.isBot),
+      server_left_at: record.serverLeftAt?.toISOString() ?? null,
+    };
+    if (record.serverJoinedAt != null) {
+      body.server_joined_at = record.serverJoinedAt.toISOString();
     }
+    await apiPost("/api/v1/users/upsert", { data: body });
   }
 
   static async markDepartedNotIn(userIds: string[]): Promise<number> {
     if (!userIds.length) return 0;
-
-    const chunkSize = 999; 
-    let totalUpdated = 0;
-
-    for (let i = 0; i < userIds.length; i += chunkSize) {
-      const chunk = userIds.slice(i, i + chunkSize);
-      const binds: Record<string, string> = {};
-      const placeholders = chunk.map((id, idx) => {
-        const key = `id${idx}`;
-        binds[key] = id;
-        return `:${key}`;
-      });
-
-      const affected = await dbMutate(MemberSql.markDepartedNotIn(placeholders.join(", ")), binds);
-      totalUpdated += affected;
-    }
-
-    return totalUpdated;
+    const response = await apiPost<{ count: number }>(
+      "/api/v1/users/mark_departed",
+      { active_ids: userIds },
+    );
+    return response?.count ?? 0;
   }
 
   static async getGameJournalList(userId: string): Promise<IGameJournalListEntry[]> {
@@ -1485,22 +1414,29 @@ export default class Member {
   }
 
   static async updateEmojiName(userId: string, emojiName: string | null): Promise<void> {
-    await dbMutate(
-      MemberSql.updateEmojiName,
-      { userId, emojiName },
-    );
+    await apiPatch(`/api/v1/users/${userId}`, { data: { emoji_name: emojiName } });
   }
 
   static async getAllWithEmojiName(): Promise<Array<{ userId: string; emojiName: string }>> {
-    return dbQuery<{ USER_ID: string; EMOJI_NAME: string },
-      { userId: string; emojiName: string }>(
-      MemberSql.getAllWithEmojiName,
-      {},
-      (row) => ({
-        userId: row.USER_ID,
-        emojiName: row.EMOJI_NAME,
-      }),
-    );
+    const results: Array<{ userId: string; emojiName: string }> = [];
+    let page = 1;
+    const per = 500;
+    let pages = 1;
+    do {
+      const response = await apiGet<UserServiceListResponse>(
+        "/api/v1/users",
+        { params: { has_emoji_name: true, page, per } },
+      );
+      if (!response) break;
+      for (const user of response.data) {
+        if (user.emoji_name) {
+          results.push({ userId: user.user_id, emojiName: user.emoji_name });
+        }
+      }
+      pages = Number(response.meta?.pages ?? 1);
+      page += 1;
+    } while (page <= pages);
+    return results;
   }
 
   static async upsertJournalMessageContext(

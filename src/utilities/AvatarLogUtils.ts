@@ -68,14 +68,12 @@ async function storeAvatarRecord(
   if (hasBackblazeB2Config()) {
     const storedUrl = await uploadAvatarToBackblaze(userId, avatarHash, discordUrl);
     if (storedUrl) {
-      await Member.insertAvatarHistoryRecord(userId, avatarHash, storedUrl, null);
+      await Member.insertAvatarHistoryRecord(userId, avatarHash, storedUrl);
       return true;
     }
   }
 
-  const blob = await downloadAvatarBuffer(discordUrl);
-  if (!blob) return false;
-  await Member.insertAvatarHistoryRecord(userId, avatarHash, discordUrl, blob);
+  await Member.insertAvatarHistoryRecord(userId, avatarHash, discordUrl);
   return true;
 }
 
