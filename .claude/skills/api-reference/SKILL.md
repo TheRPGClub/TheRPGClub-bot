@@ -87,6 +87,15 @@ POST    /api/v1/users/{user_id}/backlog  # Add to backlog
   data: { gamedb_game_id*, platform_id, sort_order, note }
 ```
 
+### Bot Presence
+
+```
+GET     /api/v1/bot_presence  # List bot presence history (page, per, limit, offset)
+POST    /api/v1/bot_presence  # Save a bot presence entry
+  data: { activity_name*, set_by_user_id, set_by_username }
+GET     /api/v1/bot_presence/latest  # Get the latest bot presence entry
+```
+
 ### Collections
 
 ```
@@ -96,9 +105,10 @@ PATCH   /api/v1/collections/{id}  # Update a collection entry
 PUT     /api/v1/collections/{id}  # Replace a collection entry (alias)
   data: { gamedb_game_id, ownership_type, platform_id, note, is_shared }
 DELETE  /api/v1/collections/{id}  # Delete a collection entry
-GET     /api/v1/users/{user_id}/collections  # List a user's collections (page, per, limit, offset)
+GET     /api/v1/users/{user_id}/collections  # List a user's collections (q, platform, ownership_type, game_id, page, per, limit, offset)
 POST    /api/v1/users/{user_id}/collections  # Create a collection entry
   data: { gamedb_game_id*, ownership_type*, platform_id, note, is_shared }
+GET     /api/v1/users/{user_id}/collections/platform_summary  # Per-platform summary of a user's collection
 ```
 
 ### Companies
@@ -111,6 +121,7 @@ GET     /api/v1/companies/{id}  # Show company
 ### Completions
 
 ```
+GET     /api/v1/completions/leaderboard  # Completion leaderboard (q, page, per, limit, offset)
 GET     /api/v1/completions/{id}  # Show a completion
 PATCH   /api/v1/completions/{id}  # Update a completion
   data: { gamedb_game_id, completion_type, completed_at, final_playtime_hrs, platform_id, note }
@@ -160,9 +171,26 @@ GET     /api/v1/franchises/{id}  # Show franchise
 
 ```
 GET     /api/v1/gotm_entries  # List Game of the Month entries (round_number, include, page, per, limit, offset)
+POST    /api/v1/gotm_entries  # Create a Game of the Month entry
+  data: { round_number*, month_year*, game_index*, gamedb_game_id*, reddit_url }
 GET     /api/v1/gotm_entries/{id}  # Show a Game of the Month entry (include)
+PATCH   /api/v1/gotm_entries/{id}  # Update a Game of the Month entry
+  data: { reddit_url, gamedb_game_id, voting_results_message_id }
+PUT     /api/v1/gotm_entries/{id}  # Replace a Game of the Month entry (alias)
+  data: { reddit_url, gamedb_game_id, voting_results_message_id }
+DELETE  /api/v1/gotm_entries/{id}  # Delete a Game of the Month entry
 GET     /api/v1/gotm_entries/{round}/nominations  # List GOTM nominations for a round (page, per, limit, offset)
+POST    /api/v1/gotm_entries/{round}/nominations  # Upsert a GOTM nomination
+  data: { user_id*, gamedb_game_id, reason }
+DELETE  /api/v1/gotm_entries/{round}/nominations  # Delete all GOTM nominations for a round
+GET     /api/v1/gotm_entries/{round}/nominations/{user_id}  # Show a user's GOTM nomination for a round
+DELETE  /api/v1/gotm_entries/{round}/nominations/{user_id}  # Delete a user's GOTM nomination for a round
 GET     /api/v1/nr_gotm_entries/{round}/nominations  # List Non-RPG GOTM nominations for a round (page, per, limit, offset)
+POST    /api/v1/nr_gotm_entries/{round}/nominations  # Upsert a Non-RPG GOTM nomination
+  data: { user_id*, gamedb_game_id*, reason }
+DELETE  /api/v1/nr_gotm_entries/{round}/nominations  # Delete all Non-RPG GOTM nominations for a round
+GET     /api/v1/nr_gotm_entries/{round}/nominations/{user_id}  # Show a user's Non-RPG GOTM nomination for a round
+DELETE  /api/v1/nr_gotm_entries/{round}/nominations/{user_id}  # Delete a user's Non-RPG GOTM nomination for a round
 ```
 
 ### Game Images
@@ -199,6 +227,7 @@ PATCH   /api/v1/users/{user_id}/giveaway_settings  # Update a user's giveaway no
 GET     /api/v1/games  # List games (q, winner, genre_id, engine_id, theme_id, perspective_id, mode_id, franchise_id, company_id, page, per, limit, offset)
 POST    /api/v1/games  # Create a game from IGDB
 GET     /api/v1/games/{id}  # Show game
+GET     /api/v1/games/{id}/collections  # List collection entries for this game (page, per, limit, offset)
 GET     /api/v1/games/{id}/completions  # List completions for this game (page, per, limit, offset)
 GET     /api/v1/games/{id}/now_playing  # List users currently playing this game (page, per, limit, offset)
 GET     /api/v1/games/{id}/profile  # Show aggregate game profile
@@ -267,7 +296,14 @@ GET     /api/v1/modes/{id}  # Show mode
 
 ```
 GET     /api/v1/nr_gotm_entries  # List Non-Retro Game of the Month entries (round_number, include, page, per, limit, offset)
+POST    /api/v1/nr_gotm_entries  # Create a Non-Retro GOTM entry
+  data: { round_number*, month_year*, game_index*, gamedb_game_id*, reddit_url }
 GET     /api/v1/nr_gotm_entries/{id}  # Show a Non-Retro GOTM entry (include)
+PATCH   /api/v1/nr_gotm_entries/{id}  # Update a Non-Retro GOTM entry
+  data: { reddit_url, gamedb_game_id, voting_results_message_id }
+PUT     /api/v1/nr_gotm_entries/{id}  # Replace a Non-Retro GOTM entry (alias)
+  data: { reddit_url, gamedb_game_id, voting_results_message_id }
+DELETE  /api/v1/nr_gotm_entries/{id}  # Delete a Non-Retro GOTM entry
 ```
 
 ### Now Playing
@@ -540,7 +576,7 @@ POST    /api/v1/users/{user_id}/socials  # Link a social account
 ### Users
 
 ```
-GET     /api/v1/users  # List users (q, page, per, limit, offset)
+GET     /api/v1/users  # List users (q, discord_id, has_platform, page, per, limit, offset)
 GET     /api/v1/users/{user_id}  # Show user profile (preview_limit)
 GET     /api/v1/users/{user_id}/avatar  # Stream user avatar
 GET     /api/v1/users/{user_id}/profile-image  # Stream user profile image
