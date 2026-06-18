@@ -1,12 +1,4 @@
-import {
-  dbQuery,
-  dbMutate,
-  dbTransaction,
-  dbQueryConn,
-  dbMutateConn,
-} from "../db/SqlManager.js";
-import { GotmSql } from "../db/sql/index.js";
-import { apiGet } from "../services/RpgClubApiClient.js";
+import { apiGet, apiPost, apiPatch, apiDelete } from "../services/RpgClubApiClient.js";
 import Game from "./Game.js";
 import { getThreadsByGameId } from "./Thread.js";
 import { isPositiveInt, requirePositiveInt } from "../utilities/ValidationUtils.js";
@@ -324,7 +316,16 @@ export default class Gotm {
 
 export type GotmDatabaseEditableField = "redditUrl" | "gamedbGameId";
 
-type GotmRowIndexRow = { ROUND_NUMBER: number; GAME_INDEX: number };
+async function fetchGotmRowsByRound(round: number): Promise<GotmEntryApiRow[]> {
+  const response = await apiGet<GotmEntryListResponse>(
+    "/api/v1/gotm_entries",
+    { params: { round_number: round, per: 500 } },
+  );
+  const rows = response?.data ?? [];
+  return rows
+    .filter((r) => Number(r.round_number) === round)
+    .sort((a, b) => Number(a.game_index) - Number(b.game_index));
+}
 
 export async function updateGotmGameFieldInDatabase(
   round: number,
@@ -334,47 +335,29 @@ export async function updateGotmGameFieldInDatabase(
 ): Promise<void> {
   ensureInitialized();
 
-  const columnMap: Record<GotmDatabaseEditableField, string> = {
-    redditUrl: "REDDIT_URL",
-    gamedbGameId: "GAMEDB_GAME_ID",
-  };
-  const columnName = columnMap[field];
-
-  await dbTransaction(async (conn) => {
-    const rows = await dbQueryConn<GotmRowIndexRow, GotmRowIndexRow>(
-      conn,
-      GotmSql.getRowsByRound,
-      { round },
-      (row) => row,
+  const rows = await fetchGotmRowsByRound(round);
+  if (!rows.length) {
+    throw new Error(`No GOTM database rows found for round ${round}.`);
+  }
+  if (!Number.isInteger(gameIndex) || gameIndex < 0 || gameIndex >= rows.length) {
+    throw new Error(
+      `Game index ${gameIndex} is out of range for round ${round} (have ${rows.length} games).`,
     );
+  }
 
-    if (!rows.length) {
-      throw new Error(`No GOTM database rows found for round ${round}.`);
-    }
+  const gotmId = rows[gameIndex].gotm_id;
+  const data: Record<string, string | number | null> = {};
+  if (field === "gamedbGameId") {
+    const newId = Number(value);
+    requirePositiveInt(newId, "GameDB id");
+    const exists = await getGameDetailsCached(newId);
+    gameCache.set(newId, exists);
+    data.gamedb_game_id = newId;
+  } else {
+    data.reddit_url = value as string | null;
+  }
 
-    if (!Number.isInteger(gameIndex) || gameIndex < 0 || gameIndex >= rows.length) {
-      throw new Error(
-        `Game index ${gameIndex} is out of range for round ${round} (have ${rows.length} games).`,
-      );
-    }
-
-    const dbGameIndex = rows[gameIndex].GAME_INDEX;
-
-    let dbValue = value;
-    if (field === "gamedbGameId") {
-      const newId = Number(value);
-      requirePositiveInt(newId, "GameDB id");
-      const exists = await getGameDetailsCached(newId);
-      gameCache.set(newId, exists);
-      dbValue = newId;
-    }
-
-    await dbMutateConn(conn, GotmSql.updateField(columnName), {
-      round,
-      gameIndex: dbGameIndex,
-      value: dbValue,
-    });
-  });
+  await apiPatch(`/api/v1/gotm_entries/${gotmId}`, { data });
 
   const entry = gotmData.find((e) => e.round === round);
   if (entry && entry.gameOfTheMonth[gameIndex]) {
@@ -395,10 +378,12 @@ export async function updateGotmVotingResultsInDatabase(
   round: number,
   messageId: string | null,
 ): Promise<void> {
-  await dbMutate(
-    GotmSql.updateVotingResults,
-    { round, value: messageId },
-  );
+  const rows = await fetchGotmRowsByRound(round);
+  for (const row of rows) {
+    await apiPatch(`/api/v1/gotm_entries/${row.gotm_id}`, {
+      data: { voting_results_message_id: messageId },
+    });
+  }
 }
 
 export async function insertGotmRoundInDatabase(
@@ -413,33 +398,28 @@ export async function insertGotmRoundInDatabase(
     throw new Error("At least one game is required for a GOTM round.");
   }
 
-  const countRows = await dbQuery<{ CNT: number }, { CNT: number }>(
-    GotmSql.checkRoundExists,
-    { round },
-    (row) => row,
-  );
-  const count = countRows.length ? Number(countRows[0].CNT) : 0;
-  if (Number.isFinite(count) && count > 0) {
+  const existing = await fetchGotmRowsByRound(round);
+  if (existing.length > 0) {
     throw new Error(`GOTM round ${round} already exists in the database.`);
   }
 
-  await dbTransaction(async (conn) => {
-    for (let i = 0; i < games.length; i++) {
-      const g = games[i];
-      if (!isPositiveInt(g.gamedbGameId)) {
-        throw new Error(`GameDB id is required for GOTM round ${round}, game ${i + 1}.`);
-      }
-      const gameMeta = await getGameDetailsCached(g.gamedbGameId);
-      await dbMutateConn(conn, GotmSql.insertRound, {
-        round,
-        monthYear,
-        gameIndex: i,
-        redditUrl: g.redditUrl ?? null,
-        gamedbGameId: g.gamedbGameId,
-      });
-      games[i].title = gameMeta.title;
+  for (let i = 0; i < games.length; i++) {
+    const g = games[i];
+    if (!isPositiveInt(g.gamedbGameId)) {
+      throw new Error(`GameDB id is required for GOTM round ${round}, game ${i + 1}.`);
     }
-  });
+    const gameMeta = await getGameDetailsCached(g.gamedbGameId);
+    await apiPost("/api/v1/gotm_entries", {
+      data: {
+        round_number: round,
+        month_year: monthYear,
+        game_index: i,
+        reddit_url: g.redditUrl ?? null,
+        gamedb_game_id: g.gamedbGameId,
+      },
+    });
+    games[i].title = gameMeta.title;
+  }
 }
 
 export async function deleteGotmRoundFromDatabase(round: number): Promise<number> {
@@ -447,8 +427,9 @@ export async function deleteGotmRoundFromDatabase(round: number): Promise<number
     throw new Error("Invalid round number for GOTM delete.");
   }
 
-  return dbMutate(
-    GotmSql.deleteRound,
-    { round },
-  );
+  const rows = await fetchGotmRowsByRound(round);
+  for (const row of rows) {
+    await apiDelete(`/api/v1/gotm_entries/${row.gotm_id}`);
+  }
+  return rows.length;
 }

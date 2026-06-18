@@ -11,7 +11,6 @@ export {
   GameSearchSynonymSql,
   GameSearchSynonymDraftSql,
 } from "./gameSearchSynonym.sql.js";
-export { GotmSql, NrGotmSql } from "./gotm.sql.js";
 export { GotmAuditImportSql } from "./gotmAuditImport.sql.js";
 export { HltbCacheSql } from "./hltbCache.sql.js";
 export { MemberSql } from "./member.sql.js";
