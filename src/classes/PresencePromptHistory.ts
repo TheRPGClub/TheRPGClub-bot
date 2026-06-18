@@ -1,5 +1,4 @@
-import { dbQuery, dbMutate } from "../db/SqlManager.js";
-import { PresencePromptHistorySql } from "../db/sql/index.js";
+import { apiPost, apiPatch, apiGet } from "../services/RpgClubApiClient.js";
 import { normalizePresenceGameTitle } from "./PresencePromptOptOut.js";
 
 export type PresencePromptStatus =
@@ -9,6 +8,21 @@ export type PresencePromptStatus =
   | "OPT_OUT_GAME"
   | "OPT_OUT_ALL";
 
+type PresencePromptRecord = {
+  id: number;
+  prompt_id: string;
+  game_title: string;
+  game_title_norm: string;
+  status: PresencePromptStatus;
+  created_at: string;
+  resolved_at: string | null;
+};
+
+type PresencePromptListResponse = {
+  data: PresencePromptRecord[];
+  meta: { count: number; page: number; pages: number; per: number };
+};
+
 export default class PresencePromptHistory {
   static async createPrompt(
     promptId: string,
@@ -16,17 +30,15 @@ export default class PresencePromptHistory {
     gameTitle: string,
   ): Promise<void> {
     const normalized = normalizePresenceGameTitle(gameTitle);
-    await dbMutate(
-      PresencePromptHistorySql.createPrompt,
-      { promptId, userId, gameTitle, gameTitleNorm: normalized },
-    );
+    await apiPost(`/api/v1/users/${userId}/presence_prompts`, {
+      data: { prompt_id: promptId, game_title: gameTitle, game_title_norm: normalized },
+    });
   }
 
   static async markResolved(promptId: string, status: PresencePromptStatus): Promise<void> {
-    await dbMutate(
-      PresencePromptHistorySql.markResolved,
-      { status, promptId },
-    );
+    await apiPatch(`/api/v1/presence_prompts/${promptId}`, {
+      data: { status, resolved_at: new Date().toISOString() },
+    });
   }
 
   static async getLastPromptDateForGame(
@@ -34,31 +46,28 @@ export default class PresencePromptHistory {
     gameTitle: string,
   ): Promise<Date | null> {
     const normalized = normalizePresenceGameTitle(gameTitle);
-    const rows = await dbQuery(
-      PresencePromptHistorySql.getLastPromptDate,
-      { userId, gameTitleNorm: normalized },
-      (row: { CREATED_AT: Date | string }) =>
-        row.CREATED_AT instanceof Date ? row.CREATED_AT : new Date(row.CREATED_AT as string),
+    const response = await apiGet<PresencePromptListResponse>(
+      `/api/v1/users/${userId}/presence_prompts`,
+      { params: { game_title_norm: normalized, per: 1 } },
     );
-    return rows[0] ?? null;
+    const first = response?.data?.[0];
+    return first ? new Date(first.created_at) : null;
   }
 
   static async countPendingForGame(userId: string, gameTitle: string): Promise<number> {
     const normalized = normalizePresenceGameTitle(gameTitle);
-    const rows = await dbQuery(
-      PresencePromptHistorySql.countPendingForGame,
-      { userId, gameTitleNorm: normalized },
-      (row: { CNT: number }) => Number(row.CNT ?? 0),
+    const response = await apiGet<PresencePromptListResponse>(
+      `/api/v1/users/${userId}/presence_prompts`,
+      { params: { game_title_norm: normalized, status: "PENDING", per: 1 } },
     );
-    return rows[0] ?? 0;
+    return response?.meta?.count ?? 0;
   }
 
   static async countPendingForUser(userId: string): Promise<number> {
-    const rows = await dbQuery(
-      PresencePromptHistorySql.countPendingForUser,
-      { userId },
-      (row: { CNT: number }) => Number(row.CNT ?? 0),
+    const response = await apiGet<PresencePromptListResponse>(
+      `/api/v1/users/${userId}/presence_prompts`,
+      { params: { status: "PENDING", per: 1 } },
     );
-    return rows[0] ?? 0;
+    return response?.meta?.count ?? 0;
   }
 }

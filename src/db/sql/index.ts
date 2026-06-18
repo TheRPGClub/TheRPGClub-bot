@@ -9,6 +9,5 @@ export { GameDbCsvImportMappingSql } from "./gameDbCsvImportMapping.sql.js";
 export { GotmAuditImportSql } from "./gotmAuditImport.sql.js";
 export { HltbCacheSql } from "./hltbCache.sql.js";
 export { MemberSql } from "./member.sql.js";
-export { PresencePromptHistorySql } from "./presencePrompt.sql.js";
 export { SteamCollectionImportSql } from "./steamCollectionImport.sql.js";
 
