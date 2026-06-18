@@ -21,7 +21,7 @@
     "lint": "npx eslint",
     "session:start": "node --no-warnings=ExperimentalWarning --loader ts-node/esm scripts/session-start.ts",
     "backup:docker-volumes": "node --no-warnings=ExperimentalWarning --loader ts-node/esm/transpile-only scripts/backup-docker-volumes.ts",
-    "remoteBash": "ssh merph518@192.168.50.15"
+    "remoteBash": "ssh -p 2222 merph518@100.120.128.48"
   },
   "dependencies": {
     "@discordjs/builders": "^1.14.1",
