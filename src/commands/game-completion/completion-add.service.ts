@@ -482,11 +482,6 @@ async function confirmDuplicateCompletion(
 export async function importGameFromIgdb(
   igdbId: number,
 ): Promise<{ gameId: number; title: string }> {
-  const existing = await Game.getGameByIgdbId(igdbId);
-  if (existing) {
-    return { gameId: existing.id, title: existing.title };
-  }
-
-  const newGame = await Game.createGame(igdbId);
-  return { gameId: newGame.id, title: newGame.title };
+  const game = await Game.createGame(igdbId);
+  return { gameId: game.id, title: game.title };
 }

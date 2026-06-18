@@ -142,26 +142,21 @@ async function fetchCsvText(url: string): Promise<string | null> {
 }
 
 async function importGameFromCsv(igdbId: number): Promise<{ gameId: number; title: string }> {
-  const existing = await Game.getGameByIgdbId(igdbId);
-  if (existing) {
-    const details = await igdbService.getGameDetails(igdbId);
-    if (details) {
-      const igdbPlatformIds: number[] = (details.platforms ?? [])
-        .map((platform) => platform.id)
-        .filter(isPositiveInt);
-      await GamePlatformRegionService.addGamePlatformsByIgdbIds(existing.id, igdbPlatformIds);
-      await processReleaseDates(existing.id, details.release_dates ?? []);
-    }
-    if (!existing.imageData) {
-      try {
-        await Game.refreshImageFromIgdb(existing.id);
-      } catch { /* ignore */ }
-    }
-    return { gameId: existing.id, title: existing.title };
+  const game = await Game.createGame(igdbId);
+  const details = await igdbService.getGameDetails(igdbId);
+  if (details) {
+    const igdbPlatformIds: number[] = (details.platforms ?? [])
+      .map((platform) => platform.id)
+      .filter(isPositiveInt);
+    await GamePlatformRegionService.addGamePlatformsByIgdbIds(game.id, igdbPlatformIds);
+    await processReleaseDates(game.id, details.release_dates ?? []);
   }
-
-  const newGame = await Game.createGame(igdbId);
-  return { gameId: newGame.id, title: newGame.title };
+  if (!game.imageData) {
+    try {
+      await Game.refreshImageFromIgdb(game.id);
+    } catch { /* ignore */ }
+  }
+  return { gameId: game.id, title: game.title };
 }
 
 async function processNextGameDbCsvImportItem(

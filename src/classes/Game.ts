@@ -1,11 +1,4 @@
 import axios from "axios";
-import {
-  dbQuery,
-  dbMutate,
-  dbWithConnection,
-  dbQueryConn,
-} from "../db/SqlManager.js";
-import { GameSql } from "../db/sql/index.js";
 import type { IGDBGameDetails } from "../services/IGDB/IgdbService.js";
 import {
   apiGet,
@@ -18,14 +11,12 @@ import {
 import { isPositiveInt } from "../utilities/ValidationUtils.js";
 import {
   mapGameFromApi,
-  mapGameRow,
   mapReleaseFromApi,
   type ReleaseApiData,
 } from "../functions/GameMappers.js";
 import type {
   IGame,
   IRelease,
-  GameSource,
 } from "../types/GameTypes.js";
 import {
   clearAutocompleteSearchCaches,
@@ -67,43 +58,37 @@ export default class Game {
     return { ...meta, gameData: body?.data ?? null };
   }
 
-  static async getGameById(
-    id: number,
-    source: GameSource = "API",
-  ): Promise<IGame | null> {
-    if (source === "API") {
-      const result = await apiGet<{ data: unknown }>(`/api/v1/games/${id}`);
-      const data = result?.data;
-      return data ? mapGameFromApi(data) : null;
-    }
-
-    return dbWithConnection(async (conn) => {
-      const rows = await dbQueryConn(
-        conn,
-        GameSql.getGameById,
-        { id },
-        mapGameRow,
-      );
-      return rows[0] ?? null;
-    });
+  static async getGameById(id: number): Promise<IGame | null> {
+    const result = await apiGet<{ data: unknown }>(`/api/v1/games/${id}`);
+    const data = result?.data;
+    return data ? mapGameFromApi(data) : null;
   }
 
   static async getGamesByIds(ids: number[]): Promise<IGame[]> {
     const uniqueIds = Array.from(new Set(ids.filter(isPositiveInt)));
     if (!uniqueIds.length) return [];
+    const results = await Promise.all(uniqueIds.map((id) => Game.getGameById(id)));
+    return results.filter((g): g is IGame => g !== null);
+  }
 
-    const binds: Record<string, number> = {};
-    const placeholders: string[] = [];
-    uniqueIds.forEach((id, idx) => {
-      const key = `id${idx}`;
-      binds[key] = id;
-      placeholders.push(`:${key}`);
-    });
-
-    return dbWithConnection(async (conn) => {
-      const entry = GameSql.getGamesByIds(placeholders.join(", "));
-      return dbQueryConn(conn, entry, binds, mapGameRow);
-    });
+  static async getAllGameIds(): Promise<number[]> {
+    const ids: number[] = [];
+    let page = 1;
+    const per = 500;
+    while (true) {
+      const result = await apiGet<{ data: unknown[]; meta: { pages: number } }>(
+        "/api/v1/games",
+        { params: { page, per } },
+      );
+      if (!result?.data?.length) break;
+      for (const item of result.data) {
+        const game = mapGameFromApi(item);
+        if (game.igdbId != null) ids.push(game.id);
+      }
+      if (page >= (result.meta?.pages ?? 1)) break;
+      page++;
+    }
+    return ids;
   }
 
   static async getAlternateVersions(gameId: number): Promise<IGame[]> {
@@ -131,27 +116,6 @@ export default class Game {
       }
     }
     return count;
-  }
-
-  static async getAllGameIdsWithIgdb(): Promise<number[]> {
-    const rows = await dbQuery<{ GAME_ID: number }, number>(
-      GameSql.getAllGameIdsWithIgdb,
-      {},
-      (row) => row.GAME_ID,
-    );
-    return rows;
-  }
-
-  static async getGameByIgdbId(igdbId: number): Promise<IGame | null> {
-    return dbWithConnection(async (conn) => {
-      const rows = await dbQueryConn(
-        conn,
-        GameSql.getGameByIgdbId,
-        { igdbId },
-        mapGameRow,
-      );
-      return rows[0] ?? null;
-    });
   }
 
   static getFeaturedVideoUrl(details: IGDBGameDetails): string | null {
@@ -250,76 +214,6 @@ export default class Game {
     return result.data.map(mapReleaseFromApi);
   }
 
-  static async getGamesForAudit(
-    missingImage: boolean,
-    missingFeaturedVideo: boolean,
-    missingDescription: boolean,
-    missingReleaseData: boolean,
-    titleWords?: string[],
-    showCompleteOnly: boolean = false,
-  ): Promise<IGame[]> {
-    return dbWithConnection(async (connection) => {
-      const imageCol = "image_data";
-      const videoCol = "featured_video_url";
-      const descCol = "description";
-      const gameIdCol =  "g.game_id";
-      const releasesTable = "gamedb_releases";
-      const releaseGameIdCol = "r.game_id";
-      const titleCol =  "g.title";
-
-      const whereClauses: string[] = [];
-      if (missingImage) {
-        whereClauses.push(`${imageCol} IS NULL`);
-      }
-      if (missingFeaturedVideo) {
-        whereClauses.push(`${videoCol} IS NULL`);
-      }
-      if (missingDescription) {
-        whereClauses.push(`${descCol} IS NULL`);
-      }
-      if (missingReleaseData) {
-        whereClauses.push(
-          `NOT EXISTS (SELECT 1 FROM ${releasesTable} r WHERE ${releaseGameIdCol} = ${gameIdCol})`,
-        );
-      }
-
-      if (whereClauses.length === 0) {
-        return [];
-      }
-
-      const whereClause = whereClauses.join(" OR ");
-      const binds: Record<string, any> = {};
-      let titleClause = "";
-      if (titleWords && titleWords.length) {
-        const wordClauses: string[] = [];
-        titleWords.forEach((word, index) => {
-          const key = `titleWord${index}`;
-          binds[key] = `%${word.toLowerCase()}%`;
-          wordClauses.push(`LOWER(${titleCol}) LIKE :${key}`);
-        });
-        titleClause = wordClauses.length ? `(${wordClauses.join(" OR ")})` : "";
-      }
-
-      let combinedClause = titleClause
-        ? `(${whereClause}) AND ${titleClause}`
-        : whereClause;
-
-      if (showCompleteOnly) {
-        const completeClause = `${imageCol} IS NOT NULL
-          AND ${videoCol} IS NOT NULL
-          AND ${descCol} IS NOT NULL
-          AND EXISTS (SELECT 1 FROM ${releasesTable} r WHERE ${releaseGameIdCol} = ${gameIdCol})`;
-        combinedClause = titleClause
-          ? `(${completeClause}) AND ${titleClause}`
-          : completeClause;
-      }
-
-      const entry = GameSql.getGamesForAudit(combinedClause);
-
-      return dbQueryConn(connection, entry, binds, mapGameRow);
-    });
-  }
-
   static async getGamePrimaryImageUrl(gameId: number): Promise<string | null> {
     type GameImage = {
       image_id: number;
@@ -356,52 +250,16 @@ export default class Game {
 
   static async updateGameImage(gameId: number, imageData: Buffer): Promise<void> {
     const form = new FormData();
-    form.append("image", new Blob([new Uint8Array(imageData)], { type: "image/jpeg" }), "cover.jpg");
+    form.append(
+      "image",
+      new Blob([new Uint8Array(imageData)], { type: "image/jpeg" }),
+      "cover.jpg",
+    );
     await apiPostForm(`/api/v1/games/${gameId}/images`, form);
   }
 
   static async refreshImageFromIgdb(gameId: number): Promise<void> {
     await apiPost(`/api/v1/games/${gameId}/refresh-images`);
-  }
-
-  static async updateGameThumbnailBad(
-    gameId: number,
-    isBad: boolean,
-  ): Promise<void> {
-    await dbMutate(GameSql.updateGameThumbnailBad, {
-      thumbnailBad: isBad ? 1 : 0,
-      gameId,
-    });
-  }
-
-  static async updateGameThumbnailApproved(
-    gameId: number,
-    isApproved: boolean,
-  ): Promise<void> {
-    await dbMutate(GameSql.updateGameThumbnailApproved, {
-      thumbnailApproved: isApproved ? 1 : 0,
-      gameId,
-    });
-  }
-
-  static async getThreadStatusForGameIds(
-    gameIds: number[],
-  ): Promise<Set<number>> {
-    const ids = Array.from(new Set(gameIds.filter(isPositiveInt)));
-    if (!ids.length) return new Set();
-
-    const placeholders = ids.map((_, idx) => `:id${idx}`).join(", ");
-    const binds: Record<string, any> = {};
-    ids.forEach((id, idx) => {
-      binds[`id${idx}`] = id;
-    });
-
-    const rows = await dbQuery(
-      GameSql.getThreadStatusForGameIds(placeholders),
-      binds,
-      (row: { GAME_ID: number }) => Number(row.GAME_ID),
-    );
-    return new Set(rows);
   }
 
   static async updateFeaturedVideoUrl(
@@ -416,10 +274,6 @@ export default class Game {
     description: string | null,
   ): Promise<void> {
     await apiPatch(`/api/v1/games/${gameId}`, { data: { description } });
-  }
-
-  static async touchGameUpdatedAt(gameId: number): Promise<void> {
-    await dbMutate(GameSql.touchGameUpdatedAt, { gameId });
   }
 
 }

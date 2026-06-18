@@ -166,5 +166,3 @@ export interface IMappedGameProfile {
   developers: string[];
   publishers: string[];
 }
-
-export type GameSource = "API";
