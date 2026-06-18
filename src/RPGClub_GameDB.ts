@@ -28,7 +28,6 @@ import { startThreadSyncService } from "./services/ThreadSyncService.js";
 import { startThreadLinkPromptService } from "./services/ThreadLinkPromptService.js";
 import { refreshGiveawayHubMessage } from "./services/GiveawayHubService.js";
 import { startGameReleaseAnnouncementService } from "./services/GameReleaseAnnouncementService.js";
-import { startIgdbScanService } from "./services/IGDB/IgdbScanService.js";
 import { startUserEmojiService } from "./services/UserEmojiService.js";
 import { restoreJournalMessageContextsFromDb } from "./commands/now-playing/nowPlayingContexts.js";
 import { truncateWithEllipsis } from "./utilities/ValidationUtils.js";
@@ -194,7 +193,6 @@ bot.once("clientReady", async () => {
   startThreadSyncService(bot);
   startThreadLinkPromptService(bot);
   startGameReleaseAnnouncementService(bot);
-  startIgdbScanService();
   await joinAllTargetForumThreads(bot);
   startRssFeedService(bot);
   await refreshGiveawayHubMessage(bot);
