@@ -152,19 +152,11 @@ function buildSuperAdminHelpButtons(
   return [buildSelectRow(select)];
 }
 
-type ImageBufferResult = { buffer: Buffer; mimeType: string | null };
-
 function buildStableSuperAdminSessionId(prefix: string, parts: string[]): string {
   const hash = crypto.createHash("sha256");
   // eslint-disable-next-line local/no-direct-interaction-response-methods
   hash.update(parts.join(":"));
   return `${prefix}-${hash.digest("hex").slice(0, 16)}`;
-}
-
-async function downloadImageBuffer(url: string): Promise<ImageBufferResult> {
-  const resp = await axios.get<ArrayBuffer>(url, { responseType: "arraybuffer" });
-  const mime = resp.headers?.["content-type"] ?? null;
-  return { buffer: Buffer.from(resp.data), mimeType: mime ? String(mime) : null };
 }
 
 export function buildSuperAdminHelpContainer(topic: SuperAdminHelpTopic): ContainerBuilder {
@@ -749,14 +741,6 @@ export class SuperAdmin {
       return;
     }
 
-    const roleMap = {
-      admin: process.env.ADMIN_ROLE_ID?.replace(/[<@&>]/g, "").trim() || null,
-      mod: process.env.MODERATOR_ROLE_ID?.replace(/[<@&>]/g, "").trim() || null,
-      regular: process.env.REGULAR_ROLE_ID?.replace(/[<@&>]/g, "").trim() || null,
-      member: process.env.MEMBER_ROLE_ID?.replace(/[<@&>]/g, "").trim() || null,
-      newcomer: process.env.NEWCOMER_ROLE_ID?.replace(/[<@&>]/g, "").trim() || null,
-    };
-
     await safeReply(interaction, buildTextReply("Fetching all guild members... this may take a moment.", true));
 
     const members = await guild.members.fetch();
@@ -765,97 +749,40 @@ export class SuperAdmin {
     let successCount = 0;
     let failCount = 0;
 
-    const avatarBuffersDifferent = (a: Buffer | null, b: Buffer | null): boolean => {
-      if (!a && !b) return false;
-      if (!!a !== !!b) return true;
-      if (!a || !b) return true;
-      if (a.length !== b.length) return true;
-      return !a.equals(b);
-    };
-
     for (const member of members.values()) {
       const user = member.user;
-      const existing = await Member.getByUserId(user.id);
 
-      let avatarBlob: Buffer | null = null;
-      const avatarUrl = user.displayAvatarURL({ extension: "png", size: 512, forceStatic: true });
-      if (avatarUrl) {
-        try {
-          const { buffer } = await downloadImageBuffer(avatarUrl);
-          avatarBlob = buffer;
-        } catch {
-          // ignore avatar fetch failures
-        }
-      }
-
-      const hasRole = (id?: string | null): number => {
-        if (!id) return 0;
-        return member.roles.cache.has(id) ? 1 : 0;
-      };
-      const adminFlag =
-        hasRole(roleMap.admin) || member.permissions.has("Administrator") ? 1 : 0;
-      const moderatorFlag =
-        hasRole(roleMap.mod) || member.permissions.has("ManageMessages") ? 1 : 0;
-      const regularFlag = hasRole(roleMap.regular);
-      const memberFlag = hasRole(roleMap.member);
-      const newcomerFlag = hasRole(roleMap.newcomer);
-
-      const baseRecord: IMemberRecord = {
+      const record: IMemberRecord = {
         userId: user.id,
         isBot: user.bot ? 1 : 0,
         username: user.username,
         globalName: (user as any).globalName ?? null,
         avatarBlob: null,
-        serverJoinedAt: member.joinedAt ?? existing?.serverJoinedAt ?? null,
+        serverJoinedAt: member.joinedAt ?? null,
         serverLeftAt: null,
-        lastSeenAt: existing?.lastSeenAt ?? null,
-        roleAdmin: adminFlag,
-        roleModerator: moderatorFlag,
-        roleRegular: regularFlag,
-        roleMember: memberFlag,
-        roleNewcomer: newcomerFlag,
-        messageCount: existing?.messageCount ?? null,
-        completionatorUrl: existing?.completionatorUrl ?? null,
-        psnUsername: existing?.psnUsername ?? null,
-        xblUsername: existing?.xblUsername ?? null,
-        nswFriendCode: existing?.nswFriendCode ?? null,
-        steamUrl: existing?.steamUrl ?? null,
-        profileImage: existing?.profileImage ?? null,
-        profileImageAt: existing?.profileImageAt ?? null,
+        lastSeenAt: null,
+        roleAdmin: 0,
+        roleModerator: 0,
+        roleRegular: 0,
+        roleMember: 0,
+        roleNewcomer: 0,
+        messageCount: null,
+        completionatorUrl: null,
+        psnUsername: null,
+        xblUsername: null,
+        nswFriendCode: null,
+        steamUrl: null,
+        profileImage: null,
+        profileImageAt: null,
       };
 
-      let avatarToUse: Buffer | null = avatarBlob;
-      if (!avatarToUse && existing?.avatarBlob) {
-        avatarToUse = existing.avatarBlob;
-      } else if (avatarToUse && existing?.avatarBlob) {
-        if (!avatarBuffersDifferent(avatarToUse, existing.avatarBlob)) {
-          avatarToUse = existing.avatarBlob;
-        }
-      }
-
       try {
-        await Member.upsert({ ...baseRecord, avatarBlob: avatarToUse });
+        await Member.upsert(record);
         successCount++;
       } catch (err) {
-        const code = (err as any)?.code ?? (err as any)?.errorNum;
-        if (code === "ORA-03146") {
-          try {
-            await Member.upsert({ ...baseRecord, avatarBlob: null });
-            successCount++;
-            await sleep(1000);
-            continue;
-          } catch (retryErr) {
-            failCount++;
-            logError("SuperadminCommand.upsertUserAfterStrippingAvatar", retryErr);
-            await sleep(1000);
-            continue;
-          }
-        }
         failCount++;
         logError("SuperadminCommand.upsertUser", err);
       }
-
-      await sleep(1000);
     }
 
     await safeReply(interaction, buildTextReply(`Member scan complete. Upserts succeeded: ${successCount}. Failed: ${failCount}. ` +
