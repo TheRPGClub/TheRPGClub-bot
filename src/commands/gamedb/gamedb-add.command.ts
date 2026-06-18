@@ -202,11 +202,9 @@ export async function handleNoResults(
     if (candidates.length === 1) {
       const candidate = candidates[0];
       if (candidate.already_imported) {
-        const existingGame = await Game.getGameByIgdbId(candidate.igdb_id);
-        if (existingGame) {
-          await showGameProfile(interaction, existingGame.id, undefined);
-          return;
-        }
+        const existingGame = await Game.createGame(candidate.igdb_id);
+        await showGameProfile(interaction, existingGame.id, undefined);
+        return;
       }
       const year = candidate.first_release_date
         ? new Date(candidate.first_release_date).getFullYear()

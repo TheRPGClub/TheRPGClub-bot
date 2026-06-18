@@ -119,14 +119,9 @@ export class ThreadLinkButtonHandlers {
         igdbId: number,
         nameHint?: string,
       ): Promise<number | null> => {
-        const existing = await Game.getGameByIgdbId(igdbId);
-        if (existing) {
-          chosenName = existing.title;
-          return existing.id;
-        }
-        const newGame = await Game.createGame(igdbId);
-        chosenName = nameHint ?? newGame.title;
-        return newGame.id;
+        const game = await Game.createGame(igdbId);
+        chosenName = nameHint ?? game.title;
+        return game.id;
       };
 
       const finishLink = async (): Promise<void> => {
