@@ -13,6 +13,7 @@ import {
   SectionBuilder,
   TextDisplayBuilder,
 } from "@discordjs/builders";
+import { validateCustomId } from "../utilities/CustomIdUtils.js";
 
 export interface IModalTextInputOptions {
   customId: string;
@@ -69,12 +70,12 @@ export function buildActionButton(
   if (typeof actionOrOpts === "string") {
     const d = ACTION_DEFAULTS[actionOrOpts];
     return new ButtonBuilder()
-      .setCustomId(customId!)
+      .setCustomId(validateCustomId(customId!))
       .setLabel(label ?? d.label)
       .setStyle(d.style);
   }
   return new ButtonBuilder()
-    .setCustomId(actionOrOpts.customId)
+    .setCustomId(validateCustomId(actionOrOpts.customId))
     .setLabel(actionOrOpts.label)
     .setStyle(actionOrOpts.style);
 }

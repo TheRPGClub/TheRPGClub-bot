@@ -65,7 +65,12 @@ import {
   GIVEAWAY_MAX_PLATFORM_LENGTH,
   GIVEAWAY_MAX_KEY_LENGTH,
 } from "../config/textLimits.js";
-import { assertCustomIdSegments, parseCustomIdSegmentsMin } from "../utilities/CustomIdUtils.js";
+import {
+  assertCustomIdSegments,
+  logUnexpectedCustomId,
+  parseCustomIdSegmentsMin,
+  validateCustomId,
+} from "../utilities/CustomIdUtils.js";
 import {
   buildActionButton,
   buildSelectOptions,
@@ -113,7 +118,7 @@ function buildKeySelectMenus(
     const range = getKeyRangeLabel(chunk);
     const select = new StringSelectMenuBuilder()
        
-      .setCustomId(`${customIdPrefix}:${rows.length}`)
+      .setCustomId(validateCustomId(`${customIdPrefix}:${rows.length}`))
       .setPlaceholder(`Claim a key... (${range})`)
       .setMinValues(1)
       .setMaxValues(1)
@@ -485,7 +490,8 @@ export class GiveawayCommand {
     const ephemeral = privateFlag ?? false;
     await deferWithPrivateFlag(interaction, privateFlag);
 
-    const sessionId = `giveaway-${Date.now()}-${Math.floor(Math.random() * 100000)}`;
+    const sessionId =
+      `${Date.now().toString(36)}${Math.floor(Math.random() * 1e6).toString(36)}`;
     const payload = await buildKeyListPayload(
       0,
       sessionId,
@@ -819,7 +825,10 @@ export class GiveawayCommand {
   @ButtonComponent({ id: /^giveaway-claim-confirm:(hub|private|public):/ })
   async handleClaimConfirm(interaction: ButtonInteraction): Promise<void> {
     const segs = parseCustomIdSegmentsMin(interaction.customId, 4);
-    if (!segs) return;
+    if (!segs) {
+      logUnexpectedCustomId(interaction.customId);
+      return;
+    }
     const [scope, keyIdStr, pageStr, ...extraSegs] = segs;
     const keyId = Number(keyIdStr);
     const page = Number(pageStr);
