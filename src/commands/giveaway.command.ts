@@ -704,7 +704,8 @@ export class GiveawayCommand {
    
   @SelectMenuComponent({ id: /^giveaway-claim:[^:]+:\d+:\d+:\d+$/ })
   async handleClaim(interaction: StringSelectMenuInteraction): Promise<void> {
-    const segs = assertCustomIdSegments(interaction, 3);
+    // buildKeySelectMenus appends a trailing row index segment; it is unused here.
+    const segs = assertCustomIdSegments(interaction, 4);
     if (!segs) return;
     const [sessionId, ownerId, pageRaw] = segs;
     if (await replyIfNotOwner(interaction, ownerId)) return;
@@ -744,7 +745,8 @@ export class GiveawayCommand {
    
   @SelectMenuComponent({ id: /^giveaway-hub-claim-select:\d+:\d+$/ })
   async handleHubClaimSelect(interaction: StringSelectMenuInteraction): Promise<void> {
-    const segs = assertCustomIdSegments(interaction, 1);
+    // buildKeySelectMenus appends a trailing row index segment; it is unused here.
+    const segs = assertCustomIdSegments(interaction, 2);
     if (!segs) return;
     const [userId] = segs;
     if (await replyIfNotOwner(interaction, userId, "This giveaway claim isn't for you.")) return;
@@ -783,7 +785,8 @@ export class GiveawayCommand {
    
   @SelectMenuComponent({ id: /^giveaway-claim-public:[^:]+:\d+:\d+:\d+:\d+$/ })
   async handlePublicClaim(interaction: StringSelectMenuInteraction): Promise<void> {
-    const segs = assertCustomIdSegments(interaction, 4);
+    // buildKeySelectMenus appends a trailing row index segment; it is unused here.
+    const segs = assertCustomIdSegments(interaction, 5);
     if (!segs) return;
     const [sessionId, pageRaw, messageId, userId] = segs;
     if (await replyIfNotOwner(interaction, userId, "This giveaway claim isn't for you.")) return;
