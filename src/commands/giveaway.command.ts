@@ -58,6 +58,7 @@ import {
 import { GIVEAWAY_HUB_CHANNEL_ID, GIVEAWAY_LOG_CHANNEL_ID } from "../config/channels.js";
 import { MEMBER_ROLE_ID } from "../config/roles.js";
 import { isPositiveInt } from "../utilities/ValidationUtils.js";
+import { logError } from "../utilities/LogUtils.js";
 import { COLOR_SUCCESS } from "../config/colors.js";
 import { CLAIM_MENU_CHUNK_SIZE } from "../config/pagination.js";
 import {
@@ -317,31 +318,10 @@ async function claimKey(
     return { status: "unavailable" };
   }
 
-  const logChannel = await interaction.client.channels
-    .fetch(GIVEAWAY_LOG_CHANNEL_ID)
-    .catch(() => null);
-  const textChannel = logChannel?.isTextBased() ? logChannel : null;
-  await logGiveawayClaim(
-    textChannel,
-    interaction.user.id,
-    key.gameTitle,
-    key.platform,
-    key.keyId,
-  );
-
-  const donorUser = await interaction.client.users
-    .fetch(key.donorUserId)
-    .catch(() => null);
-  const donorName = donorUser?.username ?? userMention(key.donorUserId);
-  const notifyDonor = await Member.getGiveawayDonorNotifySetting(key.donorUserId);
-  if (notifyDonor && donorUser && key.donorUserId !== interaction.user.id) {
-    const claimantMention = userMention(interaction.user.id);
-    safeIgnore(donorUser.send({
-      content:
-        `Your donated key for **${key.gameTitle}** (${key.platform}) was claimed by ` +
-        `${claimantMention}. Thanks for contributing!`,
-    }));
-  }
+  // The key is now claimed in the DB. The claimant's key delivery (DM) is the
+  // critical path; logging and donor notification are best-effort and must never
+  // throw, or the claimant loses a key that is already marked claimed.
+  const donorName = await runClaimSideEffects(interaction, key);
 
   return {
     status: "claimed",
@@ -353,6 +333,48 @@ async function claimKey(
       donorName,
     },
   };
+}
+
+/**
+ * Writes the claim log and notifies the donor. Never throws: any failure is
+ * logged and swallowed so the claimant's key DM still proceeds. Returns the
+ * donor display name (falls back to a mention).
+ */
+export async function runClaimSideEffects(
+  interaction: AnyRepliable,
+  key: { donorUserId: string; gameTitle: string; platform: string; keyId: number },
+): Promise<string> {
+  let donorName: string = userMention(key.donorUserId);
+  try {
+    const logChannel = await interaction.client.channels
+      .fetch(GIVEAWAY_LOG_CHANNEL_ID)
+      .catch(() => null);
+    const textChannel = logChannel?.isTextBased() ? logChannel : null;
+    await logGiveawayClaim(
+      textChannel,
+      interaction.user.id,
+      key.gameTitle,
+      key.platform,
+      key.keyId,
+    );
+
+    const donorUser = await interaction.client.users
+      .fetch(key.donorUserId)
+      .catch(() => null);
+    donorName = donorUser?.username ?? userMention(key.donorUserId);
+    const notifyDonor = await Member.getGiveawayDonorNotifySetting(key.donorUserId);
+    if (notifyDonor && donorUser && key.donorUserId !== interaction.user.id) {
+      const claimantMention = userMention(interaction.user.id);
+      safeIgnore(donorUser.send({
+        content:
+          `Your donated key for **${key.gameTitle}** (${key.platform}) was claimed by ` +
+          `${claimantMention}. Thanks for contributing!`,
+      }));
+    }
+  } catch (err: unknown) {
+    logError("giveaway.runClaimSideEffects", err);
+  }
+  return donorName;
 }
 
 function buildDonateModal(): ModalBuilder {
@@ -885,7 +907,10 @@ export class GiveawayCommand {
           `Key: \`${result.key.keyValue}\`\n` +
           `This key was donated by ${result.key.donorName}, be sure to thank them!`,
       })
-      .catch(() => null);
+      .catch((err: unknown) => {
+        logError("giveaway.handleClaimConfirm.dm", err);
+        return null;
+      });
 
     if (dmResult) {
       await safeReply(interaction, {
