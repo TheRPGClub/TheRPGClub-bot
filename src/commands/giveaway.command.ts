@@ -892,52 +892,72 @@ export class GiveawayCommand {
     }
 
     await safeDeferUpdate(interaction);
-    const result = await claimKey(interaction, keyId);
-    if (result.status === "unavailable") {
-      await safeReply(interaction, buildTextReply("That key is no longer available.", false));
-      return;
-    }
+    // Feedback is delivered via follow-ups (fresh messages), not editReply. The
+    // "Are you sure?" message is a plain content/button message while these
+    // replies are Components v2; editing across paradigms is rejected by Discord
+    // with a non-ack error that safeReply rethrows without logging, which is the
+    // silent failure this handler must avoid. The whole flow is wrapped so any
+    // failure is logged and surfaced instead of leaving the claimant with
+    // nothing after their key is already marked claimed.
+    try {
+      const result = await claimKey(interaction, keyId);
+      if (result.status === "unavailable") {
+        await safeReply(interaction, {
+          ...buildTextReply("That key is no longer available.", true),
+          __forceFollowUp: true,
+        });
+        return;
+      }
 
-    await safeReply(interaction, buildTextReply("Sending your key by DM now.", false));
+      const dmResult = await interaction.user
+        .send({
+          content:
+            `You claimed **${result.key.keyTitle}** (${result.key.platform}).\n` +
+            `Key: \`${result.key.keyValue}\`\n` +
+            `This key was donated by ${result.key.donorName}, be sure to thank them!`,
+        })
+        .catch((err: unknown) => {
+          logError("giveaway.handleClaimConfirm.dm", err);
+          return null;
+        });
 
-    const dmResult = await interaction.user
-      .send({
-        content:
-          `You claimed **${result.key.keyTitle}** (${result.key.platform}).\n` +
-          `Key: \`${result.key.keyValue}\`\n` +
-          `This key was donated by ${result.key.donorName}, be sure to thank them!`,
-      })
-      .catch((err: unknown) => {
-        logError("giveaway.handleClaimConfirm.dm", err);
-        return null;
-      });
-
-    if (dmResult) {
+      const resultMessage = dmResult
+        ? "Your key was sent by DM. Thanks for claiming responsibly."
+        : "I could not send you a DM. Please enable DMs and contact an admin to resend your key.";
       await safeReply(interaction, {
-        ...buildTextReply("Your key was sent by DM. Thanks for claiming responsibly.", false),
+        ...buildTextReply(resultMessage, true),
         __forceFollowUp: true,
       });
-    } else {
+    } catch (err: unknown) {
+      logError("giveaway.handleClaimConfirm", err);
       await safeReply(interaction, {
         ...buildTextReply(
-          "I could not send you a DM. Please enable DMs and contact an admin to resend your key.",
-          false,
+          "Something went wrong while delivering your key. Please contact an admin.",
+          true,
         ),
         __forceFollowUp: true,
       });
+      return;
     }
 
+    // Cosmetic list refreshes only. These must never affect the claimant's
+    // delivery result, so they are guarded separately: a refresh failure has
+    // already been preceded by a successful key delivery above.
     if (scope === "public") {
-      const sessionId = extraSegs[0];
-      const messageId = extraSegs[1];
-      const ownerId = extraSegs[2];
-      await updatePublicListMessage(
-        interaction as unknown as StringSelectMenuInteraction,
-        sessionId,
-        ownerId,
-        page,
-        messageId,
-      );
+      try {
+        const sessionId = extraSegs[0];
+        const messageId = extraSegs[1];
+        const ownerId = extraSegs[2];
+        await updatePublicListMessage(
+          interaction as unknown as StringSelectMenuInteraction,
+          sessionId,
+          ownerId,
+          page,
+          messageId,
+        );
+      } catch (err: unknown) {
+        logError("giveaway.updatePublicListMessage", err);
+      }
     }
 
     safeIgnore(refreshGiveawayHubMessage(interaction.client));
