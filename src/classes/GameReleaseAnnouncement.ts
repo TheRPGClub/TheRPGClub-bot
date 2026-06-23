@@ -1,5 +1,6 @@
 import { apiGet, apiPatch } from "../services/RpgClubApiClient.js";
 import { logWarn } from "../utilities/LogUtils.js";
+import { mapGameFromApi } from "../functions/GameMappers.js";
 
 export interface IReleaseAnnouncementCandidate {
   announcementId: number;
@@ -28,7 +29,7 @@ type ReleaseAnnouncementDueData = {
 type ReleaseAnnouncementDueResponse = { data: ReleaseAnnouncementDueData[] };
 
 type GamesListResponse = {
-  data: { id: number }[];
+  data: unknown[];
   meta: { pages: number; page: number };
 };
 
@@ -68,19 +69,20 @@ export default class GameReleaseAnnouncement {
       });
       if (!response) break;
       totalPages = response.meta.pages;
+      const gameIds = response.data
+        .map((item) => mapGameFromApi(item).id)
+        .filter((id) => {
+          if (!Number.isFinite(id) || id <= 0) {
+            logWarn(
+              "GameReleaseAnnouncement.syncReleaseAnnouncements",
+              `Skipping game with invalid id: ${JSON.stringify(id)}`,
+            );
+            return false;
+          }
+          return true;
+        });
       await Promise.all(
-        response.data
-          .filter((game) => {
-            if (!Number.isFinite(game.id) || game.id <= 0) {
-              logWarn(
-                "GameReleaseAnnouncement.syncReleaseAnnouncements",
-                `Skipping game with invalid id: ${JSON.stringify(game.id)}`,
-              );
-              return false;
-            }
-            return true;
-          })
-          .map((game) => apiPatch(`/api/v1/games/${game.id}/release_announcements`)),
+        gameIds.map((id) => apiPatch(`/api/v1/games/${id}/release_announcements`)),
       );
       page++;
     } while (page <= totalPages);
