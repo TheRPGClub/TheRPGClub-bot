@@ -1,4 +1,5 @@
 import { apiGet, apiPatch } from "../services/RpgClubApiClient.js";
+import { logWarn } from "../utilities/LogUtils.js";
 
 export interface IReleaseAnnouncementCandidate {
   announcementId: number;
@@ -68,9 +69,18 @@ export default class GameReleaseAnnouncement {
       if (!response) break;
       totalPages = response.meta.pages;
       await Promise.all(
-        response.data.map((game) =>
-          apiPatch(`/api/v1/games/${game.id}/release_announcements`),
-        ),
+        response.data
+          .filter((game) => {
+            if (!Number.isFinite(game.id) || game.id <= 0) {
+              logWarn(
+                "GameReleaseAnnouncement.syncReleaseAnnouncements",
+                `Skipping game with invalid id: ${JSON.stringify(game.id)}`,
+              );
+              return false;
+            }
+            return true;
+          })
+          .map((game) => apiPatch(`/api/v1/games/${game.id}/release_announcements`)),
       );
       page++;
     } while (page <= totalPages);
