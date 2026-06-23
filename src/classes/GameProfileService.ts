@@ -1,5 +1,3 @@
-import { dbQuery } from "../db/SqlManager.js";
-import { GameSql } from "../db/sql/index.js";
 import { apiGet } from "../services/RpgClubApiClient.js";
 import { mapReleaseFromApi } from "../functions/GameMappers.js";
 import type {
@@ -107,70 +105,34 @@ export default class GameProfileService {
   static async getGameAssociations(
     gameId: number,
   ): Promise<IGameAssociationSummary> {
-    type WinRow = {
-      ROUND_NUMBER: number;
-      THREAD_ID: string | null;
-      REDDIT_URL: string | null;
-      MONTH_YEAR: string;
+    const result = await apiGet<{ data: GameProfileApiData }>(
+      `/api/v1/games/${gameId}/profile`,
+    );
+    const assoc = result?.data?.associations;
+    return {
+      gotmWins: (assoc?.gotm_wins ?? []).map((w) => ({
+        round: Number(w.round),
+        threadId: null,
+        redditUrl: w.reddit_url ?? null,
+        monthYear: "",
+      })),
+      nrGotmWins: (assoc?.nr_gotm_wins ?? []).map((w) => ({
+        round: Number(w.round),
+        threadId: null,
+        redditUrl: w.reddit_url ?? null,
+        monthYear: "",
+      })),
+      gotmNominations: (assoc?.gotm_nominations ?? []).map((n) => ({
+        round: Number(n.round),
+        userId: String(n.user_id),
+        username: String(n.username || n.user_id),
+      })),
+      nrGotmNominations: (assoc?.nr_gotm_nominations ?? []).map((n) => ({
+        round: Number(n.round),
+        userId: String(n.user_id),
+        username: String(n.username || n.user_id),
+      })),
     };
-    type NomRow = {
-      ROUND_NUMBER: number;
-      USER_ID: string;
-      USERNAME?: string | null;
-      GLOBAL_NAME?: string | null;
-    };
-
-    const [gotmWins, nrGotmWins, gotmNominations, nrGotmNominations] =
-      await Promise.all([
-        dbQuery<
-          WinRow,
-          {
-            round: number;
-            threadId: string | null;
-            redditUrl: string | null;
-            monthYear: string;
-          }
-        >(GameSql.getGotmWins, { gameId }, (row) => ({
-          round: Number(row.ROUND_NUMBER),
-          threadId: row.THREAD_ID ?? null,
-          redditUrl: row.REDDIT_URL ?? null,
-          monthYear: String(row.MONTH_YEAR),
-        })),
-        dbQuery<
-          WinRow,
-          {
-            round: number;
-            threadId: string | null;
-            redditUrl: string | null;
-            monthYear: string;
-          }
-        >(GameSql.getNrGotmWins, { gameId }, (row) => ({
-          round: Number(row.ROUND_NUMBER),
-          threadId: row.THREAD_ID ?? null,
-          redditUrl: row.REDDIT_URL ?? null,
-          monthYear: String(row.MONTH_YEAR),
-        })),
-        dbQuery<NomRow, { round: number; userId: string; username: string }>(
-          GameSql.getGotmNominations,
-          { gameId },
-          (row) => ({
-            round: Number(row.ROUND_NUMBER),
-            userId: String(row.USER_ID),
-            username: String(row.GLOBAL_NAME || row.USERNAME || row.USER_ID),
-          }),
-        ),
-        dbQuery<NomRow, { round: number; userId: string; username: string }>(
-          GameSql.getNrGotmNominations,
-          { gameId },
-          (row) => ({
-            round: Number(row.ROUND_NUMBER),
-            userId: String(row.USER_ID),
-            username: String(row.GLOBAL_NAME || row.USERNAME || row.USER_ID),
-          }),
-        ),
-      ]);
-
-    return { gotmWins, nrGotmWins, gotmNominations, nrGotmNominations };
   }
 
   static async getNowPlayingMembers(
@@ -206,19 +168,14 @@ export default class GameProfileService {
   static async getGameCollectionOwners(
     gameId: number,
   ): Promise<ICollectionOwnerMember[]> {
-    return dbQuery(
-      GameSql.getGameCollectionOwners,
-      { gameId },
-      (row: {
-        USER_ID: string;
-        USERNAME: string | null;
-        GLOBAL_NAME: string | null;
-      }) => ({
-        userId: String(row.USER_ID),
-        username: row.USERNAME ?? null,
-        globalName: row.GLOBAL_NAME ?? null,
-      }),
+    const result = await apiGet<{ data: GameProfileApiData }>(
+      `/api/v1/games/${gameId}/profile`,
     );
+    return (result?.data?.collection_owners ?? []).map((o) => ({
+      userId: String(o.user_id),
+      username: o.username ?? null,
+      globalName: null,
+    }));
   }
 
   static async getGameProfile(
