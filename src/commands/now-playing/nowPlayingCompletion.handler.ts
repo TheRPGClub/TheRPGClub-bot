@@ -1107,7 +1107,7 @@ export class NowPlayingCompletionHandlers {
     const modalRows = [
       buildTextInputRow({
         customId: NOW_PLAYING_COMPLETE_DATE_INPUT_ID,
-        label: "Completion date (blank unknown)",
+        label: "Completion date (blank = today)",
         required: false,
         placeholder: "today or 03/10/2025",
       }),
