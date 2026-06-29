@@ -13,6 +13,7 @@ import { buildComponentsV2EditFlags, buildContentContainer } from "./ComponentsV
 import { buildActionButton, buildButtonRow, buildUserHeaderContainer } from "./uiComponents.js";
 import { truncateWithEllipsis } from "../utilities/ValidationUtils.js";
 import GamePlatformRegionService from "../classes/GamePlatformRegionService.js";
+import { fetchGameCoverBuffer } from "../services/GameImageService.js";
 
 const JOURNAL_PAGE_SIZE = 1;
 
@@ -70,11 +71,12 @@ export async function buildJournalView(options: IJournalViewOptions): Promise<{
     includeCompletions,
   } = options;
 
-  const [game, total, threadIds, memberRecord] = await Promise.all([
+  const [game, total, threadIds, memberRecord, cover] = await Promise.all([
     Game.getGameById(gameId),
     Member.countGameJournalEntries(ownerId, gameId, viewerId),
     Thread.getThreadsByGameId(gameId),
     Member.getByUserId(ownerId),
+    fetchGameCoverBuffer(gameId),
   ]);
 
   const totalPages = Math.max(1, Math.ceil(total / JOURNAL_PAGE_SIZE));
@@ -97,9 +99,9 @@ export async function buildJournalView(options: IJournalViewOptions): Promise<{
 
   const files: AttachmentBuilder[] = [];
   let coverUrl: string | null = null;
-  if (game?.imageData) {
+  if (cover) {
     const filename = `game_journal_${gameId}.png`;
-    files.push(new AttachmentBuilder(game.imageData, { name: filename }));
+    files.push(new AttachmentBuilder(cover.buffer, { name: filename }));
     coverUrl = `attachment://${filename}`;
   }
 
