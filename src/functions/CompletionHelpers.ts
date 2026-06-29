@@ -1,5 +1,4 @@
 import {
-  AttachmentBuilder,
   ButtonStyle,
   ComponentType,
   type ButtonInteraction,
@@ -34,7 +33,6 @@ import { logError } from "../utilities/LogUtils.js";
 import { buildActionButton, buildButtonRow } from "./uiComponents.js";
 
 const MAX_PLAYTIME_HOURS = 999999.99;
-const COMPLETION_COVER_ATTACHMENT_PREFIX = "completion-cover";
 
 export function validateCompletionPlaytimeInput(
   input: string,
@@ -229,18 +227,15 @@ export async function announceCompletion(
     const section = new SectionBuilder().addTextDisplayComponents(
       new TextDisplayBuilder().setContent(safeV2TextContent(summaryText, 3500)),
     );
-    const files: AttachmentBuilder[] = [];
-    if (game.imageData) {
-      const coverName = `${COMPLETION_COVER_ATTACHMENT_PREFIX}-${game.id}.png`;
-      files.push(new AttachmentBuilder(game.imageData, { name: coverName }));
+    const thumbnailUrl = game.coverUrl ?? null;
+    if (thumbnailUrl) {
       section.setThumbnailAccessory(
-        new ThumbnailBuilder().setURL(`attachment://${coverName}`).setDescription(game.title),
+        new ThumbnailBuilder().setURL(thumbnailUrl).setDescription(game.title),
       );
     }
     container.addSectionComponents(section);
 
     await (channel as any).send({
-      files,
       components: [container],
       flags: buildComponentsV2EditFlags(),
     });
