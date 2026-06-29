@@ -191,14 +191,12 @@ export async function announceCompletion(
     const isFirst = completions.length === 1;
 
     const playtimeText = formatPlaytimeHours(finalPlaytimeHours);
-    const dateStr = completedAt ? formatTableDate(completedAt) : "No date";
+    const effectiveDate = completedAt ?? new Date();
+    const dateStr = formatTableDate(effectiveDate);
     const hoursStr = playtimeText ? ` - ${playtimeText}` : "";
-    let yearlySummary = "";
-    if (completedAt) {
-      const completionYear = completedAt.getFullYear();
-      const yearlyCount = await Member.countCompletions(userId, completionYear);
-      yearlySummary = `\nGame completion #${yearlyCount} for ${completionYear}`;
-    }
+    const completionYear = effectiveDate.getFullYear();
+    const yearlyCount = await Member.countCompletions(userId, completionYear);
+    const yearlySummary = `\nGame completion #${yearlyCount} for ${completionYear}`;
     const userName = user.displayName ?? user.username ?? user.id;
     let desc =
       `${renderUsernameWithEmoji(user.id, userName)} has added a game completion: **${game.title}** - ` +
