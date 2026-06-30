@@ -40,7 +40,6 @@ import { renderUsernameWithEmoji } from "../services/UserEmojiService.js";
 import { safeIgnore } from "../utilities/AsyncUtils.js";
 
 import {
-  MAX_NOW_PLAYING_NOTE_LEN,
   NOW_PLAYING_SEARCH_LIMIT,
   NOW_PLAYING_NOTE_MODAL_MAX_FIELDS,
   NOW_PLAYING_LIST_EDIT_PREFIX,
@@ -93,34 +92,16 @@ export class NowPlayingCommand {
       type: ApplicationCommandOptionType.String,
     })
     rawPlatform: string,
-    @SlashOption({
-      description: "Optional note",
-      name: "note",
-      required: false,
-      type: ApplicationCommandOptionType.String,
-      maxLength: MAX_NOW_PLAYING_NOTE_LEN,
-    })
-    rawNote: string | undefined,
-    @SlashOption({
-      description: "Show only to you",
-      name: "private",
-      required: false,
-      type: ApplicationCommandOptionType.Boolean,
-    })
-    showPrivate: boolean | undefined,
     interaction: CommandInteraction,
   ): Promise<void> {
     const title = sanitizeUserInput(rawTitle, { preserveNewlines: false }).trim();
-    const noteInput = sanitizeUserInput(rawNote ?? "", { preserveNewlines: true }).trim();
-    const note = noteInput ? noteInput : null;
-    const ephemeral = showPrivate === true;
-    await safeDeferReply(interaction, { flags: buildComponentsV2Flags(ephemeral) });
+    await safeDeferReply(interaction, { flags: buildComponentsV2Flags(false) });
 
     if (!title) {
       const container = buildTextContainer("Please provide a game title from autocomplete.");
       await safeReply(interaction, {
         components: [container],
-        flags: buildComponentsV2Flags(ephemeral),
+        flags: buildComponentsV2Flags(false),
       });
       return;
     }
@@ -130,7 +111,7 @@ export class NowPlayingCommand {
       const container = buildTextContainer(`I could not find a unique GameDB match for "${title}". Please choose from autocomplete.`);
       await safeReply(interaction, {
         components: [container],
-        flags: buildComponentsV2Flags(ephemeral),
+        flags: buildComponentsV2Flags(false),
       });
       return;
     }
@@ -140,7 +121,7 @@ export class NowPlayingCommand {
       const container = buildTextContainer("Please choose a platform from autocomplete.");
       await safeReply(interaction, {
         components: [container],
-        flags: buildComponentsV2Flags(ephemeral),
+        flags: buildComponentsV2Flags(false),
       });
       return;
     }
@@ -150,39 +131,31 @@ export class NowPlayingCommand {
       const container = buildTextContainer("Selected platform was not found.");
       await safeReply(interaction, {
         components: [container],
-        flags: buildComponentsV2Flags(ephemeral),
+        flags: buildComponentsV2Flags(false),
       });
       return;
     }
 
     try {
-      await Member.addNowPlaying(interaction.user.id, game.id, platformId, note);
-      const trimmedNote = note?.trim();
-      if (trimmedNote) {
-        await Member.addGameJournalEntry({
-          userId: interaction.user.id,
-          gameId: game.id,
-          body: trimmedNote,
-        });
-      }
+      await Member.addNowPlaying(interaction.user.id, game.id, platformId, null);
     } catch (err: any) {
       const msg = extractErrorMessage(err);
       const container = buildTextContainer(`Could not add to Now Playing: ${msg}`);
       await safeReply(interaction, {
         components: [container],
-        flags: buildComponentsV2Flags(ephemeral),
+        flags: buildComponentsV2Flags(false),
       });
       return;
     }
 
-    const replacedCurrentChannelMessage = !ephemeral && interaction.channelId
+    const replacedCurrentChannelMessage = interaction.channelId
       ? await this.replaceNowPlayingMessageInCurrentChannel(interaction, interaction.user.id)
       : false;
     safeIgnore(refreshNowPlayingListFromContext(interaction, interaction.user.id));
     if (replacedCurrentChannelMessage) {
       return;
     }
-    await this.showSingle(interaction, interaction.user, ephemeral);
+    await this.showSingle(interaction, interaction.user, false);
   }
 
   @Slash({ description: "Show now playing data", name: "list" })
