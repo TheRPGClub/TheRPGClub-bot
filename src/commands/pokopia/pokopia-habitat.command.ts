@@ -18,17 +18,9 @@ export class PokopiaHabitatCommand {
       type: ApplicationCommandOptionType.String,
     })
     order: PokopiaSortOrder | undefined,
-    @SlashOption({
-      description: "Send reply privately (only visible to you).",
-      name: "private",
-      required: false,
-      type: ApplicationCommandOptionType.Boolean,
-    })
-    privateFlag: boolean | undefined,
     interaction: CommandInteraction,
   ): Promise<void> {
-    const isEphemeral = privateFlag ?? false;
-    await safeDeferReply(interaction, { flags: buildComponentsV2Flags(isEphemeral) });
+    await safeDeferReply(interaction, { flags: buildComponentsV2Flags(true) });
 
     const resolvedOrder = order ?? "asc";
     const payload = buildHabitatListPayload(interaction.user.id, resolvedOrder, 0);
@@ -36,7 +28,7 @@ export class PokopiaHabitatCommand {
     await safeReply(interaction, {
       components: payload.components,
       files: payload.files,
-      flags: buildComponentsV2Flags(isEphemeral),
+      flags: buildComponentsV2Flags(true),
     });
   }
 }
