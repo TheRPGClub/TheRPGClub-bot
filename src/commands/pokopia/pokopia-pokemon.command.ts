@@ -12,7 +12,7 @@ import type { PokopiaSortField, PokopiaSortOrder } from "./pokopia-data.service.
 @SlashGroup({ description: "Browse the Pokopia pokedex and habitats", name: "pokopia" })
 @SlashGroup("pokopia")
 export class PokopiaPokemonCommand {
-  @Slash({ description: "Browse the Pokopia pokedex", name: "pokemon" })
+  @Slash({ description: "Browse the Pokopia pokedex", name: "pokedex" })
   async pokemon(
     @SlashChoice({ name: "Number", value: "number" }, { name: "Name", value: "name" })
     @SlashOption({
