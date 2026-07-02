@@ -761,7 +761,7 @@
     ],
     "pokemon": [
       {
-        "number": "Event #003",
+        "number": "#003 (Event)",
         "name": "Jumpluff",
         "sprite": "Event_003_Jumpluff.jpg"
       }
@@ -1153,7 +1153,7 @@
     ],
     "pokemon": [
       {
-        "number": "Event #001",
+        "number": "#001 (Event)",
         "name": "Hopip",
         "sprite": "Event_001_Hopip.jpg"
       }
@@ -2186,7 +2186,7 @@
     ],
     "pokemon": [
       {
-        "number": "#00",
+        "number": "#197",
         "name": "Toxtricity Low Key Form",
         "sprite": "00_Toxtricity_Low_Key_Form.jpg"
       }
@@ -3924,7 +3924,7 @@
     ],
     "pokemon": [
       {
-        "number": "Event #004",
+        "number": "#004 (Event)",
         "name": "Sableye",
         "sprite": "Event_004_Sableye.jpg"
       }
@@ -4477,12 +4477,12 @@
     ],
     "pokemon": [
       {
-        "number": "Event #001",
+        "number": "#001 (Event)",
         "name": "Hopip",
         "sprite": "Event_001_Hopip.jpg"
       },
       {
-        "number": "Event #002",
+        "number": "#002 (Event)",
         "name": "Skiploom",
         "sprite": "Event_002_Skiploom.jpg"
       }
