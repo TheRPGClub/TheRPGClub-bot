@@ -59,6 +59,10 @@ function pokedexSortNumber(number: string): number {
   return match ? Number(match[0]) : Infinity;
 }
 
+function isEventPokemon(pokemon: IPokopiaPokemon): boolean {
+  return /event/i.test(pokemon.number);
+}
+
 export function getPokemonByNumber(number: string): IPokopiaPokemon | undefined {
   return pokemonByNumber.get(pokedexNumberKey(number));
 }
@@ -71,13 +75,21 @@ export function getSortedPokemon(
   sort: PokopiaSortField,
   order: PokopiaSortOrder,
 ): IPokopiaPokemon[] {
-  const sorted = [...POKEMON].sort((a, b) => {
+  const comparator = (a: IPokopiaPokemon, b: IPokopiaPokemon): number => {
     if (sort === "number") {
       return pokedexSortNumber(a.number) - pokedexSortNumber(b.number);
     }
     return a.name.localeCompare(b.name);
-  });
-  return order === "desc" ? sorted.reverse() : sorted;
+  };
+  const sortGroup = (group: IPokopiaPokemon[]): IPokopiaPokemon[] => {
+    const sorted = [...group].sort(comparator);
+    return order === "desc" ? sorted.reverse() : sorted;
+  };
+  const [event, standard] = [
+    POKEMON.filter(isEventPokemon),
+    POKEMON.filter((p) => !isEventPokemon(p)),
+  ];
+  return [...sortGroup(standard), ...sortGroup(event)];
 }
 
 export function getSortedHabitats(order: PokopiaSortOrder): IPokopiaHabitat[] {
