@@ -3,7 +3,6 @@ import {
   AttachmentBuilder,
   ButtonBuilder,
   ButtonStyle,
-  StringSelectMenuBuilder,
 } from "discord.js";
 import {
   ContainerBuilder,
@@ -17,35 +16,41 @@ import {
 import { SeparatorSpacingSize } from "discord-api-types/v10";
 import { resolveAssetPath } from "../../functions/AssetPath.js";
 import { safeV2TextContent } from "../../functions/ComponentsV2Utils.js";
-import {
-  buildActionButton,
-  buildButtonRow,
-  buildSelectRow,
-} from "../../functions/uiComponents.js";
+import { buildActionButton, buildButtonRow } from "../../functions/uiComponents.js";
 import {
   buildOptionalPrevNextRowWithIds,
   buildPageFooterText,
 } from "../../functions/PaginationUtils.js";
 import { POKOPIA_LIST_PAGE_SIZE } from "../../config/pagination.js";
+import { DISCORD_BUTTON_LABEL_MAX } from "../../config/textLimits.js";
+import { truncateWithEllipsis } from "../../utilities/ValidationUtils.js";
 import {
   getHabitatBySlug,
   getPokemonByNumber,
   getSortedHabitats,
   getSortedPokemon,
-  pokedexNumberKey,
   type IPokopiaHabitat,
   type PokopiaSortField,
   type PokopiaSortOrder,
 } from "./pokopia-data.service.js";
 import {
   buildPokopiaBackId,
+  buildPokopiaDetailId,
   buildPokopiaListNavId,
-  buildPokopiaSelectId,
 } from "./pokopia-customid.utils.js";
+import { getHabitatEmoji, getPokemonEmoji } from "../../services/PokopiaEmojiService.js";
 
-type PokopiaComponent =
-  | ContainerBuilder
-  | ActionRowBuilder<StringSelectMenuBuilder | ButtonBuilder>;
+type PokopiaComponent = ContainerBuilder | ActionRowBuilder<ButtonBuilder>;
+
+const BUTTONS_PER_ROW = 5;
+
+function chunkButtons(buttons: ButtonBuilder[]): ActionRowBuilder<ButtonBuilder>[] {
+  const rows: ActionRowBuilder<ButtonBuilder>[] = [];
+  for (let i = 0; i < buttons.length; i += BUTTONS_PER_ROW) {
+    rows.push(buildButtonRow(...buttons.slice(i, i + BUTTONS_PER_ROW)));
+  }
+  return rows;
+}
 
 export interface IPokopiaPayload {
   components: PokopiaComponent[];
@@ -98,29 +103,22 @@ export function buildPokemonListPayload(
     ),
   );
 
-  pageItems.forEach((pokemon) => {
-    files.push(attach(pokedexImagePath(pokemon.sprite), pokemon.sprite));
-    const section = new SectionBuilder().addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(
-        safeV2TextContent(`**${pokemon.number} ${pokemon.name}**\n${pokemon.ability1 || "-"}`, 500),
-      ),
+  const itemButtons = pageItems.map((pokemon) => {
+    const label = truncateWithEllipsis(
+      `${pokemon.number} ${pokemon.name}`,
+      DISCORD_BUTTON_LABEL_MAX,
     );
-    section.setThumbnailAccessory(
-      new ThumbnailBuilder().setURL(`attachment://${pokemon.sprite}`),
-    );
-    container.addSectionComponents(section);
+    const button = buildActionButton({
+      customId: buildPokopiaDetailId({
+        kind: "pokemon", ownerId, sort, order, page: safePage, itemKey: pokemon.number,
+      }),
+      label,
+      style: ButtonStyle.Secondary,
+    });
+    const emoji = getPokemonEmoji(pokemon.number);
+    if (emoji) button.setEmoji({ id: emoji.id, name: emoji.name });
+    return button;
   });
-
-  const selectOptions = pageItems.map((pokemon) => ({
-    label: `${pokemon.number} ${pokemon.name}`.substring(0, 100),
-    value: pokedexNumberKey(pokemon.number),
-  }));
-  const selectRow = buildSelectRow(
-    new StringSelectMenuBuilder()
-      .setCustomId(buildPokopiaSelectId({ kind: "pokemon", ownerId, sort, order, page: safePage }))
-      .setPlaceholder("View a Pokemon's details...")
-      .addOptions(selectOptions),
-  );
 
   const navRow = buildOptionalPrevNextRowWithIds(
     buildPokopiaListNavId({
@@ -133,7 +131,10 @@ export function buildPokemonListPayload(
     totalPages,
   );
 
-  return { components: paginateComponents(container, selectRow, navRow), files };
+  return {
+    components: paginateComponents(container, ...chunkButtons(itemButtons), navRow),
+    files,
+  };
 }
 
 export function buildHabitatListPayload(
@@ -152,34 +153,19 @@ export function buildHabitatListPayload(
     ),
   );
 
-  pageItems.forEach((habitat) => {
-    const section = new SectionBuilder().addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(
-        safeV2TextContent(`**${habitat.habitat}**\n${habitat.pokemon.length} Pokemon`, 500),
-      ),
-    );
-    if (habitat.image) {
-      files.push(attach(habitatImagePath(habitat.image), habitat.image));
-      section.setThumbnailAccessory(
-        new ThumbnailBuilder().setURL(`attachment://${habitat.image}`),
-      );
-    }
-    container.addSectionComponents(section);
+  const itemButtons = pageItems.map((habitat) => {
+    const label = truncateWithEllipsis(habitat.habitat, DISCORD_BUTTON_LABEL_MAX);
+    const button = buildActionButton({
+      customId: buildPokopiaDetailId({
+        kind: "habitat", ownerId, sort: "name", order, page: safePage, itemKey: habitat.slug,
+      }),
+      label,
+      style: ButtonStyle.Secondary,
+    });
+    const emoji = getHabitatEmoji(habitat.slug);
+    if (emoji) button.setEmoji({ id: emoji.id, name: emoji.name });
+    return button;
   });
-
-  const selectOptions = pageItems.map((habitat) => ({
-    label: habitat.habitat.substring(0, 100),
-    value: habitat.slug,
-  }));
-  const selectId = buildPokopiaSelectId({
-    kind: "habitat", ownerId, sort: "name", order, page: safePage,
-  });
-  const selectRow = buildSelectRow(
-    new StringSelectMenuBuilder()
-      .setCustomId(selectId)
-      .setPlaceholder("View a habitat's details...")
-      .addOptions(selectOptions),
-  );
 
   const navRow = buildOptionalPrevNextRowWithIds(
     buildPokopiaListNavId({
@@ -192,7 +178,10 @@ export function buildHabitatListPayload(
     totalPages,
   );
 
-  return { components: paginateComponents(container, selectRow, navRow), files };
+  return {
+    components: paginateComponents(container, ...chunkButtons(itemButtons), navRow),
+    files,
+  };
 }
 
 function buildBackRow(
@@ -260,6 +249,14 @@ export function buildPokemonDetailPayload(
   return { components: paginateComponents(container, backRow), files };
 }
 
+function formatHabitatDetails(details: string): string {
+  return details
+    .split("\n")
+    .map((line) => line.trim().replace(/,$/, ""))
+    .filter(Boolean)
+    .join(", ");
+}
+
 function addHabitatSection(
   container: ContainerBuilder,
   files: AttachmentBuilder[],
@@ -270,7 +267,7 @@ function addHabitatSection(
   if (!details) return;
   const section = new SectionBuilder().addTextDisplayComponents(
     new TextDisplayBuilder().setContent(
-      safeV2TextContent(`**${label}**\n${details.replace(/\n/g, ", ")}`, 500),
+      safeV2TextContent(`**${label}**\n${formatHabitatDetails(details)}`, 500),
     ),
   );
   if (image) {

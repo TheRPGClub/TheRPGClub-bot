@@ -29,6 +29,7 @@ import { startThreadLinkPromptService } from "./services/ThreadLinkPromptService
 import { refreshGiveawayHubMessage } from "./services/GiveawayHubService.js";
 import { startGameReleaseAnnouncementService } from "./services/GameReleaseAnnouncementService.js";
 import { startUserEmojiService } from "./services/UserEmojiService.js";
+import { startPokopiaEmojiService } from "./services/PokopiaEmojiService.js";
 import { restoreJournalMessageContextsFromDb } from "./commands/now-playing/nowPlayingContexts.js";
 import { truncateWithEllipsis } from "./utilities/ValidationUtils.js";
 import { logError } from "./utilities/LogUtils.js";
@@ -197,6 +198,7 @@ bot.once("clientReady", async () => {
   startRssFeedService(bot);
   await refreshGiveawayHubMessage(bot);
   await startUserEmojiService(bot);
+  await startPokopiaEmojiService(bot);
   await restoreJournalMessageContextsFromDb();
   console.log("Startup sequence completed.");
 });

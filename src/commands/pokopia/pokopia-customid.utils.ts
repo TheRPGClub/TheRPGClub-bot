@@ -4,8 +4,8 @@ import {
 } from "../../utilities/CustomIdUtils.js";
 import {
   POKOPIA_BACK_PREFIX,
+  POKOPIA_DETAIL_PREFIX,
   POKOPIA_LIST_NAV_PREFIX,
-  POKOPIA_SELECT_PREFIX,
 } from "../../config/customIdPrefixes.js";
 import type { PokopiaSortField, PokopiaSortOrder } from "./pokopia-data.service.js";
 
@@ -79,28 +79,33 @@ export function parsePokopiaListNavId(customId: string): (IPokopiaListState & {
   return { kind, ownerId, sort, order, page, direction };
 }
 
-export function buildPokopiaSelectId(state: IPokopiaListState): string {
+export function buildPokopiaDetailId(
+  state: IPokopiaListState & { itemKey: string },
+): string {
   return validateCustomId([
-    POKOPIA_SELECT_PREFIX,
+    POKOPIA_DETAIL_PREFIX,
     encodeKind(state.kind),
     state.ownerId,
     encodeSort(state.sort),
     encodeOrder(state.order),
     String(state.page),
+    encodeURIComponent(state.itemKey),
   ].join(":"));
 }
 
-export function parsePokopiaSelectId(customId: string): IPokopiaListState | null {
-  if (!customId.startsWith(`${POKOPIA_SELECT_PREFIX}:`)) return null;
-  const segs = parseCustomIdSegments(customId, 5);
+export function parsePokopiaDetailId(
+  customId: string,
+): (IPokopiaListState & { itemKey: string }) | null {
+  if (!customId.startsWith(`${POKOPIA_DETAIL_PREFIX}:`)) return null;
+  const segs = parseCustomIdSegments(customId, 6);
   if (!segs) return null;
-  const [kindCode, ownerId, sortCode, orderCode, pageRaw] = segs;
+  const [kindCode, ownerId, sortCode, orderCode, pageRaw, itemKeyRaw] = segs;
   const kind = decodeKind(kindCode);
   const sort = decodeSort(sortCode);
   const order = decodeOrder(orderCode);
   const page = Number(pageRaw);
   if (!kind || !sort || !order || Number.isNaN(page)) return null;
-  return { kind, ownerId, sort, order, page };
+  return { kind, ownerId, sort, order, page, itemKey: decodeURIComponent(itemKeyRaw) };
 }
 
 export function buildPokopiaBackId(state: IPokopiaListState): string {
