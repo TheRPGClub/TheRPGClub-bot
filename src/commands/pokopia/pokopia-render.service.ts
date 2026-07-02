@@ -234,14 +234,19 @@ export function buildPokemonDetailPayload(
     new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small).setDivider(false),
   );
 
-  const abilities = [pokemon.ability1, pokemon.ability2].filter(Boolean).join(", ") || "-";
-  const favorites = pokemon.favorites.length ? pokemon.favorites.join(", ") : "-";
+  const abilities = [pokemon.ability1, pokemon.ability2].filter(Boolean).join(", ");
+  const favorites = pokemon.favorites.join(", ");
+  const detailFields: [string, string | null][] = [
+    ["Abilities", abilities],
+    ["Home", pokemon.home],
+    ["Litter Drop", pokemon.litterDrop],
+    ["Favorites", favorites],
+  ];
   const detailText = [
     `## ${pokemon.number} ${pokemon.name}`,
-    `**Abilities:** ${abilities}`,
-    `**Home:** ${pokemon.home || "-"}`,
-    `**Litter Drop:** ${pokemon.litterDrop ?? "-"}`,
-    `**Favorites:** ${favorites}`,
+    ...detailFields
+      .filter(([, value]) => value)
+      .map(([label, value]) => `**${label}:** ${value}`),
   ].join("\n");
   container.addTextDisplayComponents(
     new TextDisplayBuilder().setContent(safeV2TextContent(detailText, 1800)),
