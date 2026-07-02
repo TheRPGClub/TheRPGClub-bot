@@ -17,3 +17,4 @@ export const COLLECTION_LIST_PAGE_SIZE     = 20;
 export const BACKLOG_LIST_PAGE_SIZE        = 20;
 export const GAMEDB_CSV_RESULT_LIMIT       = 15;
 export const GOTM_AUDIT_RESULT_LIMIT       = 25;
+export const POKOPIA_LIST_PAGE_SIZE        = 10;

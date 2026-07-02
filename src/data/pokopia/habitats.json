@@ -1,0 +1,4516 @@
+[
+  {
+    "habitat": "Absolute Luxury",
+    "slug": "absolute_luxury",
+    "image": "299_Absolute_Luxury.jpg",
+    "items": [
+      "Luxury Bed x1",
+      "Luxury Sofa x1",
+      "Luxury Table x1",
+      "Luxury Lamp"
+    ],
+    "pokemon": [
+      {
+        "number": "#206",
+        "name": "Gholdengo",
+        "sprite": "206_Gholdengo.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Alarm Clock Sleep Zone",
+    "slug": "alarm_clock_sleep_zone",
+    "image": "141_Alarm_Clock_Sleep_Zone.jpg",
+    "items": [
+      "Bed (any) x1",
+      "Table (any) x1",
+      "Alarm Clock x1"
+    ],
+    "pokemon": [
+      {
+        "number": "#100",
+        "name": "Happiny",
+        "sprite": "100_Happiny.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "All Packed Up",
+    "slug": "all_packed_up",
+    "image": "126_All_Packed_Up.jpg",
+    "items": [
+      "Cart x1",
+      "Cardboard Boxes x2"
+    ],
+    "pokemon": [
+      {
+        "number": "#090",
+        "name": "Farfetch'd",
+        "sprite": "090_Farfetch_d.jpg"
+      },
+      {
+        "number": "#125",
+        "name": "Makuhita",
+        "sprite": "125_Makuhita.jpg"
+      },
+      {
+        "number": "#126",
+        "name": "Hariyama",
+        "sprite": "126_Hariyama.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Amped Rock Stage",
+    "slug": "amped_rock_stage",
+    "image": "285_Amped_Rock_Stage.jpg",
+    "items": [
+      "Speaker x2",
+      "Small Stage x1",
+      "Standing Mic x1",
+      "Cool Electric Guitar"
+    ],
+    "pokemon": [
+      {
+        "number": "#197",
+        "name": "Toxtricity Amped Form",
+        "sprite": "197_Toxtricity_Amped_Form.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Armor Fossil Display",
+    "slug": "armor_fossil_display",
+    "image": "388_Armor_Fossil_Display.jpg",
+    "items": [
+      "Pedestal / Exhibition Stand x1",
+      "Armor Fossil x1"
+    ],
+    "pokemon": [
+      {
+        "number": "#274",
+        "name": "Shieldon",
+        "sprite": "274_Shieldon.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Auspicious Knight's Shrine",
+    "slug": "auspicious_knight_s_shrine",
+    "image": "292_Auspicious_Knight_s_Shrine.jpg",
+    "items": [
+      "Pedestal / Exhibition Stand x1",
+      "Auspicious Armor x1",
+      "Stepping Stones x2",
+      "Firepit x2"
+    ],
+    "pokemon": [
+      {
+        "number": "#201",
+        "name": "Armarouge",
+        "sprite": "201_Armarouge.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Beach Set",
+    "slug": "beach_set",
+    "image": "211_Beach_Set.jpg",
+    "items": [
+      "Beach Chair x1",
+      "Beach Parasol x1",
+      "Side Table x1"
+    ],
+    "pokemon": [
+      {
+        "number": "#145",
+        "name": "Tatsugiri Curly Form",
+        "sprite": "145_Tatsugiri_Curly_Form.jpg"
+      },
+      {
+        "number": "#145",
+        "name": "Tatsugiri Droopy Form",
+        "sprite": "145_Tatsugiri_Droopy_Form.jpg"
+      },
+      {
+        "number": "#145",
+        "name": "Tatsugiri Stretchy Form",
+        "sprite": "145_Tatsugiri_Stretchy_Form.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Bed With a Plush",
+    "slug": "bed_with_a_plush",
+    "image": "39_Bed_With_a_Plush.jpg",
+    "items": [
+      "Bed (any) x1",
+      "Doll (any) x1"
+    ],
+    "pokemon": [
+      {
+        "number": "#025",
+        "name": "Slowbro",
+        "sprite": "025_Slowbro.jpg"
+      },
+      {
+        "number": "#026",
+        "name": "Slowking",
+        "sprite": "026_Slowking.jpg"
+      },
+      {
+        "number": "#061",
+        "name": "Drifloon",
+        "sprite": "061_Drifloon.jpg"
+      },
+      {
+        "number": "#107",
+        "name": "Munchlax",
+        "sprite": "107_Munchlax.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Bench with Greenery",
+    "slug": "bench_with_greenery",
+    "image": "1_Bench_with_Greenery.jpg",
+    "items": [
+      "Hedge (any) x2",
+      "Seat (wide) x1"
+    ],
+    "pokemon": [
+      {
+        "number": "#001",
+        "name": "Bulbasaur",
+        "sprite": "001_Bulbasaur.jpg"
+      },
+      {
+        "number": "#002",
+        "name": "Ivysaur",
+        "sprite": "002_Ivysaur.jpg"
+      },
+      {
+        "number": "#041",
+        "name": "Tangrowth",
+        "sprite": "041_Tangrowth.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Berry-fest Campsite",
+    "slug": "berry_fest_campsite",
+    "image": "9_Berry_fest_Campsite.jpg",
+    "items": [
+      "Castform Weather Charm (Sun) x2",
+      "Bunfire x1",
+      "Berry Basket x1",
+      "High-up Location"
+    ],
+    "pokemon": [
+      {
+        "number": "#006",
+        "name": "Charizard",
+        "sprite": "006_Charizard.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Best Bread Bakery",
+    "slug": "best_bread_bakery",
+    "image": "288_Best_Bread_Bakery.jpg",
+    "items": [
+      "Bread Oven x1",
+      "Counter x2",
+      "Plated Food x1"
+    ],
+    "pokemon": [
+      {
+        "number": "#198",
+        "name": "Fidough",
+        "sprite": "198_Fidough.jpg"
+      },
+      {
+        "number": "#199",
+        "name": "Dachsbun",
+        "sprite": "199_Dachsbun.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Birdsong Garden",
+    "slug": "birdsong_garden",
+    "image": "348_Birdsong_Garden.jpg",
+    "items": [
+      "Stylish Hedge x1",
+      "Wooden Birdhouse x1"
+    ],
+    "pokemon": [
+      {
+        "number": "#241",
+        "name": "Altaria",
+        "sprite": "241_Altaria.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Boulder-shaded tall grass",
+    "slug": "boulder_shaded_tall_grass",
+    "image": "88_Boulder_shaded_tall_grass.jpg",
+    "items": [
+      "Tall Grass x4",
+      "Large Boulder x1"
+    ],
+    "pokemon": [
+      {
+        "number": "#065",
+        "name": "Timburr",
+        "sprite": "065_Timburr.jpg"
+      },
+      {
+        "number": "#066",
+        "name": "Gurdurr",
+        "sprite": "066_Gurdurr.jpg"
+      },
+      {
+        "number": "#156",
+        "name": "Machop",
+        "sprite": "156_Machop.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Boundless Blue Beverage",
+    "slug": "boundless_blue_beverage",
+    "image": "394_Pretty_Flower_Bed_and_Boundless_Blue_Beverage.jpg",
+    "items": [
+      "Seat (any) x1",
+      "Table (any) x1",
+      "Soda Float x1",
+      "(Palette Town Only)"
+    ],
+    "pokemon": [
+      {
+        "number": "#281",
+        "name": "Vaporeon",
+        "sprite": "281_Vaporeon.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Box to the Rhythm",
+    "slug": "box_to_the_rhythm",
+    "image": "231_Box_to_the_Rhythm.jpg",
+    "items": [
+      "Punching Bag x1",
+      "Table (any) x1",
+      "CD Player x1"
+    ],
+    "pokemon": [
+      {
+        "number": "#157",
+        "name": "Machoke",
+        "sprite": "157_Machoke.jpg"
+      },
+      {
+        "number": "#180",
+        "name": "Riolu",
+        "sprite": "180_Riolu.jpg"
+      },
+      {
+        "number": "#181",
+        "name": "Lucario",
+        "sprite": "181_Lucario.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Breezy Flower Bed",
+    "slug": "breezy_flower_bed",
+    "image": "195_Breezy_Flower_Bed.jpg",
+    "items": [
+      "Seashore Flowers x4"
+    ],
+    "pokemon": [
+      {
+        "number": "#134",
+        "name": "Zorua",
+        "sprite": "134_Zorua.jpg"
+      },
+      {
+        "number": "#135",
+        "name": "Zoroark",
+        "sprite": "135_Zoroark.jpg"
+      },
+      {
+        "number": "#142",
+        "name": "Pawmi",
+        "sprite": "142_Pawmi.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Bronze Landmark",
+    "slug": "bronze_landmark",
+    "image": "218_Bronze_Landmark.jpg",
+    "items": [
+      "Hedge (any) x4",
+      "Moonlight Dance Statue x1",
+      "Sign x1"
+    ],
+    "pokemon": [
+      {
+        "number": "#149",
+        "name": "Clefairy",
+        "sprite": "149_Clefairy.jpg"
+      },
+      {
+        "number": "#150",
+        "name": "Clefable",
+        "sprite": "150_Clefable.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Burning-hot Spice",
+    "slug": "burning_hot_spice",
+    "image": "396_Burning_hot_Spice.jpg",
+    "items": [
+      "Seat (any) x1",
+      "Table (any) x1",
+      "Pizza x1",
+      "(Palette Town Only)"
+    ],
+    "pokemon": [
+      {
+        "number": "#283",
+        "name": "Flareon",
+        "sprite": "283_Flareon.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Cafe Space",
+    "slug": "cafe_space",
+    "image": "209_Cafe_Space.jpg",
+    "items": [
+      "Seat (any) x1",
+      "Potted Plant (any) x1",
+      "Counter x2",
+      "Mug x1",
+      "Menu Board x1"
+    ],
+    "pokemon": [
+      {
+        "number": "#143",
+        "name": "Pawmo",
+        "sprite": "143_Pawmo.jpg"
+      },
+      {
+        "number": "#144",
+        "name": "Pawmot",
+        "sprite": "144_Pawmot.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Campsite",
+    "slug": "campsite",
+    "image": "7_Campsite.jpg",
+    "items": [
+      "Campfire",
+      "Straw Table",
+      "Straw Stool"
+    ],
+    "pokemon": [
+      {
+        "number": "#005",
+        "name": "Charmeleon",
+        "sprite": "005_Charmeleon.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Changing Area",
+    "slug": "changing_area",
+    "image": "198_Changing_Area.jpg",
+    "items": [
+      "Closet (any) x1",
+      "Mirror (large) x1"
+    ],
+    "pokemon": [
+      {
+        "number": "#136",
+        "name": "Minccino",
+        "sprite": "136_Minccino.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Chansey Resting Area",
+    "slug": "chansey_resting_area",
+    "image": "22_Chansey_Resting_Area.jpg",
+    "items": [
+      "Hedge (any) x6",
+      "Seat (wide) x1",
+      "Chansey Plant x1"
+    ],
+    "pokemon": [
+      {
+        "number": "#015",
+        "name": "Vileplume",
+        "sprite": "015_Vileplume.jpg"
+      },
+      {
+        "number": "#016",
+        "name": "Bellossom",
+        "sprite": "016_Bellossom.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Chef's Kitchen",
+    "slug": "chef_s_kitchen",
+    "image": "279_Chef_s_Kitchen.jpg",
+    "items": [
+      "Cooking Stove x1",
+      "Modern Sink x1",
+      "Plain Tabe x1",
+      "Stylish Cooking Pot x1",
+      "Cutting Board x1",
+      "Plated Food x1"
+    ],
+    "pokemon": [
+      {
+        "number": "#192",
+        "name": "Greedent",
+        "sprite": "192_Greedent.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Chilly Shaved Ice",
+    "slug": "chilly_shaved_ice",
+    "image": "400_Chilly_Shaved_Ice.jpg",
+    "items": [
+      "Seat (any) x1",
+      "Table (any) x1",
+      "Shaved Ice x1",
+      "(Palette Town Only)"
+    ],
+    "pokemon": [
+      {
+        "number": "#287",
+        "name": "Glaceon",
+        "sprite": "287_Glaceon.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Chirp-chirp Meal",
+    "slug": "chirp_chirp_meal",
+    "image": "172_Chirp_chirp_Meal.jpg",
+    "items": [
+      "Wooden Birdhouse x1",
+      "Table (any) x1",
+      "Plated Food x1"
+    ],
+    "pokemon": [
+      {
+        "number": "#120",
+        "name": "Torchic",
+        "sprite": "120_Torchic.jpg"
+      },
+      {
+        "number": "#122",
+        "name": "Blaziken",
+        "sprite": "122_Blaziken.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Chirping Recital",
+    "slug": "chirping_recital",
+    "image": "245_Elevated_Red_Tall_Grass_and_Chirping_Recital.jpg",
+    "items": [
+      "Perch x1",
+      "Standing Mic x1"
+    ],
+    "pokemon": [
+      {
+        "number": "#168",
+        "name": "Honchkrow",
+        "sprite": "168_Honchkrow.jpg"
+      },
+      {
+        "number": "#179",
+        "name": "Chatot",
+        "sprite": "179_Chatot.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Clink-clang Iron Construction",
+    "slug": "clink_clang_iron_construction",
+    "image": "48_Clink_clang_Iron_Construction.jpg",
+    "items": [
+      "Iron beam or column x3",
+      "Wheelbarrow x1",
+      "Sandbags x1",
+      "Excavation Tools x1"
+    ],
+    "pokemon": [
+      {
+        "number": "#031",
+        "name": "Steelix",
+        "sprite": "031_Steelix.jpg"
+      },
+      {
+        "number": "#158",
+        "name": "Machamp",
+        "sprite": "158_Machamp.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Concrete Pipe Secret Base",
+    "slug": "concrete_pipe_secret_base",
+    "image": "325_Concrete_Pipe_Secret_Base.jpg",
+    "items": [
+      "Concrete Pipe x2",
+      "Tall Grass (any) x4"
+    ],
+    "pokemon": [
+      {
+        "number": "#224",
+        "name": "Cyndaquil",
+        "sprite": "224_Cyndaquil.jpg"
+      },
+      {
+        "number": "#225",
+        "name": "Quilava",
+        "sprite": "225_Quilava.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Construction Site Generator",
+    "slug": "construction_site_generator",
+    "image": "91_Construction_Site_Generator.jpg",
+    "items": [
+      "Furnace x1",
+      "Iron Scaffold x2",
+      "Iron Pipes x1"
+    ],
+    "pokemon": [
+      {
+        "number": "#067",
+        "name": "Conkeldurr",
+        "sprite": "067_Conkeldurr.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Container Snacking",
+    "slug": "container_snacking",
+    "image": "226_Container_Snacking.jpg",
+    "items": [
+      "Barrel x1",
+      "Wooden Crate x1",
+      "Lantern x1",
+      "Plated Food x1"
+    ],
+    "pokemon": [
+      {
+        "number": "#154",
+        "name": "Diglett",
+        "sprite": "154_Diglett.jpg"
+      },
+      {
+        "number": "#203",
+        "name": "Glimmet",
+        "sprite": "203_Glimmet.jpg"
+      },
+      {
+        "number": "#204",
+        "name": "Glimmora",
+        "sprite": "204_Glimmora.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Cozy Log Handicrafts",
+    "slug": "cozy_log_handicrafts",
+    "image": "98_Cozy_Log_Handicrafts.jpg",
+    "items": [
+      "Log Chair x1",
+      "Log Table x1",
+      "Log Bed x1"
+    ],
+    "pokemon": [
+      {
+        "number": "#071",
+        "name": "Axew",
+        "sprite": "071_Axew.jpg"
+      },
+      {
+        "number": "#072",
+        "name": "Fraxure",
+        "sprite": "072_Fraxure.jpg"
+      },
+      {
+        "number": "#073",
+        "name": "Haxorus",
+        "sprite": "073_Haxorus.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Creepy Grave Offering",
+    "slug": "creepy_grave_offering",
+    "image": "93_Creepy_Grave_Offering.jpg",
+    "items": [
+      "Eerie Candle x2",
+      "Gravestone x1",
+      "Plated Food x1"
+    ],
+    "pokemon": [
+      {
+        "number": "#068",
+        "name": "Litwick",
+        "sprite": "068_Litwick.jpg"
+      },
+      {
+        "number": "#069",
+        "name": "Lampent",
+        "sprite": "069_Lampent.jpg"
+      },
+      {
+        "number": "#070",
+        "name": "Chandelure",
+        "sprite": "070_Chandelure.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Creepy White Rocks",
+    "slug": "creepy_white_rocks",
+    "image": "294_Creepy_White_Rocks.jpg",
+    "items": [
+      "Stalagmites x1",
+      "Moss x4",
+      "Wooden Crate x1",
+      "Lantern x1"
+    ],
+    "pokemon": [
+      {
+        "number": "#203",
+        "name": "Glimmet",
+        "sprite": "203_Glimmet.jpg"
+      },
+      {
+        "number": "#204",
+        "name": "Glimmora",
+        "sprite": "204_Glimmora.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Cuteness Overload",
+    "slug": "cuteness_overload",
+    "image": "144_Cuteness_Overload.jpg",
+    "items": [
+      "Cute Sofa x1",
+      "Cute Table x1",
+      "Cute Lamp x1",
+      "Cute Dresser x1",
+      "Cute Bed"
+    ],
+    "pokemon": [
+      {
+        "number": "#102",
+        "name": "Blissey",
+        "sprite": "102_Blissey.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Cycling Rest Stop",
+    "slug": "cycling_rest_stop",
+    "image": "352_Cycling_Rest_Stop.jpg",
+    "items": [
+      "Bike x1",
+      "Vending Machine x1"
+    ],
+    "pokemon": [
+      {
+        "number": "#245",
+        "name": "Beldum",
+        "sprite": "245_Beldum.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Dandelion Lunchtime",
+    "slug": "dandelion_lunchtime",
+    "image": "404_Yellow_Carpet_and_Dandelion_Lunchtime.jpg",
+    "items": [
+      "Dandy Flower x1",
+      "Lunch Box x1",
+      "Flower Cushion x1",
+      "Flowery Table Setting x1"
+    ],
+    "pokemon": [
+      {
+        "number": "Event #003",
+        "name": "Jumpluff",
+        "sprite": "Event_003_Jumpluff.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Dark-chocolate Cookies",
+    "slug": "dark_chocolate_cookies",
+    "image": "398_Dark_chocolate_Cookies.jpg",
+    "items": [
+      "Seat (any) x1",
+      "Table (any) x1",
+      "Chocolate Cookies x1",
+      "(Palette Town Only)"
+    ],
+    "pokemon": [
+      {
+        "number": "#285",
+        "name": "Umbreon",
+        "sprite": "285_Umbreon.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Despot Fossil Display",
+    "slug": "despot_fossil_display",
+    "image": "391_Despot_Fossil_Display.jpg",
+    "items": [
+      "Pedestal / Exhibition Stand x1",
+      "Despot Fossil (Head, Body, Legs, Tail)"
+    ],
+    "pokemon": [
+      {
+        "number": "#277",
+        "name": "Tyrantrum",
+        "sprite": "277_Tyrantrum.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Digging and Burning",
+    "slug": "digging_and_burning",
+    "image": "238_Digging_and_Burning.jpg",
+    "items": [
+      "Wheelbarrow x1",
+      "Smelting Furnace x1",
+      "Excavation Tools x1"
+    ],
+    "pokemon": [
+      {
+        "number": "#163",
+        "name": "Magmar",
+        "sprite": "163_Magmar.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Dinner Table Surprise",
+    "slug": "dinner_table_surprise",
+    "image": "74_Dinner_Table_Surprise.jpg",
+    "items": [
+      "Seat (wide) x2",
+      "Table (large) x1",
+      "Party Platter x4"
+    ],
+    "pokemon": [
+      {
+        "number": "#054",
+        "name": "Swalot",
+        "sprite": "054_Swalot.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Dock",
+    "slug": "dock",
+    "image": "166_Dock.jpg",
+    "items": [
+      "Walkway x4",
+      "Streetlight (any) x1",
+      "Ocean Water x2"
+    ],
+    "pokemon": [
+      {
+        "number": "#115",
+        "name": "Marill",
+        "sprite": "115_Marill.jpg"
+      },
+      {
+        "number": "#116",
+        "name": "Azumarill",
+        "sprite": "116_Azumarill.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Dojo Training",
+    "slug": "dojo_training",
+    "image": "306_Dojo_Training.jpg",
+    "items": [
+      "Hanging Scroll x2",
+      "Strength Rock x2"
+    ],
+    "pokemon": [
+      {
+        "number": "#211",
+        "name": "Poliwrath",
+        "sprite": "211_Poliwrath.jpg"
+      },
+      {
+        "number": "#234",
+        "name": "Gallade",
+        "sprite": "234_Gallade.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Electrifying Potatoes",
+    "slug": "electrifying_potatoes",
+    "image": "395_Electrifying_Potatoes.jpg",
+    "items": [
+      "Seat (any) x1",
+      "Table (any) x1",
+      "Fried Potatoes x1",
+      "(Palette Town Only)"
+    ],
+    "pokemon": [
+      {
+        "number": "#282",
+        "name": "Jolteon",
+        "sprite": "282_Jolteon.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Elegant Daytime Treats",
+    "slug": "elegant_daytime_treats",
+    "image": "397_Elegant_Daytime_Treats.jpg",
+    "items": [
+      "Seat (any) x1",
+      "Table (any) x1",
+      "Afternoon Tea Set x1",
+      "(Palette Town Only)"
+    ],
+    "pokemon": [
+      {
+        "number": "#284",
+        "name": "Espeon",
+        "sprite": "284_Espeon.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Elevated Flower Bed",
+    "slug": "elevated_flower_bed",
+    "image": "24_Elevated_Flower_Bed.jpg",
+    "items": [
+      "Wildflowers x4",
+      "High-up Location"
+    ],
+    "pokemon": [
+      {
+        "number": "#017",
+        "name": "Paras",
+        "sprite": "017_Paras.jpg"
+      },
+      {
+        "number": "#018",
+        "name": "Parasect",
+        "sprite": "018_Parasect.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Elevated Pink Tall Grass",
+    "slug": "elevated_pink_tall_grass",
+    "image": "368_Elevated_Pink_Tall_Grass.jpg",
+    "items": [
+      "Pink Tall Grass x4",
+      "High-up Location x1"
+    ],
+    "pokemon": [
+      {
+        "number": "#258",
+        "name": "Corvisquire",
+        "sprite": "258_Corvisquire.jpg"
+      },
+      {
+        "number": "#259",
+        "name": "Corviknight",
+        "sprite": "259_Corviknight.jpg"
+      },
+      {
+        "number": "#266",
+        "name": "Wattrel",
+        "sprite": "266_Wattrel.jpg"
+      },
+      {
+        "number": "#267",
+        "name": "Kilowattrel",
+        "sprite": "267_Kilowattrel.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Elevated Red Tall Grass",
+    "slug": "elevated_red_tall_grass",
+    "image": "245_Elevated_Red_Tall_Grass_and_Chirping_Recital.jpg",
+    "items": [
+      "Red Tall Grass x4",
+      "High-up Location"
+    ],
+    "pokemon": [
+      {
+        "number": "#167",
+        "name": "Murkrow",
+        "sprite": "167_Murkrow.jpg"
+      },
+      {
+        "number": "#168",
+        "name": "Honchkrow",
+        "sprite": "168_Honchkrow.jpg"
+      },
+      {
+        "number": "#179",
+        "name": "Chatot",
+        "sprite": "179_Chatot.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Elevated Tall Grass",
+    "slug": "elevated_tall_grass",
+    "image": "15_Elevated_Tall_Grass.jpg",
+    "items": [
+      "Tall Grass x4",
+      "High-up Location"
+    ],
+    "pokemon": [
+      {
+        "number": "#010",
+        "name": "Pidgey",
+        "sprite": "010_Pidgey.jpg"
+      },
+      {
+        "number": "#011",
+        "name": "Pidgeotto",
+        "sprite": "011_Pidgeotto.jpg"
+      },
+      {
+        "number": "#048",
+        "name": "Hoothoot",
+        "sprite": "048_Hoothoot.jpg"
+      },
+      {
+        "number": "#049",
+        "name": "Noctowl",
+        "sprite": "049_Noctowl.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Elevated Yellow Tall Grass",
+    "slug": "elevated_yellow_tall_grass",
+    "image": "115_Elevated_Yellow_Tall_Grass.jpg",
+    "items": [
+      "Yellow Tall Grass x4",
+      "High-up Location"
+    ],
+    "pokemon": [
+      {
+        "number": "#083",
+        "name": "Crobat",
+        "sprite": "083_Crobat.jpg"
+      },
+      {
+        "number": "#123",
+        "name": "Wingull",
+        "sprite": "123_Wingull.jpg"
+      },
+      {
+        "number": "#124",
+        "name": "Pelipper",
+        "sprite": "124_Pelipper.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Evil Organization HQ",
+    "slug": "evil_organization_hq",
+    "image": "119_Evil_Organization_HQ.jpg",
+    "items": [
+      "Potted Plant (any) x2",
+      "Team Rocket Wall Hanging x1",
+      "Luxury Sofa x1"
+    ],
+    "pokemon": [
+      {
+        "number": "#085",
+        "name": "Persian",
+        "sprite": "085_Persian.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Exercise Resting Spot",
+    "slug": "exercise_resting_spot",
+    "image": "53_Exercise_Resting_Spot.jpg",
+    "items": [
+      "Punching Bag x1",
+      "Seat (any) x1"
+    ],
+    "pokemon": [
+      {
+        "number": "#036",
+        "name": "Hitmonchan",
+        "sprite": "036_Hitmonchan.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Experiment Space",
+    "slug": "experiment_space",
+    "image": "313_Experiment_Space.jpg",
+    "items": [
+      "Science Experiment x1",
+      "Microscope x1",
+      "Papers x1"
+    ],
+    "pokemon": [
+      {
+        "number": "#215",
+        "name": "Alakazam",
+        "sprite": "215_Alakazam.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Factory Storage",
+    "slug": "factory_storage",
+    "image": "42_Factory_Storage.jpg",
+    "items": [
+      "Streetlight (any) x1",
+      "Control Unit x1",
+      "Metal Drum x1",
+      "Jumbled Cords x1"
+    ],
+    "pokemon": [
+      {
+        "number": "#027",
+        "name": "Magnemite",
+        "sprite": "027_Magnemite.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Field of Flowers",
+    "slug": "field_of_flowers",
+    "image": "2_Field_of_Flowers.jpg",
+    "items": [
+      "Wildflowers x8"
+    ],
+    "pokemon": [
+      {
+        "number": "#002",
+        "name": "Ivysaur",
+        "sprite": "002_Ivysaur.jpg"
+      },
+      {
+        "number": "#003",
+        "name": "Venusaur",
+        "sprite": "003_Venusaur.jpg"
+      },
+      {
+        "number": "#058",
+        "name": "Vespiquen",
+        "sprite": "058_Vespiquen.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Field-Trip Friends",
+    "slug": "field_trip_friends",
+    "image": "403_Field_Trip_Friends.jpg",
+    "items": [
+      "Flower Backpack x1",
+      "Lunchbox x1",
+      "Hoppip Water Bottle x1"
+    ],
+    "pokemon": [
+      {
+        "number": "Event #001",
+        "name": "Hopip",
+        "sprite": "Event_001_Hopip.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Fireplace Nap Spot",
+    "slug": "fireplace_nap_spot",
+    "image": "327_Fireplace_Nap_Spot.jpg",
+    "items": [
+      "Stone Fireplace x1",
+      "Seat (wide) x1"
+    ],
+    "pokemon": [
+      {
+        "number": "#225",
+        "name": "Quilava",
+        "sprite": "225_Quilava.jpg"
+      },
+      {
+        "number": "#226",
+        "name": "Typhlosion",
+        "sprite": "226_Typhlosion.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Floating in the Shade",
+    "slug": "floating_in_the_shade",
+    "image": "14_Floating_in_the_Shade.jpg",
+    "items": [
+      "Inflatable Boat x1",
+      "Beach Parasol x1",
+      "Water x2"
+    ],
+    "pokemon": [
+      {
+        "number": "#009",
+        "name": "Blastoise",
+        "sprite": "009_Blastoise.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Flower Garden",
+    "slug": "flower_garden",
+    "image": "25_Flower_Garden.jpg",
+    "items": [
+      "Hedge (any) x4",
+      "Wildflowers x4"
+    ],
+    "pokemon": [
+      {
+        "number": "#017",
+        "name": "Paras",
+        "sprite": "017_Paras.jpg"
+      },
+      {
+        "number": "#018",
+        "name": "Parasect",
+        "sprite": "018_Parasect.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Flower Garden Stump Stage",
+    "slug": "flower_garden_stump_stage",
+    "image": "221_Flower_Garden_Stump_Stage.jpg",
+    "items": [
+      "Mountain Flowers x4.",
+      "Tree Stump (any) x1",
+      "Mushroom Lamp x2"
+    ],
+    "pokemon": [
+      {
+        "number": "#151",
+        "name": "Igglybuff",
+        "sprite": "151_Igglybuff.jpg"
+      },
+      {
+        "number": "#152",
+        "name": "Jigglypuff",
+        "sprite": "152_Jigglypuff.jpg"
+      },
+      {
+        "number": "#212",
+        "name": "Politoed",
+        "sprite": "212_Politoed.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Flowery Table",
+    "slug": "flowery_table",
+    "image": "33_Flowery_Table.jpg",
+    "items": [
+      "Seat (any) x1",
+      "Table (any) x1",
+      "Small Vase x1"
+    ],
+    "pokemon": [
+      {
+        "number": "#022",
+        "name": "Weepinbell",
+        "sprite": "022_Weepinbell.jpg"
+      },
+      {
+        "number": "#023",
+        "name": "Victreebel",
+        "sprite": "023_Victreebel.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Fluffy Flower Bed",
+    "slug": "fluffy_flower_bed",
+    "image": "300_Fluffy_Flower_Bed.jpg",
+    "items": [
+      "Skyland Flowers x4"
+    ],
+    "pokemon": [
+      {
+        "number": "#207",
+        "name": "Vulpix",
+        "sprite": "207_Vulpix.jpg"
+      },
+      {
+        "number": "#208",
+        "name": "Ninetales",
+        "sprite": "208_Ninetales.jpg"
+      },
+      {
+        "number": "#227",
+        "name": "Misdreavus",
+        "sprite": "227_Misdreavus.jpg"
+      },
+      {
+        "number": "#228",
+        "name": "Mismagius",
+        "sprite": "228_Mismagius.jpg"
+      },
+      {
+        "number": "#257",
+        "name": "Rookidee",
+        "sprite": "257_Rookidee.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Fortune-teller's Table",
+    "slug": "fortune_teller_s_table",
+    "image": "310_Fortune_teller_s_Table.jpg",
+    "items": [
+      "Seat (any) x1",
+      "Table (any) x1",
+      "Crystal Ball x1"
+    ],
+    "pokemon": [
+      {
+        "number": "#213",
+        "name": "Abra",
+        "sprite": "213_Abra.jpg"
+      },
+      {
+        "number": "#214",
+        "name": "Kadabra",
+        "sprite": "214_Kadabra.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Fresh Veggie Field",
+    "slug": "fresh_veggie_field",
+    "image": "86_Fresh_Veggie_Field.jpg",
+    "items": [
+      "Vegetable field (any) x8"
+    ],
+    "pokemon": [
+      {
+        "number": "#063",
+        "name": "Drilbur",
+        "sprite": "063_Drilbur.jpg"
+      },
+      {
+        "number": "#064",
+        "name": "Excadrill",
+        "sprite": "064_Excadrill.jpg"
+      },
+      {
+        "number": "#185",
+        "name": "Rowlet",
+        "sprite": "185_Rowlet.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Full Recovery",
+    "slug": "full_recovery",
+    "image": "109_Full_Recovery.jpg",
+    "items": [
+      "Bed (any) x1",
+      "Plain Chest x1",
+      "First Aid Kit x1"
+    ],
+    "pokemon": [
+      {
+        "number": "#079",
+        "name": "Peakychu",
+        "sprite": "079_Peakychu.jpg"
+      },
+      {
+        "number": "#101",
+        "name": "Chansey",
+        "sprite": "101_Chansey.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Furnace Spot",
+    "slug": "furnace_spot",
+    "image": "175_Furnace_Spot.jpg",
+    "items": [
+      "Metal Drum x1",
+      "Furnace x1"
+    ],
+    "pokemon": [
+      {
+        "number": "#121",
+        "name": "Combusken",
+        "sprite": "121_Combusken.jpg"
+      },
+      {
+        "number": "#122",
+        "name": "Blaziken",
+        "sprite": "122_Blaziken.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Game Corner Battle Zone",
+    "slug": "game_corner_battle_zone",
+    "image": "319_Game_Corner_Battle_Zone.jpg",
+    "items": [
+      "Arcade Machine x2",
+      "Seat (any) x2"
+    ],
+    "pokemon": [
+      {
+        "number": "#220",
+        "name": "Porygon-Z",
+        "sprite": "220_Porygon-Z.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Gamer's Paradise",
+    "slug": "gamer_s_paradise",
+    "image": "354_Gamer_s_Paradise.jpg",
+    "items": [
+      "Gaming Bed x1",
+      "Table (any) x1",
+      "Gaming PC x1",
+      "Gaming Fridge x1",
+      "Gaming Chair x1"
+    ],
+    "pokemon": [
+      {
+        "number": "#247",
+        "name": "Metagross",
+        "sprite": "247_Metagross.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Garden Terrace",
+    "slug": "garden_terrace",
+    "image": "5_Garden_Terrace.jpg",
+    "items": [
+      "4x Wildflowers",
+      "1x Garden Chair",
+      "1x Garden Table",
+      "1x Garden Light"
+    ],
+    "pokemon": [
+      {
+        "number": "#003",
+        "name": "Venusaur",
+        "sprite": "003_Venusaur.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Gently Lit Bed",
+    "slug": "gently_lit_bed",
+    "image": "69_Gently_Lit_Bed.jpg",
+    "items": [
+      "Bed (any) x1",
+      "Table (any) x1",
+      "Slender Candle x1"
+    ],
+    "pokemon": [
+      {
+        "number": "#049",
+        "name": "Noctowl",
+        "sprite": "049_Noctowl.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Good Old-Fashioned Antiques",
+    "slug": "good_old_fashioned_antiques",
+    "image": "56_Good_Old_Fashioned_Antiques.jpg",
+    "items": [
+      "Antique Closet x1",
+      "Antique Bed x1",
+      "Antique Dresser x1",
+      "Antique Chaire x1"
+    ],
+    "pokemon": [
+      {
+        "number": "#039",
+        "name": "Weezing",
+        "sprite": "039_Weezing.jpg"
+      },
+      {
+        "number": "#108",
+        "name": "Snorlax",
+        "sprite": "108_Snorlax.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Gourmet's Altar",
+    "slug": "gourmet_s_altar",
+    "image": "153_Gourmet_s_Altar.jpg",
+    "items": [
+      "Offering Dish x1"
+    ],
+    "pokemon": [
+      {
+        "number": "#108",
+        "name": "Mosslax",
+        "sprite": "108_Mosslax.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Graceful Flower Bed",
+    "slug": "graceful_flower_bed",
+    "image": "216_Graceful_Flower_Bed.jpg",
+    "items": [
+      "Mountain Flowers x4"
+    ],
+    "pokemon": [
+      {
+        "number": "#148",
+        "name": "Cleffa",
+        "sprite": "148_Cleffa.jpg"
+      },
+      {
+        "number": "#149",
+        "name": "Clefairy",
+        "sprite": "149_Clefairy.jpg"
+      },
+      {
+        "number": "#150",
+        "name": "Clefable",
+        "sprite": "150_Clefable.jpg"
+      },
+      {
+        "number": "#198",
+        "name": "Fidough",
+        "sprite": "198_Fidough.jpg"
+      },
+      {
+        "number": "#199",
+        "name": "Dachsbun",
+        "sprite": "199_Dachsbun.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Grassy Training Field",
+    "slug": "grassy_training_field",
+    "image": "230_Grassy_Training_Field.jpg",
+    "items": [
+      "Sandbags x2",
+      "Red Tall Grass x4"
+    ],
+    "pokemon": [
+      {
+        "number": "#157",
+        "name": "Machoke",
+        "sprite": "157_Machoke.jpg"
+      },
+      {
+        "number": "#158",
+        "name": "Machamp",
+        "sprite": "158_Machamp.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Grave Offering",
+    "slug": "grave_offering",
+    "image": "92_Grave_Offering.jpg",
+    "items": [
+      "Slender Candle x2",
+      "Gravestone x1",
+      "Plated Food x1"
+    ],
+    "pokemon": [
+      {
+        "number": "#068",
+        "name": "Litwick",
+        "sprite": "068_Litwick.jpg"
+      },
+      {
+        "number": "#069",
+        "name": "Lampent",
+        "sprite": "069_Lampent.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Grave with Flowers",
+    "slug": "grave_with_flowers",
+    "image": "49_Grave_with_Flowers.jpg",
+    "items": [
+      "Wildflowers x1",
+      "Gravestone x1"
+    ],
+    "pokemon": [
+      {
+        "number": "#032",
+        "name": "Cubone",
+        "sprite": "032_Cubone.jpg"
+      },
+      {
+        "number": "#033",
+        "name": "Marowak",
+        "sprite": "033_Marowak.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Gym First Aid",
+    "slug": "gym_first_aid",
+    "image": "54_Gym_First_Aid.jpg",
+    "items": [
+      "Table (any) x1",
+      "Punching Bag x1",
+      "First Aid Kit x1"
+    ],
+    "pokemon": [
+      {
+        "number": "#037",
+        "name": "Hitmontop",
+        "sprite": "037_Hitmontop.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Headbut Fossil Display",
+    "slug": "headbut_fossil_display",
+    "image": "387_Headbut_Fossil_Display.jpg",
+    "items": [
+      "Pedestal / Exhibition Stand x2",
+      "Headbut Fossil (Head, Body, Tail)"
+    ],
+    "pokemon": [
+      {
+        "number": "#273",
+        "name": "Rampardos",
+        "sprite": "273_Rampardos.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Heart-Pounding Surprise Box",
+    "slug": "heart_pounding_surprise_box",
+    "image": "378_Heart_Pounding_Surprise_Box.jpg",
+    "items": [
+      "Spotlight x2",
+      "Boo-in-the-box x1",
+      "Big Drum x1"
+    ],
+    "pokemon": [
+      {
+        "number": "#265",
+        "name": "Meowscarada",
+        "sprite": "265_Meowscarada.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Heavy Iron",
+    "slug": "heavy_iron",
+    "image": "283_Heavy_Iron.jpg",
+    "items": [
+      "Iron Bed x1",
+      "Iron Chair x1",
+      "Iron Table x1",
+      "Lantern x1"
+    ],
+    "pokemon": [
+      {
+        "number": "#195",
+        "name": "Coalossal",
+        "sprite": "195_Coalossal.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Home Theater",
+    "slug": "home_theater",
+    "image": "333_Home_Theater.jpg",
+    "items": [
+      "Stand x1",
+      "Television x1",
+      "Speaker x2"
+    ],
+    "pokemon": [
+      {
+        "number": "#228",
+        "name": "Mismagius",
+        "sprite": "228_Mismagius.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Hot-spring Fishing Spot",
+    "slug": "hot_spring_fishing_spot",
+    "image": "253_Hot_spring_Fishing_Spot.jpg",
+    "items": [
+      "Fishing Rod x1",
+      "Seat (any) x1",
+      "Hot-spring Water x1"
+    ],
+    "pokemon": [
+      {
+        "number": "#173",
+        "name": "Lombre",
+        "sprite": "173_Lombre.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Hot-spring Shower",
+    "slug": "hot_spring_shower",
+    "image": "120_Hot_spring_Shower.jpg",
+    "items": [
+      "Shower x1",
+      "Seat (any) x1",
+      "Hot-spring Water x2"
+    ],
+    "pokemon": [
+      {
+        "number": "#086",
+        "name": "Psyduck",
+        "sprite": "086_Psyduck.jpg"
+      },
+      {
+        "number": "#087",
+        "name": "Golduck",
+        "sprite": "087_Golduck.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "House Party",
+    "slug": "house_party",
+    "image": "228_House_Party.jpg",
+    "items": [
+      "Food Counter x1",
+      "Paper Party Cups x1",
+      "Plated Food x1"
+    ],
+    "pokemon": [
+      {
+        "number": "#155",
+        "name": "Dugtrio",
+        "sprite": "155_Dugtrio.jpg"
+      },
+      {
+        "number": "#166",
+        "name": "Sudowoodo",
+        "sprite": "166_Sudowoodo.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Hydrated Flower Bed",
+    "slug": "hydrated_flower_bed",
+    "image": "71_Hydrated_Flower_Bed.jpg",
+    "items": [
+      "Wildflowers x4",
+      "Water x2"
+    ],
+    "pokemon": [
+      {
+        "number": "#051",
+        "name": "Volbeat",
+        "sprite": "051_Volbeat.jpg"
+      },
+      {
+        "number": "#052",
+        "name": "Illumise",
+        "sprite": "052_Illumise.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Hydrated Fluffy Flower Bed",
+    "slug": "hydrated_fluffy_flower_bed",
+    "image": "304_Hydrated_Fluffy_Flower_Bed.jpg",
+    "items": [
+      "Skyland Flowers x4",
+      "Water x2"
+    ],
+    "pokemon": [
+      {
+        "number": "#210",
+        "name": "Poliwhirl",
+        "sprite": "210_Poliwhirl.jpg"
+      },
+      {
+        "number": "#221",
+        "name": "Dratini",
+        "sprite": "221_Dratini.jpg"
+      },
+      {
+        "number": "#222",
+        "name": "Dragonair",
+        "sprite": "222_Dragonair.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Hydrated Graceful Flower Bed",
+    "slug": "hydrated_graceful_flower_bed",
+    "image": "214_Hydrated_Graceful_Flower_Bed.jpg",
+    "items": [
+      "Moutain Flowers x4",
+      "Water x2"
+    ],
+    "pokemon": [
+      {
+        "number": "#146",
+        "name": "Ekans",
+        "sprite": "146_Ekans.jpg"
+      },
+      {
+        "number": "#147",
+        "name": "Arbok",
+        "sprite": "147_Arbok.jpg"
+      },
+      {
+        "number": "#212",
+        "name": "Politoed",
+        "sprite": "212_Politoed.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Hydrated Pink Tall Grass",
+    "slug": "hydrated_pink_tall_grass",
+    "image": "359_Hydrated_Pink_Tall_Grass.jpg",
+    "items": [
+      "Pink Tall Grass x4",
+      "Water x2"
+    ],
+    "pokemon": [
+      {
+        "number": "#251",
+        "name": "Froakie",
+        "sprite": "251_Froakie.jpg"
+      },
+      {
+        "number": "#252",
+        "name": "Frogadier",
+        "sprite": "252_Frogadier.jpg"
+      },
+      {
+        "number": "#253",
+        "name": "Greninja",
+        "sprite": "253_Greninja.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Hydrated Red Tall Grass",
+    "slug": "hydrated_red_tall_grass",
+    "image": "250_Hydrated_Red_Tall_Grass.jpg",
+    "items": [
+      "Red Tall Grass x4",
+      "Water x2"
+    ],
+    "pokemon": [
+      {
+        "number": "#172",
+        "name": "Lotad",
+        "sprite": "172_Lotad.jpg"
+      },
+      {
+        "number": "#173",
+        "name": "Lombre",
+        "sprite": "173_Lombre.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Hydrated Tall Grass",
+    "slug": "hydrated_tall_grass",
+    "image": "11_Hydrated_Tall_Grass.jpg",
+    "items": [
+      "Tall Grass x4",
+      "Water x2"
+    ],
+    "pokemon": [
+      {
+        "number": "#007",
+        "name": "Squirtle",
+        "sprite": "007_Squirtle.jpg"
+      },
+      {
+        "number": "#008",
+        "name": "Wartortle",
+        "sprite": "008_Wartortle.jpg"
+      },
+      {
+        "number": "#009",
+        "name": "Blastoise",
+        "sprite": "009_Blastoise.jpg"
+      },
+      {
+        "number": "#075",
+        "name": "Sliggoo",
+        "sprite": "075_Sliggoo.jpg"
+      },
+      {
+        "number": "#077",
+        "name": "Cramorant",
+        "sprite": "077_Cramorant.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Hydrated Yellow Tall Grass",
+    "slug": "hydrated_yellow_tall_grass",
+    "image": "163_Hydrated_Yellow_Tall_Grass.jpg",
+    "items": [
+      "Yellow Tall Grass x4",
+      "Water x2"
+    ],
+    "pokemon": [
+      {
+        "number": "#114",
+        "name": "Azurill",
+        "sprite": "114_Azurill.jpg"
+      },
+      {
+        "number": "#115",
+        "name": "Marill",
+        "sprite": "115_Marill.jpg"
+      },
+      {
+        "number": "#128",
+        "name": "Piplup",
+        "sprite": "128_Piplup.jpg"
+      },
+      {
+        "number": "#129",
+        "name": "Prinplup",
+        "sprite": "129_Prinplup.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Illuminated Bench",
+    "slug": "illuminated_bench",
+    "image": "29_Illuminated_Bench.jpg",
+    "items": [
+      "Seat (wide) x1",
+      "Streetlight (any) x1"
+    ],
+    "pokemon": [
+      {
+        "number": "#019",
+        "name": "Venonat",
+        "sprite": "019_Venonat.jpg"
+      },
+      {
+        "number": "#020",
+        "name": "Venomoth",
+        "sprite": "020_Venomoth.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Illuminated Tall Grass",
+    "slug": "illuminated_tall_grass",
+    "image": "28_Illuminated_Tall_Grass.jpg",
+    "items": [
+      "Tall Grass (any) x4",
+      "Lighting (any) x1"
+    ],
+    "pokemon": [
+      {
+        "number": "#019",
+        "name": "Venonat",
+        "sprite": "019_Venonat.jpg"
+      },
+      {
+        "number": "#020",
+        "name": "Venomoth",
+        "sprite": "020_Venomoth.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Illuminated Waterfall",
+    "slug": "illuminated_waterfall",
+    "image": "65_Illuminated_Waterfall.jpg",
+    "items": [
+      "Stepping Stones x3",
+      "Torch x2",
+      "Water x3",
+      "Waterfall x1"
+    ],
+    "pokemon": [
+      {
+        "number": "#046",
+        "name": "Gyarados",
+        "sprite": "046_Gyarados.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Interrogation Desk",
+    "slug": "interrogation_desk",
+    "image": "376_Interrogation_Desk.jpg",
+    "items": [
+      "Arcanine Doll x1",
+      "Folding Chair x2",
+      "Industrial Desk x1",
+      "Desk Light x1"
+    ],
+    "pokemon": [
+      {
+        "number": "#263",
+        "name": "Sprigatito",
+        "sprite": "263_Sprigatito.jpg"
+      },
+      {
+        "number": "#264",
+        "name": "Floragato",
+        "sprite": "264_Floragato.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Irresistable Scent and Glow",
+    "slug": "irresistable_scent_and_glow",
+    "image": "34_Irresistable_Scent_and_Glow.jpg",
+    "items": [
+      "Pitcher-plant pot x1",
+      "Plated Food x1",
+      "Mushroom Lamp x1"
+    ],
+    "pokemon": [
+      {
+        "number": "#022",
+        "name": "Weepinbell",
+        "sprite": "022_Weepinbell.jpg"
+      },
+      {
+        "number": "#023",
+        "name": "Victreebel",
+        "sprite": "023_Victreebel.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Jaw Fossil Display",
+    "slug": "jaw_fossil_display",
+    "image": "390_Jaw_Fossil_Display.jpg",
+    "items": [
+      "Pedestal / Exhibition Stand x1",
+      "Jaw Fossil x1"
+    ],
+    "pokemon": [
+      {
+        "number": "#276",
+        "name": "Tyrunt",
+        "sprite": "276_Tyrunt.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Knitting Table",
+    "slug": "knitting_table",
+    "image": "159_Knitting_Table.jpg",
+    "items": [
+      "Seat (any) x1",
+      "Table (any) x1",
+      "Knitting Supplies x1"
+    ],
+    "pokemon": [
+      {
+        "number": "#111",
+        "name": "Mareep",
+        "sprite": "111_Mareep.jpg"
+      },
+      {
+        "number": "#112",
+        "name": "Flaaffy",
+        "sprite": "112_Flaaffy.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Large Luggage Carrier",
+    "slug": "large_luggage_carrier",
+    "image": "90_Large_Luggage_Carrier.jpg",
+    "items": [
+      "Cart x1",
+      "Wooden Crate x2"
+    ],
+    "pokemon": [
+      {
+        "number": "#066",
+        "name": "Gurdurr",
+        "sprite": "066_Gurdurr.jpg"
+      },
+      {
+        "number": "#268",
+        "name": "Tinkatink",
+        "sprite": "268_Tinkatink.jpg"
+      },
+      {
+        "number": "#269",
+        "name": "Tinkatuff",
+        "sprite": "269_Tinkatuff.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Lazy Photo-album Scrolling",
+    "slug": "lazy_photo_album_scrolling",
+    "image": "284_Lazy_Photo_album_Scrolling.jpg",
+    "items": [
+      "Tablet x1",
+      "Paper Party Cups x1"
+    ],
+    "pokemon": [
+      {
+        "number": "#196",
+        "name": "Toxel",
+        "sprite": "196_Toxel.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Leafy Greens Sandwich",
+    "slug": "leafy_greens_sandwich",
+    "image": "399_Leafy_Greens_Sandwich.jpg",
+    "items": [
+      "Seat (any) x1",
+      "Table (any) x1",
+      "Sandwiches x1",
+      "(Palette Town Only)"
+    ],
+    "pokemon": [
+      {
+        "number": "#286",
+        "name": "Leafeon",
+        "sprite": "286_Leafeon.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Light-Up Stage",
+    "slug": "light_up_stage",
+    "image": "147_Light_Up_Stage.jpg",
+    "items": [
+      "Spotlight x2",
+      "Small Stage x1"
+    ],
+    "pokemon": [
+      {
+        "number": "#104",
+        "name": "Electabuzz",
+        "sprite": "104_Electabuzz.jpg"
+      },
+      {
+        "number": "#105",
+        "name": "Electivire",
+        "sprite": "105_Electivire.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Lovely Ribbon Cake",
+    "slug": "lovely_ribbon_cake",
+    "image": "401_Lovely_Ribbon_Cake.jpg",
+    "items": [
+      "Seat (any) x1",
+      "Table (any) x1",
+      "Ribbon Cake x1",
+      "(Palette Town Only)"
+    ],
+    "pokemon": [
+      {
+        "number": "#288",
+        "name": "Sylveon",
+        "sprite": "288_Sylveon.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Low Key Rock Stage",
+    "slug": "low_key_rock_stage",
+    "image": "286_Low_Key_Rock_Stage.jpg",
+    "items": [
+      "Speaker x2",
+      "Small Stage x1",
+      "Standing Mic x1",
+      "Cool Bass Guitar x1"
+    ],
+    "pokemon": [
+      {
+        "number": "#00",
+        "name": "Toxtricity Low Key Form",
+        "sprite": "00_Toxtricity_Low_Key_Form.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Lumberjack's Workplace",
+    "slug": "lumberjack_s_workplace",
+    "image": "97_Lumberjack_s_Workplace.jpg",
+    "items": [
+      "Log Chair x1",
+      "Cart x1",
+      "Tree Stump (any) x1",
+      "Log Table x1"
+    ],
+    "pokemon": [
+      {
+        "number": "#071",
+        "name": "Axew",
+        "sprite": "071_Axew.jpg"
+      },
+      {
+        "number": "#072",
+        "name": "Fraxure",
+        "sprite": "072_Fraxure.jpg"
+      },
+      {
+        "number": "#073",
+        "name": "Haxorus",
+        "sprite": "073_Haxorus.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Luxury Chirp-Chirp Meal",
+    "slug": "luxury_chirp_chirp_meal",
+    "image": "19_Luxury_Chirp_Chirp_Meal.jpg",
+    "items": [
+      "Birdhouse x1",
+      "Berry Basket x1"
+    ],
+    "pokemon": [
+      {
+        "number": "#012",
+        "name": "Pidgeot",
+        "sprite": "012_Pidgeot.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Magma Fishing Spot",
+    "slug": "magma_fishing_spot",
+    "image": "125_Magma_Fishing_Spot.jpg",
+    "items": [
+      "Fishing Rod x1",
+      "Seat (any) x1",
+      "Lava x1"
+    ],
+    "pokemon": [
+      {
+        "number": "#089",
+        "name": "Arcanine",
+        "sprite": "089_Arcanine.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Malicious Knight's Shrine",
+    "slug": "malicious_knight_s_shrine",
+    "image": "293_Malicious_Knight_s_Shrine.jpg",
+    "items": [
+      "Pedestal / Exhibition Stand x1",
+      "Malicious Armor x1",
+      "Stepping Stones x2",
+      "Firepit x2"
+    ],
+    "pokemon": [
+      {
+        "number": "#202",
+        "name": "Ceruledge",
+        "sprite": "202_Ceruledge.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Marsh Fishing Spot",
+    "slug": "marsh_fishing_spot",
+    "image": "127_Marsh_Fishing_Spot.jpg",
+    "items": [
+      "Fishing Rod x1",
+      "Seat x1",
+      "Muddy Water x1"
+    ],
+    "pokemon": [
+      {
+        "number": "#091",
+        "name": "Grimer",
+        "sprite": "091_Grimer.jpg"
+      },
+      {
+        "number": "#092",
+        "name": "Muk",
+        "sprite": "092_Muk.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Marshy Fishing Spot",
+    "slug": "marshy_fishing_spot",
+    "image": "170_Marshy_Fishing_Spot.jpg",
+    "items": [
+      "Fishing Rod x1",
+      "Seat (any) x1",
+      "Muddy Water x1"
+    ],
+    "pokemon": [
+      {
+        "number": "#118",
+        "name": "Clodsire",
+        "sprite": "118_Clodsire.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Marshy Tall Grass",
+    "slug": "marshy_tall_grass",
+    "image": "168_Marshy_Tall_Grass.jpg",
+    "items": [
+      "Yellow Tall Grass x4",
+      "Muddy Water x2"
+    ],
+    "pokemon": [
+      {
+        "number": "#117",
+        "name": "Paldean Wooper",
+        "sprite": "117_Paldean_Wooper.jpg"
+      },
+      {
+        "number": "#118",
+        "name": "Clodsire",
+        "sprite": "118_Clodsire.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Mini Game Corner",
+    "slug": "mini_game_corner",
+    "image": "44_Mini_Game_Corner.jpg",
+    "items": [
+      "Arcade Machine x1",
+      "Seat (any) x1",
+      "Punching Game x1"
+    ],
+    "pokemon": [
+      {
+        "number": "#028",
+        "name": "Magneton",
+        "sprite": "028_Magneton.jpg"
+      },
+      {
+        "number": "#029",
+        "name": "Magnezone",
+        "sprite": "029_Magnezone.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Mini Kitchen",
+    "slug": "mini_kitchen",
+    "image": "239_Mini_Kitchen.jpg",
+    "items": [
+      "KItchen Table x1",
+      "Cooking Stove x1",
+      "Frying Pan x1",
+      "Modern Sink x1"
+    ],
+    "pokemon": [
+      {
+        "number": "#164",
+        "name": "Magmortar",
+        "sprite": "164_Magmortar.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Mini Museum",
+    "slug": "mini_museum",
+    "image": "124_Mini_Museum.jpg",
+    "items": [
+      "Post (any) x3",
+      "Pedestal / Exhibition Stand x1",
+      "Lost Relic (large) x1"
+    ],
+    "pokemon": [
+      {
+        "number": "#089",
+        "name": "Arcanine",
+        "sprite": "089_Arcanine.jpg"
+      },
+      {
+        "number": "#205",
+        "name": "Gimmighoul",
+        "sprite": "205_Gimmighoul.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Modern Living",
+    "slug": "modern_living",
+    "image": "272_Modern_Living.jpg",
+    "items": [
+      "Industrial Bed x1",
+      "Industrial Desk x1",
+      "Industrial Chair x1"
+    ],
+    "pokemon": [
+      {
+        "number": "#187",
+        "name": "Decidueye",
+        "sprite": "187_Decidueye.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Moisturizing Makeup Stand",
+    "slug": "moisturizing_makeup_stand",
+    "image": "338_Moisturizing_Makeup_Stand.jpg",
+    "items": [
+      "Dresser (any) x1",
+      "Seat (any) x1",
+      "Humidifier x1"
+    ],
+    "pokemon": [
+      {
+        "number": "#232",
+        "name": "Kirlia",
+        "sprite": "232_Kirlia.jpg"
+      },
+      {
+        "number": "#233",
+        "name": "Gardevoir",
+        "sprite": "233_Gardevoir.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Mossy Boulder",
+    "slug": "mossy_boulder",
+    "image": "235_Mossy_Boulder.jpg",
+    "items": [
+      "Moss x4",
+      "Mossy Boulder x1"
+    ],
+    "pokemon": [
+      {
+        "number": "#160",
+        "name": "Graveler",
+        "sprite": "160_Graveler.jpg"
+      },
+      {
+        "number": "#161",
+        "name": "Golem",
+        "sprite": "161_Golem.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Mossy Hot Spring",
+    "slug": "mossy_hot_spring",
+    "image": "256_Mossy_Hot_Spring.jpg",
+    "items": [
+      "Moss x4",
+      "Hot-spring Water x2"
+    ],
+    "pokemon": [
+      {
+        "number": "#176",
+        "name": "Torkoal",
+        "sprite": "176_Torkoal.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Mossy Rest Spot",
+    "slug": "mossy_rest_spot",
+    "image": "246_Mossy_Rest_Spot.jpg",
+    "items": [
+      "Moss x4"
+    ],
+    "pokemon": [
+      {
+        "number": "#169",
+        "name": "Larvitar",
+        "sprite": "169_Larvitar.jpg"
+      },
+      {
+        "number": "#171",
+        "name": "Tyranitar",
+        "sprite": "171_Tyranitar.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Music and Magazines",
+    "slug": "music_and_magazines",
+    "image": "258_Music_and_Magazines.jpg",
+    "items": [
+      "CD Player x1",
+      "CD Rack x1",
+      "Magazine Rack x1"
+    ],
+    "pokemon": [
+      {
+        "number": "#177",
+        "name": "Kricketot",
+        "sprite": "177_Kricketot.jpg"
+      },
+      {
+        "number": "#178",
+        "name": "Kricketune",
+        "sprite": "178_Kricketune.jpg"
+      },
+      {
+        "number": "#182",
+        "name": "Stereo Rotom",
+        "sprite": "182_Stereo_Rotom.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Nature's Market",
+    "slug": "nature_s_market",
+    "image": "111_Nature_s_Market.jpg",
+    "items": [
+      "Large Tree (any) x1",
+      "Large Boulder x1",
+      "Table (any) x2, C",
+      "ash Register x1"
+    ],
+    "pokemon": [
+      {
+        "number": "#080",
+        "name": "Raichu",
+        "sprite": "080_Raichu.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Night Festival Venue",
+    "slug": "night_festival_venue",
+    "image": "160_Night_Festival_Venue.jpg",
+    "items": [
+      "Balloons x2",
+      "Raichu Sign x1"
+    ],
+    "pokemon": [
+      {
+        "number": "#112",
+        "name": "Flaaffy",
+        "sprite": "112_Flaaffy.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Nine Flames",
+    "slug": "nine_flames",
+    "image": "302_Nine_Flames.jpg",
+    "items": [
+      "Firepit x9"
+    ],
+    "pokemon": [
+      {
+        "number": "#208",
+        "name": "Ninetales",
+        "sprite": "208_Ninetales.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Nothin' But Poke Balls",
+    "slug": "nothin_but_poke_balls",
+    "image": "58_Nothin_But_Poke_Balls.jpg",
+    "items": [
+      "Poke Ball Sofa x1",
+      "Poke Ball Table x1",
+      "Poke Ball Bed x1",
+      "Poke Ball Light x1"
+    ],
+    "pokemon": [
+      {
+        "number": "#040",
+        "name": "Tangela",
+        "sprite": "040_Tangela.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Ocean Fishing Spot",
+    "slug": "ocean_fishing_spot",
+    "image": "64_Ocean_Fishing_Spot.jpg",
+    "items": [
+      "Fishing Rod x1",
+      "Seat (any) x1",
+      "Ocean Water x1"
+    ],
+    "pokemon": [
+      {
+        "number": "#045",
+        "name": "Magikarp",
+        "sprite": "045_Magikarp.jpg"
+      },
+      {
+        "number": "#060",
+        "name": "Gastrodon",
+        "sprite": "060_Gastrodon.jpg"
+      },
+      {
+        "number": "#060",
+        "name": "Gastrodon East Sea",
+        "sprite": "060_Gastrodon_East_Sea.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Office Storeroom",
+    "slug": "office_storeroom",
+    "image": "331_Office_Storeroom.jpg",
+    "items": [
+      "Office Shelf x1",
+      "Step Stool x1",
+      "Cardboard Boxes x1"
+    ],
+    "pokemon": [
+      {
+        "number": "#227",
+        "name": "Misdreavus",
+        "sprite": "227_Misdreavus.jpg"
+      },
+      {
+        "number": "#261",
+        "name": "Drakloak",
+        "sprite": "261_Drakloak.jpg"
+      },
+      {
+        "number": "#262",
+        "name": "Dragapult",
+        "sprite": "262_Dragapult.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Open-air Bath",
+    "slug": "open_air_bath",
+    "image": "274_Open_air_Bath.jpg",
+    "items": [
+      "Hot-srping Spout x1",
+      "Hot-srping water x2"
+    ],
+    "pokemon": [
+      {
+        "number": "#189",
+        "name": "Raboot",
+        "sprite": "189_Raboot.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Overgrowth Vending Machine",
+    "slug": "overgrowth_vending_machine",
+    "image": "158_Overgrowth_Vending_Machine.jpg",
+    "items": [
+      "Yellow Tall Grass x4",
+      "Vending Machine x1"
+    ],
+    "pokemon": [
+      {
+        "number": "#111",
+        "name": "Mareep",
+        "sprite": "111_Mareep.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Oversized Dumping Ground",
+    "slug": "oversized_dumping_ground",
+    "image": "382_Oversized_Dumping_Ground.jpg",
+    "items": [
+      "Iron Beam or Column x3",
+      "Waste Bin (any) x1",
+      "Tires x1",
+      "Microwave Oven x1"
+    ],
+    "pokemon": [
+      {
+        "number": "#268",
+        "name": "Tinkatink",
+        "sprite": "268_Tinkatink.jpg"
+      },
+      {
+        "number": "#270",
+        "name": "Tinkaton",
+        "sprite": "270_Tinkaton.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Park Bench",
+    "slug": "park_bench",
+    "image": "113_Park_Bench.jpg",
+    "items": [
+      "Seat (wide) x1",
+      "Garbage Bin x1"
+    ],
+    "pokemon": [
+      {
+        "number": "#081",
+        "name": "Zubat",
+        "sprite": "081_Zubat.jpg"
+      },
+      {
+        "number": "#096",
+        "name": "Voltorb",
+        "sprite": "096_Voltorb.jpg"
+      },
+      {
+        "number": "#097",
+        "name": "Electrode",
+        "sprite": "097_Electrode.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Perpetual Mess",
+    "slug": "perpetual_mess",
+    "image": "122_Perpetual_Mess.jpg",
+    "items": [
+      "Cardboard Boxes x1",
+      "Toy (any) x1"
+    ],
+    "pokemon": [
+      {
+        "number": "#088",
+        "name": "Growlithe",
+        "sprite": "088_Growlithe.jpg"
+      },
+      {
+        "number": "#114",
+        "name": "Azurill",
+        "sprite": "114_Azurill.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Picnic Set",
+    "slug": "picnic_set",
+    "image": "108_Picnic_Set.jpg",
+    "items": [
+      "Seat (any) x2",
+      "Table (any) x1",
+      "Picnic Basket x1"
+    ],
+    "pokemon": [
+      {
+        "number": "#078",
+        "name": "Pichu",
+        "sprite": "078_Pichu.jpg"
+      },
+      {
+        "number": "#079",
+        "name": "Pikachu",
+        "sprite": "079_Pikachu.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Picturesque Photo Cutout Board",
+    "slug": "picturesque_photo_cutout_board",
+    "image": "342_Picturesque_Photo_Cutout_Board.jpg",
+    "items": [
+      "Photo Cutout Board x1",
+      "Spotlight x2",
+      "High-up Location"
+    ],
+    "pokemon": [
+      {
+        "number": "#235",
+        "name": "Plusle",
+        "sprite": "235_Plusle.jpg"
+      },
+      {
+        "number": "#236",
+        "name": "Minun",
+        "sprite": "236_Minun.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Pikachu Space",
+    "slug": "pikachu_space",
+    "image": "205_Pikachu_Space.jpg",
+    "items": [
+      "Pikachu Sofa x1",
+      "Pikachu Doll x1"
+    ],
+    "pokemon": [
+      {
+        "number": "#141",
+        "name": "Mimikyu",
+        "sprite": "141_Mimikyu.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Pink Tall Grass",
+    "slug": "pink_tall_grass",
+    "image": "344_Pink_Tall_Grass.jpg",
+    "items": [
+      "Pink Tall Grass x4"
+    ],
+    "pokemon": [
+      {
+        "number": "#237",
+        "name": "Trapinch",
+        "sprite": "237_Trapinch.jpg"
+      },
+      {
+        "number": "#238",
+        "name": "Vibrava",
+        "sprite": "238_Vibrava.jpg"
+      },
+      {
+        "number": "#239",
+        "name": "Flygon",
+        "sprite": "239_Flygon.jpg"
+      },
+      {
+        "number": "#240",
+        "name": "Swablu",
+        "sprite": "240_Swablu.jpg"
+      },
+      {
+        "number": "#242",
+        "name": "Duskull",
+        "sprite": "242_Duskull.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Piping-hot Lava",
+    "slug": "piping_hot_lava",
+    "image": "268_Piping_hot_Lava.jpg",
+    "items": [
+      "Molten Rock x1",
+      "Lava x2"
+    ],
+    "pokemon": [
+      {
+        "number": "#184",
+        "name": "Volcarona",
+        "sprite": "184_Volcarona.jpg"
+      },
+      {
+        "number": "#200",
+        "name": "Charcadet",
+        "sprite": "200_Charcadet.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Plain Life",
+    "slug": "plain_life",
+    "image": "162_Plain_Life.jpg",
+    "items": [
+      "Plain Bed x1",
+      "Plain Table x1",
+      "Plain Lamp x1",
+      "Plain Sofa x1"
+    ],
+    "pokemon": [
+      {
+        "number": "#113",
+        "name": "Ampharos",
+        "sprite": "113_Ampharos.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Playing Pirate",
+    "slug": "playing_pirate",
+    "image": "134_Playing_Pirate.jpg",
+    "items": [
+      "Barrel x1",
+      "Cannon x2",
+      "Ship's Wheel x1"
+    ],
+    "pokemon": [
+      {
+        "number": "#096",
+        "name": "Voltorb",
+        "sprite": "096_Voltorb.jpg"
+      },
+      {
+        "number": "#097",
+        "name": "Electrode",
+        "sprite": "097_Electrode.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Playland",
+    "slug": "playland",
+    "image": "355_Playland.jpg",
+    "items": [
+      "Slide x1",
+      "Toy (any) x1"
+    ],
+    "pokemon": [
+      {
+        "number": "#248",
+        "name": "Snivy",
+        "sprite": "248_Snivy.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Plush Central",
+    "slug": "plush_central",
+    "image": "85_Plush_Central.jpg",
+    "items": [
+      "Arcanine Doll x1",
+      "Pikachu Doll x1",
+      "Dragonite Doll x1",
+      "Eevee Doll x1"
+    ],
+    "pokemon": [
+      {
+        "number": "#062",
+        "name": "Drifblim",
+        "sprite": "062_Drifblim.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Pointy Tree-shaded Rocky Tall Grass",
+    "slug": "pointy_tree_shaded_rocky_tall_grass",
+    "image": "270_Pointy_Tree_shaded_Rocky_Tall_Grass.jpg",
+    "items": [
+      "Pointy Tree x1",
+      "Red Tall Grass x4",
+      "Large Boulder x1"
+    ],
+    "pokemon": [
+      {
+        "number": "#186",
+        "name": "Dartrix",
+        "sprite": "186_Dartrix.jpg"
+      },
+      {
+        "number": "#187",
+        "name": "Decidueye",
+        "sprite": "187_Decidueye.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Prank Button",
+    "slug": "prank_button",
+    "image": "361_Prank_Button.jpg",
+    "items": [
+      "Floor Switch x1",
+      "Boo-in-the-Box x1"
+    ],
+    "pokemon": [
+      {
+        "number": "#252",
+        "name": "Frogadier",
+        "sprite": "252_Frogadier.jpg"
+      },
+      {
+        "number": "#253",
+        "name": "Greninja",
+        "sprite": "253_Greninja.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Pretty Flower Bed",
+    "slug": "pretty_flower_bed",
+    "image": "16_Pretty_Flower_Bed.jpg",
+    "items": [
+      "Wildflowers x4"
+    ],
+    "pokemon": [
+      {
+        "number": "#010",
+        "name": "Pidgey",
+        "sprite": "010_Pidgey.jpg"
+      },
+      {
+        "number": "#011",
+        "name": "Pidgeotto",
+        "sprite": "011_Pidgeotto.jpg"
+      },
+      {
+        "number": "#048",
+        "name": "Hoothoot",
+        "sprite": "048_Hoothoot.jpg"
+      },
+      {
+        "number": "#057",
+        "name": "Combee",
+        "sprite": "057_Combee.jpg"
+      },
+      {
+        "number": "#162",
+        "name": "Magby",
+        "sprite": "162_Magby.jpg"
+      },
+      {
+        "number": "#280",
+        "name": "Eevee",
+        "sprite": "280_Eevee.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Private Makeup Stand",
+    "slug": "private_makeup_stand",
+    "image": "199_Private_Makeup_Stand.jpg",
+    "items": [
+      "Partition (any) x2",
+      "Closet (any) x1",
+      "Dresser (any) x1"
+    ],
+    "pokemon": [
+      {
+        "number": "#136",
+        "name": "Minccino",
+        "sprite": "136_Minccino.jpg"
+      },
+      {
+        "number": "#137",
+        "name": "Cinccino",
+        "sprite": "137_Cinccino.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Professor's Apprentice Program",
+    "slug": "professor_s_apprentice_program",
+    "image": "353_Professor_s_Apprentice_Program.jpg",
+    "items": [
+      "Whiteboard x1",
+      "Table (any) x1",
+      "Jumbled Cords x1",
+      "Laptop x1"
+    ],
+    "pokemon": [
+      {
+        "number": "#246",
+        "name": "Metang",
+        "sprite": "246_Metang.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Professor's Treasure Trove",
+    "slug": "professor_s_treasure_trove",
+    "image": "60_Professor_s_Treasure_Trove.jpg",
+    "items": [
+      "Professor's Treasure Trove x1",
+      "Lost Relic (Large) x4",
+      "Bed (any) x1"
+    ],
+    "pokemon": [
+      {
+        "number": "#041",
+        "name": "Tangrowth",
+        "sprite": "041_Tangrowth.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Public Reading Material",
+    "slug": "public_reading_material",
+    "image": "315_Public_Reading_Material.jpg",
+    "items": [
+      "Magazine Rack x1",
+      "Newspaper x1"
+    ],
+    "pokemon": [
+      {
+        "number": "#216",
+        "name": "Mime Jr.",
+        "sprite": "216_Mime_Jr.jpg"
+      },
+      {
+        "number": "#250",
+        "name": "Serperior",
+        "sprite": "250_Serperior.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Railroad Crossing",
+    "slug": "railroad_crossing",
+    "image": "280_Railroad_Crossing.jpg",
+    "items": [
+      "Railway Track x1",
+      "Crossing gate x1"
+    ],
+    "pokemon": [
+      {
+        "number": "#193",
+        "name": "Rolycoly",
+        "sprite": "193_Rolycoly.jpg"
+      },
+      {
+        "number": "#194",
+        "name": "Carkol",
+        "sprite": "194_Carkol.jpg"
+      },
+      {
+        "number": "#195",
+        "name": "Coalossal",
+        "sprite": "195_Coalossal.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Rain Dance Site",
+    "slug": "rain_dance_site",
+    "image": "104_Rain_Dance_Site.jpg",
+    "items": [
+      "Castform Weather Charm (rain) x2, Plated Food x1"
+    ],
+    "pokemon": [
+      {
+        "number": "#074",
+        "name": "Goomy",
+        "sprite": "074_Goomy.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Recital Stage",
+    "slug": "recital_stage",
+    "image": "223_Recital_Stage.jpg",
+    "items": [
+      "Speaker x2",
+      "Small Stage x1",
+      "Standing Mic x1"
+    ],
+    "pokemon": [
+      {
+        "number": "#152",
+        "name": "Jigglypuff",
+        "sprite": "152_Jigglypuff.jpg"
+      },
+      {
+        "number": "#153",
+        "name": "Wigglytuff",
+        "sprite": "153_Wigglytuff.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Red Tall Grass",
+    "slug": "red_tall_grass",
+    "image": "257_Red_Tall_Grass.jpg",
+    "items": [
+      "Red Tall Grass x4"
+    ],
+    "pokemon": [
+      {
+        "number": "#177",
+        "name": "Kricketot",
+        "sprite": "177_Kricketot.jpg"
+      },
+      {
+        "number": "#180",
+        "name": "Riolu",
+        "sprite": "180_Riolu.jpg"
+      },
+      {
+        "number": "#188",
+        "name": "Scorbunny",
+        "sprite": "188_Scorbunny.jpg"
+      },
+      {
+        "number": "#190",
+        "name": "Cinderace",
+        "sprite": "190_Cinderace.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Refreshing Locker Room",
+    "slug": "refreshing_locker_room",
+    "image": "275_Refreshing_Locker_Room.jpg",
+    "items": [
+      "Office Locker x2",
+      "Potted Plant (any) x1",
+      "Seat (wide) x1",
+      "Punching Game x1"
+    ],
+    "pokemon": [
+      {
+        "number": "#189",
+        "name": "Raboot",
+        "sprite": "189_Raboot.jpg"
+      },
+      {
+        "number": "#190",
+        "name": "Cinderace",
+        "sprite": "190_Cinderace.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Researcher's Desk",
+    "slug": "researcher_s_desk",
+    "image": "317_Researcher_s_Desk.jpg",
+    "items": [
+      "Table (any) x2",
+      "Computer x1",
+      "Science Experiment x1"
+    ],
+    "pokemon": [
+      {
+        "number": "#218",
+        "name": "Porygon",
+        "sprite": "218_Porygon.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Resort Meal Prep",
+    "slug": "resort_meal_prep",
+    "image": "123_Resort_Meal_Prep.jpg",
+    "items": [
+      "Large Palm Tree x1",
+      "Seat (any) x1",
+      "Plated Food x1",
+      "Campfire x1"
+    ],
+    "pokemon": [
+      {
+        "number": "#088",
+        "name": "Growlithe",
+        "sprite": "088_Growlithe.jpg"
+      },
+      {
+        "number": "#120",
+        "name": "Torchic",
+        "sprite": "120_Torchic.jpg"
+      },
+      {
+        "number": "#121",
+        "name": "Combusken",
+        "sprite": "121_Combusken.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Resting Spot",
+    "slug": "resting_spot",
+    "image": "117_Resting_Spot.jpg",
+    "items": [
+      "Cardboard Boxes x1",
+      "Straw Bed x1"
+    ],
+    "pokemon": [
+      {
+        "number": "#084",
+        "name": "Meowth",
+        "sprite": "084_Meowth.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Rhythmic Living Room",
+    "slug": "rhythmic_living_room",
+    "image": "365_Rhythmic_Living_Room.jpg",
+    "items": [
+      "Speaker x2",
+      "Music Mat (any) x4",
+      "Television x1"
+    ],
+    "pokemon": [
+      {
+        "number": "#255",
+        "name": "Noibat",
+        "sprite": "255_Noibat.jpg"
+      },
+      {
+        "number": "#256",
+        "name": "Noivern",
+        "sprite": "256_Noivern.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Riding Warm Updrafts",
+    "slug": "riding_warm_updrafts",
+    "image": "83_Riding_Warm_Updrafts.jpg",
+    "items": [
+      "Campfire x3"
+    ],
+    "pokemon": [
+      {
+        "number": "#061",
+        "name": "Drifloon",
+        "sprite": "061_Drifloon.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Road Sign",
+    "slug": "road_sign",
+    "image": "79_Road_Sign.jpg",
+    "items": [
+      "Arrow Sign x1",
+      "Wooden Path x3"
+    ],
+    "pokemon": [
+      {
+        "number": "#059",
+        "name": "Shellos",
+        "sprite": "059_Shellos.jpg"
+      },
+      {
+        "number": "#059",
+        "name": "Shellos East Sea",
+        "sprite": "059_Shellos_East_Sea.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Sail Fossil Display",
+    "slug": "sail_fossil_display",
+    "image": "392_Sail_Fossil_Display.jpg",
+    "items": [
+      "Pedestal / Exhibition Stand x1",
+      "Sail Fossil x1"
+    ],
+    "pokemon": [
+      {
+        "number": "#278",
+        "name": "Amaura",
+        "sprite": "278_Amaura.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Seaside Tall Grass",
+    "slug": "seaside_tall_grass",
+    "image": "37_Seaside_Tall_Grass.jpg",
+    "items": [
+      "Tall Grass x4",
+      "Ocean Water x2"
+    ],
+    "pokemon": [
+      {
+        "number": "#024",
+        "name": "Slowpoke",
+        "sprite": "024_Slowpoke.jpg"
+      },
+      {
+        "number": "#025",
+        "name": "Slowbro",
+        "sprite": "025_Slowbro.jpg"
+      },
+      {
+        "number": "#026",
+        "name": "Slowking",
+        "sprite": "026_Slowking.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Sewer-hole Inspection",
+    "slug": "sewer_hole_inspection",
+    "image": "305_Sewer_hole_Inspection.jpg",
+    "items": [
+      "Iron Pipes x1",
+      "Sewer-hole Cover x1",
+      "Excavation Tools x1",
+      "Traffic Cone x1"
+    ],
+    "pokemon": [
+      {
+        "number": "#211",
+        "name": "Poliwrath",
+        "sprite": "211_Poliwrath.jpg"
+      },
+      {
+        "number": "#259",
+        "name": "Corviknight",
+        "sprite": "259_Corviknight.jpg"
+      },
+      {
+        "number": "#269",
+        "name": "Tinkatuff",
+        "sprite": "269_Tinkatuff.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Shaded Beach",
+    "slug": "shaded_beach",
+    "image": "138_Shaded_Beach.jpg",
+    "items": [
+      "Large Palm Tree x1",
+      "Beach Chair x1"
+    ],
+    "pokemon": [
+      {
+        "number": "#098",
+        "name": "Exeggcute",
+        "sprite": "098_Exeggcute.jpg"
+      },
+      {
+        "number": "#099",
+        "name": "Exeggutor",
+        "sprite": "099_Exeggutor.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Shield Fossil Display",
+    "slug": "shield_fossil_display",
+    "image": "389_Shield_Fossil_Display.jpg",
+    "items": [
+      "Pedestal / Exhibition Stand x2",
+      "Shield Fossil (Head, Body, Tail)"
+    ],
+    "pokemon": [
+      {
+        "number": "#275",
+        "name": "Bastiodon",
+        "sprite": "275_Bastiodon.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Simple Bathroom",
+    "slug": "simple_bathroom",
+    "image": "321_Simple_Bathroom.jpg",
+    "items": [
+      "Shower x1",
+      "Bathtub x1"
+    ],
+    "pokemon": [
+      {
+        "number": "#221",
+        "name": "Dratini",
+        "sprite": "221_Dratini.jpg"
+      },
+      {
+        "number": "#222",
+        "name": "Dragonair",
+        "sprite": "222_Dragonair.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Skull Fossil Display",
+    "slug": "skull_fossil_display",
+    "image": "386_Skull_Fossil_Display.jpg",
+    "items": [
+      "Pedestal / Exhibition Stand x1",
+      "Skull Fossil x1"
+    ],
+    "pokemon": [
+      {
+        "number": "#272",
+        "name": "Cranidos",
+        "sprite": "272_Cranidos.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Smooth Tall Grass",
+    "slug": "smooth_tall_grass",
+    "image": "47_Smooth_Tall_Grass.jpg",
+    "items": [
+      "Dry Tall Grass x4",
+      "Smooth Rock x1"
+    ],
+    "pokemon": [
+      {
+        "number": "#030",
+        "name": "Onix",
+        "sprite": "030_Onix.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Spooky Study",
+    "slug": "spooky_study",
+    "image": "129_Spooky_Study.jpg",
+    "items": [
+      "Bookcase x1",
+      "Chic Sofa x1",
+      "Plain Table x1",
+      "Slender Candle x1"
+    ],
+    "pokemon": [
+      {
+        "number": "#093",
+        "name": "Gastly",
+        "sprite": "093_Gastly.jpg"
+      },
+      {
+        "number": "#094",
+        "name": "Haunter",
+        "sprite": "094_Haunter.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Spotless Washing Station",
+    "slug": "spotless_washing_station",
+    "image": "314_Spotless_Washing_Station.jpg",
+    "items": [
+      "Towel Rack x1",
+      "Wall Mirror x1",
+      "Sink x1"
+    ],
+    "pokemon": [
+      {
+        "number": "#216",
+        "name": "Mime Jr.",
+        "sprite": "216_Mime_Jr.jpg"
+      },
+      {
+        "number": "#217",
+        "name": "Mr. Mime",
+        "sprite": "217_Mr_Mime.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Squeaky Clean",
+    "slug": "squeaky_clean",
+    "image": "303_Squeaky_Clean.jpg",
+    "items": [
+      "Bathtub x1",
+      "Cleaning Supplies x1"
+    ],
+    "pokemon": [
+      {
+        "number": "#209",
+        "name": "Poliwag",
+        "sprite": "209_Poliwag.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Study Area",
+    "slug": "study_area",
+    "image": "336_Study_Area.jpg",
+    "items": [
+      "Bookcase x1",
+      "Seat (any) x1",
+      "Table (any) x1",
+      "Pencil Holder x1"
+    ],
+    "pokemon": [
+      {
+        "number": "#231",
+        "name": "Ralts",
+        "sprite": "231_Ralts.jpg"
+      },
+      {
+        "number": "#232",
+        "name": "Kirlia",
+        "sprite": "232_Kirlia.jpg"
+      },
+      {
+        "number": "#233",
+        "name": "Gardevoir",
+        "sprite": "233_Gardevoir.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Sunny Day Site",
+    "slug": "sunny_day_site",
+    "image": "75_Sunny_Day_Site.jpg",
+    "items": [
+      "Castform Weather Charm (sun) x2",
+      "Plated Food x1"
+    ],
+    "pokemon": [
+      {
+        "number": "#055",
+        "name": "Cacnea",
+        "sprite": "055_Cacnea.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Surging Psychic Power",
+    "slug": "surging_psychic_power",
+    "image": "309_Surging_Psychic_Power.jpg",
+    "items": [
+      "Simple Cushion x1",
+      "Crystal Ball x1"
+    ],
+    "pokemon": [
+      {
+        "number": "#213",
+        "name": "Abra",
+        "sprite": "213_Abra.jpg"
+      },
+      {
+        "number": "#215",
+        "name": "Alakazam",
+        "sprite": "215_Alakazam.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Surprise in Store",
+    "slug": "surprise_in_store",
+    "image": "130_Surprise_in_Store.jpg",
+    "items": [
+      "Balloons x2",
+      "Boo-in-the-Box x1"
+    ],
+    "pokemon": [
+      {
+        "number": "#094",
+        "name": "Haunter",
+        "sprite": "094_Haunter.jpg"
+      },
+      {
+        "number": "#095",
+        "name": "Gengar",
+        "sprite": "095_Gengar.jpg"
+      },
+      {
+        "number": "#135",
+        "name": "Zoroark",
+        "sprite": "135_Zoroark.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Tableside Deilvery Cart",
+    "slug": "tableside_deilvery_cart",
+    "image": "190_Tableside_Deilvery_Cart.jpg",
+    "items": [
+      "Chic Chair x2",
+      "Chic Table x1",
+      "Small Vase x1",
+      "Push Cart x1",
+      "Plated Food x1"
+    ],
+    "pokemon": [
+      {
+        "number": "#130",
+        "name": "Empoleon",
+        "sprite": "130_Empoleon.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Tall Grass",
+    "slug": "tall_grass",
+    "image": "0_Tall_Grass.jpg",
+    "items": [
+      "Tall Grass x4"
+    ],
+    "pokemon": [
+      {
+        "number": "#001",
+        "name": "Bulbasaur",
+        "sprite": "001_Bulbasaur.jpg"
+      },
+      {
+        "number": "#004",
+        "name": "Charmander",
+        "sprite": "004_Charmander.jpg"
+      },
+      {
+        "number": "#006",
+        "name": "Charizard",
+        "sprite": "006_Charizard.jpg"
+      },
+      {
+        "number": "#007",
+        "name": "Squirtle",
+        "sprite": "007_Squirtle.jpg"
+      },
+      {
+        "number": "#013",
+        "name": "Oddish",
+        "sprite": "013_Oddish.jpg"
+      },
+      {
+        "number": "#159",
+        "name": "Geodude",
+        "sprite": "159_Geodude.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Tantalizing Dining Set",
+    "slug": "tantalizing_dining_set",
+    "image": "73_Tantalizing_Dining_Set.jpg",
+    "items": [
+      "Seat (any) x1",
+      "Table (any) x1",
+      "Plated Food x1"
+    ],
+    "pokemon": [
+      {
+        "number": "#053",
+        "name": "Gulpin",
+        "sprite": "053_Gulpin.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Tantalizing Restaurant",
+    "slug": "tantalizing_restaurant",
+    "image": "207_Tantalizing_Restaurant.jpg",
+    "items": [
+      "Seat (any) x1",
+      "Menu Board x1",
+      "Table (any) x1",
+      "Plated Food x1"
+    ],
+    "pokemon": [
+      {
+        "number": "#142",
+        "name": "Pawmi",
+        "sprite": "142_Pawmi.jpg"
+      },
+      {
+        "number": "#143",
+        "name": "Pawmo",
+        "sprite": "143_Pawmo.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Tiny Atelier",
+    "slug": "tiny_atelier",
+    "image": "171_Tiny_Atelier.jpg",
+    "items": [
+      "Canvas x1",
+      "Seat (any) x1"
+    ],
+    "pokemon": [
+      {
+        "number": "#119",
+        "name": "Smeargle",
+        "sprite": "119_Smeargle.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Tire Park",
+    "slug": "tire_park",
+    "image": "364_Tire_Park.jpg",
+    "items": [
+      "Slide x1",
+      "Tires x1",
+      "Tire Toy x2"
+    ],
+    "pokemon": [
+      {
+        "number": "#254",
+        "name": "Dedenne",
+        "sprite": "254_Dedenne.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Toil in the Soil",
+    "slug": "toil_in_the_soil",
+    "image": "248_Toil_in_the_Soil.jpg",
+    "items": [
+      "Vegetable Field (any) x4",
+      "Wheelbarrow x1"
+    ],
+    "pokemon": [
+      {
+        "number": "#171",
+        "name": "Tyranitar",
+        "sprite": "171_Tyranitar.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Top Pop",
+    "slug": "top_pop",
+    "image": "329_Top_Pop.jpg",
+    "items": [
+      "Pop Art Bed x1",
+      "Pop Art Sofa x1",
+      "Pop Art Table x1"
+    ],
+    "pokemon": [
+      {
+        "number": "#226",
+        "name": "Typhlosion",
+        "sprite": "226_Typhlosion.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Training Waterfall",
+    "slug": "training_waterfall",
+    "image": "51_Training_Waterfall.jpg",
+    "items": [
+      "Seat (any) x1",
+      "Water x2",
+      "Waterfall x1"
+    ],
+    "pokemon": [
+      {
+        "number": "#034",
+        "name": "Tyrogue",
+        "sprite": "034_Tyrogue.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Trash Can Central",
+    "slug": "trash_can_central",
+    "image": "43_Trash_Can_Central.jpg",
+    "items": [
+      "Garbage Bin x4"
+    ],
+    "pokemon": [
+      {
+        "number": "#028",
+        "name": "Magneton",
+        "sprite": "028_Magneton.jpg"
+      },
+      {
+        "number": "#029",
+        "name": "Magnezone",
+        "sprite": "029_Magnezone.jpg"
+      },
+      {
+        "number": "#104",
+        "name": "Electabuzz",
+        "sprite": "104_Electabuzz.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Trash Collection Site",
+    "slug": "trash_collection_site",
+    "image": "55_Trash_Collection_Site.jpg",
+    "items": [
+      "Waste Bin (any) x1",
+      "Sign (any) x1",
+      "Garbage Bags x1"
+    ],
+    "pokemon": [
+      {
+        "number": "#038",
+        "name": "Koffing",
+        "sprite": "038_Koffing.jpg"
+      },
+      {
+        "number": "#039",
+        "name": "Weezing",
+        "sprite": "039_Weezing.jpg"
+      },
+      {
+        "number": "#132",
+        "name": "Trubbish",
+        "sprite": "132_Trubbish.jpg"
+      },
+      {
+        "number": "#133",
+        "name": "Garbodor",
+        "sprite": "133_Garbodor.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Trash Disposal Site",
+    "slug": "trash_disposal_site",
+    "image": "116_Trash_Disposal_Site.jpg",
+    "items": [
+      "Utility Pole x1",
+      "Garbage Bags x1"
+    ],
+    "pokemon": [
+      {
+        "number": "#083",
+        "name": "Crobat",
+        "sprite": "083_Crobat.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Trash Site TV",
+    "slug": "trash_site_tv",
+    "image": "350_Trash_Site_TV.jpg",
+    "items": [
+      "Garbage Bags x2",
+      "Television x1"
+    ],
+    "pokemon": [
+      {
+        "number": "#243",
+        "name": "Dusclops",
+        "sprite": "243_Dusclops.jpg"
+      },
+      {
+        "number": "#244",
+        "name": "Dusknoir",
+        "sprite": "244_Dusknoir.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Treasure-hunting Set",
+    "slug": "treasure_hunting_set",
+    "image": "405_Treasure_hunting_Set.jpg",
+    "items": [
+      "Adventure Kit x1",
+      "Map and Compass x1",
+      "Treasure x1"
+    ],
+    "pokemon": [
+      {
+        "number": "Event #004",
+        "name": "Sableye",
+        "sprite": "Event_004_Sableye.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Tree-shaded flower bed",
+    "slug": "tree_shaded_flower_bed",
+    "image": "103_Tree_shaded_flower_bed.jpg",
+    "items": [
+      "Berry Tree (any) x1",
+      "Wildflowers x4"
+    ],
+    "pokemon": [
+      {
+        "number": "#074",
+        "name": "Goomy",
+        "sprite": "074_Goomy.jpg"
+      },
+      {
+        "number": "#140",
+        "name": "Vikavolt",
+        "sprite": "140_Vikavolt.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Tree-shaded Fluffy Flower Bed",
+    "slug": "tree_shaded_fluffy_flower_bed",
+    "image": "334_Tree_shaded_Fluffy_Flower_Bed.jpg",
+    "items": [
+      "Large Tree (any) x1",
+      "Skyland Flowers x4"
+    ],
+    "pokemon": [
+      {
+        "number": "#229",
+        "name": "Girafarig",
+        "sprite": "229_Girafarig.jpg"
+      },
+      {
+        "number": "#230",
+        "name": "Farigiraf",
+        "sprite": "230_Farigiraf.jpg"
+      },
+      {
+        "number": "#249",
+        "name": "Servine",
+        "sprite": "249_Servine.jpg"
+      },
+      {
+        "number": "#250",
+        "name": "Serperior",
+        "sprite": "250_Serperior.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Tree-shaded Graceful Flower Bed",
+    "slug": "tree_shaded_graceful_flower_bed",
+    "image": "244_Tree_shaded_Graceful_Flower_Bed.jpg",
+    "items": [
+      "Mountain Flowers x4",
+      "Pointy Tree x1"
+    ],
+    "pokemon": [
+      {
+        "number": "#167",
+        "name": "Murkrow",
+        "sprite": "167_Murkrow.jpg"
+      },
+      {
+        "number": "#183",
+        "name": "Larvesta",
+        "sprite": "183_Larvesta.jpg"
+      },
+      {
+        "number": "#184",
+        "name": "Volcarona",
+        "sprite": "184_Volcarona.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Tree-shaded Pink Tall Grass",
+    "slug": "tree_shaded_pink_tall_grass",
+    "image": "247_Tree_shaded_Pink_Tall_Grass.jpg",
+    "items": [
+      "Large Tree (any)",
+      "Pink Tall Grass x4"
+    ],
+    "pokemon": [
+      {
+        "number": "#170",
+        "name": "Pupitar",
+        "sprite": "170_Pupitar.jpg"
+      },
+      {
+        "number": "#260",
+        "name": "Dreepy",
+        "sprite": "260_Dreepy.jpg"
+      },
+      {
+        "number": "#261",
+        "name": "Drakloak",
+        "sprite": "261_Drakloak.jpg"
+      },
+      {
+        "number": "#263",
+        "name": "Sprigatito",
+        "sprite": "263_Sprigatito.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Tree-shaded Red Tall Grass",
+    "slug": "tree_shaded_red_tall_grass",
+    "image": "225_Tree_shaded_Red_Tall_Grass.jpg",
+    "items": [
+      "Large Tree (any) x1",
+      "Red Tall Grass x4"
+    ],
+    "pokemon": [
+      {
+        "number": "#154",
+        "name": "Diglett",
+        "sprite": "154_Diglett.jpg"
+      },
+      {
+        "number": "#155",
+        "name": "Dugtrio",
+        "sprite": "155_Dugtrio.jpg"
+      },
+      {
+        "number": "#165",
+        "name": "Bonsly",
+        "sprite": "165_Bonsly.jpg"
+      },
+      {
+        "number": "#166",
+        "name": "Sudowoodo",
+        "sprite": "166_Sudowoodo.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Tree-shaded Snoozing Snorlax",
+    "slug": "tree_shaded_snoozing_snorlax",
+    "image": "152_Tree_shaded_Snoozing_Snorlax.jpg",
+    "items": [
+      "Large Tree (any) x1",
+      "Naptime Bed x1"
+    ],
+    "pokemon": [
+      {
+        "number": "#107",
+        "name": "Munchlax",
+        "sprite": "107_Munchlax.jpg"
+      },
+      {
+        "number": "#108",
+        "name": "Snorlax",
+        "sprite": "108_Snorlax.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Tree-shaded Tall Grass",
+    "slug": "tree_shaded_tall_grass",
+    "image": "32_Tree_shaded_Tall_Grass.jpg",
+    "items": [
+      "Large Tree (any) x1",
+      "Tall Grass x4"
+    ],
+    "pokemon": [
+      {
+        "number": "#021",
+        "name": "Bellsprout",
+        "sprite": "021_Bellsprout.jpg"
+      },
+      {
+        "number": "#042",
+        "name": "Scyther",
+        "sprite": "042_Scyther.jpg"
+      },
+      {
+        "number": "#043",
+        "name": "Scizor",
+        "sprite": "043_Scizor.jpg"
+      },
+      {
+        "number": "#044",
+        "name": "Pinsir",
+        "sprite": "044_Pinsir.jpg"
+      },
+      {
+        "number": "#050",
+        "name": "Heracross",
+        "sprite": "050_Heracross.jpg"
+      },
+      {
+        "number": "#056",
+        "name": "Cacturne",
+        "sprite": "056_Cacturne.jpg"
+      },
+      {
+        "number": "#191",
+        "name": "Skwovet",
+        "sprite": "191_Skwovet.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Tree-Shaded Yellow Tall Grass",
+    "slug": "tree_shaded_yellow_tall_grass",
+    "image": "112_Tree_Shaded_Yellow_Tall_Grass.jpg",
+    "items": [
+      "Large Tree (any) x1",
+      "Yellow Tall Grass x4"
+    ],
+    "pokemon": [
+      {
+        "number": "#081",
+        "name": "Zubat",
+        "sprite": "081_Zubat.jpg"
+      },
+      {
+        "number": "#082",
+        "name": "Golbat",
+        "sprite": "082_Golbat.jpg"
+      },
+      {
+        "number": "#125",
+        "name": "Makuhita",
+        "sprite": "125_Makuhita.jpg"
+      },
+      {
+        "number": "#126",
+        "name": "Hariyama",
+        "sprite": "126_Hariyama.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Tropical Seaside",
+    "slug": "tropical_seaside",
+    "image": "150_Tropical_Seaside.jpg",
+    "items": [
+      "Large Palm Tree x1",
+      "Hedge (any) x4",
+      "Ocean Water x2"
+    ],
+    "pokemon": [
+      {
+        "number": "#106",
+        "name": "Lapras",
+        "sprite": "106_Lapras.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Tropical Vibes",
+    "slug": "tropical_vibes",
+    "image": "21_Tropical_Vibes.jpg",
+    "items": [
+      "Large Palm Tree x1",
+      "Seashore Flowers x4"
+    ],
+    "pokemon": [
+      {
+        "number": "#014",
+        "name": "Gloom",
+        "sprite": "014_Gloom.jpg"
+      },
+      {
+        "number": "#098",
+        "name": "Exeggcute",
+        "sprite": "098_Exeggcute.jpg"
+      },
+      {
+        "number": "#099",
+        "name": "Exeggutor",
+        "sprite": "099_Exeggutor.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Tundra Fossil Display",
+    "slug": "tundra_fossil_display",
+    "image": "393_Tundra_Fossil_Display.jpg",
+    "items": [
+      "Pedestal / Exhibition Stand x2",
+      "Tundra Fossil (Head, Body, Tail)"
+    ],
+    "pokemon": [
+      {
+        "number": "#279",
+        "name": "Aurorus",
+        "sprite": "279_Aurorus.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Uplifting Duckweed",
+    "slug": "uplifting_duckweed",
+    "image": "251_Uplifting_Duckweed.jpg",
+    "items": [
+      "Duckweed x4",
+      "Water x2"
+    ],
+    "pokemon": [
+      {
+        "number": "#172",
+        "name": "Lotad",
+        "sprite": "172_Lotad.jpg"
+      },
+      {
+        "number": "#174",
+        "name": "Ludicolo",
+        "sprite": "174_Ludicolo.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Urgent Care",
+    "slug": "urgent_care",
+    "image": "52_Urgent_Care.jpg",
+    "items": [
+      "Seat (any) x1",
+      "Table (any) x1",
+      "First Aid Kit x1"
+    ],
+    "pokemon": [
+      {
+        "number": "#035",
+        "name": "Hitmonlee",
+        "sprite": "035_Hitmonlee.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Vending Machine Break Area",
+    "slug": "vending_machine_break_area",
+    "image": "202_Vending_Machine_Break_Area.jpg",
+    "items": [
+      "Vending Machine x1",
+      "Seat (wide) x1"
+    ],
+    "pokemon": [
+      {
+        "number": "#138",
+        "name": "Grubbin",
+        "sprite": "138_Grubbin.jpg"
+      },
+      {
+        "number": "#139",
+        "name": "Charjabug",
+        "sprite": "139_Charjabug.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Vending Machine Set",
+    "slug": "vending_machine_set",
+    "image": "145_Vending_Machine_Set.jpg",
+    "items": [
+      "Waste Bin (any) x1",
+      "Vending Machine x1"
+    ],
+    "pokemon": [
+      {
+        "number": "#103",
+        "name": "Elekid",
+        "sprite": "103_Elekid.jpg"
+      },
+      {
+        "number": "#105",
+        "name": "Electivire",
+        "sprite": "105_Electivire.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Very-Berry Space",
+    "slug": "very_berry_space",
+    "image": "106_Very_Berry_Space.jpg",
+    "items": [
+      "Berry Chair x1",
+      "Berry Table x1",
+      "Berry Bed x1"
+    ],
+    "pokemon": [
+      {
+        "number": "#076",
+        "name": "Goodra",
+        "sprite": "076_Goodra.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Waterside Dinghy",
+    "slug": "waterside_dinghy",
+    "image": "324_Waterside_Dinghy.jpg",
+    "items": [
+      "Canoe x1",
+      "Duckweed x2",
+      "Water x2",
+      "High-up Location"
+    ],
+    "pokemon": [
+      {
+        "number": "#223",
+        "name": "Dragonite",
+        "sprite": "223_Dragonite.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Waterwheel Spot",
+    "slug": "waterwheel_spot",
+    "image": "189_Waterwheel_Spot.jpg",
+    "items": [
+      "Waterwheel x1",
+      "Water x2.",
+      "Waterfall x1"
+    ],
+    "pokemon": [
+      {
+        "number": "#129",
+        "name": "Prinplup",
+        "sprite": "129_Prinplup.jpg"
+      },
+      {
+        "number": "#130",
+        "name": "Empoleon",
+        "sprite": "130_Empoleon.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Welcoming Resort",
+    "slug": "welcoming_resort",
+    "image": "186_Welcoming_Resort.jpg",
+    "items": [
+      "Resort Sofa x1",
+      "Resort Table x1",
+      "Resort Hammock x1",
+      "Resort Light x1"
+    ],
+    "pokemon": [
+      {
+        "number": "#127",
+        "name": "Absol",
+        "sprite": "127_Absol.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Windy Flower Bed",
+    "slug": "windy_flower_bed",
+    "image": "179_Windy_Flower_Bed.jpg",
+    "items": [
+      "Windmill x1",
+      "Seashore Flowers x4"
+    ],
+    "pokemon": [
+      {
+        "number": "#123",
+        "name": "Wingull",
+        "sprite": "123_Wingull.jpg"
+      },
+      {
+        "number": "#124",
+        "name": "Pelipper",
+        "sprite": "124_Pelipper.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Wing Fossil Display",
+    "slug": "wing_fossil_display",
+    "image": "385_Wing_Fossil_Display.jpg",
+    "items": [
+      "Pedestal / Exhibition Stand x2",
+      "Wing Fossil (Head, Body, Right Wing, Left Wing, Tail)"
+    ],
+    "pokemon": [
+      {
+        "number": "#271",
+        "name": "Aerodactyl",
+        "sprite": "271_Aerodactyl.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Work Desk",
+    "slug": "work_desk",
+    "image": "318_Work_Desk.jpg",
+    "items": [
+      "Office Desk x1",
+      "Office Chair x1",
+      "Mug x1",
+      "Laptop x1"
+    ],
+    "pokemon": [
+      {
+        "number": "#219",
+        "name": "Porygon2",
+        "sprite": "219_Porygon2.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Working the Register",
+    "slug": "working_the_register",
+    "image": "118_Working_the_Register.jpg",
+    "items": [
+      "Table (any) x2",
+      "Cash Register x1"
+    ],
+    "pokemon": [
+      {
+        "number": "#084",
+        "name": "Meowth",
+        "sprite": "084_Meowth.jpg"
+      },
+      {
+        "number": "#100",
+        "name": "Happiny",
+        "sprite": "100_Happiny.jpg"
+      },
+      {
+        "number": "#131",
+        "name": "Audino",
+        "sprite": "131_Audino.jpg"
+      },
+      {
+        "number": "#175",
+        "name": "Mawile",
+        "sprite": "175_Mawile.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Yellow Carpet",
+    "slug": "yellow_carpet",
+    "image": "404_Yellow_Carpet_and_Dandelion_Lunchtime.jpg",
+    "items": [
+      "Dandy Flowers x4"
+    ],
+    "pokemon": [
+      {
+        "number": "Event #001",
+        "name": "Hopip",
+        "sprite": "Event_001_Hopip.jpg"
+      },
+      {
+        "number": "Event #002",
+        "name": "Skiploom",
+        "sprite": "Event_002_Skiploom.jpg"
+      }
+    ]
+  },
+  {
+    "habitat": "Yellow Tall Grass",
+    "slug": "yellow_tall_grass",
+    "image": "156_Yellow_Tall_Grass.jpg",
+    "items": [
+      "Yellow Tall Grass x4"
+    ],
+    "pokemon": [
+      {
+        "number": "#109",
+        "name": "Spinarak",
+        "sprite": "109_Spinarak.jpg"
+      },
+      {
+        "number": "#110",
+        "name": "Ariados",
+        "sprite": "110_Ariados.jpg"
+      },
+      {
+        "number": "#138",
+        "name": "Grubbin",
+        "sprite": "138_Grubbin.jpg"
+      }
+    ]
+  }
+]
