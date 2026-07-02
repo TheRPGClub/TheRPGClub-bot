@@ -1,5 +1,5 @@
-import type { ButtonInteraction, StringSelectMenuInteraction } from "discord.js";
-import { ButtonComponent, Discord, SelectMenuComponent } from "discordx";
+import type { ButtonInteraction } from "discord.js";
+import { ButtonComponent, Discord } from "discordx";
 import {
   replyIfNotOwner,
   safeReply,
@@ -9,13 +9,13 @@ import { buildComponentsV2Flags, buildTextReply } from "../../functions/Componen
 import { safeIgnore } from "../../utilities/AsyncUtils.js";
 import {
   POKOPIA_BACK_PREFIX,
+  POKOPIA_DETAIL_PREFIX,
   POKOPIA_LIST_NAV_PREFIX,
-  POKOPIA_SELECT_PREFIX,
 } from "../../config/customIdPrefixes.js";
 import {
   parsePokopiaBackId,
+  parsePokopiaDetailId,
   parsePokopiaListNavId,
-  parsePokopiaSelectId,
 } from "./pokopia-customid.utils.js";
 import {
   buildHabitatDetailPayload,
@@ -52,23 +52,22 @@ export class PokopiaComponentsCommand {
     });
   }
 
-  @SelectMenuComponent({
-    id: new RegExp(`^${POKOPIA_SELECT_PREFIX}:[ph]:[^:]+:[an]:[du]:\\d+$`),
+  @ButtonComponent({
+    id: new RegExp(`^${POKOPIA_DETAIL_PREFIX}:[ph]:[^:]+:[an]:[du]:\\d+:[^:]+$`),
   })
-  async onPokopiaSelect(interaction: StringSelectMenuInteraction): Promise<void> {
-    const parsed = parsePokopiaSelectId(interaction.customId);
+  async onPokopiaDetail(interaction: ButtonInteraction): Promise<void> {
+    const parsed = parsePokopiaDetailId(interaction.customId);
     if (!parsed) {
       safeIgnore(safeReply(interaction, buildTextReply(INVALID_CONTROL_MESSAGE, true)));
       return;
     }
     if (await replyIfNotOwner(interaction, parsed.ownerId, NOT_YOUR_VIEW_MESSAGE)) return;
 
-    const selectedValue = interaction.values[0];
     const payload = parsed.kind === "pokemon"
       ? buildPokemonDetailPayload(
-        parsed.ownerId, parsed.sort, parsed.order, parsed.page, selectedValue,
+        parsed.ownerId, parsed.sort, parsed.order, parsed.page, parsed.itemKey,
       )
-      : buildHabitatDetailPayload(parsed.ownerId, parsed.order, parsed.page, selectedValue);
+      : buildHabitatDetailPayload(parsed.ownerId, parsed.order, parsed.page, parsed.itemKey);
 
     if (!payload) {
       safeIgnore(safeReply(interaction, buildTextReply(INVALID_CONTROL_MESSAGE, true)));

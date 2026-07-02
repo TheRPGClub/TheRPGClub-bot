@@ -17,5 +17,5 @@ export const GAMEDB_SEARCH_PREFIX = "gamedb-search-";
 
 // Pokopia list/detail navigation interaction IDs (shared by pokemon and habitat views)
 export const POKOPIA_LIST_NAV_PREFIX = "pokopia-list-nav-v1";
-export const POKOPIA_SELECT_PREFIX = "pokopia-select-v1";
+export const POKOPIA_DETAIL_PREFIX = "pokopia-detail-v1";
 export const POKOPIA_BACK_PREFIX = "pokopia-back-v1";
