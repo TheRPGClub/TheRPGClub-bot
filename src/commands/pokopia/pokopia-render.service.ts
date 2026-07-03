@@ -42,7 +42,7 @@ import { getHabitatEmoji, getPokemonEmoji } from "../../services/PokopiaEmojiSer
 
 type PokopiaComponent = ContainerBuilder | ActionRowBuilder<ButtonBuilder>;
 
-const BUTTONS_PER_ROW = 5;
+const BUTTONS_PER_ROW = 2;
 
 function chunkButtons(buttons: ButtonBuilder[]): ActionRowBuilder<ButtonBuilder>[] {
   const rows: ActionRowBuilder<ButtonBuilder>[] = [];
@@ -97,11 +97,6 @@ export function buildPokemonListPayload(
 
   const files: AttachmentBuilder[] = [];
   const footer = buildPageFooterText(safePage, totalPages, `${all.length} Pokemon`);
-  const container = new ContainerBuilder().addTextDisplayComponents(
-    new TextDisplayBuilder().setContent(
-      safeV2TextContent(`## Pokopia Pokedex\n${footer}`, 250),
-    ),
-  );
 
   const itemButtons = pageItems.map((pokemon) => {
     const label = truncateWithEllipsis(
@@ -120,6 +115,15 @@ export function buildPokemonListPayload(
     return button;
   });
 
+  const container = new ContainerBuilder()
+    .addTextDisplayComponents(
+      new TextDisplayBuilder().setContent(safeV2TextContent("## Pokopia Pokedex", 250)),
+    )
+    .addActionRowComponents(...chunkButtons(itemButtons))
+    .addTextDisplayComponents(
+      new TextDisplayBuilder().setContent(safeV2TextContent(footer, 250)),
+    );
+
   const navRow = buildOptionalPrevNextRowWithIds(
     buildPokopiaListNavId({
       kind: "pokemon", ownerId, sort, order, page: safePage, direction: "prev",
@@ -132,7 +136,7 @@ export function buildPokemonListPayload(
   );
 
   return {
-    components: paginateComponents(container, ...chunkButtons(itemButtons), navRow),
+    components: paginateComponents(container, navRow),
     files,
   };
 }
@@ -147,11 +151,6 @@ export function buildHabitatListPayload(
 
   const files: AttachmentBuilder[] = [];
   const footer = buildPageFooterText(safePage, totalPages, `${all.length} habitats`);
-  const container = new ContainerBuilder().addTextDisplayComponents(
-    new TextDisplayBuilder().setContent(
-      safeV2TextContent(`## Pokopia Habitats\n${footer}`, 250),
-    ),
-  );
 
   const itemButtons = pageItems.map((habitat) => {
     const label = truncateWithEllipsis(habitat.habitat, DISCORD_BUTTON_LABEL_MAX);
@@ -167,6 +166,15 @@ export function buildHabitatListPayload(
     return button;
   });
 
+  const container = new ContainerBuilder()
+    .addTextDisplayComponents(
+      new TextDisplayBuilder().setContent(safeV2TextContent("## Pokopia Habitats", 250)),
+    )
+    .addActionRowComponents(...chunkButtons(itemButtons))
+    .addTextDisplayComponents(
+      new TextDisplayBuilder().setContent(safeV2TextContent(footer, 250)),
+    );
+
   const navRow = buildOptionalPrevNextRowWithIds(
     buildPokopiaListNavId({
       kind: "habitat", ownerId, sort: "name", order, page: safePage, direction: "prev",
@@ -179,7 +187,7 @@ export function buildHabitatListPayload(
   );
 
   return {
-    components: paginateComponents(container, ...chunkButtons(itemButtons), navRow),
+    components: paginateComponents(container, navRow),
     files,
   };
 }
