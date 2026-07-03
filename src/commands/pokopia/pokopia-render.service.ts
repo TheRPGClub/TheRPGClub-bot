@@ -6,14 +6,10 @@ import {
 } from "discord.js";
 import {
   ContainerBuilder,
-  MediaGalleryBuilder,
-  MediaGalleryItemBuilder,
   SectionBuilder,
-  SeparatorBuilder,
   TextDisplayBuilder,
   ThumbnailBuilder,
 } from "@discordjs/builders";
-import { SeparatorSpacingSize } from "discord-api-types/v10";
 import { resolveAssetPath } from "../../functions/AssetPath.js";
 import { safeV2TextContent } from "../../functions/ComponentsV2Utils.js";
 import { buildActionButton, buildButtonRow } from "../../functions/uiComponents.js";
@@ -82,6 +78,12 @@ function formatLitterDrop(image: string | null, name: string | null): string | n
   const emoji = getLitterDropEmoji(image);
   const emojiText = emoji ? `<:${emoji.name}:${emoji.id}> ` : "";
   return `${emojiText}${name}`;
+}
+
+function formatPokemonRef(pokemon: { number: string; name: string }): string {
+  const emoji = getPokemonEmoji(pokemon.number);
+  const emojiText = emoji ? `<:${emoji.name}:${emoji.id}> ` : "";
+  return `${emojiText}${pokemon.number} ${pokemon.name}`;
 }
 
 interface IPaginateResult<T> {
@@ -300,32 +302,28 @@ export function buildHabitatDetailPayload(
 
   const files: AttachmentBuilder[] = [];
   const container = new ContainerBuilder();
-  if (habitat.image) {
-    files.push(attach(habitatImagePath(habitat.image), habitat.image));
-    container.addMediaGalleryComponents(
-      new MediaGalleryBuilder().addItems(
-        new MediaGalleryItemBuilder()
-          .setURL(`attachment://${habitat.image}`)
-          .setDescription(habitat.habitat),
-      ),
-    );
-    container.addSeparatorComponents(
-      new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small).setDivider(false),
-    );
-  }
 
   const itemsText = habitat.items.length ? habitat.items.join(", ") : "-";
   const pokemonText = habitat.pokemon.length
-    ? habitat.pokemon.map((p) => `${p.number} ${p.name}`).join(", ")
+    ? habitat.pokemon.map((p) => formatPokemonRef(p)).join(", ")
     : "-";
   const detailText = [
     `## ${habitat.habitat}`,
     `**Required Items:** ${itemsText}`,
     `**Pokemon Found Here (${habitat.pokemon.length}):** ${pokemonText}`,
   ].join("\n");
-  container.addTextDisplayComponents(
+  const headerSection = new SectionBuilder().addTextDisplayComponents(
     new TextDisplayBuilder().setContent(safeV2TextContent(detailText, 1800)),
   );
+  if (habitat.image) {
+    files.push(attach(habitatImagePath(habitat.image), habitat.image));
+    headerSection.setThumbnailAccessory(
+      new ThumbnailBuilder()
+        .setURL(`attachment://${habitat.image}`)
+        .setDescription(habitat.habitat),
+    );
+  }
+  container.addSectionComponents(headerSection);
 
   const backRow = buildBackRow(ownerId, "habitat", "name", order, page);
 
