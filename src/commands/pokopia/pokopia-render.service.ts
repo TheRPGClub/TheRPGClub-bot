@@ -238,8 +238,8 @@ export function buildPokemonDetailPayload(
   );
   container.addSectionComponents(headerSection);
 
-  addHabitatSection(container, files, "Habitat 1", pokemon.habitat1Details, pokemon.habitat1Image);
-  addHabitatSection(container, files, "Habitat 2", pokemon.habitat2Details, pokemon.habitat2Image);
+  addHabitatSection(container, "Habitat 1", pokemon.habitat1Details);
+  addHabitatSection(container, "Habitat 2", pokemon.habitat2Details);
 
   if (!showBackButton) {
     return { components: paginateComponents(container), files };
@@ -255,27 +255,21 @@ function formatHabitatDetails(details: string): string {
     .split("\n")
     .map((line) => line.trim().replace(/,$/, ""))
     .filter(Boolean)
-    .join(", ");
+    .join(", ")
+    .replace(/:, /g, ": ");
 }
 
 function addHabitatSection(
   container: ContainerBuilder,
-  files: AttachmentBuilder[],
   label: string,
   details: string,
-  image: string,
 ): void {
   if (!details) return;
-  const section = new SectionBuilder().addTextDisplayComponents(
+  container.addTextDisplayComponents(
     new TextDisplayBuilder().setContent(
       safeV2TextContent(`**${label}**\n${formatHabitatDetails(details)}`, 500),
     ),
   );
-  if (image) {
-    files.push(attach(habitatImagePath(image), image));
-    section.setThumbnailAccessory(new ThumbnailBuilder().setURL(`attachment://${image}`));
-  }
-  container.addSectionComponents(section);
 }
 
 export function buildHabitatDetailPayload(
