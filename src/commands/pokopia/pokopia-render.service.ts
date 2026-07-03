@@ -206,22 +206,13 @@ export function buildPokemonDetailPayload(
   order: PokopiaSortOrder,
   page: number,
   number: string,
+  showBackButton = true,
 ): IPokopiaPayload | null {
   const pokemon = getPokemonByNumber(number);
   if (!pokemon) return null;
 
   const files: AttachmentBuilder[] = [attach(pokedexImagePath(pokemon.sprite), pokemon.sprite)];
   const container = new ContainerBuilder();
-  container.addMediaGalleryComponents(
-    new MediaGalleryBuilder().addItems(
-      new MediaGalleryItemBuilder()
-        .setURL(`attachment://${pokemon.sprite}`)
-        .setDescription(pokemon.name),
-    ),
-  );
-  container.addSeparatorComponents(
-    new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small).setDivider(false),
-  );
 
   const abilities = [pokemon.ability1, pokemon.ability2].filter(Boolean).join(", ");
   const favorites = pokemon.favorites.join(", ");
@@ -237,12 +228,22 @@ export function buildPokemonDetailPayload(
       .filter(([, value]) => value)
       .map(([label, value]) => `**${label}:** ${value}`),
   ].join("\n");
-  container.addTextDisplayComponents(
+  const headerSection = new SectionBuilder().addTextDisplayComponents(
     new TextDisplayBuilder().setContent(safeV2TextContent(detailText, 1800)),
   );
+  headerSection.setThumbnailAccessory(
+    new ThumbnailBuilder()
+      .setURL(`attachment://${pokemon.sprite}`)
+      .setDescription(pokemon.name),
+  );
+  container.addSectionComponents(headerSection);
 
   addHabitatSection(container, files, "Habitat 1", pokemon.habitat1Details, pokemon.habitat1Image);
   addHabitatSection(container, files, "Habitat 2", pokemon.habitat2Details, pokemon.habitat2Image);
+
+  if (!showBackButton) {
+    return { components: paginateComponents(container), files };
+  }
 
   const backRow = buildBackRow(ownerId, "pokemon", sort, order, page);
 

@@ -48,7 +48,7 @@ export class PokopiaPokemonCommand {
 
     if (query) {
       const detailPayload = buildPokemonDetailPayload(
-        interaction.user.id, resolvedSort, resolvedOrder, 0, query,
+        interaction.user.id, resolvedSort, resolvedOrder, 0, query, false,
       );
       if (detailPayload) {
         await safeReply(interaction, {
