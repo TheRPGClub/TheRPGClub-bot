@@ -40,9 +40,9 @@ import {
 } from "./pokopia-customid.utils.js";
 import { getHabitatEmoji, getPokemonEmoji } from "../../services/PokopiaEmojiService.js";
 
-type PokopiaComponent = ContainerBuilder | ActionRowBuilder<ButtonBuilder>;
+type PokopiaComponent = ContainerBuilder | ActionRowBuilder<ButtonBuilder> | TextDisplayBuilder;
 
-const BUTTONS_PER_ROW = 2;
+const BUTTONS_PER_ROW = 1;
 
 function chunkButtons(buttons: ButtonBuilder[]): ActionRowBuilder<ButtonBuilder>[] {
   const rows: ActionRowBuilder<ButtonBuilder>[] = [];
@@ -119,10 +119,9 @@ export function buildPokemonListPayload(
     .addTextDisplayComponents(
       new TextDisplayBuilder().setContent(safeV2TextContent("## Pokopia Pokedex", 250)),
     )
-    .addActionRowComponents(...chunkButtons(itemButtons))
-    .addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(safeV2TextContent(footer, 250)),
-    );
+    .addActionRowComponents(...chunkButtons(itemButtons));
+
+  const footerText = new TextDisplayBuilder().setContent(safeV2TextContent(footer, 250));
 
   const navRow = buildOptionalPrevNextRowWithIds(
     buildPokopiaListNavId({
@@ -136,7 +135,7 @@ export function buildPokemonListPayload(
   );
 
   return {
-    components: paginateComponents(container, navRow),
+    components: paginateComponents(container, footerText, navRow),
     files,
   };
 }
@@ -170,10 +169,9 @@ export function buildHabitatListPayload(
     .addTextDisplayComponents(
       new TextDisplayBuilder().setContent(safeV2TextContent("## Pokopia Habitats", 250)),
     )
-    .addActionRowComponents(...chunkButtons(itemButtons))
-    .addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(safeV2TextContent(footer, 250)),
-    );
+    .addActionRowComponents(...chunkButtons(itemButtons));
+
+  const footerText = new TextDisplayBuilder().setContent(safeV2TextContent(footer, 250));
 
   const navRow = buildOptionalPrevNextRowWithIds(
     buildPokopiaListNavId({
@@ -187,7 +185,7 @@ export function buildHabitatListPayload(
   );
 
   return {
-    components: paginateComponents(container, navRow),
+    components: paginateComponents(container, footerText, navRow),
     files,
   };
 }
