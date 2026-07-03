@@ -19,6 +19,7 @@ export interface IPokopiaPokemon {
   ability2: string;
   home: string;
   litterDrop: string | null;
+  litterDropName: string | null;
   habitat1Image: string;
   habitat1Details: string;
   habitat2Image: string;

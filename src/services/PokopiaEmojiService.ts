@@ -10,6 +10,7 @@ import {
 
 const POKEMON_EMOJI_PREFIX = "pkp_";
 const HABITAT_EMOJI_PREFIX = "pkh_";
+const LITTER_DROP_EMOJI_PREFIX = "pkl_";
 const CREATION_THROTTLE_MS = 600;
 const EMOJI_NAME_MAX = 32;
 
@@ -20,6 +21,7 @@ export interface IPokopiaEmoji {
 
 const pokemonEmojiCache = new Map<string, IPokopiaEmoji>();
 const habitatEmojiCache = new Map<string, IPokopiaEmoji>();
+const litterDropEmojiCache = new Map<string, IPokopiaEmoji>();
 let initialized = false;
 
 function sanitizeKey(raw: string): string {
@@ -50,6 +52,10 @@ export function getPokemonEmoji(number: string): IPokopiaEmoji | null {
 
 export function getHabitatEmoji(slug: string): IPokopiaEmoji | null {
   return habitatEmojiCache.get(slug) ?? null;
+}
+
+export function getLitterDropEmoji(image: string): IPokopiaEmoji | null {
+  return litterDropEmojiCache.get(image) ?? null;
 }
 
 export async function startPokopiaEmojiService(client: Client): Promise<void> {
@@ -131,9 +137,38 @@ async function syncPokopiaEmoji(client: Client): Promise<void> {
     }
   }
 
+  const uniqueLitterDrops = new Map<string, string>();
+  for (const pokemon of getSortedPokemon("number", "asc")) {
+    if (pokemon.litterDrop) uniqueLitterDrops.set(pokemon.litterDrop, pokemon.litterDrop);
+  }
+
+  for (const [image] of uniqueLitterDrops) {
+    const key = image.replace(/\.[^.]+$/, "");
+    const name = buildEmojiName(LITTER_DROP_EMOJI_PREFIX, key, seenNames);
+    const existingId = existingByName.get(name);
+    if (existingId) {
+      litterDropEmojiCache.set(image, { id: existingId, name });
+      continue;
+    }
+    try {
+      const emoji = await app.emojis.create({
+        attachment: resolveAssetPath("images", "pokopia", "litter_drop", image),
+        name,
+      });
+      if (emoji.id) {
+        litterDropEmojiCache.set(image, { id: emoji.id, name });
+        created += 1;
+        await sleep(CREATION_THROTTLE_MS);
+      }
+    } catch (err) {
+      logError("PokopiaEmojiService.createLitterDropEmoji", err);
+    }
+  }
+
   logInfo(
     "PokopiaEmojiService",
     `Sync complete. Created ${created} emoji. `
-      + `Pokemon cache: ${pokemonEmojiCache.size}, Habitat cache: ${habitatEmojiCache.size}`,
+      + `Pokemon cache: ${pokemonEmojiCache.size}, Habitat cache: ${habitatEmojiCache.size}, `
+      + `Litter drop cache: ${litterDropEmojiCache.size}`,
   );
 }

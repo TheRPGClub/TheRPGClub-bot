@@ -38,7 +38,11 @@ import {
   buildPokopiaDetailId,
   buildPokopiaListNavId,
 } from "./pokopia-customid.utils.js";
-import { getHabitatEmoji, getPokemonEmoji } from "../../services/PokopiaEmojiService.js";
+import {
+  getHabitatEmoji,
+  getLitterDropEmoji,
+  getPokemonEmoji,
+} from "../../services/PokopiaEmojiService.js";
 
 type PokopiaComponent = ContainerBuilder | ActionRowBuilder<ButtonBuilder> | TextDisplayBuilder;
 
@@ -71,6 +75,13 @@ function habitatImagePath(image: string): string {
 
 function attach(path: string, name: string): AttachmentBuilder {
   return new AttachmentBuilder(path, { name });
+}
+
+function formatLitterDrop(image: string | null, name: string | null): string | null {
+  if (!image || !name) return null;
+  const emoji = getLitterDropEmoji(image);
+  const emojiText = emoji ? `<:${emoji.name}:${emoji.id}> ` : "";
+  return `${emojiText}${name}`;
 }
 
 interface IPaginateResult<T> {
@@ -225,7 +236,7 @@ export function buildPokemonDetailPayload(
   const detailFields: [string, string | null][] = [
     ["Abilities", abilities],
     ["Home", pokemon.home],
-    ["Litter Drop", pokemon.litterDrop],
+    ["Litter Drop", formatLitterDrop(pokemon.litterDrop, pokemon.litterDropName)],
     ["Favorites", favorites],
   ];
   const detailText = [
