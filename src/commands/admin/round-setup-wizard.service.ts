@@ -350,10 +350,21 @@ export async function handleNextRoundSetup(
       logHistory || "Processing...",
       { color: COLOR_PRIMARY, footer: wizardFooter },
     );
-    await safeReply(interaction, {
+    const payload = {
       components: [updatedContainer],
       flags: buildComponentsV2EditFlags(),
-    });
+    };
+    // Discord.js flips interaction.replied = true on the first editReply, so
+    // routing repeat updates through safeReply(interaction, ...) would send a
+    // brand-new followUp message every time instead of editing. Editing the
+    // captured message directly keeps every update on the same message.
+    if (message) {
+      await message.edit(payload).catch((err) => {
+        logError("round-setup-wizard.service.updateEmbed", err);
+      });
+    } else {
+      await safeReply(interaction, payload);
+    }
   };
 
   const wizardLog = async (msg: string) => {
@@ -543,9 +554,25 @@ export async function handleNextRoundSetup(
 
   const nextMonthDate = new Date();
   nextMonthDate.setMonth(nextMonthDate.getMonth() + 1);
-  const monthYear = formatMonthYear(nextMonthDate);
+  const computedMonthYear = formatMonthYear(nextMonthDate);
+  const monthYearChoice = await wizardChoice(
+    `Use auto-assigned month label **${computedMonthYear}**, or enter a custom label?`,
+    addCancelOption([
+      { label: `Use ${computedMonthYear}`, value: "default", style: ButtonStyle.Primary },
+      { label: "Enter custom label", value: "custom" },
+    ]),
+  );
+  if (!monthYearChoice) return;
+  let monthYear = computedMonthYear;
+  if (monthYearChoice === "custom") {
+    const monthYearInput = await wizardPrompt(
+      'Enter the month label to use (e.g. "August 2026").',
+    );
+    if (!monthYearInput) return;
+    monthYear = monthYearInput.trim();
+  }
   await persistWizardState({ monthYear });
-  await wizardLog(`Auto-assigned label: **${monthYear}**`);
+  await wizardLog(`Month label set to: **${monthYear}**`);
 
   const gotmNominations = await listNominationsForRound("gotm", nextRound);
   const nrNominations = await listNominationsForRound("nr-gotm", nextRound);
@@ -1036,7 +1063,13 @@ export async function handleNextRoundSetup(
        
       buildActionButton({ customId: "wiz-cancel", label: "Cancel", style: ButtonStyle.Danger }),
     );
-    await safeReply(interaction, { components: [row] });
+    if (message) {
+      await message.edit({ components: [row] }).catch((err) => {
+        logError("round-setup-wizard.service.confirmDbActions", err);
+      });
+    } else {
+      await safeReply(interaction, { components: [row] });
+    }
 
     let decision = "cancel";
     if (!message || typeof message.awaitMessageComponent !== "function") {
@@ -1053,7 +1086,13 @@ export async function handleNextRoundSetup(
           time: 300_000,
         });
         await safeDeferUpdate(collected);
-        await safeReply(interaction, { components: [] });
+        if (message) {
+          await message.edit({ components: [] }).catch((err) => {
+            logError("round-setup-wizard.service.confirmDbActions", err);
+          });
+        } else {
+          await safeReply(interaction, { components: [] });
+        }
         if (collected.customId === "wiz-commit") decision = "commit";
         else if (collected.customId === "wiz-edit") decision = "edit";
       } catch (err: any) {
