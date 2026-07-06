@@ -13,7 +13,11 @@ import {
   channelMention,
   userMention,
 } from "discord.js";
-import { safeDeferUpdate, safeReply } from "../../functions/InteractionUtils.js";
+import {
+  isInteractionSettled,
+  safeDeferUpdate,
+  safeReply,
+} from "../../functions/InteractionUtils.js";
 import {
   buildActionButton,
   buildButtonRow,
@@ -64,6 +68,7 @@ import {
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
 import { truncateLabel } from "../../config/textLimits.js";
 import { safeIgnore } from "../../utilities/AsyncUtils.js";
+import { logError } from "../../utilities/LogUtils.js";
 
 const NEXT_ROUND_SETUP_COMMAND_KEY = "nextround-setup";
 const MAX_SELECT_OPTIONS = 25;
@@ -310,15 +315,24 @@ export async function handleNextRoundSetup(
     { color: COLOR_PRIMARY, footer: wizardFooter },
   );
 
-  const replyResult = await safeReply(
-    interaction,
-    {
-      components: [initialContainer],
-      flags: buildComponentsV2Flags(false),
-      withResponse: true,
-    } as any,
-  );
-  const message = replyResult?.resource?.message ?? null;
+  const initialPayload = {
+    components: [initialContainer],
+    flags: buildComponentsV2Flags(false),
+  };
+  let message: Message | null = null;
+  if (isInteractionSettled(interaction)) {
+    const replyResult = await safeReply(
+      interaction,
+      { ...initialPayload, __forceFollowUp: true } as any,
+    );
+    message = replyResult as Message;
+  } else {
+    const replyResult = await safeReply(
+      interaction,
+      { ...initialPayload, withResponse: true } as any,
+    );
+    message = replyResult?.resource?.message ?? null;
+  }
   let logHistory = "";
   let wizardState: INextRoundWizardState = createDefaultNextRoundWizardState(testMode);
 
@@ -1023,18 +1037,28 @@ export async function handleNextRoundSetup(
     await safeReply(interaction, { components: [row] });
 
     let decision = "cancel";
-    try {
-      const collected = await message.awaitMessageComponent({
-        componentType: ComponentType.Button,
-        filter: (i: any) => i.user.id === interaction.user.id,
-        time: 300_000,
-      });
-      await safeDeferUpdate(collected);
-      await safeReply(interaction, { components: [] });
-      if (collected.customId === "wiz-commit") decision = "commit";
-      else if (collected.customId === "wiz-edit") decision = "edit";
-    } catch {
-      decision = "cancel";
+    if (!message || typeof message.awaitMessageComponent !== "function") {
+      logError(
+        "round-setup-wizard.service.confirmDbActions",
+        new Error("Wizard message unavailable for awaitMessageComponent"),
+      );
+      await wizardLog("Error: could not attach confirmation collector to wizard message.");
+    } else {
+      try {
+        const collected = await message.awaitMessageComponent({
+          componentType: ComponentType.Button,
+          filter: (i: any) => i.user.id === interaction.user.id,
+          time: 300_000,
+        });
+        await safeDeferUpdate(collected);
+        await safeReply(interaction, { components: [] });
+        if (collected.customId === "wiz-commit") decision = "commit";
+        else if (collected.customId === "wiz-edit") decision = "edit";
+      } catch (err: any) {
+        logError("round-setup-wizard.service.confirmDbActions", err);
+        await wizardLog(`Error awaiting confirmation: ${err?.message ?? String(err)}`);
+        decision = "cancel";
+      }
     }
 
     if (decision === "cancel") {
