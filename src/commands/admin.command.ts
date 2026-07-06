@@ -24,6 +24,7 @@ import {
   safeUpdate,
   sanitizeUserInput,
 } from "../functions/InteractionUtils.js";
+import { logError } from "../utilities/LogUtils.js";
 import {
   buildTextReply,
   buildComponentsV2Flags,
@@ -237,7 +238,14 @@ export class Admin {
     const okToUseCommand: boolean = await isAdmin(interaction);
     if (!okToUseCommand) return;
 
-    await handleNextRoundSetup(interaction, testModeInput);
+    await withErrorReply(interaction, async () => {
+      try {
+        await handleNextRoundSetup(interaction, testModeInput);
+      } catch (err: unknown) {
+        logError("admin.command.nextRoundSetup", err);
+        throw err;
+      }
+    }, "Round setup wizard failed");
   }
 
   @Slash({ description: "Add a new GOTM round", name: "add-gotm" })
