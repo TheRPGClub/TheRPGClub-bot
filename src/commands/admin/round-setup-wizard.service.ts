@@ -321,11 +321,13 @@ export async function handleNextRoundSetup(
   };
   let message: Message | null = null;
   if (isInteractionSettled(interaction)) {
-    const replyResult = await safeReply(
-      interaction,
-      { ...initialPayload, __forceFollowUp: true } as any,
-    );
-    message = replyResult as Message;
+    // Deferred-but-not-replied interactions route through editReply, which
+    // resolves directly to the Message (no `.resource` wrapper). Every later
+    // wizardLog/updateEmbed call edits this same underlying message, so
+    // capturing editReply's return here keeps `message` in sync with what
+    // the user actually sees (and clicks buttons on) at the commit step.
+    const replyResult = await safeReply(interaction, initialPayload as any);
+    message = (replyResult as Message) ?? null;
   } else {
     const replyResult = await safeReply(
       interaction,
