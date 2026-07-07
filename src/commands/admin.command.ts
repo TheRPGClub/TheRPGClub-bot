@@ -49,7 +49,6 @@ import {
 import { handleAddGotm, handleEditGotm } from "./admin/gotm-admin.service.js";
 import { handleAddNrGotm, handleEditNrGotm } from "./admin/nr-gotm-admin.service.js";
 import { handleNextRoundSetup } from "./admin/round-setup-wizard.service.js";
-import { handleSqlHealthCheck } from "./admin/sql-health-check.service.js";
 import { type AdminHelpTopicId } from "./admin/admin.types.js";
 
 @Discord()
@@ -297,18 +296,6 @@ export class Admin {
     }
 
     await handleEditNrGotm(interaction, round);
-  }
-
-  @Slash({ description: "Check connectivity and latency for a database", name: "sql-health-check" })
-  async sqlHealthCheck(
-    interaction: CommandInteraction,
-  ): Promise<void> {
-    await safeDeferReply(interaction, { flags: MessageFlags.Ephemeral });
-
-    const okToUseCommand: boolean = await isAdmin(interaction);
-    if (!okToUseCommand) return;
-
-    await handleSqlHealthCheck(interaction);
   }
 
   @Slash({ description: "Show help for admin commands", name: "help" })
