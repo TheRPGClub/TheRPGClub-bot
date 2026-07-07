@@ -1,19 +1,15 @@
 import {
   ApplicationCommandOptionType,
-  Attachment,
-  ButtonInteraction,
   MessageFlags,
   StringSelectMenuInteraction,
   ModalSubmitInteraction,
   type CommandInteraction,
 } from "discord.js";
 import {
-  ButtonComponent,
   Discord,
   ModalComponent,
   SelectMenuComponent,
   Slash,
-  SlashChoice,
   SlashGroup,
   SlashOption,
 } from "discordx";
@@ -52,20 +48,9 @@ import {
 } from "./admin/nomination-admin.service.js";
 import { handleAddGotm, handleEditGotm } from "./admin/gotm-admin.service.js";
 import { handleAddNrGotm, handleEditNrGotm } from "./admin/nr-gotm-admin.service.js";
-import { handleGotmAudit } from "./admin/gotm-audit.service.js";
-import {
-  handleGotmAuditSelect,
-  handleGotmAuditAction,
-  handleGotmAuditManualModal,
-  handleGotmAuditQueryModal,
-} from "./admin/gotm-audit-handlers.js";
 import { handleNextRoundSetup } from "./admin/round-setup-wizard.service.js";
 import { handleSqlHealthCheck } from "./admin/sql-health-check.service.js";
-import {
-  GOTM_AUDIT_ACTIONS,
-  type AdminHelpTopicId,
-  type GotmAuditAction,
-} from "./admin/admin.types.js";
+import { type AdminHelpTopicId } from "./admin/admin.types.js";
 
 @Discord()
 @SlashGroup({ description: "Admin Commands", name: "admin" })
@@ -270,60 +255,6 @@ export class Admin {
     }
 
     await handleAddNrGotm(interaction);
-  }
-
-  @Slash({ description: "Audit and import past GOTM and NR-GOTM entries", name: "gotm-audit" })
-  async gotmAudit(
-    @SlashChoice(
-      ...GOTM_AUDIT_ACTIONS.map((value) => ({
-        name: value,
-        value,
-      })),
-    )
-    @SlashOption({
-      description: "Action to perform",
-      name: "action",
-      required: true,
-      type: ApplicationCommandOptionType.String,
-    })
-    action: GotmAuditAction,
-    @SlashOption({
-      description: "CSV file of past GOTM/NR-GOTM entries (required for start)",
-      name: "file",
-      required: false,
-      type: ApplicationCommandOptionType.Attachment,
-    })
-    file: Attachment | undefined,
-    interaction: CommandInteraction,
-  ): Promise<void> {
-    await safeDeferReply(interaction, { flags: MessageFlags.Ephemeral });
-
-    const okToUseCommand: boolean = await isAdmin(interaction);
-    if (!okToUseCommand) {
-      return;
-    }
-
-    await handleGotmAudit(interaction, action, file);
-  }
-
-  @SelectMenuComponent({ id: /^gotm-audit-select:\d+:\d+:\d+$/ })
-  async handleGotmAuditSelect(interaction: StringSelectMenuInteraction): Promise<void> {
-    await handleGotmAuditSelect(interaction);
-  }
-
-  @ButtonComponent({ id: /^gotm-audit-action:\d+:\d+:\d+:(manual|query|accept|skip|pause)$/ })
-  async handleGotmAuditAction(interaction: ButtonInteraction): Promise<void> {
-    await handleGotmAuditAction(interaction);
-  }
-
-  @ModalComponent({ id: /^gotm-audit-manual:\d+:\d+:\d+$/ })
-  async handleGotmAuditManualModal(interaction: ModalSubmitInteraction): Promise<void> {
-    await handleGotmAuditManualModal(interaction);
-  }
-
-  @ModalComponent({ id: /^gotm-audit-query:\d+:\d+:\d+$/ })
-  async handleGotmAuditQueryModal(interaction: ModalSubmitInteraction): Promise<void> {
-    await handleGotmAuditQueryModal(interaction);
   }
 
   @Slash({ description: "Edit GOTM data by round", name: "edit-gotm" })

@@ -52,18 +52,6 @@ export const ADMIN_HELP_TOPICS: AdminHelpTopic[] = [
       "Round number is auto-assigned to the next open NR-GOTM round.",
   },
   {
-    id: "gotm-audit",
-    label: "/admin gotm-audit",
-    summary: "Audit and import past GOTM and NR-GOTM entries from a CSV file.",
-    syntax:
-      "Syntax: /admin gotm-audit action:<start|resume|pause|cancel|status> " +
-      "[file:<attachment>]",
-    notes:
-      "CSV headers: kind, round, monthYear, title. Optional: gameIndex (1-based), threadId, " +
-      "redditUrl, gameDbId. Use action:start with a CSV file to begin; resume continues " +
-      "the latest active session.",
-  },
-  {
     id: "edit-nr-gotm",
     label: "/admin edit-nr-gotm",
     summary: "Update details for a specific NR-GOTM round.",
