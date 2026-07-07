@@ -1,68 +1,6 @@
 import type { ISqlEntry } from "./types.js";
 
-const PLATFORM_COLS_PG = `platform_id,
-              platform_code,
-              platform_name,
-              platform_abbreviation,
-              igdb_platform_id`;
-
 export const GameSql = {
-  getPlatformsForGame: {
-    postgres: `SELECT DISTINCT p.platform_id,
-              p.platform_code,
-              p.platform_name,
-              p.platform_abbreviation,
-              p.igdb_platform_id
-         FROM gamedb_releases r
-         JOIN gamedb_platforms p ON p.platform_id = r.platform_id
-        WHERE r.game_id = :gameId
-        ORDER BY p.platform_name ASC`,
-  } satisfies ISqlEntry,
-
-  getAllPlatforms: {
-    postgres: `SELECT ${PLATFORM_COLS_PG}
-         FROM gamedb_platforms
-        ORDER BY platform_name ASC`,
-  } satisfies ISqlEntry,
-
-  getPlatformsByIgdbIds: (placeholders: string) =>
-    ({
-      postgres: `SELECT ${PLATFORM_COLS_PG}
-         FROM gamedb_platforms
-        WHERE igdb_platform_id IN (${placeholders})`,
-    }) satisfies ISqlEntry,
-
-  attachPlatformsToGames: (placeholders: string) =>
-    ({
-      postgres: `SELECT gp.game_id,
-              gp.platform_id,
-              p.platform_code,
-              p.platform_name,
-              p.platform_abbreviation,
-              p.igdb_platform_id
-         FROM gamedb_game_platforms gp
-         LEFT JOIN gamedb_platforms p ON p.platform_id = gp.platform_id
-        WHERE gp.game_id IN (${placeholders})`,
-    }) satisfies ISqlEntry,
-
-  getPlatformByCode: {
-    postgres: `SELECT ${PLATFORM_COLS_PG}
-         FROM gamedb_platforms
-        WHERE platform_code = :code`,
-  } satisfies ISqlEntry,
-
-  getRegionByCode: {
-    postgres: `SELECT region_id, region_code, region_name, igdb_region_id
-         FROM gamedb_regions
-        WHERE region_code = :code`,
-  } satisfies ISqlEntry,
-
-  addGamePlatformMerge: {
-    postgres: `INSERT INTO gamedb_game_platforms (game_id, platform_id)
-           VALUES (:gameId, :platformId)
-           ON CONFLICT (game_id, platform_id) DO NOTHING`,
-  } satisfies ISqlEntry,
-
   getGotmWins: {
     postgres: `SELECT ge.round_number,
                 COALESCE(

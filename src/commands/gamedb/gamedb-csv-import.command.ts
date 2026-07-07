@@ -73,7 +73,6 @@ import { isPositiveInt } from "../../utilities/ValidationUtils.js";
 import { truncateDescription } from "../../config/textLimits.js";
 import { assertCustomIdSegments } from "../../utilities/CustomIdUtils.js";
 import { buildTextInputRow } from "../../functions/uiComponents.js";
-import GamePlatformRegionService from "../../classes/GamePlatformRegionService.js";
 
 const GAMEDB_CSV_ACTIONS = ["start", "resume", "status", "pause", "cancel"] as const;
 type GameDbCsvAction = (typeof GAMEDB_CSV_ACTIONS)[number];
@@ -145,10 +144,6 @@ async function importGameFromCsv(igdbId: number): Promise<{ gameId: number; titl
   const game = await Game.createGame(igdbId);
   const details = await igdbService.getGameDetails(igdbId);
   if (details) {
-    const igdbPlatformIds: number[] = (details.platforms ?? [])
-      .map((platform) => platform.id)
-      .filter(isPositiveInt);
-    await GamePlatformRegionService.addGamePlatformsByIgdbIds(game.id, igdbPlatformIds);
     await processReleaseDates(game.id, details.release_dates ?? []);
   }
   if (!game.imageData) {

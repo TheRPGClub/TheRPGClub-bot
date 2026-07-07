@@ -34,6 +34,8 @@ export type PlatformApiData = {
   platform_id: number;
   platform_code: string;
   platform_name: string;
+  platform_abbreviation?: string | null;
+  igdb_platform_id?: number | null;
 };
 
 export type RegionApiData = {
@@ -122,27 +124,6 @@ export function mapReleaseRow(row: any): IRelease {
   };
 }
 
-export function mapPlatformDefRow(row: any): IPlatformDef {
-  return {
-    id: Number(row.PLATFORM_ID),
-    code: String(row.PLATFORM_CODE),
-    name: String(row.PLATFORM_NAME),
-    abbreviation: row.PLATFORM_ABBREVIATION
-      ? String(row.PLATFORM_ABBREVIATION)
-      : null,
-    igdbPlatformId: row.IGDB_PLATFORM_ID ? Number(row.IGDB_PLATFORM_ID) : null,
-  };
-}
-
-export function mapRegionDefRow(row: any): IRegionDef {
-  return {
-    id: Number(row.REGION_ID),
-    code: String(row.REGION_CODE),
-    name: String(row.REGION_NAME),
-    igdbRegionId: row.IGDB_REGION_ID ? Number(row.IGDB_REGION_ID) : null,
-  };
-}
-
 export function mapReleaseFromApi(data: ReleaseApiData): IRelease {
   return {
     id: Number(data.release_id),
@@ -160,8 +141,9 @@ export function mapPlatformFromApi(data: PlatformApiData): IPlatformDef {
     id: Number(data.platform_id),
     code: String(data.platform_code),
     name: String(data.platform_name),
-    abbreviation: null,
-    igdbPlatformId: null,
+    abbreviation: data.platform_abbreviation ?? null,
+    igdbPlatformId:
+      data.igdb_platform_id != null ? Number(data.igdb_platform_id) : null,
   };
 }
 

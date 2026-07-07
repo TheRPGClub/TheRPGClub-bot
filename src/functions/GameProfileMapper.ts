@@ -49,7 +49,13 @@ export type RelationReleaseApiData = {
 
 export type GameRelationsApiData = {
   releases: RelationReleaseApiData[];
-  platforms: { platform_id: number; platform_code: string; platform_name: string }[];
+  platforms: Array<{
+    platform_id: number;
+    platform_code: string;
+    platform_name: string;
+    platform_abbreviation?: string | null;
+    igdb_platform_id?: number | null;
+  }>;
   collection: { name: string } | null;
   companies: Array<CompanyApiData & { role: string | null }>;
   franchises: Array<{ name: string }>;

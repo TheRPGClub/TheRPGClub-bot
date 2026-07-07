@@ -1,13 +1,5 @@
 import {
-  dbQuery,
-  dbTransaction,
-  dbMutateConn,
-} from "../db/SqlManager.js";
-import { GameSql } from "../db/sql/index.js";
-import {
-  mapPlatformDefRow,
   mapPlatformFromApi,
-  mapRegionDefRow,
   mapRegionFromApi,
   buildPlatformCode,
   IGDB_REGION_MAP,
@@ -16,8 +8,8 @@ import {
 } from "../functions/GameMappers.js";
 import type { IPlatformDef, IRegionDef, IGame, IGameWithPlatforms } from "../types/GameTypes.js";
 import { apiGet, apiPost } from "../services/RpgClubApiClient.js";
+import GameProfileService from "./GameProfileService.js";
 import { isPositiveInt } from "../utilities/ValidationUtils.js";
-import { logWarn } from "../utilities/LogUtils.js";
 
 export default class GamePlatformRegionService {
   private static async fetchAllPages<T>(
@@ -76,11 +68,15 @@ export default class GamePlatformRegionService {
   }
 
   static async getPlatformsForGame(gameId: number): Promise<IPlatformDef[]> {
-    return dbQuery(GameSql.getPlatformsForGame, { gameId }, mapPlatformDefRow);
+    const relations = await GameProfileService.getGameRelations(gameId);
+    const platforms = (relations?.platforms ?? []).map(mapPlatformFromApi);
+    return platforms.sort((a, b) => a.name.localeCompare(b.name));
   }
 
   static async getAllPlatforms(): Promise<IPlatformDef[]> {
-    return dbQuery(GameSql.getAllPlatforms, {}, mapPlatformDefRow);
+    const rows =
+      await GamePlatformRegionService.fetchAllPages<PlatformApiData>("/api/v1/platforms");
+    return rows.map(mapPlatformFromApi).sort((a, b) => a.name.localeCompare(b.name));
   }
 
   static async getPlatformsByIgdbIds(
@@ -91,21 +87,13 @@ export default class GamePlatformRegionService {
       return new Map();
     }
 
-    const binds: Record<string, number> = {};
-    const placeholders: string[] = [];
-    uniqueIds.forEach((id, idx) => {
-      const key = `id${idx}`;
-      binds[key] = id;
-      placeholders.push(`:${key}`);
-    });
-
-    const platforms = await dbQuery(
-      GameSql.getPlatformsByIgdbIds(placeholders.join(", ")),
-      binds,
-      mapPlatformDefRow,
+    const rows = await GamePlatformRegionService.fetchAllPages<PlatformApiData>(
+      "/api/v1/platforms",
+      { igdb_ids: uniqueIds },
     );
     const map = new Map<number, IPlatformDef>();
-    platforms.forEach((platform) => {
+    rows.forEach((row) => {
+      const platform = mapPlatformFromApi(row);
       if (platform.igdbPlatformId) map.set(platform.igdbPlatformId, platform);
     });
     return map;
@@ -143,12 +131,12 @@ export default class GamePlatformRegionService {
   }
 
   static async getPlatformByCode(code: string): Promise<IPlatformDef | null> {
-    const rows = await dbQuery(
-      GameSql.getPlatformByCode,
-      { code },
-      mapPlatformDefRow,
+    const result = await apiGet<{ data: PlatformApiData[] }>(
+      "/api/v1/platforms",
+      { params: { code } },
     );
-    return rows[0] ?? null;
+    const first = result?.data?.[0];
+    return first ? mapPlatformFromApi(first) : null;
   }
 
   static async getPlatformById(id: number): Promise<IPlatformDef | null> {
@@ -163,63 +151,17 @@ export default class GamePlatformRegionService {
     const gameIds = Array.from(
       new Set(games.map((game) => game.id).filter(isPositiveInt)),
     );
-    if (!gameIds.length) {
-      return games.map((game) => ({ ...game, platforms: [] }));
-    }
-
-    const binds: Record<string, number> = {};
-    const placeholders: string[] = [];
-    gameIds.forEach((id, idx) => {
-      const key = `id${idx}`;
-      binds[key] = id;
-      placeholders.push(`:${key}`);
-    });
 
     const gameToPlatforms = new Map<number, IPlatformDef[]>();
-    const missingPlatformIds = new Set<number>();
-
-    const rows = await dbQuery(
-      GameSql.attachPlatformsToGames(placeholders.join(", ")),
-      binds,
-      (row: {
-        GAME_ID: number;
-        PLATFORM_ID: number;
-        PLATFORM_CODE: string | null;
-        PLATFORM_NAME: string | null;
-        PLATFORM_ABBREVIATION: string | null;
-        IGDB_PLATFORM_ID: number | null;
-      }) => row,
+    await Promise.all(
+      gameIds.map(async (gameId) => {
+        const relations = await GameProfileService.getGameRelations(gameId);
+        gameToPlatforms.set(
+          gameId,
+          (relations?.platforms ?? []).map(mapPlatformFromApi),
+        );
+      }),
     );
-
-    rows.forEach((row) => {
-      const gameId = Number(row.GAME_ID);
-      const platformId = Number(row.PLATFORM_ID);
-      if (!Number.isInteger(gameId) || !Number.isInteger(platformId)) return;
-      if (!row.PLATFORM_NAME || !row.PLATFORM_CODE) {
-        missingPlatformIds.add(platformId);
-        return;
-      }
-      const platform: IPlatformDef = {
-        id: platformId,
-        code: String(row.PLATFORM_CODE),
-        name: String(row.PLATFORM_NAME),
-        abbreviation: row.PLATFORM_ABBREVIATION
-          ? String(row.PLATFORM_ABBREVIATION)
-          : null,
-        igdbPlatformId: row.IGDB_PLATFORM_ID
-          ? Number(row.IGDB_PLATFORM_ID)
-          : null,
-      };
-      if (!gameToPlatforms.has(gameId)) gameToPlatforms.set(gameId, []);
-      gameToPlatforms.get(gameId)!.push(platform);
-    });
-
-    if (missingPlatformIds.size) {
-      logWarn(
-        "GamePlatformRegionService.attachPlatformsToGames",
-        `Missing platform IDs in GAMEDB_PLATFORMS: ${Array.from(missingPlatformIds).join(", ")}`,
-      );
-    }
 
     return games.map((game) => ({
       ...game,
@@ -242,12 +184,12 @@ export default class GamePlatformRegionService {
   }
 
   static async getRegionByCode(code: string): Promise<IRegionDef | null> {
-    const rows = await dbQuery(
-      GameSql.getRegionByCode,
-      { code },
-      mapRegionDefRow,
+    const result = await apiGet<{ data: RegionApiData[] }>(
+      "/api/v1/regions",
+      { params: { code } },
     );
-    return rows[0] ?? null;
+    const first = result?.data?.[0];
+    return first ? mapRegionFromApi(first) : null;
   }
 
   static async getRegionById(id: number): Promise<IRegionDef | null> {
@@ -265,34 +207,4 @@ export default class GamePlatformRegionService {
     return first ? mapRegionFromApi(first) : null;
   }
 
-  static async addGamePlatformsByIgdbIds(
-    gameId: number,
-    igdbPlatformIds: number[],
-  ): Promise<void> {
-    if (!isPositiveInt(gameId)) return;
-    const uniqueIds = Array.from(
-      new Set(igdbPlatformIds.filter(isPositiveInt)),
-    );
-    if (!uniqueIds.length) return;
-
-    const platformMap = await GamePlatformRegionService.getPlatformsByIgdbIds(uniqueIds);
-    const missingIds = uniqueIds.filter((id) => !platformMap.has(id));
-    if (missingIds.length) {
-      logWarn(
-        "GamePlatformRegionService.addGamePlatformsByIgdbIds",
-        `Missing IGDB platform IDs in GAMEDB_PLATFORMS: ${missingIds.join(", ")}`,
-      );
-    }
-
-    await dbTransaction(async (conn) => {
-      for (const igdbId of uniqueIds) {
-        const platform = platformMap.get(igdbId);
-        if (!platform) continue;
-        await dbMutateConn(conn, GameSql.addGamePlatformMerge, {
-          gameId,
-          platformId: platform.id,
-        });
-      }
-    });
-  }
 }
