@@ -1,7 +1,6 @@
-import { dbWithConnection, dbQueryConn } from "../db/SqlManager.js";
-import { GameSql } from "../db/sql/index.js";
+import { apiGet } from "../services/RpgClubApiClient.js";
 import GameSearchSynonym from "./GameSearchSynonym.js";
-import { mapGameRow } from "../functions/GameMappers.js";
+import { mapGameFromApi } from "../functions/GameMappers.js";
 import {
   autocompleteSearchCache,
   pendingAutocompleteSearches,
@@ -16,8 +15,79 @@ import type {
   IGameAutocompleteResult,
 } from "../types/GameTypes.js";
 import GamePlatformRegionService from "./GamePlatformRegionService.js";
+import GameProfileService from "./GameProfileService.js";
+
+type GamesListResponse = { data: unknown[]; meta: { next: number | null } };
+
+const MAX_QUERY_VARIANTS = 8;
 
 export default class GameSearchService {
+  private static async fetchGamesPages(
+    params: Record<string, unknown>,
+  ): Promise<IGame[]> {
+    const results: IGame[] = [];
+    let page = 1;
+    for (;;) {
+      const result = await apiGet<GamesListResponse>("/api/v1/games", {
+        params: { ...params, page, per: 100 },
+      });
+      if (!result?.data?.length) break;
+      results.push(...result.data.map(mapGameFromApi));
+      if (!result.meta?.next) break;
+      page++;
+    }
+    return results;
+  }
+
+  private static async buildQueryVariants(baseQuery: string): Promise<string[]> {
+    if (!baseQuery) return [];
+
+    const queryVariants = new Set<string>();
+    queryVariants.add(baseQuery);
+    const spacedQuery = baseQuery
+      .replace(/([a-zA-Z])(\d)/g, "$1 $2")
+      .replace(/(\d)([a-zA-Z])/g, "$1 $2");
+    queryVariants.add(spacedQuery);
+
+    const tokens = spacedQuery.split(/\s+/).filter(Boolean);
+    const tokenOptions: string[][] = [];
+    for (const token of tokens) {
+      const options = new Set<string>();
+      options.add(token);
+      const tokenSynonyms = await GameSearchSynonym.getTermsForQuery(token);
+      tokenSynonyms.forEach((synonym) => {
+        if (synonym.trim()) options.add(synonym.trim());
+      });
+      tokenOptions.push(Array.from(options));
+    }
+
+    if (tokenOptions.length) {
+      let variants: string[] = [""];
+      for (const options of tokenOptions) {
+        const nextVariants: string[] = [];
+        for (const prefix of variants) {
+          for (const option of options) {
+            nextVariants.push(prefix ? `${prefix} ${option}` : option);
+            if (nextVariants.length >= MAX_QUERY_VARIANTS) break;
+          }
+          if (nextVariants.length >= MAX_QUERY_VARIANTS) break;
+        }
+        variants = nextVariants;
+        if (variants.length >= MAX_QUERY_VARIANTS) break;
+      }
+      variants.forEach((variant) => queryVariants.add(variant));
+    }
+
+    const termSet = new Map<string, string>();
+    Array.from(queryVariants).forEach((term) => {
+      const folded = foldAccentE(term).toLowerCase();
+      const norm = folded.replace(/[^a-z0-9]/g, "");
+      if (norm) termSet.set(norm, folded);
+    });
+
+    return Array.from(termSet.values()).slice(0, MAX_QUERY_VARIANTS);
+  }
+
   static async searchGamesAutocomplete(
     query: string,
     limit: number = 24,
@@ -48,43 +118,43 @@ export default class GameSearchService {
       return [];
     }
 
-    const queryPromise = dbWithConnection(async (conn) => {
-      const titleFoldExpr = `REPLACE(REPLACE(REPLACE(REPLACE(LOWER(title), 'é', 'e'), 'è', 'e'), 'ê', 'e'), 'ë', 'e')`;
-      const titleNormExpr = `REGEXP_REPLACE(${titleFoldExpr}, '[^a-z0-9]', '', 'g')`;
+    const queryPromise = (async () => {
+      const result = await apiGet<{ data: unknown[] }>("/api/v1/games", {
+        params: { q: baseQuery, per: safeLimit },
+      });
+      const games = (result?.data ?? []).map(mapGameFromApi);
 
-      const binds = {
-        exactRaw: foldedLowerQuery,
-        rawPrefix: `${foldedLowerQuery}%`,
-        rawContains: `%${foldedLowerQuery}%`,
-        exactNorm: normalizedQuery || null,
-        normPrefix: normalizedQuery ? `${normalizedQuery}%` : null,
-        normContains: normalizedQuery ? `%${normalizedQuery}%` : null,
-        limit: safeLimit,
+      const rank = (game: IGame): number => {
+        const folded = foldAccentE(game.title.toLowerCase()).toLowerCase();
+        const norm = folded.replace(/[^a-z0-9]/g, "");
+        if (folded === foldedLowerQuery) return 0;
+        if (folded.startsWith(foldedLowerQuery)) return 1;
+        if (normalizedQuery && norm === normalizedQuery) return 2;
+        if (normalizedQuery && norm.startsWith(normalizedQuery)) return 3;
+        return 4;
       };
 
-      const games = await dbQueryConn(
-        conn,
-        GameSql.searchGamesAutocomplete(titleFoldExpr, titleNormExpr),
-        binds,
-        (row: any): IGameAutocompleteResult => {
-          const ird = row.INITIAL_RELEASE_DATE ?? row.initial_release_date;
-          return {
-            id: Number(row.GAME_ID ?? row.game_id),
-            title: String(row.TITLE ?? row.title),
-            initialReleaseDate:
-              ird instanceof Date ? ird : ird ? new Date(ird) : null,
-          };
-        },
-      );
+      const sorted = [...games].sort((a, b) => {
+        const rankDiff = rank(a) - rank(b);
+        return rankDiff !== 0 ? rankDiff : a.title.localeCompare(b.title);
+      });
+
+      const results: IGameAutocompleteResult[] = sorted
+        .slice(0, safeLimit)
+        .map((g) => ({
+          id: g.id,
+          title: g.title,
+          initialReleaseDate: g.initialReleaseDate,
+        }));
 
       autocompleteSearchCache.set(cacheKey, {
         expiresAt: Date.now() + AUTOCOMPLETE_CACHE_TTL_MS,
-        results: games,
+        results,
       });
       pruneAutocompleteCache(Date.now());
 
-      return games;
-    });
+      return results;
+    })();
 
     pendingAutocompleteSearches.set(cacheKey, queryPromise);
     try {
@@ -104,163 +174,125 @@ export default class GameSearchService {
       publisherId?: number;
     } = {},
   ): Promise<IGameSearchResult[]> {
-    return dbWithConnection(async (connection) => {
-      const baseQuery = query.trim();
-      const hasFilters =
-        filters.upcomingRelease ||
-        filters.platformId ||
-        filters.year ||
-        filters.developerId ||
-        filters.publisherId;
-      if (!baseQuery && !hasFilters) {
-        return [];
-      }
+    const baseQuery = query.trim();
+    const hasFilters =
+      filters.upcomingRelease ||
+      filters.platformId ||
+      filters.year ||
+      filters.developerId ||
+      filters.publisherId;
+    if (!baseQuery && !hasFilters) {
+      return [];
+    }
 
-      const titleFoldExpr = `REPLACE(REPLACE(REPLACE(REPLACE(LOWER(title), 'é', 'e'), 'è', 'e'), 'ê', 'e'), 'ë', 'e')`;
-      const titleNormExpr = `REGEXP_REPLACE(${titleFoldExpr}, '[^a-z0-9]', '', 'g')`;
+    const companyIds = [filters.developerId, filters.publisherId].filter(
+      (id): id is number => typeof id === "number" && Number.isFinite(id) && id > 0,
+    );
 
-      const clauses: string[] = [];
-      const binds: Record<string, string | number> = {};
+    const queryTerms = await GameSearchService.buildQueryVariants(baseQuery);
+    if (baseQuery && !queryTerms.length) {
+      return [];
+    }
 
-      if (baseQuery) {
-        const queryVariants = new Set<string>();
-        queryVariants.add(baseQuery);
-        const spacedQuery = baseQuery
-          .replace(/([a-zA-Z])(\d)/g, "$1 $2")
-          .replace(/(\d)([a-zA-Z])/g, "$1 $2");
-        queryVariants.add(spacedQuery);
+    const gameMap = new Map<number, IGame>();
+    const fetchParams: Record<string, unknown> = {};
+    if (companyIds.length) fetchParams.company_id = companyIds;
 
-        const tokens = spacedQuery.split(/\s+/).filter(Boolean);
-        const tokenOptions: string[][] = [];
-        for (const token of tokens) {
-          const options = new Set<string>();
-          options.add(token);
-          const tokenSynonyms = await GameSearchSynonym.getTermsForQuery(token);
-          tokenSynonyms.forEach((synonym) => {
-            if (synonym.trim()) {
-              options.add(synonym.trim());
-            }
-          });
-          tokenOptions.push(Array.from(options));
-        }
-
-        if (tokenOptions.length) {
-          let variants: string[] = [""];
-          const MAX_VARIANTS = 50;
-          for (const options of tokenOptions) {
-            const nextVariants: string[] = [];
-            for (const prefix of variants) {
-              for (const option of options) {
-                const next = prefix ? `${prefix} ${option}` : option;
-                nextVariants.push(next);
-                if (nextVariants.length >= MAX_VARIANTS) break;
-              }
-              if (nextVariants.length >= MAX_VARIANTS) break;
-            }
-            variants = nextVariants;
-            if (variants.length >= MAX_VARIANTS) break;
-          }
-          variants.forEach((variant) => queryVariants.add(variant));
-        }
-
-        const termSet = new Map<string, string>();
-        Array.from(queryVariants).forEach((term) => {
-          const folded = foldAccentE(term).toLowerCase();
-          const norm = folded.replace(/[^a-z0-9]/g, "");
-          if (norm) {
-            termSet.set(norm, folded);
-          }
+    if (queryTerms.length) {
+      for (const term of queryTerms) {
+        const rows = await GameSearchService.fetchGamesPages({
+          ...fetchParams,
+          q: term,
         });
+        rows.forEach((g) => gameMap.set(g.id, g));
+      }
+    } else {
+      const rows = await GameSearchService.fetchGamesPages(fetchParams);
+      rows.forEach((g) => gameMap.set(g.id, g));
+    }
 
-        if (!termSet.size) {
-          return [];
-        }
+    let games = Array.from(gameMap.values());
 
-        Array.from(termSet.entries()).forEach(([norm, term], index) => {
-          const rawKey = `searchQuery${index}`;
-          const normKey = `normalizedQuery${index}`;
-          binds[rawKey] = `%${term}%`;
-          binds[normKey] = `%${norm}%`;
-          clauses.push(
-            `(${titleFoldExpr} LIKE :${rawKey} OR ${titleNormExpr} LIKE :${normKey})`,
+    if (filters.year) {
+      const targetYear = filters.year;
+      games = games.filter(
+        (g) => g.initialReleaseDate?.getUTCFullYear() === targetYear,
+      );
+    }
+
+    if (filters.developerId || filters.publisherId) {
+      const checked = await Promise.all(
+        games.map(async (g) => {
+          const relations = await GameProfileService.getGameRelations(g.id);
+          const companies = relations?.companies ?? [];
+          const devOk =
+            !filters.developerId ||
+            companies.some(
+              (c) => c.role === "Developer" && Number(c.company_id) === filters.developerId,
+            );
+          const pubOk =
+            !filters.publisherId ||
+            companies.some(
+              (c) => c.role === "Publisher" && Number(c.company_id) === filters.publisherId,
+            );
+          return devOk && pubOk ? g : null;
+        }),
+      );
+      games = checked.filter((g): g is IGame => g !== null);
+    }
+
+    const upcomingDates = new Map<number, Date | null>();
+    const upcomingPlatforms = new Map<number, string[]>();
+    if (filters.upcomingRelease) {
+      const now = Date.now();
+      const withUpcoming = await Promise.all(
+        games.map(async (g) => {
+          const relations = await GameProfileService.getGameRelations(g.id);
+          const futureReleases = (relations?.releases ?? [])
+            .filter((r) => r.release_date && new Date(r.release_date).getTime() > now)
+            .sort(
+              (a, b) =>
+                new Date(a.release_date!).getTime() - new Date(b.release_date!).getTime(),
+            );
+          if (!futureReleases.length) return null;
+          const upcomingTime = new Date(futureReleases[0].release_date!).getTime();
+          const platformsAtDate = Array.from(
+            new Set(
+              futureReleases
+                .filter((r) => new Date(r.release_date!).getTime() === upcomingTime)
+                .map((r) => r.platform_name)
+                .filter((v): v is string => Boolean(v)),
+            ),
           );
-        });
-      }
+          upcomingDates.set(g.id, new Date(upcomingTime));
+          upcomingPlatforms.set(g.id, platformsAtDate);
+          return g;
+        }),
+      );
+      games = withUpcoming.filter((g): g is IGame => g !== null);
+    }
 
-      const filterClauses: string[] = [];
+    const withPlatforms = await GamePlatformRegionService.attachPlatformsToGames(games);
+    let results: IGameSearchResult[] = withPlatforms.map((g) => ({
+      ...g,
+      upcomingReleaseDate: upcomingDates.get(g.id) ?? null,
+      upcomingReleasePlatforms: upcomingPlatforms.get(g.id) ?? [],
+    }));
+
+    if (filters.platformId) {
+      const platformId = filters.platformId;
+      results = results.filter((g) => g.platforms.some((p) => p.id === platformId));
+    }
+
+    results.sort((a, b) => {
       if (filters.upcomingRelease) {
-        filterClauses.push("u.upcoming_date IS NOT NULL");
+        const aTime = a.upcomingReleaseDate?.getTime() ?? Number.POSITIVE_INFINITY;
+        const bTime = b.upcomingReleaseDate?.getTime() ?? Number.POSITIVE_INFINITY;
+        if (aTime !== bTime) return aTime - bTime;
       }
-      if (filters.platformId) {
-        filterClauses.push(
-          "g.game_id IN (SELECT game_id FROM gamedb_game_platforms WHERE platform_id = :filterPlatformId)",
-        );
-        binds["filterPlatformId"] = filters.platformId;
-      }
-      if (filters.year) {
-        filterClauses.push(
-          "EXTRACT(YEAR FROM g.initial_release_date) = :filterYear",
-        );
-        binds["filterYear"] = filters.year;
-      }
-      if (filters.developerId) {
-        filterClauses.push(
-          `g.game_id IN (SELECT game_id FROM gamedb_game_companies WHERE company_id = :filterDeveloperId AND role = 'Developer')`,
-        );
-        binds["filterDeveloperId"] = filters.developerId;
-      }
-      if (filters.publisherId) {
-        filterClauses.push(
-          `g.game_id IN (SELECT game_id FROM gamedb_game_companies WHERE company_id = :filterPublisherId AND role = 'Publisher')`,
-        );
-        binds["filterPublisherId"] = filters.publisherId;
-      }
-
-      const titlePart = clauses.length ? `(${clauses.join(" OR ")})` : "";
-      const filterPart = filterClauses.length
-        ? `(${filterClauses.join(" AND ")})`
-        : "";
-      const whereClause =
-        titlePart && filterPart
-          ? `${titlePart} AND ${filterPart}`
-          : titlePart || filterPart || "1=0";
-
-      const upcomingCol = "u.upcoming_date";
-      const orderPrefix = filters.upcomingRelease
-        ? `${upcomingCol} ASC NULLS LAST, `
-        : "";
-
-      const entry = GameSql.searchGames(whereClause, orderPrefix);
-
-      const upcomingDates = new Map<number, Date | null>();
-      const upcomingPlatforms = new Map<number, string[]>();
-
-      const rows = await dbQueryConn(connection, entry, binds, (row: any) => {
-        const id = Number(row.game_id);
-        const urd = row.upcoming_release_date;
-        upcomingDates.set(
-          id,
-          urd instanceof Date ? urd : urd ? new Date(urd) : null,
-        );
-        upcomingPlatforms.set(
-          id,
-          row.upcoming_platforms
-            ? String(row.upcoming_platforms)
-                .split(",")
-                .map((s: string) => s.trim())
-                .filter(Boolean)
-            : [],
-        );
-        return mapGameRow(row);
-      });
-      const games: IGame[] = rows;
-
-      const withPlatforms = await GamePlatformRegionService.attachPlatformsToGames(games);
-      return withPlatforms.map((g) => ({
-        ...g,
-        upcomingReleaseDate: upcomingDates.get(g.id) ?? null,
-        upcomingReleasePlatforms: upcomingPlatforms.get(g.id) ?? [],
-      }));
+      return a.title.localeCompare(b.title);
     });
+
+    return results;
   }
 }
