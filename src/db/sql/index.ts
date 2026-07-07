@@ -3,7 +3,6 @@ export type { ISqlEntry } from "./types.js";
 export { AdminWizardSessionSql } from "./adminWizardSession.sql.js";
 export { CollectionCsvImportSql } from "./collectionCsvImport.sql.js";
 export { CompletionatorImportSql } from "./completionatorImport.sql.js";
-export { GameSql } from "./game.sql.js";
 export { GameDbCsvImportSql } from "./gameDbCsvImport.sql.js";
 export { GameDbCsvImportMappingSql } from "./gameDbCsvImportMapping.sql.js";
 export { GotmAuditImportSql } from "./gotmAuditImport.sql.js";
