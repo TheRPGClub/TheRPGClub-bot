@@ -81,7 +81,6 @@ Note: the former `gotm-audit` subcommand has been removed.
 | `add-nr-gotm` | (wizard prompts) | API: voting_info + nr_gotm_entries insert |
 | `edit-gotm` | `round` (autocomplete) | API: GET/PATCH gotm_entries |
 | `edit-nr-gotm` | `round` (autocomplete) | API: GET/PATCH nr_gotm_entries |
-| `sql-health-check` | none | SQL: connectivity ping |
 | `help` | none | none |
 
 ---
