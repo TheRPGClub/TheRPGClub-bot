@@ -1,27 +1,6 @@
 import type { ISqlEntry } from "./types.js";
 
 export const MemberSql = {
-  // Caller must pass dialect-appropriate where clause
-  searchMembers: (where: string) =>
-    ({
-      postgres: `SELECT user_id,
-              username,
-              global_name,
-              is_bot,
-              role_admin,
-              role_moderator,
-              role_regular,
-              role_member,
-              role_newcomer,
-              server_left_at,
-              server_joined_at,
-              last_seen_at
-         FROM rpg_club_users
-        WHERE ${where}
-        ORDER BY COALESCE(UPPER(global_name), UPPER(username), user_id)
-        LIMIT :limit`,
-    }) satisfies ISqlEntry,
-
   upsertJournalMessageContext: {
     postgres: `INSERT INTO journal_message_contexts (channel_id, message_id, created_at_ms, owner_user_id, game_id)
           VALUES (:channelId, :messageId, :createdAtMs, :ownerUserId, :gameId)
