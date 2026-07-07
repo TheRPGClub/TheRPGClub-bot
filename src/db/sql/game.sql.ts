@@ -7,57 +7,6 @@ const PLATFORM_COLS_PG = `platform_id,
               igdb_platform_id`;
 
 export const GameSql = {
-  // titleFoldExpr and titleNormExpr are dialect-specific SQL fragments
-  searchGamesAutocomplete: (
-    titleFoldExpr: string,
-    titleNormExpr: string,
-  ) =>
-    ({
-      postgres: `SELECT game_id, title, initial_release_date
-           FROM gamedb_games
-          WHERE ${titleFoldExpr} LIKE :rawContains
-             OR (
-               (:exactNorm)::text IS NOT NULL AND
-               ${titleNormExpr} LIKE :normContains
-             )
-          ORDER BY CASE
-                     WHEN ${titleFoldExpr} = :exactRaw THEN 0
-                     WHEN ${titleFoldExpr} LIKE :rawPrefix THEN 1
-                     WHEN (:exactNorm)::text IS NOT NULL AND
-                          ${titleNormExpr} = :exactNorm THEN 2
-                     WHEN (:exactNorm)::text IS NOT NULL AND
-                          ${titleNormExpr} LIKE :normPrefix THEN 3
-                     ELSE 4
-                   END,
-                   title ASC
-          LIMIT :limit`,
-    }) satisfies ISqlEntry,
-
-  // whereClause and orderPrefix are dialect-specific SQL fragments
-  searchGames: (whereClause: string, orderPrefix: string) =>
-    ({
-      postgres: `WITH upcoming AS (
-           SELECT game_id, MIN(release_date) AS upcoming_date
-             FROM gamedb_releases
-            WHERE release_date > CURRENT_DATE
-            GROUP BY game_id
-         )
-         SELECT g.game_id, g.title, g.description, g.igdb_id, g.slug, g.total_rating,
-                g.igdb_url, g.featured_video_url, g.initial_release_date,
-                g.created_at, g.updated_at,
-                u.upcoming_date AS upcoming_release_date,
-                (SELECT STRING_AGG(COALESCE(p.platform_abbreviation, p.platform_name), ','
-                        ORDER BY p.platform_name)
-                   FROM gamedb_releases r
-                   JOIN gamedb_platforms p ON p.platform_id = r.platform_id
-                  WHERE r.game_id = g.game_id AND r.release_date = u.upcoming_date
-                ) AS upcoming_platforms
-           FROM gamedb_games g
-           LEFT JOIN upcoming u ON u.game_id = g.game_id
-          WHERE ${whereClause}
-          ORDER BY ${orderPrefix}g.title ASC`,
-    }) satisfies ISqlEntry,
-
   getPlatformsForGame: {
     postgres: `SELECT DISTINCT p.platform_id,
               p.platform_code,
