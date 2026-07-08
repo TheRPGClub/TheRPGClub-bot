@@ -50,7 +50,6 @@ import {
   buildComponentsV2Flags,
   isUniqueConstraintError,
   MAX_COMPLETION_NOTE_LEN,
-  MAX_NOW_PLAYING_NOTE_LEN,
 } from "./gamedb-utils.js";
 import { trimTextDisplayContent } from "./gamedb-profile.service.js";
 import { updateGameProfileMessageById } from "./gamedb-profile.service.js";
@@ -489,49 +488,42 @@ export class GameDbCompletionCommand {
     }
   }
    
-  @ModalComponent({ id: /^gamedb-nowplaying-modal:\d+$/ })
-  async handleGameDbNowPlayingModal(interaction: ModalSubmitInteraction): Promise<void> {
+  @SelectMenuComponent({ id: /^gamedb-nowplaying-platform-select:\d+$/ })
+  async handleGameDbNowPlayingPlatformSelect(
+    interaction: StringSelectMenuInteraction,
+  ): Promise<void> {
     const segs = assertCustomIdSegments(interaction, 1);
     if (!segs) return;
     const [gameIdRaw] = segs;
     const gameId = Number(gameIdRaw);
-    await safeDeferReply(interaction, { flags: MessageFlags.Ephemeral });
     if (!isPositiveInt(gameId)) {
-      safeIgnore(safeReply(interaction, buildTextReply("Invalid GameDB id.", false)));
+      safeIgnore(safeReply(interaction, buildTextReply("Invalid GameDB id.", true)));
       return;
     }
 
     const game = await Game.getGameById(gameId);
     if (!game) {
-      safeIgnore(safeReply(interaction, buildTextReply("That game was not found in GameDB.", false)));
+      safeIgnore(safeReply(interaction, buildTextReply("That game was not found in GameDB.", true)));
       return;
     }
 
-    const noteRaw = getModalField(interaction, "gamedb-nowplaying-note");
-    if (noteRaw.length > MAX_NOW_PLAYING_NOTE_LEN) {
-      safeIgnore(safeReply(interaction, buildTextReply(`Note must be ${MAX_NOW_PLAYING_NOTE_LEN} characters or fewer.`, false)));
+    const platformId = Number(interaction.values?.[0]);
+    if (!isPositiveInt(platformId)) {
+      safeIgnore(safeReply(interaction, buildTextReply("Invalid platform selection.", true)));
       return;
     }
 
-    const note = noteRaw.length ? noteRaw : null;
     try {
-      const platforms = await GamePlatformRegionService.getPlatformsForGame(gameId);
-      if (!platforms.length) {
-        safeIgnore(safeReply(interaction, buildTextReply("This game has no platform data yet. Add to Now Playing from `/now-playing list` " +
-            "after platform data is available.", false)));
-        return;
-      }
-      const defaultPlatform = platforms[0];
-      await Member.addNowPlaying(interaction.user.id, gameId, defaultPlatform.id, note);
+      await Member.addNowPlaying(interaction.user.id, gameId, platformId, null);
       const nowPlaying = new NowPlayingCommand();
       await nowPlaying.showSingle(interaction, interaction.user, true);
     } catch (err: any) {
       if (isUniqueConstraintError(err)) {
-        safeIgnore(safeReply(interaction, buildTextReply(`**${game.title}** is already in your Now Playing list.`, false)));
+        safeIgnore(safeReply(interaction, buildTextReply(`**${game.title}** is already in your Now Playing list.`, true)));
         return;
       }
       const msg = err?.message ?? "Failed to add to Now Playing.";
-      safeIgnore(safeReply(interaction, buildTextReply(`Failed to add: ${msg}`, false)));
+      safeIgnore(safeReply(interaction, buildTextReply(`Failed to add: ${msg}`, true)));
     }
   }
 }
