@@ -3,10 +3,8 @@ import {
   ButtonInteraction,
   CommandInteraction,
   MessageFlags,
-  ModalBuilder,
   StringSelectMenuBuilder,
   StringSelectMenuInteraction,
-  TextInputStyle,
 } from "discord.js";
 import {
   ButtonComponent,
@@ -27,7 +25,7 @@ import { getHltbCacheByGameId, upsertHltbCache } from "../../classes/HltbCache.j
 import Game from "../../classes/Game.js";
 import { apiPost } from "../../services/RpgClubApiClient.js";
 import { searchHltb } from "../../scripts/SearchHltb.js";
-import { buildTextReply } from "../../functions/ComponentsV2Utils.js";
+import { buildTextContainer, buildTextReply } from "../../functions/ComponentsV2Utils.js";
 import {
   autocompleteGameDbViewTitle,
   buildComponentsV2Flags,
@@ -46,13 +44,12 @@ import { assertCustomIdSegments } from "../../utilities/CustomIdUtils.js";
 import {
   buildSelectOptions,
   buildSelectRow,
-  buildTextInputRow,
 } from "../../functions/uiComponents.js";
-import { safeIgnore } from "../../utilities/AsyncUtils.js";
 import UserGameBacklog from "../../classes/UserGameBacklog.js";
 import { buildApiErrorMessage } from "../../utilities/ApiErrorUtils.js";
 import { logError } from "../../utilities/LogUtils.js";
 import GamePlatformRegionService from "../../classes/GamePlatformRegionService.js";
+import { STANDARD_PLATFORM_IDS } from "../../config/standardPlatforms.js";
 
 @Discord()
 @SlashGroup("gamedb")
@@ -174,20 +171,31 @@ export class GameDbViewCommand {
     }
 
     if (action === "nowplaying") {
-      const modal = new ModalBuilder()
+      const platforms = await GamePlatformRegionService
+        .getPlatformsForGameWithStandard(gameId, STANDARD_PLATFORM_IDS);
+      if (!platforms.length) {
+        await safeReply(interaction, buildTextReply(
+          "This game has no platform data yet. Add to Now Playing from " +
+            "`/now-playing list` after platform data is available.", true,
+        ));
+        return;
+      }
+      const options = buildSelectOptions(platforms.map((platform) => ({
+        label: platform.name,
+        value: String(platform.id),
+      })));
+      const select = new StringSelectMenuBuilder()
         // eslint-disable-next-line local/custom-id-has-matching-handler
-        .setCustomId(`gamedb-nowplaying-modal:${gameId}`)
-        .setTitle("Add to Now Playing")
-        .addComponents(
-          buildTextInputRow({
-            customId: "gamedb-nowplaying-note",
-            label: "Note (optional)",
-            style: TextInputStyle.Paragraph,
-            required: false,
-            maxLength: 500,
-          }),
-        );
-      safeIgnore(interaction.showModal(modal));
+        .setCustomId(`gamedb-nowplaying-platform-select:${gameId}`)
+        .setPlaceholder("Select the platform")
+        .addOptions(options);
+      await safeReply(interaction, {
+        components: [
+          buildTextContainer(`Select the platform for **${game.title}**.`),
+          buildSelectRow(select),
+        ],
+        flags: buildComponentsV2Flags(true),
+      });
       return;
     }
 
