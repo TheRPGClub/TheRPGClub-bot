@@ -36,6 +36,7 @@ import { decodeBase64Url } from "../../functions/CustomIdUtils.js";
 import {
   autocompleteSearchCompany,
   autocompleteSearchPlatform,
+  autocompleteSearchTitle,
   buildComponentsV2Flags,
   buildSearchCustomId,
   buildSearchRecoveryComponents,
@@ -60,7 +61,10 @@ import {
   buildSelectRow,
 } from "../../functions/uiComponents.js";
 import GameSearchService from "../../classes/GameSearchService.js";
-import { formatGameTitleWithYear } from "../../functions/GameTitleAutocompleteUtils.js";
+import {
+  formatGameTitleWithYear,
+  parseTitleWithYear,
+} from "../../functions/GameTitleAutocompleteUtils.js";
 
 function formatUpcomingDate(date: Date | null | undefined): string {
   if (!date) return "";
@@ -244,6 +248,9 @@ export class GameDbSearchCommand {
       name: "title",
       required: false,
       type: ApplicationCommandOptionType.String,
+      autocomplete: async (interaction: AutocompleteInteraction) => {
+        await autocompleteSearchTitle(interaction);
+      },
     })
     query: string | null,
     @SlashOption({
@@ -295,14 +302,20 @@ export class GameDbSearchCommand {
     await safeDeferReply(interaction, { flags: buildComponentsV2Flags(false) });
 
     try {
-      const searchTerm = query ? sanitizeUserInput(query, { preserveNewlines: false }) : "";
+      const rawSearchTerm = query ? sanitizeUserInput(query, { preserveNewlines: false }) : "";
+      const parsedTitle = rawSearchTerm ? parseTitleWithYear(rawSearchTerm) : null;
+      const searchTerm = parsedTitle ? parsedTitle.title : rawSearchTerm;
       const filters: ISearchFilters = {};
       if (upcomingRelease === true) filters.upcomingRelease = true;
       const platformId = platformValue ? Number(platformValue) : null;
       if (platformId && isPositiveInt(platformId)) {
         filters.platformId = platformId;
       }
-      if (year && isPositiveInt(year)) filters.year = year;
+      if (year && isPositiveInt(year)) {
+        filters.year = year;
+      } else if (parsedTitle?.year) {
+        filters.year = parsedTitle.year;
+      }
       const developerId = developerValue ? Number(developerValue) : null;
       if (developerId && isPositiveInt(developerId)) {
         filters.developerId = developerId;

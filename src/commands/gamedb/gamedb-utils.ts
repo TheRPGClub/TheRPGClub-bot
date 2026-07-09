@@ -252,8 +252,11 @@ export async function autocompleteSearchCompany(
   await interaction.respond(options);
 }
 
-export async function autocompleteGameDbViewTitle(
+async function autocompleteGameTitle(
   interaction: AutocompleteInteraction,
+  selectValue: (game: Awaited<ReturnType<
+    typeof GameSearchService.searchGamesAutocomplete
+  >>[number]) => string,
 ): Promise<void> {
   const focused = interaction.options.getFocused(true);
   const rawQuery = focused?.value ? String(focused.value) : "";
@@ -263,13 +266,25 @@ export async function autocompleteGameDbViewTitle(
     return;
   }
   const results = await GameSearchService.searchGamesAutocomplete(query);
-  const resultOptions = results.slice(0, 24).map((game) => {
-    const label = formatGameTitleWithYear(game);
-    return {
-      name: truncateLabel(label),
-      value: String(game.id),
-    };
-  });
+  const resultOptions = results.slice(0, 24).map((game) => ({
+    name: truncateLabel(formatGameTitleWithYear(game)),
+    value: selectValue(game),
+  }));
   const options = [buildKeepTypingOption(query), ...resultOptions];
   await interaction.respond(options);
+}
+
+export async function autocompleteGameDbViewTitle(
+  interaction: AutocompleteInteraction,
+): Promise<void> {
+  await autocompleteGameTitle(interaction, (game) => String(game.id));
+}
+
+export async function autocompleteSearchTitle(
+  interaction: AutocompleteInteraction,
+): Promise<void> {
+  await autocompleteGameTitle(
+    interaction,
+    (game) => truncateLabel(formatGameTitleWithYear(game)),
+  );
 }
