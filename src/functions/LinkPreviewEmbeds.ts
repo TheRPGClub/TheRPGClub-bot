@@ -3,19 +3,26 @@ import * as cheerio from "cheerio";
 import { AttachmentBuilder } from "discord.js";
 import {
   ContainerBuilder,
-  MediaGalleryBuilder,
-  MediaGalleryItemBuilder,
+  SectionBuilder,
+  TextDisplayBuilder,
+  ThumbnailBuilder,
 } from "@discordjs/builders";
 import { COLOR_PRIMARY } from "../config/colors.js";
 import { logWarn } from "../utilities/LogUtils.js";
 import { truncateWithEllipsis } from "../utilities/ValidationUtils.js";
-import { buildTitledContainer } from "./ComponentsV2Utils.js";
+import { safeV2TextContent } from "./ComponentsV2Utils.js";
 
 const URL_PATTERN = /https?:\/\/[^\s<>"]+/;
 const FETCH_TIMEOUT_MS = 8000;
 const TITLE_MAX_LENGTH = 200;
-const DESCRIPTION_MAX_LENGTH = 500;
+const DESCRIPTION_MAX_WORDS = 150;
 const PREVIEW_IMAGE_NAME = "link-preview.png";
+
+function truncateWords(text: string, maxWords: number): string {
+  const words = text.split(/\s+/).filter(Boolean);
+  if (words.length <= maxWords) return text;
+  return `${words.slice(0, maxWords).join(" ")}...`;
+}
 
 export interface IOpenGraphData {
   title: string | undefined;
@@ -70,26 +77,38 @@ export async function fetchOpenGraphData(url: string): Promise<IOpenGraphData | 
 }
 
 export async function buildLinkPreviewContainer(data: IOpenGraphData): Promise<ILinkPreview> {
-  const title = data.title ? truncateWithEllipsis(data.title, TITLE_MAX_LENGTH) : data.url;
+  const title = data.title ? truncateWithEllipsis(data.title, TITLE_MAX_LENGTH) : undefined;
   const bodyParts: string[] = [];
-  if (data.description) {
-    bodyParts.push(truncateWithEllipsis(data.description, DESCRIPTION_MAX_LENGTH));
-  }
-  bodyParts.push(data.url);
+  if (title) bodyParts.push(`**${title}**`);
+  if (data.description) bodyParts.push(truncateWords(data.description, DESCRIPTION_MAX_WORDS));
 
-  const container = buildTitledContainer(title, bodyParts.join("\n\n"), { color: COLOR_PRIMARY });
+  const container = new ContainerBuilder()
+    .setAccentColor(COLOR_PRIMARY)
+    .addTextDisplayComponents(
+      new TextDisplayBuilder().setContent(safeV2TextContent(data.url, 500)),
+    );
 
   const files: AttachmentBuilder[] = [];
+  const bodyText = new TextDisplayBuilder().setContent(
+    safeV2TextContent(bodyParts.join("\n"), 3500),
+  );
+
+  let thumbnailUrl: string | undefined;
   if (data.imageUrl) {
     const attachment = await downloadPreviewImage(data.imageUrl);
     if (attachment) {
       files.push(attachment);
-      container.addMediaGalleryComponents(
-        new MediaGalleryBuilder().addItems(
-          new MediaGalleryItemBuilder().setURL(`attachment://${PREVIEW_IMAGE_NAME}`),
-        ),
-      );
+      thumbnailUrl = `attachment://${PREVIEW_IMAGE_NAME}`;
     }
   }
+
+  if (thumbnailUrl) {
+    const section = new SectionBuilder().addTextDisplayComponents(bodyText);
+    section.setThumbnailAccessory(new ThumbnailBuilder().setURL(thumbnailUrl));
+    container.addSectionComponents(section);
+  } else {
+    container.addTextDisplayComponents(bodyText);
+  }
+
   return { container, files };
 }
