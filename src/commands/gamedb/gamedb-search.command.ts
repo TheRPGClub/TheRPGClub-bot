@@ -60,6 +60,7 @@ import {
   buildSelectRow,
 } from "../../functions/uiComponents.js";
 import GameSearchService from "../../classes/GameSearchService.js";
+import { formatGameTitleWithYear } from "../../functions/GameTitleAutocompleteUtils.js";
 
 function formatUpcomingDate(date: Date | null | undefined): string {
   if (!date) return "";
@@ -139,21 +140,19 @@ function buildSearchResponse(
   const safePage = Math.min(Math.max(page, 0), totalPages - 1);
   const start = safePage * GAME_SEARCH_PAGE_SIZE;
   const displayedResults = results.slice(start, start + GAME_SEARCH_PAGE_SIZE);
-  const titleCounts = new Map<string, number>();
-  results.forEach((game) => {
-    const title = String(game.title ?? "");
-    titleCounts.set(title, (titleCounts.get(title) ?? 0) + 1);
-  });
   const showDates = filters?.upcomingRelease === true;
   const resultList = displayedResults.map((game) => {
-    const title = String(game.title ?? "");
+    const titleWithYear = formatGameTitleWithYear({
+      title: String(game.title ?? ""),
+      initialReleaseDate: game.initialReleaseDate,
+    });
     const dateStr = showDates ? formatUpcomingDate(game.upcomingReleaseDate) : "";
     const platforms: string[] = game.upcomingReleasePlatforms?.length
       ? game.upcomingReleasePlatforms
       : (game.platforms ?? []).map((p: any) => p.abbreviation ?? p.name);
     const platformStr = platforms.length ? ` (${platforms.join(", ")})` : "";
     const datePart = dateStr ? `${dateStr} ` : "";
-    return `• ${datePart}**${title}**${platformStr}`;
+    return `• ${datePart}**${titleWithYear}**${platformStr}`;
   }).join("\n");
 
   const title = searchTerm
@@ -163,18 +162,10 @@ function buildSearchResponse(
   const selectCustomId = buildSearchCustomId("select", ownerId, safePage, searchTerm, undefined, filters);
   const options = displayedResults.map((game) => {
     const gameTitle = String(game.title ?? "");
-    const isDuplicate = (titleCounts.get(gameTitle) ?? 0) > 1;
-    let label = gameTitle;
-    if (isDuplicate) {
-      const releaseDate = game.initialReleaseDate as Date | null | undefined;
-      const year = releaseDate instanceof Date
-        ? releaseDate.getFullYear()
-        : releaseDate
-          ? new Date(releaseDate).getFullYear()
-          : null;
-      const yearText = year ? ` (${year})` : " (Unknown Year)";
-      label = `${gameTitle}${yearText}`;
-    }
+    const label = formatGameTitleWithYear({
+      title: gameTitle,
+      initialReleaseDate: game.initialReleaseDate,
+    });
     const upcomingDate = showDates ? (game.upcomingReleaseDate as Date | null | undefined) : null;
     const dateLabel = upcomingDate
       ? (() => {
