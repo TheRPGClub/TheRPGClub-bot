@@ -64,9 +64,9 @@ export class MessageCreated {
       const ogData = await fetchOpenGraphData(url);
       if (!ogData) return;
 
-      const container = buildLinkPreviewContainer(ogData);
+      const { container, files } = await buildLinkPreviewContainer(ogData);
       const { components, flags } = buildContainerSend(container);
-      await refreshedMessage.reply({ components, flags });
+      await refreshedMessage.reply({ components, flags, files });
     } catch (error) {
       logError("MessageCreated", error);
     }

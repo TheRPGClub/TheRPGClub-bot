@@ -1,5 +1,6 @@
 import axios from "axios";
 import * as cheerio from "cheerio";
+import { AttachmentBuilder } from "discord.js";
 import {
   ContainerBuilder,
   MediaGalleryBuilder,
@@ -14,6 +15,7 @@ const URL_PATTERN = /https?:\/\/[^\s<>"]+/;
 const FETCH_TIMEOUT_MS = 8000;
 const TITLE_MAX_LENGTH = 200;
 const DESCRIPTION_MAX_LENGTH = 500;
+const PREVIEW_IMAGE_NAME = "link-preview.png";
 
 export interface IOpenGraphData {
   title: string | undefined;
@@ -22,8 +24,27 @@ export interface IOpenGraphData {
   url: string;
 }
 
+export interface ILinkPreview {
+  container: ContainerBuilder;
+  files: AttachmentBuilder[];
+}
+
 export function extractFirstUrl(content: string): string | undefined {
   return content.match(URL_PATTERN)?.[0];
+}
+
+async function downloadPreviewImage(imageUrl: string): Promise<AttachmentBuilder | undefined> {
+  try {
+    const response = await axios.get<ArrayBuffer>(imageUrl, {
+      timeout: FETCH_TIMEOUT_MS,
+      responseType: "arraybuffer",
+      headers: { "User-Agent": "Mozilla/5.0 (compatible; TheRPGClubBot/1.0)" },
+    });
+    return new AttachmentBuilder(Buffer.from(response.data), { name: PREVIEW_IMAGE_NAME });
+  } catch (error) {
+    logWarn("LinkPreviewEmbeds", `Failed to download preview image ${imageUrl}: ${error}`);
+    return undefined;
+  }
 }
 
 export async function fetchOpenGraphData(url: string): Promise<IOpenGraphData | undefined> {
@@ -48,7 +69,7 @@ export async function fetchOpenGraphData(url: string): Promise<IOpenGraphData | 
   }
 }
 
-export function buildLinkPreviewContainer(data: IOpenGraphData): ContainerBuilder {
+export async function buildLinkPreviewContainer(data: IOpenGraphData): Promise<ILinkPreview> {
   const title = data.title ? truncateWithEllipsis(data.title, TITLE_MAX_LENGTH) : data.url;
   const bodyParts: string[] = [];
   if (data.description) {
@@ -57,10 +78,18 @@ export function buildLinkPreviewContainer(data: IOpenGraphData): ContainerBuilde
   bodyParts.push(data.url);
 
   const container = buildTitledContainer(title, bodyParts.join("\n\n"), { color: COLOR_PRIMARY });
+
+  const files: AttachmentBuilder[] = [];
   if (data.imageUrl) {
-    container.addMediaGalleryComponents(
-      new MediaGalleryBuilder().addItems(new MediaGalleryItemBuilder().setURL(data.imageUrl)),
-    );
+    const attachment = await downloadPreviewImage(data.imageUrl);
+    if (attachment) {
+      files.push(attachment);
+      container.addMediaGalleryComponents(
+        new MediaGalleryBuilder().addItems(
+          new MediaGalleryItemBuilder().setURL(`attachment://${PREVIEW_IMAGE_NAME}`),
+        ),
+      );
+    }
   }
-  return container;
+  return { container, files };
 }
