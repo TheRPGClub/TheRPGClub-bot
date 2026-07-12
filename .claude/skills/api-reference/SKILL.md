@@ -432,20 +432,6 @@ POST    /api/v1/release_announcements/{id}/skip  # Skip a release announcement
   data: { skip_reason }
 ```
 
-### Reminders
-
-```
-GET     /api/v1/reminders/{id}  # Show a personal reminder
-PATCH   /api/v1/reminders/{id}  # Update (or snooze) a personal reminder
-  data: { remind_at, content, is_noisy }
-PUT     /api/v1/reminders/{id}  # Replace a personal reminder (alias)
-  data: { remind_at, content, is_noisy }
-DELETE  /api/v1/reminders/{id}  # Delete a personal reminder
-GET     /api/v1/users/{user_id}/reminders  # List a user's personal reminders (page, per)
-POST    /api/v1/users/{user_id}/reminders  # Create a personal reminder
-  data: { remind_at*, content*, is_noisy }
-```
-
 ### Reviews
 
 ```
@@ -571,21 +557,6 @@ DELETE  /api/v1/threads/{id}/links  # Remove all of a thread's game links
 DELETE  /api/v1/threads/{id}/links/{game_id}  # Remove one game link from a thread
 ```
 
-### Todos
-
-```
-GET     /api/v1/todos  # List todos (completed, page, per, limit, offset)
-POST    /api/v1/todos  # Create a todo
-  data: { title*, details, todo_category, category, todo_size, is_completed, created_by, completed_at, completed_by }
-GET     /api/v1/todos/summary  # Todo counts summary
-GET     /api/v1/todos/{id}  # Show a todo
-PATCH   /api/v1/todos/{id}  # Update a todo
-  data: { title, details, todo_category, category, todo_size, is_completed, created_by, completed_at, completed_by }
-PUT     /api/v1/todos/{id}  # Replace a todo (alias)
-  data: { title, details, todo_category, category, todo_size, is_completed, created_by, completed_at, completed_by }
-DELETE  /api/v1/todos/{id}  # Delete a todo
-```
-
 ### User Activity Icons
 
 ```
@@ -649,6 +620,18 @@ PATCH   /api/v1/voting_info/{id}  # Update voting info
 PUT     /api/v1/voting_info/{id}  # Replace voting info (alias)
   data: { round_number, next_vote_at, nomination_list_id, five_day_reminder_sent, one_day_reminder_sent }
 DELETE  /api/v1/voting_info/{id}  # Delete voting info
+```
+
+### Wizard Sessions
+
+```
+GET     /api/v1/users/{user_id}/wizard_sessions  # Get the active wizard session (command_key, channel_id)
+POST    /api/v1/users/{user_id}/wizard_sessions  # Upsert the active wizard session
+  data: { command_key*, channel_id*, guild_id, state_json* }
+DELETE  /api/v1/users/{user_id}/wizard_sessions  # Delete historical wizard sessions (command_key, channel_id)
+PATCH   /api/v1/wizard_sessions/{id}  # Transition a wizard session status
+  data: { status* }
+DELETE  /api/v1/wizard_sessions/{id}  # Delete a wizard session
 ```
 
 ---
