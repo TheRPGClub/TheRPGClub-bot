@@ -1,5 +1,7 @@
+import axios from "axios";
 import { MessageFlags, MessageFlagsBitField } from "discord.js";
 import { logError, logInfo } from "../utilities/LogUtils.js";
+import { formatApiError, tryParseJson } from "../utilities/ApiErrorUtils.js";
 import type {
   Client,
   CommandInteraction,
@@ -544,6 +546,15 @@ export async function deferWithPrivateFlag(
 }
 
 export function extractErrorMessage(err: unknown): string {
+  if (axios.isAxiosError(err)) {
+    return formatApiError(
+      err.config?.method ?? "?",
+      err.config?.url ?? "?",
+      tryParseJson(err.config?.data as string | null | undefined),
+      err.response?.status,
+      err.response?.data ?? null,
+    );
+  }
   return err instanceof Error ? err.message : String(err);
 }
 

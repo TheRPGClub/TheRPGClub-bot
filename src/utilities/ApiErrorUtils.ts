@@ -15,7 +15,7 @@ export function formatApiError(
   return `Request:\n\`\`\`json\n${req}\n\`\`\`\nResponse:\n\`\`\`json\n${res}\n\`\`\``;
 }
 
-function tryParseJson(raw: string | null | undefined): unknown {
+export function tryParseJson(raw: string | null | undefined): unknown {
   if (!raw) return null;
   try {
     return JSON.parse(raw);
