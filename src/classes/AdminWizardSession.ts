@@ -67,10 +67,6 @@ function toDate(value: Date | string): Date {
   return value instanceof Date ? value : new Date(value);
 }
 
-function toDbStatus(status: AdminWizardSessionStatus): string {
-  return status.toUpperCase();
-}
-
 function fromDbStatus(status: string): AdminWizardSessionStatus {
   const normalized = status.trim().toLowerCase();
   if (ADMIN_WIZARD_SESSION_STATUSES.includes(normalized as AdminWizardSessionStatus)) {
@@ -247,7 +243,7 @@ export async function closeActiveAdminWizardSession(params: {
 
   const result = await apiPatch<{ data: WizardSessionApiData }>(
     `/api/v1/wizard_sessions/${active.sessionId}`,
-    { data: { status: toDbStatus(params.status) } },
+    { data: { status: params.status } },
   );
   return Boolean(result?.data);
 }
