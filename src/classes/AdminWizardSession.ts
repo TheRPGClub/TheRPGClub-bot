@@ -1,5 +1,4 @@
-import { dbQuery, dbMutate, dbTransaction, dbMutateConn } from "../db/SqlManager.js";
-import { AdminWizardSessionSql } from "../db/sql/index.js";
+import { apiGet, apiPost, apiPatch, apiDelete } from "../services/RpgClubApiClient.js";
 import { isPositiveInt } from "../utilities/ValidationUtils.js";
 
 export const ADMIN_WIZARD_COMMANDS = ["nextround-setup"] as const;
@@ -51,17 +50,17 @@ export interface IAdminWizardSession {
   lastUpdatedAt: Date;
 }
 
-type AdminWizardSessionRow = {
-  SESSION_ID: string;
-  COMMAND_KEY: string;
-  OWNER_USER_ID: string;
-  CHANNEL_ID: string;
-  GUILD_ID: string | null;
-  STATUS: string;
-  STATE_JSON: string;
-  LAST_UPDATED_AT: Date | string;
-  CREATED_AT: Date | string;
-  UPDATED_AT: Date | string;
+type WizardSessionApiData = {
+  session_id: string;
+  command_key: string;
+  owner_user_id: string;
+  channel_id: string;
+  guild_id: string | null;
+  status: string;
+  state_json: string;
+  last_updated_at: string;
+  created_at: string;
+  updated_at: string;
 };
 
 function toDate(value: Date | string): Date {
@@ -151,18 +150,18 @@ function serializeNextRoundWizardState(state: INextRoundWizardState): string {
   });
 }
 
-function mapAdminWizardSessionRow(row: AdminWizardSessionRow): IAdminWizardSession {
+function mapWizardSessionFromApi(data: WizardSessionApiData): IAdminWizardSession {
   return {
-    sessionId: row.SESSION_ID,
-    commandKey: row.COMMAND_KEY as AdminWizardCommand,
-    ownerUserId: row.OWNER_USER_ID,
-    channelId: row.CHANNEL_ID,
-    guildId: row.GUILD_ID,
-    status: fromDbStatus(row.STATUS),
-    state: parseNextRoundWizardState(row.STATE_JSON),
-    createdAt: toDate(row.CREATED_AT),
-    updatedAt: toDate(row.UPDATED_AT),
-    lastUpdatedAt: toDate(row.LAST_UPDATED_AT),
+    sessionId: data.session_id,
+    commandKey: data.command_key as AdminWizardCommand,
+    ownerUserId: data.owner_user_id,
+    channelId: data.channel_id,
+    guildId: data.guild_id,
+    status: fromDbStatus(data.status),
+    state: parseNextRoundWizardState(data.state_json),
+    createdAt: toDate(data.created_at),
+    updatedAt: toDate(data.updated_at),
+    lastUpdatedAt: toDate(data.last_updated_at),
   };
 }
 
@@ -190,12 +189,11 @@ export async function getActiveAdminWizardSession(
   ownerUserId: string,
   channelId: string,
 ): Promise<IAdminWizardSession | null> {
-  const rows = await dbQuery(
-    AdminWizardSessionSql.getActive,
-    { commandKey, ownerUserId, channelId },
-    mapAdminWizardSessionRow,
+  const result = await apiGet<{ data: WizardSessionApiData }>(
+    `/api/v1/users/${ownerUserId}/wizard_sessions`,
+    { params: { command_key: commandKey, channel_id: channelId } },
   );
-  return rows[0] ?? null;
+  return result?.data ? mapWizardSessionFromApi(result.data) : null;
 }
 
 export async function saveAdminWizardSession(params: {
@@ -210,38 +208,22 @@ export async function saveAdminWizardSession(params: {
     stateLastUpdatedAt: new Date(),
   };
   const stateJson = serializeNextRoundWizardState(normalizedState);
-  const now = new Date();
-  const uniqueSessionId = [
-    "wiz",
-    params.commandKey,
-    params.ownerUserId,
-    params.channelId,
-    Date.now().toString(),
-    Math.floor(Math.random() * 1_000_000).toString(),
-  ].join("-");
 
-  await dbMutate(
-    AdminWizardSessionSql.saveSession,
+  const result = await apiPost<{ data: WizardSessionApiData }>(
+    `/api/v1/users/${params.ownerUserId}/wizard_sessions`,
     {
-      commandKey: params.commandKey,
-      ownerUserId: params.ownerUserId,
-      channelId: params.channelId,
-      guildId: params.guildId ?? null,
-      stateJson,
-      lastUpdatedAt: now,
-      sessionId: uniqueSessionId,
+      data: {
+        command_key: params.commandKey,
+        channel_id: params.channelId,
+        guild_id: params.guildId ?? null,
+        state_json: stateJson,
+      },
     },
   );
-
-  const saved = await getActiveAdminWizardSession(
-    params.commandKey,
-    params.ownerUserId,
-    params.channelId,
-  );
-  if (!saved) {
+  if (!result?.data) {
     throw new Error("Failed to save admin wizard session.");
   }
-  return saved;
+  return mapWizardSessionFromApi(result.data);
 }
 
 export async function closeActiveAdminWizardSession(params: {
@@ -250,23 +232,22 @@ export async function closeActiveAdminWizardSession(params: {
   channelId: string;
   status: Exclude<AdminWizardSessionStatus, "active">;
 }): Promise<boolean> {
-  return dbTransaction(async (conn) => {
-    // Remove any prior historical row to avoid unique index collision when
-    // promoting ACTIVE -> CANCELLED/COMPLETED.
-    await dbMutateConn(conn, AdminWizardSessionSql.deleteHistorical, {
-      commandKey: params.commandKey,
-      ownerUserId: params.ownerUserId,
-      channelId: params.channelId,
-      status: toDbStatus(params.status),
-    });
+  const active = await getActiveAdminWizardSession(
+    params.commandKey,
+    params.ownerUserId,
+    params.channelId,
+  );
+  if (!active) return false;
 
-    const rowsAffected = await dbMutateConn(conn, AdminWizardSessionSql.updateStatus, {
-      status: toDbStatus(params.status),
-      lastUpdatedAt: new Date(),
-      commandKey: params.commandKey,
-      ownerUserId: params.ownerUserId,
-      channelId: params.channelId,
-    });
-    return rowsAffected > 0;
+  // Remove any prior historical row to avoid unique index collision when
+  // promoting ACTIVE -> CANCELLED/COMPLETED.
+  await apiDelete(`/api/v1/users/${params.ownerUserId}/wizard_sessions`, {
+    params: { command_key: params.commandKey, channel_id: params.channelId },
   });
+
+  const result = await apiPatch<{ data: WizardSessionApiData }>(
+    `/api/v1/wizard_sessions/${active.sessionId}`,
+    { data: { status: toDbStatus(params.status) } },
+  );
+  return Boolean(result?.data);
 }
