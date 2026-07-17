@@ -11,6 +11,10 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+    network_mode: host
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1    
 
   watchtower:
     image: containrrr/watchtower
@@ -18,8 +22,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       - ${DOCKER_CONFIG:-~/.docker}/config.json:/config.json:ro
     environment:
-      WATCHTOWER_POLL_INTERVAL: "300"
+      WATCHTOWER_POLL_INTERVAL: "120"
       WATCHTOWER_CLEANUP: "true"
       DOCKER_API_VERSION: "1.45"
-      WATCHTOWER_LOG_LEVEL: "warn"
     restart: unless-stopped
