@@ -1,3 +1,5 @@
+import { foldAccentE } from "./GameAutocompleteCache.js";
+
 type IGameTitleAutocompleteEntry = {
   title: string;
   initialReleaseDate?: Date | string | null;
@@ -51,4 +53,59 @@ export function parseTitleWithYear(
   }
 
   return { title: input, year: null, hasYearSuffix: false };
+}
+
+/**
+ * Collapses a title to a punctuation/accent-insensitive key so titles that
+ * differ only by colon vs. hyphen, curly quotes, or spacing still compare
+ * equal (e.g. "X: Definitive Edition" vs "X - Definitive Edition").
+ */
+export function normalizeTitleKey(title: string): string {
+  return foldAccentE(title)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+/**
+ * Resolves a single unambiguous GameDB match for a user-supplied title.
+ * Tries a literal (case-insensitive) title match first, falls back to a
+ * punctuation-normalized match, then finally to the sole search result if
+ * the search itself was already unambiguous.
+ */
+export function resolveExactTitleMatch<T extends IGameTitleAutocompleteEntry>(
+  candidates: T[],
+  searchTerm: string,
+): T | null {
+  const parsed = parseTitleWithYear(searchTerm);
+  const normalizedSearchTerm = parsed.title.trim();
+  if (!normalizedSearchTerm) {
+    return null;
+  }
+
+  const matchesYear = (game: T): boolean => {
+    if (parsed.year == null) return true;
+    return getReleaseYear(game) === parsed.year;
+  };
+
+  const literalMatch = candidates.find(
+    (game) => game.title.toLowerCase() === normalizedSearchTerm.toLowerCase() && matchesYear(game),
+  );
+  if (literalMatch) {
+    return literalMatch;
+  }
+
+  const searchKey = normalizeTitleKey(normalizedSearchTerm);
+  const normalizedMatches = candidates.filter(
+    (game) => normalizeTitleKey(game.title) === searchKey && matchesYear(game),
+  );
+  if (normalizedMatches.length === 1) {
+    return normalizedMatches[0] ?? null;
+  }
+
+  if (candidates.length === 1) {
+    return candidates[0] ?? null;
+  }
+
+  return null;
 }

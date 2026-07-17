@@ -34,7 +34,7 @@ import {
   autocompleteGameCompletionTitle,
   resolveGameCompletionPlatformId,
 } from "./game-completion/completion-autocomplete.utils.js";
-import { parseTitleWithYear } from "../functions/GameTitleAutocompleteUtils.js";
+import { resolveExactTitleMatch } from "../functions/GameTitleAutocompleteUtils.js";
 
 import { renderUsernameWithEmoji } from "../services/UserEmojiService.js";
 import { safeIgnore } from "../utilities/AsyncUtils.js";
@@ -301,37 +301,8 @@ export class NowPlayingCommand {
   }
 
   private async resolveNowPlayingGameByTitle(searchTerm: string): Promise<IGame | null> {
-    const parsed = parseTitleWithYear(searchTerm);
-    const normalizedSearchTerm = parsed.title.trim();
-    if (!normalizedSearchTerm) {
-      return null;
-    }
-
-    const existing = await GameSearchService.searchGames(normalizedSearchTerm);
-    const exact = existing.find((game) => {
-      if (game.title.toLowerCase() !== normalizedSearchTerm.toLowerCase()) {
-        return false;
-      }
-      if (parsed.year == null) {
-        return true;
-      }
-
-      const releaseDate = game.initialReleaseDate instanceof Date
-        ? game.initialReleaseDate
-        : game.initialReleaseDate
-          ? new Date(game.initialReleaseDate)
-          : null;
-      return releaseDate instanceof Date && !Number.isNaN(releaseDate.getTime())
-        ? releaseDate.getFullYear() === parsed.year
-        : false;
-    });
-    if (exact) {
-      return exact;
-    }
-    if (existing.length === 1) {
-      return existing[0] ?? null;
-    }
-    return null;
+    const existing = await GameSearchService.searchGames(searchTerm);
+    return resolveExactTitleMatch(existing, searchTerm);
   }
 
   private async promptEditNowPlayingNote(
