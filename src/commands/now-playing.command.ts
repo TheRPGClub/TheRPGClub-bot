@@ -31,10 +31,12 @@ import {
 } from "../functions/ComponentsV2Utils.js";
 import {
   autocompleteGameCompletionPlatform,
-  autocompleteGameCompletionTitle,
   resolveGameCompletionPlatformId,
 } from "./game-completion/completion-autocomplete.utils.js";
+import { autocompleteCollectionGameTitle } from "./collection/collection-autocomplete.utils.js";
 import { resolveExactTitleMatch } from "../functions/GameTitleAutocompleteUtils.js";
+import { isPositiveInt } from "../utilities/ValidationUtils.js";
+import Game from "../classes/Game.js";
 
 import { renderUsernameWithEmoji } from "../services/UserEmojiService.js";
 import { safeIgnore } from "../utilities/AsyncUtils.js";
@@ -77,7 +79,7 @@ export class NowPlayingCommand {
   @Slash({ description: "Add a game to your now playing list", name: "add" })
   async addNowPlayingSlash(
     @SlashOption({
-      autocomplete: autocompleteGameCompletionTitle,
+      autocomplete: autocompleteCollectionGameTitle,
       description: "Game title (autocomplete from GameDB)",
       name: "title",
       required: true,
@@ -106,9 +108,15 @@ export class NowPlayingCommand {
       return;
     }
 
-    const game = await this.resolveNowPlayingGameByTitle(title);
+    const { game, candidates } = await this.resolveNowPlayingGameByTitle(title);
     if (!game) {
-      const container = buildTextContainer(`I could not find a unique GameDB match for "${title}". Please choose from autocomplete.`);
+      const candidateList = candidates.length
+        ? candidates.slice(0, 5).map((g) => `"${g.title}"`).join(", ")
+        : "no results";
+      const container = buildTextContainer(
+        `I could not find a unique GameDB match for "${title}" ` +
+        `(GameDB search returned: ${candidateList}). Please choose from autocomplete.`,
+      );
       await safeReply(interaction, {
         components: [container],
         flags: buildComponentsV2Flags(false),
@@ -300,9 +308,17 @@ export class NowPlayingCommand {
     });
   }
 
-  private async resolveNowPlayingGameByTitle(searchTerm: string): Promise<IGame | null> {
+  private async resolveNowPlayingGameByTitle(
+    searchTerm: string,
+  ): Promise<{ game: IGame | null; candidates: IGame[] }> {
+    const numericId = Number(searchTerm);
+    if (isPositiveInt(numericId)) {
+      const byId = await Game.getGameById(numericId);
+      return { game: byId, candidates: byId ? [byId] : [] };
+    }
+
     const existing = await GameSearchService.searchGames(searchTerm);
-    return resolveExactTitleMatch(existing, searchTerm);
+    return { game: resolveExactTitleMatch(existing, searchTerm), candidates: existing };
   }
 
   private async promptEditNowPlayingNote(

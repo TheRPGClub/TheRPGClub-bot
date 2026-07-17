@@ -48,6 +48,7 @@ import { isPositiveInt } from "../utilities/ValidationUtils.js";
 import { DISCORD_SELECT_OPTIONS_MAX, truncateLabel } from "../config/textLimits.js";
 import { logError } from "../utilities/LogUtils.js";
 import GameSearchService from "../classes/GameSearchService.js";
+import Game from "../classes/Game.js";
 
 const NOMINATE_REASON_MAX_LENGTH = 1500;
 
@@ -66,7 +67,7 @@ async function autocompleteNominationTitle(
   await interaction.respond(
     results.slice(0, DISCORD_SELECT_OPTIONS_MAX).map((game) => ({
       name: truncateLabel(formatGameTitleWithYear(game)),
-      value: truncateLabel(formatGameTitleWithYear(game)),
+      value: String(game.id),
     })),
   );
 }
@@ -78,9 +79,17 @@ function parseNominationKind(value: string): NominationKind | null {
   return null;
 }
 
-async function resolveNominatedGameByTitle(searchTerm: string): Promise<IGame | null> {
+async function resolveNominatedGameByTitle(
+  searchTerm: string,
+): Promise<{ game: IGame | null; candidates: IGame[] }> {
+  const numericId = Number(searchTerm);
+  if (isPositiveInt(numericId)) {
+    const byId = await Game.getGameById(numericId);
+    return { game: byId, candidates: byId ? [byId] : [] };
+  }
+
   const existing = await GameSearchService.searchGames(searchTerm);
-  return resolveExactTitleMatch(existing, searchTerm);
+  return { game: resolveExactTitleMatch(existing, searchTerm), candidates: existing };
 }
 
 async function announceNominationList(
@@ -197,10 +206,14 @@ export class NominateCommand {
         return;
       }
 
-      const game = await resolveNominatedGameByTitle(cleanedTitle);
+      const { game, candidates } = await resolveNominatedGameByTitle(cleanedTitle);
       if (!game) {
+        const candidateList = candidates.length
+          ? candidates.slice(0, 5).map((g) => `"${g.title}"`).join(", ")
+          : "no results";
         const notFoundMsg =
-          `I could not find a unique GameDB match for "${cleanedTitle}". ` +
+          `I could not find a unique GameDB match for "${cleanedTitle}" ` +
+          `(GameDB search returned: ${candidateList}). ` +
           "Please use the title autocomplete or add the game to GameDB first.";
         await safeReply(interaction, buildTextReply(notFoundMsg, true));
         return;
