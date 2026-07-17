@@ -1,14 +1,9 @@
 import { apiGet } from "../services/RpgClubApiClient.js";
 import GameSearchSynonym from "./GameSearchSynonym.js";
 import { mapGameFromApi } from "../functions/GameMappers.js";
-import {
-  autocompleteSearchCache,
-  pendingAutocompleteSearches,
-  foldAccentE,
-  buildAutocompleteCacheKey,
-  pruneAutocompleteCache,
-  AUTOCOMPLETE_CACHE_TTL_MS,
-} from "../functions/GameAutocompleteCache.js";
+import { foldAccentE } from "../functions/GameTitleAutocompleteUtils.js";
+import { createTtlCache } from "../functions/TtlCache.js";
+import { AUTOCOMPLETE_CACHE_TTL_MS } from "../config/cacheDefaults.js";
 import type {
   IGame,
   IGameSearchResult,
@@ -88,6 +83,26 @@ export default class GameSearchService {
     return Array.from(termSet.values()).slice(0, MAX_QUERY_VARIANTS);
   }
 
+  private static gameTitleCache = createTtlCache<IGameAutocompleteResult[]>(
+    async () => {
+      const games = await GameSearchService.fetchGamesPages({});
+      return games.map((g) => ({
+        id: g.id,
+        title: g.title,
+        initialReleaseDate: g.initialReleaseDate,
+      }));
+    },
+    AUTOCOMPLETE_CACHE_TTL_MS,
+  );
+
+  static async getCachedGameTitles(): Promise<IGameAutocompleteResult[]> {
+    return GameSearchService.gameTitleCache.get();
+  }
+
+  static clearGameTitleCache(): void {
+    GameSearchService.gameTitleCache.clear();
+  }
+
   static async searchGamesAutocomplete(
     query: string,
     limit: number = 24,
@@ -98,18 +113,6 @@ export default class GameSearchService {
     }
 
     const safeLimit = Math.min(24, Math.max(1, Math.trunc(limit) || 24));
-    const now = Date.now();
-    pruneAutocompleteCache(now);
-
-    const cacheKey = buildAutocompleteCacheKey(baseQuery, safeLimit);
-    const cached = autocompleteSearchCache.get(cacheKey);
-    if (cached && cached.expiresAt > now) {
-      return cached.results;
-    }
-    const pending = pendingAutocompleteSearches.get(cacheKey);
-    if (pending) {
-      return pending;
-    }
 
     const lowerQuery = baseQuery.toLowerCase();
     const foldedLowerQuery = foldAccentE(lowerQuery).toLowerCase();
@@ -118,50 +121,29 @@ export default class GameSearchService {
       return [];
     }
 
-    const queryPromise = (async () => {
-      const result = await apiGet<{ data: unknown[] }>("/api/v1/games", {
-        params: { q: baseQuery, per: safeLimit },
+    const games = await GameSearchService.getCachedGameTitles();
+
+    const rank = (game: IGameAutocompleteResult): number => {
+      const folded = foldAccentE(game.title.toLowerCase()).toLowerCase();
+      const norm = folded.replace(/[^a-z0-9]/g, "");
+      if (folded === foldedLowerQuery) return 0;
+      if (folded.startsWith(foldedLowerQuery)) return 1;
+      if (normalizedQuery && norm === normalizedQuery) return 2;
+      if (normalizedQuery && norm.startsWith(normalizedQuery)) return 3;
+      if (folded.includes(foldedLowerQuery)) return 4;
+      if (normalizedQuery && norm.includes(normalizedQuery)) return 5;
+      return -1;
+    };
+
+    const matched = games
+      .map((game) => ({ game, rank: rank(game) }))
+      .filter((entry) => entry.rank >= 0)
+      .sort((a, b) => {
+        const rankDiff = a.rank - b.rank;
+        return rankDiff !== 0 ? rankDiff : a.game.title.localeCompare(b.game.title);
       });
-      const games = (result?.data ?? []).map(mapGameFromApi);
 
-      const rank = (game: IGame): number => {
-        const folded = foldAccentE(game.title.toLowerCase()).toLowerCase();
-        const norm = folded.replace(/[^a-z0-9]/g, "");
-        if (folded === foldedLowerQuery) return 0;
-        if (folded.startsWith(foldedLowerQuery)) return 1;
-        if (normalizedQuery && norm === normalizedQuery) return 2;
-        if (normalizedQuery && norm.startsWith(normalizedQuery)) return 3;
-        return 4;
-      };
-
-      const sorted = [...games].sort((a, b) => {
-        const rankDiff = rank(a) - rank(b);
-        return rankDiff !== 0 ? rankDiff : a.title.localeCompare(b.title);
-      });
-
-      const results: IGameAutocompleteResult[] = sorted
-        .slice(0, safeLimit)
-        .map((g) => ({
-          id: g.id,
-          title: g.title,
-          initialReleaseDate: g.initialReleaseDate,
-        }));
-
-      autocompleteSearchCache.set(cacheKey, {
-        expiresAt: Date.now() + AUTOCOMPLETE_CACHE_TTL_MS,
-        results,
-      });
-      pruneAutocompleteCache(Date.now());
-
-      return results;
-    })();
-
-    pendingAutocompleteSearches.set(cacheKey, queryPromise);
-    try {
-      return await queryPromise;
-    } finally {
-      pendingAutocompleteSearches.delete(cacheKey);
-    }
+    return matched.slice(0, safeLimit).map((entry) => entry.game);
   }
 
   static async searchGames(

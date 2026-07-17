@@ -219,7 +219,7 @@ export async function autocompleteSearchPlatform(
 ): Promise<void> {
   const focused = interaction.options.getFocused(true);
   const rawQuery = focused?.value ? String(focused.value) : "";
-  const platforms = await GamePlatformRegionService.getAllPlatforms();
+  const platforms = await GamePlatformRegionService.getCachedPlatforms();
   const query = rawQuery.toLowerCase().trim();
   const filtered = query
     ? platforms.filter((p) =>
@@ -240,7 +240,7 @@ export async function autocompleteSearchCompany(
 ): Promise<void> {
   const focused = interaction.options.getFocused(true);
   const rawQuery = focused?.value ? String(focused.value) : "";
-  const companies = await GameProfileService.getAllCompanies();
+  const companies = await GameProfileService.getCachedCompanies();
   const query = rawQuery.toLowerCase().trim();
   const filtered = query
     ? companies.filter((c) => c.name.toLowerCase().includes(query))

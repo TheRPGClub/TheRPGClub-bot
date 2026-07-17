@@ -18,10 +18,8 @@ import type {
   IGame,
   IRelease,
 } from "../types/GameTypes.js";
-import {
-  clearAutocompleteSearchCaches,
-} from "../functions/GameAutocompleteCache.js";
 import GameProfileService from "./GameProfileService.js";
+import GameSearchService from "./GameSearchService.js";
 
 export default class Game {
   static async createGame(igdbId: number): Promise<IGame> {
@@ -32,7 +30,7 @@ export default class Game {
     if (!result) throw new Error("No IGDB game found with that id.");
     const newGame = await Game.getGameById(result.data.game_id);
     if (!newGame) throw new Error("Failed to fetch newly created game.");
-    clearAutocompleteSearchCaches();
+    GameSearchService.clearGameTitleCache();
     return newGame;
   }
 

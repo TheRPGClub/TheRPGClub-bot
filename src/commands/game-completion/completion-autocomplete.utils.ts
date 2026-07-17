@@ -12,24 +12,7 @@ import { DISCORD_SELECT_OPTIONS_MAX, truncateLabel } from "../../config/textLimi
 import GamePlatformRegionService from "../../classes/GamePlatformRegionService.js";
 import GameSearchService from "../../classes/GameSearchService.js";
 
-const PLATFORM_CACHE_TTL_MS = 5 * 60 * 1000;
 const COMPLETION_TITLE_VALUE_PREFIX = "completion";
-
-let platformCache: { expiresAt: number; platforms: IPlatformDef[] } | null = null;
-
-async function getCachedPlatforms(): Promise<IPlatformDef[]> {
-  const now = Date.now();
-  if (platformCache && platformCache.expiresAt > now) {
-    return platformCache.platforms;
-  }
-
-  const platforms = await GamePlatformRegionService.getAllPlatforms();
-  platformCache = {
-    expiresAt: now + PLATFORM_CACHE_TTL_MS,
-    platforms,
-  };
-  return platforms;
-}
 
 function normalizePlatformSearchText(value: string): string {
   return value.trim().toLowerCase();
@@ -148,7 +131,7 @@ async function autocompleteGameCompletionPlatformWithOptions(
     sanitizeUserInput(rawQuery, { preserveNewlines: false }),
   );
 
-  const platforms = await getCachedPlatforms();
+  const platforms = await GamePlatformRegionService.getCachedPlatforms();
   const filtered = query
     ? platforms.filter((platform) => {
       const name = normalizePlatformSearchText(platform.name);
@@ -180,7 +163,7 @@ export async function resolveGameCompletionPlatformId(
     return null;
   }
 
-  const platforms = await getCachedPlatforms();
+  const platforms = await GamePlatformRegionService.getCachedPlatforms();
 
   const asId = Number(value);
   if (isPositiveInt(asId)) {
@@ -218,7 +201,7 @@ export async function resolveGameCompletionPlatformLabel(
     return "No platform";
   }
 
-  const platforms = await getCachedPlatforms();
+  const platforms = await GamePlatformRegionService.getCachedPlatforms();
   const platform = platforms.find((entry) => entry.id === platformId);
   if (!platform) {
     return `Platform #${platformId}`;
