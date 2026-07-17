@@ -1,4 +1,6 @@
-import { foldAccentE } from "./GameAutocompleteCache.js";
+export function foldAccentE(query: string): string {
+  return query.replace(/[éèêë]/g, "e").replace(/[ÉÈÊË]/g, "E");
+}
 
 type IGameTitleAutocompleteEntry = {
   title: string;

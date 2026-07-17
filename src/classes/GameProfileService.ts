@@ -17,6 +17,8 @@ import {
   type GameProfileApiData,
   mapGameProfileFromApi,
 } from "../functions/GameProfileMapper.js";
+import { createTtlCache } from "../functions/TtlCache.js";
+import { AUTOCOMPLETE_CACHE_TTL_MS } from "../config/cacheDefaults.js";
 
 export default class GameProfileService {
   private static async fetchAllPages<T>(
@@ -87,6 +89,19 @@ export default class GameProfileService {
       name: String(d.name),
       igdbId: d.igdb_company_id != null ? Number(d.igdb_company_id) : null,
     }));
+  }
+
+  private static companyCache = createTtlCache<ICompany[]>(
+    () => GameProfileService.getAllCompanies(),
+    AUTOCOMPLETE_CACHE_TTL_MS,
+  );
+
+  static async getCachedCompanies(): Promise<ICompany[]> {
+    return GameProfileService.companyCache.get();
+  }
+
+  static clearCompanyCache(): void {
+    GameProfileService.companyCache.clear();
   }
 
   static async getCompanyById(id: number): Promise<ICompany | null> {

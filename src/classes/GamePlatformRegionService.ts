@@ -10,6 +10,8 @@ import type { IPlatformDef, IRegionDef, IGame, IGameWithPlatforms } from "../typ
 import { apiGet, apiPost } from "../services/RpgClubApiClient.js";
 import GameProfileService from "./GameProfileService.js";
 import { isPositiveInt } from "../utilities/ValidationUtils.js";
+import { createTtlCache } from "../functions/TtlCache.js";
+import { AUTOCOMPLETE_CACHE_TTL_MS } from "../config/cacheDefaults.js";
 
 export default class GamePlatformRegionService {
   private static async fetchAllPages<T>(
@@ -77,6 +79,19 @@ export default class GamePlatformRegionService {
     const rows =
       await GamePlatformRegionService.fetchAllPages<PlatformApiData>("/api/v1/platforms");
     return rows.map(mapPlatformFromApi).sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  private static platformCache = createTtlCache<IPlatformDef[]>(
+    () => GamePlatformRegionService.getAllPlatforms(),
+    AUTOCOMPLETE_CACHE_TTL_MS,
+  );
+
+  static async getCachedPlatforms(): Promise<IPlatformDef[]> {
+    return GamePlatformRegionService.platformCache.get();
+  }
+
+  static clearPlatformCache(): void {
+    GamePlatformRegionService.platformCache.clear();
   }
 
   static async getPlatformsByIgdbIds(
