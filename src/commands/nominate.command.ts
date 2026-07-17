@@ -24,7 +24,7 @@ import {
 } from "../functions/ComponentsV2Utils.js";
 import {
   formatGameTitleWithYear,
-  parseTitleWithYear,
+  resolveExactTitleMatch,
 } from "../functions/GameTitleAutocompleteUtils.js";
 import {
   areNominationsClosed,
@@ -79,33 +79,8 @@ function parseNominationKind(value: string): NominationKind | null {
 }
 
 async function resolveNominatedGameByTitle(searchTerm: string): Promise<IGame | null> {
-  const parsed = parseTitleWithYear(searchTerm);
-  const normalizedSearchTerm = parsed.title;
-  const existing = await GameSearchService.searchGames(normalizedSearchTerm);
-  const exact = existing.find((game) => {
-    if (game.title.toLowerCase() !== normalizedSearchTerm.toLowerCase()) {
-      return false;
-    }
-    if (parsed.year == null) {
-      return true;
-    }
-
-    const releaseDate = game.initialReleaseDate instanceof Date
-      ? game.initialReleaseDate
-      : game.initialReleaseDate
-        ? new Date(game.initialReleaseDate)
-        : null;
-    return releaseDate instanceof Date && !Number.isNaN(releaseDate.getTime())
-      ? releaseDate.getFullYear() === parsed.year
-      : false;
-  });
-  if (exact) {
-    return exact;
-  }
-  if (existing.length === 1) {
-    return existing[0] ?? null;
-  }
-  return null;
+  const existing = await GameSearchService.searchGames(searchTerm);
+  return resolveExactTitleMatch(existing, searchTerm);
 }
 
 async function announceNominationList(
