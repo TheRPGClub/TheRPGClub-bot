@@ -64,6 +64,7 @@ export interface ICompletionatorImport {
   status: string;
   totalCount: number;
   sourceFilename: string | null;
+  testMode: boolean;
   createdAt: Date;
   updatedAt: Date;
 }

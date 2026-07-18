@@ -15,6 +15,7 @@ export interface ICompletionatorImport {
   currentIndex: number;
   totalCount: number;
   sourceFilename: string | null;
+  testMode: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -44,6 +45,7 @@ type CompletionatorImportApiData = {
   current_index: number;
   total_count: number;
   source_filename: string | null;
+  test_mode: boolean;
   created_at: string;
   updated_at: string;
 };
@@ -83,6 +85,7 @@ function mapImport(row: CompletionatorImportApiData): ICompletionatorImport {
     currentIndex: Number(row.current_index ?? 0),
     totalCount: Number(row.total_count ?? 0),
     sourceFilename: row.source_filename ?? null,
+    testMode: Boolean(row.test_mode),
     createdAt: toDate(row.created_at),
     updatedAt: toDate(row.updated_at),
   };
@@ -111,6 +114,7 @@ function mapItem(row: CompletionatorItemApiData): ICompletionatorItem {
 export async function createImportSession(params: {
   userId: string;
   sourceFilename: string | null;
+  testMode?: boolean;
   items: Array<{
     rowIndex: number;
     gameTitle: string;
@@ -128,6 +132,7 @@ export async function createImportSession(params: {
     {
       data: {
         source_filename: params.sourceFilename,
+        test_mode: params.testMode ?? false,
         items: params.items.map((item) => ({
           row_index: item.rowIndex,
           game_title: item.gameTitle,

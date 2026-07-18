@@ -23,6 +23,7 @@ export async function handleCompletionatorImport(
   interaction: CommandInteraction,
   action: CompletionatorAction,
   file: Attachment | undefined,
+  testMode: boolean | undefined,
 ): Promise<void> {
   const ephemeral = interaction.channel?.id !== BOT_DEV_CHANNEL_ID;
   await safeDeferReply(interaction, {
@@ -65,6 +66,7 @@ export async function handleCompletionatorImport(
     const session = await createImportSession({
       userId,
       sourceFilename: file.name ?? null,
+      testMode: testMode ?? false,
       items: parsed,
     });
 
@@ -98,7 +100,7 @@ export async function handleCompletionatorImport(
     const statusContainer = buildTextContainer(
     safeV2TextContent(
       `## Completionator Import #${session.importId}\n` +
-      `Status: ${session.status}\n\n` +
+      `Status: ${session.status}${session.testMode ? " (TEST MODE)" : ""}\n\n` +
       `**Pending:** ${stats.pending} | **Imported:** ${stats.imported} | ` +
       `**Updated:** ${stats.updated} | **Skipped:** ${stats.skipped} | ` +
       `**Errors:** ${stats.error}`,
