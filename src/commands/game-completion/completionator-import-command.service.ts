@@ -5,7 +5,6 @@ import { ephemeralFlag, safeDeferReply, safeReply } from "../../functions/Intera
 import { fetchCsv, parseCompletionatorCsv } from "./completionator-parser.service.js";
 import {
   createImportSession,
-  insertImportItems,
   getActiveImportForUser,
   setImportStatus,
   countImportItems,
@@ -65,10 +64,9 @@ export async function handleCompletionatorImport(
 
     const session = await createImportSession({
       userId,
-      totalCount: parsed.length,
       sourceFilename: file.name ?? null,
+      items: parsed,
     });
-    await insertImportItems(session.importId, parsed);
 
     const threadService = new CompletionatorThreadService();
     const context = await threadService.getOrCreateCompletionatorThread(interaction, session);

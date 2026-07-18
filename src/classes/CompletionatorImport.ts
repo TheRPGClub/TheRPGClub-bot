@@ -1,5 +1,4 @@
-import { dbQuery, dbMutate, dbInsert, dbTransaction, dbMutateConn } from "../db/SqlManager.js";
-import { CompletionatorImportSql } from "../db/sql/index.js";
+import { apiGet, apiPatch, apiPost } from "../services/RpgClubApiClient.js";
 
 export type ImportStatus = "ACTIVE" | "PAUSED" | "COMPLETED" | "CANCELED";
 export type ImportItemStatus =
@@ -38,91 +37,80 @@ export interface ICompletionatorItem {
   errorText: string | null;
 }
 
+type CompletionatorImportApiData = {
+  import_id: number;
+  user_id: string;
+  status: string;
+  current_index: number;
+  total_count: number;
+  source_filename: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+type CompletionatorItemApiData = {
+  item_id: number;
+  import_id: number;
+  row_index: number;
+  game_title: string | null;
+  platform_name: string | null;
+  region_name: string | null;
+  source_type: string | null;
+  time_text: string | null;
+  completed_at: string | null;
+  completion_type: string | null;
+  playtime_hrs: number | null;
+  status: string;
+  gamedb_game_id: number | null;
+  completion_id: number | null;
+  error_text: string | null;
+};
+
+type CompletionatorImportSummaryApiData = {
+  import_id: number;
+  by_status: Record<string, number>;
+};
+
 function toDate(value: Date | string): Date {
   return value instanceof Date ? value : new Date(value);
 }
 
-function mapImport(row: {
-  IMPORT_ID: number;
-  USER_ID: string;
-  STATUS: ImportStatus;
-  CURRENT_INDEX: number;
-  TOTAL_COUNT: number;
-  SOURCE_FILENAME: string | null;
-  CREATED_AT: Date | string;
-  UPDATED_AT: Date | string;
-}): ICompletionatorImport {
+function mapImport(row: CompletionatorImportApiData): ICompletionatorImport {
   return {
-    importId: Number(row.IMPORT_ID),
-    userId: row.USER_ID,
-    status: row.STATUS,
-    currentIndex: Number(row.CURRENT_INDEX ?? 0),
-    totalCount: Number(row.TOTAL_COUNT ?? 0),
-    sourceFilename: row.SOURCE_FILENAME ?? null,
-    createdAt: toDate(row.CREATED_AT),
-    updatedAt: toDate(row.UPDATED_AT),
+    importId: Number(row.import_id),
+    userId: row.user_id,
+    status: row.status.toUpperCase() as ImportStatus,
+    currentIndex: Number(row.current_index ?? 0),
+    totalCount: Number(row.total_count ?? 0),
+    sourceFilename: row.source_filename ?? null,
+    createdAt: toDate(row.created_at),
+    updatedAt: toDate(row.updated_at),
   };
 }
 
-function mapItem(row: {
-  ITEM_ID: number;
-  IMPORT_ID: number;
-  ROW_INDEX: number;
-  GAME_TITLE: string;
-  PLATFORM_NAME: string | null;
-  REGION_NAME: string | null;
-  SOURCE_TYPE: string | null;
-  TIME_TEXT: string | null;
-  COMPLETED_AT: Date | null;
-  COMPLETION_TYPE: string | null;
-  PLAYTIME_HRS: number | null;
-  STATUS: ImportItemStatus;
-  GAMEDB_GAME_ID: number | null;
-  COMPLETION_ID: number | null;
-  ERROR_TEXT: string | null;
-}): ICompletionatorItem {
+function mapItem(row: CompletionatorItemApiData): ICompletionatorItem {
   return {
-    itemId: Number(row.ITEM_ID),
-    importId: Number(row.IMPORT_ID),
-    rowIndex: Number(row.ROW_INDEX),
-    gameTitle: row.GAME_TITLE,
-    platformName: row.PLATFORM_NAME ?? null,
-    regionName: row.REGION_NAME ?? null,
-    sourceType: row.SOURCE_TYPE ?? null,
-    timeText: row.TIME_TEXT ?? null,
-    completedAt: row.COMPLETED_AT
-      ? row.COMPLETED_AT instanceof Date
-        ? row.COMPLETED_AT
-        : new Date(row.COMPLETED_AT as string)
-      : null,
-    completionType: row.COMPLETION_TYPE ?? null,
-    playtimeHours: row.PLAYTIME_HRS == null ? null : Number(row.PLAYTIME_HRS),
-    status: row.STATUS,
-    gameDbGameId: row.GAMEDB_GAME_ID == null ? null : Number(row.GAMEDB_GAME_ID),
-    completionId: row.COMPLETION_ID == null ? null : Number(row.COMPLETION_ID),
-    errorText: row.ERROR_TEXT ?? null,
+    itemId: Number(row.item_id),
+    importId: Number(row.import_id),
+    rowIndex: Number(row.row_index),
+    gameTitle: row.game_title ?? "",
+    platformName: row.platform_name ?? null,
+    regionName: row.region_name ?? null,
+    sourceType: row.source_type ?? null,
+    timeText: row.time_text ?? null,
+    completedAt: row.completed_at ? toDate(row.completed_at) : null,
+    completionType: row.completion_type ?? null,
+    playtimeHours: row.playtime_hrs == null ? null : Number(row.playtime_hrs),
+    status: row.status.toUpperCase() as ImportItemStatus,
+    gameDbGameId: row.gamedb_game_id == null ? null : Number(row.gamedb_game_id),
+    completionId: row.completion_id == null ? null : Number(row.completion_id),
+    errorText: row.error_text ?? null,
   };
 }
 
 export async function createImportSession(params: {
   userId: string;
-  totalCount: number;
   sourceFilename: string | null;
-}): Promise<ICompletionatorImport> {
-  const id = await dbInsert(CompletionatorImportSql.createImport, {
-    userId: params.userId,
-    totalCount: params.totalCount,
-    sourceFilename: params.sourceFilename,
-  }, "id");
-  if (!id) throw new Error("Failed to create import session.");
-
-  const session = await getImportById(id);
-  if (!session) throw new Error("Failed to load import session.");
-  return session;
-}
-
-export async function insertImportItems(
-  importId: number,
   items: Array<{
     rowIndex: number;
     gameTitle: string;
@@ -133,85 +121,75 @@ export async function insertImportItems(
     completedAt: Date | null;
     completionType: string | null;
     playtimeHours: number | null;
-  }>,
-): Promise<void> {
-  if (!items.length) return;
-  await dbTransaction(async (conn) => {
-    for (const item of items) {
-      await dbMutateConn(conn, CompletionatorImportSql.insertItem, {
-        importId,
-        rowIndex: item.rowIndex,
-        gameTitle: item.gameTitle,
-        platformName: item.platformName,
-        regionName: item.regionName,
-        sourceType: item.sourceType,
-        timeText: item.timeText,
-        completedAt: item.completedAt,
-        completionType: item.completionType,
-        playtimeHours: item.playtimeHours,
-      });
-    }
-  });
+  }>;
+}): Promise<ICompletionatorImport> {
+  const result = await apiPost<{ data: CompletionatorImportApiData }>(
+    `/api/v1/users/${params.userId}/completionator_imports`,
+    {
+      data: {
+        source_filename: params.sourceFilename,
+        items: params.items.map((item) => ({
+          row_index: item.rowIndex,
+          game_title: item.gameTitle,
+          platform_name: item.platformName,
+          region_name: item.regionName,
+          source_type: item.sourceType,
+          time_text: item.timeText,
+          completed_at: item.completedAt,
+          completion_type: item.completionType,
+          playtime_hrs: item.playtimeHours,
+        })),
+      },
+    },
+  );
+  if (!result?.data) throw new Error("Failed to create Completionator import session.");
+  return mapImport(result.data);
 }
 
-export async function getImportById(
-  importId: number,
-): Promise<ICompletionatorImport | null> {
-  const rows = await dbQuery(CompletionatorImportSql.getImportById, { id: importId }, mapImport);
-  return rows[0] ?? null;
+export async function getImportById(importId: number): Promise<ICompletionatorImport | null> {
+  const result = await apiGet<{ data: CompletionatorImportApiData }>(
+    `/api/v1/completionator_imports/${importId}`,
+  );
+  if (!result?.data) return null;
+  return mapImport(result.data);
 }
 
 export async function getActiveImportForUser(
   userId: string,
 ): Promise<ICompletionatorImport | null> {
-  const rows = await dbQuery(
-    CompletionatorImportSql.getActiveForUser,
-    { userId },
-    mapImport,
+  const result = await apiGet<{ data: CompletionatorImportApiData }>(
+    `/api/v1/users/${userId}/completionator_imports/active`,
   );
-  return rows[0] ?? null;
+  if (!result?.data) return null;
+  return mapImport(result.data);
 }
 
-export async function setImportStatus(
-  importId: number,
-  status: ImportStatus,
-): Promise<void> {
-  await dbMutate(
-    CompletionatorImportSql.setStatus,
-    { status, importId },
-  );
+export async function setImportStatus(importId: number, status: ImportStatus): Promise<void> {
+  await apiPatch(`/api/v1/completionator_imports/${importId}`, {
+    data: { status: status.toLowerCase() },
+  });
 }
 
-export async function updateImportIndex(
-  importId: number,
-  currentIndex: number,
-): Promise<void> {
-  await dbMutate(
-    CompletionatorImportSql.updateIndex,
-    { currentIndex, importId },
-  );
+export async function updateImportIndex(importId: number, currentIndex: number): Promise<void> {
+  await apiPatch(`/api/v1/completionator_imports/${importId}`, {
+    data: { current_index: currentIndex },
+  });
 }
 
-export async function getNextPendingItem(
-  importId: number,
-): Promise<ICompletionatorItem | null> {
-  const rows = await dbQuery(
-    CompletionatorImportSql.getNextPendingItem,
-    { importId },
-    mapItem,
+export async function getNextPendingItem(importId: number): Promise<ICompletionatorItem | null> {
+  const result = await apiGet<{ data: CompletionatorItemApiData | null }>(
+    `/api/v1/completionator_imports/${importId}/items/next_pending`,
   );
-  return rows[0] ?? null;
+  if (!result?.data) return null;
+  return mapItem(result.data);
 }
 
-export async function getImportItemById(
-  itemId: number,
-): Promise<ICompletionatorItem | null> {
-  const rows = await dbQuery(
-    CompletionatorImportSql.getItemById,
-    { itemId },
-    mapItem,
+export async function getImportItemById(itemId: number): Promise<ICompletionatorItem | null> {
+  const result = await apiGet<{ data: CompletionatorItemApiData }>(
+    `/api/v1/completionator_import_items/${itemId}`,
   );
-  return rows[0] ?? null;
+  if (!result?.data) return null;
+  return mapItem(result.data);
 }
 
 export async function updateImportItem(
@@ -223,32 +201,16 @@ export async function updateImportItem(
     errorText: string | null;
   }>,
 ): Promise<void> {
-  const fields: string[] = [];
-  const binds: Record<string, string | number | null> = { itemId };
+  const data: Record<string, unknown> = {};
 
-  if (updates.status !== undefined) {
-    fields.push("STATUS = :status");
-    binds.status = updates.status;
-  }
-  if (updates.gameDbGameId !== undefined) {
-    fields.push("GAMEDB_GAME_ID = :gameDbGameId");
-    binds.gameDbGameId = updates.gameDbGameId;
-  }
-  if (updates.completionId !== undefined) {
-    fields.push("COMPLETION_ID = :completionId");
-    binds.completionId = updates.completionId;
-  }
-  if (updates.errorText !== undefined) {
-    fields.push("ERROR_TEXT = :errorText");
-    binds.errorText = updates.errorText;
-  }
+  if (updates.status !== undefined) data.status = updates.status.toLowerCase();
+  if (updates.gameDbGameId !== undefined) data.gamedb_game_id = updates.gameDbGameId;
+  if (updates.completionId !== undefined) data.completion_id = updates.completionId;
+  if (updates.errorText !== undefined) data.error_text = updates.errorText;
 
-  if (!fields.length) return;
+  if (!Object.keys(data).length) return;
 
-  await dbMutate(
-    CompletionatorImportSql.updateItem(fields),
-    binds,
-  );
+  await apiPatch(`/api/v1/completionator_import_items/${itemId}`, { data });
 }
 
 export async function countImportItems(importId: number): Promise<{
@@ -258,20 +220,15 @@ export async function countImportItems(importId: number): Promise<{
   updated: number;
   error: number;
 }> {
-  const stats = { pending: 0, skipped: 0, imported: 0, updated: 0, error: 0 };
-  const rows = await dbQuery(
-    CompletionatorImportSql.countItemsByStatus,
-    { importId },
-    (row: { STATUS: string; CNT: number }) => row,
+  const result = await apiGet<{ data: CompletionatorImportSummaryApiData }>(
+    `/api/v1/completionator_imports/${importId}/summary`,
   );
-  for (const row of rows) {
-    const status = String(row.STATUS).toUpperCase();
-    const count = Number(row.CNT ?? 0);
-    if (status === "PENDING") stats.pending = count;
-    if (status === "SKIPPED") stats.skipped = count;
-    if (status === "IMPORTED") stats.imported = count;
-    if (status === "UPDATED") stats.updated = count;
-    if (status === "ERROR") stats.error = count;
-  }
-  return stats;
+  const byStatus = result?.data?.by_status ?? {};
+  return {
+    pending: Number(byStatus.pending ?? 0),
+    skipped: Number(byStatus.skipped ?? 0),
+    imported: Number(byStatus.imported ?? 0),
+    updated: Number(byStatus.updated ?? 0),
+    error: Number(byStatus.error ?? 0),
+  };
 }
