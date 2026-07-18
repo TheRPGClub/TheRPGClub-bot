@@ -1,8 +1,3 @@
-import {
-  dbQuery,
-  dbMutate,
-} from "../db/SqlManager.js";
-import { MemberSql } from "../db/sql/index.js";
 import { isPositiveInt, requirePositiveInt } from "../utilities/ValidationUtils.js";
 import { logError } from "../utilities/LogUtils.js";
 import { apiGet, apiPost, apiPatch, apiDelete } from "../services/RpgClubApiClient.js";
@@ -111,6 +106,19 @@ type JournalEntryListResponse = {
 
 type JournalEntryShowResponse = {
   data: JournalEntryApiData;
+};
+
+type JournalMessageContextApiData = {
+  channel_id: string;
+  message_id: string;
+  created_at_ms: number;
+  owner_user_id: string;
+  game_id: number;
+};
+
+type JournalMessageContextListResponse = {
+  data: JournalMessageContextApiData[];
+  meta: { pages: number };
 };
 
 type JournaledGameApiData = {
@@ -1319,17 +1327,19 @@ export default class Member {
     ownerUserId: string,
     gameId: number,
   ): Promise<void> {
-    await dbMutate(
-      MemberSql.upsertJournalMessageContext,
-      { channelId, messageId, createdAtMs, ownerUserId, gameId },
-    );
+    await apiPost("/api/v1/journal_message_contexts", {
+      data: {
+        channel_id: channelId,
+        message_id: messageId,
+        created_at_ms: createdAtMs,
+        owner_user_id: ownerUserId,
+        game_id: gameId,
+      },
+    });
   }
 
   static async deleteJournalMessageContext(channelId: string, messageId: string): Promise<void> {
-    await dbMutate(
-      MemberSql.deleteJournalMessageContext,
-      { channelId, messageId },
-    );
+    await apiDelete(`/api/v1/journal_message_contexts/${channelId}/${messageId}`);
   }
 
   static async loadActiveJournalMessageContexts(
@@ -1342,31 +1352,39 @@ export default class Member {
     gameId: number;
   }>> {
     const cutoffMs = Date.now() - ttlMs;
-    return dbQuery<{
-      CHANNEL_ID: string;
-      MESSAGE_ID: string;
-      CREATED_AT_MS: number;
-      OWNER_USER_ID: string;
-      GAME_ID: number;
-    }, { channelId: string; messageId: string; createdAt: number;
-        ownerUserId: string; gameId: number }>(
-      MemberSql.loadActiveJournalMessageContexts,
-      { cutoffMs },
-      (row) => ({
-        channelId: row.CHANNEL_ID,
-        messageId: row.MESSAGE_ID,
-        createdAt: Number(row.CREATED_AT_MS),
-        ownerUserId: row.OWNER_USER_ID,
-        gameId: Number(row.GAME_ID),
-      }),
-    );
+    const results: Array<{
+      channelId: string;
+      messageId: string;
+      createdAt: number;
+      ownerUserId: string;
+      gameId: number;
+    }> = [];
+    let page = 1;
+    const per = 500;
+    let pages = 1;
+    do {
+      const response = await apiGet<JournalMessageContextListResponse>(
+        "/api/v1/journal_message_contexts",
+        { params: { created_after_ms: cutoffMs, page, per } },
+      );
+      if (!response) break;
+      for (const row of response.data) {
+        results.push({
+          channelId: row.channel_id,
+          messageId: row.message_id,
+          createdAt: Number(row.created_at_ms),
+          ownerUserId: row.owner_user_id,
+          gameId: Number(row.game_id),
+        });
+      }
+      pages = Number(response.meta?.pages ?? 1);
+      page += 1;
+    } while (page <= pages);
+    return results;
   }
 
   static async pruneExpiredJournalMessageContexts(ttlMs: number): Promise<void> {
     const cutoffMs = Date.now() - ttlMs;
-    await dbMutate(
-      MemberSql.pruneExpiredJournalMessageContexts,
-      { cutoffMs },
-    );
+    await apiDelete("/api/v1/journal_message_contexts", { params: { before_ms: cutoffMs } });
   }
 }
