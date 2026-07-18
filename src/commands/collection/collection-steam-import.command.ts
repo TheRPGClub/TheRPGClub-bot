@@ -259,8 +259,7 @@ export class CollectionSteamImportCommand {
 
       if (candidates.length > 1) {
         const historicalGameIds = await getSteamAppHistoricalMappedGameIds({
-          steamAppId: nextItem.steamAppId,
-          excludeUserId: ownerId,
+          userId: ownerId,
           limit: 5,
         });
         if (historicalGameIds.length) {
@@ -499,6 +498,13 @@ export class CollectionSteamImportCommand {
       required: false,
     })
     steamProfile: string | undefined,
+    @SlashOption({
+      name: "test_mode",
+      description: "Run in test mode (no data is persisted)",
+      type: ApplicationCommandOptionType.Boolean,
+      required: false,
+    })
+    testMode: boolean | undefined,
     interaction: CommandInteraction,
   ): Promise<void> {
     const guild = interaction.guild;
@@ -557,6 +563,7 @@ export class CollectionSteamImportCommand {
             steamId64: resolved.steamId64,
             steamProfileRef: identifier,
             sourceProfileName: library.profileName,
+            testMode: testMode ?? false,
           });
 
           await insertSteamCollectionImportItems(

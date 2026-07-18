@@ -1,8 +1,4 @@
-import {
-  dbQuery, dbMutate, dbInsert, dbTransaction, dbMutateConn, dbWithConnection,
-} from "../db/SqlManager.js";
-
-import { SteamCollectionImportSql } from "../db/sql/index.js";
+import { apiGet, apiPatch, apiPost } from "../services/RpgClubApiClient.js";
 import { isPositiveInt } from "../utilities/ValidationUtils.js";
 
 export type SteamCollectionImportStatus = "ACTIVE" | "PAUSED" | "COMPLETED" | "CANCELED";
@@ -34,6 +30,7 @@ export interface ISteamCollectionImport {
   steamId64: string;
   steamProfileRef: string | null;
   sourceProfileName: string | null;
+  testMode: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -69,105 +66,117 @@ export interface ISteamAppGameDbMap {
   updatedAt: Date;
 }
 
+type SteamCollectionImportApiData = {
+  import_id: number;
+  user_id: string;
+  status: string;
+  current_index: number;
+  total_count: number;
+  steam_id64: string;
+  steam_profile_ref: string | null;
+  source_profile_name: string | null;
+  test_mode: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+type SteamCollectionImportItemApiData = {
+  item_id: number;
+  import_id: number;
+  row_index: number;
+  steam_app_id: number;
+  steam_app_name: string;
+  playtime_forever_min: number | null;
+  playtime_windows_min: number | null;
+  playtime_mac_min: number | null;
+  playtime_linux_min: number | null;
+  playtime_deck_min: number | null;
+  last_played_at: string | null;
+  status: string;
+  match_confidence: string | null;
+  match_candidate_json: string | null;
+  gamedb_game_id: number | null;
+  collection_entry_id: number | null;
+  result_reason: string | null;
+  error_text: string | null;
+};
+
+type SteamAppGameDbMapApiData = {
+  map_id: number;
+  steam_app_id: number;
+  gamedb_game_id: number | null;
+  status: string;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+type SteamCollectionImportItemCountsApiData = {
+  import_id: number;
+  by_status: Record<string, number>;
+  by_result_reason: Record<string, number>;
+};
+
 function toDate(value: Date | string): Date {
   return value instanceof Date ? value : new Date(value);
 }
 
-type ImportRow = {
-  IMPORT_ID: number;
-  USER_ID: string;
-  STATUS: SteamCollectionImportStatus;
-  CURRENT_INDEX: number;
-  TOTAL_COUNT: number;
-  STEAM_ID64: string;
-  STEAM_PROFILE_REF: string | null;
-  SOURCE_PROFILE_NAME: string | null;
-  CREATED_AT: Date | string;
-  UPDATED_AT: Date | string;
-};
-
-function mapImport(row: ImportRow): ISteamCollectionImport {
+function mapImport(row: SteamCollectionImportApiData): ISteamCollectionImport {
   return {
-    importId: Number(row.IMPORT_ID),
-    userId: row.USER_ID,
-    status: row.STATUS,
-    currentIndex: Number(row.CURRENT_INDEX ?? 0),
-    totalCount: Number(row.TOTAL_COUNT ?? 0),
-    steamId64: row.STEAM_ID64,
-    steamProfileRef: row.STEAM_PROFILE_REF ?? null,
-    sourceProfileName: row.SOURCE_PROFILE_NAME ?? null,
-    createdAt: toDate(row.CREATED_AT),
-    updatedAt: toDate(row.UPDATED_AT),
+    importId: Number(row.import_id),
+    userId: row.user_id,
+    status: row.status.toUpperCase() as SteamCollectionImportStatus,
+    currentIndex: Number(row.current_index ?? 0),
+    totalCount: Number(row.total_count ?? 0),
+    steamId64: row.steam_id64,
+    steamProfileRef: row.steam_profile_ref ?? null,
+    sourceProfileName: row.source_profile_name ?? null,
+    testMode: Boolean(row.test_mode),
+    createdAt: toDate(row.created_at),
+    updatedAt: toDate(row.updated_at),
   };
 }
 
-type ItemRow = {
-  ITEM_ID: number;
-  IMPORT_ID: number;
-  ROW_INDEX: number;
-  STEAM_APP_ID: number;
-  STEAM_APP_NAME: string;
-  PLAYTIME_FOREVER_MIN: number | null;
-  PLAYTIME_WINDOWS_MIN: number | null;
-  PLAYTIME_MAC_MIN: number | null;
-  PLAYTIME_LINUX_MIN: number | null;
-  PLAYTIME_DECK_MIN: number | null;
-  LAST_PLAYED_AT: Date | string | null;
-  STATUS: SteamCollectionImportItemStatus;
-  MATCH_CONFIDENCE: SteamCollectionMatchConfidence | null;
-  MATCH_CANDIDATE_JSON: string | null;
-  GAMEDB_GAME_ID: number | null;
-  COLLECTION_ENTRY_ID: number | null;
-  RESULT_REASON: SteamCollectionImportResultReason | null;
-  ERROR_TEXT: string | null;
-};
-
-function mapItem(row: ItemRow): ISteamCollectionImportItem {
+function mapItem(row: SteamCollectionImportItemApiData): ISteamCollectionImportItem {
   return {
-    itemId: Number(row.ITEM_ID),
-    importId: Number(row.IMPORT_ID),
-    rowIndex: Number(row.ROW_INDEX),
-    steamAppId: Number(row.STEAM_APP_ID),
-    steamAppName: row.STEAM_APP_NAME,
-    playtimeForeverMin: row.PLAYTIME_FOREVER_MIN == null
+    itemId: Number(row.item_id),
+    importId: Number(row.import_id),
+    rowIndex: Number(row.row_index),
+    steamAppId: Number(row.steam_app_id),
+    steamAppName: row.steam_app_name,
+    playtimeForeverMin: row.playtime_forever_min == null
       ? null
-      : Number(row.PLAYTIME_FOREVER_MIN),
-    playtimeWindowsMin: row.PLAYTIME_WINDOWS_MIN == null
+      : Number(row.playtime_forever_min),
+    playtimeWindowsMin: row.playtime_windows_min == null
       ? null
-      : Number(row.PLAYTIME_WINDOWS_MIN),
-    playtimeMacMin: row.PLAYTIME_MAC_MIN == null ? null : Number(row.PLAYTIME_MAC_MIN),
-    playtimeLinuxMin: row.PLAYTIME_LINUX_MIN == null ? null : Number(row.PLAYTIME_LINUX_MIN),
-    playtimeDeckMin: row.PLAYTIME_DECK_MIN == null ? null : Number(row.PLAYTIME_DECK_MIN),
-    lastPlayedAt: row.LAST_PLAYED_AT ? toDate(row.LAST_PLAYED_AT) : null,
-    status: row.STATUS,
-    matchConfidence: row.MATCH_CONFIDENCE ?? null,
-    matchCandidateJson: row.MATCH_CANDIDATE_JSON ?? null,
-    gameDbGameId: row.GAMEDB_GAME_ID == null ? null : Number(row.GAMEDB_GAME_ID),
-    collectionEntryId: row.COLLECTION_ENTRY_ID == null ? null : Number(row.COLLECTION_ENTRY_ID),
-    resultReason: row.RESULT_REASON ?? null,
-    errorText: row.ERROR_TEXT ?? null,
+      : Number(row.playtime_windows_min),
+    playtimeMacMin: row.playtime_mac_min == null ? null : Number(row.playtime_mac_min),
+    playtimeLinuxMin: row.playtime_linux_min == null ? null : Number(row.playtime_linux_min),
+    playtimeDeckMin: row.playtime_deck_min == null ? null : Number(row.playtime_deck_min),
+    lastPlayedAt: row.last_played_at ? toDate(row.last_played_at) : null,
+    status: row.status.toUpperCase() as SteamCollectionImportItemStatus,
+    matchConfidence: row.match_confidence
+      ? (row.match_confidence.toUpperCase() as SteamCollectionMatchConfidence)
+      : null,
+    matchCandidateJson: row.match_candidate_json ?? null,
+    gameDbGameId: row.gamedb_game_id == null ? null : Number(row.gamedb_game_id),
+    collectionEntryId: row.collection_entry_id == null ? null : Number(row.collection_entry_id),
+    resultReason: row.result_reason
+      ? (row.result_reason.toUpperCase() as SteamCollectionImportResultReason)
+      : null,
+    errorText: row.error_text ?? null,
   };
 }
 
-type AppMapRow = {
-  MAP_ID: number;
-  STEAM_APP_ID: number;
-  GAMEDB_GAME_ID: number | null;
-  STATUS: SteamAppGameDbMapStatus;
-  CREATED_BY: string | null;
-  CREATED_AT: Date | string;
-  UPDATED_AT: Date | string;
-};
-
-function mapAppMap(row: AppMapRow): ISteamAppGameDbMap {
+function mapAppMap(row: SteamAppGameDbMapApiData): ISteamAppGameDbMap {
   return {
-    mapId: Number(row.MAP_ID),
-    steamAppId: Number(row.STEAM_APP_ID),
-    gameDbGameId: row.GAMEDB_GAME_ID == null ? null : Number(row.GAMEDB_GAME_ID),
-    status: row.STATUS,
-    createdBy: row.CREATED_BY ?? null,
-    createdAt: toDate(row.CREATED_AT),
-    updatedAt: toDate(row.UPDATED_AT),
+    mapId: Number(row.map_id),
+    steamAppId: Number(row.steam_app_id),
+    gameDbGameId: row.gamedb_game_id == null ? null : Number(row.gamedb_game_id),
+    status: row.status.toUpperCase() as SteamAppGameDbMapStatus,
+    createdBy: row.created_by ?? null,
+    createdAt: toDate(row.created_at),
+    updatedAt: toDate(row.updated_at),
   };
 }
 
@@ -177,23 +186,22 @@ export async function createSteamCollectionImportSession(params: {
   steamId64: string;
   steamProfileRef: string | null;
   sourceProfileName: string | null;
+  testMode?: boolean;
 }): Promise<ISteamCollectionImport> {
-  const id = await dbInsert(
-    SteamCollectionImportSql.createImport,
+  const result = await apiPost<{ data: SteamCollectionImportApiData }>(
+    "/api/v1/steam_collection_imports",
     {
-      userId: params.userId,
-      totalCount: params.totalCount,
-      steamId64: params.steamId64,
-      steamProfileRef: params.steamProfileRef,
-      sourceProfileName: params.sourceProfileName,
+      data: {
+        user_id: params.userId,
+        steam_id64: params.steamId64,
+        steam_profile_ref: params.steamProfileRef,
+        source_profile_name: params.sourceProfileName,
+        test_mode: params.testMode ?? false,
+      },
     },
-    "id",
   );
-  if (!id) throw new Error("Failed to create Steam collection import session.");
-
-  const session = await getSteamCollectionImportById(id);
-  if (!session) throw new Error("Failed to load Steam collection import session.");
-  return session;
+  if (!result?.data) throw new Error("Failed to create Steam collection import session.");
+  return mapImport(result.data);
 }
 
 export async function insertSteamCollectionImportItems(
@@ -212,82 +220,79 @@ export async function insertSteamCollectionImportItems(
 ): Promise<void> {
   if (!items.length) return;
 
-  await dbTransaction(async (conn) => {
-    for (const item of items) {
-      await dbMutateConn(conn, SteamCollectionImportSql.insertItem, {
-        importId,
-        rowIndex: item.rowIndex,
-        steamAppId: item.steamAppId,
-        steamAppName: item.steamAppName,
-        playtimeForeverMin: item.playtimeForeverMin,
-        playtimeWindowsMin: item.playtimeWindowsMin,
-        playtimeMacMin: item.playtimeMacMin,
-        playtimeLinuxMin: item.playtimeLinuxMin,
-        playtimeDeckMin: item.playtimeDeckMin,
-        lastPlayedAt: item.lastPlayedAt,
-      });
-    }
+  await apiPost(`/api/v1/steam_collection_imports/${importId}/items`, {
+    data: {
+      items: items.map((item) => ({
+        row_index: item.rowIndex,
+        steam_app_id: item.steamAppId,
+        steam_app_name: item.steamAppName,
+        playtime_forever_min: item.playtimeForeverMin,
+        playtime_windows_min: item.playtimeWindowsMin,
+        playtime_mac_min: item.playtimeMacMin,
+        playtime_linux_min: item.playtimeLinuxMin,
+        playtime_deck_min: item.playtimeDeckMin,
+        last_played_at: item.lastPlayedAt,
+      })),
+    },
   });
 }
 
 export async function getSteamCollectionImportById(
   importId: number,
 ): Promise<ISteamCollectionImport | null> {
-  const rows = await dbQuery(SteamCollectionImportSql.getImportById, { importId }, mapImport);
-  return rows[0] ?? null;
+  const result = await apiGet<{ data: SteamCollectionImportApiData }>(
+    `/api/v1/steam_collection_imports/${importId}`,
+  );
+  if (!result?.data) return null;
+  return mapImport(result.data);
 }
 
 export async function getActiveSteamCollectionImportForUser(
   userId: string,
 ): Promise<ISteamCollectionImport | null> {
-  const rows = await dbQuery(
-    SteamCollectionImportSql.getActiveForUser,
-    { userId },
-    mapImport,
+  const result = await apiGet<{ data: SteamCollectionImportApiData }>(
+    `/api/v1/users/${userId}/steam_collection_imports/active`,
   );
-  return rows[0] ?? null;
+  if (!result?.data) return null;
+  return mapImport(result.data);
 }
 
 export async function setSteamCollectionImportStatus(
   importId: number,
   status: SteamCollectionImportStatus,
 ): Promise<void> {
-  await dbMutate(
-    SteamCollectionImportSql.setStatus,
-    { status, importId },
-  );
+  await apiPatch(`/api/v1/steam_collection_imports/${importId}`, {
+    data: { status: status.toLowerCase() },
+  });
 }
 
 export async function updateSteamCollectionImportIndex(
   importId: number,
   currentIndex: number,
 ): Promise<void> {
-  await dbMutate(
-    SteamCollectionImportSql.updateIndex,
-    { currentIndex, importId },
-  );
-}
-
-async function fetchItemWithJsonCol(
-  entry: { postgres: string },
-  binds: Record<string, string | number>,
-): Promise<ISteamCollectionImportItem | null> {
-  return dbWithConnection(async () => {
-    const rows = await dbQuery(entry, binds, mapItem);
-    return rows[0] ?? null;
+  await apiPatch(`/api/v1/steam_collection_imports/${importId}`, {
+    data: { current_index: currentIndex },
   });
 }
 
 export async function getSteamCollectionImportItemById(
   itemId: number,
 ): Promise<ISteamCollectionImportItem | null> {
-  return fetchItemWithJsonCol(SteamCollectionImportSql.getItemById, { itemId });
+  const result = await apiGet<{ data: SteamCollectionImportItemApiData }>(
+    `/api/v1/steam_collection_import_items/${itemId}`,
+  );
+  if (!result?.data) return null;
+  return mapItem(result.data);
 }
 
 export async function getNextPendingSteamCollectionImportItem(
   importId: number,
 ): Promise<ISteamCollectionImportItem | null> {
-  return fetchItemWithJsonCol(SteamCollectionImportSql.getNextPendingItem, { importId });
+  const result = await apiGet<{ data: SteamCollectionImportItemApiData | null }>(
+    `/api/v1/steam_collection_imports/${importId}/items/next_pending`,
+  );
+  if (!result?.data) return null;
+  return mapItem(result.data);
 }
 
 export async function updateSteamCollectionImportItem(
@@ -302,44 +307,25 @@ export async function updateSteamCollectionImportItem(
     errorText?: string | null;
   },
 ): Promise<void> {
-  const setParts: string[] = [];
-  const binds: Record<string, string | number | null> = { itemId };
+  const data: Record<string, unknown> = {};
 
-  if (updates.status !== undefined) {
-    setParts.push("STATUS = :status");
-    binds.status = updates.status;
-  }
+  if (updates.status !== undefined) data.status = updates.status.toLowerCase();
   if (updates.matchConfidence !== undefined) {
-    setParts.push("MATCH_CONFIDENCE = :matchConfidence");
-    binds.matchConfidence = updates.matchConfidence;
+    data.match_confidence = updates.matchConfidence?.toLowerCase() ?? null;
   }
   if (updates.matchCandidateJson !== undefined) {
-    setParts.push("MATCH_CANDIDATE_JSON = :matchCandidateJson");
-    binds.matchCandidateJson = updates.matchCandidateJson;
+    data.match_candidate_json = updates.matchCandidateJson;
   }
-  if (updates.gameDbGameId !== undefined) {
-    setParts.push("GAMEDB_GAME_ID = :gameDbGameId");
-    binds.gameDbGameId = updates.gameDbGameId;
-  }
-  if (updates.collectionEntryId !== undefined) {
-    setParts.push("COLLECTION_ENTRY_ID = :collectionEntryId");
-    binds.collectionEntryId = updates.collectionEntryId;
-  }
+  if (updates.gameDbGameId !== undefined) data.gamedb_game_id = updates.gameDbGameId;
+  if (updates.collectionEntryId !== undefined) data.collection_entry_id = updates.collectionEntryId;
   if (updates.resultReason !== undefined) {
-    setParts.push("RESULT_REASON = :resultReason");
-    binds.resultReason = updates.resultReason;
+    data.result_reason = updates.resultReason?.toLowerCase() ?? null;
   }
-  if (updates.errorText !== undefined) {
-    setParts.push("ERROR_TEXT = :errorText");
-    binds.errorText = updates.errorText;
-  }
+  if (updates.errorText !== undefined) data.error_text = updates.errorText;
 
-  if (!setParts.length) return;
+  if (!Object.keys(data).length) return;
 
-  await dbMutate(
-    SteamCollectionImportSql.updateItem(setParts),
-    binds,
-  );
+  await apiPatch(`/api/v1/steam_collection_import_items/${itemId}`, { data });
 }
 
 export async function countSteamCollectionImportItems(
@@ -351,37 +337,31 @@ export async function countSteamCollectionImportItems(
   skipped: number;
   failed: number;
 }> {
-  const rows = await dbQuery(
-    SteamCollectionImportSql.countItemsByStatus,
-    { importId },
-    (row: { STATUS: SteamCollectionImportItemStatus; CNT: number }) => row,
+  const result = await apiGet<{ data: SteamCollectionImportItemCountsApiData }>(
+    `/api/v1/steam_collection_imports/${importId}/items/counts`,
   );
-  const counts = { pending: 0, added: 0, updated: 0, skipped: 0, failed: 0 };
-  for (const row of rows) {
-    const status = String(row.STATUS).toUpperCase();
-    const value = Number(row.CNT ?? 0);
-    if (status === "PENDING") counts.pending = value;
-    else if (status === "ADDED") counts.added = value;
-    else if (status === "UPDATED") counts.updated = value;
-    else if (status === "SKIPPED") counts.skipped = value;
-    else if (status === "FAILED") counts.failed = value;
-  }
-  return counts;
+  const byStatus = result?.data?.by_status ?? {};
+  return {
+    pending: Number(byStatus.pending ?? 0),
+    added: Number(byStatus.added ?? 0),
+    updated: Number(byStatus.updated ?? 0),
+    skipped: Number(byStatus.skipped ?? 0),
+    failed: Number(byStatus.failed ?? 0),
+  };
 }
 
 export async function countSteamCollectionImportResultReasons(
   importId: number,
 ): Promise<Record<string, number>> {
-  const rows = await dbQuery(
-    SteamCollectionImportSql.countItemsByReason,
-    { importId },
-    (row: { RESULT_REASON: string | null; CNT: number }) => row,
+  const result = await apiGet<{ data: SteamCollectionImportItemCountsApiData }>(
+    `/api/v1/steam_collection_imports/${importId}/items/counts`,
   );
+  const byReason = result?.data?.by_result_reason ?? {};
   const counts: Record<string, number> = {};
-  for (const row of rows) {
-    const key = String(row.RESULT_REASON ?? "").trim();
-    if (!key.length) continue;
-    counts[key] = Number(row.CNT ?? 0);
+  for (const [key, value] of Object.entries(byReason)) {
+    const trimmed = key.trim();
+    if (!trimmed.length) continue;
+    counts[trimmed.toUpperCase()] = Number(value ?? 0);
   }
   return counts;
 }
@@ -389,8 +369,11 @@ export async function countSteamCollectionImportResultReasons(
 export async function getSteamAppGameDbMapByAppId(
   steamAppId: number,
 ): Promise<ISteamAppGameDbMap | null> {
-  const rows = await dbQuery(SteamCollectionImportSql.getAppMap, { steamAppId }, mapAppMap);
-  return rows[0] ?? null;
+  const result = await apiGet<{ data: SteamAppGameDbMapApiData }>(
+    `/api/v1/steam_app_gamedb_maps/${steamAppId}`,
+  );
+  if (!result?.data) return null;
+  return mapAppMap(result.data);
 }
 
 export async function upsertSteamAppGameDbMap(params: {
@@ -399,33 +382,29 @@ export async function upsertSteamAppGameDbMap(params: {
   status: SteamAppGameDbMapStatus;
   createdBy: string | null;
 }): Promise<ISteamAppGameDbMap> {
-  await dbMutate(SteamCollectionImportSql.upsertAppMap, {
-    steamAppId: params.steamAppId,
-    gameDbGameId: params.gameDbGameId,
-    status: params.status,
-    createdBy: params.createdBy,
-  });
-
-  const mapping = await getSteamAppGameDbMapByAppId(params.steamAppId);
-  if (!mapping) throw new Error("Failed to load Steam app mapping.");
-  return mapping;
+  const result = await apiPost<{ data: SteamAppGameDbMapApiData }>(
+    "/api/v1/steam_app_gamedb_maps",
+    {
+      data: {
+        steam_app_id: params.steamAppId,
+        gamedb_game_id: params.gameDbGameId,
+        status: params.status.toLowerCase(),
+        created_by: params.createdBy,
+      },
+    },
+  );
+  if (!result?.data) throw new Error("Failed to load Steam app mapping.");
+  return mapAppMap(result.data);
 }
 
 export async function getSteamAppHistoricalMappedGameIds(params: {
-  steamAppId: number;
-  excludeUserId?: string;
+  userId: string;
   limit?: number;
 }): Promise<number[]> {
   const limit = isPositiveInt(params.limit) ? Number(params.limit) : 5;
 
-  const rows = await dbQuery(
-    SteamCollectionImportSql.getHistoricalMappedIds,
-    {
-      steamAppId: params.steamAppId,
-      excludeUserId: params.excludeUserId ?? null,
-      limit,
-    },
-    (row: { GAMEDB_GAME_ID: number }) => Number(row.GAMEDB_GAME_ID),
+  const result = await apiGet<{ data: number[] }>(
+    `/api/v1/users/${params.userId}/steam_app_gamedb_maps/historical`,
   );
-  return rows.filter(isPositiveInt);
+  return (result?.data ?? []).filter(isPositiveInt).slice(0, limit);
 }
