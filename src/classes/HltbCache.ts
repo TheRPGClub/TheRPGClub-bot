@@ -1,5 +1,4 @@
-import { dbQuery, dbMutate } from "../db/SqlManager.js";
-import { HltbCacheSql } from "../db/sql/index.js";
+import { apiGet, apiPost } from "../services/RpgClubApiClient.js";
 
 export type HltbCacheEntry = {
   gameId: number;
@@ -17,51 +16,49 @@ export type HltbCacheEntry = {
   updatedAt: Date | null;
 };
 
-function mapRow(row: {
-  GAMEDB_GAME_ID: number;
-  HLTB_NAME: string | null;
-  HLTB_URL: string | null;
-  HLTB_IMAGE_URL: string | null;
-  MAIN: string | null;
-  MAIN_SIDES: string | null;
-  COMPLETIONIST: string | null;
-  SINGLE_PLAYER: string | null;
-  CO_OP: string | null;
-  VS: string | null;
-  SOURCE_QUERY: string | null;
-  SCRAPED_AT: Date | string | null;
-  UPDATED_AT: Date | string | null;
-}): HltbCacheEntry {
-  const toDate = (value: Date | string | null): Date | null => {
-    if (!value) return null;
-    return value instanceof Date ? value : new Date(value);
-  };
+type HltbProfileApiData = {
+  name: string | null;
+  url: string | null;
+  image_url: string | null;
+  main: string | null;
+  main_sides: string | null;
+  completionist: string | null;
+  single_player: string | null;
+  co_op: string | null;
+  vs: string | null;
+  source_query: string | null;
+  scraped_at: string | null;
+  updated_at: string | null;
+};
+
+function mapEntry(data: HltbProfileApiData, gameId: number): HltbCacheEntry {
+  const toDate = (value: string | null): Date | null =>
+    value ? new Date(value) : null;
   return {
-    gameId: Number(row.GAMEDB_GAME_ID),
-    name: row.HLTB_NAME ?? null,
-    url: row.HLTB_URL ?? null,
-    imageUrl: row.HLTB_IMAGE_URL ?? null,
-    main: row.MAIN ?? null,
-    mainSides: row.MAIN_SIDES ?? null,
-    completionist: row.COMPLETIONIST ?? null,
-    singlePlayer: row.SINGLE_PLAYER ?? null,
-    coOp: row.CO_OP ?? null,
-    vs: row.VS ?? null,
-    sourceQuery: row.SOURCE_QUERY ?? null,
-    scrapedAt: toDate(row.SCRAPED_AT ?? null),
-    updatedAt: toDate(row.UPDATED_AT ?? null),
+    gameId,
+    name: data.name ?? null,
+    url: data.url ?? null,
+    imageUrl: data.image_url ?? null,
+    main: data.main ?? null,
+    mainSides: data.main_sides ?? null,
+    completionist: data.completionist ?? null,
+    singlePlayer: data.single_player ?? null,
+    coOp: data.co_op ?? null,
+    vs: data.vs ?? null,
+    sourceQuery: data.source_query ?? null,
+    scrapedAt: toDate(data.scraped_at),
+    updatedAt: toDate(data.updated_at),
   };
 }
 
 export async function getHltbCacheByGameId(
   gameId: number,
 ): Promise<HltbCacheEntry | null> {
-  const rows = await dbQuery(
-    HltbCacheSql.getByGameId,
-    { gameId },
-    mapRow,
+  const result = await apiGet<{ data: { hltb: HltbProfileApiData | null } }>(
+    `/api/v1/games/${gameId}/profile`,
   );
-  return rows[0] ?? null;
+  const hltb = result?.data?.hltb;
+  return hltb ? mapEntry(hltb, gameId) : null;
 }
 
 export async function upsertHltbCache(
@@ -79,20 +76,18 @@ export async function upsertHltbCache(
     sourceQuery?: string | null;
   },
 ): Promise<void> {
-  await dbMutate(
-    HltbCacheSql.upsertCache,
-    {
-      gameId,
+  await apiPost(`/api/v1/games/${gameId}/hltb`, {
+    data: {
       name: payload.name ?? null,
       url: payload.url ?? null,
-      imageUrl: payload.imageUrl ?? null,
+      image_url: payload.imageUrl ?? null,
       main: payload.main ?? null,
-      mainSides: payload.mainSides ?? null,
+      main_sides: payload.mainSides ?? null,
       completionist: payload.completionist ?? null,
-      singlePlayer: payload.singlePlayer ?? null,
-      coOp: payload.coOp ?? null,
+      single_player: payload.singlePlayer ?? null,
+      co_op: payload.coOp ?? null,
       vs: payload.vs ?? null,
-      sourceQuery: payload.sourceQuery ?? null,
+      source_query: payload.sourceQuery ?? null,
     },
-  );
+  });
 }
