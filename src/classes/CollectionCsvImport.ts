@@ -30,6 +30,7 @@ export interface ICollectionCsvImport {
   sourceFileName: string | null;
   sourceFileSize: number | null;
   templateVersion: string | null;
+  testMode: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -62,6 +63,7 @@ type CollectionCsvImportApiData = {
   source_file_name: string | null;
   source_file_size: number | null;
   template_version: string | null;
+  test_mode: boolean;
   created_at: string;
   updated_at: string;
 };
@@ -105,6 +107,7 @@ function mapImport(row: CollectionCsvImportApiData): ICollectionCsvImport {
     sourceFileName: row.source_file_name ?? null,
     sourceFileSize: row.source_file_size == null ? null : Number(row.source_file_size),
     templateVersion: row.template_version ?? null,
+    testMode: Boolean(row.test_mode),
     createdAt: toDate(row.created_at),
     updatedAt: toDate(row.updated_at),
   };
@@ -136,6 +139,7 @@ export async function createCollectionCsvImportSession(params: {
   sourceFileName: string | null;
   sourceFileSize: number | null;
   templateVersion: string | null;
+  testMode?: boolean;
   items: Array<{
     rowIndex: number;
     rawTitle: string;
@@ -153,6 +157,7 @@ export async function createCollectionCsvImportSession(params: {
         source_file_name: params.sourceFileName,
         source_file_size: params.sourceFileSize,
         template_version: params.templateVersion,
+        test_mode: params.testMode ?? false,
         items: params.items.map((item) => ({
           row_index: item.rowIndex,
           raw_title: item.rawTitle,
