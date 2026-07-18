@@ -1113,8 +1113,6 @@ export default class Member {
     const startDate = new Date(ref.getTime() - windowMs);
     const endDate = new Date(ref.getTime() + windowMs);
 
-    // The API filters on completed_at only; the prior SQL fell back to created_at
-    // for entries with no completed_at, which this window cannot replicate.
     const rows = await Member.fetchUserCompletions(
       userId,
       {

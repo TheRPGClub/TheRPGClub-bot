@@ -694,7 +694,7 @@ export class SuperAdmin {
     }
   }
 
-  @Slash({ description: "Scan guild members and upsert into RPG_CLUB_USERS", name: "memberscan" })
+  @Slash({ description: "Scan guild members and sync their profiles", name: "memberscan" })
   async memberScan(
     interaction: CommandInteraction,
   ): Promise<void> {

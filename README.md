@@ -1,11 +1,20 @@
 # RPGClub GameDB Bot
 
-RPGClub GameDB Bot is a Discord bot that powers GameDB lookups, Monthly Games workflows, and member utilities for the RPG Club community. It is built with TypeScript, Discord.js v14, and DiscordX, with an API-backed data model and IGDB integration for game metadata.
+RPG Club is a Discord community centered on playing and discussing games together.
+GameDB is the community's shared game catalog: a searchable database of titles
+(backed by IGDB metadata) that members use to track what they own, what they're
+playing, and what they've finished. This bot is the interface to GameDB and to
+the community's monthly voting cycle, plus a set of member and moderation
+utilities. It is built with TypeScript, Discord.js v14, and DiscordX, with an
+API-backed data model and IGDB integration for game metadata.
 
 ## What It Does
 
 - GameDB search, import, and viewing with IGDB data
-- GOTM and NR-GOTM history, nominations, and round status
+- Game of the Month (GOTM) and Non-Round GOTM (NR-GOTM) nominations, voting
+  rounds, and history. Each month members nominate and vote on games to play
+  together; GOTM is the main voting track and NR-GOTM is a secondary track for
+  titles outside the elimination rounds.
 - Member profiles, Now Playing, and game completion tracking with CSV imports
 - Personal game collections with Steam imports for collection entries
 - Reminders, RSS relays, public reminders, and giveaway tools
@@ -29,10 +38,6 @@ Use `/help` in Discord for full syntax and parameters. Major command groups incl
 - Admin tools: `/mod`, `/admin`, `/superadmin`, `/todo`, `/publicreminder`, `/rss`, `/suggestion`,
   `/generate-vote-image`, `/moderator`
 - Regulars tools: `/thread`
-
-## Database Docs
-
-Schema and table notes live in `db/`. Review those files when modifying or adding tables.
 
 ## Local Development
 
