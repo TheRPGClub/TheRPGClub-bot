@@ -113,8 +113,6 @@ export async function updateFeed(
   return response !== null;
 }
 
-// `url` matches the rpg_club_rss_feed_items.url column width; a single
-// over-length row would fail the whole insert_all batch on the API side.
 const URL_MAX_LENGTH = 2048;
 
 export async function markItemsSeen(items: IRssFeedItem[]): Promise<void> {
