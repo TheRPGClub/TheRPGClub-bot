@@ -683,6 +683,15 @@ function normalizeOwnershipType(
   return match;
 }
 
+export function resolveCsvOwnershipType(rawValue: string | null): CollectionOwnershipType {
+  const cleaned = rawValue ? rawValue.trim() : "";
+  if (!cleaned) return "Digital";
+  const match = COLLECTION_OWNERSHIP_TYPES.find((item) =>
+    item.toLowerCase() === cleaned.toLowerCase(),
+  );
+  return match ?? "Digital";
+}
+
 function normalizePlatformKey(value: string): string {
   return value
     .toLowerCase()
@@ -690,7 +699,7 @@ function normalizePlatformKey(value: string): string {
     .trim();
 }
 
-async function resolveCsvPlatformId(rawValue: string): Promise<number | null> {
+export async function resolveCsvPlatformId(rawValue: string): Promise<number | null> {
   const normalized = normalizePlatformKey(rawValue);
   if (!normalized) return null;
 
