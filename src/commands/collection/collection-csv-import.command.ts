@@ -214,6 +214,7 @@ export class CollectionCsvImportCommand {
       });
       const reasonLines = buildImportReasonSummary(reasonCounts, CSV_IMPORT_REASON_LABELS);
       const done = [
+        ...(session.testMode ? ["**TEST MODE** - nothing was persisted"] : []),
         `## CSV Import #${session.importId}`,
         "Import completed.",
         `Added: ${stats.added}`,
@@ -420,6 +421,7 @@ export class CollectionCsvImportCommand {
       note: nextItem.rawNote,
       sourceGameDbId: nextItem.rawGameDbId,
       sourceIgdbId: nextItem.rawIgdbId,
+      testMode: session.testMode,
     });
     const guidance = candidates.length > 1
       ? "Ambiguous match. Use Choose to select the right GameDB title."
@@ -531,6 +533,13 @@ export class CollectionCsvImportCommand {
       required: false,
     })
     file: Attachment | undefined,
+    @SlashOption({
+      name: "test_mode",
+      description: "Run in test mode (no data is persisted)",
+      type: ApplicationCommandOptionType.Boolean,
+      required: false,
+    })
+    testMode: boolean | undefined,
     interaction: CommandInteraction,
   ): Promise<void> {
     const guild = interaction.guild;
@@ -629,6 +638,7 @@ export class CollectionCsvImportCommand {
           sourceFileName: file.name ?? null,
           sourceFileSize: typeof file.size === "number" ? file.size : null,
           templateVersion: COLLECTION_CSV_TEMPLATE_VERSION,
+          testMode: testMode ?? false,
           items: parsed.rows.map((row) => ({
             rowIndex: row.rowIndex,
             rawTitle: row.title,
@@ -659,7 +669,8 @@ export class CollectionCsvImportCommand {
         const stats = await countCollectionCsvImportItems(session.importId);
         const reasonCounts = await countCollectionCsvImportResultReasons(session.importId);
         const reasonLines = buildImportReasonSummary(reasonCounts, CSV_IMPORT_REASON_LABELS);
-        const statusLine = `Status: ${session.status}`;
+        const statusLine = `Status: ${session.status}` +
+          (session.testMode ? " (TEST MODE)" : "");
         const countsLine = `**Pending** ${stats.pending} | **Added** ${stats.added}` +
           ` | **Updated** ${stats.updated} | **Skipped** ${stats.skipped}` +
           ` | **Failed** ${stats.failed}`;

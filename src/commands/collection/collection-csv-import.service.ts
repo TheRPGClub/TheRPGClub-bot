@@ -191,6 +191,7 @@ export function buildCsvImportItemMessage(params: {
   note: string | null;
   sourceGameDbId: number | null;
   sourceIgdbId: number | null;
+  testMode: boolean;
 }): string {
   const details = [
     `Platform: ${params.platformLabel}`,
@@ -204,8 +205,11 @@ export function buildCsvImportItemMessage(params: {
   }
 
   const noteText = params.note ? `\nNote: ${params.note}` : "";
+  const testModeBanner = params.testMode
+    ? "**TEST MODE** - nothing will be persisted\n"
+    : "";
   return (
-    `## CSV Import #${params.importId}\n` +
+    `${testModeBanner}## CSV Import #${params.importId}\n` +
     `Row ${params.rowIndex}/${params.totalCount}\n` +
     `Title: **${params.title}**\n` +
     `${details.join(" | ")}${noteText}`
