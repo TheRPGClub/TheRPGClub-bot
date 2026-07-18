@@ -12,7 +12,6 @@ import { Client } from "discordx";
 
 import { updateBotPresence } from "./functions/SetPresence.js";
 
-import { initPostgresPool } from "./db/postgresClient.js";
 import { loadGotmFromDb } from "./classes/Gotm.js";
 import { loadNrGotmFromDb } from "./classes/NrGotm.js";
 import {
@@ -264,7 +263,6 @@ async function run(): Promise<void> {
     throw Error("Could not find BOT_TOKEN in your environment");
   }
 
-  await initPostgresPool();
   await loadGotmFromDb();
   await loadNrGotmFromDb();
 
