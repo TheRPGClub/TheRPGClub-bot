@@ -96,6 +96,22 @@ POST    /api/v1/bot_presence  # Save a bot presence entry
 GET     /api/v1/bot_presence/latest  # Get the latest bot presence entry
 ```
 
+### Collection CSV Imports
+
+```
+GET     /api/v1/collection_csv_import_items/{id}  # Show a collection CSV import item
+PATCH   /api/v1/collection_csv_import_items/{id}  # Update a collection CSV import item
+  data: { status, platform_id, ownership_type, note, match_confidence, match_candidate_json, gamedb_game_id, collection_entry_id, result_reason, error_text }
+GET     /api/v1/collection_csv_imports/{id}  # Show a collection CSV import job
+PATCH   /api/v1/collection_csv_imports/{id}  # Update a collection CSV import job
+  data: { status, current_index }
+GET     /api/v1/collection_csv_imports/{id}/items/next_pending  # Get the next pending import item
+GET     /api/v1/collection_csv_imports/{id}/summary  # Summarize a collection CSV import job
+POST    /api/v1/users/{user_id}/collection_csv_imports  # Start a collection CSV import job
+  data: { source_file_name, source_file_size, template_version, items }
+GET     /api/v1/users/{user_id}/collection_csv_imports/active  # Get the user's active or paused import
+```
+
 ### Collections
 
 ```
@@ -116,6 +132,22 @@ GET     /api/v1/users/{user_id}/collections/platform_summary  # Per-platform sum
 ```
 GET     /api/v1/companies  # List companies (q, page, per, limit, offset)
 GET     /api/v1/companies/{id}  # Show company
+```
+
+### Completionator Imports
+
+```
+GET     /api/v1/completionator_import_items/{id}  # Show a Completionator import item
+PATCH   /api/v1/completionator_import_items/{id}  # Update a Completionator import item
+  data: { status, gamedb_game_id, completion_id, error_text }
+GET     /api/v1/completionator_imports/{id}  # Show a Completionator import job
+PATCH   /api/v1/completionator_imports/{id}  # Update a Completionator import job
+  data: { status, current_index }
+GET     /api/v1/completionator_imports/{id}/items/next_pending  # Get the next pending import item
+GET     /api/v1/completionator_imports/{id}/summary  # Summarize a Completionator import job
+POST    /api/v1/users/{user_id}/completionator_imports  # Start a Completionator import job
+  data: { source_filename, items }
+GET     /api/v1/users/{user_id}/completionator_imports/active  # Get the user's active or paused import
 ```
 
 ### Completions
@@ -189,12 +221,24 @@ POST    /api/v1/gotm_entries/{round}/nominations  # Upsert a GOTM nomination
 DELETE  /api/v1/gotm_entries/{round}/nominations  # Delete all GOTM nominations for a round
 GET     /api/v1/gotm_entries/{round}/nominations/{user_id}  # Show a user's GOTM nomination for a round
 DELETE  /api/v1/gotm_entries/{round}/nominations/{user_id}  # Delete a user's GOTM nomination for a round
+GET     /api/v1/gotm_entries/{round}/votes  # List GOTM votes for a round (identified) (page, per)
+POST    /api/v1/gotm_entries/{round}/votes  # Cast or toggle a GOTM vote
+  data: { user_id*, nomination_id* }
+DELETE  /api/v1/gotm_entries/{round}/votes  # Delete all GOTM votes for a round
+GET     /api/v1/gotm_entries/{round}/votes/tally  # Tally GOTM votes for a round (anonymous)
+GET     /api/v1/gotm_entries/{round}/votes/{user_id}  # Show a user's GOTM votes for a round
 GET     /api/v1/nr_gotm_entries/{round}/nominations  # List Non-RPG GOTM nominations for a round (page, per, limit, offset)
 POST    /api/v1/nr_gotm_entries/{round}/nominations  # Upsert a Non-RPG GOTM nomination
   data: { user_id*, gamedb_game_id*, reason }
 DELETE  /api/v1/nr_gotm_entries/{round}/nominations  # Delete all Non-RPG GOTM nominations for a round
 GET     /api/v1/nr_gotm_entries/{round}/nominations/{user_id}  # Show a user's Non-RPG GOTM nomination for a round
 DELETE  /api/v1/nr_gotm_entries/{round}/nominations/{user_id}  # Delete a user's Non-RPG GOTM nomination for a round
+GET     /api/v1/nr_gotm_entries/{round}/votes  # List Non-RPG GOTM votes for a round (identified) (page, per)
+POST    /api/v1/nr_gotm_entries/{round}/votes  # Cast or toggle a Non-RPG GOTM vote
+  data: { user_id*, nomination_id* }
+DELETE  /api/v1/nr_gotm_entries/{round}/votes  # Delete all Non-RPG GOTM votes for a round
+GET     /api/v1/nr_gotm_entries/{round}/votes/tally  # Tally Non-RPG GOTM votes for a round (anonymous)
+GET     /api/v1/nr_gotm_entries/{round}/votes/{user_id}  # Show a user's Non-RPG GOTM votes for a round
 ```
 
 ### Game Images
@@ -237,6 +281,8 @@ POST    /api/v1/games/{id}/alternates  # Link an alternate version
   data: { alt_game_id* }
 GET     /api/v1/games/{id}/collections  # List collection entries for this game (page, per, limit, offset)
 GET     /api/v1/games/{id}/completions  # List completions for this game (page, per, limit, offset)
+POST    /api/v1/games/{id}/hltb  # Upsert HowLongToBeat cache
+  data: { name, url, image_url, main, main_sides, completionist, single_player, co_op, vs, source_query, scraped_at }
 GET     /api/v1/games/{id}/now_playing  # List users currently playing this game (page, per, limit, offset)
 GET     /api/v1/games/{id}/profile  # Show aggregate game profile
 POST    /api/v1/games/{id}/refresh-images  # Refresh images from IGDB
@@ -290,15 +336,11 @@ GET     /api/v1/users/{user_id}/journal/status  # Per-game journal status for a 
 ### Journal Message Contexts
 
 ```
-GET     /api/v1/journal_message_contexts  # List journal message contexts (channel_id, game_id, page, per)
-POST    /api/v1/journal_message_contexts  # Create a journal message context
+GET     /api/v1/journal_message_contexts  # List journal message contexts (channel_id, game_id, created_after_ms, page, per)
+POST    /api/v1/journal_message_contexts  # Upsert a journal message context
   data: { channel_id*, message_id*, created_at_ms*, owner_user_id*, game_id* }
-GET     /api/v1/journal_message_contexts/{message_id}  # Show a journal message context
-PATCH   /api/v1/journal_message_contexts/{message_id}  # Update a journal message context
-  data: { channel_id, message_id, created_at_ms, owner_user_id, game_id }
-PUT     /api/v1/journal_message_contexts/{message_id}  # Replace a journal message context (alias)
-  data: { channel_id, message_id, created_at_ms, owner_user_id, game_id }
-DELETE  /api/v1/journal_message_contexts/{message_id}  # Delete a journal message context
+DELETE  /api/v1/journal_message_contexts  # Prune journal message contexts (before_ms)
+DELETE  /api/v1/journal_message_contexts/{channel_id}/{message_id}  # Delete a journal message context
 ```
 
 ### Modes
@@ -507,6 +549,33 @@ PUT     /api/v1/starboard/{message_id}  # Replace a starboard entry (alias)
 DELETE  /api/v1/starboard/{message_id}  # Delete a starboard entry
 ```
 
+### Steam App GameDB Maps
+
+```
+POST    /api/v1/steam_app_gamedb_maps  # Upsert a Steam app -> GameDB game mapping
+  data: { steam_app_id*, gamedb_game_id, status*, created_by }
+GET     /api/v1/steam_app_gamedb_maps/{steam_app_id}  # Show a Steam app -> GameDB game mapping
+GET     /api/v1/users/{user_id}/steam_app_gamedb_maps/historical  # Get a user's historically-mapped GameDB game ids
+```
+
+### Steam Collection Imports
+
+```
+GET     /api/v1/steam_collection_import_items/{id}  # Show a Steam collection import item
+PATCH   /api/v1/steam_collection_import_items/{id}  # Update a Steam collection import item
+  data: { status, match_confidence, match_candidate_json, gamedb_game_id, collection_entry_id, result_reason, error_text }
+POST    /api/v1/steam_collection_imports  # Start a Steam collection import job
+  data: { user_id*, steam_id64*, steam_profile_ref, source_profile_name, test_mode }
+GET     /api/v1/steam_collection_imports/{id}  # Show a Steam collection import job
+PATCH   /api/v1/steam_collection_imports/{id}  # Update a Steam collection import job
+  data: { status, current_index }
+POST    /api/v1/steam_collection_imports/{id}/items  # Bulk-insert Steam collection import items
+  data: { items }
+GET     /api/v1/steam_collection_imports/{id}/items/counts  # Count Steam collection import items by status and result_reason
+GET     /api/v1/steam_collection_imports/{id}/items/next_pending  # Get the next pending import item
+GET     /api/v1/users/{user_id}/steam_collection_imports/active  # Get the user's active or paused Steam import
+```
+
 ### Suggestion Review Sessions
 
 ```
@@ -557,18 +626,6 @@ DELETE  /api/v1/threads/{id}/links  # Remove all of a thread's game links
 DELETE  /api/v1/threads/{id}/links/{game_id}  # Remove one game link from a thread
 ```
 
-### User Activity Icons
-
-```
-GET     /api/v1/users/{user_id}/activity_icons  # List a user's activity icons (page, per)
-```
-
-### User Channel Counts
-
-```
-GET     /api/v1/users/{user_id}/channel_counts  # List a user's per-channel message counts (page, per)
-```
-
 ### User Nick History
 
 ```
@@ -612,13 +669,13 @@ GET     /api/v1/users/{user_id}/profile-image  # Stream user profile image
 ```
 GET     /api/v1/voting_info  # List voting info rounds (page, per, limit, offset)
 POST    /api/v1/voting_info  # Create voting info
-  data: { round_number*, next_vote_at*, nomination_list_id, five_day_reminder_sent, one_day_reminder_sent }
+  data: { round_number*, next_vote_at*, nomination_list_id, five_day_reminder_sent, one_day_reminder_sent, vote_ends_at }
 GET     /api/v1/voting_info/current  # Show the current voting info round
 GET     /api/v1/voting_info/{id}  # Show voting info
 PATCH   /api/v1/voting_info/{id}  # Update voting info
-  data: { round_number, next_vote_at, nomination_list_id, five_day_reminder_sent, one_day_reminder_sent }
+  data: { round_number, next_vote_at, nomination_list_id, five_day_reminder_sent, one_day_reminder_sent, vote_ends_at }
 PUT     /api/v1/voting_info/{id}  # Replace voting info (alias)
-  data: { round_number, next_vote_at, nomination_list_id, five_day_reminder_sent, one_day_reminder_sent }
+  data: { round_number, next_vote_at, nomination_list_id, five_day_reminder_sent, one_day_reminder_sent, vote_ends_at }
 DELETE  /api/v1/voting_info/{id}  # Delete voting info
 ```
 
