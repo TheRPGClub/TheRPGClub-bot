@@ -1,6 +1,6 @@
 # RPGClub GameDB Bot
 
-RPGClub GameDB Bot is a Discord bot that powers GameDB lookups, Monthly Games workflows, and member utilities for the RPG Club community. It is built with TypeScript, Discord.js v14, and DiscordX, with a Postgres-backed data model and IGDB integration for game metadata.
+RPGClub GameDB Bot is a Discord bot that powers GameDB lookups, Monthly Games workflows, and member utilities for the RPG Club community. It is built with TypeScript, Discord.js v14, and DiscordX, with an API-backed data model and IGDB integration for game metadata.
 
 ## What It Does
 
@@ -79,7 +79,6 @@ These are required or commonly used by the bot. Values depend on your deployment
 - `npm run start:prod` - Run compiled output with pm2.
 - `npm run buildProd` - Build and restart or start pm2.
 - `npm run import:igdb-platforms` - Sync IGDB platforms into GameDB.
-- `npm run script:explore-postgres` - Explore the PostgreSQL schema and data.
 - `npm run session:start` - Run session startup tasks.
 - `npm run backup:docker-volumes` - Backup docker volumes.
 
