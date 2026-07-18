@@ -1,6 +1,5 @@
 export type { ISqlEntry } from "./types.js";
 
-export { CollectionCsvImportSql } from "./collectionCsvImport.sql.js";
 export { CompletionatorImportSql } from "./completionatorImport.sql.js";
 export { HltbCacheSql } from "./hltbCache.sql.js";
 export { MemberSql } from "./member.sql.js";

@@ -30,7 +30,6 @@ import {
   getCollectionCsvImportById,
   getCollectionCsvImportItemById,
   getNextPendingCollectionCsvImportItem,
-  insertCollectionCsvImportItems,
   setCollectionCsvImportStatus,
   updateCollectionCsvImportIndex,
   updateCollectionCsvImportItem,
@@ -89,6 +88,8 @@ import {
   parseCollectionCsvGameIdModalId,
   parseCollectionCsvImportActionId,
   parseCollectionCsvRemapModalId,
+  resolveCsvOwnershipType,
+  resolveCsvPlatformId,
 } from "./collection-csv-import.service.js";
 import { buildCollectionIgdbSelectOptions } from "./collection-game-resolve.utils.js";
 import {
@@ -114,12 +115,14 @@ export class CollectionCsvImportCommand {
     gameId: number;
     reason: "AUTO_MATCH" | "MANUAL_REMAP" | "CSV_GAMEDB_ID" | "CSV_IGDB_ID";
   }): Promise<void> {
-    const platformId = params.item.platformId ?? null;
+    const platformId = params.item.rawPlatform
+      ? await resolveCsvPlatformId(params.item.rawPlatform)
+      : null;
     const platformWarning = !platformId && params.item.rawPlatform
       ? "Platform not recognized; imported without platform."
       : null;
-    const ownershipType = params.item.ownershipType ?? "Digital";
-    const note = params.item.note ?? null;
+    const ownershipType = resolveCsvOwnershipType(params.item.rawOwnershipType);
+    const note = params.item.rawNote ?? null;
     const matchConfidence = params.reason === "AUTO_MATCH" ? "EXACT" : "MANUAL";
 
     try {
@@ -401,8 +404,11 @@ export class CollectionCsvImportCommand {
       return;
     }
 
-    const platformLabel = nextItem.platformId
-      ? await resolveGameCompletionPlatformLabel(nextItem.platformId)
+    const resolvedPlatformId = nextItem.rawPlatform
+      ? await resolveCsvPlatformId(nextItem.rawPlatform)
+      : null;
+    const platformLabel = resolvedPlatformId
+      ? await resolveGameCompletionPlatformLabel(resolvedPlatformId)
       : nextItem.rawPlatform ?? "No platform";
     const content = buildCsvImportItemMessage({
       importId: session.importId,
@@ -410,8 +416,8 @@ export class CollectionCsvImportCommand {
       totalCount: session.totalCount,
       title: nextItem.rawTitle,
       platformLabel,
-      ownershipType: nextItem.ownershipType ?? "Digital",
-      note: nextItem.note,
+      ownershipType: resolveCsvOwnershipType(nextItem.rawOwnershipType),
+      note: nextItem.rawNote,
       sourceGameDbId: nextItem.rawGameDbId,
       sourceIgdbId: nextItem.rawIgdbId,
     });
@@ -620,14 +626,10 @@ export class CollectionCsvImportCommand {
 
         const session = await createCollectionCsvImportSession({
           userId: interaction.user.id,
-          totalCount: parsed.rows.length,
           sourceFileName: file.name ?? null,
           sourceFileSize: typeof file.size === "number" ? file.size : null,
           templateVersion: COLLECTION_CSV_TEMPLATE_VERSION,
-        });
-        await insertCollectionCsvImportItems(
-          session.importId,
-          parsed.rows.map((row) => ({
+          items: parsed.rows.map((row) => ({
             rowIndex: row.rowIndex,
             rawTitle: row.title,
             rawPlatform: row.platformRaw,
@@ -635,11 +637,8 @@ export class CollectionCsvImportCommand {
             rawNote: row.noteRaw,
             rawGameDbId: row.sourceGameDbId,
             rawIgdbId: row.sourceIgdbId,
-            platformId: row.platformId,
-            ownershipType: row.ownershipType,
-            note: row.note,
           })),
-        );
+        });
         logCsvImportEvent("started", {
           userId: interaction.user.id,
           importId: session.importId,
