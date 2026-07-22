@@ -35,6 +35,7 @@ import { buildActionButton, buildButtonRow , buildSelectRow } from "../functions
 type HelpTopicId =
   | "noms"
   | "nominate"
+  | "nominate-delete"
   | "round"
   | "round-history"
   | "hltb"
@@ -149,6 +150,16 @@ const HELP_TOPICS: HelpTopic[] = [
       "title (required) - GameDB title chosen from autocomplete. type (required) - GOTM or NR-GOTM. reason (required) - why you are nominating it.",
     notes:
       "Title autocomplete includes the release year when available. Running the command again updates your nomination for that category.",
+  },
+  {
+    id: "nominate-delete",
+    label: "/nominate-delete",
+    summary: "Delete your own GOTM or NR-GOTM nomination for the upcoming round.",
+    syntax: "Syntax: /nominate-delete type:<GOTM|NR-GOTM>",
+    parameters: "type (required) - GOTM or NR-GOTM.",
+    notes:
+      "Only removes your own nomination, and only while nominations are still open. " +
+      "The updated nomination list is posted to the nomination channel.",
   },
   {
     id: "round",
@@ -347,7 +358,7 @@ const HELP_CATEGORIES: { id: string; name: string; topicIds: HelpTopicId[] }[] =
   {
     id: "monthly-games",
     name: "Monthly Games",
-    topicIds: ["noms", "nominate", "round", "round-history"],
+    topicIds: ["noms", "nominate", "nominate-delete", "round", "round-history"],
   },
   {
     id: "members",
@@ -877,6 +888,7 @@ export function buildMainHelpResponse(): {
     "**Monthly Games**\n" +
     `${formatCommandLine("noms", "Show the current nomination list.")}\n` +
     `${formatCommandLine("nominate", "Submit a GOTM or NR-GOTM nomination.")}\n` +
+    `${formatCommandLine("nominate-delete", "Delete your own nomination.")}\n` +
     `${formatCommandLine("round", "See the current round and winners.")}\n` +
     `${formatCommandLine("round-history", "Browse historical rounds with filters.")}\n` +
     "\n" +
