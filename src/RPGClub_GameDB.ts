@@ -32,7 +32,23 @@ import { startPokopiaEmojiService } from "./services/PokopiaEmojiService.js";
 import { restoreJournalMessageContextsFromDb } from "./commands/now-playing/nowPlayingContexts.js";
 import { truncateWithEllipsis } from "./utilities/ValidationUtils.js";
 import { logError } from "./utilities/LogUtils.js";
+import { withRetry } from "./utilities/RetryUtils.js";
+import { isTransientApiError } from "./services/RpgClubApiClient.js";
 installConsoleLogging();
+
+// Since Node 15 an unhandled rejection kills the process, so one uncaught
+// throw from an async event or command handler used to restart the whole bot
+// (docker brings it back up). Log and keep running instead; genuinely broken
+// state still surfaces as uncaughtException below, which keeps the
+// crash-and-restart behavior but with a structured log of the reason.
+process.on("unhandledRejection", (reason: unknown) => {
+  logError("process.unhandledRejection", reason);
+});
+
+process.on("uncaughtException", (err: Error) => {
+  logError("process.uncaughtException", err);
+  process.exit(1);
+});
 
 // Re-asserts the bot's stored presence to Discord. Each tick reads it from the
 // GameDB (now on Neon) directly via BotPresenceHistory.getLatestPresenceActivity();
@@ -263,8 +279,25 @@ async function run(): Promise<void> {
     throw Error("Could not find BOT_TOKEN in your environment");
   }
 
-  await loadGotmFromDb();
-  await loadNrGotmFromDb();
+  // The API is the bot's only data source, and commands assume GOTM data is
+  // loaded before login. If the API is down at boot (e.g. recovering from a
+  // Neon blip), keep retrying with capped backoff instead of crash-looping
+  // the container; the bot logs in once its startup data has loaded.
+  // Non-transient failures (bad data, auth, code bugs) still exit nonzero via
+  // the catch below so they surface instead of retrying forever.
+  await withRetry(
+    async () => {
+      await loadGotmFromDb();
+      await loadNrGotmFromDb();
+    },
+    {
+      attempts: Infinity,
+      baseDelayMs: 5_000,
+      maxDelayMs: 60_000,
+      isRetryable: isTransientApiError,
+      context: "RPGClub_GameDB.startupDataLoad",
+    },
+  );
 
   await importx(
     `${dirname(import.meta.url)}/{events,commands}/**/*.{command,handler}.{ts,js}`,
@@ -273,4 +306,7 @@ async function run(): Promise<void> {
   await bot.login(process.env.BOT_TOKEN);
 }
 
-void run();
+run().catch((err: unknown) => {
+  logError("RPGClub_GameDB.run", err);
+  process.exit(1);
+});
