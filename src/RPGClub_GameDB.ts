@@ -19,6 +19,7 @@ import {
   setConsoleLoggingClient,
 } from "./utilities/DiscordConsoleLogger.js";
 import { startNominationReminderService } from "./services/NominationReminderService.js";
+import { startVotingResultsService } from "./services/VotingResultsService.js";
 import Member from "./classes/Member.js";
 import { joinAllTargetForumThreads } from "./services/ForumThreadJoinService.js";
 import { startRssFeedService } from "./services/RssFeedService.js";
@@ -189,6 +190,7 @@ bot.once("clientReady", async () => {
   //  );
 
   startNominationReminderService(bot);
+  startVotingResultsService(bot);
   startPublicReminderService(bot);
   startThreadSyncService(bot);
   startThreadLinkPromptService(bot);

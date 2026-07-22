@@ -159,7 +159,8 @@ const HELP_TOPICS: HelpTopic[] = [
     parameters: "type (required) - GOTM or NR-GOTM.",
     notes:
       "Opens a private voting panel. Picking a game you already voted for takes the vote back. " +
-      "Votes are anonymous until voting ends; use the Results button to check tallies.",
+      "Votes are anonymous and tallies stay hidden until voting ends, when the bot posts " +
+      "the results and winners in the announcements channel automatically.",
   },
   {
     id: "round",

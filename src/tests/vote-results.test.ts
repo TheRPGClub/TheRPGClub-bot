@@ -2,12 +2,15 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { INominationEntry } from "../classes/Nomination.js";
 import type { IVoteCastResult, IVoteEntry, IVoteTallyRow } from "../classes/Vote.js";
+import type { ITallyDisplayRow } from "../functions/VoteResultsUtils.js";
 import {
   buildCastResultText,
   buildHiddenTallyText,
   buildMyVotesText,
+  buildWinnerAnnouncementText,
   dedupeNominationsByGame,
   mergeTallyWithNominations,
+  pickWinningRows,
   sumTallyVotes,
 } from "../functions/VoteResultsUtils.js";
 import { calculateVoteDeadlineEt } from "../functions/VoteDateUtils.js";
@@ -158,6 +161,64 @@ test("buildHiddenTallyText reports the total without a breakdown", () => {
   assert.match(text, /hidden while voting is open/);
   assert.match(text, /\*\*7\*\* votes cast so far/);
   assert.doesNotMatch(text, /1\./);
+});
+
+function makeTallyRow(
+  params: Partial<ITallyDisplayRow> & { gamedbGameId: number },
+): ITallyDisplayRow {
+  return {
+    gamedbGameId: params.gamedbGameId,
+    gameTitle: params.gameTitle ?? `Game ${params.gamedbGameId}`,
+    nominationId: params.nominationId ?? params.gamedbGameId,
+    voteCount: params.voteCount ?? 0,
+  };
+}
+
+test("pickWinningRows returns the top game, all ties, or nothing without votes", () => {
+  const single = pickWinningRows([
+    makeTallyRow({ gamedbGameId: 1, voteCount: 5 }),
+    makeTallyRow({ gamedbGameId: 2, voteCount: 3 }),
+  ]);
+  assert.deepEqual(single.map((row) => row.gamedbGameId), [1]);
+
+  const tied = pickWinningRows([
+    makeTallyRow({ gamedbGameId: 1, voteCount: 4 }),
+    makeTallyRow({ gamedbGameId: 2, voteCount: 4 }),
+    makeTallyRow({ gamedbGameId: 3, voteCount: 1 }),
+  ]);
+  assert.deepEqual(tied.map((row) => row.gamedbGameId), [1, 2]);
+
+  assert.deepEqual(pickWinningRows([makeTallyRow({ gamedbGameId: 1, voteCount: 0 })]), []);
+  assert.deepEqual(pickWinningRows([]), []);
+});
+
+test("buildWinnerAnnouncementText covers winner, tie, and no-votes cases", () => {
+  const winner = buildWinnerAnnouncementText({
+    kindLabel: "GOTM",
+    roundNumber: 42,
+    monthLabel: "August 2026",
+    winners: [makeTallyRow({ gamedbGameId: 1, gameTitle: "Alpha", voteCount: 5 })],
+  });
+  assert.match(winner, /The GOTM winner for Round 42 \(August 2026\) is \*\*Alpha\*\*!/);
+
+  const tie = buildWinnerAnnouncementText({
+    kindLabel: "NR-GOTM",
+    roundNumber: 42,
+    monthLabel: "August 2026",
+    winners: [
+      makeTallyRow({ gamedbGameId: 1, gameTitle: "Alpha", voteCount: 4 }),
+      makeTallyRow({ gamedbGameId: 2, gameTitle: "Beta", voteCount: 4 }),
+    ],
+  });
+  assert.match(tie, /tie between \*\*Alpha\*\* and \*\*Beta\*\*/);
+
+  const none = buildWinnerAnnouncementText({
+    kindLabel: "GOTM",
+    roundNumber: 42,
+    monthLabel: "August 2026",
+    winners: [],
+  });
+  assert.match(none, /No GOTM votes were cast for Round 42/);
 });
 
 test("calculateVoteDeadlineEt ends on the first Sunday at/after the open", () => {

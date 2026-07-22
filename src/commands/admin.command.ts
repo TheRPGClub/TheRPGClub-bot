@@ -229,6 +229,13 @@ export class Admin {
       type: ApplicationCommandOptionType.Integer,
     })
     round: number | undefined,
+    @SlashOption({
+      description: "Post the results and winner announcements to announcements",
+      name: "publish",
+      required: false,
+      type: ApplicationCommandOptionType.Boolean,
+    })
+    publish: boolean | undefined,
     interaction: CommandInteraction,
   ): Promise<void> {
     await safeDeferReply(interaction, { flags: MessageFlags.Ephemeral });
@@ -236,7 +243,7 @@ export class Admin {
     const okToUseCommand: boolean = await isAdmin(interaction);
     if (!okToUseCommand) return;
 
-    await handleVotingResults(interaction, round);
+    await handleVotingResults(interaction, round, !!publish);
   }
 
   @Slash({

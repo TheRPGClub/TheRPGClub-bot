@@ -100,16 +100,21 @@ export const ADMIN_HELP_TOPICS: AdminHelpTopic[] = [
   {
     id: "voting-close",
     label: "/admin voting-close",
-    summary: "Close the open voting round ahead of its scheduled deadline.",
+    summary: "Close the open voting round early and post the results.",
     syntax: "Syntax: /admin voting-close",
-    notes: "Voting otherwise closes automatically at the end of Sunday (America/New_York).",
+    notes:
+      "Voting otherwise closes automatically at the deadline, when the bot posts the " +
+      "results and winner announcements to announcements on its own.",
   },
   {
     id: "voting-results",
     label: "/admin voting-results",
-    summary: "Show the current GOTM and NR-GOTM vote tallies for a round.",
-    syntax: "Syntax: /admin voting-results [round:<number>]",
-    notes: "Defaults to the current round. Visible only to you.",
+    summary: "Show the GOTM and NR-GOTM vote tallies for a round.",
+    syntax: "Syntax: /admin voting-results [round:<number>] [publish:<bool>]",
+    notes:
+      "Defaults to the current round. Tallies stay hidden (totals only) until voting " +
+      "ends, admins included. publish re-posts the results and winner announcements " +
+      "to announcements after voting has ended.",
   },
   {
     id: "votes-reset",

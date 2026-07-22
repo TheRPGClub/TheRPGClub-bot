@@ -65,6 +65,45 @@ export function sumTallyVotes(rows: IVoteTallyRow[]): number {
   return rows.reduce((total, row) => total + row.voteCount, 0);
 }
 
+/**
+ * The winning row(s) of a merged tally: every game sharing the top vote
+ * count. Empty when no votes were cast at all.
+ */
+export function pickWinningRows(rows: ITallyDisplayRow[]): ITallyDisplayRow[] {
+  const top = rows[0]?.voteCount ?? 0;
+  if (top <= 0) {
+    return [];
+  }
+  return rows.filter((row) => row.voteCount === top);
+}
+
+export function buildWinnerAnnouncementText(params: {
+  kindLabel: string;
+  roundNumber: number;
+  monthLabel: string;
+  winners: ITallyDisplayRow[];
+}): string {
+  if (!params.winners.length) {
+    return (
+      `No ${params.kindLabel} votes were cast for Round ${params.roundNumber}, ` +
+      "so no winner was decided."
+    );
+  }
+  const first = params.winners[0];
+  if (params.winners.length === 1 && first) {
+    return (
+      `# 🏆 The ${params.kindLabel} winner for Round ${params.roundNumber} ` +
+      `(${params.monthLabel}) is **${first.gameTitle}**!`
+    );
+  }
+  const titles = params.winners.map((row) => `**${row.gameTitle}**`);
+  const list = `${titles.slice(0, -1).join(", ")} and ${titles[titles.length - 1]}`;
+  return (
+    `# 🏆 ${params.kindLabel} Round ${params.roundNumber} (${params.monthLabel}) ` +
+    `ends in a tie between ${list}! The admins will decide the final pick.`
+  );
+}
+
 function voteNoun(count: number): string {
   return count === 1 ? "vote" : "votes";
 }
@@ -96,8 +135,9 @@ export function buildHiddenTallyText(params: {
   voteDeadline: Date | null;
 }): string {
   const revealNote = params.voteDeadline
-    ? `Results are revealed when voting ends <t:${toUnixTimestamp(params.voteDeadline)}:R>.`
-    : "Results are revealed when voting ends.";
+    ? `Results are posted in the announcements channel when voting ends ` +
+      `<t:${toUnixTimestamp(params.voteDeadline)}:R>.`
+    : "Results are posted in the announcements channel when voting ends.";
   return (
     `${params.kindLabel} Round ${params.roundNumber} results are hidden while voting is open. ` +
     `${revealNote}\n**${params.totalVotes}** ${voteNoun(params.totalVotes)} cast so far.`

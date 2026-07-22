@@ -10,6 +10,7 @@ import {
 import { deleteAllVotesForRound, getVoteTally } from "../../classes/Vote.js";
 import BotVotingInfo from "../../classes/BotVotingInfo.js";
 import {
+  extractErrorMessage,
   safeReply,
   safeUpdate,
   withErrorReply,
@@ -26,10 +27,13 @@ import {
   type VotePanelComponent,
 } from "../../functions/VotePanelComponents.js";
 import {
+  buildHiddenTallyText,
   buildTallyText,
   dedupeNominationsByGame,
   mergeTallyWithNominations,
+  sumTallyVotes,
 } from "../../functions/VoteResultsUtils.js";
+import { announceVotingResults } from "../../services/VotingResultsService.js";
 import { getActiveVotingRound, isRoundDecided } from "../../functions/VotingRound.js";
 import { calculateVoteDeadlineEt } from "../../functions/VoteDateUtils.js";
 import { toUnixTimestamp } from "../../functions/DateFormatUtils.js";
@@ -229,7 +233,8 @@ export async function handleVotingClose(interaction: CommandInteraction): Promis
       ? ` It is otherwise scheduled to close <t:${toUnixTimestamp(round.voteDeadline)}:F>.`
       : "";
     const container = buildTextContainer(
-      `Close Round ${round.roundNumber} voting now?${deadlineText}`,
+      `Close Round ${round.roundNumber} voting now and post the results in ` +
+        `${channelMention(ANNOUNCEMENT_CHANNEL_ID)}?${deadlineText}`,
     );
     const row = buildButtonRow(
       buildActionButton(
@@ -260,11 +265,26 @@ export async function handleVoteCloseButton(interaction: ButtonInteraction): Pro
   }
   await withErrorReply(interaction, async () => {
     await BotVotingInfo.updateVoteEndsAt(round, new Date());
+    // Setting vote_ends_at also marks the round as announced for the results
+    // sweep, so the announcement has to happen here. A failure here leaves
+    // voting closed but unannounced; voting-results publish:true is the retry.
+    let announceNote: string;
+    try {
+      const info = await BotVotingInfo.getByRound(round);
+      if (!info) {
+        throw new Error(`No voting_info row was found for round ${round}.`);
+      }
+      await announceVotingResults(interaction.client, info);
+      announceNote = "Results were posted in the announcements channel.";
+    } catch (err) {
+      logError("vote-admin.service.handleVoteCloseButton", err);
+      announceNote =
+        "Posting the results failed; run /admin voting-results publish:true to retry.\n" +
+        extractErrorMessage(err);
+    }
     await safeUpdate(
       interaction,
-      buildUpdateText(
-        `🔒 Voting for Round ${round} is now closed. Results are no longer hidden.`,
-      ),
+      buildUpdateText(`🔒 Voting for Round ${round} is now closed. ${announceNote}`),
     );
   }, "Could not close voting");
 }
@@ -328,6 +348,7 @@ export async function handleVotesResetButton(interaction: ButtonInteraction): Pr
 export async function handleVotingResults(
   interaction: CommandInteraction,
   roundInput: number | undefined,
+  publish: boolean,
 ): Promise<void> {
   await withErrorReply(interaction, async () => {
     let round = roundInput;
@@ -348,6 +369,33 @@ export async function handleVotingResults(
     }
 
     const info = await BotVotingInfo.getByRound(round);
+    // Tallies are hidden from everyone (admins included) until voting ends.
+    const stillOpen = Boolean(info?.votingOpen) && !isRoundDecided(round);
+
+    if (publish) {
+      if (stillOpen || !info) {
+        await safeReply(
+          interaction,
+          buildTextReply(
+            stillOpen
+              ? `Voting for Round ${round} is still open; results cannot be published yet.`
+              : `No voting_info row was found for Round ${round}; nothing to publish.`,
+            true,
+          ),
+        );
+        return;
+      }
+      await announceVotingResults(interaction.client, info);
+      await safeReply(
+        interaction,
+        buildTextReply(
+          `Round ${round} results were posted in ${channelMention(ANNOUNCEMENT_CHANNEL_ID)}.`,
+          true,
+        ),
+      );
+      return;
+    }
+
     const sections: string[] = [];
     for (const kind of NOMINATION_KINDS) {
       const kindLabel = nominationKindLabel(kind);
@@ -359,13 +407,24 @@ export async function handleVotingResults(
         sections.push(`${kindLabel}: no nominations for Round ${round}.`);
         continue;
       }
+      if (stillOpen) {
+        sections.push(
+          buildHiddenTallyText({
+            kindLabel,
+            roundNumber: round,
+            totalVotes: sumTallyVotes(tally.rows),
+            voteDeadline: info?.voteDeadline ?? null,
+          }),
+        );
+        continue;
+      }
       sections.push(
         buildTallyText({
           kindLabel,
           roundNumber: round,
           rows: mergeTallyWithNominations(tally.rows, nominations),
           cap: tally.cap,
-          votingOpen: Boolean(info?.votingOpen) && !isRoundDecided(round),
+          votingOpen: false,
           voteDeadline: info?.voteDeadline ?? null,
         }),
       );

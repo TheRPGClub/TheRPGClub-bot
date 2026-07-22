@@ -3,11 +3,7 @@ import type {
   CommandInteraction,
   StringSelectMenuInteraction,
 } from "discord.js";
-import {
-  ApplicationCommandOptionType,
-  MessageFlags,
-  PermissionsBitField,
-} from "discord.js";
+import { ApplicationCommandOptionType, MessageFlags } from "discord.js";
 import {
   ButtonComponent,
   Discord,
@@ -36,7 +32,6 @@ import {
   sumTallyVotes,
 } from "../functions/VoteResultsUtils.js";
 import {
-  memberHasPermission,
   safeDeferReply,
   safeReply,
   withErrorReply,
@@ -247,12 +242,8 @@ export class VoteCommand {
     await withErrorReply(interaction, async () => {
       const kindLabel = nominationKindLabel(parsed.kind);
       const info = await BotVotingInfo.getByRound(parsed.round);
-      const isAdminViewer = memberHasPermission(
-        interaction,
-        PermissionsBitField.Flags.Administrator,
-      );
-      const revealed =
-        Boolean(info?.votingEnded) || isRoundDecided(parsed.round) || isAdminViewer;
+      // Tallies stay hidden for everyone (admins included) until voting ends.
+      const revealed = Boolean(info?.votingEnded) || isRoundDecided(parsed.round);
 
       const tally = await getVoteTally(parsed.kind, parsed.round);
       if (!revealed) {
