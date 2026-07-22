@@ -26,7 +26,7 @@ export function parseNominationKind(value: string): NominationKind | null {
   return null;
 }
 
-export function nominationKindLabel(kind: NominationKind): string {
+export function nominationKindLabel(kind: NominationKind): "GOTM" | "NR-GOTM" {
   return kind === "gotm" ? "GOTM" : "NR-GOTM";
 }
 

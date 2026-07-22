@@ -1,4 +1,4 @@
-import { AttachmentBuilder, type Client } from "discord.js";
+import { AttachmentBuilder, channelMention, type Client } from "discord.js";
 import {
   ContainerBuilder,
   MediaGalleryBuilder,
@@ -17,7 +17,9 @@ import {
   buildWinnerAnnouncementText,
   mergeTallyWithNominations,
   pickWinningRows,
+  type ITallyDisplayRow,
 } from "../functions/VoteResultsUtils.js";
+import { ensureWinnerThread, type WinnerKindLabel } from "./WinnerThreadService.js";
 import { isRoundDecided } from "../functions/VotingRound.js";
 import {
   buildComponentsV2Flags,
@@ -126,7 +128,11 @@ export async function announceVotingResults(
 
   const monthLabel = resolveRoundMonthLabel(round.nextVoteAt);
   const tallyContainers: ContainerBuilder[] = [];
-  const winnerAnnouncements: Array<{ text: string; coverGameId: number | null }> = [];
+  const winnerAnnouncements: Array<{
+    kindLabel: WinnerKindLabel;
+    text: string;
+    soleWinner: ITallyDisplayRow | null;
+  }> = [];
 
   for (const kind of NOMINATION_KINDS) {
     const kindLabel = nominationKindLabel(kind);
@@ -151,15 +157,15 @@ export async function announceVotingResults(
       ),
     );
     const winners = pickWinningRows(rows);
-    const soleWinner = winners.length === 1 ? winners[0] : null;
     winnerAnnouncements.push({
+      kindLabel,
       text: buildWinnerAnnouncementText({
         kindLabel,
         roundNumber: round.roundNumber,
         monthLabel,
         winners,
       }),
-      coverGameId: soleWinner?.gamedbGameId ?? null,
+      soleWinner: winners.length === 1 ? winners[0] ?? null : null,
     });
   }
 
@@ -177,11 +183,31 @@ export async function announceVotingResults(
 
   for (const announcement of winnerAnnouncements) {
     const files: AttachmentBuilder[] = [];
-    const container = buildTextContainer(announcement.text);
-    if (announcement.coverGameId) {
-      const cover = await fetchGameCoverBuffer(announcement.coverGameId).catch(() => null);
+    let text = announcement.text;
+    const winner = announcement.soleWinner;
+    if (winner) {
+      // Winner threads are best-effort: a failure here must not block the
+      // announcement itself. Ties are left for the wizard, once resolved.
+      try {
+        const threadResult = await ensureWinnerThread({
+          client,
+          gameId: winner.gamedbGameId,
+          gameTitle: winner.gameTitle,
+          roundNumber: round.roundNumber,
+          kindLabel: announcement.kindLabel,
+        });
+        if (threadResult.threadId) {
+          text += `\nJoin the discussion in ${channelMention(threadResult.threadId)}!`;
+        }
+      } catch (error) {
+        logError("VotingResultsService.ensureWinnerThread", error);
+      }
+    }
+    const container = buildTextContainer(text);
+    if (winner) {
+      const cover = await fetchGameCoverBuffer(winner.gamedbGameId).catch(() => null);
       if (cover) {
-        const filename = `winner_${announcement.coverGameId}.png`;
+        const filename = `winner_${winner.gamedbGameId}.png`;
         files.push(new AttachmentBuilder(cover.buffer, { name: filename }));
         container.addMediaGalleryComponents(
           new MediaGalleryBuilder().addItems(

@@ -14,6 +14,8 @@ import {
   sumTallyVotes,
 } from "../functions/VoteResultsUtils.js";
 import { calculateVoteDeadlineEt } from "../functions/VoteDateUtils.js";
+import { buildWinnerThreadTitle } from "../services/WinnerThreadService.js";
+import { DISCORD_THREAD_NAME_MAX } from "../config/textLimits.js";
 
 function makeNomination(
   params: Partial<INominationEntry> & { id: number },
@@ -219,6 +221,19 @@ test("buildWinnerAnnouncementText covers winner, tie, and no-votes cases", () =>
     winners: [],
   });
   assert.match(none, /No GOTM votes were cast for Round 42/);
+});
+
+test("buildWinnerThreadTitle formats and truncates the round thread name", () => {
+  assert.equal(
+    buildWinnerThreadTitle("Chrono Trigger", "GOTM", 42),
+    "Chrono Trigger (GOTM Round 42)",
+  );
+  assert.equal(
+    buildWinnerThreadTitle("Suikoden", "NR-GOTM", 7),
+    "Suikoden (NR-GOTM Round 7)",
+  );
+  const long = buildWinnerThreadTitle("A".repeat(120), "GOTM", 42);
+  assert.equal(long.length, DISCORD_THREAD_NAME_MAX);
 });
 
 test("calculateVoteDeadlineEt ends on the first Sunday at/after the open", () => {

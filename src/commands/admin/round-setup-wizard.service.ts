@@ -1,15 +1,12 @@
 import type { CommandInteraction, StringSelectMenuInteraction } from "discord.js";
 import { COLOR_PRIMARY } from "../../config/colors.js";
 import {
-  AttachmentBuilder,
   ButtonStyle,
   ComponentType,
-  ForumChannel,
   GuildScheduledEventEntityType,
   GuildScheduledEventPrivacyLevel,
   StringSelectMenuBuilder,
   type Message,
-  type MessageCreateOptions,
   channelMention,
   userMention,
 } from "discord.js";
@@ -32,7 +29,6 @@ import {
 import {
   ADMIN_CHANNEL_ID,
   ANNOUNCEMENT_CHANNEL_ID,
-  NOW_PLAYING_FORUM_ID,
 } from "../../config/channels.js";
 import Gotm, { insertGotmRoundInDatabase, type IGotmGame } from "../../classes/Gotm.js";
 import NrGotm, { insertNrGotmRoundInDatabase, type INrGotmGame } from "../../classes/NrGotm.js";
@@ -55,8 +51,11 @@ import {
 } from "../../classes/AdminWizardSession.js";
 import { listNominationsForRound } from "../../classes/Nomination.js";
 import Game from "../../classes/Game.js";
-import { getThreadsByGameId, setThreadGameLink, upsertThreadRecord } from "../../classes/Thread.js";
-import { GOTM_FORUM_TAG_ID, NR_GOTM_FORUM_TAG_ID } from "../../config/tags.js";
+import { getThreadsByGameId } from "../../classes/Thread.js";
+import {
+  buildWinnerThreadTitle,
+  ensureWinnerThread,
+} from "../../services/WinnerThreadService.js";
 import {
   buildNominationPreviewLine,
   mapSelectedNominationsToRoundPayloads,
@@ -109,65 +108,6 @@ function buildNominationCountPreview(
   return `**${kindLabel} nomination pool (${options.length})**\n${lines.join("\n")}`;
 }
 
-async function ensureWinnerThreadLinked(params: {
-  interaction: CommandInteraction;
-  gameId: number;
-  gameTitle: string;
-  roundNumber: number;
-  kindLabel: "GOTM" | "NR-GOTM";
-}): Promise<{ threadId: string | null; created: boolean }> {
-  const existingThreads = await getThreadsByGameId(params.gameId);
-  if (existingThreads.length > 0) {
-    return { threadId: existingThreads[0] ?? null, created: false };
-  }
-
-  const forum = (await params.interaction.guild?.channels.fetch(
-    NOW_PLAYING_FORUM_ID,
-  )) as ForumChannel | null;
-  if (!forum) {
-    throw new Error("Now Playing forum channel was not found.");
-  }
-
-  const game = await Game.getGameById(params.gameId);
-  if (!game) {
-    throw new Error(`GameDB game ${params.gameId} not found while creating thread.`);
-  }
-
-  const threadTitle = `${params.gameTitle} [${params.kindLabel} Round ${params.roundNumber}]`;
-  const imageBuffer =
-    game.imageData ?? await Game.getGamePrimaryImageBuffer(params.gameId).catch(() => null);
-  const files = imageBuffer
-    ? [new AttachmentBuilder(imageBuffer, { name: `gamedb_${params.gameId}.png` })]
-    : [];
-  const messagePayload: MessageCreateOptions = {
-    allowedMentions: { parse: [] },
-  };
-  if (files.length) {
-    messagePayload.files = files;
-  } else {
-    messagePayload.content = "Cover image unavailable for this game.";
-  }
-
-  const appliedTags =
-    params.kindLabel === "GOTM" ? [GOTM_FORUM_TAG_ID] : [NR_GOTM_FORUM_TAG_ID];
-  const thread = await forum.threads.create({
-    name: threadTitle,
-    message: messagePayload,
-    appliedTags,
-  });
-  await upsertThreadRecord({
-    threadId: thread.id,
-    forumChannelId: thread.parentId ?? NOW_PLAYING_FORUM_ID,
-    threadName: thread.name ?? threadTitle,
-    isArchived: Boolean(thread.archived),
-    createdAt: thread.createdAt ?? new Date(),
-    lastSeenAt: null,
-    skipLinking: "Y",
-  });
-  await setThreadGameLink(thread.id, params.gameId);
-  return { threadId: thread.id, created: true };
-}
-
 async function planWinnerThread(params: {
   gameId: number;
   gameTitle: string;
@@ -182,7 +122,7 @@ async function planWinnerThread(params: {
   const existingThreads = await getThreadsByGameId(params.gameId);
   const existingThreadId = existingThreads[0] ?? null;
   const game = await Game.getGameById(params.gameId);
-  const title = `${params.gameTitle} [${params.kindLabel} Round ${params.roundNumber}]`;
+  const title = buildWinnerThreadTitle(params.gameTitle, params.kindLabel, params.roundNumber);
   const tagLabel = params.kindLabel;
   const apiImageUrl = game?.imageData
     ? null
@@ -867,15 +807,17 @@ export async function handleNextRoundSetup(
           return;
         }
         for (const game of gotmGames) {
-          const threadResult = await ensureWinnerThreadLinked({
-            interaction,
+          const threadResult = await ensureWinnerThread({
+            client: interaction.client,
             gameId: game.gamedbGameId,
             gameTitle: game.title,
             roundNumber: nextRound,
             kindLabel: "GOTM",
           });
-          if (threadResult.threadId && threadResult.created) {
+          if (threadResult.threadId && threadResult.action === "created") {
             await wizardLog(`Linked GOTM thread ${channelMention(threadResult.threadId)} for "${game.title}".`);
+          } else if (threadResult.threadId && threadResult.action === "updated") {
+            await wizardLog(`Retitled/retagged GOTM thread ${channelMention(threadResult.threadId)} for "${game.title}".`);
           } else if (threadResult.threadId) {
             await wizardLog(`Existing GOTM thread found for "${game.title}": ${channelMention(threadResult.threadId)}.`);
           } else {
@@ -919,15 +861,17 @@ export async function handleNextRoundSetup(
           return;
         }
         for (const game of nrGotmGames) {
-          const threadResult = await ensureWinnerThreadLinked({
-            interaction,
+          const threadResult = await ensureWinnerThread({
+            client: interaction.client,
             gameId: game.gamedbGameId,
             gameTitle: game.title,
             roundNumber: nextRound,
             kindLabel: "NR-GOTM",
           });
-          if (threadResult.threadId && threadResult.created) {
+          if (threadResult.threadId && threadResult.action === "created") {
             await wizardLog(`Linked NR-GOTM thread ${channelMention(threadResult.threadId)} for "${game.title}".`);
+          } else if (threadResult.threadId && threadResult.action === "updated") {
+            await wizardLog(`Retitled/retagged NR-GOTM thread ${channelMention(threadResult.threadId)} for "${game.title}".`);
           } else if (threadResult.threadId) {
             await wizardLog(`Existing NR-GOTM thread found for "${game.title}": ${channelMention(threadResult.threadId)}.`);
           } else {

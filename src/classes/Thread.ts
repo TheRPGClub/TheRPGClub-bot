@@ -79,6 +79,15 @@ export async function removeThreadGameLink(
   return response?.count ?? 0;
 }
 
+export async function updateThreadName(
+  threadId: string,
+  threadName: string,
+): Promise<void> {
+  await apiPatch(`/api/v1/threads/${threadId}`, {
+    data: { thread_name: threadName },
+  });
+}
+
 export async function setThreadSkipLinking(
   threadId: string,
   skip: boolean,
