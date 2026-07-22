@@ -35,6 +35,7 @@ import { buildActionButton, buildButtonRow , buildSelectRow } from "../functions
 type HelpTopicId =
   | "noms"
   | "nominate"
+  | "vote"
   | "round"
   | "round-history"
   | "hltb"
@@ -149,6 +150,16 @@ const HELP_TOPICS: HelpTopic[] = [
       "title (required) - GameDB title chosen from autocomplete. type (required) - GOTM or NR-GOTM. reason (required) - why you are nominating it.",
     notes:
       "Title autocomplete includes the release year when available. Running the command again updates your nomination for that category.",
+  },
+  {
+    id: "vote",
+    label: "/vote",
+    summary: "Vote on GOTM or NR-GOTM nominations while a voting round is open.",
+    syntax: "Syntax: /vote type:<GOTM|NR-GOTM>",
+    parameters: "type (required) - GOTM or NR-GOTM.",
+    notes:
+      "Opens a private voting panel. Picking a game you already voted for takes the vote back. " +
+      "Votes are anonymous until voting ends; use the Results button to check tallies.",
   },
   {
     id: "round",
@@ -347,7 +358,7 @@ const HELP_CATEGORIES: { id: string; name: string; topicIds: HelpTopicId[] }[] =
   {
     id: "monthly-games",
     name: "Monthly Games",
-    topicIds: ["noms", "nominate", "round", "round-history"],
+    topicIds: ["noms", "nominate", "vote", "round", "round-history"],
   },
   {
     id: "members",
@@ -877,6 +888,7 @@ export function buildMainHelpResponse(): {
     "**Monthly Games**\n" +
     `${formatCommandLine("noms", "Show the current nomination list.")}\n` +
     `${formatCommandLine("nominate", "Submit a GOTM or NR-GOTM nomination.")}\n` +
+    `${formatCommandLine("vote", "Vote on nominations while voting is open.")}\n` +
     `${formatCommandLine("round", "See the current round and winners.")}\n` +
     `${formatCommandLine("round-history", "Browse historical rounds with filters.")}\n` +
     "\n" +

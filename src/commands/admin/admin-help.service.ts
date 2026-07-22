@@ -87,6 +87,37 @@ export const ADMIN_HELP_TOPICS: AdminHelpTopic[] = [
     syntax: "Syntax: /admin voting-setup",
     notes: "Pulls current nominations for GOTM and NR-GOTM, sorts answers, and sets a sensible max_select.",
   },
+  {
+    id: "voting-open",
+    label: "/admin voting-open",
+    summary: "Open first-party voting for the upcoming round and post voting panels.",
+    syntax: "Syntax: /admin voting-open [post-here:<bool>]",
+    notes:
+      "Run at/after the scheduled vote time. Opens the round's voting window and posts " +
+      "voting panels to announcements (or the current channel with post-here). " +
+      "Re-running while voting is open reposts the panels.",
+  },
+  {
+    id: "voting-close",
+    label: "/admin voting-close",
+    summary: "Close the open voting round ahead of its scheduled deadline.",
+    syntax: "Syntax: /admin voting-close",
+    notes: "Voting otherwise closes automatically at the end of Sunday (America/New_York).",
+  },
+  {
+    id: "voting-results",
+    label: "/admin voting-results",
+    summary: "Show the current GOTM and NR-GOTM vote tallies for a round.",
+    syntax: "Syntax: /admin voting-results [round:<number>]",
+    notes: "Defaults to the current round. Visible only to you.",
+  },
+  {
+    id: "votes-reset",
+    label: "/admin votes-reset",
+    summary: "Delete all first-party votes for a round and category.",
+    syntax: "Syntax: /admin votes-reset type:<GOTM|NR-GOTM> round:<number>",
+    notes: "Asks for confirmation. This cannot be undone.",
+  },
 ];
 
 export function buildAdminHelpButtons(

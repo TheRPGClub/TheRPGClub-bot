@@ -9,6 +9,10 @@ export type AdminHelpTopicId =
   | "delete-nr-gotm-noms"
   | "set-nextvote"
   | "voting-setup"
+  | "voting-open"
+  | "voting-close"
+  | "voting-results"
+  | "votes-reset"
   | "nextround-setup"
   | "sync";
 

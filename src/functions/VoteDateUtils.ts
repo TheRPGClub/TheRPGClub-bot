@@ -37,6 +37,17 @@ export function formatVoteDateForDisplay(value: Date): string {
   return DateTime.fromJSDate(value).setZone(VOTE_TIME_ZONE).toFormat("MM/dd/yyyy");
 }
 
+/**
+ * Mirrors the API's default voting deadline: voting opens at next_vote_at
+ * (scheduled on a Friday) and ends at the end of the first Sunday at or after
+ * it, in US Eastern. An explicit vote_ends_at on the round overrides this.
+ */
+export function calculateVoteDeadlineEt(opensAt: Date): Date {
+  const opens = DateTime.fromJSDate(opensAt).setZone(VOTE_TIME_ZONE);
+  const daysUntilSunday = (7 - (opens.weekday % 7)) % 7;
+  return opens.plus({ days: daysUntilSunday }).endOf("day").toUTC().toJSDate();
+}
+
 export function calculateNextVoteDateEt(now: Date = new Date()): Date {
   let cursor = DateTime.fromJSDate(now).setZone(VOTE_TIME_ZONE).plus({ months: 1 }).endOf("month");
   while (cursor.weekday !== 5) {

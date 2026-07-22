@@ -6,6 +6,10 @@ export interface IBotVotingInfoEntry {
   nextVoteAt: Date;
   fiveDayReminderSent: boolean;
   oneDayReminderSent: boolean;
+  voteEndsAt: Date | null;
+  voteDeadline: Date | null;
+  votingOpen: boolean;
+  votingEnded: boolean;
 }
 
 type VotingInfoApiData = {
@@ -14,6 +18,10 @@ type VotingInfoApiData = {
   next_vote_at: string;
   five_day_reminder_sent: boolean;
   one_day_reminder_sent: boolean;
+  vote_ends_at: string | null;
+  vote_deadline: string | null;
+  voting_open: boolean;
+  voting_ended: boolean;
 };
 
 type VotingInfoResponse = { data: VotingInfoApiData };
@@ -26,6 +34,10 @@ function mapApiData(d: VotingInfoApiData): IBotVotingInfoEntry {
     nextVoteAt: new Date(d.next_vote_at),
     fiveDayReminderSent: Boolean(d.five_day_reminder_sent),
     oneDayReminderSent: Boolean(d.one_day_reminder_sent),
+    voteEndsAt: d.vote_ends_at ? new Date(d.vote_ends_at) : null,
+    voteDeadline: d.vote_deadline ? new Date(d.vote_deadline) : null,
+    votingOpen: Boolean(d.voting_open),
+    votingEnded: Boolean(d.voting_ended),
   };
 }
 
@@ -75,17 +87,67 @@ export default class BotVotingInfo {
   ): Promise<void> {
     const round = normalizeRoundNumber(roundNumber);
     const nextVote = normalizeDate(nextVoteAt);
+    // Re-dating a round restarts its reminder cycle. The row may already exist
+    // when voting was opened first-party (openVotingRound suppresses the
+    // nomination reminders), so the flags must be reset explicitly here.
+    const body = {
+      nomination_list_id: nominationListId,
+      next_vote_at: nextVote.toISOString(),
+      five_day_reminder_sent: false,
+      one_day_reminder_sent: false,
+    };
     const updated = await apiPatch<VotingInfoResponse>(`/api/v1/voting_info/${round}`, {
-      data: { nomination_list_id: nominationListId, next_vote_at: nextVote.toISOString() },
+      data: body,
     });
     if (!updated) {
       await apiPost<VotingInfoResponse>("/api/v1/voting_info", {
-        data: {
-          round_number: round,
-          nomination_list_id: nominationListId,
-          next_vote_at: nextVote.toISOString(),
-        },
+        data: { round_number: round, ...body },
       });
+    }
+  }
+
+  /**
+   * Upserts the voting_info row that opens first-party voting for a round.
+   * The API treats next_vote_at as the round's vote-open instant, so creating
+   * this row is what opens the round's voting window server-side. Reminder
+   * flags are set so the nomination reminder service does not fire stale
+   * reminders against the just-opened round.
+   */
+  static async openVotingRound(
+    roundNumber: number,
+    opensAt: Date | string,
+  ): Promise<void> {
+    const round = normalizeRoundNumber(roundNumber);
+    const opens = normalizeDate(opensAt);
+    const body = {
+      next_vote_at: opens.toISOString(),
+      five_day_reminder_sent: true,
+      one_day_reminder_sent: true,
+    };
+    const updated = await apiPatch<VotingInfoResponse>(`/api/v1/voting_info/${round}`, {
+      data: body,
+    });
+    if (!updated) {
+      await apiPost<VotingInfoResponse>("/api/v1/voting_info", {
+        data: { round_number: round, ...body },
+      });
+    }
+  }
+
+  /** Overrides the round's default (Sunday) voting deadline, e.g. to close early. */
+  static async updateVoteEndsAt(
+    roundNumber: number,
+    voteEndsAt: Date | string,
+  ): Promise<void> {
+    const round = normalizeRoundNumber(roundNumber);
+    const endsAt = normalizeDate(voteEndsAt);
+    const result = await apiPatch<VotingInfoResponse>(`/api/v1/voting_info/${round}`, {
+      data: { vote_ends_at: endsAt.toISOString() },
+    });
+    if (!result) {
+      throw new Error(
+        `No voting_info record found for round ${round} when updating vote_ends_at.`,
+      );
     }
   }
 
