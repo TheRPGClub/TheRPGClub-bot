@@ -4,7 +4,7 @@ import {
   ModalBuilder,
   StringSelectMenuBuilder,
   TextInputStyle,
-  type RepliableInteraction,
+  type Client,
   type TextBasedChannel,
 } from "discord.js";
 import {
@@ -131,7 +131,7 @@ export function buildDeletionReasonState(
 
 export async function announceNominationChange(
   kind: NominationKind,
-  interaction: RepliableInteraction,
+  interaction: { client: Client },
   content: string,
   payload: NominationListPayload,
 ): Promise<void> {
@@ -139,7 +139,7 @@ export async function announceNominationChange(
     kind === "gotm" ? GOTM_NOMINATION_CHANNEL_ID : NR_GOTM_NOMINATION_CHANNEL_ID;
 
   try {
-    const channel = await (interaction.client as any).channels.fetch(channelId);
+    const channel = await interaction.client.channels.fetch(channelId);
     const textChannel: TextBasedChannel | null = channel?.isTextBased()
       ? (channel as TextBasedChannel)
       : null;

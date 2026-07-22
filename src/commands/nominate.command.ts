@@ -2,7 +2,6 @@ import type {
   AutocompleteInteraction,
   CommandInteraction,
   StringSelectMenuInteraction,
-  TextBasedChannel,
 } from "discord.js";
 import {
   ApplicationCommandOptionType,
@@ -12,16 +11,15 @@ import {
 import { Discord, SelectMenuComponent, Slash, SlashChoice, SlashOption } from "discordx";
 import type { NominationKind } from "../classes/Nomination.js";
 import {
+  deleteNominationForUser,
   getNominationForUser,
   listNominationsForRound,
   upsertNomination,
 } from "../classes/Nomination.js";
 import type { IGame } from "../types/GameTypes.js";
 import { buildNominationListPayload } from "../functions/NominationListComponents.js";
-import {
-  buildComponentsV2Flags,
-  buildTextContainer,
-} from "../functions/ComponentsV2Utils.js";
+import { buildComponentsV2Flags } from "../functions/ComponentsV2Utils.js";
+import { announceNominationChange } from "../functions/NominationAdminHelpers.js";
 import {
   formatGameTitleWithYear,
   resolveExactTitleMatch,
@@ -37,16 +35,12 @@ import {
   safeReply,
   sanitizeUserInput,
 } from "../functions/InteractionUtils.js";
-import { buildTextReply, safeV2TextContent } from "../functions/ComponentsV2Utils.js";
+import { buildTextReply } from "../functions/ComponentsV2Utils.js";
 import { toUnixTimestamp } from "../functions/DateFormatUtils.js";
-import {
-  GOTM_NOMINATION_CHANNEL_ID,
-  NR_GOTM_NOMINATION_CHANNEL_ID,
-} from "../config/nominationChannels.js";
 import { showGameProfileFromNomination } from "./gamedb.command.js";
 import { isPositiveInt } from "../utilities/ValidationUtils.js";
 import { DISCORD_SELECT_OPTIONS_MAX, truncateLabel } from "../config/textLimits.js";
-import { logError } from "../utilities/LogUtils.js";
+import { buildApiErrorMessage } from "../utilities/ApiErrorUtils.js";
 import GameSearchService from "../classes/GameSearchService.js";
 import Game from "../classes/Game.js";
 
@@ -90,47 +84,6 @@ async function resolveNominatedGameByTitle(
 
   const existing = await GameSearchService.searchGames(searchTerm);
   return { game: resolveExactTitleMatch(existing, searchTerm), candidates: existing };
-}
-
-async function announceNominationList(
-  interaction: CommandInteraction,
-  kind: NominationKind,
-  nominatorUserId: string,
-  nominatedTitle: string,
-  payload: Awaited<ReturnType<typeof buildNominationListPayload>>,
-): Promise<void> {
-  const channelId = kind === "gotm" ? GOTM_NOMINATION_CHANNEL_ID : NR_GOTM_NOMINATION_CHANNEL_ID;
-
-  try {
-    const channel = await interaction.client.channels.fetch(channelId);
-    const textChannel: TextBasedChannel | null = channel?.isTextBased()
-      ? (channel as TextBasedChannel)
-      : null;
-    if (!textChannel || !isSendableTextChannel(textChannel)) {
-      return;
-    }
-
-    const nominationNotice = buildTextContainer(
-        safeV2TextContent(`${userMention(nominatorUserId)} Nominated "${nominatedTitle}"!`, 1000),
-      );
-
-    await textChannel.send({
-      components: [nominationNotice, ...payload.components],
-      files: payload.files,
-      flags: buildComponentsV2Flags(false),
-      allowedMentions: { parse: [] },
-    });
-  } catch (error) {
-    logError("NominateCommand.announceNominationList", error);
-  }
-}
-
-type SendableTextChannel = TextBasedChannel & {
-  send: (content: unknown) => Promise<unknown>;
-};
-
-function isSendableTextChannel(channel: TextBasedChannel | null): channel is SendableTextChannel {
-  return Boolean(channel && typeof (channel as SendableTextChannel).send === "function");
 }
 
 @Discord()
@@ -251,17 +204,97 @@ export class NominateCommand {
         nominations,
         false,
       );
-      await announceNominationList(
-        interaction,
-        selectedKind,
-        interaction.user.id,
-        saved.gameTitle,
-        payload,
-      );
+      const notice =
+        `${userMention(interaction.user.id)} Nominated "${saved.gameTitle}"!`;
+      await announceNominationChange(selectedKind, interaction, notice, payload);
     } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
       await safeReply(
-        interaction, buildTextReply(`Could not save your nomination: ${errorMessage}`, true),
+        interaction,
+        buildTextReply(buildApiErrorMessage("Could not save your nomination.", error), true),
+      );
+    }
+  }
+
+  @Slash({
+    description: "Delete your own GOTM or NR-GOTM nomination for the upcoming round",
+    name: "nominate-delete",
+  })
+  async nominateDelete(
+    @SlashChoice(
+      { name: "GOTM", value: "gotm" },
+      { name: "NR-GOTM", value: "nr-gotm" },
+    )
+    @SlashOption({
+      description: "Nomination type",
+      name: "type",
+      required: true,
+      type: ApplicationCommandOptionType.String,
+    })
+    rawKind: string,
+    interaction: CommandInteraction,
+  ): Promise<void> {
+    const selectedKind = parseNominationKind(rawKind);
+    if (!selectedKind) {
+      await safeReply(interaction, buildTextReply("Please choose either GOTM or NR-GOTM.", true));
+      return;
+    }
+
+    await safeDeferReply(interaction, { flags: MessageFlags.Ephemeral });
+
+    const kindLabel = selectedKind === "gotm" ? "GOTM" : "NR-GOTM";
+    try {
+      const window = await getUpcomingNominationWindow();
+      if (areNominationsClosed(window)) {
+        const voteUnix = toUnixTimestamp(window.nextVoteAt);
+        const closedMsg =
+          `Nominations for Round ${window.targetRound} are closed and can no longer be ` +
+          `deleted. Voting is scheduled for <t:${voteUnix}:F>.`;
+        await safeReply(interaction, buildTextReply(closedMsg, true));
+        return;
+      }
+
+      const existing = await getNominationForUser(
+        selectedKind, window.targetRound, interaction.user.id,
+      );
+      if (!existing) {
+        const missingMsg =
+          `You have no ${kindLabel} nomination for Round ${window.targetRound} to delete.`;
+        await safeReply(interaction, buildTextReply(missingMsg, true));
+        return;
+      }
+
+      const deleted = await deleteNominationForUser(
+        selectedKind, window.targetRound, interaction.user.id,
+      );
+      if (!deleted) {
+        const failedMsg =
+          `Could not delete your ${kindLabel} nomination "${existing.gameTitle}". ` +
+          "It may have already been removed.";
+        await safeReply(interaction, buildTextReply(failedMsg, true));
+        return;
+      }
+
+      const successMsg =
+        `Deleted your ${kindLabel} nomination for Round ${window.targetRound}: ` +
+        `"${existing.gameTitle}".`;
+      await safeReply(interaction, buildTextReply(successMsg, true));
+
+      const nominations = await listNominationsForRound(selectedKind, window.targetRound);
+      const payload = await buildNominationListPayload(
+        kindLabel,
+        "/nominate",
+        window,
+        nominations,
+        false,
+      );
+      const notice =
+        `${userMention(interaction.user.id)} withdrew their nomination ` +
+        `"${existing.gameTitle}".`;
+      await announceNominationChange(selectedKind, interaction, notice, payload);
+    } catch (error: unknown) {
+      await safeReply(
+        interaction,
+        buildTextReply(buildApiErrorMessage("Could not delete your nomination.", error), true),
       );
     }
   }
