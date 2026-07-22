@@ -38,7 +38,7 @@ export function buildWinnerThreadTitle(
   roundNumber: number,
 ): string {
   return truncateWithEllipsis(
-    `${gameTitle} (${kindLabel} Round ${roundNumber})`,
+    `${gameTitle} [${kindLabel} Round ${roundNumber}]`,
     DISCORD_THREAD_NAME_MAX,
   );
 }
