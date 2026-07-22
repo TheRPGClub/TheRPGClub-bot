@@ -1,5 +1,7 @@
 import axios, { type AxiosInstance, type AxiosRequestConfig } from "axios";
 
+import { withRetry } from "../utilities/RetryUtils.js";
+
 /**
  * Singleton axios instance pre-configured for the RPG Club API.
  *
@@ -7,7 +9,31 @@ import axios, { type AxiosInstance, type AxiosRequestConfig } from "axios";
  * - Auth:     Authorization: Bearer <RPGCLUB_BOT_API_TOKEN>
  * - 404 responses are NOT thrown -- callers receive `null` via the
  *   `apiGet` / `apiPost` helpers below. All other error statuses throw.
+ * - Requests time out after REQUEST_TIMEOUT_MS. GETs additionally retry
+ *   transient failures (see `isTransientApiError`); writes never retry
+ *   automatically since they are not guaranteed idempotent.
  */
+
+// Axios defaults to no timeout, so a wedged API (e.g. the 2026-07-22 Neon
+// outage) left every bot call hanging until the Fly proxy gave up (~37s).
+const REQUEST_TIMEOUT_MS = 10_000;
+
+const GET_RETRY_ATTEMPTS = 3;
+const GET_RETRY_BASE_DELAY_MS = 1_000;
+
+/**
+ * Failures worth retrying: no response at all (network error or timeout) or a
+ * gateway-flavored status the API returns while restarting behind Fly's proxy.
+ */
+export function isTransientApiError(err: unknown): boolean {
+  if (!axios.isAxiosError(err)) {
+    return false;
+  }
+  if (!err.response) {
+    return true;
+  }
+  return [502, 503, 504].includes(err.response.status);
+}
 
 function createClient(): AxiosInstance {
   const baseURL = process.env.RPGCLUB_API_BASE_URL;
@@ -22,6 +48,7 @@ function createClient(): AxiosInstance {
 
   return axios.create({
     baseURL,
+    timeout: REQUEST_TIMEOUT_MS,
     headers: {
       Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",
@@ -49,7 +76,12 @@ export async function apiGet<T>(
   config?: AxiosRequestConfig,
 ): Promise<T | null> {
   try {
-    const response = await getClient().get<T>(path, config);
+    const response = await withRetry(() => getClient().get<T>(path, config), {
+      attempts: GET_RETRY_ATTEMPTS,
+      baseDelayMs: GET_RETRY_BASE_DELAY_MS,
+      isRetryable: isTransientApiError,
+      context: `RpgClubApiClient.apiGet ${path}`,
+    });
     return response.data;
   } catch (err: unknown) {
     if (axios.isAxiosError(err) && err.response?.status === 404) {
