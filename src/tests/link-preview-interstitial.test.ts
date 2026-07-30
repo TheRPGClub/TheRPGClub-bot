@@ -6,6 +6,7 @@ import {
   extractPreviewTitle,
   isInterstitialPreview,
   isInterstitialTitle,
+  resolvePreviewSource,
   INTERSTITIAL_TITLES,
   type IOpenGraphData,
 } from "../functions/LinkPreviewEmbeds.js";
@@ -51,6 +52,32 @@ const STUCK_LINES = [
   "[xcancel.com](https://xcancel.com)",
   `**[Verifying your browser…](${POST_URL})**`,
 ];
+
+test("resolvePreviewSource scrapes x.com for an xcancel link and keeps the path", () => {
+  const source = resolvePreviewSource(POST_URL);
+  assert.equal(source.fetchUrl, "https://x.com/ReticentY2K/status/2082451207650488402");
+  assert.equal(source.rewritten, true);
+  assert.match(source.headers["User-Agent"], /Chrome/);
+});
+
+test("resolvePreviewSource rewrites the www form of a mirrored host", () => {
+  const source = resolvePreviewSource("https://www.xcancel.com/user/status/1?lang=en");
+  assert.equal(source.fetchUrl, "https://x.com/user/status/1?lang=en");
+  assert.equal(source.rewritten, true);
+});
+
+test("resolvePreviewSource leaves unmapped hosts on the bot user agent", () => {
+  const source = resolvePreviewSource("https://store.steampowered.com/app/1086940");
+  assert.equal(source.fetchUrl, "https://store.steampowered.com/app/1086940");
+  assert.equal(source.rewritten, false);
+  assert.match(source.headers["User-Agent"], /TheRPGClubBot/);
+});
+
+test("resolvePreviewSource falls back cleanly on an unparseable url", () => {
+  const source = resolvePreviewSource("not a url");
+  assert.equal(source.fetchUrl, "not a url");
+  assert.equal(source.rewritten, false);
+});
 
 test("isInterstitialTitle matches every seeded title, ellipsis and case insensitive", () => {
   for (const known of INTERSTITIAL_TITLES) {
