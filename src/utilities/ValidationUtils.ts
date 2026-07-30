@@ -19,6 +19,13 @@ export function isValidPlaytimeHours(value: unknown): value is number {
   return typeof value === "number" && !Number.isNaN(value) && value >= 0;
 }
 
+const SNOWFLAKE_PATTERN = /^\d{17,20}$/;
+
+/** Returns true if value looks like a Discord snowflake (message, channel, user id). */
+export function isSnowflake(value: string): boolean {
+  return SNOWFLAKE_PATTERN.test(value);
+}
+
 export function truncateWithEllipsis(text: string, maxLength: number): string {
   if (text.length <= maxLength) return text;
   return text.slice(0, Math.max(0, maxLength - 3)) + "...";

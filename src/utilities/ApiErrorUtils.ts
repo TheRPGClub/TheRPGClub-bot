@@ -24,6 +24,30 @@ export function tryParseJson(raw: string | null | undefined): unknown {
   }
 }
 
+interface IDiscordRestError {
+  method?: string;
+  url?: string;
+  status?: number;
+  rawError?: unknown;
+  requestBody?: { json?: unknown };
+}
+
+/** Format a discord.js REST failure with the same request/response detail as API errors. */
+export function buildDiscordErrorMessage(label: string, err: unknown): string {
+  const restError = err as IDiscordRestError;
+  if (typeof restError?.url !== "string" || typeof restError?.method !== "string") {
+    const msg = err instanceof Error ? err.message : String(err);
+    return `${label}: ${msg}`;
+  }
+  return `${label}\n${formatApiError(
+    restError.method,
+    restError.url,
+    restError.requestBody?.json ?? null,
+    restError.status,
+    restError.rawError ?? null,
+  )}`;
+}
+
 export function buildApiErrorMessage(label: string, err: unknown): string {
   if (!axios.isAxiosError(err)) {
     const msg = err instanceof Error ? err.message : String(err);

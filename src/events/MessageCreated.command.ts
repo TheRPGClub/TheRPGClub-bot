@@ -3,12 +3,8 @@ import type { ArgsOf, Client } from "discordx";
 import { Discord, On } from "discordx";
 import { GAME_DEALS_CHANNEL_ID, GAME_NEWS_CHANNEL_ID } from "../config/channels.js";
 import { MEMBER_ROLE_ID, NEWCOMERS_ROLE_ID } from "../config/roles.js";
-import {
-  buildLinkPreviewContainer,
-  extractFirstUrl,
-  fetchOpenGraphData,
-} from "../functions/LinkPreviewEmbeds.js";
-import { buildContainerSend } from "../functions/ComponentsV2Utils.js";
+import { LINK_RELAY_BOT_USER_ID } from "../config/users.js";
+import { renderLinkPreviewForMessage } from "../services/LinkPreviewRecoveryService.js";
 import { logError, logInfo } from "../utilities/LogUtils.js";
 
 const LINK_PREVIEW_CHANNEL_IDS: readonly string[] = [
@@ -44,29 +40,28 @@ export class MessageCreated {
     }
 
     if (LINK_PREVIEW_CHANNEL_IDS.includes(message.channelId)) {
-      void this.postFallbackLinkPreview(message.id, message.channel);
+      void this.postFallbackLinkPreview(
+        message.id,
+        message.channel,
+        message.author.id === LINK_RELAY_BOT_USER_ID,
+      );
     }
   }
 
   private async postFallbackLinkPreview(
     messageId: string,
     channel: ArgsOf<"messageCreate">[0]["channel"],
+    sweepStuckReplies: boolean,
   ): Promise<void> {
     try {
       await new Promise((resolve) => setTimeout(resolve, EMBED_RENDER_WAIT_MS));
       if (!("messages" in channel)) return;
       const refreshedMessage = await channel.messages.fetch(messageId);
-      if (refreshedMessage.embeds.length > 0) return;
 
-      const url = extractFirstUrl(refreshedMessage.content);
-      if (!url) return;
-
-      const ogData = await fetchOpenGraphData(url);
-      if (!ogData) return;
-
-      const { container, files } = await buildLinkPreviewContainer(ogData);
-      const { components, flags } = buildContainerSend(container);
-      await refreshedMessage.reply({ components, flags, files });
+      await renderLinkPreviewForMessage(refreshedMessage, {
+        skipWhenEmbedded: true,
+        sweepStuckReplies,
+      });
     } catch (error) {
       logError("MessageCreated", error);
     }

@@ -17,6 +17,22 @@ const DESCRIPTION_MAX_WORDS = 150;
 const MAX_GALLERY_IMAGES = 10;
 const REQUEST_HEADERS = { "User-Agent": "Mozilla/5.0 (compatible; TheRPGClubBot/1.0)" };
 
+/**
+ * Titles served by anti-bot interstitials instead of the real page. Compared
+ * against a normalized (lowercased, ellipsis-stripped) title prefix.
+ */
+export const INTERSTITIAL_TITLES: readonly string[] = [
+  "verifying your browser",
+  "just a moment",
+  "attention required! | cloudflare",
+  "checking your browser",
+  "making sure you're not a bot",
+  "ddos-guard",
+];
+
+/** Backoff schedule used when a fetch returns an interstitial instead of the page. */
+export const INTERSTITIAL_RETRY_DELAYS_MS: readonly number[] = [10_000, 30_000, 60_000];
+
 function truncateWords(text: string, maxWords: number): string {
   const words = text.split(/\s+/).filter(Boolean);
   if (words.length <= maxWords) return text;
@@ -39,6 +55,46 @@ export interface ILinkPreview {
 
 export function extractFirstUrl(content: string): string | undefined {
   return content.match(URL_PATTERN)?.[0];
+}
+
+const TITLE_LINE_PATTERN = /^\*\*\[(.+)\]\((\S+)\)\*\*$/;
+
+function buildTitleLine(title: string, url: string): string {
+  return `**[${title}](${url})**`;
+}
+
+/** Pull the preview title back out of an already-rendered container's text displays. */
+export function extractPreviewTitle(textContents: readonly string[]): string | undefined {
+  for (const content of textContents) {
+    const match = content.trim().match(TITLE_LINE_PATTERN);
+    if (match) return match[1];
+  }
+  return undefined;
+}
+
+function normalizeTitle(title: string): string {
+  return title
+    .replace(/[…]/g, "")
+    .replace(/\.+$/, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+}
+
+export function isInterstitialTitle(title: string | undefined): boolean {
+  if (!title) return false;
+  const normalized = normalizeTitle(title);
+  return INTERSTITIAL_TITLES.some((known) => normalized.startsWith(known));
+}
+
+/**
+ * An interstitial preview is a known bot-check title with nothing else scraped.
+ * All three conditions are required so a real post with an odd title survives.
+ */
+export function isInterstitialPreview(data: IOpenGraphData): boolean {
+  return isInterstitialTitle(data.title)
+    && !data.description
+    && data.imageUrls.length === 0;
 }
 
 function resolveImageUrls($: cheerio.CheerioAPI, pageUrl: string): string[] {
@@ -116,7 +172,7 @@ export async function buildLinkPreviewContainer(data: IOpenGraphData): Promise<I
   );
 
   if (data.title) {
-    const titleLine = `**[${data.title}](${data.url})**`;
+    const titleLine = buildTitleLine(data.title, data.url);
     container.addTextDisplayComponents(
       new TextDisplayBuilder().setContent(safeV2TextContent(titleLine, 500)),
     );
