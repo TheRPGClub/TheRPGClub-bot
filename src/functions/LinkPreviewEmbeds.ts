@@ -15,7 +15,60 @@ const URL_PATTERN = /https?:\/\/[^\s<>"]+/;
 const FETCH_TIMEOUT_MS = 8000;
 const DESCRIPTION_MAX_WORDS = 150;
 const MAX_GALLERY_IMAGES = 10;
-const REQUEST_HEADERS = { "User-Agent": "Mozilla/5.0 (compatible; TheRPGClubBot/1.0)" };
+const DEFAULT_USER_AGENT = "Mozilla/5.0 (compatible; TheRPGClubBot/1.0)";
+/** Some hosts only serve card metadata to a browser user agent. */
+const BROWSER_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+  + "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36";
+
+interface IPreviewSourceHost {
+  /** Host to scrape instead of the one in the posted link. */
+  fetchHost: string;
+  userAgent: string;
+}
+
+/**
+ * Mirrors whose own pages are unscrapable. Metadata is read from the upstream
+ * host while every rendered link keeps pointing at the mirror that was posted.
+ */
+const PREVIEW_SOURCE_HOSTS: Readonly<Record<string, IPreviewSourceHost>> = {
+  "xcancel.com": { fetchHost: "x.com", userAgent: BROWSER_USER_AGENT },
+};
+
+export interface IPreviewSource {
+  /** URL to actually request. */
+  fetchUrl: string;
+  headers: Record<string, string>;
+  /** True when the scraped host differs from the posted link's host. */
+  rewritten: boolean;
+}
+
+function normalizeHostname(hostname: string): string {
+  return hostname.replace(/^www\./, "").toLowerCase();
+}
+
+/** Map a posted link to the host that will actually answer with usable metadata. */
+export function resolvePreviewSource(displayUrl: string): IPreviewSource {
+  const fallback: IPreviewSource = {
+    fetchUrl: displayUrl,
+    headers: { "User-Agent": DEFAULT_USER_AGENT },
+    rewritten: false,
+  };
+
+  try {
+    const parsed = new URL(displayUrl);
+    const source = PREVIEW_SOURCE_HOSTS[normalizeHostname(parsed.hostname)];
+    if (!source) return fallback;
+
+    parsed.hostname = source.fetchHost;
+    return {
+      fetchUrl: parsed.toString(),
+      headers: { "User-Agent": source.userAgent },
+      rewritten: true,
+    };
+  } catch {
+    return fallback;
+  }
+}
 
 /**
  * Titles served by anti-bot interstitials instead of the real page. Compared
@@ -125,12 +178,13 @@ function resolveImageUrls($: cheerio.CheerioAPI, pageUrl: string): string[] {
 async function downloadImage(
   imageUrl: string,
   name: string,
+  headers: Record<string, string>,
 ): Promise<AttachmentBuilder | undefined> {
   try {
     const response = await axios.get<ArrayBuffer>(imageUrl, {
       timeout: FETCH_TIMEOUT_MS,
       responseType: "arraybuffer",
-      headers: REQUEST_HEADERS,
+      headers,
     });
     return new AttachmentBuilder(Buffer.from(response.data), { name });
   } catch (error) {
@@ -140,10 +194,11 @@ async function downloadImage(
 }
 
 export async function fetchOpenGraphData(url: string): Promise<IOpenGraphData | undefined> {
+  const source = resolvePreviewSource(url);
   try {
-    const response = await axios.get<string>(url, {
+    const response = await axios.get<string>(source.fetchUrl, {
       timeout: FETCH_TIMEOUT_MS,
-      headers: REQUEST_HEADERS,
+      headers: source.headers,
     });
     const $ = cheerio.load(response.data);
     const ogTag = (property: string): string | undefined =>
@@ -151,14 +206,16 @@ export async function fetchOpenGraphData(url: string): Promise<IOpenGraphData | 
 
     const title = ogTag("og:title") ?? ($("title").text().trim() || undefined);
     const description = ogTag("og:description");
-    const imageUrls = resolveImageUrls($, url);
+    const imageUrls = resolveImageUrls($, source.fetchUrl);
     const homepageUrl = new URL(url).origin;
-    const siteName = ogTag("og:site_name") ?? new URL(url).hostname.replace(/^www\./, "");
+    const displayHost = normalizeHostname(new URL(url).hostname);
+    // A rewritten host would otherwise label the preview with the upstream site.
+    const siteName = source.rewritten ? displayHost : ogTag("og:site_name") ?? displayHost;
 
     if (!title && !description && imageUrls.length === 0) return undefined;
     return { siteName, homepageUrl, title, description, imageUrls, url };
   } catch (error) {
-    logWarn("LinkPreviewEmbeds", `Failed to fetch Open Graph data for ${url}: ${error}`);
+    logWarn("LinkPreviewEmbeds", `Failed to fetch Open Graph data for ${source.fetchUrl}: ${error}`);
     return undefined;
   }
 }
@@ -187,8 +244,10 @@ export async function buildLinkPreviewContainer(data: IOpenGraphData): Promise<I
 
   const files: AttachmentBuilder[] = [];
   const galleryItems: MediaGalleryItemBuilder[] = [];
+  const { headers } = resolvePreviewSource(data.url);
   const downloads = await Promise.all(
-    data.imageUrls.map((imageUrl, index) => downloadImage(imageUrl, `link-preview-${index}.png`)),
+    data.imageUrls.map((imageUrl, index) =>
+      downloadImage(imageUrl, `link-preview-${index}.png`, headers)),
   );
   for (const attachment of downloads) {
     if (!attachment) continue;
