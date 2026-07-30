@@ -5,7 +5,12 @@ import {
   StringSelectMenuBuilder,
   type StringSelectMenuInteraction,
 } from "discord.js";
-import type { CommandInteraction, ModalSubmitInteraction } from "discord.js";
+import type {
+  CommandInteraction,
+  GuildBasedChannel,
+  Message,
+  ModalSubmitInteraction,
+} from "discord.js";
 import type { ContainerBuilder } from "@discordjs/builders";
 import {
   Discord,
@@ -34,11 +39,17 @@ import {
   buildComponentsV2EditFlags,
   type EmbedField,
 } from "../functions/ComponentsV2Utils.js";
+import {
+  renderLinkPreviewForMessage,
+  type IPreviewRenderResult,
+} from "../services/LinkPreviewRecoveryService.js";
+import { buildDiscordErrorMessage } from "../utilities/ApiErrorUtils.js";
+import { isSnowflake } from "../utilities/ValidationUtils.js";
 import { truncateDescription } from "../config/textLimits.js";
 import { buildSelectRow } from "../functions/uiComponents.js";
 import { toUnixTimestamp } from "../functions/DateFormatUtils.js";
 
-type ModHelpTopicId = "presence" | "presence-history";
+type ModHelpTopicId = "presence" | "presence-history" | "rerender-embed";
 
 type ModHelpTopic = {
   id: ModHelpTopicId;
@@ -63,7 +74,45 @@ export const MOD_HELP_TOPICS: ModHelpTopic[] = [
     syntax: "Syntax: /mod presence-history [count:<integer>]",
     parameters: "count (optional integer, default 5, max 50) - number of entries.",
   },
+  {
+    id: "rerender-embed",
+    label: "/mod rerender-embed",
+    summary: "Delete a failed link preview and rebuild it.",
+    syntax: "Syntax: /mod rerender-embed message_id:<string> [channel:<channel>]",
+    parameters: [
+      "message_id (required string) - the stuck preview or the post it replied to.",
+      "channel (optional channel) - where the message lives, defaults to this channel.",
+    ].join("\n"),
+  },
 ];
+
+async function resolveSourceMessage(message: Message): Promise<Message> {
+  const referencedId = message.reference?.messageId;
+  if (message.author.id !== message.client.user.id || !referencedId) return message;
+  return message.fetchReference();
+}
+
+export function describeRerenderResult(
+  result: IPreviewRenderResult,
+  sourceUrl: string,
+): string {
+  const cleared = result.deletedStuckReply
+    ? "Deleted the stuck preview."
+    : "No stuck preview found.";
+
+  switch (result.status) {
+    case "rendered":
+      return `${cleared} Re-rendered the preview for ${sourceUrl}`;
+    case "still-interstitial":
+      return `${cleared} ${result.url} is still behind a browser check, so nothing was posted.`;
+    case "no-preview-data":
+      return `${cleared} No preview data could be read from ${result.url}`;
+    case "no-url":
+      return `${cleared} ${sourceUrl} has no link to preview.`;
+    case "skipped-existing-embed":
+      return `${cleared} Discord already rendered an embed for ${sourceUrl}`;
+  }
+}
 
 function buildModHelpButtons(
   activeId?: ModHelpTopicId,
@@ -180,6 +229,66 @@ export class Mod {
       ...response,
       flags: response.flags | MessageFlags.Ephemeral,
     });
+  }
+
+  @Slash({
+    description: "Delete a failed link preview and rebuild it",
+    name: "rerender-embed",
+  })
+  async rerenderEmbed(
+    @SlashOption({
+      description: "Message ID of the stuck preview or the post it replied to",
+      name: "message_id",
+      required: true,
+      type: ApplicationCommandOptionType.String,
+    })
+    messageId: string,
+    @SlashOption({
+      description: "Channel holding the message (defaults to this channel)",
+      name: "channel",
+      required: false,
+      type: ApplicationCommandOptionType.Channel,
+    })
+    channel: GuildBasedChannel | undefined,
+    interaction: CommandInteraction,
+  ): Promise<void> {
+    await safeDeferReply(interaction, { flags: MessageFlags.Ephemeral });
+
+    const okToUseCommand: boolean = await isModerator(interaction);
+    if (!okToUseCommand) {
+      return;
+    }
+
+    const targetId = sanitizeUserInput(messageId, { preserveNewlines: false }).trim();
+    if (!isSnowflake(targetId)) {
+      await safeReply(interaction, buildTextReply(`\`${targetId}\` is not a message ID.`, true));
+      return;
+    }
+
+    const targetChannel = channel ?? interaction.channel;
+    if (!targetChannel || !("messages" in targetChannel)) {
+      await safeReply(interaction, buildTextReply("That channel cannot hold messages.", true));
+      return;
+    }
+
+    try {
+      const fetched = await targetChannel.messages.fetch(targetId);
+      const sourceMessage = await resolveSourceMessage(fetched);
+      const result = await renderLinkPreviewForMessage(sourceMessage, {
+        skipWhenEmbedded: false,
+        sweepStuckReplies: true,
+      });
+      await safeReply(
+        interaction,
+        buildTextReply(describeRerenderResult(result, sourceMessage.url), true),
+      );
+    } catch (error) {
+      const message = buildDiscordErrorMessage(
+        `Failed to re-render the preview for \`${targetId}\``,
+        error,
+      );
+      await safeReply(interaction, buildTextReply(message, true));
+    }
   }
 
   @Slash({
