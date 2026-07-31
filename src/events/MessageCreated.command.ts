@@ -1,16 +1,12 @@
 import { Role } from "discord.js";
 import type { ArgsOf, Client } from "discordx";
 import { Discord, On } from "discordx";
-import { GAME_DEALS_CHANNEL_ID, GAME_NEWS_CHANNEL_ID } from "../config/channels.js";
 import { MEMBER_ROLE_ID, NEWCOMERS_ROLE_ID } from "../config/roles.js";
 import { LINK_RELAY_BOT_USER_ID } from "../config/users.js";
+import { extractFirstUrl } from "../functions/LinkPreviewEmbeds.js";
 import { renderLinkPreviewForMessage } from "../services/LinkPreviewRecoveryService.js";
 import { logError, logInfo } from "../utilities/LogUtils.js";
 
-const LINK_PREVIEW_CHANNEL_IDS: readonly string[] = [
-  GAME_NEWS_CHANNEL_ID,
-  GAME_DEALS_CHANNEL_ID,
-];
 const EMBED_RENDER_WAIT_MS = 3000;
 
 @Discord()
@@ -39,12 +35,9 @@ export class MessageCreated {
       }
     }
 
-    if (LINK_PREVIEW_CHANNEL_IDS.includes(message.channelId)) {
-      void this.postFallbackLinkPreview(
-        message.id,
-        message.channel,
-        message.author.id === LINK_RELAY_BOT_USER_ID,
-      );
+    const sweepStuckReplies: boolean = message.author.id === LINK_RELAY_BOT_USER_ID;
+    if (sweepStuckReplies || extractFirstUrl(message.content)) {
+      void this.postFallbackLinkPreview(message.id, message.channel, sweepStuckReplies);
     }
   }
 
