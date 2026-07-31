@@ -38,7 +38,7 @@ export interface ICompletionatorItem {
   errorText: string | null;
 }
 
-type CompletionatorImportApiData = {
+export type CompletionatorImportApiData = {
   import_id: number;
   user_id: string;
   status: string;
@@ -77,7 +77,7 @@ function toDate(value: Date | string): Date {
   return value instanceof Date ? value : new Date(value);
 }
 
-function mapImport(row: CompletionatorImportApiData): ICompletionatorImport {
+export function mapImport(row: CompletionatorImportApiData): ICompletionatorImport {
   return {
     importId: Number(row.import_id),
     userId: row.user_id,
