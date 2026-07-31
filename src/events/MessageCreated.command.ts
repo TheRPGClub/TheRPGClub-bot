@@ -9,6 +9,29 @@ import { logError, logInfo } from "../utilities/LogUtils.js";
 
 const EMBED_RENDER_WAIT_MS = 3000;
 
+export interface ILinkPreviewTrigger {
+  authorId: string;
+  content: string;
+}
+
+export interface ILinkPreviewDecision {
+  schedule: boolean;
+  sweepStuckReplies: boolean;
+}
+
+/**
+ * Repair runs in every readable channel, so the decision comes from the message
+ * itself. Link relay bot messages always schedule, even without a URL in their
+ * content, so their stuck interstitial replies still get swept.
+ */
+export function decideLinkPreviewRepair(message: ILinkPreviewTrigger): ILinkPreviewDecision {
+  const sweepStuckReplies: boolean = message.authorId === LINK_RELAY_BOT_USER_ID;
+  return {
+    schedule: sweepStuckReplies || extractFirstUrl(message.content) !== undefined,
+    sweepStuckReplies,
+  };
+}
+
 @Discord()
 export class MessageCreated {
   @On()
@@ -35,8 +58,11 @@ export class MessageCreated {
       }
     }
 
-    const sweepStuckReplies: boolean = message.author.id === LINK_RELAY_BOT_USER_ID;
-    if (sweepStuckReplies || extractFirstUrl(message.content)) {
+    const { schedule, sweepStuckReplies } = decideLinkPreviewRepair({
+      authorId: message.author.id,
+      content: message.content,
+    });
+    if (schedule) {
       void this.postFallbackLinkPreview(message.id, message.channel, sweepStuckReplies);
     }
   }
