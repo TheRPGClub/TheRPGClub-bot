@@ -58,34 +58,12 @@ export type CompletionatorModalKind =
   | "gamedb-manual"
   | "igdb-manual";
 
-export interface ICompletionatorImport {
-  importId: number;
-  userId: string;
-  status: string;
-  totalCount: number;
-  sourceFilename: string | null;
-  testMode: boolean;
-  createdAt: Date;
-  updatedAt: Date;
-}
-
-export interface ICompletionatorItem {
-  itemId: number;
-  importId: number;
-  rowIndex: number;
-  gameTitle: string;
-  platformName: string | null;
-  regionName: string | null;
-  sourceType: string | null;
-  timeText: string | null;
-  completedAt: Date | null;
-  completionType: string | null;
-  playtimeHours: number | null;
-  gameDbGameId: number | null;
-  completionId: number | null;
-  status: string;
-  errorText: string | null;
-}
+export type {
+  ICompletionatorImport,
+  ICompletionatorItem,
+  ImportStatus,
+  ImportItemStatus,
+} from "../../classes/CompletionatorImport.js";
 
 export type IgdbSelectOption = {
   id: number;
