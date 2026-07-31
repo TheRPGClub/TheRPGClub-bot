@@ -67,6 +67,7 @@ export class CompletionatorWorkflowService {
         {
           components: this.uiService.buildCompletionatorComponents({
             headerLines: [
+              ...(session.testMode ? ["**TEST MODE** - nothing was persisted"] : []),
               `## Completionator Import #${session.importId}`,
               "Import completed.",
             ],
@@ -82,13 +83,15 @@ export class CompletionatorWorkflowService {
         );
         completionatorThreadContexts.delete(key);
       }
-      const backupReason = `completionator-import-${session.importId}`;
-      void runDockerVolumeBackup({ reason: backupReason }).catch((error) => {
-        logError("completionator-workflow/runDockerVolumeBackup", {
-          importId: session.importId,
-          error,
+      if (!session.testMode) {
+        const backupReason = `completionator-import-${session.importId}`;
+        void runDockerVolumeBackup({ reason: backupReason }).catch((error) => {
+          logError("completionator-workflow/runDockerVolumeBackup", {
+            importId: session.importId,
+            error,
+          });
         });
-      });
+      }
       return;
     }
 
