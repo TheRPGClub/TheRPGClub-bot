@@ -1,4 +1,4 @@
-import sharp from "sharp";
+import sharp, { type OverlayOptions } from "sharp";
 import { requirePositiveInt } from "../utilities/ValidationUtils.js";
 
 export type VoteImageType = "GOTM" | "NR-GOTM";
@@ -247,7 +247,7 @@ export async function composeVoteImage(params: IComposeVoteImageParams): Promise
     ? Math.max(cols, usableWidth - rowStaggerAmount * 2)
     : usableWidth;
 
-  const composites: sharp.OverlayOptions[] = [];
+  const composites: OverlayOptions[] = [];
   const isSixGrid = orderedCovers.length === 6;
   const isTenGrid = orderedCovers.length === 10;
   const isRowAlignedGrid = isSixGrid || isTenGrid;
