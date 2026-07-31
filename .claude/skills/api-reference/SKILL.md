@@ -108,7 +108,7 @@ PATCH   /api/v1/collection_csv_imports/{id}  # Update a collection CSV import jo
 GET     /api/v1/collection_csv_imports/{id}/items/next_pending  # Get the next pending import item
 GET     /api/v1/collection_csv_imports/{id}/summary  # Summarize a collection CSV import job
 POST    /api/v1/users/{user_id}/collection_csv_imports  # Start a collection CSV import job
-  data: { source_file_name, source_file_size, template_version, items }
+  data: { source_file_name, source_file_size, template_version, items, test_mode }
 GET     /api/v1/users/{user_id}/collection_csv_imports/active  # Get the user's active or paused import
 ```
 
@@ -146,7 +146,7 @@ PATCH   /api/v1/completionator_imports/{id}  # Update a Completionator import jo
 GET     /api/v1/completionator_imports/{id}/items/next_pending  # Get the next pending import item
 GET     /api/v1/completionator_imports/{id}/summary  # Summarize a Completionator import job
 POST    /api/v1/users/{user_id}/completionator_imports  # Start a Completionator import job
-  data: { source_filename, items }
+  data: { source_filename, items, test_mode }
 GET     /api/v1/users/{user_id}/completionator_imports/active  # Get the user's active or paused import
 ```
 
