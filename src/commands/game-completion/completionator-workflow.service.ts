@@ -34,10 +34,8 @@ import { STANDARD_PLATFORM_IDS } from "../../config/standardPlatforms.js";
 import { igdbService } from "../../services/IGDB/IgdbService.js";
 import { importGameFromIgdb } from "./completionator-parser.service.js";
 import { searchGameDbWithFallback } from "./completionator-parser.service.js";
-import { runDockerVolumeBackup } from "../../services/DockerVolumeBackupService.js";
 import { buildImportTextContainer } from "../imports/import-scaffold.service.js";
 import { canSafeReply, safeDeferReply, safeDeferUpdate } from "../../functions/InteractionUtils.js";
-import { logError } from "../../utilities/LogUtils.js";
 import { truncateDescription } from "../../config/textLimits.js";
 import { safeIgnore } from "../../utilities/AsyncUtils.js";
 import GamePlatformRegionService from "../../classes/GamePlatformRegionService.js";
@@ -67,6 +65,7 @@ export class CompletionatorWorkflowService {
         {
           components: this.uiService.buildCompletionatorComponents({
             headerLines: [
+              ...(session.testMode ? ["**TEST MODE** - nothing was persisted"] : []),
               `## Completionator Import #${session.importId}`,
               "Import completed.",
             ],
@@ -82,13 +81,6 @@ export class CompletionatorWorkflowService {
         );
         completionatorThreadContexts.delete(key);
       }
-      const backupReason = `completionator-import-${session.importId}`;
-      void runDockerVolumeBackup({ reason: backupReason }).catch((error) => {
-        logError("completionator-workflow/runDockerVolumeBackup", {
-          importId: session.importId,
-          error,
-        });
-      });
       return;
     }
 

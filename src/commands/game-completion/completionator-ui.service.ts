@@ -66,6 +66,7 @@ export class CompletionatorUiService {
     const platformLabel = formatPlatformDisplayName(item.platformName) ?? "Unknown";
     const completedLabel = item.completedAt ? formatTableDate(item.completedAt) : "Unknown";
     return [
+      ...(session.testMode ? ["**TEST MODE** - nothing will be persisted"] : []),
       `## Completionator Import #${session.importId}`,
       `Row ${item.rowIndex}/${session.totalCount}`,
       "",

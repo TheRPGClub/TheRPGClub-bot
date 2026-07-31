@@ -750,10 +750,17 @@ export class GameCompletionCommands {
       type: ApplicationCommandOptionType.Attachment,
     })
     file: Attachment | undefined,
+    @SlashOption({
+      description: "Run in test mode (no data is persisted)",
+      name: "test_mode",
+      required: false,
+      type: ApplicationCommandOptionType.Boolean,
+    })
+    testMode: boolean | undefined,
     interaction: CommandInteraction,
   ): Promise<void> {
     const { handleCompletionatorImport } = await import("./game-completion/completionator-import-command.service.js");
-    await handleCompletionatorImport(interaction, action, file);
+    await handleCompletionatorImport(interaction, action, file, testMode);
   }
    
   @SelectMenuComponent({ id: /^completion-platform-select:.+/ })
