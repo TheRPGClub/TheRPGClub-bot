@@ -6,6 +6,7 @@ import {
   ThumbnailBuilder,
 } from "@discordjs/builders";
 import { COMPONENTS_V2_FLAG } from "../config/flags.js";
+import { DEV_ROLE_ID } from "../config/roles.js";
 import { truncateWithEllipsis } from "../utilities/ValidationUtils.js";
 
 export type EmbedField = { name: string; value: string };
@@ -53,6 +54,24 @@ export function buildTextReply(
   return {
     components: [buildTextContainer(content)],
     flags: buildComponentsV2Flags(isEphemeral),
+  };
+}
+
+/**
+ * Same shape as buildTextReply, but permits the dev role mention that
+ * formatApiError appends to every request/response failure block.
+ */
+export function buildErrorReply(
+  content: string,
+  isEphemeral: boolean,
+): {
+  components: ContainerBuilder[];
+  flags: number;
+  allowedMentions: { roles: string[] };
+} {
+  return {
+    ...buildTextReply(content, isEphemeral),
+    allowedMentions: { roles: [DEV_ROLE_ID] },
   };
 }
 

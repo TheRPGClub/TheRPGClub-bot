@@ -35,7 +35,7 @@ import {
   safeReply,
   sanitizeUserInput,
 } from "../functions/InteractionUtils.js";
-import { buildTextReply } from "../functions/ComponentsV2Utils.js";
+import { buildErrorReply, buildTextReply } from "../functions/ComponentsV2Utils.js";
 import { toUnixTimestamp } from "../functions/DateFormatUtils.js";
 import { showGameProfileFromNomination } from "./gamedb.command.js";
 import { isPositiveInt } from "../utilities/ValidationUtils.js";
@@ -210,7 +210,7 @@ export class NominateCommand {
     } catch (error: unknown) {
       await safeReply(
         interaction,
-        buildTextReply(buildApiErrorMessage("Could not save your nomination.", error), true),
+        buildErrorReply(buildApiErrorMessage("Could not save your nomination.", error), true),
       );
     }
   }
@@ -294,7 +294,7 @@ export class NominateCommand {
     } catch (error: unknown) {
       await safeReply(
         interaction,
-        buildTextReply(buildApiErrorMessage("Could not delete your nomination.", error), true),
+        buildErrorReply(buildApiErrorMessage("Could not delete your nomination.", error), true),
       );
     }
   }

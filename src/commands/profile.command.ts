@@ -34,6 +34,7 @@ import {
 import {
   buildComponentsV2Flags,
   buildTextContainer,
+  buildErrorReply,
   buildTextReply,
   buildTitledContainer,
   safeV2TextContent,
@@ -47,6 +48,7 @@ import {
 } from "../functions/DateFormatUtils.js";
 import { truncateLabel } from "../config/textLimits.js";
 import { chunk } from "../utilities/ArrayUtils.js";
+import { formatApiError } from "../utilities/ApiErrorUtils.js";
 
 export { formatDiscordTimestamp, formatPlaytimeHours, formatTableDate };
 
@@ -87,21 +89,6 @@ type ApiUserListItem = {
   global_name: string | null;
   is_bot: boolean;
 };
-
-function formatApiError(
-  method: string,
-  url: string,
-  requestBody: unknown,
-  status: number | undefined,
-  responseBody: unknown,
-): string {
-  const req = JSON.stringify(
-    { method: method.toUpperCase(), url, body: requestBody ?? null },
-    null, 2,
-  );
-  const res = JSON.stringify({ status: status ?? null, body: responseBody ?? null }, null, 2);
-  return `Request:\n\`\`\`json\n${req}\n\`\`\`\nResponse:\n\`\`\`json\n${res}\n\`\`\``;
-}
 
 let socialPlatformCache: ApiSocialPlatform[] | null = null;
 
@@ -647,7 +634,7 @@ export class ProfileCommand {
         );
         await safeReply(
           interaction,
-          buildTextReply(`Could not fetch existing socials:\n${detail}`, true),
+          buildErrorReply(`Could not fetch existing socials:\n${detail}`, true),
         );
         return;
       }

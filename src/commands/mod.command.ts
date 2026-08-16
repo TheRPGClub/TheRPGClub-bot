@@ -33,6 +33,7 @@ import {
   sanitizeUserInput,
 } from "../functions/InteractionUtils.js";
 import {
+  buildErrorReply,
   buildTextReply,
   buildTitledContainer,
   buildFieldsText,
@@ -287,7 +288,7 @@ export class Mod {
         `Failed to re-render the preview for \`${targetId}\``,
         error,
       );
-      await safeReply(interaction, buildTextReply(message, true));
+      await safeReply(interaction, buildErrorReply(message, true));
     }
   }
 

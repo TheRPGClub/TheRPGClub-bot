@@ -1,5 +1,10 @@
 import axios from "axios";
 
+import { DEV_ROLE_ID } from "../config/roles.js";
+
+/** Mention appended to every user-facing request/response failure block. */
+export const DEV_PING = `<@&${DEV_ROLE_ID}>`;
+
 export function formatApiError(
   method: string,
   url: string,
@@ -12,7 +17,10 @@ export function formatApiError(
     null, 2,
   );
   const res = JSON.stringify({ status: status ?? null, body: responseBody ?? null }, null, 2);
-  return `Request:\n\`\`\`json\n${req}\n\`\`\`\nResponse:\n\`\`\`json\n${res}\n\`\`\``;
+  return (
+    `Request:\n\`\`\`json\n${req}\n\`\`\`\n` +
+    `Response:\n\`\`\`json\n${res}\n\`\`\`\n${DEV_PING}`
+  );
 }
 
 export function tryParseJson(raw: string | null | undefined): unknown {
@@ -37,7 +45,7 @@ export function buildDiscordErrorMessage(label: string, err: unknown): string {
   const restError = err as IDiscordRestError;
   if (typeof restError?.url !== "string" || typeof restError?.method !== "string") {
     const msg = err instanceof Error ? err.message : String(err);
-    return `${label}: ${msg}`;
+    return `${label}: ${msg}\n${DEV_PING}`;
   }
   return `${label}\n${formatApiError(
     restError.method,
@@ -51,7 +59,7 @@ export function buildDiscordErrorMessage(label: string, err: unknown): string {
 export function buildApiErrorMessage(label: string, err: unknown): string {
   if (!axios.isAxiosError(err)) {
     const msg = err instanceof Error ? err.message : String(err);
-    return `${label}: ${msg}`;
+    return `${label}: ${msg}\n${DEV_PING}`;
   }
   return `${label}\n${formatApiError(
     err.config?.method ?? "?",
