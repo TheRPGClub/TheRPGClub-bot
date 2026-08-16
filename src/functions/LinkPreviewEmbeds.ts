@@ -11,7 +11,7 @@ import { COLOR_PRIMARY } from "../config/colors.js";
 import { logWarn } from "../utilities/LogUtils.js";
 import { safeV2TextContent } from "./ComponentsV2Utils.js";
 
-const URL_PATTERN = /https?:\/\/[^\s<>"]+/;
+const URL_PATTERN = /https?:\/\/[^\s<>"]+/g;
 const FETCH_TIMEOUT_MS = 8000;
 const DESCRIPTION_MAX_WORDS = 150;
 const MAX_GALLERY_IMAGES = 10;
@@ -106,8 +106,40 @@ export interface ILinkPreview {
   files: AttachmentBuilder[];
 }
 
+/**
+ * Discord's own hosts. Message jump links, invites, CDN attachments and the
+ * like already render natively, and the scraper only ever gets a login wall
+ * back from them, so they never earn a preview.
+ */
+export const BLOCKED_PREVIEW_HOSTS: readonly string[] = [
+  "discord.com",
+  "discordapp.com",
+  "discordapp.net",
+  "discord.gg",
+  "discord.media",
+  "discord.new",
+  "discordstatus.com",
+];
+
+/** True when `url` points at a host the preview builder must never scrape. */
+export function isBlockedPreviewUrl(url: string): boolean {
+  let hostname: string;
+  try {
+    hostname = normalizeHostname(new URL(url).hostname);
+  } catch {
+    return false;
+  }
+  return BLOCKED_PREVIEW_HOSTS.some(
+    (blocked) => hostname === blocked || hostname.endsWith(`.${blocked}`),
+  );
+}
+
+/** First URL in `content` that is eligible for a preview, ignoring blocked hosts. */
 export function extractFirstUrl(content: string): string | undefined {
-  return content.match(URL_PATTERN)?.[0];
+  for (const match of content.matchAll(URL_PATTERN)) {
+    if (!isBlockedPreviewUrl(match[0])) return match[0];
+  }
+  return undefined;
 }
 
 const TITLE_LINE_PATTERN = /^\*\*\[(.+)\]\((\S+)\)\*\*$/;

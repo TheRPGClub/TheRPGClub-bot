@@ -27,6 +27,16 @@ test("skips repair for a human message with no URL", () => {
   assert.equal(decision.sweepStuckReplies, false);
 });
 
+test("skips repair for a human message whose only link is a Discord jump link", () => {
+  const decision = decideLinkPreviewRepair({
+    authorId: HUMAN_USER_ID,
+    content: "https://discord.com/channels/191941851757019136/360819470836695042/742474880666173503",
+  });
+
+  assert.equal(decision.schedule, false);
+  assert.equal(decision.sweepStuckReplies, false);
+});
+
 test("skips repair for an empty message body", () => {
   const decision = decideLinkPreviewRepair({ authorId: HUMAN_USER_ID, content: "" });
 
