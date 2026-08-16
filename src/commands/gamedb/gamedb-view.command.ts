@@ -25,7 +25,11 @@ import { getHltbCacheByGameId, upsertHltbCache } from "../../classes/HltbCache.j
 import Game from "../../classes/Game.js";
 import { apiPost } from "../../services/RpgClubApiClient.js";
 import { searchHltb } from "../../scripts/SearchHltb.js";
-import { buildTextContainer, buildTextReply } from "../../functions/ComponentsV2Utils.js";
+import {
+  buildErrorReply,
+  buildTextContainer,
+  buildTextReply,
+} from "../../functions/ComponentsV2Utils.js";
 import {
   autocompleteGameDbViewTitle,
   buildComponentsV2Flags,
@@ -102,7 +106,7 @@ export class GameDbViewCommand {
         );
       } catch (err) {
         await safeReply(interaction, {
-          ...buildTextReply(buildApiErrorMessage("Failed to import game.", err), true),
+          ...buildErrorReply(buildApiErrorMessage("Failed to import game.", err), true),
           __forceFollowUp: true,
         });
         return;
@@ -299,7 +303,7 @@ export class GameDbViewCommand {
       logError("gamedb view.add_backlog_failed", err);
       await safeReply(
         interaction,
-        buildTextReply(buildApiErrorMessage("Failed to add backlog entry.", err), true),
+        buildErrorReply(buildApiErrorMessage("Failed to add backlog entry.", err), true),
       );
     }
   }

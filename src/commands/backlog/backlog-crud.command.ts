@@ -20,7 +20,7 @@ import {
   sanitizeUserInput,
 } from "../../functions/InteractionUtils.js";
 import { resolveCollectionGameForAdd } from "../collection/collection-game-resolve.utils.js";
-import { buildTextReply } from "../../functions/ComponentsV2Utils.js";
+import { buildErrorReply, buildTextReply } from "../../functions/ComponentsV2Utils.js";
 import { createIgdbSession } from "../../services/IGDB/IgdbSelectService.js";
 import {
   autocompleteBacklogEntry,
@@ -114,7 +114,7 @@ export class BacklogCrudCommand {
             logError("backlog add.igdb_import_failed", err);
             const detail = buildApiErrorMessage("Failed to import from IGDB and add backlog entry.", err);
             await safeReply(selectionInteraction, {
-              ...buildTextReply(detail, true),
+              ...buildErrorReply(detail, true),
               __forceFollowUp: true,
             });
           }
@@ -145,7 +145,7 @@ export class BacklogCrudCommand {
       logError("backlog add.add_entry_failed", err);
       await safeReply(
         interaction,
-        buildTextReply(buildApiErrorMessage("Failed to add backlog entry.", err), true),
+        buildErrorReply(buildApiErrorMessage("Failed to add backlog entry.", err), true),
       );
     }
   }
@@ -246,7 +246,7 @@ export class BacklogCrudCommand {
       logError("backlog edit.update_entry_failed", err);
       await safeReply(
         interaction,
-        buildTextReply(buildApiErrorMessage("Failed to update backlog entry.", err), true),
+        buildErrorReply(buildApiErrorMessage("Failed to update backlog entry.", err), true),
       );
     }
   }

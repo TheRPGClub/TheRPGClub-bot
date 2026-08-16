@@ -21,6 +21,7 @@ import type { IGame } from "../../types/GameTypes.js";
 import Game from "../../classes/Game.js";
 import {
   buildTextContainer,
+  buildErrorReply,
   buildTextReply,
   safeV2TextContent,
 } from "../../functions/ComponentsV2Utils.js";
@@ -148,7 +149,7 @@ export async function addGameToDatabase(
     );
   } catch (err) {
     await safeReply(interaction, {
-      ...buildTextReply(buildApiErrorMessage("Failed to import game.", err), false),
+      ...buildErrorReply(buildApiErrorMessage("Failed to import game.", err), false),
       __forceFollowUp: true,
     });
     return;
@@ -265,7 +266,7 @@ export async function handleNoResults(
     });
   } catch (err: any) {
     await safeReply(interaction, {
-      ...buildTextReply(
+      ...buildErrorReply(
         buildApiErrorMessage(`Auto-import failed for "${query}".`, err),
         false,
       ),
@@ -499,7 +500,7 @@ export class GameDbAddCommand {
 
     } catch (error: any) {
       await safeReply(interaction, {
-        ...buildTextReply(
+        ...buildErrorReply(
           buildApiErrorMessage(`Failed to search IGDB for "${title}".`, error),
           false,
         ),
