@@ -7,6 +7,7 @@ import Starboard from "../classes/Starboard.js";
 import { formatTimestampWithDay } from "../utilities/DiscordLogUtils.js";
 import { QUOTABLES_CHANNEL_ID } from "../config/channels.js";
 import { safeIgnore } from "../utilities/AsyncUtils.js";
+import { logError } from "../utilities/LogUtils.js";
 import {
   buildTitledContainer,
   buildContainerSend,
@@ -93,12 +94,19 @@ export class StarboardHandler {
       );
     }
 
-    await quotablesChannel.send({ ...buildContainerSend(container) });
-    await Starboard.insert({
-      messageId: message.id,
-      channelId: message.channelId,
-      authorId: message.author.id,
-      content,
-    });
+    const posted = await quotablesChannel.send({ ...buildContainerSend(container) });
+    try {
+      await Starboard.insert({
+        messageId: message.id,
+        channelId: message.channelId,
+        starboardMessageId: posted.id,
+        authorId: message.author.id,
+        starCount: count,
+      });
+    } catch (error: unknown) {
+      // Without the record every later star reposts the quote, so make the
+      // failure loud instead of letting it surface as duplicate posts.
+      logError("Starboard.insert", error);
+    }
   }
 }
