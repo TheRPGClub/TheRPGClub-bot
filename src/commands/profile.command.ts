@@ -33,8 +33,9 @@ import {
 } from "../functions/InteractionUtils.js";
 import {
   buildComponentsV2Flags,
-  buildTextContainer,
   buildErrorReply,
+  buildMaskedLink,
+  buildTextContainer,
   buildTextReply,
   buildTitledContainer,
   safeV2TextContent,
@@ -249,7 +250,7 @@ ${roles}`);
 
   for (const social of user.socials) {
     const value = social.display_text && social.url
-      ? `[${social.display_text}](${social.url})`
+      ? buildMaskedLink(social.display_text, social.url)
       : (social.display_text ?? social.url);
     if (value) {
       blocks.push(`**${social.social_platform.label}**

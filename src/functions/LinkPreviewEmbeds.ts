@@ -9,7 +9,7 @@ import {
 } from "@discordjs/builders";
 import { COLOR_PRIMARY } from "../config/colors.js";
 import { logWarn } from "../utilities/LogUtils.js";
-import { safeV2TextContent } from "./ComponentsV2Utils.js";
+import { buildMaskedLink, safeV2TextContent, unescapeMaskedLinkText } from "./ComponentsV2Utils.js";
 
 const URL_PATTERN = /https?:\/\/[^\s<>"]+/g;
 const FETCH_TIMEOUT_MS = 8000;
@@ -145,14 +145,14 @@ export function extractFirstUrl(content: string): string | undefined {
 const TITLE_LINE_PATTERN = /^\*\*\[(.+)\]\((\S+)\)\*\*$/;
 
 function buildTitleLine(title: string, url: string): string {
-  return `**[${title}](${url})**`;
+  return `**${buildMaskedLink(title, url)}**`;
 }
 
 /** Pull the preview title back out of an already-rendered container's text displays. */
 export function extractPreviewTitle(textContents: readonly string[]): string | undefined {
   for (const content of textContents) {
     const match = content.trim().match(TITLE_LINE_PATTERN);
-    if (match) return match[1];
+    if (match) return unescapeMaskedLinkText(match[1]);
   }
   return undefined;
 }
@@ -255,7 +255,7 @@ export async function fetchOpenGraphData(url: string): Promise<IOpenGraphData | 
 export async function buildLinkPreviewContainer(data: IOpenGraphData): Promise<ILinkPreview> {
   const container = new ContainerBuilder().setAccentColor(COLOR_PRIMARY);
 
-  const siteLine = `[${data.siteName}](${data.homepageUrl})`;
+  const siteLine = buildMaskedLink(data.siteName, data.homepageUrl);
   container.addTextDisplayComponents(
     new TextDisplayBuilder().setContent(safeV2TextContent(siteLine, 500)),
   );

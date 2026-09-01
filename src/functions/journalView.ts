@@ -7,6 +7,7 @@ import {
 import { ContainerBuilder } from "@discordjs/builders";
 import Member, { type ICompletionRecord } from "../classes/Member.js";
 import Game from "../classes/Game.js";
+import { buildMaskedLink } from "./ComponentsV2Utils.js";
 import Thread from "../classes/Thread.js";
 import { formatTableDate, formatPlaytimeHours } from "./DateFormatUtils.js";
 import { buildComponentsV2EditFlags, buildContentContainer } from "./ComponentsV2Utils.js";
@@ -111,7 +112,7 @@ export async function buildJournalView(options: IJournalViewOptions): Promise<{
   const threadId = threadIds[0] ?? null;
   const gameTitlePart =
     guildId && threadId
-      ? `[${gameTitle}](https://discord.com/channels/${guildId}/${threadId})`
+      ? buildMaskedLink(gameTitle, `https://discord.com/channels/${guildId}/${threadId}`)
       : gameTitle;
 
   let statusLine = "";

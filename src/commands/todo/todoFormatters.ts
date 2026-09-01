@@ -5,6 +5,7 @@ import { formatDiscordTimestamp } from "../../functions/DateFormatUtils.js";
 import { truncateWithEllipsis } from "../../utilities/ValidationUtils.js";
 import { renderTodoContent } from "./todoRenderers.js";
 import { MAX_COMMENT_PREVIEW_LENGTH } from "./todoTypes.js";
+import { buildMaskedLink } from "../../functions/ComponentsV2Utils.js";
 
 export function buildIssueListTitle(repo: TodoRepoCode): string {
   const target = getTodoRepo(repo);
@@ -36,7 +37,7 @@ export function formatIssueLink(issue: IGithubIssue): string {
   const labelText = issue.labels.length ? ` [${issue.labels.join(", ")}]` : "";
   const linkText = `#${issue.number}: ${issue.title}`;
   if (issue.htmlUrl) {
-    return `[${linkText}](${issue.htmlUrl})${labelText}`;
+    return `${buildMaskedLink(linkText, issue.htmlUrl)}${labelText}`;
   }
   return `${linkText}${labelText}`;
 }

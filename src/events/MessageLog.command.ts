@@ -6,8 +6,9 @@ import { formatTimestampWithDay, resolveLogChannel } from "../utilities/DiscordL
 import { COLOR_INFO, COLOR_ERROR } from "../config/colors.js";
 import { truncateWithEllipsis } from "../utilities/ValidationUtils.js";
 import {
-  buildTitledContainer,
   buildContainerSend,
+  buildMaskedLink,
+  buildTitledContainer,
 } from "../functions/ComponentsV2Utils.js";
 
 const MAX_FIELD_LENGTH = 1000;
@@ -86,15 +87,13 @@ export class MessageLog {
     const channelLabel = `#${channelName}`;
     const beforeValue = truncate(beforeText || "No text content.");
     const afterValue = truncate(afterText || "No text content.");
-    const linkLine = jumpUrl ? `[${channelLabel}](${jumpUrl})` : "";
-    const description =
-      `**Before:** ${beforeValue}\n**+After:** ${afterValue}` +
-      (linkLine ? `\n${linkLine}` : "");
+    const linkLine = jumpUrl ? buildMaskedLink(channelLabel, jumpUrl) : "";
+    const description = `**Before:** ${beforeValue}\n**+After:** ${afterValue}`;
     const footer = `ID: ${resolvedNew.id} • ${formatTimestampWithDay(resolvedNew.editedTimestamp)}`;
     const container = buildTitledContainer(
       "Message edited",
       truncate(description, MAX_DESCRIPTION_LENGTH),
-      { color: COLOR_INFO, footer },
+      { color: COLOR_INFO, footer, detail: linkLine || undefined },
     );
 
     await logChannel.send({ ...buildContainerSend(container) });

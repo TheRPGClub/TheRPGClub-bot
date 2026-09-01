@@ -1,5 +1,6 @@
 import { type IMemberNowPlayingEntry } from "../classes/Member.js";
 import { formatPlatformDisplayName } from "./PlatformDisplay.js";
+import { buildMaskedLink } from "./ComponentsV2Utils.js";
 
 export function buildNowPlayingSortStateToken(entryCount: number): string {
   return Array.from({ length: entryCount }, (_, index) => index.toString(36)).join("");
@@ -90,7 +91,8 @@ export function formatEntry(
     ? `${entry.title} (${platformLabel})`
     : entry.title;
   if (entry.threadId && guildId) {
-    return `[${baseTitle}](https://discord.com/channels/${guildId}/${entry.threadId})`;
+    const threadUrl = `https://discord.com/channels/${guildId}/${entry.threadId}`;
+    return buildMaskedLink(baseTitle, threadUrl);
   }
   return baseTitle;
 }

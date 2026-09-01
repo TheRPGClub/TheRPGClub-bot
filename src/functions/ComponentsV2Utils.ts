@@ -93,6 +93,25 @@ export function buildContainerSend(
   };
 }
 
+/**
+ * Link text is often user- or website-controlled, and a bare `]` there closes
+ * the bracket early so the rest of the string can render a link whose visible
+ * text and real target disagree. Escaping keeps the text inert; parentheses in
+ * the URL are percent-encoded so they cannot terminate the target early.
+ */
+export function escapeMaskedLinkText(text: string): string {
+  return text.replace(/([\\[\]()])/g, "\\$1");
+}
+
+export function unescapeMaskedLinkText(text: string): string {
+  return text.replace(/\\([\\[\]()])/g, "$1");
+}
+
+export function buildMaskedLink(text: string, url: string): string {
+  const safeUrl = url.split("(").join("%28").split(")").join("%29");
+  return `[${escapeMaskedLinkText(text)}](${safeUrl})`;
+}
+
 export function buildAccentContainer(
   content: string,
   color?: number,
@@ -107,13 +126,21 @@ export function buildAccentContainer(
 export function buildTitledContainer(
   title: string,
   body: string,
-  options?: { color?: number; footer?: string },
+  options?: { color?: number; footer?: string; detail?: string },
 ): ContainerBuilder {
   const container = new ContainerBuilder().addTextDisplayComponents(
     new TextDisplayBuilder().setContent(
       safeV2TextContent(`# ${title}\n${body}`, 3500),
     ),
   );
+  // A metadata line (source, jump link) gets its own text display so quoted
+  // user content cannot swallow it into a code block and body truncation
+  // cannot cut it in half.
+  if (options?.detail) {
+    container.addTextDisplayComponents(
+      new TextDisplayBuilder().setContent(safeV2TextContent(options.detail, 500)),
+    );
+  }
   if (options?.footer) {
     container.addTextDisplayComponents(
       new TextDisplayBuilder().setContent(

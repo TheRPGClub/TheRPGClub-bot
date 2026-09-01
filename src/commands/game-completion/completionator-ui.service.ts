@@ -44,6 +44,7 @@ import {
 } from "../imports/import-scaffold.service.js";
 import {
   buildComponentsV2Flags,
+  buildMaskedLink,
   buildTextContainer,
   safeV2TextContent,
 } from "../../functions/ComponentsV2Utils.js";
@@ -189,7 +190,7 @@ export class CompletionatorUiService {
     const igdbSearchUrl = `https://www.igdb.com/search?utf8=%E2%9C%93&type=1&q=${
       encodeURIComponent(params.searchTitle)
     }`;
-    const igdbLink = `[Search IGDB for ${params.searchTitle}](${igdbSearchUrl})`;
+    const igdbLink = buildMaskedLink(`Search IGDB for ${params.searchTitle}`, igdbSearchUrl);
     const container = buildTextContainer("### Import Game From IGDB");
     for (const row of params.igdbRows) {
       container.addActionRowComponents(row.toJSON());
