@@ -79,10 +79,11 @@ export class StarboardHandler {
 
     const content = getMessageContent(message);
     const imageUrl = getImageUrl(message);
-    const channelName = (message.channel as { name?: string } | null)?.name ?? "channel";
-    const channelLabel = `#${channelName}`;
     const authorName = message.author.globalName ?? message.author.username;
-    const body = `${content}\n\n**Source:** [${channelLabel}](${message.url})`;
+    // Masked links render as literal text here, so the jump link is posted raw
+    // and the channel as a native mention.
+    const source = `<#${message.channelId}> ${message.url}`;
+    const body = `${content}\n\n**Source:** ${source}`;
     const container = buildTitledContainer(authorName, body, {
       color: COLOR_DARK,
       footer: `${message.id} • ${formatTimestampWithDay(message.createdTimestamp)}`,
