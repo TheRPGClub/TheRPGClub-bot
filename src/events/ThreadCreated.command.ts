@@ -9,8 +9,9 @@ import { sleep } from "../utilities/DelayUtils.js";
 import { DISCORD_EMBED_FIELD_VALUE_MAX } from "../config/textLimits.js";
 import { logError } from "../utilities/LogUtils.js";
 import {
-  buildTitledContainer,
   buildContainerSend,
+  buildMaskedLink,
+  buildTitledContainer,
 } from "../functions/ComponentsV2Utils.js";
 
 @Discord()
@@ -132,7 +133,9 @@ export class ThreadCreated {
       }
 
       const threadUrl = `https://discord.com/channels/${thread.guildId}/${thread.id}`;
-      const authorLink = authorProfileUrl ? `[${authorName}](${authorProfileUrl})` : authorName;
+      const authorLink = authorProfileUrl
+        ? buildMaskedLink(authorName, authorProfileUrl)
+        : authorName;
       const bodyParts: string[] = [
         `New "Now Playing" Forum Post ([link](${threadUrl}))`,
         `Posted by ${authorLink}`,

@@ -50,6 +50,7 @@ import { renderUsernameWithEmoji } from "../services/UserEmojiService.js";
 import { buildJournalView } from "../functions/journalView.js";
 import {
   buildComponentsV2Flags,
+  buildMaskedLink,
   buildTextContainer,
   buildTextReply,
   safeV2TextContent,
@@ -485,7 +486,10 @@ export class GameJournalCommand {
       const threadId = threadIds[0] ?? null;
       const gameTitlePart = rawGameTitle
         ? (interaction.guildId && threadId
-          ? `[${rawGameTitle}](https://discord.com/channels/${interaction.guildId}/${threadId})`
+          ? buildMaskedLink(
+            rawGameTitle,
+            `https://discord.com/channels/${interaction.guildId}/${threadId}`,
+          )
           : rawGameTitle)
         : null;
       const targetUser = member
@@ -706,7 +710,10 @@ export class GameJournalCommand {
     const threadId = threadIds[0] ?? null;
     const gameTitlePart = rawGameTitle
       ? (interaction.guildId && threadId
-        ? `[${rawGameTitle}](https://discord.com/channels/${interaction.guildId}/${threadId})`
+        ? buildMaskedLink(
+            rawGameTitle,
+            `https://discord.com/channels/${interaction.guildId}/${threadId}`,
+          )
         : rawGameTitle)
       : null;
     const fetchedUser = targetUserId !== "0"

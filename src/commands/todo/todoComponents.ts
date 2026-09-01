@@ -6,6 +6,7 @@ import {
 import { ContainerBuilder, TextDisplayBuilder } from "@discordjs/builders";
 import type { IGithubIssue, IGithubIssueComment } from "../../services/GithubIssuesService.js";
 import { getTodoRepo, TODO_REPO_CODES } from "../../config/repos.js";
+import { buildMaskedLink } from "../../functions/ComponentsV2Utils.js";
 import { buildTextReply, safeV2TextContent } from "../../functions/ComponentsV2Utils.js";
 import {
   buildActionButton,
@@ -227,7 +228,7 @@ export function buildIssueViewComponents(
   const repoLabel = `${repoTarget.owner}/${repoTarget.name}`;
   addTextDisplayWithBudget(container, textBudget, `-# ${repoLabel}`);
   const titleText = issue.htmlUrl
-    ? `## [${formatIssueTitle(issue)}](${issue.htmlUrl})`
+    ? `## ${buildMaskedLink(formatIssueTitle(issue), issue.htmlUrl)}`
     : `## ${formatIssueTitle(issue)}`;
   addTextDisplayWithBudget(container, textBudget, titleText);
 

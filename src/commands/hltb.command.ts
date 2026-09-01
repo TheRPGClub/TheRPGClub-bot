@@ -11,10 +11,11 @@ import {
   sanitizeUserInput,
 } from "../functions/InteractionUtils.js";
 import {
+  buildComponentsV2Flags,
+  buildFieldsText,
+  buildMaskedLink,
   buildTextReply,
   buildTitledContainer,
-  buildFieldsText,
-  buildComponentsV2Flags,
 } from "../functions/ComponentsV2Utils.js";
 import {
   formatGameTitleWithYear,
@@ -110,7 +111,7 @@ async function outputHltbResultsAsEmbed(
     if (hltb_result.completionist) fields.push({ name: 'Completionist', value: hltb_result.completionist });
 
     const titleText = hltb_result.url
-      ? `[How Long to Beat ${hltb_result.name}](${hltb_result.url})`
+      ? buildMaskedLink(`How Long to Beat ${hltb_result.name}`, hltb_result.url)
       : `How Long to Beat ${hltb_result.name}`;
     const bodyParts = [`*[HowLongToBeat™](https://howlongtobeat.com)*`];
     if (fields.length) bodyParts.push(buildFieldsText(fields));

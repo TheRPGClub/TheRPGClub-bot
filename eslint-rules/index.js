@@ -3260,6 +3260,53 @@ export default {
         };
       },
     },
+    "escape-masked-link-text": {
+      meta: {
+        type: "problem",
+        docs: {
+          description:
+            "Require buildMaskedLink() when a masked link's text is interpolated.",
+        },
+        schema: [],
+        messages: {
+          useBuildMaskedLink:
+            "Build this masked link with buildMaskedLink() from ComponentsV2Utils. Interpolating unescaped text into `[text](url)` lets a `]` in that text close the bracket early and render a link whose visible text and real target disagree.",
+        },
+      },
+      create(context) {
+        const MARKER_START = "\uE000";
+        const MARKER_END = "\uE001";
+        const isEscapedText = (node) =>
+          node &&
+          node.type === "CallExpression" &&
+          node.callee.type === "Identifier" &&
+          node.callee.name === "escapeMaskedLinkText";
+        return {
+          TemplateLiteral(node) {
+            let assembled = "";
+            node.quasis.forEach((quasi, index) => {
+              assembled += quasi.value.cooked ?? quasi.value.raw;
+              if (index < node.expressions.length) {
+                assembled += `${MARKER_START}${index}${MARKER_END}`;
+              }
+            });
+            const linkPattern = /\[([^\]]*)\]\(/g;
+            let match;
+            while ((match = linkPattern.exec(assembled)) !== null) {
+              const markers = [...match[1].matchAll(/\uE000(\d+)\uE001/g)];
+              if (markers.length === 0) continue;
+              const unescaped = markers.some(
+                (marker) => !isEscapedText(node.expressions[Number(marker[1])]),
+              );
+              if (unescaped) {
+                context.report({ node, messageId: "useBuildMaskedLink" });
+                return;
+              }
+            }
+          },
+        };
+      },
+    },
     "entry-id-from-api-entry-id": {
       meta: {
         type: "problem",

@@ -121,6 +121,7 @@ export default [
       "local/custom-id-builder-matches-handler": "error",
       "local/split-long-import": "error",
       "local/entry-id-from-api-entry-id": "error",
+      "local/escape-masked-link-text": "error",
     },
   },
   {

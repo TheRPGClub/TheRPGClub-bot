@@ -18,7 +18,11 @@ import {
 } from "@discordjs/builders";
 import { SeparatorSpacingSize } from "discord-api-types/v10";
 import { safeReply } from "../../functions/InteractionUtils.js";
-import { buildTextReply, safeV2TextContent } from "../../functions/ComponentsV2Utils.js";
+import {
+  buildMaskedLink,
+  buildTextReply,
+  safeV2TextContent,
+} from "../../functions/ComponentsV2Utils.js";
 import { truncateWithEllipsis } from "../../utilities/ValidationUtils.js";
 import { formatPlatformDisplayName } from "../../functions/PlatformDisplay.js";
 import { formatTableDate } from "../../functions/DateFormatUtils.js";
@@ -238,7 +242,7 @@ export async function buildGameProfile(
       ? `https://discord.com/channels/${interaction?.guildId ?? "@me"}/${threadId}`
       : null;
     const headerLines = [
-      `## ${headerLink ? `[${game.title}](${headerLink})` : game.title}`,
+      `## ${headerLink ? buildMaskedLink(game.title, headerLink) : game.title}`,
     ];
 
     const redditUrlRaw =
