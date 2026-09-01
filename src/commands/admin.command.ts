@@ -3,13 +3,16 @@ import {
   MessageFlags,
   StringSelectMenuInteraction,
   ModalSubmitInteraction,
+  type ButtonInteraction,
   type CommandInteraction,
 } from "discord.js";
 import {
+  ButtonComponent,
   Discord,
   ModalComponent,
   SelectMenuComponent,
   Slash,
+  SlashChoice,
   SlashGroup,
   SlashOption,
 } from "discordx";
@@ -40,6 +43,14 @@ import {
   buildAdminHelpResponse,
 } from "./admin/admin-help.service.js";
 import { handleVotingSetup } from "./admin/voting-admin.service.js";
+import {
+  handleVoteCloseButton,
+  handleVotesReset,
+  handleVotesResetButton,
+  handleVotingClose,
+  handleVotingOpen,
+  handleVotingResults,
+} from "./admin/vote-admin.service.js";
 import {
   handleDeleteGotmNomsPanel,
   handleDeleteNrGotmNomsPanel,
@@ -169,6 +180,123 @@ export class Admin {
     if (!okToUseCommand) return;
 
     await handleVotingSetup(interaction);
+  }
+
+  @Slash({
+    description: "Open first-party voting for the upcoming round and post voting panels",
+    name: "voting-open",
+  })
+  async votingOpen(
+    @SlashOption({
+      description: "Post the voting panels in this channel instead of announcements",
+      name: "post-here",
+      required: false,
+      type: ApplicationCommandOptionType.Boolean,
+    })
+    postHere: boolean | undefined,
+    interaction: CommandInteraction,
+  ): Promise<void> {
+    await safeDeferReply(interaction, { flags: MessageFlags.Ephemeral });
+
+    const okToUseCommand: boolean = await isAdmin(interaction);
+    if (!okToUseCommand) return;
+
+    await handleVotingOpen(interaction, !!postHere);
+  }
+
+  @Slash({
+    description: "Close the open voting round now instead of at the scheduled deadline",
+    name: "voting-close",
+  })
+  async votingClose(interaction: CommandInteraction): Promise<void> {
+    await safeDeferReply(interaction, { flags: MessageFlags.Ephemeral });
+
+    const okToUseCommand: boolean = await isAdmin(interaction);
+    if (!okToUseCommand) return;
+
+    await handleVotingClose(interaction);
+  }
+
+  @Slash({
+    description: "Show the current vote tallies for a round",
+    name: "voting-results",
+  })
+  async votingResults(
+    @SlashOption({
+      description: "Round number (defaults to the current round)",
+      name: "round",
+      required: false,
+      type: ApplicationCommandOptionType.Integer,
+    })
+    round: number | undefined,
+    @SlashOption({
+      description: "Post the results and winner announcements to announcements",
+      name: "publish",
+      required: false,
+      type: ApplicationCommandOptionType.Boolean,
+    })
+    publish: boolean | undefined,
+    interaction: CommandInteraction,
+  ): Promise<void> {
+    await safeDeferReply(interaction, { flags: MessageFlags.Ephemeral });
+
+    const okToUseCommand: boolean = await isAdmin(interaction);
+    if (!okToUseCommand) return;
+
+    await handleVotingResults(interaction, round, !!publish);
+  }
+
+  @Slash({
+    description: "Delete all first-party votes for a round",
+    name: "votes-reset",
+  })
+  async votesReset(
+    @SlashChoice(
+      { name: "GOTM", value: "gotm" },
+      { name: "NR-GOTM", value: "nr-gotm" },
+    )
+    @SlashOption({
+      description: "Voting category",
+      name: "type",
+      required: true,
+      type: ApplicationCommandOptionType.String,
+    })
+    rawKind: string,
+    @SlashOption({
+      description: "Round number whose votes should be deleted",
+      name: "round",
+      required: true,
+      type: ApplicationCommandOptionType.Integer,
+    })
+    round: number,
+    interaction: CommandInteraction,
+  ): Promise<void> {
+    await safeDeferReply(interaction, { flags: MessageFlags.Ephemeral });
+
+    const okToUseCommand: boolean = await isAdmin(interaction);
+    if (!okToUseCommand) return;
+
+    await handleVotesReset(interaction, rawKind, round);
+  }
+
+  @ButtonComponent({ id: /^admin-vote-close:\d+:(confirm|cancel)$/ })
+  async handleAdminVoteCloseButton(interaction: ButtonInteraction): Promise<void> {
+    const okToUseCommand: boolean = await isAdmin(interaction);
+    if (!okToUseCommand) {
+      return;
+    }
+
+    await handleVoteCloseButton(interaction);
+  }
+
+  @ButtonComponent({ id: /^admin-votes-reset:(gotm|nr-gotm):\d+:(confirm|cancel)$/ })
+  async handleAdminVotesResetButton(interaction: ButtonInteraction): Promise<void> {
+    const okToUseCommand: boolean = await isAdmin(interaction);
+    if (!okToUseCommand) {
+      return;
+    }
+
+    await handleVotesResetButton(interaction);
   }
 
   @Slash({

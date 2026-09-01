@@ -36,6 +36,7 @@ type HelpTopicId =
   | "noms"
   | "nominate"
   | "nominate-delete"
+  | "vote"
   | "round"
   | "round-history"
   | "hltb"
@@ -160,6 +161,17 @@ const HELP_TOPICS: HelpTopic[] = [
     notes:
       "Only removes your own nomination, and only while nominations are still open. " +
       "The updated nomination list is posted to the nomination channel.",
+  },
+  {
+    id: "vote",
+    label: "/vote",
+    summary: "Vote on GOTM or NR-GOTM nominations while a voting round is open.",
+    syntax: "Syntax: /vote type:<GOTM|NR-GOTM>",
+    parameters: "type (required) - GOTM or NR-GOTM.",
+    notes:
+      "Opens a private voting panel. Picking a game you already voted for takes the vote back. " +
+      "Votes are anonymous and tallies stay hidden until voting ends, when the bot posts " +
+      "the results and winners in the announcements channel automatically.",
   },
   {
     id: "round",
@@ -358,7 +370,7 @@ const HELP_CATEGORIES: { id: string; name: string; topicIds: HelpTopicId[] }[] =
   {
     id: "monthly-games",
     name: "Monthly Games",
-    topicIds: ["noms", "nominate", "nominate-delete", "round", "round-history"],
+    topicIds: ["noms", "nominate", "nominate-delete", "vote", "round", "round-history"],
   },
   {
     id: "members",
@@ -889,6 +901,7 @@ export function buildMainHelpResponse(): {
     `${formatCommandLine("noms", "Show the current nomination list.")}\n` +
     `${formatCommandLine("nominate", "Submit a GOTM or NR-GOTM nomination.")}\n` +
     `${formatCommandLine("nominate-delete", "Delete your own nomination.")}\n` +
+    `${formatCommandLine("vote", "Vote on nominations while voting is open.")}\n` +
     `${formatCommandLine("round", "See the current round and winners.")}\n` +
     `${formatCommandLine("round-history", "Browse historical rounds with filters.")}\n` +
     "\n" +

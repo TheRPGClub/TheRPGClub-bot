@@ -56,7 +56,7 @@ import {
   refreshGiveawayHubMessage,
 } from "../services/GiveawayHubService.js";
 import { GIVEAWAY_HUB_CHANNEL_ID, GIVEAWAY_LOG_CHANNEL_ID } from "../config/channels.js";
-import { MEMBER_ROLE_ID } from "../config/roles.js";
+import { hasMemberRole } from "../functions/RoleUtils.js";
 import { isPositiveInt } from "../utilities/ValidationUtils.js";
 import { logError } from "../utilities/LogUtils.js";
 import { COLOR_SUCCESS } from "../config/colors.js";
@@ -127,11 +127,6 @@ function buildKeySelectMenus(
     rows.push(buildSelectRow(select));
   }
   return rows;
-}
-
-function hasMemberRole(member: any): boolean {
-  const roleCache = member?.roles?.cache;
-  return Boolean(roleCache?.has(MEMBER_ROLE_ID));
 }
 
 async function logGiveawayClaim(

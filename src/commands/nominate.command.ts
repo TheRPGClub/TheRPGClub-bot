@@ -9,11 +9,11 @@ import {
   userMention,
 } from "discord.js";
 import { Discord, SelectMenuComponent, Slash, SlashChoice, SlashOption } from "discordx";
-import type { NominationKind } from "../classes/Nomination.js";
 import {
   deleteNominationForUser,
   getNominationForUser,
   listNominationsForRound,
+  parseNominationKind,
   upsertNomination,
 } from "../classes/Nomination.js";
 import type { IGame } from "../types/GameTypes.js";
@@ -64,13 +64,6 @@ async function autocompleteNominationTitle(
       value: String(game.id),
     })),
   );
-}
-
-function parseNominationKind(value: string): NominationKind | null {
-  if (value === "gotm" || value === "nr-gotm") {
-    return value;
-  }
-  return null;
 }
 
 async function resolveNominatedGameByTitle(

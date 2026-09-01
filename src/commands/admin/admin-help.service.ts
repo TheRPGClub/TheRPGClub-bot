@@ -87,6 +87,42 @@ export const ADMIN_HELP_TOPICS: AdminHelpTopic[] = [
     syntax: "Syntax: /admin voting-setup",
     notes: "Pulls current nominations for GOTM and NR-GOTM, sorts answers, and sets a sensible max_select.",
   },
+  {
+    id: "voting-open",
+    label: "/admin voting-open",
+    summary: "Open first-party voting for the upcoming round and post voting panels.",
+    syntax: "Syntax: /admin voting-open [post-here:<bool>]",
+    notes:
+      "Run at/after the scheduled vote time. Opens the round's voting window and posts " +
+      "voting panels to announcements (or the current channel with post-here). " +
+      "Re-running while voting is open reposts the panels.",
+  },
+  {
+    id: "voting-close",
+    label: "/admin voting-close",
+    summary: "Close the open voting round early and post the results.",
+    syntax: "Syntax: /admin voting-close",
+    notes:
+      "Voting otherwise closes automatically at the deadline, when the bot posts the " +
+      "results and winner announcements to announcements on its own.",
+  },
+  {
+    id: "voting-results",
+    label: "/admin voting-results",
+    summary: "Show the GOTM and NR-GOTM vote tallies for a round.",
+    syntax: "Syntax: /admin voting-results [round:<number>] [publish:<bool>]",
+    notes:
+      "Defaults to the current round. Tallies stay hidden (totals only) until voting " +
+      "ends, admins included. publish re-posts the results and winner announcements " +
+      "to announcements after voting has ended.",
+  },
+  {
+    id: "votes-reset",
+    label: "/admin votes-reset",
+    summary: "Delete all first-party votes for a round and category.",
+    syntax: "Syntax: /admin votes-reset type:<GOTM|NR-GOTM> round:<number>",
+    notes: "Asks for confirmation. This cannot be undone.",
+  },
 ];
 
 export function buildAdminHelpButtons(
