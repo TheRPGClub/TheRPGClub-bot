@@ -1,5 +1,4 @@
-import { DateTime } from "luxon";
-import BotVotingInfo from "../classes/BotVotingInfo.js";
+import VotingRounds from "../classes/VotingRounds.js";
 
 export interface INominationWindow {
   targetRound: number;
@@ -7,33 +6,21 @@ export interface INominationWindow {
   closesAt: Date;
 }
 
-function normalizeDate(value: Date | string): Date {
-  if (value instanceof Date) {
-    if (Number.isNaN(value.getTime())) {
-      throw new Error("Invalid Date value for vote time.");
-    }
-    return value;
-  }
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) {
-    throw new Error("Invalid date string for vote time.");
-  }
-  return d;
-}
-
+/**
+ * The round members nominate for, from the API's current voting round. The
+ * API owns which round that is, so nothing here derives one round number
+ * from another. Nominations close the moment that round's voting opens.
+ */
 export async function getUpcomingNominationWindow(): Promise<INominationWindow> {
-  const currentRound = await BotVotingInfo.getCurrentRound();
-  if (!currentRound) {
-    throw new Error("No current round found. Set next vote date first.");
+  const current = await VotingRounds.getCurrent();
+  if (!current) {
+    throw new Error("No voting round is scheduled. Set the next vote date first.");
   }
-
-  const nextVoteAt = normalizeDate(currentRound.nextVoteAt);
-  const closesAt = DateTime.fromJSDate(nextVoteAt).toJSDate();
 
   return {
-    targetRound: currentRound.roundNumber + 1,
-    nextVoteAt,
-    closesAt,
+    targetRound: current.roundNumber,
+    nextVoteAt: current.votingOpensAt,
+    closesAt: current.votingOpensAt,
   };
 }
 

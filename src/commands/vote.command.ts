@@ -19,8 +19,10 @@ import {
   parseNominationKind,
 } from "../classes/Nomination.js";
 import { castVote, getVotesForUser, getVoteTally } from "../classes/Vote.js";
-import BotVotingInfo, { type IBotVotingInfoEntry } from "../classes/BotVotingInfo.js";
-import { getActiveVotingRound, isRoundDecided } from "../functions/VotingRound.js";
+import VotingRounds, {
+  isRoundTallyRevealed,
+  type IVotingRound,
+} from "../classes/VotingRounds.js";
 import { buildVotePanelComponents } from "../functions/VotePanelComponents.js";
 import {
   buildCastResultText,
@@ -58,9 +60,9 @@ function parseVoteCustomId(
   return { kind, round };
 }
 
-function buildVotingClosedText(round: number, info: IBotVotingInfoEntry | null): string {
-  if (info?.votingEnded && info.voteDeadline) {
-    return `Voting for Round ${round} closed <t:${toUnixTimestamp(info.voteDeadline)}:R>.`;
+function buildVotingClosedText(round: number, info: IVotingRound | null): string {
+  if (info?.votingEnded) {
+    return `Voting for Round ${round} closed <t:${toUnixTimestamp(info.votingClosesAt)}:R>.`;
   }
   return `Voting for Round ${round} is not open.`;
 }
@@ -99,12 +101,12 @@ export class VoteCommand {
     }
 
     await withErrorReply(interaction, async () => {
-      const round = await getActiveVotingRound();
+      const current = await VotingRounds.getCurrent();
+      const round = current?.votingOpen ? current : null;
       if (!round) {
-        const current = await BotVotingInfo.getCurrentRound();
         const scheduled =
-          current && current.nextVoteAt.getTime() > Date.now()
-            ? ` The next vote is scheduled for <t:${toUnixTimestamp(current.nextVoteAt)}:F>.`
+          current?.phase === "nominating"
+            ? ` The next vote is scheduled for <t:${toUnixTimestamp(current.votingOpensAt)}:F>.`
             : "";
         await safeReply(
           interaction,
@@ -133,7 +135,7 @@ export class VoteCommand {
       const components = buildVotePanelComponents({
         kind,
         roundNumber: round.roundNumber,
-        voteDeadline: round.voteDeadline,
+        voteDeadline: round.votingClosesAt,
         cap: tally.cap,
         nominations,
         myVotes,
@@ -161,8 +163,8 @@ export class VoteCommand {
     }
 
     await withErrorReply(interaction, async () => {
-      const info = await BotVotingInfo.getByRound(parsed.round);
-      if (!info?.votingOpen || isRoundDecided(parsed.round)) {
+      const info = await VotingRounds.getByRound(parsed.round);
+      if (!info?.votingOpen) {
         await safeReply(
           interaction,
           buildTextReply(buildVotingClosedText(parsed.round, info), true),
@@ -241,9 +243,8 @@ export class VoteCommand {
 
     await withErrorReply(interaction, async () => {
       const kindLabel = nominationKindLabel(parsed.kind);
-      const info = await BotVotingInfo.getByRound(parsed.round);
-      // Tallies stay hidden for everyone (admins included) until voting ends.
-      const revealed = Boolean(info?.votingEnded) || isRoundDecided(parsed.round);
+      const info = await VotingRounds.getByRound(parsed.round);
+      const revealed = isRoundTallyRevealed(info);
 
       const tally = await getVoteTally(parsed.kind, parsed.round);
       if (!revealed) {
@@ -251,7 +252,7 @@ export class VoteCommand {
           kindLabel,
           roundNumber: parsed.round,
           totalVotes: sumTallyVotes(tally.rows),
-          voteDeadline: info?.voteDeadline ?? null,
+          voteDeadline: info?.votingClosesAt ?? null,
         });
         await safeReply(interaction, buildTextReply(text, true));
         return;
@@ -264,8 +265,8 @@ export class VoteCommand {
         roundNumber: parsed.round,
         rows,
         cap: tally.cap,
-        votingOpen: Boolean(info?.votingOpen) && !isRoundDecided(parsed.round),
-        voteDeadline: info?.voteDeadline ?? null,
+        votingOpen: Boolean(info?.votingOpen),
+        voteDeadline: info?.votingClosesAt ?? null,
       });
       await safeReply(interaction, buildTextReply(text, true));
     }, "Could not load the results");

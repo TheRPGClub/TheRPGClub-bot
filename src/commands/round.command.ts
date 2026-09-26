@@ -6,7 +6,6 @@ import {
   safeReply,
 } from "../functions/InteractionUtils.js";
 import { buildComponentsV2Flags, buildTextReply } from "../functions/ComponentsV2Utils.js";
-import BotVotingInfo from "../classes/BotVotingInfo.js";
 import Gotm from "../classes/Gotm.js";
 import NrGotm from "../classes/NrGotm.js";
 import {
@@ -34,13 +33,13 @@ export class CurrentRoundCommand {
     await deferWithPrivateFlag(interaction, privateFlag);
 
     await withErrorReply(interaction, async () => {
-      const current = await BotVotingInfo.getCurrentRound();
-      if (!current) {
-        await safeReply(interaction, buildTextReply("No voting round information is available.", true));
+      // The round being played is the latest one with winners; the round the
+      // API reports as current is the one still being nominated or voted on.
+      const roundNumber = Gotm.getLatestRound();
+      if (roundNumber === null) {
+        await safeReply(interaction, buildTextReply("No GOTM round has been recorded yet.", true));
         return;
       }
-
-      const roundNumber = current.roundNumber;
 
       const gotmEntries = Gotm.getByRound(roundNumber);
       const nrGotmEntries = NrGotm.getByRound(roundNumber);
