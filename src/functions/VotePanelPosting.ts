@@ -1,0 +1,124 @@
+import { channelMention, type Client } from "discord.js";
+import type { INominationEntry, NominationKind } from "../classes/Nomination.js";
+import {
+  listNominationsForRound,
+  NOMINATION_KINDS,
+  nominationKindLabel,
+} from "../classes/Nomination.js";
+import { getVoteTally } from "../classes/Vote.js";
+import { buildComponentsV2Flags } from "./ComponentsV2Utils.js";
+import { buildVotePanelComponents, type VotePanelComponent } from "./VotePanelComponents.js";
+import { buildTestPanelNoticeText, dedupeNominationsByGame } from "./VoteResultsUtils.js";
+import { logError } from "../utilities/LogUtils.js";
+
+// Posting a round's voting panels, shared by /admin voting-open and the
+// voting_opened voting event (VotingEventService), which has no interaction.
+
+async function sendPanelToChannel(
+  client: Client,
+  channelId: string,
+  components: VotePanelComponent[],
+): Promise<boolean> {
+  try {
+    const channel = await client.channels.fetch(channelId);
+    const sendable =
+      channel?.isTextBased() && typeof (channel as any).send === "function"
+        ? (channel as any)
+        : null;
+    if (!sendable) {
+      return false;
+    }
+    await sendable.send({
+      components,
+      flags: buildComponentsV2Flags(false),
+      allowedMentions: { parse: [] },
+    });
+    return true;
+  } catch (error) {
+    logError("VotePanelPosting.sendPanelToChannel", error);
+    return false;
+  }
+}
+
+export async function loadNominationsByKind(
+  roundNumber: number,
+): Promise<Map<NominationKind, INominationEntry[]>> {
+  const byKind = new Map<NominationKind, INominationEntry[]>();
+  for (const kind of NOMINATION_KINDS) {
+    byKind.set(kind, await listNominationsForRound(kind, roundNumber));
+  }
+  return byKind;
+}
+
+export function hasVotableNominations(
+  nominationsByKind: Map<NominationKind, INominationEntry[]>,
+): boolean {
+  return [...nominationsByKind.values()].some(
+    (nominations) => dedupeNominationsByGame(nominations).length > 0,
+  );
+}
+
+export interface IPostVotePanelsParams {
+  client: Client;
+  channelId: string;
+  roundNumber: number;
+  voteDeadline: Date | null;
+  nominationsByKind: Map<NominationKind, INominationEntry[]>;
+  /** Adds the rehearsal banner; the controls themselves are unchanged. */
+  testMode?: boolean;
+  castsAccepted?: boolean;
+  castsRefusedReason?: string | null;
+}
+
+export interface IPostVotePanelsResult {
+  /** What happened, one line per category. */
+  lines: string[];
+  posted: number;
+  failed: number;
+}
+
+/** Posts one panel per category and reports what happened. */
+export async function postVotePanels(
+  params: IPostVotePanelsParams,
+): Promise<IPostVotePanelsResult> {
+  const resultLines: string[] = [];
+  let posted = 0;
+  let failed = 0;
+  for (const kind of NOMINATION_KINDS) {
+    const kindLabel = nominationKindLabel(kind);
+    const nominations = params.nominationsByKind.get(kind) ?? [];
+    if (!dedupeNominationsByGame(nominations).length) {
+      resultLines.push(`${kindLabel}: no votable nominations; panel skipped.`);
+      continue;
+    }
+    const tally = await getVoteTally(kind, params.roundNumber);
+    const components = buildVotePanelComponents({
+      kind,
+      roundNumber: params.roundNumber,
+      voteDeadline: params.voteDeadline,
+      cap: tally.cap,
+      nominations,
+      testNotice: params.testMode
+        ? buildTestPanelNoticeText({
+            kindLabel,
+            roundNumber: params.roundNumber,
+            castsAccepted: Boolean(params.castsAccepted),
+            reason: params.castsRefusedReason ?? null,
+          })
+        : null,
+    });
+    const sent = await sendPanelToChannel(params.client, params.channelId, components);
+    if (sent) {
+      posted += 1;
+    } else {
+      failed += 1;
+    }
+    resultLines.push(
+      sent
+        ? `${kindLabel}: voting panel posted in ${channelMention(params.channelId)}.`
+        : `${kindLabel}: failed to post the voting panel in ` +
+          `${channelMention(params.channelId)}.`,
+    );
+  }
+  return { lines: resultLines, posted, failed };
+}

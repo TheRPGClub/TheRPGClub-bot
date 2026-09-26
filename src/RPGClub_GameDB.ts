@@ -18,8 +18,7 @@ import {
   installConsoleLogging,
   setConsoleLoggingClient,
 } from "./utilities/DiscordConsoleLogger.js";
-import { startNominationReminderService } from "./services/NominationReminderService.js";
-import { startVotingResultsService } from "./services/VotingResultsService.js";
+import { startVotingEventService } from "./services/VotingEventService.js";
 import Member from "./classes/Member.js";
 import { joinAllTargetForumThreads } from "./services/ForumThreadJoinService.js";
 import { startRssFeedService } from "./services/RssFeedService.js";
@@ -211,8 +210,7 @@ bot.once("clientReady", async () => {
   //    ...bot.guilds.cache.map((g) => g.id)
   //  );
 
-  startNominationReminderService(bot);
-  startVotingResultsService(bot);
+  startVotingEventService(bot);
   startPublicReminderService(bot);
   startThreadSyncService(bot);
   startThreadLinkPromptService(bot);

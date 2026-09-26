@@ -131,6 +131,15 @@ async function loadFromDatabaseInternal(): Promise<INrGotmEntry[]> {
   return nrGotmData;
 }
 
+/**
+ * Re-reads the winners from the API after the round lifecycle recorded new
+ * ones (the round_decided voting event). Readers keep the previous data until
+ * the fresh set is swapped in.
+ */
+export async function reloadNrGotmFromDb(): Promise<void> {
+  await loadFromDatabaseInternal();
+}
+
 export async function loadNrGotmFromDb(): Promise<void> {
   if (nrGotmLoaded) return;
   if (!loadPromise) {
