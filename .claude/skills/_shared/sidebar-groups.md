@@ -24,7 +24,8 @@ A session files itself, and only itself, with
 `mcp__ccd_sidebar__move_sessions` and `session_ids: ["self"]`. Moving any
 other session asks the user first, so it is never done unasked.
 
-- Task starts (a skill begins its work, or a branch is cut for it): `Working`.
+- Task starts (a skill begins its work, an issue is labeled `In Progress`, or a
+  branch is cut for it): `Working`.
 - A dependency is still open and the skill stops on it: `Blocked`. See the
   next section.
 - Pull request opened, draft or not, and the turn ends waiting on the user:
