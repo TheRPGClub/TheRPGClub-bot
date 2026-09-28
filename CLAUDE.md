@@ -33,3 +33,7 @@ When a PR closes more than one issue, each issue must be linked in the GitHub De
 Do not use tables in markdown files.
 When doing implementation work, always pull main, then open a fresh branch and commit your changes there. When finished, push to the branch and open a PR.
 When catching API errors in bot commands, always include both the full request (method, URL, body) and the full response (status, body) in the user-facing error message, each formatted as a JSON code block. Never surface just the status code or axios message alone.
+Every session files itself in the sidebar under `Blocked`, `Working`, `Self Review`,
+`Needs Review`, or `Completed` as its task moves along. The moves are in
+`.claude/skills/_shared/sidebar-groups.md`. Skills that link that file require the moves,
+not suggest them.

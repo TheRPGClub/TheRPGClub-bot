@@ -43,6 +43,34 @@ Commit messages, the PR body, and comments are written to the scratchpad with
 the Write tool and passed by path, never through a heredoc, per
 [shell-text.md](../_shared/shell-text.md).
 
+## Sidebar moves
+
+The session files itself in the Code tab sidebar at each step below. These
+moves are part of the steps, not optional extras, and skipping one leaves the
+user unable to see where the session stands.
+
+Before the first move, load the tools in one call:
+
+```
+ToolSearch select:mcp__ccd_sidebar__list_groups,mcp__ccd_sidebar__create_group,mcp__ccd_sidebar__move_sessions
+```
+
+Each move: `mcp__ccd_sidebar__list_groups`, take the id of the group by name
+(create it with `mcp__ccd_sidebar__create_group` when missing), then
+`mcp__ccd_sidebar__move_sessions` with `session_ids: ["self"]` and that id.
+Ids are never stored; look them up every time. A tool that fails is reported
+in one line and skipped, per
+[sidebar-groups.md](../_shared/sidebar-groups.md#rules).
+
+- Step 1 or 2 stops on a holder or an open dependency: `Blocked`.
+- Step 3, once `In Progress` reads back: `Working`.
+- Step 9, as the self review starts: `Self Review`.
+- Step 11, after a clean self review pass: `Needs Review`.
+- Review comments, a CI failure, or a user answer to act on: `Working`, then
+  back through `Self Review` to `Needs Review` once the fix is pushed.
+- Step 12, after the merge: the group sidebar-groups.md names for a merge,
+  usually `Completed`.
+
 ## 1. Read the issue
 
 ```bash
@@ -121,8 +149,8 @@ gh issue view <N> --json labels --jq '[.labels[].name] | join(", ")'
 [issue-labels.md](../_shared/issue-labels.md) carries the read-back rule, what
 a failed edit means, and why the label is never created. Follow it as written.
 
-Once the label reads back, move the session to the `Working` sidebar group, per
-[sidebar-groups.md](../_shared/sidebar-groups.md).
+Once the label reads back, move the session to `Working` (see
+[Sidebar moves](#sidebar-moves)). Do this before cutting the branch.
 
 ## 4. Branch from the latest main
 
@@ -266,7 +294,8 @@ session's work, not something to hand back to the user.
 
 ## 9. Review it yourself
 
-Once CI has passed and the PR is mergeable, move to `Self Review` and run the
+Once CI has passed and the PR is mergeable, move to `Self Review` (see
+[Sidebar moves](#sidebar-moves)) and run the
 loop in [self-review.md](../_shared/self-review.md): `code-review` at `high` on
 the PR number, a read against this repo's rules, a fix for every finding that
 holds, and another full pass, until a pass comes back clean. Fill in the
@@ -283,8 +312,8 @@ mechanism when a reader of that file would need it. Skip anything already in
 
 ## 11. Report
 
-Move the session to `Needs Review`, per
-[sidebar-groups.md](../_shared/sidebar-groups.md), and give the user:
+Move the session to `Needs Review` (see [Sidebar moves](#sidebar-moves)), and
+give the user:
 
 - the issue and PR URLs, and a short summary of what changed;
 - the smoke test and CI result, and anything that was not verified;
@@ -343,6 +372,8 @@ When the PR merges (a CI monitor event, or the user saying so):
 - Do NOT skip the dependency check (step 2).
 - Do NOT cut a branch before `In Progress` reads back on the issue (step 3).
 - Do NOT leave `In Progress` on the issue after the merge (step 12).
+- Do NOT skip a sidebar move. Each one in [Sidebar moves](#sidebar-moves) is
+  part of its step.
 - Do NOT open a PR while smoke.sh fails.
 - Do NOT hand the PR over before a clean self review pass.
 - Do NOT commit directly to main.
