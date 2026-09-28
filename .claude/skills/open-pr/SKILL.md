@@ -72,6 +72,15 @@ After the PR is created, capture the PR number from the `gh pr create` output an
 gh pr view <N> --json closingIssuesReferences
 ```
 
+Older `gh` releases reject that field as an unknown JSON field. Read it through GraphQL
+instead:
+
+```bash
+gh api graphql -F o='{owner}' -F r='{repo}' -F n=<N> -f query='
+  query($o:String!,$r:String!,$n:Int!){repository(owner:$o,name:$r){
+  pullRequest(number:$n){closingIssuesReferences(first:20){nodes{number}}}}}'
+```
+
 Expected output contains each linked issue number. If an issue is missing, GitHub did not
 pick up the `Closes` line. Check formatting and patch the PR body.
 
@@ -87,10 +96,9 @@ Once CI has passed and the PR is mergeable, move to `Self Review` and run the lo
 [self-review.md](../_shared/self-review.md) until a pass comes back clean. Fill in the
 `Self review` section of the body as it goes.
 
-Skip this step, and step 7's `Needs Review` move with it, when the skill that called
-open-pr runs the self review loop itself (for example `/next-refactor`). That skill stops
-here and hands the PR over once its own loop ends clean. Say in the report which skill ran
-the loop.
+When the skill that called open-pr runs the self review loop itself (for example
+`/next-refactor`), open-pr ends after step 5 and skips steps 6 and 7. The calling skill runs
+the loop, moves to `Needs Review`, and reports once its loop ends clean.
 
 ### 7. Report and file the session in the sidebar
 

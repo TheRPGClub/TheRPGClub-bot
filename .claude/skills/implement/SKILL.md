@@ -171,8 +171,8 @@ git push -u origin HEAD
 ## 7. Open the pull request
 
 This step covers the whole `open-pr` ceremony (lint already ran in step 5), so
-do not run that skill on top of it. Its `Needs Review` move would come before
-the self review.
+do not run that skill on top of it. It would run the self review loop a second
+time alongside step 8.
 
 PR title: the issue title, prefixed with the commit type.
 
