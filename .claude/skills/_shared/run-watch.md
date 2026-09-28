@@ -1,8 +1,7 @@
 # Waiting on an issue, a pull request, or a run
 
 Shared by every skill that stops to wait on something outside the session: a
-blocking issue, a pull request with no CI monitor behind it, or a workflow
-run. This file is the only place the catch-up script and the one-watcher rule
+blocking issue, a pull request, or a workflow run. This file is the only place the catch-up script and the one-watcher rule
 are written out. A skill that needs them points here rather than restating
 them.
 
@@ -98,9 +97,33 @@ there.
 
 ## Waiting on a pull request
 
-A session's own pull request with Auto-fix on needs no row: the desktop app
-sends a CI monitor event when it merges or closes. `add-pr` is for a pull
-request the session does not own and has no CI monitor on, such as a blocker
-that has no issue behind it. When it merges, `wait` prints
-`pr: <number> merged` and the `sidebar:` line for a closed pull request, and
-exits. `closed without merging` is reported to the user as is.
+Every pull request a session opens is watched for its merge, whether a skill
+opened it or not, and however many the session has already opened. Record it
+and leave the one watcher running:
+
+```bash
+scripts/catchup.py add-pr <ledger> <pr-number> "<short label>"
+```
+
+A `PostToolUse` hook, `scripts/remind-pr-merge-watch.sh`, reminds the session
+after each `gh pr create` that prints a pull request URL. A CI monitor event
+from the desktop app may also report the merge, but the session does not rely
+on it: the watcher catches the merge even when the app sends nothing.
+
+The same command covers a pull request the session does not own, such as a
+blocker that has no issue behind it.
+
+When the pull request merges, `wait` prints
+
+```
+done: <label> - <pull request url>
+  merged <sha> at <time>
+pr: <number> merged
+sidebar: ...
+```
+
+and exits. That exit is the cue to run the skill's after-merge steps straight
+away, without waiting for the user to report the merge, then follow the
+`sidebar:` line and run `wait` again if other rows are still open.
+`closed without merging` means the user closed it: report that and do nothing
+else to the branch.

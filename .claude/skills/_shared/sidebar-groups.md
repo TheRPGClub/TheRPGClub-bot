@@ -40,8 +40,9 @@ other session asks the user first, so it is never done unasked.
 - The user answers, review comments come in to act on, or CI fails on the
   session's pull request: `Working`. Once the fix is pushed and the turn ends
   waiting on the user again: `Needs Review`.
-- The pull request merged or closed without merging (a CI monitor event from
-  the desktop app, or the user saying so): pick the group by what the session
+- The pull request merged or closed without merging (`wait` printing
+  `pr: <number> merged`, a CI monitor event from the desktop app, or the user
+  saying so): pick the group by what the session
   still holds. Any of these means `Working`:
 
   - another pull request of its own that still needs work;

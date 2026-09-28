@@ -287,6 +287,11 @@ gh pr view <PR> --json closingIssuesReferences
 If an issue is missing from `closingIssuesReferences`, fix the `Closes` lines
 and patch the body.
 
+Record the PR in the session's ledger with `scripts/catchup.py add-pr` and keep one
+`wait` running, per
+[run-watch.md](../_shared/run-watch.md#waiting-on-a-pull-request), so the merge
+reaches the session without the user reporting it.
+
 Then read mergeability and resolve any conflict before going further, per
 [pr-mergeability.md](../_shared/pr-mergeability.md). A sibling branch merging
 while this one worked is the ordinary case, and the resolution is this
@@ -328,7 +333,8 @@ back through the self review loop.
 
 ## 12. After the merge
 
-When the PR merges (a CI monitor event, or the user saying so):
+When the PR merges (`wait` printing `pr: <PR> merged`, a CI monitor event, or the user
+saying so):
 
 1. Check the PR for comments and reviews, and act on anything actionable.
 2. Confirm the issue closed, then remove its label, with the read-back

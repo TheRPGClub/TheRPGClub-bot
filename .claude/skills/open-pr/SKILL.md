@@ -94,6 +94,11 @@ gh pr create --title "<title>" --body-file <scratchpad>/pr-body.md
 
 ### 4. Verify closing-issue linkage
 
+Record the PR in the session's ledger with `scripts/catchup.py add-pr` and keep one
+`wait` running, per
+[run-watch.md](../_shared/run-watch.md#waiting-on-a-pull-request), so the merge
+reaches the session without the user reporting it.
+
 After the PR is created, capture the PR number from the `gh pr create` output and verify:
 
 ```bash
