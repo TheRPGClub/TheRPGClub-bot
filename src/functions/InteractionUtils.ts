@@ -162,6 +162,32 @@ export function sanitizeOptionalInput(
   return sanitized.length ? sanitized : undefined;
 }
 
+const INVISIBLE_CHAR_REGEX = /[\p{Cc}\p{Cf}]/gu;
+
+export type ParsedUserUrl = { ok: true; value: string } | { ok: false; error: string };
+
+/**
+ * Parses a user-supplied http(s) URL without the markdown stripping in sanitizeUserInput,
+ * which would rewrite characters such as `_`, `~`, `*`, `--`, and `;` that URLs rely on.
+ */
+export function parseUserUrl(value: string, label: string): ParsedUserUrl {
+  let text = value.replace(INVISIBLE_CHAR_REGEX, "").trim();
+  if (text.startsWith("<") && text.endsWith(">")) {
+    text = text.slice(1, -1).trim();
+  }
+
+  let parsed: URL;
+  try {
+    parsed = new URL(text);
+  } catch {
+    return { error: `${label} must be a valid URL.`, ok: false };
+  }
+  if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
+    return { error: `${label} must use http or https.`, ok: false };
+  }
+  return { ok: true, value: parsed.href };
+}
+
 export function stripModalInput(value: string): string {
   return sanitizeUserInput(value);
 }
