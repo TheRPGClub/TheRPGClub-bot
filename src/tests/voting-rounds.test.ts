@@ -62,11 +62,29 @@ test("mapVotingRoundApiData maps tied games per category", () => {
 });
 
 test("isRoundTallyRevealed hides the tally until voting ends", () => {
-  assert.equal(isRoundTallyRevealed(mapVotingRoundApiData(apiRound())), false);
-  const ended = mapVotingRoundApiData(apiRound({ phase: "closed", voting_open: false, voting_ended: true }));
-  assert.equal(isRoundTallyRevealed(ended), true);
+  const live = mapVotingRoundApiData(apiRound());
+  assert.equal(isRoundTallyRevealed(143, live, null), false);
+  const ended = mapVotingRoundApiData(
+    apiRound({ phase: "closed", voting_open: false, voting_ended: true }),
+  );
+  assert.equal(isRoundTallyRevealed(143, ended, null), true);
 });
 
-test("isRoundTallyRevealed shows rounds from before the API tracked the lifecycle", () => {
-  assert.equal(isRoundTallyRevealed(null), true);
+test("isRoundTallyRevealed shows rounds older than the current one with no API row", () => {
+  const current = mapVotingRoundApiData(apiRound());
+  assert.equal(isRoundTallyRevealed(120, null, current), true);
+});
+
+test("isRoundTallyRevealed fails closed for a missing row at or past the current round", () => {
+  const current = mapVotingRoundApiData(apiRound());
+  assert.equal(isRoundTallyRevealed(143, null, current), false);
+  assert.equal(isRoundTallyRevealed(144, null, current), false);
+  assert.equal(isRoundTallyRevealed(143, null, null), false);
+});
+
+test("mapVotingRoundApiData rejects an unparseable vote time", () => {
+  assert.throws(
+    () => mapVotingRoundApiData(apiRound({ voting_opens_at: "not a date" })),
+    /Invalid voting_opens_at/,
+  );
 });

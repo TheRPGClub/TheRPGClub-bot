@@ -1,4 +1,4 @@
-import { apiGet, apiPatch, apiPost } from "../services/RpgClubApiClient.js";
+import { apiGet } from "../services/RpgClubApiClient.js";
 
 /**
  * Where a round is in its lifecycle, as the API decides it: members nominate
@@ -51,16 +51,18 @@ export type VotingRoundApiData = {
   pending_ties: Partial<Record<VotingRoundCategory, TieGameApiData[]>>;
 };
 
-type VotingRoundResponse = { data: VotingRoundApiData };
+type VotingRoundResponse = { data: VotingRoundApiData | null };
 
-export type VotingRoundUpdate = {
-  votingOpensAt?: Date;
-  votingClosesAt?: Date;
-  monthYear?: string;
-};
+function parseApiDate(value: string, field: string): Date {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    throw new Error(`Invalid ${field} on voting round: ${JSON.stringify(value)}`);
+  }
+  return date;
+}
 
-function toDateOrNull(value: string | null): Date | null {
-  return value ? new Date(value) : null;
+function toDateOrNull(value: string | null, field: string): Date | null {
+  return value ? parseApiDate(value, field) : null;
 }
 
 export function mapVotingRoundApiData(d: VotingRoundApiData): IVotingRound {
@@ -75,10 +77,10 @@ export function mapVotingRoundApiData(d: VotingRoundApiData): IVotingRound {
   return {
     roundNumber: Number(d.round_number),
     monthYear: d.month_year,
-    votingOpensAt: new Date(d.voting_opens_at),
-    votingClosesAt: new Date(d.voting_closes_at),
-    closedAt: toDateOrNull(d.closed_at),
-    decidedAt: toDateOrNull(d.decided_at),
+    votingOpensAt: parseApiDate(d.voting_opens_at, "voting_opens_at"),
+    votingClosesAt: parseApiDate(d.voting_closes_at, "voting_closes_at"),
+    closedAt: toDateOrNull(d.closed_at, "closed_at"),
+    decidedAt: toDateOrNull(d.decided_at, "decided_at"),
     phase: d.phase,
     nominationsOpen: Boolean(d.nominations_open),
     votingOpen: Boolean(d.voting_open),
@@ -89,11 +91,17 @@ export function mapVotingRoundApiData(d: VotingRoundApiData): IVotingRound {
 
 /**
  * Whether a round's tally may be shown. Tallies stay hidden for everyone
- * (admins included) until voting ends. A round the API has no row for
- * predates it tracking the lifecycle, so it is long finished.
+ * (admins included) until voting ends. A round the API has no row for is
+ * only treated as finished when it is older than the current round (it
+ * predates the API tracking the lifecycle); anything else fails closed.
  */
-export function isRoundTallyRevealed(round: IVotingRound | null): boolean {
-  return round === null || round.votingEnded;
+export function isRoundTallyRevealed(
+  roundNumber: number,
+  round: IVotingRound | null,
+  current: IVotingRound | null,
+): boolean {
+  if (round) return round.votingEnded;
+  return current !== null && roundNumber < current.roundNumber;
 }
 
 function normalizeRoundNumber(roundNumber: number): number {
@@ -111,7 +119,7 @@ export default class VotingRounds {
    */
   static async getCurrent(): Promise<IVotingRound | null> {
     const response = await apiGet<VotingRoundResponse>("/api/v1/voting_rounds/current");
-    return response ? mapVotingRoundApiData(response.data) : null;
+    return response?.data ? mapVotingRoundApiData(response.data) : null;
   }
 
   /**
@@ -122,41 +130,6 @@ export default class VotingRounds {
   static async getByRound(roundNumber: number): Promise<IVotingRound | null> {
     const round = normalizeRoundNumber(roundNumber);
     const response = await apiGet<VotingRoundResponse>(`/api/v1/voting_rounds/${round}`);
-    return response ? mapVotingRoundApiData(response.data) : null;
-  }
-
-  /** Reschedules a round. Moving only the open keeps the default weekend window. */
-  static async update(roundNumber: number, changes: VotingRoundUpdate): Promise<IVotingRound> {
-    const round = normalizeRoundNumber(roundNumber);
-    const response = await apiPatch<VotingRoundResponse>(`/api/v1/voting_rounds/${round}`, {
-      data: {
-        ...(changes.votingOpensAt ? { voting_opens_at: changes.votingOpensAt.toISOString() } : {}),
-        ...(changes.votingClosesAt
-          ? { voting_closes_at: changes.votingClosesAt.toISOString() }
-          : {}),
-        ...(changes.monthYear ? { month_year: changes.monthYear } : {}),
-      },
-    });
-    if (!response) {
-      throw new Error(`No voting round ${round} was found to update.`);
-    }
-    return mapVotingRoundApiData(response.data);
-  }
-
-  /** Breaks a category's tie with one or more of the tied games. */
-  static async resolveTie(
-    roundNumber: number,
-    category: VotingRoundCategory,
-    gamedbGameIds: number[],
-  ): Promise<IVotingRound> {
-    const round = normalizeRoundNumber(roundNumber);
-    const response = await apiPost<VotingRoundResponse>(
-      `/api/v1/voting_rounds/${round}/resolve_tie`,
-      { data: { category, gamedb_game_ids: gamedbGameIds } },
-    );
-    if (!response) {
-      throw new Error(`No voting round ${round} was found to resolve a tie on.`);
-    }
-    return mapVotingRoundApiData(response.data);
+    return response?.data ? mapVotingRoundApiData(response.data) : null;
   }
 }

@@ -26,6 +26,7 @@ import {
 } from "../functions/GameTitleAutocompleteUtils.js";
 import {
   areNominationsClosed,
+  buildNominationsClosedText,
   getUpcomingNominationWindow,
 } from "../functions/NominationWindow.js";
 import {
@@ -36,7 +37,6 @@ import {
   sanitizeUserInput,
 } from "../functions/InteractionUtils.js";
 import { buildErrorReply, buildTextReply } from "../functions/ComponentsV2Utils.js";
-import { toUnixTimestamp } from "../functions/DateFormatUtils.js";
 import { showGameProfileFromNomination } from "./gamedb.command.js";
 import { isPositiveInt } from "../utilities/ValidationUtils.js";
 import { DISCORD_SELECT_OPTIONS_MAX, truncateLabel } from "../config/textLimits.js";
@@ -144,10 +144,7 @@ export class NominateCommand {
     try {
       const window = await getUpcomingNominationWindow();
       if (areNominationsClosed(window)) {
-        const voteUnix = toUnixTimestamp(window.nextVoteAt);
-        const closedMsg =
-          `Nominations for Round ${window.targetRound} are closed. ` +
-          `Voting is scheduled for <t:${voteUnix}:F>.`;
+        const closedMsg = buildNominationsClosedText(window);
         await safeReply(interaction, buildTextReply(closedMsg, true));
         return;
       }
@@ -238,10 +235,10 @@ export class NominateCommand {
     try {
       const window = await getUpcomingNominationWindow();
       if (areNominationsClosed(window)) {
-        const voteUnix = toUnixTimestamp(window.nextVoteAt);
-        const closedMsg =
-          `Nominations for Round ${window.targetRound} are closed and can no longer be ` +
-          `deleted. Voting is scheduled for <t:${voteUnix}:F>.`;
+        const closedMsg = buildNominationsClosedText(
+          window,
+          "are closed and can no longer be deleted",
+        );
         await safeReply(interaction, buildTextReply(closedMsg, true));
         return;
       }

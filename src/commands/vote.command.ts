@@ -244,7 +244,9 @@ export class VoteCommand {
     await withErrorReply(interaction, async () => {
       const kindLabel = nominationKindLabel(parsed.kind);
       const info = await VotingRounds.getByRound(parsed.round);
-      const revealed = isRoundTallyRevealed(info);
+      // Only a round with no API row needs the current round to judge its age.
+      const current = info ? null : await VotingRounds.getCurrent();
+      const revealed = isRoundTallyRevealed(parsed.round, info, current);
 
       const tally = await getVoteTally(parsed.kind, parsed.round);
       if (!revealed) {
