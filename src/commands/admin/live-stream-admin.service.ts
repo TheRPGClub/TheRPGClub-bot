@@ -21,12 +21,12 @@ import { LIVE_EVENT_FORUM_ID } from "../../config/channels.js";
 import {
   safeDeferReply,
   safeReply,
-  sanitizeOptionalInput,
   sanitizeUserInput,
 } from "../../functions/InteractionUtils.js";
 import { buildTextReply, buildComponentsV2Flags } from "../../functions/ComponentsV2Utils.js";
 import { truncateLabel } from "../../config/textLimits.js";
 import { assertCustomIdSegments } from "../../utilities/CustomIdUtils.js";
+import { formatApiError } from "../../utilities/ApiErrorUtils.js";
 
 const LIVE_STREAM_MODAL_PREFIX = "admin-live-stream-create";
 const LIVE_STREAM_TOPIC_ID = "live-stream-topic";
@@ -35,6 +35,7 @@ const LIVE_STREAM_END_ID = "live-stream-end";
 const LIVE_STREAM_TIMEZONE_ID = "live-stream-timezone";
 const LIVE_STREAM_IMAGE_URL_ID = "live-stream-image-url";
 const DEFAULT_TIMEZONE = "America/New_York";
+const IMAGE_ERROR_BODY_MAX = 500;
 
 type LiveStreamModalInput = {
   topic: string;
@@ -178,22 +179,21 @@ export function parseLiveStreamModalInput(
     };
   }
 
-  const imageUrl = sanitizeOptionalInput(input.imageUrl, {
-    blockSql: false,
-    maxLength: 1000,
-    preserveNewlines: false,
-  });
-
-  if (imageUrl) {
+  // URLs skip sanitizeUserInput: it strips markdown characters such as `_` and `~`, which
+  // rewrites the path and makes the image fetch 404.
+  const rawImageUrl = unwrapAngleBrackets(input.imageUrl?.trim() ?? "");
+  let imageUrl: string | undefined;
+  if (rawImageUrl) {
     let parsed: URL;
     try {
-      parsed = new URL(imageUrl);
+      parsed = new URL(rawImageUrl);
     } catch {
       return { error: "Optional Thread Image URL must be a valid URL.", ok: false };
     }
     if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
       return { error: "Optional Thread Image URL must use http or https.", ok: false };
     }
+    imageUrl = parsed.href;
   }
 
   const startsAt = start.toUTC().toJSDate();
@@ -208,6 +208,24 @@ export function parseLiveStreamModalInput(
       topic,
     },
   };
+}
+
+function unwrapAngleBrackets(value: string): string {
+  const match = /^<(.+)>$/.exec(value);
+  return match ? match[1].trim() : value;
+}
+
+function describeImageFetchError(imageUrl: string, error: unknown): string {
+  if (!axios.isAxiosError(error)) {
+    const msg = error instanceof Error ? error.message : String(error);
+    return `Image fetch failed: ${msg}`;
+  }
+  const data: unknown = error.response?.data;
+  const body = data instanceof ArrayBuffer || Buffer.isBuffer(data)
+    ? Buffer.from(data as ArrayBuffer).toString("utf8").slice(0, IMAGE_ERROR_BODY_MAX)
+    : data;
+  const status = error.response?.status;
+  return `Image fetch failed\n${formatApiError("GET", imageUrl, null, status, body)}`;
 }
 
 async function fetchImageBuffer(imageUrl: string): Promise<Buffer> {
@@ -269,8 +287,8 @@ export async function handleLiveStreamCreateModal(interaction: ModalSubmitIntera
     try {
       imageBuffer = await fetchImageBuffer(imageUrl);
     } catch (error: unknown) {
-      const msg = error instanceof Error ? error.message : String(error);
-      await safeReply(interaction, buildTextReply(`Image fetch failed: ${msg}`, true));
+      const msg = describeImageFetchError(imageUrl, error);
+      await safeReply(interaction, buildTextReply(msg, true));
       return;
     }
   }

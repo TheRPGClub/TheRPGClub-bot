@@ -72,3 +72,49 @@ test("parseLiveStreamModalInput rejects end before start", () => {
 
   assert.equal(parsed.ok, false);
 });
+
+test("parseLiveStreamModalInput keeps image url characters markdown sanitizing strips", () => {
+  const imageUrl = "https://example.com/key_art/~user/banner--wide_1.png?size=large_2";
+  const parsed = parseLiveStreamModalInput({
+    end: "2026-05-01 23:30",
+    imageUrl,
+    start: "2026-05-01 21:30",
+    timeZone: "America/New_York",
+    topic: "Nintendo Direct",
+  });
+
+  assert.equal(parsed.ok, true);
+  if (parsed.ok) {
+    assert.equal(parsed.value.imageUrl, imageUrl);
+  }
+});
+
+test("parseLiveStreamModalInput unwraps an angle-bracketed image url", () => {
+  const parsed = parseLiveStreamModalInput({
+    end: "2026-05-01 23:30",
+    imageUrl: " <https://example.com/key_art.png> ",
+    start: "2026-05-01 21:30",
+    timeZone: "America/New_York",
+    topic: "Nintendo Direct",
+  });
+
+  assert.equal(parsed.ok, true);
+  if (parsed.ok) {
+    assert.equal(parsed.value.imageUrl, "https://example.com/key_art.png");
+  }
+});
+
+test("parseLiveStreamModalInput treats a blank image url as absent", () => {
+  const parsed = parseLiveStreamModalInput({
+    end: "2026-05-01 23:30",
+    imageUrl: "   ",
+    start: "2026-05-01 21:30",
+    timeZone: "America/New_York",
+    topic: "Nintendo Direct",
+  });
+
+  assert.equal(parsed.ok, true);
+  if (parsed.ok) {
+    assert.equal(parsed.value.imageUrl, undefined);
+  }
+});
