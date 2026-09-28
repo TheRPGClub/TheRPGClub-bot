@@ -2,8 +2,8 @@
 name: implement
 description: >-
   Implement a GitHub issue end to end: read it, label it `In Progress`, branch
-  from the latest main, make the change, smoke-test it, open a linked pull request, review that pull
-  request itself, then hand it to the user. Use when asked to implement, work
+  from the latest main, make the change, smoke-test it, open a linked pull
+  request, review that pull request itself, then hand it to the user. Use when asked to implement, work
   on, pick up, or start an issue by number - "/implement 717", "work issue
   717", "start on #717".
 ---
@@ -311,8 +311,8 @@ When the PR merges (a CI monitor event, or the user saying so):
    gh issue view <N> --json labels --jq '[.labels[].name] | join(", ")'
    ```
 
-   Step 1 reads that label as "another session holds this issue", so a stale
-   one makes every later session stand down from work nobody is doing.
+   Step 1 reads that label as "another session may hold this issue", so a
+   stale one sends every later session hunting for a holder that is gone.
    Removing it is part of the merge exchange, not optional cleanup. A pull
    request closed without merging ends the claim the same way.
 
