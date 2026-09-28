@@ -13,7 +13,8 @@ import {
   TextDisplayBuilder,
   ThumbnailBuilder,
 } from "@discordjs/builders";
-import { safeV2TextContent } from "./ComponentsV2Utils.js";
+import { buildErrorReply, safeV2TextContent } from "./ComponentsV2Utils.js";
+import { buildApiErrorMessage } from "../utilities/ApiErrorUtils.js";
 import { type CompletionType } from "../commands/profile.command.js";
 import { formatPlaytimeHours, formatTableDate } from "./DateFormatUtils.js";
 import type { IGame } from "../types/GameTypes.js";
@@ -96,12 +97,12 @@ export async function saveCompletion(
       finalPlaytimeHours,
       note,
     });
-  } catch (err: any) {
-    const msg = err?.message ?? "Failed to save completion.";
-    await safeReply(interaction, {
-      components: [buildTextContainer(`Could not save completion: ${msg}`)],
-      flags: buildComponentsV2Flags(true),
-    });
+  } catch (err: unknown) {
+    logError("CompletionHelpers.saveCompletion", err);
+    await safeReply(
+      interaction,
+      buildErrorReply(buildApiErrorMessage("Could not save completion.", err), true),
+    );
     return;
   }
 
