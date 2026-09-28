@@ -1,5 +1,30 @@
-export function foldAccentE(query: string): string {
-  return query.replace(/[éèêë]/g, "e").replace(/[ÉÈÊË]/g, "E");
+/** Strips diacritics so "Pokémon" and "Ōkami" compare equal to "Pokemon" and "Okami". */
+export function foldAccents(text: string): string {
+  return text.normalize("NFD").replace(/\p{M}/gu, "");
+}
+
+/**
+ * Returns how a folded, lowercased search term is actually spelled inside a
+ * title, e.g. "pokemon" inside "Pokémon Red" gives "pokémon". Returns null when
+ * the title does not contain the term or the matched text has no accents, since
+ * the API's plain text search already finds those.
+ */
+export function findAccentedSpelling(title: string, foldedTerm: string): string | null {
+  if (!foldedTerm) return null;
+  const chars = Array.from(title);
+  let folded = "";
+  const sourceIndex: number[] = [];
+  chars.forEach((char, index) => {
+    const foldedChar = foldAccents(char).toLowerCase();
+    folded += foldedChar;
+    for (let i = 0; i < foldedChar.length; i++) sourceIndex.push(index);
+  });
+
+  const start = folded.indexOf(foldedTerm);
+  if (start < 0) return null;
+  const end = sourceIndex[start + foldedTerm.length - 1];
+  const spelling = chars.slice(sourceIndex[start], end + 1).join("").toLowerCase();
+  return spelling === foldedTerm ? null : spelling;
 }
 
 type IGameTitleAutocompleteEntry = {
@@ -63,7 +88,7 @@ export function parseTitleWithYear(
  * equal (e.g. "X: Definitive Edition" vs "X - Definitive Edition").
  */
 export function normalizeTitleKey(title: string): string {
-  return foldAccentE(title)
+  return foldAccents(title)
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, " ")
     .trim();
