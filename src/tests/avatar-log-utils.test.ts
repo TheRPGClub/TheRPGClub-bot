@@ -62,7 +62,7 @@ test("recordCurrentAvatars reports a member whose save is rejected with 422", as
   const result = await recordCurrentAvatars([fakeMember("1"), fakeMember("2")]);
 
   assert.equal(result.recorded, 1);
-  assert.equal(result.failed, 1);
+  assert.equal(result.failures.length, 1);
   assert.equal(result.failures.length, 1);
   assert.equal(result.failures[0].userId, "2");
   assert.match(result.failures[0].detail, /"status": 422/);
@@ -78,7 +78,7 @@ test("recordCurrentAvatars counts a save that returns no record as failed", asyn
   const result = await recordCurrentAvatars([fakeMember("3")]);
 
   assert.equal(result.recorded, 0);
-  assert.equal(result.failed, 1);
+  assert.equal(result.failures.length, 1);
   assert.equal(result.failures[0].userId, "3");
   assert.match(result.failures[0].detail, /"status": 404/);
 });
@@ -115,3 +115,12 @@ test("buildScanFailureDisplays returns nothing when there were no failures", () 
 function displayContents(failures: { detail: string; userId: string }[]): string[] {
   return buildScanFailureDisplays(failures).map((display) => display.toJSON().content);
 }
+
+test("buildScanFailureDisplays closes a code block cut off by truncation", () => {
+  const detail = `Request:\n\`\`\`json\n${"y".repeat(5000)}\n\`\`\``;
+
+  const [text] = displayContents([{ detail, userId: "1" }]);
+
+  assert.equal(text.length <= 1000, true);
+  assert.equal((text.split("```").length - 1) % 2, 0);
+});

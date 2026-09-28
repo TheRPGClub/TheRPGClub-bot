@@ -142,7 +142,6 @@ export interface IAvatarScanFailure {
 export interface IAvatarScanResult {
   recorded: number;
   skipped: number;
-  failed: number;
   failures: IAvatarScanFailure[];
 }
 
@@ -159,7 +158,7 @@ function describeAvatarScanFailure(err: unknown): string {
 export async function recordCurrentAvatars(
   members: readonly GuildMember[],
 ): Promise<IAvatarScanResult> {
-  const result: IAvatarScanResult = { recorded: 0, skipped: 0, failed: 0, failures: [] };
+  const result: IAvatarScanResult = { recorded: 0, skipped: 0, failures: [] };
   let next = 0;
   const worker = async (): Promise<void> => {
     while (next < members.length) {
@@ -169,7 +168,6 @@ export async function recordCurrentAvatars(
         else result.skipped++;
       } catch (err) {
         logError(`AvatarLogUtils.recordCurrentAvatars user=${member.user.id}`, err);
-        result.failed++;
         result.failures.push({ detail: describeAvatarScanFailure(err), userId: member.user.id });
       }
     }
@@ -184,20 +182,31 @@ export async function recordCurrentAvatars(
 export const AVATAR_SCAN_SUMMARY_MAX_CHARS = 500;
 const AVATAR_SCAN_FAILURE_DETAIL_MAX = 3;
 const AVATAR_SCAN_FAILURE_MAX_CHARS = 1000;
+const CODE_FENCE_CLOSE = "\n```";
+
+// Truncating a long response body can cut inside its JSON code block; close it so the
+// display still renders as intended.
+function closeOpenCodeFence(text: string): string {
+  const fenceCount = text.split("```").length - 1;
+  return fenceCount % 2 === 1 ? `${text}${CODE_FENCE_CLOSE}` : text;
+}
 
 /** One text display per failed member (capped), plus a note for any left out. */
 export function buildScanFailureDisplays(
   failures: readonly IAvatarScanFailure[],
 ): TextDisplayBuilder[] {
   const shown = failures.slice(0, AVATAR_SCAN_FAILURE_DETAIL_MAX);
-  const displays = shown.map((failure) =>
-    new TextDisplayBuilder().setContent(
+  const displays = shown.map((failure) => {
+    const text = closeOpenCodeFence(
       safeV2TextContent(
         `### Failed: ${userMention(failure.userId)} (${failure.userId})\n${failure.detail}`,
-        AVATAR_SCAN_FAILURE_MAX_CHARS,
+        AVATAR_SCAN_FAILURE_MAX_CHARS - CODE_FENCE_CLOSE.length,
       ),
-    ),
-  );
+    );
+    return new TextDisplayBuilder().setContent(
+      safeV2TextContent(text, AVATAR_SCAN_FAILURE_MAX_CHARS),
+    );
+  });
   const omitted = failures.length - shown.length;
   if (omitted > 0) {
     const plural = omitted !== 1 ? "s" : "";

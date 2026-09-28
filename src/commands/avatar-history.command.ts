@@ -263,9 +263,10 @@ export class AvatarHistoryCommand {
         return;
       }
       const guildMembers = allMembers.filter((m) => !m.user.bot);
-      const { recorded, skipped, failed, failures } = await recordCurrentAvatars([
+      const { recorded, skipped, failures } = await recordCurrentAvatars([
         ...guildMembers.values(),
       ]);
+      const failed = failures.length;
       const lines = [
         `Scanned **${guildMembers.size}** members.`,
         `- **${recorded}** new avatar${recorded !== 1 ? "s" : ""} recorded`,
