@@ -77,6 +77,36 @@ export function pickWinningRows(rows: ITallyDisplayRow[]): ITallyDisplayRow[] {
   return rows.filter((row) => row.voteCount === top);
 }
 
+/** "**A**", "**A** and **B**", or "**A**, **B** and **C**". */
+function joinBoldTitles(titles: string[]): string {
+  const bold = titles.map((title) => `**${title}**`);
+  if (bold.length <= 1) {
+    return bold[0] ?? "";
+  }
+  return `${bold.slice(0, -1).join(", ")} and ${bold[bold.length - 1]}`;
+}
+
+/**
+ * The winner line for a category whose picks are settled, e.g. after the
+ * admins break a tie or record several winners in /admin nextround-setup.
+ */
+export function buildFinalWinnersText(params: {
+  kindLabel: string;
+  roundNumber: number;
+  monthLabel: string;
+  titles: string[];
+}): string {
+  if (!params.titles.length) {
+    return `No ${params.kindLabel} winner was recorded for Round ${params.roundNumber}.`;
+  }
+  const plural = params.titles.length > 1;
+  return (
+    `# 🏆 The ${params.kindLabel} ${plural ? "winners" : "winner"} for Round ` +
+    `${params.roundNumber} (${params.monthLabel}) ${plural ? "are" : "is"} ` +
+    `${joinBoldTitles(params.titles)}!`
+  );
+}
+
 export function buildWinnerAnnouncementText(params: {
   kindLabel: string;
   roundNumber: number;
@@ -89,15 +119,13 @@ export function buildWinnerAnnouncementText(params: {
       "so no winner was decided."
     );
   }
-  const first = params.winners[0];
-  if (params.winners.length === 1 && first) {
-    return (
-      `# 🏆 The ${params.kindLabel} winner for Round ${params.roundNumber} ` +
-      `(${params.monthLabel}) is **${first.gameTitle}**!`
-    );
+  if (params.winners.length === 1) {
+    return buildFinalWinnersText({
+      ...params,
+      titles: params.winners.map((row) => row.gameTitle),
+    });
   }
-  const titles = params.winners.map((row) => `**${row.gameTitle}**`);
-  const list = `${titles.slice(0, -1).join(", ")} and ${titles[titles.length - 1]}`;
+  const list = joinBoldTitles(params.winners.map((row) => row.gameTitle));
   return (
     `# 🏆 ${params.kindLabel} Round ${params.roundNumber} (${params.monthLabel}) ` +
     `ends in a tie between ${list}! The admins will decide the final pick.`

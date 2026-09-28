@@ -5,6 +5,7 @@ import type { IVoteCastResult, IVoteEntry, IVoteTallyRow } from "../classes/Vote
 import type { ITallyDisplayRow } from "../functions/VoteResultsUtils.js";
 import {
   buildCastResultText,
+  buildFinalWinnersText,
   buildHiddenTallyText,
   buildMyVotesText,
   buildRehearsalNoticeText,
@@ -223,6 +224,26 @@ test("buildWinnerAnnouncementText covers winner, tie, and no-votes cases", () =>
     winners: [],
   });
   assert.match(none, /No GOTM votes were cast for Round 42/);
+});
+
+test("buildFinalWinnersText names one winner or lists several", () => {
+  const params = { kindLabel: "GOTM", roundNumber: 142, monthLabel: "August 2026" };
+  assert.equal(
+    buildFinalWinnersText({ ...params, titles: ["Alpha"] }),
+    "# 🏆 The GOTM winner for Round 142 (August 2026) is **Alpha**!",
+  );
+  assert.equal(
+    buildFinalWinnersText({ ...params, titles: ["Alpha", "Beta"] }),
+    "# 🏆 The GOTM winners for Round 142 (August 2026) are **Alpha** and **Beta**!",
+  );
+  assert.match(
+    buildFinalWinnersText({ ...params, titles: ["Alpha", "Beta", "Gamma"] }),
+    /are \*\*Alpha\*\*, \*\*Beta\*\* and \*\*Gamma\*\*!$/,
+  );
+  assert.equal(
+    buildFinalWinnersText({ ...params, titles: [] }),
+    "No GOTM winner was recorded for Round 142.",
+  );
 });
 
 test("buildWinnerThreadTitle formats and truncates the round thread name", () => {
