@@ -94,6 +94,9 @@ If there are issue numbers being worked on, add one `Closes #N` line per issue a
 
 ### 6. Report to user
 
+Move the session to the `Needs Review` sidebar group first, per
+[sidebar-groups.md](../_shared/sidebar-groups.md). The draft waits on the user to resume it.
+
 Give the user:
 - The branch name
 - The PR URL
