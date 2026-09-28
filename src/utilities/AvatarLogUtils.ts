@@ -121,6 +121,7 @@ export async function recordCurrentAvatarIfNew(member: GuildMember): Promise<boo
   const latest = await Member.getAvatarHistory(member.user.id, 1, 0);
   if (!needsAvatarRecord(latest[0], avatarHash)) return false;
 
+  await Member.upsertGuildMember(member);
   const discordUrl = member.displayAvatarURL({ extension: "png", size: 512, forceStatic: true });
   const { saved, avatarUrl } = await storeAvatarRecord(member.user.id, avatarHash, discordUrl);
   if (!saved) {
