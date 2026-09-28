@@ -115,3 +115,35 @@ test("Import First Match on a live session imports the first sorted option", asy
   assert.equal(importedId, 20);
   assert.equal(getIgdbSession(sessionId), undefined, "session is consumed after import");
 });
+
+test("Import First Match reports an onSelect failure instead of swallowing it", async (t) => {
+  t.mock.method(console, "error", () => undefined);
+  const { sessionId } = createIgdbSession(
+    OWNER,
+    sampleOptions(),
+    async () => {
+      throw new Error("import exploded");
+    },
+  );
+  const sent: any[] = [];
+  const interaction: any = {
+    // eslint-disable-next-line local/igdb-session-id-built-centrally
+    customId: `igdb-first:${sessionId}`,
+    user: { id: OWNER },
+    replied: false,
+    deferred: false,
+    reply: async (opts: any) => sent.push(opts),
+    editReply: async (opts: any) => sent.push(opts),
+    followUp: async (opts: any) => sent.push(opts),
+    deferUpdate: async () => {
+      interaction.deferred = true;
+    },
+    isMessageComponent: () => true,
+  };
+
+  const handled = await handleIgdbFirstMatchInteraction(interaction);
+
+  assert.equal(handled, true);
+  assert.match(JSON.stringify(sent), /IGDB selection failed.*import exploded/);
+  assert.equal(getIgdbSession(sessionId), undefined, "session is consumed after failure");
+});

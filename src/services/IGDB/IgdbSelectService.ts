@@ -13,7 +13,9 @@ import {
   safeReply,
   safeUpdate,
 } from "../../functions/InteractionUtils.js";
-import { buildTextReply } from "../../functions/ComponentsV2Utils.js";
+import { buildErrorReply, buildTextReply } from "../../functions/ComponentsV2Utils.js";
+import { buildApiErrorMessage } from "../../utilities/ApiErrorUtils.js";
+import { logError } from "../../utilities/LogUtils.js";
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
 import { truncateLabel } from "../../config/textLimits.js";
 import { assertCustomIdSegments } from "../../utilities/CustomIdUtils.js";
@@ -209,6 +211,8 @@ export async function handleIgdbSelectInteraction(
       await safeDeferUpdate(interaction);
     }
     await session.onSelect(interaction, selected.gameId);
+  } catch (err: unknown) {
+    await reportIgdbSelectError(interaction, err);
   } finally {
     getSessionStore().delete(sessionId);
   }
@@ -242,10 +246,23 @@ export async function handleIgdbFirstMatchInteraction(
       await safeDeferUpdate(interaction);
     }
     await session.onSelect(interaction as unknown as StringSelectMenuInteraction, firstOption.id);
+  } catch (err: unknown) {
+    await reportIgdbSelectError(interaction, err);
   } finally {
     getSessionStore().delete(sessionId);
   }
   return true;
+}
+
+async function reportIgdbSelectError(
+  interaction: StringSelectMenuInteraction | ButtonInteraction,
+  err: unknown,
+): Promise<void> {
+  logError("IgdbSelectService.onSelect", err);
+  await safeReply(interaction, {
+    ...buildErrorReply(buildApiErrorMessage("IGDB selection failed.", err), true),
+    __forceFollowUp: true,
+  });
 }
 
 function resolveIgdbSelection(

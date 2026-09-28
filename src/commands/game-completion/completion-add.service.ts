@@ -12,7 +12,6 @@ import Member from "../../classes/Member.js";
 import { saveCompletion } from "../../functions/CompletionHelpers.js";
 import {
   canSafeReply,
-  extractErrorMessage,
   isInteractionSettled,
   safeDeferUpdate,
   safeReply,
@@ -28,9 +27,12 @@ import { completionAddSessions, type CompletionAddContext } from "./completion.t
 import {
   buildComponentsV2EditFlags,
   buildComponentsV2Flags,
+  buildErrorReply,
   buildTextContainer,
   buildTextReply,
 } from "../../functions/ComponentsV2Utils.js";
+import { buildApiErrorMessage } from "../../utilities/ApiErrorUtils.js";
+import { logError } from "../../utilities/LogUtils.js";
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
 import { truncateDescription } from "../../config/textLimits.js";
 import {
@@ -153,59 +155,8 @@ export async function promptIgdbSelection(
         flags: buildComponentsV2EditFlags(),
       });
 
-      const imported = await importGameFromIgdb(gameId);
-      const referenceDate = ctx.completedAt ?? new Date();
-      const recent = await Member.getRecentCompletionForGame(
-        ctx.userId,
-        imported.gameId,
-        referenceDate,
-      );
-      if (recent) {
-        const confirmed = await confirmDuplicateCompletion(
-          sel,
-          imported.title,
-          recent,
-        );
-        if (!confirmed) {
-          return;
-        }
-      }
-      const removeFromNowPlaying = await resolveNowPlayingRemoval(
-        sel,
-        ctx.userId,
-        imported.gameId,
-        imported.title,
-        ctx.completedAt,
-        false,
-      );
-      if (ctx.selectedPlatformId != null) {
-        await saveCompletion(
-          sel,
-          ctx.userId,
-          imported.gameId,
-          ctx.selectedPlatformId,
-          ctx.completionType,
-          ctx.completedAt,
-          ctx.finalPlaytimeHours,
-          ctx.note,
-          imported.title,
-          ctx.announce,
-          false,
-          removeFromNowPlaying,
-        );
-      } else {
-        await promptCompletionPlatformSelection(sel, {
-          userId: ctx.userId,
-          gameId: imported.gameId,
-          gameTitle: imported.title,
-          completionType: ctx.completionType,
-          completedAt: ctx.completedAt,
-          finalPlaytimeHours: ctx.finalPlaytimeHours,
-          note: ctx.note,
-          announce: ctx.announce,
-          removeFromNowPlaying,
-        });
-      }
+      // Reuse the GameDB selection path so IGDB picks get the same error reporting.
+      await processCompletionSelection(sel, `igdb:${gameId}`, ctx);
     },
   );
 
@@ -357,11 +308,10 @@ export async function processCompletionSelection(
       });
     }
     return false;
-  } catch (err: any) {
-    const msg = extractErrorMessage(err);
+  } catch (err: unknown) {
+    logError("CompletionAdd.processCompletionSelection", err);
     await safeReply(interaction, {
-      components: [buildTextContainer(`Failed to add completion: ${msg}`)],
-      flags: buildComponentsV2Flags(true),
+      ...buildErrorReply(buildApiErrorMessage("Failed to add completion.", err), true),
       __forceFollowUp: true,
     });
     return false;
