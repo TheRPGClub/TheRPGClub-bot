@@ -1,42 +1,54 @@
-import { DateTime } from "luxon";
-import BotVotingInfo from "../classes/BotVotingInfo.js";
+import VotingRounds from "../classes/VotingRounds.js";
+import { toUnixTimestamp } from "./DateFormatUtils.js";
 
 export interface INominationWindow {
   targetRound: number;
   nextVoteAt: Date;
   closesAt: Date;
+  /** The API's verdict on whether members may nominate for `targetRound`. */
+  nominationsOpen: boolean;
 }
 
-function normalizeDate(value: Date | string): Date {
-  if (value instanceof Date) {
-    if (Number.isNaN(value.getTime())) {
-      throw new Error("Invalid Date value for vote time.");
-    }
-    return value;
-  }
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) {
-    throw new Error("Invalid date string for vote time.");
-  }
-  return d;
-}
-
+/**
+ * The round members nominate for, from the API's current voting round. The
+ * API owns which round that is and whether its nominations are open, so
+ * nothing here derives either from a round number or the local clock.
+ */
 export async function getUpcomingNominationWindow(): Promise<INominationWindow> {
-  const currentRound = await BotVotingInfo.getCurrentRound();
-  if (!currentRound) {
-    throw new Error("No current round found. Set next vote date first.");
+  const current = await VotingRounds.getCurrent();
+  if (!current) {
+    throw new Error("No voting round is scheduled. Set the next vote date first.");
   }
-
-  const nextVoteAt = normalizeDate(currentRound.nextVoteAt);
-  const closesAt = DateTime.fromJSDate(nextVoteAt).toJSDate();
 
   return {
-    targetRound: currentRound.roundNumber + 1,
-    nextVoteAt,
-    closesAt,
+    targetRound: current.roundNumber,
+    nextVoteAt: current.votingOpensAt,
+    closesAt: current.votingOpensAt,
+    nominationsOpen: current.nominationsOpen,
   };
 }
 
-export function areNominationsClosed(window: INominationWindow, now: Date = new Date()): boolean {
-  return now >= window.closesAt;
+export function areNominationsClosed(window: INominationWindow): boolean {
+  return !window.nominationsOpen;
+}
+
+/**
+ * Why nominations are closed. Once the round's vote has opened, the round
+ * stays current until it is decided, so point members at that instead of a
+ * vote time that has already passed.
+ */
+export function buildNominationsClosedText(
+  window: INominationWindow,
+  closedClause: string = "are closed",
+  now: Date = new Date(),
+): string {
+  const head = `Nominations for Round ${window.targetRound} ${closedClause}.`;
+  const voteUnix = toUnixTimestamp(window.nextVoteAt);
+  if (window.nextVoteAt > now) {
+    return `${head} Voting is scheduled for <t:${voteUnix}:F>.`;
+  }
+  return (
+    `${head} Voting opened <t:${voteUnix}:R>; nominations for the next round ` +
+    `open once Round ${window.targetRound} is decided.`
+  );
 }

@@ -479,13 +479,13 @@ POST    /api/v1/release_announcements/{id}/skip  # Skip a release announcement
 ```
 GET     /api/v1/reviews/{id}  # Show a review
 PATCH   /api/v1/reviews/{id}  # Update a review
-  data: { gamedb_game_id, rating, body, is_shared }
+  data: { gamedb_game_id, rating, title, body, facets, is_shared }
 PUT     /api/v1/reviews/{id}  # Replace a review (alias)
-  data: { gamedb_game_id, rating, body, is_shared }
+  data: { gamedb_game_id, rating, title, body, facets, is_shared }
 DELETE  /api/v1/reviews/{id}  # Delete a review
 GET     /api/v1/users/{user_id}/reviews  # List a user's reviews (page, per, limit, offset)
 POST    /api/v1/users/{user_id}/reviews  # Write a review
-  data: { gamedb_game_id*, rating*, body, is_shared }
+  data: { gamedb_game_id*, rating*, title, body, facets, is_shared }
 ```
 
 ### Search Synonyms
@@ -664,6 +664,13 @@ POST    /api/v1/users/{user_id}/avatar_history  # Record an avatar change
 GET     /api/v1/users/{user_id}/profile-image  # Stream user profile image
 ```
 
+### Voting Events
+
+```
+POST    /api/v1/voting_events/claim  # Claim due voting events (limit)
+POST    /api/v1/voting_events/{id}/ack  # Acknowledge a delivered voting event
+```
+
 ### Voting Info
 
 ```
@@ -677,6 +684,18 @@ PATCH   /api/v1/voting_info/{id}  # Update voting info
 PUT     /api/v1/voting_info/{id}  # Replace voting info (alias)
   data: { round_number, next_vote_at, nomination_list_id, five_day_reminder_sent, one_day_reminder_sent, vote_ends_at }
 DELETE  /api/v1/voting_info/{id}  # Delete voting info
+```
+
+### Voting Rounds
+
+```
+GET     /api/v1/voting_rounds  # List voting rounds (page, per)
+GET     /api/v1/voting_rounds/current  # Show the current voting round
+GET     /api/v1/voting_rounds/{id}  # Show a voting round
+PATCH   /api/v1/voting_rounds/{id}  # Reschedule a voting round
+  data: { voting_opens_at, voting_closes_at, month_year }
+POST    /api/v1/voting_rounds/{id}/resolve_tie  # Break a tie
+  data: { category*, gamedb_game_ids* }
 ```
 
 ### Wizard Sessions

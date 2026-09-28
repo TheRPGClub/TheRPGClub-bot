@@ -170,6 +170,15 @@ export default class Gotm {
     return gotmData.filter((e) => e.round === round);
   }
 
+  /** The round being played: the latest one with recorded winners, or null if none. */
+  static getLatestRound(): number | null {
+    ensureInitialized();
+    return gotmData.reduce<number | null>(
+      (latest, entry) => (latest === null || entry.round > latest ? entry.round : latest),
+      null,
+    );
+  }
+
   static getByYearMonth(year: number, month: number | string): IGotmEntry[] {
     ensureInitialized();
     const yearNum = Number(year);
