@@ -90,6 +90,10 @@ export default class GamePlatformRegionService {
     return GamePlatformRegionService.platformCache.get();
   }
 
+  static refreshPlatformCache(): Promise<void> {
+    return GamePlatformRegionService.platformCache.refresh();
+  }
+
   static clearPlatformCache(): void {
     GamePlatformRegionService.platformCache.clear();
   }

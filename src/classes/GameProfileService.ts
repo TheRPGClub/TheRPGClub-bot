@@ -100,6 +100,10 @@ export default class GameProfileService {
     return GameProfileService.companyCache.get();
   }
 
+  static refreshCompanyCache(): Promise<void> {
+    return GameProfileService.companyCache.refresh();
+  }
+
   static clearCompanyCache(): void {
     GameProfileService.companyCache.clear();
   }
