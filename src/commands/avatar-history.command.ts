@@ -3,8 +3,10 @@ import {
   ApplicationCommandOptionType,
   AttachmentBuilder,
   ButtonInteraction,
+  Collection,
   CommandInteraction,
   Guild,
+  GuildMember,
   StringSelectMenuBuilder,
   StringSelectMenuInteraction,
   User,
@@ -45,7 +47,8 @@ import {
   buildUserHeaderContainer,
   buildSelectRow,
 } from "../functions/uiComponents.js";
-import { recordCurrentAvatarIfNew } from "../utilities/AvatarLogUtils.js";
+import { recordCurrentAvatars } from "../utilities/AvatarLogUtils.js";
+import { logError } from "../utilities/LogUtils.js";
 import { parseCustomIdSegments } from "../utilities/CustomIdUtils.js";
 import { isAdmin } from "./admin/admin-auth.utils.js";
 import {
@@ -242,20 +245,23 @@ export class AvatarHistoryCommand {
         });
         return;
       }
-      const allMembers = await interaction.guild.members.fetch();
-      const guildMembers = allMembers.filter((m) => !m.user.bot);
-      let recorded = 0;
-      let skipped = 0;
-      let failed = 0;
-      for (const guildMember of guildMembers.values()) {
-        try {
-          const wasRecorded = await recordCurrentAvatarIfNew(guildMember);
-          if (wasRecorded) recorded++;
-          else skipped++;
-        } catch {
-          failed++;
-        }
+      let allMembers: Collection<string, GuildMember>;
+      try {
+        allMembers = await interaction.guild.members.fetch();
+      } catch (err) {
+        logError("AvatarHistory.scan.fetchMembers", err);
+        await safeReply(interaction, {
+          components: [
+            buildTextContainer("Could not fetch guild members. Try the scan again shortly."),
+          ],
+          flags: buildComponentsV2Flags(true),
+        });
+        return;
       }
+      const guildMembers = allMembers.filter((m) => !m.user.bot);
+      const { recorded, skipped, failed } = await recordCurrentAvatars([
+        ...guildMembers.values(),
+      ]);
       const lines = [
         `Scanned **${guildMembers.size}** members.`,
         `- **${recorded}** new avatar${recorded !== 1 ? "s" : ""} recorded`,

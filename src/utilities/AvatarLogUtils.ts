@@ -108,6 +108,37 @@ export async function recordCurrentAvatarIfNew(member: GuildMember): Promise<boo
   return storeAvatarRecord(member.user.id, avatarHash, discordUrl);
 }
 
+const AVATAR_SCAN_CONCURRENCY = 4;
+
+export interface IAvatarScanResult {
+  recorded: number;
+  skipped: number;
+  failed: number;
+}
+
+// Runs a few members at a time so a full-guild backfill (Discord download plus Backblaze
+// upload per member) finishes well inside the 15 minute interaction token lifetime.
+export async function recordCurrentAvatars(
+  members: readonly GuildMember[],
+): Promise<IAvatarScanResult> {
+  const result: IAvatarScanResult = { recorded: 0, skipped: 0, failed: 0 };
+  let next = 0;
+  const worker = async (): Promise<void> => {
+    while (next < members.length) {
+      const member = members[next++];
+      try {
+        if (await recordCurrentAvatarIfNew(member)) result.recorded++;
+        else result.skipped++;
+      } catch {
+        result.failed++;
+      }
+    }
+  };
+  const workerCount = Math.min(AVATAR_SCAN_CONCURRENCY, members.length);
+  await Promise.all(Array.from({ length: workerCount }, worker));
+  return result;
+}
+
 export async function logAvatarChange(
   client: any,
   user: User,
