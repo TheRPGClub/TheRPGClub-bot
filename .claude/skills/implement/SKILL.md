@@ -65,7 +65,8 @@ in one line and skipped, per
 - Step 1 or 2 stops on a holder or an open dependency: `Blocked`.
 - Step 3, once `In Progress` reads back: `Working`.
 - Step 9, as the self review starts: `Self Review`.
-- Step 11, after a clean self review pass: `Needs Review`.
+- Step 11, after a clean self review pass: `Needs Review`. Also any turn that ends idle
+  between passes, per [sidebar-groups.md](../_shared/sidebar-groups.md).
 - Review comments, a CI failure, or a user answer to act on: `Working`, then
   back through `Self Review` to `Needs Review` once the fix is pushed.
 - Step 12, after the merge: the group sidebar-groups.md names for a merge,

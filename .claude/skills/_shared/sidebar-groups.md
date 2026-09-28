@@ -34,8 +34,12 @@ other session asks the user first, so it is never done unasked.
   longer task is still going only once the task has nothing left to do
   without the user.
 - A skill that runs a self review moves to `Self Review` when the review
-  starts, and to `Needs Review` only when a pass comes back clean. The
-  `Needs Review` move for an opened pull request waits for that.
+  starts, and to `Needs Review` when a pass comes back clean. The
+  `Needs Review` move for an opened pull request waits for that, with one
+  exception: a turn that ends idle between passes (fixes pushed, `wait`
+  running on the new CI run) moves to `Needs Review` too, so an idle session
+  is never left under `Self Review`. When `wait` reports the run, the session
+  goes back to `Self Review` for the next pass.
 - The turn ends on a question only the user can answer: `Needs Review`.
 - The user answers, review comments come in to act on, or CI fails on the
   session's pull request: `Working`. Once the fix is pushed and the turn ends

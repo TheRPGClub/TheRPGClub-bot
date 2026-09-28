@@ -63,7 +63,10 @@ commit alone does not show.
 3. Otherwise fix every finding that holds, on the branch, rerun the smoke test,
    and push. Each finding is fixed; none is set aside for the user to pick up
    at review. The session stays in `Self Review` while it fixes.
-4. Once CI has passed on the new head, go back to 1.
+4. Once CI has passed on the new head, go back to 1. A turn that ends while
+   that CI run is still going moves to `Needs Review` and back to
+   `Self Review` when `wait` reports the run, per
+   [sidebar-groups.md](sidebar-groups.md).
 
 There is no cap on the number of passes. The loop ends on a clean pass and on
 nothing else.
