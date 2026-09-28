@@ -11,11 +11,14 @@ import {
   safeDeferReply,
   safeReply,
   sanitizeUserInput,
+  parseUserUrl,
 } from "../functions/InteractionUtils.js";
 import { buildTextReply } from "../functions/ComponentsV2Utils.js";
 import { isAdmin } from "./admin/admin-auth.utils.js";
 import { addFeed, listFeeds, removeFeed, updateFeed } from "../classes/RssFeed.js";
 import { buildRssHelpResponse } from "./help.command.js";
+
+const FEED_URL_LABEL = "Feed URL";
 
 function normalizeList(value: string | undefined): string[] {
   if (!value) return [];
@@ -84,8 +87,14 @@ export class RssCommand {
     const ok = await isAdmin(interaction);
     if (!ok) return;
 
+    const parsedUrl = parseUserUrl(url, FEED_URL_LABEL);
+    if (!parsedUrl.ok) {
+      await safeReply(interaction, buildTextReply(parsedUrl.error, true));
+      return;
+    }
+    url = parsedUrl.value;
+
     await withErrorReply(interaction, async () => {
-      url = sanitizeUserInput(url, { preserveNewlines: false });
       const sanitizedName = feedName
         ? sanitizeUserInput(feedName, { preserveNewlines: false })
         : undefined;
@@ -200,8 +209,17 @@ export class RssCommand {
       return;
     }
 
+    let parsedUrl: string | undefined;
+    if (url) {
+      const result = parseUserUrl(url, FEED_URL_LABEL);
+      if (!result.ok) {
+        await safeReply(interaction, buildTextReply(result.error, true));
+        return;
+      }
+      parsedUrl = result.value;
+    }
+
     await withErrorReply(interaction, async () => {
-      const sanitizedUrl = url ? sanitizeUserInput(url, { preserveNewlines: false }) : undefined;
       const sanitizedName = feedName
         ? sanitizeUserInput(feedName, { preserveNewlines: false })
         : undefined;
@@ -213,7 +231,7 @@ export class RssCommand {
         : normalizeList(sanitizeUserInput(exclude, { preserveNewlines: false }));
       const channelId = channel ? channel.id : undefined;
       const updated = await updateFeed(feedId, {
-        feedUrl: sanitizedUrl,
+        feedUrl: parsedUrl,
         channelId: channelId,
         includeKeywords,
         excludeKeywords,
