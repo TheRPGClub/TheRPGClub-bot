@@ -85,16 +85,58 @@ export async function updateAvatarRecordFromUrl(
   return storeAvatarRecord(user.id, avatarHash, avatarUrl);
 }
 
+// A latest row with the same hash but no URL is a legacy blob-only row. It still needs a
+// URL record so the API can stop serving the Postgres blob (issue #1073).
+export function needsAvatarRecord(
+  latest: Pick<IAvatarHistoryRecord, "avatarHash" | "avatarUrl"> | undefined,
+  avatarHash: string,
+): boolean {
+  if (!latest) return true;
+  if (latest.avatarHash !== avatarHash) return true;
+  return !latest.avatarUrl;
+}
+
 export async function recordCurrentAvatarIfNew(member: GuildMember): Promise<boolean> {
   if (member.user.bot) return false;
   const avatarHash = member.avatar ?? member.user.avatar;
   if (!avatarHash) return false;
 
   const latest = await Member.getAvatarHistory(member.user.id, 1, 0);
-  if (latest.length && latest[0].avatarHash === avatarHash) return false;
+  if (!needsAvatarRecord(latest[0], avatarHash)) return false;
 
   const discordUrl = member.displayAvatarURL({ extension: "png", size: 512, forceStatic: true });
   return storeAvatarRecord(member.user.id, avatarHash, discordUrl);
+}
+
+const AVATAR_SCAN_CONCURRENCY = 4;
+
+export interface IAvatarScanResult {
+  recorded: number;
+  skipped: number;
+  failed: number;
+}
+
+// Runs a few members at a time so a full-guild backfill (Discord download plus Backblaze
+// upload per member) finishes well inside the 15 minute interaction token lifetime.
+export async function recordCurrentAvatars(
+  members: readonly GuildMember[],
+): Promise<IAvatarScanResult> {
+  const result: IAvatarScanResult = { recorded: 0, skipped: 0, failed: 0 };
+  let next = 0;
+  const worker = async (): Promise<void> => {
+    while (next < members.length) {
+      const member = members[next++];
+      try {
+        if (await recordCurrentAvatarIfNew(member)) result.recorded++;
+        else result.skipped++;
+      } catch {
+        result.failed++;
+      }
+    }
+  };
+  const workerCount = Math.min(AVATAR_SCAN_CONCURRENCY, members.length);
+  await Promise.all(Array.from({ length: workerCount }, worker));
+  return result;
 }
 
 export async function logAvatarChange(
