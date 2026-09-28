@@ -3,6 +3,10 @@
 .env.local
 yarn.lock
 test-results.txt
+__pycache__/
+
+# catchup ledgers' saved run logs
+*.logs/
 
 # folders
 node_modules
