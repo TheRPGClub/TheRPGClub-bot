@@ -51,6 +51,15 @@
             "statusMessage": "Running related tests..."
           }
         ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "HOOK=\"$CLAUDE_PROJECT_DIR/scripts/remind-pr-merge-watch.sh\"; test -x \"$HOOK\" || exit 0; exec \"$HOOK\""
+          }
+        ]
       }
     ]
   }
