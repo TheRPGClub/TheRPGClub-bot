@@ -5,6 +5,36 @@ description: Find the oldest open, non-blocked refactor GitHub issue, implement 
 
 This skill picks up the oldest open, non-blocked refactor issue, does the full implementation, and ships a PR -- no prompting required.
 
+## Sidebar moves
+
+The session files itself in the Code tab sidebar at each step below. These
+moves are part of the steps, not optional extras, and skipping one leaves the
+user unable to see where the session stands.
+
+Before the first move, load the tools in one call:
+
+```
+ToolSearch select:mcp__ccd_sidebar__list_groups,mcp__ccd_sidebar__create_group,mcp__ccd_sidebar__move_sessions
+```
+
+Each move: `mcp__ccd_sidebar__list_groups`, take the id of the group by name
+(create it with `mcp__ccd_sidebar__create_group` when missing), then
+`mcp__ccd_sidebar__move_sessions` with `session_ids: ["self"]` and that id.
+Ids are never stored; look them up every time. A tool that fails is reported
+in one line and skipped, per
+[sidebar-groups.md](../_shared/sidebar-groups.md#rules).
+
+- Step 1 finds no issue to work: `Completed`.
+- Step 2 stops on an open dependency: `Blocked`. When it closes: `Working`.
+- Step 3 stops on a dirty working tree to ask the user: `Needs Review`.
+- Step 4, as the implementation starts: `Working`.
+- Step 9, as the self review starts: `Self Review`.
+- Step 10, after a clean self review pass: `Needs Review`.
+- Review comments, a CI failure, or a user answer to act on: `Working`, then
+  back through `Self Review` to `Needs Review` once the fix is pushed.
+- The pull request merged or closed: the group sidebar-groups.md names for a
+  merge, usually `Completed`.
+
 ## Steps (always run in order)
 
 ### 1. Find the oldest open, non-blocked refactor issue
@@ -18,7 +48,8 @@ gh issue list --label refactor --state open --limit 50 \
         | sort_by(.createdAt) | .[0]'
 ```
 
-If the result is `null`, every open refactor issue is blocked -- stop and report that to the user.
+If the result is `null`, every open refactor issue is blocked -- stop, report that to the user,
+and move to `Completed` (see [Sidebar moves](#sidebar-moves)).
 
 Capture the issue number and title. Then fetch the full body:
 
@@ -37,16 +68,18 @@ gh issue view <X> --json state,title
 ```
 
 If the dependency is still open, stop and report to the user: "Issue #N depends on #X which is
-still open." Move the session to the `Blocked` sidebar group, record #X with
-`scripts/catchup.py add-issue`, keep one `wait` running, and end the turn, per
+still open." Move the session to `Blocked` (see [Sidebar moves](#sidebar-moves)), record #X
+with `scripts/catchup.py add-issue`, keep one `wait` running, and end the turn, per
 [sidebar-groups.md](../_shared/sidebar-groups.md#blocked-by-another-issue).
-When `wait` prints `issue: <X> closed`, move to `Working` and start this skill over at step 1.
+When `wait` prints `issue: <X> closed`, move to `Working` and start this skill over at
+step 1.
 
 ### 3. Branch from the latest main
 
 The working tree must be clean first. `git status --short` printing anything
 means another task's work is sitting here: stop and ask what to do with it,
-never stash or discard it.
+never stash or discard it, and move to `Needs Review` (see
+[Sidebar moves](#sidebar-moves)).
 
 Branch from `origin/main` after a fetch. Do not `git checkout main && git pull`:
 in a worktree, `main` is checked out by the main checkout and the checkout
@@ -64,8 +97,7 @@ Derive the slug from the issue title (kebab-case, under 40 chars).
 
 ### 4. Implement the change
 
-Move the session to the `Working` sidebar group, per
-[sidebar-groups.md](../_shared/sidebar-groups.md).
+Move the session to `Working` (see [Sidebar moves](#sidebar-moves)).
 
 Read the relevant source files before editing. Do not read entire large files -- use targeted reads (specific line ranges or grep) to locate the patterns described in the issue.
 
@@ -145,14 +177,15 @@ Closes #N
 
 ### 9. Review it yourself
 
-Once CI has passed and the PR is mergeable, move to `Self Review` and run the loop in
-[self-review.md](../_shared/self-review.md): `code-review` at `high` on the PR number, a read
-against this repo's rules, a fix for every finding that holds, and another full pass, until a
-pass comes back clean. Fill in the `Self review` section of the body as it goes.
+Once CI has passed and the PR is mergeable, move to `Self Review` (see
+[Sidebar moves](#sidebar-moves)) and run the loop in [self-review.md](../_shared/self-review.md):
+`code-review` at `high` on the PR number, a read against this repo's rules, a fix for every
+finding that holds, and another full pass, until a pass comes back clean. Fill in the
+`Self review` section of the body as it goes.
 
 ### 10. Report
 
-Move the session to `Needs Review`, per [sidebar-groups.md](../_shared/sidebar-groups.md),
+Move the session to `Needs Review` (see [Sidebar moves](#sidebar-moves)),
 only after the clean pass. Give the user the PR URL, the smoke test and CI result, and how
 many self review passes ran and what they found and fixed.
 
@@ -163,4 +196,6 @@ many self review passes ran and what they found and fixed.
 - Do NOT open the PR if smoke.sh fails.
 - Do NOT commit directly to main.
 - Do NOT hand the PR over before a clean self review pass.
+- Do NOT skip a sidebar move. Each one in [Sidebar moves](#sidebar-moves) is
+  part of its step.
 - Do NOT pass multi-line text through a heredoc.
