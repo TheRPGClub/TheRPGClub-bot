@@ -1,9 +1,9 @@
 # Waiting on an issue, a pull request, or a run
 
 Shared by every skill that stops to wait on something outside the session: a
-blocking issue, a pull request, or a workflow run. This file is the only place the catch-up script and the one-watcher rule
-are written out. A skill that needs them points here rather than restating
-them.
+blocking issue, a pull request, or a workflow run. This file is the only place
+the catch-up script and the one-watcher rule are written out. A skill that
+needs them points here rather than restating them.
 
 Ported from the PlaywrightTesting repo's `scripts/catchup.py`, which keeps the
 same commands and output, so sessions in both repos read the same way.
@@ -119,7 +119,8 @@ When the pull request merges, `wait` prints
 done: <label> - <pull request url>
   merged <sha> at <time>
 pr: <number> merged
-sidebar: ...
+wait: <n> finished; <m> still open; ...
+sidebar: a pull request closed; ...
 ```
 
 and exits. That exit is the cue to run the skill's after-merge steps straight

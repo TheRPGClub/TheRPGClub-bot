@@ -8,10 +8,9 @@ set -euo pipefail
 
 input=$(cat)
 command=$(jq -r '.tool_input.command // ""' <<<"$input")
-case "$command" in
-  *"gh pr create"*) ;;
-  *) exit 0 ;;
-esac
+# Only a command that runs `gh pr create`, at its start or after a shell separator, not
+# one that merely mentions it (a grep of the docs, a commit message).
+grep -qE '(^|[;&|(])[[:space:]]*gh pr create' <<<"$command" || exit 0
 
 output=$(jq -r '.tool_response | if type == "string" then . else tostring end' \
   <<<"$input")
