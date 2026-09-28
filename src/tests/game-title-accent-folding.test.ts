@@ -1,15 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  findAccentedSpelling,
   foldAccents,
-  foldedTitleMatchesTerms,
   normalizeTitleKey,
 } from "../functions/GameTitleAutocompleteUtils.js";
-
-function keysFor(title: string): { folded: string; norm: string } {
-  const folded = foldAccents(title.toLowerCase()).toLowerCase();
-  return { folded, norm: folded.replace(/[^a-z0-9]/g, "") };
-}
 
 test("foldAccents strips diacritics beyond the letter e", () => {
   assert.equal(foldAccents("Pokémon"), "Pokemon");
@@ -23,14 +18,19 @@ test("normalizeTitleKey treats accented and plain titles as the same key", () =>
   assert.equal(normalizeTitleKey("Pokémon Red"), normalizeTitleKey("Pokemon Red"));
 });
 
-test("foldedTitleMatchesTerms finds accented titles from unaccented terms", () => {
-  const title = keysFor("Pokémon Mystery Dungeon");
-  assert.equal(foldedTitleMatchesTerms(title, ["pokemon"]), true);
-  assert.equal(foldedTitleMatchesTerms(title, ["mystery dungeon"]), true);
-  assert.equal(foldedTitleMatchesTerms(title, ["pokemonmystery"]), true);
-  assert.equal(foldedTitleMatchesTerms(title, ["zelda"]), false);
+test("findAccentedSpelling returns the accented spelling of a folded term", () => {
+  assert.equal(findAccentedSpelling("Pokémon Mystery Dungeon", "pokemon"), "pokémon");
+  assert.equal(findAccentedSpelling("Ōkami HD", "okami hd"), "ōkami hd");
+  assert.equal(findAccentedSpelling("Café Rush", "cafe"), "café");
 });
 
-test("foldedTitleMatchesTerms ignores terms with no letters or digits", () => {
-  assert.equal(foldedTitleMatchesTerms(keysFor("Pokémon"), ["!!"]), false);
+test("findAccentedSpelling handles titles stored in decomposed form", () => {
+  const decomposed = "Pokémon".normalize("NFD");
+  assert.equal(findAccentedSpelling(decomposed, "pokemon"), "pokémon".normalize("NFD"));
+});
+
+test("findAccentedSpelling returns null when the API search already matches", () => {
+  assert.equal(findAccentedSpelling("Pokémon Mystery Dungeon", "mystery"), null);
+  assert.equal(findAccentedSpelling("Pokémon Red", "zelda"), null);
+  assert.equal(findAccentedSpelling("Pokémon Red", ""), null);
 });

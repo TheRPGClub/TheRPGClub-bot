@@ -2,8 +2,8 @@ import { apiGet } from "../services/RpgClubApiClient.js";
 import GameSearchSynonym from "./GameSearchSynonym.js";
 import { mapGameFromApi } from "../functions/GameMappers.js";
 import {
+  findAccentedSpelling,
   foldAccents,
-  foldedTitleMatchesTerms,
 } from "../functions/GameTitleAutocompleteUtils.js";
 import { createTtlCache } from "../functions/TtlCache.js";
 import { AUTOCOMPLETE_CACHE_TTL_MS } from "../config/cacheDefaults.js";
@@ -14,6 +14,7 @@ import type {
 } from "../types/GameTypes.js";
 import GamePlatformRegionService from "./GamePlatformRegionService.js";
 import GameProfileService from "./GameProfileService.js";
+import { logError } from "../utilities/LogUtils.js";
 
 type GamesListResponse = { data: unknown[]; meta: { next: number | null } };
 
@@ -46,25 +47,27 @@ export default class GameSearchService {
 
   /**
    * The API's `q` search is accent-sensitive, so "pokemon" never finds "Pokémon".
-   * Matches accented titles against the folded title cache instead and fetches
-   * whichever ones the API search did not already return.
+   * Finds how each folded term is spelled inside accented titles in the cache
+   * ("pokémon") so the caller can search the API with that spelling as well.
    */
-  private static async fetchAccentedTitleMatches(
-    foldedTerms: string[],
-    found: Map<number, IGame>,
-  ): Promise<IGame[]> {
-    const titles = await GameSearchService.gameTitleCache.get();
-    const missingIds = titles
-      .filter((entry) => entry.accented && !found.has(entry.game.id))
-      .filter((entry) => foldedTitleMatchesTerms(entry, foldedTerms))
-      .map((entry) => entry.game.id);
-    const games = await Promise.all(
-      missingIds.map(async (id) => {
-        const result = await apiGet<{ data: unknown }>(`/api/v1/games/${id}`);
-        return result?.data ? mapGameFromApi(result.data) : null;
-      }),
-    );
-    return games.filter((g): g is IGame => g !== null);
+  private static async findAccentedSpellings(foldedTerms: string[]): Promise<string[]> {
+    let titles: IIndexedGameTitle[];
+    try {
+      titles = await GameSearchService.gameTitleCache.get();
+    } catch (error) {
+      logError("GameSearchService.findAccentedSpellings", error);
+      return [];
+    }
+    const spellings = new Set<string>();
+    for (const entry of titles) {
+      if (!entry.accented) continue;
+      for (const term of foldedTerms) {
+        const spelling = findAccentedSpelling(entry.game.title, term);
+        if (spelling) spellings.add(spelling);
+      }
+      if (spellings.size >= MAX_QUERY_VARIANTS) break;
+    }
+    return Array.from(spellings).slice(0, MAX_QUERY_VARIANTS);
   }
 
   private static async buildQueryVariants(baseQuery: string): Promise<string[]> {
@@ -219,18 +222,14 @@ export default class GameSearchService {
     if (companyIds.length) fetchParams.company_id = companyIds;
 
     if (queryTerms.length) {
-      for (const term of queryTerms) {
+      const accentedTerms = await GameSearchService.findAccentedSpellings(queryTerms);
+      for (const term of [...queryTerms, ...accentedTerms]) {
         const rows = await GameSearchService.fetchGamesPages({
           ...fetchParams,
           q: term,
         });
         rows.forEach((g) => gameMap.set(g.id, g));
       }
-      const accentedMatches = await GameSearchService.fetchAccentedTitleMatches(
-        queryTerms,
-        gameMap,
-      );
-      accentedMatches.forEach((g) => gameMap.set(g.id, g));
     } else {
       const rows = await GameSearchService.fetchGamesPages(fetchParams);
       rows.forEach((g) => gameMap.set(g.id, g));

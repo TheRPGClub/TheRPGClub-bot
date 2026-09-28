@@ -3,21 +3,28 @@ export function foldAccents(text: string): string {
   return text.normalize("NFD").replace(/\p{M}/gu, "");
 }
 
-type IFoldedTitleKeys = {
-  folded: string;
-  norm: string;
-};
-
 /**
- * True when a title's folded keys contain any of the folded, lowercased search
- * terms. Used to find accented titles that the API's plain text search misses.
+ * Returns how a folded, lowercased search term is actually spelled inside a
+ * title, e.g. "pokemon" inside "Pokémon Red" gives "pokémon". Returns null when
+ * the title does not contain the term or the matched text has no accents, since
+ * the API's plain text search already finds those.
  */
-export function foldedTitleMatchesTerms(title: IFoldedTitleKeys, terms: string[]): boolean {
-  return terms.some((term) => {
-    if (title.folded.includes(term)) return true;
-    const termNorm = term.replace(/[^a-z0-9]/g, "");
-    return termNorm.length > 0 && title.norm.includes(termNorm);
+export function findAccentedSpelling(title: string, foldedTerm: string): string | null {
+  if (!foldedTerm) return null;
+  const chars = Array.from(title);
+  let folded = "";
+  const sourceIndex: number[] = [];
+  chars.forEach((char, index) => {
+    const foldedChar = foldAccents(char).toLowerCase();
+    folded += foldedChar;
+    for (let i = 0; i < foldedChar.length; i++) sourceIndex.push(index);
   });
+
+  const start = folded.indexOf(foldedTerm);
+  if (start < 0) return null;
+  const end = sourceIndex[start + foldedTerm.length - 1];
+  const spelling = chars.slice(sourceIndex[start], end + 1).join("").toLowerCase();
+  return spelling === foldedTerm ? null : spelling;
 }
 
 type IGameTitleAutocompleteEntry = {
