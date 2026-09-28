@@ -31,7 +31,7 @@ import {
   safeUpdate,
   sanitizeUserInput,
 } from "../functions/InteractionUtils.js";
-import Member, { type IMemberRecord } from "../classes/Member.js";
+import Member from "../classes/Member.js";
 import type { IGame } from "../types/GameTypes.js";
 import Game from "../classes/Game.js";
 import { STANDARD_PLATFORM_IDS } from "../config/standardPlatforms.js";
@@ -718,34 +718,8 @@ export class SuperAdmin {
     let failCount = 0;
 
     for (const member of members.values()) {
-      const user = member.user;
-
-      const record: IMemberRecord = {
-        userId: user.id,
-        isBot: user.bot ? 1 : 0,
-        username: user.username,
-        globalName: (user as any).globalName ?? null,
-        avatarBlob: null,
-        serverJoinedAt: member.joinedAt ?? null,
-        serverLeftAt: null,
-        lastSeenAt: null,
-        roleAdmin: 0,
-        roleModerator: 0,
-        roleRegular: 0,
-        roleMember: 0,
-        roleNewcomer: 0,
-        messageCount: null,
-        completionatorUrl: null,
-        psnUsername: null,
-        xblUsername: null,
-        nswFriendCode: null,
-        steamUrl: null,
-        profileImage: null,
-        profileImageAt: null,
-      };
-
       try {
-        await Member.upsert(record);
+        await Member.upsertGuildMember(member);
         successCount++;
       } catch (err) {
         failCount++;

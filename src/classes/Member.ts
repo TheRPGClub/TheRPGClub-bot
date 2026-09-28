@@ -1,4 +1,4 @@
-import type { GuildMember } from "discord.js";
+import type { GuildMember, User } from "discord.js";
 import { isPositiveInt, requirePositiveInt } from "../utilities/ValidationUtils.js";
 import { logError } from "../utilities/LogUtils.js";
 import { apiGet, apiPost, apiPatch, apiDelete } from "../services/RpgClubApiClient.js";
@@ -1205,15 +1205,16 @@ export default class Member {
   }
 
   // The API rejects rows keyed to a user it has no record of ("User must exist"), so callers
-  // that save per-user data for a guild member upsert the member first (issue #1153).
-  static async upsertGuildMember(member: GuildMember): Promise<void> {
+  // that save per-user data for a guild member upsert the user first (issue #1153).
+  // A null join date leaves the stored server_joined_at untouched.
+  static async upsertDiscordUser(user: User, serverJoinedAt: Date | null): Promise<void> {
     await Member.upsert({
-      userId: member.user.id,
-      isBot: member.user.bot ? 1 : 0,
-      username: member.user.username,
-      globalName: member.user.globalName ?? null,
+      userId: user.id,
+      isBot: user.bot ? 1 : 0,
+      username: user.username,
+      globalName: user.globalName ?? null,
       avatarBlob: null,
-      serverJoinedAt: member.joinedAt ?? null,
+      serverJoinedAt,
       serverLeftAt: null,
       lastSeenAt: null,
       roleAdmin: 0,
@@ -1230,6 +1231,10 @@ export default class Member {
       profileImage: null,
       profileImageAt: null,
     });
+  }
+
+  static async upsertGuildMember(member: GuildMember): Promise<void> {
+    await Member.upsertDiscordUser(member.user, member.joinedAt ?? null);
   }
 
   static async markDepartedNotIn(userIds: string[]): Promise<number> {

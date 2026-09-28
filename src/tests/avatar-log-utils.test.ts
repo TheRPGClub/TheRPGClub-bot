@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { AxiosError, AxiosHeaders } from "axios";
-import type { GuildMember } from "discord.js";
+import type { GuildMember, User } from "discord.js";
 import Member from "../classes/Member.js";
 import {
   buildScanFailureDisplays,
@@ -53,7 +53,7 @@ function unprocessableError(userId: string): AxiosError {
 
 test("recordCurrentAvatars reports a member whose save is rejected with 422", async (t) => {
   t.mock.method(Member, "getAvatarHistory", async () => []);
-  t.mock.method(Member, "upsertGuildMember", async () => undefined);
+  t.mock.method(Member, "upsertDiscordUser", async () => undefined);
   t.mock.method(Member, "insertAvatarHistoryRecord", async (userId: string) => {
     if (userId === "2") throw unprocessableError(userId);
     return true;
@@ -73,7 +73,7 @@ test("recordCurrentAvatars reports a member whose save is rejected with 422", as
 
 test("recordCurrentAvatars counts a save that returns no record as failed", async (t) => {
   t.mock.method(Member, "getAvatarHistory", async () => []);
-  t.mock.method(Member, "upsertGuildMember", async () => undefined);
+  t.mock.method(Member, "upsertDiscordUser", async () => undefined);
   t.mock.method(Member, "insertAvatarHistoryRecord", async () => false);
   t.mock.method(console, "error", () => undefined);
 
@@ -88,8 +88,8 @@ test("recordCurrentAvatars counts a save that returns no record as failed", asyn
 test("recordCurrentAvatars upserts a member missing from the API before saving", async (t) => {
   const known = new Set<string>();
   t.mock.method(Member, "getAvatarHistory", async () => []);
-  t.mock.method(Member, "upsertGuildMember", async (member: GuildMember) => {
-    known.add(member.user.id);
+  t.mock.method(Member, "upsertDiscordUser", async (user: User) => {
+    known.add(user.id);
   });
   t.mock.method(Member, "insertAvatarHistoryRecord", async (userId: string) => {
     if (!known.has(userId)) throw unprocessableError(userId);
@@ -102,11 +102,11 @@ test("recordCurrentAvatars upserts a member missing from the API before saving",
   assert.equal(result.failures.length, 0);
 });
 
-test("recordCurrentAvatars does not upsert a member whose avatar is already recorded", async (t) => {
+test("recordCurrentAvatars does not upsert a member already recorded", async (t) => {
   t.mock.method(Member, "getAvatarHistory", async () => [
     { avatarHash: "abc", avatarUrl: CDN_URL },
   ]);
-  const upsert = t.mock.method(Member, "upsertGuildMember", async () => undefined);
+  const upsert = t.mock.method(Member, "upsertDiscordUser", async () => undefined);
 
   const result = await recordCurrentAvatars([fakeMember("6")]);
 
