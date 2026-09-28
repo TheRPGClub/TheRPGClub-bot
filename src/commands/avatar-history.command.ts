@@ -47,7 +47,11 @@ import {
   buildUserHeaderContainer,
   buildSelectRow,
 } from "../functions/uiComponents.js";
-import { recordCurrentAvatars } from "../utilities/AvatarLogUtils.js";
+import {
+  AVATAR_SCAN_SUMMARY_MAX_CHARS,
+  buildScanFailureDisplays,
+  recordCurrentAvatars,
+} from "../utilities/AvatarLogUtils.js";
 import { logError } from "../utilities/LogUtils.js";
 import { parseCustomIdSegments } from "../utilities/CustomIdUtils.js";
 import { isAdmin } from "./admin/admin-auth.utils.js";
@@ -259,7 +263,7 @@ export class AvatarHistoryCommand {
         return;
       }
       const guildMembers = allMembers.filter((m) => !m.user.bot);
-      const { recorded, skipped, failed } = await recordCurrentAvatars([
+      const { recorded, skipped, failed, failures } = await recordCurrentAvatars([
         ...guildMembers.values(),
       ]);
       const lines = [
@@ -273,8 +277,11 @@ export class AvatarHistoryCommand {
         new TextDisplayBuilder().setContent("# Avatar History Scan"),
       );
       scanContainer.addTextDisplayComponents(
-        new TextDisplayBuilder().setContent(safeV2TextContent(lines.join("\n"), 3500)),
+        new TextDisplayBuilder().setContent(
+          safeV2TextContent(lines.join("\n"), AVATAR_SCAN_SUMMARY_MAX_CHARS),
+        ),
       );
+      scanContainer.addTextDisplayComponents(...buildScanFailureDisplays(failures));
       await safeReply(interaction, {
         components: [scanContainer],
         flags: buildComponentsV2Flags(true),

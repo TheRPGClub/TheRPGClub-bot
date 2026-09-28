@@ -1,16 +1,25 @@
 import axios from "axios";
 import type { GuildMember, User } from "discord.js";
-import { MediaGalleryBuilder, MediaGalleryItemBuilder } from "@discordjs/builders";
-import { AttachmentBuilder } from "discord.js";
-import Member, { type IAvatarHistoryRecord } from "../classes/Member.js";
+import {
+  MediaGalleryBuilder,
+  MediaGalleryItemBuilder,
+  TextDisplayBuilder,
+} from "@discordjs/builders";
+import { AttachmentBuilder, userMention } from "discord.js";
+import Member, { avatarHistoryApiPath, type IAvatarHistoryRecord } from "../classes/Member.js";
 import { formatTimestampWithDay, resolveLogChannel } from "./DiscordLogUtils.js";
 import { COLOR_INFO } from "../config/colors.js";
-import { buildTitledContainer, buildContainerSend } from "../functions/ComponentsV2Utils.js";
+import {
+  buildContainerSend,
+  buildTitledContainer,
+  safeV2TextContent,
+} from "../functions/ComponentsV2Utils.js";
 import {
   getOrReplaceBackblazeImage,
   hasBackblazeB2Config,
 } from "../services/BackblazeB2Service.js";
-import { logWarn } from "./LogUtils.js";
+import { buildApiErrorMessage, formatApiError } from "./ApiErrorUtils.js";
+import { logError, logWarn } from "./LogUtils.js";
 
 async function downloadAvatarBuffer(url: string): Promise<Buffer | null> {
   try {
@@ -60,21 +69,28 @@ async function uploadAvatarToBackblaze(
   }
 }
 
+/** Thrown when the avatar history POST answers 404, so no row was saved. */
+export class AvatarRecordNotSavedError extends Error {
+  constructor(
+    readonly userId: string,
+    readonly requestBody: unknown,
+  ) {
+    super(`Avatar history POST for ${userId} returned 404; no row was saved.`);
+    this.name = "AvatarRecordNotSavedError";
+  }
+}
+
 async function storeAvatarRecord(
   userId: string,
   avatarHash: string,
   discordUrl: string,
-): Promise<boolean> {
+): Promise<{ saved: boolean; avatarUrl: string }> {
+  let avatarUrl = discordUrl;
   if (hasBackblazeB2Config()) {
-    const storedUrl = await uploadAvatarToBackblaze(userId, avatarHash, discordUrl);
-    if (storedUrl) {
-      await Member.insertAvatarHistoryRecord(userId, avatarHash, storedUrl);
-      return true;
-    }
+    avatarUrl = (await uploadAvatarToBackblaze(userId, avatarHash, discordUrl)) ?? discordUrl;
   }
-
-  await Member.insertAvatarHistoryRecord(userId, avatarHash, discordUrl);
-  return true;
+  const saved = await Member.insertAvatarHistoryRecord(userId, avatarHash, avatarUrl);
+  return { saved, avatarUrl };
 }
 
 export async function updateAvatarRecordFromUrl(
@@ -82,7 +98,8 @@ export async function updateAvatarRecordFromUrl(
   avatarUrl: string,
   avatarHash: string,
 ): Promise<boolean> {
-  return storeAvatarRecord(user.id, avatarHash, avatarUrl);
+  const { saved } = await storeAvatarRecord(user.id, avatarHash, avatarUrl);
+  return saved;
 }
 
 // A latest row with the same hash but no URL is a legacy blob-only row. It still needs a
@@ -105,15 +122,36 @@ export async function recordCurrentAvatarIfNew(member: GuildMember): Promise<boo
   if (!needsAvatarRecord(latest[0], avatarHash)) return false;
 
   const discordUrl = member.displayAvatarURL({ extension: "png", size: 512, forceStatic: true });
-  return storeAvatarRecord(member.user.id, avatarHash, discordUrl);
+  const { saved, avatarUrl } = await storeAvatarRecord(member.user.id, avatarHash, discordUrl);
+  if (!saved) {
+    throw new AvatarRecordNotSavedError(member.user.id, {
+      data: { avatar_hash: avatarHash, avatar_url: avatarUrl },
+    });
+  }
+  return true;
 }
 
 const AVATAR_SCAN_CONCURRENCY = 4;
+
+export interface IAvatarScanFailure {
+  userId: string;
+  /** Request and response detail, formatted for a Discord reply. */
+  detail: string;
+}
 
 export interface IAvatarScanResult {
   recorded: number;
   skipped: number;
   failed: number;
+  failures: IAvatarScanFailure[];
+}
+
+function describeAvatarScanFailure(err: unknown): string {
+  if (err instanceof AvatarRecordNotSavedError) {
+    const path = avatarHistoryApiPath(err.userId);
+    return `Avatar record not saved\n${formatApiError("POST", path, err.requestBody, 404, null)}`;
+  }
+  return buildApiErrorMessage("Avatar record failed", err);
 }
 
 // Runs a few members at a time so a full-guild backfill (Discord download plus Backblaze
@@ -121,7 +159,7 @@ export interface IAvatarScanResult {
 export async function recordCurrentAvatars(
   members: readonly GuildMember[],
 ): Promise<IAvatarScanResult> {
-  const result: IAvatarScanResult = { recorded: 0, skipped: 0, failed: 0 };
+  const result: IAvatarScanResult = { recorded: 0, skipped: 0, failed: 0, failures: [] };
   let next = 0;
   const worker = async (): Promise<void> => {
     while (next < members.length) {
@@ -129,14 +167,50 @@ export async function recordCurrentAvatars(
       try {
         if (await recordCurrentAvatarIfNew(member)) result.recorded++;
         else result.skipped++;
-      } catch {
+      } catch (err) {
+        logError(`AvatarLogUtils.recordCurrentAvatars user=${member.user.id}`, err);
         result.failed++;
+        result.failures.push({ detail: describeAvatarScanFailure(err), userId: member.user.id });
       }
     }
   };
   const workerCount = Math.min(AVATAR_SCAN_CONCURRENCY, members.length);
   await Promise.all(Array.from({ length: workerCount }, worker));
   return result;
+}
+
+// A Components V2 message allows 4000 characters of text in total, so the scan reply spends
+// 500 on the summary and at most 3 x 1000 on failure details, leaving room for the heading.
+export const AVATAR_SCAN_SUMMARY_MAX_CHARS = 500;
+const AVATAR_SCAN_FAILURE_DETAIL_MAX = 3;
+const AVATAR_SCAN_FAILURE_MAX_CHARS = 1000;
+
+/** One text display per failed member (capped), plus a note for any left out. */
+export function buildScanFailureDisplays(
+  failures: readonly IAvatarScanFailure[],
+): TextDisplayBuilder[] {
+  const shown = failures.slice(0, AVATAR_SCAN_FAILURE_DETAIL_MAX);
+  const displays = shown.map((failure) =>
+    new TextDisplayBuilder().setContent(
+      safeV2TextContent(
+        `### Failed: ${userMention(failure.userId)} (${failure.userId})\n${failure.detail}`,
+        AVATAR_SCAN_FAILURE_MAX_CHARS,
+      ),
+    ),
+  );
+  const omitted = failures.length - shown.length;
+  if (omitted > 0) {
+    const plural = omitted !== 1 ? "s" : "";
+    displays.push(
+      new TextDisplayBuilder().setContent(
+        safeV2TextContent(
+          `-# ${omitted} more failure${plural} not shown; see the bot logs.`,
+          AVATAR_SCAN_FAILURE_MAX_CHARS,
+        ),
+      ),
+    );
+  }
+  return displays;
 }
 
 export async function logAvatarChange(
