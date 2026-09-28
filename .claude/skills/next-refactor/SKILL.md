@@ -40,14 +40,23 @@ If the dependency is still open, stop and report to the user: "Issue #N depends 
 Move the session to the `Blocked` sidebar group, per
 [sidebar-groups.md](../_shared/sidebar-groups.md#blocked-by-another-issue).
 
-### 3. Pull main and create a branch
+### 3. Branch from the latest main
 
-Follow the new-branch ceremony exactly:
+The working tree must be clean first. `git status --short` printing anything
+means another task's work is sitting here: stop and ask what to do with it,
+never stash or discard it.
+
+Branch from `origin/main` after a fetch. Do not `git checkout main && git pull`:
+in a worktree, `main` is checked out by the main checkout and the checkout
+fails.
 
 ```bash
-git checkout main && git pull
-git checkout -b refactor/issue-<N>-<short-slug>
+git fetch origin --prune
+git switch -c refactor/issue-<N>-<short-slug> origin/main
+git log --oneline origin/main..HEAD
 ```
+
+The last command must print nothing.
 
 Derive the slug from the issue title (kebab-case, under 40 chars).
 

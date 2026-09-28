@@ -1,19 +1,20 @@
 ---
 name: new-branch
-description: Start a new feature or fix branch by pulling main first, then checking out a fresh branch. Use when asked to "start a branch", "new branch", "begin work on", or "create branch for issue #N". Always run this before writing any code.
+description: Start a new feature or fix branch from the latest main. Use when asked to "start a branch", "new branch", "begin work on", or "create branch for issue #N". Always run this before writing any code.
 ---
 
 This skill encodes the mandatory branch-setup ceremony from CLAUDE.md. Every coding task must start here -- never write code directly on `main` or on a stale branch.
 
 ## Steps (always run in order)
 
-### 1. Switch to main and pull
+### 1. Require a clean working tree
 
 ```bash
-git checkout main && git pull
+git status --short
 ```
 
-If there are uncommitted changes on the current branch, stash or commit them first and tell the user before switching.
+This must print nothing. Anything it prints means another task's work is sitting here:
+stop and ask the user what to do with it, never stash or discard it.
 
 ### 2. Determine the branch name
 
@@ -27,11 +28,19 @@ Branch naming conventions:
 - `docs/<name>` for documentation-only changes
 - `refactor/<name>` for refactors with no functional change
 
-### 3. Create and switch to the branch
+### 3. Branch from the latest main
+
+Branch from `origin/main` after a fetch. Do not `git checkout main && git pull`:
+in a worktree, `main` is checked out by the main checkout and the checkout
+fails.
 
 ```bash
-git checkout -b <branch-name>
+git fetch origin --prune
+git switch -c <branch-name> origin/main
+git log --oneline origin/main..HEAD
 ```
+
+The last command must print nothing.
 
 ### 4. Confirm ready
 
@@ -46,6 +55,7 @@ Report the branch name and confirm the working tree is clean. The branch is now 
 
 ## Common mistakes to avoid
 
-- Do NOT skip the `git pull` on main -- stale base branches cause merge conflicts.
+- Do NOT skip the `git fetch` -- a stale `origin/main` causes merge conflicts.
+- Do NOT `git checkout main` -- it fails in a worktree.
 - Do NOT create the branch from a non-main base unless the user explicitly requests it.
 - Do NOT start writing code before this skill completes successfully.
