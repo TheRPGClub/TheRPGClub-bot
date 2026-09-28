@@ -81,10 +81,13 @@ export class AvatarRecordNotSavedError extends Error {
 }
 
 async function storeAvatarRecord(
-  userId: string,
+  user: User,
+  serverJoinedAt: Date | null,
   avatarHash: string,
   discordUrl: string,
 ): Promise<{ saved: boolean; avatarUrl: string }> {
+  const userId = user.id;
+  await Member.upsertDiscordUser(user, serverJoinedAt);
   let avatarUrl = discordUrl;
   if (hasBackblazeB2Config()) {
     avatarUrl = (await uploadAvatarToBackblaze(userId, avatarHash, discordUrl)) ?? discordUrl;
@@ -98,7 +101,7 @@ export async function updateAvatarRecordFromUrl(
   avatarUrl: string,
   avatarHash: string,
 ): Promise<boolean> {
-  const { saved } = await storeAvatarRecord(user.id, avatarHash, avatarUrl);
+  const { saved } = await storeAvatarRecord(user, null, avatarHash, avatarUrl);
   return saved;
 }
 
@@ -122,7 +125,12 @@ export async function recordCurrentAvatarIfNew(member: GuildMember): Promise<boo
   if (!needsAvatarRecord(latest[0], avatarHash)) return false;
 
   const discordUrl = member.displayAvatarURL({ extension: "png", size: 512, forceStatic: true });
-  const { saved, avatarUrl } = await storeAvatarRecord(member.user.id, avatarHash, discordUrl);
+  const { saved, avatarUrl } = await storeAvatarRecord(
+    member.user,
+    member.joinedAt ?? null,
+    avatarHash,
+    discordUrl,
+  );
   if (!saved) {
     throw new AvatarRecordNotSavedError(member.user.id, {
       data: { avatar_hash: avatarHash, avatar_url: avatarUrl },
