@@ -60,18 +60,24 @@ gh issue view <N> --json number,title,state,labels,body,comments
   gh pr list --state open --search "<N> in:body" --json number,headRefName,url
   ```
 
-  Report who holds it, move to `Blocked`, record this issue itself with
-  `scripts/catchup.py add-issue`, keep one `wait` running, and end the turn,
-  per [sidebar-groups.md](../_shared/sidebar-groups.md#blocked-by-another-issue).
+  Either one found: report who holds it, move to `Blocked`, record this issue
+  itself with `scripts/catchup.py add-issue`, keep one `wait` running, and end
+  the turn, per
+  [sidebar-groups.md](../_shared/sidebar-groups.md#blocked-by-another-issue).
   The holder's merge closes it, and a closed own issue means `Completed`.
+  Neither found: the label is stale, left by a session that ended before it
+  cut a branch. Say so, and carry on; step 3's add is then a no-op that still
+  reads back. Every session runs as the same GitHub user, so an assignee
+  cannot tell holders apart and is not checked.
 - Read the comments, not just the body. Requirements get revised there, and
   the latest comment wins over the body where they disagree.
 - Tracking issue: do not implement the tracker. If the body is a list of child
   issues with no acceptance criteria of its own, work the child the tracker
   marks highest-value, or the first unblocked child when it marks none, and
   say which one and why. The rest of this skill then runs against that child's
-  number: it is the one labeled `In Progress`, named in the branch, and closed
-  by the PR.
+  number: the `In Progress` check above runs again against the child's labels,
+  and it is the one labeled `In Progress`, named in the branch, and closed by
+  the PR.
 
 Restate the scope in two or three lines before editing anything: what is being
 built, which files it likely touches, and what "done" means. When the issue is
