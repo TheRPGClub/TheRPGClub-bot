@@ -36,9 +36,11 @@ If the issue body mentions "Depends on issue #X", verify that issue is closed be
 gh issue view <X> --json state,title
 ```
 
-If the dependency is still open, stop and report to the user: "Issue #N depends on #X which is still open."
-Move the session to the `Blocked` sidebar group, per
+If the dependency is still open, stop and report to the user: "Issue #N depends on #X which is
+still open." Move the session to the `Blocked` sidebar group, record #X with
+`scripts/catchup.py add-issue`, keep one `wait` running, and end the turn, per
 [sidebar-groups.md](../_shared/sidebar-groups.md#blocked-by-another-issue).
+When `wait` prints `issue: <X> closed`, move to `Working` and start this skill over at step 1.
 
 ### 3. Branch from the latest main
 

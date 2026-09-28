@@ -43,3 +43,9 @@ bash <scratchpad>/check.sh
 Never `node - <<'EOF'`, never a multi-line `node -e`, and never a script
 written and run in the same call. The file stays behind, so a script that
 misbehaves can be opened and run again.
+
+## A process the session waits on
+
+A process the session waits on, such as `scripts/catchup.py wait`, runs as its
+own background Bash call rather than from inside a script. A bare `wait` in a
+script waits for every child the script started, background ones included.

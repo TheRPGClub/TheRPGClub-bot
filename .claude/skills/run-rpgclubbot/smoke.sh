@@ -42,6 +42,8 @@ run_tests() {
   echo "=== tests ==="
   node $NODE_OPTS --test --test-concurrency=5 src/tests/*.test.ts 2>&1 | tee /tmp/rpgclubbot-test-results.txt
   grep -E "^# (tests|pass|fail)" /tmp/rpgclubbot-test-results.txt
+  echo "=== catchup script ==="
+  python3 scripts/catchup_test.py
 }
 
 case "$STAGE" in

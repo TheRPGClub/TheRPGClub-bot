@@ -64,10 +64,23 @@ still open, or a change it needs sitting in an unmerged pull request.
    open. In that case it files by that instead: a pull request or question
    waiting on the user is `Needs Review`, and work it can still do is
    `Working`.
-3. End the turn. Nothing watches the blocker, so the session leaves `Blocked`
-   when the user invokes it again. It moves to `Working` and starts the task
-   over from the skill's first step, because the blocker's merge may have
-   changed the code or the issue.
+3. Record the blocker in the session's ledger, and make sure one `wait` is
+   running on it, per [run-watch.md](run-watch.md#waiting-on-a-blocking-issue):
+
+   ```bash
+   scripts/catchup.py add-issue <ledger> <blocking issue> "<short label>"
+   ```
+
+   When the blocker is a pull request with no issue behind it, record it with
+   `add-pr` instead, and read its `pr: <number> merged` the same way.
+4. End the turn. The watcher is the only thing running.
+
+When `wait` prints `issue: <number> closed` and
+`sidebar: a blocking issue closed`, or the user invokes the session again
+first, the session moves to `Working` and starts the task over from the
+skill's first step, because the blocker's merge may have changed the code or
+the issue. When the task's own issue is now closed, someone else finished it:
+report that and go to `Completed`.
 
 ## Rules
 

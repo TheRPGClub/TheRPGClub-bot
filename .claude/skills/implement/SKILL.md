@@ -76,8 +76,11 @@ gh issue view <X> --json state,title
 ```
 
 If it is still open, stop and report: "Issue #N depends on #X which is still
-open." Move the session to the `Blocked` sidebar group, per
+open." Move the session to the `Blocked` sidebar group, record #X with
+`scripts/catchup.py add-issue`, keep one `wait` running, and end the turn, per
 [sidebar-groups.md](../_shared/sidebar-groups.md#blocked-by-another-issue).
+When `wait` prints `issue: <X> closed`, move to `Working` and start this skill
+over at step 1.
 
 ## 3. Branch from the latest main
 
