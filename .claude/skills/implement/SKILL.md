@@ -52,21 +52,23 @@ gh issue view <N> --json number,title,state,labels,body,comments
 - The repo is whatever `gh` resolves for the current directory. Never pass
   `--repo` unless the user named one.
 - Already labeled `In Progress` and this session did not apply it: another
-  session holds it. Do not open a second branch. Look for its branch and pull
-  request so the report can name the holder:
+  session may hold it. Look for its branch and pull request:
 
   ```bash
+  git branch --list "*issue-<N>-*"
   git ls-remote --heads origin "*issue-<N>-*"
   gh pr list --state open --search "<N> in:body" --json number,headRefName,url
   ```
 
-  Either one found: report who holds it, move to `Blocked`, record this issue
-  itself with `scripts/catchup.py add-issue`, keep one `wait` running, and end
-  the turn, per
+  The local list matters: worktrees share branches, and a holder's branch only
+  reaches origin at step 7. Any one found means another session holds the
+  issue. Do not open a second branch. Report who holds it, move to `Blocked`,
+  record this issue itself with `scripts/catchup.py add-issue`, keep one
+  `wait` running, and end the turn, per
   [sidebar-groups.md](../_shared/sidebar-groups.md#blocked-by-another-issue).
   The holder's merge closes it, and a closed own issue means `Completed`.
-  Neither found: the label is stale, left by a session that ended before it
-  cut a branch. Say so, and carry on; step 3's add is then a no-op that still
+  None found: the label is stale, left by a session that ended before it cut
+  a branch. Say so, and carry on; step 3's add is then a no-op that still
   reads back. Every session runs as the same GitHub user, so an assignee
   cannot tell holders apart and is not checked.
 - Read the comments, not just the body. Requirements get revised there, and
