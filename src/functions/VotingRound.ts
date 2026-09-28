@@ -2,8 +2,8 @@ import BotVotingInfo, { type IBotVotingInfoEntry } from "../classes/BotVotingInf
 import Gotm from "../classes/Gotm.js";
 
 // Legacy round selection off bot_voting_info, kept only for the admin voting
-// commands (#1135) and the results sweep (#1133) until they move onto the API's
-// voting_rounds. Member-facing flows read VotingRounds instead.
+// commands until they move onto the API's voting_rounds (#1135). Everything
+// else reads VotingRounds and the voting_events outbox instead.
 
 /**
  * A round is decided once its winners exist in the GOTM data. Guards voting

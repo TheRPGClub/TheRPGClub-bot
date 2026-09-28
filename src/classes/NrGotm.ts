@@ -68,10 +68,16 @@ type NrGotmEntryApiRow = {
 
 type NrGotmEntryListResponse = { data: NrGotmEntryApiRow[] };
 
-async function loadFromDatabaseInternal(): Promise<INrGotmEntry[]> {
+async function fetchEntries(roundNumber?: number): Promise<INrGotmEntry[]> {
   const response = await apiGet<NrGotmEntryListResponse>(
     "/api/v1/nr_gotm_entries",
-    { params: { include: "game", per: 500 } },
+    {
+      params: {
+        include: "game",
+        per: 500,
+        ...(roundNumber === undefined ? {} : { round_number: roundNumber }),
+      },
+    },
   );
   const rows = response?.data ?? [];
 
@@ -125,10 +131,24 @@ async function loadFromDatabaseInternal(): Promise<INrGotmEntry[]> {
     entry.gameOfTheMonth.push(game);
   }
 
-  const data = Array.from(byRound.values()).sort((a, b) => a.round - b.round);
-  nrGotmData = data;
+  return Array.from(byRound.values()).sort((a, b) => a.round - b.round);
+}
+
+async function loadFromDatabaseInternal(): Promise<INrGotmEntry[]> {
+  nrGotmData = await fetchEntries();
   nrGotmLoaded = true;
   return nrGotmData;
+}
+
+/**
+ * Re-reads one round's winners from the API after the round lifecycle
+ * recorded them (the round_decided voting event), without rebuilding every
+ * other round. Readers keep the previous data until the round is swapped in.
+ */
+export async function reloadNrGotmRoundFromDb(roundNumber: number): Promise<void> {
+  const fresh = await fetchEntries(roundNumber);
+  nrGotmData = [...nrGotmData.filter((entry) => entry.round !== roundNumber), ...fresh]
+    .sort((a, b) => a.round - b.round);
 }
 
 export async function loadNrGotmFromDb(): Promise<void> {

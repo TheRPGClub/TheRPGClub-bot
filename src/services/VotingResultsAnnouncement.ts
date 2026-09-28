@@ -5,7 +5,6 @@ import {
   MediaGalleryItemBuilder,
 } from "@discordjs/builders";
 import { DateTime } from "luxon";
-import BotVotingInfo, { type IBotVotingInfoEntry } from "../classes/BotVotingInfo.js";
 import {
   listNominationsForRound,
   NOMINATION_KINDS,
@@ -21,7 +20,6 @@ import {
   type ITallyDisplayRow,
 } from "../functions/VoteResultsUtils.js";
 import { ensureWinnerThread, type WinnerKindLabel } from "./WinnerThreadService.js";
-import { isRoundDecided } from "../functions/VotingRound.js";
 import {
   buildComponentsV2Flags,
   buildTextContainer,
@@ -29,81 +27,33 @@ import {
 import { VOTE_TIME_ZONE } from "../functions/VoteDateUtils.js";
 import { ANNOUNCEMENT_CHANNEL_ID } from "../config/channels.js";
 import { fetchGameCoverBuffer } from "./GameImageService.js";
+import { fetchSendableChannel } from "../functions/ChannelUtils.js";
 import { logError } from "../utilities/LogUtils.js";
-
-// Results should land close to the deadline (e.g. a 10pm close is announced
-// at 10pm, not 11pm), so this polls tighter than the hourly nomination
-// reminder sweep. Each idle cycle costs a single voting_info GET, so the API
-// load stays negligible.
-const CHECK_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
-
-let resultsTimer: NodeJS.Timeout | null = null;
-let currentlyChecking = false;
-
-export function startVotingResultsService(client: Client): void {
-  if (resultsTimer) {
-    return;
-  }
-
-  const run = async (): Promise<void> => {
-    if (currentlyChecking) {
-      return;
-    }
-    currentlyChecking = true;
-    try {
-      await checkAndAnnounceResults(client);
-    } catch (err) {
-      logError("VotingResultsService.check", err);
-    } finally {
-      currentlyChecking = false;
-    }
-  };
-
-  void run();
-  resultsTimer = setInterval(() => {
-    void run();
-  }, CHECK_INTERVAL_MS);
-}
-
-/**
- * Announces results once per round. A null vote_ends_at doubles as the "not
- * yet announced" marker: the automatic path runs only while the round is on
- * its default (derived) deadline, and stamps vote_ends_at with that deadline
- * after posting. /admin voting-close sets vote_ends_at itself and announces
- * immediately, so this sweep never double-posts behind it.
- */
-async function checkAndAnnounceResults(client: Client): Promise<void> {
-  const current = await BotVotingInfo.getCurrentRound();
-  if (!current) {
-    return;
-  }
-  if (current.voteEndsAt) {
-    return;
-  }
-  if (!current.votingEnded) {
-    return;
-  }
-  if (isRoundDecided(current.roundNumber)) {
-    return;
-  }
-
-  await announceVotingResults(client, current);
-  await BotVotingInfo.updateVoteEndsAt(
-    current.roundNumber,
-    current.voteDeadline ?? new Date(),
-  );
-}
 
 /**
  * The month the round is played, e.g. "August 2026". Voting opens on the
  * last Friday of the month before, so the label is one month after the
  * round's vote-open date (in the club's US Eastern convention).
  */
-function resolveRoundMonthLabel(nextVoteAt: Date): string {
+export function resolveRoundMonthLabel(nextVoteAt: Date): string {
   return DateTime.fromJSDate(nextVoteAt)
     .setZone(VOTE_TIME_ZONE)
     .plus({ months: 1 })
     .toFormat("MMMM yyyy");
+}
+
+/** The round whose results are announced, and the month its winners are played. */
+export interface IResultsRound {
+  roundNumber: number;
+  monthLabel: string;
+}
+
+/** Thrown when no category of the round had nominations, so there is nothing to post. */
+export class NothingToAnnounceError extends Error {
+  constructor(roundNumber: number) {
+    super(`No nominations were found for Round ${roundNumber}; nothing to announce.`);
+    this.name = "NothingToAnnounceError";
+  }
 }
 
 export interface IAnnounceResultsOptions {
@@ -125,21 +75,17 @@ export interface IAnnounceResultsOptions {
  */
 export async function announceVotingResults(
   client: Client,
-  round: IBotVotingInfoEntry,
+  round: IResultsRound,
   options: IAnnounceResultsOptions = {},
 ): Promise<void> {
   const channelId = options.channelIdOverride ?? ANNOUNCEMENT_CHANNEL_ID;
   const rehearsal = Boolean(options.rehearsal);
-  const channel = await client.channels.fetch(channelId);
-  const sendable =
-    channel?.isTextBased() && typeof (channel as any).send === "function"
-      ? (channel as any)
-      : null;
+  const sendable = await fetchSendableChannel(client, channelId);
   if (!sendable) {
     throw new Error(`Results channel ${channelId} was not found or cannot be sent to.`);
   }
 
-  const monthLabel = resolveRoundMonthLabel(round.nextVoteAt);
+  const monthLabel = round.monthLabel;
   const tallyContainers: ContainerBuilder[] = [];
   const winnerAnnouncements: Array<{
     kindLabel: WinnerKindLabel;
@@ -183,9 +129,7 @@ export async function announceVotingResults(
   }
 
   if (!tallyContainers.length) {
-    throw new Error(
-      `No nominations were found for Round ${round.roundNumber}; nothing to announce.`,
-    );
+    throw new NothingToAnnounceError(round.roundNumber);
   }
 
   await sendable.send({
@@ -202,7 +146,8 @@ export async function announceVotingResults(
     const winner = announcement.soleWinner;
     if (winner && !rehearsal) {
       // Winner threads are best-effort: a failure here must not block the
-      // announcement itself. Ties are left for the wizard, once resolved.
+      // announcement itself. A tie gets its thread once an admin breaks it
+      // (the round_decided voting event).
       try {
         const threadResult = await ensureWinnerThread({
           client,
@@ -215,7 +160,7 @@ export async function announceVotingResults(
           text += `\nJoin the discussion in ${channelMention(threadResult.threadId)}!`;
         }
       } catch (error) {
-        logError("VotingResultsService.ensureWinnerThread", error);
+        logError("VotingResultsAnnouncement.ensureWinnerThread", error);
       }
     }
     const container = buildTextContainer(text);

@@ -3,8 +3,6 @@ import { COLOR_PRIMARY } from "../../config/colors.js";
 import {
   ButtonStyle,
   ComponentType,
-  GuildScheduledEventEntityType,
-  GuildScheduledEventPrivacyLevel,
   StringSelectMenuBuilder,
   type Message,
   channelMention,
@@ -26,10 +24,7 @@ import {
   buildComponentsV2EditFlags,
   buildComponentsV2Flags,
 } from "../../functions/ComponentsV2Utils.js";
-import {
-  ADMIN_CHANNEL_ID,
-  ANNOUNCEMENT_CHANNEL_ID,
-} from "../../config/channels.js";
+import { ADMIN_CHANNEL_ID } from "../../config/channels.js";
 import Gotm, { insertGotmRoundInDatabase, type IGotmGame } from "../../classes/Gotm.js";
 import NrGotm, { insertNrGotmRoundInDatabase, type INrGotmGame } from "../../classes/NrGotm.js";
 import BotVotingInfo from "../../classes/BotVotingInfo.js";
@@ -68,6 +63,8 @@ import { isPositiveInt } from "../../utilities/ValidationUtils.js";
 import { truncateLabel } from "../../config/textLimits.js";
 import { safeIgnore } from "../../utilities/AsyncUtils.js";
 import { logError } from "../../utilities/LogUtils.js";
+import { ensureVoteScheduledEvent } from "../../functions/VoteScheduledEvent.js";
+import { resolveRoundMonthLabel } from "../../services/VotingResultsAnnouncement.js";
 
 const NEXT_ROUND_SETUP_COMMAND_KEY = "nextround-setup";
 const MAX_SELECT_OPTIONS = 25;
@@ -908,22 +905,21 @@ export async function handleNextRoundSetup(
           await wizardLog("No guild context; skipping vote reminder event.");
           return;
         }
-        const voteChannelUrl =
-          `https://discord.com/channels/${guild.id}/${ANNOUNCEMENT_CHANNEL_ID}`;
-        // External events require an end time; give the reminder a 1-hour window.
-        const endsAt = new Date(finalDate.getTime() + 60 * 60 * 1000);
         try {
-          const event = await guild.scheduledEvents.create({
-            description: `Cast your GOTM and NR-GOTM votes for ${monthYear}.`,
-            entityMetadata: { location: voteChannelUrl },
-            entityType: GuildScheduledEventEntityType.External,
-            name: `Round ${nextRound} Vote (${monthYear})`,
-            privacyLevel: GuildScheduledEventPrivacyLevel.GuildOnly,
-            scheduledEndTime: endsAt,
-            scheduledStartTime: finalDate,
+          // The vote on finalDate is for the round after the one just recorded;
+          // the round_decided voting event creates the same event, so this
+          // reuses it when that already ran.
+          const { event, created } = await ensureVoteScheduledEvent(guild, {
+            roundNumber: nextRound + 1,
+            monthYear: resolveRoundMonthLabel(finalDate),
+            startsAt: finalDate,
           });
           const eventUrl = `https://discord.com/events/${guild.id}/${event.id}`;
-          await wizardLog(`Created vote reminder event: ${eventUrl}`);
+          await wizardLog(
+            created
+              ? `Created vote reminder event: ${eventUrl}`
+              : `Vote reminder event already exists: ${eventUrl}`,
+          );
         } catch (err: any) {
           await wizardLog(
             `Vote reminder event creation failed: ${err?.message ?? String(err)}`,

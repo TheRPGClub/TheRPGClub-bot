@@ -1,6 +1,5 @@
 import type { ButtonInteraction, CommandInteraction } from "discord.js";
 import { channelMention } from "discord.js";
-import type { INominationEntry, NominationKind } from "../../classes/Nomination.js";
 import {
   listNominationsForRound,
   NOMINATION_KINDS,
@@ -23,18 +22,21 @@ import {
 } from "../../functions/ComponentsV2Utils.js";
 import { buildActionButton, buildButtonRow } from "../../functions/uiComponents.js";
 import {
-  buildVotePanelComponents,
-  type VotePanelComponent,
-} from "../../functions/VotePanelComponents.js";
-import {
   buildHiddenTallyText,
   buildTallyText,
-  buildTestPanelNoticeText,
-  dedupeNominationsByGame,
   mergeTallyWithNominations,
   sumTallyVotes,
 } from "../../functions/VoteResultsUtils.js";
-import { announceVotingResults } from "../../services/VotingResultsService.js";
+import {
+  announceVotingResults,
+  resolveRoundMonthLabel,
+  type IResultsRound,
+} from "../../services/VotingResultsAnnouncement.js";
+import {
+  hasVotableNominations,
+  loadNominationsByKind,
+  postVotePanels,
+} from "../../functions/VotePanelPosting.js";
 import { getActiveVotingRound, isRoundDecided } from "../../functions/VotingRound.js";
 import { calculateVoteDeadlineEt } from "../../functions/VoteDateUtils.js";
 import { toUnixTimestamp } from "../../functions/DateFormatUtils.js";
@@ -49,97 +51,9 @@ function buildUpdateText(text: string): {
   return { components: [buildTextContainer(text)], flags: buildComponentsV2EditFlags() };
 }
 
-async function sendPanelToChannel(
-  interaction: CommandInteraction,
-  channelId: string,
-  components: VotePanelComponent[],
-): Promise<boolean> {
-  try {
-    const channel = await interaction.client.channels.fetch(channelId);
-    const sendable =
-      channel?.isTextBased() && typeof (channel as any).send === "function"
-        ? (channel as any)
-        : null;
-    if (!sendable) {
-      return false;
-    }
-    await sendable.send({
-      components,
-      flags: buildComponentsV2Flags(false),
-      allowedMentions: { parse: [] },
-    });
-    return true;
-  } catch (error) {
-    logError("vote-admin.service.sendPanelToChannel", error);
-    return false;
-  }
-}
-
-async function loadNominationsByKind(
-  roundNumber: number,
-): Promise<Map<NominationKind, INominationEntry[]>> {
-  const byKind = new Map<NominationKind, INominationEntry[]>();
-  for (const kind of NOMINATION_KINDS) {
-    byKind.set(kind, await listNominationsForRound(kind, roundNumber));
-  }
-  return byKind;
-}
-
-function hasVotableNominations(
-  nominationsByKind: Map<NominationKind, INominationEntry[]>,
-): boolean {
-  return [...nominationsByKind.values()].some(
-    (nominations) => dedupeNominationsByGame(nominations).length > 0,
-  );
-}
-
-interface IPostVotePanelsParams {
-  interaction: CommandInteraction;
-  channelId: string;
-  roundNumber: number;
-  voteDeadline: Date | null;
-  nominationsByKind: Map<NominationKind, INominationEntry[]>;
-  /** Adds the rehearsal banner; the controls themselves are unchanged. */
-  testMode?: boolean;
-  castsAccepted?: boolean;
-  castsRefusedReason?: string | null;
-}
-
-/** Posts one panel per category and reports what happened, line per category. */
-async function postVotePanels(params: IPostVotePanelsParams): Promise<string[]> {
-  const resultLines: string[] = [];
-  for (const kind of NOMINATION_KINDS) {
-    const kindLabel = nominationKindLabel(kind);
-    const nominations = params.nominationsByKind.get(kind) ?? [];
-    if (!dedupeNominationsByGame(nominations).length) {
-      resultLines.push(`${kindLabel}: no votable nominations; panel skipped.`);
-      continue;
-    }
-    const tally = await getVoteTally(kind, params.roundNumber);
-    const components = buildVotePanelComponents({
-      kind,
-      roundNumber: params.roundNumber,
-      voteDeadline: params.voteDeadline,
-      cap: tally.cap,
-      nominations,
-      testNotice: params.testMode
-        ? buildTestPanelNoticeText({
-            kindLabel,
-            roundNumber: params.roundNumber,
-            castsAccepted: Boolean(params.castsAccepted),
-            reason: params.castsRefusedReason ?? null,
-          })
-        : null,
-    });
-    const sent = await sendPanelToChannel(params.interaction, params.channelId, components);
-    resultLines.push(
-      sent
-        ? `${kindLabel}: voting panel posted in ${channelMention(params.channelId)}.`
-        : `${kindLabel}: failed to post the voting panel in ` +
-          `${channelMention(params.channelId)}.`,
-    );
-  }
-  return resultLines;
+/** A legacy voting_info row as the results announcement's round (to the API in #1135). */
+function legacyResultsRound(info: IBotVotingInfoEntry): IResultsRound {
+  return { roundNumber: info.roundNumber, monthLabel: resolveRoundMonthLabel(info.nextVoteAt) };
 }
 
 /** Why a test panel's casts would be refused, for the panel banner. */
@@ -228,8 +142,8 @@ async function handleVotingOpenTestMode(
       ? null
       : buildCastsRefusedReason(targetRound, info, decided);
 
-    const resultLines = await postVotePanels({
-      interaction,
+    const { lines: resultLines } = await postVotePanels({
+      client: interaction.client,
       channelId,
       roundNumber: targetRound,
       voteDeadline: info?.voteDeadline ?? null,
@@ -377,8 +291,8 @@ export async function handleVotingOpen(
 
     const channelId =
       postHere && interaction.channelId ? interaction.channelId : ANNOUNCEMENT_CHANNEL_ID;
-    const resultLines = await postVotePanels({
-      interaction,
+    const { lines: resultLines } = await postVotePanels({
+      client: interaction.client,
       channelId,
       roundNumber: targetRound,
       voteDeadline: info.voteDeadline,
@@ -441,8 +355,9 @@ export async function handleVoteCloseButton(interaction: ButtonInteraction): Pro
   }
   await withErrorReply(interaction, async () => {
     await BotVotingInfo.updateVoteEndsAt(round, new Date());
-    // Setting vote_ends_at also marks the round as announced for the results
-    // sweep, so the announcement has to happen here. A failure here leaves
+    // Setting vote_ends_at also marks the round as announced for the
+    // voting_closed event (VotingEventHandlers), so the announcement has to
+    // happen here. A failure here leaves
     // voting closed but unannounced; voting-results publish:true is the retry.
     let announceNote: string;
     try {
@@ -450,7 +365,7 @@ export async function handleVoteCloseButton(interaction: ButtonInteraction): Pro
       if (!info) {
         throw new Error(`No voting_info row was found for round ${round}.`);
       }
-      await announceVotingResults(interaction.client, info);
+      await announceVotingResults(interaction.client, legacyResultsRound(info));
       announceNote = "Results were posted in the announcements channel.";
     } catch (err) {
       logError("vote-admin.service.handleVoteCloseButton", err);
@@ -575,7 +490,7 @@ export async function handleVotingResults(
       }
       // A channel override makes this a rehearsal: banner added, no winner thread.
       const rehearsal = Boolean(channelOverrideId);
-      await announceVotingResults(interaction.client, info, {
+      await announceVotingResults(interaction.client, legacyResultsRound(info), {
         channelIdOverride: channelOverrideId,
         rehearsal,
       });
