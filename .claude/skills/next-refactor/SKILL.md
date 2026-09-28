@@ -93,18 +93,20 @@ All tests must pass and lint must be clean. Fix any failures before continuing.
 
 ### 6. Commit
 
-Stage only the files you changed:
+Stage only the files you changed. Write the message to `<scratchpad>/commit-msg.txt` with
+the Write tool, never through a heredoc, per [shell-text.md](../_shared/shell-text.md):
 
-```bash
-git add <changed files>
-git commit -m "$(cat <<'EOF'
+```
 refactor: <short description matching issue title>
 
 Closes #N
 
-Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
-EOF
-)"
+<the Co-Authored-By line from the session's attribution instructions>
+```
+
+```bash
+git add <changed files>
+git commit -F <scratchpad>/commit-msg.txt
 ```
 
 ### 7. Push
@@ -115,11 +117,13 @@ git push -u origin HEAD
 
 ### 8. Open a PR
 
-Run the open-pr skill, linking to issue #N.
+Run the open-pr skill through its mergeability check (step 5), linking to issue #N. Stop
+there: this skill runs the self review loop itself in step 9, so open-pr skips its own self
+review and its `Needs Review` move.
 
 PR title: match the issue title (strip the "refactor: " prefix if present and re-add it cleanly).
 
-PR body format:
+PR body format, written to `<scratchpad>/pr-body.md`:
 ```
 ## Summary
 - <1-3 bullets describing what was changed and why>
@@ -129,19 +133,26 @@ PR body format:
 - [ ] Smoke test passes (`bash .claude/skills/run-rpgclubbot/smoke.sh`)
 - [ ] No functional behavior changed -- refactor only
 
+## Self review
+<filled in by step 9>
+
 Closes #N
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)
 ```
 
-After opening, verify closing-issue linkage:
+### 9. Review it yourself
 
-```bash
-gh pr view <PR> --json closingIssuesReferences
-```
+Once CI has passed and the PR is mergeable, move to `Self Review` and run the loop in
+[self-review.md](../_shared/self-review.md): `code-review` at `high` on the PR number, a read
+against this repo's rules, a fix for every finding that holds, and another full pass, until a
+pass comes back clean. Fill in the `Self review` section of the body as it goes.
 
-Report the PR URL to the user. The open-pr skill has already moved the session to
-`Needs Review`.
+### 10. Report
+
+Move the session to `Needs Review`, per [sidebar-groups.md](../_shared/sidebar-groups.md),
+only after the clean pass. Give the user the PR URL, the smoke test and CI result, and how
+many self review passes ran and what they found and fixed.
 
 ## Common mistakes to avoid
 
@@ -149,3 +160,5 @@ Report the PR URL to the user. The open-pr skill has already moved the session t
 - Do NOT skip the dependency check (step 2).
 - Do NOT open the PR if smoke.sh fails.
 - Do NOT commit directly to main.
+- Do NOT hand the PR over before a clean self review pass.
+- Do NOT pass multi-line text through a heredoc.

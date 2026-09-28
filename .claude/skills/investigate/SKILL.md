@@ -118,29 +118,30 @@ Not a full implementation -- just enough for /implement to take over.>
 - Do not use emdashes. Use a double-hyphen ( -- ) or rephrase.
 - Keep lines under 100 characters.
 
-Apply the edit:
+Apply the edit. Write the rewritten body to `<scratchpad>/issue-body.md` with the Write tool,
+never through a heredoc, per [shell-text.md](../_shared/shell-text.md):
 
 ```bash
-gh issue edit <N> --body "$(cat <<'EOF'
-<rewritten body>
-EOF
-)"
+gh issue edit <N> --body-file <scratchpad>/issue-body.md
 ```
 
 ### 7. Add an investigation comment
 
 Post a brief comment summarizing the findings so the history is preserved:
 
-```bash
-gh issue comment <N> --body "$(cat <<'EOF'
+Write it to `<scratchpad>/comment.md`:
+
+```
 **Investigation complete.**
 
 Root cause: <one sentence>
 Fix location: `<file>:<line>`
 
 Issue body updated with full findings.
-EOF
-)"
+```
+
+```bash
+gh issue comment <N> --body-file <scratchpad>/comment.md
 ```
 
 ### 8. Report back

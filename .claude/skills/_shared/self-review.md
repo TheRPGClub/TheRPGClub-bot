@@ -1,6 +1,7 @@
 # Self review
 
-Shared by `/implement` and any pull request a session opens outside a skill.
+Shared by `/implement`, `/next-refactor`, `/open-pr`, and any pull request a session opens
+outside a skill.
 Before a session hands a pull request to the user, it reviews the pull request
 itself, fixes everything the review finds, and reviews it again, round after
 round, until a pass finds nothing. The user's review starts from a pull request

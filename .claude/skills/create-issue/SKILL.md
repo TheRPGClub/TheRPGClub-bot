@@ -33,17 +33,19 @@ Use this structure:
 
 ### 3. Create the issue
 
-Pass the body via HEREDOC to preserve formatting:
+Write the body to `<scratchpad>/issue-body.md` with the Write tool, never through a heredoc,
+per [shell-text.md](../_shared/shell-text.md):
 
-```bash
-gh issue create --title "<title>" --label "<label>" --body "$(cat <<'EOF'
+```
 ## Summary
 - <point>
 
 ## Details
 <details if needed>
-EOF
-)"
+```
+
+```bash
+gh issue create --title "<title>" --label "<label>" --body-file <scratchpad>/issue-body.md
 ```
 
 Omit `--label` if no label was specified. To apply multiple labels use a comma-separated

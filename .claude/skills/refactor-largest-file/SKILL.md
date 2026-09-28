@@ -122,13 +122,10 @@ If one exists, mention it in the plan output: "See existing issue #N."
 ### 6. Optional: create a GitHub issue
 
 If the user confirms they want to track this (or passes `--issue`), create one issue
-summarizing the plan:
+summarizing the plan. Write the body to `<scratchpad>/issue-body.md` with the Write tool,
+never through a heredoc, per [shell-text.md](../_shared/shell-text.md):
 
-```bash
-gh issue create \
-  --label refactor \
-  --title "Refactor: split <filename> (<N> lines) into focused modules" \
-  --body "$(cat <<'EOF'
+```
 ## Summary
 <filename> is the largest file in src/ at N lines. It mixes general helpers, domain logic,
 and orchestration. Splitting it will improve readability and enable targeted refactors.
@@ -155,8 +152,13 @@ and orchestration. Splitting it will improve readability and enable targeted ref
 
 ## Notes
 <risks, circular deps, any existing related issues>
-EOF
-)"
+```
+
+```bash
+gh issue create \
+  --label refactor \
+  --title "Refactor: split <filename> (<N> lines) into focused modules" \
+  --body-file <scratchpad>/issue-body.md
 ```
 
 Print the issue URL when done.
