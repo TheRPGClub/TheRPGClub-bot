@@ -13,6 +13,7 @@ import {
 import { getVoteTally } from "../classes/Vote.js";
 import {
   buildRehearsalNoticeText,
+  buildFinalWinnersText,
   buildTallyText,
   buildWinnerAnnouncementText,
   mergeTallyWithNominations,
@@ -65,6 +66,35 @@ export interface IAnnounceResultsOptions {
    * changes, so the real copy is what gets reviewed.
    */
   rehearsal?: boolean;
+}
+
+/**
+ * Adds a gallery of the winning games' covers to the container and returns
+ * the attachments it references. Games without a cover are left out.
+ */
+async function addWinnerCovers(
+  container: ContainerBuilder,
+  gameIds: number[],
+): Promise<AttachmentBuilder[]> {
+  const files: AttachmentBuilder[] = [];
+  const gallery = new MediaGalleryBuilder();
+  for (const gameId of gameIds) {
+    const cover = await fetchGameCoverBuffer(gameId).catch(() => null);
+    if (!cover) {
+      continue;
+    }
+    const filename = `winner_${gameId}.png`;
+    files.push(new AttachmentBuilder(cover.buffer, { name: filename }));
+    gallery.addItems(
+      new MediaGalleryItemBuilder()
+        .setURL(`attachment://${filename}`)
+        .setDescription("Winning game cover"),
+    );
+  }
+  if (files.length) {
+    container.addMediaGalleryComponents(gallery);
+  }
+  return files;
 }
 
 /**
@@ -165,21 +195,90 @@ export async function announceVotingResults(
     }
     const container = buildTextContainer(text);
     if (winner) {
-      const cover = await fetchGameCoverBuffer(winner.gamedbGameId).catch(() => null);
-      if (cover) {
-        const filename = `winner_${winner.gamedbGameId}.png`;
-        files.push(new AttachmentBuilder(cover.buffer, { name: filename }));
-        container.addMediaGalleryComponents(
-          new MediaGalleryBuilder().addItems(
-            new MediaGalleryItemBuilder()
-              .setURL(`attachment://${filename}`)
-              .setDescription("Winning game cover"),
-          ),
-        );
-      }
+      files.push(...(await addWinnerCovers(container, [winner.gamedbGameId])));
     }
     await sendable.send({
       components: [container],
+      files,
+      flags: buildComponentsV2Flags(false),
+      allowedMentions: { parse: [] },
+    });
+  }
+}
+
+/** One category's settled winners, in the order the admins recorded them. */
+export interface IRoundWinnerCategory {
+  kindLabel: WinnerKindLabel;
+  games: Array<{ gamedbGameId: number; title: string }>;
+}
+
+/**
+ * Posts the round's final winners, one message per category, as the admins
+ * recorded them (ties broken, several picks allowed). Unlike
+ * announceVotingResults, no tallies are posted: those went out when voting
+ * closed. Each winner's thread is linked; a rehearsal skips thread work.
+ */
+export async function announceRoundWinners(
+  client: Client,
+  round: IResultsRound,
+  categories: IRoundWinnerCategory[],
+  options: IAnnounceResultsOptions = {},
+): Promise<void> {
+  const channelId = options.channelIdOverride ?? ANNOUNCEMENT_CHANNEL_ID;
+  const rehearsal = Boolean(options.rehearsal);
+  const withWinners = categories.filter((category) => category.games.length);
+  if (!withWinners.length) {
+    throw new NothingToAnnounceError(round.roundNumber);
+  }
+  const sendable = await fetchSendableChannel(client, channelId);
+  if (!sendable) {
+    throw new Error(`Results channel ${channelId} was not found or cannot be sent to.`);
+  }
+
+  for (const [index, category] of withWinners.entries()) {
+    const lines = [
+      buildFinalWinnersText({
+        kindLabel: category.kindLabel,
+        roundNumber: round.roundNumber,
+        monthLabel: round.monthLabel,
+        titles: category.games.map((game) => game.title),
+      }),
+    ];
+    if (!rehearsal) {
+      for (const game of category.games) {
+        // Best-effort, as in announceVotingResults: a thread failure must not
+        // block the announcement.
+        try {
+          const threadResult = await ensureWinnerThread({
+            client,
+            gameId: game.gamedbGameId,
+            gameTitle: game.title,
+            roundNumber: round.roundNumber,
+            kindLabel: category.kindLabel,
+          });
+          if (threadResult.threadId) {
+            lines.push(
+              `Join the **${game.title}** discussion in ` +
+                `${channelMention(threadResult.threadId)}!`,
+            );
+          }
+        } catch (error) {
+          logError("VotingResultsAnnouncement.announceRoundWinners", error);
+        }
+      }
+    }
+    const containers: ContainerBuilder[] = [];
+    if (rehearsal && index === 0) {
+      containers.push(buildTextContainer(buildRehearsalNoticeText(round.roundNumber)));
+    }
+    const container = buildTextContainer(lines.join("\n"));
+    const files = await addWinnerCovers(
+      container,
+      category.games.map((game) => game.gamedbGameId),
+    );
+    containers.push(container);
+    await sendable.send({
+      components: containers,
       files,
       flags: buildComponentsV2Flags(false),
       allowedMentions: { parse: [] },

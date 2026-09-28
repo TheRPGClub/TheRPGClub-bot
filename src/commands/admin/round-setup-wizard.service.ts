@@ -24,7 +24,7 @@ import {
   buildComponentsV2EditFlags,
   buildComponentsV2Flags,
 } from "../../functions/ComponentsV2Utils.js";
-import { ADMIN_CHANNEL_ID } from "../../config/channels.js";
+import { ADMIN_CHANNEL_ID, ANNOUNCEMENT_CHANNEL_ID } from "../../config/channels.js";
 import Gotm, { insertGotmRoundInDatabase, type IGotmGame } from "../../classes/Gotm.js";
 import NrGotm, { insertNrGotmRoundInDatabase, type INrGotmGame } from "../../classes/NrGotm.js";
 import BotVotingInfo from "../../classes/BotVotingInfo.js";
@@ -64,7 +64,10 @@ import { truncateLabel } from "../../config/textLimits.js";
 import { safeIgnore } from "../../utilities/AsyncUtils.js";
 import { logError } from "../../utilities/LogUtils.js";
 import { ensureVoteScheduledEvent } from "../../functions/VoteScheduledEvent.js";
-import { resolveRoundMonthLabel } from "../../services/VotingResultsAnnouncement.js";
+import {
+  announceRoundWinners,
+  resolveRoundMonthLabel,
+} from "../../services/VotingResultsAnnouncement.js";
 
 const NEXT_ROUND_SETUP_COMMAND_KEY = "nextround-setup";
 const MAX_SELECT_OPTIONS = 25;
@@ -758,6 +761,18 @@ export async function handleNextRoundSetup(
       }
     }
 
+    const announceChoice = await wizardChoice(
+      `Post the Round ${nextRound} winners in ${channelMention(ANNOUNCEMENT_CHANNEL_ID)} ` +
+        "once setup commits? Skip it when the results post from closing the vote " +
+        "already named every winner.",
+      addCancelOption([
+        { label: "Post Announcement", value: "post", style: ButtonStyle.Primary },
+        { label: "Skip", value: "skip" },
+      ]),
+    );
+    if (!announceChoice) return;
+    const postAnnouncement = announceChoice === "post";
+
     try {
       const mapped = await mapSelectedNominationsToRoundPayloads({
         gotmOrder,
@@ -928,6 +943,41 @@ export async function handleNextRoundSetup(
       },
     },
     ];
+    if (postAnnouncement) {
+      allActions.push({
+        description:
+          `Post Round ${nextRound} winners in ${channelMention(ANNOUNCEMENT_CHANNEL_ID)}` +
+          (testMode ? ` (test: ${channelMention(ADMIN_CHANNEL_ID)} instead)` : ""),
+        execute: async () => {
+          // Last, so the insert actions have already linked each winner thread.
+          // The round is recorded by now, so a failed post is reported rather
+          // than thrown, which would log the committed setup as cancelled.
+          try {
+            await announceRoundWinners(
+              interaction.client,
+              { roundNumber: nextRound, monthLabel: monthYear },
+              [
+                { kindLabel: "GOTM", games: gotmGames },
+                { kindLabel: "NR-GOTM", games: nrGotmGames },
+              ],
+              testMode ? { channelIdOverride: ADMIN_CHANNEL_ID, rehearsal: true } : {},
+            );
+          } catch (err: any) {
+            logError("round-setup-wizard.service.announceRoundWinners", err);
+            await wizardLog(
+              `❌ Posting the winners failed: ${err?.message ?? String(err)}. ` +
+                "The round was recorded; post the announcement by hand.",
+            );
+            return;
+          }
+          await wizardLog(
+            testMode
+              ? `[Test] Posted a rehearsal of the winners in ${channelMention(ADMIN_CHANNEL_ID)}.`
+              : `Posted the winners in ${channelMention(ANNOUNCEMENT_CHANNEL_ID)}.`,
+          );
+        },
+      });
+    }
 
     await persistWizardState({
       step: "review",
