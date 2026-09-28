@@ -48,7 +48,8 @@ gh issue list --label refactor --state open --limit 50 \
         | sort_by(.createdAt) | .[0]'
 ```
 
-If the result is `null`, every open refactor issue is blocked -- stop and report that to the user.
+If the result is `null`, every open refactor issue is blocked -- stop, report that to the user,
+and move to `Completed` (see [Sidebar moves](#sidebar-moves)).
 
 Capture the issue number and title. Then fetch the full body:
 
@@ -77,7 +78,8 @@ step 1.
 
 The working tree must be clean first. `git status --short` printing anything
 means another task's work is sitting here: stop and ask what to do with it,
-never stash or discard it.
+never stash or discard it, and move to `Needs Review` (see
+[Sidebar moves](#sidebar-moves)).
 
 Branch from `origin/main` after a fetch. Do not `git checkout main && git pull`:
 in a worktree, `main` is checked out by the main checkout and the checkout
