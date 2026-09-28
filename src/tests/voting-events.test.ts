@@ -1,9 +1,14 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import type { Client } from "discord.js";
-import { mapVotingEventApiData, type IVotingEvent } from "../classes/VotingEvents.js";
+import {
+  mapVotingEventApiData,
+  type IVotingEvent,
+  type VotingEventKind,
+} from "../classes/VotingEvents.js";
 import { mapVotingRoundApiData } from "../classes/VotingRounds.js";
 import {
+  createVotingEventDeliveryState,
   MAX_VOTING_EVENT_ATTEMPTS,
   processVotingEvents,
 } from "../services/VotingEventService.js";
@@ -15,11 +20,12 @@ import {
 
 const client = {} as Client;
 
-function event(id: number, roundNumber: number, kind: string, attempts = 1): IVotingEvent {
+function event(id: number, roundNumber: number, kind: VotingEventKind, attempts = 1): IVotingEvent {
   return {
     id,
     roundNumber,
     kind,
+    rawKind: kind,
     payload: {},
     availableAt: new Date("2026-09-25T16:00:00.000Z"),
     expiresAt: null,
@@ -27,12 +33,13 @@ function event(id: number, roundNumber: number, kind: string, attempts = 1): IVo
   };
 }
 
-function recorder(failing: Set<number> = new Set()) {
+function recorder(failing: Set<number> = new Set(), failingAcks: Set<number> = new Set()) {
   const handled: number[] = [];
   const acked: number[] = [];
   return {
     handled,
     acked,
+    state: createVotingEventDeliveryState(),
     handle: async (_client: Client, e: IVotingEvent): Promise<VotingEventOutcome> => {
       handled.push(e.id);
       if (failing.has(e.id)) {
@@ -41,6 +48,9 @@ function recorder(failing: Set<number> = new Set()) {
       return "delivered";
     },
     ack: async (id: number): Promise<void> => {
+      if (failingAcks.delete(id)) {
+        throw new Error(`ack ${id} failed`);
+      }
       acked.push(id);
     },
   };
@@ -73,6 +83,7 @@ test("processVotingEvents handles and acks events in claim order", async () => {
     [event(1, 143, "voting_closed"), event(2, 143, "round_decided")],
     r.handle,
     r.ack,
+    r.state,
   );
 
   assert.deepEqual(r.handled, [1, 2]);
@@ -83,9 +94,14 @@ test("processVotingEvents holds a round's later events back when one fails", asy
   const r = recorder(new Set([1]));
   await processVotingEvents(
     client,
-    [event(1, 143, "voting_closed"), event(2, 143, "round_decided"), event(3, 144, "voting_opened")],
+    [
+      event(1, 143, "voting_closed"),
+      event(2, 143, "round_decided"),
+      event(3, 144, "voting_opened"),
+    ],
     r.handle,
     r.ack,
+    r.state,
   );
 
   // Round 143's decision waits for its results; round 144 is unaffected.
@@ -95,15 +111,61 @@ test("processVotingEvents holds a round's later events back when one fails", asy
 
 test("processVotingEvents gives up on an event after the attempt limit", async () => {
   const r = recorder(new Set([1]));
+  r.state.failures.set(1, MAX_VOTING_EVENT_ATTEMPTS - 1);
   await processVotingEvents(
     client,
-    [event(1, 143, "voting_closed", MAX_VOTING_EVENT_ATTEMPTS), event(2, 143, "round_decided")],
+    [event(1, 143, "voting_closed"), event(2, 143, "round_decided")],
     r.handle,
     r.ack,
+    r.state,
   );
 
   assert.deepEqual(r.handled, [1, 2]);
   assert.deepEqual(r.acked, [1, 2]);
+});
+
+test("processVotingEvents counts its own failures, not claims spent held back", async () => {
+  const r = recorder(new Set([2]));
+  await processVotingEvents(
+    client,
+    [event(2, 143, "round_decided", MAX_VOTING_EVENT_ATTEMPTS + 3)],
+    r.handle,
+    r.ack,
+    r.state,
+  );
+
+  assert.deepEqual(r.acked, []);
+  assert.equal(r.state.failures.get(2), 1);
+});
+
+test("processVotingEvents acks without reposting when only the ack failed", async () => {
+  const r = recorder(new Set(), new Set([1]));
+  const batch = [event(1, 143, "voting_closed"), event(2, 143, "round_decided")];
+  await processVotingEvents(client, batch, r.handle, r.ack, r.state);
+
+  // The post went out but the ack failed: the round waits for the next claim.
+  assert.deepEqual(r.handled, [1]);
+  assert.deepEqual(r.acked, []);
+
+  await processVotingEvents(client, batch, r.handle, r.ack, r.state);
+
+  assert.deepEqual(r.handled, [1, 2]);
+  assert.deepEqual(r.acked, [1, 2]);
+});
+
+test("mapVotingEventApiData marks a kind this bot does not know as unknown", () => {
+  const mapped = mapVotingEventApiData({
+    id: 8,
+    round_number: 143,
+    kind: "something_new",
+    payload: null,
+    available_at: "2026-09-28T04:00:00.000Z",
+    expires_at: null,
+    attempts: 1,
+  });
+
+  assert.equal(mapped.kind, "unknown");
+  assert.equal(mapped.rawKind, "something_new");
 });
 
 test("buildNominationReminderText points at the vote with Discord timestamps", () => {

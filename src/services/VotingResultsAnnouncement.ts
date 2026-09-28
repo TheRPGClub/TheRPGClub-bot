@@ -27,6 +27,7 @@ import {
 import { VOTE_TIME_ZONE } from "../functions/VoteDateUtils.js";
 import { ANNOUNCEMENT_CHANNEL_ID } from "../config/channels.js";
 import { fetchGameCoverBuffer } from "./GameImageService.js";
+import { fetchSendableChannel } from "../functions/ChannelUtils.js";
 import { logError } from "../utilities/LogUtils.js";
 
 /**
@@ -79,11 +80,7 @@ export async function announceVotingResults(
 ): Promise<void> {
   const channelId = options.channelIdOverride ?? ANNOUNCEMENT_CHANNEL_ID;
   const rehearsal = Boolean(options.rehearsal);
-  const channel = await client.channels.fetch(channelId);
-  const sendable =
-    channel?.isTextBased() && typeof (channel as any).send === "function"
-      ? (channel as any)
-      : null;
+  const sendable = await fetchSendableChannel(client, channelId);
   if (!sendable) {
     throw new Error(`Results channel ${channelId} was not found or cannot be sent to.`);
   }

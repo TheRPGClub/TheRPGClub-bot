@@ -67,10 +67,16 @@ type GotmEntryApiRow = {
 
 type GotmEntryListResponse = { data: GotmEntryApiRow[] };
 
-async function loadFromDatabaseInternal(): Promise<IGotmEntry[]> {
+async function fetchEntries(roundNumber?: number): Promise<IGotmEntry[]> {
   const response = await apiGet<GotmEntryListResponse>(
     "/api/v1/gotm_entries",
-    { params: { include: "game", per: 500 } },
+    {
+      params: {
+        include: "game",
+        per: 500,
+        ...(roundNumber === undefined ? {} : { round_number: roundNumber }),
+      },
+    },
   );
   const rows = response?.data ?? [];
 
@@ -121,19 +127,24 @@ async function loadFromDatabaseInternal(): Promise<IGotmEntry[]> {
     entry.gameOfTheMonth.push(game);
   }
 
-  const data = Array.from(byRound.values()).sort((a, b) => a.round - b.round);
-  gotmData = data;
+  return Array.from(byRound.values()).sort((a, b) => a.round - b.round);
+}
+
+async function loadFromDatabaseInternal(): Promise<IGotmEntry[]> {
+  gotmData = await fetchEntries();
   gotmLoaded = true;
   return gotmData;
 }
 
 /**
- * Re-reads the winners from the API after the round lifecycle recorded new
- * ones (the round_decided voting event). Readers keep the previous data until
- * the fresh set is swapped in.
+ * Re-reads one round's winners from the API after the round lifecycle
+ * recorded them (the round_decided voting event), without rebuilding every
+ * other round. Readers keep the previous data until the round is swapped in.
  */
-export async function reloadGotmFromDb(): Promise<void> {
-  await loadFromDatabaseInternal();
+export async function reloadGotmRoundFromDb(roundNumber: number): Promise<void> {
+  const fresh = await fetchEntries(roundNumber);
+  gotmData = [...gotmData.filter((entry) => entry.round !== roundNumber), ...fresh]
+    .sort((a, b) => a.round - b.round);
 }
 
 export async function loadGotmFromDb(): Promise<void> {

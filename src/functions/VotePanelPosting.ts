@@ -6,6 +6,7 @@ import {
   nominationKindLabel,
 } from "../classes/Nomination.js";
 import { getVoteTally } from "../classes/Vote.js";
+import { fetchSendableChannel } from "./ChannelUtils.js";
 import { buildComponentsV2Flags } from "./ComponentsV2Utils.js";
 import { buildVotePanelComponents, type VotePanelComponent } from "./VotePanelComponents.js";
 import { buildTestPanelNoticeText, dedupeNominationsByGame } from "./VoteResultsUtils.js";
@@ -20,11 +21,7 @@ async function sendPanelToChannel(
   components: VotePanelComponent[],
 ): Promise<boolean> {
   try {
-    const channel = await client.channels.fetch(channelId);
-    const sendable =
-      channel?.isTextBased() && typeof (channel as any).send === "function"
-        ? (channel as any)
-        : null;
+    const sendable = await fetchSendableChannel(client, channelId);
     if (!sendable) {
       return false;
     }

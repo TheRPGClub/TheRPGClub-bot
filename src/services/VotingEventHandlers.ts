@@ -1,10 +1,7 @@
-import {
-  GuildScheduledEventEntityType,
-  GuildScheduledEventPrivacyLevel,
-  type Client,
-} from "discord.js";
-import Gotm, { reloadGotmFromDb } from "../classes/Gotm.js";
-import NrGotm, { reloadNrGotmFromDb } from "../classes/NrGotm.js";
+import type { Client } from "discord.js";
+import BotVotingInfo from "../classes/BotVotingInfo.js";
+import Gotm, { reloadGotmRoundFromDb } from "../classes/Gotm.js";
+import NrGotm, { reloadNrGotmRoundFromDb } from "../classes/NrGotm.js";
 import type { IVotingEvent } from "../classes/VotingEvents.js";
 import VotingRounds, {
   type IVotingRound,
@@ -12,7 +9,9 @@ import VotingRounds, {
 } from "../classes/VotingRounds.js";
 import { ADMIN_CHANNEL_ID, ANNOUNCEMENT_CHANNEL_ID } from "../config/channels.js";
 import { NOMINATION_DISCUSSION_CHANNEL_IDS } from "../config/nominationChannels.js";
+import { fetchSendableChannel } from "../functions/ChannelUtils.js";
 import { toUnixTimestamp } from "../functions/DateFormatUtils.js";
+import { ensureVoteScheduledEvent } from "../functions/VoteScheduledEvent.js";
 import {
   hasVotableNominations,
   loadNominationsByKind,
@@ -32,22 +31,10 @@ import { ensureWinnerThread, type WinnerKindLabel } from "./WinnerThreadService.
  */
 export type VotingEventOutcome = "delivered" | "skipped";
 
-const SCHEDULED_EVENT_DURATION_MS = 60 * 60 * 1000;
-
 const CATEGORY_LABEL: Record<VotingRoundCategory, WinnerKindLabel> = {
   gotm: "GOTM",
   nr_gotm: "NR-GOTM",
 };
-
-type Sendable = { send: (payload: unknown) => Promise<unknown> };
-
-async function fetchSendableChannel(client: Client, channelId: string): Promise<Sendable | null> {
-  const channel = await client.channels.fetch(channelId).catch(() => null);
-  if (!channel?.isTextBased() || typeof (channel as any).send !== "function") {
-    return null;
-  }
-  return channel as unknown as Sendable;
-}
 
 export function buildNominationReminderText(votingOpensAt: Date): string {
   const voteUnix = toUnixTimestamp(votingOpensAt);
@@ -150,6 +137,13 @@ async function postVotingResults(
   event: IVotingEvent,
 ): Promise<VotingEventOutcome> {
   const round = await requireRound(event);
+  // /admin voting-close posts the results itself and stamps vote_ends_at
+  // first; this handler stamps it after posting. Either way a stamped round
+  // has been announced, so a mirrored close never posts the results twice.
+  const legacyRow = await BotVotingInfo.getByRound(round.roundNumber);
+  if (legacyRow?.voteEndsAt) {
+    return "skipped";
+  }
   try {
     await announceVotingResults(client, {
       roundNumber: round.roundNumber,
@@ -160,6 +154,13 @@ async function postVotingResults(
       return "skipped";
     }
     throw err;
+  }
+  if (legacyRow) {
+    // The scheduled close, so the mirror leaves the round's dates unchanged.
+    // Posting already happened: a failed stamp is logged, never retried.
+    await BotVotingInfo.updateVoteEndsAt(round.roundNumber, round.votingClosesAt).catch(
+      (err: unknown) => logError("VotingEventHandlers.markResultsAnnounced", err),
+    );
   }
   return "delivered";
 }
@@ -216,37 +217,28 @@ async function ensureRoundWinnerThreads(client: Client, roundNumber: number): Pr
 
 /**
  * The Discord scheduled event reminding members of the next round's vote.
- * Skipped when one with the same name already exists, so a redelivered event
- * does not create a duplicate.
+ * Throws when the next round is not scheduled yet, so the event is retried
+ * until the API has it; an existing event is reused, so retries are safe.
  */
 async function scheduleNextVoteEvent(client: Client, decidedRound: number): Promise<void> {
   const next = await VotingRounds.getCurrent();
-  if (!next || next.roundNumber <= decidedRound || next.votingOpensAt.getTime() <= Date.now()) {
+  if (!next || next.roundNumber <= decidedRound) {
+    throw new Error(`The round after Round ${decidedRound} is not scheduled yet.`);
+  }
+  if (next.votingOpensAt.getTime() <= Date.now()) {
     return;
   }
 
   const channel = await client.channels.fetch(ANNOUNCEMENT_CHANNEL_ID).catch(() => null);
   const guild = channel && "guild" in channel ? channel.guild : null;
   if (!guild) {
-    logWarn("VotingEventHandlers.scheduleNextVoteEvent", "No guild for the announcements channel.");
-    return;
+    throw new Error(`No guild was found for announcements channel ${ANNOUNCEMENT_CHANNEL_ID}.`);
   }
 
-  const name = `Round ${next.roundNumber} Vote (${next.monthYear})`;
-  const existing = await guild.scheduledEvents.fetch();
-  if (existing.some((scheduled) => scheduled.name === name)) {
-    return;
-  }
-  await guild.scheduledEvents.create({
-    description: `Cast your GOTM and NR-GOTM votes for ${next.monthYear}.`,
-    entityMetadata: {
-      location: `https://discord.com/channels/${guild.id}/${ANNOUNCEMENT_CHANNEL_ID}`,
-    },
-    entityType: GuildScheduledEventEntityType.External,
-    name,
-    privacyLevel: GuildScheduledEventPrivacyLevel.GuildOnly,
-    scheduledEndTime: new Date(next.votingOpensAt.getTime() + SCHEDULED_EVENT_DURATION_MS),
-    scheduledStartTime: next.votingOpensAt,
+  await ensureVoteScheduledEvent(guild, {
+    roundNumber: next.roundNumber,
+    monthYear: next.monthYear,
+    startsAt: next.votingOpensAt,
   });
 }
 
@@ -255,14 +247,11 @@ async function finishDecidedRound(
   event: IVotingEvent,
 ): Promise<VotingEventOutcome> {
   // The API recorded the winners; the caches only load at startup otherwise.
-  await reloadGotmFromDb();
-  await reloadNrGotmFromDb();
+  await reloadGotmRoundFromDb(event.roundNumber);
+  await reloadNrGotmRoundFromDb(event.roundNumber);
   await ensureRoundWinnerThreads(client, event.roundNumber);
-  try {
-    await scheduleNextVoteEvent(client, event.roundNumber);
-  } catch (err) {
-    logError("VotingEventHandlers.scheduleNextVoteEvent", err);
-  }
+  // Throws to retry the event; the steps above are safe to repeat.
+  await scheduleNextVoteEvent(client, event.roundNumber);
   return "delivered";
 }
 
@@ -283,8 +272,8 @@ export async function handleVotingEvent(
       return postTiePendingNotice(client, event);
     case "round_decided":
       return finishDecidedRound(client, event);
-    default:
-      logWarn("VotingEventHandlers", `Unknown voting event kind "${event.kind}"; acking.`);
+    case "unknown":
+      logWarn("VotingEventHandlers", `Unknown voting event kind "${event.rawKind}"; acking.`);
       return "skipped";
   }
 }

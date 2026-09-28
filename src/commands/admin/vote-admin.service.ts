@@ -355,8 +355,9 @@ export async function handleVoteCloseButton(interaction: ButtonInteraction): Pro
   }
   await withErrorReply(interaction, async () => {
     await BotVotingInfo.updateVoteEndsAt(round, new Date());
-    // Setting vote_ends_at also marks the round as announced for the results
-    // sweep, so the announcement has to happen here. A failure here leaves
+    // Setting vote_ends_at also marks the round as announced for the
+    // voting_closed event (VotingEventHandlers), so the announcement has to
+    // happen here. A failure here leaves
     // voting closed but unannounced; voting-results publish:true is the retry.
     let announceNote: string;
     try {
