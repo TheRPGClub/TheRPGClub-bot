@@ -356,6 +356,10 @@ function mapUserApiRecord(raw: UserApiRecord): IMemberRecord {
   };
 }
 
+export function avatarHistoryApiPath(userId: string): string {
+  return `/api/v1/users/${userId}/avatar_history`;
+}
+
 function mapAvatarHistoryApiRecord(raw: AvatarHistoryApiRecord): IAvatarHistoryRecord {
   return {
     eventId: Number(raw.event_id),
@@ -1087,7 +1091,7 @@ export default class Member {
     const safeOffset = Math.max(offset, 0);
     const page = Math.floor(safeOffset / safeLimit) + 1;
     const response = await apiGet<AvatarHistoryApiListResponse>(
-      `/api/v1/users/${userId}/avatar_history`,
+      avatarHistoryApiPath(userId),
       { params: { page, per: safeLimit } },
     );
     return response?.data?.map(mapAvatarHistoryApiRecord) ?? [];
@@ -1143,7 +1147,7 @@ export default class Member {
 
   static async countAvatarHistory(userId: string): Promise<number> {
     const response = await apiGet<AvatarHistoryApiListResponse>(
-      `/api/v1/users/${userId}/avatar_history`,
+      avatarHistoryApiPath(userId),
       { params: { per: 1, page: 1 } },
     );
     return response?.meta?.count ?? 0;
@@ -1153,10 +1157,12 @@ export default class Member {
     userId: string,
     avatarHash: string,
     avatarUrl: string,
-  ): Promise<void> {
-    await apiPost(`/api/v1/users/${userId}/avatar_history`, {
+  ): Promise<boolean> {
+    // apiPost resolves null on a 404, so a null result means no row was saved.
+    const saved = await apiPost(avatarHistoryApiPath(userId), {
       data: { avatar_hash: avatarHash, avatar_url: avatarUrl },
     });
+    return saved !== null;
   }
 
   static async getAllMembersAvatarHistoryCounts(): Promise<IMemberAvatarHistoryCount[]> {
