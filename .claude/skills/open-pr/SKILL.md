@@ -72,6 +72,12 @@ Expected output contains each linked issue number. If an issue is missing, GitHu
 
 Report the linkage result to the user, then give the PR URL.
 
+### 5. File the session in the sidebar
+
+Move the session to the `Needs Review` sidebar group, per
+[sidebar-groups.md](../_shared/sidebar-groups.md). When the pull request later merges or
+closes, that file says which group comes next.
+
 ## Common mistakes to avoid
 
 - Do NOT put multiple issue numbers on one `Closes` line (`Closes #1, #2` is unreliable).

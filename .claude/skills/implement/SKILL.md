@@ -26,6 +26,8 @@ gh issue view <X> --json state,title
 ```
 
 If the dependency is still open, stop and report: "Issue #N depends on #X which is still open."
+Move the session to the `Blocked` sidebar group, per
+[sidebar-groups.md](../_shared/sidebar-groups.md#blocked-by-another-issue).
 
 ### 3. Pull main and create a branch
 
@@ -46,6 +48,9 @@ git checkout -b <branch-name>
 ```
 
 ### 4. Implement the change
+
+Move the session to the `Working` sidebar group, per
+[sidebar-groups.md](../_shared/sidebar-groups.md).
 
 Read the relevant source files before editing. Use targeted reads (specific line ranges or grep) -- do not read entire large files.
 
@@ -126,7 +131,8 @@ After opening, verify closing-issue linkage:
 gh pr view <PR> --json closingIssuesReferences
 ```
 
-Report the PR URL to the user.
+Report the PR URL to the user. The open-pr skill has already moved the session to
+`Needs Review`.
 
 ## Common mistakes to avoid
 

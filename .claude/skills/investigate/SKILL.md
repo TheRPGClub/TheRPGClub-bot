@@ -25,6 +25,9 @@ Read the full body and all comments. Extract:
 
 If the issue is closed or does not exist, stop and report that to the user.
 
+Otherwise move the session to the `Working` sidebar group, per
+[sidebar-groups.md](../_shared/sidebar-groups.md).
+
 ### 2. Identify search targets
 
 From the error message and issue text, extract concrete search terms:
@@ -142,7 +145,9 @@ EOF
 
 ### 8. Report back
 
-Print the issue URL and a one-line summary of the root cause.
+Print the issue URL and a one-line summary of the root cause. Then move the session to
+`Completed`, or to whatever group the rest of the session's work calls for, per
+[sidebar-groups.md](../_shared/sidebar-groups.md).
 
 ## Common mistakes to avoid
 
