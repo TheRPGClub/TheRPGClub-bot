@@ -13,11 +13,7 @@ import {
   safeReply,
   safeUpdate,
 } from "../../functions/InteractionUtils.js";
-import {
-  buildComponentsV2EditFlags,
-  buildErrorReply,
-  buildTextReply,
-} from "../../functions/ComponentsV2Utils.js";
+import { buildErrorReply, buildTextReply } from "../../functions/ComponentsV2Utils.js";
 import { buildApiErrorMessage } from "../../utilities/ApiErrorUtils.js";
 import { logError } from "../../utilities/LogUtils.js";
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
@@ -265,7 +261,7 @@ async function reportIgdbSelectError(
   logError("IgdbSelectService.onSelect", err);
   await safeReply(interaction, {
     ...buildErrorReply(buildApiErrorMessage("IGDB selection failed.", err), true),
-    flags: buildComponentsV2EditFlags(),
+    __forceFollowUp: true,
   });
 }
 

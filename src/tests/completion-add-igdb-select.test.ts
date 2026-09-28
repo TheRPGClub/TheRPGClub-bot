@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test, { type TestContext } from "node:test";
 import { AxiosError, AxiosHeaders } from "axios";
+import { MessageFlags } from "discord.js";
 import Game from "../classes/Game.js";
 import Member from "../classes/Member.js";
 import { igdbService } from "../services/IGDB/IgdbService.js";
@@ -132,4 +133,8 @@ test("an IGDB import failure surfaces the full request and response", async (t) 
   assert.match(text, /igdb_id/);
   assert.match(text, /422/);
   assert.match(text, /already been taken/);
+  const errorReply = select.sent.find(
+    (m: any) => /Failed to add completion/.test(JSON.stringify(m)),
+  );
+  assert.ok(errorReply.flags & MessageFlags.Ephemeral, "error reply must stay ephemeral");
 });
