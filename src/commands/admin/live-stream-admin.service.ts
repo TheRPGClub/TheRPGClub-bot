@@ -26,7 +26,7 @@ import {
 import { buildTextReply, buildComponentsV2Flags } from "../../functions/ComponentsV2Utils.js";
 import { truncateLabel } from "../../config/textLimits.js";
 import { assertCustomIdSegments } from "../../utilities/CustomIdUtils.js";
-import { formatApiError } from "../../utilities/ApiErrorUtils.js";
+import { buildApiErrorMessage } from "../../utilities/ApiErrorUtils.js";
 
 const LIVE_STREAM_MODAL_PREFIX = "admin-live-stream-create";
 const LIVE_STREAM_TOPIC_ID = "live-stream-topic";
@@ -35,7 +35,7 @@ const LIVE_STREAM_END_ID = "live-stream-end";
 const LIVE_STREAM_TIMEZONE_ID = "live-stream-timezone";
 const LIVE_STREAM_IMAGE_URL_ID = "live-stream-image-url";
 const DEFAULT_TIMEZONE = "America/New_York";
-const IMAGE_ERROR_BODY_MAX = 500;
+const INVISIBLE_CHAR_REGEX = /[\p{Cc}\p{Cf}]/gu;
 
 type LiveStreamModalInput = {
   topic: string;
@@ -181,7 +181,9 @@ export function parseLiveStreamModalInput(
 
   // URLs skip sanitizeUserInput: it strips markdown characters such as `_` and `~`, which
   // rewrites the path and makes the image fetch 404.
-  const rawImageUrl = unwrapAngleBrackets(input.imageUrl?.trim() ?? "");
+  const rawImageUrl = unwrapAngleBrackets(
+    (input.imageUrl ?? "").replace(INVISIBLE_CHAR_REGEX, "").trim(),
+  );
   let imageUrl: string | undefined;
   if (rawImageUrl) {
     let parsed: URL;
@@ -215,19 +217,6 @@ function unwrapAngleBrackets(value: string): string {
   return match ? match[1].trim() : value;
 }
 
-function describeImageFetchError(imageUrl: string, error: unknown): string {
-  if (!axios.isAxiosError(error)) {
-    const msg = error instanceof Error ? error.message : String(error);
-    return `Image fetch failed: ${msg}`;
-  }
-  const data: unknown = error.response?.data;
-  const body = data instanceof ArrayBuffer || Buffer.isBuffer(data)
-    ? Buffer.from(data as ArrayBuffer).toString("utf8").slice(0, IMAGE_ERROR_BODY_MAX)
-    : data;
-  const status = error.response?.status;
-  return `Image fetch failed\n${formatApiError("GET", imageUrl, null, status, body)}`;
-}
-
 async function fetchImageBuffer(imageUrl: string): Promise<Buffer> {
   const response = await axios.get<ArrayBuffer>(imageUrl, {
     responseType: "arraybuffer",
@@ -235,7 +224,10 @@ async function fetchImageBuffer(imageUrl: string): Promise<Buffer> {
   });
   const contentType = String(response.headers["content-type"] ?? "").toLowerCase();
   if (!contentType.startsWith("image/")) {
-    throw new Error("Image URL must return an image content type.");
+    throw new Error(
+      `Image URL returned content type "${contentType}" (HTTP ${response.status}), ` +
+        "not an image.",
+    );
   }
   return Buffer.from(response.data);
 }
@@ -287,7 +279,7 @@ export async function handleLiveStreamCreateModal(interaction: ModalSubmitIntera
     try {
       imageBuffer = await fetchImageBuffer(imageUrl);
     } catch (error: unknown) {
-      const msg = describeImageFetchError(imageUrl, error);
+      const msg = buildApiErrorMessage("Image fetch failed", error);
       await safeReply(interaction, buildTextReply(msg, true));
       return;
     }

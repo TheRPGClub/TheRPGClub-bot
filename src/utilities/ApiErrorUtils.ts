@@ -23,6 +23,19 @@ export function formatApiError(
   );
 }
 
+const BINARY_BODY_MAX_CHARS = 500;
+
+/** Decode a binary response body (arraybuffer requests) into a short readable string. */
+export function decodeBinaryBody(data: unknown): unknown {
+  if (Buffer.isBuffer(data)) {
+    return data.toString("utf8").slice(0, BINARY_BODY_MAX_CHARS);
+  }
+  if (data instanceof ArrayBuffer) {
+    return Buffer.from(data).toString("utf8").slice(0, BINARY_BODY_MAX_CHARS);
+  }
+  return data;
+}
+
 export function tryParseJson(raw: string | null | undefined): unknown {
   if (!raw) return null;
   try {
@@ -66,6 +79,6 @@ export function buildApiErrorMessage(label: string, err: unknown): string {
     err.config?.url ?? "?",
     tryParseJson(err.config?.data as string | null | undefined),
     err.response?.status,
-    err.response?.data,
+    decodeBinaryBody(err.response?.data),
   )}`;
 }

@@ -118,3 +118,18 @@ test("parseLiveStreamModalInput treats a blank image url as absent", () => {
     assert.equal(parsed.value.imageUrl, undefined);
   }
 });
+
+test("parseLiveStreamModalInput strips invisible characters pasted into the image url", () => {
+  const parsed = parseLiveStreamModalInput({
+    end: "2026-05-01 23:30",
+    imageUrl: "https://example.com/key​_art.png﻿",
+    start: "2026-05-01 21:30",
+    timeZone: "America/New_York",
+    topic: "Nintendo Direct",
+  });
+
+  assert.equal(parsed.ok, true);
+  if (parsed.ok) {
+    assert.equal(parsed.value.imageUrl, "https://example.com/key_art.png");
+  }
+});
