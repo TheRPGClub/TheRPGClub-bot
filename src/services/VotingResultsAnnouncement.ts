@@ -76,10 +76,13 @@ async function addWinnerCovers(
   container: ContainerBuilder,
   gameIds: number[],
 ): Promise<AttachmentBuilder[]> {
+  const covers = await Promise.all(
+    gameIds.map((gameId) => fetchGameCoverBuffer(gameId).catch(() => null)),
+  );
   const files: AttachmentBuilder[] = [];
   const gallery = new MediaGalleryBuilder();
-  for (const gameId of gameIds) {
-    const cover = await fetchGameCoverBuffer(gameId).catch(() => null);
+  for (const [index, gameId] of gameIds.entries()) {
+    const cover = covers[index];
     if (!cover) {
       continue;
     }
@@ -209,7 +212,8 @@ export async function announceVotingResults(
 /** One category's settled winners, in the order the admins recorded them. */
 export interface IRoundWinnerCategory {
   kindLabel: WinnerKindLabel;
-  games: Array<{ gamedbGameId: number; title: string }>;
+  /** threadId: the winner thread when the caller already linked it. */
+  games: Array<{ gamedbGameId: number; title: string; threadId?: string | null }>;
 }
 
 /**
@@ -246,24 +250,24 @@ export async function announceRoundWinners(
     ];
     if (!rehearsal) {
       for (const game of category.games) {
+        let threadId = game.threadId ?? null;
         // Best-effort, as in announceVotingResults: a thread failure must not
         // block the announcement.
         try {
-          const threadResult = await ensureWinnerThread({
-            client,
-            gameId: game.gamedbGameId,
-            gameTitle: game.title,
-            roundNumber: round.roundNumber,
-            kindLabel: category.kindLabel,
-          });
-          if (threadResult.threadId) {
-            lines.push(
-              `Join the **${game.title}** discussion in ` +
-                `${channelMention(threadResult.threadId)}!`,
-            );
-          }
+          threadId ??= (
+            await ensureWinnerThread({
+              client,
+              gameId: game.gamedbGameId,
+              gameTitle: game.title,
+              roundNumber: round.roundNumber,
+              kindLabel: category.kindLabel,
+            })
+          ).threadId;
         } catch (error) {
           logError("VotingResultsAnnouncement.announceRoundWinners", error);
+        }
+        if (threadId) {
+          lines.push(`Join the **${game.title}** discussion in ${channelMention(threadId)}!`);
         }
       }
     }

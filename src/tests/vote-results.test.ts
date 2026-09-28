@@ -240,6 +240,10 @@ test("buildFinalWinnersText names one winner or lists several", () => {
     buildFinalWinnersText({ ...params, titles: ["Alpha", "Beta", "Gamma"] }),
     /are \*\*Alpha\*\*, \*\*Beta\*\* and \*\*Gamma\*\*!$/,
   );
+  assert.equal(
+    buildFinalWinnersText({ ...params, titles: [] }),
+    "No GOTM winner was recorded for Round 142.",
+  );
 });
 
 test("buildWinnerThreadTitle formats and truncates the round thread name", () => {

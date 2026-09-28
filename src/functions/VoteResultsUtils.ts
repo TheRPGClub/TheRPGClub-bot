@@ -96,6 +96,9 @@ export function buildFinalWinnersText(params: {
   monthLabel: string;
   titles: string[];
 }): string {
+  if (!params.titles.length) {
+    return `No ${params.kindLabel} winner was recorded for Round ${params.roundNumber}.`;
+  }
   const plural = params.titles.length > 1;
   return (
     `# 🏆 The ${params.kindLabel} ${plural ? "winners" : "winner"} for Round ` +

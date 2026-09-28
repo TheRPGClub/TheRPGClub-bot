@@ -63,6 +63,7 @@ import { isPositiveInt } from "../../utilities/ValidationUtils.js";
 import { truncateLabel } from "../../config/textLimits.js";
 import { safeIgnore } from "../../utilities/AsyncUtils.js";
 import { logError } from "../../utilities/LogUtils.js";
+import { buildDiscordErrorMessage } from "../../utilities/ApiErrorUtils.js";
 import { ensureVoteScheduledEvent } from "../../functions/VoteScheduledEvent.js";
 import {
   announceRoundWinners,
@@ -761,10 +762,14 @@ export async function handleNextRoundSetup(
       }
     }
 
+    const announceChannelId = testMode ? ADMIN_CHANNEL_ID : ANNOUNCEMENT_CHANNEL_ID;
     const announceChoice = await wizardChoice(
-      `Post the Round ${nextRound} winners in ${channelMention(ANNOUNCEMENT_CHANNEL_ID)} ` +
-        "once setup commits? Skip it when the results post from closing the vote " +
-        "already named every winner.",
+      `Post the Round ${nextRound} winners in ${channelMention(announceChannelId)} ` +
+        "once setup commits?" +
+        (testMode
+          ? " (Test mode: a rehearsal, not the real announcement.)"
+          : " Skip it when the results post from closing the vote already named " +
+            "every winner."),
       addCancelOption([
         { label: "Post Announcement", value: "post", style: ButtonStyle.Primary },
         { label: "Skip", value: "skip" },
@@ -789,6 +794,8 @@ export async function handleNextRoundSetup(
       return;
     }
 
+    // Filled by the insert actions so the announcement links the same threads.
+    const winnerThreadIds = new Map<number, string>();
     allActions = [
     {
       description: `Insert GOTM Round ${nextRound} (${gotmGames.length} games)`,
@@ -826,6 +833,9 @@ export async function handleNextRoundSetup(
             roundNumber: nextRound,
             kindLabel: "GOTM",
           });
+          if (threadResult.threadId) {
+            winnerThreadIds.set(game.gamedbGameId, threadResult.threadId);
+          }
           if (threadResult.threadId && threadResult.action === "created") {
             await wizardLog(`Linked GOTM thread ${channelMention(threadResult.threadId)} for "${game.title}".`);
           } else if (threadResult.threadId && threadResult.action === "updated") {
@@ -880,6 +890,9 @@ export async function handleNextRoundSetup(
             roundNumber: nextRound,
             kindLabel: "NR-GOTM",
           });
+          if (threadResult.threadId) {
+            winnerThreadIds.set(game.gamedbGameId, threadResult.threadId);
+          }
           if (threadResult.threadId && threadResult.action === "created") {
             await wizardLog(`Linked NR-GOTM thread ${channelMention(threadResult.threadId)} for "${game.title}".`);
           } else if (threadResult.threadId && threadResult.action === "updated") {
@@ -950,6 +963,10 @@ export async function handleNextRoundSetup(
           (testMode ? ` (test: ${channelMention(ADMIN_CHANNEL_ID)} instead)` : ""),
         execute: async () => {
           // Last, so the insert actions have already linked each winner thread.
+          const withThread = (game: { gamedbGameId: number; title: string }) => ({
+            ...game,
+            threadId: winnerThreadIds.get(game.gamedbGameId) ?? null,
+          });
           // The round is recorded by now, so a failed post is reported rather
           // than thrown, which would log the committed setup as cancelled.
           try {
@@ -957,15 +974,15 @@ export async function handleNextRoundSetup(
               interaction.client,
               { roundNumber: nextRound, monthLabel: monthYear },
               [
-                { kindLabel: "GOTM", games: gotmGames },
-                { kindLabel: "NR-GOTM", games: nrGotmGames },
+                { kindLabel: "GOTM", games: gotmGames.map(withThread) },
+                { kindLabel: "NR-GOTM", games: nrGotmGames.map(withThread) },
               ],
               testMode ? { channelIdOverride: ADMIN_CHANNEL_ID, rehearsal: true } : {},
             );
-          } catch (err: any) {
+          } catch (err: unknown) {
             logError("round-setup-wizard.service.announceRoundWinners", err);
             await wizardLog(
-              `❌ Posting the winners failed: ${err?.message ?? String(err)}. ` +
+              `${buildDiscordErrorMessage("❌ Posting the winners failed", err)}\n` +
                 "The round was recorded; post the announcement by hand.",
             );
             return;
