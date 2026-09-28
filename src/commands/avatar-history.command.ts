@@ -220,7 +220,7 @@ export class AvatarHistoryCommand {
     })
     showAll: boolean | undefined,
     @SlashOption({
-      description: "Scan all cached members and record current avatars for new entries (admin only).",
+      description: "Scan all members and record avatars missing a stored URL (admin only).",
       name: "scan",
       required: false,
       type: ApplicationCommandOptionType.Boolean,
@@ -242,7 +242,8 @@ export class AvatarHistoryCommand {
         });
         return;
       }
-      const guildMembers = interaction.guild.members.cache.filter((m) => !m.user.bot);
+      const allMembers = await interaction.guild.members.fetch();
+      const guildMembers = allMembers.filter((m) => !m.user.bot);
       let recorded = 0;
       let skipped = 0;
       let failed = 0;
