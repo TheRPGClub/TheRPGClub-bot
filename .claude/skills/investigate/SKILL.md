@@ -28,7 +28,7 @@ Ids are never stored; look them up every time. A tool that fails is reported
 in one line and skipped, per
 [sidebar-groups.md](../_shared/sidebar-groups.md#rules).
 
-- Step 1, once the issue reads back open: `Working`.
+- Step 1, once the issue is found open: `Working`.
 - Step 8, after the report: `Completed`, since an investigation opens no pull
   request. When the session still holds other work, the group
   sidebar-groups.md names for it instead.

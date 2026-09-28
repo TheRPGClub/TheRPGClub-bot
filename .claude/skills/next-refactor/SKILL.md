@@ -24,7 +24,9 @@ Ids are never stored; look them up every time. A tool that fails is reported
 in one line and skipped, per
 [sidebar-groups.md](../_shared/sidebar-groups.md#rules).
 
+- Step 1 finds no issue to work: `Completed`.
 - Step 2 stops on an open dependency: `Blocked`. When it closes: `Working`.
+- Step 3 stops on a dirty working tree to ask the user: `Needs Review`.
 - Step 4, as the implementation starts: `Working`.
 - Step 9, as the self review starts: `Self Review`.
 - Step 10, after a clean self review pass: `Needs Review`.
