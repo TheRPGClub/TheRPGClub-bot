@@ -1,7 +1,10 @@
 import { apiGet } from "../services/RpgClubApiClient.js";
 import GameSearchSynonym from "./GameSearchSynonym.js";
 import { mapGameFromApi } from "../functions/GameMappers.js";
-import { foldAccentE } from "../functions/GameTitleAutocompleteUtils.js";
+import {
+  foldAccents,
+  foldedTitleMatchesTerms,
+} from "../functions/GameTitleAutocompleteUtils.js";
 import { createTtlCache } from "../functions/TtlCache.js";
 import { AUTOCOMPLETE_CACHE_TTL_MS } from "../config/cacheDefaults.js";
 import type {
@@ -20,6 +23,7 @@ type IIndexedGameTitle = {
   game: IGameAutocompleteResult;
   folded: string;
   norm: string;
+  accented: boolean;
 };
 
 export default class GameSearchService {
@@ -38,6 +42,29 @@ export default class GameSearchService {
       page++;
     }
     return results;
+  }
+
+  /**
+   * The API's `q` search is accent-sensitive, so "pokemon" never finds "Pokémon".
+   * Matches accented titles against the folded title cache instead and fetches
+   * whichever ones the API search did not already return.
+   */
+  private static async fetchAccentedTitleMatches(
+    foldedTerms: string[],
+    found: Map<number, IGame>,
+  ): Promise<IGame[]> {
+    const titles = await GameSearchService.gameTitleCache.get();
+    const missingIds = titles
+      .filter((entry) => entry.accented && !found.has(entry.game.id))
+      .filter((entry) => foldedTitleMatchesTerms(entry, foldedTerms))
+      .map((entry) => entry.game.id);
+    const games = await Promise.all(
+      missingIds.map(async (id) => {
+        const result = await apiGet<{ data: unknown }>(`/api/v1/games/${id}`);
+        return result?.data ? mapGameFromApi(result.data) : null;
+      }),
+    );
+    return games.filter((g): g is IGame => g !== null);
   }
 
   private static async buildQueryVariants(baseQuery: string): Promise<string[]> {
@@ -81,7 +108,7 @@ export default class GameSearchService {
 
     const termSet = new Map<string, string>();
     Array.from(queryVariants).forEach((term) => {
-      const folded = foldAccentE(term).toLowerCase();
+      const folded = foldAccents(term).toLowerCase();
       const norm = folded.replace(/[^a-z0-9]/g, "");
       if (norm) termSet.set(norm, folded);
     });
@@ -95,11 +122,12 @@ export default class GameSearchService {
     async () => {
       const games = await GameSearchService.fetchGamesPages({});
       return games.map((g) => {
-        const folded = foldAccentE(g.title.toLowerCase()).toLowerCase();
+        const folded = foldAccents(g.title.toLowerCase()).toLowerCase();
         return {
           game: { id: g.id, title: g.title, initialReleaseDate: g.initialReleaseDate },
           folded,
           norm: folded.replace(/[^a-z0-9]/g, ""),
+          accented: foldAccents(g.title) !== g.title,
         };
       });
     },
@@ -127,7 +155,7 @@ export default class GameSearchService {
     const safeLimit = Math.min(24, Math.max(1, Math.trunc(limit) || 24));
 
     const lowerQuery = baseQuery.toLowerCase();
-    const foldedLowerQuery = foldAccentE(lowerQuery).toLowerCase();
+    const foldedLowerQuery = foldAccents(lowerQuery).toLowerCase();
     const normalizedQuery = foldedLowerQuery.replace(/[^a-z0-9]/g, "");
     if (!normalizedQuery && !/[a-z0-9]/.test(foldedLowerQuery)) {
       return [];
@@ -198,6 +226,11 @@ export default class GameSearchService {
         });
         rows.forEach((g) => gameMap.set(g.id, g));
       }
+      const accentedMatches = await GameSearchService.fetchAccentedTitleMatches(
+        queryTerms,
+        gameMap,
+      );
+      accentedMatches.forEach((g) => gameMap.set(g.id, g));
     } else {
       const rows = await GameSearchService.fetchGamesPages(fetchParams);
       rows.forEach((g) => gameMap.set(g.id, g));

@@ -1,5 +1,23 @@
-export function foldAccentE(query: string): string {
-  return query.replace(/[éèêë]/g, "e").replace(/[ÉÈÊË]/g, "E");
+/** Strips diacritics so "Pokémon" and "Ōkami" compare equal to "Pokemon" and "Okami". */
+export function foldAccents(text: string): string {
+  return text.normalize("NFD").replace(/\p{M}/gu, "");
+}
+
+type IFoldedTitleKeys = {
+  folded: string;
+  norm: string;
+};
+
+/**
+ * True when a title's folded keys contain any of the folded, lowercased search
+ * terms. Used to find accented titles that the API's plain text search misses.
+ */
+export function foldedTitleMatchesTerms(title: IFoldedTitleKeys, terms: string[]): boolean {
+  return terms.some((term) => {
+    if (title.folded.includes(term)) return true;
+    const termNorm = term.replace(/[^a-z0-9]/g, "");
+    return termNorm.length > 0 && title.norm.includes(termNorm);
+  });
 }
 
 type IGameTitleAutocompleteEntry = {
@@ -63,7 +81,7 @@ export function parseTitleWithYear(
  * equal (e.g. "X: Definitive Edition" vs "X - Definitive Edition").
  */
 export function normalizeTitleKey(title: string): string {
-  return foldAccentE(title)
+  return foldAccents(title)
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, " ")
     .trim();
