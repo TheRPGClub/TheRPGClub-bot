@@ -30,7 +30,7 @@ export default class Game {
     if (!result) throw new Error("No IGDB game found with that id.");
     const newGame = await Game.getGameById(result.data.game_id);
     if (!newGame) throw new Error("Failed to fetch newly created game.");
-    GameSearchService.clearGameTitleCache();
+    void GameSearchService.refreshGameTitleCache();
     return newGame;
   }
 

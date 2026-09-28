@@ -82,12 +82,17 @@ export default class GamePlatformRegionService {
   }
 
   private static platformCache = createTtlCache<IPlatformDef[]>(
+    "platforms",
     () => GamePlatformRegionService.getAllPlatforms(),
     AUTOCOMPLETE_CACHE_TTL_MS,
   );
 
   static async getCachedPlatforms(): Promise<IPlatformDef[]> {
     return GamePlatformRegionService.platformCache.get();
+  }
+
+  static refreshPlatformCache(): Promise<void> {
+    return GamePlatformRegionService.platformCache.refresh();
   }
 
   static clearPlatformCache(): void {

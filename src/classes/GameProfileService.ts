@@ -92,12 +92,17 @@ export default class GameProfileService {
   }
 
   private static companyCache = createTtlCache<ICompany[]>(
+    "companies",
     () => GameProfileService.getAllCompanies(),
     AUTOCOMPLETE_CACHE_TTL_MS,
   );
 
   static async getCachedCompanies(): Promise<ICompany[]> {
     return GameProfileService.companyCache.get();
+  }
+
+  static refreshCompanyCache(): Promise<void> {
+    return GameProfileService.companyCache.refresh();
   }
 
   static clearCompanyCache(): void {

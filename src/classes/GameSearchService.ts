@@ -16,6 +16,12 @@ type GamesListResponse = { data: unknown[]; meta: { next: number | null } };
 
 const MAX_QUERY_VARIANTS = 8;
 
+type IIndexedGameTitle = {
+  game: IGameAutocompleteResult;
+  folded: string;
+  norm: string;
+};
+
 export default class GameSearchService {
   private static async fetchGamesPages(
     params: Record<string, unknown>,
@@ -83,24 +89,30 @@ export default class GameSearchService {
     return Array.from(termSet.values()).slice(0, MAX_QUERY_VARIANTS);
   }
 
-  private static gameTitleCache = createTtlCache<IGameAutocompleteResult[]>(
+  // Folded/normalized keys are computed once per cache load, not on every keystroke.
+  private static gameTitleCache = createTtlCache<IIndexedGameTitle[]>(
+    "games",
     async () => {
       const games = await GameSearchService.fetchGamesPages({});
-      return games.map((g) => ({
-        id: g.id,
-        title: g.title,
-        initialReleaseDate: g.initialReleaseDate,
-      }));
+      return games.map((g) => {
+        const folded = foldAccentE(g.title.toLowerCase()).toLowerCase();
+        return {
+          game: { id: g.id, title: g.title, initialReleaseDate: g.initialReleaseDate },
+          folded,
+          norm: folded.replace(/[^a-z0-9]/g, ""),
+        };
+      });
     },
     AUTOCOMPLETE_CACHE_TTL_MS,
   );
 
-  static async getCachedGameTitles(): Promise<IGameAutocompleteResult[]> {
-    return GameSearchService.gameTitleCache.get();
-  }
-
-  static clearGameTitleCache(): void {
-    GameSearchService.gameTitleCache.clear();
+  /**
+   * Reloads the title list in the background. Call at startup so the first
+   * autocomplete does not wait on a full paged fetch, and after writes so new
+   * games appear without making the next keystroke block.
+   */
+  static refreshGameTitleCache(): Promise<void> {
+    return GameSearchService.gameTitleCache.refresh();
   }
 
   static async searchGamesAutocomplete(
@@ -121,11 +133,9 @@ export default class GameSearchService {
       return [];
     }
 
-    const games = await GameSearchService.getCachedGameTitles();
+    const games = await GameSearchService.gameTitleCache.get();
 
-    const rank = (game: IGameAutocompleteResult): number => {
-      const folded = foldAccentE(game.title.toLowerCase()).toLowerCase();
-      const norm = folded.replace(/[^a-z0-9]/g, "");
+    const rank = ({ folded, norm }: IIndexedGameTitle): number => {
       if (folded === foldedLowerQuery) return 0;
       if (folded.startsWith(foldedLowerQuery)) return 1;
       if (normalizedQuery && norm === normalizedQuery) return 2;
@@ -136,7 +146,7 @@ export default class GameSearchService {
     };
 
     const matched = games
-      .map((game) => ({ game, rank: rank(game) }))
+      .map((entry) => ({ game: entry.game, rank: rank(entry) }))
       .filter((entry) => entry.rank >= 0)
       .sort((a, b) => {
         const rankDiff = a.rank - b.rank;

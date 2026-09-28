@@ -30,6 +30,9 @@ import { startGameReleaseAnnouncementService } from "./services/GameReleaseAnnou
 import { startUserEmojiService } from "./services/UserEmojiService.js";
 import { startPokopiaEmojiService } from "./services/PokopiaEmojiService.js";
 import { restoreJournalMessageContextsFromDb } from "./commands/now-playing/nowPlayingContexts.js";
+import GameSearchService from "./classes/GameSearchService.js";
+import GamePlatformRegionService from "./classes/GamePlatformRegionService.js";
+import GameProfileService from "./classes/GameProfileService.js";
 import { truncateWithEllipsis } from "./utilities/ValidationUtils.js";
 import {
   assertTestGuildIdsComplete,
@@ -186,6 +189,12 @@ function getSlashCommandParams(interaction: ChatInputCommandInteraction): string
 }
 
 bot.once("clientReady", async () => {
+  // Warm autocomplete caches in the background so the first keystroke after a
+  // restart does not wait on a full paged fetch of games, platforms, and companies.
+  void GameSearchService.refreshGameTitleCache();
+  void GamePlatformRegionService.refreshPlatformCache();
+  void GameProfileService.refreshCompanyCache();
+
   // Make sure all guilds are cached
   await bot.guilds.fetch();
   setConsoleLoggingClient(bot);
