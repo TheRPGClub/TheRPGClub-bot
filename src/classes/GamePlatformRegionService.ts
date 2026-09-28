@@ -82,6 +82,7 @@ export default class GamePlatformRegionService {
   }
 
   private static platformCache = createTtlCache<IPlatformDef[]>(
+    "platforms",
     () => GamePlatformRegionService.getAllPlatforms(),
     AUTOCOMPLETE_CACHE_TTL_MS,
   );

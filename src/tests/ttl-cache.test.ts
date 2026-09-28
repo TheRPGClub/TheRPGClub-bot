@@ -12,7 +12,7 @@ function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
 
 test("createTtlCache blocks only the first load and shares it", async () => {
   let calls = 0;
-  const cache = createTtlCache(async () => {
+  const cache = createTtlCache("test", async () => {
     calls += 1;
     return calls;
   }, 60_000);
@@ -25,7 +25,7 @@ test("createTtlCache blocks only the first load and shares it", async () => {
 
 test("createTtlCache serves the stale value while refreshing an expired entry", async () => {
   const fetches: Array<ReturnType<typeof deferred<string>>> = [];
-  const cache = createTtlCache(() => {
+  const cache = createTtlCache("test", () => {
     const next = deferred<string>();
     fetches.push(next);
     return next.promise;
@@ -45,28 +45,29 @@ test("createTtlCache serves the stale value while refreshing an expired entry", 
   assert.equal(await cache.get(), "new");
 });
 
-test("createTtlCache keeps the stale value when a background refresh fails", async () => {
+test("createTtlCache keeps the stale value when a background refresh fails", async (t) => {
+  t.mock.method(console, "error", () => undefined);
   let calls = 0;
-  const cache = createTtlCache(async () => {
-    calls += 1;
-    if (calls > 1) throw new Error("upstream down");
-    return "cached";
-  }, 0);
-  const originalError = console.error;
-  console.error = () => {};
-  try {
-    assert.equal(await cache.get(), "cached");
-    assert.equal(await cache.get(), "cached");
-    await cache.refresh();
-    assert.equal(await cache.get(), "cached");
-  } finally {
-    console.error = originalError;
-  }
+  const cache = createTtlCache(
+    "test",
+    async () => {
+      calls += 1;
+      if (calls > 1) throw new Error("upstream down");
+      return "cached";
+    },
+    0,
+    60_000,
+  );
+  assert.equal(await cache.get(), "cached");
+  await cache.refresh();
+  assert.equal(await cache.get(), "cached");
+  assert.equal(await cache.get(), "cached");
+  assert.equal(calls, 2, "a failed refresh waits out the retry delay before fetching again");
 });
 
 test("createTtlCache refresh supersedes an in-flight fetch", async () => {
   const fetches: Array<ReturnType<typeof deferred<string>>> = [];
-  const cache = createTtlCache(() => {
+  const cache = createTtlCache("test", () => {
     const next = deferred<string>();
     fetches.push(next);
     return next.promise;
@@ -88,7 +89,7 @@ test("createTtlCache refresh supersedes an in-flight fetch", async () => {
 
 test("createTtlCache clear forces the next get to load again", async () => {
   let calls = 0;
-  const cache = createTtlCache(async () => {
+  const cache = createTtlCache("test", async () => {
     calls += 1;
     return calls;
   }, 60_000);

@@ -1,3 +1,6 @@
+import { AUTOCOMPLETE_CACHE_RETRY_DELAY_MS } from "../config/cacheDefaults.js";
+import { logError } from "../utilities/LogUtils.js";
+
 export interface ITtlCache<T> {
   get(): Promise<T>;
   /**
@@ -15,9 +18,16 @@ export interface ITtlCache<T> {
  * reload of the full game list took long enough to leave Discord's list empty.
  *
  * In-flight fetches are shared so concurrent callers during a refresh don't
- * trigger duplicate upstream requests.
+ * trigger duplicate upstream requests. A failed refresh keeps the stale value and
+ * waits retryDelayMs before trying again, so an upstream outage is not hit on
+ * every keystroke.
  */
-export function createTtlCache<T>(fetcher: () => Promise<T>, ttlMs: number): ITtlCache<T> {
+export function createTtlCache<T>(
+  name: string,
+  fetcher: () => Promise<T>,
+  ttlMs: number,
+  retryDelayMs: number = AUTOCOMPLETE_CACHE_RETRY_DELAY_MS,
+): ITtlCache<T> {
   let cache: { expiresAt: number; value: T } | null = null;
   let pending: Promise<T> | null = null;
   let generation = 0;
@@ -28,12 +38,20 @@ export function createTtlCache<T>(fetcher: () => Promise<T>, ttlMs: number): ITt
     }
     const loadGeneration = generation;
     const request = fetcher()
-      .then((value) => {
-        if (loadGeneration === generation) {
-          cache = { expiresAt: Date.now() + ttlMs, value };
-        }
-        return value;
-      })
+      .then(
+        (value) => {
+          if (loadGeneration === generation) {
+            cache = { expiresAt: Date.now() + ttlMs, value };
+          }
+          return value;
+        },
+        (err: unknown) => {
+          if (cache && loadGeneration === generation) {
+            cache = { ...cache, expiresAt: Date.now() + retryDelayMs };
+          }
+          throw err;
+        },
+      )
       .finally(() => {
         if (pending === request) {
           pending = null;
@@ -47,7 +65,7 @@ export function createTtlCache<T>(fetcher: () => Promise<T>, ttlMs: number): ITt
     load().then(
       () => undefined,
       (err: unknown) => {
-        console.error("[TtlCache] Background refresh failed; serving stale value.", err);
+        logError(`TtlCache:${name} background refresh failed; serving stale value`, err);
       },
     );
 

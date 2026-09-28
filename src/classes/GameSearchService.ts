@@ -91,6 +91,7 @@ export default class GameSearchService {
 
   // Folded/normalized keys are computed once per cache load, not on every keystroke.
   private static gameTitleCache = createTtlCache<IIndexedGameTitle[]>(
+    "games",
     async () => {
       const games = await GameSearchService.fetchGamesPages({});
       return games.map((g) => {

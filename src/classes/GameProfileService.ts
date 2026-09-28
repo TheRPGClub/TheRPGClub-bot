@@ -92,6 +92,7 @@ export default class GameProfileService {
   }
 
   private static companyCache = createTtlCache<ICompany[]>(
+    "companies",
     () => GameProfileService.getAllCompanies(),
     AUTOCOMPLETE_CACHE_TTL_MS,
   );
