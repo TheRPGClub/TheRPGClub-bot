@@ -310,9 +310,10 @@ export async function processCompletionSelection(
     return false;
   } catch (err: unknown) {
     logError("CompletionAdd.processCompletionSelection", err);
+    // Edit the prompt in place so it no longer reads "Importing..." above the error.
     await safeReply(interaction, {
       ...buildErrorReply(buildApiErrorMessage("Failed to add completion.", err), true),
-      __forceFollowUp: true,
+      flags: buildComponentsV2EditFlags(),
     });
     return false;
   }
