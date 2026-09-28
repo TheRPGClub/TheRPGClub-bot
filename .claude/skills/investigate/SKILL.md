@@ -9,6 +9,30 @@ findings so it is ready to implement.
 
 The issue number is passed as the skill argument (e.g. `/investigate 123`).
 
+## Sidebar moves
+
+The session files itself in the Code tab sidebar at each step below. These
+moves are part of the steps, not optional extras, and skipping one leaves the
+user unable to see where the session stands.
+
+Before the first move, load the tools in one call:
+
+```
+ToolSearch select:mcp__ccd_sidebar__list_groups,mcp__ccd_sidebar__create_group,mcp__ccd_sidebar__move_sessions
+```
+
+Each move: `mcp__ccd_sidebar__list_groups`, take the id of the group by name
+(create it with `mcp__ccd_sidebar__create_group` when missing), then
+`mcp__ccd_sidebar__move_sessions` with `session_ids: ["self"]` and that id.
+Ids are never stored; look them up every time. A tool that fails is reported
+in one line and skipped, per
+[sidebar-groups.md](../_shared/sidebar-groups.md#rules).
+
+- Step 1, once the issue reads back open: `Working`.
+- Step 8, after the report: `Completed`, since an investigation opens no pull
+  request. When the session still holds other work, the group
+  sidebar-groups.md names for it instead.
+
 ## Steps (always run in order)
 
 ### 1. Fetch the issue
@@ -25,8 +49,7 @@ Read the full body and all comments. Extract:
 
 If the issue is closed or does not exist, stop and report that to the user.
 
-Otherwise move the session to the `Working` sidebar group, per
-[sidebar-groups.md](../_shared/sidebar-groups.md).
+Otherwise move the session to `Working` (see [Sidebar moves](#sidebar-moves)).
 
 ### 2. Identify search targets
 
@@ -147,8 +170,8 @@ gh issue comment <N> --body-file <scratchpad>/comment.md
 ### 8. Report back
 
 Print the issue URL and a one-line summary of the root cause. Then move the session to
-`Completed`, or to whatever group the rest of the session's work calls for, per
-[sidebar-groups.md](../_shared/sidebar-groups.md).
+`Completed`, or to whatever group the rest of the session's work calls for
+(see [Sidebar moves](#sidebar-moves)).
 
 ## Common mistakes to avoid
 
@@ -158,3 +181,5 @@ Print the issue URL and a one-line summary of the root cause. Then move the sess
 - Do NOT use markdown tables in the issue body.
 - Do NOT put multiple concerns in one root cause -- if there are multiple bugs, say so clearly.
 - Do NOT read entire large files -- always grep first, then read targeted line ranges.
+- Do NOT skip a sidebar move. Each one in [Sidebar moves](#sidebar-moves) is
+  part of its step.
