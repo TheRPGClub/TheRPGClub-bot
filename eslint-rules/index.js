@@ -117,11 +117,15 @@ function getTrailingName(node) {
   if (!node) return null;
   if (node.type === "Identifier") return node.name;
   if (node.type === "ChainExpression") return getTrailingName(node.expression);
-  if (node.type === "MemberExpression" && !node.computed) return getTrailingName(node.property);
+  if (node.type === "PrivateIdentifier") return node.name;
+  if (node.type === "MemberExpression") {
+    return node.computed ? getLiteralString(node.property) : getTrailingName(node.property);
+  }
   return null;
 }
 
 function getFreeTextSanitizerName(callee) {
+  if (callee.type === "MemberExpression" && callee.computed) return null;
   const name = getCalledFunctionName(callee);
   return name && FREE_TEXT_SANITIZER_NAMES.has(name) ? name : null;
 }
@@ -146,7 +150,7 @@ function getSanitizedResultTargetName(callNode) {
   }
   const isKeyedValue = parent.type === "Property" || parent.type === "PropertyDefinition";
   if (isKeyedValue && parent.value === child && !parent.computed) {
-    return getPropertyName(parent.key);
+    return getPropertyName(parent.key) ?? getTrailingName(parent.key);
   }
   return null;
 }

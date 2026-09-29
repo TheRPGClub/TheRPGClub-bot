@@ -27,6 +27,7 @@ ruleTester.run("no-sanitize-url-input", rule, {
     "const label = sanitizeUserInput(url ? text : other);",
     "const note = sanitizeUserInput(\"paste the link here\");",
     "const imageUrl = sanitizeUserInput(raw) ? fallback : other;",
+    "const value = sanitizers[sanitizeUserInput](feedUrl);",
   ],
   invalid: [
     {
@@ -75,6 +76,14 @@ ruleTester.run("no-sanitize-url-input", rule, {
     },
     {
       code: "const imageUrl = sanitizeUserInput(raw) satisfies string;",
+      errors: [{ messageId: "noSanitizeUrl" }],
+    },
+    {
+      code: "class Feed { #imageUrl = sanitizeUserInput(raw); }",
+      errors: [{ messageId: "noSanitizeUrl" }],
+    },
+    {
+      code: "state[\"imageUrl\"] = sanitizeUserInput(raw);",
       errors: [{ messageId: "noSanitizeUrl" }],
     },
   ],
