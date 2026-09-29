@@ -35,3 +35,14 @@ test("formatStructuredLog handles circular references", () => {
   assert.equal(parsed.node.name, "root");
   assert.equal(parsed.node.self, "[Circular]");
 });
+
+test("formatStructuredLog keeps an Error cause without its extra fields", () => {
+  const cause = new Error("Request failed with status code 422") as Error & {
+    config?: unknown;
+  };
+  cause.config = { headers: { Authorization: "Bearer hidden" } };
+  const error = new Error("That game is already in your backlog.", { cause });
+  const parsed = JSON.parse(formatStructuredLog({ context: "ctx", error }));
+  assert.equal(parsed.error.cause.message, "Request failed with status code 422");
+  assert.equal(parsed.error.cause.config, undefined);
+});
