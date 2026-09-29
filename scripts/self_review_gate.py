@@ -19,25 +19,34 @@ Events:
   stop       Stop. Blocks the end of a turn while a tracked pull request's
              loop is unfinished.
 
-A loop is finished when the pull request's current head has a clean pass and
-its CI has passed or runs no checks. Pending CI on a clean head still blocks:
+A loop is finished when the pull request's current head has a clean pass, its
+CI has passed or runs no checks, and it is not in conflict with its base.
+Pending CI on a clean head still blocks:
 the session waits for it in the foreground rather than ending the turn.
+
+Pull requests are keyed by URL, so one opened in another repository is read
+from that repository. A pass is only as honest as the review behind it: the gate
+knows code-review ran and what ReportFindings said, not how carefully.
 
 State lives in <git common dir>/self-review/<session id>.json, outside the
 working tree and shared by every worktree of the repo. A GitHub read that fails
 lets the event through with a warning, so a network outage cannot trap a
 session; everything else fails closed.
 """
+import fcntl
 import json
 import os
 import re
 import subprocess
 import sys
+from concurrent.futures import ThreadPoolExecutor
 
 NEEDS_REVIEW_GROUP = 'Needs Review'
 GH_TIMEOUT = 20
-PR_URL = re.compile(r'github\.com/[^/\s]+/[^/\s]+/pull/(\d+)')
+PR_URL = re.compile(r'https://github\.com/([^/\s]+/[^/\s]+)/pull/(\d+)')
 GH_PR_CREATE = re.compile(r'(^|[;&|(])\s*gh pr create')
+# gh's wording when the repository or pull request does not exist; such a PR is dropped.
+MISSING_PR = re.compile(r'Could not resolve to a|no pull requests? found|HTTP 404', re.I)
 FAILED_CONCLUSIONS = {'FAILURE', 'TIMED_OUT', 'CANCELLED', 'ACTION_REQUIRED',
                       'STARTUP_FAILURE'}
 PENDING_STATUS_STATES = {'PENDING', 'EXPECTED'}
@@ -64,13 +73,16 @@ def state_path(session_id):
 def load(path):
     try:
         with open(path) as f:
-            return json.load(f)
+            state = json.load(f)
     except (FileNotFoundError, json.JSONDecodeError):
-        return {'prs': [], 'passes': [], 'groups': {}}
+        state = {}
+    # Entries keyed by bare number predate URL keys; the next review re-tracks them.
+    return {'prs': [u for u in state.get('prs', []) if isinstance(u, str)],
+            'passes': [p for p in state.get('passes', []) if isinstance(p.get('pr'), str)],
+            'groups': state.get('groups', {})}
 
 
 def save(path, state):
-    os.makedirs(os.path.dirname(path), exist_ok=True)
     tmp = f'{path}.tmp'
     with open(tmp, 'w') as f:
         json.dump(state, f, indent=1)
@@ -81,9 +93,18 @@ def text_of(value):
     return value if isinstance(value, str) else json.dumps(value)
 
 
-def read_pr(number):
+def read_pr(url):
     fields = 'number,state,headRefOid,mergeable,statusCheckRollup'
-    return json.loads(gh('pr', 'view', str(number), '--json', fields))
+    return json.loads(gh('pr', 'view', url, '--json', fields))
+
+
+def pr_url(match):
+    return f'https://github.com/{match.group(1)}/pull/{match.group(2)}'
+
+
+def short(url):
+    match = PR_URL.search(url)
+    return f'{match.group(1)}#{match.group(2)}' if match else url
 
 
 def ci_state(pr):
@@ -105,25 +126,30 @@ def ci_state(pr):
     return 'failed' if failed else 'passed'
 
 
-def clean_at(state, number, sha):
-    return any(p['pr'] == number and p['sha'] == sha and p.get('findings') == 0
+def clean_at(state, url, sha):
+    return any(p['pr'] == url and p['sha'] == sha and p.get('findings') == 0
                for p in state['passes'])
 
 
-def track(state, number):
-    if number not in state['prs']:
-        state['prs'].append(number)
+def track(state, url):
+    if url not in state['prs']:
+        state['prs'].append(url)
 
 
 def review_target(args):
-    """The pull request number a code-review invocation names, or the branch's own."""
+    """The URL of the pull request a code-review invocation names, or of the branch's own."""
+    ref = []
     for token in reversed((args or '').split()):
-        match = re.fullmatch(r'#?(\d+)', token) or PR_URL.search(token)
+        match = PR_URL.search(token)
         if match:
-            return int(match.group(1))
+            return pr_url(match)
+        number = re.fullmatch(r'#?(\d+)', token)
+        if number:
+            ref = [number.group(1)]
+            break
     try:
-        return int(gh('pr', 'view', '--json', 'number', '--jq', '.number').strip())
-    except (RuntimeError, ValueError):
+        return gh('pr', 'view', *ref, '--json', 'url', '--jq', '.url').strip() or None
+    except RuntimeError:
         return None
 
 
@@ -131,9 +157,14 @@ def on_pr_opened(state, payload):
     command = payload.get('tool_input', {}).get('command', '')
     if not GH_PR_CREATE.search(command):
         return None
-    match = PR_URL.search(text_of(payload.get('tool_response', '')))
-    if match:
-        track(state, int(match.group(1)))
+    # gh pr create prints the new URL on a line of its own; a URL inside other output
+    # (test data, a grep of the docs) is not a pull request this command opened.
+    response = payload.get('tool_response', '')
+    stdout = response.get('stdout', '') if isinstance(response, dict) else text_of(response)
+    for line in stdout.splitlines():
+        match = PR_URL.fullmatch(line.strip())
+        if match:
+            track(state, pr_url(match))
     return None
 
 
@@ -141,16 +172,17 @@ def on_review(state, payload):
     tool_input = payload.get('tool_input', {})
     if tool_input.get('skill') != 'code-review':
         return None
-    number = review_target(tool_input.get('args'))
-    if number is None:
-        return None
+    url = review_target(tool_input.get('args'))
+    if url is None:
+        return {'systemMessage': 'self review gate: could not tell which pull request this '
+                                 'code-review targets, so this pass is not recorded.'}
     try:
-        sha = read_pr(number)['headRefOid']
+        sha = read_pr(url)['headRefOid']
     except RuntimeError as err:
-        return {'systemMessage': f'self review gate: could not read PR {number}: {err}. '
+        return {'systemMessage': f'self review gate: could not read {short(url)}: {err}. '
                                  'This pass is not recorded.'}
-    track(state, number)
-    state['passes'].append({'pr': number, 'sha': sha, 'findings': None})
+    track(state, url)
+    state['passes'].append({'pr': url, 'sha': sha, 'findings': None})
     return None
 
 
@@ -159,10 +191,10 @@ def on_findings(state, payload):
     # A re-report carrying outcomes updates earlier findings; it is not a new pass.
     if any('outcome' in f for f in findings):
         return None
-    for entry in reversed(state['passes']):
-        if entry.get('findings') is None:
-            entry['findings'] = len(findings)
-            break
+    # Only the pass the latest code-review started takes the count; an older pass left open
+    # by an interrupted review stays open and never counts as clean.
+    if state['passes'] and state['passes'][-1].get('findings') is None:
+        state['passes'][-1]['findings'] = len(findings)
     return None
 
 
@@ -186,30 +218,46 @@ def on_groups(state, payload):
     return None
 
 
+def read_all(urls):
+    """Each URL paired with its pull request, or with the error reading it, read in parallel."""
+    def read(url):
+        try:
+            return url, read_pr(url)
+        except RuntimeError as err:
+            return url, err
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        return list(pool.map(read, urls))
+
+
 def unfinished(state):
     """Why each tracked open pull request's loop is unfinished, plus GitHub read errors."""
     problems, errors = [], []
-    for number in list(state['prs']):
-        try:
-            pr = read_pr(number)
-        except RuntimeError as err:
-            errors.append(f'PR {number}: {err}')
+    for url, pr in read_all(list(state['prs'])):
+        name = short(url)
+        if isinstance(pr, RuntimeError):
+            if MISSING_PR.search(str(pr)):
+                state['prs'].remove(url)
+            else:
+                errors.append(f'{name}: {pr}')
             continue
         if pr['state'] != 'OPEN':
-            state['prs'].remove(number)
+            state['prs'].remove(url)
             continue
         head = pr['headRefOid'][:7]
         ci = ci_state(pr)
-        if not clean_at(state, number, pr['headRefOid']):
-            problems.append(f'PR {number} has no clean pass at head {head}: run '
-                            f'`code-review high {number}` (a reread is not a pass), fix every '
-                            'finding that holds, push, and review again until a pass reports '
-                            'zero findings')
+        if not clean_at(state, url, pr['headRefOid']):
+            problems.append(f'{name} has no clean pass at head {head}: run '
+                            f'`code-review high {pr["number"]}` from its repository (a reread '
+                            'is not a pass), fix every finding that holds, push, and review '
+                            'again until a pass reports zero findings')
+        elif pr.get('mergeable') == 'CONFLICTING':
+            problems.append(f'{name} is clean at {head} but conflicts with its base: resolve '
+                            'it per pr-mergeability.md, push, and review again')
         elif ci == 'pending':
-            problems.append(f'PR {number} is clean at {head} but CI is still running: wait for '
-                            'it in the foreground with `scripts/catchup.py wait <ledger>`')
+            problems.append(f'{name} is clean at {head} but CI is still running: wait for it '
+                            'in the foreground with `scripts/catchup.py wait <ledger>`')
         elif ci == 'failed':
-            problems.append(f'PR {number} is clean at {head} but CI failed: the failure is a '
+            problems.append(f'{name} is clean at {head} but CI failed: the failure is a '
                             'finding, so fix it, push, and review again')
     return problems, errors
 
@@ -252,16 +300,33 @@ HANDLERS = {
     'stop': on_stop,
 }
 
+# Cheap checks on the tool input, so the hooks on every Bash and Skill call return before
+# touching git or the state file when the call has nothing to do with the gate.
+RELEVANT = {
+    'pr-opened': lambda tool_input: bool(GH_PR_CREATE.search(tool_input.get('command', ''))),
+    'review': lambda tool_input: tool_input.get('skill') == 'code-review',
+}
+
 
 def main(argv):
     if len(argv) != 2 or argv[1] not in HANDLERS:
         sys.stderr.write(f'usage: {argv[0]} {{{",".join(HANDLERS)}}} < hook-input.json\n')
         return 2
     payload = json.load(sys.stdin)
+    relevant = RELEVANT.get(argv[1])
+    if relevant and not relevant(payload.get('tool_input') or {}):
+        return 0
     path = state_path(payload.get('session_id'))
-    state = load(path)
-    result = HANDLERS[argv[1]](state, payload)
-    save(path, state)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    # Hooks from parallel tool calls run at once; the lock keeps one from overwriting
+    # another's update.
+    with open(f'{path}.lock', 'w') as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        state = load(path)
+        before = json.dumps(state, sort_keys=True)
+        result = HANDLERS[argv[1]](state, payload)
+        if json.dumps(state, sort_keys=True) != before:
+            save(path, state)
     if result:
         print(json.dumps(result))
     return 0

@@ -67,7 +67,7 @@
           {
             "type": "command",
             "command": "SCRIPT=\"$CLAUDE_PROJECT_DIR/scripts/self_review_gate.py\"; test -f \"$SCRIPT\" || exit 0; exec python3 \"$SCRIPT\" pr-opened",
-            "timeout": 90
+            "timeout": 120
           }
         ]
       },
@@ -77,7 +77,7 @@
           {
             "type": "command",
             "command": "SCRIPT=\"$CLAUDE_PROJECT_DIR/scripts/self_review_gate.py\"; test -f \"$SCRIPT\" || exit 0; exec python3 \"$SCRIPT\" review",
-            "timeout": 90
+            "timeout": 120
           }
         ]
       },
@@ -87,7 +87,7 @@
           {
             "type": "command",
             "command": "SCRIPT=\"$CLAUDE_PROJECT_DIR/scripts/self_review_gate.py\"; test -f \"$SCRIPT\" || exit 0; exec python3 \"$SCRIPT\" findings",
-            "timeout": 90
+            "timeout": 120
           }
         ]
       },
@@ -97,7 +97,7 @@
           {
             "type": "command",
             "command": "SCRIPT=\"$CLAUDE_PROJECT_DIR/scripts/self_review_gate.py\"; test -f \"$SCRIPT\" || exit 0; exec python3 \"$SCRIPT\" groups",
-            "timeout": 90
+            "timeout": 120
           }
         ]
       }
@@ -109,7 +109,7 @@
           {
             "type": "command",
             "command": "SCRIPT=\"$CLAUDE_PROJECT_DIR/scripts/self_review_gate.py\"; test -f \"$SCRIPT\" || exit 0; exec python3 \"$SCRIPT\" sidebar",
-            "timeout": 90
+            "timeout": 120
           }
         ]
       }
@@ -120,7 +120,7 @@
           {
             "type": "command",
             "command": "SCRIPT=\"$CLAUDE_PROJECT_DIR/scripts/self_review_gate.py\"; test -f \"$SCRIPT\" || exit 0; exec python3 \"$SCRIPT\" stop",
-            "timeout": 90
+            "timeout": 120
           }
         ]
       }
