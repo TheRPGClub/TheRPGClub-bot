@@ -28,6 +28,9 @@ The existing `ci.yml` jobs stay on GitHub-hosted runners.
   starts. The newest push wins, and the PR it displaced is told so in its comment.
 - **Watchtower leaves it alone.** The container carries
   `com.centurylinklabs.watchtower.enable=false`, and its image is local only.
+- **Scheduled work stays with production.** Test mode skips the background services in
+  `src/services/SharedStateServices.ts`, so the preview cannot claim shared work through
+  the API first and post it in the test guild.
 - **Fork PRs never run here.** Jobs skip any PR whose head repo is not this repo, so fork
   code never reaches the runner or the dev token.
 

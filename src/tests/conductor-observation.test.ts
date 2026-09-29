@@ -123,7 +123,7 @@ test("credits a component step with the component's mirrored update", () => {
   assert.equal(result.verdict, "pass");
 });
 
-test("accepts public output for an ephemeral step, as the dev channel override posts it", () => {
+test("does not accept public output for an ephemeral step", () => {
   const outputs = observe([snapshot({
     id: "pub",
     createdTimestamp: 150,
@@ -131,7 +131,10 @@ test("accepts public output for an ephemeral step, as the dev channel override p
     interactionUserId: USER,
   })]);
   const result = judgeStep(makeStep({}), outputs, { start: 100, end: 200 });
-  assert.equal(result.verdict, "pass");
+  assert.equal(result.verdict, "fail");
+  assert.match(result.reason, /No output observed in the ephemeral mirror channel\./);
+  assert.match(result.reason, /A public reply arrived instead/);
+  assert.deepEqual(result.unattributed.map((entry) => entry.messageId), ["pub"]);
 });
 
 test("a click step never owns a slash command's late mirrored reply", () => {

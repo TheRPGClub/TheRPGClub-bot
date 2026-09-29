@@ -7,7 +7,9 @@ const STATES = {
   building: (d) => `:hourglass: Building \`${d.sha}\` for the test guild.`,
   running: (d) =>
     `:green_circle: Running \`${d.sha}\` in the test guild as the dev bot ` +
-    `(container \`${d.container}\`). Guild-scoped commands are registered.`,
+    `(container \`${d.container}\`). Guild-scoped commands are registered.\n\n` +
+    `To walk through this PR's Testing steps, run \`/conduct pr:${d.pr}\` in the ` +
+    "test guild.",
   failed: (d) => `:red_circle: Preview of \`${d.sha}\` failed to start.`,
   superseded: (d) =>
     `:white_circle: Deploy of \`${d.sha}\` was cancelled, by a newer preview run or ` +
@@ -30,7 +32,7 @@ export async function upsertPreviewComment({ github, context, pr, state, ...deta
   const body = [
     MARKER,
     "### PR preview",
-    STATES[state]({ ...details, sha }),
+    STATES[state]({ ...details, sha, pr }),
     "",
     `[Workflow run](${runUrl})`,
   ].join("\n");

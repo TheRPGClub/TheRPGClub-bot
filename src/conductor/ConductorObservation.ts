@@ -153,19 +153,19 @@ export function slashSourceFor(command: string): string | null {
 
 /**
  * Splits the window's output into what this step produced and what it did not.
- * A public step's output must be public, and a mirrored slash command reply must
- * come from the command the step names, so a late reply from an earlier step is
- * not credited to this one.
+ * A step's output must land where its `Ephemeral:` line says, and a mirrored slash
+ * command reply must come from the command the step names, so a late reply from an
+ * earlier step is not credited to this one.
  */
 export function attributeStepOutput(
   step: ITestStep,
   outputs: IObservedOutput[],
   window: IStepWindow,
 ): { observed: IObservedOutput[]; unattributed: IObservedOutput[] } {
-  // Ephemeral replies come back through the mirror, or publicly when the bot's
-  // dev channel override forces them public for the guild owner. A public step
-  // producing only ephemeral output is still a failure.
-  const places: ObservationPlace[] = step.ephemeral ? ["mirror", "channel"] : ["channel"];
+  // Ephemeral replies only come back through the mirror; test mode turns off the
+  // dev channel override that would post them publicly. Output in the wrong place
+  // is a failure either way.
+  const places: ObservationPlace[] = step.ephemeral ? ["mirror"] : ["channel"];
   const slashSource = slashSourceFor(step.command);
   const observed: IObservedOutput[] = [];
   const unattributed: IObservedOutput[] = [];
@@ -219,15 +219,23 @@ export function judgeStep(
 ): IStepResult {
   const { observed, unattributed } = attributeStepOutput(step, outputs, window);
   const result = { stepNumber: step.number, observed, unattributed };
-  const where = step.ephemeral
-    ? "the ephemeral mirror channel or the test channel"
-    : "the test channel";
+  const where = step.ephemeral ? "the ephemeral mirror channel" : "the test channel";
 
   if (observed.length === 0) {
     const elsewhere = unattributed.length
       ? ` ${unattributed.length} other message(s) arrived in the window but did not match.`
       : "";
-    return { ...result, verdict: "fail", reason: `No output observed in ${where}.${elsewhere}` };
+    // A preview built from a branch older than the test mode override switch still
+    // posts the owner's ephemeral replies publicly.
+    const publicReply = step.ephemeral && unattributed.some((entry) => entry.place === "channel")
+      ? " A public reply arrived instead: it was not ephemeral, or this PR's branch predates" +
+        " the test mode dev channel fix and needs main merged in."
+      : "";
+    return {
+      ...result,
+      verdict: "fail",
+      reason: `No output observed in ${where}.${elsewhere}${publicReply}`,
+    };
   }
 
   if (step.expectedTexts.length === 0) {

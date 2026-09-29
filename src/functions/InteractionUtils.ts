@@ -23,6 +23,7 @@ import {
   mirrorEphemeralUpdate,
 } from "./EphemeralMirror.js";
 import { DEV_ROLE_ID } from "../config/roles.js";
+import { IS_TEST_MODE } from "../config/testMode.js";
 import {
   buildComponentsV2Flags,
   buildTextContainer,
@@ -292,6 +293,8 @@ function stripEphemeralFlag(flags: any): number {
 }
 
 function shouldForcePublicInDevChannel(interaction: AnyRepliable): boolean {
+  // The test guild verifies ephemeral behavior, which forcing replies public would hide.
+  if (IS_TEST_MODE) return false;
   const channelId = interaction.channelId;
   if (!channelId || channelId !== BOT_DEV_CHANNEL_ID) return false;
   const ownerId = interaction.guild?.ownerId;

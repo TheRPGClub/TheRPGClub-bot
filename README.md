@@ -92,6 +92,11 @@ output that is otherwise visible only to the invoking user. The mirror is
 best-effort and never affects the real reply. Keep that channel restricted:
 mirrored payloads can contain data that was ephemeral for a reason.
 
+Test mode also skips the background services listed in
+`src/services/SharedStateServices.ts`, which claim or write shared work through the
+API, so a preview never takes that work from production. It also turns off the dev
+channel override that makes the guild owner's ephemeral replies public.
+
 Test mode does not redirect external services. `RPGCLUB_API_BASE_URL`,
 Backblaze, and GitHub issues all use the same configuration they use in
 production, so point them at staging values yourself if you do not want a test
