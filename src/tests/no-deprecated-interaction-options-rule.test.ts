@@ -1,10 +1,12 @@
 import { describe, it } from "node:test";
-import { RuleTester, type Rule } from "eslint";
+import { RuleTester } from "oxlint/plugins-dev";
+
+type Rule = Parameters<RuleTester["run"]>[1];
 
 // eslint-rules lives outside rootDir, so load it by URL to keep tsc from pulling it in.
 const RULES_URL = new URL("../../eslint-rules/index.js", import.meta.url).href;
 const { default: localRules } = (await import(RULES_URL)) as {
-  default: { rules: Record<string, Rule.RuleModule> };
+  default: { rules: Record<string, Rule> };
 };
 const rule = localRules.rules["no-deprecated-interaction-options"];
 

@@ -282,6 +282,7 @@ function isAllowedIdConstantLocation(filename, suffix) {
 }
 
 const SNOWFLAKE_PATTERN = /^\d{17,20}$/;
+const INTERFACE_NAME_PATTERN = /^I[A-Z]/;
 
 /**
  * src/config/ owns the real snowflakes and src/tests/ needs fake ones for
@@ -3390,20 +3391,53 @@ export default {
         };
       },
     },
+    "interface-name-prefix": {
+      meta: {
+        type: "suggestion",
+        docs: {
+          description:
+            "Require interface names to be PascalCase and start with a capital I (IUser).",
+        },
+        schema: [],
+        messages: {
+          notPascalCase: "Interface name `{{name}}` must be PascalCase.",
+          missingPrefix: "Interface name `{{name}}` must match the RegExp: {{pattern}}",
+        },
+      },
+      create(context) {
+        return {
+          TSInterfaceDeclaration(node) {
+            const name = node.id.name;
+            const isPascalCase = name[0] === name[0].toUpperCase() && !name.includes("_");
+            if (!isPascalCase) {
+              context.report({ node: node.id, messageId: "notPascalCase", data: { name } });
+              return;
+            }
+            if (!INTERFACE_NAME_PATTERN.test(name)) {
+              context.report({
+                node: node.id,
+                messageId: "missingPrefix",
+                data: { name, pattern: String(INTERFACE_NAME_PATTERN) },
+              });
+            }
+          },
+        };
+      },
+    },
     "no-deprecated-eslint-context-methods": {
       meta: {
         type: "problem",
         docs: {
           description:
-            "Ban ESLint rule-context accessors that were removed in ESLint 10.",
+            "Ban rule-context accessors that Oxlint deprecates and ESLint 10 removed.",
         },
         schema: [],
         fixable: "code",
         messages: {
           useProperty:
-            "`context.{{method}}()` was removed in ESLint 10. Use `context.{{replacement}}` instead.",
+            "`context.{{method}}()` is deprecated. Use `context.{{replacement}}` instead.",
           useSourceCode:
-            "`context.{{method}}()` was removed in ESLint 10. Use `context.sourceCode.{{method}}(node)` instead.",
+            "`context.{{method}}()` is not on the rule context. Use `context.sourceCode.{{method}}(node)` instead.",
         },
       },
       create(context) {

@@ -42,7 +42,7 @@ commit alone does not show.
      `src/config/`, API errors surfaced with the full request and response;
    - interactions use stable custom IDs and resume after a bot restart;
    - a raw component builder or constant a shared helper already covers;
-   - `eslint.config.ts` rules the lint run cannot see, such as intent;
+   - `.oxlintrc.json` rules the lint run cannot see, such as intent;
    - the pull request body: `Closes #<N>` one per line, the `Testing` section
      in the shape `.github/pull-request-testing-format.md` sets, and the
      `Judgment calls` heading when the skill that opened it asks for one.

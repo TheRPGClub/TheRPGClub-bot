@@ -47,7 +47,7 @@ in one line and skipped, per
 ### 1. Lint
 
 ```bash
-npx eslint --fix
+npx oxlint --fix
 ```
 
 If violations are reported, fix them before proceeding. The fixes must be committed to the

@@ -102,7 +102,7 @@ run touching them.
 - `npm run dev` - Run the bot with ts-node.
 - `npm run build` - Build the TypeScript output.
 - `npm run compile` - Type check without emitting.
-- `npm run lint` - Run ESLint.
+- `npm run lint` - Run Oxlint.
 - `npm run watch` - Run dev mode with file watching.
 - `npm run start` - Run compiled output.
 - `npm run start:prod` - Run compiled output with pm2.

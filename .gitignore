@@ -11,7 +11,7 @@ __pycache__/
 # folders
 node_modules
 snapshots
-build
+/build
 .qodo
 .node
 .tmp

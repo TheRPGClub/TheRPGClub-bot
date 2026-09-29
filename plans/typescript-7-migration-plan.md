@@ -95,7 +95,7 @@ This is correct under TS 5.9.3 as well, so it can ship on its own, ahead of any 
 - **Custom lint rule: yes, and this is the real guard.** Forbid a decorated class from having a
   method whose name equals the class name. It is a narrow AST check, it is source-level and
   therefore compiler-independent, it catches the entire bug class, and nothing else in the repo
-  currently violates it. Add to `eslint-rules/` and register in `eslint.config.ts`.
+  currently violates it. Add to `eslint-rules/` and register in `.oxlintrc.json`.
 - **Unit test: yes, but mind what it actually guards.** A smoke test asserting that every
   registered `@Slash` command in `MetadataStorage` has a defined executor is worth having for
   null-executor regressions generally. It will **not** catch this particular bug if run the way

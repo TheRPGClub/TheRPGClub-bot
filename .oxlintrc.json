@@ -182,6 +182,7 @@
         "local/split-long-import": "error",
         "local/entry-id-from-api-entry-id": "error",
         "local/escape-masked-link-text": "error",
+        "local/interface-name-prefix": "error",
         "stylistic/semi": "error",
         "stylistic/comma-dangle": [
           "error",

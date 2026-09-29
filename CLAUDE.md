@@ -2,7 +2,7 @@ You may only edit files in the current working directory.
 Do not narrate tool calls with "Now I'll..." or "Next, let me..." sentences. Make the tool call directly. Only output text to report findings, ask questions, or deliver final results.
 You may only use non-destructive git commands.
 Research best practices for Discord.js and DiscordX, along with Typescript, so your coding mindset isn't out of date
-review eslint.config.ts and follow all rules outlined there
+review .oxlintrc.json and follow all rules outlined there
 keep lines of code under 100 characters long
 Do not delete the build directory.
 To type-check, run `tsc --noEmit` instead of building. Never run `npm run build`.
