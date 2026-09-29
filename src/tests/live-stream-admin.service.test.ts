@@ -60,6 +60,24 @@ test("parseLiveStreamModalInput rejects invalid image url protocol", () => {
   });
 
   assert.equal(parsed.ok, false);
+  if (!parsed.ok) {
+    assert.equal(parsed.error, "Optional Thread Image URL must use http or https.");
+  }
+});
+
+test("parseLiveStreamModalInput rejects a malformed image url", () => {
+  const parsed = parseLiveStreamModalInput({
+    end: "2026-05-01 23:30",
+    imageUrl: "not a url",
+    start: "2026-05-01 21:30",
+    timeZone: "America/New_York",
+    topic: "Nintendo Direct",
+  });
+
+  assert.equal(parsed.ok, false);
+  if (!parsed.ok) {
+    assert.equal(parsed.error, "Optional Thread Image URL must be a valid URL.");
+  }
 });
 
 test("parseLiveStreamModalInput rejects end before start", () => {

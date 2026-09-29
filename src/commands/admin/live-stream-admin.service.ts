@@ -20,6 +20,7 @@ import { TextInputStyle as ApiTextInputStyle } from "discord-api-types/v10";
 import { LIVE_EVENT_FORUM_ID } from "../../config/channels.js";
 import {
   safeDeferReply,
+  parseUserUrl,
   safeReply,
   sanitizeUserInput,
 } from "../../functions/InteractionUtils.js";
@@ -35,7 +36,7 @@ const LIVE_STREAM_END_ID = "live-stream-end";
 const LIVE_STREAM_TIMEZONE_ID = "live-stream-timezone";
 const LIVE_STREAM_IMAGE_URL_ID = "live-stream-image-url";
 const DEFAULT_TIMEZONE = "America/New_York";
-const INVISIBLE_CHAR_REGEX = /[\p{Cc}\p{Cf}]/gu;
+const LIVE_STREAM_IMAGE_URL_LABEL = "Optional Thread Image URL";
 
 type LiveStreamModalInput = {
   topic: string;
@@ -102,7 +103,7 @@ export function buildLiveStreamModal(customId: string): ModalBuilder {
       new ModalActionRowBuilder<ModalTextInputBuilder>().addComponents(
         new ModalTextInputBuilder()
           .setCustomId(LIVE_STREAM_IMAGE_URL_ID)
-          .setLabel("Optional Thread Image URL")
+          .setLabel(LIVE_STREAM_IMAGE_URL_LABEL)
           .setStyle(ApiTextInputStyle.Short)
           .setRequired(false)
           .setMaxLength(1000)
@@ -179,23 +180,12 @@ export function parseLiveStreamModalInput(
     };
   }
 
-  // URLs skip sanitizeUserInput: it strips markdown characters such as `_` and `~`, which
-  // rewrites the path and makes the image fetch 404.
-  const rawImageUrl = unwrapAngleBrackets(
-    (input.imageUrl ?? "").replace(INVISIBLE_CHAR_REGEX, "").trim(),
-  );
+  const rawImageUrl = input.imageUrl ?? "";
   let imageUrl: string | undefined;
-  if (rawImageUrl) {
-    let parsed: URL;
-    try {
-      parsed = new URL(rawImageUrl);
-    } catch {
-      return { error: "Optional Thread Image URL must be a valid URL.", ok: false };
-    }
-    if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
-      return { error: "Optional Thread Image URL must use http or https.", ok: false };
-    }
-    imageUrl = parsed.href;
+  if (rawImageUrl.trim()) {
+    const parsedImageUrl = parseUserUrl(rawImageUrl, LIVE_STREAM_IMAGE_URL_LABEL);
+    if (!parsedImageUrl.ok) return parsedImageUrl;
+    imageUrl = parsedImageUrl.value;
   }
 
   const startsAt = start.toUTC().toJSDate();
@@ -210,11 +200,6 @@ export function parseLiveStreamModalInput(
       topic,
     },
   };
-}
-
-function unwrapAngleBrackets(value: string): string {
-  const match = /^<(.+)>$/.exec(value);
-  return match ? match[1].trim() : value;
 }
 
 async function fetchImageBuffer(imageUrl: string): Promise<Buffer> {
