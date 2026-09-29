@@ -15,6 +15,7 @@ import {
 import {
   DISCORD_SELECT_OPTIONS_MAX,
   DISCORD_V2_COMPONENTS_MAX,
+  MAX_CONTAINER_TEXT,
   MAX_SECTION_TEXT,
 } from "../config/textLimits.js";
 import { parseCustomIdSegments, validateCustomId } from "../utilities/CustomIdUtils.js";
@@ -109,7 +110,7 @@ function buildCategoryContainer(
   } else {
     const lines = games.map((game) => `- **${game.title}**`);
     container.addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(safeV2TextContent([heading, ...lines].join("\n"), 3500)),
+      new TextDisplayBuilder().setContent(safeV2TextContent([heading, ...lines].join("\n"), MAX_CONTAINER_TEXT)),
     );
   }
   return container.addActionRowComponents(
@@ -118,12 +119,11 @@ function buildCategoryContainer(
 }
 
 /**
- * Components each category container adds: the container, heading, select and
- * its row, plus three per game with a cover (section, text, thumbnail) or one
- * without, or one list text in place of the per-game entries.
+ * Components a category container adds with covers: the container, heading,
+ * select and its row, plus three per game with a cover (section, text,
+ * thumbnail) or one without.
  */
-function countCategoryComponents(games: IVotingRoundTieGame[], withCovers: boolean): number {
-  if (!withCovers) return 4;
+function countCategoryComponents(games: IVotingRoundTieGame[]): number {
   return 4 + games.reduce((sum, game) => sum + (game.coverUrl ? 3 : 1), 0);
 }
 
@@ -137,7 +137,7 @@ export function buildTiePromptComponents(round: IVotingRound): ContainerBuilder[
   const headerCount = 2;
   const withCovers =
     headerCount +
-      ties.reduce((sum, tie) => sum + countCategoryComponents(tie.games, true), 0) <=
+      ties.reduce((sum, tie) => sum + countCategoryComponents(tie.games), 0) <=
     DISCORD_V2_COMPONENTS_MAX;
   return [
     buildTextContainer(buildTiePendingText(round)),

@@ -511,9 +511,18 @@ export async function handleTieBreakSelect(
   }
   const label = VOTING_CATEGORY_LABEL[target.category];
   await safeDeferUpdate(interaction);
+  const gameIds = interaction.values.map(Number);
   try {
-    const gameIds = interaction.values.map(Number);
     await VotingRounds.resolveTie(target.roundNumber, target.category, gameIds);
+  } catch (err: unknown) {
+    await followUpTieBreakError(
+      interaction,
+      `Could not break the Round ${target.roundNumber} ${label} tie`,
+      err,
+    );
+    return;
+  }
+  try {
     const titles = interaction.values.map((value) => {
       const option = interaction.component.options.find((opt) => opt.value === value);
       return option?.label ?? `Game ${value}`;
@@ -532,12 +541,23 @@ export async function handleTieBreakSelect(
       allowedMentions: { parse: [] },
     });
   } catch (err: unknown) {
-    // A follow-up, not safeReply: after the deferred update safeReply would
-    // edit the prompt itself and wipe every category's select.
-    const text = buildApiErrorMessage(
-      `Could not break the Round ${target.roundNumber} ${label} tie`,
+    await followUpTieBreakError(
+      interaction,
+      `The Round ${target.roundNumber} ${label} tie was broken, but this prompt could not ` +
+        "be updated",
       err,
     );
-    await safeFollowUpIfSettled(interaction, buildErrorReply(text, true));
   }
+}
+
+/**
+ * A follow-up, not safeReply: after the deferred update safeReply would edit
+ * the prompt itself and wipe every category's select.
+ */
+async function followUpTieBreakError(
+  interaction: StringSelectMenuInteraction,
+  label: string,
+  err: unknown,
+): Promise<void> {
+  await safeFollowUpIfSettled(interaction, buildErrorReply(buildApiErrorMessage(label, err), true));
 }
