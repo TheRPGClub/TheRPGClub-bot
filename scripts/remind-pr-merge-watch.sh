@@ -12,10 +12,14 @@ command=$(jq -r '.tool_input.command // ""' <<<"$input")
 # one that merely mentions it (a grep of the docs, a commit message).
 grep -qE '(^|[;&|(])[[:space:]]*gh pr create' <<<"$command" || exit 0
 
-output=$(jq -r '.tool_response | if type == "string" then . else tostring end' \
-  <<<"$input")
-number=$(grep -oE 'github\.com/[^/ ]+/[^/ ]+/pull/[0-9]+' <<<"$output" \
-  | head -n1 | grep -oE '[0-9]+$' || true)
+# gh pr create prints the new URL on a line of its own; a URL inside other output
+# (test data, a grep of the docs) is not a pull request this command opened.
+stdout=$(jq -r '.tool_response
+  | if type == "object" then (.stdout // "") | tostring
+    elif type == "string" then . else tostring end' <<<"$input")
+url_line='^[[:space:]]*https://github\.com/[^/[:space:]]+/[^/[:space:]]+/pull/[0-9]+[[:space:]]*$'
+number=$(grep -E "$url_line" <<<"$stdout" | head -n1 | grep -oE '[0-9]+[[:space:]]*$' \
+  | tr -d '[:space:]' || true)
 test -n "$number" || exit 0
 
 msg="Pull request $number was opened. Before ending the turn, record it with"
