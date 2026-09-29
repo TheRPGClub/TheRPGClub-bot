@@ -81,16 +81,51 @@
     "no-useless-backreference": "error",
     "no-useless-catch": "error",
     "no-useless-escape": "error",
-    "no-var": "error",
-    "prefer-const": "error",
-    "prefer-rest-params": "error",
-    "prefer-spread": "error",
     "preserve-caught-error": "warn",
     "require-yield": "error",
     "use-isnan": "error",
     "valid-typeof": "error"
   },
   "overrides": [
+    {
+      "files": [
+        "**/*.js",
+        "**/*.mjs",
+        "**/*.cjs"
+      ],
+      "rules": {
+        "constructor-super": "error",
+        "getter-return": "error",
+        "no-class-assign": "error",
+        "no-const-assign": "error",
+        "no-dupe-class-members": "error",
+        "no-dupe-keys": "error",
+        "no-func-assign": "error",
+        "no-import-assign": "error",
+        "no-new-native-nonconstructor": "error",
+        "no-obj-calls": "error",
+        "no-redeclare": "error",
+        "no-setter-return": "error",
+        "no-this-before-super": "error",
+        "no-undef": "error",
+        "no-unreachable": "error",
+        "no-unsafe-negation": "error",
+        "no-with": "error"
+      }
+    },
+    {
+      "files": [
+        "**/*.ts",
+        "**/*.mts",
+        "**/*.cts"
+      ],
+      "rules": {
+        "no-var": "error",
+        "prefer-const": "error",
+        "prefer-rest-params": "error",
+        "prefer-spread": "error"
+      }
+    },
     {
       "files": [
         "src/**/*.ts"
