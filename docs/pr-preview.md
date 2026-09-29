@@ -133,7 +133,15 @@ Settings, Actions, General, Fork pull request workflows from outside collaborato
 `Require approval for all external contributors`. The workflow already skips forks; this
 is the second lock.
 
-### 7. Verify
+### 7. Turn previews on
+
+Every job is skipped until the repository variable `PR_PREVIEW_ENABLED` is `true`, so
+PRs never wait on a runner that does not exist yet. Once steps 1 to 6 are done: Settings,
+Secrets and variables, Actions, Variables tab, New repository variable,
+`PR_PREVIEW_ENABLED` = `true`. Set it to anything else to pause previews, for example
+while the desktop is off for a while.
+
+### 8. Verify
 
 1. Open any PR against `main`. Within a minute or two its `PR preview` comment should
    read Running, and the dev bot should be online in the test guild with its slash

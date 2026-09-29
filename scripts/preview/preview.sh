@@ -56,8 +56,17 @@ check_env_file() {
     die "BOT_TOKEN in the preview env file belongs to the production bot"
 }
 
-remove_container() {
-  docker rm -f "$1" >/dev/null 2>&1 || true
+# Removes every preview container, or only those owned by PR $1 when given. Prints the
+# owning PR of each one removed. Fails if any is still there afterwards.
+remove_previews() {
+  local only_pr="${1:-}" id owner
+  while read -r id owner; do
+    [[ -n "${id}" ]] || continue
+    [[ -z "${only_pr}" || "${owner}" == "${only_pr}" ]] || continue
+    echo "preview: removing ${id} (PR ${owner:-unknown})" >&2
+    docker rm -f "${id}" >/dev/null || die "could not remove ${id}"
+    echo "${owner}"
+  done < <(preview_containers)
 }
 
 wait_until_ready() {
@@ -85,22 +94,19 @@ write_output() {
 }
 
 cmd_deploy() {
-  local pr="${1:?pr number required}" sha="${2:?sha required}"
+  local pr="${1:?pr number required}" sha="${2:?sha required}" owner removed id
   check_env_file
 
-  # One preview at a time: whatever is running goes first, whichever PR owns it.
-  local id owner
-  while read -r id owner; do
-    [[ -n "${id}" ]] || continue
-    if [[ -n "${owner}" && "${owner}" != "${pr}" ]]; then
-      write_output "replaced_pr=${owner}"
-    fi
-    echo "preview: removing ${id} (PR ${owner:-unknown})"
-    remove_container "${id}"
-  done < <(preview_containers)
-
+  # Build before touching the running preview, so a broken branch leaves it up.
   export PREVIEW_PR="${pr}" PREVIEW_SHA="${sha}"
   docker compose -f "${COMPOSE_FILE}" build pr-preview
+
+  # One preview at a time: whatever is running goes, whichever PR owns it.
+  removed="$(remove_previews)"
+  for owner in ${removed}; do
+    if [[ "${owner}" != "${pr}" ]]; then write_output "replaced_pr=${owner}"; fi
+  done
+
   docker compose -f "${COMPOSE_FILE}" up -d --force-recreate pr-preview
   docker image prune -f --filter "label=rpgclub.preview=true" >/dev/null || true
 
@@ -112,17 +118,14 @@ cmd_deploy() {
 }
 
 cmd_teardown() {
-  local pr="${1:?pr number required}" id owner removed=0
-  while read -r id owner; do
-    [[ -n "${id}" ]] || continue
-    if [[ "${owner}" == "${pr}" ]]; then
-      echo "preview: removing ${id} (PR ${pr})"
-      remove_container "${id}"
-      removed=1
-    fi
-  done < <(preview_containers)
-  (( removed )) || echo "preview: no preview running for PR ${pr}"
-  write_output "removed=${removed}"
+  local pr="${1:?pr number required}" removed
+  removed="$(remove_previews "${pr}")"
+  if [[ -n "${removed}" ]]; then
+    write_output "removed=1"
+  else
+    echo "preview: no preview running for PR ${pr}"
+    write_output "removed=0"
+  fi
 }
 
 cmd_current_pr() {
@@ -135,12 +138,7 @@ cmd_list() {
 }
 
 cmd_kill() {
-  local id owner
-  while read -r id owner; do
-    [[ -n "${id}" ]] || continue
-    echo "preview: removing ${id} (PR ${owner:-unknown})"
-    remove_container "${id}"
-  done < <(preview_containers)
+  remove_previews >/dev/null
 }
 
 case "${1:-}" in

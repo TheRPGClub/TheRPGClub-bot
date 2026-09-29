@@ -24,9 +24,11 @@ env:
 jobs:
   deploy:
     # Fork PRs never reach the self-hosted runner: their code would run next to the
-    # dev token and the production container.
+    # dev token and the production container. PR_PREVIEW_ENABLED (a repo variable) stays
+    # unset until the runner exists, so PRs do not sit on a check nothing can pick up.
     if: >-
-      github.event_name == 'pull_request'
+      vars.PR_PREVIEW_ENABLED == 'true'
+      && github.event_name == 'pull_request'
       && github.event.action != 'closed'
       && github.event.pull_request.head.repo.full_name == github.repository
     runs-on: [self-hosted, rpgclub-preview]
@@ -72,9 +74,10 @@ jobs:
             });
 
       # A close that landed while this run was building would otherwise leave the
-      # preview up after its teardown already ran.
+      # preview up after its teardown already ran, even when the deploy then failed.
       - name: Check the PR is still open
         id: open
+        if: always()
         uses: actions/github-script@v8
         with:
           script: |
@@ -85,7 +88,7 @@ jobs:
             core.setOutput("open", String(open));
 
       - name: Tear down for a PR closed mid-deploy
-        if: steps.open.outputs.open == 'false'
+        if: always() && steps.open.outputs.open == 'false'
         run: bash "$PREVIEW_SCRIPT" teardown "$PR"
 
       - name: Report result
@@ -110,7 +113,8 @@ jobs:
 
   teardown:
     if: >-
-      github.event_name == 'pull_request'
+      vars.PR_PREVIEW_ENABLED == 'true'
+      && github.event_name == 'pull_request'
       && github.event.action == 'closed'
       && github.event.pull_request.head.repo.full_name == github.repository
     runs-on: [self-hosted, rpgclub-preview]
@@ -142,7 +146,9 @@ jobs:
 
   # Hourly reaper for a preview whose teardown never ran or failed.
   reap:
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    if: >-
+      vars.PR_PREVIEW_ENABLED == 'true'
+      && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
     runs-on: [self-hosted, rpgclub-preview]
     timeout-minutes: 5
     concurrency:
