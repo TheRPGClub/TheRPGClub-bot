@@ -55,7 +55,10 @@ test("parses the format doc's worked example into an ordered script", () => {
   assert.equal(result.steps[0].command, "/collection add");
   assert.equal(result.steps[0].ephemeral, true);
   assert.deepEqual(result.steps[0].expectedTexts, ["Search for a game"]);
-  assert.equal(result.steps[1].command, "click \"Search for a game\", enter \"Gloomhaven\", submit");
+  assert.equal(
+    result.steps[1].command,
+    "click \"Search for a game\", enter \"Gloomhaven\", submit",
+  );
   assert.equal(result.steps[2].ephemeral, false);
   assert.deepEqual(result.steps[2].expectedTexts, ["Collection updated"]);
   assert.match(result.steps[2].expected, /naming Gloomhaven, and the ephemeral/);
@@ -98,7 +101,10 @@ const MALFORMED: [string, string][] = [
   ["two code blocks in one step", `${step(1, "/help", "help", "no")}\n${FENCE}\n/x\n${FENCE}`],
   ["a missing Expected line", `### Step 1: x\n${FENCE}\n/help\n${FENCE}\nEphemeral: no`],
   ["prose before the first step", `Run these:\n${step(1, "/help", "help", "no")}`],
-  ["a heading without a label", `### Step 1:\n${FENCE}\n/help\n${FENCE}\nExpected: y\nEphemeral: no`],
+  [
+    "a heading without a label",
+    `### Step 1:\n${FENCE}\n/help\n${FENCE}\nExpected: y\nEphemeral: no`,
+  ],
 ];
 
 for (const [name, section] of MALFORMED) {
