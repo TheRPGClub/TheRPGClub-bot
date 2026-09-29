@@ -24,7 +24,6 @@ import {
   safeUpdate,
   sanitizeUserInput,
 } from "../functions/InteractionUtils.js";
-import { logError } from "../utilities/LogUtils.js";
 import {
   buildTextReply,
   buildComponentsV2Flags,
@@ -35,7 +34,7 @@ import {
 } from "../functions/VoteDateUtils.js";
 import { toUnixTimestamp } from "../functions/DateFormatUtils.js";
 import { bot } from "../RPGClub_GameDB.js";
-import BotVotingInfo from "../classes/BotVotingInfo.js";
+import VotingRounds from "../classes/VotingRounds.js";
 import { isAdmin } from "./admin/admin-auth.utils.js";
 import {
   buildAdminHelpButtons,
@@ -60,7 +59,6 @@ import {
 } from "./admin/nomination-admin.service.js";
 import { handleAddGotm, handleEditGotm } from "./admin/gotm-admin.service.js";
 import { handleAddNrGotm, handleEditNrGotm } from "./admin/nr-gotm-admin.service.js";
-import { handleNextRoundSetup } from "./admin/round-setup-wizard.service.js";
 import { type AdminHelpTopicId } from "./admin/admin.types.js";
 
 @Discord()
@@ -131,24 +129,37 @@ export class Admin {
     }
 
     await withErrorReply(interaction, async () => {
-      const current = await BotVotingInfo.getCurrentRound();
+      const current = await VotingRounds.getCurrent();
       if (!current) {
+        await safeReply(interaction, buildTextReply("No voting round is scheduled.", true));
+        return;
+      }
+      if (current.votingEnded) {
         await safeReply(
           interaction,
           buildTextReply(
-            "No voting round information is available. Create a round before setting the next vote date.",
+            `Voting for Round ${current.roundNumber} has ended. The next round is ` +
+              "scheduled once this one is decided.",
             true,
           ),
         );
         return;
       }
 
-      await BotVotingInfo.updateNextVoteAt(current.roundNumber, parsed);
-      const voteUnix = toUnixTimestamp(parsed);
+      // The API moves the close with the open, keeping the default weekend window.
+      const updated = await VotingRounds.reschedule(current.roundNumber, {
+        votingOpensAt: parsed,
+      });
+      const opensUnix = toUnixTimestamp(updated.votingOpensAt);
+      const closesUnix = toUnixTimestamp(updated.votingClosesAt);
 
       await safeReply(
         interaction,
-        buildTextReply(`Next vote date updated to <t:${voteUnix}:D> (America/New_York).`, false),
+        buildTextReply(
+          `Round ${updated.roundNumber} voting now opens <t:${opensUnix}:F> and closes ` +
+            `<t:${closesUnix}:F>.`,
+          false,
+        ),
       );
     }, "Error updating next vote date");
   }
@@ -184,7 +195,7 @@ export class Admin {
   }
 
   @Slash({
-    description: "Open first-party voting for the upcoming round and post voting panels",
+    description: "Repost the voting panels for the round currently open for votes",
     name: "voting-open",
   })
   async votingOpen(
@@ -354,32 +365,6 @@ export class Admin {
     }
 
     await handleAdminNominationDeleteReasonModalAction(interaction);
-  }
-
-  @Slash({ description: "Interactive setup for the next round (GOTM, NR-GOTM, dates)", name: "nextround-setup" })
-  async nextRoundSetup(
-    @SlashOption({
-      description: "Run in test mode (no DB changes)",
-      name: "testmode",
-      required: false,
-      type: ApplicationCommandOptionType.Boolean,
-    })
-    testModeInput: boolean | undefined,
-    interaction: CommandInteraction,
-  ): Promise<void> {
-    await safeDeferReply(interaction, {});
-
-    const okToUseCommand: boolean = await isAdmin(interaction);
-    if (!okToUseCommand) return;
-
-    await withErrorReply(interaction, async () => {
-      try {
-        await handleNextRoundSetup(interaction, testModeInput);
-      } catch (err: unknown) {
-        logError("admin.command.nextRoundSetup", err);
-        throw err;
-      }
-    }, "Round setup wizard failed");
   }
 
   @Slash({ description: "Add a new GOTM round", name: "add-gotm" })

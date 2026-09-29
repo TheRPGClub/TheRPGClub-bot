@@ -1,4 +1,4 @@
-import { apiGet } from "../services/RpgClubApiClient.js";
+import { apiGet, apiPatch } from "../services/RpgClubApiClient.js";
 
 /**
  * Where a round is in its lifecycle, as the API decides it: members nominate
@@ -52,6 +52,16 @@ export type VotingRoundApiData = {
 };
 
 type VotingRoundResponse = { data: VotingRoundApiData | null };
+
+/**
+ * An admin reschedule. Moving the open without a close keeps the default
+ * weekend window; closing voting early is `votingClosesAt: now`. The API
+ * refuses a decided round and a close that is not after the open.
+ */
+export interface IVotingRoundUpdate {
+  votingOpensAt?: Date;
+  votingClosesAt?: Date;
+}
 
 function parseApiDate(value: string, field: string): Date {
   const date = new Date(value);
@@ -131,5 +141,23 @@ export default class VotingRounds {
     const round = normalizeRoundNumber(roundNumber);
     const response = await apiGet<VotingRoundResponse>(`/api/v1/voting_rounds/${round}`);
     return response?.data ? mapVotingRoundApiData(response.data) : null;
+  }
+
+  /** Reschedules a round. Throws when the API has no row for it. */
+  static async reschedule(
+    roundNumber: number,
+    changes: IVotingRoundUpdate,
+  ): Promise<IVotingRound> {
+    const round = normalizeRoundNumber(roundNumber);
+    const data: Record<string, string> = {};
+    if (changes.votingOpensAt) data.voting_opens_at = changes.votingOpensAt.toISOString();
+    if (changes.votingClosesAt) data.voting_closes_at = changes.votingClosesAt.toISOString();
+    const response = await apiPatch<VotingRoundResponse>(`/api/v1/voting_rounds/${round}`, {
+      data,
+    });
+    if (!response?.data) {
+      throw new Error(`No voting round ${round} was found to update.`);
+    }
+    return mapVotingRoundApiData(response.data);
   }
 }
