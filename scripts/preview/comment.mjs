@@ -10,7 +10,8 @@ const STATES = {
     `(container \`${d.container}\`). Guild-scoped commands are registered.`,
   failed: (d) => `:red_circle: Preview of \`${d.sha}\` failed to start.`,
   superseded: (d) =>
-    `:white_circle: Deploy of \`${d.sha}\` was cancelled by a newer preview run.`,
+    `:white_circle: Deploy of \`${d.sha}\` was cancelled, by a newer preview run or ` +
+    "the job timeout. The workflow run says which.",
   replaced: (d) =>
     `:white_circle: Preview stopped: #${d.by} took the test guild. ` +
     "Push a commit or re-run the workflow to bring this one back.",
