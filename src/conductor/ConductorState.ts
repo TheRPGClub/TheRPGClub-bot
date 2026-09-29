@@ -21,6 +21,8 @@ export interface IConductorRun {
   /** Discord timestamp of the DM that handed out the current step. */
   windowStart: number;
   results: IStepResult[];
+  /** A failed check awaiting "Check again" or "Continue as failed". */
+  pendingResult?: IStepResult | null;
   status: ConductorRunStatus;
 }
 

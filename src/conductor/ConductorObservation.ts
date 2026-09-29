@@ -172,8 +172,11 @@ export function attributeStepOutput(
 
   for (const output of outputs.filter((entry) => inWindow(entry, window))) {
     const rightPlace = places.includes(output.place);
-    const rightSource = !slashSource || output.place !== "mirror" ||
-      output.source === slashSource;
+    // A click step never owns a slash command's reply, which would be a late
+    // answer to an earlier step.
+    const rightSource = output.place !== "mirror" || (slashSource
+      ? output.source === slashSource
+      : !output.source?.startsWith("/"));
     if (rightPlace && rightSource) observed.push(output);
     else unattributed.push(output);
   }

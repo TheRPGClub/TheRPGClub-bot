@@ -22,7 +22,9 @@ loader never imports this directory, and the conductor never loads the bot's com
      manual testing, and notes that on the PR. It never runs a partial script.
 3. It DMs step 1: the command in a code block, the expected result, and where the
    output will land. The tester runs the command in the test channel, waits for the
-   reply, and presses **Check**.
+   reply, and presses **Check**. A failed check keeps the step open: **Check again**
+   rereads with the same window start, for output that landed after an early press,
+   and **Continue as failed** records the failure and moves on.
 4. The conductor reads back the newest 100 messages of the test channel and of the
    mirror channel, keeps the preview bot's output for the tester, and judges the step.
    Then it DMs the next step.
@@ -47,7 +49,8 @@ step once and answers the second press as stale.
 - **User.** A mirror post must name the allowlisted tester as its user. A public reply
   to an interaction must be to the tester's interaction.
 - **Command.** A step whose command is a slash command only accepts mirror posts whose
-  `source` is that command, so a late reply from an earlier step is not credited to it.
+  `source` is that command, and any other step refuses mirror posts from a slash
+  command, so a late reply from an earlier step is not credited to it.
 
 Output in the window that fails these checks is listed in the report as "other output"
 when the step fails.

@@ -134,6 +134,14 @@ test("accepts public output for an ephemeral step, as the dev channel override p
   assert.equal(result.verdict, "pass");
 });
 
+test("a click step never owns a slash command's late mirrored reply", () => {
+  const outputs = observe([mirrorPost("late", 150, "/collection", "Gloomhaven")]);
+  const clickStep = makeStep({ command: "click \"Search\"", expectedTexts: ["Gloomhaven"] });
+  const result = judgeStep(clickStep, outputs, { start: 100, end: 200 });
+  assert.equal(result.verdict, "fail");
+  assert.deepEqual(result.unattributed.map((entry) => entry.messageId), ["late"]);
+});
+
 test("does not accept mirrored ephemeral output for a public step", () => {
   const outputs = observe([mirrorPost("m", 150, "/collection", "Search for a game")]);
   const result = judgeStep(makeStep({ ephemeral: false }), outputs, { start: 100, end: 200 });

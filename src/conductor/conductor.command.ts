@@ -13,6 +13,8 @@ import {
 import { ButtonComponent, Discord, Slash, SlashOption } from "discordx";
 import {
   CONDUCTOR_ABORT_PREFIX,
+  CONDUCTOR_ACCEPT_PREFIX,
+  CONDUCTOR_CHECK_PREFIX,
   CONDUCTOR_REPORT_PREFIX,
 } from "../config/customIdPrefixes.js";
 import {
@@ -32,17 +34,19 @@ import { buildApiErrorMessage, buildDiscordErrorMessage } from "../utilities/Api
 import { checkConductorAccess } from "./ConductorAccess.js";
 import {
   NO_MENTIONS,
+  buildFailedStepMessage,
   buildReportRetryRow,
   buildStepMessage,
   buildStepResultText,
-  parseCheckCustomId,
   parseRunCustomId,
+  parseStepCustomId,
 } from "./ConductorMessages.js";
 import {
   classifySnapshot,
   judgeStep,
   type IMessageSnapshot,
   type IObservedOutput,
+  type IStepResult,
 } from "./ConductorObservation.js";
 import { buildRunReport, buildUnparseableReport } from "./ConductorReport.js";
 import { getConductorRuntime } from "./ConductorRuntime.js";
@@ -164,6 +168,13 @@ async function postRunReport(
   }
 }
 
+/** Aborts a run, keeping a failed check it was waiting on as that step's result. */
+function markAborted(run: IConductorRun): void {
+  if (run.pendingResult) run.results.push(run.pendingResult);
+  run.pendingResult = null;
+  run.status = "aborted";
+}
+
 /** Ends a still-running run that a new `/conduct` replaces, reporting what it got to. */
 async function supersedeRun(
   interaction: AnyConductorInteraction,
@@ -171,7 +182,7 @@ async function supersedeRun(
 ): Promise<void> {
   const previous = await loadRun(statePath);
   if (!previous || previous.status !== "running") return;
-  previous.status = "aborted";
+  markAborted(previous);
   await saveRun(statePath, previous);
   if (previous.results.length) await postRunReport(interaction, previous);
 }
@@ -192,20 +203,28 @@ async function replyStale(interaction: ButtonInteraction, reason: string): Promi
   await safeFollowUpIfSettled(interaction, buildTextReply(reason, true));
 }
 
-async function checkStepLocked(interaction: ButtonInteraction): Promise<void> {
-  const parsed = parseCheckCustomId(interaction.customId);
+/** Loads the run a Check or Accept button belongs to, answering stale presses. */
+async function loadStepRun(
+  interaction: ButtonInteraction,
+  prefix: string,
+): Promise<IConductorRun | null> {
+  const parsed = parseStepCustomId(interaction.customId, prefix);
   const { settings } = getConductorRuntime();
   const check = checkStepButton(
     await loadRun(settings.statePath),
     parsed?.runId ?? "",
     parsed?.step ?? -1,
   );
-  if (!check.ok) {
-    await replyStale(interaction, check.reason);
-    return;
-  }
+  if (check.ok) return check.run;
+  await replyStale(interaction, check.reason);
+  return null;
+}
 
-  const run = check.run;
+async function checkStepLocked(interaction: ButtonInteraction): Promise<void> {
+  const run = await loadStepRun(interaction, CONDUCTOR_CHECK_PREFIX);
+  if (!run) return;
+  const { settings } = getConductorRuntime();
+
   const step = run.steps[run.current];
   let outputs: IObservedOutput[];
   try {
@@ -219,6 +238,36 @@ async function checkStepLocked(interaction: ButtonInteraction): Promise<void> {
     start: run.windowStart,
     end: interaction.createdTimestamp,
   });
+  if (result.verdict === "fail") {
+    run.pendingResult = result;
+    await saveRun(settings.statePath, run);
+    await safeEditReply(
+      interaction,
+      buildFailedStepMessage(run, result, settings.testChannelId),
+    );
+    return;
+  }
+  await advanceRun(interaction, run, result);
+}
+
+async function acceptFailLocked(interaction: ButtonInteraction): Promise<void> {
+  const run = await loadStepRun(interaction, CONDUCTOR_ACCEPT_PREFIX);
+  if (!run) return;
+  if (!run.pendingResult) {
+    await replyStale(interaction, "This step has no failed check to accept.");
+    return;
+  }
+  await advanceRun(interaction, run, run.pendingResult);
+}
+
+/** Records the step's result, then DMs the next step or finishes the run. */
+async function advanceRun(
+  interaction: ButtonInteraction,
+  run: IConductorRun,
+  result: IStepResult,
+): Promise<void> {
+  const { settings } = getConductorRuntime();
+  run.pendingResult = null;
   run.results.push(result);
   run.current += 1;
   await safeEditReply(interaction, textEdit(buildStepResultText(run, result)));
@@ -250,7 +299,7 @@ async function abortRunLocked(interaction: ButtonInteraction): Promise<void> {
     await replyStale(interaction, "This run is no longer active.");
     return;
   }
-  run.status = "aborted";
+  markAborted(run);
   await saveRun(settings.statePath, run);
   await safeEditReply(interaction, textEdit(`Run for PR #${run.pr} aborted.`));
   await postRunReport(interaction, run);
@@ -360,6 +409,16 @@ export class ConductorCommand {
     }
     await safeDeferUpdate(interaction);
     await withRunLock(() => checkStepLocked(interaction));
+  }
+
+  @ButtonComponent({ id: /^conductor-accept-v1:\d+:\d+$/ })
+  async acceptFail(interaction: ButtonInteraction): Promise<void> {
+    if (!isAllowed(interaction)) {
+      await denyAccess(interaction);
+      return;
+    }
+    await safeDeferUpdate(interaction);
+    await withRunLock(() => acceptFailLocked(interaction));
   }
 
   @ButtonComponent({ id: /^conductor-abort-v1:\d+$/ })

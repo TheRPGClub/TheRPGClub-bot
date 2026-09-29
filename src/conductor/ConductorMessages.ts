@@ -6,6 +6,7 @@ import { ButtonStyle } from "discord.js";
 import { ActionRowBuilder, ButtonBuilder, ContainerBuilder } from "@discordjs/builders";
 import {
   CONDUCTOR_ABORT_PREFIX,
+  CONDUCTOR_ACCEPT_PREFIX,
   CONDUCTOR_CHECK_PREFIX,
   CONDUCTOR_REPORT_PREFIX,
 } from "../config/customIdPrefixes.js";
@@ -31,8 +32,16 @@ export function buildReportCustomId(runId: string): string {
   return `${CONDUCTOR_REPORT_PREFIX}:${runId}`;
 }
 
-export function parseCheckCustomId(customId: string): { runId: string; step: number } | null {
-  const match = new RegExp(`^${CONDUCTOR_CHECK_PREFIX}:(\\d+):(\\d+)$`).exec(customId);
+export function buildAcceptCustomId(runId: string, stepIndex: number): string {
+  return `${CONDUCTOR_ACCEPT_PREFIX}:${runId}:${stepIndex}`;
+}
+
+/** Reads `<prefix>:<runId>:<stepIndex>`, the shape of the Check and Accept IDs. */
+export function parseStepCustomId(
+  customId: string,
+  prefix: string,
+): { runId: string; step: number } | null {
+  const match = new RegExp(`^${prefix}:(\\d+):(\\d+)$`).exec(customId);
   return match ? { runId: match[1], step: Number(match[2]) } : null;
 }
 
@@ -57,24 +66,61 @@ function describeStep(run: IConductorRun, testChannelId: string): string {
   ].join("\n");
 }
 
-/** The DM for the run's current step, with its Check and Abort buttons. */
-export function buildStepMessage(run: IConductorRun, testChannelId: string): {
+type StepMessage = {
   components: (ContainerBuilder | ActionRowBuilder<ButtonBuilder>)[];
   flags: number;
   allowedMentions: typeof NO_MENTIONS;
-} {
+};
+
+function abortButton(runId: string): ButtonBuilder {
+  return new ButtonBuilder()
+    .setCustomId(buildAbortCustomId(runId))
+    .setLabel("Abort run")
+    .setStyle(ButtonStyle.Secondary);
+}
+
+function checkButton(run: IConductorRun, label: string): ButtonBuilder {
+  return new ButtonBuilder()
+    .setCustomId(buildCheckCustomId(run.runId, run.current))
+    .setLabel(label)
+    .setStyle(ButtonStyle.Primary);
+}
+
+/** The DM for the run's current step, with its Check and Abort buttons. */
+export function buildStepMessage(run: IConductorRun, testChannelId: string): StepMessage {
   const buttons = new ActionRowBuilder<ButtonBuilder>().addComponents(
-    new ButtonBuilder()
-      .setCustomId(buildCheckCustomId(run.runId, run.current))
-      .setLabel("Check")
-      .setStyle(ButtonStyle.Primary),
-    new ButtonBuilder()
-      .setCustomId(buildAbortCustomId(run.runId))
-      .setLabel("Abort run")
-      .setStyle(ButtonStyle.Secondary),
+    checkButton(run, "Check"),
+    abortButton(run.runId),
   );
   return {
     components: [buildTextContainer(describeStep(run, testChannelId)), buttons],
+    flags: buildComponentsV2EditFlags(),
+    allowedMentions: NO_MENTIONS,
+  };
+}
+
+/**
+ * The same step after a failed check. The step stays open, so output that lands
+ * after an early press can still be checked; the window keeps its start.
+ */
+export function buildFailedStepMessage(
+  run: IConductorRun,
+  result: IStepResult,
+  testChannelId: string,
+): StepMessage {
+  const text = `${describeStep(run, testChannelId)}\n\n` +
+    `**${VERDICT_LABELS[result.verdict]}**: ${result.reason}\n` +
+    "Press **Check again** once the output lands, or continue with this step failed.";
+  const buttons = new ActionRowBuilder<ButtonBuilder>().addComponents(
+    checkButton(run, "Check again"),
+    new ButtonBuilder()
+      .setCustomId(buildAcceptCustomId(run.runId, run.current))
+      .setLabel("Continue as failed")
+      .setStyle(ButtonStyle.Danger),
+    abortButton(run.runId),
+  );
+  return {
+    components: [buildTextContainer(text), buttons],
     flags: buildComponentsV2EditFlags(),
     allowedMentions: NO_MENTIONS,
   };
