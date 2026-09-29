@@ -341,7 +341,7 @@ function extractReviewDecisionFromInteraction(
     }
   }
 
-  let reason = "";
+  let reason: string;
   try {
     const rawReason = interaction.fields.getTextInputValue(SUGGESTION_REVIEW_REASON_ID);
     reason = sanitizeUserInput(rawReason, { preserveNewlines: true });

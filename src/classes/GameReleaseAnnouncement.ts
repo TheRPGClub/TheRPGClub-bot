@@ -62,7 +62,7 @@ function mapDueData(d: ReleaseAnnouncementDueData): IReleaseAnnouncementCandidat
 export default class GameReleaseAnnouncement {
   static async syncReleaseAnnouncements(): Promise<void> {
     let page = 1;
-    let totalPages = 1;
+    let totalPages: number;
     do {
       const response = await apiGet<GamesListResponse>("/api/v1/games", {
         params: { per: GAMES_PER_PAGE, page },

@@ -243,7 +243,7 @@ export class CollectionSteamImportCommand {
 
     await updateSteamCollectionImportIndex(session.importId, nextItem.rowIndex);
     let candidates = parseImportCandidates(nextItem.matchCandidateJson);
-    let igdbComponents: ActionRowBuilder<any>[] | null = null;
+    let igdbComponents: ActionRowBuilder<any>[] | null;
     let igdbHasResults = false;
     if (!candidates.length) {
       const mapped = await getSteamAppGameDbMapByAppId(nextItem.steamAppId);
@@ -972,7 +972,7 @@ export class CollectionSteamImportCommand {
       return;
     }
 
-    let resolvedGameId: number | null = null;
+    let resolvedGameId: number | null;
     let source: "gamedb" | "igdb" | null = null;
 
     const game = await Game.getGameById(enteredId);

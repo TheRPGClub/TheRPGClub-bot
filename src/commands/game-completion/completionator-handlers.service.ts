@@ -607,7 +607,7 @@ export class CompletionatorHandlersService {
     }
 
     const rawValue = interaction.fields.getTextInputValue("completion-date")?.trim();
-    let parsedDate: Date | null = null;
+    let parsedDate: Date | null;
     try {
       parsedDate = parseCompletionDateInput(rawValue);
     } catch (err: any) {

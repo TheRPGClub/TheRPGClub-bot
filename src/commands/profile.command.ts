@@ -309,7 +309,7 @@ export async function buildProfileViewPayload(
     if (axios.isAxiosError(err)) {
       const method = err.config?.method ?? "GET";
       const url = `${err.config?.baseURL ?? ""}${err.config?.url ?? ""}`;
-      let reqBody: unknown = null;
+      let reqBody: unknown;
       try {
         reqBody = err.config?.data ? JSON.parse(err.config.data as string) : null;
       } catch {

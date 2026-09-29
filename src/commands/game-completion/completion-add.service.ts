@@ -484,7 +484,7 @@ async function confirmDuplicateCompletion(
     flags: buildComponentsV2Flags(true),
   };
 
-  let message: Message | null = null;
+  let message: Message | null;
   try {
     const reply = await safeFollowUpIfSettled(interaction, payload);
     message = (reply as any)?.resource?.message ?? (reply as Message) ?? null;

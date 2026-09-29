@@ -266,8 +266,8 @@ export async function handleLiveStreamCreateModal(interaction: ModalSubmitIntera
     }
   }
 
-  let threadUrl: string | null = null;
-  let threadId: string | null = null;
+  let threadUrl: string;
+  let threadId: string;
   try {
     const threadMessage: Record<string, unknown> = {
       content: `Live event discussion for **${topic}**`,

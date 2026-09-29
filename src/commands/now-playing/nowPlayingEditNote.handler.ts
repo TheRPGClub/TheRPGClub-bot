@@ -142,7 +142,7 @@ export class NowPlayingEditNoteHandlers {
           continue;
         }
         const fieldId = `${NOW_PLAYING_NOTE_INPUT_ID}:${entry.gameId}`;
-        let noteInput = "";
+        let noteInput: string;
         try {
           noteInput = getModalField(interaction, fieldId);
         } catch {

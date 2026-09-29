@@ -77,11 +77,11 @@
     "no-unused-labels": "error",
     "no-unused-private-class-members": "error",
     "no-unused-vars": "error",
-    "no-useless-assignment": "warn",
+    "no-useless-assignment": "error",
     "no-useless-backreference": "error",
     "no-useless-catch": "error",
     "no-useless-escape": "error",
-    "preserve-caught-error": "warn",
+    "preserve-caught-error": "error",
     "require-yield": "error",
     "use-isnan": "error",
     "valid-typeof": "error"

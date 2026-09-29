@@ -144,7 +144,7 @@ async function confirmDuplicateCompletion(
     flags: buildComponentsV2Flags(true),
   };
 
-  let message: Message | null = null;
+  let message: Message | null;
   try {
     if (isInteractionSettled(interaction)) {
       const reply = await safeReply(interaction, { ...payload, __forceFollowUp: true } as any);
@@ -748,7 +748,7 @@ export class NowPlayingCompletionHandlers {
       ? getModalField(interaction, NOW_PLAYING_COMPLETE_NOTE_INPUT_ID)
       : "";
 
-    let completedAt: Date | null = null;
+    let completedAt: Date | null;
     try {
       completedAt = parseNowPlayingCompletionDate(completionDateInput);
     } catch (err: any) {
