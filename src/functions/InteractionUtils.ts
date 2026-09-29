@@ -568,6 +568,38 @@ export async function safeUpdate(interaction: AnyRepliable, options: any): Promi
   await safeReply(interaction, buildTextReply(String(options ?? ""), true));
 }
 
+/**
+ * Edits the original reply even after it was already edited once. safeReply
+ * turns into a followUp once discord.js sets `replied`, and edit-style flags on
+ * a followUp drop the Ephemeral bit, so status lines must come through here.
+ * Before any acknowledgement there is no original to edit, so it defers to
+ * safeReply.
+ */
+export async function safeEditReply(interaction: AnyRepliable, options: any): Promise<any> {
+  const aug = interaction as AugmentedInteraction;
+  if (shouldBlockDevChannelInteraction(interaction)) {
+    await sendDevChannelBlockResponse(interaction);
+    return;
+  }
+  const acked = Boolean(aug.__rpgAcked || aug.deferred || aug.replied);
+  if (!acked) {
+    return safeReply(interaction, options);
+  }
+
+  const normalizedOptions = applyDevChannelOverrides(interaction, normalizeOptions(options));
+  try {
+    const result = await interaction.editReply(normalizedOptions);
+    await mirrorEphemeralUpdate(interaction, normalizedOptions);
+    return result;
+  } catch (err: unknown) {
+    if (!isAckError(err)) throw err;
+    logError("InteractionUtils.safeEditReply", {
+      code: (err as { code?: number })?.code,
+      message: (err as { message?: string })?.message,
+    });
+  }
+}
+
 export function ephemeralFlag(isEphemeral: boolean | undefined): number | undefined {
   return isEphemeral ? MessageFlags.Ephemeral : undefined;
 }

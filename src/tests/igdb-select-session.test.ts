@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { MessageFlags } from "discord.js";
+import { buildTextReply } from "../functions/ComponentsV2Utils.js";
 import {
   createIgdbSession,
   getIgdbSession,
@@ -146,4 +148,45 @@ test("Import First Match reports an onSelect failure instead of swallowing it", 
   assert.equal(handled, true);
   assert.match(JSON.stringify(sent), /IGDB selection failed.*import exploded/);
   assert.equal(getIgdbSession(sessionId), undefined, "session is consumed after failure");
+});
+
+test("an onSelect failure replaces the ephemeral status and keeps the error private", async (t) => {
+  t.mock.method(console, "error", () => undefined);
+  const { sessionId } = createIgdbSession(
+    OWNER,
+    sampleOptions(),
+    async (sel) => {
+      await sel.editReply(buildTextReply("Importing game details from IGDB...", true));
+      throw new Error("import exploded");
+    },
+  );
+  const edits: any[] = [];
+  const followUps: any[] = [];
+  const interaction: any = {
+    // eslint-disable-next-line local/igdb-session-id-built-centrally
+    customId: `igdb-first:${sessionId}`,
+    user: { id: OWNER },
+    message: { flags: MessageFlags.Ephemeral },
+    replied: false,
+    deferred: false,
+    reply: async () => {},
+    editReply: async (opts: any) => {
+      edits.push(opts);
+      interaction.replied = true;
+    },
+    followUp: async (opts: any) => followUps.push(opts),
+    deferUpdate: async () => {
+      interaction.deferred = true;
+    },
+    isMessageComponent: () => true,
+  };
+
+  await handleIgdbFirstMatchInteraction(interaction);
+
+  assert.equal(edits.length, 2);
+  assert.match(JSON.stringify(edits[1]), /IGDB import failed/);
+  assert.doesNotMatch(JSON.stringify(edits[1]), /Importing/);
+  assert.equal(followUps.length, 1);
+  assert.match(JSON.stringify(followUps[0]), /IGDB selection failed.*import exploded/);
+  assert.ok((followUps[0].flags & MessageFlags.Ephemeral) !== 0, "error stays ephemeral");
 });
