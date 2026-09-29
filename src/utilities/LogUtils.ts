@@ -23,6 +23,9 @@ function normalizeError(error: Error): Record<string, unknown> {
   for (const field of ERROR_EXTRA_FIELDS) {
     if (source[field] !== undefined) normalized[field] = source[field];
   }
+  // The stringify replacer normalizes a nested Error cause the same way, so an axios
+  // cause logs its message and stack but not its config or auth headers.
+  if (error.cause !== undefined) normalized.cause = error.cause;
   return normalized;
 }
 

@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { AxiosError, AxiosHeaders } from "axios";
-import { buildApiErrorMessage, decodeBinaryBody } from "../utilities/ApiErrorUtils.js";
+import {
+  buildApiErrorMessage,
+  decodeBinaryBody,
+  redactUrlSecrets,
+  UserFacingError,
+} from "../utilities/ApiErrorUtils.js";
 
 function notFoundError(): AxiosError {
   const request = { method: "post", url: "/api/v1/games", data: `{"igdb_id":4242}` };
@@ -54,4 +59,45 @@ test("buildApiErrorMessage keeps the plain message when the cause is not an Axio
   const text = buildApiErrorMessage("Failed.", err);
   assert.match(text, /^Failed\.: boom\n/);
   assert.doesNotMatch(text, /Request:/);
+});
+
+test("redactUrlSecrets hides secret query values and keeps the rest", () => {
+  const url = "https://id.twitch.tv/oauth2/token?client_id=abc"
+    + "&client_secret=s3cr3t&grant_type=client_credentials";
+  assert.equal(
+    redactUrlSecrets(url),
+    "https://id.twitch.tv/oauth2/token?client_id=abc"
+      + "&client_secret=REDACTED&grant_type=client_credentials",
+  );
+  assert.equal(redactUrlSecrets("/api/v1/games?q=x"), "/api/v1/games?q=x");
+});
+
+test("buildApiErrorMessage never prints a Twitch client_secret from an AxiosError cause", () => {
+  const request = {
+    method: "post",
+    url: "https://id.twitch.tv/oauth2/token?client_id=abc&client_secret=s3cr3t",
+  };
+  const response: any = {
+    status: 400,
+    data: { message: "invalid client secret" },
+    headers: {},
+    statusText: "Bad Request",
+    config: { headers: new AxiosHeaders() },
+  };
+  const axiosErr = new AxiosError("Request failed", "ERR_BAD_REQUEST", request as any, null,
+    response);
+  const err = new Error("IGDB service unavailable", { cause: axiosErr });
+  const message = buildApiErrorMessage("Failed to add completion.", err);
+  assert.ok(!message.includes("s3cr3t"));
+  assert.ok(message.includes("client_secret=REDACTED"));
+});
+
+test("buildApiErrorMessage shows only the message for a UserFacingError", () => {
+  const err = new UserFacingError("That game is already in your backlog.", {
+    cause: notFoundError(),
+  });
+  assert.equal(
+    buildApiErrorMessage("Failed to add backlog entry.", err),
+    "Failed to add backlog entry.: That game is already in your backlog.",
+  );
 });

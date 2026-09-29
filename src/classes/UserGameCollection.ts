@@ -1,6 +1,7 @@
 import { isPositiveInt, requirePositiveInt } from "../utilities/ValidationUtils.js";
 import { apiGet, apiPost, apiPatch, apiDelete } from "../services/RpgClubApiClient.js";
 import Game from "./Game.js";
+import { UserFacingError } from "../utilities/ApiErrorUtils.js";
 
 export const COLLECTION_OWNERSHIP_TYPES = [
   "Digital",
@@ -179,8 +180,9 @@ export default class UserGameCollection {
     } catch (err: any) {
       const msg = String(err?.response?.data?.error ?? err?.message ?? "");
       if (/unique|duplicate|already been taken/i.test(msg)) {
-        throw new Error(
+        throw new UserFacingError(
           "That game/platform/ownership entry already exists in your collection.",
+          { cause: err },
         );
       }
       throw err;
@@ -249,8 +251,9 @@ export default class UserGameCollection {
     } catch (err: any) {
       const msg = String(err?.response?.data?.error ?? err?.message ?? "");
       if (/unique|duplicate|already been taken/i.test(msg)) {
-        throw new Error(
+        throw new UserFacingError(
           "That game/platform/ownership entry already exists in your collection.",
+          { cause: err },
         );
       }
       throw err;

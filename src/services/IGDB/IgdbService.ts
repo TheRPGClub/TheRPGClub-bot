@@ -109,7 +109,9 @@ class IgdbService {
       return this.accessToken;
     } catch (error) {
       logError("IgdbService.fetchToken", error);
-      throw new Error("IGDB service unavailable: Could not authenticate with Twitch.");
+      throw new Error("IGDB service unavailable: Could not authenticate with Twitch.", {
+        cause: error,
+      });
     }
   }
 
@@ -152,7 +154,10 @@ class IgdbService {
       };
     } catch (error: any) {
       logError("IgdbService.searchGames", error);
-      throw new Error(`IGDB service unavailable: Could not search for games. Error: ${error.message}`);
+      throw new Error(
+        `IGDB service unavailable: Could not search for games. Error: ${error.message}`,
+        { cause: error },
+      );
     }
   }
 
@@ -274,7 +279,10 @@ class IgdbService {
       return details;
     } catch (error: any) {
       logError("IgdbService.getGameDetails", error);
-      throw new Error(`IGDB service unavailable: Could not retrieve game details. Error: ${error.message}`);
+      throw new Error(
+        `IGDB service unavailable: Could not retrieve game details. Error: ${error.message}`,
+        { cause: error },
+      );
     }
   }
 
@@ -312,6 +320,7 @@ class IgdbService {
       logError("IgdbService.fetchPlatforms", error);
       throw new Error(
         `IGDB service unavailable: Could not fetch platforms. Error: ${error.message}`,
+        { cause: error },
       );
     }
   }
