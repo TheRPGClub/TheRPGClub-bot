@@ -41,3 +41,8 @@ Every session files itself in the sidebar under `Blocked`, `Working`, `Self Revi
 `Needs Review`, or `Completed` as its task moves along. The moves are in
 `.claude/skills/_shared/sidebar-groups.md`. Skills that link that file require the moves,
 not suggest them.
+Every pull request a session opens is gated by `scripts/self_review_gate.py`. Its
+hooks record each `code-review` pass and its finding count, and they block ending a turn or
+moving to `Needs Review` until the PR's head has a zero-finding pass, green CI (or no
+checks), and no conflict with its base. A reread is not a pass. When the gate blocks, do
+what its message says; never work around it.

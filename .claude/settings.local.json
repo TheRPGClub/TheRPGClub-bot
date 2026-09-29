@@ -62,11 +62,33 @@
         ]
       },
       {
+        "matcher": "Bash|Skill|ReportFindings",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "SCRIPT=\"$CLAUDE_PROJECT_DIR/scripts/self_review_gate.py\"; test -f \"$SCRIPT\" || exit 0; exec python3 \"$SCRIPT\"",
+            "timeout": 120
+          }
+        ]
+      },
+      {
         "matcher": "mcp__ccd_sidebar__list_groups",
         "hooks": [
           {
             "type": "command",
             "command": "HOOK=\"$CLAUDE_PROJECT_DIR/scripts/enforce_sidebar_move.py\"; test -x \"$HOOK\" || exit 0; exec \"$HOOK\" cache-groups"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "mcp__ccd_sidebar__move_sessions",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "SCRIPT=\"$CLAUDE_PROJECT_DIR/scripts/self_review_gate.py\"; test -f \"$SCRIPT\" || exit 0; exec python3 \"$SCRIPT\"",
+            "timeout": 120
           }
         ]
       }
@@ -77,6 +99,11 @@
           {
             "type": "command",
             "command": "HOOK=\"$CLAUDE_PROJECT_DIR/scripts/enforce_sidebar_move.py\"; test -x \"$HOOK\" || exit 0; exec \"$HOOK\" stop"
+          },
+          {
+            "type": "command",
+            "command": "SCRIPT=\"$CLAUDE_PROJECT_DIR/scripts/self_review_gate.py\"; test -f \"$SCRIPT\" || exit 0; exec python3 \"$SCRIPT\"",
+            "timeout": 120
           }
         ]
       }
