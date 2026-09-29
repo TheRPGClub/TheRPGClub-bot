@@ -14,6 +14,7 @@ import {
   canSafeReply,
   isInteractionSettled,
   safeDeferUpdate,
+  safeEditReply,
   safeReply,
   safeUpdate,
   replyIfNotOwner,
@@ -43,6 +44,8 @@ import {
 } from "../../functions/uiComponents.js";
 import { assertCustomIdSegments, parseCustomIdSegments } from "../../utilities/CustomIdUtils.js";
 import GameSearchService from "../../classes/GameSearchService.js";
+
+const IGDB_IMPORT_FAILED_STATUS = "Import failed. See the error below.";
 
 /**
  * Creates a completion session and returns the session ID
@@ -150,7 +153,7 @@ export async function promptIgdbSelection(
       if (!sel.deferred && !sel.replied) {
         await safeDeferUpdate(sel);
       }
-      await safeReply(sel, {
+      await safeEditReply(sel, {
         components: [buildTextContainer("Importing game details from IGDB...")],
         flags: buildComponentsV2EditFlags(),
       });
@@ -219,7 +222,17 @@ export async function processCompletionSelection(
         });
         return false;
       }
-      const imported = await importGameFromIgdb(igdbId);
+      let imported: { gameId: number; title: string };
+      try {
+        imported = await importGameFromIgdb(igdbId);
+      } catch (err: unknown) {
+        // Replace the "Importing..." status; the outer catch posts the ephemeral error.
+        await safeEditReply(interaction, {
+          components: [buildTextContainer(IGDB_IMPORT_FAILED_STATUS)],
+          flags: buildComponentsV2EditFlags(),
+        }).catch((editErr: unknown) => logError("CompletionAdd.importStatus", editErr));
+        throw err;
+      }
       gameId = imported.gameId;
       gameTitle = imported.title;
     } else {

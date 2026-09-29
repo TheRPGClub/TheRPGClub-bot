@@ -10,10 +10,17 @@ import {
   canSafeReply,
   replyIfNotOwner,
   safeDeferUpdate,
+  safeEditReply,
   safeReply,
   safeUpdate,
 } from "../../functions/InteractionUtils.js";
-import { buildErrorReply, buildTextReply } from "../../functions/ComponentsV2Utils.js";
+import { isEphemeralInteractionMessage } from "../../functions/EphemeralMirror.js";
+import {
+  buildComponentsV2EditFlags,
+  buildErrorReply,
+  buildTextContainer,
+  buildTextReply,
+} from "../../functions/ComponentsV2Utils.js";
 import { buildApiErrorMessage } from "../../utilities/ApiErrorUtils.js";
 import { logError } from "../../utilities/LogUtils.js";
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
@@ -254,11 +261,21 @@ export async function handleIgdbFirstMatchInteraction(
   return true;
 }
 
+const IGDB_SELECTION_FAILED_STATUS = "IGDB import failed. See the error below.";
+
 async function reportIgdbSelectError(
   interaction: StringSelectMenuInteraction | ButtonInteraction,
   err: unknown,
 ): Promise<void> {
   logError("IgdbSelectService.onSelect", err);
+  // Clear any "Importing..." status left by onSelect. A public prompt is left
+  // alone so a shared message is never overwritten by one user's failure.
+  if (isEphemeralInteractionMessage(interaction)) {
+    await safeEditReply(interaction, {
+      components: [buildTextContainer(IGDB_SELECTION_FAILED_STATUS)],
+      flags: buildComponentsV2EditFlags(),
+    }).catch((editErr: unknown) => logError("IgdbSelectService.statusEdit", editErr));
+  }
   await safeReply(interaction, {
     ...buildErrorReply(buildApiErrorMessage("IGDB selection failed.", err), true),
     __forceFollowUp: true,
