@@ -26,6 +26,7 @@ import {
   replyIfNotOwner,
   safeDeferReply,
   safeDeferUpdate,
+  safeEditReply,
   safeReply,
   safeUpdate,
   sanitizeUserInput,
@@ -305,7 +306,7 @@ export class CollectionViewCommand {
         titleOverride: overviewTitle ?? undefined,
       });
 
-      safeIgnore(safeReply(interaction, {
+      safeIgnore(safeEditReply(interaction, {
         components,
         flags: buildComponentsV2EditFlags(),
       }));
@@ -327,14 +328,14 @@ export class CollectionViewCommand {
       });
 
       if (response.content) {
-        safeIgnore(safeReply(interaction, {
+        safeIgnore(safeEditReply(interaction, {
           content: response.content,
           components: [],
         }));
         return;
       }
 
-      safeIgnore(safeReply(interaction, {
+      safeIgnore(safeEditReply(interaction, {
         components: response.components,
         flags: buildComponentsV2EditFlags(),
       }));
@@ -362,14 +363,14 @@ export class CollectionViewCommand {
     });
 
     if (response.content) {
-      safeIgnore(safeReply(interaction, {
+      safeIgnore(safeEditReply(interaction, {
         content: response.content,
         components: [],
       }));
       return;
     }
 
-    safeIgnore(safeReply(interaction, {
+    safeIgnore(safeEditReply(interaction, {
       components: response.components,
       flags: buildComponentsV2EditFlags(),
     }));

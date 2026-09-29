@@ -185,6 +185,7 @@
         "local/interface-name-prefix": "error",
         "local/no-sanitize-url-input": "error",
         "local/no-static-config-import-in-test-mode-test": "error",
+        "local/no-reply-after-defer-update": "error",
         "stylistic/semi": "error",
         "stylistic/comma-dangle": [
           "error",

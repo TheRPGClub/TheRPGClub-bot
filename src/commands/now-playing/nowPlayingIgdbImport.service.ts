@@ -1,6 +1,7 @@
 import { type StringSelectMenuInteraction } from "discord.js";
 import {
   safeDeferUpdate,
+  safeFollowUpIfSettled,
   safeReply,
   safeUpdate,
   type AnyRepliable,
@@ -70,7 +71,7 @@ export async function startNowPlayingIgdbImportFromInteraction(
       } catch (err: any) {
         const msg = err?.message ?? "Failed to import from IGDB.";
         const container = buildTextContainer(msg);
-        safeIgnore(safeReply(sel, {
+        safeIgnore(safeFollowUpIfSettled(sel, {
           components: [container],
           flags: buildComponentsV2Flags(true),
         }));

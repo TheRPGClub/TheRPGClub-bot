@@ -138,8 +138,6 @@ export async function handleCompletionPlatformSelect(
     false,
     ctx.removeFromNowPlaying,
   );
-
-  safeIgnore(safeReply(interaction, { components: [] }));
 }
 
 export async function resolveDefaultCompletionPlatformId(gameId: number): Promise<number | null> {

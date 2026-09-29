@@ -96,6 +96,14 @@ const TEST_MODE_SAFE_STATIC_IMPORTS = new Set([
   "discord.js",
 ]);
 const TEST_FILE_PATH_PATTERN = /(^|\/)src\/tests\//;
+const DEFER_UPDATE_HELPERS = new Set(["safeDeferUpdate", "safeDeferUpdateOrBail"]);
+const MESSAGE_EDITING_REPLY_HELPERS = new Set(["safeReply", "withErrorReply"]);
+const FUNCTION_NODE_TYPES = new Set([
+  "FunctionDeclaration",
+  "FunctionExpression",
+  "ArrowFunctionExpression",
+]);
+const DEFER_SCOPE_NODE_TYPES = new Set(["BlockStatement", "Program", "SwitchCase", "StaticBlock"]);
 const URL_NAME_WORDS = new Set(["url", "urls", "href", "link", "links", "uri", "uris"]);
 const URL_RESULT_WRAPPER_TYPES = new Set([
   "ConditionalExpression",
@@ -842,6 +850,36 @@ function isTestModeEnvTarget(node) {
     isProcessEnvMember(node.object) &&
     getTrailingName(node) === TEST_MODE_ENV_NAME
   );
+}
+
+function getEnclosingFunction(node) {
+  let current = node.parent;
+  while (current && !FUNCTION_NODE_TYPES.has(current.type)) current = current.parent;
+  return current ?? null;
+}
+
+// The region a deferred update is known to cover: its block, switch case, or the unbraced
+// branch of an `if`, so a reply in a sibling branch that never deferred is not reported. A
+// `try` block widens to the whole statement, since its catch and finally run after the defer.
+function getDeferScope(node) {
+  let child = node;
+  let current = node.parent;
+  while (current) {
+    if (current.type === "BlockStatement" && current.parent?.type === "TryStatement") {
+      if (current.parent.block === current) return current.parent;
+    }
+    if (DEFER_SCOPE_NODE_TYPES.has(current.type) || FUNCTION_NODE_TYPES.has(current.type)) {
+      return current;
+    }
+    if (current.type === "IfStatement" && current.test !== child) return child;
+    child = current;
+    current = current.parent;
+  }
+  return child;
+}
+
+function containsRange(outer, inner) {
+  return outer.range[0] <= inner.range[0] && inner.range[1] <= outer.range[1];
 }
 
 // An import or export whose every specifier is inline `type` is elided by tsc
@@ -3643,6 +3681,87 @@ export default {
                 node: node.source,
                 messageId: "staticImport",
                 data: { source: node.source.value },
+              });
+            }
+          },
+        };
+      },
+    },
+    "no-reply-after-defer-update": {
+      meta: {
+        type: "problem",
+        docs: {
+          description:
+            "Ban safeReply/withErrorReply on an interaction after safeDeferUpdate on it.",
+        },
+        schema: [],
+        messages: {
+          replyAfterDeferUpdate:
+            "{{helper}}({{target}}) after safeDeferUpdate({{target}}) edits the message the " +
+            "component sits on and replaces every control on it. Use " +
+            "safeFollowUpIfSettled({{target}}, buildErrorReply(text, true)), or safeEditReply " +
+            "when editing the message is intended.",
+        },
+      },
+      create(context) {
+        const sourceCode = context.sourceCode;
+        const defers = [];
+        const replies = [];
+
+        function describeCall(node, names) {
+          if (node.callee.type === "MemberExpression" && node.callee.computed) return null;
+          const helper = getCalledFunctionName(node.callee);
+          const target = node.arguments[0];
+          if (!helper || !names.has(helper) || !target) return null;
+          return { node, helper, target: sourceCode.getText(target) };
+        }
+
+        // `__forceFollowUp` sends safeReply down its followUp branch, so the message is kept.
+        function forcesFollowUp(reply) {
+          const options = reply.node.arguments[1];
+          return (
+            reply.helper === "safeReply" &&
+            options?.type === "ObjectExpression" &&
+            options.properties.some(
+              (prop) =>
+                prop.type === "Property" &&
+                !prop.computed &&
+                getPropertyName(prop.key) === "__forceFollowUp" &&
+                !(prop.value.type === "Literal" && prop.value.value === false),
+            )
+          );
+        }
+
+        function isDeferredBefore(reply, defer) {
+          if (defer.target !== reply.target) return false;
+          const deferFunction = getEnclosingFunction(defer.node);
+          // A defer inside withErrorReply's own callback settles the interaction before the
+          // wrapper's error reply runs.
+          if (reply.helper === "withErrorReply" && deferFunction === reply.node.arguments[1]) {
+            return true;
+          }
+          return (
+            deferFunction === getEnclosingFunction(reply.node) &&
+            defer.node.range[1] <= reply.node.range[0] &&
+            containsRange(getDeferScope(defer.node), reply.node)
+          );
+        }
+
+        return {
+          CallExpression(node) {
+            const defer = describeCall(node, DEFER_UPDATE_HELPERS);
+            if (defer) defers.push(defer);
+            const reply = describeCall(node, MESSAGE_EDITING_REPLY_HELPERS);
+            if (reply) replies.push(reply);
+          },
+          "Program:exit"() {
+            for (const reply of replies) {
+              if (forcesFollowUp(reply)) continue;
+              if (!defers.some((defer) => isDeferredBefore(reply, defer))) continue;
+              context.report({
+                node: reply.node,
+                messageId: "replyAfterDeferUpdate",
+                data: { helper: reply.helper, target: reply.target },
               });
             }
           },
