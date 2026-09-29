@@ -71,6 +71,17 @@ class Scenario(unittest.TestCase):
         self.assertNotIn('\u2014', decision['reason'])
 
 
+def bash(command, output, tool_id='toolu_bash'):
+    """A Bash call and its result, appended after a fixture's last entry."""
+    return [
+        {'type': 'assistant', 'message': {'content': [
+            {'type': 'tool_use', 'id': tool_id, 'name': 'Bash',
+             'input': {'command': command}}]}},
+        {'type': 'user', 'message': {'content': [
+            {'type': 'tool_result', 'tool_use_id': tool_id, 'content': output}]}},
+    ]
+
+
 def move(group_id, tool_id='toolu_extra'):
     """A move_sessions call and its result, appended after a fixture's last entry."""
     return [
@@ -132,18 +143,38 @@ class Merged(Scenario):
         self.output('b1.output', WAIT_MERGED)
         self.assertIsNone(self.run_stop('pr-merged-notice.jsonl', *move('cg-0000-completed')))
 
-    def test_merge_read_from_a_tool_result_counts_even_if_the_ledger_lags(self):
+    def test_merge_from_a_foreground_wait_counts_even_if_the_ledger_lags(self):
         self.ledger(OPEN_PR)
-        read = [
-            {'type': 'assistant', 'message': {'content': [
-                {'type': 'tool_use', 'id': 'toolu_cat', 'name': 'Bash',
-                 'input': {'command': 'cat b1.output'}}]}},
-            {'type': 'user', 'message': {'content': [
-                {'type': 'tool_result', 'tool_use_id': 'toolu_cat', 'content': WAIT_MERGED}]}},
-        ]
+        read = bash('scripts/catchup.py wait /tmp/x/catchup.tsv', WAIT_MERGED)
         self.assertBlocks(self.run_stop('pr-opened-self-review.jsonl', *read), 'Completed')
         self.assertIsNone(self.run_stop('pr-opened-self-review.jsonl', *read,
                                         *move('cg-0000-completed')))
+
+    def test_reading_the_notified_output_file_counts(self):
+        self.ledger(OPEN_PR)
+        self.output('b1.output', 'wait: 0 finished; 1 still open\n')
+        read = bash(f'cat {self.dir}/b1.output', WAIT_MERGED)
+        self.assertBlocks(self.run_stop('pr-merged-notice.jsonl', *read), 'Completed')
+
+    def test_reading_an_older_wait_log_is_not_a_merge(self):
+        self.ledger(OPEN_PR)
+        read = bash('cat /tmp/x/wait.log', WAIT_MERGED)
+        self.assertIsNone(self.run_stop('pr-opened-self-review.jsonl', *read))
+
+    def test_a_notice_in_an_attachment_counts(self):
+        self.ledger(MERGED_PR)
+        self.output('b1.output', WAIT_MERGED)
+        path = self.transcript('pr-opened-self-review.jsonl')
+        with open(path) as f:
+            uses = [b for line in f for b in json.loads(line)['message']['content']
+                    if isinstance(b, dict) and b.get('type') == 'tool_use']
+        wait_id = [u['id'] for u in uses if 'catchup.py wait' in str(u['input'])][-1]
+        notice = {'type': 'attachment', 'attachment': {
+            'type': 'queued_command', 'commandMode': 'task-notification',
+            'prompt': f'<task-notification>\n<tool-use-id>{wait_id}</tool-use-id>\n'
+                      f'<output-file>{self.dir}/b1.output</output-file>\n'
+                      '</task-notification>'}}
+        self.assertBlocks(self.run_stop('pr-opened-self-review.jsonl', notice), 'Completed')
 
     def test_completed_while_another_pr_is_open_blocks(self):
         self.ledger(MERGED_PR + OTHER_PR)
@@ -175,6 +206,13 @@ class IdleTurns(Scenario):
         self.assertBlocks(decision, 'Self Review', 'Needs Review')
         self.assertIn('pull request 77 open in the ledger', decision['reason'])
 
+    def test_a_prompt_without_origin_still_starts_a_turn(self):
+        self.ledger(MERGED_PR)
+        legacy = {'type': 'user', 'message': {'content': 'thanks'}}
+        self.assertIsNone(self.run_stop('in-progress-no-move.jsonl', legacy))
+        notice = {'type': 'user', 'message': {'content': '<task-notification>x'}}
+        self.assertBlocks(self.run_stop('in-progress-no-move.jsonl', notice), 'Working')
+
     def test_stop_hook_active_always_goes_through(self):
         self.assertIsNone(self.run_stop('in-progress-no-move.jsonl', active=True))
 
@@ -198,6 +236,14 @@ class GroupNames(Scenario):
         with open(guard.GROUP_CACHE) as f:
             self.assertEqual(json.load(f), {'cg-0000-working': 'Working'})
         self.assertIsNone(self.run_stop('move-by-unknown-id.jsonl'))
+
+    def test_cache_reads_a_dict_shaped_response(self):
+        text = 'Groups:\n' + json.dumps([{'id': 'cg-a', 'name': 'Working'}]) + '\nsee [docs]'
+        hook = {'tool_response': {'content': [{'type': 'text', 'text': text}]}}
+        with mock.patch('sys.stdin', io.StringIO(json.dumps(hook))):
+            guard.main(['x', 'cache-groups'])
+        with open(guard.GROUP_CACHE) as f:
+            self.assertEqual(json.load(f), {'cg-a': 'Working'})
 
     def test_cache_keeps_names_from_earlier_lists(self):
         for gid, name in (('cg-a', 'Working'), ('cg-b', 'Completed')):

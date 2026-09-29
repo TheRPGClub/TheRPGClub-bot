@@ -72,8 +72,9 @@ def text_of(content):
     if isinstance(content, str):
         return content
     if isinstance(content, list):
-        return '\n'.join(text_of(b.get('text', b.get('content', '')))
-                         for b in content if isinstance(b, dict))
+        return '\n'.join(text_of(b) for b in content)
+    if isinstance(content, dict):
+        return text_of(content.get('text', content.get('content', '')))
     return ''
 
 
@@ -197,11 +198,18 @@ def open_prs(paths):
 
 
 def shut_prs(calls, by_id, notices, start):
-    """(position, number) for each pull request `wait` reported merged or closed this turn,
-    from tool results and from the output files of finished background `wait` calls."""
+    """(position, number) for each pull request `wait` reported merged or closed this turn:
+    from a catchup.py call's own result, from reading the output file of a background `wait`
+    that finished this turn, or from that file directly. A read of any other log (an older
+    wait.log) is not a report."""
+    outputs = [m.group(1) for pos, notice in notices if pos >= start
+               for m in NOTICE_OUTPUT.finditer(notice)]
     shut = []
     for call in calls:
-        if call.pos >= start and call.answered:
+        if call.pos < start or not call.answered:
+            continue
+        said = json.dumps(call.args)
+        if 'catchup.py' in call.command or any(out in said for out in outputs):
             shut += [(call.pos, m.group(1)) for m in PR_SHUT.finditer(call.result)]
     for pos, notice in notices:
         if pos < start:
@@ -228,9 +236,9 @@ def milestones(calls, start):
         if IN_PROGRESS.search(command) and ISSUE_URL.search(call.result):
             found.append((call.pos, 'an issue was labeled In Progress',
                           (WORKING, NEEDS_REVIEW)))
-        if PR_CREATE.search(command) and PR_URL.search(call.result):
-            number = PR_URL.search(call.result).group(1)
-            found.append((call.pos, f'pull request {number} was opened', PR_OPEN))
+        opened = PR_CREATE.search(command) and PR_URL.search(call.result)
+        if opened:
+            found.append((call.pos, f'pull request {opened.group(1)} was opened', PR_OPEN))
         if ADD_ISSUE.search(command) and 'waiting for close:' in call.result:
             found.append((call.pos, 'a blocking issue was recorded', (BLOCKED, NEEDS_REVIEW)))
     return found
@@ -246,16 +254,17 @@ def load_cache():
 
 
 def groups_in(text):
-    """{id: name} from a list_groups result."""
-    found = {}
-    for block in re.findall(r'\[.*\]', text, re.S):
+    """{id: name} from every JSON array of groups in a list_groups result."""
+    found, decoder, at = {}, json.JSONDecoder(), text.find('[')
+    while at != -1:
         try:
-            rows = json.loads(block)
+            rows, end = decoder.raw_decode(text, at)
         except ValueError:
-            continue
+            rows, end = None, at + 1
         if isinstance(rows, list):
             found.update({r['id']: r['name'] for r in rows
                           if isinstance(r, dict) and 'id' in r and 'name' in r})
+        at = text.find('[', end)
     return found
 
 
@@ -338,8 +347,7 @@ def decide(hook):
 
 def cache_groups(hook):
     response = hook.get('tool_response')
-    found = groups_in(response if isinstance(response, str) else text_of(response)
-                      or json.dumps(response))
+    found = groups_in(text_of(response))
     if not found:
         return
     names = load_cache()
