@@ -33,8 +33,9 @@ in one line and skipped, per
 [sidebar-groups.md](../_shared/sidebar-groups.md#rules).
 
 - Step 6, as the self review starts: `Self Review`.
-- Step 7, after a clean self review pass: `Needs Review`. Also any turn that ends idle
-  between passes, per [sidebar-groups.md](../_shared/sidebar-groups.md).
+- Step 7, after a clean self review pass with CI green, and
+  nothing else in progress: `Needs Review`. Never before; the loop does not end
+  the turn mid-way.
 - Called by a skill that runs the self review loop itself: no moves here. The
   calling skill makes them.
 - Review comments, a CI failure, or a user answer to act on: `Working`, then
@@ -126,7 +127,7 @@ resolve, not something to hand back to the user.
 
 ### 6. Self review
 
-Once CI has passed and the PR is mergeable, move to `Self Review` (see
+Once the PR is mergeable, without waiting for CI, move to `Self Review` (see
 [Sidebar moves](#sidebar-moves)) and run the loop in [self-review.md](../_shared/self-review.md)
 until a pass comes back clean. Fill in the `Self review` section of the body as it goes.
 
@@ -149,8 +150,8 @@ what they found and fixed, and the PR URL.
 - Do NOT skip the linkage verification step.
 - Do NOT open the PR before lint passes.
 - Do NOT open a PR from `main`.
-- Do NOT move to `Needs Review` before a clean self review pass while the session is still
-  working. A turn that ends idle between passes is the one exception.
+- Do NOT move to `Needs Review` before a clean self review pass with CI green, or while
+  the session has anything else in progress. There is no exception.
 - Do NOT skip a sidebar move. Each one in [Sidebar moves](#sidebar-moves) is
   part of its step.
 - Do NOT pass multi-line text through a heredoc.

@@ -76,6 +76,18 @@ catches a lost event and runs every fifteen minutes. Every timer check reads
 each open issue row, push or no push, because a blocked session can wait for
 days.
 
+## Waiting inside a self review
+
+A self review loop never ends the turn to wait for CI, per
+[self-review.md](self-review.md#the-loop). Add the head's run with
+`scripts/catchup.py add` and run `scripts/catchup.py wait <ledger>` in the
+foreground, with the Bash tool's maximum timeout, instead of in the background.
+It returns as soon as any row finishes; run it again until the head's run is the
+one that finished. This is the only foreground `wait`, and it keeps the
+one-watcher rule: stop a background `wait` already running on the ledger
+(TaskStop) before starting it. When the loop ends, start the usual background
+`wait` for the pull request's merge and end the turn.
+
 ## Waiting on a blocking issue
 
 A session that stops on an open dependency, per
