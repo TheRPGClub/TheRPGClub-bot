@@ -234,7 +234,7 @@ export class CollectionViewCommand {
       const messages = await buildAllCollectionsOverviewMessages();
       const [first, ...rest] = messages;
       if (!first) {
-        await safeReply(interaction, "No collection entries yet.");
+        await safeReply(interaction, buildTextReply("No collection entries yet.", isEphemeral));
         return;
       }
 

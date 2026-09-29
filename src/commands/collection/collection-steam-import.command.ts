@@ -520,9 +520,13 @@ export class CollectionSteamImportCommand {
       onStart: async () => {
         const existing = await getActiveSteamCollectionImportForUser(interaction.user.id);
         if (existing) {
-          await safeReply(interaction, 
-            `You already have import #${existing.importId} (${existing.status}). ` +
-            "Use action:resume, action:status, action:pause, or action:cancel.",
+          await safeReply(
+            interaction,
+            buildTextReply(
+              `You already have import #${existing.importId} (${existing.status}). ` +
+                "Use action:resume, action:status, action:pause, or action:cancel.",
+              true,
+            ),
           );
           return;
         }
@@ -537,11 +541,15 @@ export class CollectionSteamImportCommand {
         }
 
         if (!identifier) {
-          await safeReply(interaction, 
-            "Add your Steam profile first:\n" +
-            "1. Set it once with `/profile edit steam:<url>`\n" +
-            "2. Then run `/collection import-steam action:start`\n" +
-            "Or include it now with `steam_profile:<url|vanity|steamid64>`.",
+          await safeReply(
+            interaction,
+            buildTextReply(
+              "Add your Steam profile first:\n" +
+                "1. Set it once with `/profile edit steam:<url>`\n" +
+                "2. Then run `/collection import-steam action:start`\n" +
+                "Or include it now with `steam_profile:<url|vanity|steamid64>`.",
+              true,
+            ),
           );
           return;
         }
@@ -551,8 +559,12 @@ export class CollectionSteamImportCommand {
           const library = await steamApiService.getOwnedGames(resolved.steamId64);
 
           if (!library.games.length) {
-            await safeReply(interaction, 
-              "No Steam games were found. Ensure your profile and game details are public.",
+            await safeReply(
+              interaction,
+              buildTextReply(
+                "No Steam games were found. Ensure your profile and game details are public.",
+                true,
+              ),
             );
             return;
           }
@@ -587,9 +599,13 @@ export class CollectionSteamImportCommand {
             total: library.gameCount,
           });
 
-          await safeReply(interaction, 
-            `Steam import #${session.importId} created for **${library.gameCount}** games ` +
-            `(${library.profileName ?? resolved.steamId64}). Starting review now.`,
+          await safeReply(
+            interaction,
+            buildTextReply(
+              `Steam import #${session.importId} created for **${library.gameCount}** games ` +
+                `(${library.profileName ?? resolved.steamId64}). Starting review now.`,
+              true,
+            ),
           );
           await this.renderNextSteamImportItem(
             interaction,
@@ -602,17 +618,21 @@ export class CollectionSteamImportCommand {
             error: String(error?.message ?? "unknown"),
           });
           if (error instanceof SteamApiError) {
-            await safeReply(interaction, error.message);
+            await safeReply(interaction, buildTextReply(error.message, true));
             return;
           }
-          await safeReply(interaction, 
-            error?.message ?? "Failed to start Steam import. Verify profile and try again.",
+          await safeReply(
+            interaction,
+            buildTextReply(
+              error?.message ?? "Failed to start Steam import. Verify profile and try again.",
+              true,
+            ),
           );
         }
       },
       getActiveSession: (userId: string) => getActiveSteamCollectionImportForUser(userId),
       onMissingSession: async () => {
-        await safeReply(interaction, "No active Steam import session found.");
+        await safeReply(interaction, buildTextReply("No active Steam import session found.", true));
       },
       onStatus: async (session) => {
         const stats = await countSteamCollectionImportItems(session.importId);
@@ -645,10 +665,14 @@ export class CollectionSteamImportCommand {
           importId: session.importId,
           pending: stats.pending,
         });
-        await safeReply(interaction, 
-          `Steam import #${session.importId} paused. ` +
-          `Pending ${stats.pending}, Added ${stats.added}, Updated ${stats.updated}, ` +
-          `Skipped ${stats.skipped}, Failed ${stats.failed}.`,
+        await safeReply(
+          interaction,
+          buildTextReply(
+            `Steam import #${session.importId} paused. ` +
+              `Pending ${stats.pending}, Added ${stats.added}, Updated ${stats.updated}, ` +
+              `Skipped ${stats.skipped}, Failed ${stats.failed}.`,
+            true,
+          ),
         );
       },
       onCancel: async (session) => {
@@ -659,15 +683,22 @@ export class CollectionSteamImportCommand {
           importId: session.importId,
           pending: stats.pending,
         });
-        await safeReply(interaction, 
-          `Steam import #${session.importId} canceled. ` +
-          `Pending ${stats.pending}, Added ${stats.added}, Updated ${stats.updated}, ` +
-          `Skipped ${stats.skipped}, Failed ${stats.failed}.`,
+        await safeReply(
+          interaction,
+          buildTextReply(
+            `Steam import #${session.importId} canceled. ` +
+              `Pending ${stats.pending}, Added ${stats.added}, Updated ${stats.updated}, ` +
+              `Skipped ${stats.skipped}, Failed ${stats.failed}.`,
+            true,
+          ),
         );
       },
       onResume: async (session) => {
         await setSteamCollectionImportStatus(session.importId, "ACTIVE");
-        await safeReply(interaction, `Steam import #${session.importId} resumed.`);
+        await safeReply(
+          interaction,
+          buildTextReply(`Steam import #${session.importId} resumed.`, true),
+        );
         logSteamImportEvent("resumed", {
           userId: interaction.user.id,
           importId: session.importId,

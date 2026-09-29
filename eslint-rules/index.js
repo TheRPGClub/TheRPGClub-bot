@@ -3032,6 +3032,9 @@ export default {
           useTextReply:
             "Plain text reply detected. Use buildTextReply() from ComponentsV2Utils " +
             "to wrap this message in a Components V2 container.",
+          useTextReplyForString:
+            "String passed as a reply payload. Wrap it with buildTextReply() from " +
+            "ComponentsV2Utils so it renders as a Components V2 container.",
         },
       },
       create(context) {
@@ -3052,6 +3055,21 @@ export default {
           if (!node.arguments || node.arguments.length === 0) return null;
           const last = node.arguments[node.arguments.length - 1];
           return last.type === "ObjectExpression" ? last : null;
+        }
+
+        function isStringExpression(expr) {
+          if (expr.type === "Literal") return typeof expr.value === "string";
+          if (expr.type === "TemplateLiteral") return true;
+          if (expr.type === "BinaryExpression" && expr.operator === "+") {
+            return isStringExpression(expr.left) || isStringExpression(expr.right);
+          }
+          if (expr.type === "LogicalExpression") {
+            return isStringExpression(expr.right);
+          }
+          if (expr.type === "ConditionalExpression") {
+            return isStringExpression(expr.consequent) || isStringExpression(expr.alternate);
+          }
+          return false;
         }
 
         function hasProperty(objNode, key) {
@@ -3079,6 +3097,14 @@ export default {
             }
 
             if (!isReplyCall) return;
+
+            if (callee.type === "Identifier" && node.arguments.length >= 2) {
+              const payload = node.arguments[1];
+              if (isStringExpression(payload)) {
+                context.report({ node: payload, messageId: "useTextReplyForString" });
+                return;
+              }
+            }
 
             const optionsArg = getOptionsArg(node);
             if (!optionsArg) return;

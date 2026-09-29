@@ -90,6 +90,7 @@ import {
   COMPLETIONATOR_STATUS_OPTIONS,
   type CompletionatorAction,
 } from "./game-completion/completion.types.js";
+import { buildTextReply } from "../functions/ComponentsV2Utils.js";
 import Member from "../classes/Member.js";
 import { isPositiveInt, isValidPlaytimeHours } from "../utilities/ValidationUtils.js";
 import { toUnixTimestamp } from "../functions/DateFormatUtils.js";
@@ -168,7 +169,7 @@ export class GameCompletionCommands {
     await safeDeferReply(interaction, { flags: MessageFlags.Ephemeral });
 
     if (!COMPLETION_TYPES.includes(completionType)) {
-      await safeReply(interaction, "Invalid completion type.");
+      await safeReply(interaction, buildTextReply("Invalid completion type.", true));
       return;
     }
 
@@ -182,12 +183,18 @@ export class GameCompletionCommands {
     try {
       completedAt = parseCompletionDateInput(completionDate);
     } catch (err: any) {
-      await safeReply(interaction, err?.message ?? "Invalid completion date.");
+      await safeReply(
+        interaction,
+        buildTextReply(err?.message ?? "Invalid completion date.", true),
+      );
       return;
     }
 
     if (finalPlaytimeHours !== undefined && !isValidPlaytimeHours(finalPlaytimeHours)) {
-      await safeReply(interaction, "Final playtime must be a non-negative number of hours.");
+      await safeReply(
+        interaction,
+        buildTextReply("Final playtime must be a non-negative number of hours.", true),
+      );
       return;
     }
 
@@ -196,18 +203,21 @@ export class GameCompletionCommands {
     const trimmedNote = note?.trim() ?? null;
     const selectedPlatformId = await resolveGameCompletionPlatformId(selectedPlatformRaw);
     if (selectedPlatformId == null) {
-      await safeReply(interaction, "Invalid platform selection.");
+      await safeReply(interaction, buildTextReply("Invalid platform selection.", true));
       return;
     }
 
     if (trimmedNote && trimmedNote.length > this.maxNoteLength) {
-      await safeReply(interaction, `Note must be ${this.maxNoteLength} characters or fewer.`);
+      await safeReply(
+        interaction,
+        buildTextReply(`Note must be ${this.maxNoteLength} characters or fewer.`, true),
+      );
       return;
     }
 
     const searchTerm = query.trim();
     if (!searchTerm) {
-      await safeReply(interaction, "Provide a game title to search.");
+      await safeReply(interaction, buildTextReply("Provide a game title to search.", true));
       return;
     }
 
@@ -339,8 +349,9 @@ export class GameCompletionCommands {
       } else {
         const parsed = Number(trimmed);
         if (!isPositiveInt(parsed)) {
-          await safeReply(interaction, 
-            "Year must be a valid integer (e.g., 2024) or 'unknown'.",
+          await safeReply(
+            interaction,
+            buildTextReply("Year must be a valid integer (e.g., 2024) or 'unknown'.", ephemeral),
           );
           return;
         }
@@ -435,8 +446,12 @@ export class GameCompletionCommands {
     }
 
     if (!rightUserId) {
-      await safeReply(interaction, 
-        "Pick at least one member (`member_one` or `member_two`) to compare with.",
+      await safeReply(
+        interaction,
+        buildTextReply(
+          "Pick at least one member (`member_one` or `member_two`) to compare with.",
+          ephemeral,
+        ),
       );
       return;
     }
@@ -457,8 +472,9 @@ export class GameCompletionCommands {
       } else {
         const parsed = Number(trimmed);
         if (!isPositiveInt(parsed)) {
-          await safeReply(interaction, 
-            "Year must be a valid integer (e.g., 2024) or 'unknown'.",
+          await safeReply(
+            interaction,
+            buildTextReply("Year must be a valid integer (e.g., 2024) or 'unknown'.", ephemeral),
           );
           return;
         }
@@ -471,7 +487,7 @@ export class GameCompletionCommands {
     if (platformRaw) {
       platformId = await resolveGameCompletionPlatformId(platformRaw);
       if (platformId == null) {
-        await safeReply(interaction, "Invalid platform selection.");
+        await safeReply(interaction, buildTextReply("Invalid platform selection.", ephemeral));
         return;
       }
     }
@@ -569,22 +585,35 @@ export class GameCompletionCommands {
     await safeDeferReply(interaction, { flags: MessageFlags.Ephemeral });
     const completionId = parseCompletionTitleAutocompleteValue(selectedCompletionRaw);
     if (!completionId) {
-      await safeReply(interaction, "Select a completion from the title autocomplete list.");
+      await safeReply(
+        interaction,
+        buildTextReply("Select a completion from the title autocomplete list.", true),
+      );
       return;
     }
 
     if (clearPlatform && platformRaw) {
-      await safeReply(interaction, "Use either `platform` or `clear_platform:true`, not both.");
+      await safeReply(
+        interaction,
+        buildTextReply("Use either `platform` or `clear_platform:true`, not both.", true),
+      );
       return;
     }
     if (clearFinalPlaytime && finalPlaytimeHours !== undefined) {
-      await safeReply(interaction, 
-        "Use either `final_playtime_hours` or `clear_final_playtime:true`, not both.",
+      await safeReply(
+        interaction,
+        buildTextReply(
+          "Use either `final_playtime_hours` or `clear_final_playtime:true`, not both.",
+          true,
+        ),
       );
       return;
     }
     if (clearNote && noteRaw !== undefined) {
-      await safeReply(interaction, "Use either `note` or `clear_note:true`, not both.");
+      await safeReply(
+        interaction,
+        buildTextReply("Use either `note` or `clear_note:true`, not both.", true),
+      );
       return;
     }
 
@@ -598,7 +627,7 @@ export class GameCompletionCommands {
 
     if (completionType !== undefined) {
       if (!COMPLETION_TYPES.includes(completionType)) {
-        await safeReply(interaction, "Invalid completion type.");
+        await safeReply(interaction, buildTextReply("Invalid completion type.", true));
         return;
       }
       updates.completionType = completionType;
@@ -609,7 +638,10 @@ export class GameCompletionCommands {
       try {
         updates.completedAt = parseCompletionDateInput(sanitizedDate);
       } catch (err: any) {
-        await safeReply(interaction, err?.message ?? "Invalid completion date.");
+        await safeReply(
+          interaction,
+          buildTextReply(err?.message ?? "Invalid completion date.", true),
+        );
         return;
       }
     }
@@ -619,7 +651,7 @@ export class GameCompletionCommands {
     } else if (platformRaw !== undefined) {
       const platformId = await resolveGameCompletionPlatformId(platformRaw);
       if (platformId == null) {
-        await safeReply(interaction, "Invalid platform selection.");
+        await safeReply(interaction, buildTextReply("Invalid platform selection.", true));
         return;
       }
       updates.platformId = platformId;
@@ -629,7 +661,10 @@ export class GameCompletionCommands {
       updates.finalPlaytimeHours = null;
     } else if (finalPlaytimeHours !== undefined) {
       if (!isValidPlaytimeHours(finalPlaytimeHours)) {
-        await safeReply(interaction, "Final playtime must be a non-negative number of hours.");
+        await safeReply(
+          interaction,
+          buildTextReply("Final playtime must be a non-negative number of hours.", true),
+        );
         return;
       }
       updates.finalPlaytimeHours = finalPlaytimeHours;
@@ -640,28 +675,35 @@ export class GameCompletionCommands {
     } else if (noteRaw !== undefined) {
       const sanitizedNote = sanitizeUserInput(noteRaw, { preserveNewlines: true });
       if (sanitizedNote.length > this.maxNoteLength) {
-        await safeReply(interaction, `Note must be ${this.maxNoteLength} characters or fewer.`);
+        await safeReply(
+          interaction,
+          buildTextReply(`Note must be ${this.maxNoteLength} characters or fewer.`, true),
+        );
         return;
       }
       updates.note = sanitizedNote.length ? sanitizedNote : null;
     }
 
     if (!Object.keys(updates).length) {
-      await safeReply(interaction, 
-        "Provide at least one field to update (type, date, platform, playtime, or note).",
+      await safeReply(
+        interaction,
+        buildTextReply(
+          "Provide at least one field to update (type, date, platform, playtime, or note).",
+          true,
+        ),
       );
       return;
     }
 
     const saved = await Member.updateCompletion(interaction.user.id, completionId, updates);
     if (!saved) {
-      await safeReply(interaction, "Completion not found.");
+      await safeReply(interaction, buildTextReply("Completion not found.", true));
       return;
     }
 
     const updated = await Member.getCompletionForUser(interaction.user.id, completionId);
     if (!updated) {
-      await safeReply(interaction, "Completion updated.");
+      await safeReply(interaction, buildTextReply("Completion updated.", true));
       return;
     }
 
@@ -690,8 +732,9 @@ export class GameCompletionCommands {
       changedLines.push(`- Note: ${noteLabel}`);
     }
 
-    await safeReply(interaction, 
-      `Saved: **${updated.title}** updated.\n${changedLines.join("\n")}`,
+    await safeReply(
+      interaction,
+      buildTextReply(`Saved: **${updated.title}** updated.\n${changedLines.join("\n")}`, true),
     );
   }
 
