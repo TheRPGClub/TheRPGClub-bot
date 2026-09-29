@@ -100,6 +100,7 @@ export const bot: Client = new Client({
     IntentsBitField.Flags.GuildMessageReactions,
     IntentsBitField.Flags.GuildModeration,
     IntentsBitField.Flags.GuildVoiceStates,
+    // discord.js emits userUpdate (avatar and name logs) from presence packets.
     IntentsBitField.Flags.GuildPresences,
     IntentsBitField.Flags.MessageContent,
   ],
