@@ -171,11 +171,35 @@ export type ParsedUserUrl = { ok: true; value: string } | { ok: false; error: st
  * which would rewrite characters such as `_`, `~`, `*`, `--`, and `;` that URLs rely on.
  */
 export function parseUserUrl(value: string, label: string): ParsedUserUrl {
-  let text = value.replace(INVISIBLE_CHAR_REGEX, "").trim();
-  if (text.startsWith("<") && text.endsWith(">")) {
-    text = text.slice(1, -1).trim();
-  }
+  return parseNormalizedUrl(normalizeUserUrlText(value), label);
+}
 
+export type ParsedOptionalUserUrl =
+  | { ok: true; value: string | undefined }
+  | { ok: false; error: string };
+
+/**
+ * Like parseUserUrl, but input that is empty once invisible characters, whitespace, and
+ * Discord no-embed angle brackets are removed means no URL rather than an invalid one.
+ */
+export function parseOptionalUserUrl(
+  value: string | null | undefined,
+  label: string,
+): ParsedOptionalUserUrl {
+  const text = normalizeUserUrlText(value ?? "");
+  if (!text) return { ok: true, value: undefined };
+  return parseNormalizedUrl(text, label);
+}
+
+function normalizeUserUrlText(value: string): string {
+  const text = value.replace(INVISIBLE_CHAR_REGEX, "").trim();
+  if (text.startsWith("<") && text.endsWith(">")) {
+    return text.slice(1, -1).trim();
+  }
+  return text;
+}
+
+function parseNormalizedUrl(text: string, label: string): ParsedUserUrl {
   let parsed: URL;
   try {
     parsed = new URL(text);

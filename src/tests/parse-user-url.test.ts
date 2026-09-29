@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { parseUserUrl } from "../functions/InteractionUtils.js";
+import { parseOptionalUserUrl, parseUserUrl } from "../functions/InteractionUtils.js";
 
 test("parseUserUrl keeps markdown-like characters that sanitizeUserInput strips", () => {
   const url = "https://example.com/my_feed~v2/*.xml?a=1;b=2&c=x--y";
@@ -33,4 +33,22 @@ test("parseUserUrl rejects non-http protocols", () => {
     const parsed = parseUserUrl(url, "Feed URL");
     assert.deepEqual(parsed, { error: "Feed URL must use http or https.", ok: false });
   }
+});
+
+test("parseOptionalUserUrl treats input that normalizes to empty as no url", () => {
+  for (const value of [undefined, null, "", "   ", "\u200b", " <> ", "< \u200b >"]) {
+    const parsed = parseOptionalUserUrl(value, "Image URL");
+    assert.deepEqual(parsed, { ok: true, value: undefined });
+  }
+});
+
+test("parseOptionalUserUrl parses non-empty input like parseUserUrl", () => {
+  assert.deepEqual(parseOptionalUserUrl(" <https://example.com/a_b.png> ", "Image URL"), {
+    ok: true,
+    value: "https://example.com/a_b.png",
+  });
+  assert.deepEqual(parseOptionalUserUrl("not a url", "Image URL"), {
+    error: "Image URL must be a valid URL.",
+    ok: false,
+  });
 });

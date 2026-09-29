@@ -19,8 +19,8 @@ import {
 import { TextInputStyle as ApiTextInputStyle } from "discord-api-types/v10";
 import { LIVE_EVENT_FORUM_ID } from "../../config/channels.js";
 import {
+  parseOptionalUserUrl,
   safeDeferReply,
-  parseUserUrl,
   safeReply,
   sanitizeUserInput,
 } from "../../functions/InteractionUtils.js";
@@ -180,13 +180,9 @@ export function parseLiveStreamModalInput(
     };
   }
 
-  const rawImageUrl = input.imageUrl ?? "";
-  let imageUrl: string | undefined;
-  if (rawImageUrl.trim()) {
-    const parsedImageUrl = parseUserUrl(rawImageUrl, LIVE_STREAM_IMAGE_URL_LABEL);
-    if (!parsedImageUrl.ok) return parsedImageUrl;
-    imageUrl = parsedImageUrl.value;
-  }
+  const parsedImageUrl = parseOptionalUserUrl(input.imageUrl, LIVE_STREAM_IMAGE_URL_LABEL);
+  if (!parsedImageUrl.ok) return parsedImageUrl;
+  const imageUrl = parsedImageUrl.value;
 
   const startsAt = start.toUTC().toJSDate();
   const endsAt = end.toUTC().toJSDate();
