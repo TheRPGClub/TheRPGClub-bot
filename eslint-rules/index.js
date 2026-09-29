@@ -832,26 +832,27 @@ function isProcessEnvMember(node) {
     node?.type === "MemberExpression" &&
     node.object?.type === "Identifier" &&
     node.object.name === "process" &&
-    getStaticPropertyName(node) === "env"
+    getTrailingName(node) === "env"
   );
-}
-
-function getStaticPropertyName(node) {
-  if (!node.computed && node.property?.type === "Identifier") return node.property.name;
-  if (node.computed && node.property?.type === "Literal") return String(node.property.value);
-  return null;
 }
 
 function isTestModeEnvTarget(node) {
   return (
     node?.type === "MemberExpression" &&
     isProcessEnvMember(node.object) &&
-    getStaticPropertyName(node) === TEST_MODE_ENV_NAME
+    getTrailingName(node) === TEST_MODE_ENV_NAME
   );
 }
 
+// An import or export whose every specifier is inline `type` is elided by tsc
+// just like `import type`, so it cannot load a module either.
 function isErasedModuleStatement(node) {
-  return node.importKind === "type" || node.exportKind === "type";
+  if (node.importKind === "type" || node.exportKind === "type") return true;
+  const specifiers = node.specifiers ?? [];
+  return (
+    specifiers.length > 0 &&
+    specifiers.every((spec) => spec.importKind === "type" || spec.exportKind === "type")
+  );
 }
 
 function normalizePathText(text) {

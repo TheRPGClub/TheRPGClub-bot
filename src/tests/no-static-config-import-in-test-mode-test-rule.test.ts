@@ -36,6 +36,8 @@ ruleTester.run("no-static-config-import-in-test-mode-test", rule, {
         "import { MessageFlags } from \"discord.js\";",
         "import type { AnyRepliable } from \"../functions/InteractionUtils.js\";",
         "export type { Foo } from \"../config/channels.js\";",
+        "import { type Bar } from \"../config/tags.js\";",
+        "export { type Baz } from \"../config/users.js\";",
         ASSIGN,
         "const { ADMIN_CHANNEL_ID } = await import(\"../config/channels.js\");",
       ].join("\n"),
@@ -55,6 +57,11 @@ ruleTester.run("no-static-config-import-in-test-mode-test", rule, {
     },
     {
       code: `import "../config/channels.js";\nprocess.env["TEST_GUILD_ID"] = "1";`,
+      filename: TEST_FILE,
+      errors: [{ messageId: "staticImport" }],
+    },
+    {
+      code: `import { type Bar, ADMIN_TAG_ID } from "../config/tags.js";\n${ASSIGN}`,
       filename: TEST_FILE,
       errors: [{ messageId: "staticImport" }],
     },
