@@ -29,9 +29,11 @@ def pr(head=HEAD, checks=PASSED, state='OPEN'):
 URL = 'https://github.com/o/r/pull/7'
 
 
+GROUPS = {'g-needs': 'Needs Review', 'g-self': 'Self Review'}
+
+
 def fresh():
-    return {'prs': [], 'passes': [],
-            'groups': {'g-needs': 'Needs Review', 'g-self': 'Self Review'}}
+    return {'prs': [], 'passes': []}
 
 
 def review(state, findings):
@@ -42,6 +44,7 @@ def review(state, findings):
 class GateTest(unittest.TestCase):
     def setUp(self):
         self.read = mock.patch.object(gate, 'read_pr', return_value=pr()).start()
+        mock.patch.object(gate, 'group_names', return_value=GROUPS).start()
         self.addCleanup(mock.patch.stopall)
 
     def test_opened_pr_blocks_stop_until_a_clean_pass(self):
@@ -158,14 +161,6 @@ class GateTest(unittest.TestCase):
         review(state, 0)
         self.assertIsNone(gate.on_sidebar(state, move))
 
-    def test_groups_are_learned_from_list_groups(self):
-        state = {'prs': [], 'passes': [], 'groups': {}}
-        blocks = [{'type': 'text', 'text': '[{"id": "g1", "name": "Needs Review"}]'}]
-        gate.on_groups(state, {'tool_response': blocks})
-        self.assertEqual(state['groups'], {'g1': 'Needs Review'})
-        gate.on_groups(state, {'tool_response': '[{"id": "g2", "name": "Working"}]'})
-        self.assertEqual(state['groups']['g2'], 'Working')
-
     def test_review_target_forms(self):
         self.assertEqual(gate.review_target(f'high {URL}'), URL)
         with mock.patch.object(gate, 'gh', return_value=URL + '\n') as gh:
@@ -200,7 +195,7 @@ class GateTest(unittest.TestCase):
     def test_number_keyed_state_is_dropped_on_load(self):
         with mock.patch('builtins.open', mock.mock_open(
                 read_data='{"prs": [7, "u"], "passes": [{"pr": 7}], "groups": {}}')):
-            self.assertEqual(gate.load('x'), {'prs': ['u'], 'passes': [], 'groups': {}})
+            self.assertEqual(gate.load('x'), {'prs': ['u'], 'passes': []})
 
     def test_irrelevant_calls_skip_the_state_file(self):
         self.assertFalse(gate.RELEVANT['pr-opened']({'command': 'git status'}))

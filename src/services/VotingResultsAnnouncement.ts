@@ -4,7 +4,6 @@ import {
   MediaGalleryBuilder,
   MediaGalleryItemBuilder,
 } from "@discordjs/builders";
-import { DateTime } from "luxon";
 import {
   listNominationsForRound,
   NOMINATION_KINDS,
@@ -13,7 +12,6 @@ import {
 import { getVoteTally } from "../classes/Vote.js";
 import {
   buildRehearsalNoticeText,
-  buildFinalWinnersText,
   buildTallyText,
   buildWinnerAnnouncementText,
   mergeTallyWithNominations,
@@ -25,23 +23,10 @@ import {
   buildComponentsV2Flags,
   buildTextContainer,
 } from "../functions/ComponentsV2Utils.js";
-import { VOTE_TIME_ZONE } from "../functions/VoteDateUtils.js";
 import { ANNOUNCEMENT_CHANNEL_ID } from "../config/channels.js";
 import { fetchGameCoverBuffer } from "./GameImageService.js";
 import { fetchSendableChannel } from "../functions/ChannelUtils.js";
 import { logError } from "../utilities/LogUtils.js";
-
-/**
- * The month the round is played, e.g. "August 2026". Voting opens on the
- * last Friday of the month before, so the label is one month after the
- * round's vote-open date (in the club's US Eastern convention).
- */
-export function resolveRoundMonthLabel(nextVoteAt: Date): string {
-  return DateTime.fromJSDate(nextVoteAt)
-    .setZone(VOTE_TIME_ZONE)
-    .plus({ months: 1 })
-    .toFormat("MMMM yyyy");
-}
 
 /** The round whose results are announced, and the month its winners are played. */
 export interface IResultsRound {
@@ -202,87 +187,6 @@ export async function announceVotingResults(
     }
     await sendable.send({
       components: [container],
-      files,
-      flags: buildComponentsV2Flags(false),
-      allowedMentions: { parse: [] },
-    });
-  }
-}
-
-/** One category's settled winners, in the order the admins recorded them. */
-export interface IRoundWinnerCategory {
-  kindLabel: WinnerKindLabel;
-  /** threadId: the winner thread when the caller already linked it. */
-  games: Array<{ gamedbGameId: number; title: string; threadId?: string | null }>;
-}
-
-/**
- * Posts the round's final winners, one message per category, as the admins
- * recorded them (ties broken, several picks allowed). Unlike
- * announceVotingResults, no tallies are posted: those went out when voting
- * closed. Each winner's thread is linked; a rehearsal skips thread work.
- */
-export async function announceRoundWinners(
-  client: Client,
-  round: IResultsRound,
-  categories: IRoundWinnerCategory[],
-  options: IAnnounceResultsOptions = {},
-): Promise<void> {
-  const channelId = options.channelIdOverride ?? ANNOUNCEMENT_CHANNEL_ID;
-  const rehearsal = Boolean(options.rehearsal);
-  const withWinners = categories.filter((category) => category.games.length);
-  if (!withWinners.length) {
-    throw new NothingToAnnounceError(round.roundNumber);
-  }
-  const sendable = await fetchSendableChannel(client, channelId);
-  if (!sendable) {
-    throw new Error(`Results channel ${channelId} was not found or cannot be sent to.`);
-  }
-
-  for (const [index, category] of withWinners.entries()) {
-    const lines = [
-      buildFinalWinnersText({
-        kindLabel: category.kindLabel,
-        roundNumber: round.roundNumber,
-        monthLabel: round.monthLabel,
-        titles: category.games.map((game) => game.title),
-      }),
-    ];
-    if (!rehearsal) {
-      for (const game of category.games) {
-        let threadId = game.threadId ?? null;
-        // Best-effort, as in announceVotingResults: a thread failure must not
-        // block the announcement.
-        try {
-          threadId ??= (
-            await ensureWinnerThread({
-              client,
-              gameId: game.gamedbGameId,
-              gameTitle: game.title,
-              roundNumber: round.roundNumber,
-              kindLabel: category.kindLabel,
-            })
-          ).threadId;
-        } catch (error) {
-          logError("VotingResultsAnnouncement.announceRoundWinners", error);
-        }
-        if (threadId) {
-          lines.push(`Join the **${game.title}** discussion in ${channelMention(threadId)}!`);
-        }
-      }
-    }
-    const containers: ContainerBuilder[] = [];
-    if (rehearsal && index === 0) {
-      containers.push(buildTextContainer(buildRehearsalNoticeText(round.roundNumber)));
-    }
-    const container = buildTextContainer(lines.join("\n"));
-    const files = await addWinnerCovers(
-      container,
-      category.games.map((game) => game.gamedbGameId),
-    );
-    containers.push(container);
-    await sendable.send({
-      components: containers,
       files,
       flags: buildComponentsV2Flags(false),
       allowedMentions: { parse: [] },

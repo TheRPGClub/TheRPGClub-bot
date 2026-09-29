@@ -1,0 +1,7 @@
+{"type": "user", "origin": {"kind": "human"}, "isSidechain": false, "message": {"role": "user", "content": [{"type": "text", "text": "/implement 42"}]}}
+{"type": "user", "isMeta": true, "isSidechain": false, "message": {"role": "user", "content": [{"type": "text", "text": "Base directory for this skill: ..."}]}}
+{"type": "assistant", "isSidechain": false, "message": {"role": "assistant", "content": [{"type": "tool_use", "id": "toolu_0001", "name": "Bash", "input": {"command": "gh issue edit 42 --add-label \"In Progress\"", "description": "x"}}]}}
+{"type": "user", "isSidechain": false, "message": {"role": "user", "content": [{"type": "tool_result", "tool_use_id": "toolu_0001", "content": "https://github.com/o/r/issues/42", "is_error": false}]}}
+{"type": "assistant", "isSidechain": false, "message": {"role": "assistant", "content": [{"type": "tool_use", "id": "toolu_0030", "name": "mcp__ccd_sidebar__move_sessions", "input": {"session_ids": ["self"], "group_id": "cg-0000-working"}}]}}
+{"type": "user", "isSidechain": false, "message": {"role": "user", "content": [{"type": "tool_result", "tool_use_id": "toolu_0030", "content": [{"type": "text", "text": "Moved 1 session."}], "is_error": false}]}}
+{"type": "assistant", "isSidechain": false, "message": {"role": "assistant", "content": [{"type": "text", "text": "Working on it."}]}}

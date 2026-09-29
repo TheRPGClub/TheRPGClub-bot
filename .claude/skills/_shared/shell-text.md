@@ -47,5 +47,8 @@ misbehaves can be opened and run again.
 ## A process the session waits on
 
 A process the session waits on, such as `scripts/catchup.py wait`, runs as its
-own background Bash call rather than from inside a script. A bare `wait` in a
+own background Bash call rather than from inside a script. The one foreground
+`wait` is the CI wait inside a self review, per
+[run-watch.md](run-watch.md#waiting-inside-a-self-review), and it too is its
+own Bash call. A bare `wait` in a
 script waits for every child the script started, background ones included.

@@ -19,7 +19,6 @@ Events:
              opened is gated, so reviewing a pull request it did not open never
              holds the session until that pull request is clean.
   findings   PostToolUse on ReportFindings. Closes the open pass with its count.
-  groups     PostToolUse on mcp__ccd_sidebar__list_groups. Learns group names.
   sidebar    PreToolUse on mcp__ccd_sidebar__move_sessions. Denies a move to
              Needs Review while a tracked pull request's loop is unfinished.
   stop       Stop. Blocks the end of a turn while a tracked pull request's
@@ -46,6 +45,11 @@ import re
 import subprocess
 import sys
 from concurrent.futures import ThreadPoolExecutor
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+# Group ids resolve to names through the cache enforce_sidebar_move.py keeps from
+# list_groups results, so the two hooks never disagree about which id is which group.
+from enforce_sidebar_move import load_cache as group_names  # noqa: E402
 
 NEEDS_REVIEW_GROUP = 'Needs Review'
 GH_TIMEOUT = 20
@@ -83,10 +87,9 @@ def load(path):
             state = json.load(f)
     except (FileNotFoundError, json.JSONDecodeError):
         state = {}
-    # Entries keyed by bare number predate URL keys; the next review re-tracks them.
+    # Entries keyed by a bare number predate URL keys and are dropped.
     return {'prs': [u for u in state.get('prs', []) if isinstance(u, str)],
-            'passes': [p for p in state.get('passes', []) if isinstance(p.get('pr'), str)],
-            'groups': state.get('groups', {})}
+            'passes': [p for p in state.get('passes', []) if isinstance(p.get('pr'), str)]}
 
 
 def save(path, state):
@@ -204,26 +207,6 @@ def on_findings(state, payload):
     return None
 
 
-def response_text(response):
-    """An MCP tool's result as text, whether it arrives raw or as content blocks."""
-    if isinstance(response, list):
-        return ''.join(b.get('text', '') for b in response if isinstance(b, dict))
-    if isinstance(response, dict) and isinstance(response.get('content'), list):
-        return response_text(response['content'])
-    return text_of(response)
-
-
-def on_groups(state, payload):
-    try:
-        groups = json.loads(response_text(payload.get('tool_response', '')))
-    except json.JSONDecodeError:
-        return None
-    for group in groups if isinstance(groups, list) else []:
-        if isinstance(group, dict) and 'id' in group and 'name' in group:
-            state['groups'][group['id']] = group['name']
-    return None
-
-
 def read_all(urls):
     """Each URL paired with its pull request, or with the error reading it, read in parallel."""
     def read(url):
@@ -275,7 +258,7 @@ def warning(errors):
 
 
 def on_sidebar(state, payload):
-    group = state['groups'].get(payload.get('tool_input', {}).get('group_id'))
+    group = group_names().get(payload.get('tool_input', {}).get('group_id'))
     if group is not None and group != NEEDS_REVIEW_GROUP:
         return None
     problems, errors = unfinished(state)
@@ -305,7 +288,6 @@ HANDLERS = {
     'pr-opened': on_pr_opened,
     'review': on_review,
     'findings': on_findings,
-    'groups': on_groups,
     'sidebar': on_sidebar,
     'stop': on_stop,
 }
@@ -313,7 +295,6 @@ EVENTS = {
     ('PostToolUse', 'Bash'): 'pr-opened',
     ('PostToolUse', 'Skill'): 'review',
     ('PostToolUse', 'ReportFindings'): 'findings',
-    ('PostToolUse', 'mcp__ccd_sidebar__list_groups'): 'groups',
     ('PreToolUse', 'mcp__ccd_sidebar__move_sessions'): 'sidebar',
     ('Stop', None): 'stop',
 }
