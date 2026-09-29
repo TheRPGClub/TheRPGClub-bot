@@ -21,13 +21,6 @@ export const ADMIN_HELP_TOPICS: AdminHelpTopic[] = [
     notes: "Use after updating command choices or definitions.",
   },
   {
-    id: "nextround-setup",
-    label: "/admin nextround-setup",
-    summary: "Interactive wizard to setup the next round (games, threads, dates).",
-    syntax: "Syntax: /admin nextround-setup",
-    notes: "Walks through adding GOTM/NR-GOTM winners, linking threads, and setting the next vote date.",
-  },
-  {
     id: "add-gotm",
     label: "/admin add-gotm",
     summary: "Add the next GOTM round with guided prompts.",
@@ -76,9 +69,11 @@ export const ADMIN_HELP_TOPICS: AdminHelpTopic[] = [
   {
     id: "set-nextvote",
     label: "/admin set-nextvote",
-    summary: "Set when the next GOTM/NR-GOTM vote will happen.",
+    summary: "Reschedule when voting opens for the current round.",
     syntax: "Syntax: /admin set-nextvote date:<date>",
-    notes: "Votes are typically held the last Friday of the month. Date input is interpreted in America/New_York.",
+    notes:
+      "Votes are typically held the last Friday of the month. Date input is interpreted " +
+      "in America/New_York, at noon. The close moves with it, keeping the weekend window.",
   },
   {
     id: "legacy-voting-setup",
@@ -88,29 +83,29 @@ export const ADMIN_HELP_TOPICS: AdminHelpTopic[] = [
     notes:
       "Fallback for when first-party voting is unavailable. Pulls current nominations for " +
       "GOTM and NR-GOTM, sorts answers, and sets a sensible max_select. " +
-      "Normal voting runs through /admin voting-open and /vote.",
+      "Normal voting opens on schedule and runs through /vote.",
   },
   {
     id: "voting-open",
     label: "/admin voting-open",
-    summary: "Open first-party voting for the upcoming round and post voting panels.",
+    summary: "Repost the voting panels for the round currently open for votes.",
     syntax:
       "Syntax: /admin voting-open [post-here:<bool>] [testmode:<bool>] [round:<number>]",
     notes:
-      "Run at/after the scheduled vote time. Opens the round's voting window and posts " +
-      "voting panels to announcements (or the current channel with post-here). " +
-      "Re-running while voting is open reposts the panels. testmode rehearses instead: " +
-      "panels are posted here only, nothing is written, and round picks which round to " +
-      "rehearse. Casting from a test panel is still a real vote.",
+      "Voting opens on schedule and the panels post on their own; use this to replace " +
+      "missing panels while voting is open. They go to announcements (or the current " +
+      "channel with post-here). testmode rehearses instead: panels are posted here only, " +
+      "nothing is written, and round picks which round to rehearse. Casting from a test " +
+      "panel is still a real vote.",
   },
   {
     id: "voting-close",
     label: "/admin voting-close",
-    summary: "Close the open voting round early and post the results.",
+    summary: "Close the open voting round early.",
     syntax: "Syntax: /admin voting-close",
     notes:
-      "Voting otherwise closes automatically at the deadline, when the bot posts the " +
-      "results and winner announcements to announcements on its own.",
+      "Moves the round's close to now. Either way the API decides the round and the " +
+      "results and winner announcements post to announcements on their own.",
   },
   {
     id: "voting-results",

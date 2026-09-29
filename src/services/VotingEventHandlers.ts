@@ -1,5 +1,4 @@
 import type { Client } from "discord.js";
-import BotVotingInfo from "../classes/BotVotingInfo.js";
 import Gotm, { reloadGotmRoundFromDb } from "../classes/Gotm.js";
 import NrGotm, { reloadNrGotmRoundFromDb } from "../classes/NrGotm.js";
 import type { IVotingEvent } from "../classes/VotingEvents.js";
@@ -137,13 +136,6 @@ async function postVotingResults(
   event: IVotingEvent,
 ): Promise<VotingEventOutcome> {
   const round = await requireRound(event);
-  // /admin voting-close posts the results itself and stamps vote_ends_at
-  // first; this handler stamps it after posting. Either way a stamped round
-  // has been announced, so a mirrored close never posts the results twice.
-  const legacyRow = await BotVotingInfo.getByRound(round.roundNumber);
-  if (legacyRow?.voteEndsAt) {
-    return "skipped";
-  }
   try {
     await announceVotingResults(client, {
       roundNumber: round.roundNumber,
@@ -154,13 +146,6 @@ async function postVotingResults(
       return "skipped";
     }
     throw err;
-  }
-  if (legacyRow) {
-    // The scheduled close, so the mirror leaves the round's dates unchanged.
-    // Posting already happened: a failed stamp is logged, never retried.
-    await BotVotingInfo.updateVoteEndsAt(round.roundNumber, round.votingClosesAt).catch(
-      (err: unknown) => logError("VotingEventHandlers.markResultsAnnounced", err),
-    );
   }
   return "delivered";
 }

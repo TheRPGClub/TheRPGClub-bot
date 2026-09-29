@@ -7,9 +7,13 @@ import {
   parseNominationKind,
 } from "../../classes/Nomination.js";
 import { deleteAllVotesForRound, getVoteTally } from "../../classes/Vote.js";
-import BotVotingInfo, { type IBotVotingInfoEntry } from "../../classes/BotVotingInfo.js";
+import Gotm from "../../classes/Gotm.js";
+import VotingRounds, {
+  isRoundTallyRevealed,
+  NO_VOTING_ROUND_SCHEDULED,
+  type IVotingRound,
+} from "../../classes/VotingRounds.js";
 import {
-  extractErrorMessage,
   safeReply,
   safeUpdate,
   withErrorReply,
@@ -27,22 +31,15 @@ import {
   mergeTallyWithNominations,
   sumTallyVotes,
 } from "../../functions/VoteResultsUtils.js";
-import {
-  announceVotingResults,
-  resolveRoundMonthLabel,
-  type IResultsRound,
-} from "../../services/VotingResultsAnnouncement.js";
+import { announceVotingResults } from "../../services/VotingResultsAnnouncement.js";
 import {
   hasVotableNominations,
   loadNominationsByKind,
   postVotePanels,
 } from "../../functions/VotePanelPosting.js";
-import { getActiveVotingRound, isRoundDecided } from "../../functions/VotingRound.js";
-import { calculateVoteDeadlineEt } from "../../functions/VoteDateUtils.js";
 import { toUnixTimestamp } from "../../functions/DateFormatUtils.js";
 import { ANNOUNCEMENT_CHANNEL_ID } from "../../config/channels.js";
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
-import { logError } from "../../utilities/LogUtils.js";
 
 function buildUpdateText(text: string): {
   components: ReturnType<typeof buildTextContainer>[];
@@ -51,24 +48,12 @@ function buildUpdateText(text: string): {
   return { components: [buildTextContainer(text)], flags: buildComponentsV2EditFlags() };
 }
 
-/** A legacy voting_info row as the results announcement's round (to the API in #1135). */
-function legacyResultsRound(info: IBotVotingInfoEntry): IResultsRound {
-  return { roundNumber: info.roundNumber, monthLabel: resolveRoundMonthLabel(info.nextVoteAt) };
-}
-
 /** Why a test panel's casts would be refused, for the panel banner. */
-function buildCastsRefusedReason(
-  roundNumber: number,
-  info: IBotVotingInfoEntry | null,
-  decided: boolean,
-): string {
-  if (decided) {
-    return `Round ${roundNumber} already has recorded winners`;
+function buildCastsRefusedReason(roundNumber: number, round: IVotingRound | null): string {
+  if (!round) {
+    return `the API has no voting round ${roundNumber}`;
   }
-  if (!info) {
-    return `no voting_info row exists for Round ${roundNumber} yet`;
-  }
-  if (info.votingEnded) {
+  if (round.votingEnded) {
     return `voting for Round ${roundNumber} has already ended`;
   }
   return `voting for Round ${roundNumber} has not opened yet`;
@@ -76,10 +61,9 @@ function buildCastsRefusedReason(
 
 /**
  * Rehearses a round's voting panels without writing anything. Panels go to the
- * invoking channel and never to announcements, and no voting_info row is
- * created or re-dated: creating one could make the scratch round the current
- * round, so test mode reads the round's existing window instead of opening it.
- * Casting from a test panel is still a real vote, which the banner says.
+ * invoking channel and never to announcements, and the round's schedule is
+ * left alone. Casting from a test panel is still a real vote, which the
+ * banner says.
  */
 async function handleVotingOpenTestMode(
   interaction: CommandInteraction,
@@ -101,21 +85,18 @@ async function handleVotingOpenTestMode(
 
     let targetRound = roundInput;
     if (targetRound == null) {
-      const current = await BotVotingInfo.getCurrentRound();
+      const current = await VotingRounds.getCurrent();
       if (!current) {
         await safeReply(
           interaction,
           buildTextReply(
-            "No voting round information is available. " +
-              "Pass round:<number> to choose what to rehearse.",
+            `${NO_VOTING_ROUND_SCHEDULED} Pass round:<number> to choose what to rehearse.`,
             true,
           ),
         );
         return;
       }
-      targetRound = isRoundDecided(current.roundNumber)
-        ? current.roundNumber + 1
-        : current.roundNumber;
+      targetRound = current.roundNumber;
     }
     if (!isPositiveInt(targetRound)) {
       await safeReply(interaction, buildTextReply("Invalid round number.", true));
@@ -135,18 +116,17 @@ async function handleVotingOpenTestMode(
       return;
     }
 
-    const info = await BotVotingInfo.getByRound(targetRound);
-    const decided = isRoundDecided(targetRound);
-    const castsAccepted = Boolean(info?.votingOpen) && !decided;
+    const round = await VotingRounds.getByRound(targetRound);
+    const castsAccepted = Boolean(round?.votingOpen);
     const castsRefusedReason = castsAccepted
       ? null
-      : buildCastsRefusedReason(targetRound, info, decided);
+      : buildCastsRefusedReason(targetRound, round);
 
     const { lines: resultLines } = await postVotePanels({
       client: interaction.client,
       channelId,
       roundNumber: targetRound,
-      voteDeadline: info?.voteDeadline ?? null,
+      voteDeadline: round?.votingClosesAt ?? null,
       nominationsByKind,
       testMode: true,
       castsAccepted,
@@ -161,7 +141,7 @@ async function handleVotingOpenTestMode(
       interaction,
       buildTextReply(
         `🧪 Test mode: Round ${targetRound} panels posted in ${channelMention(channelId)}. ` +
-          "No voting_info row was created or changed.\n" +
+          "The round's schedule was not changed.\n" +
           `${castNote}\n${resultLines.join("\n")}`,
         true,
       ),
@@ -170,10 +150,9 @@ async function handleVotingOpenTestMode(
 }
 
 /**
- * Opens first-party voting for the round after the current one and posts the
- * voting panels. Creating the target round's voting_info row (openVotingRound)
- * is what opens the window server-side, so this only runs once the scheduled
- * vote time has passed. Re-running while voting is open reposts the panels.
+ * Reposts the current round's voting panels. The API opens voting on schedule
+ * and queues the panels itself (the voting_opened event), so this only
+ * replaces panels that are missing while voting is open.
  */
 export async function handleVotingOpen(
   interaction: CommandInteraction,
@@ -189,100 +168,49 @@ export async function handleVotingOpen(
     await safeReply(
       interaction,
       buildTextReply(
-        "round: only applies with testmode:true. Opening voting always targets the " +
-          "round the schedule is on, so the window cannot be opened for an arbitrary round.",
+        "round: only applies with testmode:true. Reposting always targets the current round.",
         true,
       ),
     );
     return;
   }
   await withErrorReply(interaction, async () => {
-    const current = await BotVotingInfo.getCurrentRound();
+    const current = await VotingRounds.getCurrent();
     if (!current) {
+      await safeReply(interaction, buildTextReply(NO_VOTING_ROUND_SCHEDULED, true));
+      return;
+    }
+    const roundNumber = current.roundNumber;
+    if (current.nominationsOpen) {
       await safeReply(
         interaction,
         buildTextReply(
-          "No voting round information is available. Run /admin nextround-setup first.",
+          `Voting for Round ${roundNumber} opens ` +
+            `<t:${toUnixTimestamp(current.votingOpensAt)}:F>, ` +
+            "and the panels post on their own then.",
+          true,
+        ),
+      );
+      return;
+    }
+    if (!current.votingOpen) {
+      await safeReply(
+        interaction,
+        buildTextReply(
+          `Voting for Round ${roundNumber} has ended, so there are no panels to repost.`,
           true,
         ),
       );
       return;
     }
 
-    let targetRound: number;
-    let reposting = false;
-
-    if (!isRoundDecided(current.roundNumber)) {
-      if (current.votingOpen) {
-        targetRound = current.roundNumber;
-        reposting = true;
-      } else if (current.votingEnded) {
-        await safeReply(
-          interaction,
-          buildTextReply(
-            `Voting for Round ${current.roundNumber} has already ended. ` +
-              "Run /admin nextround-setup to record the winners.",
-            true,
-          ),
-        );
-        return;
-      } else {
-        await safeReply(
-          interaction,
-          buildTextReply(
-            `Voting for Round ${current.roundNumber} is scheduled to open ` +
-              `<t:${toUnixTimestamp(current.nextVoteAt)}:F>.`,
-            true,
-          ),
-        );
-        return;
-      }
-    } else {
-      targetRound = current.roundNumber + 1;
-      if (new Date() < current.nextVoteAt) {
-        await safeReply(
-          interaction,
-          buildTextReply(
-            `Voting for Round ${targetRound} is scheduled to open ` +
-              `<t:${toUnixTimestamp(current.nextVoteAt)}:F>. ` +
-              "Run this command again once that time has passed.",
-            true,
-          ),
-        );
-        return;
-      }
-    }
-
-    const nominationsByKind = await loadNominationsByKind(targetRound);
+    const nominationsByKind = await loadNominationsByKind(roundNumber);
     if (!hasVotableNominations(nominationsByKind)) {
       await safeReply(
         interaction,
         buildTextReply(
-          `There are no votable nominations for Round ${targetRound}, ` +
-            "so voting was not opened.",
-          true,
-        ),
-      );
-      return;
-    }
-
-    if (!reposting) {
-      let opensAt = current.nextVoteAt;
-      if (new Date() >= calculateVoteDeadlineEt(opensAt)) {
-        // Opened after the scheduled window would already have closed; open
-        // now so the round still gets a window through the coming Sunday.
-        opensAt = new Date();
-      }
-      await BotVotingInfo.openVotingRound(targetRound, opensAt);
-    }
-
-    const info = await BotVotingInfo.getByRound(targetRound);
-    if (!info?.votingOpen) {
-      await safeReply(
-        interaction,
-        buildTextReply(
-          `Voting for Round ${targetRound} did not open as expected. ` +
-            "Check the round's voting_info row.",
+          `There are no votable nominations for Round ${roundNumber}, ` +
+            "so no panels were posted.",
           true,
         ),
       );
@@ -294,37 +222,36 @@ export async function handleVotingOpen(
     const { lines: resultLines } = await postVotePanels({
       client: interaction.client,
       channelId,
-      roundNumber: targetRound,
-      voteDeadline: info.voteDeadline,
+      roundNumber,
+      voteDeadline: current.votingClosesAt,
       nominationsByKind,
     });
 
-    const deadlinePart = info.voteDeadline
-      ? ` Voting closes <t:${toUnixTimestamp(info.voteDeadline)}:F>.`
-      : "";
-    const headline = reposting
-      ? `Voting for Round ${targetRound} is already open; panels reposted.`
-      : `Voting opened for Round ${targetRound}.`;
     await safeReply(
       interaction,
-      buildTextReply(`${headline}${deadlinePart}\n${resultLines.join("\n")}`, true),
+      buildTextReply(
+        `Round ${roundNumber} voting panels reposted. Voting closes ` +
+          `<t:${toUnixTimestamp(current.votingClosesAt)}:F>.\n${resultLines.join("\n")}`,
+        true,
+      ),
     );
-  }, "Could not open voting");
+  }, "Could not repost the voting panels");
 }
+
+const RESULTS_POST_NOTE =
+  `The results post in ${channelMention(ANNOUNCEMENT_CHANNEL_ID)} once the API ` +
+  "decides the round.";
 
 export async function handleVotingClose(interaction: CommandInteraction): Promise<void> {
   await withErrorReply(interaction, async () => {
-    const round = await getActiveVotingRound();
-    if (!round) {
+    const round = await VotingRounds.getCurrent();
+    if (!round?.votingOpen) {
       await safeReply(interaction, buildTextReply("No voting is currently open.", true));
       return;
     }
-    const deadlineText = round.voteDeadline
-      ? ` It is otherwise scheduled to close <t:${toUnixTimestamp(round.voteDeadline)}:F>.`
-      : "";
     const container = buildTextContainer(
-      `Close Round ${round.roundNumber} voting now and post the results in ` +
-        `${channelMention(ANNOUNCEMENT_CHANNEL_ID)}?${deadlineText}`,
+      `Close Round ${round.roundNumber} voting now? ${RESULTS_POST_NOTE} It is otherwise ` +
+        `scheduled to close <t:${toUnixTimestamp(round.votingClosesAt)}:F>.`,
     );
     const row = buildButtonRow(
       buildActionButton(
@@ -354,28 +281,20 @@ export async function handleVoteCloseButton(interaction: ButtonInteraction): Pro
     return;
   }
   await withErrorReply(interaction, async () => {
-    await BotVotingInfo.updateVoteEndsAt(round, new Date());
-    // Setting vote_ends_at also marks the round as announced for the
-    // voting_closed event (VotingEventHandlers), so the announcement has to
-    // happen here. A failure here leaves
-    // voting closed but unannounced; voting-results publish:true is the retry.
-    let announceNote: string;
-    try {
-      const info = await BotVotingInfo.getByRound(round);
-      if (!info) {
-        throw new Error(`No voting_info row was found for round ${round}.`);
-      }
-      await announceVotingResults(interaction.client, legacyResultsRound(info));
-      announceNote = "Results were posted in the announcements channel.";
-    } catch (err) {
-      logError("vote-admin.service.handleVoteCloseButton", err);
-      announceNote =
-        "Posting the results failed; run /admin voting-results publish:true to retry.\n" +
-        extractErrorMessage(err);
+    // Re-read: the confirmation can be clicked after the round closed on its
+    // own, and moving the close of an ended round would rewrite its history.
+    const current = await VotingRounds.getByRound(round);
+    if (!current?.votingOpen) {
+      await safeUpdate(
+        interaction,
+        buildUpdateText(`Voting for Round ${round} is not open, so there is nothing to close.`),
+      );
+      return;
     }
+    await VotingRounds.reschedule(round, { votingClosesAt: new Date() });
     await safeUpdate(
       interaction,
-      buildUpdateText(`🔒 Voting for Round ${round} is now closed. ${announceNote}`),
+      buildUpdateText(`🔒 Voting for Round ${round} is now closed. ${RESULTS_POST_NOTE}`),
     );
   }, "Could not close voting");
 }
@@ -455,13 +374,11 @@ export async function handleVotingResults(
   }
   await withErrorReply(interaction, async () => {
     let round = roundInput;
+    let current: IVotingRound | null = null;
     if (round == null) {
-      const current = await BotVotingInfo.getCurrentRound();
+      current = await VotingRounds.getCurrent();
       if (!current) {
-        await safeReply(
-          interaction,
-          buildTextReply("No voting round information is available.", true),
-        );
+        await safeReply(interaction, buildTextReply(NO_VOTING_ROUND_SCHEDULED, true));
         return;
       }
       round = current.roundNumber;
@@ -471,29 +388,42 @@ export async function handleVotingResults(
       return;
     }
 
-    const info = await BotVotingInfo.getByRound(round);
+    const info = current ?? (await VotingRounds.getByRound(round));
     // Tallies are hidden from everyone (admins included) until voting ends.
-    const stillOpen = Boolean(info?.votingOpen) && !isRoundDecided(round);
+    const stillOpen = !isRoundTallyRevealed(
+      round,
+      info,
+      info ? null : await VotingRounds.getCurrent(),
+    );
 
     if (publish) {
-      if (stillOpen || !info) {
+      if (stillOpen) {
         await safeReply(
           interaction,
           buildTextReply(
-            stillOpen
-              ? `Voting for Round ${round} is still open; results cannot be published yet.`
-              : `No voting_info row was found for Round ${round}; nothing to publish.`,
+            `Voting for Round ${round} has not ended; results cannot be published yet.`,
             true,
           ),
         );
         return;
       }
+      // Rounds from before the API tracked the lifecycle have no row, so their
+      // month comes from the recorded GOTM round instead.
+      const monthLabel = info?.monthYear ?? Gotm.getByRound(round)[0]?.monthYear;
+      if (!monthLabel) {
+        await safeReply(
+          interaction,
+          buildTextReply(`No voting round or GOTM entry exists for Round ${round}.`, true),
+        );
+        return;
+      }
       // A channel override makes this a rehearsal: banner added, no winner thread.
       const rehearsal = Boolean(channelOverrideId);
-      await announceVotingResults(interaction.client, legacyResultsRound(info), {
-        channelIdOverride: channelOverrideId,
-        rehearsal,
-      });
+      await announceVotingResults(
+        interaction.client,
+        { roundNumber: round, monthLabel },
+        { channelIdOverride: channelOverrideId, rehearsal },
+      );
       const targetChannelId = channelOverrideId ?? ANNOUNCEMENT_CHANNEL_ID;
       await safeReply(
         interaction,
@@ -525,7 +455,7 @@ export async function handleVotingResults(
             kindLabel,
             roundNumber: round,
             totalVotes: sumTallyVotes(tally.rows),
-            voteDeadline: info?.voteDeadline ?? null,
+            voteDeadline: info?.votingClosesAt ?? null,
           }),
         );
         continue;
@@ -537,7 +467,7 @@ export async function handleVotingResults(
           rows: mergeTallyWithNominations(tally.rows, nominations),
           cap: tally.cap,
           votingOpen: false,
-          voteDeadline: info?.voteDeadline ?? null,
+          voteDeadline: info?.votingClosesAt ?? null,
         }),
       );
     }

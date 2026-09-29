@@ -13,7 +13,6 @@ export type AdminHelpTopicId =
   | "voting-close"
   | "voting-results"
   | "votes-reset"
-  | "nextround-setup"
   | "sync";
 
 export type AdminHelpTopic = {
@@ -29,11 +28,6 @@ export type PromptChoiceOption = {
   label: string;
   value: string;
   style?: ButtonStyle;
-};
-
-export type WizardAction = {
-  description: string;
-  execute: () => Promise<void>;
 };
 
 export const VOTING_TITLE_MAX_LEN = 38;
