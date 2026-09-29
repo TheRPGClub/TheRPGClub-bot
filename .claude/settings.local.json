@@ -47,7 +47,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "file=$(echo '$CLAUDE_TOOL_INPUT' | jq -r '.file_path // \"\"'); base=$(basename \"$file\" .ts); test_file=$(find src/tests -name \"${base}.test.ts\" 2>/dev/null | head -1); [ -n \"$test_file\" ] && node --no-warnings=ExperimentalWarning --loader ts-node/esm --test \"$test_file\" 2>&1 | tail -10 || true",
+            "command": "file=$(echo '$CLAUDE_TOOL_INPUT' | jq -r '.file_path // \"\"'); base=$(basename \"$file\" .ts); test_file=$(find src/tests -name \"${base}.test.ts\" 2>/dev/null | head -1); [ -n \"$test_file\" ] && node --no-warnings=ExperimentalWarning --import tsx --test \"$test_file\" 2>&1 | tail -10 || true",
             "statusMessage": "Running related tests..."
           }
         ]

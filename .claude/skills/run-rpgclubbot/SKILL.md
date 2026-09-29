@@ -41,7 +41,7 @@ bash .claude/skills/run-rpgclubbot/smoke.sh --invoke \
   "import { buildTextContainer } from './src/functions/ComponentsV2Utils.js'; console.log(JSON.stringify(buildTextContainer('test').toJSON()));"
 ```
 
-Uses `node --no-warnings=ExperimentalWarning --loader ./scripts/ts-node/transpile-only.mjs -e <snippet>`. Import paths must use `.js` extensions (ESM). Only modules that don't touch Oracle or Discord can be invoked this way.
+Uses `node --no-warnings=ExperimentalWarning --import tsx -e <snippet>`. Import paths must use `.js` extensions (ESM). Only modules that don't touch Oracle or Discord can be invoked this way.
 
 ### Type-check only
 
@@ -84,7 +84,7 @@ This is expected in the dev container. The bot is not the primary verification p
 
 ## Gotchas
 
-- **`.js` extensions required in `--invoke` imports.** TypeScript source files are loaded via ts-node ESM, but imports still need `.js` not `.ts`.
+- **`.js` extensions required in `--invoke` imports.** TypeScript source files are loaded via tsx, but imports still need `.js` not `.ts`.
 - **`dotenv/config` is auto-loaded** by the entrypoint but not by individual modules. If a module you're invoking reads `process.env`, values from `.env` won't be present unless you `import 'dotenv/config'` first in the snippet.
 - **Oracle crashes immediately** on `npm run dev` in this container — port 1521 is not running. This is normal; it only runs on the desktop.
 - **Test log noise is expected.** Lines like `{"context":"IgdbService","error":"IGDB_CLIENT_ID or IGDB_CLIENT_SECRET not configured"}` appear during tests and are not failures.
