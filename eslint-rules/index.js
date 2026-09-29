@@ -95,16 +95,19 @@ const URL_RESULT_WRAPPER_TYPES = new Set([
   "AwaitExpression",
   "ChainExpression",
   "TSAsExpression",
+  "TSSatisfiesExpression",
+  "TSTypeAssertion",
   "TSNonNullExpression",
   "ParenthesizedExpression",
 ]);
 
-// Splits camelCase, PascalCase, and snake_case names into lowercase words, so `feedUrl` and
-// `IMAGE_URL` match while `security` or `during` do not.
+// Splits camelCase, PascalCase, and snake_case names into lowercase words, so `feedUrl`,
+// `IMAGE_URL`, and `feedURLs` match while `security` or `during` do not. The lookahead keeps
+// a plural acronym such as `URLs` whole instead of splitting it into `UR` and `Ls`.
 function isUrlLikeName(name) {
   const words = name
     .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
-    .replace(/([A-Z]+)([A-Z][a-z])/g, "$1 $2")
+    .replace(/([A-Z]+)([A-Z](?!s(?:[A-Z_$]|$))[a-z])/g, "$1 $2")
     .split(/[\s_$]+/)
     .filter(Boolean);
   return words.some((word) => URL_NAME_WORDS.has(word.toLowerCase()));
@@ -114,15 +117,16 @@ function getTrailingName(node) {
   if (!node) return null;
   if (node.type === "Identifier") return node.name;
   if (node.type === "ChainExpression") return getTrailingName(node.expression);
-  if (node.type === "MemberExpression" && !node.computed) return getTrailingName(node.property);
-  if (node.type === "Literal" && typeof node.value === "string") return node.value;
+  if (node.type === "PrivateIdentifier") return node.name;
+  if (node.type === "MemberExpression") {
+    return node.computed ? getLiteralString(node.property) : getTrailingName(node.property);
+  }
   return null;
 }
 
 function getFreeTextSanitizerName(callee) {
-  const name = callee.type === "MemberExpression" && !callee.computed
-    ? getTrailingName(callee.property)
-    : getTrailingName(callee);
+  if (callee.type === "MemberExpression" && callee.computed) return null;
+  const name = getCalledFunctionName(callee);
   return name && FREE_TEXT_SANITIZER_NAMES.has(name) ? name : null;
 }
 
@@ -141,8 +145,12 @@ function getSanitizedResultTargetName(callNode) {
   if (parent.type === "AssignmentExpression" && parent.right === child) {
     return getTrailingName(parent.left);
   }
-  if (parent.type === "Property" && parent.value === child && !parent.computed) {
-    return getTrailingName(parent.key);
+  if (parent.type === "AssignmentPattern" && parent.right === child) {
+    return getTrailingName(parent.left);
+  }
+  const isKeyedValue = parent.type === "Property" || parent.type === "PropertyDefinition";
+  if (isKeyedValue && parent.value === child && !parent.computed) {
+    return getPropertyName(parent.key) ?? getTrailingName(parent.key);
   }
   return null;
 }
