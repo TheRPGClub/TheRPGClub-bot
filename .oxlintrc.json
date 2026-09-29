@@ -1,0 +1,202 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": [
+    "eslint",
+    "typescript"
+  ],
+  "jsPlugins": [
+    {
+      "name": "local",
+      "specifier": "./eslint-rules/index.js"
+    },
+    {
+      "name": "stylistic",
+      "specifier": "@stylistic/eslint-plugin"
+    }
+  ],
+  "categories": {
+    "correctness": "off"
+  },
+  "ignorePatterns": [
+    "build/**",
+    ".claude/worktrees/**",
+    "**/*.config.ts",
+    "*.reference.ts"
+  ],
+  "overrides": [
+    {
+      "files": [
+        "src/**/*.ts"
+      ],
+      "rules": {
+        "@typescript-eslint/ban-ts-comment": "error",
+        "@typescript-eslint/no-duplicate-enum-values": "error",
+        "@typescript-eslint/no-empty-object-type": "error",
+        "@typescript-eslint/no-extra-non-null-assertion": "error",
+        "@typescript-eslint/no-misused-new": "error",
+        "@typescript-eslint/no-namespace": "error",
+        "@typescript-eslint/no-non-null-asserted-optional-chain": "error",
+        "@typescript-eslint/no-require-imports": "error",
+        "@typescript-eslint/no-this-alias": "error",
+        "@typescript-eslint/no-unnecessary-type-constraint": "error",
+        "@typescript-eslint/no-unsafe-declaration-merging": "error",
+        "@typescript-eslint/no-unsafe-function-type": "error",
+        "@typescript-eslint/no-wrapper-object-types": "error",
+        "@typescript-eslint/prefer-as-const": "error",
+        "@typescript-eslint/prefer-namespace-keyword": "error",
+        "@typescript-eslint/triple-slash-reference": "error",
+        "for-direction": "error",
+        "no-array-constructor": "error",
+        "no-async-promise-executor": "error",
+        "no-case-declarations": "error",
+        "no-compare-neg-zero": "error",
+        "no-cond-assign": "error",
+        "no-constant-binary-expression": "error",
+        "no-constant-condition": "error",
+        "no-control-regex": "error",
+        "no-debugger": "error",
+        "no-delete-var": "error",
+        "no-dupe-else-if": "error",
+        "no-duplicate-case": "error",
+        "no-empty": "error",
+        "no-empty-character-class": "error",
+        "no-empty-pattern": "error",
+        "no-empty-static-block": "error",
+        "no-ex-assign": "error",
+        "no-extra-boolean-cast": "error",
+        "no-fallthrough": "error",
+        "no-global-assign": "error",
+        "no-invalid-regexp": "error",
+        "no-irregular-whitespace": "error",
+        "no-loss-of-precision": "error",
+        "no-misleading-character-class": "error",
+        "no-nonoctal-decimal-escape": "error",
+        "no-prototype-builtins": "error",
+        "no-regex-spaces": "error",
+        "no-restricted-properties": [
+          "error",
+          {
+            "property": "goto",
+            "message": "Please use gotoAndCheckUrl instead of page.goto"
+          },
+          {
+            "property": "waitForURL",
+            "message": "Please use gotoAndCheckUrl instead of page.waitForURL"
+          }
+        ],
+        "no-self-assign": "error",
+        "no-shadow-restricted-names": "error",
+        "no-sparse-arrays": "error",
+        "no-unassigned-vars": "error",
+        "no-unexpected-multiline": "error",
+        "no-unsafe-finally": "error",
+        "no-unsafe-optional-chaining": "error",
+        "no-unused-expressions": "error",
+        "no-unused-labels": "error",
+        "no-unused-private-class-members": "error",
+        "no-unused-vars": "error",
+        "no-useless-assignment": "warn",
+        "no-useless-backreference": "error",
+        "no-useless-catch": "error",
+        "no-useless-escape": "error",
+        "no-var": "error",
+        "prefer-const": "error",
+        "prefer-rest-params": "error",
+        "prefer-spread": "error",
+        "preserve-caught-error": "warn",
+        "require-yield": "error",
+        "use-isnan": "error",
+        "valid-typeof": "error",
+        "local/no-djs-button-in-v2-accessory": "error",
+        "local/no-discordjs-modalbuilder-for-new-modal-components": "error",
+        "local/prefer-safe-interaction-methods": "warn",
+        "local/no-direct-interaction-response-methods": "error",
+        "local/no-deprecated-interaction-options": "error",
+        "local/no-silent-interaction-update-catch": "error",
+        "local/component-update-requires-safe-defer": "warn",
+        "local/interactive-handler-requires-safe-interaction": "error",
+        "local/no-igdb-session-callback-unsafe-response": "error",
+        "local/igdb-session-id-built-centrally": "error",
+        "local/no-content-with-components-v2": "error",
+        "local/no-empty-catch-on-interaction-response": "warn",
+        "local/no-edit-reply-on-modal-union": "error",
+        "local/require-relative-import-js-extension": "error",
+        "local/slash-options-required-first": "error",
+        "local/no-unused-imports-vars-local": "error",
+        "local/no-unused-functions": "error",
+        "local/no-build-folder-edits": "error",
+        "local/attachment-builder-asset-path": "error",
+        "local/no-emdash": "error",
+        "local/channel-id-constants-in-channels-config": "error",
+        "local/user-id-constants-in-users-config": "error",
+        "local/tag-id-constants-in-tags-config": "error",
+        "local/message-flag-id-constants-in-tags-config": "error",
+        "local/no-raw-snowflake-literals": "error",
+        "local/stable-custom-id": "error",
+        "local/no-duplicate-literal-custom-id-in-block": "error",
+        "local/no-duplicate-computable-custom-id-in-row": "error",
+        "local/components-v2-structure": "error",
+        "local/require-safe-v2-text-content": "warn",
+        "local/no-components-v2-with-content": "error",
+        "local/require-components-v2-flag-with-v2-components": "error",
+        "local/dynamic-components-require-chunking": "error",
+        "local/section-builder-requires-accessory": "error",
+        "local/no-plain-text-v1-reply": "error",
+        "local/custom-id-has-matching-handler": "error",
+        "local/custom-id-builder-matches-handler": "error",
+        "local/split-long-import": "error",
+        "local/entry-id-from-api-entry-id": "error",
+        "local/escape-masked-link-text": "error",
+        "stylistic/semi": "error",
+        "stylistic/comma-dangle": [
+          "error",
+          "always-multiline"
+        ],
+        "stylistic/max-len": [
+          "error",
+          {
+            "code": 100,
+            "ignoreUrls": true,
+            "ignoreStrings": true,
+            "ignoreTemplateLiterals": true,
+            "ignoreComments": true
+          }
+        ],
+        "stylistic/no-multiple-empty-lines": [
+          "error",
+          {
+            "max": 1
+          }
+        ],
+        "stylistic/spaced-comment": [
+          "error",
+          "always",
+          {
+            "line": {
+              "markers": [
+                "/"
+              ]
+            },
+            "block": {
+              "markers": [
+                "!"
+              ],
+              "exceptions": [
+                "*"
+              ],
+              "balanced": true
+            }
+          }
+        ]
+      }
+    },
+    {
+      "files": [
+        "eslint-rules/**/*.js"
+      ],
+      "rules": {
+        "local/no-deprecated-eslint-context-methods": "error"
+      }
+    }
+  ]
+}
