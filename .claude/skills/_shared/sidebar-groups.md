@@ -32,8 +32,8 @@ other session asks the user first, so it is never done unasked.
   branch is cut for it): `Working`.
 - A dependency is still open and the skill stops on it: `Blocked`. See the
   next section.
-- Pull request opened, draft or not, and the turn ends waiting on the user:
-  `Needs Review`. This holds for every pull request the session opens,
+- Pull request opened, draft or not, its self review loop finished clean with
+  CI green, and the turn ends waiting on the user: `Needs Review`. This holds for every pull request the session opens,
   including one opened on the side of a longer task, and it holds while that
   longer task is still going only once the task has nothing left to do
   without the user.
@@ -48,8 +48,9 @@ other session asks the user first, so it is never done unasked.
   the user asked for, a follow-up branch) moves back to `Working` first.
 - The turn ends on a question only the user can answer: `Needs Review`.
 - The user answers, review comments come in to act on, or CI fails on the
-  session's pull request: `Working`. Once the fix is pushed and the turn ends
-  waiting on the user again: `Needs Review`.
+  session's pull request: `Working`. Once the fix is pushed, back through the
+  self review loop in `Self Review`, and to `Needs Review` only when it ends
+  clean with CI green.
 - The pull request merged or closed without merging (`wait` printing
   `pr: <number> merged` or `pr: <number> closed`, a CI monitor event from the desktop app, or the user
   saying so): pick the group by what the session

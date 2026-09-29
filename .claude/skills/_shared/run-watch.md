@@ -85,8 +85,8 @@ foreground, with the Bash tool's maximum timeout, instead of in the background.
 It returns as soon as any row finishes; run it again until the head's run is the
 one that finished. This is the only foreground `wait`, and it keeps the
 one-watcher rule: stop a background `wait` already running on the ledger
-(TaskStop) before starting it. When the loop ends, start
-the usual background `wait` for the pull request's merge and end the turn.
+(TaskStop) before starting it. When the loop ends, start the usual background
+`wait` for the pull request's merge and end the turn.
 
 ## Waiting on a blocking issue
 

@@ -86,8 +86,8 @@ A finding that holds but whose fix is the user's call, such as a scope line the
 issue does not draw, is put to the user per
 [asking-the-user.md](asking-the-user.md) rather than guessed at. The session
 sits in `Needs Review` while the question is open, the one case where the turn
-ends mid-loop, goes back to `Self Review`
-with the answer, applies it, and carries on with the loop.
+ends mid-loop. It goes back to `Self Review` with the answer, applies it, and
+carries on with the loop.
 
 The findings never go up as review comments on the pull request. Comments are
 the user's review.
@@ -110,7 +110,8 @@ gh api -X PATCH repos/{owner}/{repo}/pulls/<pr-number> -F body=@<scratchpad>/pr-
 
 Commits pushed after the handoff, for the user's review comments or anything
 else, send the pull request back through the loop, starting with a full pass
-once CI is green, in `Self Review`.
+right after the push, in `Self Review`. As on the first run, CI gates only the
+end of the loop.
 
 ## When it ends
 
