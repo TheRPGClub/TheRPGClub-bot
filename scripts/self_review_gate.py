@@ -205,10 +205,15 @@ def on_findings(state, payload):
 def group_names():
     """Group names by id, from the cache enforce_sidebar_move.py keeps from list_groups
     results, so the two hooks never disagree about which id is which group. Imported here,
-    not at the top, so a problem in that script can only affect the sidebar event."""
+    not at the top, so a problem in that script can only affect the sidebar event. When the
+    cache cannot be read, no id is known, and on_sidebar denies the move while a loop is
+    unfinished instead of letting it through."""
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-    from enforce_sidebar_move import load_cache
-    return load_cache()
+    try:
+        from enforce_sidebar_move import load_cache
+        return load_cache()
+    except Exception:  # noqa: BLE001 - any failure here must fail closed
+        return {}
 
 
 def read_all(urls):

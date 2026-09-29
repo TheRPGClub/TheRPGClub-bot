@@ -161,6 +161,19 @@ class GateTest(unittest.TestCase):
         review(state, 0)
         self.assertIsNone(gate.on_sidebar(state, move))
 
+    def test_unreadable_group_cache_fails_closed(self):
+        state = fresh()
+        state['prs'] = [URL]
+        mock.patch.object(gate, 'group_names', return_value={}).start()
+        move = {'tool_input': {'group_id': 'g-needs', 'session_ids': ['self']}}
+        denied = gate.on_sidebar(state, move)['hookSpecificOutput']
+        self.assertEqual(denied['permissionDecision'], 'deny')
+
+    def test_group_names_swallows_import_errors(self):
+        mock.patch.stopall()
+        with mock.patch.dict(sys.modules, {'enforce_sidebar_move': None}):
+            self.assertEqual(gate.group_names(), {})
+
     def test_review_target_forms(self):
         self.assertEqual(gate.review_target(f'high {URL}'), URL)
         with mock.patch.object(gate, 'gh', return_value=URL + '\n') as gh:
