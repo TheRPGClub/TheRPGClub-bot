@@ -811,8 +811,8 @@ class Push:
 def settle_notices(path, push, acted):
     """Read new events, then settle open pull request and issue rows from their close notices.
 
-    These cost no API call, so wait runs this before and after every read it makes rather
-    than leaving a notice queued behind one. True if a forwarder connected.
+    These cost no API call, so wait runs this before and after each check and each round of
+    row reads rather than leaving a notice queued behind them. True if a forwarder connected.
     """
     connected = push.read()
     for row in read_ledger(path):
