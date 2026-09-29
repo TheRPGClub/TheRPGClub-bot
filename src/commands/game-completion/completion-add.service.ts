@@ -21,7 +21,21 @@ import {
 } from "../../functions/InteractionUtils.js";
 import { formatDiscordTimestamp, formatPlaytimeHours } from "../../functions/DateFormatUtils.js";
 import { igdbService } from "../../services/IGDB/IgdbService.js";
-import { createIgdbSession, type IgdbSelectOption } from "../../services/IGDB/IgdbSelectService.js";
+import {
+  createResumableIgdbSession,
+  registerIgdbSelectFlow,
+  type IgdbSelectOption,
+} from "../../services/IGDB/IgdbSelectService.js";
+import {
+  persistedSessionStore,
+  persistSessionInBackground,
+  removePersistedSession,
+  type PersistedSessionLocation,
+} from "../../services/PersistedInteractionSessionStore.js";
+import {
+  completionAddContextFromJson,
+  completionAddContextToJson,
+} from "./completion-add-context.codec.js";
 import { resolveNowPlayingRemoval } from "./completion-helpers.js";
 import { promptCompletionPlatformSelection } from "./completion-platform.service.js";
 import { completionAddSessions, type CompletionAddContext } from "./completion.types.js";
@@ -46,14 +60,78 @@ import { assertCustomIdSegments, parseCustomIdSegments } from "../../utilities/C
 import GameSearchService from "../../classes/GameSearchService.js";
 
 const IGDB_IMPORT_FAILED_STATUS = "Import failed. See the error below.";
+const COMPLETION_ADD_PERSISTED_KIND = "completion-add";
+const completionAddRowIds = new Map<string, Promise<string | null>>();
+
+// Registered at module load so a pick after a bot restart finds the handler.
+const completionAddIgdbFlow = registerIgdbSelectFlow<CompletionAddContext>({
+  key: "completion-add",
+  toJson: completionAddContextToJson,
+  fromJson: completionAddContextFromJson,
+  onSelect: async (sel, gameId, ctx) => {
+    if (!sel.deferred && !sel.replied) {
+      await safeDeferUpdate(sel);
+    }
+    await safeEditReply(sel, {
+      components: [buildTextContainer("Importing game details from IGDB...")],
+      flags: buildComponentsV2EditFlags(),
+    });
+
+    // Reuse the GameDB selection path so IGDB picks get the same error reporting.
+    await processCompletionSelection(sel, `igdb:${gameId}`, ctx);
+  },
+});
+
+function toSessionLocation(
+  interaction: CommandInteraction | StringSelectMenuInteraction | ButtonInteraction,
+): PersistedSessionLocation {
+  return { channelId: interaction.channelId, guildId: interaction.guildId };
+}
 
 /**
- * Creates a completion session and returns the session ID
+ * Creates a completion session and returns the session ID. The context is also
+ * persisted so the GameDB select still works after a bot restart.
  */
-export function createCompletionSession(ctx: CompletionAddContext): string {
+export function createCompletionSession(
+  ctx: CompletionAddContext,
+  location: PersistedSessionLocation,
+): string {
   const sessionId = `comp-${Date.now()}-${Math.floor(Math.random() * 100000)}`;
   completionAddSessions.set(sessionId, ctx);
+  completionAddRowIds.set(sessionId, persistSessionInBackground({
+    kind: COMPLETION_ADD_PERSISTED_KIND,
+    sessionId,
+    ownerId: ctx.userId,
+    location,
+    state: completionAddContextToJson(ctx),
+  }));
   return sessionId;
+}
+
+async function resolveCompletionAddSession(
+  sessionId: string,
+  interaction: StringSelectMenuInteraction,
+): Promise<CompletionAddContext | null> {
+  const cached = completionAddSessions.get(sessionId);
+  if (cached) return cached;
+  const record = await persistedSessionStore.load({
+    kind: COMPLETION_ADD_PERSISTED_KIND,
+    sessionId,
+    ownerId: interaction.user.id,
+    channelId: interaction.channelId,
+  });
+  if (!record) return null;
+  const ctx = completionAddContextFromJson(record.state);
+  if (!ctx) return null;
+  completionAddSessions.set(sessionId, ctx);
+  completionAddRowIds.set(sessionId, Promise.resolve(record.rowId));
+  return ctx;
+}
+
+function finishCompletionAddSession(sessionId: string): void {
+  completionAddSessions.delete(sessionId);
+  void removePersistedSession(completionAddRowIds.get(sessionId));
+  completionAddRowIds.delete(sessionId);
 }
 
 /**
@@ -66,7 +144,7 @@ export async function promptCompletionSelection(
 ): Promise<void> {
   const localResults = await GameSearchService.searchGames(searchTerm);
   if (localResults.length) {
-    const sessionId = createCompletionSession(ctx);
+    const sessionId = createCompletionSession(ctx, toSessionLocation(interaction));
     const gameOptions = localResults.map((game) => ({
       label: game.title,
       value: String(game.id),
@@ -146,22 +224,13 @@ export async function promptIgdbSelection(
     };
   });
 
-  const { components } = createIgdbSession(
-    interaction.user.id,
-    opts,
-    async (sel, gameId) => {
-      if (!sel.deferred && !sel.replied) {
-        await safeDeferUpdate(sel);
-      }
-      await safeEditReply(sel, {
-        components: [buildTextContainer("Importing game details from IGDB...")],
-        flags: buildComponentsV2EditFlags(),
-      });
-
-      // Reuse the GameDB selection path so IGDB picks get the same error reporting.
-      await processCompletionSelection(sel, `igdb:${gameId}`, ctx);
-    },
-  );
+  const { components } = createResumableIgdbSession({
+    ownerId: interaction.user.id,
+    options: opts,
+    flow: completionAddIgdbFlow,
+    context: ctx,
+    location: toSessionLocation(interaction),
+  });
 
   const content = `No GameDB match; select an IGDB result to import for "${searchTerm}".`;
   if (interaction.isMessageComponent()) {
@@ -340,7 +409,17 @@ export async function handleCompletionAddSelect(
   const segs = assertCustomIdSegments(interaction, 1);
   if (!segs) return;
   const [sessionId] = segs;
-  const ctx = completionAddSessions.get(sessionId);
+  let ctx: CompletionAddContext | null;
+  try {
+    ctx = await resolveCompletionAddSession(sessionId, interaction);
+  } catch (err: unknown) {
+    logError("CompletionAdd.resolveCompletionAddSession", err);
+    await safeReply(interaction, buildErrorReply(
+      buildApiErrorMessage("Could not restore this completion prompt.", err),
+      true,
+    ));
+    return;
+  }
 
   if (!ctx) {
     await safeReply(interaction, buildTextReply("This completion prompt has expired.", true));
@@ -360,7 +439,7 @@ export async function handleCompletionAddSelect(
   try {
     await processCompletionSelection(interaction, value, ctx);
   } finally {
-    completionAddSessions.delete(sessionId);
+    finishCompletionAddSession(sessionId);
   }
 }
 

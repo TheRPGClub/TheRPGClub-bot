@@ -6,6 +6,7 @@ import Game from "../classes/Game.js";
 import Member from "../classes/Member.js";
 import { igdbService } from "../services/IGDB/IgdbService.js";
 import { handleIgdbSelectInteraction } from "../services/IGDB/IgdbSelectService.js";
+import { persistedSessionStore } from "../services/PersistedInteractionSessionStore.js";
 import { promptIgdbSelection } from "../commands/game-completion/completion-add.service.js";
 import type { CompletionAddContext } from "../commands/game-completion/completion.types.js";
 
@@ -65,7 +66,28 @@ function findIgdbSelectId(sent: any[]): string {
   return match[1];
 }
 
+type SavedSession = Parameters<typeof persistedSessionStore.save>[0];
+
+function stubSessionStore(t: TestContext): { saved: SavedSession[]; removed: string[] } {
+  const saved: SavedSession[] = [];
+  const removed: string[] = [];
+  t.mock.method(persistedSessionStore, "save", async (params: SavedSession) => {
+    saved.push(params);
+    return "row-1";
+  });
+  t.mock.method(persistedSessionStore, "remove", async (rowId: string) => {
+    removed.push(rowId);
+  });
+  return { saved, removed };
+}
+
+function simulateBotRestart(): void {
+  const store = (globalThis as any)[Symbol.for("igdbSelectSessions")] as Map<string, unknown>;
+  store.clear();
+}
+
 async function openIgdbPrompt(t: TestContext): Promise<string> {
+  if (!(persistedSessionStore.save as any).mock) stubSessionStore(t);
   t.mock.method(igdbService, "searchGames", async () => ({
     results: [
       { id: 1, name: "Pokemon Mystery Dungeon: Gates to Infinity", summary: "" },
@@ -137,4 +159,80 @@ test("an IGDB import failure surfaces the full request and response", async (t) 
     (m: any) => /Failed to add completion/.test(JSON.stringify(m)),
   );
   assert.ok(errorReply.flags & MessageFlags.Ephemeral, "error reply must stay ephemeral");
+});
+
+test("an IGDB pick after a bot restart completes the original completion", async (t) => {
+  const { saved, removed } = stubSessionStore(t);
+  const customId = await openIgdbPrompt(t);
+  assert.equal(saved.length, 1);
+  assert.equal(saved[0].kind, "igdb-select");
+  assert.equal(saved[0].ownerId, OWNER);
+
+  simulateBotRestart();
+  const load = t.mock.method(persistedSessionStore, "load", async (params: any) => {
+    assert.equal(params.sessionId, saved[0].sessionId);
+    assert.equal(params.ownerId, OWNER);
+    return { rowId: "row-1", state: JSON.parse(JSON.stringify(saved[0].state)) };
+  });
+  const game = { id: GAME_ID, title: "Pokemon Infinity Fan Game" };
+  t.mock.method(Game, "createGame", async () => game);
+  t.mock.method(Game, "getGameById", async () => game);
+  t.mock.method(Member, "getRecentCompletionForGame", async () => null);
+  t.mock.method(Member, "getNowPlayingEntryMeta", async () => null);
+  const addCompletion = t.mock.method(Member, "addCompletion", async () => 1);
+
+  const select = selectInteraction(customId);
+  const handled = await handleIgdbSelectInteraction(select);
+
+  assert.equal(handled, true);
+  assert.equal(load.mock.callCount(), 1);
+  assert.equal(addCompletion.mock.callCount(), 1);
+  const completion: any = addCompletion.mock.calls[0].arguments[0];
+  assert.equal(completion.userId, OWNER);
+  assert.equal(completion.gameId, GAME_ID);
+  assert.equal(completion.platformId, 4);
+  assert.equal(completion.completionType, "Main Story + Side Content");
+  assert.equal(completion.finalPlaytimeHours, 10);
+  assert.equal(new Date(completion.completedAt).toISOString(), "2026-09-01T00:00:00.000Z");
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(removed, ["row-1"], "the persisted row is deleted once used");
+});
+
+test("a restart with no persisted session still replies with the expired notice", async (t) => {
+  stubSessionStore(t);
+  const customId = await openIgdbPrompt(t);
+  simulateBotRestart();
+  t.mock.method(persistedSessionStore, "load", async () => null);
+
+  const select = selectInteraction(customId);
+  const handled = await handleIgdbSelectInteraction(select);
+
+  assert.equal(handled, true);
+  assert.match(JSON.stringify(select.sent), /has expired/);
+});
+
+test("an API failure while restoring a session shows the request and response", async (t) => {
+  stubSessionStore(t);
+  const customId = await openIgdbPrompt(t);
+  simulateBotRestart();
+  const request = { method: "get", url: "/api/v1/users/1/wizard_sessions" };
+  const response: any = {
+    status: 500,
+    data: { error: "boom" },
+    headers: {},
+    statusText: "Internal Server Error",
+    config: { headers: new AxiosHeaders() },
+  };
+  t.mock.method(persistedSessionStore, "load", async () => {
+    throw new AxiosError("Request failed", "ERR_BAD_RESPONSE", request as any, null, response);
+  });
+  t.mock.method(console, "error", () => undefined);
+
+  const select = selectInteraction(customId);
+  await handleIgdbSelectInteraction(select);
+
+  const text = JSON.stringify(select.sent);
+  assert.match(text, /Could not restore this game selection/);
+  assert.match(text, /wizard_sessions/);
+  assert.match(text, /500/);
 });
