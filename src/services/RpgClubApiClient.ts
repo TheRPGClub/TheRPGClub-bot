@@ -167,8 +167,7 @@ export async function apiPost<T>(
   config?: AxiosRequestConfig,
 ): Promise<T | null> {
   try {
-    const response = await getClient().post<T>(path, body, config);
-    return response.data;
+    return await apiPostOrThrow<T>(path, body, config);
   } catch (err: unknown) {
     if (axios.isAxiosError(err) && err.response?.status === 404) {
       return null;
