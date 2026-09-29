@@ -13,8 +13,12 @@ from both repos land in the same groups. This repo uses five of them:
 - `Working`: it holds a task and is editing, reading, testing, or deciding.
 - `Self Review`: it has opened a pull request and is reviewing and fixing it
   before handing it over, per [self-review.md](self-review.md).
-- `Needs Review`: it has opened a pull request for the user, or asked the
-  user a question only they can answer.
+- `Needs Review`: nothing is left that it can do without the user. Every
+  pull request it opened has finished its self review loop clean with CI
+  green, every task the user gave it in this session is done, and no
+  background task or subagent of its own is still running. Or it asked the
+  user a question only they can answer. Anything else still in progress
+  means `Working` or `Self Review`, never `Needs Review`.
 - `Completed`: its last pull request merged, or its task ended with nothing
   left to wait on.
 
@@ -34,12 +38,14 @@ other session asks the user first, so it is never done unasked.
   longer task is still going only once the task has nothing left to do
   without the user.
 - A skill that runs a self review moves to `Self Review` when the review
-  starts, and to `Needs Review` when a pass comes back clean. The
-  `Needs Review` move for an opened pull request waits for that, with one
-  exception: a turn that ends idle between passes (fixes pushed, `wait`
-  running on the new CI run) moves to `Needs Review` too, so an idle session
-  is never left under `Self Review`. When `wait` reports the run, the session
-  goes back to `Self Review` for the next pass.
+  starts, and to `Needs Review` only when a pass comes back clean with CI
+  green on that head, and only if the session has nothing else in progress.
+  There is no exception for waiting on CI: the loop waits for CI in the
+  foreground, per [self-review.md](self-review.md#the-loop), and never ends
+  the turn mid-loop.
+- Before ending any turn, check the group against the definitions above. A
+  session doing more work after its pull request is handed over (another task
+  the user asked for, a follow-up branch) moves back to `Working` first.
 - The turn ends on a question only the user can answer: `Needs Review`.
 - The user answers, review comments come in to act on, or CI fails on the
   session's pull request: `Working`. Once the fix is pushed and the turn ends
