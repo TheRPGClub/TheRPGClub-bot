@@ -4,6 +4,7 @@ import {
   apiGet,
   apiGetRaw,
   apiPost,
+  apiPostOrThrow,
   apiPatch,
   apiPostForm,
   type ApiGetRawMeta,
@@ -23,11 +24,18 @@ import GameSearchService from "./GameSearchService.js";
 
 export default class Game {
   static async createGame(igdbId: number): Promise<IGame> {
-    const result = await apiPost<{ data: { game_id: number } }>(
-      "/api/v1/games",
-      { igdb_id: igdbId },
-    );
-    if (!result) throw new Error("No IGDB game found with that id.");
+    let result: { data: { game_id: number } };
+    try {
+      result = await apiPostOrThrow<{ data: { game_id: number } }>(
+        "/api/v1/games",
+        { igdb_id: igdbId },
+      );
+    } catch (err: unknown) {
+      if (axios.isAxiosError(err) && err.response?.status === 404) {
+        throw new Error("No IGDB game found with that id.", { cause: err });
+      }
+      throw err;
+    }
     const newGame = await Game.getGameById(result.data.game_id);
     if (!newGame) throw new Error("Failed to fetch newly created game.");
     void GameSearchService.refreshGameTitleCache();

@@ -192,6 +192,37 @@ test("an IGDB import failure surfaces the full request and response", async (t) 
   assert.ok(errorReply.flags & MessageFlags.Ephemeral, "error reply must stay ephemeral");
 });
 
+test("an IGDB import 404 surfaces the full request and response", async (t) => {
+  const customId = await openIgdbPrompt(t);
+  const request = { method: "post", url: "/api/v1/games", data: `{"igdb_id":${IGDB_ID}}` };
+  const response: any = {
+    status: 404,
+    data: { error: "IGDB game not found" },
+    headers: {},
+    statusText: "Not Found",
+    config: { headers: new AxiosHeaders() },
+  };
+  t.mock.method(Game, "createGame", async () => {
+    const cause = new AxiosError(
+      "Request failed", "ERR_BAD_REQUEST", request as any, null, response,
+    );
+    throw new Error("No IGDB game found with that id.", { cause });
+  });
+  t.mock.method(console, "error", () => undefined);
+
+  const select = selectInteraction(customId);
+  await handleIgdbSelectInteraction(select);
+
+  const text = JSON.stringify(select.sent);
+  assert.match(text, /Failed to add completion/);
+  assert.match(text, /No IGDB game found with that id/);
+  assert.match(text, /Request:/);
+  assert.match(text, /igdb_id/);
+  assert.match(text, /Response:/);
+  assert.match(text, /404/);
+  assert.match(text, /IGDB game not found/);
+});
+
 test("an IGDB pick after a bot restart completes the original completion", async (t) => {
   const { saved, removed } = stubSessionStore(t);
   const customId = await openIgdbPrompt(t);

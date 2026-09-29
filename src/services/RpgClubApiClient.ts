@@ -167,14 +167,26 @@ export async function apiPost<T>(
   config?: AxiosRequestConfig,
 ): Promise<T | null> {
   try {
-    const response = await getClient().post<T>(path, body, config);
-    return response.data;
+    return await apiPostOrThrow<T>(path, body, config);
   } catch (err: unknown) {
     if (axios.isAxiosError(err) && err.response?.status === 404) {
       return null;
     }
     throw err;
   }
+}
+
+/**
+ * POST to a resource and throw the `AxiosError` for every non-2xx response,
+ * 404 included, so callers can report the full request and response.
+ */
+export async function apiPostOrThrow<T>(
+  path: string,
+  body?: unknown,
+  config?: AxiosRequestConfig,
+): Promise<T> {
+  const response = await getClient().post<T>(path, body, config);
+  return response.data;
 }
 
 /**
