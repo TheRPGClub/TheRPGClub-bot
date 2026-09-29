@@ -1,10 +1,12 @@
 ---
 name: new-lint-rule
-description: Scaffold a new custom ESLint rule: add it to eslint-rules/index.js, register it in eslint.config.ts, and verify it loads. Use when asked to "create a lint rule", "new eslint rule", or "scaffold lint rule".
+description: Scaffold a new custom lint rule: add it to eslint-rules/index.js, register it in .oxlintrc.json, and verify it loads. Use when asked to "create a lint rule", "new eslint rule", or "scaffold lint rule".
 ---
 
-This skill scaffolds a new custom ESLint rule for this project. All custom rules live in a single
-file (`eslint-rules/index.js`) and are registered in `eslint.config.ts`.
+This skill scaffolds a new custom lint rule for this project. The repo lints with Oxlint, which
+loads `eslint-rules/index.js` as a JS plugin named `local`. Rules use the ESLint rule API, which
+Oxlint's JS plugins implement. All custom rules live in that single file and are registered in
+`.oxlintrc.json`.
 
 ## Arguments
 
@@ -73,15 +75,15 @@ now instead of leaving the TODO comment. Common patterns in this codebase:
 - Checking `CallExpression` callee names or method chains
 - Checking `Literal` node values
 - Checking `VariableDeclarator` identifiers by name suffix
-- Using `context.getFilename()` to restrict rules to specific files
+- Using `context.filename` to restrict rules to specific files
 
-### 3. Register the rule in `eslint.config.ts`
+### 3. Register the rule in `.oxlintrc.json`
 
-Add a new line to the `rules` block inside the `{ files: ["src/**/*.ts"] }` config object.
-Insert it after the last `"local/..."` entry, before the closing `},` of the rules object.
+Add a new line to the `rules` object of the `overrides` entry whose `files` is
+`["src/**/*.ts"]`. Insert it after the last `"local/..."` entry.
 
 ```
-      "local/RULE_NAME": "error",
+        "local/RULE_NAME": "error",
 ```
 
 Use `"warn"` instead of `"error"` only if the rule is advisory (`type: "suggestion"`).
@@ -95,7 +97,7 @@ npm run lint
 The lint run may report new violations if the scaffolded rule already matches something in the
 codebase -- that is expected and correct. What must NOT happen:
 
-- A parse error or `Definition for rule 'local/RULE_NAME' was not found` error
+- A config error saying the rule `local/RULE_NAME` was not found
 - Any syntax error in `eslint-rules/index.js`
 
 If lint fails with a rule-load error, check the JSON structure around the new rule entry
@@ -114,8 +116,7 @@ Tell the user:
 
 - Do NOT create a new file -- all rules go in `eslint-rules/index.js`.
 - Do NOT use TypeScript syntax in `eslint-rules/index.js` -- it is plain JavaScript.
-- Do NOT add the rule under the `{ files: ["**/*.ts"] }` config block at the bottom of
-  `eslint.config.ts` -- use the `{ files: ["src/**/*.ts"] }` block that already has the
-  `local` plugin registered.
+- Do NOT add the rule to the top-level `rules` object of `.oxlintrc.json` -- use the
+  `src/**/*.ts` override, so the rule does not run on `eslint-rules/` or scripts.
 - Do NOT forget the trailing comma after the new rule entry in the `rules` object.
 - Do NOT skip step 4 -- a structurally invalid rule will silently break all lint output.

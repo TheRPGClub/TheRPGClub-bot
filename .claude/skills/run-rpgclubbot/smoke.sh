@@ -34,7 +34,7 @@ run_tsc() {
 
 run_lint() {
   echo "=== lint ==="
-  npx eslint
+  npx oxlint
   echo "OK"
 }
 
