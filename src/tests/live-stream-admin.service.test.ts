@@ -151,3 +151,20 @@ test("parseLiveStreamModalInput strips invisible characters pasted into the imag
     assert.equal(parsed.value.imageUrl, "https://example.com/key_art.png");
   }
 });
+
+test("parseLiveStreamModalInput treats an invisible-only image url as absent", () => {
+  for (const imageUrl of ["\u200b", "<>"]) {
+    const parsed = parseLiveStreamModalInput({
+      end: "2026-05-01 23:30",
+      imageUrl,
+      start: "2026-05-01 21:30",
+      timeZone: "America/New_York",
+      topic: "Nintendo Direct",
+    });
+
+    assert.equal(parsed.ok, true);
+    if (parsed.ok) {
+      assert.equal(parsed.value.imageUrl, undefined);
+    }
+  }
+});
