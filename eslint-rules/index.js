@@ -3768,5 +3768,38 @@ export default {
         };
       },
     },
+    "no-decorated-method-named-like-class": {
+      meta: {
+        type: "problem",
+        docs: {
+          description:
+            "Ban a method named like its class when the class is decorated. TypeScript 7 " +
+            "renames the method to `<name>_1` but `__decorate` keeps the original key.",
+        },
+        schema: [],
+        messages: {
+          methodNamedLikeClass:
+            "Method '{{name}}' shares its decorated class's name, so TypeScript 7 emits it as " +
+            "'{{name}}_1' and discordx wires a null handler. Rename the method and pin the " +
+            "command name in the decorator, e.g. `@Slash({ name: \"{{name}}\" })`.",
+        },
+      },
+      create(context) {
+        return {
+          ClassDeclaration(node) {
+            if (!node.id || !node.decorators?.length) return;
+            for (const member of node.body.body) {
+              if (member.type !== "MethodDefinition" || member.computed) continue;
+              if (member.key.type !== "Identifier" || member.key.name !== node.id.name) continue;
+              context.report({
+                node: member.key,
+                messageId: "methodNamedLikeClass",
+                data: { name: node.id.name },
+              });
+            }
+          },
+        };
+      },
+    },
   },
 };

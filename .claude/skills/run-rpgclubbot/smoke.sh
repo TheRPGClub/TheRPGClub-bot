@@ -4,7 +4,7 @@
 #
 # With no args: runs type-check, then lint, then tests (one stage at a time).
 # With a stage name: runs only that stage.
-# With --invoke: runs a one-liner eval through ts-node for quick module probing.
+# With --invoke: runs a one-liner eval through tsx for quick module probing.
 #
 # Examples:
 #   bash .claude/skills/run-rpgclubbot/smoke.sh
@@ -17,7 +17,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/../../.."
 
-NODE_OPTS="--no-warnings=ExperimentalWarning --loader ts-node/esm/transpile-only"
+NODE_OPTS="--no-warnings=ExperimentalWarning --import tsx"
 
 if [[ "${1:-}" == "--invoke" ]]; then
   shift

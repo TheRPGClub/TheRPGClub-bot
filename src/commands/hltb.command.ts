@@ -57,8 +57,8 @@ async function autocompleteHltbTitle(
 
 @Discord()
 export class hltb {
-  @Slash({ description: "How Long to Beat™ Search" })
-  async hltb(
+  @Slash({ name: "hltb", description: "How Long to Beat™ Search" })
+  async execute(
     @SlashOption({
       description: "Game title (autocomplete from GameDB)",
       name: "title",

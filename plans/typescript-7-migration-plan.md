@@ -1,5 +1,9 @@
 # TypeScript 7.0 Migration Plan
 
+Status: superseded by #1109. ESLint left the repo in #1174, so `typescript` moved straight to 7.x.
+ts-node was replaced by tsx, which needs no TypeScript JS API. Phase 0 shipped with it: `/hltb`
+was renamed and `local/no-decorated-method-named-like-class` guards the emit bug.
+
 All findings below were verified empirically against this repo using GA `typescript@7.0.2`,
 not inferred from release notes.
 

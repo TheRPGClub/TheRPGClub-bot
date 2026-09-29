@@ -99,7 +99,7 @@ run touching them.
 
 ## Useful Scripts
 
-- `npm run dev` - Run the bot with ts-node.
+- `npm run dev` - Run the bot with tsx.
 - `npm run build` - Build the TypeScript output.
 - `npm run compile` - Type check without emitting.
 - `npm run lint` - Run Oxlint.
