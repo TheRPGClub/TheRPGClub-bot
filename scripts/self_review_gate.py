@@ -12,6 +12,9 @@ request's current head. A pull request that gets a new commit needs a new one.
 Events:
   pr-opened  PostToolUse on Bash. Tracks a pull request `gh pr create` opened.
   review     PostToolUse on Skill. Starts a pass when the skill is code-review.
+             A review does not track its pull request: only one this session
+             opened is gated, so reviewing another author's pull request never
+             holds the session until that pull request is clean.
   findings   PostToolUse on ReportFindings. Closes the open pass with its count.
   groups     PostToolUse on mcp__ccd_sidebar__list_groups. Learns group names.
   sidebar    PreToolUse on mcp__ccd_sidebar__move_sessions. Denies a move to
@@ -182,7 +185,6 @@ def on_review(state, payload):
     except RuntimeError as err:
         return {'systemMessage': f'self review gate: could not read {short(url)}: {err}. '
                                  'This pass is not recorded.'}
-    track(state, url)
     state['passes'].append({'pr': url, 'sha': sha, 'findings': None})
     return None
 

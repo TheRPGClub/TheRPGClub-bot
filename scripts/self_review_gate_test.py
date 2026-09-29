@@ -93,14 +93,22 @@ class GateTest(unittest.TestCase):
                                   'tool_response': URL})
         self.assertEqual(state['prs'], [])
 
+    def test_reviewing_an_untracked_pr_does_not_gate_it(self):
+        state = fresh()
+        review(state, 3)
+        self.assertEqual(state['prs'], [])
+        self.assertIsNone(gate.on_stop(state, {}))
+
     def test_new_commit_needs_a_new_pass(self):
         state = fresh()
+        state['prs'] = [URL]
         review(state, 0)
         self.read.return_value = pr(head=NEW_HEAD)
         self.assertIn('no clean pass', gate.on_stop(state, {})['reason'])
 
     def test_outcome_rereport_is_not_a_pass(self):
         state = fresh()
+        state['prs'] = [URL]
         review(state, 3)
         gate.on_findings(state, {'tool_input': {'findings': [{'outcome': 'fixed'}] * 3}})
         self.assertEqual([p['findings'] for p in state['passes']], [3])
@@ -113,6 +121,7 @@ class GateTest(unittest.TestCase):
 
     def test_pending_or_failed_ci_on_a_clean_head_blocks(self):
         state = fresh()
+        state['prs'] = [URL]
         review(state, 0)
         self.read.return_value = pr(checks=RUNNING)
         self.assertIn('still running', gate.on_stop(state, {})['reason'])
@@ -121,6 +130,7 @@ class GateTest(unittest.TestCase):
 
     def test_pr_without_checks_is_finished_on_a_clean_pass(self):
         state = fresh()
+        state['prs'] = [URL]
         self.read.return_value = pr(checks=[])
         review(state, 0)
         self.assertIsNone(gate.on_stop(state, {}))
@@ -173,12 +183,14 @@ class GateTest(unittest.TestCase):
 
     def test_conflicting_clean_pr_blocks(self):
         state = fresh()
+        state['prs'] = [URL]
         review(state, 0)
         self.read.return_value = dict(pr(), mergeable='CONFLICTING')
         self.assertIn('conflicts', gate.on_stop(state, {})['reason'])
 
     def test_findings_do_not_close_an_older_open_pass(self):
         state = fresh()
+        state['prs'] = [URL]
         gate.on_review(state, {'tool_input': {'skill': 'code-review', 'args': f'high {URL}'}})
         state['passes'].append({'pr': URL, 'sha': 'old', 'findings': 4})
         gate.on_findings(state, {'tool_input': {'findings': []}})
