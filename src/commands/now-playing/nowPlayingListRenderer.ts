@@ -22,7 +22,7 @@ import crypto from "node:crypto";
 import Member, { type IMemberNowPlayingEntry } from "../../classes/Member.js";
 import { fetchGameCoverBuffer } from "../../services/GameImageService.js";
 import {
-  safeReply,
+  safeEditReply,
   safeUpdate,
   safeUserFetch,
   type AnyRepliable,
@@ -351,8 +351,10 @@ export async function returnToNowPlayingEditMenu(
     anyInteraction.__rpgDeferred ?? anyInteraction.__rpgAcked ??
     anyInteraction.deferred ?? anyInteraction.replied,
   );
+  // safeEditReply, not safeReply: once the message was edited (the sort save's loading
+  // panel), safeReply would follow up and leave that panel on screen.
   if (isAcked) {
-    safeIgnore(safeReply(interaction, { components: [row], flags }));
+    safeIgnore(safeEditReply(interaction, { components: [row], flags }));
   } else {
     safeIgnore(safeUpdate(interaction, { components: [row], flags }));
   }
