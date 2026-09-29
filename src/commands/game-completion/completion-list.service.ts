@@ -37,6 +37,7 @@ import {
   type IJournalSelectEntry,
   buildSelectRow,
 } from "../../functions/uiComponents.js";
+import { buildPageFooterText, buildPrevNextButtons } from "../../functions/PaginationUtils.js";
 
 /**
  * Renders a leaderboard showing all members with completions, optionally filtered by game title
@@ -281,21 +282,15 @@ function buildPaginationRows(
   nextCustomId: string,
   clearFilterCustomId?: string,
 ): ActionRowBuilder<ButtonBuilder>[] {
-  const showPrev = totalPages > 1 && safePage > 0;
-  const showNext = totalPages > 1 && safePage < totalPages - 1;
-
-  if (!showPrev && !showNext && !clearFilterCustomId) return [];
-
-  const buttons: ButtonBuilder[] = [];
-  if (showPrev) {
-    buttons.push(buildActionButton({ customId: prevCustomId, label: "Previous Page", style: ButtonStyle.Secondary }));
-  }
+  const buttons = buildPrevNextButtons(prevCustomId, nextCustomId, safePage, totalPages);
   if (clearFilterCustomId) {
-    buttons.push(buildActionButton({ customId: clearFilterCustomId, label: "Clear Filter", style: ButtonStyle.Secondary }));
+    buttons.push(buildActionButton({
+      customId: clearFilterCustomId,
+      label: "Clear Filter",
+      style: ButtonStyle.Secondary,
+    }));
   }
-  if (showNext) {
-    buttons.push(buildActionButton({ customId: nextCustomId, label: "Next Page", style: ButtonStyle.Secondary }));
-  }
+  if (!buttons.length) return [];
   return [buildButtonRow(...buttons)];
 }
 
@@ -423,7 +418,7 @@ async function buildCompletionComponents(
           ? ` recorded in ${minYear}`
           : ` recorded between ${minYear}-${maxYear}`;
     }
-    footerLines.push(`-# ${resultsText}. Page ${safePage + 1} of ${totalPages}.`);
+    footerLines.push(`-# ${buildPageFooterText(safePage, totalPages, resultsText)}`);
   }
 
   let sortedYears: string[] = [];

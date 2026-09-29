@@ -33,6 +33,7 @@ import {
   buildButtonRow,
   buildSelectRow,
 } from "../../functions/uiComponents.js";
+import { PAGE_NEXT_LABEL, PAGE_PREV_LABEL } from "../../functions/PaginationUtils.js";
 import {
   createResumableSessionRegistry,
   type PersistedSessionLocation,
@@ -318,14 +319,14 @@ export function buildIgdbComponents(
   if (hasOptions && totalPages > 1) {
     if (page > 0) {
       select.addOptions({
-        label: "Previous page",
+        label: PAGE_PREV_LABEL,
         value: "__igdb_prev",
         description: "Show previous results",
       });
     }
     if (page < totalPages - 1) {
       select.addOptions({
-        label: "Next page",
+        label: PAGE_NEXT_LABEL,
         value: "__igdb_next",
         description: "Show more results",
       });
