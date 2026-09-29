@@ -13,17 +13,11 @@ import {
   buildComponentsV2EditFlags,
   buildTextContainer,
 } from "../functions/ComponentsV2Utils.js";
-import type { IStepResult, StepVerdict } from "./ConductorObservation.js";
+import type { IStepResult } from "./ConductorObservation.js";
 import type { IConductorRun } from "./ConductorState.js";
-import { fenceFor } from "./ConductorReport.js";
+import { VERDICT_LABELS, fenceFor } from "./ConductorReport.js";
 
 export const NO_MENTIONS = { parse: [] as never[] };
-
-const VERDICT_ICONS: Record<StepVerdict, string> = {
-  pass: "PASS",
-  fail: "FAIL",
-  unverified: "NEEDS EYES",
-};
 
 export function buildCheckCustomId(runId: string, stepIndex: number): string {
   return `${CONDUCTOR_CHECK_PREFIX}:${runId}:${stepIndex}`;
@@ -92,7 +86,7 @@ export function buildStepResultText(run: IConductorRun, result: IStepResult): st
   const label = step ? step.label : "";
   return [
     `**PR #${run.pr}, step ${result.stepNumber}: ${label}**`,
-    `${VERDICT_ICONS[result.verdict]}: ${result.reason}`,
+    `${VERDICT_LABELS[result.verdict]}: ${result.reason}`,
     `Observed ${result.observed.length} message(s) for this step.`,
   ].join("\n");
 }

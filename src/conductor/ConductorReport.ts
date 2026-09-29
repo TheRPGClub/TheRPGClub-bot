@@ -12,8 +12,10 @@ export const CONDUCTOR_REPORT_MARKER = "<!-- rpgclub-conductor-report -->";
 /** GitHub caps a comment at 65536 characters; leave room for the footer. */
 export const MAX_REPORT_LENGTH = 60000;
 const MAX_PAYLOAD_LENGTH = 3000;
+/** Payloads listed per group, so one step can never fill the whole comment. */
+const MAX_PAYLOADS_PER_GROUP = 5;
 
-const VERDICT_LABELS: Record<StepVerdict, string> = {
+export const VERDICT_LABELS: Record<StepVerdict, string> = {
   pass: "PASS",
   fail: "FAIL",
   unverified: "NEEDS EYES",
@@ -45,16 +47,19 @@ function inlineText(text: string): string {
 }
 
 function formatObserved(outputs: IObservedOutput[]): string {
-  return outputs
+  const extra = outputs.length - MAX_PAYLOADS_PER_GROUP;
+  const listed = outputs
+    .slice(0, MAX_PAYLOADS_PER_GROUP)
     .map((output) => {
       const json = typeof output.payload === "string"
         ? output.payload
         : JSON.stringify(output.payload, null, 2);
       const header = `${output.place} message ${output.messageId}` +
-        (output.source ? ` from ${output.source}` : "");
+        (output.source ? ` from ${inlineText(output.source)}` : "");
       return `${header}:\n${fenceFor(truncate(json ?? "null", MAX_PAYLOAD_LENGTH), "json")}`;
-    })
-    .join("\n\n");
+    });
+  if (extra > 0) listed.push(`...and ${extra} more.`);
+  return listed.join("\n\n");
 }
 
 function formatStep(step: ITestStep, result: IStepResult | undefined): string {
@@ -97,8 +102,17 @@ export function buildRunReport(input: IReportInput): string {
   ].join("\n");
 
   const byStep = new Map(input.results.map((result) => [result.stepNumber, result]));
-  const body = input.steps.map((step) => formatStep(step, byStep.get(step.number)));
-  return truncate([header, ...body].join("\n\n"), MAX_REPORT_LENGTH);
+  let report = header;
+  for (const [index, step] of input.steps.entries()) {
+    const section = `\n\n${formatStep(step, byStep.get(step.number))}`;
+    // Whole sections only: cutting mid-section can leave a code fence open.
+    if (report.length + section.length > MAX_REPORT_LENGTH) {
+      const omitted = input.steps.length - index;
+      return `${report}\n\nReport truncated: ${omitted} step(s) omitted for length.`;
+    }
+    report += section;
+  }
+  return report;
 }
 
 export function buildUnparseableReport(pr: number, reason: string): string {

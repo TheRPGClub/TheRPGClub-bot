@@ -31,17 +31,19 @@ loader never imports this directory, and the conductor never loads the bot's com
    button to retry it.
 
 Starting a new `/conduct` while a run is going aborts the old run and reports what it
-got through.
+got through. Handlers take turns on the run, so a double-clicked **Check** judges the
+step once and answers the second press as stale.
 
 ## How output is attributed to a step
 
 - **Window.** A step owns output created or edited after its DM was sent and before
   **Check** was pressed. Both times are Discord timestamps, so the host clock does not
   matter.
-- **Place.** An `Ephemeral: yes` step only accepts posts in the mirror channel
-  (`TEST_LOG_CHANNEL_ID`), written there by the preview bot's ephemeral mirror. An
-  `Ephemeral: no` step only accepts public messages in the test channel
-  (`BOT_DEV_CHANNEL_ID`).
+- **Place.** An `Ephemeral: no` step only accepts public messages in the test channel
+  (`BOT_DEV_CHANNEL_ID`). An `Ephemeral: yes` step accepts posts in the mirror channel
+  (`TEST_LOG_CHANNEL_ID`), written there by the preview bot's ephemeral mirror, and
+  also public test channel messages, because the bot's dev channel override turns
+  ephemeral replies public for the guild owner.
 - **User.** A mirror post must name the allowlisted tester as its user. A public reply
   to an interaction must be to the tester's interaction.
 - **Command.** A step whose command is a slash command only accepts mirror posts whose

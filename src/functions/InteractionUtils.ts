@@ -15,7 +15,13 @@ import type {
   User,
 } from "discord.js";
 import { BOT_DEV_CHANNEL_ID } from "../config/channels.js";
-import { mirrorEphemeralReply, mirrorEphemeralUpdate } from "./EphemeralMirror.js";
+import {
+  isEphemeralPayload,
+  markEphemeralDefer,
+  mirrorEphemeralDeferredReply,
+  mirrorEphemeralReply,
+  mirrorEphemeralUpdate,
+} from "./EphemeralMirror.js";
 import { DEV_ROLE_ID } from "../config/roles.js";
 import {
   buildComponentsV2Flags,
@@ -395,6 +401,7 @@ export async function safeDeferReply(
     await interaction.deferReply(overridden as InteractionDeferReplyOptions);
     aug.__rpgAcked = true;
     aug.__rpgDeferred = true;
+    markEphemeralDefer(interaction, overridden);
   } catch {
     // ignore errors from deferReply (e.g., already acknowledged)
   }
@@ -448,11 +455,17 @@ const isAckError = (err: unknown): boolean => {
  * throws, so a mirror failure cannot reach the invoking user.
  */
 export async function safeReply(interaction: AnyRepliable, options: any): Promise<any> {
+  const aug = interaction as AugmentedInteraction;
+  // Mirrors sendSafeReply's routing: this call fills the deferred reply.
+  const fillsDefer = !options?.__forceFollowUp &&
+    Boolean(aug.__rpgDeferred ?? aug.deferred) && !aug.replied;
   const result = await sendSafeReply(interaction, options);
-  await mirrorEphemeralReply(
-    interaction,
-    applyDevChannelOverrides(interaction, normalizeOptions(options)),
-  );
+  const mirrored = applyDevChannelOverrides(interaction, normalizeOptions(options));
+  if (fillsDefer && !isEphemeralPayload(mirrored)) {
+    await mirrorEphemeralDeferredReply(interaction, mirrored);
+  } else {
+    await mirrorEphemeralReply(interaction, mirrored);
+  }
   return result;
 }
 

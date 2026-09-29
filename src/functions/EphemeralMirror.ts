@@ -68,6 +68,22 @@ export function isEphemeralInteractionMessage(interaction: AnyRepliable): boolea
   return hasEphemeralFlag(message.flags);
 }
 
+/** Interactions whose deferred reply is ephemeral; the defer is the only signal. */
+const ephemeralDefers = new WeakSet<object>();
+
+/**
+ * Records that the interaction's deferred reply is ephemeral. The payload that
+ * later fills it rarely repeats the flag, and a command interaction has no
+ * source message, so without this the reply would never be mirrored.
+ */
+export function markEphemeralDefer(interaction: AnyRepliable, options: unknown): void {
+  if (isEphemeralPayload(options)) ephemeralDefers.add(interaction);
+}
+
+export function hasEphemeralDefer(interaction: AnyRepliable): boolean {
+  return ephemeralDefers.has(interaction);
+}
+
 /**
  * Pure gate, taking the mode explicitly so both branches can be exercised
  * without reloading the module graph.
@@ -78,7 +94,8 @@ export function shouldMirrorFor(testMode: boolean, options: unknown): boolean {
 
 /** Pure gate for the update path, where ephemerality comes from the message. */
 export function shouldMirrorUpdateFor(testMode: boolean, interaction: AnyRepliable): boolean {
-  return testMode && isEphemeralInteractionMessage(interaction);
+  return testMode &&
+    (isEphemeralInteractionMessage(interaction) || hasEphemeralDefer(interaction));
 }
 
 function serializeComponent(raw: unknown): MirrorComponent {
@@ -185,6 +202,18 @@ export async function mirrorEphemeralReply(
   options: unknown,
 ): Promise<void> {
   if (!shouldMirrorFor(IS_TEST_MODE, options)) return;
+  await sendMirror(interaction, options, "reply");
+}
+
+/**
+ * Best-effort copy of a reply that fills an ephemeral deferred reply. The gate
+ * is the defer, since the filling payload usually carries no ephemeral flag.
+ */
+export async function mirrorEphemeralDeferredReply(
+  interaction: AnyRepliable,
+  options: unknown,
+): Promise<void> {
+  if (!IS_TEST_MODE || !hasEphemeralDefer(interaction)) return;
   await sendMirror(interaction, options, "reply");
 }
 

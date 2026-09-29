@@ -176,6 +176,98 @@ async function supersedeRun(
   if (previous.results.length) await postRunReport(interaction, previous);
 }
 
+/**
+ * Every handler reads, changes, and writes the one run file, so they take turns.
+ * Without this, a double-clicked Check judges one step twice and skips the next.
+ */
+let runQueue: Promise<unknown> = Promise.resolve();
+
+function withRunLock<T>(task: () => Promise<T>): Promise<T> {
+  const next = runQueue.then(task, task);
+  runQueue = next.catch(() => undefined);
+  return next;
+}
+
+async function replyStale(interaction: ButtonInteraction, reason: string): Promise<void> {
+  await safeFollowUpIfSettled(interaction, buildTextReply(reason, true));
+}
+
+async function checkStepLocked(interaction: ButtonInteraction): Promise<void> {
+  const parsed = parseCheckCustomId(interaction.customId);
+  const { settings } = getConductorRuntime();
+  const check = checkStepButton(
+    await loadRun(settings.statePath),
+    parsed?.runId ?? "",
+    parsed?.step ?? -1,
+  );
+  if (!check.ok) {
+    await replyStale(interaction, check.reason);
+    return;
+  }
+
+  const run = check.run;
+  const step = run.steps[run.current];
+  let outputs: IObservedOutput[];
+  try {
+    outputs = await collectObservations(interaction.client);
+  } catch (err: unknown) {
+    const message = buildDiscordErrorMessage("Reading back the test channels failed", err);
+    await safeFollowUpIfSettled(interaction, buildErrorReply(message, true));
+    return;
+  }
+  const result = judgeStep(step, outputs, {
+    start: run.windowStart,
+    end: interaction.createdTimestamp,
+  });
+  run.results.push(result);
+  run.current += 1;
+  await safeEditReply(interaction, textEdit(buildStepResultText(run, result)));
+
+  if (run.current < run.steps.length) {
+    try {
+      await sendCurrentStep(interaction, run);
+    } catch (err: unknown) {
+      run.windowStart = interaction.createdTimestamp;
+      await saveRun(settings.statePath, run);
+      const message = buildDiscordErrorMessage("Could not DM you the next step", err);
+      await safeFollowUpIfSettled(interaction, buildErrorReply(message, true));
+      return;
+    }
+    await saveRun(settings.statePath, run);
+    return;
+  }
+
+  run.status = "finished";
+  await saveRun(settings.statePath, run);
+  await postRunReport(interaction, run);
+}
+
+async function abortRunLocked(interaction: ButtonInteraction): Promise<void> {
+  const runId = parseRunCustomId(interaction.customId, CONDUCTOR_ABORT_PREFIX);
+  const { settings } = getConductorRuntime();
+  const run = await loadRun(settings.statePath);
+  if (!run || run.runId !== runId || run.status !== "running") {
+    await replyStale(interaction, "This run is no longer active.");
+    return;
+  }
+  run.status = "aborted";
+  await saveRun(settings.statePath, run);
+  await safeEditReply(interaction, textEdit(`Run for PR #${run.pr} aborted.`));
+  await postRunReport(interaction, run);
+}
+
+async function retryReportLocked(interaction: ButtonInteraction): Promise<void> {
+  const runId = parseRunCustomId(interaction.customId, CONDUCTOR_REPORT_PREFIX);
+  const { settings } = getConductorRuntime();
+  const run = await loadRun(settings.statePath);
+  if (!run || run.runId !== runId || run.status === "running") {
+    await replyStale(interaction, "That run's report is not available.");
+    return;
+  }
+  await safeEditReply(interaction, textEdit(`Retrying the report for PR #${run.pr}.`));
+  await postRunReport(interaction, run);
+}
+
 @Discord()
 export class ConductorCommand {
   @Slash({ name: "conduct", description: "Run a pull request's Testing steps" })
@@ -233,29 +325,31 @@ export class ConductorCommand {
       return;
     }
 
-    await supersedeRun(interaction, settings.statePath);
-    const run: IConductorRun = {
-      runId: interaction.id,
-      pr,
-      headSha: pull.headSha,
-      steps: plan.steps,
-      current: 0,
-      windowStart: interaction.createdTimestamp,
-      results: [],
-      status: "running",
-    };
-    try {
-      await sendCurrentStep(interaction, run);
-    } catch (err: unknown) {
-      const message = buildDiscordErrorMessage("Could not DM you the script", err);
-      await safeEditReply(interaction, textEdit(message));
-      return;
-    }
-    await saveRun(settings.statePath, run);
-    await safeEditReply(
-      interaction,
-      textEdit(`Sent step 1 of ${run.steps.length} for PR #${pr} to your DMs.`),
-    );
+    await withRunLock(async () => {
+      await supersedeRun(interaction, settings.statePath);
+      const run: IConductorRun = {
+        runId: interaction.id,
+        pr,
+        headSha: pull.headSha,
+        steps: plan.steps,
+        current: 0,
+        windowStart: interaction.createdTimestamp,
+        results: [],
+        status: "running",
+      };
+      try {
+        await sendCurrentStep(interaction, run);
+      } catch (err: unknown) {
+        const message = buildDiscordErrorMessage("Could not DM you the script", err);
+        await safeEditReply(interaction, textEdit(message));
+        return;
+      }
+      await saveRun(settings.statePath, run);
+      await safeEditReply(
+        interaction,
+        textEdit(`Sent step 1 of ${run.steps.length} for PR #${pr} to your DMs.`),
+      );
+    });
   }
 
   @ButtonComponent({ id: /^conductor-check-v1:\d+:\d+$/ })
@@ -264,54 +358,8 @@ export class ConductorCommand {
       await denyAccess(interaction);
       return;
     }
-    const parsed = parseCheckCustomId(interaction.customId);
-    const { settings } = getConductorRuntime();
-    const check = checkStepButton(
-      await loadRun(settings.statePath),
-      parsed?.runId ?? "",
-      parsed?.step ?? -1,
-    );
-    if (!check.ok) {
-      await safeReply(interaction, buildTextReply(check.reason, true));
-      return;
-    }
     await safeDeferUpdate(interaction);
-
-    const run = check.run;
-    const step = run.steps[run.current];
-    let outputs: IObservedOutput[];
-    try {
-      outputs = await collectObservations(interaction.client);
-    } catch (err: unknown) {
-      const message = buildDiscordErrorMessage("Reading back the test channels failed", err);
-      await interaction.user.send(textEdit(message));
-      return;
-    }
-    const result = judgeStep(step, outputs, {
-      start: run.windowStart,
-      end: interaction.createdTimestamp,
-    });
-    run.results.push(result);
-    run.current += 1;
-    await safeEditReply(interaction, textEdit(buildStepResultText(run, result)));
-
-    if (run.current < run.steps.length) {
-      try {
-        await sendCurrentStep(interaction, run);
-      } catch (err: unknown) {
-        run.windowStart = interaction.createdTimestamp;
-        await saveRun(settings.statePath, run);
-        const message = buildDiscordErrorMessage("Could not DM you the next step", err);
-        await safeFollowUpIfSettled(interaction, buildErrorReply(message, true));
-        return;
-      }
-      await saveRun(settings.statePath, run);
-      return;
-    }
-
-    run.status = "finished";
-    await saveRun(settings.statePath, run);
-    await postRunReport(interaction, run);
+    await withRunLock(() => checkStepLocked(interaction));
   }
 
   @ButtonComponent({ id: /^conductor-abort-v1:\d+$/ })
@@ -320,18 +368,8 @@ export class ConductorCommand {
       await denyAccess(interaction);
       return;
     }
-    const runId = parseRunCustomId(interaction.customId, CONDUCTOR_ABORT_PREFIX);
-    const { settings } = getConductorRuntime();
-    const run = await loadRun(settings.statePath);
-    if (!run || run.runId !== runId || run.status !== "running") {
-      await safeReply(interaction, buildTextReply("This run is no longer active.", true));
-      return;
-    }
     await safeDeferUpdate(interaction);
-    run.status = "aborted";
-    await saveRun(settings.statePath, run);
-    await safeEditReply(interaction, textEdit(`Run for PR #${run.pr} aborted.`));
-    await postRunReport(interaction, run);
+    await withRunLock(() => abortRunLocked(interaction));
   }
 
   @ButtonComponent({ id: /^conductor-report-v1:\d+$/ })
@@ -340,15 +378,7 @@ export class ConductorCommand {
       await denyAccess(interaction);
       return;
     }
-    const runId = parseRunCustomId(interaction.customId, CONDUCTOR_REPORT_PREFIX);
-    const { settings } = getConductorRuntime();
-    const run = await loadRun(settings.statePath);
-    if (!run || run.runId !== runId || run.status === "running") {
-      await safeReply(interaction, buildTextReply("That run's report is not available.", true));
-      return;
-    }
     await safeDeferUpdate(interaction);
-    await safeEditReply(interaction, textEdit(`Retrying the report for PR #${run.pr}.`));
-    await postRunReport(interaction, run);
+    await withRunLock(() => retryReportLocked(interaction));
   }
 }

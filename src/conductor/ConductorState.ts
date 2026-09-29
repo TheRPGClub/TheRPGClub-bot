@@ -32,7 +32,14 @@ export async function loadRun(path: string): Promise<IConductorRun | null> {
     if ((err as NodeJS.ErrnoException)?.code === "ENOENT") return null;
     throw err;
   }
-  const parsed = JSON.parse(raw) as IConductorRun | null;
+  let parsed: IConductorRun | null;
+  try {
+    parsed = JSON.parse(raw) as IConductorRun | null;
+  } catch {
+    // A damaged file must not wedge every handler; the next /conduct overwrites it.
+    console.error(`[conductor] ignoring unreadable run state at ${path}`);
+    return null;
+  }
   return parsed && typeof parsed.runId === "string" ? parsed : null;
 }
 

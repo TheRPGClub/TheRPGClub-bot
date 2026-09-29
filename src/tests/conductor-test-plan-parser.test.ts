@@ -74,6 +74,13 @@ test("ignores the template's HTML comment", () => {
   assert.equal(result.kind, "ok");
 });
 
+test("a Testing heading quoted in a comment or fence is not the section", () => {
+  const quoted = `<!--\n## Testing\n### Step N: x\n-->\n${FENCE}\n## Testing\n${FENCE}\n`;
+  const result = parseTestPlan(quoted + body(step(1, "/help", "help", "no")));
+  assert.equal(result.kind, "ok");
+  assert.equal(parseTestPlan(quoted).kind, "absent");
+});
+
 test("reports a missing section as absent and a comment-only one as empty", () => {
   assert.deepEqual(parseTestPlan("## Summary\n- nothing\n"), { kind: "absent" });
   assert.deepEqual(parseTestPlan(null), { kind: "absent" });

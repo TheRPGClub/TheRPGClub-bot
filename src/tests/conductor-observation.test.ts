@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -123,7 +123,7 @@ test("credits a component step with the component's mirrored update", () => {
   assert.equal(result.verdict, "pass");
 });
 
-test("does not accept public output for an ephemeral step", () => {
+test("accepts public output for an ephemeral step, as the dev channel override posts it", () => {
   const outputs = observe([snapshot({
     id: "pub",
     createdTimestamp: 150,
@@ -131,8 +131,14 @@ test("does not accept public output for an ephemeral step", () => {
     interactionUserId: USER,
   })]);
   const result = judgeStep(makeStep({}), outputs, { start: 100, end: 200 });
+  assert.equal(result.verdict, "pass");
+});
+
+test("does not accept mirrored ephemeral output for a public step", () => {
+  const outputs = observe([mirrorPost("m", 150, "/collection", "Search for a game")]);
+  const result = judgeStep(makeStep({ ephemeral: false }), outputs, { start: 100, end: 200 });
   assert.equal(result.verdict, "fail");
-  assert.match(result.reason, /No output observed in the ephemeral mirror channel/);
+  assert.match(result.reason, /No output observed in the test channel/);
 });
 
 test("matches public embed titles and credits a message edited inside the window", () => {
@@ -181,6 +187,32 @@ test("the report carries the observed payload for a failed step", () => {
   assert.match(report, /Aborted run `42` against `abcdef1`/);
 });
 
+test("a long report drops whole steps rather than cutting inside a fence", () => {
+  const big = "y".repeat(2900);
+  const outputs = observe(Array.from({ length: 5 }, (_, index) =>
+    mirrorPost(`m${index}`, 150 + index, "/collection", big)));
+  const steps = Array.from({ length: 25 }, (_, index) => makeStep({ number: index + 1 }));
+  const results = steps.map((step) =>
+    judgeStep(step, outputs, { start: 100, end: 200 }));
+  const report = buildRunReport({
+    pr: 7, headSha: "abcdef1", runId: "42", steps, results, aborted: false,
+  });
+  assert.ok(report.length <= 60000);
+  assert.match(report, /Report truncated: \d+ step\(s\) omitted for length\.$/);
+  const fences = report.split("\n").filter((line) => /^`{3,}/.test(line));
+  assert.equal(fences.length % 2, 0);
+});
+
+test("the report escapes a mirrored source before quoting it", () => {
+  const outputs = observe([mirrorPost("m", 150, "component:@team", "other")]);
+  const step = makeStep({ command: "click it" });
+  const report = buildRunReport({
+    pr: 7, headSha: "abcdef1", runId: "42", steps: [step],
+    results: [judgeStep(step, outputs, { start: 100, end: 200 })], aborted: false,
+  });
+  assert.match(report, /from component:\\@team/);
+});
+
 test("fenceFor outgrows any backtick run inside the payload", () => {
   const fenced = fenceFor("a ```` b", "json");
   assert.ok(fenced.startsWith("`````json\n"));
@@ -207,6 +239,17 @@ test("a step button is live only for the running run's current step", () => {
   assert.equal(checkStepButton(makeRun(), "41", 0).ok, false);
   assert.equal(checkStepButton(makeRun(), "42", 1).ok, false);
   assert.equal(checkStepButton(makeRun({ status: "aborted" }), "42", 0).ok, false);
+});
+
+test("an unreadable state file reads as no run instead of throwing", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "conductor-state-"));
+  try {
+    const path = join(dir, "state.json");
+    await writeFile(path, "{ not json");
+    assert.equal(await loadRun(path), null);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
 });
 
 test("run state survives a save and reload, as a restart would", async () => {

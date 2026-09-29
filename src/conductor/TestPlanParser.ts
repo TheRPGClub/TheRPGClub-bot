@@ -39,16 +39,26 @@ const EPHEMERAL_LINE = /^Ephemeral:\s*(.*?)\s*$/;
 const QUOTED_TEXT = /"([^"\n]+)"|“([^”\n]+)”/g;
 
 /**
- * Returns the lines of the `## Testing` section, or null when there is none. A
- * `##` heading inside a fenced block does not end the section.
+ * Returns the lines of the `## Testing` section, HTML comments removed, or null
+ * when there is none. Headings inside a fence or a comment neither start nor end
+ * the section.
  */
 export function extractTestingSection(body: string): string[] | null {
-  const lines = body.replace(/\r\n?/g, "\n").split("\n");
-  const start = lines.findIndex((line) => SECTION_HEADING.test(line.trim()));
+  const lines = stripHtmlComments(body.replace(/\r\n?/g, "\n")).split("\n");
+  let start = -1;
+  let inFence = false;
+  for (const [index, line] of lines.entries()) {
+    const trimmed = line.trim();
+    if (trimmed.startsWith("```")) inFence = !inFence;
+    else if (!inFence && SECTION_HEADING.test(trimmed)) {
+      start = index;
+      break;
+    }
+  }
   if (start < 0) return null;
 
   const section: string[] = [];
-  let inFence = false;
+  inFence = false;
   for (const line of lines.slice(start + 1)) {
     const trimmed = line.trim();
     if (trimmed.startsWith("```")) inFence = !inFence;
@@ -195,7 +205,7 @@ export function parseTestPlan(body: string | null | undefined): TestPlanParseRes
   const section = extractTestingSection(body ?? "");
   if (!section) return { kind: "absent" };
 
-  const lines = stripHtmlComments(section.join("\n")).split("\n");
+  const lines = section;
   const cursor: Cursor = { lines, index: 0 };
   skipBlank(cursor);
   if (cursor.index >= lines.length) return { kind: "empty" };
