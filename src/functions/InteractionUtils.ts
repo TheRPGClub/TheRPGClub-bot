@@ -432,6 +432,20 @@ export async function safeReply(interaction: AnyRepliable, options: any): Promis
   return result;
 }
 
+/**
+ * Like safeReply, but never edits the original message: once the interaction is
+ * deferred or replied, safeReply would edit the original reply, so this follows up.
+ */
+export async function safeFollowUpIfSettled(
+  interaction: AnyRepliable,
+  options: object,
+): Promise<any> {
+  return safeReply(interaction, {
+    ...options,
+    __forceFollowUp: isInteractionSettled(interaction),
+  });
+}
+
 async function sendSafeReply(interaction: AnyRepliable, options: any): Promise<any> {
   const aug = interaction as AugmentedInteraction;
   if (shouldBlockDevChannelInteraction(interaction)) {

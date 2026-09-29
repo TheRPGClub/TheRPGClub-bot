@@ -13,8 +13,10 @@ import { saveCompletion } from "../../functions/CompletionHelpers.js";
 import {
   canSafeReply,
   isInteractionSettled,
+  replyIfNotOwner,
   safeDeferUpdate,
   safeEditReply,
+  safeFollowUpIfSettled,
   safeReply,
   safeUpdate,
 } from "../../functions/InteractionUtils.js";
@@ -58,6 +60,8 @@ import GameSearchService from "../../classes/GameSearchService.js";
 
 const IGDB_IMPORT_FAILED_STATUS = "Import failed. See the error below.";
 const COMPLETION_ADD_EXPIRED_MESSAGE = "This completion prompt has expired.";
+const COMPLETION_ADD_NOT_OWNER_MESSAGE = "This completion prompt isn't for you.";
+const COMPLETION_ADD_SESSION_ID_PREFIX = "compadd";
 const completionAddRegistry = createResumableSessionRegistry<CompletionAddContext>({
   kind: "completion-add",
   sessions: completionAddSessions,
@@ -89,6 +93,19 @@ function toSessionLocation(
   return { channelId: interaction.channelId, guildId: interaction.guildId };
 }
 
+/** The owner id rides in the session id so a restore can check it before the API read. */
+function buildCompletionAddSessionId(ownerId: string): string {
+  const nonce = `${Date.now()}-${Math.floor(Math.random() * 100000)}`;
+  return `${COMPLETION_ADD_SESSION_ID_PREFIX}-${ownerId}-${nonce}`;
+}
+
+/** Returns the owner id built into a session id, or null for older ids without one. */
+function parseCompletionAddOwnerId(sessionId: string): string | null {
+  const [prefix, ownerId] = sessionId.split("-");
+  if (prefix !== COMPLETION_ADD_SESSION_ID_PREFIX) return null;
+  return ownerId && /^\d+$/.test(ownerId) ? ownerId : null;
+}
+
 /**
  * Creates a completion session and returns the session ID. The context is also
  * persisted so the GameDB select still works after a bot restart.
@@ -97,7 +114,7 @@ export function createCompletionSession(
   ctx: CompletionAddContext,
   location: PersistedSessionLocation,
 ): string {
-  const sessionId = `comp-${Date.now()}-${Math.floor(Math.random() * 100000)}`;
+  const sessionId = buildCompletionAddSessionId(ctx.userId);
   completionAddRegistry.create({
     sessionId,
     session: ctx,
@@ -389,6 +406,9 @@ export async function handleCompletionAddSelect(
     return;
   }
 
+  const ownerId = parseCompletionAddOwnerId(sessionId) ?? interaction.user.id;
+  if (await replyIfNotOwner(interaction, ownerId, COMPLETION_ADD_NOT_OWNER_MESSAGE)) return;
+
   // Ack first: restoring the prompt after a restart reads the API, which can
   // outlast Discord's 3 second window. Replies below are ephemeral follow-ups so
   // they never overwrite the prompt.
@@ -396,33 +416,27 @@ export async function handleCompletionAddSelect(
   let ctx: CompletionAddContext | undefined;
   try {
     ctx = await completionAddRegistry.resolve(sessionId, {
-      ownerId: interaction.user.id,
+      ownerId,
       channelId: interaction.channelId,
     });
   } catch (err: unknown) {
     logError("CompletionAdd.restoreSession", err);
-    await safeReply(interaction, {
-      ...buildErrorReply(
-        buildApiErrorMessage("Could not restore this completion prompt.", err),
-        true,
-      ),
-      __forceFollowUp: true,
-    });
+    await safeFollowUpIfSettled(interaction, buildErrorReply(
+      buildApiErrorMessage("Could not restore this completion prompt.", err),
+      true,
+    ));
     return;
   }
 
   if (!ctx) {
-    await safeReply(interaction, {
-      ...buildTextReply(COMPLETION_ADD_EXPIRED_MESSAGE, true),
-      __forceFollowUp: true,
-    });
+    await safeFollowUpIfSettled(interaction, buildTextReply(COMPLETION_ADD_EXPIRED_MESSAGE, true));
     return;
   }
   if (ctx.userId !== interaction.user.id) {
-    await safeReply(interaction, {
-      ...buildTextReply("This completion prompt isn't for you.", true),
-      __forceFollowUp: true,
-    });
+    await safeFollowUpIfSettled(
+      interaction,
+      buildTextReply(COMPLETION_ADD_NOT_OWNER_MESSAGE, true),
+    );
     return;
   }
   // A second click while the first is still saving must not log it twice.
@@ -472,10 +486,7 @@ async function confirmDuplicateCompletion(
 
   let message: Message | null = null;
   try {
-    const reply = await safeReply(interaction, {
-      ...payload,
-      __forceFollowUp: isInteractionSettled(interaction),
-    });
+    const reply = await safeFollowUpIfSettled(interaction, payload);
     message = (reply as any)?.resource?.message ?? (reply as Message) ?? null;
   } catch {
     try {

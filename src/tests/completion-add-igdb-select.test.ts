@@ -7,6 +7,7 @@ import Member from "../classes/Member.js";
 import { igdbService } from "../services/IGDB/IgdbService.js";
 import {
   createIgdbSession,
+  handleIgdbFirstMatchInteraction,
   handleIgdbSelectInteraction,
 } from "../services/IGDB/IgdbSelectService.js";
 import { persistedSessionStore } from "../services/PersistedInteractionSessionStore.js";
@@ -106,7 +107,13 @@ function stubCompletionSave(t: TestContext): ReturnType<typeof t.mock.method> {
   return t.mock.method(Member, "addCompletion", async () => 1);
 }
 
-async function openIgdbPrompt(t: TestContext): Promise<string> {
+function findIgdbFirstMatchId(sent: any[]): string {
+  const match = JSON.stringify(sent).match(/"custom_id":"(igdb-first:[^"]+)"/);
+  if (!match) throw new Error("no igdb-first custom id was sent");
+  return match[1];
+}
+
+async function openIgdbPromptSent(t: TestContext): Promise<any[]> {
   if (!(persistedSessionStore.save as any).mock) stubSessionStore(t);
   t.mock.method(igdbService, "searchGames", async () => ({
     results: [
@@ -116,7 +123,11 @@ async function openIgdbPrompt(t: TestContext): Promise<string> {
   }));
   const command = fakeInteraction();
   await promptIgdbSelection(command, "Pokemon Infinity", buildCtx());
-  return findIgdbSelectId(command.sent);
+  return command.sent;
+}
+
+async function openIgdbPrompt(t: TestContext): Promise<string> {
+  return findIgdbSelectId(await openIgdbPromptSent(t));
 }
 
 function selectInteraction(customId: string): any {
@@ -365,4 +376,68 @@ test("an expired completion-add-select prompt replies with an ephemeral follow-u
   const reply: any = followUp.mock.calls[0].arguments[0];
   assert.match(JSON.stringify(reply), /has expired/);
   assert.ok(reply.flags & MessageFlags.Ephemeral, "the notice must stay ephemeral");
+});
+
+test("a double click on Import First Match after a restart logs one completion", async (t) => {
+  const { saved } = stubSessionStore(t);
+  const customId = findIgdbFirstMatchId(await openIgdbPromptSent(t));
+  simulateBotRestart();
+  const load = t.mock.method(persistedSessionStore, "load", async () => {
+    await new Promise((resolve) => setImmediate(resolve));
+    return { rowId: "row-1", state: JSON.parse(JSON.stringify(saved[0].state)) };
+  });
+  const addCompletion = stubCompletionSave(t);
+
+  const first = fakeInteraction({ customId, isMessageComponent: () => true });
+  const second = fakeInteraction({ customId, isMessageComponent: () => true });
+  await Promise.all([
+    handleIgdbFirstMatchInteraction(first),
+    handleIgdbFirstMatchInteraction(second),
+  ]);
+
+  assert.equal(load.mock.callCount(), 1);
+  assert.equal(addCompletion.mock.callCount(), 1);
+  assert.equal(second.deferred, true, "the duplicate click is still acknowledged");
+});
+
+test("a click while the used row is still being deleted does not restore it", async (t) => {
+  const { saved } = stubSessionStore(t);
+  const customId = await openIgdbPrompt(t);
+  let releaseDelete: () => void = () => undefined;
+  t.mock.method(persistedSessionStore, "remove", () => new Promise<void>((resolve) => {
+    releaseDelete = resolve;
+  }));
+  const load = t.mock.method(persistedSessionStore, "load", async () => (
+    { rowId: "row-1", state: JSON.parse(JSON.stringify(saved[0].state)) }
+  ));
+  const addCompletion = stubCompletionSave(t);
+
+  await handleIgdbSelectInteraction(selectInteraction(customId));
+  await new Promise((resolve) => setImmediate(resolve));
+  const late = selectInteraction(customId);
+  await handleIgdbSelectInteraction(late);
+  releaseDelete();
+
+  assert.equal(load.mock.callCount(), 0, "a finished session is never read back");
+  assert.equal(addCompletion.mock.callCount(), 1);
+  assert.match(JSON.stringify(late.sent), /has expired/);
+});
+
+test("a non-owner click on completion-add-select after a restart is refused", async (t) => {
+  stubSessionStore(t);
+  const sessionId = createCompletionSession(buildCtx(), { channelId: "c1", guildId: "g1" });
+  simulateBotRestart();
+  const load = t.mock.method(persistedSessionStore, "load", async () => null);
+  const select = fakeInteraction({
+    customId: `completion-add-select:${sessionId}`,
+    values: [String(GAME_ID)],
+    channelId: "c1",
+    user: { id: "333333333333333333" },
+    isMessageComponent: () => true,
+  });
+
+  await handleCompletionAddSelect(select);
+
+  assert.equal(load.mock.callCount(), 0);
+  assert.match(JSON.stringify(select.sent), /isn't for you/);
 });

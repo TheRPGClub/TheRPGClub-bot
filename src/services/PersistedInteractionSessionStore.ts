@@ -138,9 +138,15 @@ export type ResumableSessionRegistry<S> = {
    * request and response.
    */
   resolve: (sessionId: string, lookup: ResumableSessionLookup) => Promise<S | undefined>;
-  /** True for the first caller only, so a double click runs the session's action once. */
+  /**
+   * True for the first caller on a live session only, so a double click runs the
+   * session's action once.
+   */
   claim: (sessionId: string) => boolean;
-  /** Forgets the session and deletes its persisted row. */
+  /**
+   * Forgets the session and deletes its persisted row. The id stays claimed and
+   * unrestorable until the delete finishes.
+   */
   finish: (sessionId: string) => void;
 };
 
@@ -157,13 +163,16 @@ export function createResumableSessionRegistry<S>(options: {
   const rowIds = new Map<string, Promise<string | null>>();
   const restoring = new Map<string, Promise<S | undefined>>();
   const claimed = new Set<string>();
+  // Finished ids whose persisted row may not be deleted yet. Until the delete
+  // lands, a late click must not restore the used row and run it again.
+  const finishing = new Set<string>();
 
   async function restore(
     sessionId: string,
     lookup: ResumableSessionLookup,
   ): Promise<S | undefined> {
     const record = await persistedSessionStore.load({ kind, sessionId, ...lookup });
-    if (!record) return undefined;
+    if (!record || finishing.has(sessionId)) return undefined;
     const session = options.fromState(record.state, lookup);
     if (!session) return undefined;
     sessions.set(sessionId, session);
@@ -186,6 +195,7 @@ export function createResumableSessionRegistry<S>(options: {
     resolve: (sessionId, lookup) => {
       const cached = sessions.get(sessionId);
       if (cached) return Promise.resolve(cached);
+      if (finishing.has(sessionId)) return Promise.resolve(undefined);
       const pending = restoring.get(sessionId);
       if (pending) return pending;
       const restored = restore(sessionId, lookup).finally(() => {
@@ -195,15 +205,18 @@ export function createResumableSessionRegistry<S>(options: {
       return restored;
     },
     claim: (sessionId) => {
-      if (claimed.has(sessionId)) return false;
+      if (claimed.has(sessionId) || !sessions.has(sessionId)) return false;
       claimed.add(sessionId);
       return true;
     },
     finish: (sessionId) => {
       sessions.delete(sessionId);
-      void removePersistedSession(rowIds.get(sessionId));
+      finishing.add(sessionId);
+      void removePersistedSession(rowIds.get(sessionId)).finally(() => {
+        finishing.delete(sessionId);
+        claimed.delete(sessionId);
+      });
       rowIds.delete(sessionId);
-      claimed.delete(sessionId);
     },
   };
 }

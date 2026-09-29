@@ -11,6 +11,7 @@ import {
   isInteractionSettled,
   replyIfNotOwner,
   safeDeferUpdate,
+  safeFollowUpIfSettled,
   safeEditReply,
   safeReply,
   safeUpdate,
@@ -234,20 +235,6 @@ function toSessionFromPersisted(ownerId: string, raw: unknown): Session | null {
 }
 
 /**
- * After a defer, a plain safeReply would edit the selection prompt itself, so
- * notices go out as ephemeral follow-ups instead.
- */
-async function replyIgdbNotice(
-  interaction: IgdbSelectInteraction,
-  payload: ReturnType<typeof buildTextReply>,
-): Promise<void> {
-  await safeReply(interaction, {
-    ...payload,
-    __forceFollowUp: isInteractionSettled(interaction),
-  });
-}
-
-/**
  * Returns the in-memory session, or rebuilds a resumable one from the API after a
  * bot restart. The API read can outlast Discord's 3 second ack window, so the
  * interaction is deferred before it starts.
@@ -261,7 +248,7 @@ async function loadIgdbSessionOrReply(
 
   const ownerId = parseResumableIgdbOwnerId(sessionId);
   if (!ownerId) {
-    await replyIgdbNotice(interaction, buildTextReply(IGDB_SESSION_EXPIRED_MESSAGE, true));
+    await safeFollowUpIfSettled(interaction, buildTextReply(IGDB_SESSION_EXPIRED_MESSAGE, true));
     return undefined;
   }
   if (await replyIfNotOwner(interaction, ownerId, IGDB_NOT_OWNER_MESSAGE)) return undefined;
@@ -275,14 +262,14 @@ async function loadIgdbSessionOrReply(
     });
   } catch (err: unknown) {
     logError("IgdbSelectService.resolveIgdbSession", err);
-    await replyIgdbNotice(interaction, buildErrorReply(
+    await safeFollowUpIfSettled(interaction, buildErrorReply(
       buildApiErrorMessage("Could not restore this game selection.", err),
       true,
     ));
     return undefined;
   }
   if (!session) {
-    await replyIgdbNotice(interaction, buildTextReply(IGDB_SESSION_EXPIRED_MESSAGE, true));
+    await safeFollowUpIfSettled(interaction, buildTextReply(IGDB_SESSION_EXPIRED_MESSAGE, true));
   }
   return session;
 }
@@ -386,7 +373,7 @@ export async function handleIgdbSelectInteraction(
   if (value === "__igdb_none") {
     const message = session.emptyMessage ??
       "No IGDB matches found. Try Search a different title.";
-    await replyIgdbNotice(interaction, buildTextReply(message, true));
+    await safeFollowUpIfSettled(interaction, buildTextReply(message, true));
     return true;
   }
 
@@ -407,7 +394,7 @@ export async function handleIgdbSelectInteraction(
 
   const selected = resolveIgdbSelection(sessionId, page, value);
   if (!selected || selected.kind !== "select") {
-    await replyIgdbNotice(interaction, buildTextReply("Invalid selection.", true));
+    await safeFollowUpIfSettled(interaction, buildTextReply("Invalid selection.", true));
     return true;
   }
   if (!await claimIgdbSessionOrAck(sessionId, interaction)) return true;
@@ -440,7 +427,7 @@ export async function handleIgdbFirstMatchInteraction(
   if (!firstOption) {
     const message = session.emptyMessage ??
       "No IGDB matches found. Try Search a different title.";
-    await replyIgdbNotice(interaction, buildTextReply(message, true));
+    await safeFollowUpIfSettled(interaction, buildTextReply(message, true));
     return true;
   }
   if (!await claimIgdbSessionOrAck(sessionId, interaction)) return true;
