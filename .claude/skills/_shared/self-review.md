@@ -10,11 +10,8 @@ the session has already read as a reviewer, not as its author, and found clean.
 ## When it starts
 
 The self review starts once the pull request is open, it is mergeable per
-[pr-mergeability.md](pr-mergeability.md), and its CI checks have passed:
-
-```bash
-gh pr checks <pr-number> --watch
-```
+[pr-mergeability.md](pr-mergeability.md), and its CI checks have passed, as
+`wait` reports them per [run-watch.md](run-watch.md).
 
 Move the session to the `Self Review` sidebar group as the review starts, per
 [sidebar-groups.md](sidebar-groups.md).
