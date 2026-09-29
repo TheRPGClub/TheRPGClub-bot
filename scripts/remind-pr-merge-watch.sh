@@ -12,24 +12,33 @@ command=$(jq -r '.tool_input.command // ""' <<<"$input")
 # one that merely mentions it (a grep of the docs, a commit message).
 grep -qE '(^|[;&|(])[[:space:]]*gh pr create' <<<"$command" || exit 0
 
-output=$(jq -r '.tool_response | if type == "string" then . else tostring end' \
-  <<<"$input")
-number=$(grep -oE 'github\.com/[^/ ]+/[^/ ]+/pull/[0-9]+' <<<"$output" \
-  | head -n1 | grep -oE '[0-9]+$' || true)
-test -n "$number" || exit 0
+# gh pr create prints the new URL on a line of its own; a URL inside other output
+# (test data, a grep of the docs) is not a pull request this command opened.
+stdout=$(jq -r '.tool_response
+  | if type == "object" then (.stdout // "") | tostring
+    elif type == "string" then . else tostring end' <<<"$input")
+url_re='https://github\.com/[^/[:space:]]+/[^/[:space:]]+/pull/([0-9]+)'
+numbers=$(sed -nE "s#^[[:space:]]*${url_re}[[:space:]]*\$#\\1#p" <<<"$stdout" \
+  | awk '!seen[$0]++')
+test -n "$numbers" || exit 0
 
-msg="Pull request $number was opened. Before ending the turn, record it with"
-msg+=" \`scripts/catchup.py add-pr <ledger> $number \"<label>\"\` and make sure"
-msg+=" one \`scripts/catchup.py wait <ledger>\` runs in the background, per"
-msg+=" .claude/skills/_shared/run-watch.md#waiting-on-a-pull-request. Once it is"
-msg+=" mergeable, without waiting for CI, move to Self Review and"
-msg+=" review it per .claude/skills/_shared/self-review.md, fixing every finding"
-msg+=" and reviewing again until a pass finds nothing. Do not end the turn inside"
-msg+=" the loop: wait for CI in the foreground. Move to Needs Review only after a"
-msg+=" clean pass with CI green and nothing else in progress, per"
-msg+=" .claude/skills/_shared/sidebar-groups.md. When \`wait\` prints"
-msg+=" \`pr: $number merged\`, run the after-merge steps straight away and follow"
-msg+=" its \`sidebar:\` line."
+# One reminder per pull request, so a command that opens several records each.
+msg=""
+for number in $numbers; do
+  test -z "$msg" || msg+=$'\n\n'
+  msg+="Pull request $number was opened. Before ending the turn, record it with"
+  msg+=" \`scripts/catchup.py add-pr <ledger> $number \"<label>\"\` and make sure"
+  msg+=" one \`scripts/catchup.py wait <ledger>\` runs in the background, per"
+  msg+=" .claude/skills/_shared/run-watch.md#waiting-on-a-pull-request. Once it is"
+  msg+=" mergeable, without waiting for CI, move to Self Review and"
+  msg+=" review it per .claude/skills/_shared/self-review.md, fixing every finding"
+  msg+=" and reviewing again until a pass finds nothing. Do not end the turn inside"
+  msg+=" the loop: wait for CI in the foreground. Move to Needs Review only after a"
+  msg+=" clean pass with CI green and nothing else in progress, per"
+  msg+=" .claude/skills/_shared/sidebar-groups.md. When \`wait\` prints"
+  msg+=" \`pr: $number merged\`, run the after-merge steps straight away and follow"
+  msg+=" its \`sidebar:\` line."
+done
 
 jq -n --arg m "$msg" \
   '{hookSpecificOutput: {hookEventName: "PostToolUse", additionalContext: $m}}'
