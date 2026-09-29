@@ -17,7 +17,6 @@ import {
   safeEditReply,
   safeReply,
   safeUpdate,
-  replyIfNotOwner,
 } from "../../functions/InteractionUtils.js";
 import { formatDiscordTimestamp, formatPlaytimeHours } from "../../functions/DateFormatUtils.js";
 import { igdbService } from "../../services/IGDB/IgdbService.js";
@@ -27,9 +26,7 @@ import {
   type IgdbSelectOption,
 } from "../../services/IGDB/IgdbSelectService.js";
 import {
-  persistedSessionStore,
-  persistSessionInBackground,
-  removePersistedSession,
+  createResumableSessionRegistry,
   type PersistedSessionLocation,
 } from "../../services/PersistedInteractionSessionStore.js";
 import {
@@ -60,8 +57,12 @@ import { assertCustomIdSegments, parseCustomIdSegments } from "../../utilities/C
 import GameSearchService from "../../classes/GameSearchService.js";
 
 const IGDB_IMPORT_FAILED_STATUS = "Import failed. See the error below.";
-const COMPLETION_ADD_PERSISTED_KIND = "completion-add";
-const completionAddRowIds = new Map<string, Promise<string | null>>();
+const COMPLETION_ADD_EXPIRED_MESSAGE = "This completion prompt has expired.";
+const completionAddRegistry = createResumableSessionRegistry<CompletionAddContext>({
+  kind: "completion-add",
+  sessions: completionAddSessions,
+  fromState: (state) => completionAddContextFromJson(state),
+});
 
 // Registered at module load so a pick after a bot restart finds the handler.
 const completionAddIgdbFlow = registerIgdbSelectFlow<CompletionAddContext>({
@@ -97,41 +98,14 @@ export function createCompletionSession(
   location: PersistedSessionLocation,
 ): string {
   const sessionId = `comp-${Date.now()}-${Math.floor(Math.random() * 100000)}`;
-  completionAddSessions.set(sessionId, ctx);
-  completionAddRowIds.set(sessionId, persistSessionInBackground({
-    kind: COMPLETION_ADD_PERSISTED_KIND,
+  completionAddRegistry.create({
     sessionId,
+    session: ctx,
     ownerId: ctx.userId,
     location,
     state: completionAddContextToJson(ctx),
-  }));
-  return sessionId;
-}
-
-async function resolveCompletionAddSession(
-  sessionId: string,
-  interaction: StringSelectMenuInteraction,
-): Promise<CompletionAddContext | null> {
-  const cached = completionAddSessions.get(sessionId);
-  if (cached) return cached;
-  const record = await persistedSessionStore.load({
-    kind: COMPLETION_ADD_PERSISTED_KIND,
-    sessionId,
-    ownerId: interaction.user.id,
-    channelId: interaction.channelId,
   });
-  if (!record) return null;
-  const ctx = completionAddContextFromJson(record.state);
-  if (!ctx) return null;
-  completionAddSessions.set(sessionId, ctx);
-  completionAddRowIds.set(sessionId, Promise.resolve(record.rowId));
-  return ctx;
-}
-
-function finishCompletionAddSession(sessionId: string): void {
-  completionAddSessions.delete(sessionId);
-  void removePersistedSession(completionAddRowIds.get(sessionId));
-  completionAddRowIds.delete(sessionId);
+  return sessionId;
 }
 
 /**
@@ -409,37 +383,55 @@ export async function handleCompletionAddSelect(
   const segs = assertCustomIdSegments(interaction, 1);
   if (!segs) return;
   const [sessionId] = segs;
-  let ctx: CompletionAddContext | null;
-  try {
-    ctx = await resolveCompletionAddSession(sessionId, interaction);
-  } catch (err: unknown) {
-    logError("CompletionAdd.resolveCompletionAddSession", err);
-    await safeReply(interaction, buildErrorReply(
-      buildApiErrorMessage("Could not restore this completion prompt.", err),
-      true,
-    ));
-    return;
-  }
-
-  if (!ctx) {
-    await safeReply(interaction, buildTextReply("This completion prompt has expired.", true));
-    return;
-  }
-
-  if (await replyIfNotOwner(interaction, ctx.userId, "This completion prompt isn't for you.")) return;
-
   const value = interaction.values?.[0];
   if (!value) {
     await safeReply(interaction, buildTextReply("No selection received.", true));
     return;
   }
 
+  // Ack first: restoring the prompt after a restart reads the API, which can
+  // outlast Discord's 3 second window. Replies below are ephemeral follow-ups so
+  // they never overwrite the prompt.
   await safeDeferUpdate(interaction);
+  let ctx: CompletionAddContext | undefined;
+  try {
+    ctx = await completionAddRegistry.resolve(sessionId, {
+      ownerId: interaction.user.id,
+      channelId: interaction.channelId,
+    });
+  } catch (err: unknown) {
+    logError("CompletionAdd.restoreSession", err);
+    await safeReply(interaction, {
+      ...buildErrorReply(
+        buildApiErrorMessage("Could not restore this completion prompt.", err),
+        true,
+      ),
+      __forceFollowUp: true,
+    });
+    return;
+  }
+
+  if (!ctx) {
+    await safeReply(interaction, {
+      ...buildTextReply(COMPLETION_ADD_EXPIRED_MESSAGE, true),
+      __forceFollowUp: true,
+    });
+    return;
+  }
+  if (ctx.userId !== interaction.user.id) {
+    await safeReply(interaction, {
+      ...buildTextReply("This completion prompt isn't for you.", true),
+      __forceFollowUp: true,
+    });
+    return;
+  }
+  // A second click while the first is still saving must not log it twice.
+  if (!completionAddRegistry.claim(sessionId)) return;
 
   try {
     await processCompletionSelection(interaction, value, ctx);
   } finally {
-    finishCompletionAddSession(sessionId);
+    completionAddRegistry.finish(sessionId);
   }
 }
 

@@ -114,3 +114,96 @@ export async function removePersistedSession(
     logError("PersistedInteractionSessionStore.remove", err);
   });
 }
+
+export type ResumableSessionLookup = {
+  ownerId: string;
+  channelId: string | null;
+};
+
+export type ResumableSessionRegistry<S> = {
+  get: (sessionId: string) => S | undefined;
+  /** Stores a session in memory only; it does not survive a restart. */
+  setInMemory: (sessionId: string, session: S) => void;
+  /** Stores a session and persists `state` so it can be restored after a restart. */
+  create: (params: {
+    sessionId: string;
+    session: S;
+    ownerId: string;
+    location: PersistedSessionLocation;
+    state: unknown;
+  }) => void;
+  /**
+   * Returns the in-memory session, or restores it from the API. Concurrent calls for
+   * one id share a single API read. API errors propagate so the caller can show the
+   * request and response.
+   */
+  resolve: (sessionId: string, lookup: ResumableSessionLookup) => Promise<S | undefined>;
+  /** True for the first caller only, so a double click runs the session's action once. */
+  claim: (sessionId: string) => boolean;
+  /** Forgets the session and deletes its persisted row. */
+  finish: (sessionId: string) => void;
+};
+
+/**
+ * In-memory interaction sessions backed by a persisted copy for restart recovery.
+ * `sessions` is passed in so callers can keep their existing (or global) map.
+ */
+export function createResumableSessionRegistry<S>(options: {
+  kind: string;
+  sessions: Map<string, S>;
+  fromState: (state: unknown, lookup: ResumableSessionLookup) => S | null;
+}): ResumableSessionRegistry<S> {
+  const { kind, sessions } = options;
+  const rowIds = new Map<string, Promise<string | null>>();
+  const restoring = new Map<string, Promise<S | undefined>>();
+  const claimed = new Set<string>();
+
+  async function restore(
+    sessionId: string,
+    lookup: ResumableSessionLookup,
+  ): Promise<S | undefined> {
+    const record = await persistedSessionStore.load({ kind, sessionId, ...lookup });
+    if (!record) return undefined;
+    const session = options.fromState(record.state, lookup);
+    if (!session) return undefined;
+    sessions.set(sessionId, session);
+    rowIds.set(sessionId, Promise.resolve(record.rowId));
+    return session;
+  }
+
+  return {
+    get: (sessionId) => sessions.get(sessionId),
+    setInMemory: (sessionId, session) => {
+      sessions.set(sessionId, session);
+    },
+    create: ({ sessionId, session, ownerId, location, state }) => {
+      sessions.set(sessionId, session);
+      rowIds.set(
+        sessionId,
+        persistSessionInBackground({ kind, sessionId, ownerId, location, state }),
+      );
+    },
+    resolve: (sessionId, lookup) => {
+      const cached = sessions.get(sessionId);
+      if (cached) return Promise.resolve(cached);
+      const pending = restoring.get(sessionId);
+      if (pending) return pending;
+      const restored = restore(sessionId, lookup).finally(() => {
+        restoring.delete(sessionId);
+      });
+      restoring.set(sessionId, restored);
+      return restored;
+    },
+    claim: (sessionId) => {
+      if (claimed.has(sessionId)) return false;
+      claimed.add(sessionId);
+      return true;
+    },
+    finish: (sessionId) => {
+      sessions.delete(sessionId);
+      void removePersistedSession(rowIds.get(sessionId));
+      rowIds.delete(sessionId);
+      claimed.delete(sessionId);
+    },
+  };
+}
