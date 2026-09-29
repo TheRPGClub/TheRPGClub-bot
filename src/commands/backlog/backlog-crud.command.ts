@@ -69,7 +69,7 @@ export class BacklogCrudCommand {
       : null;
 
     if (platformRaw !== undefined && !platformId) {
-      await safeReply(interaction, "Invalid platform selection.");
+      await safeReply(interaction, buildTextReply("Invalid platform selection.", true));
       return;
     }
 
@@ -140,7 +140,10 @@ export class BacklogCrudCommand {
 
       const platformLabel = created.platformName ?? (platformId ? `Platform #${platformId}` : "");
       const platformSuffix = platformLabel ? ` (${platformLabel})` : "";
-      await safeReply(interaction, `Added **${created.title}**${platformSuffix} to your backlog.`);
+      await safeReply(
+        interaction,
+        buildTextReply(`Added **${created.title}**${platformSuffix} to your backlog.`, true),
+      );
     } catch (err: unknown) {
       logError("backlog add.add_entry_failed", err);
       await safeReply(
@@ -195,7 +198,7 @@ export class BacklogCrudCommand {
 
     const entryId = parseBacklogEntryAutocompleteValue(entryRaw);
     if (!entryId) {
-      await safeReply(interaction, "Invalid backlog entry selection.");
+      await safeReply(interaction, buildTextReply("Invalid backlog entry selection.", true));
       return;
     }
 
@@ -208,7 +211,7 @@ export class BacklogCrudCommand {
     if (platformRaw !== undefined) {
       const platformId = await resolveGameCompletionPlatformId(platformRaw);
       if (!platformId) {
-        await safeReply(interaction, "Invalid platform selection.");
+        await safeReply(interaction, buildTextReply("Invalid platform selection.", true));
         return;
       }
       updates.platformId = platformId;
@@ -225,7 +228,7 @@ export class BacklogCrudCommand {
     }
 
     if (!Object.keys(updates).length) {
-      await safeReply(interaction, "Provide at least one field to update.");
+      await safeReply(interaction, buildTextReply("Provide at least one field to update.", true));
       return;
     }
 
@@ -236,12 +239,15 @@ export class BacklogCrudCommand {
         updates,
       );
       if (!updated) {
-        await safeReply(interaction, "Backlog entry was not found.");
+        await safeReply(interaction, buildTextReply("Backlog entry was not found.", true));
         return;
       }
 
       const platformLabel = updated.platformName ?? "No platform";
-      await safeReply(interaction, `Updated **${updated.title}** (${platformLabel}) in your backlog.`);
+      await safeReply(
+        interaction,
+        buildTextReply(`Updated **${updated.title}** (${platformLabel}) in your backlog.`, true),
+      );
     } catch (err: unknown) {
       logError("backlog edit.update_entry_failed", err);
       await safeReply(
@@ -267,22 +273,25 @@ export class BacklogCrudCommand {
 
     const entryId = parseBacklogEntryAutocompleteValue(entryRaw);
     if (!entryId) {
-      await safeReply(interaction, "Invalid backlog entry selection.");
+      await safeReply(interaction, buildTextReply("Invalid backlog entry selection.", true));
       return;
     }
 
     const existing = await UserGameBacklog.getEntryForUser(entryId, interaction.user.id);
     if (!existing) {
-      await safeReply(interaction, "Backlog entry was not found.");
+      await safeReply(interaction, buildTextReply("Backlog entry was not found.", true));
       return;
     }
 
     const deleted = await UserGameBacklog.removeEntryForUser(entryId, interaction.user.id);
     if (!deleted) {
-      await safeReply(interaction, "Failed to remove that backlog entry.");
+      await safeReply(interaction, buildTextReply("Failed to remove that backlog entry.", true));
       return;
     }
 
-    await safeReply(interaction, `Removed **${existing.title}** from your backlog.`);
+    await safeReply(
+      interaction,
+      buildTextReply(`Removed **${existing.title}** from your backlog.`, true),
+    );
   }
 }

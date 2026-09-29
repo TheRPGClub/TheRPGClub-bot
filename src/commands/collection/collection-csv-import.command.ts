@@ -558,9 +558,13 @@ export class CollectionCsvImportCommand {
       onStart: async () => {
         const existing = await getActiveCollectionCsvImportForUser(interaction.user.id);
         if (existing) {
-          await safeReply(interaction, 
-            `You already have import #${existing.importId} (${existing.status}). ` +
-            "Use action:resume, action:status, action:pause, or action:cancel.",
+          await safeReply(
+            interaction,
+            buildTextReply(
+              `You already have import #${existing.importId} (${existing.status}). ` +
+                "Use action:resume, action:status, action:pause, or action:cancel.",
+              true,
+            ),
           );
           return;
         }
@@ -601,7 +605,10 @@ export class CollectionCsvImportCommand {
 
         const csvText = await fetchCsvAttachment(file);
         if (!csvText) {
-          await safeReply(interaction, "Failed to download the CSV file. Please try again.");
+          await safeReply(
+            interaction,
+            buildTextReply("Failed to download the CSV file. Please try again.", true),
+          );
           return;
         }
 
@@ -629,7 +636,10 @@ export class CollectionCsvImportCommand {
         }
 
         if (!parsed.rows.length) {
-          await safeReply(interaction, "CSV file contains no importable rows.");
+          await safeReply(
+            interaction,
+            buildTextReply("CSV file contains no importable rows.", true),
+          );
           return;
         }
 
@@ -655,15 +665,19 @@ export class CollectionCsvImportCommand {
           total: parsed.rows.length,
         });
 
-        await safeReply(interaction, 
-          `CSV import #${session.importId} created for **${parsed.rows.length}** rows. ` +
-          "Starting review now.",
+        await safeReply(
+          interaction,
+          buildTextReply(
+            `CSV import #${session.importId} created for **${parsed.rows.length}** rows. ` +
+              "Starting review now.",
+            true,
+          ),
         );
         await this.renderNextCsvImportItem(interaction, session.importId, interaction.user.id);
       },
       getActiveSession: (userId: string) => getActiveCollectionCsvImportForUser(userId),
       onMissingSession: async () => {
-        await safeReply(interaction, "No active CSV import session found.");
+        await safeReply(interaction, buildTextReply("No active CSV import session found.", true));
       },
       onStatus: async (session) => {
         const stats = await countCollectionCsvImportItems(session.importId);
@@ -697,10 +711,14 @@ export class CollectionCsvImportCommand {
           importId: session.importId,
           pending: stats.pending,
         });
-        await safeReply(interaction, 
-          `CSV import #${session.importId} paused. ` +
-          `Pending ${stats.pending}, Added ${stats.added}, Updated ${stats.updated}, ` +
-          `Skipped ${stats.skipped}, Failed ${stats.failed}.`,
+        await safeReply(
+          interaction,
+          buildTextReply(
+            `CSV import #${session.importId} paused. ` +
+              `Pending ${stats.pending}, Added ${stats.added}, Updated ${stats.updated}, ` +
+              `Skipped ${stats.skipped}, Failed ${stats.failed}.`,
+            true,
+          ),
         );
       },
       onCancel: async (session) => {
@@ -711,15 +729,22 @@ export class CollectionCsvImportCommand {
           importId: session.importId,
           pending: stats.pending,
         });
-        await safeReply(interaction, 
-          `CSV import #${session.importId} canceled. ` +
-          `Pending ${stats.pending}, Added ${stats.added}, Updated ${stats.updated}, ` +
-          `Skipped ${stats.skipped}, Failed ${stats.failed}.`,
+        await safeReply(
+          interaction,
+          buildTextReply(
+            `CSV import #${session.importId} canceled. ` +
+              `Pending ${stats.pending}, Added ${stats.added}, Updated ${stats.updated}, ` +
+              `Skipped ${stats.skipped}, Failed ${stats.failed}.`,
+            true,
+          ),
         );
       },
       onResume: async (session) => {
         await setCollectionCsvImportStatus(session.importId, "ACTIVE");
-        await safeReply(interaction, `CSV import #${session.importId} resumed.`);
+        await safeReply(
+          interaction,
+          buildTextReply(`CSV import #${session.importId} resumed.`, true),
+        );
         logCsvImportEvent("resumed", {
           userId: interaction.user.id,
           importId: session.importId,
