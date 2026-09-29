@@ -15,16 +15,14 @@ function fakeServices(started: string[]): ISharedStateService[] {
 
 test("startSharedStateServices starts every service outside test mode", () => {
   const started: string[] = [];
-  const names = startSharedStateServices(CLIENT, false, fakeServices(started));
+  startSharedStateServices(CLIENT, false, fakeServices(started));
   assert.deepEqual(started, ["A", "B"]);
-  assert.deepEqual(names, ["A", "B"]);
 });
 
 test("startSharedStateServices starts nothing in test mode", () => {
   const started: string[] = [];
-  const names = startSharedStateServices(CLIENT, true, fakeServices(started));
+  startSharedStateServices(CLIENT, true, fakeServices(started));
   assert.deepEqual(started, []);
-  assert.deepEqual(names, []);
 });
 
 test("every service that claims or writes shared API state is gated", () => {
@@ -32,6 +30,7 @@ test("every service that claims or writes shared API state is gated", () => {
     "VotingEventService",
     "PublicReminderService",
     "ThreadSyncService",
+    "ThreadLinkPromptService",
     "GameReleaseAnnouncementService",
     "RssFeedService",
   ]);

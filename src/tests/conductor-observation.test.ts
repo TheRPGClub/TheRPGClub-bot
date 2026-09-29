@@ -133,6 +133,7 @@ test("does not accept public output for an ephemeral step", () => {
   const result = judgeStep(makeStep({}), outputs, { start: 100, end: 200 });
   assert.equal(result.verdict, "fail");
   assert.match(result.reason, /No output observed in the ephemeral mirror channel\./);
+  assert.match(result.reason, /A public reply arrived instead/);
   assert.deepEqual(result.unattributed.map((entry) => entry.messageId), ["pub"]);
 });
 

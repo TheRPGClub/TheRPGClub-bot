@@ -21,7 +21,6 @@ import {
 import Member from "./classes/Member.js";
 import { joinAllTargetForumThreads } from "./services/ForumThreadJoinService.js";
 import { startSharedStateServices } from "./services/SharedStateServices.js";
-import { startThreadLinkPromptService } from "./services/ThreadLinkPromptService.js";
 import { refreshGiveawayHubMessage } from "./services/GiveawayHubService.js";
 import { startUserEmojiService } from "./services/UserEmojiService.js";
 import { startPokopiaEmojiService } from "./services/PokopiaEmojiService.js";
@@ -216,8 +215,9 @@ bot.once("clientReady", async () => {
   //    ...bot.guilds.cache.map((g) => g.id)
   //  );
 
+  // A background service that writes through the API goes in SHARED_STATE_SERVICES, so
+  // PR previews in test mode never run it against production data.
   startSharedStateServices(bot);
-  startThreadLinkPromptService(bot);
   await joinAllTargetForumThreads(bot);
   await refreshGiveawayHubMessage(bot);
   await startUserEmojiService(bot);

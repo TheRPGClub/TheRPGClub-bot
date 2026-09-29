@@ -225,7 +225,17 @@ export function judgeStep(
     const elsewhere = unattributed.length
       ? ` ${unattributed.length} other message(s) arrived in the window but did not match.`
       : "";
-    return { ...result, verdict: "fail", reason: `No output observed in ${where}.${elsewhere}` };
+    // A preview built from a branch older than the test mode override switch still
+    // posts the owner's ephemeral replies publicly.
+    const publicReply = step.ephemeral && unattributed.some((entry) => entry.place === "channel")
+      ? " A public reply arrived instead: it was not ephemeral, or this PR's branch predates" +
+        " the test mode dev channel fix and needs main merged in."
+      : "";
+    return {
+      ...result,
+      verdict: "fail",
+      reason: `No output observed in ${where}.${elsewhere}${publicReply}`,
+    };
   }
 
   if (step.expectedTexts.length === 0) {
