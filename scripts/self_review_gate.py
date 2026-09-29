@@ -21,8 +21,8 @@ Events:
 
 A loop is finished when the pull request's current head has a clean pass, its
 CI has passed or runs no checks, and it is not in conflict with its base.
-Pending CI on a clean head still blocks:
-the session waits for it in the foreground rather than ending the turn.
+Pending CI on a clean head still blocks: the session waits for it in the
+foreground rather than ending the turn.
 
 Pull requests are keyed by URL, so one opened in another repository is read
 from that repository. A pass is only as honest as the review behind it: the gate
@@ -45,8 +45,9 @@ NEEDS_REVIEW_GROUP = 'Needs Review'
 GH_TIMEOUT = 20
 PR_URL = re.compile(r'https://github\.com/([^/\s]+/[^/\s]+)/pull/(\d+)')
 GH_PR_CREATE = re.compile(r'(^|[;&|(])\s*gh pr create')
-# gh's wording when the repository or pull request does not exist; such a PR is dropped.
-MISSING_PR = re.compile(r'Could not resolve to a|no pull requests? found|HTTP 404', re.I)
+# gh's wording when the repository does not exist; such a PR is dropped. A 404 is not
+# enough, since GitHub can answer 404 for a pull request opened seconds ago.
+MISSING_PR = re.compile(r'Could not resolve to a Repository', re.I)
 FAILED_CONCLUSIONS = {'FAILURE', 'TIMED_OUT', 'CANCELLED', 'ACTION_REQUIRED',
                       'STARTUP_FAILURE'}
 PENDING_STATUS_STATES = {'PENDING', 'EXPECTED'}
@@ -270,13 +271,17 @@ def warning(errors):
 
 def on_sidebar(state, payload):
     group = state['groups'].get(payload.get('tool_input', {}).get('group_id'))
-    if group != NEEDS_REVIEW_GROUP:
+    if group is not None and group != NEEDS_REVIEW_GROUP:
         return None
     problems, errors = unfinished(state)
     if not problems:
         return warning(errors)
-    reason = ('Not ready for Needs Review. ' + ' '.join(f'{p}.' for p in problems)
-              + ' Stay in Self Review until every loop is finished.')
+    if group is None:
+        reason = ('The self review gate does not know this group id, and a tracked pull '
+                  'request is unfinished. Call mcp__ccd_sidebar__list_groups first, then move.')
+    else:
+        reason = ('Not ready for Needs Review. ' + ' '.join(f'{p}.' for p in problems)
+                  + ' Stay in Self Review until every loop is finished.')
     return {'hookSpecificOutput': {'hookEventName': 'PreToolUse',
                                    'permissionDecision': 'deny',
                                    'permissionDecisionReason': reason}}

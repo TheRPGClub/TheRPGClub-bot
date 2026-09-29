@@ -3,8 +3,11 @@
 
 usage: python3 scripts/self_review_gate_test.py
 """
+import io
+import json
 import os
 import sys
+import tempfile
 import unittest
 from unittest import mock
 
@@ -67,6 +70,22 @@ class GateTest(unittest.TestCase):
         self.read.side_effect = RuntimeError('GraphQL: Could not resolve to a Repository')
         self.assertIsNone(gate.on_stop(state, {}))
         self.assertEqual(state['prs'], [])
+
+    def test_transient_404_keeps_the_pr(self):
+        state = fresh()
+        state['prs'] = [URL]
+        self.read.side_effect = RuntimeError('HTTP 404: Not Found')
+        self.assertIn('could not read', gate.on_stop(state, {})['systemMessage'])
+        self.assertEqual(state['prs'], [URL])
+
+    def test_unknown_group_id_is_denied_while_unfinished(self):
+        state = fresh()
+        state['prs'] = [URL]
+        move = {'tool_input': {'group_id': 'g-unknown', 'session_ids': ['self']}}
+        denied = gate.on_sidebar(state, move)['hookSpecificOutput']
+        self.assertIn('list_groups', denied['permissionDecisionReason'])
+        review(state, 0)
+        self.assertIsNone(gate.on_sidebar(state, move))
 
     def test_mentioning_gh_pr_create_does_not_track(self):
         state = fresh()
@@ -180,6 +199,37 @@ class GateTest(unittest.TestCase):
         self.assertEqual(gate.ci_state(pr(checks=[{'state': 'PENDING'}])), 'pending')
         self.assertEqual(gate.ci_state(pr(checks=[{'state': 'ERROR'}])), 'failed')
         self.assertEqual(gate.ci_state(pr(checks=PASSED + [{'state': 'SUCCESS'}])), 'passed')
+
+
+class MainTest(unittest.TestCase):
+    """main() end to end: the relevance filter, the state file, and the hook output."""
+
+    def setUp(self):
+        self.dir = tempfile.TemporaryDirectory()
+        self.addCleanup(self.dir.cleanup)
+        self.path = os.path.join(self.dir.name, 'self-review', 's.json')
+        mock.patch.object(gate, 'state_path', return_value=self.path).start()
+        mock.patch.object(gate, 'read_pr', return_value=pr()).start()
+        self.addCleanup(mock.patch.stopall)
+
+    def run_main(self, event, payload):
+        out = io.StringIO()
+        with mock.patch('sys.stdin', io.StringIO(json.dumps(payload))), \
+                mock.patch('sys.stdout', out):
+            self.assertEqual(gate.main(['gate', event]), 0)
+        return json.loads(out.getvalue()) if out.getvalue() else None
+
+    def test_unrelated_bash_call_never_creates_state(self):
+        self.run_main('pr-opened', {'session_id': 's', 'tool_input': {'command': 'ls'}})
+        self.assertFalse(os.path.exists(self.path))
+
+    def test_opened_pr_persists_and_blocks_stop(self):
+        self.run_main('pr-opened', {'session_id': 's',
+                                    'tool_input': {'command': 'gh pr create -t x'},
+                                    'tool_response': {'stdout': URL + '\n'}})
+        with open(self.path) as f:
+            self.assertEqual(json.load(f)['prs'], [URL])
+        self.assertEqual(self.run_main('stop', {'session_id': 's'})['decision'], 'block')
 
 
 if __name__ == '__main__':
