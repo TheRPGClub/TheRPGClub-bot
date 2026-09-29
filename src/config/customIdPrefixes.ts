@@ -19,3 +19,8 @@ export const GAMEDB_SEARCH_PREFIX = "gamedb-search-";
 export const POKOPIA_LIST_NAV_PREFIX = "pokopia-list-nav-v1";
 export const POKOPIA_DETAIL_PREFIX = "pokopia-detail-v1";
 export const POKOPIA_BACK_PREFIX = "pokopia-back-v1";
+
+// Conductor test runner interaction IDs (separate process, see src/conductor)
+export const CONDUCTOR_CHECK_PREFIX = "conductor-check-v1";
+export const CONDUCTOR_ABORT_PREFIX = "conductor-abort-v1";
+export const CONDUCTOR_REPORT_PREFIX = "conductor-report-v1";

@@ -14,6 +14,7 @@
     "dev": "node --no-warnings=ExperimentalWarning --import tsx src/RPGClub_GameDB.ts",
     "import:igdb-platforms": "node --no-warnings=ExperimentalWarning --import tsx src/scripts/import-igdb-platforms.ts",
     "start": "node build/RPGClub_GameDB.js",
+    "conductor": "node --no-warnings=ExperimentalWarning --import tsx src/conductor/main.ts",
     "watch": "nodemon --exec npm run dev --watch src --ext ts",
     "compile": "npx tsc --noEmit",
     "test": "node --no-warnings=ExperimentalWarning --import tsx --test src/tests/*.test.ts 2>&1 | tee test-results.txt",
