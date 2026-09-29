@@ -5,6 +5,7 @@ import {
   buildApiErrorMessage,
   decodeBinaryBody,
   redactUrlSecrets,
+  UserFacingError,
 } from "../utilities/ApiErrorUtils.js";
 
 function notFoundError(): AxiosError {
@@ -89,4 +90,14 @@ test("buildApiErrorMessage never prints a Twitch client_secret from an AxiosErro
   const message = buildApiErrorMessage("Failed to add completion.", err);
   assert.ok(!message.includes("s3cr3t"));
   assert.ok(message.includes("client_secret=REDACTED"));
+});
+
+test("buildApiErrorMessage shows only the message for a UserFacingError", () => {
+  const err = new UserFacingError("That game is already in your backlog.", {
+    cause: notFoundError(),
+  });
+  assert.equal(
+    buildApiErrorMessage("Failed to add backlog entry.", err),
+    "Failed to add backlog entry.: That game is already in your backlog.",
+  );
 });

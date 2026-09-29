@@ -2,6 +2,7 @@ import { apiGet, apiPost, apiPatch, apiDelete } from "../services/RpgClubApiClie
 import Game from "./Game.js";
 import { isPositiveInt, requirePositiveInt } from "../utilities/ValidationUtils.js";
 import GamePlatformRegionService from "./GamePlatformRegionService.js";
+import { UserFacingError } from "../utilities/ApiErrorUtils.js";
 
 export interface IUserGameBacklogEntry {
   entryId: number;
@@ -110,7 +111,7 @@ export default class UserGameBacklog {
     } catch (err: any) {
       const msg = String(err?.response?.data?.error ?? err?.message ?? "");
       if (/unique|duplicate|already been taken/i.test(msg)) {
-        throw new Error("That game is already in your backlog.", { cause: err });
+        throw new UserFacingError("That game is already in your backlog.", { cause: err });
       }
       throw err;
     }
@@ -190,7 +191,7 @@ export default class UserGameBacklog {
     } catch (err: any) {
       const msg = String(err?.response?.data?.error ?? err?.message ?? "");
       if (/unique|duplicate|already been taken/i.test(msg)) {
-        throw new Error("That game/platform entry already exists in your backlog.", {
+        throw new UserFacingError("That game/platform entry already exists in your backlog.", {
           cause: err,
         });
       }

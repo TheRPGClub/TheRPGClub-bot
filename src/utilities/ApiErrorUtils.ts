@@ -89,10 +89,23 @@ function formatAxiosError(err: AxiosError): string {
 }
 
 /**
+ * A failure the user caused and can fix, such as adding a duplicate entry. Its `cause`
+ * keeps the API error for logs, but the reply shows only the message, with no
+ * request/response JSON and no dev ping.
+ */
+export class UserFacingError extends Error {
+  constructor(message: string, options?: ErrorOptions) {
+    super(message, options);
+    this.name = "UserFacingError";
+  }
+}
+
+/**
  * Renders request/response JSON for an `AxiosError`, or for an `Error` whose
  * `cause` is one (a friendly message wrapping the API failure).
  */
 export function buildApiErrorMessage(label: string, err: unknown): string {
+  if (err instanceof UserFacingError) return `${label}: ${err.message}`;
   if (axios.isAxiosError(err)) {
     return `${label}\n${formatAxiosError(err)}`;
   }
