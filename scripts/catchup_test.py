@@ -307,5 +307,101 @@ class Forwarder(TempLedger):
         self.assertEqual(push.seen['42']['action'], 'completed')
 
 
+PUSH = catchup.Push
+HANG = """#!/usr/bin/env python3
+import time
+time.sleep(10)
+"""
+
+
+class HungRead(TempLedger):
+    """A run read that hangs gives up on its timeout and holds back no close notice."""
+
+    def setUp(self):
+        super().setUp()
+        gh = os.path.join(self.dir, 'gh')
+        with open(gh, 'w') as f:
+            f.write(HANG)
+        os.chmod(gh, os.stat(gh).st_mode | stat.S_IEXEC)
+        path = self.dir + os.pathsep + os.environ.get('PATH', '')
+        env = mock.patch.dict(os.environ, {'PATH': path})
+        env.start()
+        self.addCleanup(env.stop)
+        for patch in (mock.patch.object(catchup, 'WAIT_READ_TIMEOUT', 1),
+                      mock.patch.object(catchup.time, 'sleep')):
+            patch.start()
+            self.addCleanup(patch.stop)
+
+    def push(self):
+        push = object.__new__(PUSH)
+        push.events = os.path.join(self.dir, 'events.jsonl')
+        push.handle, push.partial, push.seen = None, b'', {}
+        push.usable, push.holder = True, False
+        push.tend = lambda: True
+        push.read()
+        self.addCleanup(lambda: push.handle and push.handle.close())
+        return push
+
+    def event(self, line):
+        with open(os.path.join(self.dir, 'events.jsonl'), 'a') as f:
+            f.write(json.dumps(line) + '\n')
+
+    MERGE = {'event': 'pr', 'run': 'pr:5', 'state': 'merged', 'sha': 'abcdef1234567',
+             'merged_at': '2026-09-28T20:12:13Z', 'at': '2026-09-28T20:12:15Z'}
+
+    def run_wait(self, merge_on_call):
+        """Wait on a run row and a pull request row, with a completed run notice already
+        in. The merge notice lands while gh call number merge_on_call is out."""
+        catchup.record(self.ledger, {'label': 'ci', 'branch': 'fix/stub', 'run': '42',
+                                     'job': 'https://example.test/job/7', 'state': 'queued',
+                                     'tally': '', 'title': ''})
+        catchup.record(self.ledger, {'label': 'pull request 5', 'branch': 'fix/stub',
+                                     'run': 'pr:5', 'job': 'https://example.test/pull/5',
+                                     'state': 'open', 'tally': 'added 2026-09-28T20:00:00Z',
+                                     'title': ''})
+        self.event({'event': 'run', 'run': '42', 'action': 'completed',
+                    'at': '2026-09-28T20:12:07Z'})
+        if merge_on_call == 0:
+            self.event(self.MERGE)
+        calls = []
+        real_gh = catchup.gh
+
+        def hung_gh(*args, timeout=None):
+            calls.append((args[-1], timeout))
+            if len(calls) == merge_on_call:
+                self.event(self.MERGE)
+            return real_gh(*args, timeout=timeout)
+
+        out = io.StringIO()
+        start = catchup.time.time()
+        with mock.patch.object(catchup, 'Push', self.push), \
+                mock.patch.object(catchup, 'gh', hung_gh), contextlib.redirect_stdout(out):
+            catchup.wait(self.ledger, 180)
+        elapsed = catchup.time.time() - start
+        rows = {r['run']: r for r in catchup.read_ledger(self.ledger)}
+        self.assertIn('pr: 5 merged', out.getvalue())
+        self.assertEqual(rows['pr:5']['state'], 'done')
+        self.assertNotEqual(rows['42']['state'], 'done')
+        return out.getvalue(), elapsed, calls
+
+    def test_a_merge_during_the_first_run_list_settles_when_it_gives_up(self):
+        # As for #1167: the merge lands while a run read is out.
+        out, elapsed, calls = self.run_wait(merge_on_call=1)
+        self.assertLess(elapsed, 4, out)
+        self.assertIn('run list failed, nothing changed: no answer in 1s', out)
+        self.assertEqual([t for _, t in calls], [1])
+
+    def test_a_merge_during_a_notified_run_read_settles_when_it_gives_up(self):
+        out, elapsed, calls = self.run_wait(merge_on_call=2)
+        self.assertLess(elapsed, 5, out)
+        self.assertIn('run read failed, nothing changed: no answer in 1s', out)
+        self.assertTrue(calls[1][0].endswith('/actions/runs/42'), calls)
+        self.assertEqual([t for _, t in calls], [1, 1])
+
+    def test_a_merge_already_in_settles_before_any_read(self):
+        out, elapsed, calls = self.run_wait(merge_on_call=0)
+        self.assertEqual(calls, [], out)
+        self.assertLess(elapsed, 1, out)
+
 if __name__ == '__main__':
     unittest.main()
