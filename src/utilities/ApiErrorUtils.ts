@@ -1,4 +1,4 @@
-import axios from "axios";
+import axios, { type AxiosError } from "axios";
 
 import { DEV_ROLE_ID } from "../config/roles.js";
 
@@ -69,16 +69,27 @@ export function buildDiscordErrorMessage(label: string, err: unknown): string {
   )}`;
 }
 
-export function buildApiErrorMessage(label: string, err: unknown): string {
-  if (!axios.isAxiosError(err)) {
-    const msg = err instanceof Error ? err.message : String(err);
-    return `${label}: ${msg}\n${DEV_PING}`;
-  }
-  return `${label}\n${formatApiError(
+function formatAxiosError(err: AxiosError): string {
+  return formatApiError(
     err.config?.method ?? "?",
     err.config?.url ?? "?",
     tryParseJson(err.config?.data as string | null | undefined),
     err.response?.status,
     decodeBinaryBody(err.response?.data),
-  )}`;
+  );
+}
+
+/**
+ * Renders request/response JSON for an `AxiosError`, or for an `Error` whose
+ * `cause` is one (a friendly message wrapping the API failure).
+ */
+export function buildApiErrorMessage(label: string, err: unknown): string {
+  if (axios.isAxiosError(err)) {
+    return `${label}\n${formatAxiosError(err)}`;
+  }
+  const msg = err instanceof Error ? err.message : String(err);
+  if (err instanceof Error && axios.isAxiosError(err.cause)) {
+    return `${label}: ${msg}\n${formatAxiosError(err.cause)}`;
+  }
+  return `${label}: ${msg}\n${DEV_PING}`;
 }
