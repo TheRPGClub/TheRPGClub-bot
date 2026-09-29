@@ -1,6 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  buildRescheduleBody,
+  explainRescheduleRefusal,
   isRoundTallyRevealed,
   mapVotingRoundApiData,
   type VotingRoundApiData,
@@ -87,4 +89,44 @@ test("mapVotingRoundApiData rejects an unparseable vote time", () => {
     () => mapVotingRoundApiData(apiRound({ voting_opens_at: "not a date" })),
     /Invalid voting_opens_at/,
   );
+});
+
+test("buildRescheduleBody sends only the fields being changed", () => {
+  const opensAt = new Date("2026-10-30T16:00:00.000Z");
+  assert.deepEqual(buildRescheduleBody({ votingOpensAt: opensAt }), {
+    voting_opens_at: "2026-10-30T16:00:00.000Z",
+  });
+  const closesAt = new Date("2026-09-27T20:00:00.000Z");
+  assert.deepEqual(buildRescheduleBody({ votingClosesAt: closesAt }), {
+    voting_closes_at: "2026-09-27T20:00:00.000Z",
+  });
+});
+
+test("explainRescheduleRefusal only moves a round still collecting nominations", () => {
+  const now = new Date("2026-10-01T12:00:00.000Z");
+  const nextFriday = new Date("2026-10-30T16:00:00.000Z");
+  const nominating = mapVotingRoundApiData(
+    apiRound({ phase: "nominating", nominations_open: true, voting_open: false }),
+  );
+  assert.equal(explainRescheduleRefusal(nominating, nextFriday, now), null);
+
+  const voting = mapVotingRoundApiData(apiRound());
+  assert.match(explainRescheduleRefusal(voting, nextFriday, now) ?? "", /already open/);
+
+  const ended = mapVotingRoundApiData(
+    apiRound({ phase: "closed", voting_open: false, voting_ended: true }),
+  );
+  assert.match(explainRescheduleRefusal(ended, nextFriday, now) ?? "", /has ended/);
+});
+
+test("explainRescheduleRefusal refuses an open whose voting weekend has passed", () => {
+  const now = new Date("2026-10-01T12:00:00.000Z");
+  const nominating = mapVotingRoundApiData(
+    apiRound({ phase: "nominating", nominations_open: true, voting_open: false }),
+  );
+  const lastMonth = new Date("2026-09-04T16:00:00.000Z");
+  assert.match(explainRescheduleRefusal(nominating, lastMonth, now) ?? "", /already be over/);
+  // Opening today still leaves the weekend window ahead.
+  const today = new Date("2026-10-01T16:00:00.000Z");
+  assert.equal(explainRescheduleRefusal(nominating, today, now), null);
 });

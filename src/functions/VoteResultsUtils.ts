@@ -88,7 +88,7 @@ function joinBoldTitles(titles: string[]): string {
 
 /**
  * The winner line for a category whose picks are settled, e.g. after the
- * admins break a tie or record several winners in /admin nextround-setup.
+ * admins break a tie.
  */
 export function buildFinalWinnersText(params: {
   kindLabel: string;
