@@ -25,6 +25,8 @@ ruleTester.run("no-sanitize-url-input", rule, {
     "const imageUrl = parseUserUrl(input.imageUrl);",
     "const payload = { title: sanitizeUserInput(title) };",
     "const label = sanitizeUserInput(url ? text : other);",
+    "const note = sanitizeUserInput(\"paste the link here\");",
+    "const imageUrl = sanitizeUserInput(raw) ? fallback : other;",
   ],
   invalid: [
     {
@@ -53,6 +55,26 @@ ruleTester.run("no-sanitize-url-input", rule, {
     },
     {
       code: "state.href = sanitizeUserInput(raw) ?? '';",
+      errors: [{ messageId: "noSanitizeUrl" }],
+    },
+    {
+      code: "const payload = { \"imageUrl\": sanitizeUserInput(raw) };",
+      errors: [{ messageId: "noSanitizeUrl" }],
+    },
+    {
+      code: "const value = sanitizeUserInput(feedURLs);",
+      errors: [{ messageId: "noSanitizeUrl" }],
+    },
+    {
+      code: "class Feed { imageUrl = sanitizeUserInput(raw); }",
+      errors: [{ messageId: "noSanitizeUrl" }],
+    },
+    {
+      code: "function save(url = sanitizeUserInput(raw)) { return url; }",
+      errors: [{ messageId: "noSanitizeUrl" }],
+    },
+    {
+      code: "const imageUrl = sanitizeUserInput(raw) satisfies string;",
       errors: [{ messageId: "noSanitizeUrl" }],
     },
   ],
