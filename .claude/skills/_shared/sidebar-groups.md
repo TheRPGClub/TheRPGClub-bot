@@ -46,7 +46,13 @@ other session asks the user first, so it is never done unasked.
 - Before ending any turn, check the group against the definitions above. A
   session doing more work after its pull request is handed over (another task
   the user asked for, a follow-up branch) moves back to `Working` first.
-- The turn ends on a question only the user can answer: `Needs Review`.
+- More than one pull request open: the least finished one decides, in the
+  order `Working`, then `Self Review`, then `Needs Review`. `Needs Review`
+  needs every open pull request clean with CI green.
+- The turn ends on a question only the user can answer: `Needs Review`, unless
+  a self review loop is unfinished. Then the question goes through
+  `AskUserQuestion` inside the turn and the session stays in `Self Review`,
+  per [self-review.md](self-review.md#the-loop).
 - The user answers, review comments come in to act on, or CI fails on the
   session's pull request: `Working`. Once the fix is pushed, back through the
   self review loop in `Self Review`, and to `Needs Review` only when it ends
@@ -60,9 +66,10 @@ other session asks the user first, so it is never done unasked.
   - a background task or subagent still running;
   - anything the user asked for in this session that is not finished yet.
 
-  A session that holds another open pull request waiting on the user goes
-  back to `Needs Review`. Only when none of these holds does the session go to
-  `Completed`.
+  A session that holds another open pull request goes to `Self Review` while
+  that pull request's loop is unfinished, and to `Needs Review` once it has
+  ended clean with CI green. Only when none of these holds does the session go
+  to `Completed`.
 - A task that opened no pull request (an investigation, an audit, a filed
   issue) goes to `Completed` when it ends with nothing left to wait on.
 
@@ -74,8 +81,9 @@ still open, or a change it needs sitting in an unmerged pull request.
 
 1. Report the blocker to the user the way the skill says.
 2. Move to `Blocked`, unless the session has something else of its own still
-   open. In that case it files by that instead: a pull request or question
-   waiting on the user is `Needs Review`, and work it can still do is
+   open. In that case it files by that instead: a pull request whose self
+   review loop is unfinished is `Self Review`, a finished pull request or a
+   question waiting on the user is `Needs Review`, and work it can still do is
    `Working`.
 3. Record the blocker in the session's ledger, and make sure one `wait` is
    running on it, per [run-watch.md](run-watch.md#waiting-on-a-blocking-issue):

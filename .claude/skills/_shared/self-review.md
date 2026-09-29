@@ -21,7 +21,18 @@ does not end its turn while a loop is unfinished, does not move to
 `Needs Review`, and does not tell the user the pull request is ready or
 reviewed. "Partly reviewed" is never a state to report.
 
+`scripts/self_review_gate.py` enforces this. Its hooks record each
+`code-review` run and the finding count `ReportFindings` gives it, and they
+block ending the turn, and deny a move to `Needs Review`, until every pull
+request the session opened or reviewed has a zero-finding pass at its current
+head, green CI (or no checks), and no conflict with its base. When the gate
+blocks, do what its message says.
+
 ## One pass
+
+A pass is all three steps below, starting with the `code-review` skill. A
+reread, a skim of the fix commit, or a check of only the lines just changed is
+not a pass and never counts as a clean one, however small the diff.
 
 A pass always reads the whole pull request as it stands at the branch head,
 not just the commits since the last pass. A fix can break something the fix
@@ -73,7 +84,9 @@ in the foreground, per
 [run-watch.md](run-watch.md#waiting-inside-a-self-review): a foreground
 `scripts/catchup.py wait <ledger>` with the Bash tool's maximum timeout, run
 again until the head's run has finished. Never end the turn to wait for it. A
-failed run is a finding: fix it, push, and go back to 1.
+failed run is a finding: fix it, push, and go back to 1. A pull request that
+triggers no checks (`gh pr checks <number>` lists none, as for a change under
+`.claude/`) has nothing to wait on: the clean pass ends the loop.
 
 There is no cap on the number of passes. The loop ends on a clean pass and on
 nothing else.
@@ -83,11 +96,10 @@ since it was checked, does not count against a clean pass. Raised again against
 code that has changed, it is checked again from scratch.
 
 A finding that holds but whose fix is the user's call, such as a scope line the
-issue does not draw, is put to the user per
-[asking-the-user.md](asking-the-user.md) rather than guessed at. The session
-sits in `Needs Review` while the question is open, the one case where the turn
-ends mid-loop. It goes back to `Self Review` with the answer, applies it, and
-carries on with the loop.
+issue does not draw, is put to the user with `AskUserQuestion`, per
+[asking-the-user.md](asking-the-user.md), rather than guessed at. The question
+waits inside the turn, so the session stays in `Self Review` and the loop does
+not end. With the answer it applies the fix and carries on with the loop.
 
 The findings never go up as review comments on the pull request. Comments are
 the user's review.
@@ -123,3 +135,11 @@ back through the loop. Then the session moves to `Needs Review` and reports.
 
 The report says in a line or two how many passes ran and what they found and
 fixed.
+
+## Merged before a clean pass
+
+The user can merge while the loop is still running. The session says so in its
+report, then finishes the loop against the merged diff: it runs the remaining
+passes on the pull request number, fixes what holds on a fresh branch from
+`origin/main`, and opens a follow-up pull request that goes through this loop in
+full. The merge does not excuse the review.
