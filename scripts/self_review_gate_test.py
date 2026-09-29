@@ -45,6 +45,8 @@ class GateTest(unittest.TestCase):
     def setUp(self):
         self.read = mock.patch.object(gate, 'read_pr', return_value=pr()).start()
         mock.patch.object(gate, 'group_names', return_value=GROUPS).start()
+        # No test reaches GitHub over git; a test that wants a head patches this itself.
+        mock.patch.object(gate, 'head_from_git', side_effect=RuntimeError('offline')).start()
         self.addCleanup(mock.patch.stopall)
 
     def test_opened_pr_blocks_stop_until_a_clean_pass(self):
@@ -145,11 +147,21 @@ class GateTest(unittest.TestCase):
         self.assertIsNone(gate.on_stop(state, {}))
         self.assertEqual(state['prs'], [])
 
-    def test_read_failure_warns_instead_of_trapping(self):
+    def test_total_outage_warns_instead_of_trapping(self):
         state = fresh()
         state['prs'] = [URL]
         self.read.side_effect = RuntimeError('no answer in 20s')
         self.assertIn('could not read', gate.on_stop(state, {})['systemMessage'])
+
+    def test_api_outage_still_blocks_a_missing_pass(self):
+        state = fresh()
+        state['prs'] = [URL]
+        self.read.side_effect = RuntimeError('no answer in 20s')
+        with mock.patch.object(gate, 'head_from_git', return_value=HEAD):
+            self.assertIn('no clean pass', gate.on_stop(state, {})['reason'])
+            review_pass = {'pr': URL, 'sha': HEAD, 'findings': 0}
+            state['passes'].append(review_pass)
+            self.assertIn('unchecked', gate.on_stop(state, {})['systemMessage'])
 
     def test_needs_review_move_is_denied_until_finished(self):
         state = fresh()
@@ -193,9 +205,8 @@ class GateTest(unittest.TestCase):
     def test_review_unrecorded_when_both_reads_fail(self):
         state = fresh()
         self.read.side_effect = RuntimeError('no answer in 20s')
-        with mock.patch.object(gate, 'head_from_git', side_effect=RuntimeError('down')):
-            result = gate.on_review(state, {'tool_input': {'skill': 'code-review',
-                                                           'args': f'high {URL}'}})
+        result = gate.on_review(state, {'tool_input': {'skill': 'code-review',
+                                                       'args': f'high {URL}'}})
         self.assertIn('NOT recorded', result['systemMessage'])
         self.assertEqual(state['passes'], [])
 

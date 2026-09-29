@@ -34,10 +34,13 @@ from that repository. A pass is only as honest as the review behind it: the gate
 knows code-review ran and what ReportFindings said, not how carefully.
 
 State lives in <git common dir>/self-review/<session id>.json, outside the
-working tree and shared by every worktree of the repo. GitHub reads are retried.
-One that still fails lets a turn end with a warning, so a network outage cannot
-trap a session, but it still refuses a move to Needs Review, which the session
-can simply retry. Everything else fails closed.
+working tree and shared by every worktree of the repo. GitHub reads are retried,
+and when the API still fails the head commit comes from `git ls-remote`, so a
+missing clean pass blocks even during an outage. Only what needs the API (CI,
+mergeability) goes unchecked then: a turn may end with a warning, but a move to
+Needs Review is refused, since the session can simply retry it. When git cannot
+reach GitHub either, the turn ends with a warning so an outage cannot trap a
+session. Everything else fails closed.
 """
 import fcntl
 import json
@@ -258,8 +261,19 @@ def unfinished(state):
         if isinstance(pr, RuntimeError):
             if MISSING_PR.search(str(pr)):
                 state['prs'].remove(url)
-            else:
+                continue
+            # The API is down: the head still comes over git, so a missing pass still
+            # blocks. Only CI and mergeability go unchecked until GitHub answers.
+            try:
+                sha = head_from_git(url)
+            except (RuntimeError, subprocess.TimeoutExpired):
                 errors.append(f'{name}: {pr}')
+                continue
+            if not clean_at(state, url, sha):
+                problems.append(f'{name} has no clean pass at head {sha[:7]}: run '
+                                'code-review on it once GitHub answers')
+            else:
+                errors.append(f'{name}: CI and mergeability unchecked ({pr})')
             continue
         if pr['state'] != 'OPEN':
             state['prs'].remove(url)
