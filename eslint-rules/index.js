@@ -87,6 +87,65 @@ const NEW_MODAL_COMPONENT_BUILDER_NAMES = new Set([
   "FileUploadBuilder",
 ]);
 const NEW_MODAL_COMPONENT_TYPE_NUMBERS = new Set([18, 19, 21, 22]);
+const FREE_TEXT_SANITIZER_NAMES = new Set(["sanitizeUserInput", "sanitizeOptionalInput"]);
+const URL_NAME_WORDS = new Set(["url", "urls", "href", "link", "links", "uri", "uris"]);
+const URL_RESULT_WRAPPER_TYPES = new Set([
+  "ConditionalExpression",
+  "LogicalExpression",
+  "AwaitExpression",
+  "ChainExpression",
+  "TSAsExpression",
+  "TSNonNullExpression",
+  "ParenthesizedExpression",
+]);
+
+// Splits camelCase, PascalCase, and snake_case names into lowercase words, so `feedUrl` and
+// `IMAGE_URL` match while `security` or `during` do not.
+function isUrlLikeName(name) {
+  const words = name
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/([A-Z]+)([A-Z][a-z])/g, "$1 $2")
+    .split(/[\s_$]+/)
+    .filter(Boolean);
+  return words.some((word) => URL_NAME_WORDS.has(word.toLowerCase()));
+}
+
+function getTrailingName(node) {
+  if (!node) return null;
+  if (node.type === "Identifier") return node.name;
+  if (node.type === "ChainExpression") return getTrailingName(node.expression);
+  if (node.type === "MemberExpression" && !node.computed) return getTrailingName(node.property);
+  if (node.type === "Literal" && typeof node.value === "string") return node.value;
+  return null;
+}
+
+function getFreeTextSanitizerName(callee) {
+  const name = callee.type === "MemberExpression" && !callee.computed
+    ? getTrailingName(callee.property)
+    : getTrailingName(callee);
+  return name && FREE_TEXT_SANITIZER_NAMES.has(name) ? name : null;
+}
+
+function getSanitizedResultTargetName(callNode) {
+  let child = callNode;
+  let parent = callNode.parent;
+  while (parent && URL_RESULT_WRAPPER_TYPES.has(parent.type)) {
+    if (parent.type === "ConditionalExpression" && parent.test === child) return null;
+    child = parent;
+    parent = parent.parent;
+  }
+  if (!parent) return null;
+  if (parent.type === "VariableDeclarator" && parent.init === child) {
+    return getTrailingName(parent.id);
+  }
+  if (parent.type === "AssignmentExpression" && parent.right === child) {
+    return getTrailingName(parent.left);
+  }
+  if (parent.type === "Property" && parent.value === child && !parent.computed) {
+    return getTrailingName(parent.key);
+  }
+  return null;
+}
 
 function isRelativeImportPath(value) {
   return typeof value === "string" && value.startsWith(".");
@@ -3465,6 +3524,37 @@ export default {
             if (RELOCATED_CONTEXT_METHODS.has(method)) {
               context.report({ node, messageId: "useSourceCode", data: { method } });
             }
+          },
+        };
+      },
+    },
+    "no-sanitize-url-input": {
+      meta: {
+        type: "problem",
+        docs: {
+          description:
+            "Ban running URL values through the free-text sanitizers, which rewrite the URL.",
+        },
+        schema: [],
+        messages: {
+          noSanitizeUrl:
+            "Do not run URLs through {{callee}}; it strips `_`, `~` and `--` and rewrites the " +
+            "path. Parse with `new URL()` (or parseUserUrl) and check the protocol instead.",
+        },
+      },
+      create(context) {
+        return {
+          CallExpression(node) {
+            const callee = getFreeTextSanitizerName(node.callee);
+            if (!callee) return;
+
+            const argumentName = getTrailingName(node.arguments[0]);
+            const targetName = getSanitizedResultTargetName(node);
+            const isUrlArgument = argumentName !== null && isUrlLikeName(argumentName);
+            const isUrlTarget = targetName !== null && isUrlLikeName(targetName);
+            if (!isUrlArgument && !isUrlTarget) return;
+
+            context.report({ node, messageId: "noSanitizeUrl", data: { callee } });
           },
         };
       },
