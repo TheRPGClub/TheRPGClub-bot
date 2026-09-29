@@ -64,11 +64,12 @@ in one line and skipped, per
 
 - Step 1 or 2 stops on a holder or an open dependency: `Blocked`.
 - Step 3, once `In Progress` reads back: `Working`.
-- Step 9, as the self review starts: `Self Review`.
-- Step 11, after a clean self review pass: `Needs Review`. Also any turn that ends idle
-  between passes, per [sidebar-groups.md](../_shared/sidebar-groups.md).
+- Step 8, once the pull request is open: `Self Review`, while CI runs ahead of step 9.
+- Step 11, after a clean self review pass: `Needs Review`, and never before it. A turn
+  that ends idle while CI runs, before the first pass or between passes, stays in
+  `Self Review`, per [sidebar-groups.md](../_shared/sidebar-groups.md).
 - Review comments, a CI failure, or a user answer to act on: `Working`, then
-  back through `Self Review` to `Needs Review` once the fix is pushed.
+  back to `Self Review` once the fix is pushed, and `Needs Review` after a clean pass.
 - Step 12, after the merge: the group sidebar-groups.md names for a merge,
   usually `Completed`.
 
@@ -300,8 +301,8 @@ session's work, not something to hand back to the user.
 
 ## 9. Review it yourself
 
-Once CI has passed and the PR is mergeable, move to `Self Review` (see
-[Sidebar moves](#sidebar-moves)) and run the
+Once CI has passed and the PR is mergeable, confirm the session is in
+`Self Review` (see [Sidebar moves](#sidebar-moves)) and run the
 loop in [self-review.md](../_shared/self-review.md): `code-review` at `high` on
 the PR number, a read against this repo's rules, a fix for every finding that
 holds, and another full pass, until a pass comes back clean. Fill in the
@@ -382,7 +383,8 @@ saying so):
 - Do NOT skip a sidebar move. Each one in [Sidebar moves](#sidebar-moves) is
   part of its step.
 - Do NOT open a PR while smoke.sh fails.
-- Do NOT hand the PR over before a clean self review pass.
+- Do NOT hand the PR over before a clean self review pass, and do NOT move to
+  `Needs Review` before it, even on a turn that ends idle waiting on CI.
 - Do NOT commit directly to main.
 - Do NOT put multiple issue numbers on one `Closes` line.
 - Do NOT pass multi-line text through a heredoc.

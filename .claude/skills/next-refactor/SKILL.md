@@ -28,10 +28,10 @@ in one line and skipped, per
 - Step 2 stops on an open dependency: `Blocked`. When it closes: `Working`.
 - Step 3 stops on a dirty working tree to ask the user: `Needs Review`.
 - Step 4, as the implementation starts: `Working`.
-- Step 9, as the self review starts: `Self Review`.
+- Once the pull request is open: `Self Review`, while CI runs ahead of step 9.
 - Step 10, after a clean self review pass: `Needs Review`.
 - Review comments, a CI failure, or a user answer to act on: `Working`, then
-  back through `Self Review` to `Needs Review` once the fix is pushed.
+  back to `Self Review` once the fix is pushed, and `Needs Review` after a clean pass.
 - The pull request merged or closed: the group sidebar-groups.md names for a
   merge, usually `Completed`.
 
@@ -177,7 +177,7 @@ Closes #N
 
 ### 9. Review it yourself
 
-Once CI has passed and the PR is mergeable, move to `Self Review` (see
+Once CI has passed and the PR is mergeable, confirm the session is in `Self Review` (see
 [Sidebar moves](#sidebar-moves)) and run the loop in [self-review.md](../_shared/self-review.md):
 `code-review` at `high` on the PR number, a read against this repo's rules, a fix for every
 finding that holds, and another full pass, until a pass comes back clean. Fill in the

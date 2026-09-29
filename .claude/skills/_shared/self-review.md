@@ -13,8 +13,10 @@ The self review starts once the pull request is open, it is mergeable per
 [pr-mergeability.md](pr-mergeability.md), and its CI checks have passed, as
 `wait` reports them per [run-watch.md](run-watch.md).
 
-Move the session to the `Self Review` sidebar group as the review starts, per
-[sidebar-groups.md](sidebar-groups.md).
+The session is filed under `Self Review` from the moment the pull request opens,
+and stays there until a pass comes back clean, per
+[sidebar-groups.md](sidebar-groups.md). A turn that ends idle while CI runs does
+not move it to `Needs Review`.
 
 ## One pass
 
@@ -61,9 +63,9 @@ commit alone does not show.
    and push. Each finding is fixed; none is set aside for the user to pick up
    at review. The session stays in `Self Review` while it fixes.
 4. Once CI has passed on the new head, go back to 1. A turn that ends while
-   that CI run is still going moves to `Needs Review` and back to
-   `Self Review` when `wait` reports the run, per
-   [sidebar-groups.md](sidebar-groups.md).
+   that CI run is still going stays in `Self Review`, with one `wait` running,
+   per [sidebar-groups.md](sidebar-groups.md). `Needs Review` waits for a
+   clean pass.
 
 There is no cap on the number of passes. The loop ends on a clean pass and on
 nothing else.
