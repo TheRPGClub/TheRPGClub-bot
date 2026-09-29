@@ -32,12 +32,12 @@ Ids are never stored; look them up every time. A tool that fails is reported
 in one line and skipped, per
 [sidebar-groups.md](../_shared/sidebar-groups.md#rules).
 
+- Called by a skill that runs the self review loop itself: no moves here. The
+  calling skill makes them, and the rest of this list does not apply.
 - Once the pull request is open: `Self Review`, while CI runs ahead of step 6.
 - Step 7, after a clean self review pass: `Needs Review`, and never before it. A turn
   that ends idle while CI runs, before the first pass or between passes, stays in
   `Self Review`, per [sidebar-groups.md](../_shared/sidebar-groups.md).
-- Called by a skill that runs the self review loop itself: no moves here. The
-  calling skill makes them.
 - Review comments, a CI failure, or a user answer to act on: `Working`, then
   back to `Self Review` once the fix is pushed, and `Needs Review` after a clean pass.
 - The pull request merged or closed: the group sidebar-groups.md names for a

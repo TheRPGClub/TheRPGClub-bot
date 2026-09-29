@@ -11,7 +11,10 @@ the session has already read as a reviewer, not as its author, and found clean.
 
 The self review starts once the pull request is open, it is mergeable per
 [pr-mergeability.md](pr-mergeability.md), and its CI checks have passed, as
-`wait` reports them per [run-watch.md](run-watch.md).
+`wait` reports them per [run-watch.md](run-watch.md). A pull request that
+triggers no checks (`gh pr checks <number>` lists none, as for a docs-only
+change) starts its review once it is mergeable, and each later pass starts once
+the fix is pushed and the pull request still reads as mergeable.
 
 The session is filed under `Self Review` from the moment the pull request opens,
 and stays there until a pass comes back clean, per
@@ -19,6 +22,10 @@ and stays there until a pass comes back clean, per
 not move it to `Needs Review`.
 
 ## One pass
+
+A pass is all three steps below, starting with the `code-review` skill. A
+reread, a skim of the fix commit, or a check of only the lines just changed is
+not a pass, and never counts as a clean one, however small the diff.
 
 A pass always reads the whole pull request as it stands at the branch head,
 not just the commits since the last pass. A fix can break something the fix
@@ -77,8 +84,9 @@ code that has changed, it is checked again from scratch.
 A finding that holds but whose fix is the user's call, such as a scope line the
 issue does not draw, is put to the user per
 [asking-the-user.md](asking-the-user.md) rather than guessed at. The session
-sits in `Needs Review` while the question is open, goes back to `Self Review`
-with the answer, applies it, and carries on with the loop.
+stays in `Self Review` while the question is open, since the pull request has
+not passed review, and its report says the review is paused on that question.
+With the answer it applies the fix and carries on with the loop.
 
 The findings never go up as review comments on the pull request. Comments are
 the user's review.

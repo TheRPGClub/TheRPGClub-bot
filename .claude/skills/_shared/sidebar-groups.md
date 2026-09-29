@@ -39,10 +39,15 @@ other session asks the user first, so it is never done unasked.
   stays in `Self Review`, with one `wait` running, so the sidebar never tells
   the user a pull request is ready for them before the session has reviewed
   it. When `wait` reports the run, the session runs the next pass.
-- More than one pull request open: the least finished one decides. Any open
-  pull request whose self review has not come back clean keeps the session in
-  `Self Review`; `Needs Review` needs every open pull request clean.
-- The turn ends on a question only the user can answer: `Needs Review`.
+- More than one pull request open: the least finished one decides, in the
+  order `Working`, then `Self Review`, then `Needs Review`. A pull request
+  being fixed keeps the session in `Working`; otherwise any open pull request
+  whose self review has not come back clean keeps it in `Self Review`;
+  `Needs Review` needs every open pull request clean.
+- The turn ends on a question only the user can answer: `Needs Review`, unless
+  the session holds a pull request whose self review has not come back clean.
+  Then it stays in `Self Review` and the report says the review is paused on
+  the question.
 - The user answers, review comments come in to act on, or CI fails on the
   session's pull request: `Working`. Once the fix is pushed: `Self Review`,
   and `Needs Review` only after the next clean pass.
