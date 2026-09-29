@@ -1,4 +1,7 @@
 import { apiGet, apiPatch } from "../services/RpgClubApiClient.js";
+import { calculateVoteDeadlineEt } from "../functions/VoteDateUtils.js";
+
+export const NO_VOTING_ROUND_SCHEDULED = "No voting round is scheduled.";
 
 /**
  * Where a round is in its lifecycle, as the API decides it: members nominate
@@ -61,6 +64,47 @@ type VotingRoundResponse = { data: VotingRoundApiData | null };
 export interface IVotingRoundUpdate {
   votingOpensAt?: Date;
   votingClosesAt?: Date;
+}
+
+/** The PATCH /voting_rounds/:round body: only the fields being changed. */
+export function buildRescheduleBody(changes: IVotingRoundUpdate): Record<string, string> {
+  const data: Record<string, string> = {};
+  if (changes.votingOpensAt) data.voting_opens_at = changes.votingOpensAt.toISOString();
+  if (changes.votingClosesAt) data.voting_closes_at = changes.votingClosesAt.toISOString();
+  return data;
+}
+
+/**
+ * Why a round's vote open may not move to `opensAt`, or null when it may. Only
+ * a round still collecting nominations moves: moving an open vote strands its
+ * posted panels and cast votes, and an ended round is waiting on its decision.
+ * An open whose default weekend window has already passed is refused too,
+ * since the API would close and decide the round on its next sweep.
+ */
+export function explainRescheduleRefusal(
+  round: IVotingRound,
+  opensAt: Date,
+  now: Date = new Date(),
+): string | null {
+  if (round.votingEnded) {
+    return (
+      `Voting for Round ${round.roundNumber} has ended. The next round is scheduled ` +
+      "once this one is decided."
+    );
+  }
+  if (round.votingOpen) {
+    return (
+      `Voting for Round ${round.roundNumber} is already open. ` +
+      "Use /admin voting-close to end it early."
+    );
+  }
+  if (calculateVoteDeadlineEt(opensAt) <= now) {
+    return (
+      "Voting from that date would already be over, which would close and decide " +
+      `Round ${round.roundNumber} right away. Pick a date whose voting weekend has not passed.`
+    );
+  }
+  return null;
 }
 
 function parseApiDate(value: string, field: string): Date {
@@ -149,11 +193,8 @@ export default class VotingRounds {
     changes: IVotingRoundUpdate,
   ): Promise<IVotingRound> {
     const round = normalizeRoundNumber(roundNumber);
-    const data: Record<string, string> = {};
-    if (changes.votingOpensAt) data.voting_opens_at = changes.votingOpensAt.toISOString();
-    if (changes.votingClosesAt) data.voting_closes_at = changes.votingClosesAt.toISOString();
     const response = await apiPatch<VotingRoundResponse>(`/api/v1/voting_rounds/${round}`, {
-      data,
+      data: buildRescheduleBody(changes),
     });
     if (!response?.data) {
       throw new Error(`No voting round ${round} was found to update.`);

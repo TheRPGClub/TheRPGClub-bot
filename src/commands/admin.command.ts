@@ -34,7 +34,10 @@ import {
 } from "../functions/VoteDateUtils.js";
 import { toUnixTimestamp } from "../functions/DateFormatUtils.js";
 import { bot } from "../RPGClub_GameDB.js";
-import VotingRounds from "../classes/VotingRounds.js";
+import VotingRounds, {
+  explainRescheduleRefusal,
+  NO_VOTING_ROUND_SCHEDULED,
+} from "../classes/VotingRounds.js";
 import { isAdmin } from "./admin/admin-auth.utils.js";
 import {
   buildAdminHelpButtons,
@@ -131,18 +134,12 @@ export class Admin {
     await withErrorReply(interaction, async () => {
       const current = await VotingRounds.getCurrent();
       if (!current) {
-        await safeReply(interaction, buildTextReply("No voting round is scheduled.", true));
+        await safeReply(interaction, buildTextReply(NO_VOTING_ROUND_SCHEDULED, true));
         return;
       }
-      if (current.votingEnded) {
-        await safeReply(
-          interaction,
-          buildTextReply(
-            `Voting for Round ${current.roundNumber} has ended. The next round is ` +
-              "scheduled once this one is decided.",
-            true,
-          ),
-        );
+      const refusal = explainRescheduleRefusal(current, parsed);
+      if (refusal) {
+        await safeReply(interaction, buildTextReply(refusal, true));
         return;
       }
 

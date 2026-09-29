@@ -10,6 +10,7 @@ import { deleteAllVotesForRound, getVoteTally } from "../../classes/Vote.js";
 import Gotm from "../../classes/Gotm.js";
 import VotingRounds, {
   isRoundTallyRevealed,
+  NO_VOTING_ROUND_SCHEDULED,
   type IVotingRound,
 } from "../../classes/VotingRounds.js";
 import {
@@ -39,8 +40,6 @@ import {
 import { toUnixTimestamp } from "../../functions/DateFormatUtils.js";
 import { ANNOUNCEMENT_CHANNEL_ID } from "../../config/channels.js";
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
-
-const NO_ROUND_SCHEDULED = "No voting round is scheduled.";
 
 function buildUpdateText(text: string): {
   components: ReturnType<typeof buildTextContainer>[];
@@ -91,7 +90,7 @@ async function handleVotingOpenTestMode(
         await safeReply(
           interaction,
           buildTextReply(
-            `${NO_ROUND_SCHEDULED} Pass round:<number> to choose what to rehearse.`,
+            `${NO_VOTING_ROUND_SCHEDULED} Pass round:<number> to choose what to rehearse.`,
             true,
           ),
         );
@@ -178,7 +177,7 @@ export async function handleVotingOpen(
   await withErrorReply(interaction, async () => {
     const current = await VotingRounds.getCurrent();
     if (!current) {
-      await safeReply(interaction, buildTextReply(NO_ROUND_SCHEDULED, true));
+      await safeReply(interaction, buildTextReply(NO_VOTING_ROUND_SCHEDULED, true));
       return;
     }
     const roundNumber = current.roundNumber;
@@ -379,7 +378,7 @@ export async function handleVotingResults(
     if (round == null) {
       current = await VotingRounds.getCurrent();
       if (!current) {
-        await safeReply(interaction, buildTextReply(NO_ROUND_SCHEDULED, true));
+        await safeReply(interaction, buildTextReply(NO_VOTING_ROUND_SCHEDULED, true));
         return;
       }
       round = current.roundNumber;
