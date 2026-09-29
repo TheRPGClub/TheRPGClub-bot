@@ -60,6 +60,25 @@
             "command": "HOOK=\"$CLAUDE_PROJECT_DIR/scripts/remind-pr-merge-watch.sh\"; test -x \"$HOOK\" || exit 0; exec \"$HOOK\""
           }
         ]
+      },
+      {
+        "matcher": "mcp__ccd_sidebar__list_groups",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "HOOK=\"$CLAUDE_PROJECT_DIR/scripts/enforce_sidebar_move.py\"; test -x \"$HOOK\" || exit 0; exec \"$HOOK\" cache-groups"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "HOOK=\"$CLAUDE_PROJECT_DIR/scripts/enforce_sidebar_move.py\"; test -x \"$HOOK\" || exit 0; exec \"$HOOK\" stop"
+          }
+        ]
       }
     ]
   }
