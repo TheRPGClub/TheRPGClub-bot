@@ -183,6 +183,7 @@
         "local/entry-id-from-api-entry-id": "error",
         "local/escape-masked-link-text": "error",
         "local/interface-name-prefix": "error",
+        "local/no-sanitize-url-input": "error",
         "stylistic/semi": "error",
         "stylistic/comma-dangle": [
           "error",
