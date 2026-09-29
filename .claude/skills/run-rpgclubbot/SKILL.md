@@ -41,7 +41,7 @@ bash .claude/skills/run-rpgclubbot/smoke.sh --invoke \
   "import { buildTextContainer } from './src/functions/ComponentsV2Utils.js'; console.log(JSON.stringify(buildTextContainer('test').toJSON()));"
 ```
 
-Uses `node --no-warnings=ExperimentalWarning --loader ts-node/esm/transpile-only -e <snippet>`. Import paths must use `.js` extensions (ESM). Only modules that don't touch Oracle or Discord can be invoked this way.
+Uses `node --no-warnings=ExperimentalWarning --loader ./scripts/ts-node/transpile-only.mjs -e <snippet>`. Import paths must use `.js` extensions (ESM). Only modules that don't touch Oracle or Discord can be invoked this way.
 
 ### Type-check only
 

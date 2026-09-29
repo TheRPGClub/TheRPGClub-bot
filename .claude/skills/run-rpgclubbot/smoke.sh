@@ -17,7 +17,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/../../.."
 
-NODE_OPTS="--no-warnings=ExperimentalWarning --loader ts-node/esm/transpile-only"
+NODE_OPTS="--no-warnings=ExperimentalWarning --loader ./scripts/ts-node/transpile-only.mjs"
 
 if [[ "${1:-}" == "--invoke" ]]; then
   shift
