@@ -98,7 +98,9 @@ production, so point them at staging values yourself if you do not want a test
 run touching them.
 
 Pull requests are deployed into the test guild automatically by a self-hosted
-runner. Setup and manual controls are in `docs/pr-preview.md`.
+runner. Setup and manual controls are in `docs/pr-preview.md`. The conductor, a
+separate bot that walks a tester through a PR's `## Testing` steps and reports the
+results to the PR, is described in `docs/conductor.md`.
 
 ## Useful Scripts
 
@@ -112,6 +114,7 @@ runner. Setup and manual controls are in `docs/pr-preview.md`.
 - `npm run buildProd` - Build and restart or start pm2.
 - `npm run import:igdb-platforms` - Sync IGDB platforms into GameDB.
 - `npm run session:start` - Run session startup tasks.
+- `npm run conductor` - Run the PR test conductor (see `docs/conductor.md`).
 - `npm run backup:docker-volumes` - Backup docker volumes.
 
 ## Configuration

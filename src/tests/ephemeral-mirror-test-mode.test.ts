@@ -145,3 +145,63 @@ test("a thrown update mirror error never surfaces to the caller", async () => {
   await mirrorEphemeralUpdate(interaction, { content: "updated" });
   assert.deepEqual(seen, [TEST_LOG_CHANNEL_ID]);
 });
+
+function deferrableCommand(channel: unknown, seen: string[]): AnyRepliable {
+  const interaction = {
+    ...interactionWithChannel(channel, seen),
+    // Not admin/mod/superadmin, which safeDeferReply always defers ephemerally.
+    commandName: "profile",
+    deferred: false,
+    replied: false,
+    isChatInputCommand: () => true,
+    isMessageComponent: () => false,
+    isModalSubmit: () => false,
+    deferReply: () => {
+      interaction.deferred = true;
+      return Promise.resolve();
+    },
+    editReply: () => Promise.resolve({ id: "reply" }),
+  };
+  return interaction as unknown as AnyRepliable;
+}
+
+test("a reply filling an ephemeral defer is mirrored without its own flag", async () => {
+  const { safeDeferReply, safeReply } = await import("../functions/InteractionUtils.js");
+  const sent: string[] = [];
+  const seen: string[] = [];
+  const channel = { isTextBased: () => true, send: (c: string) => { sent.push(c); } };
+  const interaction = deferrableCommand(channel, seen);
+
+  await safeDeferReply(interaction, { flags: MessageFlags.Ephemeral });
+  await safeReply(interaction, buildTextReply("filled", false));
+
+  assert.equal(sent.length, 1);
+  assert.ok(sent[0]?.includes("filled"));
+});
+
+test("a reply filling a public defer is not mirrored", async () => {
+  const { safeDeferReply, safeReply } = await import("../functions/InteractionUtils.js");
+  const sent: string[] = [];
+  const seen: string[] = [];
+  const channel = { isTextBased: () => true, send: (c: string) => { sent.push(c); } };
+  const interaction = deferrableCommand(channel, seen);
+
+  await safeDeferReply(interaction);
+  await safeReply(interaction, buildTextReply("public", false));
+
+  assert.equal(sent.length, 0);
+});
+
+test("safeEditReply after an ephemeral command defer is mirrored", async () => {
+  const { safeDeferReply, safeEditReply } = await import("../functions/InteractionUtils.js");
+  const sent: string[] = [];
+  const seen: string[] = [];
+  const channel = { isTextBased: () => true, send: (c: string) => { sent.push(c); } };
+  const interaction = deferrableCommand(channel, seen);
+
+  await safeDeferReply(interaction, { flags: MessageFlags.Ephemeral });
+  await safeEditReply(interaction, { content: "edited" });
+
+  assert.equal(sent.length, 1);
+  assert.ok(sent[0]?.includes("edited"));
+});
