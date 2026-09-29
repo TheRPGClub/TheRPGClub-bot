@@ -39,6 +39,9 @@ other session asks the user first, so it is never done unasked.
   stays in `Self Review`, with one `wait` running, so the sidebar never tells
   the user a pull request is ready for them before the session has reviewed
   it. When `wait` reports the run, the session runs the next pass.
+- More than one pull request open: the least finished one decides. Any open
+  pull request whose self review has not come back clean keeps the session in
+  `Self Review`; `Needs Review` needs every open pull request clean.
 - The turn ends on a question only the user can answer: `Needs Review`.
 - The user answers, review comments come in to act on, or CI fails on the
   session's pull request: `Working`. Once the fix is pushed: `Self Review`,
@@ -52,9 +55,10 @@ other session asks the user first, so it is never done unasked.
   - a background task or subagent still running;
   - anything the user asked for in this session that is not finished yet.
 
-  A session that holds another open pull request waiting on the user goes
-  back to `Needs Review`. Only when none of these holds does the session go to
-  `Completed`.
+  A session that holds another open pull request goes back to `Self Review`
+  when that pull request's self review has not come back clean, and to
+  `Needs Review` when it has. Only when none of these holds does the session
+  go to `Completed`.
 - A task that opened no pull request (an investigation, an audit, a filed
   issue) goes to `Completed` when it ends with nothing left to wait on.
 
@@ -66,8 +70,9 @@ still open, or a change it needs sitting in an unmerged pull request.
 
 1. Report the blocker to the user the way the skill says.
 2. Move to `Blocked`, unless the session has something else of its own still
-   open. In that case it files by that instead: a pull request or question
-   waiting on the user is `Needs Review`, and work it can still do is
+   open. In that case it files by that instead: a pull request whose self
+   review has not come back clean is `Self Review`, a clean pull request or a
+   question waiting on the user is `Needs Review`, and work it can still do is
    `Working`.
 3. Record the blocker in the session's ledger, and make sure one `wait` is
    running on it, per [run-watch.md](run-watch.md#waiting-on-a-blocking-issue):

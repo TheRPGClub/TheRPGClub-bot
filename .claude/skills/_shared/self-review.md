@@ -113,3 +113,12 @@ back through the loop. Then the session moves to `Needs Review` and reports.
 
 The report says in a line or two how many passes ran and what they found and
 fixed.
+
+## Merged before a clean pass
+
+The user can merge while the loop is still waiting on CI or mid pass. The
+session says so in its report, then finishes the loop against the merged diff:
+it runs the remaining passes on the pull request number, fixes what holds on a
+fresh branch from `origin/main`, and opens a follow-up pull request that goes
+through this loop in full. It does not skip the review because the merge
+happened first.
