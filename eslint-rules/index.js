@@ -859,11 +859,15 @@ function getEnclosingFunction(node) {
 }
 
 // The region a deferred update is known to cover: its block, switch case, or the unbraced
-// branch of an `if`, so a reply in a sibling branch that never deferred is not reported.
+// branch of an `if`, so a reply in a sibling branch that never deferred is not reported. A
+// `try` block widens to the whole statement, since its catch and finally run after the defer.
 function getDeferScope(node) {
   let child = node;
   let current = node.parent;
   while (current) {
+    if (current.type === "BlockStatement" && current.parent?.type === "TryStatement") {
+      if (current.parent.block === current) return current.parent;
+    }
     if (DEFER_SCOPE_NODE_TYPES.has(current.type) || FUNCTION_NODE_TYPES.has(current.type)) {
       return current;
     }

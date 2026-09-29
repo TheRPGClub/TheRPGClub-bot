@@ -54,6 +54,10 @@ ruleTester.run("no-reply-after-defer-update", rule, {
         "  await safeDeferUpdate(other);\n  await work();\n});",
     ),
     wrap("await safeDeferUpdate(interaction);\nawait helpers[\"safeReply\"](interaction, reply);"),
+    wrap(
+      "try {\n  await work();\n} catch {\n  await safeDeferUpdate(interaction);\n}\n" +
+        "await safeReply(interaction, reply);",
+    ),
   ],
   invalid: [
     {
@@ -97,6 +101,13 @@ ruleTester.run("no-reply-after-defer-update", rule, {
           data: { helper: "safeReply", target: "this.interaction" },
         },
       ],
+    },
+    {
+      code: wrap(
+        "try {\n  await safeDeferUpdate(interaction);\n  await work();\n} catch {\n" +
+          "  await safeReply(interaction, reply);\n}",
+      ),
+      errors: [{ messageId: "replyAfterDeferUpdate" }],
     },
     {
       code: wrap(

@@ -134,13 +134,17 @@ export class CompletionatorHandlersService {
 
     const session = await getImportById(parsed.importId);
     if (!session) {
-      safeIgnore(safeFollowUpIfSettled(interaction, buildTextReply("Import session not found.", true)));
+      safeIgnore(
+        safeFollowUpIfSettled(interaction, buildTextReply("Import session not found.", true)),
+      );
       return;
     }
 
     const item = await getImportItemById(parsed.itemId);
     if (!item) {
-      safeIgnore(safeFollowUpIfSettled(interaction, buildTextReply("Import item not found.", true)));
+      safeIgnore(
+        safeFollowUpIfSettled(interaction, buildTextReply("Import item not found.", true)),
+      );
       return;
     }
 
