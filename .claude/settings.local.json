@@ -60,6 +60,69 @@
             "command": "HOOK=\"$CLAUDE_PROJECT_DIR/scripts/remind-pr-merge-watch.sh\"; test -x \"$HOOK\" || exit 0; exec \"$HOOK\""
           }
         ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "SCRIPT=\"$CLAUDE_PROJECT_DIR/scripts/self_review_gate.py\"; test -f \"$SCRIPT\" || exit 0; exec python3 \"$SCRIPT\" pr-opened",
+            "timeout": 90
+          }
+        ]
+      },
+      {
+        "matcher": "Skill",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "SCRIPT=\"$CLAUDE_PROJECT_DIR/scripts/self_review_gate.py\"; test -f \"$SCRIPT\" || exit 0; exec python3 \"$SCRIPT\" review",
+            "timeout": 90
+          }
+        ]
+      },
+      {
+        "matcher": "ReportFindings",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "SCRIPT=\"$CLAUDE_PROJECT_DIR/scripts/self_review_gate.py\"; test -f \"$SCRIPT\" || exit 0; exec python3 \"$SCRIPT\" findings",
+            "timeout": 90
+          }
+        ]
+      },
+      {
+        "matcher": "mcp__ccd_sidebar__list_groups",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "SCRIPT=\"$CLAUDE_PROJECT_DIR/scripts/self_review_gate.py\"; test -f \"$SCRIPT\" || exit 0; exec python3 \"$SCRIPT\" groups",
+            "timeout": 90
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "mcp__ccd_sidebar__move_sessions",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "SCRIPT=\"$CLAUDE_PROJECT_DIR/scripts/self_review_gate.py\"; test -f \"$SCRIPT\" || exit 0; exec python3 \"$SCRIPT\" sidebar",
+            "timeout": 90
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "SCRIPT=\"$CLAUDE_PROJECT_DIR/scripts/self_review_gate.py\"; test -f \"$SCRIPT\" || exit 0; exec python3 \"$SCRIPT\" stop",
+            "timeout": 90
+          }
+        ]
       }
     ]
   }

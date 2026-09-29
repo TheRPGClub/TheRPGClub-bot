@@ -44,6 +44,8 @@ run_tests() {
   grep -E "^# (tests|pass|fail)" /tmp/rpgclubbot-test-results.txt
   echo "=== catchup script ==="
   python3 scripts/catchup_test.py
+  echo "=== self review gate ==="
+  python3 scripts/self_review_gate_test.py
 }
 
 case "$STAGE" in
