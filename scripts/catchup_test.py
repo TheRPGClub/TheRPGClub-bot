@@ -346,7 +346,12 @@ class HungRead(TempLedger):
         with open(os.path.join(self.dir, 'events.jsonl'), 'a') as f:
             f.write(json.dumps(line) + '\n')
 
-    def test_a_merge_notice_is_not_held_behind_a_hung_run_read(self):
+    MERGE = {'event': 'pr', 'run': 'pr:5', 'state': 'merged', 'sha': 'abcdef1234567',
+             'merged_at': '2026-09-28T20:12:13Z', 'at': '2026-09-28T20:12:15Z'}
+
+    def run_wait(self, merge_on_call):
+        """Wait on a run row and a pull request row, with a completed run notice already
+        in. The merge notice lands while gh call number merge_on_call is out."""
         catchup.record(self.ledger, {'label': 'ci', 'branch': 'fix/stub', 'run': '42',
                                      'job': 'https://example.test/job/7', 'state': 'queued',
                                      'tally': '', 'title': ''})
@@ -356,16 +361,15 @@ class HungRead(TempLedger):
                                      'title': ''})
         self.event({'event': 'run', 'run': '42', 'action': 'completed',
                     'at': '2026-09-28T20:12:07Z'})
-        timeouts = []
+        if merge_on_call == 0:
+            self.event(self.MERGE)
+        calls = []
         real_gh = catchup.gh
 
         def hung_gh(*args, timeout=None):
-            # The merge lands while the run read is out, as it did for #1167.
-            if not timeouts:
-                self.event({'event': 'pr', 'run': 'pr:5', 'state': 'merged',
-                            'sha': 'abcdef1234567', 'merged_at': '2026-09-28T20:12:13Z',
-                            'at': '2026-09-28T20:12:15Z'})
-            timeouts.append(timeout)
+            calls.append((args[-1], timeout))
+            if len(calls) == merge_on_call:
+                self.event(self.MERGE)
             return real_gh(*args, timeout=timeout)
 
         out = io.StringIO()
@@ -374,15 +378,30 @@ class HungRead(TempLedger):
                 mock.patch.object(catchup, 'gh', hung_gh), contextlib.redirect_stdout(out):
             catchup.wait(self.ledger, 180)
         elapsed = catchup.time.time() - start
-        self.assertLess(elapsed, 4, out.getvalue())
-        self.assertIn('pr: 5 merged', out.getvalue())
-        self.assertIn('no answer in 1s', out.getvalue())
-        self.assertTrue(timeouts)
-        self.assertEqual(set(timeouts), {1})
         rows = {r['run']: r for r in catchup.read_ledger(self.ledger)}
-        self.assertNotEqual(rows['42']['state'], 'done')
+        self.assertIn('pr: 5 merged', out.getvalue())
         self.assertEqual(rows['pr:5']['state'], 'done')
+        self.assertNotEqual(rows['42']['state'], 'done')
+        return out.getvalue(), elapsed, calls
 
+    def test_a_merge_during_the_first_run_list_settles_when_it_gives_up(self):
+        # As for #1167: the merge lands while a run read is out.
+        out, elapsed, calls = self.run_wait(merge_on_call=1)
+        self.assertLess(elapsed, 4, out)
+        self.assertIn('run list failed, nothing changed: no answer in 1s', out)
+        self.assertEqual([t for _, t in calls], [1])
+
+    def test_a_merge_during_a_notified_run_read_settles_when_it_gives_up(self):
+        out, elapsed, calls = self.run_wait(merge_on_call=2)
+        self.assertLess(elapsed, 5, out)
+        self.assertIn('run read failed, nothing changed: no answer in 1s', out)
+        self.assertTrue(calls[1][0].endswith('/actions/runs/42'), calls)
+        self.assertEqual([t for _, t in calls], [1, 1])
+
+    def test_a_merge_already_in_settles_before_any_read(self):
+        out, elapsed, calls = self.run_wait(merge_on_call=0)
+        self.assertEqual(calls, [], out)
+        self.assertLess(elapsed, 1, out)
 
 if __name__ == '__main__':
     unittest.main()

@@ -809,11 +809,12 @@ class Push:
 
 
 def settle_notices(path, push, acted):
-    """Settle open pull request and issue rows from the close notices push has read.
+    """Read new events, then settle open pull request and issue rows from their close notices.
 
-    These cost no API call, so wait runs this before and after every check rather than
-    leaving a notice queued behind a run read.
+    These cost no API call, so wait runs this before and after every read it makes rather
+    than leaving a notice queued behind one. True if a forwarder connected.
     """
+    connected = push.read()
     for row in read_ledger(path):
         key = row['run']
         if row['state'] == 'done' or is_run(key):
@@ -824,6 +825,7 @@ def settle_notices(path, push, acted):
             acted[key] = event
             print(f'push: notice for {key} arrived {event.get("at")}')
             settle_row(path, key, event['state'], notice_tally(event))
+    return connected
 
 
 def wait(path, interval, every=False):
@@ -859,13 +861,12 @@ def wait(path, interval, every=False):
         # By key: the event last acted on, and for each notified run still open, when it is
         # read next and how many reads it has left.
         acted, pending, gap = {}, {}, False
-        settle_notices(path, push, acted)
+        reconnect = settle_notices(path, push, acted)
         if handed_back(path, before, every):
             return
         check(path)
         # A forwarder that connects while a check is out is acted on at the next poll.
-        reconnect = push.read()
-        settle_notices(path, push, acted)
+        reconnect = settle_notices(path, push, acted) or reconnect
         remaining, last = len(open_rows(path)), time.time()
         # Pull request and issue reads that failed on connect, and when they are read again.
         retry, retry_at = set(), 0.0
@@ -874,21 +875,18 @@ def wait(path, interval, every=False):
             time.sleep(EVENT_POLL)
             live = push.tend()
             # A forwarder that just connected missed what closed before it.
-            connected = push.read() or reconnect
+            connected = settle_notices(path, push, acted) or reconnect
             reconnect = False
             gap = connected or gap
             now = time.time()
             if connected:
                 retry, retry_at = reconcile_rows(path), now + EVENT_RECHECK
-                remaining = len(open_rows(path))
             elif retry and now >= retry_at:
                 # One retry; a read that fails again waits for the next connect.
                 for key in reconcile_rows(path, retry):
                     print(f'{key} read failed twice; waiting for its push notice '
                           'or the next forwarder connect')
                 retry = set()
-                remaining = len(open_rows(path))
-            settle_notices(path, push, acted)
             remaining = len(open_rows(path))
             for row in read_ledger(path):
                 key = row['run']
@@ -907,14 +905,14 @@ def wait(path, interval, every=False):
                 # the rows itself. Issue rows are read even while it is live, since a blocked
                 # session can wait for days and one read per timer check is cheap.
                 reconcile_rows(path, issues_only=live)
+                reconnect = settle_notices(path, push, acted)
                 check(path)
                 last, gap, due = now, False, set(pending)
             elif due:
                 check(path, due)
             else:
                 continue
-            reconnect = push.read()
-            settle_notices(path, push, acted)
+            reconnect = settle_notices(path, push, acted) or reconnect
             remaining = len(open_rows(path))
             still_open = open_rows(path)
             for key in due:
