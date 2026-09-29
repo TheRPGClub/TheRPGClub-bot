@@ -64,7 +64,9 @@ minutes, and `wait` checks on the timer meanwhile. Every five minutes the holder
 its hook is still on the repository and restarts the forwarder when it is gone.
 
 A gh call that fails on the wait path never ends `wait`. A failed read leaves its rows as
-they were, and the next check tries again. When the waiter cannot reach GitHub to name
+they were, and the next check tries again. Each read there gives up after twenty seconds,
+and the pull request and issue notices that need no read settle before and after every
+check, so a hung read never holds one back. When the waiter cannot reach GitHub to name
 the repository, push is off and `wait` checks on the timer, setting push up again after
 each check.
 
@@ -116,6 +118,9 @@ ADD_READ_TRIES = 3
 ADD_READ_BACKOFF = 5
 ADD_READ_TIMEOUT = 30
 ADD_BUDGET = 120
+# Every read on the wait path gives up after this many seconds, so one hung call cannot hold
+# back the notices queued behind it. A read that gives up leaves its rows for the next check.
+WAIT_READ_TIMEOUT = 20
 ADD_JOBS_PAUSE = 10
 # gh's wording for a failure worth another try: not found yet, a server error, or no answer.
 TRANSIENT = re.compile(r'HTTP (404|5\d\d)|no answer in|error connecting|connection reset'
@@ -136,11 +141,13 @@ def gh(*args, timeout=None):
 
 
 def run_jobs(run_id):
-    return json.loads(gh('api', f'repos/{{owner}}/{{repo}}/actions/runs/{run_id}/jobs'))['jobs']
+    return json.loads(gh('api', f'repos/{{owner}}/{{repo}}/actions/runs/{run_id}/jobs',
+                         timeout=WAIT_READ_TIMEOUT))['jobs']
 
 
 def job_log(job_id):
-    return gh('api', f'repos/{{owner}}/{{repo}}/actions/jobs/{job_id}/logs')
+    return gh('api', f'repos/{{owner}}/{{repo}}/actions/jobs/{job_id}/logs',
+              timeout=WAIT_READ_TIMEOUT)
 
 
 def read_file(path):
@@ -277,7 +284,8 @@ def settle_row(path, key, state, tally_text):
 def read_pr(number):
     """One read of a pull request: its url, head branch, and (state, tally) once it is shut."""
     pr = json.loads(gh('pr', 'view', str(number), '--json',
-                       'url,headRefName,state,mergedAt,closedAt,mergeCommit'))
+                       'url,headRefName,state,mergedAt,closedAt,mergeCommit',
+                       timeout=WAIT_READ_TIMEOUT))
     state = pr['state'].lower()
     shut = None
     if state in ('merged', 'closed'):
@@ -300,7 +308,8 @@ def add_pr(path, number, label):
 
 def read_issue(number):
     """One read of an issue: its url, and (state, tally) once it is closed."""
-    issue = json.loads(gh('api', f'repos/{{owner}}/{{repo}}/issues/{number}'))
+    issue = json.loads(gh('api', f'repos/{{owner}}/{{repo}}/issues/{number}',
+                          timeout=WAIT_READ_TIMEOUT))
     issue['url'] = issue['html_url']
     shut = None
     if issue['state'].lower() == 'closed':
@@ -405,7 +414,8 @@ def branch_runs(branch, wanted):
     runs, page = {}, 1
     while True:
         listed = json.loads(gh('api', f'repos/{{owner}}/{{repo}}/actions/runs'
-                               f'?branch={branch}&per_page=100&page={page}'))
+                               f'?branch={branch}&per_page=100&page={page}',
+                               timeout=WAIT_READ_TIMEOUT))
         runs.update({str(r['id']): r for r in listed['workflow_runs']})
         if wanted <= runs.keys() or len(listed['workflow_runs']) < 100:
             return runs
@@ -419,7 +429,8 @@ def read_runs(rows, by_id):
         for r in rows:
             try:
                 runs[r['run']] = json.loads(
-                    gh('api', f'repos/{{owner}}/{{repo}}/actions/runs/{r["run"]}'))
+                    gh('api', f'repos/{{owner}}/{{repo}}/actions/runs/{r["run"]}',
+                       timeout=WAIT_READ_TIMEOUT))
             except (RuntimeError, ValueError) as e:
                 print(f'{r["label"]}: run read failed, nothing changed: {e}')
         return runs
@@ -797,6 +808,24 @@ class Push:
             del self.seen[next(iter(self.seen))]
 
 
+def settle_notices(path, push, acted):
+    """Settle open pull request and issue rows from the close notices push has read.
+
+    These cost no API call, so wait runs this before and after every check rather than
+    leaving a notice queued behind a run read.
+    """
+    for row in read_ledger(path):
+        key = row['run']
+        if row['state'] == 'done' or is_run(key):
+            continue
+        event = push.seen.get(key)
+        added = row['tally'].removeprefix('added ')
+        if event and event.get('at', '') >= added and acted.get(key) != event:
+            acted[key] = event
+            print(f'push: notice for {key} arrived {event.get("at")}')
+            settle_row(path, key, event['state'], notice_tally(event))
+
+
 def wait(path, interval, every=False):
     # Nothing to wait on means no forwarder, and no hook made on the repository for it.
     if not open_rows(path):
@@ -827,11 +856,17 @@ def wait(path, interval, every=False):
                 if push.usable:
                     print('push: reached GitHub, push is on')
         push.tend()
-        check(path)
-        remaining, last = len(open_rows(path)), time.time()
         # By key: the event last acted on, and for each notified run still open, when it is
         # read next and how many reads it has left.
         acted, pending, gap = {}, {}, False
+        settle_notices(path, push, acted)
+        if handed_back(path, before, every):
+            return
+        check(path)
+        # A forwarder that connects while a check is out is acted on at the next poll.
+        reconnect = push.read()
+        settle_notices(path, push, acted)
+        remaining, last = len(open_rows(path)), time.time()
         # Pull request and issue reads that failed on connect, and when they are read again.
         retry, retry_at = set(), 0.0
         while remaining and not handed_back(path, before, every):
@@ -839,7 +874,8 @@ def wait(path, interval, every=False):
             time.sleep(EVENT_POLL)
             live = push.tend()
             # A forwarder that just connected missed what closed before it.
-            connected = push.read()
+            connected = push.read() or reconnect
+            reconnect = False
             gap = connected or gap
             now = time.time()
             if connected:
@@ -852,19 +888,13 @@ def wait(path, interval, every=False):
                           'or the next forwarder connect')
                 retry = set()
                 remaining = len(open_rows(path))
+            settle_notices(path, push, acted)
+            remaining = len(open_rows(path))
             for row in read_ledger(path):
                 key = row['run']
-                if row['state'] == 'done':
+                if row['state'] == 'done' or not is_run(key):
                     continue
                 event = push.seen.get(key)
-                if not is_run(key):
-                    added = row['tally'].removeprefix('added ')
-                    if event and event.get('at', '') >= added and acted.get(key) != event:
-                        acted[key] = event
-                        print(f'push: notice for {key} arrived {event.get("at")}')
-                        settle_row(path, key, event['state'], notice_tally(event))
-                        remaining = len(open_rows(path))
-                    continue
                 if event and event['action'] == 'completed' and acted.get(key) != event:
                     acted[key] = event
                     print(f'push: notice for {key} arrived {event.get("at")}; '
@@ -883,6 +913,8 @@ def wait(path, interval, every=False):
                 check(path, due)
             else:
                 continue
+            reconnect = push.read()
+            settle_notices(path, push, acted)
             remaining = len(open_rows(path))
             still_open = open_rows(path)
             for key in due:
