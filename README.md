@@ -92,6 +92,11 @@ output that is otherwise visible only to the invoking user. The mirror is
 best-effort and never affects the real reply. Keep that channel restricted:
 mirrored payloads can contain data that was ephemeral for a reason.
 
+Test mode also skips the scheduled services that claim shared work through the
+API (voting events, public reminders, thread sync, release announcements, and RSS
+news), so a preview never takes those from production, and it turns off the dev
+channel override that makes the guild owner's ephemeral replies public.
+
 Test mode does not redirect external services. `RPGCLUB_API_BASE_URL`,
 Backblaze, and GitHub issues all use the same configuration they use in
 production, so point them at staging values yourself if you do not want a test

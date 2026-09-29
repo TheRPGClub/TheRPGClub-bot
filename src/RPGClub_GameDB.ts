@@ -18,15 +18,11 @@ import {
   installConsoleLogging,
   setConsoleLoggingClient,
 } from "./utilities/DiscordConsoleLogger.js";
-import { startVotingEventService } from "./services/VotingEventService.js";
 import Member from "./classes/Member.js";
 import { joinAllTargetForumThreads } from "./services/ForumThreadJoinService.js";
-import { startRssFeedService } from "./services/RssFeedService.js";
-import { startPublicReminderService } from "./services/PublicReminderService.js";
-import { startThreadSyncService } from "./services/ThreadSyncService.js";
+import { startSharedStateServices } from "./services/SharedStateServices.js";
 import { startThreadLinkPromptService } from "./services/ThreadLinkPromptService.js";
 import { refreshGiveawayHubMessage } from "./services/GiveawayHubService.js";
-import { startGameReleaseAnnouncementService } from "./services/GameReleaseAnnouncementService.js";
 import { startUserEmojiService } from "./services/UserEmojiService.js";
 import { startPokopiaEmojiService } from "./services/PokopiaEmojiService.js";
 import { restoreJournalMessageContextsFromDb } from "./commands/now-playing/nowPlayingContexts.js";
@@ -220,13 +216,9 @@ bot.once("clientReady", async () => {
   //    ...bot.guilds.cache.map((g) => g.id)
   //  );
 
-  startVotingEventService(bot);
-  startPublicReminderService(bot);
-  startThreadSyncService(bot);
+  startSharedStateServices(bot);
   startThreadLinkPromptService(bot);
-  startGameReleaseAnnouncementService(bot);
   await joinAllTargetForumThreads(bot);
-  startRssFeedService(bot);
   await refreshGiveawayHubMessage(bot);
   await startUserEmojiService(bot);
   await startPokopiaEmojiService(bot);
