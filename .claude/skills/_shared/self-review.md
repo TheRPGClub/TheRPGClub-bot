@@ -25,9 +25,9 @@ reviewed. "Partly reviewed" is never a state to report.
 `code-review` run and the finding count `ReportFindings` gives it, and they
 block ending the turn, and deny a move to `Needs Review`, until every pull
 request the session opened has a zero-finding pass at its current head, green
-CI (or no checks), and no conflict with its base. Reviewing another author's
-pull request never puts it under the gate. When the gate blocks, do what its
-message says.
+CI (or no checks), and no conflict with its base. A pull request this session
+did not open is never put under the gate by reviewing it. When the gate
+blocks, do what its message says.
 
 ## One pass
 
