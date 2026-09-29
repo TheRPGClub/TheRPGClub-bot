@@ -84,9 +84,11 @@ in the foreground, per
 [run-watch.md](run-watch.md#waiting-inside-a-self-review): a foreground
 `scripts/catchup.py wait <ledger>` with the Bash tool's maximum timeout, run
 again until the head's run has finished. Never end the turn to wait for it. A
-failed run is a finding: fix it, push, and go back to 1. A pull request that
-triggers no checks (`gh pr checks <number>` lists none, as for a change under
-`.claude/`) has nothing to wait on: the clean pass ends the loop.
+failed run is a finding: fix it, push, and go back to 1. CI runs on every pull
+request to `main`, whatever it touches. Only a pull request whose checks
+`gh pr checks <number>` still lists as none a minute after the push, such as
+one based on another branch, has nothing to wait on: the clean pass ends the
+loop.
 
 There is no cap on the number of passes. The loop ends on a clean pass and on
 nothing else.
