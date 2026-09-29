@@ -3044,6 +3044,11 @@ export default {
           "safeUpdate",
           "safeDeferReply",
         ]);
+        const STRING_PAYLOAD_HELPER_NAMES = new Set([
+          ...REPLY_HELPER_NAMES,
+          "safeFollowUpIfSettled",
+          "safeEditReply",
+        ]);
         const REPLY_METHOD_NAMES = new Set([
           "reply",
           "editReply",
@@ -3096,15 +3101,19 @@ export default {
               isReplyCall = REPLY_METHOD_NAMES.has(callee.property.name);
             }
 
-            if (!isReplyCall) return;
-
-            if (callee.type === "Identifier" && node.arguments.length >= 2) {
+            if (
+              callee.type === "Identifier" &&
+              STRING_PAYLOAD_HELPER_NAMES.has(callee.name) &&
+              node.arguments.length >= 2
+            ) {
               const payload = node.arguments[1];
               if (isStringExpression(payload)) {
                 context.report({ node: payload, messageId: "useTextReplyForString" });
                 return;
               }
             }
+
+            if (!isReplyCall) return;
 
             const optionsArg = getOptionsArg(node);
             if (!optionsArg) return;

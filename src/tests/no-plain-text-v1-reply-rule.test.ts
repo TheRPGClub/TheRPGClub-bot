@@ -36,6 +36,8 @@ ruleTester.run("no-plain-text-v1-reply", rule, {
     { code: "safeReply(interaction, err?.message ?? 'Failed.');", errors: [STRING_ERROR] },
     { code: "safeReply(interaction, ok ? 'Yes.' : detail);", errors: [STRING_ERROR] },
     { code: "safeFollowUp(interaction, 'Done.');", errors: [STRING_ERROR] },
+    { code: "safeEditReply(interaction, 'Saved.');", errors: [STRING_ERROR] },
+    { code: "safeFollowUpIfSettled(interaction, `Done ${n}.`);", errors: [STRING_ERROR] },
     { code: "safeReply(interaction, { content: 'Hi' });", errors: [OBJECT_ERROR] },
   ],
 });
