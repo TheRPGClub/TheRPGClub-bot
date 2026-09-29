@@ -34,9 +34,10 @@ from that repository. A pass is only as honest as the review behind it: the gate
 knows code-review ran and what ReportFindings said, not how carefully.
 
 State lives in <git common dir>/self-review/<session id>.json, outside the
-working tree and shared by every worktree of the repo. A GitHub read that fails
-lets the event through with a warning, so a network outage cannot trap a
-session; everything else fails closed.
+working tree and shared by every worktree of the repo. GitHub reads are retried.
+One that still fails lets a turn end with a warning, so a network outage cannot
+trap a session, but it still refuses a move to Needs Review, which the session
+can simply retry. Everything else fails closed.
 """
 import fcntl
 import json
@@ -48,6 +49,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 NEEDS_REVIEW_GROUP = 'Needs Review'
 GH_TIMEOUT = 20
+READ_ATTEMPTS = 3
 PR_URL = re.compile(r'https://github\.com/([^/\s]+/[^/\s]+)/pull/(\d+)')
 GH_PR_CREATE = re.compile(r'(^|[;&|(])\s*gh pr create')
 # gh's wording when the repository does not exist; such a PR is dropped. A 404 is not
@@ -100,7 +102,24 @@ def text_of(value):
 
 def read_pr(url):
     fields = 'number,state,headRefOid,mergeable,statusCheckRollup'
-    return json.loads(gh('pr', 'view', url, '--json', fields))
+    for attempt in range(READ_ATTEMPTS):
+        try:
+            return json.loads(gh('pr', 'view', url, '--json', fields))
+        except RuntimeError as err:
+            if MISSING_PR.search(str(err)) or attempt == READ_ATTEMPTS - 1:
+                raise
+
+
+def head_from_git(url):
+    """The pull request's head commit over git instead of the API, when the API is down."""
+    match = PR_URL.search(url)
+    r = subprocess.run(['git', 'ls-remote', f'https://github.com/{match.group(1)}.git',
+                        f'refs/pull/{match.group(2)}/head'],
+                       capture_output=True, text=True, timeout=GH_TIMEOUT)
+    sha = r.stdout.split()[0] if r.returncode == 0 and r.stdout.strip() else None
+    if not sha:
+        raise RuntimeError(r.stderr.strip()[:300] or 'no head from git ls-remote')
+    return sha
 
 
 def pr_url(match):
@@ -183,9 +202,13 @@ def on_review(state, payload):
                                  'code-review targets, so this pass is not recorded.'}
     try:
         sha = read_pr(url)['headRefOid']
-    except RuntimeError as err:
-        return {'systemMessage': f'self review gate: could not read {short(url)}: {err}. '
-                                 'This pass is not recorded.'}
+    except RuntimeError:
+        try:
+            sha = head_from_git(url)
+        except (RuntimeError, subprocess.TimeoutExpired) as err:
+            return {'systemMessage': f'self review gate: could not read {short(url)}: {err}. '
+                                     'This pass is NOT recorded; run it again once GitHub '
+                                     'answers.'}
     state['passes'].append({'pr': url, 'sha': sha, 'findings': None})
     return None
 
@@ -271,8 +294,11 @@ def on_sidebar(state, payload):
     if group is not None and group != NEEDS_REVIEW_GROUP:
         return None
     problems, errors = unfinished(state)
+    if not problems and errors:
+        problems = [f'the gate could not read {"; ".join(errors)}; retry the move once '
+                    'GitHub answers']
     if not problems:
-        return warning(errors)
+        return None
     if group is None:
         reason = ('The self review gate does not know this group id, and a tracked pull '
                   'request is unfinished. Call mcp__ccd_sidebar__list_groups first, then move.')

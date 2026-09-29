@@ -174,6 +174,37 @@ class GateTest(unittest.TestCase):
         with mock.patch.dict(sys.modules, {'enforce_sidebar_move': None}):
             self.assertEqual(gate.group_names(), {})
 
+    def test_read_failure_denies_a_needs_review_move(self):
+        state = fresh()
+        state['prs'] = [URL]
+        self.read.side_effect = RuntimeError('no answer in 20s')
+        move = {'tool_input': {'group_id': 'g-needs', 'session_ids': ['self']}}
+        denied = gate.on_sidebar(state, move)['hookSpecificOutput']
+        self.assertIn('could not read', denied['permissionDecisionReason'])
+
+    def test_review_falls_back_to_git_for_the_head(self):
+        state = fresh()
+        self.read.side_effect = RuntimeError('no answer in 20s')
+        with mock.patch.object(gate, 'head_from_git', return_value=HEAD):
+            gate.on_review(state, {'tool_input': {'skill': 'code-review',
+                                                  'args': f'high {URL}'}})
+        self.assertEqual(state['passes'], [{'pr': URL, 'sha': HEAD, 'findings': None}])
+
+    def test_review_unrecorded_when_both_reads_fail(self):
+        state = fresh()
+        self.read.side_effect = RuntimeError('no answer in 20s')
+        with mock.patch.object(gate, 'head_from_git', side_effect=RuntimeError('down')):
+            result = gate.on_review(state, {'tool_input': {'skill': 'code-review',
+                                                           'args': f'high {URL}'}})
+        self.assertIn('NOT recorded', result['systemMessage'])
+        self.assertEqual(state['passes'], [])
+
+    def test_read_pr_retries_transient_errors(self):
+        mock.patch.stopall()
+        replies = [RuntimeError('no answer in 20s'), '{"state": "OPEN"}']
+        with mock.patch.object(gate, 'gh', side_effect=replies):
+            self.assertEqual(gate.read_pr(URL), {'state': 'OPEN'})
+
     def test_review_target_forms(self):
         self.assertEqual(gate.review_target(f'high {URL}'), URL)
         with mock.patch.object(gate, 'gh', return_value=URL + '\n') as gh:
