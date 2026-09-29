@@ -1169,7 +1169,7 @@ export default class Member {
   static async getAllMembersAvatarHistoryCounts(): Promise<IMemberAvatarHistoryCount[]> {
     const results: IMemberAvatarHistoryCount[] = [];
     let page = 1;
-    let pages = 1;
+    let pages: number;
     do {
       const response = await apiGet<AvatarHistoryCountListResponse>(
         "/api/v1/users/avatar_history_counts",
@@ -1250,7 +1250,7 @@ export default class Member {
     const perPage = 500;
     const entries: IGameJournalListEntry[] = [];
     let page = 1;
-    let pages = 1;
+    let pages: number;
     do {
       const response = await apiGet<JournaledGameListResponse>(
         `/api/v1/users/${userId}/journal`,
@@ -1273,7 +1273,7 @@ export default class Member {
   static async getAllJournalUsers(): Promise<IJournalUserSummary[]> {
     const results: IJournalUserSummary[] = [];
     let page = 1;
-    let pages = 1;
+    let pages: number;
     do {
       const response = await apiGet<JournalContributorListResponse>(
         `/api/v1/journal_entries/contributors`,
@@ -1340,7 +1340,7 @@ export default class Member {
     const results: Array<{ userId: string; emojiName: string }> = [];
     let page = 1;
     const per = 500;
-    let pages = 1;
+    let pages: number;
     do {
       const response = await apiGet<UserServiceListResponse>(
         "/api/v1/users",
@@ -1399,7 +1399,7 @@ export default class Member {
     }> = [];
     let page = 1;
     const per = 500;
-    let pages = 1;
+    let pages: number;
     do {
       const response = await apiGet<JournalMessageContextListResponse>(
         "/api/v1/journal_message_contexts",

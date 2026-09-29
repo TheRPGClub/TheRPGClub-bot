@@ -293,7 +293,7 @@ export class CollectionCsvImportCommand {
     }
 
     let candidates = parseImportCandidates(nextItem.matchCandidateJson);
-    let igdbComponents: ActionRowBuilder<any>[] | null = null;
+    let igdbComponents: ActionRowBuilder<any>[] | null;
     let igdbHasResults = false;
     if (!candidates.length) {
       candidates = await buildImportCandidates(nextItem.rawTitle);
@@ -1028,7 +1028,7 @@ export class CollectionCsvImportCommand {
       return;
     }
 
-    let resolvedGameId: number | null = null;
+    let resolvedGameId: number | null;
     let source: "gamedb" | "igdb" | null = null;
 
     const game = await Game.getGameById(enteredId);

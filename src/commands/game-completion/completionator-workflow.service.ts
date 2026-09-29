@@ -206,7 +206,7 @@ export class CompletionatorWorkflowService {
         gameDbGameId: gameId,
       });
       item.gameDbGameId = gameId;
-      let platforms = await GamePlatformRegionService.getPlatformsForGameWithStandard(
+      const platforms = await GamePlatformRegionService.getPlatformsForGameWithStandard(
         gameId,
         STANDARD_PLATFORM_IDS,
       );
@@ -216,9 +216,7 @@ export class CompletionatorWorkflowService {
         gameId,
         interaction.user.id,
       );
-      const resolution = 
-        await this.resolveCompletionatorPlatformState(state, item, gameId, platforms);
-      platforms = resolution.platforms;
+      await this.resolveCompletionatorPlatformState(state, item, gameId, platforms);
 
       if (this.canAutoAddCompletion(item, state)) {
         await this.addCompletionFromImport(interaction, session, item, state);

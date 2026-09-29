@@ -267,7 +267,7 @@ export async function promptRemoveFromNowPlaying(
     flags: buildComponentsV2Flags(true),
   };
 
-  let message: Message | null = null;
+  let message: Message | null;
   try {
     if (isInteractionSettled(interaction)) {
       const reply = await safeReply(interaction, { ...payload, __forceFollowUp: true } as any);

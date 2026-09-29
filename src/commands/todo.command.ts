@@ -1412,7 +1412,7 @@ export class TodoCommand {
       return;
     }
 
-    let comments: IGithubIssueComment[] = [];
+    let comments: IGithubIssueComment[];
     try {
       comments = await listIssueComments(parsed.issueNumber, repo);
     } catch {

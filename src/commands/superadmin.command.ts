@@ -579,7 +579,7 @@ export class SuperAdmin {
     const replyTargetId = messageId?.trim() ?? "";
     const targetChannelId = channelId?.trim() ?? "";
 
-    let targetChannel: any = null;
+    let targetChannel: any;
     if (replyTargetId) {
       if (targetChannelId) {
         targetChannel = await interaction.client.channels.fetch(targetChannelId).catch(() => null);

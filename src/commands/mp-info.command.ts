@@ -113,7 +113,7 @@ async function fetchMembersWithPlatforms(filters: PlatformFilters): Promise<MpIn
 
   const members: MpInfoMember[] = [];
   let page = 1;
-  let totalPages = 1;
+  let totalPages: number;
   do {
     const resp = await apiGet<{ data: ApiUserWithSocials[]; meta?: { pages?: number } }>(
       "/api/v1/users",
