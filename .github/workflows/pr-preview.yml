@@ -1,0 +1,190 @@
+name: PR preview
+
+# Runs the PR branch in the test guild under the dev bot on the self-hosted runner.
+# One preview at a time: the newest deploy replaces whatever is running.
+# Setup and manual controls: docs/pr-preview.md.
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, closed]
+    branches: [main]
+  schedule:
+    - cron: "17 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: read
+
+env:
+  PREVIEW_SCRIPT: scripts/preview/preview.sh
+  COMMENT_MODULE: ${{ github.workspace }}/scripts/preview/comment.mjs
+
+jobs:
+  deploy:
+    # Fork PRs never reach the self-hosted runner: their code would run next to the
+    # dev token and the production container.
+    if: >-
+      github.event_name == 'pull_request'
+      && github.event.action != 'closed'
+      && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: [self-hosted, rpgclub-preview]
+    timeout-minutes: 20
+    concurrency:
+      group: pr-preview-deploy
+      cancel-in-progress: true
+    env:
+      PR: ${{ github.event.pull_request.number }}
+      SHA: ${{ github.event.pull_request.head.sha }}
+    steps:
+      - name: Checkout PR head
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+
+      - name: Report building
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const m = await import(process.env.COMMENT_MODULE);
+            const pr = Number(process.env.PR);
+            await m.upsertPreviewComment({
+              github, context, pr, state: "building", sha: process.env.SHA,
+            });
+
+      - name: Deploy preview
+        id: deploy
+        run: bash "$PREVIEW_SCRIPT" deploy "$PR" "$SHA"
+
+      - name: Report replaced preview
+        if: always() && steps.deploy.outputs.replaced_pr != ''
+        uses: actions/github-script@v8
+        env:
+          REPLACED_PR: ${{ steps.deploy.outputs.replaced_pr }}
+        with:
+          script: |
+            const m = await import(process.env.COMMENT_MODULE);
+            await m.upsertPreviewComment({
+              github, context, pr: Number(process.env.REPLACED_PR),
+              state: "replaced", by: Number(process.env.PR),
+            });
+
+      # A close that landed while this run was building would otherwise leave the
+      # preview up after its teardown already ran.
+      - name: Check the PR is still open
+        id: open
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const m = await import(process.env.COMMENT_MODULE);
+            const open = await m.isPullRequestOpen({
+              github, context, pr: Number(process.env.PR),
+            });
+            core.setOutput("open", String(open));
+
+      - name: Tear down for a PR closed mid-deploy
+        if: steps.open.outputs.open == 'false'
+        run: bash "$PREVIEW_SCRIPT" teardown "$PR"
+
+      - name: Report result
+        if: always()
+        uses: actions/github-script@v8
+        env:
+          JOB_STATUS: ${{ job.status }}
+          STILL_OPEN: ${{ steps.open.outputs.open }}
+          CONTAINER: ${{ steps.deploy.outputs.container }}
+        with:
+          script: |
+            const m = await import(process.env.COMMENT_MODULE);
+            const status = process.env.JOB_STATUS;
+            let state = "failed";
+            if (status === "cancelled") state = "superseded";
+            else if (process.env.STILL_OPEN === "false") state = "removed";
+            else if (status === "success") state = "running";
+            await m.upsertPreviewComment({
+              github, context, pr: Number(process.env.PR), state,
+              sha: process.env.SHA, container: process.env.CONTAINER,
+            });
+
+  teardown:
+    if: >-
+      github.event_name == 'pull_request'
+      && github.event.action == 'closed'
+      && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: [self-hosted, rpgclub-preview]
+    timeout-minutes: 5
+    concurrency:
+      group: pr-preview-teardown-${{ github.event.pull_request.number }}
+    env:
+      PR: ${{ github.event.pull_request.number }}
+    steps:
+      - name: Checkout default branch
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+
+      - name: Tear down preview
+        id: teardown
+        run: bash "$PREVIEW_SCRIPT" teardown "$PR"
+
+      - name: Report torn down
+        if: steps.teardown.outputs.removed == '1'
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const m = await import(process.env.COMMENT_MODULE);
+            await m.upsertPreviewComment({
+              github, context, pr: Number(process.env.PR), state: "removed",
+            });
+
+  # Hourly reaper for a preview whose teardown never ran or failed.
+  reap:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: [self-hosted, rpgclub-preview]
+    timeout-minutes: 5
+    concurrency:
+      group: pr-preview-reap
+    steps:
+      - name: Checkout default branch
+        uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - name: Find running preview
+        id: current
+        run: echo "pr=$(bash "$PREVIEW_SCRIPT" current-pr)" >> "$GITHUB_OUTPUT"
+
+      - name: Check its PR is still open
+        id: open
+        if: steps.current.outputs.pr != ''
+        uses: actions/github-script@v8
+        env:
+          PR: ${{ steps.current.outputs.pr }}
+        with:
+          script: |
+            const m = await import(process.env.COMMENT_MODULE);
+            const open = await m.isPullRequestOpen({
+              github, context, pr: Number(process.env.PR),
+            });
+            core.setOutput("open", String(open));
+
+      - name: Reap orphaned preview
+        if: steps.open.outputs.open == 'false'
+        env:
+          PR: ${{ steps.current.outputs.pr }}
+        run: bash "$PREVIEW_SCRIPT" teardown "$PR"
+
+      - name: Report torn down
+        if: steps.open.outputs.open == 'false'
+        uses: actions/github-script@v8
+        env:
+          PR: ${{ steps.current.outputs.pr }}
+        with:
+          script: |
+            const m = await import(process.env.COMMENT_MODULE);
+            await m.upsertPreviewComment({
+              github, context, pr: Number(process.env.PR), state: "removed",
+            });

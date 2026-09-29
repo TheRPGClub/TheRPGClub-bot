@@ -97,6 +97,9 @@ Backblaze, and GitHub issues all use the same configuration they use in
 production, so point them at staging values yourself if you do not want a test
 run touching them.
 
+Pull requests are deployed into the test guild automatically by a self-hosted
+runner. Setup and manual controls are in `docs/pr-preview.md`.
+
 ## Useful Scripts
 
 - `npm run dev` - Run the bot with tsx.
