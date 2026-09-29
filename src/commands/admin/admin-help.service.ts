@@ -83,7 +83,7 @@ export const ADMIN_HELP_TOPICS: AdminHelpTopic[] = [
     notes:
       "Fallback for when first-party voting is unavailable. Pulls current nominations for " +
       "GOTM and NR-GOTM, sorts answers, and sets a sensible max_select. " +
-      "Normal voting runs through /admin voting-open and /vote.",
+      "Normal voting opens on schedule and runs through /vote.",
   },
   {
     id: "voting-open",
