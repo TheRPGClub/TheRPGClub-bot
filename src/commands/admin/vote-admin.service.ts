@@ -559,5 +559,6 @@ async function followUpTieBreakError(
   label: string,
   err: unknown,
 ): Promise<void> {
-  await safeFollowUpIfSettled(interaction, buildErrorReply(buildApiErrorMessage(label, err), true));
+  const text = buildApiErrorMessage(label, err);
+  await safeFollowUpIfSettled(interaction, buildErrorReply(text, true));
 }

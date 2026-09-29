@@ -108,9 +108,9 @@ function buildCategoryContainer(
       }
     }
   } else {
-    const lines = games.map((game) => `- **${game.title}**`);
+    const list = [heading, ...games.map((game) => `- **${game.title}**`)].join("\n");
     container.addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(safeV2TextContent([heading, ...lines].join("\n"), MAX_CONTAINER_TEXT)),
+      new TextDisplayBuilder().setContent(safeV2TextContent(list, MAX_CONTAINER_TEXT)),
     );
   }
   return container.addActionRowComponents(
