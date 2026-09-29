@@ -21,6 +21,7 @@ import {
   extractErrorMessage,
   replyIfNotOwner,
   safeDeferUpdate,
+  safeFollowUpIfSettled,
   safeReply,
   safeUpdate,
 } from "../functions/InteractionUtils.js";
@@ -399,7 +400,7 @@ export class MultiplayerInfoCommand {
 
       if (result.errorMessage) {
         const errContainer = buildTextContainer(safeV2TextContent(result.errorMessage, 1000));
-        await safeReply(interaction, {
+        await safeFollowUpIfSettled(interaction, {
           components: [errContainer],
           flags: buildComponentsV2Flags(true),
         });
@@ -413,7 +414,7 @@ export class MultiplayerInfoCommand {
           1000,
             ),
           );
-        await safeReply(interaction, {
+        await safeFollowUpIfSettled(interaction, {
           components: [notFoundContainer],
           flags: buildComponentsV2Flags(true),
         });
@@ -432,7 +433,7 @@ export class MultiplayerInfoCommand {
       const errContainer = buildTextContainer(
       safeV2TextContent(`Could not load that profile: ${msg}`, 1000),
         );
-      await safeReply(interaction, {
+      await safeFollowUpIfSettled(interaction, {
         components: [errContainer],
         flags: buildComponentsV2Flags(true),
       });

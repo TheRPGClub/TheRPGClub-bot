@@ -13,6 +13,8 @@ import {
   replyIfNotOwner,
   safeDeferReply,
   safeDeferUpdate,
+  safeEditReply,
+  safeFollowUpIfSettled,
   safeReply,
   safeUpdate,
 } from "../../functions/InteractionUtils.js";
@@ -318,9 +320,9 @@ export class NowPlayingPlatformHandlers {
     const platformOptions = await getNowPlayingEditPlatformOptions(entries);
     const parsed = parseNowPlayingPlatformStateToken(stateToken, entries.length);
     if (!parsed) {
-      await safeReply(
+      await safeFollowUpIfSettled(
         interaction,
-        buildTextReply("This platform form has expired. Open Edit Platform again.", isEphemeral),
+        buildTextReply("This platform form has expired. Open Edit Platform again.", true),
       );
       return;
     }
@@ -335,7 +337,7 @@ export class NowPlayingPlatformHandlers {
       const pmComponents = await withPmNowPlayingList(
         ownerId, interaction.guildId, components,
       );
-      await safeReply(interaction, { components: pmComponents, flags: responseFlags });
+      await safeEditReply(interaction, { components: pmComponents, flags: responseFlags });
       return;
     }
 
@@ -344,22 +346,22 @@ export class NowPlayingPlatformHandlers {
       const option = platformOptions[slotIndex]?.[selectedOptionIndex];
       const gameId = entries[slotIndex]?.gameId;
       if (!option || !gameId) {
-        await safeReply(
+        await safeFollowUpIfSettled(
           interaction,
           buildTextReply(
             "One or more selected platforms are invalid. Please review and try again.",
-            isEphemeral,
+            true,
           ),
         );
         return;
       }
       const updated = await Member.updateNowPlayingPlatform(ownerId, gameId, option.platformId);
       if (!updated) {
-        await safeReply(
+        await safeFollowUpIfSettled(
           interaction,
           buildTextReply(
             `Could not update platform for ${entries[slotIndex].title}.`,
-            isEphemeral,
+            true,
           ),
         );
         return;
@@ -388,6 +390,6 @@ export class NowPlayingPlatformHandlers {
       stateTokenReset,
     );
     const pmComponents = await withPmNowPlayingList(ownerId, interaction.guildId, components);
-    await safeReply(interaction, { components: pmComponents, flags: responseFlags });
+    await safeEditReply(interaction, { components: pmComponents, flags: responseFlags });
   }
 }

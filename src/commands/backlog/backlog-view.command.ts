@@ -17,6 +17,7 @@ import {
   replyIfNotOwner,
   safeDeferReply,
   safeDeferUpdate,
+  safeFollowUpIfSettled,
   safeReply,
   safeUpdate,
   sanitizeUserInput,
@@ -245,9 +246,10 @@ export class BacklogViewCommand {
       });
       safeIgnore((interaction.message as any)?.delete?.() ?? Promise.resolve());
       if (!applied) {
-        safeIgnore(
-          safeReply(interaction, buildTextReply("Could not apply filter -- the backlog message was not found.", true)),
-        );
+        safeIgnore(safeFollowUpIfSettled(
+          interaction,
+          buildTextReply("Could not apply filter -- the backlog message was not found.", true),
+        ));
       }
     }
   }

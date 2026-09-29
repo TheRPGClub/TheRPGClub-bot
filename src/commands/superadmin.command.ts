@@ -27,6 +27,8 @@ import {
   safeDeferReply,
   replyIfNotOwner,
   safeDeferUpdate,
+  safeEditReply,
+  safeFollowUpIfSettled,
   safeReply,
   safeUpdate,
   sanitizeUserInput,
@@ -286,15 +288,13 @@ export class SuperAdmin {
 
     await safeDeferUpdate(interaction);
 
+    let promptShown = false;
     try {
-      await this.processCompletionSelection(interaction, value, ctx);
+      promptShown = await this.processCompletionSelection(interaction, value, ctx);
     } finally {
       superadminCompletionAddSessions.delete(sessionId);
-      try {
-        safeIgnore(safeReply(interaction, { components: [] }));
-      } catch {
-        // ignore
-      }
+      // A shown prompt already replaced this select; clearing it then would wipe that prompt.
+      if (!promptShown) safeIgnore(safeEditReply(interaction, { components: [] }));
     }
   }
 
@@ -348,7 +348,6 @@ export class SuperAdmin {
       await notifyUnknownCompletionPlatform(interaction, game.title, game.id);
     }
     await this.saveCompletionForContext(interaction, ctx, game, platformId);
-    await safeReply(interaction, { components: [] });
   }
 
   private async promptCompletionSelection(
@@ -631,7 +630,10 @@ export class SuperAdmin {
   ): Promise<boolean> {
     if (value === "import-igdb") {
       if (!ctx.query) {
-        await safeReply(interaction, buildTextReply("Original search query lost. Please try again.", true));
+        await safeFollowUpIfSettled(
+          interaction,
+          buildTextReply("Original search query lost. Please try again.", true),
+        );
         return false;
       }
       await this.promptIgdbSelection(interaction, ctx.query, ctx);

@@ -8,6 +8,7 @@ import Member from "../../classes/Member.js";
 import {
   replyIfNotOwner,
   safeDeferUpdate,
+  safeEditReply,
   safeReply,
   safeUpdate,
 } from "../../functions/InteractionUtils.js";
@@ -147,7 +148,7 @@ export class NowPlayingSortHandlers {
       const pmComponents = await withPmNowPlayingList(
         ownerId, interaction.guildId, [container],
       );
-      await safeReply(interaction, { components: pmComponents, flags: responseFlags });
+      await safeEditReply(interaction, { components: pmComponents, flags: responseFlags });
       return;
     }
     if (parsed.some((value) => value < 0)) {
@@ -160,7 +161,7 @@ export class NowPlayingSortHandlers {
       const pmComponents = await withPmNowPlayingList(
         ownerId, interaction.guildId, components,
       );
-      await safeReply(interaction, { components: pmComponents, flags: responseFlags });
+      await safeEditReply(interaction, { components: pmComponents, flags: responseFlags });
       return;
     }
     if (new Set(parsed).size !== parsed.length) {
@@ -173,7 +174,7 @@ export class NowPlayingSortHandlers {
       const pmComponents = await withPmNowPlayingList(
         ownerId, interaction.guildId, components,
       );
-      await safeReply(interaction, { components: pmComponents, flags: responseFlags });
+      await safeEditReply(interaction, { components: pmComponents, flags: responseFlags });
       return;
     }
 
@@ -187,7 +188,7 @@ export class NowPlayingSortHandlers {
       const pmComponents = await withPmNowPlayingList(
         ownerId, interaction.guildId, [container],
       );
-      await safeReply(interaction, { components: pmComponents, flags: responseFlags });
+      await safeEditReply(interaction, { components: pmComponents, flags: responseFlags });
       return;
     }
 
@@ -208,7 +209,7 @@ export class NowPlayingSortHandlers {
     const stateToken = buildNowPlayingSortStateToken(entries.length);
     const components = buildNowPlayingSortComponents(entries, ownerId, stateToken);
     const pmComponents = await withPmNowPlayingList(ownerId, interaction.guildId, components);
-    await safeReply(interaction, { components: pmComponents, flags: responseFlags });
+    await safeEditReply(interaction, { components: pmComponents, flags: responseFlags });
   }
 
   @ButtonComponent({ id: /^nowplaying-edit-menu-sort:\d+$/ })

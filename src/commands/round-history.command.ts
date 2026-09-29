@@ -33,6 +33,7 @@ import {
 import {
   safeDeferReply,
   safeDeferUpdate,
+  safeEditReply,
   safeReply,
   sanitizeUserInput,
 } from "../functions/InteractionUtils.js";
@@ -616,7 +617,7 @@ export class RoundHistoryCommand {
     await safeDeferUpdate(interaction);
 
     const response = await buildRoundHistoryResponse(interaction, parsed);
-    await safeReply(interaction, {
+    await safeEditReply(interaction, {
       content: null,
       components: response.components,
       files: response.files.length ? response.files : [],

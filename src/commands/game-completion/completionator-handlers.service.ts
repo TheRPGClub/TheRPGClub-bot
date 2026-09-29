@@ -7,6 +7,7 @@ import { MessageFlags } from "discord.js";
 import {
   safeDeferReply,
   safeDeferUpdate,
+  safeFollowUpIfSettled,
   safeReply,
   replyIfNotOwner,
 } from "../../functions/InteractionUtils.js";
@@ -133,13 +134,13 @@ export class CompletionatorHandlersService {
 
     const session = await getImportById(parsed.importId);
     if (!session) {
-      safeIgnore(safeReply(interaction, buildTextReply("Import session not found.", true)));
+      safeIgnore(safeFollowUpIfSettled(interaction, buildTextReply("Import session not found.", true)));
       return;
     }
 
     const item = await getImportItemById(parsed.itemId);
     if (!item) {
-      safeIgnore(safeReply(interaction, buildTextReply("Import item not found.", true)));
+      safeIgnore(safeFollowUpIfSettled(interaction, buildTextReply("Import item not found.", true)));
       return;
     }
 

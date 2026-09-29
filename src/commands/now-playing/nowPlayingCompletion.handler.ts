@@ -34,6 +34,7 @@ import {
   replyIfNotOwner,
   safeDeferReply,
   safeDeferUpdate,
+  safeFollowUpIfSettled,
   safeReply,
   safeUpdate,
 } from "../../functions/InteractionUtils.js";
@@ -888,7 +889,7 @@ export class NowPlayingCompletionHandlers {
     const game = await Game.getGameById(session.gameId);
     if (!game) {
       const container = buildTextContainer("That game could not be found.");
-      await safeReply(interaction, {
+      await safeFollowUpIfSettled(interaction, {
         components: [container],
         flags: buildComponentsV2Flags(true),
       });
