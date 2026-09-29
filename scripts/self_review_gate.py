@@ -16,7 +16,7 @@ Events:
   pr-opened  PostToolUse on Bash. Tracks a pull request `gh pr create` opened.
   review     PostToolUse on Skill. Starts a pass when the skill is code-review.
              A review does not track its pull request: only one this session
-             opened is gated, so reviewing another author's pull request never
+             opened is gated, so reviewing a pull request it did not open never
              holds the session until that pull request is clean.
   findings   PostToolUse on ReportFindings. Closes the open pass with its count.
   groups     PostToolUse on mcp__ccd_sidebar__list_groups. Learns group names.
