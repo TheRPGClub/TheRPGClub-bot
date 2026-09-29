@@ -181,6 +181,7 @@ export default class UserGameCollection {
       if (/unique|duplicate|already been taken/i.test(msg)) {
         throw new Error(
           "That game/platform/ownership entry already exists in your collection.",
+          { cause: err },
         );
       }
       throw err;
@@ -251,6 +252,7 @@ export default class UserGameCollection {
       if (/unique|duplicate|already been taken/i.test(msg)) {
         throw new Error(
           "That game/platform/ownership entry already exists in your collection.",
+          { cause: err },
         );
       }
       throw err;

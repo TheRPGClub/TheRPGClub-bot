@@ -110,7 +110,7 @@ export default class UserGameBacklog {
     } catch (err: any) {
       const msg = String(err?.response?.data?.error ?? err?.message ?? "");
       if (/unique|duplicate|already been taken/i.test(msg)) {
-        throw new Error("That game is already in your backlog.");
+        throw new Error("That game is already in your backlog.", { cause: err });
       }
       throw err;
     }
@@ -190,7 +190,9 @@ export default class UserGameBacklog {
     } catch (err: any) {
       const msg = String(err?.response?.data?.error ?? err?.message ?? "");
       if (/unique|duplicate|already been taken/i.test(msg)) {
-        throw new Error("That game/platform entry already exists in your backlog.");
+        throw new Error("That game/platform entry already exists in your backlog.", {
+          cause: err,
+        });
       }
       throw err;
     }
