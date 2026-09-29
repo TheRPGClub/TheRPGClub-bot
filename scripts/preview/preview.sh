@@ -31,8 +31,10 @@ env_value() {
   local line
   line="$(grep -E "^[[:space:]]*$1=" "${PREVIEW_ENV_FILE}" | tail -n 1 || true)"
   line="${line#*=}"
-  line="${line%\"}"
-  line="${line#\"}"
+  # The file may come from the Windows production .env: drop CRLF and either quote style.
+  line="${line%$'\r'}"
+  line="${line#[\"\']}"
+  line="${line%[\"\']}"
   printf '%s' "${line}"
 }
 

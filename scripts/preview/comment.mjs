@@ -40,7 +40,9 @@ export async function upsertPreviewComment({ github, context, pr, state, ...deta
     issue_number: pr,
     per_page: 100,
   });
-  const existing = comments.find((c) => c.body?.startsWith(MARKER));
+  const existing = comments.find(
+    (c) => c.user?.login === "github-actions[bot]" && c.body?.startsWith(MARKER),
+  );
   if (existing) {
     await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body });
   } else {
