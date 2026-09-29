@@ -1319,40 +1319,24 @@ export default {
         },
       },
       create(context) {
-        const reportOption = (propNode, key) => {
-          // Offer an autofix when the deprecated `ephemeral` property is a boolean literal.
-          if (propNode && propNode.type === "Property") {
-            const valueNode = propNode.value;
-            context.report({
-              node: propNode.key,
-              messageId: "deprecatedOption",
-              data: { key },
-              fix: (fixer) => {
-                try {
-                  if (valueNode && valueNode.type === "Literal") {
-                    if (valueNode.value === true) {
-                      // Replace `ephemeral: true` with `flags: MessageFlags.Ephemeral`
-                      return fixer.replaceText(propNode, "flags: MessageFlags.Ephemeral");
-                    }
-                    if (valueNode.value === false) {
-                      // Remove the property entirely. Try to remove trailing comma if present.
-                      return fixer.remove(propNode);
-                    }
-                  }
-                } catch {
-                  // fallthrough to no-fix
-                }
-                return null;
-              },
-            });
-            return;
-          }
+        const sourceCode = context.sourceCode;
 
-          context.report({
-            node: propNode,
-            messageId: "deprecatedOption",
-            data: { key },
-          });
+        // Only a boolean `ephemeral` in an object without its own `flags` is safe to rewrite.
+        const buildEphemeralFix = (propNode, objectNode) => {
+          const valueNode = propNode.value;
+          if (valueNode.type !== "Literal" || typeof valueNode.value !== "boolean") return null;
+          const hasFlags = objectNode.properties.some(
+            (p) => p.type === "Property" && getPropertyName(p.key) === "flags",
+          );
+          if (hasFlags) return null;
+          if (valueNode.value) {
+            return (fixer) => fixer.replaceText(propNode, "flags: MessageFlags.Ephemeral");
+          }
+          return (fixer) => {
+            const next = sourceCode.getTokenAfter(propNode);
+            const end = next && next.value === "," ? next.range[1] : propNode.range[1];
+            return fixer.removeRange([propNode.range[0], end]);
+          };
         };
 
         const checkOptionsObject = (node) => {
@@ -1361,7 +1345,13 @@ export default {
             if (prop.type !== "Property") continue;
             const keyName = getPropertyName(prop.key);
             if (!keyName || !DEPRECATED_RESPONSE_OPTION_KEYS.has(keyName)) continue;
-            reportOption(prop.key, keyName);
+            const fix = keyName === "ephemeral" ? buildEphemeralFix(prop, node) : null;
+            context.report({
+              node: prop.key,
+              messageId: "deprecatedOption",
+              data: { key: keyName },
+              ...(fix ? { fix } : {}),
+            });
           }
         };
 
@@ -1376,7 +1366,8 @@ export default {
               node.callee.type === "Identifier" &&
               INTERACTION_RESPONSE_HELPERS.has(calleeName);
             if (!isMethodCall && !isHelperCall) return;
-            checkOptionsObject(node.arguments[0]);
+            // Helpers take the interaction first: safeReply(interaction, options).
+            checkOptionsObject(node.arguments[isHelperCall ? 1 : 0]);
           },
           MemberExpression(node) {
             if (node.property.type !== "Identifier") return;
