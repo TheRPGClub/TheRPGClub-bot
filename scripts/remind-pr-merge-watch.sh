@@ -18,7 +18,8 @@ stdout=$(jq -r '.tool_response
   | if type == "object" then (.stdout // "") | tostring
     elif type == "string" then . else tostring end' <<<"$input")
 url_re='https://github\.com/[^/[:space:]]+/[^/[:space:]]+/pull/([0-9]+)'
-numbers=$(sed -nE "s#^[[:space:]]*${url_re}[[:space:]]*\$#\\1#p" <<<"$stdout")
+numbers=$(sed -nE "s#^[[:space:]]*${url_re}[[:space:]]*\$#\\1#p" <<<"$stdout" \
+  | awk '!seen[$0]++')
 test -n "$numbers" || exit 0
 
 # One reminder per pull request, so a command that opens several records each.
