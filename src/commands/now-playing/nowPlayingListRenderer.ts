@@ -348,8 +348,8 @@ export async function returnToNowPlayingEditMenu(
   const flags = buildComponentsV2Flags(true);
   const anyInteraction = interaction as any;
   const isAcked = Boolean(
-    anyInteraction.__rpgDeferred ?? anyInteraction.__rpgAcked ??
-    anyInteraction.deferred ?? anyInteraction.replied,
+    anyInteraction.__rpgDeferred || anyInteraction.__rpgAcked ||
+    anyInteraction.deferred || anyInteraction.replied,
   );
   // safeEditReply, not safeReply: once the message was edited (the sort save's loading
   // panel), safeReply would follow up and leave that panel on screen.
