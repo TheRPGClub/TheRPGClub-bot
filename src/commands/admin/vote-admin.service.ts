@@ -1,4 +1,8 @@
-import type { ButtonInteraction, CommandInteraction } from "discord.js";
+import type {
+  ButtonInteraction,
+  CommandInteraction,
+  StringSelectMenuInteraction,
+} from "discord.js";
 import { channelMention } from "discord.js";
 import {
   listNominationsForRound,
@@ -14,6 +18,8 @@ import VotingRounds, {
   type IVotingRound,
 } from "../../classes/VotingRounds.js";
 import {
+  safeDeferUpdate,
+  safeEditReply,
   safeReply,
   safeUpdate,
   withErrorReply,
@@ -38,6 +44,12 @@ import {
   postVotePanels,
 } from "../../functions/VotePanelPosting.js";
 import { toUnixTimestamp } from "../../functions/DateFormatUtils.js";
+import {
+  buildResolvedTieContainer,
+  parseTieBreakSelectId,
+  replaceTieCategoryContainer,
+  VOTING_CATEGORY_LABEL,
+} from "../../functions/VotingTiePrompt.js";
 import { ANNOUNCEMENT_CHANNEL_ID } from "../../config/channels.js";
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
 
@@ -476,4 +488,42 @@ export async function handleVotingResults(
       flags: buildComponentsV2Flags(true),
     });
   }, "Could not load voting results");
+}
+
+/**
+ * An admin's pick on the tie-break prompt. The picked games become the
+ * category's winners, and that category's select is replaced with a note of
+ * who picked what; the other categories' selects stay. The API refuses a stale
+ * prompt (422 `no_tie` or `invalid_pick`), shown with the full request and
+ * response. Breaking the last tie decides the round, which the API announces
+ * with a `round_decided` event.
+ */
+export async function handleTieBreakSelect(
+  interaction: StringSelectMenuInteraction,
+): Promise<void> {
+  const target = parseTieBreakSelectId(interaction.customId);
+  if (!target) {
+    await safeReply(interaction, buildTextReply("Invalid tie-break action.", true));
+    return;
+  }
+  const label = VOTING_CATEGORY_LABEL[target.category];
+  await safeDeferUpdate(interaction);
+  await withErrorReply(interaction, async () => {
+    const gameIds = interaction.values.map(Number);
+    await VotingRounds.resolveTie(target.roundNumber, target.category, gameIds);
+    const titles = interaction.values.map((value) => {
+      const option = interaction.component.options.find((opt) => opt.value === value);
+      return option?.label ?? `Game ${value}`;
+    });
+    const components = replaceTieCategoryContainer(
+      interaction.message.components.map((component) => component.toJSON()),
+      interaction.customId,
+      buildResolvedTieContainer(target.category, titles, interaction.user.id),
+    );
+    await safeEditReply(interaction, {
+      components,
+      flags: buildComponentsV2EditFlags(),
+      allowedMentions: { parse: [] },
+    });
+  }, `Could not break the Round ${target.roundNumber} ${label} tie`);
 }

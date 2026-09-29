@@ -6,7 +6,6 @@ import {
   type IVotingEvent,
   type VotingEventKind,
 } from "../classes/VotingEvents.js";
-import { mapVotingRoundApiData } from "../classes/VotingRounds.js";
 import {
   createVotingEventDeliveryState,
   MAX_VOTING_EVENT_ATTEMPTS,
@@ -14,7 +13,6 @@ import {
 } from "../services/VotingEventService.js";
 import {
   buildNominationReminderText,
-  buildTiePendingText,
   type VotingEventOutcome,
 } from "../services/VotingEventHandlers.js";
 
@@ -173,31 +171,4 @@ test("buildNominationReminderText points at the vote with Discord timestamps", (
 
   assert.match(text, /^Voting is <t:1793376000:R> \(<t:1793376000:D>\)!/);
   assert.match(text, /Please nominate games/);
-});
-
-test("buildTiePendingText lists each tied category's games", () => {
-  const round = mapVotingRoundApiData({
-    round_number: 143,
-    month_year: "October 2026",
-    voting_opens_at: "2026-09-25T16:00:00.000Z",
-    voting_closes_at: "2026-09-28T03:59:59.999Z",
-    closed_at: "2026-09-28T04:00:00.000Z",
-    decided_at: null,
-    phase: "tie",
-    nominations_open: false,
-    voting_open: false,
-    voting_ended: true,
-    pending_ties: {
-      gotm: [
-        { game_id: 12, title: "Saltmarsh Requiem", cover_url: null },
-        { game_id: 34, title: "Verdant Hollow", cover_url: null },
-      ],
-    },
-  });
-
-  const text = buildTiePendingText(round);
-
-  assert.match(text, /^## Round 143 voting ended in a tie/);
-  assert.match(text, /- GOTM: \*\*Saltmarsh Requiem\*\*, \*\*Verdant Hollow\*\*/);
-  assert.doesNotMatch(text, /NR-GOTM/);
 });

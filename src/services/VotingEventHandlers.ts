@@ -2,14 +2,13 @@ import type { Client } from "discord.js";
 import Gotm, { reloadGotmRoundFromDb } from "../classes/Gotm.js";
 import NrGotm, { reloadNrGotmRoundFromDb } from "../classes/NrGotm.js";
 import type { IVotingEvent } from "../classes/VotingEvents.js";
-import VotingRounds, {
-  type IVotingRound,
-  type VotingRoundCategory,
-} from "../classes/VotingRounds.js";
+import VotingRounds, { type IVotingRound } from "../classes/VotingRounds.js";
 import { ADMIN_CHANNEL_ID, ANNOUNCEMENT_CHANNEL_ID } from "../config/channels.js";
 import { NOMINATION_DISCUSSION_CHANNEL_IDS } from "../config/nominationChannels.js";
 import { fetchSendableChannel } from "../functions/ChannelUtils.js";
 import { toUnixTimestamp } from "../functions/DateFormatUtils.js";
+import { buildComponentsV2Flags } from "../functions/ComponentsV2Utils.js";
+import { buildTiePromptComponents } from "../functions/VotingTiePrompt.js";
 import { ensureVoteScheduledEvent } from "../functions/VoteScheduledEvent.js";
 import {
   hasVotableNominations,
@@ -30,31 +29,12 @@ import { ensureWinnerThread, type WinnerKindLabel } from "./WinnerThreadService.
  */
 export type VotingEventOutcome = "delivered" | "skipped";
 
-const CATEGORY_LABEL: Record<VotingRoundCategory, WinnerKindLabel> = {
-  gotm: "GOTM",
-  nr_gotm: "NR-GOTM",
-};
-
 export function buildNominationReminderText(votingOpensAt: Date): string {
   const voteUnix = toUnixTimestamp(votingOpensAt);
   return (
     `Voting is <t:${voteUnix}:R> (<t:${voteUnix}:D>)!\n` +
     "Please nominate games for the upcoming vote so they can be included."
   );
-}
-
-export function buildTiePendingText(round: IVotingRound): string {
-  const lines = [
-    `## Round ${round.roundNumber} voting ended in a tie`,
-    "An admin needs to pick the winner for each tied category below. The round is " +
-      "decided, and nominations for the next one open, once every tie is broken.",
-  ];
-  for (const [category, games] of Object.entries(round.pendingTies)) {
-    const label = CATEGORY_LABEL[category as VotingRoundCategory] ?? category;
-    const titles = (games ?? []).map((game) => `**${game.title}**`).join(", ");
-    lines.push(`- ${label}: ${titles}`);
-  }
-  return lines.join("\n");
 }
 
 async function requireRound(event: IVotingEvent): Promise<IVotingRound> {
@@ -162,7 +142,11 @@ async function postTiePendingNotice(
   if (!channel) {
     throw new Error(`Admin channel ${ADMIN_CHANNEL_ID} was not found or cannot be sent to.`);
   }
-  await channel.send({ content: buildTiePendingText(round), allowedMentions: { parse: [] } });
+  await channel.send({
+    components: buildTiePromptComponents(round),
+    flags: buildComponentsV2Flags(false),
+    allowedMentions: { parse: [] },
+  });
   return "delivered";
 }
 
