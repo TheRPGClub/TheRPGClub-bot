@@ -49,6 +49,7 @@ import { handleLegacyVotingSetup } from "./admin/voting-admin.service.js";
 import {
   handleVoteCloseButton,
   handleVotesReset,
+  handleTieBreakSelect,
   handleVotesResetButton,
   handleVotingClose,
   handleVotingOpen,
@@ -327,6 +328,16 @@ export class Admin {
     }
 
     await handleVotesResetButton(interaction);
+  }
+
+  @SelectMenuComponent({ id: /^admin-vote-tie:\d+:(gotm|nr_gotm)$/ })
+  async handleAdminTieBreakSelect(interaction: StringSelectMenuInteraction): Promise<void> {
+    const okToUseCommand: boolean = await isAdmin(interaction);
+    if (!okToUseCommand) {
+      return;
+    }
+
+    await handleTieBreakSelect(interaction);
   }
 
   @Slash({

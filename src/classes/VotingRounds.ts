@@ -1,4 +1,4 @@
-import { apiGet, apiPatch } from "../services/RpgClubApiClient.js";
+import { apiGet, apiPatch, apiPostOrThrow } from "../services/RpgClubApiClient.js";
 import { calculateVoteDeadlineEt } from "../functions/VoteDateUtils.js";
 
 export const NO_VOTING_ROUND_SCHEDULED = "No voting round is scheduled.";
@@ -11,6 +11,12 @@ export const NO_VOTING_ROUND_SCHEDULED = "No voting round is scheduled.";
 export type VotingPhase = "nominating" | "voting" | "closed" | "tie" | "decided";
 
 export type VotingRoundCategory = "gotm" | "nr_gotm";
+
+export const VOTING_ROUND_CATEGORIES: readonly VotingRoundCategory[] = ["gotm", "nr_gotm"];
+
+export function isVotingRoundCategory(value: string): value is VotingRoundCategory {
+  return (VOTING_ROUND_CATEGORIES as readonly string[]).includes(value);
+}
 
 export interface IVotingRoundTieGame {
   gameId: number;
@@ -198,6 +204,27 @@ export default class VotingRounds {
     });
     if (!response?.data) {
       throw new Error(`No voting round ${round} was found to update.`);
+    }
+    return mapVotingRoundApiData(response.data);
+  }
+
+  /**
+   * Records the picked games as a tied category's winners. Throws the
+   * AxiosError for every failure, so the caller can show the full request and
+   * response; a stale prompt gets 422 `no_tie` or `invalid_pick`.
+   */
+  static async resolveTie(
+    roundNumber: number,
+    category: VotingRoundCategory,
+    gameIds: number[],
+  ): Promise<IVotingRound> {
+    const round = normalizeRoundNumber(roundNumber);
+    const response = await apiPostOrThrow<VotingRoundResponse>(
+      `/api/v1/voting_rounds/${round}/resolve_tie`,
+      { data: { category, gamedb_game_ids: gameIds } },
+    );
+    if (!response?.data) {
+      throw new Error(`The API returned no voting round after resolving the Round ${round} tie.`);
     }
     return mapVotingRoundApiData(response.data);
   }
