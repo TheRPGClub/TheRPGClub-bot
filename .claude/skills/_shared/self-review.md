@@ -24,9 +24,10 @@ reviewed. "Partly reviewed" is never a state to report.
 `scripts/self_review_gate.py` enforces this. Its hooks record each
 `code-review` run and the finding count `ReportFindings` gives it, and they
 block ending the turn, and deny a move to `Needs Review`, until every pull
-request the session opened or reviewed has a zero-finding pass at its current
-head, green CI (or no checks), and no conflict with its base. When the gate
-blocks, do what its message says.
+request the session opened has a zero-finding pass at its current head, green
+CI (or no checks), and no conflict with its base. Reviewing another author's
+pull request never puts it under the gate. When the gate blocks, do what its
+message says.
 
 ## One pass
 
