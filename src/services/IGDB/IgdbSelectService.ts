@@ -31,6 +31,12 @@ import {
   buildButtonRow,
   buildSelectRow,
 } from "../../functions/uiComponents.js";
+import {
+  persistedSessionStore,
+  persistSessionInBackground,
+  removePersistedSession,
+  type PersistedSessionLocation,
+} from "../PersistedInteractionSessionStore.js";
 
 export type IgdbSelectOption = { id: number; label: string; description?: string };
 
@@ -40,6 +46,33 @@ type Session = {
   onSelect: (interaction: StringSelectMenuInteraction, gameId: number) => Promise<void>;
   extraComponents?: ActionRowBuilder<any>[];
   emptyMessage?: string;
+  // API row id of the restart-recovery copy; only set for resumable sessions.
+  persistedRowId?: Promise<string | null>;
+};
+
+type IgdbSelectInteraction = StringSelectMenuInteraction | ButtonInteraction;
+
+/**
+ * A named IGDB selection flow whose context survives a bot restart. The session
+ * persists the flow key and `toJson(context)`; after a restart the registry maps
+ * the key back to `onSelect`, since a closure cannot be persisted.
+ */
+export type IgdbSelectFlow<T> = {
+  key: string;
+  toJson: (context: T) => unknown;
+  fromJson: (raw: unknown) => T | null;
+  onSelect: (
+    interaction: StringSelectMenuInteraction,
+    gameId: number,
+    context: T,
+  ) => Promise<void>;
+};
+
+type PersistedIgdbSessionState = {
+  flow: string;
+  options: IgdbSelectOption[];
+  emptyMessage?: string;
+  context: unknown;
 };
 
 const IGDB_FIRST_MATCH_PREFIX = "igdb-first";
@@ -49,6 +82,14 @@ const IGDB_SESSION_EXPIRED_MESSAGE =
 // Leave room for prev/next navigation in the 25-option Discord limit.
 const PAGE_SIZE = 22; // 22 options + prev/next (up to 24) stays under 25
 const IGDB_SESSION_KEY = Symbol.for("igdbSelectSessions");
+const IGDB_PERSISTED_KIND = "igdb-select";
+const IGDB_SESSION_ID_PATTERN = /^igdb-(\d+)-([0-9a-f-]{36})$/;
+const igdbSelectFlows = new Map<string, IgdbSelectFlow<any>>();
+
+export function registerIgdbSelectFlow<T>(flow: IgdbSelectFlow<T>): IgdbSelectFlow<T> {
+  igdbSelectFlows.set(flow.key, flow);
+  return flow;
+}
 
 function getSessionStore(): Map<string, Session> {
   const g = globalThis as any;
@@ -83,14 +124,9 @@ export function createIgdbSession(
   // do not clobber each other in the shared session store. The id never contains a
   // colon, which the custom-id parser relies on for exact segment counting.
   const sessionId = `igdb-${ownerId}-${crypto.randomUUID()}`;
-  const sorted = [...options].sort((a, b) => {
-    const lenDiff = a.label.length - b.label.length;
-    if (lenDiff !== 0) return lenDiff;
-    return a.label.localeCompare(b.label);
-  });
   getSessionStore().set(sessionId, {
     ownerId,
-    options: sorted,
+    options: sortIgdbOptions(options),
     onSelect,
     extraComponents,
     emptyMessage,
@@ -99,6 +135,139 @@ export function createIgdbSession(
     sessionId,
     components: buildIgdbComponents(sessionId, 0),
   };
+}
+
+/**
+ * Like createIgdbSession, but the session also survives a bot restart: the options
+ * and `flow.toJson(context)` are persisted, and a pick after a restart runs
+ * `flow.onSelect` with the restored context. The flow must be registered with
+ * registerIgdbSelectFlow at module load so it exists before any interaction.
+ */
+export function createResumableIgdbSession<T>(params: {
+  ownerId: string;
+  options: IgdbSelectOption[];
+  flow: IgdbSelectFlow<T>;
+  context: T;
+  location: PersistedSessionLocation;
+  emptyMessage?: string;
+}): { sessionId: string; components: ActionRowBuilder<any>[] } {
+  const { flow, context } = params;
+  const created = createIgdbSession(
+    params.ownerId,
+    params.options,
+    (interaction, gameId) => flow.onSelect(interaction, gameId, context),
+    undefined,
+    params.emptyMessage,
+  );
+  const session = getSessionStore().get(created.sessionId);
+  if (session) {
+    const state: PersistedIgdbSessionState = {
+      flow: flow.key,
+      options: session.options,
+      emptyMessage: params.emptyMessage,
+      context: flow.toJson(context),
+    };
+    session.persistedRowId = persistSessionInBackground({
+      kind: IGDB_PERSISTED_KIND,
+      sessionId: created.sessionId,
+      ownerId: params.ownerId,
+      location: params.location,
+      state,
+    });
+  }
+  return created;
+}
+
+function sortIgdbOptions(options: IgdbSelectOption[]): IgdbSelectOption[] {
+  return [...options].sort((a, b) => {
+    const lenDiff = a.label.length - b.label.length;
+    if (lenDiff !== 0) return lenDiff;
+    return a.label.localeCompare(b.label);
+  });
+}
+
+function parsePersistedOptions(raw: unknown): IgdbSelectOption[] | null {
+  if (!Array.isArray(raw)) return null;
+  const options: IgdbSelectOption[] = [];
+  for (const item of raw) {
+    const id = Number(item?.id);
+    if (!isPositiveInt(id) || typeof item?.label !== "string") return null;
+    const description = typeof item.description === "string" ? item.description : undefined;
+    options.push({ id, label: item.label, description });
+  }
+  return options;
+}
+
+function toSessionFromPersisted(
+  ownerId: string,
+  rowId: string,
+  raw: unknown,
+): Session | null {
+  const state = raw as Partial<PersistedIgdbSessionState> | null;
+  const flow = typeof state?.flow === "string" ? igdbSelectFlows.get(state.flow) : undefined;
+  const options = parsePersistedOptions(state?.options);
+  if (!flow || !options) return null;
+  const context = flow.fromJson(state?.context);
+  if (context === null) return null;
+  return {
+    ownerId,
+    options,
+    onSelect: (interaction, gameId) => flow.onSelect(interaction, gameId, context),
+    emptyMessage: typeof state?.emptyMessage === "string" ? state.emptyMessage : undefined,
+    persistedRowId: Promise.resolve(rowId),
+  };
+}
+
+/**
+ * Returns the in-memory session, or rebuilds a resumable one from the API after a
+ * bot restart. API errors propagate so the caller can show the request/response.
+ */
+async function resolveIgdbSession(
+  sessionId: string,
+  interaction: IgdbSelectInteraction,
+): Promise<Session | undefined> {
+  const cached = getSessionStore().get(sessionId);
+  if (cached) return cached;
+
+  const ownerId = IGDB_SESSION_ID_PATTERN.exec(sessionId)?.[1];
+  if (!ownerId) return undefined;
+  const record = await persistedSessionStore.load({
+    kind: IGDB_PERSISTED_KIND,
+    sessionId,
+    ownerId,
+    channelId: interaction.channelId,
+  });
+  if (!record) return undefined;
+  const session = toSessionFromPersisted(ownerId, record.rowId, record.state);
+  if (!session) return undefined;
+  getSessionStore().set(sessionId, session);
+  return session;
+}
+
+async function loadIgdbSessionOrReply(
+  sessionId: string,
+  interaction: IgdbSelectInteraction,
+): Promise<Session | undefined> {
+  let session: Session | undefined;
+  try {
+    session = await resolveIgdbSession(sessionId, interaction);
+  } catch (err: unknown) {
+    logError("IgdbSelectService.resolveIgdbSession", err);
+    await safeReply(interaction, buildErrorReply(
+      buildApiErrorMessage("Could not restore this game selection.", err),
+      true,
+    ));
+    return undefined;
+  }
+  if (!session) {
+    await safeReply(interaction, buildTextReply(IGDB_SESSION_EXPIRED_MESSAGE, true));
+  }
+  return session;
+}
+
+function finishIgdbSession(sessionId: string, session: Session): void {
+  getSessionStore().delete(sessionId);
+  void removePersistedSession(session.persistedRowId);
 }
 
 export function buildIgdbComponents(
@@ -166,7 +335,8 @@ export function getIgdbSession(sessionId: string): Session | undefined {
 }
 
 export function deleteIgdbSession(sessionId: string): void {
-  getSessionStore().delete(sessionId);
+  const session = getSessionStore().get(sessionId);
+  if (session) finishIgdbSession(sessionId, session);
 }
 
 export async function handleIgdbSelectInteraction(
@@ -175,11 +345,8 @@ export async function handleIgdbSelectInteraction(
   const segs = assertCustomIdSegments(interaction, 2);
   if (!segs) return false;
   const [sessionId, pageRaw] = segs;
-  const session = getSessionStore().get(sessionId);
-  if (!session) {
-    await safeReply(interaction, buildTextReply(IGDB_SESSION_EXPIRED_MESSAGE, true));
-    return true;
-  }
+  const session = await loadIgdbSessionOrReply(sessionId, interaction);
+  if (!session) return true;
 
   if (await replyIfNotOwner(interaction, session.ownerId, "This selection isn't for you.")) return true;
 
@@ -221,7 +388,7 @@ export async function handleIgdbSelectInteraction(
   } catch (err: unknown) {
     await reportIgdbSelectError(interaction, err);
   } finally {
-    getSessionStore().delete(sessionId);
+    finishIgdbSession(sessionId, session);
   }
   return true;
 }
@@ -232,11 +399,8 @@ export async function handleIgdbFirstMatchInteraction(
   const segs = assertCustomIdSegments(interaction, 1);
   if (!segs) return false;
   const [sessionId] = segs;
-  const session = getSessionStore().get(sessionId);
-  if (!session) {
-    await safeReply(interaction, buildTextReply(IGDB_SESSION_EXPIRED_MESSAGE, true));
-    return true;
-  }
+  const session = await loadIgdbSessionOrReply(sessionId, interaction);
+  if (!session) return true;
 
   if (await replyIfNotOwner(interaction, session.ownerId, "This selection isn't for you.")) return true;
 
@@ -256,7 +420,7 @@ export async function handleIgdbFirstMatchInteraction(
   } catch (err: unknown) {
     await reportIgdbSelectError(interaction, err);
   } finally {
-    getSessionStore().delete(sessionId);
+    finishIgdbSession(sessionId, session);
   }
   return true;
 }
