@@ -2,7 +2,6 @@ import {
   ActionRowBuilder,
   ApplicationCommandOptionType,
   AutocompleteInteraction,
-  ButtonStyle,
   CommandInteraction,
   StringSelectMenuBuilder,
   StringSelectMenuInteraction,
@@ -30,7 +29,7 @@ import {
   buildTextReply,
   safeV2TextContent,
 } from "../../functions/ComponentsV2Utils.js";
-import { shouldRenderPrevNextButtons } from "../../functions/PaginationUtils.js";
+import { buildDisabledPrevNextRowWithIds } from "../../functions/PaginationUtils.js";
 import GameProfileService from "../../classes/GameProfileService.js";
 import { decodeBase64Url } from "../../functions/CustomIdUtils.js";
 import {
@@ -55,11 +54,7 @@ import { isPositiveInt } from "../../utilities/ValidationUtils.js";
 import { MAX_CONTAINER_TEXT } from "../../config/textLimits.js";
 import { assertCustomIdSegments } from "../../utilities/CustomIdUtils.js";
 import GamePlatformRegionService from "../../classes/GamePlatformRegionService.js";
-import {
-  buildActionButton,
-  buildButtonRow,
-  buildSelectRow,
-} from "../../functions/uiComponents.js";
+import { buildSelectRow } from "../../functions/uiComponents.js";
 import GameSearchService from "../../classes/GameSearchService.js";
 import {
   formatGameTitleWithYear,
@@ -199,21 +194,12 @@ function buildSearchResponse(
 
   const selectRow = buildSelectRow(selectMenu);
 
-  const prevDisabled = safePage === 0;
-  const nextDisabled = safePage >= totalPages - 1;
-
-  const prevButton = buildActionButton({
-    customId: buildSearchCustomId("page", ownerId, safePage, searchTerm, "prev", filters),
-    label: "Previous Page",
-    style: ButtonStyle.Secondary,
-  }).setDisabled(prevDisabled);
-  const nextButton = buildActionButton({
-    customId: buildSearchCustomId("page", ownerId, safePage, searchTerm, "next", filters),
-    label: "Next Page",
-    style: ButtonStyle.Secondary,
-  }).setDisabled(nextDisabled);
-
-  const buttonRow = buildButtonRow(prevButton, nextButton);
+  const buttonRow = buildDisabledPrevNextRowWithIds(
+    buildSearchCustomId("page", ownerId, safePage, searchTerm, "prev", filters),
+    buildSearchCustomId("page", ownerId, safePage, searchTerm, "next", filters),
+    safePage,
+    totalPages,
+  );
   const components: Array<ContainerBuilder | ActionRowBuilder<any>> = [];
   if (includeList) {
     const filterNote = filterSummary ? `\n*Filters: ${filterSummary}*` : "";
@@ -226,8 +212,7 @@ function buildSearchResponse(
   }
   components.push(selectRow);
 
-  if (shouldRenderPrevNextButtons(prevDisabled, nextDisabled)) {
-
+  if (buttonRow) {
     components.push(buttonRow);
   }
 

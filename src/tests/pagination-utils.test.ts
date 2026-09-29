@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  buildDisabledPrevNextButtons,
   buildDisabledPrevNextRowWithIds,
   buildOptionalPrevNextRow,
   buildPageFooterText,
@@ -52,6 +53,14 @@ test("buildDisabledPrevNextRowWithIds disables the boundary button", () => {
   assert.ok(row);
   assert.deepEqual(describe(row.components).map((b) => b.disabled), [true, false]);
   assert.equal(buildDisabledPrevNextRowWithIds("p", "n", 0, 1), null);
+});
+
+test("buildDisabledPrevNextButtons keeps both buttons and disables the boundary", () => {
+  assert.deepEqual(buildDisabledPrevNextButtons("p", "n", 0, 1), []);
+  const last = describe(buildDisabledPrevNextButtons("p", "n", 2, 3));
+  assert.deepEqual(last.map((b) => b.custom_id), ["p", "n"]);
+  assert.deepEqual(last.map((b) => b.label), [PAGE_PREV_LABEL, PAGE_NEXT_LABEL]);
+  assert.deepEqual(last.map((b) => b.disabled), [false, true]);
 });
 
 test("buildPageFooterText is one-based with an optional suffix", () => {

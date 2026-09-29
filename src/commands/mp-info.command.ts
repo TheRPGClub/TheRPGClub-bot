@@ -261,7 +261,6 @@ function buildPageComponents(
     `mpinfo-page:${ownerId}:${filterKey}`,
     page,
     totalPages,
-    { prev: "Previous Page", next: "Next Page" },
   );
   if (navRow) {
     components.push(navRow);

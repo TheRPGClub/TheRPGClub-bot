@@ -47,7 +47,7 @@ import GameSearchSynonym from "../classes/GameSearchSynonym.js";
 import GameSearchSynonymDraft, {
   type ISynonymDraftPair,
 } from "../classes/GameSearchSynonymDraft.js";
-import { shouldRenderPrevNextButtons } from "../functions/PaginationUtils.js";
+import { buildDisabledPrevNextButtons } from "../functions/PaginationUtils.js";
 import {
   buildActionButton,
   buildButtonRow,
@@ -224,18 +224,6 @@ export class GameDbAdmin {
 
     const container = buildTextContainer(safeV2TextContent(content, 3500));
 
-    const prevDisabled = safePage === 0;
-    const nextDisabled = safePage >= totalPages - 1;
-    const prevButton = buildActionButton({
-      customId: buildSynonymListCustomId(ownerId, safePage, query, "prev"),
-      label: "Previous Page",
-      style: ButtonStyle.Secondary,
-    }).setDisabled(prevDisabled);
-    const nextButton = buildActionButton({
-      customId: buildSynonymListCustomId(ownerId, safePage, query, "next"),
-      label: "Next Page",
-      style: ButtonStyle.Secondary,
-    }).setDisabled(nextDisabled);
     const addGroupButton = buildActionButton({
       customId: buildSynonymGroupSelectCustomId(
         SYNONYM_ADD_FROM_LIST_PREFIX,
@@ -246,11 +234,15 @@ export class GameDbAdmin {
       label: "Add New Group",
       style: ButtonStyle.Primary,
     });
-    const buttonRowItems: ButtonBuilder[] = [addGroupButton];
-    if (shouldRenderPrevNextButtons(prevDisabled, nextDisabled)) {
-      buttonRowItems.push(prevButton, nextButton);
-    }
-    const buttonRow = buildButtonRow(...buttonRowItems);
+    const buttonRow = buildButtonRow(
+      addGroupButton,
+      ...buildDisabledPrevNextButtons(
+        buildSynonymListCustomId(ownerId, safePage, query, "prev"),
+        buildSynonymListCustomId(ownerId, safePage, query, "next"),
+        safePage,
+        totalPages,
+      ),
+    );
 
     const components: Array<
       ContainerBuilder | ActionRowBuilder<ButtonBuilder> | ActionRowBuilder<StringSelectMenuBuilder>
