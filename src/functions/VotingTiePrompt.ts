@@ -17,13 +17,14 @@ import {
   DISCORD_V2_COMPONENTS_MAX,
   MAX_SECTION_TEXT,
 } from "../config/textLimits.js";
-import { validateCustomId } from "../utilities/CustomIdUtils.js";
+import { parseCustomIdSegments, validateCustomId } from "../utilities/CustomIdUtils.js";
+import type { WinnerKindLabel } from "../services/WinnerThreadService.js";
 import { buildTextContainer, safeV2TextContent } from "./ComponentsV2Utils.js";
 import { buildSelectOptions, buildSelectRow } from "./uiComponents.js";
 
 export const TIE_BREAK_SELECT_PREFIX = "admin-vote-tie";
 
-export const VOTING_CATEGORY_LABEL: Record<VotingRoundCategory, "GOTM" | "NR-GOTM"> = {
+export const VOTING_CATEGORY_LABEL: Record<VotingRoundCategory, WinnerKindLabel> = {
   gotm: "GOTM",
   nr_gotm: "NR-GOTM",
 };
@@ -39,19 +40,13 @@ export function buildTieBreakSelectId(roundNumber: number, category: VotingRound
 }
 
 export function parseTieBreakSelectId(customId: string): ITieBreakTarget | null {
-  const [prefix, rawRound, category, ...rest] = customId.split(":");
+  const segments = customId.startsWith(`${TIE_BREAK_SELECT_PREFIX}:`)
+    ? parseCustomIdSegments(customId, 2)
+    : null;
+  const [rawRound, category] = segments ?? [];
   const roundNumber = Number(rawRound);
-  if (
-    prefix !== TIE_BREAK_SELECT_PREFIX ||
-    rest.length > 0 ||
-    !Number.isInteger(roundNumber) ||
-    roundNumber <= 0 ||
-    !category ||
-    !isVotingRoundCategory(category)
-  ) {
-    return null;
-  }
-  return { roundNumber, category };
+  if (!Number.isInteger(roundNumber) || roundNumber <= 0 || !category) return null;
+  return isVotingRoundCategory(category) ? { roundNumber, category } : null;
 }
 
 export function buildTiePendingText(round: IVotingRound): string {

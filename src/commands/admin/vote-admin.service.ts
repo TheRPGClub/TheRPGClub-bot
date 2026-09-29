@@ -20,6 +20,7 @@ import VotingRounds, {
 import {
   safeDeferUpdate,
   safeEditReply,
+  safeFollowUpIfSettled,
   safeReply,
   safeUpdate,
   withErrorReply,
@@ -27,6 +28,7 @@ import {
 import {
   buildComponentsV2EditFlags,
   buildComponentsV2Flags,
+  buildErrorReply,
   buildTextContainer,
   buildTextReply,
 } from "../../functions/ComponentsV2Utils.js";
@@ -51,6 +53,7 @@ import {
   VOTING_CATEGORY_LABEL,
 } from "../../functions/VotingTiePrompt.js";
 import { ANNOUNCEMENT_CHANNEL_ID } from "../../config/channels.js";
+import { buildApiErrorMessage } from "../../utilities/ApiErrorUtils.js";
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
 
 function buildUpdateText(text: string): {
@@ -508,15 +511,18 @@ export async function handleTieBreakSelect(
   }
   const label = VOTING_CATEGORY_LABEL[target.category];
   await safeDeferUpdate(interaction);
-  await withErrorReply(interaction, async () => {
+  try {
     const gameIds = interaction.values.map(Number);
     await VotingRounds.resolveTie(target.roundNumber, target.category, gameIds);
     const titles = interaction.values.map((value) => {
       const option = interaction.component.options.find((opt) => opt.value === value);
       return option?.label ?? `Game ${value}`;
     });
+    // Re-read the prompt: another admin may have broken a different category's
+    // tie since this one loaded it, and editing the stale copy would undo that.
+    const message = await interaction.message.fetch();
     const components = replaceTieCategoryContainer(
-      interaction.message.components.map((component) => component.toJSON()),
+      message.components.map((component) => component.toJSON()),
       interaction.customId,
       buildResolvedTieContainer(target.category, titles, interaction.user.id),
     );
@@ -525,5 +531,13 @@ export async function handleTieBreakSelect(
       flags: buildComponentsV2EditFlags(),
       allowedMentions: { parse: [] },
     });
-  }, `Could not break the Round ${target.roundNumber} ${label} tie`);
+  } catch (err: unknown) {
+    // A follow-up, not safeReply: after the deferred update safeReply would
+    // edit the prompt itself and wipe every category's select.
+    const text = buildApiErrorMessage(
+      `Could not break the Round ${target.roundNumber} ${label} tie`,
+      err,
+    );
+    await safeFollowUpIfSettled(interaction, buildErrorReply(text, true));
+  }
 }
