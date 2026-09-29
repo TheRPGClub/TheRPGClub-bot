@@ -314,7 +314,9 @@ def expected(calls, by_id, notices, start, ledger_open):
         return what, groups
     if still_open:
         listed = ', '.join(sorted(still_open, key=int))
-        return f'the turn is ending with pull request {listed} open in the ledger', PR_OPEN
+        return (f'the turn is ending with pull request {listed} open in the ledger (if it '
+                'already merged or closed, run `scripts/catchup.py wait <ledger>` so the row '
+                'settles)', PR_OPEN)
     return None
 
 

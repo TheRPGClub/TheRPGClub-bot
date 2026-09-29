@@ -214,6 +214,7 @@ class IdleTurns(Scenario):
         decision = self.run_stop('question-next-turn.jsonl', *move('cg-0000-working'))
         self.assertBlocks(decision, 'Needs Review')
         self.assertIn('pull request 77 open in the ledger', decision['reason'])
+        self.assertIn('catchup.py wait', decision['reason'])
 
     def test_a_prompt_without_origin_still_starts_a_turn(self):
         self.ledger(MERGED_PR)
