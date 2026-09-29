@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
 """Hooks that record self review passes and refuse a handoff before a clean one.
 
-usage: python3 scripts/self_review_gate.py <event> < hook-input.json
+usage: python3 scripts/self_review_gate.py < hook-input.json
+
+The handler is picked from the payload's hook_event_name and tool_name, so every
+hook in .claude/settings.local.json runs the same command.
 
 A pass is recorded by the hooks, never by the session: `review` runs after the
 `code-review` skill starts and stores the pull request and the head commit it
@@ -306,6 +309,19 @@ HANDLERS = {
     'sidebar': on_sidebar,
     'stop': on_stop,
 }
+EVENTS = {
+    ('PostToolUse', 'Bash'): 'pr-opened',
+    ('PostToolUse', 'Skill'): 'review',
+    ('PostToolUse', 'ReportFindings'): 'findings',
+    ('PostToolUse', 'mcp__ccd_sidebar__list_groups'): 'groups',
+    ('PreToolUse', 'mcp__ccd_sidebar__move_sessions'): 'sidebar',
+    ('Stop', None): 'stop',
+}
+
+
+def event_of(payload):
+    hook = payload.get('hook_event_name')
+    return EVENTS.get((hook, None if hook == 'Stop' else payload.get('tool_name')))
 
 # Cheap checks on the tool input, so the hooks on every Bash and Skill call return before
 # touching git or the state file when the call has nothing to do with the gate.
@@ -315,12 +331,12 @@ RELEVANT = {
 }
 
 
-def main(argv):
-    if len(argv) != 2 or argv[1] not in HANDLERS:
-        sys.stderr.write(f'usage: {argv[0]} {{{",".join(HANDLERS)}}} < hook-input.json\n')
-        return 2
+def main():
     payload = json.load(sys.stdin)
-    relevant = RELEVANT.get(argv[1])
+    event = event_of(payload)
+    if event is None:
+        return 0
+    relevant = RELEVANT.get(event)
     if relevant and not relevant(payload.get('tool_input') or {}):
         return 0
     path = state_path(payload.get('session_id'))
@@ -331,7 +347,7 @@ def main(argv):
         fcntl.flock(lock, fcntl.LOCK_EX)
         state = load(path)
         before = json.dumps(state, sort_keys=True)
-        result = HANDLERS[argv[1]](state, payload)
+        result = HANDLERS[event](state, payload)
         if json.dumps(state, sort_keys=True) != before:
             save(path, state)
     if result:
@@ -340,4 +356,4 @@ def main(argv):
 
 
 if __name__ == '__main__':
-    sys.exit(main(sys.argv))
+    sys.exit(main())

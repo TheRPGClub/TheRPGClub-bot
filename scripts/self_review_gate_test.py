@@ -224,24 +224,30 @@ class MainTest(unittest.TestCase):
         mock.patch.object(gate, 'read_pr', return_value=pr()).start()
         self.addCleanup(mock.patch.stopall)
 
-    def run_main(self, event, payload):
+    def run_main(self, payload):
         out = io.StringIO()
         with mock.patch('sys.stdin', io.StringIO(json.dumps(payload))), \
                 mock.patch('sys.stdout', out):
-            self.assertEqual(gate.main(['gate', event]), 0)
+            self.assertEqual(gate.main(), 0)
         return json.loads(out.getvalue()) if out.getvalue() else None
 
     def test_unrelated_bash_call_never_creates_state(self):
-        self.run_main('pr-opened', {'session_id': 's', 'tool_input': {'command': 'ls'}})
+        self.run_main({'session_id': 's', 'hook_event_name': 'PostToolUse',
+                       'tool_name': 'Bash', 'tool_input': {'command': 'ls'}})
         self.assertFalse(os.path.exists(self.path))
 
     def test_opened_pr_persists_and_blocks_stop(self):
-        self.run_main('pr-opened', {'session_id': 's',
-                                    'tool_input': {'command': 'gh pr create -t x'},
-                                    'tool_response': {'stdout': URL + '\n'}})
+        self.run_main({'session_id': 's', 'hook_event_name': 'PostToolUse',
+                       'tool_name': 'Bash', 'tool_input': {'command': 'gh pr create -t x'},
+                       'tool_response': {'stdout': URL + '\n'}})
         with open(self.path) as f:
             self.assertEqual(json.load(f)['prs'], [URL])
-        self.assertEqual(self.run_main('stop', {'session_id': 's'})['decision'], 'block')
+        stop = {'session_id': 's', 'hook_event_name': 'Stop'}
+        self.assertEqual(self.run_main(stop)['decision'], 'block')
+
+    def test_unknown_event_is_ignored(self):
+        self.run_main({'session_id': 's', 'hook_event_name': 'PostToolUse', 'tool_name': 'Read'})
+        self.assertFalse(os.path.exists(self.path))
 
 
 if __name__ == '__main__':

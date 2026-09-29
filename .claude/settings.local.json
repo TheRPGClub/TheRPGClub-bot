@@ -62,41 +62,11 @@
         ]
       },
       {
-        "matcher": "Bash",
+        "matcher": "Bash|Skill|ReportFindings|mcp__ccd_sidebar__list_groups",
         "hooks": [
           {
             "type": "command",
-            "command": "SCRIPT=\"$CLAUDE_PROJECT_DIR/scripts/self_review_gate.py\"; test -f \"$SCRIPT\" || exit 0; exec python3 \"$SCRIPT\" pr-opened",
-            "timeout": 120
-          }
-        ]
-      },
-      {
-        "matcher": "Skill",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "SCRIPT=\"$CLAUDE_PROJECT_DIR/scripts/self_review_gate.py\"; test -f \"$SCRIPT\" || exit 0; exec python3 \"$SCRIPT\" review",
-            "timeout": 120
-          }
-        ]
-      },
-      {
-        "matcher": "ReportFindings",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "SCRIPT=\"$CLAUDE_PROJECT_DIR/scripts/self_review_gate.py\"; test -f \"$SCRIPT\" || exit 0; exec python3 \"$SCRIPT\" findings",
-            "timeout": 120
-          }
-        ]
-      },
-      {
-        "matcher": "mcp__ccd_sidebar__list_groups",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "SCRIPT=\"$CLAUDE_PROJECT_DIR/scripts/self_review_gate.py\"; test -f \"$SCRIPT\" || exit 0; exec python3 \"$SCRIPT\" groups",
+            "command": "SCRIPT=\"$CLAUDE_PROJECT_DIR/scripts/self_review_gate.py\"; test -f \"$SCRIPT\" || exit 0; exec python3 \"$SCRIPT\"",
             "timeout": 120
           }
         ]
@@ -108,7 +78,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "SCRIPT=\"$CLAUDE_PROJECT_DIR/scripts/self_review_gate.py\"; test -f \"$SCRIPT\" || exit 0; exec python3 \"$SCRIPT\" sidebar",
+            "command": "SCRIPT=\"$CLAUDE_PROJECT_DIR/scripts/self_review_gate.py\"; test -f \"$SCRIPT\" || exit 0; exec python3 \"$SCRIPT\"",
             "timeout": 120
           }
         ]
@@ -119,7 +89,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "SCRIPT=\"$CLAUDE_PROJECT_DIR/scripts/self_review_gate.py\"; test -f \"$SCRIPT\" || exit 0; exec python3 \"$SCRIPT\" stop",
+            "command": "SCRIPT=\"$CLAUDE_PROJECT_DIR/scripts/self_review_gate.py\"; test -f \"$SCRIPT\" || exit 0; exec python3 \"$SCRIPT\"",
             "timeout": 120
           }
         ]
