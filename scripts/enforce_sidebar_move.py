@@ -11,15 +11,18 @@ stop walks the transcript since the last prompt the user typed and finds the lat
 
 - `gh issue edit ... --add-label "In Progress"` that printed the issue URL: Working (or Needs
   Review, for a question)
-- `gh pr create` that printed a pull request URL: Self Review or Needs Review
+- `gh pr create` that printed a pull request URL: Needs Review
 - `scripts/catchup.py add-issue` that recorded a blocker: Blocked (or Needs Review, for an open
   pull request)
-- `pr: <n> merged` or `pr: <n> closed` from `catchup.py wait`: Completed or Working, or any
-  but Completed and Blocked while another pull request in the ledger is still open
+- `pr: <n> merged` or `pr: <n> closed` from `catchup.py wait`: Completed or Working, or Working
+  or Needs Review while another pull request in the ledger is still open
 
 With no milestone in the turn, a pull request still open in the session's catch-up ledger
-calls for Self Review or Needs Review. The session's group is the one its last successful
-`mcp__ccd_sidebar__move_sessions` call filed it in, anywhere in the transcript. A missing or
+calls for Needs Review. The self review loop waits for CI in the foreground and never ends a
+turn, so a turn that ends under Self Review stopped inside the loop.
+
+The session's group is the one its last successful `mcp__ccd_sidebar__move_sessions` call
+filed it in, anywhere in the transcript. A missing or
 wrong group blocks the stop with a reason naming the group to move to. A stop that a block
 already sent back (`stop_hook_active`) is let through, so the hook never loops.
 
@@ -46,7 +49,10 @@ BLOCKED = 'Blocked'
 SELF_REVIEW = 'Self Review'
 NEEDS_REVIEW = 'Needs Review'
 COMPLETED = 'Completed'
-PR_OPEN = (SELF_REVIEW, NEEDS_REVIEW)
+# A turn only ends with a pull request open once its self review came back clean.
+PR_OPEN = (NEEDS_REVIEW,)
+MID_LOOP = ('Self review never ends a turn: wait for CI in the foreground and finish the '
+            'loop per .claude/skills/_shared/self-review.md, then move to `Needs Review`.')
 
 # A command that runs the tool, at its start or after a shell separator, not one that only
 # mentions it (a grep of the docs, a commit message).
@@ -305,10 +311,6 @@ def expected(calls, by_id, notices, start, ledger_open):
         events.append((pos, f'pull request {number} merged or closed', groups))
     if events:
         _, what, groups = max(events, key=lambda e: e[0])
-        if still_open and groups == (WORKING, NEEDS_REVIEW):
-            groups = (WORKING, SELF_REVIEW, NEEDS_REVIEW)
-        if still_open and groups == (BLOCKED, NEEDS_REVIEW):
-            groups = (BLOCKED, SELF_REVIEW, NEEDS_REVIEW)
         return what, groups
     if still_open:
         listed = ', '.join(sorted(still_open, key=int))
@@ -339,6 +341,8 @@ def decide(hook):
     if name is None:
         return (f'Sidebar: {what}, and the last move used group id `{moved[1]}`, which no '
                 f'`{LIST_TOOL}` result names. Move to {target}. {how}')
+    if name == SELF_REVIEW and groups == PR_OPEN:
+        return f'Sidebar: {what}, but this session is still under `{name}`. {MID_LOOP}'
     if name not in groups:
         return (f'Sidebar: {what}, but this session is filed under `{name}`. '
                 f'Move to {target}. {how}')

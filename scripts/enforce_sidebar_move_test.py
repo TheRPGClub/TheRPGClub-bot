@@ -104,13 +104,15 @@ class Milestones(Scenario):
     def test_pr_opened_while_filed_under_working_blocks(self):
         self.ledger(OPEN_PR)
         decision = self.run_stop('pr-opened-still-working.jsonl')
-        self.assertBlocks(decision, 'Self Review', 'Needs Review')
+        self.assertBlocks(decision, 'Needs Review')
         self.assertIn('pull request 77 was opened', decision['reason'])
         self.assertIn('filed under `Working`', decision['reason'])
 
-    def test_pr_opened_then_self_review_goes_through(self):
+    def test_pr_opened_then_self_review_blocks_mid_loop(self):
         self.ledger(OPEN_PR)
-        self.assertIsNone(self.run_stop('pr-opened-self-review.jsonl'))
+        decision = self.run_stop('pr-opened-self-review.jsonl')
+        self.assertBlocks(decision, 'Needs Review')
+        self.assertIn('wait for CI in the foreground', decision['reason'])
 
     def test_pr_opened_then_needs_review_goes_through(self):
         self.ledger(OPEN_PR)
@@ -159,7 +161,8 @@ class Merged(Scenario):
     def test_reading_an_older_wait_log_is_not_a_merge(self):
         self.ledger(OPEN_PR)
         read = bash('cat /tmp/x/wait.log', WAIT_MERGED)
-        self.assertIsNone(self.run_stop('pr-opened-self-review.jsonl', *read))
+        decision = self.run_stop('pr-opened-self-review.jsonl', *read)
+        self.assertIn('pull request 77 was opened', decision['reason'])
 
     def test_a_notice_in_an_attachment_counts(self):
         self.ledger(MERGED_PR)
@@ -180,15 +183,16 @@ class Merged(Scenario):
         self.ledger(MERGED_PR + OTHER_PR)
         self.output('b1.output', WAIT_MERGED)
         decision = self.run_stop('pr-merged-notice.jsonl', *move('cg-0000-completed'))
-        self.assertBlocks(decision, 'Self Review', 'Needs Review')
-        self.assertIsNone(self.run_stop('pr-merged-notice.jsonl', *move('cg-0000-self-review')))
+        self.assertBlocks(decision, 'Working', 'Needs Review')
+        self.assertIsNone(self.run_stop('pr-merged-notice.jsonl', *move('cg-0000-needs-review')))
 
     def test_a_task_notification_is_not_a_new_prompt(self):
         """The notice starts a turn of its own, but the prompt before it still bounds it, so
-        the Self Review move from earlier in the transcript is what the session holds."""
+        the pull request opened earlier in the turn is still the latest milestone."""
         self.ledger(MERGED_PR)
         self.output('b1.output', 'wait: 0 finished; 1 still open\n')
-        self.assertIsNone(self.run_stop('pr-merged-notice.jsonl'))
+        decision = self.run_stop('pr-merged-notice.jsonl')
+        self.assertIn('pull request 77 was opened', decision['reason'])
 
 
 class IdleTurns(Scenario):
@@ -196,14 +200,19 @@ class IdleTurns(Scenario):
         self.ledger(MERGED_PR)
         self.assertIsNone(self.run_stop('question-next-turn.jsonl'))
 
-    def test_open_pr_in_the_ledger_keeps_self_review(self):
+    def test_open_pr_in_the_ledger_keeps_needs_review(self):
         self.ledger(OPEN_PR)
-        self.assertIsNone(self.run_stop('question-next-turn.jsonl'))
+        self.assertIsNone(self.run_stop('question-next-turn.jsonl',
+                                        *move('cg-0000-needs-review')))
+
+    def test_open_pr_in_the_ledger_blocks_self_review(self):
+        self.ledger(OPEN_PR)
+        self.assertBlocks(self.run_stop('question-next-turn.jsonl'), 'Needs Review')
 
     def test_open_pr_in_the_ledger_blocks_working(self):
         self.ledger(OPEN_PR)
         decision = self.run_stop('question-next-turn.jsonl', *move('cg-0000-working'))
-        self.assertBlocks(decision, 'Self Review', 'Needs Review')
+        self.assertBlocks(decision, 'Needs Review')
         self.assertIn('pull request 77 open in the ledger', decision['reason'])
 
     def test_a_prompt_without_origin_still_starts_a_turn(self):
