@@ -46,11 +46,6 @@ import subprocess
 import sys
 from concurrent.futures import ThreadPoolExecutor
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-# Group ids resolve to names through the cache enforce_sidebar_move.py keeps from
-# list_groups results, so the two hooks never disagree about which id is which group.
-from enforce_sidebar_move import load_cache as group_names  # noqa: E402
-
 NEEDS_REVIEW_GROUP = 'Needs Review'
 GH_TIMEOUT = 20
 PR_URL = re.compile(r'https://github\.com/([^/\s]+/[^/\s]+)/pull/(\d+)')
@@ -205,6 +200,15 @@ def on_findings(state, payload):
     if state['passes'] and state['passes'][-1].get('findings') is None:
         state['passes'][-1]['findings'] = len(findings)
     return None
+
+
+def group_names():
+    """Group names by id, from the cache enforce_sidebar_move.py keeps from list_groups
+    results, so the two hooks never disagree about which id is which group. Imported here,
+    not at the top, so a problem in that script can only affect the sidebar event."""
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    from enforce_sidebar_move import load_cache
+    return load_cache()
 
 
 def read_all(urls):
