@@ -212,9 +212,12 @@ class GateTest(unittest.TestCase):
 
     def test_read_pr_retries_transient_errors(self):
         mock.patch.stopall()
-        replies = [RuntimeError('no answer in 20s'), '{"state": "OPEN"}']
-        with mock.patch.object(gate, 'gh', side_effect=replies):
+        replies = [RuntimeError('error connecting'), RuntimeError('error connecting'),
+                   '{"state": "OPEN"}']
+        with mock.patch.object(gate, 'gh', side_effect=replies), \
+                mock.patch.object(gate.time, 'sleep') as sleep:
             self.assertEqual(gate.read_pr(URL), {'state': 'OPEN'})
+        self.assertEqual([c.args[0] for c in sleep.call_args_list], [2, 5])
 
     def test_review_target_forms(self):
         self.assertEqual(gate.review_target(f'high {URL}'), URL)

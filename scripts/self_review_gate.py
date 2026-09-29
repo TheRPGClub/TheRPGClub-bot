@@ -48,11 +48,14 @@ import os
 import re
 import subprocess
 import sys
+import time
 from concurrent.futures import ThreadPoolExecutor
 
 NEEDS_REVIEW_GROUP = 'Needs Review'
 GH_TIMEOUT = 20
 READ_ATTEMPTS = 3
+# Seconds to pause before each retry, so a short network blip is outlasted.
+READ_BACKOFF = (2, 5)
 PR_URL = re.compile(r'https://github\.com/([^/\s]+/[^/\s]+)/pull/(\d+)')
 GH_PR_CREATE = re.compile(r'(^|[;&|(])\s*gh pr create')
 # gh's wording when the repository does not exist; such a PR is dropped. A 404 is not
@@ -111,6 +114,7 @@ def read_pr(url):
         except RuntimeError as err:
             if MISSING_PR.search(str(err)) or attempt == READ_ATTEMPTS - 1:
                 raise
+            time.sleep(READ_BACKOFF[min(attempt, len(READ_BACKOFF) - 1)])
 
 
 def head_from_git(url):
