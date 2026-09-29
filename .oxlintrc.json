@@ -184,6 +184,7 @@
         "local/escape-masked-link-text": "error",
         "local/interface-name-prefix": "error",
         "local/no-sanitize-url-input": "error",
+        "local/no-static-config-import-in-test-mode-test": "error",
         "stylistic/semi": "error",
         "stylistic/comma-dangle": [
           "error",

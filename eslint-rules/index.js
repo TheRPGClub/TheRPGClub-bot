@@ -88,6 +88,14 @@ const NEW_MODAL_COMPONENT_BUILDER_NAMES = new Set([
 ]);
 const NEW_MODAL_COMPONENT_TYPE_NUMBERS = new Set([18, 19, 21, 22]);
 const FREE_TEXT_SANITIZER_NAMES = new Set(["sanitizeUserInput", "sanitizeOptionalInput"]);
+const TEST_MODE_ENV_NAME = "TEST_GUILD_ID";
+const TEST_MODE_SAFE_STATIC_IMPORTS = new Set([
+  "node:test",
+  "node:assert",
+  "node:assert/strict",
+  "discord.js",
+]);
+const TEST_FILE_PATH_PATTERN = /(^|\/)src\/tests\//;
 const URL_NAME_WORDS = new Set(["url", "urls", "href", "link", "links", "uri", "uris"]);
 const URL_RESULT_WRAPPER_TYPES = new Set([
   "ConditionalExpression",
@@ -817,6 +825,33 @@ function unwrapAwaitExpression(node) {
   if (!node) return null;
   if (node.type === "AwaitExpression") return node.argument;
   return node;
+}
+
+function isProcessEnvMember(node) {
+  return (
+    node?.type === "MemberExpression" &&
+    node.object?.type === "Identifier" &&
+    node.object.name === "process" &&
+    getStaticPropertyName(node) === "env"
+  );
+}
+
+function getStaticPropertyName(node) {
+  if (!node.computed && node.property?.type === "Identifier") return node.property.name;
+  if (node.computed && node.property?.type === "Literal") return String(node.property.value);
+  return null;
+}
+
+function isTestModeEnvTarget(node) {
+  return (
+    node?.type === "MemberExpression" &&
+    isProcessEnvMember(node.object) &&
+    getStaticPropertyName(node) === TEST_MODE_ENV_NAME
+  );
+}
+
+function isErasedModuleStatement(node) {
+  return node.importKind === "type" || node.exportKind === "type";
 }
 
 function normalizePathText(text) {
@@ -3563,6 +3598,52 @@ export default {
             if (!isUrlArgument && !isUrlTarget) return;
 
             context.report({ node, messageId: "noSanitizeUrl", data: { callee } });
+          },
+        };
+      },
+    },
+    "no-static-config-import-in-test-mode-test": {
+      meta: {
+        type: "problem",
+        docs: {
+          description:
+            "Ban static imports in src/tests files that assign process.env.TEST_GUILD_ID.",
+        },
+        schema: [],
+        messages: {
+          staticImport:
+            "Static import of '{{source}}' hoists above the `TEST_GUILD_ID` assignment and " +
+            "loads `src/config/` with test mode off. Use `await import()` below the assignment.",
+        },
+      },
+      create(context) {
+        if (!TEST_FILE_PATH_PATTERN.test(normalizePathText(context.filename ?? ""))) return {};
+
+        const staticImports = [];
+        let assignsTestMode = false;
+
+        function recordStaticImport(node) {
+          if (!node.source || isErasedModuleStatement(node)) return;
+          if (TEST_MODE_SAFE_STATIC_IMPORTS.has(node.source.value)) return;
+          staticImports.push(node);
+        }
+
+        return {
+          ImportDeclaration: recordStaticImport,
+          ExportNamedDeclaration: recordStaticImport,
+          ExportAllDeclaration: recordStaticImport,
+          AssignmentExpression(node) {
+            if (isTestModeEnvTarget(node.left)) assignsTestMode = true;
+          },
+          "Program:exit"() {
+            if (!assignsTestMode) return;
+            for (const node of staticImports) {
+              context.report({
+                node: node.source,
+                messageId: "staticImport",
+                data: { source: node.source.value },
+              });
+            }
           },
         };
       },
