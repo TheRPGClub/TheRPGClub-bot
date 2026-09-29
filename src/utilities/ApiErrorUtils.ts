@@ -5,6 +5,15 @@ import { DEV_ROLE_ID } from "../config/roles.js";
 /** Mention appended to every user-facing request/response failure block. */
 export const DEV_PING = `<@&${DEV_ROLE_ID}>`;
 
+// Query parameters whose values never belong in a Discord reply, such as the Twitch
+// token request's client_secret.
+const SECRET_QUERY_PARAM = /([?&][^=&#]*(?:secret|token|password|api_?key)[^=&#]*=)[^&#]*/gi;
+
+/** Replace the value of every secret-looking query parameter in a URL. */
+export function redactUrlSecrets(url: string): string {
+  return url.replace(SECRET_QUERY_PARAM, "$1REDACTED");
+}
+
 export function formatApiError(
   method: string,
   url: string,
@@ -13,7 +22,7 @@ export function formatApiError(
   responseBody: unknown,
 ): string {
   const req = JSON.stringify(
-    { method: method.toUpperCase(), url, body: requestBody ?? null },
+    { method: method.toUpperCase(), url: redactUrlSecrets(url), body: requestBody ?? null },
     null, 2,
   );
   const res = JSON.stringify({ status: status ?? null, body: responseBody ?? null }, null, 2);
