@@ -18,13 +18,6 @@ export function buildPageFooterText(page: number, totalPages: number, suffix?: s
   return suffix ? `${base} • ${suffix}` : base;
 }
 
-export function shouldRenderPrevNextButtons(
-  prevDisabled: boolean,
-  nextDisabled: boolean,
-): boolean {
-  return !(prevDisabled && nextDisabled);
-}
-
 export type PageDirection = "prev" | "next";
 
 /**
@@ -191,7 +184,6 @@ export function buildDisabledPrevNextButtons(
   if (totalPages <= 1) return [];
   const prevDisabled = page <= 0;
   const nextDisabled = page >= totalPages - 1;
-  if (!shouldRenderPrevNextButtons(prevDisabled, nextDisabled)) return [];
   return [
     buildActionButton({
       customId: prevCustomId,
