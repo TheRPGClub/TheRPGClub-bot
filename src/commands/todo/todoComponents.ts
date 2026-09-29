@@ -14,6 +14,10 @@ import {
   buildSelectRow,
 } from "../../functions/uiComponents.js";
 import { AnyRepliable, safeReply } from "../../functions/InteractionUtils.js";
+import {
+  buildDisabledPrevNextRowWithIds,
+  buildPageFooterText,
+} from "../../functions/PaginationUtils.js";
 import { formatDiscordTimestamp } from "../../functions/DateFormatUtils.js";
 import { DISCORD_TEXT_INPUT_MAX } from "../../config/textLimits.js";
 import {
@@ -91,7 +95,7 @@ export function buildIssueListComponents(
     labelSummary,
     payload.query ? `Query: ${payload.query}` : "Query: Any",
     `Sort: # ${payload.direction}`,
-    `Page: ${payload.page} of ${totalPages}`,
+    buildPageFooterText(payload.page - 1, totalPages),
   ];
   if (suggestionCount > 0) {
     summaryParts.push(`${suggestionCount} suggestions awaiting review`);
@@ -195,21 +199,13 @@ export function buildIssueListComponents(
     );
   components.push(buildSelectRow(repoSelect));
   components.push(actionRow);
-  if (totalPages > 1) {
-    const prevDisabled = payload.page <= 1;
-    const nextDisabled = payload.page >= totalPages;
-    const pagingRow = buildButtonRow(
-      buildActionButton({
-        customId: buildTodoListCustomId(payloadToken, payload.page - 1),
-        label: "Prev Page",
-        style: ButtonStyle.Secondary,
-      }).setDisabled(prevDisabled),
-      buildActionButton({
-        customId: buildTodoListCustomId(payloadToken, payload.page + 1),
-        label: "Next Page",
-        style: ButtonStyle.Secondary,
-      }).setDisabled(nextDisabled),
-    );
+  const pagingRow = buildDisabledPrevNextRowWithIds(
+    buildTodoListCustomId(payloadToken, payload.page - 1),
+    buildTodoListCustomId(payloadToken, payload.page + 1),
+    payload.page - 1,
+    totalPages,
+  );
+  if (pagingRow) {
     components.push(pagingRow);
   }
 

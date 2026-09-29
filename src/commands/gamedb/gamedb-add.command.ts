@@ -45,6 +45,7 @@ import {
   buildActionButton,
   buildButtonRow,
 } from "../../functions/uiComponents.js";
+import { PAGE_NEXT_LABEL } from "../../functions/PaginationUtils.js";
 
 export interface IGdbApiCandidate {
   igdb_id: number;
@@ -246,7 +247,7 @@ export async function handleNoResults(
 
     const needsPaging = candidates.length > 22;
     const pagingHint = needsPaging
-      ? " Use the dropdown's Next page option to see more results."
+      ? ` Use the dropdown's ${PAGE_NEXT_LABEL} option to see more results.`
       : "";
     const baseText =
       `## IGDB Results for "${query}"\n` +

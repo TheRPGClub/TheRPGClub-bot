@@ -42,7 +42,10 @@ import { decodeBase64Url, encodeBase64Url } from "../functions/CustomIdUtils.js"
 import { parseCustomIdSegments } from "../utilities/CustomIdUtils.js";
 import { ROUND_HISTORY_PAGE_SIZE } from "../config/pagination.js";
 import { DISCORD_SELECT_OPTIONS_MAX } from "../config/textLimits.js";
-import { buildDisabledPrevNextRowWithIds } from "../functions/PaginationUtils.js";
+import {
+  buildDisabledPrevNextRowWithIds,
+  buildPageFooterText,
+} from "../functions/PaginationUtils.js";
 
 const ROUND_HISTORY_MODAL_TITLE = "Round History";
 const ROUND_HISTORY_HELP_ID = "round-history-help";
@@ -418,7 +421,11 @@ function buildRoundHistoryIntro(
   return [
     `Category: ${kindLabel} | Year: ${state.year} | Sort: ${state.sort.toUpperCase()}`,
     `Query: ${queryLine}`,
-    `Page ${state.page + 1}/${Math.max(totalPages, 1)} | Rounds ${start}-${end} of ${totalRounds}`,
+    buildPageFooterText(
+      state.page,
+      Math.max(totalPages, 1),
+      `Rounds ${start}-${end} of ${totalRounds}`,
+    ),
   ].join("\n");
 }
 

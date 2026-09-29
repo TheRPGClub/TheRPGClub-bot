@@ -8,6 +8,11 @@ import {
   parseCustomIdSegments,
 } from "../utilities/CustomIdUtils.js";
 
+export const PAGE_PREV_LABEL = "Previous";
+export const PAGE_NEXT_LABEL = "Next";
+
+export type PrevNextLabels = { prev?: string; next?: string };
+
 export function buildPageFooterText(page: number, totalPages: number, suffix?: string): string {
   const base = `Page ${page + 1}/${totalPages}`;
   return suffix ? `${base} • ${suffix}` : base;
@@ -48,15 +53,43 @@ export function buildOptionalPrevNextRow(
   page: number,
   totalPages: number,
 ): ActionRowBuilder<ButtonBuilder> | null {
+  return buildOptionalPrevNextRowWithIds(
+    `${customIdBase}:${page}:prev`,
+    `${customIdBase}:${page}:next`,
+    page,
+    totalPages,
+  );
+}
+
+/**
+ * Builds the Previous / Next buttons for a page, omitting whichever would be
+ * disabled. Returns an empty array when there is only one page. Use this when
+ * the buttons share a row with other controls.
+ */
+export function buildPrevNextButtons(
+  prevCustomId: string,
+  nextCustomId: string,
+  page: number,
+  totalPages: number,
+  labels?: PrevNextLabels,
+): ButtonBuilder[] {
+  if (totalPages <= 1) return [];
   const buttons: ButtonBuilder[] = [];
   if (page > 0) {
-    buttons.push(buildActionButton({ customId: `${customIdBase}:${page}:prev`, label: "Previous", style: ButtonStyle.Secondary }));
+    buttons.push(buildActionButton({
+      customId: prevCustomId,
+      label: labels?.prev ?? PAGE_PREV_LABEL,
+      style: ButtonStyle.Secondary,
+    }));
   }
   if (page < totalPages - 1) {
-    buttons.push(buildActionButton({ customId: `${customIdBase}:${page}:next`, label: "Next", style: ButtonStyle.Secondary }));
+    buttons.push(buildActionButton({
+      customId: nextCustomId,
+      label: labels?.next ?? PAGE_NEXT_LABEL,
+      style: ButtonStyle.Secondary,
+    }));
   }
-  if (!buttons.length) return null;
-  return buildButtonRow(...buttons);
+  return buttons;
 }
 
 /**
@@ -69,16 +102,9 @@ export function buildOptionalPrevNextRowWithIds(
   nextCustomId: string,
   page: number,
   totalPages: number,
-  labels?: { prev?: string; next?: string },
+  labels?: PrevNextLabels,
 ): ActionRowBuilder<ButtonBuilder> | null {
-  if (totalPages <= 1) return null;
-  const buttons: ButtonBuilder[] = [];
-  if (page > 0) {
-    buttons.push(buildActionButton({ customId: prevCustomId, label: labels?.prev ?? "Previous", style: ButtonStyle.Secondary }));
-  }
-  if (page < totalPages - 1) {
-    buttons.push(buildActionButton({ customId: nextCustomId, label: labels?.next ?? "Next", style: ButtonStyle.Secondary }));
-  }
+  const buttons = buildPrevNextButtons(prevCustomId, nextCustomId, page, totalPages, labels);
   if (!buttons.length) return null;
   return buildButtonRow(...buttons);
 }
@@ -92,15 +118,14 @@ export function buildDisabledPrevNextRow(
   customIdBase: string,
   page: number,
   totalPages: number,
-  labels?: { prev?: string; next?: string },
+  labels?: PrevNextLabels,
 ): ActionRowBuilder<ButtonBuilder> | null {
-  if (totalPages <= 1) return null;
-  const prevDisabled = page <= 0;
-  const nextDisabled = page >= totalPages - 1;
-  if (!shouldRenderPrevNextButtons(prevDisabled, nextDisabled)) return null;
-  return buildButtonRow(
-    buildActionButton({ customId: `${customIdBase}:${page}:prev`, label: labels?.prev ?? "Previous", style: ButtonStyle.Secondary }).setDisabled(prevDisabled),
-    buildActionButton({ customId: `${customIdBase}:${page}:next`, label: labels?.next ?? "Next", style: ButtonStyle.Secondary }).setDisabled(nextDisabled),
+  return buildDisabledPrevNextRowWithIds(
+    `${customIdBase}:${page}:prev`,
+    `${customIdBase}:${page}:next`,
+    page,
+    totalPages,
+    { labels },
   );
 }
 
@@ -157,7 +182,7 @@ export function buildDisabledPrevNextRowWithIds(
   page: number,
   totalPages: number,
   options?: {
-    labels?: { prev?: string; next?: string };
+    labels?: PrevNextLabels;
     styles?: { prev?: ButtonStyle; next?: ButtonStyle };
   },
 ): ActionRowBuilder<ButtonBuilder> | null {
@@ -166,8 +191,16 @@ export function buildDisabledPrevNextRowWithIds(
   const nextDisabled = page >= totalPages - 1;
   if (!shouldRenderPrevNextButtons(prevDisabled, nextDisabled)) return null;
   return buildButtonRow(
-    buildActionButton({ customId: prevCustomId, label: options?.labels?.prev ?? "Previous", style: options?.styles?.prev ?? ButtonStyle.Secondary }).setDisabled(prevDisabled),
-    buildActionButton({ customId: nextCustomId, label: options?.labels?.next ?? "Next", style: options?.styles?.next ?? ButtonStyle.Secondary }).setDisabled(nextDisabled),
+    buildActionButton({
+      customId: prevCustomId,
+      label: options?.labels?.prev ?? PAGE_PREV_LABEL,
+      style: options?.styles?.prev ?? ButtonStyle.Secondary,
+    }).setDisabled(prevDisabled),
+    buildActionButton({
+      customId: nextCustomId,
+      label: options?.labels?.next ?? PAGE_NEXT_LABEL,
+      style: options?.styles?.next ?? ButtonStyle.Secondary,
+    }).setDisabled(nextDisabled),
   );
 }
 

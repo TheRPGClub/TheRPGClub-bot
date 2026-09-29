@@ -2,7 +2,6 @@ import {
   ActionRowBuilder,
   AttachmentBuilder,
   ButtonBuilder,
-  ButtonStyle,
 } from "discord.js";
 import { ContainerBuilder } from "@discordjs/builders";
 import Member, { type ICompletionRecord } from "../classes/Member.js";
@@ -11,7 +10,8 @@ import { buildMaskedLink } from "./ComponentsV2Utils.js";
 import Thread from "../classes/Thread.js";
 import { formatTableDate, formatPlaytimeHours } from "./DateFormatUtils.js";
 import { buildComponentsV2EditFlags, buildContentContainer } from "./ComponentsV2Utils.js";
-import { buildActionButton, buildButtonRow, buildUserHeaderContainer } from "./uiComponents.js";
+import { buildButtonRow, buildUserHeaderContainer } from "./uiComponents.js";
+import { buildPrevNextButtons } from "./PaginationUtils.js";
 import { truncateWithEllipsis } from "../utilities/ValidationUtils.js";
 import GamePlatformRegionService from "../classes/GamePlatformRegionService.js";
 import { fetchGameCoverBuffer } from "../services/GameImageService.js";
@@ -181,12 +181,14 @@ export async function buildJournalView(options: IJournalViewOptions): Promise<{
   if (buildOwnerButtons) {
     navButtons.push(...buildOwnerButtons(safePage, entries.length > 0));
   }
-  if (safePage > 1) {
-    navButtons.push(buildActionButton({ customId: prevPageCustomId(safePage - 1), label: "Next Entry", style: ButtonStyle.Secondary }));
-  }
-  if (safePage < totalPages) {
-    navButtons.push(buildActionButton({ customId: nextPageCustomId(safePage + 1), label: "Previous Entry", style: ButtonStyle.Secondary }));
-  }
+  // Entries are newest first, so paging backward shows the next (newer) entry.
+  navButtons.push(...buildPrevNextButtons(
+    prevPageCustomId(safePage - 1),
+    nextPageCustomId(safePage + 1),
+    safePage - 1,
+    totalPages,
+    { prev: "Next Entry", next: "Previous Entry" },
+  ));
   if (navRowTrailingButtons?.length) {
     navButtons.push(...navRowTrailingButtons);
   }
