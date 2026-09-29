@@ -59,14 +59,19 @@ check_env_file() {
 }
 
 # Removes every preview container, or only those owned by PR $1 when given. Prints the
-# owning PR of each one removed. Fails if any is still there afterwards.
+# owning PR of each one removed. Fails if one cannot be removed and still exists.
 remove_previews() {
   local only_pr="${1:-}" id owner
   while read -r id owner; do
     [[ -n "${id}" ]] || continue
     [[ -z "${only_pr}" || "${owner}" == "${only_pr}" ]] || continue
     echo "preview: removing ${id} (PR ${owner:-unknown})" >&2
-    docker rm -f "${id}" >/dev/null || die "could not remove ${id}"
+    if ! docker rm -f "${id}" >/dev/null; then
+      # Another run (a deploy replacing it) may have removed it since the listing.
+      docker inspect "${id}" >/dev/null 2>&1 && die "could not remove ${id}"
+      echo "preview: ${id} was already gone" >&2
+      continue
+    fi
     echo "${owner}"
   done < <(preview_containers)
 }

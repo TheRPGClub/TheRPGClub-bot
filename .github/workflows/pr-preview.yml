@@ -178,13 +178,14 @@ jobs:
             core.setOutput("open", String(open));
 
       - name: Reap orphaned preview
+        id: reap
         if: steps.open.outputs.open == 'false'
         env:
           PR: ${{ steps.current.outputs.pr }}
         run: bash "$PREVIEW_SCRIPT" teardown "$PR"
 
       - name: Report torn down
-        if: steps.open.outputs.open == 'false'
+        if: steps.reap.outputs.removed == '1'
         uses: actions/github-script@v8
         env:
           PR: ${{ steps.current.outputs.pr }}
