@@ -1,0 +1,33 @@
+# Per-PR preview of the bot in the test guild. Driven by scripts/preview/preview.sh
+# from .github/workflows/pr-preview.yml on the self-hosted runner. See docs/pr-preview.md.
+# Kept out of docker-compose.yml so `docker compose up -d` never starts it.
+name: rpgclub-preview
+
+services:
+  pr-preview:
+    build:
+      context: .
+      labels:
+        rpgclub.preview: "true"
+    image: rpgclub-bot-preview:local
+    container_name: rpgclub-pr-preview
+    env_file: ${PREVIEW_ENV_FILE:?PREVIEW_ENV_FILE must point at the preview env file}
+    environment:
+      DOCKER_BACKUP_ENABLED: "false"
+    labels:
+      # Watchtower watches every container on the host. This one is built locally
+      # from a PR branch and must never be replaced by a registry image.
+      com.centurylinklabs.watchtower.enable: "false"
+      rpgclub.preview: "true"
+      rpgclub.preview.pr: "${PREVIEW_PR:?PREVIEW_PR is required}"
+      rpgclub.preview.sha: "${PREVIEW_SHA:?PREVIEW_SHA is required}"
+    restart: on-failure:3
+    init: true
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
