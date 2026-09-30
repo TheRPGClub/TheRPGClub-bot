@@ -1,6 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { NowPlayingCompletionHandlers } from "../commands/now-playing/nowPlayingCompletion.handler.js";
+import {
+  NowPlayingCompletionHandlers,
+} from "../commands/now-playing/nowPlayingCompletion.handler.js";
 import { nowPlayingCompletionWizardSessions } from "../commands/now-playing/nowPlayingContexts.js";
 import Member from "../classes/Member.js";
 import Game from "../classes/Game.js";

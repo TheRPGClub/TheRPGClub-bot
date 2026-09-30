@@ -568,10 +568,10 @@ async function finalizeNowPlayingCompletion(
     try {
       removedFromNowPlaying = await Member.removeNowPlaying(session.userId, game.id);
     } catch (err) {
-      removeWarning = buildTextContainer(trimTextDisplayContent(buildApiErrorMessage(
+      removeWarning = buildTextContainer(buildApiErrorMessage(
         `Completion saved, but **${game.title}** could not be removed from Now Playing.`,
         err,
-      )));
+      ));
     }
   }
 
