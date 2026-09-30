@@ -24,6 +24,7 @@ import { startSharedStateServices } from "./services/SharedStateServices.js";
 import { refreshGiveawayHubMessage } from "./services/GiveawayHubService.js";
 import { startUserEmojiService } from "./services/UserEmojiService.js";
 import { startPokopiaEmojiService } from "./services/PokopiaEmojiService.js";
+import { registerClientObservability } from "./services/ClientObservability.js";
 import { restoreJournalMessageContextsFromDb } from "./commands/now-playing/nowPlayingContexts.js";
 import GameSearchService from "./classes/GameSearchService.js";
 import GamePlatformRegionService from "./classes/GamePlatformRegionService.js";
@@ -279,6 +280,11 @@ bot.on("error", (err: unknown) => {
     return;
   }
   logError("RPGClub_GameDB.discordClientError", err);
+});
+
+registerClientObservability(bot, () => {
+  // Exit nonzero so the process manager restarts the bot with a fresh session.
+  void bot.destroy().finally(() => process.exit(1));
 });
 
 async function run(): Promise<void> {
