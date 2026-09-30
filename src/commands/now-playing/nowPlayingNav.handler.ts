@@ -111,10 +111,12 @@ export class NowPlayingNavHandlers {
         attachments: [],
         flags: buildComponentsV2EditFlags(),
       });
-      trackNowPlayingListContext(updated as Message<boolean>, {
-        view: "everyone-selected",
-        selectedUserId,
-      });
+      if (updated) {
+        trackNowPlayingListContext(updated as Message<boolean>, {
+          view: "everyone-selected",
+          selectedUserId,
+        });
+      }
       return;
     }
 
@@ -132,9 +134,11 @@ export class NowPlayingNavHandlers {
       attachments: [],
       flags: buildComponentsV2EditFlags(),
     });
-    trackNowPlayingListContext(updated as Message<boolean>, {
-      view: "everyone-selected",
-      selectedUserId,
-    });
+    if (updated) {
+      trackNowPlayingListContext(updated as Message<boolean>, {
+        view: "everyone-selected",
+        selectedUserId,
+      });
+    }
   }
 }

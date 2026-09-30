@@ -73,6 +73,7 @@ test("nowplaying remove select acknowledges interaction and refreshes same messa
     assert.equal(edits.length, 1, "expected refreshed remove list via editReply");
     assert.ok(Array.isArray(edits[0]?.components), "editReply should include refreshed components");
     assert.equal(edits[0]?.flags, COMPONENTS_V2_FLAG, "editReply should keep Components V2");
+    assert.deepEqual(edits[0]?.attachments, [], "editReply should drop stale attachments");
   } finally {
     Member.removeNowPlaying = originalRemoveNowPlaying;
     Member.getNowPlaying = originalGetNowPlaying;
@@ -83,12 +84,16 @@ test("nowplaying remove select acknowledges interaction and shows error on faile
   const command = new NowPlayingRemoveHandlers() as any;
 
   const originalRemoveNowPlaying = Member.removeNowPlaying;
+  const originalGetNowPlaying = Member.getNowPlaying;
 
   const updates: any[] = [];
   const edits: any[] = [];
 
   try {
     Member.removeNowPlaying = (async () => false) as any;
+    Member.getNowPlaying = (async () => ([
+      { gameId: 11, title: "Alpha", platformName: "Switch", platformAbbreviation: "NS" },
+    ])) as any;
 
     const interaction: any = {
       customId: "nowplaying-remove-select:123",
@@ -120,9 +125,12 @@ test("nowplaying remove select acknowledges interaction and shows error on faile
     await command.handleNowPlayingRemoveSelect(interaction);
 
     assert.equal(updates.length, 1, "expected immediate interaction acknowledgement via update");
-    assert.equal(edits.length, 1, "expected error render via editReply after ack");
-    assert.ok(Array.isArray(edits[0]?.components), "error editReply should include components");
+    assert.equal(edits.length, 1, "expected the redrawn remove screen via editReply");
+    const rendered = JSON.stringify(edits[0]?.components);
+    assert.match(rendered, /Failed to remove that game/, "error notice should show");
+    assert.match(rendered, /nowplaying-remove-select:123/, "remove select should stay usable");
   } finally {
     Member.removeNowPlaying = originalRemoveNowPlaying;
+    Member.getNowPlaying = originalGetNowPlaying;
   }
 });

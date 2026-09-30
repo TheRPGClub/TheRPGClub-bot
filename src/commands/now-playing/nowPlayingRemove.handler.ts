@@ -134,6 +134,8 @@ async function promptRemoveNowPlaying(
   }
 }
 
+const REMOVE_FAILED_TEXT = "Failed to remove that game (it may have been removed already).";
+
 @Discord()
 export class NowPlayingRemoveHandlers {
   @ButtonComponent({ id: /^np-remove:[^:]+:\d+$/ })
@@ -229,23 +231,18 @@ export class NowPlayingRemoveHandlers {
 
     try {
       const removed = await Member.removeNowPlaying(ownerId, gameId);
-      if (!removed) {
-        const container = buildTextContainer("Failed to remove that game (it may have been removed already).");
-        safeIgnore(safeEditReply(interaction, {
-          components: [container],
-          attachments: [],
-          flags: buildComponentsV2EditFlags(),
-        }));
-        return;
+      if (removed) {
+        safeIgnore(refreshNowPlayingListFromContext(interaction, ownerId));
       }
-      safeIgnore(refreshNowPlayingListFromContext(interaction, ownerId));
+      // A failed removal still redraws the remove screen so its select and Done stay usable.
+      const notice = removed ? [] : [buildTextContainer(REMOVE_FAILED_TEXT)];
       const entries = getDisplayNowPlayingEntries(await Member.getNowPlaying(ownerId));
       if (!entries.length) {
         const container = buildTextContainer("Your Now Playing list is empty.");
         const pmComponents = await withPmNowPlayingList(
           ownerId,
           interaction.guildId,
-          [container],
+          [...notice, container],
         );
         safeIgnore(safeEditReply(interaction, {
           components: pmComponents,
@@ -268,7 +265,7 @@ export class NowPlayingRemoveHandlers {
       const pmComponents = await withPmNowPlayingList(
         ownerId,
         interaction.guildId,
-        components,
+        [...notice, ...components],
       );
       safeIgnore(safeEditReply(interaction, {
         ...buildComponentPayload(pmComponents as any, files),
