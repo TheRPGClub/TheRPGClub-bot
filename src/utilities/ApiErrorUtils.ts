@@ -1,9 +1,22 @@
 import axios, { type AxiosError } from "axios";
 
 import { DEV_ROLE_ID } from "../config/roles.js";
+import { jsonCodeBlock } from "./CodeBlockUtils.js";
 
 /** Mention appended to every user-facing request/response failure block. */
 export const DEV_PING = `<@&${DEV_ROLE_ID}>`;
+
+export interface IErrorMessageOptions {
+  /**
+   * Append DEV_PING. Defaults to true. The conductor turns it off: its DMs and the test
+   * guild have no dev role, so the mention renders as `@unknown-role`.
+   */
+  devPing?: boolean;
+}
+
+function pingSuffix(options: IErrorMessageOptions | undefined): string {
+  return options?.devPing === false ? "" : `\n${DEV_PING}`;
+}
 
 // Query parameters whose values never belong in a Discord reply, such as the Twitch
 // token request's client_secret.
@@ -20,6 +33,7 @@ export function formatApiError(
   requestBody: unknown,
   status: number | undefined,
   responseBody: unknown,
+  options?: IErrorMessageOptions,
 ): string {
   const req = JSON.stringify(
     { method: method.toUpperCase(), url: redactUrlSecrets(url), body: requestBody ?? null },
@@ -27,8 +41,8 @@ export function formatApiError(
   );
   const res = JSON.stringify({ status: status ?? null, body: responseBody ?? null }, null, 2);
   return (
-    `Request:\n\`\`\`json\n${req}\n\`\`\`\n` +
-    `Response:\n\`\`\`json\n${res}\n\`\`\`\n${DEV_PING}`
+    `Request:\n${jsonCodeBlock(req)}\n` +
+    `Response:\n${jsonCodeBlock(res)}${pingSuffix(options)}`
   );
 }
 
@@ -63,11 +77,15 @@ interface IDiscordRestError {
 }
 
 /** Format a discord.js REST failure with the same request/response detail as API errors. */
-export function buildDiscordErrorMessage(label: string, err: unknown): string {
+export function buildDiscordErrorMessage(
+  label: string,
+  err: unknown,
+  options?: IErrorMessageOptions,
+): string {
   const restError = err as IDiscordRestError;
   if (typeof restError?.url !== "string" || typeof restError?.method !== "string") {
     const msg = err instanceof Error ? err.message : String(err);
-    return `${label}: ${msg}\n${DEV_PING}`;
+    return `${label}: ${msg}${pingSuffix(options)}`;
   }
   return `${label}\n${formatApiError(
     restError.method,
@@ -75,6 +93,7 @@ export function buildDiscordErrorMessage(label: string, err: unknown): string {
     restError.requestBody?.json ?? null,
     restError.status,
     restError.rawError ?? null,
+    options,
   )}`;
 }
 
@@ -99,13 +118,14 @@ export function describeRequestError(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
-function formatAxiosError(err: AxiosError): string {
+function formatAxiosError(err: AxiosError, options?: IErrorMessageOptions): string {
   return formatApiError(
     err.config?.method ?? "?",
     err.config?.url ?? "?",
     tryParseJson(err.config?.data as string | null | undefined),
     err.response?.status,
     decodeBinaryBody(err.response?.data),
+    options,
   );
 }
 
@@ -125,16 +145,20 @@ export class UserFacingError extends Error {
  * Renders request/response JSON for an `AxiosError`, or for an `Error` whose
  * `cause` is one (a friendly message wrapping the API failure).
  */
-export function buildApiErrorMessage(label: string, err: unknown): string {
+export function buildApiErrorMessage(
+  label: string,
+  err: unknown,
+  options?: IErrorMessageOptions,
+): string {
   if (err instanceof UserFacingError) return `${label}: ${err.message}`;
   if (axios.isAxiosError(err)) {
-    return `${label}\n${formatAxiosError(err)}`;
+    return `${label}\n${formatAxiosError(err, options)}`;
   }
   const msg = err instanceof Error ? err.message : String(err);
   if (err instanceof Error && axios.isAxiosError(err.cause)) {
-    return `${label}: ${msg}\n${formatAxiosError(err.cause)}`;
+    return `${label}: ${msg}\n${formatAxiosError(err.cause, options)}`;
   }
-  return `${label}: ${msg}\n${DEV_PING}`;
+  return `${label}: ${msg}${pingSuffix(options)}`;
 }
 
 /**

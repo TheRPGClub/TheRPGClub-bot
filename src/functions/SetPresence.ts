@@ -1,6 +1,7 @@
 import { ActivityType, Client } from "discord.js";
 import type { AnyRepliable } from "./InteractionUtils.js";
 import BotPresenceHistory, { type IPresenceHistoryEntry } from "../classes/BotPresenceHistory.js";
+import { PREVIEW_PRESENCE } from "../config/previewMode.js";
 import { logError, logInfo } from "../utilities/LogUtils.js";
 
 export type { IPresenceHistoryEntry };
@@ -22,13 +23,14 @@ async function internalSetPresence(
     status: "online",
   });
 
-  if (saveToDb) {
-    try {
-      await BotPresenceHistory.savePresence(activityName, userId, username);
-      logInfo("SetPresence", "Presence saved to database.");
-    } catch (error) {
-      logError("SetPresence.save", error);
-    }
+  // The preview shares production's BotPresenceHistory, and production re-asserts the
+  // latest row hourly, so a preview write would change the production bot's status.
+  if (!saveToDb || PREVIEW_PRESENCE) return;
+  try {
+    await BotPresenceHistory.savePresence(activityName, userId, username);
+    logInfo("SetPresence", "Presence saved to database.");
+  } catch (error) {
+    logError("SetPresence.save", error);
   }
 }
 
@@ -55,6 +57,10 @@ export async function setPresence(
 }
 
 export async function updateBotPresence(bot: Client): Promise<void> {
+  if (PREVIEW_PRESENCE) {
+    await internalSetPresence(bot, PREVIEW_PRESENCE);
+    return;
+  }
   try {
     const activityName: string | null = await BotPresenceHistory.getLatestPresenceActivity();
     if (activityName) {

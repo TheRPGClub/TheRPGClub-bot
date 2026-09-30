@@ -89,6 +89,17 @@ test("formatMirrorMessage stays within Discord's message limit", () => {
   assert.ok(message.endsWith("\n```"));
 });
 
+test("formatMirrorMessage keeps content with triple backticks in one block", () => {
+  const payload = serializeMirrorPayload(fakeInteraction(), {
+    flags: MessageFlags.Ephemeral,
+    content: "Request:\n```json\n{}\n```",
+  });
+  const message = formatMirrorMessage(payload);
+  assert.equal((message.match(/```/g) ?? []).length, 2);
+  const body = message.slice("```json\n".length, -"\n```".length);
+  assert.deepEqual(JSON.parse(body), payload);
+});
+
 test("mirrorEphemeralReply does not touch the client when test mode is off", async () => {
   const { mirrorEphemeralReply } = await import("../functions/EphemeralMirror.js");
   let fetched = false;

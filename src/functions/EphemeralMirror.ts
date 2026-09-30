@@ -1,6 +1,7 @@
 import { MessageFlags, MessageFlagsBitField } from "discord.js";
 import { IS_TEST_MODE } from "../config/testMode.js";
 import { TEST_LOG_CHANNEL_ID } from "../config/channels.js";
+import { escapeJsonBackticks, jsonCodeBlock } from "../utilities/CodeBlockUtils.js";
 import { logError } from "../utilities/LogUtils.js";
 import type { AnyRepliable } from "./InteractionUtils.js";
 
@@ -162,11 +163,11 @@ export function serializeMirrorPayload(
 
 /** Renders the mirrored payload as a fenced JSON block within Discord's limit. */
 export function formatMirrorMessage(payload: MirrorPayload): string {
-  const body = JSON.stringify(payload, null, 2);
-  const fenceOverhead = "```json\n\n```".length;
+  const body = escapeJsonBackticks(JSON.stringify(payload, null, 2));
+  const fenceOverhead = jsonCodeBlock("").length;
   const room = MIRROR_MESSAGE_LIMIT - fenceOverhead;
   const truncated = body.length > room ? `${body.slice(0, room - 3)}...` : body;
-  return `\`\`\`json\n${truncated}\n\`\`\``;
+  return jsonCodeBlock(truncated);
 }
 
 /**

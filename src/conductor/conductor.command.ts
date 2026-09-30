@@ -36,8 +36,8 @@ import {
   safeFollowUpIfSettled,
   safeReply,
 } from "../functions/InteractionUtils.js";
-import { buildApiErrorMessage, buildDiscordErrorMessage } from "../utilities/ApiErrorUtils.js";
 import { checkConductorAccess } from "./ConductorAccess.js";
+import { conductorApiError, conductorDiscordError } from "./ConductorErrors.js";
 import {
   checkConductorChannelAccess,
   formatChannelAccessProblem,
@@ -132,7 +132,7 @@ function describeAccessProblems(problems: IChannelAccessProblem[]): string {
   const lines = problems.map((problem) =>
     problem.error === undefined
       ? formatChannelAccessProblem(problem)
-      : buildDiscordErrorMessage(formatChannelAccessProblem(problem), problem.error));
+      : conductorDiscordError(formatChannelAccessProblem(problem), problem.error));
   return `The conductor cannot run until its channel access is fixed.\n${lines.join("\n")}`;
 }
 
@@ -230,7 +230,7 @@ async function postOrNotify(
       allowedMentions: NO_MENTIONS,
     });
   } catch (err: unknown) {
-    const failure = buildDiscordErrorMessage("Could not post in the run's channel", err);
+    const failure = conductorDiscordError("Could not post in the run's channel", err);
     await safeFollowUpIfSettled(interaction, buildErrorReply(`${text}\n\n${failure}`, true));
   }
 }
@@ -254,7 +254,7 @@ async function postRunReport(
   try {
     url = await github.postComment(run.pr, report);
   } catch (err: unknown) {
-    const message = buildApiErrorMessage(`Posting the report to PR #${run.pr} failed`, err);
+    const message = conductorApiError(`Posting the report to PR #${run.pr} failed`, err);
     await postOrNotify(interaction, run, message, buildReportRetryRow(run.runId));
     return;
   }
@@ -334,7 +334,7 @@ function modalEditor(interaction: ModalSubmitInteraction): StepMessageEditor {
     try {
       await interaction.message?.edit(payload);
     } catch (err: unknown) {
-      const message = buildDiscordErrorMessage("Could not update the step message", err);
+      const message = conductorDiscordError("Could not update the step message", err);
       await safeFollowUpIfSettled(interaction, buildErrorReply(message, true));
     }
   };
@@ -355,7 +355,7 @@ async function checkStepLocked(interaction: ButtonInteraction): Promise<void> {
   try {
     outputs = await collectObservations(interaction.client);
   } catch (err: unknown) {
-    const message = buildDiscordErrorMessage("Reading back the test channels failed", err);
+    const message = conductorDiscordError("Reading back the test channels failed", err);
     await safeFollowUpIfSettled(interaction, buildErrorReply(message, true));
     return;
   }
@@ -462,7 +462,7 @@ async function advanceRun(
     } catch (err: unknown) {
       run.windowStart = interaction.createdTimestamp;
       await saveRun(settings.statePath, run);
-      const message = buildDiscordErrorMessage("Could not post the next step", err);
+      const message = conductorDiscordError("Could not post the next step", err);
       await safeFollowUpIfSettled(interaction, buildErrorReply(message, true));
       return;
     }
@@ -532,7 +532,7 @@ export class ConductorCommand {
     try {
       pull = await github.getPullRequest(pr);
     } catch (err: unknown) {
-      const message = buildApiErrorMessage(`Could not read PR #${pr}`, err);
+      const message = conductorApiError(`Could not read PR #${pr}`, err);
       await safeEditReply(interaction, textEdit(message));
       return;
     }
@@ -555,7 +555,7 @@ export class ConductorCommand {
         const url = await github.postComment(pr, buildUnparseableReport(pr, plan.reason));
         posted = `\nNoted on the PR: ${url}`;
       } catch (err: unknown) {
-        posted = `\n${buildApiErrorMessage("Noting it on the PR failed", err)}`;
+        posted = `\n${conductorApiError("Noting it on the PR failed", err)}`;
       }
       await safeEditReply(interaction, textEdit(
         `Cannot parse the Testing section of PR #${pr}: ${plan.reason}\n` +
@@ -580,7 +580,7 @@ export class ConductorCommand {
       try {
         await sendCurrentStep(interaction, run);
       } catch (err: unknown) {
-        const message = buildDiscordErrorMessage("Could not post the script in this channel", err);
+        const message = conductorDiscordError("Could not post the script in this channel", err);
         await safeEditReply(interaction, textEdit(message));
         return;
       }

@@ -187,6 +187,7 @@
         "local/no-static-config-import-in-test-mode-test": "error",
         "local/no-reply-after-defer-update": "error",
         "local/no-decorated-method-named-like-class": "error",
+        "local/no-direct-reaction-fetch": "error",
         "stylistic/semi": "error",
         "stylistic/comma-dangle": [
           "error",
