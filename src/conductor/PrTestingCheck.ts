@@ -4,13 +4,45 @@
  * `scripts/check-pr-testing.ts`.
  */
 
-import { findUncheckedSteps, parseTestPlan } from "./TestPlanParser.js";
+import { findUncheckedSteps, parseTestPlan, type ITestStep } from "./TestPlanParser.js";
 
 export interface IPrTestingCheck {
   /** False only when the section exists and does not parse. */
   ok: boolean;
   /** A human-readable report: the parsed steps, or why the section was rejected. */
   lines: string[];
+}
+
+/** Separators between actions a step's code block chains together. */
+const ACTION_SEPARATOR = /,|;|\n|\bthen\b/i;
+const QUOTED = /"[^"]*"/g;
+/** First words that start a new user action. Field entries and `submit` finish a modal. */
+const ACTION_VERBS = new Set(["click", "press", "select", "choose", "pick"]);
+
+/** How many user actions a step's code block holds, per the one-action rule. */
+export function countStepActions(command: string): number {
+  let actions = 0;
+  let modalOpen = false;
+  for (const segment of command.replace(QUOTED, '""').split(ACTION_SEPARATOR)) {
+    const text = segment.trim().toLowerCase();
+    const verb = text.split(/\s+/)[0] ?? "";
+    if (text.startsWith("/") || ACTION_VERBS.has(verb)) {
+      actions += 1;
+      modalOpen = verb === "click" || verb === "press";
+    } else if (verb === "submit") {
+      if (!modalOpen) actions += 1;
+      modalOpen = false;
+    }
+  }
+  return actions;
+}
+
+/**
+ * Step numbers whose code block chains several actions. Only the last reply of such a
+ * step gets checked, so the format asks for one action per step.
+ */
+export function findChainedSteps(steps: ITestStep[]): number[] {
+  return steps.filter((step) => countStepActions(step.command) > 1).map((step) => step.number);
 }
 
 export function checkPrTesting(body: string): IPrTestingCheck {
@@ -46,6 +78,14 @@ export function checkPrTesting(body: string): IPrTestingCheck {
     lines.push(
       `Note: step(s) ${unchecked.join(", ")} have nothing the conductor can check ` +
         "(no quoted text that must appear), so the tester must confirm them by eye.",
+    );
+  }
+  const chained = findChainedSteps(plan.steps);
+  if (chained.length) {
+    lines.push(
+      `Warning: step(s) ${chained.join(", ")} chain several actions, so only the last ` +
+        "reply gets checked. Split them into one command, click, select, or modal submit " +
+        "per step.",
     );
   }
   return { ok: true, lines };

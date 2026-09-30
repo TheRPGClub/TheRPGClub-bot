@@ -18,6 +18,26 @@ in this order:
 
 Steps run in order and may depend on state created by earlier steps.
 
+## One action per step
+
+Each step is one user action and the reply it produces. One action is exactly one of:
+
+- one slash command;
+- one button click;
+- one select menu choice;
+- one modal submit: the click that opens the modal, the fields entered into it, and the
+  submit, written as `click "<button>", enter "<value>" in "<field>", submit`.
+
+A modal is not a message, so the conductor cannot read it. The click that opens one
+therefore belongs to the modal submit step, and that step's `Expected:` checks the reply
+the submit produces.
+
+Every step quotes at least one check for the reply its action produces (see
+[Checks in `Expected:`](#checks-in-expected)). Chaining several actions into one step
+means only the last reply is checked and every reply in between goes untested, so a flow
+of three clicks is three steps. `npm run check:pr-testing` warns about a step whose code
+block chains several actions.
+
 ## Rules
 
 - One fenced code block per step. A step with zero or two blocks is unparseable.
@@ -50,8 +70,8 @@ never degrades to a partially guessed script.
 
 ## Worked example
 
-A multi-step interactive flow: run a command, click a button on the reply, then
-confirm the result is visible to everyone.
+A multi-step interactive flow: run a command, submit a search modal, pick a result,
+then confirm it. Each step is one action with its own checks.
 
 ````markdown
 ## Testing
@@ -66,15 +86,23 @@ Ephemeral: yes
 
 ### Step 2: Search for a game
 ```
-click "Search for a game", enter "Gloomhaven", submit
+click "Search for a game", enter "Gloomhaven" in "Title", submit
 ```
-Expected: the ephemeral reply updates to a list of matching games, each with a
-select option. "Gloomhaven" is the first result.
+Expected: the ephemeral reply updates to a list of matching games,
+option: "Gloomhaven".
 Ephemeral: yes
 
-### Step 3: Confirm the selection
+### Step 3: Pick the game
 ```
-select "Gloomhaven", click "Confirm"
+select "Gloomhaven"
+```
+Expected: the ephemeral reply shows the chosen game, field: "Gloomhaven", with
+button: "Confirm".
+Ephemeral: yes
+
+### Step 4: Confirm the selection
+```
+click "Confirm"
 ```
 Expected: a public embed in the channel, title: "Collection updated", naming
 "Gloomhaven", and not: "Error". The ephemeral flow reply is dismissed.
