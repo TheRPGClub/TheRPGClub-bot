@@ -18,13 +18,6 @@ export function buildPageFooterText(page: number, totalPages: number, suffix?: s
   return suffix ? `${base} • ${suffix}` : base;
 }
 
-export function shouldRenderPrevNextButtons(
-  prevDisabled: boolean,
-  nextDisabled: boolean,
-): boolean {
-  return !(prevDisabled && nextDisabled);
-}
-
 export type PageDirection = "prev" | "next";
 
 /**
@@ -171,26 +164,27 @@ export function parseUserListNavId(
   return { viewerUserId, targetUserId, page, isEphemeral, direction: direction as "prev" | "next" };
 }
 
+type DisabledPrevNextOptions = {
+  labels?: PrevNextLabels;
+  styles?: { prev?: ButtonStyle; next?: ButtonStyle };
+};
+
 /**
- * Builds a Previous / Next button row using explicit customIds where both
- * buttons are always included but disabled at the boundary pages. Returns null
- * when there is only one page.
+ * Builds the Previous / Next buttons for a page, keeping both and disabling
+ * whichever is at a boundary. Returns an empty array when there is only one
+ * page. Use this when the buttons share a row with other controls.
  */
-export function buildDisabledPrevNextRowWithIds(
+export function buildDisabledPrevNextButtons(
   prevCustomId: string,
   nextCustomId: string,
   page: number,
   totalPages: number,
-  options?: {
-    labels?: PrevNextLabels;
-    styles?: { prev?: ButtonStyle; next?: ButtonStyle };
-  },
-): ActionRowBuilder<ButtonBuilder> | null {
-  if (totalPages <= 1) return null;
+  options?: DisabledPrevNextOptions,
+): ButtonBuilder[] {
+  if (totalPages <= 1) return [];
   const prevDisabled = page <= 0;
   const nextDisabled = page >= totalPages - 1;
-  if (!shouldRenderPrevNextButtons(prevDisabled, nextDisabled)) return null;
-  return buildButtonRow(
+  return [
     buildActionButton({
       customId: prevCustomId,
       label: options?.labels?.prev ?? PAGE_PREV_LABEL,
@@ -201,7 +195,30 @@ export function buildDisabledPrevNextRowWithIds(
       label: options?.labels?.next ?? PAGE_NEXT_LABEL,
       style: options?.styles?.next ?? ButtonStyle.Secondary,
     }).setDisabled(nextDisabled),
+  ];
+}
+
+/**
+ * Builds a Previous / Next button row using explicit customIds where both
+ * buttons are always included but disabled at the boundary pages. Returns null
+ * when there is only one page.
+ */
+export function buildDisabledPrevNextRowWithIds(
+  prevCustomId: string,
+  nextCustomId: string,
+  page: number,
+  totalPages: number,
+  options?: DisabledPrevNextOptions,
+): ActionRowBuilder<ButtonBuilder> | null {
+  const buttons = buildDisabledPrevNextButtons(
+    prevCustomId,
+    nextCustomId,
+    page,
+    totalPages,
+    options,
   );
+  if (!buttons.length) return null;
+  return buildButtonRow(...buttons);
 }
 
 export function buildPaginatedUserListResponse(params: {

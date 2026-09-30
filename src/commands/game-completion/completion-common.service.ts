@@ -1,6 +1,4 @@
 import {
-  ButtonBuilder,
-  ButtonStyle,
   MessageFlags,
   type ButtonInteraction,
   type CommandInteraction,
@@ -8,6 +6,7 @@ import {
   type User,
 } from "discord.js";
 import { ContainerBuilder } from "@discordjs/builders";
+import { buildOptionalPrevNextRowWithIds } from "../../functions/PaginationUtils.js";
 import Member, { type ICompletionRecord } from "../../classes/Member.js";
 import { safeDeferUpdate, safeReply } from "../../functions/InteractionUtils.js";
 import { formatPlatformDisplayName } from "../../functions/PlatformDisplay.js";
@@ -25,7 +24,6 @@ import {
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
 import { MAX_CONTAINER_TEXT, MAX_SECTION_TEXT } from "../../config/textLimits.js";
 import { safeIgnore } from "../../utilities/AsyncUtils.js";
-import { buildActionButton, buildButtonRow } from "../../functions/uiComponents.js";
 import GamePlatformRegionService from "../../classes/GamePlatformRegionService.js";
 
 export type CommonCompletionSort =
@@ -446,22 +444,17 @@ export async function renderCommonCompletionPage(
     buildTextContainer(safeV2TextContent(footerLines.join("\n"), MAX_SECTION_TEXT)),
   );
 
-  const showPrev = totalPages > 1 && safePage > 0;
-  const showNext = totalPages > 1 && safePage < totalPages - 1;
-  const paginationButtons: ButtonBuilder[] = [];
-  if (showPrev) {
-    paginationButtons.push(buildActionButton({ customId: buildCommonNavCustomId(state, safePage, "prev"), label: "Previous Page", style: ButtonStyle.Secondary }));
-  }
-  if (showNext) {
-    paginationButtons.push(buildActionButton({ customId: buildCommonNavCustomId(state, safePage, "next"), label: "Next Page", style: ButtonStyle.Secondary }));
-  }
+  const paginationRow = buildOptionalPrevNextRowWithIds(
+    buildCommonNavCustomId(state, safePage, "prev"),
+    buildCommonNavCustomId(state, safePage, "next"),
+    safePage,
+    totalPages,
+  );
 
   await safeReply(interaction, {
     components: [
       ...containers,
-      ...(paginationButtons.length
-        ? [buildButtonRow(...paginationButtons)]
-        : []),
+      ...(paginationRow ? [paginationRow] : []),
     ],
     flags: buildV2Flags(ephemeral),
   });
