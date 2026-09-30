@@ -4,7 +4,6 @@
  */
 import {
   ApplicationCommandOptionType,
-  MessageFlags,
   type ButtonInteraction,
   type Client,
   type CommandInteraction,
@@ -35,10 +34,13 @@ import {
 import { buildApiErrorMessage, buildDiscordErrorMessage } from "../utilities/ApiErrorUtils.js";
 import { checkConductorAccess } from "./ConductorAccess.js";
 import {
+  CONDUCT_DEFER_OPTIONS,
   NO_MENTIONS,
+  buildDenialReply,
   buildFailedStepMessage,
   buildReportRetryRow,
   buildStepMessage,
+  buildStatusEdit,
   buildStepResultText,
   parseRunCustomId,
   parseStepCustomId,
@@ -78,19 +80,7 @@ function isAllowed(interaction: AnyConductorInteraction): boolean {
 }
 
 async function denyAccess(interaction: AnyConductorInteraction): Promise<void> {
-  await safeReply(interaction, buildTextReply("This conductor is restricted.", true));
-}
-
-function textEdit(content: string): {
-  components: ReturnType<typeof buildTextContainer>[];
-  flags: number;
-  allowedMentions: typeof NO_MENTIONS;
-} {
-  return {
-    components: [buildTextContainer(content)],
-    flags: buildComponentsV2EditFlags(),
-    allowedMentions: NO_MENTIONS,
-  };
+  await safeReply(interaction, buildDenialReply());
 }
 
 export function snapshotMessage(message: Message): IMessageSnapshot {
@@ -323,7 +313,7 @@ async function advanceRun(
   run.pendingResult = null;
   run.results.push(result);
   run.current += 1;
-  await safeEditReply(interaction, textEdit(buildStepResultText(run, result)));
+  await safeEditReply(interaction, buildStatusEdit(buildStepResultText(run, result)));
 
   if (run.current < run.steps.length) {
     try {
@@ -354,7 +344,7 @@ async function abortRunLocked(interaction: ButtonInteraction): Promise<void> {
   }
   markAborted(run);
   await saveRun(settings.statePath, run);
-  await safeEditReply(interaction, textEdit(`Run for PR #${run.pr} aborted.`));
+  await safeEditReply(interaction, buildStatusEdit(`Run for PR #${run.pr} aborted.`));
   await postRunReport(interaction, run);
 }
 
@@ -366,7 +356,7 @@ async function retryReportLocked(interaction: ButtonInteraction): Promise<void> 
     await replyStale(interaction, "That run's report is not available.");
     return;
   }
-  await safeEditReply(interaction, textEdit(`Retrying the report for PR #${run.pr}.`));
+  await safeEditReply(interaction, buildStatusEdit(`Retrying the report for PR #${run.pr}.`));
   await postRunReport(interaction, run);
 }
 
@@ -388,7 +378,7 @@ export class ConductorCommand {
       await denyAccess(interaction);
       return;
     }
-    await safeDeferReply(interaction, { flags: MessageFlags.Ephemeral });
+    await safeDeferReply(interaction, CONDUCT_DEFER_OPTIONS);
     const { settings, github } = getConductorRuntime();
 
     let pull;
@@ -396,11 +386,11 @@ export class ConductorCommand {
       pull = await github.getPullRequest(pr);
     } catch (err: unknown) {
       const message = buildApiErrorMessage(`Could not read PR #${pr}`, err);
-      await safeEditReply(interaction, textEdit(message));
+      await safeEditReply(interaction, buildStatusEdit(message));
       return;
     }
     if (pull.state !== "open") {
-      await safeEditReply(interaction, textEdit(`PR #${pr} is ${pull.state}, not open.`));
+      await safeEditReply(interaction, buildStatusEdit(`PR #${pr} is ${pull.state}, not open.`));
       return;
     }
 
@@ -408,7 +398,7 @@ export class ConductorCommand {
     if (plan.kind === "absent" || plan.kind === "empty") {
       await safeEditReply(
         interaction,
-        textEdit(`PR #${pr} has no Testing steps, so there is nothing to run.`),
+        buildStatusEdit(`PR #${pr} has no Testing steps, so there is nothing to run.`),
       );
       return;
     }
@@ -420,7 +410,7 @@ export class ConductorCommand {
       } catch (err: unknown) {
         posted = `\n${buildApiErrorMessage("Noting it on the PR failed", err)}`;
       }
-      await safeEditReply(interaction, textEdit(
+      await safeEditReply(interaction, buildStatusEdit(
         `Cannot parse the Testing section of PR #${pr}: ${plan.reason}\n` +
           `Please test it manually.${posted}`,
       ));
@@ -444,13 +434,13 @@ export class ConductorCommand {
         await sendCurrentStep(interaction, run);
       } catch (err: unknown) {
         const message = buildDiscordErrorMessage("Could not post the script in this channel", err);
-        await safeEditReply(interaction, textEdit(message));
+        await safeEditReply(interaction, buildStatusEdit(message));
         return;
       }
       await saveRun(settings.statePath, run);
       await safeEditReply(
         interaction,
-        textEdit(`Posted step 1 of ${run.steps.length} for PR #${pr} in this channel.`),
+        buildStatusEdit(`Posted step 1 of ${run.steps.length} for PR #${pr} in this channel.`),
       );
     });
   }
