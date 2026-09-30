@@ -59,8 +59,8 @@ Ephemeral: no
 ```
 react with 📌 to your step 1 message
 ```
-Expected: the bot pins the message, and Discord shows its own notice in the test channel
-that the bot "pinned a message" to this channel.
+Expected: the bot pins the message; check by eye that Discord shows its own pin notice in
+the test channel. The bot sends no text of its own, and not: "Pin limit reached".
 Ephemeral: no
 
 ### Step 4: Delete the message

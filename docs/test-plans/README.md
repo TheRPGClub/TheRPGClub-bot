@@ -18,7 +18,7 @@ are tested only on their cancel, error, or permission paths.
 - `backlog-1.md`, `backlog-2.md`: /backlog
 - `game-completion-1.md`, `game-completion-2.md`: /game-completion
 - `game-completion-import.md`: /game-completion Completionator import
-- `gamedb-1.md`, `gamedb-2.md`: /gamedb and /gamedb-admin
+- `gamedb-1.md`, `gamedb-2.md`: /gamedb, including its admin subcommands
 - `game-journal-1.md`, `game-journal-2.md`, `game-journal-3.md`: game journals
 - `profile.md`: /profile, /avatar-history, and the user context menus
 - `lookups.md`: /hltb, /timestamp, and /mp-info
