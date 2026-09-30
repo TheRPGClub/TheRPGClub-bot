@@ -17,6 +17,7 @@ import { ButtonComponent, Discord, ModalComponent, Slash, SlashOption } from "di
 import {
   CONDUCTOR_ABORT_PREFIX,
   CONDUCTOR_ACCEPT_PREFIX,
+  CONDUCTOR_APPROVE_PREFIX,
   CONDUCTOR_CHECK_PREFIX,
   CONDUCTOR_CONFIRM_PREFIX,
   CONDUCTOR_NOTE_PREFIX,
@@ -50,6 +51,7 @@ import {
 import {
   NOTE_INPUT_ID,
   NO_MENTIONS,
+  buildApproveRetryRow,
   buildCurrentStepMessage,
   buildNoteModal,
   buildReportRetryRow,
@@ -70,7 +72,13 @@ import {
   type IObservedOutput,
   type IStepResult,
 } from "./ConductorObservation.js";
-import { buildRunReport, buildUnparseableReport } from "./ConductorReport.js";
+import {
+  approveIfPassed,
+  publishRunResult,
+  type IPublishOutcome,
+  type PublishRetry,
+} from "./ConductorPublish.js";
+import { buildUnparseableReport } from "./ConductorReport.js";
 import { getConductorRuntime } from "./ConductorRuntime.js";
 import { checkStepButton, loadRun, saveRun, type IConductorRun } from "./ConductorState.js";
 import { findUncheckedSteps, parseTestPlan } from "./TestPlanParser.js";
@@ -102,6 +110,8 @@ interface IRunTrigger {
 
 /** Edits the message holding the current step's buttons. */
 type StepMessageEditor = (payload: ReturnType<typeof buildStepMessage>) => Promise<unknown>;
+/** A button row offered under a failure notice, so the tester can retry the call. */
+type RetryRow = ReturnType<typeof buildReportRetryRow>;
 
 function isAllowed(interaction: AnyConductorInteraction): boolean {
   const { settings } = getConductorRuntime();
@@ -293,7 +303,7 @@ async function postOrNotify(
   trigger: IRunTrigger,
   run: IConductorRun,
   text: string,
-  retryRow?: ReturnType<typeof buildReportRetryRow>,
+  retryRow?: RetryRow,
 ): Promise<void> {
   const components = [buildTextContainer(text), ...(retryRow ? [retryRow] : [])];
   try {
@@ -308,30 +318,37 @@ async function postOrNotify(
   }
 }
 
-/** Posts the run's report, or offers a retry button when GitHub refuses it. */
+function buildRetryRow(runId: string, retry?: PublishRetry): RetryRow | undefined {
+  if (retry === "report") return buildReportRetryRow(runId);
+  if (retry === "approve") return buildApproveRetryRow(runId);
+  return undefined;
+}
+
+/**
+ * Saves what publishing recorded on the run, then posts the notice. A failed save is
+ * added to the notice rather than thrown, since the PR already has the report.
+ */
+async function postPublishOutcome(
+  trigger: IRunTrigger,
+  run: IConductorRun,
+  outcome: IPublishOutcome,
+): Promise<void> {
+  let text = outcome.text;
+  try {
+    await saveRun(getConductorRuntime().settings.statePath, run);
+  } catch (err: unknown) {
+    text += `\n\n${conductorApiError("Saving the run state failed", err)}`;
+  }
+  await postOrNotify(trigger, run, text, buildRetryRow(run.runId, outcome.retry));
+}
+
+/** Posts the run's report and approval, offering a retry button for whichever failed. */
 async function postRunReport(
   trigger: IRunTrigger,
   run: IConductorRun,
 ): Promise<void> {
-  const { github } = getConductorRuntime();
-  const report = buildRunReport({
-    pr: run.pr,
-    headSha: run.headSha,
-    runId: run.runId,
-    steps: run.steps,
-    results: run.results,
-    notes: run.notes,
-    aborted: run.status === "aborted",
-  });
-  let url: string;
-  try {
-    url = await github.postComment(run.pr, report);
-  } catch (err: unknown) {
-    const message = conductorApiError(`Posting the report to PR #${run.pr} failed`, err);
-    await postOrNotify(trigger, run, message, buildReportRetryRow(run.runId));
-    return;
-  }
-  await postOrNotify(trigger, run, `Report for PR #${run.pr} posted: ${url}`);
+  const outcome = await publishRunResult(getConductorRuntime().github, run);
+  await postPublishOutcome(trigger, run, outcome);
 }
 
 /** Aborts a run, keeping a failed check it was waiting on as that step's result. */
@@ -716,6 +733,20 @@ export async function startRunFromAnnouncement(message: Message): Promise<void> 
   await startRun(trigger, announcement.pr, trigger.notify, announcement.sha);
 }
 
+async function retryApprovalLocked(interaction: ButtonInteraction): Promise<void> {
+  const runId = parseRunCustomId(interaction.customId, CONDUCTOR_APPROVE_PREFIX);
+  const { settings, github } = getConductorRuntime();
+  const run = await loadRun(settings.statePath);
+  if (!run || run.runId !== runId || !run.reportUrl) {
+    await replyStale(interaction, "That run's approval is not available.");
+    return;
+  }
+  await safeEditReply(interaction, publicText(`Retrying the approval for PR #${run.pr}.`));
+  const outcome = await approveIfPassed(github, run, run.reportUrl);
+  const text = outcome.text || `The run for PR #${run.pr} did not pass, so it is not approved.`;
+  await postPublishOutcome(interactionTrigger(interaction), run, { ...outcome, text });
+}
+
 @Discord()
 export class ConductorCommand {
   @Slash({ name: "conduct", description: "Run a pull request's Testing steps" })
@@ -806,5 +837,15 @@ export class ConductorCommand {
     }
     await safeDeferUpdate(interaction);
     await withRunLock(() => retryReportLocked(interaction));
+  }
+
+  @ButtonComponent({ id: /^conductor-approve-v1:\d+$/ })
+  async retryApproval(interaction: ButtonInteraction): Promise<void> {
+    if (!isAllowed(interaction)) {
+      await denyAccess(interaction);
+      return;
+    }
+    await safeDeferUpdate(interaction);
+    await withRunLock(() => retryApprovalLocked(interaction));
   }
 }

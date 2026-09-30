@@ -42,6 +42,12 @@ loader never imports this directory, and the conductor never loads the bot's com
 5. After the last step, or on **Abort run**, it comments a report on the PR and posts
    the report link in the same channel. If that comment fails, the channel message
    carries the full request and response and a **Post report** button to retry it.
+6. When the run finished with every step passing, it then approves the PR, pinned to the
+   commit it tested. It first reads the PR again and skips the approval, saying why in
+   the channel, when the head moved since the run started, the PR is no longer open, or
+   the GitHub token's user opened the PR (GitHub rejects an author's own approval). A
+   failed approval shows the full request and response with an **Approve PR** button to
+   retry it; the report is already posted by then.
 
 The run state saves the channel, pending check, and notes, so after a conductor restart
 every button on the step message still works and the run keeps posting there. The
@@ -155,6 +161,9 @@ The conductor reads these from its process environment:
   Pull requests: read and write. The report is posted through the issues comments API,
   but on a pull request GitHub checks the Pull requests permission, not Issues, so
   Issues: read and write alone gets a 403.
+  The same permission covers the approval. The approval is skipped when the token's user
+  opened the PR, so a token for the account that opens the PRs never approves; a
+  separate machine user or a GitHub App with write access to the repo does.
 - `TEST_GUILD_ID`: must be the test guild. The conductor refuses to start without it,
   since it is what makes the shared channel constants resolve to the test guild.
 - `CONDUCTOR_STATE_PATH` (optional): where the active run is saved, by default

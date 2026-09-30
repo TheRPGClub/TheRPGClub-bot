@@ -98,7 +98,10 @@ async function useRuntime(headSha: string): Promise<IHarness> {
   const github = {
     getPullRequest: async (): Promise<IPullRequestInfo> => {
       harness.prReads += 1;
-      return { number: 1350, state: "open", headSha, body: PLAN, htmlUrl: "https://x.test" };
+      return {
+        number: 1350, state: "open", headSha, body: PLAN, htmlUrl: "https://x.test",
+        authorLogin: "author",
+      };
     },
     postComment: async (): Promise<string> => "https://example.test/comment",
   } as unknown as GitHubPullClient;

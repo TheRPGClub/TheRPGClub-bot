@@ -81,3 +81,76 @@ test("game journal hmenu delete confirm reports the delete or the cancel", async
     Member.deleteGameJournalEntry = originalDelete;
   }
 });
+
+test("game journal hmenu add and edit modals update the menu, not reply", async () => {
+  const command = new GameJournalCommand() as any;
+  const originalAdd = Member.addGameJournalEntry;
+  const originalUpdate = Member.updateGameJournalEntry;
+  const originalGet = Member.getGameJournalEntryForUser;
+  const existing: IGameJournalEntry = {
+    entryId: 10,
+    entryNumber: 3,
+    userId: "123",
+    gameId: 1,
+    title: null,
+    body: "Body",
+    createdAt: new Date("2026-05-11T00:00:00.000Z"),
+    updatedAt: new Date("2026-05-11T00:00:00.000Z"),
+  };
+
+  const makeInteraction = (customId: string, calls: string[]) => ({
+    customId,
+    isMessageComponent: () => false,
+    isModalSubmit: () => true,
+    isFromMessage: () => true,
+    fields: { getTextInputValue: () => "Entry text" },
+    user: { id: "123" },
+    guildId: "987654321",
+    client: {},
+    message: { id: "555", flags: { has: () => true } },
+    deferred: false,
+    replied: false,
+    update: async (payload: unknown) => {
+      calls.push("update");
+      assert.ok(collectContent(payload).join("\n").includes("## Manage Journal"));
+    },
+    reply: async () => {
+      calls.push("reply");
+    },
+    followUp: async () => {
+      calls.push("followUp");
+    },
+    editReply: async () => {
+      calls.push("editReply");
+    },
+  }) as any;
+
+  try {
+    Member.addGameJournalEntry = (async () => existing) as any;
+    Member.updateGameJournalEntry = (async () => existing) as any;
+    Member.getGameJournalEntryForUser = (async () => existing) as any;
+
+    const addCalls: string[] = [];
+    await command.handleGjHmenuAddModal(
+      makeInteraction("game-journal-hmenu-add-modal:123:1", addCalls),
+    );
+    assert.deepEqual(addCalls, ["update"]);
+
+    const editCalls: string[] = [];
+    await command.handleGjHmenuEditModal(
+      makeInteraction("game-journal-hmenu-edit-modal:123:1:10", editCalls),
+    );
+    assert.deepEqual(editCalls, ["update"]);
+
+    Member.getGameJournalEntryForUser = (async () => null) as any;
+    const missingCalls: string[] = [];
+    await command.handleGjHmenuEditModal(
+      makeInteraction("game-journal-hmenu-edit-modal:123:1:10", missingCalls),
+    );
+    assert.deepEqual(missingCalls, ["update"]);
+  } finally {
+    Member.addGameJournalEntry = originalAdd;
+    Member.updateGameJournalEntry = originalUpdate;
+    Member.getGameJournalEntryForUser = originalGet;
+  }
+});

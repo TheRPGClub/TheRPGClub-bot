@@ -6,7 +6,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { checkPrTesting } from "../conductor/PrTestingCheck.js";
+import { checkPrTesting, countStepActions } from "../conductor/PrTestingCheck.js";
 
 const FENCE = "```";
 const SCRIPT = fileURLToPath(new URL("../../scripts/check-pr-testing.ts", import.meta.url));
@@ -67,6 +67,47 @@ test("a valid multi-step section passes and lists each step", () => {
   assert.match(report, /Step 1: Step 1 label \(ephemeral\)/);
   assert.match(report, /Command: \/command2/);
   assert.match(report, /step\(s\) 2 have nothing the conductor can check/);
+});
+
+test("each single action counts once, a modal submit included", () => {
+  assert.equal(countStepActions("/collection add"), 1);
+  assert.equal(countStepActions('click "Confirm"'), 1);
+  assert.equal(countStepActions('select "Gloomhaven"'), 1);
+  assert.equal(countStepActions("/journal select game:Gloomhaven"), 1);
+  assert.equal(countStepActions("/journal add body:Great game, pick it up"), 1);
+  assert.equal(countStepActions('/suggestion\nenter "x" in "Title", submit'), 1);
+  assert.equal(countStepActions('click "Search", enter "Gloomhaven" in "Title", submit'), 1);
+  assert.equal(countStepActions('click "Add", enter "Hello, then bye" in "Body", submit'), 1);
+  assert.equal(countStepActions('click "Add", select "PS5" in "Platform", submit'), 1);
+});
+
+test("chained actions count separately", () => {
+  assert.equal(countStepActions('select "Gloomhaven", click "Confirm"'), 2);
+  assert.equal(countStepActions('click "Add", submit, select "PS5"'), 2);
+  assert.equal(countStepActions('click "Manage", select "Delete"'), 2);
+  assert.equal(countStepActions('/journal view\nclick "Manage"'), 2);
+  assert.equal(countStepActions('click "Mike" and click "Add Entry"'), 2);
+  assert.equal(countStepActions('select "Gloomhaven" and click "Confirm"'), 2);
+  assert.equal(
+    countStepActions('click "Mike", click "Add Entry", enter "x" in "Title", submit'),
+    2,
+  );
+});
+
+test("a step chaining several actions passes with a warning", () => {
+  const chained = [
+    "### Step 1: Chained",
+    FENCE,
+    'select "Gloomhaven", click "Confirm"',
+    FENCE,
+    'Expected: "Saved"',
+    "Ephemeral: yes",
+    "",
+  ];
+  const result = checkPrTesting(body(chained));
+  assert.equal(result.ok, true);
+  assert.match(result.lines.join("\n"), /step\(s\) 1 chain several actions/);
+  assert.doesNotMatch(checkPrTesting(VALID).lines.join("\n"), /chain several actions/);
 });
 
 test("text after an Ephemeral line is rejected with the parser's reason", () => {

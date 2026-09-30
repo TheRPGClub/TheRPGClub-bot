@@ -14,6 +14,7 @@ import {
 import {
   CONDUCTOR_ABORT_PREFIX,
   CONDUCTOR_ACCEPT_PREFIX,
+  CONDUCTOR_APPROVE_PREFIX,
   CONDUCTOR_CHECK_PREFIX,
   CONDUCTOR_CONFIRM_PREFIX,
   CONDUCTOR_NOTE_MODAL_PREFIX,
@@ -40,6 +41,10 @@ export function buildAbortCustomId(runId: string): string {
 
 export function buildReportCustomId(runId: string): string {
   return `${CONDUCTOR_REPORT_PREFIX}:${runId}`;
+}
+
+export function buildApproveCustomId(runId: string): string {
+  return `${CONDUCTOR_APPROVE_PREFIX}:${runId}`;
 }
 
 export function buildAcceptCustomId(runId: string, stepIndex: number): string {
@@ -279,6 +284,16 @@ export function buildReportRetryRow(runId: string): ActionRowBuilder<ButtonBuild
     new ButtonBuilder()
       .setCustomId(buildReportCustomId(runId))
       .setLabel("Post report")
+      .setStyle(ButtonStyle.Primary),
+  );
+}
+
+/** Offered when approving a passed run failed, so the tester can retry the approval alone. */
+export function buildApproveRetryRow(runId: string): ActionRowBuilder<ButtonBuilder> {
+  return new ActionRowBuilder<ButtonBuilder>().addComponents(
+    new ButtonBuilder()
+      .setCustomId(buildApproveCustomId(runId))
+      .setLabel("Approve PR")
       .setStyle(ButtonStyle.Primary),
   );
 }

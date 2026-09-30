@@ -44,6 +44,7 @@ import {
   sanitizeUserInput,
   safeReply,
   safeUpdate,
+  safeUpdateModalSource,
   safeUserFetch,
 } from "../functions/InteractionUtils.js";
 import { formatGameTitleWithYear } from "../functions/GameTitleAutocompleteUtils.js";
@@ -829,7 +830,6 @@ export class GameJournalCommand {
       entry.body,
     );
     await interaction.showModal(modal);
-    await gjHmenu.dismiss(ownerId);
   }
 
   @ButtonComponent({ id: /^game-journal-hmenu-delete:\d+:\d+$/ })
@@ -961,7 +961,7 @@ export class GameJournalCommand {
     await Member.addGameJournalEntry({ userId: ownerId, gameId, title: title || null, body });
     const container = buildTextContainer("## Manage Journal");
     const row = buildHmenuActionRow(ownerId, gameId);
-    await safeUpdate(interaction, {
+    await safeUpdateModalSource(interaction, {
       components: [container, row],
       flags: buildComponentsV2Flags(true),
     });
@@ -978,7 +978,13 @@ export class GameJournalCommand {
     const entryId = Number(entryIdRaw);
     const existing = await Member.getGameJournalEntryForUser(ownerId, entryId);
     if (!existing || existing.gameId !== gameId) {
-      await safeReply(interaction, buildTextReply("That journal entry was not found.", false));
+      await safeUpdateModalSource(interaction, {
+        components: [
+          buildTextContainer("## Manage Journal\n-# That journal entry was not found."),
+          buildHmenuActionRow(ownerId, gameId),
+        ],
+        flags: buildComponentsV2Flags(true),
+      });
       return;
     }
     const title = sanitizeUserInput(
@@ -992,7 +998,7 @@ export class GameJournalCommand {
     await Member.updateGameJournalEntry({ userId: ownerId, entryId, title: title || null, body });
     const container = buildTextContainer("## Manage Journal");
     const row = buildHmenuActionRow(ownerId, gameId);
-    await safeUpdate(interaction, {
+    await safeUpdateModalSource(interaction, {
       components: [container, row],
       flags: buildComponentsV2Flags(true),
     });
