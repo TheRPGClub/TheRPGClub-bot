@@ -6,11 +6,18 @@ import { join } from "node:path";
 
 import {
   classifySnapshot,
+  confirmedResult,
+  failedResult,
   judgeStep,
   parseMirrorMessage,
   type IMessageSnapshot,
   type IObservedOutput,
 } from "../conductor/ConductorObservation.js";
+import {
+  buildCurrentStepMessage,
+  buildNoteModalCustomId,
+  parseNoteModalCustomId,
+} from "../conductor/ConductorMessages.js";
 import { buildRunReport, fenceFor } from "../conductor/ConductorReport.js";
 import {
   checkStepButton,
@@ -68,7 +75,6 @@ function makeStep(overrides: Partial<ITestStep>): ITestStep {
     command: "/collection add",
     expected: "a \"Search for a game\" button",
     ephemeral: true,
-    expectedTexts: ["Search for a game"],
     ...overrides,
   };
 }
@@ -125,7 +131,7 @@ test("credits a component step with the component's mirrored update", () => {
   const outputs = observe([mirrorPost("u", 150, "component:search:1", "Gloomhaven")]);
   const componentStep = makeStep({
     command: "click \"Search for a game\"",
-    expectedTexts: ["Gloomhaven"],
+    expected: "\"Gloomhaven\"",
   });
   const result = judgeStep(componentStep, outputs, { start: 100, end: 200 });
   assert.equal(result.verdict, "pass");
@@ -147,7 +153,7 @@ test("does not accept public output for an ephemeral step", () => {
 
 test("a click step never owns a slash command's late mirrored reply", () => {
   const outputs = observe([mirrorPost("late", 150, "/collection", "Gloomhaven")]);
-  const clickStep = makeStep({ command: "click \"Search\"", expectedTexts: ["Gloomhaven"] });
+  const clickStep = makeStep({ command: "click \"Search\"", expected: "\"Gloomhaven\"" });
   const result = judgeStep(clickStep, outputs, { start: 100, end: 200 });
   assert.equal(result.verdict, "fail");
   assert.deepEqual(result.unattributed.map((entry) => entry.messageId), ["late"]);
@@ -168,7 +174,7 @@ test("matches public embed titles and credits a message edited inside the window
     interactionUserId: USER,
     embeds: [{ title: "Collection updated", fields: [{ name: "Game", value: "Gloomhaven" }] }],
   })]);
-  const publicStep = makeStep({ ephemeral: false, expectedTexts: ["collection UPDATED"] });
+  const publicStep = makeStep({ ephemeral: false, expected: "\"collection UPDATED\"" });
   const result = judgeStep(publicStep, outputs, { start: 100, end: 200 });
   assert.equal(result.verdict, "pass");
 });
@@ -185,7 +191,7 @@ test("fails a step that produced no output, and names the missing text otherwise
 
 test("leaves a step with nothing quoted for the tester instead of passing it", () => {
   const outputs = observe([mirrorPost("m", 150, "/collection", "anything")]);
-  const result = judgeStep(makeStep({ expectedTexts: [] }), outputs, { start: 100, end: 200 });
+  const result = judgeStep(makeStep({ expected: "a reply" }), outputs, { start: 100, end: 200 });
   assert.equal(result.verdict, "unverified");
 });
 
@@ -282,4 +288,147 @@ test("run state survives a save and reload, as a restart would", async () => {
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
+});
+
+function publicReply(overrides: Partial<IMessageSnapshot>): IObservedOutput[] {
+  return observe([snapshot({ id: "p", createdTimestamp: 150, interactionUserId: USER, ...overrides })]);
+}
+
+test("a scoped check only matches its own part of the payload", () => {
+  // Raw API JSON, as `snapshotMessage` stores it: a row holding a button and a select.
+  const button = { type: 2, label: "Keep", custom_id: "keep" };
+  const select = { type: 3, custom_id: "pick", options: [{ label: "Gloomhaven", value: "1" }] };
+  const outputs = publicReply({
+    content: "## Collection updated\nPress Undo to revert.",
+    components: [{ type: 1, components: [button, select] }],
+    embeds: [{ fields: [{ name: "Platform", value: "PC" }] }],
+  });
+  const judge = (expected: string): string =>
+    judgeStep(makeStep({ ephemeral: false, expected }), outputs, { start: 100, end: 200 })
+      .verdict;
+  assert.equal(judge("title: \"Collection updated\""), "pass");
+  assert.equal(judge("button: \"Keep\" option: \"Gloomhaven\" field: \"PC\""), "pass");
+  assert.equal(judge("button: \"Undo\""), "fail");
+  assert.equal(judge("title: \"Keep\""), "fail");
+});
+
+test("fails a step when text it rules out appears, and names it", () => {
+  const outputs = publicReply({ content: "Saved. Error: none" });
+  const result = judgeStep(
+    makeStep({ ephemeral: false, expected: "\"Saved\" and not: \"Error\"" }),
+    outputs,
+    { start: 100, end: 200 },
+  );
+  assert.equal(result.verdict, "fail");
+  assert.match(result.reason, /should be absent: "Error"/);
+});
+
+test("a step that only rules text out still needs the tester's eyes", () => {
+  const outputs = publicReply({ content: "Saved" });
+  const result = judgeStep(
+    makeStep({ ephemeral: false, expected: "no not: \"Error\"" }),
+    outputs,
+    { start: 100, end: 200 },
+  );
+  assert.equal(result.verdict, "unverified");
+});
+
+test("a truncated mirror post satisfies a scoped check by its text", () => {
+  const outputs: IObservedOutput[] = [{
+    place: "mirror",
+    messageId: "t",
+    at: 150,
+    createdAt: 150,
+    source: "/collection",
+    payload: "{\"source\": \"/collection\", \"components\": [{\"label\": \"Keep\"...",
+  }];
+  const result = judgeStep(makeStep({ expected: "button: \"Keep\"" }), outputs, {
+    start: 100,
+    end: 200,
+  });
+  assert.equal(result.verdict, "pass");
+});
+
+test("the report quotes the tester's note under its step, run or not", () => {
+  const step = makeStep({});
+  const report = buildRunReport({
+    pr: 7,
+    headSha: "abcdef1234",
+    runId: "42",
+    steps: [step, makeStep({ number: 2 })],
+    results: [judgeStep(step, [], { start: 100, end: 200 })],
+    notes: { 1: "The modal never opened.", 2: "Skipped: needs ```data```" },
+    aborted: true,
+  });
+  assert.match(report, /FAIL[\s\S]*Tester note:\n\n```\nThe modal never opened\.\n```/);
+  assert.match(report, /Not run\.\n\nTester note:\n\n````\nSkipped: needs ```data```\n````/);
+});
+
+test("note modal IDs round-trip their run, step, and mode", () => {
+  const id = buildNoteModalCustomId("123", 4, "fail");
+  assert.deepEqual(parseNoteModalCustomId(id), { runId: "123", step: 4, mode: "fail" });
+  assert.equal(parseNoteModalCustomId(`${id}x`), null);
+});
+
+test("a not: check skips a truncated mirror post, whose JSON keys would trip it", () => {
+  const outputs: IObservedOutput[] = [{
+    place: "mirror",
+    messageId: "t",
+    at: 150,
+    createdAt: 150,
+    source: "/collection",
+    payload: "{\"kind\": \"reply\", \"content\": \"Saved...",
+  }];
+  const result = judgeStep(makeStep({ expected: "\"Saved\" not: \"reply\"" }), outputs, {
+    start: 100,
+    end: 200,
+  });
+  assert.equal(result.verdict, "pass");
+});
+
+test("the tester's answer turns unchecked output into a pass or a fail", () => {
+  const outputs = publicReply({ content: "Saved" });
+  const pending = judgeStep(makeStep({ ephemeral: false, expected: "a reply" }), outputs, {
+    start: 100,
+    end: 200,
+  });
+  assert.equal(pending.verdict, "unverified");
+  assert.equal(confirmedResult(pending).verdict, "pass");
+  assert.match(confirmedResult(pending).reason, /tester confirmed/);
+  assert.equal(failedResult(pending).verdict, "fail");
+  assert.match(failedResult(pending).reason, /does not match Expected/);
+
+  const failed = judgeStep(makeStep({}), [], { start: 100, end: 200 });
+  assert.equal(failedResult(failed), failed);
+});
+
+function customIdsOf(run: IConductorRun): string[] {
+  const json = JSON.stringify(buildCurrentStepMessage(run, "700").components);
+  return [...json.matchAll(/"custom_id":"([a-z-]+-v1):/g)].map((match) => match[1]);
+}
+
+test("the step message offers the buttons its pending check calls for", () => {
+  const run: IConductorRun = {
+    runId: "42",
+    pr: 7,
+    headSha: "abc",
+    steps: [makeStep({})],
+    current: 0,
+    windowStart: 0,
+    results: [],
+    status: "running",
+    notes: { 1: "Looked slow." },
+  };
+  assert.deepEqual(customIdsOf(run), ["conductor-check-v1", "conductor-note-v1",
+    "conductor-abort-v1"]);
+  assert.match(JSON.stringify(buildCurrentStepMessage(run, "700").components),
+    /Your note: Looked slow\./);
+
+  run.pendingResult = judgeStep(makeStep({}), [], { start: 100, end: 200 });
+  assert.deepEqual(customIdsOf(run), ["conductor-check-v1", "conductor-accept-v1",
+    "conductor-note-v1", "conductor-abort-v1"]);
+
+  run.pendingResult = { ...run.pendingResult, verdict: "unverified" };
+  assert.deepEqual(customIdsOf(run), ["conductor-confirm-v1", "conductor-accept-v1",
+    "conductor-check-v1", "conductor-note-v1", "conductor-abort-v1"]);
 });

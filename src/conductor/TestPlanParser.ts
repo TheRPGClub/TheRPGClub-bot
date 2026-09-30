@@ -17,8 +17,17 @@ export interface ITestStep {
   command: string;
   expected: string;
   ephemeral: boolean;
-  /** Quoted strings in `expected`, which the observed output must contain. */
-  expectedTexts: string[];
+}
+
+/**
+ * Where a quoted string must appear. `text` is anywhere in the output, `absent`
+ * is nowhere in it, and the rest narrow the match to one part of the payload.
+ */
+export type ExpectationKind = "text" | "absent" | "title" | "button" | "option" | "field";
+
+export interface IExpectation {
+  kind: ExpectationKind;
+  text: string;
 }
 
 export type TestPlanParseResult =
@@ -39,7 +48,15 @@ const FENCE_OPEN = /^```[\w-]*\s*$/;
 const FENCE_CLOSE = /^```\s*$/;
 const EXPECTED_LINE = /^Expected:\s*(.*)$/;
 const EPHEMERAL_LINE = /^Ephemeral:\s*(.*?)\s*$/;
-const QUOTED_TEXT = /"([^"\n]+)"|“([^”\n]+)”/g;
+/** A quoted string, optionally scoped by a `keyword:` right before it. */
+const QUOTED_TEXT = /(?:\b(not|title|button|option|field):\s*)?(?:"([^"\n]+)"|“([^”\n]+)”)/gi;
+const SCOPE_KINDS: Record<string, ExpectationKind> = {
+  not: "absent",
+  title: "title",
+  button: "button",
+  option: "option",
+  field: "field",
+};
 
 /**
  * Returns the lines of the `## Testing` section, HTML comments removed, or null
@@ -76,13 +93,29 @@ export function stripHtmlComments(text: string): string {
   return text.replace(/<!--[\s\S]*?(?:-->|$)/g, "");
 }
 
-export function extractExpectedTexts(expected: string): string[] {
-  const texts: string[] = [];
+/**
+ * The checks an `Expected:` line makes: every quoted string, scoped by a
+ * `not:`, `title:`, `button:`, `option:`, or `field:` keyword right before it.
+ */
+export function extractExpectations(expected: string): IExpectation[] {
+  const checks: IExpectation[] = [];
   for (const match of expected.matchAll(QUOTED_TEXT)) {
-    const text = (match[1] ?? match[2] ?? "").trim();
-    if (text && !texts.includes(text)) texts.push(text);
+    const text = (match[2] ?? match[3] ?? "").trim();
+    const kind = match[1] ? SCOPE_KINDS[match[1].toLowerCase()] : "text";
+    const duplicate = checks.some((check) => check.kind === kind && check.text === text);
+    if (text && !duplicate) checks.push({ kind, text });
   }
-  return texts;
+  return checks;
+}
+
+/**
+ * Step numbers whose `Expected:` asks for no text to be present. The conductor
+ * cannot verify those, so it asks the tester to confirm them by eye.
+ */
+export function findUncheckedSteps(steps: ITestStep[]): number[] {
+  return steps
+    .filter((step) => !extractExpectations(step.expected).some((c) => c.kind !== "absent"))
+    .map((step) => step.number);
 }
 
 type Cursor = { lines: string[]; index: number };
@@ -195,7 +228,6 @@ function readStep(cursor: Cursor, expectedNumber: number): ITestStep {
     command,
     expected,
     ephemeral,
-    expectedTexts: extractExpectedTexts(expected),
   };
 }
 

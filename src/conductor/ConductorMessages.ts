@@ -2,12 +2,22 @@
  * Discord payloads the conductor sends the tester. Step text comes from the PR
  * body, so every payload disables mentions and the command sits in a code block.
  */
-import { ButtonStyle } from "discord.js";
-import { ActionRowBuilder, ButtonBuilder, ContainerBuilder } from "@discordjs/builders";
+import { ButtonStyle, TextInputStyle } from "discord.js";
+import {
+  ActionRowBuilder,
+  ButtonBuilder,
+  ContainerBuilder,
+  LabelBuilder,
+  ModalBuilder,
+  TextInputBuilder,
+} from "@discordjs/builders";
 import {
   CONDUCTOR_ABORT_PREFIX,
   CONDUCTOR_ACCEPT_PREFIX,
   CONDUCTOR_CHECK_PREFIX,
+  CONDUCTOR_CONFIRM_PREFIX,
+  CONDUCTOR_NOTE_MODAL_PREFIX,
+  CONDUCTOR_NOTE_PREFIX,
   CONDUCTOR_REPORT_PREFIX,
 } from "../config/customIdPrefixes.js";
 import {
@@ -36,7 +46,39 @@ export function buildAcceptCustomId(runId: string, stepIndex: number): string {
   return `${CONDUCTOR_ACCEPT_PREFIX}:${runId}:${stepIndex}`;
 }
 
-/** Reads `<prefix>:<runId>:<stepIndex>`, the shape of the Check and Accept IDs. */
+export function buildConfirmCustomId(runId: string, stepIndex: number): string {
+  return `${CONDUCTOR_CONFIRM_PREFIX}:${runId}:${stepIndex}`;
+}
+
+export function buildNoteCustomId(runId: string, stepIndex: number): string {
+  return `${CONDUCTOR_NOTE_PREFIX}:${runId}:${stepIndex}`;
+}
+
+/** `note` only saves the note; `fail` also records the step as failed. */
+export type NoteModalMode = "note" | "fail";
+
+export const NOTE_INPUT_ID = "conductor-note-text";
+/** Keeps a report with a note on every step inside GitHub's comment cap. */
+export const MAX_NOTE_LENGTH = 1000;
+
+export function buildNoteModalCustomId(
+  runId: string,
+  stepIndex: number,
+  mode: NoteModalMode,
+): string {
+  return `${CONDUCTOR_NOTE_MODAL_PREFIX}:${runId}:${stepIndex}:${mode}`;
+}
+
+export function parseNoteModalCustomId(
+  customId: string,
+): { runId: string; step: number; mode: NoteModalMode } | null {
+  const match = new RegExp(`^${CONDUCTOR_NOTE_MODAL_PREFIX}:(\\d+):(\\d+):(note|fail)$`)
+    .exec(customId);
+  if (!match) return null;
+  return { runId: match[1], step: Number(match[2]), mode: match[3] as NoteModalMode };
+}
+
+/** Reads `<prefix>:<runId>:<stepIndex>`, the shape of every per-step button ID. */
 export function parseStepCustomId(
   customId: string,
   prefix: string,
@@ -66,6 +108,20 @@ function describeStep(run: IConductorRun, testChannelId: string): string {
   ].join("\n");
 }
 
+function currentNote(run: IConductorRun): string | undefined {
+  return run.notes?.[run.steps[run.current].number];
+}
+
+/**
+ * Ends a step message with the tester's note. It goes last so that, when the text
+ * container's length cap cuts a long step, it cuts the note, which the report keeps
+ * in full, and not the verdict or the instructions.
+ */
+function withNote(run: IConductorRun, text: string): string {
+  const note = currentNote(run);
+  return note ? `${text}\n\nYour note: ${note}` : text;
+}
+
 type StepMessage = {
   components: (ContainerBuilder | ActionRowBuilder<ButtonBuilder>)[];
   flags: number;
@@ -86,14 +142,22 @@ function checkButton(run: IConductorRun, label: string): ButtonBuilder {
     .setStyle(ButtonStyle.Primary);
 }
 
+function noteButton(run: IConductorRun): ButtonBuilder {
+  return new ButtonBuilder()
+    .setCustomId(buildNoteCustomId(run.runId, run.current))
+    .setLabel(currentNote(run) ? "Edit note" : "Add note")
+    .setStyle(ButtonStyle.Secondary);
+}
+
 /** The public message for the run's current step, with its Check and Abort buttons. */
 export function buildStepMessage(run: IConductorRun, testChannelId: string): StepMessage {
   const buttons = new ActionRowBuilder<ButtonBuilder>().addComponents(
     checkButton(run, "Check"),
+    noteButton(run),
     abortButton(run.runId),
   );
   return {
-    components: [buildTextContainer(describeStep(run, testChannelId)), buttons],
+    components: [buildTextContainer(withNote(run, describeStep(run, testChannelId))), buttons],
     flags: buildComponentsV2EditFlags(),
     allowedMentions: NO_MENTIONS,
   };
@@ -111,29 +175,101 @@ export function buildFailedStepMessage(
   const text = `${describeStep(run, testChannelId)}\n\n` +
     `**${VERDICT_LABELS[result.verdict]}**: ${result.reason}\n` +
     "Press **Check again** once the output lands, or continue with this step failed.";
+  const content = withNote(run, text);
   const buttons = new ActionRowBuilder<ButtonBuilder>().addComponents(
     checkButton(run, "Check again"),
     new ButtonBuilder()
       .setCustomId(buildAcceptCustomId(run.runId, run.current))
       .setLabel("Continue as failed")
       .setStyle(ButtonStyle.Danger),
+    noteButton(run),
     abortButton(run.runId),
   );
   return {
-    components: [buildTextContainer(text), buttons],
+    components: [buildTextContainer(content), buttons],
     flags: buildComponentsV2EditFlags(),
     allowedMentions: NO_MENTIONS,
   };
+}
+
+/**
+ * The step after output arrived that the conductor cannot check: `Expected:` asks
+ * for no text. The tester compares it by eye and says whether it matches.
+ */
+export function buildUnverifiedStepMessage(
+  run: IConductorRun,
+  result: IStepResult,
+  testChannelId: string,
+): StepMessage {
+  const text = `${describeStep(run, testChannelId)}\n\n` +
+    `**${VERDICT_LABELS[result.verdict]}**: ${result.reason}\n` +
+    `Observed ${result.observed.length} message(s). Compare them with Expected above.`;
+  const content = withNote(run, text);
+  const buttons = new ActionRowBuilder<ButtonBuilder>().addComponents(
+    new ButtonBuilder()
+      .setCustomId(buildConfirmCustomId(run.runId, run.current))
+      .setLabel("Looks right")
+      .setStyle(ButtonStyle.Success),
+    new ButtonBuilder()
+      .setCustomId(buildAcceptCustomId(run.runId, run.current))
+      .setLabel("Doesn't match")
+      .setStyle(ButtonStyle.Danger),
+    checkButton(run, "Check again"),
+    noteButton(run),
+    abortButton(run.runId),
+  );
+  return {
+    components: [buildTextContainer(content), buttons],
+    flags: buildComponentsV2EditFlags(),
+    allowedMentions: NO_MENTIONS,
+  };
+}
+
+/** The current step as it stands: awaiting a check, a failure, or the tester's eyes. */
+export function buildCurrentStepMessage(run: IConductorRun, testChannelId: string): StepMessage {
+  const pending = run.pendingResult;
+  if (pending?.verdict === "fail") return buildFailedStepMessage(run, pending, testChannelId);
+  if (pending?.verdict === "unverified") {
+    return buildUnverifiedStepMessage(run, pending, testChannelId);
+  }
+  return buildStepMessage(run, testChannelId);
+}
+
+/**
+ * Asks for the tester's note. In `fail` mode it is the reason the step failed; in
+ * `note` mode it replaces the step's note. Either may be left blank, which in `note`
+ * mode clears it.
+ */
+export function buildNoteModal(run: IConductorRun, mode: NoteModalMode): ModalBuilder {
+  const step = run.steps[run.current];
+  const input = new TextInputBuilder()
+    .setCustomId(NOTE_INPUT_ID)
+    .setStyle(TextInputStyle.Paragraph)
+    .setRequired(false)
+    .setMaxLength(MAX_NOTE_LENGTH);
+  const note = currentNote(run);
+  if (note) input.setValue(note);
+  return new ModalBuilder()
+    .setCustomId(buildNoteModalCustomId(run.runId, run.current, mode))
+    .setTitle(`Step ${step.number} ${mode === "fail" ? "failed" : "note"}`)
+    .addLabelComponents(
+      new LabelBuilder()
+        .setLabel(mode === "fail" ? "Why or how did it fail?" : "Note for the PR report")
+        .setDescription("Posted on the pull request with this step's result.")
+        .setTextInputComponent(input),
+    );
 }
 
 /** Replaces a step message once it is checked, so its buttons cannot fire twice. */
 export function buildStepResultText(run: IConductorRun, result: IStepResult): string {
   const step = run.steps.find((entry) => entry.number === result.stepNumber);
   const label = step ? step.label : "";
+  const note = run.notes?.[result.stepNumber];
   return [
     `**PR #${run.pr}, step ${result.stepNumber}: ${label}**`,
     `${VERDICT_LABELS[result.verdict]}: ${result.reason}`,
     `Observed ${result.observed.length} message(s) for this step.`,
+    ...(note ? [`Your note: ${note}`] : []),
   ].join("\n");
 }
 

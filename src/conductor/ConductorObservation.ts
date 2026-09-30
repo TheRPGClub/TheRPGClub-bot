@@ -4,7 +4,12 @@
  * Everything here is untrusted data from Discord. It is matched against the
  * step's expectations and quoted in reports; it is never acted on.
  */
-import type { ITestStep } from "./TestPlanParser.js";
+import {
+  extractExpectations,
+  type ExpectationKind,
+  type IExpectation,
+  type ITestStep,
+} from "./TestPlanParser.js";
 
 /** A plain copy of a Discord message, so attribution runs without a client. */
 export interface IMessageSnapshot {
@@ -207,10 +212,92 @@ export function collectPayloadText(payload: unknown, into: string[] = []): strin
 }
 
 /**
- * Decides one step. Quoted text in `Expected:` must all appear in the step's
- * output. With nothing quoted there is nothing to check mechanically, so the
- * step is left for the tester's eyes rather than passed on the strength of any
- * output at all.
+ * Where a string sits in a payload, for the scoped `Expected:` checks. `raw` is a
+ * mirror post cut at Discord's length cap: text, not JSON, so any positive scope may
+ * match it, and `not:` skips it.
+ */
+type TextScope = Exclude<ExpectationKind, "text" | "absent"> | "other" | "raw";
+
+export interface IScopedText {
+  scope: TextScope;
+  text: string;
+}
+
+const BUTTON_TYPE = 2;
+const HEADING_LINE = /^#{1,3}\s+(.+)$/;
+
+function headingsIn(content: string): string[] {
+  return content.split("\n").flatMap((line) => {
+    const match = HEADING_LINE.exec(line.trim());
+    return match ? [match[1].trim()] : [];
+  });
+}
+
+/**
+ * Every human-readable string in a payload, tagged with where it sits: embed
+ * titles and markdown headings are titles, button labels are buttons, select
+ * option labels are options, and embed field names and values are fields.
+ */
+export function collectScopedText(
+  payload: unknown,
+  into: IScopedText[] = [],
+  parentKey = "",
+): IScopedText[] {
+  if (typeof payload === "string") {
+    into.push({ scope: "other", text: payload });
+    return into;
+  }
+  if (Array.isArray(payload)) {
+    for (const entry of payload) collectScopedText(entry, into, parentKey);
+    return into;
+  }
+  if (!payload || typeof payload !== "object") return into;
+  const record = payload as Record<string, unknown>;
+  for (const [key, value] of Object.entries(record)) {
+    if (typeof value !== "string") {
+      collectScopedText(value, into, key);
+      continue;
+    }
+    if (!TEXT_KEYS.has(key)) continue;
+    into.push({ scope: scopeFor(record, key, parentKey), text: value });
+    if (key === "content") {
+      for (const heading of headingsIn(value)) into.push({ scope: "title", text: heading });
+    }
+  }
+  return into;
+}
+
+function scopeFor(record: Record<string, unknown>, key: string, parentKey: string): TextScope {
+  if (key === "title") return "title";
+  if (key === "label" && record.type === BUTTON_TYPE) return "button";
+  if (key === "label" && parentKey === "options") return "option";
+  if ((key === "name" || key === "value") && parentKey === "fields") return "field";
+  return "other";
+}
+
+function describeCheck(check: IExpectation): string {
+  return check.kind === "text" ? `"${check.text}"` : `${check.kind} "${check.text}"`;
+}
+
+/**
+ * Whether the output satisfies one check. A raw post's JSON keys and metadata would
+ * trip a `not:` check, so absent text is only looked for in parsed payloads.
+ */
+function checkHolds(check: IExpectation, texts: IScopedText[]): boolean {
+  const needle = check.text.toLowerCase();
+  const inScope = (entry: IScopedText): boolean => {
+    if (check.kind === "absent") return entry.scope !== "raw";
+    return check.kind === "text" || entry.scope === check.kind || entry.scope === "raw";
+  };
+  const found = texts.some((entry) =>
+    inScope(entry) && entry.text.toLowerCase().includes(needle));
+  return check.kind === "absent" ? !found : found;
+}
+
+/**
+ * Decides one step. Every check in `Expected:` must hold on the step's output.
+ * A step whose checks only rule text out cannot show the right output arrived,
+ * so it is left for the tester's eyes rather than passed on any output at all.
  */
 export function judgeStep(
   step: ITestStep,
@@ -238,22 +325,47 @@ export function judgeStep(
     };
   }
 
-  if (step.expectedTexts.length === 0) {
+  const texts = observed.flatMap((output): IScopedText[] => typeof output.payload === "string"
+    ? [{ scope: "raw", text: output.payload }]
+    : collectScopedText(output.payload));
+  const checks = extractExpectations(step.expected);
+  const failed = checks.filter((check) => !checkHolds(check, texts));
+  const present = failed.filter((check) => check.kind !== "absent");
+  const absent = failed.filter((check) => check.kind === "absent");
+  if (failed.length) {
+    const reasons = [
+      present.length ? `Missing expected ${present.map(describeCheck).join(", ")}.` : "",
+      absent.length ? `Found text that should be absent: ` +
+        `${absent.map((check) => `"${check.text}"`).join(", ")}.` : "",
+    ];
+    return { ...result, verdict: "fail", reason: reasons.filter(Boolean).join(" ") };
+  }
+
+  if (!checks.some((check) => check.kind !== "absent")) {
     return {
       ...result,
       verdict: "unverified",
-      reason: `Output observed in ${where}, but Expected quotes no text to check.`,
+      reason: `Output observed in ${where}, but Expected quotes no text to look for.`,
     };
   }
+  return { ...result, verdict: "pass", reason: "Every expected check held." };
+}
 
-  const haystack = observed
-    .flatMap((output) => collectPayloadText(output.payload))
-    .join("\n")
-    .toLowerCase();
-  const missing = step.expectedTexts.filter((text) => !haystack.includes(text.toLowerCase()));
-  if (missing.length) {
-    const list = missing.map((text) => `"${text}"`).join(", ");
-    return { ...result, verdict: "fail", reason: `Missing expected text: ${list}.` };
-  }
-  return { ...result, verdict: "pass", reason: "All quoted expected text was found." };
+/** "Looks right": the tester vouches for output the conductor had nothing to check in. */
+export function confirmedResult(pending: IStepResult): IStepResult {
+  return {
+    ...pending,
+    verdict: "pass",
+    reason: `The tester confirmed the output matches Expected. ${pending.reason}`,
+  };
+}
+
+/** The pending check, recorded as failed: a failure stands, unchecked output does not match. */
+export function failedResult(pending: IStepResult): IStepResult {
+  if (pending.verdict === "fail") return pending;
+  return {
+    ...pending,
+    verdict: "fail",
+    reason: `The tester says the output does not match Expected. ${pending.reason}`,
+  };
 }

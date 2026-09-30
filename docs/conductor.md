@@ -24,7 +24,15 @@ loader never imports this directory, and the conductor never loads the bot's com
    code block, the expected result, and where the output will land. The tester runs the command in the test channel, waits for the
    reply, and presses **Check**. A failed check keeps the step open: **Check again**
    rereads with the same window start, for output that landed after an early press,
-   and **Continue as failed** records the failure and moves on.
+   and **Continue as failed** asks why the step failed, records the failure with that
+   note, and moves on. A check that finds output but nothing to look for asks the
+   tester instead: **Looks right** passes the step, and **Doesn't match** asks why and
+   fails it.
+   - **Add note** on any step message saves the tester's note for that step. Notes
+     show on the step message and are quoted under their step in the PR report,
+     including steps the run never reached.
+   - The `/conduct` reply names any step whose `Expected:` quotes no text to look
+     for, so a vague plan is visible before the run starts.
 4. The conductor reads back the newest 100 messages of the test channel and of the
    mirror channel, keeps the preview bot's output for the tester, and judges the step.
    Then it posts the next step in the same channel.
@@ -32,8 +40,8 @@ loader never imports this directory, and the conductor never loads the bot's com
    the report link in the same channel. If that comment fails, the channel message
    carries the full request and response and a **Post report** button to retry it.
 
-The run state saves the channel, so after a conductor restart the **Check** and **Abort
-run** buttons on the step message still work and the run keeps posting there. The
+The run state saves the channel, pending check, and notes, so after a conductor restart
+every button on the step message still works and the run keeps posting there. The
 conductor needs Send Messages in that channel; the #dev override already grants it.
 
 Starting a new `/conduct` while a run is going aborts the old run and reports what it
@@ -61,13 +69,27 @@ when the step fails.
 
 ## Verdicts
 
-- **PASS**: every double-quoted string in `Expected:` appears, case-insensitively, in
-  the step's output: content, embed titles, descriptions and fields, button labels,
-  select options and placeholders, and custom IDs.
-- **FAIL**: no output, or a quoted string is missing. The report includes the observed
-  payloads.
-- **NEEDS EYES**: output arrived, but `Expected:` quotes nothing, so there is nothing to
-  check mechanically. The tester reads the report and decides.
+Each double-quoted string in `Expected:` is one check, matched case-insensitively. A
+keyword right before the quote narrows where it must appear:
+
+- no keyword: anywhere in the output: content, embed titles, descriptions and fields,
+  button labels, select options and placeholders, and custom IDs.
+- `title: "..."`: an embed title, or a markdown heading line (`#` to `###`) in content.
+- `button: "..."`: a button label.
+- `option: "..."`: a select menu option label.
+- `field: "..."`: an embed field name or value.
+- `not: "..."`: must appear nowhere in the output.
+
+A mirror post cut at Discord's length cap is raw text, not JSON, so its scoped checks
+only look for the text, and its `not:` checks are skipped: its JSON keys would trip them.
+
+- **PASS**: every check holds. When the tester presses **Looks right**, the result
+  says the tester confirmed it.
+- **FAIL**: no output, or a check does not hold. The report includes the observed
+  payloads and the tester's note.
+- **NEEDS EYES**: output arrived, but `Expected:` quotes nothing that must be present.
+  The tester is asked to confirm it; the report only keeps this verdict when the run
+  was aborted before they answered.
 
 No model is involved. Quote the exact labels and titles a step should produce, and the
 conductor can check them.

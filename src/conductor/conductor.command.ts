@@ -7,15 +7,19 @@ import {
   type ButtonInteraction,
   type Client,
   type CommandInteraction,
+  MessageFlags,
   type Message,
   type MessageCreateOptions,
+  type ModalSubmitInteraction,
   type SendableChannels,
 } from "discord.js";
-import { ButtonComponent, Discord, Slash, SlashOption } from "discordx";
+import { ButtonComponent, Discord, ModalComponent, Slash, SlashOption } from "discordx";
 import {
   CONDUCTOR_ABORT_PREFIX,
   CONDUCTOR_ACCEPT_PREFIX,
   CONDUCTOR_CHECK_PREFIX,
+  CONDUCTOR_CONFIRM_PREFIX,
+  CONDUCTOR_NOTE_PREFIX,
   CONDUCTOR_REPORT_PREFIX,
 } from "../config/customIdPrefixes.js";
 import {
@@ -25,6 +29,7 @@ import {
   buildTextReply,
 } from "../functions/ComponentsV2Utils.js";
 import {
+  getModalField,
   safeDeferReply,
   safeDeferUpdate,
   safeEditReply,
@@ -34,16 +39,22 @@ import {
 import { buildApiErrorMessage, buildDiscordErrorMessage } from "../utilities/ApiErrorUtils.js";
 import { checkConductorAccess } from "./ConductorAccess.js";
 import {
+  NOTE_INPUT_ID,
   NO_MENTIONS,
-  buildFailedStepMessage,
+  buildCurrentStepMessage,
+  buildNoteModal,
   buildReportRetryRow,
   buildStepMessage,
   buildStepResultText,
+  parseNoteModalCustomId,
   parseRunCustomId,
   parseStepCustomId,
+  type NoteModalMode,
 } from "./ConductorMessages.js";
 import {
   classifySnapshot,
+  confirmedResult,
+  failedResult,
   judgeStep,
   type IMessageSnapshot,
   type IObservedOutput,
@@ -52,12 +63,15 @@ import {
 import { buildRunReport, buildUnparseableReport } from "./ConductorReport.js";
 import { getConductorRuntime } from "./ConductorRuntime.js";
 import { checkStepButton, loadRun, saveRun, type IConductorRun } from "./ConductorState.js";
-import { parseTestPlan } from "./TestPlanParser.js";
+import { findUncheckedSteps, parseTestPlan } from "./TestPlanParser.js";
 
 /** Newest messages read back per channel; a step's window is far smaller. */
 const OBSERVATION_FETCH_LIMIT = 100;
 
-type AnyConductorInteraction = CommandInteraction | ButtonInteraction;
+type AnyConductorInteraction = CommandInteraction | ButtonInteraction | ModalSubmitInteraction;
+
+/** Edits the message holding the current step's buttons. */
+type StepMessageEditor = (payload: ReturnType<typeof buildStepMessage>) => Promise<unknown>;
 
 function isAllowed(interaction: AnyConductorInteraction): boolean {
   const { settings } = getConductorRuntime();
@@ -141,6 +155,7 @@ async function fetchRunChannel(
   run: IConductorRun,
 ): Promise<SendableChannels> {
   const channelId = run.channelId ?? interaction.channelId;
+  if (!channelId) throw new Error("The run has no channel to post in.");
   const channel = await interaction.client.channels.fetch(channelId);
   if (!channel?.isSendable()) {
     throw new Error(`Channel ${channelId} is not a channel the conductor can post in.`);
@@ -156,6 +171,17 @@ async function postToRunChannel(
 ): Promise<Message> {
   const channel = await fetchRunChannel(interaction, run);
   return channel.send(payload);
+}
+
+/**
+ * Warns up front about steps the conductor cannot check, so a vague plan is seen
+ * before the run and not only in the report.
+ */
+function describeUncheckedSteps(steps: IConductorRun["steps"]): string {
+  const unchecked = findUncheckedSteps(steps);
+  if (!unchecked.length) return "";
+  return `\nStep(s) ${unchecked.join(", ")} quote no text to look for, so you will be ` +
+    "asked to confirm their output by eye. Quote exact text in Expected to check it.";
 }
 
 /** Posts the current step and opens its observation window at the post's timestamp. */
@@ -207,6 +233,7 @@ async function postRunReport(
     runId: run.runId,
     steps: run.steps,
     results: run.results,
+    notes: run.notes,
     aborted: run.status === "aborted",
   });
   let url: string;
@@ -255,21 +282,53 @@ async function replyStale(interaction: ButtonInteraction, reason: string): Promi
   await safeFollowUpIfSettled(interaction, buildTextReply(reason, true));
 }
 
-/** Loads the run a Check or Accept button belongs to, answering stale presses. */
+async function replyStaleUnacked(
+  interaction: ButtonInteraction | ModalSubmitInteraction,
+  reason: string,
+): Promise<void> {
+  await safeReply(interaction, buildTextReply(reason, true));
+}
+
+/** The running run, when `runId` and `step` name its current step. */
+async function loadCurrentStep(
+  runId: string,
+  step: number,
+): Promise<{ ok: true; run: IConductorRun } | { ok: false; reason: string }> {
+  const { settings } = getConductorRuntime();
+  return checkStepButton(await loadRun(settings.statePath), runId, step);
+}
+
+/** Loads the run a per-step button belongs to, answering stale presses. */
 async function loadStepRun(
   interaction: ButtonInteraction,
   prefix: string,
 ): Promise<IConductorRun | null> {
   const parsed = parseStepCustomId(interaction.customId, prefix);
-  const { settings } = getConductorRuntime();
-  const check = checkStepButton(
-    await loadRun(settings.statePath),
-    parsed?.runId ?? "",
-    parsed?.step ?? -1,
-  );
+  const check = await loadCurrentStep(parsed?.runId ?? "", parsed?.step ?? -1);
   if (check.ok) return check.run;
   await replyStale(interaction, check.reason);
   return null;
+}
+
+/**
+ * A modal opened from the step message edits that message directly: its deferred
+ * reply is a separate ephemeral one. A failed edit is reported there, and the run
+ * carries on so its state is still saved.
+ */
+function modalEditor(interaction: ModalSubmitInteraction): StepMessageEditor {
+  return async (payload) => {
+    try {
+      await interaction.message?.edit(payload);
+    } catch (err: unknown) {
+      const message = buildDiscordErrorMessage("Could not update the step message", err);
+      await safeFollowUpIfSettled(interaction, buildErrorReply(message, true));
+    }
+  };
+}
+
+/** A button pressed on the step message edits that message through its deferred update. */
+function buttonEditor(interaction: ButtonInteraction): StepMessageEditor {
+  return (payload) => safeEditReply(interaction, payload);
 }
 
 async function checkStepLocked(interaction: ButtonInteraction): Promise<void> {
@@ -290,39 +349,98 @@ async function checkStepLocked(interaction: ButtonInteraction): Promise<void> {
     start: run.windowStart,
     end: interaction.createdTimestamp,
   });
-  if (result.verdict === "fail") {
+  if (result.verdict !== "pass") {
     run.pendingResult = result;
     await saveRun(settings.statePath, run);
-    await safeEditReply(
-      interaction,
-      buildFailedStepMessage(run, result, settings.testChannelId),
-    );
+    await safeEditReply(interaction, buildCurrentStepMessage(run, settings.testChannelId));
     return;
   }
-  await advanceRun(interaction, run, result);
+  await advanceRun(interaction, run, result, buttonEditor(interaction));
 }
 
-async function acceptFailLocked(interaction: ButtonInteraction): Promise<void> {
-  const run = await loadStepRun(interaction, CONDUCTOR_ACCEPT_PREFIX);
+/** "Looks right": the tester vouches for output the conductor had nothing to check in. */
+async function confirmStepLocked(interaction: ButtonInteraction): Promise<void> {
+  const run = await loadStepRun(interaction, CONDUCTOR_CONFIRM_PREFIX);
   if (!run) return;
-  if (!run.pendingResult) {
-    await replyStale(interaction, "This step has no failed check to accept.");
+  const pending = run.pendingResult;
+  if (pending?.verdict !== "unverified") {
+    await replyStale(interaction, "This step has no output waiting for your eyes.");
     return;
   }
-  await advanceRun(interaction, run, run.pendingResult);
+  await advanceRun(interaction, run, confirmedResult(pending), buttonEditor(interaction));
+}
+
+/**
+ * Opens the note modal for the current step. A modal has to be the button's first
+ * response, so this checks the run without the lock; the submit checks it again.
+ */
+async function openNoteModal(
+  interaction: ButtonInteraction,
+  prefix: string,
+  mode: NoteModalMode,
+): Promise<void> {
+  const parsed = parseStepCustomId(interaction.customId, prefix);
+  const check = await loadCurrentStep(parsed?.runId ?? "", parsed?.step ?? -1);
+  if (!check.ok) {
+    await replyStaleUnacked(interaction, check.reason);
+    return;
+  }
+  if (mode === "fail" && !check.run.pendingResult) {
+    await replyStaleUnacked(interaction, "This step has no check to record as failed.");
+    return;
+  }
+  await interaction.showModal(buildNoteModal(check.run, mode));
+}
+
+function setNote(run: IConductorRun, note: string): void {
+  const stepNumber = run.steps[run.current].number;
+  const notes = { ...run.notes };
+  if (note) notes[stepNumber] = note;
+  else delete notes[stepNumber];
+  run.notes = notes;
+}
+
+async function submitNoteLocked(interaction: ModalSubmitInteraction): Promise<void> {
+  const parsed = parseNoteModalCustomId(interaction.customId);
+  const check = await loadCurrentStep(parsed?.runId ?? "", parsed?.step ?? -1);
+  if (!parsed || !check.ok) {
+    await safeEditReply(interaction, textEdit(check.ok ? "Unknown note." : check.reason));
+    return;
+  }
+  const { run } = check;
+  const { settings } = getConductorRuntime();
+  const note = getModalField(interaction, NOTE_INPUT_ID).trim();
+  const editStep = modalEditor(interaction);
+
+  if (parsed.mode === "note") {
+    setNote(run, note);
+    await saveRun(settings.statePath, run);
+    await editStep(buildCurrentStepMessage(run, settings.testChannelId));
+    await safeEditReply(interaction, textEdit(note ? "Note saved." : "Note cleared."));
+    return;
+  }
+
+  if (!run.pendingResult) {
+    await safeEditReply(interaction, textEdit("This step has no check to record as failed."));
+    return;
+  }
+  if (note) setNote(run, note);
+  await advanceRun(interaction, run, failedResult(run.pendingResult), editStep);
+  await safeEditReply(interaction, textEdit(`Step ${parsed.step + 1} recorded as failed.`));
 }
 
 /** Records the step's result, then posts the next step or finishes the run. */
 async function advanceRun(
-  interaction: ButtonInteraction,
+  interaction: ButtonInteraction | ModalSubmitInteraction,
   run: IConductorRun,
   result: IStepResult,
+  editStep: StepMessageEditor,
 ): Promise<void> {
   const { settings } = getConductorRuntime();
   run.pendingResult = null;
   run.results.push(result);
   run.current += 1;
-  await safeEditReply(interaction, textEdit(buildStepResultText(run, result)));
+  await editStep(textEdit(buildStepResultText(run, result)));
 
   if (run.current < run.steps.length) {
     try {
@@ -449,7 +567,8 @@ export class ConductorCommand {
       await saveRun(settings.statePath, run);
       await safeEditReply(
         interaction,
-        textEdit(`Posted step 1 of ${run.steps.length} for PR #${pr} in this channel.`),
+        textEdit(`Posted step 1 of ${run.steps.length} for PR #${pr} in this channel.` +
+          describeUncheckedSteps(run.steps)),
       );
     });
   }
@@ -470,8 +589,36 @@ export class ConductorCommand {
       await denyAccess(interaction);
       return;
     }
+    await openNoteModal(interaction, CONDUCTOR_ACCEPT_PREFIX, "fail");
+  }
+
+  @ButtonComponent({ id: /^conductor-confirm-v1:\d+:\d+$/ })
+  async confirmStep(interaction: ButtonInteraction): Promise<void> {
+    if (!isAllowed(interaction)) {
+      await denyAccess(interaction);
+      return;
+    }
     await safeDeferUpdate(interaction);
-    await withRunLock(() => acceptFailLocked(interaction));
+    await withRunLock(() => confirmStepLocked(interaction));
+  }
+
+  @ButtonComponent({ id: /^conductor-note-v1:\d+:\d+$/ })
+  async addNote(interaction: ButtonInteraction): Promise<void> {
+    if (!isAllowed(interaction)) {
+      await denyAccess(interaction);
+      return;
+    }
+    await openNoteModal(interaction, CONDUCTOR_NOTE_PREFIX, "note");
+  }
+
+  @ModalComponent({ id: /^conductor-note-modal-v1:\d+:\d+:(?:note|fail)$/ })
+  async submitNote(interaction: ModalSubmitInteraction): Promise<void> {
+    if (!isAllowed(interaction)) {
+      await denyAccess(interaction);
+      return;
+    }
+    await safeDeferReply(interaction, { flags: MessageFlags.Ephemeral });
+    await withRunLock(() => submitNoteLocked(interaction));
   }
 
   @ButtonComponent({ id: /^conductor-abort-v1:\d+$/ })

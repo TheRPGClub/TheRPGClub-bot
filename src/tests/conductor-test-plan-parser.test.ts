@@ -1,7 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { MAX_TEST_STEPS, parseTestPlan } from "../conductor/TestPlanParser.js";
+import {
+  MAX_TEST_STEPS,
+  extractExpectations,
+  findUncheckedSteps,
+  parseTestPlan,
+  type ITestStep,
+} from "../conductor/TestPlanParser.js";
 
 const FENCE = "```";
 
@@ -54,13 +60,19 @@ test("parses the format doc's worked example into an ordered script", () => {
   assert.equal(result.steps[0].label, "Open the collection add flow");
   assert.equal(result.steps[0].command, "/collection add");
   assert.equal(result.steps[0].ephemeral, true);
-  assert.deepEqual(result.steps[0].expectedTexts, ["Search for a game"]);
+  assert.deepEqual(
+    extractExpectations(result.steps[0].expected),
+    [{ kind: "text", text: "Search for a game" }],
+  );
   assert.equal(
     result.steps[1].command,
     "click \"Search for a game\", enter \"Gloomhaven\", submit",
   );
   assert.equal(result.steps[2].ephemeral, false);
-  assert.deepEqual(result.steps[2].expectedTexts, ["Collection updated"]);
+  assert.deepEqual(
+    extractExpectations(result.steps[2].expected),
+    [{ kind: "text", text: "Collection updated" }],
+  );
   assert.match(result.steps[2].expected, /naming Gloomhaven, and the ephemeral/);
 });
 
@@ -130,4 +142,41 @@ test("refuses more steps than the cap", () => {
 test("accepts CRLF line endings", () => {
   const result = parseTestPlan(body(step(1, "/help", "help", "no")).replace(/\n/g, "\r\n"));
   assert.equal(result.kind, "ok");
+});
+
+test("scopes a quoted string by the keyword right before it", () => {
+  assert.deepEqual(
+    extractExpectations(
+      "title: \"Collection updated\" with Button: \"Undo\", option:\"Gloomhaven\", " +
+        "field: \"Platform\", not: \"Error\" and a \"plain\" mention",
+    ),
+    [
+      { kind: "title", text: "Collection updated" },
+      { kind: "button", text: "Undo" },
+      { kind: "option", text: "Gloomhaven" },
+      { kind: "field", text: "Platform" },
+      { kind: "absent", text: "Error" },
+      { kind: "text", text: "plain" },
+    ],
+  );
+});
+
+test("does not read a keyword out of a longer word", () => {
+  assert.deepEqual(
+    extractExpectations("Note: \"x\" and subtitle: \"y\""),
+    [{ kind: "text", text: "x" }, { kind: "text", text: "y" }],
+  );
+});
+
+test("flags steps that ask for no text to be present", () => {
+  const step = (number: number, expected: string): ITestStep =>
+    ({ number, label: "l", command: "/c", expected, ephemeral: false });
+  assert.deepEqual(
+    findUncheckedSteps([
+      step(1, "a \"Saved\" reply"),
+      step(2, "a reply"),
+      step(3, "no not: \"Error\" text"),
+    ]),
+    [2, 3],
+  );
 });
