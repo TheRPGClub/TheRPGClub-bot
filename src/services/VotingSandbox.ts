@@ -37,6 +37,7 @@ import {
   type ISandboxQueuedEvent,
   type IVotingSandboxState,
 } from "./VotingSandboxModel.js";
+import { commandMention } from "./CommandMentionService.js";
 
 // The voting sandbox's runtime: one sandbox round per admin, persisted in the
 // wizard session table (its own command_key, never read by production) so the
@@ -371,7 +372,10 @@ export async function deliverSandboxOutbox(client: Client, ownerId: string): Pro
     await processVotingEvents(client, events, handle, ack, createVotingEventDeliveryState());
     const left = (await loadSandbox(ownerId))?.outbox.length ?? 0;
     if (left) {
-      lines.push(`${left} event(s) still queued. Retry with /vote-sandbox deliver.`);
+      lines.push(
+        `${left} event(s) still queued. ` +
+          `Retry with ${commandMention("vote-sandbox deliver")}.`,
+      );
     }
     return lines;
   } finally {

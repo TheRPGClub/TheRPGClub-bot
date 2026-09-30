@@ -1,5 +1,6 @@
 import { apiGet, apiPatch, apiPostOrThrow } from "../services/RpgClubApiClient.js";
 import { calculateVoteDeadlineEt } from "../functions/VoteDateUtils.js";
+import { commandMention } from "../services/CommandMentionService.js";
 
 export const NO_VOTING_ROUND_SCHEDULED = "No voting round is scheduled.";
 
@@ -101,7 +102,7 @@ export function explainRescheduleRefusal(
   if (round.votingOpen) {
     return (
       `Voting for Round ${round.roundNumber} is already open. ` +
-      "Use /admin voting-close to end it early."
+      `Use ${commandMention("admin voting-close")} to end it early.`
     );
   }
   if (calculateVoteDeadlineEt(opensAt) <= now) {

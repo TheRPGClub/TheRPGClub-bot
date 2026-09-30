@@ -20,11 +20,12 @@ import { buildModHelpResponse } from "./mod.command.js";
 import { buildSuperAdminHelpResponse, isSuperAdmin } from "./superadmin.command.js";
 import {
   buildTextContainer,
-  buildTitledContainer,
+  buildCommandHelpContainer,
   buildFieldsText,
   buildComponentsV2EditFlags,
   type EmbedField,
 } from "../functions/ComponentsV2Utils.js";
+import { findCommandMention } from "../services/CommandMentionService.js";
 import { safeDeferReply, safeReply, safeUpdate } from "../functions/InteractionUtils.js";
 import { decodeBase64Url, encodeBase64Url } from "../functions/CustomIdUtils.js";
 import { parseCustomIdSegments } from "../utilities/CustomIdUtils.js";
@@ -462,7 +463,10 @@ export function padCommandName(label: string, width = 15): string {
   return name.padEnd(width, " ");
 }
 
+/** A command and its summary, the command as a clickable mention once its ID is known. */
 function formatCommandLine(label: string, summary: string, width = 15): string {
+  const mention = findCommandMention(label);
+  if (mention) return `> ${mention} ${summary}`;
   return `> **\`\` ${padCommandName(label, width)} \`\`** ${summary}`;
 }
 
@@ -470,7 +474,7 @@ function buildHelpDetailsContainer(topic: HelpTopic): ContainerBuilder {
   const fields: EmbedField[] = [{ name: "Syntax", value: topic.syntax }];
   if (topic.parameters) fields.push({ name: "Parameters", value: topic.parameters });
   if (topic.notes) fields.push({ name: "Notes", value: topic.notes });
-  return buildTitledContainer(`${topic.label} help`, buildFieldsText(fields));
+  return buildCommandHelpContainer(`${topic.label} help`, buildFieldsText(fields));
 }
 
 function buildProfileHelpButtons(
@@ -495,7 +499,7 @@ function buildProfileHelpButtons(
 function buildProfileHelpContainer(topic: ProfileHelpTopic): ContainerBuilder {
   const fields: EmbedField[] = [{ name: "Syntax", value: topic.syntax }];
   if (topic.notes) fields.push({ name: "Notes", value: topic.notes });
-  return buildTitledContainer(`${topic.label} help`, buildFieldsText(fields));
+  return buildCommandHelpContainer(`${topic.label} help`, buildFieldsText(fields));
 }
 
 function buildNowPlayingHelpButtons(
@@ -520,13 +524,13 @@ function buildNowPlayingHelpButtons(
 function buildNowPlayingHelpContainer(topic: NowPlayingHelpTopic): ContainerBuilder {
   const fields: EmbedField[] = [{ name: "Syntax", value: topic.syntax }];
   if (topic.notes) fields.push({ name: "Notes", value: topic.notes });
-  return buildTitledContainer(`${topic.label} help`, buildFieldsText(fields));
+  return buildCommandHelpContainer(`${topic.label} help`, buildFieldsText(fields));
 }
 
 export function buildNowPlayingHelpResponse(
   activeTopicId?: NowPlayingHelpTopicId,
 ): { components: (ContainerBuilder | ActionRowBuilder<StringSelectMenuBuilder>)[]; flags: number } {
-  const container = buildTitledContainer(
+  const container = buildCommandHelpContainer(
     "/now-playing commands",
     "Choose a subcommand from the dropdown to view details.",
   );
@@ -557,7 +561,7 @@ function buildGamedbHelpButtons(
 function buildGamedbHelpContainer(topic: GameDbHelpTopic): ContainerBuilder {
   const fields: EmbedField[] = [{ name: "Syntax", value: topic.syntax }];
   if (topic.notes) fields.push({ name: "Notes", value: topic.notes });
-  return buildTitledContainer(`${topic.label} help`, buildFieldsText(fields));
+  return buildCommandHelpContainer(`${topic.label} help`, buildFieldsText(fields));
 }
 
 type RssHelpTopicId = "add" | "remove" | "edit" | "list";
@@ -746,13 +750,13 @@ function buildGameCompletionHelpButtons(
 function buildGameCompletionHelpContainer(topic: GameCompletionHelpTopic): ContainerBuilder {
   const fields: EmbedField[] = [{ name: "Syntax", value: topic.syntax }];
   if (topic.notes) fields.push({ name: "Notes", value: topic.notes });
-  return buildTitledContainer(`${topic.label} help`, buildFieldsText(fields));
+  return buildCommandHelpContainer(`${topic.label} help`, buildFieldsText(fields));
 }
 
 export function buildGameCompletionHelpResponse(
   activeTopicId?: GameCompletionHelpTopicId,
 ): { components: (ContainerBuilder | ActionRowBuilder<StringSelectMenuBuilder>)[]; flags: number } {
-  const container = buildTitledContainer(
+  const container = buildCommandHelpContainer(
     "/game-completion commands",
     "Choose a subcommand from the dropdown to view details.",
   );
@@ -876,13 +880,13 @@ function buildRssHelpButtons(
 
 function buildRssHelpContainer(topic: RssHelpTopic): ContainerBuilder {
   const fields: EmbedField[] = [{ name: "Syntax", value: topic.syntax }];
-  return buildTitledContainer(`${topic.label} help`, buildFieldsText(fields));
+  return buildCommandHelpContainer(`${topic.label} help`, buildFieldsText(fields));
 }
 
 export function buildRssHelpResponse(
   activeTopicId?: RssHelpTopicId,
 ): { components: (ContainerBuilder | ActionRowBuilder<StringSelectMenuBuilder>)[]; flags: number } {
-  const container = buildTitledContainer(
+  const container = buildCommandHelpContainer(
     "/rss commands",
     "Choose an RSS subcommand from the dropdown to view details.",
   );
@@ -927,7 +931,7 @@ export function buildMainHelpResponse(): {
     `${formatCommandLine("thread", "Link threads to GameDB games.")}\n` +
     `${formatCommandLine("rss", "Manage RSS relays with filters.")}`;
 
-  const container = buildTitledContainer("RPGClubUtils Commands", body);
+  const container = buildCommandHelpContainer("RPGClubUtils Commands", body);
 
   return {
      
@@ -939,7 +943,7 @@ export function buildMainHelpResponse(): {
 export function buildProfileHelpResponse(
   activeTopicId?: ProfileHelpTopicId,
 ): { components: (ContainerBuilder | ActionRowBuilder<StringSelectMenuBuilder>)[]; flags: number } {
-  const container = buildTitledContainer(
+  const container = buildCommandHelpContainer(
     "/profile commands",
     "Choose a profile subcommand from the dropdown to view details.",
   );
@@ -951,7 +955,7 @@ export function buildProfileHelpResponse(
 export function buildGamedbHelpResponse(
   activeTopicId?: GameDbHelpTopicId,
 ): { components: (ContainerBuilder | ActionRowBuilder<StringSelectMenuBuilder>)[]; flags: number } {
-  const container = buildTitledContainer(
+  const container = buildCommandHelpContainer(
     "/gamedb commands",
     "Choose a GameDB subcommand from the dropdown to view details.",
   );
@@ -1323,7 +1327,7 @@ function buildCategoryHelpResponse(
     ? topics.map((t) => formatCommandLine(t.label, t.summary, 10)).join("\n")
     : "No commands found for this category.";
 
-  const container = buildTitledContainer(category?.name ?? "Commands", body);
+  const container = buildCommandHelpContainer(category?.name ?? "Commands", body);
 
   return {
      

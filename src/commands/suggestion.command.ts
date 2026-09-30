@@ -54,6 +54,7 @@ import { isPositiveInt, truncateWithEllipsis } from "../utilities/ValidationUtil
 import { parseCustomIdSegments } from "../utilities/CustomIdUtils.js";
 import { buildActionButton, buildButtonRow } from "../functions/uiComponents.js";
 import { toUnixTimestamp } from "../functions/DateFormatUtils.js";
+import { commandMention } from "../services/CommandMentionService.js";
 
 const SUGGESTION_APPROVE_PREFIX = "suggestion-approve";
 const SUGGESTION_CREATE_MODAL_ID = "suggestion-create-modal";
@@ -705,7 +706,7 @@ export class SuggestionCommand {
     const session = await loadSuggestionReviewSession(parsed.sessionId, parsed.reviewerId);
     if (!session) {
       const container = buildTextContainer(
-          "This review session is no longer available. Start again from /todo.",
+          `This review session is no longer available. Start again from ${commandMention("todo")}.`,
         );
       await safeUpdate(interaction, {
         components: [container],
@@ -843,7 +844,8 @@ export class SuggestionCommand {
       ? "Accepted."
       : "Rejected.";
     await safeReply(interaction, buildTextReply(remainingCount > 0
-        ? `${outcomeLabel} ${remainingCount} suggestion(s) remain. Use Review Suggestions again from /todo.`
+        ? `${outcomeLabel} ${remainingCount} suggestion(s) remain. ` +
+          `Use Review Suggestions again from ${commandMention("todo")}.`
         : `${outcomeLabel} No pending suggestions remain.`, true));
   }
 

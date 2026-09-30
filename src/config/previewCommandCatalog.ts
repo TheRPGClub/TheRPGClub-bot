@@ -110,3 +110,33 @@ export function parseCommandCatalog(text: string): ICommandCatalog | null {
   }
   return { commands };
 }
+
+export interface ICatalogMention {
+  mention: string;
+  /** How many of the given words the command path used: the name plus 0 to 2 more. */
+  wordCount: number;
+}
+
+/**
+ * The clickable mention for the longest command path `words` starts with, or null. A
+ * command with subcommands matches only when one is named, since Discord cannot open its
+ * bare name. The markup is built only from catalog entries, never from `words`.
+ */
+export function findCatalogMention(
+  catalog: ICommandCatalog,
+  words: readonly string[],
+): ICatalogMention | null {
+  const command = catalog.commands.find((entry) => entry.name === words[0]);
+  if (!command) return null;
+  if (!command.subcommands.length) {
+    return { mention: `</${command.name}:${command.id}>`, wordCount: 1 };
+  }
+  for (const wordCount of [3, 2]) {
+    if (words.length < wordCount) continue;
+    const path = words.slice(1, wordCount).join(" ");
+    if (command.subcommands.includes(path)) {
+      return { mention: `</${command.name} ${path}:${command.id}>`, wordCount };
+    }
+  }
+  return null;
+}
