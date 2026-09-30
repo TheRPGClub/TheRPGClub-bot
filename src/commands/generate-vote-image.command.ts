@@ -3,7 +3,7 @@ import {
   AttachmentBuilder,
   type CommandInteraction,
 } from "discord.js";
-import { Discord, Guild, Slash, SlashChoice, SlashOption } from "discordx";
+import { Discord, Slash, SlashChoice, SlashGroup, SlashOption } from "discordx";
 import Game from "../classes/Game.js";
 import { type NominationKind, listNominationsForRound } from "../classes/Nomination.js";
 import { safeDeferReply, safeReply } from "../functions/InteractionUtils.js";
@@ -53,9 +53,12 @@ function toVoteKind(value: string):
 }
 
 @Discord()
-@Guild((client) => client.guilds.cache.map((guild) => guild.id))
+@SlashGroup("admin")
 export class GenerateVoteImageCommand {
-  @Slash({ description: "Generate a combined vote image from round nominations", name: "generate-vote-image" })
+  @Slash({
+    description: "Generate a combined vote image from round nominations",
+    name: "generate-vote-image",
+  })
   async generateVoteImage(
     @SlashChoice({ name: "GOTM", value: "gotm" }, { name: "NR-GOTM", value: "nr-gotm" })
     @SlashOption({

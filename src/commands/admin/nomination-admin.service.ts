@@ -27,7 +27,7 @@ import { buildComponentsV2Flags } from "../../functions/ComponentsV2Utils.js";
 
 export async function handleDeleteGotmNomsPanel(interaction: CommandInteraction): Promise<void> {
   const window = await getUpcomingNominationWindow();
-  const view = await buildNominationDeleteView("gotm", "/nominate");
+  const view = await buildNominationDeleteView("gotm", "/gotm nominate");
   if (!view) {
     await safeReply(
       interaction,
@@ -45,7 +45,7 @@ export async function handleDeleteGotmNomsPanel(interaction: CommandInteraction)
 
 export async function handleDeleteNrGotmNomsPanel(interaction: CommandInteraction): Promise<void> {
   const window = await getUpcomingNominationWindow();
-  const view = await buildNominationDeleteView("nr-gotm", "/nominate");
+  const view = await buildNominationDeleteView("nr-gotm", "/gotm nominate");
   if (!view) {
     await safeReply(
       interaction,
@@ -151,7 +151,7 @@ export async function handleAdminNominationDeleteReasonModal(
   const window = await getUpcomingNominationWindow();
   const payload = await buildNominationListPayload(
     sessionState.kind === "gotm" ? "GOTM" : "NR-GOTM",
-    "/nominate",
+    "/gotm nominate",
     {
       ...window,
       targetRound: sessionState.round,
@@ -180,7 +180,7 @@ export async function buildDeleteViewForTests(
   const nominations = await listNominationsForRound(kind, round);
   const payload = await buildNominationListPayload(
     kind === "gotm" ? "GOTM" : "NR-GOTM",
-    "/nominate",
+    "/gotm nominate",
     {
       closesAt: new Date("2026-03-13T12:00:00.000Z"),
       nextVoteAt: new Date("2026-03-20T12:00:00.000Z"),

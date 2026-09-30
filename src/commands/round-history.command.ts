@@ -21,7 +21,14 @@ import {
   TextInputStyle as ApiTextInputStyle,
   type APISelectMenuOption,
 } from "discord-api-types/v10";
-import { ButtonComponent, Discord, ModalComponent, Slash, SlashOption } from "discordx";
+import {
+  ButtonComponent,
+  Discord,
+  ModalComponent,
+  Slash,
+  SlashGroup,
+  SlashOption,
+} from "discordx";
 import type { IGotmEntry } from "../classes/Gotm.js";
 import Gotm from "../classes/Gotm.js";
 import type { INrGotmEntry } from "../classes/NrGotm.js";
@@ -508,8 +515,9 @@ async function buildRoundHistoryResponse(
 }
 
 @Discord()
+@SlashGroup("gotm")
 export class RoundHistoryCommand {
-  @Slash({ description: "Query historical GOTM/NR-GOTM rounds", name: "round-history" })
+  @Slash({ description: "Query historical GOTM/NR-GOTM rounds", name: "history" })
   async roundHistory(
     @SlashOption({
       description: "Send reply privately (only visible to you).",
@@ -578,7 +586,7 @@ export class RoundHistoryCommand {
     const selectedYear = Number(selectedYearRaw);
 
     if (!parsedCustomId) {
-      await safeReply(interaction, buildTextReply("This round history form is invalid. Please run /round-history again.", true));
+      await safeReply(interaction, buildTextReply("This round history form is invalid. Please run /gotm history again.", true));
       return;
     }
 
@@ -612,7 +620,7 @@ export class RoundHistoryCommand {
   async handleRoundHistoryPageButton(interaction: ButtonInteraction): Promise<void> {
     const parsed = parseRoundHistoryPageCustomId(interaction.customId);
     if (!parsed) {
-      await safeReply(interaction, buildTextReply("This round history page control is invalid. Please run /round-history again.", true));
+      await safeReply(interaction, buildTextReply("This round history page control is invalid. Please run /gotm history again.", true));
       return;
     }
 

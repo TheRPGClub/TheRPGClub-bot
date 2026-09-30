@@ -13,6 +13,7 @@ export type AdminHelpTopicId =
   | "voting-close"
   | "voting-results"
   | "votes-reset"
+  | "generate-vote-image"
   | "sync";
 
 export type AdminHelpTopic = {
