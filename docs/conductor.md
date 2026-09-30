@@ -55,11 +55,14 @@ step once and answers the second press as stale.
   does not matter. The conductor's own posts in the test channel are never output.
 - **Place.** An `Ephemeral: no` step only accepts public messages in the test channel
   (`BOT_DEV_CHANNEL_ID`). An `Ephemeral: yes` step accepts posts in the mirror channel
-  (`TEST_LOG_CHANNEL_ID`), written there by the preview bot's ephemeral mirror. The
+  (`TEST_LOG_CHANNEL_ID`, the test guild's dev logs channel, so mirror posts stay out
+  of #dev), written there by the preview bot's ephemeral mirror. The
   bot's dev channel override, which turns the guild owner's ephemeral replies public,
   is off in test mode, so a reply in the wrong place fails the step.
 - **User.** A mirror post must name the allowlisted tester as its user. A public reply
-  to an interaction must be to the tester's interaction.
+  to an interaction must be to the tester's interaction. Discord sends interaction
+  replies through the app's own webhook, so those count; posts from any other webhook
+  do not.
 - **Command.** A step whose command is a slash command only accepts mirror posts whose
   `source` is that command, and any other step refuses mirror posts from a slash
   command, so a late reply from an earlier step is not credited to it.
