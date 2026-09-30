@@ -46,6 +46,8 @@ run_tests() {
   python3 scripts/catchup_test.py
   echo "=== self review gate ==="
   python3 scripts/self_review_gate_test.py
+  echo "=== PR testing gate ==="
+  python3 scripts/pr_testing_gate_test.py
 }
 
 case "$STAGE" in
