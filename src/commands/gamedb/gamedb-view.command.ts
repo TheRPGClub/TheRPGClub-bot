@@ -235,8 +235,17 @@ export class GameDbViewCommand {
     gameId: number,
     title: string,
   ): Promise<void> {
-    const platforms = await GamePlatformRegionService
-      .getPlatformsForGameWithStandard(gameId, STANDARD_PLATFORM_IDS);
+    let platforms;
+    try {
+      platforms = await GamePlatformRegionService
+        .getPlatformsForGameWithStandard(gameId, STANDARD_PLATFORM_IDS);
+    } catch (err: unknown) {
+      logError("gamedb view.load_collection_platforms_failed", err);
+      await safeReply(interaction, buildErrorReply(
+        buildApiErrorMessage("Failed to load platform options.", err), true,
+      ));
+      return;
+    }
     if (!platforms.length) {
       await safeReply(interaction, buildTextReply(
         "This game has no platform data yet. Add it with `/collection add` " +

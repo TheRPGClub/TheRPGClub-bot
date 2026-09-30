@@ -186,7 +186,7 @@ export async function buildNowPlayingListPayload(
   target: User,
   entries: IMemberNowPlayingEntry[],
   guildId: string | null,
-  showPrivateOnlyJournalButtons: boolean = false,
+  isOwnerView: boolean = false,
   singleUserMode: boolean = false,
 ): Promise<{ components: NowPlayingPayloadComponents; files: AttachmentBuilder[] }> {
   const { files, covers } = await buildNowPlayingAttachments(
@@ -197,7 +197,7 @@ export async function buildNowPlayingListPayload(
     target.id,
     guildId,
     await buildNowPlayingCompositeImageUrl(files, covers, target.id),
-    showPrivateOnlyJournalButtons,
+    isOwnerView,
     singleUserMode,
     singleUserMode,
   );
@@ -212,7 +212,7 @@ export async function buildNowPlayingListPayload(
     headerCustomId,
   );
   const trailingComponents: NowPlayingPayloadComponents = [];
-  if (singleUserMode && showPrivateOnlyJournalButtons && entries.length) {
+  if (singleUserMode && isOwnerView && entries.length) {
     trailingComponents.push(buildNowPlayingLifecycleRow(target.id));
   }
   const journalSelectRow = buildNowPlayingJournalSelectRow(entries, target.id);

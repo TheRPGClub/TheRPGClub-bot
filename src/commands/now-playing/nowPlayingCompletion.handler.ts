@@ -732,8 +732,11 @@ export class NowPlayingCompletionHandlers {
     const segs = assertCustomIdSegments(interaction, 1);
     if (!segs) return;
     const [ownerId] = segs;
-    if (await replyIfNotOwner(interaction, ownerId, "This completion prompt isn't for you.")) return;
+    const notOwnerMessage = "This completion prompt isn't for you.";
+    if (await replyIfNotOwner(interaction, ownerId, notOwnerMessage)) return;
     setNowPlayingListContext(ownerId, interaction.message);
+    // Cover attachments can outlast the 3s window, and safeReply fills the deferred reply.
+    await safeDeferReply(interaction, { flags: buildComponentsV2Flags(true) });
     const sessionId = createNowPlayingCompletionWizardSession(ownerId, true);
     await promptNowPlayingCompletionPick(interaction, ownerId, sessionId, "reply");
   }
