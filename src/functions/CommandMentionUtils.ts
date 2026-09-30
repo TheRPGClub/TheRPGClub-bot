@@ -1,8 +1,4 @@
-import {
-  chatInputApplicationCommandMention,
-  type ApplicationCommand,
-  type CommandInteraction,
-} from "discord.js";
+import { chatInputApplicationCommandMention, type CommandInteraction } from "discord.js";
 
 /**
  * The registered ID of a sibling slash command. The invoking command's scope decides
@@ -12,14 +8,11 @@ async function findCommandId(
   interaction: CommandInteraction,
   commandName: string,
 ): Promise<string | null> {
-  const guildManager = interaction.commandGuildId ? interaction.guild?.commands : undefined;
-  const globalManager = interaction.client.application.commands;
-  const matches = (command: ApplicationCommand): boolean => command.name === commandName;
-  const cached = (guildManager ?? globalManager).cache.find(matches);
-  if (cached) return cached.id;
   try {
-    const fetched = guildManager ? await guildManager.fetch() : await globalManager.fetch();
-    return fetched.find(matches)?.id ?? null;
+    const commands = await interaction.client.application.commands.fetch({
+      guildId: interaction.commandGuildId ?? undefined,
+    });
+    return commands.find((command) => command.name === commandName)?.id ?? null;
   } catch {
     return null;
   }
