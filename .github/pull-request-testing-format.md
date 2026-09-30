@@ -26,7 +26,8 @@ Each step is one user action and the reply it produces. One action is exactly on
 - one button click;
 - one select menu choice;
 - one modal submit: the click that opens the modal, the fields entered into it, and the
-  submit, written as `click "<button>", enter "<value>" in "<field>", submit`.
+  submit, written as `click "<button>", enter "<value>" in "<field>", submit`. A select
+  field in the modal is written `select "<value>" in "<field>"`.
 
 A modal is not a message, so the conductor cannot read it. The click that opens one
 therefore belongs to the modal submit step, and that step's `Expected:` checks the reply

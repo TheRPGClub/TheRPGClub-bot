@@ -77,10 +77,13 @@ test("each single action counts once, a modal submit included", () => {
   assert.equal(countStepActions("/journal add body:Great game, pick it up"), 1);
   assert.equal(countStepActions('click "Search", enter "Gloomhaven" in "Title", submit'), 1);
   assert.equal(countStepActions('click "Add", enter "Hello, then bye" in "Body", submit'), 1);
+  assert.equal(countStepActions('click "Add", select "PS5" in "Platform", submit'), 1);
 });
 
 test("chained actions count separately", () => {
   assert.equal(countStepActions('select "Gloomhaven", click "Confirm"'), 2);
+  assert.equal(countStepActions('click "Add", submit, select "PS5"'), 2);
+  assert.equal(countStepActions('click "Manage", select "Delete"'), 2);
   assert.equal(countStepActions('/journal view\nclick "Manage"'), 2);
   assert.equal(countStepActions('click "Mike" and click "Add Entry"'), 2);
   assert.equal(countStepActions('select "Gloomhaven" and click "Confirm"'), 2);

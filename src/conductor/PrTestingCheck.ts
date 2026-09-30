@@ -15,7 +15,8 @@ export interface IPrTestingCheck {
 
 const QUOTED = /"[^"]*"/g;
 /** Words that start a user action. Field entries and a `submit` finish a modal. */
-const ACTION_VERBS = new Set(["click", "press", "select", "choose", "pick"]);
+const CLICK_VERBS = new Set(["click", "press"]);
+const ACTION_VERBS = new Set([...CLICK_VERBS, "select", "choose", "pick"]);
 
 /** How many user actions a step's code block holds, per the one-action rule. */
 export function countStepActions(command: string): number {
@@ -29,15 +30,18 @@ export function countStepActions(command: string): number {
       modalOpen = false;
       continue;
     }
-    for (const word of line.match(/[a-z]+/g) ?? []) {
-      if (ACTION_VERBS.has(word)) {
+    const words = line.match(/[a-z]+/g) ?? [];
+    words.forEach((word, index) => {
+      // `select "<value>" in "<field>"` inside an open modal is a field, not a new action.
+      const modalField = modalOpen && !CLICK_VERBS.has(word) && words[index + 1] === "in";
+      if (ACTION_VERBS.has(word) && !modalField) {
         actions += 1;
-        modalOpen = word === "click" || word === "press";
+        modalOpen = CLICK_VERBS.has(word);
       } else if (word === "submit") {
         if (!modalOpen) actions += 1;
         modalOpen = false;
       }
-    }
+    });
   }
   return actions;
 }
