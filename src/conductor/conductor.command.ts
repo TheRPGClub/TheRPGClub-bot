@@ -4,7 +4,6 @@
  */
 import {
   ApplicationCommandOptionType,
-  MessageFlags,
   type ButtonInteraction,
   type Client,
   type CommandInteraction,
@@ -388,7 +387,7 @@ export class ConductorCommand {
       await denyAccess(interaction);
       return;
     }
-    await safeDeferReply(interaction, { flags: MessageFlags.Ephemeral });
+    await safeDeferReply(interaction);
     const { settings, github } = getConductorRuntime();
 
     let pull;
