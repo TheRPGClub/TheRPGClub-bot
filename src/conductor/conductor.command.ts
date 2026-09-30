@@ -37,7 +37,11 @@ import {
   safeReply,
 } from "../functions/InteractionUtils.js";
 import { parsePreviewReadyAnnouncement } from "../config/previewMode.js";
-import { checkAnnouncementSource, checkConductorAccess } from "./ConductorAccess.js";
+import {
+  checkAnnouncementSource,
+  checkConductorAccess,
+  type AccessDecision,
+} from "./ConductorAccess.js";
 import {
   conductorAnyError,
   conductorApiError,
@@ -79,18 +83,19 @@ import {
   type PublishRetry,
 } from "./ConductorPublish.js";
 import { buildUnparseableReport } from "./ConductorReport.js";
+import { catalogAttachmentUrl, resolveStepMentions } from "./ConductorCommandMentions.js";
 import { getConductorRuntime } from "./ConductorRuntime.js";
 import { checkStepButton, loadRun, saveRun, type IConductorRun } from "./ConductorState.js";
-import { findUncheckedSteps, parseTestPlan } from "./TestPlanParser.js";
+import { findUncheckedSteps, parseTestPlan, type ITestStep } from "./TestPlanParser.js";
 
 /** Newest messages read back per channel; a step's window is far smaller. */
 const OBSERVATION_FETCH_LIMIT = 100;
 
-/** How long one mirror payload attachment may take to download. */
-const MIRROR_ATTACHMENT_TIMEOUT_MS = 10_000;
+/** How long one mirror payload or command catalog attachment may take to download. */
+const ATTACHMENT_TIMEOUT_MS = 10_000;
 
-/** Largest mirror payload attachment read back; a real one is a few kilobytes. */
-const MIRROR_ATTACHMENT_MAX_BYTES = 1_000_000;
+/** Largest attachment read back; a real one is a few kilobytes. */
+const ATTACHMENT_MAX_BYTES = 1_000_000;
 
 type AnyConductorInteraction = CommandInteraction | ButtonInteraction | ModalSubmitInteraction;
 
@@ -184,13 +189,13 @@ export function snapshotMessage(message: Message): IMessageSnapshot {
   };
 }
 
-/** Downloads a mirror post's full payload, kept as text for the parser to read. */
-async function downloadMirrorAttachment(url: string): Promise<string> {
+/** Downloads an attachment, kept as text for its parser to read. */
+async function downloadAttachment(url: string): Promise<string> {
   const response = await axios.get<string>(url, {
     responseType: "text",
     transformResponse: [(data: string) => data],
-    timeout: MIRROR_ATTACHMENT_TIMEOUT_MS,
-    maxContentLength: MIRROR_ATTACHMENT_MAX_BYTES,
+    timeout: ATTACHMENT_TIMEOUT_MS,
+    maxContentLength: ATTACHMENT_MAX_BYTES,
   });
   return response.data;
 }
@@ -232,7 +237,7 @@ async function collectObservations(
       const url = message.createdTimestamp > since
         ? mirrorAttachmentUrl(snapshot, context)
         : null;
-      if (url) snapshot.mirrorAttachment = await downloadMirrorAttachment(url);
+      if (url) snapshot.mirrorAttachment = await downloadAttachment(url);
       return snapshot;
     }));
     for (const snapshot of snapshots) {
@@ -597,9 +602,12 @@ async function startRun(
   trigger: IRunTrigger,
   pr: number,
   answer: (text: string) => Promise<void>,
-  announcedSha?: string,
+  announcement?: Message<true>,
 ): Promise<void> {
   const { settings, github } = getConductorRuntime();
+  const announcedSha = announcement
+    ? parsePreviewReadyAnnouncement(announcement.content)?.sha
+    : undefined;
 
   const accessProblems = await checkConductorChannelAccess(trigger.client, settings);
   if (accessProblems.length) {
@@ -646,6 +654,13 @@ async function startRun(
     return;
   }
 
+  const commandMentions = await loadCommandMentions(
+    trigger.client,
+    pr,
+    pull.headSha,
+    plan.steps,
+    announcement,
+  );
   await withRunLock(async () => {
     if (announcedSha !== undefined) {
       const current = await loadRun(settings.statePath);
@@ -665,6 +680,7 @@ async function startRun(
       current: 0,
       windowStart: trigger.createdTimestamp,
       results: [],
+      commandMentions,
       status: "running",
     };
     try {
@@ -702,16 +718,10 @@ function messageTrigger(message: Message<true>): IRunTrigger {
   };
 }
 
-/**
- * Starts a run when the preview bot announces it is ready, as if `/conduct pr:<n>` had
- * been run in the dev channel. Any other message, or the same text from anyone else,
- * does nothing.
- */
-export async function startRunFromAnnouncement(message: Message): Promise<void> {
-  const announcement = parsePreviewReadyAnnouncement(message.content);
-  if (!announcement || !message.inGuild()) return;
+/** Whether a message is a ready announcement the preview bot really posted. */
+function checkAnnouncementMessage(message: Message<true>): AccessDecision {
   const { settings } = getConductorRuntime();
-  const decision = checkAnnouncementSource(
+  return checkAnnouncementSource(
     {
       authorId: message.author.id,
       webhookId: message.webhookId,
@@ -725,12 +735,66 @@ export async function startRunFromAnnouncement(message: Message): Promise<void> 
       testChannelId: settings.testChannelId,
     },
   );
+}
+
+/**
+ * The preview bot's newest ready announcement for this PR and head, which carries its
+ * command catalog. A run `/conduct` started by hand finds it in the test channel.
+ */
+async function findReadyAnnouncement(
+  client: Client<true>,
+  pr: number,
+  headSha: string,
+): Promise<Message<true> | null> {
+  const { settings } = getConductorRuntime();
+  const channel = await client.channels.fetch(settings.testChannelId);
+  if (!channel?.isTextBased() || channel.isDMBased()) return null;
+  const messages = await channel.messages.fetch({ limit: OBSERVATION_FETCH_LIMIT });
+  for (const message of messages.values()) {
+    const announced = parsePreviewReadyAnnouncement(message.content);
+    if (announced?.pr !== pr || announced.sha !== headSha || !message.inGuild()) continue;
+    if (checkAnnouncementMessage(message).allowed) return message;
+  }
+  return null;
+}
+
+/**
+ * Clickable mentions for the run's slash command steps, from the preview's command
+ * catalog. Any failure is logged and gives none: each step still shows its code block.
+ */
+async function loadCommandMentions(
+  client: Client<true>,
+  pr: number,
+  headSha: string,
+  steps: readonly ITestStep[],
+  announcement?: Message<true>,
+): Promise<Record<number, string> | undefined> {
+  try {
+    const source = announcement ?? await findReadyAnnouncement(client, pr, headSha);
+    const url = source ? catalogAttachmentUrl([...source.attachments.values()]) : null;
+    if (!url) return undefined;
+    return resolveStepMentions(await downloadAttachment(url), steps);
+  } catch (err: unknown) {
+    console.error(`[conductor] could not read the command catalog for PR #${pr}`, err);
+    return undefined;
+  }
+}
+
+/**
+ * Starts a run when the preview bot announces it is ready, as if `/conduct pr:<n>` had
+ * been run in the dev channel. Any other message, or the same text from anyone else,
+ * does nothing.
+ */
+export async function startRunFromAnnouncement(message: Message): Promise<void> {
+  const announcement = parsePreviewReadyAnnouncement(message.content);
+  if (!announcement || !message.inGuild()) return;
+  const decision = checkAnnouncementMessage(message);
   if (!decision.allowed) {
     console.log(`[conductor] ignored a ready announcement: ${decision.reason}`);
     return;
   }
   const trigger = messageTrigger(message);
-  await startRun(trigger, announcement.pr, trigger.notify, announcement.sha);
+  await startRun(trigger, announcement.pr, trigger.notify, message);
 }
 
 async function retryApprovalLocked(interaction: ButtonInteraction): Promise<void> {

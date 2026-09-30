@@ -97,6 +97,12 @@ export function parseRunCustomId(customId: string, prefix: string): string | nul
   return match ? match[1] : null;
 }
 
+/** The current step's command mention, which opens the command in the chat box. */
+function mentionLine(run: IConductorRun): string[] {
+  const mention = run.commandMentions?.[run.steps[run.current].number];
+  return mention ? [`Click to start: ${mention}`] : [];
+}
+
 function describeStep(run: IConductorRun, testChannelId: string): string {
   const step = run.steps[run.current];
   const where = step.ephemeral
@@ -105,6 +111,7 @@ function describeStep(run: IConductorRun, testChannelId: string): string {
   return [
     `**PR #${run.pr}, step ${step.number} of ${run.steps.length}: ${step.label}**`,
     `Run this in <#${testChannelId}>:`,
+    ...mentionLine(run),
     fenceFor(step.command),
     `Expected: ${step.expected}`,
     `Output lands as ${where}.`,

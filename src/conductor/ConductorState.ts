@@ -34,6 +34,11 @@ export interface IConductorRun {
   pendingResult?: IStepResult | null;
   /** The tester's notes, by step number, quoted under each step in the report. */
   notes?: Record<number, string>;
+  /**
+   * Clickable slash command mentions, by step number, resolved once from the preview
+   * bot's command catalog when the run starts. A step without one shows its code block.
+   */
+  commandMentions?: Record<number, string>;
   status: ConductorRunStatus;
   /** The report comment's URL, once posted. An approval retry links it. */
   reportUrl?: string;
