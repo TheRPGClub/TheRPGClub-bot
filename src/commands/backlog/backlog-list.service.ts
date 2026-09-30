@@ -3,11 +3,13 @@ import {
   ButtonBuilder,
   ButtonInteraction,
   ButtonStyle,
+  StringSelectMenuBuilder,
 } from "discord.js";
-import UserGameBacklog from "../../classes/UserGameBacklog.js";
+import UserGameBacklog, { type IUserGameBacklogEntry } from "../../classes/UserGameBacklog.js";
 import { safeV2TextContent } from "../../functions/ComponentsV2Utils.js";
 import { safeDeferUpdate } from "../../functions/InteractionUtils.js";
 import { buildActionButton, buildButtonRow } from "../../functions/uiComponents.js";
+import { buildStartPlayingSelectRow } from "../../functions/StartPlayingSelect.js";
 import {
   buildPaginatedUserListResponse,
   buildUserListNavId,
@@ -23,6 +25,7 @@ import {
   BACKLOG_LIST_NAV_PREFIX,
   BACKLOG_LIST_FILTER_PREFIX,
   BACKLOG_LIST_FILTER_MODAL_PREFIX,
+  BACKLOG_START_PLAYING_PREFIX,
 } from "../../config/customIdPrefixes.js";
 import { BACKLOG_LIST_PAGE_SIZE } from "../../config/pagination.js";
 
@@ -283,8 +286,32 @@ export async function buildBacklogListResponse(params: {
     ],
   });
 
+  if (params.viewerUserId !== params.targetUserId) {
+    // eslint-disable-next-line local/dynamic-components-require-chunking
+    return { components };
+  }
+  const startPlayingRow = buildBacklogStartPlayingRow(params.targetUserId, pageEntries, start);
   // eslint-disable-next-line local/dynamic-components-require-chunking
-  return { components };
+  return { components: [...components, startPlayingRow] };
+}
+
+export function buildBacklogStartPlayingCustomId(ownerId: string): string {
+  return `${BACKLOG_START_PLAYING_PREFIX}:${ownerId}`;
+}
+
+function buildBacklogStartPlayingRow(
+  ownerId: string,
+  pageEntries: IUserGameBacklogEntry[],
+  start: number,
+): ActionRowBuilder<StringSelectMenuBuilder> {
+  return buildStartPlayingSelectRow(
+    buildBacklogStartPlayingCustomId(ownerId),
+    pageEntries.map((entry, index) => ({
+      entryId: entry.entryId,
+      label: `${start + index + 1}. ${entry.title}`,
+      platformName: entry.platformName,
+    })),
+  );
 }
 
 export async function applyBacklogFiltersToSourceMessage(params: {

@@ -51,6 +51,8 @@ import { safeIgnore } from "../../utilities/AsyncUtils.js";
 import { DISCORD_SELECT_OPTIONS_MAX, truncateLabel } from "../../config/textLimits.js";
 import {
   NOW_PLAYING_LIST_EDIT_PREFIX,
+  NOW_PLAYING_VIEW_COMPLETE_PREFIX,
+  NOW_PLAYING_VIEW_JOURNAL_PREFIX,
   NOW_PLAYING_JOURNAL_VIEW_SELECT_PREFIX,
   NOW_PLAYING_COMPOSITE_MAX,
   NOW_PLAYING_EDIT_MENU_SORT_PREFIX,
@@ -184,7 +186,7 @@ export async function buildNowPlayingListPayload(
   target: User,
   entries: IMemberNowPlayingEntry[],
   guildId: string | null,
-  showPrivateOnlyJournalButtons: boolean = false,
+  isOwnerView: boolean = false,
   singleUserMode: boolean = false,
 ): Promise<{ components: NowPlayingPayloadComponents; files: AttachmentBuilder[] }> {
   const { files, covers } = await buildNowPlayingAttachments(
@@ -195,7 +197,7 @@ export async function buildNowPlayingListPayload(
     target.id,
     guildId,
     await buildNowPlayingCompositeImageUrl(files, covers, target.id),
-    showPrivateOnlyJournalButtons,
+    isOwnerView,
     singleUserMode,
     singleUserMode,
   );
@@ -209,10 +211,28 @@ export async function buildNowPlayingListPayload(
     "Now Playing",
     headerCustomId,
   );
+  const trailingComponents: NowPlayingPayloadComponents = [];
+  if (singleUserMode && isOwnerView && entries.length) {
+    trailingComponents.push(buildNowPlayingLifecycleRow(target.id));
+  }
   const journalSelectRow = buildNowPlayingJournalSelectRow(entries, target.id);
-  const trailingComponents: NowPlayingPayloadComponents =
-    journalSelectRow ? [journalSelectRow] : [];
+  if (journalSelectRow) trailingComponents.push(journalSelectRow);
   return { components: [headerContainer, ...listComponents, ...trailingComponents], files };
+}
+
+function buildNowPlayingLifecycleRow(ownerId: string): ActionRowBuilder<ButtonBuilder> {
+  return buildButtonRow(
+    buildActionButton({
+      customId: `${NOW_PLAYING_VIEW_COMPLETE_PREFIX}:${ownerId}`,
+      label: "Mark Complete",
+      style: ButtonStyle.Success,
+    }),
+    buildActionButton({
+      customId: `${NOW_PLAYING_VIEW_JOURNAL_PREFIX}:${ownerId}`,
+      label: "Journal",
+      style: ButtonStyle.Secondary,
+    }),
+  );
 }
 
 export function buildNowPlayingJournalSelectRow(

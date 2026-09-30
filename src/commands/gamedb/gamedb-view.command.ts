@@ -17,6 +17,7 @@ import {
 import {
   safeDeferReply,
   safeDeferUpdate,
+  safeEditReply,
   safeReply,
   safeUpdate,
   sanitizeUserInput,
@@ -50,10 +51,18 @@ import {
   buildSelectRow,
 } from "../../functions/uiComponents.js";
 import UserGameBacklog from "../../classes/UserGameBacklog.js";
+import UserGameCollection, {
+  COLLECTION_OWNERSHIP_TYPES,
+} from "../../classes/UserGameCollection.js";
+import {
+  GAMEDB_COLLECTION_OWNERSHIP_PREFIX,
+  GAMEDB_COLLECTION_PLATFORM_PREFIX,
+} from "../../config/customIdPrefixes.js";
+import { buildNowPlayingPlatformPromptPayload } from "../now-playing/nowPlayingStart.service.js";
+import { buildGamePlatformPromptPayload } from "../../functions/GamePlatformPrompt.js";
 import { buildApiErrorMessage } from "../../utilities/ApiErrorUtils.js";
 import { logError } from "../../utilities/LogUtils.js";
 import GamePlatformRegionService from "../../classes/GamePlatformRegionService.js";
-import { STANDARD_PLATFORM_IDS } from "../../config/standardPlatforms.js";
 
 @Discord()
 @SlashGroup("gamedb")
@@ -84,7 +93,7 @@ export class GameDbViewCommand {
   }
 
   @ButtonComponent({
-    id: /^gamedb-action:(nowplaying|video|hltb-import|backlog|igdb-import):\d+$/,
+    id: /^gamedb-action:(nowplaying|video|hltb-import|backlog|collection|igdb-import):\d+$/,
   })
   async handleGameDbAction(interaction: ButtonInteraction): Promise<void> {
     const segs = assertCustomIdSegments(interaction, 2);
@@ -119,6 +128,11 @@ export class GameDbViewCommand {
         return;
       }
       await refreshGameProfileMessage(interaction, result.data.game_id);
+      return;
+    }
+
+    if (action === "collection") {
+      await this.handleAddToCollection(interaction, numericId);
       return;
     }
 
@@ -175,31 +189,15 @@ export class GameDbViewCommand {
     }
 
     if (action === "nowplaying") {
-      const platforms = await GamePlatformRegionService
-        .getPlatformsForGameWithStandard(gameId, STANDARD_PLATFORM_IDS);
-      if (!platforms.length) {
+      const prompt = await buildNowPlayingPlatformPromptPayload(gameId, game.title);
+      if (!prompt) {
         await safeReply(interaction, buildTextReply(
           "This game has no platform data yet. Add to Now Playing from " +
             "`/now-playing list` after platform data is available.", true,
         ));
         return;
       }
-      const options = buildSelectOptions(platforms.map((platform) => ({
-        label: platform.name,
-        value: String(platform.id),
-      })));
-      const select = new StringSelectMenuBuilder()
-        // eslint-disable-next-line local/custom-id-has-matching-handler
-        .setCustomId(`gamedb-nowplaying-platform-select:${gameId}`)
-        .setPlaceholder("Select the platform")
-        .addOptions(options);
-      await safeReply(interaction, {
-        components: [
-          buildTextContainer(`Select the platform for **${game.title}**.`),
-          buildSelectRow(select),
-        ],
-        flags: buildComponentsV2Flags(true),
-      });
+      await safeReply(interaction, prompt);
       return;
     }
 
@@ -230,6 +228,110 @@ export class GameDbViewCommand {
     if (action === "backlog") {
       await this.handleAddToBacklog(interaction, gameId);
       return;
+    }
+  }
+
+  private async handleAddToCollection(
+    interaction: ButtonInteraction,
+    gameId: number,
+  ): Promise<void> {
+    // Defer before any API call: the game lookup and platform list can outlast 3s together.
+    await safeDeferReply(interaction, { flags: buildComponentsV2Flags(true) });
+    let prompt;
+    try {
+      const game = await Game.getGameById(gameId);
+      if (!game) {
+        await safeReply(interaction, buildTextReply(`No game found with ID ${gameId}.`, true));
+        return;
+      }
+      prompt = await buildGamePlatformPromptPayload({
+        gameId,
+        title: game.title,
+        customId: `${GAMEDB_COLLECTION_PLATFORM_PREFIX}:${gameId}`,
+        placeholder: "Select the platform you own it on",
+      });
+    } catch (err: unknown) {
+      logError("gamedb view.load_collection_platforms_failed", err);
+      await safeReply(interaction, buildErrorReply(
+        buildApiErrorMessage("Failed to load platform options", err), true,
+      ));
+      return;
+    }
+    if (!prompt) {
+      await safeReply(interaction, buildTextReply(
+        "This game has no platform data yet. Add it with `/collection add` " +
+          "after platform data is available.", true,
+      ));
+      return;
+    }
+    await safeReply(interaction, prompt);
+  }
+
+  @SelectMenuComponent({ id: /^gamedb-collection-platform:\d+$/ })
+  async handleCollectionPlatformSelect(
+    interaction: StringSelectMenuInteraction,
+  ): Promise<void> {
+    const segs = assertCustomIdSegments(interaction, 1);
+    if (!segs) return;
+    const gameId = Number(segs[0]);
+    const platformId = Number(interaction.values[0]);
+    if (!isPositiveInt(gameId) || !isPositiveInt(platformId)) {
+      await safeReply(interaction, buildTextReply("Invalid collection selection.", true));
+      return;
+    }
+    const options = buildSelectOptions(
+      COLLECTION_OWNERSHIP_TYPES.map((value) => ({ label: value, value })),
+    );
+    const select = new StringSelectMenuBuilder()
+      .setCustomId(`${GAMEDB_COLLECTION_OWNERSHIP_PREFIX}:${gameId}:${platformId}`)
+      .setPlaceholder("Select the ownership type")
+      .addOptions(options);
+    await safeUpdate(interaction, {
+      components: [
+        buildTextContainer("How do you own it?"),
+        buildSelectRow(select),
+      ],
+      flags: buildComponentsV2Flags(true),
+    });
+  }
+
+  @SelectMenuComponent({ id: /^gamedb-collection-ownership:\d+:\d+$/ })
+  async handleCollectionOwnershipSelect(
+    interaction: StringSelectMenuInteraction,
+  ): Promise<void> {
+    const segs = assertCustomIdSegments(interaction, 2);
+    if (!segs) return;
+    const gameId = Number(segs[0]);
+    const platformId = Number(segs[1]);
+    const ownershipType = COLLECTION_OWNERSHIP_TYPES
+      .find((value) => value === interaction.values[0]);
+    if (!isPositiveInt(gameId) || !isPositiveInt(platformId) || !ownershipType) {
+      await safeReply(interaction, buildTextReply("Invalid collection selection.", true));
+      return;
+    }
+    // The ephemeral picker is replaced in place once the API answers.
+    await safeDeferUpdate(interaction);
+    try {
+      const created = await UserGameCollection.addEntry({
+        userId: interaction.user.id,
+        gameId,
+        platformId,
+        ownershipType,
+      });
+      const platformLabel = created.platformName ?? `Platform #${platformId}`;
+      await safeEditReply(interaction, {
+        components: [buildTextContainer(
+          `Added **${created.title}** (${platformLabel}, ${created.ownershipType}) ` +
+            "to your collection.",
+        )],
+        flags: buildComponentsV2Flags(true),
+      });
+    } catch (err: unknown) {
+      logError("gamedb view.add_collection_failed", err);
+      await safeEditReply(
+        interaction,
+        buildErrorReply(buildApiErrorMessage("Failed to add collection entry", err), true),
+      );
     }
   }
 

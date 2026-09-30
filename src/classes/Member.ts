@@ -2,6 +2,7 @@ import type { GuildMember, User } from "discord.js";
 import { isPositiveInt, requirePositiveInt } from "../utilities/ValidationUtils.js";
 import { logError } from "../utilities/LogUtils.js";
 import { apiGet, apiPost, apiPatch, apiDelete } from "../services/RpgClubApiClient.js";
+import { UserFacingError } from "../utilities/ApiErrorUtils.js";
 
 export interface IMemberRecord {
   userId: string;
@@ -580,10 +581,10 @@ export default class Member {
 
     const existing = await Member.fetchNowPlayingRaw(userId);
     if (existing.length >= MAX_NOW_PLAYING) {
-      throw new Error(`You can only track up to ${MAX_NOW_PLAYING} Now Playing titles.`);
+      throw new UserFacingError(`You can only track up to ${MAX_NOW_PLAYING} Now Playing titles.`);
     }
     if (existing.some((e) => Number(e.gamedb_game_id) === gameId)) {
-      throw new Error("That title is already in your Now Playing list.");
+      throw new UserFacingError("That title is already in your Now Playing list.");
     }
 
     await apiPost<{ data: NowPlayingEntryApiData }>(
