@@ -16,7 +16,8 @@ already hold Chrono Trigger. Step 4 adds it, and later steps remove it again.
 ```
 /now-playing list
 ```
-Expected: a public list with the heading "Now Playing", a header button with your name, and
+Expected: a public list with the heading "Now Playing", a header button labelled with your
+username, and
 the line "List owner can use button in the header to maintain this list". not: "Error".
 Ephemeral: no
 
@@ -38,7 +39,7 @@ Ephemeral: no
 
 ### Step 4: Add Chrono Trigger
 ```
-/now-playing add title:Chrono Trigger platform:Super Nintendo
+/now-playing add title:Chrono Trigger platform:SNES
 ```
 Expected: pick both values from autocomplete. Your public list is reposted with
 "Chrono Trigger" in it, and not: "Could not add to Now Playing".
@@ -46,7 +47,7 @@ Ephemeral: no
 
 ### Step 5: Add Chrono Trigger again
 ```
-/now-playing add title:Chrono Trigger platform:Super Nintendo
+/now-playing add title:Chrono Trigger platform:SNES
 ```
 Expected: pick both values from autocomplete. A public error,
 "That title is already in your Now Playing list".
@@ -54,7 +55,7 @@ Ephemeral: no
 
 ### Step 6: View another member's list
 ```
-/now-playing list member:@RPGClub GameDB Bot
+/now-playing list member:@RPGClubbot (Preview)
 ```
 Expected: a public reply naming that member, "Now Playing", with either their games or
 a note that they have no Now Playing entries.
@@ -104,7 +105,7 @@ Ephemeral: yes
 click "Sort"
 ```
 Expected: the manage message changes to "Sort Your Now Playing List" with
-"Pick one title for each position, then press Save." and button: "Reset to current order".
+"Pick one title for each position, then press Save." and a Position select per game.
 Ephemeral: yes
 
 ### Step 13: Open the Sort help
@@ -116,10 +117,11 @@ Ephemeral: yes
 
 ### Step 14: Save a new sort order
 ```
-select "Chrono Trigger (Super Nintendo)" from "Position 1", fill any cleared slot, click "Save"
+select "Chrono Trigger (SNES)" for "Position 1", refill the cleared slot, click "Save"
 ```
 Expected: the message briefly shows Saving sort order and returns to the manage row with
-button: "Sort". Your public list refreshes with Chrono Trigger first.
+button: "Sort". Check by eye that your public list now shows Chrono Trigger as number 1,
+a different order from before; the new order stays for the rest of the run.
 Ephemeral: yes
 
 ### Step 15: Open Edit Platform
@@ -172,7 +174,7 @@ Ephemeral: yes
 
 ### Step 21: Remove Chrono Trigger with Remove Game
 ```
-click your name button on your list, click "Remove Game", select "Chrono Trigger (Super Nintendo)"
+click your name button on your list, click "Remove Game", select "Chrono Trigger (SNES)"
 ```
 Expected: the message briefly shows Updating your Now Playing remove list, then changes
 in place to the remove screen, or to an empty-list note, with not: "Chrono Trigger".
@@ -181,7 +183,7 @@ Ephemeral: yes
 
 ### Step 22: Add Chrono Trigger back for the completion flow
 ```
-/now-playing add title:Chrono Trigger platform:Super Nintendo
+/now-playing add title:Chrono Trigger platform:SNES
 ```
 Expected: pick both values from autocomplete. Your public list is reposted with
 "Chrono Trigger", and not: "Could not add to Now Playing".
