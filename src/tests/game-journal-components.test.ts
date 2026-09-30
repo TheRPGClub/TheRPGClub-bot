@@ -82,7 +82,7 @@ test("game journal hmenu delete confirm reports the delete or the cancel", async
   }
 });
 
-test("game journal hmenu add and edit modals update the menu instead of replying", async () => {
+test("game journal hmenu add and edit modals update the menu, not reply", async () => {
   const command = new GameJournalCommand() as any;
   const originalAdd = Member.addGameJournalEntry;
   const originalUpdate = Member.updateGameJournalEntry;

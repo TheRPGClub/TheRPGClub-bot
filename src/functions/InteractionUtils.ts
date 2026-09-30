@@ -602,10 +602,14 @@ export async function safeUpdateModalSource(
   await updateOrReply(interaction, options, true);
 }
 
+type UpdatableSource =
+  | Extract<AnyRepliable, { update: unknown }>
+  | ModalMessageModalSubmitInteraction;
+
 function canUpdateSource(
   interaction: AnyRepliable,
   fromModal: boolean,
-): interaction is Extract<AnyRepliable, { update: unknown }> | ModalMessageModalSubmitInteraction {
+): interaction is UpdatableSource {
   if (interaction.isMessageComponent()) return true;
   return fromModal && interaction.isModalSubmit() && interaction.isFromMessage();
 }
