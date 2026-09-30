@@ -37,8 +37,10 @@ function formatTimestamp(timestamp: number | null | undefined): string {
 export class MessageLog {
   @On()
   async messageDelete([message]: ArgsOf<"messageDelete">, client: Client): Promise<void> {
-    const resolved = message.partial ? await message.fetch().catch(() => null) : message;
-    if (!resolved || !resolved.author || resolved.author.bot) return;
+    // A deleted message cannot be fetched, so an uncached one has nothing left to log.
+    if (message.partial) return;
+    const resolved = message;
+    if (!resolved.author || resolved.author.bot) return;
 
     const logChannel = await resolveLogChannel(client);
     if (!logChannel) return;
@@ -62,14 +64,13 @@ export class MessageLog {
     [oldMessage, newMessage]: ArgsOf<"messageUpdate">,
     client: Client,
   ): Promise<void> {
+    // An uncached edit has no old content: fetching it returns the edited text, never a diff.
+    if (oldMessage.partial) return;
     const resolvedNew = newMessage.partial
       ? await newMessage.fetch().catch(() => null)
       : newMessage;
     if (!resolvedNew || !resolvedNew.author || resolvedNew.author.bot) return;
-    const resolvedOld = oldMessage.partial
-      ? await oldMessage.fetch().catch(() => null)
-      : oldMessage;
-    if (!resolvedOld) return;
+    const resolvedOld = oldMessage;
 
     const beforeText = resolvedOld.cleanContent ?? resolvedOld.content ?? "";
     const afterText = resolvedNew.cleanContent ?? resolvedNew.content ?? "";

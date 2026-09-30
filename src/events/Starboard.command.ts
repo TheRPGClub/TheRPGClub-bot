@@ -6,7 +6,7 @@ import { MediaGalleryBuilder, MediaGalleryItemBuilder } from "@discordjs/builder
 import Starboard from "../classes/Starboard.js";
 import { formatTimestampWithDay } from "../utilities/DiscordLogUtils.js";
 import { QUOTABLES_CHANNEL_ID } from "../config/channels.js";
-import { safeIgnore } from "../utilities/AsyncUtils.js";
+import { resolveReactionMessage } from "../utilities/ReactionFetchUtils.js";
 import { logError } from "../utilities/LogUtils.js";
 import {
   buildTitledContainer,
@@ -56,19 +56,16 @@ export class StarboardHandler {
     client: Client,
   ): Promise<void> {
     if (user.bot) return;
-
-    if (reaction.partial) {
-      safeIgnore(reaction.fetch());
-    }
-    const message = reaction.message?.partial
-      ? await reaction.message.fetch().catch(() => null)
-      : reaction.message;
-    if (!message || !message.guild) return;
     if (!isStarReaction(reaction)) return;
+
+    const resolved = await resolveReactionMessage(reaction, user.id);
+    if (!resolved) return;
+    const { message } = resolved;
+    if (!message.guild) return;
     if (message.channelId === QUOTABLES_CHANNEL_ID) return;
     if (!message.author || message.author.bot) return;
 
-    const count = reaction.count ?? 0;
+    const count = resolved.reaction.count ?? 0;
     if (count < STAR_THRESHOLD) return;
 
     const existing = await Starboard.getByMessageId(message.id);
