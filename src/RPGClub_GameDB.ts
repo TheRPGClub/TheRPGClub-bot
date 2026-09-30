@@ -35,6 +35,10 @@ import {
   TEST_GUILD_ID,
 } from "./config/testMode.js";
 import { logError } from "./utilities/LogUtils.js";
+import {
+  getSlashCommandPath,
+  handleInteractionError,
+} from "./functions/InteractionErrorHandler.js";
 import { withRetry } from "./utilities/RetryUtils.js";
 import { isTransientApiError } from "./services/RpgClubApiClient.js";
 installConsoleLogging();
@@ -169,15 +173,6 @@ function formatSlashOption(option: ISlashOptionNode): string {
   return `${option.name}=${sanitizeSlashValue(option.value)}`;
 }
 
-function getSlashCommandPath(interaction: ChatInputCommandInteraction): string {
-  const commandPath: string[] = [interaction.commandName];
-  const subcommandGroup = interaction.options.getSubcommandGroup(false);
-  const subcommand = interaction.options.getSubcommand(false);
-  if (subcommandGroup) commandPath.push(subcommandGroup);
-  if (subcommand) commandPath.push(subcommand);
-  return commandPath.join(" ");
-}
-
 function getSlashCommandParams(interaction: ChatInputCommandInteraction): string {
   const options = interaction.options.data as readonly ISlashOptionNode[];
   if (!options || options.length === 0) return "none";
@@ -242,7 +237,11 @@ bot.on("interactionCreate", async (interaction: Interaction) => {
     }
   }
 
-  await bot.executeInteraction(interaction);
+  try {
+    await bot.executeInteraction(interaction);
+  } catch (err: unknown) {
+    await handleInteractionError(interaction, err);
+  }
 });
 
 bot.on("messageCreate", async (message: Message) => {
