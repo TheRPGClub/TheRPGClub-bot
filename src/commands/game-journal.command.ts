@@ -44,6 +44,7 @@ import {
   sanitizeUserInput,
   safeReply,
   safeUpdate,
+  safeUpdateModalSource,
   safeUserFetch,
 } from "../functions/InteractionUtils.js";
 import { formatGameTitleWithYear } from "../functions/GameTitleAutocompleteUtils.js";
@@ -829,7 +830,6 @@ export class GameJournalCommand {
       entry.body,
     );
     await interaction.showModal(modal);
-    await gjHmenu.dismiss(ownerId);
   }
 
   @ButtonComponent({ id: /^game-journal-hmenu-delete:\d+:\d+$/ })
@@ -961,7 +961,7 @@ export class GameJournalCommand {
     await Member.addGameJournalEntry({ userId: ownerId, gameId, title: title || null, body });
     const container = buildTextContainer("## Manage Journal");
     const row = buildHmenuActionRow(ownerId, gameId);
-    await safeUpdate(interaction, {
+    await safeUpdateModalSource(interaction, {
       components: [container, row],
       flags: buildComponentsV2Flags(true),
     });
@@ -992,7 +992,7 @@ export class GameJournalCommand {
     await Member.updateGameJournalEntry({ userId: ownerId, entryId, title: title || null, body });
     const container = buildTextContainer("## Manage Journal");
     const row = buildHmenuActionRow(ownerId, gameId);
-    await safeUpdate(interaction, {
+    await safeUpdateModalSource(interaction, {
       components: [container, row],
       flags: buildComponentsV2Flags(true),
     });

@@ -9,6 +9,7 @@ import type {
   GuildMember,
   GuildMemberRoleManager,
   InteractionDeferReplyOptions,
+  ModalMessageModalSubmitInteraction,
   ModalSubmitInteraction,
   PermissionResolvable,
   RepliableInteraction,
@@ -585,6 +586,35 @@ async function sendSafeReply(interaction: AnyRepliable, options: any): Promise<a
 
 // Try to update an existing interaction message; fall back to a normal reply if needed.
 export async function safeUpdate(interaction: AnyRepliable, options: any): Promise<void> {
+  await updateOrReply(interaction, options, false);
+}
+
+/**
+ * safeUpdate for a modal opened from a button on a menu the modal should rewrite.
+ * safeUpdate alone treats every modal submit as a new reply, which leaves the old
+ * menu on screen next to the new one. Opt-in only: a modal opened from a public
+ * message would otherwise overwrite that message.
+ */
+export async function safeUpdateModalSource(
+  interaction: AnyRepliable,
+  options: any,
+): Promise<void> {
+  await updateOrReply(interaction, options, true);
+}
+
+function canUpdateSource(
+  interaction: AnyRepliable,
+  fromModal: boolean,
+): interaction is Extract<AnyRepliable, { update: unknown }> | ModalMessageModalSubmitInteraction {
+  if (interaction.isMessageComponent()) return true;
+  return fromModal && interaction.isModalSubmit() && interaction.isFromMessage();
+}
+
+async function updateOrReply(
+  interaction: AnyRepliable,
+  options: any,
+  fromModal: boolean,
+): Promise<void> {
   const aug = interaction as AugmentedInteraction;
   if (shouldBlockDevChannelInteraction(interaction)) {
     await sendDevChannelBlockResponse(interaction);
@@ -592,7 +622,7 @@ export async function safeUpdate(interaction: AnyRepliable, options: any): Promi
   }
   const normalizedOptions = applyDevChannelOverrides(interaction, normalizeOptions(options));
 
-  if (interaction.isMessageComponent()) {
+  if (canUpdateSource(interaction, fromModal)) {
     try {
       await interaction.update(normalizedOptions);
       aug.__rpgAcked = true;
