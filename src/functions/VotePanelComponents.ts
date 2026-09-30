@@ -26,6 +26,22 @@ export type VotePanelComponent =
   | ActionRowBuilder<StringSelectMenuBuilder>
   | ActionRowBuilder<ButtonBuilder>;
 
+/**
+ * Custom ids a panel's controls carry. Live panels route to /vote's handlers;
+ * the voting sandbox swaps in ids that route to its own round.
+ */
+export interface IVotePanelIds {
+  cast(kind: NominationKind, roundNumber: number, chunk: number): string;
+  mine(kind: NominationKind, roundNumber: number): string;
+  tally(kind: NominationKind, roundNumber: number): string;
+}
+
+export const LIVE_VOTE_PANEL_IDS: IVotePanelIds = {
+  cast: (kind, roundNumber, chunk) => `vote-cast:${kind}:${roundNumber}:${chunk}`,
+  mine: (kind, roundNumber) => `vote-mine:${kind}:${roundNumber}`,
+  tally: (kind, roundNumber) => `vote-tally:${kind}:${roundNumber}`,
+};
+
 export interface IVotePanelParams {
   kind: NominationKind;
   roundNumber: number;
@@ -35,23 +51,25 @@ export interface IVotePanelParams {
   /** When provided (the personal /vote panel), the header lists these votes. */
   myVotes?: IVoteEntry[] | null;
   /**
-   * Marks the panel as a rehearsal posted by /admin voting-open testmode:true.
-   * The controls are identical, so any cast is a real vote; the banner says so.
+   * Marks the panel as a rehearsal: /admin voting-open testmode:true (whose
+   * casts are real votes) or the voting sandbox. The banner says which.
    */
   testNotice?: string | null;
+  ids?: IVotePanelIds;
 }
 
 export function buildVotePanelComponents(params: IVotePanelParams): VotePanelComponent[] {
+  const ids = params.ids ?? LIVE_VOTE_PANEL_IDS;
   const header = buildTextContainer(buildPanelHeaderText(params));
-  const selectRows = buildVoteSelectRows(params.kind, params.roundNumber, params.nominations);
+  const selectRows = buildVoteSelectRows(params, ids);
   const buttonRow = buildButtonRow(
     buildActionButton({
-      customId: validateCustomId(`vote-mine:${params.kind}:${params.roundNumber}`),
+      customId: validateCustomId(ids.mine(params.kind, params.roundNumber)),
       label: "My Votes",
       style: ButtonStyle.Secondary,
     }),
     buildActionButton({
-      customId: validateCustomId(`vote-tally:${params.kind}:${params.roundNumber}`),
+      customId: validateCustomId(ids.tally(params.kind, params.roundNumber)),
       label: "Results",
       style: ButtonStyle.Primary,
     }),
@@ -91,11 +109,10 @@ function buildPanelHeaderText(params: IVotePanelParams): string {
 }
 
 function buildVoteSelectRows(
-  kind: NominationKind,
-  roundNumber: number,
-  nominations: INominationEntry[],
+  params: IVotePanelParams,
+  ids: IVotePanelIds,
 ): ActionRowBuilder<StringSelectMenuBuilder>[] {
-  const options: ISelectOptionInput[] = dedupeNominationsByGame(nominations).map(
+  const options: ISelectOptionInput[] = dedupeNominationsByGame(params.nominations).map(
     (nomination) => ({
       label: nomination.gameTitle,
       value: String(nomination.id),
@@ -106,7 +123,7 @@ function buildVoteSelectRows(
   for (let i = 0; i < options.length; i += DISCORD_SELECT_OPTIONS_MAX) {
     const chunk = options.slice(i, i + DISCORD_SELECT_OPTIONS_MAX);
     const select = new StringSelectMenuBuilder()
-      .setCustomId(validateCustomId(`vote-cast:${kind}:${roundNumber}:${rows.length}`))
+      .setCustomId(validateCustomId(ids.cast(params.kind, params.roundNumber, rows.length)))
       .setPlaceholder("Cast or take back a vote...")
       .setMinValues(1)
       .setMaxValues(1)

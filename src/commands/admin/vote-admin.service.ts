@@ -51,7 +51,12 @@ import {
   parseTieBreakSelectId,
   replaceTieCategoryContainer,
   VOTING_CATEGORY_LABEL,
+  type ITieBreakTarget,
 } from "../../functions/VotingTiePrompt.js";
+import {
+  apiVotingDataSource,
+  type IVotingDataSource,
+} from "../../services/VotingDataSource.js";
 import { ANNOUNCEMENT_CHANNEL_ID } from "../../config/channels.js";
 import { buildApiErrorMessage } from "../../utilities/ApiErrorUtils.js";
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
@@ -494,7 +499,8 @@ export async function handleVotingResults(
 }
 
 /**
- * An admin's pick on the tie-break prompt. The picked games become the
+ * An admin's pick on the tie-break prompt (or the voting sandbox's copy of it,
+ * which passes its own target and source). The picked games become the
  * category's winners, and that category's select is replaced with a note of
  * who picked what; the other categories' selects stay. The API refuses a stale
  * prompt (422 `no_tie` or `invalid_pick`), shown with the full request and
@@ -503,8 +509,9 @@ export async function handleVotingResults(
  */
 export async function handleTieBreakSelect(
   interaction: StringSelectMenuInteraction,
+  target: ITieBreakTarget | null = parseTieBreakSelectId(interaction.customId),
+  source: IVotingDataSource = apiVotingDataSource,
 ): Promise<void> {
-  const target = parseTieBreakSelectId(interaction.customId);
   if (!target) {
     await safeReply(interaction, buildTextReply("Invalid tie-break action.", true));
     return;
@@ -513,7 +520,7 @@ export async function handleTieBreakSelect(
   await safeDeferUpdate(interaction);
   const gameIds = interaction.values.map(Number);
   try {
-    await VotingRounds.resolveTie(target.roundNumber, target.category, gameIds);
+    await source.resolveTie(target.roundNumber, target.category, gameIds);
   } catch (err: unknown) {
     await followUpTieBreakError(
       interaction,

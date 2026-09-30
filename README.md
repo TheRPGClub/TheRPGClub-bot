@@ -97,6 +97,10 @@ Test mode also skips the background services listed in
 API, so a preview never takes that work from production. It also turns off the dev
 channel override that makes the guild owner's ephemeral replies public.
 
+Voting events are among the skipped services, so test mode adds `/vote-sandbox` to
+walk a whole voting round against an in-memory round instead. See
+[docs/voting-sandbox.md](docs/voting-sandbox.md).
+
 Test mode does not redirect external services. `RPGCLUB_API_BASE_URL`,
 Backblaze, and GitHub issues all use the same configuration they use in
 production, so point them at staging values yourself if you do not want a test
