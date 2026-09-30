@@ -22,6 +22,7 @@ import {
 import { TextInputStyle as ApiTextInputStyle } from "discord-api-types/v10";
 import Member from "../../classes/Member.js";
 import {
+  safeDeferReply,
   safeDeferUpdate,
   safeReply,
   safeUpdate,
@@ -518,13 +519,12 @@ export class NowPlayingJournalCommand {
     if (await replyIfNotOwner(interaction, ownerId, "Only the owner can add journal entries.")) {
       return;
     }
+    // The Now Playing lookup can outlast 3s, and a modal cannot follow a defer, so this
+    // always answers with a picker; the picker's select opens the modal with no API call.
+    await safeDeferReply(interaction, { flags: buildComponentsV2Flags(true) });
     const entries = await Member.getNowPlaying(ownerId).then(getDisplayNowPlayingEntries);
     if (!entries.length) {
       await safeReply(interaction, buildTextReply("Your Now Playing list is empty.", true));
-      return;
-    }
-    if (entries.length === 1) {
-      await interaction.showModal(buildNowPlayingJournalAddModal(ownerId, entries[0].gameId, 1));
       return;
     }
     const select = new StringSelectMenuBuilder()
