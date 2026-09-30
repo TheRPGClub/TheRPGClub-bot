@@ -59,6 +59,11 @@ export const SANDBOX_ENDED_MESSAGE =
   "This sandbox panel belongs to a voting sandbox that has ended or been restarted.";
 
 const sandboxes = new Map<string, IVotingSandboxState>();
+/**
+ * Bumped by every save and end. A restore that finds it moved while its read
+ * was in flight read an older row, so it must not replace what memory holds.
+ */
+const generations = new Map<string, number>();
 const locks = new Map<string, Promise<unknown>>();
 const delivering = new Set<string>();
 
@@ -75,7 +80,11 @@ function sessionLookup(ownerId: string): {
 export async function loadSandbox(ownerId: string): Promise<IVotingSandboxState | null> {
   const cached = sandboxes.get(ownerId);
   if (cached) return cached;
+  const generation = generations.get(ownerId) ?? 0;
   const record = await persistedSessionStore.load(sessionLookup(ownerId));
+  if ((generations.get(ownerId) ?? 0) !== generation) {
+    return sandboxes.get(ownerId) ?? null;
+  }
   const state = record ? parseSandboxState(record.state) : null;
   if (state) sandboxes.set(ownerId, state);
   return state;
@@ -90,7 +99,12 @@ async function saveSandbox(state: IVotingSandboxState): Promise<void> {
     location: { channelId: null, guildId: TEST_GUILD_ID || null },
     state,
   });
+  bumpGeneration(state.ownerId);
   sandboxes.set(state.ownerId, state);
+}
+
+function bumpGeneration(ownerId: string): void {
+  generations.set(ownerId, (generations.get(ownerId) ?? 0) + 1);
 }
 
 /** Runs `task` after any earlier one for the same admin, so writes never interleave. */
@@ -133,6 +147,7 @@ export function mutateSandbox<T>(
 export async function endSandbox(ownerId: string): Promise<boolean> {
   return serialize(ownerId, async () => {
     const existed = Boolean(await loadSandbox(ownerId));
+    bumpGeneration(ownerId);
     sandboxes.delete(ownerId);
     const record = await persistedSessionStore.load(sessionLookup(ownerId));
     if (record) await persistedSessionStore.remove(record.rowId);

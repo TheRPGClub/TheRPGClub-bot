@@ -239,3 +239,34 @@ test("a step that throws partway, or fails to save, changes nothing", async (t) 
   );
   assert.equal((await loadSandbox(ownerId))?.votes.length, 0);
 });
+
+test("a restore that races a save never replaces the newer sandbox", async (t) => {
+  const rows = mockStore(t);
+  const ownerId = nextOwner();
+  const state = createSandboxState({ id: "5a1e01", ownerId, now: new Date() });
+  openSandboxVoting(state, new Date());
+  rows.set(ownerId, JSON.stringify(state));
+
+  // The first read stalls until the vote below has been saved.
+  let release: () => void = () => undefined;
+  const stalled = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let calls = 0;
+  t.mock.method(persistedSessionStore, "load", async (params: { ownerId: string }) => {
+    calls += 1;
+    const snapshot = rows.get(params.ownerId);
+    if (calls === 1) await stalled;
+    return snapshot ? { rowId: `row-${ownerId}`, state: JSON.parse(snapshot) } : null;
+  });
+
+  const slowRestore = loadSandbox(ownerId);
+  const source = createSandboxDataSource({ ownerId, sandboxId: "5a1e01" });
+  const nominationId = state.nominations.gotm[0]?.id ?? 0;
+  // The cast restores, votes and saves while the first read is still stalled.
+  await source.castVote("gotm", 999, "u1", nominationId);
+  release();
+  await slowRestore;
+
+  assert.equal((await loadSandbox(ownerId))?.votes.length, 1);
+});
