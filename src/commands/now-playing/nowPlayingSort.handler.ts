@@ -8,6 +8,7 @@ import Member from "../../classes/Member.js";
 import {
   replyIfNotOwner,
   safeDeferUpdate,
+  withClickedRowDisabled,
   safeEditReply,
   safeReply,
   safeUpdate,
@@ -85,7 +86,8 @@ export class NowPlayingSortHandlers {
     }
 
     try {
-      const entries = getDisplayNowPlayingEntries(await Member.getNowPlaying(ownerId)).slice(0, 10);
+      const nowPlaying = await Member.getNowPlaying(ownerId);
+      const entries = getDisplayNowPlayingEntries(nowPlaying).slice(0, 10);
       const parsed = parseNowPlayingSortStateToken(stateToken, entries.length);
       const selectedValue = interaction.values[0] ?? "";
       const selectedIndex = Number(selectedValue);
@@ -137,63 +139,67 @@ export class NowPlayingSortHandlers {
     if (!segs) return;
     const [ownerId, stateToken] = segs;
     if (await replyIfNotOwner(interaction, ownerId, "This sort prompt isn't for you.")) return;
-    await safeDeferUpdate(interaction);
-    const isEphemeral = interaction.message.flags?.has(MessageFlags.Ephemeral) ?? false;
-    const responseFlags = buildComponentsV2Flags(isEphemeral);
+    await withClickedRowDisabled(interaction, async () => {
+      const isEphemeral = interaction.message.flags?.has(MessageFlags.Ephemeral) ?? false;
+      const responseFlags = buildComponentsV2Flags(isEphemeral);
 
-    const entries = getDisplayNowPlayingEntries(await Member.getNowPlaying(ownerId)).slice(0, 10);
-    const parsed = parseNowPlayingSortStateToken(stateToken, entries.length);
-    if (!parsed) {
-      const container = buildTextContainer("This sort form has expired. Open Sort again.");
-      const pmComponents = await withPmNowPlayingList(
-        ownerId, interaction.guildId, [container],
-      );
-      await safeEditReply(interaction, { components: pmComponents, flags: responseFlags });
-      return;
-    }
-    if (parsed.some((value) => value < 0)) {
-      const components = buildNowPlayingSortComponents(
-        entries,
-        ownerId,
-        stateToken,
-        "Assign a title to every visible position before saving.",
-      );
-      const pmComponents = await withPmNowPlayingList(
-        ownerId, interaction.guildId, components,
-      );
-      await safeEditReply(interaction, { components: pmComponents, flags: responseFlags });
-      return;
-    }
-    if (new Set(parsed).size !== parsed.length) {
-      const components = buildNowPlayingSortComponents(
-        entries,
-        ownerId,
-        stateToken,
-        "Each title can only be used once. Remove duplicate assignments and try again.",
-      );
-      const pmComponents = await withPmNowPlayingList(
-        ownerId, interaction.guildId, components,
-      );
-      await safeEditReply(interaction, { components: pmComponents, flags: responseFlags });
-      return;
-    }
+      const nowPlaying = await Member.getNowPlaying(ownerId);
+      const entries = getDisplayNowPlayingEntries(nowPlaying).slice(0, 10);
+      const parsed = parseNowPlayingSortStateToken(stateToken, entries.length);
+      if (!parsed) {
+        const container = buildTextContainer("This sort form has expired. Open Sort again.");
+        const pmComponents = await withPmNowPlayingList(
+          ownerId, interaction.guildId, [container],
+        );
+        await safeEditReply(interaction, { components: pmComponents, flags: responseFlags });
+        return;
+      }
+      if (parsed.some((value) => value < 0)) {
+        const components = buildNowPlayingSortComponents(
+          entries,
+          ownerId,
+          stateToken,
+          "Assign a title to every visible position before saving.",
+        );
+        const pmComponents = await withPmNowPlayingList(
+          ownerId, interaction.guildId, components,
+        );
+        await safeEditReply(interaction, { components: pmComponents, flags: responseFlags });
+        return;
+      }
+      if (new Set(parsed).size !== parsed.length) {
+        const components = buildNowPlayingSortComponents(
+          entries,
+          ownerId,
+          stateToken,
+          "Each title can only be used once. Remove duplicate assignments and try again.",
+        );
+        const pmComponents = await withPmNowPlayingList(
+          ownerId, interaction.guildId, components,
+        );
+        await safeEditReply(interaction, { components: pmComponents, flags: responseFlags });
+        return;
+      }
 
-    const loadingContainer = buildTextContainer("## Now Loading\nSaving sort order and generating cover layout...");
-    await safeUpdate(interaction, { components: [loadingContainer], flags: responseFlags });
-
-    const orderedIds = parsed.map((index) => entries[index].gameId);
-    const updated = await Member.updateNowPlayingSort(ownerId, orderedIds);
-    if (!updated) {
-      const container = buildTextContainer("Could not update the sort order.");
-      const pmComponents = await withPmNowPlayingList(
-        ownerId, interaction.guildId, [container],
+      const loadingContainer = buildTextContainer(
+        "## Now Loading\nSaving sort order and generating cover layout...",
       );
-      await safeEditReply(interaction, { components: pmComponents, flags: responseFlags });
-      return;
-    }
+      await safeUpdate(interaction, { components: [loadingContainer], flags: responseFlags });
 
-    safeIgnore(refreshNowPlayingListFromContext(interaction, ownerId));
-    await returnToNowPlayingEditMenu(interaction, ownerId);
+      const orderedIds = parsed.map((index) => entries[index].gameId);
+      const updated = await Member.updateNowPlayingSort(ownerId, orderedIds);
+      if (!updated) {
+        const container = buildTextContainer("Could not update the sort order.");
+        const pmComponents = await withPmNowPlayingList(
+          ownerId, interaction.guildId, [container],
+        );
+        await safeEditReply(interaction, { components: pmComponents, flags: responseFlags });
+        return;
+      }
+
+      safeIgnore(refreshNowPlayingListFromContext(interaction, ownerId));
+      await returnToNowPlayingEditMenu(interaction, ownerId);
+    }, { workingLabel: "Saving..." });
   }
 
   @ButtonComponent({ id: /^nowplaying-sort-reset:\d+$/ })

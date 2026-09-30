@@ -8,6 +8,8 @@ import type {
   Guild,
   GuildMember,
   GuildMemberRoleManager,
+  AnySelectMenuInteraction,
+  ButtonInteraction,
   InteractionDeferReplyOptions,
   ModalMessageModalSubmitInteraction,
   ModalSubmitInteraction,
@@ -26,6 +28,7 @@ import {
 import { DEV_ROLE_ID } from "../config/roles.js";
 import { IS_TEST_MODE } from "../config/testMode.js";
 import { sendWithInvalidEmojiRetry } from "./InvalidEmojiRetry.js";
+import { disableClickedRow, type IRawComponent } from "./ClickedRowLock.js";
 import {
   buildComponentsV2Flags,
   buildTextContainer,
@@ -445,6 +448,111 @@ export async function safeDeferUpdateOrBail(interaction: AnyRepliable): Promise<
   } catch {
     return false;
   }
+}
+
+export interface IClickedRowLockOptions {
+  /** Label shown on the clicked button while the work runs, e.g. "Saving...". */
+  workingLabel?: string;
+  /**
+   * Leave the row disabled when the work finishes without editing the message. For actions
+   * that must never run twice from the same message, like claiming a key.
+   */
+  keepDisabled?: boolean;
+}
+
+type ClickInteraction = ButtonInteraction | AnySelectMenuInteraction;
+
+type LockedMessage = { components: unknown[]; flags?: number; editedTimestamp: number | null };
+
+function componentFlags(message: ClickInteraction["message"]): number | undefined {
+  return message.flags.has(MessageFlags.IsComponentsV2) ? MessageFlags.IsComponentsV2 : undefined;
+}
+
+async function lockClickedRow(
+  interaction: ClickInteraction,
+  workingLabel: string | undefined,
+): Promise<LockedMessage | null> {
+  const original = interaction.message.components.map((component) => component.toJSON());
+  const locked = structuredClone(original) as IRawComponent[];
+  if (!disableClickedRow(locked, interaction.customId, workingLabel)) return null;
+  const flags = componentFlags(interaction.message);
+  // The webhook edit, unlike editReply, keeps `replied` false, so every helper after
+  // this behaves exactly as it would after a plain safeDeferUpdate.
+  const edited = await interaction.webhook.editMessage("@original", {
+    components: locked as any[],
+    flags,
+  });
+  return { components: original, flags, editedTimestamp: edited.editedTimestamp };
+}
+
+async function restoreClickedRow(
+  interaction: ClickInteraction,
+  lock: LockedMessage,
+  onlyIfUnchanged: boolean,
+): Promise<void> {
+  try {
+    if (onlyIfUnchanged) {
+      const current = await interaction.webhook.fetchMessage("@original");
+      if (current.editedTimestamp !== lock.editedTimestamp) return;
+    }
+    await interaction.webhook.editMessage("@original", {
+      components: lock.components as any[],
+      flags: lock.flags,
+    });
+  } catch (err: unknown) {
+    logError("InteractionUtils.restoreClickedRow", err);
+  }
+}
+
+/**
+ * Acknowledges a click like safeDeferUpdate, but first disables the clicked row (optionally
+ * relabeling the clicked button) so a second click cannot repeat the action while `work`
+ * runs. Inside `work`, the interaction is in the same state safeDeferUpdate leaves it in.
+ * When `work` throws, or finishes without editing the message, the row is restored so the
+ * user can retry. Only use this on a message the clicker owns: it edits the message for
+ * everyone who can see it.
+ */
+export async function withClickedRowDisabled(
+  interaction: ClickInteraction,
+  work: () => Promise<void>,
+  options: IClickedRowLockOptions = {},
+): Promise<void> {
+  if (shouldBlockDevChannelInteraction(interaction)) {
+    await sendDevChannelBlockResponse(interaction);
+    return;
+  }
+  const aug = interaction as AugmentedInteraction;
+  if (aug.__rpgAcked || aug.deferred || aug.replied) {
+    await work();
+    return;
+  }
+
+  try {
+    await interaction.deferUpdate();
+    aug.__rpgAcked = true;
+    aug.__rpgDeferred = true;
+  } catch (err: unknown) {
+    if (!isAckError(err)) throw err;
+    // Same as safeDeferUpdate: an acknowledgement race still runs the work.
+    await work();
+    return;
+  }
+
+  let lock: LockedMessage | null = null;
+  try {
+    lock = await lockClickedRow(interaction, options.workingLabel);
+  } catch (err: unknown) {
+    // The click is acknowledged either way; a failed cosmetic lock must not block the work.
+    logError("InteractionUtils.lockClickedRow", err);
+  }
+
+  try {
+    await work();
+  } catch (err: unknown) {
+    if (lock) await restoreClickedRow(interaction, lock, false);
+    throw err;
+  }
+  if (lock && !options.keepDisabled) await restoreClickedRow(interaction, lock, true);
 }
 
 // Ensure we do not hit "Interaction already acknowledged" when replying

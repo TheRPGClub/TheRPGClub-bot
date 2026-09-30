@@ -25,6 +25,7 @@ const INTERACTION_RESPONSE_HELPERS = new Set([
   "safeUpdate",
   "safeFollowUp",
   "safeDeferUpdate",
+  "withClickedRowDisabled",
 ]);
 const DIRECT_INTERACTION_METHODS = new Set([
   "reply",
@@ -98,6 +99,8 @@ const TEST_MODE_SAFE_STATIC_IMPORTS = new Set([
 const TEST_FILE_PATH_PATTERN = /(^|\/)src\/tests\//;
 const DEFER_UPDATE_HELPERS = new Set(["safeDeferUpdate", "safeDeferUpdateOrBail"]);
 const MESSAGE_EDITING_REPLY_HELPERS = new Set(["safeReply", "withErrorReply"]);
+const CLICKED_ROW_LOCK_HELPER = "withClickedRowDisabled";
+const CLICKED_ROW_LOCK_HELPERS = new Set([CLICKED_ROW_LOCK_HELPER]);
 const FUNCTION_NODE_TYPES = new Set([
   "FunctionDeclaration",
   "FunctionExpression",
@@ -3727,7 +3730,8 @@ export default {
         type: "problem",
         docs: {
           description:
-            "Ban safeReply/withErrorReply on an interaction after safeDeferUpdate on it.",
+            "Ban safeReply/withErrorReply on an interaction after safeDeferUpdate on it, " +
+            "including inside a withClickedRowDisabled callback.",
         },
         schema: [],
         messages: {
@@ -3769,6 +3773,11 @@ export default {
 
         function isDeferredBefore(reply, defer) {
           if (defer.target !== reply.target) return false;
+          // withClickedRowDisabled defers before its callback runs.
+          if (defer.helper === CLICKED_ROW_LOCK_HELPER) {
+            const callback = defer.node.arguments[1];
+            return Boolean(callback) && containsRange(callback, reply.node);
+          }
           const deferFunction = getEnclosingFunction(defer.node);
           // A defer inside withErrorReply's own callback settles the interaction before the
           // wrapper's error reply runs.
@@ -3784,7 +3793,8 @@ export default {
 
         return {
           CallExpression(node) {
-            const defer = describeCall(node, DEFER_UPDATE_HELPERS);
+            const defer = describeCall(node, DEFER_UPDATE_HELPERS) ??
+              describeCall(node, CLICKED_ROW_LOCK_HELPERS);
             if (defer) defers.push(defer);
             const reply = describeCall(node, MESSAGE_EDITING_REPLY_HELPERS);
             if (reply) replies.push(reply);

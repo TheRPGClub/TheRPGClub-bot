@@ -58,8 +58,29 @@ ruleTester.run("no-reply-after-defer-update", rule, {
       "try {\n  await work();\n} catch {\n  await safeDeferUpdate(interaction);\n}\n" +
         "await safeReply(interaction, reply);",
     ),
+    wrap(
+      "await safeReply(interaction, reply);\n" +
+        "await withClickedRowDisabled(interaction, async () => {\n" +
+        "  await safeEditReply(interaction, panel);\n});",
+    ),
+    wrap(
+      "await withClickedRowDisabled(interaction, async () => {\n" +
+        "  await safeFollowUpIfSettled(interaction, reply);\n});",
+    ),
   ],
   invalid: [
+    {
+      code: wrap(
+        "await withClickedRowDisabled(interaction, async () => {\n" +
+          "  await safeReply(interaction, reply);\n});",
+      ),
+      errors: [
+        {
+          messageId: "replyAfterDeferUpdate",
+          data: { helper: "safeReply", target: "interaction" },
+        },
+      ],
+    },
     {
       code: wrap("await safeDeferUpdate(interaction);\nawait safeReply(interaction, reply);"),
       errors: [
