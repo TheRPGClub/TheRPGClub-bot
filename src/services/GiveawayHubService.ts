@@ -10,7 +10,6 @@ import { ContainerBuilder } from "@discordjs/builders";
 import { countAvailableGameKeys, listAvailableGameKeys } from "../classes/GameKey.js";
 import { GIVEAWAY_HUB_CHANNEL_ID } from "../config/channels.js";
 import { buildPageFooterText } from "../functions/PaginationUtils.js";
-import { safeIgnore } from "../utilities/AsyncUtils.js";
 import { logError, logWarn } from "../utilities/LogUtils.js";
 import { buildActionButton, buildButtonRow } from "../functions/uiComponents.js";
 import {
@@ -177,15 +176,49 @@ async function buildGiveawayHubPayload(page: number): Promise<GiveawayHubPayload
   };
 }
 
-async function deleteAllGiveawayHubMessages(
-  channel: TextBasedChannel,
+type GiveawayHubCleanupChannel = {
+  messages: {
+    fetch: (options: { limit: number; before?: string }) => Promise<{
+      values: () => Iterable<GiveawayMessage>;
+    }>;
+  };
+};
+
+// Pages backwards with `before` so a message that cannot be deleted is never refetched,
+// and stops at the first page holding no hub message.
+export async function deleteGiveawayHubMessages(
+  client: Client,
+  channel: GiveawayHubCleanupChannel,
 ): Promise<void> {
-  let fetched = await channel.messages.fetch({ limit: GIVEAWAY_HUB_SCAN_LIMIT }).catch(() => null);
-  while (fetched && fetched.size) {
-    for (const message of fetched.values()) {
-      safeIgnore(message.delete());
+  let before: string | undefined;
+  for (;;) {
+    const fetched = await channel.messages
+      .fetch({ limit: GIVEAWAY_HUB_SCAN_LIMIT, ...(before ? { before } : {}) })
+      .catch((err) => {
+        logError("GiveawayHubService.cleanupFetch", err);
+        return null;
+      });
+    const page = fetched ? Array.from(fetched.values()) : [];
+    if (!page.length) {
+      return;
     }
-    fetched = await channel.messages.fetch({ limit: GIVEAWAY_HUB_SCAN_LIMIT }).catch(() => null);
+
+    const hubMessages = page.filter((message) => isGiveawayHubMessage(client, message));
+    if (!hubMessages.length) {
+      return;
+    }
+    for (const message of hubMessages) {
+      await message.delete().catch((err) => {
+        logError("GiveawayHubService.cleanupDelete", err);
+      });
+    }
+
+    if (page.length < GIVEAWAY_HUB_SCAN_LIMIT) {
+      return;
+    }
+    before = page.reduce((oldest, message) =>
+      message.createdTimestamp < oldest.createdTimestamp ? message : oldest,
+    ).id;
   }
 }
 
@@ -290,7 +323,7 @@ export async function refreshGiveawayHubMessage(
       logWarn("GiveawayHubService.updateHub", "Giveaway hub channel does not support send.");
       return;
     }
-    await deleteAllGiveawayHubMessages(textChannel);
+    await deleteGiveawayHubMessages(client, textChannel as GiveawayHubCleanupChannel);
     await updateGiveawayHubMessages(client, textChannel, payload, {
       suppressNotifications: true,
     });
