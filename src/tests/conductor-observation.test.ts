@@ -179,6 +179,24 @@ test("matches public embed titles and credits a message edited inside the window
   assert.equal(result.verdict, "pass");
 });
 
+test("credits a public interaction reply, which Discord sends through the app's webhook", () => {
+  const outputs = observe([snapshot({
+    id: "reply",
+    createdTimestamp: 150,
+    webhookId: PREVIEW_BOT,
+    interactionUserId: USER,
+    content: "## Now Playing Search",
+  })]);
+  const publicStep = makeStep({ ephemeral: false, expected: "\"Now Playing Search\"" });
+  const result = judgeStep(publicStep, outputs, { start: 100, end: 200 });
+  assert.equal(result.verdict, "pass");
+});
+
+test("drops a post from some other webhook", () => {
+  const foreign = snapshot({ id: "hook", createdTimestamp: 150, webhookId: "555" });
+  assert.equal(classifySnapshot(foreign, CONTEXT), null);
+});
+
 test("fails a step that produced no output, and names the missing text otherwise", () => {
   const none = judgeStep(makeStep({}), [], { start: 100, end: 200 });
   assert.equal(none.verdict, "fail");
