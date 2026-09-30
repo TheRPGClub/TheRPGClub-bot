@@ -33,19 +33,20 @@ export async function showNowPlayingSingle(
         "Your Now Playing List",
         [
           "Welcome. Your list is empty, so nothing shows yet.",
-          "Use the user button in the header to manage sort order, platform, completions, and removals.",
+          "Use the user button in the header to manage sort order, platform, "
+            + "completions, and removals.",
         ].join("\n"),
       );
-    const reply = await safeReply(interaction, {
-      components: [header, container],
-      flags: buildComponentsV2Flags(ephemeral),
-      withResponse: !ephemeral,
-    });
-    if (!ephemeral) {
-      const message = reply?.resource?.message ?? null;
-      if (message) {
-        trackNowPlayingListContext(message as Message<boolean>, {
-          view: "single",
+      const reply = await safeReply(interaction, {
+        components: [header, container],
+        flags: buildComponentsV2Flags(ephemeral),
+        withResponse: !ephemeral,
+      });
+      if (!ephemeral) {
+        const message = reply?.resource?.message ?? null;
+        if (message) {
+          trackNowPlayingListContext(message as Message<boolean>, {
+            view: "single",
             ownerUserId: target.id,
           });
         }
@@ -53,9 +54,13 @@ export async function showNowPlayingSingle(
       return;
     }
 
+    const targetName = renderUsernameWithEmoji(
+      target.id,
+      target.displayName ?? target.username ?? target.id,
+    );
     const container = buildNowPlayingMessageContainer(
       "Now Playing",
-      `No Now Playing entries found for ${renderUsernameWithEmoji(target.id, target.displayName ?? target.username ?? target.id)}.`,
+      `No Now Playing entries found for ${targetName}.`,
     );
     const reply = await safeReply(interaction, {
       components: [container],
