@@ -5,7 +5,7 @@
  * It runs as its own process with its own token so it outlives restarts of the
  * preview bot it is checking. See docs/conductor.md.
  */
-import { IntentsBitField, type Interaction } from "discord.js";
+import { IntentsBitField, type Interaction, type Message } from "discord.js";
 import { Client } from "discordx";
 import {
   checkConductorChannelAccess,
@@ -14,7 +14,7 @@ import {
 import { loadConductorSettings } from "./ConductorConfig.js";
 import { setConductorRuntime } from "./ConductorRuntime.js";
 import { GitHubPullClient } from "./GitHubPullClient.js";
-import "./conductor.command.js";
+import { startRunFromAnnouncement } from "./conductor.command.js";
 
 const settings = loadConductorSettings();
 setConductorRuntime({
@@ -27,7 +27,7 @@ const client = new Client({
   intents: [
     IntentsBitField.Flags.Guilds,
     IntentsBitField.Flags.GuildMessages,
-    // Needed to read the bot under test's replies and mirror posts.
+    // Needed to read the bot under test's replies, mirror posts, and ready announcement.
     IntentsBitField.Flags.MessageContent,
   ],
   silent: true,
@@ -49,6 +49,15 @@ client.on("interactionCreate", async (interaction: Interaction) => {
     await client.executeInteraction(interaction);
   } catch (err: unknown) {
     console.error("[conductor] interaction failed", err);
+  }
+});
+
+// The preview bot announces it is ready in the dev channel; that starts its PR's run.
+client.on("messageCreate", async (message: Message) => {
+  try {
+    await startRunFromAnnouncement(message);
+  } catch (err: unknown) {
+    console.error("[conductor] starting a run from an announcement failed", err);
   }
 });
 

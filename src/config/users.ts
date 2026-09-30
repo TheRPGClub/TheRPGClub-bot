@@ -6,3 +6,8 @@ export const LINK_RELAY_BOT_USER_ID = resolveId(
   "LINK_RELAY_BOT_USER_ID",
   "1154429583031025705",
 );
+/**
+ * The dev bot application PR previews run under. It exists only in the test guild, so
+ * production never matches it; the conductor trusts ready announcements from it alone.
+ */
+export const PREVIEW_BOT_USER_ID = "1461187162228916540";

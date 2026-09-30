@@ -20,3 +20,35 @@ export function formatPreviewPresence(pr: string, sha: string): string {
 export const PREVIEW_PRESENCE: string | null = PREVIEW_PR
   ? formatPreviewPresence(PREVIEW_PR, PREVIEW_SHA)
   : null;
+
+/**
+ * The preview bot's one post in the dev channel once startup completes. The conductor
+ * matches it to start a run, so both processes build and read it only through these.
+ */
+const PREVIEW_READY_PATTERN = /^Ready for testing PR #([1-9]\d*) at ([0-9a-f]{40})$/;
+
+export interface IPreviewReady {
+  pr: number;
+  sha: string;
+}
+
+export function formatPreviewReadyAnnouncement(pr: string | number, sha: string): string {
+  return `Ready for testing PR #${pr} at ${sha}`;
+}
+
+/** The PR and full head sha an announcement names, or null for any other text. */
+export function parsePreviewReadyAnnouncement(content: string): IPreviewReady | null {
+  const match = PREVIEW_READY_PATTERN.exec(content.trim());
+  if (!match) return null;
+  return { pr: Number(match[1]), sha: match[2] };
+}
+
+/**
+ * The announcement this process posts, or null outside a PR preview. A preview whose
+ * sha is not a full commit sha posts nothing, since the conductor could not verify it.
+ */
+export const PREVIEW_READY_ANNOUNCEMENT: string | null = (() => {
+  if (!PREVIEW_PR) return null;
+  const text = formatPreviewReadyAnnouncement(PREVIEW_PR, PREVIEW_SHA);
+  return parsePreviewReadyAnnouncement(text) ? text : null;
+})();
