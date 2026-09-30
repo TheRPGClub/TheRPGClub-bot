@@ -15,8 +15,9 @@ import { findUncheckedSteps, parseTestPlan, type ITestStep } from "./TestPlanPar
 export type DriveActionKind = "slash" | "slash-modal" | "click" | "modal" | "select";
 
 /**
- * Slash commands whose flows write outside the test guild (GitHub issues). Their steps,
- * and the component steps that follow them, are always done by the tester.
+ * Slash commands whose flows always write outside the test guild (GitHub issues). Their
+ * steps, and the component steps that follow them, are always done by the tester. API
+ * writes depend on the preview's env, so `/conduct-auto` asks the tester about those.
  */
 export const EXTERNAL_EFFECT_COMMANDS: readonly string[] = ["todo", "suggestion"];
 
@@ -48,6 +49,7 @@ const SLASH_NAME = /^\/([\w-]+)/;
 const CLICK_START = /^(?:click|press)\b/i;
 const SELECT_START = /^(?:select|choose|pick)\b/i;
 const SUBMIT = /\bsubmit\b/i;
+const QUOTED = /"[^"]*"/g;
 
 /** The single action a command performs, or null when it is not a recognized one. */
 export function detectAction(command: string): DriveActionKind | null {
@@ -55,7 +57,8 @@ export function detectAction(command: string): DriveActionKind | null {
   const first = lines[0] ?? "";
   if (SLASH_NAME.test(first)) return lines.length > 1 ? "slash-modal" : "slash";
   if (lines.length > 1) return null;
-  if (CLICK_START.test(first)) return SUBMIT.test(first) ? "modal" : "click";
+  const unquoted = first.replace(QUOTED, '""');
+  if (CLICK_START.test(first)) return SUBMIT.test(unquoted) ? "modal" : "click";
   if (SELECT_START.test(first)) return "select";
   return null;
 }

@@ -57,12 +57,14 @@ Take the PR number from the argument (`<pr>`, `#<pr>`, or a PR URL). With none, 
 it.
 
 ```bash
-gh pr view <pr> --json body,headRefOid,state --jq .body > <scratchpad>/pr-<pr>-body.md
+gh pr view <pr> --json state --jq .state
+gh pr view <pr> --json body --jq .body > <scratchpad>/pr-<pr>-body.md
 npm run -s conduct:drive-plan -- <scratchpad>/pr-<pr>-body.md > <scratchpad>/drive.json
 ```
 
-Exit 1 means there is nothing to drive (no steps, or a section the conductor cannot
-parse): print its message and stop. Exit 2 is a read error.
+The first command must print `OPEN`; a closed or merged PR has nothing to test, so say
+so and stop. For the drive plan, exit 1 means there is nothing to drive (no steps, or a
+section the conductor cannot parse): print its message and stop. Exit 2 is a read error.
 
 Each step in `drive.json` carries:
 
@@ -74,10 +76,21 @@ Each step in `drive.json` carries:
 - `readsFrom`: earlier steps whose reply supplies a value, written in the command as
   `(… from step N)`.
 
-Show the plan in the turn text, one line per step: number, label, `drive` or
-`hand-off`, and the hand-off reasons. When the tester knows a `drive` step changes real
-data or should be theirs for another reason, they say so and it becomes `hand-off` for
-this run. Nothing turns a `hand-off` step into `drive`.
+Show the plan in the turn text, one line per step: number, label, command, `drive` or
+`hand-off`, and the hand-off reasons. Nothing turns a `hand-off` step into `drive`.
+
+The plan cannot tell which steps write real data. The preview writes to whatever API and
+Backblaze its env file names (`docs/pr-preview.md`), which may be production. So before
+the first action, ask the tester once which `drive` steps change real data, with the
+choices:
+
+- **None, drive as planned**: every `drive` step stays driven.
+- **Hand off every step that writes**: Claude drives only steps whose command only reads
+  (lists, shows, searches, help) and hands back the rest.
+- Other: the tester names the step numbers to hand back.
+
+Steps the answer hands back become `hand-off` for this run. A dismissed question is not
+an answer; wait.
 
 ## 2. Open the test channel
 
@@ -95,8 +108,9 @@ stop and ask the tester to sign in there themselves.
 
 Find the run. The conductor's current step message is headed
 `PR #<pr>, step N of M: <label>`. When `/test-guild` started the run on its own, it is
-already there. When there is no run for this PR, ask the tester to start
-`/conduct pr:<pr>` themselves and wait.
+already there. When there is no run for this PR in the test channel, ask the tester to
+start `/conduct pr:<pr>` there themselves and wait. A run started in another channel is
+not followed: the skill reads and acts only in the test channel.
 
 ## 3. Walk the steps
 
@@ -107,8 +121,8 @@ confirm something the tree cannot show.
 For the conductor's current step `N`:
 
 1. Take step `N` from `drive.json`. The step message only says which number is current.
-   When its label does not match the plan's label for `N`, the PR body changed since
-   step 1: stop and tell the tester.
+   When its label, or the command in its code block, does not match the plan's step
+   `N`, the PR body changed since the run started: stop and tell the tester.
 2. `hand-off`: tell the tester in the session which step it is, its command, and why it is
    theirs. Then wait for the next step (item 5).
 3. `drive`: perform the one action, as described under [Actions](#actions).

@@ -127,7 +127,10 @@ back to the tester when:
 - its label or `Expected:` needs a second account;
 - its code block chains several actions, or is not one recognized action;
 - it belongs to a `/todo` or `/suggestion` flow, which writes to GitHub
-  (`EXTERNAL_EFFECT_COMMANDS`). The tester can hand back any other step too.
+  (`EXTERNAL_EFFECT_COMMANDS`);
+- the tester hands it back. The preview writes to whatever API and Backblaze its env file
+  names (`docs/pr-preview.md`), so before the first action the skill asks the tester which
+  driven steps change real data, and hands those back.
 
 A value a command reads from an earlier reply, written as `(… from step N)`, is read from
 that reply on the page. When it cannot be found, the step is handed back.

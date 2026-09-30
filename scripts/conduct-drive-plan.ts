@@ -28,6 +28,10 @@ if (plan.kind === "none") {
   process.exit(1);
 }
 
-const channelUrl =
-  `https://discord.com/channels/${TEST_GUILD_SNOWFLAKE}/${TEST_GUILD_IDS.BOT_DEV_CHANNEL_ID}`;
+const testChannelId = TEST_GUILD_IDS.BOT_DEV_CHANNEL_ID;
+if (!testChannelId) {
+  console.error("src/config/testGuild.ts has no BOT_DEV_CHANNEL_ID for the test guild.");
+  process.exit(2);
+}
+const channelUrl = `https://discord.com/channels/${TEST_GUILD_SNOWFLAKE}/${testChannelId}`;
 console.log(JSON.stringify({ channelUrl, steps: plan.steps }, null, 2));
