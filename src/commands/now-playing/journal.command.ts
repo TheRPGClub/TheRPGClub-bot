@@ -22,6 +22,10 @@ import {
 import { TextInputStyle as ApiTextInputStyle } from "discord-api-types/v10";
 import Member, { type IGameJournalEntry } from "../../classes/Member.js";
 import {
+  formatJournalDeleteStatus,
+  formatJournalEntryTitle,
+} from "../../functions/journalView.js";
+import {
   safeDeferReply,
   safeDeferUpdate,
   safeReply,
@@ -101,10 +105,6 @@ function buildNowPlayingJournalAddModal(
     ),
   );
   return modal;
-}
-
-function formatJournalEntryTitle(entry: IGameJournalEntry): string {
-  return entry.title?.trim() ? entry.title.trim() : `Entry #${entry.entryNumber}`;
 }
 
 @Discord()
@@ -399,15 +399,15 @@ export class NowPlayingJournalCommand {
       await safeReply(interaction, buildTextReply("Only the owner can delete journal entries.", false));
       return;
     }
-    let status = "-# Delete cancelled. Nothing was deleted.";
+    let removed: IGameJournalEntry | null = null;
     if (action === "yes") {
-      const removed = await Member.deleteGameJournalEntry(ownerId, Number(entryIdRaw));
+      removed = await Member.deleteGameJournalEntry(ownerId, Number(entryIdRaw));
       if (!removed) {
         await safeReply(interaction, buildTextReply("That journal entry was not found.", false));
         return;
       }
-      status = `-# Deleted **${formatJournalEntryTitle(removed)}**.`;
     }
+    const status = formatJournalDeleteStatus(removed);
     const row = await this.buildManageJournalButtonRow(ownerId, Number(gameIdRaw), Number(pageRaw));
     await safeUpdate(interaction, {
       components: [buildTextContainer(status), row],
