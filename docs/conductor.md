@@ -182,15 +182,18 @@ The conductor reads these from its process environment:
 4. Create the GitHub token described under Settings.
 5. Put the settings in an env file readable only by you, for example
    `~/.config/rpgclub-conductor/conductor.env` with mode `600`.
-6. Run it as a long-lived service on the desktop, separate from the preview container,
-   for example a systemd user unit:
+6. Run it as a long-lived systemd user service on the desktop, separate from the
+   preview container, from the release directory the deploy workflow maintains (see
+   [Deploys](#deploys)). The runner's service has no login session, so let the user's
+   services run without one: `loginctl enable-linger`. Then save this as
+   `~/.config/systemd/user/rpgclub-conductor.service`:
 
    ```ini
    [Unit]
    Description=RPGClub PR test conductor
 
    [Service]
-   WorkingDirectory=%h/Code/bot
+   WorkingDirectory=%h/.local/share/rpgclub-conductor/current
    EnvironmentFile=%h/.config/rpgclub-conductor/conductor.env
    ExecStart=/usr/bin/npm run conductor
    Restart=on-failure
@@ -199,6 +202,54 @@ The conductor reads these from its process environment:
    WantedBy=default.target
    ```
 
+   Build the first release by hand from an up-to-date checkout of `main`, which also
+   starts the service:
+
+   ```bash
+   systemctl --user enable rpgclub-conductor.service
+   bash scripts/conductor/deploy.sh deploy "$(git rev-parse HEAD)"
+   ```
+
+   Then set the repository variable `CONDUCTOR_DEPLOY_ENABLED` to `true`, so merges
+   deploy it from then on.
 7. In the test guild, `/conduct` should appear. Run it against a PR with a `## Testing`
    section while that PR's preview is running, after deploying it with
    `/test-guild <number>`.
+
+## Deploys
+
+`.github/workflows/conductor-deploy.yml` keeps the conductor on the latest `main`. It
+runs on the self-hosted preview runner, which must run as the same user as the service.
+A unit named other than `rpgclub-conductor` is set with the `CONDUCTOR_UNIT` repository
+variable, the same one `docs/pr-preview.md` uses for logs.
+
+- **When.** A push to `main` deploys only when it changes a file the conductor loads:
+  anything reachable through relative imports from `src/conductor/main.ts`, plus
+  `package.json`, `package-lock.json`, and `tsconfig.json`. The comparison is against
+  the live release, not the push's parent, so a skipped or failed deploy is caught up
+  by the next one. Any other push leaves the conductor running.
+- **How.** `scripts/conductor/deploy.sh` builds each commit into its own directory under
+  `~/.local/share/rpgclub-conductor/releases/`, from `git archive` with a `REVISION`
+  file naming the commit. It reuses the live release's `node_modules` when the lockfile
+  is unchanged, runs `npm ci` otherwise, and type-checks the release. Only then does it
+  point the `current` link at the new release and restart the service.
+- **Runs in progress.** While the saved run (`CONDUCTOR_STATE_PATH`) is `running`, the
+  restart waits, up to 30 minutes, for the tester to finish. Past that it restarts
+  anyway, and the run resumes from its state file.
+- **Failures.** A failed install or type-check fails the workflow and leaves the live
+  release untouched. After a restart, the script waits for the startup line
+  `[conductor] ready as <tag> at <commit>` in the service's journal. When the new commit
+  does not log it within two minutes, it switches back to the release it replaced,
+  restarts that one, and fails the workflow.
+- **Which version is live.** The startup line names the commit. So does
+  `bash scripts/conductor/deploy.sh current`, and `deploy.sh list` marks the live one
+  among the releases kept on disk (the five newest, plus the live and previous ones).
+
+### Rolling back
+
+- `bash scripts/conductor/deploy.sh rollback` on the desktop switches back to the
+  release before the live one; `rollback <sha>` switches to any release still on disk.
+- Running the **Conductor deploy** workflow by hand with an older commit as `ref` builds
+  and deploys that commit, for one no longer on disk. A dispatch always deploys.
+- The next push that changes the conductor deploys `main` again. To hold a rollback,
+  set `CONDUCTOR_DEPLOY_ENABLED` to anything but `true` until the fix merges.

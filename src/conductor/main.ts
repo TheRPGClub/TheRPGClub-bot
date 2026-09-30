@@ -12,11 +12,14 @@ import {
   formatChannelAccessProblem,
 } from "./ConductorChannelAccess.js";
 import { loadConductorSettings } from "./ConductorConfig.js";
+import { readConductorRevision } from "./ConductorRevision.js";
 import { setConductorRuntime } from "./ConductorRuntime.js";
 import { GitHubPullClient } from "./GitHubPullClient.js";
 import { startRunFromAnnouncement } from "./conductor.command.js";
 
 const settings = loadConductorSettings();
+// Read once at startup, so a checkout pulled later cannot misreport what is running.
+const revision = readConductorRevision();
 setConductorRuntime({
   settings,
   github: new GitHubPullClient(settings.githubToken, settings.repo),
@@ -41,7 +44,9 @@ client.once("clientReady", async (readyClient) => {
     console.error(`[conductor] ${formatChannelAccessProblem(problem)}`);
   }
   await client.initApplicationCommands();
-  console.log(`[conductor] ready as ${client.user?.tag ?? "unknown"}`);
+  // scripts/conductor/deploy.sh waits for this line, commit included, after a restart.
+  const tag = client.user?.tag ?? "unknown";
+  console.log(`[conductor] ready as ${tag} at ${revision}`);
 });
 
 client.on("interactionCreate", async (interaction: Interaction) => {

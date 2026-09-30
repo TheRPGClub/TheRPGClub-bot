@@ -1,0 +1,124 @@
+name: Conductor deploy
+run-name: >-
+  ${{ github.event_name == 'workflow_dispatch'
+    && format('Conductor deploy {0}', inputs.ref)
+    || github.workflow }}
+
+# Keeps the conductor (src/conductor, docs/conductor.md) on the latest main. A push that
+# changes a file the conductor loads builds a new release on the self-hosted runner and
+# restarts its systemd user service there; any other push leaves it running. A failed
+# build or start fails this run and leaves the previous release live.
+# Setup and rollback: docs/conductor.md.
+
+on:
+  push:
+    branches: [main]
+    # A coarse filter so unrelated pushes never queue a job; the plan step then checks
+    # the conductor's actual import graph.
+    paths:
+      - "src/**"
+      - "package.json"
+      - "package-lock.json"
+      - "tsconfig.json"
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: branch, tag, or commit to deploy (an older commit rolls back)
+        type: string
+        default: main
+
+permissions:
+  contents: read
+
+env:
+  DEPLOY_SCRIPT: scripts/conductor/deploy.sh
+  PLAN_MODULE: ${{ github.workspace }}/scripts/conductor/plan.mjs
+
+jobs:
+  deploy:
+    # CONDUCTOR_DEPLOY_ENABLED (a repo variable) stays unset until the conductor's
+    # service runs from the release directory, so a push never restarts a hand-run one.
+    if: vars.CONDUCTOR_DEPLOY_ENABLED == 'true'
+    runs-on: [self-hosted, rpgclub-preview]
+    # Covers the wait for a run in progress (deploy.sh, 30 minutes) plus the build.
+    timeout-minutes: 45
+    # Deploys queue rather than cancel, so a restart is never cut off halfway. GitHub
+    # keeps only the newest pending run, which is the one worth deploying.
+    concurrency:
+      group: conductor-deploy
+      cancel-in-progress: false
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.sha }}
+          persist-credentials: false
+
+      - name: Resolve commits
+        id: commits
+        run: |
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "live=$(bash "$DEPLOY_SCRIPT" current)" >> "$GITHUB_OUTPUT"
+
+      # A dispatch always deploys. A push compares against the live release, not the
+      # push's parent, so a push that was skipped or failed is still picked up.
+      - name: Check the conductor changed
+        id: plan
+        if: github.event_name == 'push'
+        uses: actions/github-script@v8
+        env:
+          SHA: ${{ steps.commits.outputs.sha }}
+          LIVE: ${{ steps.commits.outputs.live }}
+        with:
+          script: |
+            const m = await import(process.env.PLAN_MODULE);
+            const { SHA: head, LIVE: base } = process.env;
+            if (!base) {
+              core.info("No release is live yet; deploying.");
+              core.setOutput("deploy", "true");
+              return;
+            }
+            if (base === head) {
+              core.info(`${head} is already live.`);
+              core.setOutput("deploy", "false");
+              return;
+            }
+            let data;
+            try {
+              ({ data } = await github.rest.repos.compareCommitsWithBasehead({
+                ...context.repo, basehead: `${base}...${head}`,
+              }));
+            } catch (err) {
+              core.warning(`Could not compare ${base} to ${head}: ${err.message}`);
+              core.setOutput("deploy", "true");
+              return;
+            }
+            if (data.status === "behind") {
+              core.info(`The live ${base} is newer than ${head}; leaving it.`);
+              core.setOutput("deploy", "false");
+              return;
+            }
+            // The compare API lists at most 300 files; past that, assume it changed.
+            const files = data.files ?? [];
+            if (files.length >= 300) {
+              core.info(`${files.length} files changed; deploying.`);
+              core.setOutput("deploy", "true");
+              return;
+            }
+            const changed = files.flatMap((f) =>
+              f.previous_filename ? [f.filename, f.previous_filename] : [f.filename]);
+            const hits = m.conductorChanges({
+              changed, sources: m.conductorSources(process.env.GITHUB_WORKSPACE),
+            });
+            core.info(hits.length
+              ? `Conductor files changed:\n${hits.join("\n")}`
+              : "No conductor file changed; leaving it running.");
+            core.setOutput("deploy", String(hits.length > 0));
+
+      - name: Deploy conductor
+        if: github.event_name == 'workflow_dispatch' || steps.plan.outputs.deploy == 'true'
+        env:
+          SHA: ${{ steps.commits.outputs.sha }}
+          # The same variable preview-logs.yml reads; deploy.sh defaults it when unset.
+          CONDUCTOR_UNIT: ${{ vars.CONDUCTOR_UNIT }}
+        run: bash "$DEPLOY_SCRIPT" deploy "$SHA"
