@@ -1,28 +1,42 @@
-// Decides from a PR body whether a preview is worth deploying, using the same parser
-// `/conduct` runs, so the workflow and the conductor agree on what counts as Testing
-// steps. Loaded by actions/github-script steps in .github/workflows/pr-preview.yml, whose
-// Node 24 runtime strips the parser's types natively, and by tsx in the unit tests.
+// Decides from a PR whether a preview can be deployed, using the same parser `/conduct`
+// runs, so the workflow and the conductor agree on what counts as Testing steps. Loaded
+// by actions/github-script steps in .github/workflows/pr-preview.yml, whose Node 24
+// runtime strips the parser's types natively, and by tsx in the unit tests.
 
 import { parseTestPlan } from "../../src/conductor/TestPlanParser.ts";
 
 /**
- * `deploy` is true when the body has a runnable plan and this event is the one that
- * should build it. An `edited` event only deploys when the edit gave the body its plan:
- * an edit elsewhere in a body that already had one would evict another PR's preview for
- * a build that is already running. A re-run always deploys, since the replaced comment
- * tells the user to re-run to bring an evicted preview back.
+ * Classifies a PR body's Testing section, with the parser's reason for `malformed`.
  *
- * @param {{ action: string, body?: string | null, previousBody?: string | null,
- *   rerun?: boolean }} args
- * @returns {{ deploy: boolean, kind: "ok" | "absent" | "empty" | "malformed",
- *   reason: string }}
+ * @param {string | null | undefined} body
+ * @returns {{ kind: "ok" | "absent" | "empty" | "malformed", reason: string }}
  */
-export function planPreview({ action, body, previousBody, rerun = false }) {
+export function testingSteps(body) {
   const plan = parseTestPlan(body);
-  const reason = plan.kind === "malformed" ? plan.reason : "";
-  if (plan.kind !== "ok") return { deploy: false, kind: plan.kind, reason };
-  const hadPlan = action === "edited" && parseTestPlan(previousBody).kind === "ok";
-  return { deploy: rerun || !hadPlan, kind: plan.kind, reason };
+  return { kind: plan.kind, reason: plan.kind === "malformed" ? plan.reason : "" };
+}
+
+/**
+ * Whether a manual deploy of a PR may go ahead. Previews are only ever deployed on
+ * request (`/test-guild` in Claude Code dispatches the workflow), so this is the one
+ * gate: `refusal` is empty when the deploy may run, and says why when it may not.
+ *
+ * @param {{ pr: { number: number, state: string, body?: string | null,
+ *   head: { repo?: { full_name?: string } | null } }, repository: string }} args
+ * @returns {{ refusal: string, kind: string, reason: string }}
+ */
+export function deployRefusal({ pr, repository }) {
+  const { kind, reason } = testingSteps(pr.body);
+  let refusal = "";
+  if (pr.state !== "open") refusal = `PR #${pr.number} is ${pr.state}.`;
+  else if (pr.head.repo?.full_name !== repository) {
+    refusal = `PR #${pr.number} is from a fork, which never runs on the preview runner.`;
+  } else if (kind === "malformed") {
+    refusal = `PR #${pr.number}'s Testing section could not be parsed: ${reason}`;
+  } else if (kind !== "ok") {
+    refusal = `PR #${pr.number} has no Testing steps for \`/conduct\` to run.`;
+  }
+  return { refusal, kind, reason };
 }
 
 /**
@@ -37,8 +51,8 @@ export async function previewWanted({ github, context, pr }) {
   const { owner, repo } = context.repo;
   const { data } = await github.rest.pulls.get({ owner, repo, pull_number: pr });
   if (data.state !== "open") return { wanted: "closed", reason: "" };
-  const plan = parseTestPlan(data.body);
-  if (plan.kind === "ok") return { wanted: "yes", reason: "" };
-  if (plan.kind === "malformed") return { wanted: "malformed", reason: plan.reason };
+  const { kind, reason } = testingSteps(data.body);
+  if (kind === "ok") return { wanted: "yes", reason: "" };
+  if (kind === "malformed") return { wanted: "malformed", reason };
   return { wanted: "untested", reason: "" };
 }

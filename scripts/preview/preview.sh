@@ -5,6 +5,7 @@
 #   preview.sh deploy <pr> <sha>   build the checked-out tree and replace the preview
 #   preview.sh teardown <pr>       remove the preview only if it belongs to <pr>
 #   preview.sh current-pr          print the PR the running preview belongs to, if any
+#   preview.sh current-sha         print the commit the running preview was built from
 #   preview.sh list                show preview containers
 #   preview.sh kill                remove the preview whatever PR it belongs to
 set -euo pipefail
@@ -139,6 +140,11 @@ cmd_current_pr() {
   preview_containers | awk 'NF == 2 { print $2; exit }'
 }
 
+cmd_current_sha() {
+  docker ps -a --filter "${LABEL_FILTER}" --format '{{.Label "rpgclub.preview.sha"}}' |
+    awk 'NF { print; exit }'
+}
+
 cmd_list() {
   docker ps -a --filter "${LABEL_FILTER}" --format \
     'table {{.ID}}\t{{.Label "rpgclub.preview.pr"}}\t{{.Label "rpgclub.preview.sha"}}\t{{.Status}}'
@@ -152,7 +158,9 @@ case "${1:-}" in
   deploy) shift; cmd_deploy "$@" ;;
   teardown) shift; cmd_teardown "$@" ;;
   current-pr) cmd_current_pr ;;
+  current-sha) cmd_current_sha ;;
   list) cmd_list ;;
   kill) cmd_kill ;;
-  *) die "usage: preview.sh deploy <pr> <sha> | teardown <pr> | current-pr | list | kill" ;;
+  *) die "usage: preview.sh deploy <pr> <sha> | teardown <pr> | current-pr | current-sha" \
+    "| list | kill" ;;
 esac
