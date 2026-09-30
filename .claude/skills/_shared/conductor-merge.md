@@ -6,6 +6,32 @@ asks the user whether to merge, and merges only on a yes.
 
 ## When conductor testing counts as passed
 
+### The approval
+
+A run that finishes with every step passing approves the pull request, pinned to the
+commit it tested, with a review body that starts with
+`<!-- rpgclub-conductor-approval -->` (`CONDUCTOR_APPROVAL_MARKER` in
+`src/conductor/ConductorApproval.ts`). Read the newest one's commit and the current
+head:
+
+```bash
+gh api repos/{owner}/{repo}/pulls/<N>/reviews --paginate \
+  --jq '.[] | select(.state == "APPROVED")
+    | select(.body | startswith("<!-- rpgclub-conductor-approval -->")) | .commit_id' \
+  | tail -1
+gh pr view <N> --json headRefOid --jq .headRefOid
+```
+
+An approval whose `commit_id` equals the current head is the pass on the current head.
+One on an older commit does not cover commits pushed after it.
+
+The conductor skips the approval, and says so in the test channel, when its GitHub
+token's user opened the pull request, since GitHub rejects an author's own approval. No
+approval on the current head therefore does not mean a failure: fall back to the report
+comment below.
+
+### The report comment
+
 `/conduct pr:<N>` in the test guild posts its result to the pull request as a comment
 that starts with `<!-- rpgclub-conductor-report -->` (`CONDUCTOR_REPORT_MARKER` in
 `src/conductor/ConductorReport.ts`). Find the newest one's id, then read it:

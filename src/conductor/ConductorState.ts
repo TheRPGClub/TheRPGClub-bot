@@ -35,6 +35,10 @@ export interface IConductorRun {
   /** The tester's notes, by step number, quoted under each step in the report. */
   notes?: Record<number, string>;
   status: ConductorRunStatus;
+  /** The report comment's URL, once posted. An approval retry links it. */
+  reportUrl?: string;
+  /** The head this run approved, so a retry never approves twice. */
+  approvedSha?: string;
 }
 
 export async function loadRun(path: string): Promise<IConductorRun | null> {

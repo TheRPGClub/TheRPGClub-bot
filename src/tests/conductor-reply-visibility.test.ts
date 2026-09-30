@@ -80,7 +80,14 @@ function useRuntime(getPullRequest: () => Promise<IPullRequestInfo>): void {
 }
 
 function pull(state: string, body: string): IPullRequestInfo {
-  return { number: 1272, state, headSha: "abc", body, htmlUrl: "https://example.test/pr" };
+  return {
+    number: 1272,
+    state,
+    headSha: "abc",
+    body,
+    htmlUrl: "https://example.test/pr",
+    authorLogin: "author",
+  };
 }
 
 const OUTCOMES: [string, () => Promise<IPullRequestInfo>][] = [
