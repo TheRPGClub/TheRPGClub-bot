@@ -11,7 +11,7 @@ import {
   MessageFlags,
   userMention,
 } from "discord.js";
-import { Discord, Slash, SlashOption } from "discordx";
+import { Discord, Slash, SlashGroup, SlashOption } from "discordx";
 import Game from "../classes/Game.js";
 import { getThreadsByGameId, setThreadGameLink, upsertThreadRecord } from "../classes/Thread.js";
 import { NOW_PLAYING_FORUM_ID } from "../config/channels.js";
@@ -21,6 +21,7 @@ import { buildTextReply } from "../functions/ComponentsV2Utils.js";
 import { formatGameTitleWithYear } from "../functions/GameTitleAutocompleteUtils.js";
 import { DISCORD_SELECT_OPTIONS_MAX, truncateLabel } from "../config/textLimits.js";
 import GameSearchService from "../classes/GameSearchService.js";
+import { buildCommandMention } from "../functions/CommandMentionUtils.js";
 
 const DEFAULT_FIRST_POST_PREFIX = "Thread created by";
 
@@ -73,8 +74,9 @@ async function autocompleteCreateThreadTag(
 }
 
 @Discord()
+@SlashGroup("thread")
 export class CreateThreadCommand {
-  @Slash({ description: "Create a forum thread for a GameDB title", name: "create-thread" })
+  @Slash({ description: "Create a forum thread for a GameDB title", name: "create" })
   async createThread(
     @SlashOption({
       autocomplete: autocompleteCreateThreadTitle,
@@ -189,6 +191,23 @@ export class CreateThreadCommand {
 
     await safeReply(interaction, buildTextReply(
       `Created thread ${channelMention(thread.id)} for "${game.title}" with tag "${selectedTag.name}".`,
+      true,
+    ));
+  }
+}
+
+/**
+ * The old top level name, kept for one release after the move to `/thread create` (#1243)
+ * so muscle memory lands on a pointer instead of an unknown command. Remove it after that.
+ */
+@Discord()
+export class CreateThreadLegacyCommand {
+  @Slash({ description: "Moved to /thread create", name: "create-thread" })
+  async createThreadLegacy(interaction: CommandInteraction): Promise<void> {
+    await safeDeferReply(interaction, { flags: MessageFlags.Ephemeral });
+    const mention = await buildCommandMention(interaction, "thread", "create");
+    await safeReply(interaction, buildTextReply(
+      `/create-thread has moved to ${mention}.`,
       true,
     ));
   }
