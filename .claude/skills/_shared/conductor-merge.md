@@ -35,6 +35,11 @@ It counts as passed only when all of these hold:
   on an older head does not cover commits pushed after it;
 - `0 failed` and `0 need eyes`, with `<p>` equal to `<s>`.
 
+A PR only reaches the test guild when the user deploys it with `/test-guild <N>`, a
+skill only they run. Opening or pushing to a PR never deploys it. With no report on the
+current head, the handover says `/test-guild <N>` then `/conduct pr:<N>` is the way to
+test it; the session never dispatches the deploy itself.
+
 Anything else is not a pass: no report, a report that could not parse the `Testing`
 section, a failed step, or a step that needs eyes. Report what the comment says, and
 never offer to merge over it. A failed step is a finding. Work out whether the code or

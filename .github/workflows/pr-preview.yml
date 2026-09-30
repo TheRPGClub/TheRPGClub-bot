@@ -1,17 +1,34 @@
 name: PR preview
+run-name: >-
+  ${{ github.event_name == 'workflow_dispatch'
+    && format('PR preview {0} {1}', inputs.action, inputs.pr)
+    || github.event.pull_request.title || github.workflow }}
 
-# Runs the PR branch in the test guild under the dev bot on the self-hosted runner.
-# One preview at a time: the newest deploy replaces whatever is running. Only a PR whose
-# body has Testing steps `/conduct` can run gets one; the rest leave the running one alone.
+# Runs a PR branch in the test guild under the dev bot on the self-hosted runner.
+# Deploys happen only on request: the user-invoked `/test-guild` skill in Claude Code
+# dispatches this workflow with a PR number, so several PRs can be in flight while the
+# user picks which one the test guild runs. One preview at a time: a deploy replaces
+# whatever is running. PR events never deploy; they only report a preview that fell
+# behind, tear down one whose PR closed or lost its Testing steps, and reap orphans.
 # Setup and manual controls: docs/pr-preview.md.
 
 on:
   pull_request:
-    types: [opened, reopened, synchronize, edited, closed]
+    types: [synchronize, edited, closed]
     branches: [main]
   schedule:
     - cron: "17 * * * *"
   workflow_dispatch:
+    inputs:
+      action:
+        description: deploy a PR, stop the running preview, or reap an orphaned one
+        type: choice
+        options: [deploy, stop, reap]
+        default: deploy
+      pr:
+        description: PR number to deploy (deploy only)
+        type: string
+        required: false
 
 permissions:
   contents: read
@@ -24,100 +41,84 @@ env:
   PLAN_MODULE: ${{ github.workspace }}/scripts/preview/plan.mjs
 
 jobs:
-  # Reads the PR body with the parser `/conduct` uses. It sits outside the deploy
-  # concurrency group, so a PR with nothing to test never cancels another PR's deploy.
-  # It has no group of its own either: a body edit cancelling a push's run would drop
-  # that push's deploy. Overlapping runs are safe because deploy re-reads the body.
-  # An edit can land on a closed PR, which must not evict another PR's preview.
+  # Checks a requested PR with the parser `/conduct` uses before anything is built. It
+  # sits outside the deploy concurrency group, so a refused request never cancels a
+  # deploy in flight. A refusal fails the run, which is what `/test-guild` reports.
   plan:
     if: >-
       vars.PR_PREVIEW_ENABLED == 'true'
-      && github.event_name == 'pull_request'
-      && github.event.action != 'closed'
-      && github.event.pull_request.state == 'open'
-      && github.event.pull_request.head.repo.full_name == github.repository
-      && (github.event.action != 'edited' || github.event.changes.body != null)
+      && github.event_name == 'workflow_dispatch'
+      && inputs.action == 'deploy'
     runs-on: [self-hosted, rpgclub-preview]
     timeout-minutes: 5
     outputs:
-      deploy: ${{ steps.plan.outputs.deploy }}
-    env:
-      PR: ${{ github.event.pull_request.number }}
+      pr: ${{ steps.plan.outputs.pr }}
+      sha: ${{ steps.plan.outputs.sha }}
     steps:
-      - name: Checkout PR head
+      - name: Checkout default branch
         uses: actions/checkout@v5
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
           persist-credentials: false
 
-      # The body is attacker-controlled: it reaches the script through env only.
-      - name: Read Testing steps
+      # The input and the PR body reach the script through env only.
+      - name: Check the PR can be deployed
         id: plan
         uses: actions/github-script@v8
         env:
-          ACTION: ${{ github.event.action }}
-          BODY: ${{ github.event.pull_request.body }}
-          PREVIOUS_BODY: ${{ github.event.changes.body.from }}
-          RUN_ATTEMPT: ${{ github.run_attempt }}
+          PR_INPUT: ${{ inputs.pr }}
         with:
           script: |
             const m = await import(process.env.PLAN_MODULE);
-            const plan = m.planPreview({
-              action: process.env.ACTION,
-              body: process.env.BODY,
-              previousBody: process.env.PREVIOUS_BODY,
-              rerun: Number(process.env.RUN_ATTEMPT) > 1,
+            const input = (process.env.PR_INPUT ?? "").trim().replace(/^#/, "");
+            if (!/^[1-9]\d*$/.test(input)) {
+              core.setFailed(`Not a PR number: "${input}".`);
+              return;
+            }
+            const { owner, repo } = context.repo;
+            let data;
+            try {
+              ({ data } = await github.rest.pulls.get({
+                owner, repo, pull_number: Number(input),
+              }));
+            } catch (err) {
+              if (err.status !== 404) throw err;
+              core.setFailed(`PR #${input} does not exist.`);
+              return;
+            }
+            const { refusal, kind } = m.deployRefusal({
+              pr: data, repository: `${owner}/${repo}`,
             });
-            core.info(`Testing steps: ${plan.kind}, deploy: ${plan.deploy}`);
-            core.setOutput("deploy", String(plan.deploy));
-            core.setOutput("kind", plan.kind);
-            core.setOutput("reason", plan.reason);
-
-      - name: Tear down this PR's preview
-        id: teardown
-        if: steps.plan.outputs.kind != 'ok'
-        run: bash "$PREVIEW_SCRIPT" teardown "$PR"
-
-      - name: Report no Testing steps
-        if: steps.plan.outputs.kind != 'ok'
-        uses: actions/github-script@v8
-        env:
-          KIND: ${{ steps.plan.outputs.kind }}
-          REASON: ${{ steps.plan.outputs.reason }}
-        with:
-          script: |
-            const m = await import(process.env.COMMENT_MODULE);
-            const malformed = process.env.KIND === "malformed";
-            await m.upsertPreviewComment({
-              github, context, pr: Number(process.env.PR),
-              state: malformed ? "malformed" : "untested",
-              reason: process.env.REASON, onlyIfExists: !malformed,
-            });
+            core.info(`PR #${data.number} at ${data.head.sha}, Testing steps: ${kind}`);
+            if (refusal) {
+              core.setFailed(refusal);
+              return;
+            }
+            core.setOutput("pr", String(data.number));
+            core.setOutput("sha", data.head.sha);
 
   deploy:
     needs: plan
     # Fork PRs never reach the self-hosted runner: their code would run next to the
-    # dev token and the production container. PR_PREVIEW_ENABLED (a repo variable) stays
-    # unset until the runner exists, so PRs do not sit on a check nothing can pick up.
+    # dev token and the production container. `plan` refuses them. PR_PREVIEW_ENABLED
+    # (a repo variable) stays unset until the runner exists, so a dispatch does not sit
+    # on a job nothing can pick up.
     if: >-
       vars.PR_PREVIEW_ENABLED == 'true'
-      && github.event_name == 'pull_request'
-      && github.event.action != 'closed'
-      && github.event.pull_request.head.repo.full_name == github.repository
-      && needs.plan.outputs.deploy == 'true'
+      && github.event_name == 'workflow_dispatch'
+      && needs.plan.outputs.sha != ''
     runs-on: [self-hosted, rpgclub-preview]
     timeout-minutes: 20
     concurrency:
       group: pr-preview-deploy
       cancel-in-progress: true
     env:
-      PR: ${{ github.event.pull_request.number }}
-      SHA: ${{ github.event.pull_request.head.sha }}
+      PR: ${{ needs.plan.outputs.pr }}
+      SHA: ${{ needs.plan.outputs.sha }}
     steps:
       - name: Checkout PR head
         uses: actions/checkout@v5
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ needs.plan.outputs.sha }}
           persist-credentials: false
 
       - name: Report building
@@ -157,11 +158,12 @@ jobs:
         with:
           script: |
             const m = await import(process.env.PLAN_MODULE);
-            const { wanted, reason } = await m.previewWanted({
+            const { wanted, reason, head } = await m.previewWanted({
               github, context, pr: Number(process.env.PR),
             });
             core.setOutput("wanted", wanted);
             core.setOutput("reason", reason);
+            core.setOutput("head", head);
 
       - name: Tear down for a PR closed or untested mid-deploy
         if: >-
@@ -177,6 +179,7 @@ jobs:
           JOB_STATUS: ${{ job.status }}
           WANTED: ${{ steps.wanted.outputs.wanted }}
           REASON: ${{ steps.wanted.outputs.reason }}
+          HEAD: ${{ steps.wanted.outputs.head }}
           CONTAINER: ${{ steps.deploy.outputs.container }}
         with:
           script: |
@@ -188,10 +191,155 @@ jobs:
             else if (process.env.WANTED === "untested") state = "untested";
             else if (process.env.WANTED === "malformed") state = "malformed";
             else if (status === "success") state = "running";
+            // A push during the build found no container of this PR to mark behind.
+            const head = process.env.HEAD;
+            const behind = state === "running" && head && head !== process.env.SHA;
             await m.upsertPreviewComment({
-              github, context, pr: Number(process.env.PR), state,
-              sha: process.env.SHA, container: process.env.CONTAINER,
-              reason: process.env.REASON,
+              github, context, pr: Number(process.env.PR),
+              state: behind ? "stale" : state,
+              sha: behind ? head : process.env.SHA, running: process.env.SHA,
+              container: process.env.CONTAINER, reason: process.env.REASON,
+            });
+
+  # A push never redeploys. When the pushed PR holds the test guild, its comment says the
+  # preview is now behind, so the user can redeploy with `/test-guild` when they choose.
+  stale:
+    if: >-
+      vars.PR_PREVIEW_ENABLED == 'true'
+      && github.event_name == 'pull_request'
+      && github.event.action == 'synchronize'
+      && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: [self-hosted, rpgclub-preview]
+    timeout-minutes: 5
+    env:
+      PR: ${{ github.event.pull_request.number }}
+      SHA: ${{ github.event.pull_request.head.sha }}
+    steps:
+      # The workflow's own commit, so the scripts match the jobs calling them.
+      - name: Checkout workflow commit
+        uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      # A script failure fails the step; only an empty listing reads as no preview.
+      - name: Find running preview
+        id: current
+        run: |
+          current="$(bash "$PREVIEW_SCRIPT" current)"
+          read -r pr sha <<< "${current}" || true
+          echo "pr=${pr:-}" >> "$GITHUB_OUTPUT"
+          echo "sha=${sha:-}" >> "$GITHUB_OUTPUT"
+
+      - name: Report preview behind
+        if: >-
+          steps.current.outputs.pr == env.PR
+          && steps.current.outputs.sha != env.SHA
+        uses: actions/github-script@v8
+        env:
+          RUNNING: ${{ steps.current.outputs.sha }}
+        with:
+          script: |
+            const m = await import(process.env.COMMENT_MODULE);
+            await m.upsertPreviewComment({
+              github, context, pr: Number(process.env.PR), state: "stale",
+              sha: process.env.SHA, running: process.env.RUNNING,
+            });
+
+  # An edit that removes the Testing steps tears down that PR's preview, since
+  # `/conduct` has nothing left to run against it. Adding them never deploys.
+  # An edit can land on a closed PR, whose preview the teardown job already handled.
+  edited:
+    if: >-
+      vars.PR_PREVIEW_ENABLED == 'true'
+      && github.event_name == 'pull_request'
+      && github.event.action == 'edited'
+      && github.event.changes.body != null
+      && github.event.pull_request.state == 'open'
+      && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: [self-hosted, rpgclub-preview]
+    timeout-minutes: 5
+    env:
+      PR: ${{ github.event.pull_request.number }}
+    steps:
+      # The workflow's own commit, so the scripts match the jobs calling them.
+      - name: Checkout workflow commit
+        uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      # The body is attacker-controlled: it reaches the script through env only.
+      - name: Read Testing steps
+        id: plan
+        uses: actions/github-script@v8
+        env:
+          BODY: ${{ github.event.pull_request.body }}
+        with:
+          script: |
+            const m = await import(process.env.PLAN_MODULE);
+            const { kind, reason } = m.testingSteps(process.env.BODY);
+            core.info(`Testing steps: ${kind}`);
+            core.setOutput("kind", kind);
+            core.setOutput("reason", reason);
+
+      - name: Tear down this PR's preview
+        id: teardown
+        if: steps.plan.outputs.kind != 'ok'
+        run: bash "$PREVIEW_SCRIPT" teardown "$PR"
+
+      - name: Report no Testing steps
+        if: steps.plan.outputs.kind != 'ok'
+        uses: actions/github-script@v8
+        env:
+          KIND: ${{ steps.plan.outputs.kind }}
+          REASON: ${{ steps.plan.outputs.reason }}
+        with:
+          script: |
+            const m = await import(process.env.COMMENT_MODULE);
+            const malformed = process.env.KIND === "malformed";
+            await m.upsertPreviewComment({
+              github, context, pr: Number(process.env.PR),
+              state: malformed ? "malformed" : "untested",
+              reason: process.env.REASON, onlyIfExists: true,
+            });
+
+  # Shares the deploy group, so a stop also cancels a deploy still building.
+  stop:
+    if: >-
+      vars.PR_PREVIEW_ENABLED == 'true'
+      && github.event_name == 'workflow_dispatch'
+      && inputs.action == 'stop'
+    runs-on: [self-hosted, rpgclub-preview]
+    timeout-minutes: 5
+    concurrency:
+      group: pr-preview-deploy
+      cancel-in-progress: true
+    steps:
+      - name: Checkout default branch
+        uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - name: Find running preview
+        id: current
+        run: echo "pr=$(bash "$PREVIEW_SCRIPT" current-pr)" >> "$GITHUB_OUTPUT"
+
+      - name: Tear down preview
+        id: teardown
+        if: steps.current.outputs.pr != ''
+        env:
+          PR: ${{ steps.current.outputs.pr }}
+        run: bash "$PREVIEW_SCRIPT" teardown "$PR"
+
+      - name: Report torn down
+        if: steps.teardown.outputs.removed == '1'
+        uses: actions/github-script@v8
+        env:
+          PR: ${{ steps.current.outputs.pr }}
+        with:
+          script: |
+            const m = await import(process.env.COMMENT_MODULE);
+            await m.upsertPreviewComment({
+              github, context, pr: Number(process.env.PR), state: "removed",
             });
 
   teardown:
@@ -231,7 +379,8 @@ jobs:
   reap:
     if: >-
       vars.PR_PREVIEW_ENABLED == 'true'
-      && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
+      && (github.event_name == 'schedule'
+        || (github.event_name == 'workflow_dispatch' && inputs.action == 'reap'))
     runs-on: [self-hosted, rpgclub-preview]
     timeout-minutes: 5
     concurrency:

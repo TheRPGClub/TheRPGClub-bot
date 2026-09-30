@@ -14,7 +14,9 @@ loader never imports this directory, and the conductor never loads the bot's com
 
 ## How a run goes
 
-1. In the test guild, the tester runs `/conduct pr:<number>` on the conductor.
+1. The tester deploys the PR to the test guild with `/test-guild <number>` in Claude
+   Code, since previews never deploy on their own (`docs/pr-preview.md`). Then, in the
+   test guild, they run `/conduct pr:<number>` on the conductor.
 2. The conductor fetches the PR and parses its `## Testing` section, whose format is in
    `.github/pull-request-testing-format.md`.
    - No section, or only the template comment: it says there is nothing to run.
@@ -165,4 +167,5 @@ The conductor reads these from its process environment:
    ```
 
 7. In the test guild, `/conduct` should appear. Run it against a PR with a `## Testing`
-   section while that PR's preview is running.
+   section while that PR's preview is running, after deploying it with
+   `/test-guild <number>`.

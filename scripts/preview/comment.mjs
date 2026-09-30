@@ -1,7 +1,7 @@
 // Sticky PR comment reporting preview status. Loaded by actions/github-script steps in
 // .github/workflows/pr-preview.yml, which pass in their `github` and `context` objects.
 
-const MARKER = "<!-- rpgclub-pr-preview -->";
+export const PREVIEW_COMMENT_MARKER = "<!-- rpgclub-pr-preview -->";
 const FORMAT_DOC = ".github/pull-request-testing-format.md";
 
 /**
@@ -13,6 +13,11 @@ function inlineText(text) {
   return text.replace(/\s+/g, " ").replace(/[`*_<>[\]|#@]/g, "\\$&").trim();
 }
 
+/** Previews deploy only on request, through the user-invoked `/test-guild` skill. */
+function redeploy(pr) {
+  return `\`/test-guild ${pr}\` in Claude Code`;
+}
+
 const STATES = {
   building: (d) => `:hourglass: Building \`${d.sha}\` for the test guild.`,
   running: (d) =>
@@ -22,19 +27,25 @@ const STATES = {
     "test guild.",
   failed: (d) => `:red_circle: Preview of \`${d.sha}\` failed to start.`,
   superseded: (d) =>
-    `:white_circle: Deploy of \`${d.sha}\` was cancelled, by a newer preview run or ` +
-    "the job timeout. The workflow run says which.",
+    `:white_circle: Deploy of \`${d.sha}\` was cancelled, by a newer preview run, a stop, ` +
+    "or the job timeout. The workflow run says which.",
   replaced: (d) =>
     `:white_circle: Preview stopped: #${d.by} took the test guild. ` +
-    "Push a commit or re-run the workflow to bring this one back.",
+    `Run ${redeploy(d.pr)} to bring this one back.`,
+  stale: (d) =>
+    `:yellow_circle: Still running \`${d.running}\` in the test guild, behind this ` +
+    `PR's head \`${d.sha}\`. Pushes never redeploy on their own. ` +
+    `Run ${redeploy(d.pr)} to test the new head.`,
   removed: () => ":white_circle: Preview torn down.",
   untested: (d) =>
     ":white_circle: No preview: this PR has no Testing steps for `/conduct` to run. " +
-    `Add a \`## Testing\` section in [the Testing format](${d.formatUrl}) to deploy one.`,
+    `Add a \`## Testing\` section in [the Testing format](${d.formatUrl}), then ` +
+    `run ${redeploy(d.pr)} to deploy one.`,
   malformed: (d) =>
     ":warning: No preview: the Testing section could not be parsed, so there is " +
     `nothing for \`/conduct\` to run. Reason: ${inlineText(d.reason ?? "")}\n\n` +
-    `Fix it to match [the Testing format](${d.formatUrl}) to deploy a preview.`,
+    `Fix it to match [the Testing format](${d.formatUrl}), then ` +
+    `run ${redeploy(d.pr)} to deploy a preview.`,
 };
 
 /**
@@ -42,7 +53,7 @@ const STATES = {
  * nothing, so a PR that never had a preview is not told it has none.
  *
  * @param {{ github: any, context: any, pr: number, state: keyof STATES,
- *   sha?: string, container?: string, by?: number, reason?: string,
+ *   sha?: string, running?: string, container?: string, by?: number, reason?: string,
  *   onlyIfExists?: boolean }} args
  */
 export async function upsertPreviewComment({
@@ -53,10 +64,11 @@ export async function upsertPreviewComment({
   const runUrl = `${repoUrl}/actions/runs/${context.runId}`;
   const formatUrl = `${repoUrl}/blob/main/${FORMAT_DOC}`;
   const sha = (details.sha ?? "").slice(0, 7);
+  const running = (details.running ?? "").slice(0, 7);
   const body = [
-    MARKER,
+    PREVIEW_COMMENT_MARKER,
     "### PR preview",
-    STATES[state]({ ...details, sha, pr, formatUrl }),
+    STATES[state]({ ...details, sha, running, pr, formatUrl }),
     "",
     `[Workflow run](${runUrl})`,
   ].join("\n");
@@ -68,7 +80,8 @@ export async function upsertPreviewComment({
     per_page: 100,
   });
   const existing = comments.find(
-    (c) => c.user?.login === "github-actions[bot]" && c.body?.startsWith(MARKER),
+    (c) =>
+      c.user?.login === "github-actions[bot]" && c.body?.startsWith(PREVIEW_COMMENT_MARKER),
   );
   if (existing) {
     await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body });

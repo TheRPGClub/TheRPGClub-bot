@@ -4,7 +4,10 @@ import {
   ButtonBuilder,
 } from "discord.js";
 import { ContainerBuilder } from "@discordjs/builders";
-import Member, { type ICompletionRecord } from "../classes/Member.js";
+import Member, {
+  type ICompletionRecord,
+  type IGameJournalEntry,
+} from "../classes/Member.js";
 import Game from "../classes/Game.js";
 import { buildMaskedLink } from "./ComponentsV2Utils.js";
 import Thread from "../classes/Thread.js";
@@ -24,6 +27,17 @@ function trimContent(text: string): string {
 
 function entryLabel(n: number): string {
   return n === 1 ? "entry" : "entries";
+}
+
+export function formatJournalEntryTitle(entry: IGameJournalEntry): string {
+  return entry.title?.trim() ? entry.title.trim() : `Entry #${entry.entryNumber}`;
+}
+
+// Status line shown above the manage controls once a delete confirm is answered.
+export function formatJournalDeleteStatus(removed: IGameJournalEntry | null): string {
+  return removed
+    ? `-# Deleted **${formatJournalEntryTitle(removed)}**.`
+    : "-# Delete cancelled. Nothing was deleted.";
 }
 
 export interface IJournalViewOptions {
