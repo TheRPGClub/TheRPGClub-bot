@@ -23,7 +23,8 @@ PREVIOUS_FILE="${ROOT}/previous"
 # Matches scripts/preview/collect-logs.sh, which reads the same unit's journal.
 UNIT="${CONDUCTOR_UNIT:-rpgclub-conductor}"
 NPM="${CONDUCTOR_NPM:-/usr/bin/npm}"
-STATE_PATH="${CONDUCTOR_STATE_PATH:-${HOME}/.config/rpgclub-conductor/state.json}"
+ENV_FILE="${CONDUCTOR_ENV_FILE:-${HOME}/.config/rpgclub-conductor/conductor.env}"
+DEFAULT_STATE_PATH="${HOME}/.config/rpgclub-conductor/state.json"
 READY_TIMEOUT_SECONDS="${CONDUCTOR_READY_TIMEOUT_SECONDS:-120}"
 # How long a restart waits for a tester to finish a run. Past it the restart goes ahead:
 # the run resumes from its state file, so a late restart only costs a short pause.
@@ -63,9 +64,23 @@ switch_to() {
   mv -T "${link}" "${CURRENT}"
 }
 
+# The state file the service uses: its env file sets it, as docs/conductor.md says.
+# Reads only that one line, never the tokens beside it.
+state_path() {
+  local line
+  line="$(grep -E '^[[:space:]]*CONDUCTOR_STATE_PATH=' "${ENV_FILE}" 2>/dev/null |
+    tail -n 1 || true)"
+  line="${line#*=}"
+  line="${line#[\"\']}"
+  line="${line%[\"\']}"
+  printf '%s' "${CONDUCTOR_STATE_PATH:-${line:-${DEFAULT_STATE_PATH}}}"
+}
+
 # Prints "active" when the saved run is running and was saved recently.
 run_status() {
-  [[ -f "${STATE_PATH}" ]] || return 0
+  local path
+  path="$(state_path)"
+  [[ -f "${path}" ]] || return 0
   node -e '
     const fs = require("fs");
     try {
@@ -76,7 +91,7 @@ run_status() {
         process.stdout.write("active");
       }
     } catch {}
-  ' "${STATE_PATH}" "${ACTIVE_RUN_SECONDS}"
+  ' "${path}" "${ACTIVE_RUN_SECONDS}"
 }
 
 wait_for_idle() {
