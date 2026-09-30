@@ -24,6 +24,25 @@ Steps run in order and may depend on state created by earlier steps.
 - `Expected:` and `Ephemeral:` are single lines, immediately after the code block.
 - `Ephemeral:` accepts only `yes` or `no`. Anything else is unparseable.
 - No markdown tables anywhere, per project convention.
+- Quote at least one exact string the output must contain in every `Expected:` line.
+  The conductor only checks double-quoted text; a step that quotes none is left for
+  the tester to confirm by eye.
+- The command must be runnable as written: real option names and real values that
+  exist in the test data, not `<placeholders>`.
+
+## Checks in `Expected:`
+
+Each double-quoted string is one check, matched case-insensitively. A keyword right
+before the quote narrows where it must appear:
+
+- `"Saved"`: anywhere in the reply.
+- `title: "Collection updated"`: an embed title or a markdown heading.
+- `button: "Confirm"`: a button label.
+- `option: "Gloomhaven"`: a select menu option label.
+- `field: "Platform"`: an embed field name or value.
+- `not: "Error"`: nowhere in the reply.
+
+Prose around the quotes is for the human tester and is not checked.
 - Omit the `## Testing` section entirely when the change is not testable in Discord.
 
 Anything that does not match degrades to "cannot parse, ask for manual testing". It
@@ -41,8 +60,8 @@ confirm the result is visible to everyone.
 ```
 /collection add
 ```
-Expected: an ephemeral reply with a game search modal trigger button labelled
-"Search for a game".
+Expected: an ephemeral reply with a game search modal trigger,
+button: "Search for a game".
 Ephemeral: yes
 
 ### Step 2: Search for a game
@@ -57,8 +76,8 @@ Ephemeral: yes
 ```
 select "Gloomhaven", click "Confirm"
 ```
-Expected: a public embed in the channel titled "Collection updated" naming
-Gloomhaven, and the ephemeral flow reply is dismissed.
+Expected: a public embed in the channel, title: "Collection updated", naming
+"Gloomhaven", and not: "Error". The ephemeral flow reply is dismissed.
 Ephemeral: no
 ````
 

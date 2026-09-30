@@ -12,8 +12,11 @@ Format reference: .github/pull-request-testing-format.md
 ```
 <command or action, exactly as typed in Discord>
 ```
-Expected: <what a human should see>
+Expected: <what a human should see, with the exact text to check in double quotes,
+optionally scoped: title: "..." button: "..." option: "..." field: "..." not: "...">
 Ephemeral: yes | no
+
+Quote at least one exact string per step, and give real option values, not placeholders.
 
 Delete this whole section if the change is not testable in Discord (docs, CI, tooling).
 A section that does not follow the shape is treated as unparseable and falls back to

@@ -27,6 +27,8 @@ export interface IReportInput {
   runId: string;
   steps: ITestStep[];
   results: IStepResult[];
+  /** The tester's notes, by step number. */
+  notes?: Record<number, string>;
   aborted: boolean;
 }
 
@@ -62,9 +64,18 @@ function formatObserved(outputs: IObservedOutput[]): string {
   return listed.join("\n\n");
 }
 
-function formatStep(step: ITestStep, result: IStepResult | undefined): string {
+/** The tester typed it, so it is fenced like any other text the report did not write. */
+function formatNote(note: string | undefined): string {
+  return note ? `\n\nTester note:\n\n${fenceFor(note)}` : "";
+}
+
+function formatStep(
+  step: ITestStep,
+  result: IStepResult | undefined,
+  note: string | undefined,
+): string {
   const heading = `### Step ${step.number}: ${inlineText(step.label)}`;
-  if (!result) return `${heading}\n\nNot run.`;
+  if (!result) return `${heading}\n\nNot run.${formatNote(note)}`;
 
   const lines = [
     `${heading}: ${VERDICT_LABELS[result.verdict]}`,
@@ -81,7 +92,7 @@ function formatStep(step: ITestStep, result: IStepResult | undefined): string {
       lines.push("", "Other output in the window:", "", formatObserved(result.unattributed));
     }
   }
-  return lines.join("\n");
+  return lines.join("\n") + formatNote(note);
 }
 
 function countVerdicts(results: IStepResult[]): string {
@@ -104,7 +115,8 @@ export function buildRunReport(input: IReportInput): string {
   const byStep = new Map(input.results.map((result) => [result.stepNumber, result]));
   let report = header;
   for (const [index, step] of input.steps.entries()) {
-    const section = `\n\n${formatStep(step, byStep.get(step.number))}`;
+    const note = input.notes?.[step.number];
+    const section = `\n\n${formatStep(step, byStep.get(step.number), note)}`;
     // Whole sections only: cutting mid-section can leave a code fence open.
     if (report.length + section.length > MAX_REPORT_LENGTH) {
       const omitted = input.steps.length - index;

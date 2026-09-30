@@ -26,8 +26,14 @@ export interface IConductorRun {
   /** Discord timestamp of the channel message that handed out the current step. */
   windowStart: number;
   results: IStepResult[];
-  /** A failed check awaiting "Check again" or "Continue as failed". */
+  /**
+   * A check awaiting the tester: a failure waits for "Check again" or "Continue as
+   * failed", and output with nothing to look for waits for "Looks right" or
+   * "Doesn't match".
+   */
   pendingResult?: IStepResult | null;
+  /** The tester's notes, by step number, quoted under each step in the report. */
+  notes?: Record<number, string>;
   status: ConductorRunStatus;
 }
 
