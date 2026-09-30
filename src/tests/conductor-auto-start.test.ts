@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { Message } from "discord.js";
+import type { CommandInteraction, Message } from "discord.js";
 
 import {
   formatPreviewReadyAnnouncement,
@@ -17,7 +17,7 @@ import type { IConductorSettings } from "../conductor/ConductorConfig.js";
 import { setConductorRuntime } from "../conductor/ConductorRuntime.js";
 import type { IConductorRun } from "../conductor/ConductorState.js";
 import type { GitHubPullClient, IPullRequestInfo } from "../conductor/GitHubPullClient.js";
-import { startRunFromAnnouncement } from "../conductor/conductor.command.js";
+import { ConductorCommand, startRunFromAnnouncement } from "../conductor/conductor.command.js";
 
 const SHA = "a606242f0c1d2e3b4a5968778695a4b3c2d1e0f9";
 const OTHER_SHA = "b606242f0c1d2e3b4a5968778695a4b3c2d1e0f9";
@@ -85,6 +85,7 @@ test("trusts no one when the preview bot ID is empty", () => {
 const FENCE = "```";
 const PLAN = ["## Testing", "", "### Step 1: Ping", FENCE, "/ping", FENCE,
   "Expected: \"Pong\"", "Ephemeral: no", ""].join("\n");
+const UNCHECKED_PLAN = PLAN.replace("Expected: \"Pong\"", "Expected: a reply appears");
 
 interface IHarness {
   statePath: string;
@@ -92,14 +93,14 @@ interface IHarness {
   prReads: number;
 }
 
-async function useRuntime(headSha: string): Promise<IHarness> {
+async function useRuntime(headSha: string, body = PLAN): Promise<IHarness> {
   const dir = await mkdtemp(join(tmpdir(), "conductor-auto-start-"));
   const harness: IHarness = { statePath: join(dir, "state.json"), sent: [], prReads: 0 };
   const github = {
     getPullRequest: async (): Promise<IPullRequestInfo> => {
       harness.prReads += 1;
       return {
-        number: 1350, state: "open", headSha, body: PLAN, htmlUrl: "https://x.test",
+        number: 1350, state: "open", headSha, body, htmlUrl: "https://x.test",
         authorLogin: "author",
       };
     },
@@ -117,8 +118,9 @@ async function useRuntime(headSha: string): Promise<IHarness> {
   return harness;
 }
 
-function fakeMessage(harness: IHarness, authorId: string, content: string): Message {
-  const channel = {
+/** The dev channel, recording what the conductor posts there. */
+function fakeChannel(harness: IHarness): object {
+  return {
     name: "dev",
     guildId: GUILD,
     isTextBased: (): boolean => true,
@@ -130,10 +132,14 @@ function fakeMessage(harness: IHarness, authorId: string, content: string): Mess
       return { createdTimestamp: 1000 };
     },
   };
-  const client = {
-    user: { id: SELF },
-    channels: { fetch: async () => channel },
-  };
+}
+
+function fakeClient(channel: object): object {
+  return { user: { id: SELF }, channels: { fetch: async () => channel } };
+}
+
+function fakeMessage(harness: IHarness, authorId: string, content: string): Message {
+  const channel = fakeChannel(harness);
   return {
     id: "4242",
     content,
@@ -142,7 +148,7 @@ function fakeMessage(harness: IHarness, authorId: string, content: string): Mess
     guildId: GUILD,
     channelId: CHANNEL,
     createdTimestamp: 999,
-    client,
+    client: fakeClient(channel),
     channel,
     inGuild: (): boolean => true,
   } as unknown as Message;
@@ -168,7 +174,16 @@ test("the preview bot's announcement starts a run in the dev channel", async () 
   assert.equal(run?.channelId, CHANNEL);
   assert.equal(run?.status, "running");
   assert.equal(run?.windowStart, 1000);
+  assert.equal(harness.sent.length, 1, "only the step message, no start notice");
+});
+
+test("a run with unchecked steps still warns about them after the step message", async () => {
+  const harness = await useRuntime(SHA, UNCHECKED_PLAN);
+  await startRunFromAnnouncement(fakeMessage(harness, PREVIEW_BOT, READY));
+
+  assert.equal((await readRun(harness.statePath))?.status, "running");
   assert.equal(harness.sent.length, 2);
+  assert.match(JSON.stringify(harness.sent[1]), /Step\(s\) 1 quote no text to look for/);
 });
 
 test("the announcement text from anyone else starts nothing", async () => {
@@ -239,3 +254,62 @@ for (const [name, pr, headSha] of SUPERSEDED) {
     assert.equal(run?.status, "running");
   });
 }
+
+interface IConductCalls {
+  edits: unknown[];
+  deletes: number;
+}
+
+function fakeConduct(harness: IHarness): {
+  interaction: CommandInteraction;
+  calls: IConductCalls;
+} {
+  const calls: IConductCalls = { edits: [], deletes: 0 };
+  const fake = {
+    id: "4343",
+    user: { id: "100", bot: false },
+    guildId: GUILD,
+    channelId: CHANNEL,
+    commandName: "conduct",
+    createdTimestamp: 999,
+    client: fakeClient(fakeChannel(harness)),
+    deferred: false,
+    replied: false,
+    isChatInputCommand: (): boolean => true,
+    isMessageComponent: (): boolean => false,
+    isModalSubmit: (): boolean => false,
+    isRepliable: (): boolean => true,
+    async deferReply(): Promise<void> {
+      fake.deferred = true;
+    },
+    async editReply(payload: unknown): Promise<void> {
+      calls.edits.push(payload);
+    },
+    async deleteReply(): Promise<void> {
+      calls.deletes += 1;
+    },
+  };
+  return { interaction: fake as unknown as CommandInteraction, calls };
+}
+
+test("/conduct with checkable steps deletes its deferred reply", async () => {
+  const harness = await useRuntime(SHA);
+  const { interaction, calls } = fakeConduct(harness);
+  await new ConductorCommand().conduct(1350, interaction);
+
+  assert.equal((await readRun(harness.statePath))?.status, "running");
+  assert.equal(harness.sent.length, 1);
+  assert.equal(calls.deletes, 1);
+  assert.deepEqual(calls.edits, []);
+});
+
+test("/conduct with unchecked steps edits its reply to the warning", async () => {
+  const harness = await useRuntime(SHA, UNCHECKED_PLAN);
+  const { interaction, calls } = fakeConduct(harness);
+  await new ConductorCommand().conduct(1350, interaction);
+
+  assert.equal(harness.sent.length, 1);
+  assert.equal(calls.deletes, 0);
+  assert.equal(calls.edits.length, 1);
+  assert.match(JSON.stringify(calls.edits[0]), /Step\(s\) 1 quote no text to look for/);
+});
