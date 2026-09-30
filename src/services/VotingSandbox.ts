@@ -11,7 +11,7 @@ import {
 } from "../functions/ComponentsV2Utils.js";
 import type { IVotePanelIds } from "../functions/VotePanelComponents.js";
 import { buildFinalWinnersText } from "../functions/VoteResultsUtils.js";
-import { UserFacingError } from "../utilities/ApiErrorUtils.js";
+import { describeDiscordRestError, UserFacingError } from "../utilities/ApiErrorUtils.js";
 import { persistedSessionStore } from "./PersistedInteractionSessionStore.js";
 import type { IVotingDataSource } from "./VotingDataSource.js";
 import {
@@ -335,10 +335,6 @@ function toVotingEvent(
   };
 }
 
-function describeError(err: unknown): string {
-  return err instanceof Error ? err.message : String(err);
-}
-
 /**
  * Delivers the sandbox's queued events through the live delivery loop and
  * handlers, oldest first, and reports each one. A failed event stays queued,
@@ -364,7 +360,7 @@ export async function deliverSandboxOutbox(client: Client, ownerId: string): Pro
         lines.push(`\`${event.rawKind}\`: ${outcome}.`);
         return outcome;
       } catch (err) {
-        lines.push(`\`${event.rawKind}\`: failed, left queued. ${describeError(err)}`);
+        lines.push(`\`${event.rawKind}\`: failed, left queued. ${describeDiscordRestError(err)}`);
         throw err;
       }
     };

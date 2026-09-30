@@ -14,24 +14,10 @@ import {
 } from "./VotePanelComponents.js";
 import { buildTestPanelNoticeText, dedupeNominationsByGame } from "./VoteResultsUtils.js";
 import { logError } from "../utilities/LogUtils.js";
+import { describeDiscordRestError } from "../utilities/ApiErrorUtils.js";
 
 // Posting a round's voting panels, shared by /admin voting-open and the
 // voting_opened voting event (VotingEventService), which has no interaction.
-
-/**
- * Why a panel send failed, short enough for a result line: the request line and
- * Discord's response, e.g. `POST /channels/1/messages -> 403 {"code":50013,...}`.
- * The request body (the whole panel) is left to the log.
- */
-export function describePanelSendError(err: unknown): string {
-  const rest = err as { method?: unknown; url?: unknown; status?: unknown; rawError?: unknown };
-  if (typeof rest?.method === "string" && typeof rest?.url === "string") {
-    const path = rest.url.replace(/^https?:\/\/[^/]+\/api\/v\d+/, "");
-    return `${rest.method.toUpperCase()} ${path} -> ${String(rest.status ?? "?")} ` +
-      JSON.stringify(rest.rawError ?? null);
-  }
-  return err instanceof Error ? err.message : String(err);
-}
 
 /** Null once sent; otherwise why it was not. */
 async function sendPanelToChannel(
@@ -52,7 +38,8 @@ async function sendPanelToChannel(
     return null;
   } catch (error) {
     logError("VotePanelPosting.sendPanelToChannel", error);
-    return describePanelSendError(error);
+    // The request body is the whole panel, so it is left to the log above.
+    return describeDiscordRestError(error);
   }
 }
 

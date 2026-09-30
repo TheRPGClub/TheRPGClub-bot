@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { Collection, type Client } from "discord.js";
 import { ADMIN_CHANNEL_ID, ANNOUNCEMENT_CHANNEL_ID } from "../config/channels.js";
-import { describePanelSendError } from "../functions/VotePanelPosting.js";
+import { describeDiscordRestError } from "../utilities/ApiErrorUtils.js";
 import { persistedSessionStore } from "../services/PersistedInteractionSessionStore.js";
 import {
   createSandboxDataSource,
@@ -293,7 +293,7 @@ test("sandbox ids carry owner, sandbox and round, and stay within Discord's limi
   assert.equal(parseSandboxCustomId("vsbx-mine:abc:x:1:gotm"), null);
 });
 
-test("describePanelSendError names the request and Discord's response", () => {
+test("describeDiscordRestError names the request and Discord's response", () => {
   const restError = Object.assign(new Error("Missing Permissions"), {
     method: "post",
     url: "https://discord.com/api/v10/channels/123/messages",
@@ -301,10 +301,10 @@ test("describePanelSendError names the request and Discord's response", () => {
     rawError: { message: "Missing Permissions", code: 50013 },
   });
   assert.equal(
-    describePanelSendError(restError),
+    describeDiscordRestError(restError),
     'POST /channels/123/messages -> 403 {"message":"Missing Permissions","code":50013}',
   );
-  assert.equal(describePanelSendError(new Error("boom")), "boom");
+  assert.equal(describeDiscordRestError(new Error("boom")), "boom");
 });
 
 test("a panel Discord refuses is reported with Discord's reason", async (t) => {
@@ -328,4 +328,39 @@ test("a panel Discord refuses is reported with Discord's reason", async (t) => {
   } as unknown as Client;
   const lines = await deliverSandboxOutbox(refusing, ownerId);
   assert.match(lines[0] ?? "", /-> 403 .*50013/);
+});
+
+test("a tie prompt Discord refuses names the request and Discord's response", async (t) => {
+  mockStore(t);
+  const { client } = fakeClient();
+  const ownerId = nextOwner();
+  await startOpenSandbox(ownerId);
+  await deliverSandboxOutbox(client, ownerId);
+  await mutateSandbox(ownerId, (state) => {
+    seedSandboxOutcome(state, "gotm", "two-way-tie", new Date());
+    closeSandboxVoting(state, new Date());
+  });
+  const noAdminAccess = {
+    channels: {
+      fetch: async (channelId: string) => {
+        const channel = await client.channels.fetch(channelId);
+        if (channelId !== ADMIN_CHANNEL_ID) return channel;
+        return {
+          ...channel,
+          send: async () => {
+            throw Object.assign(new Error("Missing Access"), {
+              method: "post",
+              url: `https://discord.com/api/v10/channels/${channelId}/messages`,
+              status: 403,
+              rawError: { message: "Missing Access", code: 50001 },
+            });
+          },
+        };
+      },
+    },
+  } as unknown as Client;
+  const lines = await deliverSandboxOutbox(noAdminAccess, ownerId);
+  assert.equal(lines[0], "`voting_closed`: delivered.");
+  assert.match(lines[1] ?? "", /`tie_pending`: failed, left queued\. POST \/channels\//);
+  assert.match(lines[1] ?? "", /-> 403 .*50001/);
 });
