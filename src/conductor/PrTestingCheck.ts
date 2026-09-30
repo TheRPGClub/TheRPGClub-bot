@@ -4,13 +4,56 @@
  * `scripts/check-pr-testing.ts`.
  */
 
-import { findUncheckedSteps, parseTestPlan } from "./TestPlanParser.js";
+import { findUncheckedSteps, parseTestPlan, type ITestStep } from "./TestPlanParser.js";
 
 export interface IPrTestingCheck {
   /** False only when the section exists and does not parse. */
   ok: boolean;
   /** A human-readable report: the parsed steps, or why the section was rejected. */
   lines: string[];
+}
+
+const QUOTED = /"[^"]*"/g;
+/** Actions that can open a modal: a click, or a slash command line. */
+const CLICK_VERBS = new Set(["click", "press"]);
+/** Words that start a user action. Field entries and a `submit` finish a modal. */
+const ACTION_VERBS = new Set([...CLICK_VERBS, "select", "choose", "pick"]);
+
+/** How many user actions a step's code block holds, per the one-action rule. */
+export function countStepActions(command: string): number {
+  let actions = 0;
+  let modalOpen = false;
+  const lines = command.replace(QUOTED, '""').toLowerCase().split("\n");
+  for (const line of lines) {
+    // A slash command line is one action; its subcommands and option values are not.
+    // It may open a modal, so a following `submit` closes the same action.
+    if (line.trim().startsWith("/")) {
+      actions += 1;
+      modalOpen = true;
+      continue;
+    }
+    const words = line.match(/[a-z]+/g) ?? [];
+    words.forEach((word, index) => {
+      // `select "<value>" in "<field>"` inside an open modal is a field, not a new action.
+      const modalField = modalOpen && !CLICK_VERBS.has(word) && words[index + 1] === "in";
+      if (ACTION_VERBS.has(word) && !modalField) {
+        actions += 1;
+        modalOpen = CLICK_VERBS.has(word);
+      } else if (word === "submit") {
+        if (!modalOpen) actions += 1;
+        modalOpen = false;
+      }
+    });
+  }
+  return actions;
+}
+
+/**
+ * Step numbers whose code block chains several actions. Only the last reply of such a
+ * step gets checked, so the format asks for one action per step.
+ */
+export function findChainedSteps(steps: ITestStep[]): number[] {
+  return steps.filter((step) => countStepActions(step.command) > 1).map((step) => step.number);
 }
 
 export function checkPrTesting(body: string): IPrTestingCheck {
@@ -46,6 +89,14 @@ export function checkPrTesting(body: string): IPrTestingCheck {
     lines.push(
       `Note: step(s) ${unchecked.join(", ")} have nothing the conductor can check ` +
         "(no quoted text that must appear), so the tester must confirm them by eye.",
+    );
+  }
+  const chained = findChainedSteps(plan.steps);
+  if (chained.length) {
+    lines.push(
+      `Warning: step(s) ${chained.join(", ")} chain several actions, so only the last ` +
+        "reply gets checked. Split them into one command, click, select, or modal submit " +
+        "per step.",
     );
   }
   return { ok: true, lines };

@@ -279,13 +279,16 @@ Closes #<N>
   taken over another, a scope line drawn, something left out. It is never
   dropped; an empty one reads "none".
 - Each closed issue gets its own `Closes #X` line.
+- Each `Testing` step is one asserted action, per `One action per step` in
+  `.github/pull-request-testing-format.md`.
 - Non-draft. Never run `gh pr merge` unasked. Once conductor testing passes, offer
   the merge per step 11.
 
 Check the `Testing` section with the parser `/conduct` runs before opening the
 PR. The script prints the steps it parsed. Exit 1 means the conductor cannot
 read the section and exit 2 means the body file could not be read. Fix whichever
-it names and run it again until it passes:
+it names and run it again until it passes. A warning that a step chains several
+actions means splitting that step, one action each:
 
 ```bash
 npm run check:pr-testing -- <scratchpad>/pr-body.md
