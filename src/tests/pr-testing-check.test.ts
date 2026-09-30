@@ -74,6 +74,7 @@ test("each single action counts once, a modal submit included", () => {
   assert.equal(countStepActions('click "Confirm"'), 1);
   assert.equal(countStepActions('select "Gloomhaven"'), 1);
   assert.equal(countStepActions("/journal select game:Gloomhaven"), 1);
+  assert.equal(countStepActions("/journal add body:Great game, pick it up"), 1);
   assert.equal(countStepActions('click "Search", enter "Gloomhaven" in "Title", submit'), 1);
   assert.equal(countStepActions('click "Add", enter "Hello, then bye" in "Body", submit'), 1);
 });
