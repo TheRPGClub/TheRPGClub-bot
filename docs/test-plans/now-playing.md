@@ -4,8 +4,11 @@ A full pass over `/now-playing add`, `list`, and `search`, and every button, sel
 modal their replies lead to. It runs against real data: it adds Chrono Trigger, writes and
 deletes a journal entry, and logs a real completion with the announcement turned off.
 
-Paste the `## Testing` section below into a PR body and run `/conduct` on that PR, or
+Paste the Testing section below into a PR body and run `/conduct` on that PR, or
 follow it by hand. The format is in `.github/pull-request-testing-format.md`.
+
+Before running it, make sure your Now Playing list has fewer than 10 titles and does not
+already hold Chrono Trigger. Step 4 adds it, and later steps remove it again.
 
 ## Testing
 
@@ -145,7 +148,7 @@ Ephemeral: yes
 
 ### Step 18: Write the first journal entry
 ```
-select "Chrono Trigger", enter "Conductor test entry" as Title and "Testing the journal." as Entry, submit
+select "Chrono Trigger", Title "Conductor test entry", Entry "Testing the journal.", submit
 ```
 Expected: a public journal message, "Chrono Trigger Game Journal", with
 "Conductor test entry", "Testing the journal." and "1 entry".
@@ -161,7 +164,7 @@ Ephemeral: no
 
 ### Step 20: Delete the journal entry
 ```
-click "Delete Entry" on the ephemeral journal follow-up, select "Conductor test entry", click "Delete"
+click "Delete Entry" on the journal follow-up, select "Conductor test entry", click "Delete"
 ```
 Expected: a Confirm Delete prompt names the entry, then the entry is removed,
 and not: "That journal entry was not found".
@@ -186,7 +189,7 @@ Ephemeral: no
 
 ### Step 23: Open Add Completion with the announcement off
 ```
-click your name button, click "Add Completion", click "Add Completion" under Chrono Trigger, select "No" from "Announce completion?"
+click your name, "Add Completion", then Chrono Trigger's "Add Completion", set Announce "No"
 ```
 Expected: the manage message shows "Add Completion" and "Chrono Trigger", with
 button: "Continue" and button: "Cancel". If Chrono Trigger is your only game, the
@@ -195,10 +198,11 @@ Ephemeral: yes
 
 ### Step 24: Submit the completion
 ```
-click "Continue", leave the date blank, enter "40" as Final playtime hours, enter "Conductor test" as Note, submit
+click "Continue", date blank, hours "40", Note "Conductor test", submit, "Add Another" if asked
 ```
-Expected: an ephemeral reply returns to the completion game picker, or to an empty-list
-note, with not: "Could not parse completion date" and not: "Chrono Trigger".
+Expected: a completion from the last week asks whether to add another; answer Add
+Another. An ephemeral reply then returns to the completion game picker, or to an
+empty-list note, with not: "Could not parse completion date" and not: "Chrono Trigger".
 Chrono Trigger is gone from your list, and nothing is announced publicly.
 Ephemeral: yes
 
