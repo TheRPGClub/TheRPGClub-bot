@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import { MessageFlags } from "discord.js";
 
 import {
-  formatMirrorMessage,
+  buildMirrorMessage,
+  MIRROR_ATTACHMENT_NAME,
   isEphemeralInteractionMessage,
   isEphemeralPayload,
   serializeMirrorPayload,
@@ -78,25 +79,31 @@ test("serializeMirrorPayload unwraps builders via toJSON", () => {
   assert.equal(payload.components?.[0]?.customId, "built:1");
 });
 
-test("formatMirrorMessage stays within Discord's message limit", () => {
+test("buildMirrorMessage moves a payload over the length cap into an attachment", () => {
   const payload = serializeMirrorPayload(fakeInteraction(), {
     flags: MessageFlags.Ephemeral,
     content: "x".repeat(5000),
   });
-  const message = formatMirrorMessage(payload);
-  assert.ok(message.length <= 2000, `message was ${message.length} chars`);
-  assert.ok(message.startsWith("```json\n"));
-  assert.ok(message.endsWith("\n```"));
+  const message = buildMirrorMessage(payload);
+  assert.ok(message.content.length <= 2000, `message was ${message.content.length} chars`);
+  const summary = JSON.parse(message.content.slice("```json\n".length, -"\n```".length));
+  assert.equal(summary.source, "/admin");
+  assert.equal(summary.attachment, MIRROR_ATTACHMENT_NAME);
+  const file = message.files?.[0];
+  assert.ok(file);
+  assert.equal(file.name, MIRROR_ATTACHMENT_NAME);
+  assert.deepEqual(JSON.parse((file.attachment as Buffer).toString("utf8")), payload);
 });
 
-test("formatMirrorMessage keeps content with triple backticks in one block", () => {
+test("buildMirrorMessage keeps content with triple backticks in one block", () => {
   const payload = serializeMirrorPayload(fakeInteraction(), {
     flags: MessageFlags.Ephemeral,
     content: "Request:\n```json\n{}\n```",
   });
-  const message = formatMirrorMessage(payload);
-  assert.equal((message.match(/```/g) ?? []).length, 2);
-  const body = message.slice("```json\n".length, -"\n```".length);
+  const message = buildMirrorMessage(payload);
+  assert.equal(message.files, undefined);
+  assert.equal((message.content.match(/```/g) ?? []).length, 2);
+  const body = message.content.slice("```json\n".length, -"\n```".length);
   assert.deepEqual(JSON.parse(body), payload);
 });
 

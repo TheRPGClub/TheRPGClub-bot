@@ -34,7 +34,10 @@ function interactionWithChannel(channel: unknown, seen: string[]): AnyRepliable 
 test("mirrorEphemeralReply posts an ephemeral reply to the test-log channel", async () => {
   const sent: string[] = [];
   const seen: string[] = [];
-  const channel = { isTextBased: () => true, send: (c: string) => { sent.push(c); } };
+  const channel = {
+    isTextBased: () => true,
+    send: (message: { content: string }) => { sent.push(message.content); },
+  };
 
   await mirrorEphemeralReply(interactionWithChannel(channel, seen), EPHEMERAL);
 
@@ -47,7 +50,10 @@ test("mirrorEphemeralReply posts an ephemeral reply to the test-log channel", as
 test("mirrorEphemeralReply skips a public reply in test mode", async () => {
   const sent: string[] = [];
   const seen: string[] = [];
-  const channel = { isTextBased: () => true, send: (c: string) => { sent.push(c); } };
+  const channel = {
+    isTextBased: () => true,
+    send: (message: { content: string }) => { sent.push(message.content); },
+  };
 
   await mirrorEphemeralReply(interactionWithChannel(channel, seen), { flags: 0 });
 
@@ -103,7 +109,10 @@ test("safeUpdate mirrors a successful update of an ephemeral message", async () 
   const sent: string[] = [];
   const seen: string[] = [];
   const updated: unknown[] = [];
-  const channel = { isTextBased: () => true, send: (c: string) => { sent.push(c); } };
+  const channel = {
+    isTextBased: () => true,
+    send: (message: { content: string }) => { sent.push(message.content); },
+  };
   const interaction = componentInteraction(MessageFlags.Ephemeral, channel, seen, updated);
 
   await safeUpdate(interaction, buildTextReply("updated body", true));
@@ -121,7 +130,10 @@ test("safeUpdate does not mirror an update of a public message", async () => {
   const sent: string[] = [];
   const seen: string[] = [];
   const updated: unknown[] = [];
-  const channel = { isTextBased: () => true, send: (c: string) => { sent.push(c); } };
+  const channel = {
+    isTextBased: () => true,
+    send: (message: { content: string }) => { sent.push(message.content); },
+  };
   const interaction = componentInteraction(0, channel, seen, updated);
 
   await safeUpdate(interaction, buildTextReply("public body", false));
@@ -169,7 +181,10 @@ test("a reply filling an ephemeral defer is mirrored without its own flag", asyn
   const { safeDeferReply, safeReply } = await import("../functions/InteractionUtils.js");
   const sent: string[] = [];
   const seen: string[] = [];
-  const channel = { isTextBased: () => true, send: (c: string) => { sent.push(c); } };
+  const channel = {
+    isTextBased: () => true,
+    send: (message: { content: string }) => { sent.push(message.content); },
+  };
   const interaction = deferrableCommand(channel, seen);
 
   await safeDeferReply(interaction, { flags: MessageFlags.Ephemeral });
@@ -183,7 +198,10 @@ test("a reply filling a public defer is not mirrored", async () => {
   const { safeDeferReply, safeReply } = await import("../functions/InteractionUtils.js");
   const sent: string[] = [];
   const seen: string[] = [];
-  const channel = { isTextBased: () => true, send: (c: string) => { sent.push(c); } };
+  const channel = {
+    isTextBased: () => true,
+    send: (message: { content: string }) => { sent.push(message.content); },
+  };
   const interaction = deferrableCommand(channel, seen);
 
   await safeDeferReply(interaction);
@@ -196,7 +214,10 @@ test("safeEditReply after an ephemeral command defer is mirrored", async () => {
   const { safeDeferReply, safeEditReply } = await import("../functions/InteractionUtils.js");
   const sent: string[] = [];
   const seen: string[] = [];
-  const channel = { isTextBased: () => true, send: (c: string) => { sent.push(c); } };
+  const channel = {
+    isTextBased: () => true,
+    send: (message: { content: string }) => { sent.push(message.content); },
+  };
   const interaction = deferrableCommand(channel, seen);
 
   await safeDeferReply(interaction, { flags: MessageFlags.Ephemeral });

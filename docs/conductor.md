@@ -85,8 +85,14 @@ keyword right before the quote narrows where it must appear:
 - `field: "..."`: an embed field name or value.
 - `not: "..."`: must appear nowhere in the output.
 
-A mirror post cut at Discord's length cap is raw text, not JSON, so its scoped checks
-only look for the text, and its `not:` checks are skipped: its JSON keys would trip them.
+A reply too long for Discord's 2000-character cap is mirrored whole as a `mirror.json`
+attachment, and the post's content keeps only its `kind`, `source`, `user`, and the
+attachment's name. The conductor downloads the attachment for mirror posts newer than
+the step's window start, so every check sees the full payload.
+
+A mirror post from a preview bot built before the attachment is cut at the length cap
+instead. It is raw text, not JSON, so its scoped checks only look for the text, and its
+`not:` checks are skipped: its JSON keys would trip them.
 
 - **PASS**: every check holds. When the tester presses **Looks right**, the result
   says the tester confirmed it.
