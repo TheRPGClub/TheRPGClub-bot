@@ -4,6 +4,7 @@ import Member from "../classes/Member.js";
 import GamePlatformRegionService from "../classes/GamePlatformRegionService.js";
 import { startPlayingEntry } from "../commands/now-playing/nowPlayingStart.service.js";
 import { buildStartPlayingSelectRow } from "../functions/StartPlayingSelect.js";
+import { UserFacingError } from "../utilities/ApiErrorUtils.js";
 
 function buildInteraction(replies: any[]): any {
   return {
@@ -81,4 +82,26 @@ test("buildStartPlayingSelectRow uses entry ids as option values", () => {
   assert.equal(select.custom_id, "backlog-start-playing-v1:123");
   assert.deepEqual(select.options.map((o: any) => o.value), ["41", "42"]);
   assert.equal(select.options[1].description, "No platform");
+});
+
+test("startPlayingEntry reports a duplicate without pinging the developers", async () => {
+  const originalAdd = Member.addNowPlaying;
+  const replies: any[] = [];
+  try {
+    Member.addNowPlaying = (async () => {
+      throw new UserFacingError("That title is already in your Now Playing list.");
+    }) as any;
+    await startPlayingEntry(buildInteraction(replies), {
+      gameId: 7,
+      title: "Alpha",
+      platformId: 4,
+      platformName: "Switch",
+      note: null,
+    });
+    const json = collectJson(replies[0]);
+    assert.match(json, /already in your Now Playing list/);
+    assert.doesNotMatch(json, /<@&/);
+  } finally {
+    Member.addNowPlaying = originalAdd;
+  }
 });
