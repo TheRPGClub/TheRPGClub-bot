@@ -6,6 +6,16 @@ const INVALID_EMOJI_ERROR_CODE = "COMPONENT_INVALID_EMOJI";
 type ErrorTree = { _errors?: { code?: string }[]; [key: string]: unknown };
 type InvalidEmojiHandler = (emojiIds: readonly string[]) => void;
 
+let invalidEmojiHandler: InvalidEmojiHandler = () => {};
+
+/**
+ * Registers who hears about rejected emoji ids. UserEmojiService sets it at startup, so the
+ * send helpers do not import the service (and its sharp and API dependencies) themselves.
+ */
+export function setInvalidEmojiHandler(handler: InvalidEmojiHandler): void {
+  invalidEmojiHandler = handler;
+}
+
 function readApiError(err: unknown): { code?: number; errors?: ErrorTree } {
   const e = err as { code?: number; rawError?: { code?: number; errors?: ErrorTree } };
   return { code: e?.code ?? e?.rawError?.code, errors: e?.rawError?.errors };
@@ -93,7 +103,7 @@ export function stripInvalidEmojis(
 export async function sendWithInvalidEmojiRetry<T>(
   options: unknown,
   send: (options: any) => Promise<T>,
-  onInvalid: InvalidEmojiHandler,
+  onInvalid: InvalidEmojiHandler = invalidEmojiHandler,
 ): Promise<T> {
   try {
     return await send(options);

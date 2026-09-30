@@ -4,6 +4,7 @@ import Member from "../classes/Member.js";
 import { sleep } from "../utilities/DelayUtils.js";
 import { logError, logInfo } from "../utilities/LogUtils.js";
 import { IS_TEST_MODE } from "../config/testMode.js";
+import { setInvalidEmojiHandler } from "../functions/InvalidEmojiRetry.js";
 import {
   ADMIN_ROLE_ID,
   MEMBER_ROLE_ID,
@@ -76,11 +77,13 @@ function hasQualifyingRole(member: GuildMember): boolean {
 }
 
 type EmojiCacheEntry = { emojiId: string; emojiName: string };
+// rejectedId: the id Discord refused; not re-adopted on the first look after the rejection.
+type PendingEntry = EmojiCacheEntry & { rejectedId?: string };
 
 // userId -> { emojiId, emojiName }
 const emojiCache = new Map<string, EmojiCacheEntry>();
 // Entries evicted because Discord rejected or no longer lists their emoji, awaiting resync.
-const pendingResync = new Map<string, EmojiCacheEntry>();
+const pendingResync = new Map<string, PendingEntry>();
 let initialized = false;
 let serviceClient: Client | null = null;
 let initialSyncDone = false;
@@ -135,6 +138,7 @@ export async function startUserEmojiService(client: Client): Promise<void> {
   if (initialized) return;
   initialized = true;
   serviceClient = client;
+  setInvalidEmojiHandler(reportInvalidUserEmojis);
   const initialSync = EMOJI_WRITES_ENABLED
     ? syncAllUserEmoji(client, process.env["FORCE_EMOJI_REFRESH"] === "true")
     : loadUserEmojiCacheReadOnly(client);
@@ -187,7 +191,7 @@ export function reportInvalidUserEmojis(emojiIds: readonly string[]): void {
   for (const [userId, entry] of emojiCache) {
     if (!rejected.has(entry.emojiId)) continue;
     emojiCache.delete(userId);
-    pendingResync.set(userId, entry);
+    pendingResync.set(userId, { ...entry, rejectedId: entry.emojiId });
     logInfo("UserEmojiService", `Evicted stale emoji ${entry.emojiName} (${entry.emojiId})`);
   }
   if (pendingResync.size && serviceClient && initialSyncDone) {
@@ -214,18 +218,26 @@ function scheduleReconcile(client: Client): void {
 async function reconcileUserEmojiCache(client: Client): Promise<void> {
   const app = client.application;
   if (!app) return;
+  // Entries written while the fetch is in flight (an avatar or name change) are newer than
+  // the listing, so only entries unchanged since before the fetch are checked against it.
+  const snapshot = new Map(emojiCache);
   const liveIdsByName = await fetchLiveEmojiIdsByName(app);
   const liveIds = new Set(liveIdsByName.values());
-  for (const [userId, entry] of emojiCache) {
-    if (liveIds.has(entry.emojiId)) continue;
+  for (const [userId, entry] of snapshot) {
+    if (liveIds.has(entry.emojiId) || emojiCache.get(userId) !== entry) continue;
     emojiCache.delete(userId);
     pendingResync.set(userId, entry);
   }
 
-  for (const [userId, entry] of pendingResync) {
+  for (const [userId, entry] of [...pendingResync]) {
     pendingResync.delete(userId);
     if (emojiCache.has(userId)) continue;
     const liveId = liveIdsByName.get(entry.emojiName);
+    if (liveId && liveId === entry.rejectedId) {
+      // Still listed under the id Discord just refused; look again next cycle.
+      pendingResync.set(userId, { emojiId: entry.emojiId, emojiName: entry.emojiName });
+      continue;
+    }
     if (liveId) {
       emojiCache.set(userId, { emojiId: liveId, emojiName: entry.emojiName });
       logInfo("UserEmojiService", `Adopted live emoji ${entry.emojiName} (${liveId})`);
