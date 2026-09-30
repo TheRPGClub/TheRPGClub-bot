@@ -141,9 +141,9 @@ Once the PR is mergeable, without waiting for CI, move to `Self Review` (see
 [Sidebar moves](#sidebar-moves)) and run the loop in [self-review.md](../_shared/self-review.md)
 until a pass comes back clean. Fill in the `Self review` section of the body as it goes.
 
-When the skill that called open-pr runs the self review loop itself (for example
-`/next-refactor`), open-pr ends after step 5 and skips steps 6 and 7. The calling skill runs
-the loop, moves to `Needs Review`, and reports once its loop ends clean.
+When the skill that called open-pr runs the self review loop itself, open-pr ends after
+step 5 and skips steps 6 and 7. The calling skill runs the loop, moves to `Needs Review`,
+and reports once its loop ends clean.
 
 ### 7. Report and file the session in the sidebar
 
