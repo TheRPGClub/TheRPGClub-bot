@@ -23,7 +23,6 @@ RUN npm ci --omit=dev
 
 COPY --from=builder /app/build ./build
 COPY --from=builder /app/src/assets ./src/assets
-COPY --from=builder /app/src/data ./src/data
 
 RUN useradd --uid 1001 --create-home botuser
 USER botuser
