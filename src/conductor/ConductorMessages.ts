@@ -2,7 +2,7 @@
  * Discord payloads the conductor sends the tester. Step text comes from the PR
  * body, so every payload disables mentions and the command sits in a code block.
  */
-import { ButtonStyle, type InteractionDeferReplyOptions } from "discord.js";
+import { ButtonStyle } from "discord.js";
 import { ActionRowBuilder, ButtonBuilder, ContainerBuilder } from "@discordjs/builders";
 import {
   CONDUCTOR_ABORT_PREFIX,
@@ -13,36 +13,12 @@ import {
 import {
   buildComponentsV2EditFlags,
   buildTextContainer,
-  buildTextReply,
 } from "../functions/ComponentsV2Utils.js";
 import type { IStepResult } from "./ConductorObservation.js";
 import type { IConductorRun } from "./ConductorState.js";
 import { VERDICT_LABELS, fenceFor } from "./ConductorReport.js";
 
 export const NO_MENTIONS = { parse: [] as never[] };
-
-/**
- * An allowed `/conduct` defers publicly, so its status lines stay in the channel
- * after a dismiss or reload. Every later edit inherits this visibility.
- */
-export const CONDUCT_DEFER_OPTIONS: InteractionDeferReplyOptions = {};
-
-/** Refusals stay ephemeral: only the allowed user gets public replies. */
-export function buildDenialReply(): ReturnType<typeof buildTextReply> {
-  return buildTextReply("This conductor is restricted.", true);
-}
-
-export function buildStatusEdit(content: string): {
-  components: ContainerBuilder[];
-  flags: number;
-  allowedMentions: typeof NO_MENTIONS;
-} {
-  return {
-    components: [buildTextContainer(content)],
-    flags: buildComponentsV2EditFlags(),
-    allowedMentions: NO_MENTIONS,
-  };
-}
 
 export function buildCheckCustomId(runId: string, stepIndex: number): string {
   return `${CONDUCTOR_CHECK_PREFIX}:${runId}:${stepIndex}`;
