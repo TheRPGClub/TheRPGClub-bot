@@ -87,7 +87,9 @@ The conductor reads these from its process environment:
 - `CONDUCTOR_BOT_TOKEN`: the conductor application's bot token. Never the production or
   preview bot's token.
 - `CONDUCTOR_GITHUB_TOKEN`: a fine-grained token for `TheRPGClub/TheRPGClub-bot` with
-  Pull requests: read and Issues: read and write (PR comments are issue comments).
+  Pull requests: read and write. The report is posted through the issues comments API,
+  but on a pull request GitHub checks the Pull requests permission, not Issues, so
+  Issues: read and write alone gets a 403.
 - `TEST_GUILD_ID`: must be the test guild. The conductor refuses to start without it,
   since it is what makes the shared channel constants resolve to the test guild.
 - `CONDUCTOR_STATE_PATH` (optional): where the active run is saved, by default
