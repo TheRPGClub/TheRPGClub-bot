@@ -44,8 +44,8 @@ export function checkPrTesting(body: string): IPrTestingCheck {
   const unchecked = findUncheckedSteps(plan.steps);
   if (unchecked.length) {
     lines.push(
-      `Note: step(s) ${unchecked.join(", ")} quote no text to look for, ` +
-        "so the tester must confirm them by eye.",
+      `Note: step(s) ${unchecked.join(", ")} have nothing the conductor can check ` +
+        "(no quoted text that must appear), so the tester must confirm them by eye.",
     );
   }
   return { ok: true, lines };

@@ -282,8 +282,9 @@ Closes #<N>
 - Non-draft. Never run `gh pr merge`; the user merges.
 
 Check the `Testing` section with the parser `/conduct` runs before opening the
-PR. The script prints the steps it parsed; a non-zero exit means the conductor
-cannot read the section. Fix the body and run it again until it passes:
+PR. The script prints the steps it parsed. Exit 1 means the conductor cannot
+read the section and exit 2 means the body file could not be read. Fix whichever
+it names and run it again until it passes:
 
 ```bash
 npm run check:pr-testing -- <scratchpad>/pr-body.md

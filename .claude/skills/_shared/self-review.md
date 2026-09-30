@@ -116,8 +116,9 @@ is listed as clean. A first pass that found nothing reads "one pass, no
 findings" rather than dropping the heading.
 
 Patch the body from a scratchpad file, per [shell-text.md](shell-text.md), after
-checking its `Testing` section still parses. A non-zero exit means the conductor
-cannot read the section; fix the body and run the check again before patching:
+checking its `Testing` section still parses. Exit 1 means the conductor cannot
+read the section and exit 2 means the file could not be read; fix whichever it
+names and run the check again before patching:
 
 ```bash
 npm run check:pr-testing -- <scratchpad>/pr-body.md
