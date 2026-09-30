@@ -57,7 +57,7 @@ import {
 
 const OUTCOME_CHOICES = [
   { name: "Clear winner", value: "winner" },
-  { name: "Two-way tie", value: "tie" },
+  { name: "Two-way tie", value: "two-way-tie" },
   { name: "Three-way tie", value: "three-way-tie" },
   { name: "No votes", value: "no-votes" },
 ];

@@ -132,7 +132,7 @@ test("a clear winner decides the round and queues the results then the decision"
 test("a two-way tie leaves the round tied until an admin breaks it", () => {
   const state = votingSandbox();
   seedSandboxOutcome(state, "gotm", "winner", NOW);
-  seedSandboxOutcome(state, "nr-gotm", "tie", NOW);
+  seedSandboxOutcome(state, "nr-gotm", "two-way-tie", NOW);
   closeSandboxVoting(state, later(1000));
   assert.equal(state.phase, "tie");
   assert.deepEqual(outboxKinds(state), ["voting_opened", "voting_closed", "tie_pending"]);
@@ -180,7 +180,10 @@ test("no votes decides the round with no winner and no tie", () => {
 test("seedSandboxOutcome refuses an outcome the category has too few games for", () => {
   const state = sandbox({ nominationCounts: { "gotm": 1, "nr-gotm": 2 } });
   openSandboxVoting(state, NOW);
-  assert.throws(() => seedSandboxOutcome(state, "gotm", "tie", NOW), /needs at least 2/);
+  assert.throws(
+    () => seedSandboxOutcome(state, "gotm", "two-way-tie", NOW),
+    /needs at least 2/,
+  );
   assert.throws(
     () => seedSandboxOutcome(state, "nr-gotm", "three-way-tie", NOW),
     /needs at least 3/,
@@ -241,7 +244,7 @@ test("isFixtureGameId marks only fixture games", () => {
 
 test("parseSandboxState round-trips JSON and rejects anything else", () => {
   const state = votingSandbox();
-  seedSandboxOutcome(state, "gotm", "tie", NOW);
+  seedSandboxOutcome(state, "gotm", "two-way-tie", NOW);
   const restored = parseSandboxState(JSON.parse(JSON.stringify(state)));
   assert.deepEqual(restored, state);
   assert.equal(parseSandboxState(null), null);

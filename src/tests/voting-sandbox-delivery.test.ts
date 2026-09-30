@@ -1,7 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { AxiosError } from "axios";
 import { Collection, type Client } from "discord.js";
 import { ADMIN_CHANNEL_ID, ANNOUNCEMENT_CHANNEL_ID } from "../config/channels.js";
+import { describeRequestError } from "../utilities/ApiErrorUtils.js";
 import { persistedSessionStore } from "../services/PersistedInteractionSessionStore.js";
 import {
   createSandboxDataSource,
@@ -120,7 +122,7 @@ test("a tie posts results, prompts the admins, and breaking it decides the round
 
   await mutateSandbox(ownerId, (state) => {
     const now = new Date();
-    seedSandboxOutcome(state, "gotm", "tie", now);
+    seedSandboxOutcome(state, "gotm", "two-way-tie", now);
     seedSandboxOutcome(state, "nr-gotm", "no-votes", now);
     closeSandboxVoting(state, now);
   });
@@ -180,6 +182,8 @@ test("a failed post stays queued and holds back the round's later events", async
 
   const lines = await deliverSandboxOutbox(silent, ownerId);
   assert.match(lines[0] ?? "", /`voting_opened`: failed, left queued/);
+  // The reason each panel failed reaches the reply, not just the log.
+  assert.match(lines[0] ?? "", /GOTM: failed to post .*not found or is not a text channel/);
   assert.match(lines.at(-1) ?? "", /2 event\(s\) still queued/);
   assert.equal((await loadSandbox(ownerId))?.outbox.length, 2);
 
@@ -288,4 +292,87 @@ test("sandbox ids carry owner, sandbox and round, and stay within Discord's limi
   assert.equal(parseSandboxCustomId(tie)?.rest[0], "nr_gotm");
   assert.equal(parseSandboxCustomId(`vsbx-mine:${target.ownerId}:x:0:gotm`), null);
   assert.equal(parseSandboxCustomId("vsbx-mine:abc:x:1:gotm"), null);
+});
+
+test("describeRequestError names the request and Discord's response", () => {
+  const restError = Object.assign(new Error("Missing Permissions"), {
+    method: "post",
+    url: "https://discord.com/api/v10/channels/123/messages",
+    status: 403,
+    rawError: { message: "Missing Permissions", code: 50013 },
+  });
+  assert.equal(
+    describeRequestError(restError),
+    'POST /channels/123/messages -> 403 {"message":"Missing Permissions","code":50013}',
+  );
+  assert.equal(describeRequestError(new Error("boom")), "boom");
+  const apiError = new AxiosError(
+    "Request failed with status code 500",
+    "ERR_BAD_RESPONSE",
+    { method: "get", url: "/api/v1/users/1/wizard_sessions" } as never,
+    null,
+    { status: 500, data: { error: "boom" } } as never,
+  );
+  const described = describeRequestError(apiError);
+  assert.match(described, /"method": "GET"/);
+  assert.match(described, /"url": "\/api\/v1\/users\/1\/wizard_sessions"/);
+  assert.match(described, /"status": 500/);
+});
+
+test("a panel Discord refuses is reported with Discord's reason", async (t) => {
+  mockStore(t);
+  const ownerId = nextOwner();
+  await startOpenSandbox(ownerId);
+  const refusing = {
+    channels: {
+      fetch: async () => ({
+        isTextBased: () => true,
+        send: async () => {
+          throw Object.assign(new Error("Missing Permissions"), {
+            method: "post",
+            url: "https://discord.com/api/v10/channels/9/messages",
+            status: 403,
+            rawError: { message: "Missing Permissions", code: 50013 },
+          });
+        },
+      }),
+    },
+  } as unknown as Client;
+  const lines = await deliverSandboxOutbox(refusing, ownerId);
+  assert.match(lines[0] ?? "", /-> 403 .*50013/);
+});
+
+test("a tie prompt Discord refuses names the request and Discord's response", async (t) => {
+  mockStore(t);
+  const { client } = fakeClient();
+  const ownerId = nextOwner();
+  await startOpenSandbox(ownerId);
+  await deliverSandboxOutbox(client, ownerId);
+  await mutateSandbox(ownerId, (state) => {
+    seedSandboxOutcome(state, "gotm", "two-way-tie", new Date());
+    closeSandboxVoting(state, new Date());
+  });
+  const noAdminAccess = {
+    channels: {
+      fetch: async (channelId: string) => {
+        const channel = await client.channels.fetch(channelId);
+        if (channelId !== ADMIN_CHANNEL_ID) return channel;
+        return {
+          ...channel,
+          send: async () => {
+            throw Object.assign(new Error("Missing Access"), {
+              method: "post",
+              url: `https://discord.com/api/v10/channels/${channelId}/messages`,
+              status: 403,
+              rawError: { message: "Missing Access", code: 50001 },
+            });
+          },
+        };
+      },
+    },
+  } as unknown as Client;
+  const lines = await deliverSandboxOutbox(noAdminAccess, ownerId);
+  assert.equal(lines[0], "`voting_closed`: delivered.");
+  assert.match(lines[1] ?? "", /`tie_pending`: failed, left queued\. POST \/channels\//);
+  assert.match(lines[1] ?? "", /-> 403 .*50001/);
 });

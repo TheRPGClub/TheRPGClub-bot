@@ -14,29 +14,32 @@ import {
 } from "./VotePanelComponents.js";
 import { buildTestPanelNoticeText, dedupeNominationsByGame } from "./VoteResultsUtils.js";
 import { logError } from "../utilities/LogUtils.js";
+import { describeRequestError } from "../utilities/ApiErrorUtils.js";
 
 // Posting a round's voting panels, shared by /admin voting-open and the
 // voting_opened voting event (VotingEventService), which has no interaction.
 
+/** Null once sent; otherwise why it was not. */
 async function sendPanelToChannel(
   client: Client,
   channelId: string,
   components: VotePanelComponent[],
-): Promise<boolean> {
+): Promise<string | null> {
   try {
     const sendable = await fetchSendableChannel(client, channelId);
     if (!sendable) {
-      return false;
+      return "the channel was not found or is not a text channel";
     }
     await sendable.send({
       components,
       flags: buildComponentsV2Flags(false),
       allowedMentions: { parse: [] },
     });
-    return true;
+    return null;
   } catch (error) {
     logError("VotePanelPosting.sendPanelToChannel", error);
-    return false;
+    // The request body is the whole panel, so it is left to the log above.
+    return describeRequestError(error);
   }
 }
 
@@ -117,7 +120,8 @@ export async function postVotePanels(
           })
         : null),
     });
-    const sent = await sendPanelToChannel(params.client, params.channelId, components);
+    const failure = await sendPanelToChannel(params.client, params.channelId, components);
+    const sent = failure === null;
     if (sent) {
       posted += 1;
     } else {
@@ -127,7 +131,7 @@ export async function postVotePanels(
       sent
         ? `${kindLabel}: voting panel posted in ${channelMention(params.channelId)}.`
         : `${kindLabel}: failed to post the voting panel in ` +
-          `${channelMention(params.channelId)}.`,
+          `${channelMention(params.channelId)}: ${failure}`,
     );
   }
   return { lines: resultLines, posted, failed };

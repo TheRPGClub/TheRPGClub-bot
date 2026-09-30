@@ -136,7 +136,9 @@ async function postVotingPanels(
     notice: context.panelNotice,
   });
   if (result.posted === 0) {
-    throw new Error(`No Round ${round.roundNumber} voting panel could be posted.`);
+    throw new Error(
+      `No Round ${round.roundNumber} voting panel could be posted.\n${result.lines.join("\n")}`,
+    );
   }
   if (result.failed > 0) {
     // Retrying would repost the panels that did go out; /admin voting-open
