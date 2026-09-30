@@ -340,10 +340,8 @@ export async function takeOffBacklogIfAlreadyPlaying(
     }
     await UserGameBacklog.removeEntries([entry.entryId]);
   } catch (err: unknown) {
-    await safeReply(
-      interaction,
-      buildErrorReply(buildApiErrorMessage("Failed to take this game off your backlog", err), true),
-    );
+    const message = buildApiErrorMessage("Failed to take this game off your backlog", err);
+    await safeReply(interaction, buildErrorReply(message, true));
     return true;
   }
   await safeReply(interaction, buildTextReply(
