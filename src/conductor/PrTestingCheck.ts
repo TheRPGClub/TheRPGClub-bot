@@ -16,7 +16,7 @@ export interface IPrTestingCheck {
 /** Separators between actions a step's code block chains together. */
 const ACTION_SEPARATOR = /,|;|\n|\bthen\b/i;
 const QUOTED = /"[^"]*"/g;
-/** First words that start a new user action. Field entries and `submit` finish a modal. */
+/** Words that start a user action. Field entries and a `submit` finish a modal. */
 const ACTION_VERBS = new Set(["click", "press", "select", "choose", "pick"]);
 
 /** How many user actions a step's code block holds, per the one-action rule. */
@@ -25,13 +25,20 @@ export function countStepActions(command: string): number {
   let modalOpen = false;
   for (const segment of command.replace(QUOTED, '""').split(ACTION_SEPARATOR)) {
     const text = segment.trim().toLowerCase();
-    const verb = text.split(/\s+/)[0] ?? "";
-    if (text.startsWith("/") || ACTION_VERBS.has(verb)) {
+    // A slash command's subcommand names (`/journal select`) are not actions.
+    if (text.startsWith("/")) {
       actions += 1;
-      modalOpen = verb === "click" || verb === "press";
-    } else if (verb === "submit") {
-      if (!modalOpen) actions += 1;
       modalOpen = false;
+      continue;
+    }
+    for (const word of text.match(/[a-z]+/g) ?? []) {
+      if (ACTION_VERBS.has(word)) {
+        actions += 1;
+        modalOpen = word === "click" || word === "press";
+      } else if (word === "submit") {
+        if (!modalOpen) actions += 1;
+        modalOpen = false;
+      }
     }
   }
   return actions;

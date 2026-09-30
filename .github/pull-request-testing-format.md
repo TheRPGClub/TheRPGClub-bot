@@ -44,9 +44,9 @@ block chains several actions.
 - `Expected:` and `Ephemeral:` are single lines, immediately after the code block.
 - `Ephemeral:` accepts only `yes` or `no`. Anything else is unparseable.
 - No markdown tables anywhere, per project convention.
-- Quote at least one exact string the output must contain in every `Expected:` line.
-  The conductor only checks double-quoted text; a step that quotes none is left for
-  the tester to confirm by eye.
+- Quote at least one check in every `Expected:` line, per
+  [One action per step](#one-action-per-step). The conductor only checks
+  double-quoted text; a step that quotes none is left for the tester to confirm by eye.
 - The command must be runnable as written: real option names and real values that
   exist in the test data, not `<placeholders>`.
 

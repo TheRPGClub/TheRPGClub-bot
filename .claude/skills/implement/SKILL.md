@@ -279,10 +279,8 @@ Closes #<N>
   taken over another, a scope line drawn, something left out. It is never
   dropped; an empty one reads "none".
 - Each closed issue gets its own `Closes #X` line.
-- `Testing` follows the rule under `One action per step` in
-  `.github/pull-request-testing-format.md`:
-  one command, click, select, or modal submit per step, each quoting at least one
-  check for the reply it produces. A flow of three clicks is three steps.
+- Each `Testing` step is one asserted action, per `One action per step` in
+  `.github/pull-request-testing-format.md`.
 - Non-draft. Never run `gh pr merge` unasked. Once conductor testing passes, offer
   the merge per step 11.
 
