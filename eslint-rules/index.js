@@ -3773,11 +3773,10 @@ export default {
 
         function isDeferredBefore(reply, defer) {
           if (defer.target !== reply.target) return false;
-          // withClickedRowDisabled defers before its callback runs.
-          if (defer.helper === CLICKED_ROW_LOCK_HELPER) {
-            const callback = defer.node.arguments[1];
-            return Boolean(callback) && containsRange(callback, reply.node);
-          }
+          // withClickedRowDisabled defers before its callback runs, so a reply inside the
+          // callback counts too; one after the call falls through to the check below.
+          const callback = defer.helper === CLICKED_ROW_LOCK_HELPER && defer.node.arguments[1];
+          if (callback && containsRange(callback, reply.node)) return true;
           const deferFunction = getEnclosingFunction(defer.node);
           // A defer inside withErrorReply's own callback settles the interaction before the
           // wrapper's error reply runs.
