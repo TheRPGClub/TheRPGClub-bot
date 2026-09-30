@@ -34,6 +34,7 @@ import {
 } from "../../functions/InteractionUtils.js";
 import { buildActionButton, buildButtonRow } from "../../functions/uiComponents.js";
 import { buildApiErrorMessage } from "../../utilities/ApiErrorUtils.js";
+import { assertCustomIdSegments } from "../../utilities/CustomIdUtils.js";
 import { logError } from "../../utilities/LogUtils.js";
 import { startPlayingEntry } from "../now-playing/nowPlayingStart.service.js";
 import { takeOffBacklogIfAlreadyPlaying } from "./backlog-list.service.js";
@@ -59,8 +60,12 @@ type PickPayload = { components: unknown[] };
 
 async function buildPickPayload(state: IBacklogPickState): Promise<PickPayload> {
   let result: Awaited<ReturnType<typeof pickFromBacklog>>;
+  let filterSummary: string;
   try {
-    result = await pickFromBacklog(state);
+    [result, filterSummary] = await Promise.all([
+      pickFromBacklog(state),
+      describeBacklogPickFilters(state),
+    ]);
   } catch (err) {
     logError("backlog pick.build_failed", err);
     const message = buildApiErrorMessage("Failed to pick a game", err);
@@ -70,7 +75,6 @@ async function buildPickPayload(state: IBacklogPickState): Promise<PickPayload> 
     return { components: [buildTextContainer(buildBacklogPickEmptyMessage(state))] };
   }
 
-  const filterSummary = await describeBacklogPickFilters(state);
   const container = buildContentContainer(
     buildBacklogPickContent(result, filterSummary),
     result.coverUrl,
@@ -210,7 +214,9 @@ export class BacklogPickCommand {
 
   @ButtonComponent({ id: /^backlog-pick-dismiss-v1:\d+$/ })
   async onPickDismiss(interaction: ButtonInteraction): Promise<void> {
-    const ownerId = interaction.customId.split(":")[1] ?? "";
+    const segs = assertCustomIdSegments(interaction, 1);
+    if (!segs) return;
+    const [ownerId] = segs;
     if (await replyIfNotOwner(interaction, ownerId, NOT_YOURS)) return;
     await safeDeferUpdate(interaction);
     await safeEditReply(interaction, {

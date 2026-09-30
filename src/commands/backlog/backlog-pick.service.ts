@@ -273,7 +273,8 @@ export async function pickFromBacklog(
     position: found.position,
     hltb,
     coverUrl,
-    wrapped: state.position >= order.length,
+    // Only a walk that runs past the end of the order has come back to the start.
+    wrapped: found.position >= order.length,
   };
 }
 
