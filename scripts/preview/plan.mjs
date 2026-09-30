@@ -9,29 +9,36 @@ import { parseTestPlan } from "../../src/conductor/TestPlanParser.ts";
  * `deploy` is true when the body has a runnable plan and this event is the one that
  * should build it. An `edited` event only deploys when the edit gave the body its plan:
  * an edit elsewhere in a body that already had one would evict another PR's preview for
- * a build that is already running.
+ * a build that is already running. A re-run always deploys, since the replaced comment
+ * tells the user to re-run to bring an evicted preview back.
  *
- * @param {{ action: string, body?: string | null, previousBody?: string | null }} args
+ * @param {{ action: string, body?: string | null, previousBody?: string | null,
+ *   rerun?: boolean }} args
  * @returns {{ deploy: boolean, kind: "ok" | "absent" | "empty" | "malformed",
  *   reason: string }}
  */
-export function planPreview({ action, body, previousBody }) {
+export function planPreview({ action, body, previousBody, rerun = false }) {
   const plan = parseTestPlan(body);
   const reason = plan.kind === "malformed" ? plan.reason : "";
   if (plan.kind !== "ok") return { deploy: false, kind: plan.kind, reason };
   const hadPlan = action === "edited" && parseTestPlan(previousBody).kind === "ok";
-  return { deploy: !hadPlan, kind: plan.kind, reason };
+  return { deploy: rerun || !hadPlan, kind: plan.kind, reason };
 }
 
 /**
- * Whether a finished deploy should stay up: `yes`, or why not. The PR can close, or
- * its body lose its Testing steps, while the image builds.
+ * Whether a finished deploy should stay up: `wanted` is `yes`, or why not, with the
+ * parser's reason for `malformed`. The PR can close, or its body lose its Testing
+ * steps, while the image builds.
  *
- * @returns {Promise<"yes" | "closed" | "untested">}
+ * @returns {Promise<{ wanted: "yes" | "closed" | "untested" | "malformed",
+ *   reason: string }>}
  */
 export async function previewWanted({ github, context, pr }) {
   const { owner, repo } = context.repo;
   const { data } = await github.rest.pulls.get({ owner, repo, pull_number: pr });
-  if (data.state !== "open") return "closed";
-  return parseTestPlan(data.body).kind === "ok" ? "yes" : "untested";
+  if (data.state !== "open") return { wanted: "closed", reason: "" };
+  const plan = parseTestPlan(data.body);
+  if (plan.kind === "ok") return { wanted: "yes", reason: "" };
+  if (plan.kind === "malformed") return { wanted: "malformed", reason: plan.reason };
+  return { wanted: "untested", reason: "" };
 }

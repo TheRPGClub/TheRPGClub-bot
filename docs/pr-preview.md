@@ -175,6 +175,7 @@ bash scripts/preview/preview.sh list
 bash scripts/preview/preview.sh kill
 ```
 
-`teardown <pr>` removes the preview only if it belongs to that PR. Re-running the
-`deploy` job of a PR's latest workflow run brings its preview back. Running the workflow
+`teardown <pr>` removes the preview only if it belongs to that PR. Re-running all
+jobs of a PR's latest workflow run brings its preview back, as long as its body still
+has Testing steps. Running the workflow
 by hand from the Actions tab runs the reaper, which removes a preview whose PR is closed.

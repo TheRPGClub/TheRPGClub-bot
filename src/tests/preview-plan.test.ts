@@ -8,6 +8,7 @@ type PlanModule = {
     action: string;
     body?: string | null;
     previousBody?: string | null;
+    rerun?: boolean;
   }) => PreviewPlan;
 };
 
@@ -65,6 +66,15 @@ test("an edit deploys only when it gave the body its Testing steps", () => {
   assert.deepEqual(reworded, { deploy: false, kind: "ok", reason: "" });
   const removed = planPreview({ action: "edited", body: UNTESTED, previousBody: RUNNABLE });
   assert.deepEqual(removed, { deploy: false, kind: "absent", reason: "" });
+});
+
+test("a re-run deploys a body with Testing steps whatever event started it", () => {
+  const rerun = planPreview({
+    action: "edited", body: RUNNABLE, previousBody: RUNNABLE, rerun: true,
+  });
+  assert.equal(rerun.deploy, true);
+  const untested = planPreview({ action: "edited", body: UNTESTED, rerun: true });
+  assert.equal(untested.deploy, false);
 });
 
 // The workflow imports the parser under Node's built-in type stripping, which cannot

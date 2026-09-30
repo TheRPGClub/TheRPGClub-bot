@@ -58,6 +58,7 @@ jobs:
           ACTION: ${{ github.event.action }}
           BODY: ${{ github.event.pull_request.body }}
           PREVIOUS_BODY: ${{ github.event.changes.body.from }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
         with:
           script: |
             const m = await import(process.env.PLAN_MODULE);
@@ -65,6 +66,7 @@ jobs:
               action: process.env.ACTION,
               body: process.env.BODY,
               previousBody: process.env.PREVIOUS_BODY,
+              rerun: Number(process.env.RUN_ATTEMPT) > 1,
             });
             core.info(`Testing steps: ${plan.kind}, deploy: ${plan.deploy}`);
             core.setOutput("deploy", String(plan.deploy));
@@ -155,15 +157,17 @@ jobs:
         with:
           script: |
             const m = await import(process.env.PLAN_MODULE);
-            const wanted = await m.previewWanted({
+            const { wanted, reason } = await m.previewWanted({
               github, context, pr: Number(process.env.PR),
             });
             core.setOutput("wanted", wanted);
+            core.setOutput("reason", reason);
 
       - name: Tear down for a PR closed or untested mid-deploy
         if: >-
           always()
-          && (steps.wanted.outputs.wanted == 'closed' || steps.wanted.outputs.wanted == 'untested')
+          && steps.wanted.outputs.wanted != ''
+          && steps.wanted.outputs.wanted != 'yes'
         run: bash "$PREVIEW_SCRIPT" teardown "$PR"
 
       - name: Report result
@@ -172,6 +176,7 @@ jobs:
         env:
           JOB_STATUS: ${{ job.status }}
           WANTED: ${{ steps.wanted.outputs.wanted }}
+          REASON: ${{ steps.wanted.outputs.reason }}
           CONTAINER: ${{ steps.deploy.outputs.container }}
         with:
           script: |
@@ -181,10 +186,12 @@ jobs:
             if (status === "cancelled") state = "superseded";
             else if (process.env.WANTED === "closed") state = "removed";
             else if (process.env.WANTED === "untested") state = "untested";
+            else if (process.env.WANTED === "malformed") state = "malformed";
             else if (status === "success") state = "running";
             await m.upsertPreviewComment({
               github, context, pr: Number(process.env.PR), state,
               sha: process.env.SHA, container: process.env.CONTAINER,
+              reason: process.env.REASON,
             });
 
   teardown:
