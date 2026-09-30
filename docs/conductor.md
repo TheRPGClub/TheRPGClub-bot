@@ -24,7 +24,9 @@ loader never imports this directory, and the conductor never loads the bot's com
    - Anything that does not match the format: it says it cannot parse it, asks for
      manual testing, and notes that on the PR. It never runs a partial script.
 3. It posts step 1 publicly in the channel where `/conduct` was run: the command in a
-   code block, the expected result, and where the output will land. The tester runs the command in the test channel, waits for the
+   code block, a clickable command mention when it can resolve one (see
+   [Clickable commands](#clickable-commands)), the expected result, and where the output
+   will land. The tester runs the command in the test channel, waits for the
    reply, and presses **Check**. A failed check keeps the step open: **Check again**
    rereads with the same window start, for output that landed after an early press,
    and **Continue as failed** asks why the step failed, records the failure with that
@@ -78,6 +80,23 @@ dev channel whatever `/conduct` would have answered, and nothing more:
   `/conduct` would, since the preview it was testing has just been replaced.
 - A conductor that is down when the announcement lands does not replay it after a
   restart; run `/conduct pr:<n>` by hand.
+
+## Clickable commands
+
+A bot cannot list another application's commands, so the announcement carries the
+preview bot's slash commands as a `preview-commands.json` attachment. Its format lives in
+`src/config/previewCommandCatalog.ts`. When a run starts, the conductor reads the
+catalog from the announcement that started it, or for `/conduct` from the newest
+announcement in the dev channel for the same PR and head, and saves one command mention
+per step with the run.
+
+A step whose command starts with `/` and names a registered command, and its registered
+subcommand when it has any, shows `Click to start: </name sub:id>` above its code block.
+Clicking it opens that command in the chat box of the channel the step message is in;
+the option values still come from the code block. Any other step, an unknown name, or a
+missing or unreadable catalog shows the code block alone. Names and IDs are checked
+against Discord's formats, and the mention is built only from the catalog, never from
+step text.
 
 ## How output is attributed to a step
 
