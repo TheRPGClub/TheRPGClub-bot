@@ -137,7 +137,8 @@ const HELP_TOPICS: HelpTopic[] = [
     summary: "Show the current GOTM or NR-GOTM nomination list.",
     syntax: "Syntax: /gotm nominations type:<GOTM|NR-GOTM> [private:<boolean>]",
     parameters:
-      "type (required) - GOTM or NR-GOTM. private (optional) - set true to keep the list to yourself.",
+      "type (required) - GOTM or NR-GOTM. " +
+      "private (optional) - set true to keep the list to yourself.",
     notes:
       "Uses the same nomination list UI as a completed /gotm nominate action. " +
       "Posts in channel by default.",

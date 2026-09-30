@@ -586,7 +586,11 @@ export class RoundHistoryCommand {
     const selectedYear = Number(selectedYearRaw);
 
     if (!parsedCustomId) {
-      await safeReply(interaction, buildTextReply("This round history form is invalid. Please run /gotm history again.", true));
+      await safeReply(
+        interaction,
+        buildTextReply("This round history form is invalid. Please" +
+          " run /gotm history again.", true),
+      );
       return;
     }
 
@@ -620,7 +624,11 @@ export class RoundHistoryCommand {
   async handleRoundHistoryPageButton(interaction: ButtonInteraction): Promise<void> {
     const parsed = parseRoundHistoryPageCustomId(interaction.customId);
     if (!parsed) {
-      await safeReply(interaction, buildTextReply("This round history page control is invalid. Please run /gotm history again.", true));
+      await safeReply(
+        interaction,
+        buildTextReply("This round history page control is invalid. Please" +
+          " run /gotm history again.", true),
+      );
       return;
     }
 
