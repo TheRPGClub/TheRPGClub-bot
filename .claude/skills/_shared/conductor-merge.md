@@ -8,14 +8,19 @@ asks the user whether to merge, and merges only on a yes.
 
 `/conduct pr:<N>` in the test guild posts its result to the pull request as a comment
 that starts with `<!-- rpgclub-conductor-report -->` (`CONDUCTOR_REPORT_MARKER` in
-`src/conductor/ConductorReport.ts`). Read the newest one:
+`src/conductor/ConductorReport.ts`). Find the newest one's id, then read it:
 
 ```bash
 gh api repos/{owner}/{repo}/issues/<N>/comments --paginate \
-  --jq '[.[] | select(.body | startswith("<!-- rpgclub-conductor-report -->"))] | last
-    | {created_at, body}'
+  --jq '.[] | select(.body | startswith("<!-- rpgclub-conductor-report -->")) | .id' \
+  | tail -1
+gh api repos/{owner}/{repo}/issues/comments/<id> --jq .body
 gh pr view <N> --json headRefOid --jq .headRefOid
 ```
+
+`--paginate` runs `--jq` on each page separately, so a `last` inside the filter would
+pick one report per page. Comments come back oldest first; `tail -1` takes the newest
+across all pages.
 
 Its summary line reads
 
@@ -48,8 +53,11 @@ When a passing report is on the current head, and the pull request still reads
 [asking-the-user.md](asking-the-user.md). Name the pull request, the run id, and the
 head it ran against. Offer to squash-merge it or leave it for the user.
 
-- Yes: `gh pr merge <N> --squash`, then run the skill's after-merge steps straight
-  away.
+- Yes: `gh pr merge <N> --squash`, then run the after-merge steps straight away:
+  `/implement` step 12 when that skill opened the pull request. Otherwise remove any
+  `In Progress` label it added, per [issue-labels.md](issue-labels.md), delete the
+  branch as `/implement` step 12 does, and move to the group
+  [sidebar-groups.md](sidebar-groups.md) names for a merge.
 - No, or no answer: leave the pull request open. The merge stays the user's.
 
 A request to merge before a passing report exists is answered with the report's state,
