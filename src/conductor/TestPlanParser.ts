@@ -24,7 +24,7 @@ export type TestPlanParseResult =
   | { kind: "empty" }
   | { kind: "malformed"; reason: string };
 
-/** Guardrails against a PR body that tries to flood the DM or the report. */
+/** Guardrails against a PR body that tries to flood the channel or the report. */
 export const MAX_TEST_STEPS = 25;
 export const MAX_COMMAND_LENGTH = 1500;
 export const MAX_EXPECTED_LENGTH = 1500;

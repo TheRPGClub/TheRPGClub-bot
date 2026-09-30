@@ -86,7 +86,7 @@ function checkButton(run: IConductorRun, label: string): ButtonBuilder {
     .setStyle(ButtonStyle.Primary);
 }
 
-/** The DM for the run's current step, with its Check and Abort buttons. */
+/** The public message for the run's current step, with its Check and Abort buttons. */
 export function buildStepMessage(run: IConductorRun, testChannelId: string): StepMessage {
   const buttons = new ActionRowBuilder<ButtonBuilder>().addComponents(
     checkButton(run, "Check"),
@@ -126,7 +126,7 @@ export function buildFailedStepMessage(
   };
 }
 
-/** Replaces a step DM once it is checked, so its buttons cannot fire twice. */
+/** Replaces a step message once it is checked, so its buttons cannot fire twice. */
 export function buildStepResultText(run: IConductorRun, result: IStepResult): string {
   const step = run.steps.find((entry) => entry.number === result.stepNumber);
   const label = step ? step.label : "";

@@ -54,7 +54,7 @@ export interface IStepResult {
 }
 
 export interface IStepWindow {
-  /** When the step was handed to the tester, from the DM's Discord timestamp. */
+  /** When the step was handed to the tester, from the step message's Discord timestamp. */
   start: number;
   /** When the tester asked for the check, from the interaction's timestamp. */
   end: number;

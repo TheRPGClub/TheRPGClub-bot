@@ -1,9 +1,9 @@
 # Conductor
 
 The conductor is a second, small Discord application that runs a pull request's
-`## Testing` steps with a human. It reads the steps from the PR body, DMs them to the
-tester one at a time, reads back what the preview bot posted, and comments per-step
-results on the PR.
+`## Testing` steps with a human. It reads the steps from the PR body, posts them one at
+a time in the channel where `/conduct` was run, reads back what the preview bot posted,
+and comments per-step results on the PR.
 
 A bot cannot invoke another bot's slash commands, and a user token would be a self-bot,
 which breaks Discord's terms. So the tester always runs each command; the conductor only
@@ -20,17 +20,21 @@ loader never imports this directory, and the conductor never loads the bot's com
    - No section, or only the template comment: it says there is nothing to run.
    - Anything that does not match the format: it says it cannot parse it, asks for
      manual testing, and notes that on the PR. It never runs a partial script.
-3. It DMs step 1: the command in a code block, the expected result, and where the
-   output will land. The tester runs the command in the test channel, waits for the
+3. It posts step 1 publicly in the channel where `/conduct` was run: the command in a
+   code block, the expected result, and where the output will land. The tester runs the command in the test channel, waits for the
    reply, and presses **Check**. A failed check keeps the step open: **Check again**
    rereads with the same window start, for output that landed after an early press,
    and **Continue as failed** records the failure and moves on.
 4. The conductor reads back the newest 100 messages of the test channel and of the
    mirror channel, keeps the preview bot's output for the tester, and judges the step.
-   Then it DMs the next step.
-5. After the last step, or on **Abort run**, it comments a report on the PR. If that
-   comment fails, the DM carries the full request and response and a **Post report**
-   button to retry it.
+   Then it posts the next step in the same channel.
+5. After the last step, or on **Abort run**, it comments a report on the PR and posts
+   the report link in the same channel. If that comment fails, the channel message
+   carries the full request and response and a **Post report** button to retry it.
+
+The run state saves the channel, so after a conductor restart the **Check** and **Abort
+run** buttons on the step message still work and the run keeps posting there. The
+conductor needs Send Messages in that channel; the #dev override already grants it.
 
 Starting a new `/conduct` while a run is going aborts the old run and reports what it
 got through. Handlers take turns on the run, so a double-clicked **Check** judges the
@@ -38,9 +42,9 @@ step once and answers the second press as stale.
 
 ## How output is attributed to a step
 
-- **Window.** A step owns output created or edited after its DM was sent and before
-  **Check** was pressed. Both times are Discord timestamps, so the host clock does not
-  matter.
+- **Window.** A step owns output created or edited after its step message was posted
+  and before **Check** was pressed. Both times are Discord timestamps, so the host clock
+  does not matter. The conductor's own posts in the test channel are never output.
 - **Place.** An `Ephemeral: no` step only accepts public messages in the test channel
   (`BOT_DEV_CHANNEL_ID`). An `Ephemeral: yes` step accepts posts in the mirror channel
   (`TEST_LOG_CHANNEL_ID`), written there by the preview bot's ephemeral mirror. The
@@ -76,7 +80,7 @@ conductor can check them.
 - It only reads the test guild's test and mirror channels, and it never replies to what
   it reads, so it cannot loop with another bot.
 - The PR body and everything read from Discord are data. Commands are shown to the
-  tester, never executed. Mentions are disabled in every DM, and PR text in the report
+  tester, never executed. Mentions are disabled in every post, and PR text in the report
   is escaped or fenced.
 - It reads its settings from its own environment and never loads the bot's `.env`.
 

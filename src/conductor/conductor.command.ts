@@ -9,6 +9,8 @@ import {
   type Client,
   type CommandInteraction,
   type Message,
+  type MessageCreateOptions,
+  type SendableChannels,
 } from "discord.js";
 import { ButtonComponent, Discord, Slash, SlashOption } from "discordx";
 import {
@@ -131,14 +133,67 @@ async function collectObservations(client: Client<true>): Promise<IObservedOutpu
   return outputs;
 }
 
-/** DMs the current step and opens its observation window at the DM's timestamp. */
+/**
+ * The channel `/conduct` ran in. State saved before runs posted publicly has no
+ * channel, so it falls back to wherever the button was pressed.
+ */
+async function fetchRunChannel(
+  interaction: AnyConductorInteraction,
+  run: IConductorRun,
+): Promise<SendableChannels> {
+  const channelId = run.channelId ?? interaction.channelId;
+  const channel = await interaction.client.channels.fetch(channelId);
+  if (!channel?.isSendable()) {
+    throw new Error(`Channel ${channelId} is not a channel the conductor can post in.`);
+  }
+  return channel;
+}
+
+/** Posts in the run's channel. Every payload keeps mentions off: step text is untrusted. */
+async function postToRunChannel(
+  interaction: AnyConductorInteraction,
+  run: IConductorRun,
+  payload: MessageCreateOptions & { allowedMentions: typeof NO_MENTIONS },
+): Promise<Message> {
+  const channel = await fetchRunChannel(interaction, run);
+  return channel.send(payload);
+}
+
+/** Posts the current step and opens its observation window at the post's timestamp. */
 async function sendCurrentStep(
   interaction: AnyConductorInteraction,
   run: IConductorRun,
 ): Promise<void> {
   const { settings } = getConductorRuntime();
-  const sent = await interaction.user.send(buildStepMessage(run, settings.testChannelId));
+  const sent = await postToRunChannel(
+    interaction,
+    run,
+    buildStepMessage(run, settings.testChannelId),
+  );
   run.windowStart = sent.createdTimestamp;
+}
+
+/**
+ * Posts in the run's channel. A channel the conductor can no longer post in falls back
+ * to a private note to the tester, so the handler still answers.
+ */
+async function postOrNotify(
+  interaction: AnyConductorInteraction,
+  run: IConductorRun,
+  text: string,
+  retryRow?: ReturnType<typeof buildReportRetryRow>,
+): Promise<void> {
+  const components = [buildTextContainer(text), ...(retryRow ? [retryRow] : [])];
+  try {
+    await postToRunChannel(interaction, run, {
+      components,
+      flags: buildComponentsV2EditFlags(),
+      allowedMentions: NO_MENTIONS,
+    });
+  } catch (err: unknown) {
+    const failure = buildDiscordErrorMessage("Could not post in the run's channel", err);
+    await safeFollowUpIfSettled(interaction, buildErrorReply(`${text}\n\n${failure}`, true));
+  }
 }
 
 /** Posts the run's report, or offers a retry button when GitHub refuses it. */
@@ -155,17 +210,15 @@ async function postRunReport(
     results: run.results,
     aborted: run.status === "aborted",
   });
+  let url: string;
   try {
-    const url = await github.postComment(run.pr, report);
-    await interaction.user.send(textEdit(`Report for PR #${run.pr} posted: ${url}`));
+    url = await github.postComment(run.pr, report);
   } catch (err: unknown) {
     const message = buildApiErrorMessage(`Posting the report to PR #${run.pr} failed`, err);
-    await interaction.user.send({
-      components: [buildTextContainer(message), buildReportRetryRow(run.runId)],
-      flags: buildComponentsV2EditFlags(),
-      allowedMentions: NO_MENTIONS,
-    });
+    await postOrNotify(interaction, run, message, buildReportRetryRow(run.runId));
+    return;
   }
+  await postOrNotify(interaction, run, `Report for PR #${run.pr} posted: ${url}`);
 }
 
 /** Aborts a run, keeping a failed check it was waiting on as that step's result. */
@@ -260,7 +313,7 @@ async function acceptFailLocked(interaction: ButtonInteraction): Promise<void> {
   await advanceRun(interaction, run, run.pendingResult);
 }
 
-/** Records the step's result, then DMs the next step or finishes the run. */
+/** Records the step's result, then posts the next step or finishes the run. */
 async function advanceRun(
   interaction: ButtonInteraction,
   run: IConductorRun,
@@ -278,7 +331,7 @@ async function advanceRun(
     } catch (err: unknown) {
       run.windowStart = interaction.createdTimestamp;
       await saveRun(settings.statePath, run);
-      const message = buildDiscordErrorMessage("Could not DM you the next step", err);
+      const message = buildDiscordErrorMessage("Could not post the next step", err);
       await safeFollowUpIfSettled(interaction, buildErrorReply(message, true));
       return;
     }
@@ -381,6 +434,7 @@ export class ConductorCommand {
         pr,
         headSha: pull.headSha,
         steps: plan.steps,
+        channelId: interaction.channelId,
         current: 0,
         windowStart: interaction.createdTimestamp,
         results: [],
@@ -389,14 +443,14 @@ export class ConductorCommand {
       try {
         await sendCurrentStep(interaction, run);
       } catch (err: unknown) {
-        const message = buildDiscordErrorMessage("Could not DM you the script", err);
+        const message = buildDiscordErrorMessage("Could not post the script in this channel", err);
         await safeEditReply(interaction, textEdit(message));
         return;
       }
       await saveRun(settings.statePath, run);
       await safeEditReply(
         interaction,
-        textEdit(`Sent step 1 of ${run.steps.length} for PR #${pr} to your DMs.`),
+        textEdit(`Posted step 1 of ${run.steps.length} for PR #${pr} in this channel.`),
       );
     });
   }
