@@ -42,7 +42,11 @@ TESTING = re.compile(r'^##[ \t]+Testing[ \t]*$', re.M)
 
 
 def segments(command):
-    """Splits a shell command into the simple commands between separators."""
+    """Splits a shell command into (simple command, separator after it) pairs.
+
+    The separator is the run of `;&|()` and newline characters that ends the command, or
+    '' at the end. The words list may be empty, as before a `(`.
+    """
     lexer = shlex.shlex(command, posix=True, punctuation_chars='();<>|&\n')
     lexer.whitespace_split = True
     # A newline separates commands rather than words, and `#` is left in the words: a
@@ -53,13 +57,11 @@ def segments(command):
     for token in lexer:
         # An empty quoted argument ('') is a word, not a separator.
         if token and set(token) <= SEPARATOR_CHARS:
-            if seg:
-                yield seg
+            yield seg, token
             seg = []
         else:
             seg.append(token)
-    if seg:
-        yield seg
+    yield seg, ''
 
 
 def flag_values(args, longs, shorts):
@@ -139,32 +141,52 @@ def body_sources(command):
     found = []
     env = {}
     cd = ''
-    for seg in segs:
-        if seg and seg[0] == 'export':
-            seg = seg[1:]
-        while seg and ASSIGNMENT.match(seg[0]):
-            name, value = ASSIGNMENT.match(seg[0]).groups()
-            env[name] = expand(value, env)
-            seg = seg[1:]
-        if seg and seg[0] == 'cd':
-            cd = change_dir(cd, [a for a in seg[1:] if a != '--'], env)
-            continue
-        if len(seg) < 2 or seg[0] != 'gh':
-            continue
-        if seg[1] == 'pr' and len(seg) > 2 and seg[2] in ('create', 'edit'):
-            sources = pr_bodies(seg[3:])
-        elif seg[1] == 'api':
-            sources = api_bodies(seg[2:])
+    # A subshell's `cd` and assignments end with it: `(` saves them and `)` restores them.
+    saved = []
+    for seg, separator in segs:
+        words = command_words(seg, env)
+        if words[:1] == ['cd']:
+            cd = change_dir(cd, [w for w in words[1:] if w != '--'], env)
         else:
-            continue
-        for kind, value in sources:
-            if kind == 'file' and value != '-':
-                value = expand(value, env)
-                if not os.path.isabs(value):
-                    if cd is None:
-                        continue
-                    value = os.path.join(cd, value)
-            found.append((kind, value))
+            found.extend(gh_bodies(words, env, cd))
+        for char in separator:
+            if char == '(':
+                saved.append((cd, dict(env)))
+            elif char == ')' and saved:
+                cd, env = saved.pop()
+    return found
+
+
+def command_words(seg, env):
+    """A simple command's words after `export` and `NAME=value` prefixes, kept in env."""
+    if seg[:1] == ['export']:
+        seg = seg[1:]
+    while seg and ASSIGNMENT.match(seg[0]):
+        name, value = ASSIGNMENT.match(seg[0]).groups()
+        env[name] = expand(value, env)
+        seg = seg[1:]
+    return seg
+
+
+def gh_bodies(words, env, cd):
+    """Body sources of one `gh` command, with file paths expanded and joined onto cd."""
+    if len(words) < 2 or words[0] != 'gh':
+        return []
+    if words[1] == 'pr' and len(words) > 2 and words[2] in ('create', 'edit'):
+        sources = pr_bodies(words[3:])
+    elif words[1] == 'api':
+        sources = api_bodies(words[2:])
+    else:
+        return []
+    found = []
+    for kind, value in sources:
+        if kind == 'file' and value != '-':
+            value = expand(value, env)
+            if not os.path.isabs(value):
+                if cd is None:
+                    continue
+                value = os.path.join(cd, value)
+        found.append((kind, value))
     return found
 
 

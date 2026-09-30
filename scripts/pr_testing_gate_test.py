@@ -100,6 +100,11 @@ class Matcher(unittest.TestCase):
         self.assertEqual(gate.body_sources('cd -- sub && gh pr create -F b.md'),
                          [('file', 'sub/b.md')])
         self.assertEqual(gate.body_sources('cd -; gh pr create --body-file b.md'), [])
+        self.assertEqual(
+            gate.body_sources('(cd sub && make) && gh pr create --body-file b.md'),
+            [('file', 'b.md')])
+        self.assertEqual(gate.body_sources('(GATE_T=/x; cd /y); gh pr edit -F "$GATE_T/b.md"'),
+                         [('file', '$GATE_T/b.md')])
         self.assertEqual(gate.body_sources('cd -; cd /w; gh pr create -F b.md'),
                          [('file', '/w/b.md')])
         self.assertEqual(gate.body_sources('B=/s/pr.md; gh pr create --body-file "$B"'),
