@@ -146,6 +146,20 @@ export default class GameSearchService {
     return GameSearchService.gameTitleCache.refresh();
   }
 
+  /**
+   * Looks up titles in the cached game list. Ids the cache does not hold yet
+   * (games created since its last load) are absent from the result.
+   */
+  static async getCachedTitles(ids: number[]): Promise<Map<number, string>> {
+    const wanted = new Set(ids);
+    const titles = new Map<number, string>();
+    if (!wanted.size) return titles;
+    for (const { game } of await GameSearchService.gameTitleCache.get()) {
+      if (wanted.has(game.id)) titles.set(game.id, game.title);
+    }
+    return titles;
+  }
+
   static async searchGamesAutocomplete(
     query: string,
     limit: number = 24,

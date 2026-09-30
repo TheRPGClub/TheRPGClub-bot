@@ -136,16 +136,10 @@ export default class UserGameCollection {
     return results;
   }
 
-  private static async fetchTitles(
+  private static fetchTitles(
     rows: Array<{ gamedb_game_id: number }>,
   ): Promise<Map<number, string>> {
-    const ids = Array.from(new Set(rows.map((row) => Number(row.gamedb_game_id))));
-    const games = await Game.getGamesByIds(ids);
-    const titles = new Map<number, string>();
-    for (const game of games) {
-      titles.set(Number(game.id), game.title);
-    }
-    return titles;
+    return Game.getTitlesByIds(rows.map((row) => Number(row.gamedb_game_id)));
   }
 
   static async addEntry(params: {
