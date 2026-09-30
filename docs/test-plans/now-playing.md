@@ -201,7 +201,8 @@ Ephemeral: yes
 click "Continue", date blank, hours "40", Note "Conductor test", submit, "Add Another" if asked
 ```
 Expected: only if a completion was logged in the last week, a prompt asks whether to add
-another; answer Add Another. An ephemeral reply then returns to the completion game picker, or to an
+another; answer Add Another. An ephemeral reply then returns to the completion game
+picker, or to an
 empty-list note, with not: "Could not parse completion date" and not: "Chrono Trigger".
 Chrono Trigger is gone from your list, and nothing is announced publicly.
 Ephemeral: yes
