@@ -18,6 +18,13 @@ export interface IUserGameBacklogEntry {
   updatedAt: Date;
 }
 
+export interface IUserGameBacklogGameEntry {
+  entryId: number;
+  note: string | null;
+}
+
+const BACKLOG_FETCH_LIMIT = 200;
+
 type BacklogApiData = {
   entry_id: number;
   user_id: string;
@@ -135,7 +142,7 @@ export default class UserGameBacklog {
 
   static async listForUser(
     userId: string,
-    limit = 200,
+    limit = BACKLOG_FETCH_LIMIT,
   ): Promise<IUserGameBacklogEntry[]> {
     const response = await apiGet<BacklogListResponse>(
       `/api/v1/users/${userId}/backlog`,
@@ -209,5 +216,30 @@ export default class UserGameBacklog {
     if (!existing || existing.data.user_id !== userId) return false;
     const result = await apiDelete<{ deleted: boolean }>(`/api/v1/backlog/${entryId}`);
     return result?.deleted === true;
+  }
+
+  /**
+   * Backlog entries for one game, unmapped. Skips the game and platform lookups `listForUser`
+   * does, since callers only need the entry ids and notes.
+   */
+  static async listEntriesForGame(
+    userId: string,
+    gameId: number,
+  ): Promise<IUserGameBacklogGameEntry[]> {
+    requirePositiveInt(gameId, "GameDB id");
+    const response = await apiGet<BacklogListResponse>(
+      `/api/v1/users/${userId}/backlog`,
+      { params: { limit: BACKLOG_FETCH_LIMIT } },
+    );
+    return (response?.data ?? [])
+      .filter((raw) => Number(raw.gamedb_game_id) === gameId)
+      .map((raw) => ({ entryId: Number(raw.entry_id), note: raw.note ?? null }));
+  }
+
+  /** Deletes entries already known to belong to the caller, such as `listEntriesForGame`'s. */
+  static async removeEntries(entryIds: number[]): Promise<void> {
+    await Promise.all(
+      entryIds.map((entryId) => apiDelete<{ deleted: boolean }>(`/api/v1/backlog/${entryId}`)),
+    );
   }
 }

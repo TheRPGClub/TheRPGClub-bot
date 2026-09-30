@@ -3,6 +3,7 @@ import { isPositiveInt, requirePositiveInt } from "../utilities/ValidationUtils.
 import { logError } from "../utilities/LogUtils.js";
 import { apiGet, apiPost, apiPatch, apiDelete } from "../services/RpgClubApiClient.js";
 import { UserFacingError } from "../utilities/ApiErrorUtils.js";
+import UserGameBacklog from "./UserGameBacklog.js";
 
 export interface IMemberRecord {
   userId: string;
@@ -587,10 +588,23 @@ export default class Member {
       throw new UserFacingError("That title is already in your Now Playing list.");
     }
 
+    // A game on Now Playing leaves the backlog. Backlog trouble never blocks the add.
+    const backlogEntries = await UserGameBacklog.listEntriesForGame(userId, gameId)
+      .catch((err: unknown) => {
+        logError("Member.addNowPlaying.backlog_lookup", err);
+        return [];
+      });
+    // Deleting the backlog entry drops its note, so an add without a note of its own keeps it.
+    const carriedNote = noteValue ?? backlogEntries.find((e) => e.note?.trim())?.note ?? null;
+
     await apiPost<{ data: NowPlayingEntryApiData }>(
       `/api/v1/users/${userId}/now_playing`,
-      { data: { gamedb_game_id: gameId, platform_id: platformId, note: noteValue } },
+      { data: { gamedb_game_id: gameId, platform_id: platformId, note: carriedNote } },
     );
+
+    if (!backlogEntries.length) return;
+    await UserGameBacklog.removeEntries(backlogEntries.map((e) => e.entryId))
+      .catch((err: unknown) => logError("Member.addNowPlaying.backlog_remove", err));
   }
 
   static async getJournalStatusForGames(
