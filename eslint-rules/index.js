@@ -3836,5 +3836,66 @@ export default {
         };
       },
     },
+    "no-direct-reaction-fetch": {
+      meta: {
+        type: "problem",
+        docs: {
+          description:
+            "Route reaction and reaction.message fetches through resolveReactionMessage.",
+        },
+        schema: [],
+        messages: {
+          noDirectReactionFetch:
+            "Use resolveReactionMessage(reaction, user.id) from " +
+            "src/utilities/ReactionFetchUtils.ts instead of {{target}}.fetch(). Each " +
+            "listener fetching on its own multiplies GET /channels/:id/messages/:id per " +
+            "reaction event, and MessageReaction.fetch() refetches the whole message (#1292).",
+        },
+      },
+      create(context) {
+        const fileName = normalizePathText(context.filename ?? "");
+        if (fileName.endsWith("/src/utilities/reactionfetchutils.ts")) {
+          return {};
+        }
+
+        // Types are not available to the plugin, so a reaction is matched by name.
+        const isReactionName = (node) =>
+          node.type === "Identifier" &&
+          (node.name === "reaction" || node.name.endsWith("Reaction"));
+
+        return {
+          CallExpression(node) {
+            const callee = node.callee;
+            if (
+              callee.type !== "MemberExpression" ||
+              callee.computed ||
+              callee.property.type !== "Identifier" ||
+              callee.property.name !== "fetch"
+            ) {
+              return;
+            }
+            const target = callee.object;
+            let targetText = null;
+            if (isReactionName(target)) {
+              targetText = target.name;
+            } else if (
+              target.type === "MemberExpression" &&
+              !target.computed &&
+              target.property.type === "Identifier" &&
+              target.property.name === "message" &&
+              isReactionName(target.object)
+            ) {
+              targetText = `${target.object.name}.message`;
+            }
+            if (!targetText) return;
+            context.report({
+              node,
+              messageId: "noDirectReactionFetch",
+              data: { target: targetText },
+            });
+          },
+        };
+      },
+    },
   },
 };

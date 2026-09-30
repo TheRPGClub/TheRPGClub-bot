@@ -25,6 +25,7 @@ import {
   openLiveStreamCreateModal,
 } from "./admin/live-stream-admin.service.js";
 import { getPresenceHistory, setPresence } from "../functions/SetPresence.js";
+import { IS_PREVIEW } from "../config/previewMode.js";
 import { isModerator } from "./admin/admin-auth.utils.js";
 import {
   safeDeferReply,
@@ -161,11 +162,11 @@ export class Mod {
 
     if (okToUseCommand) {
       text = sanitizeUserInput(text, { preserveNewlines: false });
-      await setPresence(
-        interaction,
-        text,
-      );
-      await safeReply(interaction, buildTextReply(`I'm now playing: ${text}!`, false));
+      await setPresence(interaction, text);
+      const note = IS_PREVIEW
+        ? "\nPR preview: not saved, and the preview status returns within the hour."
+        : "";
+      await safeReply(interaction, buildTextReply(`I'm now playing: ${text}!${note}`, false));
     }
   }
 

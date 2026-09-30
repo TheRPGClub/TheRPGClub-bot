@@ -41,6 +41,10 @@ The existing `ci.yml` jobs stay on GitHub-hosted runners.
 - **Scheduled work stays with production.** Test mode skips the background services in
   `src/services/SharedStateServices.ts`, so the preview cannot claim shared work through
   the API first and post it in the test guild.
+- **The status names the preview.** `PREVIEW_PR` and `PREVIEW_SHA` reach the container,
+  and `src/config/previewMode.ts` turns them into a fixed `Testing PR #N (sha)` status
+  instead of the production status in `BotPresenceHistory`. `/mod presence` in the
+  preview changes the status live but never writes that table, which production reads.
 - **Fork PRs never run here.** Jobs skip any PR whose head repo is not this repo, so fork
   code never reaches the runner or the dev token.
 

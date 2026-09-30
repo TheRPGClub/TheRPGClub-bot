@@ -3,7 +3,10 @@ import test from "node:test";
 import { AxiosError, AxiosHeaders } from "axios";
 import {
   buildApiErrorMessage,
+  buildDiscordErrorMessage,
+  DEV_PING,
   decodeBinaryBody,
+  formatApiError,
   redactUrlSecrets,
   UserFacingError,
 } from "../utilities/ApiErrorUtils.js";
@@ -100,4 +103,43 @@ test("buildApiErrorMessage shows only the message for a UserFacingError", () => 
     buildApiErrorMessage("Failed to add backlog entry.", err),
     "Failed to add backlog entry.: That game is already in your backlog.",
   );
+});
+
+test("formatApiError keeps a body with triple backticks in one block per fence", () => {
+  const body = { body: "Report:\n```json\n{}\n```\nDone" };
+  const message = formatApiError("post", "/repos/x/issues/1/comments", body, 422, {
+    message: "```bad```",
+  });
+  const fences = message.match(/```/g) ?? [];
+  assert.equal(fences.length, 4);
+  assert.ok(message.includes("Request:\n```json\n{"));
+  assert.ok(message.includes("Response:\n```json\n{"));
+  const request = /Request:\n```json\n([\s\S]*?)\n```/.exec(message);
+  assert.deepEqual(JSON.parse(request?.[1] ?? "").body, body);
+});
+
+test("error builders append DEV_PING by default", () => {
+  assert.ok(buildApiErrorMessage("Failed", notFoundError()).endsWith(DEV_PING));
+  assert.ok(buildApiErrorMessage("Failed", new Error("boom")).endsWith(DEV_PING));
+  assert.ok(buildDiscordErrorMessage("Failed", new Error("boom")).endsWith(DEV_PING));
+});
+
+test("error builders leave DEV_PING out when devPing is false", () => {
+  const options = { devPing: false };
+  const api = buildApiErrorMessage("Failed", notFoundError(), options);
+  assert.ok(!api.includes(DEV_PING));
+  assert.ok(api.includes("IGDB game not found"));
+  assert.ok(api.endsWith("```"));
+  const restError = {
+    method: "POST",
+    url: "https://discord.com/api/v10/channels/1/messages",
+    status: 403,
+    rawError: { message: "Missing Access", code: 50001 },
+    requestBody: { json: { content: "hi" } },
+  };
+  const discord = buildDiscordErrorMessage("Failed", restError, options);
+  assert.ok(!discord.includes(DEV_PING));
+  assert.ok(discord.includes("Missing Access"));
+  assert.equal(buildDiscordErrorMessage("Failed", new Error("boom"), options), "Failed: boom");
+  assert.equal(buildApiErrorMessage("Failed", new Error("boom"), options), "Failed: boom");
 });

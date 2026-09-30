@@ -14,6 +14,9 @@ services:
     env_file: ${PREVIEW_ENV_FILE:?PREVIEW_ENV_FILE must point at the preview env file}
     environment:
       DOCKER_BACKUP_ENABLED: "false"
+      # Read by src/config/previewMode.ts to set the "Testing PR #N (sha)" status.
+      PREVIEW_PR: "${PREVIEW_PR:?PREVIEW_PR is required}"
+      PREVIEW_SHA: "${PREVIEW_SHA:?PREVIEW_SHA is required}"
     labels:
       # Watchtower watches every container on the host. This one is built locally
       # from a PR branch and must never be replaced by a registry image.
