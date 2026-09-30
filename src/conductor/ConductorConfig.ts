@@ -10,7 +10,7 @@ import { join } from "node:path";
 import { BOT_DEV_CHANNEL_ID, TEST_LOG_CHANNEL_ID } from "../config/channels.js";
 import { TODO_REPOS } from "../config/repos.js";
 import { IS_TEST_MODE, TEST_GUILD_ID } from "../config/testMode.js";
-import { BOT_DEV_PING_USER_ID } from "../config/users.js";
+import { BOT_DEV_PING_USER_ID, PREVIEW_BOT_USER_ID } from "../config/users.js";
 import type { IGitHubRepoRef } from "./GitHubPullClient.js";
 
 export interface IConductorSettings {
@@ -23,6 +23,8 @@ export interface IConductorSettings {
   /** Where the bot under test mirrors its ephemeral replies. */
   mirrorChannelId: string;
   allowedUserId: string;
+  /** The only author whose ready announcement starts a run. */
+  previewBotId: string;
   repo: IGitHubRepoRef;
 }
 
@@ -49,6 +51,7 @@ export function loadConductorSettings(): IConductorSettings {
     testChannelId: BOT_DEV_CHANNEL_ID,
     mirrorChannelId: TEST_LOG_CHANNEL_ID,
     allowedUserId: BOT_DEV_PING_USER_ID,
+    previewBotId: PREVIEW_BOT_USER_ID,
     repo: CONDUCTOR_REPO,
   };
 }

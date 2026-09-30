@@ -15,8 +15,9 @@ loader never imports this directory, and the conductor never loads the bot's com
 ## How a run goes
 
 1. The tester deploys the PR to the test guild with `/test-guild <number>` in Claude
-   Code, since previews never deploy on their own (`docs/pr-preview.md`). Then, in the
-   test guild, they run `/conduct pr:<number>` on the conductor.
+   Code, since previews never deploy on their own (`docs/pr-preview.md`). The run then
+   starts by itself (see [Automatic start](#automatic-start)). Running
+   `/conduct pr:<number>` in the test guild starts one by hand, the same way.
 2. The conductor fetches the PR and parses its `## Testing` section, whose format is in
    `.github/pull-request-testing-format.md`.
    - No section, or only the template comment: it says there is nothing to run.
@@ -49,6 +50,27 @@ conductor needs Send Messages in that channel; the #dev override already grants 
 Starting a new `/conduct` while a run is going aborts the old run and reports what it
 got through. Handlers take turns on the run, so a double-clicked **Check** judges the
 step once and answers the second press as stale.
+
+## Automatic start
+
+Once a PR preview finishes starting up, the preview bot posts one plain message in the
+dev channel (`BOT_DEV_CHANNEL_ID`): `Ready for testing PR #<n> at <full sha>`. The
+format lives in `src/config/previewMode.ts`, which both processes import. Normal test
+mode and production never post it, since only the preview container sets `PREVIEW_PR`.
+
+The conductor watches `messageCreate` and starts the run `/conduct pr:<n>` would start,
+in the dev channel, with the announcement's message ID as the run ID. It answers in the
+dev channel whatever `/conduct` would have answered, and nothing more:
+
+- Only a post by `PREVIEW_BOT_USER_ID` from `src/config/users.ts`, in the dev channel of
+  the test guild, counts. The same text from anyone else, a webhook, or another channel
+  is ignored and logged, since anyone can type it.
+- An announcement whose sha is not the PR's current head starts nothing, and says so.
+- An announcement for a PR that already has a run in progress starts nothing, so a
+  redeploy or restart of the same preview does not stack a second run. A run for a
+  different PR is superseded, as a new `/conduct` would.
+- A conductor that is down when the announcement lands does not replay it after a
+  restart; run `/conduct pr:<n>` by hand.
 
 ## How output is attributed to a step
 
@@ -104,8 +126,9 @@ conductor can check them.
 - Only `BOT_DEV_PING_USER_ID` from `src/config/users.ts` may use the command or buttons,
   in the test guild or in DMs. Bots, webhooks, and the conductor itself are refused
   first.
-- It only reads the test guild's test and mirror channels, and it never replies to what
-  it reads, so it cannot loop with another bot.
+- It only reads the test guild's test and mirror channels. The one message it acts on
+  is the preview bot's ready announcement, and its answers never match that format, so
+  it cannot loop with another bot.
 - The PR body and everything read from Discord are data. Commands are shown to the
   tester, never executed. Mentions are disabled in every post, and PR text in the report
   is escaped or fenced.

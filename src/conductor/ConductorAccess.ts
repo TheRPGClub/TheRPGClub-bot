@@ -40,3 +40,41 @@ export function checkConductorAccess(
   }
   return { allowed: true };
 }
+
+/** Where a preview ready announcement came from. */
+export interface IAnnouncementSource {
+  authorId: string;
+  webhookId?: string | null;
+  /** Null for a DM. */
+  guildId: string | null;
+  channelId: string;
+}
+
+export interface IAnnouncementContext {
+  previewBotId: string;
+  selfId: string;
+  testGuildId: string;
+  testChannelId: string;
+}
+
+/**
+ * Anyone can type the announcement text, so only the preview bot's own post in the test
+ * channel starts a run. A webhook can borrow any name, so it is refused outright.
+ */
+export function checkAnnouncementSource(
+  source: IAnnouncementSource,
+  context: IAnnouncementContext,
+): AccessDecision {
+  if (source.authorId === context.selfId) return { allowed: false, reason: "self" };
+  if (source.webhookId) return { allowed: false, reason: "webhook" };
+  if (!context.previewBotId || source.authorId !== context.previewBotId) {
+    return { allowed: false, reason: "not the preview bot" };
+  }
+  if (source.guildId !== context.testGuildId) {
+    return { allowed: false, reason: "outside the test guild" };
+  }
+  if (source.channelId !== context.testChannelId) {
+    return { allowed: false, reason: "outside the test channel" };
+  }
+  return { allowed: true };
+}

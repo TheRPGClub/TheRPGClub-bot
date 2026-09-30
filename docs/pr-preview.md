@@ -56,6 +56,10 @@ The existing `ci.yml` jobs stay on GitHub-hosted runners.
   and `src/config/previewMode.ts` turns them into a fixed `Testing PR #N (sha)` status
   instead of the production status in `BotPresenceHistory`. `/mod presence` in the
   preview changes the status live but never writes that table, which production reads.
+- **A ready preview starts its test run.** Once startup completes, the preview posts
+  `Ready for testing PR #N at <sha>` in the test guild's dev channel, and the conductor
+  starts that PR's Testing steps there with no further input (`docs/conductor.md`,
+  Automatic start). `/test-guild <pr>` is the only step needed to get a PR tested.
 - **Fork PRs never run here.** Jobs skip any PR whose head repo is not this repo, so fork
   code never reaches the runner or the dev token.
 
@@ -174,7 +178,8 @@ while the desktop is off for a while.
 1. Pick any open PR against `main` with Testing steps in its body and run
    `/test-guild <pr>` in Claude Code. Once the run finishes its `PR preview` comment
    should read Running, and the dev bot should be online in the test guild with its
-   slash commands listed there.
+   slash commands listed there. It posts `Ready for testing PR #<pr> at <sha>` in the
+   dev channel, and the conductor posts step 1 of that PR's Testing steps under it.
 2. `docker ps` shows `rpgclub-pr-preview` next to the production container, and the
    production bot keeps answering in the main guild.
 3. Close the PR. The container is gone and the comment reads torn down.

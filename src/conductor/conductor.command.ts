@@ -34,7 +34,8 @@ import {
   safeFollowUpIfSettled,
   safeReply,
 } from "../functions/InteractionUtils.js";
-import { checkConductorAccess } from "./ConductorAccess.js";
+import { parsePreviewReadyAnnouncement } from "../config/previewMode.js";
+import { checkAnnouncementSource, checkConductorAccess } from "./ConductorAccess.js";
 import { conductorApiError, conductorDiscordError } from "./ConductorErrors.js";
 import {
   checkConductorChannelAccess,
@@ -73,6 +74,20 @@ const OBSERVATION_FETCH_LIMIT = 100;
 
 type AnyConductorInteraction = CommandInteraction | ButtonInteraction | ModalSubmitInteraction;
 
+/**
+ * Whatever started or advanced a run: a slash command, a button, a modal, or the preview
+ * bot's ready announcement. The run helpers need only this from it.
+ */
+interface IRunTrigger {
+  client: Client<true>;
+  /** The interaction's or message's snowflake; a run it starts takes this as its ID. */
+  id: string;
+  channelId: string | null;
+  createdTimestamp: number;
+  /** Answers the trigger itself when the run's channel cannot be posted in. */
+  notify: (text: string) => Promise<void>;
+}
+
 /** Edits the message holding the current step's buttons. */
 type StepMessageEditor = (payload: ReturnType<typeof buildStepMessage>) => Promise<unknown>;
 
@@ -91,6 +106,18 @@ function isAllowed(interaction: AnyConductorInteraction): boolean {
     },
   );
   return decision.allowed;
+}
+
+function interactionTrigger(interaction: AnyConductorInteraction): IRunTrigger {
+  return {
+    client: interaction.client,
+    id: interaction.id,
+    channelId: interaction.channelId,
+    createdTimestamp: interaction.createdTimestamp,
+    notify: async (text) => {
+      await safeFollowUpIfSettled(interaction, publicText(text));
+    },
+  };
 }
 
 /** The one private reply: it answers someone who is not the tester, not the run. */
@@ -169,12 +196,12 @@ async function collectObservations(client: Client<true>): Promise<IObservedOutpu
  * channel, so it falls back to wherever the button was pressed.
  */
 async function fetchRunChannel(
-  interaction: AnyConductorInteraction,
+  trigger: IRunTrigger,
   run: IConductorRun,
 ): Promise<SendableChannels> {
-  const channelId = run.channelId ?? interaction.channelId;
+  const channelId = run.channelId ?? trigger.channelId;
   if (!channelId) throw new Error("The run has no channel to post in.");
-  const channel = await interaction.client.channels.fetch(channelId);
+  const channel = await trigger.client.channels.fetch(channelId);
   if (!channel?.isSendable()) {
     throw new Error(`Channel ${channelId} is not a channel the conductor can post in.`);
   }
@@ -183,11 +210,11 @@ async function fetchRunChannel(
 
 /** Posts in the run's channel. Every payload keeps mentions off: step text is untrusted. */
 async function postToRunChannel(
-  interaction: AnyConductorInteraction,
+  trigger: IRunTrigger,
   run: IConductorRun,
   payload: MessageCreateOptions & { allowedMentions: typeof NO_MENTIONS },
 ): Promise<Message> {
-  const channel = await fetchRunChannel(interaction, run);
+  const channel = await fetchRunChannel(trigger, run);
   return channel.send(payload);
 }
 
@@ -204,12 +231,12 @@ function describeUncheckedSteps(steps: IConductorRun["steps"]): string {
 
 /** Posts the current step and opens its observation window at the post's timestamp. */
 async function sendCurrentStep(
-  interaction: AnyConductorInteraction,
+  trigger: IRunTrigger,
   run: IConductorRun,
 ): Promise<void> {
   const { settings } = getConductorRuntime();
   const sent = await postToRunChannel(
-    interaction,
+    trigger,
     run,
     buildStepMessage(run, settings.testChannelId),
   );
@@ -218,30 +245,30 @@ async function sendCurrentStep(
 
 /**
  * Posts in the run's channel. A channel the conductor can no longer post in falls back
- * to a follow-up on the interaction, so the handler still answers.
+ * to answering the trigger, so the handler still answers.
  */
 async function postOrNotify(
-  interaction: AnyConductorInteraction,
+  trigger: IRunTrigger,
   run: IConductorRun,
   text: string,
   retryRow?: ReturnType<typeof buildReportRetryRow>,
 ): Promise<void> {
   const components = [buildTextContainer(text), ...(retryRow ? [retryRow] : [])];
   try {
-    await postToRunChannel(interaction, run, {
+    await postToRunChannel(trigger, run, {
       components,
       flags: buildComponentsV2EditFlags(),
       allowedMentions: NO_MENTIONS,
     });
   } catch (err: unknown) {
     const failure = conductorDiscordError("Could not post in the run's channel", err);
-    await safeFollowUpIfSettled(interaction, publicText(`${text}\n\n${failure}`));
+    await trigger.notify(`${text}\n\n${failure}`);
   }
 }
 
 /** Posts the run's report, or offers a retry button when GitHub refuses it. */
 async function postRunReport(
-  interaction: AnyConductorInteraction,
+  trigger: IRunTrigger,
   run: IConductorRun,
 ): Promise<void> {
   const { github } = getConductorRuntime();
@@ -259,10 +286,10 @@ async function postRunReport(
     url = await github.postComment(run.pr, report);
   } catch (err: unknown) {
     const message = conductorApiError(`Posting the report to PR #${run.pr} failed`, err);
-    await postOrNotify(interaction, run, message, buildReportRetryRow(run.runId));
+    await postOrNotify(trigger, run, message, buildReportRetryRow(run.runId));
     return;
   }
-  await postOrNotify(interaction, run, `Report for PR #${run.pr} posted: ${url}`);
+  await postOrNotify(trigger, run, `Report for PR #${run.pr} posted: ${url}`);
 }
 
 /** Aborts a run, keeping a failed check it was waiting on as that step's result. */
@@ -273,15 +300,12 @@ function markAborted(run: IConductorRun): void {
 }
 
 /** Ends a still-running run that a new `/conduct` replaces, reporting what it got to. */
-async function supersedeRun(
-  interaction: AnyConductorInteraction,
-  statePath: string,
-): Promise<void> {
+async function supersedeRun(trigger: IRunTrigger, statePath: string): Promise<void> {
   const previous = await loadRun(statePath);
   if (!previous || previous.status !== "running") return;
   markAborted(previous);
   await saveRun(statePath, previous);
-  if (previous.results.length) await postRunReport(interaction, previous);
+  if (previous.results.length) await postRunReport(trigger, previous);
 }
 
 /**
@@ -462,7 +486,7 @@ async function advanceRun(
 
   if (run.current < run.steps.length) {
     try {
-      await sendCurrentStep(interaction, run);
+      await sendCurrentStep(interactionTrigger(interaction), run);
     } catch (err: unknown) {
       run.windowStart = interaction.createdTimestamp;
       await saveRun(settings.statePath, run);
@@ -476,7 +500,7 @@ async function advanceRun(
 
   run.status = "finished";
   await saveRun(settings.statePath, run);
-  await postRunReport(interaction, run);
+  await postRunReport(interactionTrigger(interaction), run);
 }
 
 async function abortRunLocked(interaction: ButtonInteraction): Promise<void> {
@@ -490,7 +514,7 @@ async function abortRunLocked(interaction: ButtonInteraction): Promise<void> {
   markAborted(run);
   await saveRun(settings.statePath, run);
   await safeEditReply(interaction, publicText(`Run for PR #${run.pr} aborted.`));
-  await postRunReport(interaction, run);
+  await postRunReport(interactionTrigger(interaction), run);
 }
 
 async function retryReportLocked(interaction: ButtonInteraction): Promise<void> {
@@ -502,7 +526,152 @@ async function retryReportLocked(interaction: ButtonInteraction): Promise<void> 
     return;
   }
   await safeEditReply(interaction, publicText(`Retrying the report for PR #${run.pr}.`));
-  await postRunReport(interaction, run);
+  await postRunReport(interactionTrigger(interaction), run);
+}
+
+/**
+ * Checks the PR and starts its run in the trigger's channel, as `/conduct` does. An
+ * announced start carries the sha the preview was built from: a stale one, or a PR that
+ * already has a run going, starts nothing. `answer` tells whoever started it how it went.
+ */
+async function startRun(
+  trigger: IRunTrigger,
+  pr: number,
+  answer: (text: string) => Promise<void>,
+  announcedSha?: string,
+): Promise<void> {
+  const { settings, github } = getConductorRuntime();
+
+  const accessProblems = await checkConductorChannelAccess(trigger.client, settings);
+  if (accessProblems.length) {
+    await answer(describeAccessProblems(accessProblems));
+    return;
+  }
+
+  let pull;
+  try {
+    pull = await github.getPullRequest(pr);
+  } catch (err: unknown) {
+    await answer(conductorApiError(`Could not read PR #${pr}`, err));
+    return;
+  }
+  if (pull.state !== "open") {
+    await answer(`PR #${pr} is ${pull.state}, not open.`);
+    return;
+  }
+  if (announcedSha !== undefined && pull.headSha !== announcedSha) {
+    await answer(
+      `The preview of PR #${pr} was built from ${announcedSha}, but the PR's head is now ` +
+        `${pull.headSha}, so no run started. Redeploy it to test the new head.`,
+    );
+    return;
+  }
+
+  const plan = parseTestPlan(pull.body);
+  if (plan.kind === "absent" || plan.kind === "empty") {
+    await answer(`PR #${pr} has no Testing steps, so there is nothing to run.`);
+    return;
+  }
+  if (plan.kind === "malformed") {
+    let posted: string;
+    try {
+      const url = await github.postComment(pr, buildUnparseableReport(pr, plan.reason));
+      posted = `\nNoted on the PR: ${url}`;
+    } catch (err: unknown) {
+      posted = `\n${conductorApiError("Noting it on the PR failed", err)}`;
+    }
+    await answer(
+      `Cannot parse the Testing section of PR #${pr}: ${plan.reason}\n` +
+        `Please test it manually.${posted}`,
+    );
+    return;
+  }
+
+  await withRunLock(async () => {
+    if (announcedSha !== undefined) {
+      const current = await loadRun(settings.statePath);
+      if (current?.status === "running" && current.pr === pr) {
+        await answer(`PR #${pr} already has a run in progress, so no second run started.`);
+        return;
+      }
+    }
+    await supersedeRun(trigger, settings.statePath);
+    const run: IConductorRun = {
+      runId: trigger.id,
+      pr,
+      headSha: pull.headSha,
+      steps: plan.steps,
+      channelId: trigger.channelId ?? undefined,
+      current: 0,
+      windowStart: trigger.createdTimestamp,
+      results: [],
+      status: "running",
+    };
+    try {
+      await sendCurrentStep(trigger, run);
+    } catch (err: unknown) {
+      await answer(conductorDiscordError("Could not post the script in this channel", err));
+      return;
+    }
+    await saveRun(settings.statePath, run);
+    const lead = announcedSha === undefined ? "" : `The preview of PR #${pr} is ready. `;
+    await answer(
+      `${lead}Posted step 1 of ${run.steps.length} for PR #${pr} in this channel.` +
+        describeUncheckedSteps(run.steps),
+    );
+  });
+}
+
+/**
+ * A message trigger answers in its own channel. When that fails too, the log is the only
+ * place left to say so.
+ */
+function messageTrigger(message: Message<true>): IRunTrigger {
+  return {
+    client: message.client,
+    id: message.id,
+    channelId: message.channelId,
+    createdTimestamp: message.createdTimestamp,
+    notify: async (text) => {
+      try {
+        await message.channel.send(publicText(text));
+      } catch (err: unknown) {
+        console.error(`[conductor] could not answer in ${message.channelId}: ${text}`, err);
+      }
+    },
+  };
+}
+
+/**
+ * Starts a run when the preview bot announces it is ready, as if `/conduct pr:<n>` had
+ * been run in the dev channel. Any other message, or the same text from anyone else,
+ * does nothing.
+ */
+export async function startRunFromAnnouncement(message: Message): Promise<void> {
+  const announcement = parsePreviewReadyAnnouncement(message.content);
+  if (!announcement) return;
+  const { settings } = getConductorRuntime();
+  const decision = checkAnnouncementSource(
+    {
+      authorId: message.author.id,
+      webhookId: message.webhookId,
+      guildId: message.guildId,
+      channelId: message.channelId,
+    },
+    {
+      previewBotId: settings.previewBotId,
+      selfId: message.client.user.id,
+      testGuildId: settings.testGuildId,
+      testChannelId: settings.testChannelId,
+    },
+  );
+  if (!decision.allowed || !message.inGuild()) {
+    console.log(`[conductor] ignored a ready announcement: ${
+      decision.allowed ? "not in a guild" : decision.reason}`);
+    return;
+  }
+  const trigger = messageTrigger(message);
+  await startRun(trigger, announcement.pr, trigger.notify, announcement.sha);
 }
 
 @Discord()
@@ -524,76 +693,8 @@ export class ConductorCommand {
       return;
     }
     await safeDeferReply(interaction);
-    const { settings, github } = getConductorRuntime();
-
-    const accessProblems = await checkConductorChannelAccess(interaction.client, settings);
-    if (accessProblems.length) {
-      await safeEditReply(interaction, publicText(describeAccessProblems(accessProblems)));
-      return;
-    }
-
-    let pull;
-    try {
-      pull = await github.getPullRequest(pr);
-    } catch (err: unknown) {
-      const message = conductorApiError(`Could not read PR #${pr}`, err);
-      await safeEditReply(interaction, publicText(message));
-      return;
-    }
-    if (pull.state !== "open") {
-      await safeEditReply(interaction, publicText(`PR #${pr} is ${pull.state}, not open.`));
-      return;
-    }
-
-    const plan = parseTestPlan(pull.body);
-    if (plan.kind === "absent" || plan.kind === "empty") {
-      await safeEditReply(
-        interaction,
-        publicText(`PR #${pr} has no Testing steps, so there is nothing to run.`),
-      );
-      return;
-    }
-    if (plan.kind === "malformed") {
-      let posted: string;
-      try {
-        const url = await github.postComment(pr, buildUnparseableReport(pr, plan.reason));
-        posted = `\nNoted on the PR: ${url}`;
-      } catch (err: unknown) {
-        posted = `\n${conductorApiError("Noting it on the PR failed", err)}`;
-      }
-      await safeEditReply(interaction, publicText(
-        `Cannot parse the Testing section of PR #${pr}: ${plan.reason}\n` +
-          `Please test it manually.${posted}`,
-      ));
-      return;
-    }
-
-    await withRunLock(async () => {
-      await supersedeRun(interaction, settings.statePath);
-      const run: IConductorRun = {
-        runId: interaction.id,
-        pr,
-        headSha: pull.headSha,
-        steps: plan.steps,
-        channelId: interaction.channelId,
-        current: 0,
-        windowStart: interaction.createdTimestamp,
-        results: [],
-        status: "running",
-      };
-      try {
-        await sendCurrentStep(interaction, run);
-      } catch (err: unknown) {
-        const message = conductorDiscordError("Could not post the script in this channel", err);
-        await safeEditReply(interaction, publicText(message));
-        return;
-      }
-      await saveRun(settings.statePath, run);
-      await safeEditReply(
-        interaction,
-        publicText(`Posted step 1 of ${run.steps.length} for PR #${pr} in this channel.` +
-          describeUncheckedSteps(run.steps)),
-      );
+    await startRun(interactionTrigger(interaction), pr, async (text) => {
+      await safeEditReply(interaction, publicText(text));
     });
   }
 
