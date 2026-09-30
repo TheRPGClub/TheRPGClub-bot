@@ -446,16 +446,31 @@ def read_runs(rows, by_id):
     return runs
 
 
+def run_log(jobs):
+    """A completed run's jobs' logs joined, and whether any job had a log to read. A skipped
+    job has none, and a completed run answers 404 for a job with no log, so neither retries."""
+    parts = []
+    for job in jobs:
+        if job.get('conclusion') == 'skipped':
+            continue
+        try:
+            parts.append(job_log(job['id']))
+        except RuntimeError as e:
+            if 'HTTP 404' not in str(e):
+                raise
+    return ''.join(parts), bool(parts)
+
+
 def finish(path, row, run):
     """Save a completed run's log and tally it. False when a read failed or the log came
     back empty, which a log read straight after the run finishes can do for a while."""
     try:
         jobs = run_jobs(row['run'])
-        log = ''.join(job_log(job['id']) for job in jobs)
+        log, has_log = run_log(jobs)
     except (RuntimeError, ValueError, KeyError) as e:
         print(f'{row["label"]}: log fetch failed, will retry next check: {e}')
         return False
-    if not log.strip():
+    if has_log and not log.strip():
         print(f'{row["label"]}: log came back empty, will retry next check')
         return False
     logs = path + '.logs'
@@ -464,6 +479,8 @@ def finish(path, row, run):
         f.write(log)
     row['state'], row['tally'] = 'done', tally(run['conclusion'], jobs)
     print(f'done: {row["label"]} - {row["job"]}\n  {row["tally"]}')
+    if not has_log:
+        print('  no job logs to save: every job was skipped or had none')
     if run['conclusion'] != 'success':
         for line in findings(log):
             print(line)

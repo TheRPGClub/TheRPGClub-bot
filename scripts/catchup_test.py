@@ -122,15 +122,17 @@ JOBS = [{'id': 108, 'name': 'lint', 'conclusion': 'success', 'steps': []},
 class FinishLog(TempLedger):
     """finish reads a finished run's jobs and logs, saves the log, and tallies the run."""
 
-    def run_finish(self, conclusion='failure', log=LOG):
+    def run_finish(self, conclusion='failure', log=LOG, jobs=JOBS, missing=()):
         row = {'label': 'stub', 'run': '42', 'job': 'https://example.test/job/108'}
         calls = []
 
         def fake_gh(*gh_args, timeout=None):
             calls.append(gh_args[-1])
             if gh_args[-1].endswith('/runs/42/jobs'):
-                return json.dumps({'jobs': JOBS})
+                return json.dumps({'jobs': jobs})
             if gh_args[-1].endswith('/logs'):
+                if any(f'/jobs/{job_id}/' in gh_args[-1] for job_id in missing):
+                    raise RuntimeError(NOT_FOUND)
                 return log
             raise AssertionError(f'unexpected gh call {gh_args}')
 
@@ -164,6 +166,38 @@ class FinishLog(TempLedger):
         self.assertNotIn('state', row)
         self.assertIsNone(saved)
         self.assertIn('log came back empty, will retry next check', out)
+
+    def test_a_completed_run_whose_jobs_have_no_logs_still_settles(self):
+        jobs = [{'id': 108, 'name': 'preview', 'conclusion': 'skipped', 'steps': []},
+                {'id': 109, 'name': 'gate', 'conclusion': 'success', 'steps': []}]
+        done, row, out, calls, saved = self.run_finish(
+            conclusion='success', log='', jobs=jobs, missing=(109,))
+        self.assertTrue(done)
+        self.assertEqual(calls[1:], ['repos/{owner}/{repo}/actions/jobs/109/logs'])
+        self.assertEqual(row['state'], 'done')
+        self.assertEqual(row['tally'], 'success jobs=2')
+        self.assertEqual(saved, '')
+        self.assertIn('done: stub - https://example.test/job/108', out)
+        self.assertNotIn('will retry', out)
+
+    def test_a_404_skips_that_job_and_keeps_the_others_logs(self):
+        done, _, _, _, saved = self.run_finish(missing=(108,))
+        self.assertTrue(done)
+        self.assertEqual(saved, LOG)
+
+    def test_a_server_error_still_retries(self):
+        def fake_gh(*gh_args, timeout=None):
+            if gh_args[-1].endswith('/jobs'):
+                return json.dumps({'jobs': JOBS})
+            raise RuntimeError('gh: Server Error (HTTP 502)')
+
+        row = {'label': 'stub', 'run': '42', 'job': 'https://example.test/job/108'}
+        out = io.StringIO()
+        with mock.patch.object(catchup, 'gh', side_effect=fake_gh), \
+                contextlib.redirect_stdout(out):
+            done = catchup.finish(self.ledger, row, {'conclusion': 'success'})
+        self.assertFalse(done)
+        self.assertIn('log fetch failed, will retry next check', out.getvalue())
 
 
 OPEN_ISSUE = {'html_url': 'https://example.test/issues/9', 'state': 'open',
