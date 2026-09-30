@@ -79,6 +79,14 @@ function observe(snapshots: IMessageSnapshot[]): IObservedOutput[] {
     .filter((entry): entry is IObservedOutput => entry !== null);
 }
 
+test("drops the conductor's own step prompt posted in the test channel", () => {
+  const prompt = snapshot({
+    authorId: CONTEXT.selfId,
+    content: "Run this in <#700>:\nPress **Check** once the output has appeared.",
+  });
+  assert.equal(classifySnapshot(prompt, CONTEXT), null);
+});
+
 test("reads back what the ephemeral mirror writes", () => {
   const post = mirrorPost("1", 10, "/collection", "hi");
   const parsed = parseMirrorMessage(post.content);
@@ -236,6 +244,7 @@ function makeRun(overrides: Partial<IConductorRun> = {}): IConductorRun {
     pr: 7,
     headSha: "abc",
     steps: [makeStep({})],
+    channelId: "700",
     current: 0,
     windowStart: 100,
     results: [],

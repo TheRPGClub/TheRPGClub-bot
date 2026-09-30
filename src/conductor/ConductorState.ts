@@ -16,9 +16,14 @@ export interface IConductorRun {
   pr: number;
   headSha: string;
   steps: ITestStep[];
+  /**
+   * The channel `/conduct` ran in, where every step, result, and report link is posted.
+   * Missing only in state saved before runs were posted publicly.
+   */
+  channelId?: string;
   /** Index into `steps` of the step awaiting its check. */
   current: number;
-  /** Discord timestamp of the DM that handed out the current step. */
+  /** Discord timestamp of the channel message that handed out the current step. */
   windowStart: number;
   results: IStepResult[];
   /** A failed check awaiting "Check again" or "Continue as failed". */
