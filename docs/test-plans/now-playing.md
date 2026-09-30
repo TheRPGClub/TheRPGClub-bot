@@ -94,7 +94,7 @@ Ephemeral: yes
 
 ### Step 11: Open the manage menu
 ```
-click your name button in the header of your public list from step 4
+click your name on your newest public list; if it is far up, run /now-playing list first
 ```
 Expected: an ephemeral manage row with button: "Sort", button: "Edit Platform",
 button: "Add Completion", button: "Remove Game", and button: "Start a Game Journal".
@@ -168,17 +168,19 @@ Ephemeral: no
 ```
 click "Delete Entry" on the journal follow-up, select "Conductor test entry", click "Delete"
 ```
-Expected: a Confirm Delete prompt names the entry, then the entry is removed,
-and not: "That journal entry was not found".
+Expected: a Confirm Delete prompt names the entry, then the entry is removed and the
+journal controls return with button: "Delete Entry", and not: "That journal entry was not
+found". A confirmation line saying the entry was deleted should show.
 Ephemeral: yes
 
 ### Step 21: Remove Chrono Trigger with Remove Game
 ```
-click your name button on your list, click "Remove Game", select "Chrono Trigger (SNES)"
+click your name on your newest list, click "Remove Game", select "Chrono Trigger (SNES)"
 ```
 Expected: the message briefly shows Updating your Now Playing remove list, then changes
-in place to the remove screen, or to an empty-list note, with not: "Chrono Trigger".
-It must not post a second message.
+in place to the remove screen, "Select a game below to remove it from your list.", and
+Chrono Trigger is gone from it (check by eye: the screen before the removal still lists
+it). It must not post a second message.
 Ephemeral: yes
 
 ### Step 22: Add Chrono Trigger back for the completion flow
@@ -191,7 +193,7 @@ Ephemeral: no
 
 ### Step 23: Open Add Completion with the announcement off
 ```
-click your name, "Add Completion", then Chrono Trigger's "Add Completion", set Announce "No"
+click your name on your newest list, "Add Completion", Chrono Trigger's one, Announce "No"
 ```
 Expected: the manage message shows "Add Completion" and "Chrono Trigger", with the
 completion selects and Continue and Cancel buttons. If Chrono Trigger is your only game, the
