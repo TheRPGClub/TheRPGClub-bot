@@ -68,7 +68,9 @@ cmd_fetch() {
   esac
 
   workdir="$(mktemp -d)"
-  trap 'rm -rf "${workdir}"' EXIT
+  # Expanded now: the EXIT trap runs after this function's locals are gone.
+  # shellcheck disable=SC2064
+  trap "rm -rf '${workdir}'" EXIT
   gh run download "${run_id}" --name preview-logs --dir "${workdir}"
   gpg --batch --quiet --decrypt "${workdir}/preview-logs.gpg"
 }
