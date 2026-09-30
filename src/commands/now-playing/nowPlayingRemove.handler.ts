@@ -12,6 +12,7 @@ import {
   replyIfNotOwner,
   safeDeferReply,
   safeEditReply,
+  safeFollowUpIfSettled,
   safeReply,
   safeUpdate,
 } from "../../functions/InteractionUtils.js";
@@ -235,7 +236,6 @@ export class NowPlayingRemoveHandlers {
 
     // A failed removal still redraws the remove screen so its select and Done stay usable.
     let notice: ContainerBuilder[] = [];
-    let removeThrew = false;
     try {
       if (await Member.removeNowPlaying(ownerId, gameId)) {
         safeIgnore(refreshNowPlayingListFromContext(interaction, ownerId));
@@ -243,8 +243,13 @@ export class NowPlayingRemoveHandlers {
         notice = [buildTextContainer(REMOVE_FAILED_TEXT)];
       }
     } catch (err: unknown) {
-      removeThrew = true;
-      notice = [buildTextContainer(buildApiErrorMessage(REMOVE_ERROR_LABEL, err))];
+      // The full API error gets its own message: stacked on the remove screen it could pass
+      // the 4000-character Components V2 text limit and the edit would be rejected.
+      const container = buildTextContainer(buildApiErrorMessage(REMOVE_ERROR_LABEL, err));
+      safeIgnore(safeFollowUpIfSettled(interaction, {
+        components: [container],
+        flags: buildComponentsV2Flags(true),
+      }));
     }
 
     try {
@@ -285,12 +290,9 @@ export class NowPlayingRemoveHandlers {
         flags: buildComponentsV2EditFlags(),
       }));
     } catch (err: unknown) {
-      // Two full API errors could pass the 4000-character Components V2 text limit.
-      const components = removeThrew
-        ? notice
-        : [...notice, buildTextContainer(buildApiErrorMessage(REDRAW_ERROR_LABEL, err))];
+      const container = buildTextContainer(buildApiErrorMessage(REDRAW_ERROR_LABEL, err));
       safeIgnore(safeEditReply(interaction, {
-        components,
+        components: [...notice, container],
         attachments: [],
         flags: buildComponentsV2EditFlags(),
       }));

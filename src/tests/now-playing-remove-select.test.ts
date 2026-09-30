@@ -135,13 +135,14 @@ test("nowplaying remove select acknowledges interaction and shows error on faile
   }
 });
 
-test("nowplaying remove select keeps the remove screen when the removal throws", async () => {
+test("nowplaying remove select redraws in place and follows up with the error when the removal throws", async () => {
   const command = new NowPlayingRemoveHandlers() as any;
 
   const originalRemoveNowPlaying = Member.removeNowPlaying;
   const originalGetNowPlaying = Member.getNowPlaying;
 
   const edits: any[] = [];
+  const followUps: any[] = [];
 
   try {
     Member.removeNowPlaying = (async () => {
@@ -171,8 +172,8 @@ test("nowplaying remove select keeps the remove screen when the removal throws",
       reply: async () => {
         throw new Error("reply should not be called on the error path");
       },
-      followUp: async () => {
-        throw new Error("followUp should not be called on the error path");
+      followUp: async (payload: any) => {
+        followUps.push(payload);
       },
     };
 
@@ -180,9 +181,11 @@ test("nowplaying remove select keeps the remove screen when the removal throws",
 
     assert.equal(edits.length, 1, "expected the redrawn remove screen via editReply");
     const rendered = JSON.stringify(edits[0]?.components);
-    assert.match(rendered, /Could not remove from Now Playing/, "error notice should show");
-    assert.match(rendered, /delete exploded/, "error notice should carry the error");
     assert.match(rendered, /nowplaying-remove-select:123/, "remove select should stay usable");
+    assert.equal(followUps.length, 1, "expected the API error as an ephemeral follow-up");
+    const error = JSON.stringify(followUps[0]?.components);
+    assert.match(error, /Could not remove from Now Playing/, "error label should show");
+    assert.match(error, /delete exploded/, "error should carry the cause");
   } finally {
     Member.removeNowPlaying = originalRemoveNowPlaying;
     Member.getNowPlaying = originalGetNowPlaying;
