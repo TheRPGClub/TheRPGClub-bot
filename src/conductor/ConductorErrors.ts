@@ -1,5 +1,5 @@
-import axios from "axios";
 import {
+  buildAnyErrorMessage,
   buildApiErrorMessage,
   buildDiscordErrorMessage,
   type IErrorMessageOptions,
@@ -22,7 +22,5 @@ export function conductorDiscordError(label: string, err: unknown): string {
 
 /** Picks the formatter for a failure that may come from either Discord or an HTTP download. */
 export function conductorAnyError(label: string, err: unknown): string {
-  const isApiError = axios.isAxiosError(err) ||
-    (err instanceof Error && axios.isAxiosError(err.cause));
-  return isApiError ? conductorApiError(label, err) : conductorDiscordError(label, err);
+  return buildAnyErrorMessage(label, err, CONDUCTOR_ERROR_OPTIONS);
 }

@@ -192,6 +192,23 @@ test("a mirror post without its attachment still names who and what it answers",
   assert.equal(parsed?.source, "/collection");
 });
 
+test("only a kept mirror post's attachment is downloaded", () => {
+  const long = mirrorPost("m", 150, "/collection", "x".repeat(3000));
+  assert.ok(mirrorAttachmentUrl(long, CONTEXT));
+  assert.equal(mirrorAttachmentUrl({ ...long, authorIsBot: false }, CONTEXT), null);
+  assert.equal(mirrorAttachmentUrl({ ...long, authorId: CONTEXT.selfId }, CONTEXT), null);
+  assert.equal(mirrorAttachmentUrl({ ...long, webhookId: "w1" }, CONTEXT), null);
+  const other = { ...CONTEXT, allowedUserId: "101" };
+  assert.equal(mirrorAttachmentUrl(long, other), null);
+});
+
+test("an attachment that does not parse is kept raw for the report", () => {
+  const long = mirrorPost("m", 150, "/collection", "x".repeat(3000));
+  const parsed = parseMirrorMessage(long.content, "<html>error</html>");
+  assert.equal(parsed?.user, USER);
+  assert.equal(parsed?.payload, "<html>error</html>");
+});
+
 test("attributes ephemeral output to the step whose window it landed in", () => {
   const outputs = observe([
     mirrorPost("early", 50, "/collection", "Search for a game"),

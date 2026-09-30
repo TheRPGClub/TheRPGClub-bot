@@ -124,8 +124,9 @@ export function parseMirrorMessage(content: string, attachment?: string): Mirror
   const body = match[1];
   const parsed = parseJsonObject(body);
   if (parsed) {
-    const full = attachment === undefined ? null : parseJsonObject(attachment);
-    return mirrorRecord(parsed, full ?? parsed);
+    if (attachment === undefined) return mirrorRecord(parsed, parsed);
+    // An attachment that does not parse is kept raw, so the report shows what came back.
+    return mirrorRecord(parsed, parseJsonObject(attachment) ?? attachment);
   }
   const user = MIRROR_USER.exec(body)?.[1] ?? null;
   if (!user) return null;
@@ -134,13 +135,16 @@ export function parseMirrorMessage(content: string, attachment?: string): Mirror
 
 /**
  * Where to download a mirror post's full payload: the URL of the attachment its
- * content names, when the post is in the mirror channel and carries one.
+ * content names. Only a mirror post `classifySnapshot` would keep qualifies, so
+ * nothing a human, a webhook, or a reply to someone else attached is downloaded.
  */
 export function mirrorAttachmentUrl(
   snapshot: IMessageSnapshot,
   context: IObservationContext,
 ): string | null {
   if (snapshot.channelId !== context.mirrorChannelId) return null;
+  if (!isFromBotUnderTest(snapshot, context)) return null;
+  if (parseMirrorMessage(snapshot.content)?.user !== context.allowedUserId) return null;
   const name = mirrorAttachmentName(snapshot.content);
   if (!name) return null;
   return snapshot.attachments.find((entry) => entry.name === name)?.url ?? null;
@@ -159,6 +163,12 @@ function isForeignWebhook(snapshot: IMessageSnapshot): boolean {
   return Boolean(snapshot.webhookId) && snapshot.webhookId !== snapshot.applicationId;
 }
 
+/** A bot's own post, not the conductor's and not someone else's webhook. */
+function isFromBotUnderTest(snapshot: IMessageSnapshot, context: IObservationContext): boolean {
+  return snapshot.authorId !== context.selfId && snapshot.authorIsBot &&
+    !isForeignWebhook(snapshot);
+}
+
 /**
  * Keeps output from the bot under test that answers the allowlisted user. The
  * conductor's own posts, webhooks, human messages, and replies to anyone else
@@ -168,8 +178,7 @@ export function classifySnapshot(
   snapshot: IMessageSnapshot,
   context: IObservationContext,
 ): IObservedOutput | null {
-  if (snapshot.authorId === context.selfId) return null;
-  if (!snapshot.authorIsBot || isForeignWebhook(snapshot)) return null;
+  if (!isFromBotUnderTest(snapshot, context)) return null;
 
   const base = {
     messageId: snapshot.id,

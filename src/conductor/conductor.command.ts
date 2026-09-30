@@ -80,6 +80,9 @@ const OBSERVATION_FETCH_LIMIT = 100;
 /** How long one mirror payload attachment may take to download. */
 const MIRROR_ATTACHMENT_TIMEOUT_MS = 10_000;
 
+/** Largest mirror payload attachment read back; a real one is a few kilobytes. */
+const MIRROR_ATTACHMENT_MAX_BYTES = 1_000_000;
+
 type AnyConductorInteraction = CommandInteraction | ButtonInteraction | ModalSubmitInteraction;
 
 /** Edits the message holding the current step's buttons. */
@@ -150,6 +153,7 @@ async function downloadMirrorAttachment(url: string): Promise<string> {
     responseType: "text",
     transformResponse: [(data: string) => data],
     timeout: MIRROR_ATTACHMENT_TIMEOUT_MS,
+    maxContentLength: MIRROR_ATTACHMENT_MAX_BYTES,
   });
   return response.data;
 }
@@ -186,12 +190,15 @@ async function collectObservations(
     if (!channel?.isTextBased() || channel.isDMBased()) continue;
     if (channel.guildId !== settings.testGuildId) continue;
     const messages = await channel.messages.fetch({ limit: OBSERVATION_FETCH_LIMIT });
-    for (const message of messages.values()) {
+    const snapshots = await Promise.all([...messages.values()].map(async (message) => {
       const snapshot = snapshotMessage(message);
       const url = message.createdTimestamp > since
         ? mirrorAttachmentUrl(snapshot, context)
         : null;
       if (url) snapshot.mirrorAttachment = await downloadMirrorAttachment(url);
+      return snapshot;
+    }));
+    for (const snapshot of snapshots) {
       const output = classifySnapshot(snapshot, context);
       if (output) outputs.push(output);
     }
