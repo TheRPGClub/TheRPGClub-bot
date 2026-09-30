@@ -12,7 +12,7 @@ export type ApprovalDecision =
   | { kind: "approve" }
   /** The run did not pass, so there is nothing to approve and nothing to say. */
   | { kind: "not-passed" }
-  /** The run passed but cannot approve; `reason` is shown to the tester. */
+  /** The run passed but cannot approve; `reason` is a sentence shown to the tester. */
   | { kind: "skip"; reason: string };
 
 export function shortSha(sha: string): string {
@@ -30,28 +30,36 @@ export function runPassed(run: IConductorRun): boolean {
 export function decideApproval(
   run: IConductorRun,
   pull: IPullRequestInfo,
-  viewerLogin: string,
+  /** Null for a token with no user, such as a GitHub App's, which never authors a PR. */
+  viewerLogin: string | null,
 ): ApprovalDecision {
   if (!runPassed(run)) return { kind: "not-passed" };
   if (run.approvedSha === run.headSha) {
-    return { kind: "skip", reason: `PR #${run.pr} is already approved for this run.` };
+    return {
+      kind: "skip",
+      reason: `PR #${run.pr} is already approved at \`${shortSha(run.headSha)}\` by this run.`,
+    };
   }
   if (pull.state !== "open") {
-    return { kind: "skip", reason: `PR #${run.pr} is ${pull.state}, not open.` };
+    return {
+      kind: "skip",
+      reason: `PR #${run.pr} is ${pull.state}, not open, so it was not approved.`,
+    };
   }
   if (pull.headSha !== run.headSha) {
     return {
       kind: "skip",
       reason: `PR #${run.pr}'s head moved from \`${shortSha(run.headSha)}\` to ` +
         `\`${shortSha(pull.headSha)}\` since the run started, so the tested commit is ` +
-        "no longer the head.",
+        "no longer the head and it was not approved.",
     };
   }
-  if (pull.authorLogin.toLowerCase() === viewerLogin.toLowerCase()) {
+  if (viewerLogin && pull.authorLogin.toLowerCase() === viewerLogin.toLowerCase()) {
     return {
       kind: "skip",
       reason: `The conductor's GitHub token acts as ${viewerLogin}, who opened PR ` +
-        `#${run.pr}, and GitHub does not let an author approve their own pull request.`,
+        `#${run.pr}, and GitHub does not let an author approve their own pull request, ` +
+        "so it was not approved.",
     };
   }
   return { kind: "approve" };

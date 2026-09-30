@@ -131,9 +131,9 @@ The conductor reads these from its process environment:
   Pull requests: read and write. The report is posted through the issues comments API,
   but on a pull request GitHub checks the Pull requests permission, not Issues, so
   Issues: read and write alone gets a 403.
-  The same permission covers the approval. Approvals only happen when the token's user
-  is not the PR's author, so a token for the account that opens the PRs never approves;
-  a separate machine user with write access to the repo does.
+  The same permission covers the approval. The approval is skipped when the token's user
+  opened the PR, so a token for the account that opens the PRs never approves; a
+  separate machine user or a GitHub App with write access to the repo does.
 - `TEST_GUILD_ID`: must be the test guild. The conductor refuses to start without it,
   since it is what makes the shared channel constants resolve to the test guild.
 - `CONDUCTOR_STATE_PATH` (optional): where the active run is saved, by default

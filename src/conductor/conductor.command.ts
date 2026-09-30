@@ -36,13 +36,6 @@ import {
   safeReply,
 } from "../functions/InteractionUtils.js";
 import { checkConductorAccess } from "./ConductorAccess.js";
-import {
-  buildApprovalBody,
-  decideApproval,
-  runPassed,
-  shortSha,
-  type ApprovalDecision,
-} from "./ConductorApproval.js";
 import { conductorApiError, conductorDiscordError } from "./ConductorErrors.js";
 import {
   checkConductorChannelAccess,
@@ -72,7 +65,13 @@ import {
   type IObservedOutput,
   type IStepResult,
 } from "./ConductorObservation.js";
-import { buildRunReport, buildUnparseableReport } from "./ConductorReport.js";
+import {
+  approveIfPassed,
+  publishRunResult,
+  type IPublishOutcome,
+  type PublishRetry,
+} from "./ConductorPublish.js";
+import { buildUnparseableReport } from "./ConductorReport.js";
 import { getConductorRuntime } from "./ConductorRuntime.js";
 import { checkStepButton, loadRun, saveRun, type IConductorRun } from "./ConductorState.js";
 import { findUncheckedSteps, parseTestPlan } from "./TestPlanParser.js";
@@ -250,84 +249,37 @@ async function postOrNotify(
   }
 }
 
-interface IApprovalOutcome {
-  /** Appended to the channel notice; empty when the run did not pass. */
-  text: string;
-  retryRow?: RetryRow;
+function buildRetryRow(runId: string, retry?: PublishRetry): RetryRow | undefined {
+  if (retry === "report") return buildReportRetryRow(runId);
+  if (retry === "approve") return buildApproveRetryRow(runId);
+  return undefined;
 }
 
 /**
- * Approves a passed run's PR at the tested head. The head is read again first: a push
- * since the run started means the tested commit is no longer what would merge.
+ * Saves what publishing recorded on the run, then posts the notice. A failed save is
+ * added to the notice rather than thrown, since the PR already has the report.
  */
-async function approveIfPassed(
+async function postPublishOutcome(
+  interaction: AnyConductorInteraction,
   run: IConductorRun,
-  reportUrl: string,
-): Promise<IApprovalOutcome> {
-  if (!runPassed(run)) return { text: "" };
-  const { github, settings } = getConductorRuntime();
-  const retryRow = buildApproveRetryRow(run.runId);
-  let decision: ApprovalDecision;
+  outcome: IPublishOutcome,
+): Promise<void> {
+  let text = outcome.text;
   try {
-    const [pull, viewer] = await Promise.all([
-      github.getPullRequest(run.pr),
-      github.getViewerLogin(),
-    ]);
-    decision = decideApproval(run, pull, viewer);
+    await saveRun(getConductorRuntime().settings.statePath, run);
   } catch (err: unknown) {
-    const message = conductorApiError(`Reading PR #${run.pr} before approving it failed`, err);
-    return { text: `\n\n${message}`, retryRow };
+    text += `\n\n${conductorApiError("Saving the run state failed", err)}`;
   }
-  if (decision.kind === "not-passed") return { text: "" };
-  if (decision.kind === "skip") return { text: `\nNot approved: ${decision.reason}` };
-
-  let reviewUrl: string;
-  try {
-    reviewUrl = await github.approve(run.pr, run.headSha, buildApprovalBody(run, reportUrl));
-  } catch (err: unknown) {
-    const message = conductorApiError(`Approving PR #${run.pr} failed`, err);
-    return { text: `\n\n${message}`, retryRow };
-  }
-  run.approvedSha = run.headSha;
-  await saveRun(settings.statePath, run);
-  return { text: `\nApproved PR #${run.pr} at \`${shortSha(run.headSha)}\`: ${reviewUrl}` };
+  await postOrNotify(interaction, run, text, buildRetryRow(run.runId, outcome.retry));
 }
 
-/**
- * Posts the run's report, or offers a retry button when GitHub refuses it. The report
- * goes first, so a failed approval never costs the report.
- */
+/** Posts the run's report and approval, offering a retry button for whichever failed. */
 async function postRunReport(
   interaction: AnyConductorInteraction,
   run: IConductorRun,
 ): Promise<void> {
-  const { github, settings } = getConductorRuntime();
-  const report = buildRunReport({
-    pr: run.pr,
-    headSha: run.headSha,
-    runId: run.runId,
-    steps: run.steps,
-    results: run.results,
-    notes: run.notes,
-    aborted: run.status === "aborted",
-  });
-  let url: string;
-  try {
-    url = await github.postComment(run.pr, report);
-  } catch (err: unknown) {
-    const message = conductorApiError(`Posting the report to PR #${run.pr} failed`, err);
-    await postOrNotify(interaction, run, message, buildReportRetryRow(run.runId));
-    return;
-  }
-  run.reportUrl = url;
-  await saveRun(settings.statePath, run);
-  const approval = await approveIfPassed(run, url);
-  await postOrNotify(
-    interaction,
-    run,
-    `Report for PR #${run.pr} posted: ${url}${approval.text}`,
-    approval.retryRow,
-  );
+  const outcome = await publishRunResult(getConductorRuntime().github, run);
+  await postPublishOutcome(interaction, run, outcome);
 }
 
 /** Aborts a run, keeping a failed check it was waiting on as that step's result. */
@@ -572,15 +524,16 @@ async function retryReportLocked(interaction: ButtonInteraction): Promise<void> 
 
 async function retryApprovalLocked(interaction: ButtonInteraction): Promise<void> {
   const runId = parseRunCustomId(interaction.customId, CONDUCTOR_APPROVE_PREFIX);
-  const { settings } = getConductorRuntime();
+  const { settings, github } = getConductorRuntime();
   const run = await loadRun(settings.statePath);
   if (!run || run.runId !== runId || !run.reportUrl) {
     await replyStale(interaction, "That run's approval is not available.");
     return;
   }
   await safeEditReply(interaction, publicText(`Retrying the approval for PR #${run.pr}.`));
-  const approval = await approveIfPassed(run, run.reportUrl);
-  await postOrNotify(interaction, run, approval.text.trim(), approval.retryRow);
+  const outcome = await approveIfPassed(github, run, run.reportUrl);
+  const text = outcome.text || `The run for PR #${run.pr} did not pass, so it is not approved.`;
+  await postPublishOutcome(interaction, run, { ...outcome, text });
 }
 
 @Discord()

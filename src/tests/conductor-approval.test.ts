@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import type { AxiosAdapter, InternalAxiosRequestConfig } from "axios";
+import { AxiosError, type AxiosAdapter, type InternalAxiosRequestConfig } from "axios";
 
 import {
   CONDUCTOR_APPROVAL_MARKER,
@@ -8,6 +8,7 @@ import {
   decideApproval,
 } from "../conductor/ConductorApproval.js";
 import type { StepVerdict } from "../conductor/ConductorObservation.js";
+import { publishRunResult, type PublishClient } from "../conductor/ConductorPublish.js";
 import type { IConductorRun } from "../conductor/ConductorState.js";
 import { GitHubPullClient, type IPullRequestInfo } from "../conductor/GitHubPullClient.js";
 
@@ -84,6 +85,10 @@ test("a token that opened the PR skips the approval", () => {
   assert.match(decision.kind === "skip" ? decision.reason : "", /author approve/);
 });
 
+test("a token with no user, such as a GitHub App's, still approves", () => {
+  assert.deepEqual(decideApproval(run(["pass", "pass"]), pull(), null), { kind: "approve" });
+});
+
 test("a PR that is no longer open skips the approval", () => {
   const decision = decideApproval(run(["pass", "pass"]), pull({ state: "closed" }), "x");
   assert.equal(decision.kind, "skip");
@@ -139,4 +144,85 @@ test("getViewerLogin reads the token's user once", async () => {
   assert.equal(await client.getViewerLogin(), "conductor");
   assert.equal(requests.length, 1);
   assert.equal(requests[0].url, "/user");
+});
+
+test("getViewerLogin answers null for a token GitHub refuses /user with 403", async () => {
+  let calls = 0;
+  const adapter: AxiosAdapter = async (config) => {
+    calls += 1;
+    const response = { data: {}, status: 403, statusText: "Forbidden", headers: {}, config };
+    throw new AxiosError("Forbidden", "ERR_BAD_REQUEST", config, null, response);
+  };
+  const client = new GitHubPullClient("token", REPO, { adapter });
+
+  assert.equal(await client.getViewerLogin(), null);
+  assert.equal(await client.getViewerLogin(), null);
+  assert.equal(calls, 1);
+});
+
+interface IFakeGitHub {
+  client: PublishClient;
+  calls: string[];
+}
+
+/** A GitHub client that records its calls in order and fails the ones named. */
+function fakeGitHub(fail: string[] = []): IFakeGitHub {
+  const calls: string[] = [];
+  const call = async <T>(name: string, value: T): Promise<T> => {
+    calls.push(name);
+    if (fail.includes(name)) throw new Error(`${name} refused`);
+    return value;
+  };
+  const client: PublishClient = {
+    postComment: async () => call("postComment", "https://example.test/report"),
+    getPullRequest: async () => call("getPullRequest", pull()),
+    getViewerLogin: async () => call("getViewerLogin", "conductor"),
+    approve: async () => call("approve", "https://example.test/review"),
+  };
+  return { client, calls };
+}
+
+test("a passed run posts the report before approving", async () => {
+  const github = fakeGitHub();
+  const passed = run(["pass", "pass"]);
+
+  const outcome = await publishRunResult(github.client, passed);
+
+  assert.equal(github.calls[0], "postComment");
+  assert.equal(github.calls.at(-1), "approve");
+  assert.equal(outcome.retry, undefined);
+  assert.match(outcome.text, /posted: https:\/\/example\.test\/report\nApproved PR #1354/);
+  assert.equal(passed.reportUrl, "https://example.test/report");
+  assert.equal(passed.approvedSha, HEAD);
+});
+
+test("a failed approval keeps the report and offers the approval retry", async () => {
+  const github = fakeGitHub(["approve"]);
+  const passed = run(["pass", "pass"]);
+
+  const outcome = await publishRunResult(github.client, passed);
+
+  assert.equal(outcome.retry, "approve");
+  assert.match(outcome.text, /posted: https:\/\/example\.test\/report/);
+  assert.match(outcome.text, /Approving PR #1354 failed/);
+  assert.equal(passed.reportUrl, "https://example.test/report");
+  assert.equal(passed.approvedSha, undefined);
+});
+
+test("a failed report offers the report retry and does not approve", async () => {
+  const github = fakeGitHub(["postComment"]);
+
+  const outcome = await publishRunResult(github.client, run(["pass", "pass"]));
+
+  assert.equal(outcome.retry, "report");
+  assert.deepEqual(github.calls, ["postComment"]);
+});
+
+test("a run with a failed step posts the report and never reads the PR", async () => {
+  const github = fakeGitHub();
+
+  const outcome = await publishRunResult(github.client, run(["pass", "fail"]));
+
+  assert.deepEqual(github.calls, ["postComment"]);
+  assert.equal(outcome.text, "Report for PR #1354 posted: https://example.test/report");
 });

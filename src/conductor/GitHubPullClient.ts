@@ -30,7 +30,7 @@ export interface IGitHubPullClientOptions {
 
 export class GitHubPullClient {
   private readonly http: AxiosInstance;
-  private viewerLogin: string | null = null;
+  private viewerLogin: string | null | undefined;
 
   constructor(
     token: string,
@@ -79,11 +79,20 @@ export class GitHubPullClient {
     return (response.data as { html_url: string }).html_url;
   }
 
-  /** The login the token acts as. It never changes while the process runs, so it is cached. */
-  async getViewerLogin(): Promise<string> {
-    if (this.viewerLogin) return this.viewerLogin;
-    const response = await this.http.get("/user");
-    this.viewerLogin = (response.data as { login: string }).login;
+  /**
+   * The login the token acts as, or null when the token has no user: GitHub answers
+   * `/user` with 403 for a GitHub App installation token. Cached, since it never changes
+   * while the process runs.
+   */
+  async getViewerLogin(): Promise<string | null> {
+    if (this.viewerLogin !== undefined) return this.viewerLogin;
+    try {
+      const response = await this.http.get("/user");
+      this.viewerLogin = (response.data as { login: string }).login;
+    } catch (err: unknown) {
+      if (!axios.isAxiosError(err) || err.response?.status !== 403) throw err;
+      this.viewerLogin = null;
+    }
     return this.viewerLogin;
   }
 
