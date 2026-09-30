@@ -14,8 +14,9 @@ export interface IPrTestingCheck {
 }
 
 const QUOTED = /"[^"]*"/g;
-/** Words that start a user action. Field entries and a `submit` finish a modal. */
+/** Actions that can open a modal: a click, or a slash command line. */
 const CLICK_VERBS = new Set(["click", "press"]);
+/** Words that start a user action. Field entries and a `submit` finish a modal. */
 const ACTION_VERBS = new Set([...CLICK_VERBS, "select", "choose", "pick"]);
 
 /** How many user actions a step's code block holds, per the one-action rule. */
@@ -25,9 +26,10 @@ export function countStepActions(command: string): number {
   const lines = command.replace(QUOTED, '""').toLowerCase().split("\n");
   for (const line of lines) {
     // A slash command line is one action; its subcommands and option values are not.
+    // It may open a modal, so a following `submit` closes the same action.
     if (line.trim().startsWith("/")) {
       actions += 1;
-      modalOpen = false;
+      modalOpen = true;
       continue;
     }
     const words = line.match(/[a-z]+/g) ?? [];
