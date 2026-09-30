@@ -131,6 +131,11 @@ export class GameDbViewCommand {
       return;
     }
 
+    if (action === "collection") {
+      await this.handleAddToCollection(interaction, numericId);
+      return;
+    }
+
     const gameId = numericId;
     const game = await Game.getGameById(gameId);
     if (!game) {
@@ -224,24 +229,24 @@ export class GameDbViewCommand {
       await this.handleAddToBacklog(interaction, gameId);
       return;
     }
-
-    if (action === "collection") {
-      await this.handleAddToCollection(interaction, gameId, game.title);
-      return;
-    }
   }
 
   private async handleAddToCollection(
     interaction: ButtonInteraction,
     gameId: number,
-    title: string,
   ): Promise<void> {
+    // Defer before any API call: the game lookup and platform list can outlast 3s together.
     await safeDeferReply(interaction, { flags: buildComponentsV2Flags(true) });
     let prompt;
     try {
+      const game = await Game.getGameById(gameId);
+      if (!game) {
+        await safeReply(interaction, buildTextReply(`No game found with ID ${gameId}.`, true));
+        return;
+      }
       prompt = await buildGamePlatformPromptPayload({
         gameId,
-        title,
+        title: game.title,
         customId: `${GAMEDB_COLLECTION_PLATFORM_PREFIX}:${gameId}`,
         placeholder: "Select the platform you own it on",
       });
