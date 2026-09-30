@@ -15,11 +15,6 @@ export const COMPLETIONATOR_CHOOSE_PREFIX = "comp-import-choose-v1";
 // GameDB search interaction IDs
 export const GAMEDB_SEARCH_PREFIX = "gamedb-search-";
 
-// Pokopia list/detail navigation interaction IDs (shared by pokemon and habitat views)
-export const POKOPIA_LIST_NAV_PREFIX = "pokopia-list-nav-v1";
-export const POKOPIA_DETAIL_PREFIX = "pokopia-detail-v1";
-export const POKOPIA_BACK_PREFIX = "pokopia-back-v1";
-
 // Conductor test runner interaction IDs (separate process, see src/conductor)
 export const CONDUCTOR_CHECK_PREFIX = "conductor-check-v1";
 export const CONDUCTOR_ABORT_PREFIX = "conductor-abort-v1";

@@ -23,7 +23,6 @@ import { joinAllTargetForumThreads } from "./services/ForumThreadJoinService.js"
 import { startSharedStateServices } from "./services/SharedStateServices.js";
 import { refreshGiveawayHubMessage } from "./services/GiveawayHubService.js";
 import { startUserEmojiService } from "./services/UserEmojiService.js";
-import { startPokopiaEmojiService } from "./services/PokopiaEmojiService.js";
 import { registerClientObservability } from "./services/ClientObservability.js";
 import { restoreJournalMessageContextsFromDb } from "./commands/now-playing/nowPlayingContexts.js";
 import GameSearchService from "./classes/GameSearchService.js";
@@ -217,7 +216,6 @@ bot.once("clientReady", async () => {
   await joinAllTargetForumThreads(bot);
   await refreshGiveawayHubMessage(bot);
   await startUserEmojiService(bot);
-  await startPokopiaEmojiService(bot);
   await restoreJournalMessageContextsFromDb();
   console.log("Startup sequence completed.");
 });
