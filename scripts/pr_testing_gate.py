@@ -32,18 +32,26 @@ TIMEOUT = 60
 
 # Cheap test on the raw command, so every other Bash call returns before any parsing.
 MAYBE = re.compile(r'\bgh\s+(pr\s+(create|edit)|api)\b')
-SEPARATORS = {';', '&', '&&', '|', '||', '(', ')', '\n'}
+# Every token made only of these ends a simple command: `;`, `&&`, `|`, a newline, a
+# subshell parenthesis, and runs of them such as `)\n`.
+SEPARATOR_CHARS = set(';&|()\n')
+ASSIGNMENT = re.compile(r'^([A-Za-z_][A-Za-z0-9_]*)=(.*)$', re.S)
+VARIABLE = re.compile(r'\$(?:\{([A-Za-z_][A-Za-z0-9_]*)\}|([A-Za-z_][A-Za-z0-9_]*))')
 PULLS = re.compile(r'^/?repos/[^/]+/[^/]+/pulls(/[^/]+)?$')
 TESTING = re.compile(r'^##[ \t]+Testing[ \t]*$', re.M)
 
 
 def segments(command):
     """Splits a shell command into the simple commands between separators."""
-    lexer = shlex.shlex(command, posix=True, punctuation_chars=True)
+    lexer = shlex.shlex(command, posix=True, punctuation_chars='();<>|&\n')
     lexer.whitespace_split = True
+    # A newline separates commands rather than words, and `#` is left in the words: a
+    # comment read by shlex would swallow the newline that ends it.
+    lexer.whitespace = ' \t\r'
+    lexer.commenters = ''
     seg = []
     for token in lexer:
-        if token in SEPARATORS or set(token) <= set(';&|()'):
+        if set(token) <= SEPARATOR_CHARS:
             if seg:
                 yield seg
             seg = []
@@ -95,8 +103,20 @@ def api_bodies(args):
             yield ('inline', field[len('body='):])
 
 
+def expand(word, env):
+    """Expands `~` and `$NAME` in a path, preferring values the command itself set."""
+    def value(match):
+        name = match.group(1) or match.group(2)
+        return env.get(name, os.environ.get(name, match.group(0)))
+    return os.path.expanduser(VARIABLE.sub(value, word))
+
+
 def body_sources(command):
-    """Every ('file', path) or ('inline', text) body the command passes to a PR."""
+    """Every ('file', path) or ('inline', text) body the command passes to a PR.
+
+    A relative path is joined onto the directory an earlier `cd` in the command moved to,
+    and variables the command assigned earlier are expanded in it.
+    """
     if not MAYBE.search(command):
         return []
     try:
@@ -105,20 +125,34 @@ def body_sources(command):
         # Unbalanced quoting, usually a heredoc: nothing here can be read reliably.
         return []
     found = []
+    env = {}
+    cd = ''
     for seg in segs:
-        while seg and re.match(r'^[A-Za-z_][A-Za-z0-9_]*=', seg[0]):
+        if seg and seg[0] == 'export':
             seg = seg[1:]
+        while seg and ASSIGNMENT.match(seg[0]):
+            name, value = ASSIGNMENT.match(seg[0]).groups()
+            env[name] = expand(value, env)
+            seg = seg[1:]
+        if len(seg) == 2 and seg[0] == 'cd':
+            cd = os.path.join(cd, expand(seg[1], env))
+            continue
         if len(seg) < 2 or seg[0] != 'gh':
             continue
         if seg[1] == 'pr' and len(seg) > 2 and seg[2] in ('create', 'edit'):
-            found.extend(pr_bodies(seg[3:]))
+            sources = pr_bodies(seg[3:])
         elif seg[1] == 'api':
-            found.extend(api_bodies(seg[2:]))
+            sources = api_bodies(seg[2:])
+        else:
+            continue
+        for kind, value in sources:
+            if kind == 'file' and value != '-':
+                value = os.path.join(cd, expand(value, env))
+            found.append((kind, value))
     return found
 
 
 def resolve(path, cwd):
-    path = os.path.expandvars(os.path.expanduser(path))
     return path if os.path.isabs(path) else os.path.join(cwd or ROOT, path)
 
 
@@ -154,10 +188,15 @@ def decide(payload, run=run_checker):
         if value == '-':
             continue
         code, output = run(resolve(value, payload.get('cwd')))
-        if code != 0:
+        if code == 1 and 'The ## Testing section cannot be parsed' in output:
             return deny(f'The pull request body in {value} failed the Testing check '
-                        f'(`npm run check:pr-testing -- {value}` exited {code}):\n{output}'
+                        f'(`npm run check:pr-testing -- {value}`):\n{output}'
                         '\nFix the body and run the command again.')
+        if code != 0:
+            return deny(f'The pull request body in {value} could not be checked '
+                        f'(`npm run check:pr-testing -- {value}` exited {code}):\n{output}'
+                        '\nFix the path or the checker (a missing tsx means `npm ci`), '
+                        'then run the command again.')
     return None
 
 

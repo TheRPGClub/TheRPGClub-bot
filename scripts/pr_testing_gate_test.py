@@ -84,6 +84,24 @@ class Matcher(unittest.TestCase):
             with self.subTest(cmd=cmd):
                 self.assertEqual(gate.body_sources(cmd), [])
 
+    def test_newlines_and_comments_separate_commands(self):
+        for cmd in ('cd /w\ngh pr create --body-file /s/b.md',
+                    'git push # first\ngh pr create --body-file /s/b.md',
+                    'git push &&\n  gh pr create --body-file /s/b.md'):
+            with self.subTest(cmd=cmd):
+                self.assertEqual(gate.body_sources(cmd), [('file', '/s/b.md')])
+
+    def test_cd_and_variables_in_the_command(self):
+        self.assertEqual(gate.body_sources('cd sub && gh pr create --body-file b.md'),
+                         [('file', 'sub/b.md')])
+        self.assertEqual(gate.body_sources('cd /a; cd b\ngh pr edit 1 -F c.md'),
+                         [('file', '/a/b/c.md')])
+        self.assertEqual(gate.body_sources('B=/s/pr.md; gh pr create --body-file "$B"'),
+                         [('file', '/s/pr.md')])
+        self.assertEqual(
+            gate.body_sources('export D=/s\ngh api repos/o/r/pulls/1 -F body=@${D}/b.md'),
+            [('file', '/s/b.md')])
+
     def test_resolve_relative_to_cwd(self):
         self.assertEqual(gate.resolve('b.md', '/work'), '/work/b.md')
         self.assertEqual(gate.resolve('/abs/b.md', '/work'), '/abs/b.md')
@@ -99,7 +117,8 @@ class Decision(unittest.TestCase):
         return gate.decide(payload(command), run=fake), seen
 
     def test_malformed_denies_with_reason(self):
-        result, seen = self.run_with('gh pr create --body-file b.md', 1, 'cannot be parsed')
+        result, seen = self.run_with('gh pr create --body-file b.md', 1,
+                                     'The ## Testing section cannot be parsed: x')
         self.assertEqual(seen, ['/repo/b.md'])
         out = result['hookSpecificOutput']
         self.assertEqual(out['permissionDecision'], 'deny')
@@ -109,8 +128,9 @@ class Decision(unittest.TestCase):
     def test_unreadable_denies(self):
         result, _ = self.run_with('gh api -X PATCH repos/o/r/pulls/3 -F body=@/x.md', 2,
                                   'Cannot read /x.md: ENOENT')
-        self.assertIn('Cannot read /x.md',
-                      result['hookSpecificOutput']['permissionDecisionReason'])
+        reason = result['hookSpecificOutput']['permissionDecisionReason']
+        self.assertIn('Cannot read /x.md', reason)
+        self.assertIn('could not be checked', reason)
 
     def test_valid_passes(self):
         result, seen = self.run_with('gh pr create --body-file b.md', 0)
