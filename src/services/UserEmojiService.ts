@@ -3,6 +3,8 @@ import type { Client, GuildMember } from "discord.js";
 import Member from "../classes/Member.js";
 import { sleep } from "../utilities/DelayUtils.js";
 import { logError, logInfo } from "../utilities/LogUtils.js";
+import { IS_TEST_MODE } from "../config/testMode.js";
+import { setInvalidEmojiHandler } from "../functions/InvalidEmojiRetry.js";
 import {
   ADMIN_ROLE_ID,
   MEMBER_ROLE_ID,
@@ -52,6 +54,15 @@ async function circularCropAvatar(url: string): Promise<Buffer> {
 
 const EMOJI_NAME_PREFIX = "u_";
 const CREATION_THROTTLE_MS = 600;
+const RECONCILE_INTERVAL_MS = 10 * 60 * 1000;
+
+/**
+ * Application emojis belong to the bot application, not a guild, so a test mode bot running
+ * as the same application shares them with production. Letting it create, delete, or rename
+ * them (or clear DB emoji names) swaps the IDs out from under the production cache, so test
+ * mode only reads them.
+ */
+const EMOJI_WRITES_ENABLED = !IS_TEST_MODE;
 
 const QUALIFYING_ROLE_IDS = [
   REGULARS_ROLE_ID,
@@ -66,10 +77,17 @@ function hasQualifyingRole(member: GuildMember): boolean {
 }
 
 type EmojiCacheEntry = { emojiId: string; emojiName: string };
+// rejectedId: the id Discord refused; not re-adopted on the first look after the rejection.
+type PendingEntry = EmojiCacheEntry & { rejectedId?: string };
 
 // userId -> { emojiId, emojiName }
 const emojiCache = new Map<string, EmojiCacheEntry>();
+// Entries evicted because Discord rejected or no longer lists their emoji, awaiting resync.
+const pendingResync = new Map<string, PendingEntry>();
 let initialized = false;
+let serviceClient: Client | null = null;
+let initialSyncDone = false;
+let reconcileInFlight: Promise<void> | null = null;
 
 function sanitizeDisplayName(displayName: string): string {
   return displayName
@@ -119,16 +137,146 @@ export function renderUsernameWithEmoji(userId: string, displayName: string): st
 export async function startUserEmojiService(client: Client): Promise<void> {
   if (initialized) return;
   initialized = true;
-  const forceRefresh = process.env["FORCE_EMOJI_REFRESH"] === "true";
-  if (forceRefresh) {
-    logInfo("UserEmojiService", "FORCE_EMOJI_REFRESH detected -- all emojis will be re-uploaded.");
+  serviceClient = client;
+  setInvalidEmojiHandler(reportInvalidUserEmojis);
+  const initialSync = EMOJI_WRITES_ENABLED
+    ? syncAllUserEmoji(client, process.env["FORCE_EMOJI_REFRESH"] === "true")
+    : loadUserEmojiCacheReadOnly(client);
+  initialSync
+    .catch((err) => {
+      logError("UserEmojiService.initialSync", err);
+    })
+    .finally(() => {
+      initialSyncDone = true;
+      setInterval(() => {
+        scheduleReconcile(client);
+      }, RECONCILE_INTERVAL_MS);
+    });
+}
+
+/** Test mode: fills the cache from the DB names and the live emojis, changing neither. */
+async function loadUserEmojiCacheReadOnly(client: Client): Promise<void> {
+  const app = client.application;
+  if (!app) {
+    logError("UserEmojiService", "client.application not available");
+    return;
   }
-  syncAllUserEmoji(client, forceRefresh).catch((err) => {
-    logError("UserEmojiService.initialSync", err);
-  });
+  const dbEntries = await Member.getAllWithEmojiName();
+  const liveIdsByName = await fetchLiveEmojiIdsByName(app);
+  for (const { userId, emojiName } of dbEntries) {
+    const emojiId = liveIdsByName.get(emojiName);
+    if (emojiId) emojiCache.set(userId, { emojiId, emojiName });
+  }
+  logInfo("UserEmojiService", `Test mode: loaded ${emojiCache.size} emoji read-only.`);
+}
+
+async function fetchLiveEmojiIdsByName(
+  app: NonNullable<Client["application"]>,
+): Promise<Map<string, string>> {
+  const existing = await app.emojis.fetch();
+  const idsByName = new Map<string, string>();
+  for (const [, emoji] of existing) {
+    if (!emoji.name?.startsWith(EMOJI_NAME_PREFIX) || !emoji.id) continue;
+    idsByName.set(emoji.name, emoji.id);
+  }
+  return idsByName;
+}
+
+/**
+ * Called when Discord rejects a component emoji. Evicts every user whose cached emoji has
+ * one of those ids, so the next render has no emoji, then resyncs them in the background.
+ */
+export function reportInvalidUserEmojis(emojiIds: readonly string[]): void {
+  const rejected = new Set(emojiIds);
+  for (const [userId, entry] of emojiCache) {
+    if (!rejected.has(entry.emojiId)) continue;
+    emojiCache.delete(userId);
+    pendingResync.set(userId, { ...entry, rejectedId: entry.emojiId });
+    logInfo("UserEmojiService", `Evicted stale emoji ${entry.emojiName} (${entry.emojiId})`);
+  }
+  if (pendingResync.size && serviceClient && initialSyncDone) {
+    scheduleReconcile(serviceClient);
+  }
+}
+
+function scheduleReconcile(client: Client): void {
+  if (reconcileInFlight) return;
+  reconcileInFlight = reconcileUserEmojiCache(client)
+    .catch((err) => {
+      logError("UserEmojiService.reconcile", err);
+    })
+    .finally(() => {
+      reconcileInFlight = null;
+    });
+}
+
+/**
+ * Checks the cache against the application's live emojis. An entry whose emoji is gone
+ * adopts the live emoji with the same name (another process recreated it) or, outside test
+ * mode, has its emoji recreated from the member's avatar.
+ */
+async function reconcileUserEmojiCache(client: Client): Promise<void> {
+  const app = client.application;
+  if (!app) return;
+  // Entries written while the fetch is in flight (an avatar or name change) are newer than
+  // the listing, so only entries unchanged since before the fetch are checked against it.
+  const snapshot = new Map(emojiCache);
+  const liveIdsByName = await fetchLiveEmojiIdsByName(app);
+  const liveIds = new Set(liveIdsByName.values());
+  for (const [userId, entry] of snapshot) {
+    if (liveIds.has(entry.emojiId) || emojiCache.get(userId) !== entry) continue;
+    emojiCache.delete(userId);
+    pendingResync.set(userId, entry);
+  }
+
+  for (const [userId, entry] of [...pendingResync]) {
+    pendingResync.delete(userId);
+    if (emojiCache.has(userId)) continue;
+    const liveId = liveIdsByName.get(entry.emojiName);
+    if (liveId && liveId === entry.rejectedId) {
+      // Still listed under the id Discord just refused; look again next cycle.
+      pendingResync.set(userId, { emojiId: entry.emojiId, emojiName: entry.emojiName });
+      continue;
+    }
+    if (liveId) {
+      emojiCache.set(userId, { emojiId: liveId, emojiName: entry.emojiName });
+      logInfo("UserEmojiService", `Adopted live emoji ${entry.emojiName} (${liveId})`);
+      continue;
+    }
+    if (!EMOJI_WRITES_ENABLED) continue;
+    const member = await client.guilds.cache.first()?.members.fetch(userId).catch(() => null);
+    if (member && await uploadUserEmoji(app, member, entry.emojiName)) {
+      logInfo("UserEmojiService", `Recreated missing emoji ${entry.emojiName}`);
+      await sleep(CREATION_THROTTLE_MS);
+    }
+  }
+}
+
+/** Uploads the member's circular avatar as `emojiName` and caches it. Returns success. */
+async function uploadUserEmoji(
+  app: NonNullable<Client["application"]>,
+  member: GuildMember,
+  emojiName: string,
+): Promise<boolean> {
+  const avatarUrl = member.displayAvatarURL({ extension: "png", size: 128, forceStatic: true });
+  try {
+    const emoji = await app.emojis.create({
+      attachment: await circularCropAvatar(avatarUrl),
+      name: emojiName,
+    });
+    if (!emoji.id) return false;
+    emojiCache.set(member.id, { emojiId: emoji.id, emojiName });
+    return true;
+  } catch (err) {
+    logError("UserEmojiService.createEmoji", err);
+    return false;
+  }
 }
 
 async function syncAllUserEmoji(client: Client, forceRefresh = false): Promise<void> {
+  if (forceRefresh) {
+    logInfo("UserEmojiService", "FORCE_EMOJI_REFRESH detected -- all emojis will be re-uploaded.");
+  }
   const app = client.application;
   if (!app) {
     logError("UserEmojiService", "client.application not available");
@@ -140,13 +288,8 @@ async function syncAllUserEmoji(client: Client, forceRefresh = false): Promise<v
   const dbUserToName = new Map(dbEntries.map((e) => [e.userId, e.emojiName]));
   const dbNameToUser = new Map(dbEntries.map((e) => [e.emojiName, e.userId]));
 
-  // Load existing Discord emojis
-  const existing = await app.emojis.fetch();
-  const discordEmojis = new Map<string, string>(); // emojiName -> emojiId
-  for (const [, emoji] of existing) {
-    if (!emoji.name?.startsWith(EMOJI_NAME_PREFIX) || !emoji.id) continue;
-    discordEmojis.set(emoji.name, emoji.id);
-  }
+  // Load existing Discord emojis: emojiName -> emojiId
+  const discordEmojis = await fetchLiveEmojiIdsByName(app);
 
   const guild = client.guilds.cache.first();
   if (!guild) {
@@ -181,20 +324,10 @@ async function syncAllUserEmoji(client: Client, forceRefresh = false): Promise<v
         }
         if (!deleted) continue;
       }
-      const avatarUrl = member.displayAvatarURL({ extension: "png", size: 128, forceStatic: true });
-      try {
-        const emoji = await app.emojis.create({
-          attachment: await circularCropAvatar(avatarUrl),
-          name: storedName,
-        });
-        if (emoji.id) {
-          emojiCache.set(userId, { emojiId: emoji.id, emojiName: storedName });
-          claimedNames.add(storedName);
-          created++;
-          await sleep(CREATION_THROTTLE_MS);
-        }
-      } catch (err) {
-        logError("UserEmojiService.recreateEmoji", err);
+      if (await uploadUserEmoji(app, member, storedName)) {
+        claimedNames.add(storedName);
+        created++;
+        await sleep(CREATION_THROTTLE_MS);
       }
     }
   }
@@ -234,23 +367,11 @@ async function createEmojiForMember(
   member: GuildMember,
 ): Promise<boolean> {
   const emojiName = buildEmojiName(member);
-  const avatarUrl = member.displayAvatarURL({ extension: "png", size: 128, forceStatic: true });
-  try {
-    const emoji = await app.emojis.create({
-      attachment: await circularCropAvatar(avatarUrl),
-      name: emojiName,
-    });
-    if (emoji.id) {
-      emojiCache.set(member.id, { emojiId: emoji.id, emojiName });
-      await Member.updateEmojiName(member.id, emojiName).catch((err) => {
-        logError("UserEmojiService.saveEmojiName", err);
-      });
-      return true;
-    }
-  } catch (err) {
-    logError("UserEmojiService.createEmoji", err);
-  }
-  return false;
+  if (!await uploadUserEmoji(app, member, emojiName)) return false;
+  await Member.updateEmojiName(member.id, emojiName).catch((err) => {
+    logError("UserEmojiService.saveEmojiName", err);
+  });
+  return true;
 }
 
 export async function syncUserEmojiFromAvatarChange(
@@ -259,7 +380,7 @@ export async function syncUserEmojiFromAvatarChange(
   newAvatarUrl: string,
 ): Promise<void> {
   const app = client.application;
-  if (!app) return;
+  if (!app || !EMOJI_WRITES_ENABLED) return;
 
   const existing = emojiCache.get(userId);
   if (!existing) return;
@@ -291,7 +412,7 @@ export async function syncUserEmojiFromDisplayNameChange(
   member: GuildMember,
 ): Promise<void> {
   const app = client.application;
-  if (!app) return;
+  if (!app || !EMOJI_WRITES_ENABLED) return;
 
   const existing = emojiCache.get(member.id);
   const newEmojiName = buildEmojiName(member);
@@ -328,7 +449,7 @@ export async function ensureUserEmojiForMember(
   client: Client,
   member: GuildMember,
 ): Promise<void> {
-  if (emojiCache.has(member.id)) return;
+  if (emojiCache.has(member.id) || !EMOJI_WRITES_ENABLED) return;
   const app = client.application;
   if (!app) return;
   await createEmojiForMember(app, member);

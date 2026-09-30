@@ -24,6 +24,7 @@ import {
 } from "./EphemeralMirror.js";
 import { DEV_ROLE_ID } from "../config/roles.js";
 import { IS_TEST_MODE } from "../config/testMode.js";
+import { sendWithInvalidEmojiRetry } from "./InvalidEmojiRetry.js";
 import {
   buildComponentsV2Flags,
   buildTextContainer,
@@ -462,8 +463,13 @@ export async function safeReply(interaction: AnyRepliable, options: any): Promis
   // Mirrors sendSafeReply's routing: this call fills the deferred reply.
   const fillsDefer = !options?.__forceFollowUp &&
     Boolean(aug.__rpgDeferred ?? aug.deferred) && !aug.replied;
-  const result = await sendSafeReply(interaction, options);
-  const mirrored = applyDevChannelOverrides(interaction, normalizeOptions(options));
+  // The mirror copies what was actually sent, which drops an emoji Discord rejected.
+  let sent = options;
+  const result = await sendWithInvalidEmojiRetry(options, (payload) => {
+    sent = payload;
+    return sendSafeReply(interaction, payload);
+  });
+  const mirrored = applyDevChannelOverrides(interaction, normalizeOptions(sent));
   if (fillsDefer && !isEphemeralPayload(mirrored)) {
     await mirrorEphemeralDeferredReply(interaction, mirrored);
   } else {
@@ -594,11 +600,15 @@ export async function safeUpdate(interaction: AnyRepliable, options: any): Promi
 
   if (interaction.isMessageComponent()) {
     try {
-      await interaction.update(normalizedOptions);
+      let sent = normalizedOptions;
+      await sendWithInvalidEmojiRetry(normalizedOptions, (payload) => {
+        sent = payload;
+        return interaction.update(payload);
+      });
       aug.__rpgAcked = true;
       aug.__rpgDeferred = true;
       // Only on the success path: the fallback below mirrors through safeReply.
-      await mirrorEphemeralUpdate(interaction, normalizedOptions);
+      await mirrorEphemeralUpdate(interaction, sent);
       return;
     } catch (err: unknown) {
       if (isAckError(err)) {
@@ -642,8 +652,12 @@ export async function safeEditReply(interaction: AnyRepliable, options: any): Pr
 
   const normalizedOptions = applyDevChannelOverrides(interaction, normalizeOptions(options));
   try {
-    const result = await interaction.editReply(normalizedOptions);
-    await mirrorEphemeralUpdate(interaction, normalizedOptions);
+    let sent = normalizedOptions;
+    const result = await sendWithInvalidEmojiRetry(normalizedOptions, (payload) => {
+      sent = payload;
+      return interaction.editReply(payload);
+    });
+    await mirrorEphemeralUpdate(interaction, sent);
     return result;
   } catch (err: unknown) {
     if (!isAckError(err)) throw err;
