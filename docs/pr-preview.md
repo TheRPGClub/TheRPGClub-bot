@@ -1,10 +1,10 @@
 # PR preview deployments
 
-Every same-repo pull request against `main` whose body has Testing steps is built and run in the test guild under a
-separate dev bot application, on a self-hosted runner on the desktop that already runs
-the production bot. The PR gets a sticky `PR preview` comment saying whether its preview
-is building, running, failed, replaced, or torn down, and the `deploy` job doubles as a
-check.
+Every same-repo pull request against `main` whose body has Testing steps is built and run
+in the test guild under a separate dev bot application, on a self-hosted runner on the
+desktop that already runs the production bot. The PR gets a sticky `PR preview` comment
+saying whether its preview is building, running, failed, replaced, or torn down, and the
+`deploy` job doubles as a check.
 
 Pieces:
 
@@ -156,9 +156,9 @@ while the desktop is off for a while.
 
 ### 8. Verify
 
-1. Open any PR against `main` with Testing steps in its body. Within a minute or two its `PR preview` comment should
-   read Running, and the dev bot should be online in the test guild with its slash
-   commands listed there.
+1. Open any PR against `main` with Testing steps in its body. Within a minute or two its
+   `PR preview` comment should read Running, and the dev bot should be online in the test
+   guild with its slash commands listed there.
 2. `docker ps` shows `rpgclub-pr-preview` next to the production container, and the
    production bot keeps answering in the main guild.
 3. Close the PR. The container is gone and the comment reads torn down.
@@ -175,6 +175,7 @@ bash scripts/preview/preview.sh list
 bash scripts/preview/preview.sh kill
 ```
 
-`teardown <pr>` removes the preview only if it belongs to that PR. Re-running all
-jobs of a PR's latest workflow run brings its preview back, as long as its body still
-has Testing steps. Running the workflow by hand from the Actions tab runs the reaper, which removes a preview whose PR is closed.
+`teardown <pr>` removes the preview only if it belongs to that PR. Re-running all jobs of
+a PR's latest workflow run brings its preview back, as long as its body still has Testing
+steps. Running the workflow by hand from the Actions tab runs the reaper, which removes a
+preview whose PR is closed.
