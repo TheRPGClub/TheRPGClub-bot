@@ -141,6 +141,13 @@ test("game journal hmenu add and edit modals update the menu instead of replying
       makeInteraction("game-journal-hmenu-edit-modal:123:1:10", editCalls),
     );
     assert.deepEqual(editCalls, ["update"]);
+
+    Member.getGameJournalEntryForUser = (async () => null) as any;
+    const missingCalls: string[] = [];
+    await command.handleGjHmenuEditModal(
+      makeInteraction("game-journal-hmenu-edit-modal:123:1:10", missingCalls),
+    );
+    assert.deepEqual(missingCalls, ["update"]);
   } finally {
     Member.addGameJournalEntry = originalAdd;
     Member.updateGameJournalEntry = originalUpdate;

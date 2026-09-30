@@ -978,7 +978,13 @@ export class GameJournalCommand {
     const entryId = Number(entryIdRaw);
     const existing = await Member.getGameJournalEntryForUser(ownerId, entryId);
     if (!existing || existing.gameId !== gameId) {
-      await safeReply(interaction, buildTextReply("That journal entry was not found.", false));
+      await safeUpdateModalSource(interaction, {
+        components: [
+          buildTextContainer("## Manage Journal\n-# That journal entry was not found."),
+          buildHmenuActionRow(ownerId, gameId),
+        ],
+        flags: buildComponentsV2Flags(true),
+      });
       return;
     }
     const title = sanitizeUserInput(
