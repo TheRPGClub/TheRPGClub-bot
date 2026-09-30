@@ -4,6 +4,9 @@
  * The format is fixed by `.github/pull-request-testing-format.md`. The PR body is
  * attacker-controlled, so this module only ever turns it into data. Nothing it
  * returns is executed; commands are shown to a human, who runs them.
+ *
+ * The PR preview workflow imports this file directly under Node's type stripping
+ * (`scripts/preview/plan.mjs`), so it keeps no imports and only erasable TypeScript.
  */
 
 export interface ITestStep {
