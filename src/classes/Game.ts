@@ -10,6 +10,7 @@ import {
   type ApiGetRawMeta,
 } from "../services/RpgClubApiClient.js";
 import { isPositiveInt } from "../utilities/ValidationUtils.js";
+import { logError } from "../utilities/LogUtils.js";
 import {
   mapGameFromApi,
   mapReleaseFromApi,
@@ -75,6 +76,26 @@ export default class Game {
     if (!uniqueIds.length) return [];
     const results = await Promise.all(uniqueIds.map((id) => Game.getGameById(id)));
     return results.filter((g): g is IGame => g !== null);
+  }
+
+  /**
+   * Resolves game titles from the cached game list, fetching one game at a time
+   * only for ids the cache misses. Use this when only titles are needed for many
+   * rows: getGamesByIds sends one GET /games/{id} per id.
+   */
+  static async getTitlesByIds(ids: number[]): Promise<Map<number, string>> {
+    const uniqueIds = Array.from(new Set(ids.filter(isPositiveInt)));
+    let titles = new Map<number, string>();
+    try {
+      titles = await GameSearchService.getCachedTitles(uniqueIds);
+    } catch (err) {
+      logError("Game.getTitlesByIds: title cache unavailable; fetching per id", err);
+    }
+    const missing = uniqueIds.filter((id) => !titles.has(id));
+    for (const game of await Game.getGamesByIds(missing)) {
+      titles.set(Number(game.id), game.title);
+    }
+    return titles;
   }
 
   static async getAllGameIds(): Promise<number[]> {
