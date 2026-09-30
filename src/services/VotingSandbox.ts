@@ -151,6 +151,10 @@ export async function endSandbox(ownerId: string): Promise<boolean> {
     sandboxes.delete(ownerId);
     const record = await persistedSessionStore.load(sessionLookup(ownerId));
     if (record) await persistedSessionStore.remove(record.rowId);
+    // Again once the row is gone: a restore that read it after the first bump
+    // must not bring the sandbox back.
+    bumpGeneration(ownerId);
+    sandboxes.delete(ownerId);
     return existed;
   });
 }
