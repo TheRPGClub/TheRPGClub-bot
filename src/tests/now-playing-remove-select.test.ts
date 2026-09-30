@@ -188,3 +188,50 @@ test("nowplaying remove select keeps the remove screen when the removal throws",
     Member.getNowPlaying = originalGetNowPlaying;
   }
 });
+
+test("nowplaying remove select labels a redraw failure after a successful removal", async () => {
+  const command = new NowPlayingRemoveHandlers() as any;
+
+  const originalRemoveNowPlaying = Member.removeNowPlaying;
+  const originalGetNowPlaying = Member.getNowPlaying;
+
+  const edits: any[] = [];
+
+  try {
+    Member.removeNowPlaying = (async () => true) as any;
+    Member.getNowPlaying = (async () => {
+      throw new Error("list exploded");
+    }) as any;
+    command.refreshNowPlayingListFromContext = async () => true;
+
+    const interaction: any = {
+      customId: "nowplaying-remove-select:123",
+      isMessageComponent: () => true,
+      user: { id: "123" },
+      values: ["11"],
+      guildId: null,
+      client: { channels: { fetch: async () => null } },
+      message: {
+        flags: { has: () => false },
+      },
+      deferred: false,
+      replied: false,
+      update: async () => {
+        interaction.replied = true;
+      },
+      editReply: async (payload: any) => {
+        edits.push(payload);
+      },
+    };
+
+    await command.handleNowPlayingRemoveSelect(interaction);
+
+    assert.equal(edits.length, 1, "expected the redraw error via editReply");
+    const rendered = JSON.stringify(edits[0]?.components);
+    assert.match(rendered, /Could not reload the remove screen/, "redraw error should show");
+    assert.doesNotMatch(rendered, /Could not remove from Now Playing/, "removal succeeded");
+  } finally {
+    Member.removeNowPlaying = originalRemoveNowPlaying;
+    Member.getNowPlaying = originalGetNowPlaying;
+  }
+});

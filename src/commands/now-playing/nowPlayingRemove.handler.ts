@@ -138,6 +138,7 @@ async function promptRemoveNowPlaying(
 
 const REMOVE_FAILED_TEXT = "Failed to remove that game (it may have been removed already).";
 const REMOVE_ERROR_LABEL = "Could not remove from Now Playing";
+const REDRAW_ERROR_LABEL = "Could not reload the remove screen";
 
 @Discord()
 export class NowPlayingRemoveHandlers {
@@ -162,7 +163,7 @@ export class NowPlayingRemoveHandlers {
     try {
       const removed = await Member.removeNowPlaying(ownerId, gameId);
       if (!removed) {
-        const container = buildTextContainer("Failed to remove that game (it may have been removed already).");
+        const container = buildTextContainer(REMOVE_FAILED_TEXT);
         await safeReply(interaction, {
           components: [container],
           flags: buildComponentsV2Flags(true),
@@ -234,6 +235,7 @@ export class NowPlayingRemoveHandlers {
 
     // A failed removal still redraws the remove screen so its select and Done stay usable.
     let notice: ContainerBuilder[] = [];
+    let removeThrew = false;
     try {
       if (await Member.removeNowPlaying(ownerId, gameId)) {
         safeIgnore(refreshNowPlayingListFromContext(interaction, ownerId));
@@ -241,6 +243,7 @@ export class NowPlayingRemoveHandlers {
         notice = [buildTextContainer(REMOVE_FAILED_TEXT)];
       }
     } catch (err: unknown) {
+      removeThrew = true;
       notice = [buildTextContainer(buildApiErrorMessage(REMOVE_ERROR_LABEL, err))];
     }
 
@@ -282,9 +285,12 @@ export class NowPlayingRemoveHandlers {
         flags: buildComponentsV2EditFlags(),
       }));
     } catch (err: unknown) {
-      const container = buildTextContainer(buildApiErrorMessage(REMOVE_ERROR_LABEL, err));
+      // Two full API errors could pass the 4000-character Components V2 text limit.
+      const components = removeThrew
+        ? notice
+        : [...notice, buildTextContainer(buildApiErrorMessage(REDRAW_ERROR_LABEL, err))];
       safeIgnore(safeEditReply(interaction, {
-        components: [...notice, container],
+        components,
         attachments: [],
         flags: buildComponentsV2EditFlags(),
       }));
