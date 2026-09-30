@@ -24,6 +24,8 @@ import {
 } from "./EphemeralMirror.js";
 import { DEV_ROLE_ID } from "../config/roles.js";
 import { IS_TEST_MODE } from "../config/testMode.js";
+import { reportInvalidUserEmojis } from "../services/UserEmojiService.js";
+import { sendWithInvalidEmojiRetry } from "./InvalidEmojiRetry.js";
 import {
   buildComponentsV2Flags,
   buildTextContainer,
@@ -462,7 +464,11 @@ export async function safeReply(interaction: AnyRepliable, options: any): Promis
   // Mirrors sendSafeReply's routing: this call fills the deferred reply.
   const fillsDefer = !options?.__forceFollowUp &&
     Boolean(aug.__rpgDeferred ?? aug.deferred) && !aug.replied;
-  const result = await sendSafeReply(interaction, options);
+  const result = await sendWithInvalidEmojiRetry(
+    options,
+    (payload) => sendSafeReply(interaction, payload),
+    reportInvalidUserEmojis,
+  );
   const mirrored = applyDevChannelOverrides(interaction, normalizeOptions(options));
   if (fillsDefer && !isEphemeralPayload(mirrored)) {
     await mirrorEphemeralDeferredReply(interaction, mirrored);
@@ -594,7 +600,11 @@ export async function safeUpdate(interaction: AnyRepliable, options: any): Promi
 
   if (interaction.isMessageComponent()) {
     try {
-      await interaction.update(normalizedOptions);
+      await sendWithInvalidEmojiRetry(
+        normalizedOptions,
+        (payload) => interaction.update(payload),
+        reportInvalidUserEmojis,
+      );
       aug.__rpgAcked = true;
       aug.__rpgDeferred = true;
       // Only on the success path: the fallback below mirrors through safeReply.
@@ -642,7 +652,11 @@ export async function safeEditReply(interaction: AnyRepliable, options: any): Pr
 
   const normalizedOptions = applyDevChannelOverrides(interaction, normalizeOptions(options));
   try {
-    const result = await interaction.editReply(normalizedOptions);
+    const result = await sendWithInvalidEmojiRetry(
+      normalizedOptions,
+      (payload) => interaction.editReply(payload),
+      reportInvalidUserEmojis,
+    );
     await mirrorEphemeralUpdate(interaction, normalizedOptions);
     return result;
   } catch (err: unknown) {
