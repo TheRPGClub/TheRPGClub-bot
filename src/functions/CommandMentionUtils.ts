@@ -1,31 +1,25 @@
 import type { ApplicationCommand, Collection, CommandInteraction } from "discord.js";
 import { chatInputApplicationCommandMention, inlineCode } from "discord.js";
+import { IS_TEST_MODE } from "../config/testMode.js";
 
 type CommandList = Collection<string, ApplicationCommand<any>>;
-
-function findCommandId(commands: CommandList | undefined, name: string): string | null {
-  return commands?.find((command) => command.name === name)?.id ?? null;
-}
+type CommandManager = { cache: CommandList; fetch: () => Promise<CommandList> };
 
 /**
  * Looks up a registered slash command by name. Test mode registers commands to the test
- * guild and production registers them globally, so both are searched, cache first.
+ * guild and production registers them globally, so only that one list is searched.
  */
 async function resolveCommandId(
   interaction: CommandInteraction,
   name: string,
 ): Promise<string | null> {
-  const guildCommands = interaction.guild?.commands;
-  const appCommands = interaction.client.application?.commands;
-  const cached = findCommandId(guildCommands?.cache, name) ??
-    findCommandId(appCommands?.cache, name);
-  if (cached) return cached;
-
-  const fetchedGuild = await guildCommands?.fetch().catch(() => undefined);
-  const guildId = findCommandId(fetchedGuild, name);
-  if (guildId) return guildId;
-  const fetchedApp = await appCommands?.fetch().catch(() => undefined);
-  return findCommandId(fetchedApp, name);
+  const manager = (IS_TEST_MODE
+    ? interaction.guild?.commands
+    : interaction.client.application?.commands) as CommandManager | undefined;
+  if (!manager) return null;
+  const byName = (commands: CommandList | undefined) =>
+    commands?.find((command) => command.name === name)?.id ?? null;
+  return byName(manager.cache) ?? byName(await manager.fetch().catch(() => undefined));
 }
 
 /**
