@@ -103,7 +103,6 @@ function describeStep(run: IConductorRun, testChannelId: string): string {
     fenceFor(step.command),
     `Expected: ${step.expected}`,
     `Output lands as ${where}.`,
-    ...noteLines(run),
     "Press **Check** once the output has appeared.",
     "-# Step text comes from the PR body. Run only commands you recognize.",
   ].join("\n");
@@ -113,9 +112,14 @@ function currentNote(run: IConductorRun): string | undefined {
   return run.notes?.[run.steps[run.current].number];
 }
 
-function noteLines(run: IConductorRun): string[] {
+/**
+ * Ends a step message with the tester's note. It goes last so that, when the text
+ * container's length cap cuts a long step, it cuts the note, which the report keeps
+ * in full, and not the verdict or the instructions.
+ */
+function withNote(run: IConductorRun, text: string): string {
   const note = currentNote(run);
-  return note ? [`Your note: ${note}`] : [];
+  return note ? `${text}\n\nYour note: ${note}` : text;
 }
 
 type StepMessage = {
@@ -153,7 +157,7 @@ export function buildStepMessage(run: IConductorRun, testChannelId: string): Ste
     abortButton(run.runId),
   );
   return {
-    components: [buildTextContainer(describeStep(run, testChannelId)), buttons],
+    components: [buildTextContainer(withNote(run, describeStep(run, testChannelId))), buttons],
     flags: buildComponentsV2EditFlags(),
     allowedMentions: NO_MENTIONS,
   };
@@ -171,6 +175,7 @@ export function buildFailedStepMessage(
   const text = `${describeStep(run, testChannelId)}\n\n` +
     `**${VERDICT_LABELS[result.verdict]}**: ${result.reason}\n` +
     "Press **Check again** once the output lands, or continue with this step failed.";
+  const content = withNote(run, text);
   const buttons = new ActionRowBuilder<ButtonBuilder>().addComponents(
     checkButton(run, "Check again"),
     new ButtonBuilder()
@@ -181,7 +186,7 @@ export function buildFailedStepMessage(
     abortButton(run.runId),
   );
   return {
-    components: [buildTextContainer(text), buttons],
+    components: [buildTextContainer(content), buttons],
     flags: buildComponentsV2EditFlags(),
     allowedMentions: NO_MENTIONS,
   };
@@ -199,6 +204,7 @@ export function buildUnverifiedStepMessage(
   const text = `${describeStep(run, testChannelId)}\n\n` +
     `**${VERDICT_LABELS[result.verdict]}**: ${result.reason}\n` +
     `Observed ${result.observed.length} message(s). Compare them with Expected above.`;
+  const content = withNote(run, text);
   const buttons = new ActionRowBuilder<ButtonBuilder>().addComponents(
     new ButtonBuilder()
       .setCustomId(buildConfirmCustomId(run.runId, run.current))
@@ -213,7 +219,7 @@ export function buildUnverifiedStepMessage(
     abortButton(run.runId),
   );
   return {
-    components: [buildTextContainer(text), buttons],
+    components: [buildTextContainer(content), buttons],
     flags: buildComponentsV2EditFlags(),
     allowedMentions: NO_MENTIONS,
   };
@@ -230,15 +236,16 @@ export function buildCurrentStepMessage(run: IConductorRun, testChannelId: strin
 }
 
 /**
- * Asks for the tester's note. In `fail` mode it is the reason the step failed and
- * may be left blank; in `note` mode it replaces the step's note.
+ * Asks for the tester's note. In `fail` mode it is the reason the step failed; in
+ * `note` mode it replaces the step's note. Either may be left blank, which in `note`
+ * mode clears it.
  */
 export function buildNoteModal(run: IConductorRun, mode: NoteModalMode): ModalBuilder {
   const step = run.steps[run.current];
   const input = new TextInputBuilder()
     .setCustomId(NOTE_INPUT_ID)
     .setStyle(TextInputStyle.Paragraph)
-    .setRequired(mode === "note")
+    .setRequired(false)
     .setMaxLength(MAX_NOTE_LENGTH);
   const note = currentNote(run);
   if (note) input.setValue(note);

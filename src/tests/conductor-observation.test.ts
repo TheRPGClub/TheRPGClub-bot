@@ -6,12 +6,15 @@ import { join } from "node:path";
 
 import {
   classifySnapshot,
+  confirmedResult,
+  failedResult,
   judgeStep,
   parseMirrorMessage,
   type IMessageSnapshot,
   type IObservedOutput,
 } from "../conductor/ConductorObservation.js";
 import {
+  buildCurrentStepMessage,
   buildNoteModalCustomId,
   parseNoteModalCustomId,
 } from "../conductor/ConductorMessages.js";
@@ -365,4 +368,67 @@ test("note modal IDs round-trip their run, step, and mode", () => {
   const id = buildNoteModalCustomId("123", 4, "fail");
   assert.deepEqual(parseNoteModalCustomId(id), { runId: "123", step: 4, mode: "fail" });
   assert.equal(parseNoteModalCustomId(`${id}x`), null);
+});
+
+test("a not: check skips a truncated mirror post, whose JSON keys would trip it", () => {
+  const outputs: IObservedOutput[] = [{
+    place: "mirror",
+    messageId: "t",
+    at: 150,
+    createdAt: 150,
+    source: "/collection",
+    payload: "{\"kind\": \"reply\", \"content\": \"Saved...",
+  }];
+  const result = judgeStep(makeStep({ expected: "\"Saved\" not: \"reply\"" }), outputs, {
+    start: 100,
+    end: 200,
+  });
+  assert.equal(result.verdict, "pass");
+});
+
+test("the tester's answer turns unchecked output into a pass or a fail", () => {
+  const outputs = publicReply({ content: "Saved" });
+  const pending = judgeStep(makeStep({ ephemeral: false, expected: "a reply" }), outputs, {
+    start: 100,
+    end: 200,
+  });
+  assert.equal(pending.verdict, "unverified");
+  assert.equal(confirmedResult(pending).verdict, "pass");
+  assert.match(confirmedResult(pending).reason, /tester confirmed/);
+  assert.equal(failedResult(pending).verdict, "fail");
+  assert.match(failedResult(pending).reason, /does not match Expected/);
+
+  const failed = judgeStep(makeStep({}), [], { start: 100, end: 200 });
+  assert.equal(failedResult(failed), failed);
+});
+
+function customIdsOf(run: IConductorRun): string[] {
+  const json = JSON.stringify(buildCurrentStepMessage(run, "700").components);
+  return [...json.matchAll(/"custom_id":"([a-z-]+-v1):/g)].map((match) => match[1]);
+}
+
+test("the step message offers the buttons its pending check calls for", () => {
+  const run: IConductorRun = {
+    runId: "42",
+    pr: 7,
+    headSha: "abc",
+    steps: [makeStep({})],
+    current: 0,
+    windowStart: 0,
+    results: [],
+    status: "running",
+    notes: { 1: "Looked slow." },
+  };
+  assert.deepEqual(customIdsOf(run), ["conductor-check-v1", "conductor-note-v1",
+    "conductor-abort-v1"]);
+  assert.match(JSON.stringify(buildCurrentStepMessage(run, "700").components),
+    /Your note: Looked slow\./);
+
+  run.pendingResult = judgeStep(makeStep({}), [], { start: 100, end: 200 });
+  assert.deepEqual(customIdsOf(run), ["conductor-check-v1", "conductor-accept-v1",
+    "conductor-note-v1", "conductor-abort-v1"]);
+
+  run.pendingResult = { ...run.pendingResult, verdict: "unverified" };
+  assert.deepEqual(customIdsOf(run), ["conductor-confirm-v1", "conductor-accept-v1",
+    "conductor-check-v1", "conductor-note-v1", "conductor-abort-v1"]);
 });

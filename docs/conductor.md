@@ -81,7 +81,7 @@ keyword right before the quote narrows where it must appear:
 - `not: "..."`: must appear nowhere in the output.
 
 A mirror post cut at Discord's length cap is raw text, not JSON, so its scoped checks
-only look for the text.
+only look for the text, and its `not:` checks are skipped: its JSON keys would trip them.
 
 - **PASS**: every check holds. When the tester presses **Looks right**, the result
   says the tester confirmed it.

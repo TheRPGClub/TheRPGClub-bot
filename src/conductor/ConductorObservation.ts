@@ -278,12 +278,18 @@ function describeCheck(check: IExpectation): string {
   return check.kind === "text" ? `"${check.text}"` : `${check.kind} "${check.text}"`;
 }
 
+/**
+ * Whether the output satisfies one check. A raw post's JSON keys and metadata would
+ * trip a `not:` check, so absent text is only looked for in parsed payloads.
+ */
 function checkHolds(check: IExpectation, texts: IScopedText[]): boolean {
   const needle = check.text.toLowerCase();
-  const anyScope = check.kind === "text" || check.kind === "absent";
+  const inScope = (entry: IScopedText): boolean => {
+    if (check.kind === "absent") return entry.scope !== "raw";
+    return check.kind === "text" || entry.scope === check.kind || entry.scope === "raw";
+  };
   const found = texts.some((entry) =>
-    (anyScope || entry.scope === check.kind || entry.scope === "raw") &&
-    entry.text.toLowerCase().includes(needle));
+    inScope(entry) && entry.text.toLowerCase().includes(needle));
   return check.kind === "absent" ? !found : found;
 }
 
@@ -342,4 +348,23 @@ export function judgeStep(
     };
   }
   return { ...result, verdict: "pass", reason: "Every expected check held." };
+}
+
+/** "Looks right": the tester vouches for output the conductor had nothing to check in. */
+export function confirmedResult(pending: IStepResult): IStepResult {
+  return {
+    ...pending,
+    verdict: "pass",
+    reason: `The tester confirmed the output matches Expected. ${pending.reason}`,
+  };
+}
+
+/** The pending check, recorded as failed: a failure stands, unchecked output does not match. */
+export function failedResult(pending: IStepResult): IStepResult {
+  if (pending.verdict === "fail") return pending;
+  return {
+    ...pending,
+    verdict: "fail",
+    reason: `The tester says the output does not match Expected. ${pending.reason}`,
+  };
 }

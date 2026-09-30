@@ -53,6 +53,8 @@ import {
 } from "./ConductorMessages.js";
 import {
   classifySnapshot,
+  confirmedResult,
+  failedResult,
   judgeStep,
   type IMessageSnapshot,
   type IObservedOutput,
@@ -308,6 +310,22 @@ async function loadStepRun(
   return null;
 }
 
+/**
+ * A modal opened from the step message edits that message directly: its deferred
+ * reply is a separate ephemeral one. A failed edit is reported there, and the run
+ * carries on so its state is still saved.
+ */
+function modalEditor(interaction: ModalSubmitInteraction): StepMessageEditor {
+  return async (payload) => {
+    try {
+      await interaction.message?.edit(payload);
+    } catch (err: unknown) {
+      const message = buildDiscordErrorMessage("Could not update the step message", err);
+      await safeFollowUpIfSettled(interaction, buildErrorReply(message, true));
+    }
+  };
+}
+
 /** A button pressed on the step message edits that message through its deferred update. */
 function buttonEditor(interaction: ButtonInteraction): StepMessageEditor {
   return (payload) => safeEditReply(interaction, payload);
@@ -349,12 +367,7 @@ async function confirmStepLocked(interaction: ButtonInteraction): Promise<void> 
     await replyStale(interaction, "This step has no output waiting for your eyes.");
     return;
   }
-  const result: IStepResult = {
-    ...pending,
-    verdict: "pass",
-    reason: `The tester confirmed the output matches Expected. ${pending.reason}`,
-  };
-  await advanceRun(interaction, run, result, buttonEditor(interaction));
+  await advanceRun(interaction, run, confirmedResult(pending), buttonEditor(interaction));
 }
 
 /**
@@ -379,16 +392,6 @@ async function openNoteModal(
   await interaction.showModal(buildNoteModal(check.run, mode));
 }
 
-/** The pending check, recorded as failed: a failure stands, unchecked output does not match. */
-function failedResult(pending: IStepResult): IStepResult {
-  if (pending.verdict === "fail") return pending;
-  return {
-    ...pending,
-    verdict: "fail",
-    reason: `The tester says the output does not match Expected. ${pending.reason}`,
-  };
-}
-
 function setNote(run: IConductorRun, note: string): void {
   const stepNumber = run.steps[run.current].number;
   const notes = { ...run.notes };
@@ -407,8 +410,7 @@ async function submitNoteLocked(interaction: ModalSubmitInteraction): Promise<vo
   const { run } = check;
   const { settings } = getConductorRuntime();
   const note = getModalField(interaction, NOTE_INPUT_ID).trim();
-  // The modal was opened from the step message, which carries the step's buttons.
-  const editStep: StepMessageEditor = async (payload) => interaction.message?.edit(payload);
+  const editStep = modalEditor(interaction);
 
   if (parsed.mode === "note") {
     setNote(run, note);
