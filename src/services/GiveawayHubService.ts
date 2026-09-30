@@ -176,19 +176,11 @@ async function buildGiveawayHubPayload(page: number): Promise<GiveawayHubPayload
   };
 }
 
-type GiveawayHubCleanupChannel = {
-  messages: {
-    fetch: (options: { limit: number; before?: string }) => Promise<{
-      values: () => Iterable<GiveawayMessage>;
-    }>;
-  };
-};
-
 // Pages backwards with `before` so a message that cannot be deleted is never refetched,
 // and stops at the first page holding no hub message.
 export async function deleteGiveawayHubMessages(
   client: Client,
-  channel: GiveawayHubCleanupChannel,
+  channel: TextBasedChannel,
 ): Promise<void> {
   let before: string | undefined;
   for (;;) {
@@ -198,7 +190,9 @@ export async function deleteGiveawayHubMessages(
         logError("GiveawayHubService.cleanupFetch", err);
         return null;
       });
-    const page = fetched ? Array.from(fetched.values()) : [];
+    const page = fetched
+      ? Array.from(fetched.values(), (message) => message as GiveawayMessage)
+      : [];
     if (!page.length) {
       return;
     }
@@ -323,7 +317,7 @@ export async function refreshGiveawayHubMessage(
       logWarn("GiveawayHubService.updateHub", "Giveaway hub channel does not support send.");
       return;
     }
-    await deleteGiveawayHubMessages(client, textChannel as GiveawayHubCleanupChannel);
+    await deleteGiveawayHubMessages(client, textChannel);
     await updateGiveawayHubMessages(client, textChannel, payload, {
       suppressNotifications: true,
     });
