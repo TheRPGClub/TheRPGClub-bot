@@ -146,7 +146,9 @@ self review pass. When the pull request later merges or closes, that section say
 group comes next.
 
 Report the linkage result, the mergeability result, how many self review passes ran and
-what they found and fixed, and the PR URL.
+what they found and fixed, and the PR URL. When the PR has Testing steps, say that
+`/test-guild <PR>` puts it in the test guild for `/conduct`. Only the user runs that
+skill; never dispatch a deploy.
 
 Never merge unasked. When a conductor report lands on the PR, read it per
 [conductor-merge.md](../_shared/conductor-merge.md): a pass on the current head means

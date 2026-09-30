@@ -21,6 +21,7 @@
     "lint": "oxlint",
     "session:start": "node --no-warnings=ExperimentalWarning --import tsx scripts/session-start.ts",
     "check:pr-testing": "node --no-warnings=ExperimentalWarning --import tsx scripts/check-pr-testing.ts",
+    "test-guild:status": "node --no-warnings=ExperimentalWarning --import tsx scripts/test-guild-status.ts",
     "remoteBash": "ssh -p 2222 merph518@100.120.128.48"
   },
   "dependencies": {
