@@ -10,10 +10,12 @@ import {
   extractErrorMessage,
   replyIfNotOwner,
   safeDeferReply,
+  safeEditReply,
   safeReply,
   safeUpdate,
 } from "../../functions/InteractionUtils.js";
 import {
+  buildComponentsV2EditFlags,
   buildComponentsV2Flags,
   buildTextContainer,
 } from "../../functions/ComponentsV2Utils.js";
@@ -229,9 +231,10 @@ export class NowPlayingRemoveHandlers {
       const removed = await Member.removeNowPlaying(ownerId, gameId);
       if (!removed) {
         const container = buildTextContainer("Failed to remove that game (it may have been removed already).");
-        safeIgnore(safeReply(interaction, {
+        safeIgnore(safeEditReply(interaction, {
           components: [container],
-          flags: buildComponentsV2Flags(isEphemeral),
+          attachments: [],
+          flags: buildComponentsV2EditFlags(),
         }));
         return;
       }
@@ -244,9 +247,10 @@ export class NowPlayingRemoveHandlers {
           interaction.guildId,
           [container],
         );
-        safeIgnore(safeReply(interaction, {
+        safeIgnore(safeEditReply(interaction, {
           components: pmComponents,
-          flags: buildComponentsV2Flags(isEphemeral),
+          attachments: [],
+          flags: buildComponentsV2EditFlags(),
         }));
         return;
       }
@@ -266,16 +270,18 @@ export class NowPlayingRemoveHandlers {
         interaction.guildId,
         components,
       );
-      safeIgnore(safeReply(interaction, {
+      safeIgnore(safeEditReply(interaction, {
         ...buildComponentPayload(pmComponents as any, files),
-        flags: buildComponentsV2Flags(isEphemeral),
+        attachments: [],
+        flags: buildComponentsV2EditFlags(),
       }));
     } catch (err: any) {
       const msg = extractErrorMessage(err);
       const container = buildTextContainer(`Could not remove from Now Playing: ${msg}`);
-      safeIgnore(safeReply(interaction, {
+      safeIgnore(safeEditReply(interaction, {
         components: [container],
-        flags: buildComponentsV2Flags(isEphemeral),
+        attachments: [],
+        flags: buildComponentsV2EditFlags(),
       }));
     }
   }

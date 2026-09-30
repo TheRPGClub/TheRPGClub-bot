@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { NowPlayingRemoveHandlers } from "../commands/now-playing/nowPlayingRemove.handler.js";
 import Member from "../classes/Member.js";
+import { COMPONENTS_V2_FLAG } from "../config/flags.js";
 
 test("nowplaying remove select acknowledges interaction and refreshes same message", async () => {
   const command = new NowPlayingRemoveHandlers() as any;
@@ -48,8 +49,10 @@ test("nowplaying remove select acknowledges interaction and refreshes same messa
       },
       deferred: false,
       replied: false,
+      // discord.js marks the interaction replied once update() resolves.
       update: async (payload: any) => {
         updates.push(payload);
+        interaction.replied = true;
       },
       editReply: async (payload: any) => {
         edits.push(payload);
@@ -69,6 +72,7 @@ test("nowplaying remove select acknowledges interaction and refreshes same messa
 
     assert.equal(edits.length, 1, "expected refreshed remove list via editReply");
     assert.ok(Array.isArray(edits[0]?.components), "editReply should include refreshed components");
+    assert.equal(edits[0]?.flags, COMPONENTS_V2_FLAG, "editReply should keep Components V2");
   } finally {
     Member.removeNowPlaying = originalRemoveNowPlaying;
     Member.getNowPlaying = originalGetNowPlaying;
@@ -97,8 +101,10 @@ test("nowplaying remove select acknowledges interaction and shows error on faile
       },
       deferred: false,
       replied: false,
+      // discord.js marks the interaction replied once update() resolves.
       update: async (payload: any) => {
         updates.push(payload);
+        interaction.replied = true;
       },
       editReply: async (payload: any) => {
         edits.push(payload);

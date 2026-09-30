@@ -8,12 +8,14 @@ import { Discord, ButtonComponent, SelectMenuComponent } from "discordx";
 import Member from "../../classes/Member.js";
 import {
   replyIfNotOwner,
+  safeEditReply,
   safeReply,
   safeUpdate,
   safeUserFetch,
 } from "../../functions/InteractionUtils.js";
 import { buildUserHeaderContainer } from "../../functions/uiComponents.js";
 import {
+  buildComponentsV2EditFlags,
   buildComponentsV2Flags,
   buildTextContainer,
 } from "../../functions/ComponentsV2Utils.js";
@@ -104,8 +106,10 @@ export class NowPlayingNavHandlers {
         "Now Playing - Everyone",
         `No Now Playing entries found for ${renderUsernameWithEmoji(selectedUserId, ownerName)}.`,
       );
-      const updated = await safeReply(interaction, {
+      const updated = await safeEditReply(interaction, {
         components: [header, container],
+        attachments: [],
+        flags: buildComponentsV2EditFlags(),
       });
       trackNowPlayingListContext(updated as Message<boolean>, {
         view: "everyone-selected",
@@ -122,9 +126,11 @@ export class NowPlayingNavHandlers {
       false,
       true,
     );
-    const updated = await safeReply(interaction, {
+    const updated = await safeEditReply(interaction, {
       components: payload.components,
       files: payload.files,
+      attachments: [],
+      flags: buildComponentsV2EditFlags(),
     });
     trackNowPlayingListContext(updated as Message<boolean>, {
       view: "everyone-selected",
