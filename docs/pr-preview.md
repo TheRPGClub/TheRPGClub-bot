@@ -1,15 +1,18 @@
 # PR preview deployments
 
-Every same-repo pull request against `main` is built and run in the test guild under a
-separate dev bot application, on a self-hosted runner on the desktop that already runs
-the production bot. The PR gets a sticky `PR preview` comment saying whether its preview
-is building, running, failed, replaced, or torn down, and the `deploy` job doubles as a
-check.
+Every same-repo pull request against `main` whose body has Testing steps is built and run
+in the test guild under a separate dev bot application, on a self-hosted runner on the
+desktop that already runs the production bot. The PR gets a sticky `PR preview` comment
+saying whether its preview is building, running, failed, replaced, or torn down, and the
+`deploy` job doubles as a check.
 
 Pieces:
 
 - `.github/workflows/pr-preview.yml` deploys on open, reopen, and push (including
-  force-push), tears down on close or merge, and reaps orphans hourly.
+  force-push), and on a body edit that adds Testing steps. It tears down on close or
+  merge, and reaps orphans hourly.
+- `scripts/preview/plan.mjs` reads the PR body with `src/conductor/TestPlanParser.ts`,
+  the parser `/conduct` uses, so both agree on what counts as Testing steps.
 - `scripts/preview/preview.sh` does the Docker work, and is the manual control.
 - `docker-compose.preview.yml` defines the `pr-preview` service. It is a separate file so
   `docker compose up -d` for production never starts it.
@@ -18,6 +21,13 @@ Pieces:
 The existing `ci.yml` jobs stay on GitHub-hosted runners.
 
 ## Guarantees
+
+- **Only testable PRs deploy.** A PR whose body has no `## Testing` section, or an empty
+  one, gets no preview and no comment. A malformed one gets a comment with the parse
+  error instead of a deploy. Either way the preview running for another PR stays up, and
+  a PR that loses its Testing steps has its own preview torn down and its comment
+  updated. Adding the section later deploys it without a push; other body edits do not
+  redeploy.
 
 - **Production is untouched.** The preview runs with `TEST_GUILD_ID` set, so its slash
   commands register to the test guild only, and under the dev bot's own application, so
@@ -146,9 +156,9 @@ while the desktop is off for a while.
 
 ### 8. Verify
 
-1. Open any PR against `main`. Within a minute or two its `PR preview` comment should
-   read Running, and the dev bot should be online in the test guild with its slash
-   commands listed there.
+1. Open any PR against `main` with Testing steps in its body. Within a minute or two its
+   `PR preview` comment should read Running, and the dev bot should be online in the test
+   guild with its slash commands listed there.
 2. `docker ps` shows `rpgclub-pr-preview` next to the production container, and the
    production bot keeps answering in the main guild.
 3. Close the PR. The container is gone and the comment reads torn down.
@@ -165,6 +175,7 @@ bash scripts/preview/preview.sh list
 bash scripts/preview/preview.sh kill
 ```
 
-`teardown <pr>` removes the preview only if it belongs to that PR. Re-running the
-`deploy` job of a PR's latest workflow run brings its preview back. Running the workflow
-by hand from the Actions tab runs the reaper, which removes a preview whose PR is closed.
+`teardown <pr>` removes the preview only if it belongs to that PR. Re-running all jobs of
+a PR's latest workflow run brings its preview back, as long as its body still has Testing
+steps. Running the workflow by hand from the Actions tab runs the reaper, which removes a
+preview whose PR is closed.
