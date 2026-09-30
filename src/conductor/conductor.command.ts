@@ -7,7 +7,6 @@ import {
   type ButtonInteraction,
   type Client,
   type CommandInteraction,
-  MessageFlags,
   type Message,
   type MessageCreateOptions,
   type ModalSubmitInteraction,
@@ -24,7 +23,6 @@ import {
 } from "../config/customIdPrefixes.js";
 import {
   buildComponentsV2EditFlags,
-  buildErrorReply,
   buildTextContainer,
   buildTextReply,
 } from "../functions/ComponentsV2Utils.js";
@@ -95,11 +93,16 @@ function isAllowed(interaction: AnyConductorInteraction): boolean {
   return decision.allowed;
 }
 
+/** The one private reply: it answers someone who is not the tester, not the run. */
 async function denyAccess(interaction: AnyConductorInteraction): Promise<void> {
   await safeReply(interaction, buildTextReply("This conductor is restricted.", true));
 }
 
-function textEdit(content: string): {
+/**
+ * Every conductor message to the tester is public, in the channel `/conduct` ran in.
+ * Error text can echo untrusted step text, so mentions stay off.
+ */
+function publicText(content: string): {
   components: ReturnType<typeof buildTextContainer>[];
   flags: number;
   allowedMentions: typeof NO_MENTIONS;
@@ -214,7 +217,7 @@ async function sendCurrentStep(
 
 /**
  * Posts in the run's channel. A channel the conductor can no longer post in falls back
- * to a private note to the tester, so the handler still answers.
+ * to a follow-up on the interaction, so the handler still answers.
  */
 async function postOrNotify(
   interaction: AnyConductorInteraction,
@@ -231,7 +234,7 @@ async function postOrNotify(
     });
   } catch (err: unknown) {
     const failure = conductorDiscordError("Could not post in the run's channel", err);
-    await safeFollowUpIfSettled(interaction, buildErrorReply(`${text}\n\n${failure}`, true));
+    await safeFollowUpIfSettled(interaction, publicText(`${text}\n\n${failure}`));
   }
 }
 
@@ -293,14 +296,14 @@ function withRunLock<T>(task: () => Promise<T>): Promise<T> {
 }
 
 async function replyStale(interaction: ButtonInteraction, reason: string): Promise<void> {
-  await safeFollowUpIfSettled(interaction, buildTextReply(reason, true));
+  await safeFollowUpIfSettled(interaction, publicText(reason));
 }
 
 async function replyStaleUnacked(
   interaction: ButtonInteraction | ModalSubmitInteraction,
   reason: string,
 ): Promise<void> {
-  await safeReply(interaction, buildTextReply(reason, true));
+  await safeReply(interaction, publicText(reason));
 }
 
 /** The running run, when `runId` and `step` name its current step. */
@@ -326,7 +329,7 @@ async function loadStepRun(
 
 /**
  * A modal opened from the step message edits that message directly: its deferred
- * reply is a separate ephemeral one. A failed edit is reported there, and the run
+ * reply is a separate public one. A failed edit is reported there, and the run
  * carries on so its state is still saved.
  */
 function modalEditor(interaction: ModalSubmitInteraction): StepMessageEditor {
@@ -335,7 +338,7 @@ function modalEditor(interaction: ModalSubmitInteraction): StepMessageEditor {
       await interaction.message?.edit(payload);
     } catch (err: unknown) {
       const message = conductorDiscordError("Could not update the step message", err);
-      await safeFollowUpIfSettled(interaction, buildErrorReply(message, true));
+      await safeFollowUpIfSettled(interaction, publicText(message));
     }
   };
 }
@@ -356,7 +359,7 @@ async function checkStepLocked(interaction: ButtonInteraction): Promise<void> {
     outputs = await collectObservations(interaction.client);
   } catch (err: unknown) {
     const message = conductorDiscordError("Reading back the test channels failed", err);
-    await safeFollowUpIfSettled(interaction, buildErrorReply(message, true));
+    await safeFollowUpIfSettled(interaction, publicText(message));
     return;
   }
   const result = judgeStep(step, outputs, {
@@ -418,7 +421,7 @@ async function submitNoteLocked(interaction: ModalSubmitInteraction): Promise<vo
   const parsed = parseNoteModalCustomId(interaction.customId);
   const check = await loadCurrentStep(parsed?.runId ?? "", parsed?.step ?? -1);
   if (!parsed || !check.ok) {
-    await safeEditReply(interaction, textEdit(check.ok ? "Unknown note." : check.reason));
+    await safeEditReply(interaction, publicText(check.ok ? "Unknown note." : check.reason));
     return;
   }
   const { run } = check;
@@ -430,17 +433,17 @@ async function submitNoteLocked(interaction: ModalSubmitInteraction): Promise<vo
     setNote(run, note);
     await saveRun(settings.statePath, run);
     await editStep(buildCurrentStepMessage(run, settings.testChannelId));
-    await safeEditReply(interaction, textEdit(note ? "Note saved." : "Note cleared."));
+    await safeEditReply(interaction, publicText(note ? "Note saved." : "Note cleared."));
     return;
   }
 
   if (!run.pendingResult) {
-    await safeEditReply(interaction, textEdit("This step has no check to record as failed."));
+    await safeEditReply(interaction, publicText("This step has no check to record as failed."));
     return;
   }
   if (note) setNote(run, note);
   await advanceRun(interaction, run, failedResult(run.pendingResult), editStep);
-  await safeEditReply(interaction, textEdit(`Step ${parsed.step + 1} recorded as failed.`));
+  await safeEditReply(interaction, publicText(`Step ${parsed.step + 1} recorded as failed.`));
 }
 
 /** Records the step's result, then posts the next step or finishes the run. */
@@ -454,7 +457,7 @@ async function advanceRun(
   run.pendingResult = null;
   run.results.push(result);
   run.current += 1;
-  await editStep(textEdit(buildStepResultText(run, result)));
+  await editStep(publicText(buildStepResultText(run, result)));
 
   if (run.current < run.steps.length) {
     try {
@@ -463,7 +466,7 @@ async function advanceRun(
       run.windowStart = interaction.createdTimestamp;
       await saveRun(settings.statePath, run);
       const message = conductorDiscordError("Could not post the next step", err);
-      await safeFollowUpIfSettled(interaction, buildErrorReply(message, true));
+      await safeFollowUpIfSettled(interaction, publicText(message));
       return;
     }
     await saveRun(settings.statePath, run);
@@ -485,7 +488,7 @@ async function abortRunLocked(interaction: ButtonInteraction): Promise<void> {
   }
   markAborted(run);
   await saveRun(settings.statePath, run);
-  await safeEditReply(interaction, textEdit(`Run for PR #${run.pr} aborted.`));
+  await safeEditReply(interaction, publicText(`Run for PR #${run.pr} aborted.`));
   await postRunReport(interaction, run);
 }
 
@@ -497,7 +500,7 @@ async function retryReportLocked(interaction: ButtonInteraction): Promise<void> 
     await replyStale(interaction, "That run's report is not available.");
     return;
   }
-  await safeEditReply(interaction, textEdit(`Retrying the report for PR #${run.pr}.`));
+  await safeEditReply(interaction, publicText(`Retrying the report for PR #${run.pr}.`));
   await postRunReport(interaction, run);
 }
 
@@ -524,7 +527,7 @@ export class ConductorCommand {
 
     const accessProblems = await checkConductorChannelAccess(interaction.client, settings);
     if (accessProblems.length) {
-      await safeEditReply(interaction, textEdit(describeAccessProblems(accessProblems)));
+      await safeEditReply(interaction, publicText(describeAccessProblems(accessProblems)));
       return;
     }
 
@@ -533,11 +536,11 @@ export class ConductorCommand {
       pull = await github.getPullRequest(pr);
     } catch (err: unknown) {
       const message = conductorApiError(`Could not read PR #${pr}`, err);
-      await safeEditReply(interaction, textEdit(message));
+      await safeEditReply(interaction, publicText(message));
       return;
     }
     if (pull.state !== "open") {
-      await safeEditReply(interaction, textEdit(`PR #${pr} is ${pull.state}, not open.`));
+      await safeEditReply(interaction, publicText(`PR #${pr} is ${pull.state}, not open.`));
       return;
     }
 
@@ -545,7 +548,7 @@ export class ConductorCommand {
     if (plan.kind === "absent" || plan.kind === "empty") {
       await safeEditReply(
         interaction,
-        textEdit(`PR #${pr} has no Testing steps, so there is nothing to run.`),
+        publicText(`PR #${pr} has no Testing steps, so there is nothing to run.`),
       );
       return;
     }
@@ -557,7 +560,7 @@ export class ConductorCommand {
       } catch (err: unknown) {
         posted = `\n${conductorApiError("Noting it on the PR failed", err)}`;
       }
-      await safeEditReply(interaction, textEdit(
+      await safeEditReply(interaction, publicText(
         `Cannot parse the Testing section of PR #${pr}: ${plan.reason}\n` +
           `Please test it manually.${posted}`,
       ));
@@ -581,13 +584,13 @@ export class ConductorCommand {
         await sendCurrentStep(interaction, run);
       } catch (err: unknown) {
         const message = conductorDiscordError("Could not post the script in this channel", err);
-        await safeEditReply(interaction, textEdit(message));
+        await safeEditReply(interaction, publicText(message));
         return;
       }
       await saveRun(settings.statePath, run);
       await safeEditReply(
         interaction,
-        textEdit(`Posted step 1 of ${run.steps.length} for PR #${pr} in this channel.` +
+        publicText(`Posted step 1 of ${run.steps.length} for PR #${pr} in this channel.` +
           describeUncheckedSteps(run.steps)),
       );
     });
@@ -637,7 +640,7 @@ export class ConductorCommand {
       await denyAccess(interaction);
       return;
     }
-    await safeDeferReply(interaction, { flags: MessageFlags.Ephemeral });
+    await safeDeferReply(interaction);
     await withRunLock(() => submitNoteLocked(interaction));
   }
 

@@ -3,8 +3,10 @@ import assert from "node:assert/strict";
 import {
   MessageFlags,
   MessageFlagsBitField,
+  type ButtonInteraction,
   type CommandInteraction,
   type MessageFlagsResolvable,
+  type ModalSubmitInteraction,
 } from "discord.js";
 
 import type { IConductorSettings } from "../conductor/ConductorConfig.js";
@@ -112,4 +114,77 @@ test("a denied /conduct still replies ephemerally", async () => {
   assert.deepEqual(calls.defer, []);
   assert.equal(calls.reply.length, 1);
   assert.equal(isEphemeral(calls.reply[0]), true);
+});
+
+interface IComponentCalls extends IFakeCalls {
+  followUp: Payload[];
+}
+
+/** A button press or modal submit on a step message from a run that no longer exists. */
+function fakeComponentInteraction(kind: "button" | "modal", customId: string): {
+  interaction: ButtonInteraction & ModalSubmitInteraction;
+  calls: IComponentCalls;
+} {
+  const calls: IComponentCalls = { defer: [], reply: [], edit: [], followUp: [] };
+  const fake = {
+    id: "2",
+    customId,
+    user: { id: CONTEXT.allowedUserId, bot: false },
+    guildId: CONTEXT.testGuildId,
+    channelId: "700",
+    createdTimestamp: 0,
+    client: { user: { id: "900" } },
+    deferred: false,
+    replied: false,
+    isChatInputCommand: (): boolean => false,
+    isMessageComponent: (): boolean => kind === "button",
+    isModalSubmit: (): boolean => kind === "modal",
+    isRepliable: (): boolean => true,
+    async deferUpdate(): Promise<void> {
+      fake.deferred = true;
+    },
+    async deferReply(options: Payload): Promise<void> {
+      calls.defer.push(options);
+      fake.deferred = true;
+    },
+    async reply(options: Payload): Promise<void> {
+      calls.reply.push(options);
+      fake.replied = true;
+    },
+    async editReply(options: Payload): Promise<void> {
+      calls.edit.push(options);
+    },
+    async followUp(options: Payload): Promise<void> {
+      calls.followUp.push(options);
+    },
+  };
+  return {
+    interaction: fake as unknown as ButtonInteraction & ModalSubmitInteraction,
+    calls,
+  };
+}
+
+test("a stale Check press answers publicly", async () => {
+  useRuntime(async () => pull("open", ""));
+  const { interaction, calls } = fakeComponentInteraction("button", "conductor-check-v1:5:0");
+
+  await new ConductorCommand().checkStep(interaction);
+
+  assert.equal(calls.followUp.length, 1);
+  assert.equal(isEphemeral(calls.followUp[0]), false);
+});
+
+test("a note submitted on a stale run defers and answers publicly", async () => {
+  useRuntime(async () => pull("open", ""));
+  const { interaction, calls } = fakeComponentInteraction(
+    "modal",
+    "conductor-note-modal-v1:5:0:note",
+  );
+
+  await new ConductorCommand().submitNote(interaction);
+
+  assert.equal(calls.defer.length, 1);
+  assert.equal(isEphemeral(calls.defer[0]), false);
+  assert.equal(calls.edit.length, 1);
+  assert.equal(isEphemeral(calls.edit[0]), false);
 });
