@@ -51,7 +51,8 @@ def segments(command):
     lexer.commenters = ''
     seg = []
     for token in lexer:
-        if set(token) <= SEPARATOR_CHARS:
+        # An empty quoted argument ('') is a word, not a separator.
+        if token and set(token) <= SEPARATOR_CHARS:
             if seg:
                 yield seg
             seg = []
@@ -111,11 +112,22 @@ def expand(word, env):
     return os.path.expanduser(VARIABLE.sub(value, word))
 
 
+def change_dir(cd, args, env):
+    """The directory after `cd <args>`, relative to the hook's cwd, or None if unknown."""
+    if len(args) > 1 or args == ['-']:
+        return None
+    target = expand(args[0] if args else '~', env)
+    if os.path.isabs(target):
+        return target
+    return None if cd is None else os.path.join(cd, target)
+
+
 def body_sources(command):
     """Every ('file', path) or ('inline', text) body the command passes to a PR.
 
     A relative path is joined onto the directory an earlier `cd` in the command moved to,
-    and variables the command assigned earlier are expanded in it.
+    and variables the command assigned earlier are expanded in it. After a `cd` whose
+    target cannot be known (`cd -`), a relative path is left unchecked.
     """
     if not MAYBE.search(command):
         return []
@@ -134,8 +146,8 @@ def body_sources(command):
             name, value = ASSIGNMENT.match(seg[0]).groups()
             env[name] = expand(value, env)
             seg = seg[1:]
-        if len(seg) == 2 and seg[0] == 'cd':
-            cd = os.path.join(cd, expand(seg[1], env))
+        if seg and seg[0] == 'cd':
+            cd = change_dir(cd, [a for a in seg[1:] if a != '--'], env)
             continue
         if len(seg) < 2 or seg[0] != 'gh':
             continue
@@ -147,7 +159,11 @@ def body_sources(command):
             continue
         for kind, value in sources:
             if kind == 'file' and value != '-':
-                value = os.path.join(cd, expand(value, env))
+                value = expand(value, env)
+                if not os.path.isabs(value):
+                    if cd is None:
+                        continue
+                    value = os.path.join(cd, value)
             found.append((kind, value))
     return found
 

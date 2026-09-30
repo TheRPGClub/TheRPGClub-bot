@@ -48,7 +48,8 @@ class Matcher(unittest.TestCase):
                     'gh pr create -F /s/b.md --title t',
                     'gh pr create -F/s/b.md',
                     'git push -u origin HEAD && gh pr create --body-file /s/b.md',
-                    'GH_PAGER= gh pr create --body-file /s/b.md'):
+                    'GH_PAGER= gh pr create --body-file /s/b.md',
+                    'gh pr create --title "" --body-file /s/b.md'):
             with self.subTest(cmd=cmd):
                 self.assertEqual(gate.body_sources(cmd), [('file', '/s/b.md')])
 
@@ -96,6 +97,11 @@ class Matcher(unittest.TestCase):
                          [('file', 'sub/b.md')])
         self.assertEqual(gate.body_sources('cd /a; cd b\ngh pr edit 1 -F c.md'),
                          [('file', '/a/b/c.md')])
+        self.assertEqual(gate.body_sources('cd -- sub && gh pr create -F b.md'),
+                         [('file', 'sub/b.md')])
+        self.assertEqual(gate.body_sources('cd -; gh pr create --body-file b.md'), [])
+        self.assertEqual(gate.body_sources('cd -; cd /w; gh pr create -F b.md'),
+                         [('file', '/w/b.md')])
         self.assertEqual(gate.body_sources('B=/s/pr.md; gh pr create --body-file "$B"'),
                          [('file', '/s/pr.md')])
         self.assertEqual(
