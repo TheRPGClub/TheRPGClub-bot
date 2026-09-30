@@ -78,6 +78,16 @@ test("handleInteractionError stays quiet once the user has a reply", async (t) =
   assert.deepEqual(interaction.calls, []);
 });
 
+test("handleInteractionError only logs an interaction that cannot be replied to", async (t) => {
+  t.mock.method(console, "error", () => undefined);
+  const interaction = buildInteraction({ deferred: false, replied: false });
+  interaction.isRepliable = () => false;
+
+  await handleInteractionError(interaction, new Error("boom"));
+
+  assert.deepEqual(interaction.calls, []);
+});
+
 test("handleInteractionError swallows a failed error reply", async (t) => {
   t.mock.method(console, "error", () => undefined);
   const interaction = buildInteraction({ deferred: false, replied: false });

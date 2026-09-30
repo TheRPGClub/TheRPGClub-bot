@@ -24,10 +24,11 @@ export function describeInteraction(interaction: Interaction): string {
 
 /**
  * Last-resort handler for an error a command or component handler did not catch. It logs
- * the failure with its source and, when the user has not been answered yet, replies
- * ephemerally so they see the error instead of "This interaction failed". A deferred
- * interaction gets a follow-up, which never overwrites a message a component deferUpdate
- * left in place.
+ * the failure with its source and, when the user has not been answered yet, replies so
+ * they see the error instead of "This interaction failed". A fresh reply is ephemeral. A
+ * deferred interaction gets a follow-up, which never overwrites a message a component
+ * deferUpdate left in place; after a public deferReply that follow-up fills the loading
+ * message and stays public, since Discord keeps the visibility the defer chose.
  */
 export async function handleInteractionError(
   interaction: Interaction,

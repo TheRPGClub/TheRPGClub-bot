@@ -222,22 +222,22 @@ bot.once("clientReady", async () => {
 });
 
 bot.on("interactionCreate", async (interaction: Interaction) => {
-  if ("isChatInputCommand" in interaction && interaction.isChatInputCommand()) {
-    const commandPath: string = getSlashCommandPath(interaction);
-    const params: string = getSlashCommandParams(interaction);
-    const userTag: string = interaction.user?.tag ?? interaction.user?.id ?? "unknown";
-    const channel: Channel | null = interaction.channel;
-    const channelName: string = getChannelName(channel);
-    console.log(
-      `[SlashCommand] /${commandPath} by ${userTag} in ${channelName} ` +
-      `params: ${params}`,
-    );
-    if (interaction.user?.id) {
-      void Member.touchLastSeen(interaction.user.id);
-    }
-  }
-
   try {
+    if ("isChatInputCommand" in interaction && interaction.isChatInputCommand()) {
+      const commandPath: string = getSlashCommandPath(interaction);
+      const params: string = getSlashCommandParams(interaction);
+      const userTag: string = interaction.user?.tag ?? interaction.user?.id ?? "unknown";
+      const channel: Channel | null = interaction.channel;
+      const channelName: string = getChannelName(channel);
+      console.log(
+        `[SlashCommand] /${commandPath} by ${userTag} in ${channelName} ` +
+        `params: ${params}`,
+      );
+      if (interaction.user?.id) {
+        void Member.touchLastSeen(interaction.user.id);
+      }
+    }
+
     await bot.executeInteraction(interaction);
   } catch (err: unknown) {
     await handleInteractionError(interaction, err);
