@@ -15,7 +15,9 @@ Any member can run it; no admin or owner role is needed. Before running it, make
 - your collection holds no SNES games with a HowLongToBeat main story time of 1 hour or
   less;
 - Chrono Trigger is on neither your backlog nor your Now Playing list;
-- Chrono Trigger's GameDB entry has HowLongToBeat times (step 9 relies on them).
+- the bot has cached HowLongToBeat times for Chrono Trigger. `/backlog pick` reads the
+  bot's HLTB cache, and with `max_hours` set it skips a game with no cached times, so
+  step 9 would show "Nothing matched those filters." instead of the card.
 
 Every reply is ephemeral except the public list checks in steps 11 and 13.
 
