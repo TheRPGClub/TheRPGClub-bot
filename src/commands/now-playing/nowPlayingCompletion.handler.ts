@@ -72,6 +72,7 @@ import {
 } from "../../utilities/ValidationUtils.js";
 import { assertCustomIdSegments } from "../../utilities/CustomIdUtils.js";
 import { safeIgnore } from "../../utilities/AsyncUtils.js";
+import { buildApiErrorMessage } from "../../utilities/ApiErrorUtils.js";
 import { truncateLabel } from "../../config/textLimits.js";
 import {
   MAX_NOW_PLAYING_NOTE_LEN,
@@ -560,8 +561,18 @@ async function finalizeNowPlayingCompletion(
     return;
   }
 
+  let removedFromNowPlaying = false;
+  let removeWarning: ContainerBuilder | null = null;
   if (session.removeFromNowPlaying) {
-    safeIgnore(Member.removeNowPlaying(session.userId, game.id));
+    // Awaited so the refreshed lists and the returned picker no longer show the game.
+    try {
+      removedFromNowPlaying = await Member.removeNowPlaying(session.userId, game.id);
+    } catch (err) {
+      removeWarning = buildTextContainer(trimTextDisplayContent(buildApiErrorMessage(
+        `Completion saved, but **${game.title}** could not be removed from Now Playing.`,
+        err,
+      )));
+    }
   }
 
   if (session.announce) {
@@ -575,9 +586,10 @@ async function finalizeNowPlayingCompletion(
     );
   }
 
-  if (session.removeFromNowPlaying) {
+  if (removedFromNowPlaying) {
     safeIgnore(refreshNowPlayingListFromContext(interaction, session.userId));
   }
+  const warningComponents = removeWarning ? [removeWarning] : [];
 
   if (session.returnToList) {
     const entries = getDisplayNowPlayingEntries(
@@ -586,7 +598,7 @@ async function finalizeNowPlayingCompletion(
     if (!entries.length) {
       const container = buildTextContainer("Your Now Playing list is empty.");
       await safeReply(interaction, {
-        components: [container],
+        components: [...warningComponents, container],
         flags: buildComponentsV2Flags(true),
       });
     } else {
@@ -596,12 +608,15 @@ async function finalizeNowPlayingCompletion(
         NOW_PLAYING_GALLERY_MAX,
         includeImages,
       );
-      const components = buildNowPlayingCompletionComponents(
-        entries,
-        session.userId,
-        sessionId,
-        thumbnailsByGameId,
-      );
+      const components = [
+        ...warningComponents,
+        ...buildNowPlayingCompletionComponents(
+          entries,
+          session.userId,
+          sessionId,
+          thumbnailsByGameId,
+        ),
+      ];
       await safeReply(interaction, {
         ...buildComponentPayload(components, files),
         flags: buildComponentsV2Flags(true),
@@ -624,13 +639,13 @@ async function finalizeNowPlayingCompletion(
     detailLines.push(`**Note:** ${session.note}`);
   }
   detailLines.push(
-    `**Removed from Now Playing:** ${session.removeFromNowPlaying ? "Yes" : "No"}`,
+    `**Removed from Now Playing:** ${removedFromNowPlaying ? "Yes" : "No"}`,
     `**Announced:** ${session.announce ? "Yes" : "No"}`,
   );
   const content = trimTextDisplayContent(detailLines.join("\n"));
   const container = buildTextContainer(content);
   await safeReply(interaction, {
-    components: [container],
+    components: [container, ...warningComponents],
     flags: buildComponentsV2Flags(true),
   });
   nowPlayingCompletionWizardSessions.delete(sessionId);
