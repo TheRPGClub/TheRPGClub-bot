@@ -282,7 +282,7 @@ async function postToRunChannel(
 function describeUncheckedSteps(steps: IConductorRun["steps"]): string {
   const unchecked = findUncheckedSteps(steps);
   if (!unchecked.length) return "";
-  return `\nStep(s) ${unchecked.join(", ")} quote no text to look for, so you will be ` +
+  return `Step(s) ${unchecked.join(", ")} quote no text to look for, so you will be ` +
     "asked to confirm their output by eye. Quote exact text in Expected to check it.";
 }
 
@@ -597,11 +597,13 @@ async function retryReportLocked(interaction: ButtonInteraction): Promise<void> 
  * Checks the PR and starts its run in the trigger's channel, as `/conduct` does. An
  * announced start carries the sha the preview was built from: a stale one, or a head that
  * already has a run going, starts nothing. `answer` tells whoever started it how it went.
+ * A clean start has nothing to add to the step message, so it calls `clear` instead.
  */
 async function startRun(
   trigger: IRunTrigger,
   pr: number,
   answer: (text: string) => Promise<void>,
+  clear: () => Promise<void>,
   announcement?: Message<true>,
 ): Promise<void> {
   const { settings, github } = getConductorRuntime();
@@ -690,11 +692,8 @@ async function startRun(
       return;
     }
     await saveRun(settings.statePath, run);
-    const lead = announcedSha === undefined ? "" : `The preview of PR #${pr} is ready. `;
-    await answer(
-      `${lead}Posted step 1 of ${run.steps.length} for PR #${pr} in this channel.` +
-        describeUncheckedSteps(run.steps),
-    );
+    const warning = describeUncheckedSteps(run.steps);
+    await (warning ? answer(warning) : clear());
   });
 }
 
@@ -794,7 +793,7 @@ export async function startRunFromAnnouncement(message: Message): Promise<void> 
     return;
   }
   const trigger = messageTrigger(message);
-  await startRun(trigger, announcement.pr, trigger.notify, message);
+  await startRun(trigger, announcement.pr, trigger.notify, async () => {}, message);
 }
 
 async function retryApprovalLocked(interaction: ButtonInteraction): Promise<void> {
@@ -830,9 +829,20 @@ export class ConductorCommand {
       return;
     }
     await safeDeferReply(interaction);
-    await startRun(interactionTrigger(interaction), pr, async (text) => {
-      await safeEditReply(interaction, publicText(text));
-    });
+    await startRun(
+      interactionTrigger(interaction),
+      pr,
+      async (text) => {
+        await safeEditReply(interaction, publicText(text));
+      },
+      async () => {
+        try {
+          await interaction.deleteReply();
+        } catch (err: unknown) {
+          console.error(`[conductor] could not delete the /conduct reply for PR #${pr}`, err);
+        }
+      },
+    );
   }
 
   @ButtonComponent({ id: /^conductor-check-v1:\d+:\d+$/ })
