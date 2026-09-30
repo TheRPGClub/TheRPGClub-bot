@@ -18,6 +18,8 @@ export interface IMessageSnapshot {
   authorId: string;
   authorIsBot: boolean;
   webhookId: string | null;
+  /** The application that sent the message, set on interaction replies. */
+  applicationId: string | null;
   createdTimestamp: number;
   editedTimestamp: number | null;
   content: string;
@@ -105,11 +107,11 @@ function latestTime(snapshot: IMessageSnapshot): number {
 
 /**
  * Discord delivers interaction replies through the application's own webhook, so
- * every slash command and button reply has a `webhookId` equal to the bot's own ID.
- * Any other webhook is someone else's post.
+ * every slash command and button reply has a `webhookId` equal to its application's
+ * ID. Any other webhook is someone else's post.
  */
 function isForeignWebhook(snapshot: IMessageSnapshot): boolean {
-  return Boolean(snapshot.webhookId) && snapshot.webhookId !== snapshot.authorId;
+  return Boolean(snapshot.webhookId) && snapshot.webhookId !== snapshot.applicationId;
 }
 
 /**

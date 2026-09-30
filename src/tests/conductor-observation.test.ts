@@ -44,6 +44,7 @@ function snapshot(overrides: Partial<IMessageSnapshot>): IMessageSnapshot {
     authorId: PREVIEW_BOT,
     authorIsBot: true,
     webhookId: null,
+    applicationId: null,
     createdTimestamp: 0,
     editedTimestamp: null,
     content: "",
@@ -183,7 +184,8 @@ test("credits a public interaction reply, which Discord sends through the app's 
   const outputs = observe([snapshot({
     id: "reply",
     createdTimestamp: 150,
-    webhookId: PREVIEW_BOT,
+    webhookId: "app",
+    applicationId: "app",
     interactionUserId: USER,
     content: "## Now Playing Search",
   })]);
