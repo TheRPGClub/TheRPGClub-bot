@@ -27,6 +27,8 @@ import {
 import { getPresenceHistory, setPresence } from "../functions/SetPresence.js";
 import { PREVIEW_PRESENCE } from "../config/previewMode.js";
 import { isModerator } from "./admin/admin-auth.utils.js";
+import { getHelpAccess } from "./help/help-access.js";
+import { withLegacyHelpPointer } from "./help/help-pointer.js";
 import {
   safeDeferReply,
   safeReply,
@@ -121,7 +123,7 @@ function buildModHelpButtons(
 ): ActionRowBuilder<StringSelectMenuBuilder>[] {
   const select = new StringSelectMenuBuilder()
     .setCustomId("mod-help-select")
-    .setPlaceholder("/mod help")
+    .setPlaceholder("/mod commands")
     .addOptions(
       MOD_HELP_TOPICS.map((topic) => ({
         label: topic.label,
@@ -216,7 +218,7 @@ export class Mod {
     await safeReply(interaction, buildTextReply(header + lines.join("\n"), false));
   }
 
-  @Slash({ description: "Show help for moderator commands", name: "help" })
+  @Slash({ description: "Moved to /help category:mod", name: "help" })
   async help(interaction: CommandInteraction): Promise<void> {
     await safeDeferReply(interaction, { flags: MessageFlags.Ephemeral });
 
@@ -225,7 +227,7 @@ export class Mod {
       return;
     }
 
-    const response = buildModHelpResponse();
+    const response = withLegacyHelpPointer(buildModHelpResponse(), "/mod help", "mod");
 
     await safeReply(interaction, {
       ...response,
@@ -322,7 +324,7 @@ export class Mod {
 
     if (topicId === "help-main") {
       const { buildMainHelpResponse } = await import("./help.command.js");
-      const response = buildMainHelpResponse();
+      const response = buildMainHelpResponse(getHelpAccess(interaction));
       await safeUpdate(interaction, response);
       return;
     }

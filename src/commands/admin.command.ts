@@ -39,6 +39,8 @@ import VotingRounds, {
   NO_VOTING_ROUND_SCHEDULED,
 } from "../classes/VotingRounds.js";
 import { isAdmin } from "./admin/admin-auth.utils.js";
+import { getHelpAccess } from "./help/help-access.js";
+import { withLegacyHelpPointer } from "./help/help-pointer.js";
 import {
   buildAdminHelpButtons,
   buildAdminHelpEmbed,
@@ -441,7 +443,7 @@ export class Admin {
     await handleEditNrGotm(interaction, round);
   }
 
-  @Slash({ description: "Show help for admin commands", name: "help" })
+  @Slash({ description: "Moved to /help category:admin", name: "help" })
   async help(interaction: CommandInteraction): Promise<void> {
     await safeDeferReply(interaction, { flags: MessageFlags.Ephemeral });
 
@@ -450,7 +452,7 @@ export class Admin {
       return;
     }
 
-    const response = buildAdminHelpResponse();
+    const response = withLegacyHelpPointer(buildAdminHelpResponse(), "/admin help", "admin");
     await safeReply(interaction, {
       components: response.components,
       flags: buildComponentsV2Flags(true),
@@ -463,7 +465,7 @@ export class Admin {
 
     if (topicId === "help-main") {
       const { buildMainHelpResponse } = await import("./help.command.js");
-      const response = buildMainHelpResponse();
+      const response = buildMainHelpResponse(getHelpAccess(interaction));
       await safeUpdate(interaction, response);
       return;
     }

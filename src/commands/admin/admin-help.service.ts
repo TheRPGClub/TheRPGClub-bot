@@ -152,7 +152,7 @@ export function buildAdminHelpButtons(
   const select = new StringSelectMenuBuilder()
     // eslint-disable-next-line local/custom-id-has-matching-handler
     .setCustomId("admin-help-select")
-    .setPlaceholder("/admin help")
+    .setPlaceholder("/admin commands")
     .addOptions(
       ADMIN_HELP_TOPICS.map((topic) => ({
         label: topic.label,
