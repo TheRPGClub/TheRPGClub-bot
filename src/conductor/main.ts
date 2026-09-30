@@ -34,13 +34,14 @@ const client = new Client({
 });
 
 client.once("clientReady", async (readyClient) => {
-  await client.initApplicationCommands();
-  console.log(`[conductor] ready as ${client.user?.tag ?? "unknown"}`);
-  // Logs and keeps running: a permission fixed in Discord then works without a restart.
+  // Runs first so it still logs when command registration fails. Logs and keeps
+  // running: a permission fixed in Discord then works without a restart.
   const problems = await checkConductorChannelAccess(readyClient, settings);
   for (const problem of problems) {
     console.error(`[conductor] ${formatChannelAccessProblem(problem)}`);
   }
+  await client.initApplicationCommands();
+  console.log(`[conductor] ready as ${client.user?.tag ?? "unknown"}`);
 });
 
 client.on("interactionCreate", async (interaction: Interaction) => {
