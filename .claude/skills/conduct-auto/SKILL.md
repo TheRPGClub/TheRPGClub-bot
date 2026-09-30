@@ -140,9 +140,9 @@ tester says stop.
 
 ## Actions
 
-- **slash**: use the step message's `Click to start` command mention when it has one: it
-  opens the preview bot's command in the chat box. Otherwise type the command name in the
-  channel's message box and pick the entry the preview bot owns from the command popup.
+- **slash**: type the command name in the channel's message box and pick the entry the
+  preview bot owns from the command popup. The step message's `Click to start` mention is
+  on a conductor message, so it is never clicked.
   Fill each option from the code block: its name, then its value. For an option with
   autocomplete, pick the suggestion whose visible text matches the value; when none
   does, stop and hand the step to the tester. Send it, and check the chat box is empty.
