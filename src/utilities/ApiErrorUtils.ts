@@ -115,3 +115,15 @@ export function buildApiErrorMessage(label: string, err: unknown): string {
   }
   return `${label}: ${msg}\n${DEV_PING}`;
 }
+
+/**
+ * Picks the formatter for an error of unknown origin: API errors (axios, or wrapped in a
+ * cause) get buildApiErrorMessage, and everything else, including discord.js REST
+ * failures, gets buildDiscordErrorMessage.
+ */
+export function buildAnyErrorMessage(label: string, err: unknown): string {
+  const isApiError: boolean = err instanceof UserFacingError ||
+    axios.isAxiosError(err) ||
+    (err instanceof Error && axios.isAxiosError(err.cause));
+  return isApiError ? buildApiErrorMessage(label, err) : buildDiscordErrorMessage(label, err);
+}

@@ -35,6 +35,10 @@ import {
   TEST_GUILD_ID,
 } from "./config/testMode.js";
 import { logError } from "./utilities/LogUtils.js";
+import {
+  getSlashCommandPath,
+  handleInteractionError,
+} from "./functions/InteractionErrorHandler.js";
 import { withRetry } from "./utilities/RetryUtils.js";
 import { isTransientApiError } from "./services/RpgClubApiClient.js";
 installConsoleLogging();
@@ -169,15 +173,6 @@ function formatSlashOption(option: ISlashOptionNode): string {
   return `${option.name}=${sanitizeSlashValue(option.value)}`;
 }
 
-function getSlashCommandPath(interaction: ChatInputCommandInteraction): string {
-  const commandPath: string[] = [interaction.commandName];
-  const subcommandGroup = interaction.options.getSubcommandGroup(false);
-  const subcommand = interaction.options.getSubcommand(false);
-  if (subcommandGroup) commandPath.push(subcommandGroup);
-  if (subcommand) commandPath.push(subcommand);
-  return commandPath.join(" ");
-}
-
 function getSlashCommandParams(interaction: ChatInputCommandInteraction): string {
   const options = interaction.options.data as readonly ISlashOptionNode[];
   if (!options || options.length === 0) return "none";
@@ -227,22 +222,26 @@ bot.once("clientReady", async () => {
 });
 
 bot.on("interactionCreate", async (interaction: Interaction) => {
-  if ("isChatInputCommand" in interaction && interaction.isChatInputCommand()) {
-    const commandPath: string = getSlashCommandPath(interaction);
-    const params: string = getSlashCommandParams(interaction);
-    const userTag: string = interaction.user?.tag ?? interaction.user?.id ?? "unknown";
-    const channel: Channel | null = interaction.channel;
-    const channelName: string = getChannelName(channel);
-    console.log(
-      `[SlashCommand] /${commandPath} by ${userTag} in ${channelName} ` +
-      `params: ${params}`,
-    );
-    if (interaction.user?.id) {
-      void Member.touchLastSeen(interaction.user.id);
+  try {
+    if ("isChatInputCommand" in interaction && interaction.isChatInputCommand()) {
+      const commandPath: string = getSlashCommandPath(interaction);
+      const params: string = getSlashCommandParams(interaction);
+      const userTag: string = interaction.user?.tag ?? interaction.user?.id ?? "unknown";
+      const channel: Channel | null = interaction.channel;
+      const channelName: string = getChannelName(channel);
+      console.log(
+        `[SlashCommand] /${commandPath} by ${userTag} in ${channelName} ` +
+        `params: ${params}`,
+      );
+      if (interaction.user?.id) {
+        void Member.touchLastSeen(interaction.user.id);
+      }
     }
-  }
 
-  await bot.executeInteraction(interaction);
+    await bot.executeInteraction(interaction);
+  } catch (err: unknown) {
+    await handleInteractionError(interaction, err);
+  }
 });
 
 bot.on("messageCreate", async (message: Message) => {
