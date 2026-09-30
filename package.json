@@ -20,6 +20,7 @@
     "test": "node --no-warnings=ExperimentalWarning --import tsx --test src/tests/*.test.ts 2>&1 | tee test-results.txt",
     "lint": "oxlint",
     "session:start": "node --no-warnings=ExperimentalWarning --import tsx scripts/session-start.ts",
+    "check:pr-testing": "node --no-warnings=ExperimentalWarning --import tsx scripts/check-pr-testing.ts",
     "remoteBash": "ssh -p 2222 merph518@100.120.128.48"
   },
   "dependencies": {
