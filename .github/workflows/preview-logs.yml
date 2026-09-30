@@ -5,6 +5,8 @@ name: Preview logs
 # so plaintext logs never reach the job log or an artifact. Fetch and decrypt them with
 # scripts/preview/fetch-logs.sh. Setup: docs/pr-preview.md, "Reading preview logs".
 
+run-name: Preview logs ${{ inputs.request }}
+
 on:
   workflow_dispatch:
     inputs:
@@ -12,6 +14,10 @@ on:
         description: Lines of each log to collect
         default: "500"
         required: true
+      request:
+        description: Tag that lets fetch-logs.sh find its own run
+        default: ""
+        required: false
 
 permissions:
   contents: read
