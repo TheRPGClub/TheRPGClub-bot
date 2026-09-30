@@ -39,6 +39,11 @@ import {
 import { buildApiErrorMessage, buildDiscordErrorMessage } from "../utilities/ApiErrorUtils.js";
 import { checkConductorAccess } from "./ConductorAccess.js";
 import {
+  checkConductorChannelAccess,
+  formatChannelAccessProblem,
+  type IChannelAccessProblem,
+} from "./ConductorChannelAccess.js";
+import {
   NOTE_INPUT_ID,
   NO_MENTIONS,
   buildCurrentStepMessage,
@@ -120,6 +125,15 @@ export function snapshotMessage(message: Message): IMessageSnapshot {
     embeds: message.embeds.map((embed) => embed.toJSON()),
     components: message.components.map((component) => component.toJSON()),
   };
+}
+
+/** One line per channel, plus the full request and response of any fetch that failed. */
+function describeAccessProblems(problems: IChannelAccessProblem[]): string {
+  const lines = problems.map((problem) =>
+    problem.error === undefined
+      ? formatChannelAccessProblem(problem)
+      : buildDiscordErrorMessage(formatChannelAccessProblem(problem), problem.error));
+  return `The conductor cannot run until its channel access is fixed.\n${lines.join("\n")}`;
 }
 
 /** Reads back the test and mirror channels and keeps what the bot under test posted. */
@@ -507,6 +521,12 @@ export class ConductorCommand {
     }
     await safeDeferReply(interaction);
     const { settings, github } = getConductorRuntime();
+
+    const accessProblems = await checkConductorChannelAccess(interaction.client, settings);
+    if (accessProblems.length) {
+      await safeEditReply(interaction, textEdit(describeAccessProblems(accessProblems)));
+      return;
+    }
 
     let pull;
     try {

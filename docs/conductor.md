@@ -105,6 +105,10 @@ conductor can check them.
   tester, never executed. Mentions are disabled in every post, and PR text in the report
   is escaped or fenced.
 - It reads its settings from its own environment and never loads the bot's `.env`.
+- On startup it checks that it has View Channel, Read Message History, and (in the test
+  channel) Send Messages in the test and mirror channels, and logs each channel that is
+  missing one. It keeps running, and `/conduct` repeats the check and refuses to start a
+  run until the permissions are fixed, so no restart is needed.
 
 ## Settings
 

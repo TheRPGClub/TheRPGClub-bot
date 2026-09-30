@@ -7,6 +7,10 @@
  */
 import { IntentsBitField, type Interaction } from "discord.js";
 import { Client } from "discordx";
+import {
+  checkConductorChannelAccess,
+  formatChannelAccessProblem,
+} from "./ConductorChannelAccess.js";
 import { loadConductorSettings } from "./ConductorConfig.js";
 import { setConductorRuntime } from "./ConductorRuntime.js";
 import { GitHubPullClient } from "./GitHubPullClient.js";
@@ -29,9 +33,14 @@ const client = new Client({
   silent: true,
 });
 
-client.once("clientReady", async () => {
+client.once("clientReady", async (readyClient) => {
   await client.initApplicationCommands();
   console.log(`[conductor] ready as ${client.user?.tag ?? "unknown"}`);
+  // Logs and keeps running: a permission fixed in Discord then works without a restart.
+  const problems = await checkConductorChannelAccess(readyClient, settings);
+  for (const problem of problems) {
+    console.error(`[conductor] ${formatChannelAccessProblem(problem)}`);
+  }
 });
 
 client.on("interactionCreate", async (interaction: Interaction) => {
