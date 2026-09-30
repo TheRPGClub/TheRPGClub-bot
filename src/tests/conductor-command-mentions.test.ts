@@ -6,12 +6,12 @@ import {
   PREVIEW_COMMANDS_ATTACHMENT_NAME,
   buildCommandCatalog,
   parseCommandCatalog,
-  resolveCommandMention,
   type IApplicationCommandLike,
   type ICommandCatalog,
 } from "../config/previewCommandCatalog.js";
 import {
   catalogAttachmentUrl,
+  resolveCommandMention,
   resolveStepMentions,
 } from "../conductor/ConductorCommandMentions.js";
 import { buildCurrentStepMessage } from "../conductor/ConductorMessages.js";

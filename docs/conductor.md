@@ -25,7 +25,8 @@ loader never imports this directory, and the conductor never loads the bot's com
      manual testing, and notes that on the PR. It never runs a partial script.
 3. It posts step 1 publicly in the channel where `/conduct` was run: the command in a
    code block, a clickable command mention when it can resolve one (see
-   [Clickable commands](#clickable-commands)), the expected result, and where the output will land. The tester runs the command in the test channel, waits for the
+   [Clickable commands](#clickable-commands)), the expected result, and where the output
+   will land. The tester runs the command in the test channel, waits for the
    reply, and presses **Check**. A failed check keeps the step open: **Check again**
    rereads with the same window start, for output that landed after an early press,
    and **Continue as failed** asks why the step failed, records the failure with that
