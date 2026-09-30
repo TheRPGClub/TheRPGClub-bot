@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import type { ICommandCatalog } from "../config/previewCommandCatalog.js";
+import { findCatalogMention, type ICommandCatalog } from "../config/previewCommandCatalog.js";
 import {
   commandMention,
   findCommandMention,
@@ -76,4 +76,21 @@ test("linkCommandMentions leaves URLs, paths, and code syntax alone", () => {
 
 test("linkCommandMentions returns text unchanged before the catalog loads", () => {
   assert.equal(linkCommandMentions("Run /noms"), "Run /noms");
+});
+
+test("findCatalogMention takes the longest path and counts the words it used", () => {
+  assert.deepEqual(findCatalogMention(CATALOG, ["admin", "votes", "reset", "type"]), {
+    mention: `</admin votes reset:${ADMIN_ID}>`,
+    wordCount: 3,
+  });
+  assert.deepEqual(findCatalogMention(CATALOG, ["collection", "add", "title"]), {
+    mention: `</collection add:${COLLECTION_ID}>`,
+    wordCount: 2,
+  });
+  assert.deepEqual(findCatalogMention(CATALOG, ["noms", "type"]), {
+    mention: `</noms:${NOMS_ID}>`,
+    wordCount: 1,
+  });
+  assert.equal(findCatalogMention(CATALOG, ["admin", "votes"]), null);
+  assert.equal(findCatalogMention(CATALOG, ["missing"]), null);
 });

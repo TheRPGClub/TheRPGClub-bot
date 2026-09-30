@@ -50,6 +50,11 @@ export async function refreshCommandMentions(client: Client): Promise<void> {
   }
 }
 
+/** The command IDs loaded by the last {@link refreshCommandMentions}. */
+export function getCommandMentionCatalog(): ICommandCatalog {
+  return catalog;
+}
+
 /** Replaces the loaded command IDs. Tests use it in place of a client. */
 export function setCommandMentionCatalog(next: ICommandCatalog): void {
   catalog = next;

@@ -63,7 +63,7 @@ import { buildGamePlatformPromptPayload } from "../../functions/GamePlatformProm
 import { buildApiErrorMessage } from "../../utilities/ApiErrorUtils.js";
 import { logError } from "../../utilities/LogUtils.js";
 import GamePlatformRegionService from "../../classes/GamePlatformRegionService.js";
-import { commandMention } from "../../services/CommandMentionService.js";
+import { linkCommandMentions } from "../../services/CommandMentionService.js";
 
 @Discord()
 @SlashGroup("gamedb")
@@ -192,10 +192,10 @@ export class GameDbViewCommand {
     if (action === "nowplaying") {
       const prompt = await buildNowPlayingPlatformPromptPayload(gameId, game.title);
       if (!prompt) {
-        await safeReply(interaction, buildTextReply(
+        await safeReply(interaction, buildTextReply(linkCommandMentions(
           "This game has no platform data yet. Add to Now Playing from " +
-            `${commandMention("now-playing list")} after platform data is available.`, true,
-        ));
+            "`/now-playing list` after platform data is available.",
+        ), true));
         return;
       }
       await safeReply(interaction, prompt);
@@ -259,10 +259,10 @@ export class GameDbViewCommand {
       return;
     }
     if (!prompt) {
-      await safeReply(interaction, buildTextReply(
-        `This game has no platform data yet. Add it with ${commandMention("collection add")} ` +
-          "after platform data is available.", true,
-      ));
+      await safeReply(interaction, buildTextReply(linkCommandMentions(
+        "This game has no platform data yet. Add it with `/collection add` " +
+          "after platform data is available.",
+      ), true));
       return;
     }
     await safeReply(interaction, prompt);

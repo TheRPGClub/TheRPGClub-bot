@@ -54,7 +54,10 @@ export const SANDBOX_CUSTOM_ID_PREFIX = {
   tie: "vsbx-tie",
 } as const;
 
-export const NO_SANDBOX_MESSAGE = "You have no voting sandbox. Run /vote-sandbox start.";
+/** Built per reply, since the command mention needs the IDs loaded after startup. */
+export function noSandboxMessage(): string {
+  return `You have no voting sandbox. Run ${commandMention("vote-sandbox start")}.`;
+}
 
 export const SANDBOX_ENDED_MESSAGE =
   "This sandbox panel belongs to a voting sandbox that has ended or been restarted.";
@@ -135,7 +138,7 @@ export function mutateSandbox<T>(
   return serialize(ownerId, async () => {
     const state = await loadSandbox(ownerId);
     if (!state || (sandboxId && state.id !== sandboxId)) {
-      throw new UserFacingError(sandboxId ? SANDBOX_ENDED_MESSAGE : NO_SANDBOX_MESSAGE);
+      throw new UserFacingError(sandboxId ? SANDBOX_ENDED_MESSAGE : noSandboxMessage());
     }
     // A change that throws partway, or a save that fails, leaves the sandbox as it was.
     const draft = structuredClone(state);
