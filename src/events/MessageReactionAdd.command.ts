@@ -28,6 +28,7 @@ import {
   stripModalInput,
 } from "../functions/InteractionUtils.js";
 import { buildTextReply } from "../functions/ComponentsV2Utils.js";
+import { resolveReactionMessage } from "../utilities/ReactionFetchUtils.js";
 import { notifyUnknownCompletionPlatform } from "../functions/CompletionHelpers.js";
 import { COMPLETION_REACTION_DEV_CHANNEL_ID } from "../config/channels.js";
 import { isPositiveInt, truncateWithEllipsis } from "../utilities/ValidationUtils.js";
@@ -159,17 +160,6 @@ export class MessageReactionAdd {
     void _client;
     if (user.bot) return;
 
-    try {
-      if (reaction.partial) {
-        await reaction.fetch();
-      }
-      if (reaction.message?.partial) {
-        await reaction.message.fetch();
-      }
-    } catch {
-      return;
-    }
-
     const emojiName = reaction.emoji?.name;
     const isPinEmoji = emojiName === PUSH_PIN_EMOJI || emojiName === "pushpin";
     const isPlusEmoji = emojiName === PLUS_EMOJI || emojiName === PLUS_EMOJI_NAME;
@@ -177,7 +167,8 @@ export class MessageReactionAdd {
       return;
     }
 
-    const message = reaction.message;
+    const resolved = await resolveReactionMessage(reaction);
+    const message = resolved?.message;
     if (!message || !message.guild) {
       return;
     }
