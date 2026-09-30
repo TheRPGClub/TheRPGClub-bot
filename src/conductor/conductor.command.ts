@@ -173,6 +173,29 @@ async function sendCurrentStep(
   run.windowStart = sent.createdTimestamp;
 }
 
+/**
+ * Posts in the run's channel. A channel the conductor can no longer post in falls back
+ * to a private note to the tester, so the handler still answers.
+ */
+async function postOrNotify(
+  interaction: AnyConductorInteraction,
+  run: IConductorRun,
+  text: string,
+  retryRow?: ReturnType<typeof buildReportRetryRow>,
+): Promise<void> {
+  const components = [buildTextContainer(text), ...(retryRow ? [retryRow] : [])];
+  try {
+    await postToRunChannel(interaction, run, {
+      components,
+      flags: buildComponentsV2EditFlags(),
+      allowedMentions: NO_MENTIONS,
+    });
+  } catch (err: unknown) {
+    const failure = buildDiscordErrorMessage("Could not post in the run's channel", err);
+    await safeFollowUpIfSettled(interaction, buildErrorReply(`${text}\n\n${failure}`, true));
+  }
+}
+
 /** Posts the run's report, or offers a retry button when GitHub refuses it. */
 async function postRunReport(
   interaction: AnyConductorInteraction,
@@ -187,21 +210,15 @@ async function postRunReport(
     results: run.results,
     aborted: run.status === "aborted",
   });
+  let url: string;
   try {
-    const url = await github.postComment(run.pr, report);
-    await postToRunChannel(
-      interaction,
-      run,
-      textEdit(`Report for PR #${run.pr} posted: ${url}`),
-    );
+    url = await github.postComment(run.pr, report);
   } catch (err: unknown) {
     const message = buildApiErrorMessage(`Posting the report to PR #${run.pr} failed`, err);
-    await postToRunChannel(interaction, run, {
-      components: [buildTextContainer(message), buildReportRetryRow(run.runId)],
-      flags: buildComponentsV2EditFlags(),
-      allowedMentions: NO_MENTIONS,
-    });
+    await postOrNotify(interaction, run, message, buildReportRetryRow(run.runId));
+    return;
   }
+  await postOrNotify(interaction, run, `Report for PR #${run.pr} posted: ${url}`);
 }
 
 /** Aborts a run, keeping a failed check it was waiting on as that step's result. */
