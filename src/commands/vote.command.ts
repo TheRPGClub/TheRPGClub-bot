@@ -12,27 +12,15 @@ import {
   SlashChoice,
   SlashOption,
 } from "discordx";
-import type { NominationKind } from "../classes/Nomination.js";
 import {
   listNominationsForRound,
   nominationKindLabel,
   parseNominationKind,
 } from "../classes/Nomination.js";
-import { castVote, getVotesForUser, getVoteTally } from "../classes/Vote.js";
-import VotingRounds, {
-  isRoundTallyRevealed,
-  type IVotingRound,
-} from "../classes/VotingRounds.js";
+import { getVotesForUser, getVoteTally } from "../classes/Vote.js";
+import VotingRounds from "../classes/VotingRounds.js";
 import { buildVotePanelComponents } from "../functions/VotePanelComponents.js";
-import {
-  buildCastResultText,
-  buildHiddenTallyText,
-  buildMyVotesText,
-  buildTallyText,
-  dedupeNominationsByGame,
-  mergeTallyWithNominations,
-  sumTallyVotes,
-} from "../functions/VoteResultsUtils.js";
+import { dedupeNominationsByGame } from "../functions/VoteResultsUtils.js";
 import {
   safeDeferReply,
   safeReply,
@@ -45,12 +33,16 @@ import {
 import { hasMemberRole } from "../functions/RoleUtils.js";
 import { toUnixTimestamp } from "../functions/DateFormatUtils.js";
 import { isPositiveInt } from "../utilities/ValidationUtils.js";
+import { apiVotingDataSource } from "../services/VotingDataSource.js";
+import {
+  MEMBERS_ONLY_MESSAGE,
+  respondVoteCast,
+  respondVoteMine,
+  respondVoteTally,
+  type IVotePanelTarget,
+} from "./vote/vote-panel-actions.service.js";
 
-const MEMBERS_ONLY_MESSAGE = "Voting is limited to server members with the Members role.";
-
-function parseVoteCustomId(
-  customId: string,
-): { kind: NominationKind; round: number } | null {
+function parseVoteCustomId(customId: string): IVotePanelTarget | null {
   const parts = customId.split(":");
   const kind = parseNominationKind(parts[1] ?? "");
   const round = Number(parts[2] ?? "");
@@ -58,13 +50,6 @@ function parseVoteCustomId(
     return null;
   }
   return { kind, round };
-}
-
-function buildVotingClosedText(round: number, info: IVotingRound | null): string {
-  if (info?.votingEnded) {
-    return `Voting for Round ${round} closed <t:${toUnixTimestamp(info.votingClosesAt)}:R>.`;
-  }
-  return `Voting for Round ${round} is not open.`;
 }
 
 @Discord()
@@ -149,128 +134,28 @@ export class VoteCommand {
 
   @SelectMenuComponent({ id: /^vote-cast:(gotm|nr-gotm):\d+:\d+$/ })
   async handleVoteCast(interaction: StringSelectMenuInteraction): Promise<void> {
-    await safeDeferReply(interaction, { flags: MessageFlags.Ephemeral });
-
-    const parsed = parseVoteCustomId(interaction.customId);
-    if (!parsed) {
-      await safeReply(interaction, buildTextReply("Invalid vote selection.", true));
-      return;
-    }
-
-    if (!hasMemberRole(interaction.member)) {
-      await safeReply(interaction, buildTextReply(MEMBERS_ONLY_MESSAGE, true));
-      return;
-    }
-
-    await withErrorReply(interaction, async () => {
-      const info = await VotingRounds.getByRound(parsed.round);
-      if (!info?.votingOpen) {
-        await safeReply(
-          interaction,
-          buildTextReply(buildVotingClosedText(parsed.round, info), true),
-        );
-        return;
-      }
-
-      const nominationId = Number(interaction.values?.[0]);
-      if (!isPositiveInt(nominationId)) {
-        await safeReply(interaction, buildTextReply("Invalid nomination selection.", true));
-        return;
-      }
-
-      const result = await castVote(
-        parsed.kind,
-        parsed.round,
-        interaction.user.id,
-        nominationId,
-      );
-      if (!result) {
-        await safeReply(
-          interaction,
-          buildTextReply(
-            `That nomination no longer exists for Round ${parsed.round}.`,
-            true,
-          ),
-        );
-        return;
-      }
-
-      const votes = await getVotesForUser(parsed.kind, parsed.round, interaction.user.id);
-      const text = buildCastResultText({
-        kindLabel: nominationKindLabel(parsed.kind),
-        roundNumber: parsed.round,
-        result,
-        votes,
-      });
-      await safeReply(interaction, buildTextReply(text, true));
-    }, "Could not record your vote");
+    await respondVoteCast(
+      interaction,
+      parseVoteCustomId(interaction.customId),
+      apiVotingDataSource,
+    );
   }
 
   @ButtonComponent({ id: /^vote-mine:(gotm|nr-gotm):\d+$/ })
   async handleVoteMine(interaction: ButtonInteraction): Promise<void> {
-    await safeDeferReply(interaction, { flags: MessageFlags.Ephemeral });
-
-    const parsed = parseVoteCustomId(interaction.customId);
-    if (!parsed) {
-      await safeReply(interaction, buildTextReply("Invalid vote panel button.", true));
-      return;
-    }
-
-    await withErrorReply(interaction, async () => {
-      const [votes, tally] = await Promise.all([
-        getVotesForUser(parsed.kind, parsed.round, interaction.user.id),
-        getVoteTally(parsed.kind, parsed.round),
-      ]);
-      const text = buildMyVotesText({
-        kindLabel: nominationKindLabel(parsed.kind),
-        roundNumber: parsed.round,
-        votes,
-        cap: tally.cap,
-      });
-      await safeReply(interaction, buildTextReply(text, true));
-    }, "Could not load your votes");
+    await respondVoteMine(
+      interaction,
+      parseVoteCustomId(interaction.customId),
+      apiVotingDataSource,
+    );
   }
 
   @ButtonComponent({ id: /^vote-tally:(gotm|nr-gotm):\d+$/ })
   async handleVoteTally(interaction: ButtonInteraction): Promise<void> {
-    await safeDeferReply(interaction, { flags: MessageFlags.Ephemeral });
-
-    const parsed = parseVoteCustomId(interaction.customId);
-    if (!parsed) {
-      await safeReply(interaction, buildTextReply("Invalid vote panel button.", true));
-      return;
-    }
-
-    await withErrorReply(interaction, async () => {
-      const kindLabel = nominationKindLabel(parsed.kind);
-      const info = await VotingRounds.getByRound(parsed.round);
-      // Only a round with no API row needs the current round to judge its age.
-      const current = info ? null : await VotingRounds.getCurrent();
-      const revealed = isRoundTallyRevealed(parsed.round, info, current);
-
-      const tally = await getVoteTally(parsed.kind, parsed.round);
-      if (!revealed) {
-        const text = buildHiddenTallyText({
-          kindLabel,
-          roundNumber: parsed.round,
-          totalVotes: sumTallyVotes(tally.rows),
-          voteDeadline: info?.votingClosesAt ?? null,
-        });
-        await safeReply(interaction, buildTextReply(text, true));
-        return;
-      }
-
-      const nominations = await listNominationsForRound(parsed.kind, parsed.round);
-      const rows = mergeTallyWithNominations(tally.rows, nominations);
-      const text = buildTallyText({
-        kindLabel,
-        roundNumber: parsed.round,
-        rows,
-        cap: tally.cap,
-        votingOpen: Boolean(info?.votingOpen),
-        voteDeadline: info?.votingClosesAt ?? null,
-      });
-      await safeReply(interaction, buildTextReply(text, true));
-    }, "Could not load the results");
+    await respondVoteTally(
+      interaction,
+      parseVoteCustomId(interaction.customId),
+      apiVotingDataSource,
+    );
   }
 }

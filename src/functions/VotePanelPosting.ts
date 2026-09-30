@@ -1,14 +1,17 @@
 import { channelMention, type Client } from "discord.js";
 import type { INominationEntry, NominationKind } from "../classes/Nomination.js";
+import { NOMINATION_KINDS, nominationKindLabel } from "../classes/Nomination.js";
 import {
-  listNominationsForRound,
-  NOMINATION_KINDS,
-  nominationKindLabel,
-} from "../classes/Nomination.js";
-import { getVoteTally } from "../classes/Vote.js";
+  apiVotingDataSource,
+  type IVotingDataSource,
+} from "../services/VotingDataSource.js";
 import { fetchSendableChannel } from "./ChannelUtils.js";
 import { buildComponentsV2Flags } from "./ComponentsV2Utils.js";
-import { buildVotePanelComponents, type VotePanelComponent } from "./VotePanelComponents.js";
+import {
+  buildVotePanelComponents,
+  type IVotePanelIds,
+  type VotePanelComponent,
+} from "./VotePanelComponents.js";
 import { buildTestPanelNoticeText, dedupeNominationsByGame } from "./VoteResultsUtils.js";
 import { logError } from "../utilities/LogUtils.js";
 
@@ -39,10 +42,11 @@ async function sendPanelToChannel(
 
 export async function loadNominationsByKind(
   roundNumber: number,
+  source: IVotingDataSource = apiVotingDataSource,
 ): Promise<Map<NominationKind, INominationEntry[]>> {
   const byKind = new Map<NominationKind, INominationEntry[]>();
   for (const kind of NOMINATION_KINDS) {
-    byKind.set(kind, await listNominationsForRound(kind, roundNumber));
+    byKind.set(kind, await source.listNominations(kind, roundNumber));
   }
   return byKind;
 }
@@ -65,6 +69,11 @@ export interface IPostVotePanelsParams {
   testMode?: boolean;
   castsAccepted?: boolean;
   castsRefusedReason?: string | null;
+  /** A banner of the caller's own, used in place of the testMode one. */
+  notice?: string;
+  /** Where the tally (for the cap) is read; the API unless the sandbox runs. */
+  source?: IVotingDataSource;
+  ids?: IVotePanelIds;
 }
 
 export interface IPostVotePanelsResult {
@@ -88,21 +97,25 @@ export async function postVotePanels(
       resultLines.push(`${kindLabel}: no votable nominations; panel skipped.`);
       continue;
     }
-    const tally = await getVoteTally(kind, params.roundNumber);
+    const tally = await (params.source ?? apiVotingDataSource).getTally(
+      kind,
+      params.roundNumber,
+    );
     const components = buildVotePanelComponents({
       kind,
       roundNumber: params.roundNumber,
       voteDeadline: params.voteDeadline,
       cap: tally.cap,
       nominations,
-      testNotice: params.testMode
+      ids: params.ids,
+      testNotice: params.notice ?? (params.testMode
         ? buildTestPanelNoticeText({
             kindLabel,
             roundNumber: params.roundNumber,
             castsAccepted: Boolean(params.castsAccepted),
             reason: params.castsRefusedReason ?? null,
           })
-        : null,
+        : null),
     });
     const sent = await sendPanelToChannel(params.client, params.channelId, components);
     if (sent) {

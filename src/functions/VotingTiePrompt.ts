@@ -68,13 +68,20 @@ function tiedCategories(
   });
 }
 
+/** Builds a tie-break select's custom id; the voting sandbox passes its own. */
+export type TieBreakSelectIdBuilder = (
+  roundNumber: number,
+  category: VotingRoundCategory,
+) => string;
+
 function buildTieSelect(
   roundNumber: number,
   category: VotingRoundCategory,
   games: IVotingRoundTieGame[],
+  selectId: TieBreakSelectIdBuilder,
 ): StringSelectMenuBuilder {
   return new StringSelectMenuBuilder()
-    .setCustomId(buildTieBreakSelectId(roundNumber, category))
+    .setCustomId(validateCustomId(selectId(roundNumber, category)))
     .setPlaceholder(`Pick the ${VOTING_CATEGORY_LABEL[category]} winner(s)`)
     .setMinValues(1)
     .setMaxValues(games.length)
@@ -88,6 +95,7 @@ function buildCategoryContainer(
   category: VotingRoundCategory,
   games: IVotingRoundTieGame[],
   withCovers: boolean,
+  selectId: TieBreakSelectIdBuilder,
 ): ContainerBuilder {
   const heading = `### ${VOTING_CATEGORY_LABEL[category]} tie`;
   const container = new ContainerBuilder();
@@ -114,7 +122,7 @@ function buildCategoryContainer(
     );
   }
   return container.addActionRowComponents(
-    buildSelectRow(buildTieSelect(roundNumber, category, games)).toJSON(),
+    buildSelectRow(buildTieSelect(roundNumber, category, games, selectId)).toJSON(),
   );
 }
 
@@ -132,7 +140,10 @@ function countCategoryComponents(games: IVotingRoundTieGame[]): number {
  * with its games and a select to pick the winners. Covers are dropped when
  * they would push the message past Discord's component limit.
  */
-export function buildTiePromptComponents(round: IVotingRound): ContainerBuilder[] {
+export function buildTiePromptComponents(
+  round: IVotingRound,
+  selectId: TieBreakSelectIdBuilder = buildTieBreakSelectId,
+): ContainerBuilder[] {
   const ties = tiedCategories(round);
   const headerCount = 2;
   const withCovers =
@@ -142,7 +153,7 @@ export function buildTiePromptComponents(round: IVotingRound): ContainerBuilder[
   return [
     buildTextContainer(buildTiePendingText(round)),
     ...ties.map((tie) =>
-      buildCategoryContainer(round.roundNumber, tie.category, tie.games, withCovers),
+      buildCategoryContainer(round.roundNumber, tie.category, tie.games, withCovers, selectId),
     ),
   ];
 }

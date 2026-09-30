@@ -2,13 +2,17 @@ import type { Client } from "discord.js";
 import Gotm, { reloadGotmRoundFromDb } from "../classes/Gotm.js";
 import NrGotm, { reloadNrGotmRoundFromDb } from "../classes/NrGotm.js";
 import type { IVotingEvent } from "../classes/VotingEvents.js";
-import VotingRounds, { type IVotingRound } from "../classes/VotingRounds.js";
+import type { IVotingRound } from "../classes/VotingRounds.js";
 import { ADMIN_CHANNEL_ID, ANNOUNCEMENT_CHANNEL_ID } from "../config/channels.js";
 import { NOMINATION_DISCUSSION_CHANNEL_IDS } from "../config/nominationChannels.js";
 import { fetchSendableChannel } from "../functions/ChannelUtils.js";
 import { toUnixTimestamp } from "../functions/DateFormatUtils.js";
 import { buildComponentsV2Flags } from "../functions/ComponentsV2Utils.js";
-import { buildTiePromptComponents } from "../functions/VotingTiePrompt.js";
+import {
+  buildTiePromptComponents,
+  type TieBreakSelectIdBuilder,
+} from "../functions/VotingTiePrompt.js";
+import type { IVotePanelIds } from "../functions/VotePanelComponents.js";
 import { ensureVoteScheduledEvent } from "../functions/VoteScheduledEvent.js";
 import {
   hasVotableNominations,
@@ -21,6 +25,7 @@ import {
   NothingToAnnounceError,
 } from "./VotingResultsAnnouncement.js";
 import { ensureWinnerThread, type WinnerKindLabel } from "./WinnerThreadService.js";
+import { apiVotingDataSource, type IVotingDataSource } from "./VotingDataSource.js";
 
 /**
  * What handling an event came to. Both outcomes are acked: "skipped" means
@@ -28,6 +33,27 @@ import { ensureWinnerThread, type WinnerKindLabel } from "./WinnerThreadService.
  * post). A handler throws when the post failed and should be retried.
  */
 export type VotingEventOutcome = "delivered" | "skipped";
+
+/**
+ * Where an event's posts read the round from and how they look. The live
+ * context reads the API and has every side effect; the voting sandbox
+ * (/vote-sandbox, test mode only) passes its own so the same handlers run
+ * against an in-memory round.
+ */
+export interface IVotingEventContext {
+  source: IVotingDataSource;
+  /** Adds a banner to the results post and never creates a winner thread there. */
+  rehearsal: boolean;
+  panelIds?: IVotePanelIds;
+  panelNotice?: string;
+  tieSelectId?: TieBreakSelectIdBuilder;
+  /**
+   * The round_decided step before the next vote is scheduled. Live, it reloads
+   * the GOTM caches and creates the winner threads, both of which write
+   * through the API, so the sandbox replaces it.
+   */
+  recordWinners: (client: Client, roundNumber: number) => Promise<void>;
+}
 
 export function buildNominationReminderText(votingOpensAt: Date): string {
   const voteUnix = toUnixTimestamp(votingOpensAt);
@@ -37,8 +63,11 @@ export function buildNominationReminderText(votingOpensAt: Date): string {
   );
 }
 
-async function requireRound(event: IVotingEvent): Promise<IVotingRound> {
-  const round = await VotingRounds.getByRound(event.roundNumber);
+async function requireRound(
+  event: IVotingEvent,
+  context: IVotingEventContext,
+): Promise<IVotingRound> {
+  const round = await context.source.getRound(event.roundNumber);
   if (!round) {
     throw new Error(`Voting round ${event.roundNumber} was not found for event ${event.id}.`);
   }
@@ -48,8 +77,9 @@ async function requireRound(event: IVotingEvent): Promise<IVotingRound> {
 async function postNominationReminder(
   client: Client,
   event: IVotingEvent,
+  context: IVotingEventContext,
 ): Promise<VotingEventOutcome> {
-  const round = await requireRound(event);
+  const round = await requireRound(event, context);
   if (!round.nominationsOpen) {
     return "skipped";
   }
@@ -78,13 +108,14 @@ async function postNominationReminder(
 async function postVotingPanels(
   client: Client,
   event: IVotingEvent,
+  context: IVotingEventContext,
 ): Promise<VotingEventOutcome> {
-  const round = await requireRound(event);
+  const round = await requireRound(event, context);
   if (!round.votingOpen) {
     return "skipped";
   }
 
-  const nominationsByKind = await loadNominationsByKind(round.roundNumber);
+  const nominationsByKind = await loadNominationsByKind(round.roundNumber, context.source);
   if (!hasVotableNominations(nominationsByKind)) {
     logWarn(
       "VotingEventHandlers.votingOpened",
@@ -99,6 +130,9 @@ async function postVotingPanels(
     roundNumber: round.roundNumber,
     voteDeadline: round.votingClosesAt,
     nominationsByKind,
+    source: context.source,
+    ids: context.panelIds,
+    notice: context.panelNotice,
   });
   if (result.posted === 0) {
     throw new Error(`No Round ${round.roundNumber} voting panel could be posted.`);
@@ -114,13 +148,15 @@ async function postVotingPanels(
 async function postVotingResults(
   client: Client,
   event: IVotingEvent,
+  context: IVotingEventContext,
 ): Promise<VotingEventOutcome> {
-  const round = await requireRound(event);
+  const round = await requireRound(event, context);
   try {
-    await announceVotingResults(client, {
-      roundNumber: round.roundNumber,
-      monthLabel: round.monthYear,
-    });
+    await announceVotingResults(
+      client,
+      { roundNumber: round.roundNumber, monthLabel: round.monthYear },
+      { rehearsal: context.rehearsal, source: context.source },
+    );
   } catch (err) {
     if (err instanceof NothingToAnnounceError) {
       return "skipped";
@@ -133,8 +169,9 @@ async function postVotingResults(
 async function postTiePendingNotice(
   client: Client,
   event: IVotingEvent,
+  context: IVotingEventContext,
 ): Promise<VotingEventOutcome> {
-  const round = await requireRound(event);
+  const round = await requireRound(event, context);
   if (round.phase !== "tie") {
     return "skipped";
   }
@@ -143,7 +180,7 @@ async function postTiePendingNotice(
     throw new Error(`Admin channel ${ADMIN_CHANNEL_ID} was not found or cannot be sent to.`);
   }
   await channel.send({
-    components: buildTiePromptComponents(round),
+    components: buildTiePromptComponents(round, context.tieSelectId),
     flags: buildComponentsV2Flags(false),
     allowedMentions: { parse: [] },
   });
@@ -189,8 +226,12 @@ async function ensureRoundWinnerThreads(client: Client, roundNumber: number): Pr
  * Throws when the next round is not scheduled yet, so the event is retried
  * until the API has it; an existing event is reused, so retries are safe.
  */
-async function scheduleNextVoteEvent(client: Client, decidedRound: number): Promise<void> {
-  const next = await VotingRounds.getCurrent();
+async function scheduleNextVoteEvent(
+  client: Client,
+  decidedRound: number,
+  source: IVotingDataSource,
+): Promise<void> {
+  const next = await source.getCurrentRound();
   if (!next || next.roundNumber <= decidedRound) {
     throw new Error(`The round after Round ${decidedRound} is not scheduled yet.`);
   }
@@ -211,16 +252,27 @@ async function scheduleNextVoteEvent(client: Client, decidedRound: number): Prom
   });
 }
 
+async function recordLiveWinners(client: Client, roundNumber: number): Promise<void> {
+  // The API recorded the winners; the caches only load at startup otherwise.
+  await reloadGotmRoundFromDb(roundNumber);
+  await reloadNrGotmRoundFromDb(roundNumber);
+  await ensureRoundWinnerThreads(client, roundNumber);
+}
+
+export const LIVE_VOTING_EVENT_CONTEXT: IVotingEventContext = {
+  source: apiVotingDataSource,
+  rehearsal: false,
+  recordWinners: recordLiveWinners,
+};
+
 async function finishDecidedRound(
   client: Client,
   event: IVotingEvent,
+  context: IVotingEventContext,
 ): Promise<VotingEventOutcome> {
-  // The API recorded the winners; the caches only load at startup otherwise.
-  await reloadGotmRoundFromDb(event.roundNumber);
-  await reloadNrGotmRoundFromDb(event.roundNumber);
-  await ensureRoundWinnerThreads(client, event.roundNumber);
-  // Throws to retry the event; the steps above are safe to repeat.
-  await scheduleNextVoteEvent(client, event.roundNumber);
+  await context.recordWinners(client, event.roundNumber);
+  // Throws to retry the event; the step above is safe to repeat.
+  await scheduleNextVoteEvent(client, event.roundNumber, context.source);
   return "delivered";
 }
 
@@ -228,19 +280,20 @@ async function finishDecidedRound(
 export async function handleVotingEvent(
   client: Client,
   event: IVotingEvent,
+  context: IVotingEventContext = LIVE_VOTING_EVENT_CONTEXT,
 ): Promise<VotingEventOutcome> {
   switch (event.kind) {
     case "nomination_reminder_5d":
     case "nomination_reminder_1d":
-      return postNominationReminder(client, event);
+      return postNominationReminder(client, event, context);
     case "voting_opened":
-      return postVotingPanels(client, event);
+      return postVotingPanels(client, event, context);
     case "voting_closed":
-      return postVotingResults(client, event);
+      return postVotingResults(client, event, context);
     case "tie_pending":
-      return postTiePendingNotice(client, event);
+      return postTiePendingNotice(client, event, context);
     case "round_decided":
-      return finishDecidedRound(client, event);
+      return finishDecidedRound(client, event, context);
     case "unknown":
       logWarn("VotingEventHandlers", `Unknown voting event kind "${event.rawKind}"; acking.`);
       return "skipped";

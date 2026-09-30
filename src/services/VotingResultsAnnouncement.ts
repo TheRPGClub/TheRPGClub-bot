@@ -4,12 +4,8 @@ import {
   MediaGalleryBuilder,
   MediaGalleryItemBuilder,
 } from "@discordjs/builders";
-import {
-  listNominationsForRound,
-  NOMINATION_KINDS,
-  nominationKindLabel,
-} from "../classes/Nomination.js";
-import { getVoteTally } from "../classes/Vote.js";
+import { NOMINATION_KINDS, nominationKindLabel } from "../classes/Nomination.js";
+import { apiVotingDataSource, type IVotingDataSource } from "./VotingDataSource.js";
 import {
   buildRehearsalNoticeText,
   buildTallyText,
@@ -51,6 +47,8 @@ export interface IAnnounceResultsOptions {
    * changes, so the real copy is what gets reviewed.
    */
   rehearsal?: boolean;
+  /** Where the tallies and nominations are read; the API unless the sandbox runs. */
+  source?: IVotingDataSource;
 }
 
 /**
@@ -98,6 +96,7 @@ export async function announceVotingResults(
 ): Promise<void> {
   const channelId = options.channelIdOverride ?? ANNOUNCEMENT_CHANNEL_ID;
   const rehearsal = Boolean(options.rehearsal);
+  const source = options.source ?? apiVotingDataSource;
   const sendable = await fetchSendableChannel(client, channelId);
   if (!sendable) {
     throw new Error(`Results channel ${channelId} was not found or cannot be sent to.`);
@@ -114,8 +113,8 @@ export async function announceVotingResults(
   for (const kind of NOMINATION_KINDS) {
     const kindLabel = nominationKindLabel(kind);
     const [tally, nominations] = await Promise.all([
-      getVoteTally(kind, round.roundNumber),
-      listNominationsForRound(kind, round.roundNumber),
+      source.getTally(kind, round.roundNumber),
+      source.listNominations(kind, round.roundNumber),
     ]);
     if (!nominations.length) {
       continue;
