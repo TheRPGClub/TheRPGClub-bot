@@ -17,6 +17,7 @@ import {
 import {
   safeDeferReply,
   safeDeferUpdate,
+  safeEditReply,
   safeReply,
   safeUpdate,
   sanitizeUserInput,
@@ -235,6 +236,7 @@ export class GameDbViewCommand {
     gameId: number,
     title: string,
   ): Promise<void> {
+    await safeDeferReply(interaction, { flags: buildComponentsV2Flags(true) });
     let prompt;
     try {
       prompt = await buildGamePlatformPromptPayload({
@@ -302,6 +304,8 @@ export class GameDbViewCommand {
       await safeReply(interaction, buildTextReply("Invalid collection selection.", true));
       return;
     }
+    // The ephemeral picker is replaced in place once the API answers.
+    await safeDeferUpdate(interaction);
     try {
       const created = await UserGameCollection.addEntry({
         userId: interaction.user.id,
@@ -310,7 +314,7 @@ export class GameDbViewCommand {
         ownershipType,
       });
       const platformLabel = created.platformName ?? `Platform #${platformId}`;
-      await safeUpdate(interaction, {
+      await safeEditReply(interaction, {
         components: [buildTextContainer(
           `Added **${created.title}** (${platformLabel}, ${created.ownershipType}) ` +
             "to your collection.",
@@ -319,7 +323,7 @@ export class GameDbViewCommand {
       });
     } catch (err: unknown) {
       logError("gamedb view.add_collection_failed", err);
-      await safeReply(
+      await safeEditReply(
         interaction,
         buildErrorReply(buildApiErrorMessage("Failed to add collection entry.", err), true),
       );

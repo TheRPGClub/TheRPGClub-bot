@@ -124,6 +124,7 @@ export class BacklogViewCommand {
     if (!segs) return;
     const [ownerId] = segs;
     if (await replyIfNotOwner(interaction, ownerId, "This backlog view is not for you.")) return;
+    await safeDeferReply(interaction, { flags: buildComponentsV2Flags(true) });
 
     const entryId = Number(interaction.values[0]);
     const entry = isPositiveInt(entryId)

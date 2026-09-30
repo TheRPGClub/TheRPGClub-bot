@@ -387,6 +387,7 @@ export class CollectionViewCommand {
     if (await replyIfNotOwner(interaction, ownerId, "This collection view is not for you.")) {
       return;
     }
+    await safeDeferReply(interaction, { flags: buildComponentsV2Flags(true) });
 
     const entryId = Number(interaction.values[0]);
     const entry = isPositiveInt(entryId)
