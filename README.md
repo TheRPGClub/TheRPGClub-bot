@@ -105,7 +105,8 @@ run touching them.
 Pull requests are deployed into the test guild automatically by a self-hosted
 runner. Setup and manual controls are in `docs/pr-preview.md`. The conductor, a
 separate bot that walks a tester through a PR's `## Testing` steps and reports the
-results to the PR, is described in `docs/conductor.md`.
+results to the PR, is described in `docs/conductor.md`. The `## Testing` section format
+it reads is defined in `.github/pull-request-testing-format.md`.
 
 ## Useful Scripts
 
