@@ -44,7 +44,7 @@ import {
 import { padCommandName } from "../help.command.js";
 import Game from "../../classes/Game.js";
 import Member from "../../classes/Member.js";
-import { NowPlayingCommand } from "../now-playing.command.js";
+import { showNowPlayingSingle } from "../now-playing/nowPlayingSingleView.js";
 import { STANDARD_PLATFORM_IDS } from "../../config/standardPlatforms.js";
 import {
   buildComponentsV2Flags,
@@ -515,8 +515,7 @@ export class GameDbCompletionCommand {
 
     try {
       await Member.addNowPlaying(interaction.user.id, gameId, platformId, null);
-      const nowPlaying = new NowPlayingCommand();
-      await nowPlaying.showSingle(interaction, interaction.user, true);
+      await showNowPlayingSingle(interaction, interaction.user, true);
     } catch (err: any) {
       if (isUniqueConstraintError(err)) {
         safeIgnore(safeReply(interaction, buildTextReply(`**${game.title}** is already in your Now Playing list.`, true)));

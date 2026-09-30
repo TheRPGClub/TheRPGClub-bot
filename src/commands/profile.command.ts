@@ -325,6 +325,47 @@ export async function buildProfileViewPayload(
   }
 }
 
+/** Replies to an already deferred interaction with the member's profile view. */
+export async function replyWithProfileView(
+  interaction: CommandInteraction,
+  target: User,
+  ephemeral: boolean,
+): Promise<void> {
+  const result = await buildProfileViewPayload(target);
+
+  if (result.errorMessage) {
+    const errContainer = buildTextContainer(safeV2TextContent(result.errorMessage, 1000));
+    await safeReply(interaction, {
+      components: [errContainer],
+      flags: buildComponentsV2Flags(ephemeral),
+    });
+    return;
+  }
+
+  if (!result.payload) {
+    const notFoundContainer = buildTextContainer(
+      safeV2TextContent(
+        result.notFoundMessage ??
+          `No profile data found for ${renderUsernameWithEmoji(
+            target.id,
+            target.globalName ?? target.username ?? "Unknown",
+          )}.`,
+        1000,
+      ),
+    );
+    await safeReply(interaction, {
+      components: [notFoundContainer],
+      flags: buildComponentsV2Flags(ephemeral),
+    });
+    return;
+  }
+
+  await safeReply(interaction, {
+    ...result.payload,
+    flags: buildComponentsV2Flags(ephemeral),
+  });
+}
+
 @SlashGroup({ description: "Profile commands", name: "profile" })
 @Discord()
 export class ProfileCommand {
@@ -348,39 +389,8 @@ export class ProfileCommand {
     interaction: CommandInteraction,
   ): Promise<void> {
     const target = member ?? interaction.user;
-    const ephemeral = privateFlag ?? false;
     await deferWithPrivateFlag(interaction, privateFlag);
-
-    const result = await buildProfileViewPayload(target);
-
-    if (result.errorMessage) {
-      const errContainer = buildTextContainer(safeV2TextContent(result.errorMessage, 1000));
-      await safeReply(interaction, {
-        components: [errContainer],
-        flags: buildComponentsV2Flags(ephemeral),
-      });
-      return;
-    }
-
-    if (!result.payload) {
-      const notFoundContainer = buildTextContainer(
-        safeV2TextContent(
-          result.notFoundMessage ??
-            `No profile data found for ${renderUsernameWithEmoji(target.id, target.globalName ?? target.username ?? "Unknown")}.`,
-          1000,
-        ),
-      );
-      await safeReply(interaction, {
-        components: [notFoundContainer],
-        flags: buildComponentsV2Flags(ephemeral),
-      });
-      return;
-    }
-
-    await safeReply(interaction, {
-      ...result.payload,
-      flags: buildComponentsV2Flags(ephemeral),
-    });
+    await replyWithProfileView(interaction, target, privateFlag ?? false);
   }
 
   @SelectMenuComponent({ id: /^profile-search-select-\d+$/ })

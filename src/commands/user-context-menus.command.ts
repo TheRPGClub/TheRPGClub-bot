@@ -1,0 +1,45 @@
+import {
+  ApplicationCommandType,
+  type UserContextMenuCommandInteraction,
+} from "discord.js";
+import { ContextMenu, Discord } from "discordx";
+import { deferWithPrivateFlag } from "../functions/InteractionUtils.js";
+import { replyWithProfileView } from "./profile.command.js";
+import { showNowPlayingSingle } from "./now-playing/nowPlayingSingleView.js";
+import { renderCommonCompletionPage } from "./game-completion/completion-common.service.js";
+
+// Discord allows 5 user context menus per app; this file holds 3 of them.
+// Replies are ephemeral: a right-click is a private lookup, not a post to the channel.
+const CONTEXT_MENU_EPHEMERAL = true;
+
+@Discord()
+export class UserContextMenus {
+  @ContextMenu({ name: "View profile", type: ApplicationCommandType.User })
+  async viewProfile(interaction: UserContextMenuCommandInteraction): Promise<void> {
+    await deferWithPrivateFlag(interaction, CONTEXT_MENU_EPHEMERAL);
+    await replyWithProfileView(interaction, interaction.targetUser, CONTEXT_MENU_EPHEMERAL);
+  }
+
+  @ContextMenu({ name: "Now playing", type: ApplicationCommandType.User })
+  async nowPlaying(interaction: UserContextMenuCommandInteraction): Promise<void> {
+    await deferWithPrivateFlag(interaction, CONTEXT_MENU_EPHEMERAL);
+    await showNowPlayingSingle(interaction, interaction.targetUser, CONTEXT_MENU_EPHEMERAL);
+  }
+
+  @ContextMenu({ name: "Compare completions", type: ApplicationCommandType.User })
+  async compareCompletions(interaction: UserContextMenuCommandInteraction): Promise<void> {
+    await deferWithPrivateFlag(interaction, CONTEXT_MENU_EPHEMERAL);
+    await renderCommonCompletionPage(
+      interaction,
+      {
+        leftId: interaction.user.id,
+        rightId: interaction.targetUser.id,
+        sort: "date_desc",
+        year: null,
+        platformId: null,
+      },
+      0,
+      CONTEXT_MENU_EPHEMERAL,
+    );
+  }
+}

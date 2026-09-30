@@ -22,9 +22,6 @@ import {
 } from "../functions/InteractionUtils.js";
 import type { IGame } from "../types/GameTypes.js";
 import {
-  buildUserHeaderContainer,
-} from "../functions/uiComponents.js";
-import {
   buildComponentsV2Flags,
   buildTextContainer,
   buildTextReply,
@@ -44,7 +41,6 @@ import { safeIgnore } from "../utilities/AsyncUtils.js";
 import {
   NOW_PLAYING_SEARCH_LIMIT,
   NOW_PLAYING_NOTE_MODAL_MAX_FIELDS,
-  NOW_PLAYING_LIST_EDIT_PREFIX,
 } from "./now-playing/nowPlayingIds.js";
 import {
   nowPlayingListContexts,
@@ -52,12 +48,8 @@ import {
   NOW_PLAYING_CONTEXT_TTL_MS,
 } from "./now-playing/nowPlayingContexts.js";
 import {
-  getDisplayNowPlayingEntries,
-} from "../functions/NowPlayingUtils.js";
-import {
   buildNowPlayingListContainer,
   buildNowPlayingMessageContainer,
-  buildNowPlayingListPayload,
   withPmNowPlayingList,
   refreshNowPlayingListFromContext,
   trimTextDisplayContent,
@@ -71,6 +63,7 @@ import {
 } from "./now-playing/nowPlayingMessageService.js";
 import GamePlatformRegionService from "../classes/GamePlatformRegionService.js";
 import GameSearchService from "../classes/GameSearchService.js";
+import { showNowPlayingSingle } from "./now-playing/nowPlayingSingleView.js";
 
 @Discord()
 @SlashGroup({ description: "Show now playing data", name: "now-playing" })
@@ -163,7 +156,7 @@ export class NowPlayingCommand {
     if (replacedCurrentChannelMessage) {
       return;
     }
-    await this.showSingle(interaction, interaction.user, false);
+    await showNowPlayingSingle(interaction, interaction.user, false);
   }
 
   @Slash({ description: "Show now playing data", name: "list" })
@@ -210,7 +203,7 @@ export class NowPlayingCommand {
       return;
     }
 
-    await this.showSingle(interaction, target, ephemeral);
+    await showNowPlayingSingle(interaction, target, ephemeral);
   }
 
   @Slash({ description: "Search for who is playing a GameDB title", name: "search" })
@@ -386,92 +379,6 @@ export class NowPlayingCommand {
     }
   }
 
-  async showSingle(
-    interaction: AnyRepliable,
-    target: User,
-    ephemeral: boolean,
-  ): Promise<void> {
-    const isOwnList = target.id === interaction.user.id;
-    const entries = await Member.getNowPlaying(target.id);
-    if (!entries.length) {
-      if (isOwnList) {
-        const ownerName = target.displayName ?? target.username ?? target.id;
-        const header = buildUserHeaderContainer(
-          target.id,
-          ownerName,
-          "Now Playing",
-          `${NOW_PLAYING_LIST_EDIT_PREFIX}:${target.id}`,
-        );
-        const container = buildNowPlayingMessageContainer(
-          "Your Now Playing List",
-          [
-            "Welcome. Your list is empty, so nothing shows yet.",
-            "Use the user button in the header to manage sort order, platform, completions, and removals.",
-          ].join("\n"),
-        );
-      const reply = await safeReply(interaction, {
-        components: [header, container],
-        flags: buildComponentsV2Flags(ephemeral),
-        withResponse: !ephemeral,
-      });
-      if (!ephemeral) {
-        const message = reply?.resource?.message ?? null;
-        if (message) {
-          trackNowPlayingListContext(message as Message<boolean>, {
-            view: "single",
-              ownerUserId: target.id,
-            });
-          }
-        }
-        return;
-      }
-
-      const container = buildNowPlayingMessageContainer(
-        "Now Playing",
-        `No Now Playing entries found for ${renderUsernameWithEmoji(target.id, target.displayName ?? target.username ?? target.id)}.`,
-      );
-      const reply = await safeReply(interaction, {
-        components: [container],
-        flags: buildComponentsV2Flags(ephemeral),
-        withResponse: !ephemeral,
-      });
-      if (!ephemeral) {
-        const message = reply?.resource?.message ?? null;
-        if (message) {
-          trackNowPlayingListContext(message as Message<boolean>, {
-            view: "single",
-            ownerUserId: target.id,
-          });
-        }
-      }
-      return;
-    }
-
-    const sortedEntries = getDisplayNowPlayingEntries(entries);
-    const payload = await buildNowPlayingListPayload(
-      target,
-      sortedEntries,
-      interaction.guildId,
-      isOwnList,
-      true,
-    );
-    const reply = await safeReply(interaction, {
-      components: payload.components,
-      files: payload.files,
-      flags: buildComponentsV2Flags(ephemeral),
-      withResponse: !ephemeral,
-    });
-    if (!ephemeral) {
-      const message = reply?.resource?.message ?? null;
-      if (message) {
-        trackNowPlayingListContext(message as Message<boolean>, {
-          view: "single",
-          ownerUserId: target.id,
-        });
-      }
-    }
-  }
-
   private async showEveryone(
     interaction: CommandInteraction,
     ephemeral: boolean,
@@ -556,7 +463,7 @@ export class NowPlayingCommand {
 
       await message.delete().catch(() => null);
       nowPlayingListContexts.delete(key);
-      await this.showSingle(interaction, interaction.user, false);
+      await showNowPlayingSingle(interaction, interaction.user, false);
       return true;
     }
 
