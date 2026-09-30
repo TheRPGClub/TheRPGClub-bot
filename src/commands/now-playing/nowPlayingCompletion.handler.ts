@@ -342,16 +342,36 @@ function buildNowPlayingCompletionConfigContainer(
   return container;
 }
 
+type CompletionResponseMode = "update" | "reply";
+
+/**
+ * "update" edits the message the button sits on (the ephemeral edit menu). "reply" opens
+ * the wizard in a new ephemeral message, for buttons on the public Now Playing view.
+ */
+function buildCompletionResponder(
+  interaction: ButtonInteraction | StringSelectMenuInteraction,
+  mode: CompletionResponseMode,
+): (payload: Record<string, unknown>) => Promise<void> {
+  if (mode === "reply") {
+    return async (payload) => {
+      await safeReply(interaction, { ...payload, flags: buildComponentsV2Flags(true) });
+    };
+  }
+  return (payload) => safeUpdate(interaction, payload);
+}
+
 async function renderNowPlayingCompletionConfig(
   interaction: ButtonInteraction | StringSelectMenuInteraction,
   sessionId: string,
   session: NowPlayingCompletionWizardSession,
+  mode: CompletionResponseMode = "update",
 ): Promise<void> {
+  const respond = buildCompletionResponder(interaction, mode);
   const entries = await Member.getNowPlaying(session.userId);
   const entry = entries.find((item) => item.gameId === session.gameId);
   if (!entry) {
     const container = buildTextContainer("That game is no longer in your Now Playing list.");
-    await safeUpdate(interaction, { components: [container] });
+    await respond({ components: [container] });
     return;
   }
 
@@ -377,9 +397,9 @@ async function renderNowPlayingCompletionConfig(
     [container],
   );
   if (files.length) {
-    await safeUpdate(interaction, { components: pmComponents, files });
+    await respond({ components: pmComponents, files });
   } else {
-    await safeUpdate(interaction, { components: pmComponents });
+    await respond({ components: pmComponents });
   }
 }
 
@@ -641,14 +661,16 @@ export async function promptNowPlayingCompletionPick(
   interaction: ButtonInteraction,
   ownerId: string,
   sessionId: string,
+  mode: CompletionResponseMode = "update",
 ): Promise<void> {
+  const respond = buildCompletionResponder(interaction, mode);
   const current = await Member.getNowPlaying(ownerId);
   if (!current.length) {
     const container = buildTextContainer("Your Now Playing list is empty.");
     const pmComponents = await withPmNowPlayingList(
       ownerId, interaction.guildId, [container],
     );
-    await safeUpdate(interaction, { components: pmComponents });
+    await respond({ components: pmComponents });
     return;
   }
 
@@ -657,11 +679,11 @@ export async function promptNowPlayingCompletionPick(
     const entry = current[0];
     if (!session || !entry?.gameId) {
       const container = buildTextContainer("Unable to start completion flow.");
-      await safeUpdate(interaction, { components: [container] });
+      await respond({ components: [container] });
       return;
     }
     session.gameId = entry.gameId;
-    await renderNowPlayingCompletionConfig(interaction, sessionId, session);
+    await renderNowPlayingCompletionConfig(interaction, sessionId, session, mode);
     return;
   }
 
@@ -679,7 +701,7 @@ export async function promptNowPlayingCompletionPick(
     thumbnailsByGameId,
   );
   const pmComponents = await withPmNowPlayingList(ownerId, interaction.guildId, components);
-  await safeUpdate(interaction, buildComponentPayload(pmComponents as any, files));
+  await respond(buildComponentPayload(pmComponents as any, files));
 }
 
 @Discord()
@@ -703,6 +725,17 @@ export class NowPlayingCompletionHandlers {
     setNowPlayingListContext(ownerId, interaction.message);
     const sessionId = createNowPlayingCompletionWizardSession(ownerId, true);
     await promptNowPlayingCompletionPick(interaction, ownerId, sessionId);
+  }
+
+  @ButtonComponent({ id: /^nowplaying-view-complete:\d+$/ })
+  async handleNowPlayingViewComplete(interaction: ButtonInteraction): Promise<void> {
+    const segs = assertCustomIdSegments(interaction, 1);
+    if (!segs) return;
+    const [ownerId] = segs;
+    if (await replyIfNotOwner(interaction, ownerId, "This completion prompt isn't for you.")) return;
+    setNowPlayingListContext(ownerId, interaction.message);
+    const sessionId = createNowPlayingCompletionWizardSession(ownerId, true);
+    await promptNowPlayingCompletionPick(interaction, ownerId, sessionId, "reply");
   }
 
   @ButtonComponent({ id: /^nowplaying-complete-done:\d+$/ })

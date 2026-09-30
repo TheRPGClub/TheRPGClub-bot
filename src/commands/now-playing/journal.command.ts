@@ -31,8 +31,10 @@ import {
 import {
   buildActionButton,
   buildButtonRow,
+  buildSelectOptions,
   buildSelectRow,
 } from "../../functions/uiComponents.js";
+import { isPositiveInt } from "../../utilities/ValidationUtils.js";
 import {
   buildComponentsV2Flags,
   buildTextContainer,
@@ -53,6 +55,7 @@ import {
   NOW_PLAYING_JOURNAL_EDIT_MODAL_ID,
   NOW_PLAYING_JOURNAL_TITLE_INPUT_ID,
   NOW_PLAYING_JOURNAL_BODY_INPUT_ID,
+  NOW_PLAYING_VIEW_JOURNAL_SELECT_PREFIX,
 } from "./nowPlayingIds.js";
 import {
   journalOwnerMenu,
@@ -69,6 +72,35 @@ import {
   deleteLatestJournalMessageInChannel,
   trackJournalReply,
 } from "./nowPlayingMessageService.js";
+
+function buildNowPlayingJournalAddModal(
+  ownerId: string,
+  gameId: number | string,
+  page: number | string,
+): ComponentsModalBuilder {
+  const modal = new ComponentsModalBuilder()
+    .setCustomId(`${NOW_PLAYING_JOURNAL_MODAL_ID}:${ownerId}:${gameId}:${page}`)
+    .setTitle("Add Journal Entry");
+  modal.addActionRowComponents(
+    new ComponentsActionRowBuilder<ComponentsTextInputBuilder>().addComponents(
+      new ComponentsTextInputBuilder()
+        .setCustomId(NOW_PLAYING_JOURNAL_TITLE_INPUT_ID)
+        .setLabel("Title (optional)")
+        .setStyle(ApiTextInputStyle.Short)
+        .setRequired(false)
+        .setMaxLength(120),
+    ),
+    new ComponentsActionRowBuilder<ComponentsTextInputBuilder>().addComponents(
+      new ComponentsTextInputBuilder()
+        .setCustomId(NOW_PLAYING_JOURNAL_BODY_INPUT_ID)
+        .setLabel("Entry")
+        .setStyle(ApiTextInputStyle.Paragraph)
+        .setRequired(true)
+        .setMaxLength(2000),
+    ),
+  );
+  return modal;
+}
 
 @Discord()
 export class NowPlayingJournalCommand {
@@ -228,28 +260,7 @@ export class NowPlayingJournalCommand {
       await safeReply(interaction, buildTextReply("Only the owner can add journal entries.", false));
       return;
     }
-    const modal = new ComponentsModalBuilder()
-      .setCustomId(`${NOW_PLAYING_JOURNAL_MODAL_ID}:${ownerId}:${gameIdRaw}:${pageRaw}`)
-      .setTitle("Add Journal Entry");
-    modal.addActionRowComponents(
-      new ComponentsActionRowBuilder<ComponentsTextInputBuilder>().addComponents(
-        new ComponentsTextInputBuilder()
-          .setCustomId(NOW_PLAYING_JOURNAL_TITLE_INPUT_ID)
-          .setLabel("Title (optional)")
-          .setStyle(ApiTextInputStyle.Short)
-          .setRequired(false)
-          .setMaxLength(120),
-      ),
-      new ComponentsActionRowBuilder<ComponentsTextInputBuilder>().addComponents(
-        new ComponentsTextInputBuilder()
-          .setCustomId(NOW_PLAYING_JOURNAL_BODY_INPUT_ID)
-          .setLabel("Entry")
-          .setStyle(ApiTextInputStyle.Paragraph)
-          .setRequired(true)
-          .setMaxLength(2000),
-      ),
-    );
-    await interaction.showModal(modal);
+    await interaction.showModal(buildNowPlayingJournalAddModal(ownerId, gameIdRaw, pageRaw));
     await journalOwnerMenu.dismiss(ownerId);
   }
 
@@ -499,6 +510,57 @@ export class NowPlayingJournalCommand {
     await refreshJournalMessages(interaction.client, ownerId, gameId);
   }
 
+  @ButtonComponent({ id: /^nowplaying-view-journal:\d+$/ })
+  async handleNowPlayingViewJournal(interaction: ButtonInteraction): Promise<void> {
+    const segs = assertCustomIdSegments(interaction, 1);
+    if (!segs) return;
+    const [ownerId] = segs;
+    if (await replyIfNotOwner(interaction, ownerId, "Only the owner can add journal entries.")) {
+      return;
+    }
+    const entries = await Member.getNowPlaying(ownerId).then(getDisplayNowPlayingEntries);
+    if (!entries.length) {
+      await safeReply(interaction, buildTextReply("Your Now Playing list is empty.", true));
+      return;
+    }
+    if (entries.length === 1) {
+      await interaction.showModal(buildNowPlayingJournalAddModal(ownerId, entries[0].gameId, 1));
+      return;
+    }
+    const select = new StringSelectMenuBuilder()
+      .setCustomId(`${NOW_PLAYING_VIEW_JOURNAL_SELECT_PREFIX}:${ownerId}`)
+      .setPlaceholder("Select a game to journal")
+      .addOptions(buildSelectOptions(entries.map((e) => ({
+        label: e.title,
+        value: String(e.gameId),
+      }))));
+    await safeReply(interaction, {
+      components: [
+        buildTextContainer("## Game Journal\nSelect a game to write an entry for."),
+        buildSelectRow(select),
+      ],
+      flags: buildComponentsV2Flags(true),
+    });
+  }
+
+  @SelectMenuComponent({ id: /^nowplaying-view-journal-select:\d+$/ })
+  async handleNowPlayingViewJournalSelect(
+    interaction: StringSelectMenuInteraction,
+  ): Promise<void> {
+    const segs = assertCustomIdSegments(interaction, 1);
+    if (!segs) return;
+    const [ownerId] = segs;
+    if (await replyIfNotOwner(interaction, ownerId, "Only the owner can add journal entries.")) {
+      return;
+    }
+    const gameId = Number(interaction.values[0]);
+    if (!isPositiveInt(gameId)) {
+      await safeReply(interaction, buildTextReply("Invalid game selection.", true));
+      return;
+    }
+    await interaction.showModal(buildNowPlayingJournalAddModal(ownerId, gameId, 1));
+  }
+
   @ButtonComponent({ id: /^nowplaying-edit-menu-start-journal:\d+$/ })
   async handleNowPlayingEditMenuStartJournal(interaction: ButtonInteraction): Promise<void> {
     const segs = assertCustomIdSegments(interaction, 1);
@@ -549,28 +611,7 @@ export class NowPlayingJournalCommand {
       });
       return;
     }
-    const modal = new ComponentsModalBuilder()
-      .setCustomId(`${NOW_PLAYING_JOURNAL_MODAL_ID}:${ownerId}:${gameId}:1`)
-      .setTitle("Add Journal Entry");
-    modal.addActionRowComponents(
-      new ComponentsActionRowBuilder<ComponentsTextInputBuilder>().addComponents(
-        new ComponentsTextInputBuilder()
-          .setCustomId(NOW_PLAYING_JOURNAL_TITLE_INPUT_ID)
-          .setLabel("Title (optional)")
-          .setStyle(ApiTextInputStyle.Short)
-          .setRequired(false)
-          .setMaxLength(120),
-      ),
-      new ComponentsActionRowBuilder<ComponentsTextInputBuilder>().addComponents(
-        new ComponentsTextInputBuilder()
-          .setCustomId(NOW_PLAYING_JOURNAL_BODY_INPUT_ID)
-          .setLabel("Entry")
-          .setStyle(ApiTextInputStyle.Paragraph)
-          .setRequired(true)
-          .setMaxLength(2000),
-      ),
-    );
-    await interaction.showModal(modal);
+    await interaction.showModal(buildNowPlayingJournalAddModal(ownerId, gameId, 1));
     await nowPlayingOwnerMenu.dismiss(ownerId);
   }
 }

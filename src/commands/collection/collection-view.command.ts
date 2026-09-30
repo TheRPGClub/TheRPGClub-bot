@@ -41,6 +41,9 @@ import { flattenErrorMessages } from "../imports/import-scaffold.service.js";
 import { logError, logInfo } from "../../utilities/LogUtils.js";
 import { safeIgnore } from "../../utilities/AsyncUtils.js";
 import { buildTextInputRow } from "../../functions/uiComponents.js";
+import { startPlayingEntry } from "../now-playing/nowPlayingStart.service.js";
+import { assertCustomIdSegments } from "../../utilities/CustomIdUtils.js";
+import { isPositiveInt } from "../../utilities/ValidationUtils.js";
 import {
   buildAllCollectionsOverviewMessages,
   buildCollectionOverviewResponse,
@@ -374,6 +377,29 @@ export class CollectionViewCommand {
       components: response.components,
       flags: buildComponentsV2EditFlags(),
     }));
+  }
+
+  @SelectMenuComponent({ id: /^collection-start-playing-v1:\d+$/ })
+  async onCollectionStartPlaying(interaction: StringSelectMenuInteraction): Promise<void> {
+    const segs = assertCustomIdSegments(interaction, 1);
+    if (!segs) return;
+    const [ownerId] = segs;
+    if (await replyIfNotOwner(interaction, ownerId, "This collection view is not for you.")) {
+      return;
+    }
+
+    const entryId = Number(interaction.values[0]);
+    const entry = isPositiveInt(entryId)
+      ? await UserGameCollection.getEntryForUser(entryId, ownerId)
+      : null;
+    if (!entry) {
+      await safeReply(
+        interaction,
+        buildTextReply("That collection entry no longer exists.", true),
+      );
+      return;
+    }
+    await startPlayingEntry(interaction, entry);
   }
 
   @ButtonComponent({

@@ -76,5 +76,5 @@ export type NowPlayingMessageComponents = Array<
 export type NowPlayingListComponents = ContainerBuilder[];
 
 export type NowPlayingPayloadComponents = Array<
-  ContainerBuilder | ActionRowBuilder<StringSelectMenuBuilder>
+  ContainerBuilder | ActionRowBuilder<StringSelectMenuBuilder> | ActionRowBuilder<ButtonBuilder>
 >;

@@ -4,11 +4,13 @@ import {
   CommandInteraction,
   ModalBuilder,
   ModalSubmitInteraction,
+  StringSelectMenuInteraction,
 } from "discord.js";
 import {
   ButtonComponent,
   Discord,
   ModalComponent,
+  SelectMenuComponent,
   Slash,
   SlashGroup,
   SlashOption,
@@ -27,6 +29,10 @@ import {
   buildTextReply,
 } from "../../functions/ComponentsV2Utils.js";
 import { buildTextInputRow } from "../../functions/uiComponents.js";
+import UserGameBacklog from "../../classes/UserGameBacklog.js";
+import { startPlayingEntry } from "../now-playing/nowPlayingStart.service.js";
+import { assertCustomIdSegments } from "../../utilities/CustomIdUtils.js";
+import { isPositiveInt } from "../../utilities/ValidationUtils.js";
 import { safeIgnore } from "../../utilities/AsyncUtils.js";
 import { logError } from "../../utilities/LogUtils.js";
 import {
@@ -110,6 +116,24 @@ export class BacklogViewCommand {
         safeReply(interaction, buildTextReply("Failed to display backlog. Please try again.", isEphemeral)),
       );
     }
+  }
+
+  @SelectMenuComponent({ id: /^backlog-start-playing-v1:\d+$/ })
+  async onBacklogStartPlaying(interaction: StringSelectMenuInteraction): Promise<void> {
+    const segs = assertCustomIdSegments(interaction, 1);
+    if (!segs) return;
+    const [ownerId] = segs;
+    if (await replyIfNotOwner(interaction, ownerId, "This backlog view is not for you.")) return;
+
+    const entryId = Number(interaction.values[0]);
+    const entry = isPositiveInt(entryId)
+      ? await UserGameBacklog.getEntryForUser(entryId, ownerId)
+      : null;
+    if (!entry) {
+      await safeReply(interaction, buildTextReply("That backlog entry no longer exists.", true));
+      return;
+    }
+    await startPlayingEntry(interaction, entry);
   }
 
   @ButtonComponent({

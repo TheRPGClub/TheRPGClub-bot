@@ -147,6 +147,11 @@ export function buildGameProfileActionRow(
     label: "Add to Backlog",
     style: ButtonStyle.Secondary,
   }));
+  primaryButtons.push(buildActionButton({
+    customId: `gamedb-action:collection:${gameId}`,
+    label: "Add to Collection",
+    style: ButtonStyle.Secondary,
+  }));
   rows.push(buildButtonRow(...primaryButtons));
   return rows;
 }

@@ -3,11 +3,14 @@ import {
   ButtonBuilder,
   ButtonInteraction,
   ButtonStyle,
+  StringSelectMenuBuilder,
 } from "discord.js";
 import { ContainerBuilder } from "@discordjs/builders";
 import UserGameCollection, {
   type CollectionOwnershipType,
+  type IUserGameCollectionEntry,
 } from "../../classes/UserGameCollection.js";
+import { buildStartPlayingSelectRow } from "../../functions/StartPlayingSelect.js";
 import { flattenErrorMessages } from "../imports/import-scaffold.service.js";
 import { safeV2TextContent } from "../../functions/ComponentsV2Utils.js";
 import { safeDeferUpdate } from "../../functions/InteractionUtils.js";
@@ -33,6 +36,7 @@ import {
   COLLECTION_LIST_FILTER_PREFIX,
   COLLECTION_LIST_FILTER_PANEL_PREFIX,
   COLLECTION_LIST_FILTER_MODAL_PREFIX,
+  COLLECTION_START_PLAYING_PREFIX,
 } from "../../config/customIdPrefixes.js";
 import { COLLECTION_LIST_PAGE_SIZE } from "../../config/pagination.js";
 export const COLLECTION_FILTER_TITLE_INPUT_ID = "collection-filter-title";
@@ -517,8 +521,31 @@ async function buildCollectionListResponse(params: {
   }
 
   logInfo("collection-list", { step: "components built", count: components.length });
+  if (params.viewerUserId !== params.targetUserId) {
+    // eslint-disable-next-line local/dynamic-components-require-chunking
+    return { components };
+  }
+  const startPlayingRow = buildCollectionStartPlayingRow(params.targetUserId, pageEntries);
   // eslint-disable-next-line local/dynamic-components-require-chunking
-  return { components };
+  return { components: [...components, startPlayingRow] };
+}
+
+export function buildCollectionStartPlayingCustomId(ownerId: string): string {
+  return `${COLLECTION_START_PLAYING_PREFIX}:${ownerId}`;
+}
+
+function buildCollectionStartPlayingRow(
+  ownerId: string,
+  pageEntries: IUserGameCollectionEntry[],
+): ActionRowBuilder<StringSelectMenuBuilder> {
+  return buildStartPlayingSelectRow(
+    buildCollectionStartPlayingCustomId(ownerId),
+    pageEntries.map((entry) => ({
+      entryId: entry.entryId,
+      label: entry.title,
+      platformName: entry.platformName,
+    })),
+  );
 }
 
 export async function buildCollectionListResponseForTests(params: {
