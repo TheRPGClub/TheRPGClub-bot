@@ -25,6 +25,7 @@ import {
 } from "./VotingEventService.js";
 import {
   castSandboxVote,
+  isFixtureGameId,
   parseSandboxState,
   resolveSandboxTie,
   sandboxTally,
@@ -80,8 +81,8 @@ export async function loadSandbox(ownerId: string): Promise<IVotingSandboxState 
   return state;
 }
 
+/** Persists first, so memory never holds a state the persisted row lacks. */
 async function saveSandbox(state: IVotingSandboxState): Promise<void> {
-  sandboxes.set(state.ownerId, state);
   await persistedSessionStore.save({
     kind: SESSION_KIND,
     sessionId: SESSION_ID,
@@ -89,6 +90,7 @@ async function saveSandbox(state: IVotingSandboxState): Promise<void> {
     location: { channelId: null, guildId: TEST_GUILD_ID || null },
     state,
   });
+  sandboxes.set(state.ownerId, state);
 }
 
 /** Runs `task` after any earlier one for the same admin, so writes never interleave. */
@@ -120,8 +122,10 @@ export function mutateSandbox<T>(
     if (!state || (sandboxId && state.id !== sandboxId)) {
       throw new UserFacingError(sandboxId ? SANDBOX_ENDED_MESSAGE : NO_SANDBOX_MESSAGE);
     }
-    const result = change(state);
-    await saveSandbox(state);
+    // A change that throws partway, or a save that fails, leaves the sandbox as it was.
+    const draft = structuredClone(state);
+    const result = change(draft);
+    await saveSandbox(draft);
     return result;
   });
 }
@@ -275,6 +279,7 @@ export function buildSandboxEventContext(state: IVotingSandboxState): IVotingEve
     panelIds: buildSandboxPanelIds(target),
     panelNotice: buildSandboxPanelNotice(state),
     tieSelectId: (_round, category) => buildSandboxTieSelectId(target, category),
+    hasCover: (gameId) => !isFixtureGameId(gameId),
     recordWinners: (client) => postSandboxDecided(client, target),
   };
 }

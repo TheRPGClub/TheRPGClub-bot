@@ -240,9 +240,10 @@ export class VoteSandboxCommand {
     interaction: CommandInteraction,
   ): Promise<void> {
     if (!(await beginAdminStep(interaction))) return;
-    const choice = EVENT_CHOICES.find((entry) => entry.value === kind);
-    if (!choice) return;
-    await handleSandboxEvent(interaction, choice.value);
+    await handleSandboxEvent(
+      interaction,
+      EVENT_CHOICES.find((entry) => entry.value === kind)?.value ?? null,
+    );
   }
 
   @Slash({ description: "Retry sandbox events that failed to post", name: "deliver" })

@@ -143,6 +143,11 @@ function monthYearOf(date: Date): string {
   return date.toLocaleString("en-US", { month: "long", year: "numeric", timeZone: "UTC" });
 }
 
+/** True for the made-up games fixtures use, which have no GameDB row or cover. */
+export function isFixtureGameId(gameId: number): boolean {
+  return gameId > FIXTURE_GAME_ID_BASE && gameId <= FIXTURE_GAME_ID_BASE + 1000;
+}
+
 function fixtureSeeds(kind: NominationKind, count: number): ISandboxNominationSeed[] {
   const label = nominationKindLabel(kind);
   const offset = kind === "gotm" ? 0 : 500;

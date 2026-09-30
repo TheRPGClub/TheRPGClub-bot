@@ -214,3 +214,28 @@ test("a sandbox restored from the persisted row keeps taking votes", async (t) =
   const saved = JSON.parse(rows.get(ownerId) ?? "{}") as { votes: unknown[] };
   assert.equal(saved.votes.length, 1);
 });
+
+test("a step that throws partway, or fails to save, changes nothing", async (t) => {
+  mockStore(t);
+  const ownerId = nextOwner();
+  await startOpenSandbox(ownerId);
+
+  await assert.rejects(
+    mutateSandbox(ownerId, (state) => {
+      seedSandboxOutcome(state, "gotm", "winner", new Date());
+      seedSandboxOutcome(state, "nr-gotm", "three-way-tie", new Date());
+      throw new Error("second category refused");
+    }),
+    /second category refused/,
+  );
+  assert.equal((await loadSandbox(ownerId))?.votes.length, 0);
+
+  t.mock.method(persistedSessionStore, "save", async () => {
+    throw new Error("API down");
+  });
+  await assert.rejects(
+    mutateSandbox(ownerId, (state) => seedSandboxOutcome(state, "gotm", "winner", new Date())),
+    /API down/,
+  );
+  assert.equal((await loadSandbox(ownerId))?.votes.length, 0);
+});

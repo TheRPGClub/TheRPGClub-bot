@@ -129,16 +129,29 @@ async function loadSourceSeeds(
   return seeds;
 }
 
+async function replyWithError(
+  interaction: CommandInteraction,
+  label: string,
+  err: unknown,
+): Promise<void> {
+  await safeReply(interaction, buildErrorReply(buildApiErrorMessage(label, err), true));
+}
+
 async function replyWithDelivery(
   interaction: CommandInteraction,
   heading: string,
 ): Promise<void> {
   const ownerId = interaction.user.id;
-  const delivery = await deliverSandboxOutbox(interaction.client, ownerId);
-  const state = await loadSandbox(ownerId);
   const sections = [heading];
-  if (delivery.length) sections.push(`**Delivered**\n${delivery.join("\n")}`);
-  if (state) sections.push(buildSandboxStatusText(state));
+  try {
+    const delivery = await deliverSandboxOutbox(interaction.client, ownerId);
+    const state = await loadSandbox(ownerId);
+    if (delivery.length) sections.push(`**Delivered**\n${delivery.join("\n")}`);
+    if (state) sections.push(buildSandboxStatusText(state));
+  } catch (err) {
+    await replyWithError(interaction, `${heading}\nCould not deliver the queued events`, err);
+    return;
+  }
   await safeReply(interaction, buildTextReply(sections.join("\n\n"), true));
 }
 
@@ -155,7 +168,7 @@ async function runStep(
   try {
     heading = await step();
   } catch (err) {
-    await safeReply(interaction, buildErrorReply(buildApiErrorMessage(label, err), true));
+    await replyWithError(interaction, label, err);
     return;
   }
   await replyWithDelivery(interaction, heading);
@@ -190,7 +203,13 @@ export async function handleSandboxStart(
 }
 
 export async function handleSandboxStatus(interaction: CommandInteraction): Promise<void> {
-  const state = await loadSandbox(interaction.user.id);
+  let state: IVotingSandboxState | null;
+  try {
+    state = await loadSandbox(interaction.user.id);
+  } catch (err) {
+    await replyWithError(interaction, "Could not load the voting sandbox", err);
+    return;
+  }
   await safeReply(
     interaction,
     buildTextReply(
@@ -259,8 +278,12 @@ export async function handleSandboxClose(interaction: CommandInteraction): Promi
 
 export async function handleSandboxEvent(
   interaction: CommandInteraction,
-  kind: VotingEventKind,
+  kind: VotingEventKind | null,
 ): Promise<void> {
+  if (!kind) {
+    await safeReply(interaction, buildTextReply("Please choose a voting event kind.", true));
+    return;
+  }
   await runStep(interaction, "Could not queue the event", async () => {
     await mutateSandbox(interaction.user.id, (state) => queueSandboxEvent(state, kind));
     return `Queued \`${kind}\` without changing the round, so its handler sees the ` +
@@ -290,9 +313,6 @@ export async function handleSandboxEnd(interaction: CommandInteraction): Promise
       ),
     );
   } catch (err) {
-    await safeReply(
-      interaction,
-      buildErrorReply(buildApiErrorMessage("Could not end the voting sandbox", err), true),
-    );
+    await replyWithError(interaction, "Could not end the voting sandbox", err);
   }
 }

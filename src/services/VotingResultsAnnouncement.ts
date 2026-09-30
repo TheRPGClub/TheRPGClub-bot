@@ -49,6 +49,8 @@ export interface IAnnounceResultsOptions {
   rehearsal?: boolean;
   /** Where the tallies and nominations are read; the API unless the sandbox runs. */
   source?: IVotingDataSource;
+  /** False for a game with no GameDB images to fetch, such as a sandbox fixture. */
+  hasCover?: (gameId: number) => boolean;
 }
 
 /**
@@ -181,7 +183,7 @@ export async function announceVotingResults(
       }
     }
     const container = buildTextContainer(text);
-    if (winner) {
+    if (winner && (options.hasCover?.(winner.gamedbGameId) ?? true)) {
       files.push(...(await addWinnerCovers(container, [winner.gamedbGameId])));
     }
     await sendable.send({

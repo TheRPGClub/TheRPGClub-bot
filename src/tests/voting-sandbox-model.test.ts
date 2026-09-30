@@ -4,6 +4,7 @@ import {
   castSandboxVote,
   closeSandboxVoting,
   createSandboxState,
+  isFixtureGameId,
   openSandboxVoting,
   parseSandboxState,
   remindSandboxNominations,
@@ -231,6 +232,13 @@ test("the next round exists only once the sandbox round is decided", () => {
   assert.ok((next?.votingOpensAt.getTime() ?? 0) > NOW.getTime());
 });
 
+test("isFixtureGameId marks only fixture games", () => {
+  const state = sandbox();
+  assert.ok(state.nominations.gotm.every((n) => isFixtureGameId(n.gameId)));
+  assert.ok(state.nominations["nr-gotm"].every((n) => isFixtureGameId(n.gameId)));
+  assert.equal(isFixtureGameId(42), false);
+});
+
 test("parseSandboxState round-trips JSON and rejects anything else", () => {
   const state = votingSandbox();
   seedSandboxOutcome(state, "gotm", "tie", NOW);
@@ -245,5 +253,5 @@ test("resolveSandboxGuilds registers only in the test guild", () => {
   assert.deepEqual(resolveSandboxGuilds(true, "123"), ["123"]);
   assert.deepEqual(resolveSandboxGuilds(false, ""), []);
   assert.deepEqual(resolveSandboxGuilds(false, "123"), []);
-  assert.deepEqual(resolveSandboxGuilds(), []);
+  assert.deepEqual(resolveSandboxGuilds(true, ""), []);
 });
