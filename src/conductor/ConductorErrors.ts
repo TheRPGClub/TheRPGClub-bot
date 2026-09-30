@@ -1,4 +1,5 @@
 import {
+  buildAnyErrorMessage,
   buildApiErrorMessage,
   buildDiscordErrorMessage,
   type IErrorMessageOptions,
@@ -17,4 +18,9 @@ export function conductorApiError(label: string, err: unknown): string {
 
 export function conductorDiscordError(label: string, err: unknown): string {
   return buildDiscordErrorMessage(label, err, CONDUCTOR_ERROR_OPTIONS);
+}
+
+/** Picks the formatter for a failure that may come from either Discord or an HTTP download. */
+export function conductorAnyError(label: string, err: unknown): string {
+  return buildAnyErrorMessage(label, err, CONDUCTOR_ERROR_OPTIONS);
 }

@@ -57,6 +57,7 @@ function snapshot(overrides: Partial<IMessageSnapshot> = {}): IMessageSnapshot {
     interactionUserId: "100",
     embeds: [],
     components: [],
+    attachments: [],
     ...overrides,
   };
 }

@@ -12,6 +12,7 @@ import {
   type ModalSubmitInteraction,
   type SendableChannels,
 } from "discord.js";
+import axios from "axios";
 import { ButtonComponent, Discord, ModalComponent, Slash, SlashOption } from "discordx";
 import {
   CONDUCTOR_ABORT_PREFIX,
@@ -36,7 +37,11 @@ import {
 } from "../functions/InteractionUtils.js";
 import { parsePreviewReadyAnnouncement } from "../config/previewMode.js";
 import { checkAnnouncementSource, checkConductorAccess } from "./ConductorAccess.js";
-import { conductorApiError, conductorDiscordError } from "./ConductorErrors.js";
+import {
+  conductorAnyError,
+  conductorApiError,
+  conductorDiscordError,
+} from "./ConductorErrors.js";
 import {
   checkConductorChannelAccess,
   formatChannelAccessProblem,
@@ -60,6 +65,7 @@ import {
   confirmedResult,
   failedResult,
   judgeStep,
+  mirrorAttachmentUrl,
   type IMessageSnapshot,
   type IObservedOutput,
   type IStepResult,
@@ -71,6 +77,12 @@ import { findUncheckedSteps, parseTestPlan } from "./TestPlanParser.js";
 
 /** Newest messages read back per channel; a step's window is far smaller. */
 const OBSERVATION_FETCH_LIMIT = 100;
+
+/** How long one mirror payload attachment may take to download. */
+const MIRROR_ATTACHMENT_TIMEOUT_MS = 10_000;
+
+/** Largest mirror payload attachment read back; a real one is a few kilobytes. */
+const MIRROR_ATTACHMENT_MAX_BYTES = 1_000_000;
 
 type AnyConductorInteraction = CommandInteraction | ButtonInteraction | ModalSubmitInteraction;
 
@@ -155,7 +167,22 @@ export function snapshotMessage(message: Message): IMessageSnapshot {
     interactionUserId: message.interactionMetadata?.user.id ?? null,
     embeds: message.embeds.map((embed) => embed.toJSON()),
     components: message.components.map((component) => component.toJSON()),
+    attachments: message.attachments.map((attachment) => ({
+      name: attachment.name,
+      url: attachment.url,
+    })),
   };
+}
+
+/** Downloads a mirror post's full payload, kept as text for the parser to read. */
+async function downloadMirrorAttachment(url: string): Promise<string> {
+  const response = await axios.get<string>(url, {
+    responseType: "text",
+    transformResponse: [(data: string) => data],
+    timeout: MIRROR_ATTACHMENT_TIMEOUT_MS,
+    maxContentLength: MIRROR_ATTACHMENT_MAX_BYTES,
+  });
+  return response.data;
 }
 
 /** One line per channel, plus the full request and response of any fetch that failed. */
@@ -167,8 +194,15 @@ function describeAccessProblems(problems: IChannelAccessProblem[]): string {
   return `The conductor cannot run until its channel access is fixed.\n${lines.join("\n")}`;
 }
 
-/** Reads back the test and mirror channels and keeps what the bot under test posted. */
-async function collectObservations(client: Client<true>): Promise<IObservedOutput[]> {
+/**
+ * Reads back the test and mirror channels and keeps what the bot under test posted.
+ * Mirror payload attachments are downloaded only for posts newer than `since`, the
+ * step window's start; older posts cannot belong to the step being checked.
+ */
+async function collectObservations(
+  client: Client<true>,
+  since: number,
+): Promise<IObservedOutput[]> {
   const { settings } = getConductorRuntime();
   const context = {
     selfId: client.user.id,
@@ -183,8 +217,16 @@ async function collectObservations(client: Client<true>): Promise<IObservedOutpu
     if (!channel?.isTextBased() || channel.isDMBased()) continue;
     if (channel.guildId !== settings.testGuildId) continue;
     const messages = await channel.messages.fetch({ limit: OBSERVATION_FETCH_LIMIT });
-    for (const message of messages.values()) {
-      const output = classifySnapshot(snapshotMessage(message), context);
+    const snapshots = await Promise.all([...messages.values()].map(async (message) => {
+      const snapshot = snapshotMessage(message);
+      const url = message.createdTimestamp > since
+        ? mirrorAttachmentUrl(snapshot, context)
+        : null;
+      if (url) snapshot.mirrorAttachment = await downloadMirrorAttachment(url);
+      return snapshot;
+    }));
+    for (const snapshot of snapshots) {
+      const output = classifySnapshot(snapshot, context);
       if (output) outputs.push(output);
     }
   }
@@ -381,9 +423,9 @@ async function checkStepLocked(interaction: ButtonInteraction): Promise<void> {
   const step = run.steps[run.current];
   let outputs: IObservedOutput[];
   try {
-    outputs = await collectObservations(interaction.client);
+    outputs = await collectObservations(interaction.client, run.windowStart);
   } catch (err: unknown) {
-    const message = conductorDiscordError("Reading back the test channels failed", err);
+    const message = conductorAnyError("Reading back the test channels failed", err);
     await safeFollowUpIfSettled(interaction, publicText(message));
     return;
   }
