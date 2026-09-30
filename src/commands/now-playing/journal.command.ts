@@ -401,14 +401,12 @@ export class NowPlayingJournalCommand {
     }
     let status = "-# Delete cancelled. Nothing was deleted.";
     if (action === "yes") {
-      const entryId = Number(entryIdRaw);
-      const entry = await Member.getGameJournalEntryForUser(ownerId, entryId);
-      const removed = entry ? await Member.deleteGameJournalEntry(ownerId, entryId) : false;
-      if (!entry || !removed) {
+      const removed = await Member.deleteGameJournalEntry(ownerId, Number(entryIdRaw));
+      if (!removed) {
         await safeReply(interaction, buildTextReply("That journal entry was not found.", false));
         return;
       }
-      status = `-# Deleted **${formatJournalEntryTitle(entry)}**.`;
+      status = `-# Deleted **${formatJournalEntryTitle(removed)}**.`;
     }
     const row = await this.buildManageJournalButtonRow(ownerId, Number(gameIdRaw), Number(pageRaw));
     await safeUpdate(interaction, {

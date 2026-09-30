@@ -769,16 +769,18 @@ export default class Member {
     return response != null;
   }
 
-  static async deleteGameJournalEntry(userId: string, entryId: number): Promise<boolean> {
+  // Returns the deleted entry so callers can name it, or null when nothing was deleted.
+  static async deleteGameJournalEntry(
+    userId: string,
+    entryId: number,
+  ): Promise<IGameJournalEntry | null> {
     // Verify ownership before deleting -- the API keys deletes off the entry id.
-    const existing = await apiGet<JournalEntryShowResponse>(
-      `/api/v1/journal_entries/${entryId}`,
-    );
-    if (!existing || existing.data.user_id !== userId) return false;
+    const existing = await this.getGameJournalEntryForUser(userId, entryId);
+    if (!existing) return null;
     const result = await apiDelete<{ deleted: boolean }>(
       `/api/v1/journal_entries/${entryId}`,
     );
-    return result?.deleted === true;
+    return result?.deleted === true ? existing : null;
   }
 
   static async updateNowPlayingSort(
