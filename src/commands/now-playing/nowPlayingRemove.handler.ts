@@ -1,5 +1,6 @@
 import {
   ButtonInteraction,
+  type ContainerBuilder,
   MessageFlags,
   StringSelectMenuInteraction,
 } from "discord.js";
@@ -10,10 +11,13 @@ import {
   extractErrorMessage,
   replyIfNotOwner,
   safeDeferReply,
+  safeEditReply,
+  safeFollowUpIfSettled,
   safeReply,
   safeUpdate,
 } from "../../functions/InteractionUtils.js";
 import {
+  buildComponentsV2EditFlags,
   buildComponentsV2Flags,
   buildTextContainer,
 } from "../../functions/ComponentsV2Utils.js";
@@ -21,6 +25,7 @@ import { getDisplayNowPlayingEntries } from "../../functions/NowPlayingUtils.js"
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
 import { assertCustomIdSegments } from "../../utilities/CustomIdUtils.js";
 import { safeIgnore } from "../../utilities/AsyncUtils.js";
+import { buildApiErrorMessage } from "../../utilities/ApiErrorUtils.js";
 import { NOW_PLAYING_GALLERY_MAX } from "./nowPlayingIds.js";
 import {
   buildComponentPayload,
@@ -132,6 +137,10 @@ async function promptRemoveNowPlaying(
   }
 }
 
+const REMOVE_FAILED_TEXT = "Failed to remove that game (it may have been removed already).";
+const REMOVE_ERROR_LABEL = "Could not remove from Now Playing";
+const REDRAW_ERROR_LABEL = "Could not reload the remove screen";
+
 @Discord()
 export class NowPlayingRemoveHandlers {
   @ButtonComponent({ id: /^np-remove:[^:]+:\d+$/ })
@@ -155,7 +164,7 @@ export class NowPlayingRemoveHandlers {
     try {
       const removed = await Member.removeNowPlaying(ownerId, gameId);
       if (!removed) {
-        const container = buildTextContainer("Failed to remove that game (it may have been removed already).");
+        const container = buildTextContainer(REMOVE_FAILED_TEXT);
         await safeReply(interaction, {
           components: [container],
           flags: buildComponentsV2Flags(true),
@@ -225,28 +234,37 @@ export class NowPlayingRemoveHandlers {
       flags: buildComponentsV2Flags(isEphemeral),
     });
 
+    // A failed removal still redraws the remove screen so its select and Done stay usable.
+    let notice: ContainerBuilder[] = [];
     try {
-      const removed = await Member.removeNowPlaying(ownerId, gameId);
-      if (!removed) {
-        const container = buildTextContainer("Failed to remove that game (it may have been removed already).");
-        safeIgnore(safeReply(interaction, {
-          components: [container],
-          flags: buildComponentsV2Flags(isEphemeral),
-        }));
-        return;
+      if (await Member.removeNowPlaying(ownerId, gameId)) {
+        safeIgnore(refreshNowPlayingListFromContext(interaction, ownerId));
+      } else {
+        notice = [buildTextContainer(REMOVE_FAILED_TEXT)];
       }
-      safeIgnore(refreshNowPlayingListFromContext(interaction, ownerId));
+    } catch (err: unknown) {
+      // The full API error gets its own message: stacked on the remove screen it could pass
+      // the 4000-character Components V2 text limit and the edit would be rejected.
+      const container = buildTextContainer(buildApiErrorMessage(REMOVE_ERROR_LABEL, err));
+      safeIgnore(safeFollowUpIfSettled(interaction, {
+        components: [container],
+        flags: buildComponentsV2Flags(true),
+      }));
+    }
+
+    try {
       const entries = getDisplayNowPlayingEntries(await Member.getNowPlaying(ownerId));
       if (!entries.length) {
         const container = buildTextContainer("Your Now Playing list is empty.");
         const pmComponents = await withPmNowPlayingList(
           ownerId,
           interaction.guildId,
-          [container],
+          [...notice, container],
         );
-        safeIgnore(safeReply(interaction, {
+        safeIgnore(safeEditReply(interaction, {
           components: pmComponents,
-          flags: buildComponentsV2Flags(isEphemeral),
+          attachments: [],
+          flags: buildComponentsV2EditFlags(),
         }));
         return;
       }
@@ -264,18 +282,19 @@ export class NowPlayingRemoveHandlers {
       const pmComponents = await withPmNowPlayingList(
         ownerId,
         interaction.guildId,
-        components,
+        [...notice, ...components],
       );
-      safeIgnore(safeReply(interaction, {
+      safeIgnore(safeEditReply(interaction, {
         ...buildComponentPayload(pmComponents as any, files),
-        flags: buildComponentsV2Flags(isEphemeral),
+        attachments: [],
+        flags: buildComponentsV2EditFlags(),
       }));
-    } catch (err: any) {
-      const msg = extractErrorMessage(err);
-      const container = buildTextContainer(`Could not remove from Now Playing: ${msg}`);
-      safeIgnore(safeReply(interaction, {
-        components: [container],
-        flags: buildComponentsV2Flags(isEphemeral),
+    } catch (err: unknown) {
+      const container = buildTextContainer(buildApiErrorMessage(REDRAW_ERROR_LABEL, err));
+      safeIgnore(safeEditReply(interaction, {
+        components: [...notice, container],
+        attachments: [],
+        flags: buildComponentsV2EditFlags(),
       }));
     }
   }
