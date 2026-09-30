@@ -183,3 +183,34 @@ bash scripts/preview/preview.sh kill
 a PR's latest workflow run brings its preview back, as long as its body still has Testing
 steps. Running the workflow by hand from the Actions tab runs the reaper, which removes a
 preview whose PR is closed.
+
+## Reading preview logs
+
+The preview container and the conductor log only on the desktop. The **Preview logs**
+workflow (`.github/workflows/preview-logs.yml`) collects their recent output on the
+runner with `scripts/preview/collect-logs.sh` and uploads it encrypted to a key whose
+private half stays on the machine that reads the logs. The repository is public, so
+plaintext logs never reach a job log or an artifact. Artifacts expire after a day.
+
+One-time setup, on the machine that will read the logs:
+
+```bash
+bash scripts/preview/fetch-logs.sh init
+```
+
+That makes a key pair in `~/.config/rpgclub-preview-logs/gnupg` (override with
+`PREVIEW_LOGS_GNUPGHOME`) and publishes the public key as the `PREVIEW_LOGS_PUBLIC_KEY`
+repository variable. The private key has no passphrase; the directory's permissions are
+its guard, and it decrypts preview logs and nothing else. Running `init` on a second
+machine replaces the public key, so only the newest machine can read later logs.
+
+Then, any time:
+
+```bash
+bash scripts/preview/fetch-logs.sh 500
+```
+
+It runs the workflow on `main`, waits for it, and prints the last 500 lines of each
+preview container and of the conductor. The conductor section reads the
+`rpgclub-conductor` systemd user unit; set the `CONDUCTOR_UNIT` repository variable if
+yours has another name.
