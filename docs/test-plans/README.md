@@ -15,7 +15,7 @@ are tested only on their cancel, error, or permission paths.
 - `now-playing.md`: /now-playing (the worked example)
 - `collection-1.md`, `collection-2.md`, `collection-3.md`: /collection
 - `collection-import.md`: /collection CSV and Steam imports
-- `backlog-1.md`, `backlog-2.md`: /backlog
+- `backlog-1.md`, `backlog-2.md`, `backlog-3.md`: /backlog, including pick
 - `game-completion-1.md`, `game-completion-2.md`: /game-completion
 - `game-completion-import.md`: /game-completion Completionator import
 - `gamedb-1.md`, `gamedb-2.md`: /gamedb, including its admin subcommands
