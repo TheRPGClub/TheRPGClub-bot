@@ -166,15 +166,9 @@ export function buildApiErrorMessage(
  * cause) get buildApiErrorMessage, and everything else, including discord.js REST
  * failures, gets buildDiscordErrorMessage.
  */
-export function buildAnyErrorMessage(
-  label: string,
-  err: unknown,
-  options?: IErrorMessageOptions,
-): string {
+export function buildAnyErrorMessage(label: string, err: unknown): string {
   const isApiError: boolean = err instanceof UserFacingError ||
     axios.isAxiosError(err) ||
     (err instanceof Error && axios.isAxiosError(err.cause));
-  return isApiError
-    ? buildApiErrorMessage(label, err, options)
-    : buildDiscordErrorMessage(label, err, options);
+  return isApiError ? buildApiErrorMessage(label, err) : buildDiscordErrorMessage(label, err);
 }
