@@ -55,7 +55,7 @@ export interface IBacklogPickResult {
   position: number;
   hltb: HltbCacheEntry | null;
   coverUrl: string | null;
-  /** True once rerolls have gone past every candidate and started over. */
+  /** True when this pick came from going back to the start of the shuffled order. */
   wrapped: boolean;
 }
 
@@ -255,10 +255,9 @@ export async function pickFromBacklog(
   const candidates = await loadBacklogPickCandidates(state);
   if (!candidates.length) return null;
   const order = shuffleBacklogPickCandidates(candidates, state.seed);
-  const start = state.position % order.length;
 
   // Without a playtime limit every candidate qualifies; HLTB is still fetched for display.
-  const found = await findBacklogPick(order, start, async (candidate) => {
+  const found = await findBacklogPick(order, state.position, async (candidate) => {
     if (!state.maxHours) return { hltb: null as HltbCacheEntry | null };
     const hltb = await lookupHltb(candidate.gameId);
     const hours = getHltbPickHours(hltb);
@@ -270,10 +269,12 @@ export async function pickFromBacklog(
   const coverUrl = await lookupCover(found.candidate.gameId, hltb);
   return {
     candidate: found.candidate,
-    position: found.position,
+    position: found.position % order.length,
     hltb,
     coverUrl,
-    // Only a walk that runs past the end of the order has come back to the start.
+    // A walk that runs past the end of the order has come back to the start. A list that
+    // shrank since the last roll lands here too, which is why the notice only says repeats
+    // are possible.
     wrapped: found.position >= order.length,
   };
 }
@@ -317,7 +318,7 @@ export function buildBacklogPickContent(
 
   lines.push("", `-# Filters: ${filterSummary}`);
   if (result.wrapped) {
-    lines.push("-# You have seen every match, so picks are starting over.");
+    lines.push("-# Back to the start of your list, so picks may repeat.");
   }
   return lines.join("\n");
 }

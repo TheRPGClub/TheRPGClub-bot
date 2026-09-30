@@ -90,5 +90,5 @@ test("pick content shows HLTB times and the wrap notice", () => {
   assert.match(content, /Main: 12 Hours/);
   assert.match(content, /Completionist: 40 Hours/);
   assert.match(content, /From your backlog/);
-  assert.match(content, /starting over/);
+  assert.match(content, /picks may repeat/);
 });
