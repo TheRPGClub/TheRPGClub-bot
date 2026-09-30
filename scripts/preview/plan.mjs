@@ -24,11 +24,14 @@ export function planPreview({ action, body, previousBody }) {
 }
 
 /**
- * True when a finished deploy should stay up: the PR is still open and its current
- * body still has a runnable plan. Either can change while the image builds.
+ * Whether a finished deploy should stay up: `yes`, or why not. The PR can close, or
+ * its body lose its Testing steps, while the image builds.
+ *
+ * @returns {Promise<"yes" | "closed" | "untested">}
  */
-export async function isPreviewStillWanted({ github, context, pr }) {
+export async function previewWanted({ github, context, pr }) {
   const { owner, repo } = context.repo;
   const { data } = await github.rest.pulls.get({ owner, repo, pull_number: pr });
-  return data.state === "open" && parseTestPlan(data.body).kind === "ok";
+  if (data.state !== "open") return "closed";
+  return parseTestPlan(data.body).kind === "ok" ? "yes" : "untested";
 }

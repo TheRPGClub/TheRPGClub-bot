@@ -26,18 +26,19 @@ env:
 jobs:
   # Reads the PR body with the parser `/conduct` uses. It sits outside the deploy
   # concurrency group, so a PR with nothing to test never cancels another PR's deploy.
+  # It has no group of its own either: a body edit cancelling a push's run would drop
+  # that push's deploy. Overlapping runs are safe because deploy re-reads the body.
+  # An edit can land on a closed PR, which must not evict another PR's preview.
   plan:
     if: >-
       vars.PR_PREVIEW_ENABLED == 'true'
       && github.event_name == 'pull_request'
       && github.event.action != 'closed'
+      && github.event.pull_request.state == 'open'
       && github.event.pull_request.head.repo.full_name == github.repository
       && (github.event.action != 'edited' || github.event.changes.body != null)
     runs-on: [self-hosted, rpgclub-preview]
     timeout-minutes: 5
-    concurrency:
-      group: pr-preview-plan-${{ github.event.pull_request.number }}
-      cancel-in-progress: true
     outputs:
       deploy: ${{ steps.plan.outputs.deploy }}
     env:
@@ -148,19 +149,21 @@ jobs:
       # building would otherwise leave the preview up after its teardown already ran,
       # even when the deploy then failed.
       - name: Check the PR still wants a preview
-        id: open
+        id: wanted
         if: always()
         uses: actions/github-script@v8
         with:
           script: |
             const m = await import(process.env.PLAN_MODULE);
-            const open = await m.isPreviewStillWanted({
+            const wanted = await m.previewWanted({
               github, context, pr: Number(process.env.PR),
             });
-            core.setOutput("open", String(open));
+            core.setOutput("wanted", wanted);
 
       - name: Tear down for a PR closed or untested mid-deploy
-        if: always() && steps.open.outputs.open == 'false'
+        if: >-
+          always()
+          && (steps.wanted.outputs.wanted == 'closed' || steps.wanted.outputs.wanted == 'untested')
         run: bash "$PREVIEW_SCRIPT" teardown "$PR"
 
       - name: Report result
@@ -168,7 +171,7 @@ jobs:
         uses: actions/github-script@v8
         env:
           JOB_STATUS: ${{ job.status }}
-          STILL_OPEN: ${{ steps.open.outputs.open }}
+          WANTED: ${{ steps.wanted.outputs.wanted }}
           CONTAINER: ${{ steps.deploy.outputs.container }}
         with:
           script: |
@@ -176,7 +179,8 @@ jobs:
             const status = process.env.JOB_STATUS;
             let state = "failed";
             if (status === "cancelled") state = "superseded";
-            else if (process.env.STILL_OPEN === "false") state = "removed";
+            else if (process.env.WANTED === "closed") state = "removed";
+            else if (process.env.WANTED === "untested") state = "untested";
             else if (status === "success") state = "running";
             await m.upsertPreviewComment({
               github, context, pr: Number(process.env.PR), state,

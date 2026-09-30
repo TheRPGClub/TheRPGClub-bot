@@ -4,7 +4,11 @@
 const MARKER = "<!-- rpgclub-pr-preview -->";
 const FORMAT_DOC = ".github/pull-request-testing-format.md";
 
-/** The parser's reason quotes the attacker-controlled body, so it is escaped. */
+/**
+ * The parser's reason quotes the attacker-controlled body, so it is escaped. Mirrors
+ * inlineText in src/conductor/ConductorReport.ts, which this plain-JS module cannot
+ * import.
+ */
 function inlineText(text) {
   return text.replace(/\s+/g, " ").replace(/[`*_<>[\]|#@]/g, "\\$&").trim();
 }
