@@ -82,7 +82,6 @@ import { buildUnparseableReport } from "./ConductorReport.js";
 import { getConductorRuntime } from "./ConductorRuntime.js";
 import { checkStepButton, loadRun, saveRun, type IConductorRun } from "./ConductorState.js";
 import { findUncheckedSteps, parseTestPlan } from "./TestPlanParser.js";
-import { safeIgnore } from "../utilities/AsyncUtils.js";
 
 /** Newest messages read back per channel; a step's window is far smaller. */
 const OBSERVATION_FETCH_LIMIT = 100;
@@ -773,7 +772,11 @@ export class ConductorCommand {
         await safeEditReply(interaction, publicText(text));
       },
       async () => {
-        safeIgnore(interaction.deleteReply());
+        try {
+          await interaction.deleteReply();
+        } catch (err: unknown) {
+          console.error(`[conductor] could not delete the /conduct reply for PR #${pr}`, err);
+        }
       },
     );
   }
