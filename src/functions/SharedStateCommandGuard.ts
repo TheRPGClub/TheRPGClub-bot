@@ -13,6 +13,5 @@ export function sharedStateCommandRefusal(
 ): string | null {
   if (!testMode) return null;
   return `\`${commandName}\` is disabled in test mode. This bot shares the production API, ` +
-    "so running it here would write test guild results over production data. " +
-    "Run it from the production bot instead.";
+    "so its writes would land in production data. Run it from the production bot instead.";
 }

@@ -122,7 +122,9 @@ export const SUPERADMIN_HELP_TOPICS: SuperAdminHelpTopic[] = [
     label: "/superadmin memberscan",
     summary: "Scan the server and refresh member records in the database.",
     syntax: "Syntax: /superadmin memberscan",
-    notes: "Runs in the current server. Make sure env role IDs are set so roles classify correctly.",
+    notes:
+      "Runs in the current server. Make sure env role IDs are set so roles classify correctly. " +
+      "Disabled in test mode, where it would mark production members departed.",
   },
   {
     id: "say",
