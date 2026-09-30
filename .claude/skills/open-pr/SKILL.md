@@ -88,6 +88,15 @@ Closes #M
 🤖 Generated with [Claude Code](https://claude.com/claude-code)
 ```
 
+A body with a `## Testing` section must follow
+`.github/pull-request-testing-format.md`. Check it with the parser `/conduct` runs; a
+non-zero exit means the conductor cannot read the section. Fix the body and run the check
+again until it passes. Run it again before any later body patch:
+
+```bash
+npm run check:pr-testing -- <scratchpad>/pr-body.md
+```
+
 Then open the PR:
 
 ```bash

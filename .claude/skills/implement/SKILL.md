@@ -281,13 +281,21 @@ Closes #<N>
 - Each closed issue gets its own `Closes #X` line.
 - Non-draft. Never run `gh pr merge`; the user merges.
 
+Check the `Testing` section with the parser `/conduct` runs before opening the
+PR. The script prints the steps it parsed; a non-zero exit means the conductor
+cannot read the section. Fix the body and run it again until it passes:
+
+```bash
+npm run check:pr-testing -- <scratchpad>/pr-body.md
+```
+
 ```bash
 gh pr create --title "<type>: <title>" --body-file <scratchpad>/pr-body.md
 gh pr view <PR> --json closingIssuesReferences
 ```
 
 If an issue is missing from `closingIssuesReferences`, fix the `Closes` lines
-and patch the body.
+and patch the body. Every body patch runs the check above first.
 
 Record the PR in the session's ledger with `scripts/catchup.py add-pr` and keep one
 `wait` running, per
