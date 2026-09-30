@@ -75,9 +75,16 @@ jobs:
               return;
             }
             const { owner, repo } = context.repo;
-            const { data } = await github.rest.pulls.get({
-              owner, repo, pull_number: Number(input),
-            });
+            let data;
+            try {
+              ({ data } = await github.rest.pulls.get({
+                owner, repo, pull_number: Number(input),
+              }));
+            } catch (err) {
+              if (err.status !== 404) throw err;
+              core.setFailed(`PR #${input} does not exist.`);
+              return;
+            }
             const { refusal, kind } = m.deployRefusal({
               pr: data, repository: `${owner}/${repo}`,
             });
@@ -151,11 +158,12 @@ jobs:
         with:
           script: |
             const m = await import(process.env.PLAN_MODULE);
-            const { wanted, reason } = await m.previewWanted({
+            const { wanted, reason, head } = await m.previewWanted({
               github, context, pr: Number(process.env.PR),
             });
             core.setOutput("wanted", wanted);
             core.setOutput("reason", reason);
+            core.setOutput("head", head);
 
       - name: Tear down for a PR closed or untested mid-deploy
         if: >-
@@ -171,6 +179,7 @@ jobs:
           JOB_STATUS: ${{ job.status }}
           WANTED: ${{ steps.wanted.outputs.wanted }}
           REASON: ${{ steps.wanted.outputs.reason }}
+          HEAD: ${{ steps.wanted.outputs.head }}
           CONTAINER: ${{ steps.deploy.outputs.container }}
         with:
           script: |
@@ -182,10 +191,14 @@ jobs:
             else if (process.env.WANTED === "untested") state = "untested";
             else if (process.env.WANTED === "malformed") state = "malformed";
             else if (status === "success") state = "running";
+            // A push during the build found no container of this PR to mark behind.
+            const head = process.env.HEAD;
+            const behind = state === "running" && head && head !== process.env.SHA;
             await m.upsertPreviewComment({
-              github, context, pr: Number(process.env.PR), state,
-              sha: process.env.SHA, container: process.env.CONTAINER,
-              reason: process.env.REASON,
+              github, context, pr: Number(process.env.PR),
+              state: behind ? "stale" : state,
+              sha: behind ? head : process.env.SHA, running: process.env.SHA,
+              container: process.env.CONTAINER, reason: process.env.REASON,
             });
 
   # A push never redeploys. When the pushed PR holds the test guild, its comment says the
@@ -211,8 +224,9 @@ jobs:
       - name: Find running preview
         id: current
         run: |
-          echo "pr=$(bash "$PREVIEW_SCRIPT" current-pr)" >> "$GITHUB_OUTPUT"
-          echo "sha=$(bash "$PREVIEW_SCRIPT" current-sha)" >> "$GITHUB_OUTPUT"
+          read -r pr sha < <(bash "$PREVIEW_SCRIPT" current) || true
+          echo "pr=${pr:-}" >> "$GITHUB_OUTPUT"
+          echo "sha=${sha:-}" >> "$GITHUB_OUTPUT"
 
       - name: Report preview behind
         if: >-

@@ -191,8 +191,8 @@ bash scripts/preview/preview.sh list
 bash scripts/preview/preview.sh kill
 ```
 
-`teardown <pr>` removes the preview only if it belongs to that PR, and `current-pr` and
-`current-sha` print what the running preview was built from.
+`teardown <pr>` removes the preview only if it belongs to that PR, and `current` prints
+the PR and commit the running preview was built from.
 
 From anywhere, including the laptop, `/test-guild` covers the same ground through the
 workflow. Without Claude Code, run the workflow from the Actions tab or with

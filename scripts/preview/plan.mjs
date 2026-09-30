@@ -42,17 +42,19 @@ export function deployRefusal({ pr, repository }) {
 /**
  * Whether a finished deploy should stay up: `wanted` is `yes`, or why not, with the
  * parser's reason for `malformed`. The PR can close, or its body lose its Testing
- * steps, while the image builds.
+ * steps, while the image builds. `head` is the PR's head now, which a push during the
+ * build moves past the deployed commit.
  *
  * @returns {Promise<{ wanted: "yes" | "closed" | "untested" | "malformed",
- *   reason: string }>}
+ *   reason: string, head: string }>}
  */
 export async function previewWanted({ github, context, pr }) {
   const { owner, repo } = context.repo;
   const { data } = await github.rest.pulls.get({ owner, repo, pull_number: pr });
-  if (data.state !== "open") return { wanted: "closed", reason: "" };
+  const head = data.head.sha;
+  if (data.state !== "open") return { wanted: "closed", reason: "", head };
   const { kind, reason } = testingSteps(data.body);
-  if (kind === "ok") return { wanted: "yes", reason: "" };
-  if (kind === "malformed") return { wanted: "malformed", reason };
-  return { wanted: "untested", reason: "" };
+  if (kind === "ok") return { wanted: "yes", reason: "", head };
+  if (kind === "malformed") return { wanted: "malformed", reason, head };
+  return { wanted: "untested", reason: "", head };
 }
