@@ -81,7 +81,6 @@ import {
   NOW_PLAYING_COMPLETE_HOURS_INPUT_ID,
   NOW_PLAYING_COMPLETE_MODAL_ID,
   NOW_PLAYING_COMPLETE_NOTE_INPUT_ID,
-  NOW_PLAYING_COMPLETE_NOTE_SELECT_PREFIX,
   NOW_PLAYING_COMPLETE_PICK_PREFIX,
   NOW_PLAYING_COMPLETE_PLATFORM_SELECT_PREFIX,
   NOW_PLAYING_COMPLETE_REMOVE_SELECT_PREFIX,
@@ -285,21 +284,6 @@ function buildNowPlayingCompletionConfigContainer(
         default: !session.announce,
       },
     );
-  const noteSelect = new StringSelectMenuBuilder()
-    .setCustomId(`${NOW_PLAYING_COMPLETE_NOTE_SELECT_PREFIX}:${sessionId}`)
-    .setPlaceholder("Add a Completion Note")
-    .addOptions(
-      {
-        label: "Yes",
-        value: "yes",
-        default: session.addCompletionNote,
-      },
-      {
-        label: "No",
-        value: "no",
-        default: !session.addCompletionNote,
-      },
-    );
   const detailsButton = buildActionButton({
     customId: `${NOW_PLAYING_COMPLETE_DETAILS_PREFIX}:${sessionId}`,
     label: "Continue",
@@ -310,7 +294,6 @@ function buildNowPlayingCompletionConfigContainer(
   const typeRow = buildSelectRow(typeSelect);
   const removeRow = buildSelectRow(removeSelect);
   const announceRow = buildSelectRow(announceSelect);
-  const noteRow = buildSelectRow(noteSelect);
   const helpButton = buildActionButton({
     customId: `${NOW_PLAYING_HELP_PREFIX}:completion-config:${session.userId}`,
     label: "?",
@@ -334,10 +317,6 @@ function buildNowPlayingCompletionConfigContainer(
     new TextDisplayBuilder().setContent("Announce Completion"),
   );
   container.addActionRowComponents(announceRow.toJSON());
-  container.addTextDisplayComponents(
-    new TextDisplayBuilder().setContent("Add a Completion Note"),
-  );
-  container.addActionRowComponents(noteRow.toJSON());
   container.addActionRowComponents(buttonRow.toJSON());
   return container;
 }
@@ -745,9 +724,7 @@ export class NowPlayingCompletionHandlers {
 
     const completionDateInput = getModalField(interaction, NOW_PLAYING_COMPLETE_DATE_INPUT_ID);
     const finalPlaytimeRaw = getModalField(interaction, NOW_PLAYING_COMPLETE_HOURS_INPUT_ID);
-    const noteInput = session.addCompletionNote
-      ? getModalField(interaction, NOW_PLAYING_COMPLETE_NOTE_INPUT_ID)
-      : "";
+    const noteInput = getModalField(interaction, NOW_PLAYING_COMPLETE_NOTE_INPUT_ID);
 
     let completedAt: Date | null;
     try {
@@ -1039,39 +1016,6 @@ export class NowPlayingCompletionHandlers {
     await renderNowPlayingCompletionConfig(interaction, sessionId, session);
   }
 
-  @SelectMenuComponent({ id: /^np-complete-note:[^:]+$/ })
-  async handleNowPlayingCompletionNoteSelect(
-    interaction: StringSelectMenuInteraction,
-  ): Promise<void> {
-    const segs = assertCustomIdSegments(interaction, 1);
-    if (!segs) return;
-    const [sessionId] = segs;
-    const session = nowPlayingCompletionWizardSessions.get(sessionId);
-    if (!session) {
-      const container = buildTextContainer("This completion prompt has expired.");
-      await safeReply(interaction, {
-        components: [container],
-        flags: buildComponentsV2Flags(true),
-      });
-      return;
-    }
-
-    if (await replyIfNotOwner(interaction, session.userId, "This completion prompt isn't for you.")) return;
-
-    const value = interaction.values?.[0];
-    if (value !== "yes" && value !== "no") {
-      const container = buildTextContainer("Invalid selection.");
-      await safeReply(interaction, {
-        components: [container],
-        flags: buildComponentsV2Flags(true),
-      });
-      return;
-    }
-
-    session.addCompletionNote = value === "yes";
-    await renderNowPlayingCompletionConfig(interaction, sessionId, session);
-  }
-
   @ButtonComponent({ id: /^np-complete-details:[^:]+$/ })
   async handleNowPlayingCompletionDetails(interaction: ButtonInteraction): Promise<void> {
     const segs = assertCustomIdSegments(interaction, 1);
@@ -1117,17 +1061,15 @@ export class NowPlayingCompletionHandlers {
         label: "Final playtime hours (optional)",
         required: false,
       }),
-    ];
-    if (session.addCompletionNote) {
-      modalRows.push(buildTextInputRow({
+      buildTextInputRow({
         customId: NOW_PLAYING_COMPLETE_NOTE_INPUT_ID,
         label: "Note (optional)",
         style: TextInputStyle.Paragraph,
         required: false,
         maxLength: MAX_NOW_PLAYING_NOTE_LEN,
         value: noteValue ? noteValue.slice(0, MAX_NOW_PLAYING_NOTE_LEN) : undefined,
-      }));
-    }
+      }),
+    ];
     modal.addComponents(...modalRows);
     safeIgnore(interaction.showModal(modal));
   }

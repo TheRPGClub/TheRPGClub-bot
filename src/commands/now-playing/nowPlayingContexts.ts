@@ -59,7 +59,6 @@ export function createNowPlayingCompletionWizardSession(
     completionType: defaultType,
     removeFromNowPlaying: true,
     announce: true,
-    addCompletionNote: true,
     returnToList,
   });
   return sessionId;
