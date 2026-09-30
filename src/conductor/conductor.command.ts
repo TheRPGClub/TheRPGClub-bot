@@ -531,7 +531,7 @@ async function retryReportLocked(interaction: ButtonInteraction): Promise<void> 
 
 /**
  * Checks the PR and starts its run in the trigger's channel, as `/conduct` does. An
- * announced start carries the sha the preview was built from: a stale one, or a PR that
+ * announced start carries the sha the preview was built from: a stale one, or a head that
  * already has a run going, starts nothing. `answer` tells whoever started it how it went.
  */
 async function startRun(
