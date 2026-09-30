@@ -20,7 +20,7 @@ import {
   TextInputBuilder as ComponentsTextInputBuilder,
 } from "@discordjs/builders";
 import { TextInputStyle as ApiTextInputStyle } from "discord-api-types/v10";
-import Member from "../../classes/Member.js";
+import Member, { type IGameJournalEntry } from "../../classes/Member.js";
 import {
   safeDeferReply,
   safeDeferUpdate,
@@ -101,6 +101,10 @@ function buildNowPlayingJournalAddModal(
     ),
   );
   return modal;
+}
+
+function formatJournalEntryTitle(entry: IGameJournalEntry): string {
+  return entry.title?.trim() ? entry.title.trim() : `Entry #${entry.entryNumber}`;
 }
 
 @Discord()
@@ -365,7 +369,7 @@ export class NowPlayingJournalCommand {
       await safeReply(interaction, buildTextReply("That journal entry was not found.", false));
       return;
     }
-    const entryTitle = entry.title?.trim() ? entry.title.trim() : `Entry #${entry.entryNumber}`;
+    const entryTitle = formatJournalEntryTitle(entry);
     const container = buildTextContainer(`## Confirm Delete\nDelete **${entryTitle}** from ${formatTableDate(entry.createdAt)}?`);
     const row = buildButtonRow(
       buildActionButton(
@@ -395,16 +399,20 @@ export class NowPlayingJournalCommand {
       await safeReply(interaction, buildTextReply("Only the owner can delete journal entries.", false));
       return;
     }
+    let status = "-# Delete cancelled. Nothing was deleted.";
     if (action === "yes") {
-      const removed = await Member.deleteGameJournalEntry(ownerId, Number(entryIdRaw));
-      if (!removed) {
+      const entryId = Number(entryIdRaw);
+      const entry = await Member.getGameJournalEntryForUser(ownerId, entryId);
+      const removed = entry ? await Member.deleteGameJournalEntry(ownerId, entryId) : false;
+      if (!entry || !removed) {
         await safeReply(interaction, buildTextReply("That journal entry was not found.", false));
         return;
       }
+      status = `-# Deleted **${formatJournalEntryTitle(entry)}**.`;
     }
     const row = await this.buildManageJournalButtonRow(ownerId, Number(gameIdRaw), Number(pageRaw));
     await safeUpdate(interaction, {
-      components: [row],
+      components: [buildTextContainer(status), row],
       flags: buildComponentsV2Flags(
         interaction.message.flags?.has(MessageFlags.Ephemeral) ?? false,
       ),
