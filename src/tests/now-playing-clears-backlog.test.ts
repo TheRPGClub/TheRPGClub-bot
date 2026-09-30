@@ -3,8 +3,7 @@ import assert from "node:assert/strict";
 import { createServer, type IncomingMessage, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import Member from "../classes/Member.js";
-import UserGameBacklog from "../classes/UserGameBacklog.js";
-import { buildBacklogListResponse } from "../commands/backlog/backlog-list.service.js";
+import { takeOffBacklogIfAlreadyPlaying } from "../commands/backlog/backlog-list.service.js";
 
 type CapturedRequest = {
   method: string;
@@ -29,8 +28,15 @@ async function readBody(req: IncomingMessage): Promise<Record<string, unknown>> 
   return raw ? (JSON.parse(raw) as Record<string, unknown>) : {};
 }
 
-function respond(method: string, url: string): unknown {
-  if (method === "GET" && url.startsWith("/api/v1/users/123/now_playing")) return { data: [] };
+function respond(method: string, url: string): { status: number; body: unknown } {
+  if (method === "GET" && url.startsWith("/api/v1/users/456/backlog")) {
+    return { status: 400, body: { error: "backlog unavailable" } };
+  }
+  return { status: 200, body: respondOk(method, url) };
+}
+
+function respondOk(method: string, url: string): unknown {
+  if (method === "GET" && /^\/api\/v1\/users\/\d+\/now_playing/.test(url)) return { data: [] };
   if (method === "GET" && url.startsWith("/api/v1/users/123/backlog")) {
     return { data: BACKLOG_ROWS, meta: { page: 1, pages: 1, count: 2, per: 200 } };
   }
@@ -44,8 +50,9 @@ before(async () => {
       const method = req.method ?? "";
       const url = req.url ?? "";
       requests.push({ method, url, body: await readBody(req) });
-      res.writeHead(200, { "Content-Type": "application/json" });
-      res.end(JSON.stringify(respond(method, url)));
+      const { status, body } = respond(method, url);
+      res.writeHead(status, { "Content-Type": "application/json" });
+      res.end(JSON.stringify(body));
     })();
   });
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
@@ -62,10 +69,10 @@ beforeEach(() => {
   requests.length = 0;
 });
 
-function nowPlayingPost(): CapturedRequest {
+function nowPlayingPost(userId = "123"): CapturedRequest {
   const post = requests.find((r) => r.method === "POST");
   assert.ok(post, "addNowPlaying posted the entry");
-  assert.equal(post.url, "/api/v1/users/123/now_playing");
+  assert.equal(post.url, `/api/v1/users/${userId}/now_playing`);
   return post;
 }
 
@@ -94,12 +101,19 @@ test("addNowPlaying deletes nothing when the game is not on the backlog", async 
   assert.equal(requests.filter((r) => r.method === "DELETE").length, 0);
 });
 
-function backlogEntry(entryId: number, gameId: number, title: string): any {
+test("addNowPlaying still adds when the backlog lookup fails", async () => {
+  await Member.addNowPlaying("456", 7, 4, null);
+
+  assert.equal((nowPlayingPost("456").body.data as any).gamedb_game_id, 7);
+  assert.equal(requests.filter((r) => r.method === "DELETE").length, 0);
+});
+
+function backlogEntry(): any {
   return {
-    entryId,
+    entryId: 11,
     userId: "123",
-    gameId,
-    title,
+    gameId: 7,
+    title: "Alpha",
     platformId: 4,
     platformName: "Switch",
     platformAbbreviation: "NS",
@@ -110,44 +124,46 @@ function backlogEntry(entryId: number, gameId: number, title: string): any {
   };
 }
 
-async function buildOwnList(nowPlayingGameIds: number[]): Promise<any[]> {
-  const originalList = UserGameBacklog.listForUser;
+async function pickFromBacklog(nowPlayingGameIds: number[]): Promise<{
+  handled: boolean;
+  replies: any[];
+}> {
   const originalNowPlaying = Member.getNowPlaying;
+  const replies: any[] = [];
+  const interaction: any = {
+    user: { id: "123" },
+    guildId: null,
+    channelId: null,
+    deferred: false,
+    replied: false,
+    isMessageComponent: () => true,
+    reply: async (payload: any) => {
+      replies.push(payload);
+    },
+  };
   try {
-    UserGameBacklog.listForUser = (async () => [
-      backlogEntry(11, 7, "Alpha"),
-      backlogEntry(12, 8, "Beta"),
-    ]) as any;
     Member.getNowPlaying = (async () => nowPlayingGameIds.map((gameId) => ({ gameId }))) as any;
-    const response = await buildBacklogListResponse({
-      viewerUserId: "123",
-      targetUserId: "123",
-      memberLabel: "Tester",
-      title: undefined,
-      page: 0,
-      isEphemeral: true,
-    });
-    return response.components.map((c: any) => c.toJSON());
+    const handled = await takeOffBacklogIfAlreadyPlaying(interaction, backlogEntry());
+    return { handled, replies };
   } finally {
-    UserGameBacklog.listForUser = originalList;
     Member.getNowPlaying = originalNowPlaying;
   }
 }
 
-function findStartPlayingSelect(components: any[]): any {
-  const rows = components.filter((c) => c.components?.[0]?.custom_id?.startsWith(
-    "backlog-start-playing-v1:",
-  ));
-  return rows[0]?.components[0] ?? null;
-}
+test("picking a backlog game already on Now Playing takes it off the backlog", async () => {
+  const { handled, replies } = await pickFromBacklog([7]);
 
-test("the backlog start-playing menu leaves out games already on Now Playing", async () => {
-  const select = findStartPlayingSelect(await buildOwnList([7]));
-
-  assert.ok(select, "the start-playing menu is present");
-  assert.deepEqual(select.options.map((o: any) => [o.value, o.label]), [["12", "2. Beta"]]);
+  assert.equal(handled, true);
+  const deletes = requests.filter((r) => r.method === "DELETE").map((r) => r.url);
+  assert.deepEqual(deletes, ["/api/v1/backlog/11"]);
+  const json = JSON.stringify(replies[0].components.map((c: any) => c.toJSON()));
+  assert.match(json, /already on your Now Playing list, so it was taken off your backlog/);
 });
 
-test("the backlog start-playing menu is dropped when every game is on Now Playing", async () => {
-  assert.equal(findStartPlayingSelect(await buildOwnList([7, 8])), null);
+test("picking a backlog game not on Now Playing leaves it to startPlayingEntry", async () => {
+  const { handled, replies } = await pickFromBacklog([8]);
+
+  assert.equal(handled, false);
+  assert.equal(replies.length, 0);
+  assert.equal(requests.filter((r) => r.method === "DELETE").length, 0);
 });

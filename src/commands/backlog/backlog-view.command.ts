@@ -49,6 +49,7 @@ import {
   parseBacklogFilterStateFromContent,
   parseBacklogFiltersFromListMessage,
   parseBacklogListNavId,
+  takeOffBacklogIfAlreadyPlaying,
 } from "./backlog-list.service.js";
 
 @Discord()
@@ -134,6 +135,7 @@ export class BacklogViewCommand {
       await safeReply(interaction, buildTextReply("That backlog entry no longer exists.", true));
       return;
     }
+    if (await takeOffBacklogIfAlreadyPlaying(interaction, entry)) return;
     await startPlayingEntry(interaction, entry);
   }
 

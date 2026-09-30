@@ -4,11 +4,16 @@ import {
   ButtonInteraction,
   ButtonStyle,
   StringSelectMenuBuilder,
+  type StringSelectMenuInteraction,
 } from "discord.js";
 import Member from "../../classes/Member.js";
 import UserGameBacklog, { type IUserGameBacklogEntry } from "../../classes/UserGameBacklog.js";
-import { safeV2TextContent } from "../../functions/ComponentsV2Utils.js";
-import { safeDeferUpdate } from "../../functions/InteractionUtils.js";
+import {
+  buildErrorReply,
+  buildTextReply,
+  safeV2TextContent,
+} from "../../functions/ComponentsV2Utils.js";
+import { safeDeferUpdate, safeReply } from "../../functions/InteractionUtils.js";
 import { buildActionButton, buildButtonRow } from "../../functions/uiComponents.js";
 import { buildStartPlayingSelectRow } from "../../functions/StartPlayingSelect.js";
 import {
@@ -22,7 +27,7 @@ import {
   parseCustomIdSegments,
 } from "../../utilities/CustomIdUtils.js";
 import { safeIgnore } from "../../utilities/AsyncUtils.js";
-import { logError } from "../../utilities/LogUtils.js";
+import { buildApiErrorMessage } from "../../utilities/ApiErrorUtils.js";
 import {
   BACKLOG_LIST_NAV_PREFIX,
   BACKLOG_LIST_FILTER_PREFIX,
@@ -218,11 +223,7 @@ export async function buildBacklogListResponse(params: {
   page: number;
   isEphemeral: boolean;
 }): Promise<{ components: Array<any>; content?: string }> {
-  const isOwnView = params.viewerUserId === params.targetUserId;
-  const [allEntries, nowPlayingGameIds] = await Promise.all([
-    UserGameBacklog.listForUser(params.targetUserId),
-    isOwnView ? loadNowPlayingGameIds(params.targetUserId) : new Set<number>(),
-  ]);
+  const allEntries = await UserGameBacklog.listForUser(params.targetUserId);
 
   const filtered = params.title
     ? allEntries.filter((e) =>
@@ -292,25 +293,13 @@ export async function buildBacklogListResponse(params: {
     ],
   });
 
-  const startPlayingRow = isOwnView
-    ? buildBacklogStartPlayingRow(params.targetUserId, pageEntries, start, nowPlayingGameIds)
-    : null;
-  if (!startPlayingRow) {
+  if (params.viewerUserId !== params.targetUserId) {
     // eslint-disable-next-line local/dynamic-components-require-chunking
     return { components };
   }
+  const startPlayingRow = buildBacklogStartPlayingRow(params.targetUserId, pageEntries, start);
   // eslint-disable-next-line local/dynamic-components-require-chunking
   return { components: [...components, startPlayingRow] };
-}
-
-async function loadNowPlayingGameIds(userId: string): Promise<Set<number>> {
-  try {
-    const entries = await Member.getNowPlaying(userId);
-    return new Set(entries.map((entry) => entry.gameId));
-  } catch (err: unknown) {
-    logError("backlog list.now_playing_lookup", err);
-    return new Set();
-  }
 }
 
 export function buildBacklogStartPlayingCustomId(ownerId: string): string {
@@ -321,19 +310,43 @@ function buildBacklogStartPlayingRow(
   ownerId: string,
   pageEntries: IUserGameBacklogEntry[],
   start: number,
-  nowPlayingGameIds: ReadonlySet<number>,
-): ActionRowBuilder<StringSelectMenuBuilder> | null {
-  // Numbers come from the page position before filtering, so they match the list text.
-  const options = pageEntries
-    .map((entry, index) => ({
+): ActionRowBuilder<StringSelectMenuBuilder> {
+  return buildStartPlayingSelectRow(
+    buildBacklogStartPlayingCustomId(ownerId),
+    pageEntries.map((entry, index) => ({
       entryId: entry.entryId,
-      gameId: entry.gameId,
       label: `${start + index + 1}. ${entry.title}`,
       platformName: entry.platformName,
-    }))
-    .filter((option) => !nowPlayingGameIds.has(option.gameId));
-  if (!options.length) return null;
-  return buildStartPlayingSelectRow(buildBacklogStartPlayingCustomId(ownerId), options);
+    })),
+  );
+}
+
+/**
+ * Adding to Now Playing takes a game off the backlog, but a row left on both lists before that
+ * rule existed still offers the game here. Picking it drops the backlog row instead of failing
+ * on the duplicate. Returns true when it replied.
+ */
+export async function takeOffBacklogIfAlreadyPlaying(
+  interaction: StringSelectMenuInteraction,
+  entry: IUserGameBacklogEntry,
+): Promise<boolean> {
+  try {
+    const nowPlaying = await Member.getNowPlaying(entry.userId);
+    if (!nowPlaying.some((playing) => playing.gameId === entry.gameId)) return false;
+    await UserGameBacklog.removeEntries([entry.entryId]);
+  } catch (err: unknown) {
+    await safeReply(
+      interaction,
+      buildErrorReply(buildApiErrorMessage("Failed to check your Now Playing list", err), true),
+    );
+    return true;
+  }
+  await safeReply(interaction, buildTextReply(
+    `**${safeV2TextContent(entry.title, 100)}** is already on your Now Playing list, ` +
+      "so it was taken off your backlog.",
+    true,
+  ));
+  return true;
 }
 
 export async function applyBacklogFiltersToSourceMessage(params: {

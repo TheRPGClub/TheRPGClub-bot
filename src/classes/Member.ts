@@ -580,7 +580,14 @@ export default class Member {
     requirePositiveInt(platformId, "platform selection");
     const noteValue = note?.trim() || null;
 
-    const existing = await Member.fetchNowPlayingRaw(userId);
+    // A game on Now Playing leaves the backlog. Backlog trouble never blocks the add.
+    const [existing, backlogEntries] = await Promise.all([
+      Member.fetchNowPlayingRaw(userId),
+      UserGameBacklog.listEntriesForGame(userId, gameId).catch((err: unknown) => {
+        logError("Member.addNowPlaying.backlog_lookup", err);
+        return [];
+      }),
+    ]);
     if (existing.length >= MAX_NOW_PLAYING) {
       throw new UserFacingError(`You can only track up to ${MAX_NOW_PLAYING} Now Playing titles.`);
     }
@@ -588,12 +595,6 @@ export default class Member {
       throw new UserFacingError("That title is already in your Now Playing list.");
     }
 
-    // A game on Now Playing leaves the backlog. Backlog trouble never blocks the add.
-    const backlogEntries = await UserGameBacklog.listEntriesForGame(userId, gameId)
-      .catch((err: unknown) => {
-        logError("Member.addNowPlaying.backlog_lookup", err);
-        return [];
-      });
     // Deleting the backlog entry drops its note, so an add without a note of its own keeps it.
     const carriedNote = noteValue ?? backlogEntries.find((e) => e.note?.trim())?.note ?? null;
 
