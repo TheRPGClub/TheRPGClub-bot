@@ -24,6 +24,7 @@ test("detectAction recognizes each single action", () => {
   assert.equal(detectAction('click "Edit", enter "x" in "Title", submit'), "modal");
   assert.equal(detectAction('select "Gloomhaven"'), "select");
   assert.equal(detectAction('click "Submit"'), "click");
+  assert.equal(detectAction("click “Submit”"), "click");
   assert.equal(detectAction("react with a thumbs up"), null);
   assert.equal(detectAction('click "A"\nclick "B"'), null);
 });

@@ -9,7 +9,7 @@
  * `docs/conductor.md`.
  */
 
-import { countStepActions } from "./PrTestingCheck.js";
+import { countStepActions, QUOTED } from "./PrTestingCheck.js";
 import { findUncheckedSteps, parseTestPlan, type ITestStep } from "./TestPlanParser.js";
 
 export type DriveActionKind = "slash" | "slash-modal" | "click" | "modal" | "select";
@@ -49,7 +49,6 @@ const SLASH_NAME = /^\/([\w-]+)/;
 const CLICK_START = /^(?:click|press)\b/i;
 const SELECT_START = /^(?:select|choose|pick)\b/i;
 const SUBMIT = /\bsubmit\b/i;
-const QUOTED = /"[^"]*"/g;
 
 /** The single action a command performs, or null when it is not a recognized one. */
 export function detectAction(command: string): DriveActionKind | null {
