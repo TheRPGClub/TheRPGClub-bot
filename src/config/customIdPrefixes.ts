@@ -26,6 +26,7 @@ export const GAMEDB_COLLECTION_OWNERSHIP_PREFIX = "gamedb-collection-ownership";
 export const CONDUCTOR_CHECK_PREFIX = "conductor-check-v1";
 export const CONDUCTOR_ABORT_PREFIX = "conductor-abort-v1";
 export const CONDUCTOR_REPORT_PREFIX = "conductor-report-v1";
+export const CONDUCTOR_APPROVE_PREFIX = "conductor-approve-v1";
 export const CONDUCTOR_ACCEPT_PREFIX = "conductor-accept-v1";
 export const CONDUCTOR_CONFIRM_PREFIX = "conductor-confirm-v1";
 export const CONDUCTOR_NOTE_PREFIX = "conductor-note-v1";
