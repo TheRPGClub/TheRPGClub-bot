@@ -1,5 +1,6 @@
 import {
   ButtonInteraction,
+  type ContainerBuilder,
   MessageFlags,
   StringSelectMenuInteraction,
 } from "discord.js";
@@ -23,6 +24,7 @@ import { getDisplayNowPlayingEntries } from "../../functions/NowPlayingUtils.js"
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
 import { assertCustomIdSegments } from "../../utilities/CustomIdUtils.js";
 import { safeIgnore } from "../../utilities/AsyncUtils.js";
+import { buildApiErrorMessage } from "../../utilities/ApiErrorUtils.js";
 import { NOW_PLAYING_GALLERY_MAX } from "./nowPlayingIds.js";
 import {
   buildComponentPayload,
@@ -135,6 +137,7 @@ async function promptRemoveNowPlaying(
 }
 
 const REMOVE_FAILED_TEXT = "Failed to remove that game (it may have been removed already).";
+const REMOVE_ERROR_LABEL = "Could not remove from Now Playing";
 
 @Discord()
 export class NowPlayingRemoveHandlers {
@@ -229,13 +232,19 @@ export class NowPlayingRemoveHandlers {
       flags: buildComponentsV2Flags(isEphemeral),
     });
 
+    // A failed removal still redraws the remove screen so its select and Done stay usable.
+    let notice: ContainerBuilder[] = [];
     try {
-      const removed = await Member.removeNowPlaying(ownerId, gameId);
-      if (removed) {
+      if (await Member.removeNowPlaying(ownerId, gameId)) {
         safeIgnore(refreshNowPlayingListFromContext(interaction, ownerId));
+      } else {
+        notice = [buildTextContainer(REMOVE_FAILED_TEXT)];
       }
-      // A failed removal still redraws the remove screen so its select and Done stay usable.
-      const notice = removed ? [] : [buildTextContainer(REMOVE_FAILED_TEXT)];
+    } catch (err: unknown) {
+      notice = [buildTextContainer(buildApiErrorMessage(REMOVE_ERROR_LABEL, err))];
+    }
+
+    try {
       const entries = getDisplayNowPlayingEntries(await Member.getNowPlaying(ownerId));
       if (!entries.length) {
         const container = buildTextContainer("Your Now Playing list is empty.");
@@ -272,11 +281,10 @@ export class NowPlayingRemoveHandlers {
         attachments: [],
         flags: buildComponentsV2EditFlags(),
       }));
-    } catch (err: any) {
-      const msg = extractErrorMessage(err);
-      const container = buildTextContainer(`Could not remove from Now Playing: ${msg}`);
+    } catch (err: unknown) {
+      const container = buildTextContainer(buildApiErrorMessage(REMOVE_ERROR_LABEL, err));
       safeIgnore(safeEditReply(interaction, {
-        components: [container],
+        components: [...notice, container],
         attachments: [],
         flags: buildComponentsV2EditFlags(),
       }));

@@ -134,3 +134,57 @@ test("nowplaying remove select acknowledges interaction and shows error on faile
     Member.getNowPlaying = originalGetNowPlaying;
   }
 });
+
+test("nowplaying remove select keeps the remove screen when the removal throws", async () => {
+  const command = new NowPlayingRemoveHandlers() as any;
+
+  const originalRemoveNowPlaying = Member.removeNowPlaying;
+  const originalGetNowPlaying = Member.getNowPlaying;
+
+  const edits: any[] = [];
+
+  try {
+    Member.removeNowPlaying = (async () => {
+      throw new Error("delete exploded");
+    }) as any;
+    Member.getNowPlaying = (async () => ([
+      { gameId: 11, title: "Alpha", platformName: "Switch", platformAbbreviation: "NS" },
+    ])) as any;
+
+    const interaction: any = {
+      customId: "nowplaying-remove-select:123",
+      isMessageComponent: () => true,
+      user: { id: "123" },
+      values: ["11"],
+      guildId: null,
+      message: {
+        flags: { has: () => false },
+      },
+      deferred: false,
+      replied: false,
+      update: async () => {
+        interaction.replied = true;
+      },
+      editReply: async (payload: any) => {
+        edits.push(payload);
+      },
+      reply: async () => {
+        throw new Error("reply should not be called on the error path");
+      },
+      followUp: async () => {
+        throw new Error("followUp should not be called on the error path");
+      },
+    };
+
+    await command.handleNowPlayingRemoveSelect(interaction);
+
+    assert.equal(edits.length, 1, "expected the redrawn remove screen via editReply");
+    const rendered = JSON.stringify(edits[0]?.components);
+    assert.match(rendered, /Could not remove from Now Playing/, "error notice should show");
+    assert.match(rendered, /delete exploded/, "error notice should carry the error");
+    assert.match(rendered, /nowplaying-remove-select:123/, "remove select should stay usable");
+  } finally {
+    Member.removeNowPlaying = originalRemoveNowPlaying;
+    Member.getNowPlaying = originalGetNowPlaying;
+  }
+});
