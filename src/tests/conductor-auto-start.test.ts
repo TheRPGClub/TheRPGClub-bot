@@ -85,6 +85,7 @@ test("trusts no one when the preview bot ID is empty", () => {
 const FENCE = "```";
 const PLAN = ["## Testing", "", "### Step 1: Ping", FENCE, "/ping", FENCE,
   "Expected: \"Pong\"", "Ephemeral: no", ""].join("\n");
+const UNCHECKED_PLAN = PLAN.replace("Expected: \"Pong\"", "Expected: a reply appears");
 
 interface IHarness {
   statePath: string;
@@ -92,14 +93,14 @@ interface IHarness {
   prReads: number;
 }
 
-async function useRuntime(headSha: string): Promise<IHarness> {
+async function useRuntime(headSha: string, body = PLAN): Promise<IHarness> {
   const dir = await mkdtemp(join(tmpdir(), "conductor-auto-start-"));
   const harness: IHarness = { statePath: join(dir, "state.json"), sent: [], prReads: 0 };
   const github = {
     getPullRequest: async (): Promise<IPullRequestInfo> => {
       harness.prReads += 1;
       return {
-        number: 1350, state: "open", headSha, body: PLAN, htmlUrl: "https://x.test",
+        number: 1350, state: "open", headSha, body, htmlUrl: "https://x.test",
         authorLogin: "author",
       };
     },
@@ -168,7 +169,16 @@ test("the preview bot's announcement starts a run in the dev channel", async () 
   assert.equal(run?.channelId, CHANNEL);
   assert.equal(run?.status, "running");
   assert.equal(run?.windowStart, 1000);
+  assert.equal(harness.sent.length, 1, "only the step message, no start notice");
+});
+
+test("a run with unchecked steps still warns about them after the step message", async () => {
+  const harness = await useRuntime(SHA, UNCHECKED_PLAN);
+  await startRunFromAnnouncement(fakeMessage(harness, PREVIEW_BOT, READY));
+
+  assert.equal((await readRun(harness.statePath))?.status, "running");
   assert.equal(harness.sent.length, 2);
+  assert.match(JSON.stringify(harness.sent[1]), /Step\(s\) 1 quote no text to look for/);
 });
 
 test("the announcement text from anyone else starts nothing", async () => {
