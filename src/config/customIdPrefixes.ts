@@ -11,6 +11,11 @@ export const BACKLOG_LIST_FILTER_PREFIX = "backlog-list-filter-v1";
 export const BACKLOG_LIST_FILTER_MODAL_PREFIX = "blm1";
 export const BACKLOG_START_PLAYING_PREFIX = "backlog-start-playing-v1";
 
+// Backlog pick (random suggestion) interaction IDs
+export const BACKLOG_PICK_REROLL_PREFIX = "backlog-pick-reroll-v1";
+export const BACKLOG_PICK_START_PREFIX = "backlog-pick-start-v1";
+export const BACKLOG_PICK_DISMISS_PREFIX = "backlog-pick-dismiss-v1";
+
 // Completionator CSV import interaction IDs
 export const COMPLETIONATOR_CHOOSE_PREFIX = "comp-import-choose-v1";
 
