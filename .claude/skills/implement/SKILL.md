@@ -279,7 +279,8 @@ Closes #<N>
   taken over another, a scope line drawn, something left out. It is never
   dropped; an empty one reads "none".
 - Each closed issue gets its own `Closes #X` line.
-- Non-draft. Never run `gh pr merge`; the user merges.
+- Non-draft. Never run `gh pr merge` unasked. Once conductor testing passes, offer
+  the merge per step 11.
 
 Check the `Testing` section with the parser `/conduct` runs before opening the
 PR. The script prints the steps it parsed. Exit 1 means the conductor cannot
@@ -342,6 +343,12 @@ When the user later says they reviewed the PR, check it for comments and act on
 them instead of waiting to be asked again. Commits that answer them send the PR
 back through the self review loop.
 
+When a conductor report lands on the PR (the CI monitor relays it as a comment,
+or the user says `/conduct` ran), read it per
+[conductor-merge.md](../_shared/conductor-merge.md). A pass on the current head
+means asking the user whether to merge; a failed step is a finding for the self
+review loop, never something to merge over.
+
 ## 12. After the merge
 
 When the PR merges (`wait` printing `pr: <PR> merged`, a CI monitor event, or the user
@@ -396,4 +403,7 @@ saying so):
   the middle of the loop. "Partly reviewed" is never reported.
 - Do NOT commit directly to main.
 - Do NOT put multiple issue numbers on one `Closes` line.
+- Do NOT merge without asking, and do NOT offer to merge before a passing
+  conductor report on the current head, per
+  [conductor-merge.md](../_shared/conductor-merge.md).
 - Do NOT pass multi-line text through a heredoc.

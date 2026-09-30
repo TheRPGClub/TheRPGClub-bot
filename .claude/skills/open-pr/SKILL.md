@@ -148,6 +148,10 @@ group comes next.
 Report the linkage result, the mergeability result, how many self review passes ran and
 what they found and fixed, and the PR URL.
 
+Never merge unasked. When a conductor report lands on the PR, read it per
+[conductor-merge.md](../_shared/conductor-merge.md): a pass on the current head means
+asking the user whether to merge, and a failed step goes back through the self review loop.
+
 ## Common mistakes to avoid
 
 - Do NOT put multiple issue numbers on one `Closes` line (`Closes #1, #2` is unreliable).
