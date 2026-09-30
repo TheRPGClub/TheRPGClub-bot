@@ -3736,7 +3736,7 @@ export default {
         schema: [],
         messages: {
           replyAfterDeferUpdate:
-            "{{helper}}({{target}}) after safeDeferUpdate({{target}}) edits the message the " +
+            "{{helper}}({{target}}) after {{deferHelper}}({{target}}) edits the message the " +
             "component sits on and replaces every control on it. Use " +
             "safeFollowUpIfSettled({{target}}, buildErrorReply(text, true)), or safeEditReply " +
             "when editing the message is intended.",
@@ -3802,11 +3802,12 @@ export default {
           "Program:exit"() {
             for (const reply of replies) {
               if (forcesFollowUp(reply)) continue;
-              if (!defers.some((defer) => isDeferredBefore(reply, defer))) continue;
+              const defer = defers.find((candidate) => isDeferredBefore(reply, candidate));
+              if (!defer) continue;
               context.report({
                 node: reply.node,
                 messageId: "replyAfterDeferUpdate",
-                data: { helper: reply.helper, target: reply.target },
+                data: { helper: reply.helper, target: reply.target, deferHelper: defer.helper },
               });
             }
           },

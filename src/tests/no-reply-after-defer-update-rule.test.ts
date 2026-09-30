@@ -18,7 +18,7 @@ const ruleTester = new RuleTester({ languageOptions: { parserOptions: { lang: "t
 
 const WITH_ERROR_REPLY_ERROR = {
   messageId: "replyAfterDeferUpdate",
-  data: { helper: "withErrorReply", target: "interaction" },
+  data: { helper: "withErrorReply", target: "interaction", deferHelper: "safeDeferUpdate" },
 };
 
 const wrap = (body: string): string => `async function handle(interaction, other) {\n${body}\n}`;
@@ -77,7 +77,11 @@ ruleTester.run("no-reply-after-defer-update", rule, {
       errors: [
         {
           messageId: "replyAfterDeferUpdate",
-          data: { helper: "safeReply", target: "interaction" },
+          data: {
+            helper: "safeReply",
+            target: "interaction",
+            deferHelper: "withClickedRowDisabled",
+          },
         },
       ],
     },
@@ -86,7 +90,7 @@ ruleTester.run("no-reply-after-defer-update", rule, {
       errors: [
         {
           messageId: "replyAfterDeferUpdate",
-          data: { helper: "safeReply", target: "interaction" },
+          data: { helper: "safeReply", target: "interaction", deferHelper: "safeDeferUpdate" },
         },
       ],
     },
@@ -119,7 +123,11 @@ ruleTester.run("no-reply-after-defer-update", rule, {
       errors: [
         {
           messageId: "replyAfterDeferUpdate",
-          data: { helper: "safeReply", target: "this.interaction" },
+          data: {
+            helper: "safeReply",
+            target: "this.interaction",
+            deferHelper: "safeDeferUpdate",
+          },
         },
       ],
     },
