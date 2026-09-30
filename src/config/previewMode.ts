@@ -2,10 +2,8 @@
  * Set by docker-compose.preview.yml from scripts/preview/preview.sh, so only the PR
  * preview container sees them. Read once at module load, like TEST_GUILD_ID.
  */
-export const PREVIEW_PR: string = (process.env.PREVIEW_PR ?? "").trim();
-export const PREVIEW_SHA: string = (process.env.PREVIEW_SHA ?? "").trim();
-
-export const IS_PREVIEW: boolean = PREVIEW_PR.length > 0;
+const PREVIEW_PR: string = (process.env.PREVIEW_PR ?? "").trim();
+const PREVIEW_SHA: string = (process.env.PREVIEW_SHA ?? "").trim();
 
 const SHORT_SHA_LENGTH = 7;
 
@@ -15,7 +13,10 @@ export function formatPreviewPresence(pr: string, sha: string): string {
   return shortSha ? `Testing PR #${pr} (${shortSha})` : `Testing PR #${pr}`;
 }
 
-/** The fixed status for this process, or null outside a PR preview. */
-export const PREVIEW_PRESENCE: string | null = IS_PREVIEW
+/**
+ * The fixed status for this process, or null outside a PR preview. Non-null is the one
+ * preview-mode check, so callers never test the environment themselves.
+ */
+export const PREVIEW_PRESENCE: string | null = PREVIEW_PR
   ? formatPreviewPresence(PREVIEW_PR, PREVIEW_SHA)
   : null;

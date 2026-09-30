@@ -36,12 +36,8 @@ import {
   safeFollowUpIfSettled,
   safeReply,
 } from "../functions/InteractionUtils.js";
-import {
-  buildApiErrorMessage,
-  buildDiscordErrorMessage,
-  type IErrorMessageOptions,
-} from "../utilities/ApiErrorUtils.js";
 import { checkConductorAccess } from "./ConductorAccess.js";
+import { conductorApiError, conductorDiscordError } from "./ConductorErrors.js";
 import {
   checkConductorChannelAccess,
   formatChannelAccessProblem,
@@ -78,17 +74,6 @@ import { findUncheckedSteps, parseTestPlan } from "./TestPlanParser.js";
 const OBSERVATION_FETCH_LIMIT = 100;
 
 type AnyConductorInteraction = CommandInteraction | ButtonInteraction | ModalSubmitInteraction;
-
-/** The conductor's DMs and the test guild have no dev role to mention. */
-const CONDUCTOR_ERROR_OPTIONS: IErrorMessageOptions = { devPing: false };
-
-function conductorApiError(label: string, err: unknown): string {
-  return buildApiErrorMessage(label, err, CONDUCTOR_ERROR_OPTIONS);
-}
-
-function conductorDiscordError(label: string, err: unknown): string {
-  return buildDiscordErrorMessage(label, err, CONDUCTOR_ERROR_OPTIONS);
-}
 
 /** Edits the message holding the current step's buttons. */
 type StepMessageEditor = (payload: ReturnType<typeof buildStepMessage>) => Promise<unknown>;

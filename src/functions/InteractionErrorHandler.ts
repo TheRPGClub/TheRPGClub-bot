@@ -2,6 +2,7 @@ import type { ChatInputCommandInteraction, Interaction } from "discord.js";
 
 import { buildErrorReply } from "./ComponentsV2Utils.js";
 import { safeFollowUpIfSettled } from "./InteractionUtils.js";
+import { CONDUCTOR_ERROR_OPTIONS, isConductorSource } from "../conductor/ConductorErrors.js";
 import { buildAnyErrorMessage } from "../utilities/ApiErrorUtils.js";
 import { logError } from "../utilities/LogUtils.js";
 
@@ -38,7 +39,12 @@ export async function handleInteractionError(
   logError(`[Interaction] ${source} failed`, err);
   if (!interaction.isRepliable() || interaction.replied) return;
 
-  const message: string = buildAnyErrorMessage(`Something went wrong running ${source}`, err);
+  const options = isConductorSource(source) ? CONDUCTOR_ERROR_OPTIONS : undefined;
+  const message: string = buildAnyErrorMessage(
+    `Something went wrong running ${source}`,
+    err,
+    options,
+  );
   try {
     await safeFollowUpIfSettled(interaction, buildErrorReply(message, true));
   } catch (replyErr: unknown) {
