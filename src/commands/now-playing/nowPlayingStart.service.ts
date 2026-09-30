@@ -1,22 +1,12 @@
-import {
-  StringSelectMenuBuilder,
-  type ActionRowBuilder,
-  type ButtonInteraction,
-  type StringSelectMenuInteraction,
-} from "discord.js";
-import type { ContainerBuilder } from "@discordjs/builders";
+import type { ButtonInteraction, StringSelectMenuInteraction } from "discord.js";
 import Member from "../../classes/Member.js";
-import GamePlatformRegionService from "../../classes/GamePlatformRegionService.js";
-import { STANDARD_PLATFORM_IDS } from "../../config/standardPlatforms.js";
 import { GAMEDB_NOWPLAYING_PLATFORM_SELECT_PREFIX } from "../../config/customIdPrefixes.js";
+import { buildErrorReply, buildTextReply } from "../../functions/ComponentsV2Utils.js";
 import {
-  buildComponentsV2Flags,
-  buildErrorReply,
-  buildTextContainer,
-  buildTextReply,
-} from "../../functions/ComponentsV2Utils.js";
+  buildGamePlatformPromptPayload,
+  type IGamePlatformPrompt,
+} from "../../functions/GamePlatformPrompt.js";
 import { safeReply } from "../../functions/InteractionUtils.js";
-import { buildSelectOptions, buildSelectRow } from "../../functions/uiComponents.js";
 import { buildApiErrorMessage } from "../../utilities/ApiErrorUtils.js";
 
 export interface IStartPlayingEntry {
@@ -25,11 +15,6 @@ export interface IStartPlayingEntry {
   platformId: number | null;
   platformName: string | null;
   note: string | null;
-}
-
-export interface INowPlayingPlatformPrompt {
-  components: Array<ContainerBuilder | ActionRowBuilder<StringSelectMenuBuilder>>;
-  flags: number;
 }
 
 export function buildGameDbNowPlayingPlatformSelectCustomId(gameId: number): string {
@@ -43,26 +28,13 @@ export function buildGameDbNowPlayingPlatformSelectCustomId(gameId: number): str
 export async function buildNowPlayingPlatformPromptPayload(
   gameId: number,
   title: string,
-): Promise<INowPlayingPlatformPrompt | null> {
-  const platforms = await GamePlatformRegionService
-    .getPlatformsForGameWithStandard(gameId, STANDARD_PLATFORM_IDS);
-  if (!platforms.length) return null;
-  const options = buildSelectOptions(platforms.map((platform) => ({
-    label: platform.name,
-    value: String(platform.id),
-  })));
-  const select = new StringSelectMenuBuilder()
-    // eslint-disable-next-line local/custom-id-has-matching-handler
-    .setCustomId(buildGameDbNowPlayingPlatformSelectCustomId(gameId))
-    .setPlaceholder("Select the platform")
-    .addOptions(options);
-  return {
-    components: [
-      buildTextContainer(`Select the platform for **${title}**.`),
-      buildSelectRow(select),
-    ],
-    flags: buildComponentsV2Flags(true),
-  };
+): Promise<IGamePlatformPrompt | null> {
+  return buildGamePlatformPromptPayload({
+    gameId,
+    title,
+    customId: buildGameDbNowPlayingPlatformSelectCustomId(gameId),
+    placeholder: "Select the platform",
+  });
 }
 
 /**

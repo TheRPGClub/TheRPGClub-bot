@@ -58,10 +58,10 @@ import {
   GAMEDB_COLLECTION_PLATFORM_PREFIX,
 } from "../../config/customIdPrefixes.js";
 import { buildNowPlayingPlatformPromptPayload } from "../now-playing/nowPlayingStart.service.js";
+import { buildGamePlatformPromptPayload } from "../../functions/GamePlatformPrompt.js";
 import { buildApiErrorMessage } from "../../utilities/ApiErrorUtils.js";
 import { logError } from "../../utilities/LogUtils.js";
 import GamePlatformRegionService from "../../classes/GamePlatformRegionService.js";
-import { STANDARD_PLATFORM_IDS } from "../../config/standardPlatforms.js";
 
 @Discord()
 @SlashGroup("gamedb")
@@ -235,10 +235,14 @@ export class GameDbViewCommand {
     gameId: number,
     title: string,
   ): Promise<void> {
-    let platforms;
+    let prompt;
     try {
-      platforms = await GamePlatformRegionService
-        .getPlatformsForGameWithStandard(gameId, STANDARD_PLATFORM_IDS);
+      prompt = await buildGamePlatformPromptPayload({
+        gameId,
+        title,
+        customId: `${GAMEDB_COLLECTION_PLATFORM_PREFIX}:${gameId}`,
+        placeholder: "Select the platform you own it on",
+      });
     } catch (err: unknown) {
       logError("gamedb view.load_collection_platforms_failed", err);
       await safeReply(interaction, buildErrorReply(
@@ -246,28 +250,14 @@ export class GameDbViewCommand {
       ));
       return;
     }
-    if (!platforms.length) {
+    if (!prompt) {
       await safeReply(interaction, buildTextReply(
         "This game has no platform data yet. Add it with `/collection add` " +
           "after platform data is available.", true,
       ));
       return;
     }
-    const options = buildSelectOptions(platforms.map((platform) => ({
-      label: platform.name,
-      value: String(platform.id),
-    })));
-    const select = new StringSelectMenuBuilder()
-      .setCustomId(`${GAMEDB_COLLECTION_PLATFORM_PREFIX}:${gameId}`)
-      .setPlaceholder("Select the platform you own it on")
-      .addOptions(options);
-    await safeReply(interaction, {
-      components: [
-        buildTextContainer(`Select the platform for **${title}**.`),
-        buildSelectRow(select),
-      ],
-      flags: buildComponentsV2Flags(true),
-    });
+    await safeReply(interaction, prompt);
   }
 
   @SelectMenuComponent({ id: /^gamedb-collection-platform:\d+$/ })
