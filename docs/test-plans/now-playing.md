@@ -129,7 +129,7 @@ Ephemeral: yes
 click "Edit Platform"
 ```
 Expected: the manage message changes to "Now Playing Edit Platform" with
-"Pick one platform per game, then press Save." and button: "Reset to current platforms".
+"Pick one platform per game, then press Save." and a platform select per game.
 Ephemeral: yes
 
 ### Step 16: Cancel Edit Platform and open Remove Game
@@ -193,8 +193,8 @@ Ephemeral: no
 ```
 click your name, "Add Completion", then Chrono Trigger's "Add Completion", set Announce "No"
 ```
-Expected: the manage message shows "Add Completion" and "Chrono Trigger", with
-button: "Continue" and button: "Cancel". If Chrono Trigger is your only game, the
+Expected: the manage message shows "Add Completion" and "Chrono Trigger", with the
+completion selects and Continue and Cancel buttons. If Chrono Trigger is your only game, the
 game picker is skipped. Nothing is posted publicly.
 Ephemeral: yes
 
