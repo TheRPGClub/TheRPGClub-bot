@@ -79,12 +79,17 @@ export function buildDiscordErrorMessage(label: string, err: unknown): string {
 }
 
 /**
- * A discord.js REST failure on one line: the request line and Discord's response,
- * e.g. `POST /channels/1/messages -> 403 {"message":"Missing Access","code":50001}`.
- * For result lines and replies where buildDiscordErrorMessage's request body would
- * crowd out the reason. Anything else gives its message.
+ * Why a request failed, for result lines and replies. A discord.js REST failure is
+ * one line, the request line and Discord's response, e.g.
+ * `POST /channels/1/messages -> 403 {"message":"Missing Access","code":50001}`, since
+ * buildDiscordErrorMessage's request body (a whole message) would crowd out the reason.
+ * An API (axios) failure gets the full request and response blocks. Anything else
+ * gives its message.
  */
-export function describeDiscordRestError(err: unknown): string {
+export function describeRequestError(err: unknown): string {
+  if (axios.isAxiosError(err)) {
+    return `${err.message}\n${formatAxiosError(err)}`;
+  }
   const restError = err as IDiscordRestError;
   if (typeof restError?.method === "string" && typeof restError?.url === "string") {
     const path = restError.url.replace(/^https?:\/\/[^/]+\/api\/v\d+/, "");

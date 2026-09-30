@@ -14,7 +14,7 @@ import {
 } from "./VotePanelComponents.js";
 import { buildTestPanelNoticeText, dedupeNominationsByGame } from "./VoteResultsUtils.js";
 import { logError } from "../utilities/LogUtils.js";
-import { describeDiscordRestError } from "../utilities/ApiErrorUtils.js";
+import { describeRequestError } from "../utilities/ApiErrorUtils.js";
 
 // Posting a round's voting panels, shared by /admin voting-open and the
 // voting_opened voting event (VotingEventService), which has no interaction.
@@ -39,7 +39,7 @@ async function sendPanelToChannel(
   } catch (error) {
     logError("VotePanelPosting.sendPanelToChannel", error);
     // The request body is the whole panel, so it is left to the log above.
-    return describeDiscordRestError(error);
+    return describeRequestError(error);
   }
 }
 

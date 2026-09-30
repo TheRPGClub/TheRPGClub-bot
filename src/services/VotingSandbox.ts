@@ -11,7 +11,7 @@ import {
 } from "../functions/ComponentsV2Utils.js";
 import type { IVotePanelIds } from "../functions/VotePanelComponents.js";
 import { buildFinalWinnersText } from "../functions/VoteResultsUtils.js";
-import { describeDiscordRestError, UserFacingError } from "../utilities/ApiErrorUtils.js";
+import { describeRequestError, UserFacingError } from "../utilities/ApiErrorUtils.js";
 import { persistedSessionStore } from "./PersistedInteractionSessionStore.js";
 import type { IVotingDataSource } from "./VotingDataSource.js";
 import {
@@ -360,7 +360,7 @@ export async function deliverSandboxOutbox(client: Client, ownerId: string): Pro
         lines.push(`\`${event.rawKind}\`: ${outcome}.`);
         return outcome;
       } catch (err) {
-        lines.push(`\`${event.rawKind}\`: failed, left queued. ${describeDiscordRestError(err)}`);
+        lines.push(`\`${event.rawKind}\`: failed, left queued. ${describeRequestError(err)}`);
         throw err;
       }
     };

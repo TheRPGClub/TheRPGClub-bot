@@ -1,8 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { AxiosError } from "axios";
 import { Collection, type Client } from "discord.js";
 import { ADMIN_CHANNEL_ID, ANNOUNCEMENT_CHANNEL_ID } from "../config/channels.js";
-import { describeDiscordRestError } from "../utilities/ApiErrorUtils.js";
+import { describeRequestError } from "../utilities/ApiErrorUtils.js";
 import { persistedSessionStore } from "../services/PersistedInteractionSessionStore.js";
 import {
   createSandboxDataSource,
@@ -293,7 +294,7 @@ test("sandbox ids carry owner, sandbox and round, and stay within Discord's limi
   assert.equal(parseSandboxCustomId("vsbx-mine:abc:x:1:gotm"), null);
 });
 
-test("describeDiscordRestError names the request and Discord's response", () => {
+test("describeRequestError names the request and Discord's response", () => {
   const restError = Object.assign(new Error("Missing Permissions"), {
     method: "post",
     url: "https://discord.com/api/v10/channels/123/messages",
@@ -301,10 +302,21 @@ test("describeDiscordRestError names the request and Discord's response", () => 
     rawError: { message: "Missing Permissions", code: 50013 },
   });
   assert.equal(
-    describeDiscordRestError(restError),
+    describeRequestError(restError),
     'POST /channels/123/messages -> 403 {"message":"Missing Permissions","code":50013}',
   );
-  assert.equal(describeDiscordRestError(new Error("boom")), "boom");
+  assert.equal(describeRequestError(new Error("boom")), "boom");
+  const apiError = new AxiosError(
+    "Request failed with status code 500",
+    "ERR_BAD_RESPONSE",
+    { method: "get", url: "/api/v1/users/1/wizard_sessions" } as never,
+    null,
+    { status: 500, data: { error: "boom" } } as never,
+  );
+  const described = describeRequestError(apiError);
+  assert.match(described, /"method": "GET"/);
+  assert.match(described, /"url": "\/api\/v1\/users\/1\/wizard_sessions"/);
+  assert.match(described, /"status": 500/);
 });
 
 test("a panel Discord refuses is reported with Discord's reason", async (t) => {
