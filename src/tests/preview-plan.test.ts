@@ -2,20 +2,24 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
-type PreviewPlan = { deploy: boolean; kind: string; reason: string };
+type TestingSteps = { kind: string; reason: string };
+type PullRequest = {
+  number: number;
+  state: string;
+  body?: string | null;
+  head: { repo?: { full_name?: string } | null };
+};
 type PlanModule = {
-  planPreview: (args: {
-    action: string;
-    body?: string | null;
-    previousBody?: string | null;
-    rerun?: boolean;
-  }) => PreviewPlan;
+  testingSteps: (body?: string | null) => TestingSteps;
+  deployRefusal: (args: { pr: PullRequest; repository: string }) => TestingSteps & {
+    refusal: string;
+  };
 };
 
 // A runtime path keeps tsc from pulling the workflow script, outside src, into the build.
 const PLAN_MODULE = new URL("../../scripts/preview/plan.mjs", import.meta.url).href;
 const PARSER_FILE = new URL("../conductor/TestPlanParser.ts", import.meta.url);
-const { planPreview } = await import(PLAN_MODULE) as PlanModule;
+const { testingSteps, deployRefusal } = await import(PLAN_MODULE) as PlanModule;
 
 const FENCE = "```";
 const RUNNABLE = [
@@ -30,51 +34,55 @@ const RUNNABLE = [
 ].join("\n");
 const UNTESTED = "## Summary\n- a change\n";
 const MALFORMED = "## Summary\n- a change\n\n## Testing\n\nJust run /ping.\n";
+const REPOSITORY = "owner/repo";
 
-test("a body with runnable Testing steps deploys", () => {
-  assert.deepEqual(planPreview({ action: "opened", body: RUNNABLE }), {
-    deploy: true, kind: "ok", reason: "",
-  });
-  assert.equal(planPreview({ action: "synchronize", body: RUNNABLE }).deploy, true);
+function pullRequest(overrides: Partial<PullRequest> = {}): PullRequest {
+  return {
+    number: 7,
+    state: "open",
+    body: RUNNABLE,
+    head: { repo: { full_name: REPOSITORY } },
+    ...overrides,
+  };
+}
+
+test("testingSteps classifies a body the way /conduct does", () => {
+  assert.deepEqual(testingSteps(RUNNABLE), { kind: "ok", reason: "" });
+  assert.deepEqual(testingSteps(UNTESTED), { kind: "absent", reason: "" });
+  assert.equal(testingSteps(null).kind, "absent");
+  assert.deepEqual(testingSteps(`${UNTESTED}\n## Testing\n\n`), { kind: "empty", reason: "" });
+  const malformed = testingSteps(MALFORMED);
+  assert.equal(malformed.kind, "malformed");
+  assert.match(malformed.reason, /Step 1/);
 });
 
-test("a body with no Testing section or an empty one never deploys", () => {
-  assert.deepEqual(planPreview({ action: "opened", body: UNTESTED }), {
-    deploy: false, kind: "absent", reason: "",
-  });
-  assert.equal(planPreview({ action: "opened", body: null }).kind, "absent");
-  const empty = planPreview({ action: "opened", body: `${UNTESTED}\n## Testing\n\n` });
-  assert.deepEqual(empty, { deploy: false, kind: "empty", reason: "" });
+test("an open same-repo PR with runnable Testing steps may deploy", () => {
+  const plan = deployRefusal({ pr: pullRequest(), repository: REPOSITORY });
+  assert.deepEqual(plan, { refusal: "", kind: "ok", reason: "" });
 });
 
-test("a malformed Testing section never deploys and carries the parser's reason", () => {
-  const plan = planPreview({ action: "opened", body: MALFORMED });
-  assert.equal(plan.deploy, false);
-  assert.equal(plan.kind, "malformed");
-  assert.match(plan.reason, /Step 1/);
+test("a closed PR is refused", () => {
+  const plan = deployRefusal({ pr: pullRequest({ state: "closed" }), repository: REPOSITORY });
+  assert.equal(plan.refusal, "PR #7 is closed.");
 });
 
-test("an edit deploys only when it gave the body its Testing steps", () => {
-  const gained = planPreview({ action: "edited", body: RUNNABLE, previousBody: UNTESTED });
-  assert.equal(gained.deploy, true);
-  const fixed = planPreview({ action: "edited", body: RUNNABLE, previousBody: MALFORMED });
-  assert.equal(fixed.deploy, true);
-  const reworded = planPreview({
-    action: "edited", body: RUNNABLE.replace("a change", "a reworded change"),
-    previousBody: RUNNABLE,
-  });
-  assert.deepEqual(reworded, { deploy: false, kind: "ok", reason: "" });
-  const removed = planPreview({ action: "edited", body: UNTESTED, previousBody: RUNNABLE });
-  assert.deepEqual(removed, { deploy: false, kind: "absent", reason: "" });
+test("a fork PR is refused, including one whose head repo was deleted", () => {
+  const fork = pullRequest({ head: { repo: { full_name: "someone/repo" } } });
+  assert.match(deployRefusal({ pr: fork, repository: REPOSITORY }).refusal, /fork/);
+  const gone = pullRequest({ head: { repo: null } });
+  assert.match(deployRefusal({ pr: gone, repository: REPOSITORY }).refusal, /fork/);
 });
 
-test("a re-run deploys a body with Testing steps whatever event started it", () => {
-  const rerun = planPreview({
-    action: "edited", body: RUNNABLE, previousBody: RUNNABLE, rerun: true,
+test("a PR without runnable Testing steps is refused, with the parser's reason", () => {
+  const untested = deployRefusal({
+    pr: pullRequest({ body: UNTESTED }), repository: REPOSITORY,
   });
-  assert.equal(rerun.deploy, true);
-  const untested = planPreview({ action: "edited", body: UNTESTED, rerun: true });
-  assert.equal(untested.deploy, false);
+  assert.match(untested.refusal, /no Testing steps/);
+  const malformed = deployRefusal({
+    pr: pullRequest({ body: MALFORMED }), repository: REPOSITORY,
+  });
+  assert.equal(malformed.kind, "malformed");
+  assert.match(malformed.refusal, /could not be parsed: [\s\S]*Step 1/);
 });
 
 // The workflow imports the parser under Node's built-in type stripping, which cannot

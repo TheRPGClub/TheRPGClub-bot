@@ -380,11 +380,21 @@ test("journal delete confirm removes entry on yes and skips removal on no", asyn
   const originalEntries = Member.getGameJournalEntries;
 
   let deleteCalls = 0;
+  const updates: unknown[] = [];
 
   try {
     Member.deleteGameJournalEntry = (async () => {
       deleteCalls += 1;
-      return true;
+      return {
+        entryId: 10,
+        entryNumber: 1,
+        userId: "123",
+        gameId: 1,
+        title: "Boss Rush",
+        body: "Body",
+        createdAt: new Date("2026-05-11T00:00:00.000Z"),
+        updatedAt: new Date("2026-05-11T00:00:00.000Z"),
+      };
     }) as any;
     Game.getGameById = (async () => ({ id: 1, title: "Pragmata" })) as any;
     Member.getByUserId = (async () => ({ globalName: "merph518", username: "merph518" })) as any;
@@ -409,7 +419,9 @@ test("journal delete confirm removes entry on yes and skips removal on no", asyn
       message: { flags: { has: () => false } },
       deferred: false,
       replied: false,
-      update: async () => undefined,
+      update: async (payload: unknown) => {
+        updates.push(payload);
+      },
       followUp: async () => undefined,
       reply: async () => undefined,
       editReply: async () => undefined,
@@ -417,9 +429,15 @@ test("journal delete confirm removes entry on yes and skips removal on no", asyn
 
     await command.handleNowPlayingJournalDeleteConfirm(makeInteraction("no"));
     assert.equal(deleteCalls, 0);
+    assert.ok(collectBuilderField(updates[0], "content").some(
+      (text) => text.includes("Nothing was deleted"),
+    ));
 
     await command.handleNowPlayingJournalDeleteConfirm(makeInteraction("yes"));
     assert.equal(deleteCalls, 1);
+    assert.ok(collectBuilderField(updates[1], "content").some(
+      (text) => text.includes("Deleted **Boss Rush**."),
+    ));
   } finally {
     Member.deleteGameJournalEntry = originalDelete;
     Game.getGameById = originalGetGameById;

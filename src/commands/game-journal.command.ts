@@ -29,6 +29,7 @@ import {
   SlashOption,
 } from "discordx";
 import Member, {
+  type IGameJournalEntry,
   type IGameJournalListEntry,
   type IJournalSearchResult,
   type IJournalUserSummary,
@@ -47,7 +48,11 @@ import {
 } from "../functions/InteractionUtils.js";
 import { formatGameTitleWithYear } from "../functions/GameTitleAutocompleteUtils.js";
 import { renderUsernameWithEmoji } from "../services/UserEmojiService.js";
-import { buildJournalView } from "../functions/journalView.js";
+import {
+  buildJournalView,
+  formatJournalDeleteStatus,
+  formatJournalEntryTitle,
+} from "../functions/journalView.js";
 import {
   buildComponentsV2Flags,
   buildMaskedLink,
@@ -886,7 +891,7 @@ export class GameJournalCommand {
       await safeReply(interaction, buildTextReply("That journal entry was not found.", false));
       return;
     }
-    const entryTitle = entry.title?.trim() ? entry.title.trim() : `Entry #${entry.entryNumber}`;
+    const entryTitle = formatJournalEntryTitle(entry);
     const container = buildTextContainer(
     safeV2TextContent(
       `## Confirm Delete\nDelete **${entryTitle}** from ${formatTableDate(entry.createdAt)}?`,
@@ -916,15 +921,18 @@ export class GameJournalCommand {
     if (!segments) return;
     const [action, ownerId, gameIdRaw, entryIdRaw] = segments;
     if (await replyIfNotOwner(interaction, ownerId)) return;
+    let removed: IGameJournalEntry | null = null;
     if (action === "yes") {
-      const removed = await Member.deleteGameJournalEntry(ownerId, Number(entryIdRaw));
+      removed = await Member.deleteGameJournalEntry(ownerId, Number(entryIdRaw));
       if (!removed) {
         await safeReply(interaction, buildTextReply("That journal entry was not found.", false));
         return;
       }
     }
     const gameId = Number(gameIdRaw);
-    const container = buildTextContainer("## Manage Journal");
+    const container = buildTextContainer(
+      `## Manage Journal\n${formatJournalDeleteStatus(removed)}`,
+    );
     const row = buildHmenuActionRow(ownerId, gameId);
     await safeUpdate(interaction, {
       components: [container, row],

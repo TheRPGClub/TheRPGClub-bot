@@ -1,33 +1,43 @@
 # PR preview deployments
 
-Every same-repo pull request against `main` whose body has Testing steps is built and run
+A same-repo pull request against `main` whose body has Testing steps can be built and run
 in the test guild under a separate dev bot application, on a self-hosted runner on the
-desktop that already runs the production bot. The PR gets a sticky `PR preview` comment
-saying whether its preview is building, running, failed, replaced, or torn down, and the
-`deploy` job doubles as a check.
+desktop that already runs the production bot. Deploys happen only when the user asks for
+one with the `/test-guild` skill in Claude Code, so several PRs can be in flight while
+the user picks which one the test guild runs. The PR gets a sticky `PR preview` comment
+saying whether its preview is building, running, behind its head, failed, replaced, or
+torn down.
 
 Pieces:
 
-- `.github/workflows/pr-preview.yml` deploys on open, reopen, and push (including
-  force-push), and on a body edit that adds Testing steps. It tears down on close or
-  merge, and reaps orphans hourly.
+- `.claude/skills/test-guild/SKILL.md` is the `/test-guild` skill. Only the user runs
+  it. It lists the deployable PRs and which one holds the test guild, dispatches a
+  deploy or a stop, and waits for the run.
+- `.github/workflows/pr-preview.yml` deploys when dispatched with `action=deploy` and a
+  PR number, and stops the running preview on `action=stop`. PR events never deploy: a
+  push to the PR holding the test guild marks its comment behind, a body edit that
+  removes the Testing steps tears its preview down, and a close or merge tears it down.
+  It reaps orphans hourly, or on `action=reap`.
 - `scripts/preview/plan.mjs` reads the PR body with `src/conductor/TestPlanParser.ts`,
   the parser `/conduct` uses, so both agree on what counts as Testing steps.
 - `scripts/preview/preview.sh` does the Docker work, and is the manual control.
 - `docker-compose.preview.yml` defines the `pr-preview` service. It is a separate file so
   `docker compose up -d` for production never starts it.
-- `scripts/preview/comment.mjs` writes the PR comment.
+- `scripts/preview/comment.mjs` writes the PR comment, and `scripts/preview/status.mjs`
+  reads it back for `npm run test-guild:status`, the skill's view of the test guild.
 
 The existing `ci.yml` jobs stay on GitHub-hosted runners.
 
 ## Guarantees
 
-- **Only testable PRs deploy.** A PR whose body has no `## Testing` section, or an empty
-  one, gets no preview and no comment. A malformed one gets a comment with the parse
-  error instead of a deploy. Either way the preview running for another PR stays up, and
-  a PR that loses its Testing steps has its own preview torn down and its comment
-  updated. Adding the section later deploys it without a push; other body edits do not
-  redeploy.
+- **Nothing deploys on its own.** Opening, reopening, pushing to, or editing a PR never
+  builds anything. A push to the PR holding the test guild updates its comment to say
+  the preview is behind the new head; the user redeploys with `/test-guild <pr>`.
+- **Only testable PRs deploy.** The `plan` job refuses a closed PR, a fork PR, and one
+  whose body has no, an empty, or a malformed `## Testing` section, failing the run with
+  the reason before anything is built, so the preview running for another PR stays up.
+  A PR that loses its Testing steps has its own preview torn down and its comment
+  updated.
 
 - **Production is untouched.** The preview runs with `TEST_GUILD_ID` set, so its slash
   commands register to the test guild only, and under the dev bot's own application, so
@@ -35,7 +45,8 @@ The existing `ci.yml` jobs stay on GitHub-hosted runners.
   `TEST_GUILD_ID` is empty or when `BOT_TOKEN` decodes to `PRODUCTION_BOT_USER_ID`.
 - **One preview at a time.** Every deploy removes whatever preview is running first, and
   deploys share one concurrency group that cancels an in-flight deploy when a newer one
-  starts. The newest push wins, and the PR it displaced is told so in its comment.
+  or a stop starts. The newest request wins, and the PR it displaced is told so in its
+  comment.
 - **Watchtower leaves it alone.** The container carries
   `com.centurylinklabs.watchtower.enable=false`, and its image is local only.
 - **Scheduled work stays with production.** Test mode skips the background services in
@@ -160,9 +171,10 @@ while the desktop is off for a while.
 
 ### 8. Verify
 
-1. Open any PR against `main` with Testing steps in its body. Within a minute or two its
-   `PR preview` comment should read Running, and the dev bot should be online in the test
-   guild with its slash commands listed there.
+1. Pick any open PR against `main` with Testing steps in its body and run
+   `/test-guild <pr>` in Claude Code. Once the run finishes its `PR preview` comment
+   should read Running, and the dev bot should be online in the test guild with its
+   slash commands listed there.
 2. `docker ps` shows `rpgclub-pr-preview` next to the production container, and the
    production bot keeps answering in the main guild.
 3. Close the PR. The container is gone and the comment reads torn down.
@@ -179,10 +191,14 @@ bash scripts/preview/preview.sh list
 bash scripts/preview/preview.sh kill
 ```
 
-`teardown <pr>` removes the preview only if it belongs to that PR. Re-running all jobs of
-a PR's latest workflow run brings its preview back, as long as its body still has Testing
-steps. Running the workflow by hand from the Actions tab runs the reaper, which removes a
-preview whose PR is closed.
+`teardown <pr>` removes the preview only if it belongs to that PR, and `current` prints
+the PR and commit the running preview was built from.
+
+From anywhere, including the laptop, `/test-guild` covers the same ground through the
+workflow. Without Claude Code, run the workflow from the Actions tab or with
+`gh workflow run pr-preview.yml -f action=deploy -f pr=<pr>`; `action=stop` removes the
+running preview and `action=reap` removes one whose PR is closed. Re-running all jobs
+of a deploy run deploys that PR's head as of the re-run.
 
 ## Reading preview logs
 

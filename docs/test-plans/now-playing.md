@@ -170,7 +170,7 @@ click "Delete Entry" on the journal follow-up, select "Conductor test entry", cl
 ```
 Expected: a Confirm Delete prompt names the entry, then the entry is removed and the
 journal controls return with button: "Delete Entry", and not: "That journal entry was not
-found". A confirmation line saying the entry was deleted should show.
+found". The status line above the controls reads "Deleted" and names "Conductor test entry".
 Ephemeral: yes
 
 ### Step 21: Remove Chrono Trigger with Remove Game
