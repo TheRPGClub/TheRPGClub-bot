@@ -41,7 +41,10 @@ export class RssCommand {
     if (!ok) return;
 
     const response = withLegacyHelpPointer(buildRssHelpResponse(), "/rss help", "rss");
-    await safeReply(interaction, { ...response, flags: MessageFlags.Ephemeral });
+    await safeReply(interaction, {
+      ...response,
+      flags: response.flags | MessageFlags.Ephemeral,
+    });
   }
 
   @Slash({ description: "Add an RSS feed relay", name: "add" })

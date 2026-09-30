@@ -2,7 +2,6 @@ import type {
   AutocompleteInteraction,
   ButtonInteraction,
   CommandInteraction,
-  MessageActionRowComponentBuilder,
 } from "discord.js";
 import {
   ActionRowBuilder,
@@ -28,11 +27,11 @@ import {
   type HelpAccess,
   type HelpAccessLevel,
 } from "./help/help-access.js";
+import { withHelpNotice } from "./help/help-pointer.js";
 import { buildAdminHelpResponse } from "./admin/admin-help.service.js";
 import { buildModHelpResponse } from "./mod.command.js";
 import { buildSuperAdminHelpResponse } from "./superadmin.command.js";
 import {
-  buildTextContainer,
   buildTitledContainer,
   buildFieldsText,
   buildComponentsV2EditFlags,
@@ -378,18 +377,6 @@ const HELP_TOPICS: HelpTopic[] = [
     notes: "Suggestions are approved from the Review Suggestions button in /todo by the server owner or bot dev.",
   },
 ];
-
-function withHelpNotice<
-  T extends {
-    components: (ContainerBuilder | ActionRowBuilder<MessageActionRowComponentBuilder>)[];
-    flags: number;
-  },
->(response: T, content: string): T {
-  return {
-    ...response,
-    components: [buildTextContainer(content), ...response.components],
-  };
-}
 
 const HELP_CATEGORIES: { id: string; name: string; topicIds: HelpTopicId[] }[] = [
   {
@@ -1081,11 +1068,7 @@ export class BotHelp {
     }
 
     const container = buildHelpDetailsContainer(topic);
-    const categoryComponents = buildCategoryComponents(
-      category.id,
-      getHelpAccess(interaction),
-      topic.id,
-    );
+    const categoryComponents = buildCategoryComponents(category.id, access, topic.id);
     await safeUpdate(interaction, {
       components: [container, ...categoryComponents],
       flags: buildComponentsV2EditFlags(),
