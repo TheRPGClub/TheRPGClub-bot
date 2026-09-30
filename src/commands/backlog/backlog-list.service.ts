@@ -4,10 +4,16 @@ import {
   ButtonInteraction,
   ButtonStyle,
   StringSelectMenuBuilder,
+  type StringSelectMenuInteraction,
 } from "discord.js";
+import Member from "../../classes/Member.js";
 import UserGameBacklog, { type IUserGameBacklogEntry } from "../../classes/UserGameBacklog.js";
-import { safeV2TextContent } from "../../functions/ComponentsV2Utils.js";
-import { safeDeferUpdate } from "../../functions/InteractionUtils.js";
+import {
+  buildErrorReply,
+  buildTextReply,
+  safeV2TextContent,
+} from "../../functions/ComponentsV2Utils.js";
+import { safeDeferUpdate, safeReply } from "../../functions/InteractionUtils.js";
 import { buildActionButton, buildButtonRow } from "../../functions/uiComponents.js";
 import { buildStartPlayingSelectRow } from "../../functions/StartPlayingSelect.js";
 import {
@@ -21,6 +27,7 @@ import {
   parseCustomIdSegments,
 } from "../../utilities/CustomIdUtils.js";
 import { safeIgnore } from "../../utilities/AsyncUtils.js";
+import { buildApiErrorMessage } from "../../utilities/ApiErrorUtils.js";
 import {
   BACKLOG_LIST_NAV_PREFIX,
   BACKLOG_LIST_FILTER_PREFIX,
@@ -312,6 +319,37 @@ function buildBacklogStartPlayingRow(
       platformName: entry.platformName,
     })),
   );
+}
+
+/**
+ * Adding to Now Playing takes a game off the backlog, but a row left on both lists before that
+ * rule existed still offers the game here. Picking it drops the backlog row instead of failing
+ * on the duplicate. Returns true when it replied.
+ */
+export async function takeOffBacklogIfAlreadyPlaying(
+  interaction: StringSelectMenuInteraction,
+  entry: IUserGameBacklogEntry,
+): Promise<boolean> {
+  try {
+    const nowPlaying = await Member.getNowPlaying(entry.userId);
+    const playing = nowPlaying.find((item) => item.gameId === entry.gameId);
+    if (!playing) return false;
+    // Same carry-over as Member.addNowPlaying: deleting the row would drop its note.
+    if (entry.note && !playing.note?.trim()) {
+      await Member.updateNowPlayingNote(entry.userId, entry.gameId, entry.note);
+    }
+    await UserGameBacklog.removeEntries([entry.entryId]);
+  } catch (err: unknown) {
+    const message = buildApiErrorMessage("Failed to take this game off your backlog", err);
+    await safeReply(interaction, buildErrorReply(message, true));
+    return true;
+  }
+  await safeReply(interaction, buildTextReply(
+    `**${safeV2TextContent(entry.title, 100)}** is already on your Now Playing list, ` +
+      "so it was taken off your backlog.",
+    true,
+  ));
+  return true;
 }
 
 export async function applyBacklogFiltersToSourceMessage(params: {
