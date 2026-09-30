@@ -108,7 +108,7 @@ test("addNowPlaying still adds when the backlog lookup fails", async () => {
   assert.equal(requests.filter((r) => r.method === "DELETE").length, 0);
 });
 
-function backlogEntry(): any {
+function backlogEntry(note: string | null): any {
   return {
     entryId: 11,
     userId: "123",
@@ -118,17 +118,23 @@ function backlogEntry(): any {
     platformName: "Switch",
     platformAbbreviation: "NS",
     sortOrder: null,
-    note: null,
+    note,
     createdAt: new Date(0),
     updatedAt: new Date(0),
   };
 }
 
-async function pickFromBacklog(nowPlayingGameIds: number[]): Promise<{
+async function pickFromBacklog(
+  nowPlaying: Array<{ gameId: number; note: string | null }>,
+  backlogNote: string | null = null,
+): Promise<{
   handled: boolean;
   replies: any[];
+  noteUpdates: unknown[][];
 }> {
   const originalNowPlaying = Member.getNowPlaying;
+  const originalUpdateNote = Member.updateNowPlayingNote;
+  const noteUpdates: unknown[][] = [];
   const replies: any[] = [];
   const interaction: any = {
     user: { id: "123" },
@@ -142,18 +148,27 @@ async function pickFromBacklog(nowPlayingGameIds: number[]): Promise<{
     },
   };
   try {
-    Member.getNowPlaying = (async () => nowPlayingGameIds.map((gameId) => ({ gameId }))) as any;
-    const handled = await takeOffBacklogIfAlreadyPlaying(interaction, backlogEntry());
-    return { handled, replies };
+    Member.getNowPlaying = (async () => nowPlaying) as any;
+    Member.updateNowPlayingNote = (async (...args: unknown[]) => {
+      noteUpdates.push(args);
+      return true;
+    }) as any;
+    const handled = await takeOffBacklogIfAlreadyPlaying(interaction, backlogEntry(backlogNote));
+    return { handled, replies, noteUpdates };
   } finally {
     Member.getNowPlaying = originalNowPlaying;
+    Member.updateNowPlayingNote = originalUpdateNote;
   }
 }
 
 test("picking a backlog game already on Now Playing takes it off the backlog", async () => {
-  const { handled, replies } = await pickFromBacklog([7]);
+  const { handled, replies, noteUpdates } = await pickFromBacklog(
+    [{ gameId: 7, note: "mine" }],
+    "from backlog",
+  );
 
   assert.equal(handled, true);
+  assert.equal(noteUpdates.length, 0);
   const deletes = requests.filter((r) => r.method === "DELETE").map((r) => r.url);
   assert.deepEqual(deletes, ["/api/v1/backlog/11"]);
   const json = JSON.stringify(replies[0].components.map((c: any) => c.toJSON()));
@@ -161,9 +176,17 @@ test("picking a backlog game already on Now Playing takes it off the backlog", a
 });
 
 test("picking a backlog game not on Now Playing leaves it to startPlayingEntry", async () => {
-  const { handled, replies } = await pickFromBacklog([8]);
+  const { handled, replies } = await pickFromBacklog([{ gameId: 8, note: null }]);
 
   assert.equal(handled, false);
   assert.equal(replies.length, 0);
   assert.equal(requests.filter((r) => r.method === "DELETE").length, 0);
+});
+
+test("clearing a backlog row already on Now Playing carries its note over", async () => {
+  const { noteUpdates } = await pickFromBacklog([{ gameId: 7, note: null }], "from backlog");
+
+  assert.deepEqual(noteUpdates, [["123", 7, "from backlog"]]);
+  const deletes = requests.filter((r) => r.method === "DELETE").map((r) => r.url);
+  assert.deepEqual(deletes, ["/api/v1/backlog/11"]);
 });

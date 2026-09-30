@@ -332,12 +332,17 @@ export async function takeOffBacklogIfAlreadyPlaying(
 ): Promise<boolean> {
   try {
     const nowPlaying = await Member.getNowPlaying(entry.userId);
-    if (!nowPlaying.some((playing) => playing.gameId === entry.gameId)) return false;
+    const playing = nowPlaying.find((item) => item.gameId === entry.gameId);
+    if (!playing) return false;
+    // Same carry-over as Member.addNowPlaying: deleting the row would drop its note.
+    if (entry.note && !playing.note?.trim()) {
+      await Member.updateNowPlayingNote(entry.userId, entry.gameId, entry.note);
+    }
     await UserGameBacklog.removeEntries([entry.entryId]);
   } catch (err: unknown) {
     await safeReply(
       interaction,
-      buildErrorReply(buildApiErrorMessage("Failed to check your Now Playing list", err), true),
+      buildErrorReply(buildApiErrorMessage("Failed to take this game off your backlog", err), true),
     );
     return true;
   }
