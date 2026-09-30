@@ -35,7 +35,7 @@ import {
   buildComponentsV2EditFlags,
 } from "../functions/ComponentsV2Utils.js";
 import {
-  buildOptionalPrevNextRow,
+  buildDisabledPrevNextRow,
   parseDirAndPage,
 } from "../functions/PaginationUtils.js";
 import { ContainerBuilder } from "@discordjs/builders";
@@ -421,7 +421,7 @@ function buildKeyListComponents(
   const pageBase = isPublic
     ? `giveaway-page-public:${sessionId}`
     : `giveaway-page:${sessionId}:${ownerId}`;
-  const pageRow = buildOptionalPrevNextRow(pageBase, page, totalPages);
+  const pageRow = buildDisabledPrevNextRow(pageBase, page, totalPages);
   if (pageRow) rows.push(pageRow);
 
   return rows;

@@ -6,7 +6,7 @@ import {
   type User,
 } from "discord.js";
 import { ContainerBuilder } from "@discordjs/builders";
-import { buildOptionalPrevNextRowWithIds } from "../../functions/PaginationUtils.js";
+import { buildDisabledPrevNextRowWithIds } from "../../functions/PaginationUtils.js";
 import Member, { type ICompletionRecord } from "../../classes/Member.js";
 import { safeDeferUpdate, safeReply } from "../../functions/InteractionUtils.js";
 import { formatPlatformDisplayName } from "../../functions/PlatformDisplay.js";
@@ -444,7 +444,7 @@ export async function renderCommonCompletionPage(
     buildTextContainer(safeV2TextContent(footerLines.join("\n"), MAX_SECTION_TEXT)),
   );
 
-  const paginationRow = buildOptionalPrevNextRowWithIds(
+  const paginationRow = buildDisabledPrevNextRowWithIds(
     buildCommonNavCustomId(state, safePage, "prev"),
     buildCommonNavCustomId(state, safePage, "next"),
     safePage,
