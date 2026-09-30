@@ -213,7 +213,8 @@ export function collectPayloadText(payload: unknown, into: string[] = []): strin
 
 /**
  * Where a string sits in a payload, for the scoped `Expected:` checks. `raw` is a
- * mirror post cut at Discord's length cap: text, not JSON, so any scope may match it.
+ * mirror post cut at Discord's length cap: text, not JSON, so any positive scope may
+ * match it, and `not:` skips it.
  */
 type TextScope = Exclude<ExpectationKind, "text" | "absent"> | "other" | "raw";
 
