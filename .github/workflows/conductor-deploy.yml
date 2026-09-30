@@ -33,6 +33,9 @@ permissions:
 env:
   DEPLOY_SCRIPT: scripts/conductor/deploy.sh
   PLAN_MODULE: ${{ github.workspace }}/scripts/conductor/plan.mjs
+  # The commit being deployed, checked out apart from the workflow's own commit, so a
+  # rollback to a commit older than the deploy scripts still has them.
+  CONDUCTOR_SOURCE: ${{ github.workspace }}/target
 
 jobs:
   deploy:
@@ -48,16 +51,22 @@ jobs:
       group: conductor-deploy
       cancel-in-progress: false
     steps:
-      - name: Checkout
+      - name: Checkout workflow commit
+        uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - name: Checkout commit to deploy
         uses: actions/checkout@v5
         with:
           ref: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.sha }}
+          path: target
           persist-credentials: false
 
       - name: Resolve commits
         id: commits
         run: |
-          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "sha=$(git -C "$CONDUCTOR_SOURCE" rev-parse HEAD)" >> "$GITHUB_OUTPUT"
           echo "live=$(bash "$DEPLOY_SCRIPT" current)" >> "$GITHUB_OUTPUT"
 
       # A dispatch always deploys. A push compares against the live release, not the
@@ -108,7 +117,7 @@ jobs:
             const changed = files.flatMap((f) =>
               f.previous_filename ? [f.filename, f.previous_filename] : [f.filename]);
             const hits = m.conductorChanges({
-              changed, sources: m.conductorSources(process.env.GITHUB_WORKSPACE),
+              changed, sources: m.conductorSources(process.env.CONDUCTOR_SOURCE),
             });
             core.info(hits.length
               ? `Conductor files changed:\n${hits.join("\n")}`

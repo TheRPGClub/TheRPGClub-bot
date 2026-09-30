@@ -13,6 +13,9 @@
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+# The checkout to build from. The workflow checks the target out separately, so a
+# rollback to a commit older than this script still runs this script.
+SOURCE="${CONDUCTOR_SOURCE:-${REPO_ROOT}}"
 ROOT="${CONDUCTOR_DEPLOY_ROOT:-${HOME}/.local/share/rpgclub-conductor}"
 RELEASES="${ROOT}/releases"
 CURRENT="${ROOT}/current"
@@ -26,6 +29,9 @@ READY_TIMEOUT_SECONDS="${CONDUCTOR_READY_TIMEOUT_SECONDS:-120}"
 # the run resumes from its state file, so a late restart only costs a short pause.
 IDLE_TIMEOUT_SECONDS="${CONDUCTOR_IDLE_TIMEOUT_SECONDS:-1800}"
 IDLE_POLL_SECONDS=30
+# A `running` run saved longer ago than this was abandoned, and never delays a restart.
+# Every step button saves the state, so an active tester keeps it fresh.
+ACTIVE_RUN_SECONDS="${CONDUCTOR_ACTIVE_RUN_SECONDS:-900}"
 KEEP_RELEASES=5
 
 # The runner's service has no login session; systemctl --user needs the user's bus.
@@ -57,20 +63,25 @@ switch_to() {
   mv -T "${link}" "${CURRENT}"
 }
 
-# Prints "running" when the saved run is still waiting on the tester.
+# Prints "active" when the saved run is running and was saved recently.
 run_status() {
   [[ -f "${STATE_PATH}" ]] || return 0
   node -e '
+    const fs = require("fs");
     try {
-      const run = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
-      process.stdout.write(run && typeof run.status === "string" ? run.status : "");
+      const [path, activeSeconds] = process.argv.slice(1);
+      const run = JSON.parse(fs.readFileSync(path, "utf8"));
+      const age = Date.now() - fs.statSync(path).mtimeMs;
+      if (run?.status === "running" && age < Number(activeSeconds) * 1000) {
+        process.stdout.write("active");
+      }
     } catch {}
-  ' "${STATE_PATH}"
+  ' "${STATE_PATH}" "${ACTIVE_RUN_SECONDS}"
 }
 
 wait_for_idle() {
   local waited=0
-  while [[ "$(run_status)" == "running" ]]; do
+  while [[ "$(run_status)" == "active" ]]; do
     if (( waited >= IDLE_TIMEOUT_SECONDS )); then
       log "a run is still in progress after ${waited}s; restarting anyway, it resumes"
       return 0
@@ -84,14 +95,17 @@ wait_for_idle() {
 # Restarts the service and waits for the ready line naming <sha>, logged after the
 # restart. Fails when the service stops or the line never comes.
 restart_and_wait() {
-  local sha="$1" since waited=0
+  local sha="$1" since waited=0 journal
   since="$(date '+%Y-%m-%d %H:%M:%S')"
-  systemctl --user restart "${UNIT}"
+  # Returns rather than exiting, so activate() can still switch back.
+  systemctl --user restart "${UNIT}" || return 1
   while (( waited < READY_TIMEOUT_SECONDS )); do
     sleep 2
     waited=$(( waited + 2 ))
-    if journalctl --user -u "${UNIT}" --since "${since}" -o cat --no-pager 2>/dev/null |
-      grep -F "[conductor] ready as " | grep -Fq " at ${sha}"; then
+    # Read whole before matching: grep -q in a pipe can SIGPIPE journalctl under pipefail.
+    journal="$(journalctl --user -u "${UNIT}" --since "${since}" -o cat --no-pager \
+      2>/dev/null || true)"
+    if grep -q -- "^\[conductor\] ready as .* at ${sha}\$" <<< "${journal}"; then
       log "${UNIT} is ready at ${sha}"
       return 0
     fi
@@ -110,7 +124,7 @@ build_release() {
   [[ -f "${dir}/REVISION" ]] && { log "release ${sha} already built"; return 0; }
   rm -rf "${tmp}"
   mkdir -p "${tmp}"
-  git -C "${REPO_ROOT}" archive --format=tar "${sha}" | tar -x -C "${tmp}"
+  git -C "${SOURCE}" archive --format=tar "${sha}" | tar -x -C "${tmp}"
   live="$(readlink -f "${CURRENT}" 2>/dev/null || true)"
   if [[ -n "${live}" && -d "${live}/node_modules" ]] &&
     cmp -s "${live}/package-lock.json" "${tmp}/package-lock.json"; then
@@ -167,7 +181,7 @@ activate() {
 cmd_deploy() {
   local sha="${1:-}" live
   is_commit "${sha}" || die "not a full commit sha: '${sha}'"
-  [[ "$(git -C "${REPO_ROOT}" rev-parse HEAD)" == "${sha}" ]] ||
+  [[ "$(git -C "${SOURCE}" rev-parse HEAD)" == "${sha}" ]] ||
     die "the checkout is not at ${sha}"
   mkdir -p "${RELEASES}"
   build_release "${sha}"

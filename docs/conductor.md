@@ -203,9 +203,11 @@ The conductor reads these from its process environment:
    ```
 
    Build the first release by hand from an up-to-date checkout of `main`, which also
-   starts the service:
+   starts the service. `daemon-reload` makes systemd pick up an edited unit; without it,
+   an existing unit keeps running the old checkout and the deploy times out:
 
    ```bash
+   systemctl --user daemon-reload
    systemctl --user enable rpgclub-conductor.service
    bash scripts/conductor/deploy.sh deploy "$(git rev-parse HEAD)"
    ```
@@ -233,9 +235,10 @@ variable, the same one `docs/pr-preview.md` uses for logs.
   file naming the commit. It reuses the live release's `node_modules` when the lockfile
   is unchanged, runs `npm ci` otherwise, and type-checks the release. Only then does it
   point the `current` link at the new release and restart the service.
-- **Runs in progress.** While the saved run (`CONDUCTOR_STATE_PATH`) is `running`, the
-  restart waits, up to 30 minutes, for the tester to finish. Past that it restarts
-  anyway, and the run resumes from its state file.
+- **Runs in progress.** While the saved run (`CONDUCTOR_STATE_PATH`) is `running` and
+  was saved in the last 15 minutes, the restart waits, up to 30 minutes, for the tester
+  to finish. Past that it restarts anyway, and the run resumes from its state file. A
+  `running` run untouched for 15 minutes counts as abandoned and never delays a deploy.
 - **Failures.** A failed install or type-check fails the workflow and leaves the live
   release untouched. After a restart, the script waits for the startup line
   `[conductor] ready as <tag> at <commit>` in the service's journal. When the new commit
@@ -250,6 +253,7 @@ variable, the same one `docs/pr-preview.md` uses for logs.
 - `bash scripts/conductor/deploy.sh rollback` on the desktop switches back to the
   release before the live one; `rollback <sha>` switches to any release still on disk.
 - Running the **Conductor deploy** workflow by hand with an older commit as `ref` builds
-  and deploys that commit, for one no longer on disk. A dispatch always deploys.
+  and deploys that commit, for one no longer on disk. A dispatch always deploys, with
+  the deploy scripts from the branch it was dispatched on, so any commit works.
 - The next push that changes the conductor deploys `main` again. To hold a rollback,
   set `CONDUCTOR_DEPLOY_ENABLED` to anything but `true` until the fix merges.
