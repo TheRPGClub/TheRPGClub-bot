@@ -918,7 +918,8 @@ export class GiveawayCommand {
 
         const resultMessage = dmResult
           ? "Your key was sent by DM. Thanks for claiming responsibly."
-          : "I could not send you a DM. Please enable DMs and contact an admin to resend your key.";
+          : "I could not send you a DM. " +
+            "Please enable DMs and contact an admin to resend your key.";
         await safeReply(interaction, {
           ...buildTextReply(resultMessage, true),
           __forceFollowUp: true,

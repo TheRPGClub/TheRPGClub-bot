@@ -672,13 +672,26 @@ export class SuggestionCommand {
           body,
           labels,
         });
-        await deleteSuggestion(suggestionId);
       } catch (err: any) {
         await safeFollowUpIfSettled(
           interaction,
           buildTextReply(err?.message ?? "Failed to create GitHub issue.", true),
         );
         return;
+      }
+      // The issue exists now, so a failed delete still renders Approved below: restoring
+      // the button would let a retry file a second issue.
+      try {
+        await deleteSuggestion(suggestionId);
+      } catch (err: any) {
+        await safeFollowUpIfSettled(
+          interaction,
+          buildTextReply(
+            `Created GitHub issue #${issue.number}, but could not remove the suggestion: ` +
+              `${err?.message ?? "unknown error"}`,
+            true,
+          ),
+        );
       }
 
       const authorMention = getSuggestionAuthorMention(suggestion);

@@ -30,6 +30,7 @@ import { IS_TEST_MODE } from "../config/testMode.js";
 import { sendWithInvalidEmojiRetry } from "./InvalidEmojiRetry.js";
 import { disableClickedRow, type IRawComponent } from "./ClickedRowLock.js";
 import {
+  buildComponentsV2EditFlags,
   buildComponentsV2Flags,
   buildTextContainer,
   buildTextReply,
@@ -465,7 +466,8 @@ type ClickInteraction = ButtonInteraction | AnySelectMenuInteraction;
 type LockedMessage = { components: unknown[]; flags?: number; editedTimestamp: number | null };
 
 function componentFlags(message: ClickInteraction["message"]): number | undefined {
-  return message.flags.has(MessageFlags.IsComponentsV2) ? MessageFlags.IsComponentsV2 : undefined;
+  const isV2 = message.flags.has(MessageFlags.IsComponentsV2);
+  return isV2 ? buildComponentsV2EditFlags() : undefined;
 }
 
 async function lockClickedRow(

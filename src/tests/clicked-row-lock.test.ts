@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { ComponentType, MessageFlags } from "discord.js";
 import { disableClickedRow, type IRawComponent } from "../functions/ClickedRowLock.js";
 import { withClickedRowDisabled } from "../functions/InteractionUtils.js";
+import { BOT_DEV_CHANNEL_ID } from "../config/channels.js";
 
 const LINK_BUTTON = { type: ComponentType.Button, style: 5, url: "https://example.com" };
 
@@ -125,6 +126,40 @@ test("withClickedRowDisabled runs the work without a lock once acknowledged", as
   const edits: Edit[] = [];
   const interaction = makeInteraction(edits, { value: false });
   interaction.deferred = true;
+  let ran = false;
+  await withClickedRowDisabled(interaction, async () => {
+    ran = true;
+  });
+  assert.equal(ran, true);
+  assert.equal(edits.length, 0);
+});
+
+test("withClickedRowDisabled skips the work when the dev channel blocks the click", async () => {
+  const edits: Edit[] = [];
+  const interaction = makeInteraction(edits, { value: false });
+  interaction.channelId = BOT_DEV_CHANNEL_ID;
+  interaction.message.interaction = { user: { id: "owner" } };
+  const replies: unknown[] = [];
+  interaction.reply = async (payload: unknown) => {
+    replies.push(payload);
+  };
+  let ran = false;
+  await withClickedRowDisabled(interaction, async () => {
+    ran = true;
+  });
+  assert.equal(ran, false);
+  assert.equal(replies.length, 1);
+  assert.equal(edits.length, 0);
+});
+
+test("withClickedRowDisabled runs the work unlocked after an acknowledgement race", async () => {
+  const edits: Edit[] = [];
+  const interaction = makeInteraction(edits, { value: false });
+  interaction.deferUpdate = async () => {
+    const error: any = new Error("Unknown interaction");
+    error.code = 10062;
+    throw error;
+  };
   let ran = false;
   await withClickedRowDisabled(interaction, async () => {
     ran = true;
