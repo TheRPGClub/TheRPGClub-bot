@@ -66,9 +66,10 @@ dev channel whatever `/conduct` would have answered, and nothing more:
   the test guild, counts. The same text from anyone else, a webhook, or another channel
   is ignored and logged, since anyone can type it.
 - An announcement whose sha is not the PR's current head starts nothing, and says so.
-- An announcement for a PR that already has a run in progress starts nothing, so a
-  redeploy or restart of the same preview does not stack a second run. A run for a
-  different PR is superseded, as a new `/conduct` would.
+- An announcement for a PR whose run in progress is testing that same head starts
+  nothing, so a redeploy or restart of the same preview does not stack a second run. A
+  run for an older head of the PR, or for a different PR, is superseded, as a new
+  `/conduct` would, since the preview it was testing has just been replaced.
 - A conductor that is down when the announcement lands does not replay it after a
   restart; run `/conduct pr:<n>` by hand.
 

@@ -207,3 +207,32 @@ test("a redeploy of a PR with a run in progress starts no second run", async () 
   assert.equal(run?.status, "running");
   assert.equal(harness.sent.length, 1);
 });
+
+const SUPERSEDED: [string, number, string][] = [
+  ["the same PR at an older head", 1350, OTHER_SHA],
+  ["another PR", 1349, SHA],
+];
+
+for (const [name, pr, headSha] of SUPERSEDED) {
+  test(`an announcement supersedes a running run for ${name}`, async () => {
+    const harness = await useRuntime(SHA);
+    const existing: IConductorRun = {
+      runId: "1111",
+      pr,
+      headSha,
+      steps: [],
+      channelId: CHANNEL,
+      current: 0,
+      windowStart: 1,
+      results: [],
+      status: "running",
+    };
+    await writeFile(harness.statePath, JSON.stringify(existing));
+
+    await startRunFromAnnouncement(fakeMessage(harness, PREVIEW_BOT, READY));
+
+    const run = await readRun(harness.statePath);
+    assert.equal(run?.runId, "4242");
+    assert.equal(run?.status, "running");
+  });
+}

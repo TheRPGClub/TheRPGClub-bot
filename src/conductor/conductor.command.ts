@@ -590,7 +590,8 @@ async function startRun(
   await withRunLock(async () => {
     if (announcedSha !== undefined) {
       const current = await loadRun(settings.statePath);
-      if (current?.status === "running" && current.pr === pr) {
+      // A new head supersedes the run below: its preview has just been replaced.
+      if (current?.status === "running" && current.pr === pr && current.headSha === pull.headSha) {
         await answer(`PR #${pr} already has a run in progress, so no second run started.`);
         return;
       }
@@ -649,7 +650,7 @@ function messageTrigger(message: Message<true>): IRunTrigger {
  */
 export async function startRunFromAnnouncement(message: Message): Promise<void> {
   const announcement = parsePreviewReadyAnnouncement(message.content);
-  if (!announcement) return;
+  if (!announcement || !message.inGuild()) return;
   const { settings } = getConductorRuntime();
   const decision = checkAnnouncementSource(
     {
@@ -665,9 +666,8 @@ export async function startRunFromAnnouncement(message: Message): Promise<void> 
       testChannelId: settings.testChannelId,
     },
   );
-  if (!decision.allowed || !message.inGuild()) {
-    console.log(`[conductor] ignored a ready announcement: ${
-      decision.allowed ? "not in a guild" : decision.reason}`);
+  if (!decision.allowed) {
+    console.log(`[conductor] ignored a ready announcement: ${decision.reason}`);
     return;
   }
   const trigger = messageTrigger(message);
