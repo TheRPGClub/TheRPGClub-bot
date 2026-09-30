@@ -1,0 +1,53 @@
+name: Preview logs
+
+# Collects the preview container's and the conductor's recent logs on the self-hosted
+# runner and uploads them encrypted to PREVIEW_LOGS_PUBLIC_KEY. The repository is public,
+# so plaintext logs never reach the job log or an artifact. Fetch and decrypt them with
+# scripts/preview/fetch-logs.sh. Setup: docs/pr-preview.md, "Reading preview logs".
+
+on:
+  workflow_dispatch:
+    inputs:
+      lines:
+        description: Lines of each log to collect
+        default: "500"
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  collect:
+    if: github.ref == 'refs/heads/main' && vars.PREVIEW_LOGS_PUBLIC_KEY != ''
+    runs-on: [self-hosted, rpgclub-preview]
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      # The logs go straight from the collector into gpg: no plaintext file, no echo.
+      - name: Collect and encrypt
+        env:
+          LINES_INPUT: ${{ inputs.lines }}
+          PUBLIC_KEY: ${{ vars.PREVIEW_LOGS_PUBLIC_KEY }}
+          CONDUCTOR_UNIT: ${{ vars.CONDUCTOR_UNIT }}
+        run: |
+          set -euo pipefail
+          export GNUPGHOME="$(mktemp -d)"
+          trap 'rm -rf "${GNUPGHOME}"' EXIT
+          key_file="${GNUPGHOME}/recipient.asc"
+          printf '%s\n' "${PUBLIC_KEY}" > "${key_file}"
+          export CONDUCTOR_UNIT="${CONDUCTOR_UNIT:-rpgclub-conductor}"
+          bash scripts/preview/collect-logs.sh "${LINES_INPUT}" |
+            gpg --batch --yes --trust-model always --recipient-file "${key_file}" \
+              --output preview-logs.gpg --encrypt
+
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: preview-logs
+          path: preview-logs.gpg
+          retention-days: 1
+          if-no-files-found: error
