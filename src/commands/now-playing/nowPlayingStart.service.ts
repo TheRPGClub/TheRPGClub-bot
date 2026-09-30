@@ -59,7 +59,7 @@ export async function startPlayingEntry(
   } catch (err: unknown) {
     await safeReply(
       interaction,
-      buildErrorReply(buildApiErrorMessage("Failed to add to Now Playing.", err), true),
+      buildErrorReply(buildApiErrorMessage("Failed to add to Now Playing", err), true),
     );
     return;
   }
