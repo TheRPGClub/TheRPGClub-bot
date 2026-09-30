@@ -167,7 +167,7 @@ export class MessageReactionAdd {
       return;
     }
 
-    const resolved = await resolveReactionMessage(reaction);
+    const resolved = await resolveReactionMessage(reaction, user.id);
     const message = resolved?.message;
     if (!message || !message.guild) {
       return;

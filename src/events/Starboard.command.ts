@@ -58,7 +58,7 @@ export class StarboardHandler {
     if (user.bot) return;
     if (!isStarReaction(reaction)) return;
 
-    const resolved = await resolveReactionMessage(reaction);
+    const resolved = await resolveReactionMessage(reaction, user.id);
     if (!resolved) return;
     const { message } = resolved;
     if (!message.guild) return;
