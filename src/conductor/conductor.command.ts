@@ -121,6 +121,7 @@ export function snapshotMessage(message: Message): IMessageSnapshot {
     authorId: message.author.id,
     authorIsBot: message.author.bot,
     webhookId: message.webhookId ?? null,
+    applicationId: message.applicationId ?? null,
     createdTimestamp: message.createdTimestamp,
     editedTimestamp: message.editedTimestamp,
     content: message.content,

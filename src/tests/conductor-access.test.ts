@@ -50,6 +50,7 @@ function snapshot(overrides: Partial<IMessageSnapshot> = {}): IMessageSnapshot {
     authorId: "800",
     authorIsBot: true,
     webhookId: null,
+    applicationId: null,
     createdTimestamp: 1000,
     editedTimestamp: null,
     content: "hello",

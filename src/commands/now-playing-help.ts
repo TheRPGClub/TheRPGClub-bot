@@ -63,7 +63,6 @@ export const NOW_PLAYING_HELP_TEXTS: Record<string, string> = {
     "- **Completion Type** - Choose the kind of completion (e.g. Beaten, 100%, Dropped).",
     "- **Remove from Now Playing** - Choose Yes to take the game off your active list.",
     "- **Announce Completion** - Choose Yes to post a message to the server about it.",
-    "- **Add a Completion Note** - Choose Yes to write a short note about the completion.",
     "- Press **Continue** to open the details form.",
     "- Press **Cancel** to abort without saving anything.",
   ].join("\n"),

@@ -29,7 +29,6 @@ export type NowPlayingCompletionWizardSession = {
   completionType: CompletionType;
   removeFromNowPlaying: boolean;
   announce: boolean;
-  addCompletionNote: boolean;
   returnToList: boolean;
 };
 

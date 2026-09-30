@@ -74,8 +74,8 @@ export const TEST_GUILD_IDS: TestGuildIdMap = {
   GOTM_NOMINATION_CHANNEL_ID: "1547802424893247522",
   NR_GOTM_NOMINATION_CHANNEL_ID: "1547802424893247523",
   NEW_GAME_ANNOUNCEMENT_CHANNEL_ID: "1547802425514008587",
-  // Reuses the test guild bot dev channel until a dedicated log channel exists.
-  TEST_LOG_CHANNEL_ID: "1547802425086312558",
+  // The dev logs channel, so mirrored ephemeral replies stay out of #dev.
+  TEST_LOG_CHANNEL_ID: "1547802425295896617",
 
   // roles.ts
   REGULARS_ROLE_ID: "1547802424310374510",
