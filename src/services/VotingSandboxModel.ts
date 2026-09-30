@@ -43,11 +43,11 @@ export const SANDBOX_MAX_NOMINATIONS = 30;
 const FIXTURE_GAME_ID_BASE = 990_000;
 const SIMULATED_VOTER_PREFIX = "sim-";
 
-export type SandboxOutcome = "winner" | "tie" | "three-way-tie" | "no-votes";
+export type SandboxOutcome = "winner" | "two-way-tie" | "three-way-tie" | "no-votes";
 
 export const SANDBOX_OUTCOMES: readonly SandboxOutcome[] = [
   "winner",
-  "tie",
+  "two-way-tie",
   "three-way-tie",
   "no-votes",
 ];
@@ -55,7 +55,7 @@ export const SANDBOX_OUTCOMES: readonly SandboxOutcome[] = [
 /** Simulated vote counts per outcome, highest first, one vote per simulated voter. */
 const OUTCOME_COUNTS: Record<SandboxOutcome, number[]> = {
   "winner": [3, 2, 1],
-  "tie": [2, 2, 1],
+  "two-way-tie": [2, 2, 1],
   "three-way-tie": [2, 2, 2],
   "no-votes": [],
 };
@@ -63,7 +63,7 @@ const OUTCOME_COUNTS: Record<SandboxOutcome, number[]> = {
 /** How many games an outcome needs: the tied games plus one that trails them. */
 const OUTCOME_MIN_NOMINATIONS: Record<SandboxOutcome, number> = {
   "winner": 1,
-  "tie": 2,
+  "two-way-tie": 2,
   "three-way-tie": 3,
   "no-votes": 0,
 };

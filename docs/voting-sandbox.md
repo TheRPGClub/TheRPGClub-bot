@@ -74,8 +74,8 @@ for.
 5. Press Results: the tally is hidden while voting is open, with a vote count.
 6. `/vote-sandbox event kind:nomination_reminder_5d`: reported as skipped, nothing
    posts (nominations are closed).
-7. `/vote-sandbox seed gotm:winner nr-gotm:tie`, then `/vote-sandbox close`: results
-   post with the TEST MODE banner, GOTM names a winner, NR-GOTM announces a tie, and
+7. `/vote-sandbox seed gotm:winner nr-gotm:two-way-tie`, then `/vote-sandbox close`:
+   results post with the TEST MODE banner, GOTM names a winner, NR-GOTM announces a tie, and
    the tie prompt appears in the admin channel.
 8. Press Results on a panel: the full tally now shows.
 9. Restart the bot, then pick a winner on the tie prompt: the prompt updates to name
@@ -90,7 +90,7 @@ for.
 13. `/vote-sandbox start gotm-nominations:30 nr-gotm-nominations:0`, `open`: the GOTM
     panel has two selects; no NR-GOTM panel posts.
 14. `/vote-sandbox start gotm-nominations:1 nr-gotm-nominations:1`, `open`, then
-    `seed gotm:tie`: refused, one game cannot tie.
+    `seed gotm:two-way-tie`: refused, one game cannot tie.
 15. `/vote-sandbox start source-round:<a past round>`, `open`: the panels list that
     round's real nominations, and voting on them changes nothing in the API.
 16. Vote on a panel from an earlier sandbox: refused as belonging to an ended sandbox.
