@@ -15,11 +15,15 @@ import { logError } from "../utilities/LogUtils.js";
 async function buildCatalogFiles(client: Client): Promise<AttachmentBuilder[]> {
   if (!client.application) return [];
   try {
-    const global = await client.application.commands.fetch();
-    const guild = TEST_GUILD_ID
-      ? await client.application.commands.fetch({ guildId: TEST_GUILD_ID })
-      : new Map();
-    const catalog = buildCommandCatalog([...global.values(), ...guild.values()]);
+    const { commands } = client.application;
+    const [globalCommands, guildCommands] = await Promise.all([
+      commands.fetch(),
+      TEST_GUILD_ID ? commands.fetch({ guildId: TEST_GUILD_ID }) : new Map(),
+    ]);
+    const catalog = buildCommandCatalog([
+      ...globalCommands.values(),
+      ...guildCommands.values(),
+    ]);
     const body = Buffer.from(JSON.stringify(catalog), "utf8");
     return [new AttachmentBuilder(body, { name: PREVIEW_COMMANDS_ATTACHMENT_NAME })];
   } catch (error) {

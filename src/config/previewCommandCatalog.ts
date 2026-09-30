@@ -33,8 +33,8 @@ export interface IApplicationCommandLike {
   options: readonly ICommandOptionLike[];
 }
 
-/** Discord's rule for command, group, and subcommand names. */
-const COMMAND_NAME_PATTERN = /^[-_\p{L}\p{N}]{1,32}$/u;
+/** Discord's documented rule for command, group, and subcommand names. */
+const COMMAND_NAME_PATTERN = /^[-_'\p{L}\p{N}\p{sc=Deva}\p{sc=Thai}]{1,32}$/u;
 const SNOWFLAKE_PATTERN = /^\d{17,20}$/;
 /** Discord caps an application at 100 chat input commands per scope, two scopes here. */
 const MAX_CATALOG_COMMANDS = 200;
@@ -91,7 +91,8 @@ function parseCatalogCommand(value: unknown): ICatalogCommand | null {
 
 /**
  * The catalog in `text`, or null when it is not one. Every name and ID is checked
- * against Discord's formats, since each is later written into mention markup.
+ * against Discord's formats, since each is later written into mention markup; an entry
+ * that fails is dropped, so the other commands keep their mentions.
  */
 export function parseCommandCatalog(text: string): ICommandCatalog | null {
   let parsed: unknown;
@@ -105,8 +106,7 @@ export function parseCommandCatalog(text: string): ICommandCatalog | null {
   const commands: ICatalogCommand[] = [];
   for (const entry of list) {
     const command = parseCatalogCommand(entry);
-    if (!command) return null;
-    commands.push(command);
+    if (command) commands.push(command);
   }
   return { commands };
 }

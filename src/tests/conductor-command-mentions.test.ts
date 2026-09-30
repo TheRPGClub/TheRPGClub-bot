@@ -68,13 +68,16 @@ test("a catalog survives the round trip through its attachment text", () => {
   assert.deepEqual(parseCommandCatalog(JSON.stringify(catalog())), catalog());
 });
 
-test("a catalog with markup in a name or a bad ID is rejected whole", () => {
-  const withMarkup = { commands: [{ name: "x>@everyone", id: JOURNAL_ID, subcommands: [] }] };
-  const badId = { commands: [{ name: "game-journal", id: "12:34", subcommands: [] }] };
-  const badPath = { commands: [{ name: "a", id: JOURNAL_ID, subcommands: ["b:1>"] }] };
-  assert.equal(parseCommandCatalog(JSON.stringify(withMarkup)), null);
-  assert.equal(parseCommandCatalog(JSON.stringify(badId)), null);
-  assert.equal(parseCommandCatalog(JSON.stringify(badPath)), null);
+test("an entry with markup in a name or a bad ID is dropped, the rest kept", () => {
+  const good = { name: "it's-time", id: JOURNAL_ID, subcommands: ["vote start"] };
+  const entries = [
+    { name: "x>@everyone", id: JOURNAL_ID, subcommands: [] },
+    { name: "game-journal", id: "12:34", subcommands: [] },
+    { name: "a", id: JOURNAL_ID, subcommands: ["b:1>"] },
+    good,
+  ];
+  assert.deepEqual(parseCommandCatalog(JSON.stringify({ commands: entries })),
+    { commands: [good] });
   assert.equal(parseCommandCatalog("not json"), null);
   assert.equal(parseCommandCatalog("null"), null);
 });
