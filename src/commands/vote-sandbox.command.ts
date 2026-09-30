@@ -18,6 +18,7 @@ import { parseNominationKind } from "../classes/Nomination.js";
 import type { VotingEventKind } from "../classes/VotingEvents.js";
 import { isVotingRoundCategory } from "../classes/VotingRounds.js";
 import { safeDeferReply } from "../functions/InteractionUtils.js";
+import { logError } from "../utilities/LogUtils.js";
 import { isAdmin } from "./admin/admin-auth.utils.js";
 import { handleTieBreakSelect } from "./admin/vote-admin.service.js";
 import {
@@ -42,7 +43,6 @@ import {
 import {
   createSandboxDataSource,
   deliverSandboxOutbox,
-  loadSandbox,
   parseSandboxCustomId,
   type ISandboxTarget,
 } from "../services/VotingSandbox.js";
@@ -79,19 +79,16 @@ function toOutcome(value: string | undefined): SandboxOutcome | undefined {
 const UNPARSED_SANDBOX: ISandboxTarget = { ownerId: "0", sandboxId: "" };
 
 /**
- * Owner, sandbox and category from a sandbox panel id,
- * `<prefix>:<owner>:<sandbox>:<kind>[:<chunk>]`. The ids carry the sandbox, not
- * the round, so the round is the sandbox's own; a panel from an ended sandbox is
+ * Sandbox and category from a panel id. A panel from an ended sandbox is
  * refused by the data source with a message saying so.
  */
-async function resolvePanel(
+function resolvePanel(
   customId: string,
-): Promise<{ sandbox: ISandboxTarget; target: IVotePanelTarget | null }> {
+): { sandbox: ISandboxTarget; target: IVotePanelTarget | null } {
   const parsed = parseSandboxCustomId(customId);
   const kind = parseNominationKind(parsed?.rest[0] ?? "");
   if (!parsed || !kind) return { sandbox: UNPARSED_SANDBOX, target: null };
-  const state = await loadSandbox(parsed.ownerId);
-  return { sandbox: parsed, target: { kind, round: state?.roundNumber ?? 0 } };
+  return { sandbox: parsed, target: { kind, round: parsed.roundNumber } };
 }
 
 async function beginAdminStep(interaction: CommandInteraction): Promise<boolean> {
@@ -258,25 +255,25 @@ export class VoteSandboxCommand {
     await handleSandboxEnd(interaction);
   }
 
-  @SelectMenuComponent({ id: /^vsbx-cast:\d+:[0-9a-f]+:(gotm|nr-gotm):\d+$/ })
+  @SelectMenuComponent({ id: /^vsbx-cast:\d+:[0-9a-f]+:\d+:(gotm|nr-gotm):\d+$/ })
   async handleCast(interaction: StringSelectMenuInteraction): Promise<void> {
-    const panel = await resolvePanel(interaction.customId);
+    const panel = resolvePanel(interaction.customId);
     await respondVoteCast(interaction, panel.target, createSandboxDataSource(panel.sandbox));
   }
 
-  @ButtonComponent({ id: /^vsbx-mine:\d+:[0-9a-f]+:(gotm|nr-gotm)$/ })
+  @ButtonComponent({ id: /^vsbx-mine:\d+:[0-9a-f]+:\d+:(gotm|nr-gotm)$/ })
   async handleMine(interaction: ButtonInteraction): Promise<void> {
-    const panel = await resolvePanel(interaction.customId);
+    const panel = resolvePanel(interaction.customId);
     await respondVoteMine(interaction, panel.target, createSandboxDataSource(panel.sandbox));
   }
 
-  @ButtonComponent({ id: /^vsbx-tally:\d+:[0-9a-f]+:(gotm|nr-gotm)$/ })
+  @ButtonComponent({ id: /^vsbx-tally:\d+:[0-9a-f]+:\d+:(gotm|nr-gotm)$/ })
   async handleTally(interaction: ButtonInteraction): Promise<void> {
-    const panel = await resolvePanel(interaction.customId);
+    const panel = resolvePanel(interaction.customId);
     await respondVoteTally(interaction, panel.target, createSandboxDataSource(panel.sandbox));
   }
 
-  @SelectMenuComponent({ id: /^vsbx-tie:\d+:[0-9a-f]+:(gotm|nr_gotm)$/ })
+  @SelectMenuComponent({ id: /^vsbx-tie:\d+:[0-9a-f]+:\d+:(gotm|nr_gotm)$/ })
   async handleTie(interaction: StringSelectMenuInteraction): Promise<void> {
     if (!(await isAdmin(interaction))) return;
     const parsed = parseSandboxCustomId(interaction.customId);
@@ -285,13 +282,17 @@ export class VoteSandboxCommand {
       await handleTieBreakSelect(interaction, null);
       return;
     }
-    const state = await loadSandbox(parsed.ownerId);
     await handleTieBreakSelect(
       interaction,
-      { roundNumber: state?.roundNumber ?? 0, category },
+      { roundNumber: parsed.roundNumber, category },
       createSandboxDataSource(parsed),
     );
-    // Breaking the last tie queues round_decided, as the API would.
-    await deliverSandboxOutbox(interaction.client, parsed.ownerId);
+    // Breaking the last tie queues round_decided, as the API would. The prompt
+    // is already answered, so a failure here is logged and left queued.
+    try {
+      await deliverSandboxOutbox(interaction.client, parsed.ownerId);
+    } catch (err) {
+      logError("VoteSandbox.handleTie.deliver", err);
+    }
   }
 }

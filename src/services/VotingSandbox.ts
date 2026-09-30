@@ -164,29 +164,45 @@ export interface ISandboxTarget {
   sandboxId: string;
 }
 
+/**
+ * Sandbox ids are `<prefix>:<owner>:<sandbox>:<round>:<kind or category>[:<chunk>]`.
+ * Everything a handler needs is in the id, so no read runs before it defers.
+ */
+function sandboxIdBase(target: ISandboxTarget, roundNumber: number): string {
+  return `${target.ownerId}:${target.sandboxId}:${roundNumber}`;
+}
+
 export function buildSandboxPanelIds(target: ISandboxTarget): IVotePanelIds {
-  const base = `${target.ownerId}:${target.sandboxId}`;
   return {
-    cast: (kind, _round, chunk) => `${SANDBOX_CUSTOM_ID_PREFIX.cast}:${base}:${kind}:${chunk}`,
-    mine: (kind) => `${SANDBOX_CUSTOM_ID_PREFIX.mine}:${base}:${kind}`,
-    tally: (kind) => `${SANDBOX_CUSTOM_ID_PREFIX.tally}:${base}:${kind}`,
+    cast: (kind, round, chunk) =>
+      `${SANDBOX_CUSTOM_ID_PREFIX.cast}:${sandboxIdBase(target, round)}:${kind}:${chunk}`,
+    mine: (kind, round) =>
+      `${SANDBOX_CUSTOM_ID_PREFIX.mine}:${sandboxIdBase(target, round)}:${kind}`,
+    tally: (kind, round) =>
+      `${SANDBOX_CUSTOM_ID_PREFIX.tally}:${sandboxIdBase(target, round)}:${kind}`,
   };
 }
 
 export function buildSandboxTieSelectId(
   target: ISandboxTarget,
+  roundNumber: number,
   category: VotingRoundCategory,
 ): string {
-  return `${SANDBOX_CUSTOM_ID_PREFIX.tie}:${target.ownerId}:${target.sandboxId}:${category}`;
+  return `${SANDBOX_CUSTOM_ID_PREFIX.tie}:${sandboxIdBase(target, roundNumber)}:${category}`;
 }
 
-/** Owner, sandbox and the id's last segment (category or kind), or null. */
-export function parseSandboxCustomId(
-  customId: string,
-): (ISandboxTarget & { rest: string[] }) | null {
-  const [, ownerId, sandboxId, ...rest] = customId.split(":");
+export interface IParsedSandboxCustomId extends ISandboxTarget {
+  roundNumber: number;
+  /** The kind or category, then the select chunk for a cast id. */
+  rest: string[];
+}
+
+export function parseSandboxCustomId(customId: string): IParsedSandboxCustomId | null {
+  const [, ownerId, sandboxId, rawRound, ...rest] = customId.split(":");
+  const roundNumber = Number(rawRound);
   if (!ownerId || !/^\d+$/.test(ownerId) || !sandboxId || !rest.length) return null;
-  return { ownerId, sandboxId, rest };
+  if (!Number.isInteger(roundNumber) || roundNumber <= 0) return null;
+  return { ownerId, sandboxId, roundNumber, rest };
 }
 
 async function requireSandbox(target: ISandboxTarget): Promise<IVotingSandboxState> {
@@ -297,7 +313,7 @@ export function buildSandboxEventContext(state: IVotingSandboxState): IVotingEve
     rehearsal: true,
     panelIds: buildSandboxPanelIds(target),
     panelNotice: buildSandboxPanelNotice(state),
-    tieSelectId: (_round, category) => buildSandboxTieSelectId(target, category),
+    tieSelectId: (round, category) => buildSandboxTieSelectId(target, round, category),
     hasCover: (gameId) => !isFixtureGameId(gameId),
     recordWinners: (client) => postSandboxDecided(client, target),
   };

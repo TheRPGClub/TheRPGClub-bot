@@ -7,8 +7,11 @@ import {
   createSandboxDataSource,
   deliverSandboxOutbox,
   endSandbox,
+  buildSandboxPanelIds,
+  buildSandboxTieSelectId,
   loadSandbox,
   mutateSandbox,
+  parseSandboxCustomId,
   SANDBOX_ENDED_MESSAGE,
   startSandbox,
 } from "../services/VotingSandbox.js";
@@ -100,7 +103,7 @@ test("voting_opened posts sandbox panels to announcements through the live handl
   assert.equal(sent.length, 2);
   assert.ok(sent.every((message) => message.channelId === ANNOUNCEMENT_CHANNEL_ID));
   for (const message of sent) {
-    assert.match(message.json, new RegExp(`vsbx-cast:${ownerId}:cafe01:`));
+    assert.match(message.json, new RegExp(`vsbx-cast:${ownerId}:cafe01:999:`));
     assert.match(message.json, /VOTING SANDBOX/);
     assert.doesNotMatch(message.json, /"vote-cast:/);
   }
@@ -128,7 +131,7 @@ test("a tie posts results, prompts the admins, and breaking it decides the round
   assert.match(results[0]?.json ?? "", /TEST MODE/);
   assert.ok(results.some((message) => /ends in a tie between/.test(message.json)));
   const prompt = sent.find((message) => message.channelId === ADMIN_CHANNEL_ID);
-  assert.match(prompt?.json ?? "", new RegExp(`vsbx-tie:${ownerId}:beef02:gotm`));
+  assert.match(prompt?.json ?? "", new RegExp(`vsbx-tie:${ownerId}:beef02:999:gotm`));
 
   const state = await loadSandbox(ownerId);
   const pick = state?.pendingTies.gotm?.[0]?.gameId ?? 0;
@@ -269,4 +272,20 @@ test("a restore that races a save never replaces the newer sandbox", async (t) =
   await slowRestore;
 
   assert.equal((await loadSandbox(ownerId))?.votes.length, 1);
+});
+
+test("sandbox ids carry owner, sandbox and round, and stay within Discord's limit", () => {
+  const target = { ownerId: "123456789012345678901", sandboxId: "ffffffff" };
+  const ids = buildSandboxPanelIds(target);
+  const cast = ids.cast("nr-gotm", 123456, 1);
+  assert.ok(cast.length <= 100);
+  assert.deepEqual(parseSandboxCustomId(cast), {
+    ...target,
+    roundNumber: 123456,
+    rest: ["nr-gotm", "1"],
+  });
+  const tie = buildSandboxTieSelectId(target, 999, "nr_gotm");
+  assert.equal(parseSandboxCustomId(tie)?.rest[0], "nr_gotm");
+  assert.equal(parseSandboxCustomId(`vsbx-mine:${target.ownerId}:x:0:gotm`), null);
+  assert.equal(parseSandboxCustomId("vsbx-mine:abc:x:1:gotm"), null);
 });
