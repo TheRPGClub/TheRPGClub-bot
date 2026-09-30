@@ -253,7 +253,7 @@ export class GameDbViewCommand {
     } catch (err: unknown) {
       logError("gamedb view.load_collection_platforms_failed", err);
       await safeReply(interaction, buildErrorReply(
-        buildApiErrorMessage("Failed to load platform options.", err), true,
+        buildApiErrorMessage("Failed to load platform options", err), true,
       ));
       return;
     }
@@ -330,7 +330,7 @@ export class GameDbViewCommand {
       logError("gamedb view.add_collection_failed", err);
       await safeEditReply(
         interaction,
-        buildErrorReply(buildApiErrorMessage("Failed to add collection entry.", err), true),
+        buildErrorReply(buildApiErrorMessage("Failed to add collection entry", err), true),
       );
     }
   }
