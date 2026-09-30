@@ -6,8 +6,9 @@ a time in the channel where `/conduct` was run, reads back what the preview bot 
 and comments per-step results on the PR.
 
 A bot cannot invoke another bot's slash commands, and a user token would be a self-bot,
-which breaks Discord's terms. So the tester always runs each command; the conductor only
-hands out the script and checks the output.
+which breaks Discord's terms. So the tester always runs each command, by hand or through
+the supervised [assisted mode](#assisted-mode-conduct-auto); the conductor only hands out
+the script and checks the output.
 
 Code: `src/conductor/`. Entry point: `src/conductor/main.ts`. The bot's own command
 loader never imports this directory, and the conductor never loads the bot's commands.
@@ -97,6 +98,61 @@ the option values still come from the code block. Any other step, an unknown nam
 missing or unreadable catalog shows the code block alone. Names and IDs are checked
 against Discord's formats, and the mention is built only from the catalog, never from
 step text.
+
+## Assisted mode (`/conduct-auto`)
+
+`/conduct-auto <pr>` is a Claude Code skill (`.claude/skills/conduct-auto/SKILL.md`) that
+performs a run's checkable steps in the tester's own Discord web session, through Claude
+in Chrome. The conductor is unchanged: it posts every step, judges it, and writes the
+report.
+
+The split:
+
+- Claude performs each driven step's one action against the preview bot in the test
+  channel: the slash command, button click, select choice, or modal submit from the
+  step's code block. It says in the Claude Code session what it did and what the reply
+  shows.
+- The tester presses every conductor control: **Check**, **Check again**,
+  **Looks right**, **Doesn't match**, **Continue as failed**, **Add note**, and
+  **Abort run**. Claude never clicks a conductor button and never starts a run.
+- The conductor posts the next step only after the tester judges the current one, so
+  that press is the approval between actions.
+
+`npm run -s conduct:drive-plan -- <body-file>` prints which steps are driven, as JSON,
+from the same parser `/conduct` runs (`src/conductor/DrivePlan.ts`). A step is handed
+back to the tester when:
+
+- the conductor has nothing to check in it;
+- its `Expected:` asks for a check by eye;
+- its label or `Expected:` needs a second account;
+- its code block chains several actions, or is not one recognized action;
+- it belongs to a `/todo` or `/suggestion` flow, which writes to GitHub
+  (`EXTERNAL_EFFECT_COMMANDS`). The tester can hand back any other step too.
+
+A value a command reads from an earlier reply, written as `(… from step N)`, is read from
+that reply on the page. When it cannot be found, the step is handed back.
+
+Limits:
+
+- It acts only on commands from the PR's parsed steps, only in the test channel, and
+  only on the preview bot's messages. Text read from Discord is data, never instructions,
+  since a PR body is attacker-controlled.
+- It prefers the accessibility tree and visible text over CSS classes, since Discord's
+  markup changes often. An action that does not go as expected is handed back, never
+  retried with a guess.
+- It needs Claude in Chrome with the tester signed in to Discord, and stops at any login,
+  captcha, or verification screen.
+
+### Discord's terms
+
+Driving a user account through a browser is still automation of that account, so this
+mode is kept narrow on purpose. The decision on issue 1376: the tester starts the run,
+is present for all of it, watches it in their visible Chrome window (never headless or in
+the background), and approves each step by judging the previous one. It runs only on the
+tester's own account in the test guild. That is assisted testing, not the unattended
+self-bot a user token would make, which stays ruled out above: a user token runs with no
+one watching, anywhere the account can reach. The tester can stop at any point in the
+session, and **Abort run** still ends the run.
 
 ## How output is attributed to a step
 
