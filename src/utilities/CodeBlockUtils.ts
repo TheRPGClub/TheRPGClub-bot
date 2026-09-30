@@ -1,8 +1,9 @@
 /**
- * Escape every backtick in serialized JSON as ```. JSON.stringify output only holds
- * backticks inside string literals, where the escape decodes to the same value, and a
- * backtick-free body can never close its code fence early. Discord ends a code block at
- * the first triple backtick, so a longer fence would not help.
+ * Escape every backtick in serialized JSON as the JSON unicode escape (backslash, "u0060").
+ * JSON.stringify output only holds backticks inside string literals, where the escape
+ * decodes to the same value, and a backtick-free body can never close its code fence
+ * early. Discord ends a code block at the first triple backtick, so a longer fence would
+ * not help.
  */
 export function escapeJsonBackticks(json: string): string {
   return json.replaceAll("`", "\\u0060");
