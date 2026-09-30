@@ -86,8 +86,7 @@ export class NowPlayingSortHandlers {
     }
 
     try {
-      const nowPlaying = await Member.getNowPlaying(ownerId);
-      const entries = getDisplayNowPlayingEntries(nowPlaying).slice(0, 10);
+      const entries = getDisplayNowPlayingEntries(await Member.getNowPlaying(ownerId)).slice(0, 10);
       const parsed = parseNowPlayingSortStateToken(stateToken, entries.length);
       const selectedValue = interaction.values[0] ?? "";
       const selectedIndex = Number(selectedValue);
