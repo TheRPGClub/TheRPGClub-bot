@@ -20,3 +20,6 @@ snapshots
 # exceptions
 !.claude/skills/
 !.claude/agents/
+
+# conductor release commit, written by scripts/conductor/deploy.sh
+/REVISION
