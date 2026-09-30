@@ -27,6 +27,14 @@ export interface IMessageSnapshot {
   interactionUserId: string | null;
   embeds: unknown[];
   components: unknown[];
+  attachments: IAttachmentSnapshot[];
+  /** Body of the mirror's payload attachment, once downloaded. */
+  mirrorAttachment?: string;
+}
+
+export interface IAttachmentSnapshot {
+  name: string;
+  url: string;
 }
 
 export interface IObservationContext {
@@ -77,28 +85,65 @@ const TEXT_KEYS = new Set([
 
 type MirrorRecord = { user: string | null; source: string | null; payload: unknown };
 
+type MirrorHeader = { user?: unknown; source?: unknown; attachment?: unknown };
+
+function mirrorRecord(parsed: MirrorHeader, payload: unknown): MirrorRecord {
+  return {
+    user: typeof parsed.user === "string" ? parsed.user : null,
+    source: typeof parsed.source === "string" ? parsed.source : null,
+    payload,
+  };
+}
+
+function parseJsonObject(text: string): MirrorHeader | null {
+  try {
+    const parsed = JSON.parse(text) as unknown;
+    return parsed && typeof parsed === "object" ? parsed as MirrorHeader : null;
+  } catch {
+    return null;
+  }
+}
+
+/** The attachment a mirror post names as holding its full payload, if any. */
+export function mirrorAttachmentName(content: string): string | null {
+  const match = MIRROR_BLOCK.exec(content.trim());
+  const attachment = match ? parseJsonObject(match[1])?.attachment : undefined;
+  return typeof attachment === "string" ? attachment : null;
+}
+
 /**
- * Reads a mirror post written by `formatMirrorMessage`. A post truncated at
- * Discord's length cap is not valid JSON, so its user and source are recovered
- * by pattern and the raw text is kept as the payload.
+ * Reads a mirror post written by `buildMirrorMessage`. A payload too long for the
+ * content comes back through `attachment`, the downloaded body of the file the
+ * post names. A post truncated at Discord's length cap, from a bot built before
+ * the attachment, is not valid JSON, so its user and source are recovered by
+ * pattern and the raw text is kept as the payload.
  */
-export function parseMirrorMessage(content: string): MirrorRecord | null {
+export function parseMirrorMessage(content: string, attachment?: string): MirrorRecord | null {
   const match = MIRROR_BLOCK.exec(content.trim());
   if (!match) return null;
   const body = match[1];
-  try {
-    const parsed = JSON.parse(body) as { user?: unknown; source?: unknown };
-    if (!parsed || typeof parsed !== "object") return null;
-    return {
-      user: typeof parsed.user === "string" ? parsed.user : null,
-      source: typeof parsed.source === "string" ? parsed.source : null,
-      payload: parsed,
-    };
-  } catch {
-    const user = MIRROR_USER.exec(body)?.[1] ?? null;
-    if (!user) return null;
-    return { user, source: MIRROR_SOURCE.exec(body)?.[1] ?? null, payload: body };
+  const parsed = parseJsonObject(body);
+  if (parsed) {
+    const full = attachment === undefined ? null : parseJsonObject(attachment);
+    return mirrorRecord(parsed, full ?? parsed);
   }
+  const user = MIRROR_USER.exec(body)?.[1] ?? null;
+  if (!user) return null;
+  return { user, source: MIRROR_SOURCE.exec(body)?.[1] ?? null, payload: body };
+}
+
+/**
+ * Where to download a mirror post's full payload: the URL of the attachment its
+ * content names, when the post is in the mirror channel and carries one.
+ */
+export function mirrorAttachmentUrl(
+  snapshot: IMessageSnapshot,
+  context: IObservationContext,
+): string | null {
+  if (snapshot.channelId !== context.mirrorChannelId) return null;
+  const name = mirrorAttachmentName(snapshot.content);
+  if (!name) return null;
+  return snapshot.attachments.find((entry) => entry.name === name)?.url ?? null;
 }
 
 function latestTime(snapshot: IMessageSnapshot): number {
@@ -133,7 +178,7 @@ export function classifySnapshot(
   };
 
   if (snapshot.channelId === context.mirrorChannelId) {
-    const mirror = parseMirrorMessage(snapshot.content);
+    const mirror = parseMirrorMessage(snapshot.content, snapshot.mirrorAttachment);
     if (mirror) {
       if (mirror.user !== context.allowedUserId) return null;
       return { ...base, place: "mirror", source: mirror.source, payload: mirror.payload };

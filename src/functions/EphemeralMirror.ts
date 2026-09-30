@@ -1,12 +1,15 @@
-import { MessageFlags, MessageFlagsBitField } from "discord.js";
+import { AttachmentBuilder, MessageFlags, MessageFlagsBitField } from "discord.js";
 import { IS_TEST_MODE } from "../config/testMode.js";
 import { TEST_LOG_CHANNEL_ID } from "../config/channels.js";
-import { escapeJsonBackticks, jsonCodeBlock } from "../utilities/CodeBlockUtils.js";
+import { jsonCodeBlock } from "../utilities/CodeBlockUtils.js";
 import { logError } from "../utilities/LogUtils.js";
 import type { AnyRepliable } from "./InteractionUtils.js";
 
 /** Discord's hard cap on a message's content length. */
 const MIRROR_MESSAGE_LIMIT = 2000;
+
+/** File name of the full payload when it does not fit in the message content. */
+export const MIRROR_ATTACHMENT_NAME = "mirror.json";
 
 type MirrorComponent = {
   type?: number;
@@ -161,13 +164,24 @@ export function serializeMirrorPayload(
   return payload;
 }
 
-/** Renders the mirrored payload as a fenced JSON block within Discord's limit. */
-export function formatMirrorMessage(payload: MirrorPayload): string {
-  const body = escapeJsonBackticks(JSON.stringify(payload, null, 2));
-  const fenceOverhead = jsonCodeBlock("").length;
-  const room = MIRROR_MESSAGE_LIMIT - fenceOverhead;
-  const truncated = body.length > room ? `${body.slice(0, room - 3)}...` : body;
-  return jsonCodeBlock(truncated);
+export type MirrorMessage = { content: string; files?: AttachmentBuilder[] };
+
+/**
+ * Renders the mirrored payload as a fenced JSON block. A payload too long for
+ * Discord's content cap goes whole into a JSON attachment instead, and the
+ * content keeps only who and what it answers plus the attachment's name, so the
+ * conductor sees every component rather than whatever survived a cut.
+ */
+export function buildMirrorMessage(payload: MirrorPayload): MirrorMessage {
+  const body = JSON.stringify(payload, null, 2);
+  const content = jsonCodeBlock(body);
+  if (content.length <= MIRROR_MESSAGE_LIMIT) return { content };
+  const { kind, source, user, channelId } = payload;
+  const summary = { kind, source, user, channelId, attachment: MIRROR_ATTACHMENT_NAME };
+  return {
+    content: jsonCodeBlock(JSON.stringify(summary, null, 2)),
+    files: [new AttachmentBuilder(Buffer.from(body, "utf8"), { name: MIRROR_ATTACHMENT_NAME })],
+  };
 }
 
 /**
@@ -182,10 +196,10 @@ async function sendMirror(
   try {
     const channel = await interaction.client.channels.fetch(TEST_LOG_CHANNEL_ID);
     if (!channel || !channel.isTextBased()) return;
-    const sendable = channel as { send?: (content: string) => Promise<unknown> };
+    const sendable = channel as { send?: (message: MirrorMessage) => Promise<unknown> };
     if (typeof sendable.send !== "function") return;
     const payload = serializeMirrorPayload(interaction, options, kind);
-    await sendable.send(formatMirrorMessage(payload));
+    await sendable.send(buildMirrorMessage(payload));
   } catch (err: unknown) {
     logError("EphemeralMirror.sendMirror", {
       kind,

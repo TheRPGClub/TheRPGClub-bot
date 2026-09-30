@@ -9,6 +9,7 @@ import {
   confirmedResult,
   failedResult,
   judgeStep,
+  mirrorAttachmentUrl,
   parseMirrorMessage,
   type IMessageSnapshot,
   type IObservedOutput,
@@ -26,7 +27,13 @@ import {
   type IConductorRun,
 } from "../conductor/ConductorState.js";
 import type { ITestStep } from "../conductor/TestPlanParser.js";
-import { formatMirrorMessage } from "../functions/EphemeralMirror.js";
+import { MessageFlags } from "discord.js";
+import {
+  buildMirrorMessage,
+  MIRROR_ATTACHMENT_NAME,
+  serializeMirrorPayload,
+} from "../functions/EphemeralMirror.js";
+import type { AnyRepliable } from "../functions/InteractionUtils.js";
 
 const USER = "100";
 const PREVIEW_BOT = "800";
@@ -51,22 +58,26 @@ function snapshot(overrides: Partial<IMessageSnapshot>): IMessageSnapshot {
     interactionUserId: null,
     embeds: [],
     components: [],
+    attachments: [],
     ...overrides,
   };
 }
 
+/** A mirror post as the conductor reads it, with any payload attachment downloaded. */
 function mirrorPost(id: string, at: number, source: string, content: string): IMessageSnapshot {
-  return snapshot({
-    id,
-    createdTimestamp: at,
-    content: formatMirrorMessage({
-      kind: "reply",
-      source,
-      user: USER,
-      channelId: "700",
-      content,
-    }),
+  const message = buildMirrorMessage({
+    kind: "reply",
+    source,
+    user: USER,
+    channelId: "700",
+    content,
   });
+  const file = message.files?.[0];
+  const attachment = file ? {
+    attachments: [{ name: MIRROR_ATTACHMENT_NAME, url: `https://cdn.example/${id}` }],
+    mirrorAttachment: (file.attachment as Buffer).toString("utf8"),
+  } : {};
+  return snapshot({ id, createdTimestamp: at, content: message.content, ...attachment });
 }
 
 function makeStep(overrides: Partial<ITestStep>): ITestStep {
@@ -102,9 +113,80 @@ test("reads back what the ephemeral mirror writes", () => {
 });
 
 test("recovers user and source from a mirror post truncated at the length cap", () => {
-  const long = "x".repeat(3000);
-  const post = mirrorPost("1", 10, "/collection", long);
-  assert.ok(post.content.length <= 2000);
+  const truncated = "```json\n{\n  \"kind\": \"reply\",\n  \"source\": \"/collection\"," +
+    `\n  "user": "${USER}",\n  "content": "xxx...\n\`\`\``;
+  const parsed = parseMirrorMessage(truncated);
+  assert.equal(parsed?.user, USER);
+  assert.equal(parsed?.source, "/collection");
+  assert.equal(typeof parsed?.payload, "string");
+});
+
+const PAGE_SELECT = {
+  type: 3,
+  custom_id: "collection:page",
+  options: [{ label: "Page 1", value: "1" }, { label: "Page 2", value: "2" }],
+};
+const PREV_BUTTON = { type: 2, custom_id: "collection:prev", label: "Previous" };
+const NEXT_BUTTON = { type: 2, custom_id: "collection:next", label: "Next" };
+const FILTER_BUTTON = { type: 2, custom_id: "collection:filter", label: "Filter Results" };
+const PAGE_SELECT_ROW = { type: 1, components: [PAGE_SELECT] };
+const NAV_ROW = { type: 1, components: [PREV_BUTTON, NEXT_BUTTON, FILTER_BUTTON] };
+
+type MirrorPayload = ReturnType<typeof serializeMirrorPayload>;
+
+/** A long paged list whose nav row and filter button come last, past the 2000 cap. */
+function longListReply(): MirrorPayload {
+  const rows = Array.from({ length: 100 }, (_, index) => `${index + 1}. Game number ${index + 1}`);
+  const text = { type: 10, content: `## List\n${rows.join("\n")}` };
+  const list = { type: 17, components: [text] };
+  const interaction = {
+    commandName: "collection",
+    user: { id: USER },
+    channelId: "700",
+  } as unknown as AnyRepliable;
+  return serializeMirrorPayload(interaction, {
+    flags: MessageFlags.Ephemeral,
+    components: [list, PAGE_SELECT_ROW, NAV_ROW],
+  });
+}
+
+test("a mirrored reply over the length cap reaches the checks whole", () => {
+  const payload = longListReply();
+  const message = buildMirrorMessage(payload);
+  assert.ok(message.content.length <= 2000, `content was ${message.content.length} chars`);
+  assert.ok(JSON.stringify(payload).length > 2000);
+  const file = message.files?.[0];
+  assert.ok(file);
+  assert.equal(file.name, MIRROR_ATTACHMENT_NAME);
+
+  const url = "https://cdn.example/mirror.json";
+  const post = snapshot({
+    id: "long",
+    createdTimestamp: 150,
+    content: message.content,
+    attachments: [{ name: MIRROR_ATTACHMENT_NAME, url }],
+  });
+  assert.equal(mirrorAttachmentUrl(post, CONTEXT), url);
+  post.mirrorAttachment = (file.attachment as Buffer).toString("utf8");
+
+  const parsed = parseMirrorMessage(post.content, post.mirrorAttachment);
+  assert.deepEqual(parsed?.payload, payload);
+  const outputs = observe([post]);
+  assert.equal(outputs[0]?.source, "/collection");
+  const judge = (expected: string): string => judgeStep(
+    makeStep({ command: "/collection list private:true", expected }),
+    outputs,
+    { start: 100, end: 200 },
+  ).verdict;
+  assert.equal(judge("button: \"Filter Results\" option: \"Page 2\" \"Game number 100\""), "pass");
+  assert.equal(judge("button: \"Next\" not: \"Game number 101\""), "pass");
+  assert.equal(judge("not: \"Filter Results\""), "fail");
+});
+
+test("a mirror post without its attachment still names who and what it answers", () => {
+  const message = buildMirrorMessage(longListReply());
+  const post = snapshot({ content: message.content });
+  assert.equal(mirrorAttachmentUrl(post, CONTEXT), null);
   const parsed = parseMirrorMessage(post.content);
   assert.equal(parsed?.user, USER);
   assert.equal(parsed?.source, "/collection");
