@@ -36,8 +36,6 @@ in one line and skipped, per
 - Step 7, after a clean self review pass with CI green, and
   nothing else in progress: `Needs Review`. Never before; the loop does not end
   the turn mid-way.
-- Called by a skill that runs the self review loop itself: no moves here. The
-  calling skill makes them.
 - Review comments, a CI failure, or a user answer to act on: `Working`, then
   back through `Self Review` to `Needs Review` once the fix is pushed.
 - The pull request merged or closed: the group sidebar-groups.md names for a
@@ -140,10 +138,6 @@ resolve, not something to hand back to the user.
 Once the PR is mergeable, without waiting for CI, move to `Self Review` (see
 [Sidebar moves](#sidebar-moves)) and run the loop in [self-review.md](../_shared/self-review.md)
 until a pass comes back clean. Fill in the `Self review` section of the body as it goes.
-
-When the skill that called open-pr runs the self review loop itself (for example
-`/next-refactor`), open-pr ends after step 5 and skips steps 6 and 7. The calling skill runs
-the loop, moves to `Needs Review`, and reports once its loop ends clean.
 
 ### 7. Report and file the session in the sidebar
 
