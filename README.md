@@ -106,8 +106,9 @@ Backblaze, and GitHub issues all use the same configuration they use in
 production, so point them at staging values yourself if you do not want a test
 run touching them.
 
-Pull requests are deployed into the test guild automatically by a self-hosted
-runner. Setup and manual controls are in `docs/pr-preview.md`. The conductor, a
+A pull request is deployed into the test guild by a self-hosted runner only when
+you ask for it with the `/test-guild <pr>` skill in Claude Code, one PR at a time.
+Setup and manual controls are in `docs/pr-preview.md`. The conductor, a
 separate bot that walks a tester through a PR's `## Testing` steps and reports the
 results to the PR, is described in `docs/conductor.md`. The `## Testing` section format
 it reads is defined in `.github/pull-request-testing-format.md`.
