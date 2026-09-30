@@ -53,7 +53,10 @@ export type OverridableIdName = (typeof OVERRIDABLE_ID_NAMES)[number];
 
 export type TestGuildIdMap = Partial<Record<OverridableIdName, string>>;
 
-/** Snowflakes from the private test guild (TEST_GUILD_ID 1547802424301854770). */
+/** The private test guild's own ID, the value `TEST_GUILD_ID` is set to. */
+export const TEST_GUILD_SNOWFLAKE = "1547802424301854770";
+
+/** Snowflakes from the private test guild ({@link TEST_GUILD_SNOWFLAKE}). */
 export const TEST_GUILD_IDS: TestGuildIdMap = {
   // channels.ts
   BOT_DEV_CHANNEL_ID: "1547802425086312558",
