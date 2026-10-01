@@ -48,6 +48,7 @@ import { decodeBase64Url, encodeBase64Url } from "../functions/CustomIdUtils.js"
 import { parseCustomIdSegments } from "../utilities/CustomIdUtils.js";
 import { GIVEAWAY_HUB_CHANNEL_ID } from "../config/channels.js";
 import { DISCORD_SELECT_OPTIONS_MAX, truncateDescription } from "../config/textLimits.js";
+import { ROUND_HISTORY_GAMES_PER_PAGE } from "../config/pagination.js";
 import { buildActionButton, buildButtonRow , buildSelectRow } from "../functions/uiComponents.js";
 
 type HelpTopicId =
@@ -214,7 +215,7 @@ const HELP_TOPICS: HelpTopic[] = [
     syntax: "Syntax: /gotm history [private:<boolean>]",
     notes:
       "Modal filters: category (GOTM/NR-GOTM/Both), optional title query, year, and sort order. " +
-      "Results are paginated at 5 rounds per page.",
+      `Results are paginated at ${ROUND_HISTORY_GAMES_PER_PAGE} games per page.`,
   },
   {
     id: "hltb",

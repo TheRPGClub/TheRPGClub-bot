@@ -1,5 +1,6 @@
 import type {
   ButtonInteraction,
+  Client,
   CommandInteraction,
   ModalSubmitInteraction,
 } from "discord.js";
@@ -34,7 +35,9 @@ import type { INrGotmEntry } from "../classes/NrGotm.js";
 import NrGotm from "../classes/NrGotm.js";
 import {
   buildGotmCardsFromEntries,
+  buildGotmCardText,
   buildGotmSearchMessages,
+  type GotmDisplayCard,
 } from "../functions/GotmSearchComponents.js";
 import {
   safeDeferReply,
@@ -51,7 +54,10 @@ import {
 import { buildCaughtErrorMessage } from "../utilities/ApiErrorUtils.js";
 import { decodeBase64Url, encodeBase64Url } from "../functions/CustomIdUtils.js";
 import { parseCustomIdSegments } from "../utilities/CustomIdUtils.js";
-import { ROUND_HISTORY_PAGE_SIZE } from "../config/pagination.js";
+import {
+  ROUND_HISTORY_CARD_TEXT_BUDGET,
+  ROUND_HISTORY_GAMES_PER_PAGE,
+} from "../config/pagination.js";
 import { DISCORD_SELECT_OPTIONS_MAX } from "../config/textLimits.js";
 import {
   buildDisabledPrevNextRowWithIds,
@@ -69,13 +75,13 @@ const ROUND_HISTORY_SORT_ID = "round-history-sort";
 type RoundHistoryKind = "gotm" | "nr-gotm" | "both";
 type RoundHistorySort = "asc" | "desc";
 
-type IRoundHistoryRecord = {
+export type IRoundHistoryRecord = {
   round: number;
   gotmEntries: IGotmEntry[];
   nrGotmEntries: INrGotmEntry[];
 };
 
-type IRoundHistoryFilterState = {
+export type IRoundHistoryFilterState = {
   ownerUserId: string;
   kind: RoundHistoryKind;
   query: string;
@@ -145,7 +151,8 @@ function getModalYearOptions(): APISelectMenuOption[] {
 export function buildRoundHistoryModal(sessionId: string): ModalBuilder {
   const helpText =
     "Filter by category, optional title text, and year. " +
-    "Sort controls round order. Results show up to 5 rounds per page.";
+    "Sort controls round order. Results show up to " +
+    `${ROUND_HISTORY_GAMES_PER_PAGE} games per page.`;
 
   return new ModalBuilder()
     .setCustomId(buildRoundHistoryModalCustomId(sessionId))
@@ -413,15 +420,88 @@ function getFilteredRoundHistoryRecords(
   return sorted;
 }
 
+type IRoundHistoryResponse = {
+  components: Array<any>;
+  files: any[];
+  totalPages: number;
+  safePage: number;
+};
+
+type IRoundHistoryPage = {
+  cards: GotmDisplayCard[];
+  textLength: number;
+  firstRoundIndex: number;
+  lastRoundIndex: number;
+};
+
+type IRoundHistoryCardCost = { card: GotmDisplayCard; textLength: number };
+
+function buildRoundCards(round: IRoundHistoryRecord): GotmDisplayCard[] {
+  return [
+    ...buildGotmCardsFromEntries(round.gotmEntries, "GOTM"),
+    ...buildGotmCardsFromEntries(round.nrGotmEntries, "NR-GOTM").filter(
+      (card) => card.title.trim().toLowerCase() !== "n/a",
+    ),
+  ].sort((a, b) => {
+    if (a.kindLabel !== b.kindLabel) {
+      return a.kindLabel === "GOTM" ? -1 : 1;
+    }
+    return a.title.localeCompare(b.title);
+  });
+}
+
+function pageFits(page: IRoundHistoryPage, costs: IRoundHistoryCardCost[]): boolean {
+  const textLength = costs.reduce((sum, cost) => sum + cost.textLength, page.textLength);
+  return (
+    page.cards.length + costs.length <= ROUND_HISTORY_GAMES_PER_PAGE &&
+    textLength <= ROUND_HISTORY_CARD_TEXT_BUDGET
+  );
+}
+
+// Pages are packed by game count and text length so each reply stays under the Components V2
+// limits. A round stays on one page unless it alone holds more than a page fits.
+export function paginateRoundHistory(
+  rounds: IRoundHistoryRecord[],
+  guildId?: string,
+): IRoundHistoryPage[] {
+  const pages: IRoundHistoryPage[] = [];
+  const startPage = (roundIndex: number): IRoundHistoryPage => {
+    const page = {
+      cards: [], textLength: 0, firstRoundIndex: roundIndex, lastRoundIndex: roundIndex,
+    };
+    pages.push(page);
+    return page;
+  };
+
+  let current: IRoundHistoryPage | null = null;
+  rounds.forEach((round, roundIndex) => {
+    const costs = buildRoundCards(round).map((card) => ({
+      card,
+      textLength: buildGotmCardText(card, guildId).length,
+    }));
+    let page = current && pageFits(current, costs) ? current : startPage(roundIndex);
+    for (const cost of costs) {
+      if (!pageFits(page, [cost])) {
+        page = startPage(roundIndex);
+      }
+      page.cards.push(cost.card);
+      page.textLength += cost.textLength;
+    }
+    page.lastRoundIndex = roundIndex;
+    current = page;
+  });
+  return pages;
+}
+
 function buildRoundHistoryIntro(
   state: IRoundHistoryFilterState,
   totalRounds: number,
   totalPages: number,
-  pageRounds: IRoundHistoryRecord[],
+  page: IRoundHistoryPage | undefined,
 ): string {
   const kindLabel = state.kind === "gotm" ? "GOTM" : state.kind === "nr-gotm" ? "NR-GOTM" : "Both";
-  const start = totalRounds === 0 ? 0 : state.page * ROUND_HISTORY_PAGE_SIZE + 1;
-  const end = totalRounds === 0 ? 0 : start + pageRounds.length - 1;
+  const start = page ? page.firstRoundIndex + 1 : 0;
+  const end = page ? page.lastRoundIndex + 1 : 0;
   const queryLine = state.query ? `"${state.query}"` : "(none)";
   return [
     `Category: ${kindLabel} | Year: ${state.year} | Sort: ${state.sort.toUpperCase()}`,
@@ -452,40 +532,29 @@ function buildRoundHistoryPaginationRow(
 async function buildRoundHistoryResponse(
   interaction: CommandInteraction | ButtonInteraction | ModalSubmitInteraction,
   state: IRoundHistoryFilterState,
-): Promise<{
-    components: Array<any>;
-    files: any[];
-    totalPages: number;
-    safePage: number;
-  }> {
+): Promise<IRoundHistoryResponse> {
   const allRounds = getFilteredRoundHistoryRecords(state.kind, state.query, state.year, state.sort);
-  const totalPages = Math.max(1, Math.ceil(allRounds.length / ROUND_HISTORY_PAGE_SIZE));
-  const safePage = Math.min(Math.max(state.page, 0), totalPages - 1);
-  const pageRounds = allRounds.slice(
-    safePage * ROUND_HISTORY_PAGE_SIZE,
-    safePage * ROUND_HISTORY_PAGE_SIZE + ROUND_HISTORY_PAGE_SIZE,
+  return buildRoundHistoryPageResponse(
+    interaction.client,
+    interaction.guildId ?? undefined,
+    state,
+    allRounds,
   );
+}
 
-  const cards = [
-    ...buildGotmCardsFromEntries(
-      pageRounds.flatMap((entry) => entry.gotmEntries),
-      "GOTM",
-    ),
-    ...buildGotmCardsFromEntries(
-      pageRounds.flatMap((entry) => entry.nrGotmEntries),
-      "NR-GOTM",
-    ).filter((card) => card.title.trim().toLowerCase() !== "n/a"),
-  ].sort((a, b) => {
-    if (a.round !== b.round) {
-      return state.sort === "asc" ? a.round - b.round : b.round - a.round;
-    }
-    if (a.kindLabel !== b.kindLabel) {
-      return a.kindLabel === "GOTM" ? -1 : 1;
-    }
-    return a.title.localeCompare(b.title);
-  });
+export async function buildRoundHistoryPageResponse(
+  client: Client,
+  guildId: string | undefined,
+  state: IRoundHistoryFilterState,
+  allRounds: IRoundHistoryRecord[],
+): Promise<IRoundHistoryResponse> {
+  const pages = paginateRoundHistory(allRounds, guildId);
+  const totalPages = Math.max(1, pages.length);
+  const safePage = Math.min(Math.max(state.page, 0), totalPages - 1);
+  const page = pages[safePage];
+  const cards = page?.cards ?? [];
 
-  const payloads = await buildGotmSearchMessages(interaction.client, cards, {
+  const payloads = await buildGotmSearchMessages(client, cards, {
     title: `Round History - ${state.year}`,
     continuationTitle: `Round History - ${state.year} (continued)`,
     emptyMessage: "No rounds matched your filters.",
@@ -493,11 +562,11 @@ async function buildRoundHistoryResponse(
       { ...state, page: safePage },
       allRounds.length,
       totalPages,
-      pageRounds,
+      page,
     ),
-    guildId: interaction.guildId ?? undefined,
-    maxGamesPerContainer: 50,
-    maxContainersPerMessage: 20,
+    guildId,
+    maxGamesPerContainer: ROUND_HISTORY_GAMES_PER_PAGE,
+    maxContainersPerMessage: 1,
   });
 
   const payload = payloads[0] ?? { components: [], files: [] };
