@@ -12,7 +12,7 @@ import * as os from "os";
 import * as path from "path";
 import { createInterface } from "readline/promises";
 
-import { chromium, type Page } from "playwright-core";
+import { chromium, errors, type Page } from "playwright-core";
 
 import { TEST_GUILD_IDS, TEST_GUILD_SNOWFLAKE } from "../../src/config/testGuild.ts";
 import { parseDriveAction, type DriveAction } from "../../src/conductor/DriveActions.ts";
@@ -21,6 +21,7 @@ import {
   currentStep,
   HandOff,
   newestText,
+  pendingVerdict,
   performAction,
   reportUrl,
   stepMessage,
@@ -41,7 +42,6 @@ interface IOutcome {
 const USAGE = "Usage: npm run -s conduct:playwright -- <pr> [--hand-off 3,5]";
 const PROFILE_DIR = process.env.CONDUCT_PROFILE_DIR ??
   path.join(os.homedir(), ".cache", "rpgclub-conductor", "discord-profile");
-const NEXT_STEP_BUTTONS = /^(?:Check again|Looks right)$/;
 
 function fail(message: string, code = 2): never {
   console.error(message);
@@ -138,11 +138,9 @@ async function waitForAdvance(page: Page, pr: number, n: number, ms: number): Pr
 async function check(page: Page, pr: number, n: number): Promise<string | null> {
   const message = stepMessage(page, pr, n);
   await message.getByRole("button", { name: "Check", exact: true }).click();
-  const verdict = await poll(page, TIMING.verdictMs, async () => {
-    if (await waitForAdvance(page, pr, n, 0)) return "passed";
-    const stuck = await message.getByRole("button", { name: NEXT_STEP_BUTTONS }).count();
-    return stuck ? (await message.innerText()).split("\n").slice(-3).join(" ") : null;
-  });
+  const verdict = await poll(page, TIMING.verdictMs, async () =>
+    await waitForAdvance(page, pr, n, 0) ? "passed" : pendingVerdict(page, pr, n),
+  );
   if (verdict === "passed") return null;
   return verdict ?? "the conductor gave no verdict";
 }
@@ -191,6 +189,11 @@ async function runStep(page: Page, pr: number, step: IRunStep, shots: string): P
     console.log(`Step ${step.number} is yours: ${step.command}`);
     return { number: step.number, result: "hand-off", detail: step.reasons.join("; ") };
   }
+  const pending = await pendingVerdict(page, pr, step.number);
+  if (pending) {
+    console.log(`Step ${step.number} is yours: it already shows ${pending}.`);
+    return { number: step.number, result: "handed back", detail: pending };
+  }
   const shot = path.join(shots, `step-${step.number}.png`);
   try {
     const before = await newestText(page);
@@ -201,10 +204,12 @@ async function runStep(page: Page, pr: number, step: IRunStep, shots: string): P
     if (!verdict) return { number: step.number, result: "passed", detail: "" };
     return { number: step.number, result: "handed back", detail: verdict };
   } catch (err: unknown) {
-    if (!(err instanceof HandOff)) throw err;
+    if (!(err instanceof HandOff) && !(err instanceof errors.TimeoutError)) throw err;
     await page.screenshot({ path: shot });
-    console.log(`Step ${step.number} is yours: ${err.message}. Do it, then judge it.`);
-    return { number: step.number, result: "handed back", detail: err.message };
+    // A Playwright timeout carries its whole call log; the first line says what failed.
+    const why = err.message.split("\n")[0];
+    console.log(`Step ${step.number} is yours: ${why}. Do it, then judge it.`);
+    return { number: step.number, result: "handed back", detail: why };
   }
 }
 

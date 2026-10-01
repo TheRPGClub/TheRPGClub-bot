@@ -6,6 +6,7 @@
 
 import type { Locator, Page } from "playwright-core";
 
+import { PREVIEW_BOT_NAME } from "../../src/config/previewMode.ts";
 import type {
   DriveAction,
   IModalField,
@@ -39,6 +40,10 @@ export interface IStepHeader {
 export class HandOff extends Error {}
 
 const STEP_HEADER = /PR #(\d+), step (\d+) of (\d+): ([^\n]+)/;
+/** Buttons a step message shows once a check found anything but a pass. */
+const PENDING_BUTTONS = /^(?:Check again|Looks right)$/;
+/** The conductor's verdict line on a step message, as `ConductorReport.ts` labels it. */
+const VERDICT_LINE = /^(?:FAIL|NEEDS EYES): .+$/m;
 /** Controls only conductor messages carry; their messages are never acted on. */
 const CONDUCTOR_BUTTONS = /^(?:Check|Check again|Abort run|Post report|Approve PR)$/;
 
@@ -79,6 +84,16 @@ export function stepMessage(page: Page, pr: number, n: number): Locator {
   return messages(page).filter({ hasText: header }).last();
 }
 
+/**
+ * The verdict a step message is waiting on the tester for, or null while it still
+ * offers a plain Check. Such a step is the tester's: driving it again would repeat it.
+ */
+export async function pendingVerdict(page: Page, pr: number, n: number): Promise<string | null> {
+  const message = stepMessage(page, pr, n);
+  if (!await message.getByRole("button", { name: PENDING_BUTTONS }).count()) return null;
+  return VERDICT_LINE.exec(await message.innerText())?.[0] ?? "awaiting the tester's judgment";
+}
+
 async function isConductorMessage(item: Locator): Promise<boolean> {
   if (STEP_HEADER.test(await item.innerText())) return true;
   return await item.getByRole("button", { name: CONDUCTOR_BUTTONS }).count() > 0;
@@ -102,17 +117,20 @@ async function newestWith(page: Page, find: (item: Locator) => Locator): Promise
   throw new HandOff("the control is not on any recent preview bot message");
 }
 
-/** Picks the option whose first line of visible text is exactly `value`. */
-async function pickOption(options: Locator, value: string): Promise<void> {
+/** The option whose first line of visible text is one of `values`, or null. */
+async function findOption(options: Locator, values: string[]): Promise<Locator | null> {
   const count = await options.count();
   for (let index = 0; index < count; index += 1) {
-    const text = (await options.nth(index).innerText()).split("\n")[0]?.trim();
-    if (text === value) {
-      await options.nth(index).click();
-      return;
-    }
+    const text = (await options.nth(index).innerText()).split("\n")[0]?.trim() ?? "";
+    if (values.includes(text)) return options.nth(index);
   }
-  throw new HandOff(`no option reads "${value}"`);
+  return null;
+}
+
+async function pickOption(options: Locator, value: string): Promise<void> {
+  const option = await findOption(options, [value]);
+  if (!option) throw new HandOff(`no option reads "${value}"`);
+  await option.click();
 }
 
 async function waitVisible(locator: Locator, what: string): Promise<void> {
@@ -153,17 +171,22 @@ async function runSlash(page: Page, action: ISlashAction): Promise<void> {
   const name = `/${action.path.join(" ")}`;
   await box.click();
   await box.pressSequentially(name, { delay: TIMING.typeDelayMs });
-  const command = page.getByRole("option").filter({ hasText: name });
-  await waitVisible(command, `the ${name} entry in the command popup`);
-  await command.first().click();
+  const entries = page.getByRole("option").filter({ hasText: PREVIEW_BOT_NAME });
+  await waitVisible(entries, `the preview bot's entries in the command popup`);
+  const command = await findOption(entries, [name, name.slice(1)]);
+  if (!command) throw new HandOff(`the command popup has no preview bot ${name}`);
+  await command.click();
   for (const option of action.options) {
     // Discord opens the first required option by itself; name it only when it is not open.
     const typed = (await box.innerText()).trimEnd();
     const prefix = typed.endsWith(`${option.name}:`) ? "" : ` ${option.name}:`;
     await box.pressSequentially(`${prefix}${option.value}`, { delay: TIMING.typeDelayMs });
     await page.waitForTimeout(TIMING.settleMs / 3);
-    const suggestions = page.getByRole("option");
-    if (await suggestions.count() > 0) await pickOption(suggestions, option.value);
+    // An autocomplete or choice suggestion that matches is picked. Any other popup, such
+    // as the list of remaining options, is left alone; a value Discord rejects keeps
+    // the command in the box, which the send check below catches.
+    const suggestion = await findOption(page.getByRole("option"), [option.value]);
+    if (suggestion) await suggestion.click();
   }
   await box.press("Enter");
   await page.waitForTimeout(TIMING.settleMs / 3);

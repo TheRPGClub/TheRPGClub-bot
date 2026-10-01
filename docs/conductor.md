@@ -128,8 +128,9 @@ What it does:
 - It opens the test channel and follows the conductor's newest
   `PR #<pr>, step N of M` message. For a `drive` step it performs the one action from the
   code block (`src/conductor/DriveActions.ts` reads it): the slash command, button
-  click, select choice, or modal submit. It waits for the reply, takes a screenshot, and
-  presses **Check**.
+  click, select choice, or modal submit. A slash command is picked only from the
+  entries of `PREVIEW_BOT_NAME` (`src/config/previewMode.ts`), never another bot's. It
+  waits for the reply, takes a screenshot, and presses **Check**.
 - A pass moves on to the next step. Any other verdict, or an action that does not go as
   expected (a missing control, an unmatched option, a command Discord did not send),
   hands the step to the tester, who finishes and judges it on the same page. The runner
@@ -143,7 +144,8 @@ What it does:
 
 The runner holds no state of its own. If it stops (a timeout, a closed window, a step
 whose label no longer matches the PR body), rerun it and it picks up from the
-conductor's current step.
+conductor's current step. A current step that already shows a verdict (**Check again**
+or **Looks right**) is left to the tester, so a resume never repeats an action.
 
 A step is handed off, beyond the reasons `DrivePlan.ts` gives (nothing to check, a check
 by eye, a second account, a chained or unrecognized action, a `/todo` or `/suggestion`
