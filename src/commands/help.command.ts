@@ -1,10 +1,11 @@
 import type {
+  AutocompleteInteraction,
   ButtonInteraction,
   CommandInteraction,
-  MessageActionRowComponentBuilder,
 } from "discord.js";
 import {
   ActionRowBuilder,
+  ApplicationCommandOptionType,
   ButtonBuilder,
   ButtonStyle,
   StringSelectMenuBuilder,
@@ -13,13 +14,24 @@ import {
   channelMention,
 } from "discord.js";
 import type { ContainerBuilder } from "@discordjs/builders";
-import { ButtonComponent, Discord, SelectMenuComponent, Slash } from "discordx";
-import { isAdmin, isModerator } from "./admin/admin-auth.utils.js";
+import {
+  ButtonComponent,
+  Discord,
+  SelectMenuComponent,
+  Slash,
+  SlashOption,
+} from "discordx";
+import {
+  canUseHelpLevel,
+  getHelpAccess,
+  type HelpAccess,
+  type HelpAccessLevel,
+} from "./help/help-access.js";
+import { withHelpNotice } from "./help/help-pointer.js";
 import { buildAdminHelpResponse } from "./admin/admin-help.service.js";
 import { buildModHelpResponse } from "./mod.command.js";
-import { buildSuperAdminHelpResponse, isSuperAdmin } from "./superadmin.command.js";
+import { buildSuperAdminHelpResponse } from "./superadmin.command.js";
 import {
-  buildTextContainer,
   buildCommandHelpContainer,
   buildFieldsText,
   buildComponentsV2EditFlags,
@@ -30,7 +42,7 @@ import { safeDeferReply, safeReply, safeUpdate } from "../functions/InteractionU
 import { decodeBase64Url, encodeBase64Url } from "../functions/CustomIdUtils.js";
 import { parseCustomIdSegments } from "../utilities/CustomIdUtils.js";
 import { GIVEAWAY_HUB_CHANNEL_ID } from "../config/channels.js";
-import { truncateDescription } from "../config/textLimits.js";
+import { DISCORD_SELECT_OPTIONS_MAX, truncateDescription } from "../config/textLimits.js";
 import { buildActionButton, buildButtonRow , buildSelectRow } from "../functions/uiComponents.js";
 
 type HelpTopicId =
@@ -68,6 +80,11 @@ type HelpMenuView =
   | "rss"
   | "refresh";
 
+type HelpMenuResponse = {
+  components: (ContainerBuilder | ActionRowBuilder<StringSelectMenuBuilder>)[];
+  flags: number;
+};
+
 type HelpStatePayload = {
   categoryId?: string;
   activeTopicId?: string;
@@ -80,6 +97,8 @@ type HelpTopic = {
   syntax: string;
   parameters?: string;
   notes?: string;
+  /** Who may see this topic in /help. Omitted means every member. */
+  access?: HelpAccessLevel;
 };
 
 type ProfileHelpTopicId =
@@ -286,6 +305,7 @@ const HELP_TOPICS: HelpTopic[] = [
     id: "publicreminder",
     label: "/publicreminder",
     summary: "Schedule public reminders with optional recurrence (admin only).",
+    access: "admin",
     syntax:
       "Syntax: /publicreminder create channel:<channel> date:<string> time:<string> message:<string> [recur:<int>] [recurunit:<minutes|hours|days|weeks|months|years>] | /publicreminder list | /publicreminder delete id:<int>",
     notes:
@@ -323,25 +343,29 @@ const HELP_TOPICS: HelpTopic[] = [
     id: "rss",
     label: "/rss",
     summary: "Manage RSS relays with include/exclude keywords per channel (admin only).",
-    syntax: "Use /rss help for subcommands: add, remove, edit, list.",
+    syntax: "Use /help category:rss for subcommands: add, remove, edit, list.",
+    access: "admin",
   },
   {
     id: "admin",
     label: "/admin",
     summary: "Admin tools for GOTM/NR-GOTM management.",
-    syntax: "Use /admin help to see the subcommands and details.",
+    syntax: "Use /help category:admin to see the subcommands and details.",
+    access: "admin",
   },
   {
     id: "mod",
     label: "/mod",
     summary: "Moderator tools for NR-GOTM management.",
-    syntax: "Use /mod help to see the subcommands and details.",
+    syntax: "Use /help category:mod to see the subcommands and details.",
+    access: "moderator",
   },
   {
     id: "superadmin",
     label: "/superadmin",
     summary: "Server owner tools for GOTM/NR-GOTM management.",
-    syntax: "Use /superadmin help to see the subcommands and details.",
+    syntax: "Use /help category:superadmin to see the subcommands and details.",
+    access: "owner",
   },
   {
     id: "todo",
@@ -364,18 +388,6 @@ const HELP_TOPICS: HelpTopic[] = [
     notes: "Suggestions are approved from the Review Suggestions button in /todo by the server owner or bot dev.",
   },
 ];
-
-function withHelpNotice<
-  T extends {
-    components: (ContainerBuilder | ActionRowBuilder<MessageActionRowComponentBuilder>)[];
-    flags: number;
-  },
->(response: T, content: string): T {
-  return {
-    ...response,
-    components: [buildTextContainer(content), ...response.components],
-  };
-}
 
 const HELP_CATEGORIES: { id: string; name: string; topicIds: HelpTopicId[] }[] = [
   {
@@ -905,47 +917,59 @@ export function buildRssHelpResponse(
   return { components: [container, ...buttons], flags: buildComponentsV2EditFlags() };
 }
 
-export function buildMainHelpResponse(): {
+const MAIN_MENU_SUMMARIES: Record<HelpTopicId, string> = {
+  noms: "Show the current nomination list.",
+  nominate: "Submit a GOTM or NR-GOTM nomination.",
+  "nominate-delete": "Delete your own nomination.",
+  vote: "Vote on nominations while voting is open.",
+  round: "See the current round and winners.",
+  "round-history": "Browse historical rounds with filters.",
+  profile: "View and edit member profiles.",
+  "mp-info": "Find who has shared multiplayer info.",
+  gamedb: "Search for games and view their details.",
+  collection: "Track owned games by platform and ownership.",
+  "now-playing": "Show Now Playing lists and thread links.",
+  "game-completion": "Log and manage your completed games.",
+  hltb: "Look up HowLongToBeat playtimes.",
+  suggestion: "Submit a bot suggestion.",
+  giveaway: "Claim or donate game keys.",
+  "avatar-history": "View a member’s avatar history.",
+  mod: "Moderator tools.",
+  admin: "Admin tools.",
+  superadmin: "Server Owner tools.",
+  todo: "Manage GitHub issues using the bot.",
+  publicreminder: "Schedule public reminders.",
+  thread: "Create threads and link them to GameDB games.",
+  rss: "Manage RSS relays with filters.",
+};
+
+function getVisibleCategoryTopics(categoryId: string, access: HelpAccess): HelpTopic[] {
+  const category = getCategoryById(categoryId);
+  if (!category) return [];
+  return category.topicIds
+    .map((id) => HELP_TOPICS.find((t) => t.id === id))
+    .filter((t): t is HelpTopic => Boolean(t) && canUseHelpLevel(access, t?.access));
+}
+
+export function buildMainHelpResponse(access: HelpAccess): {
   components: (ContainerBuilder | ActionRowBuilder<StringSelectMenuBuilder>)[];
   flags: number;
 } {
+  const sections = HELP_CATEGORIES.map((category) => {
+    const lines = getVisibleCategoryTopics(category.id, access).map((topic) =>
+      formatCommandLine(topic.label, MAIN_MENU_SUMMARIES[topic.id]),
+    );
+    return lines.length ? `**${category.name}**\n${lines.join("\n")}` : "";
+  }).filter(Boolean);
   const body =
-    "Use the category dropdowns below to jump straight to a command’s details.\n\n" +
-    "**Monthly Games**\n" +
-    `${formatCommandLine("gotm nominations", "Show the current nomination list.", 16)}\n` +
-    `${formatCommandLine("gotm nominate", "Submit a GOTM or NR-GOTM nomination.", 16)}\n` +
-    `${formatCommandLine("gotm withdraw", "Delete your own nomination.", 16)}\n` +
-    `${formatCommandLine("gotm vote", "Vote on nominations while voting is open.", 16)}\n` +
-    `${formatCommandLine("gotm current", "See the current round and winners.", 16)}\n` +
-    `${formatCommandLine("gotm history", "Browse historical rounds with filters.", 16)}\n` +
-    "\n" +
-    "**Members**\n" +
-    `${formatCommandLine("profile", "View and edit member profiles.")}\n` +
-    `${formatCommandLine("mp-info", "Find who has shared multiplayer info.")}\n\n` +
-    "**GameDB**\n" +
-    `${formatCommandLine("gamedb", "Search for games and view their details.")}\n` +
-    `${formatCommandLine("collection", "Track owned games by platform and ownership.")}\n` +
-    `${formatCommandLine("now-playing", "Show Now Playing lists and thread links.")}\n` +
-    `${formatCommandLine("game-completion", "Log and manage your completed games.")}\n\n` +
-    "**Utilities**\n" +
-    `${formatCommandLine("hltb", "Look up HowLongToBeat playtimes.")}\n` +
-    `${formatCommandLine("giveaway", "Claim or donate game keys.")}\n` +
-    `${formatCommandLine("avatar-history", "View a member’s avatar history.")}\n` +
-    `${formatCommandLine("suggestion", "Submit a bot suggestion.")}\n\n` +
-    "**Server Administration**\n" +
-    `${formatCommandLine("mod", "Moderator tools.")}\n` +
-    `${formatCommandLine("admin", "Admin tools.")}\n` +
-    `${formatCommandLine("superadmin", "Server Owner tools.")}\n` +
-    `${formatCommandLine("todo", "Manage GitHub issues using the bot.")}\n` +
-    `${formatCommandLine("publicreminder", "Schedule public reminders.")}\n` +
-    `${formatCommandLine("thread", "Create threads and link them to GameDB games.")}\n` +
-    `${formatCommandLine("rss", "Manage RSS relays with filters.")}`;
+    "Use the category dropdowns below to jump straight to a command’s details, " +
+    "or run /help with a category.\n\n" +
+    sections.join("\n\n");
 
   const container = buildCommandHelpContainer("RPGClubUtils Commands", body);
 
   return {
-     
-    components: [container, ...buildMainHelpComponents()],
+    components: [container, ...buildMainHelpComponents(access)],
     flags: buildComponentsV2EditFlags(),
   };
 }
@@ -977,10 +1001,27 @@ export function buildGamedbHelpResponse(
 @Discord()
 export class BotHelp {
   @Slash({ description: "Show help for all bot commands", name: "help" })
-  async help(interaction: CommandInteraction): Promise<void> {
+  async help(
+    @SlashOption({
+      autocomplete: autocompleteHelpCategory,
+      description: "Jump straight to one category of commands",
+      name: "category",
+      required: false,
+      type: ApplicationCommandOptionType.String,
+    })
+    category: string | undefined,
+    interaction: CommandInteraction,
+  ): Promise<void> {
     await safeDeferReply(interaction, { flags: MessageFlags.Ephemeral });
 
-    const response = buildMainHelpResponse();
+    const access = getHelpAccess(interaction);
+    const categoryResponse = category ? buildHelpCategoryResponse(category, access) : null;
+    const response = categoryResponse ?? (category
+      ? withHelpNotice(
+        buildMainHelpResponse(access),
+        "That help category isn't available to you. Showing the main menu.",
+      )
+      : buildMainHelpResponse(access));
 
     await safeReply(interaction, {
       ...response,
@@ -1007,7 +1048,7 @@ export class BotHelp {
     const category = getCategoryById(parsed.state.categoryId);
 
     if (!category || topicId === "help-main") {
-      const response = buildMainHelpResponse();
+      const response = buildMainHelpResponse(getHelpAccess(interaction));
       await safeUpdate(interaction, response);
       return;
     }
@@ -1015,38 +1056,22 @@ export class BotHelp {
     if (!topicId) {
       const response = buildCategoryHelpResponse(
         category.id,
+        getHelpAccess(interaction),
         parsed.state.activeTopicId as HelpTopicId | undefined,
       );
       await safeUpdate(interaction, withHelpNotice(response, "Please pick a command from the list."));
       return;
     }
 
+    const access = getHelpAccess(interaction);
     const topic = HELP_TOPICS.find((entry) => entry.id === topicId);
 
-    if (topicId === "admin") {
-      const ok = await isAdmin(interaction);
-      if (!ok) return;
-    }
-
-    if (topicId === "mod") {
-      const ok = await isModerator(interaction);
-      if (!ok) return;
-    }
-
-    if (topicId === "superadmin") {
-      const ok = await isSuperAdmin(interaction);
-      if (!ok) return;
-    }
-
-    if (!topic) {
-      const response = buildCategoryHelpResponse(category.id);
-      await safeUpdate(
-        interaction,
-        withHelpNotice(
-          response,
-          "Sorry, I don't recognize that help topic. Showing the category menu.",
-        ),
-      );
+    if (!topic || !canUseHelpLevel(access, topic.access)) {
+      const response = buildCategoryHelpResponse(category.id, access);
+      const notice = topic
+        ? "You don't have access to that help topic. Showing the category menu."
+        : "Sorry, I don't recognize that help topic. Showing the category menu.";
+      await safeUpdate(interaction, withHelpNotice(response, notice));
       return;
     }
 
@@ -1057,7 +1082,7 @@ export class BotHelp {
     }
 
     const container = buildHelpDetailsContainer(topic);
-    const categoryComponents = buildCategoryComponents(category.id, topic.id);
+    const categoryComponents = buildCategoryComponents(category.id, access, topic.id);
     await safeUpdate(interaction, {
       components: [container, ...categoryComponents],
       flags: buildComponentsV2EditFlags(),
@@ -1076,7 +1101,7 @@ export class BotHelp {
       (interaction.values?.[0] as RssHelpTopicId | "help-main" | undefined) ??
       (parsed.state.activeTopicId as RssHelpTopicId | "help-main" | undefined);
     if (topicId === "help-main") {
-      const response = buildMainHelpResponse();
+      const response = buildMainHelpResponse(getHelpAccess(interaction));
       await safeUpdate(interaction, response);
       return;
     }
@@ -1115,7 +1140,7 @@ export class BotHelp {
       (interaction.values?.[0] as ProfileHelpTopicId | "help-main" | undefined) ??
       (parsed.state.activeTopicId as ProfileHelpTopicId | "help-main" | undefined);
     if (topicId === "help-main") {
-      const response = buildMainHelpResponse();
+      const response = buildMainHelpResponse(getHelpAccess(interaction));
       await safeUpdate(interaction, response);
       return;
     }
@@ -1154,7 +1179,7 @@ export class BotHelp {
       (interaction.values?.[0] as NowPlayingHelpTopicId | "help-main" | undefined) ??
       (parsed.state.activeTopicId as NowPlayingHelpTopicId | "help-main" | undefined);
     if (topicId === "help-main") {
-      const response = buildMainHelpResponse();
+      const response = buildMainHelpResponse(getHelpAccess(interaction));
       await safeUpdate(interaction, response);
       return;
     }
@@ -1193,7 +1218,7 @@ export class BotHelp {
       (interaction.values?.[0] as GameDbHelpTopicId | "help-main" | undefined) ??
       (parsed.state.activeTopicId as GameDbHelpTopicId | "help-main" | undefined);
     if (topicId === "help-main") {
-      const response = buildMainHelpResponse();
+      const response = buildMainHelpResponse(getHelpAccess(interaction));
       await safeUpdate(interaction, response);
       return;
     }
@@ -1232,7 +1257,7 @@ export class BotHelp {
       (interaction.values?.[0] as GameCompletionHelpTopicId | "help-main" | undefined) ??
       (parsed.state.activeTopicId as GameCompletionHelpTopicId | "help-main" | undefined);
     if (topicId === "help-main") {
-      const response = buildMainHelpResponse();
+      const response = buildMainHelpResponse(getHelpAccess(interaction));
       await safeUpdate(interaction, response);
       return;
     }
@@ -1267,12 +1292,48 @@ export class BotHelp {
       return;
     }
 
-    const response = buildMainHelpResponse();
+    const response = buildMainHelpResponse(getHelpAccess(interaction));
     await safeUpdate(interaction, withHelpNotice(response, "Help menu refreshed."));
   }
 }
 
-function buildTopicHelpResponse(topicId: HelpTopicId): Record<string, unknown> | null {
+/** Topics whose help is its own menu, offered directly by /help category. */
+const STAFF_MENU_TOPIC_IDS = ["mod", "admin", "superadmin", "rss"] as const satisfies HelpTopicId[];
+
+function getHelpCategoryChoices(access: HelpAccess): { name: string; value: string }[] {
+  const categories = HELP_CATEGORIES
+    .filter((category) => getVisibleCategoryTopics(category.id, access).length > 0)
+    .map((category) => ({ name: category.name, value: category.id }));
+  const staffMenus = HELP_TOPICS
+    .filter((topic) => (STAFF_MENU_TOPIC_IDS as readonly string[]).includes(topic.id))
+    .filter((topic) => canUseHelpLevel(access, topic.access))
+    .map((topic) => ({ name: `${topic.label} commands`, value: topic.id }));
+  return [...categories, ...staffMenus];
+}
+
+/** Null when the value is unknown or names a category the member cannot use. */
+export function buildHelpCategoryResponse(
+  value: string,
+  access: HelpAccess,
+): HelpMenuResponse | null {
+  const choice = getHelpCategoryChoices(access).find((entry) => entry.value === value);
+  if (!choice) return null;
+  if (getCategoryById(choice.value)) return buildCategoryHelpResponse(choice.value, access);
+  return buildTopicHelpResponse(choice.value as HelpTopicId);
+}
+
+async function autocompleteHelpCategory(interaction: AutocompleteInteraction): Promise<void> {
+  const query = String(interaction.options.getFocused() ?? "").trim().toLowerCase();
+  const choices = getHelpCategoryChoices(getHelpAccess(interaction))
+    .filter((choice) =>
+      !query ||
+      choice.name.toLowerCase().includes(query) ||
+      choice.value.includes(query))
+    .slice(0, DISCORD_SELECT_OPTIONS_MAX);
+  await interaction.respond(choices);
+}
+
+function buildTopicHelpResponse(topicId: HelpTopicId): HelpMenuResponse | null {
   switch (topicId) {
     case "profile":
       return buildProfileHelpResponse();
@@ -1296,15 +1357,15 @@ function buildTopicHelpResponse(topicId: HelpTopicId): Record<string, unknown> |
 }
 function buildCategoryComponents(
   categoryId: string,
+  access: HelpAccess,
   activeTopicId?: HelpTopicId,
   includeBackToMain = true,
 ): ActionRowBuilder<StringSelectMenuBuilder>[] {
   const category = getCategoryById(categoryId);
-  if (!category) return buildMainHelpComponents();
+  if (!category) return buildMainHelpComponents(access);
 
-  const topics = category.topicIds
-    .map((id) => HELP_TOPICS.find((t) => t.id === id))
-    .filter((t): t is HelpTopic => Boolean(t));
+  const topics = getVisibleCategoryTopics(categoryId, access);
+  if (!topics.length) return [];
 
   const select = new StringSelectMenuBuilder()
     .setCustomId(buildHelpCustomId("category", { categoryId, activeTopicId }))
@@ -1326,30 +1387,26 @@ function buildCategoryComponents(
 
 function buildCategoryHelpResponse(
   categoryId: string,
+  access: HelpAccess,
   activeTopicId?: HelpTopicId,
 ): { components: (ContainerBuilder | ActionRowBuilder<StringSelectMenuBuilder>)[]; flags: number } {
   const category = getCategoryById(categoryId);
-  const topics = category?.topicIds
-    .map((id) => HELP_TOPICS.find((t) => t.id === id))
-    .filter((t): t is HelpTopic => Boolean(t));
+  const topics = getVisibleCategoryTopics(categoryId, access);
 
-  const body = topics && topics.length
+  const body = topics.length
     ? topics.map((t) => formatCommandLine(t.label, t.summary, 10)).join("\n")
     : "No commands found for this category.";
 
   const container = buildCommandHelpContainer(category?.name ?? "Commands", body);
 
   return {
-     
-    components: [container, ...buildCategoryComponents(categoryId, activeTopicId)],
+    components: [container, ...buildCategoryComponents(categoryId, access, activeTopicId)],
     flags: buildComponentsV2EditFlags(),
   };
 }
 
-function buildMainHelpComponents(): ActionRowBuilder<StringSelectMenuBuilder>[] {
-  const rows: ActionRowBuilder<StringSelectMenuBuilder>[] = [];
-  HELP_CATEGORIES.forEach((category) => {
-    rows.push(...buildCategoryComponents(category.id, undefined, false));
-  });
-  return rows;
+function buildMainHelpComponents(access: HelpAccess): ActionRowBuilder<StringSelectMenuBuilder>[] {
+  return HELP_CATEGORIES.flatMap((category) =>
+    buildCategoryComponents(category.id, access, undefined, false),
+  );
 }
