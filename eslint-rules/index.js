@@ -3890,6 +3890,18 @@ export default {
           return !first.properties.some(scopesFetch);
         };
 
+        // Types are not available to the plugin, so a thread's members (a REST list that
+        // fetchAllGuildMembers cannot replace) are told apart by the owner's name.
+        const isThreadOwner = (owner) => {
+          const name =
+            owner.type === "Identifier"
+              ? owner.name
+              : owner.type === "MemberExpression" && owner.property.type === "Identifier"
+                ? owner.property.name
+                : "";
+          return /thread/i.test(name);
+        };
+
         return {
           CallExpression(node) {
             const callee = node.callee;
@@ -3910,6 +3922,7 @@ export default {
             ) {
               return;
             }
+            if (isThreadOwner(target.object)) return;
             if (!isFullListCall(node.arguments)) return;
             context.report({
               node,

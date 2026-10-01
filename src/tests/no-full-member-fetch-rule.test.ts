@@ -26,6 +26,9 @@ ruleTester.run("no-full-member-fetch", rule, {
     "await guild.members.fetch({ ...options });",
     "await reaction.users.fetch();",
     "await guild.members[\"fetch\"]();",
+    "await thread.members.fetch();",
+    "await interaction.channel.thread.members.fetch();",
+    "await forumThread.members.fetch({ withMember: true });",
     {
       code: "await guild.members.fetch();",
       filename: "/repo/src/functions/GuildMemberFetch.ts",
