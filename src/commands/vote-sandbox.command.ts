@@ -49,7 +49,6 @@ import {
   type ISandboxTarget,
 } from "../services/VotingSandbox.js";
 import {
-  isFixtureGameId,
   isSandboxOutcome,
   SANDBOX_DEFAULT_CAP,
   SANDBOX_DEFAULT_NOMINATIONS,
@@ -136,7 +135,7 @@ export class VoteSandboxCommand {
     cap: number | undefined,
     @SlashOption({
       description:
-        `Fixture GOTM games (default ${SANDBOX_DEFAULT_NOMINATIONS}, 26+ splits the menu)`,
+        `GOTM games (default ${SANDBOX_DEFAULT_NOMINATIONS}, 26+ splits the menu)`,
       name: "gotm-nominations",
       required: false,
       type: ApplicationCommandOptionType.Integer,
@@ -145,7 +144,7 @@ export class VoteSandboxCommand {
     })
     gotmNominations: number | undefined,
     @SlashOption({
-      description: `Fixture NR-GOTM games (default ${SANDBOX_DEFAULT_NOMINATIONS})`,
+      description: `NR-GOTM games (default ${SANDBOX_DEFAULT_NOMINATIONS})`,
       name: "nr-gotm-nominations",
       required: false,
       type: ApplicationCommandOptionType.Integer,
@@ -154,7 +153,7 @@ export class VoteSandboxCommand {
     })
     nrGotmNominations: number | undefined,
     @SlashOption({
-      description: "Copy this real round's nominations (read only) instead of fixtures",
+      description: "Copy this real round's nominations (read only) instead of past winners",
       name: "source-round",
       required: false,
       type: ApplicationCommandOptionType.Integer,
@@ -305,7 +304,7 @@ export class VoteSandboxCommand {
       interaction,
       { roundNumber: parsed.roundNumber, category },
       createSandboxDataSource(parsed),
-      { rehearsal: true, hasCover: (gameId) => !isFixtureGameId(gameId) },
+      { rehearsal: true },
     );
     // Breaking the last tie queues round_decided, as the API would. The prompt
     // is already answered, so a failure here is logged and left queued.

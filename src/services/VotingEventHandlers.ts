@@ -57,7 +57,6 @@ export interface IVotingEventContext {
   panelIds?: Record<VoteBallot, IVotePanelIds>;
   panelNotice?: string;
   tieSelectId?: TieBreakSelectIdBuilder;
-  hasCover?: (gameId: number) => boolean;
   /**
    * The round_decided step before the next vote is scheduled. Live, it reloads
    * the GOTM caches and creates the winner threads, both of which write
@@ -172,7 +171,7 @@ async function postVotingResults(
     await announceVotingResults(
       client,
       { roundNumber: round.roundNumber, monthLabel: round.monthYear },
-      { rehearsal: context.rehearsal, source: context.source, hasCover: context.hasCover },
+      { rehearsal: context.rehearsal, source: context.source },
     );
   } catch (err) {
     if (err instanceof NothingToAnnounceError) {
@@ -252,7 +251,6 @@ async function postRunoffResults(
     await announceRunoffResults(client, round, {
       rehearsal: context.rehearsal,
       source: context.source,
-      hasCover: context.hasCover,
     });
   } catch (err) {
     if (err instanceof NothingToAnnounceError) {

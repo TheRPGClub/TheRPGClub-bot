@@ -6,7 +6,8 @@ import {
   closeSandboxRunoff,
   closeSandboxVoting,
   createSandboxState,
-  isFixtureGameId,
+  fillSandboxSeeds,
+  sandboxPoolFromWinners,
   openSandboxVoting,
   parseSandboxState,
   remindSandboxNominations,
@@ -21,11 +22,18 @@ import {
   type IVotingSandboxState,
 } from "../services/VotingSandboxModel.js";
 import { resolveSandboxGuilds } from "../commands/vote-sandbox/vote-sandbox.service.js";
+import { TEST_SANDBOX_POOLS, winnerRounds } from "./votingSandboxPools.js";
 
 const NOW = new Date("2026-09-29T12:00:00.000Z");
 
 function sandbox(overrides: Partial<Parameters<typeof createSandboxState>[0]> = {}) {
-  return createSandboxState({ id: "abc123", ownerId: "111", now: NOW, ...overrides });
+  return createSandboxState({
+    id: "abc123",
+    ownerId: "111",
+    now: NOW,
+    pools: TEST_SANDBOX_POOLS,
+    ...overrides,
+  });
 }
 
 function votingSandbox(cap = 2): IVotingSandboxState {
@@ -42,11 +50,17 @@ function outboxKinds(state: IVotingSandboxState): string[] {
   return state.outbox.map((event) => event.kind);
 }
 
-test("createSandboxState makes fixture nominations and starts nominating", () => {
+test("createSandboxState nominates past winners in round order and starts nominating", () => {
   const state = sandbox({ nominationCounts: { "gotm": 3, "nr-gotm": 0 } });
-  assert.equal(state.nominations.gotm.length, 3);
+  assert.deepEqual(
+    state.nominations.gotm.map((n) => [n.gameId, n.title, n.reason]),
+    [
+      [101, "GOTM Winner 1", "GOTM Round 1 winner"],
+      [102, "GOTM Winner 2", "GOTM Round 2 winner"],
+      [103, "GOTM Winner 3", "GOTM Round 3 winner"],
+    ],
+  );
   assert.equal(state.nominations["nr-gotm"].length, 0);
-  assert.ok(state.nominations.gotm.every((nomination) => nomination.gameId > 0));
   const round = toSandboxVotingRound(state);
   assert.equal(round.phase, "nominating");
   assert.equal(round.nominationsOpen, true);
@@ -54,13 +68,13 @@ test("createSandboxState makes fixture nominations and starts nominating", () =>
   assert.equal(round.votingEnded, false);
 });
 
-test("createSandboxState caps fixture nominations one past a single select", () => {
+test("createSandboxState caps nominations one past a single select", () => {
   const state = sandbox({ nominationCounts: { gotm: 99 } });
   assert.equal(state.nominations.gotm.length, SANDBOX_MAX_NOMINATIONS);
   assert.ok(SANDBOX_MAX_NOMINATIONS > 25);
 });
 
-test("createSandboxState uses copied nominations and fixtures for an empty category", () => {
+test("createSandboxState uses copied nominations and past winners for an empty category", () => {
   const state = sandbox({
     seeds: { gotm: [{ gameId: 42, title: "Real Game", userId: "222" }], "nr-gotm": [] },
   });
@@ -68,7 +82,48 @@ test("createSandboxState uses copied nominations and fixtures for an empty categ
     state.nominations.gotm.map((n) => [n.gameId, n.title, n.userId]),
     [[42, "Real Game", "222"]],
   );
-  assert.equal(state.nominations["nr-gotm"].length, 4);
+  assert.deepEqual(
+    state.nominations["nr-gotm"].map((n) => n.title),
+    ["NR-GOTM Winner 1", "NR-GOTM Winner 2", "NR-GOTM Winner 3", "NR-GOTM Winner 4"],
+  );
+});
+
+test("sandboxPoolFromWinners orders by round and keeps each real game once", () => {
+  const pool = sandboxPoolFromWinners("nr-gotm", [
+    { round: 7, gameOfTheMonth: [{ gamedbGameId: 9, title: "Later" }] },
+    {
+      round: 2,
+      gameOfTheMonth: [
+        { gamedbGameId: 5, title: "Joint A" },
+        { gamedbGameId: 6, title: "Joint B" },
+        { gamedbGameId: 0, title: "No GameDB row" },
+      ],
+    },
+    { round: 9, gameOfTheMonth: [{ gamedbGameId: 5, title: "Joint A" }] },
+  ]);
+  assert.deepEqual(
+    pool.map((seed) => [seed.gameId, seed.title, seed.reason]),
+    [
+      [5, "Joint A", "NR-GOTM Round 2 winner"],
+      [6, "Joint B", "NR-GOTM Round 2 winner"],
+      [9, "Later", "NR-GOTM Round 7 winner"],
+    ],
+  );
+});
+
+test("fillSandboxSeeds borrows from the other pool and never repeats a game", () => {
+  const pools = {
+    "gotm": sandboxPoolFromWinners("gotm", winnerRounds("GOTM", 2, 100)),
+    "nr-gotm": sandboxPoolFromWinners("nr-gotm", [
+      ...winnerRounds("NR-GOTM", 1, 500),
+      { round: 2, gameOfTheMonth: [{ gamedbGameId: 101, title: "GOTM Winner 1" }] },
+    ]),
+  };
+  const seeds = fillSandboxSeeds(pools, {}, { "gotm": 3, "nr-gotm": 3 });
+  assert.deepEqual(seeds.gotm.map((seed) => seed.gameId), [101, 102, 501]);
+  assert.deepEqual(seeds["nr-gotm"].map((seed) => seed.gameId), []);
+  const copied = fillSandboxSeeds(pools, { gotm: [{ gameId: 501, title: "Copied" }] });
+  assert.deepEqual(copied["nr-gotm"].map((seed) => seed.gameId), [101, 102]);
 });
 
 test("castSandboxVote records, toggles off, and refuses an unknown nomination", () => {
@@ -296,13 +351,6 @@ test("the next round exists only once the sandbox round is decided", () => {
   assert.equal(next?.roundNumber, state.roundNumber + 1);
   assert.equal(next?.nominationsOpen, true);
   assert.ok((next?.votingOpensAt.getTime() ?? 0) > NOW.getTime());
-});
-
-test("isFixtureGameId marks only fixture games", () => {
-  const state = sandbox();
-  assert.ok(state.nominations.gotm.every((n) => isFixtureGameId(n.gameId)));
-  assert.ok(state.nominations["nr-gotm"].every((n) => isFixtureGameId(n.gameId)));
-  assert.equal(isFixtureGameId(42), false);
 });
 
 test("parseSandboxState round-trips JSON and rejects anything else", () => {

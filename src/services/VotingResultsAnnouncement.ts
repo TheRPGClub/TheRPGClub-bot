@@ -66,8 +66,6 @@ export interface IAnnounceResultsOptions {
   rehearsal?: boolean;
   /** Where the tallies and nominations are read; the API unless the sandbox runs. */
   source?: IVotingDataSource;
-  /** False for a game with no GameDB images to fetch, such as a sandbox fixture. */
-  hasCover?: (gameId: number) => boolean;
 }
 
 /**
@@ -125,7 +123,7 @@ async function postWinnerAnnouncements(
   sendable: SendableChannel,
   roundNumber: number,
   winnerAnnouncements: IWinnerAnnouncement[],
-  options: { rehearsal: boolean; hasCover?: (gameId: number) => boolean },
+  options: { rehearsal: boolean },
 ): Promise<string[]> {
   const { rehearsal } = options;
   const posted: string[] = [];
@@ -153,7 +151,7 @@ async function postWinnerAnnouncements(
       }
     }
     const container = buildAccentContainer(text, announcement.accentColor);
-    if (winner && (options.hasCover?.(winner.gamedbGameId) ?? true)) {
+    if (winner) {
       files.push(...(await addWinnerCovers(container, [winner.gamedbGameId])));
     }
     const message: unknown = await sendable.send({
@@ -196,10 +194,7 @@ async function postResults(
     flags: buildComponentsV2Flags(false),
     allowedMentions: { parse: [] },
   });
-  await postWinnerAnnouncements(client, sendable, roundNumber, announcements, {
-    rehearsal,
-    hasCover: options.hasCover,
-  });
+  await postWinnerAnnouncements(client, sendable, roundNumber, announcements, { rehearsal });
 }
 
 /**
@@ -378,6 +373,6 @@ export async function announceTieBreak(
         : null,
       accentColor: verdictAccent(1),
     }],
-    { rehearsal, hasCover: options.hasCover },
+    { rehearsal },
   );
 }

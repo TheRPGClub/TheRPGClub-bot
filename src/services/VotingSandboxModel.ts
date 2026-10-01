@@ -47,8 +47,6 @@ export const SANDBOX_DEFAULT_ROUND = 999;
 export const SANDBOX_DEFAULT_NOMINATIONS = 4;
 /** One past Discord's 25-option select, so the panel's second select is reachable. */
 export const SANDBOX_MAX_NOMINATIONS = 30;
-/** Fixture game ids sit far above GameDB's, so no real game is ever implied. */
-const FIXTURE_GAME_ID_BASE = 990_000;
 const SIMULATED_VOTER_PREFIX = "sim-";
 
 export type SandboxOutcome = "winner" | "two-way-tie" | "three-way-tie" | "no-votes";
@@ -146,7 +144,9 @@ export interface ICreateSandboxParams {
   roundNumber?: number;
   cap?: number;
   now: Date;
-  /** Per category; fixture games are made up when a category has no seeds. */
+  /** Real GameDB games per category that fill a category with no seeds. */
+  pools: Record<NominationKind, ISandboxNominationSeed[]>;
+  /** Per category, copied from a real round; a category with none draws on the pools. */
   seeds?: Partial<Record<NominationKind, ISandboxNominationSeed[]>>;
   nominationCounts?: Partial<Record<NominationKind, number>>;
 }
@@ -155,24 +155,74 @@ function monthYearOf(date: Date): string {
   return date.toLocaleString("en-US", { month: "long", year: "numeric", timeZone: "UTC" });
 }
 
-/** True for the made-up games fixtures use, which have no GameDB row or cover. */
-export function isFixtureGameId(gameId: number): boolean {
-  return gameId > FIXTURE_GAME_ID_BASE && gameId <= FIXTURE_GAME_ID_BASE + 1000;
-}
-
-function fixtureSeeds(kind: NominationKind, count: number): ISandboxNominationSeed[] {
-  const label = nominationKindLabel(kind);
-  const offset = kind === "gotm" ? 0 : 500;
-  return Array.from({ length: count }, (_, index) => ({
-    gameId: FIXTURE_GAME_ID_BASE + offset + index + 1,
-    title: `Sandbox ${label} Game ${index + 1}`,
-    reason: `Fixture nomination ${index + 1}`,
-  }));
-}
-
 function clampCount(value: number | undefined): number {
   const count = Math.trunc(value ?? SANDBOX_DEFAULT_NOMINATIONS);
   return Math.min(Math.max(count, 0), SANDBOX_MAX_NOMINATIONS);
+}
+
+export interface ISandboxWinnerRound {
+  round: number;
+  gameOfTheMonth: { gamedbGameId: number; title: string }[];
+}
+
+/**
+ * A category's past winners as sandbox seeds, earliest round first and each
+ * game once. Winners are real GameDB games with covers, and history does not
+ * change, so every sandbox start nominates the same titles.
+ */
+export function sandboxPoolFromWinners(
+  kind: NominationKind,
+  rounds: readonly ISandboxWinnerRound[],
+): ISandboxNominationSeed[] {
+  const label = nominationKindLabel(kind);
+  const seen = new Set<number>();
+  const pool: ISandboxNominationSeed[] = [];
+  for (const entry of [...rounds].sort((a, b) => a.round - b.round)) {
+    for (const game of entry.gameOfTheMonth) {
+      if (!(game.gamedbGameId > 0) || seen.has(game.gamedbGameId)) continue;
+      seen.add(game.gamedbGameId);
+      pool.push({
+        gameId: game.gamedbGameId,
+        title: game.title,
+        reason: `${label} Round ${entry.round} winner`,
+      });
+    }
+  }
+  return pool;
+}
+
+/**
+ * Each category's seeds: the copied ones when it has any, otherwise the first
+ * games from its own pool, then from the other pools. A game nominated in one
+ * category is never reused in another, and pool order is kept, so the same
+ * pools always give the same nominations.
+ */
+export function fillSandboxSeeds(
+  pools: Record<NominationKind, ISandboxNominationSeed[]>,
+  seeds: Partial<Record<NominationKind, ISandboxNominationSeed[]>> = {},
+  counts: Partial<Record<NominationKind, number>> = {},
+): Record<NominationKind, ISandboxNominationSeed[]> {
+  const filled = {} as Record<NominationKind, ISandboxNominationSeed[]>;
+  const used = new Set<number>();
+  for (const kind of NOMINATION_KINDS) {
+    const copied = seeds[kind]?.slice(0, SANDBOX_MAX_NOMINATIONS) ?? [];
+    if (copied.length) filled[kind] = copied;
+    for (const seed of copied) used.add(seed.gameId);
+  }
+  for (const kind of NOMINATION_KINDS) {
+    if (filled[kind]) continue;
+    const order = [kind, ...NOMINATION_KINDS.filter((other) => other !== kind)];
+    const picked: ISandboxNominationSeed[] = [];
+    const wanted = clampCount(counts[kind]);
+    for (const seed of order.flatMap((source) => pools[source])) {
+      if (picked.length >= wanted) break;
+      if (used.has(seed.gameId)) continue;
+      used.add(seed.gameId);
+      picked.push(seed);
+    }
+    filled[kind] = picked;
+  }
+  return filled;
 }
 
 /** A fresh round collecting nominations, with voting due to open in five days. */
@@ -180,11 +230,9 @@ export function createSandboxState(params: ICreateSandboxParams): IVotingSandbox
   const opensAt = new Date(params.now.getTime() + 5 * DAY_MS);
   let nextId = 1;
   const nominations = {} as Record<NominationKind, ISandboxNomination[]>;
+  const seeds = fillSandboxSeeds(params.pools, params.seeds, params.nominationCounts);
   for (const kind of NOMINATION_KINDS) {
-    const seeds = params.seeds?.[kind]?.length
-      ? params.seeds[kind].slice(0, SANDBOX_MAX_NOMINATIONS)
-      : fixtureSeeds(kind, clampCount(params.nominationCounts?.[kind]));
-    nominations[kind] = seeds.map((seed) => ({
+    nominations[kind] = seeds[kind].map((seed) => ({
       id: nextId++,
       gameId: seed.gameId,
       title: seed.title,

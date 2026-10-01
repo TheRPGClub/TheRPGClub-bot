@@ -1,11 +1,13 @@
 import { randomBytes } from "node:crypto";
 import type { CommandInteraction } from "discord.js";
+import Gotm from "../../classes/Gotm.js";
 import {
   listNominationsForRound,
   NOMINATION_KINDS,
   nominationKindLabel,
   type NominationKind,
 } from "../../classes/Nomination.js";
+import NrGotm from "../../classes/NrGotm.js";
 import type { VotingEventKind } from "../../classes/VotingEvents.js";
 import { toVotingRoundCategory } from "../../classes/VotingRounds.js";
 import { IS_TEST_MODE, TEST_GUILD_ID } from "../../config/testMode.js";
@@ -32,6 +34,7 @@ import {
   openSandboxVoting,
   queueSandboxEvent,
   remindSandboxNominations,
+  sandboxPoolFromWinners,
   sandboxTally,
   sandboxWinnerTitles,
   seedSandboxOutcome,
@@ -147,6 +150,24 @@ async function loadSourceSeeds(
   return seeds;
 }
 
+/** Past winners from the startup caches: real GameDB games, read without an API call. */
+function loadWinnerPools(): Record<NominationKind, ISandboxNominationSeed[]> {
+  return {
+    "gotm": sandboxPoolFromWinners("gotm", Gotm.all()),
+    "nr-gotm": sandboxPoolFromWinners("nr-gotm", NrGotm.all()),
+  };
+}
+
+/** Every nomination in panel order, so a step can name the game it clicks. */
+function buildNominationListText(state: IVotingSandboxState): string {
+  const lines = ["**Nominations, in panel order**"];
+  for (const kind of NOMINATION_KINDS) {
+    const titles = state.nominations[kind].map((n, index) => `${index + 1}. ${n.title}`);
+    lines.push(`${kindHeading(kind)}: ${titles.join(" · ") || "none"}`);
+  }
+  return lines.join("\n");
+}
+
 async function replyWithError(
   interaction: CommandInteraction,
   label: string,
@@ -158,6 +179,7 @@ async function replyWithError(
 async function replyWithDelivery(
   interaction: CommandInteraction,
   heading: string,
+  footer?: (state: IVotingSandboxState) => string,
 ): Promise<void> {
   const ownerId = interaction.user.id;
   const sections = [heading];
@@ -166,6 +188,7 @@ async function replyWithDelivery(
     const state = await loadSandbox(ownerId);
     if (delivery.length) sections.push(`**Delivered**\n${delivery.join("\n")}`);
     if (state) sections.push(buildSandboxStatusText(state));
+    if (state && footer) sections.push(footer(state));
   } catch (err) {
     await replyWithError(interaction, `${heading}\nCould not deliver the queued events`, err);
     return;
@@ -181,6 +204,7 @@ async function runStep(
   interaction: CommandInteraction,
   label: string,
   step: () => Promise<string>,
+  footer?: (state: IVotingSandboxState) => string,
 ): Promise<void> {
   let heading: string;
   try {
@@ -189,7 +213,7 @@ async function runStep(
     await replyWithError(interaction, label, err);
     return;
   }
-  await replyWithDelivery(interaction, heading);
+  await replyWithDelivery(interaction, heading, footer);
 }
 
 export async function handleSandboxStart(
@@ -204,6 +228,7 @@ export async function handleSandboxStart(
       roundNumber: options.roundNumber,
       cap: options.cap,
       now: new Date(),
+      pools: loadWinnerPools(),
       seeds,
       nominationCounts: {
         "gotm": options.gotmNominations,
@@ -213,11 +238,11 @@ export async function handleSandboxStart(
     await startSandbox(state);
     const source = options.sourceRound
       ? `Nominations copied (read only) from Round ${options.sourceRound}; a category it ` +
-        "had none for gets fixture games."
-      : "Nominations are fixture games.";
+        "had none for gets past winners."
+      : "Nominations are past GOTM and NR-GOTM winners, earliest round first.";
     return `🧪 Started sandbox \`${state.id}\`. Any earlier sandbox of yours was replaced, ` +
       `and its panels now refuse votes. ${source}`;
-  });
+  }, buildNominationListText);
 }
 
 export async function handleSandboxStatus(interaction: CommandInteraction): Promise<void> {
