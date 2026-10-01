@@ -1,5 +1,5 @@
 import { type CommandInteraction, ApplicationCommandOptionType } from "discord.js";
-import { Discord, Slash, SlashOption } from "discordx";
+import { Discord, Slash, SlashGroup, SlashOption } from "discordx";
 import {
   deferWithPrivateFlag,
   withErrorReply,
@@ -14,10 +14,11 @@ import {
 } from "../functions/GotmSearchComponents.js";
 
 @Discord()
+@SlashGroup("gotm")
 export class CurrentRoundCommand {
   @Slash({
     description: "Show the current GOTM round and winners",
-    name: "round",
+    name: "current",
   })
   async round(
     @SlashOption({

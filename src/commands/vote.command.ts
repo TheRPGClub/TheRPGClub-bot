@@ -10,6 +10,7 @@ import {
   SelectMenuComponent,
   Slash,
   SlashChoice,
+  SlashGroup,
   SlashOption,
 } from "discordx";
 import {
@@ -53,6 +54,7 @@ function parseVoteCustomId(customId: string): IVotePanelTarget | null {
 }
 
 @Discord()
+@SlashGroup("gotm")
 export class VoteCommand {
   @Slash({
     description: "Vote on GOTM or NR-GOTM nominations for the open voting round",

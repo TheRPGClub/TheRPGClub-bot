@@ -31,12 +31,12 @@ API-backed data model and IGDB integration for game metadata.
 
 Use `/help` in Discord for full syntax and parameters. Major command groups include:
 
-- Monthly games: `/nominate`, `/noms`, `/round`, `/round-history`
+- Monthly games: `/gotm` (`nominate`, `withdraw`, `nominations`, `vote`, `current`, `history`)
 - GameDB: `/gamedb`, `/collection`, `/now-playing`, `/game-completion`, `/game-journal`, `/thread create`
 - Members: `/profile`, `/mp-info`
 - Utilities: `/hltb`, `/giveaway`, `/avatar-history`, `/timestamp`
 - Admin tools: `/mod`, `/admin`, `/superadmin`, `/todo`, `/publicreminder`, `/rss`, `/suggestion`,
-  `/generate-vote-image`, `/moderator`
+  `/moderator`
 - Regulars tools: `/thread link`, `/thread unlink`
 
 ## Local Development

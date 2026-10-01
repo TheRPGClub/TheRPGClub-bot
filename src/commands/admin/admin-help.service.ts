@@ -83,7 +83,7 @@ export const ADMIN_HELP_TOPICS: AdminHelpTopic[] = [
     notes:
       "Fallback for when first-party voting is unavailable. Pulls current nominations for " +
       "GOTM and NR-GOTM, sorts answers, and sets a sensible max_select. " +
-      "Normal voting opens on schedule and runs through /vote.",
+      "Normal voting opens on schedule and runs through /gotm vote.",
   },
   {
     id: "voting-open",
@@ -125,6 +125,15 @@ export const ADMIN_HELP_TOPICS: AdminHelpTopic[] = [
     summary: "Delete all first-party votes for a round and category.",
     syntax: "Syntax: /admin votes-reset type:<GOTM|NR-GOTM> round:<number>",
     notes: "Asks for confirmation. This cannot be undone.",
+  },
+  {
+    id: "generate-vote-image",
+    label: "/admin generate-vote-image",
+    summary: "Generate a combined vote image from a round's nominations.",
+    syntax: "Syntax: /admin generate-vote-image vote_type:<GOTM|NR-GOTM> [round:<number>]",
+    parameters:
+      "vote_type (required) - GOTM or NR-GOTM. round (optional) - defaults to the " +
+      "upcoming nomination round.",
   },
 ];
 

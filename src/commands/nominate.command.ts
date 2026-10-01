@@ -8,7 +8,14 @@ import {
   MessageFlags,
   userMention,
 } from "discord.js";
-import { Discord, SelectMenuComponent, Slash, SlashChoice, SlashOption } from "discordx";
+import {
+  Discord,
+  SelectMenuComponent,
+  Slash,
+  SlashChoice,
+  SlashGroup,
+  SlashOption,
+} from "discordx";
 import {
   deleteNominationForUser,
   getNominationForUser,
@@ -80,6 +87,8 @@ async function resolveNominatedGameByTitle(
 }
 
 @Discord()
+@SlashGroup({ description: "Game of the Month commands", name: "gotm" })
+@SlashGroup("gotm")
 export class NominateCommand {
   @Slash({ description: "Nominate a GameDB title for GOTM or NR-GOTM", name: "nominate" })
   async nominate(
@@ -189,7 +198,7 @@ export class NominateCommand {
       const nominations = await listNominationsForRound(selectedKind, window.targetRound);
       const payload = await buildNominationListPayload(
         kindLabel,
-        "/nominate",
+        "/gotm nominate",
         window,
         nominations,
         false,
@@ -207,7 +216,7 @@ export class NominateCommand {
 
   @Slash({
     description: "Delete your own GOTM or NR-GOTM nomination for the upcoming round",
-    name: "nominate-delete",
+    name: "withdraw",
   })
   async nominateDelete(
     @SlashChoice(
@@ -272,7 +281,7 @@ export class NominateCommand {
       const nominations = await listNominationsForRound(selectedKind, window.targetRound);
       const payload = await buildNominationListPayload(
         kindLabel,
-        "/nominate",
+        "/gotm nominate",
         window,
         nominations,
         false,
@@ -289,7 +298,10 @@ export class NominateCommand {
     }
   }
 
-  @Slash({ description: "Show the current GOTM or NR-GOTM nominations", name: "noms" })
+  @Slash({
+    description: "Show the current GOTM or NR-GOTM nominations",
+    name: "nominations",
+  })
   async noms(
     @SlashChoice(
       { name: "GOTM", value: "gotm" },
@@ -327,7 +339,7 @@ export class NominateCommand {
       const kindLabel = selectedKind === "gotm" ? "GOTM" : "NR-GOTM";
       const payload = await buildNominationListPayload(
         kindLabel,
-        "/nominate",
+        "/gotm nominate",
         window,
         nominations,
         false,

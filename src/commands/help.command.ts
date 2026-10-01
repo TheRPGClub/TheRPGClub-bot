@@ -153,20 +153,22 @@ type GameDbHelpTopic = {
 const HELP_TOPICS: HelpTopic[] = [
   {
     id: "noms",
-    label: "/noms",
+    label: "/gotm nominations",
     summary: "Show the current GOTM or NR-GOTM nomination list.",
-    syntax: "Syntax: /noms type:<GOTM|NR-GOTM> [showinchat:<boolean>]",
+    syntax: "Syntax: /gotm nominations type:<GOTM|NR-GOTM> [private:<boolean>]",
     parameters:
-      "type (required) - GOTM or NR-GOTM. showinchat (optional) - set true to share the list in channel.",
+      "type (required) - GOTM or NR-GOTM. " +
+      "private (optional) - set true to keep the list to yourself.",
     notes:
-      "Uses the same nomination list UI as a completed /nominate action. Replies privately by default.",
+      "Uses the same nomination list UI as a completed /gotm nominate action. " +
+      "Posts in channel by default.",
   },
   {
     id: "nominate",
-    label: "/nominate",
+    label: "/gotm nominate",
     summary:
       "Submit a GOTM or NR-GOTM nomination with a GameDB title, category, and reason.",
-    syntax: "Syntax: /nominate title:<string> type:<GOTM|NR-GOTM> reason:<string>",
+    syntax: "Syntax: /gotm nominate title:<string> type:<GOTM|NR-GOTM> reason:<string>",
     parameters:
       "title (required) - GameDB title chosen from autocomplete. type (required) - GOTM or NR-GOTM. reason (required) - why you are nominating it.",
     notes:
@@ -174,9 +176,9 @@ const HELP_TOPICS: HelpTopic[] = [
   },
   {
     id: "nominate-delete",
-    label: "/nominate-delete",
+    label: "/gotm withdraw",
     summary: "Delete your own GOTM or NR-GOTM nomination for the upcoming round.",
-    syntax: "Syntax: /nominate-delete type:<GOTM|NR-GOTM>",
+    syntax: "Syntax: /gotm withdraw type:<GOTM|NR-GOTM>",
     parameters: "type (required) - GOTM or NR-GOTM.",
     notes:
       "Only removes your own nomination, and only while nominations are still open. " +
@@ -184,9 +186,9 @@ const HELP_TOPICS: HelpTopic[] = [
   },
   {
     id: "vote",
-    label: "/vote",
+    label: "/gotm vote",
     summary: "Vote on GOTM or NR-GOTM nominations while a voting round is open.",
-    syntax: "Syntax: /vote type:<GOTM|NR-GOTM>",
+    syntax: "Syntax: /gotm vote type:<GOTM|NR-GOTM>",
     parameters: "type (required) - GOTM or NR-GOTM.",
     notes:
       "Opens a private voting panel. Picking a game you already voted for takes the vote back. " +
@@ -195,16 +197,16 @@ const HELP_TOPICS: HelpTopic[] = [
   },
   {
     id: "round",
-    label: "/round",
+    label: "/gotm current",
     summary: "See the current round details and winners for GOTM and NR-GOTM.",
-    syntax: "Syntax: /round [showinchat:<boolean>]",
-    notes: "Replies privately by default; set showinchat:true to post in channel.",
+    syntax: "Syntax: /gotm current [private:<boolean>]",
+    notes: "Posts in channel by default; set private:true to keep it to yourself.",
   },
   {
     id: "round-history",
-    label: "/round-history",
+    label: "/gotm history",
     summary: "Open a modal to filter and browse historical GOTM/NR-GOTM rounds.",
-    syntax: "Syntax: /round-history [showinchat:<boolean>]",
+    syntax: "Syntax: /gotm history [private:<boolean>]",
     notes:
       "Modal filters: category (GOTM/NR-GOTM/Both), optional title query, year, and sort order. " +
       "Results are paginated at 5 rounds per page.",
