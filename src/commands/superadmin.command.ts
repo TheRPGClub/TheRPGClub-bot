@@ -73,6 +73,8 @@ import { logError, logWarn } from "../utilities/LogUtils.js";
 import { buildSelectRow } from "../functions/uiComponents.js";
 import GamePlatformRegionService from "../classes/GamePlatformRegionService.js";
 import GameSearchService from "../classes/GameSearchService.js";
+import { getHelpAccess } from "./help/help-access.js";
+import { withLegacyHelpPointer } from "./help/help-pointer.js";
 
 type CompletionAddContext = {
   targetUserId: string;
@@ -820,7 +822,7 @@ export class SuperAdmin {
     ));
   }
 
-  @Slash({ description: "Show help for server owner commands", name: "help" })
+  @Slash({ description: "Moved to /help category:superadmin", name: "help" })
   async help(interaction: CommandInteraction): Promise<void> {
     await safeDeferReply(interaction, { flags: MessageFlags.Ephemeral });
 
@@ -829,7 +831,11 @@ export class SuperAdmin {
       return;
     }
 
-    const response = buildSuperAdminHelpResponse();
+    const response = withLegacyHelpPointer(
+      buildSuperAdminHelpResponse(),
+      "/superadmin help",
+      "superadmin",
+    );
 
     await safeReply(interaction, {
       ...response,
@@ -843,7 +849,7 @@ export class SuperAdmin {
 
     if (topicId === "help-main") {
       const { buildMainHelpResponse } = await import("./help.command.js");
-      const response = buildMainHelpResponse();
+      const response = buildMainHelpResponse(getHelpAccess(interaction));
       await safeUpdate(interaction, response);
       return;
     }

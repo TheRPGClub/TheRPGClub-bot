@@ -17,6 +17,7 @@ import { buildTextReply } from "../functions/ComponentsV2Utils.js";
 import { isAdmin } from "./admin/admin-auth.utils.js";
 import { addFeed, listFeeds, removeFeed, updateFeed } from "../classes/RssFeed.js";
 import { buildRssHelpResponse } from "./help.command.js";
+import { withLegacyHelpPointer } from "./help/help-pointer.js";
 
 const FEED_URL_LABEL = "Feed URL";
 
@@ -32,15 +33,18 @@ function normalizeList(value: string | undefined): string[] {
 @SlashGroup({ description: "Manage RSS feed relays", name: "rss" })
 @SlashGroup("rss")
 export class RssCommand {
-  @Slash({ description: "Show help for RSS commands", name: "help" })
+  @Slash({ description: "Moved to /help category:rss", name: "help" })
   async help(interaction: CommandInteraction): Promise<void> {
     await safeDeferReply(interaction, { flags: MessageFlags.Ephemeral });
 
     const ok = await isAdmin(interaction);
     if (!ok) return;
 
-    const response = buildRssHelpResponse();
-    await safeReply(interaction, { ...response, flags: MessageFlags.Ephemeral });
+    const response = withLegacyHelpPointer(buildRssHelpResponse(), "/rss help", "rss");
+    await safeReply(interaction, {
+      ...response,
+      flags: response.flags | MessageFlags.Ephemeral,
+    });
   }
 
   @Slash({ description: "Add an RSS feed relay", name: "add" })
