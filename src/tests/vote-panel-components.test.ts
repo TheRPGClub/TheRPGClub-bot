@@ -165,7 +165,9 @@ test("the vote image tops the panel and each game is a nomination section", () =
     ],
   );
   const nominator = children[2]?.accessory;
-  assert.equal(nominator?.custom_id, "user-header-label:100");
+  assert.equal(nominator?.custom_id, "user-header-label:100:1");
+  const ids = flatten(json).map((node) => node.custom_id).filter(Boolean);
+  assert.equal(new Set(ids).size, ids.length, "custom ids are unique within the message");
   assert.equal(nominator?.label, "Weasel");
   assert.equal(children[2]?.components?.[0]?.content, "**Game 1**\n-# *No reason provided.*");
   assert.match(json[0]?.components?.[0]?.content ?? "", /^## GOTM Vote - Round 143\n/);

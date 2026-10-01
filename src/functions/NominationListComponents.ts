@@ -159,7 +159,12 @@ export function addNominationSection(
     ),
   );
    
-  let button = buildActionButton({ customId: `user-header-label:${nomination.userId}`, label: displayName, style: ButtonStyle.Secondary });
+  // The nomination id keeps the id unique when one member nominated several games.
+  let button = buildActionButton({
+    customId: `user-header-label:${nomination.userId}:${nomination.id}`,
+    label: displayName,
+    style: ButtonStyle.Secondary,
+  });
   const emojiString = getUserEmojiString(nomination.userId);
   if (emojiString) {
     const match = emojiString.match(/^<:([^:]+):(\d+)>$/);
@@ -171,7 +176,7 @@ export function addNominationSection(
   container.addSectionComponents(section);
 }
 
-export function buildNominationText(nomination: INominationEntry, reasonMax: number): string {
+function buildNominationText(nomination: INominationEntry, reasonMax: number): string {
   // A reason max of 0 leaves the reasons out, for a panel short on text room.
   if (nomination.reason && reasonMax <= 0) {
     return `**${nomination.gameTitle}**`;
@@ -353,7 +358,7 @@ async function appendVoteImageAttachment(
   return `attachment://${filename}`;
 }
 
-export function toVoteImageType(kindLabel: string): VoteImageType | null {
+function toVoteImageType(kindLabel: string): VoteImageType | null {
   if (kindLabel === "GOTM" || kindLabel === "NR-GOTM") {
     return kindLabel;
   }
