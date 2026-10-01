@@ -75,7 +75,11 @@ import { assertCustomIdSegments } from "../utilities/CustomIdUtils.js";
 import { safeIgnore } from "../utilities/AsyncUtils.js";
 import { sharedStateCommandRefusal } from "../functions/SharedStateCommandGuard.js";
 import { logError, logWarn } from "../utilities/LogUtils.js";
-import { buildSelectRow } from "../functions/uiComponents.js";
+import {
+  buildSelectRow,
+  IGDB_IMPORT_OPTION_VALUE,
+  withIgdbImportOption,
+} from "../functions/uiComponents.js";
 import GamePlatformRegionService from "../classes/GamePlatformRegionService.js";
 import GameSearchService from "../classes/GameSearchService.js";
 import { getHelpAccess } from "./help/help-access.js";
@@ -391,17 +395,11 @@ export class SuperAdmin {
       ]);
       superadminCompletionAddSessions.set(sessionId, ctx);
 
-      const options = localResults.slice(0, 24).map((game) => ({
+      const options = withIgdbImportOption(localResults.map((game) => ({
         label: truncateLabel(game.title),
         value: String(game.id),
         description: `GameDB #${game.id}`,
-      }));
-
-      options.push({
-        label: "Import another game from IGDB",
-        value: "import-igdb",
-        description: "Search IGDB and import a new GameDB entry",
-      });
+      })));
 
       const select = new StringSelectMenuBuilder()
         .setCustomId(`sa-comp-add-select:${sessionId}`)
@@ -656,7 +654,7 @@ export class SuperAdmin {
     value: string,
     ctx: CompletionAddContext,
   ): Promise<boolean> {
-    if (value === "import-igdb") {
+    if (value === IGDB_IMPORT_OPTION_VALUE) {
       if (!ctx.query) {
         await safeFollowUpIfSettled(
           interaction,

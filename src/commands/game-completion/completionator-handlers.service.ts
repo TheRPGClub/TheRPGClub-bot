@@ -36,6 +36,7 @@ import { isPositiveInt } from "../../utilities/ValidationUtils.js";
 import { assertCustomIdSegments } from "../../utilities/CustomIdUtils.js";
 import { safeIgnore } from "../../utilities/AsyncUtils.js";
 import GamePlatformRegionService from "../../classes/GamePlatformRegionService.js";
+import { IGDB_IMPORT_OPTION_VALUE } from "../../functions/uiComponents.js";
 
 export class CompletionatorHandlersService {
   private workflowService: CompletionatorWorkflowService;
@@ -81,7 +82,7 @@ export class CompletionatorHandlersService {
       return;
     }
 
-    if (choice === "import-igdb") {
+    if (choice === IGDB_IMPORT_OPTION_VALUE) {
       const item = await getImportItemById(itemId);
       if (!item) {
         await safeReply(interaction, buildTextReply("Import item not found.", Boolean(ephemeral)));
