@@ -4,6 +4,7 @@
  */
 import {
   PREVIEW_COMMANDS_ATTACHMENT_NAME,
+  findCatalogMention,
   parseCommandCatalog,
   type ICommandCatalog,
 } from "../config/previewCommandCatalog.js";
@@ -29,13 +30,7 @@ export function resolveCommandMention(
 ): string | null {
   const firstLine = stepCommand.trimStart().split("\n", 1)[0];
   if (!firstLine.startsWith("/")) return null;
-  const words = firstLine.slice(1).split(/\s+/);
-  const command = catalog.commands.find((entry) => entry.name === words[0]);
-  if (!command) return null;
-  if (!command.subcommands.length) return `</${command.name}:${command.id}>`;
-  const candidates = [words.slice(1, 3).join(" "), words[1] ?? ""];
-  const path = candidates.find((candidate) => command.subcommands.includes(candidate));
-  return path ? `</${command.name} ${path}:${command.id}>` : null;
+  return findCatalogMention(catalog, firstLine.slice(1).split(/\s+/))?.mention ?? null;
 }
 
 /**

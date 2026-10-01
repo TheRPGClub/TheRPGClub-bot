@@ -16,14 +16,13 @@ function toCollection(commands: FakeCommand[]): Collection<string, FakeCommand> 
 function fakeInteraction(options: {
   guildScoped: boolean;
   failFetch?: boolean;
-  guildCommands?: FakeCommand[];
 }): CommandInteraction {
   const fetch = async (
     fetchOptions: { guildId?: string },
   ): Promise<Collection<string, FakeCommand>> => {
     if (options.failFetch) throw new Error("Missing Access");
     return fetchOptions.guildId === GUILD
-      ? toCollection(options.guildCommands ?? [{ id: GUILD_ID, name: "giveaway" }])
+      ? toCollection([{ id: GUILD_ID, name: "giveaway" }])
       : toCollection([{ id: GLOBAL_ID, name: "giveaway" }]);
   };
   return {
@@ -59,10 +58,4 @@ test("falls back to inline code when fetching commands fails", async () => {
   const mention = await buildCommandMention(
     fakeInteraction({ guildScoped: false, failFetch: true }), "giveaway", "hub");
   assert.equal(mention, "`/giveaway hub`");
-});
-
-test("falls back to the global registration when the guild lacks the command", async () => {
-  const mention = await buildCommandMention(
-    fakeInteraction({ guildScoped: true, guildCommands: [] }), "giveaway", "hub");
-  assert.equal(mention, `</giveaway hub:${GLOBAL_ID}>`);
 });

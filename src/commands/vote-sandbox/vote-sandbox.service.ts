@@ -21,7 +21,7 @@ import {
   endSandbox,
   loadSandbox,
   mutateSandbox,
-  NO_SANDBOX_MESSAGE,
+  noSandboxMessage,
   startSandbox,
 } from "../../services/VotingSandbox.js";
 import {
@@ -213,7 +213,7 @@ export async function handleSandboxStatus(interaction: CommandInteraction): Prom
   await safeReply(
     interaction,
     buildTextReply(
-      state ? buildSandboxStatusText(state) : NO_SANDBOX_MESSAGE,
+      state ? buildSandboxStatusText(state) : noSandboxMessage(),
       true,
     ),
   );
@@ -294,7 +294,7 @@ export async function handleSandboxEvent(
 export async function handleSandboxDeliver(interaction: CommandInteraction): Promise<void> {
   await runStep(interaction, "Could not deliver the sandbox events", async () => {
     if (!(await loadSandbox(interaction.user.id))) {
-      throw new UserFacingError(NO_SANDBOX_MESSAGE);
+      throw new UserFacingError(noSandboxMessage());
     }
     return "Retried the queued events.";
   });

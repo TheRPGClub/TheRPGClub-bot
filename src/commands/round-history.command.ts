@@ -53,6 +53,7 @@ import {
   buildDisabledPrevNextRowWithIds,
   buildPageFooterText,
 } from "../functions/PaginationUtils.js";
+import { commandMention } from "../services/CommandMentionService.js";
 
 const ROUND_HISTORY_MODAL_TITLE = "Round History";
 const ROUND_HISTORY_HELP_ID = "round-history-help";
@@ -586,11 +587,11 @@ export class RoundHistoryCommand {
     const selectedYear = Number(selectedYearRaw);
 
     if (!parsedCustomId) {
-      await safeReply(
-        interaction,
-        buildTextReply("This round history form is invalid. Please" +
-          " run /gotm history again.", true),
-      );
+      await safeReply(interaction, buildTextReply(
+        "This round history form is invalid. " +
+          `Please run ${commandMention("gotm history")} again.`,
+        true,
+      ));
       return;
     }
 
@@ -624,11 +625,9 @@ export class RoundHistoryCommand {
   async handleRoundHistoryPageButton(interaction: ButtonInteraction): Promise<void> {
     const parsed = parseRoundHistoryPageCustomId(interaction.customId);
     if (!parsed) {
-      await safeReply(
-        interaction,
-        buildTextReply("This round history page control is invalid. Please" +
-          " run /gotm history again.", true),
-      );
+      await safeReply(interaction, buildTextReply(
+        "This round history page control is invalid. " +
+          `Please run ${commandMention("gotm history")} again.`, true));
       return;
     }
 

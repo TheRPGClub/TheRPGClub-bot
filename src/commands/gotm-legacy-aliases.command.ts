@@ -1,8 +1,8 @@
-import { MessageFlags, type CommandInteraction } from "discord.js";
+import type { CommandInteraction } from "discord.js";
 import { Discord, Guild, Slash } from "discordx";
-import { buildCommandMention } from "../functions/CommandMentionUtils.js";
 import { buildTextReply } from "../functions/ComponentsV2Utils.js";
-import { safeDeferReply, safeReply, withErrorReply } from "../functions/InteractionUtils.js";
+import { safeReply } from "../functions/InteractionUtils.js";
+import { commandMention } from "../services/CommandMentionService.js";
 
 /**
  * Old top-level names for the commands now grouped under /gotm and /admin (#1242). Each
@@ -10,51 +10,43 @@ import { safeDeferReply, safeReply, withErrorReply } from "../functions/Interact
  * landing spot, then this file is deleted. Discord cannot hide a registered command, so
  * the descriptions say where each one moved.
  */
-async function replyMoved(
-  interaction: CommandInteraction,
-  group: string,
-  subcommand: string,
-): Promise<void> {
-  await safeDeferReply(interaction, { flags: MessageFlags.Ephemeral });
-  await withErrorReply(interaction, async () => {
-    const mention = await buildCommandMention(interaction, group, subcommand);
-    await safeReply(
-      interaction,
-      buildTextReply(`This command moved. Use ${mention} instead.`, true),
-    );
-  });
+async function replyMoved(interaction: CommandInteraction, newPath: string): Promise<void> {
+  await safeReply(interaction, buildTextReply(
+    `This command moved. Use ${commandMention(newPath)} instead.`,
+    true,
+  ));
 }
 
 @Discord()
 export class GotmLegacyAliases {
   @Slash({ description: "Moved to /gotm nominate", name: "nominate" })
   async nominate(interaction: CommandInteraction): Promise<void> {
-    await replyMoved(interaction, "gotm", "nominate");
+    await replyMoved(interaction, "gotm nominate");
   }
 
   @Slash({ description: "Moved to /gotm withdraw", name: "nominate-delete" })
   async nominateDelete(interaction: CommandInteraction): Promise<void> {
-    await replyMoved(interaction, "gotm", "withdraw");
+    await replyMoved(interaction, "gotm withdraw");
   }
 
   @Slash({ description: "Moved to /gotm nominations", name: "noms" })
   async noms(interaction: CommandInteraction): Promise<void> {
-    await replyMoved(interaction, "gotm", "nominations");
+    await replyMoved(interaction, "gotm nominations");
   }
 
   @Slash({ description: "Moved to /gotm vote", name: "vote" })
   async vote(interaction: CommandInteraction): Promise<void> {
-    await replyMoved(interaction, "gotm", "vote");
+    await replyMoved(interaction, "gotm vote");
   }
 
   @Slash({ description: "Moved to /gotm current", name: "round" })
   async round(interaction: CommandInteraction): Promise<void> {
-    await replyMoved(interaction, "gotm", "current");
+    await replyMoved(interaction, "gotm current");
   }
 
   @Slash({ description: "Moved to /gotm history", name: "round-history" })
   async roundHistory(interaction: CommandInteraction): Promise<void> {
-    await replyMoved(interaction, "gotm", "history");
+    await replyMoved(interaction, "gotm history");
   }
 }
 
@@ -69,6 +61,6 @@ export class GotmLegacyAliases {
 export class GenerateVoteImageLegacyAlias {
   @Slash({ description: "Moved to /admin generate-vote-image", name: "generate-vote-image" })
   async generateVoteImage(interaction: CommandInteraction): Promise<void> {
-    await replyMoved(interaction, "admin", "generate-vote-image");
+    await replyMoved(interaction, "admin generate-vote-image");
   }
 }

@@ -6,7 +6,7 @@ import { ContainerBuilder } from "@discordjs/builders";
 import { type AdminHelpTopic, type AdminHelpTopicId } from "./admin.types.js";
 import { truncateDescription } from "../../config/textLimits.js";
 import {
-  buildTitledContainer,
+  buildCommandHelpContainer,
   buildComponentsV2EditFlags,
   buildFieldsText,
 } from "../../functions/ComponentsV2Utils.js";
@@ -180,7 +180,7 @@ export function buildAdminHelpEmbed(topic: AdminHelpTopic): ContainerBuilder {
   if (topic.parameters) fields.push({ name: "Parameters", value: topic.parameters });
   if (topic.notes) fields.push({ name: "Notes", value: topic.notes });
   const body = [topic.summary, buildFieldsText(fields)].join("\n\n");
-  return buildTitledContainer(`${topic.label} help`, body);
+  return buildCommandHelpContainer(`${topic.label} help`, body);
 }
 
 export function buildAdminHelpResponse(
@@ -189,7 +189,7 @@ export function buildAdminHelpResponse(
   components: (ContainerBuilder | ActionRowBuilder<StringSelectMenuBuilder>)[];
   flags: number;
 } {
-  const container = buildTitledContainer(
+  const container = buildCommandHelpContainer(
     "Admin Commands Help",
     "Pick an `/admin` command below to see what it does and how to use it.",
   );

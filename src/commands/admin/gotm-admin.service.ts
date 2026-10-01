@@ -19,6 +19,7 @@ import {
   addCancelOption,
 } from "./admin-prompt.utils.js";
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
+import { commandMention } from "../../services/CommandMentionService.js";
 
 export async function handleAddGotm(interaction: CommandInteraction): Promise<void> {
   const allEntries = await withErrorReply(
@@ -72,7 +73,7 @@ export async function handleAddGotm(interaction: CommandInteraction): Promise<vo
 
     const gamedbRaw = await promptUserForInput(
       interaction,
-      `Enter the GameDB id for game #${n} (use /gamedb add first if needed).`,
+      `Enter the GameDB id for game #${n} (use ${commandMention("gamedb add")} first if needed).`,
     );
     if (gamedbRaw === null) return;
     const gamedbId = Number(gamedbRaw.trim());
@@ -87,7 +88,10 @@ export async function handleAddGotm(interaction: CommandInteraction): Promise<vo
     if (!gameMeta) {
       await safeReply(
         interaction,
-        buildTextReply(`GameDB id ${gamedbId} not found. Use /gamedb add first.`, false),
+        buildTextReply(
+          `GameDB id ${gamedbId} not found. Use ${commandMention("gamedb add")} first.`,
+          false,
+        ),
       );
       return;
     }
@@ -238,7 +242,11 @@ export async function handleEditGotm(
     if (!game) {
       await safeReply(
         interaction,
-        buildTextReply(`GameDB id ${parsed} was not found. Use /gamedb add first if needed.`, false),
+        buildTextReply(
+          `GameDB id ${parsed} was not found. ` +
+            `Use ${commandMention("gamedb add")} first if needed.`,
+          false,
+        ),
       );
       return;
     }

@@ -1,32 +1,21 @@
 import { chatInputApplicationCommandMention, type CommandInteraction } from "discord.js";
 
-async function fetchCommandId(
-  interaction: CommandInteraction,
-  commandName: string,
-  guildId: string | undefined,
-): Promise<string | null> {
-  try {
-    const commands = await interaction.client.application.commands.fetch({ guildId });
-    return commands.find((command) => command.name === commandName)?.id ?? null;
-  } catch {
-    return null;
-  }
-}
-
 /**
  * The registered ID of a sibling slash command. The invoking command's scope decides
- * where to look first: test mode registers guild commands, production registers global
- * ones. A guild command can point at a global one (the guild-scoped
- * `/generate-vote-image` alias names `/admin`), so a guild miss falls back to global.
+ * where to look: test mode registers guild commands, production registers global ones.
  */
 async function findCommandId(
   interaction: CommandInteraction,
   commandName: string,
 ): Promise<string | null> {
-  const guildId = interaction.commandGuildId ?? undefined;
-  const id = await fetchCommandId(interaction, commandName, guildId);
-  if (id || !guildId) return id;
-  return fetchCommandId(interaction, commandName, undefined);
+  try {
+    const commands = await interaction.client.application.commands.fetch({
+      guildId: interaction.commandGuildId ?? undefined,
+    });
+    return commands.find((command) => command.name === commandName)?.id ?? null;
+  } catch {
+    return null;
+  }
 }
 
 /**
