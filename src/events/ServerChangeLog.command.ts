@@ -47,6 +47,14 @@ function formatPermissions(role: Role): string {
   return names.length ? names.join(", ") : "None";
 }
 
+// A single-color role renders as before; gradient and holographic roles add their extra stops.
+function formatRoleColors(role: Role): string {
+  const { primaryColor, secondaryColor, tertiaryColor } = role.colors;
+  return [primaryColor, secondaryColor, tertiaryColor]
+    .filter((color) => color !== null)
+    .join(", ");
+}
+
 function diffLines(label: string, before: string | null, after: string | null): string | null {
   if ((before ?? "") === (after ?? "")) return null;
   return `**${label}:** ${before ?? "None"} -> ${after ?? "None"}`;
@@ -153,7 +161,7 @@ export class ServerChangeLog {
 
     const changes: string[] = [];
     changes.push(diffLines("Name", oldRole.name ?? null, newRole.name ?? null) ?? "");
-    changes.push(diffLines("Color", String(oldRole.color), String(newRole.color)) ?? "");
+    changes.push(diffLines("Color", formatRoleColors(oldRole), formatRoleColors(newRole)) ?? "");
     changes.push(diffLines("Hoist", String(oldRole.hoist), String(newRole.hoist)) ?? "");
     changes.push(
       diffLines("Mentionable", String(oldRole.mentionable), String(newRole.mentionable)) ?? "",

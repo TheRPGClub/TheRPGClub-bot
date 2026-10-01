@@ -314,14 +314,12 @@ function shouldForcePublicInDevChannel(interaction: AnyRepliable): boolean {
   return Boolean(ownerId && interaction.user.id === ownerId);
 }
 
-type MessageWithInteraction = {
-  interaction?: { user?: { id?: string } } | null;
-};
-
 function getCommandOwnerId(interaction: AnyRepliable): string | null {
-  // message exists on MessageComponentInteraction; use structural check to avoid import.
-  const msg = (interaction as unknown as { message?: MessageWithInteraction | null }).message;
-  return msg?.interaction?.user?.id ?? null;
+  // A modal opened from a message component carries that message too.
+  const message = interaction.isMessageComponent() || interaction.isModalSubmit()
+    ? interaction.message
+    : null;
+  return message?.interactionMetadata?.user.id ?? null;
 }
 
 function memberHasDevRole(interaction: AnyRepliable): boolean {
@@ -577,10 +575,12 @@ const discordErrorCode = (err: unknown): number | undefined =>
 // Ensure we do not hit "Interaction already acknowledged" when replying
 const isAckError = (err: unknown): boolean => {
   const code = discordErrorCode(err);
-  return code === 40060 || code === 10062;
+  return code === RESTJSONErrorCodes.InteractionHasAlreadyBeenAcknowledged
+    || code === RESTJSONErrorCodes.UnknownInteraction;
 };
 
-const isUnknownInteraction = (err: unknown): boolean => discordErrorCode(err) === 10062;
+const isUnknownInteraction = (err: unknown): boolean =>
+  discordErrorCode(err) === RESTJSONErrorCodes.UnknownInteraction;
 
 // Autocomplete has a 3 second window, so an expired token (10062) is routine, and a
 // second respond for the same keystroke (40060) changes nothing the user sees.
@@ -697,7 +697,7 @@ async function sendSafeReply(interaction: AnyRepliable, options: any): Promise<a
         rawError: JSON.stringify((err as { rawError?: unknown })?.rawError),
       });
       // 40060 = already replied; a followUp can still deliver the content
-      if (ackCode === 40060) {
+      if (ackCode === RESTJSONErrorCodes.InteractionHasAlreadyBeenAcknowledged) {
         try {
           if (typeof options === "string") {
             // eslint-disable-next-line local/no-plain-text-v1-reply
