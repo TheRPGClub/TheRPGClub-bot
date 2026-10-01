@@ -1,6 +1,7 @@
 import type { Channel, CommandInteraction } from "discord.js";
 import { ApplicationCommandOptionType, channelMention, MessageFlags } from "discord.js";
 import { Discord, Slash, SlashChoice, SlashGroup, SlashOption } from "discordx";
+import { ADMIN_COMMAND_PERMISSIONS } from "../config/commandPermissions.js";
 import {
   withErrorReply,
   safeDeferReply,
@@ -28,7 +29,11 @@ const RECURRENCE_CHOICES: { name: string; value: RecurrenceUnit }[] = [
 ];
 
 @Discord()
-@SlashGroup({ description: "Public reminders (admin-only)", name: "publicreminder" })
+@SlashGroup({
+  defaultMemberPermissions: ADMIN_COMMAND_PERMISSIONS,
+  description: "Public reminders (admin-only)",
+  name: "publicreminder",
+})
 @SlashGroup("publicreminder")
 export class PublicReminderCommand {
   @Slash({ description: "Create a public reminder", name: "create" })

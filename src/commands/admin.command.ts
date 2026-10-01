@@ -17,6 +17,7 @@ import {
   SlashGroup,
   SlashOption,
 } from "discordx";
+import { ADMIN_COMMAND_PERMISSIONS } from "../config/commandPermissions.js";
 import {
   withErrorReply,
   safeDeferReply,
@@ -69,7 +70,11 @@ import { type AdminHelpTopicId } from "./admin/admin.types.js";
 import { refreshCommandMentions } from "../services/CommandMentionService.js";
 
 @Discord()
-@SlashGroup({ description: "Admin Commands", name: "admin" })
+@SlashGroup({
+  defaultMemberPermissions: ADMIN_COMMAND_PERMISSIONS,
+  description: "Admin Commands",
+  name: "admin",
+})
 @SlashGroup("admin")
 export class Admin {
   @Slash({

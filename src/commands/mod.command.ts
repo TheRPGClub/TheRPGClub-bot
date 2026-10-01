@@ -20,6 +20,7 @@ import {
   SlashGroup,
   SlashOption,
 } from "discordx";
+import { MOD_COMMAND_PERMISSIONS } from "../config/commandPermissions.js";
 import {
   handleLiveStreamCreateModal,
   openLiveStreamCreateModal,
@@ -144,7 +145,11 @@ export function buildModHelpContainer(topic: ModHelpTopic): ContainerBuilder {
 }
 
 @Discord()
-@SlashGroup({ description: "Moderator Commands", name: "mod" })
+@SlashGroup({
+  defaultMemberPermissions: MOD_COMMAND_PERMISSIONS,
+  description: "Moderator Commands",
+  name: "mod",
+})
 @SlashGroup("mod")
 export class Mod {
   @Slash({ description: "Set Presence", name: "presence" })
