@@ -300,13 +300,18 @@ export async function promptRemoveFromNowPlaying(
       style: ButtonStyle.Secondary,
     }),
   );
-  await safeFollowUpIfSettled(interaction, {
-    components: [
-      buildTextContainer(`Remove **${gameTitle}** from your Now Playing list?`),
-      row,
-    ],
-    flags: buildComponentsV2Flags(true),
-  });
+  // The completion is already saved, so a failed prompt must not abort the caller.
+  try {
+    await safeFollowUpIfSettled(interaction, {
+      components: [
+        buildTextContainer(`Remove **${gameTitle}** from your Now Playing list?`),
+        row,
+      ],
+      flags: buildComponentsV2Flags(true),
+    });
+  } catch (err: unknown) {
+    logError("CompletionHelpers.promptRemoveFromNowPlaying", err);
+  }
 }
 
 export async function handleNowPlayingRemoveConfirm(

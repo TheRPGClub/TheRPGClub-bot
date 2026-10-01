@@ -721,6 +721,13 @@ export class CompletionatorWorkflowService {
       note: null,
     });
 
+    completionatorAddFormStates.delete(getCompletionatorFormKey(session.importId, item.itemId));
+    await updateImportItem(item.itemId, {
+      status: "IMPORTED",
+      gameDbGameId: item.gameDbGameId,
+      completionId,
+    });
+
     if (removeFromNowPlaying === "prompt") {
       await promptRemoveFromNowPlaying(
         interaction,
@@ -729,13 +736,6 @@ export class CompletionatorWorkflowService {
         item.gameTitle,
       );
     }
-
-    completionatorAddFormStates.delete(getCompletionatorFormKey(session.importId, item.itemId));
-    await updateImportItem(item.itemId, {
-      status: "IMPORTED",
-      gameDbGameId: item.gameDbGameId,
-      completionId,
-    });
   }
 
   async resolveCompletionatorPlatformState(

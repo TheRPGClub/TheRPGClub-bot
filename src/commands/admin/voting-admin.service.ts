@@ -1,7 +1,6 @@
 import { DateTime } from "luxon";
 import {
   ButtonStyle,
-  MessageFlags,
   ModalBuilder,
   type ButtonInteraction,
   type CommandInteraction,
@@ -9,12 +8,21 @@ import {
 } from "discord.js";
 import {
   getModalField,
-  safeDeferReply,
   safeDeferUpdate,
+  safeEditReply,
+  safeFollowUpIfSettled,
   safeReply,
   withErrorReply,
 } from "../../functions/InteractionUtils.js";
-import { buildErrorReply, buildTextReply } from "../../functions/ComponentsV2Utils.js";
+import {
+  buildComponentsV2EditFlags,
+  buildErrorReply,
+  buildTextContainer,
+  buildTextReply,
+} from "../../functions/ComponentsV2Utils.js";
+import { buildCaughtErrorMessage } from "../../utilities/ApiErrorUtils.js";
+import { resolveSessionOrReply } from "../../functions/ResumableSessionReplies.js";
+import { assertCustomIdSegments } from "../../utilities/CustomIdUtils.js";
 import { listNominationsForRound } from "../../classes/Nomination.js";
 import { getUpcomingNominationWindow } from "../../functions/NominationWindow.js";
 import { calculateNextVoteDateEt } from "../../functions/VoteDateUtils.js";
@@ -26,16 +34,15 @@ import {
 } from "../../config/customIdPrefixes.js";
 import { DISCORD_SELECT_LABEL_MAX } from "../../config/textLimits.js";
 import {
+  buildOwnedSessionId,
   createResumableSessionRegistry,
-  type ResumableSessionLookup,
+  parseOwnedSessionOwnerId,
 } from "../../services/PersistedInteractionSessionStore.js";
 import {
   buildActionButton,
   buildButtonRow,
   buildTextInputLabel,
 } from "../../functions/uiComponents.js";
-import { buildApiErrorMessage } from "../../utilities/ApiErrorUtils.js";
-import { logError } from "../../utilities/LogUtils.js";
 import { safeIgnore } from "../../utilities/AsyncUtils.js";
 import { VOTING_TITLE_MAX_LEN } from "./admin.types.js";
 
@@ -47,7 +54,7 @@ const VOTING_TITLES_SESSION_PREFIX = "votetitles";
 const VOTING_TITLES_EXPIRED_MESSAGE =
   "This voting setup has expired. Run the legacy voting setup command again.";
 
-type VotingSetupState = {
+export type VotingSetupState = {
   roundNumber: number;
   monthLabel: string;
   answers: Record<VotingKind, string[]>;
@@ -63,7 +70,7 @@ function isStringArray(value: unknown): value is string[] {
   return Array.isArray(value) && value.every((v) => typeof v === "string");
 }
 
-function votingSetupFromState(state: unknown): VotingSetupState | null {
+export function votingSetupFromState(state: unknown): VotingSetupState | null {
   if (!state || typeof state !== "object") return null;
   const raw = state as Partial<VotingSetupState>;
   const answers = raw.answers as Partial<Record<VotingKind, unknown>> | undefined;
@@ -94,23 +101,11 @@ const votingSetupRegistry = createResumableSessionRegistry<VotingSetupState>({
   fromState: (state) => votingSetupFromState(state),
 });
 
-/** The owner id rides in the session id so a restore knows whose row to read. */
-function buildVotingSessionId(ownerId: string): string {
-  const nonce = `${Date.now()}-${Math.floor(Math.random() * 100000)}`;
-  return `${VOTING_TITLES_SESSION_PREFIX}-${ownerId}-${nonce}`;
-}
-
-function parseVotingSessionOwnerId(sessionId: string): string | null {
-  const [prefix, ownerId] = sessionId.split("-");
-  if (prefix !== VOTING_TITLES_SESSION_PREFIX) return null;
-  return ownerId && /^\d+$/.test(ownerId) ? ownerId : null;
-}
-
 function isTitleTooLong(title: string): boolean {
   return title.length > VOTING_TITLE_MAX_LEN;
 }
 
-function listPendingTitles(state: VotingSetupState): PendingTitle[] {
+export function listPendingTitles(state: VotingSetupState): PendingTitle[] {
   const pending: PendingTitle[] = [];
   for (const kind of ["GOTM", "NR-GOTM"] as const) {
     state.answers[kind].forEach((title, index) => {
@@ -123,7 +118,7 @@ function listPendingTitles(state: VotingSetupState): PendingTitle[] {
   return pending;
 }
 
-function resolveAnswers(state: VotingSetupState, kind: VotingKind): string[] {
+export function resolveAnswers(state: VotingSetupState, kind: VotingKind): string[] {
   return state.answers[kind].map((title, index) =>
     state.overrides[`${kind}-${index}`] ?? title);
 }
@@ -253,7 +248,7 @@ export async function handleLegacyVotingSetup(
       return;
     }
 
-    const sessionId = buildVotingSessionId(interaction.user.id);
+    const sessionId = buildOwnedSessionId(VOTING_TITLES_SESSION_PREFIX, interaction.user.id);
     votingSetupRegistry.create({
       sessionId,
       session: state,
@@ -265,35 +260,36 @@ export async function handleLegacyVotingSetup(
   }, "Could not generate vote commands");
 }
 
-function readSessionId(customId: string): { sessionId: string; ownerId: string } | null {
-  const sessionId = customId.split(":")[1] ?? "";
-  const ownerId = parseVotingSessionOwnerId(sessionId);
-  return ownerId ? { sessionId, ownerId } : null;
+function readSessionId(
+  interaction: ButtonInteraction | ModalSubmitInteraction,
+): { sessionId: string; ownerId: string } | null {
+  const [sessionId] = assertCustomIdSegments(interaction, 1) ?? [];
+  const ownerId = sessionId
+    ? parseOwnedSessionOwnerId(VOTING_TITLES_SESSION_PREFIX, sessionId)
+    : null;
+  return sessionId && ownerId ? { sessionId, ownerId } : null;
 }
 
-async function resolveVotingSession(
+function resolveVotingSession(
   interaction: ButtonInteraction | ModalSubmitInteraction,
   sessionId: string,
-  lookup: ResumableSessionLookup,
+  ownerId: string,
 ): Promise<VotingSetupState | undefined> {
-  try {
-    const state = await votingSetupRegistry.resolve(sessionId, lookup);
-    if (!state) {
-      await safeReply(interaction, buildTextReply(VOTING_TITLES_EXPIRED_MESSAGE, true));
-    }
-    return state;
-  } catch (err: unknown) {
-    logError("VotingAdmin.restoreSession", err);
-    await safeReply(interaction, buildErrorReply(
-      buildApiErrorMessage("Could not restore this voting setup.", err),
-      true,
-    ));
-    return undefined;
-  }
+  return resolveSessionOrReply(
+    votingSetupRegistry,
+    interaction,
+    sessionId,
+    { ownerId, channelId: interaction.channelId },
+    {
+      expired: VOTING_TITLES_EXPIRED_MESSAGE,
+      restoreFailed: "Could not restore this voting setup.",
+      logContext: "VotingAdmin.restoreSession",
+    },
+  );
 }
 
 export async function handleVotingTitlesButton(interaction: ButtonInteraction): Promise<void> {
-  const parsed = readSessionId(interaction.customId);
+  const parsed = readSessionId(interaction);
   if (!parsed) {
     await safeReply(interaction, buildTextReply(VOTING_TITLES_EXPIRED_MESSAGE, true));
     return;
@@ -306,10 +302,7 @@ export async function handleVotingTitlesButton(interaction: ButtonInteraction): 
     // API and can outlast Discord's 3 second window. Ack, restore into memory, and
     // re-offer the button: the next click finds the session in memory.
     await safeDeferUpdate(interaction);
-    state = await resolveVotingSession(interaction, sessionId, {
-      ownerId,
-      channelId: interaction.channelId,
-    });
+    state = await resolveVotingSession(interaction, sessionId, ownerId);
     if (!state) return;
     await safeReply(interaction, {
       ...buildShortenPrompt(sessionId, listPendingTitles(state)),
@@ -337,15 +330,16 @@ export async function handleVotingTitlesButton(interaction: ButtonInteraction): 
 }
 
 export async function handleVotingTitlesModal(interaction: ModalSubmitInteraction): Promise<void> {
-  await safeDeferReply(interaction, { flags: MessageFlags.Ephemeral });
-  const parsed = readSessionId(interaction.customId);
+  // The modal opens from the shorten prompt, so acking it as an update lets the next
+  // prompt or the final result replace that prompt in place.
+  await safeDeferUpdate(interaction);
+  const parsed = readSessionId(interaction);
   if (!parsed) {
-    await safeReply(interaction, buildTextReply(VOTING_TITLES_EXPIRED_MESSAGE, true));
+    await safeFollowUpIfSettled(interaction, buildTextReply(VOTING_TITLES_EXPIRED_MESSAGE, true));
     return;
   }
   const { sessionId, ownerId } = parsed;
-  const lookup = { ownerId, channelId: interaction.channelId };
-  const state = await resolveVotingSession(interaction, sessionId, lookup);
+  const state = await resolveVotingSession(interaction, sessionId, ownerId);
   if (!state) return;
 
   const overrides = { ...state.overrides };
@@ -353,7 +347,7 @@ export async function handleVotingTitlesModal(interaction: ModalSubmitInteractio
     if (!interaction.fields.fields.has(item.key)) continue;
     const value = getModalField(interaction, item.key).trim();
     if (!value || isTitleTooLong(value)) {
-      await safeReply(interaction, buildTextReply(
+      await safeFollowUpIfSettled(interaction, buildTextReply(
         `The ${item.kind} title for "${item.title}" must be 1 to ` +
           `${VOTING_TITLE_MAX_LEN} characters. Nothing was saved; use the button again.`,
         true,
@@ -373,18 +367,27 @@ export async function handleVotingTitlesModal(interaction: ModalSubmitInteractio
       location: { channelId: interaction.channelId, guildId: interaction.guildId },
       state: nextState,
     });
-    await safeReply(interaction, buildShortenPrompt(sessionId, pending));
+    await safeEditReply(interaction, {
+      ...buildShortenPrompt(sessionId, pending),
+      flags: buildComponentsV2EditFlags(),
+    });
     return;
   }
 
   // A second submit while the first is still posting must not post twice.
   if (!votingSetupRegistry.claim(sessionId)) return;
   try {
-    await withErrorReply(
-      interaction,
-      () => postVotingSetup(interaction, nextState),
-      "Could not generate vote commands",
-    );
+    // Retire the prompt's button; the result below then lands as a follow-up.
+    await safeEditReply(interaction, {
+      components: [buildTextContainer("All titles shortened.")],
+      flags: buildComponentsV2EditFlags(),
+    });
+    await postVotingSetup(interaction, nextState);
+  } catch (err: unknown) {
+    await safeFollowUpIfSettled(interaction, buildErrorReply(
+      buildCaughtErrorMessage("Could not generate vote commands", err),
+      true,
+    ));
   } finally {
     votingSetupRegistry.finish(sessionId);
   }

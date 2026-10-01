@@ -28,9 +28,12 @@ import {
   type IgdbSelectOption,
 } from "../../services/IGDB/IgdbSelectService.js";
 import {
+  buildOwnedSessionId,
   createResumableSessionRegistry,
+  parseOwnedSessionOwnerId,
   type PersistedSessionLocation,
 } from "../../services/PersistedInteractionSessionStore.js";
+import { resolveSessionOrReply } from "../../functions/ResumableSessionReplies.js";
 import {
   completionAddContextFromJson,
   completionAddContextToJson,
@@ -91,19 +94,6 @@ function toSessionLocation(
   return { channelId: interaction.channelId, guildId: interaction.guildId };
 }
 
-/** The owner id rides in the session id so a restore can check it before the API read. */
-function buildCompletionAddSessionId(ownerId: string): string {
-  const nonce = `${Date.now()}-${Math.floor(Math.random() * 100000)}`;
-  return `${COMPLETION_ADD_SESSION_ID_PREFIX}-${ownerId}-${nonce}`;
-}
-
-/** Returns the owner id built into a session id, or null for older ids without one. */
-function parseCompletionAddOwnerId(sessionId: string): string | null {
-  const [prefix, ownerId] = sessionId.split("-");
-  if (prefix !== COMPLETION_ADD_SESSION_ID_PREFIX) return null;
-  return ownerId && /^\d+$/.test(ownerId) ? ownerId : null;
-}
-
 /**
  * Creates a completion session and returns the session ID. The context is also
  * persisted so the GameDB select still works after a bot restart.
@@ -112,7 +102,7 @@ export function createCompletionSession(
   ctx: CompletionAddContext,
   location: PersistedSessionLocation,
 ): string {
-  const sessionId = buildCompletionAddSessionId(ctx.userId);
+  const sessionId = buildOwnedSessionId(COMPLETION_ADD_SESSION_ID_PREFIX, ctx.userId);
   completionAddRegistry.create({
     sessionId,
     session: ctx,
@@ -358,25 +348,18 @@ async function resolveCompletionAddSession(
   sessionId: string,
   ownerId: string,
 ): Promise<CompletionAddContext | undefined> {
-  let ctx: CompletionAddContext | undefined;
-  try {
-    ctx = await completionAddRegistry.resolve(sessionId, {
-      ownerId,
-      channelId: interaction.channelId,
-    });
-  } catch (err: unknown) {
-    logError("CompletionAdd.restoreSession", err);
-    await safeFollowUpIfSettled(interaction, buildErrorReply(
-      buildApiErrorMessage("Could not restore this completion prompt.", err),
-      true,
-    ));
-    return undefined;
-  }
-
-  if (!ctx) {
-    await safeFollowUpIfSettled(interaction, buildTextReply(COMPLETION_ADD_EXPIRED_MESSAGE, true));
-    return undefined;
-  }
+  const ctx = await resolveSessionOrReply(
+    completionAddRegistry,
+    interaction,
+    sessionId,
+    { ownerId, channelId: interaction.channelId },
+    {
+      expired: COMPLETION_ADD_EXPIRED_MESSAGE,
+      restoreFailed: "Could not restore this completion prompt.",
+      logContext: "CompletionAdd.restoreSession",
+    },
+  );
+  if (!ctx) return undefined;
   if (ctx.userId !== interaction.user.id) {
     await safeFollowUpIfSettled(
       interaction,
@@ -402,7 +385,8 @@ export async function handleCompletionAddSelect(
     return;
   }
 
-  const ownerId = parseCompletionAddOwnerId(sessionId) ?? interaction.user.id;
+  const ownerId = parseOwnedSessionOwnerId(COMPLETION_ADD_SESSION_ID_PREFIX, sessionId)
+    ?? interaction.user.id;
   if (await replyIfNotOwner(interaction, ownerId, COMPLETION_ADD_NOT_OWNER_MESSAGE)) return;
 
   // Ack first: restoring the prompt after a restart reads the API, which can
@@ -494,7 +478,8 @@ export async function handleCompletionAddDuplicate(
   const segs = assertCustomIdSegments(interaction, 3);
   if (!segs) return;
   const [sessionId, gameIdRaw, choice] = segs;
-  const ownerId = parseCompletionAddOwnerId(sessionId) ?? interaction.user.id;
+  const ownerId = parseOwnedSessionOwnerId(COMPLETION_ADD_SESSION_ID_PREFIX, sessionId)
+    ?? interaction.user.id;
   if (await replyIfNotOwner(interaction, ownerId, COMPLETION_ADD_NOT_OWNER_MESSAGE)) return;
 
   await safeDeferUpdate(interaction);

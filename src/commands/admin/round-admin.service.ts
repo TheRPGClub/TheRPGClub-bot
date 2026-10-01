@@ -38,6 +38,7 @@ import {
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
 import { safeIgnore } from "../../utilities/AsyncUtils.js";
 import { commandMention } from "../../services/CommandMentionService.js";
+import { DISCORD_TEXT_INPUT_MAX } from "../../config/textLimits.js";
 import {
   ADMIN_ROUND_ADD_MODAL_PREFIX,
   ADMIN_ROUND_ADD_PREFIX,
@@ -49,7 +50,6 @@ export type RoundKind = "gotm" | "nr-gotm";
 
 const MAX_ROUND_GAMES = 5;
 const MONTH_YEAR_MAX_LENGTH = 100;
-const REDDIT_URL_MAX_LENGTH = 500;
 const ADD_MONTH_YEAR_INPUT_ID = "month-year";
 const ADD_GAMES_INPUT_ID = "gamedb-ids";
 const EDIT_GAMEDB_INPUT_ID = "gamedb-id";
@@ -140,7 +140,7 @@ function isRoundKind(value: string | undefined): value is RoundKind {
 }
 
 /** Parses `<prefix>:<kind>:<round>[:<gameIndex>]` custom ids. */
-function parseRoundCustomId(
+export function parseRoundCustomId(
   customId: string,
   withGameIndex: boolean,
 ): { kind: RoundKind; round: number; gameIndex: number } | null {
@@ -394,7 +394,8 @@ export async function handleEditRoundButton(interaction: ButtonInteraction): Pro
         customId: EDIT_REDDIT_INPUT_ID,
         label: "Reddit URL (leave blank to clear)",
         required: false,
-        maxLength: REDDIT_URL_MAX_LENGTH,
+        // Any cap below the stored length would make Discord reject the prefilled form.
+        maxLength: DISCORD_TEXT_INPUT_MAX,
         value: game.redditUrl ?? undefined,
       }),
     );

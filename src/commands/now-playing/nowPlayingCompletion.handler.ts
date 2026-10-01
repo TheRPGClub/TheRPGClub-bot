@@ -114,6 +114,7 @@ import {
 } from "./nowPlayingListRenderer.js";
 import { NOW_PLAYING_HELP_PREFIX } from "../now-playing-help.js";
 import GamePlatformRegionService from "../../classes/GamePlatformRegionService.js";
+import { resolveSessionOrReply } from "../../functions/ResumableSessionReplies.js";
 import {
   createNowPlayingDuplicateSession,
   nowPlayingDuplicateRegistry,
@@ -824,29 +825,18 @@ export class NowPlayingCompletionHandlers {
     // Ack first: restoring after a restart reads the API, which can outlast
     // Discord's 3 second window.
     await safeDeferUpdate(interaction);
-    let pending: NowPlayingPendingCompletion | undefined;
-    try {
-      pending = await nowPlayingDuplicateRegistry.resolve(dupSessionId, {
-        ownerId,
-        channelId: interaction.channelId,
-      });
-    } catch (err: unknown) {
-      await safeFollowUpIfSettled(interaction, {
-        components: [buildTextContainer(buildApiErrorMessage(
-          "Could not restore this completion prompt.",
-          err,
-        ))],
-        flags: buildComponentsV2Flags(true),
-      });
-      return;
-    }
-    if (!pending) {
-      await safeFollowUpIfSettled(interaction, {
-        components: [buildTextContainer("This completion prompt has expired.")],
-        flags: buildComponentsV2Flags(true),
-      });
-      return;
-    }
+    const pending = await resolveSessionOrReply(
+      nowPlayingDuplicateRegistry,
+      interaction,
+      dupSessionId,
+      { ownerId, channelId: interaction.channelId },
+      {
+        expired: "This completion prompt has expired.",
+        restoreFailed: "Could not restore this completion prompt.",
+        logContext: "NowPlayingCompletion.restoreDuplicate",
+      },
+    );
+    if (!pending) return;
     // A second click while the first is still saving must not log it twice.
     if (!nowPlayingDuplicateRegistry.claim(dupSessionId)) return;
 

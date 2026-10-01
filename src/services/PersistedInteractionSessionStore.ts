@@ -115,6 +115,22 @@ export async function removePersistedSession(
   });
 }
 
+/**
+ * Builds `<prefix>-<ownerId>-<nonce>`. The owner rides in the id so a handler can check
+ * ownership, and knows whose row to read, before restoring the session from the API.
+ */
+export function buildOwnedSessionId(prefix: string, ownerId: string): string {
+  const nonce = `${Date.now()}-${Math.floor(Math.random() * 100000)}`;
+  return `${prefix}-${ownerId}-${nonce}`;
+}
+
+/** Returns the owner id in an id from {@link buildOwnedSessionId}, or null. */
+export function parseOwnedSessionOwnerId(prefix: string, sessionId: string): string | null {
+  const [idPrefix, ownerId] = sessionId.split("-");
+  if (idPrefix !== prefix) return null;
+  return ownerId && /^\d+$/.test(ownerId) ? ownerId : null;
+}
+
 export type ResumableSessionLookup = {
   ownerId: string;
   channelId: string | null;

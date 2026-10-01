@@ -1,5 +1,7 @@
 import {
+  buildOwnedSessionId,
   createResumableSessionRegistry,
+  parseOwnedSessionOwnerId,
   type PersistedSessionLocation,
 } from "../../services/PersistedInteractionSessionStore.js";
 import { COMPLETION_TYPES, type CompletionType } from "../profile.command.js";
@@ -70,8 +72,7 @@ export function createNowPlayingDuplicateSession(
   pending: NowPlayingPendingCompletion,
   location: PersistedSessionLocation,
 ): string {
-  const nonce = `${Date.now()}-${Math.floor(Math.random() * 100000)}`;
-  const sessionId = `${NP_DUPLICATE_SESSION_PREFIX}-${pending.userId}-${nonce}`;
+  const sessionId = buildOwnedSessionId(NP_DUPLICATE_SESSION_PREFIX, pending.userId);
   nowPlayingDuplicateRegistry.create({
     sessionId,
     session: pending,
@@ -84,7 +85,5 @@ export function createNowPlayingDuplicateSession(
 
 /** Returns the owner id built into a duplicate session id. */
 export function parseNowPlayingDuplicateOwnerId(sessionId: string): string | null {
-  const [prefix, ownerId] = sessionId.split("-");
-  if (prefix !== NP_DUPLICATE_SESSION_PREFIX) return null;
-  return ownerId && /^\d+$/.test(ownerId) ? ownerId : null;
+  return parseOwnedSessionOwnerId(NP_DUPLICATE_SESSION_PREFIX, sessionId);
 }
