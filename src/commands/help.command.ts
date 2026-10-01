@@ -310,13 +310,17 @@ const HELP_TOPICS: HelpTopic[] = [
   },
   {
     id: "giveaway",
-    label: "/gamegiveaway",
-    summary: "Jump to the giveaway hub list to claim or donate digital game keys.",
+    label: "/giveaway",
+    summary: "Claim, donate, or revoke digital game keys.",
     syntax:
-      "Syntax: /gamegiveaway (returns a link to the hub list).",
+      "Syntax: /giveaway hub | /giveaway list [private:<boolean>] | " +
+      "/giveaway donate title:<string> platform:<string> key:<string> | " +
+      "/giveaway revoke key_id:<int>",
     notes:
-      `The giveaway list is kept in ${channelMention(GIVEAWAY_HUB_CHANNEL_ID)} with claim/donate buttons. ` +
-      "Claims are handled from the list menu; keys are sent by DM.",
+      `The giveaway list is kept in ${channelMention(GIVEAWAY_HUB_CHANNEL_ID)} with ` +
+      "claim/donate buttons; /giveaway hub links to it. Keys are sent by DM. " +
+      "Only the donor or an admin can revoke a key. " +
+      "/gamegiveaway still works for now and points to /giveaway hub.",
   },
   {
     id: "thread",
@@ -918,7 +922,7 @@ const MAIN_MENU_SUMMARIES: Record<HelpTopicId, string> = {
   "game-completion": "Log and manage your completed games.",
   hltb: "Look up HowLongToBeat playtimes.",
   suggestion: "Submit a bot suggestion.",
-  giveaway: "Jump to the giveaway hub list.",
+  giveaway: "Claim or donate game keys.",
   "avatar-history": "View a member’s avatar history.",
   mod: "Moderator tools.",
   admin: "Admin tools.",
