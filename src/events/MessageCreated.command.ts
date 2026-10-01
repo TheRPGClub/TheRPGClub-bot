@@ -33,17 +33,17 @@ export function decideLinkPreviewRepair(message: ILinkPreviewTrigger): ILinkPrev
 }
 
 export interface IRoleSyncTrigger {
-  hasMember: boolean;
   authorIsBot: boolean;
+  isSystem: boolean;
   webhookId: string | null;
 }
 
 /**
- * Webhook and DM messages have no guild member, and bots never graduate from
- * newcomers, so only a human member's message syncs roles.
+ * Only a human's own post graduates them. System messages are skipped because
+ * the join notice is authored by the joining user, and webhooks are not members.
  */
 export function shouldSyncMemberRoles(message: IRoleSyncTrigger): boolean {
-  return message.hasMember && !message.authorIsBot && !message.webhookId;
+  return !message.authorIsBot && !message.isSystem && !message.webhookId;
 }
 
 @Discord()
@@ -54,7 +54,7 @@ export class MessageCreated {
     _client: Client,
   ): Promise<void> {
     void _client;
-    await this.syncMemberRoles(message);
+    void this.syncMemberRoles(message);
 
     const { schedule, sweepStuckReplies } = decideLinkPreviewRepair({
       authorId: message.author.id,
@@ -67,12 +67,13 @@ export class MessageCreated {
 
   private async syncMemberRoles(message: ArgsOf<"messageCreate">[0]): Promise<void> {
     const member = message.member;
+    if (!member) return;
     const trigger: IRoleSyncTrigger = {
-      hasMember: member !== null,
       authorIsBot: message.author.bot,
+      isSystem: message.system,
       webhookId: message.webhookId,
     };
-    if (!member || !shouldSyncMemberRoles(trigger)) return;
+    if (!shouldSyncMemberRoles(trigger)) return;
     if (member.roles.cache.has(MEMBER_ROLE_ID)) return;
 
     const userName: string = member.nickname?.length ? member.nickname : member.displayName;
