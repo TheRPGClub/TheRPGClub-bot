@@ -116,8 +116,9 @@ export interface IVotePanelParams {
 const GAME_BUTTONS_PER_ROW = 5;
 const PANEL_REASON_MAX = 200;
 /**
- * The listed games' text, reasons included, may total this much; past it the
- * reasons are dropped so the panel stays inside Discord's 4000 text characters.
+ * The listed games' text may total this much, so the panel stays inside
+ * Discord's 4000 text characters. Past it a cover list drops its reasons and a
+ * title list is truncated.
  */
 const GAME_LIST_TEXT_BUDGET = 2400;
 /** A section with a thumbnail is the section, its text and the thumbnail. */
@@ -168,6 +169,23 @@ function countCoverListComponents(
   return games.reduce(
     (sum, game) => sum + (coverUrls.has(game.gamedbGameId) ? COVER_SECTION_COMPONENTS : 1),
     0,
+  );
+}
+
+/**
+ * True when at least one game's cover could fit, so fetching the covers is
+ * worth it. A ballot past this lists its titles whatever covers exist.
+ */
+export function couldListCovers(params: IVotePanelParams): boolean {
+  const games = dedupeNominationsByGame(params.nominations);
+  if (!games.length) return false;
+  const useButtons = fitsGameButtons(params, games.length);
+  return (
+    countContainerComponents(params) +
+      COVER_SECTION_COMPONENTS +
+      (games.length - 1) +
+      countControlComponents(useButtons, games.length) <=
+    DISCORD_V2_COMPONENTS_MAX
   );
 }
 
@@ -247,7 +265,13 @@ function buildPanelContainer(
       addGameEntry(container, game, withReasons, params.coverUrls?.get(game.gamedbGameId));
     }
   } else {
-    addText(container, [heading, ...games.map((game) => `- **${game.gameTitle}**`)].join("\n"));
+    // Capped so the heading, list and rules stay inside Discord's 4000 text characters;
+    // a truncated list still has every game on its button or select option.
+    const list = safeV2TextContent(
+      games.map((game) => `- **${game.gameTitle}**`).join("\n"),
+      GAME_LIST_TEXT_BUDGET,
+    );
+    addText(container, `${heading}\n${list}`);
   }
   addSeparator(container);
   addText(container, buildPanelDetailsText(params, useButtons));

@@ -1,11 +1,15 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { ComponentType, type Client } from "discord.js";
 import type { INominationEntry } from "../classes/Nomination.js";
 import type { IVoteEntry } from "../classes/Vote.js";
 import {
   buildVotePanelComponents,
+  couldListCovers,
   type IVotePanelParams,
 } from "../functions/VotePanelComponents.js";
+import { postVotePanels } from "../functions/VotePanelPosting.js";
+import type { IVotingDataSource } from "../services/VotingDataSource.js";
 import { parsePickedNominationId } from "../commands/vote/vote-panel-actions.service.js";
 import { DISCORD_V2_COMPONENTS_MAX } from "../config/textLimits.js";
 
@@ -127,9 +131,9 @@ test("parsePickedNominationId reads the button's last segment", () => {
   assert.equal(parsePickedNominationId("vote-pick:gotm:143:x"), null);
 });
 
-const SECTION_TYPE = 9;
-const TEXT_DISPLAY_TYPE = 10;
-const THUMBNAIL_TYPE = 11;
+const SECTION_TYPE = ComponentType.Section;
+const TEXT_DISPLAY_TYPE = ComponentType.TextDisplay;
+const THUMBNAIL_TYPE = ComponentType.Thumbnail;
 
 function coverUrlsFor(count: number): Map<number, string> {
   return new Map(
@@ -155,7 +159,7 @@ test("each game is listed with its cover above the rules", () => {
       SECTION_TYPE,
       SECTION_TYPE,
       SECTION_TYPE,
-      14,
+      ComponentType.Separator,
       TEXT_DISPLAY_TYPE,
     ],
   );
@@ -213,4 +217,60 @@ test("long reasons are dropped when the cover list would pass the text budget", 
   assert.equal(children[1]?.components?.[0]?.content, "**Game 1**");
   assert.equal(children[14]?.content, "**Game 14**");
   assert.ok(flatten(json).length <= DISCORD_V2_COMPONENTS_MAX);
+});
+
+test("a long title list is capped so the panel stays inside Discord's text limit", () => {
+  const nominations = makeNominations(40).map((nomination) => ({
+    ...nomination,
+    gameTitle: `${"Long Title ".repeat(9)}${nomination.id}`,
+  }));
+  assert.ok(textOf(panelJson({ nominations, myVotes: MY_VOTES })).length <= 4000);
+});
+
+test("covers are worth fetching only while one could fit", () => {
+  const params = (count: number): IVotePanelParams => ({
+    kind: "gotm",
+    roundNumber: 143,
+    voteDeadline: null,
+    cap: 2,
+    nominations: makeNominations(count),
+  });
+  assert.equal(couldListCovers(params(4)), true);
+  assert.equal(couldListCovers(params(14)), true);
+  assert.equal(couldListCovers(params(20)), false);
+  assert.equal(couldListCovers(params(0)), false);
+});
+
+test("postVotePanels lists the data source's covers on the posted panel", async () => {
+  const sent: Array<{ components: Array<{ toJSON(): unknown }> }> = [];
+  const client = {
+    channels: {
+      fetch: async () => ({
+        isTextBased: () => true,
+        send: async (payload: (typeof sent)[number]) => {
+          sent.push(payload);
+        },
+      }),
+    },
+  } as unknown as Client;
+  const requested: number[][] = [];
+  const source = {
+    getTally: async () => ({ rows: [], cap: 2 }),
+    getCoverUrls: async (gameIds: number[]) => {
+      requested.push(gameIds);
+      return coverUrlsFor(4);
+    },
+  } as unknown as IVotingDataSource;
+  const result = await postVotePanels({
+    client,
+    channelId: "1",
+    roundNumber: 143,
+    voteDeadline: null,
+    nominationsByKind: new Map([["gotm", makeNominations(4)]]),
+    source,
+  });
+  assert.equal(result.posted, 1);
+  assert.deepEqual(requested, [[1, 2, 3, 4]]);
+  const json = sent[0]?.components.map((c) => c.toJSON() as IComponentNode) ?? [];
+  assert.equal(flatten(json).filter((node) => node.type === THUMBNAIL_TYPE).length, 4);
 });

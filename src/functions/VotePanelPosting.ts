@@ -10,7 +10,9 @@ import { fetchSendableChannel } from "./ChannelUtils.js";
 import { buildComponentsV2Flags } from "./ComponentsV2Utils.js";
 import {
   buildVotePanelComponents,
+  couldListCovers,
   type IVotePanelIds,
+  type IVotePanelParams,
   type VotePanelComponent,
 } from "./VotePanelComponents.js";
 import { buildTestPanelNoticeText, dedupeNominationsByGame } from "./VoteResultsUtils.js";
@@ -115,13 +117,8 @@ export async function postVotePanels(
       continue;
     }
     const source = params.source ?? apiVotingDataSource;
-    const [tally, coverUrls] = await Promise.all([
-      source.getTally(kind, params.roundNumber, ballot),
-      source.getCoverUrls(
-        dedupeNominationsByGame(nominations).map((nomination) => nomination.gamedbGameId),
-      ),
-    ]);
-    const components = buildVotePanelComponents({
+    const tally = await source.getTally(kind, params.roundNumber, ballot);
+    const panelParams: IVotePanelParams = {
       ballot,
       kind,
       roundNumber: params.roundNumber,
@@ -129,7 +126,6 @@ export async function postVotePanels(
       voteDeadline: params.voteDeadline,
       cap: tally.cap,
       nominations,
-      coverUrls,
       ids: params.ids,
       testNotice: params.notice ?? (params.testMode
         ? buildTestPanelNoticeText({
@@ -139,7 +135,13 @@ export async function postVotePanels(
             reason: params.castsRefusedReason ?? null,
           })
         : null),
-    });
+    };
+    const coverUrls = couldListCovers(panelParams)
+      ? await source.getCoverUrls(
+        dedupeNominationsByGame(nominations).map((nomination) => nomination.gamedbGameId),
+      )
+      : null;
+    const components = buildVotePanelComponents({ ...panelParams, coverUrls });
     const failure = await sendPanelToChannel(params.client, params.channelId, components);
     const sent = failure === null;
     if (sent) {
