@@ -195,7 +195,8 @@ test("a ballot too large for covers drops them and lists the titles", () => {
   const json = panelJson({ nominations: makeNominations(12), coverUrls: coverUrlsFor(12) });
   assert.equal(flatten(json).filter((node) => node.type === THUMBNAIL_TYPE).length, 0);
   assert.equal(flatten(json).filter((node) => node.type === BUTTON_TYPE).length, 14);
-  assert.match(containerChildren(json)[0]?.content ?? "", /- \*\*Game 1\*\*\n[^]*- \*\*Game 12\*\*/);
+  const heading = containerChildren(json)[0]?.content ?? "";
+  assert.match(heading, /- \*\*Game 1\*\*\n[^]*- \*\*Game 12\*\*/);
   assert.ok(flatten(json).length <= DISCORD_V2_COMPONENTS_MAX);
 });
 
