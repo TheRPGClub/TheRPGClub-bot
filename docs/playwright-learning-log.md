@@ -23,6 +23,18 @@ entry for every new problem. The `playwright-log` skill
   the test data (for example `title:Chrono Trig` and `platform:SNES`). For an
   autocomplete option, use a value the bot resolves on its own, such as an abbreviation.
   The runner may send the typed text before any suggestion loads.
+- Set `Ephemeral:` from the defer call the code makes, not from the reply's flags.
+  `/admin`, `/mod`, and `/superadmin` slash commands defer ephemerally by default
+  (`safeDeferReply`), so their replies land only in the mirror: `Ephemeral: yes`. A form
+  submitted from their buttons defers on its own and is usually public.
+- "No output observed in the test channel" while "Other output" shows the expected
+  mirror message means the step's `Ephemeral:` is wrong, not that the mirror cut it off.
+- Never assume a record exists because its number is low. NR-GOTM started long after
+  GOTM, so NR-GOTM round 1 does not exist. Use a value a test plan lists, or check a
+  path that needs no data: a never-real id such as round 99999, or a form submitted
+  with a value the bot rejects.
+- The runner clicks buttons by exact label. A label that carries data (a round number,
+  a title) cannot be clicked from a fixed step, so keep such labels fixed in code.
 - A slash command with several required options is fine to drive. Write it on one line
   as `/command option:value option:value`, with real values from the test data.
 
@@ -182,3 +194,20 @@ entry for every new problem. The `playwright-log` skill
   account; the tester removes it with `/game-completion delete`.
 - **Lesson:** decide `Changes data:` from the worst path a step can take, not the intended
   one. Any step that can reach a save path is `yes`.
+
+### 2026-10-01: three `/admin` steps "No output observed" with the right reply mirrored
+
+- **PR under test:** #1408
+- **Symptom:** steps 1, 3, and 4 failed with "No output observed in the test channel. 1
+  other message(s) arrived in the window but did not match.", and the other output was
+  the expected reply as a mirror message. The tester suspected the mirror was cutting
+  off content.
+- **Cause:** the steps said `Ephemeral: no`, but `safeDeferReply` defers `/admin`,
+  `/mod`, and `/superadmin` slash commands ephemerally when no flags are passed, so the
+  replies reached only the mirror. The mirrored content was complete. Step 4 also used
+  `/admin edit-nr-gotm round:1`, and NR-GOTM has no round 1 because it started much later.
+- **Fix:** #1408 marks those steps `Ephemeral: yes`, replaces the NR-GOTM round 1 step
+  with the add flow and round 99999, drops the round number from the "Create ... round"
+  button label so a step can click it, and rewrites `docs/test-plans/admin-rounds.md`.
+- **Lesson:** read the defer call before setting `Ephemeral:`, and never pick a record
+  by a guessed number.

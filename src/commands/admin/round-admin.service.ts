@@ -232,7 +232,7 @@ export async function handleAddRound(
       ...reply.components,
       buildButtonRow(buildActionButton({
         customId: `${ADMIN_ROUND_ADD_PREFIX}:${kind}:${nextRound}`,
-        label: `Create ${config.label} round ${nextRound}`,
+        label: `Create ${config.label} round`,
         style: ButtonStyle.Primary,
       })),
     ],
