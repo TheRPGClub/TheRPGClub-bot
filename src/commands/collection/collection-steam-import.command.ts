@@ -61,9 +61,11 @@ import {
 } from "../../functions/ImportCandidateUtils.js";
 import {
   buildComponentsV2Flags,
+  buildErrorReply,
   buildTextReply,
   buildTitledContainer,
 } from "../../functions/ComponentsV2Utils.js";
+import { buildCaughtErrorMessage } from "../../utilities/ApiErrorUtils.js";
 import {
   buildImportActionsContainer,
   buildImportMessageContainer,
@@ -623,8 +625,8 @@ export class CollectionSteamImportCommand {
           }
           await safeReply(
             interaction,
-            buildTextReply(
-              error?.message ?? "Failed to start Steam import. Verify profile and try again.",
+            buildErrorReply(
+              buildCaughtErrorMessage("Failed to start Steam import", error),
               true,
             ),
           );

@@ -44,7 +44,12 @@ import {
   safeReply,
   sanitizeUserInput,
 } from "../functions/InteractionUtils.js";
-import { buildComponentsV2Flags, buildTextReply } from "../functions/ComponentsV2Utils.js";
+import {
+  buildComponentsV2Flags,
+  buildErrorReply,
+  buildTextReply,
+} from "../functions/ComponentsV2Utils.js";
+import { buildCaughtErrorMessage } from "../utilities/ApiErrorUtils.js";
 import { decodeBase64Url, encodeBase64Url } from "../functions/CustomIdUtils.js";
 import { parseCustomIdSegments } from "../utilities/CustomIdUtils.js";
 import { ROUND_HISTORY_PAGE_SIZE } from "../config/pagination.js";
@@ -550,7 +555,7 @@ export class RoundHistoryCommand {
         sessionId,
       });
     } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorMessage = buildCaughtErrorMessage("Unable to open round history form", error);
       let postErrorJson: unknown = modalJson;
       let postErrorJsonError: unknown = null;
       if (modal && !postErrorJson) {
@@ -570,7 +575,7 @@ export class RoundHistoryCommand {
           postErrorJsonError instanceof Error ? postErrorJsonError : String(postErrorJsonError ?? ""),
         componentSummary: getRoundHistoryModalComponentSummary(postErrorJson),
       });
-      await safeReply(interaction, buildTextReply(`Unable to open round history form: ${errorMessage}`, true));
+      await safeReply(interaction, buildErrorReply(errorMessage, true));
     }
   }
 

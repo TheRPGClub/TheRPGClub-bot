@@ -23,11 +23,13 @@ import { NOW_PLAYING_FORUM_ID } from "../config/channels.js";
 import { NOW_PLAYING_SIDEGAME_TAG_ID } from "../config/tags.js";
 import { safeReply, safeDeferReply } from "../functions/InteractionUtils.js";
 import {
+  buildErrorReply,
   buildTextReply,
   buildComponentsV2Flags,
   buildTextContainer,
   buildTitledContainer,
 } from "../functions/ComponentsV2Utils.js";
+import { buildCaughtErrorMessage } from "../utilities/ApiErrorUtils.js";
 import { shouldPrompt, markPrompted, getGameReleaseYear } from "./ThreadLinkPromptCache.js";
 import { COLOR_BLUE_INFO } from "../config/colors.js";
 import { truncateDescription } from "../config/textLimits.js";
@@ -200,8 +202,8 @@ export class ThreadLinkButtonHandlers {
 
       await finishLink();
     } catch (err: any) {
-      const msg = err?.message ?? String(err);
-      await safeReply(interaction, buildTextReply(`Failed to link game: ${msg}`, false));
+      const msg = buildCaughtErrorMessage("Failed to link game", err);
+      await safeReply(interaction, buildErrorReply(msg, false));
     }
   }
 
@@ -218,8 +220,8 @@ export class ThreadLinkButtonHandlers {
       ));
       safeIgnore(interaction.message.edit({ components: [] }));
     } catch (err: any) {
-      const msg = err?.message ?? String(err);
-      await safeReply(interaction, buildTextReply(`Failed to update skip flag: ${msg}`, true));
+      const msg = buildCaughtErrorMessage("Failed to update skip flag", err);
+      await safeReply(interaction, buildErrorReply(msg, true));
     }
   }
 }

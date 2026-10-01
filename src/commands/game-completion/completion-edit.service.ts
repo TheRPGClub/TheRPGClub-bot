@@ -24,6 +24,7 @@ import {
   buildTextReply,
   safeV2TextContent,
 } from "../../functions/ComponentsV2Utils.js";
+import { buildCaughtErrorMessage } from "../../utilities/ApiErrorUtils.js";
 import {
   isInteractionSettled,
   replyIfNotOwner,
@@ -237,7 +238,7 @@ export async function handleCompletionFieldEdit(interaction: ButtonInteraction):
         ownerId,
         completionId,
         updated,
-        err?.message ?? "Failed to update completion.",
+        buildCaughtErrorMessage("Failed to update completion", err),
       )));
     }
   } finally {

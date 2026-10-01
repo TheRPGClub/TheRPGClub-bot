@@ -27,6 +27,23 @@ export function redactUrlSecrets(url: string): string {
   return url.replace(SECRET_QUERY_PARAM, "$1REDACTED");
 }
 
+const DATA_URI = /^data:[^;,]+(?:;base64)?,/;
+
+/** Swap inline file payloads (base64 data URIs, e.g. an event cover) for their size. */
+function redactDataUris(value: unknown): unknown {
+  if (typeof value === "string") {
+    const prefix = DATA_URI.exec(value)?.[0];
+    return prefix ? `${prefix}<${value.length - prefix.length} chars>` : value;
+  }
+  if (Array.isArray(value)) return value.map(redactDataUris);
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, item]) => [key, redactDataUris(item)]),
+    );
+  }
+  return value;
+}
+
 export function formatApiError(
   method: string,
   url: string,
@@ -36,7 +53,11 @@ export function formatApiError(
   options?: IErrorMessageOptions,
 ): string {
   const req = JSON.stringify(
-    { method: method.toUpperCase(), url: redactUrlSecrets(url), body: requestBody ?? null },
+    {
+      method: method.toUpperCase(),
+      url: redactUrlSecrets(url),
+      body: redactDataUris(requestBody ?? null),
+    },
     null, 2,
   );
   const res = JSON.stringify({ status: status ?? null, body: responseBody ?? null }, null, 2);
@@ -76,23 +97,29 @@ interface IDiscordRestError {
   requestBody?: { json?: unknown };
 }
 
+function isDiscordRestError(
+  err: unknown,
+): err is IDiscordRestError & { method: string; url: string } {
+  const restError = err as IDiscordRestError;
+  return typeof restError?.url === "string" && typeof restError?.method === "string";
+}
+
 /** Format a discord.js REST failure with the same request/response detail as API errors. */
 export function buildDiscordErrorMessage(
   label: string,
   err: unknown,
   options?: IErrorMessageOptions,
 ): string {
-  const restError = err as IDiscordRestError;
-  if (typeof restError?.url !== "string" || typeof restError?.method !== "string") {
+  if (!isDiscordRestError(err)) {
     const msg = err instanceof Error ? err.message : String(err);
     return `${label}: ${msg}${pingSuffix(options)}`;
   }
   return `${label}\n${formatApiError(
-    restError.method,
-    restError.url,
-    restError.requestBody?.json ?? null,
-    restError.status,
-    restError.rawError ?? null,
+    err.method,
+    err.url,
+    err.requestBody?.json ?? null,
+    err.status,
+    err.rawError ?? null,
     options,
   )}`;
 }
@@ -171,10 +198,29 @@ export function buildAnyErrorMessage(
   err: unknown,
   options?: IErrorMessageOptions,
 ): string {
-  const isApiError: boolean = err instanceof UserFacingError ||
-    axios.isAxiosError(err) ||
-    (err instanceof Error && axios.isAxiosError(err.cause));
-  return isApiError
+  return isApiError(err)
     ? buildApiErrorMessage(label, err, options)
     : buildDiscordErrorMessage(label, err, options);
+}
+
+function isApiError(err: unknown): boolean {
+  return err instanceof UserFacingError ||
+    axios.isAxiosError(err) ||
+    (err instanceof Error && axios.isAxiosError(err.cause));
+}
+
+/**
+ * For a catch block around API or Discord calls that also throw our own validation
+ * errors. An API failure gets buildApiErrorMessage's request/response blocks and a
+ * discord.js REST failure gets buildDiscordErrorMessage's; any other error is a
+ * validation message for the user, shown after the label with no dev ping.
+ */
+export function buildCaughtErrorMessage(
+  label: string,
+  err: unknown,
+  options?: IErrorMessageOptions,
+): string {
+  if (isApiError(err)) return buildApiErrorMessage(label, err, options);
+  if (isDiscordRestError(err)) return buildDiscordErrorMessage(label, err, options);
+  return buildApiErrorMessage(label, err, { ...options, devPing: false });
 }

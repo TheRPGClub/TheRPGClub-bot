@@ -37,7 +37,8 @@ import {
   parseCollectionEntryAutocompleteValue,
 } from "./collection-autocomplete.utils.js";
 import { resolveCollectionGameForAdd } from "./collection-game-resolve.utils.js";
-import { buildTextReply } from "../../functions/ComponentsV2Utils.js";
+import { buildTextReply, buildErrorReply } from "../../functions/ComponentsV2Utils.js";
+import { buildCaughtErrorMessage } from "../../utilities/ApiErrorUtils.js";
 import { isValidPlaytimeHours } from "../../utilities/ValidationUtils.js";
 import { importGameFromIgdb } from "../../functions/GameIgdbSync.js";
 
@@ -101,7 +102,10 @@ export class CollectionCrudCommand {
     try {
       resolution = await resolveCollectionGameForAdd(gameIdRaw);
     } catch (err: any) {
-      await safeReply(interaction, buildTextReply(err?.message ?? "Invalid game selection.", true));
+      await safeReply(
+        interaction,
+        buildErrorReply(buildCaughtErrorMessage("Could not resolve that game", err), true),
+      );
       return;
     }
 
@@ -131,8 +135,8 @@ export class CollectionCrudCommand {
             });
           } catch (err: any) {
             await safeReply(selectionInteraction, {
-              ...buildTextReply(
-                err?.message ?? "Failed to import from IGDB and add collection entry.",
+              ...buildErrorReply(
+                buildCaughtErrorMessage("Failed to import from IGDB and add collection entry", err),
                 true,
               ),
               __forceFollowUp: true,
@@ -173,7 +177,7 @@ export class CollectionCrudCommand {
     } catch (err: any) {
       await safeReply(
         interaction,
-        buildTextReply(err?.message ?? "Failed to add collection entry.", true),
+        buildErrorReply(buildCaughtErrorMessage("Failed to add collection entry", err), true),
       );
     }
   }
@@ -285,7 +289,7 @@ export class CollectionCrudCommand {
     } catch (err: any) {
       await safeReply(
         interaction,
-        buildTextReply(err?.message ?? "Failed to update collection entry.", true),
+        buildErrorReply(buildCaughtErrorMessage("Failed to update collection entry", err), true),
       );
     }
   }
@@ -389,7 +393,7 @@ export class CollectionCrudCommand {
     } catch (err: any) {
       await safeReply(
         interaction,
-        buildTextReply(err?.message ?? "Failed to add entry to now-playing.", true),
+        buildErrorReply(buildCaughtErrorMessage("Failed to add entry to now-playing", err), true),
       );
     }
   }

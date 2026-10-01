@@ -1,7 +1,11 @@
 import axios from "axios";
 import { MessageFlags, MessageFlagsBitField } from "discord.js";
 import { logError, logInfo } from "../utilities/LogUtils.js";
-import { formatApiError, tryParseJson } from "../utilities/ApiErrorUtils.js";
+import {
+  buildCaughtErrorMessage,
+  formatApiError,
+  tryParseJson,
+} from "../utilities/ApiErrorUtils.js";
 import type {
   Client,
   CommandInteraction,
@@ -32,6 +36,7 @@ import { disableClickedRow, type IRawComponent } from "./ClickedRowLock.js";
 import {
   buildComponentsV2EditFlags,
   buildComponentsV2Flags,
+  buildErrorReply,
   buildTextContainer,
   buildTextReply,
   hasComponentsV2Flag,
@@ -854,9 +859,9 @@ export async function withErrorReply<T>(
   try {
     return await fn();
   } catch (err: unknown) {
-    const msg = extractErrorMessage(err);
+    const msg = buildCaughtErrorMessage(errorPrefix, err);
     try {
-      await safeReply(interaction, buildTextReply(`${errorPrefix}: ${msg}`, ephemeral));
+      await safeReply(interaction, buildErrorReply(msg, ephemeral));
     } catch {
       // error reply itself failed (e.g. interaction token expired); nothing more to do
     }

@@ -28,9 +28,11 @@ import {
 } from "../../functions/InteractionUtils.js";
 import {
   buildTextContainer,
+  buildErrorReply,
   buildTextReply,
   safeV2TextContent,
 } from "../../functions/ComponentsV2Utils.js";
+import { buildCaughtErrorMessage } from "../../utilities/ApiErrorUtils.js";
 import { assertCustomIdSegments } from "../../utilities/CustomIdUtils.js";
 import {
   notifyUnknownCompletionPlatform,
@@ -484,7 +486,10 @@ export class GameDbCompletionCommand {
       COMPLETION_WIZARD_SESSIONS.delete(sessionId);
       safeIgnore(interaction.deleteReply());
     } catch (err: any) {
-      safeIgnore(safeReply(interaction, buildTextReply(`Failed to add completion: ${err?.message ?? String(err)}`, false)));
+      safeIgnore(safeReply(interaction, buildErrorReply(
+        buildCaughtErrorMessage("Failed to add completion", err),
+        false,
+      )));
     }
   }
    
@@ -521,8 +526,8 @@ export class GameDbCompletionCommand {
         safeIgnore(safeReply(interaction, buildTextReply(`**${game.title}** is already in your Now Playing list.`, true)));
         return;
       }
-      const msg = err?.message ?? "Failed to add to Now Playing.";
-      safeIgnore(safeReply(interaction, buildTextReply(`Failed to add: ${msg}`, true)));
+      const msg = buildCaughtErrorMessage("Failed to add to Now Playing", err);
+      safeIgnore(safeReply(interaction, buildErrorReply(msg, true)));
     }
   }
 }

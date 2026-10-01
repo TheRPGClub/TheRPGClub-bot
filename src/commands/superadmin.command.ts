@@ -22,7 +22,6 @@ import {
   ACCESS_DENIED_OWNER,
   AnyRepliable,
   canSafeReply,
-  extractErrorMessage,
   isInteractionSettled,
   safeDeferReply,
   replyIfNotOwner,
@@ -52,12 +51,14 @@ import {
   saveCompletion,
 } from "../functions/CompletionHelpers.js";
 import {
+  buildErrorReply,
   buildTextReply,
   buildCommandHelpContainer,
   buildFieldsText,
   buildComponentsV2EditFlags,
   type EmbedField,
 } from "../functions/ComponentsV2Utils.js";
+import { buildCaughtErrorMessage } from "../utilities/ApiErrorUtils.js";
 import { isPositiveInt, isValidPlaytimeHours } from "../utilities/ValidationUtils.js";
 import { sleep } from "../utilities/DelayUtils.js";
 import { apiPost } from "../services/RpgClubApiClient.js";
@@ -660,8 +661,8 @@ export class SuperAdmin {
       await this.promptCompletionPlatformSelection(interaction, ctx, game);
       return true;
     } catch (err: any) {
-      const msg = extractErrorMessage(err);
-      await safeReply(interaction, { ...buildTextReply(`Failed to add completion: ${msg}`, true), __forceFollowUp: true });
+      const msg = buildCaughtErrorMessage("Failed to add completion", err);
+      await safeReply(interaction, { ...buildErrorReply(msg, true), __forceFollowUp: true });
       return false;
     }
   }

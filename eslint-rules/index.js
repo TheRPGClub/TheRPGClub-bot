@@ -3907,5 +3907,162 @@ export default {
         };
       },
     },
+    "api-error-reply-shows-request": {
+      meta: {
+        type: "problem",
+        docs: {
+          description:
+            "Replies from a catch around awaited calls must not show only the error message.",
+        },
+        schema: [],
+        messages: {
+          messageOnlyReply:
+            "This reply shows only {{shown}}, which drops the API request and response. " +
+            "Use buildCaughtErrorMessage, buildApiErrorMessage, or buildAnyErrorMessage " +
+            "from src/utilities/ApiErrorUtils.ts (#1230).",
+        },
+      },
+      create(context) {
+        const REPLY_CALLEE = /^(?:build\w*Reply|safe(?:Reply|EditReply|Update|FollowUp))$/;
+        const calleeName = (call) => {
+          const callee = call.callee;
+          if (callee.type === "Identifier") return callee.name;
+          if (
+            callee.type === "MemberExpression" &&
+            !callee.computed &&
+            callee.property.type === "Identifier"
+          ) {
+            return callee.property.name;
+          }
+          return null;
+        };
+        const containsAwait = (node) => {
+          let found = false;
+          const visit = (current) => {
+            if (found || !current || typeof current.type !== "string") return;
+            if (current.type === "AwaitExpression") {
+              found = true;
+              return;
+            }
+            // A nested function's awaits run elsewhere, not inside this try.
+            if (/Function/.test(current.type)) return;
+            for (const key of Object.keys(current)) {
+              if (key === "parent") continue;
+              const value = current[key];
+              if (Array.isArray(value)) value.forEach(visit);
+              else if (value && typeof value === "object") visit(value);
+            }
+          };
+          visit(node);
+          return found;
+        };
+        // The catch clause whose parameter `name` is, when its try awaits something.
+        const awaitingCatchFor = (node, name) => {
+          for (let current = node.parent; current; current = current.parent) {
+            if (/Function/.test(current.type)) return null;
+            if (
+              current.type === "CatchClause" &&
+              current.param?.type === "Identifier" &&
+              current.param.name === name
+            ) {
+              return containsAwait(current.parent.block) ? current : null;
+            }
+          }
+          return null;
+        };
+        const insideReplyCall = (node, stop) => {
+          for (let current = node.parent; current && current !== stop; current = current.parent) {
+            if (current.type === "CallExpression") {
+              const name = calleeName(current);
+              if (name && REPLY_CALLEE.test(name)) return true;
+            }
+          }
+          return false;
+        };
+        // `if (err instanceof SomeError)` picks a typed error that owns its message. Plain
+        // `Error` does not count: every API failure is one.
+        const insideInstanceofGuard = (node, errName, stop) => {
+          for (let current = node; current && current !== stop; current = current.parent) {
+            const parent = current.parent;
+            if (
+              parent?.type === "IfStatement" &&
+              parent.consequent === current &&
+              parent.test.type === "BinaryExpression" &&
+              parent.test.operator === "instanceof" &&
+              parent.test.left.type === "Identifier" &&
+              parent.test.left.name === errName &&
+              !(parent.test.right.type === "Identifier" && parent.test.right.name === "Error")
+            ) {
+              return true;
+            }
+          }
+          return false;
+        };
+        // `const msg = err.message` (or a ternary around it): the variable it lands in.
+        const assignedName = (node, stop) => {
+          for (let current = node.parent; current && current !== stop; current = current.parent) {
+            if (current.type === "VariableDeclarator") {
+              return current.id.type === "Identifier" ? current.id.name : null;
+            }
+            if (/Statement|Call/.test(current.type)) return null;
+          }
+          return null;
+        };
+        const repliesWith = (root, name) => {
+          let found = false;
+          const visit = (current) => {
+            if (found || !current || typeof current.type !== "string") return;
+            if (
+              current.type === "Identifier" &&
+              current.name === name &&
+              current.parent?.type !== "VariableDeclarator" &&
+              insideReplyCall(current, root)
+            ) {
+              found = true;
+              return;
+            }
+            for (const key of Object.keys(current)) {
+              if (key === "parent") continue;
+              const value = current[key];
+              if (Array.isArray(value)) value.forEach(visit);
+              else if (value && typeof value === "object") visit(value);
+            }
+          };
+          visit(root);
+          return found;
+        };
+        const check = (node, errName, shown) => {
+          const clause = awaitingCatchFor(node, errName);
+          if (!clause) return;
+          if (insideInstanceofGuard(node, errName, clause)) return;
+          if (!insideReplyCall(node, clause)) {
+            const name = assignedName(node, clause);
+            if (!name || !repliesWith(clause.body, name)) return;
+          }
+          context.report({ node, messageId: "messageOnlyReply", data: { shown } });
+        };
+
+        return {
+          MemberExpression(node) {
+            if (
+              node.computed ||
+              node.property.type !== "Identifier" ||
+              node.property.name !== "message" ||
+              node.object.type !== "Identifier"
+            ) {
+              return;
+            }
+            check(node, node.object.name, `${node.object.name}.message`);
+          },
+          CallExpression(node) {
+            const arg = node.arguments[0];
+            if (calleeName(node) !== "extractErrorMessage" || arg?.type !== "Identifier") {
+              return;
+            }
+            check(node, arg.name, `extractErrorMessage(${arg.name})`);
+          },
+        };
+      },
+    },
   },
 };

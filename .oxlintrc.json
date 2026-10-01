@@ -188,6 +188,7 @@
         "local/no-reply-after-defer-update": "error",
         "local/no-decorated-method-named-like-class": "error",
         "local/no-direct-reaction-fetch": "error",
+        "local/api-error-reply-shows-request": "error",
         "stylistic/semi": "error",
         "stylistic/comma-dangle": [
           "error",

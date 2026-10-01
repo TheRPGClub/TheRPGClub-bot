@@ -8,11 +8,11 @@ import {
   userMention,
 } from "discord.js";
 import {
-  extractErrorMessage,
   safeDeferUpdate,
   safeReply,
 } from "../../functions/InteractionUtils.js";
-import { buildTextReply } from "../../functions/ComponentsV2Utils.js";
+import { buildErrorReply, buildTextReply } from "../../functions/ComponentsV2Utils.js";
+import { buildCaughtErrorMessage } from "../../utilities/ApiErrorUtils.js";
 import { type PromptChoiceOption } from "./admin.types.js";
 import { safeIgnore } from "../../utilities/AsyncUtils.js";
 import { logError } from "../../utilities/LogUtils.js";
@@ -171,9 +171,9 @@ export async function promptUserForInput(
 
     return content;
   } catch (err: any) {
-    const msg = extractErrorMessage(err);
+    const msg = buildCaughtErrorMessage("Error while waiting for a response", err);
     try {
-      await safeReply(interaction, buildTextReply(`Error while waiting for a response: ${msg}`, false));
+      await safeReply(interaction, buildErrorReply(msg, false));
     } catch {
       // ignore
     }

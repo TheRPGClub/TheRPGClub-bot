@@ -27,7 +27,10 @@ import {
   autocompleteBacklogGameTitle,
   parseBacklogEntryAutocompleteValue,
 } from "./backlog-autocomplete.utils.js";
-import { buildApiErrorMessage } from "../../utilities/ApiErrorUtils.js";
+import {
+  buildApiErrorMessage,
+  buildCaughtErrorMessage,
+} from "../../utilities/ApiErrorUtils.js";
 import { logError } from "../../utilities/LogUtils.js";
 import { importGameFromIgdb } from "../../functions/GameIgdbSync.js";
 
@@ -82,8 +85,8 @@ export class BacklogCrudCommand {
       resolution = await resolveCollectionGameForAdd(gameIdRaw);
     } catch (err: unknown) {
       logError("backlog add.resolve_game_failed", err);
-      const msg = err instanceof Error ? err.message : "Invalid game selection.";
-      await safeReply(interaction, buildTextReply(msg, true));
+      const msg = buildCaughtErrorMessage("Could not resolve that game", err);
+      await safeReply(interaction, buildErrorReply(msg, true));
       return;
     }
 

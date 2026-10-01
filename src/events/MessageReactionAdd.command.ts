@@ -32,7 +32,12 @@ import { resolveReactionMessage } from "../utilities/ReactionFetchUtils.js";
 import { notifyUnknownCompletionPlatform } from "../functions/CompletionHelpers.js";
 import { COMPLETION_REACTION_DEV_CHANNEL_ID } from "../config/channels.js";
 import { isPositiveInt, truncateWithEllipsis } from "../utilities/ValidationUtils.js";
-import { truncateDescription, truncateLabel } from "../config/textLimits.js";
+import {
+  DISCORD_MESSAGE_CONTENT_MAX,
+  truncateDescription,
+  truncateLabel,
+} from "../config/textLimits.js";
+import { buildCaughtErrorMessage } from "../utilities/ApiErrorUtils.js";
 import { assertCustomIdSegments } from "../utilities/CustomIdUtils.js";
 import { safeIgnore } from "../utilities/AsyncUtils.js";
 import {
@@ -409,9 +414,9 @@ export class MessageReactionAdd {
         note: null,
       });
     } catch (err: any) {
-      const msg = err?.message ?? "Failed to save completion.";
+      const msg = buildCaughtErrorMessage("Could not save completion", err);
       safeIgnore(safeUpdate(interaction, {
-        content: `Could not save completion: ${msg}`,
+        content: truncateWithEllipsis(msg, DISCORD_MESSAGE_CONTENT_MAX),
         components: [],
       }));
       completionReactionPlatformSessions.delete(sessionId);
@@ -566,9 +571,9 @@ export class MessageReactionAdd {
     try {
       searchRes = await igdbService.searchGames(session.query);
     } catch (err: any) {
-      const msg = err?.message ?? "Failed to search IGDB.";
+      const msg = buildCaughtErrorMessage("IGDB search failed", err);
       safeIgnore(safeUpdate(interaction, {
-        content: `IGDB search failed: ${msg}`,
+        content: truncateWithEllipsis(msg, DISCORD_MESSAGE_CONTENT_MAX),
         components: [],
       }));
       completionReactionSessions.delete(session.sessionId);
@@ -598,9 +603,9 @@ export class MessageReactionAdd {
         await this.saveCompletionFromReaction(sel, session, imported.gameId);
         completionReactionSessions.delete(session.sessionId);
       } catch (err: any) {
-        const msg = err?.message ?? "Failed to import from IGDB.";
+        const msg = buildCaughtErrorMessage("Failed to import from IGDB", err);
         safeIgnore(safeReply(sel, {
-          content: msg,
+          content: truncateWithEllipsis(msg, DISCORD_MESSAGE_CONTENT_MAX),
           components: [],
         }));
         completionReactionSessions.delete(session.sessionId);
