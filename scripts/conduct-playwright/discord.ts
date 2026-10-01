@@ -123,14 +123,21 @@ async function newestWith(page: Page, find: (item: Locator) => Locator): Promise
   throw new HandOff("the control is not on any recent preview bot message");
 }
 
-/** The option whose first line of visible text is one of `values`, or null. */
+/**
+ * The option whose first line of visible text is one of `values`, or null. An exact match
+ * wins; failing that, one that differs only in case, since Discord labels a boolean
+ * option's choices `True` and `False` while a step types `all:true`.
+ */
 async function findOption(options: Locator, values: string[]): Promise<Locator | null> {
   const count = await options.count();
+  const lowered = values.map((value) => value.toLowerCase());
+  let caseless: Locator | null = null;
   for (let index = 0; index < count; index += 1) {
     const text = (await options.nth(index).innerText()).split("\n")[0]?.trim() ?? "";
     if (values.includes(text)) return options.nth(index);
+    if (!caseless && lowered.includes(text.toLowerCase())) caseless = options.nth(index);
   }
-  return null;
+  return caseless;
 }
 
 async function pickOption(options: Locator, value: string): Promise<void> {
