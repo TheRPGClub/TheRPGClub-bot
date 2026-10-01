@@ -2,6 +2,7 @@ import sharp from "sharp";
 import type { Client, GuildMember } from "discord.js";
 import Member from "../classes/Member.js";
 import { sleep } from "../utilities/DelayUtils.js";
+import { startTrackedInterval } from "../utilities/IntervalUtils.js";
 import { logError, logInfo } from "../utilities/LogUtils.js";
 import { IS_TEST_MODE } from "../config/testMode.js";
 import { setInvalidEmojiHandler } from "../functions/InvalidEmojiRetry.js";
@@ -148,7 +149,7 @@ export async function startUserEmojiService(client: Client): Promise<void> {
     })
     .finally(() => {
       initialSyncDone = true;
-      setInterval(() => {
+      startTrackedInterval(() => {
         scheduleReconcile(client);
       }, RECONCILE_INTERVAL_MS);
     });
