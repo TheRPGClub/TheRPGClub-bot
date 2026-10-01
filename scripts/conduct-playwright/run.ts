@@ -48,8 +48,8 @@ const RUNNER_PATHS = [
   "src/config/testGuild.ts",
   "src/config/users.ts",
 ];
-const PROFILE_DIR = process.env.CONDUCT_PROFILE_DIR ??
-  path.join(os.homedir(), ".cache", "rpgclub-conductor", "discord-profile");
+/** Each run's throwaway Chrome profile lives under here and is deleted when it ends. */
+const PROFILE_PREFIX = path.join(os.tmpdir(), "rpgclub-conductor-profile-");
 
 function fail(message: string, code = 2): never {
   console.error(message);
@@ -298,8 +298,15 @@ async function main(): Promise<void> {
   const stamp = new Date().toISOString().replace(/[:.]/g, "-");
   const artifacts = path.resolve("conduct-artifacts", `pr-${args.pr}-${stamp}`);
   fs.mkdirSync(artifacts, { recursive: true });
-  // The system Chrome, installed with apt, and a profile only the tester signs in to.
-  const context = await chromium.launchPersistentContext(PROFILE_DIR, {
+  // The system Chrome, installed with apt, in a brand new empty profile: no cookies, no
+  // storage, no saved sign-in from an earlier run. The tester signs in every time.
+  const profile = fs.mkdtempSync(PROFILE_PREFIX);
+  const removeProfile = (): void => fs.rmSync(profile, { recursive: true, force: true });
+  process.once("SIGINT", () => {
+    removeProfile();
+    process.exit(130);
+  });
+  const context = await chromium.launchPersistentContext(profile, {
     channel: "chrome",
     headless: false,
     viewport: null,
@@ -329,6 +336,7 @@ async function main(): Promise<void> {
       console.error("The browser closed before the trace was saved.");
     }
     await context.close().catch(() => undefined);
+    removeProfile();
     printSummary(outcomes, report, artifacts);
   }
 }

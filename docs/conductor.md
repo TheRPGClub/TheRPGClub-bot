@@ -112,10 +112,11 @@ Before it starts:
    `/conduct pr:<pr>` in the test channel.
 2. Google Chrome must be installed (from Google's apt repository). The runner drives it
    through `playwright-core`, so it downloads no browser of its own.
-3. The first time, sign in to Discord in the window it opens. The session is kept in a
-   profile at `~/.cache/rpgclub-conductor/discord-profile` (or `CONDUCT_PROFILE_DIR`) on
-   that machine only. The runner never types into a login, captcha, or verification
-   screen; it waits for the tester.
+3. Sign in to Discord in the window it opens, every run (a passkey from a phone works).
+   Each run starts Chrome with a new, empty profile in the system temp directory and
+   deletes it when the run ends or is stopped with Ctrl+C, so no cookies, storage, or
+   sign-in carry over between runs. The runner never types into a login, captcha, or
+   verification screen; it waits for the tester.
 
 What it does:
 
