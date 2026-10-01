@@ -16,10 +16,8 @@ import {
 } from "discordx";
 import {
   ModalBuilder as ComponentsModalBuilder,
-  ActionRowBuilder as ComponentsActionRowBuilder,
-  TextInputBuilder as ComponentsTextInputBuilder,
 } from "@discordjs/builders";
-import { TextInputStyle as ApiTextInputStyle } from "discord-api-types/v10";
+import { TextInputStyle } from "discord-api-types/v10";
 import Member, { type IGameJournalEntry } from "../../classes/Member.js";
 import {
   formatJournalDeleteStatus,
@@ -38,6 +36,7 @@ import {
   buildButtonRow,
   buildSelectOptions,
   buildSelectRow,
+  buildTextInputLabel,
 } from "../../functions/uiComponents.js";
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
 import {
@@ -86,23 +85,19 @@ function buildNowPlayingJournalAddModal(
   const modal = new ComponentsModalBuilder()
     .setCustomId(`${NOW_PLAYING_JOURNAL_MODAL_ID}:${ownerId}:${gameId}:${page}`)
     .setTitle("Add Journal Entry");
-  modal.addActionRowComponents(
-    new ComponentsActionRowBuilder<ComponentsTextInputBuilder>().addComponents(
-      new ComponentsTextInputBuilder()
-        .setCustomId(NOW_PLAYING_JOURNAL_TITLE_INPUT_ID)
-        .setLabel("Title (optional)")
-        .setStyle(ApiTextInputStyle.Short)
-        .setRequired(false)
-        .setMaxLength(120),
-    ),
-    new ComponentsActionRowBuilder<ComponentsTextInputBuilder>().addComponents(
-      new ComponentsTextInputBuilder()
-        .setCustomId(NOW_PLAYING_JOURNAL_BODY_INPUT_ID)
-        .setLabel("Entry")
-        .setStyle(ApiTextInputStyle.Paragraph)
-        .setRequired(true)
-        .setMaxLength(2000),
-    ),
+  modal.addLabelComponents(
+    buildTextInputLabel({
+      customId: NOW_PLAYING_JOURNAL_TITLE_INPUT_ID,
+      label: "Title (optional)",
+      required: false,
+      maxLength: 120,
+    }),
+    buildTextInputLabel({
+      customId: NOW_PLAYING_JOURNAL_BODY_INPUT_ID,
+      label: "Entry",
+      style: TextInputStyle.Paragraph,
+      maxLength: 2000,
+    }),
   );
   return modal;
 }
@@ -290,25 +285,21 @@ export class NowPlayingJournalCommand {
     const modal = new ComponentsModalBuilder()
       .setCustomId(`${NOW_PLAYING_JOURNAL_EDIT_MODAL_ID}:${ownerId}:${gameIdRaw}:${pageRaw}:${entry.entryId}`)
       .setTitle("Edit Journal Entry");
-    modal.addActionRowComponents(
-      new ComponentsActionRowBuilder<ComponentsTextInputBuilder>().addComponents(
-        new ComponentsTextInputBuilder()
-          .setCustomId(NOW_PLAYING_JOURNAL_TITLE_INPUT_ID)
-          .setLabel("Title (optional)")
-          .setStyle(ApiTextInputStyle.Short)
-          .setRequired(false)
-          .setMaxLength(120)
-          .setValue((entry.title ?? "").slice(0, 120)),
-      ),
-      new ComponentsActionRowBuilder<ComponentsTextInputBuilder>().addComponents(
-        new ComponentsTextInputBuilder()
-          .setCustomId(NOW_PLAYING_JOURNAL_BODY_INPUT_ID)
-          .setLabel("Entry")
-          .setStyle(ApiTextInputStyle.Paragraph)
-          .setRequired(true)
-          .setMaxLength(2000)
-          .setValue(entry.body.slice(0, 2000)),
-      ),
+    modal.addLabelComponents(
+      buildTextInputLabel({
+        customId: NOW_PLAYING_JOURNAL_TITLE_INPUT_ID,
+        label: "Title (optional)",
+        required: false,
+        maxLength: 120,
+        value: (entry.title ?? "").slice(0, 120),
+      }),
+      buildTextInputLabel({
+        customId: NOW_PLAYING_JOURNAL_BODY_INPUT_ID,
+        label: "Entry",
+        style: TextInputStyle.Paragraph,
+        maxLength: 2000,
+        value: entry.body.slice(0, 2000),
+      }),
     );
     await interaction.showModal(modal);
   }

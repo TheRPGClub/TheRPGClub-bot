@@ -44,7 +44,7 @@ import {
   buildActionButton,
   buildButtonRow,
   buildSelectRow,
-  buildTextInputRow,
+  buildTextInputLabel,
 } from "../../functions/uiComponents.js";
 import {
   announceCompletion,
@@ -1100,19 +1100,19 @@ export class NowPlayingCompletionHandlers {
     const modal = new ModalBuilder()
       .setCustomId(`${NOW_PLAYING_COMPLETE_MODAL_ID}:${sessionId}`)
       .setTitle("Add Completion Details");
-    const modalRows = [
-      buildTextInputRow({
+    const modalLabels = [
+      buildTextInputLabel({
         customId: NOW_PLAYING_COMPLETE_DATE_INPUT_ID,
         label: "Completion date (blank = today)",
         required: false,
         placeholder: "today or 03/10/2025",
       }),
-      buildTextInputRow({
+      buildTextInputLabel({
         customId: NOW_PLAYING_COMPLETE_HOURS_INPUT_ID,
         label: "Final playtime hours (optional)",
         required: false,
       }),
-      buildTextInputRow({
+      buildTextInputLabel({
         customId: NOW_PLAYING_COMPLETE_NOTE_INPUT_ID,
         label: "Note (optional)",
         style: TextInputStyle.Paragraph,
@@ -1121,7 +1121,7 @@ export class NowPlayingCompletionHandlers {
         value: noteValue ? noteValue.slice(0, MAX_NOW_PLAYING_NOTE_LEN) : undefined,
       }),
     ];
-    modal.addComponents(...modalRows);
+    modal.addLabelComponents(...modalLabels);
     safeIgnore(interaction.showModal(modal));
   }
 }

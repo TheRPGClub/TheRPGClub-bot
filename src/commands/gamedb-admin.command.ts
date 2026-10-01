@@ -53,7 +53,7 @@ import { buildDisabledPrevNextButtons } from "../functions/PaginationUtils.js";
 import {
   buildActionButton,
   buildButtonRow,
-  buildTextInputRow,
+  buildTextInputLabel,
   buildSelectRow,
 } from "../functions/uiComponents.js";
 import { parseSynonymQuickAddTerms } from "./gamedb-synonym.utils.js";
@@ -90,7 +90,7 @@ function buildSynonymGroupEditModal(ownerId: string, groupId: number, terms: str
   return new ModalBuilder()
     .setCustomId(`${SYNONYM_EDIT_GROUP_MODAL_PREFIX}:${ownerId}:${groupId}`)
     .setTitle("Edit Search Synonym Group")
-    .addComponents(buildTextInputRow({
+    .addLabelComponents(buildTextInputLabel({
       customId: SYNONYM_EDIT_GROUP_INPUT_ID,
       label: "Synonym terms, one per line",
       style: TextInputStyle.Paragraph,
@@ -155,7 +155,7 @@ function buildSynonymAddModal(draftId: number): ModalBuilder {
   return new ModalBuilder()
     .setCustomId(`${SYNONYM_ADD_MODAL_PREFIX}:${draftId}`)
     .setTitle("Add GameDB Search Synonyms")
-    .addComponents(buildTextInputRow({
+    .addLabelComponents(buildTextInputLabel({
       customId: SYNONYM_ADD_BULK_INPUT_ID,
       label: "Synonym pairs, one per line",
       style: TextInputStyle.Paragraph,

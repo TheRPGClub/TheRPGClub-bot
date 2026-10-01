@@ -40,7 +40,7 @@ import {
 import { flattenErrorMessages } from "../imports/import-scaffold.service.js";
 import { logError, logInfo } from "../../utilities/LogUtils.js";
 import { safeIgnore } from "../../utilities/AsyncUtils.js";
-import { buildTextInputRow } from "../../functions/uiComponents.js";
+import { buildTextInputLabel } from "../../functions/uiComponents.js";
 import { startPlayingEntry } from "../now-playing/nowPlayingStart.service.js";
 import { assertCustomIdSegments } from "../../utilities/CustomIdUtils.js";
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
@@ -543,15 +543,15 @@ export class CollectionViewCommand {
         )
         .setTitle("Collection filters");
 
-      modal.addComponents(
-        buildTextInputRow({
+      modal.addLabelComponents(
+        buildTextInputLabel({
           customId: COLLECTION_FILTER_TITLE_INPUT_ID,
           label: "Title contains",
           required: false,
           maxLength: 100,
           value: currentState.title ?? "",
         }),
-        buildTextInputRow({
+        buildTextInputLabel({
           customId: COLLECTION_FILTER_PLATFORM_INPUT_ID,
           label: "Platform contains",
           required: false,

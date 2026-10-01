@@ -28,7 +28,7 @@ import {
   buildComponentsV2Flags,
   buildTextReply,
 } from "../../functions/ComponentsV2Utils.js";
-import { buildTextInputRow } from "../../functions/uiComponents.js";
+import { buildTextInputLabel } from "../../functions/uiComponents.js";
 import UserGameBacklog from "../../classes/UserGameBacklog.js";
 import { startPlayingEntry } from "../now-playing/nowPlayingStart.service.js";
 import { assertCustomIdSegments } from "../../utilities/CustomIdUtils.js";
@@ -246,8 +246,8 @@ export class BacklogViewCommand {
         }))
         .setTitle("Backlog filter");
 
-      modal.addComponents(
-        buildTextInputRow({
+      modal.addLabelComponents(
+        buildTextInputLabel({
           customId: BACKLOG_FILTER_TITLE_INPUT_ID,
           label: "Title contains",
           required: false,

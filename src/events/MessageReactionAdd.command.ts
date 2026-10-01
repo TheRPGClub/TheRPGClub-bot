@@ -43,7 +43,7 @@ import { safeIgnore } from "../utilities/AsyncUtils.js";
 import {
   buildActionButton,
   buildButtonRow,
-  buildTextInputRow,
+  buildTextInputLabel,
   buildSelectRow,
 } from "../functions/uiComponents.js";
 import { toUnixTimestamp } from "../functions/DateFormatUtils.js";
@@ -466,7 +466,7 @@ export class MessageReactionAdd {
        
       .setCustomId(`completion-react-title-modal:${sessionId}`)
       .setTitle("Change completion title")
-      .addComponents(buildTextInputRow({
+      .addLabelComponents(buildTextInputLabel({
         customId: "completion-react-title-input",
         label: "Game title",
         maxLength: 100,

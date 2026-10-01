@@ -147,6 +147,7 @@
         "local/prefer-safe-interaction-methods": "warn",
         "local/no-direct-interaction-response-methods": "error",
         "local/no-deprecated-interaction-options": "error",
+        "local/no-deprecated-modal-text-input": "error",
         "local/no-silent-interaction-update-catch": "error",
         "local/component-update-requires-safe-defer": "warn",
         "local/interactive-handler-requires-safe-interaction": "error",

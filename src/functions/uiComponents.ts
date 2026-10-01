@@ -1,17 +1,19 @@
+import type { APILabelComponent } from "discord-api-types/v10";
 import {
   ActionRowBuilder,
   ButtonStyle,
   ComponentEmojiResolvable,
   StringSelectMenuBuilder,
   StringSelectMenuOptionBuilder,
-  TextInputBuilder,
   TextInputStyle,
 } from "discord.js";
 import {
   ButtonBuilder,
   ContainerBuilder,
+  LabelBuilder,
   SectionBuilder,
   TextDisplayBuilder,
+  TextInputBuilder,
 } from "@discordjs/builders";
 import { validateCustomId } from "../utilities/CustomIdUtils.js";
 
@@ -26,19 +28,19 @@ export interface IModalTextInputOptions {
   value?: string;
 }
 
-export function buildTextInputRow(
-  options: IModalTextInputOptions,
-): ActionRowBuilder<TextInputBuilder> {
+// Returns API JSON, not a LabelBuilder: discord.js builders come from the CJS build of
+// @discordjs/builders and this module imports the ESM one, so each side's instanceof
+// check rejects the other's builders. Raw JSON works with either ModalBuilder.
+export function buildTextInputLabel(options: IModalTextInputOptions): APILabelComponent {
   const input = new TextInputBuilder()
     .setCustomId(options.customId)
-    .setLabel(options.label)
     .setStyle(options.style ?? TextInputStyle.Short)
     .setRequired(options.required ?? true);
   if (options.placeholder != null) input.setPlaceholder(options.placeholder);
   if (options.minLength != null) input.setMinLength(options.minLength);
   if (options.maxLength != null) input.setMaxLength(options.maxLength);
   if (options.value != null) input.setValue(options.value);
-  return new ActionRowBuilder<TextInputBuilder>().addComponents(input);
+  return new LabelBuilder().setLabel(options.label).setTextInputComponent(input).toJSON();
 }
 
 export function buildButtonRow(

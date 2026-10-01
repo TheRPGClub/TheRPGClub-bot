@@ -1,5 +1,5 @@
 import { ModalBuilder, TextInputStyle } from "discord.js";
-import { buildTextInputRow } from "../../functions/uiComponents.js";
+import { buildTextInputLabel } from "../../functions/uiComponents.js";
 import { formatEntryTitleWithPlatform } from "../../functions/NowPlayingUtils.js";
 import {
   MAX_NOW_PLAYING_NOTE_LEN,
@@ -19,7 +19,7 @@ export function buildEditNoteModal(
   return new ModalBuilder()
     .setCustomId(`${NOW_PLAYING_NOTE_MODAL_ID}:${ownerId}:${gameId}`)
     .setTitle("Edit Now Playing Note")
-    .addComponents(buildTextInputRow({
+    .addLabelComponents(buildTextInputLabel({
       customId: NOW_PLAYING_NOTE_INPUT_ID,
       label: title.slice(0, 45),
       style: TextInputStyle.Paragraph,
@@ -44,7 +44,7 @@ export function buildEditNotesModal(
     .setTitle("Edit Now Playing Notes");
 
   entries.forEach((entry) => {
-    modal.addComponents(buildTextInputRow({
+    modal.addLabelComponents(buildTextInputLabel({
       customId: `${NOW_PLAYING_NOTE_INPUT_ID}:${entry.gameId}`,
       label: formatEntryTitleWithPlatform(entry).slice(0, 45),
       style: TextInputStyle.Paragraph,
@@ -61,13 +61,13 @@ export function buildNowPlayingAddModal(): ModalBuilder {
   return new ModalBuilder()
     .setCustomId(NOW_PLAYING_ADD_MODAL_ID)
     .setTitle("Add Now Playing Game")
-    .addComponents(
-      buildTextInputRow({
+    .addLabelComponents(
+      buildTextInputLabel({
         customId: NOW_PLAYING_ADD_TITLE_INPUT_ID,
         label: "Game title",
         maxLength: 100,
       }),
-      buildTextInputRow({
+      buildTextInputLabel({
         customId: NOW_PLAYING_ADD_NOTE_INPUT_ID,
         label: "Note (optional)",
         style: TextInputStyle.Paragraph,

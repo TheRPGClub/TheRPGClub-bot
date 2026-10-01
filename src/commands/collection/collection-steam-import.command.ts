@@ -99,7 +99,7 @@ import { buildCollectionIgdbSelectOptions } from "./collection-game-resolve.util
 import { SteamApiError, steamApiService } from "../../services/SteamApiService.js";
 import { createIgdbSession } from "../../services/IGDB/IgdbSelectService.js";
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
-import { buildTextInputRow } from "../../functions/uiComponents.js";
+import { buildTextInputLabel } from "../../functions/uiComponents.js";
 import { safeIgnore } from "../../utilities/AsyncUtils.js";
 import { logError } from "../../utilities/LogUtils.js";
 import { importGameFromIgdb } from "../../functions/GameIgdbSync.js";
@@ -800,7 +800,7 @@ export class CollectionSteamImportCommand {
         )
         .setTitle("Steam import remap");
 
-      modal.addComponents(buildTextInputRow({
+      modal.addLabelComponents(buildTextInputLabel({
         customId: STEAM_REMAP_INPUT_ID,
         label: "Search title",
         maxLength: 120,
@@ -822,7 +822,7 @@ export class CollectionSteamImportCommand {
         )
         .setTitle("Steam import: Enter GameDB ID");
 
-      modal.addComponents(buildTextInputRow({
+      modal.addLabelComponents(buildTextInputLabel({
         customId: STEAM_GAME_ID_INPUT_ID,
         label: "GameDB ID (or IGDB numeric ID)",
         maxLength: 20,

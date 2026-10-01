@@ -8,14 +8,12 @@ import {
   userMention,
 } from "discord.js";
 import {
-  ActionRowBuilder as ModalActionRowBuilder,
   CheckboxGroupBuilder,
   LabelBuilder,
   ModalBuilder,
   RadioGroupBuilder,
-  TextInputBuilder as ModalTextInputBuilder,
 } from "@discordjs/builders";
-import { TextInputStyle as ApiTextInputStyle } from "discord-api-types/v10";
+import { TextInputStyle } from "discord-api-types/v10";
 import {
   ButtonComponent,
   Discord,
@@ -57,7 +55,11 @@ import { buildCaughtErrorMessage } from "../utilities/ApiErrorUtils.js";
 import { formatStructuredLog, logError, logInfo, logWarn } from "../utilities/LogUtils.js";
 import { isPositiveInt, truncateWithEllipsis } from "../utilities/ValidationUtils.js";
 import { parseCustomIdSegments } from "../utilities/CustomIdUtils.js";
-import { buildActionButton, buildButtonRow } from "../functions/uiComponents.js";
+import {
+  buildActionButton,
+  buildButtonRow,
+  buildTextInputLabel,
+} from "../functions/uiComponents.js";
 import { toUnixTimestamp } from "../functions/DateFormatUtils.js";
 import { commandMention } from "../services/CommandMentionService.js";
 
@@ -155,18 +157,15 @@ export function buildSuggestionReviewDecisionModal(
   return new ModalBuilder()
     .setCustomId(customId)
     .setTitle("Suggestion Review Decision")
-    .addActionRowComponents(
-      new ModalActionRowBuilder<ModalTextInputBuilder>().addComponents(
-        new ModalTextInputBuilder()
-          .setCustomId(SUGGESTION_REVIEW_SUMMARY_ID)
-          .setLabel("Suggestion Review")
-          .setStyle(ApiTextInputStyle.Paragraph)
-          .setRequired(false)
-          .setMaxLength(MAX_MODAL_TEXT_INPUT_VALUE)
-          .setValue(summaryValue),
-      ),
-    )
     .addLabelComponents(
+      buildTextInputLabel({
+        customId: SUGGESTION_REVIEW_SUMMARY_ID,
+        label: "Suggestion Review",
+        style: TextInputStyle.Paragraph,
+        required: false,
+        maxLength: MAX_MODAL_TEXT_INPUT_VALUE,
+        value: summaryValue,
+      }),
       new LabelBuilder()
         .setLabel("Review Decision")
         .setDescription("Choose one action")
@@ -187,16 +186,13 @@ export function buildSuggestionReviewDecisionModal(
               },
             ),
         ),
-    )
-    .addActionRowComponents(
-      new ModalActionRowBuilder<ModalTextInputBuilder>().addComponents(
-        new ModalTextInputBuilder()
-          .setCustomId(SUGGESTION_REVIEW_REASON_ID)
-          .setLabel("Rejection reason (required when Reject)")
-          .setStyle(ApiTextInputStyle.Paragraph)
-          .setRequired(false)
-          .setMaxLength(1000),
-      ),
+      buildTextInputLabel({
+        customId: SUGGESTION_REVIEW_REASON_ID,
+        label: "Rejection reason (required when Reject)",
+        style: TextInputStyle.Paragraph,
+        required: false,
+        maxLength: 1000,
+      }),
     );
 }
 
@@ -204,25 +200,18 @@ export function buildSuggestionCreateModal(): ModalBuilder {
   return new ModalBuilder()
     .setCustomId(SUGGESTION_CREATE_MODAL_ID)
     .setTitle("Submit Suggestion")
-    .addActionRowComponents(
-      new ModalActionRowBuilder<ModalTextInputBuilder>().addComponents(
-        new ModalTextInputBuilder()
-          .setCustomId(SUGGESTION_CREATE_TITLE_ID)
-          .setLabel("Title")
-          .setStyle(ApiTextInputStyle.Short)
-          .setRequired(true)
-          .setMaxLength(256),
-      ),
-      new ModalActionRowBuilder<ModalTextInputBuilder>().addComponents(
-        new ModalTextInputBuilder()
-          .setCustomId(SUGGESTION_CREATE_DETAILS_ID)
-          .setLabel("Description")
-          .setStyle(ApiTextInputStyle.Paragraph)
-          .setRequired(true)
-          .setMaxLength(4000),
-      ),
-    )
     .addLabelComponents(
+      buildTextInputLabel({
+        customId: SUGGESTION_CREATE_TITLE_ID,
+        label: "Title",
+        maxLength: 256,
+      }),
+      buildTextInputLabel({
+        customId: SUGGESTION_CREATE_DETAILS_ID,
+        label: "Description",
+        style: TextInputStyle.Paragraph,
+        maxLength: 4000,
+      }),
       new LabelBuilder()
         .setLabel("Suggestion Type(s)")
         .setDescription("Select one or more suggestion types")

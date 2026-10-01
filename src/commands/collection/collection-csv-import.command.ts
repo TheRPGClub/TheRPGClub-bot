@@ -101,7 +101,7 @@ import {
 } from "./collection-csv-import.service.js";
 import { createIgdbSession } from "../../services/IGDB/IgdbSelectService.js";
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
-import { buildTextInputRow } from "../../functions/uiComponents.js";
+import { buildTextInputLabel } from "../../functions/uiComponents.js";
 import { safeIgnore } from "../../utilities/AsyncUtils.js";
 import { logError } from "../../utilities/LogUtils.js";
 import { importGameFromIgdb } from "../../functions/GameIgdbSync.js";
@@ -836,7 +836,7 @@ export class CollectionCsvImportCommand {
         )
         .setTitle("CSV import remap");
 
-      modal.addComponents(buildTextInputRow({
+      modal.addLabelComponents(buildTextInputLabel({
         customId: CSV_REMAP_INPUT_ID,
         label: "Search title",
         maxLength: 120,
@@ -858,7 +858,7 @@ export class CollectionCsvImportCommand {
         )
         .setTitle("CSV import: Enter GameDB ID");
 
-      modal.addComponents(buildTextInputRow({
+      modal.addLabelComponents(buildTextInputLabel({
         customId: CSV_GAME_ID_INPUT_ID,
         label: "GameDB ID (or IGDB numeric ID)",
         maxLength: 20,
