@@ -37,6 +37,18 @@ export class GuildMemberUpdate {
     void _client;
 
     const user = newMember.user;
+    if (oldMember.partial) {
+      // An uncached member has no prior roles or nickname to diff against, so only the
+      // idempotent emoji ensure runs. The member is cached from here on.
+      const holdsQualifyingRole = newMember.roles.cache.some((r) =>
+        QUALIFYING_ROLE_IDS_SET.has(r.id),
+      );
+      if (!user.bot && holdsQualifyingRole) {
+        await ensureUserEmojiForMember(_client, newMember);
+      }
+      return;
+    }
+
     const oldNick = oldMember.nickname ?? oldMember.user.globalName ?? oldMember.user.username;
     const newNick = newMember.nickname ?? newMember.user.globalName ?? newMember.user.username;
 

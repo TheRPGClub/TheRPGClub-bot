@@ -94,12 +94,12 @@ export const bot: Client = new Client({
     IntentsBitField.Flags.GuildMessages,
     IntentsBitField.Flags.GuildMessageReactions,
     IntentsBitField.Flags.GuildModeration,
-    IntentsBitField.Flags.GuildVoiceStates,
     // discord.js emits userUpdate (avatar and name logs) from presence packets.
     IntentsBitField.Flags.GuildPresences,
     IntentsBitField.Flags.MessageContent,
   ],
-  partials: [Partials.Message, Partials.Channel, Partials.Reaction],
+  // GuildMember lets guildMemberRemove and guildMemberUpdate fire for uncached members.
+  partials: [Partials.Message, Partials.Reaction, Partials.GuildMember],
 
   // Debug logs are disabled in silent mode
   silent: false,
