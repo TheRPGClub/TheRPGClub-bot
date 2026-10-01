@@ -12,7 +12,8 @@ stop walks the transcript since the last prompt the user typed and finds the lat
 - `gh issue edit ... --add-label "In Progress"` that printed the issue URL: Working (or Needs
   Review, for a question)
 - a later `gh issue edit <n> --remove-label "In Progress"` or `gh issue close <n>` for that
-  same issue: Completed or Working, since the task ended (say it was already fixed on main)
+  same issue that names it in its output: Completed or Working, since the task ended (say
+  it was already fixed on main), or Working or Needs Review while a pull request is open
 - `gh pr create` that printed a pull request URL: Needs Review
 - `scripts/catchup.py add-issue` that recorded a blocker: Blocked (or Needs Review, for an open
   pull request)
@@ -67,7 +68,6 @@ DROPS_IN_PROGRESS = re.compile(r'--remove-label[= ]+["\']?[^"\'\n]*In Progress')
 ISSUE_REF = re.compile(r'^#?(\d+)$|/issues/(\d+)$')
 # `gh issue edit` and `gh issue close` flags that take no value.
 BARE_FLAGS = ('--remove-milestone',)
-CLOSED = re.compile(r'Closed issue|already closed|/issues/\d+')
 PR_CREATE = re.compile(RUNS + r'gh pr create\b')
 PR_URL = re.compile(r'github\.com/[^/\s]+/[^/\s]+/pull/(\d+)')
 ISSUE_URL = re.compile(r'github\.com/[^/\s]+/[^/\s]+/issues/\d+')
@@ -267,6 +267,16 @@ def issue_edits(command):
             for m in GH_ISSUE.finditer(command)]
 
 
+def cleared(verb, number, args, result):
+    """Whether a `gh issue edit` that dropped In Progress, or a `gh issue close`, printed
+    proof it worked on that issue: its URL, or gh's `Closed issue o/r#N` or
+    `Issue o/r#N (...) is already closed`."""
+    url = re.search(rf'/issues/{number}\b', result)
+    if verb == 'edit':
+        return bool(DROPS_IN_PROGRESS.search(args) and url)
+    return bool(url or re.search(rf'\b(?:Closed issue|Issue) \S*#{number}\b', result))
+
+
 def milestones(calls, start, still_open=frozenset()):
     """(position, what, groups) for each milestone in the turn. An In Progress issue that is
     later unlabeled or closed ends the task: Completed, unless a pull request is still open
@@ -279,13 +289,11 @@ def milestones(calls, start, still_open=frozenset()):
         command = call.command
         if IN_PROGRESS.search(command) and ISSUE_URL.search(call.result):
             labeled.update(n for verb, n, args in issue_edits(command)
-                           if verb == 'edit' and ADDS_IN_PROGRESS.search(args))
+                           if n and verb == 'edit' and ADDS_IN_PROGRESS.search(args))
             found.append((call.pos, 'an issue was labeled In Progress',
                           (WORKING, NEEDS_REVIEW)))
         for verb, number, args in issue_edits(command):
-            dropped = verb == 'edit' and DROPS_IN_PROGRESS.search(args)
-            proof = ISSUE_URL if dropped else CLOSED if verb == 'close' else None
-            if number and number in labeled and proof and proof.search(call.result):
+            if number in labeled and cleared(verb, number, args, call.result):
                 found.append((call.pos, f'issue {number} was unlabeled or closed', ended))
         opened = PR_CREATE.search(command) and PR_URL.search(call.result)
         if opened:

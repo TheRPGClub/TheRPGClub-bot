@@ -182,6 +182,18 @@ class InProgressCleared(Scenario):
         self.assertBlocks(decision, 'Needs Review')
         self.assertIn('issue 42 was unlabeled or closed', decision['reason'])
 
+    def test_output_naming_another_issue_does_not_count(self):
+        other = bash('gh issue edit 42 --remove-label "In Progress"; gh issue view 43',
+                     'https://github.com/o/r/issues/43', 'toolu_other')
+        self.assertBlocks(self.run_stop('in-progress-no-move.jsonl', *other,
+                                        *move('cg-0000-completed')), 'Working')
+
+    def test_already_closed_counts(self):
+        close = bash('gh issue close 42', '! Issue o/r#42 (Fix it) is already closed',
+                     'toolu_close')
+        self.assertIsNone(self.run_stop('in-progress-no-move.jsonl', *close,
+                                        *move('cg-0000-completed')))
+
     def test_issue_number_reads_urls_and_flags(self):
         self.assertEqual(guard.issue_number(' --repo o/r 42'), '42')
         self.assertEqual(guard.issue_number(' https://github.com/o/r/issues/42 -c x'), '42')
