@@ -99,7 +99,7 @@ function countGameButtonComponents(gameCount: number): number {
  * True when one button per game fits under Discord's component limit. Larger
  * ballots fall back to select menus, which hold 25 games per row.
  */
-export function fitsGameButtons(params: IVotePanelParams, gameCount: number): boolean {
+function fitsGameButtons(params: IVotePanelParams, gameCount: number): boolean {
   return (
     countContainerComponents(params) +
       countGameButtonComponents(gameCount) +
@@ -167,7 +167,7 @@ function buildPanelContainer(params: IVotePanelParams, useButtons: boolean): Con
   return container;
 }
 
-export function buildPanelHeadingText(params: IVotePanelParams): string {
+function buildPanelHeadingText(params: IVotePanelParams): string {
   const label = nominationKindLabel(params.kind);
   const gamesWord = params.cap === 1 ? "game" : "game(s)";
   const question = params.monthLabel
@@ -180,7 +180,7 @@ export function buildPanelHeadingText(params: IVotePanelParams): string {
   return lines.join("\n");
 }
 
-export function buildPanelDetailsText(params: IVotePanelParams, useButtons: boolean): string {
+function buildPanelDetailsText(params: IVotePanelParams, useButtons: boolean): string {
   const gamesNoun = params.cap === 1 ? "game" : "games";
   const control = useButtons ? "Press" : "Pick";
   const lines = [
