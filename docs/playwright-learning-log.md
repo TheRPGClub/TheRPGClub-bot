@@ -45,6 +45,9 @@ entry for every new problem. The `playwright-log` skill
 - Each run opens a clean Chrome profile. The tester signs in every time (a passkey works).
 - If the bot does not respond, check that a preview container is running and which commit
   the conductor is live at, with `bash scripts/preview/fetch-logs.sh 400`.
+- A mirror post is never cut off. A payload over 2000 characters goes whole into a
+  `mirror.json` attachment, and the message keeps a short summary naming it. Before
+  reporting a cut-off mirror, open that attachment.
 
 ### Changing the runner, conductor, or preview workflow
 
@@ -224,7 +227,8 @@ entry for every new problem. The `playwright-log` skill
   off content.
 - **Cause:** the steps said `Ephemeral: no`, but `safeDeferReply` defers `/admin`,
   `/mod`, and `/superadmin` slash commands ephemerally when no flags are passed, so the
-  replies reached only the mirror. The mirrored content was complete. Step 4 also used
+  replies reached only the mirror. The mirrored content was complete: since #1345 a
+  payload over 2000 characters goes whole into a `mirror.json` attachment. Step 4 also used
   `/admin edit-nr-gotm round:1`, and NR-GOTM has no round 1 because it started much later.
 - **Fix:** #1408 marks those steps `Ephemeral: yes`, replaces the NR-GOTM round 1 step
   with the add flow and round 99999, drops the round number from the "Create ... round"
