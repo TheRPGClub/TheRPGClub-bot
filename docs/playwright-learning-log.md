@@ -33,6 +33,9 @@ entry for every new problem. The `playwright-log` skill
 - Each run opens a clean Chrome profile. The tester signs in every time (a passkey works).
 - If the bot does not respond, check that a preview container is running and which commit
   the conductor is live at, with `bash scripts/preview/fetch-logs.sh 400`.
+- A mirror post is never cut off. A payload over 2000 characters goes whole into a
+  `mirror.json` attachment, and the message keeps a short summary naming it. Before
+  reporting a cut-off mirror, open that attachment.
 
 ### Changing the runner, conductor, or preview workflow
 
@@ -182,3 +185,17 @@ entry for every new problem. The `playwright-log` skill
   account; the tester removes it with `/game-completion delete`.
 - **Lesson:** decide `Changes data:` from the worst path a step can take, not the intended
   one. Any step that can reach a save path is `yes`.
+
+### 2026-10-01: "I think maybe the mirror is cutting off content again"
+
+- **PR under test:** #1408
+- **Symptom:** the tester suspected the ephemeral mirror was cutting off replies and asked
+  for the mirror to attach its payload as a text file instead.
+- **Cause:** nothing was cut off. Since #1345, `buildMirrorMessage` moves any payload over
+  Discord's 2000-character cap whole into a `mirror.json` attachment, leaving a summary
+  (`kind`, `source`, `user`, `channelId`, `attachment`) in the message. The conductor
+  downloads and parses that attachment. #1408's branch already contains #1345. The run's
+  real failures were wrong `Ephemeral:` lines.
+- **Fix:** none needed; the behaviour asked for already shipped in #1345.
+- **Lesson:** a short JSON summary with an `attachment` field is the full payload moved to
+  a file, not a truncation. Check the `mirror.json` attachment before suspecting the mirror.
