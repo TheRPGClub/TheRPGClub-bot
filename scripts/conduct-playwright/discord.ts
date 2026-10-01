@@ -7,6 +7,7 @@
 import type { Locator, Page } from "playwright-core";
 
 import { PREVIEW_BOT_NAME } from "../../src/config/previewMode.ts";
+import { PREVIEW_BOT_USER_ID } from "../../src/config/users.ts";
 import type {
   DriveAction,
   IModalField,
@@ -169,6 +170,17 @@ async function fillModal(page: Page, fields: IModalField[]): Promise<void> {
   }
 }
 
+/**
+ * The command popup's entries from the preview bot. Each names its application in visible
+ * text and shows the bot's avatar, whose CDN path carries the bot's user ID; either one
+ * matching is enough, so renaming the application does not break the runner.
+ */
+function previewBotOptions(page: Page): Locator {
+  const options = page.getByRole("option");
+  const avatar = page.locator(`img[src*="/avatars/${PREVIEW_BOT_USER_ID}/"]`);
+  return options.filter({ hasText: PREVIEW_BOT_NAME }).or(options.filter({ has: avatar }));
+}
+
 async function runSlash(page: Page, action: ISlashAction): Promise<void> {
   const box = chatBox(page);
   await waitVisible(box, "the message box");
@@ -176,7 +188,7 @@ async function runSlash(page: Page, action: ISlashAction): Promise<void> {
   const name = `/${action.path.join(" ")}`;
   await box.click();
   await box.pressSequentially(name, { delay: TIMING.typeDelayMs });
-  const entries = page.getByRole("option").filter({ hasText: PREVIEW_BOT_NAME });
+  const entries = previewBotOptions(page);
   await waitVisible(entries, `the preview bot's entries in the command popup`);
   const command = await findOption(entries, [name, name.slice(1)]);
   if (!command) throw new HandOff(`the command popup has no preview bot ${name}`);
