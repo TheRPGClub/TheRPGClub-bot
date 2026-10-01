@@ -14,6 +14,7 @@ import {
 } from "../functions/InteractionUtils.js";
 import { buildErrorReply, buildTextReply } from "../functions/ComponentsV2Utils.js";
 import { buildApiErrorMessage } from "../utilities/ApiErrorUtils.js";
+import { isSnowflake } from "../utilities/ValidationUtils.js";
 
 /** The `/thread` group; `/thread create` lives in create-thread.command.ts. */
 export const THREAD_GROUP_NAME = "thread";
@@ -42,15 +43,12 @@ export class ThreadAdminCommands {
   ): Promise<void> {
     await safeDeferReply(interaction, { flags: MessageFlags.Ephemeral });
     threadId = sanitizeUserInput(threadId, { preserveNewlines: false });
-    if (!this.hasRegularsRole(interaction)) {
-      await safeReply(interaction, buildTextReply(ACCESS_DENIED_REGULARS, true));
-      return;
-    }
+    if (!(await this.canEditLinks(interaction, threadId))) return;
 
     try {
       await setThreadGameLink(threadId, gamedbGameId);
     } catch (error: unknown) {
-      const label = `Could not link thread ${threadId} to GameDB game ${gamedbGameId}.`;
+      const label = `Could not link thread ${threadId} to GameDB game ${gamedbGameId}`;
       await safeReply(interaction, buildErrorReply(buildApiErrorMessage(label, error), true));
       return;
     }
@@ -80,17 +78,16 @@ export class ThreadAdminCommands {
   ): Promise<void> {
     await safeDeferReply(interaction, { flags: MessageFlags.Ephemeral });
     threadId = sanitizeUserInput(threadId, { preserveNewlines: false });
-    if (!this.hasRegularsRole(interaction)) {
-      await safeReply(interaction, buildTextReply(ACCESS_DENIED_REGULARS, true));
-      return;
-    }
+    if (!(await this.canEditLinks(interaction, threadId))) return;
 
-    const target = gamedbGameId ? `GameDB game ${gamedbGameId}` : "all GameDB links";
+    const target = gamedbGameId === undefined
+      ? "all GameDB links"
+      : `GameDB game ${gamedbGameId}`;
     let removed: number;
     try {
       removed = await removeThreadGameLink(threadId, gamedbGameId);
     } catch (error: unknown) {
-      const label = `Could not unlink ${target} from thread ${threadId}.`;
+      const label = `Could not unlink ${target} from thread ${threadId}`;
       await safeReply(interaction, buildErrorReply(buildApiErrorMessage(label, error), true));
       return;
     }
@@ -99,6 +96,22 @@ export class ThreadAdminCommands {
       `Unlinked ${target} from thread ${threadId}${suffix}`,
       true,
     ));
+  }
+
+  /** Replies with the reason and returns false when the caller or thread id is rejected. */
+  private async canEditLinks(
+    interaction: CommandInteraction,
+    threadId: string,
+  ): Promise<boolean> {
+    if (!this.hasRegularsRole(interaction)) {
+      await safeReply(interaction, buildTextReply(ACCESS_DENIED_REGULARS, true));
+      return false;
+    }
+    if (!isSnowflake(threadId)) {
+      await safeReply(interaction, buildTextReply(`\`${threadId}\` is not a thread ID.`, true));
+      return false;
+    }
+    return true;
   }
 
   private hasRegularsRole(interaction: CommandInteraction): boolean {
