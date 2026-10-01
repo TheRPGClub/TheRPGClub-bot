@@ -20,6 +20,7 @@ import {
   SelectMenuComponent,
   SlashChoice,
 } from "discordx";
+import { SUPERADMIN_COMMAND_PERMISSIONS } from "../config/commandPermissions.js";
 import {
   ACCESS_DENIED_OWNER,
   AnyRepliable,
@@ -188,7 +189,11 @@ const SAY_CHANNEL_TYPES = [
 ];
 
 @Discord()
-@SlashGroup({ description: "Server Owner Commands", name: "superadmin" })
+@SlashGroup({
+  defaultMemberPermissions: SUPERADMIN_COMMAND_PERMISSIONS,
+  description: "Server Owner Commands",
+  name: "superadmin",
+})
 @SlashGroup("superadmin")
 export class SuperAdmin {
   @Slash({ description: "Add a game completion for another user", name: "completion-add-other" })
