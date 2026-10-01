@@ -1,6 +1,8 @@
 import {
   ActionRowBuilder,
   ApplicationCommandOptionType,
+  ChannelType,
+  type GuildBasedChannel,
   MessageFlags,
   StringSelectMenuBuilder,
   type StringSelectMenuInteraction,
@@ -134,9 +136,10 @@ export const SUPERADMIN_HELP_TOPICS: SuperAdminHelpTopic[] = [
     label: "/superadmin say",
     summary: "Have the bot send a message or reply to a message.",
     syntax:
-      "Syntax: /superadmin say message:<string> [message_id:<string>] [channel_id:<string>]",
+      "Syntax: /superadmin say message:<string> [message_id:<string>] [channel:<channel>]",
     notes:
-      "If message_id is provided, the bot replies in that channel. If not, channel_id is required.",
+      "With message_id, the bot replies to that message in channel (default: this channel). " +
+      "Without it, channel is required.",
   },
 ];
 
@@ -172,6 +175,17 @@ export function buildSuperAdminHelpContainer(topic: SuperAdminHelpTopic): Contai
   if (topic.notes) fields.push({ name: "Notes", value: topic.notes });
   return buildCommandHelpContainer(`${topic.label} help`, buildFieldsText(fields));
 }
+
+/** Channels the bot can post a plain message in. */
+const SAY_CHANNEL_TYPES = [
+  ChannelType.GuildText,
+  ChannelType.GuildAnnouncement,
+  ChannelType.GuildVoice,
+  ChannelType.GuildStageVoice,
+  ChannelType.PublicThread,
+  ChannelType.PrivateThread,
+  ChannelType.AnnouncementThread,
+];
 
 @Discord()
 @SlashGroup({ description: "Server Owner Commands", name: "superadmin" })
@@ -563,12 +577,13 @@ export class SuperAdmin {
     })
     messageId: string | undefined,
     @SlashOption({
-      description: "Channel ID to post in (required if no message_id)",
-      name: "channel_id",
+      description: "Channel to post in (required if no message_id)",
+      name: "channel",
       required: false,
-      type: ApplicationCommandOptionType.String,
+      type: ApplicationCommandOptionType.Channel,
+      channelTypes: SAY_CHANNEL_TYPES,
     })
-    channelId: string | undefined,
+    channel: GuildBasedChannel | undefined,
     interaction: CommandInteraction,
   ): Promise<void> {
     await safeDeferReply(interaction, { flags: MessageFlags.Ephemeral });
@@ -583,7 +598,7 @@ export class SuperAdmin {
     }
 
     const replyTargetId = messageId?.trim() ?? "";
-    const targetChannelId = channelId?.trim() ?? "";
+    const targetChannelId = channel?.id ?? "";
 
     let targetChannel: any;
     if (replyTargetId) {
@@ -615,7 +630,8 @@ export class SuperAdmin {
     }
 
     if (!targetChannelId) {
-      await safeReply(interaction, buildTextReply("Channel ID is required when no message id is provided.", true));
+      const reply = buildTextReply("Channel is required when no message id is provided.", true);
+      await safeReply(interaction, reply);
       return;
     }
 
