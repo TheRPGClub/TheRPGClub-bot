@@ -21,5 +21,8 @@ snapshots
 !.claude/skills/
 !.claude/agents/
 
+# Playwright conductor runner traces and screenshots
+/conduct-artifacts
+
 # conductor release commit, written by scripts/conductor/deploy.sh
 /REVISION

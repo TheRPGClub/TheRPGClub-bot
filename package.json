@@ -21,6 +21,7 @@
     "lint": "oxlint",
     "session:start": "node --no-warnings=ExperimentalWarning --import tsx scripts/session-start.ts",
     "conduct:drive-plan": "node --no-warnings=ExperimentalWarning --import tsx scripts/conduct-drive-plan.ts",
+    "conduct:playwright": "node --no-warnings=ExperimentalWarning --import tsx scripts/conduct-playwright/run.ts",
     "check:pr-testing": "node --no-warnings=ExperimentalWarning --import tsx scripts/check-pr-testing.ts",
     "test-guild:status": "node --no-warnings=ExperimentalWarning --import tsx scripts/test-guild-status.ts",
     "remoteBash": "ssh -p 2222 merph518@100.120.128.48"
@@ -50,6 +51,7 @@
     "nodemon": "^3.1.14",
     "oxlint": "1.86.0",
     "oxlint-tsgolint": "^7.0.2003",
+    "playwright-core": "^1.63.0",
     "prettier": "^3.9.6",
     "rimraf": "^6.1.3",
     "tsx": "^4.23.15",
