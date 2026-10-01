@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import {
+  attributeStepOutput,
   classifySnapshot,
   confirmedResult,
   failedResult,
@@ -256,6 +257,32 @@ test("a click step never owns a slash command's late mirrored reply", () => {
   const clickStep = makeStep({ command: "click \"Search\"", expected: "\"Gloomhaven\"" });
   const result = judgeStep(clickStep, outputs, { start: 100, end: 200 });
   assert.equal(result.verdict, "fail");
+  assert.deepEqual(result.unattributed.map((entry) => entry.messageId), ["late"]);
+});
+
+const MODAL_SOURCE = "component:modal:round-history:v1:query:2026";
+
+test("credits a slash command step that submits a modal with the modal's reply", () => {
+  const outputs = observe([mirrorPost("reply", 150, MODAL_SOURCE, "Round History - 2026")]);
+  const step = makeStep({ command: "/gotm history private:true\nsubmit" });
+  const result = attributeStepOutput(step, outputs, { start: 100, end: 200 });
+  assert.deepEqual(result.observed.map((entry) => entry.messageId), ["reply"]);
+  assert.deepEqual(result.unattributed, []);
+});
+
+test("a slash and modal step never owns another command's late reply", () => {
+  const outputs = observe([mirrorPost("late", 140, "/collection", "Gloomhaven")]);
+  const step = makeStep({ command: "/gotm history private:true\nsubmit" });
+  const result = attributeStepOutput(step, outputs, { start: 100, end: 200 });
+  assert.deepEqual(result.observed, []);
+  assert.deepEqual(result.unattributed.map((entry) => entry.messageId), ["late"]);
+});
+
+test("a plain slash command step never owns a modal's late reply", () => {
+  const outputs = observe([mirrorPost("late", 150, MODAL_SOURCE, "Round History - 2026")]);
+  const step = makeStep({ command: "/gotm history" });
+  const result = attributeStepOutput(step, outputs, { start: 100, end: 200 });
+  assert.deepEqual(result.observed, []);
   assert.deepEqual(result.unattributed.map((entry) => entry.messageId), ["late"]);
 });
 
