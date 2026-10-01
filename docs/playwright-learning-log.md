@@ -14,6 +14,10 @@ entry for every new problem. The `playwright-log` skill
   parses: check its commit before using a new Testing line.
 - Prefer steps that stop before a write. To exercise a picker, use a partial title so the
   select menu appears, and choose an option that only shows the next prompt.
+- A partial title in an autocomplete option is not safe on its own. If the autocomplete
+  suggestion is picked, the bot gets the full title, and `/game-completion add` takes the
+  exact-match path and logs a completion at once. Mark such a step `Changes data: yes`,
+  or use a title with no exact GameDB match.
 - Quote reply text exactly as the code builds it, so the conductor's checks match.
 - Take option values from `docs/test-plans/`, which hold values known to work against
   the test data (for example `title:Chrono Trig` and `platform:SNES`). For an
@@ -166,6 +170,23 @@ entry for every new problem. The `playwright-log` skill
   exact reply. A search term with many matches can push a trailing option past a select
   menu's cap, so prefer narrow terms in steps unless the step tests the cap.
 
+### 2026-10-01: a `Changes data: no` step logged a real completion
+
+- **PR under test:** #1412
+- **Symptom:** the 12:41 run of step 1 (`/game-completion add title:Chrono Trig
+  completion_type:Main Story platform:Switch`) replied "Logged completion for **Chrono
+  Trigger** (Main Story)" and asked to remove it from Now Playing, where it expected the
+  game picker.
+- **Cause:** the bot received the title "Chrono Trigger", not "Chrono Trig", so it took the
+  exact-match path, which saves immediately. That happens when the `title` autocomplete
+  suggestion is chosen. No runner trace exists for that run on the laptop, so the step was
+  likely done by hand, picking the suggestion. The step assumed a partial title stays
+  partial.
+- **Fix:** none in code. The PR was merged with a completion logged on the tester's
+  account; the tester removes it with `/game-completion delete`.
+- **Lesson:** decide `Changes data:` from the worst path a step can take, not the intended
+  one. Any step that can reach a save path is `yes`.
+
 ### 2026-10-01: "FAIL: No output observed in the ephemeral mirror channel."
 
 - **PR under test:** #1425
@@ -177,7 +198,7 @@ entry for every new problem. The `playwright-log` skill
   screenshot, which still shows the placeholder. The tester also saw the conductor's step
   message scroll out of view, which the runner could not reach if Discord stopped
   rendering it.
-- **Fix:** #1435. `waitForReply` waits while the newest message is a thinking placeholder,
+- **Fix:** #1437. `waitForReply` waits while the newest message is a thinking placeholder,
   and the runner scrolls the message panel up to find a step message that is not rendered.
 - **Lesson:** wait for the reply itself, not for any change. A slow deferred command looks
   like a missing reply to the conductor.

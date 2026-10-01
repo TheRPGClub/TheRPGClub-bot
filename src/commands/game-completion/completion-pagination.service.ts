@@ -39,7 +39,7 @@ export function parseCompletionYearFilter(yearRaw: string): number | "unknown" |
 }
 
 /**
- * Handles page selection from dropdown menu for list, edit, or delete modes
+ * Handles page selection from dropdown menu for list or delete modes
  */
 export async function handleCompletionPageSelect(
   interaction: StringSelectMenuInteraction,
@@ -47,7 +47,7 @@ export async function handleCompletionPageSelect(
   const segs = parseCustomIdSegmentsMin(interaction.customId, 3);
   if (!segs) { logUnexpectedCustomId(interaction.customId); return; }
   const [ownerId, yearRaw, modeRaw, ...queryParts] = segs;
-  const mode = modeRaw as "list" | "edit" | "delete";
+  const mode = modeRaw as "list" | "delete";
   const query = queryParts.join(":") || undefined;
 
   if (mode !== "list" && await replyIfNotOwner(interaction, ownerId)) return;
@@ -69,19 +69,19 @@ export async function handleCompletionPageSelect(
       query,
     );
   } else {
-    await renderSelectionPage(interaction, ownerId, page, mode, year, query);
+    await renderSelectionPage(interaction, ownerId, page, year, query);
   }
 }
 
 /**
- * Handles prev/next button clicks for list, edit, or delete pagination
+ * Handles prev/next button clicks for list or delete pagination
  */
 export async function handleCompletionPaging(interaction: ButtonInteraction): Promise<void> {
   const prefixPart = getCustomIdPrefix(interaction.customId);
   const segs = parseCustomIdSegmentsMin(interaction.customId, 4);
   if (!segs) { logUnexpectedCustomId(interaction.customId); return; }
   const [ownerId, yearRaw, pageRaw, dir, ...queryParts] = segs;
-  const mode = prefixPart.split("-")[1] as "list" | "edit" | "delete";
+  const mode = prefixPart.split("-")[1] as "list" | "delete";
   const query = queryParts.join(":") || undefined;
 
   if (mode !== "list" && await replyIfNotOwner(interaction, ownerId)) return;
@@ -103,7 +103,7 @@ export async function handleCompletionPaging(interaction: ButtonInteraction): Pr
       query,
     );
   } else {
-    await renderSelectionPage(interaction, ownerId, nextPage, mode, year, query);
+    await renderSelectionPage(interaction, ownerId, nextPage, year, query);
   }
 }
 
