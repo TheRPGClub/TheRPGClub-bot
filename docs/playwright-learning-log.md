@@ -15,6 +15,10 @@ entry for every new problem. The `playwright-log` skill
 - Prefer steps that stop before a write. To exercise a picker, use a partial title so the
   select menu appears, and choose an option that only shows the next prompt.
 - Quote reply text exactly as the code builds it, so the conductor's checks match.
+- Take option values from `docs/test-plans/`, which hold values known to work against
+  the test data (for example `title:Chrono Trig` and `platform:SNES`). For an
+  autocomplete option, use a value the bot resolves on its own, such as an abbreviation.
+  The runner may send the typed text before any suggestion loads.
 - A slash command with several required options is fine to drive. Write it on one line
   as `/command option:value option:value`, with real values from the test data.
 
@@ -125,3 +129,20 @@ entry for every new problem. The `playwright-log` skill
 - **Fix:** #1427 clicks each option's field, types only the value, and hands back naming
   the option if the value did not land.
 - **Lesson:** multi-option commands need per-field input; check each field after typing.
+- **Verified:** the next run (12:27) filled `title`, `completion_type` and `platform` in
+  their own fields and Discord sent the command.
+
+### 2026-10-01: "Invalid platform selection." on a step expecting a game picker
+
+- **PR under test:** #1412
+- **Symptom:** step 1 failed: missing "Select the game for", and the reply was "Invalid
+  platform selection."
+- **Cause:** the step used `platform:Nintendo Switch`. No autocomplete suggestion had loaded
+  within the runner's one-second wait, so Discord sent the raw text.
+  `resolveGameCompletionPlatformId` accepts raw text only on an exact name, abbreviation
+  or code, or a single partial match, and "Nintendo Switch" matched more than one
+  platform. The trace showed the field held the right text, so the runner was not at fault.
+- **Fix:** the step was rewritten to `title:Chrono Trig completion_type:Main Story
+  platform:SNES`, the values `docs/test-plans/game-completion-1.md` already uses for this
+  prompt.
+- **Lesson:** reuse test-plan values; never guess option values for autocomplete fields.
