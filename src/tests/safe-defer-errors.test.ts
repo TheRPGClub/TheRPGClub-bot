@@ -47,9 +47,28 @@ test("safeDeferUpdate returns true after a successful defer", async () => {
   assert.equal(await safeDeferUpdate(buildComponent()), true);
 });
 
-test("safeDeferUpdate treats acknowledgement races as acknowledged", async () => {
-  assert.equal(await safeDeferUpdate(buildComponent(ACK_ERROR)), true);
-  assert.equal(await safeDeferUpdate(buildComponent(UNKNOWN_INTERACTION)), true);
+test("safeDeferUpdate treats an acknowledgement race as acknowledged", async () => {
+  const { result, logged } = await withSilencedErrors(
+    () => safeDeferUpdate(buildComponent(ACK_ERROR)),
+  );
+  assert.equal(result, true);
+  assert.equal(logged, 0);
+});
+
+test("safeDeferUpdateOrBail bails quietly on an expired interaction", async () => {
+  const { result, logged } = await withSilencedErrors(
+    () => safeDeferUpdateOrBail(buildComponent(UNKNOWN_INTERACTION)),
+  );
+  assert.equal(result, false);
+  assert.equal(logged, 0);
+});
+
+test("safeDeferUpdate returns false for an interaction that is not a component", async () => {
+  const command = {
+    ...(buildComponent() as object),
+    isMessageComponent: () => false,
+  } as unknown as AnyRepliable;
+  assert.equal(await safeDeferUpdate(command), false);
 });
 
 test("safeDeferUpdateOrBail bails and logs when the defer really fails", async () => {

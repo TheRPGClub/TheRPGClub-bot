@@ -420,8 +420,8 @@ export async function safeDeferReply(
 /**
  * Safely defers a component update, ignoring acknowledgement races. Returns true when the
  * interaction is acknowledged and the caller may carry on, and false when it is not: the
- * dev channel blocked it, it is not a component, or the defer failed for another reason
- * (logged here).
+ * dev channel blocked it, it is not a component, its token is gone (10062), or the defer
+ * failed for another reason (logged here).
  */
 export async function safeDeferUpdate(interaction: AnyRepliable): Promise<boolean> {
   const aug = interaction as AugmentedInteraction;
@@ -444,7 +444,9 @@ export async function safeDeferUpdate(interaction: AnyRepliable): Promise<boolea
     aug.__rpgDeferred = true;
     return true;
   } catch (err: unknown) {
-    if (isAckError(err)) return true;
+    // 40060: another path already acknowledged it, so the caller can carry on. 10062: the
+    // interaction expired, so every later edit would fail too.
+    if (isAckError(err)) return !isUnknownInteraction(err);
     logError("InteractionUtils.safeDeferUpdate", err);
     return false;
   }
@@ -561,12 +563,17 @@ export async function withClickedRowDisabled(
   if (lock && !options.keepDisabled) await restoreClickedRow(interaction, lock, true);
 }
 
+const discordErrorCode = (err: unknown): number | undefined =>
+  (err as { code?: number; rawError?: { code?: number } })?.code
+    ?? (err as { rawError?: { code?: number } })?.rawError?.code;
+
 // Ensure we do not hit "Interaction already acknowledged" when replying
 const isAckError = (err: unknown): boolean => {
-  const code = (err as { code?: number; rawError?: { code?: number } })?.code
-    ?? (err as { rawError?: { code?: number } })?.rawError?.code;
+  const code = discordErrorCode(err);
   return code === 40060 || code === 10062;
 };
+
+const isUnknownInteraction = (err: unknown): boolean => discordErrorCode(err) === 10062;
 
 /**
  * Mirrors the reply before returning, so the caller's payload is copied to the
