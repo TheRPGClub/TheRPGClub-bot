@@ -3,11 +3,9 @@ import type { ArgsOf, Client } from "discordx";
 import { Discord, On } from "discordx";
 import { formatTimestampWithDay } from "../utilities/DiscordLogUtils.js";
 import { JOIN_LEAVE_LOG_CHANNEL_ID } from "../config/channels.js";
-import Member from "../classes/Member.js";
-import { recordCurrentAvatarIfNew } from "../utilities/AvatarLogUtils.js";
+import { recordJoinedMember } from "../services/MemberEventWrites.js";
 import { COLOR_SUCCESS } from "../config/colors.js";
 import { toUnixTimestamp } from "../functions/DateFormatUtils.js";
-import { logError } from "../utilities/LogUtils.js";
 import {
   buildTitledContainer,
   buildContainerSend,
@@ -52,11 +50,7 @@ export class GuildMemberAdd {
     }
 
     if (!member.user.bot) {
-      // Sequential: both upsert the user, and concurrent upserts can race on the insert.
-      void Member.upsertGuildMember(member)
-        .catch((err: any) => logError("GuildMemberAdd.upsertUser", err?.message ?? err))
-        .then(() => recordCurrentAvatarIfNew(member))
-        .catch((err: any) => logError("GuildMemberAdd.recordAvatar", err?.message ?? err));
+      void recordJoinedMember(member);
     }
 
     // auto-role assignment on member join

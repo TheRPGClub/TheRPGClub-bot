@@ -1,6 +1,6 @@
 # threads test plan
 
-A pass over `/create-thread`, `/thread link`, `/thread unlink`, and the thread link prompt
+A pass over `/thread create`, `/thread link`, `/thread unlink`, and the thread link prompt
 the bot posts in new Now Playing forum posts, with its Link a game and Skip Linking Game
 buttons. It runs against real data: it creates a Now Playing forum thread for Hylics 2
 and links it, links a forum post of your own to Chrono Trigger, marks a second post to
@@ -29,14 +29,14 @@ by hand; the bot cannot delete them.
 
 ### Step 1: Create a thread with a title typed instead of picked
 ```
-/create-thread title:zzqqxx tag:zzqqxx
+/thread create title:zzqqxx tag:zzqqxx
 ```
 Expected: an ephemeral error, "Please select a game from title autocomplete.".
 Ephemeral: yes
 
 ### Step 2: Create a thread for a GameDB id that does not exist
 ```
-/create-thread title:999999999 tag:zzqqxx
+/thread create title:999999999 tag:zzqqxx
 ```
 Expected: type the title without picking from autocomplete. An ephemeral error,
 "Could not find GameDB game #999999999".
@@ -44,7 +44,7 @@ Ephemeral: yes
 
 ### Step 3: Create a thread with a tag the forum does not have
 ```
-/create-thread title:Hylics 2 tag:zzqqxx
+/thread create title:Hylics 2 tag:zzqqxx
 ```
 Expected: pick the title from autocomplete, and type the tag. An ephemeral error,
 "Could not find forum tag" and "Please pick one from tag autocomplete.".
@@ -52,7 +52,7 @@ Ephemeral: yes
 
 ### Step 4: Create the Hylics 2 thread
 ```
-/create-thread title:Hylics 2 tag:(any tag from autocomplete) first-post-text:Conductor test
+/thread create title:Hylics 2 tag:(any tag from autocomplete) first-post-text:Conductor test
 ```
 Expected: pick the title and the tag from autocomplete. An ephemeral reply,
 "Created thread", "Hylics 2", and "with tag". Check by eye that the forum has a new
@@ -62,7 +62,7 @@ Ephemeral: yes
 
 ### Step 5: Create the Hylics 2 thread again
 ```
-/create-thread title:Hylics 2 tag:(any tag from autocomplete)
+/thread create title:Hylics 2 tag:(any tag from autocomplete)
 ```
 Expected: pick both values from autocomplete. An ephemeral error,
 "A thread is already linked for" and "Hylics 2", and not: "Created thread".

@@ -27,7 +27,7 @@ are tested only on their cancel, error, or permission paths.
 - `voting-sandbox-1.md`, `voting-sandbox-2.md`: /vote-sandbox
 - `giveaway.md`: /gamegiveaway
 - `suggestion.md`: /suggestion
-- `threads.md`: /create-thread and /thread
+- `threads.md`: /thread create, link, and unlink
 - `help.md`, `help-2.md`: /help
 
 ## Staff commands
