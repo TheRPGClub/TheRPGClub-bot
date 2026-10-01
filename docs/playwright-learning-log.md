@@ -83,6 +83,22 @@ entry for every new problem. The `playwright-log` skill
 
 ## Entries
 
+### 2026-10-01: optional boolean typed as `private:true`
+
+- **PR under test:** #1405
+- **Symptom:** step 1 (`/gotm history private:true`) was handed back with "Discord did not
+  send the command; it is still in the message box". Discord showed "Pick either true or
+  false".
+- **Cause:** the runner typed ` private:true` in one go for an optional option. The
+  screenshot shows the `private` pill holding `private:true`, so the name and colon landed
+  in the value. The fill check only asked whether the pill's text included `true`.
+- **Fix:** #1439 types a space first and `name:` only if no pill appeared, waits for the
+  pill, erases any text already in its value, then types the value. The check now reads the
+  pill's value alone and requires it to equal the step's value, ignoring case.
+- **Lesson:** check an option's value for equality, not containment; containment passes a
+  value with the option's name stuck to it.
+- **Verified:** not yet; the next run of a step with an optional option confirms it.
+
 ### 2026-10-01: a tie break that worked failed as "No output observed"
 
 - **PR under test:** #1443

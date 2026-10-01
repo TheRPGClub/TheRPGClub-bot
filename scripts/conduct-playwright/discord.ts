@@ -327,29 +327,81 @@ function optionPill(box: Locator, name: string): Locator {
 }
 
 /**
- * Puts the cursor where an option's value goes and returns the text to type before it.
- * Picking a command adds a pill for each required option, and its value is typed into
- * that pill. An optional option has no pill until `name:` is typed after the others.
+ * The text in an option pill's value. The pill's own text also carries the option's name,
+ * so the value part is read alone; a pill without one has the leading name stripped.
  */
-async function focusOption(box: Locator, name: string): Promise<string> {
-  const pill = optionPill(box, name);
-  if (await pill.count()) {
-    await pill.first().click();
-    return "";
-  }
-  const bounds = await box.boundingBox();
-  if (!bounds) throw new HandOff("the message box has no size");
-  await box.click({ position: { x: bounds.width - 2, y: bounds.height - 4 } });
-  await box.press("End");
-  return ` ${name}:`;
+async function optionPillValue(pill: Locator, name: string): Promise<string> {
+  const value = optionPillValueField(pill);
+  if (await value.count()) return value.first().innerText();
+  return pillValueFromText(await pill.innerText(), name);
 }
 
-/** Hands the step back, naming the option, when a value did not land in its own field. */
+/**
+ * A pill's value from its whole text, for a pill with no value field. The label may render
+ * as `name:` above the value, so only the label's own colon is dropped after the name.
+ */
+export function pillValueFromText(pillText: string, name: string): string {
+  const text = pillText.trim();
+  return text.startsWith(name) ? text.slice(name.length).replace(/^[:\s]+/, "") : text;
+}
+
+/** Pill text as compared: zero-width characters the editor keeps dropped, trimmed, caseless. */
+function cleanOptionText(text: string): string {
+  return text.replace(/\p{Cf}/gu, "").trim().toLowerCase();
+}
+
+/** The value part of an option pill, which holds what is typed for the option. */
+function optionPillValueField(pill: Locator): Locator {
+  return pill.locator('[class*="optionPillValue__"]');
+}
+
+/**
+ * Whether an option pill holds exactly the step's value. Case is ignored, since Discord
+ * shows a boolean choice as `True`, and zero-width characters the editor keeps are dropped.
+ * `private:true` for `true` is rejected: the name was typed into the value.
+ */
+export function optionValueMatches(pillValue: string, value: string): boolean {
+  return cleanOptionText(pillValue) === cleanOptionText(value);
+}
+
+/**
+ * Puts the cursor in an option's empty value field. Picking a command adds a pill for each
+ * required option. An optional option has none until it is named after the others, and
+ * when it is the only one left Discord adds its pill as soon as a space is typed, so
+ * `name:` is typed only when the space did not do it. Text already in the value, such as
+ * a name Discord moved into it, is erased.
+ */
+async function focusOption(box: Locator, name: string): Promise<void> {
+  const pill = optionPill(box, name);
+  if (!(await pill.count())) {
+    const bounds = await box.boundingBox();
+    if (!bounds) throw new HandOff("the message box has no size");
+    await box.click({ position: { x: bounds.width - 2, y: bounds.height - 4 } });
+    await box.press("End");
+    await box.pressSequentially(" ", { delay: TIMING.typeDelayMs });
+    const added = await pill.first()
+      .waitFor({ state: "visible", timeout: TIMING.settleMs / 3 })
+      .then(() => true, () => false);
+    if (!added) await box.pressSequentially(`${name}:`, { delay: TIMING.typeDelayMs });
+    await waitVisible(pill, `the ${name} option's field`);
+  }
+  await pill.first().click();
+  // Selecting the value field's own text keeps the erase inside this pill. Without the
+  // field nothing is erased, and the check after typing hands the step back.
+  const field = optionPillValueField(pill.first());
+  if (!(await field.count()) || !cleanOptionText(await field.first().innerText())) return;
+  await field.first().selectText();
+  await box.press("Backspace");
+}
+
+/** Hands the step back, naming the option, when its field does not hold exactly the value. */
 async function assertOptionFilled(box: Locator, name: string, value: string): Promise<void> {
   const pill = optionPill(box, name);
-  const text = await pill.count() ? await pill.first().innerText() : "";
-  if (!text.toLowerCase().includes(value.toLowerCase())) {
-    throw new HandOff(`the ${name} option did not take the value "${value}"`);
+  const text = await pill.count() ? await optionPillValue(pill.first(), name) : "";
+  if (!optionValueMatches(text, value)) {
+    throw new HandOff(
+      `the ${name} option holds "${text.trim()}" instead of the value "${value}"`,
+    );
   }
 }
 
@@ -380,8 +432,8 @@ async function runSlash(
   if (!command) throw new HandOff(`the command popup has no ${source.app} ${name}`);
   await command.click();
   for (const option of action.options) {
-    const typed = await focusOption(box, option.name);
-    await box.pressSequentially(typed + option.value, { delay: TIMING.typeDelayMs });
+    await focusOption(box, option.name);
+    await box.pressSequentially(option.value, { delay: TIMING.typeDelayMs });
     await page.waitForTimeout(TIMING.settleMs / 3);
     // An autocomplete or choice suggestion that matches is picked. Any other popup, such
     // as the list of remaining options, is left alone; a value Discord rejects keeps
