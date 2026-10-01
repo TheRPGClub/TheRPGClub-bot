@@ -24,6 +24,7 @@ import { startSharedStateServices } from "./services/SharedStateServices.js";
 import { refreshGiveawayHubMessage } from "./services/GiveawayHubService.js";
 import { startUserEmojiService } from "./services/UserEmojiService.js";
 import { announcePreviewReady } from "./services/PreviewReadyService.js";
+import { refreshCommandMentions } from "./services/CommandMentionService.js";
 import { registerClientObservability } from "./services/ClientObservability.js";
 import { restoreJournalMessageContextsFromDb } from "./commands/now-playing/nowPlayingContexts.js";
 import GameSearchService from "./classes/GameSearchService.js";
@@ -202,6 +203,7 @@ bot.once("clientReady", async () => {
 
   // Synchronize applications commands with Discord
   await bot.initApplicationCommands();
+  await refreshCommandMentions(bot);
 
   // To clear all guild commands, uncomment this line,
   // This is useful when moving from guild commands to global commands

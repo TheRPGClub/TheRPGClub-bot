@@ -1,35 +1,20 @@
 import { AttachmentBuilder, type Client } from "discord.js";
 import { BOT_DEV_CHANNEL_ID } from "../config/channels.js";
-import {
-  PREVIEW_COMMANDS_ATTACHMENT_NAME,
-  buildCommandCatalog,
-} from "../config/previewCommandCatalog.js";
+import { PREVIEW_COMMANDS_ATTACHMENT_NAME } from "../config/previewCommandCatalog.js";
 import { PREVIEW_READY_ANNOUNCEMENT } from "../config/previewMode.js";
-import { TEST_GUILD_ID } from "../config/testMode.js";
 import { logError } from "../utilities/LogUtils.js";
+import { getCommandMentionCatalog } from "./CommandMentionService.js";
 
 /**
- * This bot's slash commands as the conductor's catalog file, or none when they cannot
- * be read. The conductor then shows each step's command without a mention.
+ * This bot's slash commands as the conductor's catalog file, from the IDs startup just
+ * loaded for mentions, or none when they could not be read. The conductor then shows
+ * each step's command without a mention.
  */
-async function buildCatalogFiles(client: Client): Promise<AttachmentBuilder[]> {
-  if (!client.application) return [];
-  try {
-    const { commands } = client.application;
-    const [globalCommands, guildCommands] = await Promise.all([
-      commands.fetch(),
-      TEST_GUILD_ID ? commands.fetch({ guildId: TEST_GUILD_ID }) : undefined,
-    ]);
-    const catalog = buildCommandCatalog([
-      ...globalCommands.values(),
-      ...(guildCommands?.values() ?? []),
-    ]);
-    const body = Buffer.from(JSON.stringify(catalog), "utf8");
-    return [new AttachmentBuilder(body, { name: PREVIEW_COMMANDS_ATTACHMENT_NAME })];
-  } catch (error) {
-    logError("PreviewReady.commandCatalog", error);
-    return [];
-  }
+function buildCatalogFiles(): AttachmentBuilder[] {
+  const catalog = getCommandMentionCatalog();
+  if (!catalog.commands.length) return [];
+  const body = Buffer.from(JSON.stringify(catalog), "utf8");
+  return [new AttachmentBuilder(body, { name: PREVIEW_COMMANDS_ATTACHMENT_NAME })];
 }
 
 /**
@@ -47,7 +32,7 @@ export async function announcePreviewReady(client: Client): Promise<void> {
     }
     await channel.send({
       content: PREVIEW_READY_ANNOUNCEMENT,
-      files: await buildCatalogFiles(client),
+      files: buildCatalogFiles(),
       allowedMentions: { parse: [] },
     });
   } catch (error) {
