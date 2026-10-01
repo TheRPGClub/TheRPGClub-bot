@@ -91,8 +91,13 @@ A body with a `## Testing` section must follow
 `One action per step` section. Check it with the parser
 `/conduct` runs. Exit 1 means the conductor cannot read the section and exit 2 means the
 body file could not be read. Fix whichever it names and run the check again until it
-passes. A warning that a step chains several actions means splitting that step. Run it
-again before any later body patch:
+passes. A warning that a step chains several actions means splitting that step, and a
+warning about a missing `Changes data:` line means adding it from the code the step runs
+(`yes` when the step writes anything that outlives the test, `no` otherwise). Use only
+Testing syntax the live conductor parses (see
+`.claude/skills/_shared/test-commands.md`); while it predates `Changes data:` (#1416),
+leave that line out. Run the check again before any later body
+patch:
 
 ```bash
 npm run check:pr-testing -- <scratchpad>/pr-body.md
