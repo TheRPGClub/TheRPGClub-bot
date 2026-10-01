@@ -116,8 +116,23 @@ ledger, the new row is picked up by it; do not start a second one.
 When the run finishes:
 
 - Success on a deploy: PR #<pr> is running in the test guild. Link the PR's
-  `PR preview` comment, and say to run `/conduct pr:<pr>` in the test guild to walk its
-  Testing steps. If step 1 showed another PR holding the guild, say its preview stopped.
+  `PR preview` comment. If step 1 showed another PR holding the guild, say its preview
+  stopped. Then always give the Playwright runner command in its own `bash` block, so
+  the tester has it without asking:
+
+  ```bash
+  npm run -s conduct:playwright -- <pr>
+  ```
+
+  Before giving it, make sure `node_modules/playwright-core` exists in the session's
+  checkout, and run `npm ci` there when it does not. The runner also refuses to start
+  when the checkout lacks a commit `origin/main` made to `scripts/conduct-playwright`.
+  Run `git fetch origin main` first, and when
+  `git log HEAD..origin/main -- scripts/conduct-playwright` prints anything, sync the
+  branch with main. Say that the runner opens a fresh Chrome profile to sign in to
+  Discord in, that the run starts by itself (or by hand with `/conduct pr:<pr>` in the
+  test channel), and that steps the runner cannot drive are left to the tester. The
+  full rules for offering the block are in `.claude/skills/_shared/test-commands.md`.
 - Success on a stop: the preview is torn down, naming the PR it belonged to, or that
   nothing was running.
 - Failure: read the failed step's log from `<scratchpad>/catchup.tsv.logs/<run-id>.log`

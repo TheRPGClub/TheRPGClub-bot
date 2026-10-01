@@ -179,13 +179,12 @@ export async function renderCompletionPage(
 }
 
 /**
- * Renders a paginated list of completions with selection menu for editing or deleting
+ * Renders a paginated list of completions with a selection menu for deleting
  */
 export async function renderSelectionPage(
   interaction: CommandInteraction | ButtonInteraction | StringSelectMenuInteraction,
   userId: string,
   page: number,
-  mode: "edit" | "delete",
   year: number | "unknown" | null = null,
   query?: string,
 ): Promise<void> {
@@ -197,11 +196,10 @@ export async function renderSelectionPage(
   const result = await buildCompletionComponents(userId, page, year, user, query);
 
   if (!result) {
-    const msg =
-      mode === "edit"
-        ? "You have no completions to edit matching your filters."
-        : "You have no completions to delete matching your filters.";
-    await safeReply(interaction, buildTextReply(msg, true));
+    await safeReply(
+      interaction,
+      buildTextReply("You have no completions to delete matching your filters.", true),
+    );
     return;
   }
 
@@ -215,10 +213,10 @@ export async function renderSelectionPage(
     })`),
   }));
 
-  const selectId = mode === "edit" ? "comp-edit-menu" : "comp-del-menu";
   const select = new StringSelectMenuBuilder()
-    .setCustomId(`${selectId}:${userId}`)
-    .setPlaceholder(`Select a completion to ${mode}`)
+    // eslint-disable-next-line local/custom-id-has-matching-handler
+    .setCustomId(`comp-del-menu:${userId}`)
+    .setPlaceholder("Select a completion to delete")
     .addOptions(selectOptions);
 
   const selectRow = buildSelectRow(select);
@@ -228,8 +226,8 @@ export async function renderSelectionPage(
   const paginationRows = buildPaginationRows(
     totalPages,
     safePage,
-    `comp-${mode}-page:${userId}:${yearPart}:${safePage}:prev${queryPart}`,
-    `comp-${mode}-page:${userId}:${yearPart}:${safePage}:next${queryPart}`,
+    `comp-delete-page:${userId}:${yearPart}:${safePage}:prev${queryPart}`,
+    `comp-delete-page:${userId}:${yearPart}:${safePage}:next${queryPart}`,
   );
 
   const displayName = user.displayName ?? user.username ?? user.id;
