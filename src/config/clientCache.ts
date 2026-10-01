@@ -10,8 +10,9 @@ export const MESSAGE_CACHE_MAX_PER_CHANNEL = 200;
 // emits userUpdate from presence packets, and that path reads users.cache, not presences.
 export const PRESENCE_CACHE_MAX_PER_GUILD = 0;
 
-// A cached message older than this (by edit or creation time) is swept. Edits and deletes
-// of older messages then log without the old content, as any uncached message does today.
+// A cached message older than this (by edit or creation time) is swept. After that, a delete
+// logs without the content and an edit is not logged at all, since the edit log skips
+// partial old messages. Any message missing from the cache already behaves this way.
 export const MESSAGE_SWEEP_LIFETIME_SECONDS = 6 * SECONDS_PER_HOUR;
 export const MESSAGE_SWEEP_INTERVAL_SECONDS = SECONDS_PER_HOUR;
 

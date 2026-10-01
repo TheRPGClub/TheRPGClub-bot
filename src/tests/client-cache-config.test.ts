@@ -1,12 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { LimitedCollection, Options } from "discord.js";
+import { LimitedCollection } from "discord.js";
 import {
   CLIENT_MAKE_CACHE,
   CLIENT_SWEEPERS,
   MESSAGE_CACHE_MAX_PER_CHANNEL,
   MESSAGE_SWEEP_LIFETIME_SECONDS,
   PRESENCE_CACHE_MAX_PER_GUILD,
+  THREAD_SWEEP_LIFETIME_SECONDS,
 } from "../config/clientCache.js";
 
 // cacheWithLimits picks the limit by the manager's class name, so a named stub is enough.
@@ -35,6 +36,7 @@ test("sweepers cover messages and keep the thread sweeper", () => {
   const messages = CLIENT_SWEEPERS.messages;
   assert.ok(messages && "lifetime" in messages);
   assert.equal(messages.lifetime, MESSAGE_SWEEP_LIFETIME_SECONDS);
-  assert.ok(CLIENT_SWEEPERS.threads);
-  assert.ok(Options.DefaultSweeperSettings.threads);
+  const threads = CLIENT_SWEEPERS.threads;
+  assert.ok(threads && "lifetime" in threads);
+  assert.equal(threads.lifetime, THREAD_SWEEP_LIFETIME_SECONDS);
 });
