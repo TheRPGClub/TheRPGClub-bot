@@ -290,7 +290,9 @@ Closes #<N>
 - Only use Testing syntax the live conductor parses. The conductor runs from its own
   release directory, not from main, so a format change merged to main is not live until
   it is deployed (see `.claude/skills/_shared/test-commands.md`). Until then a body
-  using the new syntax reads "Cannot parse the Testing section" in the test guild.
+  using the new syntax reads "Cannot parse the Testing section" in the test guild. This
+  rule wins over the one above: while the live conductor predates `Changes data:`
+  (#1416), leave the line out and say so under `Judgment calls`.
 - Non-draft. Never run `gh pr merge` unasked. Once conductor testing passes, offer
   the merge per step 11.
 

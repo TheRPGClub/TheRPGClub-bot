@@ -95,7 +95,8 @@ passes. A warning that a step chains several actions means splitting that step, 
 warning about a missing `Changes data:` line means adding it from the code the step runs
 (`yes` when the step writes anything that outlives the test, `no` otherwise). Use only
 Testing syntax the live conductor parses (see
-`.claude/skills/_shared/test-commands.md`). Run the check again before any later body
+`.claude/skills/_shared/test-commands.md`); while it predates `Changes data:` (#1416),
+leave that line out. Run the check again before any later body
 patch:
 
 ```bash
