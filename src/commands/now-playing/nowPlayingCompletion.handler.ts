@@ -1100,7 +1100,7 @@ export class NowPlayingCompletionHandlers {
     const modal = new ModalBuilder()
       .setCustomId(`${NOW_PLAYING_COMPLETE_MODAL_ID}:${sessionId}`)
       .setTitle("Add Completion Details");
-    const modalRows = [
+    const modalLabels = [
       buildTextInputLabel({
         customId: NOW_PLAYING_COMPLETE_DATE_INPUT_ID,
         label: "Completion date (blank = today)",
@@ -1121,7 +1121,7 @@ export class NowPlayingCompletionHandlers {
         value: noteValue ? noteValue.slice(0, MAX_NOW_PLAYING_NOTE_LEN) : undefined,
       }),
     ];
-    modal.addLabelComponents(...modalRows);
+    modal.addLabelComponents(...modalLabels);
     safeIgnore(interaction.showModal(modal));
   }
 }
