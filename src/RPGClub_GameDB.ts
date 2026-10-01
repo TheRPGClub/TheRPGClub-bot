@@ -7,7 +7,7 @@ import type {
   Message,
   TextBasedChannel,
 } from "discord.js";
-import { IntentsBitField, Partials } from "discord.js";
+import { IntentsBitField, Partials, RESTJSONErrorCodes } from "discord.js";
 import { Client } from "discordx";
 
 import { updateBotPresence } from "./functions/SetPresence.js";
@@ -277,7 +277,10 @@ bot.on("error", (err: unknown) => {
   const normalizedErr: DiscordClientError | undefined =
     typeof err === "object" && err !== null ? (err as DiscordClientError) : undefined;
   const code: number | string | undefined = normalizedErr?.code ?? normalizedErr?.rawError?.code;
-  if (code === 40060 || code === 10062) {
+  if (
+    code === RESTJSONErrorCodes.InteractionHasAlreadyBeenAcknowledged
+    || code === RESTJSONErrorCodes.UnknownInteraction
+  ) {
     // Ignore ack/unknown-interaction noise
     return;
   }

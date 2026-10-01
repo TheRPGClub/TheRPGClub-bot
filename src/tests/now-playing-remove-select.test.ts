@@ -1,8 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { MessageFlags } from "discord.js";
 import { NowPlayingRemoveHandlers } from "../commands/now-playing/nowPlayingRemove.handler.js";
 import Member from "../classes/Member.js";
-import { COMPONENTS_V2_FLAG } from "../config/flags.js";
 
 test("nowplaying remove select acknowledges interaction and refreshes same message", async () => {
   const command = new NowPlayingRemoveHandlers() as any;
@@ -72,7 +72,11 @@ test("nowplaying remove select acknowledges interaction and refreshes same messa
 
     assert.equal(edits.length, 1, "expected refreshed remove list via editReply");
     assert.ok(Array.isArray(edits[0]?.components), "editReply should include refreshed components");
-    assert.equal(edits[0]?.flags, COMPONENTS_V2_FLAG, "editReply should keep Components V2");
+    assert.equal(
+      edits[0]?.flags,
+      MessageFlags.IsComponentsV2,
+      "editReply should keep Components V2",
+    );
     assert.deepEqual(edits[0]?.attachments, [], "editReply should drop stale attachments");
   } finally {
     Member.removeNowPlaying = originalRemoveNowPlaying;

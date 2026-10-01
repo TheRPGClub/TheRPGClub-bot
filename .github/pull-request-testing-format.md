@@ -6,7 +6,7 @@ shape below is fixed. Everything else in a PR body is freeform.
 
 ## The shape
 
-A `## Testing` section contains zero or more steps. Each step is exactly four parts,
+A `## Testing` section contains zero or more steps. Each step is these five parts,
 in this order:
 
 1. A `### Step N: <short label>` heading, numbered from 1, in run order.
@@ -15,6 +15,13 @@ in this order:
 3. An `Expected:` line describing, in prose, what a human should see.
 4. An `Ephemeral:` line whose value is `yes` or `no`. This says where the reply
    lands, which decides where the conductor looks for output.
+5. A `Changes data:` line whose value is `yes` or `no`, directly after `Ephemeral:`.
+   `yes` means the step writes real data: an API or database row, an uploaded file, a
+   GitHub issue, or anything else that outlives the test. Whoever writes the PR decides
+   it by reading the code the step runs. The Playwright runner leaves a `yes` step to
+   the tester and drives a `no` step without asking. The parser still accepts a step
+   without the line, for older PR bodies, but `npm run check:pr-testing` warns about it
+   and the runner asks the tester about that step.
 
 Steps run in order and may depend on state created by earlier steps.
 
@@ -44,7 +51,8 @@ block chains several actions.
 
 - One fenced code block per step. A step with zero or two blocks is unparseable.
 - `Expected:` and `Ephemeral:` are single lines, immediately after the code block.
-- `Ephemeral:` accepts only `yes` or `no`. Anything else is unparseable.
+- `Ephemeral:` and `Changes data:` accept only `yes` or `no`. Anything else is
+  unparseable.
 - No markdown tables anywhere, per project convention.
 - Quote at least one check in every `Expected:` line, per
   [One action per step](#one-action-per-step). The conductor only checks
@@ -85,6 +93,7 @@ then confirm it. Each step is one action with its own checks.
 Expected: an ephemeral reply with a game search modal trigger,
 button: "Search for a game".
 Ephemeral: yes
+Changes data: no
 
 ### Step 2: Search for a game
 ```
@@ -93,6 +102,7 @@ click "Search for a game", enter "Gloomhaven" in "Title", submit
 Expected: the ephemeral reply updates to a list of matching games,
 option: "Gloomhaven".
 Ephemeral: yes
+Changes data: no
 
 ### Step 3: Pick the game
 ```
@@ -101,6 +111,7 @@ select "Gloomhaven"
 Expected: the ephemeral reply shows the chosen game, field: "Gloomhaven", with
 button: "Confirm".
 Ephemeral: yes
+Changes data: no
 
 ### Step 4: Confirm the selection
 ```
@@ -109,6 +120,7 @@ click "Confirm"
 Expected: a public embed in the channel, title: "Collection updated", naming
 "Gloomhaven", and not: "Error". The ephemeral flow reply is dismissed.
 Ephemeral: no
+Changes data: yes
 ````
 
 ## Security

@@ -11,7 +11,7 @@ const SHORT_SHA_LENGTH = 7;
  * The preview application's name (docs/pr-preview.md). The Playwright conductor runner
  * picks a slash command only from this app's entries, never the test-mode bot's.
  */
-export const PREVIEW_BOT_NAME = "RPGClub Bot (preview)";
+export const PREVIEW_BOT_NAME = "RPGClubbot (Preview)";
 
 /** The preview bot's status, naming the PR and commit it was built from. */
 export function formatPreviewPresence(pr: string, sha: string): string {
