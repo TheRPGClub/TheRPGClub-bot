@@ -131,8 +131,8 @@ When the run finishes:
   `git log HEAD..origin/main -- scripts/conduct-playwright` prints anything, sync the
   branch with main. Say that the runner opens a fresh Chrome profile to sign in to
   Discord in, that the run starts by itself (or by hand with `/conduct pr:<pr>` in the
-  test channel), and that steps the runner cannot drive are left to the tester. The full rules for offering the block are in
-  `.claude/skills/_shared/test-commands.md`.
+  test channel), and that steps the runner cannot drive are left to the tester. The
+  full rules for offering the block are in `.claude/skills/_shared/test-commands.md`.
 - Success on a stop: the preview is torn down, naming the PR it belonged to, or that
   nothing was running.
 - Failure: read the failed step's log from `<scratchpad>/catchup.tsv.logs/<run-id>.log`
