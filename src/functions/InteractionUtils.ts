@@ -411,44 +411,48 @@ export async function safeDeferReply(
     aug.__rpgAcked = true;
     aug.__rpgDeferred = true;
     markEphemeralDefer(interaction, overridden);
-  } catch {
-    // ignore errors from deferReply (e.g., already acknowledged)
+  } catch (err: unknown) {
+    // An acknowledgement race is expected; anything else is a real failure worth seeing.
+    if (!isAckError(err)) logError("InteractionUtils.safeDeferReply", err);
   }
 }
 
-// Safely defer a component update, ignoring acknowledgement races.
-export async function safeDeferUpdate(interaction: AnyRepliable): Promise<void> {
+/**
+ * Safely defers a component update, ignoring acknowledgement races. Returns true when the
+ * interaction is acknowledged and the caller may carry on, and false when it is not: the
+ * dev channel blocked it, it is not a component, or the defer failed for another reason
+ * (logged here).
+ */
+export async function safeDeferUpdate(interaction: AnyRepliable): Promise<boolean> {
   const aug = interaction as AugmentedInteraction;
   if (shouldBlockDevChannelInteraction(interaction)) {
     await sendDevChannelBlockResponse(interaction);
-    return;
+    return false;
   }
 
   if (aug.__rpgAcked || aug.deferred || aug.replied) {
-    return;
+    return true;
   }
 
   if (!interaction.isMessageComponent()) {
-    return;
+    return false;
   }
 
   try {
     await interaction.deferUpdate();
     aug.__rpgAcked = true;
     aug.__rpgDeferred = true;
-  } catch {
-    // ignore acknowledgement races
+    return true;
+  } catch (err: unknown) {
+    if (isAckError(err)) return true;
+    logError("InteractionUtils.safeDeferUpdate", err);
+    return false;
   }
 }
 
 /** Defers the update. Returns false if deferral failed (caller should return). */
 export async function safeDeferUpdateOrBail(interaction: AnyRepliable): Promise<boolean> {
-  try {
-    await safeDeferUpdate(interaction);
-    return true;
-  } catch {
-    return false;
-  }
+  return safeDeferUpdate(interaction);
 }
 
 export interface IClickedRowLockOptions {
