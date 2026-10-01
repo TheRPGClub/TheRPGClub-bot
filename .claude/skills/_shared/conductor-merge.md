@@ -64,7 +64,8 @@ It counts as passed only when all of these hold:
 A PR only reaches the test guild when the user deploys it with `/test-guild <N>`, a
 skill only they run. Opening or pushing to a PR never deploys it. With no report on the
 current head, the handover offers the `/test-guild <N>` and Playwright runner commands
-in the blocks [test-commands.md](test-commands.md) sets; the session never dispatches the
+in the blocks [test-commands.md](test-commands.md) sets, with `/conduct pr:<N>` as the
+manual start when the run does not start by itself; the session never dispatches the
 deploy itself.
 
 Anything else is not a pass: no report, a report that could not parse the `Testing`

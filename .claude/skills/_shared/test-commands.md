@@ -2,7 +2,7 @@
 
 Shared by `/implement`, `/open-pr`, and any pull request a session opens outside a skill.
 When a session hands a pull request over for manual review and its body has a `Testing`
-section, the report ends with the two commands that test it, each in its own fenced code
+section, the report closes with the two commands that test it, each in its own fenced code
 block tagged `bash`. The Code tab puts a Run button on each block, so the user starts
 either one from the terminal without retyping it.
 
@@ -26,8 +26,14 @@ Fill in the pull request number. Nothing else changes, and the two never share a
    npm run -s conduct:playwright -- <N>
    ```
 
-Say in a line that the runner needs the deploy finished first, and that steps it cannot
-drive are left to the tester in the test channel.
+Say in a line that the runner needs the deploy finished first, that the run starts by
+itself (or by hand with `/conduct pr:<N>` in the test channel when it does not), and that
+steps the runner cannot drive are left to the tester there.
+
+The Run button runs a block in the session's own checkout, so before offering the runner
+block, check that `node_modules/playwright-core` exists there. A worktree cut before the
+runner landed, or with stale dependencies, lacks it and the runner fails to load. When it
+is missing, run `npm ci` in that checkout first.
 
 ## Rules
 
