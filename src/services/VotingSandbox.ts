@@ -15,6 +15,7 @@ import { buildFinalWinnersText } from "../functions/VoteResultsUtils.js";
 import { describeRequestError, UserFacingError } from "../utilities/ApiErrorUtils.js";
 import { persistedSessionStore } from "./PersistedInteractionSessionStore.js";
 import type { IVotingDataSource } from "./VotingDataSource.js";
+import { fetchGameCoverUrls } from "./GameImageService.js";
 import {
   handleVotingEvent,
   type IVotingEventContext,
@@ -259,8 +260,8 @@ export function createSandboxDataSource(target: ISandboxTarget): IVotingDataSour
         ? sandboxTally(state, kind, ballot)
         : { rows: [], cap: state.cap };
     },
-    // Fixture games have no GameDB covers, so the panels list them as text.
-    getCoverUrls: async () => new Map(),
+    // Sandbox games are real GameDB games, so their covers are read like the live round's.
+    getCoverUrls: fetchGameCoverUrls,
     getVotesForUser: async (kind, roundNumber, userId, ballot) => {
       const state = await requireSandbox(target);
       return roundNumber === state.roundNumber
