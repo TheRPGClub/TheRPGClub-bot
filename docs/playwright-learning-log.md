@@ -143,6 +143,21 @@ entry for every new problem. The `playwright-log` skill
   or code, or a single partial match, and "Nintendo Switch" matched more than one
   platform. The trace showed the field held the right text, so the runner was not at fault.
 - **Fix:** the step was rewritten to `title:Chrono Trig completion_type:Main Story
-  platform:SNES`, the values `docs/test-plans/game-completion-1.md` already uses for this
-  prompt.
+  platform:Switch`. `Switch` resolves to one platform, and `Chrono Trig` (also used in
+  `docs/test-plans/game-completion-1.md`) matches few games.
 - **Lesson:** reuse test-plan values; never guess option values for autocomplete fields.
+
+### 2026-10-01: "Import another game from IGDB" missing from the game picker
+
+- **PR under test:** #1412
+- **Symptom:** the conductor report for `title:mario` showed "Select the game for" with 25
+  Mario titles and no "Import another game from IGDB".
+- **Cause:** a bot bug, not a testing one. `/game-completion add` appended the import
+  option after every search result, and the 25-option cap on a select menu cut it off.
+  Found by reading the conductor's report comment on the PR, which prints every option
+  the reply had.
+- **Fix:** #1432 adds `withIgdbImportOption`, which keeps room for the import option, and
+  uses it in all three game pickers.
+- **Lesson:** read the conductor's report comment before blaming the runner; it shows the
+  exact reply. A search term with many matches can push a trailing option past a select
+  menu's cap, so prefer narrow terms in steps unless the step tests the cap.
