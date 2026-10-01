@@ -113,6 +113,12 @@ const MALFORMED: [string, string][] = [
   ["two code blocks in one step", `${step(1, "/help", "help", "no")}\n${FENCE}\n/x\n${FENCE}`],
   ["a missing Expected line", `### Step 1: x\n${FENCE}\n/help\n${FENCE}\nEphemeral: no`],
   ["prose before the first step", `Run these:\n${step(1, "/help", "help", "no")}`],
+  ["a Changes data value other than yes or no", `${step(1, "/help", "help", "no")}
+Changes data: maybe`],
+  ["Changes data before Ephemeral", step(1, "/help", "help", "no")
+    .replace("Ephemeral: no", "Changes data: no\nEphemeral: no")],
+  ["text after a Changes data line", `${step(1, "/help", "help", "no")}
+Changes data: no\nA note.`],
   [
     "a heading without a label",
     `### Step 1:\n${FENCE}\n/help\n${FENCE}\nExpected: y\nEphemeral: no`,
@@ -179,4 +185,17 @@ test("flags steps that ask for no text to be present", () => {
     ]),
     [2, 3],
   );
+});
+
+test("reads an optional Changes data line after Ephemeral", () => {
+  const section = [
+    `${step(1, "/help", "help", "yes")}\nChanges data: yes`,
+    `${step(2, "/help", "help", "no")}\nChanges data: no`,
+    step(3, "/help", "help", "no"),
+  ].join("\n\n");
+  const result = parseTestPlan(body(section));
+  assert.equal(result.kind, "ok");
+  const steps = result.kind === "ok" ? result.steps : [];
+  assert.deepEqual(steps.map((s) => s.changesData), [true, false, undefined]);
+  assert.equal("changesData" in steps[2], false);
 });

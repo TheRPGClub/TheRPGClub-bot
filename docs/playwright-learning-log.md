@@ -1,0 +1,184 @@
+# Playwright testing learning log
+
+Problems met while testing PRs with the conductor and the Playwright runner, and what fixed
+them. Read it before writing a PR's `## Testing` section or changing the runner, and add an
+entry for every new problem. The `playwright-log` skill
+(`.claude/skills/playwright-log/SKILL.md`) says when and how.
+
+## Lessons
+
+### Writing Testing steps
+
+- Mark every step `Changes data: yes|no` from the code the step runs, not the command name.
+  `yes` when it writes anything that outlives the test. Use only syntax the live conductor
+  parses: check its commit before using a new Testing line.
+- Prefer steps that stop before a write. To exercise a picker, use a partial title so the
+  select menu appears, and choose an option that only shows the next prompt.
+- A partial title in an autocomplete option is not safe on its own. If the autocomplete
+  suggestion is picked, the bot gets the full title, and `/game-completion add` takes the
+  exact-match path and logs a completion at once. Mark such a step `Changes data: yes`,
+  or use a title with no exact GameDB match.
+- Quote reply text exactly as the code builds it, so the conductor's checks match.
+- Take option values from `docs/test-plans/`, which hold values known to work against
+  the test data (for example `title:Chrono Trig` and `platform:SNES`). For an
+  autocomplete option, use a value the bot resolves on its own, such as an abbreviation.
+  The runner may send the typed text before any suggestion loads.
+- A slash command with several required options is fine to drive. Write it on one line
+  as `/command option:value option:value`, with real values from the test data.
+
+### Running the runner
+
+- Run it from an up-to-date `main` checkout. It refuses to start when the checkout lacks a
+  runner commit from `origin/main`.
+- Each run opens a clean Chrome profile. The tester signs in every time (a passkey works).
+- If the bot does not respond, check that a preview container is running and which commit
+  the conductor is live at, with `bash scripts/preview/fetch-logs.sh 400`.
+
+### Changing the runner, conductor, or preview workflow
+
+- A change to `src/conductor/` is not live until the conductor is deployed with
+  `scripts/conductor/deploy.sh deploy <sha>` on the desktop. Pulling and restarting do not
+  update it.
+- The preview deploy job must run main's scripts and only build the PR's tree. Never let a
+  PR checkout supply code that decides or reports on its own preview.
+- Discord's command editor holds one field (`optionPill__`) per option. Type a value into
+  its own field, and confirm it landed there before moving on.
+- Every hand-back message should name what failed (which option, which control), so the
+  next entry here starts from a cause, not a guess.
+
+## Entries
+
+### 2026-10-01: preview bot's commands never appear in the popup
+
+- **PR under test:** #1412
+- **Symptom:** step 1 handed back with "the preview bot's entries in the command popup did
+  not appear".
+- **Cause:** the runner ran from PR 1412's branch, cut before #1411 fixed the preview bot's
+  name. That old copy looked for "RPGClub Bot (preview)"; the app is "RPGClubbot (Preview)".
+  Found in the trace's `waitForSelector` call.
+- **Fix:** #1411 (name and avatar match) was already on main. #1416 made the runner refuse
+  to start when it lacks a runner commit from `origin/main`.
+- **Lesson:** the runner must come from current main, never from the PR's branch.
+
+### 2026-10-01: the runner asked which steps change real data
+
+- **PR under test:** #1412
+- **Symptom:** "Which driven steps (1, 2) change real data?" before every run.
+- **Cause:** nothing in the PR body said whether a step writes data, so the runner asked.
+- **Fix:** #1416 added the per-step `Changes data: yes|no` line, which the runner reads.
+- **Lesson:** the PR author decides it from the code, once, in the body.
+
+### 2026-10-01: "the message box is not empty"
+
+- **PR under test:** #1412
+- **Symptom:** step 1 handed back with "the message box is not empty".
+- **Cause:** an earlier handed-back run left its half-typed command in the box, and
+  Discord kept it as a draft.
+- **Fix:** #1418 clears a leftover draft starting with `/` before a slash step.
+- **Lesson:** a hand-back mid-command leaves state behind; the next run must clean it.
+
+### 2026-10-01: runner crashed when the browser was closed
+
+- **PR under test:** #1412
+- **Symptom:** "tracing.stop: Target page, context or browser has been closed" and no
+  summary.
+- **Cause:** closing the window made `tracing.stop` throw inside `finally`, and the
+  target-closed error was rethrown.
+- **Fix:** #1418 catches both and prints the summary.
+- **Lesson:** any step can find the browser gone; cleanup must never throw.
+
+### 2026-10-01: "Cannot parse the Testing section ... Changes data: no"
+
+- **PR under test:** #1412
+- **Symptom:** the conductor rejected step 1 with "extra content after its Ephemeral line".
+- **Cause:** the live conductor was still at `6de5556`, before #1416. It runs from
+  `~/.local/share/rpgclub-conductor/current`, so pulling main and restarting reloaded the
+  same old build. Found with `fetch-logs.sh`, whose journal showed every restart reporting
+  `ready ... at 6de5556`.
+- **Fix:** the user ran `bash scripts/conductor/deploy.sh deploy "$(git rev-parse HEAD)"`
+  on the desktop, which made `08a08f5` live. Meanwhile, removing the new line from the body
+  unblocked the test.
+- **Lesson:** after a conductor change merges, deploy it before any PR body uses it.
+
+### 2026-10-01: "The application did not respond"
+
+- **PR under test:** #1412
+- **Symptom:** the slash command got no reply. The deploy run was green.
+- **Cause:** no preview was running. The deploy job checked out the PR's head and then ran
+  the PR's own `plan.mjs`, whose old parser rejected `Changes data:` and tore the fresh
+  preview down. The `PR preview` comment said "No preview"; `fetch-logs.sh` showed no
+  container.
+- **Fix:** #1420 runs main's scripts and compose file and builds only the PR's tree.
+- **Lesson:** a green deploy run is not proof the preview is up; read the PR comment.
+
+### 2026-10-01: many captcha prompts
+
+- **PR under test:** #1412
+- **Symptom:** Discord challenged the runner's browser repeatedly.
+- **Cause:** not confirmed. The runner reused a persistent profile with old cookies and
+  site data, and the tester wanted a clean start.
+- **Fix:** #1422 starts every run with an empty profile and deletes it afterwards. The
+  tester signs in with a passkey each run.
+- **Lesson:** if captchas continue with a clean profile, look at automation signals next,
+  and record what was found here.
+
+### 2026-10-01: "Discord did not send the command; it is still in the message box"
+
+- **PR under test:** #1412
+- **Symptom:** step 1 (`/game-completion add title:mario completion_type:Main Story
+  platform:Nintendo Switch`) was handed back, so step 2 had no prompt to act on.
+- **Cause:** choosing the command makes Discord add a field per required option, with the
+  cursor in `title`. The runner typed all three `name:value` pairs into `title`. Found in
+  the screenshot and in the trace's `innerText` results.
+- **Fix:** #1427 clicks each option's field, types only the value, and hands back naming
+  the option if the value did not land.
+- **Lesson:** multi-option commands need per-field input; check each field after typing.
+- **Verified:** the next run (12:27) filled `title`, `completion_type` and `platform` in
+  their own fields and Discord sent the command.
+
+### 2026-10-01: "Invalid platform selection." on a step expecting a game picker
+
+- **PR under test:** #1412
+- **Symptom:** step 1 failed: missing "Select the game for", and the reply was "Invalid
+  platform selection."
+- **Cause:** the step used `platform:Nintendo Switch`. No autocomplete suggestion had loaded
+  within the runner's one-second wait, so Discord sent the raw text.
+  `resolveGameCompletionPlatformId` accepts raw text only on an exact name, abbreviation
+  or code, or a single partial match, and "Nintendo Switch" matched more than one
+  platform. The trace showed the field held the right text, so the runner was not at fault.
+- **Fix:** the step was rewritten to `title:Chrono Trig completion_type:Main Story
+  platform:Switch`. `Switch` resolves to one platform, and `Chrono Trig` (also used in
+  `docs/test-plans/game-completion-1.md`) matches few games.
+- **Lesson:** reuse test-plan values; never guess option values for autocomplete fields.
+
+### 2026-10-01: "Import another game from IGDB" missing from the game picker
+
+- **PR under test:** #1412
+- **Symptom:** the conductor report for `title:mario` showed "Select the game for" with 25
+  Mario titles and no "Import another game from IGDB".
+- **Cause:** a bot bug, not a testing one. `/game-completion add` appended the import
+  option after every search result, and the 25-option cap on a select menu cut it off.
+  Found by reading the conductor's report comment on the PR, which prints every option
+  the reply had.
+- **Fix:** #1432 adds `withIgdbImportOption`, which keeps room for the import option, and
+  uses it in all three game pickers.
+- **Lesson:** read the conductor's report comment before blaming the runner; it shows the
+  exact reply. A search term with many matches can push a trailing option past a select
+  menu's cap, so prefer narrow terms in steps unless the step tests the cap.
+
+### 2026-10-01: a `Changes data: no` step logged a real completion
+
+- **PR under test:** #1412
+- **Symptom:** the 12:41 run of step 1 (`/game-completion add title:Chrono Trig
+  completion_type:Main Story platform:Switch`) replied "Logged completion for **Chrono
+  Trigger** (Main Story)" and asked to remove it from Now Playing, where it expected the
+  game picker.
+- **Cause:** the bot received the title "Chrono Trigger", not "Chrono Trig", so it took the
+  exact-match path, which saves immediately. That happens when the `title` autocomplete
+  suggestion is chosen. No runner trace exists for that run on the laptop, so the step was
+  likely done by hand, picking the suggestion. The step assumed a partial title stays
+  partial.
+- **Fix:** none in code. The PR was merged with a completion logged on the tester's
+  account; the tester removes it with `/game-completion delete`.
+- **Lesson:** decide `Changes data:` from the worst path a step can take, not the intended
+  one. Any step that can reach a save path is `yes`.

@@ -4,6 +4,7 @@ import {
   ButtonStyle,
   ComponentType,
   type CommandInteraction,
+  type InteractionCallbackResponse,
   type Message,
   ModalBuilder,
   ModalSubmitInteraction,
@@ -159,7 +160,10 @@ async function confirmDuplicateCompletion(
       const reply = await safeReply(interaction, { ...payload, __forceFollowUp: true } as any);
       message = reply as Message;
     } else {
-      const reply = await safeReply(interaction, { ...payload, withResponse: true } as any);
+      const reply: InteractionCallbackResponse = await safeReply(
+        interaction,
+        { ...payload, withResponse: true },
+      );
       message = reply.resource?.message ?? null;
     }
   } catch {

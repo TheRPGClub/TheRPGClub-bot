@@ -7,7 +7,7 @@ import type {
   Message,
   TextBasedChannel,
 } from "discord.js";
-import { IntentsBitField, Partials } from "discord.js";
+import { IntentsBitField, Partials, RESTJSONErrorCodes } from "discord.js";
 import { Client } from "discordx";
 
 import { updateBotPresence } from "./functions/SetPresence.js";
@@ -28,6 +28,7 @@ import { startUserEmojiService } from "./services/UserEmojiService.js";
 import { announcePreviewReady } from "./services/PreviewReadyService.js";
 import { refreshCommandMentions } from "./services/CommandMentionService.js";
 import { registerClientObservability } from "./services/ClientObservability.js";
+import { registerUncachedThreadDeleteCleanup } from "./services/ThreadDeleteCleanup.js";
 import {
   createShutdown,
   installShutdownSignalHandlers,
@@ -276,7 +277,10 @@ bot.on("error", (err: unknown) => {
   const normalizedErr: DiscordClientError | undefined =
     typeof err === "object" && err !== null ? (err as DiscordClientError) : undefined;
   const code: number | string | undefined = normalizedErr?.code ?? normalizedErr?.rawError?.code;
-  if (code === 40060 || code === 10062) {
+  if (
+    code === RESTJSONErrorCodes.InteractionHasAlreadyBeenAcknowledged
+    || code === RESTJSONErrorCodes.UnknownInteraction
+  ) {
     // Ignore ack/unknown-interaction noise
     return;
   }
@@ -294,6 +298,7 @@ registerClientObservability(bot, () => {
   // Exit nonzero so the process manager restarts the bot with a fresh session.
   void shutdown("unrecoverable shard disconnect", 1);
 });
+registerUncachedThreadDeleteCleanup(bot);
 
 async function run(): Promise<void> {
   if (!process.env.BOT_TOKEN) {

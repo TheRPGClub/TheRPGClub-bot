@@ -81,7 +81,9 @@ export function checkPrTesting(body: string): IPrTestingCheck {
   const lines = [`The ## Testing section parses into ${plan.steps.length} step(s):`];
   for (const step of plan.steps) {
     const visibility = step.ephemeral ? "ephemeral" : "public";
-    lines.push(`  Step ${step.number}: ${step.label} (${visibility})`);
+    const data = step.changesData === undefined ? ""
+      : step.changesData ? ", changes data" : ", no data change";
+    lines.push(`  Step ${step.number}: ${step.label} (${visibility}${data})`);
     lines.push(`    Command: ${step.command.replace(/\n/g, " | ")}`);
     lines.push(`    Expected: ${step.expected}`);
   }
@@ -98,6 +100,14 @@ export function checkPrTesting(body: string): IPrTestingCheck {
       `Warning: step(s) ${chained.join(", ")} chain several actions, so only the last ` +
         "reply gets checked. Split them into one command, click, select, or modal submit " +
         "per step.",
+    );
+  }
+  const unmarked = plan.steps.filter((step) => step.changesData === undefined);
+  if (unmarked.length) {
+    lines.push(
+      `Warning: step(s) ${unmarked.map((step) => step.number).join(", ")} have no ` +
+        '"Changes data: yes|no" line, so the Playwright runner asks the tester about them. ' +
+        "Read the code the step runs and add the line.",
     );
   }
   return { ok: true, lines };

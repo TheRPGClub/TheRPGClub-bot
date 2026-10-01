@@ -1,12 +1,13 @@
 // Discord web helpers for the Playwright conductor runner (`run.ts`).
 //
-// Every selector is a role or visible text, never Discord's generated CSS classes, which
-// change between builds. Text read from the page is data: it only locates controls the
-// step's own action names, and it never decides what to type or click.
+// Every selector is a role, visible text, or a Discord CDN path, never Discord's generated
+// CSS classes, which change between builds. Text read from the page is data: it only
+// locates controls the step's own action names, and it never decides what to type or click.
 
 import type { Locator, Page } from "playwright-core";
 
 import { PREVIEW_BOT_NAME } from "../../src/config/previewMode.ts";
+import { PREVIEW_BOT_USER_ID } from "../../src/config/users.ts";
 import type {
   DriveAction,
   IModalField,
@@ -122,14 +123,21 @@ async function newestWith(page: Page, find: (item: Locator) => Locator): Promise
   throw new HandOff("the control is not on any recent preview bot message");
 }
 
-/** The option whose first line of visible text is one of `values`, or null. */
+/**
+ * The option whose first line of visible text is one of `values`, or null. An exact match
+ * wins; failing that, one that differs only in case, since Discord labels a boolean
+ * option's choices `True` and `False` while a step types `all:true`.
+ */
 async function findOption(options: Locator, values: string[]): Promise<Locator | null> {
   const count = await options.count();
+  const lowered = values.map((value) => value.toLowerCase());
+  let caseless: Locator | null = null;
   for (let index = 0; index < count; index += 1) {
     const text = (await options.nth(index).innerText()).split("\n")[0]?.trim() ?? "";
     if (values.includes(text)) return options.nth(index);
+    if (!caseless && lowered.includes(text.toLowerCase())) caseless = options.nth(index);
   }
-  return null;
+  return caseless;
 }
 
 async function pickOption(options: Locator, value: string): Promise<void> {
@@ -169,29 +177,95 @@ async function fillModal(page: Page, fields: IModalField[]): Promise<void> {
   }
 }
 
+/**
+ * The command popup's entries from the preview bot. Each names its application in visible
+ * text and shows the bot's avatar, whose CDN path carries the bot's user ID; either one
+ * matching is enough, so renaming the application does not break the runner.
+ */
+function previewBotOptions(page: Page): Locator {
+  const options = page.getByRole("option");
+  const avatar = page.locator(`img[src*="/avatars/${PREVIEW_BOT_USER_ID}/"]`);
+  return options.filter({ hasText: PREVIEW_BOT_NAME }).or(options.filter({ has: avatar }));
+}
+
+/**
+ * Clears a slash-command draft a handed-back step left behind; Discord keeps it across
+ * runs. The profile is the runner's alone, so a `/` draft is the runner's own. Any other
+ * text is handed off rather than erased.
+ */
+async function clearLeftoverCommand(page: Page, box: Locator): Promise<void> {
+  const text = (await box.innerText()).trim();
+  if (!text) return;
+  if (!text.startsWith("/")) throw new HandOff("the message box is not empty");
+  await box.click();
+  // A picked command holds its options as chips, so one select-all may leave the name.
+  for (let attempt = 0; attempt < 3 && (await box.innerText()).trim(); attempt += 1) {
+    await box.press("ControlOrMeta+a");
+    await box.press("Backspace");
+  }
+  await page.keyboard.press("Escape");
+  if ((await box.innerText()).trim()) {
+    throw new HandOff("a leftover command in the message box would not clear");
+  }
+}
+
+/** An option's field (pill) in Discord's command editor, matched by its name. */
+function optionPill(box: Locator, name: string): Locator {
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  // `optionPill__<hash>` is the pill itself; `optionPillValue__<hash>` is its value.
+  return box.locator('[class*="optionPill__"]')
+    .filter({ hasText: new RegExp(`^\\s*${escaped}(?![\\w-])`) });
+}
+
+/**
+ * Puts the cursor where an option's value goes and returns the text to type before it.
+ * Picking a command adds a pill for each required option, and its value is typed into
+ * that pill. An optional option has no pill until `name:` is typed after the others.
+ */
+async function focusOption(box: Locator, name: string): Promise<string> {
+  const pill = optionPill(box, name);
+  if (await pill.count()) {
+    await pill.first().click();
+    return "";
+  }
+  const bounds = await box.boundingBox();
+  if (!bounds) throw new HandOff("the message box has no size");
+  await box.click({ position: { x: bounds.width - 2, y: bounds.height - 4 } });
+  await box.press("End");
+  return ` ${name}:`;
+}
+
+/** Hands the step back, naming the option, when a value did not land in its own field. */
+async function assertOptionFilled(box: Locator, name: string, value: string): Promise<void> {
+  const pill = optionPill(box, name);
+  const text = await pill.count() ? await pill.first().innerText() : "";
+  if (!text.toLowerCase().includes(value.toLowerCase())) {
+    throw new HandOff(`the ${name} option did not take the value "${value}"`);
+  }
+}
+
 async function runSlash(page: Page, action: ISlashAction): Promise<void> {
   const box = chatBox(page);
   await waitVisible(box, "the message box");
-  if ((await box.innerText()).trim()) throw new HandOff("the message box is not empty");
+  await clearLeftoverCommand(page, box);
   const name = `/${action.path.join(" ")}`;
   await box.click();
   await box.pressSequentially(name, { delay: TIMING.typeDelayMs });
-  const entries = page.getByRole("option").filter({ hasText: PREVIEW_BOT_NAME });
+  const entries = previewBotOptions(page);
   await waitVisible(entries, `the preview bot's entries in the command popup`);
   const command = await findOption(entries, [name, name.slice(1)]);
   if (!command) throw new HandOff(`the command popup has no preview bot ${name}`);
   await command.click();
   for (const option of action.options) {
-    // Discord opens the first required option by itself; name it only when it is not open.
-    const typed = (await box.innerText()).trimEnd();
-    const prefix = typed.endsWith(`${option.name}:`) ? "" : ` ${option.name}:`;
-    await box.pressSequentially(`${prefix}${option.value}`, { delay: TIMING.typeDelayMs });
+    const typed = await focusOption(box, option.name);
+    await box.pressSequentially(typed + option.value, { delay: TIMING.typeDelayMs });
     await page.waitForTimeout(TIMING.settleMs / 3);
     // An autocomplete or choice suggestion that matches is picked. Any other popup, such
     // as the list of remaining options, is left alone; a value Discord rejects keeps
     // the command in the box, which the send check below catches.
     const suggestion = await findOption(page.getByRole("option"), [option.value]);
     if (suggestion) await suggestion.click();
+    await assertOptionFilled(box, option.name, option.value);
   }
   await box.press("Enter");
   await page.waitForTimeout(TIMING.settleMs / 3);

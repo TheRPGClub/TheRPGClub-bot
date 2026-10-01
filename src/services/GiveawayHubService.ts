@@ -16,7 +16,6 @@ import {
   buildTitledContainer,
   buildComponentsV2EditFlags,
 } from "../functions/ComponentsV2Utils.js";
-import { COMPONENTS_V2_FLAG } from "../config/flags.js";
 const GIVEAWAY_HUB_SCAN_LIMIT = 50;
 
 export const KEYS_PAGE_SIZE = 20;
@@ -271,8 +270,8 @@ async function updateGiveawayHubMessages(
     await (channel as any).send({
       components: allComponents,
       flags: options?.suppressNotifications
-        ? COMPONENTS_V2_FLAG | MessageFlags.SuppressNotifications
-        : COMPONENTS_V2_FLAG,
+        ? MessageFlags.IsComponentsV2 | MessageFlags.SuppressNotifications
+        : MessageFlags.IsComponentsV2,
     }).catch((err: unknown) => {
       logError("GiveawayHubService.send", err);
     });
