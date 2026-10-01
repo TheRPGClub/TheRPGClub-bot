@@ -630,7 +630,8 @@ export class SuperAdmin {
     }
 
     if (!targetChannelId) {
-      await safeReply(interaction, buildTextReply("Channel is required when no message id is provided.", true));
+      const reply = buildTextReply("Channel is required when no message id is provided.", true);
+      await safeReply(interaction, reply);
       return;
     }
 
