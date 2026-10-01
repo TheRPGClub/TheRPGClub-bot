@@ -3852,6 +3852,74 @@ export default {
         };
       },
     },
+    "no-full-member-fetch": {
+      meta: {
+        type: "problem",
+        docs: {
+          description:
+            "Route whole-list guild member fetches through fetchAllGuildMembers.",
+        },
+        schema: [],
+        messages: {
+          noFullMemberFetch:
+            "{{target}}.fetch() without a user or query requests the whole member list. " +
+            "Fetch by ID with members.fetch(id) or members.fetch({ user: ids }), or, when " +
+            "every member is truly needed, call fetchAllGuildMembers from " +
+            "src/functions/GuildMemberFetch.ts and add the path to its doc (#1229).",
+        },
+      },
+      create(context) {
+        const fileName = normalizePathText(context.filename ?? "");
+        if (fileName.endsWith("/src/functions/guildmemberfetch.ts")) {
+          return {};
+        }
+
+        const scopesFetch = (property) =>
+          property.type === "Property" &&
+          !property.computed &&
+          property.key.type === "Identifier" &&
+          (property.key.name === "user" || property.key.name === "query");
+
+        // An object literal with no user or query asks for everyone; anything else (an ID,
+        // a variable, a spread) is left alone because the plugin cannot see its type.
+        const isFullListCall = (args) => {
+          if (args.length === 0) return true;
+          const [first] = args;
+          if (first.type !== "ObjectExpression") return false;
+          if (first.properties.some((prop) => prop.type === "SpreadElement")) return false;
+          return !first.properties.some(scopesFetch);
+        };
+
+        return {
+          CallExpression(node) {
+            const callee = node.callee;
+            if (
+              callee.type !== "MemberExpression" ||
+              callee.computed ||
+              callee.property.type !== "Identifier" ||
+              callee.property.name !== "fetch"
+            ) {
+              return;
+            }
+            const target = callee.object;
+            if (
+              target.type !== "MemberExpression" ||
+              target.computed ||
+              target.property.type !== "Identifier" ||
+              target.property.name !== "members"
+            ) {
+              return;
+            }
+            if (!isFullListCall(node.arguments)) return;
+            context.report({
+              node,
+              messageId: "noFullMemberFetch",
+              data: { target: context.sourceCode.getText(target) },
+            });
+          },
+        };
+      },
+    },
     "no-direct-reaction-fetch": {
       meta: {
         type: "problem",
