@@ -115,10 +115,19 @@ jobs:
       PR: ${{ needs.plan.outputs.pr }}
       SHA: ${{ needs.plan.outputs.sha }}
     steps:
-      - name: Checkout PR head
+      # Every script, module, and the compose file this job runs come from the workflow's
+      # own commit. The PR's head is only the Docker build context, so a branch that
+      # predates or rewrites them cannot change how its preview is deployed or judged.
+      - name: Checkout workflow commit
+        uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - name: Checkout PR head to build
         uses: actions/checkout@v5
         with:
           ref: ${{ needs.plan.outputs.sha }}
+          path: pr-src
           persist-credentials: false
 
       - name: Report building
@@ -133,6 +142,8 @@ jobs:
 
       - name: Deploy preview
         id: deploy
+        env:
+          PREVIEW_BUILD_CONTEXT: ${{ github.workspace }}/pr-src
         run: bash "$PREVIEW_SCRIPT" deploy "$PR" "$SHA"
 
       - name: Report replaced preview
