@@ -36,7 +36,6 @@ import {
   completionAddContextToJson,
 } from "./completion-add-context.codec.js";
 import { resolveNowPlayingRemoval } from "./completion-helpers.js";
-import { promptCompletionPlatformSelection } from "./completion-platform.service.js";
 import { completionAddSessions, type CompletionAddContext } from "./completion.types.js";
 import {
   buildComponentsV2EditFlags,
@@ -60,6 +59,8 @@ import GameSearchService from "../../classes/GameSearchService.js";
 
 const IGDB_IMPORT_FAILED_STATUS = "Import failed. See the error below.";
 const COMPLETION_ADD_EXPIRED_MESSAGE = "This completion prompt has expired.";
+const COMPLETION_ADD_MISSING_PLATFORM_MESSAGE =
+  "This completion prompt lost its platform. Please start the completion again.";
 const COMPLETION_ADD_NOT_OWNER_MESSAGE = "This completion prompt isn't for you.";
 const COMPLETION_ADD_SESSION_ID_PREFIX = "compadd";
 const completionAddRegistry = createResumableSessionRegistry<CompletionAddContext>({
@@ -267,6 +268,17 @@ export async function processCompletionSelection(
     }
   }
 
+  // The platform option is required, so only a corrupt restored session lacks one.
+  const platformId = ctx.selectedPlatformId;
+  if (platformId == null) {
+    await safeReply(interaction, {
+      components: [buildTextContainer(COMPLETION_ADD_MISSING_PLATFORM_MESSAGE)],
+      flags: buildComponentsV2Flags(true),
+      __forceFollowUp: true,
+    });
+    return false;
+  }
+
   try {
     let gameId: number | null = null;
     let gameTitle: string | null = null;
@@ -352,34 +364,20 @@ export async function processCompletionSelection(
       ctx.completedAt,
       false,
     );
-    if (ctx.selectedPlatformId != null) {
-      await saveCompletion(
-        interaction,
-        ctx.userId,
-        gameId,
-        ctx.selectedPlatformId,
-        ctx.completionType,
-        ctx.completedAt,
-        ctx.finalPlaytimeHours,
-        ctx.note,
-        gameTitle ?? "this game",
-        ctx.announce,
-        false,
-        removeFromNowPlaying,
-      );
-    } else {
-      await promptCompletionPlatformSelection(interaction, {
-        userId: ctx.userId,
-        gameId,
-        gameTitle: gameTitle ?? "this game",
-        completionType: ctx.completionType,
-        completedAt: ctx.completedAt,
-        finalPlaytimeHours: ctx.finalPlaytimeHours,
-        note: ctx.note,
-        announce: ctx.announce,
-        removeFromNowPlaying,
-      });
-    }
+    await saveCompletion(
+      interaction,
+      ctx.userId,
+      gameId,
+      platformId,
+      ctx.completionType,
+      ctx.completedAt,
+      ctx.finalPlaytimeHours,
+      ctx.note,
+      gameTitle ?? "this game",
+      ctx.announce,
+      false,
+      removeFromNowPlaying,
+    );
     return false;
   } catch (err: unknown) {
     logError("CompletionAdd.processCompletionSelection", err);
