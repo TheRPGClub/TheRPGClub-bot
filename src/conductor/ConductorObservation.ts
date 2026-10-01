@@ -4,6 +4,7 @@
  * Everything here is untrusted data from Discord. It is matched against the
  * step's expectations and quoted in reports; it is never acted on.
  */
+import { detectAction } from "./DrivePlan.js";
 import {
   extractExpectations,
   type ExpectationKind,
@@ -222,10 +223,18 @@ export function slashSourceFor(command: string): string | null {
 }
 
 /**
+ * The mirror sources a modal submit's reply as `component:<modal custom ID>`. Modal
+ * IDs share no prefix of their own (`todo-create-modal:...`, `gamedb-syn-add:...`),
+ * so any component source is accepted for the modal a slash command step submits.
+ */
+const COMPONENT_SOURCE_PREFIX = "component:";
+
+/**
  * Splits the window's output into what this step produced and what it did not.
  * A step's output must land where its `Ephemeral:` line says, and a mirrored slash
  * command reply must come from the command the step names, so a late reply from an
- * earlier step is not credited to this one.
+ * earlier step is not credited to this one. A slash command step that submits the
+ * modal it opens also owns the modal's component-sourced reply.
  */
 export function attributeStepOutput(
   step: ITestStep,
@@ -237,6 +246,7 @@ export function attributeStepOutput(
   // is a failure either way.
   const places: ObservationPlace[] = step.ephemeral ? ["mirror"] : ["channel"];
   const slashSource = slashSourceFor(step.command);
+  const submitsModal = detectAction(step.command) === "slash-modal";
   const observed: IObservedOutput[] = [];
   const unattributed: IObservedOutput[] = [];
 
@@ -246,6 +256,7 @@ export function attributeStepOutput(
     // answer to an earlier step.
     const rightSource = output.place !== "mirror" || (slashSource
       ? output.source === slashSource
+        || (submitsModal && Boolean(output.source?.startsWith(COMPONENT_SOURCE_PREFIX)))
       : !output.source?.startsWith("/"));
     if (rightPlace && rightSource) observed.push(output);
     else unattributed.push(output);
