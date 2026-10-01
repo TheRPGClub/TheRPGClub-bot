@@ -7,6 +7,7 @@ import {
   type NominationKind,
 } from "../../classes/Nomination.js";
 import type { VotingEventKind } from "../../classes/VotingEvents.js";
+import { toVotingRoundCategory } from "../../classes/VotingRounds.js";
 import { IS_TEST_MODE, TEST_GUILD_ID } from "../../config/testMode.js";
 import { buildErrorReply, buildTextReply } from "../../functions/ComponentsV2Utils.js";
 import { toUnixTimestamp } from "../../functions/DateFormatUtils.js";
@@ -25,7 +26,7 @@ import {
   startSandbox,
 } from "../../services/VotingSandbox.js";
 import {
-  closeSandboxVoting,
+  closeSandboxBallot,
   createSandboxState,
   isSimulatedVoter,
   openSandboxVoting,
@@ -35,7 +36,6 @@ import {
   sandboxWinnerTitles,
   seedSandboxOutcome,
   toNominationEntries,
-  toVotingRoundCategory,
   type ISandboxNominationSeed,
   type IVotingSandboxState,
   type SandboxOutcome,
@@ -85,6 +85,14 @@ export function buildSandboxStatusText(state: IVotingSandboxState): string {
     `Voting opens <t:${toUnixTimestamp(new Date(state.votingOpensAt))}:F> and closes ` +
       `<t:${toUnixTimestamp(new Date(state.votingClosesAt))}:F>.`,
   ];
+  if (state.runoffClosesAt) {
+    const closes = toUnixTimestamp(new Date(state.runoffClosesAt));
+    lines.push(
+      state.runoffClosedAt
+        ? `The runoff closed <t:${closes}:F>.`
+        : `The runoff is open until <t:${closes}:F>.`,
+    );
+  }
   for (const kind of NOMINATION_KINDS) {
     const rows = mergeTallyWithNominations(
       sandboxTally(state, kind).rows,
@@ -101,9 +109,19 @@ export function buildSandboxStatusText(state: IVotingSandboxState): string {
       lines.push(`- ${row.gameTitle}: ${row.voteCount}`);
     }
     if (rows.length > 10) lines.push(`- ...and ${rows.length - 10} more`);
-    const tie = state.pendingTies[toVotingRoundCategory(kind)];
+    const category = toVotingRoundCategory(kind);
+    const runoffTies = state.runoffTies[category] ?? [];
+    if (runoffTies.length) {
+      const counts = new Map(
+        sandboxTally(state, kind, "runoff").rows.map((row) => [row.gamedbGameId, row.voteCount]),
+      );
+      const runoff = runoffTies.map((game) => `${game.title}: ${counts.get(game.gameId) ?? 0}`);
+      lines.push(`- Runoff: ${runoff.join(", ")}`);
+    }
+    const tie = state.pendingTies[category];
     if (tie?.length) {
-      lines.push(`- Tie pending: ${tie.map((game) => game.title).join(", ")}`);
+      const noun = state.phase === "runoff" ? "In the runoff" : "Tie pending";
+      lines.push(`- ${noun}: ${tie.map((game) => game.title).join(", ")}`);
     }
     const winners = sandboxWinnerTitles(state, kind);
     if (winners.length) lines.push(`- Winner(s): ${winners.join(", ")}`);
@@ -251,10 +269,11 @@ export async function handleSandboxSeed(
     return;
   }
   await runStep(interaction, "Could not seed the sandbox votes", async () => {
-    await mutateSandbox(interaction.user.id, (state) => {
-      if (state.phase !== "voting") {
+    const runoff = await mutateSandbox(interaction.user.id, (state) => {
+      if (state.phase !== "voting" && state.phase !== "runoff") {
         throw new UserFacingError(
-          `Seeding needs open voting; sandbox Round ${state.roundNumber} is ${state.phase}.`,
+          "Seeding needs open voting or an open runoff; " +
+            `sandbox Round ${state.roundNumber} is ${state.phase}.`,
         );
       }
       const now = new Date();
@@ -262,17 +281,25 @@ export async function handleSandboxSeed(
         const outcome = outcomes[kind];
         if (outcome) seedSandboxOutcome(state, kind, outcome, now);
       }
+      return state.phase === "runoff";
     });
     const seeded = kinds.map((kind) => `${nominationKindLabel(kind)}: ${outcomes[kind]}`);
-    return `Seeded simulated votes (${seeded.join(", ")}). Earlier simulated votes in those ` +
-      "categories were replaced; members' votes were kept.";
+    const ballot = runoff ? "runoff " : "";
+    return `Seeded simulated ${ballot}votes (${seeded.join(", ")}). Earlier simulated ` +
+      `${ballot}votes in those categories were replaced; members' votes were kept.`;
   });
 }
 
 export async function handleSandboxClose(interaction: CommandInteraction): Promise<void> {
   await runStep(interaction, "Could not close sandbox voting", async () => {
-    await mutateSandbox(interaction.user.id, (state) => closeSandboxVoting(state, new Date()));
-    return "Closed voting. Results post in announcements, and a tie prompts the admin channel.";
+    const closed = await mutateSandbox(interaction.user.id, (state) =>
+      closeSandboxBallot(state, new Date()),
+    );
+    return closed === "runoff"
+      ? "Closed the runoff. Its results post in announcements, and a runoff that tied " +
+        "again prompts the admin channel."
+      : "Closed voting. Results post in announcements, and a tie opens a runoff with its " +
+        "own panels there.";
   });
 }
 

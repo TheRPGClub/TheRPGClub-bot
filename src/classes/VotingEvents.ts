@@ -5,6 +5,8 @@ export type VotingEventKind =
   | "nomination_reminder_1d"
   | "voting_opened"
   | "voting_closed"
+  | "runoff_opened"
+  | "runoff_closed"
   | "tie_pending"
   | "round_decided";
 
@@ -13,6 +15,8 @@ const VOTING_EVENT_KINDS: ReadonlySet<string> = new Set<VotingEventKind>([
   "nomination_reminder_1d",
   "voting_opened",
   "voting_closed",
+  "runoff_opened",
+  "runoff_closed",
   "tie_pending",
   "round_decided",
 ]);

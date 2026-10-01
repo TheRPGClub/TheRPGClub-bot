@@ -18,6 +18,8 @@ export interface IVoteCastResult {
   removedVotes: IVoteEntry[];
   cap: number;
   warning: string | null;
+  /** True when the API put the cast on the round's tie-breaker runoff ballot. */
+  runoff: boolean;
 }
 
 export interface IVoteTallyRow {
@@ -29,6 +31,16 @@ export interface IVoteTallyRow {
 export interface IVoteTally {
   rows: IVoteTallyRow[];
   cap: number;
+}
+
+/**
+ * Which of a round's ballots a read addresses: the main vote, or the
+ * tie-breaker runoff between a category's tied games.
+ */
+export type VoteBallot = "main" | "runoff";
+
+function ballotParams(ballot: VoteBallot): { params: { runoff: true } } | undefined {
+  return ballot === "runoff" ? { params: { runoff: true } } : undefined;
 }
 
 type VoteApiData = {
@@ -48,6 +60,7 @@ type VoteCastApiResponse = {
     removed_votes: VoteApiData[];
     cap: number;
     warning: string | null;
+    runoff?: boolean;
   };
 };
 
@@ -73,7 +86,8 @@ function mapApiData(d: VoteApiData): IVoteEntry {
 
 /**
  * Casts or toggles a vote on a nomination. Returns null when the API reports
- * the nomination no longer exists in the round (404).
+ * the nomination no longer exists in the round (404). There is no ballot to
+ * pick: while the round's runoff is open the API puts the cast on the runoff.
  */
 export async function castVote(
   kind: NominationKind,
@@ -99,6 +113,7 @@ export async function castVote(
     removedVotes: (d.removed_votes ?? []).map(mapApiData),
     cap: Number(d.cap),
     warning: d.warning ?? null,
+    runoff: Boolean(d.runoff),
   };
 }
 
@@ -106,9 +121,11 @@ export async function getVotesForUser(
   kind: NominationKind,
   roundNumber: number,
   userId: string,
+  ballot: VoteBallot = "main",
 ): Promise<IVoteEntry[]> {
   const response = await apiGet<VoteListApiResponse>(
     `/api/v1/${nominationApiPrefix(kind)}/${roundNumber}/votes/${userId}`,
+    ballotParams(ballot),
   );
   return (response?.data ?? []).map(mapApiData);
 }
@@ -116,9 +133,11 @@ export async function getVotesForUser(
 export async function getVoteTally(
   kind: NominationKind,
   roundNumber: number,
+  ballot: VoteBallot = "main",
 ): Promise<IVoteTally> {
   const response = await apiGet<VoteTallyApiResponse>(
     `/api/v1/${nominationApiPrefix(kind)}/${roundNumber}/votes/tally`,
+    ballotParams(ballot),
   );
   return {
     rows: (response?.data ?? []).map((row) => ({
@@ -126,7 +145,7 @@ export async function getVoteTally(
       gamedbGameId: Number(row.gamedb_game_id),
       voteCount: Number(row.vote_count),
     })),
-    cap: Number(response?.meta?.cap ?? 2),
+    cap: Number(response?.meta?.cap ?? (ballot === "runoff" ? 1 : 2)),
   };
 }
 

@@ -1,5 +1,6 @@
 import { channelMention, type Client } from "discord.js";
 import type { INominationEntry, NominationKind } from "../classes/Nomination.js";
+import type { VoteBallot } from "../classes/Vote.js";
 import { NOMINATION_KINDS, nominationKindLabel } from "../classes/Nomination.js";
 import {
   apiVotingDataSource,
@@ -77,6 +78,11 @@ export interface IPostVotePanelsParams {
   /** Where the tally (for the cap) is read; the API unless the sandbox runs. */
   source?: IVotingDataSource;
   ids?: IVotePanelIds;
+  /**
+   * The main vote (the default) or the tie-breaker runoff, whose
+   * `nominationsByKind` holds only each tied category's tied games.
+   */
+  ballot?: VoteBallot;
 }
 
 export interface IPostVotePanelsResult {
@@ -95,16 +101,24 @@ export async function postVotePanels(
   let failed = 0;
   for (const kind of NOMINATION_KINDS) {
     const kindLabel = nominationKindLabel(kind);
+    const ballot = params.ballot ?? "main";
+    const panelNoun = ballot === "runoff" ? "runoff panel" : "voting panel";
     const nominations = params.nominationsByKind.get(kind) ?? [];
     if (!dedupeNominationsByGame(nominations).length) {
-      resultLines.push(`${kindLabel}: no votable nominations; panel skipped.`);
+      resultLines.push(
+        ballot === "runoff"
+          ? `${kindLabel}: no runoff; panel skipped.`
+          : `${kindLabel}: no votable nominations; panel skipped.`,
+      );
       continue;
     }
     const tally = await (params.source ?? apiVotingDataSource).getTally(
       kind,
       params.roundNumber,
+      ballot,
     );
     const components = buildVotePanelComponents({
+      ballot,
       kind,
       roundNumber: params.roundNumber,
       voteDeadline: params.voteDeadline,
@@ -129,8 +143,8 @@ export async function postVotePanels(
     }
     resultLines.push(
       sent
-        ? `${kindLabel}: voting panel posted in ${channelMention(params.channelId)}.`
-        : `${kindLabel}: failed to post the voting panel in ` +
+        ? `${kindLabel}: ${panelNoun} posted in ${channelMention(params.channelId)}.`
+        : `${kindLabel}: failed to post the ${panelNoun} in ` +
           `${channelMention(params.channelId)}: ${failure}`,
     );
   }

@@ -1,8 +1,14 @@
 import type { Client } from "discord.js";
 import Gotm, { reloadGotmRoundFromDb } from "../classes/Gotm.js";
+import {
+  NOMINATION_KINDS,
+  type INominationEntry,
+  type NominationKind,
+} from "../classes/Nomination.js";
+import type { VoteBallot } from "../classes/Vote.js";
 import NrGotm, { reloadNrGotmRoundFromDb } from "../classes/NrGotm.js";
 import type { IVotingEvent } from "../classes/VotingEvents.js";
-import type { IVotingRound } from "../classes/VotingRounds.js";
+import { toVotingRoundCategory, type IVotingRound } from "../classes/VotingRounds.js";
 import { ADMIN_CHANNEL_ID, ANNOUNCEMENT_CHANNEL_ID } from "../config/channels.js";
 import { NOMINATION_DISCUSSION_CHANNEL_IDS } from "../config/nominationChannels.js";
 import { fetchSendableChannel } from "../functions/ChannelUtils.js";
@@ -13,6 +19,7 @@ import {
   type TieBreakSelectIdBuilder,
 } from "../functions/VotingTiePrompt.js";
 import type { IVotePanelIds } from "../functions/VotePanelComponents.js";
+import { filterRunoffNominations } from "../functions/VoteResultsUtils.js";
 import { ensureVoteScheduledEvent } from "../functions/VoteScheduledEvent.js";
 import {
   hasVotableNominations,
@@ -21,6 +28,7 @@ import {
 } from "../functions/VotePanelPosting.js";
 import { logError, logWarn } from "../utilities/LogUtils.js";
 import {
+  announceRunoffResults,
   announceVotingResults,
   NothingToAnnounceError,
 } from "./VotingResultsAnnouncement.js";
@@ -44,7 +52,8 @@ export interface IVotingEventContext {
   source: IVotingDataSource;
   /** Adds a banner to the results post and never creates a winner thread there. */
   rehearsal: boolean;
-  panelIds?: IVotePanelIds;
+  /** Panel ids per ballot; the live ones when absent. */
+  panelIds?: Record<VoteBallot, IVotePanelIds>;
   panelNotice?: string;
   tieSelectId?: TieBreakSelectIdBuilder;
   hasCover?: (gameId: number) => boolean;
@@ -132,7 +141,7 @@ async function postVotingPanels(
     voteDeadline: round.votingClosesAt,
     nominationsByKind,
     source: context.source,
-    ids: context.panelIds,
+    ids: context.panelIds?.main,
     notice: context.panelNotice,
   });
   if (result.posted === 0) {
@@ -160,6 +169,85 @@ async function postVotingResults(
       { roundNumber: round.roundNumber, monthLabel: round.monthYear },
       { rehearsal: context.rehearsal, source: context.source, hasCover: context.hasCover },
     );
+  } catch (err) {
+    if (err instanceof NothingToAnnounceError) {
+      return "skipped";
+    }
+    throw err;
+  }
+  return "delivered";
+}
+
+/**
+ * The runoff panels: one per category the runoff is still deciding, offering
+ * only its tied games. A category an admin already settled is left out.
+ */
+async function postRunoffPanels(
+  client: Client,
+  event: IVotingEvent,
+  context: IVotingEventContext,
+): Promise<VotingEventOutcome> {
+  const round = await requireRound(event, context);
+  if (!round.runoffOpen || !round.runoffClosesAt) {
+    return "skipped";
+  }
+
+  const listed = await loadNominationsByKind(round.roundNumber, context.source);
+  const nominationsByKind = new Map<NominationKind, INominationEntry[]>(
+    NOMINATION_KINDS.map((kind) => [
+      kind,
+      filterRunoffNominations(
+        listed.get(kind) ?? [],
+        round.pendingTies[toVotingRoundCategory(kind)] ?? [],
+      ),
+    ]),
+  );
+  if (!hasVotableNominations(nominationsByKind)) {
+    logWarn(
+      "VotingEventHandlers.runoffOpened",
+      `Round ${round.roundNumber}'s runoff has no tied games left to vote on; no panels posted.`,
+    );
+    return "skipped";
+  }
+
+  const result = await postVotePanels({
+    client,
+    channelId: ANNOUNCEMENT_CHANNEL_ID,
+    roundNumber: round.roundNumber,
+    voteDeadline: round.runoffClosesAt,
+    nominationsByKind,
+    source: context.source,
+    ids: context.panelIds?.runoff,
+    notice: context.panelNotice,
+    ballot: "runoff",
+  });
+  if (result.posted === 0) {
+    throw new Error(
+      `No Round ${round.roundNumber} runoff panel could be posted.\n${result.lines.join("\n")}`,
+    );
+  }
+  if (result.failed > 0) {
+    // As with the voting panels, a retry would repost the ones that went out.
+    logWarn("VotingEventHandlers.runoffOpened", result.lines.join("\n"));
+  }
+  return "delivered";
+}
+
+async function postRunoffResults(
+  client: Client,
+  event: IVotingEvent,
+  context: IVotingEventContext,
+): Promise<VotingEventOutcome> {
+  const round = await requireRound(event, context);
+  if (!round.runoffEnded) {
+    return "skipped";
+  }
+  try {
+    await announceRunoffResults(client, round, {
+      rehearsal: context.rehearsal,
+      source: context.source,
+      hasCover: context.hasCover,
+    });
   } catch (err) {
     if (err instanceof NothingToAnnounceError) {
       return "skipped";
@@ -293,6 +381,10 @@ export async function handleVotingEvent(
       return postVotingPanels(client, event, context);
     case "voting_closed":
       return postVotingResults(client, event, context);
+    case "runoff_opened":
+      return postRunoffPanels(client, event, context);
+    case "runoff_closed":
+      return postRunoffResults(client, event, context);
     case "tie_pending":
       return postTiePendingNotice(client, event, context);
     case "round_decided":

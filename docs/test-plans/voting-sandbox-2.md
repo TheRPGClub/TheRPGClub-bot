@@ -3,14 +3,14 @@
 The rest of `/vote-sandbox`: the `start` options (`round`, `cap`, `gotm-nominations`,
 `nr-gotm-nominations`, `source-round`), the one-day reminder, `deliver`, events that no
 longer apply, the refusals for a phase or a game count that does not allow a step, a
-three-way tie broken with joint winners, a category with no votes, and panels from a
-replaced or ended sandbox. Part 1 (`voting-sandbox-1.md`) covers the main walk.
+three-way tie whose runoff ties again, broken with joint winners, a category with no
+votes, and panels from a replaced or ended sandbox. Part 1 (`voting-sandbox-1.md`) covers the main walk.
 
 It changes no real club data. The sandbox lives in one wizard session row for you, and
 `source-round` only reads a real round's nominations. It does post in the test guild:
-reminders in the nomination channels, panels and results in announcements, tie prompts
-and "Sandbox Round N decided" summaries in the admin channel, and a scheduled event for
-the round after each decided one. The plan ends its sandbox at the end.
+reminders in the nomination channels, panels, runoff panels and results in
+announcements, tie prompts and "Sandbox Round N decided" summaries in the admin channel,
+and a scheduled event for the round after each decided one. The plan ends its sandbox at the end.
 
 Paste the Testing section below into a PR body and run `/conduct` on that PR, or
 follow it by hand. The format is in `.github/pull-request-testing-format.md`.
@@ -157,17 +157,33 @@ Expected: an ephemeral reply, "Seeded simulated votes", "GOTM: three-way-tie", a
 "NR-GOTM: no-votes".
 Ephemeral: yes
 
-### Step 18: Close voting into a tie
+### Step 18: Close voting into a runoff
 ```
 /vote-sandbox close
 ```
-Expected: an ephemeral reply, "Closed voting.", "tie_pending", and
-"Tie pending: Sandbox GOTM Game 1, Sandbox GOTM Game 2, Sandbox GOTM Game 3".
-A tie prompt posts in the admin
-channel for GOTM only.
+Expected: an ephemeral reply, "Closed voting.", "runoff_opened", and
+"In the runoff: Sandbox GOTM Game 1, Sandbox GOTM Game 2, Sandbox GOTM Game 3".
+A GOTM runoff panel posts in announcements; no NR-GOTM runoff panel and no tie prompt.
 Ephemeral: yes
 
-### Step 19: Break the tie with joint winners
+### Step 19: Seed a runoff that ties again
+```
+/vote-sandbox seed gotm:Two-way tie
+```
+Expected: an ephemeral reply, "Seeded simulated runoff votes" and "GOTM: two-way-tie".
+Ephemeral: yes
+
+### Step 20: Close the runoff into a tie
+```
+/vote-sandbox close
+```
+Expected: an ephemeral reply, "Closed the runoff.", "runoff_closed", "tie_pending", and
+"Tie pending: Sandbox GOTM Game 1, Sandbox GOTM Game 2". The runoff results in
+announcements say the GOTM runoff "also ended in a tie", and a tie prompt headed
+"runoff did not break the tie" posts in the admin channel for GOTM only.
+Ephemeral: yes
+
+### Step 21: Break the tie with joint winners
 ```
 select "Sandbox GOTM Game 1" and "Sandbox GOTM Game 2" on the Round 999 tie prompt
 ```
@@ -175,7 +191,7 @@ Expected: the tie prompt in the admin channel changes in place to "GOTM tie brok
 "picked as the GOTM joint winners". A "Sandbox Round 999 decided" summary posts.
 Ephemeral: no
 
-### Step 20: Show the decided round
+### Step 22: Show the decided round
 ```
 /vote-sandbox status
 ```
@@ -183,7 +199,7 @@ Expected: an ephemeral reply, "decided",
 "Winner(s): Sandbox GOTM Game 1, Sandbox GOTM Game 2", and "Queued events: none."
 Ephemeral: yes
 
-### Step 21: Start a sandbox from a real round's nominations
+### Step 23: Start a sandbox from a real round's nominations
 ```
 /vote-sandbox start source-round:100
 ```
@@ -191,7 +207,7 @@ Expected: an ephemeral reply, "Started sandbox" and
 "Nominations copied (read only) from Round 100". Nothing is written to Round 100.
 Ephemeral: yes
 
-### Step 22: Open voting on the copied round
+### Step 24: Open voting on the copied round
 ```
 /vote-sandbox open
 ```
@@ -199,7 +215,7 @@ Expected: an ephemeral reply, "voting_opened" and "delivered". The panels list R
 100's nominations, or fixture games for a category it had none for.
 Ephemeral: yes
 
-### Step 23: End the sandbox
+### Step 25: End the sandbox
 ```
 /vote-sandbox end
 ```
@@ -207,15 +223,15 @@ Expected: an ephemeral reply,
 "Ended your voting sandbox. Its panels and tie prompts now refuse input."
 Ephemeral: yes
 
-### Step 24: Use a panel from the ended sandbox
+### Step 26: Use a panel from the ended sandbox
 ```
-click "Results" on the GOTM sandbox panel from step 22
+click "Results" on the GOTM sandbox panel from step 24
 ```
 Expected: an ephemeral error, "Could not load the results" and
 "belongs to a voting sandbox that has ended or been restarted".
 Ephemeral: yes
 
-### Step 25: End the sandbox again
+### Step 27: End the sandbox again
 ```
 /vote-sandbox end
 ```

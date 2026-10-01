@@ -1,5 +1,6 @@
 import type { Client } from "discord.js";
 import { NOMINATION_KINDS, nominationKindLabel } from "../classes/Nomination.js";
+import type { VoteBallot } from "../classes/Vote.js";
 import type { IVotingEvent } from "../classes/VotingEvents.js";
 import type { VotingRoundCategory } from "../classes/VotingRounds.js";
 import { ADMIN_CHANNEL_ID } from "../config/channels.js";
@@ -52,6 +53,13 @@ export const SANDBOX_CUSTOM_ID_PREFIX = {
   mine: "vsbx-mine",
   tally: "vsbx-tally",
   tie: "vsbx-tie",
+} as const;
+
+/** The sandbox's runoff panels, kept apart from its voting panels by prefix. */
+export const SANDBOX_RUNOFF_CUSTOM_ID_PREFIX = {
+  cast: "vsbx-rcast",
+  mine: "vsbx-rmine",
+  tally: "vsbx-rtally",
 } as const;
 
 /** Built per reply, since the command mention needs the IDs loaded after startup. */
@@ -176,14 +184,16 @@ function sandboxIdBase(target: ISandboxTarget, roundNumber: number): string {
   return `${target.ownerId}:${target.sandboxId}:${roundNumber}`;
 }
 
-export function buildSandboxPanelIds(target: ISandboxTarget): IVotePanelIds {
+export function buildSandboxPanelIds(
+  target: ISandboxTarget,
+  ballot: VoteBallot = "main",
+): IVotePanelIds {
+  const prefix = ballot === "runoff" ? SANDBOX_RUNOFF_CUSTOM_ID_PREFIX : SANDBOX_CUSTOM_ID_PREFIX;
   return {
     cast: (kind, round, chunk) =>
-      `${SANDBOX_CUSTOM_ID_PREFIX.cast}:${sandboxIdBase(target, round)}:${kind}:${chunk}`,
-    mine: (kind, round) =>
-      `${SANDBOX_CUSTOM_ID_PREFIX.mine}:${sandboxIdBase(target, round)}:${kind}`,
-    tally: (kind, round) =>
-      `${SANDBOX_CUSTOM_ID_PREFIX.tally}:${sandboxIdBase(target, round)}:${kind}`,
+      `${prefix.cast}:${sandboxIdBase(target, round)}:${kind}:${chunk}`,
+    mine: (kind, round) => `${prefix.mine}:${sandboxIdBase(target, round)}:${kind}`,
+    tally: (kind, round) => `${prefix.tally}:${sandboxIdBase(target, round)}:${kind}`,
   };
 }
 
@@ -239,15 +249,17 @@ export function createSandboxDataSource(target: ISandboxTarget): IVotingDataSour
       const state = await requireSandbox(target);
       return roundNumber === state.roundNumber ? toNominationEntries(state, kind) : [];
     },
-    getTally: async (kind, roundNumber) => {
+    getTally: async (kind, roundNumber, ballot) => {
       const state = await requireSandbox(target);
       return roundNumber === state.roundNumber
-        ? sandboxTally(state, kind)
+        ? sandboxTally(state, kind, ballot)
         : { rows: [], cap: state.cap };
     },
-    getVotesForUser: async (kind, roundNumber, userId) => {
+    getVotesForUser: async (kind, roundNumber, userId, ballot) => {
       const state = await requireSandbox(target);
-      return roundNumber === state.roundNumber ? sandboxVotesForUser(state, kind, userId) : [];
+      return roundNumber === state.roundNumber
+        ? sandboxVotesForUser(state, kind, userId, ballot)
+        : [];
     },
     castVote: (kind, roundNumber, userId, nominationId) =>
       mutateSandbox(
@@ -315,7 +327,10 @@ export function buildSandboxEventContext(state: IVotingSandboxState): IVotingEve
   return {
     source: createSandboxDataSource(target),
     rehearsal: true,
-    panelIds: buildSandboxPanelIds(target),
+    panelIds: {
+      main: buildSandboxPanelIds(target, "main"),
+      runoff: buildSandboxPanelIds(target, "runoff"),
+    },
     panelNotice: buildSandboxPanelNotice(state),
     tieSelectId: (round, category) => buildSandboxTieSelectId(target, round, category),
     hasCover: (gameId) => !isFixtureGameId(gameId),

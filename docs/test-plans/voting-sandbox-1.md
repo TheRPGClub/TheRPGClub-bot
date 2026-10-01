@@ -2,14 +2,14 @@
 
 A walk through a whole sandboxed GOTM / NR-GOTM voting round with `/vote-sandbox`: the
 no-sandbox errors, `start`, `status`, `remind`, `open`, `seed`, `close`, `event`, and
-`end`, the vote panel's select, My Votes and Results controls, and the admin tie-break
-prompt. Part 2 (`voting-sandbox-2.md`) covers the start options, joint winners, the
+`end`, the vote panel's select, My Votes and Results controls, and a tie settled by a
+member runoff. Part 2 (`voting-sandbox-2.md`) covers the start options, joint winners, the
 refusals, and ended sandboxes.
 
 It changes no real club data. The sandbox round, its nominations, votes and winners live
 in one wizard session row for you, and nothing is written to a real voting round. It does
-post in the test guild: nomination reminders in both nomination channels, the vote panels
-and the results in the announcements channel, and the tie prompt and a "Sandbox Round 999
+post in the test guild: nomination reminders in both nomination channels, the vote panels,
+the runoff panel and the results in the announcements channel, and a "Sandbox Round 999
 decided" summary in the admin channel. Deciding the round also creates a "Round 1000 Vote"
 scheduled event in the test guild. The last step ends the sandbox.
 
@@ -189,10 +189,11 @@ Ephemeral: yes
 ```
 /vote-sandbox close
 ```
-Expected: an ephemeral reply, "Closed voting.", "voting_closed", "tie_pending",
+Expected: an ephemeral reply, "Closed voting.", "voting_closed", "runoff_opened",
 "Winner(s): Sandbox GOTM Game 1", and
-"Tie pending: Sandbox NR-GOTM Game 1, Sandbox NR-GOTM Game 2". The results post with the
-TEST MODE banner in announcements, and the tie prompt posts in the admin channel.
+"In the runoff: Sandbox NR-GOTM Game 1, Sandbox NR-GOTM Game 2". The results post with the
+TEST MODE banner in announcements, followed by an NR-GOTM runoff panel. No tie prompt
+posts in the admin channel.
 Ephemeral: yes
 
 ### Step 22: Check the revealed results
@@ -203,24 +204,48 @@ Expected: an ephemeral reply, "GOTM Results - Round 999", "Sandbox GOTM Game 1",
 "Each member can vote for up to 2 games."
 Ephemeral: yes
 
-### Step 23: Break the NR-GOTM tie
+### Step 23: Vote on the closed NR-GOTM voting panel
 ```
-select "Sandbox NR-GOTM Game 1" on the Round 999 tie prompt in the admin channel
+select "Sandbox NR-GOTM Game 3" on the NR-GOTM sandbox panel
 ```
-Expected: the tie prompt changes in place to "NR-GOTM tie broken" and
-"picked as the NR-GOTM winner". A "Sandbox Round 999 decided" summary posts in the admin
-channel.
-Ephemeral: no
+Expected: an ephemeral reply, "Voting for Round 999 has closed" and "Vote in the runoff".
+Ephemeral: yes
 
-### Step 24: Show the decided round
+### Step 24: Vote in the NR-GOTM runoff
+```
+select "Sandbox NR-GOTM Game 2" on the NR-GOTM sandbox runoff panel
+```
+Expected: an ephemeral reply, "Vote recorded for Sandbox NR-GOTM Game 2" and
+"Your NR-GOTM runoff votes for Round 999 (1/1)".
+Ephemeral: yes
+
+### Step 25: Check the hidden runoff results
+```
+click "Results" on the NR-GOTM sandbox runoff panel
+```
+Expected: an ephemeral reply, "NR-GOTM runoff Round 999 results are hidden" and
+"cast so far."
+Ephemeral: yes
+
+### Step 26: Close the runoff
+```
+/vote-sandbox close
+```
+Expected: an ephemeral reply, "Closed the runoff.", "runoff_closed", "round_decided", and
+"Winner(s): Sandbox NR-GOTM Game 2". The runoff results post with the TEST MODE banner in
+announcements, naming Sandbox NR-GOTM Game 2 as the NR-GOTM winner, and a
+"Sandbox Round 999 decided" summary posts in the admin channel.
+Ephemeral: yes
+
+### Step 27: Show the decided round
 ```
 /vote-sandbox status
 ```
 Expected: an ephemeral reply, "decided", "Winner(s): Sandbox GOTM Game 1",
-"Winner(s): Sandbox NR-GOTM Game 1", and "Queued events: none."
+"Winner(s): Sandbox NR-GOTM Game 2", and "Queued events: none."
 Ephemeral: yes
 
-### Step 25: End the sandbox
+### Step 28: End the sandbox
 ```
 /vote-sandbox end
 ```

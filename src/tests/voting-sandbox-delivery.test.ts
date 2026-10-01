@@ -18,6 +18,7 @@ import {
   startSandbox,
 } from "../services/VotingSandbox.js";
 import {
+  closeSandboxRunoff,
   closeSandboxVoting,
   createSandboxState,
   openSandboxVoting,
@@ -112,9 +113,9 @@ test("voting_opened posts sandbox panels to announcements through the live handl
   assert.equal((await loadSandbox(ownerId))?.outbox.length, 0);
 });
 
-test("a tie posts results, prompts the admins, and breaking it decides the round", async (t) => {
+test("a tie opens a runoff whose panels offer only the tied games", async (t) => {
   mockStore(t);
-  const { client, sent, scheduled } = fakeClient();
+  const { client, sent } = fakeClient();
   const ownerId = nextOwner();
   await startOpenSandbox(ownerId, "beef02");
   await deliverSandboxOutbox(client, ownerId);
@@ -123,21 +124,103 @@ test("a tie posts results, prompts the admins, and breaking it decides the round
   await mutateSandbox(ownerId, (state) => {
     const now = new Date();
     seedSandboxOutcome(state, "gotm", "two-way-tie", now);
-    seedSandboxOutcome(state, "nr-gotm", "no-votes", now);
+    seedSandboxOutcome(state, "nr-gotm", "winner", now);
     closeSandboxVoting(state, now);
   });
   const lines = await deliverSandboxOutbox(client, ownerId);
-  assert.deepEqual(lines, ["`voting_closed`: delivered.", "`tie_pending`: delivered."]);
+  assert.deepEqual(lines, ["`voting_closed`: delivered.", "`runoff_opened`: delivered."]);
+  assert.ok(sent.every((message) => message.channelId === ANNOUNCEMENT_CHANNEL_ID));
+  assert.match(sent[0]?.json ?? "", /TEST MODE/);
+  assert.ok(sent.some((message) => /A runoff vote between them decides the winner/.test(
+    message.json,
+  )));
 
+  const panels = sent.filter((message) => /GOTM Runoff - Round 999/.test(message.json));
+  assert.equal(panels.length, 1, "only the tied category gets a runoff panel");
+  const panel = panels[0]?.json ?? "";
+  assert.match(panel, new RegExp(`vsbx-rcast:${ownerId}:beef02:999:gotm:0`));
+  assert.match(panel, /VOTING SANDBOX/);
+  assert.match(panel, /Sandbox GOTM Game 1/);
+  assert.match(panel, /Sandbox GOTM Game 2/);
+  assert.doesNotMatch(panel, /Sandbox GOTM Game 3/);
+
+  const state = await loadSandbox(ownerId);
+  const source = createSandboxDataSource({ ownerId, sandboxId: "beef02" });
+  const tied = state?.nominations.gotm[1];
+  assert.ok(tied);
+  const cast = await source.castVote("gotm", 999, "member", tied.id);
+  assert.equal(cast?.runoff, true);
+  assert.equal((await source.getTally("gotm", 999, "runoff")).rows[0]?.voteCount, 1);
+  assert.equal((await source.getTally("gotm", 999)).cap, 2);
+});
+
+test("a runoff with a sole leader announces the winner and decides the round", async (t) => {
+  mockStore(t);
+  const { client, sent, scheduled } = fakeClient();
+  const ownerId = nextOwner();
+  await startOpenSandbox(ownerId, "beef03");
+  await mutateSandbox(ownerId, (state) => {
+    const now = new Date();
+    seedSandboxOutcome(state, "gotm", "two-way-tie", now);
+    seedSandboxOutcome(state, "nr-gotm", "winner", now);
+    closeSandboxVoting(state, now);
+  });
+  await deliverSandboxOutbox(client, ownerId);
+  sent.length = 0;
+
+  await mutateSandbox(ownerId, (state) => {
+    seedSandboxOutcome(state, "gotm", "winner", new Date());
+    closeSandboxRunoff(state, new Date());
+  });
+  assert.deepEqual(await deliverSandboxOutbox(client, ownerId), [
+    "`runoff_closed`: delivered.",
+    "`round_decided`: delivered.",
+  ]);
   const results = sent.filter((message) => message.channelId === ANNOUNCEMENT_CHANNEL_ID);
   assert.match(results[0]?.json ?? "", /TEST MODE/);
-  assert.ok(results.some((message) => /ends in a tie between/.test(message.json)));
+  assert.match(results[0]?.json ?? "", /GOTM runoff Results - Round 999/);
+  assert.doesNotMatch(results[0]?.json ?? "", /NR-GOTM/, "only the runoff's categories");
+  assert.ok(results.some((message) => /GOTM winner for Round 999.*Sandbox GOTM Game 1/.test(
+    message.json,
+  )));
+  assert.ok(sent.some((message) => /Sandbox Round 999 decided/.test(message.json)));
+  assert.equal(sent.some((message) => message.channelId === ADMIN_CHANNEL_ID &&
+    /tie/.test(message.json)), false);
+  assert.equal(scheduled.length, 1);
+});
+
+test("a runoff that ties again prompts the admins, and breaking it decides", async (t) => {
+  mockStore(t);
+  const { client, sent, scheduled } = fakeClient();
+  const ownerId = nextOwner();
+  await startOpenSandbox(ownerId, "beef04");
+  await mutateSandbox(ownerId, (state) => {
+    const now = new Date();
+    seedSandboxOutcome(state, "gotm", "two-way-tie", now);
+    seedSandboxOutcome(state, "nr-gotm", "no-votes", now);
+    closeSandboxVoting(state, now);
+  });
+  await deliverSandboxOutbox(client, ownerId);
+  sent.length = 0;
+
+  await mutateSandbox(ownerId, (state) => {
+    seedSandboxOutcome(state, "gotm", "two-way-tie", new Date());
+    closeSandboxRunoff(state, new Date());
+  });
+  assert.deepEqual(await deliverSandboxOutbox(client, ownerId), [
+    "`runoff_closed`: delivered.",
+    "`tie_pending`: delivered.",
+  ]);
+  assert.ok(sent.some((message) => /runoff for Round 999.*also ended in a tie/.test(
+    message.json,
+  )));
   const prompt = sent.find((message) => message.channelId === ADMIN_CHANNEL_ID);
-  assert.match(prompt?.json ?? "", new RegExp(`vsbx-tie:${ownerId}:beef02:999:gotm`));
+  assert.match(prompt?.json ?? "", /runoff did not break the tie/);
+  assert.match(prompt?.json ?? "", new RegExp(`vsbx-tie:${ownerId}:beef04:999:gotm`));
 
   const state = await loadSandbox(ownerId);
   const pick = state?.pendingTies.gotm?.[0]?.gameId ?? 0;
-  const source = createSandboxDataSource({ ownerId, sandboxId: "beef02" });
+  const source = createSandboxDataSource({ ownerId, sandboxId: "beef04" });
   const round = await source.resolveTie(state?.roundNumber ?? 0, "gotm", [pick]);
   assert.equal(round.phase, "decided");
 
@@ -147,8 +230,25 @@ test("a tie posts results, prompts the admins, and breaking it decides the round
   ]);
   assert.equal(sent[0]?.channelId, ADMIN_CHANNEL_ID);
   assert.match(sent[0]?.json ?? "", /Sandbox Round 999 decided/);
-  assert.deepEqual(scheduled.length, 1);
   assert.match(scheduled[0] ?? "", /^Round 1000 Vote/);
+});
+
+test("runoff events fired by hand outside a runoff are skipped, not posted", async (t) => {
+  mockStore(t);
+  const { client, sent } = fakeClient();
+  const ownerId = nextOwner();
+  await startOpenSandbox(ownerId);
+  await deliverSandboxOutbox(client, ownerId);
+  sent.length = 0;
+  await mutateSandbox(ownerId, (state) => {
+    queueSandboxEvent(state, "runoff_opened");
+    queueSandboxEvent(state, "runoff_closed");
+  });
+  assert.deepEqual(await deliverSandboxOutbox(client, ownerId), [
+    "`runoff_opened`: skipped.",
+    "`runoff_closed`: skipped.",
+  ]);
+  assert.equal(sent.length, 0);
 });
 
 test("a hand-fired event whose phase has passed is skipped, not posted", async (t) => {
@@ -351,6 +451,7 @@ test("a tie prompt Discord refuses names the request and Discord's response", as
   await mutateSandbox(ownerId, (state) => {
     seedSandboxOutcome(state, "gotm", "two-way-tie", new Date());
     closeSandboxVoting(state, new Date());
+    closeSandboxRunoff(state, new Date());
   });
   const noAdminAccess = {
     channels: {
@@ -372,7 +473,11 @@ test("a tie prompt Discord refuses names the request and Discord's response", as
     },
   } as unknown as Client;
   const lines = await deliverSandboxOutbox(noAdminAccess, ownerId);
-  assert.equal(lines[0], "`voting_closed`: delivered.");
-  assert.match(lines[1] ?? "", /`tie_pending`: failed, left queued\. POST \/channels\//);
-  assert.match(lines[1] ?? "", /-> 403 .*50001/);
+  assert.deepEqual(lines.slice(0, 3), [
+    "`voting_closed`: delivered.",
+    "`runoff_opened`: skipped.",
+    "`runoff_closed`: delivered.",
+  ]);
+  assert.match(lines[3] ?? "", /`tie_pending`: failed, left queued\. POST \/channels\//);
+  assert.match(lines[3] ?? "", /-> 403 .*50001/);
 });

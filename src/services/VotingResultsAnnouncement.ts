@@ -5,11 +5,15 @@ import {
   MediaGalleryItemBuilder,
 } from "@discordjs/builders";
 import { NOMINATION_KINDS, nominationKindLabel } from "../classes/Nomination.js";
+import { toVotingRoundCategory, type IVotingRound } from "../classes/VotingRounds.js";
 import { apiVotingDataSource, type IVotingDataSource } from "./VotingDataSource.js";
 import {
+  ballotKindLabel,
   buildRehearsalNoticeText,
+  buildRunoffResultText,
   buildTallyText,
   buildWinnerAnnouncementText,
+  filterRunoffNominations,
   mergeTallyWithNominations,
   pickWinningRows,
   type ITallyDisplayRow,
@@ -21,7 +25,7 @@ import {
 } from "../functions/ComponentsV2Utils.js";
 import { ANNOUNCEMENT_CHANNEL_ID } from "../config/channels.js";
 import { fetchGameCoverBuffer } from "./GameImageService.js";
-import { fetchSendableChannel } from "../functions/ChannelUtils.js";
+import { fetchSendableChannel, type SendableChannel } from "../functions/ChannelUtils.js";
 import { logError } from "../utilities/LogUtils.js";
 
 /** The round whose results are announced, and the month its winners are played. */
@@ -85,6 +89,60 @@ async function addWinnerCovers(
   return files;
 }
 
+interface IWinnerAnnouncement {
+  kindLabel: WinnerKindLabel;
+  text: string;
+  soleWinner: ITallyDisplayRow | null;
+}
+
+/**
+ * One message per category naming its winner, with the winning game's cover
+ * and (outside a rehearsal) a link to its winner thread.
+ */
+async function postWinnerAnnouncements(
+  client: Client,
+  sendable: SendableChannel,
+  roundNumber: number,
+  winnerAnnouncements: IWinnerAnnouncement[],
+  options: { rehearsal: boolean; hasCover?: (gameId: number) => boolean },
+): Promise<void> {
+  const { rehearsal } = options;
+  for (const announcement of winnerAnnouncements) {
+    const files: AttachmentBuilder[] = [];
+    let text = announcement.text;
+    const winner = announcement.soleWinner;
+    if (winner && !rehearsal) {
+      // Winner threads are best-effort: a failure here must not block the
+      // announcement itself. A category left tied gets its thread once an
+      // admin breaks the tie (the round_decided voting event).
+      try {
+        const threadResult = await ensureWinnerThread({
+          client,
+          gameId: winner.gamedbGameId,
+          gameTitle: winner.gameTitle,
+          roundNumber,
+          kindLabel: announcement.kindLabel,
+        });
+        if (threadResult.threadId) {
+          text += `\nJoin the discussion in ${channelMention(threadResult.threadId)}!`;
+        }
+      } catch (error) {
+        logError("VotingResultsAnnouncement.ensureWinnerThread", error);
+      }
+    }
+    const container = buildTextContainer(text);
+    if (winner && (options.hasCover?.(winner.gamedbGameId) ?? true)) {
+      files.push(...(await addWinnerCovers(container, [winner.gamedbGameId])));
+    }
+    await sendable.send({
+      components: [container],
+      files,
+      flags: buildComponentsV2Flags(false),
+      allowedMentions: { parse: [] },
+    });
+  }
+}
+
 /**
  * Posts the round's results to the announcements channel: one message with
  * the full tallies, then one winner announcement per category (with the
@@ -106,11 +164,7 @@ export async function announceVotingResults(
 
   const monthLabel = round.monthLabel;
   const tallyContainers: ContainerBuilder[] = [];
-  const winnerAnnouncements: Array<{
-    kindLabel: WinnerKindLabel;
-    text: string;
-    soleWinner: ITallyDisplayRow | null;
-  }> = [];
+  const winnerAnnouncements: IWinnerAnnouncement[] = [];
 
   for (const kind of NOMINATION_KINDS) {
     const kindLabel = nominationKindLabel(kind);
@@ -159,38 +213,89 @@ export async function announceVotingResults(
     allowedMentions: { parse: [] },
   });
 
-  for (const announcement of winnerAnnouncements) {
-    const files: AttachmentBuilder[] = [];
-    let text = announcement.text;
-    const winner = announcement.soleWinner;
-    if (winner && !rehearsal) {
-      // Winner threads are best-effort: a failure here must not block the
-      // announcement itself. A tie gets its thread once an admin breaks it
-      // (the round_decided voting event).
-      try {
-        const threadResult = await ensureWinnerThread({
-          client,
-          gameId: winner.gamedbGameId,
-          gameTitle: winner.gameTitle,
+  await postWinnerAnnouncements(client, sendable, round.roundNumber, winnerAnnouncements, {
+    rehearsal,
+    hasCover: options.hasCover,
+  });
+}
+
+/**
+ * Posts the runoff's results to the announcements channel once it has closed:
+ * one message with each runoff category's runoff tally, then each category's
+ * verdict. A sole leader is announced as the winner the way the main results
+ * are; a runoff that tied again says the admins will pick. Throws
+ * NothingToAnnounceError when the round had no runoff.
+ */
+export async function announceRunoffResults(
+  client: Client,
+  round: IVotingRound,
+  options: IAnnounceResultsOptions = {},
+): Promise<void> {
+  const channelId = options.channelIdOverride ?? ANNOUNCEMENT_CHANNEL_ID;
+  const rehearsal = Boolean(options.rehearsal);
+  const source = options.source ?? apiVotingDataSource;
+  const sendable = await fetchSendableChannel(client, channelId);
+  if (!sendable) {
+    throw new Error(`Results channel ${channelId} was not found or cannot be sent to.`);
+  }
+
+  const tallyContainers: ContainerBuilder[] = [];
+  const announcements: IWinnerAnnouncement[] = [];
+  for (const kind of NOMINATION_KINDS) {
+    const category = toVotingRoundCategory(kind);
+    const tied = round.runoffTies[category] ?? [];
+    if (!tied.length) {
+      continue;
+    }
+    const kindLabel = nominationKindLabel(kind);
+    const [tally, nominations] = await Promise.all([
+      source.getTally(kind, round.roundNumber, "runoff"),
+      source.listNominations(kind, round.roundNumber),
+    ]);
+    const rows = mergeTallyWithNominations(
+      tally.rows,
+      filterRunoffNominations(nominations, tied),
+    );
+    tallyContainers.push(
+      buildTextContainer(
+        buildTallyText({
+          kindLabel: ballotKindLabel(kindLabel, "runoff"),
           roundNumber: round.roundNumber,
-          kindLabel: announcement.kindLabel,
-        });
-        if (threadResult.threadId) {
-          text += `\nJoin the discussion in ${channelMention(threadResult.threadId)}!`;
-        }
-      } catch (error) {
-        logError("VotingResultsAnnouncement.ensureWinnerThread", error);
-      }
-    }
-    const container = buildTextContainer(text);
-    if (winner && (options.hasCover?.(winner.gamedbGameId) ?? true)) {
-      files.push(...(await addWinnerCovers(container, [winner.gamedbGameId])));
-    }
-    await sendable.send({
-      components: [container],
-      files,
-      flags: buildComponentsV2Flags(false),
-      allowedMentions: { parse: [] },
+          rows,
+          cap: tally.cap,
+          votingOpen: false,
+          voteDeadline: null,
+        }),
+      ),
+    );
+    const leaders = pickWinningRows(rows);
+    const stillTied = (round.pendingTies[category] ?? []).map((game) => game.title);
+    announcements.push({
+      kindLabel,
+      text: buildRunoffResultText({
+        kindLabel,
+        roundNumber: round.roundNumber,
+        monthLabel: round.monthYear,
+        leaders,
+        stillTied,
+      }),
+      soleWinner: !stillTied.length && leaders.length === 1 ? leaders[0] ?? null : null,
     });
   }
+
+  if (!tallyContainers.length) {
+    throw new NothingToAnnounceError(round.roundNumber);
+  }
+
+  await sendable.send({
+    components: rehearsal
+      ? [buildTextContainer(buildRehearsalNoticeText(round.roundNumber)), ...tallyContainers]
+      : tallyContainers,
+    flags: buildComponentsV2Flags(false),
+    allowedMentions: { parse: [] },
+  });
+  await postWinnerAnnouncements(client, sendable, round.roundNumber, announcements, {
+    rehearsal,
+    hasCover: options.hasCover,
+  });
 }

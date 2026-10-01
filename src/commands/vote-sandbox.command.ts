@@ -44,6 +44,7 @@ import {
   createSandboxDataSource,
   deliverSandboxOutbox,
   parseSandboxCustomId,
+  SANDBOX_RUNOFF_CUSTOM_ID_PREFIX,
   type ISandboxTarget,
 } from "../services/VotingSandbox.js";
 import {
@@ -67,6 +68,8 @@ const EVENT_CHOICES: Array<{ name: string; value: VotingEventKind }> = [
   { name: "nomination_reminder_1d", value: "nomination_reminder_1d" },
   { name: "voting_opened", value: "voting_opened" },
   { name: "voting_closed", value: "voting_closed" },
+  { name: "runoff_opened", value: "runoff_opened" },
+  { name: "runoff_closed", value: "runoff_closed" },
   { name: "tie_pending", value: "tie_pending" },
   { name: "round_decided", value: "round_decided" },
 ];
@@ -88,7 +91,12 @@ function resolvePanel(
   const parsed = parseSandboxCustomId(customId);
   const kind = parseNominationKind(parsed?.rest[0] ?? "");
   if (!parsed || !kind) return { sandbox: UNPARSED_SANDBOX, target: null };
-  return { sandbox: parsed, target: { kind, round: parsed.roundNumber } };
+  const prefix = customId.split(":")[0] ?? "";
+  const runoff = (Object.values(SANDBOX_RUNOFF_CUSTOM_ID_PREFIX) as string[]).includes(prefix);
+  return {
+    sandbox: parsed,
+    target: { kind, round: parsed.roundNumber, ballot: runoff ? "runoff" : "main" },
+  };
 }
 
 async function beginAdminStep(interaction: CommandInteraction): Promise<boolean> {
@@ -191,7 +199,10 @@ export class VoteSandboxCommand {
     await handleSandboxOpen(interaction);
   }
 
-  @Slash({ description: "Cast simulated votes that produce an outcome", name: "seed" })
+  @Slash({
+    description: "Cast simulated votes that produce an outcome (in the runoff once open)",
+    name: "seed",
+  })
   async seed(
     @SlashChoice(...OUTCOME_CHOICES)
     @SlashOption({
@@ -218,7 +229,7 @@ export class VoteSandboxCommand {
     });
   }
 
-  @Slash({ description: "Close voting and decide the sandbox round", name: "close" })
+  @Slash({ description: "Close voting, or the runoff once one is open", name: "close" })
   async close(interaction: CommandInteraction): Promise<void> {
     if (!(await beginAdminStep(interaction))) return;
     await handleSandboxClose(interaction);
@@ -255,19 +266,19 @@ export class VoteSandboxCommand {
     await handleSandboxEnd(interaction);
   }
 
-  @SelectMenuComponent({ id: /^vsbx-cast:\d+:[0-9a-f]+:\d+:(gotm|nr-gotm):\d+$/ })
+  @SelectMenuComponent({ id: /^vsbx-r?cast:\d+:[0-9a-f]+:\d+:(gotm|nr-gotm):\d+$/ })
   async handleCast(interaction: StringSelectMenuInteraction): Promise<void> {
     const panel = resolvePanel(interaction.customId);
     await respondVoteCast(interaction, panel.target, createSandboxDataSource(panel.sandbox));
   }
 
-  @ButtonComponent({ id: /^vsbx-mine:\d+:[0-9a-f]+:\d+:(gotm|nr-gotm)$/ })
+  @ButtonComponent({ id: /^vsbx-r?mine:\d+:[0-9a-f]+:\d+:(gotm|nr-gotm)$/ })
   async handleMine(interaction: ButtonInteraction): Promise<void> {
     const panel = resolvePanel(interaction.customId);
     await respondVoteMine(interaction, panel.target, createSandboxDataSource(panel.sandbox));
   }
 
-  @ButtonComponent({ id: /^vsbx-tally:\d+:[0-9a-f]+:\d+:(gotm|nr-gotm)$/ })
+  @ButtonComponent({ id: /^vsbx-r?tally:\d+:[0-9a-f]+:\d+:(gotm|nr-gotm)$/ })
   async handleTally(interaction: ButtonInteraction): Promise<void> {
     const panel = resolvePanel(interaction.customId);
     await respondVoteTally(interaction, panel.target, createSandboxDataSource(panel.sandbox));

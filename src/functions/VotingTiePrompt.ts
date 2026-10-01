@@ -51,11 +51,17 @@ export function parseTieBreakSelectId(customId: string): ITieBreakTarget | null 
 }
 
 export function buildTiePendingText(round: IVotingRound): string {
+  const hadRunoff = VOTING_ROUND_CATEGORIES.some((category) => round.runoffTies[category]?.length);
   return [
-    `## Round ${round.roundNumber} voting ended in a tie`,
-    "An admin needs to pick the winner for each tied category below. Pick more than one " +
-      "game to make them joint winners. The round is decided, and nominations for the " +
-      "next one open, once every tie is broken.",
+    hadRunoff
+      ? `## Round ${round.roundNumber} runoff did not break the tie`
+      : `## Round ${round.roundNumber} voting ended in a tie`,
+    (hadRunoff
+      ? "The runoff between the tied games tied again or got no votes, so an admin needs " +
+        "to pick the winner for each category below. "
+      : "An admin needs to pick the winner for each tied category below. ") +
+      "Pick more than one game to make them joint winners. The round is decided, and " +
+      "nominations for the next one open, once every tie is broken.",
   ].join("\n");
 }
 

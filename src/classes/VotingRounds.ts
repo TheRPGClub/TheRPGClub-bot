@@ -1,15 +1,18 @@
 import { apiGet, apiPatch, apiPostOrThrow } from "../services/RpgClubApiClient.js";
 import { calculateVoteDeadlineEt } from "../functions/VoteDateUtils.js";
 import { commandMention } from "../services/CommandMentionService.js";
+import type { NominationKind } from "./Nomination.js";
 
 export const NO_VOTING_ROUND_SCHEDULED = "No voting round is scheduled.";
 
 /**
  * Where a round is in its lifecycle, as the API decides it: members nominate
  * until voting opens, vote until it closes, then the tally decides the
- * winners (or leaves a tie for the admins) and the round is decided.
+ * winners. A tied category goes to a member runoff between its tied games;
+ * only a runoff that ties again (or gets no votes) leaves a tie for the
+ * admins. Then the round is decided.
  */
-export type VotingPhase = "nominating" | "voting" | "closed" | "tie" | "decided";
+export type VotingPhase = "nominating" | "voting" | "closed" | "runoff" | "tie" | "decided";
 
 export type VotingRoundCategory = "gotm" | "nr_gotm";
 
@@ -17,6 +20,10 @@ export const VOTING_ROUND_CATEGORIES: readonly VotingRoundCategory[] = ["gotm", 
 
 export function isVotingRoundCategory(value: string): value is VotingRoundCategory {
   return (VOTING_ROUND_CATEGORIES as readonly string[]).includes(value);
+}
+
+export function toVotingRoundCategory(kind: NominationKind): VotingRoundCategory {
+  return kind === "gotm" ? "gotm" : "nr_gotm";
 }
 
 export interface IVotingRoundTieGame {
@@ -42,8 +49,21 @@ export interface IVotingRound {
   nominationsOpen: boolean;
   votingOpen: boolean;
   votingEnded: boolean;
-  pendingTies: Partial<Record<VotingRoundCategory, IVotingRoundTieGame[]>>;
+  runoffOpensAt: Date | null;
+  runoffClosesAt: Date | null;
+  runoffClosedAt: Date | null;
+  runoffOpen: boolean;
+  runoffEnded: boolean;
+  /**
+   * Tied games per category still awaiting a decision: the runoff's ballot
+   * while it is open, then any category the runoff left tied for an admin pick.
+   */
+  pendingTies: VotingRoundTies;
+  /** The runoff's ballot as it opened. Empty when the round had no runoff. */
+  runoffTies: VotingRoundTies;
 }
+
+export type VotingRoundTies = Partial<Record<VotingRoundCategory, IVotingRoundTieGame[]>>;
 
 type TieGameApiData = { game_id: number; title: string; cover_url: string | null };
 
@@ -58,7 +78,13 @@ export type VotingRoundApiData = {
   nominations_open: boolean;
   voting_open: boolean;
   voting_ended: boolean;
+  runoff_opens_at?: string | null;
+  runoff_closes_at?: string | null;
+  runoff_closed_at?: string | null;
+  runoff_open?: boolean;
+  runoff_ended?: boolean;
   pending_ties: Partial<Record<VotingRoundCategory, TieGameApiData[]>>;
+  runoff_ties?: Partial<Record<VotingRoundCategory, TieGameApiData[]>>;
 };
 
 type VotingRoundResponse = { data: VotingRoundApiData | null };
@@ -122,19 +148,26 @@ function parseApiDate(value: string, field: string): Date {
   return date;
 }
 
-function toDateOrNull(value: string | null, field: string): Date | null {
+function toDateOrNull(value: string | null | undefined, field: string): Date | null {
   return value ? parseApiDate(value, field) : null;
 }
 
-export function mapVotingRoundApiData(d: VotingRoundApiData): IVotingRound {
-  const pendingTies: IVotingRound["pendingTies"] = {};
-  for (const [category, games] of Object.entries(d.pending_ties ?? {})) {
-    pendingTies[category as VotingRoundCategory] = (games ?? []).map((game) => ({
+function mapTies(
+  raw: Partial<Record<VotingRoundCategory, TieGameApiData[]>> | undefined,
+): VotingRoundTies {
+  const ties: VotingRoundTies = {};
+  for (const [category, games] of Object.entries(raw ?? {})) {
+    if (!isVotingRoundCategory(category)) continue;
+    ties[category] = (games ?? []).map((game) => ({
       gameId: Number(game.game_id),
       title: game.title,
       coverUrl: game.cover_url ?? null,
     }));
   }
+  return ties;
+}
+
+export function mapVotingRoundApiData(d: VotingRoundApiData): IVotingRound {
   return {
     roundNumber: Number(d.round_number),
     monthYear: d.month_year,
@@ -146,7 +179,13 @@ export function mapVotingRoundApiData(d: VotingRoundApiData): IVotingRound {
     nominationsOpen: Boolean(d.nominations_open),
     votingOpen: Boolean(d.voting_open),
     votingEnded: Boolean(d.voting_ended),
-    pendingTies,
+    runoffOpensAt: toDateOrNull(d.runoff_opens_at, "runoff_opens_at"),
+    runoffClosesAt: toDateOrNull(d.runoff_closes_at, "runoff_closes_at"),
+    runoffClosedAt: toDateOrNull(d.runoff_closed_at, "runoff_closed_at"),
+    runoffOpen: Boolean(d.runoff_open),
+    runoffEnded: Boolean(d.runoff_ended),
+    pendingTies: mapTies(d.pending_ties),
+    runoffTies: mapTies(d.runoff_ties),
   };
 }
 
@@ -163,6 +202,16 @@ export function isRoundTallyRevealed(
 ): boolean {
   if (round) return round.votingEnded;
   return current !== null && roundNumber < current.roundNumber;
+}
+
+/** Whether a round's runoff tally may be shown: only once the runoff has closed. */
+export function isRunoffTallyRevealed(round: IVotingRound | null): boolean {
+  return Boolean(round?.runoffEnded);
+}
+
+/** The categories the round's runoff covers, in display order. */
+export function listRunoffCategories(ties: VotingRoundTies): VotingRoundCategory[] {
+  return VOTING_ROUND_CATEGORIES.filter((category) => Boolean(ties[category]?.length));
 }
 
 function normalizeRoundNumber(roundNumber: number): number {
