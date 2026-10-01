@@ -3,7 +3,6 @@ import Member from "../../classes/Member.js";
 import { EphemeralOwnerMenu } from "../../functions/EphemeralOwnerMenu.js";
 import { buildJournalView } from "../../functions/journalView.js";
 import { logError, logInfo } from "../../utilities/LogUtils.js";
-import { COMPLETION_TYPES, type CompletionType } from "../profile.command.js";
 import {
   NOW_PLAYING_JOURNAL_PAGE_PREFIX,
   NOW_PLAYING_JOURNAL_HEADER_PREFIX,
@@ -45,23 +44,6 @@ export async function restoreJournalMessageContextsFromDb(): Promise<void> {
   } catch (err) {
     logError("Journal.restore_contexts_failed", err);
   }
-}
-
-export function createNowPlayingCompletionWizardSession(
-  userId: string,
-  returnToList: boolean = false,
-): string {
-  const sessionId = `np-comp-ui-${userId}`;
-  const defaultType = (COMPLETION_TYPES[0] ?? "Main Story") as CompletionType;
-  nowPlayingCompletionWizardSessions.set(sessionId, {
-    userId,
-    gameId: null,
-    completionType: defaultType,
-    removeFromNowPlaying: true,
-    announce: true,
-    returnToList,
-  });
-  return sessionId;
 }
 
 export function clearNowPlayingAddSession(sessionId: string): void {

@@ -35,7 +35,6 @@ import {
   replyIfNotOwner,
   safeDeferReply,
   safeDeferUpdate,
-  safeFollowUpIfSettled,
   safeReply,
   safeUpdate,
 } from "../../functions/InteractionUtils.js";
@@ -94,9 +93,6 @@ import {
   type NowPlayingCompletionWizardSession,
 } from "./nowPlayingTypes.js";
 import {
-  createNowPlayingCompletionWizardSession,
-  nowPlayingCompletionPlatformSessions,
-  nowPlayingCompletionWizardSessions,
   setNowPlayingListContext,
 } from "./nowPlayingContexts.js";
 import {
@@ -113,6 +109,18 @@ import {
 } from "./nowPlayingListRenderer.js";
 import { NOW_PLAYING_HELP_PREFIX } from "../now-playing-help.js";
 import GamePlatformRegionService from "../../classes/GamePlatformRegionService.js";
+import {
+  claimNowPlayingCompletionPlatformSession,
+  createNowPlayingCompletionPlatformSession,
+  createNowPlayingCompletionWizardSession,
+  finishNowPlayingCompletionPlatformSession,
+  finishNowPlayingCompletionWizardSession,
+  getNowPlayingCompletionWizardSession,
+  persistNowPlayingCompletionWizardSession,
+  replyNowPlayingCompletionText,
+  resolveNowPlayingCompletionPlatformSession,
+  resolveNowPlayingCompletionWizardSession,
+} from "./nowPlayingCompletionSessions.js";
 
 async function confirmDuplicateCompletion(
   interaction: CommandInteraction | ModalSubmitInteraction | ButtonInteraction,
@@ -494,8 +502,7 @@ async function promptNowPlayingCompletionPlatformSelection(
     id: platform.id,
     name: platform.name,
   }));
-  const platformSessionId = `np-comp-platform-${session.userId}`;
-  nowPlayingCompletionPlatformSessions.set(platformSessionId, {
+  const platformSessionId = createNowPlayingCompletionPlatformSession(interaction, {
     sessionId,
     userId: session.userId,
     gameId: game.id,
@@ -652,7 +659,7 @@ async function finalizeNowPlayingCompletion(
     components: [container, ...warningComponents],
     flags: buildComponentsV2Flags(true),
   });
-  nowPlayingCompletionWizardSessions.delete(sessionId);
+  finishNowPlayingCompletionWizardSession(sessionId);
 }
 
 export async function promptNowPlayingCompletionPick(
@@ -673,7 +680,7 @@ export async function promptNowPlayingCompletionPick(
   }
 
   if (current.length === 1) {
-    const session = nowPlayingCompletionWizardSessions.get(sessionId);
+    const session = getNowPlayingCompletionWizardSession(sessionId);
     const entry = current[0];
     if (!session || !entry?.gameId) {
       const container = buildTextContainer("Unable to start completion flow.");
@@ -681,6 +688,7 @@ export async function promptNowPlayingCompletionPick(
       return;
     }
     session.gameId = entry.gameId;
+    persistNowPlayingCompletionWizardSession(interaction, sessionId, session);
     await renderNowPlayingCompletionConfig(interaction, sessionId, session, mode);
     return;
   }
@@ -710,7 +718,7 @@ export class NowPlayingCompletionHandlers {
     if (!segs) return;
     const [ownerId] = segs;
     if (await replyIfNotOwner(interaction, ownerId, "This edit menu isn't for you.")) return;
-    const sessionId = createNowPlayingCompletionWizardSession(ownerId, true);
+    const sessionId = createNowPlayingCompletionWizardSession(interaction, ownerId, true);
     await promptNowPlayingCompletionPick(interaction, ownerId, sessionId);
   }
 
@@ -721,7 +729,7 @@ export class NowPlayingCompletionHandlers {
     const [ownerId] = segs;
     if (await replyIfNotOwner(interaction, ownerId, "This completion prompt isn't for you.")) return;
     setNowPlayingListContext(ownerId, interaction.message);
-    const sessionId = createNowPlayingCompletionWizardSession(ownerId, true);
+    const sessionId = createNowPlayingCompletionWizardSession(interaction, ownerId, true);
     await promptNowPlayingCompletionPick(interaction, ownerId, sessionId);
   }
 
@@ -735,7 +743,7 @@ export class NowPlayingCompletionHandlers {
     setNowPlayingListContext(ownerId, interaction.message);
     // Cover attachments can outlast the 3s window, and safeReply fills the deferred reply.
     await safeDeferReply(interaction, { flags: buildComponentsV2Flags(true) });
-    const sessionId = createNowPlayingCompletionWizardSession(ownerId, true);
+    const sessionId = createNowPlayingCompletionWizardSession(interaction, ownerId, true);
     await promptNowPlayingCompletionPick(interaction, ownerId, sessionId, "reply");
   }
 
@@ -756,17 +764,8 @@ export class NowPlayingCompletionHandlers {
     const segs = assertCustomIdSegments(interaction, 1);
     if (!segs) return;
     const [sessionId] = segs;
-    const session = nowPlayingCompletionWizardSessions.get(sessionId);
-    if (!session) {
-      const container = buildTextContainer("This completion prompt has expired.");
-      await safeReply(interaction, {
-        components: [container],
-        flags: buildComponentsV2Flags(true),
-      });
-      return;
-    }
-
-    if (await replyIfNotOwner(interaction, session.userId, "This completion prompt isn't for you.")) return;
+    const session = await resolveNowPlayingCompletionWizardSession(interaction, sessionId);
+    if (!session) return;
 
     if (!session.gameId) {
       const container = buildTextContainer("Select a game first before submitting details.");
@@ -881,17 +880,11 @@ export class NowPlayingCompletionHandlers {
     const segs = assertCustomIdSegments(interaction, 1);
     if (!segs) return;
     const [platformSessionId] = segs;
-    const session = nowPlayingCompletionPlatformSessions.get(platformSessionId);
-    if (!session) {
-      const container = buildTextContainer("This completion prompt has expired.");
-      await safeReply(interaction, {
-        components: [container],
-        flags: buildComponentsV2Flags(true),
-      });
-      return;
-    }
-
-    if (await replyIfNotOwner(interaction, session.userId, "This completion prompt isn't for you.")) return;
+    const session = await resolveNowPlayingCompletionPlatformSession(
+      interaction,
+      platformSessionId,
+    );
+    if (!session) return;
 
     const selected = interaction.values?.[0];
     const isOther = selected === "other";
@@ -907,38 +900,38 @@ export class NowPlayingCompletionHandlers {
       session.platforms.some((platform) => platform.id === platformId)
     );
     if (!valid) {
-      const container = buildTextContainer("Invalid platform selection.");
-      await safeReply(interaction, {
-        components: [container],
-        flags: buildComponentsV2Flags(true),
-      });
+      await replyNowPlayingCompletionText(interaction, "Invalid platform selection.");
+      return;
+    }
+    // A second pick while the first is still saving must not log it twice; it is only
+    // acknowledged so Discord does not show it as failed.
+    if (!claimNowPlayingCompletionPlatformSession(platformSessionId)) {
+      await safeDeferUpdate(interaction);
       return;
     }
 
-    await safeDeferUpdate(interaction);
-    nowPlayingCompletionPlatformSessions.delete(platformSessionId);
+    try {
+      await safeDeferUpdate(interaction);
+      const game = await Game.getGameById(session.gameId);
+      if (!game) {
+        await replyNowPlayingCompletionText(interaction, "That game could not be found.");
+        return;
+      }
 
-    const game = await Game.getGameById(session.gameId);
-    if (!game) {
-      const container = buildTextContainer("That game could not be found.");
-      await safeFollowUpIfSettled(interaction, {
-        components: [container],
-        flags: buildComponentsV2Flags(true),
-      });
-      return;
+      if (isOther) {
+        await notifyUnknownCompletionPlatform(interaction, game.title, game.id);
+      }
+
+      await finalizeNowPlayingCompletion(
+        interaction,
+        session.sessionId,
+        session,
+        game,
+        platformId,
+      );
+    } finally {
+      finishNowPlayingCompletionPlatformSession(platformSessionId);
     }
-
-    if (isOther) {
-      await notifyUnknownCompletionPlatform(interaction, game.title, game.id);
-    }
-
-    await finalizeNowPlayingCompletion(
-      interaction,
-      session.sessionId,
-      session,
-      game,
-      platformId,
-    );
   }
 
   @ButtonComponent({ id: /^np-complete-pick:[^:]+:\d+$/ })
@@ -946,29 +939,17 @@ export class NowPlayingCompletionHandlers {
     const segs = assertCustomIdSegments(interaction, 2);
     if (!segs) return;
     const [sessionId, gameIdRaw] = segs;
-    const session = nowPlayingCompletionWizardSessions.get(sessionId);
-    if (!session) {
-      const container = buildTextContainer("This completion prompt has expired.");
-      await safeReply(interaction, {
-        components: [container],
-        flags: buildComponentsV2Flags(true),
-      });
-      return;
-    }
-
-    if (await replyIfNotOwner(interaction, session.userId, "This completion prompt isn't for you.")) return;
+    const session = await resolveNowPlayingCompletionWizardSession(interaction, sessionId);
+    if (!session) return;
 
     const gameId = Number(gameIdRaw);
     if (!isPositiveInt(gameId)) {
-      const container = buildTextContainer("Invalid selection.");
-      await safeReply(interaction, {
-        components: [container],
-        flags: buildComponentsV2Flags(true),
-      });
+      await replyNowPlayingCompletionText(interaction, "Invalid selection.");
       return;
     }
 
     session.gameId = gameId;
+    persistNowPlayingCompletionWizardSession(interaction, sessionId, session);
     await renderNowPlayingCompletionConfig(interaction, sessionId, session);
   }
 
@@ -979,29 +960,17 @@ export class NowPlayingCompletionHandlers {
     const segs = assertCustomIdSegments(interaction, 1);
     if (!segs) return;
     const [sessionId] = segs;
-    const session = nowPlayingCompletionWizardSessions.get(sessionId);
-    if (!session) {
-      const container = buildTextContainer("This completion prompt has expired.");
-      await safeReply(interaction, {
-        components: [container],
-        flags: buildComponentsV2Flags(true),
-      });
-      return;
-    }
-
-    if (await replyIfNotOwner(interaction, session.userId, "This completion prompt isn't for you.")) return;
+    const session = await resolveNowPlayingCompletionWizardSession(interaction, sessionId);
+    if (!session) return;
 
     const value = interaction.values?.[0];
     if (!value || !COMPLETION_TYPES.includes(value as CompletionType)) {
-      const container = buildTextContainer("Invalid completion type.");
-      await safeReply(interaction, {
-        components: [container],
-        flags: buildComponentsV2Flags(true),
-      });
+      await replyNowPlayingCompletionText(interaction, "Invalid completion type.");
       return;
     }
 
     session.completionType = value as CompletionType;
+    persistNowPlayingCompletionWizardSession(interaction, sessionId, session);
     await renderNowPlayingCompletionConfig(interaction, sessionId, session);
   }
 
@@ -1012,29 +981,17 @@ export class NowPlayingCompletionHandlers {
     const segs = assertCustomIdSegments(interaction, 1);
     if (!segs) return;
     const [sessionId] = segs;
-    const session = nowPlayingCompletionWizardSessions.get(sessionId);
-    if (!session) {
-      const container = buildTextContainer("This completion prompt has expired.");
-      await safeReply(interaction, {
-        components: [container],
-        flags: buildComponentsV2Flags(true),
-      });
-      return;
-    }
-
-    if (await replyIfNotOwner(interaction, session.userId, "This completion prompt isn't for you.")) return;
+    const session = await resolveNowPlayingCompletionWizardSession(interaction, sessionId);
+    if (!session) return;
 
     const value = interaction.values?.[0];
     if (value !== "yes" && value !== "no") {
-      const container = buildTextContainer("Invalid selection.");
-      await safeReply(interaction, {
-        components: [container],
-        flags: buildComponentsV2Flags(true),
-      });
+      await replyNowPlayingCompletionText(interaction, "Invalid selection.");
       return;
     }
 
     session.removeFromNowPlaying = value === "yes";
+    persistNowPlayingCompletionWizardSession(interaction, sessionId, session);
     await renderNowPlayingCompletionConfig(interaction, sessionId, session);
   }
 
@@ -1045,29 +1002,17 @@ export class NowPlayingCompletionHandlers {
     const segs = assertCustomIdSegments(interaction, 1);
     if (!segs) return;
     const [sessionId] = segs;
-    const session = nowPlayingCompletionWizardSessions.get(sessionId);
-    if (!session) {
-      const container = buildTextContainer("This completion prompt has expired.");
-      await safeReply(interaction, {
-        components: [container],
-        flags: buildComponentsV2Flags(true),
-      });
-      return;
-    }
-
-    if (await replyIfNotOwner(interaction, session.userId, "This completion prompt isn't for you.")) return;
+    const session = await resolveNowPlayingCompletionWizardSession(interaction, sessionId);
+    if (!session) return;
 
     const value = interaction.values?.[0];
     if (value !== "yes" && value !== "no") {
-      const container = buildTextContainer("Invalid selection.");
-      await safeReply(interaction, {
-        components: [container],
-        flags: buildComponentsV2Flags(true),
-      });
+      await replyNowPlayingCompletionText(interaction, "Invalid selection.");
       return;
     }
 
     session.announce = value === "yes";
+    persistNowPlayingCompletionWizardSession(interaction, sessionId, session);
     await renderNowPlayingCompletionConfig(interaction, sessionId, session);
   }
 
@@ -1076,24 +1021,15 @@ export class NowPlayingCompletionHandlers {
     const segs = assertCustomIdSegments(interaction, 1);
     if (!segs) return;
     const [sessionId] = segs;
-    const session = nowPlayingCompletionWizardSessions.get(sessionId);
-    if (!session) {
-      const container = buildTextContainer("This completion prompt has expired.");
-      await safeReply(interaction, {
-        components: [container],
-        flags: buildComponentsV2Flags(true),
-      });
-      return;
-    }
-
-    if (await replyIfNotOwner(interaction, session.userId, "This completion prompt isn't for you.")) return;
+    const session = await resolveNowPlayingCompletionWizardSession(
+      interaction,
+      sessionId,
+      { deferRestore: false },
+    );
+    if (!session) return;
 
     if (!session.gameId) {
-      const container = buildTextContainer("Select a game first.");
-      await safeReply(interaction, {
-        components: [container],
-        flags: buildComponentsV2Flags(true),
-      });
+      await replyNowPlayingCompletionText(interaction, "Select a game first.");
       return;
     }
 
