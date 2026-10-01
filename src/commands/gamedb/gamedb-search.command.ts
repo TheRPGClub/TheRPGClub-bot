@@ -20,7 +20,7 @@ import {
   safeDeferReply,
   safeDeferUpdate,
   safeReply,
-  safeUpdate,
+  safeEditReply,
   sanitizeUserInput,
   replyIfNotOwner,
 } from "../../functions/InteractionUtils.js";
@@ -485,12 +485,16 @@ export class GameDbSearchCommand {
       return;
     }
 
+    // Acknowledge before the API search so a slow search cannot outlast Discord's 3s window.
+    if (!(await safeDeferUpdate(interaction))) return;
+
     const results = await GameSearchService.searchGames(searchTerm, filters);
     if (results.length === 0) {
       const msg = searchTerm
         ? `No results found for "${searchTerm}".`
         : "No games found matching your filters.";
-      await safeReply(interaction, buildTextReply(msg, true));
+      // A follow-up, so the ephemeral notice does not overwrite the public results message.
+      await safeReply(interaction, { ...buildTextReply(msg, true), __forceFollowUp: true });
       return;
     }
 
@@ -500,6 +504,6 @@ export class GameDbSearchCommand {
     const response = buildSearchResponse(
       searchTerm, results, ownerId, 0, true, filters, filterSummary,
     );
-    await safeUpdate(interaction, response);
+    await safeEditReply(interaction, response);
   }
 }
