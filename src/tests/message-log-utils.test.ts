@@ -19,15 +19,15 @@ function fakePartial(channelId = CHANNEL_ID): PartialMessage {
   } as unknown as PartialMessage;
 }
 
-function fakeCached(bot: boolean, content = "hello"): Message {
+function fakeCached(bot: boolean, channelId = CHANNEL_ID): Message {
   return {
     partial: false,
     id: MESSAGE_ID,
-    channelId: CHANNEL_ID,
+    channelId,
     createdTimestamp: CREATED_MS,
     author: { id: "333", bot },
-    cleanContent: content,
-    content,
+    cleanContent: "hello",
+    content: "hello",
     attachments: new Collection(),
   } as unknown as Message;
 }
@@ -51,6 +51,12 @@ test("buildDeletedMessageLog skips a cached bot message", () => {
   assert.equal(buildDeletedMessageLog(fakeCached(true)), null);
 });
 
-test("buildDeletedMessageLog skips deletes in the log channel itself", () => {
+test("buildDeletedMessageLog skips uncached deletes in the log channel", () => {
   assert.equal(buildDeletedMessageLog(fakePartial(DISCORD_LOG_CHANNEL_ID)), null);
+});
+
+test("buildDeletedMessageLog still logs a cached human delete in the log channel", () => {
+  const entry = buildDeletedMessageLog(fakeCached(false, DISCORD_LOG_CHANNEL_ID));
+  assert.ok(entry);
+  assert.equal(entry.body, "hello");
 });

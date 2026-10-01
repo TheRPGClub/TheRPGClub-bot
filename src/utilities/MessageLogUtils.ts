@@ -30,12 +30,12 @@ export function formatMessageContent(message: Message): string {
 export function buildDeletedMessageLog(
   message: Message | PartialMessage,
 ): DeletedMessageLog | null {
-  // Deleting a log entry must not post another log entry about it.
-  if (message.channelId === DISCORD_LOG_CHANNEL_ID) return null;
   const title = `Message deleted in ${channelMention(message.channelId)}`;
   const created = formatTimestampWithDay(message.createdTimestamp);
 
   if (message.partial) {
+    // With the author unknown, clearing an old log entry would post a log entry about it.
+    if (message.channelId === DISCORD_LOG_CHANNEL_ID) return null;
     return {
       title,
       body: UNCACHED_DELETE_BODY,
