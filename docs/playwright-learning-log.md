@@ -80,6 +80,19 @@ entry for every new problem. The `playwright-log` skill
 
 ## Entries
 
+### 2026-10-01: new run ended after step 1 with the old run's report
+
+- **PR under test:** #1443
+- **Symptom:** the runner started a new run itself, step 1 passed, then it printed the
+  summary with the aborted run's report link and stopped.
+- **Cause:** once a step is checked the conductor rewrites its message to
+  `PR #<pr>, step N: <label>`, without `of M`. `reportUrl` only treated `step N of M:` as
+  the start of the current run, so in the moment before step 2 was posted it scanned past
+  the checked step 1 and found the older run's report line.
+- **Fix:** #1443 made `reportUrl` stop at any step message of the PR, open or checked.
+- **Lesson:** the runner's "is this run over" check must recognise every form a step
+  message takes, not only the open one, or an old report in the channel ends a new run.
+
 ### 2026-10-01: rerun exited at once with "For a person: none"
 
 - **PR under test:** #1443
