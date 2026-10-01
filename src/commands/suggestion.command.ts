@@ -24,9 +24,12 @@ import {
 } from "discordx";
 import {
   safeDeferReply,
+  safeEditReply,
+  safeFollowUpIfSettled,
   safeReply,
   safeUpdate,
   sanitizeUserInput,
+  withClickedRowDisabled,
 } from "../functions/InteractionUtils.js";
 import {
   createSuggestion,
@@ -648,45 +651,68 @@ export class SuggestionCommand {
       return;
     }
 
-    const suggestion = await getSuggestionById(suggestionId);
-    if (!suggestion) {
-      await safeReply(interaction, buildTextReply("Suggestion not found.", true));
-      return;
-    }
+    await withClickedRowDisabled(interaction, async () => {
+      const suggestion = await getSuggestionById(suggestionId);
+      if (!suggestion) {
+        await safeFollowUpIfSettled(interaction, buildTextReply("Suggestion not found.", true));
+        return;
+      }
 
-    const authorName = suggestion.createdByName ?? "Unknown";
-    const description = suggestion.details ?? "No details provided.";
-    const body = `${authorName}: ${description}`;
-    const labels = suggestion.labels
-      ? suggestion.labels.split(",").map((label) => label.trim()).filter(Boolean)
-      : [];
+      const authorName = suggestion.createdByName ?? "Unknown";
+      const description = suggestion.details ?? "No details provided.";
+      const body = `${authorName}: ${description}`;
+      const labels = suggestion.labels
+        ? suggestion.labels.split(",").map((label) => label.trim()).filter(Boolean)
+        : [];
 
-    let issue;
-    try {
-      issue = await createIssue({
-        title: suggestion.title,
-        body,
-        labels,
+      let issue;
+      try {
+        issue = await createIssue({
+          title: suggestion.title,
+          body,
+          labels,
+        });
+      } catch (err: any) {
+        await safeFollowUpIfSettled(
+          interaction,
+          buildTextReply(err?.message ?? "Failed to create GitHub issue.", true),
+        );
+        return;
+      }
+      // The issue exists now, so a failed delete still renders Approved below: restoring
+      // the button would let a retry file a second issue.
+      try {
+        await deleteSuggestion(suggestionId);
+      } catch (err: any) {
+        await safeFollowUpIfSettled(
+          interaction,
+          buildTextReply(
+            `Created GitHub issue #${issue.number}, but could not remove the suggestion: ` +
+              `${err?.message ?? "unknown error"}`,
+            true,
+          ),
+        );
+      }
+
+      const authorMention = getSuggestionAuthorMention(suggestion);
+      await sendSuggestionUpdateMessage(
+        interaction,
+        `${authorMention} Your suggestion was accepted and logged as GitHub issue ` +
+          `#${issue.number}: ${issue.htmlUrl}`,
+      );
+
+      const approvedRow = buildButtonRow(
+        buildActionButton({
+          customId: buildSuggestionApproveId(suggestionId),
+          label: "Approved",
+          style: ButtonStyle.Success,
+        }).setDisabled(true),
+      );
+
+      await safeEditReply(interaction, {
+        components: [approvedRow],
       });
-      await deleteSuggestion(suggestionId);
-    } catch (err: any) {
-      await safeReply(interaction, buildTextReply(err?.message ?? "Failed to create GitHub issue.", true));
-      return;
-    }
-
-    const authorMention = getSuggestionAuthorMention(suggestion);
-    await sendSuggestionUpdateMessage(
-      interaction,
-      `${authorMention} Your suggestion was accepted and logged as GitHub issue #${issue.number}: ${issue.htmlUrl}`,
-    );
-
-    const approvedRow = buildButtonRow(
-      buildActionButton({ customId: buildSuggestionApproveId(suggestionId), label: "Approved", style: ButtonStyle.Success }).setDisabled(true),
-    );
-
-    await safeUpdate(interaction, {
-      components: [approvedRow],
-    });
+    }, { workingLabel: "Approving..." });
   }
 
   @ButtonComponent({ id: /^suggestion-review:.+$/ })

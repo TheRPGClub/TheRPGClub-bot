@@ -13,6 +13,7 @@ import {
   replyIfNotOwner,
   safeDeferReply,
   safeDeferUpdate,
+  withClickedRowDisabled,
   safeEditReply,
   safeFollowUpIfSettled,
   safeReply,
@@ -313,62 +314,64 @@ export class NowPlayingPlatformHandlers {
     const [ownerId, stateToken] = segs;
     if (await replyIfNotOwner(interaction, ownerId, "This platform prompt isn't for you.")) return;
 
-    await safeDeferUpdate(interaction);
-    const isEphemeral = interaction.message.flags?.has(MessageFlags.Ephemeral) ?? false;
-    const responseFlags = buildComponentsV2Flags(isEphemeral);
-    const entries = getDisplayNowPlayingEntries(await Member.getNowPlaying(ownerId)).slice(0, 10);
-    const platformOptions = await getNowPlayingEditPlatformOptions(entries);
-    const parsed = parseNowPlayingPlatformStateToken(stateToken, entries.length);
-    if (!parsed) {
-      await safeFollowUpIfSettled(
-        interaction,
-        buildTextReply("This platform form has expired. Open Edit Platform again.", true),
-      );
-      return;
-    }
-    if (parsed.some((value) => value < 0)) {
-      const components = buildNowPlayingEditPlatformComponents(
-        entries,
-        ownerId,
-        platformOptions,
-        stateToken,
-        "Assign a platform for every visible game before saving.",
-      );
-      const pmComponents = await withPmNowPlayingList(
-        ownerId, interaction.guildId, components,
-      );
-      await safeEditReply(interaction, { components: pmComponents, flags: responseFlags });
-      return;
-    }
+    await withClickedRowDisabled(interaction, async () => {
+      const isEphemeral = interaction.message.flags?.has(MessageFlags.Ephemeral) ?? false;
+      const responseFlags = buildComponentsV2Flags(isEphemeral);
+      const nowPlaying = await Member.getNowPlaying(ownerId);
+      const entries = getDisplayNowPlayingEntries(nowPlaying).slice(0, 10);
+      const platformOptions = await getNowPlayingEditPlatformOptions(entries);
+      const parsed = parseNowPlayingPlatformStateToken(stateToken, entries.length);
+      if (!parsed) {
+        await safeFollowUpIfSettled(
+          interaction,
+          buildTextReply("This platform form has expired. Open Edit Platform again.", true),
+        );
+        return;
+      }
+      if (parsed.some((value) => value < 0)) {
+        const components = buildNowPlayingEditPlatformComponents(
+          entries,
+          ownerId,
+          platformOptions,
+          stateToken,
+          "Assign a platform for every visible game before saving.",
+        );
+        const pmComponents = await withPmNowPlayingList(
+          ownerId, interaction.guildId, components,
+        );
+        await safeEditReply(interaction, { components: pmComponents, flags: responseFlags });
+        return;
+      }
 
-    for (let slotIndex = 0; slotIndex < entries.length; slotIndex += 1) {
-      const selectedOptionIndex = parsed[slotIndex];
-      const option = platformOptions[slotIndex]?.[selectedOptionIndex];
-      const gameId = entries[slotIndex]?.gameId;
-      if (!option || !gameId) {
-        await safeFollowUpIfSettled(
-          interaction,
-          buildTextReply(
-            "One or more selected platforms are invalid. Please review and try again.",
-            true,
-          ),
-        );
-        return;
+      for (let slotIndex = 0; slotIndex < entries.length; slotIndex += 1) {
+        const selectedOptionIndex = parsed[slotIndex];
+        const option = platformOptions[slotIndex]?.[selectedOptionIndex];
+        const gameId = entries[slotIndex]?.gameId;
+        if (!option || !gameId) {
+          await safeFollowUpIfSettled(
+            interaction,
+            buildTextReply(
+              "One or more selected platforms are invalid. Please review and try again.",
+              true,
+            ),
+          );
+          return;
+        }
+        const updated = await Member.updateNowPlayingPlatform(ownerId, gameId, option.platformId);
+        if (!updated) {
+          await safeFollowUpIfSettled(
+            interaction,
+            buildTextReply(
+              `Could not update platform for ${entries[slotIndex].title}.`,
+              true,
+            ),
+          );
+          return;
+        }
       }
-      const updated = await Member.updateNowPlayingPlatform(ownerId, gameId, option.platformId);
-      if (!updated) {
-        await safeFollowUpIfSettled(
-          interaction,
-          buildTextReply(
-            `Could not update platform for ${entries[slotIndex].title}.`,
-            true,
-          ),
-        );
-        return;
-      }
-    }
-    safeIgnore(refreshNowPlayingListFromContext(interaction, ownerId));
-    await returnToNowPlayingEditMenu(interaction, ownerId);
+      safeIgnore(refreshNowPlayingListFromContext(interaction, ownerId));
+      await returnToNowPlayingEditMenu(interaction, ownerId);
+    }, { workingLabel: "Saving..." });
   }
 
   @ButtonComponent({ id: /^nowplaying-edit-platform-reset:\d+$/ })
