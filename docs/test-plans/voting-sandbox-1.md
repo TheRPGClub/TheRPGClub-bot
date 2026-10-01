@@ -206,14 +206,14 @@ Ephemeral: yes
 
 ### Step 23: Vote on the closed NR-GOTM voting panel
 ```
-select "Sandbox NR-GOTM Game 3" on the NR-GOTM sandbox panel
+select "Sandbox NR-GOTM Game 3" on the "NR-GOTM Voting - Round 999" panel in the announcements channel (the second link in step 11's reply)
 ```
 Expected: an ephemeral reply, "Voting for Round 999 has closed" and "Vote in the runoff".
 Ephemeral: yes
 
 ### Step 24: Vote in the NR-GOTM runoff
 ```
-select "Sandbox NR-GOTM Game 2" on the NR-GOTM sandbox runoff panel
+select "Sandbox NR-GOTM Game 2" on the "NR-GOTM Runoff - Round 999" panel in the announcements channel (the last link in step 21's reply)
 ```
 Expected: an ephemeral reply, "Vote recorded for Sandbox NR-GOTM Game 2" and
 "Your NR-GOTM runoff votes for Round 999 (1/1)".
@@ -221,7 +221,7 @@ Ephemeral: yes
 
 ### Step 25: Check the hidden runoff results
 ```
-click "Results" on the NR-GOTM sandbox runoff panel
+click "Results" on the "NR-GOTM Runoff - Round 999" panel in the announcements channel (the last link in step 21's reply)
 ```
 Expected: an ephemeral reply, "NR-GOTM runoff Round 999 results are hidden" and
 "cast so far."

@@ -185,7 +185,7 @@ Ephemeral: yes
 
 ### Step 21: Break the tie with joint winners
 ```
-select "Sandbox GOTM Game 1" and "Sandbox GOTM Game 2" on the Round 999 tie prompt
+select "Sandbox GOTM Game 1" and "Sandbox GOTM Game 2" on the Round 999 tie prompt in the admin channel (the last link in step 20's reply)
 ```
 Expected: the tie prompt in the admin channel changes in place to "GOTM tie broken" and
 "picked as the GOTM joint winners". A "Sandbox Round 999 decided" summary posts.
