@@ -12,6 +12,7 @@ export interface IStartupStep {
  * Runs each startup step in order. A step that throws is logged and skipped, so one
  * failing service does not stop the ones after it. `clientReady` fires once, so
  * nothing would retry a step the sequence never reached. Returns the failed names.
+ * Each failure's error reaches only stdout; the summary warning also reaches Discord.
  */
 export async function runStartupSequence(
   steps: readonly IStartupStep[],
@@ -26,9 +27,10 @@ export async function runStartupSequence(
     }
   }
 
+  console.log(STARTUP_COMPLETE_LINE);
+  // After the ready line: DiscordConsoleLogger drops everything else until it sees it.
   if (failed.length > 0) {
     logWarn("Startup", `Failed startup steps: ${failed.join(", ")}`);
   }
-  console.log(STARTUP_COMPLETE_LINE);
   return failed;
 }

@@ -28,8 +28,9 @@ test("runStartupSequence keeps running the steps after one that throws", async (
   }
   assert.deepEqual(ran, ["A", "D"]);
   assert.deepEqual(failed, ["B", "C"]);
-  assert.ok(output.lines.some((line) => line.includes("Failed startup steps: B, C")));
-  assert.equal(output.lines.at(-1), STARTUP_COMPLETE_LINE);
+  const readyIndex = output.lines.indexOf(STARTUP_COMPLETE_LINE);
+  assert.ok(readyIndex >= 0);
+  assert.ok(output.lines[readyIndex + 1]?.includes("Failed startup steps: B, C"));
 });
 
 test("runStartupSequence prints only the ready line when every step succeeds", async () => {

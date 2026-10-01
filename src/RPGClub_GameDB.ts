@@ -207,13 +207,13 @@ bot.once("clientReady", async () => {
   //    ...bot.guilds.cache.map((g) => g.id)
   //  );
 
-  // A background service that writes through the API goes in SHARED_STATE_SERVICES, so
-  // PR previews in test mode never run it against production data.
   await runStartupSequence([
     { name: "refreshPresence", run: refreshPresence },
     { name: "presenceInterval", run: startPresenceInterval },
     { name: "initApplicationCommands", run: () => bot.initApplicationCommands() },
     { name: "refreshCommandMentions", run: () => refreshCommandMentions(bot) },
+    // A background service that writes through the API goes in SHARED_STATE_SERVICES,
+    // so PR previews in test mode never run it against production data.
     { name: "sharedStateServices", run: () => startSharedStateServices(bot) },
     { name: "joinAllTargetForumThreads", run: () => joinAllTargetForumThreads(bot) },
     { name: "refreshGiveawayHubMessage", run: () => refreshGiveawayHubMessage(bot) },
