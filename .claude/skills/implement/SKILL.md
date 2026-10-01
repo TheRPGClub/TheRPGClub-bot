@@ -198,7 +198,7 @@ Stay inside the scope the issue defines:
   along the way is a finding for the report or a new issue, not a task.
 - Do not add error handling for scenarios the issue does not address.
 - Do not add comments unless the why is non-obvious.
-- Follow `CLAUDE.md` and `.oxlintrc.json`: lines under 100 characters, no em
+- Follow `CLAUDE.md` and `.oxlintrc.json`: lines of code under 100 characters, no em
   dashes, no deprecated APIs, ID constants in `src/config/`, stable custom IDs
   that resume after a restart, full request and response in API error replies.
 

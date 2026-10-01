@@ -29,7 +29,8 @@ Use this structure:
 - Do NOT use markdown tables anywhere in the body. Use bullet lists or plain `file:line`
   lines instead.
 - Do not use emdashes (--). Use a double-hyphen ( -- ) or rephrase.
-- Keep lines under 100 characters.
+- No line-length limit: the 100-character rule in `CLAUDE.md` is for code only, so issue
+  text is not hard-wrapped to it.
 
 ### 3. Create the issue
 
