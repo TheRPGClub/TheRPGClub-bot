@@ -89,9 +89,12 @@ entry for every new problem. The `playwright-log` skill
   `PR #<pr>, step N: <label>`, without `of M`. `reportUrl` only treated `step N of M:` as
   the start of the current run, so in the moment before step 2 was posted it scanned past
   the checked step 1 and found the older run's report line.
-- **Fix:** #1443 made `reportUrl` stop at any step message of the PR, open or checked.
-- **Lesson:** the runner's "is this run over" check must recognise every form a step
-  message takes, not only the open one, or an old report in the channel ends a new run.
+- **Fix:** #1443 made `reportUrl` stop at any step message of the PR, open or checked,
+  and `currentStep` stop at an earlier run's report, so an aborted run's still-open step
+  (step 8 here) is never taken for the new run's.
+- **Lesson:** the runner's "is this run over" and "which step is current" checks must both
+  recognise every form a step message takes and where one run ends, or messages from an
+  older run in the channel leak into a new one.
 
 ### 2026-10-01: rerun exited at once with "For a person: none"
 

@@ -138,9 +138,17 @@ function chatBox(page: Page): Locator {
 }
 
 /** The newest step header the conductor posted for this PR, or null. */
+/** The conductor's `Report for PR #<pr> posted: <url>` line, capturing the url. */
+function reportLine(pr: number): RegExp {
+  return new RegExp(`Report for PR #${pr} posted: (\\S+)`);
+}
+
 export async function currentStep(page: Page, pr: number): Promise<IStepHeader | null> {
   const texts = await messages(page).allInnerTexts();
+  const posted = reportLine(pr);
   for (const text of texts.reverse()) {
+    // An earlier run's report ends the search: its open steps are not this run's.
+    if (posted.test(text)) return null;
     const match = STEP_HEADER.exec(text);
     if (match && Number(match[1]) === pr) {
       return { number: Number(match[2]), total: Number(match[3]), label: match[4].trim() };
@@ -156,7 +164,7 @@ export async function currentStep(page: Page, pr: number): Promise<IStepHeader |
  * step being checked and the next one being posted.
  */
 export async function reportUrl(page: Page, pr: number): Promise<string | null> {
-  const posted = new RegExp(`Report for PR #${pr} posted: (\\S+)`);
+  const posted = reportLine(pr);
   const texts = await messages(page).allInnerTexts();
   for (const text of texts.reverse()) {
     const match = posted.exec(text);
