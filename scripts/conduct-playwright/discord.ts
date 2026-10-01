@@ -28,7 +28,12 @@ export const TIMING = {
   pollMs: 1_000,
   /** Per-key delay, so Discord's command editor keeps up. */
   typeDelayMs: 40,
+  /** The pause after scrolling the message panel, so Discord renders what came into view. */
+  scrollSettleMs: 500,
 } as const;
+
+/** How many screens the runner scrolls up looking for a conductor message. */
+const SCROLL_SCREENS = 10;
 
 /** A step header the conductor posts: `PR #<pr>, step <n> of <m>: <label>`. */
 export interface IStepHeader {
@@ -47,9 +52,62 @@ const PENDING_BUTTONS = /^(?:Check again|Looks right)$/;
 const VERDICT_LINE = /^(?:FAIL|NEEDS EYES): .+$/m;
 /** Controls only conductor messages carry; their messages are never acted on. */
 const CONDUCTOR_BUTTONS = /^(?:Check|Check again|Abort run|Post report|Approve PR)$/;
+/** Discord's placeholder for a deferred reply: `<app> is thinking...`. */
+const THINKING = /\bis thinking(?:\.\.\.|\u2026)/;
+
+/** True when `text` is Discord's placeholder for a reply the bot has not sent yet. */
+export function isThinkingPlaceholder(text: string): boolean {
+  return THINKING.test(text);
+}
+
+function messageList(page: Page): Locator {
+  return page.getByRole("list", { name: /^Messages in / });
+}
 
 export function messages(page: Page): Locator {
-  return page.getByRole("list", { name: /^Messages in / }).getByRole("listitem");
+  return messageList(page).getByRole("listitem");
+}
+
+/**
+ * Scrolls the panel holding the messages one screen up, or to the bottom. Discord renders
+ * only a window of messages, so a tall reply can push a conductor message out of the DOM.
+ * Returns false when the panel did not move.
+ */
+async function scrollPanel(page: Page, direction: "up" | "bottom"): Promise<boolean> {
+  const moved = await messageList(page).evaluate((list, to) => {
+    let panel = list.parentElement;
+    while (panel) {
+      const overflow = getComputedStyle(panel).overflowY;
+      const scrolls = overflow === "auto" || overflow === "scroll";
+      if (scrolls && panel.scrollHeight > panel.clientHeight) break;
+      panel = panel.parentElement;
+    }
+    if (!panel) return false;
+    const before = panel.scrollTop;
+    panel.scrollTop = to === "up" ? before - panel.clientHeight * 0.8 : panel.scrollHeight;
+    return panel.scrollTop !== before;
+  }, direction);
+  if (moved) await page.waitForTimeout(TIMING.scrollSettleMs);
+  return moved;
+}
+
+/**
+ * Scrolls the panel to the bottom, then up a screen at a time until `found` holds or
+ * the panel stops moving. Reads of the newest messages scroll back down themselves.
+ */
+async function scrollUpUntil(page: Page, found: () => Promise<boolean>): Promise<boolean> {
+  await scrollPanel(page, "bottom");
+  for (let screen = 0; screen < SCROLL_SCREENS; screen += 1) {
+    if (await found()) return true;
+    if (!await scrollPanel(page, "up")) break;
+  }
+  return found();
+}
+
+/** The newest-first texts of the rendered messages, read with the panel at the bottom. */
+async function newestFirstTexts(page: Page): Promise<string[]> {
+  await scrollPanel(page, "bottom");
+  return (await messages(page).allInnerTexts()).reverse();
 }
 
 function chatBox(page: Page): Locator {
@@ -58,14 +116,24 @@ function chatBox(page: Page): Locator {
 
 /** The newest step header the conductor posted for this PR, or null. */
 export async function currentStep(page: Page, pr: number): Promise<IStepHeader | null> {
-  const texts = await messages(page).allInnerTexts();
-  for (const text of texts.reverse()) {
-    const match = STEP_HEADER.exec(text);
-    if (match && Number(match[1]) === pr) {
-      return { number: Number(match[2]), total: Number(match[3]), label: match[4].trim() };
+  const newest = async (texts: string[]): Promise<IStepHeader | null> => {
+    for (const text of texts) {
+      const match = STEP_HEADER.exec(text);
+      if (match && Number(match[1]) === pr) {
+        return { number: Number(match[2]), total: Number(match[3]), label: match[4].trim() };
+      }
     }
+    return null;
+  };
+  const header = await newest(await newestFirstTexts(page));
+  if (header) return header;
+  // A tall reply may have pushed the header out of the rendered window.
+  const rendered = async (): Promise<string[]> =>
+    (await messages(page).allInnerTexts()).reverse();
+  if (!await scrollUpUntil(page, async () => await newest(await rendered()) !== null)) {
+    return null;
   }
-  return null;
+  return newest(await rendered());
 }
 
 /**
@@ -75,8 +143,7 @@ export async function currentStep(page: Page, pr: number): Promise<IStepHeader |
  */
 export async function reportUrl(page: Page, pr: number): Promise<string | null> {
   const posted = new RegExp(`Report for PR #${pr} posted: (\\S+)`);
-  const texts = await messages(page).allInnerTexts();
-  for (const text of texts.reverse()) {
+  for (const text of await newestFirstTexts(page)) {
     const match = posted.exec(text);
     if (match) return match[1];
     if (Number(STEP_HEADER.exec(text)?.[1]) === pr) return null;
@@ -85,9 +152,18 @@ export async function reportUrl(page: Page, pr: number): Promise<string | null> 
 }
 
 /** The message holding the step header for this PR's step `n`. */
-export function stepMessage(page: Page, pr: number, n: number): Locator {
+function stepMessage(page: Page, pr: number, n: number): Locator {
   const header = new RegExp(`PR #${pr}, step ${n} of \\d+:`);
   return messages(page).filter({ hasText: header }).last();
+}
+
+/**
+ * The step message for this PR's step `n`, scrolling the panel up to it when a tall
+ * reply pushed it out of the rendered window, or null when it is not in the channel.
+ */
+export async function findStepMessage(page: Page, pr: number, n: number): Promise<Locator | null> {
+  const message = stepMessage(page, pr, n);
+  return await scrollUpUntil(page, async () => await message.count() > 0) ? message : null;
 }
 
 /**
@@ -95,7 +171,8 @@ export function stepMessage(page: Page, pr: number, n: number): Locator {
  * offers a plain Check. Such a step is the tester's: driving it again would repeat it.
  */
 export async function pendingVerdict(page: Page, pr: number, n: number): Promise<string | null> {
-  const message = stepMessage(page, pr, n);
+  const message = await findStepMessage(page, pr, n);
+  if (!message) return null;
   if (!await message.getByRole("button", { name: PENDING_BUTTONS }).count()) return null;
   return VERDICT_LINE.exec(await message.innerText())?.[0] ?? "awaiting the tester's judgment";
 }
@@ -111,6 +188,7 @@ async function isConductorMessage(item: Locator): Promise<boolean> {
  * got, never on an old message further up.
  */
 async function newestWith(page: Page, find: (item: Locator) => Locator): Promise<Locator> {
+  await scrollPanel(page, "bottom");
   const items = messages(page);
   const count = await items.count();
   for (let index = count - 1; index >= Math.max(0, count - 15); index -= 1) {
@@ -316,6 +394,7 @@ export async function performAction(page: Page, action: DriveAction): Promise<vo
 
 /** The newest message's text, to tell when a new reply lands after an action. */
 export async function newestText(page: Page): Promise<string> {
+  await scrollPanel(page, "bottom");
   const items = messages(page);
   return await items.count() ? items.last().innerText() : "";
 }
@@ -323,12 +402,20 @@ export async function newestText(page: Page): Promise<string> {
 /**
  * Waits for the reply an action produces: a new newest message for a slash command, or
  * a short settle for a component, whose reply usually updates its message in place.
+ * Either way it keeps waiting while the newest message is a deferred reply's
+ * "is thinking..." placeholder, which the conductor cannot judge.
  * Discord keeps only a window of messages rendered, so the count is no signal.
  */
 export async function waitForReply(page: Page, before: string, slash: boolean): Promise<void> {
   const deadline = Date.now() + TIMING.replyMs;
-  while (slash && Date.now() < deadline && await newestText(page) === before) {
-    await page.waitForTimeout(TIMING.pollMs);
+  const pending = async (): Promise<boolean> => {
+    const text = await newestText(page);
+    return (slash && text === before) || isThinkingPlaceholder(text);
+  };
+  for (;;) {
+    while (Date.now() < deadline && await pending()) await page.waitForTimeout(TIMING.pollMs);
+    await page.waitForTimeout(TIMING.settleMs);
+    // A component's deferred reply can show its placeholder only after the first look.
+    if (Date.now() >= deadline || !isThinkingPlaceholder(await newestText(page))) return;
   }
-  await page.waitForTimeout(TIMING.settleMs);
 }

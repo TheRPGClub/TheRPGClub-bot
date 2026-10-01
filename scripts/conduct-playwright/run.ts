@@ -19,12 +19,12 @@ import { parseDriveAction, type DriveAction } from "../../src/conductor/DriveAct
 import { buildDrivePlan, type IDriveStep } from "../../src/conductor/DrivePlan.ts";
 import {
   currentStep,
+  findStepMessage,
   HandOff,
   newestText,
   pendingVerdict,
   performAction,
   reportUrl,
-  stepMessage,
   TIMING,
   waitForReply,
 } from "./discord.ts";
@@ -210,7 +210,8 @@ async function waitForAdvance(page: Page, pr: number, n: number, ms: number): Pr
 
 /** Presses the step's Check and reads the conductor's verdict. */
 async function check(page: Page, pr: number, n: number): Promise<string | null> {
-  const message = stepMessage(page, pr, n);
+  const message = await findStepMessage(page, pr, n);
+  if (!message) throw new HandOff(`the conductor's message for step ${n} is not in the channel`);
   await message.getByRole("button", { name: "Check", exact: true }).click();
   const verdict = await poll(page, TIMING.verdictMs, async () =>
     await waitForAdvance(page, pr, n, 0) ? "passed" : pendingVerdict(page, pr, n),

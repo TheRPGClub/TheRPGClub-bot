@@ -41,6 +41,10 @@ entry for every new problem. The `playwright-log` skill
   its own field, and confirm it landed there before moving on.
 - Every hand-back message should name what failed (which option, which control), so the
   next entry here starts from a cause, not a guess.
+- A changed newest message is not a reply. A deferred reply first shows
+  "<app> is thinking..."; wait until that placeholder is gone before pressing Check.
+- Discord renders only a window of messages. Read the newest messages with the panel at the
+  bottom, and scroll up to find an older conductor message instead of assuming it is gone.
 
 ## Entries
 
@@ -161,3 +165,19 @@ entry for every new problem. The `playwright-log` skill
 - **Lesson:** read the conductor's report comment before blaming the runner; it shows the
   exact reply. A search term with many matches can push a trailing option past a select
   menu's cap, so prefer narrow terms in steps unless the step tests the cap.
+
+### 2026-10-01: "FAIL: No output observed in the ephemeral mirror channel."
+
+- **PR under test:** #1425
+- **Symptom:** step 1 (`/game-completion delete`) handed back with "FAIL: No output observed
+  in the ephemeral mirror channel." The tester pressed Check again and the step passed.
+- **Cause:** the runner pressed Check about 4 seconds after sending the command. The newest
+  message had changed to "RPGClubbot (Preview) is thinking...", and the runner took that
+  for the reply. Found in the trace (Enter at 27.7s, Check at 32.0s) and the step
+  screenshot, which still shows the placeholder. The tester also saw the conductor's step
+  message scroll out of view, which the runner could not reach if Discord stopped
+  rendering it.
+- **Fix:** #1435. `waitForReply` waits while the newest message is a thinking placeholder,
+  and the runner scrolls the message panel up to find a step message that is not rendered.
+- **Lesson:** wait for the reply itself, not for any change. A slow deferred command looks
+  like a missing reply to the conductor.
