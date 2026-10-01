@@ -171,10 +171,28 @@ export function buildAnyErrorMessage(
   err: unknown,
   options?: IErrorMessageOptions,
 ): string {
-  const isApiError: boolean = err instanceof UserFacingError ||
-    axios.isAxiosError(err) ||
-    (err instanceof Error && axios.isAxiosError(err.cause));
-  return isApiError
+  return isApiError(err)
     ? buildApiErrorMessage(label, err, options)
     : buildDiscordErrorMessage(label, err, options);
+}
+
+function isApiError(err: unknown): boolean {
+  return err instanceof UserFacingError ||
+    axios.isAxiosError(err) ||
+    (err instanceof Error && axios.isAxiosError(err.cause));
+}
+
+/**
+ * For a catch block around API calls that also throw our own validation errors. An API
+ * failure gets buildApiErrorMessage's request/response blocks; any other error is a
+ * validation message for the user, shown after the label with no dev ping.
+ */
+export function buildCaughtErrorMessage(
+  label: string,
+  err: unknown,
+  options?: IErrorMessageOptions,
+): string {
+  if (isApiError(err)) return buildApiErrorMessage(label, err, options);
+  const msg = err instanceof Error ? err.message : String(err);
+  return `${label}: ${msg}`;
 }

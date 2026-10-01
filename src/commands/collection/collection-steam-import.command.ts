@@ -64,6 +64,7 @@ import {
   buildTextReply,
   buildTitledContainer,
 } from "../../functions/ComponentsV2Utils.js";
+import { buildCaughtErrorMessage } from "../../utilities/ApiErrorUtils.js";
 import {
   buildImportActionsContainer,
   buildImportMessageContainer,
@@ -624,7 +625,10 @@ export class CollectionSteamImportCommand {
           await safeReply(
             interaction,
             buildTextReply(
-              error?.message ?? "Failed to start Steam import. Verify profile and try again.",
+              buildCaughtErrorMessage(
+                "Failed to start Steam import. Verify profile and try again",
+                error,
+              ),
               true,
             ),
           );

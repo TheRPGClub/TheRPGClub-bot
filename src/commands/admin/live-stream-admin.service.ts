@@ -27,7 +27,10 @@ import {
 import { buildTextReply, buildComponentsV2Flags } from "../../functions/ComponentsV2Utils.js";
 import { truncateLabel } from "../../config/textLimits.js";
 import { assertCustomIdSegments } from "../../utilities/CustomIdUtils.js";
-import { buildApiErrorMessage } from "../../utilities/ApiErrorUtils.js";
+import {
+  buildApiErrorMessage,
+  buildDiscordErrorMessage,
+} from "../../utilities/ApiErrorUtils.js";
 
 const LIVE_STREAM_MODAL_PREFIX = "admin-live-stream-create";
 const LIVE_STREAM_TOPIC_ID = "live-stream-topic";
@@ -286,8 +289,8 @@ export async function handleLiveStreamCreateModal(interaction: ModalSubmitIntera
     threadUrl = thread.url;
     threadId = thread.id;
   } catch (error: unknown) {
-    const msg = error instanceof Error ? error.message : String(error);
-    await safeReply(interaction, buildTextReply(`Thread creation failed: ${msg}`, true));
+    const msg = buildDiscordErrorMessage("Thread creation failed", error);
+    await safeReply(interaction, buildTextReply(msg, true));
     return;
   }
 
@@ -315,9 +318,9 @@ export async function handleLiveStreamCreateModal(interaction: ModalSubmitIntera
       true,
     ));
   } catch (error: unknown) {
-    const msg = error instanceof Error ? error.message : String(error);
+    const msg = buildDiscordErrorMessage("Scheduled event creation failed", error);
     await safeReply(interaction, buildTextReply(
-      `Scheduled event creation failed: ${msg}\n` +
+      `${msg}\n` +
       `Thread was created successfully: ${channelMention(threadId)}`,
       true,
     ));

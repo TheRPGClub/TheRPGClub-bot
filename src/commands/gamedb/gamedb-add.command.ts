@@ -40,7 +40,10 @@ import { apiGet, apiPost } from "../../services/RpgClubApiClient.js";
 import GamePlatformRegionService from "../../classes/GamePlatformRegionService.js";
 import { importReleaseDatesFromIgdb } from "../../functions/GameIgdbSync.js";
 import GameSearchService from "../../classes/GameSearchService.js";
-import { buildApiErrorMessage } from "../../utilities/ApiErrorUtils.js";
+import {
+  buildApiErrorMessage,
+  buildCaughtErrorMessage,
+} from "../../utilities/ApiErrorUtils.js";
 import {
   buildActionButton,
   buildButtonRow,
@@ -436,7 +439,7 @@ export class GameDbAddCommand {
       ));
     } catch (err: any) {
       await safeReply(interaction, buildTextReply(
-        `Failed to refresh release info: ${err?.message ?? String(err)}`,
+        buildCaughtErrorMessage("Failed to refresh release info", err),
         true,
       ));
     }

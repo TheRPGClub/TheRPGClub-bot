@@ -52,6 +52,7 @@ import {
   buildTextReply,
   safeV2TextContent,
 } from "../functions/ComponentsV2Utils.js";
+import { buildCaughtErrorMessage } from "../utilities/ApiErrorUtils.js";
 import { formatStructuredLog, logError, logInfo, logWarn } from "../utilities/LogUtils.js";
 import { isPositiveInt, truncateWithEllipsis } from "../utilities/ValidationUtils.js";
 import { parseCustomIdSegments } from "../utilities/CustomIdUtils.js";
@@ -675,7 +676,7 @@ export class SuggestionCommand {
       } catch (err: any) {
         await safeFollowUpIfSettled(
           interaction,
-          buildTextReply(err?.message ?? "Failed to create GitHub issue.", true),
+          buildTextReply(buildCaughtErrorMessage("Failed to create GitHub issue", err), true),
         );
         return;
       }
@@ -687,8 +688,10 @@ export class SuggestionCommand {
         await safeFollowUpIfSettled(
           interaction,
           buildTextReply(
-            `Created GitHub issue #${issue.number}, but could not remove the suggestion: ` +
-              `${err?.message ?? "unknown error"}`,
+            buildCaughtErrorMessage(
+              `Created GitHub issue #${issue.number}, but could not remove the suggestion`,
+              err,
+            ),
             true,
           ),
         );
@@ -834,7 +837,10 @@ export class SuggestionCommand {
           });
           await deleteSuggestion(parsed.suggestionId);
         } catch (err: any) {
-          await safeReply(interaction, buildTextReply(err?.message ?? "Failed to create GitHub issue.", true));
+          await safeReply(
+            interaction,
+            buildTextReply(buildCaughtErrorMessage("Failed to create GitHub issue", err), true),
+          );
           return;
         }
 
@@ -851,7 +857,10 @@ export class SuggestionCommand {
         try {
           await deleteSuggestion(parsed.suggestionId);
         } catch (err: any) {
-          await safeReply(interaction, buildTextReply(err?.message ?? "Failed to reject suggestion.", true));
+          await safeReply(
+            interaction,
+            buildTextReply(buildCaughtErrorMessage("Failed to reject suggestion", err), true),
+          );
           return;
         }
 

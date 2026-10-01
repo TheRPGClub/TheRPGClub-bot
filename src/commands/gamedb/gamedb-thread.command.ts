@@ -22,6 +22,7 @@ import {
   safeReply,
 } from "../../functions/InteractionUtils.js";
 import { buildTextReply } from "../../functions/ComponentsV2Utils.js";
+import { buildAnyErrorMessage } from "../../utilities/ApiErrorUtils.js";
 import { getThreadsByGameId, setThreadGameLink, upsertThreadRecord } from "../../classes/Thread.js";
 import { NOW_PLAYING_FORUM_ID } from "../../config/channels.js";
 import { NOW_PLAYING_SIDEGAME_TAG_ID } from "../../config/tags.js";
@@ -222,7 +223,7 @@ async function runNowPlayingThreadWizard(
       );
     }
   } catch (err: any) {
-    await sendStatus(`Failed to create thread: ${err?.message ?? String(err)}`);
+    await sendStatus(buildAnyErrorMessage("Failed to create thread", err));
   }
 }
 

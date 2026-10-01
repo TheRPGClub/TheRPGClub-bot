@@ -37,6 +37,7 @@ import {
   buildTitledContainer,
   safeV2TextContent,
 } from "../functions/ComponentsV2Utils.js";
+import { buildCaughtErrorMessage } from "../utilities/ApiErrorUtils.js";
 import {
   ContainerBuilder,
 } from "@discordjs/builders";
@@ -406,7 +407,10 @@ export class GameDbAdmin {
       content = truncateWithEllipsis(content, 1900);
       await safeReply(interaction, buildTextReply(content, !(isPublic)));
     } catch (err: any) {
-      await safeReply(interaction, buildTextReply(`Failed to save synonym group. ${err?.message ?? "Unknown error."}`, !(isPublic)));
+      await safeReply(interaction, buildTextReply(
+        buildCaughtErrorMessage("Failed to save synonym group", err),
+        !(isPublic),
+      ));
     }
   }
 
@@ -674,7 +678,10 @@ export class GameDbAdmin {
       content = truncateWithEllipsis(content, 1900);
       await safeReply(interaction, buildTextReply(content, true));
     } catch (err: any) {
-      await safeReply(interaction, buildTextReply(err?.message ?? "Failed to update synonym group.", true));
+      await safeReply(interaction, buildTextReply(
+        buildCaughtErrorMessage("Failed to update synonym group", err),
+        true,
+      ));
     }
   }
 

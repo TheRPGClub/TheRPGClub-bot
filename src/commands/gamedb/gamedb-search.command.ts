@@ -29,6 +29,7 @@ import {
   buildTextReply,
   safeV2TextContent,
 } from "../../functions/ComponentsV2Utils.js";
+import { buildCaughtErrorMessage } from "../../utilities/ApiErrorUtils.js";
 import { buildDisabledPrevNextRowWithIds } from "../../functions/PaginationUtils.js";
 import GameProfileService from "../../classes/GameProfileService.js";
 import { decodeBase64Url } from "../../functions/CustomIdUtils.js";
@@ -323,7 +324,7 @@ export class GameDbSearchCommand {
       await runSearchFlow(interaction, searchTerm, query ?? undefined, filters);
     } catch (error: any) {
       await safeReply(interaction, buildTextReply(
-        `Failed to search games. Error: ${error.message}`, true,
+        buildCaughtErrorMessage("Failed to search games", error), true,
       ));
     }
   }
