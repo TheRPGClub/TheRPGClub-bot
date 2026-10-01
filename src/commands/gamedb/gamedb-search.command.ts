@@ -427,11 +427,7 @@ export class GameDbSearchCommand {
     }
 
     // Defer before the search: the API call can outlast Discord's 3 second window.
-    try {
-      await safeDeferUpdate(interaction);
-    } catch {
-      // ignore
-    }
+    await safeDeferUpdate(interaction);
 
     const results = await GameSearchService.searchGames(searchTerm, filters);
     const totalPages = Math.max(
