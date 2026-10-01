@@ -188,7 +188,7 @@ async function postRunoffPanels(
   context: IVotingEventContext,
 ): Promise<VotingEventOutcome> {
   const round = await requireRound(event, context);
-  if (!round.runoffOpen || !round.runoffClosesAt) {
+  if (!round.runoffOpen) {
     return "skipped";
   }
 
