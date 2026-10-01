@@ -303,7 +303,7 @@ test("buildTestPanelNoticeText names the reset command when casting is live", ()
     castsAccepted: true,
     reason: null,
   });
-  assert.match(text, /TEST MODE/);
+  assert.match(text, /^-# 🧪 Test mode: /);
   assert.match(text, /votes land on Round 120 for real/);
   assert.match(text, /\/admin votes-reset type:GOTM round:120/);
 });

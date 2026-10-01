@@ -156,7 +156,7 @@ test("voting_opened posts sandbox panels to announcements through the live handl
   assert.ok(sent.every((message) => message.channelId === ANNOUNCEMENT_CHANNEL_ID));
   for (const message of sent) {
     assert.match(message.json, new RegExp(`vsbx-pick:${ownerId}:cafe01:999:`));
-    assert.match(message.json, /VOTING SANDBOX/);
+    assert.match(message.json, /Test mode: votes cast here are stored in the voting sandbox/);
     assert.doesNotMatch(message.json, /"vote-(cast|pick):/);
   }
   assert.equal((await loadSandbox(ownerId))?.outbox.length, 0);
@@ -188,7 +188,7 @@ test("a tie opens a runoff whose panels offer only the tied games", async (t) =>
   assert.equal(panels.length, 1, "only the tied category gets a runoff panel");
   const panel = panels[0]?.json ?? "";
   assert.match(panel, new RegExp(`vsbx-rpick:${ownerId}:beef02:999:gotm:\\d+`));
-  assert.match(panel, /VOTING SANDBOX/);
+  assert.match(panel, /Test mode: votes cast here are stored in the voting sandbox/);
   assert.match(panel, /Which game should be the GOTM for \*\*/);
   assert.match(panel, /GOTM Winner 1/);
   assert.match(panel, /GOTM Winner 2/);

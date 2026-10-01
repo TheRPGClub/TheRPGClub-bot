@@ -140,9 +140,22 @@ function addNominationContent(
   nomination: INominationEntry,
   displayName: string,
 ): void {
+  addNominationSection(container, nomination, displayName, MAX_REASON_LENGTH);
+}
+
+/**
+ * A nomination as the nominations list shows it: the title and reason, with the
+ * nominator's name and avatar emoji on a button. The voting panels reuse it.
+ */
+export function addNominationSection(
+  container: ContainerBuilder,
+  nomination: INominationEntry,
+  displayName: string,
+  reasonMax: number,
+): void {
   const section = new SectionBuilder().addTextDisplayComponents(
     new TextDisplayBuilder().setContent(
-      safeV2TextContent(buildNominationText(nomination), 1800),
+      safeV2TextContent(buildNominationText(nomination, reasonMax), 1800),
     ),
   );
    
@@ -158,9 +171,13 @@ function addNominationContent(
   container.addSectionComponents(section);
 }
 
-function buildNominationText(nomination: INominationEntry): string {
+export function buildNominationText(nomination: INominationEntry, reasonMax: number): string {
+  // A reason max of 0 leaves the reasons out, for a panel short on text room.
+  if (nomination.reason && reasonMax <= 0) {
+    return `**${nomination.gameTitle}**`;
+  }
   if (nomination.reason) {
-    return `**${nomination.gameTitle}**\n> ${trimReason(nomination.reason)}`;
+    return `**${nomination.gameTitle}**\n> ${truncateWithEllipsis(nomination.reason, reasonMax)}`;
   }
   return `**${nomination.gameTitle}**\n-# *No reason provided.*`;
 }
@@ -228,15 +245,11 @@ function truncateLabel(label: string, maxLength: number): string {
   return truncateWithEllipsis(label, maxLength);
 }
 
-function trimReason(reason: string): string {
-  return truncateWithEllipsis(reason, MAX_REASON_LENGTH);
-}
-
 function formatDate(date: Date): string {
   return `<t:${toUnixTimestamp(date)}:D>`;
 }
 
-async function buildNominatorDisplayNames(
+export async function buildNominatorDisplayNames(
   nominations: INominationEntry[],
 ): Promise<Map<string, string>> {
   const uniqueUserIds = [...new Set(nominations.map((nomination) => nomination.userId))];
@@ -250,10 +263,21 @@ async function buildNominatorDisplayNames(
   return new Map(records);
 }
 
-async function buildNominationAttachments(
+/** Where the nominations list stores a category's composed vote image. */
+export function nominationImageStorageKey(voteType: VoteImageType, roundNumber: number): string {
+  return `generated/noms/${voteType.toLowerCase()}/round-${roundNumber}`;
+}
+
+/**
+ * The composed cover image for these nominations. With a storage key it is
+ * stored once per key and reused while the covers are unchanged; with none it
+ * goes along as a file.
+ */
+export async function buildNominationAttachments(
   kindLabel: string,
   roundNumber: number,
   nominations: INominationEntry[],
+  storageKey?: string | null,
 ): Promise<{
   files: AttachmentBuilder[];
   voteImageUrl: string | null;
@@ -280,7 +304,13 @@ async function buildNominationAttachments(
   );
   const covers = results.filter((c): c is NonNullable<typeof c> => c !== null);
 
-  const voteImageUrl = await appendVoteImageAttachment(files, kindLabel, roundNumber, covers);
+  const voteImageUrl = await appendVoteImageAttachment(
+    files,
+    kindLabel,
+    roundNumber,
+    covers,
+    storageKey,
+  );
   return { files, voteImageUrl };
 }
 
@@ -289,6 +319,7 @@ async function appendVoteImageAttachment(
   kindLabel: string,
   roundNumber: number,
   covers: Array<{ gameId: number; title: string; imageData: Buffer; imageUrl: string }>,
+  storageKey: string | null | undefined,
 ): Promise<string | null> {
   const voteType = toVoteImageType(kindLabel);
   if (!voteType || !covers.length) {
@@ -296,10 +327,13 @@ async function appendVoteImageAttachment(
   }
 
   const sourceHash = buildNominationImageSourceHash(voteType, roundNumber, covers);
-  if (hasBackblazeB2Config()) {
+  const key = storageKey === undefined
+    ? nominationImageStorageKey(voteType, roundNumber)
+    : storageKey;
+  if (key && hasBackblazeB2Config()) {
     try {
       const stored = await getOrReplaceBackblazeImage(
-        `generated/noms/${voteType.toLowerCase()}/round-${roundNumber}`,
+        key,
         sourceHash,
         () => composeVoteImage({
           roundNumber,
@@ -319,7 +353,7 @@ async function appendVoteImageAttachment(
   return `attachment://${filename}`;
 }
 
-function toVoteImageType(kindLabel: string): VoteImageType | null {
+export function toVoteImageType(kindLabel: string): VoteImageType | null {
   if (kindLabel === "GOTM" || kindLabel === "NR-GOTM") {
     return kindLabel;
   }
@@ -341,7 +375,10 @@ function buildNominationImageSourceHash(
   return hash.digest("hex");
 }
 
-function addVoteImageToContainer(container: ContainerBuilder, voteImageUrl: string | null): void {
+export function addVoteImageToContainer(
+  container: ContainerBuilder,
+  voteImageUrl: string | null,
+): void {
   if (!voteImageUrl) {
     return;
   }
