@@ -388,7 +388,7 @@ test("a GameDB pick on completion-add-select after a restart logs the completion
   assert.deepEqual(removed, ["row-2"], "the persisted row is deleted once used");
 });
 
-test("a restored completion-add-select session with no platform is treated as expired", async (t) => {
+test("a restored completion-add session with no platform reads as expired", async (t) => {
   const { saved } = stubSessionStore(t);
   const sessionId = createCompletionSession(buildCtx(), { channelId: "c1", guildId: "g1" });
   simulateBotRestart();
