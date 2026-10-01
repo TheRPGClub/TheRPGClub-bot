@@ -83,7 +83,7 @@ import { NOW_PLAYING_HELP_PREFIX } from "./now-playing-help.js";
 import { EphemeralOwnerMenu } from "../functions/EphemeralOwnerMenu.js";
 import { isPositiveInt } from "../utilities/ValidationUtils.js";
 import { parseCustomIdSegments, parseCustomIdSegmentsMin } from "../utilities/CustomIdUtils.js";
-import { buildOptionalPrevNextRowWithIds } from "../functions/PaginationUtils.js";
+import { buildDisabledPrevNextRowWithIds } from "../functions/PaginationUtils.js";
 import {
   JOURNAL_LIST_PAGE_SIZE as LIST_PAGE_SIZE,
   JOURNAL_ALL_PAGE_SIZE as ALL_PAGE_SIZE,
@@ -234,7 +234,7 @@ function buildListPageRow(
   page: number,
   totalPages: number,
 ): ActionRowBuilder<ButtonBuilder> | null {
-  return buildOptionalPrevNextRowWithIds(
+  return buildDisabledPrevNextRowWithIds(
     `${GJ_LIST_PAGE_PREFIX}:${callerId}:${targetUserId}:${page - 1}`,
     `${GJ_LIST_PAGE_PREFIX}:${callerId}:${targetUserId}:${page + 1}`,
     page,
@@ -314,7 +314,7 @@ function buildAllPageRow(
   page: number,
   totalPages: number,
 ): ActionRowBuilder<ButtonBuilder> | null {
-  return buildOptionalPrevNextRowWithIds(
+  return buildDisabledPrevNextRowWithIds(
     `${GJ_ALL_PAGE_PREFIX}:${callerId}:${page - 1}`,
     `${GJ_ALL_PAGE_PREFIX}:${callerId}:${page + 1}`,
     page,
@@ -404,12 +404,12 @@ function buildSearchPageRow(
   page: number,
   totalPages: number,
 ): ActionRowBuilder<ButtonBuilder> | null {
-  return buildOptionalPrevNextRowWithIds(
+  return buildDisabledPrevNextRowWithIds(
     buildSearchCustomId(callerId, targetUserId, gameId, page - 1, query),
     buildSearchCustomId(callerId, targetUserId, gameId, page + 1, query),
     page,
     totalPages,
-    { prev: "Previous Result", next: "Next Result" },
+    { labels: { prev: "Previous Result", next: "Next Result" } },
   );
 }
 

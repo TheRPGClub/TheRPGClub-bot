@@ -30,7 +30,7 @@ import {
   safeUserFetch,
 } from "../functions/InteractionUtils.js";
 import {
-  buildOptionalPrevNextRow,
+  buildDisabledPrevNextRow,
   parseDirAndPage,
 } from "../functions/PaginationUtils.js";
 import Member from "../classes/Member.js";
@@ -307,7 +307,7 @@ export class AvatarHistoryCommand {
         return;
       }
       const { headerContainer, contentContainer, selectRow, totalPages, safePage } = pageResult;
-      const paginationRow = buildOptionalPrevNextRow(
+      const paginationRow = buildDisabledPrevNextRow(
         `avatar-history-all-page:${interaction.user.id}`,
         safePage,
         totalPages,
@@ -338,7 +338,7 @@ export class AvatarHistoryCommand {
     }
 
     const { containers, files, totalPages, safePage } = pageResult;
-    const paginationRow = buildOptionalPrevNextRow(
+    const paginationRow = buildDisabledPrevNextRow(
       `avatar-history-page:${interaction.user.id}:${target.id}`,
       safePage,
       totalPages,
@@ -374,7 +374,7 @@ export class AvatarHistoryCommand {
     }
 
     const { containers, files, totalPages, safePage } = pageResult;
-    const paginationRow = buildOptionalPrevNextRow(
+    const paginationRow = buildDisabledPrevNextRow(
       `avatar-history-page:${ownerId}:${targetId}`,
       safePage,
       totalPages,
@@ -406,7 +406,7 @@ export class AvatarHistoryCommand {
       return;
     }
     const { headerContainer, contentContainer, selectRow, totalPages, safePage } = pageResult;
-    const paginationRow = buildOptionalPrevNextRow(
+    const paginationRow = buildDisabledPrevNextRow(
       `avatar-history-all-page:${ownerId}`,
       safePage,
       totalPages,
@@ -441,7 +441,7 @@ export class AvatarHistoryCommand {
       return;
     }
     const { containers, files, totalPages, safePage } = pageResult;
-    const paginationRow = buildOptionalPrevNextRow(
+    const paginationRow = buildDisabledPrevNextRow(
       `avatar-history-page:${ownerId}:${targetId}`,
       safePage,
       totalPages,

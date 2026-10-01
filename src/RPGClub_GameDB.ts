@@ -97,6 +97,8 @@ export const bot: Client = new Client({
   intents: [
     IntentsBitField.Flags.Guilds,
     IntentsBitField.Flags.GuildMembers,
+    // Required for the emojiCreate, emojiDelete, and emojiUpdate change logs.
+    IntentsBitField.Flags.GuildExpressions,
     IntentsBitField.Flags.GuildMessages,
     IntentsBitField.Flags.GuildMessageReactions,
     IntentsBitField.Flags.GuildModeration,
