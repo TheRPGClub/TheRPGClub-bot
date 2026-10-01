@@ -47,7 +47,11 @@ export class GuildMemberAdd {
           footer: `ID: ${member.user.id} • ${formatTimestampWithDay(Date.now())}`,
         });
 
-        await (logChannel as any).send({ ...buildContainerSend(container) });
+        try {
+          await (logChannel as any).send({ ...buildContainerSend(container) });
+        } catch (error) {
+          logError("GuildMemberAdd", error);
+        }
       }
     }
 
