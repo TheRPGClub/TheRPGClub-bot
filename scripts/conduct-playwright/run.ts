@@ -6,7 +6,7 @@
 // Usage: npm run -s conduct:playwright -- <pr> [--hand-off 3,5] [--local]
 // It never runs headless or in CI; see "Playwright runner" in docs/conductor.md.
 
-import { execFileSync } from "child_process";
+import { execFileSync, spawnSync } from "child_process";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
@@ -40,8 +40,14 @@ interface IOutcome {
 }
 
 const USAGE = "Usage: npm run -s conduct:playwright -- <pr> [--hand-off 3,5] [--local]";
-/** The runner's own code and what it imports; it must match main unless `--local`. */
-const RUNNER_PATHS = ["scripts/conduct-playwright", "src/conductor", "src/config"];
+/** The runner's own code and what it imports; it must not lag main unless `--local`. */
+const RUNNER_PATHS = [
+  "scripts/conduct-playwright",
+  "src/conductor",
+  "src/config/previewMode.ts",
+  "src/config/testGuild.ts",
+  "src/config/users.ts",
+];
 const PROFILE_DIR = process.env.CONDUCT_PROFILE_DIR ??
   path.join(os.homedir(), ".cache", "rpgclub-conductor", "discord-profile");
 
@@ -74,25 +80,36 @@ function parseArgs(argv: string[]): IArgs {
   };
 }
 
+/** Runs git and returns its exit status and trimmed stdout; never throws. */
+function git(args: string[]): { status: number | null; out: string } {
+  const result = spawnSync("git", args, { encoding: "utf8" });
+  return { status: result.status, out: (result.stdout ?? "").trim() };
+}
+
 /**
  * The runner runs from whatever branch is checked out, so a PR branch cut before a runner
- * fix runs the old code. Refuses to start unless the runner matches `origin/main`.
+ * fix runs the old code (PR 1412 did). Refuses to start when origin/main has a runner
+ * commit this checkout lacks. A branch that edits those paths on top of main passes.
  */
 function assertRunnerCurrent(): void {
-  try {
-    execFileSync("git", ["fetch", "--quiet", "origin", "main"], { stdio: "ignore" });
-  } catch {
+  if (git(["fetch", "--quiet", "origin", "main"]).status !== 0) {
     console.warn("Could not fetch origin/main; checking the runner against the last fetch.");
   }
-  try {
-    execFileSync("git", ["diff", "--quiet", "origin/main", "--", ...RUNNER_PATHS], {
-      stdio: "ignore",
-    });
-  } catch {
+  const latest = git(["log", "-1", "--format=%H", "origin/main", "--", ...RUNNER_PATHS]);
+  if (latest.status !== 0 || !latest.out) {
+    console.warn("Could not read origin/main; skipping the runner freshness check.");
+    return;
+  }
+  const check = git(["merge-base", "--is-ancestor", latest.out, "HEAD"]);
+  if (check.status === 1) {
     fail(
-      `The runner here differs from origin/main (${RUNNER_PATHS.join(", ")}). Run it from ` +
-        "an up-to-date main checkout, or pass --local to run this checkout's copy.",
+      `This checkout lacks origin/main's runner commit ${latest.out.slice(0, 7)}, so it ` +
+        "would run an old runner. Merge main into this branch or run it from an up-to-date " +
+        "main checkout, or pass --local to run this checkout's copy anyway.",
     );
+  }
+  if (check.status !== 0) {
+    console.warn("Could not compare this checkout with origin/main; running anyway.");
   }
 }
 

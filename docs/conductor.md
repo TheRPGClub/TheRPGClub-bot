@@ -122,10 +122,11 @@ What it does:
 - It reads the PR body with `gh` and builds the drive plan with the same parser
   `/conduct` runs (`src/conductor/DrivePlan.ts`), then prints it. `npm run -s
   conduct:drive-plan -- <body-file>` prints the same plan as JSON.
-- It first checks that its own code (`scripts/conduct-playwright/`, `src/conductor/`,
-  `src/config/`) matches `origin/main`, and refuses to start when it does not. That way
-  a PR branch cut before a runner fix never runs the old runner. `--local` runs this
-  checkout's copy anyway, for work on the runner itself.
+- It first fetches `origin/main` and refuses to start when main has a commit to the
+  runner's code (`scripts/conduct-playwright/`, `src/conductor/`, and the `src/config/`
+  files it imports) that this checkout lacks. That way a PR branch cut before a runner
+  fix never runs the old runner. A branch that changes those files on top of main still
+  runs. `--local` skips the check, for work on the runner itself.
 - Each step's `Changes data:` line (`.github/pull-request-testing-format.md`) says
   whether it writes real data. The preview writes to whatever API and Backblaze its env
   file names (`docs/pr-preview.md`), so a `yes` step becomes a hand-off. Only driven
