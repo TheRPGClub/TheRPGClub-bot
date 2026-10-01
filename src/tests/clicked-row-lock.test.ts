@@ -138,7 +138,7 @@ test("withClickedRowDisabled skips the work when the dev channel blocks the clic
   const edits: Edit[] = [];
   const interaction = makeInteraction(edits, { value: false });
   interaction.channelId = BOT_DEV_CHANNEL_ID;
-  interaction.message.interaction = { user: { id: "owner" } };
+  interaction.message.interactionMetadata = { user: { id: "owner" } };
   const replies: unknown[] = [];
   interaction.reply = async (payload: unknown) => {
     replies.push(payload);
@@ -150,6 +150,18 @@ test("withClickedRowDisabled skips the work when the dev channel blocks the clic
   assert.equal(ran, false);
   assert.equal(replies.length, 1);
   assert.equal(edits.length, 0);
+});
+
+test("withClickedRowDisabled lets the command owner click in the dev channel", async () => {
+  const edits: Edit[] = [];
+  const interaction = makeInteraction(edits, { value: false });
+  interaction.channelId = BOT_DEV_CHANNEL_ID;
+  interaction.message.interactionMetadata = { user: { id: "u1" } };
+  let ran = false;
+  await withClickedRowDisabled(interaction, async () => {
+    ran = true;
+  });
+  assert.equal(ran, true);
 });
 
 test("withClickedRowDisabled runs the work unlocked after an acknowledgement race", async () => {
