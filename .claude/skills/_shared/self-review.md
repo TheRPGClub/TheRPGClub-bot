@@ -51,9 +51,9 @@ commit alone does not show.
 2. Read the diff once more against this repository's own rules, which a
    general review does not know:
 
-   - `CLAUDE.md`: lines under 100 characters, no em dashes, no deprecated
-     Discord.js or discordx APIs, channel, user, and tag ID constants in
-     `src/config/`, API errors surfaced with the full request and response;
+   - `CLAUDE.md`: lines of code under 100 characters (not PR or issue text), no em
+     dashes, no deprecated Discord.js or discordx APIs, channel, user, and tag ID
+     constants in `src/config/`, API errors surfaced with the full request and response;
    - interactions use stable custom IDs and resume after a bot restart;
    - a raw component builder or constant a shared helper already covers;
    - `.oxlintrc.json` rules the lint run cannot see, such as intent;

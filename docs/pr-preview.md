@@ -60,6 +60,11 @@ The existing `ci.yml` jobs stay on GitHub-hosted runners.
   `Ready for testing PR #N at <sha>` in the test guild's dev channel, and the conductor
   starts that PR's Testing steps there with no further input (`docs/conductor.md`,
   Automatic start). `/test-guild <pr>` is the only step needed to get a PR tested.
+- **The deploy scripts come from main.** The `deploy` job runs `preview.sh`, the
+  workflow's modules, and `docker-compose.preview.yml` from the workflow's own commit.
+  It checks out the PR's head separately, into `pr-src/`, and uses it only as the Docker
+  build context (`PREVIEW_BUILD_CONTEXT`). A branch that predates or rewrites those files
+  cannot change how its preview is deployed or judged.
 - **Fork PRs never run here.** Jobs skip any PR whose head repo is not this repo, so fork
   code never reaches the runner or the dev token.
 
@@ -73,8 +78,10 @@ Everything below happens on the desktop, in the WSL2 distro unless it says Windo
 
 ### 1. Dev bot application
 
-1. In the Discord Developer Portal, create a new application, for example
-   `RPGClub Bot (preview)`. Never reuse the production application.
+1. In the Discord Developer Portal, create a new application named
+   `RPGClubbot (Preview)`. Never reuse the production application. The Playwright runner
+   finds the bot's slash commands by this name (`PREVIEW_BOT_NAME` in
+   `src/config/previewMode.ts`) or by its avatar, so keep the two in step.
 2. Under Bot, reset and copy the token. Enable the Server Members, Presence, and Message
    Content privileged intents, since the bot requests all three.
 3. Under OAuth2 URL Generator, pick the `bot` and `applications.commands` scopes and the

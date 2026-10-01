@@ -2579,13 +2579,10 @@ export default {
 
         const isComponentsV2Flag = (node) => {
           if (!node) return false;
-          if (node.type === "Identifier" && node.name === "COMPONENTS_V2_FLAG") {
-            return true;
-          }
           if (
             node.type === "MemberExpression" &&
             node.property.type === "Identifier" &&
-            node.property.name === "IS_COMPONENTS_V2"
+            node.property.name === "IsComponentsV2"
           ) {
             return true;
           }
@@ -2609,6 +2606,7 @@ export default {
               }
             }
             for (const key of Object.keys(current)) {
+              if (key === "parent") continue;
               const value = current[key];
               if (!value) continue;
               if (Array.isArray(value)) {
@@ -2679,13 +2677,10 @@ export default {
 
         const isComponentsV2Flag = (node) => {
           if (!node) return false;
-          if (node.type === "Identifier" && node.name === "COMPONENTS_V2_FLAG") {
-            return true;
-          }
           if (
             node.type === "MemberExpression" &&
             node.property.type === "Identifier" &&
-            node.property.name === "IS_COMPONENTS_V2"
+            node.property.name === "IsComponentsV2"
           ) {
             return true;
           }
@@ -2710,6 +2705,7 @@ export default {
               return true;
             }
             for (const key of Object.keys(current)) {
+              if (key === "parent") continue;
               const value = current[key];
               if (!value) continue;
               if (Array.isArray(value)) {
@@ -2752,6 +2748,7 @@ export default {
             }
 
             for (const key of Object.keys(current)) {
+              if (key === "parent") continue;
               const value = current[key];
               if (!value) continue;
               if (Array.isArray(value)) {

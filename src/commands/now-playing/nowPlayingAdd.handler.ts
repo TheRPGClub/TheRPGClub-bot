@@ -16,7 +16,11 @@ import {
   safeReply,
   safeUpdate,
 } from "../../functions/InteractionUtils.js";
-import { buildSelectRow } from "../../functions/uiComponents.js";
+import {
+  buildSelectRow,
+  IGDB_IMPORT_OPTION_VALUE,
+  withIgdbImportOption,
+} from "../../functions/uiComponents.js";
 import {
   buildComponentsV2Flags,
   buildTextContainer,
@@ -95,17 +99,10 @@ export class NowPlayingAddHandlers {
       };
       nowPlayingAddSessions.set(sessionId, session);
 
-      const options: Array<{ label: string; value: string; description?: string }> =
-        results.slice(0, 23).map((g) => ({
+      const options = withIgdbImportOption(results.map((g) => ({
         label: g.title.substring(0, 100),
         value: String(g.id),
-      }));
-
-      options.push({
-        label: "Import another game from IGDB",
-        value: "import-igdb",
-        description: "Search IGDB and import a new GameDB entry",
-      });
+      })));
 
       const selectId = `nowplaying-add-select:${sessionId}`;
       const selectRow = buildSelectRow(
@@ -190,7 +187,7 @@ export class NowPlayingAddHandlers {
     }
 
     const choice = interaction.values[0];
-    if (choice === "import-igdb") {
+    if (choice === IGDB_IMPORT_OPTION_VALUE) {
       await startNowPlayingIgdbImport(interaction, session);
       return;
     }

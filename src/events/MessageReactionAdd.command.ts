@@ -4,6 +4,7 @@ import {
   ButtonStyle,
   MessageFlags,
   ModalBuilder,
+  RESTJSONErrorCodes,
   StringSelectMenuBuilder,
   userMention,
 } from "discord.js";
@@ -249,7 +250,8 @@ export class MessageReactionAdd {
       await message.pin();
     } catch (err: any) {
       const code = err?.code ?? err?.rawError?.code;
-      const limitReached = code === 30003 || /maximum number of pins/i.test(err?.message ?? "");
+      const limitReached = code === RESTJSONErrorCodes.MaximumNumberOfPinsReachedForTheChannel
+        || /maximum number of pins/i.test(err?.message ?? "");
       if (!limitReached) return;
       const channel: any = message.channel;
       if (channel && typeof channel.send === "function") {

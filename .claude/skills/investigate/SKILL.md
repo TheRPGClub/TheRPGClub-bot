@@ -139,7 +139,8 @@ Not a full implementation -- just enough for /implement to take over.>
 **Formatting rules -- enforced, no exceptions:**
 - Do NOT use markdown tables. Use bullet lists or plain `file:line` references.
 - Do not use emdashes. Use a double-hyphen ( -- ) or rephrase.
-- Keep lines under 100 characters.
+- No line-length limit: the 100-character rule in `CLAUDE.md` is for code only, so let
+  issue text run as long as reads well.
 
 Apply the edit. Write the rewritten body to `<scratchpad>/issue-body.md` with the Write tool,
 never through a heredoc, per [shell-text.md](../_shared/shell-text.md):

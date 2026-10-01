@@ -388,6 +388,30 @@ test("a GameDB pick on completion-add-select after a restart logs the completion
   assert.deepEqual(removed, ["row-2"], "the persisted row is deleted once used");
 });
 
+test("a restored completion-add session with no platform reads as expired", async (t) => {
+  const { saved } = stubSessionStore(t);
+  const sessionId = createCompletionSession(buildCtx(), { channelId: "c1", guildId: "g1" });
+  simulateBotRestart();
+  const state = { ...JSON.parse(JSON.stringify(saved[0].state)), selectedPlatformId: 0 };
+  t.mock.method(persistedSessionStore, "load", async () => ({ rowId: "row-3", state }));
+  const addCompletion = stubCompletionSave(t);
+  const select = fakeInteraction({
+    customId: `completion-add-select:${sessionId}`,
+    values: [String(GAME_ID)],
+    channelId: "c1",
+    isMessageComponent: () => true,
+  });
+  const followUp = t.mock.method(select, "followUp", async () => undefined);
+
+  await handleCompletionAddSelect(select);
+
+  assert.equal(addCompletion.mock.callCount(), 0);
+  assert.equal(followUp.mock.callCount(), 1);
+  const reply: any = followUp.mock.calls[0].arguments[0];
+  assert.match(JSON.stringify(reply), /has expired/);
+  assert.ok(reply.flags & MessageFlags.Ephemeral, "the notice must stay ephemeral");
+});
+
 test("an expired completion-add-select prompt replies with an ephemeral follow-up", async (t) => {
   stubSessionStore(t);
   const sessionId = createCompletionSession(buildCtx(), { channelId: "c1", guildId: "g1" });

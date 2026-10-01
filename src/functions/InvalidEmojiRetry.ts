@@ -1,6 +1,7 @@
+import { RESTJSONErrorCodes } from "discord.js";
 import { logError } from "../utilities/LogUtils.js";
 
-const INVALID_FORM_BODY_CODE = 50035;
+const INVALID_FORM_BODY_CODE = RESTJSONErrorCodes.InvalidFormBodyOrContentType;
 const INVALID_EMOJI_ERROR_CODE = "COMPONENT_INVALID_EMOJI";
 
 type ErrorTree = { _errors?: { code?: string }[]; [key: string]: unknown };
