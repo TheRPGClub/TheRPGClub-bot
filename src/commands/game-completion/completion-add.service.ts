@@ -36,7 +36,6 @@ import {
   completionAddContextToJson,
 } from "./completion-add-context.codec.js";
 import { resolveNowPlayingRemoval } from "./completion-helpers.js";
-import { promptCompletionPlatformSelection } from "./completion-platform.service.js";
 import { completionAddSessions, type CompletionAddContext } from "./completion.types.js";
 import {
   buildComponentsV2EditFlags,
@@ -348,34 +347,20 @@ export async function processCompletionSelection(
       ctx.completedAt,
       false,
     );
-    if (ctx.selectedPlatformId != null) {
-      await saveCompletion(
-        interaction,
-        ctx.userId,
-        gameId,
-        ctx.selectedPlatformId,
-        ctx.completionType,
-        ctx.completedAt,
-        ctx.finalPlaytimeHours,
-        ctx.note,
-        gameTitle ?? "this game",
-        ctx.announce,
-        false,
-        removeFromNowPlaying,
-      );
-    } else {
-      await promptCompletionPlatformSelection(interaction, {
-        userId: ctx.userId,
-        gameId,
-        gameTitle: gameTitle ?? "this game",
-        completionType: ctx.completionType,
-        completedAt: ctx.completedAt,
-        finalPlaytimeHours: ctx.finalPlaytimeHours,
-        note: ctx.note,
-        announce: ctx.announce,
-        removeFromNowPlaying,
-      });
-    }
+    await saveCompletion(
+      interaction,
+      ctx.userId,
+      gameId,
+      ctx.selectedPlatformId,
+      ctx.completionType,
+      ctx.completedAt,
+      ctx.finalPlaytimeHours,
+      ctx.note,
+      gameTitle ?? "this game",
+      ctx.announce,
+      false,
+      removeFromNowPlaying,
+    );
     return false;
   } catch (err: unknown) {
     logError("CompletionAdd.processCompletionSelection", err);

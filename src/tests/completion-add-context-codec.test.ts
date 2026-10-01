@@ -23,12 +23,11 @@ test("a completion add context survives a JSON round trip", () => {
   assert.deepEqual(completionAddContextFromJson(raw), CTX);
 });
 
-test("null dates and platforms round trip as null", () => {
-  const ctx = { ...CTX, completedAt: null, selectedPlatformId: null, note: null };
+test("null dates and notes round trip as null", () => {
+  const ctx = { ...CTX, completedAt: null, note: null };
   const raw = JSON.parse(JSON.stringify(completionAddContextToJson(ctx)));
   const parsed = completionAddContextFromJson(raw);
   assert.equal(parsed?.completedAt, null);
-  assert.equal(parsed?.selectedPlatformId, null);
   assert.equal(parsed?.note, null);
 });
 
@@ -37,4 +36,6 @@ test("a malformed persisted context is rejected", () => {
   assert.equal(completionAddContextFromJson({ ...CTX, completionType: "Speedrun" }), null);
   assert.equal(completionAddContextFromJson({ ...CTX, completedAt: "not a date" }), null);
   assert.equal(completionAddContextFromJson({ ...CTX, userId: "" }), null);
+  assert.equal(completionAddContextFromJson({ ...CTX, selectedPlatformId: null }), null);
+  assert.equal(completionAddContextFromJson({ ...CTX, selectedPlatformId: 0 }), null);
 });

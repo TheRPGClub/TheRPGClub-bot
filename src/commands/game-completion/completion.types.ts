@@ -8,24 +8,11 @@ export type CompletionAddContext = {
   completionType: CompletionType;
   completedAt: Date | null;
   finalPlaytimeHours: number | null;
-  selectedPlatformId?: number | null;
+  selectedPlatformId: number;
   note: string | null;
   source: "existing" | "igdb";
   query?: string;
   announce?: boolean;
-};
-
-export type CompletionPlatformContext = {
-  userId: string;
-  gameId: number;
-  gameTitle: string;
-  completionType: CompletionType;
-  completedAt: Date | null;
-  finalPlaytimeHours: number | null;
-  note: string | null;
-  announce?: boolean;
-  removeFromNowPlaying: boolean;
-  platforms: Array<{ id: number; name: string }>;
 };
 
 export type CompletionatorThreadContext = {
@@ -71,7 +58,6 @@ export type IgdbSelectOption = {
   description: string;
 };
 
-export const COMPLETION_PLATFORM_SELECT_PREFIX = "completion-platform-select";
 export const COMPLETIONATOR_SKIP_SENTINEL = "skip";
 export const COMPLETIONATOR_STATUS_OPTIONS = ["start", "resume", "status", "pause", "cancel"] as const;
 export const COMPLETIONATOR_MATCH_THUMBNAIL_NAME = "completionator_match.png";
@@ -80,6 +66,5 @@ export type CompletionatorAction = (typeof COMPLETIONATOR_STATUS_OPTIONS)[number
 
 // Session storage maps
 export const completionAddSessions = new Map<string, CompletionAddContext>();
-export const completionPlatformSessions = new Map<string, CompletionPlatformContext>();
 export const completionatorThreadContexts = new Map<string, CompletionatorThreadContext>();
 export const completionatorAddFormStates = new Map<string, CompletionatorAddFormState>();

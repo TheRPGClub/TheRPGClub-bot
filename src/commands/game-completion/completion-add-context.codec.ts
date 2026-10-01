@@ -30,13 +30,15 @@ export function completionAddContextFromJson(raw: unknown): CompletionAddContext
     if (Number.isNaN(completedAt.getTime())) return null;
   }
 
+  // The platform option is required, so a row without a valid id is corrupt.
   const platformId = optionalNumber(data.selectedPlatformId);
+  if (!isPositiveInt(platformId)) return null;
   return {
     userId: data.userId,
     completionType: data.completionType as CompletionType,
     completedAt,
     finalPlaytimeHours: optionalNumber(data.finalPlaytimeHours) ?? null,
-    selectedPlatformId: platformId != null && !isPositiveInt(platformId) ? null : platformId,
+    selectedPlatformId: platformId,
     note: typeof data.note === "string" ? data.note : null,
     source: data.source,
     query: typeof data.query === "string" ? data.query : undefined,
