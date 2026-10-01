@@ -18,6 +18,11 @@ export interface ITestStep {
   command: string;
   expected: string;
   ephemeral: boolean;
+  /**
+   * The optional `Changes data:` line: true when the step writes real data, false when
+   * it does not, undefined when the PR body does not say.
+   */
+  changesData?: boolean;
 }
 
 /**
@@ -49,6 +54,7 @@ const FENCE_OPEN = /^```[\w-]*\s*$/;
 const FENCE_CLOSE = /^```\s*$/;
 const EXPECTED_LINE = /^Expected:\s*(.*)$/;
 const EPHEMERAL_LINE = /^Ephemeral:\s*(.*?)\s*$/;
+const CHANGES_DATA_LINE = /^Changes data:\s*(.*?)\s*$/;
 /** A quoted string, optionally scoped by a `keyword:` right before it. */
 const QUOTED_TEXT = /(?:\b(not|title|button|option|field):\s*)?(?:"([^"\n]+)"|“([^”\n]+)”)/gi;
 const SCOPE_KINDS: Record<string, ExpectationKind> = {
@@ -177,6 +183,9 @@ function readExpected(cursor: Cursor, stepNumber: number): string {
   while (cursor.index < cursor.lines.length) {
     const line = peek(cursor) ?? "";
     if (!line || EPHEMERAL_LINE.test(line)) break;
+    if (CHANGES_DATA_LINE.test(line)) {
+      fail(`Step ${stepNumber} has its "Changes data:" line before "Ephemeral:".`);
+    }
     if (line.startsWith("#") || line.startsWith("```") || EXPECTED_LINE.test(line)) {
       fail(`Step ${stepNumber} has something other than prose between Expected and Ephemeral.`);
     }
@@ -201,6 +210,15 @@ function readEphemeral(cursor: Cursor, stepNumber: number): boolean {
   fail(`Step ${stepNumber} has "Ephemeral: ${match[1]}"; only "yes" or "no" is accepted.`);
 }
 
+function readChangesData(cursor: Cursor, stepNumber: number): boolean | undefined {
+  const match = CHANGES_DATA_LINE.exec(peek(cursor) ?? "");
+  if (!match) return undefined;
+  cursor.index += 1;
+  if (match[1] === "yes") return true;
+  if (match[1] === "no") return false;
+  fail(`Step ${stepNumber} has "Changes data: ${match[1]}"; only "yes" or "no" is accepted.`);
+}
+
 function readStep(cursor: Cursor, expectedNumber: number): ITestStep {
   const heading = STEP_HEADING.exec(peek(cursor) ?? "");
   if (!heading) {
@@ -216,20 +234,18 @@ function readStep(cursor: Cursor, expectedNumber: number): ITestStep {
   const command = readCommand(cursor, number);
   const expected = readExpected(cursor, number);
   const ephemeral = readEphemeral(cursor, number);
+  const changesData = readChangesData(cursor, number);
 
   skipBlank(cursor);
   const next = peek(cursor);
   if (next !== undefined && !STEP_HEADING.test(next)) {
-    fail(`Step ${number} has extra content after its Ephemeral line: "${next}".`);
+    const last = changesData === undefined ? "Ephemeral" : "Changes data";
+    fail(`Step ${number} has extra content after its ${last} line: "${next}".`);
   }
 
-  return {
-    number,
-    label: heading[2].trim(),
-    command,
-    expected,
-    ephemeral,
-  };
+  const step: ITestStep = { number, label: heading[2].trim(), command, expected, ephemeral };
+  if (changesData !== undefined) step.changesData = changesData;
+  return step;
 }
 
 /**

@@ -39,7 +39,6 @@ import {
   completionAddContextToJson,
 } from "./completion-add-context.codec.js";
 import { resolveNowPlayingRemoval } from "./completion-helpers.js";
-import { promptCompletionPlatformSelection } from "./completion-platform.service.js";
 import { completionAddSessions, type CompletionAddContext } from "./completion.types.js";
 import {
   buildComponentsV2EditFlags,
@@ -55,6 +54,8 @@ import { truncateDescription } from "../../config/textLimits.js";
 import {
   buildSelectOptions,
   buildSelectRow,
+  IGDB_IMPORT_OPTION_VALUE,
+  withIgdbImportOption,
 } from "../../functions/uiComponents.js";
 import { assertCustomIdSegments, parseCustomIdSegments } from "../../utilities/CustomIdUtils.js";
 import GameSearchService from "../../classes/GameSearchService.js";
@@ -124,17 +125,11 @@ export async function promptCompletionSelection(
   const localResults = await GameSearchService.searchGames(searchTerm);
   if (localResults.length) {
     const sessionId = createCompletionSession(ctx, toSessionLocation(interaction));
-    const gameOptions = localResults.map((game) => ({
+    const options = buildSelectOptions(withIgdbImportOption(localResults.map((game) => ({
       label: game.title,
       value: String(game.id),
       description: `GameDB #${game.id}`,
-    }));
-    gameOptions.push({
-      label: "Import another game from IGDB",
-      value: "import-igdb",
-      description: "Search IGDB and import a new GameDB entry",
-    });
-    const options = buildSelectOptions(gameOptions);
+    }))));
 
     const select = new StringSelectMenuBuilder()
       // eslint-disable-next-line local/custom-id-has-matching-handler
@@ -238,7 +233,7 @@ export async function processCompletionSelection(
   value: string,
   ctx: CompletionAddContext,
 ): Promise<boolean> {
-  if (value === "import-igdb") {
+  if (value === IGDB_IMPORT_OPTION_VALUE) {
     if (!ctx.query) {
       await safeReply(interaction, buildTextReply("Original search query lost. Please try again.", true));
       return false;
@@ -406,7 +401,7 @@ export async function handleCompletionAddSelect(
 }
 
 /**
- * Saves the completion for a resolved game, or asks for its platform first.
+ * Saves the completion for a resolved game.
  */
 async function finishCompletionForGame(
   interaction: StringSelectMenuInteraction | ButtonInteraction,
@@ -420,34 +415,20 @@ async function finishCompletionForGame(
     ctx.completedAt,
     false,
   );
-  if (ctx.selectedPlatformId != null) {
-    await saveCompletion(
-      interaction,
-      ctx.userId,
-      gameId,
-      ctx.selectedPlatformId,
-      ctx.completionType,
-      ctx.completedAt,
-      ctx.finalPlaytimeHours,
-      ctx.note,
-      gameTitle,
-      ctx.announce,
-      false,
-      removeFromNowPlaying,
-    );
-    return;
-  }
-  await promptCompletionPlatformSelection(interaction, {
-    userId: ctx.userId,
+  await saveCompletion(
+    interaction,
+    ctx.userId,
     gameId,
+    ctx.selectedPlatformId,
+    ctx.completionType,
+    ctx.completedAt,
+    ctx.finalPlaytimeHours,
+    ctx.note,
     gameTitle,
-    completionType: ctx.completionType,
-    completedAt: ctx.completedAt,
-    finalPlaytimeHours: ctx.finalPlaytimeHours,
-    note: ctx.note,
-    announce: ctx.announce,
+    ctx.announce,
+    false,
     removeFromNowPlaying,
-  });
+  );
 }
 
 /**

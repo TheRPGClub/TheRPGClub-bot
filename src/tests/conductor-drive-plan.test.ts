@@ -76,3 +76,18 @@ test("a body without steps has nothing to drive", () => {
   assert.equal(buildDrivePlan("## Summary\n- none\n").kind, "none");
   assert.equal(buildDrivePlan("## Testing\n\n### Step 1: x\nno fence\n").kind, "none");
 });
+
+test("a Changes data: yes step is handed off and a no step is driven", () => {
+  const [writes, reads, unmarked] = drive([
+    [...step(1, "/help", '"Help"').slice(0, -1), "Changes data: yes", ""],
+    [...step(2, "/help", '"Help"').slice(0, -1), "Changes data: no", ""],
+    step(3, "/help", '"Help"'),
+  ]);
+  assert.equal(writes.mode, "hand-off");
+  assert.equal(writes.changesData, true);
+  assert.deepEqual(writes.reasons, ["it changes real data"]);
+  assert.equal(reads.mode, "drive");
+  assert.equal(reads.changesData, false);
+  assert.equal(unmarked.mode, "drive");
+  assert.equal(unmarked.changesData, undefined);
+});

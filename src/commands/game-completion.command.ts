@@ -46,10 +46,6 @@ import {
   resolveGameCompletionPlatformLabel,
 } from "./game-completion/completion-autocomplete.utils.js";
 import { handleCompletionExport } from "./game-completion/completion-export.service.js";
-import {
-  handleCompletionPlatformSelect,
-  promptCompletionPlatformSelection,
-} from "./game-completion/completion-platform.service.js";
 import { resolveNowPlayingRemoval } from "./game-completion/completion-helpers.js";
 import {
   promptCompletionSelection,
@@ -244,34 +240,20 @@ export class GameCompletionCommands {
         false,
       );
 
-      if (selectedPlatformId != null) {
-        await saveCompletion(
-          interaction,
-          userId,
-          exactMatch.id,
-          selectedPlatformId,
-          completionType,
-          completedAt,
-          playtime,
-          trimmedNote,
-          exactMatch.title,
-          announce,
-          false,
-          removeFromNowPlaying,
-        );
-      } else {
-        await promptCompletionPlatformSelection(interaction, {
-          userId,
-          gameId: exactMatch.id,
-          gameTitle: exactMatch.title,
-          completionType,
-          completedAt,
-          finalPlaytimeHours: playtime,
-          note: trimmedNote,
-          announce,
-          removeFromNowPlaying,
-        });
-      }
+      await saveCompletion(
+        interaction,
+        userId,
+        exactMatch.id,
+        selectedPlatformId,
+        completionType,
+        completedAt,
+        playtime,
+        trimmedNote,
+        exactMatch.title,
+        announce,
+        false,
+        removeFromNowPlaying,
+      );
       return;
     }
 
@@ -808,11 +790,6 @@ export class GameCompletionCommands {
     await handleCompletionatorImport(interaction, action, file, testMode);
   }
    
-  @SelectMenuComponent({ id: /^completion-platform-select:.+/ })
-  async handlePlatformSelect(interaction: StringSelectMenuInteraction): Promise<void> {
-    await handleCompletionPlatformSelect(interaction);
-  }
-
   // Simplified handlers - full implementation would delegate to respective service files
    
   @SelectMenuComponent({ id: /^comp-import-select:\d+:\d+:\d+$/ })

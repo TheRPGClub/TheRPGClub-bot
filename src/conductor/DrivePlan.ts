@@ -17,8 +17,8 @@ export type DriveActionKind = "slash" | "slash-modal" | "click" | "modal" | "sel
 
 /**
  * Slash commands whose flows always write outside the test guild (GitHub issues). Their
- * steps, and the component steps that follow them, are always done by the tester. API
- * writes depend on the preview's env, so the runner asks the tester about those.
+ * steps, and the component steps that follow them, are always done by the tester. Other
+ * real-data writes are marked per step with `Changes data: yes` in the PR body.
  */
 export const EXTERNAL_EFFECT_COMMANDS: readonly string[] = ["todo", "suggestion"];
 
@@ -28,6 +28,8 @@ export interface IDriveStep {
   command: string;
   expected: string;
   ephemeral: boolean;
+  /** The step's `Changes data:` line, or undefined when the PR body does not say. */
+  changesData?: boolean;
   /** `drive` when the runner may perform the action; `hand-off` when the tester does. */
   mode: "drive" | "hand-off";
   /** The recognized action, or null when the command is not one. */
@@ -82,6 +84,7 @@ export function classifyDriveSteps(steps: ITestStep[]): IDriveStep[] {
       reasons.push("needs a second account");
     }
     if (actionCount > 1) reasons.push(`chains ${actionCount} actions`);
+    if (step.changesData) reasons.push("it changes real data");
     if (!action) reasons.push("not one recognized action");
     if (flowCommand && EXTERNAL_EFFECT_COMMANDS.includes(flowCommand)) {
       reasons.push(`/${flowCommand} changes data outside the test guild`);
@@ -95,6 +98,7 @@ export function classifyDriveSteps(steps: ITestStep[]): IDriveStep[] {
       command: step.command,
       expected: step.expected,
       ephemeral: step.ephemeral,
+      ...(step.changesData === undefined ? {} : { changesData: step.changesData }),
       mode: reasons.length ? "hand-off" : "drive",
       action,
       reasons,

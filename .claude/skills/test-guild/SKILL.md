@@ -126,6 +126,17 @@ When the run finishes:
   was running before in place when the build failed, and none when the new container
   failed to start.
 
+A green run does not prove the preview is up. The deploy job asks the PR again after the
+build and tears the preview down when the answer changed, while still reporting success.
+Read the PR's `PR preview` comment before saying it is running. `No preview` with a
+reason (malformed, untested, closed) means it was torn down; report that reason.
+
+When the tester says the preview bot does not respond ("The application did not
+respond"), fetch the desktop's logs with `bash scripts/preview/fetch-logs.sh 400`. Under
+`preview containers`, an empty table means no preview is running at all. The conductor
+section's `ready as <tag> at <sha>` line names the commit the conductor is running; see
+`.claude/skills/_shared/test-commands.md#the-live-conductor`.
+
 Never redeploy on your own after a failure or after a later push. A push to the PR in
 the test guild only marks its comment `behind`; the user runs `/test-guild <pr>` again
 when they want the new head.

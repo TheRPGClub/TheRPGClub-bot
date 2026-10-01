@@ -120,6 +120,27 @@ export function buildSelectOptions(
   });
 }
 
+/** Select value of the "Import another game from IGDB" option in game pickers. */
+export const IGDB_IMPORT_OPTION_VALUE = "import-igdb";
+
+/**
+ * Game search results followed by the IGDB import option, capped so the import option
+ * always fits in one select menu however many games matched.
+ */
+export function withIgdbImportOption(
+  results: ISelectOptionInput[],
+  maxOptions = DISCORD_SELECT_OPTIONS_MAX,
+): ISelectOptionInput[] {
+  return [
+    ...results.slice(0, maxOptions - 1),
+    {
+      label: "Import another game from IGDB",
+      value: IGDB_IMPORT_OPTION_VALUE,
+      description: "Search IGDB and import a new GameDB entry",
+    },
+  ];
+}
+
 export interface IJournalSelectEntry {
   gameId: number;
   title: string;

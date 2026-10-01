@@ -188,10 +188,66 @@ function previewBotOptions(page: Page): Locator {
   return options.filter({ hasText: PREVIEW_BOT_NAME }).or(options.filter({ has: avatar }));
 }
 
+/**
+ * Clears a slash-command draft a handed-back step left behind; Discord keeps it across
+ * runs. The profile is the runner's alone, so a `/` draft is the runner's own. Any other
+ * text is handed off rather than erased.
+ */
+async function clearLeftoverCommand(page: Page, box: Locator): Promise<void> {
+  const text = (await box.innerText()).trim();
+  if (!text) return;
+  if (!text.startsWith("/")) throw new HandOff("the message box is not empty");
+  await box.click();
+  // A picked command holds its options as chips, so one select-all may leave the name.
+  for (let attempt = 0; attempt < 3 && (await box.innerText()).trim(); attempt += 1) {
+    await box.press("ControlOrMeta+a");
+    await box.press("Backspace");
+  }
+  await page.keyboard.press("Escape");
+  if ((await box.innerText()).trim()) {
+    throw new HandOff("a leftover command in the message box would not clear");
+  }
+}
+
+/** An option's field (pill) in Discord's command editor, matched by its name. */
+function optionPill(box: Locator, name: string): Locator {
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  // `optionPill__<hash>` is the pill itself; `optionPillValue__<hash>` is its value.
+  return box.locator('[class*="optionPill__"]')
+    .filter({ hasText: new RegExp(`^\\s*${escaped}(?![\\w-])`) });
+}
+
+/**
+ * Puts the cursor where an option's value goes and returns the text to type before it.
+ * Picking a command adds a pill for each required option, and its value is typed into
+ * that pill. An optional option has no pill until `name:` is typed after the others.
+ */
+async function focusOption(box: Locator, name: string): Promise<string> {
+  const pill = optionPill(box, name);
+  if (await pill.count()) {
+    await pill.first().click();
+    return "";
+  }
+  const bounds = await box.boundingBox();
+  if (!bounds) throw new HandOff("the message box has no size");
+  await box.click({ position: { x: bounds.width - 2, y: bounds.height - 4 } });
+  await box.press("End");
+  return ` ${name}:`;
+}
+
+/** Hands the step back, naming the option, when a value did not land in its own field. */
+async function assertOptionFilled(box: Locator, name: string, value: string): Promise<void> {
+  const pill = optionPill(box, name);
+  const text = await pill.count() ? await pill.first().innerText() : "";
+  if (!text.toLowerCase().includes(value.toLowerCase())) {
+    throw new HandOff(`the ${name} option did not take the value "${value}"`);
+  }
+}
+
 async function runSlash(page: Page, action: ISlashAction): Promise<void> {
   const box = chatBox(page);
   await waitVisible(box, "the message box");
-  if ((await box.innerText()).trim()) throw new HandOff("the message box is not empty");
+  await clearLeftoverCommand(page, box);
   const name = `/${action.path.join(" ")}`;
   await box.click();
   await box.pressSequentially(name, { delay: TIMING.typeDelayMs });
@@ -201,16 +257,15 @@ async function runSlash(page: Page, action: ISlashAction): Promise<void> {
   if (!command) throw new HandOff(`the command popup has no preview bot ${name}`);
   await command.click();
   for (const option of action.options) {
-    // Discord opens the first required option by itself; name it only when it is not open.
-    const typed = (await box.innerText()).trimEnd();
-    const prefix = typed.endsWith(`${option.name}:`) ? "" : ` ${option.name}:`;
-    await box.pressSequentially(`${prefix}${option.value}`, { delay: TIMING.typeDelayMs });
+    const typed = await focusOption(box, option.name);
+    await box.pressSequentially(typed + option.value, { delay: TIMING.typeDelayMs });
     await page.waitForTimeout(TIMING.settleMs / 3);
     // An autocomplete or choice suggestion that matches is picked. Any other popup, such
     // as the list of remaining options, is left alone; a value Discord rejects keeps
     // the command in the box, which the send check below catches.
     const suggestion = await findOption(page.getByRole("option"), [option.value]);
     if (suggestion) await suggestion.click();
+    await assertOptionFilled(box, option.name, option.value);
   }
   await box.press("Enter");
   await page.waitForTimeout(TIMING.settleMs / 3);

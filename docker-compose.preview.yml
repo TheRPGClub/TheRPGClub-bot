@@ -6,7 +6,8 @@ name: rpgclub-preview
 services:
   pr-preview:
     build:
-      context: .
+      # The PR's tree, checked out apart from the scripts that deploy it.
+      context: ${PREVIEW_BUILD_CONTEXT:-.}
       labels:
         rpgclub.preview: "true"
     image: rpgclub-bot-preview:local
