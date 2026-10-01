@@ -132,6 +132,80 @@ class Milestones(Scenario):
         self.assertIsNone(self.run_stop('pr-create-failed.jsonl'))
 
 
+class InProgressCleared(Scenario):
+    UNLABEL = bash('gh issue edit 42 --remove-label "In Progress"',
+                   'https://github.com/o/r/issues/42', 'toolu_unlabel')
+    CLOSE = bash('gh issue close 42 --comment "Already fixed on main"',
+                 '\u2713 Closed issue o/r#42 (Fix it)', 'toolu_close')
+
+    def test_unlabel_and_close_then_completed_goes_through(self):
+        self.assertIsNone(self.run_stop('in-progress-no-move.jsonl', *self.UNLABEL,
+                                        *self.CLOSE, *move('cg-0000-completed')))
+
+    def test_close_alone_allows_completed(self):
+        self.assertIsNone(self.run_stop('in-progress-no-move.jsonl', *self.CLOSE,
+                                        *move('cg-0000-completed')))
+
+    def test_unlabel_alone_allows_completed(self):
+        self.assertIsNone(self.run_stop('in-progress-no-move.jsonl', *self.UNLABEL,
+                                        *move('cg-0000-completed')))
+
+    def test_completed_without_clearing_blocks(self):
+        self.assertBlocks(self.run_stop('in-progress-no-move.jsonl',
+                                        *move('cg-0000-completed')), 'Working')
+
+    def test_closing_another_issue_does_not_count(self):
+        close = bash('gh issue close 43', '\u2713 Closed issue o/r#43 (Other)', 'toolu_close')
+        self.assertBlocks(self.run_stop('in-progress-no-move.jsonl', *close,
+                                        *move('cg-0000-completed')), 'Working')
+
+    def test_failed_close_does_not_count(self):
+        close = bash('gh issue close 42', 'GraphQL: Could not resolve to an issue',
+                     'toolu_close')
+        self.assertBlocks(self.run_stop('in-progress-no-move.jsonl', *close,
+                                        *move('cg-0000-completed')), 'Working')
+
+    def test_unlabel_and_close_in_one_command_counts(self):
+        both = bash('gh issue edit 42 --remove-label "In Progress" && gh issue close 42',
+                    'https://github.com/o/r/issues/42\n\u2713 Closed issue o/r#42 (Fix it)',
+                    'toolu_both')
+        self.assertIsNone(self.run_stop('in-progress-no-move.jsonl', *both,
+                                        *move('cg-0000-completed')))
+
+    def test_close_while_a_pr_is_open_keeps_needs_review(self):
+        self.ledger(OPEN_PR)
+        ledger = os.path.join(self.dir, 'catchup.tsv')
+        add = bash(f'scripts/catchup.py add-pr {ledger} 77 x', 'waiting for merge: x',
+                   'toolu_add')
+        decision = self.run_stop('in-progress-no-move.jsonl', *add, *self.CLOSE,
+                                 *move('cg-0000-completed'))
+        self.assertBlocks(decision, 'Needs Review')
+        self.assertIn('issue 42 was unlabeled or closed', decision['reason'])
+
+    def test_output_naming_another_issue_does_not_count(self):
+        other = bash('gh issue edit 42 --remove-label "In Progress"; gh issue view 43',
+                     'https://github.com/o/r/issues/43', 'toolu_other')
+        self.assertBlocks(self.run_stop('in-progress-no-move.jsonl', *other,
+                                        *move('cg-0000-completed')), 'Working')
+
+    def test_already_closed_counts(self):
+        close = bash('gh issue close 42', '! Issue o/r#42 (Fix it) is already closed',
+                     'toolu_close')
+        self.assertIsNone(self.run_stop('in-progress-no-move.jsonl', *close,
+                                        *move('cg-0000-completed')))
+
+    def test_issue_number_reads_urls_and_flags(self):
+        self.assertEqual(guard.issue_number(' --repo o/r 42'), '42')
+        self.assertEqual(guard.issue_number(' https://github.com/o/r/issues/42 -c x'), '42')
+        self.assertEqual(guard.issue_number(' "#42"'), '42')
+        self.assertEqual(guard.issue_number(' --comment "Fixed in 1300" 42'), '42')
+        self.assertEqual(guard.issue_number(' --remove-milestone 42'), '42')
+
+    def test_each_gh_issue_call_reads_its_own_number(self):
+        edits = guard.issue_edits('gh issue edit 41 --add-label bug && gh issue close 42')
+        self.assertEqual([(verb, n) for verb, n, _ in edits], [('edit', '41'), ('close', '42')])
+
+
 class Merged(Scenario):
     def test_merge_in_a_wait_output_file_blocks_until_completed(self):
         self.ledger(MERGED_PR)
