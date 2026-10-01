@@ -219,6 +219,7 @@ async function postRunoffPanels(
     client,
     channelId: ANNOUNCEMENT_CHANNEL_ID,
     roundNumber: round.roundNumber,
+    monthLabel: round.monthYear,
     voteDeadline: round.runoffClosesAt,
     nominationsByKind,
     source: context.source,

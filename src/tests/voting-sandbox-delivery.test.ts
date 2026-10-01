@@ -145,6 +145,7 @@ test("a tie opens a runoff whose panels offer only the tied games", async (t) =>
   const panel = panels[0]?.json ?? "";
   assert.match(panel, new RegExp(`vsbx-rpick:${ownerId}:beef02:999:gotm:\\d+`));
   assert.match(panel, /VOTING SANDBOX/);
+  assert.match(panel, /Which game should be the GOTM for \*\*/);
   assert.match(panel, /Sandbox GOTM Game 1/);
   assert.match(panel, /Sandbox GOTM Game 2/);
   assert.doesNotMatch(panel, /Sandbox GOTM Game 3/);
