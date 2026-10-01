@@ -22,6 +22,7 @@ import {
 import Member from "./classes/Member.js";
 import { joinAllTargetForumThreads } from "./services/ForumThreadJoinService.js";
 import { startSharedStateServices } from "./services/SharedStateServices.js";
+import { runStartupSequence } from "./services/StartupSequence.js";
 import { refreshGiveawayHubMessage } from "./services/GiveawayHubService.js";
 import { startUserEmojiService } from "./services/UserEmojiService.js";
 import { announcePreviewReady } from "./services/PreviewReadyService.js";
@@ -78,6 +79,13 @@ async function refreshPresence(): Promise<void> {
   } catch (err) {
     logError("RPGClub_GameDB.refreshPresence", err);
   }
+}
+
+// Periodically refresh presence from the database to stay in sync
+function startPresenceInterval(): void {
+  startTrackedInterval(() => {
+    void refreshPresence();
+  }, PRESENCE_CHECK_INTERVAL_MS);
 }
 
 export const bot: Client = new Client({
@@ -182,23 +190,9 @@ bot.once("clientReady", async () => {
   void GamePlatformRegionService.refreshPlatformCache();
   void GameProfileService.refreshCompanyCache();
 
-  // Make sure all guilds are cached
-  await bot.guilds.fetch();
   setConsoleLoggingClient(bot);
 
-  // Set presence state from stored value
-  await refreshPresence();
-
-  // Periodically refresh presence from the database to stay in sync
-  startTrackedInterval(() => {
-    void refreshPresence();
-  }, PRESENCE_CHECK_INTERVAL_MS);
-
-  // Synchronize applications commands with Discord
-  await bot.initApplicationCommands();
-  await refreshCommandMentions(bot);
-
-  // To clear all guild commands, uncomment this line,
+  // To clear all guild commands, add this step after initApplicationCommands,
   // This is useful when moving from guild commands to global commands
   // It must only be executed once
   //
@@ -206,14 +200,19 @@ bot.once("clientReady", async () => {
   //    ...bot.guilds.cache.map((g) => g.id)
   //  );
 
-  // A background service that writes through the API goes in SHARED_STATE_SERVICES, so
-  // PR previews in test mode never run it against production data.
-  startSharedStateServices(bot);
-  await joinAllTargetForumThreads(bot);
-  await refreshGiveawayHubMessage(bot);
-  await startUserEmojiService(bot);
-  await restoreJournalMessageContextsFromDb();
-  console.log("Startup sequence completed.");
+  await runStartupSequence([
+    { name: "refreshPresence", run: refreshPresence },
+    { name: "presenceInterval", run: startPresenceInterval },
+    { name: "initApplicationCommands", run: () => bot.initApplicationCommands() },
+    { name: "refreshCommandMentions", run: () => refreshCommandMentions(bot) },
+    // A background service that writes through the API goes in SHARED_STATE_SERVICES,
+    // so PR previews in test mode never run it against production data.
+    { name: "sharedStateServices", run: () => startSharedStateServices(bot) },
+    { name: "joinAllTargetForumThreads", run: () => joinAllTargetForumThreads(bot) },
+    { name: "refreshGiveawayHubMessage", run: () => refreshGiveawayHubMessage(bot) },
+    { name: "startUserEmojiService", run: () => startUserEmojiService(bot) },
+    { name: "restoreJournalMessageContexts", run: restoreJournalMessageContextsFromDb },
+  ]);
   await announcePreviewReady(bot);
 });
 

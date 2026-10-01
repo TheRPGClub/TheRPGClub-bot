@@ -4,6 +4,7 @@ import type { Client } from "discordx";
 
 import { DISCORD_CONSOLE_LOG_CHANNEL_ID } from "../config/channels.js";
 import { BOT_DEV_PING_USER_ID } from "../config/users.js";
+import { STARTUP_COMPLETE_LINE } from "../services/StartupSequence.js";
 import { buildComponentsV2EditFlags, safeV2TextContent } from "../functions/ComponentsV2Utils.js";
 import {
   COLOR_INFO,
@@ -22,7 +23,6 @@ const LEVEL_COLORS: Record<string, number> = {
 };
 const LOG_BATCH_INTERVAL_MS = 5 * 1000;
 const LOG_BATCH_MAX_CHARS = 2600;
-const STARTUP_COMPLETE_LOG = "Startup sequence completed.";
 const STARTUP_ALLOWED_LOG_PATTERNS: RegExp[] = [
   /^bot >> connecting discord\.\.\.$/i,
   /^RPGClub GameDB >> commands >> global$/,
@@ -100,7 +100,7 @@ function isAllowedStartupLog(message: string): boolean {
 function shouldSendToDiscord(level: ConsoleLevel, message: string): boolean {
   if (!startupLogFilterEnabled) return true;
   if (isAllowedStartupLog(message)) {
-    if (message.includes(STARTUP_COMPLETE_LOG)) {
+    if (message.includes(STARTUP_COMPLETE_LINE)) {
       startupLogFilterEnabled = false;
     }
     return true;
