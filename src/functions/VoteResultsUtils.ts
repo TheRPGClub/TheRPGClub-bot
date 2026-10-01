@@ -297,8 +297,8 @@ export function buildRehearsalNoticeText(roundNumber: number): string {
 }
 
 /**
- * Banner for a test-mode voting panel. Casts from a test panel are real votes
- * on that round, so the notice names the cleanup command.
+ * Footer line for a test-mode voting panel. Casts from a test panel are real
+ * votes on that round, so the notice names the cleanup command.
  */
 export function buildTestPanelNoticeText(params: {
   kindLabel: string;
@@ -311,5 +311,5 @@ export function buildTestPanelNoticeText(params: {
       `Clear them with \`/admin votes-reset type:${params.kindLabel} ` +
       `round:${params.roundNumber}\`.`
     : `Casting is refused right now${params.reason ? `: ${params.reason}.` : "."}`;
-  return `## 🧪 TEST MODE\n${status}`;
+  return `-# 🧪 Test mode: ${status}`;
 }

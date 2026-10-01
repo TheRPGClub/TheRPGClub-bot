@@ -1,4 +1,4 @@
-import { channelMention, type Client } from "discord.js";
+import { channelMention, type AttachmentBuilder, type Client } from "discord.js";
 import type { INominationEntry, NominationKind } from "../classes/Nomination.js";
 import type { VoteBallot } from "../classes/Vote.js";
 import { NOMINATION_KINDS, nominationKindLabel } from "../classes/Nomination.js";
@@ -10,10 +10,14 @@ import { fetchSendableChannel } from "./ChannelUtils.js";
 import { buildComponentsV2Flags } from "./ComponentsV2Utils.js";
 import {
   buildVotePanelComponents,
+  planVotePanelArt,
+  type IVotePanelArt,
   type IVotePanelIds,
+  type IVotePanelParams,
   type VotePanelComponent,
 } from "./VotePanelComponents.js";
 import { buildTestPanelNoticeText, dedupeNominationsByGame } from "./VoteResultsUtils.js";
+import { buildNominatorDisplayNames } from "./NominationListComponents.js";
 import { logError } from "../utilities/LogUtils.js";
 import { describeRequestError } from "../utilities/ApiErrorUtils.js";
 
@@ -25,6 +29,7 @@ async function sendPanelToChannel(
   client: Client,
   channelId: string,
   components: VotePanelComponent[],
+  files: AttachmentBuilder[],
 ): Promise<string | null> {
   try {
     const sendable = await fetchSendableChannel(client, channelId);
@@ -33,6 +38,7 @@ async function sendPanelToChannel(
     }
     await sendable.send({
       components,
+      files,
       flags: buildComponentsV2Flags(false),
       allowedMentions: { parse: [] },
     });
@@ -94,6 +100,32 @@ export interface IPostVotePanelsResult {
   failed: number;
 }
 
+/**
+ * The nominations list's presentation for a posted panel: the composed vote
+ * image and the nominators' names, each fetched only when the panel has room.
+ */
+async function loadPanelArt(
+  source: IVotingDataSource,
+  panelParams: IVotePanelParams,
+  ballot: VoteBallot,
+): Promise<{ files: AttachmentBuilder[]; art: IVotePanelArt }> {
+  const plan = planVotePanelArt(panelParams);
+  const games = dedupeNominationsByGame(panelParams.nominations);
+  const [image, nominatorNames] = await Promise.all([
+    plan.voteImage
+      ? source
+        .buildVoteImage(panelParams.kind, panelParams.roundNumber, ballot, games)
+        .catch((error: unknown) => {
+          // The panel matters more than its art: post it without the image.
+          logError("VotePanelPosting.loadPanelArt", error);
+          return { files: [], voteImageUrl: null };
+        })
+      : { files: [], voteImageUrl: null },
+    plan.nominationSections ? buildNominatorDisplayNames(games) : null,
+  ]);
+  return { files: image.files, art: { voteImageUrl: image.voteImageUrl, nominatorNames } };
+}
+
 /** Posts one panel per category and reports what happened. */
 export async function postVotePanels(
   params: IPostVotePanelsParams,
@@ -114,12 +146,9 @@ export async function postVotePanels(
       );
       continue;
     }
-    const tally = await (params.source ?? apiVotingDataSource).getTally(
-      kind,
-      params.roundNumber,
-      ballot,
-    );
-    const components = buildVotePanelComponents({
+    const source = params.source ?? apiVotingDataSource;
+    const tally = await source.getTally(kind, params.roundNumber, ballot);
+    const panelParams: IVotePanelParams = {
       ballot,
       kind,
       roundNumber: params.roundNumber,
@@ -136,8 +165,10 @@ export async function postVotePanels(
             reason: params.castsRefusedReason ?? null,
           })
         : null),
-    });
-    const failure = await sendPanelToChannel(params.client, params.channelId, components);
+    };
+    const { files, art } = await loadPanelArt(source, panelParams, ballot);
+    const components = buildVotePanelComponents({ ...panelParams, art });
+    const failure = await sendPanelToChannel(params.client, params.channelId, components, files);
     const sent = failure === null;
     if (sent) {
       posted += 1;

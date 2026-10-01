@@ -13,7 +13,7 @@ import { SeparatorSpacingSize } from "discord-api-types/v10";
 import type { INominationEntry, NominationKind } from "../classes/Nomination.js";
 import { nominationKindLabel } from "../classes/Nomination.js";
 import type { IVoteEntry, VoteBallot } from "../classes/Vote.js";
-import { safeV2TextContent } from "./ComponentsV2Utils.js";
+import { buildTextContainer, safeV2TextContent } from "./ComponentsV2Utils.js";
 import {
   buildActionButton,
   buildButtonRow,
@@ -25,13 +25,16 @@ import { validateCustomId } from "../utilities/CustomIdUtils.js";
 import { truncateWithEllipsis } from "../utilities/ValidationUtils.js";
 import { chunk } from "../utilities/ArrayUtils.js";
 import { toUnixTimestamp } from "./DateFormatUtils.js";
-import { COLOR_PRIMARY } from "../config/colors.js";
 import {
   DISCORD_BUTTON_LABEL_MAX,
   DISCORD_SELECT_OPTIONS_MAX,
   DISCORD_V2_COMPONENTS_MAX,
   MAX_CONTAINER_TEXT,
 } from "../config/textLimits.js";
+import {
+  addNominationSection,
+  addVoteImageToContainer,
+} from "./NominationListComponents.js";
 import {
   ballotKindLabel,
   buildMyVotesText,
@@ -99,23 +102,52 @@ export interface IVotePanelParams {
   myVotes?: IVoteEntry[] | null;
   /**
    * Marks the panel as a rehearsal: /admin voting-open testmode:true (whose
-   * casts are real votes) or the voting sandbox. The banner says which.
+   * casts are real votes) or the voting sandbox. A small footer line says which.
    */
   testNotice?: string | null;
   ids?: IVotePanelIds;
+  /**
+   * The nominations list's presentation, for the posted panels: its composed
+   * vote image and each nominator's name. Without it the games are a title list.
+   */
+  art?: IVotePanelArt | null;
+}
+
+export interface IVotePanelArt {
+  voteImageUrl: string | null;
+  /** Display names by user id for the nominator buttons; null lists the titles instead. */
+  nominatorNames: ReadonlyMap<string, string> | null;
 }
 
 const GAME_BUTTONS_PER_ROW = 5;
+/** Each reason's most, when the text budget has room for it. */
+const PANEL_REASON_MAX = 300;
+/** A reason shorter than this says too little, so the reasons are left out. */
+const PANEL_REASON_MIN = 40;
+/**
+ * The listed games' text may total this much, so the panel stays inside
+ * Discord's 4000 text characters. Past it the reasons are shortened or left
+ * out, and a title list is truncated.
+ */
+const GAME_LIST_TEXT_BUDGET = 2400;
+/** A nomination section: the section, its text and the nominator button. */
+const NOMINATION_SECTION_COMPONENTS = 3;
+/** The vote image: its media gallery and the separator under it. */
+const VOTE_IMAGE_COMPONENTS = 2;
 /** The My Votes and Results row: the row and its two buttons. */
 const FOOTER_ROW_COMPONENTS = 3;
 
 /**
- * Components the container holds: itself, the heading, a separator and the
- * details, plus a separator and the votes list on the personal panel.
+ * Components every panel has: the header container and its text, then the
+ * panel container, a separator and the rules, plus a separator and the votes
+ * list on the personal panel. The games come between, counted separately.
  */
-function countContainerComponents(params: IVotePanelParams): number {
-  return 4 + (params.myVotes ? 2 : 0);
+function countFixedComponents(params: IVotePanelParams): number {
+  return 5 + (params.myVotes ? 2 : 0);
 }
+
+/** The game list as one text display, the layout every ballot has room for. */
+const TITLE_LIST_COMPONENTS = 1;
 
 /** Each game is a button, and every five share a row. */
 function countGameButtonComponents(gameCount: number): number {
@@ -128,17 +160,71 @@ function countGameButtonComponents(gameCount: number): number {
  */
 function fitsGameButtons(params: IVotePanelParams, gameCount: number): boolean {
   return (
-    countContainerComponents(params) +
+    countFixedComponents(params) +
+      TITLE_LIST_COMPONENTS +
       countGameButtonComponents(gameCount) +
       FOOTER_ROW_COMPONENTS <=
     DISCORD_V2_COMPONENTS_MAX
   );
 }
 
+/** The games, the vote buttons or select rows, and the footer row. */
+function countControlComponents(useButtons: boolean, gameCount: number): number {
+  const controls = useButtons
+    ? countGameButtonComponents(gameCount)
+    : 2 * Math.ceil(gameCount / DISCORD_SELECT_OPTIONS_MAX);
+  return controls + FOOTER_ROW_COMPONENTS;
+}
+
+/** True when the composed vote image fits above the games. */
+function fitsVoteImage(params: IVotePanelParams, gameCount: number, useButtons: boolean): boolean {
+  return (
+    countFixedComponents(params) +
+      VOTE_IMAGE_COMPONENTS +
+      TITLE_LIST_COMPONENTS +
+      countControlComponents(useButtons, gameCount) <=
+    DISCORD_V2_COMPONENTS_MAX
+  );
+}
+
 /**
- * A ballot laid out like the club's long-running survey polls: a container
- * with the question and the rules, then one button per game, then the My
- * Votes and Results buttons.
+ * True when every game fits as a nomination section, under the vote image when
+ * it is shown. A ballot too large for that lists the titles instead.
+ */
+function fitsNominationSections(
+  params: IVotePanelParams,
+  gameCount: number,
+  useButtons: boolean,
+  withImage: boolean,
+): boolean {
+  return (
+    countFixedComponents(params) +
+      (withImage ? VOTE_IMAGE_COMPONENTS : 0) +
+      gameCount * NOMINATION_SECTION_COMPONENTS +
+      countControlComponents(useButtons, gameCount) <=
+    DISCORD_V2_COMPONENTS_MAX
+  );
+}
+
+/** What a panel has room for, so a poster fetches only what will be shown. */
+export function planVotePanelArt(params: IVotePanelParams): {
+  voteImage: boolean;
+  nominationSections: boolean;
+} {
+  const games = dedupeNominationsByGame(params.nominations);
+  if (!games.length) return { voteImage: false, nominationSections: false };
+  const useButtons = fitsGameButtons(params, games.length);
+  const voteImage = fitsVoteImage(params, games.length, useButtons);
+  return {
+    voteImage,
+    nominationSections: fitsNominationSections(params, games.length, useButtons, voteImage),
+  };
+}
+
+/**
+ * A ballot laid out like the nominations list: a header with the question,
+ * then a container with the vote image, the games and the rules, then one
+ * button per game and the My Votes and Results buttons.
  */
 export function buildVotePanelComponents(params: IVotePanelParams): VotePanelComponent[] {
   const ids = params.ids ?? LIVE_VOTE_PANEL_IDS[params.ballot ?? "main"];
@@ -159,7 +245,20 @@ export function buildVotePanelComponents(params: IVotePanelParams): VotePanelCom
       style: ButtonStyle.Secondary,
     }),
   );
-  return [buildPanelContainer(params, useButtons), ...gameRows, footerRow];
+  const art = params.art ?? null;
+  const voteImageUrl = art?.voteImageUrl && fitsVoteImage(params, games.length, useButtons)
+    ? art.voteImageUrl
+    : null;
+  const nominatorNames = art?.nominatorNames &&
+    fitsNominationSections(params, games.length, useButtons, Boolean(voteImageUrl))
+    ? art.nominatorNames
+    : null;
+  return [
+    buildTextContainer(buildPanelHeadingText(params)),
+    buildPanelContainer(params, games, useButtons, voteImageUrl, nominatorNames),
+    ...gameRows,
+    footerRow,
+  ];
 }
 
 function addText(container: ContainerBuilder, content: string): void {
@@ -174,9 +273,25 @@ function addSeparator(container: ContainerBuilder): void {
   );
 }
 
-function buildPanelContainer(params: IVotePanelParams, useButtons: boolean): ContainerBuilder {
-  const container = new ContainerBuilder().setAccentColor(COLOR_PRIMARY);
-  addText(container, buildPanelHeadingText(params));
+function buildPanelContainer(
+  params: IVotePanelParams,
+  games: INominationEntry[],
+  useButtons: boolean,
+  voteImageUrl: string | null,
+  nominatorNames: ReadonlyMap<string, string> | null,
+): ContainerBuilder {
+  // No accent, like the nominations list the panel mirrors.
+  const container = new ContainerBuilder();
+  addVoteImageToContainer(container, voteImageUrl);
+  if (nominatorNames) {
+    const reasonMax = panelReasonMax(games);
+    for (const game of games) {
+      const displayName = nominatorNames.get(game.userId) ?? game.userId;
+      addNominationSection(container, game, displayName, reasonMax);
+    }
+  } else {
+    addText(container, buildTitleListText(games));
+  }
   addSeparator(container);
   addText(container, buildPanelDetailsText(params, useButtons));
   if (params.myVotes) {
@@ -194,6 +309,35 @@ function buildPanelContainer(params: IVotePanelParams, useButtons: boolean): Con
   return container;
 }
 
+/**
+ * Each reason's share of the text budget once the titles are in, capped at
+ * PANEL_REASON_MAX; 0, leaving the reasons out, when the share is too small.
+ */
+function panelReasonMax(games: INominationEntry[]): number {
+  const titles = games.reduce((sum, game) => sum + game.gameTitle.length + 8, 0);
+  const share = Math.floor((GAME_LIST_TEXT_BUDGET - titles) / games.length);
+  return share < PANEL_REASON_MIN ? 0 : Math.min(share, PANEL_REASON_MAX);
+}
+
+/**
+ * One line per game, cut at whole lines once the list passes the text budget.
+ * Every game left off still has its button or select option.
+ */
+function buildTitleListText(games: INominationEntry[]): string {
+  const lines: string[] = [];
+  let length = 0;
+  for (const [index, game] of games.entries()) {
+    const line = `- **${truncateWithEllipsis(game.gameTitle, DISCORD_BUTTON_LABEL_MAX)}**`;
+    if (length + line.length > GAME_LIST_TEXT_BUDGET) {
+      lines.push(`-# ...and ${games.length - index} more`);
+      break;
+    }
+    lines.push(line);
+    length += line.length + 1;
+  }
+  return lines.join("\n");
+}
+
 function buildPanelHeadingText(params: IVotePanelParams): string {
   const label = nominationKindLabel(params.kind);
   const gamesWord = params.cap === 1 ? "game" : "game(s)";
@@ -201,11 +345,7 @@ function buildPanelHeadingText(params: IVotePanelParams): string {
     ? `Which ${gamesWord} should be the ${label} for **${params.monthLabel}**?`
     : `Which ${gamesWord} should win ${label} Round ${params.roundNumber}?`;
   const title = params.ballot === "runoff" ? "Runoff" : "Vote";
-  const lines = [`## 🗳️ ${label} ${title} - Round ${params.roundNumber}`, question];
-  if (params.testNotice) {
-    lines.unshift(params.testNotice);
-  }
-  return lines.join("\n");
+  return `## ${label} ${title} - Round ${params.roundNumber}\n${question}`;
 }
 
 function buildPanelDetailsText(params: IVotePanelParams, useButtons: boolean): string {
@@ -227,6 +367,9 @@ function buildPanelDetailsText(params: IVotePanelParams, useButtons: boolean): s
     lines.push(`⏳ Ends <t:${deadlineUnix}:R> (<t:${deadlineUnix}:F>)`);
   }
   lines.push("🔒 Members role required");
+  if (params.testNotice) {
+    lines.push(params.testNotice);
+  }
   return lines.join("\n");
 }
 

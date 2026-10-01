@@ -15,6 +15,7 @@ import { buildFinalWinnersText } from "../functions/VoteResultsUtils.js";
 import { describeRequestError, UserFacingError } from "../utilities/ApiErrorUtils.js";
 import { persistedSessionStore } from "./PersistedInteractionSessionStore.js";
 import type { IVotingDataSource } from "./VotingDataSource.js";
+import { buildBallotVoteImage } from "../functions/VoteBallotImage.js";
 import {
   handleVotingEvent,
   type IVotingEventContext,
@@ -259,6 +260,9 @@ export function createSandboxDataSource(target: ISandboxTarget): IVotingDataSour
         ? sandboxTally(state, kind, ballot)
         : { rows: [], cap: state.cap };
     },
+    // Real GameDB covers, sent as a file: a stored image could replace a real round's.
+    buildVoteImage: (kind, roundNumber, ballot, nominations) =>
+      buildBallotVoteImage(kind, roundNumber, ballot, nominations, false),
     getVotesForUser: async (kind, roundNumber, userId, ballot) => {
       const state = await requireSandbox(target);
       return roundNumber === state.roundNumber
@@ -289,7 +293,7 @@ export function createSandboxDataSource(target: ISandboxTarget): IVotingDataSour
 
 export function buildSandboxPanelNotice(state: IVotingSandboxState): string {
   return (
-    "## 🧪 VOTING SANDBOX\nVotes cast here are stored in the sandbox only and never " +
+    "-# 🧪 Test mode: votes cast here are stored in the voting sandbox only and never " +
     `touch a real round. Sandbox \`${state.id}\`, run by <@${state.ownerId}>.`
   );
 }
