@@ -13,7 +13,8 @@ export interface IPrTestingCheck {
   lines: string[];
 }
 
-const QUOTED = /"[^"]*"/g;
+/** A quoted value in a step command, straight or curly quoted. */
+export const QUOTED = /"[^"]*"|“[^”]*”/g;
 /** Actions that can open a modal: a click, or a slash command line. */
 const CLICK_VERBS = new Set(["click", "press"]);
 /** Words that start a user action. Field entries and a `submit` finish a modal. */

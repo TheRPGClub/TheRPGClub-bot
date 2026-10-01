@@ -327,7 +327,7 @@ function buildBacklogStartPlayingRow(
  * on the duplicate. Returns true when it replied.
  */
 export async function takeOffBacklogIfAlreadyPlaying(
-  interaction: StringSelectMenuInteraction,
+  interaction: ButtonInteraction | StringSelectMenuInteraction,
   entry: IUserGameBacklogEntry,
 ): Promise<boolean> {
   try {
