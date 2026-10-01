@@ -7,6 +7,7 @@ import {
 } from "@discordjs/builders";
 import {
   isVotingRoundCategory,
+  listRunoffCategories,
   VOTING_ROUND_CATEGORIES,
   type IVotingRound,
   type IVotingRoundTieGame,
@@ -51,7 +52,7 @@ export function parseTieBreakSelectId(customId: string): ITieBreakTarget | null 
 }
 
 export function buildTiePendingText(round: IVotingRound): string {
-  const hadRunoff = VOTING_ROUND_CATEGORIES.some((category) => round.runoffTies[category]?.length);
+  const hadRunoff = listRunoffCategories(round.runoffTies).length > 0;
   return [
     hadRunoff
       ? `## Round ${round.roundNumber} runoff did not break the tie`
