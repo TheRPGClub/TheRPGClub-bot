@@ -223,8 +223,8 @@ Ephemeral: yes
 ```
 click "Results" on the "NR-GOTM Runoff - Round 999" panel in the announcements channel (the last link in step 21's reply)
 ```
-Expected: an ephemeral reply, "NR-GOTM runoff Round 999 results are hidden" and
-"cast so far."
+Expected: an ephemeral reply, "NR-GOTM runoff Results - Round 999",
+"Results are hidden while voting is open", and "cast so far."
 Ephemeral: yes
 
 ### Step 26: Close the runoff
