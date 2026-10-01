@@ -317,8 +317,10 @@ async function main(): Promise<void> {
     await walk(page, args.pr, steps, channelUrl, artifacts, outcomes);
     report = await reportUrl(page, args.pr);
   } catch (err: unknown) {
-    if (!(err instanceof Stop) && !closed) throw err;
-    console.error(closed ? "The browser window was closed; stopping." : (err as Stop).message);
+    // A pending call can reject before the context's close event fires.
+    const gone = closed || (err instanceof Error && err.name === "TargetClosedError");
+    if (!(err instanceof Stop) && !gone) throw err;
+    console.error(gone ? "The browser window was closed; stopping." : (err as Stop).message);
     process.exitCode = 1;
   } finally {
     try {
