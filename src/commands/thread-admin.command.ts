@@ -12,9 +12,12 @@ import {
 } from "../functions/InteractionUtils.js";
 import { buildTextReply } from "../functions/ComponentsV2Utils.js";
 
+/** The `/thread` group; `/thread create` lives in create-thread.command.ts. */
+export const THREAD_GROUP_NAME = "thread";
+
 @Discord()
-@SlashGroup({ description: "Thread commands", name: "thread" })
-@SlashGroup("thread")
+@SlashGroup({ description: "Thread commands", name: THREAD_GROUP_NAME })
+@SlashGroup(THREAD_GROUP_NAME)
 export class ThreadAdminCommands {
   @Slash({ description: "Link a thread to a GameDB game id", name: "link" })
   async link(

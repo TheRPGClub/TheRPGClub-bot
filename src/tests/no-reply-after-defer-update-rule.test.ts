@@ -18,7 +18,7 @@ const ruleTester = new RuleTester({ languageOptions: { parserOptions: { lang: "t
 
 const WITH_ERROR_REPLY_ERROR = {
   messageId: "replyAfterDeferUpdate",
-  data: { helper: "withErrorReply", target: "interaction" },
+  data: { helper: "withErrorReply", target: "interaction", deferHelper: "safeDeferUpdate" },
 };
 
 const wrap = (body: string): string => `async function handle(interaction, other) {\n${body}\n}`;
@@ -58,14 +58,46 @@ ruleTester.run("no-reply-after-defer-update", rule, {
       "try {\n  await work();\n} catch {\n  await safeDeferUpdate(interaction);\n}\n" +
         "await safeReply(interaction, reply);",
     ),
+    wrap(
+      "await safeReply(interaction, reply);\n" +
+        "await withClickedRowDisabled(interaction, async () => {\n" +
+        "  await safeEditReply(interaction, panel);\n});",
+    ),
+    wrap(
+      "await withClickedRowDisabled(interaction, async () => {\n" +
+        "  await safeFollowUpIfSettled(interaction, reply);\n});",
+    ),
   ],
   invalid: [
+    {
+      code: wrap(
+        "await withClickedRowDisabled(interaction, async () => work());\n" +
+          "await safeReply(interaction, reply);",
+      ),
+      errors: [{ messageId: "replyAfterDeferUpdate" }],
+    },
+    {
+      code: wrap(
+        "await withClickedRowDisabled(interaction, async () => {\n" +
+          "  await safeReply(interaction, reply);\n});",
+      ),
+      errors: [
+        {
+          messageId: "replyAfterDeferUpdate",
+          data: {
+            helper: "safeReply",
+            target: "interaction",
+            deferHelper: "withClickedRowDisabled",
+          },
+        },
+      ],
+    },
     {
       code: wrap("await safeDeferUpdate(interaction);\nawait safeReply(interaction, reply);"),
       errors: [
         {
           messageId: "replyAfterDeferUpdate",
-          data: { helper: "safeReply", target: "interaction" },
+          data: { helper: "safeReply", target: "interaction", deferHelper: "safeDeferUpdate" },
         },
       ],
     },
@@ -98,7 +130,11 @@ ruleTester.run("no-reply-after-defer-update", rule, {
       errors: [
         {
           messageId: "replyAfterDeferUpdate",
-          data: { helper: "safeReply", target: "this.interaction" },
+          data: {
+            helper: "safeReply",
+            target: "this.interaction",
+            deferHelper: "safeDeferUpdate",
+          },
         },
       ],
     },

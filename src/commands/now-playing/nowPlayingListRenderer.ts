@@ -47,7 +47,6 @@ import {
 import { renderUsernameWithEmoji } from "../../services/UserEmojiService.js";
 import { truncateWithEllipsis, isPositiveInt } from "../../utilities/ValidationUtils.js";
 import { logError } from "../../utilities/LogUtils.js";
-import { safeIgnore } from "../../utilities/AsyncUtils.js";
 import { DISCORD_SELECT_OPTIONS_MAX, truncateLabel } from "../../config/textLimits.js";
 import {
   NOW_PLAYING_LIST_EDIT_PREFIX,
@@ -372,12 +371,12 @@ export async function returnToNowPlayingEditMenu(
     anyInteraction.deferred || anyInteraction.replied,
   );
   // safeEditReply, not safeReply: once the message was edited (the sort save's loading
-  // panel), safeReply would follow up and leave that panel on screen.
-  if (isAcked) {
-    safeIgnore(safeEditReply(interaction, { components: [row], flags }));
-  } else {
-    safeIgnore(safeUpdate(interaction, { components: [row], flags }));
-  }
+  // panel), safeReply would follow up and leave that panel on screen. Awaited so a
+  // withClickedRowDisabled caller sees the menu land before deciding to restore its row.
+  const send = isAcked
+    ? safeEditReply(interaction, { components: [row], flags })
+    : safeUpdate(interaction, { components: [row], flags });
+  await send.catch((err: unknown) => logError("now-playing/returnToEditMenu", err));
 }
 
 export async function buildNowPlayingEditInitialComponents(

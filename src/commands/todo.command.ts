@@ -24,6 +24,7 @@ import {
   safeDeferReply,
   PRIVATE_OPTION_DESCRIPTION,
   safeDeferUpdate,
+  withClickedRowDisabled,
   safeReply,
   safeUpdate,
 } from "../functions/InteractionUtils.js";
@@ -1384,57 +1385,57 @@ export class TodoCommand {
     const ok = await requireOwner(interaction);
     if (!ok) return;
 
-    await safeDeferUpdate(interaction);
+    await withClickedRowDisabled(interaction, async () => {
+      const basePayload = parseTodoPayloadToken(parsed.payloadToken);
+      if (!basePayload) {
+        await replyTodoExpired(interaction);
+        return;
+      }
+      const repo = getRepoTarget(basePayload.repo);
 
-    const basePayload = parseTodoPayloadToken(parsed.payloadToken);
-    if (!basePayload) {
-      await replyTodoExpired(interaction);
-      return;
-    }
-    const repo = getRepoTarget(basePayload.repo);
+      let closed: IGithubIssue | null;
+      try {
+        closed = await closeIssue(parsed.issueNumber, repo);
+      } catch (err: any) {
+        await safeUpdate(
+          interaction,
+          buildTodoTextReply(getGithubErrorMessage(err), true),
+        );
+        return;
+      }
 
-    let closed: IGithubIssue | null;
-    try {
-      closed = await closeIssue(parsed.issueNumber, repo);
-    } catch (err: any) {
-      await safeUpdate(
-        interaction,
-        buildTodoTextReply(getGithubErrorMessage(err), true),
+      if (!closed) {
+        await safeUpdate(
+          interaction,
+          buildTodoTextReply(`Issue #${parsed.issueNumber} was not found.`, true),
+        );
+        return;
+      }
+
+      let comments: IGithubIssueComment[];
+      try {
+        comments = await listIssueComments(parsed.issueNumber, repo);
+      } catch {
+        comments = [];
+      }
+
+      const payload: TodoListPayload = { ...basePayload, page: parsed.page };
+      const viewPayload = buildIssueViewComponents(
+        closed,
+        comments,
+        payload,
+        parsed.payloadToken,
       );
-      return;
-    }
 
-    if (!closed) {
-      await safeUpdate(
-        interaction,
-        buildTodoTextReply(`Issue #${parsed.issueNumber} was not found.`, true),
-      );
-      return;
-    }
-
-    let comments: IGithubIssueComment[];
-    try {
-      comments = await listIssueComments(parsed.issueNumber, repo);
-    } catch {
-      comments = [];
-    }
-
-    const payload: TodoListPayload = { ...basePayload, page: parsed.page };
-    const viewPayload = buildIssueViewComponents(
-      closed,
-      comments,
-      payload,
-      parsed.payloadToken,
-    );
-
-    try {
-      await interaction.message.edit({
-        components: viewPayload.components,
-      });
-    } catch {
-      await replyTodoExpired(interaction);
-      return;
-    }
+      try {
+        await interaction.message.edit({
+          components: viewPayload.components,
+        });
+      } catch {
+        await replyTodoExpired(interaction);
+        return;
+      }
+    }, { workingLabel: "Closing..." });
   }
 
   @ButtonComponent({ id: /^todo-reopen-view:[^:]+:\d+:\d+$/ })
@@ -1448,44 +1449,44 @@ export class TodoCommand {
     const ok = await requireOwner(interaction);
     if (!ok) return;
 
-    await safeDeferUpdate(interaction);
-
-    const reopenRepo = getRepoTarget(
-      parseTodoPayloadToken(parsed.payloadToken)?.repo ?? DEFAULT_TODO_REPO_CODE,
-    );
-    let reopened: IGithubIssue | null;
-    try {
-      reopened = await reopenIssue(parsed.issueNumber, reopenRepo);
-    } catch (err: any) {
-      await safeUpdate(
-        interaction,
-        buildTodoTextReply(getGithubErrorMessage(err), true),
+    await withClickedRowDisabled(interaction, async () => {
+      const reopenRepo = getRepoTarget(
+        parseTodoPayloadToken(parsed.payloadToken)?.repo ?? DEFAULT_TODO_REPO_CODE,
       );
-      return;
-    }
+      let reopened: IGithubIssue | null;
+      try {
+        reopened = await reopenIssue(parsed.issueNumber, reopenRepo);
+      } catch (err: any) {
+        await safeUpdate(
+          interaction,
+          buildTodoTextReply(getGithubErrorMessage(err), true),
+        );
+        return;
+      }
 
-    if (!reopened) {
-      await safeUpdate(
-        interaction,
-        buildTodoTextReply(`Issue #${parsed.issueNumber} was not found.`, true),
-      );
-      return;
-    }
+      if (!reopened) {
+        await safeUpdate(
+          interaction,
+          buildTodoTextReply(`Issue #${parsed.issueNumber} was not found.`, true),
+        );
+        return;
+      }
 
-    const listPayload = await this.buildTodoListPayload(parsed.payloadToken, parsed.page);
-    if (!listPayload) {
-      await replyTodoExpired(interaction);
-      return;
-    }
+      const listPayload = await this.buildTodoListPayload(parsed.payloadToken, parsed.page);
+      if (!listPayload) {
+        await replyTodoExpired(interaction);
+        return;
+      }
 
-    try {
-      await interaction.message.edit({
-        components: listPayload.components,
-      });
-    } catch {
-      await replyTodoExpired(interaction);
-      return;
-    }
+      try {
+        await interaction.message.edit({
+          components: listPayload.components,
+        });
+      } catch {
+        await replyTodoExpired(interaction);
+        return;
+      }
+    }, { workingLabel: "Reopening..." });
   }
 
   @ButtonComponent({ id: /^todo-label-edit-button:[^:]+:\d+:\d+$/ })

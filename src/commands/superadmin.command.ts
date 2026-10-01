@@ -68,6 +68,7 @@ import {
 import { truncateDescription, truncateLabel } from "../config/textLimits.js";
 import { assertCustomIdSegments } from "../utilities/CustomIdUtils.js";
 import { safeIgnore } from "../utilities/AsyncUtils.js";
+import { sharedStateCommandRefusal } from "../functions/SharedStateCommandGuard.js";
 import { logError, logWarn } from "../utilities/LogUtils.js";
 import { buildSelectRow } from "../functions/uiComponents.js";
 import GamePlatformRegionService from "../classes/GamePlatformRegionService.js";
@@ -123,7 +124,9 @@ export const SUPERADMIN_HELP_TOPICS: SuperAdminHelpTopic[] = [
     label: "/superadmin memberscan",
     summary: "Scan the server and refresh member records in the database.",
     syntax: "Syntax: /superadmin memberscan",
-    notes: "Runs in the current server. Make sure env role IDs are set so roles classify correctly.",
+    notes:
+      "Runs in the current server. Make sure env role IDs are set so roles classify correctly. " +
+      "Disabled in test mode, where it would mark production members departed.",
   },
   {
     id: "say",
@@ -707,6 +710,12 @@ export class SuperAdmin {
     const okToUseCommand: boolean = await isSuperAdmin(interaction);
     if (!okToUseCommand) return;
 
+    const refusal = sharedStateCommandRefusal("/superadmin memberscan");
+    if (refusal) {
+      await safeReply(interaction, buildTextReply(refusal, true));
+      return;
+    }
+
     const guild = interaction.guild;
     if (!guild) {
       await safeReply(interaction, buildTextReply("This command must be run in a guild.", true));
@@ -744,6 +753,12 @@ export class SuperAdmin {
 
     const okToUseCommand = await isSuperAdmin(interaction);
     if (!okToUseCommand) return;
+
+    const refusal = sharedStateCommandRefusal("/superadmin download-missing-images");
+    if (refusal) {
+      await safeReply(interaction, buildTextReply(refusal, true));
+      return;
+    }
 
     await safeReply(interaction, buildTextReply("Scanning Backblaze for existing game images...", true));
 
