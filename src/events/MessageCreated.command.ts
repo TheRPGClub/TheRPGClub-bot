@@ -32,6 +32,20 @@ export function decideLinkPreviewRepair(message: ILinkPreviewTrigger): ILinkPrev
   };
 }
 
+export interface IRoleSyncTrigger {
+  authorIsBot: boolean;
+  isSystem: boolean;
+  webhookId: string | null;
+}
+
+/**
+ * Only a human's own post graduates them. System messages are skipped because
+ * the join notice is authored by the joining user, and webhooks are not members.
+ */
+export function shouldSyncMemberRoles(message: IRoleSyncTrigger): boolean {
+  return !message.authorIsBot && !message.isSystem && !message.webhookId;
+}
+
 @Discord()
 export class MessageCreated {
   @On()
@@ -40,23 +54,7 @@ export class MessageCreated {
     _client: Client,
   ): Promise<void> {
     void _client;
-    const userName: string | undefined =
-      message.member?.nickname?.length ? message.member?.nickname : message.member?.displayName;
-
-    const hasMemberRole: boolean = message.member!.roles.cache.has(MEMBER_ROLE_ID);
-    if (!hasMemberRole) {
-      const membersRole: Role | undefined = message.member!.guild.roles.cache.get(MEMBER_ROLE_ID);
-      const newcomersRole: Role | undefined =
-        message.member!.guild.roles.cache.get(NEWCOMERS_ROLE_ID);
-      if (membersRole) {
-        logInfo("MessageCreated", `Granting member role to ${userName}`);
-        message.member!.roles.add(membersRole);
-      }
-      if (newcomersRole) {
-        logInfo("MessageCreated", `Removing newcomers role from ${userName}`);
-        message.member!.roles.remove(newcomersRole);
-      }
-    }
+    void this.syncMemberRoles(message);
 
     const { schedule, sweepStuckReplies } = decideLinkPreviewRepair({
       authorId: message.author.id,
@@ -64,6 +62,34 @@ export class MessageCreated {
     });
     if (schedule) {
       void this.postFallbackLinkPreview(message.id, message.channel, sweepStuckReplies);
+    }
+  }
+
+  private async syncMemberRoles(message: ArgsOf<"messageCreate">[0]): Promise<void> {
+    const member = message.member;
+    if (!member) return;
+    const trigger: IRoleSyncTrigger = {
+      authorIsBot: message.author.bot,
+      isSystem: message.system,
+      webhookId: message.webhookId,
+    };
+    if (!shouldSyncMemberRoles(trigger)) return;
+    if (member.roles.cache.has(MEMBER_ROLE_ID)) return;
+
+    const userName: string = member.nickname?.length ? member.nickname : member.displayName;
+    const membersRole: Role | undefined = member.guild.roles.cache.get(MEMBER_ROLE_ID);
+    const newcomersRole: Role | undefined = member.guild.roles.cache.get(NEWCOMERS_ROLE_ID);
+    try {
+      if (membersRole) {
+        logInfo("MessageCreated", `Granting member role to ${userName}`);
+        await member.roles.add(membersRole);
+      }
+      if (newcomersRole) {
+        logInfo("MessageCreated", `Removing newcomers role from ${userName}`);
+        await member.roles.remove(newcomersRole);
+      }
+    } catch (error) {
+      logError("MessageCreated", error);
     }
   }
 

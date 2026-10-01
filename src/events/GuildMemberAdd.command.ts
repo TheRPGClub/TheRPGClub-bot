@@ -3,9 +3,11 @@ import type { ArgsOf, Client } from "discordx";
 import { Discord, On } from "discordx";
 import { formatTimestampWithDay } from "../utilities/DiscordLogUtils.js";
 import { JOIN_LEAVE_LOG_CHANNEL_ID } from "../config/channels.js";
+import { NEWCOMERS_ROLE_ID } from "../config/roles.js";
 import { recordJoinedMember } from "../services/MemberEventWrites.js";
 import { COLOR_SUCCESS } from "../config/colors.js";
 import { toUnixTimestamp } from "../functions/DateFormatUtils.js";
+import { logError } from "../utilities/LogUtils.js";
 import {
   buildTitledContainer,
   buildContainerSend,
@@ -45,7 +47,11 @@ export class GuildMemberAdd {
           footer: `ID: ${member.user.id} • ${formatTimestampWithDay(Date.now())}`,
         });
 
-        await (logChannel as any).send({ ...buildContainerSend(container) });
+        try {
+          await (logChannel as any).send({ ...buildContainerSend(container) });
+        } catch (error) {
+          logError("GuildMemberAdd", error);
+        }
       }
     }
 
@@ -54,9 +60,13 @@ export class GuildMemberAdd {
     }
 
     // auto-role assignment on member join
-    const role: Role | undefined = member.guild.roles.cache.find((r) => r.name === "newcomers");
-    if (role) {
-      member.roles.add(role);
+    const role: Role | undefined = member.guild.roles.cache.get(NEWCOMERS_ROLE_ID);
+    if (role && !member.user.bot) {
+      try {
+        await member.roles.add(role);
+      } catch (error) {
+        logError("GuildMemberAdd", error);
+      }
     }
   }
 }
