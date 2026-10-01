@@ -306,11 +306,15 @@ const HELP_TOPICS: HelpTopic[] = [
     id: "thread",
     label: "/thread",
     summary:
-      "Link or unlink a thread to one or more GameDB games (requires the Regulars role).",
+      "Create a Now Playing thread for a GameDB game, or link and unlink threads " +
+      "(link and unlink require the Regulars role).",
     syntax:
-      "Syntax: /thread link thread_id:<string> gamedb_game_id:<int> | /thread unlink thread_id:<string> [gamedb_game_id:<int>]",
+      "Syntax: /thread create title:<game> tag:<tag> [first-post-text:<string>] | " +
+      "/thread link thread_id:<string> gamedb_game_id:<int> | " +
+      "/thread unlink thread_id:<string> [gamedb_game_id:<int>]",
     notes:
-      "Threads can have multiple linked games. Use unlink without gamedb_game_id to remove all links for the thread. Replies are private.",
+      "Threads can have multiple linked games. Use unlink without gamedb_game_id to " +
+      "remove all links for the thread. Replies are private.",
   },
   {
     id: "rss",
@@ -928,7 +932,7 @@ export function buildMainHelpResponse(): {
     `${formatCommandLine("superadmin", "Server Owner tools.")}\n` +
     `${formatCommandLine("todo", "Manage GitHub issues using the bot.")}\n` +
     `${formatCommandLine("publicreminder", "Schedule public reminders.")}\n` +
-    `${formatCommandLine("thread", "Link threads to GameDB games.")}\n` +
+    `${formatCommandLine("thread", "Create threads and link them to GameDB games.")}\n` +
     `${formatCommandLine("rss", "Manage RSS relays with filters.")}`;
 
   const container = buildTitledContainer("RPGClubUtils Commands", body);
