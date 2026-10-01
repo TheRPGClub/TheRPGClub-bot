@@ -60,8 +60,6 @@ MID_LOOP = ('Self review never ends a turn: wait for CI in the foreground and fi
 # A command that runs the tool, at its start or after a shell separator, not one that only
 # mentions it (a grep of the docs, a commit message).
 RUNS = r'(?:^|[;&|(\n])\s*(?:\S*/)?'
-IN_PROGRESS = re.compile(RUNS + r'gh issue edit\b[^\n;&|]*--add-label[= ]+["\']?[^"\'\n]*'
-                         r'In Progress')
 GH_ISSUE = re.compile(RUNS + r'gh issue (edit|close)\b([^\n;&|]*)')
 ADDS_IN_PROGRESS = re.compile(r'--add-label[= ]+["\']?[^"\'\n]*In Progress')
 DROPS_IN_PROGRESS = re.compile(r'--remove-label[= ]+["\']?[^"\'\n]*In Progress')
@@ -287,12 +285,13 @@ def milestones(calls, start, still_open=frozenset()):
         if call.pos < start or call.name != 'Bash' or call.error:
             continue
         command = call.command
-        if IN_PROGRESS.search(command) and ISSUE_URL.search(call.result):
-            labeled.update(n for verb, n, args in issue_edits(command)
-                           if n and verb == 'edit' and ADDS_IN_PROGRESS.search(args))
+        edits = issue_edits(command)
+        added = [n for verb, n, args in edits if verb == 'edit' and ADDS_IN_PROGRESS.search(args)]
+        if added and ISSUE_URL.search(call.result):
+            labeled.update(n for n in added if n)
             found.append((call.pos, 'an issue was labeled In Progress',
                           (WORKING, NEEDS_REVIEW)))
-        for verb, number, args in issue_edits(command):
+        for verb, number, args in edits:
             if number in labeled and cleared(verb, number, args, call.result):
                 found.append((call.pos, f'issue {number} was unlabeled or closed', ended))
         opened = PR_CREATE.search(command) and PR_URL.search(call.result)
