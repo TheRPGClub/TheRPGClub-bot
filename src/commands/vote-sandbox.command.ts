@@ -17,7 +17,8 @@ import {
 import { parseNominationKind } from "../classes/Nomination.js";
 import type { VotingEventKind } from "../classes/VotingEvents.js";
 import { isVotingRoundCategory } from "../classes/VotingRounds.js";
-import { safeDeferReply } from "../functions/InteractionUtils.js";
+import { buildTextReply } from "../functions/ComponentsV2Utils.js";
+import { safeDeferReply, safeFollowUpIfSettled } from "../functions/InteractionUtils.js";
 import { logError } from "../utilities/LogUtils.js";
 import { isAdmin } from "./admin/admin-auth.utils.js";
 import { handleTieBreakSelect } from "./admin/vote-admin.service.js";
@@ -306,10 +307,20 @@ export class VoteSandboxCommand {
     );
     // Breaking the last tie queues round_decided, as the API would. The prompt
     // is already answered, so a failure here is logged and left queued.
+    let delivered: string[];
     try {
-      await deliverSandboxOutbox(interaction.client, parsed.ownerId);
+      delivered = await deliverSandboxOutbox(interaction.client, parsed.ownerId);
     } catch (err) {
       logError("VoteSandbox.handleTie.deliver", err);
+      return;
+    }
+    // The prompt changes in place, so the admin who picked also gets a private note of
+    // what that delivered, with links to the posts (the test conductor reads it too).
+    if (delivered.length) {
+      await safeFollowUpIfSettled(
+        interaction,
+        buildTextReply(`🧪 Sandbox tie broken.\n**Delivered**\n${delivered.join("\n")}`, true),
+      );
     }
   }
 }

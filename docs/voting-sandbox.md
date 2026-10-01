@@ -65,7 +65,8 @@ Every sandbox post carries a banner, and the sandbox round defaults to Round 999
 Every step replies with what it delivered and the sandbox status. Each delivered event
 links every message it posted (panels and results in announcements, reminders in the
 nomination channels, tie prompts and summaries in the admin channel), so a link takes you
-straight to the post.
+straight to the post. Breaking a tie on the sandbox's tie prompt updates the prompt in place and
+sends the admin who picked a private reply with the same delivery report.
 
 ## Walkthrough checklist
 

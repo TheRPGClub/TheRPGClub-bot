@@ -23,6 +23,9 @@ entry for every new problem. The `playwright-log` skill
   prose and keep the phrase out of a step the runner should drive.
 - A step that expects a refusal says so first, in its label and `Expected:`, and names
   the later step that depends on it.
+- The conductor reads only the test channel and the ephemeral mirror. A step whose only
+  output lands in another channel always fails as "No output observed"; give the action a
+  private reply to check, or verify it with a later command in the test channel.
 - The runner acts only in the test channel. A step on a message posted elsewhere (an
   announcements panel, an admin prompt) is the tester's: name the channel, the message's
   heading, and the earlier reply that links it.
@@ -79,6 +82,22 @@ entry for every new problem. The `playwright-log` skill
   bottom, and scroll up to find an older conductor message instead of assuming it is gone.
 
 ## Entries
+
+### 2026-10-01: a tie break that worked failed as "No output observed"
+
+- **PR under test:** #1443
+- **Symptom:** step 15 (pick a winner on the admin tie prompt) failed with "No output
+  observed in the test channel"; the tester confirmed the pick worked.
+- **Cause:** the pick updates a public message in #admin in place. The conductor only
+  reads the test channel and the ephemeral mirror, and a step with no output there always
+  fails, whatever its `Ephemeral:` line says.
+- **Fix:** #1443 made the sandbox tie break also send the picker a private follow-up with
+  the delivery report and jump links. Private replies are mirrored, so the step is now
+  `Ephemeral: yes` and checks that reply.
+- **Lesson:** every step needs output the conductor can read: a reply in the test channel
+  or a private (mirrored) reply. If an action only changes or posts messages elsewhere,
+  give it a private confirmation, or check the result in a follow-up step that runs a
+  command in the test channel.
 
 ### 2026-10-01: new run ended after step 1 with the old run's report
 

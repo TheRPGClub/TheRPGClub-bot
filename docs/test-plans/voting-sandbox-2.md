@@ -188,9 +188,11 @@ Ephemeral: yes
 ```
 select "Sandbox GOTM Game 1" and "Sandbox GOTM Game 2" on the Round 999 tie prompt in the admin channel (the last link in step 20's reply)
 ```
-Expected: the tie prompt in the admin channel changes in place to "GOTM tie broken" and
-"picked as the GOTM joint winners". A "Sandbox Round 999 decided" summary posts.
-Ephemeral: no
+Expected: in the admin channel the tie prompt changes in place to GOTM tie broken, naming
+the GOTM joint winners, and a Sandbox Round 999 decided summary posts. You also get a
+private reply, which the conductor reads: "Sandbox tie broken", "round_decided", and
+"Posted:" with a link to that summary.
+Ephemeral: yes
 
 ### Step 22: Show the decided round
 ```
