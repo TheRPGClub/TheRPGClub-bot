@@ -37,6 +37,10 @@ import {
 } from "../../functions/uiComponents.js";
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
 import { safeIgnore } from "../../utilities/AsyncUtils.js";
+import {
+  logUnexpectedCustomId,
+  parseCustomIdSegments,
+} from "../../utilities/CustomIdUtils.js";
 import { commandMention } from "../../services/CommandMentionService.js";
 import { DISCORD_TEXT_INPUT_MAX } from "../../config/textLimits.js";
 import {
@@ -144,7 +148,12 @@ export function parseRoundCustomId(
   customId: string,
   withGameIndex: boolean,
 ): { kind: RoundKind; round: number; gameIndex: number } | null {
-  const [, kind, roundRaw, indexRaw] = customId.split(":");
+  const segs = parseCustomIdSegments(customId, withGameIndex ? 3 : 2);
+  if (!segs) {
+    logUnexpectedCustomId(customId);
+    return null;
+  }
+  const [kind, roundRaw, indexRaw] = segs;
   const round = Number(roundRaw);
   const gameIndex = withGameIndex ? Number(indexRaw) : 0;
   if (!isRoundKind(kind) || !isPositiveInt(round)) return null;
