@@ -114,8 +114,9 @@ Before it starts:
    through `playwright-core`, so it downloads no browser of its own.
 3. Sign in to Discord in the window it opens, every run (a passkey from a phone works).
    Each run starts Chrome with a new, empty profile in the system temp directory and
-   deletes it when the run ends or is stopped with Ctrl+C, so no cookies, storage, or
-   sign-in carry over between runs. The runner never types into a login, captcha, or
+   deletes it when the run ends or is stopped (Ctrl+C, a closed terminal). A profile left
+   by a run that was killed outright is deleted when the next run starts, so no cookies,
+   storage, or sign-in carry over between runs. The runner never types into a login, captcha, or
    verification screen; it waits for the tester.
 
 What it does:

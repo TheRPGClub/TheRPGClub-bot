@@ -12,7 +12,7 @@ import * as os from "os";
 import * as path from "path";
 import { createInterface } from "readline/promises";
 
-import { chromium, errors, type Page } from "playwright-core";
+import { chromium, errors, type BrowserContext, type Page } from "playwright-core";
 
 import { TEST_GUILD_IDS, TEST_GUILD_SNOWFLAKE } from "../../src/config/testGuild.ts";
 import { parseDriveAction, type DriveAction } from "../../src/conductor/DriveActions.ts";
@@ -49,7 +49,27 @@ const RUNNER_PATHS = [
   "src/config/users.ts",
 ];
 /** Each run's throwaway Chrome profile lives under here and is deleted when it ends. */
-const PROFILE_PREFIX = path.join(os.tmpdir(), "rpgclub-conductor-profile-");
+const PROFILE_PARENT = os.tmpdir();
+const PROFILE_NAME_PREFIX = "rpgclub-conductor-profile-";
+
+/** Deletes a profile, retrying while Chrome may still be writing to it; never throws. */
+function removeProfileDir(dir: string): void {
+  try {
+    fs.rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+  } catch {
+    console.error(`Could not delete the browser profile at ${dir}; delete it by hand.`);
+  }
+}
+
+/**
+ * Deletes profiles an earlier run left behind (a closed terminal, SIGKILL, a crash).
+ * They hold a signed-in Discord session, so none outlives the next run.
+ */
+function sweepLeftoverProfiles(): void {
+  for (const name of fs.readdirSync(PROFILE_PARENT)) {
+    if (name.startsWith(PROFILE_NAME_PREFIX)) removeProfileDir(path.join(PROFILE_PARENT, name));
+  }
+}
 
 function fail(message: string, code = 2): never {
   console.error(message);
@@ -300,17 +320,26 @@ async function main(): Promise<void> {
   fs.mkdirSync(artifacts, { recursive: true });
   // The system Chrome, installed with apt, in a brand new empty profile: no cookies, no
   // storage, no saved sign-in from an earlier run. The tester signs in every time.
-  const profile = fs.mkdtempSync(PROFILE_PREFIX);
-  const removeProfile = (): void => fs.rmSync(profile, { recursive: true, force: true });
-  process.once("SIGINT", () => {
+  sweepLeftoverProfiles();
+  const profile = fs.mkdtempSync(path.join(PROFILE_PARENT, PROFILE_NAME_PREFIX));
+  const removeProfile = (): void => removeProfileDir(profile);
+  for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"] as const) {
+    process.once(signal, () => {
+      removeProfile();
+      process.exit(130);
+    });
+  }
+  let context: BrowserContext;
+  try {
+    context = await chromium.launchPersistentContext(profile, {
+      channel: "chrome",
+      headless: false,
+      viewport: null,
+    });
+  } catch (err: unknown) {
     removeProfile();
-    process.exit(130);
-  });
-  const context = await chromium.launchPersistentContext(profile, {
-    channel: "chrome",
-    headless: false,
-    viewport: null,
-  });
+    throw err;
+  }
   let closed = false;
   context.on("close", () => {
     closed = true;
