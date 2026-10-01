@@ -66,6 +66,7 @@ import {
 import { handleAddGotm, handleEditGotm } from "./admin/gotm-admin.service.js";
 import { handleAddNrGotm, handleEditNrGotm } from "./admin/nr-gotm-admin.service.js";
 import { type AdminHelpTopicId } from "./admin/admin.types.js";
+import { refreshCommandMentions } from "../services/CommandMentionService.js";
 
 @Discord()
 @SlashGroup({ description: "Admin Commands", name: "admin" })
@@ -94,6 +95,7 @@ export class Admin {
           ),
         ),
       ]);
+      await refreshCommandMentions(bot);
       await safeReply(interaction, buildTextReply("✅ Commands synchronized with Discord.", true));
     }, "Failed to sync commands");
   }

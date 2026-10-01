@@ -36,6 +36,7 @@ import { safeIgnore } from "../utilities/AsyncUtils.js";
 import { logError, logInfo, logWarn } from "../utilities/LogUtils.js";
 import { buildActionButton, buildButtonRow } from "../functions/uiComponents.js";
 import GameSearchService from "../classes/GameSearchService.js";
+import { commandMention } from "./CommandMentionService.js";
 
 function hasIgdbConfig(): boolean {
   return Boolean(process.env.IGDB_CLIENT_ID && process.env.IGDB_CLIENT_SECRET);
@@ -129,7 +130,8 @@ export class ThreadLinkButtonHandlers {
         await setThreadGameLink(threadId, gameId!);
         await safeReply(interaction, buildTextReply(
           `Linked this thread to GameDB #${gameId}${chosenName ? ` (${chosenName})` : ""}.\n` +
-          "Threads can have multiple links; use /thread unlink to remove one or all.",
+          `Threads can have multiple links; use ${commandMention("thread unlink")} to remove ` +
+          "one or all.",
           true,
         ));
 

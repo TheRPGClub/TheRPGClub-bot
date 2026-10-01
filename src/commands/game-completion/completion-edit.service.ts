@@ -42,6 +42,7 @@ import {
   buildSelectRow,
 } from "../../functions/uiComponents.js";
 import { safeIgnore } from "../../utilities/AsyncUtils.js";
+import { linkCommandMentions } from "../../services/CommandMentionService.js";
 
 const MAX_NOTE_LENGTH = 500;
 type CompletionEditField = "type" | "date" | "platform" | "playtime" | "note";
@@ -201,7 +202,9 @@ export async function handleCompletionFieldEdit(interaction: ButtonInteraction):
         const platformId = await resolveGameCompletionPlatformId(value);
         if (platformId == null) {
           throw new Error(
-            "Platform not found. Use the platform autocomplete in `/game-completion add`.",
+            linkCommandMentions(
+              "Platform not found. Use the platform autocomplete in `/game-completion add`.",
+            ),
           );
         }
         await Member.updateCompletion(ownerId, completionId, { platformId });

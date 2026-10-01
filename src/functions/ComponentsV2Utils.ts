@@ -8,6 +8,7 @@ import {
 import { COMPONENTS_V2_FLAG } from "../config/flags.js";
 import { DEV_ROLE_ID } from "../config/roles.js";
 import { truncateWithEllipsis } from "../utilities/ValidationUtils.js";
+import { linkCommandMentions } from "../services/CommandMentionService.js";
 
 export type EmbedField = { name: string; value: string };
 
@@ -151,6 +152,11 @@ export function buildTitledContainer(
   }
   if (options?.color !== undefined) container.setAccentColor(options.color);
   return container;
+}
+
+/** A titled container whose `/command` references render as clickable mentions. */
+export function buildCommandHelpContainer(title: string, body: string): ContainerBuilder {
+  return buildTitledContainer(linkCommandMentions(title), linkCommandMentions(body));
 }
 
 export function buildFieldsText(fields: EmbedField[]): string {

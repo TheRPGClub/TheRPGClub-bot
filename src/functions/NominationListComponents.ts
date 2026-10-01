@@ -31,6 +31,7 @@ import {
 } from "../services/BackblazeB2Service.js";
 import { truncateWithEllipsis } from "../utilities/ValidationUtils.js";
 import { logError } from "../utilities/LogUtils.js";
+import { commandMention } from "../services/CommandMentionService.js";
 
 const MAX_SECTIONS_PER_CONTAINER = 10;
 const MAX_REASON_LENGTH = 1500;
@@ -173,7 +174,9 @@ function buildHeaderContent(
 
 function buildFooterContent(commandLabel: string, window: NominationWindow): string {
   const voteLabel = formatDate(window.nextVoteAt);
-  return `-# Round ${window.targetRound} voting will open on ${voteLabel}. Nominate a game (or edit your existing nomination) with ${commandLabel}.`;
+  return `-# Round ${window.targetRound} voting will open on ${voteLabel}. ` +
+    "Nominate a game (or edit your existing nomination) with " +
+    `${commandMention(commandLabel)}.`;
 }
 
 function buildNominationSelectRows(

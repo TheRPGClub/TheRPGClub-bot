@@ -4,15 +4,17 @@ import type {
   MessageActionRowComponentBuilder,
 } from "discord.js";
 import { buildTextContainer } from "../../functions/ComponentsV2Utils.js";
+import { linkCommandMentions } from "../../services/CommandMentionService.js";
 
 type HelpResponse = {
   components: (ContainerBuilder | ActionRowBuilder<MessageActionRowComponentBuilder>)[];
   flags: number;
 };
 
-/** Puts a text notice above a help menu response. */
+/** Puts a text notice above a help menu response, its command references clickable. */
 export function withHelpNotice<T extends HelpResponse>(response: T, content: string): T {
-  return { ...response, components: [buildTextContainer(content), ...response.components] };
+  const notice = buildTextContainer(linkCommandMentions(content));
+  return { ...response, components: [notice, ...response.components] };
 }
 
 /**

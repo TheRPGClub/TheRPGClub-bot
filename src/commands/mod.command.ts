@@ -38,7 +38,7 @@ import {
 import {
   buildErrorReply,
   buildTextReply,
-  buildTitledContainer,
+  buildCommandHelpContainer,
   buildFieldsText,
   buildComponentsV2EditFlags,
   type EmbedField,
@@ -140,7 +140,7 @@ function buildModHelpButtons(
 export function buildModHelpContainer(topic: ModHelpTopic): ContainerBuilder {
   const fields: EmbedField[] = [{ name: "Syntax", value: topic.syntax }];
   if (topic.parameters) fields.push({ name: "Parameters", value: topic.parameters });
-  return buildTitledContainer(`${topic.label} help`, buildFieldsText(fields));
+  return buildCommandHelpContainer(`${topic.label} help`, buildFieldsText(fields));
 }
 
 @Discord()
@@ -353,7 +353,7 @@ export function buildModHelpResponse(
   components: (ContainerBuilder | ActionRowBuilder<StringSelectMenuBuilder>)[];
   flags: number;
 } {
-  const container = buildTitledContainer(
+  const container = buildCommandHelpContainer(
     "Moderator Commands Help",
     "Pick a `/mod` command to see what it does and how to run it.",
   );

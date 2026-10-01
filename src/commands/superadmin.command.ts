@@ -53,7 +53,7 @@ import {
 } from "../functions/CompletionHelpers.js";
 import {
   buildTextReply,
-  buildTitledContainer,
+  buildCommandHelpContainer,
   buildFieldsText,
   buildComponentsV2EditFlags,
   type EmbedField,
@@ -169,7 +169,7 @@ export function buildSuperAdminHelpContainer(topic: SuperAdminHelpTopic): Contai
   const fields: EmbedField[] = [{ name: "Syntax", value: topic.syntax }];
   if (topic.parameters) fields.push({ name: "Parameters", value: topic.parameters });
   if (topic.notes) fields.push({ name: "Notes", value: topic.notes });
-  return buildTitledContainer(`${topic.label} help`, buildFieldsText(fields));
+  return buildCommandHelpContainer(`${topic.label} help`, buildFieldsText(fields));
 }
 
 @Discord()
@@ -913,7 +913,7 @@ export function buildSuperAdminHelpResponse(
   components: (ContainerBuilder | ActionRowBuilder<StringSelectMenuBuilder>)[];
   flags: number;
 } {
-  const container = buildTitledContainer(
+  const container = buildCommandHelpContainer(
     "Superadmin Commands Help",
     "Pick a `/superadmin` command to see what it does and how to run it (server owner only).",
   );

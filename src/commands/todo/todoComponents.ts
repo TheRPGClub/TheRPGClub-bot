@@ -49,6 +49,7 @@ import {
   addTextDisplayWithBudget,
   addIssueImagesToContainer,
 } from "./todoRenderers.js";
+import { commandMention } from "../../services/CommandMentionService.js";
 
 export function buildTodoTextReply(
   content: string,
@@ -72,7 +73,9 @@ export function buildTodoTextReply(
 export async function replyTodoExpired(interaction: AnyRepliable): Promise<void> {
   await safeReply(
     interaction,
-    buildTodoTextReply("This /todo view expired. Run /todo again to refresh it.", true),
+    buildTodoTextReply(
+      `This ${commandMention("todo")} view expired. ` +
+        `Run ${commandMention("todo")} again to refresh it.`, true),
   );
 }
 
