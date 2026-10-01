@@ -1,6 +1,7 @@
 import { channelMention } from "discord.js";
 import type { Message, PartialMessage } from "discord.js";
 import { DISCORD_LOG_CHANNEL_ID } from "../config/channels.js";
+import { formatTimestampWithDay } from "./DiscordLogUtils.js";
 import { truncateWithEllipsis } from "./ValidationUtils.js";
 
 export const MAX_FIELD_LENGTH = 1000;
@@ -24,11 +25,6 @@ export function formatMessageContent(message: Message): string {
   return "No text content.";
 }
 
-function formatTimestamp(timestamp: number | null | undefined): string {
-  const unixSeconds = Math.floor((timestamp ?? Date.now()) / 1000);
-  return `<t:${unixSeconds}:F>`;
-}
-
 // A deleted message cannot be fetched (always 10008), so an uncached one is logged from
 // what the gateway event carries: channel, message ID, and the ID's creation time.
 export function buildDeletedMessageLog(
@@ -37,7 +33,7 @@ export function buildDeletedMessageLog(
   // Deleting a log entry must not post another log entry about it.
   if (message.channelId === DISCORD_LOG_CHANNEL_ID) return null;
   const title = `Message deleted in ${channelMention(message.channelId)}`;
-  const created = formatTimestamp(message.createdTimestamp);
+  const created = formatTimestampWithDay(message.createdTimestamp);
 
   if (message.partial) {
     return {
