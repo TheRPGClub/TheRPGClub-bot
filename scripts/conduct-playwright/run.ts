@@ -304,6 +304,10 @@ async function main(): Promise<void> {
     headless: false,
     viewport: null,
   });
+  let closed = false;
+  context.on("close", () => {
+    closed = true;
+  });
   await context.tracing.start({ screenshots: true, snapshots: true });
   const outcomes: IOutcome[] = [];
   let report: string | null = null;
@@ -313,12 +317,18 @@ async function main(): Promise<void> {
     await walk(page, args.pr, steps, channelUrl, artifacts, outcomes);
     report = await reportUrl(page, args.pr);
   } catch (err: unknown) {
-    if (!(err instanceof Stop)) throw err;
-    console.error(err.message);
+    // A pending call can reject before the context's close event fires.
+    const gone = closed || (err instanceof Error && err.name === "TargetClosedError");
+    if (!(err instanceof Stop) && !gone) throw err;
+    console.error(gone ? "The browser window was closed; stopping." : (err as Stop).message);
     process.exitCode = 1;
   } finally {
-    await context.tracing.stop({ path: path.join(artifacts, "trace.zip") });
-    await context.close();
+    try {
+      await context.tracing.stop({ path: path.join(artifacts, "trace.zip") });
+    } catch {
+      console.error("The browser closed before the trace was saved.");
+    }
+    await context.close().catch(() => undefined);
     printSummary(outcomes, report, artifacts);
   }
 }
