@@ -59,8 +59,6 @@ import GameSearchService from "../../classes/GameSearchService.js";
 
 const IGDB_IMPORT_FAILED_STATUS = "Import failed. See the error below.";
 const COMPLETION_ADD_EXPIRED_MESSAGE = "This completion prompt has expired.";
-const COMPLETION_ADD_MISSING_PLATFORM_MESSAGE =
-  "This completion prompt lost its platform. Please start the completion again.";
 const COMPLETION_ADD_NOT_OWNER_MESSAGE = "This completion prompt isn't for you.";
 const COMPLETION_ADD_SESSION_ID_PREFIX = "compadd";
 const completionAddRegistry = createResumableSessionRegistry<CompletionAddContext>({
@@ -268,17 +266,6 @@ export async function processCompletionSelection(
     }
   }
 
-  // The platform option is required, so only a corrupt restored session lacks one.
-  const platformId = ctx.selectedPlatformId;
-  if (platformId == null) {
-    await safeReply(interaction, {
-      components: [buildTextContainer(COMPLETION_ADD_MISSING_PLATFORM_MESSAGE)],
-      flags: buildComponentsV2Flags(true),
-      __forceFollowUp: true,
-    });
-    return false;
-  }
-
   try {
     let gameId: number | null = null;
     let gameTitle: string | null = null;
@@ -368,7 +355,7 @@ export async function processCompletionSelection(
       interaction,
       ctx.userId,
       gameId,
-      platformId,
+      ctx.selectedPlatformId,
       ctx.completionType,
       ctx.completedAt,
       ctx.finalPlaytimeHours,

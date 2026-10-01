@@ -388,7 +388,7 @@ test("a GameDB pick on completion-add-select after a restart logs the completion
   assert.deepEqual(removed, ["row-2"], "the persisted row is deleted once used");
 });
 
-test("a restored completion-add-select session with no platform is refused", async (t) => {
+test("a restored completion-add-select session with no platform is treated as expired", async (t) => {
   const { saved } = stubSessionStore(t);
   const sessionId = createCompletionSession(buildCtx(), { channelId: "c1", guildId: "g1" });
   simulateBotRestart();
@@ -408,7 +408,7 @@ test("a restored completion-add-select session with no platform is refused", asy
   assert.equal(addCompletion.mock.callCount(), 0);
   assert.equal(followUp.mock.callCount(), 1);
   const reply: any = followUp.mock.calls[0].arguments[0];
-  assert.match(JSON.stringify(reply), /lost its platform/);
+  assert.match(JSON.stringify(reply), /has expired/);
   assert.ok(reply.flags & MessageFlags.Ephemeral, "the notice must stay ephemeral");
 });
 
