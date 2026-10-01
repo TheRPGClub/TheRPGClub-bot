@@ -43,6 +43,10 @@ The runner opens a new, empty Chrome profile every run, so say the tester signs 
 Discord in the window it opens (a passkey from their phone works). Nothing is kept
 between runs.
 
+When the tester reports a run that failed, handed a step back, or needed a manual
+workaround, find the cause and record it with the `playwright-log` skill, in
+`docs/playwright-learning-log.md`, in the same pull request as the fix.
+
 ## The live conductor
 
 The conductor is a separate service on the desktop. It runs from
