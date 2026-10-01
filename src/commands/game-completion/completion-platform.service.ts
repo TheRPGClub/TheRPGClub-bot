@@ -6,21 +6,12 @@ import type {
   ButtonInteraction,
 } from "discord.js";
 import { StringSelectMenuBuilder } from "discord.js";
-import {
-  replyIfNotOwner,
-  safeDeferUpdate,
-  safeFollowUpIfSettled,
-  safeReply,
-} from "../../functions/InteractionUtils.js";
+import { replyIfNotOwner, safeDeferUpdate, safeReply } from "../../functions/InteractionUtils.js";
 import {
   notifyUnknownCompletionPlatform,
   saveCompletion,
 } from "../../functions/CompletionHelpers.js";
-import {
-  buildComponentsV2Flags,
-  buildErrorReply,
-  buildTextReply,
-} from "../../functions/ComponentsV2Utils.js";
+import { buildComponentsV2Flags, buildTextReply } from "../../functions/ComponentsV2Utils.js";
 import { STANDARD_PLATFORM_IDS } from "../../config/standardPlatforms.js";
 import {
   COMPLETION_PLATFORM_SELECT_PREFIX,
@@ -29,56 +20,16 @@ import {
 } from "./completion.types.js";
 import { truncateLabel } from "../../config/textLimits.js";
 import { assertCustomIdSegments } from "../../utilities/CustomIdUtils.js";
-import { buildApiErrorMessage } from "../../utilities/ApiErrorUtils.js";
-import { logError } from "../../utilities/LogUtils.js";
+import { safeIgnore } from "../../utilities/AsyncUtils.js";
 import { buildSelectRow } from "../../functions/uiComponents.js";
 import GamePlatformRegionService from "../../classes/GamePlatformRegionService.js";
-import {
-  createResumableSessionRegistry,
-  type PersistedSessionLocation,
-} from "../../services/PersistedInteractionSessionStore.js";
-import {
-  completionPlatformContextFromJson,
-  completionPlatformContextToJson,
-} from "./completion-platform-context.codec.js";
 
-const COMPLETION_PLATFORM_SESSION_ID_PREFIX = "comp-platform";
-const COMPLETION_PLATFORM_EXPIRED_MESSAGE = "This completion prompt has expired.";
-const COMPLETION_PLATFORM_NOT_OWNER_MESSAGE = "This completion prompt isn't for you.";
-const completionPlatformRegistry = createResumableSessionRegistry<CompletionPlatformContext>({
-  kind: "completion-platform",
-  sessions: completionPlatformSessions,
-  fromState: (state) => completionPlatformContextFromJson(state),
-});
-
-/** Returns the owner id built into a session id, or null when the id has none. */
-function parseCompletionPlatformOwnerId(sessionId: string): string | null {
-  const prefix = `${COMPLETION_PLATFORM_SESSION_ID_PREFIX}-`;
-  if (!sessionId.startsWith(prefix)) return null;
-  const [ownerId] = sessionId.slice(prefix.length).split("-");
-  return ownerId && /^\d+$/.test(ownerId) ? ownerId : null;
-}
-
-/**
- * Creates a platform prompt session and returns its id. The context is also
- * persisted so the select still works after a bot restart.
- */
 export function createCompletionPlatformSession(
   ctx: CompletionPlatformContext,
   userId: string,
-  location: PersistedSessionLocation,
 ): string {
-  // The timestamp keeps a re-prompt for the same game from sharing a persisted row
-  // with an earlier prompt that is still being finished.
-  const sessionId =
-    `${COMPLETION_PLATFORM_SESSION_ID_PREFIX}-${userId}-${ctx.gameId}-${Date.now()}`;
-  completionPlatformRegistry.create({
-    sessionId,
-    session: ctx,
-    ownerId: userId,
-    location,
-    state: completionPlatformContextToJson(ctx),
-  });
+  const sessionId = `comp-platform-${userId}-${ctx.gameId}`;
+  completionPlatformSessions.set(sessionId, ctx);
   return sessionId;
 }
 
@@ -104,11 +55,10 @@ export async function promptCompletionPlatformSelection(
       id: platform.id,
       name: platform.name,
     }));
-  const sessionId = createCompletionPlatformSession(
-    { ...ctx, platforms: platformOptions },
-    interaction.user.id,
-    { channelId: interaction.channelId, guildId: interaction.guildId },
-  );
+  const sessionId = createCompletionPlatformSession({
+    ...ctx,
+    platforms: platformOptions,
+  }, interaction.user.id);
 
   const baseOptions = platformOptions.map((platform) => ({
     label: truncateLabel(platform.name),
@@ -134,42 +84,17 @@ export async function handleCompletionPlatformSelect(
   const segs = assertCustomIdSegments(interaction, 1);
   if (!segs) return;
   const [sessionId] = segs;
-  const ownerId = parseCompletionPlatformOwnerId(sessionId) ?? interaction.user.id;
-  if (await replyIfNotOwner(interaction, ownerId, COMPLETION_PLATFORM_NOT_OWNER_MESSAGE)) return;
+  const ctx = completionPlatformSessions.get(sessionId);
 
-  // Ack first: restoring the prompt after a restart reads the API, which can
-  // outlast Discord's 3 second window. Replies below are ephemeral follow-ups so
-  // they never overwrite the prompt.
-  await safeDeferUpdate(interaction);
-  let ctx: CompletionPlatformContext | undefined;
-  try {
-    ctx = await completionPlatformRegistry.resolve(sessionId, {
-      ownerId,
-      channelId: interaction.channelId,
-    });
-  } catch (err: unknown) {
-    logError("CompletionPlatform.restoreSession", err);
-    await safeFollowUpIfSettled(interaction, buildErrorReply(
-      buildApiErrorMessage("Could not restore this completion prompt.", err),
-      true,
+  if (!ctx) {
+    safeIgnore(safeReply(
+      interaction,
+      buildTextReply("This completion prompt has expired.", true),
     ));
     return;
   }
 
-  if (!ctx) {
-    await safeFollowUpIfSettled(
-      interaction,
-      buildTextReply(COMPLETION_PLATFORM_EXPIRED_MESSAGE, true),
-    );
-    return;
-  }
-  if (ctx.userId !== interaction.user.id) {
-    await safeFollowUpIfSettled(
-      interaction,
-      buildTextReply(COMPLETION_PLATFORM_NOT_OWNER_MESSAGE, true),
-    );
-    return;
-  }
+  if (await replyIfNotOwner(interaction, ctx.userId, "This completion prompt isn't for you.")) return;
 
   const selected = interaction.values?.[0];
   const isOther = selected === "other";
@@ -185,25 +110,16 @@ export async function handleCompletionPlatformSelect(
     ctx.platforms.some((platform) => platform.id === platformId)
   );
   if (!valid) {
-    await safeFollowUpIfSettled(interaction, buildTextReply("Invalid platform selection.", true));
+    safeIgnore(safeReply(
+      interaction,
+      buildTextReply("Invalid platform selection.", true),
+    ));
     return;
   }
-  // A second click while the first is still saving must not log it twice.
-  if (!completionPlatformRegistry.claim(sessionId)) return;
 
-  try {
-    await saveSelectedPlatform(interaction, ctx, platformId, isOther);
-  } finally {
-    completionPlatformRegistry.finish(sessionId);
-  }
-}
+  safeIgnore(safeDeferUpdate(interaction));
+  completionPlatformSessions.delete(sessionId);
 
-async function saveSelectedPlatform(
-  interaction: StringSelectMenuInteraction,
-  ctx: CompletionPlatformContext,
-  platformId: number | null,
-  isOther: boolean,
-): Promise<void> {
   if (isOther) {
     await notifyUnknownCompletionPlatform(interaction, ctx.gameTitle, ctx.gameId);
   }

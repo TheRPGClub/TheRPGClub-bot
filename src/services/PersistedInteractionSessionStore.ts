@@ -133,6 +133,16 @@ export type ResumableSessionRegistry<S> = {
     state: unknown;
   }) => void;
   /**
+   * Saves the current `state` of a live session again, after a step changed it.
+   * Saves for one id run in order, so a slow earlier save never overwrites a later one.
+   */
+  persist: (params: {
+    sessionId: string;
+    ownerId: string;
+    location: PersistedSessionLocation;
+    state: unknown;
+  }) => void;
+  /**
    * Returns the in-memory session, or restores it from the API. Concurrent calls for
    * one id share a single API read. API errors propagate so the caller can show the
    * request and response.
@@ -180,6 +190,20 @@ export function createResumableSessionRegistry<S>(options: {
     return session;
   }
 
+  // Saves for one id are chained so they land in order; a save that fails keeps
+  // the row id an earlier save returned.
+  function queueSave(params: {
+    sessionId: string;
+    ownerId: string;
+    location: PersistedSessionLocation;
+    state: unknown;
+  }): void {
+    const previous = rowIds.get(params.sessionId);
+    const save = (rowId: string | null): Promise<string | null> =>
+      persistSessionInBackground({ kind, ...params }).then((savedId) => savedId ?? rowId);
+    rowIds.set(params.sessionId, previous ? previous.then(save) : save(null));
+  }
+
   return {
     get: (sessionId) => sessions.get(sessionId),
     setInMemory: (sessionId, session) => {
@@ -187,10 +211,11 @@ export function createResumableSessionRegistry<S>(options: {
     },
     create: ({ sessionId, session, ownerId, location, state }) => {
       sessions.set(sessionId, session);
-      rowIds.set(
-        sessionId,
-        persistSessionInBackground({ kind, sessionId, ownerId, location, state }),
-      );
+      queueSave({ sessionId, ownerId, location, state });
+    },
+    persist: (params) => {
+      if (!sessions.has(params.sessionId)) return;
+      queueSave(params);
     },
     resolve: (sessionId, lookup) => {
       const cached = sessions.get(sessionId);
