@@ -2,7 +2,8 @@
 # Controls the single per-PR preview container. Used by .github/workflows/pr-preview.yml
 # on the self-hosted runner, and by hand to list or kill previews. See docs/pr-preview.md.
 #
-#   preview.sh deploy <pr> <sha>   build the checked-out tree and replace the preview
+#   preview.sh deploy <pr> <sha>   build PREVIEW_BUILD_CONTEXT (default: this checkout)
+#                                  and replace the preview
 #   preview.sh teardown <pr>       remove the preview only if it belongs to <pr>
 #   preview.sh current-pr          print the PR the running preview belongs to, if any
 #   preview.sh current             print "<pr> <sha>" of the running preview, if any
@@ -12,6 +13,9 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 COMPOSE_FILE="${REPO_ROOT}/docker-compose.preview.yml"
+# The tree to build. The workflow points it at the PR's checkout and keeps this script
+# and the compose file from its own commit.
+export PREVIEW_BUILD_CONTEXT="${PREVIEW_BUILD_CONTEXT:-${REPO_ROOT}}"
 export PREVIEW_ENV_FILE="${PREVIEW_ENV_FILE:-${HOME}/.config/rpgclub-preview/preview.env}"
 READY_TIMEOUT_SECONDS="${PREVIEW_READY_TIMEOUT_SECONDS:-180}"
 READY_LINE="Startup sequence completed."

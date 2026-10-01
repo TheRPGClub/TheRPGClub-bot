@@ -198,7 +198,7 @@ Stay inside the scope the issue defines:
   along the way is a finding for the report or a new issue, not a task.
 - Do not add error handling for scenarios the issue does not address.
 - Do not add comments unless the why is non-obvious.
-- Follow `CLAUDE.md` and `.oxlintrc.json`: lines under 100 characters, no em
+- Follow `CLAUDE.md` and `.oxlintrc.json`: lines of code under 100 characters, no em
   dashes, no deprecated APIs, ID constants in `src/config/`, stable custom IDs
   that resume after a restart, full request and response in API error replies.
 
@@ -280,7 +280,20 @@ Closes #<N>
   dropped; an empty one reads "none".
 - Each closed issue gets its own `Closes #X` line.
 - Each `Testing` step is one asserted action, per `One action per step` in
-  `.github/pull-request-testing-format.md`.
+  `.github/pull-request-testing-format.md`. Read `docs/playwright-learning-log.md` first
+  (the `playwright-log` skill) and apply its `Lessons`.
+- Each `Testing` step ends with a `Changes data: yes|no` line after `Ephemeral:`.
+  Decide it by reading the code the step runs, not the command name: `yes` when it
+  writes anything that outlives the test (an API or database row, an upload, a GitHub
+  issue), `no` when it only reads or shows a prompt. The Playwright runner hands a `yes`
+  step to the tester and drives a `no` step without asking. A missing line makes the
+  runner ask the tester, and `npm run check:pr-testing` warns about it.
+- Only use Testing syntax the live conductor parses. The conductor runs from its own
+  release directory, not from main, so a format change merged to main is not live until
+  it is deployed (see `.claude/skills/_shared/test-commands.md`). Until then a body
+  using the new syntax reads "Cannot parse the Testing section" in the test guild. This
+  rule wins over the one above: while the live conductor predates `Changes data:`
+  (#1416), leave the line out and say so under `Judgment calls`.
 - Non-draft. Never run `gh pr merge` unasked. Once conductor testing passes, offer
   the merge per step 11.
 
