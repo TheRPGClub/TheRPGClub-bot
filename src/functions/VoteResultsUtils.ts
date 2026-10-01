@@ -13,7 +13,7 @@ export interface ITallyDisplayRow {
 /**
  * One votable entry per game. Votes are per game server-side, so when two
  * members nominate the same game only the earliest nomination is offered in
- * the vote select. GOTM nominations without a resolvable game are skipped
+ * the ballot. GOTM nominations without a resolvable game are skipped
  * (the API rejects votes on them anyway).
  */
 export function dedupeNominationsByGame(
