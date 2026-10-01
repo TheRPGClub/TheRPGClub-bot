@@ -17,10 +17,12 @@ import {
   SANDBOX_ENDED_MESSAGE,
   startSandbox,
 } from "../services/VotingSandbox.js";
+import { announceTieBreak } from "../services/VotingResultsAnnouncement.js";
 import {
   closeSandboxRunoff,
   closeSandboxVoting,
   createSandboxState,
+  toSandboxVotingRound,
   openSandboxVoting,
   queueSandboxEvent,
   seedSandboxOutcome,
@@ -509,4 +511,29 @@ test("a tie prompt Discord refuses names the request and Discord's response", as
   ]);
   assert.match(lines[3] ?? "", /`tie_pending`: failed, left queued\. POST \/channels\//);
   assert.match(lines[3] ?? "", /-> 403 .*50001/);
+});
+
+test("an admin's tie-break pick is announced in announcements, joint winners together", async () => {
+  const { client, sent } = fakeClient(true);
+  const state = createSandboxState({ id: "feed05", ownerId: nextOwner(), now: new Date() });
+  const round = toSandboxVotingRound(state);
+  const links = await announceTieBreak(
+    client,
+    round,
+    {
+      category: "gotm",
+      games: [
+        { gameId: 990001, title: "Sandbox GOTM Game 1" },
+        { gameId: 990002, title: "Sandbox GOTM Game 2" },
+      ],
+    },
+    { rehearsal: true, hasCover: () => false },
+  );
+  assert.equal(sent.length, 2);
+  assert.ok(sent.every((message) => message.channelId === ANNOUNCEMENT_CHANNEL_ID));
+  assert.match(sent[0]?.json ?? "", /TEST MODE/);
+  assert.match(sent[1]?.json ?? "", /GOTM winners for Round 999/);
+  assert.match(sent[1]?.json ?? "", /Sandbox GOTM Game 1\*\* and \*\*Sandbox GOTM Game 2/);
+  assert.match(sent[1]?.json ?? "", /the admins picked the winner/);
+  assert.deepEqual(links, [`https://discord.com/channels/guild/${ANNOUNCEMENT_CHANNEL_ID}/2`]);
 });

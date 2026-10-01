@@ -189,9 +189,10 @@ Ephemeral: yes
 select "Sandbox GOTM Game 1" and "Sandbox GOTM Game 2" on the Round 999 tie prompt in the admin channel (the last link in step 20's reply)
 ```
 Expected: in the admin channel the tie prompt changes in place to GOTM tie broken, naming
-the GOTM joint winners, and a Sandbox Round 999 decided summary posts. You also get a
-private reply, which the conductor reads: "Sandbox tie broken", "round_decided", and
-"Posted:" with a link to that summary.
+the GOTM joint winners, and a Sandbox Round 999 decided summary posts. In announcements,
+under a TEST MODE banner, both games are announced as the GOTM winners. You also get a
+private reply, which the conductor reads: "Sandbox tie broken", "Winner announced:",
+"round_decided", and "Posted:".
 Ephemeral: yes
 
 ### Step 22: Show the decided round

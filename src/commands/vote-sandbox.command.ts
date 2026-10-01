@@ -49,6 +49,7 @@ import {
   type ISandboxTarget,
 } from "../services/VotingSandbox.js";
 import {
+  isFixtureGameId,
   isSandboxOutcome,
   SANDBOX_DEFAULT_CAP,
   SANDBOX_DEFAULT_NOMINATIONS,
@@ -300,10 +301,11 @@ export class VoteSandboxCommand {
       await handleTieBreakSelect(interaction, null);
       return;
     }
-    await handleTieBreakSelect(
+    const announced = await handleTieBreakSelect(
       interaction,
       { roundNumber: parsed.roundNumber, category },
       createSandboxDataSource(parsed),
+      { rehearsal: true, hasCover: (gameId) => !isFixtureGameId(gameId) },
     );
     // Breaking the last tie queues round_decided, as the API would. The prompt
     // is already answered, so a failure here is logged and left queued.
@@ -315,12 +317,12 @@ export class VoteSandboxCommand {
       return;
     }
     // The prompt changes in place, so the admin who picked also gets a private note of
-    // what that delivered, with links to the posts (the test conductor reads it too).
-    if (delivered.length) {
-      await safeFollowUpIfSettled(
-        interaction,
-        buildTextReply(`🧪 Sandbox tie broken.\n**Delivered**\n${delivered.join("\n")}`, true),
-      );
-    }
+    // the winner announcement and what the pick delivered, with links to each post (the
+    // test conductor reads it too).
+    if (!announced.length && !delivered.length) return;
+    const lines = ["🧪 Sandbox tie broken."];
+    if (announced.length) lines.push(`Winner announced: ${announced.join(" ")}`);
+    if (delivered.length) lines.push("**Delivered**", ...delivered);
+    await safeFollowUpIfSettled(interaction, buildTextReply(lines.join("\n"), true));
   }
 }

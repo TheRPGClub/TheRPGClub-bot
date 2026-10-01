@@ -5,10 +5,15 @@ import {
   MediaGalleryItemBuilder,
 } from "@discordjs/builders";
 import { NOMINATION_KINDS, nominationKindLabel } from "../classes/Nomination.js";
-import { toVotingRoundCategory, type IVotingRound } from "../classes/VotingRounds.js";
+import {
+  toVotingRoundCategory,
+  type IVotingRound,
+  type VotingRoundCategory,
+} from "../classes/VotingRounds.js";
 import { apiVotingDataSource, type IVotingDataSource } from "./VotingDataSource.js";
 import {
   ballotKindLabel,
+  buildFinalWinnersText,
   buildRehearsalNoticeText,
   buildRunoffResultText,
   buildTallyText,
@@ -19,6 +24,7 @@ import {
   type ITallyDisplayRow,
 } from "../functions/VoteResultsUtils.js";
 import { ensureWinnerThread, type WinnerKindLabel } from "./WinnerThreadService.js";
+import { VOTING_CATEGORY_LABEL } from "../functions/VotingTiePrompt.js";
 import {
   buildAccentContainer,
   buildComponentsV2Flags,
@@ -120,8 +126,9 @@ async function postWinnerAnnouncements(
   roundNumber: number,
   winnerAnnouncements: IWinnerAnnouncement[],
   options: { rehearsal: boolean; hasCover?: (gameId: number) => boolean },
-): Promise<void> {
+): Promise<string[]> {
   const { rehearsal } = options;
+  const posted: string[] = [];
   for (const announcement of winnerAnnouncements) {
     const files: AttachmentBuilder[] = [];
     let text = announcement.text;
@@ -149,13 +156,16 @@ async function postWinnerAnnouncements(
     if (winner && (options.hasCover?.(winner.gamedbGameId) ?? true)) {
       files.push(...(await addWinnerCovers(container, [winner.gamedbGameId])));
     }
-    await sendable.send({
+    const message: unknown = await sendable.send({
       components: [container],
       files,
       flags: buildComponentsV2Flags(false),
       allowedMentions: { parse: [] },
     });
+    const url = (message as { url?: unknown } | null)?.url;
+    if (typeof url === "string") posted.push(url);
   }
+  return posted;
 }
 
 /**
@@ -314,4 +324,59 @@ export async function announceRunoffResults(
   }
 
   await postResults(client, round.roundNumber, tallyContainers, announcements, options);
+}
+
+/** The games an admin picked to break one category's tie. */
+export interface ITieBreakPick {
+  category: VotingRoundCategory;
+  games: Array<{ gameId: number; title: string }>;
+}
+
+/**
+ * Announces an admin's tie-break pick in the announcements channel, the way the
+ * results name a winner: the cover and winner thread for a sole winner, joint winners
+ * named together. A rehearsal posts the test banner first and creates no thread.
+ * Returns links to the posts.
+ */
+export async function announceTieBreak(
+  client: Client,
+  round: IVotingRound,
+  pick: ITieBreakPick,
+  options: IAnnounceResultsOptions = {},
+): Promise<string[]> {
+  const channelId = options.channelIdOverride ?? ANNOUNCEMENT_CHANNEL_ID;
+  const rehearsal = Boolean(options.rehearsal);
+  const sendable = await fetchSendableChannel(client, channelId);
+  if (!sendable) {
+    throw new Error(`Results channel ${channelId} was not found or cannot be sent to.`);
+  }
+  if (rehearsal) {
+    await sendable.send({
+      components: [buildTextContainer(buildRehearsalNoticeText(round.roundNumber))],
+      flags: buildComponentsV2Flags(false),
+      allowedMentions: { parse: [] },
+    });
+  }
+  const kindLabel = VOTING_CATEGORY_LABEL[pick.category];
+  const [sole] = pick.games;
+  const text = buildFinalWinnersText({
+    kindLabel,
+    roundNumber: round.roundNumber,
+    monthLabel: round.monthYear,
+    titles: pick.games.map((game) => game.title),
+  }) + "\n-# The vote tied, so the admins picked the winner.";
+  return postWinnerAnnouncements(
+    client,
+    sendable,
+    round.roundNumber,
+    [{
+      kindLabel,
+      text,
+      soleWinner: pick.games.length === 1 && sole
+        ? { gamedbGameId: sole.gameId, gameTitle: sole.title, nominationId: 0, voteCount: 0 }
+        : null,
+      accentColor: verdictAccent(1),
+    }],
+    { rehearsal, hasCover: options.hasCover },
+  );
 }

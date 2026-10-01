@@ -39,7 +39,11 @@ import {
   mergeTallyWithNominations,
   sumTallyVotes,
 } from "../../functions/VoteResultsUtils.js";
-import { announceVotingResults } from "../../services/VotingResultsAnnouncement.js";
+import {
+  announceTieBreak,
+  announceVotingResults,
+  type IAnnounceResultsOptions,
+} from "../../services/VotingResultsAnnouncement.js";
 import {
   hasVotableNominations,
   loadNominationsByKind,
@@ -502,40 +506,43 @@ export async function handleVotingResults(
 
 /**
  * An admin's pick on the tie-break prompt (or the voting sandbox's copy of it,
- * which passes its own target and source). The picked games become the
- * category's winners, and that category's select is replaced with a note of
- * who picked what; the other categories' selects stay. The API refuses a stale
- * prompt (422 `no_tie` or `invalid_pick`), shown with the full request and
- * response. Breaking the last tie decides the round, which the API announces
- * with a `round_decided` event.
+ * which passes its own target, source and announcement options). The picked games
+ * become the category's winners and are announced in the announcements channel, and
+ * that category's select is replaced with a note of who picked what; the other
+ * categories' selects stay. The API refuses a stale prompt (422 `no_tie` or
+ * `invalid_pick`), shown with the full request and response. Breaking the last tie
+ * decides the round, which the API announces with a `round_decided` event.
+ * Returns links to the winner announcement, empty when none was posted.
  */
 export async function handleTieBreakSelect(
   interaction: StringSelectMenuInteraction,
   target: ITieBreakTarget | null = parseTieBreakSelectId(interaction.customId),
   source: IVotingDataSource = apiVotingDataSource,
-): Promise<void> {
+  announce: IAnnounceResultsOptions = {},
+): Promise<string[]> {
   if (!target) {
     await safeReply(interaction, buildTextReply("Invalid tie-break action.", true));
-    return;
+    return [];
   }
   const label = VOTING_CATEGORY_LABEL[target.category];
   await safeDeferUpdate(interaction);
   const gameIds = interaction.values.map(Number);
+  let round: IVotingRound;
   try {
-    await source.resolveTie(target.roundNumber, target.category, gameIds);
+    round = await source.resolveTie(target.roundNumber, target.category, gameIds);
   } catch (err: unknown) {
     await followUpTieBreakError(
       interaction,
       `Could not break the Round ${target.roundNumber} ${label} tie`,
       err,
     );
-    return;
+    return [];
   }
+  const titles = interaction.values.map((value) => {
+    const option = interaction.component.options.find((opt) => opt.value === value);
+    return option?.label ?? `Game ${value}`;
+  });
   try {
-    const titles = interaction.values.map((value) => {
-      const option = interaction.component.options.find((opt) => opt.value === value);
-      return option?.label ?? `Game ${value}`;
-    });
     // Re-read the prompt: another admin may have broken a different category's
     // tie since this one loaded it, and editing the stale copy would undo that.
     const message = await interaction.message.fetch();
@@ -556,6 +563,25 @@ export async function handleTieBreakSelect(
         "be updated",
       err,
     );
+  }
+  try {
+    return await announceTieBreak(
+      interaction.client,
+      round,
+      {
+        category: target.category,
+        games: gameIds.map((gameId, index) => ({ gameId, title: titles[index] ?? "" })),
+      },
+      { source, ...announce },
+    );
+  } catch (err: unknown) {
+    await followUpTieBreakError(
+      interaction,
+      `The Round ${target.roundNumber} ${label} tie was broken, but the winner could not ` +
+        "be announced",
+      err,
+    );
+    return [];
   }
 }
 
