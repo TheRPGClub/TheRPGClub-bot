@@ -60,6 +60,11 @@ The existing `ci.yml` jobs stay on GitHub-hosted runners.
   `Ready for testing PR #N at <sha>` in the test guild's dev channel, and the conductor
   starts that PR's Testing steps there with no further input (`docs/conductor.md`,
   Automatic start). `/test-guild <pr>` is the only step needed to get a PR tested.
+- **The deploy scripts come from main.** The `deploy` job runs `preview.sh`, the
+  workflow's modules, and `docker-compose.preview.yml` from the workflow's own commit.
+  It checks out the PR's head separately, into `pr-src/`, and uses it only as the Docker
+  build context (`PREVIEW_BUILD_CONTEXT`). A branch that predates or rewrites those files
+  cannot change how its preview is deployed or judged.
 - **Fork PRs never run here.** Jobs skip any PR whose head repo is not this repo, so fork
   code never reaches the runner or the dev token.
 
