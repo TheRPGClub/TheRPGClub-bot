@@ -17,11 +17,18 @@ import {
   listNominationsForRound,
   nominationKindLabel,
   parseNominationKind,
+  type NominationKind,
 } from "../classes/Nomination.js";
-import { getVotesForUser, getVoteTally } from "../classes/Vote.js";
-import VotingRounds from "../classes/VotingRounds.js";
+import { getVotesForUser, getVoteTally, type VoteBallot } from "../classes/Vote.js";
+import VotingRounds, {
+  toVotingRoundCategory,
+  type IVotingRound,
+} from "../classes/VotingRounds.js";
 import { buildVotePanelComponents } from "../functions/VotePanelComponents.js";
-import { dedupeNominationsByGame } from "../functions/VoteResultsUtils.js";
+import {
+  dedupeNominationsByGame,
+  filterRunoffNominations,
+} from "../functions/VoteResultsUtils.js";
 import {
   safeDeferReply,
   safeReply,
@@ -33,24 +40,38 @@ import {
 } from "../functions/ComponentsV2Utils.js";
 import { hasMemberRole } from "../functions/RoleUtils.js";
 import { toUnixTimestamp } from "../functions/DateFormatUtils.js";
-import { isPositiveInt } from "../utilities/ValidationUtils.js";
 import { apiVotingDataSource } from "../services/VotingDataSource.js";
 import {
   MEMBERS_ONLY_MESSAGE,
+  parseVoteCustomId,
   respondVoteCast,
   respondVoteMine,
   respondVoteTally,
-  type IVotePanelTarget,
 } from "./vote/vote-panel-actions.service.js";
 
-function parseVoteCustomId(customId: string): IVotePanelTarget | null {
-  const parts = customId.split(":");
-  const kind = parseNominationKind(parts[1] ?? "");
-  const round = Number(parts[2] ?? "");
-  if (!kind || !isPositiveInt(round)) {
-    return null;
+/**
+ * The ballot /gotm vote shows for a category, or why there is none: the main
+ * vote while voting is open, then the runoff for a category that tied.
+ */
+function pickOpenBallot(
+  current: IVotingRound | null,
+  kind: NominationKind,
+): { round: IVotingRound; ballot: VoteBallot; deadline: Date | null } | string {
+  if (current?.votingOpen) {
+    return { round: current, ballot: "main", deadline: current.votingClosesAt };
   }
-  return { kind, round };
+  if (current?.runoffOpen) {
+    if (!current.pendingTies[toVotingRoundCategory(kind)]?.length) {
+      return `Voting is not open right now. The Round ${current.roundNumber} runoff is only ` +
+        `for the categories that tied, and ${nominationKindLabel(kind)} did not.`;
+    }
+    return { round: current, ballot: "runoff", deadline: current.runoffClosesAt };
+  }
+  const scheduled =
+    current?.phase === "nominating"
+      ? ` The next vote is scheduled for <t:${toUnixTimestamp(current.votingOpensAt)}:F>.`
+      : "";
+  return `Voting is not open right now.${scheduled}`;
 }
 
 @Discord()
@@ -88,22 +109,18 @@ export class VoteCommand {
     }
 
     await withErrorReply(interaction, async () => {
-      const current = await VotingRounds.getCurrent();
-      const round = current?.votingOpen ? current : null;
-      if (!round) {
-        const scheduled =
-          current?.phase === "nominating"
-            ? ` The next vote is scheduled for <t:${toUnixTimestamp(current.votingOpensAt)}:F>.`
-            : "";
-        await safeReply(
-          interaction,
-          buildTextReply(`Voting is not open right now.${scheduled}`, true),
-        );
+      const open = pickOpenBallot(await VotingRounds.getCurrent(), kind);
+      if (typeof open === "string") {
+        await safeReply(interaction, buildTextReply(open, true));
         return;
       }
+      const { round, ballot } = open;
 
       const kindLabel = nominationKindLabel(kind);
-      const nominations = await listNominationsForRound(kind, round.roundNumber);
+      const listed = await listNominationsForRound(kind, round.roundNumber);
+      const nominations = ballot === "runoff"
+        ? filterRunoffNominations(listed, round.pendingTies[toVotingRoundCategory(kind)] ?? [])
+        : listed;
       if (!dedupeNominationsByGame(nominations).length) {
         await safeReply(
           interaction,
@@ -116,13 +133,14 @@ export class VoteCommand {
       }
 
       const [tally, myVotes] = await Promise.all([
-        getVoteTally(kind, round.roundNumber),
-        getVotesForUser(kind, round.roundNumber, interaction.user.id),
+        getVoteTally(kind, round.roundNumber, ballot),
+        getVotesForUser(kind, round.roundNumber, interaction.user.id, ballot),
       ]);
       const components = buildVotePanelComponents({
         kind,
+        ballot,
         roundNumber: round.roundNumber,
-        voteDeadline: round.votingClosesAt,
+        voteDeadline: open.deadline,
         monthLabel: round.monthYear,
         cap: tally.cap,
         nominations,
@@ -135,7 +153,7 @@ export class VoteCommand {
     }, "Could not load the voting panel");
   }
 
-  @ButtonComponent({ id: /^vote-pick:(gotm|nr-gotm):\d+:\d+$/ })
+  @ButtonComponent({ id: /^vote-(runoff-)?pick:(gotm|nr-gotm):\d+:\d+$/ })
   async handleVotePick(interaction: ButtonInteraction): Promise<void> {
     await respondVoteCast(
       interaction,
@@ -144,7 +162,7 @@ export class VoteCommand {
     );
   }
 
-  @SelectMenuComponent({ id: /^vote-cast:(gotm|nr-gotm):\d+:\d+$/ })
+  @SelectMenuComponent({ id: /^vote-(runoff-)?cast:(gotm|nr-gotm):\d+:\d+$/ })
   async handleVoteCast(interaction: StringSelectMenuInteraction): Promise<void> {
     await respondVoteCast(
       interaction,
@@ -153,7 +171,7 @@ export class VoteCommand {
     );
   }
 
-  @ButtonComponent({ id: /^vote-mine:(gotm|nr-gotm):\d+$/ })
+  @ButtonComponent({ id: /^vote-(runoff-)?mine:(gotm|nr-gotm):\d+$/ })
   async handleVoteMine(interaction: ButtonInteraction): Promise<void> {
     await respondVoteMine(
       interaction,
@@ -162,7 +180,7 @@ export class VoteCommand {
     );
   }
 
-  @ButtonComponent({ id: /^vote-tally:(gotm|nr-gotm):\d+$/ })
+  @ButtonComponent({ id: /^vote-(runoff-)?tally:(gotm|nr-gotm):\d+$/ })
   async handleVoteTally(interaction: ButtonInteraction): Promise<void> {
     await respondVoteTally(
       interaction,

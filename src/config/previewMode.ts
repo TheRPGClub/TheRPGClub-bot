@@ -13,6 +13,12 @@ const SHORT_SHA_LENGTH = 7;
  */
 export const PREVIEW_BOT_NAME = "RPGClubbot (Preview)";
 
+/**
+ * The conductor application's name, as its bot reports when it starts. The runner picks
+ * `/conduct` only from this app's entries, to start a run when none is in progress.
+ */
+export const CONDUCTOR_BOT_NAME = "RPGClub Conductor";
+
 /** The preview bot's status, naming the PR and commit it was built from. */
 export function formatPreviewPresence(pr: string, sha: string): string {
   const shortSha = sha.slice(0, SHORT_SHA_LENGTH);

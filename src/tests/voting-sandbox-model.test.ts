@@ -2,6 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   castSandboxVote,
+  closeSandboxBallot,
+  closeSandboxRunoff,
   closeSandboxVoting,
   createSandboxState,
   isFixtureGameId,
@@ -129,43 +131,103 @@ test("a clear winner decides the round and queues the results then the decision"
   assert.equal(round.votingOpen, false);
 });
 
-test("a two-way tie leaves the round tied until an admin breaks it", () => {
+test("a two-way tie opens a runoff between only the tied games", () => {
   const state = votingSandbox();
   seedSandboxOutcome(state, "gotm", "winner", NOW);
   seedSandboxOutcome(state, "nr-gotm", "two-way-tie", NOW);
   closeSandboxVoting(state, later(1000));
-  assert.equal(state.phase, "tie");
-  assert.deepEqual(outboxKinds(state), ["voting_opened", "voting_closed", "tie_pending"]);
+  assert.equal(state.phase, "runoff");
+  assert.deepEqual(outboxKinds(state), ["voting_opened", "voting_closed", "runoff_opened"]);
   assert.equal(state.pendingTies.gotm, undefined);
-  const tied = state.pendingTies.nr_gotm ?? [];
-  assert.equal(tied.length, 2);
+  assert.equal(state.pendingTies.nr_gotm?.length, 2);
+  assert.deepEqual(state.runoffTies, state.pendingTies);
 
-  assert.throws(() => resolveSandboxTie(state, "gotm", [1], NOW), /no_tie/);
-  assert.throws(() => resolveSandboxTie(state, "nr_gotm", [123456], NOW), /invalid_pick/);
-  assert.equal(state.phase, "tie");
-
-  resolveSandboxTie(state, "nr_gotm", [tied[1]?.gameId ?? 0], later(2000));
-  assert.equal(state.phase, "decided");
-  assert.equal(outboxKinds(state).at(-1), "round_decided");
-  assert.deepEqual(sandboxWinnerTitles(state, "nr-gotm"), [tied[1]?.title]);
+  const round = toSandboxVotingRound(state);
+  assert.equal(round.runoffOpen, true);
+  assert.equal(round.runoffEnded, false);
+  assert.equal(round.votingOpen, false);
+  assert.equal(round.runoffClosesAt?.getTime(), later(1000 + 24 * 60 * 60 * 1000).getTime());
 });
 
-test("a three-way tie in both categories needs both broken, and joint winners stick", () => {
+test("a runoff cast goes to the runoff ballot, capped at one, and only for a tied game", () => {
+  const state = votingSandbox();
+  seedSandboxOutcome(state, "gotm", "winner", NOW);
+  seedSandboxOutcome(state, "nr-gotm", "two-way-tie", NOW);
+  closeSandboxVoting(state, NOW);
+  const [first, second, untied] = state.nominations["nr-gotm"];
+  assert.ok(first && second && untied);
+
+  const cast = castSandboxVote(state, "nr-gotm", "member", first.id, NOW);
+  assert.equal(cast?.runoff, true);
+  assert.equal(cast?.cap, 1);
+  const moved = castSandboxVote(state, "nr-gotm", "member", second.id, later(1));
+  assert.equal(moved?.removedVotes[0]?.gameTitle, first.title);
+  assert.deepEqual(
+    sandboxVotesForUser(state, "nr-gotm", "member", "runoff").map((vote) => vote.gameTitle),
+    [second.title],
+  );
+  assert.equal(sandboxVotesForUser(state, "nr-gotm", "member").length, 0);
+  assert.equal(sandboxTally(state, "nr-gotm", "runoff").cap, 1);
+
+  assert.throws(() => castSandboxVote(state, "nr-gotm", "member", untied.id, NOW), /not_in_runoff/);
+  const gotm = state.nominations.gotm[0];
+  assert.ok(gotm);
+  assert.throws(() => castSandboxVote(state, "gotm", "member", gotm.id, NOW), /voting_closed/);
+});
+
+test("a runoff with a sole leader decides the round", () => {
+  const state = votingSandbox();
+  seedSandboxOutcome(state, "gotm", "winner", NOW);
+  seedSandboxOutcome(state, "nr-gotm", "two-way-tie", NOW);
+  closeSandboxVoting(state, NOW);
+  seedSandboxOutcome(state, "nr-gotm", "winner", NOW);
+  assert.equal(closeSandboxBallot(state, later(1000)), "runoff");
+  assert.equal(state.phase, "decided");
+  assert.deepEqual(outboxKinds(state).slice(-2), ["runoff_closed", "round_decided"]);
+  assert.deepEqual(state.pendingTies, {});
+  assert.equal(toSandboxVotingRound(state).runoffEnded, true);
+  assert.deepEqual(sandboxWinnerTitles(state, "nr-gotm"), [state.nominations["nr-gotm"][0]?.title]);
+});
+
+test("a runoff that ties again narrows to its leaders and waits on an admin", () => {
   const state = votingSandbox();
   seedSandboxOutcome(state, "gotm", "three-way-tie", NOW);
-  seedSandboxOutcome(state, "nr-gotm", "three-way-tie", NOW);
+  seedSandboxOutcome(state, "nr-gotm", "two-way-tie", NOW);
   closeSandboxVoting(state, NOW);
-  assert.equal(state.pendingTies.gotm?.length, 3);
-  assert.equal(state.pendingTies.nr_gotm?.length, 3);
+  seedSandboxOutcome(state, "gotm", "two-way-tie", NOW);
+  seedSandboxOutcome(state, "nr-gotm", "no-votes", NOW);
+  closeSandboxRunoff(state, later(1000));
+  assert.equal(state.phase, "tie");
+  assert.deepEqual(outboxKinds(state).slice(-2), ["runoff_closed", "tie_pending"]);
+  assert.equal(state.pendingTies.gotm?.length, 2, "narrowed to the runoff's leaders");
+  assert.equal(state.pendingTies.nr_gotm?.length, 2, "no runoff votes keeps the whole tie");
+  assert.equal(state.runoffTies.gotm?.length, 3);
 
-  const gotmIds = (state.pendingTies.gotm ?? []).slice(0, 2).map((game) => game.gameId);
+  assert.throws(() => resolveSandboxTie(state, "nr_gotm", [123456], NOW), /invalid_pick/);
+  const gotmIds = (state.pendingTies.gotm ?? []).map((game) => game.gameId);
   resolveSandboxTie(state, "gotm", gotmIds, NOW);
   assert.equal(state.phase, "tie");
   assert.equal(outboxKinds(state).includes("round_decided"), false);
+  resolveSandboxTie(state, "nr_gotm", [state.pendingTies.nr_gotm?.[0]?.gameId ?? 0], NOW);
+  assert.equal(state.phase, "decided");
+  assert.equal(sandboxWinnerTitles(state, "gotm").length, 2, "joint winners stick");
+  assert.throws(() => resolveSandboxTie(state, "gotm", gotmIds, NOW), /no_tie/);
+});
+
+test("an admin may settle a category during the runoff, which then skips it", () => {
+  const state = votingSandbox();
+  seedSandboxOutcome(state, "gotm", "two-way-tie", NOW);
+  seedSandboxOutcome(state, "nr-gotm", "two-way-tie", NOW);
+  closeSandboxVoting(state, NOW);
+  assert.throws(() => resolveSandboxTie(state, "gotm", [1], NOW), /invalid_pick/);
+  resolveSandboxTie(state, "gotm", [state.pendingTies.gotm?.[1]?.gameId ?? 0], NOW);
+  assert.equal(state.phase, "runoff");
+  assert.throws(() => seedSandboxOutcome(state, "gotm", "winner", NOW), /no runoff to seed/);
 
   resolveSandboxTie(state, "nr_gotm", [state.pendingTies.nr_gotm?.[0]?.gameId ?? 0], NOW);
   assert.equal(state.phase, "decided");
-  assert.equal(sandboxWinnerTitles(state, "gotm").length, 2);
+  assert.equal(outboxKinds(state).includes("runoff_closed"), false);
+  assert.equal(outboxKinds(state).at(-1), "round_decided");
 });
 
 test("no votes decides the round with no winner and no tie", () => {
@@ -208,6 +270,7 @@ test("reseeding replaces simulated votes and keeps members' votes", () => {
 test("phase transitions refuse what the API would not allow", () => {
   const state = sandbox();
   assert.throws(() => closeSandboxVoting(state, NOW), /only open voting can close/);
+  assert.throws(() => closeSandboxRunoff(state, NOW), /only an open runoff can close/);
   openSandboxVoting(state, NOW);
   assert.throws(() => openSandboxVoting(state, NOW), /only opens from nominating/);
 });
@@ -250,6 +313,15 @@ test("parseSandboxState round-trips JSON and rejects anything else", () => {
   assert.equal(parseSandboxState(null), null);
   assert.equal(parseSandboxState({ id: "x" }), null);
   assert.equal(parseSandboxState({ ...state, nominations: { gotm: [] } }), null);
+});
+
+test("parseSandboxState reads a sandbox saved before runoffs as one with no runoff", () => {
+  const state = votingSandbox();
+  const legacy: Record<string, unknown> = JSON.parse(JSON.stringify(state));
+  for (const key of ["runoffOpensAt", "runoffClosesAt", "runoffClosedAt", "runoffTies"]) {
+    delete legacy[key];
+  }
+  assert.deepEqual(parseSandboxState(legacy), state);
 });
 
 test("resolveSandboxGuilds registers only in the test guild", () => {

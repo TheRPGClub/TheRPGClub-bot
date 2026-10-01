@@ -12,7 +12,7 @@ import {
 import { SeparatorSpacingSize } from "discord-api-types/v10";
 import type { INominationEntry, NominationKind } from "../classes/Nomination.js";
 import { nominationKindLabel } from "../classes/Nomination.js";
-import type { IVoteEntry } from "../classes/Vote.js";
+import type { IVoteEntry, VoteBallot } from "../classes/Vote.js";
 import { safeV2TextContent } from "./ComponentsV2Utils.js";
 import {
   buildActionButton,
@@ -32,7 +32,11 @@ import {
   DISCORD_V2_COMPONENTS_MAX,
   MAX_CONTAINER_TEXT,
 } from "../config/textLimits.js";
-import { buildMyVotesText, dedupeNominationsByGame } from "./VoteResultsUtils.js";
+import {
+  ballotKindLabel,
+  buildMyVotesText,
+  dedupeNominationsByGame,
+} from "./VoteResultsUtils.js";
 
 export type VotePanelComponent =
   | ContainerBuilder
@@ -52,12 +56,32 @@ export interface IVotePanelIds {
   tally(kind: NominationKind, roundNumber: number): string;
 }
 
-export const LIVE_VOTE_PANEL_IDS: IVotePanelIds = {
-  pick: (kind, roundNumber, nominationId) =>
-    `vote-pick:${kind}:${roundNumber}:${nominationId}`,
-  cast: (kind, roundNumber, chunk) => `vote-cast:${kind}:${roundNumber}:${chunk}`,
-  mine: (kind, roundNumber) => `vote-mine:${kind}:${roundNumber}`,
-  tally: (kind, roundNumber) => `vote-tally:${kind}:${roundNumber}`,
+/** Custom id prefixes of the live panels, per ballot. */
+export const LIVE_VOTE_PANEL_PREFIX: Record<VoteBallot, Record<keyof IVotePanelIds, string>> = {
+  main: { pick: "vote-pick", cast: "vote-cast", mine: "vote-mine", tally: "vote-tally" },
+  runoff: {
+    pick: "vote-runoff-pick",
+    cast: "vote-runoff-cast",
+    mine: "vote-runoff-mine",
+    tally: "vote-runoff-tally",
+  },
+};
+
+function buildLivePanelIds(ballot: VoteBallot): IVotePanelIds {
+  const prefix = LIVE_VOTE_PANEL_PREFIX[ballot];
+  return {
+    pick: (kind, roundNumber, nominationId) =>
+      `${prefix.pick}:${kind}:${roundNumber}:${nominationId}`,
+    cast: (kind, roundNumber, chunk) => `${prefix.cast}:${kind}:${roundNumber}:${chunk}`,
+    mine: (kind, roundNumber) => `${prefix.mine}:${kind}:${roundNumber}`,
+    tally: (kind, roundNumber) => `${prefix.tally}:${kind}:${roundNumber}`,
+  };
+}
+
+/** Live panel ids per ballot; a runoff panel's ids name the runoff ballot. */
+export const LIVE_VOTE_PANEL_IDS: Record<VoteBallot, IVotePanelIds> = {
+  main: buildLivePanelIds("main"),
+  runoff: buildLivePanelIds("runoff"),
 };
 
 export interface IVotePanelParams {
@@ -67,7 +91,10 @@ export interface IVotePanelParams {
   monthLabel?: string | null;
   voteDeadline: Date | null;
   cap: number;
+  /** For a runoff panel, only the category's tied games. */
   nominations: INominationEntry[];
+  /** The main vote (the default) or the tie-breaker runoff. */
+  ballot?: VoteBallot;
   /** When provided (the personal /vote panel), the panel lists these votes. */
   myVotes?: IVoteEntry[] | null;
   /**
@@ -114,7 +141,7 @@ function fitsGameButtons(params: IVotePanelParams, gameCount: number): boolean {
  * Votes and Results buttons.
  */
 export function buildVotePanelComponents(params: IVotePanelParams): VotePanelComponent[] {
-  const ids = params.ids ?? LIVE_VOTE_PANEL_IDS;
+  const ids = params.ids ?? LIVE_VOTE_PANEL_IDS[params.ballot ?? "main"];
   const games = dedupeNominationsByGame(params.nominations);
   const useButtons = fitsGameButtons(params, games.length);
   const gameRows = useButtons
@@ -157,7 +184,7 @@ function buildPanelContainer(params: IVotePanelParams, useButtons: boolean): Con
     addText(
       container,
       buildMyVotesText({
-        kindLabel: nominationKindLabel(params.kind),
+        kindLabel: ballotKindLabel(nominationKindLabel(params.kind), params.ballot ?? "main"),
         roundNumber: params.roundNumber,
         votes: params.myVotes,
         cap: params.cap,
@@ -173,7 +200,8 @@ function buildPanelHeadingText(params: IVotePanelParams): string {
   const question = params.monthLabel
     ? `Which ${gamesWord} should be the ${label} for **${params.monthLabel}**?`
     : `Which ${gamesWord} should win ${label} Round ${params.roundNumber}?`;
-  const lines = [`## 🗳️ ${label} Vote - Round ${params.roundNumber}`, question];
+  const title = params.ballot === "runoff" ? "Runoff" : "Vote";
+  const lines = [`## 🗳️ ${label} ${title} - Round ${params.roundNumber}`, question];
   if (params.testNotice) {
     lines.unshift(params.testNotice);
   }
@@ -184,6 +212,12 @@ function buildPanelDetailsText(params: IVotePanelParams, useButtons: boolean): s
   const gamesNoun = params.cap === 1 ? "game" : "games";
   const control = useButtons ? "Press" : "Pick";
   const lines = [
+    ...(params.ballot === "runoff"
+      ? [
+          `🤝 The ${nominationKindLabel(params.kind)} vote ended in a tie, so this runoff ` +
+            "between the tied games decides the winner",
+        ]
+      : []),
     "🙈 Votes are anonymous, and results stay hidden until voting ends",
     `🔢 Vote for up to **${params.cap}** ${gamesNoun}`,
     `↩️ ${control} a game you already voted for to take that vote back`,

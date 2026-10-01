@@ -1,5 +1,6 @@
 import type { Client } from "discord.js";
 import { NOMINATION_KINDS, nominationKindLabel } from "../classes/Nomination.js";
+import type { VoteBallot } from "../classes/Vote.js";
 import type { IVotingEvent } from "../classes/VotingEvents.js";
 import type { VotingRoundCategory } from "../classes/VotingRounds.js";
 import { ADMIN_CHANNEL_ID } from "../config/channels.js";
@@ -53,6 +54,14 @@ export const SANDBOX_CUSTOM_ID_PREFIX = {
   mine: "vsbx-mine",
   tally: "vsbx-tally",
   tie: "vsbx-tie",
+} as const;
+
+/** The sandbox's runoff panels, kept apart from its voting panels by prefix. */
+export const SANDBOX_RUNOFF_CUSTOM_ID_PREFIX = {
+  pick: "vsbx-rpick",
+  cast: "vsbx-rcast",
+  mine: "vsbx-rmine",
+  tally: "vsbx-rtally",
 } as const;
 
 /** Built per reply, since the command mention needs the IDs loaded after startup. */
@@ -178,16 +187,18 @@ function sandboxIdBase(target: ISandboxTarget, roundNumber: number): string {
   return `${target.ownerId}:${target.sandboxId}:${roundNumber}`;
 }
 
-export function buildSandboxPanelIds(target: ISandboxTarget): IVotePanelIds {
+export function buildSandboxPanelIds(
+  target: ISandboxTarget,
+  ballot: VoteBallot = "main",
+): IVotePanelIds {
+  const prefix = ballot === "runoff" ? SANDBOX_RUNOFF_CUSTOM_ID_PREFIX : SANDBOX_CUSTOM_ID_PREFIX;
   return {
     pick: (kind, round, nominationId) =>
-      `${SANDBOX_CUSTOM_ID_PREFIX.pick}:${sandboxIdBase(target, round)}:${kind}:${nominationId}`,
+      `${prefix.pick}:${sandboxIdBase(target, round)}:${kind}:${nominationId}`,
     cast: (kind, round, chunk) =>
-      `${SANDBOX_CUSTOM_ID_PREFIX.cast}:${sandboxIdBase(target, round)}:${kind}:${chunk}`,
-    mine: (kind, round) =>
-      `${SANDBOX_CUSTOM_ID_PREFIX.mine}:${sandboxIdBase(target, round)}:${kind}`,
-    tally: (kind, round) =>
-      `${SANDBOX_CUSTOM_ID_PREFIX.tally}:${sandboxIdBase(target, round)}:${kind}`,
+      `${prefix.cast}:${sandboxIdBase(target, round)}:${kind}:${chunk}`,
+    mine: (kind, round) => `${prefix.mine}:${sandboxIdBase(target, round)}:${kind}`,
+    tally: (kind, round) => `${prefix.tally}:${sandboxIdBase(target, round)}:${kind}`,
   };
 }
 
@@ -243,15 +254,17 @@ export function createSandboxDataSource(target: ISandboxTarget): IVotingDataSour
       const state = await requireSandbox(target);
       return roundNumber === state.roundNumber ? toNominationEntries(state, kind) : [];
     },
-    getTally: async (kind, roundNumber) => {
+    getTally: async (kind, roundNumber, ballot) => {
       const state = await requireSandbox(target);
       return roundNumber === state.roundNumber
-        ? sandboxTally(state, kind)
+        ? sandboxTally(state, kind, ballot)
         : { rows: [], cap: state.cap };
     },
-    getVotesForUser: async (kind, roundNumber, userId) => {
+    getVotesForUser: async (kind, roundNumber, userId, ballot) => {
       const state = await requireSandbox(target);
-      return roundNumber === state.roundNumber ? sandboxVotesForUser(state, kind, userId) : [];
+      return roundNumber === state.roundNumber
+        ? sandboxVotesForUser(state, kind, userId, ballot)
+        : [];
     },
     castVote: (kind, roundNumber, userId, nominationId) =>
       mutateSandbox(
@@ -319,12 +332,20 @@ export function buildSandboxEventContext(state: IVotingSandboxState): IVotingEve
   return {
     source: createSandboxDataSource(target),
     rehearsal: true,
-    panelIds: buildSandboxPanelIds(target),
+    panelIds: {
+      main: buildSandboxPanelIds(target, "main"),
+      runoff: buildSandboxPanelIds(target, "runoff"),
+    },
     panelNotice: buildSandboxPanelNotice(state),
     tieSelectId: (round, category) => buildSandboxTieSelectId(target, round, category),
     hasCover: (gameId) => !isFixtureGameId(gameId),
     recordWinners: (client) => postSandboxDecided(client, target),
   };
+}
+
+/** " Posted: <link> <link>", or nothing when the event posted nothing. */
+function formatPosted(posted: string[]): string {
+  return posted.length ? ` Posted: ${posted.join(" ")}` : "";
 }
 
 function toVotingEvent(
@@ -344,9 +365,48 @@ function toVotingEvent(
 }
 
 /**
+ * The client with every channel's `send` recorded in `posted`, as message
+ * links, so a step's reply can link each post it made. Everything else passes
+ * straight through to the real client.
+ */
+function recordPosts(client: Client, posted: string[]): Client {
+  const passThrough = <T extends object>(target: T, key: string | symbol): unknown => {
+    const value: unknown = Reflect.get(target, key, target);
+    return typeof value === "function" ? value.bind(target) : value;
+  };
+  const recordSend = <T extends object>(channel: T): T =>
+    new Proxy(channel, {
+      get: (target, key) => {
+        if (key !== "send") return passThrough(target, key);
+        const send = passThrough(target, key) as (payload: unknown) => Promise<unknown>;
+        return async (payload: unknown) => {
+          const message = await send(payload);
+          const url = (message as { url?: unknown } | null)?.url;
+          if (typeof url === "string") posted.push(url);
+          return message;
+        };
+      },
+    });
+  const channels = new Proxy(client.channels, {
+    get: (target, key) => {
+      if (key !== "fetch") return passThrough(target, key);
+      const fetch = passThrough(target, key) as (...args: unknown[]) => Promise<unknown>;
+      return async (...args: unknown[]) => {
+        const channel = await fetch(...args);
+        return channel && typeof channel === "object" ? recordSend(channel) : channel;
+      };
+    },
+  });
+  return new Proxy(client, {
+    get: (target, key) => (key === "channels" ? channels : passThrough(target, key)),
+  });
+}
+
+/**
  * Delivers the sandbox's queued events through the live delivery loop and
- * handlers, oldest first, and reports each one. A failed event stays queued,
- * holding back the ones after it, exactly as the API outbox would.
+ * handlers, oldest first, and reports each one with a link to every message
+ * it posted. A failed event stays queued, holding back the ones after it,
+ * exactly as the API outbox would.
  */
 export async function deliverSandboxOutbox(client: Client, ownerId: string): Promise<string[]> {
   if (delivering.has(ownerId)) {
@@ -363,12 +423,20 @@ export async function deliverSandboxOutbox(client: Client, ownerId: string): Pro
       eventClient: Client,
       event: IVotingEvent,
     ): Promise<VotingEventOutcome> => {
+      const posted: string[] = [];
       try {
-        const outcome = await handleVotingEvent(eventClient, event, context);
-        lines.push(`\`${event.rawKind}\`: ${outcome}.`);
+        const outcome = await handleVotingEvent(
+          recordPosts(eventClient, posted),
+          event,
+          context,
+        );
+        lines.push(`\`${event.rawKind}\`: ${outcome}.${formatPosted(posted)}`);
         return outcome;
       } catch (err) {
-        lines.push(`\`${event.rawKind}\`: failed, left queued. ${describeRequestError(err)}`);
+        lines.push(
+          `\`${event.rawKind}\`: failed, left queued.${formatPosted(posted)} ` +
+            describeRequestError(err),
+        );
         throw err;
       }
     };

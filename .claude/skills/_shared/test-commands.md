@@ -27,8 +27,9 @@ Fill in the pull request number. Nothing else changes, and the two never share a
    ```
 
 Say in a line that the runner needs the deploy finished first, that the run starts by
-itself (or by hand with `/conduct pr:<N>` in the test channel when it does not), and that
-steps the runner cannot drive are left to the tester there.
+itself (the runner sends `/conduct pr:<N>` in the test channel when no run is in
+progress, including after an earlier run finished), and that steps the runner cannot
+drive are left to the tester there.
 
 The Run button runs a block in the session's own checkout, so before offering the runner
 block, check that `node_modules/playwright-core` exists there. A worktree cut before the

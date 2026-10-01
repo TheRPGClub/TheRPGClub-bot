@@ -1,5 +1,11 @@
 import type { INominationEntry } from "../classes/Nomination.js";
-import type { IVoteCastResult, IVoteEntry, IVoteTallyRow } from "../classes/Vote.js";
+import type {
+  IVoteCastResult,
+  IVoteEntry,
+  IVoteTallyRow,
+  VoteBallot,
+} from "../classes/Vote.js";
+import type { IVotingRoundTieGame } from "../classes/VotingRounds.js";
 import { toUnixTimestamp } from "./DateFormatUtils.js";
 import { isPositiveInt } from "../utilities/ValidationUtils.js";
 
@@ -29,6 +35,22 @@ export function dedupeNominationsByGame(
     }
   }
   return [...byGame.values()];
+}
+
+/** "GOTM" for the main vote, "GOTM runoff" for the tie-breaker runoff. */
+export function ballotKindLabel(kindLabel: string, ballot: VoteBallot): string {
+  return ballot === "runoff" ? `${kindLabel} runoff` : kindLabel;
+}
+
+/** The nominations on a runoff ballot: one per tied game, in the round's order. */
+export function filterRunoffNominations(
+  nominations: INominationEntry[],
+  tiedGames: IVotingRoundTieGame[],
+): INominationEntry[] {
+  const tied = new Set(tiedGames.map((game) => game.gameId));
+  return dedupeNominationsByGame(nominations).filter((nomination) =>
+    tied.has(nomination.gamedbGameId),
+  );
 }
 
 /**
@@ -112,6 +134,8 @@ export function buildWinnerAnnouncementText(params: {
   roundNumber: number;
   monthLabel: string;
   winners: ITallyDisplayRow[];
+  /** Whether a tie goes to a member runoff; ties before runoffs went to the admins. */
+  runoff: boolean;
 }): string {
   if (!params.winners.length) {
     return (
@@ -129,8 +153,43 @@ export function buildWinnerAnnouncementText(params: {
   const list = joinBoldTitles(params.winners.map((row) => row.gameTitle));
   return (
     `# ⚖️ ${params.kindLabel} Round ${params.roundNumber} (${params.monthLabel}) ` +
-    `ended in a tie\nIt is a tie between ${list}. The admins will pick the final winner.`
+    `ended in a tie\nIt is a tie between ${list}. ` +
+    (params.runoff
+      ? "A runoff vote between them decides the winner."
+      : "The admins will pick the final winner.")
   );
+}
+
+/**
+ * The runoff's verdict for a category. A sole leader wins. A runoff that ties
+ * again, or gets no votes, leaves `stillTied` for the admins to pick from. A
+ * category with neither was settled by an admin's pick instead.
+ */
+export function buildRunoffResultText(params: {
+  kindLabel: string;
+  roundNumber: number;
+  monthLabel: string;
+  /** The runoff tally's leaders. */
+  leaders: ITallyDisplayRow[];
+  /** The games still tied after the runoff; empty once the category is decided. */
+  stillTied: string[];
+}): string {
+  const heading = `# ⚖️ The ${params.kindLabel} runoff for Round ${params.roundNumber} ` +
+    `(${params.monthLabel})`;
+  if (params.stillTied.length) {
+    const why = params.leaders.length > 1 ? "also ended in a tie" : "got no votes";
+    return (
+      `${heading} ${why}. The admins will pick the winner from ` +
+      `${joinBoldTitles(params.stillTied)}.`
+    );
+  }
+  if (params.leaders.length === 1) {
+    return buildFinalWinnersText({
+      ...params,
+      titles: params.leaders.map((row) => row.gameTitle),
+    });
+  }
+  return `${heading} did not pick the winner; the admins settled the tie.`;
 }
 
 function voteNoun(count: number): string {

@@ -4,6 +4,8 @@ import {
   buildRescheduleBody,
   explainRescheduleRefusal,
   isRoundTallyRevealed,
+  isRunoffTallyRevealed,
+  listRunoffCategories,
   mapVotingRoundApiData,
   type VotingRoundApiData,
 } from "../classes/VotingRounds.js";
@@ -38,6 +40,43 @@ test("mapVotingRoundApiData reads the round and its windows as the API reports t
   assert.equal(round.votingOpen, true);
   assert.equal(round.nominationsOpen, false);
   assert.deepEqual(round.pendingTies, {});
+  assert.equal(round.runoffOpen, false);
+  assert.equal(round.runoffClosesAt, null);
+  assert.deepEqual(round.runoffTies, {});
+});
+
+test("mapVotingRoundApiData reads an open runoff and its ballot", () => {
+  const ballot = [
+    { game_id: 12, title: "Saltmarsh Requiem", cover_url: null },
+    { game_id: 34, title: "Verdant Hollow", cover_url: null },
+  ];
+  const round = mapVotingRoundApiData(apiRound({
+    phase: "runoff",
+    voting_open: false,
+    voting_ended: true,
+    closed_at: "2026-09-28T04:00:00.000Z",
+    runoff_opens_at: "2026-09-28T04:00:00.000Z",
+    runoff_closes_at: "2026-09-29T04:00:00.000Z",
+    runoff_closed_at: null,
+    runoff_open: true,
+    runoff_ended: false,
+    pending_ties: { nr_gotm: ballot },
+    runoff_ties: { nr_gotm: ballot },
+  }));
+
+  assert.equal(round.phase, "runoff");
+  assert.equal(round.runoffOpen, true);
+  assert.equal(round.runoffEnded, false);
+  assert.equal(round.runoffClosesAt?.toISOString(), "2026-09-29T04:00:00.000Z");
+  assert.equal(round.runoffClosedAt, null);
+  assert.deepEqual(round.runoffTies.nr_gotm?.map((game) => game.gameId), [12, 34]);
+  assert.deepEqual(listRunoffCategories(round.runoffTies), ["nr_gotm"]);
+  assert.equal(isRunoffTallyRevealed(round), false);
+  assert.equal(
+    isRunoffTallyRevealed({ ...round, runoffOpen: false, runoffEnded: true }),
+    true,
+  );
+  assert.equal(isRunoffTallyRevealed(null), false);
 });
 
 test("mapVotingRoundApiData maps tied games per category", () => {

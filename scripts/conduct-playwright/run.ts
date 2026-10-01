@@ -34,6 +34,7 @@ import {
   performAction,
   reportUrl,
   scrollToBottom,
+  startConductRun,
   TIMING,
   waitForReply,
 } from "./discord.ts";
@@ -289,6 +290,37 @@ async function signIn(page: Page, channelUrl: string): Promise<void> {
   await waitForChannel(page, channelUrl);
 }
 
+/** True when the channel shows a run for this PR that has not reported yet. */
+async function runInProgress(page: Page, pr: number): Promise<boolean> {
+  return Boolean(await currentStep(page, pr)) && !await reportUrl(page, pr);
+}
+
+/**
+ * Starts the PR's run with `/conduct pr:<pr>` when the channel shows none in progress (no
+ * step message, or only a finished run's report), then waits for its first step.
+ */
+async function ensureRun(page: Page, pr: number): Promise<void> {
+  await scrollToBottom(page);
+  if (await runInProgress(page, pr)) return;
+  console.log(`No run for PR #${pr} is in progress; starting one with /conduct pr:${pr}.`);
+  try {
+    await startConductRun(page, pr);
+  } catch (err: unknown) {
+    if (!(err instanceof HandOff) && !(err instanceof errors.TimeoutError)) throw err;
+    const why = err.message.split("\n")[0];
+    throw new Stop(`Could not start the run (${why}). Run /conduct pr:${pr} here, then rerun.`);
+  }
+  const started = await poll(page, TIMING.verdictMs, async () =>
+    await runInProgress(page, pr) ? true : null,
+  );
+  if (!started) {
+    throw new Stop(
+      `The conductor posted no step for PR #${pr}. Check its reply in the channel; ` +
+        "another run may be in progress.",
+    );
+  }
+}
+
 async function walk(
   page: Page,
   pr: number,
@@ -410,6 +442,7 @@ async function main(): Promise<void> {
   try {
     const page = context.pages()[0] ?? await context.newPage();
     await signIn(page, channelUrl);
+    await ensureRun(page, args.pr);
     await walk(page, args.pr, steps, channelUrl, artifacts, outcomes);
     report = await reportUrl(page, args.pr);
   } catch (err: unknown) {

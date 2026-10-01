@@ -13,7 +13,10 @@ import {
 
 type TieGame = { game_id: number; title: string; cover_url: string | null };
 
-function tieRound(pendingTies: VotingRoundApiData["pending_ties"]) {
+function tieRound(
+  pendingTies: VotingRoundApiData["pending_ties"],
+  runoffTies: VotingRoundApiData["runoff_ties"] = {},
+) {
   return mapVotingRoundApiData({
     round_number: 143,
     month_year: "October 2026",
@@ -26,6 +29,7 @@ function tieRound(pendingTies: VotingRoundApiData["pending_ties"]) {
     voting_open: false,
     voting_ended: true,
     pending_ties: pendingTies,
+    runoff_ties: runoffTies,
   });
 }
 
@@ -70,6 +74,13 @@ test("buildTiePendingText names the round", () => {
   const text = buildTiePendingText(tieRound({ gotm: games(2, false) }));
 
   assert.match(text, /^## ⚖️ Round 143 voting ended in a tie/);
+});
+
+test("buildTiePendingText says when the runoff did not break the tie", () => {
+  const text = buildTiePendingText(tieRound({ gotm: games(2, false) }, { gotm: games(3, false) }));
+
+  assert.match(text, /^## ⚖️ Round 143 runoff did not break the tie/);
+  assert.match(text, /tied again or got no votes/);
 });
 
 test("the prompt has one select per tied category allowing every tied game", () => {

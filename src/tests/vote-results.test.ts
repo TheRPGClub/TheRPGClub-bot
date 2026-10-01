@@ -4,14 +4,18 @@ import type { INominationEntry } from "../classes/Nomination.js";
 import type { IVoteCastResult, IVoteEntry, IVoteTallyRow } from "../classes/Vote.js";
 import type { ITallyDisplayRow } from "../functions/VoteResultsUtils.js";
 import {
+  ballotKindLabel,
   buildCastResultText,
   buildFinalWinnersText,
   buildHiddenTallyText,
   buildMyVotesText,
   buildRehearsalNoticeText,
+  buildRunoffResultText,
+  buildTallyText,
   buildTestPanelNoticeText,
   buildWinnerAnnouncementText,
   dedupeNominationsByGame,
+  filterRunoffNominations,
   mergeTallyWithNominations,
   pickWinningRows,
   sumTallyVotes,
@@ -107,6 +111,7 @@ test("buildCastResultText reports a recorded vote with the API warning", () => {
     removedVotes: [makeVote({ id: 2, gameTitle: "Beta" })],
     cap: 2,
     warning: "You were at the vote cap (2), so your oldest vote (Beta) was removed.",
+    runoff: false,
   };
   const text = buildCastResultText({
     kindLabel: "GOTM",
@@ -127,6 +132,7 @@ test("buildCastResultText reports a toggled-off vote", () => {
     removedVotes: [makeVote({ id: 2, gameTitle: "Beta" })],
     cap: 3,
     warning: "Removed your vote for Beta.",
+    runoff: false,
   };
   const text = buildCastResultText({
     kindLabel: "NR-GOTM",
@@ -203,6 +209,7 @@ test("buildWinnerAnnouncementText covers winner, tie, and no-votes cases", () =>
     roundNumber: 42,
     monthLabel: "August 2026",
     winners: [makeTallyRow({ gamedbGameId: 1, gameTitle: "Alpha", voteCount: 5 })],
+    runoff: false,
   });
   assert.match(winner, /The GOTM winner for Round 42 \(August 2026\) is \*\*Alpha\*\*!/);
 
@@ -214,14 +221,30 @@ test("buildWinnerAnnouncementText covers winner, tie, and no-votes cases", () =>
       makeTallyRow({ gamedbGameId: 1, gameTitle: "Alpha", voteCount: 4 }),
       makeTallyRow({ gamedbGameId: 2, gameTitle: "Beta", voteCount: 4 }),
     ],
+    runoff: true,
   });
   assert.match(tie, /tie between \*\*Alpha\*\* and \*\*Beta\*\*/);
+  assert.match(tie, /A runoff vote between them decides the winner\./);
+  assert.doesNotMatch(tie, /admins/);
+
+  const beforeRunoffs = buildWinnerAnnouncementText({
+    kindLabel: "NR-GOTM",
+    roundNumber: 12,
+    monthLabel: "August 2025",
+    winners: [
+      makeTallyRow({ gamedbGameId: 1, gameTitle: "Alpha", voteCount: 4 }),
+      makeTallyRow({ gamedbGameId: 2, gameTitle: "Beta", voteCount: 4 }),
+    ],
+    runoff: false,
+  });
+  assert.match(beforeRunoffs, /The admins will pick the final winner\./);
 
   const none = buildWinnerAnnouncementText({
     kindLabel: "GOTM",
     roundNumber: 42,
     monthLabel: "August 2026",
     winners: [],
+    runoff: false,
   });
   assert.match(none, /No GOTM votes were cast for Round 42/);
 });
@@ -312,4 +335,57 @@ test("buildRehearsalNoticeText says nothing reached announcements", () => {
   assert.match(text, /Round 123 results announcement/);
   assert.match(text, /No winner thread was created or renamed/);
   assert.match(text, /nothing was posted to announcements/);
+});
+
+test("buildRunoffResultText names a sole leader, or hands a repeat tie to the admins", () => {
+  const base = { kindLabel: "GOTM", roundNumber: 42, monthLabel: "August 2026" };
+  const alpha = makeTallyRow({ gamedbGameId: 1, gameTitle: "Alpha", voteCount: 3 });
+  const beta = makeTallyRow({ gamedbGameId: 2, gameTitle: "Beta", voteCount: 3 });
+
+  const won = buildRunoffResultText({ ...base, leaders: [alpha], stillTied: [] });
+  assert.match(won, /The GOTM winner for Round 42 \(August 2026\) is \*\*Alpha\*\*!/);
+
+  const tiedAgain = buildRunoffResultText({
+    ...base,
+    leaders: [alpha, beta],
+    stillTied: ["Alpha", "Beta"],
+  });
+  assert.match(tiedAgain, /GOTM runoff for Round 42 \(August 2026\) also ended in a tie/);
+  assert.match(tiedAgain, /admins will pick the winner from \*\*Alpha\*\* and \*\*Beta\*\*/);
+
+  const empty = buildRunoffResultText({ ...base, leaders: [], stillTied: ["Alpha", "Beta"] });
+  assert.match(empty, /got no votes\. The admins will pick/);
+
+  const settled = buildRunoffResultText({ ...base, leaders: [alpha, beta], stillTied: [] });
+  assert.match(settled, /the admins settled the tie/);
+});
+
+test("filterRunoffNominations keeps one nomination per tied game", () => {
+  const nominations = [
+    makeNomination({ id: 1, gamedbGameId: 10 }),
+    makeNomination({ id: 2, gamedbGameId: 20 }),
+    makeNomination({ id: 3, gamedbGameId: 10 }),
+    makeNomination({ id: 4, gamedbGameId: 30 }),
+  ];
+  const tied = [
+    { gameId: 10, title: "Game 10", coverUrl: null },
+    { gameId: 30, title: "Game 30", coverUrl: null },
+  ];
+  assert.deepEqual(filterRunoffNominations(nominations, tied).map((entry) => entry.id), [1, 4]);
+  assert.deepEqual(filterRunoffNominations(nominations, []), []);
+});
+
+test("runoff text labels the ballot and says one game, not one games", () => {
+  assert.equal(ballotKindLabel("GOTM", "main"), "GOTM");
+  assert.equal(ballotKindLabel("GOTM", "runoff"), "GOTM runoff");
+  const text = buildTallyText({
+    kindLabel: "GOTM runoff",
+    roundNumber: 42,
+    rows: [],
+    cap: 1,
+    votingOpen: false,
+    voteDeadline: null,
+  });
+  assert.match(text, /GOTM runoff Results - Round 42/);
+  assert.match(text, /vote for up to 1 game\./);
 });

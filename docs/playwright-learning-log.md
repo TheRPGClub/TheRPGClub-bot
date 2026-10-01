@@ -19,6 +19,16 @@ entry for every new problem. The `playwright-log` skill
   exact-match path and logs a completion at once. Mark such a step `Changes data: yes`,
   or use a title with no exact GameDB match.
 - Quote reply text exactly as the code builds it, so the conductor's checks match.
+- "by eye" anywhere in `Expected:` hands the step off. Describe output elsewhere in plain
+  prose and keep the phrase out of a step the runner should drive.
+- A step that expects a refusal says so first, in its label and `Expected:`, and names
+  the later step that depends on it.
+- The conductor reads only the test channel and the ephemeral mirror. A step whose only
+  output lands in another channel always fails as "No output observed"; give the action a
+  private reply to check, or verify it with a later command in the test channel.
+- The runner acts only in the test channel. A step on a message posted elsewhere (an
+  announcements panel, an admin prompt) is the tester's: name the channel, the message's
+  heading, and the earlier reply that links it.
 - Take option values from `docs/test-plans/`, which hold values known to work against
   the test data (for example `title:Chrono Trig` and `platform:SNES`). For an
   autocomplete option, use a value the bot resolves on its own, such as an abbreviation.
@@ -40,6 +50,9 @@ entry for every new problem. The `playwright-log` skill
 
 ### Running the runner
 
+- The runner starts the PR's run with `/conduct pr:<pr>` when the test channel shows none
+  in progress, including after an earlier run finished or was aborted. Starting it by
+  hand first is no longer needed.
 - Run it from an up-to-date `main` checkout. It refuses to start when the checkout lacks a
   runner commit from `origin/main`.
 - Each run opens a clean Chrome profile. The tester signs in every time: the runner clicks
@@ -69,6 +82,87 @@ entry for every new problem. The `playwright-log` skill
   bottom, and scroll up to find an older conductor message instead of assuming it is gone.
 
 ## Entries
+
+### 2026-10-01: a tie break that worked failed as "No output observed"
+
+- **PR under test:** #1443
+- **Symptom:** step 15 (pick a winner on the admin tie prompt) failed with "No output
+  observed in the test channel"; the tester confirmed the pick worked.
+- **Cause:** the pick updates a public message in #admin in place. The conductor only
+  reads the test channel and the ephemeral mirror, and a step with no output there always
+  fails, whatever its `Ephemeral:` line says.
+- **Fix:** #1443 made the sandbox tie break also send the picker a private follow-up with
+  the delivery report and jump links. Private replies are mirrored, so the step is now
+  `Ephemeral: yes` and checks that reply.
+- **Lesson:** every step needs output the conductor can read: a reply in the test channel
+  or a private (mirrored) reply. If an action only changes or posts messages elsewhere,
+  give it a private confirmation, or check the result in a follow-up step that runs a
+  command in the test channel.
+
+### 2026-10-01: new run ended after step 1 with the old run's report
+
+- **PR under test:** #1443
+- **Symptom:** the runner started a new run itself, step 1 passed, then it printed the
+  summary with the aborted run's report link and stopped.
+- **Cause:** once a step is checked the conductor rewrites its message to
+  `PR #<pr>, step N: <label>`, without `of M`. `reportUrl` only treated `step N of M:` as
+  the start of the current run, so in the moment before step 2 was posted it scanned past
+  the checked step 1 and found the older run's report line.
+- **Fix:** #1443 made `reportUrl` stop at any step message of the PR, open or checked,
+  and `currentStep` stop at an earlier run's report, so an aborted run's still-open step
+  (step 8 here) is never taken for the new run's.
+- **Lesson:** the runner's "is this run over" and "which step is current" checks must both
+  recognise every form a step message takes and where one run ends, or messages from an
+  older run in the channel leak into a new one.
+
+### 2026-10-01: rerun exited at once with "For a person: none"
+
+- **PR under test:** #1443
+- **Symptom:** after an aborted run and a PR body edit, two reruns printed the drive plan,
+  then an empty summary and the old report link, without driving anything.
+- **Cause:** the newest conductor message in the test channel was the aborted run's
+  "Report for PR #1443 posted" line, so `reportUrl` treated the run as finished. Editing
+  the body (or redeploying the same head) does not start a new run, and the runner only
+  joined runs; it never started one.
+- **Fix:** #1443 made the runner send `/conduct pr:<pr>` itself, from the conductor's
+  entry in the command popup (`CONDUCTOR_BOT_NAME`), whenever the channel shows no run in
+  progress, then wait for step 1. If it cannot, it stops and says to start the run by hand.
+- **Lesson:** a rerun after a finished or aborted run needs a new run. The runner now
+  starts it; if it ever stops with "Could not start the run", run `/conduct pr:<pr>` in
+  the test channel and rerun.
+
+### 2026-10-01: tester skipped a step that was meant to be refused
+
+- **PR under test:** #1443
+- **Symptom:** steps 5 and 6 failed with "No output observed", noted "bad test, you
+  closed the vote". Step 8 then found an empty runoff and failed.
+- **Cause:** step 5 deliberately voted on the old, closed voting panel to check the
+  refusal, but its label read like a normal vote, and the tester went to the runoff panel,
+  which (correctly) has no Game 3. Step 6 looked equally wrong after that, so neither
+  click was made, and the runoff closed with no votes.
+- **Fix:** #1443 relabelled both steps, put OLD and NEW on the two panels, and opened each
+  `Expected:` with what should happen ("meant to be refused", "meant to land") and which
+  later step depends on it.
+- **Lesson:** a step that expects a refusal says so first, in its label and `Expected:`.
+  When two messages look alike, the step says which one, how to tell them apart, and
+  what a later step needs from it.
+
+### 2026-10-01: half the sandbox steps handed off, and the tester could not find the panel
+
+- **PR under test:** #1443
+- **Symptom:** steps 4 to 8, 12, 14 and 15 handed off as "Expected asks for a check by eye"
+  or "the runner cannot read the action". The tester then did not know where the runoff
+  panel step 6 named was: "Step 6 is yours" gave only the command.
+- **Cause:** the `Expected:` lines said "Check by eye", which the drive plan always hands
+  off. The panel steps read `select "X" on the ... panel`, which the action parser does
+  not accept. The panels themselves post in the announcements channel and the tie prompt
+  in the admin channel, while the runner acts only in the test channel, and no step said
+  how to get there.
+- **Fix:** #1443 made every `/vote-sandbox` reply link each message it posted, wherever
+  it landed, and reworded the steps: no "by eye" in a step the runner can drive, and each
+  panel step names the panel's heading and which earlier reply links it.
+- **Lesson:** a step acting on a message outside the test channel says where that
+  message is and how to reach it. Keep "by eye" out of a step the runner should drive.
 
 ### 2026-10-01: preview bot's commands never appear in the popup
 

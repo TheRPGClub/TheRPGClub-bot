@@ -10,6 +10,7 @@ import {
   type IVoteCastResult,
   type IVoteEntry,
   type IVoteTally,
+  type VoteBallot,
 } from "../classes/Vote.js";
 import VotingRounds, {
   type IVotingRound,
@@ -25,12 +26,14 @@ export interface IVotingDataSource {
   getRound(roundNumber: number): Promise<IVotingRound | null>;
   getCurrentRound(): Promise<IVotingRound | null>;
   listNominations(kind: NominationKind, roundNumber: number): Promise<INominationEntry[]>;
-  getTally(kind: NominationKind, roundNumber: number): Promise<IVoteTally>;
+  getTally(kind: NominationKind, roundNumber: number, ballot?: VoteBallot): Promise<IVoteTally>;
   getVotesForUser(
     kind: NominationKind,
     roundNumber: number,
     userId: string,
+    ballot?: VoteBallot,
   ): Promise<IVoteEntry[]>;
+  /** Puts the cast on the runoff ballot while the round's runoff is open, as the API does. */
   castVote(
     kind: NominationKind,
     roundNumber: number,
