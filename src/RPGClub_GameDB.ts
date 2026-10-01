@@ -280,7 +280,7 @@ const shutdown: Shutdown = createShutdown({
   destroyClient: () => bot.destroy(),
   exit: (code) => process.exit(code),
 });
-installShutdownSignalHandlers(shutdown, (code) => process.exit(code));
+installShutdownSignalHandlers(shutdown);
 
 registerClientObservability(bot, () => {
   // Exit nonzero so the process manager restarts the bot with a fresh session.

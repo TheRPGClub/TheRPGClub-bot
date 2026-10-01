@@ -78,25 +78,19 @@ test("a failing destroy is logged and shutdown still exits", async () => {
   assert.equal(calls.at(-1), "exit:0");
 });
 
-test("the first signal starts shutdown and a second one exits at once", () => {
+test("every shutdown signal starts the same idempotent shutdown", async () => {
   const emitter = new EventEmitter();
-  const reasons: string[] = [];
-  const exits: number[] = [];
+  const { steps, calls } = recordingSteps();
   installShutdownSignalHandlers(
-    async (reason) => {
-      reasons.push(reason);
-    },
-    (code) => exits.push(code),
+    createShutdown(steps),
     emitter as unknown as Pick<NodeJS.Process, "on">,
   );
 
-  emitter.emit("SIGTERM");
-  assert.deepEqual(reasons, ["SIGTERM"]);
-  assert.deepEqual(exits, []);
-
   emitter.emit("SIGINT");
-  assert.deepEqual(reasons, ["SIGTERM"]);
-  assert.deepEqual(exits, [1]);
+  emitter.emit("SIGINT");
+  emitter.emit("SIGTERM");
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  assert.deepEqual(calls, ["stopIntervals", "flushLogs", "destroyClient", "exit:0"]);
 });
 
 test("stopAllTrackedIntervals clears every tracked interval", () => {

@@ -70,22 +70,17 @@ export function createShutdown(steps: IShutdownSteps): Shutdown {
 }
 
 /**
- * Any SIGINT or SIGTERM listener replaces Node's default exit, so this one must end the
- * process itself. A second signal while shutdown runs exits at once.
+ * Any SIGINT or SIGTERM listener replaces Node's default exit, so shutdown must end the
+ * process itself. Repeat signals are ignored rather than forcing an exit: one Ctrl+C under
+ * `npm run` arrives twice (from the terminal and from npm), and the step caps already
+ * bound how long shutdown can take.
  */
 export function installShutdownSignalHandlers(
   shutdown: Shutdown,
-  exit: (code: number) => void,
   target: Pick<NodeJS.Process, "on"> = process,
 ): void {
-  let received = false;
   for (const signal of SHUTDOWN_SIGNALS) {
     target.on(signal, () => {
-      if (received) {
-        exit(1);
-        return;
-      }
-      received = true;
       void shutdown(signal);
     });
   }
