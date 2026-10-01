@@ -6,7 +6,7 @@
 
 import type { Locator, Page } from "playwright-core";
 
-import { PREVIEW_BOT_NAME } from "../../src/config/previewMode.ts";
+import { CONDUCTOR_BOT_NAME, PREVIEW_BOT_NAME } from "../../src/config/previewMode.ts";
 import { PREVIEW_BOT_USER_ID } from "../../src/config/users.ts";
 import type {
   DriveAction,
@@ -278,6 +278,11 @@ function previewBotOptions(page: Page): Locator {
   return options.filter({ hasText: PREVIEW_BOT_NAME }).or(options.filter({ has: avatar }));
 }
 
+/** The command popup's entries from the conductor, which owns `/conduct`. */
+function conductorOptions(page: Page): Locator {
+  return page.getByRole("option").filter({ hasText: CONDUCTOR_BOT_NAME });
+}
+
 /**
  * Clears a slash-command draft a handed-back step left behind; Discord keeps it across
  * runs. The profile is the runner's alone, so a `/` draft is the runner's own. Any other
@@ -334,17 +339,31 @@ async function assertOptionFilled(box: Locator, name: string, value: string): Pr
   }
 }
 
-async function runSlash(page: Page, action: ISlashAction): Promise<void> {
+/** Which application's popup entries a slash command is picked from. */
+interface ICommandSource {
+  entries: (page: Page) => Locator;
+  /** Names the app in hand-off messages. */
+  app: string;
+}
+
+const PREVIEW_COMMANDS: ICommandSource = { entries: previewBotOptions, app: "preview bot" };
+const CONDUCTOR_COMMANDS: ICommandSource = { entries: conductorOptions, app: "conductor" };
+
+async function runSlash(
+  page: Page,
+  action: ISlashAction,
+  source: ICommandSource = PREVIEW_COMMANDS,
+): Promise<void> {
   const box = chatBox(page);
   await waitVisible(box, "the message box");
   await clearLeftoverCommand(page, box);
   const name = `/${action.path.join(" ")}`;
   await box.click();
   await box.pressSequentially(name, { delay: TIMING.typeDelayMs });
-  const entries = previewBotOptions(page);
-  await waitVisible(entries, `the preview bot's entries in the command popup`);
+  const entries = source.entries(page);
+  await waitVisible(entries, `the ${source.app}'s entries in the command popup`);
   const command = await findOption(entries, [name, name.slice(1)]);
-  if (!command) throw new HandOff(`the command popup has no preview bot ${name}`);
+  if (!command) throw new HandOff(`the command popup has no ${source.app} ${name}`);
   await command.click();
   for (const option of action.options) {
     const typed = await focusOption(box, option.name);
@@ -382,6 +401,20 @@ async function runSelect(
   }
   // A multi-select submits its choices when the menu closes.
   if (action.values.length > 1) await page.keyboard.press("Escape");
+}
+
+/**
+ * Sends `/conduct pr:<pr>` from the conductor's own entry, to start the PR's run. Throws
+ * `HandOff` when the command cannot be sent.
+ */
+export async function startConductRun(page: Page, pr: number): Promise<void> {
+  const action: ISlashAction = {
+    kind: "slash",
+    path: ["conduct"],
+    options: [{ name: "pr", value: String(pr) }],
+    modal: null,
+  };
+  await runSlash(page, action, CONDUCTOR_COMMANDS);
 }
 
 /** Performs one step's action. Throws `HandOff` when anything is not as expected. */

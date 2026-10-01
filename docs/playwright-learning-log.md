@@ -47,6 +47,9 @@ entry for every new problem. The `playwright-log` skill
 
 ### Running the runner
 
+- The runner starts the PR's run with `/conduct pr:<pr>` when the test channel shows none
+  in progress, including after an earlier run finished or was aborted. Starting it by
+  hand first is no longer needed.
 - Run it from an up-to-date `main` checkout. It refuses to start when the checkout lacks a
   runner commit from `origin/main`.
 - Each run opens a clean Chrome profile. The tester signs in every time: the runner clicks
@@ -76,6 +79,22 @@ entry for every new problem. The `playwright-log` skill
   bottom, and scroll up to find an older conductor message instead of assuming it is gone.
 
 ## Entries
+
+### 2026-10-01: rerun exited at once with "For a person: none"
+
+- **PR under test:** #1443
+- **Symptom:** after an aborted run and a PR body edit, two reruns printed the drive plan,
+  then an empty summary and the old report link, without driving anything.
+- **Cause:** the newest conductor message in the test channel was the aborted run's
+  "Report for PR #1443 posted" line, so `reportUrl` treated the run as finished. Editing
+  the body (or redeploying the same head) does not start a new run, and the runner only
+  joined runs; it never started one.
+- **Fix:** #1443 made the runner send `/conduct pr:<pr>` itself, from the conductor's
+  entry in the command popup (`CONDUCTOR_BOT_NAME`), whenever the channel shows no run in
+  progress, then wait for step 1. If it cannot, it stops and says to start the run by hand.
+- **Lesson:** a rerun after a finished or aborted run needs a new run. The runner now
+  starts it; if it ever stops with "Could not start the run", run `/conduct pr:<pr>` in
+  the test channel and rerun.
 
 ### 2026-10-01: tester skipped a step that was meant to be refused
 

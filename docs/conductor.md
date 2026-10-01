@@ -108,8 +108,12 @@ report. It is much faster than doing each step by hand, since no step waits on a
 
 Before it starts:
 
-1. Deploy the PR with `/test-guild <pr>`. The run starts by itself, or start
-   `/conduct pr:<pr>` in the test channel.
+1. Deploy the PR with `/test-guild <pr>`. The run usually starts by itself. When the
+   test channel shows no run for the PR in progress (no step message, or only a finished
+   run's report), the runner starts one itself with `/conduct pr:<pr>`, picked from the
+   conductor's entry in the command popup (`CONDUCTOR_BOT_NAME` in
+   `src/config/previewMode.ts`), and waits for step 1. If that fails it stops and says to
+   run `/conduct pr:<pr>` by hand.
 2. Google Chrome must be installed (from Google's apt repository). The runner drives it
    through `playwright-core`, so it downloads no browser of its own.
 3. Sign in to Discord in the window it opens, every run. The runner clicks the login
@@ -157,7 +161,8 @@ What it does:
 
 The runner holds no state of its own. If it stops (a timeout, a closed window, a step
 whose label no longer matches the PR body), rerun it and it picks up from the
-conductor's current step. A current step that already shows a verdict (**Check again**
+conductor's current step. A rerun after a run has finished or been aborted starts a new
+run, as above. A current step that already shows a verdict (**Check again**
 or **Looks right**) is left to the tester, so a resume never repeats an action.
 
 A step is handed off, beyond the reasons `DrivePlan.ts` gives (nothing to check, a check
