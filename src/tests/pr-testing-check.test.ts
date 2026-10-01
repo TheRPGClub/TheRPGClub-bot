@@ -141,3 +141,13 @@ test("the script exits 2 without a readable body file", () => {
   assert.equal(result.status, 2, result.output);
   assert.match(result.output, /Cannot read/);
 });
+
+test("a step without a Changes data line passes with a warning", () => {
+  const report = checkPrTesting(VALID).lines.join("\n");
+  assert.match(report, /step\(s\) 1, 2 have no "Changes data: yes\|no" line/);
+  const marked = checkPrTesting(body([
+    ...step(1, '"Saved"', ["Changes data: yes"]),
+  ])).lines.join("\n");
+  assert.match(marked, /Step 1: Step 1 label \(ephemeral, changes data\)/);
+  assert.doesNotMatch(marked, /no "Changes data/);
+});
