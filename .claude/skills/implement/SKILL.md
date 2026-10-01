@@ -280,7 +280,8 @@ Closes #<N>
   dropped; an empty one reads "none".
 - Each closed issue gets its own `Closes #X` line.
 - Each `Testing` step is one asserted action, per `One action per step` in
-  `.github/pull-request-testing-format.md`.
+  `.github/pull-request-testing-format.md`. Read `docs/playwright-learning-log.md` first
+  (the `playwright-log` skill) and apply its `Lessons`.
 - Each `Testing` step ends with a `Changes data: yes|no` line after `Ephemeral:`.
   Decide it by reading the code the step runs, not the command name: `yes` when it
   writes anything that outlives the test (an API or database row, an upload, a GitHub
