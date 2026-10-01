@@ -19,6 +19,7 @@ import { ContainerBuilder } from "@discordjs/builders";
 import {
   safeDeferReply,
   safeDeferUpdate,
+  safeEditReply,
   safeReply,
   safeUpdate,
   sanitizeUserInput,
@@ -444,11 +445,7 @@ export class GameDbSearchCommand {
       searchTerm, results, ownerId, newPage, true, filters, filterSummary,
     );
 
-    try {
-      await safeReply(interaction, response);
-    } catch {
-      // ignore
-    }
+    await safeEditReply(interaction, response);
   }
 
   @ButtonComponent({ id: /^gamedb-search-refresh:\d+:[A-Za-z0-9_-]*:[a-z0-9]*$/ })
