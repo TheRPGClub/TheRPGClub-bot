@@ -15,6 +15,7 @@ import { updateBotPresence } from "./functions/SetPresence.js";
 import { loadGotmFromDb } from "./classes/Gotm.js";
 import { loadNrGotmFromDb } from "./classes/NrGotm.js";
 import {
+  flushConsoleLogs,
   installConsoleLogging,
   setConsoleLoggingClient,
 } from "./utilities/DiscordConsoleLogger.js";
@@ -26,6 +27,12 @@ import { startUserEmojiService } from "./services/UserEmojiService.js";
 import { announcePreviewReady } from "./services/PreviewReadyService.js";
 import { refreshCommandMentions } from "./services/CommandMentionService.js";
 import { registerClientObservability } from "./services/ClientObservability.js";
+import {
+  createShutdown,
+  installShutdownSignalHandlers,
+  type Shutdown,
+} from "./services/ShutdownService.js";
+import { startTrackedInterval } from "./utilities/IntervalUtils.js";
 import { restoreJournalMessageContextsFromDb } from "./commands/now-playing/nowPlayingContexts.js";
 import GameSearchService from "./classes/GameSearchService.js";
 import GamePlatformRegionService from "./classes/GamePlatformRegionService.js";
@@ -64,13 +71,6 @@ process.on("uncaughtException", (err: Error) => {
 // at 30 min this woke Neon's serverless compute twice an hour. Presence only
 // changes on an explicit command, so hourly re-assertion is plenty.
 const PRESENCE_CHECK_INTERVAL_MS: number = 60 * 60 * 1000; // 1 hour
-let presenceInterval: NodeJS.Timeout | null = null;
-
-function clearPresenceInterval(): void {
-  if (!presenceInterval) return;
-  clearInterval(presenceInterval);
-  presenceInterval = null;
-}
 
 async function refreshPresence(): Promise<void> {
   try {
@@ -78,14 +78,6 @@ async function refreshPresence(): Promise<void> {
   } catch (err) {
     logError("RPGClub_GameDB.refreshPresence", err);
   }
-}
-
-function registerPresenceShutdownHooks(): void {
-  const signals: NodeJS.Signals[] = ["SIGINT", "SIGTERM", "SIGBREAK"];
-  for (const signal of signals) {
-    process.once(signal, clearPresenceInterval);
-  }
-  process.once("beforeExit", clearPresenceInterval);
 }
 
 export const bot: Client = new Client({
@@ -198,10 +190,9 @@ bot.once("clientReady", async () => {
   await refreshPresence();
 
   // Periodically refresh presence from the database to stay in sync
-  presenceInterval = setInterval(() => {
+  startTrackedInterval(() => {
     void refreshPresence();
   }, PRESENCE_CHECK_INTERVAL_MS);
-  registerPresenceShutdownHooks();
 
   // Synchronize applications commands with Discord
   await bot.initApplicationCommands();
@@ -286,9 +277,16 @@ bot.on("error", (err: unknown) => {
   logError("RPGClub_GameDB.discordClientError", err);
 });
 
+const shutdown: Shutdown = createShutdown({
+  flushLogs: flushConsoleLogs,
+  destroyClient: () => bot.destroy(),
+  exit: (code) => process.exit(code),
+});
+installShutdownSignalHandlers(shutdown);
+
 registerClientObservability(bot, () => {
   // Exit nonzero so the process manager restarts the bot with a fresh session.
-  void bot.destroy().finally(() => process.exit(1));
+  void shutdown("unrecoverable shard disconnect", 1);
 });
 
 async function run(): Promise<void> {

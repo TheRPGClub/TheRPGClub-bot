@@ -1,5 +1,6 @@
 import type { Client } from "discord.js";
 import VotingEvents, { type IVotingEvent } from "../classes/VotingEvents.js";
+import { startTrackedInterval } from "../utilities/IntervalUtils.js";
 import { logError, logInfo } from "../utilities/LogUtils.js";
 import { handleVotingEvent, type VotingEventOutcome } from "./VotingEventHandlers.js";
 
@@ -111,7 +112,7 @@ export function startVotingEventService(client: Client): void {
   };
 
   void run();
-  pollTimer = setInterval(() => {
+  pollTimer = startTrackedInterval(() => {
     void run();
   }, POLL_INTERVAL_MS);
 }

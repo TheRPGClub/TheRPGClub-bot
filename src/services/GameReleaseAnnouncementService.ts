@@ -7,6 +7,7 @@ import GameReleaseAnnouncement, {
 import { NEW_GAME_ANNOUNCEMENT_CHANNEL_ID } from "../config/channels.js";
 import { buildGameProfileMessagePayload } from "../commands/gamedb.command.js";
 import { buildComponentsV2EditFlags } from "../functions/ComponentsV2Utils.js";
+import { startTrackedInterval } from "../utilities/IntervalUtils.js";
 import { logError, logWarn } from "../utilities/LogUtils.js";
 
 // Coarse safety-net sweep. Each cycle runs several queries against the GameDB
@@ -109,7 +110,7 @@ export function startGameReleaseAnnouncementService(client: Client): void {
   };
 
   void run();
-  gameReleaseTimer = setInterval(() => {
+  gameReleaseTimer = startTrackedInterval(() => {
     void run();
   }, CHECK_INTERVAL_MS);
 }
