@@ -67,13 +67,18 @@ export async function currentStep(page: Page, pr: number): Promise<IStepHeader |
   return null;
 }
 
-/** The conductor's `Report for PR #<pr> posted: <url>` line, once it is there. */
+/**
+ * The conductor's `Report for PR #<pr> posted: <url>` line for the current run. Only a
+ * report newer than the PR's newest step header counts, so an earlier run's report
+ * still in the channel never ends this one.
+ */
 export async function reportUrl(page: Page, pr: number): Promise<string | null> {
   const posted = new RegExp(`Report for PR #${pr} posted: (\\S+)`);
   const texts = await messages(page).allInnerTexts();
   for (const text of texts.reverse()) {
     const match = posted.exec(text);
     if (match) return match[1];
+    if (Number(STEP_HEADER.exec(text)?.[1]) === pr) return null;
   }
   return null;
 }
