@@ -159,8 +159,6 @@ export function buildRoundHistoryModal(sessionId: string): ModalBuilder {
         maxLength: 500,
         value: helpText,
       }),
-    )
-    .addLabelComponents(
       new LabelBuilder()
         .setLabel("Category")
         .setDescription("Required")
@@ -196,8 +194,6 @@ export function buildRoundHistoryModal(sessionId: string): ModalBuilder {
               { label: "Descending", value: "desc" },
             ),
         ),
-    )
-    .addLabelComponents(
       buildTextInputLabel({
         customId: ROUND_HISTORY_QUERY_ID,
         label: "Query (optional title match)",

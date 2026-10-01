@@ -166,8 +166,6 @@ export function buildSuggestionReviewDecisionModal(
         maxLength: MAX_MODAL_TEXT_INPUT_VALUE,
         value: summaryValue,
       }),
-    )
-    .addLabelComponents(
       new LabelBuilder()
         .setLabel("Review Decision")
         .setDescription("Choose one action")
@@ -188,8 +186,6 @@ export function buildSuggestionReviewDecisionModal(
               },
             ),
         ),
-    )
-    .addLabelComponents(
       buildTextInputLabel({
         customId: SUGGESTION_REVIEW_REASON_ID,
         label: "Rejection reason (required when Reject)",
@@ -216,8 +212,6 @@ export function buildSuggestionCreateModal(): ModalBuilder {
         style: TextInputStyle.Paragraph,
         maxLength: 4000,
       }),
-    )
-    .addLabelComponents(
       new LabelBuilder()
         .setLabel("Suggestion Type(s)")
         .setDescription("Select one or more suggestion types")

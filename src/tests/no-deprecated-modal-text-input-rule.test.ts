@@ -22,12 +22,17 @@ ruleTester.run("no-deprecated-modal-text-input", rule, {
     "modal.addLabelComponents(label);",
     "new LabelBuilder().setLabel('Name').setTextInputComponent(input);",
     "new ButtonBuilder().setLabel('Go');",
+    "const button = new ButtonBuilder(); button.setLabel('Go');",
     "row.addComponents(button);",
     "container.addActionRowComponents(row);",
   ],
   invalid: [
     {
       code: "new TextInputBuilder().setCustomId('a').setLabel('Name');",
+      errors: [{ messageId: "textInputLabel" }],
+    },
+    {
+      code: "const input = new TextInputBuilder().setCustomId('a'); input.setLabel('Name');",
       errors: [{ messageId: "textInputLabel" }],
     },
     {

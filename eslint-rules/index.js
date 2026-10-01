@@ -1568,13 +1568,25 @@ export default {
           isNewOf(node, "ModalBuilder") ||
           (node?.type === "Identifier" && /modal$/i.test(node.name));
 
+        // Names bound to a text input, so `input.setLabel(...)` is caught as well.
+        const textInputNames = new Set();
+        const isTextInputRoot = (node) =>
+          isNewOf(node, "TextInputBuilder") ||
+          (node?.type === "Identifier" && textInputNames.has(node.name));
+
         return {
+          VariableDeclarator(node) {
+            if (node.id.type !== "Identifier") return;
+            if (isNewOf(getChainRoot(node.init), "TextInputBuilder")) {
+              textInputNames.add(node.id.name);
+            }
+          },
           CallExpression(node) {
             if (node.callee.type !== "MemberExpression") return;
             const method = getCalleePropertyName(node.callee);
             if (!method) return;
             const root = getChainRoot(node.callee.object);
-            if (method === "setLabel" && isNewOf(root, "TextInputBuilder")) {
+            if (method === "setLabel" && isTextInputRoot(root)) {
               context.report({ node: node.callee.property, messageId: "textInputLabel" });
               return;
             }
