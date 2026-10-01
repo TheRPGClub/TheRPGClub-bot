@@ -163,3 +163,35 @@ test("buildCaughtErrorMessage shows a validation error without a dev ping", () =
   const message = buildCaughtErrorMessage("Failed to add entry", new Error("Invalid platform id."));
   assert.equal(message, "Failed to add entry: Invalid platform id.");
 });
+
+test("buildCaughtErrorMessage shows a UserFacingError without request JSON or a ping", () => {
+  const err = new UserFacingError("Already in your collection.", { cause: notFoundError() });
+  assert.equal(
+    buildCaughtErrorMessage("Failed to add entry", err),
+    "Failed to add entry: Already in your collection.",
+  );
+});
+
+test("buildCaughtErrorMessage shows a non-Error throw as text", () => {
+  assert.equal(buildCaughtErrorMessage("Failed", "boom"), "Failed: boom");
+});
+
+test("buildCaughtErrorMessage renders a discord.js REST failure", () => {
+  const restError = Object.assign(new Error("Missing Access"), {
+    method: "POST",
+    url: "https://discord.com/api/v10/channels/1/messages",
+    status: 403,
+    rawError: { message: "Missing Access", code: 50001 },
+    requestBody: { json: { content: "hi" } },
+  });
+  const message = buildCaughtErrorMessage("Failed to post", restError);
+  assert.match(message, /^Failed to post\nRequest:/);
+  assert.match(message, /"status": 403/);
+});
+
+test("formatApiError replaces a data URI in the request body with its size", () => {
+  const image = `data:image/png;base64,${"A".repeat(5000)}`;
+  const message = formatApiError("post", "/guilds/1/scheduled-events", { image }, 400, null);
+  assert.ok(message.includes("data:image/png;base64,<5000 chars>"));
+  assert.ok(!message.includes("AAAAAAAA"));
+});

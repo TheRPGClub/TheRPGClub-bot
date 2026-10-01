@@ -24,7 +24,11 @@ import {
   safeReply,
   sanitizeUserInput,
 } from "../../functions/InteractionUtils.js";
-import { buildTextReply, buildComponentsV2Flags } from "../../functions/ComponentsV2Utils.js";
+import {
+  buildComponentsV2Flags,
+  buildErrorReply,
+  buildTextReply,
+} from "../../functions/ComponentsV2Utils.js";
 import { truncateLabel } from "../../config/textLimits.js";
 import { assertCustomIdSegments } from "../../utilities/CustomIdUtils.js";
 import {
@@ -290,7 +294,7 @@ export async function handleLiveStreamCreateModal(interaction: ModalSubmitIntera
     threadId = thread.id;
   } catch (error: unknown) {
     const msg = buildDiscordErrorMessage("Thread creation failed", error);
-    await safeReply(interaction, buildTextReply(msg, true));
+    await safeReply(interaction, buildErrorReply(msg, true));
     return;
   }
 
@@ -319,7 +323,7 @@ export async function handleLiveStreamCreateModal(interaction: ModalSubmitIntera
     ));
   } catch (error: unknown) {
     const msg = buildDiscordErrorMessage("Scheduled event creation failed", error);
-    await safeReply(interaction, buildTextReply(
+    await safeReply(interaction, buildErrorReply(
       `${msg}\n` +
       `Thread was created successfully: ${channelMention(threadId)}`,
       true,

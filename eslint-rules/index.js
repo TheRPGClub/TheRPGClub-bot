@@ -3979,7 +3979,8 @@ export default {
           }
           return false;
         };
-        // `if (err instanceof SomeError)` picks a typed error that owns its message.
+        // `if (err instanceof SomeError)` picks a typed error that owns its message. Plain
+        // `Error` does not count: every API failure is one.
         const insideInstanceofGuard = (node, errName, stop) => {
           for (let current = node; current && current !== stop; current = current.parent) {
             const parent = current.parent;
@@ -3989,17 +3990,55 @@ export default {
               parent.test.type === "BinaryExpression" &&
               parent.test.operator === "instanceof" &&
               parent.test.left.type === "Identifier" &&
-              parent.test.left.name === errName
+              parent.test.left.name === errName &&
+              !(parent.test.right.type === "Identifier" && parent.test.right.name === "Error")
             ) {
               return true;
             }
           }
           return false;
         };
+        // `const msg = err.message` (or a ternary around it): the variable it lands in.
+        const assignedName = (node, stop) => {
+          for (let current = node.parent; current && current !== stop; current = current.parent) {
+            if (current.type === "VariableDeclarator") {
+              return current.id.type === "Identifier" ? current.id.name : null;
+            }
+            if (/Statement|Call/.test(current.type)) return null;
+          }
+          return null;
+        };
+        const repliesWith = (root, name) => {
+          let found = false;
+          const visit = (current) => {
+            if (found || !current || typeof current.type !== "string") return;
+            if (
+              current.type === "Identifier" &&
+              current.name === name &&
+              current.parent?.type !== "VariableDeclarator" &&
+              insideReplyCall(current, root)
+            ) {
+              found = true;
+              return;
+            }
+            for (const key of Object.keys(current)) {
+              if (key === "parent") continue;
+              const value = current[key];
+              if (Array.isArray(value)) value.forEach(visit);
+              else if (value && typeof value === "object") visit(value);
+            }
+          };
+          visit(root);
+          return found;
+        };
         const check = (node, errName, shown) => {
           const clause = awaitingCatchFor(node, errName);
-          if (!clause || !insideReplyCall(node, clause)) return;
+          if (!clause) return;
           if (insideInstanceofGuard(node, errName, clause)) return;
+          if (!insideReplyCall(node, clause)) {
+            const name = assignedName(node, clause);
+            if (!name || !repliesWith(clause.body, name)) return;
+          }
           context.report({ node, messageId: "messageOnlyReply", data: { shown } });
         };
 

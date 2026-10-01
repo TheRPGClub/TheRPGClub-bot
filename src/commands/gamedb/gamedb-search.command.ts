@@ -26,6 +26,7 @@ import {
 } from "../../functions/InteractionUtils.js";
 import {
   buildTextContainer,
+  buildErrorReply,
   buildTextReply,
   safeV2TextContent,
 } from "../../functions/ComponentsV2Utils.js";
@@ -323,7 +324,7 @@ export class GameDbSearchCommand {
       }
       await runSearchFlow(interaction, searchTerm, query ?? undefined, filters);
     } catch (error: any) {
-      await safeReply(interaction, buildTextReply(
+      await safeReply(interaction, buildErrorReply(
         buildCaughtErrorMessage("Failed to search games", error), true,
       ));
     }

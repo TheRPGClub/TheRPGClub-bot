@@ -32,11 +32,26 @@ ruleTester.run("api-error-reply-shows-request", rule, {
     "async function f() { try { await api(); } catch (err) { " +
       "if (err instanceof SteamApiError) { " +
       "await safeReply(i, buildTextReply(err.message, true)); } } }",
+    // A message kept for a log line, not the reply.
+    "async function f() { try { await api(); } catch (err) { " +
+      "const msg = err.message; logError(\"x\", msg); " +
+      "await safeReply(i, buildTextReply(\"Failed\", true)); } }",
     // An await inside a nested callback does not run inside this try.
     "async function f() { try { run(async () => { await api(); }); } catch (err) { " +
       "await safeReply(i, buildTextReply(err.message, true)); } }",
   ],
   invalid: [
+    {
+      code: "async function f() { try { await api(); } catch (err) { " +
+        "if (err instanceof Error) { await safeReply(i, buildTextReply(err.message, true)); } } }",
+      errors: [{ messageId: "messageOnlyReply", data: { shown: "err.message" } }],
+    },
+    {
+      code: "async function f() { try { await api(); } catch (error) { " +
+        "const msg = error instanceof Error ? error.message : String(error); " +
+        "await safeReply(i, buildTextReply(`Failed: ${msg}`, true)); } }",
+      errors: [{ messageId: "messageOnlyReply", data: { shown: "error.message" } }],
+    },
     {
       code: SAFE_REPLY_MESSAGE,
       errors: [{ messageId: "messageOnlyReply", data: { shown: "err.message" } }],

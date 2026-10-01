@@ -1,5 +1,6 @@
 // Discord API hard limits
 export const DISCORD_SELECT_LABEL_MAX = 100;
+export const DISCORD_MESSAGE_CONTENT_MAX = 2000;
 export const DISCORD_SELECT_OPTIONS_MAX = 25;
 export const DISCORD_EMBED_TITLE_MAX = 256;
 export const DISCORD_EMBED_DESCRIPTION_MAX = 4096;

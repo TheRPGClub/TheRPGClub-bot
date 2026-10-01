@@ -37,7 +37,7 @@ import {
   parseCollectionEntryAutocompleteValue,
 } from "./collection-autocomplete.utils.js";
 import { resolveCollectionGameForAdd } from "./collection-game-resolve.utils.js";
-import { buildTextReply } from "../../functions/ComponentsV2Utils.js";
+import { buildTextReply, buildErrorReply } from "../../functions/ComponentsV2Utils.js";
 import { buildCaughtErrorMessage } from "../../utilities/ApiErrorUtils.js";
 import { isValidPlaytimeHours } from "../../utilities/ValidationUtils.js";
 import { importGameFromIgdb } from "../../functions/GameIgdbSync.js";
@@ -104,7 +104,7 @@ export class CollectionCrudCommand {
     } catch (err: any) {
       await safeReply(
         interaction,
-        buildTextReply(buildCaughtErrorMessage("Could not resolve that game", err), true),
+        buildErrorReply(buildCaughtErrorMessage("Could not resolve that game", err), true),
       );
       return;
     }
@@ -135,7 +135,7 @@ export class CollectionCrudCommand {
             });
           } catch (err: any) {
             await safeReply(selectionInteraction, {
-              ...buildTextReply(
+              ...buildErrorReply(
                 buildCaughtErrorMessage("Failed to import from IGDB and add collection entry", err),
                 true,
               ),
@@ -177,7 +177,7 @@ export class CollectionCrudCommand {
     } catch (err: any) {
       await safeReply(
         interaction,
-        buildTextReply(buildCaughtErrorMessage("Failed to add collection entry", err), true),
+        buildErrorReply(buildCaughtErrorMessage("Failed to add collection entry", err), true),
       );
     }
   }
@@ -289,7 +289,7 @@ export class CollectionCrudCommand {
     } catch (err: any) {
       await safeReply(
         interaction,
-        buildTextReply(buildCaughtErrorMessage("Failed to update collection entry", err), true),
+        buildErrorReply(buildCaughtErrorMessage("Failed to update collection entry", err), true),
       );
     }
   }
@@ -393,7 +393,7 @@ export class CollectionCrudCommand {
     } catch (err: any) {
       await safeReply(
         interaction,
-        buildTextReply(buildCaughtErrorMessage("Failed to add entry to now-playing", err), true),
+        buildErrorReply(buildCaughtErrorMessage("Failed to add entry to now-playing", err), true),
       );
     }
   }

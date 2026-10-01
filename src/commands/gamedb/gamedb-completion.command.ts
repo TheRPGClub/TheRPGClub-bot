@@ -28,6 +28,7 @@ import {
 } from "../../functions/InteractionUtils.js";
 import {
   buildTextContainer,
+  buildErrorReply,
   buildTextReply,
   safeV2TextContent,
 } from "../../functions/ComponentsV2Utils.js";
@@ -485,7 +486,7 @@ export class GameDbCompletionCommand {
       COMPLETION_WIZARD_SESSIONS.delete(sessionId);
       safeIgnore(interaction.deleteReply());
     } catch (err: any) {
-      safeIgnore(safeReply(interaction, buildTextReply(
+      safeIgnore(safeReply(interaction, buildErrorReply(
         buildCaughtErrorMessage("Failed to add completion", err),
         false,
       )));
@@ -526,7 +527,7 @@ export class GameDbCompletionCommand {
         return;
       }
       const msg = buildCaughtErrorMessage("Failed to add to Now Playing", err);
-      safeIgnore(safeReply(interaction, buildTextReply(msg, true)));
+      safeIgnore(safeReply(interaction, buildErrorReply(msg, true)));
     }
   }
 }

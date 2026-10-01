@@ -40,7 +40,7 @@ import { buildErrorReply, buildTextReply } from "../functions/ComponentsV2Utils.
 import { showGameProfileFromNomination } from "./gamedb.command.js";
 import { isPositiveInt } from "../utilities/ValidationUtils.js";
 import { DISCORD_SELECT_OPTIONS_MAX, truncateLabel } from "../config/textLimits.js";
-import { buildApiErrorMessage } from "../utilities/ApiErrorUtils.js";
+import { buildApiErrorMessage, buildCaughtErrorMessage } from "../utilities/ApiErrorUtils.js";
 import GameSearchService from "../classes/GameSearchService.js";
 import Game from "../classes/Game.js";
 
@@ -339,10 +339,8 @@ export class NominateCommand {
         flags: buildComponentsV2Flags(ephemeral),
       });
     } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      await safeReply(
-        interaction, buildTextReply(`Could not load nominations: ${errorMessage}`, ephemeral),
-      );
+      const errorMessage = buildCaughtErrorMessage("Could not load nominations", error);
+      await safeReply(interaction, buildErrorReply(errorMessage, ephemeral));
     }
   }
    

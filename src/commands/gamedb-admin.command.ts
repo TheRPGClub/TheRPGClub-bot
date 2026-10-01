@@ -33,6 +33,7 @@ import { decodeBase64Url, encodeWithMaxLength } from "../functions/CustomIdUtils
 import {
   buildComponentsV2Flags,
   buildTextContainer,
+  buildErrorReply,
   buildTextReply,
   buildTitledContainer,
   safeV2TextContent,
@@ -407,7 +408,7 @@ export class GameDbAdmin {
       content = truncateWithEllipsis(content, 1900);
       await safeReply(interaction, buildTextReply(content, !(isPublic)));
     } catch (err: any) {
-      await safeReply(interaction, buildTextReply(
+      await safeReply(interaction, buildErrorReply(
         buildCaughtErrorMessage("Failed to save synonym group", err),
         !(isPublic),
       ));
@@ -678,7 +679,7 @@ export class GameDbAdmin {
       content = truncateWithEllipsis(content, 1900);
       await safeReply(interaction, buildTextReply(content, true));
     } catch (err: any) {
-      await safeReply(interaction, buildTextReply(
+      await safeReply(interaction, buildErrorReply(
         buildCaughtErrorMessage("Failed to update synonym group", err),
         true,
       ));

@@ -438,7 +438,7 @@ export class GameDbAddCommand {
         true,
       ));
     } catch (err: any) {
-      await safeReply(interaction, buildTextReply(
+      await safeReply(interaction, buildErrorReply(
         buildCaughtErrorMessage("Failed to refresh release info", err),
         true,
       ));

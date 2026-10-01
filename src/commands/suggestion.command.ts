@@ -49,6 +49,7 @@ import { BOT_DEV_PING_USER_ID } from "../config/users.js";
 import {
   buildComponentsV2Flags,
   buildTextContainer,
+  buildErrorReply,
   buildTextReply,
   safeV2TextContent,
 } from "../functions/ComponentsV2Utils.js";
@@ -676,7 +677,7 @@ export class SuggestionCommand {
       } catch (err: any) {
         await safeFollowUpIfSettled(
           interaction,
-          buildTextReply(buildCaughtErrorMessage("Failed to create GitHub issue", err), true),
+          buildErrorReply(buildCaughtErrorMessage("Failed to create GitHub issue", err), true),
         );
         return;
       }
@@ -687,7 +688,7 @@ export class SuggestionCommand {
       } catch (err: any) {
         await safeFollowUpIfSettled(
           interaction,
-          buildTextReply(
+          buildErrorReply(
             buildCaughtErrorMessage(
               `Created GitHub issue #${issue.number}, but could not remove the suggestion`,
               err,
@@ -839,7 +840,7 @@ export class SuggestionCommand {
         } catch (err: any) {
           await safeReply(
             interaction,
-            buildTextReply(buildCaughtErrorMessage("Failed to create GitHub issue", err), true),
+            buildErrorReply(buildCaughtErrorMessage("Failed to create GitHub issue", err), true),
           );
           return;
         }
@@ -859,7 +860,7 @@ export class SuggestionCommand {
         } catch (err: any) {
           await safeReply(
             interaction,
-            buildTextReply(buildCaughtErrorMessage("Failed to reject suggestion", err), true),
+            buildErrorReply(buildCaughtErrorMessage("Failed to reject suggestion", err), true),
           );
           return;
         }
