@@ -235,6 +235,15 @@ async function focusOption(box: Locator, name: string): Promise<string> {
   return ` ${name}:`;
 }
 
+/** Hands the step back, naming the option, when a value did not land in its own field. */
+async function assertOptionFilled(box: Locator, name: string, value: string): Promise<void> {
+  const pill = optionPill(box, name);
+  const text = await pill.count() ? await pill.first().innerText() : "";
+  if (!text.toLowerCase().includes(value.toLowerCase())) {
+    throw new HandOff(`the ${name} option did not take the value "${value}"`);
+  }
+}
+
 async function runSlash(page: Page, action: ISlashAction): Promise<void> {
   const box = chatBox(page);
   await waitVisible(box, "the message box");
@@ -256,6 +265,7 @@ async function runSlash(page: Page, action: ISlashAction): Promise<void> {
     // the command in the box, which the send check below catches.
     const suggestion = await findOption(page.getByRole("option"), [option.value]);
     if (suggestion) await suggestion.click();
+    await assertOptionFilled(box, option.name, option.value);
   }
   await box.press("Enter");
   await page.waitForTimeout(TIMING.settleMs / 3);
