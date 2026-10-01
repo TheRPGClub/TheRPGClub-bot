@@ -50,6 +50,7 @@ import {
 } from "./functions/InteractionErrorHandler.js";
 import { withRetry } from "./utilities/RetryUtils.js";
 import { isTransientApiError } from "./services/RpgClubApiClient.js";
+import { CLIENT_MAKE_CACHE, CLIENT_SWEEPERS } from "./config/clientCache.js";
 installConsoleLogging();
 
 // Since Node 15 an unhandled rejection kills the process, so one uncaught
@@ -100,6 +101,10 @@ export const bot: Client = new Client({
     IntentsBitField.Flags.MessageContent,
   ],
   partials: [Partials.Message, Partials.Channel, Partials.Reaction],
+
+  // Bounded caches so presence and message state does not grow with the guild forever.
+  makeCache: CLIENT_MAKE_CACHE,
+  sweepers: CLIENT_SWEEPERS,
 
   // Debug logs are disabled in silent mode
   silent: false,
