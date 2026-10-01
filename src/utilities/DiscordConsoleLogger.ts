@@ -68,6 +68,8 @@ const logBufferCharCount: Record<BufferedLevel, number> = {
   debug: 0,
 };
 let logBufferTimer: NodeJS.Timeout | null = null;
+let activeFlush: Promise<void> | null = null;
+let flushRequestedDuringFlush = false;
 let startupLogFilterEnabled = true;
 let shutdownHooksRegistered = true;
 
@@ -181,7 +183,33 @@ function stopLogBufferTimerIfIdle(): void {
   logBufferTimer = null;
 }
 
-async function flushLogBuffer(targetLevel?: BufferedLevel): Promise<void> {
+/**
+ * Runs one flush at a time. A slow send would otherwise overlap the next timer tick and
+ * post batches out of order. A flush asked for while one runs is not dropped: it waits on
+ * the running flush, which then goes around once more for every level, so a shutdown
+ * signal still sends what was buffered after the running flush took its snapshot.
+ */
+function flushLogBuffer(targetLevel?: BufferedLevel): Promise<void> {
+  if (activeFlush) {
+    flushRequestedDuringFlush = true;
+    return activeFlush;
+  }
+
+  activeFlush = (async () => {
+    try {
+      await flushBufferedLevels(targetLevel);
+      while (flushRequestedDuringFlush) {
+        flushRequestedDuringFlush = false;
+        await flushBufferedLevels();
+      }
+    } finally {
+      activeFlush = null;
+    }
+  })();
+  return activeFlush;
+}
+
+async function flushBufferedLevels(targetLevel?: BufferedLevel): Promise<void> {
   const levelsToFlush: BufferedLevel[] = targetLevel
     ? [targetLevel]
     : ["log", "info", "warn", "error", "debug"];
