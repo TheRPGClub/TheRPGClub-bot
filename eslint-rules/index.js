@@ -35,6 +35,9 @@ const DIRECT_INTERACTION_METHODS = new Set([
   "update",
   "deferUpdate",
 ]);
+// Autocomplete's respond goes through safeRespond. Kept out of DIRECT_INTERACTION_METHODS,
+// which other rules read as "acknowledges a repliable interaction".
+const AUTOCOMPLETE_RESPOND_METHOD = "respond";
 const DEPRECATED_RESPONSE_OPTION_KEYS = new Set(["ephemeral", "fetchReply"]);
 const INTERACTION_DECORATORS = new Set([
   "ButtonComponent",
@@ -1160,7 +1163,10 @@ export default {
               return;
             }
             const methodName = callee.property.name;
-            if (!DIRECT_INTERACTION_METHODS.has(methodName)) {
+            if (
+              !DIRECT_INTERACTION_METHODS.has(methodName) &&
+              methodName !== AUTOCOMPLETE_RESPOND_METHOD
+            ) {
               return;
             }
 

@@ -8,6 +8,7 @@ import { getHltbCacheByGameId, upsertHltbCache } from "../classes/HltbCache.js";
 import {
   deferWithPrivateFlag,
   safeReply,
+  safeRespond,
   sanitizeUserInput,
 } from "../functions/InteractionUtils.js";
 import {
@@ -40,7 +41,7 @@ async function autocompleteHltbTitle(
   const rawQuery = focused?.value ? String(focused.value) : "";
   const query = sanitizeUserInput(rawQuery, { preserveNewlines: false }).trim();
   if (!query) {
-    await interaction.respond([]);
+    await safeRespond(interaction, []);
     return;
   }
   const results = await GameSearchService.searchGamesAutocomplete(query);
@@ -52,7 +53,7 @@ async function autocompleteHltbTitle(
     };
   });
   const options = [buildKeepTypingOption(query), ...resultOptions];
-  await interaction.respond(options);
+  await safeRespond(interaction, options);
 }
 
 @Discord()

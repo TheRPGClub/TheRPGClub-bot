@@ -38,7 +38,12 @@ import {
   type EmbedField,
 } from "../functions/ComponentsV2Utils.js";
 import { findCommandMention } from "../services/CommandMentionService.js";
-import { safeDeferReply, safeReply, safeUpdate } from "../functions/InteractionUtils.js";
+import {
+  safeDeferReply,
+  safeReply,
+  safeRespond,
+  safeUpdate,
+} from "../functions/InteractionUtils.js";
 import { decodeBase64Url, encodeBase64Url } from "../functions/CustomIdUtils.js";
 import { parseCustomIdSegments } from "../utilities/CustomIdUtils.js";
 import { GIVEAWAY_HUB_CHANNEL_ID } from "../config/channels.js";
@@ -1330,7 +1335,7 @@ async function autocompleteHelpCategory(interaction: AutocompleteInteraction): P
       choice.name.toLowerCase().includes(query) ||
       choice.value.includes(query))
     .slice(0, DISCORD_SELECT_OPTIONS_MAX);
-  await interaction.respond(choices);
+  await safeRespond(interaction, choices);
 }
 
 function buildTopicHelpResponse(topicId: HelpTopicId): HelpMenuResponse | null {
