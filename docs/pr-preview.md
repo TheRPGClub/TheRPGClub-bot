@@ -73,8 +73,10 @@ Everything below happens on the desktop, in the WSL2 distro unless it says Windo
 
 ### 1. Dev bot application
 
-1. In the Discord Developer Portal, create a new application, for example
-   `RPGClub Bot (preview)`. Never reuse the production application.
+1. In the Discord Developer Portal, create a new application named
+   `RPGClubbot (Preview)`. Never reuse the production application. The Playwright runner
+   finds the bot's slash commands by this name (`PREVIEW_BOT_NAME` in
+   `src/config/previewMode.ts`) or by its avatar, so keep the two in step.
 2. Under Bot, reset and copy the token. Enable the Server Members, Presence, and Message
    Content privileged intents, since the bot requests all three.
 3. Under OAuth2 URL Generator, pick the `bot` and `applications.commands` scopes and the
