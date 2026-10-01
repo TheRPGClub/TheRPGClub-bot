@@ -21,7 +21,7 @@ import {
 } from "./IGDB/IgdbSelectService.js";
 import { NOW_PLAYING_FORUM_ID } from "../config/channels.js";
 import { NOW_PLAYING_SIDEGAME_TAG_ID } from "../config/tags.js";
-import { safeReply, safeDeferReply } from "../functions/InteractionUtils.js";
+import { safeReply, safeDeferReply, safeEditReply } from "../functions/InteractionUtils.js";
 import {
   buildErrorReply,
   buildTextReply,
@@ -61,21 +61,28 @@ function buildButtons(threadId: string): ActionRowBuilder<ButtonBuilder> {
   );
 }
 
-async function promptThread(thread: ThreadChannel): Promise<void> {
+type ThreadLinkLookup = typeof getThreadLinkInfo;
+
+export async function promptThread(
+  thread: ThreadChannel,
+  lookupLinkInfo: ThreadLinkLookup = getThreadLinkInfo,
+): Promise<void> {
   if (!hasIgdbConfig()) return;
   const isBotCreated = thread.ownerId && thread.ownerId === thread.client.user?.id;
   const isSidegameTag = thread.appliedTags?.includes(NOW_PLAYING_SIDEGAME_TAG_ID) ?? false;
   if (thread.parentId === NOW_PLAYING_FORUM_ID && isBotCreated && isSidegameTag) {
     return;
   }
-  const info = await getThreadLinkInfo(thread.id).catch(() => ({
+  // Mark before the API call so a linked or skipped thread is not looked up again on
+  // every message, and so concurrent messages in one thread share a single lookup.
+  if (!shouldPrompt(thread.id)) return;
+  markPrompted(thread.id);
+  const info = await lookupLinkInfo(thread.id).catch(() => ({
     skipLinking: false,
     gamedbGameIds: [],
   }));
   if (info.skipLinking) return;
   if (info.gamedbGameIds.length) return;
-  if (!shouldPrompt(thread.id)) return;
-  markPrompted(thread.id);
 
   try {
     await thread.send({
@@ -184,7 +191,7 @@ export class ThreadLinkButtonHandlers {
               gameId = finalId;
               // The prompt was sent with IS_COMPONENTS_V2, so the edit must use a V2
               // container; a legacy `content` field is rejected (Discord error 50035).
-              await sel.editReply({
+              await safeEditReply(sel, {
                 components: [buildTextContainer(`Linked to GameDB #${finalId}.`)],
               });
               await finishLink();
@@ -237,6 +244,7 @@ export function startThreadLinkPromptService(client: Client): void {
   });
 
   client.on("messageCreate", async (message) => {
+    if (message.author.bot) return;
     const channel = message.channel;
     if (!("isThread" in channel) || !channel.isThread()) return;
     if (channel.parentId !== NOW_PLAYING_FORUM_ID) return;
