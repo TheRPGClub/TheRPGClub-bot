@@ -98,8 +98,10 @@ export const bot: Client = new Client({
     IntentsBitField.Flags.GuildPresences,
     IntentsBitField.Flags.MessageContent,
   ],
-  // GuildMember lets guildMemberRemove and guildMemberUpdate fire for uncached members.
-  partials: [Partials.Message, Partials.Reaction, Partials.GuildMember],
+  // Channel resolves interaction.channel for commands run in the bot's DMs (discordx
+  // registers dmPermission true). GuildMember lets guildMemberRemove and guildMemberUpdate
+  // fire for uncached members.
+  partials: [Partials.Message, Partials.Channel, Partials.Reaction, Partials.GuildMember],
 
   // Debug logs are disabled in silent mode
   silent: false,

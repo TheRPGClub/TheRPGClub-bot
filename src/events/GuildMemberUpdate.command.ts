@@ -27,6 +27,10 @@ const QUALIFYING_ROLE_IDS_SET = new Set(
   ),
 );
 
+function isQualifyingRole(role: { id: string }): boolean {
+  return QUALIFYING_ROLE_IDS_SET.has(role.id);
+}
+
 @Discord()
 export class GuildMemberUpdate {
   @On()
@@ -40,10 +44,7 @@ export class GuildMemberUpdate {
     if (oldMember.partial) {
       // An uncached member has no prior roles or nickname to diff against, so only the
       // idempotent emoji ensure runs. The member is cached from here on.
-      const holdsQualifyingRole = newMember.roles.cache.some((r) =>
-        QUALIFYING_ROLE_IDS_SET.has(r.id),
-      );
-      if (!user.bot && holdsQualifyingRole) {
+      if (!user.bot && newMember.roles.cache.some(isQualifyingRole)) {
         await ensureUserEmojiForMember(_client, newMember);
       }
       return;
@@ -108,7 +109,7 @@ export class GuildMemberUpdate {
       }
     }
 
-    const gainedQualifyingRole = addedRoles.some((r) => QUALIFYING_ROLE_IDS_SET.has(r.id));
+    const gainedQualifyingRole = addedRoles.some(isQualifyingRole);
     if (!user.bot && gainedQualifyingRole) {
       await ensureUserEmojiForMember(_client, newMember);
     }
