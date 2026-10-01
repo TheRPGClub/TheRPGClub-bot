@@ -326,7 +326,7 @@ async function main(): Promise<void> {
   for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"] as const) {
     process.once(signal, () => {
       removeProfile();
-      process.exit(130);
+      process.exit(128 + os.constants.signals[signal]);
     });
   }
   let context: BrowserContext;
