@@ -38,9 +38,6 @@ is missing, run `npm ci` in that checkout first.
 The runner also refuses to start when the checkout lacks a commit `origin/main` made to
 the runner's code (`docs/conductor.md#playwright-runner`). Before offering the block,
 sync the branch with main when main has moved on, so the Run button does not stop there.
-A PR branch cut before a change to the Testing parser (`src/conductor/`) or to
-`scripts/preview/` also judges its own body with its own stale copy. Merging main into it
-fixes both.
 
 The runner opens a new, empty Chrome profile every run, so say the tester signs in to
 Discord in the window it opens (a passkey from their phone works). Nothing is kept
@@ -57,7 +54,10 @@ variable is `true`, a merge that changes the conductor does not reach it on its 
 - Check which commit is live before relying on a conductor change, such as a new Testing
   line: `bash scripts/preview/fetch-logs.sh 400` prints the conductor's journal, whose
   `[conductor] ready as <tag> at <sha>` line names the commit. A `sha` older than the
-  change means the change is not live.
+  change means the change is not live. The script decrypts with a key made once by
+  `fetch-logs.sh init` on the machine reading the logs (`docs/pr-preview.md`). When the
+  key is missing here, ask the user rather than running `init`: it replaces the public
+  key, which locks every other machine out of later logs.
 - To make it live, the user runs this on the desktop, from an up-to-date main checkout:
   `bash scripts/conductor/deploy.sh deploy "$(git rev-parse HEAD)"`. Give them the
   command; the session never deploys the conductor itself.
