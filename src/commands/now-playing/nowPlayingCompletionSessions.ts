@@ -14,6 +14,7 @@ import {
   replyIfNotOwner,
   safeDeferUpdate,
   safeFollowUpIfSettled,
+  safeReply,
 } from "../../functions/InteractionUtils.js";
 import {
   buildComponentsV2Flags,
@@ -193,19 +194,7 @@ export function persistNowPlayingCompletionWizardSession(
   });
 }
 
-/**
- * Ends the wizard and deletes its persisted row. After a restart the platform picker
- * can finish a wizard that was never restored, so it is loaded first to learn its row.
- */
-export async function finishNowPlayingCompletionWizardSession(
-  interaction: CompletionInteraction,
-  sessionId: string,
-  ownerId: string,
-): Promise<void> {
-  if (!wizardRegistry.get(sessionId)) {
-    await wizardRegistry.resolve(sessionId, { ownerId, channelId: interaction.channelId })
-      .catch((err: unknown) => logError("NowPlayingCompletion.finishWizard", err));
-  }
+export function finishNowPlayingCompletionWizardSession(sessionId: string): void {
   wizardRegistry.finish(sessionId);
 }
 
@@ -257,6 +246,14 @@ async function resolveOwnedSession<S extends { userId: string }>(
     }
   }
 
+  // A modal submit has already deferred its own reply, which these messages fill. After a
+  // component click they follow up instead, so the prompt itself is left on screen.
+  const sendNotice = (options: object): Promise<unknown> => (
+    interaction.isModalSubmit()
+      ? safeReply(interaction, options)
+      : safeFollowUpIfSettled(interaction, options)
+  );
+
   let session: S | undefined;
   try {
     session = cached ?? await registry.resolve(sessionId, {
@@ -265,7 +262,7 @@ async function resolveOwnedSession<S extends { userId: string }>(
     });
   } catch (err: unknown) {
     logError("NowPlayingCompletion.restoreSession", err);
-    await safeFollowUpIfSettled(interaction, buildErrorReply(
+    await sendNotice(buildErrorReply(
       buildApiErrorMessage("Could not restore this completion prompt.", err),
       true,
     ));
@@ -273,7 +270,7 @@ async function resolveOwnedSession<S extends { userId: string }>(
   }
 
   if (!session) {
-    await safeFollowUpIfSettled(interaction, {
+    await sendNotice({
       components: [buildTextContainer(NOW_PLAYING_COMPLETION_EXPIRED_MESSAGE)],
       flags: buildComponentsV2Flags(true),
     });

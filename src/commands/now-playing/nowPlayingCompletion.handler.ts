@@ -655,7 +655,7 @@ async function finalizeNowPlayingCompletion(
     components: [container, ...warningComponents],
     flags: buildComponentsV2Flags(true),
   });
-  await finishNowPlayingCompletionWizardSession(interaction, sessionId, session.userId);
+  finishNowPlayingCompletionWizardSession(sessionId);
 }
 
 export async function promptNowPlayingCompletionPick(
@@ -899,8 +899,12 @@ export class NowPlayingCompletionHandlers {
       await replyNowPlayingCompletionText(interaction, "Invalid platform selection.");
       return;
     }
-    // A second pick while the first is still saving must not log it twice.
-    if (!claimNowPlayingCompletionPlatformSession(platformSessionId)) return;
+    // A second pick while the first is still saving must not log it twice; it is only
+    // acknowledged so Discord does not show it as failed.
+    if (!claimNowPlayingCompletionPlatformSession(platformSessionId)) {
+      await safeDeferUpdate(interaction);
+      return;
+    }
 
     try {
       await safeDeferUpdate(interaction);
