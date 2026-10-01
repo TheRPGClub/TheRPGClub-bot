@@ -4,8 +4,11 @@ import {
   parseOwnedSessionOwnerId,
   type PersistedSessionLocation,
 } from "../../services/PersistedInteractionSessionStore.js";
-import { COMPLETION_TYPES, type CompletionType } from "../profile.command.js";
 import type { NowPlayingCompletionPlatformSession } from "./nowPlayingTypes.js";
+import {
+  platformSessionFromJson,
+  platformSessionToJson,
+} from "./nowPlayingCompletionSessions.js";
 
 /**
  * A Now Playing completion waiting on the duplicate warning. `sessionId` is the
@@ -17,47 +20,17 @@ const NP_DUPLICATE_SESSION_PREFIX = "npdup";
 
 const pendingCompletions = new Map<string, NowPlayingPendingCompletion>();
 
-function toJson(pending: NowPlayingPendingCompletion): Record<string, unknown> {
-  return {
-    ...pending,
-    completedAt: pending.completedAt ? pending.completedAt.toISOString() : null,
-  };
-}
-
-function isNullableNumber(value: unknown): value is number | null {
-  return value === null || typeof value === "number";
+// The pending completion is a platform session without its platform list, so it reuses
+// that codec and stores an empty list.
+function toJson(pending: NowPlayingPendingCompletion): unknown {
+  return platformSessionToJson({ ...pending, platforms: [] });
 }
 
 function fromJson(state: unknown): NowPlayingPendingCompletion | null {
-  if (!state || typeof state !== "object") return null;
-  const raw = state as Record<string, unknown>;
-  const completedAt = typeof raw.completedAt === "string" ? new Date(raw.completedAt) : null;
-  if (
-    typeof raw.sessionId !== "string" ||
-    typeof raw.userId !== "string" ||
-    typeof raw.gameId !== "number" ||
-    !COMPLETION_TYPES.includes(raw.completionType as CompletionType) ||
-    (completedAt !== null && Number.isNaN(completedAt.getTime())) ||
-    !isNullableNumber(raw.finalPlaytimeHours) ||
-    !(raw.note === null || typeof raw.note === "string") ||
-    typeof raw.removeFromNowPlaying !== "boolean" ||
-    typeof raw.announce !== "boolean" ||
-    typeof raw.returnToList !== "boolean"
-  ) {
-    return null;
-  }
-  return {
-    sessionId: raw.sessionId,
-    userId: raw.userId,
-    gameId: raw.gameId,
-    completionType: raw.completionType as CompletionType,
-    completedAt,
-    finalPlaytimeHours: raw.finalPlaytimeHours,
-    note: raw.note,
-    removeFromNowPlaying: raw.removeFromNowPlaying,
-    announce: raw.announce,
-    returnToList: raw.returnToList,
-  };
+  const session = platformSessionFromJson(state);
+  if (!session) return null;
+  const { platforms: _platforms, ...pending } = session;
+  return pending;
 }
 
 export const nowPlayingDuplicateRegistry =

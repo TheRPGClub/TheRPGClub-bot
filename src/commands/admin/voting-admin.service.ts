@@ -360,9 +360,9 @@ export async function handleVotingTitlesModal(interaction: ModalSubmitInteractio
   const nextState: VotingSetupState = { ...state, overrides };
   const pending = listPendingTitles(nextState);
   if (pending.length) {
-    votingSetupRegistry.create({
+    votingSetupRegistry.setInMemory(sessionId, nextState);
+    votingSetupRegistry.persist({
       sessionId,
-      session: nextState,
       ownerId,
       location: { channelId: interaction.channelId, guildId: interaction.guildId },
       state: nextState,

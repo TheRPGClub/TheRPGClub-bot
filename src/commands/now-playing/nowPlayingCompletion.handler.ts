@@ -119,6 +119,8 @@ import {
   type NowPlayingPendingCompletion,
 } from "./nowPlayingCompletionDuplicate.js";
 import {
+  NOW_PLAYING_COMPLETION_EXPIRED_MESSAGE,
+  NOW_PLAYING_COMPLETION_NOT_OWNER_MESSAGE,
   claimNowPlayingCompletionPlatformSession,
   createNowPlayingCompletionPlatformSession,
   createNowPlayingCompletionWizardSession,
@@ -818,7 +820,7 @@ export class NowPlayingCompletionHandlers {
     if (!segs) return;
     const [dupSessionId, choice] = segs;
     const ownerId = parseNowPlayingDuplicateOwnerId(dupSessionId) ?? interaction.user.id;
-    if (await replyIfNotOwner(interaction, ownerId, "This completion prompt isn't for you.")) {
+    if (await replyIfNotOwner(interaction, ownerId, NOW_PLAYING_COMPLETION_NOT_OWNER_MESSAGE)) {
       return;
     }
 
@@ -831,7 +833,7 @@ export class NowPlayingCompletionHandlers {
       dupSessionId,
       { ownerId, channelId: interaction.channelId },
       {
-        expired: "This completion prompt has expired.",
+        expired: NOW_PLAYING_COMPLETION_EXPIRED_MESSAGE,
         restoreFailed: "Could not restore this completion prompt.",
         logContext: "NowPlayingCompletion.restoreDuplicate",
       },
