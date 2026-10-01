@@ -48,7 +48,11 @@ import {
   buildAdminHelpResponse,
   resolveAdminHelpTopic,
 } from "./admin/admin-help.service.js";
-import { handleLegacyVotingSetup } from "./admin/voting-admin.service.js";
+import {
+  handleLegacyVotingSetup,
+  handleVotingTitlesButton,
+  handleVotingTitlesModal,
+} from "./admin/voting-admin.service.js";
 import {
   handleVoteCloseButton,
   handleVotesReset,
@@ -64,8 +68,14 @@ import {
   handleAdminNominationDeleteSelect as handleAdminNominationDeleteSelectAction,
   handleAdminNominationDeleteReasonModal as handleAdminNominationDeleteReasonModalAction,
 } from "./admin/nomination-admin.service.js";
-import { handleAddGotm, handleEditGotm } from "./admin/gotm-admin.service.js";
-import { handleAddNrGotm, handleEditNrGotm } from "./admin/nr-gotm-admin.service.js";
+import {
+  handleAddRound,
+  handleAddRoundButton,
+  handleAddRoundModal,
+  handleEditRound,
+  handleEditRoundButton,
+  handleEditRoundModal,
+} from "./admin/round-admin.service.js";
 import { type AdminHelpTopicId } from "./admin/admin.types.js";
 import { refreshCommandMentions } from "../services/CommandMentionService.js";
 
@@ -393,7 +403,7 @@ export class Admin {
       return;
     }
 
-    await handleAddGotm(interaction);
+    await handleAddRound(interaction, "gotm");
   }
 
   @Slash({ description: "Add a new NR-GOTM round", name: "add-nr-gotm" })
@@ -405,7 +415,7 @@ export class Admin {
       return;
     }
 
-    await handleAddNrGotm(interaction);
+    await handleAddRound(interaction, "nr-gotm");
   }
 
   @Slash({ description: "Edit GOTM data by round", name: "edit-gotm" })
@@ -426,7 +436,7 @@ export class Admin {
       return;
     }
 
-    await handleEditGotm(interaction, round);
+    await handleEditRound(interaction, "gotm", round);
   }
 
   @Slash({ description: "Edit NR-GOTM data by round", name: "edit-nr-gotm" })
@@ -447,7 +457,43 @@ export class Admin {
       return;
     }
 
-    await handleEditNrGotm(interaction, round);
+    await handleEditRound(interaction, "nr-gotm", round);
+  }
+
+  @ButtonComponent({ id: /^admin-round-add-v1:(gotm|nr-gotm):\d+$/ })
+  async handleAdminRoundAddButton(interaction: ButtonInteraction): Promise<void> {
+    if (!(await isAdmin(interaction))) return;
+    await handleAddRoundButton(interaction);
+  }
+
+  @ModalComponent({ id: /^admin-round-add-modal-v1:(gotm|nr-gotm):\d+$/ })
+  async handleAdminRoundAddModal(interaction: ModalSubmitInteraction): Promise<void> {
+    if (!(await isAdmin(interaction))) return;
+    await handleAddRoundModal(interaction);
+  }
+
+  @ButtonComponent({ id: /^admin-round-edit-v1:(gotm|nr-gotm):\d+:\d+$/ })
+  async handleAdminRoundEditButton(interaction: ButtonInteraction): Promise<void> {
+    if (!(await isAdmin(interaction))) return;
+    await handleEditRoundButton(interaction);
+  }
+
+  @ModalComponent({ id: /^admin-round-edit-modal-v1:(gotm|nr-gotm):\d+:\d+$/ })
+  async handleAdminRoundEditModal(interaction: ModalSubmitInteraction): Promise<void> {
+    if (!(await isAdmin(interaction))) return;
+    await handleEditRoundModal(interaction);
+  }
+
+  @ButtonComponent({ id: /^admin-voting-titles-v1:votetitles-\d+-[\d-]+$/ })
+  async handleAdminVotingTitlesButton(interaction: ButtonInteraction): Promise<void> {
+    if (!(await isAdmin(interaction))) return;
+    await handleVotingTitlesButton(interaction);
+  }
+
+  @ModalComponent({ id: /^admin-voting-titles-modal-v1:votetitles-\d+-[\d-]+$/ })
+  async handleAdminVotingTitlesModal(interaction: ModalSubmitInteraction): Promise<void> {
+    if (!(await isAdmin(interaction))) return;
+    await handleVotingTitlesModal(interaction);
   }
 
   @Slash({ description: "Moved to /help category:admin", name: "help" })

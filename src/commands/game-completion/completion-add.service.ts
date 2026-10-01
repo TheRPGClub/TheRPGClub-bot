@@ -1,15 +1,16 @@
 import {
   StringSelectMenuBuilder,
-  ButtonStyle,
-  ComponentType,
   type CommandInteraction,
   type StringSelectMenuInteraction,
   type ButtonInteraction,
-  type Message,
 } from "discord.js";
 import Game from "../../classes/Game.js";
-import Member from "../../classes/Member.js";
-import { saveCompletion } from "../../functions/CompletionHelpers.js";
+import Member, { type ICompletionRecord } from "../../classes/Member.js";
+import {
+  buildDuplicateCompletionPrompt,
+  saveCompletion,
+} from "../../functions/CompletionHelpers.js";
+import { COMPLETION_ADD_DUPLICATE_PREFIX } from "../../config/customIdPrefixes.js";
 import {
   canSafeReply,
   isInteractionSettled,
@@ -20,7 +21,6 @@ import {
   safeReply,
   safeUpdate,
 } from "../../functions/InteractionUtils.js";
-import { formatDiscordTimestamp, formatPlaytimeHours } from "../../functions/DateFormatUtils.js";
 import { igdbService } from "../../services/IGDB/IgdbService.js";
 import {
   createResumableIgdbSession,
@@ -50,8 +50,6 @@ import { logError } from "../../utilities/LogUtils.js";
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
 import { truncateDescription } from "../../config/textLimits.js";
 import {
-  buildActionButton,
-  buildButtonRow,
   buildSelectOptions,
   buildSelectRow,
 } from "../../functions/uiComponents.js";
@@ -327,6 +325,7 @@ export async function processCompletionSelection(
       return false;
     }
 
+    const title = gameTitle ?? "this game";
     const referenceDate = ctx.completedAt ?? new Date();
     const recent = await Member.getRecentCompletionForGame(
       ctx.userId,
@@ -334,52 +333,11 @@ export async function processCompletionSelection(
       referenceDate,
     );
     if (recent) {
-      const confirmed = await confirmDuplicateCompletion(
-        interaction,
-        gameTitle ?? "this game",
-        recent,
-      );
-      if (!confirmed) {
-        return false;
-      }
+      await promptDuplicateCompletion(interaction, ctx, gameId, title, recent);
+      return false;
     }
 
-    const removeFromNowPlaying = await resolveNowPlayingRemoval(
-      interaction,
-      ctx.userId,
-      gameId,
-      gameTitle ?? "this game",
-      ctx.completedAt,
-      false,
-    );
-    if (ctx.selectedPlatformId != null) {
-      await saveCompletion(
-        interaction,
-        ctx.userId,
-        gameId,
-        ctx.selectedPlatformId,
-        ctx.completionType,
-        ctx.completedAt,
-        ctx.finalPlaytimeHours,
-        ctx.note,
-        gameTitle ?? "this game",
-        ctx.announce,
-        false,
-        removeFromNowPlaying,
-      );
-    } else {
-      await promptCompletionPlatformSelection(interaction, {
-        userId: ctx.userId,
-        gameId,
-        gameTitle: gameTitle ?? "this game",
-        completionType: ctx.completionType,
-        completedAt: ctx.completedAt,
-        finalPlaytimeHours: ctx.finalPlaytimeHours,
-        note: ctx.note,
-        announce: ctx.announce,
-        removeFromNowPlaying,
-      });
-    }
+    await finishCompletionForGame(interaction, ctx, gameId, title);
     return false;
   } catch (err: unknown) {
     logError("CompletionAdd.processCompletionSelection", err);
@@ -389,6 +347,44 @@ export async function processCompletionSelection(
     });
     return false;
   }
+}
+
+/**
+ * Resolves a deferred interaction's completion session, restoring it from the API after
+ * a restart. Replies with the reason and returns undefined when it cannot be used.
+ */
+async function resolveCompletionAddSession(
+  interaction: StringSelectMenuInteraction | ButtonInteraction,
+  sessionId: string,
+  ownerId: string,
+): Promise<CompletionAddContext | undefined> {
+  let ctx: CompletionAddContext | undefined;
+  try {
+    ctx = await completionAddRegistry.resolve(sessionId, {
+      ownerId,
+      channelId: interaction.channelId,
+    });
+  } catch (err: unknown) {
+    logError("CompletionAdd.restoreSession", err);
+    await safeFollowUpIfSettled(interaction, buildErrorReply(
+      buildApiErrorMessage("Could not restore this completion prompt.", err),
+      true,
+    ));
+    return undefined;
+  }
+
+  if (!ctx) {
+    await safeFollowUpIfSettled(interaction, buildTextReply(COMPLETION_ADD_EXPIRED_MESSAGE, true));
+    return undefined;
+  }
+  if (ctx.userId !== interaction.user.id) {
+    await safeFollowUpIfSettled(
+      interaction,
+      buildTextReply(COMPLETION_ADD_NOT_OWNER_MESSAGE, true),
+    );
+    return undefined;
+  }
+  return ctx;
 }
 
 /**
@@ -413,32 +409,8 @@ export async function handleCompletionAddSelect(
   // outlast Discord's 3 second window. Replies below are ephemeral follow-ups so
   // they never overwrite the prompt.
   await safeDeferUpdate(interaction);
-  let ctx: CompletionAddContext | undefined;
-  try {
-    ctx = await completionAddRegistry.resolve(sessionId, {
-      ownerId,
-      channelId: interaction.channelId,
-    });
-  } catch (err: unknown) {
-    logError("CompletionAdd.restoreSession", err);
-    await safeFollowUpIfSettled(interaction, buildErrorReply(
-      buildApiErrorMessage("Could not restore this completion prompt.", err),
-      true,
-    ));
-    return;
-  }
-
-  if (!ctx) {
-    await safeFollowUpIfSettled(interaction, buildTextReply(COMPLETION_ADD_EXPIRED_MESSAGE, true));
-    return;
-  }
-  if (ctx.userId !== interaction.user.id) {
-    await safeFollowUpIfSettled(
-      interaction,
-      buildTextReply(COMPLETION_ADD_NOT_OWNER_MESSAGE, true),
-    );
-    return;
-  }
+  const ctx = await resolveCompletionAddSession(interaction, sessionId, ownerId);
+  if (!ctx) return;
   // A second click while the first is still saving must not log it twice.
   if (!completionAddRegistry.claim(sessionId)) return;
 
@@ -450,74 +422,111 @@ export async function handleCompletionAddSelect(
 }
 
 /**
- * Confirms with user if they want to add a duplicate completion
+ * Saves the completion for a resolved game, or asks for its platform first.
  */
-async function confirmDuplicateCompletion(
-  interaction: CommandInteraction | StringSelectMenuInteraction | ButtonInteraction,
+async function finishCompletionForGame(
+  interaction: StringSelectMenuInteraction | ButtonInteraction,
+  ctx: CompletionAddContext,
+  gameId: number,
   gameTitle: string,
-  existing: Awaited<ReturnType<typeof Member.getRecentCompletionForGame>>,
-): Promise<boolean> {
-  if (!existing) return true;
-
-  const promptId = `comp-dup:${interaction.user.id}:${Date.now()}`;
-  const yesId = `${promptId}:yes`;
-  const noId = `${promptId}:no`;
-  const dateText = existing.completedAt
-    ? formatDiscordTimestamp(existing.completedAt)
-    : "No date";
-  const playtimeText = formatPlaytimeHours(existing.finalPlaytimeHours);
-  const detailParts = [existing.completionType, dateText, playtimeText].filter(Boolean);
-  const noteLine = existing.note ? `\n> ${existing.note}` : "";
-
-  const row = buildButtonRow(
-    buildActionButton({ customId: yesId, label: "Add Another", style: ButtonStyle.Danger }),
-    buildActionButton("cancel", noId),
+): Promise<void> {
+  const removeFromNowPlaying = await resolveNowPlayingRemoval(
+    ctx.userId,
+    gameId,
+    ctx.completedAt,
+    false,
   );
+  if (ctx.selectedPlatformId != null) {
+    await saveCompletion(
+      interaction,
+      ctx.userId,
+      gameId,
+      ctx.selectedPlatformId,
+      ctx.completionType,
+      ctx.completedAt,
+      ctx.finalPlaytimeHours,
+      ctx.note,
+      gameTitle,
+      ctx.announce,
+      false,
+      removeFromNowPlaying,
+    );
+    return;
+  }
+  await promptCompletionPlatformSelection(interaction, {
+    userId: ctx.userId,
+    gameId,
+    gameTitle,
+    completionType: ctx.completionType,
+    completedAt: ctx.completedAt,
+    finalPlaytimeHours: ctx.finalPlaytimeHours,
+    note: ctx.note,
+    announce: ctx.announce,
+    removeFromNowPlaying,
+  });
+}
 
-  const promptText =
-    `We found a completion for **${gameTitle}** within the last week:\n` +
-    `- ${detailParts.join(" - ")} (Completion #${existing.completionId})${noteLine}\n\n` +
-    "Add another completion anyway?";
+/**
+ * Warns about a completion logged within the last week. The context is persisted
+ * under a fresh session so "Add Another" still works after a bot restart.
+ */
+async function promptDuplicateCompletion(
+  interaction: StringSelectMenuInteraction,
+  ctx: CompletionAddContext,
+  gameId: number,
+  gameTitle: string,
+  existing: ICompletionRecord,
+): Promise<void> {
+  const sessionId = createCompletionSession(ctx, toSessionLocation(interaction));
+  const baseId = `${COMPLETION_ADD_DUPLICATE_PREFIX}:${sessionId}:${gameId}`;
+  await safeFollowUpIfSettled(interaction, buildDuplicateCompletionPrompt(gameTitle, existing, {
+    confirm: `${baseId}:yes`,
+    cancel: `${baseId}:no`,
+  }));
+}
 
-  const payload = {
-    components: [buildTextContainer(promptText), row],
-    flags: buildComponentsV2Flags(true),
-  };
+/**
+ * Handles the duplicate completion warning's Add Another and Cancel buttons.
+ */
+export async function handleCompletionAddDuplicate(
+  interaction: ButtonInteraction,
+): Promise<void> {
+  const segs = assertCustomIdSegments(interaction, 3);
+  if (!segs) return;
+  const [sessionId, gameIdRaw, choice] = segs;
+  const ownerId = parseCompletionAddOwnerId(sessionId) ?? interaction.user.id;
+  if (await replyIfNotOwner(interaction, ownerId, COMPLETION_ADD_NOT_OWNER_MESSAGE)) return;
 
-  let message: Message | null;
+  await safeDeferUpdate(interaction);
+  const ctx = await resolveCompletionAddSession(interaction, sessionId, ownerId);
+  if (!ctx) return;
+  if (!completionAddRegistry.claim(sessionId)) return;
+
   try {
-    const reply = await safeFollowUpIfSettled(interaction, payload);
-    message = (reply as any)?.resource?.message ?? (reply as Message) ?? null;
-  } catch {
-    try {
-      const reply = await safeReply(interaction, { ...payload, __forceFollowUp: true });
-      message = reply as Message;
-    } catch {
-      return false;
+    const confirmed = choice === "yes";
+    await safeEditReply(interaction, {
+      components: [buildTextContainer(confirmed ? "Adding another completion." : "Cancelled.")],
+      flags: buildComponentsV2EditFlags(),
+    });
+    if (!confirmed) return;
+
+    const game = await Game.getGameById(Number(gameIdRaw));
+    if (!game) {
+      await safeFollowUpIfSettled(
+        interaction,
+        buildTextReply("Selected game was not found in GameDB.", true),
+      );
+      return;
     }
-  }
-
-  if (!message || typeof message.awaitMessageComponent !== "function") {
-    return false;
-  }
-
-  try {
-    const selection = await message.awaitMessageComponent({
-      componentType: ComponentType.Button,
-      filter: (i) =>
-        i.user.id === interaction.user.id && i.customId.startsWith(promptId),
-      time: 120_000,
-    });
-    const confirmed = selection.customId.endsWith(":yes");
-    await safeUpdate(selection, {
-      components: [buildTextContainer(
-        confirmed ? "Adding another completion." : "Cancelled.",
-      )],
-      flags: buildComponentsV2Flags(false),
-    });
-    return confirmed;
-  } catch {
-    return false;
+    await finishCompletionForGame(interaction, ctx, game.id, game.title);
+  } catch (err: unknown) {
+    logError("CompletionAdd.handleCompletionAddDuplicate", err);
+    await safeFollowUpIfSettled(
+      interaction,
+      buildErrorReply(buildApiErrorMessage("Failed to add completion.", err), true),
+    );
+  } finally {
+    completionAddRegistry.finish(sessionId);
   }
 }
 

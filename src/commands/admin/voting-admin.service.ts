@@ -1,14 +1,226 @@
 import { DateTime } from "luxon";
-import type { CommandInteraction } from "discord.js";
-import { withErrorReply, safeReply } from "../../functions/InteractionUtils.js";
-import { buildTextReply } from "../../functions/ComponentsV2Utils.js";
+import {
+  ButtonStyle,
+  MessageFlags,
+  ModalBuilder,
+  type ButtonInteraction,
+  type CommandInteraction,
+  type ModalSubmitInteraction,
+} from "discord.js";
+import {
+  getModalField,
+  safeDeferReply,
+  safeDeferUpdate,
+  safeReply,
+  withErrorReply,
+} from "../../functions/InteractionUtils.js";
+import { buildErrorReply, buildTextReply } from "../../functions/ComponentsV2Utils.js";
 import { listNominationsForRound } from "../../classes/Nomination.js";
 import { getUpcomingNominationWindow } from "../../functions/NominationWindow.js";
 import { calculateNextVoteDateEt } from "../../functions/VoteDateUtils.js";
 import { ADMIN_CHANNEL_ID, ANNOUNCEMENT_CHANNEL_NAME } from "../../config/channels.js";
 import { formatMonthYear } from "../../functions/DateFormatUtils.js";
-import { promptUserForInput } from "./admin-prompt.utils.js";
+import {
+  ADMIN_VOTING_TITLES_MODAL_PREFIX,
+  ADMIN_VOTING_TITLES_PREFIX,
+} from "../../config/customIdPrefixes.js";
+import { DISCORD_SELECT_LABEL_MAX } from "../../config/textLimits.js";
+import {
+  createResumableSessionRegistry,
+  type ResumableSessionLookup,
+} from "../../services/PersistedInteractionSessionStore.js";
+import {
+  buildActionButton,
+  buildButtonRow,
+  buildTextInputLabel,
+} from "../../functions/uiComponents.js";
+import { buildApiErrorMessage } from "../../utilities/ApiErrorUtils.js";
+import { logError } from "../../utilities/LogUtils.js";
+import { safeIgnore } from "../../utilities/AsyncUtils.js";
 import { VOTING_TITLE_MAX_LEN } from "./admin.types.js";
+
+type VotingKind = "GOTM" | "NR-GOTM";
+
+// A modal holds at most five inputs, so long titles are shortened five at a time.
+const TITLES_PER_MODAL = 5;
+const VOTING_TITLES_SESSION_PREFIX = "votetitles";
+const VOTING_TITLES_EXPIRED_MESSAGE =
+  "This voting setup has expired. Run the legacy voting setup command again.";
+
+type VotingSetupState = {
+  roundNumber: number;
+  monthLabel: string;
+  answers: Record<VotingKind, string[]>;
+  /** Shortened titles keyed by `<kind>-<index>` into `answers`. */
+  overrides: Record<string, string>;
+};
+
+type PendingTitle = { key: string; kind: VotingKind; title: string };
+
+const votingSetupSessions = new Map<string, VotingSetupState>();
+
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((v) => typeof v === "string");
+}
+
+function votingSetupFromState(state: unknown): VotingSetupState | null {
+  if (!state || typeof state !== "object") return null;
+  const raw = state as Partial<VotingSetupState>;
+  const answers = raw.answers as Partial<Record<VotingKind, unknown>> | undefined;
+  const overrides = raw.overrides;
+  if (
+    typeof raw.roundNumber !== "number" ||
+    typeof raw.monthLabel !== "string" ||
+    !answers ||
+    !isStringArray(answers.GOTM) ||
+    !isStringArray(answers["NR-GOTM"]) ||
+    !overrides ||
+    typeof overrides !== "object" ||
+    !Object.values(overrides).every((v) => typeof v === "string")
+  ) {
+    return null;
+  }
+  return {
+    roundNumber: raw.roundNumber,
+    monthLabel: raw.monthLabel,
+    answers: { "GOTM": answers.GOTM, "NR-GOTM": answers["NR-GOTM"] },
+    overrides: { ...overrides },
+  };
+}
+
+const votingSetupRegistry = createResumableSessionRegistry<VotingSetupState>({
+  kind: "admin-voting-titles",
+  sessions: votingSetupSessions,
+  fromState: (state) => votingSetupFromState(state),
+});
+
+/** The owner id rides in the session id so a restore knows whose row to read. */
+function buildVotingSessionId(ownerId: string): string {
+  const nonce = `${Date.now()}-${Math.floor(Math.random() * 100000)}`;
+  return `${VOTING_TITLES_SESSION_PREFIX}-${ownerId}-${nonce}`;
+}
+
+function parseVotingSessionOwnerId(sessionId: string): string | null {
+  const [prefix, ownerId] = sessionId.split("-");
+  if (prefix !== VOTING_TITLES_SESSION_PREFIX) return null;
+  return ownerId && /^\d+$/.test(ownerId) ? ownerId : null;
+}
+
+function isTitleTooLong(title: string): boolean {
+  return title.length > VOTING_TITLE_MAX_LEN;
+}
+
+function listPendingTitles(state: VotingSetupState): PendingTitle[] {
+  const pending: PendingTitle[] = [];
+  for (const kind of ["GOTM", "NR-GOTM"] as const) {
+    state.answers[kind].forEach((title, index) => {
+      const key = `${kind}-${index}`;
+      if (isTitleTooLong(title) && !(key in state.overrides)) {
+        pending.push({ key, kind, title });
+      }
+    });
+  }
+  return pending;
+}
+
+function resolveAnswers(state: VotingSetupState, kind: VotingKind): string[] {
+  return state.answers[kind].map((title, index) =>
+    state.overrides[`${kind}-${index}`] ?? title);
+}
+
+function buildPoll(
+  kindLabel: VotingKind,
+  answers: string[],
+  roundNumber: number,
+  monthLabel: string,
+): string {
+  if (!answers.length) {
+    return `${kindLabel}: (no nominations found for Round ${roundNumber})`;
+  }
+  const maxSelect = Math.max(1, Math.floor(answers.length / 2));
+  const answersJoined = answers.join(";");
+  const pollName =
+    kindLabel === "GOTM"
+      ? `GOTM_Round_${roundNumber}`
+      : `NR-GOTM_Round_${roundNumber}`;
+  const question =
+    kindLabel === "GOTM"
+      ? `What Roleplaying Game(s) would you like to discuss in ${monthLabel}?`
+      : `What Non-Roleplaying Game(s) would you like to discuss in ${monthLabel}?`;
+
+  // Calculate time until 8 PM Eastern
+  const nowInEastern = DateTime.now().setZone("America/New_York");
+  const today8pm = nowInEastern.set({ hour: 20, minute: 0, second: 0, millisecond: 0 });
+
+  let startOutput: string;
+  let timeLimitOutput: string;
+
+  if (nowInEastern < today8pm) {
+    const diff = today8pm.diff(nowInEastern).shiftTo("hours", "minutes", "seconds");
+    startOutput = diff.toFormat("h'h'm'm's's");
+    timeLimitOutput = "48h";
+  } else {
+    startOutput = "1m";
+    // End at 8 PM on (Today + 2 days)
+    const targetEnd = today8pm.plus({ days: 2 });
+    const actualStart = nowInEastern.plus({ minutes: 1 });
+    const diff = targetEnd.diff(actualStart).shiftTo("hours", "minutes", "seconds");
+    timeLimitOutput = diff.toFormat("h'h'm'm's's");
+  }
+
+  return `/poll question:${question} answers:${answersJoined} max_select:${maxSelect} start:${startOutput} time_limit:${timeLimitOutput} vote_change:Yes realtime_results:🙈 Hidden privacy:🤐 Semi-private role_required:@members channel:#${ANNOUNCEMENT_CHANNEL_NAME} name:${pollName} final_reveal:Yes chart_emoji:🟩 voting_button:Full Answer`;
+}
+
+async function postVotingSetup(
+  interaction: CommandInteraction | ModalSubmitInteraction | ButtonInteraction,
+  state: VotingSetupState,
+): Promise<void> {
+  const gotmPoll = buildPoll(
+    "GOTM", resolveAnswers(state, "GOTM"), state.roundNumber, state.monthLabel,
+  );
+  const nrPoll = buildPoll(
+    "NR-GOTM", resolveAnswers(state, "NR-GOTM"), state.roundNumber, state.monthLabel,
+  );
+
+  const adminChannel = ADMIN_CHANNEL_ID
+    ? await interaction.client.channels.fetch(ADMIN_CHANNEL_ID).catch(() => null)
+    : null;
+
+  const messageContent = `GOTM:\n\`\`\`\n${gotmPoll}\n\`\`\`\nNR-GOTM:\n\`\`\`\n${nrPoll}\n\`\`\``;
+
+  if (adminChannel && (adminChannel as any).send) {
+    await (adminChannel as any).send({ content: messageContent });
+    await safeReply(
+      interaction,
+      buildTextReply("Voting setup commands posted to #admin.", true),
+    );
+  } else {
+    await safeReply(interaction, buildTextReply(messageContent, true));
+  }
+}
+
+function buildShortenPrompt(sessionId: string, pending: PendingTitle[]) {
+  const listed = pending
+    .map((item, i) => `${i + 1}. ${item.kind}: "${item.title}" (${item.title.length})`)
+    .join("\n");
+  const reply = buildTextReply(
+    `${pending.length} title(s) are longer than ${VOTING_TITLE_MAX_LEN} characters ` +
+      `and need a shorter version before the poll commands can be built:\n${listed}`,
+    true,
+  );
+  const nextCount = Math.min(TITLES_PER_MODAL, pending.length);
+  return {
+    ...reply,
+    components: [
+      ...reply.components,
+      buildButtonRow(buildActionButton({
+        customId: `${ADMIN_VOTING_TITLES_PREFIX}:${sessionId}`,
+        label: `Shorten ${nextCount} title(s)`,
+        style: ButtonStyle.Primary,
+      })),
+    ],
+  };
+}
 
 export async function handleLegacyVotingSetup(
   interaction: CommandInteraction,
@@ -25,123 +237,157 @@ export async function handleLegacyVotingSetup(
 
     const gotmNoms = await listNominationsForRound("gotm", roundNumber);
     const nrNoms = await listNominationsForRound("nr-gotm", roundNumber);
+    const toAnswers = (noms: Array<{ gameTitle: string }>): string[] =>
+      noms.map((n) => n.gameTitle.trim()).filter(Boolean);
 
-    const buildPoll = (kindLabel: string, answers: string[]): string => {
-      if (!answers.length) {
-        return `${kindLabel}: (no nominations found for Round ${roundNumber})`;
-      }
-      const maxSelect = Math.max(1, Math.floor(answers.length / 2));
-      const answersJoined = answers.join(";");
-      const pollName =
-        kindLabel === "GOTM"
-          ? `GOTM_Round_${roundNumber}`
-          : `NR-GOTM_Round_${roundNumber}`;
-      const question =
-        kindLabel === "GOTM"
-          ? `What Roleplaying Game(s) would you like to discuss in ${monthLabel}?`
-          : `What Non-Roleplaying Game(s) would you like to discuss in ${monthLabel}?`;
-
-      // Calculate time until 8 PM Eastern
-      const nowInEastern = DateTime.now().setZone("America/New_York");
-      const today8pm = nowInEastern.set({ hour: 20, minute: 0, second: 0, millisecond: 0 });
-
-      let startOutput: string;
-      let timeLimitOutput: string;
-
-      if (nowInEastern < today8pm) {
-        const diff = today8pm.diff(nowInEastern).shiftTo("hours", "minutes", "seconds");
-        startOutput = diff.toFormat("h'h'm'm's's");
-        timeLimitOutput = "48h";
-      } else {
-        startOutput = "1m";
-        // End at 8 PM on (Today + 2 days)
-        const targetEnd = today8pm.plus({ days: 2 });
-        const actualStart = nowInEastern.plus({ minutes: 1 });
-        const diff = targetEnd.diff(actualStart).shiftTo("hours", "minutes", "seconds");
-        timeLimitOutput = diff.toFormat("h'h'm'm's's");
-      }
-
-      return `/poll question:${question} answers:${answersJoined} max_select:${maxSelect} start:${startOutput} time_limit:${timeLimitOutput} vote_change:Yes realtime_results:🙈 Hidden privacy:🤐 Semi-private role_required:@members channel:#${ANNOUNCEMENT_CHANNEL_NAME} name:${pollName} final_reveal:Yes chart_emoji:🟩 voting_button:Full Answer`;
+    const state: VotingSetupState = {
+      roundNumber,
+      monthLabel,
+      answers: { "GOTM": toAnswers(gotmNoms), "NR-GOTM": toAnswers(nrNoms) },
+      overrides: {},
     };
 
-    const gotmAnswers = gotmNoms.map((n) => n.gameTitle).map((t) => t.trim()).filter(Boolean);
-    const nrAnswers = nrNoms.map((n) => n.gameTitle).map((t) => t.trim()).filter(Boolean);
-
-    const normalizedGotmAnswers = await normalizeVotingTitles(
-      interaction,
-      "GOTM",
-      gotmAnswers,
-    );
-    if (!normalizedGotmAnswers) return;
-
-    const normalizedNrAnswers = await normalizeVotingTitles(
-      interaction,
-      "NR-GOTM",
-      nrAnswers,
-    );
-    if (!normalizedNrAnswers) return;
-
-    const gotmPoll = buildPoll("GOTM", normalizedGotmAnswers);
-    const nrPoll = buildPoll("NR-GOTM", normalizedNrAnswers);
-
-    const adminChannel = ADMIN_CHANNEL_ID
-      ? await interaction.client.channels.fetch(ADMIN_CHANNEL_ID).catch(() => null)
-      : null;
-
-    const messageContent = `GOTM:\n\`\`\`\n${gotmPoll}\n\`\`\`\nNR-GOTM:\n\`\`\`\n${nrPoll}\n\`\`\``;
-
-    if (adminChannel && (adminChannel as any).send) {
-      await (adminChannel as any).send({ content: messageContent });
-      await safeReply(
-        interaction,
-        buildTextReply("Voting setup commands posted to #admin.", true),
-      );
-    } else {
-      await safeReply(interaction, buildTextReply(messageContent, true));
+    const pending = listPendingTitles(state);
+    if (!pending.length) {
+      await postVotingSetup(interaction, state);
+      return;
     }
+
+    const sessionId = buildVotingSessionId(interaction.user.id);
+    votingSetupRegistry.create({
+      sessionId,
+      session: state,
+      ownerId: interaction.user.id,
+      location: { channelId: interaction.channelId, guildId: interaction.guildId },
+      state,
+    });
+    await safeReply(interaction, buildShortenPrompt(sessionId, pending));
   }, "Could not generate vote commands");
 }
 
-async function normalizeVotingTitles(
-  interaction: CommandInteraction,
-  kindLabel: string,
-  answers: string[],
-): Promise<string[] | null> {
-  const normalized: string[] = [];
+function readSessionId(customId: string): { sessionId: string; ownerId: string } | null {
+  const sessionId = customId.split(":")[1] ?? "";
+  const ownerId = parseVotingSessionOwnerId(sessionId);
+  return ownerId ? { sessionId, ownerId } : null;
+}
 
-  for (const answer of answers) {
-    if (answer.length < 39) {
-      normalized.push(answer);
-      continue;
+async function resolveVotingSession(
+  interaction: ButtonInteraction | ModalSubmitInteraction,
+  sessionId: string,
+  lookup: ResumableSessionLookup,
+): Promise<VotingSetupState | undefined> {
+  try {
+    const state = await votingSetupRegistry.resolve(sessionId, lookup);
+    if (!state) {
+      await safeReply(interaction, buildTextReply(VOTING_TITLES_EXPIRED_MESSAGE, true));
     }
+    return state;
+  } catch (err: unknown) {
+    logError("VotingAdmin.restoreSession", err);
+    await safeReply(interaction, buildErrorReply(
+      buildApiErrorMessage("Could not restore this voting setup.", err),
+      true,
+    ));
+    return undefined;
+  }
+}
 
-    while (true) {
-      const prompt =
-        `The ${kindLabel} title "${answer}" is ${answer.length} characters. ` +
-        `Enter a shorter title (max ${VOTING_TITLE_MAX_LEN}).`;
-      const response = await promptUserForInput(interaction, prompt, 180_000);
-      if (!response) return null;
+export async function handleVotingTitlesButton(interaction: ButtonInteraction): Promise<void> {
+  const parsed = readSessionId(interaction.customId);
+  if (!parsed) {
+    await safeReply(interaction, buildTextReply(VOTING_TITLES_EXPIRED_MESSAGE, true));
+    return;
+  }
+  const { sessionId, ownerId } = parsed;
 
-      const trimmed = response.trim();
-      if (!trimmed) {
-        await safeReply(interaction, buildTextReply("Title cannot be empty.", false));
-        continue;
-      }
-
-      if (trimmed.length >= 39) {
-        await safeReply(
-          interaction,
-          buildTextReply(`Title must be ${VOTING_TITLE_MAX_LEN} characters or fewer.`, false),
-        );
-        continue;
-      }
-
-      normalized.push(trimmed);
-      break;
-    }
+  let state = votingSetupRegistry.get(sessionId);
+  if (!state) {
+    // A modal must be the first response, but restoring after a restart reads the
+    // API and can outlast Discord's 3 second window. Ack, restore into memory, and
+    // re-offer the button: the next click finds the session in memory.
+    await safeDeferUpdate(interaction);
+    state = await resolveVotingSession(interaction, sessionId, {
+      ownerId,
+      channelId: interaction.channelId,
+    });
+    if (!state) return;
+    await safeReply(interaction, {
+      ...buildShortenPrompt(sessionId, listPendingTitles(state)),
+      __forceFollowUp: true,
+    });
+    return;
   }
 
-  return normalized;
+  const batch = listPendingTitles(state).slice(0, TITLES_PER_MODAL);
+  if (!batch.length) {
+    await safeReply(interaction, buildTextReply("Every title is already shortened.", true));
+    return;
+  }
+
+  const modal = new ModalBuilder()
+    .setCustomId(`${ADMIN_VOTING_TITLES_MODAL_PREFIX}:${sessionId}`)
+    .setTitle("Shorten voting titles")
+    .addLabelComponents(...batch.map((item, i) => buildTextInputLabel({
+      customId: item.key,
+      label: `${item.kind} title ${i + 1} (max ${VOTING_TITLE_MAX_LEN})`,
+      placeholder: item.title.slice(0, DISCORD_SELECT_LABEL_MAX),
+      maxLength: VOTING_TITLE_MAX_LEN,
+    })));
+  safeIgnore(interaction.showModal(modal));
+}
+
+export async function handleVotingTitlesModal(interaction: ModalSubmitInteraction): Promise<void> {
+  await safeDeferReply(interaction, { flags: MessageFlags.Ephemeral });
+  const parsed = readSessionId(interaction.customId);
+  if (!parsed) {
+    await safeReply(interaction, buildTextReply(VOTING_TITLES_EXPIRED_MESSAGE, true));
+    return;
+  }
+  const { sessionId, ownerId } = parsed;
+  const lookup = { ownerId, channelId: interaction.channelId };
+  const state = await resolveVotingSession(interaction, sessionId, lookup);
+  if (!state) return;
+
+  const overrides = { ...state.overrides };
+  for (const item of listPendingTitles(state)) {
+    if (!interaction.fields.fields.has(item.key)) continue;
+    const value = getModalField(interaction, item.key).trim();
+    if (!value || isTitleTooLong(value)) {
+      await safeReply(interaction, buildTextReply(
+        `The ${item.kind} title for "${item.title}" must be 1 to ` +
+          `${VOTING_TITLE_MAX_LEN} characters. Nothing was saved; use the button again.`,
+        true,
+      ));
+      return;
+    }
+    overrides[item.key] = value;
+  }
+
+  const nextState: VotingSetupState = { ...state, overrides };
+  const pending = listPendingTitles(nextState);
+  if (pending.length) {
+    votingSetupRegistry.create({
+      sessionId,
+      session: nextState,
+      ownerId,
+      location: { channelId: interaction.channelId, guildId: interaction.guildId },
+      state: nextState,
+    });
+    await safeReply(interaction, buildShortenPrompt(sessionId, pending));
+    return;
+  }
+
+  // A second submit while the first is still posting must not post twice.
+  if (!votingSetupRegistry.claim(sessionId)) return;
+  try {
+    await withErrorReply(
+      interaction,
+      () => postVotingSetup(interaction, nextState),
+      "Could not generate vote commands",
+    );
+  } finally {
+    votingSetupRegistry.finish(sessionId);
+  }
 }
 
 export function calculateNextVoteDate(): Date {

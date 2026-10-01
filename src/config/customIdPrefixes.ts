@@ -36,3 +36,17 @@ export const CONDUCTOR_ACCEPT_PREFIX = "conductor-accept-v1";
 export const CONDUCTOR_CONFIRM_PREFIX = "conductor-confirm-v1";
 export const CONDUCTOR_NOTE_PREFIX = "conductor-note-v1";
 export const CONDUCTOR_NOTE_MODAL_PREFIX = "conductor-note-modal-v1";
+
+// Game completion confirmation interaction IDs
+export const COMPLETION_ADD_DUPLICATE_PREFIX = "comp-add-dup-v1";
+export const NOW_PLAYING_REMOVE_CONFIRM_PREFIX = "np-remove-confirm-v1";
+
+// Admin GOTM / NR-GOTM round interaction IDs
+export const ADMIN_ROUND_ADD_PREFIX = "admin-round-add-v1";
+export const ADMIN_ROUND_ADD_MODAL_PREFIX = "admin-round-add-modal-v1";
+export const ADMIN_ROUND_EDIT_PREFIX = "admin-round-edit-v1";
+export const ADMIN_ROUND_EDIT_MODAL_PREFIX = "admin-round-edit-modal-v1";
+
+// Admin legacy voting setup interaction IDs
+export const ADMIN_VOTING_TITLES_PREFIX = "admin-voting-titles-v1";
+export const ADMIN_VOTING_TITLES_MODAL_PREFIX = "admin-voting-titles-modal-v1";

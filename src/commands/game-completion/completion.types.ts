@@ -2,6 +2,7 @@
 
 import type { Message, ThreadChannel } from "discord.js";
 import type { CompletionType } from "../profile.command.js";
+import type { NowPlayingRemoval } from "../../functions/CompletionHelpers.js";
 
 export type CompletionAddContext = {
   userId: string;
@@ -24,7 +25,7 @@ export type CompletionPlatformContext = {
   finalPlaytimeHours: number | null;
   note: string | null;
   announce?: boolean;
-  removeFromNowPlaying: boolean;
+  removeFromNowPlaying: NowPlayingRemoval;
   platforms: Array<{ id: number; name: string }>;
 };
 

@@ -1,13 +1,7 @@
 // Helper utilities for game completion functionality
 
-import type {
-  CommandInteraction,
-  ButtonInteraction,
-  ModalSubmitInteraction,
-  StringSelectMenuInteraction,
-} from "discord.js";
 import Member from "../../classes/Member.js";
-import { promptRemoveFromNowPlaying } from "../../functions/CompletionHelpers.js";
+import type { NowPlayingRemoval } from "../../functions/CompletionHelpers.js";
 import { parseCustomIdSegments } from "../../utilities/CustomIdUtils.js";
 import { COMPLETIONATOR_CHOOSE_PREFIX } from "../../config/customIdPrefixes.js";
 
@@ -22,18 +16,16 @@ function shouldPromptNowPlayingRemoval(
   return completedAt >= addedAt;
 }
 
+/**
+ * Returns "prompt" when the member should be asked, after the completion saves, whether
+ * to drop the game from Now Playing, and false when there is nothing to ask about.
+ */
 export async function resolveNowPlayingRemoval(
-  interaction:
-    | CommandInteraction
-    | ButtonInteraction
-    | ModalSubmitInteraction
-    | StringSelectMenuInteraction,
   userId: string,
   gameId: number,
-  gameTitle: string,
   completedAt: Date | null,
   requireCompletionAfterAdded: boolean,
-): Promise<boolean> {
+): Promise<NowPlayingRemoval> {
   const nowPlayingMeta = await Member.getNowPlayingEntryMeta(userId, gameId);
   if (!nowPlayingMeta) {
     return false;
@@ -43,10 +35,7 @@ export async function resolveNowPlayingRemoval(
     completedAt,
     requireCompletionAfterAdded,
   );
-  if (!shouldPrompt) {
-    return false;
-  }
-  return promptRemoveFromNowPlaying(interaction, gameTitle);
+  return shouldPrompt ? "prompt" : false;
 }
 
 export function escapeCsv(field: string): string {
