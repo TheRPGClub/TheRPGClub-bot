@@ -188,10 +188,31 @@ function previewBotOptions(page: Page): Locator {
   return options.filter({ hasText: PREVIEW_BOT_NAME }).or(options.filter({ has: avatar }));
 }
 
+/**
+ * Clears a slash-command draft a handed-back step left behind; Discord keeps it across
+ * runs. The profile is the runner's alone, so a `/` draft is the runner's own. Any other
+ * text is handed off rather than erased.
+ */
+async function clearLeftoverCommand(page: Page, box: Locator): Promise<void> {
+  const text = (await box.innerText()).trim();
+  if (!text) return;
+  if (!text.startsWith("/")) throw new HandOff("the message box is not empty");
+  await box.click();
+  // A picked command holds its options as chips, so one select-all may leave the name.
+  for (let attempt = 0; attempt < 3 && (await box.innerText()).trim(); attempt += 1) {
+    await box.press("ControlOrMeta+a");
+    await box.press("Backspace");
+  }
+  await page.keyboard.press("Escape");
+  if ((await box.innerText()).trim()) {
+    throw new HandOff("a leftover command in the message box would not clear");
+  }
+}
+
 async function runSlash(page: Page, action: ISlashAction): Promise<void> {
   const box = chatBox(page);
   await waitVisible(box, "the message box");
-  if ((await box.innerText()).trim()) throw new HandOff("the message box is not empty");
+  await clearLeftoverCommand(page, box);
   const name = `/${action.path.join(" ")}`;
   await box.click();
   await box.pressSequentially(name, { delay: TIMING.typeDelayMs });

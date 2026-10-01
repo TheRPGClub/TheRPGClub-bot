@@ -317,8 +317,13 @@ async function main(): Promise<void> {
     console.error(err.message);
     process.exitCode = 1;
   } finally {
-    await context.tracing.stop({ path: path.join(artifacts, "trace.zip") });
-    await context.close();
+    // A tester who closes the window ends the browser; the summary still prints.
+    try {
+      await context.tracing.stop({ path: path.join(artifacts, "trace.zip") });
+    } catch {
+      console.error("The browser closed before the trace was saved.");
+    }
+    await context.close().catch(() => undefined);
     printSummary(outcomes, report, artifacts);
   }
 }
