@@ -25,6 +25,7 @@ import {
   pendingVerdict,
   performAction,
   reportUrl,
+  scrollToBottom,
   TIMING,
   waitForReply,
 } from "./discord.ts";
@@ -213,6 +214,7 @@ async function check(page: Page, pr: number, n: number): Promise<string | null> 
   const message = await findStepMessage(page, pr, n);
   if (!message) throw new HandOff(`the conductor's message for step ${n} is not in the channel`);
   await message.getByRole("button", { name: "Check", exact: true }).click();
+  await scrollToBottom(page);
   const verdict = await poll(page, TIMING.verdictMs, async () =>
     await waitForAdvance(page, pr, n, 0) ? "passed" : pendingVerdict(page, pr, n),
   );

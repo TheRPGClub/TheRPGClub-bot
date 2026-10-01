@@ -92,6 +92,14 @@ async function scrollPanel(page: Page, direction: "up" | "bottom"): Promise<bool
 }
 
 /**
+ * Puts the panel back at the bottom, where the conductor posts its next header and report.
+ * Call it after using a message `findStepMessage` scrolled up to.
+ */
+export async function scrollToBottom(page: Page): Promise<void> {
+  await scrollPanel(page, "bottom");
+}
+
+/**
  * Scrolls the panel to the bottom, then up a screen at a time until `found` holds or
  * the panel stops moving. Reads of the newest messages scroll back down themselves.
  * Only the runner's own actions scroll: the polls that wait on the tester or the
@@ -161,8 +169,11 @@ export async function findStepMessage(page: Page, pr: number, n: number): Promis
 export async function pendingVerdict(page: Page, pr: number, n: number): Promise<string | null> {
   const message = await findStepMessage(page, pr, n);
   if (!message) return null;
-  if (!await message.getByRole("button", { name: PENDING_BUTTONS }).count()) return null;
-  return VERDICT_LINE.exec(await message.innerText())?.[0] ?? "awaiting the tester's judgment";
+  const pending = await message.getByRole("button", { name: PENDING_BUTTONS }).count() > 0;
+  const text = pending ? await message.innerText() : "";
+  await scrollToBottom(page);
+  if (!pending) return null;
+  return VERDICT_LINE.exec(text)?.[0] ?? "awaiting the tester's judgment";
 }
 
 async function isConductorMessage(item: Locator): Promise<boolean> {
