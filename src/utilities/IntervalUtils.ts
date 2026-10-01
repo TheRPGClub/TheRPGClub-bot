@@ -18,8 +18,6 @@ export interface IIntervalTask {
   stop(): void;
   /** Runs one tick now, under the same in-flight guard as the interval. */
   runNow(): Promise<void>;
-  isRunning(): boolean;
-  isStarted(): boolean;
 }
 
 /**
@@ -62,7 +60,5 @@ export function createIntervalTask(options: IIntervalTaskOptions): IIntervalTask
       timer = null;
     },
     runNow,
-    isRunning: () => running,
-    isStarted: () => timer !== null,
   };
 }
