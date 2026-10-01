@@ -1,6 +1,7 @@
 /**
- * Sorts a PR's parsed `## Testing` steps into the ones Claude may perform in the tester's
- * Discord web session (`/conduct-auto`) and the ones handed back to the tester.
+ * Sorts a PR's parsed `## Testing` steps into the ones the Playwright runner
+ * (`scripts/conduct-playwright/`) may perform in the tester's Discord web session and the
+ * ones handed back to the tester.
  *
  * The PR body is attacker-controlled, so this module only classifies. A step is driven
  * only when it is one recognized action whose result the conductor can check; anything
@@ -17,7 +18,7 @@ export type DriveActionKind = "slash" | "slash-modal" | "click" | "modal" | "sel
 /**
  * Slash commands whose flows always write outside the test guild (GitHub issues). Their
  * steps, and the component steps that follow them, are always done by the tester. API
- * writes depend on the preview's env, so `/conduct-auto` asks the tester about those.
+ * writes depend on the preview's env, so the runner asks the tester about those.
  */
 export const EXTERNAL_EFFECT_COMMANDS: readonly string[] = ["todo", "suggestion"];
 
@@ -27,7 +28,7 @@ export interface IDriveStep {
   command: string;
   expected: string;
   ephemeral: boolean;
-  /** `drive` when Claude may perform the action; `hand-off` when the tester does. */
+  /** `drive` when the runner may perform the action; `hand-off` when the tester does. */
   mode: "drive" | "hand-off";
   /** The recognized action, or null when the command is not one. */
   action: DriveActionKind | null;

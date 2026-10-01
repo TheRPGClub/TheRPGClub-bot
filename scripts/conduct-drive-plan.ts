@@ -1,5 +1,6 @@
-// Prints, as JSON, which of a PR body's Testing steps `/conduct-auto` may perform in the
-// tester's Discord web session and which it hands back, plus the test channel's URL.
+// Prints, as JSON, which of a PR body's Testing steps the Playwright runner
+// (`scripts/conduct-playwright/`) may perform in the tester's Discord web session and
+// which it hands back, plus the test channel's URL.
 // Usage: npm run -s conduct:drive-plan -- <body-file>
 // Exits 1 when there is nothing to drive, 2 on a usage or read error, 0 otherwise.
 
