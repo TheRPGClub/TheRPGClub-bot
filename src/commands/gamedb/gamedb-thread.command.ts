@@ -31,7 +31,7 @@ import GameProfileService from "../../classes/GameProfileService.js";
 import { updateGameProfileMessageById } from "./gamedb-profile.service.js";
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
 import { assertCustomIdSegments } from "../../utilities/CustomIdUtils.js";
-import { buildTextInputRow } from "../../functions/uiComponents.js";
+import { buildTextInputLabel } from "../../functions/uiComponents.js";
 import { safeIgnore } from "../../utilities/AsyncUtils.js";
 import { renderUsernameWithEmoji } from "../../services/UserEmojiService.js";
 
@@ -85,14 +85,14 @@ export async function showNowPlayingThreadModal(
       buildNowPlayingThreadModalCustomId(gameId, sourceChannelId, sourceMessageId),
     )
     .setTitle("Create Now Playing Thread")
-    .addComponents(
-      buildTextInputRow({
+    .addLabelComponents(
+      buildTextInputLabel({
         customId: GAMEDB_THREAD_TITLE_INPUT_ID,
         label: "Thread Title",
         maxLength: MAX_THREAD_TITLE_LEN,
         value: defaultTitle,
       }),
-      buildTextInputRow({
+      buildTextInputLabel({
         customId: GAMEDB_THREAD_BODY_INPUT_ID,
         label: "Initial Post",
         style: TextInputStyle.Paragraph,

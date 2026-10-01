@@ -1528,6 +1528,67 @@ export default {
         };
       },
     },
+    "no-deprecated-modal-text-input": {
+      meta: {
+        type: "problem",
+        docs: {
+          description:
+            "Disallow TextInputBuilder.setLabel and action rows in modals; use labels.",
+        },
+        schema: [],
+        messages: {
+          textInputLabel:
+            "TextInputBuilder.setLabel is deprecated; wrap the input with buildTextInputLabel.",
+          modalActionRow:
+            "Modal {{method}} is deprecated; use addLabelComponents or " +
+            "addTextDisplayComponents.",
+        },
+      },
+      create(context) {
+        const DEPRECATED_MODAL_METHODS = new Set([
+          "addComponents",
+          "addActionRowComponents",
+          "setComponents",
+        ]);
+        // Follows a builder chain such as new X().a().b() back to new X() or an identifier.
+        const getChainRoot = (node) => {
+          let current = node;
+          while (current) {
+            if (current.type === "MemberExpression") current = current.object;
+            else if (current.type === "CallExpression") current = current.callee;
+            else return current;
+          }
+          return null;
+        };
+        const isNewOf = (node, suffix) =>
+          node?.type === "NewExpression" &&
+          node.callee.type === "Identifier" &&
+          node.callee.name.endsWith(suffix);
+        const isModalRoot = (node) =>
+          isNewOf(node, "ModalBuilder") ||
+          (node?.type === "Identifier" && /modal$/i.test(node.name));
+
+        return {
+          CallExpression(node) {
+            if (node.callee.type !== "MemberExpression") return;
+            const method = getCalleePropertyName(node.callee);
+            if (!method) return;
+            const root = getChainRoot(node.callee.object);
+            if (method === "setLabel" && isNewOf(root, "TextInputBuilder")) {
+              context.report({ node: node.callee.property, messageId: "textInputLabel" });
+              return;
+            }
+            if (DEPRECATED_MODAL_METHODS.has(method) && isModalRoot(root)) {
+              context.report({
+                node: node.callee.property,
+                messageId: "modalActionRow",
+                data: { method },
+              });
+            }
+          },
+        };
+      },
+    },
     "no-silent-interaction-update-catch": {
       meta: {
         type: "problem",

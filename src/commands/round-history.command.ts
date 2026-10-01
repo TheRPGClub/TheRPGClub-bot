@@ -10,15 +10,13 @@ import {
   ButtonStyle,
 } from "discord.js";
 import {
-  ActionRowBuilder as ModalActionRowBuilder,
   LabelBuilder,
   ModalBuilder,
   RadioGroupBuilder,
   StringSelectMenuBuilder as ModalStringSelectMenuBuilder,
-  TextInputBuilder as ModalTextInputBuilder,
 } from "@discordjs/builders";
 import {
-  TextInputStyle as ApiTextInputStyle,
+  TextInputStyle,
   type APISelectMenuOption,
 } from "discord-api-types/v10";
 import {
@@ -29,6 +27,7 @@ import {
   SlashGroup,
   SlashOption,
 } from "discordx";
+import { buildTextInputLabel } from "../functions/uiComponents.js";
 import type { IGotmEntry } from "../classes/Gotm.js";
 import Gotm from "../classes/Gotm.js";
 import type { INrGotmEntry } from "../classes/NrGotm.js";
@@ -151,16 +150,15 @@ export function buildRoundHistoryModal(sessionId: string): ModalBuilder {
   return new ModalBuilder()
     .setCustomId(buildRoundHistoryModalCustomId(sessionId))
     .setTitle(ROUND_HISTORY_MODAL_TITLE)
-    .addActionRowComponents(
-      new ModalActionRowBuilder<ModalTextInputBuilder>().addComponents(
-        new ModalTextInputBuilder()
-          .setCustomId(ROUND_HISTORY_HELP_ID)
-          .setLabel("How this form works")
-          .setStyle(ApiTextInputStyle.Paragraph)
-          .setRequired(false)
-          .setMaxLength(500)
-          .setValue(helpText),
-      ),
+    .addLabelComponents(
+      buildTextInputLabel({
+        customId: ROUND_HISTORY_HELP_ID,
+        label: "How this form works",
+        style: TextInputStyle.Paragraph,
+        required: false,
+        maxLength: 500,
+        value: helpText,
+      }),
     )
     .addLabelComponents(
       new LabelBuilder()
@@ -199,15 +197,13 @@ export function buildRoundHistoryModal(sessionId: string): ModalBuilder {
             ),
         ),
     )
-    .addActionRowComponents(
-      new ModalActionRowBuilder<ModalTextInputBuilder>().addComponents(
-        new ModalTextInputBuilder()
-          .setCustomId(ROUND_HISTORY_QUERY_ID)
-          .setLabel("Query (optional title match)")
-          .setStyle(ApiTextInputStyle.Short)
-          .setRequired(false)
-          .setMaxLength(30),
-      ),
+    .addLabelComponents(
+      buildTextInputLabel({
+        customId: ROUND_HISTORY_QUERY_ID,
+        label: "Query (optional title match)",
+        required: false,
+        maxLength: 30,
+      }),
     );
 }
 

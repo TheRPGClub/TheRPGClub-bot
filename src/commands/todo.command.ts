@@ -53,7 +53,7 @@ import {
   buildSelectRow,
   buildActionButton,
   buildButtonRow,
-  buildTextInputRow,
+  buildTextInputLabel,
 } from "../functions/uiComponents.js";
 import { DISCORD_TEXT_INPUT_MAX } from "../config/textLimits.js";
 import { TODO_DEFAULT_PAGE_SIZE, TODO_MAX_PAGE_SIZE } from "../config/pagination.js";
@@ -452,9 +452,9 @@ export class TodoCommand {
       )
       .setTitle("Create GitHub Issue");
 
-    modal.addComponents(
-      buildTextInputRow({ customId: TODO_CREATE_TITLE_ID, label: "Title", maxLength: 256 }),
-      buildTextInputRow({
+    modal.addLabelComponents(
+      buildTextInputLabel({ customId: TODO_CREATE_TITLE_ID, label: "Title", maxLength: 256 }),
+      buildTextInputLabel({
         customId: TODO_CREATE_BODY_ID,
         label: "Description",
         style: TextInputStyle.Paragraph,
@@ -1696,14 +1696,14 @@ export class TodoCommand {
       )
       .setTitle("Edit GitHub Issue");
 
-    modal.addComponents(
-      buildTextInputRow({
+    modal.addLabelComponents(
+      buildTextInputLabel({
         customId: TODO_CREATE_TITLE_ID,
         label: "Title",
         maxLength: 256,
         value: issue.title,
       }),
-      buildTextInputRow({
+      buildTextInputLabel({
         customId: TODO_CREATE_BODY_ID,
         label: "Description",
         style: TextInputStyle.Paragraph,
@@ -1753,7 +1753,7 @@ export class TodoCommand {
       )
       .setTitle("Add Comment");
 
-    modal.addComponents(buildTextInputRow({
+    modal.addLabelComponents(buildTextInputLabel({
       customId: TODO_COMMENT_INPUT_ID,
       label: "Comment",
       style: TextInputStyle.Paragraph,
@@ -1804,7 +1804,7 @@ export class TodoCommand {
       )
       .setTitle("Edit Title");
 
-    modal.addComponents(buildTextInputRow({
+    modal.addLabelComponents(buildTextInputLabel({
       customId: TODO_EDIT_TITLE_INPUT_ID,
       label: "Title",
       maxLength: 256,
@@ -1855,7 +1855,7 @@ export class TodoCommand {
       )
       .setTitle("Edit Description");
 
-    modal.addComponents(buildTextInputRow({
+    modal.addLabelComponents(buildTextInputLabel({
       customId: TODO_EDIT_DESC_INPUT_ID,
       label: "Description",
       style: TextInputStyle.Paragraph,

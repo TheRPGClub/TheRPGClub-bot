@@ -52,7 +52,7 @@ import { buildCompletionatorChooseId } from "./completion-helpers.js";
 import {
   buildActionButton,
   buildButtonRow,
-  buildTextInputRow,
+  buildTextInputLabel,
   buildSelectRow,
 } from "../../functions/uiComponents.js";
 import { truncateDescription, truncateLabel } from "../../config/textLimits.js";
@@ -713,7 +713,7 @@ export class CompletionatorUiService {
       // eslint-disable-next-line local/custom-id-has-matching-handler
       .setCustomId(`comp-import-date:${userId}:${importId}:${itemId}`)
       .setTitle("Completion Date");
-    modal.addComponents(buildTextInputRow({
+    modal.addLabelComponents(buildTextInputLabel({
       customId: "completion-date",
       label: "Completion date (YYYY-MM-DD)",
       placeholder: "2025-12-31",
@@ -735,7 +735,7 @@ export class CompletionatorUiService {
       // eslint-disable-next-line local/custom-id-has-matching-handler
       .setCustomId(`comp-import-modal:${kind}:${userId}:${importId}:${itemId}`)
       .setTitle(title);
-    modal.addComponents(buildTextInputRow({
+    modal.addLabelComponents(buildTextInputLabel({
       customId: "completionator-input",
       label: label.slice(0, 45),
       placeholder: truncateLabel((itemTitle ?? placeholder)),

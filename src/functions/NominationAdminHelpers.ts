@@ -21,7 +21,7 @@ import {
   safeV2TextContent,
 } from "./ComponentsV2Utils.js";
 import { truncateWithEllipsis } from "../utilities/ValidationUtils.js";
-import { buildTextInputRow , buildSelectRow } from "./uiComponents.js";
+import { buildTextInputLabel , buildSelectRow } from "./uiComponents.js";
 import {
   buildNominationListPayload,
   type NominationListPayload,
@@ -106,7 +106,7 @@ export function buildDeletionReasonModal(
   return new ModalBuilder()
     .setCustomId(buildDeletionReasonModalCustomId(kind, round, userId))
     .setTitle("Delete nomination")
-    .addComponents(buildTextInputRow({
+    .addLabelComponents(buildTextInputLabel({
       customId: ADMIN_NOMINATION_DELETE_REASON_INPUT_ID,
       label: "Deletion reason",
       style: TextInputStyle.Paragraph,

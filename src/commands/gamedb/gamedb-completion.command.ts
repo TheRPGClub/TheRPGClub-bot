@@ -60,7 +60,7 @@ import { truncateLabel } from "../../config/textLimits.js";
 import {
   buildActionButton,
   buildButtonRow,
-  buildTextInputRow,
+  buildTextInputLabel,
   buildSelectRow,
 } from "../../functions/uiComponents.js";
 import { safeIgnore } from "../../utilities/AsyncUtils.js";
@@ -383,12 +383,19 @@ export class GameDbCompletionCommand {
       .setTitle("Add Completion Details");
 
     if (session.dateChoice === "date") {
-      modal.addComponents(buildTextInputRow({ customId: "completion-date", label: "Completion date (YYYY-MM-DD)" }));
+      modal.addLabelComponents(buildTextInputLabel({
+        customId: "completion-date",
+        label: "Completion date (YYYY-MM-DD)",
+      }));
     }
 
-    modal.addComponents(buildTextInputRow({ customId: "completion-playtime", label: "Playtime hours (optional)", required: false }));
+    modal.addLabelComponents(buildTextInputLabel({
+      customId: "completion-playtime",
+      label: "Playtime hours (optional)",
+      required: false,
+    }));
 
-    modal.addComponents(buildTextInputRow({
+    modal.addLabelComponents(buildTextInputLabel({
       customId: "completion-note",
       label: `Note (optional, ${MAX_COMPLETION_NOTE_LEN} chars max)`,
       style: TextInputStyle.Paragraph,

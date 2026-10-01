@@ -10,13 +10,11 @@ import {
   channelMention,
 } from "discord.js";
 import {
-  ActionRowBuilder as ModalActionRowBuilder,
   ModalBuilder,
-  TextInputBuilder as ModalTextInputBuilder,
   MediaGalleryBuilder,
   MediaGalleryItemBuilder,
 } from "@discordjs/builders";
-import { TextInputStyle as ApiTextInputStyle } from "discord-api-types/v10";
+import { buildTextInputLabel } from "../../functions/uiComponents.js";
 import { LIVE_EVENT_FORUM_ID } from "../../config/channels.js";
 import {
   parseOptionalUserUrl,
@@ -69,53 +67,39 @@ export function buildLiveStreamModal(customId: string): ModalBuilder {
   return new ModalBuilder()
     .setCustomId(customId)
     .setTitle("Create Live Event and Thread")
-    .addActionRowComponents(
-      new ModalActionRowBuilder<ModalTextInputBuilder>().addComponents(
-        new ModalTextInputBuilder()
-          .setCustomId(LIVE_STREAM_TOPIC_ID)
-          .setLabel("Event Topic")
-          .setStyle(ApiTextInputStyle.Short)
-          .setRequired(true)
-          .setMaxLength(100)
-          .setPlaceholder("Nintendo Direct"),
-      ),
-      new ModalActionRowBuilder<ModalTextInputBuilder>().addComponents(
-        new ModalTextInputBuilder()
-          .setCustomId(LIVE_STREAM_START_ID)
-          .setLabel("Start (YYYY-MM-DD HH:mm)")
-          .setStyle(ApiTextInputStyle.Short)
-          .setRequired(true)
-          .setMaxLength(16)
-          .setPlaceholder("2026-05-01 21:00"),
-      ),
-      new ModalActionRowBuilder<ModalTextInputBuilder>().addComponents(
-        new ModalTextInputBuilder()
-          .setCustomId(LIVE_STREAM_END_ID)
-          .setLabel("End (YYYY-MM-DD HH:mm)")
-          .setStyle(ApiTextInputStyle.Short)
-          .setRequired(true)
-          .setMaxLength(16)
-          .setPlaceholder("2026-05-01 23:00"),
-      ),
-      new ModalActionRowBuilder<ModalTextInputBuilder>().addComponents(
-        new ModalTextInputBuilder()
-          .setCustomId(LIVE_STREAM_TIMEZONE_ID)
-          .setLabel("Time Zone (IANA)")
-          .setStyle(ApiTextInputStyle.Short)
-          .setRequired(true)
-          .setMaxLength(64)
-          .setValue(DEFAULT_TIMEZONE)
-          .setPlaceholder("America/New_York"),
-      ),
-      new ModalActionRowBuilder<ModalTextInputBuilder>().addComponents(
-        new ModalTextInputBuilder()
-          .setCustomId(LIVE_STREAM_IMAGE_URL_ID)
-          .setLabel(LIVE_STREAM_IMAGE_URL_LABEL)
-          .setStyle(ApiTextInputStyle.Short)
-          .setRequired(false)
-          .setMaxLength(1000)
-          .setPlaceholder("https://example.com/image.png"),
-      ),
+    .addLabelComponents(
+      buildTextInputLabel({
+        customId: LIVE_STREAM_TOPIC_ID,
+        label: "Event Topic",
+        maxLength: 100,
+        placeholder: "Nintendo Direct",
+      }),
+      buildTextInputLabel({
+        customId: LIVE_STREAM_START_ID,
+        label: "Start (YYYY-MM-DD HH:mm)",
+        maxLength: 16,
+        placeholder: "2026-05-01 21:00",
+      }),
+      buildTextInputLabel({
+        customId: LIVE_STREAM_END_ID,
+        label: "End (YYYY-MM-DD HH:mm)",
+        maxLength: 16,
+        placeholder: "2026-05-01 23:00",
+      }),
+      buildTextInputLabel({
+        customId: LIVE_STREAM_TIMEZONE_ID,
+        label: "Time Zone (IANA)",
+        maxLength: 64,
+        value: DEFAULT_TIMEZONE,
+        placeholder: "America/New_York",
+      }),
+      buildTextInputLabel({
+        customId: LIVE_STREAM_IMAGE_URL_ID,
+        label: LIVE_STREAM_IMAGE_URL_LABEL,
+        required: false,
+        maxLength: 1000,
+        placeholder: "https://example.com/image.png",
+      }),
     );
 }
 

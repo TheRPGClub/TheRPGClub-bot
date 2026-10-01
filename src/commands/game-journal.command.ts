@@ -14,12 +14,10 @@ import {
   User,
 } from "discord.js";
 import {
-  ActionRowBuilder as ComponentsActionRowBuilder,
   ContainerBuilder,
   ModalBuilder as ComponentsModalBuilder,
-  TextInputBuilder as ComponentsTextInputBuilder,
 } from "@discordjs/builders";
-import { TextInputStyle as ApiTextInputStyle } from "discord-api-types/v10";
+import { TextInputStyle } from "discord-api-types/v10";
 import {
   ButtonComponent,
   Discord,
@@ -68,6 +66,7 @@ import {
   buildUserHeaderContainer,
   buildButtonRow,
   buildSelectRow,
+  buildTextInputLabel,
 } from "../functions/uiComponents.js";
 import {
   GJ_CLOSE_PREFIX,
@@ -150,25 +149,21 @@ function buildHmenuModal(
   const modal = new ComponentsModalBuilder()
     .setCustomId(modalId)
     .setTitle(modalTitle);
-  modal.addActionRowComponents(
-    new ComponentsActionRowBuilder<ComponentsTextInputBuilder>().addComponents(
-      new ComponentsTextInputBuilder()
-        .setCustomId(JOURNAL_TITLE_INPUT_ID)
-        .setLabel("Title (optional)")
-        .setStyle(ApiTextInputStyle.Short)
-        .setRequired(false)
-        .setMaxLength(120)
-        .setValue((prefillTitle ?? "").slice(0, 120)),
-    ),
-    new ComponentsActionRowBuilder<ComponentsTextInputBuilder>().addComponents(
-      new ComponentsTextInputBuilder()
-        .setCustomId(JOURNAL_BODY_INPUT_ID)
-        .setLabel("Entry")
-        .setStyle(ApiTextInputStyle.Paragraph)
-        .setRequired(true)
-        .setMaxLength(2000)
-        .setValue((prefillBody ?? "").slice(0, 2000)),
-    ),
+  modal.addLabelComponents(
+    buildTextInputLabel({
+      customId: JOURNAL_TITLE_INPUT_ID,
+      label: "Title (optional)",
+      required: false,
+      maxLength: 120,
+      value: (prefillTitle ?? "").slice(0, 120),
+    }),
+    buildTextInputLabel({
+      customId: JOURNAL_BODY_INPUT_ID,
+      label: "Entry",
+      style: TextInputStyle.Paragraph,
+      maxLength: 2000,
+      value: (prefillBody ?? "").slice(0, 2000),
+    }),
   );
   return modal;
 }

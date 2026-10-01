@@ -80,7 +80,7 @@ import {
 import {
   buildActionButton,
   buildSelectOptions,
-  buildTextInputRow,
+  buildTextInputLabel,
   buildButtonRow,
   buildSelectRow,
 } from "../functions/uiComponents.js";
@@ -389,10 +389,22 @@ function buildDonateModal(): ModalBuilder {
 
     .setCustomId(GIVEAWAY_DONATE_MODAL_ID)
     .setTitle("Donate a Game Key")
-    .addComponents(
-      buildTextInputRow({ customId: GIVEAWAY_DONATE_TITLE_ID, label: "Game title", maxLength: GIVEAWAY_MAX_TITLE_LENGTH }),
-      buildTextInputRow({ customId: GIVEAWAY_DONATE_PLATFORM_ID, label: "Platform (Steam, Epic, GOG, etc.)", maxLength: GIVEAWAY_MAX_PLATFORM_LENGTH }),
-      buildTextInputRow({ customId: GIVEAWAY_DONATE_KEY_ID, label: "Game key", maxLength: GIVEAWAY_MAX_KEY_LENGTH }),
+    .addLabelComponents(
+      buildTextInputLabel({
+        customId: GIVEAWAY_DONATE_TITLE_ID,
+        label: "Game title",
+        maxLength: GIVEAWAY_MAX_TITLE_LENGTH,
+      }),
+      buildTextInputLabel({
+        customId: GIVEAWAY_DONATE_PLATFORM_ID,
+        label: "Platform (Steam, Epic, GOG, etc.)",
+        maxLength: GIVEAWAY_MAX_PLATFORM_LENGTH,
+      }),
+      buildTextInputLabel({
+        customId: GIVEAWAY_DONATE_KEY_ID,
+        label: "Game key",
+        maxLength: GIVEAWAY_MAX_KEY_LENGTH,
+      }),
     );
 }
 
@@ -401,7 +413,9 @@ function buildRevokeModal(): ModalBuilder {
 
     .setCustomId(GIVEAWAY_REVOKE_MODAL_ID)
     .setTitle("Revoke a Game Key")
-    .addComponents(buildTextInputRow({ customId: GIVEAWAY_REVOKE_KEY_ID, label: "Key ID" }));
+    .addLabelComponents(
+      buildTextInputLabel({ customId: GIVEAWAY_REVOKE_KEY_ID, label: "Key ID" }),
+    );
 }
 
 function buildKeyListComponents(
