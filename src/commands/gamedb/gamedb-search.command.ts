@@ -21,7 +21,6 @@ import {
   safeDeferUpdate,
   safeEditReply,
   safeReply,
-  safeEditReply,
   sanitizeUserInput,
   replyIfNotOwner,
 } from "../../functions/InteractionUtils.js";
