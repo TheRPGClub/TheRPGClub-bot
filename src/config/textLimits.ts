@@ -8,6 +8,8 @@ export const DISCORD_BUTTON_LABEL_MAX = 80;
 export const DISCORD_CUSTOM_ID_MAX = 100;
 // Every component in a Components V2 message, nested ones included.
 export const DISCORD_V2_COMPONENTS_MAX = 40;
+// Every text display in a Components V2 message, added together.
+export const DISCORD_V2_TEXT_MAX = 4000;
 export const DISCORD_MODAL_TITLE_MAX = 45;
 export const DISCORD_TEXT_INPUT_MAX = 4000;
 export const DISCORD_THREAD_NAME_MAX = 100;

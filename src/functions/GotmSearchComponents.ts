@@ -141,16 +141,8 @@ export async function buildGotmSearchMessages(
 
       for (let itemIndex = 0; itemIndex < chunk.length; itemIndex += 1) {
         const card = chunk[itemIndex];
-        const lines = [
-          `### ${card.title}`,
-          `-# ${card.kindLabel} | Round ${card.round} | ${card.monthYear}`,
-        ];
-        const detailsLine = buildDetailsLine(card, options.guildId);
-        if (detailsLine) {
-          lines.push(detailsLine);
-        }
         const section = new SectionBuilder().addTextDisplayComponents(
-          new TextDisplayBuilder().setContent(safeV2TextContent(lines.join("\n"), 1000)),
+          new TextDisplayBuilder().setContent(buildGotmCardText(card, options.guildId)),
         );
 
         const accessory = await resolveAccessoryThumbnail(
@@ -177,6 +169,18 @@ export async function buildGotmSearchMessages(
   }
 
   return payloads;
+}
+
+export function buildGotmCardText(card: GotmDisplayCard, guildId?: string): string {
+  const lines = [
+    `### ${card.title}`,
+    `-# ${card.kindLabel} | Round ${card.round} | ${card.monthYear}`,
+  ];
+  const detailsLine = buildDetailsLine(card, guildId);
+  if (detailsLine) {
+    lines.push(detailsLine);
+  }
+  return safeV2TextContent(lines.join("\n"), 1000);
 }
 
 function buildDetailsLine(card: GotmDisplayCard, guildId?: string): string | null {

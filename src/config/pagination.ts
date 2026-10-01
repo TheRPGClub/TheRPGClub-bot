@@ -1,4 +1,4 @@
-import { DISCORD_V2_COMPONENTS_MAX } from "./textLimits.js";
+import { DISCORD_V2_COMPONENTS_MAX, DISCORD_V2_TEXT_MAX } from "./textLimits.js";
 
 export const DEFAULT_PAGE_SIZE         = 20;
 export const AVATAR_HISTORY_PAGE_SIZE  = 20;
@@ -27,3 +27,7 @@ export const ROUND_HISTORY_GAMES_PER_PAGE = Math.floor(
   (DISCORD_V2_COMPONENTS_MAX - ROUND_HISTORY_FIXED_COMPONENTS) /
     ROUND_HISTORY_COMPONENTS_PER_GAME,
 );
+// The page title and filter intro (its query capped at MAX_QUERY_LENGTH) stay under this.
+const ROUND_HISTORY_HEADER_TEXT_RESERVE = 500;
+export const ROUND_HISTORY_CARD_TEXT_BUDGET =
+  DISCORD_V2_TEXT_MAX - ROUND_HISTORY_HEADER_TEXT_RESERVE;

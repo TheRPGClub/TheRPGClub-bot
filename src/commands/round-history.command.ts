@@ -35,6 +35,7 @@ import type { INrGotmEntry } from "../classes/NrGotm.js";
 import NrGotm from "../classes/NrGotm.js";
 import {
   buildGotmCardsFromEntries,
+  buildGotmCardText,
   buildGotmSearchMessages,
   type GotmDisplayCard,
 } from "../functions/GotmSearchComponents.js";
@@ -53,7 +54,10 @@ import {
 import { buildCaughtErrorMessage } from "../utilities/ApiErrorUtils.js";
 import { decodeBase64Url, encodeBase64Url } from "../functions/CustomIdUtils.js";
 import { parseCustomIdSegments } from "../utilities/CustomIdUtils.js";
-import { ROUND_HISTORY_GAMES_PER_PAGE } from "../config/pagination.js";
+import {
+  ROUND_HISTORY_CARD_TEXT_BUDGET,
+  ROUND_HISTORY_GAMES_PER_PAGE,
+} from "../config/pagination.js";
 import { DISCORD_SELECT_OPTIONS_MAX } from "../config/textLimits.js";
 import {
   buildDisabledPrevNextRowWithIds,
@@ -425,9 +429,12 @@ type IRoundHistoryResponse = {
 
 type IRoundHistoryPage = {
   cards: GotmDisplayCard[];
+  textLength: number;
   firstRoundIndex: number;
   lastRoundIndex: number;
 };
+
+type IRoundHistoryCardCost = { card: GotmDisplayCard; textLength: number };
 
 function buildRoundCards(round: IRoundHistoryRecord): GotmDisplayCard[] {
   return [
@@ -443,28 +450,45 @@ function buildRoundCards(round: IRoundHistoryRecord): GotmDisplayCard[] {
   });
 }
 
-// Pages are packed by game count so each reply stays under the component limit. A round
-// stays on one page unless it alone holds more games than a page fits.
-export function paginateRoundHistory(rounds: IRoundHistoryRecord[]): IRoundHistoryPage[] {
+function pageFits(page: IRoundHistoryPage, costs: IRoundHistoryCardCost[]): boolean {
+  const textLength = costs.reduce((sum, cost) => sum + cost.textLength, page.textLength);
+  return (
+    page.cards.length + costs.length <= ROUND_HISTORY_GAMES_PER_PAGE &&
+    textLength <= ROUND_HISTORY_CARD_TEXT_BUDGET
+  );
+}
+
+// Pages are packed by game count and text length so each reply stays under the Components V2
+// limits. A round stays on one page unless it alone holds more than a page fits.
+export function paginateRoundHistory(
+  rounds: IRoundHistoryRecord[],
+  guildId?: string,
+): IRoundHistoryPage[] {
   const pages: IRoundHistoryPage[] = [];
+  const startPage = (roundIndex: number): IRoundHistoryPage => {
+    const page = {
+      cards: [], textLength: 0, firstRoundIndex: roundIndex, lastRoundIndex: roundIndex,
+    };
+    pages.push(page);
+    return page;
+  };
+
   let current: IRoundHistoryPage | null = null;
   rounds.forEach((round, roundIndex) => {
-    const roundCards = buildRoundCards(round);
-    if (current && current.cards.length + roundCards.length > ROUND_HISTORY_GAMES_PER_PAGE) {
-      current = null;
-    }
-    let offset = 0;
-    do {
-      const pageFull = current && current.cards.length >= ROUND_HISTORY_GAMES_PER_PAGE;
-      if (!current || (pageFull && offset < roundCards.length)) {
-        current = { cards: [], firstRoundIndex: roundIndex, lastRoundIndex: roundIndex };
-        pages.push(current);
+    const costs = buildRoundCards(round).map((card) => ({
+      card,
+      textLength: buildGotmCardText(card, guildId).length,
+    }));
+    let page = current && pageFits(current, costs) ? current : startPage(roundIndex);
+    for (const cost of costs) {
+      if (!pageFits(page, [cost])) {
+        page = startPage(roundIndex);
       }
-      const room = ROUND_HISTORY_GAMES_PER_PAGE - current.cards.length;
-      current.cards.push(...roundCards.slice(offset, offset + room));
-      current.lastRoundIndex = roundIndex;
-      offset += room;
-    } while (offset < roundCards.length);
+      page.cards.push(cost.card);
+      page.textLength += cost.textLength;
+    }
+    page.lastRoundIndex = roundIndex;
+    current = page;
   });
   return pages;
 }
@@ -524,7 +548,7 @@ export async function buildRoundHistoryPageResponse(
   state: IRoundHistoryFilterState,
   allRounds: IRoundHistoryRecord[],
 ): Promise<IRoundHistoryResponse> {
-  const pages = paginateRoundHistory(allRounds);
+  const pages = paginateRoundHistory(allRounds, guildId);
   const totalPages = Math.max(1, pages.length);
   const safePage = Math.min(Math.max(state.page, 0), totalPages - 1);
   const page = pages[safePage];
