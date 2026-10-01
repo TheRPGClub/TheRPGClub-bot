@@ -23,7 +23,7 @@ entry for every new problem. The `playwright-log` skill
   the test data (for example `title:Chrono Trig` and `platform:SNES`). For an
   autocomplete option, use a value the bot resolves on its own, such as an abbreviation.
   The runner may send the typed text before any suggestion loads.
-- Set `Ephemeral:` from the defer call the code makes, not from the reply's flags.
+- When a reply fills a defer, set `Ephemeral:` from the defer call, not the reply's flags.
   `/admin`, `/mod`, and `/superadmin` slash commands defer ephemerally by default
   (`safeDeferReply`), so their replies land only in the mirror: `Ephemeral: yes`. A form
   submitted from their buttons defers on its own and is usually public.

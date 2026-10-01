@@ -61,9 +61,9 @@ block chains several actions.
   exist in the test data, not `<placeholders>`.
   Do not guess a record from a low number (NR-GOTM has no round 1); take values from
   `docs/test-plans/` or test a path that needs no data.
-- `Ephemeral:` follows the reply's defer, not its flags. `/admin`, `/mod`, and
-  `/superadmin` slash commands defer ephemerally by default, so their replies are
-  `Ephemeral: yes`.
+- When a reply fills a deferred response, `Ephemeral:` follows the defer, not the
+  reply's flags. `/admin`, `/mod`, and `/superadmin` slash commands defer ephemerally
+  by default, so their replies are `Ephemeral: yes`.
 
 ## Checks in `Expected:`
 
