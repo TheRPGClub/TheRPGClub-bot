@@ -12,7 +12,13 @@ import * as os from "os";
 import * as path from "path";
 import { createInterface } from "readline/promises";
 
-import { chromium, errors, type BrowserContext, type Page } from "playwright-core";
+import {
+  chromium,
+  errors,
+  type BrowserContext,
+  type Locator,
+  type Page,
+} from "playwright-core";
 
 import { TEST_GUILD_IDS, TEST_GUILD_SNOWFLAKE } from "../../src/config/testGuild.ts";
 import { parseDriveAction, type DriveAction } from "../../src/conductor/DriveActions.ts";
@@ -21,7 +27,9 @@ import {
   currentStep,
   findStepMessage,
   HandOff,
+  messageList,
   newestText,
+  passkeyButton,
   pendingVerdict,
   performAction,
   reportUrl,
@@ -222,14 +230,63 @@ async function check(page: Page, pr: number, n: number): Promise<string | null> 
   return verdict ?? "the conductor gave no verdict";
 }
 
+/** Waits for `locator` to show: false when it does not within `ms`. */
+async function shows(locator: Locator, ms: number): Promise<boolean> {
+  try {
+    await locator.waitFor({ state: "visible", timeout: ms });
+    return true;
+  } catch (err: unknown) {
+    if (err instanceof errors.TimeoutError) return false;
+    throw err;
+  }
+}
+
+/** Opens the passkey prompt for the tester: true when the login page offered one. */
+async function startPasskeySignIn(page: Page): Promise<boolean> {
+  const button = passkeyButton(page);
+  if (!await shows(button, TIMING.controlMs)) return false;
+  await button.click();
+  return true;
+}
+
+/**
+ * Waits for the channel's messages, reloading the channel when Discord hangs after sign-in
+ * (a spinner or a blank app that a refresh clears).
+ */
+async function waitForChannel(page: Page, channelUrl: string): Promise<void> {
+  for (let reloads = 0; ; reloads += 1) {
+    // A page other than the channel (such as @me) never shows its list, so skip the wait.
+    const onChannel = page.url().startsWith(channelUrl);
+    if (onChannel && await shows(messageList(page).first(), TIMING.channelLoadMs)) return;
+    if (reloads === TIMING.channelReloads) break;
+    console.log(
+      `The channel did not load; reloading (${reloads + 1} of ${TIMING.channelReloads}).`,
+    );
+    try {
+      // The app shell is enough; the message list wait above decides whether it loaded.
+      await page.goto(channelUrl, { waitUntil: "domcontentloaded" });
+    } catch (err: unknown) {
+      if (!(err instanceof errors.TimeoutError)) throw err;
+    }
+  }
+  throw new Stop(`The channel did not load after ${TIMING.channelReloads} reloads.`);
+}
+
 async function signIn(page: Page, channelUrl: string): Promise<void> {
   await page.goto(channelUrl);
-  if (!page.url().includes("/login")) return;
-  console.log("Sign in to Discord in the browser window. The runner never types there.");
-  const done = await poll(page, TIMING.handOffMs, async () =>
-    page.url().startsWith(channelUrl) ? true : null,
-  );
-  if (!done) throw new Stop("Not signed in; stopping.");
+  if (page.url().includes("/login")) {
+    const prompted = await startPasskeySignIn(page);
+    console.log(
+      prompted
+        ? "Opened the passkey sign-in. Pick your passkey in the browser window."
+        : "Sign in to Discord in the browser window. The runner never types there.",
+    );
+    const done = await poll(page, TIMING.handOffMs, async () =>
+      page.url().includes("/login") ? null : true,
+    );
+    if (!done) throw new Stop("Not signed in; stopping.");
+  }
+  await waitForChannel(page, channelUrl);
 }
 
 async function walk(

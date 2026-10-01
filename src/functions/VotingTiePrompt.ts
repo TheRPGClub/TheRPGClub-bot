@@ -21,7 +21,11 @@ import {
 } from "../config/textLimits.js";
 import { parseCustomIdSegments, validateCustomId } from "../utilities/CustomIdUtils.js";
 import type { WinnerKindLabel } from "../services/WinnerThreadService.js";
-import { buildTextContainer, safeV2TextContent } from "./ComponentsV2Utils.js";
+import {
+  buildAccentContainer,
+  safeV2TextContent,
+} from "./ComponentsV2Utils.js";
+import { COLOR_SUCCESS, COLOR_WARNING } from "../config/colors.js";
 import { buildSelectOptions, buildSelectRow } from "./uiComponents.js";
 
 export const TIE_BREAK_SELECT_PREFIX = "admin-vote-tie";
@@ -55,14 +59,14 @@ export function buildTiePendingText(round: IVotingRound): string {
   const hadRunoff = listRunoffCategories(round.runoffTies).length > 0;
   return [
     hadRunoff
-      ? `## Round ${round.roundNumber} runoff did not break the tie`
-      : `## Round ${round.roundNumber} voting ended in a tie`,
-    (hadRunoff
+      ? `## ⚖️ Round ${round.roundNumber} runoff did not break the tie`
+      : `## ⚖️ Round ${round.roundNumber} voting ended in a tie`,
+    hadRunoff
       ? "The runoff between the tied games tied again or got no votes, so an admin needs " +
-        "to pick the winner for each category below. "
-      : "An admin needs to pick the winner for each tied category below. ") +
-      "Pick more than one game to make them joint winners. The round is decided, and " +
-      "nominations for the next one open, once every tie is broken.",
+        "to pick the winner for each category below."
+      : "An admin needs to pick the winner for each tied category below.",
+    "- Pick more than one game to make them joint winners.",
+    "- The round is decided, and nominations for the next one open, once every tie is broken.",
   ].join("\n");
 }
 
@@ -104,8 +108,8 @@ function buildCategoryContainer(
   withCovers: boolean,
   selectId: TieBreakSelectIdBuilder,
 ): ContainerBuilder {
-  const heading = `### ${VOTING_CATEGORY_LABEL[category]} tie`;
-  const container = new ContainerBuilder();
+  const heading = `### ⚖️ ${VOTING_CATEGORY_LABEL[category]} tie`;
+  const container = new ContainerBuilder().setAccentColor(COLOR_WARNING);
   if (withCovers) {
     container.addTextDisplayComponents(
       new TextDisplayBuilder().setContent(safeV2TextContent(heading, MAX_SECTION_TEXT)),
@@ -158,7 +162,7 @@ export function buildTiePromptComponents(
       ties.reduce((sum, tie) => sum + countCategoryComponents(tie.games), 0) <=
     DISCORD_V2_COMPONENTS_MAX;
   return [
-    buildTextContainer(buildTiePendingText(round)),
+    buildAccentContainer(buildTiePendingText(round), COLOR_WARNING),
     ...ties.map((tie) =>
       buildCategoryContainer(round.roundNumber, tie.category, tie.games, withCovers, selectId),
     ),
@@ -173,8 +177,9 @@ export function buildResolvedTieContainer(
   const label = VOTING_CATEGORY_LABEL[category];
   const winners = winnerTitles.map((title) => `**${title}**`).join(", ");
   const noun = winnerTitles.length === 1 ? "winner" : "joint winners";
-  return buildTextContainer(
-    `### ${label} tie broken\n${winners} picked as the ${label} ${noun} by <@${adminId}>.`,
+  return buildAccentContainer(
+    `### ✅ ${label} tie broken\n${winners} picked as the ${label} ${noun} by <@${adminId}>.`,
+    COLOR_SUCCESS,
   );
 }
 

@@ -141,6 +141,7 @@ export class VoteCommand {
         ballot,
         roundNumber: round.roundNumber,
         voteDeadline: open.deadline,
+        monthLabel: round.monthYear,
         cap: tally.cap,
         nominations,
         myVotes,
@@ -150,6 +151,15 @@ export class VoteCommand {
         flags: buildComponentsV2Flags(true),
       });
     }, "Could not load the voting panel");
+  }
+
+  @ButtonComponent({ id: /^vote-(runoff-)?pick:(gotm|nr-gotm):\d+:\d+$/ })
+  async handleVotePick(interaction: ButtonInteraction): Promise<void> {
+    await respondVoteCast(
+      interaction,
+      parseVoteCustomId(interaction.customId),
+      apiVotingDataSource,
+    );
   }
 
   @SelectMenuComponent({ id: /^vote-(runoff-)?cast:(gotm|nr-gotm):\d+:\d+$/ })

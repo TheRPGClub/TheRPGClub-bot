@@ -13,9 +13,9 @@ Real, the same code production runs:
   kind, including their "this no longer applies" skips.
 - The delivery loop (`processVotingEvents`): events go out oldest first, a failed post
   stays queued and holds back the round's later events.
-- The vote panels, the vote select, My Votes and Results buttons, the results
-  announcement, the runoff panels and runoff results, the tie prompt and the tie-break
-  select.
+- The vote panels, their game buttons (or the vote select past 25 games), My Votes and
+  Results buttons, the results announcement, the runoff panels and runoff results, the
+  tie prompt and the tie-break select.
 - Channel routing: posts go to the test guild's announcements, admin and nomination
   channels through the normal `src/config/channels.ts` constants.
 - The Discord scheduled event for the next round's vote, created in the test guild.

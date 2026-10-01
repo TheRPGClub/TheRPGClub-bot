@@ -57,6 +57,8 @@ test("parseVoteCustomId reads the ballot from the panel's prefix", () => {
     ballot: "main",
   });
   assert.deepEqual(parseVoteCustomId("vote-runoff-mine:gotm:143"), GOTM_RUNOFF);
+  assert.deepEqual(parseVoteCustomId("vote-runoff-pick:gotm:143:7"), GOTM_RUNOFF);
+  assert.deepEqual(parseVoteCustomId("vote-pick:gotm:143:7"), GOTM_MAIN);
   assert.equal(parseVoteCustomId("vote-other:gotm:143"), null);
   assert.equal(parseVoteCustomId("vote-runoff-cast:retro:143:0"), null);
   assert.equal(parseVoteCustomId("vote-runoff-cast:gotm:0:0"), null);
@@ -74,12 +76,13 @@ test("a runoff panel offers one vote and routes to the runoff handlers", () => {
     }).map((component) => component.toJSON()),
   );
   assert.match(json, /GOTM Runoff - Round 143/);
-  assert.match(json, /Vote for \*\*1\*\* game using/);
-  assert.match(json, /The runoff closes <t:/);
-  assert.match(json, /"custom_id":"vote-runoff-cast:gotm:143:0"/);
+  assert.match(json, /vote ended in a tie, so this runoff between the tied games decides/);
+  assert.match(json, /Vote for up to \*\*1\*\* game/);
+  assert.match(json, /"custom_id":"vote-runoff-pick:gotm:143:1"/);
+  assert.match(json, /"custom_id":"vote-runoff-pick:gotm:143:2"/);
   assert.match(json, /"custom_id":"vote-runoff-mine:gotm:143"/);
   assert.match(json, /"custom_id":"vote-runoff-tally:gotm:143"/);
-  assert.doesNotMatch(json, /"vote-cast:/);
+  assert.doesNotMatch(json, /"vote-(pick|cast):/);
 });
 
 test("a runoff ballot is open only for a category still in the runoff", () => {

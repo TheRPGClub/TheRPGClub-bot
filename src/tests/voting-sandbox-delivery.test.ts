@@ -111,9 +111,9 @@ test("voting_opened posts sandbox panels to announcements through the live handl
   assert.equal(sent.length, 2);
   assert.ok(sent.every((message) => message.channelId === ANNOUNCEMENT_CHANNEL_ID));
   for (const message of sent) {
-    assert.match(message.json, new RegExp(`vsbx-cast:${ownerId}:cafe01:999:`));
+    assert.match(message.json, new RegExp(`vsbx-pick:${ownerId}:cafe01:999:`));
     assert.match(message.json, /VOTING SANDBOX/);
-    assert.doesNotMatch(message.json, /"vote-cast:/);
+    assert.doesNotMatch(message.json, /"vote-(cast|pick):/);
   }
   assert.equal((await loadSandbox(ownerId))?.outbox.length, 0);
 });
@@ -143,7 +143,7 @@ test("a tie opens a runoff whose panels offer only the tied games", async (t) =>
   const panels = sent.filter((message) => /GOTM Runoff - Round 999/.test(message.json));
   assert.equal(panels.length, 1, "only the tied category gets a runoff panel");
   const panel = panels[0]?.json ?? "";
-  assert.match(panel, new RegExp(`vsbx-rcast:${ownerId}:beef02:999:gotm:0`));
+  assert.match(panel, new RegExp(`vsbx-rpick:${ownerId}:beef02:999:gotm:\\d+`));
   assert.match(panel, /VOTING SANDBOX/);
   assert.match(panel, /Sandbox GOTM Game 1/);
   assert.match(panel, /Sandbox GOTM Game 2/);
@@ -413,6 +413,9 @@ test("sandbox ids carry owner, sandbox and round, and stay within Discord's limi
     roundNumber: 123456,
     rest: ["nr-gotm", "1"],
   });
+  const pick = ids.pick("nr-gotm", 123456, 2147483647);
+  assert.ok(pick.length <= 100);
+  assert.deepEqual(parseSandboxCustomId(pick)?.rest, ["nr-gotm", "2147483647"]);
   const tie = buildSandboxTieSelectId(target, 999, "nr_gotm");
   assert.equal(parseSandboxCustomId(tie)?.rest[0], "nr_gotm");
   assert.equal(parseSandboxCustomId(`vsbx-mine:${target.ownerId}:x:0:gotm`), null);

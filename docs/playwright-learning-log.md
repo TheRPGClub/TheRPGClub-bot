@@ -47,7 +47,10 @@ entry for every new problem. The `playwright-log` skill
 
 - Run it from an up-to-date `main` checkout. It refuses to start when the checkout lacks a
   runner commit from `origin/main`.
-- Each run opens a clean Chrome profile. The tester signs in every time (a passkey works).
+- Each run opens a clean Chrome profile. The tester signs in every time: the runner clicks
+  the login page's passkey button, and the tester only picks the passkey.
+- Discord can hang after sign-in. The runner reloads the channel until its messages show,
+  up to three times, before it stops.
 - If the bot does not respond, check that a preview container is running and which commit
   the conductor is live at, with `bash scripts/preview/fetch-logs.sh 400`.
 - A mirror post is never cut off. A payload over 2000 characters goes whole into a
@@ -257,3 +260,15 @@ entry for every new problem. The `playwright-log` skill
   button label so a step can click it, and rewrites `docs/test-plans/admin-rounds.md`.
 - **Lesson:** read the defer call before setting `Ephemeral:`, and never pick a record
   by a guessed number.
+
+### 2026-10-01: Discord hung after sign-in
+
+- **Symptom:** after the tester signed in, the Discord tab hung and never showed the test
+  channel until the tester refreshed it by hand. The tester also clicked the passkey sign-in
+  button by hand on every run.
+- **Cause:** not confirmed; a refresh always cleared it. The runner waited only for the
+  URL, which already pointed at the channel, so it never noticed the hang.
+- **Fix:** the runner now clicks the login page's passkey button itself, then waits for the
+  channel's message list and reloads the channel when it does not show in 30 seconds, up to
+  three times.
+- **Lesson:** a URL is not proof a page loaded; wait for something the page renders.

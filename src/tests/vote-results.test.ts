@@ -237,7 +237,7 @@ test("buildWinnerAnnouncementText covers winner, tie, and no-votes cases", () =>
     ],
     runoff: false,
   });
-  assert.match(beforeRunoffs, /The admins will decide the final pick\./);
+  assert.match(beforeRunoffs, /The admins will pick the final winner\./);
 
   const none = buildWinnerAnnouncementText({
     kindLabel: "GOTM",

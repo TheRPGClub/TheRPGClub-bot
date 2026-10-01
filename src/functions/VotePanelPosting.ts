@@ -67,6 +67,8 @@ export interface IPostVotePanelsParams {
   client: Client;
   channelId: string;
   roundNumber: number;
+  /** The month the round's winners are played, for the panel's question. */
+  monthLabel?: string | null;
   voteDeadline: Date | null;
   nominationsByKind: Map<NominationKind, INominationEntry[]>;
   /** Adds the rehearsal banner; the controls themselves are unchanged. */
@@ -121,6 +123,7 @@ export async function postVotePanels(
       ballot,
       kind,
       roundNumber: params.roundNumber,
+      monthLabel: params.monthLabel,
       voteDeadline: params.voteDeadline,
       cap: tally.cap,
       nominations,

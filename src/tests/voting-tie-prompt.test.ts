@@ -73,13 +73,13 @@ test("parseTieBreakSelectId rejects ids that are not a tie-break select", () => 
 test("buildTiePendingText names the round", () => {
   const text = buildTiePendingText(tieRound({ gotm: games(2, false) }));
 
-  assert.match(text, /^## Round 143 voting ended in a tie/);
+  assert.match(text, /^## ⚖️ Round 143 voting ended in a tie/);
 });
 
 test("buildTiePendingText says when the runoff did not break the tie", () => {
   const text = buildTiePendingText(tieRound({ gotm: games(2, false) }, { gotm: games(3, false) }));
 
-  assert.match(text, /^## Round 143 runoff did not break the tie/);
+  assert.match(text, /^## ⚖️ Round 143 runoff did not break the tie/);
   assert.match(text, /tied again or got no votes/);
 });
 

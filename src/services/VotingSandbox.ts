@@ -49,6 +49,7 @@ const SESSION_KIND = "vote-sandbox";
 const SESSION_ID = "current";
 
 export const SANDBOX_CUSTOM_ID_PREFIX = {
+  pick: "vsbx-pick",
   cast: "vsbx-cast",
   mine: "vsbx-mine",
   tally: "vsbx-tally",
@@ -57,6 +58,7 @@ export const SANDBOX_CUSTOM_ID_PREFIX = {
 
 /** The sandbox's runoff panels, kept apart from its voting panels by prefix. */
 export const SANDBOX_RUNOFF_CUSTOM_ID_PREFIX = {
+  pick: "vsbx-rpick",
   cast: "vsbx-rcast",
   mine: "vsbx-rmine",
   tally: "vsbx-rtally",
@@ -177,7 +179,8 @@ export interface ISandboxTarget {
 }
 
 /**
- * Sandbox ids are `<prefix>:<owner>:<sandbox>:<round>:<kind or category>[:<chunk>]`.
+ * Sandbox ids are
+ * `<prefix>:<owner>:<sandbox>:<round>:<kind or category>[:<chunk or nomination>]`.
  * Everything a handler needs is in the id, so no read runs before it defers.
  */
 function sandboxIdBase(target: ISandboxTarget, roundNumber: number): string {
@@ -190,6 +193,8 @@ export function buildSandboxPanelIds(
 ): IVotePanelIds {
   const prefix = ballot === "runoff" ? SANDBOX_RUNOFF_CUSTOM_ID_PREFIX : SANDBOX_CUSTOM_ID_PREFIX;
   return {
+    pick: (kind, round, nominationId) =>
+      `${prefix.pick}:${sandboxIdBase(target, round)}:${kind}:${nominationId}`,
     cast: (kind, round, chunk) =>
       `${prefix.cast}:${sandboxIdBase(target, round)}:${kind}:${chunk}`,
     mine: (kind, round) => `${prefix.mine}:${sandboxIdBase(target, round)}:${kind}`,
@@ -207,7 +212,7 @@ export function buildSandboxTieSelectId(
 
 export interface IParsedSandboxCustomId extends ISandboxTarget {
   roundNumber: number;
-  /** The kind or category, then the select chunk for a cast id. */
+  /** The kind or category, then the select chunk or nomination for a cast id. */
   rest: string[];
 }
 

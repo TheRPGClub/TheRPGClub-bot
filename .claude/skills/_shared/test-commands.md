@@ -40,7 +40,8 @@ the runner's code (`docs/conductor.md#playwright-runner`). Before offering the b
 sync the branch with main when main has moved on, so the Run button does not stop there.
 
 The runner opens a new, empty Chrome profile every run, so say the tester signs in to
-Discord in the window it opens (a passkey from their phone works). Nothing is kept
+Discord in the window it opens: the runner clicks the passkey button, and the tester picks
+the passkey (one on their phone works). Nothing is kept
 between runs.
 
 When the tester reports a run that failed, handed a step back, or needed a manual

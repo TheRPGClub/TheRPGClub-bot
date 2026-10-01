@@ -20,9 +20,16 @@ import {
 } from "../functions/VoteResultsUtils.js";
 import { ensureWinnerThread, type WinnerKindLabel } from "./WinnerThreadService.js";
 import {
+  buildAccentContainer,
   buildComponentsV2Flags,
   buildTextContainer,
 } from "../functions/ComponentsV2Utils.js";
+import {
+  COLOR_HIGHLIGHT,
+  COLOR_NEUTRAL,
+  COLOR_PRIMARY,
+  COLOR_WARNING,
+} from "../config/colors.js";
 import { ANNOUNCEMENT_CHANNEL_ID } from "../config/channels.js";
 import { fetchGameCoverBuffer } from "./GameImageService.js";
 import { fetchSendableChannel, type SendableChannel } from "../functions/ChannelUtils.js";
@@ -93,6 +100,14 @@ interface IWinnerAnnouncement {
   kindLabel: WinnerKindLabel;
   text: string;
   soleWinner: ITallyDisplayRow | null;
+  /** Gold for a winner, amber for a tie, grey when no votes were cast. */
+  accentColor: number;
+}
+
+/** The accent a category's verdict carries: a sole winner, a tie, or nothing. */
+function verdictAccent(winnerCount: number): number {
+  if (winnerCount === 1) return COLOR_HIGHLIGHT;
+  return winnerCount ? COLOR_WARNING : COLOR_NEUTRAL;
 }
 
 /**
@@ -130,7 +145,7 @@ async function postWinnerAnnouncements(
         logError("VotingResultsAnnouncement.ensureWinnerThread", error);
       }
     }
-    const container = buildTextContainer(text);
+    const container = buildAccentContainer(text, announcement.accentColor);
     if (winner && (options.hasCover?.(winner.gamedbGameId) ?? true)) {
       files.push(...(await addWinnerCovers(container, [winner.gamedbGameId])));
     }
@@ -208,7 +223,7 @@ export async function announceVotingResults(
     }
     const rows = mergeTallyWithNominations(tally.rows, nominations);
     tallyContainers.push(
-      buildTextContainer(
+      buildAccentContainer(
         buildTallyText({
           kindLabel,
           roundNumber: round.roundNumber,
@@ -217,6 +232,7 @@ export async function announceVotingResults(
           votingOpen: false,
           voteDeadline: null,
         }),
+        COLOR_PRIMARY,
       ),
     );
     const winners = pickWinningRows(rows);
@@ -230,6 +246,7 @@ export async function announceVotingResults(
         runoff: Boolean(runoffTies[toVotingRoundCategory(kind)]?.length),
       }),
       soleWinner: winners.length === 1 ? winners[0] ?? null : null,
+      accentColor: verdictAccent(winners.length),
     });
   }
 
@@ -268,7 +285,7 @@ export async function announceRunoffResults(
       filterRunoffNominations(nominations, tied),
     );
     tallyContainers.push(
-      buildTextContainer(
+      buildAccentContainer(
         buildTallyText({
           kindLabel: ballotKindLabel(kindLabel, "runoff"),
           roundNumber: round.roundNumber,
@@ -277,6 +294,7 @@ export async function announceRunoffResults(
           votingOpen: false,
           voteDeadline: null,
         }),
+        COLOR_PRIMARY,
       ),
     );
     const leaders = pickWinningRows(rows);
@@ -291,6 +309,7 @@ export async function announceRunoffResults(
         stillTied,
       }),
       soleWinner: !stillTied.length && leaders.length === 1 ? leaders[0] ?? null : null,
+      accentColor: stillTied.length ? COLOR_WARNING : verdictAccent(leaders.length === 1 ? 1 : 0),
     });
   }
 

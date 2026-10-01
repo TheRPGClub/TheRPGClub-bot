@@ -67,7 +67,7 @@ Ephemeral: yes
 
 ### Step 6: Vote on the Round 500 panel
 ```
-select "Sandbox GOTM Game 1" on the Round 500 GOTM sandbox panel in announcements
+click "Sandbox GOTM Game 1" on the Round 500 GOTM sandbox panel in announcements
 ```
 Expected: an ephemeral reply, "Vote recorded for", "Sandbox GOTM Game 1", and
 "Your GOTM votes for Round 500 (1/1)".
@@ -83,7 +83,7 @@ Ephemeral: yes
 
 ### Step 8: Vote after voting has closed
 ```
-select "Sandbox GOTM Game 1" on the Round 500 GOTM sandbox panel again
+click "Sandbox GOTM Game 1" on the Round 500 GOTM sandbox panel again
 ```
 Expected: an ephemeral error, "Voting for Round 500 closed", and not: "Vote recorded".
 Ephemeral: yes
@@ -93,7 +93,7 @@ Ephemeral: yes
 click "Results" on the Round 500 GOTM sandbox panel
 ```
 Expected: an ephemeral reply, "GOTM Results - Round 500", "Sandbox GOTM Game 1", and
-"Each member can vote for up to 1 games."
+"Each member could vote for up to 1 game."
 Ephemeral: yes
 
 ### Step 10: Fire a stale voting_opened event
@@ -139,7 +139,8 @@ Ephemeral: yes
 /vote-sandbox open
 ```
 Expected: an ephemeral reply, "voting_opened" and "delivered". Check by eye that the new
-GOTM panel has two "Cast or take back a vote..." menus.
+GOTM panel has two "Cast or take back a vote..." menus in place of game buttons, since
+30 games is past the 25 that fit as buttons.
 Ephemeral: yes
 
 ### Step 16: Vote from the second menu

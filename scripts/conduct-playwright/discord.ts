@@ -23,6 +23,10 @@ export const TIMING = {
   settleMs: 3_000,
   /** How long the conductor may take to judge a step after Check. */
   verdictMs: 60_000,
+  /** How long a signed-in channel may take to show its messages before a reload. */
+  channelLoadMs: 30_000,
+  /** How many times a channel that never shows its messages is reloaded. */
+  channelReloads: 3,
   /** How long to wait for the tester to finish a handed-off step. */
   handOffMs: 15 * 60_000,
   pollMs: 1_000,
@@ -60,8 +64,17 @@ export function isThinkingPlaceholder(text: string): boolean {
   return THINKING.test(text);
 }
 
-function messageList(page: Page): Locator {
+/** The channel's message list; visible once Discord has loaded the channel. */
+export function messageList(page: Page): Locator {
   return page.getByRole("list", { name: /^Messages in / });
+}
+
+/**
+ * The login page's passkey button. Clicking it only opens the browser's own passkey
+ * prompt; the tester picks the passkey there, and nothing is ever typed into the page.
+ */
+export function passkeyButton(page: Page): Locator {
+  return page.getByRole("button", { name: /passkey/i }).first();
 }
 
 export function messages(page: Page): Locator {
