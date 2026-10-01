@@ -192,6 +192,6 @@ Ephemeral: yes
 ```
 Expected: an ephemeral reply, "Voting setup commands posted to #admin.", and the test
 guild's #admin gets the GOTM and NR-GOTM /poll commands. If a nominated title is 39
-characters or longer, the bot first asks publicly for a shorter title; type one of 38
-characters or fewer by hand, then check the reply.
+characters or longer, the bot first lists those titles with a "Shorten" button; click it,
+enter titles of 38 characters or fewer in the form by hand, submit, then check the reply.
 Ephemeral: yes

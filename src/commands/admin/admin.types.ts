@@ -1,5 +1,3 @@
-import { ButtonStyle } from "discord.js";
-
 export type AdminHelpTopicId =
   | "add-gotm"
   | "edit-gotm"
@@ -23,12 +21,6 @@ export type AdminHelpTopic = {
   syntax: string;
   parameters?: string;
   notes?: string;
-};
-
-export type PromptChoiceOption = {
-  label: string;
-  value: string;
-  style?: ButtonStyle;
 };
 
 export const VOTING_TITLE_MAX_LEN = 38;

@@ -23,6 +23,7 @@ export const NOW_PLAYING_COMPLETE_REMOVE_SELECT_PREFIX = "np-complete-remove";
 export const NOW_PLAYING_COMPLETE_ANNOUNCE_SELECT_PREFIX = "np-complete-announce";
 export const NOW_PLAYING_COMPLETE_DETAILS_PREFIX = "np-complete-details";
 export const NOW_PLAYING_COMPLETE_PLATFORM_SELECT_PREFIX = "np-complete-platform";
+export const NOW_PLAYING_COMPLETE_DUPLICATE_PREFIX = "np-complete-dup-v1";
 export const NOW_PLAYING_GALLERY_MAX = 5;
 export const NOW_PLAYING_COMPOSITE_MAX = 10;
 export const NOW_PLAYING_ALL_SELECT_ID = "nowplaying-all-select:v1";

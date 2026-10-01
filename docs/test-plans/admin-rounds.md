@@ -1,25 +1,20 @@
 # /admin rounds test plan
 
 A pass over the `/admin` round commands: `add-gotm`, `add-nr-gotm`, `edit-gotm`, and
-`edit-nr-gotm`, with the button prompts and typed replies their guided flows ask for. It
-is one of four `/admin` plans; the others are `admin-help.md`, `admin-voting.md`, and
-`admin-nominations.md`.
+`edit-nr-gotm`, with the buttons and forms their flows use. It is one of four `/admin`
+plans; the others are `admin-help.md`, `admin-voting.md`, and `admin-nominations.md`.
 
-It never creates or edits a real round. Every flow is walked up to a prompt and then
-ended by a Cancel button, a typed `cancel`, or a value the bot rejects, so no GOTM or
-NR-GOTM data changes and every step is safe to repeat. The prompts and their answers
-are public messages in the channel; delete your typed answers by hand afterwards if you
-like.
+It never creates or edits a real round. Every form is submitted unchanged or with a value
+the bot rejects, so no GOTM or NR-GOTM data changes and every step is safe to repeat.
 
 Paste the Testing section below into a PR body and run `/conduct` on that PR, or
 follow it by hand. The format is in `.github/pull-request-testing-format.md`.
 
 Run it in #dev as a member with the Administrator permission in the test guild (the
-guild owner works). Steps whose code block reads `type "..." in the channel` are a plain
-chat message, not a command: send exactly that text in the same channel, within two
-minutes of the prompt. GOTM round 1 and NR-GOTM round 1 must exist, and GOTM round 1
-must hold more than one game (step 18 checks this); if it holds one, use a GOTM round
-that holds several in steps 18 to 25 instead.
+guild owner works). The slash commands reply privately, because `/admin` defers
+ephemerally; a submitted form replies publicly. GOTM round 1 must exist. NR-GOTM started
+much later than GOTM, so NR-GOTM round 1 does not exist; the NR-GOTM steps use the add
+flow and a round that is never real (99999) instead of a specific round.
 
 ## Testing
 
@@ -27,189 +22,77 @@ that holds several in steps 18 to 25 instead.
 ```
 /admin add-gotm
 ```
-Expected: an ephemeral reply, "Preparing to create GOTM round", naming the next round
-number, then (by eye) a public prompt that mentions you and asks for the month/year
-label.
+Expected: a private reply, "Ready to create GOTM round", naming the next round number,
+with button: "Create GOTM round".
 Ephemeral: yes
+Changes data: no
 
-### Step 2: Cancel at the month label prompt
+### Step 2: Submit the GOTM form with a GameDB id that is not a number
 ```
-type "cancel" in the channel
+click "Create GOTM round", enter "Conductor Test 2099" in "Month/year label", enter "abc" in "GameDB ids, one per line (1 to 5)", submit
 ```
-Expected: a public reply, "Edit cancelled.", and no round is created.
+Expected: a public reply, "was not created", "is not a valid GameDB id", and not:
+"Created GOTM round".
 Ephemeral: no
+Changes data: no
 
-### Step 3: Start adding a GOTM round again
-```
-/admin add-gotm
-```
-Expected: an ephemeral reply, "Preparing to create GOTM round".
-Ephemeral: yes
-
-### Step 4: Enter a month label
-```
-type "Conductor Test 2099" in the channel
-```
-Expected: a public prompt, "How many games are in this GOTM round?", with button:
-"1", button: "5", and button: "Cancel".
-Ephemeral: no
-
-### Step 5: Cancel at the game count prompt
-```
-click "Cancel"
-```
-Expected: a public reply, "Cancelled.", and the count buttons are removed from the
-prompt.
-Ephemeral: no
-
-### Step 6: Start adding a GOTM round a third time
-```
-/admin add-gotm
-```
-Expected: an ephemeral reply, "Preparing to create GOTM round".
-Ephemeral: yes
-
-### Step 7: Enter the month label again
-```
-type "Conductor Test 2099" in the channel
-```
-Expected: a public prompt, "How many games are in this GOTM round?", with button: "1".
-Ephemeral: no
-
-### Step 8: Pick one game
-```
-click "1"
-```
-Expected: a public prompt, "Enter the GameDB id for game #1", with
-"use /gamedb add first if needed".
-Ephemeral: no
-
-### Step 9: Enter a GameDB id that is not a number
-```
-type "abc" in the channel
-```
-Expected: a public reply, "Invalid GameDB id. Creation cancelled.", and no round is
-created.
-Ephemeral: no
-
-### Step 10: Start adding an NR-GOTM round
+### Step 3: Start adding an NR-GOTM round
 ```
 /admin add-nr-gotm
 ```
-Expected: an ephemeral reply, "Preparing to create NR-GOTM round", then (by eye) a
-public prompt for the NR-GOTM month/year label.
+Expected: a private reply, "Ready to create NR-GOTM round", with button:
+"Create NR-GOTM round".
 Ephemeral: yes
+Changes data: no
 
-### Step 11: Enter an NR-GOTM month label
+### Step 4: Submit the NR-GOTM form with too many games
 ```
-type "Conductor Test 2099" in the channel
+click "Create NR-GOTM round", enter "Conductor Test 2099" in "Month/year label", enter "1 2 3 4 5 6" in "GameDB ids, one per line (1 to 5)", submit
 ```
-Expected: a public prompt, "How many games are in this NR-GOTM round?", with button:
-"1".
+Expected: a public reply, "enter between 1 and 5 GameDB ids (got 6)", and not:
+"Created NR-GOTM round".
 Ephemeral: no
+Changes data: no
 
-### Step 12: Pick one NR-GOTM game
-```
-click "1"
-```
-Expected: a public prompt, "Enter the GameDB id for NR-GOTM game #1".
-Ephemeral: no
-
-### Step 13: Enter a GameDB id that does not exist
-```
-type "999999999" in the channel
-```
-Expected: a public reply, "GameDB id 999999999 not found. Use /gamedb add first.", and
-no round is created.
-Ephemeral: no
-
-### Step 14: Edit a GOTM round that does not exist
+### Step 5: Edit a GOTM round that does not exist
 ```
 /admin edit-gotm round:99999
 ```
-Expected: an ephemeral reply, "No GOTM entry found for round 99999."
+Expected: a private reply, "No GOTM entry found for round 99999."
 Ephemeral: yes
+Changes data: no
 
-### Step 15: Edit an NR-GOTM round that does not exist
+### Step 6: Edit an NR-GOTM round that does not exist
 ```
 /admin edit-nr-gotm round:99999
 ```
-Expected: an ephemeral reply, "No NR-GOTM entry found for round 99999."
+Expected: a private reply, "No NR-GOTM entry found for round 99999."
 Ephemeral: yes
+Changes data: no
 
-### Step 16: Open NR-GOTM round 1 for editing
-```
-/admin edit-nr-gotm round:1
-```
-Expected: an ephemeral reply, "Editing NR-GOTM round 1.", with the round's entry. Check
-by eye that a public prompt follows with a Cancel button, asking which game number or
-which field to edit.
-Ephemeral: yes
-
-### Step 17: Cancel the NR-GOTM edit
-```
-click "Cancel"
-```
-Expected: a public reply, "Cancelled.", and round 1 is unchanged.
-Ephemeral: no
-
-### Step 18: Open GOTM round 1 for editing
+### Step 7: Open GOTM round 1 for editing
 ```
 /admin edit-gotm round:1
 ```
-Expected: an ephemeral reply, "Editing GOTM round 1.", with the round's entry. Check by
-eye that it lists more than one game and that a public prompt follows asking which game
-number to edit, with number buttons and Cancel.
+Expected: a private reply, "Editing GOTM round 1", with the round's entry and
+button: "Edit game #1".
 Ephemeral: yes
+Changes data: no
 
-### Step 19: Pick the first game
+### Step 8: Submit the edit form unchanged
 ```
-click "1"
+click "Edit game #1", submit
 ```
-Expected: a public prompt, "Which field do you want to edit?", with button:
-"GameDB", button: "Reddit", and button: "Cancel".
+Expected: a public reply, "No changes made to GOTM round 1", and not: "updated
+successfully".
 Ephemeral: no
+Changes data: no
 
-### Step 20: Pick the GameDB field
+### Step 9: Submit the edit form with a GameDB id that is not a number
 ```
-click "GameDB"
+click "Edit game #1", enter "abc" in "GameDB id", submit
 ```
-Expected: a public prompt, "Enter the new value for gamedb (GameDB id required)."
+Expected: a public reply, "was not updated", "is not a valid GameDB id", and not:
+"updated successfully".
 Ephemeral: no
-
-### Step 21: Enter a GameDB id that is not a number
-```
-type "abc" in the channel
-```
-Expected: a public reply, "Please provide a valid numeric GameDB id.", and round 1 is
-unchanged.
-Ephemeral: no
-
-### Step 22: Open GOTM round 1 for editing again
-```
-/admin edit-gotm round:1
-```
-Expected: an ephemeral reply, "Editing GOTM round 1.", then (by eye) the public game
-number prompt.
-Ephemeral: yes
-
-### Step 23: Pick the first game again
-```
-click "1"
-```
-Expected: a public prompt, "Which field do you want to edit?", with button: "Reddit".
-Ephemeral: no
-
-### Step 24: Pick the Reddit field
-```
-click "Reddit"
-```
-Expected: a public prompt, "Enter the new value for reddit", with "to clear it".
-Ephemeral: no
-
-### Step 25: Cancel at the value prompt
-```
-type "cancel" in the channel
-```
-Expected: a public reply, "Edit cancelled.", and not: "updated successfully".
-Ephemeral: no
+Changes data: no
