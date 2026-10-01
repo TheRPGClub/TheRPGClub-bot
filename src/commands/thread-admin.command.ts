@@ -1,16 +1,19 @@
 import {
   ApplicationCommandOptionType,
   CommandInteraction,
+  MessageFlags,
 } from "discord.js";
 import { Discord, Slash, SlashGroup, SlashOption } from "discordx";
 import { removeThreadGameLink, setThreadGameLink } from "../classes/Thread.js";
 import { REGULARS_ROLE_ID } from "../config/roles.js";
 import {
   ACCESS_DENIED_REGULARS,
+  safeDeferReply,
   safeReply,
   sanitizeUserInput,
 } from "../functions/InteractionUtils.js";
-import { buildTextReply } from "../functions/ComponentsV2Utils.js";
+import { buildErrorReply, buildTextReply } from "../functions/ComponentsV2Utils.js";
+import { buildApiErrorMessage } from "../utilities/ApiErrorUtils.js";
 
 /** The `/thread` group; `/thread create` lives in create-thread.command.ts. */
 export const THREAD_GROUP_NAME = "thread";
@@ -37,14 +40,24 @@ export class ThreadAdminCommands {
     gamedbGameId: number,
     interaction: CommandInteraction,
   ): Promise<void> {
+    await safeDeferReply(interaction, { flags: MessageFlags.Ephemeral });
     threadId = sanitizeUserInput(threadId, { preserveNewlines: false });
     if (!this.hasRegularsRole(interaction)) {
       await safeReply(interaction, buildTextReply(ACCESS_DENIED_REGULARS, true));
       return;
     }
 
-    await setThreadGameLink(threadId, gamedbGameId);
-    await safeReply(interaction, buildTextReply(`Linked thread ${threadId} to GameDB game ${gamedbGameId}.`, true));
+    try {
+      await setThreadGameLink(threadId, gamedbGameId);
+    } catch (error: unknown) {
+      const label = `Could not link thread ${threadId} to GameDB game ${gamedbGameId}.`;
+      await safeReply(interaction, buildErrorReply(buildApiErrorMessage(label, error), true));
+      return;
+    }
+    await safeReply(interaction, buildTextReply(
+      `Linked thread ${threadId} to GameDB game ${gamedbGameId}.`,
+      true,
+    ));
   }
 
   @Slash({ description: "Unlink a thread from a GameDB game id", name: "unlink" })
@@ -65,14 +78,22 @@ export class ThreadAdminCommands {
     gamedbGameId: number | undefined,
     interaction: CommandInteraction,
   ): Promise<void> {
+    await safeDeferReply(interaction, { flags: MessageFlags.Ephemeral });
     threadId = sanitizeUserInput(threadId, { preserveNewlines: false });
     if (!this.hasRegularsRole(interaction)) {
       await safeReply(interaction, buildTextReply(ACCESS_DENIED_REGULARS, true));
       return;
     }
 
-    const removed = await removeThreadGameLink(threadId, gamedbGameId);
     const target = gamedbGameId ? `GameDB game ${gamedbGameId}` : "all GameDB links";
+    let removed: number;
+    try {
+      removed = await removeThreadGameLink(threadId, gamedbGameId);
+    } catch (error: unknown) {
+      const label = `Could not unlink ${target} from thread ${threadId}.`;
+      await safeReply(interaction, buildErrorReply(buildApiErrorMessage(label, error), true));
+      return;
+    }
     const suffix = removed === 0 ? " (no matching links were found)." : ".";
     await safeReply(interaction, buildTextReply(
       `Unlinked ${target} from thread ${threadId}${suffix}`,
