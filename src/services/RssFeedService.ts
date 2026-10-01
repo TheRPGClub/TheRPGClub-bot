@@ -8,6 +8,7 @@ import {
   type IRssFeedItem,
   type IRssFeed,
 } from "../classes/RssFeed.js";
+import { createIntervalTask, type IIntervalTask } from "../utilities/IntervalUtils.js";
 import { logError, logWarn } from "../utilities/LogUtils.js";
 
 // Coarse safety-net sweep. Each tick dedupes RSS items through the API
@@ -139,30 +140,23 @@ async function processFeed(
   }
 }
 
+let rssPollTask: IIntervalTask | null = null;
+
 export function startRssFeedService(client: Client): void {
-  let isPolling = false;
+  if (rssPollTask) {
+    logWarn("RssFeedService", "Already started, ignoring a second start.");
+    return;
+  }
 
-  const tick = async () => {
-    if (isPolling) {
-      logWarn("RssFeedService.tick", "Previous poll still running, skipping this cycle.");
-      return;
-    }
-    isPolling = true;
-
-    try {
+  rssPollTask = createIntervalTask({
+    name: "RssFeedService.polling",
+    intervalMs: POLL_INTERVAL_MS,
+    task: async () => {
       const feeds = await listFeeds();
       for (const feed of feeds) {
         await processFeed(client, feed);
       }
-    } catch (err) {
-      logError("RssFeedService.polling", err);
-    } finally {
-      isPolling = false;
-    }
-  };
-
-  void tick();
-  setInterval(() => {
-    void tick();
-  }, POLL_INTERVAL_MS);
+    },
+  });
+  rssPollTask.start();
 }
