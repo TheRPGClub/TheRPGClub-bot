@@ -1,5 +1,6 @@
 import {
   ActionRowBuilder,
+  ApplicationCommandOptionType,
   ButtonBuilder,
   ButtonInteraction,
   ButtonStyle,
@@ -17,10 +18,14 @@ import {
   ModalComponent,
   SelectMenuComponent,
   Slash,
+  SlashGroup,
+  SlashOption,
 } from "discordx";
 import {
   AnyRepliable,
+  deferWithPrivateFlag,
   safeDeferReply,
+  sanitizeUserInput,
   withClickedRowDisabled,
   replyIfNotOwner,
   safeReply,
@@ -80,6 +85,9 @@ import {
   buildSelectRow,
 } from "../functions/uiComponents.js";
 import { safeIgnore } from "../utilities/AsyncUtils.js";
+import { buildCommandMention } from "../functions/CommandMentionUtils.js";
+const GIVEAWAY_GROUP_NAME = "giveaway";
+const GIVEAWAY_HUB_SUBCOMMAND = "hub";
 const GIVEAWAY_DONATE_MODAL_ID = "giveaway-donate-modal";
 const GIVEAWAY_REVOKE_MODAL_ID = "giveaway-revoke-modal";
 const GIVEAWAY_DONATE_TITLE_ID = "giveaway-donate-title";
@@ -93,6 +101,10 @@ type GiveawayListPayload = {
   components: (ContainerBuilder | ActionRowBuilder<ButtonBuilder | StringSelectMenuBuilder>)[];
   flags: number;
 };
+
+function buildHubLink(guildId: string | null): string {
+  return `https://discord.com/channels/${guildId ?? "@me"}/${GIVEAWAY_HUB_CHANNEL_ID}`;
+}
 
 function getKeyRangeLabel(keys: Awaited<ReturnType<typeof listAvailableGameKeys>>): string {
   const startRaw = keys[0]?.gameTitle?.trim()?.[0] ?? "?";
@@ -491,8 +503,18 @@ async function updatePublicListMessage(
 }
 
 @Discord()
+@SlashGroup({ description: "Game key giveaways", name: GIVEAWAY_GROUP_NAME })
+@SlashGroup(GIVEAWAY_GROUP_NAME)
 export class GiveawayCommand {
-  /*
+  @Slash({ description: "Get a link to the giveaway hub", name: GIVEAWAY_HUB_SUBCOMMAND })
+  async hub(interaction: CommandInteraction): Promise<void> {
+    await safeDeferReply(interaction, { flags: MessageFlags.Ephemeral });
+    await safeReply(interaction, buildTextReply(
+      `Use the giveaway hub here: ${buildHubLink(interaction.guildId)}`,
+      true,
+    ));
+  }
+
   @Slash({ description: "List available donated game keys", name: "list" })
   async listKeys(
     @SlashOption({
@@ -504,7 +526,6 @@ export class GiveawayCommand {
     privateFlag: boolean | undefined,
     interaction: CommandInteraction,
   ): Promise<void> {
-    const ephemeral = privateFlag ?? false;
     await deferWithPrivateFlag(interaction, privateFlag);
 
     const sessionId =
@@ -516,10 +537,7 @@ export class GiveawayCommand {
       !(privateFlag ?? false),
     );
 
-    await safeReply(interaction, {
-      ...payload,
-      flags: ephemeral ? MessageFlags.Ephemeral : undefined,
-    });
+    await safeReply(interaction, payload);
   }
 
   @Slash({ description: "Donate a game key to the giveaway pool", name: "donate" })
@@ -574,8 +592,7 @@ export class GiveawayCommand {
       safeIgnore(refreshGiveawayHubMessage(interaction.client));
     }
   }
-  */
-   
+
   @ButtonComponent({ id: /^giveaway-page:[^:]+:\d+:\d+:(prev|next)$/ })
   async handlePage(interaction: ButtonInteraction): Promise<void> {
     const segs = assertCustomIdSegments(interaction, 4);
@@ -1004,17 +1021,26 @@ export class GiveawayCommand {
   }
 }
 
+/**
+ * `/gamegiveaway` before the move under `/giveaway`. Kept for one release so muscle
+ * memory lands somewhere useful, then removed.
+ */
 @Discord()
 export class GiveawayRedirectCommand {
-  @Slash({ description: "Go to the giveaway hub", name: "gamegiveaway" })
+  @Slash({
+    description: `Moved: use /${GIVEAWAY_GROUP_NAME} ${GIVEAWAY_HUB_SUBCOMMAND}`,
+    name: "gamegiveaway",
+  })
   async redirect(interaction: CommandInteraction): Promise<void> {
     await safeDeferReply(interaction, { flags: MessageFlags.Ephemeral });
-    const guildId = interaction.guildId;
-    const link = guildId
-      ? `https://discord.com/channels/${guildId}/${GIVEAWAY_HUB_CHANNEL_ID}`
-      : `https://discord.com/channels/@me/${GIVEAWAY_HUB_CHANNEL_ID}`;
+    const mention = await buildCommandMention(
+      interaction,
+      GIVEAWAY_GROUP_NAME,
+      GIVEAWAY_HUB_SUBCOMMAND,
+    );
     await safeReply(interaction, buildTextReply(
-      `Use the giveaway hub here: ${link}`,
+      `This command moved to ${mention}. ` +
+        `Use the giveaway hub here: ${buildHubLink(interaction.guildId)}`,
       true,
     ));
   }

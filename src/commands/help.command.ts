@@ -290,13 +290,17 @@ const HELP_TOPICS: HelpTopic[] = [
   },
   {
     id: "giveaway",
-    label: "/gamegiveaway",
-    summary: "Jump to the giveaway hub list to claim or donate digital game keys.",
+    label: "/giveaway",
+    summary: "Claim, donate, or revoke digital game keys.",
     syntax:
-      "Syntax: /gamegiveaway (returns a link to the hub list).",
+      "Syntax: /giveaway hub | /giveaway list [private:<boolean>] | " +
+      "/giveaway donate title:<string> platform:<string> key:<string> | " +
+      "/giveaway revoke key_id:<int>",
     notes:
-      `The giveaway list is kept in ${channelMention(GIVEAWAY_HUB_CHANNEL_ID)} with claim/donate buttons. ` +
-      "Claims are handled from the list menu; keys are sent by DM.",
+      `The giveaway list is kept in ${channelMention(GIVEAWAY_HUB_CHANNEL_ID)} with ` +
+      "claim/donate buttons; /giveaway hub links to it. Keys are sent by DM. " +
+      "Only the donor or an admin can revoke a key. " +
+      "/gamegiveaway still works for now and points to /giveaway hub.",
   },
   {
     id: "thread",
@@ -915,7 +919,7 @@ export function buildMainHelpResponse(): {
     `${formatCommandLine("game-completion", "Log and manage your completed games.")}\n\n` +
     "**Utilities**\n" +
     `${formatCommandLine("hltb", "Look up HowLongToBeat playtimes.")}\n` +
-    `${formatCommandLine("gamegiveaway", "Jump to the giveaway hub list.")}\n` +
+    `${formatCommandLine("giveaway", "Claim or donate game keys.")}\n` +
     `${formatCommandLine("avatar-history", "View a member’s avatar history.")}\n` +
     `${formatCommandLine("suggestion", "Submit a bot suggestion.")}\n\n` +
     "**Server Administration**\n" +
