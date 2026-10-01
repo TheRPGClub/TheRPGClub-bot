@@ -462,11 +462,7 @@ export class GameDbSearchCommand {
     if (!segs) return;
     const [ownerId, encodedQuery, filterStr] = segs;
 
-    if (interaction.user.id !== ownerId) {
-      await safeReply(interaction, {
-        ...buildTextReply("This refresh button isn't for you.", true),
-        __forceFollowUp: true,
-      });
+    if (await replyIfNotOwner(interaction, ownerId, "This refresh button isn't for you.")) {
       return;
     }
 

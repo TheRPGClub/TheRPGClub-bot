@@ -7,12 +7,12 @@ import { encodeBase64Url } from "../functions/CustomIdUtils.js";
 
 const OWNER = "333333333333333333";
 
-function fakeRefreshClick(): any {
+function fakeRefreshClick(userId = OWNER): any {
   const calls: Array<{ method: string; opts?: any }> = [];
   const interaction: any = {
     customId: `gamedb-search-refresh:${OWNER}:${encodeBase64Url("chrono")}:`,
     channelId: "999999999999999999",
-    user: { id: OWNER },
+    user: { id: userId },
     replied: false,
     deferred: false,
     calls,
@@ -69,4 +69,16 @@ test("refresh with no results follows up ephemerally without editing the message
   assert.deepEqual(methods, ["deferUpdate", "followUp"]);
   const flags = Number(interaction.calls[1].opts.flags ?? 0);
   assert.ok(flags & MessageFlags.Ephemeral, "no-results notice is ephemeral");
+});
+
+test("refresh from another user replies ephemerally without searching", async (t) => {
+  const interaction = fakeRefreshClick("444444444444444444");
+  const search = t.mock.method(GameSearchService, "searchGames", async () => []);
+
+  await new GameDbSearchCommand().handleSearchRefresh(interaction);
+
+  assert.equal(search.mock.callCount(), 0);
+  assert.deepEqual(interaction.calls.map((c: any) => c.method), ["reply"]);
+  const flags = Number(interaction.calls[0].opts.flags ?? 0);
+  assert.ok(flags & MessageFlags.Ephemeral, "not-yours notice is ephemeral");
 });
