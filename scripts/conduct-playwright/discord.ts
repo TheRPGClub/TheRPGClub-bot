@@ -94,6 +94,8 @@ async function scrollPanel(page: Page, direction: "up" | "bottom"): Promise<bool
 /**
  * Scrolls the panel to the bottom, then up a screen at a time until `found` holds or
  * the panel stops moving. Reads of the newest messages scroll back down themselves.
+ * Only the runner's own actions scroll: the polls that wait on the tester or the
+ * conductor read what is rendered and leave the panel where the tester put it.
  */
 async function scrollUpUntil(page: Page, found: () => Promise<boolean>): Promise<boolean> {
   await scrollPanel(page, "bottom");
@@ -104,11 +106,6 @@ async function scrollUpUntil(page: Page, found: () => Promise<boolean>): Promise
   return found();
 }
 
-/** The newest-first texts of the rendered messages, read with the panel at the bottom. */
-async function newestFirstTexts(page: Page): Promise<string[]> {
-  await scrollPanel(page, "bottom");
-  return (await messages(page).allInnerTexts()).reverse();
-}
 
 function chatBox(page: Page): Locator {
   return page.getByRole("textbox", { name: /^Message #/ });
@@ -116,24 +113,14 @@ function chatBox(page: Page): Locator {
 
 /** The newest step header the conductor posted for this PR, or null. */
 export async function currentStep(page: Page, pr: number): Promise<IStepHeader | null> {
-  const newest = async (texts: string[]): Promise<IStepHeader | null> => {
-    for (const text of texts) {
-      const match = STEP_HEADER.exec(text);
-      if (match && Number(match[1]) === pr) {
-        return { number: Number(match[2]), total: Number(match[3]), label: match[4].trim() };
-      }
+  const texts = await messages(page).allInnerTexts();
+  for (const text of texts.reverse()) {
+    const match = STEP_HEADER.exec(text);
+    if (match && Number(match[1]) === pr) {
+      return { number: Number(match[2]), total: Number(match[3]), label: match[4].trim() };
     }
-    return null;
-  };
-  const header = await newest(await newestFirstTexts(page));
-  if (header) return header;
-  // A tall reply may have pushed the header out of the rendered window.
-  const rendered = async (): Promise<string[]> =>
-    (await messages(page).allInnerTexts()).reverse();
-  if (!await scrollUpUntil(page, async () => await newest(await rendered()) !== null)) {
-    return null;
   }
-  return newest(await rendered());
+  return null;
 }
 
 /**
@@ -143,7 +130,8 @@ export async function currentStep(page: Page, pr: number): Promise<IStepHeader |
  */
 export async function reportUrl(page: Page, pr: number): Promise<string | null> {
   const posted = new RegExp(`Report for PR #${pr} posted: (\\S+)`);
-  for (const text of await newestFirstTexts(page)) {
+  const texts = await messages(page).allInnerTexts();
+  for (const text of texts.reverse()) {
     const match = posted.exec(text);
     if (match) return match[1];
     if (Number(STEP_HEADER.exec(text)?.[1]) === pr) return null;

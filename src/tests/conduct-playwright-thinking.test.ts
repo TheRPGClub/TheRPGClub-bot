@@ -4,7 +4,8 @@ import assert from "node:assert/strict";
 type DiscordModule = { isThinkingPlaceholder: (text: string) => boolean };
 
 // A runtime path keeps tsc from pulling the runner script, outside src, into the build.
-const DISCORD_MODULE = new URL("../../scripts/conduct-playwright/discord.ts", import.meta.url).href;
+const DISCORD_MODULE =
+  new URL("../../scripts/conduct-playwright/discord.ts", import.meta.url).href;
 const { isThinkingPlaceholder } = await import(DISCORD_MODULE) as DiscordModule;
 
 test("isThinkingPlaceholder spots a deferred reply's placeholder", () => {
