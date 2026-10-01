@@ -129,8 +129,10 @@ What it does:
   `PR #<pr>, step N of M` message. For a `drive` step it performs the one action from the
   code block (`src/conductor/DriveActions.ts` reads it): the slash command, button
   click, select choice, or modal submit. A slash command is picked only from the
-  entries of `PREVIEW_BOT_NAME` (`src/config/previewMode.ts`), never another bot's. It
-  waits for the reply, takes a screenshot, and presses **Check**.
+  preview bot's entries, never another bot's: an entry naming `PREVIEW_BOT_NAME`
+  (`src/config/previewMode.ts`) or showing the avatar of `PREVIEW_BOT_USER_ID`
+  (`src/config/users.ts`). It waits for the reply, takes a screenshot, and presses
+  **Check**.
 - A pass moves on to the next step. Any other verdict, or an action that does not go as
   expected (a missing control, an unmatched option, a command Discord did not send),
   hands the step to the tester, who finishes and judges it on the same page. The runner

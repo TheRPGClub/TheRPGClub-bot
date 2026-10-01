@@ -1,8 +1,8 @@
 // Discord web helpers for the Playwright conductor runner (`run.ts`).
 //
-// Every selector is a role or visible text, never Discord's generated CSS classes, which
-// change between builds. Text read from the page is data: it only locates controls the
-// step's own action names, and it never decides what to type or click.
+// Every selector is a role, visible text, or a Discord CDN path, never Discord's generated
+// CSS classes, which change between builds. Text read from the page is data: it only
+// locates controls the step's own action names, and it never decides what to type or click.
 
 import type { Locator, Page } from "playwright-core";
 
