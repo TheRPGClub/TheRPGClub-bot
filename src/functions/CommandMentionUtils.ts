@@ -1,37 +1,37 @@
-import type { ApplicationCommand, Collection, CommandInteraction } from "discord.js";
-import { chatInputApplicationCommandMention, inlineCode } from "discord.js";
-import { IS_TEST_MODE } from "../config/testMode.js";
-
-type CommandList = Collection<string, ApplicationCommand<any>>;
-type CommandManager = { cache: CommandList; fetch: () => Promise<CommandList> };
+import { chatInputApplicationCommandMention, type CommandInteraction } from "discord.js";
 
 /**
- * Looks up a registered slash command by name. Test mode registers commands to the test
- * guild and production registers them globally, so only that one list is searched.
+ * The registered ID of a sibling slash command. The invoking command's scope decides
+ * where to look: test mode registers guild commands, production registers global ones.
  */
-async function resolveCommandId(
+async function findCommandId(
   interaction: CommandInteraction,
-  name: string,
+  commandName: string,
 ): Promise<string | null> {
-  const manager = (IS_TEST_MODE
-    ? interaction.guild?.commands
-    : interaction.client.application?.commands) as CommandManager | undefined;
-  if (!manager) return null;
-  const byName = (commands: CommandList | undefined) =>
-    commands?.find((command) => command.name === name)?.id ?? null;
-  return byName(manager.cache) ?? byName(await manager.fetch().catch(() => undefined));
+  try {
+    const commands = await interaction.client.application.commands.fetch({
+      guildId: interaction.commandGuildId ?? undefined,
+    });
+    return commands.find((command) => command.name === commandName)?.id ?? null;
+  } catch {
+    return null;
+  }
 }
 
 /**
- * Builds a clickable mention of `/<name> <subcommand>`. Falls back to the command
- * written as inline code when Discord does not report the command's id.
+ * A clickable mention of `/commandName [subcommand]`, or the command as inline code when
+ * its registration cannot be found.
  */
 export async function buildCommandMention(
   interaction: CommandInteraction,
-  name: string,
-  subcommand: string,
+  commandName: string,
+  subcommand?: string,
 ): Promise<string> {
-  const commandId = await resolveCommandId(interaction, name);
-  if (!commandId) return inlineCode(`/${name} ${subcommand}`);
-  return chatInputApplicationCommandMention(name, subcommand, commandId);
+  const id = await findCommandId(interaction, commandName);
+  if (!id) {
+    return `\`/${subcommand ? `${commandName} ${subcommand}` : commandName}\``;
+  }
+  return subcommand
+    ? chatInputApplicationCommandMention(commandName, subcommand, id)
+    : chatInputApplicationCommandMention(commandName, id);
 }

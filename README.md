@@ -34,7 +34,7 @@ Use `/help` in Discord for full syntax and parameters. Major command groups incl
 - Monthly games: `/nominate`, `/noms`, `/round`, `/round-history`
 - GameDB: `/gamedb`, `/collection`, `/now-playing`, `/game-completion`, `/game-journal`, `/thread create`
 - Members: `/profile`, `/mp-info`
-- Utilities: `/hltb`, `/gamegiveaway`, `/avatar-history`, `/timestamp`
+- Utilities: `/hltb`, `/giveaway`, `/avatar-history`, `/timestamp`
 - Admin tools: `/mod`, `/admin`, `/superadmin`, `/todo`, `/publicreminder`, `/rss`, `/suggestion`,
   `/generate-vote-image`, `/moderator`
 - Regulars tools: `/thread link`, `/thread unlink`
