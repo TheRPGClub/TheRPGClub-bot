@@ -19,6 +19,7 @@ import { ContainerBuilder } from "@discordjs/builders";
 import {
   safeDeferReply,
   safeDeferUpdate,
+  safeEditReply,
   safeReply,
   safeUpdate,
   sanitizeUserInput,
@@ -428,6 +429,9 @@ export class GameDbSearchCommand {
       return;
     }
 
+    // Defer before the search: the API call can outlast Discord's 3 second window.
+    await safeDeferUpdate(interaction);
+
     const results = await GameSearchService.searchGames(searchTerm, filters);
     const totalPages = Math.max(
       1,
@@ -436,12 +440,6 @@ export class GameDbSearchCommand {
     const delta = direction === "next" ? 1 : -1;
     const newPage = Math.min(Math.max(page + delta, 0), totalPages - 1);
 
-    try {
-      await safeDeferUpdate(interaction);
-    } catch {
-      // ignore
-    }
-
     const filterSummary = Object.keys(filters).length
       ? await buildFilterSummary(filters)
       : "";
@@ -449,11 +447,7 @@ export class GameDbSearchCommand {
       searchTerm, results, ownerId, newPage, true, filters, filterSummary,
     );
 
-    try {
-      await safeReply(interaction, response);
-    } catch {
-      // ignore
-    }
+    await safeEditReply(interaction, response);
   }
 
   @ButtonComponent({ id: /^gamedb-search-refresh:\d+:[A-Za-z0-9_-]*:[a-z0-9]*$/ })
