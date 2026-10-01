@@ -21,6 +21,11 @@ Before running it:
 - Run it as an admin (Administrator permission) who also has the test guild's Members
   role.
 - Step 1 replaces any sandbox you already have.
+- The sandbox nominates real GameDB games: past GOTM and NR-GOTM winners, earliest round
+  first, so the same titles come back on every run. Each `start` reply lists them under
+  "Nominations, in panel order", numbered. The steps below name a game by that number
+  ("GOTM game 1" is the first GOTM title in the list); read its title from the `start`
+  step's reply before clicking it.
 
 ## Testing
 
@@ -30,7 +35,8 @@ Before running it:
 ```
 Expected: an ephemeral reply, "Started sandbox",
 "Any earlier sandbox of yours was replaced", "Round 500", "vote cap 1",
-"1 votable game(s)", and "0 votable game(s)".
+"1 votable game(s)", "0 votable game(s)", and "Nominations, in panel order" with one
+numbered GOTM title (GOTM game 1, used in steps 6 to 9) and NR-GOTM "none".
 Ephemeral: yes
 
 ### Step 2: Post the one-day nomination reminder
@@ -67,9 +73,9 @@ Ephemeral: yes
 
 ### Step 6: Vote on the Round 500 panel
 ```
-click "Sandbox GOTM Game 1" on the Round 500 GOTM sandbox panel in announcements
+click GOTM game 1 (the only GOTM title in step 1's reply) on the Round 500 GOTM sandbox panel in announcements
 ```
-Expected: an ephemeral reply, "Vote recorded for", "Sandbox GOTM Game 1", and
+Expected: an ephemeral reply, "Vote recorded for" naming GOTM game 1, and
 "Your GOTM votes for Round 500 (1/1)".
 Ephemeral: yes
 
@@ -78,12 +84,13 @@ Ephemeral: yes
 /vote-sandbox close
 ```
 Expected: an ephemeral reply, "Closed voting.", "voting_closed", "round_decided", and
-"Winner(s): Sandbox GOTM Game 1", with no tie prompt.
+"Winner(s):" naming GOTM game 1, with no tie prompt. The results post in announcements
+shows GOTM game 1's GameDB cover.
 Ephemeral: yes
 
 ### Step 8: Vote after voting has closed
 ```
-click "Sandbox GOTM Game 1" on the Round 500 GOTM sandbox panel again
+click GOTM game 1 on the Round 500 GOTM sandbox panel again
 ```
 Expected: an ephemeral error, "Voting for Round 500 closed", and not: "Vote recorded".
 Ephemeral: yes
@@ -92,7 +99,7 @@ Ephemeral: yes
 ```
 click "Results" on the Round 500 GOTM sandbox panel
 ```
-Expected: an ephemeral reply, "GOTM Results - Round 500", "Sandbox GOTM Game 1", and
+Expected: an ephemeral reply, "GOTM Results - Round 500" naming GOTM game 1, and
 "Each member could vote for up to 1 game."
 Ephemeral: yes
 
@@ -122,8 +129,9 @@ Ephemeral: yes
 ```
 /vote-sandbox start gotm-nominations:30 nr-gotm-nominations:0
 ```
-Expected: an ephemeral reply, "Started sandbox", "Round 999", "30 votable game(s)", and
-"...and 20 more".
+Expected: an ephemeral reply, "Started sandbox", "Round 999", "30 votable game(s)",
+"...and 20 more", and "Nominations, in panel order" with 30 numbered GOTM titles.
+GOTM game 30, the last of them, is used in step 16.
 Ephemeral: yes
 
 ### Step 14: Use a panel from the replaced sandbox
@@ -145,9 +153,9 @@ Ephemeral: yes
 
 ### Step 16: Vote from the second menu
 ```
-select "Sandbox GOTM Game 30" from the second menu on the Round 999 GOTM sandbox panel
+select GOTM game 30 (the last GOTM title in step 13's reply) from the second menu on the Round 999 GOTM sandbox panel
 ```
-Expected: an ephemeral reply, "Vote recorded for", "Sandbox GOTM Game 30", and "(1/2)".
+Expected: an ephemeral reply, "Vote recorded for" naming GOTM game 30, and "(1/2)".
 Ephemeral: yes
 
 ### Step 17: Seed a three-way tie and no NR-GOTM votes
@@ -163,7 +171,7 @@ Ephemeral: yes
 /vote-sandbox close
 ```
 Expected: an ephemeral reply, "Closed voting.", "runoff_opened", and
-"In the runoff: Sandbox GOTM Game 1, Sandbox GOTM Game 2, Sandbox GOTM Game 3".
+"In the runoff:" naming GOTM games 1, 2 and 3 from step 13's reply.
 A GOTM runoff panel posts in announcements; no NR-GOTM runoff panel and no tie prompt.
 Ephemeral: yes
 
@@ -179,14 +187,14 @@ Ephemeral: yes
 /vote-sandbox close
 ```
 Expected: an ephemeral reply, "Closed the runoff.", "runoff_closed", "tie_pending", and
-"Tie pending: Sandbox GOTM Game 1, Sandbox GOTM Game 2". The runoff results in
+"Tie pending:" naming GOTM games 1 and 2. The runoff results in
 announcements say the GOTM runoff "also ended in a tie", and a tie prompt headed
 "runoff did not break the tie" posts in the admin channel for GOTM only.
 Ephemeral: yes
 
 ### Step 21: Break the tie with joint winners
 ```
-select "Sandbox GOTM Game 1" and "Sandbox GOTM Game 2" on the Round 999 tie prompt in the admin channel (the last link in step 20's reply)
+select GOTM games 1 and 2 (the first two GOTM titles in step 13's reply) on the Round 999 tie prompt in the admin channel (the last link in step 20's reply)
 ```
 Expected: in the admin channel the tie prompt changes in place to GOTM tie broken, naming
 the GOTM joint winners, and a Sandbox Round 999 decided summary posts. In announcements,
@@ -200,7 +208,7 @@ Ephemeral: yes
 /vote-sandbox status
 ```
 Expected: an ephemeral reply, "decided",
-"Winner(s): Sandbox GOTM Game 1, Sandbox GOTM Game 2", and "Queued events: none."
+"Winner(s):" naming GOTM games 1 and 2, and "Queued events: none."
 Ephemeral: yes
 
 ### Step 23: Start a sandbox from a real round's nominations
@@ -216,7 +224,7 @@ Ephemeral: yes
 /vote-sandbox open
 ```
 Expected: an ephemeral reply, "voting_opened" and "delivered". The panels list Round
-100's nominations, or fixture games for a category it had none for.
+100's nominations, or past winners for a category it had none for.
 Ephemeral: yes
 
 ### Step 25: End the sandbox

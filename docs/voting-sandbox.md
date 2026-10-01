@@ -43,8 +43,13 @@ Every sandbox post carries a banner, and the sandbox round defaults to Round 999
 
 - `/vote-sandbox start` starts a fresh round in the nominating phase, replacing your
   previous sandbox (whose panels then refuse votes). Options: `round`, `cap` (votes per
-  member per category), `gotm-nominations` and `nr-gotm-nominations` (fixture games,
-  0 to 30), and `source-round` to copy a real round's nominations read only.
+  member per category), `gotm-nominations` and `nr-gotm-nominations` (0 to 30
+  games each), and `source-round` to copy a real round's nominations read only. Without
+  `source-round`, a category nominates past winners from the GOTM and NR-GOTM caches,
+  earliest round first, borrowing from the other category's winners when its own run
+  out, and never the same game twice. They are real GameDB games, so their covers load
+  on the results, runoff and tie-break posts like a live round, and every start
+  nominates the same titles. The reply lists every nomination in panel order.
 - `/vote-sandbox remind which:` posts the five-day or one-day nomination reminder.
 - `/vote-sandbox open` opens voting and posts the panels.
 - `/vote-sandbox seed gotm: nr-gotm:` casts simulated votes for an outcome: clear

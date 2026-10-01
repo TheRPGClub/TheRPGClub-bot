@@ -26,7 +26,6 @@ import {
 } from "./VotingEventService.js";
 import {
   castSandboxVote,
-  isFixtureGameId,
   parseSandboxState,
   resolveSandboxTie,
   sandboxTally,
@@ -340,7 +339,6 @@ export function buildSandboxEventContext(state: IVotingSandboxState): IVotingEve
     },
     panelNotice: buildSandboxPanelNotice(state),
     tieSelectId: (round, category) => buildSandboxTieSelectId(target, round, category),
-    hasCover: (gameId) => !isFixtureGameId(gameId),
     recordWinners: (client) => postSandboxDecided(client, target),
   };
 }
