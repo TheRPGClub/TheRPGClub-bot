@@ -112,12 +112,14 @@ Before it starts:
    `/conduct pr:<pr>` in the test channel.
 2. Google Chrome must be installed (from Google's apt repository). The runner drives it
    through `playwright-core`, so it downloads no browser of its own.
-3. Sign in to Discord in the window it opens, every run (a passkey from a phone works).
+3. Sign in to Discord in the window it opens, every run. The runner clicks the login
+   page's passkey button, so the tester only picks the passkey (one on a phone works). If
+   Discord hangs after sign-in, the runner reloads the channel, up to three times.
    Each run starts Chrome with a new, empty profile in the system temp directory and
    deletes it when the run ends or is stopped (Ctrl+C, a closed terminal). A profile left
    by a run that was killed outright is deleted when the next run starts, so no cookies,
    storage, or sign-in carry over between runs. The runner never types into a login, captcha, or
-   verification screen; it waits for the tester.
+   verification screen; beyond the passkey button it waits for the tester.
 
 What it does:
 
