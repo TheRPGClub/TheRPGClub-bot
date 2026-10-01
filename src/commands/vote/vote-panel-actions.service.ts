@@ -203,79 +203,43 @@ export async function respondVoteTally(
     return;
   }
 
-  if (target.ballot === "runoff") {
-    await respondRunoffTally(interaction, target, source);
-    return;
-  }
-
   await withErrorReply(interaction, async () => {
-    const kindLabel = nominationKindLabel(target.kind);
-    const info = await source.getRound(target.round);
-    // Only a round with no API row needs the current round to judge its age.
-    const current = info ? null : await source.getCurrentRound();
-    const revealed = isRoundTallyRevealed(target.round, info, current);
+    const runoff = target.ballot === "runoff";
+    const kindLabel = ballotKindLabel(nominationKindLabel(target.kind), target.ballot);
+    const [info, tally] = await Promise.all([
+      source.getRound(target.round),
+      source.getTally(target.kind, target.round, target.ballot),
+    ]);
+    // Only a main-vote round with no API row needs the current round to judge its age.
+    const current = info || runoff ? null : await source.getCurrentRound();
+    const revealed = runoff
+      ? isRunoffTallyRevealed(info)
+      : isRoundTallyRevealed(target.round, info, current);
+    const voteDeadline = (runoff ? info?.runoffClosesAt : info?.votingClosesAt) ?? null;
 
-    const tally = await source.getTally(target.kind, target.round);
     if (!revealed) {
       const text = buildHiddenTallyText({
         kindLabel,
         roundNumber: target.round,
         totalVotes: sumTallyVotes(tally.rows),
-        voteDeadline: info?.votingClosesAt ?? null,
+        voteDeadline,
       });
       await safeReply(interaction, buildTextReply(text, true));
       return;
     }
 
-    const nominations = await source.listNominations(target.kind, target.round);
-    const rows = mergeTallyWithNominations(tally.rows, nominations);
+    const listed = await source.listNominations(target.kind, target.round);
+    const nominations = runoff
+      ? filterRunoffNominations(listed, info?.runoffTies[toVotingRoundCategory(target.kind)] ?? [])
+      : listed;
     const text = buildTallyText({
       kindLabel,
       roundNumber: target.round,
-      rows,
+      rows: mergeTallyWithNominations(tally.rows, nominations),
       cap: tally.cap,
-      votingOpen: Boolean(info?.votingOpen),
-      voteDeadline: info?.votingClosesAt ?? null,
+      votingOpen: !runoff && Boolean(info?.votingOpen),
+      voteDeadline,
     });
     await safeReply(interaction, buildTextReply(text, true));
   }, "Could not load the results");
-}
-
-/** The runoff panel's Results button: hidden until the runoff closes. */
-async function respondRunoffTally(
-  interaction: ButtonInteraction,
-  target: IVotePanelTarget,
-  source: IVotingDataSource,
-): Promise<void> {
-  await withErrorReply(interaction, async () => {
-    const kindLabel = ballotKindLabel(nominationKindLabel(target.kind), "runoff");
-    const info = await source.getRound(target.round);
-    const tally = await source.getTally(target.kind, target.round, "runoff");
-    if (!isRunoffTallyRevealed(info)) {
-      const text = buildHiddenTallyText({
-        kindLabel,
-        roundNumber: target.round,
-        totalVotes: sumTallyVotes(tally.rows),
-        voteDeadline: info?.runoffClosesAt ?? null,
-      });
-      await safeReply(interaction, buildTextReply(text, true));
-      return;
-    }
-
-    const tied = info?.runoffTies[toVotingRoundCategory(target.kind)] ?? [];
-    const nominations = await source.listNominations(target.kind, target.round);
-    const rows = mergeTallyWithNominations(
-      tally.rows,
-      filterRunoffNominations(nominations, tied),
-    );
-    const text = buildTallyText({
-      kindLabel,
-      roundNumber: target.round,
-      rows,
-      cap: tally.cap,
-      votingOpen: false,
-      voteDeadline: null,
-    });
-    await safeReply(interaction, buildTextReply(text, true));
-  }, "Could not load the runoff results");
 }

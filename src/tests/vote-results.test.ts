@@ -209,6 +209,7 @@ test("buildWinnerAnnouncementText covers winner, tie, and no-votes cases", () =>
     roundNumber: 42,
     monthLabel: "August 2026",
     winners: [makeTallyRow({ gamedbGameId: 1, gameTitle: "Alpha", voteCount: 5 })],
+    runoff: false,
   });
   assert.match(winner, /The GOTM winner for Round 42 \(August 2026\) is \*\*Alpha\*\*!/);
 
@@ -220,16 +221,30 @@ test("buildWinnerAnnouncementText covers winner, tie, and no-votes cases", () =>
       makeTallyRow({ gamedbGameId: 1, gameTitle: "Alpha", voteCount: 4 }),
       makeTallyRow({ gamedbGameId: 2, gameTitle: "Beta", voteCount: 4 }),
     ],
+    runoff: true,
   });
   assert.match(tie, /tie between \*\*Alpha\*\* and \*\*Beta\*\*/);
   assert.match(tie, /A runoff vote between them decides the winner\./);
   assert.doesNotMatch(tie, /admins/);
+
+  const beforeRunoffs = buildWinnerAnnouncementText({
+    kindLabel: "NR-GOTM",
+    roundNumber: 12,
+    monthLabel: "August 2025",
+    winners: [
+      makeTallyRow({ gamedbGameId: 1, gameTitle: "Alpha", voteCount: 4 }),
+      makeTallyRow({ gamedbGameId: 2, gameTitle: "Beta", voteCount: 4 }),
+    ],
+    runoff: false,
+  });
+  assert.match(beforeRunoffs, /The admins will decide the final pick\./);
 
   const none = buildWinnerAnnouncementText({
     kindLabel: "GOTM",
     roundNumber: 42,
     monthLabel: "August 2026",
     winners: [],
+    runoff: false,
   });
   assert.match(none, /No GOTM votes were cast for Round 42/);
 });

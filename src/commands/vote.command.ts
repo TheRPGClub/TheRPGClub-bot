@@ -56,15 +56,14 @@ import {
 function pickOpenBallot(
   current: IVotingRound | null,
   kind: NominationKind,
-): { round: IVotingRound; ballot: VoteBallot; deadline: Date } | string {
+): { round: IVotingRound; ballot: VoteBallot; deadline: Date | null } | string {
   if (current?.votingOpen) {
     return { round: current, ballot: "main", deadline: current.votingClosesAt };
   }
   if (current?.runoffOpen) {
-    const label = nominationKindLabel(kind);
-    if (!current.pendingTies[toVotingRoundCategory(kind)]?.length || !current.runoffClosesAt) {
+    if (!current.pendingTies[toVotingRoundCategory(kind)]?.length) {
       return `Voting is not open right now. The Round ${current.roundNumber} runoff is only ` +
-        `for the categories that tied, and ${label} did not.`;
+        `for the categories that tied, and ${nominationKindLabel(kind)} did not.`;
     }
     return { round: current, ballot: "runoff", deadline: current.runoffClosesAt };
   }

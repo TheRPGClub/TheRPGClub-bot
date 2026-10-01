@@ -144,6 +144,40 @@ async function postWinnerAnnouncements(
 }
 
 /**
+ * Sends one results post: the tallies (under the rehearsal banner when it is
+ * one), then each category's winner announcement. Throws
+ * NothingToAnnounceError when there is no tally to post.
+ */
+async function postResults(
+  client: Client,
+  roundNumber: number,
+  tallyContainers: ContainerBuilder[],
+  announcements: IWinnerAnnouncement[],
+  options: IAnnounceResultsOptions,
+): Promise<void> {
+  if (!tallyContainers.length) {
+    throw new NothingToAnnounceError(roundNumber);
+  }
+  const channelId = options.channelIdOverride ?? ANNOUNCEMENT_CHANNEL_ID;
+  const rehearsal = Boolean(options.rehearsal);
+  const sendable = await fetchSendableChannel(client, channelId);
+  if (!sendable) {
+    throw new Error(`Results channel ${channelId} was not found or cannot be sent to.`);
+  }
+  await sendable.send({
+    components: rehearsal
+      ? [buildTextContainer(buildRehearsalNoticeText(roundNumber)), ...tallyContainers]
+      : tallyContainers,
+    flags: buildComponentsV2Flags(false),
+    allowedMentions: { parse: [] },
+  });
+  await postWinnerAnnouncements(client, sendable, roundNumber, announcements, {
+    rehearsal,
+    hasCover: options.hasCover,
+  });
+}
+
+/**
  * Posts the round's results to the announcements channel: one message with
  * the full tallies, then one winner announcement per category (with the
  * winning game's cover when available). Throws when nothing can be posted so
@@ -154,13 +188,10 @@ export async function announceVotingResults(
   round: IResultsRound,
   options: IAnnounceResultsOptions = {},
 ): Promise<void> {
-  const channelId = options.channelIdOverride ?? ANNOUNCEMENT_CHANNEL_ID;
-  const rehearsal = Boolean(options.rehearsal);
   const source = options.source ?? apiVotingDataSource;
-  const sendable = await fetchSendableChannel(client, channelId);
-  if (!sendable) {
-    throw new Error(`Results channel ${channelId} was not found or cannot be sent to.`);
-  }
+  // A round from before runoffs (or with no API row) had its ties settled by an
+  // admin, so only a tie the API sent to a runoff is announced as one.
+  const runoffTies = (await source.getRound(round.roundNumber))?.runoffTies ?? {};
 
   const monthLabel = round.monthLabel;
   const tallyContainers: ContainerBuilder[] = [];
@@ -196,27 +227,13 @@ export async function announceVotingResults(
         roundNumber: round.roundNumber,
         monthLabel,
         winners,
+        runoff: Boolean(runoffTies[toVotingRoundCategory(kind)]?.length),
       }),
       soleWinner: winners.length === 1 ? winners[0] ?? null : null,
     });
   }
 
-  if (!tallyContainers.length) {
-    throw new NothingToAnnounceError(round.roundNumber);
-  }
-
-  await sendable.send({
-    components: rehearsal
-      ? [buildTextContainer(buildRehearsalNoticeText(round.roundNumber)), ...tallyContainers]
-      : tallyContainers,
-    flags: buildComponentsV2Flags(false),
-    allowedMentions: { parse: [] },
-  });
-
-  await postWinnerAnnouncements(client, sendable, round.roundNumber, winnerAnnouncements, {
-    rehearsal,
-    hasCover: options.hasCover,
-  });
+  await postResults(client, round.roundNumber, tallyContainers, winnerAnnouncements, options);
 }
 
 /**
@@ -231,13 +248,7 @@ export async function announceRunoffResults(
   round: IVotingRound,
   options: IAnnounceResultsOptions = {},
 ): Promise<void> {
-  const channelId = options.channelIdOverride ?? ANNOUNCEMENT_CHANNEL_ID;
-  const rehearsal = Boolean(options.rehearsal);
   const source = options.source ?? apiVotingDataSource;
-  const sendable = await fetchSendableChannel(client, channelId);
-  if (!sendable) {
-    throw new Error(`Results channel ${channelId} was not found or cannot be sent to.`);
-  }
 
   const tallyContainers: ContainerBuilder[] = [];
   const announcements: IWinnerAnnouncement[] = [];
@@ -283,19 +294,5 @@ export async function announceRunoffResults(
     });
   }
 
-  if (!tallyContainers.length) {
-    throw new NothingToAnnounceError(round.roundNumber);
-  }
-
-  await sendable.send({
-    components: rehearsal
-      ? [buildTextContainer(buildRehearsalNoticeText(round.roundNumber)), ...tallyContainers]
-      : tallyContainers,
-    flags: buildComponentsV2Flags(false),
-    allowedMentions: { parse: [] },
-  });
-  await postWinnerAnnouncements(client, sendable, round.roundNumber, announcements, {
-    rehearsal,
-    hasCover: options.hasCover,
-  });
+  await postResults(client, round.roundNumber, tallyContainers, announcements, options);
 }

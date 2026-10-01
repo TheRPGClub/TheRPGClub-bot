@@ -134,6 +134,8 @@ export function buildWinnerAnnouncementText(params: {
   roundNumber: number;
   monthLabel: string;
   winners: ITallyDisplayRow[];
+  /** Whether a tie goes to a member runoff; ties before runoffs went to the admins. */
+  runoff: boolean;
 }): string {
   if (!params.winners.length) {
     return (
@@ -150,7 +152,10 @@ export function buildWinnerAnnouncementText(params: {
   const list = joinBoldTitles(params.winners.map((row) => row.gameTitle));
   return (
     `# 🏆 ${params.kindLabel} Round ${params.roundNumber} (${params.monthLabel}) ` +
-    `ends in a tie between ${list}! A runoff vote between them decides the winner.`
+    `ends in a tie between ${list}! ` +
+    (params.runoff
+      ? "A runoff vote between them decides the winner."
+      : "The admins will decide the final pick.")
   );
 }
 
