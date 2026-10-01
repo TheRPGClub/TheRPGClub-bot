@@ -333,9 +333,21 @@ function optionPill(box: Locator, name: string): Locator {
 async function optionPillValue(pill: Locator, name: string): Promise<string> {
   const value = optionPillValueField(pill);
   if (await value.count()) return value.first().innerText();
-  const text = (await pill.innerText()).trim();
-  // The label may render as `name:` above the value; only the label's colon is dropped.
+  return pillValueFromText(await pill.innerText(), name);
+}
+
+/**
+ * A pill's value from its whole text, for a pill with no value field. The label may render
+ * as `name:` above the value, so only the label's own colon is dropped after the name.
+ */
+export function pillValueFromText(pillText: string, name: string): string {
+  const text = pillText.trim();
   return text.startsWith(name) ? text.slice(name.length).replace(/^[:\s]+/, "") : text;
+}
+
+/** Pill text as compared: zero-width characters the editor keeps dropped, trimmed, caseless. */
+function cleanOptionText(text: string): string {
+  return text.replace(/\p{Cf}/gu, "").trim().toLowerCase();
 }
 
 /** The value part of an option pill, which holds what is typed for the option. */
@@ -349,8 +361,7 @@ function optionPillValueField(pill: Locator): Locator {
  * `private:true` for `true` is rejected: the name was typed into the value.
  */
 export function optionValueMatches(pillValue: string, value: string): boolean {
-  const clean = (text: string): string => text.replace(/\p{Cf}/gu, "").trim().toLowerCase();
-  return clean(pillValue) === clean(value);
+  return cleanOptionText(pillValue) === cleanOptionText(value);
 }
 
 /**
@@ -378,7 +389,7 @@ async function focusOption(box: Locator, name: string): Promise<void> {
   // Selecting the value field's own text keeps the erase inside this pill. Without the
   // field nothing is erased, and the check after typing hands the step back.
   const field = optionPillValueField(pill.first());
-  if (!(await field.count()) || !(await field.first().innerText()).trim()) return;
+  if (!(await field.count()) || !cleanOptionText(await field.first().innerText())) return;
   await field.first().selectText();
   await box.press("Backspace");
 }
