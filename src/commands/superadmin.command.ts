@@ -32,6 +32,7 @@ import {
   safeUpdate,
   sanitizeUserInput,
 } from "../functions/InteractionUtils.js";
+import { fetchAllGuildMembers } from "../functions/GuildMemberFetch.js";
 import Member from "../classes/Member.js";
 import type { IGame } from "../types/GameTypes.js";
 import Game from "../classes/Game.js";
@@ -725,7 +726,7 @@ export class SuperAdmin {
 
     await safeReply(interaction, buildTextReply("Fetching all guild members... this may take a moment.", true));
 
-    const members = await guild.members.fetch();
+    const members = await fetchAllGuildMembers(guild);
     const departedCount = await Member.markDepartedNotIn(Array.from(members.keys()));
 
     let successCount = 0;
