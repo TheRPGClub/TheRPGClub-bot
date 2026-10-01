@@ -146,6 +146,7 @@ async function handleVotingOpenTestMode(
       client: interaction.client,
       channelId,
       roundNumber: targetRound,
+      monthLabel: round?.monthYear ?? null,
       voteDeadline: round?.votingClosesAt ?? null,
       nominationsByKind,
       testMode: true,
@@ -243,6 +244,7 @@ export async function handleVotingOpen(
       client: interaction.client,
       channelId,
       roundNumber,
+      monthLabel: current.monthYear,
       voteDeadline: current.votingClosesAt,
       nominationsByKind,
     });

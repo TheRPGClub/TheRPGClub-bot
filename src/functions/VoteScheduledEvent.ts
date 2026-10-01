@@ -43,7 +43,10 @@ export async function ensureVoteScheduledEvent(
   }
 
   const event = await guild.scheduledEvents.create({
-    description: `Cast your GOTM and NR-GOTM votes for ${params.monthYear}.`,
+    description:
+      `Round ${params.roundNumber} voting opens! Pick the GOTM and NR-GOTM for ` +
+      `${params.monthYear} on the voting panels in the announcements channel, or with ` +
+      "/gotm vote.",
     entityMetadata: {
       location: `https://discord.com/channels/${guild.id}/${ANNOUNCEMENT_CHANNEL_ID}`,
     },
