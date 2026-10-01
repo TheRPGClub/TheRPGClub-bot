@@ -426,6 +426,13 @@ export class GameDbSearchCommand {
       return;
     }
 
+    // Defer before the search: the API call can outlast Discord's 3 second window.
+    try {
+      await safeDeferUpdate(interaction);
+    } catch {
+      // ignore
+    }
+
     const results = await GameSearchService.searchGames(searchTerm, filters);
     const totalPages = Math.max(
       1,
@@ -433,12 +440,6 @@ export class GameDbSearchCommand {
     );
     const delta = direction === "next" ? 1 : -1;
     const newPage = Math.min(Math.max(page + delta, 0), totalPages - 1);
-
-    try {
-      await safeDeferUpdate(interaction);
-    } catch {
-      // ignore
-    }
 
     const filterSummary = Object.keys(filters).length
       ? await buildFilterSummary(filters)
