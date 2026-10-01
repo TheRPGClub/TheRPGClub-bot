@@ -304,6 +304,10 @@ async function main(): Promise<void> {
     headless: false,
     viewport: null,
   });
+  let closed = false;
+  context.on("close", () => {
+    closed = true;
+  });
   await context.tracing.start({ screenshots: true, snapshots: true });
   const outcomes: IOutcome[] = [];
   let report: string | null = null;
@@ -313,11 +317,10 @@ async function main(): Promise<void> {
     await walk(page, args.pr, steps, channelUrl, artifacts, outcomes);
     report = await reportUrl(page, args.pr);
   } catch (err: unknown) {
-    if (!(err instanceof Stop)) throw err;
-    console.error(err.message);
+    if (!(err instanceof Stop) && !closed) throw err;
+    console.error(closed ? "The browser window was closed; stopping." : (err as Stop).message);
     process.exitCode = 1;
   } finally {
-    // A tester who closes the window ends the browser; the summary still prints.
     try {
       await context.tracing.stop({ path: path.join(artifacts, "trace.zip") });
     } catch {
