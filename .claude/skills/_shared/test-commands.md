@@ -35,6 +35,10 @@ block, check that `node_modules/playwright-core` exists there. A worktree cut be
 runner landed, or with stale dependencies, lacks it and the runner fails to load. When it
 is missing, run `npm ci` in that checkout first.
 
+The runner also refuses to start when the checkout lacks a commit `origin/main` made to
+the runner's code (`docs/conductor.md#playwright-runner`). Before offering the block,
+sync the branch with main when main has moved on, so the Run button does not stop there.
+
 ## Rules
 
 - The blocks are offered, never run. Only the user starts `/test-guild`, and only the

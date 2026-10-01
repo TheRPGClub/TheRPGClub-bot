@@ -3,10 +3,10 @@
 // the PR report; this only performs each `drive` step's one action and presses Check.
 // `hand-off` steps are left for the tester and listed in the summary.
 //
-// Usage: npm run -s conduct:playwright -- <pr> [--hand-off 3,5]
+// Usage: npm run -s conduct:playwright -- <pr> [--hand-off 3,5] [--local]
 // It never runs headless or in CI; see "Playwright runner" in docs/conductor.md.
 
-import { execFileSync } from "child_process";
+import { execFileSync, spawnSync } from "child_process";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
@@ -39,7 +39,15 @@ interface IOutcome {
   detail: string;
 }
 
-const USAGE = "Usage: npm run -s conduct:playwright -- <pr> [--hand-off 3,5]";
+const USAGE = "Usage: npm run -s conduct:playwright -- <pr> [--hand-off 3,5] [--local]";
+/** The runner's own code and what it imports; it must not lag main unless `--local`. */
+const RUNNER_PATHS = [
+  "scripts/conduct-playwright",
+  "src/conductor",
+  "src/config/previewMode.ts",
+  "src/config/testGuild.ts",
+  "src/config/users.ts",
+];
 const PROFILE_DIR = process.env.CONDUCT_PROFILE_DIR ??
   path.join(os.homedir(), ".cache", "rpgclub-conductor", "discord-profile");
 
@@ -55,11 +63,54 @@ function parseNumbers(text: string): number[] {
   return text.split(/[\s,]+/).filter(Boolean).map(Number).filter(Number.isInteger);
 }
 
-function parseArgs(argv: string[]): { pr: number; handOff: number[] | null } {
+interface IArgs {
+  pr: number;
+  handOff: number[] | null;
+  local: boolean;
+}
+
+function parseArgs(argv: string[]): IArgs {
   const pr = Number(argv[0]?.replace(/^#/, "").replace(/.*\/pull\//, ""));
   if (!Number.isInteger(pr) || pr <= 0) fail(USAGE);
   const flag = argv.indexOf("--hand-off");
-  return { pr, handOff: flag >= 0 ? parseNumbers(argv[flag + 1] ?? "") : null };
+  return {
+    pr,
+    handOff: flag >= 0 ? parseNumbers(argv[flag + 1] ?? "") : null,
+    local: argv.includes("--local"),
+  };
+}
+
+/** Runs git and returns its exit status and trimmed stdout; never throws. */
+function git(args: string[]): { status: number | null; out: string } {
+  const result = spawnSync("git", args, { encoding: "utf8" });
+  return { status: result.status, out: (result.stdout ?? "").trim() };
+}
+
+/**
+ * The runner runs from whatever branch is checked out, so a PR branch cut before a runner
+ * fix runs the old code (PR 1412 did). Refuses to start when origin/main has a runner
+ * commit this checkout lacks. A branch that edits those paths on top of main passes.
+ */
+function assertRunnerCurrent(): void {
+  if (git(["fetch", "--quiet", "origin", "main"]).status !== 0) {
+    console.warn("Could not fetch origin/main; checking the runner against the last fetch.");
+  }
+  const latest = git(["log", "-1", "--format=%H", "origin/main", "--", ...RUNNER_PATHS]);
+  if (latest.status !== 0 || !latest.out) {
+    console.warn("Could not read origin/main; skipping the runner freshness check.");
+    return;
+  }
+  const check = git(["merge-base", "--is-ancestor", latest.out, "HEAD"]);
+  if (check.status === 1) {
+    fail(
+      `This checkout lacks origin/main's runner commit ${latest.out.slice(0, 7)}, so it ` +
+        "would run an old runner. Merge main into this branch or run it from an up-to-date " +
+        "main checkout, or pass --local to run this checkout's copy anyway.",
+    );
+  }
+  if (check.status !== 0) {
+    console.warn("Could not compare this checkout with origin/main; running anyway.");
+  }
 }
 
 function readPr(pr: number): { state: string; body: string } {
@@ -90,11 +141,14 @@ function printPlan(steps: IRunStep[]): void {
 }
 
 /**
- * The plan cannot tell which steps write real data: the preview writes to whatever API
- * its env names (docs/pr-preview.md). The tester says once which to hand back.
+ * Each step says whether it writes real data with its `Changes data:` line, and a `yes`
+ * step is already a hand-off. Only driven steps from an older PR body without the line
+ * are asked about, once.
  */
 async function askRealData(steps: IRunStep[]): Promise<number[]> {
-  const driven = steps.filter((step) => step.mode === "drive").map((step) => step.number);
+  const driven = steps
+    .filter((step) => step.mode === "drive" && step.changesData === undefined)
+    .map((step) => step.number);
   if (!driven.length) return [];
   const prompt = createInterface({ input: process.stdin, output: process.stdout });
   const answer = await prompt.question(
@@ -227,6 +281,7 @@ function printSummary(outcomes: IOutcome[], report: string | null, artifacts: st
 
 async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
+  if (!args.local) assertRunnerCurrent();
   const pr = readPr(args.pr);
   if (pr.state !== "OPEN") fail(`PR #${args.pr} is ${pr.state}; nothing to test.`);
   const plan = buildDrivePlan(pr.body);

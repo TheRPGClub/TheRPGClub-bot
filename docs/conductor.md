@@ -122,8 +122,15 @@ What it does:
 - It reads the PR body with `gh` and builds the drive plan with the same parser
   `/conduct` runs (`src/conductor/DrivePlan.ts`), then prints it. `npm run -s
   conduct:drive-plan -- <body-file>` prints the same plan as JSON.
-- It asks once which driven steps change real data, since the preview writes to whatever
-  API and Backblaze its env file names (`docs/pr-preview.md`). Those become hand-offs.
+- It first fetches `origin/main` and refuses to start when main has a commit to the
+  runner's code (`scripts/conduct-playwright/`, `src/conductor/`, and the `src/config/`
+  files it imports) that this checkout lacks. That way a PR branch cut before a runner
+  fix never runs the old runner. A branch that changes those files on top of main still
+  runs. `--local` skips the check, for work on the runner itself.
+- Each step's `Changes data:` line (`.github/pull-request-testing-format.md`) says
+  whether it writes real data. The preview writes to whatever API and Backblaze its env
+  file names (`docs/pr-preview.md`), so a `yes` step becomes a hand-off. Only driven
+  steps from an older PR body without the line are asked about, once.
   `--hand-off 3,5` answers up front.
 - It opens the test channel and follows the conductor's newest
   `PR #<pr>, step N of M` message. For a `drive` step it performs the one action from the
@@ -155,7 +162,7 @@ flow), when:
 
 - its command reads a value from an earlier reply, written as `(… from step N)`;
 - `DriveActions.ts` cannot read its action exactly;
-- the tester names it at the real-data question.
+- its `Changes data:` line says `yes`, or the tester names it at the real-data question.
 
 Limits:
 
