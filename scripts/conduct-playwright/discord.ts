@@ -331,10 +331,16 @@ function optionPill(box: Locator, name: string): Locator {
  * so the value part is read alone; a pill without one has the leading name stripped.
  */
 async function optionPillValue(pill: Locator, name: string): Promise<string> {
-  const value = pill.locator('[class*="optionPillValue__"]');
+  const value = optionPillValueField(pill);
   if (await value.count()) return value.first().innerText();
   const text = (await pill.innerText()).trim();
-  return text.startsWith(name) ? text.slice(name.length) : text;
+  // The label may render as `name:` above the value; only the label's colon is dropped.
+  return text.startsWith(name) ? text.slice(name.length).replace(/^[:\s]+/, "") : text;
+}
+
+/** The value part of an option pill, which holds what is typed for the option. */
+function optionPillValueField(pill: Locator): Locator {
+  return pill.locator('[class*="optionPillValue__"]');
 }
 
 /**
@@ -354,7 +360,7 @@ export function optionValueMatches(pillValue: string, value: string): boolean {
  * `name:` is typed only when the space did not do it. Text already in the value, such as
  * a name Discord moved into it, is erased.
  */
-async function focusOption(page: Page, box: Locator, name: string): Promise<void> {
+async function focusOption(box: Locator, name: string): Promise<void> {
   const pill = optionPill(box, name);
   if (!(await pill.count())) {
     const bounds = await box.boundingBox();
@@ -362,19 +368,19 @@ async function focusOption(page: Page, box: Locator, name: string): Promise<void
     await box.click({ position: { x: bounds.width - 2, y: bounds.height - 4 } });
     await box.press("End");
     await box.pressSequentially(" ", { delay: TIMING.typeDelayMs });
-    await page.waitForTimeout(TIMING.settleMs / 3);
-    if (!(await pill.count())) {
-      await box.pressSequentially(`${name}:`, { delay: TIMING.typeDelayMs });
-    }
+    const added = await pill.first()
+      .waitFor({ state: "visible", timeout: TIMING.settleMs / 3 })
+      .then(() => true, () => false);
+    if (!added) await box.pressSequentially(`${name}:`, { delay: TIMING.typeDelayMs });
     await waitVisible(pill, `the ${name} option's field`);
   }
   await pill.first().click();
-  const leftover = await optionPillValue(pill.first(), name);
-  if (!leftover.trim()) return;
-  await box.press("End");
-  for (let index = 0; index < leftover.length; index += 1) {
-    await box.press("Backspace", { delay: TIMING.typeDelayMs });
-  }
+  // Selecting the value field's own text keeps the erase inside this pill. Without the
+  // field nothing is erased, and the check after typing hands the step back.
+  const field = optionPillValueField(pill.first());
+  if (!(await field.count()) || !(await field.first().innerText()).trim()) return;
+  await field.first().selectText();
+  await box.press("Backspace");
 }
 
 /** Hands the step back, naming the option, when its field does not hold exactly the value. */
@@ -415,7 +421,7 @@ async function runSlash(
   if (!command) throw new HandOff(`the command popup has no ${source.app} ${name}`);
   await command.click();
   for (const option of action.options) {
-    await focusOption(page, box, option.name);
+    await focusOption(box, option.name);
     await box.pressSequentially(option.value, { delay: TIMING.typeDelayMs });
     await page.waitForTimeout(TIMING.settleMs / 3);
     // An autocomplete or choice suggestion that matches is picked. Any other popup, such
