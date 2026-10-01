@@ -260,6 +260,8 @@ export function createSandboxDataSource(target: ISandboxTarget): IVotingDataSour
         ? sandboxTally(state, kind, ballot)
         : { rows: [], cap: state.cap };
     },
+    // Fixture games have no GameDB covers, so the panels list them as text.
+    getCoverUrls: async () => new Map(),
     getVotesForUser: async (kind, roundNumber, userId, ballot) => {
       const state = await requireSandbox(target);
       return roundNumber === state.roundNumber

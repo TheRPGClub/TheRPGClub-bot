@@ -6,8 +6,10 @@ import {
 import type { ButtonBuilder } from "@discordjs/builders";
 import {
   ContainerBuilder,
+  SectionBuilder,
   SeparatorBuilder,
   TextDisplayBuilder,
+  ThumbnailBuilder,
 } from "@discordjs/builders";
 import { SeparatorSpacingSize } from "discord-api-types/v10";
 import type { INominationEntry, NominationKind } from "../classes/Nomination.js";
@@ -31,6 +33,7 @@ import {
   DISCORD_SELECT_OPTIONS_MAX,
   DISCORD_V2_COMPONENTS_MAX,
   MAX_CONTAINER_TEXT,
+  MAX_SECTION_TEXT,
 } from "../config/textLimits.js";
 import {
   ballotKindLabel,
@@ -103,15 +106,29 @@ export interface IVotePanelParams {
    */
   testNotice?: string | null;
   ids?: IVotePanelIds;
+  /**
+   * Cover URLs by GameDB id. Given, each game is listed with its cover as a
+   * thumbnail while the panel fits Discord's component limit.
+   */
+  coverUrls?: ReadonlyMap<number, string> | null;
 }
 
 const GAME_BUTTONS_PER_ROW = 5;
+const PANEL_REASON_MAX = 200;
+/**
+ * The listed games' text, reasons included, may total this much; past it the
+ * reasons are dropped so the panel stays inside Discord's 4000 text characters.
+ */
+const GAME_LIST_TEXT_BUDGET = 2400;
+/** A section with a thumbnail is the section, its text and the thumbnail. */
+const COVER_SECTION_COMPONENTS = 3;
 /** The My Votes and Results row: the row and its two buttons. */
 const FOOTER_ROW_COMPONENTS = 3;
 
 /**
- * Components the container holds: itself, the heading, a separator and the
- * details, plus a separator and the votes list on the personal panel.
+ * Components the container holds: itself, the heading (which carries the game
+ * list when there are no covers), a separator and the details, plus a
+ * separator and the votes list on the personal panel.
  */
 function countContainerComponents(params: IVotePanelParams): number {
   return 4 + (params.myVotes ? 2 : 0);
@@ -135,10 +152,50 @@ function fitsGameButtons(params: IVotePanelParams, gameCount: number): boolean {
   );
 }
 
+/** The games, the vote buttons or select rows, and the footer row. */
+function countControlComponents(useButtons: boolean, gameCount: number): number {
+  const controls = useButtons
+    ? countGameButtonComponents(gameCount)
+    : 2 * Math.ceil(gameCount / DISCORD_SELECT_OPTIONS_MAX);
+  return controls + FOOTER_ROW_COMPONENTS;
+}
+
+/** One section per game with a cover, one text line per game without. */
+function countCoverListComponents(
+  games: INominationEntry[],
+  coverUrls: ReadonlyMap<number, string>,
+): number {
+  return games.reduce(
+    (sum, game) => sum + (coverUrls.has(game.gamedbGameId) ? COVER_SECTION_COMPONENTS : 1),
+    0,
+  );
+}
+
+/**
+ * True when the games can be listed with their covers. A ballot too large for
+ * that keeps its buttons and lists the titles in the heading instead.
+ */
+function fitsCoverList(
+  params: IVotePanelParams,
+  games: INominationEntry[],
+  useButtons: boolean,
+): boolean {
+  const coverUrls = params.coverUrls;
+  if (!coverUrls || !games.some((game) => coverUrls.has(game.gamedbGameId))) {
+    return false;
+  }
+  return (
+    countContainerComponents(params) +
+      countCoverListComponents(games, coverUrls) +
+      countControlComponents(useButtons, games.length) <=
+    DISCORD_V2_COMPONENTS_MAX
+  );
+}
+
 /**
  * A ballot laid out like the club's long-running survey polls: a container
- * with the question and the rules, then one button per game, then the My
- * Votes and Results buttons.
+ * with the question, the games and the rules, then one button per game, then
+ * the My Votes and Results buttons.
  */
 export function buildVotePanelComponents(params: IVotePanelParams): VotePanelComponent[] {
   const ids = params.ids ?? LIVE_VOTE_PANEL_IDS[params.ballot ?? "main"];
@@ -159,7 +216,8 @@ export function buildVotePanelComponents(params: IVotePanelParams): VotePanelCom
       style: ButtonStyle.Secondary,
     }),
   );
-  return [buildPanelContainer(params, useButtons), ...gameRows, footerRow];
+  const withCovers = fitsCoverList(params, games, useButtons);
+  return [buildPanelContainer(params, games, useButtons, withCovers), ...gameRows, footerRow];
 }
 
 function addText(container: ContainerBuilder, content: string): void {
@@ -174,9 +232,23 @@ function addSeparator(container: ContainerBuilder): void {
   );
 }
 
-function buildPanelContainer(params: IVotePanelParams, useButtons: boolean): ContainerBuilder {
+function buildPanelContainer(
+  params: IVotePanelParams,
+  games: INominationEntry[],
+  useButtons: boolean,
+  withCovers: boolean,
+): ContainerBuilder {
   const container = new ContainerBuilder().setAccentColor(COLOR_PRIMARY);
-  addText(container, buildPanelHeadingText(params));
+  const heading = buildPanelHeadingText(params);
+  if (withCovers) {
+    addText(container, heading);
+    const withReasons = fitsReasons(games);
+    for (const game of games) {
+      addGameEntry(container, game, withReasons, params.coverUrls?.get(game.gamedbGameId));
+    }
+  } else {
+    addText(container, [heading, ...games.map((game) => `- **${game.gameTitle}**`)].join("\n"));
+  }
   addSeparator(container);
   addText(container, buildPanelDetailsText(params, useButtons));
   if (params.myVotes) {
@@ -192,6 +264,37 @@ function buildPanelContainer(params: IVotePanelParams, useButtons: boolean): Con
     );
   }
   return container;
+}
+
+function buildGameEntryText(game: INominationEntry, withReason: boolean): string {
+  const reason = withReason ? game.reason?.replace(/\s+/g, " ").trim() : null;
+  return reason
+    ? `**${game.gameTitle}**\n> ${truncateWithEllipsis(reason, PANEL_REASON_MAX)}`
+    : `**${game.gameTitle}**`;
+}
+
+function fitsReasons(games: INominationEntry[]): boolean {
+  const total = games.reduce((sum, game) => sum + buildGameEntryText(game, true).length, 0);
+  return total <= GAME_LIST_TEXT_BUDGET;
+}
+
+/** A game with its cover as a thumbnail, or a plain text line when it has none. */
+function addGameEntry(
+  container: ContainerBuilder,
+  game: INominationEntry,
+  withReason: boolean,
+  coverUrl: string | undefined,
+): void {
+  const text = new TextDisplayBuilder().setContent(
+    safeV2TextContent(buildGameEntryText(game, withReason), MAX_SECTION_TEXT),
+  );
+  if (!coverUrl) {
+    container.addTextDisplayComponents(text);
+    return;
+  }
+  const section = new SectionBuilder().addTextDisplayComponents(text);
+  section.setThumbnailAccessory(new ThumbnailBuilder().setURL(coverUrl));
+  container.addSectionComponents(section);
 }
 
 function buildPanelHeadingText(params: IVotePanelParams): string {

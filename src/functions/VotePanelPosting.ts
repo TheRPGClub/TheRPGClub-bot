@@ -114,11 +114,13 @@ export async function postVotePanels(
       );
       continue;
     }
-    const tally = await (params.source ?? apiVotingDataSource).getTally(
-      kind,
-      params.roundNumber,
-      ballot,
-    );
+    const source = params.source ?? apiVotingDataSource;
+    const [tally, coverUrls] = await Promise.all([
+      source.getTally(kind, params.roundNumber, ballot),
+      source.getCoverUrls(
+        dedupeNominationsByGame(nominations).map((nomination) => nomination.gamedbGameId),
+      ),
+    ]);
     const components = buildVotePanelComponents({
       ballot,
       kind,
@@ -127,6 +129,7 @@ export async function postVotePanels(
       voteDeadline: params.voteDeadline,
       cap: tally.cap,
       nominations,
+      coverUrls,
       ids: params.ids,
       testNotice: params.notice ?? (params.testMode
         ? buildTestPanelNoticeText({

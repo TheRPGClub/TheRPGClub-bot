@@ -14,6 +14,7 @@ interface IComponentNode {
   custom_id?: string;
   content?: string;
   components?: IComponentNode[];
+  accessory?: IComponentNode;
 }
 
 const BUTTON_TYPE = 2;
@@ -57,7 +58,11 @@ function panelJson(overrides: Partial<IVotePanelParams>): IComponentNode[] {
 }
 
 function flatten(nodes: IComponentNode[]): IComponentNode[] {
-  return nodes.flatMap((node) => [node, ...flatten(node.components ?? [])]);
+  return nodes.flatMap((node) => [
+    node,
+    ...flatten(node.components ?? []),
+    ...(node.accessory ? flatten([node.accessory]) : []),
+  ]);
 }
 
 function textOf(nodes: IComponentNode[]): string {
@@ -120,4 +125,92 @@ test("parsePickedNominationId reads the button's last segment", () => {
   assert.equal(parsePickedNominationId("vsbx-pick:1:ff:999:nr-gotm:3"), 3);
   assert.equal(parsePickedNominationId("vote-pick:gotm:143:0"), null);
   assert.equal(parsePickedNominationId("vote-pick:gotm:143:x"), null);
+});
+
+const SECTION_TYPE = 9;
+const TEXT_DISPLAY_TYPE = 10;
+const THUMBNAIL_TYPE = 11;
+
+function coverUrlsFor(count: number): Map<number, string> {
+  return new Map(
+    Array.from({ length: count }, (_, index) => [
+      index + 1,
+      `https://example.com/cover-${index + 1}.png`,
+    ]),
+  );
+}
+
+function containerChildren(json: IComponentNode[]): IComponentNode[] {
+  return json[0]?.components ?? [];
+}
+
+test("each game is listed with its cover above the rules", () => {
+  const json = panelJson({ coverUrls: coverUrlsFor(4) });
+  const children = containerChildren(json);
+  assert.deepEqual(
+    children.map((node) => node.type),
+    [
+      TEXT_DISPLAY_TYPE,
+      SECTION_TYPE,
+      SECTION_TYPE,
+      SECTION_TYPE,
+      SECTION_TYPE,
+      14,
+      TEXT_DISPLAY_TYPE,
+    ],
+  );
+  const thumbnails = flatten(json).filter((node) => node.type === THUMBNAIL_TYPE);
+  assert.equal(thumbnails.length, 4);
+  assert.match(children.at(-1)?.content ?? "", /^🙈 Votes are anonymous/);
+  assert.ok(flatten(json).length <= DISCORD_V2_COMPONENTS_MAX);
+});
+
+test("the cover list counts its components and keeps the buttons", () => {
+  const json = panelJson({ nominations: makeNominations(7), coverUrls: coverUrlsFor(7) });
+  // Container 4, seven sections of 3, seven buttons in two rows, footer row 3.
+  assert.equal(flatten(json).length, 4 + 21 + 9 + 3);
+  assert.equal(flatten(json).filter((node) => node.type === BUTTON_TYPE).length, 9);
+});
+
+test("a game without a cover is a plain text line with its reason", () => {
+  const nominations = makeNominations(3).map((nomination) => ({
+    ...nomination,
+    reason: nomination.id === 2 ? "A classic\nworth playing" : null,
+  }));
+  const coverUrls = coverUrlsFor(3);
+  coverUrls.delete(2);
+  const children = containerChildren(panelJson({ nominations, coverUrls }));
+  assert.deepEqual(
+    children.slice(1, 4).map((node) => node.type),
+    [SECTION_TYPE, TEXT_DISPLAY_TYPE, SECTION_TYPE],
+  );
+  assert.equal(children[2]?.content, "**Game 2**\n> A classic worth playing");
+});
+
+test("a ballot too large for covers drops them and lists the titles", () => {
+  const json = panelJson({ nominations: makeNominations(12), coverUrls: coverUrlsFor(12) });
+  assert.equal(flatten(json).filter((node) => node.type === THUMBNAIL_TYPE).length, 0);
+  assert.equal(flatten(json).filter((node) => node.type === BUTTON_TYPE).length, 14);
+  assert.match(containerChildren(json)[0]?.content ?? "", /- \*\*Game 1\*\*\n[^]*- \*\*Game 12\*\*/);
+  assert.ok(flatten(json).length <= DISCORD_V2_COMPONENTS_MAX);
+});
+
+test("games without any covers are listed as titles in the heading", () => {
+  const children = containerChildren(panelJson({ coverUrls: new Map() }));
+  assert.equal(children.length, 3);
+  assert.match(children[0]?.content ?? "", /- \*\*Game 4\*\*$/);
+});
+
+test("long reasons are dropped when the cover list would pass the text budget", () => {
+  // One cover leaves room for thirteen text lines, whose reasons would pass the budget.
+  const nominations = makeNominations(14).map((nomination) => ({
+    ...nomination,
+    reason: "x".repeat(500),
+  }));
+  const json = panelJson({ nominations, coverUrls: coverUrlsFor(1) });
+  const children = containerChildren(json);
+  assert.equal(children[1]?.type, SECTION_TYPE);
+  assert.equal(children[1]?.components?.[0]?.content, "**Game 1**");
+  assert.equal(children[14]?.content, "**Game 14**");
+  assert.ok(flatten(json).length <= DISCORD_V2_COMPONENTS_MAX);
 });

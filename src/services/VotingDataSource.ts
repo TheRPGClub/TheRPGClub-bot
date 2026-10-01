@@ -12,6 +12,7 @@ import {
   type IVoteTally,
   type VoteBallot,
 } from "../classes/Vote.js";
+import { fetchGameCoverUrls } from "./GameImageService.js";
 import VotingRounds, {
   type IVotingRound,
   type VotingRoundCategory,
@@ -27,6 +28,8 @@ export interface IVotingDataSource {
   getCurrentRound(): Promise<IVotingRound | null>;
   listNominations(kind: NominationKind, roundNumber: number): Promise<INominationEntry[]>;
   getTally(kind: NominationKind, roundNumber: number, ballot?: VoteBallot): Promise<IVoteTally>;
+  /** Cover URLs by GameDB id for the voting panel thumbnails; games without one are left out. */
+  getCoverUrls(gameIds: number[]): Promise<Map<number, string>>;
   getVotesForUser(
     kind: NominationKind,
     roundNumber: number,
@@ -52,6 +55,7 @@ export const apiVotingDataSource: IVotingDataSource = {
   getCurrentRound: () => VotingRounds.getCurrent(),
   listNominations: listNominationsForRound,
   getTally: getVoteTally,
+  getCoverUrls: fetchGameCoverUrls,
   getVotesForUser,
   castVote,
   resolveTie: (roundNumber, category, gameIds) =>
