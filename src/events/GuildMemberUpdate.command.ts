@@ -1,9 +1,8 @@
 import type { ArgsOf, Client } from "discordx";
 import { Discord, On } from "discordx";
-import Member, { type IMemberRecord } from "../classes/Member.js";
 import { formatTimestampWithDay, resolveLogChannel } from "../utilities/DiscordLogUtils.js";
-import { logError } from "../utilities/LogUtils.js";
-import { logAvatarChange, updateAvatarRecordFromUrl } from "../utilities/AvatarLogUtils.js";
+import { logAvatarChange } from "../utilities/AvatarLogUtils.js";
+import { recordAvatarChange, recordNicknameChange } from "../services/MemberEventWrites.js";
 import {
   ensureUserEmojiForMember,
   syncUserEmojiFromAvatarChange,
@@ -84,7 +83,7 @@ export class GuildMemberUpdate {
         forceStatic: true,
       });
       if (avatarUrl) {
-        const updated = await updateAvatarRecordFromUrl(user, avatarUrl, newGuildAvatar);
+        const updated = await recordAvatarChange(user, avatarUrl, newGuildAvatar);
         if (updated) {
           await logAvatarChange(_client, user, "Server avatar changed");
         }
@@ -147,35 +146,6 @@ export class GuildMemberUpdate {
 
     await syncUserEmojiFromDisplayNameChange(_client, newMember);
 
-    try {
-      const record: IMemberRecord = {
-        userId: user.id,
-        isBot: user.bot ? 1 : 0,
-        username: user.username ?? null,
-        globalName: newNick ?? null,
-        avatarBlob: null,
-        serverJoinedAt: newMember.joinedAt ?? null,
-        serverLeftAt: null,
-        lastSeenAt: null,
-        roleAdmin: 0,
-        roleModerator: 0,
-        roleRegular: 0,
-        roleMember: 0,
-        roleNewcomer: 0,
-        messageCount: null,
-        completionatorUrl: null,
-        psnUsername: null,
-        xblUsername: null,
-        nswFriendCode: null,
-        steamUrl: null,
-        profileImage: null,
-        profileImageAt: null,
-      };
-
-      await Member.upsert(record);
-    } catch (err: any) {
-      const msg = err?.message ?? String(err);
-      logError("GuildMemberUpdate.upsertNicknameChange", msg);
-    }
+    await recordNicknameChange(newMember, newNick ?? null);
   }
 }

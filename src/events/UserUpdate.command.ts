@@ -1,7 +1,8 @@
 import type { ArgsOf, Client } from "discordx";
 import { Discord, On } from "discordx";
 import { formatTimestampWithDay, resolveLogChannel } from "../utilities/DiscordLogUtils.js";
-import { logAvatarChange, updateAvatarRecordFromUrl } from "../utilities/AvatarLogUtils.js";
+import { logAvatarChange } from "../utilities/AvatarLogUtils.js";
+import { recordAvatarChange } from "../services/MemberEventWrites.js";
 import { syncUserEmojiFromAvatarChange } from "../services/UserEmojiService.js";
 import { COLOR_INFO } from "../config/colors.js";
 import {
@@ -33,7 +34,7 @@ export class UserUpdate {
         forceStatic: true,
       });
       if (avatarUrl) {
-        const updated = await updateAvatarRecordFromUrl(newUser, avatarUrl, newAvatarHash);
+        const updated = await recordAvatarChange(newUser, avatarUrl, newAvatarHash);
         if (updated) {
           await logAvatarChange(client, newUser, "Avatar changed");
         }
