@@ -2,10 +2,6 @@ import {
   AttachmentBuilder,
   ButtonInteraction,
   ButtonStyle,
-  ComponentType,
-  type CommandInteraction,
-  type InteractionCallbackResponse,
-  type Message,
   ModalBuilder,
   ModalSubmitInteraction,
   StringSelectMenuBuilder,
@@ -28,13 +24,17 @@ import {
   TextDisplayBuilder,
 } from "@discordjs/builders";
 import { SeparatorSpacingSize } from "discord-api-types/v10";
-import Member, { type IMemberNowPlayingEntry } from "../../classes/Member.js";
+import Member, {
+  type ICompletionRecord,
+  type IMemberNowPlayingEntry,
+} from "../../classes/Member.js";
 import {
   getModalField,
-  isInteractionSettled,
   replyIfNotOwner,
   safeDeferReply,
   safeDeferUpdate,
+  safeEditReply,
+  safeFollowUpIfSettled,
   safeReply,
   safeUpdate,
 } from "../../functions/InteractionUtils.js";
@@ -48,9 +48,11 @@ import {
 } from "../../functions/uiComponents.js";
 import {
   announceCompletion,
+  buildDuplicateCompletionPrompt,
   notifyUnknownCompletionPlatform,
 } from "../../functions/CompletionHelpers.js";
 import {
+  buildComponentsV2EditFlags,
   buildComponentsV2Flags,
   buildTextContainer,
   safeV2TextContent,
@@ -61,7 +63,6 @@ import {
   parseCompletionDateInput,
 } from "../profile.command.js";
 import {
-  formatDiscordTimestamp,
   formatPlaytimeHours,
   formatTableDate,
 } from "../../functions/DateFormatUtils.js";
@@ -79,6 +80,7 @@ import {
   NOW_PLAYING_COMPLETE_ANNOUNCE_SELECT_PREFIX,
   NOW_PLAYING_COMPLETE_DATE_INPUT_ID,
   NOW_PLAYING_COMPLETE_DETAILS_PREFIX,
+  NOW_PLAYING_COMPLETE_DUPLICATE_PREFIX,
   NOW_PLAYING_COMPLETE_HOURS_INPUT_ID,
   NOW_PLAYING_COMPLETE_MODAL_ID,
   NOW_PLAYING_COMPLETE_NOTE_INPUT_ID,
@@ -109,7 +111,16 @@ import {
 } from "./nowPlayingListRenderer.js";
 import { NOW_PLAYING_HELP_PREFIX } from "../now-playing-help.js";
 import GamePlatformRegionService from "../../classes/GamePlatformRegionService.js";
+import { resolveSessionOrReply } from "../../functions/ResumableSessionReplies.js";
 import {
+  createNowPlayingDuplicateSession,
+  nowPlayingDuplicateRegistry,
+  parseNowPlayingDuplicateOwnerId,
+  type NowPlayingPendingCompletion,
+} from "./nowPlayingCompletionDuplicate.js";
+import {
+  NOW_PLAYING_COMPLETION_EXPIRED_MESSAGE,
+  NOW_PLAYING_COMPLETION_NOT_OWNER_MESSAGE,
   claimNowPlayingCompletionPlatformSession,
   createNowPlayingCompletionPlatformSession,
   createNowPlayingCompletionWizardSession,
@@ -122,80 +133,51 @@ import {
   resolveNowPlayingCompletionWizardSession,
 } from "./nowPlayingCompletionSessions.js";
 
-async function confirmDuplicateCompletion(
-  interaction: CommandInteraction | ModalSubmitInteraction | ButtonInteraction,
+/**
+ * Warns about a completion logged within the last week. The pending completion is
+ * persisted so the warning's buttons still work after a bot restart.
+ */
+async function promptNowPlayingDuplicate(
+  interaction: ModalSubmitInteraction,
+  pending: NowPlayingPendingCompletion,
   gameTitle: string,
-  existing: Awaited<ReturnType<typeof Member.getRecentCompletionForGame>>,
-): Promise<boolean> {
-  if (!existing) return true;
+  existing: ICompletionRecord,
+): Promise<void> {
+  const dupSessionId = createNowPlayingDuplicateSession(pending, {
+    channelId: interaction.channelId,
+    guildId: interaction.guildId,
+  });
+  const baseId = `${NOW_PLAYING_COMPLETE_DUPLICATE_PREFIX}:${dupSessionId}`;
+  await safeReply(interaction, buildDuplicateCompletionPrompt(gameTitle, existing, {
+    confirm: `${baseId}:yes`,
+    cancel: `${baseId}:no`,
+  }));
+}
 
-  const promptId = `np-comp-dup:${interaction.user.id}`;
-  const yesId = `${promptId}:yes`;
-  const noId = `${promptId}:no`;
-  const dateText = existing.completedAt
-    ? formatDiscordTimestamp(existing.completedAt)
-    : "No date";
-  const playtimeText = formatPlaytimeHours(existing.finalPlaytimeHours);
-  const detailParts = [existing.completionType, dateText, playtimeText].filter(Boolean);
-  const noteLine = existing.note ? `\n> ${existing.note}` : "";
-
-  const container = buildTextContainer(
-    `We found a completion for **${gameTitle}** within the last week:\n` +
-    `• ${detailParts.join(" - ")} (Completion #${existing.completionId})${noteLine}\n\n` +
-    "Add another completion anyway?",
-  );
-  const row = buildButtonRow(
-    buildActionButton({ customId: yesId, label: "Add Another", style: ButtonStyle.Danger }),
-    buildActionButton("cancel", noId),
-  );
-
-  const payload = {
-    components: [container, row],
-    flags: buildComponentsV2Flags(true),
-  };
-
-  let message: Message | null;
-  try {
-    if (isInteractionSettled(interaction)) {
-      const reply = await safeReply(interaction, { ...payload, __forceFollowUp: true } as any);
-      message = reply as Message;
-    } else {
-      const reply: InteractionCallbackResponse = await safeReply(
-        interaction,
-        { ...payload, withResponse: true },
-      );
-      message = reply.resource?.message ?? null;
-    }
-  } catch {
-    try {
-      const reply = await safeReply(interaction, { ...payload, __forceFollowUp: true } as any);
-      message = reply as Message;
-    } catch {
-      return false;
-    }
+/**
+ * Logs a completion that passed the duplicate check, asking for the platform first
+ * when the Now Playing entry has none.
+ */
+async function continueNowPlayingCompletion(
+  interaction: ModalSubmitInteraction | ButtonInteraction,
+  pending: NowPlayingPendingCompletion,
+  game: IGame,
+): Promise<void> {
+  const nowPlayingEntries = await Member.getNowPlaying(pending.userId);
+  const selectedEntry = nowPlayingEntries.find((item) => item.gameId === pending.gameId);
+  const existingPlatformId = selectedEntry?.platformId ?? null;
+  if (existingPlatformId) {
+    await finalizeNowPlayingCompletion(
+      interaction,
+      pending.sessionId,
+      { ...pending, platforms: [] },
+      game,
+      existingPlatformId,
+    );
+    return;
   }
 
-  if (!message || typeof message.awaitMessageComponent !== "function") {
-    return false;
-  }
-
-  try {
-    const selection = await message.awaitMessageComponent({
-      componentType: ComponentType.Button,
-      filter: (i) =>
-        i.user.id === interaction.user.id && i.customId.startsWith(promptId),
-      time: 120_000,
-    });
-    const confirmed = selection.customId.endsWith(":yes");
-    const resultContainer = buildTextContainer(confirmed ? "Adding another completion." : "Cancelled.");
-    await safeUpdate(selection, {
-      components: [resultContainer],
-      flags: buildComponentsV2Flags(true),
-    });
-    return confirmed;
-  } catch {
-    return false;
-  }
+  await promptNowPlayingCompletionPlatformSelection(interaction, pending, game);
 }
 
 function parseNowPlayingCompletionDate(value: string): Date | null {
@@ -479,13 +461,9 @@ function buildNowPlayingCompletionComponents(
 }
 
 async function promptNowPlayingCompletionPlatformSelection(
-  interaction: ModalSubmitInteraction,
-  sessionId: string,
-  session: NowPlayingCompletionWizardSession,
+  interaction: ModalSubmitInteraction | ButtonInteraction,
+  session: NowPlayingPendingCompletion,
   game: IGame,
-  completedAt: Date | null,
-  finalPlaytimeHours: number | null,
-  note: string | null,
 ): Promise<void> {
   const platforms = await GamePlatformRegionService
     .getPlatformsForGameWithStandard(game.id, STANDARD_PLATFORM_IDS);
@@ -503,16 +481,8 @@ async function promptNowPlayingCompletionPlatformSelection(
     name: platform.name,
   }));
   const platformSessionId = createNowPlayingCompletionPlatformSession(interaction, {
-    sessionId,
-    userId: session.userId,
+    ...session,
     gameId: game.id,
-    completionType: session.completionType,
-    completedAt,
-    finalPlaytimeHours,
-    note,
-    removeFromNowPlaying: session.removeFromNowPlaying,
-    announce: session.announce,
-    returnToList: session.returnToList,
     platforms: platformOptions,
   });
 
@@ -546,7 +516,7 @@ async function promptNowPlayingCompletionPlatformSelection(
 }
 
 async function finalizeNowPlayingCompletion(
-  interaction: StringSelectMenuInteraction | ModalSubmitInteraction,
+  interaction: StringSelectMenuInteraction | ModalSubmitInteraction | ButtonInteraction,
   sessionId: string,
   session: NowPlayingCompletionPlatformSession,
   game: IGame,
@@ -818,6 +788,18 @@ export class NowPlayingCompletionHandlers {
       return;
     }
 
+    const pending: NowPlayingPendingCompletion = {
+      sessionId,
+      userId: session.userId,
+      gameId: game.id,
+      completionType: session.completionType,
+      completedAt,
+      finalPlaytimeHours,
+      note,
+      removeFromNowPlaying: session.removeFromNowPlaying,
+      announce: session.announce,
+      returnToList: session.returnToList,
+    };
     const referenceDate = completedAt ?? new Date();
     const recentCompletion = await Member.getRecentCompletionForGame(
       session.userId,
@@ -825,52 +807,63 @@ export class NowPlayingCompletionHandlers {
       referenceDate,
     );
     if (recentCompletion) {
-      const confirmed = await confirmDuplicateCompletion(
-        interaction,
-        game.title,
-        recentCompletion,
-      );
-      if (!confirmed) {
-        return;
-      }
-    }
-
-    const nowPlayingEntries = await Member.getNowPlaying(session.userId);
-    const selectedEntry = nowPlayingEntries.find((item) => item.gameId === session.gameId);
-    const existingPlatformId = selectedEntry?.platformId ?? null;
-    if (existingPlatformId) {
-      await finalizeNowPlayingCompletion(
-        interaction,
-        sessionId,
-        {
-          sessionId,
-          userId: session.userId,
-          gameId: game.id,
-          completionType: session.completionType,
-          completedAt,
-          finalPlaytimeHours,
-          note,
-          removeFromNowPlaying: session.removeFromNowPlaying,
-          announce: session.announce,
-          returnToList: session.returnToList,
-          platforms: [],
-        },
-        game,
-        existingPlatformId,
-      );
+      await promptNowPlayingDuplicate(interaction, pending, game.title, recentCompletion);
       return;
     }
 
-    await promptNowPlayingCompletionPlatformSelection(
+    await continueNowPlayingCompletion(interaction, pending, game);
+  }
+
+  @ButtonComponent({ id: /^np-complete-dup-v1:npdup-\d+-[\d-]+:(yes|no)$/ })
+  async handleNowPlayingCompletionDuplicate(interaction: ButtonInteraction): Promise<void> {
+    const segs = assertCustomIdSegments(interaction, 2);
+    if (!segs) return;
+    const [dupSessionId, choice] = segs;
+    const ownerId = parseNowPlayingDuplicateOwnerId(dupSessionId) ?? interaction.user.id;
+    if (await replyIfNotOwner(interaction, ownerId, NOW_PLAYING_COMPLETION_NOT_OWNER_MESSAGE)) {
+      return;
+    }
+
+    // Ack first: restoring after a restart reads the API, which can outlast
+    // Discord's 3 second window.
+    await safeDeferUpdate(interaction);
+    const pending = await resolveSessionOrReply(
+      nowPlayingDuplicateRegistry,
       interaction,
-      sessionId,
-      session,
-      game,
-      completedAt,
-      finalPlaytimeHours,
-      note,
+      dupSessionId,
+      { ownerId, channelId: interaction.channelId },
+      {
+        expired: NOW_PLAYING_COMPLETION_EXPIRED_MESSAGE,
+        restoreFailed: "Could not restore this completion prompt.",
+        logContext: "NowPlayingCompletion.restoreDuplicate",
+      },
     );
-    return;
+    if (!pending) return;
+    // A second click while the first is still saving must not log it twice.
+    if (!nowPlayingDuplicateRegistry.claim(dupSessionId)) return;
+
+    try {
+      const confirmed = choice === "yes";
+      await safeEditReply(interaction, {
+        components: [buildTextContainer(
+          confirmed ? "Adding another completion." : "Cancelled.",
+        )],
+        flags: buildComponentsV2EditFlags(),
+      });
+      if (!confirmed) return;
+
+      const game = await Game.getGameById(pending.gameId);
+      if (!game) {
+        await safeFollowUpIfSettled(interaction, {
+          components: [buildTextContainer("That game could not be found.")],
+          flags: buildComponentsV2Flags(true),
+        });
+        return;
+      }
+      await continueNowPlayingCompletion(interaction, pending, game);
+    } finally {
+      nowPlayingDuplicateRegistry.finish(dupSessionId);
+    }
   }
 
   @SelectMenuComponent({ id: /^np-complete-platform:[^:]+$/ })

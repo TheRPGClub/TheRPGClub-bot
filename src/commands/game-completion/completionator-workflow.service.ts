@@ -27,7 +27,10 @@ import {
   getCompletionatorFormKey,
   resolveNowPlayingRemoval,
 } from "./completion-helpers.js";
-import { notifyUnknownCompletionPlatform } from "../../functions/CompletionHelpers.js";
+import {
+  notifyUnknownCompletionPlatform,
+  promptRemoveFromNowPlaying,
+} from "../../functions/CompletionHelpers.js";
 import { COMPLETION_TYPES, type CompletionType } from "../profile.command.js";
 import { formatTableDate } from "../../functions/DateFormatUtils.js";
 import { STANDARD_PLATFORM_IDS } from "../../config/standardPlatforms.js";
@@ -37,7 +40,6 @@ import { searchGameDbWithFallback } from "./completionator-parser.service.js";
 import { buildImportTextContainer } from "../imports/import-scaffold.service.js";
 import { canSafeReply, safeDeferReply, safeDeferUpdate } from "../../functions/InteractionUtils.js";
 import { truncateDescription } from "../../config/textLimits.js";
-import { safeIgnore } from "../../utilities/AsyncUtils.js";
 import GamePlatformRegionService from "../../classes/GamePlatformRegionService.js";
 import GameSearchService from "../../classes/GameSearchService.js";
 
@@ -703,10 +705,8 @@ export class CompletionatorWorkflowService {
     }
 
     const removeFromNowPlaying = await resolveNowPlayingRemoval(
-      interaction,
       interaction.user.id,
       item.gameDbGameId!,
-      item.gameTitle,
       completedAt,
       true,
     );
@@ -721,16 +721,21 @@ export class CompletionatorWorkflowService {
       note: null,
     });
 
-    if (removeFromNowPlaying) {
-      safeIgnore(Member.removeNowPlaying(interaction.user.id, item.gameDbGameId!));
-    }
-
     completionatorAddFormStates.delete(getCompletionatorFormKey(session.importId, item.itemId));
     await updateImportItem(item.itemId, {
       status: "IMPORTED",
       gameDbGameId: item.gameDbGameId,
       completionId,
     });
+
+    if (removeFromNowPlaying === "prompt") {
+      await promptRemoveFromNowPlaying(
+        interaction,
+        interaction.user.id,
+        item.gameDbGameId!,
+        item.gameTitle,
+      );
+    }
   }
 
   async resolveCompletionatorPlatformState(

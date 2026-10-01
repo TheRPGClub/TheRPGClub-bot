@@ -1,10 +1,7 @@
 import {
   ButtonStyle,
-  ComponentType,
   type ButtonInteraction,
   type CommandInteraction,
-  type InteractionCallbackResponse,
-  type Message,
   type ModalSubmitInteraction,
   type StringSelectMenuInteraction,
 } from "discord.js";
@@ -17,22 +14,35 @@ import {
 import { buildErrorReply, safeV2TextContent } from "./ComponentsV2Utils.js";
 import { buildApiErrorMessage } from "../utilities/ApiErrorUtils.js";
 import { type CompletionType } from "../commands/profile.command.js";
-import { formatPlaytimeHours, formatTableDate } from "./DateFormatUtils.js";
+import {
+  formatDiscordTimestamp,
+  formatPlaytimeHours,
+  formatTableDate,
+} from "./DateFormatUtils.js";
 import type { IGame } from "../types/GameTypes.js";
 import Game from "../classes/Game.js";
 import GameProfileService from "../classes/GameProfileService.js";
-import Member from "../classes/Member.js";
+import Member, { type ICompletionRecord } from "../classes/Member.js";
 import { ANNOUNCEMENT_CHANNEL_ID, BOT_DEV_CHANNEL_ID } from "../config/channels.js";
 import {
   buildComponentsV2EditFlags,
   buildComponentsV2Flags,
   buildTextContainer,
 } from "./ComponentsV2Utils.js";
-import { isInteractionSettled, safeReply, safeUpdate, safeUserFetch } from "./InteractionUtils.js";
+import {
+  replyIfNotOwner,
+  safeDeferUpdate,
+  safeEditReply,
+  safeFollowUpIfSettled,
+  safeReply,
+  safeUpdate,
+  safeUserFetch,
+} from "./InteractionUtils.js";
 import { renderUsernameWithEmoji } from "../services/UserEmojiService.js";
-import { safeIgnore } from "../utilities/AsyncUtils.js";
 import { logError } from "../utilities/LogUtils.js";
 import { buildActionButton, buildButtonRow } from "./uiComponents.js";
+import { assertCustomIdSegments } from "../utilities/CustomIdUtils.js";
+import { NOW_PLAYING_REMOVE_CONFIRM_PREFIX } from "../config/customIdPrefixes.js";
 
 const MAX_PLAYTIME_HOURS = 999999.99;
 
@@ -58,7 +68,7 @@ export function validateCompletionPlaytimeInput(
 }
 
 export async function saveCompletion(
-  interaction: CommandInteraction | StringSelectMenuInteraction,
+  interaction: CommandInteraction | StringSelectMenuInteraction | ButtonInteraction,
   userId: string,
   gameId: number,
   platformId: number | null,
@@ -69,7 +79,7 @@ export async function saveCompletion(
   gameTitle?: string,
   announce?: boolean,
   isAdminOverride: boolean = false,
-  removeFromNowPlaying: boolean = true,
+  removeFromNowPlaying: NowPlayingRemoval = true,
 ): Promise<void> {
   if (interaction.user.id !== userId && !isAdminOverride) {
     await safeReply(interaction, {
@@ -107,7 +117,7 @@ export async function saveCompletion(
     return;
   }
 
-  if (removeFromNowPlaying) {
+  if (removeFromNowPlaying === true) {
     try {
       await Member.removeNowPlaying(userId, gameId);
     } catch {
@@ -124,6 +134,10 @@ export async function saveCompletion(
     )],
     flags: buildComponentsV2Flags(true),
   });
+
+  if (removeFromNowPlaying === "prompt") {
+    await promptRemoveFromNowPlaying(interaction, userId, gameId, gameTitle ?? game.title);
+  }
 
   if (announce) {
     await announceCompletion(
@@ -244,76 +258,119 @@ export async function announceCompletion(
   }
 }
 
+/**
+ * How a saved completion treats the game's Now Playing entry: remove it, keep it, or
+ * ask the member with restart-safe buttons once the completion is saved.
+ */
+export type NowPlayingRemoval = boolean | "prompt";
+
+type NowPlayingRemoveChoice = "yes" | "no";
+
+function buildNowPlayingRemoveId(
+  userId: string,
+  gameId: number,
+  choice: NowPlayingRemoveChoice,
+): string {
+  return `${NOW_PLAYING_REMOVE_CONFIRM_PREFIX}:${userId}:${gameId}:${choice}`;
+}
+
+/**
+ * Asks whether to drop the game from Now Playing. The buttons carry the owner and game,
+ * so the answer is handled by {@link handleNowPlayingRemoveConfirm} even after a restart.
+ */
 export async function promptRemoveFromNowPlaying(
   interaction:
     | CommandInteraction
     | StringSelectMenuInteraction
     | ButtonInteraction
     | ModalSubmitInteraction,
+  userId: string,
+  gameId: number,
   gameTitle: string,
-): Promise<boolean> {
-  const promptId = `np-remove-confirm:${interaction.user.id}`;
-  const yesId = `${promptId}:yes`;
-  const noId = `${promptId}:no`;
+): Promise<void> {
   const row = buildButtonRow(
-    buildActionButton({ customId: yesId, label: "Yes", style: ButtonStyle.Danger }),
-    buildActionButton({ customId: noId, label: "No", style: ButtonStyle.Secondary }),
+    buildActionButton({
+      customId: buildNowPlayingRemoveId(userId, gameId, "yes"),
+      label: "Yes",
+      style: ButtonStyle.Danger,
+    }),
+    buildActionButton({
+      customId: buildNowPlayingRemoveId(userId, gameId, "no"),
+      label: "No",
+      style: ButtonStyle.Secondary,
+    }),
   );
+  // The completion is already saved, so a failed prompt must not abort the caller.
+  try {
+    await safeFollowUpIfSettled(interaction, {
+      components: [
+        buildTextContainer(`Remove **${gameTitle}** from your Now Playing list?`),
+        row,
+      ],
+      flags: buildComponentsV2Flags(true),
+    });
+  } catch (err: unknown) {
+    logError("CompletionHelpers.promptRemoveFromNowPlaying", err);
+  }
+}
 
-  const payload = {
-    components: [
-      buildTextContainer(`Remove **${gameTitle}** from your Now Playing list?`),
-      row,
-    ],
+export async function handleNowPlayingRemoveConfirm(
+  interaction: ButtonInteraction,
+): Promise<void> {
+  const segs = assertCustomIdSegments(interaction, 3);
+  if (!segs) return;
+  const [ownerId, gameIdRaw, choice] = segs;
+  if (await replyIfNotOwner(interaction, ownerId, "This prompt isn't for you.")) return;
+
+  const gameId = Number(gameIdRaw);
+  if (choice !== "yes") {
+    await safeUpdate(interaction, {
+      components: [buildTextContainer("Okay, I'll leave it in your Now Playing list.")],
+      flags: buildComponentsV2EditFlags(),
+    });
+    return;
+  }
+
+  await safeDeferUpdate(interaction);
+  let message = "Okay, I removed it from Now Playing.";
+  try {
+    const removed = await Member.removeNowPlaying(ownerId, gameId);
+    if (!removed) message = "It was already off your Now Playing list.";
+  } catch (err: unknown) {
+    logError("CompletionHelpers.handleNowPlayingRemoveConfirm", err);
+    message = buildApiErrorMessage("Could not remove it from Now Playing.", err);
+  }
+  await safeEditReply(interaction, {
+    components: [buildTextContainer(message)],
+    flags: buildComponentsV2EditFlags(),
+  });
+}
+
+/**
+ * Builds the "found a recent completion" warning shown before logging a duplicate.
+ * Callers supply the button ids so each flow resumes through its own handler.
+ */
+export function buildDuplicateCompletionPrompt(
+  gameTitle: string,
+  existing: ICompletionRecord,
+  ids: { confirm: string; cancel: string },
+): { components: Array<ContainerBuilder | ReturnType<typeof buildButtonRow>>; flags: number } {
+  const dateText = existing.completedAt
+    ? formatDiscordTimestamp(existing.completedAt)
+    : "No date";
+  const playtimeText = formatPlaytimeHours(existing.finalPlaytimeHours);
+  const detailParts = [existing.completionType, dateText, playtimeText].filter(Boolean);
+  const noteLine = existing.note ? `\n> ${existing.note}` : "";
+  const promptText =
+    `We found a completion for **${gameTitle}** within the last week:\n` +
+    `- ${detailParts.join(" - ")} (Completion #${existing.completionId})${noteLine}\n\n` +
+    "Add another completion anyway?";
+  const row = buildButtonRow(
+    buildActionButton({ customId: ids.confirm, label: "Add Another", style: ButtonStyle.Danger }),
+    buildActionButton("cancel", ids.cancel),
+  );
+  return {
+    components: [buildTextContainer(promptText), row],
     flags: buildComponentsV2Flags(true),
   };
-
-  let message: Message | null;
-  try {
-    if (isInteractionSettled(interaction)) {
-      const reply = await safeReply(interaction, { ...payload, __forceFollowUp: true } as any);
-      message = reply as Message;
-    } else {
-      const reply: InteractionCallbackResponse = await safeReply(
-        interaction,
-        { ...payload, withResponse: true },
-      );
-      message = reply.resource?.message ?? null;
-    }
-  } catch {
-    try {
-      const reply = await safeReply(interaction, { ...payload, __forceFollowUp: true } as any);
-      message = reply as Message;
-    } catch {
-      return false;
-    }
-  }
-
-  if (!message || typeof message.awaitMessageComponent !== "function") {
-    return false;
-  }
-
-  try {
-    const selection = await message.awaitMessageComponent({
-      componentType: ComponentType.Button,
-      filter: (i) => i.user.id === interaction.user.id && i.customId.startsWith(promptId),
-      time: 120_000,
-    });
-    const remove = selection.customId.endsWith(":yes");
-    safeIgnore(safeUpdate(selection, {
-      components: [buildTextContainer(
-        remove
-          ? "Okay, I'll remove it from Now Playing."
-          : "Okay, I'll leave it in your Now Playing list.",
-      )],
-      flags: buildComponentsV2Flags(false),
-    }));
-    return remove;
-  } catch {
-    safeIgnore(message.edit({
-      components: [buildTextContainer("No response received. Leaving it in your Now Playing list.")],
-      flags: buildComponentsV2Flags(false),
-    }));
-    return false;
-  }
 }

@@ -33,7 +33,10 @@ import {
   type CompletionType,
   parseCompletionDateInput,
 } from "./profile.command.js";
-import { saveCompletion } from "../functions/CompletionHelpers.js";
+import {
+  handleNowPlayingRemoveConfirm,
+  saveCompletion,
+} from "../functions/CompletionHelpers.js";
 import {
   autocompleteGameCompletionTitle,
   autocompleteGameCompletionPlatform,
@@ -46,6 +49,7 @@ import { handleCompletionExport } from "./game-completion/completion-export.serv
 import { resolveNowPlayingRemoval } from "./game-completion/completion-helpers.js";
 import {
   promptCompletionSelection,
+  handleCompletionAddDuplicate,
   handleCompletionAddSelect,
 } from "./game-completion/completion-add.service.js";
 import {
@@ -230,10 +234,8 @@ export class GameCompletionCommands {
       );
       // For simplicity, skip duplicate check in this version
       const removeFromNowPlaying = await resolveNowPlayingRemoval(
-        interaction,
         userId,
         exactMatch.id,
-        exactMatch.title,
         completedAt,
         false,
       );
@@ -833,6 +835,16 @@ export class GameCompletionCommands {
   @SelectMenuComponent({ id: /^completion-add-select:.+/ })
   async handleCompletionAddSelectHandler(interaction: StringSelectMenuInteraction): Promise<void> {
     await handleCompletionAddSelect(interaction);
+  }
+   
+  @ButtonComponent({ id: /^comp-add-dup-v1:compadd-\d+-[\d-]+:\d+:(yes|no)$/ })
+  async handleCompletionAddDuplicateHandler(interaction: ButtonInteraction): Promise<void> {
+    await handleCompletionAddDuplicate(interaction);
+  }
+
+  @ButtonComponent({ id: /^np-remove-confirm-v1:\d+:\d+:(yes|no)$/ })
+  async handleNowPlayingRemoveConfirmHandler(interaction: ButtonInteraction): Promise<void> {
+    await handleNowPlayingRemoveConfirm(interaction);
   }
    
   @SelectMenuComponent({ id: /^comp-del-menu:.+$/ })

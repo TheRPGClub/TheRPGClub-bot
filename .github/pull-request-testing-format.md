@@ -59,6 +59,11 @@ block chains several actions.
   double-quoted text; a step that quotes none is left for the tester to confirm by eye.
 - The command must be runnable as written: real option names and real values that
   exist in the test data, not `<placeholders>`.
+  Do not guess a record from a low number (NR-GOTM has no round 1); take values from
+  `docs/test-plans/` or test a path that needs no data.
+- When a reply fills a deferred response, `Ephemeral:` follows the defer, not the
+  reply's flags. `/admin`, `/mod`, and `/superadmin` slash commands defer ephemerally
+  by default, so their replies are `Ephemeral: yes`.
 
 ## Checks in `Expected:`
 

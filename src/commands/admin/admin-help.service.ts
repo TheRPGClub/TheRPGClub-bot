@@ -23,10 +23,11 @@ export const ADMIN_HELP_TOPICS: AdminHelpTopic[] = [
   {
     id: "add-gotm",
     label: "/admin add-gotm",
-    summary: "Add the next GOTM round with guided prompts.",
+    summary: "Add the next GOTM round through a form.",
     syntax: "Syntax: /admin add-gotm",
     notes:
-      "Round number is auto-assigned to the next open round.",
+      "Round number is auto-assigned to the next open round. The form takes the " +
+      "month/year label and 1 to 5 GameDB ids, one per line.",
   },
   {
     id: "edit-gotm",
@@ -34,15 +35,17 @@ export const ADMIN_HELP_TOPICS: AdminHelpTopic[] = [
     summary: "Update details for a specific GOTM round.",
     syntax: "Syntax: /admin edit-gotm round:<integer>",
     parameters:
-      "round (required) - GOTM round to edit. The bot shows current data and lets you pick what to change.",
+      "round (required) - GOTM round to edit. The bot shows current data with a " +
+      "button per game that opens a form for its GameDB id and Reddit URL.",
   },
   {
     id: "add-nr-gotm",
     label: "/admin add-nr-gotm",
-    summary: "Add the next NR-GOTM round with guided prompts.",
+    summary: "Add the next NR-GOTM round through a form.",
     syntax: "Syntax: /admin add-nr-gotm",
     notes:
-      "Round number is auto-assigned to the next open NR-GOTM round.",
+      "Round number is auto-assigned to the next open NR-GOTM round. The form takes " +
+      "the month/year label and 1 to 5 GameDB ids, one per line.",
   },
   {
     id: "edit-nr-gotm",
@@ -50,7 +53,8 @@ export const ADMIN_HELP_TOPICS: AdminHelpTopic[] = [
     summary: "Update details for a specific NR-GOTM round.",
     syntax: "Syntax: /admin edit-nr-gotm round:<integer>",
     parameters:
-      "round (required) - NR-GOTM round to edit. The bot shows current data and lets you pick what to change.",
+      "round (required) - NR-GOTM round to edit. The bot shows current data with a " +
+      "button per game that opens a form for its GameDB id and Reddit URL.",
   },
   {
     id: "delete-gotm-noms",
@@ -82,7 +86,8 @@ export const ADMIN_HELP_TOPICS: AdminHelpTopic[] = [
     syntax: "Syntax: /admin legacy-voting-setup",
     notes:
       "Fallback for when first-party voting is unavailable. Pulls current nominations for " +
-      "GOTM and NR-GOTM, sorts answers, and sets a sensible max_select. " +
+      "GOTM and NR-GOTM, sorts answers, and sets a sensible max_select. Titles over 38 " +
+      "characters are shortened through a form first. " +
       "Normal voting opens on schedule and runs through /gotm vote.",
   },
   {
