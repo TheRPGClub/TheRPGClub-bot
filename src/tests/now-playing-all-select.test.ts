@@ -1,8 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { MessageFlags } from "discord.js";
 import { NowPlayingNavHandlers } from "../commands/now-playing/nowPlayingNav.handler.js";
 import Member from "../classes/Member.js";
-import { COMPONENTS_V2_FLAG } from "../config/flags.js";
 
 test("nowplaying everyone select replaces the loading panel in place", async () => {
   const command = new NowPlayingNavHandlers() as any;
@@ -56,7 +56,11 @@ test("nowplaying everyone select replaces the loading panel in place", async () 
     assert.equal(updates.length, 1, "expected the loading panel via update");
     assert.equal(edits.length, 1, "expected the member list via editReply");
     assert.ok(Array.isArray(edits[0]?.components), "editReply should include components");
-    assert.equal(edits[0]?.flags, COMPONENTS_V2_FLAG, "editReply should keep Components V2");
+    assert.equal(
+      edits[0]?.flags,
+      MessageFlags.IsComponentsV2,
+      "editReply should keep Components V2",
+    );
     assert.deepEqual(edits[0]?.attachments, [], "editReply should drop stale attachments");
   } finally {
     Member.getNowPlaying = originalGetNowPlaying;
