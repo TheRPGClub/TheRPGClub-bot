@@ -41,7 +41,7 @@ type ThreadDeletePacket = { id: string };
  */
 export function registerUncachedThreadDeleteCleanup(
   client: Client,
-  cleanup: (threadId: string) => Promise<number> = removeDeletedThreadLinks,
+  cleanup: RemoveLinks = removeDeletedThreadLinks,
 ): void {
   client.ws.on(GatewayDispatchEvents.ThreadDelete, (data: ThreadDeletePacket) => {
     if (client.channels.cache.has(data.id)) return;
