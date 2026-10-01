@@ -21,7 +21,6 @@ import {
   safeDeferUpdate,
   safeEditReply,
   safeReply,
-  safeUpdate,
   sanitizeUserInput,
   replyIfNotOwner,
 } from "../../functions/InteractionUtils.js";
@@ -456,11 +455,7 @@ export class GameDbSearchCommand {
     if (!segs) return;
     const [ownerId, encodedQuery, filterStr] = segs;
 
-    if (interaction.user.id !== ownerId) {
-      await safeReply(interaction, {
-        ...buildTextReply("This refresh button isn't for you.", true),
-        __forceFollowUp: true,
-      });
+    if (await replyIfNotOwner(interaction, ownerId, "This refresh button isn't for you.")) {
       return;
     }
 
@@ -479,12 +474,16 @@ export class GameDbSearchCommand {
       return;
     }
 
+    // Acknowledge before the API search so a slow search cannot outlast Discord's 3s window.
+    if (!(await safeDeferUpdate(interaction))) return;
+
     const results = await GameSearchService.searchGames(searchTerm, filters);
     if (results.length === 0) {
       const msg = searchTerm
         ? `No results found for "${searchTerm}".`
         : "No games found matching your filters.";
-      await safeReply(interaction, buildTextReply(msg, true));
+      // A follow-up, so the ephemeral notice does not overwrite the public results message.
+      await safeReply(interaction, { ...buildTextReply(msg, true), __forceFollowUp: true });
       return;
     }
 
@@ -494,6 +493,6 @@ export class GameDbSearchCommand {
     const response = buildSearchResponse(
       searchTerm, results, ownerId, 0, true, filters, filterSummary,
     );
-    await safeUpdate(interaction, response);
+    await safeEditReply(interaction, response);
   }
 }
