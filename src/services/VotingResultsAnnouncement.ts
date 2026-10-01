@@ -20,7 +20,12 @@ import {
   buildComponentsV2Flags,
   buildTextContainer,
 } from "../functions/ComponentsV2Utils.js";
-import { COLOR_HIGHLIGHT, COLOR_PRIMARY } from "../config/colors.js";
+import {
+  COLOR_HIGHLIGHT,
+  COLOR_NEUTRAL,
+  COLOR_PRIMARY,
+  COLOR_WARNING,
+} from "../config/colors.js";
 import { ANNOUNCEMENT_CHANNEL_ID } from "../config/channels.js";
 import { fetchGameCoverBuffer } from "./GameImageService.js";
 import { fetchSendableChannel } from "../functions/ChannelUtils.js";
@@ -112,6 +117,8 @@ export async function announceVotingResults(
     kindLabel: WinnerKindLabel;
     text: string;
     soleWinner: ITallyDisplayRow | null;
+    /** Gold for a winner, amber for a tie, grey when no votes were cast. */
+    accentColor: number;
   }> = [];
 
   for (const kind of NOMINATION_KINDS) {
@@ -147,6 +154,8 @@ export async function announceVotingResults(
         winners,
       }),
       soleWinner: winners.length === 1 ? winners[0] ?? null : null,
+      accentColor:
+        winners.length === 1 ? COLOR_HIGHLIGHT : winners.length ? COLOR_WARNING : COLOR_NEUTRAL,
     });
   }
 
@@ -185,7 +194,7 @@ export async function announceVotingResults(
         logError("VotingResultsAnnouncement.ensureWinnerThread", error);
       }
     }
-    const container = buildAccentContainer(text, COLOR_HIGHLIGHT);
+    const container = buildAccentContainer(text, announcement.accentColor);
     if (winner && (options.hasCover?.(winner.gamedbGameId) ?? true)) {
       files.push(...(await addWinnerCovers(container, [winner.gamedbGameId])));
     }
