@@ -158,7 +158,10 @@ function loadWinnerPools(): Record<NominationKind, ISandboxNominationSeed[]> {
   };
 }
 
-/** Every nomination in panel order, so a step can name the game it clicks. */
+/**
+ * Every nomination in panel order, so a step can name the game it clicks. It goes
+ * before the status, so a long list trims the status's tail rather than its own.
+ */
 function buildNominationListText(state: IVotingSandboxState): string {
   const lines = ["**Nominations, in panel order**"];
   for (const kind of NOMINATION_KINDS) {
@@ -179,7 +182,7 @@ async function replyWithError(
 async function replyWithDelivery(
   interaction: CommandInteraction,
   heading: string,
-  footer?: (state: IVotingSandboxState) => string,
+  preface?: (state: IVotingSandboxState) => string,
 ): Promise<void> {
   const ownerId = interaction.user.id;
   const sections = [heading];
@@ -187,8 +190,8 @@ async function replyWithDelivery(
     const delivery = await deliverSandboxOutbox(interaction.client, ownerId);
     const state = await loadSandbox(ownerId);
     if (delivery.length) sections.push(`**Delivered**\n${delivery.join("\n")}`);
+    if (state && preface) sections.push(preface(state));
     if (state) sections.push(buildSandboxStatusText(state));
-    if (state && footer) sections.push(footer(state));
   } catch (err) {
     await replyWithError(interaction, `${heading}\nCould not deliver the queued events`, err);
     return;
@@ -204,7 +207,7 @@ async function runStep(
   interaction: CommandInteraction,
   label: string,
   step: () => Promise<string>,
-  footer?: (state: IVotingSandboxState) => string,
+  preface?: (state: IVotingSandboxState) => string,
 ): Promise<void> {
   let heading: string;
   try {
@@ -213,7 +216,7 @@ async function runStep(
     await replyWithError(interaction, label, err);
     return;
   }
-  await replyWithDelivery(interaction, heading, footer);
+  await replyWithDelivery(interaction, heading, preface);
 }
 
 export async function handleSandboxStart(
