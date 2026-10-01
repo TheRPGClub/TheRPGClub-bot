@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { AxiosError } from "axios";
+import axios, { AxiosError, type AxiosAdapter, type InternalAxiosRequestConfig } from "axios";
 import { Collection, type Client } from "discord.js";
 import { ADMIN_CHANNEL_ID, ANNOUNCEMENT_CHANNEL_ID } from "../config/channels.js";
 import { describeRequestError } from "../utilities/ApiErrorUtils.js";
@@ -27,10 +27,45 @@ import {
   queueSandboxEvent,
   seedSandboxOutcome,
 } from "../services/VotingSandboxModel.js";
+import { TEST_SANDBOX_POOLS } from "./votingSandboxPools.js";
+
+interface IApiRequest {
+  method: string;
+  url: string;
+}
+
+/**
+ * Every HTTP request the bot makes in this file, answered offline: a GameDB
+ * game's images list one cover, the cover downloads as a few bytes, and
+ * anything else is a 404. Nothing here reaches a real API.
+ */
+const apiRequests: IApiRequest[] = [];
+const offlineAdapter: AxiosAdapter = async (config: InternalAxiosRequestConfig) => {
+  const method = (config.method ?? "get").toUpperCase();
+  const url = `${config.baseURL ?? ""}${config.url ?? ""}`;
+  apiRequests.push({ method, url });
+  const respond = (data: unknown) => ({
+    data, status: 200, statusText: "OK", headers: {}, config, request: {},
+  });
+  const images = /\/api\/v1\/games\/(\d+)\/images$/.exec(url);
+  if (method === "GET" && images) {
+    const cover = { kind: "cover", is_primary: true, url: `https://covers.test/${images[1]}.png` };
+    return respond({ data: [cover] });
+  }
+  if (method === "GET" && url.startsWith("https://covers.test/")) {
+    return respond(new Uint8Array([137, 80, 78, 71]).buffer);
+  }
+  const response = { ...respond(null), status: 404, statusText: "Not Found" };
+  throw new AxiosError("Not Found", "ERR_BAD_REQUEST", config, null, response);
+};
+process.env.RPGCLUB_API_BASE_URL = "https://api.test";
+process.env.RPGCLUB_BOT_API_TOKEN = "test-token";
+axios.defaults.adapter = offlineAdapter;
 
 interface ISent {
   channelId: string;
   json: string;
+  files: number;
 }
 
 /**
@@ -55,11 +90,18 @@ function fakeClient(withUrls = false): { client: Client; sent: ISent[]; schedule
       fetch: async (channelId: string) => ({
         guild,
         isTextBased: () => true,
-        send: async (payload: { components?: Array<{ toJSON?: () => unknown }> }) => {
+        send: async (payload: {
+          components?: Array<{ toJSON?: () => unknown }>;
+          files?: unknown[];
+        }) => {
           const components = (payload.components ?? []).map((component) =>
             typeof component.toJSON === "function" ? component.toJSON() : component,
           );
-          sent.push({ channelId, json: JSON.stringify(components) });
+          sent.push({
+            channelId,
+            json: JSON.stringify(components),
+            files: payload.files?.length ?? 0,
+          });
           return withUrls
             ? { url: `https://discord.com/channels/guild/${channelId}/${sent.length}` }
             : {};
@@ -97,7 +139,7 @@ function nextOwner(): string {
 }
 
 async function startOpenSandbox(ownerId: string, id = "cafe01"): Promise<void> {
-  const state = createSandboxState({ id, ownerId, now: new Date() });
+  const state = createSandboxState({ id, ownerId, now: new Date(), pools: TEST_SANDBOX_POOLS });
   await startSandbox(state);
   await mutateSandbox(ownerId, (current) => openSandboxVoting(current, new Date()));
 }
@@ -148,9 +190,9 @@ test("a tie opens a runoff whose panels offer only the tied games", async (t) =>
   assert.match(panel, new RegExp(`vsbx-rpick:${ownerId}:beef02:999:gotm:\\d+`));
   assert.match(panel, /VOTING SANDBOX/);
   assert.match(panel, /Which game should be the GOTM for \*\*/);
-  assert.match(panel, /Sandbox GOTM Game 1/);
-  assert.match(panel, /Sandbox GOTM Game 2/);
-  assert.doesNotMatch(panel, /Sandbox GOTM Game 3/);
+  assert.match(panel, /GOTM Winner 1/);
+  assert.match(panel, /GOTM Winner 2/);
+  assert.doesNotMatch(panel, /GOTM Winner 3/);
 
   const state = await loadSandbox(ownerId);
   const source = createSandboxDataSource({ ownerId, sandboxId: "beef02" });
@@ -208,9 +250,12 @@ test("a runoff with a sole leader announces the winner and decides the round", a
   assert.match(results[0]?.json ?? "", /TEST MODE/);
   assert.match(results[0]?.json ?? "", /GOTM runoff Results - Round 999/);
   assert.doesNotMatch(results[0]?.json ?? "", /NR-GOTM/, "only the runoff's categories");
-  assert.ok(results.some((message) => /GOTM winner for Round 999.*Sandbox GOTM Game 1/.test(
+  const winner = results.find((message) => /GOTM winner for Round 999.*GOTM Winner 1/.test(
     message.json,
-  )));
+  ));
+  assert.ok(winner);
+  assert.equal(winner.files, 1, "the winner's GameDB cover is attached");
+  assert.match(winner.json, /attachment:\/\/winner_101\.png/);
   assert.ok(sent.some((message) => /Sandbox Round 999 decided/.test(message.json)));
   assert.equal(sent.some((message) => message.channelId === ADMIN_CHANNEL_ID &&
     /tie/.test(message.json)), false);
@@ -337,7 +382,12 @@ test("panels from a replaced or ended sandbox refuse votes", async (t) => {
 test("a sandbox restored from the persisted row keeps taking votes", async (t) => {
   const rows = mockStore(t);
   const ownerId = nextOwner();
-  const state = createSandboxState({ id: "a11ce5", ownerId, now: new Date() });
+  const state = createSandboxState({
+    id: "a11ce5",
+    ownerId,
+    now: new Date(),
+    pools: TEST_SANDBOX_POOLS,
+  });
   openSandboxVoting(state, new Date());
   // Written by an earlier process: nothing in this one's memory.
   rows.set(ownerId, JSON.stringify(state));
@@ -378,7 +428,12 @@ test("a step that throws partway, or fails to save, changes nothing", async (t) 
 test("a restore that races a save never replaces the newer sandbox", async (t) => {
   const rows = mockStore(t);
   const ownerId = nextOwner();
-  const state = createSandboxState({ id: "5a1e01", ownerId, now: new Date() });
+  const state = createSandboxState({
+    id: "5a1e01",
+    ownerId,
+    now: new Date(),
+    pools: TEST_SANDBOX_POOLS,
+  });
   openSandboxVoting(state, new Date());
   rows.set(ownerId, JSON.stringify(state));
 
@@ -515,7 +570,12 @@ test("a tie prompt Discord refuses names the request and Discord's response", as
 
 test("an admin's tie-break pick is announced in announcements, joint winners together", async () => {
   const { client, sent } = fakeClient(true);
-  const state = createSandboxState({ id: "feed05", ownerId: nextOwner(), now: new Date() });
+  const state = createSandboxState({
+    id: "feed05",
+    ownerId: nextOwner(),
+    now: new Date(),
+    pools: TEST_SANDBOX_POOLS,
+  });
   const round = toSandboxVotingRound(state);
   const links = await announceTieBreak(
     client,
@@ -523,17 +583,42 @@ test("an admin's tie-break pick is announced in announcements, joint winners tog
     {
       category: "gotm",
       games: [
-        { gameId: 990001, title: "Sandbox GOTM Game 1" },
-        { gameId: 990002, title: "Sandbox GOTM Game 2" },
+        { gameId: 101, title: "GOTM Winner 1" },
+        { gameId: 102, title: "GOTM Winner 2" },
       ],
     },
-    { rehearsal: true, hasCover: () => false },
+    { rehearsal: true },
   );
   assert.equal(sent.length, 2);
   assert.ok(sent.every((message) => message.channelId === ANNOUNCEMENT_CHANNEL_ID));
   assert.match(sent[0]?.json ?? "", /TEST MODE/);
   assert.match(sent[1]?.json ?? "", /GOTM winners for Round 999/);
-  assert.match(sent[1]?.json ?? "", /Sandbox GOTM Game 1\*\* and \*\*Sandbox GOTM Game 2/);
+  assert.match(sent[1]?.json ?? "", /GOTM Winner 1\*\* and \*\*GOTM Winner 2/);
   assert.match(sent[1]?.json ?? "", /the admins picked the winners\./);
   assert.deepEqual(links, [`https://discord.com/channels/guild/${ANNOUNCEMENT_CHANNEL_ID}/2`]);
+});
+
+test("a sandbox round from start to decided reads GameDB covers and writes nothing", async (t) => {
+  mockStore(t);
+  const { client, sent } = fakeClient();
+  const ownerId = nextOwner();
+  apiRequests.length = 0;
+  await startOpenSandbox(ownerId, "c0ffee");
+  await mutateSandbox(ownerId, (state) => {
+    const now = new Date();
+    seedSandboxOutcome(state, "gotm", "winner", now);
+    seedSandboxOutcome(state, "nr-gotm", "winner", now);
+    closeSandboxVoting(state, now);
+  });
+  await deliverSandboxOutbox(client, ownerId);
+
+  assert.equal((await loadSandbox(ownerId))?.phase, "decided");
+  const writes = apiRequests.filter((request) => request.method !== "GET");
+  assert.deepEqual(writes, [], "the sandbox never writes through the API");
+  const coverReads = apiRequests.filter((request) => /\/images$/.test(request.url));
+  assert.deepEqual(
+    coverReads.map((request) => request.url),
+    ["https://api.test/api/v1/games/101/images", "https://api.test/api/v1/games/501/images"],
+  );
+  assert.equal(sent.filter((message) => message.files > 0).length, 2);
 });
