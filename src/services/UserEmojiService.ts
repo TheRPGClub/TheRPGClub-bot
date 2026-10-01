@@ -1,6 +1,8 @@
 import sharp from "sharp";
-import type { Client, GuildMember } from "discord.js";
+import type { Client, Guild, GuildMember } from "discord.js";
 import Member from "../classes/Member.js";
+import { HOME_GUILD_ID } from "../config/guilds.js";
+import { fetchAllGuildMembers } from "../functions/GuildMemberFetch.js";
 import { sleep } from "../utilities/DelayUtils.js";
 import { startTrackedInterval } from "../utilities/IntervalUtils.js";
 import { logError, logInfo } from "../utilities/LogUtils.js";
@@ -72,6 +74,10 @@ const QUALIFYING_ROLE_IDS = [
   MEMBER_ROLE_ID,
   NEWCOMERS_ROLE_ID,
 ].filter((id): id is string => id !== null);
+
+function getHomeGuild(client: Client): Guild | undefined {
+  return client.guilds.cache.get(HOME_GUILD_ID);
+}
 
 function hasQualifyingRole(member: GuildMember): boolean {
   return QUALIFYING_ROLE_IDS.some((id) => member.roles.cache.has(id));
@@ -245,7 +251,7 @@ async function reconcileUserEmojiCache(client: Client): Promise<void> {
       continue;
     }
     if (!EMOJI_WRITES_ENABLED) continue;
-    const member = await client.guilds.cache.first()?.members.fetch(userId).catch(() => null);
+    const member = await getHomeGuild(client)?.members.fetch(userId).catch(() => null);
     if (member && await uploadUserEmoji(app, member, entry.emojiName)) {
       logInfo("UserEmojiService", `Recreated missing emoji ${entry.emojiName}`);
       await sleep(CREATION_THROTTLE_MS);
@@ -292,13 +298,13 @@ async function syncAllUserEmoji(client: Client, forceRefresh = false): Promise<v
   // Load existing Discord emojis: emojiName -> emojiId
   const discordEmojis = await fetchLiveEmojiIdsByName(app);
 
-  const guild = client.guilds.cache.first();
+  const guild = getHomeGuild(client);
   if (!guild) {
-    logError("UserEmojiService", "no guild found");
+    logError("UserEmojiService", `home guild ${HOME_GUILD_ID} not in the guild cache`);
     return;
   }
 
-  const members = await guild.members.fetch();
+  const members = await fetchAllGuildMembers(guild);
   const regulars = members.filter((m) => !m.user.bot && hasQualifyingRole(m));
   const claimedNames = new Set<string>();
 

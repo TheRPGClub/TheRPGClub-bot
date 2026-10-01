@@ -29,6 +29,7 @@ import {
   safeUpdate,
   safeUserFetch,
 } from "../functions/InteractionUtils.js";
+import { fetchAllGuildMembers } from "../functions/GuildMemberFetch.js";
 import {
   buildDisabledPrevNextRow,
   parseDirAndPage,
@@ -251,7 +252,7 @@ export class AvatarHistoryCommand {
       }
       let allMembers: Collection<string, GuildMember>;
       try {
-        allMembers = await interaction.guild.members.fetch();
+        allMembers = await fetchAllGuildMembers(interaction.guild);
       } catch (err) {
         logError("AvatarHistory.scan.fetchMembers", err);
         await safeReply(interaction, {
