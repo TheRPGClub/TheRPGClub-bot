@@ -38,7 +38,6 @@ import {
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
 import { safeIgnore } from "../../utilities/AsyncUtils.js";
 import { commandMention } from "../../services/CommandMentionService.js";
-import { DISCORD_BUTTON_LABEL_MAX } from "../../config/textLimits.js";
 import {
   ADMIN_ROUND_ADD_MODAL_PREFIX,
   ADMIN_ROUND_ADD_PREFIX,
@@ -350,10 +349,10 @@ export async function handleEditRound(
     return;
   }
 
-  const buttons = entry.gameOfTheMonth.slice(0, MAX_ROUND_GAMES).map((game, index) =>
+  const buttons = entry.gameOfTheMonth.slice(0, MAX_ROUND_GAMES).map((_game, index) =>
     buildActionButton({
       customId: `${ADMIN_ROUND_EDIT_PREFIX}:${kind}:${roundNumber}:${index}`,
-      label: `Edit #${index + 1}: ${game.title}`.slice(0, DISCORD_BUTTON_LABEL_MAX),
+      label: `Edit game #${index + 1}`,
       style: ButtonStyle.Primary,
     }));
   await replyWithEntry(
