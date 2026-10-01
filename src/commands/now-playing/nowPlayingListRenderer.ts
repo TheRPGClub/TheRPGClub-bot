@@ -7,6 +7,7 @@ import {
   ButtonBuilder,
   ButtonStyle,
   type Client,
+  RESTJSONErrorCodes,
 } from "discord.js";
 import {
   ContainerBuilder,
@@ -562,7 +563,7 @@ export async function refreshNowPlayingListFromContext(
     } catch (err: unknown) {
       const error = err as { code?: number; rawError?: { code?: number } };
       const code = error?.code ?? error?.rawError?.code;
-      if (code === 10008) {
+      if (code === RESTJSONErrorCodes.UnknownMessage) {
         nowPlayingListContexts.delete(key);
         continue;
       }

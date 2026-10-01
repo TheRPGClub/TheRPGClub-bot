@@ -3,6 +3,7 @@ import {
   ButtonBuilder,
   ButtonStyle,
   PermissionsBitField,
+  RESTJSONErrorCodes,
   type ActionRow,
   type MessageActionRowComponent,
   type AutocompleteInteraction,
@@ -173,7 +174,7 @@ export function isUniqueConstraintError(err: any): boolean {
 
 export function isUnknownWebhookError(err: any): boolean {
   const code = err?.code ?? err?.rawError?.code;
-  return code === 10015;
+  return code === RESTJSONErrorCodes.UnknownWebhook;
 }
 
 export { buildComponentsV2Flags };

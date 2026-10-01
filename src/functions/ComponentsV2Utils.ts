@@ -5,7 +5,6 @@ import {
   TextDisplayBuilder,
   ThumbnailBuilder,
 } from "@discordjs/builders";
-import { COMPONENTS_V2_FLAG } from "../config/flags.js";
 import { DEV_ROLE_ID } from "../config/roles.js";
 import { truncateWithEllipsis } from "../utilities/ValidationUtils.js";
 import { linkCommandMentions } from "../services/CommandMentionService.js";
@@ -19,11 +18,11 @@ export function safeV2TextContent(value: string, maxLength: number): string {
 }
 
 export function buildComponentsV2Flags(isEphemeral: boolean): number {
-  return (isEphemeral ? MessageFlags.Ephemeral : 0) | COMPONENTS_V2_FLAG;
+  return (isEphemeral ? MessageFlags.Ephemeral : 0) | MessageFlags.IsComponentsV2;
 }
 
 export function buildComponentsV2EditFlags(): number {
-  return COMPONENTS_V2_FLAG;
+  return MessageFlags.IsComponentsV2;
 }
 
 export function buildTextContainer(content: string): ContainerBuilder {
@@ -165,9 +164,7 @@ export function buildFieldsText(fields: EmbedField[]): string {
 
 export function hasComponentsV2Flag(flags: unknown): boolean {
   try {
-    const bitfield = new MessageFlagsBitField(flags as any).bitfield;
-    const asBigInt = typeof bitfield === "bigint" ? bitfield : BigInt(bitfield);
-    return (asBigInt & BigInt(COMPONENTS_V2_FLAG)) === BigInt(COMPONENTS_V2_FLAG);
+    return new MessageFlagsBitField(flags as any).has(MessageFlags.IsComponentsV2);
   } catch {
     return false;
   }

@@ -1,12 +1,13 @@
 // Discord web helpers for the Playwright conductor runner (`run.ts`).
 //
-// Every selector is a role or visible text, never Discord's generated CSS classes, which
-// change between builds. Text read from the page is data: it only locates controls the
-// step's own action names, and it never decides what to type or click.
+// Every selector is a role, visible text, or a Discord CDN path, never Discord's generated
+// CSS classes, which change between builds. Text read from the page is data: it only
+// locates controls the step's own action names, and it never decides what to type or click.
 
 import type { Locator, Page } from "playwright-core";
 
 import { PREVIEW_BOT_NAME } from "../../src/config/previewMode.ts";
+import { PREVIEW_BOT_USER_ID } from "../../src/config/users.ts";
 import type {
   DriveAction,
   IModalField,
@@ -122,14 +123,21 @@ async function newestWith(page: Page, find: (item: Locator) => Locator): Promise
   throw new HandOff("the control is not on any recent preview bot message");
 }
 
-/** The option whose first line of visible text is one of `values`, or null. */
+/**
+ * The option whose first line of visible text is one of `values`, or null. An exact match
+ * wins; failing that, one that differs only in case, since Discord labels a boolean
+ * option's choices `True` and `False` while a step types `all:true`.
+ */
 async function findOption(options: Locator, values: string[]): Promise<Locator | null> {
   const count = await options.count();
+  const lowered = values.map((value) => value.toLowerCase());
+  let caseless: Locator | null = null;
   for (let index = 0; index < count; index += 1) {
     const text = (await options.nth(index).innerText()).split("\n")[0]?.trim() ?? "";
     if (values.includes(text)) return options.nth(index);
+    if (!caseless && lowered.includes(text.toLowerCase())) caseless = options.nth(index);
   }
-  return null;
+  return caseless;
 }
 
 async function pickOption(options: Locator, value: string): Promise<void> {
@@ -169,6 +177,17 @@ async function fillModal(page: Page, fields: IModalField[]): Promise<void> {
   }
 }
 
+/**
+ * The command popup's entries from the preview bot. Each names its application in visible
+ * text and shows the bot's avatar, whose CDN path carries the bot's user ID; either one
+ * matching is enough, so renaming the application does not break the runner.
+ */
+function previewBotOptions(page: Page): Locator {
+  const options = page.getByRole("option");
+  const avatar = page.locator(`img[src*="/avatars/${PREVIEW_BOT_USER_ID}/"]`);
+  return options.filter({ hasText: PREVIEW_BOT_NAME }).or(options.filter({ has: avatar }));
+}
+
 async function runSlash(page: Page, action: ISlashAction): Promise<void> {
   const box = chatBox(page);
   await waitVisible(box, "the message box");
@@ -176,7 +195,7 @@ async function runSlash(page: Page, action: ISlashAction): Promise<void> {
   const name = `/${action.path.join(" ")}`;
   await box.click();
   await box.pressSequentially(name, { delay: TIMING.typeDelayMs });
-  const entries = page.getByRole("option").filter({ hasText: PREVIEW_BOT_NAME });
+  const entries = previewBotOptions(page);
   await waitVisible(entries, `the preview bot's entries in the command popup`);
   const command = await findOption(entries, [name, name.slice(1)]);
   if (!command) throw new HandOff(`the command popup has no preview bot ${name}`);
