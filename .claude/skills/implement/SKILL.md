@@ -337,8 +337,10 @@ give the user:
 
 - the issue and PR URLs, and a short summary of what changed;
 - the smoke test and CI result, and anything that was not verified;
-- when the PR has Testing steps, that `/test-guild <PR>` puts it in the test
-  guild for `/conduct`. Only the user runs that skill; never dispatch a deploy;
+- when the PR has Testing steps, the `/test-guild` and Playwright runner
+  commands, each in its own `bash` block, per
+  [test-commands.md](../_shared/test-commands.md). Only the user runs them;
+  never dispatch a deploy;
 - the judgment calls, one line each;
 - how many self review passes ran and what they found and fixed;
 - anything left out of scope, and any conflict resolved and what the union
