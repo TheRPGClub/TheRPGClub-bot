@@ -359,12 +359,13 @@ export async function announceTieBreak(
   }
   const kindLabel = VOTING_CATEGORY_LABEL[pick.category];
   const [sole] = pick.games;
+  const picked = pick.games.length > 1 ? "winners" : "winner";
   const text = buildFinalWinnersText({
     kindLabel,
     roundNumber: round.roundNumber,
     monthLabel: round.monthYear,
     titles: pick.games.map((game) => game.title),
-  }) + "\n-# The vote tied, so the admins picked the winner.";
+  }) + `\n-# The vote tied, so the admins picked the ${picked}.`;
   return postWinnerAnnouncements(
     client,
     sendable,

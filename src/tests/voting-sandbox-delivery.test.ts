@@ -534,6 +534,6 @@ test("an admin's tie-break pick is announced in announcements, joint winners tog
   assert.match(sent[0]?.json ?? "", /TEST MODE/);
   assert.match(sent[1]?.json ?? "", /GOTM winners for Round 999/);
   assert.match(sent[1]?.json ?? "", /Sandbox GOTM Game 1\*\* and \*\*Sandbox GOTM Game 2/);
-  assert.match(sent[1]?.json ?? "", /the admins picked the winner/);
+  assert.match(sent[1]?.json ?? "", /the admins picked the winners\./);
   assert.deepEqual(links, [`https://discord.com/channels/guild/${ANNOUNCEMENT_CHANNEL_ID}/2`]);
 });
