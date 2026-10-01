@@ -167,8 +167,9 @@ test("mapVotingEventApiData marks a kind this bot does not know as unknown", () 
 });
 
 test("buildNominationReminderText points at the vote with Discord timestamps", () => {
-  const text = buildNominationReminderText(new Date("2026-10-30T16:00:00.000Z"));
+  const text = buildNominationReminderText(143, new Date("2026-10-30T16:00:00.000Z"));
 
-  assert.match(text, /^Voting is <t:1793376000:R> \(<t:1793376000:D>\)!/);
-  assert.match(text, /Please nominate games/);
+  assert.match(text, /^### 📝 Round 143 nominations are open/);
+  assert.match(text, /Voting opens <t:1793376000:R> \(<t:1793376000:F>\)\./);
+  assert.match(text, /Nominate games with .*gotm nominate.* so they make the ballot\./);
 });

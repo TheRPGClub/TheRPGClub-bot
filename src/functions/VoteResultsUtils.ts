@@ -115,6 +115,7 @@ export function buildWinnerAnnouncementText(params: {
 }): string {
   if (!params.winners.length) {
     return (
+      `## 🗳️ No ${params.kindLabel} winner\n` +
       `No ${params.kindLabel} votes were cast for Round ${params.roundNumber}, ` +
       "so no winner was decided."
     );
@@ -127,8 +128,8 @@ export function buildWinnerAnnouncementText(params: {
   }
   const list = joinBoldTitles(params.winners.map((row) => row.gameTitle));
   return (
-    `# 🏆 ${params.kindLabel} Round ${params.roundNumber} (${params.monthLabel}) ` +
-    `ends in a tie between ${list}! The admins will decide the final pick.`
+    `# ⚖️ ${params.kindLabel} Round ${params.roundNumber} (${params.monthLabel}) ` +
+    `ended in a tie\nIt is a tie between ${list}. The admins will pick the final winner.`
   );
 }
 
@@ -148,12 +149,15 @@ export function buildTallyText(params: {
     (row, index) => `${index + 1}. **${row.gameTitle}** - ${row.voteCount} ${voteNoun(row.voteCount)}`,
   );
   const body = lines.length ? lines.join("\n") : "No nominations to tally.";
-  let footer = `-# Each member can vote for up to ${params.cap} games.`;
+  const gamesNoun = params.cap === 1 ? "game" : "games";
+  let footer = `-# Each member could vote for up to ${params.cap} ${gamesNoun}.`;
   if (params.votingOpen && params.voteDeadline) {
     const deadlineUnix = toUnixTimestamp(params.voteDeadline);
-    footer += ` Voting is still open until <t:${deadlineUnix}:F>; counts can change.`;
+    footer =
+      `-# Each member can vote for up to ${params.cap} ${gamesNoun}. Voting is still open ` +
+      `until <t:${deadlineUnix}:F> (<t:${deadlineUnix}:R>), so counts can change.`;
   }
-  return `## 🗳️ ${params.kindLabel} Results - Round ${params.roundNumber}\n${body}\n${footer}`;
+  return `## 📊 ${params.kindLabel} Results - Round ${params.roundNumber}\n${body}\n${footer}`;
 }
 
 export function buildHiddenTallyText(params: {
@@ -162,14 +166,16 @@ export function buildHiddenTallyText(params: {
   totalVotes: number;
   voteDeadline: Date | null;
 }): string {
-  const revealNote = params.voteDeadline
-    ? `Results are posted in the announcements channel when voting ends ` +
-      `<t:${toUnixTimestamp(params.voteDeadline)}:R>.`
-    : "Results are posted in the announcements channel when voting ends.";
-  return (
-    `${params.kindLabel} Round ${params.roundNumber} results are hidden while voting is open. ` +
-    `${revealNote}\n**${params.totalVotes}** ${voteNoun(params.totalVotes)} cast so far.`
-  );
+  const deadlineUnix = params.voteDeadline ? toUnixTimestamp(params.voteDeadline) : null;
+  const revealNote = deadlineUnix
+    ? "They are posted in the announcements channel when voting ends " +
+      `<t:${deadlineUnix}:R> (<t:${deadlineUnix}:F>).`
+    : "They are posted in the announcements channel when voting ends.";
+  return [
+    `### 🙈 ${params.kindLabel} Results - Round ${params.roundNumber}`,
+    `Results are hidden while voting is open. ${revealNote}`,
+    `**${params.totalVotes}** ${voteNoun(params.totalVotes)} cast so far.`,
+  ].join("\n");
 }
 
 export function buildMyVotesText(params: {
@@ -179,10 +185,10 @@ export function buildMyVotesText(params: {
   cap: number;
 }): string {
   const header =
-    `**Your ${params.kindLabel} votes for Round ${params.roundNumber} ` +
-    `(${params.votes.length}/${params.cap}):**`;
+    `### Your ${params.kindLabel} votes for Round ${params.roundNumber} ` +
+    `(${params.votes.length}/${params.cap})`;
   if (!params.votes.length) {
-    return `${header}\nYou have not voted yet.`;
+    return `${header}\nYou have not voted yet. Pick a game on the voting panel to vote.`;
   }
   const lines = params.votes.map(
     (vote, index) =>

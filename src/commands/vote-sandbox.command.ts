@@ -255,6 +255,12 @@ export class VoteSandboxCommand {
     await handleSandboxEnd(interaction);
   }
 
+  @ButtonComponent({ id: /^vsbx-pick:\d+:[0-9a-f]+:\d+:(gotm|nr-gotm):\d+$/ })
+  async handlePick(interaction: ButtonInteraction): Promise<void> {
+    const panel = resolvePanel(interaction.customId);
+    await respondVoteCast(interaction, panel.target, createSandboxDataSource(panel.sandbox));
+  }
+
   @SelectMenuComponent({ id: /^vsbx-cast:\d+:[0-9a-f]+:\d+:(gotm|nr-gotm):\d+$/ })
   async handleCast(interaction: StringSelectMenuInteraction): Promise<void> {
     const panel = resolvePanel(interaction.customId);

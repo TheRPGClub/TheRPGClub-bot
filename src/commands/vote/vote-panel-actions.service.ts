@@ -21,8 +21,9 @@ import { toUnixTimestamp } from "../../functions/DateFormatUtils.js";
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
 import type { IVotingDataSource } from "../../services/VotingDataSource.js";
 
-// A vote panel's select and buttons, shared by the live panels (/vote) and the
-// voting sandbox's panels, which differ only in the data source they read.
+// A vote panel's game buttons, select fallback and other buttons, shared by
+// the live panels (/vote) and the voting sandbox's panels, which differ only in
+// the data source they read.
 
 export const MEMBERS_ONLY_MESSAGE = "Voting is limited to server members with the Members role.";
 
@@ -38,8 +39,28 @@ function buildVotingClosedText(round: number, info: IVotingRound | null): string
   return `Voting for Round ${round} is not open.`;
 }
 
+/** The nomination a game button carries as its last custom id segment. */
+export function parsePickedNominationId(customId: string): number | null {
+  const nominationId = Number(customId.split(":").at(-1));
+  return isPositiveInt(nominationId) ? nominationId : null;
+}
+
+/**
+ * The nomination a cast picked: the game button's own id segment, or the
+ * select's value on a large ballot (and on panels posted before the buttons).
+ */
+function resolveCastNominationId(
+  interaction: ButtonInteraction | StringSelectMenuInteraction,
+): number | null {
+  if (interaction.isButton()) {
+    return parsePickedNominationId(interaction.customId);
+  }
+  const nominationId = Number(interaction.values?.[0]);
+  return isPositiveInt(nominationId) ? nominationId : null;
+}
+
 export async function respondVoteCast(
-  interaction: StringSelectMenuInteraction,
+  interaction: ButtonInteraction | StringSelectMenuInteraction,
   target: IVotePanelTarget | null,
   source: IVotingDataSource,
 ): Promise<void> {
@@ -65,8 +86,8 @@ export async function respondVoteCast(
       return;
     }
 
-    const nominationId = Number(interaction.values?.[0]);
-    if (!isPositiveInt(nominationId)) {
+    const nominationId = resolveCastNominationId(interaction);
+    if (nominationId === null) {
       await safeReply(interaction, buildTextReply("Invalid nomination selection.", true));
       return;
     }

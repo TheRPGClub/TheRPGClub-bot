@@ -7,7 +7,8 @@ import { ADMIN_CHANNEL_ID, ANNOUNCEMENT_CHANNEL_ID } from "../config/channels.js
 import { NOMINATION_DISCUSSION_CHANNEL_IDS } from "../config/nominationChannels.js";
 import { fetchSendableChannel } from "../functions/ChannelUtils.js";
 import { toUnixTimestamp } from "../functions/DateFormatUtils.js";
-import { buildComponentsV2Flags } from "../functions/ComponentsV2Utils.js";
+import { buildComponentsV2Flags, buildTextSend } from "../functions/ComponentsV2Utils.js";
+import { commandMention } from "./CommandMentionService.js";
 import {
   buildTiePromptComponents,
   type TieBreakSelectIdBuilder,
@@ -56,12 +57,13 @@ export interface IVotingEventContext {
   recordWinners: (client: Client, roundNumber: number) => Promise<void>;
 }
 
-export function buildNominationReminderText(votingOpensAt: Date): string {
+export function buildNominationReminderText(roundNumber: number, votingOpensAt: Date): string {
   const voteUnix = toUnixTimestamp(votingOpensAt);
-  return (
-    `Voting is <t:${voteUnix}:R> (<t:${voteUnix}:D>)!\n` +
-    "Please nominate games for the upcoming vote so they can be included."
-  );
+  return [
+    `### 📝 Round ${roundNumber} nominations are open`,
+    `Voting opens <t:${voteUnix}:R> (<t:${voteUnix}:F>).`,
+    `Nominate games with ${commandMention("gotm nominate")} so they make the ballot.`,
+  ].join("\n");
 }
 
 async function requireRound(
@@ -85,7 +87,9 @@ async function postNominationReminder(
     return "skipped";
   }
 
-  const content = buildNominationReminderText(round.votingOpensAt);
+  const reminder = buildTextSend(
+    buildNominationReminderText(round.roundNumber, round.votingOpensAt),
+  );
   let sent = 0;
   for (const channelId of NOMINATION_DISCUSSION_CHANNEL_IDS) {
     const channel = await fetchSendableChannel(client, channelId);
@@ -94,7 +98,7 @@ async function postNominationReminder(
       continue;
     }
     try {
-      await channel.send(content);
+      await channel.send(reminder);
       sent += 1;
     } catch (err) {
       logError("VotingEventHandlers.reminder", err);
@@ -129,6 +133,7 @@ async function postVotingPanels(
     client,
     channelId: ANNOUNCEMENT_CHANNEL_ID,
     roundNumber: round.roundNumber,
+    monthLabel: round.monthYear,
     voteDeadline: round.votingClosesAt,
     nominationsByKind,
     source: context.source,

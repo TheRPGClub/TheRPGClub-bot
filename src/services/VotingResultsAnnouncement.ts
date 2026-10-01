@@ -16,9 +16,11 @@ import {
 } from "../functions/VoteResultsUtils.js";
 import { ensureWinnerThread, type WinnerKindLabel } from "./WinnerThreadService.js";
 import {
+  buildAccentContainer,
   buildComponentsV2Flags,
   buildTextContainer,
 } from "../functions/ComponentsV2Utils.js";
+import { COLOR_HIGHLIGHT, COLOR_PRIMARY } from "../config/colors.js";
 import { ANNOUNCEMENT_CHANNEL_ID } from "../config/channels.js";
 import { fetchGameCoverBuffer } from "./GameImageService.js";
 import { fetchSendableChannel } from "../functions/ChannelUtils.js";
@@ -123,7 +125,7 @@ export async function announceVotingResults(
     }
     const rows = mergeTallyWithNominations(tally.rows, nominations);
     tallyContainers.push(
-      buildTextContainer(
+      buildAccentContainer(
         buildTallyText({
           kindLabel,
           roundNumber: round.roundNumber,
@@ -132,6 +134,7 @@ export async function announceVotingResults(
           votingOpen: false,
           voteDeadline: null,
         }),
+        COLOR_PRIMARY,
       ),
     );
     const winners = pickWinningRows(rows);
@@ -182,7 +185,7 @@ export async function announceVotingResults(
         logError("VotingResultsAnnouncement.ensureWinnerThread", error);
       }
     }
-    const container = buildTextContainer(text);
+    const container = buildAccentContainer(text, COLOR_HIGHLIGHT);
     if (winner && (options.hasCover?.(winner.gamedbGameId) ?? true)) {
       files.push(...(await addWinnerCovers(container, [winner.gamedbGameId])));
     }

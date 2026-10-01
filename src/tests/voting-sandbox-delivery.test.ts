@@ -105,9 +105,9 @@ test("voting_opened posts sandbox panels to announcements through the live handl
   assert.equal(sent.length, 2);
   assert.ok(sent.every((message) => message.channelId === ANNOUNCEMENT_CHANNEL_ID));
   for (const message of sent) {
-    assert.match(message.json, new RegExp(`vsbx-cast:${ownerId}:cafe01:999:`));
+    assert.match(message.json, new RegExp(`vsbx-pick:${ownerId}:cafe01:999:`));
     assert.match(message.json, /VOTING SANDBOX/);
-    assert.doesNotMatch(message.json, /"vote-cast:/);
+    assert.doesNotMatch(message.json, /"vote-(cast|pick):/);
   }
   assert.equal((await loadSandbox(ownerId))?.outbox.length, 0);
 });
@@ -131,7 +131,7 @@ test("a tie posts results, prompts the admins, and breaking it decides the round
 
   const results = sent.filter((message) => message.channelId === ANNOUNCEMENT_CHANNEL_ID);
   assert.match(results[0]?.json ?? "", /TEST MODE/);
-  assert.ok(results.some((message) => /ends in a tie between/.test(message.json)));
+  assert.ok(results.some((message) => /ended in a tie/.test(message.json)));
   const prompt = sent.find((message) => message.channelId === ADMIN_CHANNEL_ID);
   assert.match(prompt?.json ?? "", new RegExp(`vsbx-tie:${ownerId}:beef02:999:gotm`));
 
@@ -288,6 +288,9 @@ test("sandbox ids carry owner, sandbox and round, and stay within Discord's limi
     roundNumber: 123456,
     rest: ["nr-gotm", "1"],
   });
+  const pick = ids.pick("nr-gotm", 123456, 2147483647);
+  assert.ok(pick.length <= 100);
+  assert.deepEqual(parseSandboxCustomId(pick)?.rest, ["nr-gotm", "2147483647"]);
   const tie = buildSandboxTieSelectId(target, 999, "nr_gotm");
   assert.equal(parseSandboxCustomId(tie)?.rest[0], "nr_gotm");
   assert.equal(parseSandboxCustomId(`vsbx-mine:${target.ownerId}:x:0:gotm`), null);
