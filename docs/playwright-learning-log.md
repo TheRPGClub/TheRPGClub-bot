@@ -21,6 +21,8 @@ entry for every new problem. The `playwright-log` skill
 - Quote reply text exactly as the code builds it, so the conductor's checks match.
 - "by eye" anywhere in `Expected:` hands the step off. Describe output elsewhere in plain
   prose and keep the phrase out of a step the runner should drive.
+- A step that expects a refusal says so first, in its label and `Expected:`, and names
+  the later step that depends on it.
 - The runner acts only in the test channel. A step on a message posted elsewhere (an
   announcements panel, an admin prompt) is the tester's: name the channel, the message's
   heading, and the earlier reply that links it.
@@ -74,6 +76,22 @@ entry for every new problem. The `playwright-log` skill
   bottom, and scroll up to find an older conductor message instead of assuming it is gone.
 
 ## Entries
+
+### 2026-10-01: tester skipped a step that was meant to be refused
+
+- **PR under test:** #1443
+- **Symptom:** steps 5 and 6 failed with "No output observed", noted "bad test, you
+  closed the vote". Step 8 then found an empty runoff and failed.
+- **Cause:** step 5 deliberately voted on the old, closed voting panel to check the
+  refusal, but its label read like a normal vote, and the tester went to the runoff panel,
+  which (correctly) has no Game 3. Step 6 looked equally wrong after that, so neither
+  click was made, and the runoff closed with no votes.
+- **Fix:** #1443 relabelled both steps, put OLD and NEW on the two panels, and opened each
+  `Expected:` with what should happen ("meant to be refused", "meant to land") and which
+  later step depends on it.
+- **Lesson:** a step that expects a refusal says so first, in its label and `Expected:`.
+  When two messages look alike, the step says which one, how to tell them apart, and
+  what a later step needs from it.
 
 ### 2026-10-01: half the sandbox steps handed off, and the tester could not find the panel
 

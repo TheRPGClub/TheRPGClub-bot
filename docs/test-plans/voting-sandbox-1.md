@@ -204,19 +204,22 @@ Expected: an ephemeral reply, "GOTM Results - Round 999", "Sandbox GOTM Game 1",
 "Each member could vote for up to 2 games."
 Ephemeral: yes
 
-### Step 23: Vote on the closed NR-GOTM voting panel
+### Step 23: Old voting panel refuses a vote once the runoff is open
 ```
-click "Sandbox NR-GOTM Game 3" on the "NR-GOTM Vote - Round 999" panel in the announcements channel (the second link in step 11's reply)
+click "Sandbox NR-GOTM Game 3" on the OLD "NR-GOTM Vote - Round 999" panel in the announcements channel, not the runoff panel (the second link in step 11's reply, and the only NR-GOTM panel that still lists Game 3)
 ```
-Expected: an ephemeral reply, "Voting for Round 999 has closed" and "Vote in the runoff".
+Expected: this vote is meant to be refused. Step 21 closed the main vote and opened a
+runoff, so the old panel points you to the runoff instead. An ephemeral reply,
+"Voting for Round 999 has closed" and "Vote in the runoff".
 Ephemeral: yes
 
 ### Step 24: Vote in the NR-GOTM runoff
 ```
-click "Sandbox NR-GOTM Game 2" on the "NR-GOTM Runoff - Round 999" panel in the announcements channel (the last link in step 21's reply)
+click "Sandbox NR-GOTM Game 2" on the NEW "NR-GOTM Runoff - Round 999" panel in the announcements channel, which lists only Game 1 and Game 2 (the last link in step 21's reply)
 ```
-Expected: an ephemeral reply, "Vote recorded for Sandbox NR-GOTM Game 2" and
-"Your NR-GOTM runoff votes for Round 999 (1/1)".
+Expected: this vote is meant to land; step 26 needs it to pick Game 2 as the winner. An
+ephemeral reply, "Vote recorded for", "Sandbox NR-GOTM Game 2", and
+"NR-GOTM runoff votes for Round 999 (1/1)".
 Ephemeral: yes
 
 ### Step 25: Check the hidden runoff results
