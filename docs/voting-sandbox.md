@@ -62,7 +62,10 @@ Every sandbox post carries a banner, and the sandbox round defaults to Round 999
   runoff and its tally, pending ties, winners and queued events.
 - `/vote-sandbox end` ends the sandbox and deletes its row.
 
-Every step replies with what it delivered and the sandbox status.
+Every step replies with what it delivered and the sandbox status. Each delivered event
+links every message it posted (panels and results in announcements, reminders in the
+nomination channels, tie prompts and summaries in the admin channel), so a link takes you
+straight to the post.
 
 ## Walkthrough checklist
 

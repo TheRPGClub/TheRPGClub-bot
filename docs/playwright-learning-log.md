@@ -19,6 +19,11 @@ entry for every new problem. The `playwright-log` skill
   exact-match path and logs a completion at once. Mark such a step `Changes data: yes`,
   or use a title with no exact GameDB match.
 - Quote reply text exactly as the code builds it, so the conductor's checks match.
+- "by eye" anywhere in `Expected:` hands the step off. Describe output elsewhere in plain
+  prose and keep the phrase out of a step the runner should drive.
+- The runner acts only in the test channel. A step on a message posted elsewhere (an
+  announcements panel, an admin prompt) is the tester's: name the channel, the message's
+  heading, and the earlier reply that links it.
 - Take option values from `docs/test-plans/`, which hold values known to work against
   the test data (for example `title:Chrono Trig` and `platform:SNES`). For an
   autocomplete option, use a value the bot resolves on its own, such as an abbreviation.
@@ -66,6 +71,23 @@ entry for every new problem. The `playwright-log` skill
   bottom, and scroll up to find an older conductor message instead of assuming it is gone.
 
 ## Entries
+
+### 2026-10-01: half the sandbox steps handed off, and the tester could not find the panel
+
+- **PR under test:** #1443
+- **Symptom:** steps 4 to 8, 12, 14 and 15 handed off as "Expected asks for a check by eye"
+  or "the runner cannot read the action". The tester then did not know where the runoff
+  panel step 6 named was: "Step 6 is yours" gave only the command.
+- **Cause:** the `Expected:` lines said "Check by eye", which the drive plan always hands
+  off. The panel steps read `select "X" on the ... panel`, which the action parser does
+  not accept. The panels themselves post in the announcements channel and the tie prompt
+  in the admin channel, while the runner acts only in the test channel, and no step said
+  how to get there.
+- **Fix:** #1443 made every `/vote-sandbox` reply link each message it posted, wherever
+  it landed, and reworded the steps: no "by eye" in a step the runner can drive, and each
+  panel step names the panel's heading and which earlier reply links it.
+- **Lesson:** a step acting on a message outside the test channel says where that
+  message is and how to reach it. Keep "by eye" out of a step the runner should drive.
 
 ### 2026-10-01: preview bot's commands never appear in the popup
 

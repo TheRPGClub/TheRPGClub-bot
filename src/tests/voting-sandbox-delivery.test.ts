@@ -31,8 +31,11 @@ interface ISent {
   json: string;
 }
 
-/** A client whose every channel accepts sends, recorded in order. */
-function fakeClient(): { client: Client; sent: ISent[]; scheduled: string[] } {
+/**
+ * A client whose every channel accepts sends, recorded in order. With `withUrls`, each
+ * sent message has a link, as Discord's do.
+ */
+function fakeClient(withUrls = false): { client: Client; sent: ISent[]; scheduled: string[] } {
   const sent: ISent[] = [];
   const scheduled: string[] = [];
   const guild = {
@@ -55,7 +58,9 @@ function fakeClient(): { client: Client; sent: ISent[]; scheduled: string[] } {
             typeof component.toJSON === "function" ? component.toJSON() : component,
           );
           sent.push({ channelId, json: JSON.stringify(components) });
-          return {};
+          return withUrls
+            ? { url: `https://discord.com/channels/guild/${channelId}/${sent.length}` }
+            : {};
         },
       }),
     },
@@ -152,6 +157,26 @@ test("a tie opens a runoff whose panels offer only the tied games", async (t) =>
   assert.equal(cast?.runoff, true);
   assert.equal((await source.getTally("gotm", 999, "runoff")).rows[0]?.voteCount, 1);
   assert.equal((await source.getTally("gotm", 999)).cap, 2);
+});
+
+test("each delivered event links every message it posted, wherever it landed", async (t) => {
+  mockStore(t);
+  const { client } = fakeClient(true);
+  const ownerId = nextOwner();
+  await startOpenSandbox(ownerId);
+  const [opened] = await deliverSandboxOutbox(client, ownerId);
+  const panels = `https://discord.com/channels/guild/${ANNOUNCEMENT_CHANNEL_ID}`;
+  assert.equal(opened, `\`voting_opened\`: delivered. Posted: ${panels}/1 ${panels}/2`);
+
+  await mutateSandbox(ownerId, (state) => {
+    seedSandboxOutcome(state, "gotm", "two-way-tie", new Date());
+    closeSandboxVoting(state, new Date());
+    closeSandboxRunoff(state, new Date());
+  });
+  const lines = await deliverSandboxOutbox(client, ownerId);
+  assert.match(lines.at(-1) ?? "", new RegExp(
+    `^\`tie_pending\`: delivered\\. Posted: https://discord.com/channels/guild/${ADMIN_CHANNEL_ID}/`,
+  ));
 });
 
 test("a runoff with a sole leader announces the winner and decides the round", async (t) => {
