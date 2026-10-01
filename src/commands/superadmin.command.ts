@@ -141,7 +141,7 @@ function buildSuperAdminHelpButtons(
 ): ActionRowBuilder<StringSelectMenuBuilder>[] {
   const select = new StringSelectMenuBuilder()
     .setCustomId("superadmin-help-select")
-    .setPlaceholder("/superadmin commands")
+    .setPlaceholder("/superadmin help")
     .addOptions(
       SUPERADMIN_HELP_TOPICS.map((topic) => ({
         label: topic.label,

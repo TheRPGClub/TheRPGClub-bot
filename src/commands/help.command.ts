@@ -876,7 +876,7 @@ function buildRssHelpButtons(
 ): ActionRowBuilder<StringSelectMenuBuilder>[] {
   const select = new StringSelectMenuBuilder()
     .setCustomId(buildHelpCustomId("rss", { activeTopicId: activeId }))
-    .setPlaceholder("/rss commands")
+    .setPlaceholder("/rss help")
     .addOptions(
       RSS_HELP_TOPICS.map((topic) => ({
         label: topic.label,

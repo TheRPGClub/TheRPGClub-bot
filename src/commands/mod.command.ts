@@ -123,7 +123,7 @@ function buildModHelpButtons(
 ): ActionRowBuilder<StringSelectMenuBuilder>[] {
   const select = new StringSelectMenuBuilder()
     .setCustomId("mod-help-select")
-    .setPlaceholder("/mod commands")
+    .setPlaceholder("/mod help")
     .addOptions(
       MOD_HELP_TOPICS.map((topic) => ({
         label: topic.label,
