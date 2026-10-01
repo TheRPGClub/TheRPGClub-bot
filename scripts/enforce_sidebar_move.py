@@ -11,6 +11,8 @@ stop walks the transcript since the last prompt the user typed and finds the lat
 
 - `gh issue edit ... --add-label "In Progress"` that printed the issue URL: Working (or Needs
   Review, for a question)
+- a later `gh issue edit <n> --remove-label "In Progress"` or `gh issue close <n>` for that
+  same issue: Completed or Working, since the task ended (say it was already fixed on main)
 - `gh pr create` that printed a pull request URL: Needs Review
 - `scripts/catchup.py add-issue` that recorded a blocker: Blocked (or Needs Review, for an open
   pull request)
@@ -59,6 +61,12 @@ MID_LOOP = ('Self review never ends a turn: wait for CI in the foreground and fi
 RUNS = r'(?:^|[;&|(\n])\s*(?:\S*/)?'
 IN_PROGRESS = re.compile(RUNS + r'gh issue edit\b[^\n;&|]*--add-label[= ]+["\']?[^"\'\n]*'
                          r'In Progress')
+LABEL_CLEARED = re.compile(RUNS + r'gh issue edit\b[^\n;&|]*--remove-label[= ]+["\']?'
+                           r'[^"\'\n]*In Progress')
+ISSUE_CLOSE = re.compile(RUNS + r'gh issue close\b')
+ISSUE_ARG = re.compile(r'gh issue (?:edit|close)\b([^\n;&|]*)')
+ISSUE_NUMBER = re.compile(r'(?:^|\s)["\']?(?:#|\S*/issues/)?(\d+)["\']?(?=\s|$)')
+CLOSED = re.compile(r'Closed issue|already closed|/issues/\d+')
 PR_CREATE = re.compile(RUNS + r'gh pr create\b')
 PR_URL = re.compile(r'github\.com/[^/\s]+/[^/\s]+/pull/(\d+)')
 ISSUE_URL = re.compile(r'github\.com/[^/\s]+/[^/\s]+/issues/\d+')
@@ -232,16 +240,30 @@ def shut_prs(calls, by_id, notices, start):
     return shut
 
 
+def issue_number(command):
+    """The issue a `gh issue edit` or `gh issue close` in the command acts on, or None."""
+    m = ISSUE_ARG.search(command)
+    number = ISSUE_NUMBER.search(m.group(1)) if m else None
+    return number.group(1) if number else None
+
+
 def milestones(calls, start):
     """(position, what, groups) for each milestone in the turn."""
-    found = []
+    found, labeled = [], set()
     for call in calls:
         if call.pos < start or call.name != 'Bash' or call.error:
             continue
         command = call.command
         if IN_PROGRESS.search(command) and ISSUE_URL.search(call.result):
+            labeled.add(issue_number(command))
             found.append((call.pos, 'an issue was labeled In Progress',
                           (WORKING, NEEDS_REVIEW)))
+        cleared = ((LABEL_CLEARED.search(command) and ISSUE_URL.search(call.result))
+                   or (ISSUE_CLOSE.search(command) and CLOSED.search(call.result)))
+        number = issue_number(command) if cleared else None
+        if number and number in labeled:
+            found.append((call.pos, f'issue {number} was unlabeled or closed',
+                          (COMPLETED, WORKING)))
         opened = PR_CREATE.search(command) and PR_URL.search(call.result)
         if opened:
             found.append((call.pos, f'pull request {opened.group(1)} was opened', PR_OPEN))

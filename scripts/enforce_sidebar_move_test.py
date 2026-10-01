@@ -132,6 +132,46 @@ class Milestones(Scenario):
         self.assertIsNone(self.run_stop('pr-create-failed.jsonl'))
 
 
+class InProgressCleared(Scenario):
+    UNLABEL = bash('gh issue edit 42 --remove-label "In Progress"',
+                   'https://github.com/o/r/issues/42', 'toolu_unlabel')
+    CLOSE = bash('gh issue close 42 --comment "Already fixed on main"',
+                 '\u2713 Closed issue o/r#42 (Fix it)', 'toolu_close')
+
+    def test_unlabel_and_close_then_completed_goes_through(self):
+        self.assertIsNone(self.run_stop('in-progress-no-move.jsonl', *self.UNLABEL,
+                                        *self.CLOSE, *move('cg-0000-completed')))
+
+    def test_close_alone_allows_completed(self):
+        self.assertIsNone(self.run_stop('in-progress-no-move.jsonl', *self.CLOSE,
+                                        *move('cg-0000-completed')))
+
+    def test_unlabel_alone_allows_completed(self):
+        self.assertIsNone(self.run_stop('in-progress-no-move.jsonl', *self.UNLABEL,
+                                        *move('cg-0000-completed')))
+
+    def test_completed_without_clearing_blocks(self):
+        self.assertBlocks(self.run_stop('in-progress-no-move.jsonl',
+                                        *move('cg-0000-completed')), 'Working')
+
+    def test_closing_another_issue_does_not_count(self):
+        close = bash('gh issue close 43', '\u2713 Closed issue o/r#43 (Other)', 'toolu_close')
+        self.assertBlocks(self.run_stop('in-progress-no-move.jsonl', *close,
+                                        *move('cg-0000-completed')), 'Working')
+
+    def test_failed_close_does_not_count(self):
+        close = bash('gh issue close 42', 'GraphQL: Could not resolve to an issue',
+                     'toolu_close')
+        self.assertBlocks(self.run_stop('in-progress-no-move.jsonl', *close,
+                                        *move('cg-0000-completed')), 'Working')
+
+    def test_issue_number_reads_urls_and_flags(self):
+        self.assertEqual(guard.issue_number('gh issue close --repo o/r 42'), '42')
+        self.assertEqual(guard.issue_number(
+            'gh issue edit https://github.com/o/r/issues/42 --remove-label x'), '42')
+        self.assertEqual(guard.issue_number('gh issue close "#42"'), '42')
+
+
 class Merged(Scenario):
     def test_merge_in_a_wait_output_file_blocks_until_completed(self):
         self.ledger(MERGED_PR)
