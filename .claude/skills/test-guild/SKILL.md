@@ -126,12 +126,12 @@ When the run finishes:
 
   Before giving it, make sure `node_modules/playwright-core` exists in the session's
   checkout, and run `npm ci` there when it does not. The runner also refuses to start
-  when the checkout lacks a commit `origin/main` made to `scripts/conduct-playwright`;
-  when `git log HEAD..origin/main -- scripts/conduct-playwright` prints anything, sync
-  the branch with main first. Say that the runner opens a fresh
-  Chrome profile to sign in to Discord in, that the run starts by itself (or by hand with
-  `/conduct pr:<pr>` in the test channel), and that steps the runner cannot drive are
-  left to the tester. The full rules for offering the block are in
+  when the checkout lacks a commit `origin/main` made to `scripts/conduct-playwright`.
+  Run `git fetch origin main` first, and when
+  `git log HEAD..origin/main -- scripts/conduct-playwright` prints anything, sync the
+  branch with main. Say that the runner opens a fresh Chrome profile to sign in to
+  Discord in, that the run starts by itself (or by hand with `/conduct pr:<pr>` in the
+  test channel), and that steps the runner cannot drive are left to the tester. The full rules for offering the block are in
   `.claude/skills/_shared/test-commands.md`.
 - Success on a stop: the preview is torn down, naming the PR it belonged to, or that
   nothing was running.
