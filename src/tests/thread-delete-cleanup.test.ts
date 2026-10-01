@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { EventEmitter } from "node:events";
+import { GatewayDispatchEvents, type Client } from "discord.js";
 import { AxiosError, AxiosHeaders, type InternalAxiosRequestConfig } from "axios";
-import { removeDeletedThreadLinks } from "../services/ThreadDeleteCleanup.js";
+import {
+  registerUncachedThreadDeleteCleanup,
+  removeDeletedThreadLinks,
+} from "../services/ThreadDeleteCleanup.js";
 
 const THREAD_ID = "123456789012345678";
 const LINKS_URL = `/api/v1/threads/${THREAD_ID}/links`;
@@ -58,4 +63,32 @@ test("removeDeletedThreadLinks logs the request and response when the API fails"
   assert.match(logged, /Response:/);
   assert.match(logged, /\\"status\\": 500/);
   assert.match(logged, /Internal Server Error/);
+});
+
+function fakeClient(cachedIds: string[]): { client: Client; ws: EventEmitter } {
+  const ws = new EventEmitter();
+  const cache = new Map(cachedIds.map((id) => [id, {}]));
+  const client = { ws, channels: { cache } } as unknown as Client;
+  return { client, ws };
+}
+
+test("an uncached deleted thread is cleaned up from the gateway packet", (t) => {
+  const { client, ws } = fakeClient([]);
+  const cleanup = t.mock.fn(async (_threadId: string) => 1);
+  registerUncachedThreadDeleteCleanup(client, cleanup);
+
+  ws.emit(GatewayDispatchEvents.ThreadDelete, { id: THREAD_ID });
+
+  assert.equal(cleanup.mock.callCount(), 1);
+  assert.deepEqual(cleanup.mock.calls[0].arguments, [THREAD_ID]);
+});
+
+test("a cached deleted thread is left to the threadDelete handler", (t) => {
+  const { client, ws } = fakeClient([THREAD_ID]);
+  const cleanup = t.mock.fn(async (_threadId: string) => 1);
+  registerUncachedThreadDeleteCleanup(client, cleanup);
+
+  ws.emit(GatewayDispatchEvents.ThreadDelete, { id: THREAD_ID });
+
+  assert.equal(cleanup.mock.callCount(), 0);
 });

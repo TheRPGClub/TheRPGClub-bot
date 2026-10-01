@@ -1,3 +1,4 @@
+import { GatewayDispatchEvents, type Client } from "discord.js";
 import { removeThreadGameLink } from "../classes/Thread.js";
 import { IS_TEST_MODE } from "../config/testMode.js";
 import { buildApiErrorMessage } from "../utilities/ApiErrorUtils.js";
@@ -28,4 +29,22 @@ export async function removeDeletedThreadLinks(
     logError(LOG_CONTEXT, buildApiErrorMessage(label, error));
     return 0;
   }
+}
+
+type ThreadDeletePacket = { id: string };
+
+/**
+ * discord.js emits `threadDelete` only for a thread in its channel cache, and an archived
+ * thread is not cached after a restart. `client.ws` emits each dispatch before discord.js
+ * handles it, so a thread still in the cache here is left to the `threadDelete` handler
+ * and only an uncached one is cleaned up from the raw packet.
+ */
+export function registerUncachedThreadDeleteCleanup(
+  client: Client,
+  cleanup: (threadId: string) => Promise<number> = removeDeletedThreadLinks,
+): void {
+  client.ws.on(GatewayDispatchEvents.ThreadDelete, (data: ThreadDeletePacket) => {
+    if (client.channels.cache.has(data.id)) return;
+    void cleanup(data.id);
+  });
 }
