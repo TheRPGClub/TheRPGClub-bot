@@ -255,13 +255,19 @@ async function startPasskeySignIn(page: Page): Promise<boolean> {
  */
 async function waitForChannel(page: Page, channelUrl: string): Promise<void> {
   for (let reloads = 0; ; reloads += 1) {
-    const loaded = await shows(messageList(page), TIMING.channelLoadMs);
-    if (loaded && page.url().startsWith(channelUrl)) return;
+    // A page other than the channel (such as @me) never shows its list, so skip the wait.
+    const onChannel = page.url().startsWith(channelUrl);
+    if (onChannel && await shows(messageList(page).first(), TIMING.channelLoadMs)) return;
     if (reloads === TIMING.channelReloads) break;
     console.log(
       `The channel did not load; reloading (${reloads + 1} of ${TIMING.channelReloads}).`,
     );
-    await page.goto(channelUrl);
+    try {
+      // The app shell is enough; the message list wait above decides whether it loaded.
+      await page.goto(channelUrl, { waitUntil: "domcontentloaded" });
+    } catch (err: unknown) {
+      if (!(err instanceof errors.TimeoutError)) throw err;
+    }
   }
   throw new Stop(`The channel did not load after ${TIMING.channelReloads} reloads.`);
 }
