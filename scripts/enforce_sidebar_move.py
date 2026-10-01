@@ -61,11 +61,12 @@ MID_LOOP = ('Self review never ends a turn: wait for CI in the foreground and fi
 RUNS = r'(?:^|[;&|(\n])\s*(?:\S*/)?'
 IN_PROGRESS = re.compile(RUNS + r'gh issue edit\b[^\n;&|]*--add-label[= ]+["\']?[^"\'\n]*'
                          r'In Progress')
-LABEL_CLEARED = re.compile(RUNS + r'gh issue edit\b[^\n;&|]*--remove-label[= ]+["\']?'
-                           r'[^"\'\n]*In Progress')
-ISSUE_CLOSE = re.compile(RUNS + r'gh issue close\b')
-ISSUE_ARG = re.compile(r'gh issue (?:edit|close)\b([^\n;&|]*)')
-ISSUE_NUMBER = re.compile(r'(?:^|\s)["\']?(?:#|\S*/issues/)?(\d+)["\']?(?=\s|$)')
+GH_ISSUE = re.compile(RUNS + r'gh issue (edit|close)\b([^\n;&|]*)')
+ADDS_IN_PROGRESS = re.compile(r'--add-label[= ]+["\']?[^"\'\n]*In Progress')
+DROPS_IN_PROGRESS = re.compile(r'--remove-label[= ]+["\']?[^"\'\n]*In Progress')
+ISSUE_REF = re.compile(r'^#?(\d+)$|/issues/(\d+)$')
+# `gh issue edit` and `gh issue close` flags that take no value.
+BARE_FLAGS = ('--remove-milestone',)
 CLOSED = re.compile(r'Closed issue|already closed|/issues/\d+')
 PR_CREATE = re.compile(RUNS + r'gh pr create\b')
 PR_URL = re.compile(r'github\.com/[^/\s]+/[^/\s]+/pull/(\d+)')
@@ -240,30 +241,52 @@ def shut_prs(calls, by_id, notices, start):
     return shut
 
 
-def issue_number(command):
-    """The issue a `gh issue edit` or `gh issue close` in the command acts on, or None."""
-    m = ISSUE_ARG.search(command)
-    number = ISSUE_NUMBER.search(m.group(1)) if m else None
-    return number.group(1) if number else None
+def issue_number(args):
+    """The issue a `gh issue edit` or `gh issue close` acts on: its first positional
+    argument, skipping flags and their values. None when there is none."""
+    try:
+        words = shlex.split(args)
+    except ValueError:
+        words = args.split()
+    skip = False
+    for word in words:
+        if skip:
+            skip = False
+        elif word.startswith('-'):
+            skip = '=' not in word and word not in BARE_FLAGS
+        else:
+            m = ISSUE_REF.search(word)
+            return (m.group(1) or m.group(2)) if m else None
+    return None
 
 
-def milestones(calls, start):
-    """(position, what, groups) for each milestone in the turn."""
+def issue_edits(command):
+    """(verb, issue number, args) for each `gh issue edit` or `gh issue close` the command
+    runs."""
+    return [(m.group(1), issue_number(m.group(2)), m.group(2))
+            for m in GH_ISSUE.finditer(command)]
+
+
+def milestones(calls, start, still_open=frozenset()):
+    """(position, what, groups) for each milestone in the turn. An In Progress issue that is
+    later unlabeled or closed ends the task: Completed, unless a pull request is still open
+    in the ledger."""
     found, labeled = [], set()
+    ended = (WORKING,) + PR_OPEN if still_open else (COMPLETED, WORKING)
     for call in calls:
         if call.pos < start or call.name != 'Bash' or call.error:
             continue
         command = call.command
         if IN_PROGRESS.search(command) and ISSUE_URL.search(call.result):
-            labeled.add(issue_number(command))
+            labeled.update(n for verb, n, args in issue_edits(command)
+                           if verb == 'edit' and ADDS_IN_PROGRESS.search(args))
             found.append((call.pos, 'an issue was labeled In Progress',
                           (WORKING, NEEDS_REVIEW)))
-        cleared = ((LABEL_CLEARED.search(command) and ISSUE_URL.search(call.result))
-                   or (ISSUE_CLOSE.search(command) and CLOSED.search(call.result)))
-        number = issue_number(command) if cleared else None
-        if number and number in labeled:
-            found.append((call.pos, f'issue {number} was unlabeled or closed',
-                          (COMPLETED, WORKING)))
+        for verb, number, args in issue_edits(command):
+            dropped = verb == 'edit' and DROPS_IN_PROGRESS.search(args)
+            proof = ISSUE_URL if dropped else CLOSED if verb == 'close' else None
+            if number and number in labeled and proof and proof.search(call.result):
+                found.append((call.pos, f'issue {number} was unlabeled or closed', ended))
         opened = PR_CREATE.search(command) and PR_URL.search(call.result)
         if opened:
             found.append((call.pos, f'pull request {opened.group(1)} was opened', PR_OPEN))
@@ -325,9 +348,9 @@ def current_group(calls):
 
 def expected(calls, by_id, notices, start, ledger_open):
     """(what happened, allowed group names), or None when the turn calls for no group."""
-    events = milestones(calls, start)
     shut = shut_prs(calls, by_id, notices, start)
     still_open = ledger_open - {number for _, number in shut}
+    events = milestones(calls, start, still_open)
     for pos, number in shut:
         groups = (WORKING,) + PR_OPEN if still_open else (COMPLETED, WORKING)
         events.append((pos, f'pull request {number} merged or closed', groups))

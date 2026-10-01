@@ -165,11 +165,33 @@ class InProgressCleared(Scenario):
         self.assertBlocks(self.run_stop('in-progress-no-move.jsonl', *close,
                                         *move('cg-0000-completed')), 'Working')
 
+    def test_unlabel_and_close_in_one_command_counts(self):
+        both = bash('gh issue edit 42 --remove-label "In Progress" && gh issue close 42',
+                    'https://github.com/o/r/issues/42\n\u2713 Closed issue o/r#42 (Fix it)',
+                    'toolu_both')
+        self.assertIsNone(self.run_stop('in-progress-no-move.jsonl', *both,
+                                        *move('cg-0000-completed')))
+
+    def test_close_while_a_pr_is_open_keeps_needs_review(self):
+        self.ledger(OPEN_PR)
+        ledger = os.path.join(self.dir, 'catchup.tsv')
+        add = bash(f'scripts/catchup.py add-pr {ledger} 77 x', 'waiting for merge: x',
+                   'toolu_add')
+        decision = self.run_stop('in-progress-no-move.jsonl', *add, *self.CLOSE,
+                                 *move('cg-0000-completed'))
+        self.assertBlocks(decision, 'Needs Review')
+        self.assertIn('issue 42 was unlabeled or closed', decision['reason'])
+
     def test_issue_number_reads_urls_and_flags(self):
-        self.assertEqual(guard.issue_number('gh issue close --repo o/r 42'), '42')
-        self.assertEqual(guard.issue_number(
-            'gh issue edit https://github.com/o/r/issues/42 --remove-label x'), '42')
-        self.assertEqual(guard.issue_number('gh issue close "#42"'), '42')
+        self.assertEqual(guard.issue_number(' --repo o/r 42'), '42')
+        self.assertEqual(guard.issue_number(' https://github.com/o/r/issues/42 -c x'), '42')
+        self.assertEqual(guard.issue_number(' "#42"'), '42')
+        self.assertEqual(guard.issue_number(' --comment "Fixed in 1300" 42'), '42')
+        self.assertEqual(guard.issue_number(' --remove-milestone 42'), '42')
+
+    def test_each_gh_issue_call_reads_its_own_number(self):
+        edits = guard.issue_edits('gh issue edit 41 --add-label bug && gh issue close 42')
+        self.assertEqual([(verb, n) for verb, n, _ in edits], [('edit', '41'), ('close', '42')])
 
 
 class Merged(Scenario):
