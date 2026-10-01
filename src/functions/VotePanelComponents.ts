@@ -265,13 +265,7 @@ function buildPanelContainer(
       addGameEntry(container, game, withReasons, params.coverUrls?.get(game.gamedbGameId));
     }
   } else {
-    // Capped so the heading, list and rules stay inside Discord's 4000 text characters;
-    // a truncated list still has every game on its button or select option.
-    const list = safeV2TextContent(
-      games.map((game) => `- **${game.gameTitle}**`).join("\n"),
-      GAME_LIST_TEXT_BUDGET,
-    );
-    addText(container, `${heading}\n${list}`);
+    addText(container, `${heading}\n${buildTitleListText(games)}`);
   }
   addSeparator(container);
   addText(container, buildPanelDetailsText(params, useButtons));
@@ -295,6 +289,25 @@ function buildGameEntryText(game: INominationEntry, withReason: boolean): string
   return reason
     ? `**${game.gameTitle}**\n> ${truncateWithEllipsis(reason, PANEL_REASON_MAX)}`
     : `**${game.gameTitle}**`;
+}
+
+/**
+ * One line per game, cut at whole lines once the list passes the text budget.
+ * Every game left off still has its button or select option.
+ */
+function buildTitleListText(games: INominationEntry[]): string {
+  const lines: string[] = [];
+  let length = 0;
+  for (const [index, game] of games.entries()) {
+    const line = `- **${truncateWithEllipsis(game.gameTitle, DISCORD_BUTTON_LABEL_MAX)}**`;
+    if (length + line.length > GAME_LIST_TEXT_BUDGET) {
+      lines.push(`-# ...and ${games.length - index} more`);
+      break;
+    }
+    lines.push(line);
+    length += line.length + 1;
+  }
+  return lines.join("\n");
 }
 
 function fitsReasons(games: INominationEntry[]): boolean {

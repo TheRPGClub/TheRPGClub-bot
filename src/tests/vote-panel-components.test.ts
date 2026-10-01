@@ -224,7 +224,9 @@ test("a long title list is capped so the panel stays inside Discord's text limit
     ...nomination,
     gameTitle: `${"Long Title ".repeat(9)}${nomination.id}`,
   }));
-  assert.ok(textOf(panelJson({ nominations, myVotes: MY_VOTES })).length <= 4000);
+  const text = textOf(panelJson({ nominations, myVotes: MY_VOTES }));
+  assert.ok(text.length <= 4000);
+  assert.match(text, /\*\*\n-# \.\.\.and \d+ more\n/);
 });
 
 test("covers are worth fetching only while one could fit", () => {
