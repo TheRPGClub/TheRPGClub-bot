@@ -757,7 +757,6 @@ export class GameCompletionCommands {
       interaction,
       interaction.user.id,
       0,
-      "delete",
       null,
       sanitizedQuery,
     );
@@ -869,7 +868,7 @@ export class GameCompletionCommands {
     await handleCompletionPageSelect(interaction);
   }
    
-  @ButtonComponent({ id: /^comp-(list|edit|delete)-page:[^:]+:[^:]*:\d+:(prev|next)(?::.*)?$/ })
+  @ButtonComponent({ id: /^comp-(list|delete)-page:[^:]+:[^:]*:\d+:(prev|next)(?::.*)?$/ })
   async handleCompletionPaging(interaction: ButtonInteraction): Promise<void> {
     await handleCompletionPaging(interaction);
   }
