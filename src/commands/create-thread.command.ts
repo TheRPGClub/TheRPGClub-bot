@@ -22,8 +22,10 @@ import { formatGameTitleWithYear } from "../functions/GameTitleAutocompleteUtils
 import { DISCORD_SELECT_OPTIONS_MAX, truncateLabel } from "../config/textLimits.js";
 import GameSearchService from "../classes/GameSearchService.js";
 import { buildCommandMention } from "../functions/CommandMentionUtils.js";
+import { THREAD_GROUP_NAME } from "./thread-admin.command.js";
 
 const DEFAULT_FIRST_POST_PREFIX = "Thread created by";
+const THREAD_CREATE_SUBCOMMAND = "create";
 
 function buildDefaultFirstPostText(userId: string): string {
   return `${DEFAULT_FIRST_POST_PREFIX} ${userMention(userId)}`;
@@ -74,9 +76,12 @@ async function autocompleteCreateThreadTag(
 }
 
 @Discord()
-@SlashGroup("thread")
+@SlashGroup(THREAD_GROUP_NAME)
 export class CreateThreadCommand {
-  @Slash({ description: "Create a forum thread for a GameDB title", name: "create" })
+  @Slash({
+    description: "Create a forum thread for a GameDB title",
+    name: THREAD_CREATE_SUBCOMMAND,
+  })
   async createThread(
     @SlashOption({
       autocomplete: autocompleteCreateThreadTitle,
@@ -202,10 +207,17 @@ export class CreateThreadCommand {
  */
 @Discord()
 export class CreateThreadLegacyCommand {
-  @Slash({ description: "Moved to /thread create", name: "create-thread" })
+  @Slash({
+    description: `Moved to /${THREAD_GROUP_NAME} ${THREAD_CREATE_SUBCOMMAND}`,
+    name: "create-thread",
+  })
   async createThreadLegacy(interaction: CommandInteraction): Promise<void> {
     await safeDeferReply(interaction, { flags: MessageFlags.Ephemeral });
-    const mention = await buildCommandMention(interaction, "thread", "create");
+    const mention = await buildCommandMention(
+      interaction,
+      THREAD_GROUP_NAME,
+      THREAD_CREATE_SUBCOMMAND,
+    );
     await safeReply(interaction, buildTextReply(
       `/create-thread has moved to ${mention}.`,
       true,
