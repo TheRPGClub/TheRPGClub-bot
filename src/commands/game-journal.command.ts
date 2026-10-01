@@ -43,6 +43,7 @@ import {
   safeDeferUpdate,
   sanitizeUserInput,
   safeReply,
+  safeRespond,
   safeUpdate,
   safeUpdateModalSource,
   safeUserFetch,
@@ -329,11 +330,12 @@ async function autocompleteJournalSearchGame(
   const rawQuery = focused?.value ? String(focused.value) : "";
   const query = sanitizeUserInput(rawQuery, { preserveNewlines: false }).trim();
   if (!query) {
-    await interaction.respond([]);
+    await safeRespond(interaction, []);
     return;
   }
   const results = await GameSearchService.searchGamesAutocomplete(query);
-  await interaction.respond(
+  await safeRespond(
+    interaction,
     results.slice(0, DISCORD_SELECT_OPTIONS_MAX).map((game) => ({
       name: truncateLabel(formatGameTitleWithYear(game)),
       value: String(game.id),

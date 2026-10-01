@@ -41,6 +41,7 @@ import {
   PRIVATE_OPTION_DESCRIPTION,
   safeDeferReply,
   safeReply,
+  safeRespond,
   sanitizeUserInput,
 } from "../functions/InteractionUtils.js";
 import { buildErrorReply, buildTextReply } from "../functions/ComponentsV2Utils.js";
@@ -60,12 +61,13 @@ async function autocompleteNominationTitle(
   const rawQuery = focused?.value ? String(focused.value) : "";
   const query = sanitizeUserInput(rawQuery, { preserveNewlines: false }).trim();
   if (!query) {
-    await interaction.respond([]);
+    await safeRespond(interaction, []);
     return;
   }
 
   const results = await GameSearchService.searchGamesAutocomplete(query);
-  await interaction.respond(
+  await safeRespond(
+    interaction,
     results.slice(0, DISCORD_SELECT_OPTIONS_MAX).map((game) => ({
       name: truncateLabel(formatGameTitleWithYear(game)),
       value: String(game.id),

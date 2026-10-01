@@ -15,8 +15,13 @@ import { Discord, Slash, SlashGroup, SlashOption } from "discordx";
 import Game from "../classes/Game.js";
 import { getThreadsByGameId, setThreadGameLink, upsertThreadRecord } from "../classes/Thread.js";
 import { NOW_PLAYING_FORUM_ID } from "../config/channels.js";
-import { safeDeferReply, safeReply, sanitizeOptionalInput, sanitizeUserInput } from
-  "../functions/InteractionUtils.js";
+import {
+  safeDeferReply,
+  safeReply,
+  safeRespond,
+  sanitizeOptionalInput,
+  sanitizeUserInput,
+} from "../functions/InteractionUtils.js";
 import { buildTextReply } from "../functions/ComponentsV2Utils.js";
 import { formatGameTitleWithYear } from "../functions/GameTitleAutocompleteUtils.js";
 import { DISCORD_SELECT_OPTIONS_MAX, truncateLabel } from "../config/textLimits.js";
@@ -38,12 +43,13 @@ async function autocompleteCreateThreadTitle(
   const rawQuery = focused?.value ? String(focused.value) : "";
   const query = sanitizeUserInput(rawQuery, { preserveNewlines: false }).trim();
   if (!query) {
-    await interaction.respond([]);
+    await safeRespond(interaction, []);
     return;
   }
 
   const results = await GameSearchService.searchGamesAutocomplete(query);
-  await interaction.respond(
+  await safeRespond(
+    interaction,
     results.slice(0, DISCORD_SELECT_OPTIONS_MAX).map((game) => ({
       name: truncateLabel(formatGameTitleWithYear(game)),
       value: String(game.id),
@@ -61,7 +67,7 @@ async function autocompleteCreateThreadTag(
   const forum = (
     await interaction.guild?.channels.fetch(NOW_PLAYING_FORUM_ID)) as ForumChannel | null;
   if (!forum) {
-    await interaction.respond([]);
+    await safeRespond(interaction, []);
     return;
   }
 
@@ -72,7 +78,7 @@ async function autocompleteCreateThreadTag(
       name: truncateLabel(tag.name),
       value: truncateLabel(tag.name),
     }));
-  await interaction.respond(filtered);
+  await safeRespond(interaction, filtered);
 }
 
 @Discord()

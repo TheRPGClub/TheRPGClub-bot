@@ -12,6 +12,7 @@ import {
   AnyRepliable,
   memberHasPermission,
   safeReply,
+  safeRespond,
   sanitizeUserInput,
 } from "../../functions/InteractionUtils.js";
 import { formatGameTitleWithYear } from "../../functions/GameTitleAutocompleteUtils.js";
@@ -232,7 +233,7 @@ export async function autocompleteSearchPlatform(
     name: truncateLabel((p.abbreviation ? `${p.name} (${p.abbreviation})` : p.name)),
     value: String(p.id),
   }));
-  await interaction.respond(options);
+  await safeRespond(interaction, options);
 }
 
 export async function autocompleteSearchCompany(
@@ -249,7 +250,7 @@ export async function autocompleteSearchCompany(
     name: truncateLabel(c.name),
     value: String(c.id),
   }));
-  await interaction.respond(options);
+  await safeRespond(interaction, options);
 }
 
 async function autocompleteGameTitle(
@@ -262,7 +263,7 @@ async function autocompleteGameTitle(
   const rawQuery = focused?.value ? String(focused.value) : "";
   const query = sanitizeUserInput(rawQuery, { preserveNewlines: false }).trim();
   if (!query) {
-    await interaction.respond([]);
+    await safeRespond(interaction, []);
     return;
   }
   const results = await GameSearchService.searchGamesAutocomplete(query);
@@ -271,7 +272,7 @@ async function autocompleteGameTitle(
     value: selectValue(game),
   }));
   const options = [buildKeepTypingOption(query), ...resultOptions];
-  await interaction.respond(options);
+  await safeRespond(interaction, options);
 }
 
 export async function autocompleteGameDbViewTitle(
