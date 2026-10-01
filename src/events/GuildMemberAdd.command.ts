@@ -6,6 +6,7 @@ import { JOIN_LEAVE_LOG_CHANNEL_ID } from "../config/channels.js";
 import { recordJoinedMember } from "../services/MemberEventWrites.js";
 import { COLOR_SUCCESS } from "../config/colors.js";
 import { toUnixTimestamp } from "../functions/DateFormatUtils.js";
+import { logError } from "../utilities/LogUtils.js";
 import {
   buildTitledContainer,
   buildContainerSend,
@@ -56,7 +57,11 @@ export class GuildMemberAdd {
     // auto-role assignment on member join
     const role: Role | undefined = member.guild.roles.cache.find((r) => r.name === "newcomers");
     if (role) {
-      member.roles.add(role);
+      try {
+        await member.roles.add(role);
+      } catch (error) {
+        logError("GuildMemberAdd", error);
+      }
     }
   }
 }
