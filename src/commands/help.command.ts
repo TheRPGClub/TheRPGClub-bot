@@ -338,8 +338,8 @@ const HELP_TOPICS: HelpTopic[] = [
       "(link and unlink require the Regulars role).",
     syntax:
       "Syntax: /thread create title:<game> tag:<tag> [first-post-text:<string>] | " +
-      "/thread link thread_id:<string> gamedb_game_id:<int> | " +
-      "/thread unlink thread_id:<string> [gamedb_game_id:<int>]",
+      "/thread link thread:<thread> gamedb_game_id:<int> | " +
+      "/thread unlink thread:<thread> [gamedb_game_id:<int>]",
     notes:
       "Threads can have multiple linked games. Use unlink without gamedb_game_id to " +
       "remove all links for the thread. Replies are private.",

@@ -1,6 +1,8 @@
 import {
   ApplicationCommandOptionType,
+  ChannelType,
   CommandInteraction,
+  type GuildBasedChannel,
   MessageFlags,
 } from "discord.js";
 import { Discord, Slash, SlashGroup, SlashOption } from "discordx";
@@ -10,14 +12,19 @@ import {
   ACCESS_DENIED_REGULARS,
   safeDeferReply,
   safeReply,
-  sanitizeUserInput,
 } from "../functions/InteractionUtils.js";
 import { buildErrorReply, buildTextReply } from "../functions/ComponentsV2Utils.js";
 import { buildApiErrorMessage } from "../utilities/ApiErrorUtils.js";
-import { isSnowflake } from "../utilities/ValidationUtils.js";
 
 /** The `/thread` group; `/thread create` lives in create-thread.command.ts. */
 export const THREAD_GROUP_NAME = "thread";
+
+/** Forum posts are public threads, so this covers every thread a game can link to. */
+const LINKABLE_THREAD_TYPES = [
+  ChannelType.PublicThread,
+  ChannelType.PrivateThread,
+  ChannelType.AnnouncementThread,
+];
 
 @Discord()
 @SlashGroup({ description: "Thread commands", name: THREAD_GROUP_NAME })
@@ -26,12 +33,13 @@ export class ThreadAdminCommands {
   @Slash({ description: "Link a thread to a GameDB game id", name: "link" })
   async link(
     @SlashOption({
-      name: "thread_id",
-      description: "Thread id to link",
+      name: "thread",
+      description: "Thread to link",
       required: true,
-      type: ApplicationCommandOptionType.String,
+      type: ApplicationCommandOptionType.Channel,
+      channelTypes: LINKABLE_THREAD_TYPES,
     })
-    threadId: string,
+    thread: GuildBasedChannel,
     @SlashOption({
       name: "gamedb_game_id",
       description: "GameDB game id",
@@ -42,8 +50,8 @@ export class ThreadAdminCommands {
     interaction: CommandInteraction,
   ): Promise<void> {
     await safeDeferReply(interaction, { flags: MessageFlags.Ephemeral });
-    threadId = sanitizeUserInput(threadId, { preserveNewlines: false });
-    if (!(await this.canEditLinks(interaction, threadId))) return;
+    if (!(await this.canEditLinks(interaction))) return;
+    const threadId = thread.id;
 
     try {
       await setThreadGameLink(threadId, gamedbGameId);
@@ -53,7 +61,7 @@ export class ThreadAdminCommands {
       return;
     }
     await safeReply(interaction, buildTextReply(
-      `Linked thread ${threadId} to GameDB game ${gamedbGameId}.`,
+      `Linked thread <#${threadId}> to GameDB game ${gamedbGameId}.`,
       true,
     ));
   }
@@ -61,12 +69,13 @@ export class ThreadAdminCommands {
   @Slash({ description: "Unlink a thread from a GameDB game id", name: "unlink" })
   async unlink(
     @SlashOption({
-      name: "thread_id",
-      description: "Thread id to unlink",
+      name: "thread",
+      description: "Thread to unlink",
       required: true,
-      type: ApplicationCommandOptionType.String,
+      type: ApplicationCommandOptionType.Channel,
+      channelTypes: LINKABLE_THREAD_TYPES,
     })
-    threadId: string,
+    thread: GuildBasedChannel,
     @SlashOption({
       name: "gamedb_game_id",
       description: "Specific GameDB game id to unlink (omit to remove all)",
@@ -77,8 +86,8 @@ export class ThreadAdminCommands {
     interaction: CommandInteraction,
   ): Promise<void> {
     await safeDeferReply(interaction, { flags: MessageFlags.Ephemeral });
-    threadId = sanitizeUserInput(threadId, { preserveNewlines: false });
-    if (!(await this.canEditLinks(interaction, threadId))) return;
+    if (!(await this.canEditLinks(interaction))) return;
+    const threadId = thread.id;
 
     const target = gamedbGameId === undefined
       ? "all GameDB links"
@@ -93,25 +102,16 @@ export class ThreadAdminCommands {
     }
     const suffix = removed === 0 ? " (no matching links were found)." : ".";
     await safeReply(interaction, buildTextReply(
-      `Unlinked ${target} from thread ${threadId}${suffix}`,
+      `Unlinked ${target} from thread <#${threadId}>${suffix}`,
       true,
     ));
   }
 
-  /** Replies with the reason and returns false when the caller or thread id is rejected. */
-  private async canEditLinks(
-    interaction: CommandInteraction,
-    threadId: string,
-  ): Promise<boolean> {
-    if (!this.hasRegularsRole(interaction)) {
-      await safeReply(interaction, buildTextReply(ACCESS_DENIED_REGULARS, true));
-      return false;
-    }
-    if (!isSnowflake(threadId)) {
-      await safeReply(interaction, buildTextReply(`\`${threadId}\` is not a thread ID.`, true));
-      return false;
-    }
-    return true;
+  /** Replies with the reason and returns false when the caller lacks the Regulars role. */
+  private async canEditLinks(interaction: CommandInteraction): Promise<boolean> {
+    if (this.hasRegularsRole(interaction)) return true;
+    await safeReply(interaction, buildTextReply(ACCESS_DENIED_REGULARS, true));
+    return false;
   }
 
   private hasRegularsRole(interaction: CommandInteraction): boolean {
