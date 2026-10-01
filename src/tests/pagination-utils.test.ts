@@ -2,10 +2,12 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   buildDisabledPrevNextButtons,
+  buildDisabledPrevNextRow,
   buildDisabledPrevNextRowWithIds,
-  buildOptionalPrevNextRow,
   buildPageFooterText,
+  buildPageIndicatorLabel,
   buildPrevNextButtons,
+  PAGE_INDICATOR_CUSTOM_ID,
   PAGE_NEXT_LABEL,
   PAGE_PREV_LABEL,
 } from "../functions/PaginationUtils.js";
@@ -38,21 +40,48 @@ test("buildPrevNextButtons honors custom labels", () => {
   assert.deepEqual(buttons.map((b) => b.label), ["Next Entry", "Previous Entry"]);
 });
 
-test("buildOptionalPrevNextRow keeps the base:page:dir custom ID format", () => {
-  const row = buildOptionalPrevNextRow("base:1", 1, 3);
+test("buildDisabledPrevNextRow keeps the base:page:dir custom ID format", () => {
+  const row = buildDisabledPrevNextRow("base:1", 1, 3);
   assert.ok(row);
   assert.deepEqual(
     describe(row.components).map((b) => b.custom_id),
-    ["base:1:1:prev", "base:1:1:next"],
+    ["base:1:1:prev", PAGE_INDICATOR_CUSTOM_ID, "base:1:1:next"],
   );
-  assert.equal(buildOptionalPrevNextRow("base", 0, 1), null);
+  assert.equal(buildDisabledPrevNextRow("base", 0, 1), null);
 });
 
-test("buildDisabledPrevNextRowWithIds disables the boundary button", () => {
-  const row = buildDisabledPrevNextRowWithIds("p", "n", 0, 2);
-  assert.ok(row);
-  assert.deepEqual(describe(row.components).map((b) => b.disabled), [true, false]);
+test("buildDisabledPrevNextRowWithIds keeps every button in place across pages", () => {
+  for (const [page, disabled] of [
+    [0, [true, true, false]],
+    [1, [false, true, false]],
+    [2, [false, true, true]],
+  ] as const) {
+    const row = buildDisabledPrevNextRowWithIds("p", "n", page, 3);
+    assert.ok(row);
+    const buttons = describe(row.components);
+    assert.deepEqual(buttons.map((b) => b.custom_id), ["p", PAGE_INDICATOR_CUSTOM_ID, "n"]);
+    assert.deepEqual(
+      buttons.map((b) => b.label),
+      [PAGE_PREV_LABEL, `${page + 1} / 3`, PAGE_NEXT_LABEL],
+    );
+    assert.deepEqual(buttons.map((b) => b.disabled), [...disabled]);
+  }
   assert.equal(buildDisabledPrevNextRowWithIds("p", "n", 0, 1), null);
+});
+
+test("buildDisabledPrevNextRowWithIds passes custom labels to the arrows", () => {
+  const row = buildDisabledPrevNextRowWithIds("p", "n", 0, 2, {
+    labels: { prev: "Previous Result", next: "Next Result" },
+  });
+  assert.ok(row);
+  assert.deepEqual(
+    describe(row.components).map((b) => b.label),
+    ["Previous Result", "1 / 2", "Next Result"],
+  );
+});
+
+test("buildPageIndicatorLabel is one-based", () => {
+  assert.equal(buildPageIndicatorLabel(1, 7), "2 / 7");
 });
 
 test("buildDisabledPrevNextButtons keeps both buttons and disables the boundary", () => {

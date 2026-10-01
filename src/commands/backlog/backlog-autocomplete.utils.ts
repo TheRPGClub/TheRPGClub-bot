@@ -1,6 +1,6 @@
 import { type AutocompleteInteraction } from "discord.js";
 import UserGameBacklog from "../../classes/UserGameBacklog.js";
-import { sanitizeUserInput } from "../../functions/InteractionUtils.js";
+import { safeRespond, sanitizeUserInput } from "../../functions/InteractionUtils.js";
 import { DISCORD_SELECT_OPTIONS_MAX, truncateLabel } from "../../config/textLimits.js";
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
 import { formatGameTitleWithYear } from "../../functions/GameTitleAutocompleteUtils.js";
@@ -31,12 +31,13 @@ export async function autocompleteBacklogGameTitle(
   const rawQuery = focused?.value ? String(focused.value) : "";
   const query = sanitizeUserInput(rawQuery, { preserveNewlines: false }).trim();
   if (!query) {
-    await interaction.respond([]);
+    await safeRespond(interaction, []);
     return;
   }
 
   const results = await GameSearchService.searchGamesAutocomplete(query);
-  await interaction.respond(
+  await safeRespond(
+    interaction,
     results.slice(0, DISCORD_SELECT_OPTIONS_MAX).map((game) => ({
       name: truncateLabel(formatGameTitleWithYear(game)),
       value: String(game.id),
@@ -61,7 +62,9 @@ export async function autocompleteBacklogEntry(
     )
     : entries;
 
-  await interaction.respond(
+  await safeRespond(
+
+    interaction,
     filtered
       .filter((entry) => isPositiveInt(entry.entryId))
       .slice(0, DISCORD_SELECT_OPTIONS_MAX)

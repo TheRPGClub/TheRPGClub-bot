@@ -1,5 +1,5 @@
 import axios from "axios";
-import { MessageFlags, MessageFlagsBitField } from "discord.js";
+import { MessageFlags, MessageFlagsBitField, RESTJSONErrorCodes } from "discord.js";
 import { logError, logInfo } from "../utilities/LogUtils.js";
 import {
   buildCaughtErrorMessage,
@@ -7,6 +7,8 @@ import {
   tryParseJson,
 } from "../utilities/ApiErrorUtils.js";
 import type {
+  ApplicationCommandOptionChoiceData,
+  AutocompleteInteraction,
   Client,
   CommandInteraction,
   Guild,
@@ -579,6 +581,31 @@ const isAckError = (err: unknown): boolean => {
 };
 
 const isUnknownInteraction = (err: unknown): boolean => discordErrorCode(err) === 10062;
+
+// Autocomplete has a 3 second window, so an expired token (10062) is routine, and a
+// second respond for the same keystroke (40060) changes nothing the user sees.
+const IGNORED_RESPOND_CODES: ReadonlySet<number> = new Set([
+  RESTJSONErrorCodes.UnknownInteraction,
+  RESTJSONErrorCodes.InteractionHasAlreadyBeenAcknowledged,
+]);
+
+/**
+ * Answers an autocomplete interaction without letting an expired or already answered
+ * interaction become an unhandled rejection. Other failures are logged, not thrown,
+ * since there is no reply channel to surface them on.
+ */
+export async function safeRespond(
+  interaction: AutocompleteInteraction,
+  choices: readonly ApplicationCommandOptionChoiceData[],
+): Promise<void> {
+  try {
+    await interaction.respond(choices);
+  } catch (err) {
+    const code = discordErrorCode(err);
+    if (code !== undefined && IGNORED_RESPOND_CODES.has(code)) return;
+    logError(`autocomplete respond failed for /${interaction.commandName}`, err);
+  }
+}
 
 /**
  * Mirrors the reply before returning, so the caller's payload is copied to the

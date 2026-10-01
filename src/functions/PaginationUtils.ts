@@ -10,12 +10,19 @@ import {
 
 export const PAGE_PREV_LABEL = "Previous";
 export const PAGE_NEXT_LABEL = "Next";
+// The indicator is always disabled, so it never reaches a handler. It only has to be
+// unique within its message, and each message carries at most one pagination row.
+export const PAGE_INDICATOR_CUSTOM_ID = "page-indicator";
 
 export type PrevNextLabels = { prev?: string; next?: string };
 
 export function buildPageFooterText(page: number, totalPages: number, suffix?: string): string {
   const base = `Page ${page + 1}/${totalPages}`;
   return suffix ? `${base} • ${suffix}` : base;
+}
+
+export function buildPageIndicatorLabel(page: number, totalPages: number): string {
+  return `${page + 1} / ${totalPages}`;
 }
 
 export type PageDirection = "prev" | "next";
@@ -33,25 +40,6 @@ export function parseDirAndPage(
   const delta = dir === "next" ? 1 : -1;
   const nextPage = Math.max(page + delta, 0);
   return { page, nextPage };
-}
-
-/**
- * Builds a Previous / Next button row, omitting whichever buttons are disabled.
- * Returns null when neither button would be enabled (i.e. single page).
- * customIdBase should include all session/owner segments; page and direction
- * are appended as `:${page}:prev` / `:${page}:next`.
- */
-export function buildOptionalPrevNextRow(
-  customIdBase: string,
-  page: number,
-  totalPages: number,
-): ActionRowBuilder<ButtonBuilder> | null {
-  return buildOptionalPrevNextRowWithIds(
-    `${customIdBase}:${page}:prev`,
-    `${customIdBase}:${page}:next`,
-    page,
-    totalPages,
-  );
 }
 
 /**
@@ -86,26 +74,10 @@ export function buildPrevNextButtons(
 }
 
 /**
- * Builds a Previous / Next button row using explicit customIds, omitting
- * whichever buttons are disabled. Returns null when there is only one page
- * or neither button would be shown.
- */
-export function buildOptionalPrevNextRowWithIds(
-  prevCustomId: string,
-  nextCustomId: string,
-  page: number,
-  totalPages: number,
-  labels?: PrevNextLabels,
-): ActionRowBuilder<ButtonBuilder> | null {
-  const buttons = buildPrevNextButtons(prevCustomId, nextCustomId, page, totalPages, labels);
-  if (!buttons.length) return null;
-  return buildButtonRow(...buttons);
-}
-
-/**
- * Builds a Previous / Next button row where both buttons are always included
- * but disabled at the boundary pages. Uses the customIdBase+`:${page}:prev|next`
- * suffix convention. Returns null when there is only one page.
+ * Builds a Previous / page indicator / Next button row where both arrows are
+ * always included but disabled at the boundary pages, so neither shifts position.
+ * Uses the customIdBase+`:${page}:prev|next` suffix convention. Returns null when
+ * there is only one page.
  */
 export function buildDisabledPrevNextRow(
   customIdBase: string,
@@ -199,9 +171,10 @@ export function buildDisabledPrevNextButtons(
 }
 
 /**
- * Builds a Previous / Next button row using explicit customIds where both
- * buttons are always included but disabled at the boundary pages. Returns null
- * when there is only one page.
+ * Builds a Previous / page indicator / Next button row using explicit customIds
+ * where both arrows are always included but disabled at the boundary pages. The
+ * disabled middle button shows the current page, e.g. `2 / 7`. Returns null when
+ * there is only one page.
  */
 export function buildDisabledPrevNextRowWithIds(
   prevCustomId: string,
@@ -218,7 +191,13 @@ export function buildDisabledPrevNextRowWithIds(
     options,
   );
   if (!buttons.length) return null;
-  return buildButtonRow(...buttons);
+  const [prevButton, nextButton] = buttons;
+  const indicator = buildActionButton({
+    customId: PAGE_INDICATOR_CUSTOM_ID,
+    label: buildPageIndicatorLabel(page, totalPages),
+    style: ButtonStyle.Secondary,
+  }).setDisabled(true);
+  return buildButtonRow(prevButton, indicator, nextButton);
 }
 
 export function buildPaginatedUserListResponse(params: {

@@ -1,5 +1,31 @@
 import { logError, logWarn } from "./LogUtils.js";
 
+const trackedIntervals = new Set<NodeJS.Timeout>();
+
+/**
+ * Starts a setInterval that graceful shutdown clears. Every long-lived interval goes
+ * through here (or createIntervalTask) so a SIGTERM never waits on a forgotten timer.
+ */
+export function startTrackedInterval(callback: () => void, intervalMs: number): NodeJS.Timeout {
+  const timer = setInterval(callback, intervalMs);
+  trackedIntervals.add(timer);
+  return timer;
+}
+
+/** Clears an interval from startTrackedInterval and forgets it. */
+export function stopTrackedInterval(timer: NodeJS.Timeout): void {
+  clearInterval(timer);
+  trackedIntervals.delete(timer);
+}
+
+/** Clears every tracked interval. Returns how many it cleared. */
+export function stopAllTrackedIntervals(): number {
+  const count = trackedIntervals.size;
+  for (const timer of trackedIntervals) clearInterval(timer);
+  trackedIntervals.clear();
+  return count;
+}
+
 export interface IIntervalTaskOptions {
   /** Log context for skipped ticks and errors the task lets escape. */
   name: string;
@@ -46,7 +72,7 @@ export function createIntervalTask(options: IIntervalTaskOptions): IIntervalTask
   return {
     start(): boolean {
       if (timer) return false;
-      timer = setInterval(() => {
+      timer = startTrackedInterval(() => {
         void runNow();
       }, options.intervalMs);
       if (options.runOnStart ?? true) {
@@ -56,7 +82,7 @@ export function createIntervalTask(options: IIntervalTaskOptions): IIntervalTask
     },
     stop(): void {
       if (!timer) return;
-      clearInterval(timer);
+      stopTrackedInterval(timer);
       timer = null;
     },
     runNow,

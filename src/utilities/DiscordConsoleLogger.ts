@@ -71,7 +71,6 @@ let logBufferTimer: NodeJS.Timeout | null = null;
 let activeFlush: Promise<void> | null = null;
 let flushRequestedDuringFlush = false;
 let startupLogFilterEnabled = true;
-let shutdownHooksRegistered = true;
 
 function formatArgs(args: unknown[]): string {
   return args
@@ -273,22 +272,6 @@ function bufferLog(level: BufferedLevel, message: string): void {
   }
 }
 
-function registerLogBufferShutdownHooks(): void {
-  if (shutdownHooksRegistered) return;
-  shutdownHooksRegistered = true;
-
-  const signals: NodeJS.Signals[] = ["SIGINT", "SIGTERM", "SIGBREAK"];
-  for (const signal of signals) {
-    process.once(signal, () => {
-      void flushLogBuffer();
-    });
-  }
-
-  process.once("beforeExit", () => {
-    void flushLogBuffer();
-  });
-}
-
 async function sendToDiscord(level: ConsoleLevel, message: string): Promise<void> {
   try {
     if (!shouldSendToDiscord(level, message)) {
@@ -304,7 +287,6 @@ async function sendToDiscord(level: ConsoleLevel, message: string): Promise<void
 
 export function installConsoleLogging(): void {
   const levels: ConsoleLevel[] = ["log", "error", "warn", "info", "debug"];
-  registerLogBufferShutdownHooks();
 
   for (const level of levels) {
     console[level] = (...args: unknown[]) => {
@@ -313,6 +295,14 @@ export function installConsoleLogging(): void {
       void sendToDiscord(level, msg);
     };
   }
+}
+
+/**
+ * Sends everything still buffered. Graceful shutdown awaits this before destroying the
+ * client, because the batch timer would otherwise post it after the process is gone.
+ */
+export function flushConsoleLogs(): Promise<void> {
+  return flushLogBuffer();
 }
 
 export function setConsoleLoggingClient(client: Client): void {

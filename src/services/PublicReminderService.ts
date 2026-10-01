@@ -5,6 +5,7 @@ import {
   disableReminder,
   type IPublicReminder,
 } from "../classes/PublicReminder.js";
+import { startTrackedInterval } from "../utilities/IntervalUtils.js";
 import { logError } from "../utilities/LogUtils.js";
 
 // Coarse safety-net sweep. Each cycle calls therpgclub-api (which is backed by
@@ -36,7 +37,7 @@ export function startPublicReminderService(client: Client): void {
   };
 
   void run();
-  publicReminderTimer = setInterval(() => {
+  publicReminderTimer = startTrackedInterval(() => {
     void run();
   }, PUBLIC_REMINDER_INTERVAL_MS);
 }

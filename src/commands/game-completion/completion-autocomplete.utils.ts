@@ -1,7 +1,7 @@
 // Autocomplete utilities for game completion commands
 
 import type { AutocompleteInteraction } from "discord.js";
-import { sanitizeUserInput } from "../../functions/InteractionUtils.js";
+import { safeRespond, sanitizeUserInput } from "../../functions/InteractionUtils.js";
 import { formatGameTitleWithYear } from "../../functions/GameTitleAutocompleteUtils.js";
 import type { IPlatformDef } from "../../types/GameTypes.js";
 import Member from "../../classes/Member.js";
@@ -53,7 +53,7 @@ export async function autocompleteGameCompletionTitle(
   const rawQuery = focused?.value ? String(focused.value) : "";
   const query = sanitizeUserInput(rawQuery, { preserveNewlines: false }).trim();
   if (!query) {
-    await interaction.respond([]);
+    await safeRespond(interaction, []);
     return;
   }
   const results = await GameSearchService.searchGamesAutocomplete(query);
@@ -62,7 +62,7 @@ export async function autocompleteGameCompletionTitle(
     value: game.title,
   }));
   const options = [buildKeepTypingOption(query), ...resultOptions];
-  await interaction.respond(options);
+  await safeRespond(interaction, options);
 }
 
 function buildCompletionTitleAutocompleteName(completion: {
@@ -106,7 +106,7 @@ export async function autocompleteUserCompletionTitle(
     value: buildCompletionTitleAutocompleteValue(completion.completionId),
   }));
 
-  await interaction.respond(options.slice(0, DISCORD_SELECT_OPTIONS_MAX));
+  await safeRespond(interaction, options.slice(0, DISCORD_SELECT_OPTIONS_MAX));
 }
 
 export async function autocompleteGameCompletionPlatform(
@@ -148,7 +148,7 @@ async function autocompleteGameCompletionPlatformWithOptions(
       value: String(platform.id),
     }));
 
-  await interaction.respond(options);
+  await safeRespond(interaction, options);
 }
 
 export async function resolveGameCompletionPlatformId(
