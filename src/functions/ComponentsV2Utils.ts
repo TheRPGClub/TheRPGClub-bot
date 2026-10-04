@@ -104,10 +104,6 @@ export function escapeMaskedLinkText(text: string): string {
   return text.replace(/([\\[\]])/g, "\\$1");
 }
 
-export function unescapeMaskedLinkText(text: string): string {
-  return text.replace(/\\([\\[\]])/g, "$1");
-}
-
 export function buildMaskedLink(text: string, url: string): string {
   const safeUrl = url.split("(").join("%28").split(")").join("%29");
   return `[${escapeMaskedLinkText(text)}](${safeUrl})`;
