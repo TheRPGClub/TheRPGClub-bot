@@ -132,8 +132,7 @@ Ephemeral: yes
 select "/mod" from "Server Administration commands"
 ```
 Expected: the help message changes to title: "Moderator Commands Help", with
-option: "/mod presence", option: "/mod presence-history", option: "/mod rerender-embed",
-and not: "Access denied".
+option: "/mod presence", option: "/mod presence-history", and not: "Access denied".
 Ephemeral: yes
 
 ### Step 16: Open the /mod presence-history topic

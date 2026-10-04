@@ -1,10 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {
-  buildMaskedLink,
-  escapeMaskedLinkText,
-  unescapeMaskedLinkText,
-} from "../functions/ComponentsV2Utils.js";
+import { buildMaskedLink, escapeMaskedLinkText } from "../functions/ComponentsV2Utils.js";
 
 test("buildMaskedLink neutralizes a bracket breakout in the link text", () => {
   const link = buildMaskedLink("Anything](https://evil.example) ", "https://real.example");
@@ -28,7 +24,7 @@ test("buildMaskedLink percent-encodes parentheses in the url", () => {
   assert.equal(link, "[Wiki](https://example.com/a_%28b%29)");
 });
 
-test("escaping a plain title round-trips", () => {
+test("escapeMaskedLinkText escapes brackets and leaves parentheses", () => {
   const title = "Half-Life 2: Episode [One] (2006)";
-  assert.equal(unescapeMaskedLinkText(escapeMaskedLinkText(title)), title);
+  assert.equal(escapeMaskedLinkText(title), "Half-Life 2: Episode \\[One\\] (2006)");
 });

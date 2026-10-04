@@ -41,7 +41,7 @@ are tested only on their cancel, error, or permission paths.
 
 ## Event handlers
 
-- `events.md`: message edit and delete logs, pins, reactions, names, link previews
+- `events.md`: message edit and delete logs, pins, reactions, names, forum posts
 - `events-server.md`: role, channel, emoji, and server change logs
 - `events-members.md`: member join, leave, kick, and ban logs (needs a second account)
 
