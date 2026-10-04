@@ -2,8 +2,8 @@
 
 A pass over the bot's reactions to things you do yourself: the message edit and delete
 logs, the pushpin reaction, the owner's plus-sign completion flow with its Change title
-modal and selects, the link preview fallback, the nickname and display name logs, and the
-Now Playing forum announcement. None of these has a slash command, so each step is an
+modal and selects, the nickname and display name logs, and the Now Playing forum
+announcement. None of these has a slash command, so each step is an
 action you take in Discord, and its `Expected:` says what appears and in which channel.
 
 The member join, leave, kick, and ban logs need a second account and are in
@@ -34,7 +34,7 @@ Preconditions:
 - Your profile has no Chrono Trigger completion.
 - You have no server nickname in the test guild, and you know your current display name.
 - After the run, delete the messages from steps 5 and 8 (each logs "Message deleted in"),
-  the forum post from step 21, and the bot's preview reply from step 22.
+  and the forum post from step 21.
 
 ## Testing
 
@@ -208,12 +208,4 @@ post in the Now Playing forum with the title "Event plan forum post" and any tex
 ```
 Expected: about ten seconds later the Whatcha Playing channel gets a post,
 title: "Event plan forum post", with "Forum Post" and "Posted by" naming you.
-Ephemeral: no
-
-### Step 22: Post a link with its embed suppressed
-```
-post "<https://en.wikipedia.org/wiki/Chrono_Trigger>" in the test channel
-```
-Expected: Discord shows no embed for the angle-bracketed link, and a few seconds later the
-bot replies to your message with its own preview card naming "Chrono Trigger".
 Ephemeral: no
