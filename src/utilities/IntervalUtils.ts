@@ -28,7 +28,7 @@ export function stopAllTrackedIntervals(): number {
   const count = trackedIntervals.size + activeScheduledTasks.size;
   for (const timer of trackedIntervals) clearInterval(timer);
   trackedIntervals.clear();
-  for (const task of [...activeScheduledTasks]) task.stop();
+  for (const task of activeScheduledTasks) task.stop();
   return count;
 }
 

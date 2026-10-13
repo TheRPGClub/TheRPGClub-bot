@@ -24,7 +24,7 @@ export const MAX_POLL_DELAY_MS = 60 * 60 * 1000;
  * down, Neon waking).
  */
 export const POLL_RETRY_DELAY_MS = 5 * 60 * 1000;
-export const CLAIM_LIMIT = 10;
+const CLAIM_LIMIT = 10;
 // Failed handling attempts, counted here rather than from the API's claim
 // count so time spent held back behind another failing event does not use
 // them up. A claim is a 5-minute lease, so this is roughly an hour of retries
@@ -56,7 +56,7 @@ export function createVotingEventDeliveryState(): IVotingEventDeliveryState {
  * batch are left unacked too, so a round's posts never land out of order (the
  * results before the vote panels, say); the leases hand them back later. An
  * event whose post went out but whose ack failed is only acked when it comes
- * back, never posted again.
+ * back, never posted again. Resolves to whether every event was acked.
  */
 export async function processVotingEvents(
   client: Client,
@@ -64,8 +64,9 @@ export async function processVotingEvents(
   handle: Handle = handleVotingEvent,
   ack: Ack = VotingEvents.ack,
   state: IVotingEventDeliveryState = deliveryState,
-): Promise<void> {
+): Promise<boolean> {
   const blockedRounds = new Set<number>();
+  let acked = 0;
   for (const event of events) {
     if (blockedRounds.has(event.roundNumber)) {
       continue;
@@ -97,39 +98,38 @@ export async function processVotingEvents(
     try {
       await ack(event.id);
       state.delivered.delete(event.id);
+      acked++;
     } catch (err) {
       logError("VotingEventService.ack", err);
       blockedRounds.add(event.roundNumber);
     }
   }
+  return acked === events.length;
 }
 
 /**
- * How long to sleep before the next claim: until the API's next_poll_at, within the floor
- * and the cap, or the old fixed pace from an API that does not send one. Claimed events
- * cap it at their lease, in case one failed or went unacked, and a full batch may have
- * more waiting behind it.
+ * How long to sleep after a claim that came back empty: until the API's next_poll_at,
+ * within the floor and the cap, or the old fixed pace from an API that does not send one.
  */
 export function nextPollDelayMs(claim: IVotingEventClaim, now: number = Date.now()): number {
-  let untilDue = MAX_POLL_DELAY_MS;
   if (claim.nextPollAt === undefined) {
-    untilDue = POLL_RETRY_DELAY_MS;
-  } else if (claim.nextPollAt) {
-    untilDue = claim.nextPollAt.getTime() - now;
+    return POLL_RETRY_DELAY_MS;
   }
-  let delayMs = Math.min(MAX_POLL_DELAY_MS, Math.max(MIN_POLL_DELAY_MS, untilDue));
-  if (claim.events.length >= CLAIM_LIMIT) {
-    delayMs = MIN_POLL_DELAY_MS;
-  } else if (claim.events.length > 0) {
-    delayMs = Math.min(delayMs, POLL_RETRY_DELAY_MS);
-  }
-  return delayMs;
+  const untilDue = claim.nextPollAt ? claim.nextPollAt.getTime() - now : MAX_POLL_DELAY_MS;
+  return Math.min(MAX_POLL_DELAY_MS, Math.max(MIN_POLL_DELAY_MS, untilDue));
 }
 
 async function pollOnce(client: Client): Promise<number> {
   const claim = await VotingEvents.claim(CLAIM_LIMIT);
-  await processVotingEvents(client, claim.events);
-  return nextPollDelayMs(claim);
+  if (claim.events.length === 0) {
+    return nextPollDelayMs(claim);
+  }
+  const allAcked = await processVotingEvents(client, claim.events);
+  // The API's next_poll_at counted this batch's leases, since it was worked out before
+  // the acks. Once every event is acked, claim again while Neon is still awake for an
+  // up-to-date one (and whatever waited behind a full batch), rather than waking it when
+  // those leases run out. Anything left unacked comes back on its lease.
+  return allAcked ? MIN_POLL_DELAY_MS : POLL_RETRY_DELAY_MS;
 }
 
 export function startVotingEventService(client: Client): void {

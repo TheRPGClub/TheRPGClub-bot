@@ -72,7 +72,7 @@ export interface IVotingEventClaim {
   /**
    * When the API expects the next event (or a lapsed lease) to be claimable, so the
    * bot can sleep until then. null when nothing is scheduled; undefined from an API that
-   * predates the field.
+   * predates the field, or when the value cannot be read.
    */
   nextPollAt?: Date | null;
 }
@@ -90,11 +90,12 @@ export function mapVotingEventClaimResponse(
   if (!meta || !("next_poll_at" in meta)) {
     return { events };
   }
-  const nextPollAt = meta.next_poll_at ? new Date(meta.next_poll_at) : null;
-  return {
-    events,
-    nextPollAt: nextPollAt && !Number.isNaN(nextPollAt.getTime()) ? nextPollAt : null,
-  };
+  if (!meta.next_poll_at) {
+    return { events, nextPollAt: null };
+  }
+  // A value this bot cannot read gets the same fallback as an API that sends none.
+  const nextPollAt = new Date(meta.next_poll_at);
+  return Number.isNaN(nextPollAt.getTime()) ? { events } : { events, nextPollAt };
 }
 
 export default class VotingEvents {

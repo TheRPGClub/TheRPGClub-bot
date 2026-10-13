@@ -8,7 +8,6 @@ import {
   type VotingEventKind,
 } from "../classes/VotingEvents.js";
 import {
-  CLAIM_LIMIT,
   createVotingEventDeliveryState,
   MAX_POLL_DELAY_MS,
   MAX_VOTING_EVENT_ATTEMPTS,
@@ -92,6 +91,22 @@ test("processVotingEvents handles and acks events in claim order", async () => {
 
   assert.deepEqual(r.handled, [1, 2]);
   assert.deepEqual(r.acked, [1, 2]);
+});
+
+test("processVotingEvents says whether every event was acked", async () => {
+  const batch = [event(1, 143, "voting_closed"), event(2, 143, "round_decided")];
+  const ok = recorder();
+  assert.equal(await processVotingEvents(client, batch, ok.handle, ok.ack, ok.state), true);
+
+  const failing = recorder(new Set([1]));
+  const settled = await processVotingEvents(
+    client,
+    batch,
+    failing.handle,
+    failing.ack,
+    failing.state,
+  );
+  assert.equal(settled, false);
 });
 
 test("processVotingEvents holds a round's later events back when one fails", async () => {
@@ -190,14 +205,14 @@ test("mapVotingEventClaimResponse reads the events and next_poll_at", () => {
   assert.equal(claim.nextPollAt?.toISOString(), "2026-10-25T21:01:30.000Z");
 });
 
-test("mapVotingEventClaimResponse tells an API without next_poll_at from an unscheduled one", () => {
+test("mapVotingEventClaimResponse tells a missing next_poll_at from a null one", () => {
   assert.equal(mapVotingEventClaimResponse({ data: [] }).nextPollAt, undefined);
   assert.equal(mapVotingEventClaimResponse({ data: [], meta: {} }).nextPollAt, undefined);
   const unscheduled = mapVotingEventClaimResponse({ data: [], meta: { next_poll_at: null } });
   assert.equal(unscheduled.nextPollAt, null);
   assert.equal(
     mapVotingEventClaimResponse({ data: [], meta: { next_poll_at: "soon" } }).nextPollAt,
-    null,
+    undefined,
   );
 });
 
@@ -209,28 +224,9 @@ test("nextPollDelayMs sleeps until next_poll_at, within the floor and the cap", 
   assert.equal(due(-5_000), MIN_POLL_DELAY_MS);
   assert.equal(due(10 * 60 * 1000), 10 * 60 * 1000);
   assert.equal(due(5 * 24 * 60 * 60 * 1000), MAX_POLL_DELAY_MS);
-});
-
-test("nextPollDelayMs uses the cap only when nothing is scheduled or claimed", () => {
-  const events = (count: number): IVotingEvent[] =>
-    Array.from({ length: count }, (_, i) => event(i + 1, 1, "voting_opened"));
-
   assert.equal(nextPollDelayMs({ events: [], nextPollAt: null }), MAX_POLL_DELAY_MS);
-  const fullBatch = { events: events(CLAIM_LIMIT), nextPollAt: null };
-  assert.equal(nextPollDelayMs(fullBatch), MIN_POLL_DELAY_MS);
-  assert.equal(nextPollDelayMs({ events: events(1), nextPollAt: null }), POLL_RETRY_DELAY_MS);
 });
 
 test("nextPollDelayMs keeps the old pace for an API that predates next_poll_at", () => {
   assert.equal(nextPollDelayMs({ events: [] }), POLL_RETRY_DELAY_MS);
-});
-
-test("nextPollDelayMs comes back by the lease after claiming events, whatever the API says", () => {
-  const now = Date.parse("2026-10-25T20:00:00.000Z");
-  const claim = {
-    events: [event(1, 1, "voting_opened")],
-    nextPollAt: new Date(now + 7 * 24 * 60 * 60 * 1000),
-  };
-
-  assert.equal(nextPollDelayMs(claim, now), POLL_RETRY_DELAY_MS);
 });
