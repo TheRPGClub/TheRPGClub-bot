@@ -1,6 +1,7 @@
 import { logError, logWarn } from "./LogUtils.js";
 
 const trackedIntervals = new Set<NodeJS.Timeout>();
+const trackedTimeouts = new Set<NodeJS.Timeout>();
 
 /**
  * Starts a setInterval that graceful shutdown clears. Every long-lived interval goes
@@ -18,11 +19,32 @@ export function stopTrackedInterval(timer: NodeJS.Timeout): void {
   trackedIntervals.delete(timer);
 }
 
-/** Clears every tracked interval. Returns how many it cleared. */
+/**
+ * Starts a setTimeout that graceful shutdown clears, for a loop that schedules its next
+ * run from the last one's result. The timer is forgotten once it fires.
+ */
+export function startTrackedTimeout(callback: () => void, delayMs: number): NodeJS.Timeout {
+  const timer = setTimeout(() => {
+    trackedTimeouts.delete(timer);
+    callback();
+  }, delayMs);
+  trackedTimeouts.add(timer);
+  return timer;
+}
+
+/** Clears a timeout from startTrackedTimeout and forgets it. */
+export function stopTrackedTimeout(timer: NodeJS.Timeout): void {
+  clearTimeout(timer);
+  trackedTimeouts.delete(timer);
+}
+
+/** Clears every tracked interval and pending tracked timeout. Returns how many it cleared. */
 export function stopAllTrackedIntervals(): number {
-  const count = trackedIntervals.size;
+  const count = trackedIntervals.size + trackedTimeouts.size;
   for (const timer of trackedIntervals) clearInterval(timer);
   trackedIntervals.clear();
+  for (const timer of trackedTimeouts) clearTimeout(timer);
+  trackedTimeouts.clear();
   return count;
 }
 

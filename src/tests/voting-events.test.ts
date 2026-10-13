@@ -3,12 +3,16 @@ import assert from "node:assert/strict";
 import type { Client } from "discord.js";
 import {
   mapVotingEventApiData,
+  mapVotingEventClaimResponse,
   type IVotingEvent,
   type VotingEventKind,
 } from "../classes/VotingEvents.js";
 import {
   createVotingEventDeliveryState,
+  MAX_POLL_DELAY_MS,
   MAX_VOTING_EVENT_ATTEMPTS,
+  MIN_POLL_DELAY_MS,
+  nextPollDelayMs,
   processVotingEvents,
 } from "../services/VotingEventService.js";
 import {
@@ -172,4 +176,34 @@ test("buildNominationReminderText points at the vote with Discord timestamps", (
   assert.match(text, /^### 📝 Round 143 nominations are open/);
   assert.match(text, /Voting opens <t:1793376000:R> \(<t:1793376000:F>\)\./);
   assert.match(text, /Nominate games with .*gotm nominate.* so they make the ballot\./);
+});
+
+test("mapVotingEventClaimResponse reads the events and next_poll_at", () => {
+  const claim = mapVotingEventClaimResponse({
+    data: [],
+    meta: { next_poll_at: "2026-10-25T21:01:30.000Z" },
+  });
+
+  assert.deepEqual(claim.events, []);
+  assert.equal(claim.nextPollAt?.toISOString(), "2026-10-25T21:01:30.000Z");
+});
+
+test("mapVotingEventClaimResponse treats a missing or bad next_poll_at as unscheduled", () => {
+  assert.equal(mapVotingEventClaimResponse({ data: [] }).nextPollAt, null);
+  const unscheduled = mapVotingEventClaimResponse({ data: [], meta: { next_poll_at: null } });
+  assert.equal(unscheduled.nextPollAt, null);
+  assert.equal(
+    mapVotingEventClaimResponse({ data: [], meta: { next_poll_at: "soon" } }).nextPollAt,
+    null,
+  );
+});
+
+test("nextPollDelayMs sleeps until next_poll_at, within the floor and the cap", () => {
+  const now = Date.parse("2026-10-25T20:00:00.000Z");
+  const at = (ms: number): Date => new Date(now + ms);
+
+  assert.equal(nextPollDelayMs(null, now), MAX_POLL_DELAY_MS);
+  assert.equal(nextPollDelayMs(at(-5_000), now), MIN_POLL_DELAY_MS);
+  assert.equal(nextPollDelayMs(at(10 * 60 * 1000), now), 10 * 60 * 1000);
+  assert.equal(nextPollDelayMs(at(5 * 24 * 60 * 60 * 1000), now), MAX_POLL_DELAY_MS);
 });

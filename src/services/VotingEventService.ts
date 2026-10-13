@@ -1,15 +1,21 @@
 import type { Client } from "discord.js";
 import VotingEvents, { type IVotingEvent } from "../classes/VotingEvents.js";
-import { startTrackedInterval } from "../utilities/IntervalUtils.js";
+import { startTrackedTimeout, stopTrackedTimeout } from "../utilities/IntervalUtils.js";
 import { logError, logInfo } from "../utilities/LogUtils.js";
 import { handleVotingEvent, type VotingEventOutcome } from "./VotingEventHandlers.js";
 
 // The API runs the GOTM / NR-GOTM round lifecycle and queues the Discord posts
 // each step calls for; this service polls that outbox. Every poll is an API
-// call against Neon-backed compute, and voting events come a few times a
-// month, so a 5-minute poll (the old results sweep's pace) keeps posts close
-// to their moment without keeping the database awake every minute.
-const POLL_INTERVAL_MS = 5 * 60 * 1000;
+// call against Neon-backed compute, which suspends after 5 idle minutes, so a
+// fixed poll at that pace kept the database awake around the clock. Instead
+// each claim's response says when the next event is due (next_poll_at) and the
+// service sleeps until then. The cap is a safety net for changes the API cannot
+// schedule ahead (a round re-dated, automation switched on); the floor keeps a
+// stuck event from turning the loop into a spin.
+export const MIN_POLL_DELAY_MS = 60 * 1000;
+export const MAX_POLL_DELAY_MS = 60 * 60 * 1000;
+/** After a failed claim (API down, Neon waking), try again sooner than the cap. */
+const POLL_RETRY_DELAY_MS = 5 * 60 * 1000;
 const CLAIM_LIMIT = 10;
 // Failed handling attempts, counted here rather than from the API's claim
 // count so time spent held back behind another failing event does not use
@@ -18,7 +24,9 @@ const CLAIM_LIMIT = 10;
 export const MAX_VOTING_EVENT_ATTEMPTS = 12;
 
 let pollTimer: NodeJS.Timeout | null = null;
+let pollClient: Client | null = null;
 let currentlyPolling = false;
+let pollRequested = false;
 
 type Handle = (client: Client, event: IVotingEvent) => Promise<VotingEventOutcome>;
 type Ack = (id: number) => Promise<void>;
@@ -91,28 +99,63 @@ export async function processVotingEvents(
   }
 }
 
-export function startVotingEventService(client: Client): void {
+/** How long to sleep before the next claim, given the API's next_poll_at. */
+export function nextPollDelayMs(nextPollAt: Date | null, now: number = Date.now()): number {
+  if (!nextPollAt) {
+    return MAX_POLL_DELAY_MS;
+  }
+  return Math.min(MAX_POLL_DELAY_MS, Math.max(MIN_POLL_DELAY_MS, nextPollAt.getTime() - now));
+}
+
+function schedulePoll(client: Client, delayMs: number): void {
   if (pollTimer) {
+    stopTrackedTimeout(pollTimer);
+  }
+  pollTimer = startTrackedTimeout(() => {
+    pollTimer = null;
+    void poll(client);
+  }, delayMs);
+}
+
+async function poll(client: Client): Promise<void> {
+  if (currentlyPolling) {
     return;
   }
+  currentlyPolling = true;
+  pollRequested = false;
+  let delayMs = POLL_RETRY_DELAY_MS;
+  try {
+    const claim = await VotingEvents.claim(CLAIM_LIMIT);
+    await processVotingEvents(client, claim.events);
+    delayMs = nextPollDelayMs(claim.nextPollAt);
+  } catch (err) {
+    logError("VotingEventService.poll", err);
+  } finally {
+    currentlyPolling = false;
+  }
+  schedulePoll(client, pollRequested ? 0 : delayMs);
+}
 
-  const run = async (): Promise<void> => {
-    if (currentlyPolling) {
-      return;
-    }
-    currentlyPolling = true;
-    try {
-      const events = await VotingEvents.claim(CLAIM_LIMIT);
-      await processVotingEvents(client, events);
-    } catch (err) {
-      logError("VotingEventService.poll", err);
-    } finally {
-      currentlyPolling = false;
-    }
-  };
+export function startVotingEventService(client: Client): void {
+  if (pollClient) {
+    return;
+  }
+  pollClient = client;
+  void poll(client);
+}
 
-  void run();
-  pollTimer = startTrackedInterval(() => {
-    void run();
-  }, POLL_INTERVAL_MS);
+/**
+ * Claims now rather than at the scheduled time, for a bot action that just made the API
+ * queue an event it could not schedule ahead (an admin settling a tie). A claim already
+ * in flight may have missed it, so that one is followed by another.
+ */
+export function requestVotingEventPoll(): void {
+  if (!pollClient) {
+    return;
+  }
+  if (currentlyPolling) {
+    pollRequested = true;
+    return;
+  }
+  schedulePoll(pollClient, 0);
 }

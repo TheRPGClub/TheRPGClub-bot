@@ -8,6 +8,7 @@ import {
 } from "../services/ShutdownService.js";
 import {
   startTrackedInterval,
+  startTrackedTimeout,
   stopAllTrackedIntervals,
 } from "../utilities/IntervalUtils.js";
 
@@ -99,4 +100,15 @@ test("stopAllTrackedIntervals clears every tracked interval", () => {
   startTrackedInterval(() => {}, HOUR_MS);
   assert.equal(stopAllTrackedIntervals(), 2);
   assert.equal(stopAllTrackedIntervals(), 0);
+});
+
+test("stopAllTrackedIntervals also clears pending tracked timeouts", async () => {
+  stopAllTrackedIntervals();
+  let fired = 0;
+  startTrackedTimeout(() => fired++, 0);
+  startTrackedTimeout(() => fired++, HOUR_MS);
+  await new Promise((resolve) => setTimeout(resolve, 10));
+
+  assert.equal(fired, 1);
+  assert.equal(stopAllTrackedIntervals(), 1);
 });

@@ -61,6 +61,7 @@ import {
   apiVotingDataSource,
   type IVotingDataSource,
 } from "../../services/VotingDataSource.js";
+import { requestVotingEventPoll } from "../../services/VotingEventService.js";
 import { ANNOUNCEMENT_CHANNEL_ID } from "../../config/channels.js";
 import { buildApiErrorMessage } from "../../utilities/ApiErrorUtils.js";
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
@@ -538,6 +539,8 @@ export async function handleTieBreakSelect(
     );
     return [];
   }
+  // Settling the last tie queues round_decided, which the outbox poll cannot schedule ahead.
+  requestVotingEventPoll();
   const titles = interaction.values.map((value) => {
     const option = interaction.component.options.find((opt) => opt.value === value);
     return option?.label ?? `Game ${value}`;

@@ -66,15 +66,40 @@ export function mapVotingEventApiData(d: VotingEventApiData): IVotingEvent {
   };
 }
 
+/** One claim from the outbox. */
+export interface IVotingEventClaim {
+  events: IVotingEvent[];
+  /**
+   * When the API expects the next event (or a lapsed lease) to be claimable, so the
+   * bot can sleep until then. null when nothing is scheduled.
+   */
+  nextPollAt: Date | null;
+}
+
+type VotingEventClaimResponse = {
+  data: VotingEventApiData[];
+  meta?: { next_poll_at?: string | null };
+};
+
+export function mapVotingEventClaimResponse(
+  response: VotingEventClaimResponse | null | undefined,
+): IVotingEventClaim {
+  const nextPollAt = response?.meta?.next_poll_at ? new Date(response.meta.next_poll_at) : null;
+  return {
+    events: (response?.data ?? []).map(mapVotingEventApiData),
+    nextPollAt: nextPollAt && !Number.isNaN(nextPollAt.getTime()) ? nextPollAt : null,
+  };
+}
+
 export default class VotingEvents {
   /** Leases up to `limit` due events, oldest first. */
-  static async claim(limit: number): Promise<IVotingEvent[]> {
-    const response = await apiPost<{ data: VotingEventApiData[] }>(
+  static async claim(limit: number): Promise<IVotingEventClaim> {
+    const response = await apiPost<VotingEventClaimResponse>(
       "/api/v1/voting_events/claim",
       undefined,
       { params: { limit } },
     );
-    return (response?.data ?? []).map(mapVotingEventApiData);
+    return mapVotingEventClaimResponse(response);
   }
 
   /** Marks an event delivered. Idempotent on the API side. */
