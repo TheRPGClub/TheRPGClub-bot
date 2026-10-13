@@ -168,8 +168,6 @@ export class Admin {
       const updated = await VotingRounds.reschedule(current.roundNumber, {
         votingOpensAt: parsed,
       });
-      // The poller may be asleep until the old schedule's next event.
-      requestVotingEventPoll();
       const opensUnix = toUnixTimestamp(updated.votingOpensAt);
       const closesUnix = toUnixTimestamp(updated.votingClosesAt);
 
@@ -181,6 +179,9 @@ export class Admin {
           false,
         ),
       );
+      // The poller may be asleep until the old schedule's next event. After the reply, so
+      // an open moved to now never posts the panels before the admin is told.
+      requestVotingEventPoll();
     }, "Error updating next vote date");
   }
 

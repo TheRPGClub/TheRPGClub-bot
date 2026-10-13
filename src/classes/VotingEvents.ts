@@ -87,7 +87,7 @@ export function mapVotingEventClaimResponse(
 ): IVotingEventClaim {
   const events = (response?.data ?? []).map(mapVotingEventApiData);
   const meta = response?.meta;
-  if (!meta || !("next_poll_at" in meta)) {
+  if (!meta || typeof meta !== "object" || !("next_poll_at" in meta)) {
     return { events };
   }
   if (!meta.next_poll_at) {
