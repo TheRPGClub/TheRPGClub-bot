@@ -13,9 +13,10 @@ import { handleVotingEvent, type VotingEventOutcome } from "./VotingEventHandler
 // fixed poll at that pace kept the database awake around the clock. Instead
 // each claim's response says when the next event is due (next_poll_at) and the
 // service sleeps until then. The cap is a safety net for changes the API cannot
-// schedule ahead (a round re-dated, automation switched on); the floor keeps a
-// stuck event from turning the loop into a spin.
-export const MIN_POLL_DELAY_MS = 60 * 1000;
+// schedule ahead (a round re-dated outside the bot, automation switched on); the
+// floor keeps the loop from spinning, short enough that a bot clock running a little
+// ahead of the API's costs seconds, not a minute.
+export const MIN_POLL_DELAY_MS = 10 * 1000;
 export const MAX_POLL_DELAY_MS = 60 * 60 * 1000;
 /**
  * A claim's lease: an event left unacked comes back this soon, so the service never
@@ -105,11 +106,17 @@ export async function processVotingEvents(
 
 /**
  * How long to sleep before the next claim: until the API's next_poll_at, within the floor
- * and the cap. Claimed events cap it at their lease, in case one failed or went unacked,
- * and a full batch may have more waiting behind it.
+ * and the cap, or the old fixed pace from an API that does not send one. Claimed events
+ * cap it at their lease, in case one failed or went unacked, and a full batch may have
+ * more waiting behind it.
  */
 export function nextPollDelayMs(claim: IVotingEventClaim, now: number = Date.now()): number {
-  const untilDue = claim.nextPollAt ? claim.nextPollAt.getTime() - now : MAX_POLL_DELAY_MS;
+  let untilDue = MAX_POLL_DELAY_MS;
+  if (claim.nextPollAt === undefined) {
+    untilDue = POLL_RETRY_DELAY_MS;
+  } else if (claim.nextPollAt) {
+    untilDue = claim.nextPollAt.getTime() - now;
+  }
   let delayMs = Math.min(MAX_POLL_DELAY_MS, Math.max(MIN_POLL_DELAY_MS, untilDue));
   if (claim.events.length >= CLAIM_LIMIT) {
     delayMs = MIN_POLL_DELAY_MS;

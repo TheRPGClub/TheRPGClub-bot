@@ -586,9 +586,9 @@ export async function handleTieBreakSelect(
     return [];
   } finally {
     // Settling the last tie decides the round and queues round_decided, which the poll
-    // cannot schedule ahead. Only after the announcement: its handler ensures the same
-    // winner threads, and the two racing could create one twice. A sandbox tie queues
-    // nothing.
+    // cannot schedule ahead. Asked for after the announcement, even a failed one, so this
+    // nudge does not itself start the handler (which ensures the same winner threads)
+    // alongside it; round_decided still has to go out. A sandbox tie queues nothing.
     if (source === apiVotingDataSource && round.decidedAt) {
       requestVotingEventPoll();
     }

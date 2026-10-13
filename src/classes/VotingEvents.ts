@@ -71,9 +71,10 @@ export interface IVotingEventClaim {
   events: IVotingEvent[];
   /**
    * When the API expects the next event (or a lapsed lease) to be claimable, so the
-   * bot can sleep until then. null when nothing is scheduled.
+   * bot can sleep until then. null when nothing is scheduled; undefined from an API that
+   * predates the field.
    */
-  nextPollAt: Date | null;
+  nextPollAt?: Date | null;
 }
 
 type VotingEventClaimResponse = {
@@ -84,9 +85,14 @@ type VotingEventClaimResponse = {
 export function mapVotingEventClaimResponse(
   response: VotingEventClaimResponse | null | undefined,
 ): IVotingEventClaim {
-  const nextPollAt = response?.meta?.next_poll_at ? new Date(response.meta.next_poll_at) : null;
+  const events = (response?.data ?? []).map(mapVotingEventApiData);
+  const meta = response?.meta;
+  if (!meta || !("next_poll_at" in meta)) {
+    return { events };
+  }
+  const nextPollAt = meta.next_poll_at ? new Date(meta.next_poll_at) : null;
   return {
-    events: (response?.data ?? []).map(mapVotingEventApiData),
+    events,
     nextPollAt: nextPollAt && !Number.isNaN(nextPollAt.getTime()) ? nextPollAt : null,
   };
 }
