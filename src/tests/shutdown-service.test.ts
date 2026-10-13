@@ -7,8 +7,8 @@ import {
   type IShutdownSteps,
 } from "../services/ShutdownService.js";
 import {
+  createScheduledTask,
   startTrackedInterval,
-  startTrackedTimeout,
   stopAllTrackedIntervals,
 } from "../utilities/IntervalUtils.js";
 
@@ -102,13 +102,21 @@ test("stopAllTrackedIntervals clears every tracked interval", () => {
   assert.equal(stopAllTrackedIntervals(), 0);
 });
 
-test("stopAllTrackedIntervals also clears pending tracked timeouts", async () => {
+test("stopAllTrackedIntervals also stops scheduled tasks", async () => {
   stopAllTrackedIntervals();
-  let fired = 0;
-  startTrackedTimeout(() => fired++, 0);
-  startTrackedTimeout(() => fired++, HOUR_MS);
+  let runs = 0;
+  createScheduledTask({
+    name: "test",
+    retryDelayMs: HOUR_MS,
+    task: async () => {
+      runs++;
+      return HOUR_MS;
+    },
+  }).start();
+  startTrackedInterval(() => {}, HOUR_MS);
   await new Promise((resolve) => setTimeout(resolve, 10));
 
-  assert.equal(fired, 1);
-  assert.equal(stopAllTrackedIntervals(), 1);
+  assert.equal(runs, 1);
+  assert.equal(stopAllTrackedIntervals(), 2);
+  assert.equal(stopAllTrackedIntervals(), 0);
 });

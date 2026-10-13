@@ -18,10 +18,11 @@ import { handleVotingEvent, type VotingEventOutcome } from "./VotingEventHandler
 export const MIN_POLL_DELAY_MS = 60 * 1000;
 export const MAX_POLL_DELAY_MS = 60 * 60 * 1000;
 /**
- * A claim's lease. After a failed claim (API down, Neon waking) the service tries again
- * this soon rather than at the cap.
+ * A claim's lease: an event left unacked comes back this soon, so the service never
+ * sleeps longer than this after claiming any. Also the wait after a failed claim (API
+ * down, Neon waking).
  */
-const POLL_RETRY_DELAY_MS = 5 * 60 * 1000;
+export const POLL_RETRY_DELAY_MS = 5 * 60 * 1000;
 export const CLAIM_LIMIT = 10;
 // Failed handling attempts, counted here rather than from the API's claim
 // count so time spent held back behind another failing event does not use
@@ -102,18 +103,20 @@ export async function processVotingEvents(
   }
 }
 
-/** How long to sleep before the next claim. */
+/**
+ * How long to sleep before the next claim: until the API's next_poll_at, within the floor
+ * and the cap. Claimed events cap it at their lease, in case one failed or went unacked,
+ * and a full batch may have more waiting behind it.
+ */
 export function nextPollDelayMs(claim: IVotingEventClaim, now: number = Date.now()): number {
-  if (claim.nextPollAt) {
-    const untilDue = claim.nextPollAt.getTime() - now;
-    return Math.min(MAX_POLL_DELAY_MS, Math.max(MIN_POLL_DELAY_MS, untilDue));
-  }
-  // An API that predates next_poll_at: more may wait behind a full batch, and an event
-  // held back or left unacked comes back once its lease runs out.
+  const untilDue = claim.nextPollAt ? claim.nextPollAt.getTime() - now : MAX_POLL_DELAY_MS;
+  let delayMs = Math.min(MAX_POLL_DELAY_MS, Math.max(MIN_POLL_DELAY_MS, untilDue));
   if (claim.events.length >= CLAIM_LIMIT) {
-    return MIN_POLL_DELAY_MS;
+    delayMs = MIN_POLL_DELAY_MS;
+  } else if (claim.events.length > 0) {
+    delayMs = Math.min(delayMs, POLL_RETRY_DELAY_MS);
   }
-  return claim.events.length > 0 ? POLL_RETRY_DELAY_MS : MAX_POLL_DELAY_MS;
+  return delayMs;
 }
 
 async function pollOnce(client: Client): Promise<number> {

@@ -1,12 +1,12 @@
 import { logError, logWarn } from "./LogUtils.js";
 
 const trackedIntervals = new Set<NodeJS.Timeout>();
-const trackedTimeouts = new Set<NodeJS.Timeout>();
 const activeScheduledTasks = new Set<IScheduledTask>();
 
 /**
  * Starts a setInterval that graceful shutdown clears. Every long-lived interval goes
- * through here (or createIntervalTask) so a SIGTERM never waits on a forgotten timer.
+ * through here (or createIntervalTask, or createScheduledTask) so a SIGTERM never waits on
+ * a forgotten timer.
  */
 export function startTrackedInterval(callback: () => void, intervalMs: number): NodeJS.Timeout {
   const timer = setInterval(callback, intervalMs);
@@ -21,36 +21,14 @@ export function stopTrackedInterval(timer: NodeJS.Timeout): void {
 }
 
 /**
- * Starts a setTimeout that graceful shutdown clears, for a loop that schedules its next
- * run from the last one's result. The timer is forgotten once it fires.
- */
-export function startTrackedTimeout(callback: () => void, delayMs: number): NodeJS.Timeout {
-  const timer = setTimeout(() => {
-    trackedTimeouts.delete(timer);
-    callback();
-  }, delayMs);
-  trackedTimeouts.add(timer);
-  return timer;
-}
-
-/** Clears a timeout from startTrackedTimeout and forgets it. */
-export function stopTrackedTimeout(timer: NodeJS.Timeout): void {
-  clearTimeout(timer);
-  trackedTimeouts.delete(timer);
-}
-
-/**
- * Clears every tracked interval and pending tracked timeout, and stops every scheduled
- * task so a run still in flight does not schedule another. Returns how many timers it
- * cleared.
+ * Clears every tracked interval and stops every scheduled task, so a run still in flight
+ * does not schedule another. Returns how many it stopped.
  */
 export function stopAllTrackedIntervals(): number {
-  for (const task of [...activeScheduledTasks]) task.stop();
-  const count = trackedIntervals.size + trackedTimeouts.size;
+  const count = trackedIntervals.size + activeScheduledTasks.size;
   for (const timer of trackedIntervals) clearInterval(timer);
   trackedIntervals.clear();
-  for (const timer of trackedTimeouts) clearTimeout(timer);
-  trackedTimeouts.clear();
+  for (const task of [...activeScheduledTasks]) task.stop();
   return count;
 }
 
@@ -117,10 +95,16 @@ export function createIntervalTask(options: IIntervalTaskOptions): IIntervalTask
   };
 }
 
+/** The longest delay setTimeout honors (about 24.8 days). */
+const MAX_TIMEOUT_MS = 2 ** 31 - 1;
+
 export interface IScheduledTaskOptions {
   /** Log context for errors the task lets escape. */
   name: string;
-  /** The work for one run. Resolves to how long to wait before the next run. */
+  /**
+   * The work for one run. Resolves to how long to wait before the next run; a value that
+   * is not a finite, non-negative number falls back to `retryDelayMs`.
+   */
   task: () => Promise<number>;
   /** How long to wait after a run that throws. */
   retryDelayMs: number;
@@ -148,17 +132,21 @@ export function createScheduledTask(options: IScheduledTaskOptions): IScheduledT
 
   const clearTimer = (): void => {
     if (!timer) return;
-    stopTrackedTimeout(timer);
+    clearTimeout(timer);
     timer = null;
   };
 
   const schedule = (delayMs: number): void => {
     clearTimer();
     if (!active) return;
-    timer = startTrackedTimeout(() => {
+    // Node fires an out-of-range or NaN delay after 1ms, which would spin the loop.
+    const safeDelayMs = Number.isFinite(delayMs) && delayMs >= 0
+      ? Math.min(delayMs, MAX_TIMEOUT_MS)
+      : options.retryDelayMs;
+    timer = setTimeout(() => {
       timer = null;
       void run();
-    }, delayMs);
+    }, safeDelayMs);
   };
 
   const run = async (): Promise<void> => {

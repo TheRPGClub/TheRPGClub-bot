@@ -94,8 +94,8 @@ export function mapVotingEventClaimResponse(
 export default class VotingEvents {
   /** Leases up to `limit` due events, oldest first. */
   static async claim(limit: number): Promise<IVotingEventClaim> {
-    // Throws rather than reading a failed claim as an empty outbox, which would sleep the
-    // poller until its cap instead of retrying.
+    // apiPost would read a 404 (a route missing mid-deploy) as an empty outbox and sleep
+    // the poller until its cap; throwing retries after the lease instead.
     const response = await apiPostOrThrow<VotingEventClaimResponse>(
       "/api/v1/voting_events/claim",
       undefined,

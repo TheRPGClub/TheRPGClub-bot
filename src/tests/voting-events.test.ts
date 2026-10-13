@@ -14,6 +14,7 @@ import {
   MAX_VOTING_EVENT_ATTEMPTS,
   MIN_POLL_DELAY_MS,
   nextPollDelayMs,
+  POLL_RETRY_DELAY_MS,
   processVotingEvents,
 } from "../services/VotingEventService.js";
 import {
@@ -209,12 +210,22 @@ test("nextPollDelayMs sleeps until next_poll_at, within the floor and the cap", 
   assert.equal(due(5 * 24 * 60 * 60 * 1000), MAX_POLL_DELAY_MS);
 });
 
-test("nextPollDelayMs without next_poll_at waits out the cap only when nothing came back", () => {
+test("nextPollDelayMs without next_poll_at uses the cap only when nothing came back", () => {
   const events = (count: number): IVotingEvent[] =>
     Array.from({ length: count }, (_, i) => event(i + 1, 1, "voting_opened"));
 
   assert.equal(nextPollDelayMs({ events: [], nextPollAt: null }), MAX_POLL_DELAY_MS);
   const fullBatch = { events: events(CLAIM_LIMIT), nextPollAt: null };
   assert.equal(nextPollDelayMs(fullBatch), MIN_POLL_DELAY_MS);
-  assert.equal(nextPollDelayMs({ events: events(1), nextPollAt: null }), 5 * 60 * 1000);
+  assert.equal(nextPollDelayMs({ events: events(1), nextPollAt: null }), POLL_RETRY_DELAY_MS);
+});
+
+test("nextPollDelayMs comes back by the lease after claiming events, whatever the API says", () => {
+  const now = Date.parse("2026-10-25T20:00:00.000Z");
+  const claim = {
+    events: [event(1, 1, "voting_opened")],
+    nextPollAt: new Date(now + 7 * 24 * 60 * 60 * 1000),
+  };
+
+  assert.equal(nextPollDelayMs(claim, now), POLL_RETRY_DELAY_MS);
 });
