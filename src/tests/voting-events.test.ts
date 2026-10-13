@@ -8,6 +8,7 @@ import {
   type VotingEventKind,
 } from "../classes/VotingEvents.js";
 import {
+  CLAIM_LIMIT,
   createVotingEventDeliveryState,
   MAX_POLL_DELAY_MS,
   MAX_VOTING_EVENT_ATTEMPTS,
@@ -200,10 +201,20 @@ test("mapVotingEventClaimResponse treats a missing or bad next_poll_at as unsche
 
 test("nextPollDelayMs sleeps until next_poll_at, within the floor and the cap", () => {
   const now = Date.parse("2026-10-25T20:00:00.000Z");
-  const at = (ms: number): Date => new Date(now + ms);
+  const due = (ms: number): number =>
+    nextPollDelayMs({ events: [], nextPollAt: new Date(now + ms) }, now);
 
-  assert.equal(nextPollDelayMs(null, now), MAX_POLL_DELAY_MS);
-  assert.equal(nextPollDelayMs(at(-5_000), now), MIN_POLL_DELAY_MS);
-  assert.equal(nextPollDelayMs(at(10 * 60 * 1000), now), 10 * 60 * 1000);
-  assert.equal(nextPollDelayMs(at(5 * 24 * 60 * 60 * 1000), now), MAX_POLL_DELAY_MS);
+  assert.equal(due(-5_000), MIN_POLL_DELAY_MS);
+  assert.equal(due(10 * 60 * 1000), 10 * 60 * 1000);
+  assert.equal(due(5 * 24 * 60 * 60 * 1000), MAX_POLL_DELAY_MS);
+});
+
+test("nextPollDelayMs without next_poll_at waits out the cap only when nothing came back", () => {
+  const events = (count: number): IVotingEvent[] =>
+    Array.from({ length: count }, (_, i) => event(i + 1, 1, "voting_opened"));
+
+  assert.equal(nextPollDelayMs({ events: [], nextPollAt: null }), MAX_POLL_DELAY_MS);
+  const fullBatch = { events: events(CLAIM_LIMIT), nextPollAt: null };
+  assert.equal(nextPollDelayMs(fullBatch), MIN_POLL_DELAY_MS);
+  assert.equal(nextPollDelayMs({ events: events(1), nextPollAt: null }), 5 * 60 * 1000);
 });

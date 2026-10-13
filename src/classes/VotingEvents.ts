@@ -1,4 +1,4 @@
-import { apiPost } from "../services/RpgClubApiClient.js";
+import { apiPost, apiPostOrThrow } from "../services/RpgClubApiClient.js";
 
 export type VotingEventKind =
   | "nomination_reminder_5d"
@@ -94,7 +94,9 @@ export function mapVotingEventClaimResponse(
 export default class VotingEvents {
   /** Leases up to `limit` due events, oldest first. */
   static async claim(limit: number): Promise<IVotingEventClaim> {
-    const response = await apiPost<VotingEventClaimResponse>(
+    // Throws rather than reading a failed claim as an empty outbox, which would sleep the
+    // poller until its cap instead of retrying.
+    const response = await apiPostOrThrow<VotingEventClaimResponse>(
       "/api/v1/voting_events/claim",
       undefined,
       { params: { limit } },

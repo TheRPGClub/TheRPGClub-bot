@@ -1,6 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createIntervalTask } from "../utilities/IntervalUtils.js";
+import {
+  createIntervalTask,
+  createScheduledTask,
+  stopAllTrackedIntervals,
+} from "../utilities/IntervalUtils.js";
 
 const HOUR_MS = 60 * 60 * 1000;
 
@@ -72,4 +76,67 @@ test("a throwing task does not block the next run", async () => {
     console.error = originalError;
   }
   assert.equal(runs, 2);
+});
+
+test("a scheduled task runs on start and again after the delay its run returns", async () => {
+  let runs = 0;
+  const task = createScheduledTask({
+    name: "test",
+    retryDelayMs: HOUR_MS,
+    task: async () => {
+      runs++;
+      return runs === 1 ? 0 : HOUR_MS;
+    },
+  });
+
+  assert.equal(task.start(), true);
+  assert.equal(task.start(), false);
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  assert.equal(runs, 2);
+  task.stop();
+});
+
+test("runSoon during a run follows it instead of being lost", async () => {
+  const gate = deferred();
+  let runs = 0;
+  const task = createScheduledTask({
+    name: "test",
+    retryDelayMs: HOUR_MS,
+    task: async () => {
+      runs++;
+      if (runs === 1) await gate.promise;
+      return HOUR_MS;
+    },
+  });
+
+  task.start();
+  task.runSoon();
+  assert.equal(runs, 1);
+  gate.resolve();
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  assert.equal(runs, 2);
+  task.stop();
+});
+
+test("stopAllTrackedIntervals keeps a run in flight from scheduling another", async () => {
+  const gate = deferred();
+  let runs = 0;
+  const task = createScheduledTask({
+    name: "test",
+    retryDelayMs: 0,
+    task: async () => {
+      runs++;
+      await gate.promise;
+      return 0;
+    },
+  });
+
+  task.start();
+  task.runSoon();
+  stopAllTrackedIntervals();
+  gate.resolve();
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  assert.equal(runs, 1);
+  task.runSoon();
+  assert.equal(runs, 1);
 });

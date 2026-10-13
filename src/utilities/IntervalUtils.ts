@@ -2,6 +2,7 @@ import { logError, logWarn } from "./LogUtils.js";
 
 const trackedIntervals = new Set<NodeJS.Timeout>();
 const trackedTimeouts = new Set<NodeJS.Timeout>();
+const activeScheduledTasks = new Set<IScheduledTask>();
 
 /**
  * Starts a setInterval that graceful shutdown clears. Every long-lived interval goes
@@ -38,8 +39,13 @@ export function stopTrackedTimeout(timer: NodeJS.Timeout): void {
   trackedTimeouts.delete(timer);
 }
 
-/** Clears every tracked interval and pending tracked timeout. Returns how many it cleared. */
+/**
+ * Clears every tracked interval and pending tracked timeout, and stops every scheduled
+ * task so a run still in flight does not schedule another. Returns how many timers it
+ * cleared.
+ */
 export function stopAllTrackedIntervals(): number {
+  for (const task of [...activeScheduledTasks]) task.stop();
   const count = trackedIntervals.size + trackedTimeouts.size;
   for (const timer of trackedIntervals) clearInterval(timer);
   trackedIntervals.clear();
@@ -109,4 +115,92 @@ export function createIntervalTask(options: IIntervalTaskOptions): IIntervalTask
     },
     runNow,
   };
+}
+
+export interface IScheduledTaskOptions {
+  /** Log context for errors the task lets escape. */
+  name: string;
+  /** The work for one run. Resolves to how long to wait before the next run. */
+  task: () => Promise<number>;
+  /** How long to wait after a run that throws. */
+  retryDelayMs: number;
+}
+
+export interface IScheduledTask {
+  /** Runs once now and keeps going. Returns false, and does nothing, when already started. */
+  start(): boolean;
+  /** Clears the pending run; a run in flight finishes without scheduling another. */
+  stop(): void;
+  /** Runs now instead of at the scheduled time, or again right after a run in flight. */
+  runSoon(): void;
+}
+
+/**
+ * Like createIntervalTask, but each run picks the delay before the next one, for a loop
+ * that should sleep until something is due rather than tick at a fixed pace. Runs never
+ * overlap, and a run asked for while one is in flight follows it instead of being lost.
+ */
+export function createScheduledTask(options: IScheduledTaskOptions): IScheduledTask {
+  let timer: NodeJS.Timeout | null = null;
+  let active = false;
+  let running = false;
+  let runAgain = false;
+
+  const clearTimer = (): void => {
+    if (!timer) return;
+    stopTrackedTimeout(timer);
+    timer = null;
+  };
+
+  const schedule = (delayMs: number): void => {
+    clearTimer();
+    if (!active) return;
+    timer = startTrackedTimeout(() => {
+      timer = null;
+      void run();
+    }, delayMs);
+  };
+
+  const run = async (): Promise<void> => {
+    if (running) {
+      runAgain = true;
+      return;
+    }
+    running = true;
+    runAgain = false;
+    let delayMs = options.retryDelayMs;
+    try {
+      delayMs = await options.task();
+    } catch (err) {
+      logError(options.name, err);
+    } finally {
+      running = false;
+    }
+    schedule(runAgain ? 0 : delayMs);
+  };
+
+  const scheduledTask: IScheduledTask = {
+    start(): boolean {
+      if (active) return false;
+      active = true;
+      activeScheduledTasks.add(scheduledTask);
+      void run();
+      return true;
+    },
+    stop(): void {
+      active = false;
+      runAgain = false;
+      activeScheduledTasks.delete(scheduledTask);
+      clearTimer();
+    },
+    runSoon(): void {
+      if (!active) return;
+      if (running) {
+        runAgain = true;
+        return;
+      }
+      schedule(0);
+    },
+  };
+  return scheduledTask;
 }

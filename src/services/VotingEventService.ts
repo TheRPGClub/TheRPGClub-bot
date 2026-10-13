@@ -1,6 +1,9 @@
 import type { Client } from "discord.js";
-import VotingEvents, { type IVotingEvent } from "../classes/VotingEvents.js";
-import { startTrackedTimeout, stopTrackedTimeout } from "../utilities/IntervalUtils.js";
+import VotingEvents, {
+  type IVotingEvent,
+  type IVotingEventClaim,
+} from "../classes/VotingEvents.js";
+import { createScheduledTask, type IScheduledTask } from "../utilities/IntervalUtils.js";
 import { logError, logInfo } from "../utilities/LogUtils.js";
 import { handleVotingEvent, type VotingEventOutcome } from "./VotingEventHandlers.js";
 
@@ -14,19 +17,19 @@ import { handleVotingEvent, type VotingEventOutcome } from "./VotingEventHandler
 // stuck event from turning the loop into a spin.
 export const MIN_POLL_DELAY_MS = 60 * 1000;
 export const MAX_POLL_DELAY_MS = 60 * 60 * 1000;
-/** After a failed claim (API down, Neon waking), try again sooner than the cap. */
+/**
+ * A claim's lease. After a failed claim (API down, Neon waking) the service tries again
+ * this soon rather than at the cap.
+ */
 const POLL_RETRY_DELAY_MS = 5 * 60 * 1000;
-const CLAIM_LIMIT = 10;
+export const CLAIM_LIMIT = 10;
 // Failed handling attempts, counted here rather than from the API's claim
 // count so time spent held back behind another failing event does not use
 // them up. A claim is a 5-minute lease, so this is roughly an hour of retries
 // before a failing post is given up on (and logged) rather than retried forever.
 export const MAX_VOTING_EVENT_ATTEMPTS = 12;
 
-let pollTimer: NodeJS.Timeout | null = null;
-let pollClient: Client | null = null;
-let currentlyPolling = false;
-let pollRequested = false;
+let pollTask: IScheduledTask | null = null;
 
 type Handle = (client: Client, event: IVotingEvent) => Promise<VotingEventOutcome>;
 type Ack = (id: number) => Promise<void>;
@@ -99,63 +102,42 @@ export async function processVotingEvents(
   }
 }
 
-/** How long to sleep before the next claim, given the API's next_poll_at. */
-export function nextPollDelayMs(nextPollAt: Date | null, now: number = Date.now()): number {
-  if (!nextPollAt) {
-    return MAX_POLL_DELAY_MS;
+/** How long to sleep before the next claim. */
+export function nextPollDelayMs(claim: IVotingEventClaim, now: number = Date.now()): number {
+  if (claim.nextPollAt) {
+    const untilDue = claim.nextPollAt.getTime() - now;
+    return Math.min(MAX_POLL_DELAY_MS, Math.max(MIN_POLL_DELAY_MS, untilDue));
   }
-  return Math.min(MAX_POLL_DELAY_MS, Math.max(MIN_POLL_DELAY_MS, nextPollAt.getTime() - now));
+  // An API that predates next_poll_at: more may wait behind a full batch, and an event
+  // held back or left unacked comes back once its lease runs out.
+  if (claim.events.length >= CLAIM_LIMIT) {
+    return MIN_POLL_DELAY_MS;
+  }
+  return claim.events.length > 0 ? POLL_RETRY_DELAY_MS : MAX_POLL_DELAY_MS;
 }
 
-function schedulePoll(client: Client, delayMs: number): void {
-  if (pollTimer) {
-    stopTrackedTimeout(pollTimer);
-  }
-  pollTimer = startTrackedTimeout(() => {
-    pollTimer = null;
-    void poll(client);
-  }, delayMs);
-}
-
-async function poll(client: Client): Promise<void> {
-  if (currentlyPolling) {
-    return;
-  }
-  currentlyPolling = true;
-  pollRequested = false;
-  let delayMs = POLL_RETRY_DELAY_MS;
-  try {
-    const claim = await VotingEvents.claim(CLAIM_LIMIT);
-    await processVotingEvents(client, claim.events);
-    delayMs = nextPollDelayMs(claim.nextPollAt);
-  } catch (err) {
-    logError("VotingEventService.poll", err);
-  } finally {
-    currentlyPolling = false;
-  }
-  schedulePoll(client, pollRequested ? 0 : delayMs);
+async function pollOnce(client: Client): Promise<number> {
+  const claim = await VotingEvents.claim(CLAIM_LIMIT);
+  await processVotingEvents(client, claim.events);
+  return nextPollDelayMs(claim);
 }
 
 export function startVotingEventService(client: Client): void {
-  if (pollClient) {
+  if (pollTask) {
     return;
   }
-  pollClient = client;
-  void poll(client);
+  pollTask = createScheduledTask({
+    name: "VotingEventService.poll",
+    task: () => pollOnce(client),
+    retryDelayMs: POLL_RETRY_DELAY_MS,
+  });
+  pollTask.start();
 }
 
 /**
- * Claims now rather than at the scheduled time, for a bot action that just made the API
- * queue an event it could not schedule ahead (an admin settling a tie). A claim already
- * in flight may have missed it, so that one is followed by another.
+ * Claims now rather than at the scheduled time, after a bot action that changed what the
+ * API will queue or when (an admin settling a tie, or moving a round's open or close).
  */
 export function requestVotingEventPoll(): void {
-  if (!pollClient) {
-    return;
-  }
-  if (currentlyPolling) {
-    pollRequested = true;
-    return;
-  }
-  schedulePoll(pollClient, 0);
+  pollTask?.runSoon();
 }

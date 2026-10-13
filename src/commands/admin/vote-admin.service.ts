@@ -319,6 +319,7 @@ export async function handleVoteCloseButton(interaction: ButtonInteraction): Pro
       return;
     }
     await VotingRounds.reschedule(round, { votingClosesAt: new Date() });
+    requestVotingEventPoll();
     await safeUpdate(
       interaction,
       buildUpdateText(`🔒 Voting for Round ${round} is now closed. ${RESULTS_POST_NOTE}`),
@@ -539,8 +540,6 @@ export async function handleTieBreakSelect(
     );
     return [];
   }
-  // Settling the last tie queues round_decided, which the outbox poll cannot schedule ahead.
-  requestVotingEventPoll();
   const titles = interaction.values.map((value) => {
     const option = interaction.component.options.find((opt) => opt.value === value);
     return option?.label ?? `Game ${value}`;
@@ -585,6 +584,13 @@ export async function handleTieBreakSelect(
       err,
     );
     return [];
+  } finally {
+    // Settling the last tie queues round_decided, which the poll cannot schedule ahead.
+    // Only after the announcement: its handler ensures the same winner threads, and the
+    // two racing could create one twice. A sandbox tie queues nothing.
+    if (source === apiVotingDataSource) {
+      requestVotingEventPoll();
+    }
   }
 }
 

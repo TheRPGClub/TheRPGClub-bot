@@ -39,6 +39,7 @@ import VotingRounds, {
   explainRescheduleRefusal,
   NO_VOTING_ROUND_SCHEDULED,
 } from "../classes/VotingRounds.js";
+import { requestVotingEventPoll } from "../services/VotingEventService.js";
 import { isAdmin } from "./admin/admin-auth.utils.js";
 import { getHelpAccess } from "./help/help-access.js";
 import { withLegacyHelpPointer } from "./help/help-pointer.js";
@@ -167,6 +168,8 @@ export class Admin {
       const updated = await VotingRounds.reschedule(current.roundNumber, {
         votingOpensAt: parsed,
       });
+      // The poller may be asleep until the old schedule's next event.
+      requestVotingEventPoll();
       const opensUnix = toUnixTimestamp(updated.votingOpensAt);
       const closesUnix = toUnixTimestamp(updated.votingClosesAt);
 
