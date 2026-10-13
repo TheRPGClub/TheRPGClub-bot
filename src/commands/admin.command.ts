@@ -39,6 +39,7 @@ import VotingRounds, {
   explainRescheduleRefusal,
   NO_VOTING_ROUND_SCHEDULED,
 } from "../classes/VotingRounds.js";
+import { requestVotingEventPoll } from "../services/VotingEventService.js";
 import { isAdmin } from "./admin/admin-auth.utils.js";
 import { getHelpAccess } from "./help/help-access.js";
 import { withLegacyHelpPointer } from "./help/help-pointer.js";
@@ -178,6 +179,9 @@ export class Admin {
           false,
         ),
       );
+      // The poller may be asleep until the old schedule's next event. After the reply, so
+      // an open moved to now never posts the panels before the admin is told.
+      requestVotingEventPoll();
     }, "Error updating next vote date");
   }
 

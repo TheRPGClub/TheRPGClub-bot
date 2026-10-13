@@ -3,12 +3,17 @@ import assert from "node:assert/strict";
 import type { Client } from "discord.js";
 import {
   mapVotingEventApiData,
+  mapVotingEventClaimResponse,
   type IVotingEvent,
   type VotingEventKind,
 } from "../classes/VotingEvents.js";
 import {
   createVotingEventDeliveryState,
+  MAX_POLL_DELAY_MS,
   MAX_VOTING_EVENT_ATTEMPTS,
+  MIN_POLL_DELAY_MS,
+  nextPollDelayMs,
+  POLL_RETRY_DELAY_MS,
   processVotingEvents,
 } from "../services/VotingEventService.js";
 import {
@@ -86,6 +91,22 @@ test("processVotingEvents handles and acks events in claim order", async () => {
 
   assert.deepEqual(r.handled, [1, 2]);
   assert.deepEqual(r.acked, [1, 2]);
+});
+
+test("processVotingEvents says whether every event was acked", async () => {
+  const batch = [event(1, 143, "voting_closed"), event(2, 143, "round_decided")];
+  const ok = recorder();
+  assert.equal(await processVotingEvents(client, batch, ok.handle, ok.ack, ok.state), true);
+
+  const failing = recorder(new Set([1]));
+  const settled = await processVotingEvents(
+    client,
+    batch,
+    failing.handle,
+    failing.ack,
+    failing.state,
+  );
+  assert.equal(settled, false);
 });
 
 test("processVotingEvents holds a round's later events back when one fails", async () => {
@@ -172,4 +193,40 @@ test("buildNominationReminderText points at the vote with Discord timestamps", (
   assert.match(text, /^### 📝 Round 143 nominations are open/);
   assert.match(text, /Voting opens <t:1793376000:R> \(<t:1793376000:F>\)\./);
   assert.match(text, /Nominate games with .*gotm nominate.* so they make the ballot\./);
+});
+
+test("mapVotingEventClaimResponse reads the events and next_poll_at", () => {
+  const claim = mapVotingEventClaimResponse({
+    data: [],
+    meta: { next_poll_at: "2026-10-25T21:01:30.000Z" },
+  });
+
+  assert.deepEqual(claim.events, []);
+  assert.equal(claim.nextPollAt?.toISOString(), "2026-10-25T21:01:30.000Z");
+});
+
+test("mapVotingEventClaimResponse tells a missing next_poll_at from a null one", () => {
+  assert.equal(mapVotingEventClaimResponse({ data: [] }).nextPollAt, undefined);
+  assert.equal(mapVotingEventClaimResponse({ data: [], meta: {} }).nextPollAt, undefined);
+  const unscheduled = mapVotingEventClaimResponse({ data: [], meta: { next_poll_at: null } });
+  assert.equal(unscheduled.nextPollAt, null);
+  assert.equal(
+    mapVotingEventClaimResponse({ data: [], meta: { next_poll_at: "soon" } }).nextPollAt,
+    undefined,
+  );
+});
+
+test("nextPollDelayMs sleeps until next_poll_at, within the floor and the cap", () => {
+  const now = Date.parse("2026-10-25T20:00:00.000Z");
+  const due = (ms: number): number =>
+    nextPollDelayMs({ events: [], nextPollAt: new Date(now + ms) }, now);
+
+  assert.equal(due(-5_000), MIN_POLL_DELAY_MS);
+  assert.equal(due(10 * 60 * 1000), 10 * 60 * 1000);
+  assert.equal(due(5 * 24 * 60 * 60 * 1000), MAX_POLL_DELAY_MS);
+  assert.equal(nextPollDelayMs({ events: [], nextPollAt: null }), MAX_POLL_DELAY_MS);
+});
+
+test("nextPollDelayMs keeps the old pace for an API that predates next_poll_at", () => {
+  assert.equal(nextPollDelayMs({ events: [] }), POLL_RETRY_DELAY_MS);
 });

@@ -60,7 +60,7 @@ export function createShutdown(steps: IShutdownSteps): Shutdown {
     if (running) return running;
     running = (async () => {
       const cleared = stopIntervals();
-      logInfo(LOG_CONTEXT, `Shutting down (${reason}); cleared ${cleared} interval(s).`);
+      logInfo(LOG_CONTEXT, `Shutting down (${reason}); stopped ${cleared} timer(s).`);
       await runStep("flushLogs", steps.flushLogs, stepTimeoutMs);
       await runStep("destroyClient", steps.destroyClient, stepTimeoutMs);
       steps.exit(exitCode);

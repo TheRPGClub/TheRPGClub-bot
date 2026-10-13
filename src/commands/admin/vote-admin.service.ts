@@ -61,6 +61,7 @@ import {
   apiVotingDataSource,
   type IVotingDataSource,
 } from "../../services/VotingDataSource.js";
+import { requestVotingEventPoll } from "../../services/VotingEventService.js";
 import { ANNOUNCEMENT_CHANNEL_ID } from "../../config/channels.js";
 import { buildApiErrorMessage } from "../../utilities/ApiErrorUtils.js";
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
@@ -322,6 +323,8 @@ export async function handleVoteCloseButton(interaction: ButtonInteraction): Pro
       interaction,
       buildUpdateText(`🔒 Voting for Round ${round} is now closed. ${RESULTS_POST_NOTE}`),
     );
+    // After the confirmation, so the results never land before the admin is told.
+    requestVotingEventPoll();
   }, "Could not close voting");
 }
 
@@ -582,6 +585,14 @@ export async function handleTieBreakSelect(
       err,
     );
     return [];
+  } finally {
+    // Settling the last tie decides the round and queues round_decided, which the poll
+    // cannot schedule ahead. Asked for after the announcement, even a failed one, so this
+    // nudge does not itself start the handler (which ensures the same winner threads)
+    // alongside it; round_decided still has to go out. A sandbox tie queues nothing.
+    if (source === apiVotingDataSource && round.decidedAt) {
+      requestVotingEventPoll();
+    }
   }
 }
 
