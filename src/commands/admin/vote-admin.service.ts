@@ -319,11 +319,12 @@ export async function handleVoteCloseButton(interaction: ButtonInteraction): Pro
       return;
     }
     await VotingRounds.reschedule(round, { votingClosesAt: new Date() });
-    requestVotingEventPoll();
     await safeUpdate(
       interaction,
       buildUpdateText(`🔒 Voting for Round ${round} is now closed. ${RESULTS_POST_NOTE}`),
     );
+    // After the confirmation, so the results never land before the admin is told.
+    requestVotingEventPoll();
   }, "Could not close voting");
 }
 

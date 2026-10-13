@@ -1,4 +1,4 @@
-import { apiPost, apiPostOrThrow } from "../services/RpgClubApiClient.js";
+import { apiPostOrThrow } from "../services/RpgClubApiClient.js";
 
 export type VotingEventKind =
   | "nomination_reminder_5d"
@@ -111,8 +111,11 @@ export default class VotingEvents {
     return mapVotingEventClaimResponse(response);
   }
 
-  /** Marks an event delivered. Idempotent on the API side. */
+  /**
+   * Marks an event delivered. Idempotent on the API side. Throws on a 404 too: an ack the
+   * API never recorded hands the event back once its lease runs out.
+   */
   static async ack(id: number): Promise<void> {
-    await apiPost(`/api/v1/voting_events/${id}/ack`);
+    await apiPostOrThrow(`/api/v1/voting_events/${id}/ack`);
   }
 }

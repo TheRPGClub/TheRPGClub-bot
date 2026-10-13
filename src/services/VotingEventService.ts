@@ -129,11 +129,15 @@ async function pollOnce(client: Client): Promise<number> {
   // the acks. Once every event is acked, claim again while Neon is still awake for an
   // up-to-date one (and whatever waited behind a full batch), rather than waking it when
   // those leases run out. Anything left unacked comes back on its lease.
-  return allAcked ? MIN_POLL_DELAY_MS : POLL_RETRY_DELAY_MS;
+  return allAcked
+    ? MIN_POLL_DELAY_MS
+    : Math.min(nextPollDelayMs(claim), POLL_RETRY_DELAY_MS);
 }
 
 export function startVotingEventService(client: Client): void {
   if (pollTask) {
+    // Already running, or stopped with the other tracked timers: start() resumes it.
+    pollTask.start();
     return;
   }
   pollTask = createScheduledTask({
