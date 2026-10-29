@@ -1,0 +1,21 @@
+{
+  "prTestingGate": {
+    "checker": [
+      "node", "--no-warnings=ExperimentalWarning", "--import", "tsx",
+      "scripts/check-pr-testing.ts"
+    ],
+    "checkerLabel": "npm run check:pr-testing -- <file>",
+    "failureMarker": "The ## Testing section cannot be parsed"
+  },
+  "mergeWatchReminder": {
+    "ledgerTool": "scripts/catchup.py"
+  },
+  "testOnEdit": {
+    "testDir": "src/tests",
+    "testName": "<name>.test<ext>",
+    "extensions": [".ts"],
+    "command": ["node", "--no-warnings=ExperimentalWarning", "--import", "tsx", "--test"],
+    "tailLines": 10
+  },
+  "prettierOnSave": {}
+}

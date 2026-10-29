@@ -456,3 +456,7 @@ Common mistakes to avoid:
 - Do NOT merge without asking, and do NOT offer to merge before a passing conductor
   report on the current head, per [conductor-merge.md](../_shared/conductor-merge.md).
 - Do NOT pass multi-line text through a heredoc.
+
+The PR testing gate, the merge-watch reminder, the unit test on edit, and Prettier on save
+run as hooks, per [repo-hooks](../repo-hooks/SKILL.md). The manual `check:pr-testing` and
+`catchup.py add-pr` steps above still apply when a hook is absent.

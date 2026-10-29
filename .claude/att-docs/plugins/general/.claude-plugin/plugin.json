@@ -1,5 +1,5 @@
 {
   "name": "general",
-  "description": "Workflow skills that are not tied to one subject: implementing issues and working the backlog",
-  "version": "0.4.0"
+  "description": "Workflow skills that are not tied to one subject (implementing issues, working the backlog) and the repo hooks that read a repository's extension.json",
+  "version": "0.5.0"
 }

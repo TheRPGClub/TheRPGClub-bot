@@ -1,0 +1,45 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "exec \"${CLAUDE_PLUGIN_ROOT}/hooks/run.sh\" prTestingGate pr_testing_gate.py",
+            "timeout": 90
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "exec \"${CLAUDE_PLUGIN_ROOT}/hooks/run.sh\" mergeWatchReminder remind-pr-merge-watch.sh",
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "exec \"${CLAUDE_PLUGIN_ROOT}/hooks/run.sh\" prettierOnSave prettier-on-save.sh",
+            "timeout": 60,
+            "statusMessage": "Formatting..."
+          },
+          {
+            "type": "command",
+            "command": "exec \"${CLAUDE_PLUGIN_ROOT}/hooks/run.sh\" testOnEdit test-on-edit.sh",
+            "timeout": 180,
+            "statusMessage": "Running related tests..."
+          }
+        ]
+      }
+    ]
+  }
+}

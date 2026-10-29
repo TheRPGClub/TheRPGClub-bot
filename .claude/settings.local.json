@@ -20,5 +20,48 @@
       "Bash(Select-Object Name, FullName)",
       "Bash(gh issue *)"
     ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "timeout": 90,
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/att-docs/plugins/general/hooks/run.sh\" prTestingGate pr_testing_gate.py"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "timeout": 10,
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/att-docs/plugins/general/hooks/run.sh\" mergeWatchReminder remind-pr-merge-watch.sh"
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "timeout": 60,
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/att-docs/plugins/general/hooks/run.sh\" prettierOnSave prettier-on-save.sh",
+            "statusMessage": "Formatting..."
+          },
+          {
+            "type": "command",
+            "timeout": 180,
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/att-docs/plugins/general/hooks/run.sh\" testOnEdit test-on-edit.sh",
+            "statusMessage": "Running related tests..."
+          }
+        ]
+      }
+    ]
   }
 }
