@@ -56,7 +56,10 @@ export class CurrentRoundCommand {
 
       const currentDescLines: string[] = [];
       const mainLine = `Round ${roundNumber}`;
-      const roundTitle = `Round ${roundNumber} - ${gotmMonthYear}`;
+      const titleMonthYear = gotmMonthYear ?? nrGotmMonthYear;
+      const roundTitle = titleMonthYear
+        ? `Round ${roundNumber} - ${titleMonthYear}`
+        : `Round ${roundNumber}`;
 
       currentDescLines.push(mainLine);
 

@@ -102,6 +102,9 @@ export async function fetchGotmRoundHistory(params: {
   const rest = await Promise.all(
     Array.from({ length: Math.max(pages - 1, 0) }, (_, index) => fetchPage(index + 2)),
   );
+  if (rest.some((response) => response === null)) {
+    throw new Error("GOTM round history ended early: a page of rounds was not found.");
+  }
   return [first, ...rest].flatMap((response) => (response?.data ?? []).map(mapGotmRound));
 }
 
