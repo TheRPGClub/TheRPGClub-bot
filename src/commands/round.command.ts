@@ -33,8 +33,8 @@ export class CurrentRoundCommand {
     await deferWithPrivateFlag(interaction, privateFlag);
 
     await withErrorReply(interaction, async () => {
-      // The round being played is the latest one with winners; the round the
-      // API reports as current is the one still being nominated or voted on.
+      // The API's current GOTM round is the latest one with recorded winners, not the
+      // round being nominated or voted on.
       const current = await fetchCurrentGotmRound();
       if (!current) {
         await safeReply(interaction, buildTextReply("No GOTM round has been recorded yet.", true));

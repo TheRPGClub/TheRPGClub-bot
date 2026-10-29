@@ -85,10 +85,8 @@ export async function fetchGotmRoundHistory(params: {
   query: string;
   sort: "asc" | "desc";
 }): Promise<GotmRoundRecord[]> {
-  const rounds: GotmRoundRecord[] = [];
-  let pages = 1;
-  for (let page = 1; page <= pages; page += 1) {
-    const response = await apiGet<GotmRoundsListResponse>("/api/v1/gotm_rounds", {
+  const fetchPage = async (page: number): Promise<GotmRoundsListResponse | null> =>
+    apiGet<GotmRoundsListResponse>("/api/v1/gotm_rounds", {
       params: {
         kind: params.kind,
         year: params.year,
@@ -98,10 +96,13 @@ export async function fetchGotmRoundHistory(params: {
         ...(params.query.trim() ? { q: params.query.trim() } : {}),
       },
     });
-    rounds.push(...(response?.data ?? []).map(mapGotmRound));
-    pages = response?.meta?.pages ?? 1;
-  }
-  return rounds;
+
+  const first = await fetchPage(1);
+  const pages = Number.isInteger(first?.meta?.pages) ? Number(first?.meta?.pages) : 1;
+  const rest = await Promise.all(
+    Array.from({ length: Math.max(pages - 1, 0) }, (_, index) => fetchPage(index + 2)),
+  );
+  return [first, ...rest].flatMap((response) => (response?.data ?? []).map(mapGotmRound));
 }
 
 /** The latest round with winners, or null when no GOTM round exists. */

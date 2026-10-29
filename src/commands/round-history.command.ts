@@ -29,11 +29,9 @@ import {
   SlashOption,
 } from "discordx";
 import { buildTextInputLabel } from "../functions/uiComponents.js";
-import type { IGotmEntry } from "../classes/Gotm.js";
 import Gotm from "../classes/Gotm.js";
-import type { INrGotmEntry } from "../classes/NrGotm.js";
 import NrGotm from "../classes/NrGotm.js";
-import { fetchGotmRoundHistory } from "../classes/GotmRounds.js";
+import { fetchGotmRoundHistory, type GotmRoundRecord } from "../classes/GotmRounds.js";
 import {
   buildGotmCardsFromEntries,
   buildGotmCardText,
@@ -76,11 +74,7 @@ const ROUND_HISTORY_SORT_ID = "round-history-sort";
 type RoundHistoryKind = "gotm" | "nr-gotm" | "both";
 type RoundHistorySort = "asc" | "desc";
 
-export type IRoundHistoryRecord = {
-  round: number;
-  gotmEntries: IGotmEntry[];
-  nrGotmEntries: INrGotmEntry[];
-};
+export type IRoundHistoryRecord = GotmRoundRecord;
 
 export type IRoundHistoryFilterState = {
   ownerUserId: string;
