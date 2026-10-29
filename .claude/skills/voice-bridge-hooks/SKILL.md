@@ -26,10 +26,9 @@ vendored copy pinned by `.claude/att-docs.lock`; never edit it here.
   `.claude/settings.json` registers none of them. If it did, the plugin's runner would
   step aside, which only adds churn.
 - `<entry-points>`: the plugin's own scripts. This repository keeps no shims.
-- `<review-label>`: `Ready for Review`, set in [extension.json](extension.json) because the
-  hooks need the key. This repository has no such label and does not use a ready label
-  (the Section 9 report is the handoff), so the label announcement
-  never fires here.
+- `<review-label>`: `Manual Review Needed`, set in [extension.json](extension.json) because
+  the hooks need the key. The implement skill applies it when a pull request is ready, so
+  the label announcement fires then.
 - `<ready-line>`: `PULL REQUEST <N> IS READY FOR YOUR REVIEW`, the generic default
 - `<ledger-module>`: not set. `scripts/catchup.py` has no `STATIC_CHECKS_NAME`, which the
   module field requires, so the hooks read only the ledger subcommands in the config.

@@ -66,7 +66,7 @@ Takes one argument: the issue number. `/implement 717`, `/implement #717`, and
 - `<run-watch>`: [run-watch.md](../_shared/run-watch.md), with `scripts/catchup.py`
 - `<mergeability-note>`: [pr-mergeability.md](../_shared/pr-mergeability.md)
 - `<self-review>`: [self-review.md](../_shared/self-review.md)
-- `<ready-signal>`: not used
+- `<ready-signal>`: the `Manual Review Needed` label, applied under Section 9
 - `<instructions-file>`: `CLAUDE.md`
 - `<post-merge-checks>`: none
 - `<merge-cleanup>`: not used. Section 10 deletes the branch.
@@ -371,17 +371,27 @@ Give the user:
   dispatch a deploy.
 
 Before the report, label the pull request `Manual Review Needed` once the self review
-loop has ended clean, `mergeStateStatus` reads `CLEAN` and every CI check has passed. Use
-the REST call, because `gh pr edit` fails on this repository's old CLI:
+loop has ended (a clean pass, or the third pass's fixes with the remaining findings noted
+as the user's call), the pull request is not `BLOCKED`, and every CI check it has has
+passed. A stacked pull request waiting on its base, or one with no checks, is labeled when
+the rest holds, and the report says what it waits on. Use the REST call, because
+`gh pr edit` fails on this repository's old CLI, and read the labels back:
 
 ```bash
-gh api repos/TheRPGClub/TheRPGClub-bot/issues/<PR>/labels -f 'labels[]=Manual Review Needed'
+gh api repos/{owner}/{repo}/issues/<PR>/labels -f 'labels[]=Manual Review Needed' \
+  --jq '[.[].name] | join(", ")'
 ```
 
 The label is the handoff signal; a pull request without it is not ready for the user. Wait
-for CI in the foreground first, and never label one mid-loop or with a check failing.
-There is no ready signal. The skip, deviation, and run-link parts of the general report do
-not apply.
+for CI in the foreground first, and never label one mid-loop or with a check failing. A
+commit pushed after labeling, or feedback from the user, removes the label at once:
+
+```bash
+gh api -X DELETE repos/{owner}/{repo}/issues/<PR>/labels/Manual%20Review%20Needed
+```
+
+The session puts it back once the loop and CI are clean on the new head. The skip,
+deviation, and run-link parts of the general report do not apply.
 
 When the user later says they reviewed the PR, check it for comments and act on them
 instead of waiting to be asked again. Commits that answer them send the PR back through
