@@ -1,4 +1,4 @@
-import { apiGet, apiPatch, apiPost } from "../services/RpgClubApiClient.js";
+import { apiGet, apiPatch, apiPostOrThrow } from "../services/RpgClubApiClient.js";
 
 export type CollectionCsvImportStatus = "ACTIVE" | "PAUSED" | "COMPLETED" | "CANCELED";
 export type CollectionCsvImportItemStatus =
@@ -8,18 +8,6 @@ export type CollectionCsvImportItemStatus =
   | "SKIPPED"
   | "FAILED";
 export type CollectionCsvMatchConfidence = "EXACT" | "FUZZY" | "MANUAL";
-export type CollectionCsvImportResultReason =
-  | "AUTO_MATCH"
-  | "CSV_GAMEDB_ID"
-  | "CSV_IGDB_ID"
-  | "MANUAL_REMAP"
-  | "DUPLICATE"
-  | "MANUAL_SKIP"
-  | "NO_CANDIDATE"
-  | "INVALID_REMAP"
-  | "PLATFORM_UNRESOLVED"
-  | "ADD_FAILED"
-  | "INVALID_ROW";
 
 export interface ICollectionCsvImport {
   importId: number;
@@ -45,13 +33,41 @@ export interface ICollectionCsvImportItem {
   rawNote: string | null;
   rawGameDbId: number | null;
   rawIgdbId: number | null;
+  platformId: number | null;
+  ownershipType: string | null;
+  note: string | null;
   status: CollectionCsvImportItemStatus;
-  matchConfidence: CollectionCsvMatchConfidence | null;
-  matchCandidateJson: string | null;
   gameDbGameId: number | null;
   collectionEntryId: number | null;
-  resultReason: CollectionCsvImportResultReason | null;
+  resultReason: string | null;
   errorText: string | null;
+}
+
+export interface ICsvImportCandidate {
+  gameId: number;
+  title: string;
+}
+
+export interface ICsvImportIgdbCandidate {
+  igdbId: number;
+  name: string;
+  summary: string | null;
+  firstReleaseDate: Date | null;
+  alreadyImported: boolean;
+}
+
+export interface ICsvImportCounts {
+  byStatus: Record<string, number>;
+  byResultReason: Record<string, number>;
+}
+
+export interface ICsvImportReview {
+  import: ICollectionCsvImport;
+  /** Null when the import is completed, or when advance hit its cap and must run again. */
+  item: ICollectionCsvImportItem | null;
+  candidates: ICsvImportCandidate[];
+  matchConfidence: CollectionCsvMatchConfidence | null;
+  counts: ICsvImportCounts;
 }
 
 type CollectionCsvImportApiData = {
@@ -78,9 +94,10 @@ type CollectionCsvImportItemApiData = {
   raw_note: string | null;
   raw_gamedb_id: number | null;
   raw_igdb_id: number | null;
+  platform_id: number | null;
+  ownership_type: string | null;
+  note: string | null;
   status: string;
-  match_confidence: string | null;
-  match_candidate_json: string | null;
   gamedb_game_id: number | null;
   collection_entry_id: number | null;
   result_reason: string | null;
@@ -91,6 +108,22 @@ type CollectionCsvImportSummaryApiData = {
   import_id: number;
   by_status: Record<string, number>;
   by_result_reason: Record<string, number>;
+};
+
+type CsvImportReviewApiData = {
+  import: CollectionCsvImportApiData;
+  item: CollectionCsvImportItemApiData | null;
+  candidates: Array<{ game_id: number; title: string }>;
+  match_confidence: string | null;
+  counts: CollectionCsvImportSummaryApiData;
+};
+
+type CsvImportIgdbCandidateApiData = {
+  igdb_id: number;
+  name: string;
+  summary: string | null;
+  first_release_date: string | null;
+  already_imported: boolean;
 };
 
 function toDate(value: Date | string): Date {
@@ -124,53 +157,72 @@ function mapItem(row: CollectionCsvImportItemApiData): ICollectionCsvImportItem 
     rawNote: row.raw_note ?? null,
     rawGameDbId: row.raw_gamedb_id == null ? null : Number(row.raw_gamedb_id),
     rawIgdbId: row.raw_igdb_id == null ? null : Number(row.raw_igdb_id),
+    platformId: row.platform_id == null ? null : Number(row.platform_id),
+    ownershipType: row.ownership_type ?? null,
+    note: row.note ?? null,
     status: row.status.toUpperCase() as CollectionCsvImportItemStatus,
-    matchConfidence: (row.match_confidence as CollectionCsvMatchConfidence | null) ?? null,
-    matchCandidateJson: row.match_candidate_json ?? null,
     gameDbGameId: row.gamedb_game_id == null ? null : Number(row.gamedb_game_id),
     collectionEntryId: row.collection_entry_id == null ? null : Number(row.collection_entry_id),
-    resultReason: (row.result_reason as CollectionCsvImportResultReason | null) ?? null,
+    resultReason: row.result_reason ? row.result_reason.toUpperCase() : null,
     errorText: row.error_text ?? null,
   };
 }
 
-export async function createCollectionCsvImportSession(params: {
+function mapCounts(row: CollectionCsvImportSummaryApiData | undefined): ICsvImportCounts {
+  const byResultReason: Record<string, number> = {};
+  for (const [key, value] of Object.entries(row?.by_result_reason ?? {})) {
+    const trimmed = key.trim();
+    if (!trimmed.length) continue;
+    byResultReason[trimmed.toUpperCase()] = Number(value ?? 0);
+  }
+  return { byStatus: row?.by_status ?? {}, byResultReason };
+}
+
+export function mapCsvImportReview(row: CsvImportReviewApiData): ICsvImportReview {
+  return {
+    import: mapImport(row.import),
+    item: row.item ? mapItem(row.item) : null,
+    candidates: (row.candidates ?? []).map((candidate) => ({
+      gameId: Number(candidate.game_id),
+      title: candidate.title,
+    })),
+    matchConfidence: row.match_confidence
+      ? (row.match_confidence.toUpperCase() as CollectionCsvMatchConfidence)
+      : null,
+    counts: mapCounts(row.counts),
+  };
+}
+
+/**
+ * The create call parses and inserts the whole file and `advance` auto-applies up to 25
+ * rows, so both outlast the shared client's default timeout. A timed-out write is never
+ * retried, and the server can still finish it and leave an open import behind.
+ */
+const CSV_IMPORT_SLOW_REQUEST_TIMEOUT_MS = 120_000;
+
+/**
+ * Creates the import server-side from the raw file: the API parses and validates it and
+ * creates one pending item per row. A bad file is a 422 `invalid_csv` with the problems
+ * per line and column. Throws the AxiosError on any failure so the caller can show the
+ * request and response.
+ */
+export async function startCollectionCsvImport(params: {
   userId: string;
+  csvText: string;
   sourceFileName: string | null;
-  sourceFileSize: number | null;
-  templateVersion: string | null;
   testMode?: boolean;
-  items: Array<{
-    rowIndex: number;
-    rawTitle: string;
-    rawPlatform: string | null;
-    rawOwnershipType: string | null;
-    rawNote: string | null;
-    rawGameDbId: number | null;
-    rawIgdbId: number | null;
-  }>;
 }): Promise<ICollectionCsvImport> {
-  const result = await apiPost<{ data: CollectionCsvImportApiData }>(
+  const result = await apiPostOrThrow<{ data: CollectionCsvImportApiData }>(
     `/api/v1/users/${params.userId}/collection_csv_imports`,
     {
       data: {
+        csv_text: params.csvText,
         source_file_name: params.sourceFileName,
-        source_file_size: params.sourceFileSize,
-        template_version: params.templateVersion,
         test_mode: params.testMode ?? false,
-        items: params.items.map((item) => ({
-          row_index: item.rowIndex,
-          raw_title: item.rawTitle,
-          raw_platform: item.rawPlatform,
-          raw_ownership_type: item.rawOwnershipType,
-          raw_note: item.rawNote,
-          raw_gamedb_id: item.rawGameDbId,
-          raw_igdb_id: item.rawIgdbId,
-        })),
       },
     },
+    { timeout: CSV_IMPORT_SLOW_REQUEST_TIMEOUT_MS },
   );
-  if (!result?.data) throw new Error("Failed to create CSV collection import session.");
   return mapImport(result.data);
 }
 
@@ -203,13 +255,69 @@ export async function setCollectionCsvImportStatus(
   });
 }
 
-export async function updateCollectionCsvImportIndex(
-  importId: number,
-  currentIndex: number,
-): Promise<void> {
-  await apiPatch(`/api/v1/collection_csv_imports/${importId}`, {
-    data: { current_index: currentIndex },
-  });
+/**
+ * Moves the import to the next row that needs a person, auto-applying rows with a GameDB
+ * or IGDB id and single exact title matches on the way (up to 25 per call). The item is
+ * null when the import is completed, and also when the cap was hit while it is still
+ * active, in which case call it again.
+ */
+export async function advanceCollectionCsvImport(importId: number): Promise<ICsvImportReview> {
+  const result = await apiPostOrThrow<{ data: CsvImportReviewApiData }>(
+    `/api/v1/collection_csv_imports/${importId}/advance`,
+    undefined,
+    { timeout: CSV_IMPORT_SLOW_REQUEST_TIMEOUT_MS },
+  );
+  return mapCsvImportReview(result.data);
+}
+
+export async function applyCollectionCsvImportItem(
+  itemId: number,
+  target: { gameId: number } | { igdbId: number },
+): Promise<ICollectionCsvImportItem> {
+  const data = "gameId" in target ? { game_id: target.gameId } : { igdb_id: target.igdbId };
+  const result = await apiPostOrThrow<{ data: CollectionCsvImportItemApiData }>(
+    `/api/v1/collection_csv_import_items/${itemId}/apply`,
+    { data },
+  );
+  return mapItem(result.data);
+}
+
+export async function skipCollectionCsvImportItem(
+  itemId: number,
+): Promise<ICollectionCsvImportItem> {
+  const result = await apiPostOrThrow<{ data: CollectionCsvImportItemApiData }>(
+    `/api/v1/collection_csv_import_items/${itemId}/skip`,
+  );
+  return mapItem(result.data);
+}
+
+/** Searches GameDB again under another title; nothing is applied. */
+export async function remapCollectionCsvImportItem(
+  itemId: number,
+  title: string,
+): Promise<ICsvImportReview> {
+  const result = await apiPostOrThrow<{ data: CsvImportReviewApiData }>(
+    `/api/v1/collection_csv_import_items/${itemId}/remap`,
+    { data: { title } },
+  );
+  return mapCsvImportReview(result.data);
+}
+
+export async function getCsvImportIgdbCandidates(
+  itemId: number,
+  query?: string,
+): Promise<ICsvImportIgdbCandidate[]> {
+  const result = await apiGet<{ data: CsvImportIgdbCandidateApiData[] }>(
+    `/api/v1/collection_csv_import_items/${itemId}/igdb_candidates`,
+    query ? { params: { q: query } } : undefined,
+  );
+  return (result?.data ?? []).map((row) => ({
+    igdbId: Number(row.igdb_id),
+    name: row.name,
+    summary: row.summary ?? null,
+    firstReleaseDate: row.first_release_date ? toDate(row.first_release_date) : null,
+    alreadyImported: Boolean(row.already_imported),
+  }));
 }
 
 export async function getCollectionCsvImportItemById(
@@ -222,58 +330,21 @@ export async function getCollectionCsvImportItemById(
   return mapItem(result.data);
 }
 
-export async function getNextPendingCollectionCsvImportItem(
-  importId: number,
-): Promise<ICollectionCsvImportItem | null> {
-  const result = await apiGet<{ data: CollectionCsvImportItemApiData | null }>(
-    `/api/v1/collection_csv_imports/${importId}/items/next_pending`,
+export async function getCollectionCsvImportCounts(importId: number): Promise<ICsvImportCounts> {
+  const result = await apiGet<{ data: CollectionCsvImportSummaryApiData }>(
+    `/api/v1/collection_csv_imports/${importId}/summary`,
   );
-  if (!result?.data) return null;
-  return mapItem(result.data);
+  return mapCounts(result?.data);
 }
 
-export async function updateCollectionCsvImportItem(
-  itemId: number,
-  updates: {
-    status?: CollectionCsvImportItemStatus;
-    matchConfidence?: CollectionCsvMatchConfidence | null;
-    matchCandidateJson?: string | null;
-    gameDbGameId?: number | null;
-    collectionEntryId?: number | null;
-    resultReason?: CollectionCsvImportResultReason | null;
-    errorText?: string | null;
-  },
-): Promise<void> {
-  const data: Record<string, unknown> = {};
-
-  if (updates.status !== undefined) data.status = updates.status.toLowerCase();
-  if (updates.matchConfidence !== undefined) data.match_confidence = updates.matchConfidence;
-  if (updates.matchCandidateJson !== undefined) {
-    data.match_candidate_json = updates.matchCandidateJson;
-  }
-  if (updates.gameDbGameId !== undefined) data.gamedb_game_id = updates.gameDbGameId;
-  if (updates.collectionEntryId !== undefined) data.collection_entry_id = updates.collectionEntryId;
-  if (updates.resultReason !== undefined) data.result_reason = updates.resultReason;
-  if (updates.errorText !== undefined) data.error_text = updates.errorText;
-
-  if (!Object.keys(data).length) return;
-
-  await apiPatch(`/api/v1/collection_csv_import_items/${itemId}`, { data });
-}
-
-export async function countCollectionCsvImportItems(
-  importId: number,
-): Promise<{
+export function summarizeCsvImportCounts(counts: ICsvImportCounts): {
   pending: number;
   added: number;
   updated: number;
   skipped: number;
   failed: number;
-}> {
-  const result = await apiGet<{ data: CollectionCsvImportSummaryApiData }>(
-    `/api/v1/collection_csv_imports/${importId}/summary`,
-  );
-  const byStatus = result?.data?.by_status ?? {};
+} {
+  const byStatus = counts.byStatus;
   return {
     pending: Number(byStatus.pending ?? 0),
     added: Number(byStatus.added ?? 0),
@@ -281,13 +352,4 @@ export async function countCollectionCsvImportItems(
     skipped: Number(byStatus.skipped ?? 0),
     failed: Number(byStatus.failed ?? 0),
   };
-}
-
-export async function countCollectionCsvImportResultReasons(
-  importId: number,
-): Promise<Record<string, number>> {
-  const result = await apiGet<{ data: CollectionCsvImportSummaryApiData }>(
-    `/api/v1/collection_csv_imports/${importId}/summary`,
-  );
-  return result?.data?.by_result_reason ?? {};
 }

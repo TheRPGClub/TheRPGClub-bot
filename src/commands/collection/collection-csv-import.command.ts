@@ -6,7 +6,6 @@ import {
   ModalBuilder,
   ModalSubmitInteraction,
   StringSelectMenuInteraction,
-  ActionRowBuilder,
   type Attachment,
 } from "discord.js";
 import {
@@ -19,20 +18,21 @@ import {
   SlashOption,
 } from "discordx";
 import Game from "../../classes/Game.js";
-import UserGameCollection from "../../classes/UserGameCollection.js";
 import {
   type ICollectionCsvImport,
-  type ICollectionCsvImportItem,
-  countCollectionCsvImportItems,
-  countCollectionCsvImportResultReasons,
-  createCollectionCsvImportSession,
+  type ICsvImportReview,
+  advanceCollectionCsvImport,
+  applyCollectionCsvImportItem,
   getActiveCollectionCsvImportForUser,
   getCollectionCsvImportById,
+  getCollectionCsvImportCounts,
   getCollectionCsvImportItemById,
-  getNextPendingCollectionCsvImportItem,
+  getCsvImportIgdbCandidates,
+  remapCollectionCsvImportItem,
   setCollectionCsvImportStatus,
-  updateCollectionCsvImportIndex,
-  updateCollectionCsvImportItem,
+  skipCollectionCsvImportItem,
+  startCollectionCsvImport,
+  summarizeCsvImportCounts,
 } from "../../classes/CollectionCsvImport.js";
 import {
   resolveGameCompletionPlatformLabel,
@@ -47,19 +47,16 @@ import {
   sanitizeUserInput,
 } from "../../functions/InteractionUtils.js";
 import {
-  buildImportCandidates,
-  buildImportMatchConfidence,
-  isExactImportTitleMatch,
-  parseImportCandidates,
-  searchIgdbWithProgressiveTitleVariants,
-  type ImportCandidate,
-} from "../../functions/ImportCandidateUtils.js";
-import {
   buildComponentsV2Flags,
+  buildErrorReply,
   buildTextReply,
   buildTitledContainer,
 } from "../../functions/ComponentsV2Utils.js";
-import { OPEN_IMPORT_CONFLICT_LABEL, isOpenImportConflict } from "../../utilities/ApiErrorUtils.js";
+import {
+  OPEN_IMPORT_CONFLICT_LABEL,
+  buildCaughtErrorMessage,
+  isOpenImportConflict,
+} from "../../utilities/ApiErrorUtils.js";
 import {
   buildImportActionsContainer,
   buildImportMessageContainer,
@@ -73,442 +70,339 @@ import {
 import {
   buildImportCandidatesContainer,
   buildImportIgdbContainer,
-  buildImportReasonSummary,
 } from "./collection-import-ui.utils.js";
 import {
+  COLLECTION_CSV_EXAMPLE_NOTE,
+  COLLECTION_CSV_MAX_BYTES,
+  CSV_GAME_ID_INPUT_ID,
+  CSV_IMPORT_MAX_ADVANCE_CALLS,
+  CSV_REMAP_INPUT_ID,
   buildCollectionCsvChooseId,
   buildCollectionCsvGameIdModalId,
   buildCollectionCsvRemapModalId,
+  buildCollectionCsvTemplateAttachment,
+  buildCsvIgdbSelectOptions,
   buildCsvImportItemButtons,
   buildCsvImportItemMessage,
-  CSV_GAME_ID_INPUT_ID,
-  CSV_IMPORT_REASON_LABELS,
-  CSV_REMAP_INPUT_ID,
+  buildCsvImportReasonSummary,
+  buildCsvValidationLines,
+  describeCsvImportError,
+  fetchCsvAttachment,
+  getCsvImportErrorCode,
   logCsvImportEvent,
   parseCollectionCsvChooseId,
   parseCollectionCsvGameIdModalId,
   parseCollectionCsvImportActionId,
   parseCollectionCsvRemapModalId,
-  resolveCsvOwnershipType,
-  resolveCsvPlatformId,
+  readCsvValidationProblems,
 } from "./collection-csv-import.service.js";
-import { buildCollectionIgdbSelectOptions } from "./collection-game-resolve.utils.js";
 import {
-  COLLECTION_CSV_EXAMPLE_NOTE,
-  COLLECTION_CSV_TEMPLATE_VERSION,
-  buildCollectionCsvTemplateAttachment,
-  fetchCsvAttachment,
-  parseCollectionCsvImportText,
-} from "./collection-csv-import.service.js";
-import { createIgdbSession } from "../../services/IGDB/IgdbSelectService.js";
+  createResumableIgdbSession,
+  registerIgdbSelectFlow,
+} from "../../services/IGDB/IgdbSelectService.js";
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
 import { buildTextInputLabel } from "../../functions/uiComponents.js";
 import { safeIgnore } from "../../utilities/AsyncUtils.js";
 import { logError } from "../../utilities/LogUtils.js";
-import { importGameFromIgdb } from "../../functions/GameIgdbSync.js";
+
+type CsvImportInteraction =
+  | CommandInteraction
+  | ButtonInteraction
+  | StringSelectMenuInteraction
+  | ModalSubmitInteraction;
+
+type CsvIgdbContext = { ownerId: string; importId: number; itemId: number };
+
+function parseCsvIgdbContext(raw: unknown): CsvIgdbContext | null {
+  const value = raw as Partial<CsvIgdbContext> | null;
+  if (
+    !value ||
+    typeof value.ownerId !== "string" ||
+    !isPositiveInt(value.importId) ||
+    !isPositiveInt(value.itemId)
+  ) {
+    return null;
+  }
+  return { ownerId: value.ownerId, importId: value.importId, itemId: value.itemId };
+}
+
+/** Replaces the panel on a component or modal interaction, and replies otherwise. */
+async function sendCsvImportPanel(
+  interaction: CsvImportInteraction,
+  components: unknown[],
+): Promise<void> {
+  const payload = { content: null, components, flags: buildComponentsV2Flags(true) };
+  const shouldUpdate = interaction.isModalSubmit() ||
+    ((interaction.isButton() || interaction.isStringSelectMenu()) && canSafeReply(interaction));
+  if (shouldUpdate) {
+    await safeUpdate(interaction, payload);
+    return;
+  }
+  await safeReply(interaction, payload);
+}
+
+/**
+ * Shows an API failure with its full request and response. A failure the member can act
+ * on leads with a plain reason and skips the developer ping.
+ */
+async function reportCsvImportFailure(
+  interaction: CsvImportInteraction,
+  fallbackLabel: string,
+  error: unknown,
+  followUp: boolean,
+): Promise<void> {
+  const reason = describeCsvImportError(error);
+  const message = buildCaughtErrorMessage(reason ?? fallbackLabel, error, {
+    devPing: reason === null,
+  });
+  await safeReply(interaction, {
+    ...buildErrorReply(message, true),
+    ...(followUp ? { __forceFollowUp: true } : {}),
+  });
+}
+
+/** True when the API says the import or row moved on, so the panel just needs a redraw. */
+function isStaleCsvImportError(error: unknown): boolean {
+  const code = getCsvImportErrorCode(error);
+  return code === "import_not_active" || code === "item_not_pending";
+}
+
+/**
+ * Advances the import until a row needs a person. Each call auto-applies up to 25 rows,
+ * and a null item on an active import means the cap was hit, so it runs again.
+ */
+async function advanceToReviewItem(importId: number): Promise<ICsvImportReview> {
+  let review = await advanceCollectionCsvImport(importId);
+  for (
+    let calls = 1;
+    !review.item && review.import.status === "ACTIVE" && calls < CSV_IMPORT_MAX_ADVANCE_CALLS;
+    calls += 1
+  ) {
+    review = await advanceCollectionCsvImport(importId);
+  }
+  return review;
+}
+
+/** Advances the import and shows the row that needs a person, or the closing summary. */
+async function advanceAndRenderCsvImport(
+  interaction: CsvImportInteraction,
+  importId: number,
+  ownerId: string,
+): Promise<void> {
+  let review: ICsvImportReview;
+  try {
+    review = await advanceToReviewItem(importId);
+  } catch (error) {
+    if (isStaleCsvImportError(error)) {
+      await sendCsvImportPanel(interaction, [
+        buildImportTextContainer("This CSV import is no longer active."),
+      ]);
+      return;
+    }
+    await reportCsvImportFailure(interaction, "Failed to load the next CSV row", error, true);
+    return;
+  }
+  await renderCsvImportReview(interaction, review, ownerId);
+}
+
+/**
+ * Shows what an advance or remap returned. `igdbQuery` searches IGDB under another title,
+ * which a remap passes so the suggestions follow the new search.
+ */
+async function renderCsvImportReview(
+  interaction: CsvImportInteraction,
+  review: ICsvImportReview,
+  ownerId: string,
+  igdbQuery?: string,
+): Promise<void> {
+  const session = review.import;
+  if (session.userId !== ownerId) {
+    await sendCsvImportPanel(interaction, [
+      buildImportTextContainer("This CSV import session no longer exists."),
+    ]);
+    return;
+  }
+
+  const nextItem = review.item;
+  if (!nextItem) {
+    const stats = summarizeCsvImportCounts(review.counts);
+    if (session.status === "ACTIVE") {
+      await sendCsvImportPanel(interaction, [
+        buildImportTextContainer(
+          `CSV import #${session.importId} is still matching your rows ` +
+            `(${stats.pending} left). Use \`/collection import-csv action:resume\` to continue.`,
+        ),
+      ]);
+      return;
+    }
+    if (session.status !== "COMPLETED") {
+      await sendCsvImportPanel(interaction, [
+        buildImportTextContainer(
+          `CSV import #${session.importId} is ${session.status.toLowerCase()}.`,
+        ),
+      ]);
+      return;
+    }
+    logCsvImportEvent("completed", {
+      userId: ownerId,
+      importId: session.importId,
+      added: stats.added,
+      updated: stats.updated,
+      skipped: stats.skipped,
+      failed: stats.failed,
+    });
+    const reasonLines = buildCsvImportReasonSummary(review.counts.byResultReason);
+    const done = [
+      ...(session.testMode ? ["**TEST MODE** - nothing was persisted"] : []),
+      `## CSV Import #${session.importId}`,
+      "Import completed.",
+      `Added: ${stats.added}`,
+      `Updated: ${stats.updated}`,
+      `Skipped: ${stats.skipped}`,
+      `Failed: ${stats.failed}`,
+      ...(reasonLines.length ? ["", `Reasons: ${reasonLines.join(" | ")}`] : []),
+    ].join("\n");
+    await sendCsvImportPanel(interaction, [buildImportTextContainer(done)]);
+    return;
+  }
+
+  const candidates = review.candidates;
+  const igdbOptions = await loadIgdbOptions(nextItem.itemId, igdbQuery);
+  const igdbSession = createResumableIgdbSession({
+    ownerId,
+    options: igdbOptions,
+    flow: csvIgdbFlow,
+    context: { ownerId, importId: session.importId, itemId: nextItem.itemId },
+    location: { channelId: interaction.channelId, guildId: interaction.guildId },
+    emptyMessage: `No IGDB matches found for "${nextItem.rawTitle}". ` +
+      "Try Search a different title.",
+  });
+
+  const platformLabel = nextItem.platformId
+    ? await resolveGameCompletionPlatformLabel(nextItem.platformId)
+    : nextItem.rawPlatform ?? "No platform";
+  const content = buildCsvImportItemMessage({
+    importId: session.importId,
+    rowIndex: nextItem.rowIndex,
+    totalCount: session.totalCount,
+    title: nextItem.rawTitle,
+    platformLabel,
+    ownershipType: nextItem.ownershipType ?? nextItem.rawOwnershipType ?? "Digital",
+    note: nextItem.note ?? nextItem.rawNote,
+    sourceGameDbId: nextItem.rawGameDbId,
+    sourceIgdbId: nextItem.rawIgdbId,
+    testMode: session.testMode,
+  });
+  const guidance = candidates.length > 1
+    ? "Ambiguous match. Use Choose to select the right GameDB title."
+    : candidates.length === 1
+      ? "Single match found. Use Choose to confirm import."
+      : "No matches yet. Use Search a different title to search again or Skip.";
+  const helpText = "Use **Choose**, or choose **Search a different title**, " +
+    "**Enter GameDB or IGDB ID**, **Skip**, or **Pause**.";
+  const controlsRow = buildCsvImportItemButtons({
+    ownerId,
+    importId: session.importId,
+    itemId: nextItem.itemId,
+  });
+  const contentContainer = buildImportMessageContainer({
+    content,
+    thumbnailUrl: null,
+    logPrefix: "CsvImport",
+    logMeta: {
+      importId: session.importId,
+      itemId: nextItem.itemId,
+      rowIndex: nextItem.rowIndex,
+    },
+  });
+  const candidatesContainer = await buildImportCandidatesContainer({
+    ownerId,
+    importId: session.importId,
+    itemId: nextItem.itemId,
+    headerText: "### GameDB Match Candidates",
+    headerHelpText: candidates.length > 1 ? guidance : null,
+    candidates,
+    buildChooseCustomId: buildCollectionCsvChooseId,
+    logPrefix: "CsvImport",
+  });
+  const igdbContainer = buildImportIgdbContainer({
+    searchTitle: igdbQuery ?? nextItem.rawTitle,
+    igdbRows: igdbSession.components,
+    noResultsText: igdbOptions.length
+      ? null
+      : "No IGDB matches found for this title. Try Search a different title.",
+  });
+  const actionsContainer = buildImportActionsContainer({
+    helpText,
+    controlRow: controlsRow,
+  });
+  const components = [contentContainer, candidatesContainer, igdbContainer, actionsContainer];
+  logImportComponentDiagnostics({
+    importId: session.importId,
+    itemId: nextItem.itemId,
+    rowIndex: nextItem.rowIndex,
+    components,
+    logPrefix: "CsvImport",
+    logEvent: logCsvImportEvent,
+  });
+
+  try {
+    await sendCsvImportPanel(interaction, components);
+  } catch (error) {
+    const messages = flattenErrorMessages(error);
+    logCsvImportEvent("render_failed", {
+      importId: session.importId,
+      itemId: nextItem.itemId,
+      rowIndex: nextItem.rowIndex,
+    });
+    logError("CsvImport.messageRender", {
+      importId: session.importId,
+      itemId: nextItem.itemId,
+      rowIndex: nextItem.rowIndex,
+      candidateCount: candidates.length,
+      messages,
+    });
+    throw error;
+  }
+}
+
+/** IGDB suggestions are a convenience, so a failed lookup leaves the list empty. */
+async function loadIgdbOptions(itemId: number, query?: string) {
+  try {
+    return buildCsvIgdbSelectOptions(await getCsvImportIgdbCandidates(itemId, query));
+  } catch (error) {
+    logError("CsvImport.igdbCandidates", { itemId, messages: flattenErrorMessages(error) });
+    return [];
+  }
+}
+
+// Registered at module load so an IGDB pick after a bot restart finds its handler.
+const csvIgdbFlow = registerIgdbSelectFlow<CsvIgdbContext>({
+  key: "collection-csv-import",
+  toJson: (context) => context,
+  fromJson: parseCsvIgdbContext,
+  onSelect: async (selection, igdbId, context) => {
+    try {
+      await applyCollectionCsvImportItem(context.itemId, { igdbId });
+      logCsvImportEvent("item_igdb_imported", {
+        userId: context.ownerId,
+        importId: context.importId,
+        itemId: context.itemId,
+        igdbId,
+      });
+    } catch (error) {
+      if (!isStaleCsvImportError(error)) {
+        await reportCsvImportFailure(selection, "Failed to import title from IGDB", error, true);
+        return;
+      }
+    }
+    await advanceAndRenderCsvImport(selection, context.importId, context.ownerId);
+  },
+});
 
 @Discord()
 @SlashGroup("collection")
 export class CollectionCsvImportCommand {
-  private async applyCsvImportSelection(params: {
-    ownerId: string;
-    item: ICollectionCsvImportItem;
-    gameId: number;
-    reason: "AUTO_MATCH" | "MANUAL_REMAP" | "CSV_GAMEDB_ID" | "CSV_IGDB_ID";
-  }): Promise<void> {
-    const platformId = params.item.rawPlatform
-      ? await resolveCsvPlatformId(params.item.rawPlatform)
-      : null;
-    const platformWarning = !platformId && params.item.rawPlatform
-      ? "Platform not recognized; imported without platform."
-      : null;
-    const ownershipType = resolveCsvOwnershipType(params.item.rawOwnershipType);
-    const note = params.item.rawNote ?? null;
-    const matchConfidence = params.reason === "AUTO_MATCH" ? "EXACT" : "MANUAL";
-
-    try {
-      const created = await UserGameCollection.addEntry({
-        userId: params.ownerId,
-        gameId: params.gameId,
-        platformId,
-        ownershipType,
-        note,
-      });
-      await updateCollectionCsvImportItem(params.item.itemId, {
-        status: "ADDED",
-        gameDbGameId: params.gameId,
-        collectionEntryId: created.entryId,
-        matchConfidence,
-        resultReason: platformWarning ? "PLATFORM_UNRESOLVED" : params.reason,
-        errorText: platformWarning,
-      });
-    } catch (error: any) {
-      const message = String(error?.message ?? "");
-      const isDuplicate = /already exists/i.test(message);
-      await updateCollectionCsvImportItem(params.item.itemId, {
-        status: isDuplicate ? "SKIPPED" : "FAILED",
-        gameDbGameId: params.gameId,
-        matchConfidence,
-        resultReason: isDuplicate ? "DUPLICATE" : "ADD_FAILED",
-        errorText: message || "Failed to add collection entry.",
-      });
-    }
-  }
-
-  async renderNextCsvImportItem(
-    interaction:
-      | CommandInteraction
-      | ButtonInteraction
-      | StringSelectMenuInteraction
-      | ModalSubmitInteraction,
-    importId: number,
-    ownerId: string,
-  ): Promise<void> {
-    const shouldUseInteractionUpdate =
-      (interaction.isButton() || interaction.isStringSelectMenu()) &&
-      canSafeReply(interaction);
-    const shouldUseModalUpdate = interaction.isModalSubmit();
-
-    const session = await getCollectionCsvImportById(importId);
-    if (!session || session.userId !== ownerId) {
-      const payload = {
-        content: null,
-        components: [buildImportTextContainer("This CSV import session no longer exists.")],
-        flags: buildComponentsV2Flags(true),
-      };
-      if (shouldUseInteractionUpdate || shouldUseModalUpdate) {
-        await safeUpdate(interaction, payload);
-      } else {
-        await safeReply(interaction, payload);
-      }
-      return;
-    }
-
-    if (session.status !== "ACTIVE") {
-      const payload = {
-        content: null,
-        components: [buildImportTextContainer(
-          `CSV import #${session.importId} is ${session.status.toLowerCase()}.`,
-        )],
-        flags: buildComponentsV2Flags(true),
-      };
-      if (shouldUseInteractionUpdate || shouldUseModalUpdate) {
-        await safeUpdate(interaction, payload);
-      } else {
-        await safeReply(interaction, payload);
-      }
-      return;
-    }
-
-    const nextItem = await getNextPendingCollectionCsvImportItem(session.importId);
-    if (!nextItem) {
-      await setCollectionCsvImportStatus(session.importId, "COMPLETED");
-      const stats = await countCollectionCsvImportItems(session.importId);
-      const reasonCounts = await countCollectionCsvImportResultReasons(session.importId);
-      logCsvImportEvent("completed", {
-        userId: ownerId,
-        importId: session.importId,
-        added: stats.added,
-        updated: stats.updated,
-        skipped: stats.skipped,
-        failed: stats.failed,
-      });
-      const reasonLines = buildImportReasonSummary(reasonCounts, CSV_IMPORT_REASON_LABELS);
-      const done = [
-        ...(session.testMode ? ["**TEST MODE** - nothing was persisted"] : []),
-        `## CSV Import #${session.importId}`,
-        "Import completed.",
-        `Added: ${stats.added}`,
-        `Updated: ${stats.updated}`,
-        `Skipped: ${stats.skipped}`,
-        `Failed: ${stats.failed}`,
-        ...(reasonLines.length ? ["", `Reasons: ${reasonLines.join(" | ")}`] : []),
-      ].join("\n");
-      const payload = {
-        content: null,
-        components: [buildImportTextContainer(done)],
-        flags: buildComponentsV2Flags(true),
-      };
-      if (shouldUseInteractionUpdate || shouldUseModalUpdate) {
-        await safeUpdate(interaction, payload);
-      } else {
-        await safeReply(interaction, payload);
-      }
-      return;
-    }
-
-    await updateCollectionCsvImportIndex(session.importId, nextItem.rowIndex);
-
-    if (nextItem.rawGameDbId) {
-      const game = await Game.getGameById(nextItem.rawGameDbId);
-      if (!game) {
-        await updateCollectionCsvImportItem(nextItem.itemId, {
-          status: "FAILED",
-          resultReason: "INVALID_ROW",
-          errorText: `GameDB id ${nextItem.rawGameDbId} was not found.`,
-        });
-        await this.renderNextCsvImportItem(interaction, session.importId, ownerId);
-        return;
-      }
-      await this.applyCsvImportSelection({
-        ownerId,
-        item: nextItem,
-        gameId: game.id,
-        reason: "CSV_GAMEDB_ID",
-      });
-      logCsvImportEvent("item_csv_gamedb_id", {
-        userId: ownerId,
-        importId: session.importId,
-        itemId: nextItem.itemId,
-        gameDbGameId: game.id,
-      });
-      await this.renderNextCsvImportItem(interaction, session.importId, ownerId);
-      return;
-    }
-
-    if (nextItem.rawIgdbId) {
-      try {
-        const imported = await importGameFromIgdb(nextItem.rawIgdbId);
-        await this.applyCsvImportSelection({
-          ownerId,
-          item: nextItem,
-          gameId: imported.gameId,
-          reason: "CSV_IGDB_ID",
-        });
-        logCsvImportEvent("item_csv_igdb_id", {
-          userId: ownerId,
-          importId: session.importId,
-          itemId: nextItem.itemId,
-          igdbId: nextItem.rawIgdbId,
-          gameDbGameId: imported.gameId,
-        });
-      } catch (error: any) {
-        await updateCollectionCsvImportItem(nextItem.itemId, {
-          status: "FAILED",
-          resultReason: "INVALID_ROW",
-          errorText: error?.message ?? "Failed to import IGDB id.",
-        });
-      }
-      await this.renderNextCsvImportItem(interaction, session.importId, ownerId);
-      return;
-    }
-
-    let candidates = parseImportCandidates(nextItem.matchCandidateJson);
-    let igdbComponents: ActionRowBuilder<any>[] | null;
-    let igdbHasResults = false;
-    if (!candidates.length) {
-      candidates = await buildImportCandidates(nextItem.rawTitle);
-      const matchConfidence = buildImportMatchConfidence(nextItem.rawTitle, candidates);
-      await updateCollectionCsvImportItem(nextItem.itemId, {
-        matchCandidateJson: candidates.length ? JSON.stringify(candidates) : null,
-        matchConfidence,
-      });
-    }
-
-    try {
-      const igdbResults = await searchIgdbWithProgressiveTitleVariants(nextItem.rawTitle, 10);
-      igdbHasResults = igdbResults.length > 0;
-      const options = igdbHasResults ? await buildCollectionIgdbSelectOptions(igdbResults) : [];
-      const igdbSession = createIgdbSession(
-        ownerId,
-        options,
-        async (selectionInteraction, igdbId) => {
-          const currentSession = await getCollectionCsvImportById(session.importId);
-          if (
-            !currentSession ||
-            currentSession.userId !== ownerId ||
-            currentSession.status !== "ACTIVE"
-          ) {
-            await safeReply(selectionInteraction, {
-              ...buildTextReply("This CSV import session is no longer active.", true),
-              __forceFollowUp: true,
-            });
-            return;
-          }
-
-          const currentItem = await getCollectionCsvImportItemById(nextItem.itemId);
-          if (
-            !currentItem ||
-            currentItem.importId !== session.importId ||
-            currentItem.status !== "PENDING"
-          ) {
-            await safeReply(selectionInteraction, {
-              ...buildTextReply("This import row is no longer pending.", true),
-              __forceFollowUp: true,
-            });
-            return;
-          }
-
-          try {
-            const imported = await importGameFromIgdb(igdbId);
-            await updateCollectionCsvImportItem(currentItem.itemId, {
-              matchCandidateJson: JSON.stringify([{
-                gameId: imported.gameId,
-                title: imported.title,
-              } satisfies ImportCandidate]),
-              matchConfidence: "MANUAL",
-            });
-
-            await this.applyCsvImportSelection({
-              ownerId,
-              item: currentItem,
-              gameId: imported.gameId,
-              reason: "MANUAL_REMAP",
-            });
-            logCsvImportEvent("item_igdb_imported", {
-              userId: ownerId,
-              importId: session.importId,
-              itemId: currentItem.itemId,
-              gameDbGameId: imported.gameId,
-            });
-          } catch (error: any) {
-            await updateCollectionCsvImportItem(currentItem.itemId, {
-              resultReason: "ADD_FAILED",
-              errorText: error?.message ?? "Failed to import title from IGDB.",
-            });
-          }
-
-          await this.renderNextCsvImportItem(selectionInteraction, session.importId, ownerId);
-        },
-        undefined,
-        `No IGDB matches found for "${nextItem.rawTitle}". Try Search a different title.`,
-      );
-      igdbComponents = igdbSession.components;
-    } catch {
-      const igdbSession = createIgdbSession(
-        ownerId,
-        [],
-        async () => {},
-        undefined,
-        `No IGDB matches found for "${nextItem.rawTitle}". Try Search a different title.`,
-      );
-      igdbComponents = igdbSession.components;
-    }
-
-    const singleExactCandidate = candidates.length === 1 &&
-      isExactImportTitleMatch(nextItem.rawTitle, candidates[0].title)
-      ? candidates[0]
-      : null;
-    if (singleExactCandidate) {
-      await this.applyCsvImportSelection({
-        ownerId,
-        item: nextItem,
-        gameId: singleExactCandidate.gameId,
-        reason: "AUTO_MATCH",
-      });
-      logCsvImportEvent("item_auto_accepted_exact", {
-        userId: ownerId,
-        importId: session.importId,
-        itemId: nextItem.itemId,
-        gameDbGameId: singleExactCandidate.gameId,
-      });
-      await this.renderNextCsvImportItem(interaction, session.importId, ownerId);
-      return;
-    }
-
-    const resolvedPlatformId = nextItem.rawPlatform
-      ? await resolveCsvPlatformId(nextItem.rawPlatform)
-      : null;
-    const platformLabel = resolvedPlatformId
-      ? await resolveGameCompletionPlatformLabel(resolvedPlatformId)
-      : nextItem.rawPlatform ?? "No platform";
-    const content = buildCsvImportItemMessage({
-      importId: session.importId,
-      rowIndex: nextItem.rowIndex,
-      totalCount: session.totalCount,
-      title: nextItem.rawTitle,
-      platformLabel,
-      ownershipType: resolveCsvOwnershipType(nextItem.rawOwnershipType),
-      note: nextItem.rawNote,
-      sourceGameDbId: nextItem.rawGameDbId,
-      sourceIgdbId: nextItem.rawIgdbId,
-      testMode: session.testMode,
-    });
-    const guidance = candidates.length > 1
-      ? "Ambiguous match. Use Choose to select the right GameDB title."
-      : candidates.length === 1
-        ? "Single match found. Use Choose to confirm import."
-        : "No matches yet. Use Search a different title to search again or Skip.";
-    const helpText = "Use **Choose**, or choose **Search a different title**, " +
-      "**Enter GameDB or IGDB ID**, **Skip**, or **Pause**.";
-    const controlsRow = buildCsvImportItemButtons({
-      ownerId,
-      importId: session.importId,
-      itemId: nextItem.itemId,
-    });
-    const contentContainer = buildImportMessageContainer({
-      content,
-      thumbnailUrl: null,
-      logPrefix: "CsvImport",
-      logMeta: {
-        importId: session.importId,
-        itemId: nextItem.itemId,
-        rowIndex: nextItem.rowIndex,
-      },
-    });
-    const candidatesContainer = await buildImportCandidatesContainer({
-      ownerId,
-      importId: session.importId,
-      itemId: nextItem.itemId,
-      headerText: "### GameDB Match Candidates",
-      headerHelpText: candidates.length > 1 ? guidance : null,
-      candidates,
-      buildChooseCustomId: buildCollectionCsvChooseId,
-      logPrefix: "CsvImport",
-    });
-    const igdbContainer = buildImportIgdbContainer({
-      searchTitle: nextItem.rawTitle,
-      igdbRows: igdbComponents ?? [],
-      noResultsText: igdbHasResults
-        ? null
-        : "No IGDB matches found for this title. Try Search a different title.",
-    });
-    const actionsContainer = buildImportActionsContainer({
-      helpText,
-      controlRow: controlsRow,
-    });
-    const components = [contentContainer, candidatesContainer, igdbContainer, actionsContainer];
-    logImportComponentDiagnostics({
-      importId: session.importId,
-      itemId: nextItem.itemId,
-      rowIndex: nextItem.rowIndex,
-      components,
-      logPrefix: "CsvImport",
-      logEvent: logCsvImportEvent,
-    });
-
-    try {
-      if (shouldUseInteractionUpdate || shouldUseModalUpdate) {
-        await safeUpdate(interaction, {
-          content: null,
-          components,
-          flags: buildComponentsV2Flags(true),
-        });
-        return;
-      }
-      await safeReply(interaction, {
-        content: null,
-        components,
-        flags: buildComponentsV2Flags(true),
-      });
-    } catch (error) {
-      const messages = flattenErrorMessages(error);
-      logCsvImportEvent("render_failed", {
-        importId: session.importId,
-        itemId: nextItem.itemId,
-        rowIndex: nextItem.rowIndex,
-      });
-      logError("CsvImport.messageRender", {
-        importId: session.importId,
-        itemId: nextItem.itemId,
-        rowIndex: nextItem.rowIndex,
-        candidateCount: candidates.length,
-        messages,
-      });
-      throw error;
-    }
-  }
-
   @Slash({
     name: "import-csv",
     description: "Import your collection from a custom CSV template",
@@ -579,7 +473,8 @@ export class CollectionCsvImportCommand {
                 "Download the attached Excel template and fill in your rows.",
                 "Required column: `title`.",
                 "Optional columns: `platform`, `ownership_type`, `note`, `gamedb_id`, `igdb_id`.",
-                `Delete the example row marked "${COLLECTION_CSV_EXAMPLE_NOTE}" before exporting to CSV.`,
+                `Delete the example row marked "${COLLECTION_CSV_EXAMPLE_NOTE}" ` +
+                  "before exporting to CSV.",
                 "Then upload the CSV with `/collection import-csv action:start file:<csv>`.",
                 "Duplicates are detected by game, platform, and ownership type.",
               ].join("\n"),
@@ -604,6 +499,14 @@ export class CollectionCsvImportCommand {
           return;
         }
 
+        if (typeof file.size === "number" && file.size > COLLECTION_CSV_MAX_BYTES) {
+          await safeReply(
+            interaction,
+            buildTextReply("That CSV is larger than the 2 MB import limit.", true),
+          );
+          return;
+        }
+
         const csvText = await fetchCsvAttachment(file);
         if (!csvText) {
           await safeReply(
@@ -613,56 +516,33 @@ export class CollectionCsvImportCommand {
           return;
         }
 
-        const parsed = await parseCollectionCsvImportText(csvText);
-        if (parsed.errors.length) {
-          const lines = parsed.errors
-            .slice(0, 12)
-            .map((error) => `- Row ${error.rowIndex}, ${error.column}: ${error.message}`);
-          if (parsed.errors.length > 12) {
-            lines.push(`- ...and ${parsed.errors.length - 12} more`);
-          }
-          const template = await buildCollectionCsvTemplateAttachment();
-          await safeReply(interaction, {
-            ...buildTextReply(
-              [
-                "CSV validation failed. Fix the following issues and try again.",
-                "",
-                ...lines,
-              ].join("\n"),
-              false,
-            ),
-            files: [template],
-          });
-          return;
-        }
-
-        if (!parsed.rows.length) {
-          await safeReply(
-            interaction,
-            buildTextReply("CSV file contains no importable rows.", true),
-          );
-          return;
-        }
-
-        let session;
+        let session: ICollectionCsvImport;
         try {
-          session = await createCollectionCsvImportSession({
+          session = await startCollectionCsvImport({
             userId: interaction.user.id,
+            csvText,
             sourceFileName: file.name ?? null,
-            sourceFileSize: typeof file.size === "number" ? file.size : null,
-            templateVersion: COLLECTION_CSV_TEMPLATE_VERSION,
             testMode: testMode ?? false,
-            items: parsed.rows.map((row) => ({
-              rowIndex: row.rowIndex,
-              rawTitle: row.title,
-              rawPlatform: row.platformRaw,
-              rawOwnershipType: row.ownershipRaw,
-              rawNote: row.noteRaw,
-              rawGameDbId: row.sourceGameDbId,
-              rawIgdbId: row.sourceIgdbId,
-            })),
           });
         } catch (error: unknown) {
+          const problems = readCsvValidationProblems(error);
+          if (problems) {
+            const template = await buildCollectionCsvTemplateAttachment();
+            await safeReply(interaction, {
+              ...buildTextReply(
+                [
+                  "CSV validation failed. Fix the following issues and try again.",
+                  "",
+                  ...buildCsvValidationLines(problems),
+                ].join("\n"),
+                false,
+              ),
+              files: [template],
+            });
+            return;
+          }
+          // The request carries the whole file, so a conflict is told in plain text and
+          // anything else goes to the shared error handler.
           if (!isOpenImportConflict(error)) throw error;
           await safeReply(interaction, buildTextReply(OPEN_IMPORT_CONFLICT_LABEL, true));
           return;
@@ -670,27 +550,43 @@ export class CollectionCsvImportCommand {
         logCsvImportEvent("started", {
           userId: interaction.user.id,
           importId: session.importId,
-          total: parsed.rows.length,
+          total: session.totalCount,
         });
 
         await safeReply(
           interaction,
           buildTextReply(
-            `CSV import #${session.importId} created for **${parsed.rows.length}** rows. ` +
+            `CSV import #${session.importId} created for **${session.totalCount}** rows. ` +
               "Starting review now.",
             true,
           ),
         );
-        await this.renderNextCsvImportItem(interaction, session.importId, interaction.user.id);
+        try {
+          await advanceAndRenderCsvImport(interaction, session.importId, interaction.user.id);
+        } catch (error: unknown) {
+          logCsvImportEvent("first_panel_failed", {
+            userId: interaction.user.id,
+            importId: session.importId,
+            error: String((error as Error)?.message ?? "unknown"),
+          });
+          await safeReply(
+            interaction,
+            buildTextReply(
+              "The import was created, but the first row could not be shown. " +
+                "Use action:resume to continue.",
+              true,
+            ),
+          );
+        }
       },
       getActiveSession: (userId: string) => getActiveCollectionCsvImportForUser(userId),
       onMissingSession: async () => {
         await safeReply(interaction, buildTextReply("No active CSV import session found.", true));
       },
       onStatus: async (session) => {
-        const stats = await countCollectionCsvImportItems(session.importId);
-        const reasonCounts = await countCollectionCsvImportResultReasons(session.importId);
-        const reasonLines = buildImportReasonSummary(reasonCounts, CSV_IMPORT_REASON_LABELS);
+        const counts = await getCollectionCsvImportCounts(session.importId);
+        const stats = summarizeCsvImportCounts(counts);
+        const reasonLines = buildCsvImportReasonSummary(counts.byResultReason);
         const statusLine = `Status: ${session.status}` +
           (session.testMode ? " (TEST MODE)" : "");
         const countsLine = `**Pending** ${stats.pending} | **Added** ${stats.added}` +
@@ -713,7 +609,9 @@ export class CollectionCsvImportCommand {
       },
       onPause: async (session) => {
         await setCollectionCsvImportStatus(session.importId, "PAUSED");
-        const stats = await countCollectionCsvImportItems(session.importId);
+        const stats = summarizeCsvImportCounts(
+          await getCollectionCsvImportCounts(session.importId),
+        );
         logCsvImportEvent("paused", {
           userId: interaction.user.id,
           importId: session.importId,
@@ -731,7 +629,9 @@ export class CollectionCsvImportCommand {
       },
       onCancel: async (session) => {
         await setCollectionCsvImportStatus(session.importId, "CANCELED");
-        const stats = await countCollectionCsvImportItems(session.importId);
+        const stats = summarizeCsvImportCounts(
+          await getCollectionCsvImportCounts(session.importId),
+        );
         logCsvImportEvent("canceled", {
           userId: interaction.user.id,
           importId: session.importId,
@@ -757,7 +657,7 @@ export class CollectionCsvImportCommand {
           userId: interaction.user.id,
           importId: session.importId,
         });
-        await this.renderNextCsvImportItem(interaction, session.importId, interaction.user.id);
+        await advanceAndRenderCsvImport(interaction, session.importId, interaction.user.id);
       },
     });
   }
@@ -775,70 +675,67 @@ export class CollectionCsvImportCommand {
       return;
     }
 
-    if (await replyIfNotOwner(interaction, parsed.ownerId, "This CSV import control is not for you.")) return;
-
-    const session = await getCollectionCsvImportById(parsed.importId);
-    if (!session || session.userId !== parsed.ownerId) {
-      await safeUpdate(interaction, {
-        content: null,
-        components: [buildImportTextContainer("This CSV import session no longer exists.")],
-        flags: buildComponentsV2Flags(true),
-      });
-      return;
-    }
-    if (session.status !== "ACTIVE") {
-      await safeUpdate(interaction, {
-        content: null,
-        components: [buildImportTextContainer(
-          `CSV import #${session.importId} is ${session.status.toLowerCase()}.`,
-        )],
-        flags: buildComponentsV2Flags(true),
-      });
-      return;
-    }
-
-    const item = await getNextPendingCollectionCsvImportItem(session.importId);
-    if (!item || item.itemId !== parsed.itemId) {
-      safeIgnore(safeDeferUpdate(interaction));
-      await this.renderNextCsvImportItem(interaction, session.importId, parsed.ownerId);
-      return;
-    }
+    if (
+      await replyIfNotOwner(interaction, parsed.ownerId, "This CSV import control is not for you.")
+    ) return;
 
     if (parsed.action === "pause") {
+      const session = await getCollectionCsvImportById(parsed.importId);
+      if (!session || session.userId !== parsed.ownerId) {
+        await sendCsvImportPanel(interaction, [
+          buildImportTextContainer("This CSV import session no longer exists."),
+        ]);
+        return;
+      }
+      if (session.status !== "ACTIVE") {
+        await sendCsvImportPanel(interaction, [
+          buildImportTextContainer(
+            `CSV import #${session.importId} is ${session.status.toLowerCase()}.`,
+          ),
+        ]);
+        return;
+      }
       await setCollectionCsvImportStatus(session.importId, "PAUSED");
-      await safeUpdate(interaction, {
-        content: null,
-        components: [buildImportTextContainer(
+      await sendCsvImportPanel(interaction, [
+        buildImportTextContainer(
           `CSV import #${session.importId} paused. ` +
           "Use `/collection import-csv action:resume` to continue.",
-        )],
-        flags: buildComponentsV2Flags(true),
-      });
+        ),
+      ]);
       return;
     }
 
     if (parsed.action === "skip") {
-      safeIgnore(safeDeferUpdate(interaction));
-      await updateCollectionCsvImportItem(item.itemId, {
-        status: "SKIPPED",
-        resultReason: "MANUAL_SKIP",
-        errorText: "Skipped by user.",
-      });
-      logCsvImportEvent("item_skipped", {
-        userId: parsed.ownerId,
-        importId: session.importId,
-        itemId: item.itemId,
-      });
-      await this.renderNextCsvImportItem(interaction, session.importId, parsed.ownerId);
+      await safeDeferUpdate(interaction);
+      try {
+        await skipCollectionCsvImportItem(parsed.itemId);
+        logCsvImportEvent("item_skipped", {
+          userId: parsed.ownerId,
+          importId: parsed.importId,
+          itemId: parsed.itemId,
+        });
+      } catch (error) {
+        if (!isStaleCsvImportError(error)) {
+          await reportCsvImportFailure(interaction, "Failed to skip that CSV row", error, true);
+          return;
+        }
+      }
+      await advanceAndRenderCsvImport(interaction, parsed.importId, parsed.ownerId);
       return;
     }
 
     if (parsed.action === "remap") {
+      const item = await getCollectionCsvImportItemById(parsed.itemId);
+      if (!item || item.importId !== parsed.importId || item.status !== "PENDING") {
+        await safeDeferUpdate(interaction);
+        await advanceAndRenderCsvImport(interaction, parsed.importId, parsed.ownerId);
+        return;
+      }
       const modal = new ModalBuilder()
         .setCustomId(
           buildCollectionCsvRemapModalId({
             ownerId: parsed.ownerId,
-            importId: session.importId,
+            importId: parsed.importId,
             itemId: item.itemId,
           }),
         )
@@ -860,8 +757,8 @@ export class CollectionCsvImportCommand {
         .setCustomId(
           buildCollectionCsvGameIdModalId({
             ownerId: parsed.ownerId,
-            importId: session.importId,
-            itemId: item.itemId,
+            importId: parsed.importId,
+            itemId: parsed.itemId,
           }),
         )
         .setTitle("CSV import: Enter GameDB ID");
@@ -883,49 +780,33 @@ export class CollectionCsvImportCommand {
   async onCsvImportChoose(interaction: ButtonInteraction): Promise<void> {
     const parsed = parseCollectionCsvChooseId(interaction.customId);
     if (!parsed) {
-      safeIgnore(safeReply(interaction, buildTextReply(
-        "This CSV import choice is invalid.",
-        true,
-      )));
+      safeIgnore(
+        safeReply(interaction, buildTextReply("This CSV import choice is invalid.", true)),
+      );
       return;
     }
 
-    if (await replyIfNotOwner(interaction, parsed.ownerId, "This CSV import choice is not for you.")) return;
+    if (
+      await replyIfNotOwner(interaction, parsed.ownerId, "This CSV import choice is not for you.")
+    ) return;
 
-    const session = await getCollectionCsvImportById(parsed.importId);
-    if (!session || session.userId !== parsed.ownerId || session.status !== "ACTIVE") {
-      await safeUpdate(interaction, {
-        content: null,
-        components: [buildImportTextContainer(
-          "This CSV import session is no longer active.",
-        )],
-        flags: buildComponentsV2Flags(true),
+    await safeDeferUpdate(interaction);
+    try {
+      await applyCollectionCsvImportItem(parsed.itemId, { gameId: parsed.gameId });
+      logCsvImportEvent("item_selected", {
+        userId: parsed.ownerId,
+        importId: parsed.importId,
+        itemId: parsed.itemId,
+        gameDbGameId: parsed.gameId,
       });
-      return;
+    } catch (error) {
+      if (!isStaleCsvImportError(error)) {
+        await reportCsvImportFailure(interaction, "Failed to add that game", error, true);
+        return;
+      }
     }
 
-    const item = await getNextPendingCollectionCsvImportItem(session.importId);
-    if (!item || item.itemId !== parsed.itemId) {
-      safeIgnore(safeDeferUpdate(interaction));
-      await this.renderNextCsvImportItem(interaction, session.importId, parsed.ownerId);
-      return;
-    }
-
-    safeIgnore(safeDeferUpdate(interaction));
-    await this.applyCsvImportSelection({
-      ownerId: parsed.ownerId,
-      item,
-      gameId: parsed.gameId,
-      reason: "MANUAL_REMAP",
-    });
-    logCsvImportEvent("item_selected", {
-      userId: parsed.ownerId,
-      importId: session.importId,
-      itemId: item.itemId,
-      gameDbGameId: parsed.gameId,
-    });
-
-    await this.renderNextCsvImportItem(interaction, session.importId, parsed.ownerId);
+    await advanceAndRenderCsvImport(interaction, parsed.importId, parsed.ownerId);
   }
 
   @ModalComponent({
@@ -934,42 +815,19 @@ export class CollectionCsvImportCommand {
   async onCsvImportRemapModal(interaction: ModalSubmitInteraction): Promise<void> {
     const parsed = parseCollectionCsvRemapModalId(interaction.customId);
     if (!parsed) {
-      safeIgnore(safeReply(interaction, buildTextReply(
-        "This remap form is invalid.",
-        true,
-      )));
+      safeIgnore(safeReply(interaction, buildTextReply("This remap form is invalid.", true)));
       return;
     }
 
-    if (await replyIfNotOwner(interaction, parsed.ownerId, "This remap form is not for you.")) return;
+    if (
+      await replyIfNotOwner(interaction, parsed.ownerId, "This remap form is not for you.")
+    ) return;
 
-    const session = await getCollectionCsvImportById(parsed.importId);
-    if (!session || session.userId !== parsed.ownerId || session.status !== "ACTIVE") {
-      safeIgnore(safeReply(interaction, buildTextReply(
-        "This CSV import session is no longer active.",
-        true,
-      )));
-      return;
-    }
-
-    const item = await getNextPendingCollectionCsvImportItem(session.importId);
-    if (!item || item.itemId !== parsed.itemId) {
-      await safeUpdate(interaction, {
-        content: "This import row is no longer pending.",
-        components: [],
-      });
-      return;
-    }
-
-    const gameIdRaw = sanitizeUserInput(
+    const remapTitle = sanitizeUserInput(
       interaction.fields.getTextInputValue(CSV_REMAP_INPUT_ID) ?? "",
       { preserveNewlines: false, maxLength: 120 },
-    );
-    const remapTitle = gameIdRaw.trim();
+    ).trim();
     if (!remapTitle) {
-      await updateCollectionCsvImportItem(item.itemId, {
-        resultReason: "INVALID_REMAP",
-      });
       await safeUpdate(interaction, {
         content: "Enter a title to search for remap.",
         components: [],
@@ -977,42 +835,26 @@ export class CollectionCsvImportCommand {
       return;
     }
 
-    const remapCandidates = await buildImportCandidates(remapTitle);
-    if (!remapCandidates.length) {
-      await updateCollectionCsvImportItem(item.itemId, {
-        matchCandidateJson: null,
-        matchConfidence: null,
-        resultReason: "NO_CANDIDATE",
-        errorText: `No candidates found for remap search "${remapTitle}".`,
+    await safeDeferUpdate(interaction);
+    let review: ICsvImportReview;
+    try {
+      review = await remapCollectionCsvImportItem(parsed.itemId, remapTitle);
+      logCsvImportEvent("item_remapped", {
+        userId: parsed.ownerId,
+        importId: parsed.importId,
+        itemId: parsed.itemId,
+        candidateCount: review.candidates.length,
       });
-      await safeUpdate(interaction, {
-        content:
-          `No GameDB matches found for "${remapTitle}". ` +
-          "Use Search a different title to try another title or Skip.",
-        components: [buildCsvImportItemButtons({
-          ownerId: parsed.ownerId,
-          importId: session.importId,
-          itemId: item.itemId,
-        })],
-      });
+    } catch (error) {
+      if (!isStaleCsvImportError(error)) {
+        await reportCsvImportFailure(interaction, "Failed to search for that title", error, true);
+        return;
+      }
+      await advanceAndRenderCsvImport(interaction, parsed.importId, parsed.ownerId);
       return;
     }
 
-    const remapMatchConfidence = buildImportMatchConfidence(remapTitle, remapCandidates);
-    await updateCollectionCsvImportItem(item.itemId, {
-      matchCandidateJson: JSON.stringify(remapCandidates),
-      matchConfidence: remapMatchConfidence,
-      resultReason: null,
-      errorText: null,
-    });
-    logCsvImportEvent("item_remapped", {
-      userId: parsed.ownerId,
-      importId: session.importId,
-      itemId: item.itemId,
-      candidateCount: remapCandidates.length,
-    });
-
-    await this.renderNextCsvImportItem(interaction, session.importId, parsed.ownerId);
+    await renderCsvImportReview(interaction, review, parsed.ownerId, remapTitle);
   }
 
   @ModalComponent({
@@ -1021,32 +863,13 @@ export class CollectionCsvImportCommand {
   async onCsvImportGameIdModal(interaction: ModalSubmitInteraction): Promise<void> {
     const parsed = parseCollectionCsvGameIdModalId(interaction.customId);
     if (!parsed) {
-      safeIgnore(safeReply(interaction, buildTextReply(
-        "This GameDB ID form is invalid.",
-        true,
-      )));
+      safeIgnore(safeReply(interaction, buildTextReply("This GameDB ID form is invalid.", true)));
       return;
     }
 
-    if (await replyIfNotOwner(interaction, parsed.ownerId, "This GameDB ID form is not for you.")) return;
-
-    const session = await getCollectionCsvImportById(parsed.importId);
-    if (!session || session.userId !== parsed.ownerId || session.status !== "ACTIVE") {
-      safeIgnore(safeReply(interaction, buildTextReply(
-        "This CSV import session is no longer active.",
-        true,
-      )));
-      return;
-    }
-
-    const item = await getNextPendingCollectionCsvImportItem(session.importId);
-    if (!item || item.itemId !== parsed.itemId) {
-      await safeUpdate(interaction, {
-        content: "This import row is no longer pending.",
-        components: [],
-      });
-      return;
-    }
+    if (
+      await replyIfNotOwner(interaction, parsed.ownerId, "This GameDB ID form is not for you.")
+    ) return;
 
     const gameIdRaw = sanitizeUserInput(
       interaction.fields.getTextInputValue(CSV_GAME_ID_INPUT_ID) ?? "",
@@ -1061,45 +884,34 @@ export class CollectionCsvImportCommand {
       return;
     }
 
-    let resolvedGameId: number | null;
-    let source: "gamedb" | "igdb" | null = null;
-
-    const game = await Game.getGameById(enteredId);
-    if (game) {
-      resolvedGameId = game.id;
-      source = "gamedb";
-    } else {
-      try {
-        const imported = await importGameFromIgdb(enteredId);
-        resolvedGameId = imported.gameId;
-        source = "igdb";
-      } catch {
-        resolvedGameId = null;
+    await safeDeferUpdate(interaction);
+    try {
+      // A GameDB id wins; any other number is taken as an IGDB id the API imports.
+      const game = await Game.getGameById(enteredId);
+      const source = game ? "gamedb" : "igdb";
+      await applyCollectionCsvImportItem(
+        parsed.itemId,
+        game ? { gameId: game.id } : { igdbId: enteredId },
+      );
+      logCsvImportEvent("item_selected_by_game_id", {
+        userId: parsed.ownerId,
+        importId: parsed.importId,
+        itemId: parsed.itemId,
+        enteredId,
+        source,
+      });
+    } catch (error) {
+      if (!isStaleCsvImportError(error)) {
+        await reportCsvImportFailure(
+          interaction,
+          `Could not find or import game ID ${enteredId}`,
+          error,
+          true,
+        );
+        return;
       }
     }
 
-    if (!resolvedGameId) {
-      await safeUpdate(interaction, {
-        content: `Could not find or import game ID ${enteredId}.`,
-        components: [],
-      });
-      return;
-    }
-
-    await this.applyCsvImportSelection({
-      ownerId: parsed.ownerId,
-      item,
-      gameId: resolvedGameId,
-      reason: "MANUAL_REMAP",
-    });
-    logCsvImportEvent("item_selected_by_game_id", {
-      userId: parsed.ownerId,
-      importId: session.importId,
-      itemId: item.itemId,
-      gameDbGameId: resolvedGameId,
-      source: source ?? "unknown",
-    });
-
-    await this.renderNextCsvImportItem(interaction, session.importId, parsed.ownerId);
+    await advanceAndRenderCsvImport(interaction, parsed.importId, parsed.ownerId);
   }
 }
