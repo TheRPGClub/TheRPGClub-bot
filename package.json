@@ -38,7 +38,7 @@
     "googleapis": "^180.0.0",
     "luxon": "^3.7.2",
     "rss-parser": "^3.13.0",
-    "sharp": "^0.35.4",
+    "sharp": "^0.35.5",
     "user-agents": "^2.1.179",
     "write-excel-file": "^4.1.1"
   },
