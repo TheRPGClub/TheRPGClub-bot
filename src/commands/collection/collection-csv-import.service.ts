@@ -19,6 +19,7 @@ export type CollectionCsvImportButtonAction = "skip" | "remap" | "game-id" | "pa
 
 /** The API rejects a larger file, so say so before downloading and uploading it. */
 export const COLLECTION_CSV_MAX_BYTES = 2 * 1024 * 1024;
+const CSV_DOWNLOAD_TIMEOUT_MS = 30_000;
 
 /**
  * Each advance call auto-applies up to 25 rows, so a very large file needs many calls
@@ -84,6 +85,9 @@ export function readCsvValidationProblems(error: unknown): CsvValidationProblem[
 }
 
 export function buildCsvValidationLines(problems: CsvValidationProblem[]): string[] {
+  if (!problems.length) {
+    return ["- The server rejected the file without saying why. Compare it to the template."];
+  }
   const lines = problems
     .slice(0, CSV_VALIDATION_LINES_SHOWN)
     .map((problem) => `- Line ${problem.rowIndex}, ${problem.column}: ${problem.message}`);
@@ -430,7 +434,11 @@ export async function buildCollectionCsvTemplateAttachment(): Promise<Attachment
 
 export async function fetchCsvAttachment(attachment: Attachment): Promise<string | null> {
   try {
-    const response = await axios.get(attachment.url, { responseType: "arraybuffer" });
+    const response = await axios.get(attachment.url, {
+      responseType: "arraybuffer",
+      timeout: CSV_DOWNLOAD_TIMEOUT_MS,
+      maxContentLength: COLLECTION_CSV_MAX_BYTES,
+    });
     return Buffer.from(response.data).toString("utf-8").replace(/^﻿/, "");
   } catch {
     return null;

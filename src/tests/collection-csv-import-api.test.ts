@@ -268,3 +268,9 @@ test("advance, apply and remap call the item endpoints with the right bodies", a
   );
   assert.ok((requests[0]?.timeout ?? 0) > 20_000);
 });
+
+test("an invalid_csv with no per line problems still tells the member something", () => {
+  const lines = buildCsvValidationLines([]);
+  assert.equal(lines.length, 1);
+  assert.match(lines[0] ?? "", /template/);
+});
