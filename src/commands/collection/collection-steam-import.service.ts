@@ -1,10 +1,85 @@
+import axios from "axios";
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle } from "discord.js";
+import type { ISteamImportIgdbCandidate } from "../../classes/SteamCollectionImport.js";
 import { buildActionButton, buildButtonRow } from "../../functions/uiComponents.js";
 import { buildImportReasonSummary } from "./collection-import-ui.utils.js";
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
 import { parseCustomIdSegments } from "../../utilities/CustomIdUtils.js";
+import { truncateLabel } from "../../config/textLimits.js";
+import type { IgdbSelectOption } from "../../services/IGDB/IgdbSelectService.js";
 
 export type CollectionSteamImportButtonAction = "skip" | "remap" | "game-id" | "pause";
+
+/**
+ * Each advance call auto-applies up to 25 exact matches, so a very large library needs
+ * many calls before the first item that needs a person. Past this many calls the review
+ * stops and asks the member to resume.
+ */
+export const STEAM_IMPORT_MAX_ADVANCE_CALLS = 40;
+
+const STEAM_IMPORT_ERROR_MESSAGES: Record<string, string> = {
+  invalid_identifier:
+    "That is not a Steam profile. Use a profile URL, a vanity name, or a SteamID64.",
+  private_profile:
+    "That Steam profile or its game details are private. Make them public and try again.",
+  api_unavailable: "Steam could not be reached. Try again in a few minutes.",
+  api_unauthorized: "Steam rejected the server's request. Try again later.",
+  api_rate_limited: "Steam is rate limiting requests. Wait a few minutes and try again.",
+  steam_not_configured: "Steam imports are not set up on the server yet.",
+  import_not_active: "This Steam import is no longer active.",
+  item_not_pending: "This import row is no longer pending.",
+  game_not_found: "Could not find that game in GameDB.",
+  igdb_game_not_found: "Could not find that game on IGDB.",
+  game_id_or_igdb_id_required: "Enter a GameDB or IGDB ID.",
+  invalid_igdb_id: "That is not a valid IGDB ID.",
+  igdb_not_configured: "IGDB lookups are not set up on the server yet.",
+  igdb_request_failed: "IGDB could not be reached. Try again in a few minutes.",
+  title_required: "Enter a title to search for.",
+};
+
+const STEAM_IMPORT_OPEN_IMPORT_MESSAGE =
+  "You already have an open Steam import. " +
+  "Use action:resume, action:status, action:pause, or action:cancel.";
+
+/** The `error` code the API puts in a failed response body, if there is one. */
+export function getSteamImportErrorCode(error: unknown): string | null {
+  if (!axios.isAxiosError(error)) return null;
+  const code = (error.response?.data as { error?: unknown } | undefined)?.error;
+  return typeof code === "string" && code.trim() ? code.trim() : null;
+}
+
+/**
+ * A short reason for an API failure the member can act on, or null for anything
+ * unexpected. A 422 with no other known code is the one-open-import-per-kind rule.
+ */
+export function describeSteamImportError(error: unknown): string | null {
+  const code = getSteamImportErrorCode(error);
+  if (code && STEAM_IMPORT_ERROR_MESSAGES[code]) return STEAM_IMPORT_ERROR_MESSAGES[code];
+  if (axios.isAxiosError(error) && error.response?.status === 422) {
+    return STEAM_IMPORT_OPEN_IMPORT_MESSAGE;
+  }
+  return null;
+}
+
+export function buildSteamHeaderImageUrl(steamAppId: number): string {
+  return `https://cdn.cloudflare.steamstatic.com/steam/apps/${steamAppId}/header.jpg`;
+}
+
+export function buildSteamIgdbSelectOptions(
+  candidates: ISteamImportIgdbCandidate[],
+): IgdbSelectOption[] {
+  return candidates.slice(0, 50).map((candidate) => {
+    const year = candidate.firstReleaseDate
+      ? candidate.firstReleaseDate.getFullYear()
+      : "TBD";
+    const summary = (candidate.summary ?? "No summary").replace(/\s+/g, " ").trim();
+    return {
+      id: candidate.igdbId,
+      label: truncateLabel(`${candidate.name} (${year})`),
+      description: truncateLabel(summary),
+    };
+  });
+}
 
 export const STEAM_IMPORT_ACTION_PREFIX = "collection-steam-import-v1";
 export const STEAM_CHOOSE_PREFIX = "collection-steam-choose-v1";
@@ -20,7 +95,6 @@ export const STEAM_IMPORT_REASON_LABELS: Record<string, string> = {
   ADD_FAILED: "add-failed",
   PLATFORM_UNRESOLVED: "platform-unresolved",
   NO_CANDIDATE: "no-candidate",
-  INVALID_REMAP: "invalid-remap",
 };
 
 export function buildCollectionSteamImportActionId(params: {
@@ -174,14 +248,12 @@ export function buildSteamImportItemMessage(params: {
   totalCount: number;
   steamAppName: string;
   steamAppId: number;
-  steamReleaseYear: number | null;
 }): string {
-  const releaseText = params.steamReleaseYear ? ` | Release: ${params.steamReleaseYear}` : "";
   const steamStoreUrl = `https://store.steampowered.com/app/${params.steamAppId}/`;
   return (
     `## Steam Import #${params.importId}\n` +
     `Row ${params.rowIndex}/${params.totalCount}\n` +
-    `Steam: **${params.steamAppName}**${releaseText}\n` +
+    `Steam: **${params.steamAppName}**\n` +
     `[Open in Steam Store](${steamStoreUrl})`
   );
 }
