@@ -69,7 +69,7 @@ Ephemeral: yes
 /game-completion import-completionator action:status
 ```
 Expected: a public reply, "Completionator Import #", "Status: paused (TEST MODE)",
-"Pending:", "Imported:", and "Skipped:".
+"Pending:", "Added:", "Updated:", "Skipped:", and "Failed:".
 Ephemeral: no
 
 ### Step 7: Resume the import
