@@ -71,7 +71,7 @@ export function buildSteamIgdbSelectOptions(
 ): IgdbSelectOption[] {
   return candidates.slice(0, 50).map((candidate) => {
     const year = candidate.firstReleaseDate
-      ? candidate.firstReleaseDate.getFullYear()
+      ? candidate.firstReleaseDate.getUTCFullYear()
       : "TBD";
     const summary = (candidate.summary ?? "No summary").replace(/\s+/g, " ").trim();
     return {
