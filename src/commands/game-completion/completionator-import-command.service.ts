@@ -18,6 +18,7 @@ import {
   buildTextReply,
   safeV2TextContent,
 } from "../../functions/ComponentsV2Utils.js";
+import { OPEN_IMPORT_CONFLICT_LABEL, isOpenImportConflict } from "../../utilities/ApiErrorUtils.js";
 
 export async function handleCompletionatorImport(
   interaction: CommandInteraction,
@@ -38,6 +39,16 @@ export async function handleCompletionatorImport(
   }
 
   if (action === "start") {
+    const existing = await getActiveImportForUser(userId);
+    if (existing) {
+      await safeReply(interaction, buildTextReply(
+        `You already have import #${existing.importId} (${existing.status}). ` +
+        "Use action:resume, action:status, action:pause, or action:cancel.",
+        ephemeral,
+      ));
+      return;
+    }
+
     if (!file?.url) {
       const attachMsg = [
         "Please attach the Completionator CSV file.",
@@ -63,12 +74,19 @@ export async function handleCompletionatorImport(
       return;
     }
 
-    const session = await createImportSession({
-      userId,
-      sourceFilename: file.name ?? null,
-      testMode: testMode ?? false,
-      items: parsed,
-    });
+    let session;
+    try {
+      session = await createImportSession({
+        userId,
+        sourceFilename: file.name ?? null,
+        testMode: testMode ?? false,
+        items: parsed,
+      });
+    } catch (error: unknown) {
+      if (!isOpenImportConflict(error)) throw error;
+      await safeReply(interaction, buildTextReply(OPEN_IMPORT_CONFLICT_LABEL, ephemeral));
+      return;
+    }
 
     const threadService = new CompletionatorThreadService();
     const context = await threadService.getOrCreateCompletionatorThread(interaction, session);
@@ -101,9 +119,9 @@ export async function handleCompletionatorImport(
     safeV2TextContent(
       `## Completionator Import #${session.importId}\n` +
       `Status: ${session.status}${session.testMode ? " (TEST MODE)" : ""}\n\n` +
-      `**Pending:** ${stats.pending} | **Imported:** ${stats.imported} | ` +
+      `**Pending:** ${stats.pending} | **Added:** ${stats.added} | ` +
       `**Updated:** ${stats.updated} | **Skipped:** ${stats.skipped} | ` +
-      `**Errors:** ${stats.error}`,
+      `**Failed:** ${stats.failed}`,
       1000,
         ),
       );

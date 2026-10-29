@@ -221,9 +221,9 @@ export async function updateImportItem(
 export async function countImportItems(importId: number): Promise<{
   pending: number;
   skipped: number;
-  imported: number;
+  added: number;
   updated: number;
-  error: number;
+  failed: number;
 }> {
   const result = await apiGet<{ data: CompletionatorImportSummaryApiData }>(
     `/api/v1/completionator_imports/${importId}/summary`,
@@ -232,8 +232,8 @@ export async function countImportItems(importId: number): Promise<{
   return {
     pending: Number(byStatus.pending ?? 0),
     skipped: Number(byStatus.skipped ?? 0),
-    imported: Number(byStatus.imported ?? 0),
+    added: Number(byStatus.added ?? byStatus.imported ?? 0),
     updated: Number(byStatus.updated ?? 0),
-    error: Number(byStatus.error ?? 0),
+    failed: Number(byStatus.failed ?? byStatus.error ?? 0),
   };
 }
