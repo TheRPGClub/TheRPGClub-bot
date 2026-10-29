@@ -65,7 +65,11 @@ import {
   buildTextReply,
   buildTitledContainer,
 } from "../../functions/ComponentsV2Utils.js";
-import { buildCaughtErrorMessage } from "../../utilities/ApiErrorUtils.js";
+import {
+  OPEN_IMPORT_CONFLICT_LABEL,
+  buildCaughtErrorMessage,
+  isOpenImportConflict,
+} from "../../utilities/ApiErrorUtils.js";
 import {
   buildImportActionsContainer,
   buildImportMessageContainer,
@@ -615,6 +619,10 @@ export class CollectionSteamImportCommand {
             interaction.user.id,
           );
         } catch (error: any) {
+          if (isOpenImportConflict(error)) {
+            await safeReply(interaction, buildTextReply(OPEN_IMPORT_CONFLICT_LABEL, true));
+            return;
+          }
           logSteamImportEvent("start_failed", {
             userId: interaction.user.id,
             error: String(error?.message ?? "unknown"),
