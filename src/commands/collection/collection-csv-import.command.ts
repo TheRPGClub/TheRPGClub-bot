@@ -56,9 +56,15 @@ import {
 } from "../../functions/ImportCandidateUtils.js";
 import {
   buildComponentsV2Flags,
+  buildErrorReply,
   buildTextReply,
   buildTitledContainer,
 } from "../../functions/ComponentsV2Utils.js";
+import {
+  OPEN_IMPORT_CONFLICT_LABEL,
+  buildApiErrorMessage,
+  isOpenImportConflict,
+} from "../../utilities/ApiErrorUtils.js";
 import {
   buildImportActionsContainer,
   buildImportMessageContainer,
@@ -643,22 +649,32 @@ export class CollectionCsvImportCommand {
           return;
         }
 
-        const session = await createCollectionCsvImportSession({
-          userId: interaction.user.id,
-          sourceFileName: file.name ?? null,
-          sourceFileSize: typeof file.size === "number" ? file.size : null,
-          templateVersion: COLLECTION_CSV_TEMPLATE_VERSION,
-          testMode: testMode ?? false,
-          items: parsed.rows.map((row) => ({
-            rowIndex: row.rowIndex,
-            rawTitle: row.title,
-            rawPlatform: row.platformRaw,
-            rawOwnershipType: row.ownershipRaw,
-            rawNote: row.noteRaw,
-            rawGameDbId: row.sourceGameDbId,
-            rawIgdbId: row.sourceIgdbId,
-          })),
-        });
+        let session;
+        try {
+          session = await createCollectionCsvImportSession({
+            userId: interaction.user.id,
+            sourceFileName: file.name ?? null,
+            sourceFileSize: typeof file.size === "number" ? file.size : null,
+            templateVersion: COLLECTION_CSV_TEMPLATE_VERSION,
+            testMode: testMode ?? false,
+            items: parsed.rows.map((row) => ({
+              rowIndex: row.rowIndex,
+              rawTitle: row.title,
+              rawPlatform: row.platformRaw,
+              rawOwnershipType: row.ownershipRaw,
+              rawNote: row.noteRaw,
+              rawGameDbId: row.sourceGameDbId,
+              rawIgdbId: row.sourceIgdbId,
+            })),
+          });
+        } catch (error: unknown) {
+          if (!isOpenImportConflict(error)) throw error;
+          await safeReply(
+            interaction,
+            buildErrorReply(buildApiErrorMessage(OPEN_IMPORT_CONFLICT_LABEL, error), true),
+          );
+          return;
+        }
         logCsvImportEvent("started", {
           userId: interaction.user.id,
           importId: session.importId,

@@ -224,3 +224,13 @@ export function buildCaughtErrorMessage(
   if (isDiscordRestError(err)) return buildDiscordErrorMessage(label, err, options);
   return buildApiErrorMessage(label, err, { ...options, devPing: false });
 }
+
+/** Shown when a member starts an import while one of the same kind is still open. */
+export const OPEN_IMPORT_CONFLICT_LABEL =
+  "You already have an open import of this kind. " +
+  "Use action:resume, action:status, action:pause, or action:cancel.";
+
+/** True for the 422 the API returns when a member already has an open import of a kind. */
+export function isOpenImportConflict(err: unknown): boolean {
+  return axios.isAxiosError(err) && err.response?.status === 422;
+}

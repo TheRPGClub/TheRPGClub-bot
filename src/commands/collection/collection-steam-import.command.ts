@@ -65,7 +65,11 @@ import {
   buildTextReply,
   buildTitledContainer,
 } from "../../functions/ComponentsV2Utils.js";
-import { buildCaughtErrorMessage } from "../../utilities/ApiErrorUtils.js";
+import {
+  OPEN_IMPORT_CONFLICT_LABEL,
+  buildCaughtErrorMessage,
+  isOpenImportConflict,
+} from "../../utilities/ApiErrorUtils.js";
 import {
   buildImportActionsContainer,
   buildImportMessageContainer,
@@ -626,7 +630,12 @@ export class CollectionSteamImportCommand {
           await safeReply(
             interaction,
             buildErrorReply(
-              buildCaughtErrorMessage("Failed to start Steam import", error),
+              buildCaughtErrorMessage(
+                isOpenImportConflict(error)
+                  ? OPEN_IMPORT_CONFLICT_LABEL
+                  : "Failed to start Steam import",
+                error,
+              ),
               true,
             ),
           );
