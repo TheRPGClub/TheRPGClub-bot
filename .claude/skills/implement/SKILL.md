@@ -100,7 +100,8 @@ gh issue view <N> --json number,title,state,labels,body,comments
 ```
 
 A closed issue stops the session with a report; the general skill's question about
-proceeding does not apply. The holder check replaces the general one. Already labeled `In Progress` and this
+proceeding does not apply. The holder check replaces the general one. Already labeled
+`In Progress` and this
 session did not apply it: another session may hold it. Look for its branch and pull
 request:
 
@@ -334,7 +335,8 @@ something to hand back to the user.
 The whole general subsection of this name is replaced, including its three-pass cap, its
 minor-findings rule, and its final-checks line. The loop in
 [self-review.md](../_shared/self-review.md), which `scripts/self_review_gate.py`
-enforces, applies instead. Once the PR is mergeable, without waiting for CI, move to `Self Review` and
+enforces, applies instead. Once the PR is mergeable, without waiting for CI, move to
+`Self Review` and
 run `code-review` at `high` on the PR number, read the diff against this repo's rules,
 fix every finding that holds, and run another full pass, until a pass comes back clean.
 Fill in the `Self review` section of the body as it goes.
