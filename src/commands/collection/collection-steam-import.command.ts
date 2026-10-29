@@ -470,7 +470,23 @@ export class CollectionSteamImportCommand {
               true,
             ),
           );
-          await renderNextSteamImportItem(interaction, session.importId, interaction.user.id);
+          try {
+            await renderNextSteamImportItem(interaction, session.importId, interaction.user.id);
+          } catch (error: unknown) {
+            logSteamImportEvent("first_panel_failed", {
+              userId: interaction.user.id,
+              importId: session.importId,
+              error: String((error as Error)?.message ?? "unknown"),
+            });
+            await safeReply(
+              interaction,
+              buildTextReply(
+                "The import was created, but the first game could not be shown. " +
+                  "Use action:resume to continue.",
+                true,
+              ),
+            );
+          }
         } catch (error: unknown) {
           logSteamImportEvent("start_failed", {
             userId: interaction.user.id,
@@ -726,6 +742,7 @@ export class CollectionSteamImportCommand {
       return;
     }
 
+    safeIgnore(safeDeferUpdate(interaction));
     try {
       const review = await remapSteamImportItem(parsed.itemId, remapTitle);
       logSteamImportEvent("item_remapped", {
@@ -769,6 +786,7 @@ export class CollectionSteamImportCommand {
       return;
     }
 
+    safeIgnore(safeDeferUpdate(interaction));
     try {
       // A GameDB id wins; any other number is taken as an IGDB id the API imports.
       const game = await Game.getGameById(enteredId);

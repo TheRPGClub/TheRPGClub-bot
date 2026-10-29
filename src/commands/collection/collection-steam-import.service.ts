@@ -6,6 +6,7 @@ import { buildImportReasonSummary } from "./collection-import-ui.utils.js";
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
 import { parseCustomIdSegments } from "../../utilities/CustomIdUtils.js";
 import { truncateLabel } from "../../config/textLimits.js";
+import { isOpenImportConflict } from "../../utilities/ApiErrorUtils.js";
 import type { IgdbSelectOption } from "../../services/IGDB/IgdbSelectService.js";
 
 export type CollectionSteamImportButtonAction = "skip" | "remap" | "game-id" | "pause";
@@ -50,14 +51,12 @@ export function getSteamImportErrorCode(error: unknown): string | null {
 
 /**
  * A short reason for an API failure the member can act on, or null for anything
- * unexpected. A 422 with no other known code is the one-open-import-per-kind rule.
+ * unexpected. The one-open-import-per-kind rule has no error code, only message text.
  */
 export function describeSteamImportError(error: unknown): string | null {
   const code = getSteamImportErrorCode(error);
   if (code && STEAM_IMPORT_ERROR_MESSAGES[code]) return STEAM_IMPORT_ERROR_MESSAGES[code];
-  if (axios.isAxiosError(error) && error.response?.status === 422) {
-    return STEAM_IMPORT_OPEN_IMPORT_MESSAGE;
-  }
+  if (isOpenImportConflict(error)) return STEAM_IMPORT_OPEN_IMPORT_MESSAGE;
   return null;
 }
 

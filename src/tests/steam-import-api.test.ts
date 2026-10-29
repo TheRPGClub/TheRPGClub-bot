@@ -42,9 +42,15 @@ test("each Steam error code from the API maps to a reason for the member", () =>
   }
 });
 
-test("a 422 with no Steam code is the one-open-import rule", () => {
-  const reason = describeSteamImportError(apiError(422, { error: "validation_failed" }));
+test("the one-open-import 422 is recognised by its message text", () => {
+  const reason = describeSteamImportError(
+    apiError(422, { error: "User already has an active or paused import" }),
+  );
   assert.match(reason ?? "", /already have an open Steam import/);
+});
+
+test("an unrelated 422 is not shown as the open-import rule", () => {
+  assert.equal(describeSteamImportError(apiError(422, { error: "validation_failed" })), null);
 });
 
 test("unknown failures have no member-facing reason", () => {
