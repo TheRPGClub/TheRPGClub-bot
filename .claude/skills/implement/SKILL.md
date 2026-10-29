@@ -31,7 +31,7 @@ Takes one argument: the issue number. `/implement 717`, `/implement #717`, and
 
 - `<asking-note>`: [asking-the-user.md](../_shared/asking-the-user.md)
 - `<in-progress-label>`: `In Progress`
-- `<ready-label>`: not used. The Section 9 report is the handoff.
+- `<ready-label>`: `Manual Review Needed`, applied to the pull request as Section 9 sets out
 - `<label-script>`: `gh issue edit <N> --add-label` (or `--remove-label`) followed by the
   read-back `gh issue view <N> --json labels`, as step 2 shows
 - `<labels-note>`: [issue-labels.md](../_shared/issue-labels.md)
@@ -370,8 +370,18 @@ Give the user:
   [test-commands.md](../_shared/test-commands.md). Only the user runs them; never
   dispatch a deploy.
 
-There is no ready label and no ready signal. The skip, deviation, and run-link parts of
-the general report do not apply.
+Before the report, label the pull request `Manual Review Needed` once the self review
+loop has ended clean, `mergeStateStatus` reads `CLEAN` and every CI check has passed. Use
+the REST call, because `gh pr edit` fails on this repository's old CLI:
+
+```bash
+gh api repos/TheRPGClub/TheRPGClub-bot/issues/<PR>/labels -f 'labels[]=Manual Review Needed'
+```
+
+The label is the handoff signal; a pull request without it is not ready for the user. Wait
+for CI in the foreground first, and never label one mid-loop or with a check failing.
+There is no ready signal. The skip, deviation, and run-link parts of the general report do
+not apply.
 
 When the user later says they reviewed the PR, check it for comments and act on them
 instead of waiting to be asked again. Commits that answer them send the PR back through
