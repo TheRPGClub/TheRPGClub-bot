@@ -23,7 +23,7 @@ import type { IGame } from "../types/GameTypes.js";
 import Game from "../classes/Game.js";
 import GameProfileService from "../classes/GameProfileService.js";
 import Member, { type ICompletionRecord } from "../classes/Member.js";
-import { ANNOUNCEMENT_CHANNEL_ID, BOT_DEV_CHANNEL_ID } from "../config/channels.js";
+import { BOT_DEV_CHANNEL_ID, WHATCHA_PLAYING_CHANNEL_ID } from "../config/channels.js";
 import {
   buildComponentsV2EditFlags,
   buildComponentsV2Flags,
@@ -193,7 +193,7 @@ export async function announceCompletion(
   isAdminOverride: boolean = false,
 ): Promise<void> {
   try {
-    const channel = await interaction.client.channels.fetch(ANNOUNCEMENT_CHANNEL_ID);
+    const channel = await interaction.client.channels.fetch(WHATCHA_PLAYING_CHANNEL_ID);
     if (!channel || !("send" in channel)) {
       return;
     }
