@@ -104,8 +104,8 @@ the user's review.
 ## Minor findings
 
 A nitpick, or an edge case no caller reaches, is noted under `Settled decisions` in the
-pull request body as minor and left unfixed. Only a real bug, a quotable rule broken, or a cost that can be pointed at is
-fixed.
+pull request body as minor and left unfixed. Only a real bug, a quotable rule broken, or a
+cost that can be pointed at is fixed.
 
 ## Settled decisions
 
