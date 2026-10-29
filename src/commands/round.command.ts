@@ -6,8 +6,7 @@ import {
   safeReply,
 } from "../functions/InteractionUtils.js";
 import { buildComponentsV2Flags, buildTextReply } from "../functions/ComponentsV2Utils.js";
-import Gotm from "../classes/Gotm.js";
-import NrGotm from "../classes/NrGotm.js";
+import { fetchCurrentGotmRound } from "../classes/GotmRounds.js";
 import {
   buildGotmCardsFromEntries,
   buildGotmSearchMessages,
@@ -34,16 +33,17 @@ export class CurrentRoundCommand {
     await deferWithPrivateFlag(interaction, privateFlag);
 
     await withErrorReply(interaction, async () => {
-      // The round being played is the latest one with winners; the round the
-      // API reports as current is the one still being nominated or voted on.
-      const roundNumber = Gotm.getLatestRound();
-      if (roundNumber === null) {
+      // The API's current GOTM round is the latest one with recorded winners, not the
+      // round being nominated or voted on.
+      const current = await fetchCurrentGotmRound();
+      if (!current) {
         await safeReply(interaction, buildTextReply("No GOTM round has been recorded yet.", true));
         return;
       }
 
-      const gotmEntries = Gotm.getByRound(roundNumber);
-      const nrGotmEntries = NrGotm.getByRound(roundNumber);
+      const roundNumber = current.round;
+      const gotmEntries = current.gotmEntries;
+      const nrGotmEntries = current.nrGotmEntries;
 
       const gotmMonthYear = gotmEntries[0]?.monthYear;
       const nrGotmMonthYear = nrGotmEntries[0]?.monthYear;
@@ -56,7 +56,10 @@ export class CurrentRoundCommand {
 
       const currentDescLines: string[] = [];
       const mainLine = `Round ${roundNumber}`;
-      const roundTitle = `Round ${roundNumber} - ${gotmMonthYear}`;
+      const titleMonthYear = gotmMonthYear ?? nrGotmMonthYear;
+      const roundTitle = titleMonthYear
+        ? `Round ${roundNumber} - ${titleMonthYear}`
+        : `Round ${roundNumber}`;
 
       currentDescLines.push(mainLine);
 

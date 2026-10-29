@@ -213,13 +213,6 @@ export default class NrGotm {
     });
   }
 
-  static getByYear(year: number): INrGotmEntry[] {
-    ensureInitialized();
-    const yearNum = Number(year);
-    if (!Number.isFinite(yearNum)) return [];
-    return nrGotmData.filter((e) => parseYear(e.monthYear) === yearNum);
-  }
-
   static searchByTitle(query: string): INrGotmEntry[] {
     ensureInitialized();
     if (!query?.trim()) return [];
