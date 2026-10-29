@@ -334,7 +334,8 @@ export async function takeOffBacklogIfAlreadyPlaying(
     const nowPlaying = await Member.getNowPlaying(entry.userId);
     const playing = nowPlaying.find((item) => item.gameId === entry.gameId);
     if (!playing) return false;
-    // Same carry-over as Member.addNowPlaying: deleting the row would drop its note.
+    // The API leaves the backlog alone on 409, so carry the note over here: deleting the row
+    // would drop it.
     if (entry.note && !playing.note?.trim()) {
       await Member.updateNowPlayingNote(entry.userId, entry.gameId, entry.note);
     }
