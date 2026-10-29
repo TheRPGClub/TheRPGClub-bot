@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { createServer, type IncomingMessage, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import Member from "../classes/Member.js";
+import { UserFacingError } from "../utilities/ApiErrorUtils.js";
 import { takeOffBacklogIfAlreadyPlaying } from "../commands/backlog/backlog-list.service.js";
 
 type CapturedRequest = {
@@ -10,11 +11,6 @@ type CapturedRequest = {
   url: string;
   body: Record<string, unknown>;
 };
-
-const BACKLOG_ROWS = [
-  { entry_id: 11, user_id: "123", gamedb_game_id: 7, platform_id: 4, note: "from backlog" },
-  { entry_id: 12, user_id: "123", gamedb_game_id: 8, platform_id: 4, note: null },
-];
 
 // The API client caches a single axios instance keyed to the base URL it saw
 // first, so every test in this file shares one stub server.
@@ -29,17 +25,17 @@ async function readBody(req: IncomingMessage): Promise<Record<string, unknown>> 
 }
 
 function respond(method: string, url: string): { status: number; body: unknown } {
-  if (method === "GET" && url.startsWith("/api/v1/users/456/backlog")) {
-    return { status: 400, body: { error: "backlog unavailable" } };
+  if (method === "POST" && url.startsWith("/api/v1/users/790/now_playing")) {
+    return { status: 409, body: { error: "something_else" } };
+  }
+  if (method === "POST" && url.startsWith("/api/v1/users/789/now_playing")) {
+    return { status: 409, body: { error: "already_playing" } };
   }
   return { status: 200, body: respondOk(method, url) };
 }
 
 function respondOk(method: string, url: string): unknown {
   if (method === "GET" && /^\/api\/v1\/users\/\d+\/now_playing/.test(url)) return { data: [] };
-  if (method === "GET" && url.startsWith("/api/v1/users/123/backlog")) {
-    return { data: BACKLOG_ROWS, meta: { page: 1, pages: 1, count: 2, per: 200 } };
-  }
   if (method === "DELETE") return { deleted: true };
   return { data: {} };
 }
@@ -76,36 +72,37 @@ function nowPlayingPost(userId = "123"): CapturedRequest {
   return post;
 }
 
-test("addNowPlaying deletes the game's backlog entry and keeps its note", async () => {
+test("addNowPlaying leaves the backlog and its note to the API", async () => {
   await Member.addNowPlaying("123", 7, 4, null);
 
   assert.deepEqual(nowPlayingPost().body.data, {
     gamedb_game_id: 7,
     platform_id: 4,
-    note: "from backlog",
+    note: null,
   });
-  const deletes = requests.filter((r) => r.method === "DELETE").map((r) => r.url);
-  assert.deepEqual(deletes, ["/api/v1/backlog/11"]);
+  assert.equal(requests.filter((r) => r.method === "DELETE").length, 0);
+  assert.equal(requests.filter((r) => r.url.includes("/backlog")).length, 0);
 });
 
-test("addNowPlaying keeps its own note over the backlog note", async () => {
+test("addNowPlaying sends its own note", async () => {
   await Member.addNowPlaying("123", 7, 4, "fresh note");
 
   assert.equal((nowPlayingPost().body.data as any).note, "fresh note");
 });
 
-test("addNowPlaying deletes nothing when the game is not on the backlog", async () => {
-  await Member.addNowPlaying("123", 9, 4, null);
-
-  assert.equal((nowPlayingPost().body.data as any).note, null);
-  assert.equal(requests.filter((r) => r.method === "DELETE").length, 0);
+test("addNowPlaying turns a 409 already_playing into a friendly error", async () => {
+  await assert.rejects(
+    Member.addNowPlaying("789", 7, 4, null),
+    (err: unknown) =>
+      err instanceof UserFacingError && err.message.includes("already in your Now Playing"),
+  );
 });
 
-test("addNowPlaying still adds when the backlog lookup fails", async () => {
-  await Member.addNowPlaying("456", 7, 4, null);
-
-  assert.equal((nowPlayingPost("456").body.data as any).gamedb_game_id, 7);
-  assert.equal(requests.filter((r) => r.method === "DELETE").length, 0);
+test("addNowPlaying rethrows a 409 that is not already_playing", async () => {
+  await assert.rejects(
+    Member.addNowPlaying("790", 7, 4, null),
+    (err: unknown) => !(err instanceof UserFacingError),
+  );
 });
 
 function backlogEntry(note: string | null): any {
