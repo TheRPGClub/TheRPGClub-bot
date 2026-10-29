@@ -4,6 +4,7 @@
 usage: speechctl status [--json]
        speechctl skip | next | clear | pause | resume | toggle
        speechctl volume up|down|<0.0-2.0>
+       speechctl pace up|down|<0.5-1.5>
        speechctl voices | voice next|prev|<name>
        speechctl speaker <id>|reset
        speechctl noise|noise-w <0.0-2.0>|reset
@@ -23,6 +24,7 @@ failure.
 import fcntl
 import glob
 import json
+import math
 import os
 import signal
 import subprocess
@@ -244,6 +246,36 @@ def cmd_volume(arg):
             raise Bad("volume takes up, down or a number from 0.0 to 2.0")
     value = round(min(2.0, max(0.0, value)), 1)
     save_setting("volume", value)
+    print(value)
+
+
+def current_pace():
+    """The pace the hook uses: settings.json, else SPEAK_PIPER_LENGTH, else 0.85, passing over
+    any that is not a finite number so a step from a bad value starts at the default."""
+    for v in (settings().get("pace"), os.environ.get("SPEAK_PIPER_LENGTH")):
+        try:
+            v = float(v)
+        except (TypeError, ValueError):
+            continue
+        if math.isfinite(v):
+            return v
+    return 0.85
+
+
+def cmd_pace(arg):
+    """Piper's length scale, so a smaller pace is faster: up adds a step and down takes one off."""
+    msg = "pace takes up, down or a number from 0.5 to 1.5 (smaller is faster)"
+    if arg in ("up", "down"):
+        value = current_pace() + (0.05 if arg == "up" else -0.05)
+    else:
+        try:
+            value = float(arg)
+        except ValueError:
+            raise Bad(msg)
+        if not 0.5 <= value <= 1.5:  # also false for nan
+            raise Bad(msg)
+    value = round(min(1.5, max(0.5, value)), 2)
+    save_setting("pace", value)
     print(value)
 
 
@@ -479,6 +511,8 @@ def main(argv):
         globals()["cmd_" + cmd]()
     elif cmd == "volume" and len(rest) == 1:
         cmd_volume(rest[0])
+    elif cmd == "pace" and len(rest) == 1:
+        cmd_pace(rest[0])
     elif cmd in PIPER_RANGES and len(rest) == 1:
         cmd_piper_number(cmd, rest[0])
     elif cmd == "speaker" and len(rest) == 1:
@@ -490,7 +524,7 @@ def main(argv):
     elif cmd == "managed" and len(rest) == 2:
         cmd_managed(*rest)
     else:
-        raise Bad("usage: speechctl status|skip|next|clear|pause|resume|toggle|volume|voice(s)|speaker|noise|noise-w|silence|sessions|speech|managed")
+        raise Bad("usage: speechctl status|skip|next|clear|pause|resume|toggle|volume|pace|voice(s)|speaker|noise|noise-w|silence|sessions|speech|managed")
 
 
 if __name__ == "__main__":

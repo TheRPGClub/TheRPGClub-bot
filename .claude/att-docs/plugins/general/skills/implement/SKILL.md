@@ -21,6 +21,7 @@ tool, per `<asking-note>`.
 | `<asking-note>` | The repository's note on how a question is put to the user |
 | `<in-progress-label>` | The label that claims an issue for a session |
 | `<ready-label>` | The label the ready signal adds to a pull request |
+| `<preflight>` | The checks that run before an issue is claimed: required tools, secrets and variables, and services that must respond |
 | `<label-script>` | The command that adds or removes a label and reads it back |
 | `<labels-note>` | The repository's note on the label read-back and what a failed edit means |
 | `<area-label-rule>` | How an issue's area label is checked when it is picked up, if the repository keys issues to areas |
@@ -152,7 +153,16 @@ search `<reference-docs>` before treating the question as open. State the
 reading and the one it beat in the restated scope and again in the pull
 request body, so the review has something specific to overturn.
 
-## 2. Claim the issue with `<in-progress-label>`
+## 2. Preflight, then claim the issue with `<in-progress-label>`
+
+Preflight comes first. Run `<preflight>` before the label goes on, so a missing
+tool, secret or service stops the issue before it is claimed, not halfway
+through the work. Run only the checks the issue's likely files need. A check
+that fails stops the issue before it is claimed: a comment on the issue names
+the failed check and the exact fix (for example the install command), the
+issue is marked blocked the way the repository marks one, and the failure is
+put to the user with `AskUserQuestion`. A
+repository with no `<preflight>` skips this part.
 
 Gate: no branch is cut and no file is edited until the read-back shows the
 label on the issue. The label is what claims this issue's `<ownership-unit>`
