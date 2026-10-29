@@ -66,7 +66,7 @@ Takes one argument: the issue number. `/implement 717`, `/implement #717`, and
 - `<run-watch>`: [run-watch.md](../_shared/run-watch.md), with `scripts/catchup.py`
 - `<mergeability-note>`: [pr-mergeability.md](../_shared/pr-mergeability.md)
 - `<self-review>`: [self-review.md](../_shared/self-review.md)
-- `<ready-signal>`: not used
+- `<ready-signal>`: the `Manual Review Needed` label, applied under Section 9
 - `<instructions-file>`: `CLAUDE.md`
 - `<post-merge-checks>`: none
 - `<merge-cleanup>`: not used. Section 10 deletes the branch.
@@ -371,20 +371,39 @@ Give the user:
   dispatch a deploy.
 
 Before the report, label the pull request `Manual Review Needed` once the self review
-loop has ended clean, `mergeStateStatus` reads `CLEAN` and every CI check has passed. Use
-the REST call, because `gh pr edit` fails on this repository's old CLI:
+loop has ended (a clean pass, or the third pass's fixes with the remaining findings noted
+as the user's call), `mergeStateStatus` is neither `DIRTY` nor `UNKNOWN` (read it again
+after a few seconds when GitHub is still computing it), and no CI check is failing or
+pending. A stacked pull request that reads `BLOCKED` only because its base has not merged,
+or one with no checks, is labeled when the rest holds, and the report says what it waits
+on. Use the REST call, because
+`gh pr edit` fails on this repository's old CLI, and read the labels back:
 
 ```bash
-gh api repos/TheRPGClub/TheRPGClub-bot/issues/<PR>/labels -f 'labels[]=Manual Review Needed'
+gh api repos/{owner}/{repo}/issues/<PR>/labels -f 'labels[]=Manual Review Needed' \
+  --jq '[.[].name] | join(", ")'
 ```
 
 The label is the handoff signal; a pull request without it is not ready for the user. Wait
-for CI in the foreground first, and never label one mid-loop or with a check failing.
-There is no ready signal. The skip, deviation, and run-link parts of the general report do
-not apply.
+for CI in the foreground first, and never label one mid-loop or with a check failing. A
+commit pushed after labeling, or feedback from the user, removes the label at once (a 404
+means it was never on, which is fine):
 
-When the user later says they reviewed the PR, check it for comments and act on them
-instead of waiting to be asked again. Commits that answer them send the PR back through
+```bash
+gh api -X DELETE repos/{owner}/{repo}/issues/<PR>/labels/Manual%20Review%20Needed
+```
+
+The session puts it back once the loop and CI are clean on the new head, and straight
+away when the removal was for feedback that needed no commit. A commit pushed by anything
+else, such as the CI monitor's auto-fix, is the same case: take the label off and run the
+loop on the new head. Once labeled, put the line `PULL REQUEST <N> IS READY FOR YOUR REVIEW`
+in the report, the ready line the voice bridge reads, ahead of the test commands so they
+stay last. The hook ignores a `-X DELETE` call, so the removal never reads as an add. The
+skip, deviation, and run-link parts of the general report do not apply.
+
+When the user later says they reviewed the PR, remove the label as above, then check it
+for comments and act on them instead of waiting to be asked again. A failed conductor
+step removes it the same way. Commits that answer them send the PR back through
 the self review loop.
 
 When a conductor report lands on the PR (the CI monitor relays it as a comment, or the

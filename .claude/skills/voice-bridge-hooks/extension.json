@@ -1,6 +1,6 @@
 {
   "base": "voice-bridge-hooks",
-  "reviewLabel": "Ready for Review",
+  "reviewLabel": "Manual Review Needed",
   "reviewAnnouncement": "ready for review",
   "inProgressLabel": "In Progress",
   "mainBranch": "main",
