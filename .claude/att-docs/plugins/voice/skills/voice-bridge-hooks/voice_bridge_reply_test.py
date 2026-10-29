@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 """Tests for voice_bridge_reply.py. Run with: python3 voice_bridge_reply_test.py"""
-import io
 import json
 import os
 import sys
@@ -8,7 +7,6 @@ import tempfile
 import threading
 import time
 import unittest
-from unittest import mock
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import hook_config  # noqa: E402
@@ -143,6 +141,46 @@ class VoiceBridgeReplyTest(unittest.TestCase):
         self.assertEqual(hook.attention(payload, self.socket, self.root),
                          'a permission prompt for Bash, Push it')
         self.assertEqual(self.waiting(), 'a permission prompt for Bash, Push it')
+
+    def run_main(self, form, payload):
+        argv = ['voice_bridge_reply.py'] + ([form] if form else [])
+        stdin = tempfile.TemporaryFile('w+')
+        stdin.write(json.dumps(payload))
+        stdin.seek(0)
+        saved = (sys.argv, sys.stdin, os.environ.get('XDG_RUNTIME_DIR'),
+                 os.environ.get('CLAUDE_CODE_MESSAGING_SOCKET'))
+        sys.argv, sys.stdin = argv, stdin
+        os.environ['XDG_RUNTIME_DIR'] = self.runtime
+        os.environ['CLAUDE_CODE_MESSAGING_SOCKET'] = self.socket
+        try:
+            return hook.main()
+        finally:
+            sys.argv, sys.stdin = saved[0], saved[1]
+            for name, value in zip(('XDG_RUNTIME_DIR', 'CLAUDE_CODE_MESSAGING_SOCKET'), saved[2:]):
+                if value is None:
+                    os.environ.pop(name, None)
+                else:
+                    os.environ[name] = value
+            stdin.close()
+
+    def prepare_mark(self):
+        self.runtime = tempfile.mkdtemp()
+        self.root = os.path.join(self.runtime, 'voice-bridge')
+        os.makedirs(os.path.join(self.root, 'pending'))
+        hook.attention(self.prompt(), self.socket, self.root)
+        self.assertIsNotNone(self.waiting())
+
+    def test_a_removed_form_still_passed_by_an_old_hook_entry_does_nothing(self):
+        self.prepare_mark()
+        done = {'hook_event_name': 'PostToolUse', 'tool_name': 'Bash', 'session_id': 'abc'}
+        self.assertEqual(self.run_main('spoken', done), 0)
+        self.assertIsNotNone(self.waiting())
+
+    def test_an_unknown_form_does_nothing(self):
+        self.prepare_mark()
+        self.assertEqual(self.run_main('bogus', {'hook_event_name': 'Stop',
+                                                 'last_assistant_message': 'Done.'}), 0)
+        self.assertIsNotNone(self.waiting())
 
     def test_a_session_with_no_prompt_is_not_waiting(self):
         self.assertIsNone(self.waiting())
@@ -319,94 +357,6 @@ class VoiceBridgeReplyTest(unittest.TestCase):
         hook.milestone_stop(payload, self.socket, self.root, check=lambda p: True)
         self.assertEqual([(e['text'], e.get('kind')) for e in self.feed()],
                          [('Ready.', hook.MILESTONE)])
-
-    def spoken_on(self, session='abc'):
-        self.follow()
-        with open(os.path.join(self.root, 'follow', '4242.spoken'), 'w') as mode:
-            mode.write(session)
-
-    def spoken_note(self, event='UserPromptSubmit', session='abc'):
-        payload = {'session_id': session, 'hook_event_name': event}
-        return hook.spoken(payload, self.socket, self.root)
-
-    def test_spoken_mode_tells_the_session_once(self):
-        self.spoken_on()
-        self.assertEqual(self.spoken_note(), hook.SPOKEN_ON)
-        self.assertIsNone(self.spoken_note('PostToolUse'))
-        self.assertIsNone(self.spoken_note())
-
-    def test_spoken_mode_says_it_again_after_a_compaction(self):
-        self.spoken_on()
-        self.spoken_note()
-        self.assertEqual(self.spoken_note('SessionStart'), hook.SPOKEN_ON)
-        self.assertIsNone(self.spoken_note())
-
-    def test_spoken_mode_says_it_again_after_a_compaction_in_a_lapsed_follow(self):
-        self.spoken_on()
-        self.spoken_note()
-        old = time.time() - hook.FOLLOW_IDLE_SECONDS - 10
-        os.utime(os.path.join(self.root, 'follow', '4242'), (old, old))
-        self.assertIsNone(self.spoken_note('SessionStart'))
-        os.utime(os.path.join(self.root, 'follow', '4242'))
-        self.assertEqual(self.spoken_note(), hook.SPOKEN_ON)
-
-    def test_spoken_mode_follows_the_session_through_a_clear(self):
-        self.spoken_on()
-        self.spoken_note()
-        payload = {'session_id': 'fresh', 'hook_event_name': 'SessionStart', 'source': 'clear'}
-        self.assertEqual(hook.spoken(payload, self.socket, self.root), hook.SPOKEN_ON)
-        self.assertEqual(hook.read_marker(os.path.join(self.root, 'follow', '4242.spoken')),
-                         'fresh')
-        self.assertIsNone(self.spoken_note(session='fresh'))
-
-    def test_spoken_mode_ignores_a_start_that_is_not_a_clear(self):
-        self.spoken_on('earlier')
-        payload = {'session_id': 'fresh', 'hook_event_name': 'SessionStart', 'source': 'startup'}
-        self.assertIsNone(hook.spoken(payload, self.socket, self.root))
-        self.assertEqual(hook.read_marker(os.path.join(self.root, 'follow', '4242.spoken')),
-                         'earlier')
-
-    def test_spoken_mode_says_when_it_goes_off_and_then_nothing(self):
-        self.spoken_on()
-        self.spoken_note()
-        os.remove(os.path.join(self.root, 'follow', '4242.spoken'))
-        self.assertEqual(self.spoken_note('PostToolUse'), hook.SPOKEN_OFF)
-        self.assertFalse(os.path.exists(os.path.join(self.root, 'follow', '4242.spoken-told')))
-        self.assertIsNone(self.spoken_note('PostToolUse'))
-
-    def test_spoken_mode_says_nothing_for_another_sessions_marker(self):
-        self.spoken_on('earlier')
-        self.assertIsNone(self.spoken_note(session='abc'))
-        told = os.path.join(self.root, 'follow', '4242.spoken-told')
-        with open(told, 'w') as stamp:
-            stamp.write('earlier')
-        self.assertIsNone(self.spoken_note(session='abc'))
-        self.assertFalse(os.path.exists(told))
-
-    def test_spoken_mode_waits_while_the_follow_has_lapsed(self):
-        self.spoken_on()
-        old = time.time() - hook.FOLLOW_IDLE_SECONDS - 10
-        os.utime(os.path.join(self.root, 'follow', '4242'), (old, old))
-        self.assertIsNone(self.spoken_note())
-        os.utime(os.path.join(self.root, 'follow', '4242'))
-        self.assertEqual(self.spoken_note(), hook.SPOKEN_ON)
-
-    def test_spoken_mode_needs_a_socket_a_session_and_a_context_event(self):
-        self.spoken_on()
-        payload = {'session_id': 'abc', 'hook_event_name': 'UserPromptSubmit'}
-        self.assertIsNone(hook.spoken(payload, '', self.root))
-        self.assertIsNone(hook.spoken({**payload, 'session_id': ''}, self.socket, self.root))
-        self.assertIsNone(hook.spoken({**payload, 'hook_event_name': 'Stop'}, self.socket,
-                                      self.root))
-
-    def test_spoken_form_prints_the_note_as_additional_context(self):
-        self.spoken_on()
-        payload = {'session_id': 'abc', 'hook_event_name': 'PostToolUse'}
-        with mock.patch('sys.stdout', new_callable=io.StringIO) as out:
-            hook.print_spoken(payload, self.socket, self.root)
-            hook.print_spoken(payload, self.socket, self.root)
-        self.assertEqual(json.loads(out.getvalue()), {'hookSpecificOutput': {
-            'hookEventName': 'PostToolUse', 'additionalContext': hook.SPOKEN_ON}})
 
     def opened_payload(self, command, stdout):
         return {'tool_name': 'Bash', 'tool_input': {'command': command},

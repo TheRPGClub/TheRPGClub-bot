@@ -111,6 +111,12 @@ until_ 5 playing; "$CTL" toggle; check "$([[ -e $D/paused ]] && echo yes)" yes "
 "$CTL" toggle; check "$([[ -e $D/paused ]] && echo yes || echo no)" no "toggle resumes"
 until_ 10 gone $HOOK
 
+# --- a queue line carries its Markdown source after a tab
+fresh; touch "$D/paused"; queue "$(printf 'one\t"**one**"')" "two"
+check "$("$CTL" status --json | jq -c '.queues[0] | [.lines, .next]')" '[2,"one"]' \
+  "status shows a queued line's spoken text without its source"
+rm -f "$D/paused"; : > "$D/s1.queue"
+
 # --- a killed hook leaves no player and no now.json
 fresh; queue "one"; hook
 until_ 5 playing; PID=$(jq -r .player_pid "$D/now.json"); kill -TERM $HOOK
@@ -188,9 +194,16 @@ mkdir -p "$SPEAK_SESSIONS_DIR" "$SPEAK_PROC_DIR/10" "$SPEAK_PROC_DIR/11"
 jq -n '{pid:10,sessionId:"s1",name:"Overmind",cwd:"/x",kind:"interactive",status:"busy",messagingSocketPath:"/s/10.sock"}' > "$SPEAK_SESSIONS_DIR/10.json"
 jq -n '{pid:11,sessionId:"s2",name:"Widget",cwd:"/y",kind:"bg",messagingSocketPath:"/s/11.sock"}' > "$SPEAK_SESSIONS_DIR/11.json"
 mkfifo "$SPEAK_SESSIONS_DIR/10.key"
-queue "one"
-check "$(timeout 5 "$CTL" sessions --json | jq -c '[.[]|[.name,.speech,.queued,.background]]')" \
-  '[["Overmind","on",1,false],["Widget","alerts",0,true]]' "sessions lists the open sessions with their setting"
+queue "one"; : > "$D/s1.managed"
+check "$(timeout 5 "$CTL" sessions --json | jq -c '[.[]|[.name,.speech,.managed,.queued,.background]]')" \
+  '[["Overmind","on",true,1,false],["Widget","alerts",false,0,true]]' \
+  "sessions lists the open sessions with their settings"
+check "$(timeout 5 "$CTL" sessions | grep -c managed)" 1 "the sessions table flags a managed session"
+"$CTL" managed Widget on > /dev/null
+check "$([[ -e $D/s2.managed && ! -e $D/s2.replies ]] && echo set)" set "managed on writes .managed and leaves speech alone"
+"$CTL" managed Widget off > /dev/null
+check "$([[ ! -e $D/s2.managed ]] && echo cleared)" cleared "managed off removes .managed"
+"$CTL" managed Widget maybe 2> /dev/null; check "$?" 2 "managed takes only on or off"
 cp "$TRANSCRIPT" "$HOME/.claude/projects/p/s2.jsonl"
 
 "$CTL" speech Widget on > /dev/null
@@ -259,18 +272,31 @@ touch "$D/s1.muted"
 check "$(announce)" "" "an off session announces nothing"
 rm -f "$D/s1.muted"
 
-# --- /implement-with-speech and /implement
+# --- /implement makes a managed session and leaves speech alone
 prompt() {
   jq -cn --arg t "$TRANSCRIPT" --arg p "$1" '{hook_event_name:"UserPromptSubmit", session_id:"s1",
     transcript_path:$t, prompt:$p}' | "$HERE/speak-attention.sh" --config "$CONFIG"
 }
-rm -rf "$D"; mkdir -p "$D"; touch "$D/s1.muted"
-prompt "/implement-with-speech do it"
-check "$([[ -e $D/s1.replies && ! -e $D/s1.muted ]] && echo on)" on "/implement-with-speech sets On and clears Off"
+skill() {
+  jq -cn --arg t "$TRANSCRIPT" --arg s "$1" '{hook_event_name:"PostToolUse", tool_name:"Skill",
+    session_id:"s1", transcript_path:$t, tool_input:{skill:$s}}' |
+    "$HERE/speak-attention.sh" --config "$CONFIG"
+}
+rm -rf "$D"; mkdir -p "$D"
 prompt "/implement fix it"
-check "$([[ ! -e $D/s1.replies ]] && echo alerts)" alerts "/implement takes On to Alerts only"
-touch "$D/s1.muted"; prompt "/implement fix it"
-check "$([[ -e $D/s1.muted ]] && echo off)" off "/implement leaves Off alone"
+check "$([[ -e $D/s1.managed && ! -e $D/s1.replies ]] && echo managed)" managed \
+  "/implement makes a managed session and leaves speech at Alerts only"
+rm -rf "$D"; mkdir -p "$D"; : > "$D/s1.replies"
+prompt "/general:implement 7"
+check "$([[ -e $D/s1.managed && -e $D/s1.replies ]] && echo both)" both \
+  "/general:implement makes a managed session and leaves speech On"
+rm -rf "$D"; mkdir -p "$D"; touch "$D/s1.muted"
+skill general:implement
+check "$([[ -e $D/s1.managed && -e $D/s1.muted ]] && echo both)" both \
+  "a Skill call to implement makes a managed session and leaves Off alone"
+rm -rf "$D"; mkdir -p "$D"
+skill implement-something; prompt "/implementation 3"; prompt "please /implement 3"
+check "$([[ ! -e $D/s1.managed ]] && echo none)" none "only the implement skill itself makes a managed session"
 
 if ((fails)); then echo "$fails failed"; exit 1; fi
 echo "all passed"
