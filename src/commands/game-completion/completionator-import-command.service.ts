@@ -38,6 +38,16 @@ export async function handleCompletionatorImport(
   }
 
   if (action === "start") {
+    const existing = await getActiveImportForUser(userId);
+    if (existing) {
+      await safeReply(interaction, buildTextReply(
+        `You already have import #${existing.importId} (${existing.status}). ` +
+        "Use action:resume, action:status, action:pause, or action:cancel.",
+        ephemeral,
+      ));
+      return;
+    }
+
     if (!file?.url) {
       const attachMsg = [
         "Please attach the Completionator CSV file.",
