@@ -393,11 +393,13 @@ means it was never on, which is fine):
 gh api -X DELETE repos/{owner}/{repo}/issues/<PR>/labels/Manual%20Review%20Needed
 ```
 
-The session puts it back once the loop and CI are clean on the new head. Once labeled, end
-the report with `PULL REQUEST <N> IS READY FOR YOUR REVIEW`, the ready line the voice
-bridge reads. Never write the removal command with a space in the label name: the hook
-that announces the label would take it for an add. The skip,
-deviation, and run-link parts of the general report do not apply.
+The session puts it back once the loop and CI are clean on the new head, and straight
+away when the removal was for feedback that needed no commit. A commit pushed by anything
+else, such as the CI monitor's auto-fix, is the same case: take the label off and run the
+loop on the new head. Once labeled, put the line `PULL REQUEST <N> IS READY FOR YOUR REVIEW`
+in the report, the ready line the voice bridge reads, ahead of the test commands so they
+stay last. The hook ignores a `-X DELETE` call, so the removal never reads as an add. The
+skip, deviation, and run-link parts of the general report do not apply.
 
 When the user later says they reviewed the PR, remove the label as above, then check it
 for comments and act on them instead of waiting to be asked again. A failed conductor
