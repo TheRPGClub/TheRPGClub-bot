@@ -38,7 +38,12 @@ function redactDataUris(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(redactDataUris);
   if (value && typeof value === "object") {
     return Object.fromEntries(
-      Object.entries(value).map(([key, item]) => [key, redactDataUris(item)]),
+      Object.entries(value).map(([key, item]) => [
+        key,
+        key === "csv_text" && typeof item === "string"
+          ? `<${item.length} chars>`
+          : redactDataUris(item),
+      ]),
     );
   }
   return value;

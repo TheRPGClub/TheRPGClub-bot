@@ -8,18 +8,110 @@ import {
 } from "discord.js";
 import { buildActionButton, buildButtonRow } from "../../functions/uiComponents.js";
 import writeXlsxFile, { type Row } from "write-excel-file/node";
-import {
-  COLLECTION_OWNERSHIP_TYPES,
-  type CollectionOwnershipType,
-} from "../../classes/UserGameCollection.js";
-import { GAMEDB_CSV_PLATFORM_MAP } from "../../config/gamedbCsvPlatformMap.js";
-import { sanitizeUserInput } from "../../functions/InteractionUtils.js";
-import { resolveGameCompletionPlatformId } from "../game-completion/completion-autocomplete.utils.js";
+import type { ICsvImportIgdbCandidate } from "../../classes/CollectionCsvImport.js";
 import { buildImportReasonSummary } from "./collection-import-ui.utils.js";
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
 import { parseCustomIdSegments } from "../../utilities/CustomIdUtils.js";
+import { truncateLabel } from "../../config/textLimits.js";
+import type { IgdbSelectOption } from "../../services/IGDB/IgdbSelectService.js";
 
 export type CollectionCsvImportButtonAction = "skip" | "remap" | "game-id" | "pause";
+
+/** The API rejects a larger file, so say so before downloading and uploading it. */
+export const COLLECTION_CSV_MAX_BYTES = 2 * 1024 * 1024;
+const CSV_DOWNLOAD_TIMEOUT_MS = 30_000;
+
+/**
+ * Each advance call auto-applies up to 25 rows, so a very large file needs many calls
+ * before the first row that needs a person. Past this many calls the review stops and
+ * asks the member to resume.
+ */
+export const CSV_IMPORT_MAX_ADVANCE_CALLS = 40;
+
+const CSV_IMPORT_ERROR_MESSAGES: Record<string, string> = {
+  import_not_active: "This CSV import is no longer active.",
+  item_not_pending: "This import row is no longer pending.",
+  game_not_found: "Could not find that game in GameDB.",
+  igdb_game_not_found: "Could not find that game on IGDB.",
+  game_id_or_igdb_id_required: "Enter a GameDB or IGDB ID.",
+  invalid_igdb_id: "That is not a valid IGDB ID.",
+  igdb_not_configured: "IGDB lookups are not set up on the server yet.",
+  igdb_request_failed: "IGDB could not be reached. Try again in a few minutes.",
+  title_required: "Enter a title to search for.",
+};
+
+/** How many validation problems one reply lists before it summarises the rest. */
+const CSV_VALIDATION_LINES_SHOWN = 12;
+
+export type CsvValidationProblem = { rowIndex: number; column: string; message: string };
+
+/** The `error` code the API puts in a failed response body, if there is one. */
+export function getCsvImportErrorCode(error: unknown): string | null {
+  if (!axios.isAxiosError(error)) return null;
+  const code = (error.response?.data as { error?: unknown } | undefined)?.error;
+  return typeof code === "string" && code.trim() ? code.trim() : null;
+}
+
+/**
+ * A short reason for an API failure the member can act on during review, or null for
+ * anything unexpected. Starting an import has its own handling, because that request
+ * carries the whole file.
+ */
+export function describeCsvImportError(error: unknown): string | null {
+  const code = getCsvImportErrorCode(error);
+  if (code && Object.hasOwn(CSV_IMPORT_ERROR_MESSAGES, code)) {
+    return CSV_IMPORT_ERROR_MESSAGES[code] ?? null;
+  }
+  return null;
+}
+
+/**
+ * The per line and column problems of a 422 `invalid_csv`, or null for any other error.
+ * `row_index` is the physical line, with 1 being the header.
+ */
+export function readCsvValidationProblems(error: unknown): CsvValidationProblem[] | null {
+  if (getCsvImportErrorCode(error) !== "invalid_csv") return null;
+  const raw = (error as { response?: { data?: { errors?: unknown } } }).response?.data?.errors;
+  if (!Array.isArray(raw)) return [];
+  return raw.flatMap((entry): CsvValidationProblem[] => {
+    const value = entry as Partial<{ row_index: unknown; column: unknown; message: unknown }>;
+    if (typeof value?.message !== "string") return [];
+    return [{
+      rowIndex: Number(value.row_index ?? 0),
+      column: typeof value.column === "string" ? value.column : "file",
+      message: value.message,
+    }];
+  });
+}
+
+export function buildCsvValidationLines(problems: CsvValidationProblem[]): string[] {
+  if (!problems.length) {
+    return ["- The server rejected the file without saying why. Compare it to the template."];
+  }
+  const lines = problems
+    .slice(0, CSV_VALIDATION_LINES_SHOWN)
+    .map((problem) => `- Line ${problem.rowIndex}, ${problem.column}: ${problem.message}`);
+  if (problems.length > CSV_VALIDATION_LINES_SHOWN) {
+    lines.push(`- ...and ${problems.length - CSV_VALIDATION_LINES_SHOWN} more`);
+  }
+  return lines;
+}
+
+export function buildCsvIgdbSelectOptions(
+  candidates: ICsvImportIgdbCandidate[],
+): IgdbSelectOption[] {
+  return candidates.slice(0, 50).map((candidate) => {
+    const year = candidate.firstReleaseDate
+      ? candidate.firstReleaseDate.getUTCFullYear()
+      : "TBD";
+    const summary = (candidate.summary ?? "No summary").replace(/\s+/g, " ").trim();
+    return {
+      id: candidate.igdbId,
+      label: truncateLabel(`${candidate.name} (${year})`),
+      description: truncateLabel(summary),
+    };
+  });
+}
 
 export const CSV_IMPORT_ACTION_PREFIX = "collection-csv-import-v1";
 export const CSV_CHOOSE_PREFIX = "collection-csv-choose-v1";
@@ -258,54 +350,8 @@ export function buildCsvImportReasonSummary(reasonCounts: Record<string, number>
   return buildImportReasonSummary(reasonCounts, CSV_IMPORT_REASON_LABELS);
 }
 
-export type CollectionCsvParsedRow = {
-  rowIndex: number;
-  title: string;
-  platformRaw: string | null;
-  platformId: number | null;
-  ownershipRaw: string | null;
-  ownershipType: CollectionOwnershipType;
-  noteRaw: string | null;
-  note: string | null;
-  sourceGameDbId: number | null;
-  sourceIgdbId: number | null;
-};
-
-export type CsvValidationError = {
-  rowIndex: number;
-  column: string;
-  message: string;
-};
-
-export const COLLECTION_CSV_TEMPLATE_VERSION = "1.0";
 export const COLLECTION_CSV_TEMPLATE_FILENAME = "rpgclub_collection_import_template_v1.xlsx";
 export const COLLECTION_CSV_EXAMPLE_NOTE = "EXAMPLE ROW - DELETE BEFORE IMPORT";
-
-const HEADER_ALIASES: Record<string, string> = {
-  title: "title",
-  game: "title",
-  game_title: "title",
-  game_title_name: "title",
-  game_name: "title",
-  "game title": "title",
-  platform: "platform",
-  platform_name: "platform",
-  platform_id: "platform",
-  ownership: "ownership_type",
-  ownership_type: "ownership_type",
-  ownershiptype: "ownership_type",
-  "ownership type": "ownership_type",
-  note: "note",
-  notes: "note",
-  gamedb_id: "gamedb_id",
-  gamedb: "gamedb_id",
-  "gamedb id": "gamedb_id",
-  igdb_id: "igdb_id",
-  igdb: "igdb_id",
-  "igdb id": "igdb_id",
-};
-
-const REQUIRED_HEADERS = ["title"];
 
 const TEMPLATE_COLUMN_HEADERS = [
   "title",
@@ -388,327 +434,13 @@ export async function buildCollectionCsvTemplateAttachment(): Promise<Attachment
 
 export async function fetchCsvAttachment(attachment: Attachment): Promise<string | null> {
   try {
-    const response = await axios.get(attachment.url, { responseType: "arraybuffer" });
-    return Buffer.from(response.data).toString("utf-8");
+    const response = await axios.get(attachment.url, {
+      responseType: "arraybuffer",
+      timeout: CSV_DOWNLOAD_TIMEOUT_MS,
+      maxContentLength: COLLECTION_CSV_MAX_BYTES,
+    });
+    return Buffer.from(response.data).toString("utf-8").replace(/^\uFEFF/, "");
   } catch {
     return null;
   }
-}
-
-export async function parseCollectionCsvImportText(csvText: string): Promise<{
-  rows: CollectionCsvParsedRow[];
-  errors: CsvValidationError[];
-}> {
-  const normalizedText = csvText.replace(/^\uFEFF/, "");
-  const { rows, errors: parseErrors } = parseCsvText(normalizedText);
-  if (parseErrors.length) {
-    return { rows: [], errors: parseErrors };
-  }
-
-  if (!rows.length) {
-    return {
-      rows: [],
-      errors: [{
-        rowIndex: 1,
-        column: "file",
-        message: "CSV file is empty.",
-      }],
-    };
-  }
-
-  const [headerRow, ...dataRows] = rows;
-  const headerValues = headerRow?.values ?? [];
-  const headerMap = buildHeaderMap(headerValues);
-  const headerErrors = validateHeaders(headerMap);
-  if (headerErrors.length) {
-    return { rows: [], errors: headerErrors };
-  }
-
-  const results: CollectionCsvParsedRow[] = [];
-  const validationErrors: CsvValidationError[] = [];
-
-  for (const row of dataRows) {
-    const rowIndex = row.rowIndex;
-    const values = row.values;
-    if (values.every((value) => !String(value ?? "").trim())) {
-      continue;
-    }
-
-    const title = getColumnValue(values, headerMap, "title");
-    const platformRaw = getColumnValue(values, headerMap, "platform");
-    const ownershipRaw = getColumnValue(values, headerMap, "ownership_type");
-    const noteRaw = getColumnValue(values, headerMap, "note");
-    const gameDbRaw = getColumnValue(values, headerMap, "gamedb_id");
-    const igdbRaw = getColumnValue(values, headerMap, "igdb_id");
-
-    if (noteRaw && noteRaw.toUpperCase().includes("EXAMPLE ROW")) {
-      continue;
-    }
-
-    const rowErrors: CsvValidationError[] = [];
-    if (!title) {
-      rowErrors.push({
-        rowIndex,
-        column: "title",
-        message: "Title is required.",
-      });
-    }
-
-    let gameDbId: number | null = null;
-    if (gameDbRaw) {
-      gameDbId = parsePositiveInteger(gameDbRaw);
-      if (!gameDbId) {
-        rowErrors.push({
-          rowIndex,
-          column: "gamedb_id",
-          message: "GameDB id must be a positive number.",
-        });
-      }
-    }
-
-    let igdbId: number | null = null;
-    if (igdbRaw) {
-      igdbId = parsePositiveInteger(igdbRaw);
-      if (!igdbId) {
-        rowErrors.push({
-          rowIndex,
-          column: "igdb_id",
-          message: "IGDB id must be a positive number.",
-        });
-      }
-    }
-
-    if (gameDbId && igdbId) {
-      rowErrors.push({
-        rowIndex,
-        column: "gamedb_id",
-        message: "Provide only one of gamedb_id or igdb_id.",
-      });
-    }
-
-    const ownershipType = normalizeOwnershipType(ownershipRaw, rowIndex, rowErrors);
-
-    const note = noteRaw ? sanitizeValue(noteRaw) : null;
-    if (note && note.length > 500) {
-      rowErrors.push({
-        rowIndex,
-        column: "note",
-        message: "Note must be 500 characters or fewer.",
-      });
-    }
-
-    let platformId: number | null = null;
-    if (platformRaw) {
-      platformId = await resolveCsvPlatformId(platformRaw);
-      if (!platformId) {
-        rowErrors.push({
-          rowIndex,
-          column: "platform",
-          message: "Platform not recognized. Use a platform name or id.",
-        });
-      }
-    }
-
-    if (rowErrors.length) {
-      validationErrors.push(...rowErrors);
-      continue;
-    }
-
-    results.push({
-      rowIndex,
-      title,
-      platformRaw: platformRaw || null,
-      platformId,
-      ownershipRaw: ownershipRaw || null,
-      ownershipType,
-      noteRaw: noteRaw || null,
-      note: note ?? null,
-      sourceGameDbId: gameDbId,
-      sourceIgdbId: igdbId,
-    });
-  }
-
-  return { rows: results, errors: validationErrors };
-}
-
-function parseCsvText(csvText: string): {
-  rows: Array<{ rowIndex: number; values: string[] }>;
-  errors: CsvValidationError[];
-} {
-  const rows: Array<{ rowIndex: number; values: string[] }> = [];
-  const errors: CsvValidationError[] = [];
-
-  let currentRow: string[] = [];
-  let currentValue = "";
-  let inQuotes = false;
-  let rowIndex = 1;
-  let columnIndex = 1;
-
-  const pushValue = () => {
-    currentRow.push(currentValue);
-    currentValue = "";
-    columnIndex += 1;
-  };
-
-  const pushRow = () => {
-    rows.push({ rowIndex, values: currentRow });
-    currentRow = [];
-    rowIndex += 1;
-    columnIndex = 1;
-  };
-
-  for (let i = 0; i < csvText.length; i += 1) {
-    const char = csvText[i];
-    const next = csvText[i + 1];
-
-    if (char === "\"") {
-      if (inQuotes && next === "\"") {
-        currentValue += "\"";
-        i += 1;
-        continue;
-      }
-      inQuotes = !inQuotes;
-      continue;
-    }
-
-    if (char === "," && !inQuotes) {
-      pushValue();
-      continue;
-    }
-
-    if ((char === "\n" || char === "\r") && !inQuotes) {
-      pushValue();
-      pushRow();
-      if (char === "\r" && next === "\n") {
-        i += 1;
-      }
-      continue;
-    }
-
-    currentValue += char;
-  }
-
-  if (inQuotes) {
-    errors.push({
-      rowIndex,
-      column: `col${columnIndex}`,
-      message: "Unterminated quoted field.",
-    });
-  }
-
-  if (currentValue.length || currentRow.length) {
-    pushValue();
-    pushRow();
-  }
-
-  return { rows, errors };
-}
-
-function normalizeHeader(value: string): string {
-  const cleaned = value
-    .replace(/\uFEFF/g, "")
-    .trim()
-    .toLowerCase()
-    .replace(/[\s-]+/g, "_")
-    .replace(/[^\w]/g, "");
-  return cleaned;
-}
-
-function buildHeaderMap(headerRow: string[]): Map<string, number> {
-  const map = new Map<string, number>();
-  headerRow.forEach((value, index) => {
-    const normalized = normalizeHeader(String(value ?? ""));
-    const key = HEADER_ALIASES[normalized] ?? "";
-    if (!key || map.has(key)) return;
-    map.set(key, index);
-  });
-  return map;
-}
-
-function validateHeaders(headerMap: Map<string, number>): CsvValidationError[] {
-  const errors: CsvValidationError[] = [];
-  for (const required of REQUIRED_HEADERS) {
-    if (!headerMap.has(required)) {
-      errors.push({
-        rowIndex: 1,
-        column: required,
-        message: `Missing required column "${required}".`,
-      });
-    }
-  }
-  return errors;
-}
-
-function getColumnValue(
-  rowValues: string[],
-  headerMap: Map<string, number>,
-  column: string,
-): string {
-  const index = headerMap.get(column);
-  if (index == null) return "";
-  return sanitizeValue(rowValues[index] ?? "");
-}
-
-function sanitizeValue(value: string): string {
-  return sanitizeUserInput(value, { preserveNewlines: false }).trim();
-}
-
-function parsePositiveInteger(value: string): number | null {
-  const numeric = Number(value);
-  if (!isPositiveInt(numeric)) return null;
-  return numeric;
-}
-
-function normalizeOwnershipType(
-  rawValue: string,
-  rowIndex: number,
-  errors: CsvValidationError[],
-): CollectionOwnershipType {
-  const cleaned = rawValue ? rawValue.trim() : "";
-  if (!cleaned) {
-    return "Digital";
-  }
-  const match = COLLECTION_OWNERSHIP_TYPES.find((item) =>
-    item.toLowerCase() === cleaned.toLowerCase(),
-  );
-  if (!match) {
-    errors.push({
-      rowIndex,
-      column: "ownership_type",
-      message: "Ownership type must be Digital, Physical, Subscription, or Other.",
-    });
-    return "Digital";
-  }
-  return match;
-}
-
-export function resolveCsvOwnershipType(rawValue: string | null): CollectionOwnershipType {
-  const cleaned = rawValue ? rawValue.trim() : "";
-  if (!cleaned) return "Digital";
-  const match = COLLECTION_OWNERSHIP_TYPES.find((item) =>
-    item.toLowerCase() === cleaned.toLowerCase(),
-  );
-  return match ?? "Digital";
-}
-
-function normalizePlatformKey(value: string): string {
-  return value
-    .toLowerCase()
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-export async function resolveCsvPlatformId(rawValue: string): Promise<number | null> {
-  const normalized = normalizePlatformKey(rawValue);
-  if (!normalized) return null;
-
-  const mapped = GAMEDB_CSV_PLATFORM_MAP[normalized] ?? [];
-  const candidates = mapped.length ? mapped : [rawValue];
-
-  for (const candidate of candidates) {
-    const platformId = await resolveGameCompletionPlatformId(candidate);
-    if (platformId) return platformId;
-  }
-
-  return null;
 }

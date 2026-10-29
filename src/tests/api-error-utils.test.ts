@@ -195,3 +195,12 @@ test("formatApiError replaces a data URI in the request body with its size", () 
   assert.ok(message.includes("data:image/png;base64,<5000 chars>"));
   assert.ok(!message.includes("AAAAAAAA"));
 });
+
+test("formatApiError replaces a CSV upload in the request body with its size", () => {
+  const csv_text = "title\n" + "Portal\n".repeat(2000);
+  const body = { data: { csv_text, source_file_name: "games.csv" } };
+  const message = formatApiError("post", "/users/1/collection_csv_imports", body, 500, null);
+  assert.ok(message.includes(`"csv_text": "<${csv_text.length} chars>"`));
+  assert.ok(message.includes("games.csv"));
+  assert.ok(!message.includes("Portal"));
+});
