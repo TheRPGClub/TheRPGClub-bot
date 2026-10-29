@@ -101,9 +101,9 @@ export async function handleCompletionatorImport(
     safeV2TextContent(
       `## Completionator Import #${session.importId}\n` +
       `Status: ${session.status}${session.testMode ? " (TEST MODE)" : ""}\n\n` +
-      `**Pending:** ${stats.pending} | **Imported:** ${stats.imported} | ` +
+      `**Pending:** ${stats.pending} | **Added:** ${stats.added} | ` +
       `**Updated:** ${stats.updated} | **Skipped:** ${stats.skipped} | ` +
-      `**Errors:** ${stats.error}`,
+      `**Failed:** ${stats.failed}`,
       1000,
         ),
       );
