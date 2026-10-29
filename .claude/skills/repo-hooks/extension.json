@@ -1,0 +1,33 @@
+{
+  "prTestingGate": {
+    "checker": [
+      "node",
+      "--no-warnings=ExperimentalWarning",
+      "--import",
+      "tsx",
+      "scripts/check-pr-testing.ts"
+    ],
+    "checkerLabel": "npm run check:pr-testing -- <file>",
+    "failureMarker": "The ## Testing section cannot be parsed"
+  },
+  "mergeWatchReminder": {
+    "ledgerTool": "scripts/catchup.py",
+    "message": "Pull request <N> was opened. Before ending the turn, record it with `<ledgerTool> add-pr <ledger> <N> \"<label>\"` and make sure one `<ledgerTool> wait <ledger>` runs in the background, per .claude/skills/_shared/run-watch.md#waiting-on-a-pull-request. Once it is mergeable, without waiting for CI, review it per .claude/skills/_shared/self-review.md, fixing every real bug and reviewing again for at most three passes. Do not end the turn inside the loop: wait for CI in the foreground. When `wait` prints `pr: <N> merged`, run the after-merge steps straight away."
+  },
+  "testOnEdit": {
+    "testDir": "src/tests",
+    "testName": "<name>.test<ext>",
+    "extensions": [
+      ".ts"
+    ],
+    "command": [
+      "node",
+      "--no-warnings=ExperimentalWarning",
+      "--import",
+      "tsx",
+      "--test"
+    ],
+    "tailLines": 10
+  },
+  "prettierOnSave": {}
+}

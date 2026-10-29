@@ -3,9 +3,9 @@
 Shared by `/implement`, `/open-pr`, and any pull request a session opens
 outside a skill.
 Before a session hands a pull request to the user, it reviews the pull request
-itself, fixes everything the review finds, and reviews it again, round after
-round, until a pass finds nothing. The user's review starts from a pull request
-the session has already read as a reviewer, not as its author, and found clean.
+itself, fixes every real bug the review finds, and reviews it again, for at most
+three passes, stopping early on a pass that finds none. The user's review starts from a
+pull request the session has already read as a reviewer, not as its author.
 
 ## When it starts
 
@@ -13,21 +13,10 @@ The self review starts as soon as the pull request is open and mergeable per
 [pr-mergeability.md](pr-mergeability.md). It does not wait for CI first; CI
 gates the end of the loop, per [The loop](#the-loop).
 
-Move the session to the `Self Review` sidebar group as the review starts, per
-[sidebar-groups.md](sidebar-groups.md).
-
 The loop runs start to finish without handing anything to the user. The session
-does not end its turn while a loop is unfinished, does not move to
-`Needs Review`, and does not tell the user the pull request is ready or
-reviewed. "Partly reviewed" is never a state to report.
-
-`scripts/self_review_gate.py` enforces this. Its hooks record each
-`code-review` run and the finding count `ReportFindings` gives it, and they
-block ending the turn, and deny a move to `Needs Review`, until every pull
-request the session opened has a zero-finding pass at its current head, green
-CI (or no checks), and no conflict with its base. A pull request this session
-did not open is never put under the gate by reviewing it. When the gate
-blocks, do what its message says.
+does not end its turn while a loop is unfinished, and does not tell the user the
+pull request is ready or reviewed. "Partly reviewed" is never a state to report.
+Nothing enforces this: the session holds itself to it.
 
 ## One pass
 
@@ -37,7 +26,8 @@ not a pass and never counts as a clean one, however small the diff.
 
 A pass always reads the whole pull request as it stands at the branch head,
 not just the commits since the last pass. A fix can break something the fix
-commit alone does not show.
+commit alone does not show. This replaces the general skill's review of only the
+commits since the previous pass.
 
 1. Run the `code-review` skill on the pull request at `high`, with neither
    `--comment` nor `--fix`:
@@ -59,7 +49,8 @@ commit alone does not show.
    - `.oxlintrc.json` rules the lint run cannot see, such as intent;
    - the pull request body: `Closes #<N>` one per line, the `Testing` section
      in the shape `.github/pull-request-testing-format.md` sets, and the
-     `Judgment calls` heading when the skill that opened it asks for one.
+     `Judgment calls` heading when the skill that opened it asks for one, and the
+     `Settled decisions` heading.
 3. Check every finding before acting on it. Read the code the finding names. A
    finding holds when it names a concrete way the change goes wrong (a case
    that breaks, a restart that loses state, a rule skipped), a rule it breaks
@@ -73,26 +64,29 @@ commit alone does not show.
 ## The loop
 
 1. Run a pass.
-2. No finding holds: the loop is over. Go to [When it ends](#when-it-ends).
-3. Otherwise fix every finding that holds, on the branch, rerun the smoke test,
-   and push. Each finding is fixed; none is set aside for the user to pick up
-   at review. The session stays in `Self Review` while it fixes.
-4. Go straight back to 1. The next pass does not wait for CI: the smoke test
+2. No real bug holds: the loop is over. Go to [When it ends](#when-it-ends).
+3. Otherwise fix every real bug that holds, on the branch, rerun the smoke test,
+   and push. Minor findings are handled per [Minor findings](#minor-findings).
+4. Go back to 1, unless this was the third pass. The third pass's fixes get no
+   fourth review: rerun the smoke test, then go to [When it ends](#when-it-ends).
+   Otherwise go straight back to 1. The next pass does not wait for CI: the smoke test
    already ran locally, and the review reads the diff, not the checks.
 
-CI gates only the end of the loop. After a clean pass, wait for CI on that head
+CI gates only the end of the loop. After a clean pass, or the third pass's fixes, wait for CI
+on that head
 in the foreground, per
 [run-watch.md](run-watch.md#waiting-inside-a-self-review): a foreground
 `scripts/catchup.py wait <ledger>` with the Bash tool's maximum timeout, run
 again until the head's run has finished. Never end the turn to wait for it. A
-failed run is a finding: fix it, push, and go back to 1. CI runs on every pull
+failed run is a finding: fix it, push, and go back to 1, or after the third pass rerun
+the smoke test and wait again, with no further pass. CI runs on every pull
 request to `main`, whatever it touches. Only a pull request whose checks
 `gh pr checks <number>` still lists as none a minute after the push, such as
 one based on another branch, has nothing to wait on: the clean pass ends the
 loop.
 
-There is no cap on the number of passes. The loop ends on a clean pass and on
-nothing else.
+The loop runs at most three passes. It ends on a clean pass, or after the third
+pass's fixes.
 
 A false positive a later pass raises again, against code that has not changed
 since it was checked, does not count against a clean pass. Raised again against
@@ -101,11 +95,24 @@ code that has changed, it is checked again from scratch.
 A finding that holds but whose fix is the user's call, such as a scope line the
 issue does not draw, is put to the user with `AskUserQuestion`, per
 [asking-the-user.md](asking-the-user.md), rather than guessed at. The question
-waits inside the turn, so the session stays in `Self Review` and the loop does
-not end. With the answer it applies the fix and carries on with the loop.
+waits inside the turn, so the loop does not end. With the answer it applies the fix and
+carries on with the loop.
 
 The findings never go up as review comments on the pull request. Comments are
 the user's review.
+
+## Minor findings
+
+A nitpick, or an edge case no caller reaches, is noted under `Settled decisions` in the
+pull request body as minor and left unfixed. Only a real bug, a quotable rule broken, or a
+cost that can be pointed at is fixed.
+
+## Settled decisions
+
+The pull request body carries a `Settled decisions` section that records every finding a
+pass sorted, with its evidence and the commit it was checked against. Every pass but the
+first reads that section and sorts its findings by it: a finding already settled against
+unchanged code is not raised again.
 
 ## The `Self review` section
 
@@ -129,21 +136,22 @@ gh api -X PATCH repos/{owner}/{repo}/pulls/<pr-number> -F body=@<scratchpad>/pr-
 
 Commits pushed after the handoff, for the user's review comments or anything
 else, send the pull request back through the loop, starting with a full pass
-right after the push, in `Self Review`. As on the first run, CI gates only the
+right after the push. As on the first run, CI gates only the
 end of the loop.
 
 ## When it ends
 
-The review ends on a pass that finds nothing, with CI passed on the last push
+The review ends on a pass that finds nothing, or after the third pass's fixes, with CI
+passed on the last push
 and the pull request still reading as mergeable. A sibling branch can merge
 while the review runs, so read mergeability again rather than trusting the
 earlier read. A conflict resolved at that point is a new commit, so it goes
-back through the loop. Then the session moves to `Needs Review` and reports.
+back through the loop. Then the session reports.
 
 The report says in a line or two how many passes ran and what they found and
 fixed.
 
-## Merged before a clean pass
+## Merged before the review ended
 
 The user can merge while the loop is still running. The session says so in its
 report, then finishes the loop against the merged diff: it runs the remaining

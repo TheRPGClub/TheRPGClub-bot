@@ -90,20 +90,34 @@ one-watcher rule: stop a background `wait` already running on the ledger
 
 ## Waiting on a blocking issue
 
-A session that stops on an open dependency, per
-[sidebar-groups.md](sidebar-groups.md#blocked-by-another-issue), records the
-blocker and leaves one `wait` running on it. When the issue closes, `wait`
-prints
+A session is blocked when the skill stops because the work depends on something that has
+not landed: a `Depends on #X` or `Blocked by #X` issue still open, or a change it needs
+sitting in an unmerged pull request.
+
+1. Report the blocker to the user the way the skill says.
+2. Record the blocker in the session's ledger, and make sure one `wait` is running on it:
+
+   ```bash
+   scripts/catchup.py add-issue <ledger> <blocking issue> "<short label>"
+   ```
+
+   When the blocker is a pull request with no issue behind it, record it with `add-pr`
+   instead, and read its `pr: <number> merged` the same way.
+3. End the turn. The watcher is the only thing running.
+
+When the issue closes, `wait` prints
 
 ```
 done: <label> - <issue url>
   closed as completed at <time>
 issue: <number> closed
-sidebar: a blocking issue closed; move this session from Blocked to Working, ...
+next: a blocking issue closed; start the deferred task again from its first step
 ```
 
-and exits. The `sidebar:` line goes on to say the deferred task starts again
-from its first step. `closed as not planned` is a close too: the dependency will not
+and exits. Whichever comes first, the `wait` exit or the user invoking the session again,
+starts the task over from the skill's first step, because the blocker's merge may have
+changed the code or the issue. When the task's own issue is now closed, someone else
+finished it: report that and stop. `closed as not planned` is a close too: the dependency will not
 land, so the task starts over from its first step and the skill decides from
 there.
 
@@ -117,10 +131,8 @@ and leave the one watcher running:
 scripts/catchup.py add-pr <ledger> <pr-number> "<short label>"
 ```
 
-A `PostToolUse` hook, `scripts/remind-pr-merge-watch.sh`, reminds the session
-after each `gh pr create` that prints a pull request URL. A CI monitor event
-from the desktop app may also report the merge, but the session does not rely
-on it: the watcher catches the merge even when the app sends nothing.
+A CI monitor event from the desktop app may also report the merge, but the session does not
+rely on it: the watcher catches the merge even when the app sends nothing.
 
 The same command covers a pull request the session does not own, such as a
 blocker that has no issue behind it.
@@ -132,11 +144,11 @@ done: <label> - <pull request url>
   merged <sha> at <time>
 pr: <number> merged
 wait: <n> finished; <m> still open; ...
-sidebar: a pull request closed; ...
+next: a pull request closed; run the after-merge steps
 ```
 
 and exits. That exit is the cue to run the skill's after-merge steps straight
-away, without waiting for the user to report the merge, then follow the
-`sidebar:` line and run `wait` again if other rows are still open.
+away, without waiting for the user to report the merge, then run `wait` again
+if other rows are still open.
 `closed without merging` means the user closed it: report that and do nothing
 else to the branch.

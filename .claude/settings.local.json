@@ -3,7 +3,8 @@
     "typescript-lsp@claude-plugins-official": true,
     "code-simplifier@claude-plugins-official": true,
     "context7@claude-plugins-official": true,
-    "claude-code-setup@claude-plugins-official": true
+    "claude-code-setup@claude-plugins-official": true,
+    "general@att-docs": false
   },
   "permissions": {
     "allow": [
@@ -21,99 +22,43 @@
     ]
   },
   "hooks": {
-    "PostToolUse": [
-      {
-        "matcher": "Edit|Write",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "file=$(echo '$CLAUDE_TOOL_INPUT' | jq -r '.file_path // \"\"'); echo \"$file\" | grep -qE '\\.tsx?$' && npx prettier --write \"$file\" 2>/dev/null || true",
-            "statusMessage": "Formatting..."
-          }
-        ]
-      },
-      {
-        "matcher": "Edit|Write",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "file=$(echo '$CLAUDE_TOOL_INPUT' | jq -r '.file_path // \"\"'); echo \"$file\" | grep -qE '\\.tsx?$' && npx tsc --noEmit 2>&1 | tail -5 || true",
-            "statusMessage": "Type checking..."
-          }
-        ]
-      },
-      {
-        "matcher": "Edit|Write",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "file=$(echo '$CLAUDE_TOOL_INPUT' | jq -r '.file_path // \"\"'); base=$(basename \"$file\" .ts); test_file=$(find src/tests -name \"${base}.test.ts\" 2>/dev/null | head -1); [ -n \"$test_file\" ] && node --no-warnings=ExperimentalWarning --import tsx --test \"$test_file\" 2>&1 | tail -10 || true",
-            "statusMessage": "Running related tests..."
-          }
-        ]
-      },
-      {
-        "matcher": "Bash",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "HOOK=\"$CLAUDE_PROJECT_DIR/scripts/remind-pr-merge-watch.sh\"; test -x \"$HOOK\" || exit 0; exec \"$HOOK\""
-          }
-        ]
-      },
-      {
-        "matcher": "Bash|Skill|ReportFindings",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "SCRIPT=\"$CLAUDE_PROJECT_DIR/scripts/self_review_gate.py\"; test -f \"$SCRIPT\" || exit 0; exec python3 \"$SCRIPT\"",
-            "timeout": 120
-          }
-        ]
-      },
-      {
-        "matcher": "mcp__ccd_sidebar__list_groups",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "HOOK=\"$CLAUDE_PROJECT_DIR/scripts/enforce_sidebar_move.py\"; test -x \"$HOOK\" || exit 0; exec \"$HOOK\" cache-groups"
-          }
-        ]
-      }
-    ],
     "PreToolUse": [
       {
         "matcher": "Bash",
         "hooks": [
           {
             "type": "command",
-            "command": "SCRIPT=\"$CLAUDE_PROJECT_DIR/scripts/pr_testing_gate.py\"; test -f \"$SCRIPT\" || exit 0; input=$(cat); case \"$input\" in *'gh pr '*|*'gh api'*) ;; *) exit 0 ;; esac; printf '%s' \"$input\" | exec python3 \"$SCRIPT\"",
-            "timeout": 90
-          }
-        ]
-      },
-      {
-        "matcher": "mcp__ccd_sidebar__move_sessions",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "SCRIPT=\"$CLAUDE_PROJECT_DIR/scripts/self_review_gate.py\"; test -f \"$SCRIPT\" || exit 0; exec python3 \"$SCRIPT\"",
-            "timeout": 120
+            "timeout": 90,
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/att-docs/plugins/general/hooks/run.sh\" prTestingGate pr_testing_gate.py"
           }
         ]
       }
     ],
-    "Stop": [
+    "PostToolUse": [
       {
+        "matcher": "Bash",
         "hooks": [
           {
             "type": "command",
-            "command": "HOOK=\"$CLAUDE_PROJECT_DIR/scripts/enforce_sidebar_move.py\"; test -x \"$HOOK\" || exit 0; exec \"$HOOK\" stop"
+            "timeout": 10,
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/att-docs/plugins/general/hooks/run.sh\" mergeWatchReminder remind-pr-merge-watch.sh"
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "timeout": 60,
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/att-docs/plugins/general/hooks/run.sh\" prettierOnSave prettier-on-save.sh",
+            "statusMessage": "Formatting..."
           },
           {
             "type": "command",
-            "command": "SCRIPT=\"$CLAUDE_PROJECT_DIR/scripts/self_review_gate.py\"; test -f \"$SCRIPT\" || exit 0; exec python3 \"$SCRIPT\"",
-            "timeout": 120
+            "timeout": 180,
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/att-docs/plugins/general/hooks/run.sh\" testOnEdit test-on-edit.sh",
+            "statusMessage": "Running related tests..."
           }
         ]
       }

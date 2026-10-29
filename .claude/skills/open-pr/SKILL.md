@@ -13,34 +13,6 @@ be opened. Do not skip steps.
 The PR body and any other multi-line text are written to the scratchpad with the Write tool
 and passed by path, never through a heredoc, per [shell-text.md](../_shared/shell-text.md).
 
-## Sidebar moves
-
-The session files itself in the Code tab sidebar at each step below. These
-moves are part of the steps, not optional extras, and skipping one leaves the
-user unable to see where the session stands.
-
-Before the first move, load the tools in one call:
-
-```
-ToolSearch select:mcp__ccd_sidebar__list_groups,mcp__ccd_sidebar__create_group,mcp__ccd_sidebar__move_sessions
-```
-
-Each move: `mcp__ccd_sidebar__list_groups`, take the id of the group by name
-(create it with `mcp__ccd_sidebar__create_group` when missing), then
-`mcp__ccd_sidebar__move_sessions` with `session_ids: ["self"]` and that id.
-Ids are never stored; look them up every time. A tool that fails is reported
-in one line and skipped, per
-[sidebar-groups.md](../_shared/sidebar-groups.md#rules).
-
-- Step 6, as the self review starts: `Self Review`.
-- Step 7, after a clean self review pass with CI green, and
-  nothing else in progress: `Needs Review`. Never before; the loop does not end
-  the turn mid-way.
-- Review comments, a CI failure, or a user answer to act on: `Working`, then
-  back through `Self Review` to `Needs Review` once the fix is pushed.
-- The pull request merged or closed: the group sidebar-groups.md names for a
-  merge, usually `Completed`.
-
 ## Steps (always run in order)
 
 ### 1. Lint
@@ -79,6 +51,9 @@ Write the body to `<scratchpad>/pr-body.md`:
 
 ## Self review
 <filled in by step 6>
+
+## Settled decisions
+<every review finding sorted, with its evidence and the commit it was checked against>
 
 Closes #N
 Closes #M
@@ -143,15 +118,11 @@ resolve, not something to hand back to the user.
 
 ### 6. Self review
 
-Once the PR is mergeable, without waiting for CI, move to `Self Review` (see
-[Sidebar moves](#sidebar-moves)) and run the loop in [self-review.md](../_shared/self-review.md)
-until a pass comes back clean. Fill in the `Self review` section of the body as it goes.
+Once the PR is mergeable, without waiting for CI, run the loop in
+[self-review.md](../_shared/self-review.md) until a pass comes back clean or the third
+pass's fixes land. Fill in the `Self review` section of the body as it goes.
 
-### 7. Report and file the session in the sidebar
-
-Move the session to `Needs Review` (see [Sidebar moves](#sidebar-moves)) only after the clean
-self review pass. When the pull request later merges or closes, that section says which
-group comes next.
+### 7. Report
 
 Report the linkage result, the mergeability result, how many self review passes ran and
 what they found and fixed, and the PR URL. When the PR has Testing steps, end the report
@@ -163,14 +134,17 @@ Never merge unasked. When a conductor report lands on the PR, read it per
 [conductor-merge.md](../_shared/conductor-merge.md): a pass on the current head means
 asking the user whether to merge, and a failed step goes back through the self review loop.
 
+### 8. After the merge
+
+When `wait` prints `pr: <N> merged`, check the PR for comments, remove any `In Progress`
+label the work added with the read-back [issue-labels.md](../_shared/issue-labels.md)
+requires, and delete the branch as `/implement` Section 10 does.
+
 ## Common mistakes to avoid
 
 - Do NOT put multiple issue numbers on one `Closes` line (`Closes #1, #2` is unreliable).
 - Do NOT skip the linkage verification step.
 - Do NOT open the PR before lint passes.
 - Do NOT open a PR from `main`.
-- Do NOT move to `Needs Review` before a clean self review pass with CI green, or while
-  the session has anything else in progress. There is no exception.
-- Do NOT skip a sidebar move. Each one in [Sidebar moves](#sidebar-moves) is
-  part of its step.
+- Do NOT hand the PR over before the self review loop ends.
 - Do NOT pass multi-line text through a heredoc.
