@@ -25,6 +25,9 @@ async function readBody(req: IncomingMessage): Promise<Record<string, unknown>> 
 }
 
 function respond(method: string, url: string): { status: number; body: unknown } {
+  if (method === "POST" && url.startsWith("/api/v1/users/790/now_playing")) {
+    return { status: 409, body: { error: "something_else" } };
+  }
   if (method === "POST" && url.startsWith("/api/v1/users/789/now_playing")) {
     return { status: 409, body: { error: "already_playing" } };
   }
@@ -92,6 +95,13 @@ test("addNowPlaying turns a 409 already_playing into a friendly error", async ()
     Member.addNowPlaying("789", 7, 4, null),
     (err: unknown) =>
       err instanceof UserFacingError && err.message.includes("already in your Now Playing"),
+  );
+});
+
+test("addNowPlaying rethrows a 409 that is not already_playing", async () => {
+  await assert.rejects(
+    Member.addNowPlaying("790", 7, 4, null),
+    (err: unknown) => !(err instanceof UserFacingError),
   );
 });
 
