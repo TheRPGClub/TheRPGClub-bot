@@ -33,6 +33,7 @@ import type { IGotmEntry } from "../classes/Gotm.js";
 import Gotm from "../classes/Gotm.js";
 import type { INrGotmEntry } from "../classes/NrGotm.js";
 import NrGotm from "../classes/NrGotm.js";
+import { fetchGotmRoundHistory } from "../classes/GotmRounds.js";
 import {
   buildGotmCardsFromEntries,
   buildGotmCardText,
@@ -363,61 +364,18 @@ function parseRoundHistoryPageCustomId(customId: string): IRoundHistoryFilterSta
   };
 }
 
-function getFilteredRoundHistoryRecords(
+async function getFilteredRoundHistoryRecords(
   kind: RoundHistoryKind,
   query: string,
   year: number,
   sort: RoundHistorySort,
-): IRoundHistoryRecord[] {
-  const normalizedQuery = query.trim().toLowerCase();
-  const includeGotm = kind === "gotm" || kind === "both";
-  const includeNrGotm = kind === "nr-gotm" || kind === "both";
-  const gotmEntries = includeGotm ? Gotm.getByYear(year) : [];
-  const nrGotmEntries = includeNrGotm ? NrGotm.getByYear(year) : [];
-  const byRound = new Map<number, IRoundHistoryRecord>();
-
-  for (const entry of gotmEntries) {
-    if (
-      normalizedQuery &&
-      !entry.gameOfTheMonth.some((game) => game.title.toLowerCase().includes(normalizedQuery))
-    ) {
-      continue;
-    }
-    const existing = byRound.get(entry.round);
-    if (existing) {
-      existing.gotmEntries.push(entry);
-    } else {
-      byRound.set(entry.round, {
-        round: entry.round,
-        gotmEntries: [entry],
-        nrGotmEntries: [],
-      });
-    }
-  }
-
-  for (const entry of nrGotmEntries) {
-    if (
-      normalizedQuery &&
-      !entry.gameOfTheMonth.some((game) => game.title.toLowerCase().includes(normalizedQuery))
-    ) {
-      continue;
-    }
-    const existing = byRound.get(entry.round);
-    if (existing) {
-      existing.nrGotmEntries.push(entry);
-    } else {
-      byRound.set(entry.round, {
-        round: entry.round,
-        gotmEntries: [],
-        nrGotmEntries: [entry],
-      });
-    }
-  }
-
-  const sorted = Array.from(byRound.values()).sort((a, b) =>
-    sort === "asc" ? a.round - b.round : b.round - a.round,
-  );
-  return sorted;
+): Promise<IRoundHistoryRecord[]> {
+  return fetchGotmRoundHistory({
+    kind: kind === "nr-gotm" ? "nr_gotm" : kind,
+    year,
+    query,
+    sort,
+  });
 }
 
 type IRoundHistoryResponse = {
@@ -533,7 +491,12 @@ async function buildRoundHistoryResponse(
   interaction: CommandInteraction | ButtonInteraction | ModalSubmitInteraction,
   state: IRoundHistoryFilterState,
 ): Promise<IRoundHistoryResponse> {
-  const allRounds = getFilteredRoundHistoryRecords(state.kind, state.query, state.year, state.sort);
+  const allRounds = await getFilteredRoundHistoryRecords(
+    state.kind,
+    state.query,
+    state.year,
+    state.sort,
+  );
   return buildRoundHistoryPageResponse(
     interaction.client,
     interaction.guildId ?? undefined,

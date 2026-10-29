@@ -190,15 +190,6 @@ export default class Gotm {
     return gotmData.filter((e) => e.round === round);
   }
 
-  /** The round being played: the latest one with recorded winners, or null if none. */
-  static getLatestRound(): number | null {
-    ensureInitialized();
-    return gotmData.reduce<number | null>(
-      (latest, entry) => (latest === null || entry.round > latest ? entry.round : latest),
-      null,
-    );
-  }
-
   static getByYearMonth(year: number, month: number | string): IGotmEntry[] {
     ensureInitialized();
     const yearNum = Number(year);
@@ -216,13 +207,6 @@ export default class Gotm {
       const labelLower = parseMonthLabel(e.monthYear).toLowerCase();
       return labelLower === wantedLower;
     });
-  }
-
-  static getByYear(year: number): IGotmEntry[] {
-    ensureInitialized();
-    const yearNum = Number(year);
-    if (!Number.isFinite(yearNum)) return [];
-    return gotmData.filter((e) => parseYear(e.monthYear) === yearNum);
   }
 
   static searchByTitle(query: string): IGotmEntry[] {
