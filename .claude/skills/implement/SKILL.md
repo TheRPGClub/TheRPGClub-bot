@@ -322,6 +322,11 @@ gh pr view <PR> --json closingIssuesReferences
 If an issue is missing from `closingIssuesReferences`, fix the `Closes` lines and patch
 the body. Every body patch runs the check above first.
 
+The PR testing gate and merge-watch reminder hooks (see [repo-hooks](../repo-hooks/SKILL.md))
+back up the two steps in this section: the check above and the ledger record below always
+apply, because the gate cannot read a body passed inline and the reminder never records the
+PR itself.
+
 Record the PR in the session's ledger with `scripts/catchup.py add-pr` and keep one
 `wait` running, per
 [run-watch.md](../_shared/run-watch.md#waiting-on-a-pull-request), so the merge reaches
@@ -456,7 +461,3 @@ Common mistakes to avoid:
 - Do NOT merge without asking, and do NOT offer to merge before a passing conductor
   report on the current head, per [conductor-merge.md](../_shared/conductor-merge.md).
 - Do NOT pass multi-line text through a heredoc.
-
-The PR testing gate, the merge-watch reminder, the unit test on edit, and Prettier on save
-run as hooks, per [repo-hooks](../repo-hooks/SKILL.md). The manual `check:pr-testing` and
-`catchup.py add-pr` steps above still apply when a hook is absent.

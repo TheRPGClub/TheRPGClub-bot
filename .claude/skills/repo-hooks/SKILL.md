@@ -25,6 +25,8 @@ vendored copy pinned by `.claude/att-docs.lock`; never edit it here.
   `.claude/att-docs/plugins/general/hooks/run.sh` once per hook. The `general@att-docs`
   plugin is disabled for this project, so nothing fires twice and its same-name skills
   do not load beside the extensions here.
+- Settings file: the hooks sit in `settings.local.json`, which `.claude/*` ignores but this
+  repository force-tracks, instead of the `.claude/settings.json` the general skill names.
 
 ## Overrides
 
@@ -36,3 +38,6 @@ None. A rule this file does not name is the general skill's rule.
   is added.
 - [implement](../implement/SKILL.md): the manual `npm run check:pr-testing` and
   `catchup.py add-pr` steps the gate and reminder back up.
+- `testOnEdit` finds a test only when it is named after the edited file (`<name>.test.ts`
+  under `src/tests`). Most tests here carry feature names, so it rarely fires, and editing a
+  test file does not run that test.
