@@ -619,14 +619,14 @@ export class CollectionSteamImportCommand {
             interaction.user.id,
           );
         } catch (error: any) {
-          logSteamImportEvent("start_failed", {
-            userId: interaction.user.id,
-            error: String(error?.message ?? "unknown"),
-          });
           if (isOpenImportConflict(error)) {
             await safeReply(interaction, buildTextReply(OPEN_IMPORT_CONFLICT_LABEL, true));
             return;
           }
+          logSteamImportEvent("start_failed", {
+            userId: interaction.user.id,
+            error: String(error?.message ?? "unknown"),
+          });
           if (error instanceof SteamApiError) {
             await safeReply(interaction, buildTextReply(error.message, true));
             return;

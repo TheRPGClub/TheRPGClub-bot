@@ -225,7 +225,11 @@ export function buildCaughtErrorMessage(
   return buildApiErrorMessage(label, err, { ...options, devPing: false });
 }
 
-/** Shown when a member starts an import while one of the same kind is still open. */
+/**
+ * Shown when a member starts an import while one of the same kind is still open. A reply
+ * of text only, like UserFacingError: the member caused it, and a CSV request body holds
+ * every row.
+ */
 export const OPEN_IMPORT_CONFLICT_LABEL =
   "You already have an open import of this kind. " +
   "Use action:resume, action:status, action:pause, or action:cancel on this command.";
