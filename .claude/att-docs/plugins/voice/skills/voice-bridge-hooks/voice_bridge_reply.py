@@ -5,8 +5,6 @@ usage: voice_bridge_reply.py < <Stop hook payload>
        voice_bridge_reply.py push < <spoken text>
        voice_bridge_reply.py opened < <PostToolUse Bash hook payload>
        voice_bridge_reply.py milestone < <Stop hook payload>
-       voice_bridge_reply.py spoken < <UserPromptSubmit, PostToolUse or SessionStart hook
-                                       payload>
        voice_bridge_reply.py attention < <PermissionRequest, PreToolUse, PostToolUse or
                                           UserPromptSubmit hook payload>
        voice_bridge_reply.py answer < <PermissionRequest hook payload>
@@ -65,12 +63,6 @@ That copy is added when the reply carries the ready line, leaves the user
 a question, or ends the turn with no background work due to wake the session, by
 background_pending.py's test.
 
-A follow in spoken reply mode (a voice-bridge/follow/<socket name>.spoken file holding the
-session's id) asks for each reply to be a short spoken summary. The spoken form prints that
-instruction as additional context, once when the mode turns on, again after a compaction,
-and a note that the mode is off once after it turns off. A voice-bridge/follow/<socket
-name>.spoken-told file holds the id of the session it last told.
-
 A Stop whose reply carries the ready line, the extension file's readyLine, also
 starts the ready form in a process of its own, follow or not. It runs the milestone form's
 ready test, and for each pull request the line names writes
@@ -107,16 +99,6 @@ STOP = 'stop'
 # A feed entry only a follow in milestones mode hears.
 MILESTONE = 'milestone'
 REFUSED = re.compile(r'a pull request for branch .* already exists')
-# What the spoken form tells a session whose follow is in spoken reply mode, and what it tells
-# the session when the mode goes off.
-SPOKEN_ON = ('A phone follows this session and hears every reply read aloud. Write each reply '
-             'as a short spoken summary: a few sentences with no tables, lists, headings or '
-             'code blocks, and no long links or paths. Leave the detail in the session, the '
-             'pull request or the issue. This holds for every reply until you are told it is '
-             'off.')
-SPOKEN_OFF = 'Spoken reply mode is off. Write replies as you normally would.'
-# The hook events whose output the spoken form may add context to.
-SPOKEN_EVENTS = ('UserPromptSubmit', 'PostToolUse', 'SessionStart')
 # How often the answer form looks for an answer, and how long it waits for one. The wait ends
 # short of the 600 second timeout its settings.json entry gives it, so it ends on its own.
 ANSWER_POLL_SECONDS = 0.5
@@ -331,71 +313,6 @@ def opened(payload, socket_path, root, now=None):
     title = pr_title(str((payload.get('tool_input') or {}).get('command') or ''))
     text = f'Opened pull request {number}' + (f': {title}' if title else '') + '.'
     return add_to_feed(root, key, text, now, kind=MILESTONE)
-
-
-def read_marker(path):
-    """The text of a marker file, or an empty string when it is missing."""
-    try:
-        with open(path) as marker:
-            return marker.read().strip()
-    except OSError:
-        return ''
-
-
-def replace_file(path, text):
-    """Writes text to path through a temporary file and a rename, so a reader sees the old
-    text or the new, never an empty file."""
-    fd, tmp = tempfile.mkstemp(dir=os.path.dirname(path))
-    with os.fdopen(fd, 'w') as out:
-        out.write(text)
-    os.replace(tmp, path)
-
-
-def drop_file(path):
-    """Removes path, whether or not another hook got there first."""
-    try:
-        os.remove(path)
-    except FileNotFoundError:
-        pass
-
-
-def spoken(payload, socket_path, root, now=None):
-    """The note a session in spoken reply mode is owed, or None. The bridge writes
-    follow/<key>.spoken with the session's id while the mode is on, and the hook leaves
-    follow/<key>.spoken-told with the id once it has told the session, so each change is said
-    once. A compaction or a /clear says the mode again, since the session no longer holds the
-    first note, and a /clear carries the marker over to the session's new id. A marker left by
-    an earlier session on the same key names that session, so it says nothing to this one."""
-    key = socket_key(socket_path)
-    session = payload.get('session_id')
-    event = payload.get('hook_event_name')
-    if not key or not session or event not in SPOKEN_EVENTS:
-        return None
-    base = os.path.join(root, 'follow', key)
-    marker = base + '.spoken'
-    told = base + '.spoken-told'
-    if event == 'SessionStart' and payload.get('source') == 'clear' and os.path.exists(marker):
-        # /clear gives the running session a new id on the same key, so the marker follows it.
-        replace_file(marker, session)
-    on = read_marker(marker) == session
-    if on:
-        if event == 'SessionStart':
-            drop_file(told)
-        if not followed(key, root, now) or read_marker(told) == session:
-            return None
-        replace_file(told, session)
-        return SPOKEN_ON
-    owed = read_marker(told) == session
-    drop_file(told)
-    return SPOKEN_OFF if owed else None
-
-
-def print_spoken(payload, socket_path, root, now=None):
-    """Prints the spoken form's note as the hook's additional context."""
-    text = spoken(payload, socket_path, root, now)
-    if text:
-        print(json.dumps({'hookSpecificOutput': {
-            'hookEventName': payload['hook_event_name'], 'additionalContext': text}}))
 
 
 def questions_text(payload):
@@ -899,9 +816,6 @@ def main():
         elif args == ['ready']:
             payload = json.load(sys.stdin)
             steps = [lambda p: ready(p, socket_path, bridge_dir())]
-        elif args == ['spoken']:
-            payload = json.load(sys.stdin)
-            steps = [lambda p: print_spoken(p, socket_path, bridge_dir())]
         elif args == ['opened']:
             payload = json.load(sys.stdin)
             steps = [lambda p: opened(p, socket_path, bridge_dir())]
@@ -910,13 +824,19 @@ def main():
             # The hook command execs this script, so its parent is the session process.
             steps = [lambda p: milestone_stop(p, socket_path, bridge_dir(), check=lambda q:
                                               stop_milestone(q, os.getppid(), stop_ms))]
-        else:
+        elif args == ['attention']:
             payload = json.load(sys.stdin)
-            steps = ([lambda p: attention(p, socket_path, bridge_dir())]
-                     if args == ['attention'] else
-                     [lambda p: handle(p, socket_path, bridge_dir()),
-                      lambda p: stop_waiting(p, socket_path, bridge_dir()),
-                      start_ready])
+            steps = [lambda p: attention(p, socket_path, bridge_dir())]
+        elif args == []:
+            payload = json.load(sys.stdin)
+            steps = [lambda p: handle(p, socket_path, bridge_dir()),
+                     lambda p: stop_waiting(p, socket_path, bridge_dir()),
+                     start_ready]
+        else:
+            # Any other form does nothing. Hook entries copied from an earlier release can
+            # still pass `spoken`, which no longer exists, and a payload that is not a Stop
+            # must never reach the Stop handlers.
+            return 0
     except Exception as error:  # noqa: BLE001
         print(f'voice_bridge_reply: {error}', file=sys.stderr)
         return 0

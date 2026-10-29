@@ -10,9 +10,11 @@ usage: speechctl status [--json]
        speechctl silence <0.0-10.0>|reset
        speechctl sessions [--json]
        speechctl speech <session> on|alerts|off|cycle
+       speechctl managed <session> on|off
 
 It works through the files the hook keeps in $XDG_RUNTIME_DIR/speak-attention: now.json
-while a clip plays, the <session>.queue files, a paused flag, and settings.json for the voice,
+while a clip plays, the <session>.queue files, the <session>.managed markers that put a
+session in the session management widget, a paused flag, and settings.json for the voice,
 volume, pace and Piper's speaker, noise, noise-w and silence, which the hook reads before each
 clip. An option that is not set is left out of the Piper command, so the model keeps its own
 default. Exit 2 is a bad argument, 1 a
@@ -131,7 +133,8 @@ def is_paused():
 def queue_lines(queue):
     try:
         with open(queue, encoding="utf-8") as f:
-            return [l.rstrip("\n") for l in f if l.strip()]
+            # a line is the spoken text, then a tab and its Markdown source for now.json
+            return [l.rstrip("\n").split("\t", 1)[0] for l in f if l.strip()]
     except OSError:
         return []
 
@@ -336,19 +339,43 @@ def speech_setting(sid):
     return "off" if os.path.exists(path(sid + ".muted")) else "alerts"
 
 
+def is_managed(sid):
+    return os.path.exists(path(sid + ".managed"))
+
+
+def cmd_managed(ref, mode):
+    if mode not in ("on", "off"):
+        raise Bad("managed takes on or off")
+    try:
+        s = sessions_mod.find_session(sessions_mod.list_sessions(), ref)
+    except LookupError as e:
+        raise Bad(str(e))
+    if mode == "on":
+        os.makedirs(DIR, exist_ok=True)
+        open(path(s["id"] + ".managed"), "w").close()
+    else:
+        try:
+            os.remove(path(s["id"] + ".managed"))
+        except OSError:
+            pass
+    print("%s: managed %s" % (s["name"], mode))
+
+
 def cmd_sessions(as_json):
     n = now_playing()
     out = []
     for s in sessions_mod.list_sessions():
-        s = dict(s, speech=speech_setting(s["id"]), queued=len(queue_lines(queue_of(s["id"]))),
+        s = dict(s, speech=speech_setting(s["id"]), managed=is_managed(s["id"]),
+                 queued=len(queue_lines(queue_of(s["id"]))),
                  speaking=bool(n and n.get("session") == s["id"]))
         out.append(s)
     if as_json:
         print(json.dumps(out))
         return
     for s in out:
-        flags = " ".join(f for f, on in (("busy", s["busy"]), ("bg", s["background"]),
-                                         ("speaking", s["speaking"])) if on)
+        flags = " ".join(f for f, on in (("managed", s["managed"]), ("busy", s["busy"]),
+                                         ("bg", s["background"]), ("speaking", s["speaking"]))
+                         if on)
         print("%-8s %-24s %2d queued  %s" % (s["speech"], s["name"], s["queued"], flags))
 
 
@@ -460,8 +487,10 @@ def main(argv):
         cmd_voice(rest[0])
     elif cmd == "speech" and len(rest) == 2:
         cmd_speech(*rest)
+    elif cmd == "managed" and len(rest) == 2:
+        cmd_managed(*rest)
     else:
-        raise Bad("usage: speechctl status|skip|next|clear|pause|resume|toggle|volume|voice(s)|speaker|noise|noise-w|silence|sessions|speech")
+        raise Bad("usage: speechctl status|skip|next|clear|pause|resume|toggle|volume|voice(s)|speaker|noise|noise-w|silence|sessions|speech|managed")
 
 
 if __name__ == "__main__":

@@ -16,17 +16,22 @@
 # tool reads what was written ahead of that call, and the Stop reads the rest. An
 # AskUserQuestion call's question and options are read with the text ahead of it, and
 # a wrap-up question with its buttons after the closing reply.
-# /implement-with-speech turns it on for the session, typed (UserPromptSubmit) or
-# called through the Skill tool (PostToolUse Skill), and a typed /implement turns
-# it off. A Skill call to implement leaves it alone, since /implement-with-speech
-# hands its work to that skill.
+# speechctl and the speech widget turn it on and off; no command a session runs does.
+# Every implementation is a managed session: its .managed marker puts it in the session
+# management widget, which reads it through speechctl sessions. The implement skill sets
+# the marker, typed (UserPromptSubmit) or called through the Skill tool (PostToolUse
+# Skill), and leaves speech mode as it was.
 # Outside speech mode, a session a phone follows through the voice bridge still sends its
 # text to the voice feed ahead of each tool call, and reads none of it aloud.
+# A managed session (its .managed marker) also writes every block to <id>.feed, whatever
+# its speech setting, so the session management widget can list its replies without
+# anything being read aloud.
 # Each session's speech is On (its .replies marker), Alerts only (the default: neither
 # marker) or Off (its .muted marker, which silences the announcements too). speechctl sets
 # it, and reads and drives playback through the files this script keeps in the speak-attention
 # folder: now.json while a clip plays, paused while speech is held, skip and requeue for a
-# clip speechctl is ending, and settings.json for the voice, volume and pace.
+# clip speechctl is ending, and settings.json for the voice, volume and pace. A session may
+# also have a voice of its own in <id>.voice, which the speech widget writes.
 # Anything else exits quietly, as does a machine without jq or python3, or with
 # neither Piper nor spd-say to speak.
 # The label case asks ready_line.py, which holds the same rules for the ready signal, so
@@ -50,8 +55,8 @@ done
 
 input=$(cat)
 # Every tool call runs this hook, and outside speech mode only a question says anything,
-# and a followed session's text goes to the voice feed, so a call leaves before the payload
-# is parsed when no session has speech mode on and no phone follows one.
+# and a followed or managed session's text goes to a feed, so a call leaves before the
+# payload is parsed when no session has speech mode on or is managed, and no phone follows one.
 # The bridge touches voice-bridge/follow/<socket name> as the phone polls; a marker idle
 # longer than FOLLOW_IDLE_SECONDS in voice_bridge_reply.py no longer counts.
 follow_dir=${XDG_RUNTIME_DIR:-/tmp}/voice-bridge/follow
@@ -66,6 +71,7 @@ followed() {
 if [[ $input == *'"hook_event_name":"PreToolUse"'* &&
   $input != *'"tool_name":"AskUserQuestion"'* ]] &&
   ! compgen -G "${XDG_RUNTIME_DIR:-/tmp}/speak-attention/*.replies" >/dev/null &&
+  ! compgen -G "${XDG_RUNTIME_DIR:-/tmp}/speak-attention/*.managed" >/dev/null &&
   ! followed; then
   exit 0
 fi
@@ -89,18 +95,19 @@ session=$(field .session_id)
 owed=${XDG_RUNTIME_DIR:-/tmp}/speak-attention/${session:-none}.owed
 # The marker that holds speech mode on for this session.
 replies=${owed%.owed}.replies
+# The marker that makes this a managed session, which the session management widget lists.
+managed=${owed%.owed}.managed
 
-# usage: speech_mode <command>; sets the mode for the slash command a prompt opens with.
-speech_mode() {
+# usage: is_implement <skill or command>; succeeds for the implement skill, by its own name
+# or with its plugin's, as a skill name or a slash command.
+is_implement() {
+  [[ ${1#/} =~ ^([A-Za-z0-9_-]+:)?implement$ ]]
+}
+
+# usage: manage; marks this session a managed session.
+manage() {
   [[ -n "$session" ]] || return 0
-  case $1 in
-    /implement-with-speech)
-      mkdir -p "${replies%/*}" && rm -f "${replies%.replies}.muted" && : > "$replies" &&
-        { flock -w 30 8 &&
-          python3 "$here/speak_pending.py" "$transcript" "$cursor" seen 2>/dev/null; } 8>"$cursor.lock"
-      ;;
-    /implement) rm -f "$replies" "$cursor" "$queue" ;;
-  esac
+  mkdir -p "${managed%/*}" && : > "$managed"
 }
 
 # usage: command_of <prompt>; prints the slash command the prompt opens with, from
@@ -241,17 +248,21 @@ alive() {
   [[ -n $state && $state != Z ]]
 }
 
-# usage: publish_now <text> <engine> <player pid or empty> <speaker>; writes now.json
-# atomically. The speaker is the session whose line is playing, which is not this hook's
-# own when it reads another session's queue.
+# usage: publish_now <text> <engine> <player pid or empty> <speaker> [markdown]; writes
+# now.json atomically. The speaker is the session whose line is playing, which is not this
+# hook's own when it reads another session's queue. The markdown is the line as the
+# assistant wrote it, for a widget that draws it formatted; a line the hook composes itself
+# has none, and publishes an empty string.
 publish_now() {
   local speaker=${4:-$session}
   mkdir -p "$dir"
   jq -n --arg session "$speaker" --arg name "$(cat "$dir/$speaker.name" 2>/dev/null)" \
     --arg text "$1" --arg engine "$2" --arg pid "$3" --arg clip "$clip" --argjson hook "$$" \
-    '{session:$session, name:$name, text:$text, started:(now|floor), clip:$clip,
-      hook_pid:$hook, player_pid:(if $pid == "" then null else ($pid|tonumber) end),
-      engine:$engine}' > "$now.$$.tmp" 2>/dev/null && mv -f "$now.$$.tmp" "$now"
+    --arg markdown "${5:-}" \
+    '{session:$session, name:$name, text:$text, markdown:$markdown, started:(now|floor),
+      clip:$clip, hook_pid:$hook,
+      player_pid:(if $pid == "" then null else ($pid|tonumber) end), engine:$engine}' \
+    > "$now.$$.tmp" 2>/dev/null && mv -f "$now.$$.tmp" "$now"
 }
 
 # usage: wait_unpaused; waits while speech is paused. Returns 1 once the deadline passes.
@@ -262,15 +273,16 @@ wait_unpaused() {
   done
 }
 
-# usage: await_player <pid> <text> <engine> <speaker>; publishes the clip and waits for
-# the player to end. speechctl pauses a Piper clip by stopping the player, which this keeps waiting on
-# until the deadline; then the clip is ended and 75 asks the caller to put its line back.
+# usage: await_player <pid> <text> <engine> <speaker> [markdown]; publishes the clip and waits
+# for the player to end. speechctl pauses a Piper clip by stopping the player, which this
+# keeps waiting on until the deadline; then the clip is ended and 75 asks the caller to put
+# its line back.
 # A Speech Dispatcher clip is paused by speechctl cancelling it with a requeue marker
 # naming this clip, which also gets 75.
 await_player() {
   local rc=0
   player=$1
-  publish_now "$2" "$3" "$player" "$4"
+  publish_now "$2" "$3" "$player" "$4" "${5:-}"
   while alive "$player"; do
     # a skip or pause that came before the player's pid was published is met here
     if [[ -e $dir/skip ]]; then
@@ -303,9 +315,9 @@ await_player() {
   return $rc
 }
 
-# usage: say <text> [speaker]; speaks it for the speaker's session, this hook's own when
-# none is named, and returns once it has played, or 75 when the clip was paused away and
-# the text still has to be read.
+# usage: say <text> [speaker] [markdown]; speaks it for the speaker's session, this hook's
+# own when none is named, and returns once it has played, or 75 when the clip was paused away
+# and the text still has to be read. The markdown is what now.json carries beside the text.
 # Piper speaks when it and its voice model are installed; SPEAK_PIPER_MODEL names the
 # model, and SPEAK_PIPER_LENGTH its pace, faster below 1. settings.json, which speechctl
 # writes, overrides both, and sets the volume. Its speaker, noise, noise_w and silence go to
@@ -315,13 +327,17 @@ await_player() {
 # Piper renders at 0.8 volume, below where its peaks clip, and the stream plays at 1.2
 # to make up the level. Once Piper has rendered, pw-play's exit status is not checked,
 # so a clip that played and then failed is never spoken a second time, and neither is one
-# that speechctl skipped.
+# that speechctl skipped. A speaker's <id>.voice file, written by the speech widget, overrides
+# the voice for that session's lines alone.
 say() {
   local speaker=${2:-$session} piper=$HOME/.local/bin/piper args voice volume pace opts=() v
   local model=${SPEAK_PIPER_MODEL:-$HOME/.local/share/piper/en_US-amy-medium.onnx}
-  voice=$(setting voice)
-  [[ -n $voice && -f "$HOME/.local/share/piper/$voice.onnx" ]] &&
-    model=$HOME/.local/share/piper/$voice.onnx
+  # The speaker's own voice, a name in <speaker>.voice, wins over settings.json's; a name
+  # with no model installed falls through to it.
+  for voice in "$([[ -n $speaker ]] && cat "$dir/$speaker.voice" 2>/dev/null)" "$(setting voice)"; do
+    [[ -n $voice && $voice != */* && -f "$HOME/.local/share/piper/$voice.onnx" ]] &&
+      { model=$HOME/.local/share/piper/$voice.onnx; break; }
+  done
   pace=$(setting pace)
   pace=${pace:-${SPEAK_PIPER_LENGTH:-0.85}}
   volume=$(setting volume)
@@ -333,7 +349,7 @@ say() {
   rm -f "$dir/skip" "$dir/requeue"
   if [[ -x "$piper" && -f "$model" ]] && command -v pw-play >/dev/null; then
     # now.json is up while Piper renders, so a skip in that time leaves a token for below
-    publish_now "$1" piper "" "$speaker"
+    publish_now "$1" piper "" "$speaker" "${3:-}"
     if "$piper" -m "$model" --length-scale "$pace" "${opts[@]}" --volume 0.8 -f "$wav" \
       <<<"$1" >/dev/null 2>&1 8>&- 9>&-; then
       wait_unpaused || { rm -f "$now"; return 75; }
@@ -342,7 +358,7 @@ say() {
         return 0
       fi
       pw-play --media-role=Speech --volume "${volume:-1.2}" "$wav" >/dev/null 2>&1 8>&- 9>&- &
-      await_player $! "$1" piper "$speaker"
+      await_player $! "$1" piper "$speaker" "${3:-}"
       return $?
     fi
     rm -f "$now"
@@ -364,7 +380,7 @@ say() {
   # is cut short rather than not spoken at all. The cap counts characters, up to four
   # bytes each.
   spd-say "${args[@]}" -- "${1:0:30000}" >/dev/null 2>&1 8>&- 9>&- &
-  await_player $! "$1" spd-say "$speaker"
+  await_player $! "$1" spd-say "$speaker" "${3:-}"
 }
 
 # One clip plays at a time: hooks that fire together wait on this lock. An announcement
@@ -385,8 +401,39 @@ hold_voice() {
 # speakable for a phone following it. A followed session outside speech mode takes the same
 # path with nothing queued or spoken. A block the speaker finds nothing to say in still
 # goes, and the bridge decides what of it the phone hears.
+# A queue line is the spoken text, then a tab and the block as written, as a JSON string
+# (newlines escaped, so it stays one line). The source travels with the line, so a line put
+# back or read by another session's hook still publishes the Markdown it was made from. A
+# line with no tab, such as one queued before this field existed, has none.
 queue=${replies%.replies}.queue
 cursor=${replies%.replies}.cursor
+# A managed session's blocks also go to its feed, one JSON object per line: session, name,
+# text (the spoken form, with no name ahead of it), markdown (as markdown_source makes it)
+# and at (epoch seconds). It is written whatever the speech setting, plays nothing, and keeps
+# the last FEED_KEEP blocks, far more than a widget that lists each session's latest lines
+# draws, so a long-running session's file stays small.
+feed=${replies%.replies}.feed
+feed_cursor=${replies%.replies}.feed-cursor
+FEED_KEEP=200
+
+# The most characters of a block's Markdown the queue keeps for now.json; a widget draws a
+# few lines, and a longer source is cut at a line boundary and ends with an ellipsis.
+MARKDOWN_CAP=2000
+
+# usage: markdown_source; reads a block on stdin and prints it as a JSON string: leading blank
+# lines and trailing space trimmed, and cut to MARKDOWN_CAP characters at the last line
+# boundary within them (mid-line when they hold no newline), ending with an ellipsis. Only
+# text past the cap that is more than space counts as past it. The cut comes before the
+# trailing trim, so the regex never scans a long block. --rawfile reads the block whole,
+# since -R splits a multibyte character that straddles a read.
+markdown_source() {
+  jq -nc --rawfile s /dev/stdin --argjson cap "$MARKDOWN_CAP" '
+    $s | sub("\\A\\s*\\n"; "") | . as $all
+    | if length > $cap and ($all[$cap:] | test("\\S")) then
+        (.[0:$cap] | if $all[$cap:$cap + 1] == "\n" then . else sub("\\n[^\\n]*\\z"; "") end
+          | sub("\\s+\\z"; "")) + "…"
+      else sub("\\s+\\z"; "") end'
+}
 
 # usage: await_text_row; the app writes transcript rows in batches, so a tool call can
 # start before the text ahead of it is on disk. The call's own row lands with or after
@@ -402,9 +449,24 @@ await_text_row() {
   fi
 }
 
+# usage: feed_block <block>; appends the block to a managed session's feed, under the
+# cursor lock the caller holds, and drops what is past the last FEED_KEEP blocks.
+feed_block() {
+  local md
+  md=$(markdown_source <<<"$1")
+  [[ $md != '""' ]] || return 0
+  jq -nc --arg session "$session" --arg name "$(cat "$dir/$session.name" 2>/dev/null)" \
+    --arg text "$(speakable <<<"$1")" --argjson markdown "$md" \
+    '{session:$session, name:$name, text:$text, markdown:$markdown, at:(now|floor)}' \
+    >> "$feed" 2>/dev/null || return 0
+  (($(wc -l < "$feed") > FEED_KEEP)) &&
+    tail -n "$FEED_KEEP" "$feed" > "$feed.tmp.$$" && mv -f "$feed.tmp.$$" "$feed"
+  return 0
+}
+
 # usage: read_aloud; queues the turn's unread text and reads the queue. Outside speech mode
-# only the voice feed gets the text, while a phone follows the session, and nothing is
-# queued or spoken.
+# nothing is queued or spoken: a managed session's feed gets the text, and so does the voice
+# feed ahead of a tool call while a phone follows the session.
 read_aloud() {
   local fields name='' chunk text line
   local args=("$here/speak_pending.py" "$transcript" "$cursor")
@@ -419,16 +481,30 @@ read_aloud() {
       printf '%s' "${name% says: }" > "$dir/$session.name.tmp.$$" &&
         mv -f "$dir/$session.name.tmp.$$" "$dir/$session.name"
     fi
+    # The feed reads the turn through a cursor of its own, so speech turning on, which marks
+    # the speech cursor read, never drops a block the feed has not had. Stop has already
+    # waited on the reply row above, so this read does not wait again.
+    if [[ -e "$managed" ]]; then
+      [[ -s "$dir/$session.name" ]] || { session_name > "$dir/$session.name.tmp.$$" &&
+        mv -f "$dir/$session.name.tmp.$$" "$dir/$session.name"; }
+      local fed
+      mapfile -d '' fed < <(STOP_WAIT=0 python3 "$here/speak_pending.py" "$transcript" \
+        "$feed_cursor" "${args[@]:3}" 2>/dev/null)
+      for chunk in "${fed[@]:1}"; do feed_block "$chunk"; done
+    fi
     local pushed=$name
     for chunk in "${fields[@]:1}"; do
       pushed+=$chunk$'\n\n'
       [[ -e "$replies" ]] || continue
       text=$(speakable <<<"$chunk")
       [[ -n "$text" ]] || continue
-      printf '%s\n' "$name$text" >> "$queue"
+      printf '%s\t%s\n' "$name$text" "$(markdown_source <<<"$chunk")" >> "$queue"
       name=
     done
+    # outside speech mode the bridge's own Stop hook feeds the final reply, and a session
+    # no phone follows feeds the voice bridge nothing
     [[ ${#fields[@]} -gt 1 ]] &&
+      { [[ -e "$replies" ]] || { [[ $event != Stop ]] && followed; }; } &&
       python3 "$here/voice_bridge_reply.py" --config "$config" push <<<"$pushed" 2>/dev/null
   } 8>"$cursor.lock"
   [[ -e "$replies" ]] || return 0
@@ -438,7 +514,7 @@ read_aloud() {
   # This hook reads its own session's queue first, then any other session's with lines
   # left, oldest first, so a "next" reply plays even when its own hook is gone. A paused
   # voice holds before a line is taken, so a held line stays queued.
-  local q rc cur=
+  local q rc cur= markdown
   while wait_unpaused; do
     # leave a margin before the hook's own timeout, so no clip is cut off mid-line
     (($(date +%s) >= deadline - 120)) && break
@@ -454,7 +530,9 @@ read_aloud() {
     [[ -n $line ]] || break
     cur=$q
     held_line=$line held_q=$q
-    say "$line" "$(basename "$q" .queue)"
+    markdown=
+    [[ $line == *$'\t'* ]] && markdown=$(jq -r . <<<"${line#*$'\t'}" 2>/dev/null)
+    say "${line%%$'\t'*}" "$(basename "$q" .queue)" "$markdown"
     rc=$?
     held_line= held_q=
     # a clip paused away puts its line back at the head of the queue it came from
@@ -472,26 +550,22 @@ fi
 
 # Outside speech mode a followed session still sends its mid-turn text to the voice feed,
 # ahead of each tool call. The bridge's Stop hook feeds the final reply, so the Stop only
-# marks the turn's text as sent. A question is announced aloud after its text goes.
-if [[ -n "$session" && ($event == PreToolUse || $event == Stop) ]] && followed; then
-  if [[ $event == Stop ]]; then
-    mkdir -p "$dir"
-    { flock -w 30 8 && python3 "$here/speak_pending.py" "$transcript" "$cursor" stop \
-      "$(field .last_assistant_message)" >/dev/null 2>&1; } 8>"$cursor.lock"
-  else
-    read_aloud
-    [[ $tool != AskUserQuestion ]] && exit 0
-  fi
+# marks the turn's text as sent. A managed session writes every block to its own feed,
+# the final reply included. A question is announced aloud after its text goes, and a Stop
+# goes on to its announcement.
+if [[ -n "$session" && ($event == PreToolUse || $event == Stop) ]] &&
+  { [[ -e "$managed" ]] || followed; }; then
+  read_aloud
+  [[ $event == PreToolUse && $tool != AskUserQuestion ]] && exit 0
 fi
 
 case "$event:$tool" in
   UserPromptSubmit:)
-    speech_mode "$(command_of "$(field .prompt)")"
+    is_implement "$(command_of "$(field .prompt)")" && manage
     exit 0
     ;;
   PostToolUse:Skill)
-    [[ $(field .tool_input.skill) == implement-with-speech ]] &&
-      speech_mode /implement-with-speech
+    is_implement "$(field .tool_input.skill)" && manage
     exit 0
     ;;
   Stop:)

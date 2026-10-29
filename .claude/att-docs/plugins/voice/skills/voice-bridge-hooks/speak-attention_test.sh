@@ -17,8 +17,21 @@ trap 'rm -rf "$SANDBOX"' EXIT
 export HOME="$SANDBOX/home"
 mkdir -p "$SANDBOX/bin" "$HOME/.local/bin"
 # The stub lists no output modules for -O and appends the spoken text to SPOKEN.
+# While NOWLOG is set, the stubs also append the now.json the hook published for the clip.
+# The spd-say stub can end its first clip as a pause would, naming the clip in requeue, when
+# REQUEUE_ONCE names a flag file that does not exist yet.
 printf '%s\n' '#!/bin/sh' '[ "$1" = -O ] && exit 0' \
-  'for a in "$@"; do last=$a; done' 'echo "$last" >> "$SPOKEN"' > "$SANDBOX/bin/spd-say"
+  'for a in "$@"; do last=$a; done' \
+  'now=$XDG_RUNTIME_DIR/speak-attention/now.json' \
+  'if [ -n "$NOWLOG" ]; then' \
+  '  for i in $(seq 50); do [ -n "$(jq -r ".player_pid // empty" "$now" 2>/dev/null)" ] && break;' \
+  '    sleep 0.1; done' \
+  '  jq -c . "$now" >> "$NOWLOG"' \
+  'fi' \
+  'if [ -n "$REQUEUE_ONCE" ] && [ ! -e "$REQUEUE_ONCE" ]; then' \
+  '  : > "$REQUEUE_ONCE"; jq -r .clip "$now" > "$XDG_RUNTIME_DIR/speak-attention/requeue"; exit 0' \
+  'fi' \
+  'echo "$last" >> "$SPOKEN"' > "$SANDBOX/bin/spd-say"
 # The piper stub writes its input to the -f file, or fails when PIPER_FAIL is set, and
 # the pw-play stub appends that file to SPOKEN behind a "piper: " mark. A piper on PATH
 # speaks as "path piper: ", which no case expects.
@@ -29,6 +42,12 @@ printf '%s\n' '#!/bin/sh' 'echo "$*" >> "${PIPER_ARGS:-/dev/null}"' \
 printf '%s\n' '#!/bin/sh' 'while [ $# -gt 0 ] && [ "$1" != -f ]; do shift; done' \
   'printf "path " > "$2"' > "$SANDBOX/bin/piper"
 printf '%s\n' '#!/bin/sh' 'for a in "$@"; do last=$a; done' \
+  'now=$XDG_RUNTIME_DIR/speak-attention/now.json' \
+  'if [ -n "$NOWLOG" ]; then' \
+  '  for i in $(seq 50); do [ -n "$(jq -r ".player_pid // empty" "$now" 2>/dev/null)" ] && break;' \
+  '    sleep 0.1; done' \
+  '  jq -c . "$now" >> "$NOWLOG"' \
+  'fi' \
   'printf "piper: %s" "$(cat "$last")" >> "$SPOKEN"' > "$SANDBOX/bin/pw-play"
 chmod +x "$SANDBOX/bin/spd-say" "$SANDBOX/bin/piper" "$SANDBOX/bin/pw-play" \
   "$HOME/.local/bin/piper"
@@ -180,7 +199,39 @@ prompt human "run the suite"; : > "$PIPER_ARGS"
 SPEAK_PIPER_MODEL="$SANDBOX/voice.onnx" stop 'Done.' > /dev/null
 check "$(grep -c -- '--speaker 0' "$PIPER_ARGS")" 1 "speaker 0 is passed, not mistaken for unset"
 check "$(grep -c -- '--noise-scale' "$PIPER_ARGS")" 0 "the options still unset stay out"
-rm -f "$settings"; unset PIPER_ARGS
+rm -f "$settings"
+
+# A session's own voice, <id>.voice, wins over settings.json's for its lines alone.
+piper_dir="$HOME/.local/share/piper"
+mkdir -p "$piper_dir"
+: > "$piper_dir/global.onnx"; : > "$piper_dir/own.onnx"; : > "$piper_dir/other.onnx"
+echo '{"voice":"global"}' > "$settings"
+run_dir="$XDG_RUNTIME_DIR/speak-attention"
+# usage: model_used <extra env assignment...>; the model Piper was given for a stop.
+model_used() {
+  prompt human "run the suite"; : > "$PIPER_ARGS"
+  stop 'Done.' > /dev/null
+  grep -o -- '-m [^ ]*' "$PIPER_ARGS" | sed 's|.*/||'
+}
+check "$(model_used)" "global.onnx" "with no .voice file the global voice speaks"
+printf %s own > "$run_dir/s1.voice"
+check "$(model_used)" "own.onnx" "the session's .voice wins over the global voice"
+printf %s other > "$run_dir/s2.voice"
+check "$(model_used)" "own.onnx" "another session's .voice file is not used"
+rm -f "$run_dir/s1.voice"
+check "$(model_used)" "global.onnx" "another session's .voice file leaves this session on the global voice"
+: > "$run_dir/s1.voice"
+check "$(model_used)" "global.onnx" "an empty .voice file uses the global voice"
+printf %s nosuchvoice > "$run_dir/s1.voice"
+check "$(model_used)" "global.onnx" "an unknown voice falls back to the global voice"
+check "$(stop 'Done.')" "piper: demo session finished" "an unknown voice still speaks the line"
+printf %s ../piper/own > "$run_dir/s1.voice"
+check "$(model_used)" "global.onnx" "a voice name with a slash is not used"
+rm -f "$run_dir/s1.voice" "$run_dir/s2.voice" "$settings"
+printf %s own > "$run_dir/s1.voice"
+check "$(model_used)" "own.onnx" "the session's voice speaks with no global voice set"
+rm -f "$run_dir/s1.voice"
+unset PIPER_ARGS
 
 # usage: ask <question> [cwd]; runs the PreToolUse hook for an AskUserQuestion call.
 ask() {
@@ -221,6 +272,16 @@ skill() {
     "$HERE/speak-attention.sh" --config "$CONFIG"
 }
 
+# usage: speech_on; turns speech mode on as speechctl does, with the turn so far marked read.
+speech_on() {
+  mkdir -p "${OWED%/*}" && : > "${OWED%.owed}.replies" &&
+    python3 "$HERE/speak_pending.py" "$TRANSCRIPT" "${OWED%.owed}.cursor" seen
+}
+# usage: speech_alerts; takes speech mode back to Alerts only, as speechctl does.
+speech_alerts() { rm -f "${OWED%.owed}".{replies,queue}; }
+# usage: managed; prints managed while the session is a managed session.
+managed() { [[ -e ${OWED%.owed}.managed ]] && echo managed; }
+
 : > "$TRANSCRIPT"
 reply='## Status
 
@@ -237,12 +298,12 @@ gh run list
 ```'
 prompt human "run the suite"
 check "$(stop 'Done.')" "demo session finished" "speech mode starts off"
-typed "/implement-with-speech 4638"
+speech_on
 prompt human "run the suite"
 said="demo session says: Status Run is green at the following link."
 said+=" See, Worker, 12, Node.js and the following link."
 check "$(stop "$reply")" "$said Spec Result a.spec.ts pass" \
-  "/implement-with-speech reads the reply as plain text"
+  "speech mode reads the reply as plain text"
 prompt human "time it"
 said="demo session says: Took 7.0 seconds, the 30 seconds cap, 5 minutes, 2 hours,"
 said+=" 1 hour 30 minutes and 1 minute; 3e4s, 10ms, option 1 m, the 1990s"
@@ -268,29 +329,31 @@ monitor
 check "$(stop 'Watching.')" "demo session says: Watching." \
   "speech mode reads a reply held by background work"
 stopped
-skill implement "4638"
-check "$(stop 'Working.')" "demo session says: Working." \
-  "the Skill call to implement it hands off to leaves it on"
 typed "please /implement the next one"
-check "$(stop 'Next.')" "demo session says: Next." \
-  "a prompt not opening with /implement leaves it on"
+check "$(stop 'Next.')$(managed)" "demo session says: Next." \
+  "a prompt not opening with /implement leaves it on and makes no managed session"
+skill implement "4638"
+check "$(stop 'Working.')$(managed)" "demo session says: Working.managed" \
+  "a Skill call to implement leaves it on and makes a managed session"
 check "$(label 'https://github.com/o/r/pull/12')" "" "speech mode leaves the label to the reply"
+rm -f "${OWED%.owed}.managed"
 typed "/implement 4639"
-check "$(stop 'Done.')" "demo session finished" "a typed /implement turns it off"
-skill implement-with-speech "214"
-check "$(stop 'Started.')" "demo session says: Started." "a Skill call to it turns it on"
+check "$(stop 'Done.')$(managed)" "demo session says: Done.managed" \
+  "a typed /implement leaves it on and makes a managed session"
+speech_alerts; rm -f "${OWED%.owed}.managed"
 typed "<command-message>implement</command-message>
-<command-name>/implement</command-name>
+<command-name>/general:implement</command-name>
 <command-args>214</command-args>"
-check "$(stop 'Done.')" "demo session finished" "an expanded /implement turns it off"
-typed "<command-name>/implement-with-speech</command-name>"
-check "$(stop 'On.')" "demo session says: On." "an expanded /implement-with-speech turns it on"
+prompt human "go"
+check "$(stop 'Done.')$(managed)" "demo session finishedmanaged" \
+  "an expanded /general:implement leaves Alerts only and makes a managed session"
+speech_on
 prompt human "show the command"
 check "$(stop '```bash
 gh run list
 ```')" "" "a reply that is only code is quiet"
 check "$(ask 'Which suite first?')" "" "speech mode drops the has-a-question announcement"
-typed "/implement-with-speechless 1"
+typed "/implementation 1"
 check "$(stop 'Still.')" "demo session says: Still." "another command leaves the mode alone"
 
 # usage: text <text>; appends an assistant row holding one text block, as the app writes
@@ -376,6 +439,18 @@ mkdir -p "$XDG_RUNTIME_DIR/speak-attention" && printf 'Queued earlier.\n' > \
 text "Next."
 check "$(call)" "Queued earlier.
 Next." "a block waiting on the queue is read before a newer one"
+# a line another session queued is read in that session's voice, not the reading hook's
+export PIPER_ARGS="$SANDBOX/piper-args"; : > "$PIPER_ARGS"
+printf 'From s2.\n' > "$XDG_RUNTIME_DIR/speak-attention/s2.queue"
+printf %s other > "$XDG_RUNTIME_DIR/speak-attention/s2.voice"
+text "Mine."
+printf %s own > "$XDG_RUNTIME_DIR/speak-attention/s1.voice"
+check "$(call)" "piper: Mine.piper: From s2." \
+  "another session's queued line is read in its own voice"
+check "$(grep -o -- '-m [^ ]*' "$PIPER_ARGS" | sed 's|.*/||' | paste -sd,)" "own.onnx,other.onnx" \
+  "each line is rendered with its own session's model"
+unset PIPER_ARGS
+rm -f "$XDG_RUNTIME_DIR/speak-attention"/s[12].voice "$XDG_RUNTIME_DIR/speak-attention"/s2.queue
 prompt human "pick one"
 text "Two ways to go."
 row "$(jq -cn '{type:"assistant", message:{role:"assistant", content:[{type:"tool_use",
@@ -426,7 +501,7 @@ check "$(CLAUDE_CODE_MESSAGING_SOCKET=/x/77.sock call)" "demo session says: Push
 Then this." "a socket session still reads aloud"
 check "$(jq -c '[.[].text]' "$XDG_RUNTIME_DIR/voice-bridge/feed/77.json")" \
   '["demo session says: Pushed.\n\nThen this."]' "the blocks reach the voice feed as one entry"
-typed "/implement"
+speech_alerts
 prompt human "run it"
 text "Quiet."
 check "$(call)" "" "a tool call outside speech mode is quiet"
@@ -481,7 +556,221 @@ text "Unfollowed."
 CLAUDE_CODE_MESSAGING_SOCKET=/x/88.sock call > /dev/null
 check "$(jq 'length' "$XDG_RUNTIME_DIR/voice-bridge/feed/88.json")" "4" \
   "an unfollowed session feeds nothing"
-typed "/implement"
+# now.json carries the Markdown of the line playing, beside the spoken text.
+export NOWLOG="$SANDBOX/now-log"
+QUEUES="$XDG_RUNTIME_DIR/speak-attention"
+# usage: now <jq filter>; the filter applied to every now.json the stubs logged, as an array.
+now() { jq -sc "map($1)" "$NOWLOG"; }
+speech_on
+prompt human "write it up"
+: > "$NOWLOG"
+text "Cutting the branch now."
+check "$(call)" "demo session says: Cutting the branch now." "a plain line is read as before"
+check "$(now '[.session, .name, .text, .markdown]')" \
+  '[["s1","demo session","demo session says: Cutting the branch now.","Cutting the branch now."]]' \
+  "a plain line publishes its source without the name prefix"
+check "$(now 'keys | join(",")')" \
+  '["clip,engine,hook_pid,markdown,name,player_pid,session,started,text"]' \
+  "now.json keeps its other fields beside markdown"
+
+md='Two things changed:
+
+- **Spacing**: the gap is now `12px`.
+- Avatar alignment: see [the PR](https://github.com/o/r/pull/9).
+
+```bash
+make test
+```
+
+Done.'
+: > "$NOWLOG"
+text "$md"
+call > /dev/null
+check "$(now '.markdown')" "$(jq -cn --arg m "$md" '[$m]')" \
+  "a multi-paragraph line keeps its list, bold, code span, fence and newlines"
+check "$(now '.text | contains("**") or contains("`") or contains("\n")')" "[false]" \
+  "the same line's text is still the flat spoken form"
+
+: > "$NOWLOG"
+text "$(printf '\n\n  Indented first line.\n\n\n')"
+call > /dev/null
+check "$(now '.markdown')" '["  Indented first line."]' \
+  "blank lines around a block are trimmed, its indentation kept"
+
+# a source past the cap is cut at a line boundary and ends in an ellipsis
+long=$(for i in $(seq 1 400); do echo "line $i of a long reply"; done)
+: > "$NOWLOG"
+text "$long"
+call > /dev/null
+check "$(now '.markdown | [length <= 2001, endswith("…"), (split("\n") | length > 3),
+  (split("\n") | .[-1] | test("^line [0-9]+ of a long reply…$"))] | all')" "[true]" \
+  "a long source is cut at a line boundary and marked"
+check "$(now '.text | length > 4000')" "[true]" "the cap leaves the spoken text whole"
+
+# the cut falls after a complete line, not before it, and a long run of space is quick
+exact="$(head -c 1990 /dev/zero | tr '\0' x)
+tail line
+after the cap"
+: > "$NOWLOG"
+text "$exact"
+call > /dev/null
+check "$(now '.markdown | endswith("tail line…")')" "[true]" \
+  "a source cut exactly at the end of a line keeps that line"
+: > "$NOWLOG"
+text "start$(head -c 60000 /dev/zero | tr '\0' ' ')end"
+began=$(date +%s)
+call > /dev/null
+check "$(( $(date +%s) - began < 10 ))" "1" \
+  "a block with a long run of spaces queues quickly"
+
+# trailing space past the cap is not content, and a multibyte source survives the read
+: > "$NOWLOG"
+text "$(head -c 1990 /dev/zero | tr '\0' x)$(printf ' %.0s' $(seq 1 50))"
+call > /dev/null
+check "$(now '.markdown | [length, endswith("…")]')" "[[1990,false]]" \
+  "space past the cap does not cut the line before it"
+cjk="x$(printf '日%.0s' $(seq 1 3000))"
+: > "$NOWLOG"
+text "$cjk"
+call > /dev/null
+check "$(now '.markdown | [length, (explode | any(. == 65533)), endswith("…")]')" \
+  "[[2001,false,true]]" "a multibyte source over 4 KB is cut whole, with no replacement characters"
+
+# another session's queue: its line plays with its own source, after this session's own
+printf 'Other session.' > "$QUEUES/s2.name"
+printf '%s\t%s\n' "other session says: Merged it." \
+  "$(jq -cn '"Merged **it**.\n\n- one\n- two"')" > "$QUEUES/s2.queue"
+: > "$NOWLOG"
+text "Own line."
+call > /dev/null
+check "$(now '[.session, .text, .markdown]')" \
+  '[["s1","Own line.","Own line."],["s2","other session says: Merged it.","Merged **it**.\n\n- one\n- two"]]' \
+  "a line read from another session's queue publishes that session and its own source"
+rm -f "$QUEUES/s2.queue" "$QUEUES/s2.name"
+
+# a line paused away is put back with its source and published again
+: > "$NOWLOG"
+rm -f "$SANDBOX/requeued"
+text "Requeued **line**."
+check "$(REQUEUE_ONCE="$SANDBOX/requeued" call)" "Requeued line." \
+  "a line whose clip was paused away is read again"
+check "$(now '[.text, .markdown]')" \
+  '[["Requeued line.","Requeued **line**."],["Requeued line.","Requeued **line**."]]' \
+  "a requeued line publishes the same text and source both times"
+
+# Piper publishes it too, in the publish that stays up while the clip plays
+: > "$NOWLOG"
+text "Piper **line**."
+SPEAK_PIPER_MODEL="$SANDBOX/voice.onnx" call > /dev/null
+check "$(now '[.engine, .player_pid != null, .markdown]')" '[["piper",true,"Piper **line**."]]' \
+  "Piper publishes the source"
+
+# a line with no source: a queue line from before the field, and one the hook composes
+: > "$NOWLOG"
+printf 'Queued earlier.\n' > "$QUEUES/s1.queue"
+call > /dev/null
+check "$(now '[.text, .markdown]')" '[["Queued earlier.",""]]' \
+  "a queue line with no source publishes an empty markdown"
+speech_alerts
+prompt human "run the suite"
+: > "$NOWLOG"
+stop 'Done.' > /dev/null
+check "$(now '[.text, .markdown]')" '[["demo session finished",""]]' \
+  "an announcement the hook composes publishes an empty markdown"
+unset NOWLOG
+
+# A managed session writes every block to its feed, whatever its speech setting.
+speech_alerts
+: > "$TRANSCRIPT"
+FEED="$QUEUES/s1.feed"
+# usage: fed <jq filter>; the filter applied to every feed entry, as an array.
+fed() { jq -sc "map($1)" "$FEED" 2>/dev/null; }
+# the /implement cases above made this session managed; start from an unmanaged one
+rm -f "$QUEUES/s1.managed" "$FEED" "$QUEUES/s1.feed-cursor"
+prompt human "unmanaged"
+text "Not fed."
+call > /dev/null
+check "$([ -e "$FEED" ] && echo fed)" "" "a session that is not managed has no feed"
+: > "$QUEUES/s1.managed"
+export NOWLOG="$SANDBOX/now-log"
+: > "$NOWLOG"
+prompt human "managed alerts"
+text 'Cutting **the** branch.'
+check "$(call)" "" "a managed session on Alerts reads nothing aloud"
+check "$(fed '[.session, .name, .text, .markdown, (.at | type)]')" \
+  '[["s1","demo session","Cutting the branch.","Cutting **the** branch.","number"]]' \
+  "its block reaches the feed with its name, spoken text and Markdown"
+check "$([ -s "$QUEUES/s1.queue" ] && echo queued)$(cat "$NOWLOG")" "" \
+  "a fed block is not queued and publishes no now.json"
+check "$(call)" "" "a call with no new text is quiet"
+check "$(fed .text | jq length)" "1" "the block is fed once"
+result '{}'
+check "$(stop 'All green.' unwritten)" "demo session finished" \
+  "a managed session on Alerts still announces its stop"
+check "$(fed .text)" '["Cutting the branch.","All green."]' "the final reply reaches the feed"
+prompt human "code only"
+text '```bash
+gh run list
+```'
+call > /dev/null
+check "$(fed .markdown | jq -r '.[-1]')" '```bash
+gh run list
+```' "a block with nothing to say aloud is still fed"
+check "$(fed .text | jq -r '.[-1]')" "" "and its spoken text is empty"
+: > "$QUEUES/s1.muted"
+prompt human "managed off"
+text "Muted line."
+check "$(call)" "" "a managed session set to Off reads nothing aloud"
+result '{}'
+check "$(stop 'Muted reply.' unwritten)" "" "and announces nothing"
+check "$(fed .text | jq -c '.[-2:]')" '["Muted line.","Muted reply."]' \
+  "a managed session set to Off still feeds every block"
+check "$(jq -sc "map(.text)" "$NOWLOG")" '["demo session finished"]' \
+  "the only clip while it was Off or on Alerts was the stop's announcement"
+: > "$NOWLOG"
+speech_on
+prompt human "managed on"
+text "Spoken line."
+check "$(call)" "demo session says: Spoken line." "a managed session set to On still reads aloud"
+check "$(jq -r .text "$NOWLOG")" "demo session says: Spoken line." "and publishes now.json"
+check "$(fed .text | jq -r '.[-1]')" "Spoken line." "and feeds the block too"
+speech_alerts
+unset NOWLOG
+FOLLOW_DIR="$XDG_RUNTIME_DIR/voice-bridge/follow"
+: > "$FOLLOW_DIR/88"
+prompt human "managed and followed"
+text "Followed line."
+CLAUDE_CODE_MESSAGING_SOCKET=/x/88.sock call > /dev/null
+bridge_feed="$XDG_RUNTIME_DIR/voice-bridge/feed/88.json"
+fed_before=$(jq length "$bridge_feed")
+check "$(jq -r '.[-1].text' "$bridge_feed")" "demo session says: Followed line." \
+  "a managed, followed call still sends its text to the voice feed"
+result '{}'
+CLAUDE_CODE_MESSAGING_SOCKET=/x/88.sock stop 'Followed reply.' unwritten > /dev/null
+check "$(jq length "$bridge_feed")" "$fed_before" \
+  "a managed, followed stop still leaves the final reply to the bridge's own hook"
+check "$(fed .text | jq -c '.[-2:]')" '["Followed line.","Followed reply."]' \
+  "while the session's feed gets both blocks"
+rm -f "$FOLLOW_DIR/88"
+# speechctl turning speech on marks the speech cursor read before the hook takes the lock
+prompt human "speech turns on mid-turn"
+text "Written before speech turned on."
+python3 "$HERE/speak_pending.py" "$TRANSCRIPT" "$QUEUES/s1.cursor" seen
+: > "$QUEUES/s1.replies"
+check "$(call)" "" "speech turned on reads nothing already written"
+check "$(fed .text | jq -r '.[-1]')" "Written before speech turned on." \
+  "but the feed still gets the block speech skipped"
+rm -f "$QUEUES/s1.replies"
+for i in $(seq 200); do printf '{"text":"old %s"}\n' "$i"; done > "$FEED"
+prompt human "long session"
+text "Newest."
+call > /dev/null
+check "$(fed .text | jq -c '[length, .[0], .[-1]]')" '[200,"old 2","Newest."]' \
+  "the feed keeps the last 200 blocks"
+rm -f "$QUEUES/s1.managed" "$FEED" "$QUEUES/s1.feed-cursor"
+call > /dev/null
+
+speech_alerts
 : > "$TRANSCRIPT"
 
 [ "$fails" -eq 0 ] || { echo "$fails failed"; exit 1; }
