@@ -131,13 +131,42 @@ check "$("$CTL" volume up)" 0.6 "volume up steps by a tenth"
 "$CTL" volume 3 2>/dev/null; check "$?" 2 "a volume out of range is refused"
 "$CTL" volume loud 2>/dev/null; check "$?" 2 "a volume that is no number is refused"
 check "$(jq -r .volume "$D/settings.json")" 0.6 "volume is saved in settings.json"
+check "$(env -u SPEAK_PIPER_LENGTH "$CTL" pace up)" 0.9 "pace up steps from the 0.85 default by a twentieth"
+check "$("$CTL" pace 1.0)" 1.0 "pace takes a number"
+check "$("$CTL" pace down)" 0.95 "pace down steps by a twentieth"
+check "$("$CTL" pace up)" 1.0 "pace steps without float drift"
+check "$("$CTL" pace 1.5)" 1.5 "pace takes the top of its range"
+check "$("$CTL" pace up)" 1.5 "pace up stops at 1.5"
+check "$("$CTL" pace 0.5)" 0.5 "pace takes the bottom of its range"
+check "$("$CTL" pace down)" 0.5 "pace down stops at 0.5"
+"$CTL" pace 1.6 2>/dev/null; check "$?" 2 "a pace above the range is refused"
+"$CTL" pace 0.4 2>/dev/null; check "$?" 2 "a pace below the range is refused"
+"$CTL" pace fast 2>/dev/null; check "$?" 2 "a pace that is no number is refused"
+"$CTL" pace nan 2>/dev/null; check "$?" 2 "a pace of nan is refused"
+check "$(jq -r .pace "$D/settings.json")" 0.5 "pace is saved in settings.json"
+out=$("$CTL" pace 2 2>&1 >/dev/null); code=$?
+check "$code:${out:+msg}" "2:msg" "a refused pace exits 2 with a message"
+printf '{"pace": "quick"}' > "$D/settings.json"
+check "$(env -u SPEAK_PIPER_LENGTH "$CTL" pace down)" 0.8 \
+  "pace down from a saved pace that is no number steps from the default"
+rm "$D/settings.json"
+check "$(SPEAK_PIPER_LENGTH=slow "$CTL" pace up)" 0.9 \
+  "pace up from a SPEAK_PIPER_LENGTH that is no number steps from the default"
+rm "$D/settings.json"
+check "$(SPEAK_PIPER_LENGTH=3 "$CTL" pace down)" 1.5 \
+  "pace down from a SPEAK_PIPER_LENGTH above the range clamps to 1.5"
+check "$("$CTL" pace 0.9)" 0.9 "pace 0.9 sets the pace"
+check "$("$CTL" status --json | jq -r .pace)" 0.9 "status --json reports the saved pace"
 check "$("$CTL" voice next)" en_US-ryan-high "voice next cycles the installed models"
 check "$("$CTL" voice prev)" en_US-amy-medium "voice prev cycles back"
 "$CTL" voice nobody 2>/dev/null; check "$?" 2 "an unknown voice is refused"
 check "$("$CTL" voices | tr '\n' '|')" "* en_US-amy-medium|  en_US-ryan-high|" "voices lists them"
-"$CTL" voice en_US-ryan-high > /dev/null; "$CTL" volume 0.5 > /dev/null; queue "one"; PLAY=0.2 hook
+"$CTL" voice en_US-ryan-high > /dev/null; "$CTL" volume 0.5 > /dev/null; : > "$SANDBOX/piper-args"
+queue "one"; PLAY=0.2 PIPER_ARGS="$SANDBOX/piper-args" hook
 until_ 10 gone $HOOK
 check "$(grep -c -- '--volume 0.5' "$ARGS")" 1 "the next clip plays at the saved volume"
+check "$(grep -c -- '--length-scale 0.9 ' "$SANDBOX/piper-args")" 1 \
+  "the next clip uses the saved pace with no restart"
 
 # --- Piper options
 fresh
