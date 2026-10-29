@@ -1,9 +1,9 @@
+import axios from "axios";
 import type { GuildMember, User } from "discord.js";
 import { isPositiveInt, requirePositiveInt } from "../utilities/ValidationUtils.js";
 import { logError } from "../utilities/LogUtils.js";
 import { apiGet, apiPost, apiPatch, apiDelete } from "../services/RpgClubApiClient.js";
 import { UserFacingError } from "../utilities/ApiErrorUtils.js";
-import UserGameBacklog from "./UserGameBacklog.js";
 
 export interface IMemberRecord {
   userId: string;
@@ -281,6 +281,7 @@ export interface ICompletionRecord {
 }
 
 const MAX_NOW_PLAYING = 10;
+const ALREADY_PLAYING_MESSAGE = "That title is already in your Now Playing list.";
 
 type UserApiRecord = {
   user_id: string;
@@ -580,32 +581,27 @@ export default class Member {
     requirePositiveInt(platformId, "platform selection");
     const noteValue = note?.trim() || null;
 
-    // A game on Now Playing leaves the backlog. Backlog trouble never blocks the add.
-    const [existing, backlogEntries] = await Promise.all([
-      Member.fetchNowPlayingRaw(userId),
-      UserGameBacklog.listEntriesForGame(userId, gameId).catch((err: unknown) => {
-        logError("Member.addNowPlaying.backlog_lookup", err);
-        return [];
-      }),
-    ]);
+    // The API removes the game's backlog rows and carries their note over in the same
+    // transaction, so the add needs no backlog calls of its own.
+    const existing = await Member.fetchNowPlayingRaw(userId);
     if (existing.length >= MAX_NOW_PLAYING) {
       throw new UserFacingError(`You can only track up to ${MAX_NOW_PLAYING} Now Playing titles.`);
     }
     if (existing.some((e) => Number(e.gamedb_game_id) === gameId)) {
-      throw new UserFacingError("That title is already in your Now Playing list.");
+      throw new UserFacingError(ALREADY_PLAYING_MESSAGE);
     }
 
-    // Deleting the backlog entry drops its note, so an add without a note of its own keeps it.
-    const carriedNote = noteValue ?? backlogEntries.find((e) => e.note?.trim())?.note ?? null;
-
-    await apiPost<{ data: NowPlayingEntryApiData }>(
-      `/api/v1/users/${userId}/now_playing`,
-      { data: { gamedb_game_id: gameId, platform_id: platformId, note: carriedNote } },
-    );
-
-    if (!backlogEntries.length) return;
-    await UserGameBacklog.removeEntries(backlogEntries.map((e) => e.entryId))
-      .catch((err: unknown) => logError("Member.addNowPlaying.backlog_remove", err));
+    try {
+      await apiPost<{ data: NowPlayingEntryApiData }>(
+        `/api/v1/users/${userId}/now_playing`,
+        { data: { gamedb_game_id: gameId, platform_id: platformId, note: noteValue } },
+      );
+    } catch (err: unknown) {
+      if (axios.isAxiosError(err) && err.response?.status === 409) {
+        throw new UserFacingError(ALREADY_PLAYING_MESSAGE, { cause: err });
+      }
+      throw err;
+    }
   }
 
   static async getJournalStatusForGames(
