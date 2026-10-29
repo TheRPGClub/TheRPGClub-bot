@@ -124,8 +124,11 @@ pass's fixes land. Fill in the `Self review` section of the body as it goes.
 
 ### 7. Report
 
-Before the report, label the pull request `Manual Review Needed` once the loop has ended
-and CI is green, as Section 9 of the [implement](../implement/SKILL.md) skill sets out.
+Before the report, wait for CI in the foreground, then label the pull request
+`Manual Review Needed` once the loop has ended and the checks have passed, with the
+mergeability and stacked-pull-request rules in Section 9 of the
+[implement](../implement/SKILL.md) skill. That section also has the commands, including
+the removal.
 
 Report the linkage result, the mergeability result, how many self review passes ran and
 what they found and fixed, and the PR URL. When the PR has Testing steps, end the report

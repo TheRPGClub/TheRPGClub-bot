@@ -372,7 +372,8 @@ Give the user:
 
 Before the report, label the pull request `Manual Review Needed` once the self review
 loop has ended (a clean pass, or the third pass's fixes with the remaining findings noted
-as the user's call), `mergeStateStatus` is not `DIRTY`, and no CI check is failing or
+as the user's call), `mergeStateStatus` is neither `DIRTY` nor `UNKNOWN` (read it again
+after a few seconds when GitHub is still computing it), and no CI check is failing or
 pending. A stacked pull request that reads `BLOCKED` only because its base has not merged,
 or one with no checks, is labeled when the rest holds, and the report says what it waits
 on. Use the REST call, because
@@ -392,11 +393,15 @@ means it was never on, which is fine):
 gh api -X DELETE repos/{owner}/{repo}/issues/<PR>/labels/Manual%20Review%20Needed
 ```
 
-The session puts it back once the loop and CI are clean on the new head. The skip,
+The session puts it back once the loop and CI are clean on the new head. Once labeled, end
+the report with `PULL REQUEST <N> IS READY FOR YOUR REVIEW`, the ready line the voice
+bridge reads. Never write the removal command with a space in the label name: the hook
+that announces the label would take it for an add. The skip,
 deviation, and run-link parts of the general report do not apply.
 
-When the user later says they reviewed the PR, check it for comments and act on them
-instead of waiting to be asked again. Commits that answer them send the PR back through
+When the user later says they reviewed the PR, remove the label as above, then check it
+for comments and act on them instead of waiting to be asked again. A failed conductor
+step removes it the same way. Commits that answer them send the PR back through
 the self review loop.
 
 When a conductor report lands on the PR (the CI monitor relays it as a comment, or the

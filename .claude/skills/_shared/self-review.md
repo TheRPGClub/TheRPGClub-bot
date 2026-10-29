@@ -137,8 +137,9 @@ gh api -X PATCH repos/{owner}/{repo}/pulls/<pr-number> -F body=@<scratchpad>/pr-
 Commits pushed after the handoff, for the user's review comments or anything
 else, send the pull request back through the loop, starting with a full pass
 right after the push. As on the first run, CI gates only the
-end of the loop. If the pull request carries the `Manual Review Needed` label, remove it
-before the pass (a 404 means it was never on) and put it back once the loop ends clean.
+end of the loop. If the pull request carries the ready label, remove it before the pass
+and put it back once the loop ends and CI passes on the new head. The commands are in
+Section 9 of the [implement](../implement/SKILL.md) skill.
 
 ## When it ends
 
