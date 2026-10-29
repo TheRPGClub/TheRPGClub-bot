@@ -1,0 +1,11 @@
+{
+  "base": "voice-bridge-hooks",
+  "inProgressLabel": "In Progress",
+  "mainBranch": "main",
+  "startRequest": "/implement <N>",
+  "readyLine": "PULL REQUEST <N> IS READY FOR YOUR REVIEW",
+  "spokenTerms": {},
+  "scriptsDir": "scripts",
+  "ledgerTool": "catchup.py",
+  "ledgerSubcommands": ["add-pr", "add-issue", "add", "wait", "check"]
+}
