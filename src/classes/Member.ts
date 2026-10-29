@@ -597,7 +597,11 @@ export default class Member {
         { data: { gamedb_game_id: gameId, platform_id: platformId, note: noteValue } },
       );
     } catch (err: unknown) {
-      if (axios.isAxiosError(err) && err.response?.status === 409) {
+      if (
+        axios.isAxiosError(err) &&
+        err.response?.status === 409 &&
+        err.response.data?.error === "already_playing"
+      ) {
         throw new UserFacingError(ALREADY_PLAYING_MESSAGE, { cause: err });
       }
       throw err;

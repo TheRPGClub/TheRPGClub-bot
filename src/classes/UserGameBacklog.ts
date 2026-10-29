@@ -213,7 +213,7 @@ export default class UserGameBacklog {
     return result?.deleted === true;
   }
 
-  /** Deletes entries already known to belong to the caller, such as the entry a backlog list row was built from. */
+  /** Deletes entries already known to belong to the caller, such as a list row's own entry. */
   static async removeEntries(entryIds: number[]): Promise<void> {
     await Promise.all(
       entryIds.map((entryId) => apiDelete<{ deleted: boolean }>(`/api/v1/backlog/${entryId}`)),
