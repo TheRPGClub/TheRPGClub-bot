@@ -508,7 +508,7 @@ export class CollectionCsvImportCommand {
         }
 
         const csvText = await fetchCsvAttachment(file);
-        if (!csvText) {
+        if (csvText === null) {
           await safeReply(
             interaction,
             buildTextReply("Failed to download the CSV file. Please try again.", true),
