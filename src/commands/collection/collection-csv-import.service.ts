@@ -439,7 +439,7 @@ export async function fetchCsvAttachment(attachment: Attachment): Promise<string
       timeout: CSV_DOWNLOAD_TIMEOUT_MS,
       maxContentLength: COLLECTION_CSV_MAX_BYTES,
     });
-    return Buffer.from(response.data).toString("utf-8").replace(/^﻿/, "");
+    return Buffer.from(response.data).toString("utf-8").replace(/^\uFEFF/, "");
   } catch {
     return null;
   }
