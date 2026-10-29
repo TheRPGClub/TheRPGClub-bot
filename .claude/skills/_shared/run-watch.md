@@ -114,9 +114,10 @@ issue: <number> closed
 next: a blocking issue closed; start the deferred task again from its first step
 ```
 
-and exits. The session, or the user invoking it again first, starts the task over from the
-skill's first step, because the blocker's merge may have changed the code or the issue.
-When the task's own issue is now closed, someone else finished it: report that and stop. `closed as not planned` is a close too: the dependency will not
+and exits. Whichever comes first, the `wait` exit or the user invoking the session again,
+starts the task over from the skill's first step, because the blocker's merge may have
+changed the code or the issue. When the task's own issue is now closed, someone else
+finished it: report that and stop. `closed as not planned` is a close too: the dependency will not
 land, so the task starts over from its first step and the skill decides from
 there.
 

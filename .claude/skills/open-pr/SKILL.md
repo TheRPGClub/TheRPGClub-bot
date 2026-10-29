@@ -52,6 +52,9 @@ Write the body to `<scratchpad>/pr-body.md`:
 ## Self review
 <filled in by step 6>
 
+## Settled decisions
+<every review finding sorted, with its evidence and the commit it was checked against>
+
 Closes #N
 Closes #M
 
@@ -130,6 +133,12 @@ deploy.
 Never merge unasked. When a conductor report lands on the PR, read it per
 [conductor-merge.md](../_shared/conductor-merge.md): a pass on the current head means
 asking the user whether to merge, and a failed step goes back through the self review loop.
+
+### 8. After the merge
+
+When `wait` prints `pr: <N> merged`, check the PR for comments, remove any `In Progress`
+label the work added with the read-back [issue-labels.md](../_shared/issue-labels.md)
+requires, and delete the branch as `/implement` Section 10 does.
 
 ## Common mistakes to avoid
 

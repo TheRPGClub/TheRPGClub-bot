@@ -30,8 +30,8 @@ vendored copy pinned by `.claude/att-docs.lock`; never edit it here.
 Do not run this skill until the user has approved both points under Repository
 notes in this session. Until then, tell the user what blocks it and stop.
 
-Two things about this repository change what the general skill assumes. Both are Repository notes below, and both need the user's
-decision before the skill is run.
+Two things about this repository change what the general skill assumes. Both are Repository
+notes below, and both need the user's decision before the skill is run.
 
 ## Repository notes
 
