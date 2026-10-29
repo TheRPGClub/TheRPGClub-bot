@@ -742,7 +742,7 @@ export class CollectionSteamImportCommand {
       return;
     }
 
-    safeIgnore(safeDeferUpdate(interaction));
+    await safeDeferUpdate(interaction);
     try {
       const review = await remapSteamImportItem(parsed.itemId, remapTitle);
       logSteamImportEvent("item_remapped", {
@@ -786,7 +786,7 @@ export class CollectionSteamImportCommand {
       return;
     }
 
-    safeIgnore(safeDeferUpdate(interaction));
+    await safeDeferUpdate(interaction);
     try {
       // A GameDB id wins; any other number is taken as an IGDB id the API imports.
       const game = await Game.getGameById(enteredId);

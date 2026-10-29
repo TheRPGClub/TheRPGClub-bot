@@ -55,7 +55,9 @@ export function getSteamImportErrorCode(error: unknown): string | null {
  */
 export function describeSteamImportError(error: unknown): string | null {
   const code = getSteamImportErrorCode(error);
-  if (code && STEAM_IMPORT_ERROR_MESSAGES[code]) return STEAM_IMPORT_ERROR_MESSAGES[code];
+  if (code && Object.hasOwn(STEAM_IMPORT_ERROR_MESSAGES, code)) {
+    return STEAM_IMPORT_ERROR_MESSAGES[code] ?? null;
+  }
   if (isOpenImportConflict(error)) return STEAM_IMPORT_OPEN_IMPORT_MESSAGE;
   return null;
 }

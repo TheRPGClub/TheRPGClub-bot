@@ -173,6 +173,13 @@ export function mapSteamImportReview(row: SteamImportReviewApiData): ISteamImpor
 }
 
 /**
+ * The create call fetches the whole Steam library and `advance` auto-applies up to 25
+ * matches, so both outlast the shared client's default timeout. A timed-out write is
+ * never retried, and the server can still finish it and leave an open import behind.
+ */
+const STEAM_IMPORT_SLOW_REQUEST_TIMEOUT_MS = 120_000;
+
+/**
  * Creates the import server-side: the API resolves the Steam profile, fetches the owned
  * library and creates one pending item per app. Throws the AxiosError on any failure so
  * the caller can show the request and response.
@@ -190,6 +197,7 @@ export async function startSteamCollectionImport(params: {
         test_mode: params.testMode ?? false,
       },
     },
+    { timeout: STEAM_IMPORT_SLOW_REQUEST_TIMEOUT_MS },
   );
   return mapImport(result.data);
 }
@@ -233,6 +241,8 @@ export async function advanceSteamCollectionImport(
 ): Promise<ISteamImportReview> {
   const result = await apiPostOrThrow<{ data: SteamImportReviewApiData }>(
     `/api/v1/steam_collection_imports/${importId}/advance`,
+    undefined,
+    { timeout: STEAM_IMPORT_SLOW_REQUEST_TIMEOUT_MS },
   );
   return mapSteamImportReview(result.data);
 }
