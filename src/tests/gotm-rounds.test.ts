@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import axios, { type AxiosAdapter } from "axios";
+import axios, { AxiosError, type AxiosAdapter } from "axios";
 
 process.env.RPGCLUB_API_BASE_URL = "https://api.example.test";
 process.env.RPGCLUB_BOT_API_TOKEN = "token";
@@ -26,6 +26,10 @@ function round(roundNumber: number): unknown {
 const adapter: AxiosAdapter = async (config) => {
   const params = (config.params ?? {}) as Record<string, unknown>;
   requested.push(params);
+  if (params.kind === "missing_page" && Number(params.page) > 1) {
+    const response = { data: {}, status: 404, statusText: "Not Found", headers: {}, config };
+    throw new AxiosError("not found", "ERR_BAD_REQUEST", config, null, response);
+  }
   const body = config.url?.endsWith("/current")
     ? { data: round(120) }
     : { data: [round(Number(params.page) * 10)], meta: { pages: 2, years: [2024] } };
@@ -56,6 +60,26 @@ test("fetchGotmRoundHistory reads every page and maps games in index order", asy
     ["Beta", null],
   ]);
   assert.deepEqual(rounds[0]?.nrGotmEntries, []);
+});
+
+test("fetchGotmRoundHistory sends the API kind and omits a blank query", async () => {
+  requested.length = 0;
+  await fetchGotmRoundHistory({ kind: "nr_gotm", year: 2024, query: "  ", sort: "asc" });
+
+  assert.equal(requested[0]?.kind, "nr_gotm");
+  assert.equal(requested[0]?.sort, "asc");
+  assert.equal("q" in (requested[0] ?? {}), false);
+});
+
+test("fetchGotmRoundHistory throws when a later page is missing", async () => {
+  await assert.rejects(
+    fetchGotmRoundHistory({
+      kind: "missing_page" as never,
+      year: 2024,
+      query: "",
+      sort: "desc",
+    }),
+  );
 });
 
 test("fetchCurrentGotmRound maps the current round", async () => {

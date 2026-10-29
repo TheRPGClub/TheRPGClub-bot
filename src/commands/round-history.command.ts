@@ -481,6 +481,14 @@ function buildRoundHistoryPaginationRow(
   );
 }
 
+async function replyRoundHistoryFailure(
+  interaction: ButtonInteraction | ModalSubmitInteraction,
+  error: unknown,
+): Promise<void> {
+  const message = buildCaughtErrorMessage("Unable to load round history", error);
+  await safeReply(interaction, buildErrorReply(message, true));
+}
+
 async function buildRoundHistoryResponse(
   interaction: CommandInteraction | ButtonInteraction | ModalSubmitInteraction,
   state: IRoundHistoryFilterState,
@@ -628,14 +636,20 @@ export class RoundHistoryCommand {
     const ephemeral = privateFlag === null ? true : (privateFlag ?? false);
     await safeDeferReply(interaction, { flags: buildComponentsV2Flags(ephemeral) });
 
-    const response = await buildRoundHistoryResponse(interaction, {
-      ownerUserId: interaction.user.id,
-      kind: selectedKind,
-      query,
-      year,
-      sort: selectedSort,
-      page: 0,
-    });
+    let response: IRoundHistoryResponse;
+    try {
+      response = await buildRoundHistoryResponse(interaction, {
+        ownerUserId: interaction.user.id,
+        kind: selectedKind,
+        query,
+        year,
+        sort: selectedSort,
+        page: 0,
+      });
+    } catch (error: unknown) {
+      await replyRoundHistoryFailure(interaction, error);
+      return;
+    }
 
     await safeReply(interaction, {
       components: response.components,
@@ -661,7 +675,13 @@ export class RoundHistoryCommand {
 
     await safeDeferUpdate(interaction);
 
-    const response = await buildRoundHistoryResponse(interaction, parsed);
+    let response: IRoundHistoryResponse;
+    try {
+      response = await buildRoundHistoryResponse(interaction, parsed);
+    } catch (error: unknown) {
+      await replyRoundHistoryFailure(interaction, error);
+      return;
+    }
     await safeEditReply(interaction, {
       content: null,
       components: response.components,
