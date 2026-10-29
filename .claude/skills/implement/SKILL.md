@@ -372,9 +372,10 @@ Give the user:
 
 Before the report, label the pull request `Manual Review Needed` once the self review
 loop has ended (a clean pass, or the third pass's fixes with the remaining findings noted
-as the user's call), the pull request is not `BLOCKED`, and every CI check it has has
-passed. A stacked pull request waiting on its base, or one with no checks, is labeled when
-the rest holds, and the report says what it waits on. Use the REST call, because
+as the user's call), `mergeStateStatus` is not `DIRTY`, and no CI check is failing or
+pending. A stacked pull request that reads `BLOCKED` only because its base has not merged,
+or one with no checks, is labeled when the rest holds, and the report says what it waits
+on. Use the REST call, because
 `gh pr edit` fails on this repository's old CLI, and read the labels back:
 
 ```bash
@@ -384,7 +385,8 @@ gh api repos/{owner}/{repo}/issues/<PR>/labels -f 'labels[]=Manual Review Needed
 
 The label is the handoff signal; a pull request without it is not ready for the user. Wait
 for CI in the foreground first, and never label one mid-loop or with a check failing. A
-commit pushed after labeling, or feedback from the user, removes the label at once:
+commit pushed after labeling, or feedback from the user, removes the label at once (a 404
+means it was never on, which is fine):
 
 ```bash
 gh api -X DELETE repos/{owner}/{repo}/issues/<PR>/labels/Manual%20Review%20Needed

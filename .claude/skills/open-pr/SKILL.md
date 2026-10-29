@@ -124,6 +124,9 @@ pass's fixes land. Fill in the `Self review` section of the body as it goes.
 
 ### 7. Report
 
+Before the report, label the pull request `Manual Review Needed` once the loop has ended
+and CI is green, as Section 9 of the [implement](../implement/SKILL.md) skill sets out.
+
 Report the linkage result, the mergeability result, how many self review passes ran and
 what they found and fixed, and the PR URL. When the PR has Testing steps, end the report
 with the `/test-guild` and Playwright runner commands, each in its own `bash` block, per
