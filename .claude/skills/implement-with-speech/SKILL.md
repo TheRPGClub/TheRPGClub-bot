@@ -17,8 +17,9 @@ vendored copy pinned by `.claude/att-docs.lock`; never edit it here.
 
 ## Paths
 
-- `<speech-mechanism>`: the `voice` plugin's Stop hook, installed at user scope. It
-  turns speech on when this skill starts and reads each reply aloud in the background.
+- `<speech-mechanism>`: the `voice` plugin's `speak-attention.sh` hooks, installed at user
+  scope. They turn speech on when this skill starts and read each reply aloud in the
+  background.
   This repository registers no hooks of its own.
 - `<voice-relay>`: the voice bridge, which carries each reply to the phone. Its values
   for this repository are in

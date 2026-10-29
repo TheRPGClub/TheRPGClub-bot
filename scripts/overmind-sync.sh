@@ -2,8 +2,7 @@
 # Vendor a tagged snapshot of the global skills repository into .claude/att-docs
 # and record the pin in .claude/att-docs.lock.
 # usage: scripts/overmind-sync.sh [<tag>]
-# The tag defaults to the one in the lock file. The vendored tree is gitignored, so each
-# checkout runs this once; only the lock file is committed.
+# The tag defaults to the one in the lock file. The pruned copy is committed with the lock.
 # The repository comes from the lock file, or from ATT_DOCS_REPO on the first run.
 set -euo pipefail
 
@@ -11,6 +10,8 @@ ROOT="$(git rev-parse --show-toplevel)"
 cd "$ROOT"
 LOCK=.claude/att-docs.lock
 PREFIX=.claude/att-docs
+# Only the plugins this repository extends. The rest of the tag stays out of the copy.
+PATHS=(plugins/general plugins/voice/skills)
 
 TAG="${1:-}"
 if [ -z "$TAG" ] && [ -f "$LOCK" ]; then
@@ -36,8 +37,9 @@ TREE="$(git rev-parse 'FETCH_HEAD^{tree}')"
 
 rm -rf "$PREFIX"
 mkdir -p "$PREFIX"
-git archive FETCH_HEAD | tar -x -C "$PREFIX"
+git archive FETCH_HEAD -- "${PATHS[@]}" | tar -x -C "$PREFIX"
 
-printf 'repo=%s\ntag=%s\ncommit=%s\ntree=%s\n' "$REPO" "$TAG" "$COMMIT" "$TREE" > "$LOCK"
-git add -- "$LOCK"
+printf 'repo=%s\ntag=%s\ncommit=%s\ntree=%s\npaths=%s\n' \
+  "$REPO" "$TAG" "$COMMIT" "$TREE" "${PATHS[*]}" > "$LOCK"
+git add -- "$LOCK" "$PREFIX"
 echo "vendored $REPO $TAG ($COMMIT) into $PREFIX"

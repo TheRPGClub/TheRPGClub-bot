@@ -3,9 +3,9 @@ name: implement
 description: >-
   Implement a GitHub issue end to end: read it, label it `In Progress`, branch
   from the latest main, make the change, smoke-test it, open a linked pull
-  request, review that pull request itself, then hand it to the user. Use when asked to implement, work
-  on, pick up, or start an issue by number - "/implement 717", "work issue
-  717", "start on #717".
+  request, review that pull request itself, then hand it to the user. Use when
+  asked to implement, work on, pick up, or start an issue by number -
+  "/implement 717", "work issue 717", "start on #717".
 ---
 
 # Implement
@@ -15,10 +15,9 @@ description: >-
 Read
 [the general skill](../../att-docs/plugins/general/skills/implement/SKILL.md)
 first and follow it, except where this file overrides it. The general skill is the
-vendored copy pinned by `.claude/att-docs.lock`; never edit it here. The copy is
-gitignored, so a checkout without `.claude/att-docs/` runs `scripts/overmind-sync.sh`
-once to fetch the pinned tag. Move the pin with `scripts/overmind-sync.sh <tag>` in its
-own pull request.
+vendored copy pinned by `.claude/att-docs.lock`; never edit it here. The copy holds
+only `plugins/general` and `plugins/voice/skills`. Move the pin with
+`scripts/overmind-sync.sh <tag>` in its own pull request.
 
 The general skill was written for a test suite, so its dispatch, deviation, and
 baseline machinery has no counterpart in this repository. Each part of it that does
@@ -70,7 +69,7 @@ Takes one argument: the issue number. `/implement 717`, `/implement #717`, and
 - `<ready-signal>`: not used
 - `<instructions-file>`: `CLAUDE.md`
 - `<post-merge-checks>`: none
-- `<merge-cleanup>`: not used. Step 12 deletes the branch.
+- `<merge-cleanup>`: not used. Section 10 deletes the branch.
 
 ## Overrides
 
@@ -100,7 +99,8 @@ Write tool and passed by path, never through a heredoc, per
 gh issue view <N> --json number,title,state,labels,body,comments
 ```
 
-The holder check replaces the general one. Already labeled `In Progress` and this
+A closed issue stops the session with a report; the general skill's question about
+proceeding does not apply. The holder check replaces the general one. Already labeled `In Progress` and this
 session did not apply it: another session may hold it. Look for its branch and pull
 request:
 
@@ -145,6 +145,8 @@ moves). Do this before cutting the branch. The Area label subsection does not ap
 The general section is replaced by this one. The session already runs in a worktree
 the app created, so there is no worktree script, no `EnterWorktree`, and no board read.
 
+Run `npm ci` first when `node_modules` is missing or stale (`<dependency-setup>`).
+
 The working tree must be clean first. `git status --short` printing anything means
 another task's work is sitting here: stop and ask what to do with it, never stash or
 discard it.
@@ -184,6 +186,9 @@ rules are replaced by:
   the way is a finding for the report or a new issue, not a task.
 - Do not add error handling for scenarios the issue does not address.
 - Do not add comments unless the why is non-obvious.
+- Issue and PR numbers are outputs: run `gh issue create` first and use the number it
+  returns, never a predicted one. They belong in commits, PR bodies, and the tracker,
+  not in code or code comments.
 
 The test data discovery, tests-that-can-never-run, and text-that-ships subsections do
 not apply.
@@ -205,10 +210,10 @@ Fix any type errors before continuing.
 ### Section 5, Validate before publishing
 
 Run `<static-checks>`. Fix every failure, including lint violations, and commit the
-fixes on this branch. A failure already on `main` that smoke.sh reports still blocks
-the pull request, but fixing code the issue does not mention is out of scope: report it
-and file an issue instead of widening the branch. The general skill's rule that
-failures already on the default branch get fixed does not apply.
+fixes on this branch. That holds for a failure already on `main` too: the pull request
+waits for a green smoke.sh, so make the smallest change that turns the check green and
+name it under `Judgment calls`. The general skill's "Pre-existing failures fixed" body
+section and its run evidence do not apply.
 
 ### Section 6, Run the affected tests
 
@@ -220,7 +225,7 @@ request after it opens, per Section 7.
 
 The gates, body requirements, and `gh pr create` line in the general section are
 replaced by this one. It covers the whole `open-pr` ceremony (lint already ran in
-step 6), so do not run that skill on top of it. It would run the self review loop a
+Section 5), so do not run that skill on top of it. It would run the self review loop a
 second time.
 
 #### Commit and push
@@ -324,11 +329,12 @@ Then read mergeability and resolve any conflict before going further, per
 this one worked is the ordinary case, and the resolution is this session's work, not
 something to hand back to the user.
 
-### Section 7, Review it yourself
+### Section 7, Review it yourself before handing it over
 
-The general three-pass cap is replaced by the loop in
+The whole general subsection of this name is replaced, including its three-pass cap, its
+minor-findings rule, and its final-checks line. The loop in
 [self-review.md](../_shared/self-review.md), which `scripts/self_review_gate.py`
-enforces. Once the PR is mergeable, without waiting for CI, move to `Self Review` and
+enforces, applies instead. Once the PR is mergeable, without waiting for CI, move to `Self Review` and
 run `code-review` at `high` on the PR number, read the diff against this repo's rules,
 fix every finding that holds, and run another full pass, until a pass comes back clean.
 Fill in the `Self review` section of the body as it goes.
@@ -376,10 +382,13 @@ The general section is replaced by this one. When the PR merges (`wait` printing
 
 1. Check the PR for comments and reviews, and act on anything actionable.
 2. Confirm the issue closed, then remove its label, with the read-back
-   [issue-labels.md](../_shared/issue-labels.md) requires:
+   [issue-labels.md](../_shared/issue-labels.md) requires. The `Closes` line does not
+   always link the PR, so close the issue by hand when it reads `OPEN`:
 
    ```bash
    gh issue view <N> --json state --jq .state
+   # only when the state read OPEN
+   gh issue close <N> --reason completed --comment "Completed by pull request <PR>."
    gh issue edit <N> --remove-label "In Progress"
    gh issue view <N> --json labels --jq '[.labels[].name] | join(", ")'
    ```

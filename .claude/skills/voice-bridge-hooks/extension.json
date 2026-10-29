@@ -1,5 +1,7 @@
 {
   "base": "voice-bridge-hooks",
+  "reviewLabel": "Ready for Review",
+  "reviewAnnouncement": "ready for review",
   "inProgressLabel": "In Progress",
   "mainBranch": "main",
   "startRequest": "/implement <N>",

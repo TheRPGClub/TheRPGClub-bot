@@ -20,6 +20,7 @@ snapshots
 # exceptions
 !.claude/skills/
 !.claude/agents/
+!.claude/att-docs/
 !.claude/att-docs.lock
 
 # Playwright conductor runner traces and screenshots

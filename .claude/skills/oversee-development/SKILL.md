@@ -27,9 +27,11 @@ vendored copy pinned by `.claude/att-docs.lock`; never edit it here.
 
 ## Overrides
 
-None in text. Two things about this repository change what the general skill assumes.
-Both are Repository notes below, and both need the user's decision before the skill is
-run.
+The general skill's cap of three self review passes is replaced by the loop in
+[self-review.md](../_shared/self-review.md), which has no cap and is enforced by
+`scripts/self_review_gate.py`. Two more things about this repository change what the
+general skill assumes. Both are Repository notes below, and both need the user's
+decision before the skill is run.
 
 ## Repository notes
 
@@ -42,6 +44,8 @@ run.
 - Labels. The script moves issues between `In Progress`, `Blocked`, and `Already Done`
   and never creates a label. This repository has `In Progress` and `Blocked on API`,
   but no `Blocked` or `Already Done`, so those swaps fail until the user creates them.
+  The queue excludes only the exact label `Blocked`, so an issue labeled `Blocked on API`
+  stays in the queue.
   [issue-labels.md](../_shared/issue-labels.md) forbids a session creating labels.
 - Suite arguments (`/oversee-development CCA`) restrict the queue by label. This
   repository has no suite labels, so only the plain forms apply.
