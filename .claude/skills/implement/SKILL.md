@@ -31,7 +31,7 @@ Takes one argument: the issue number. `/implement 717`, `/implement #717`, and
 
 - `<asking-note>`: [asking-the-user.md](../_shared/asking-the-user.md)
 - `<in-progress-label>`: `In Progress`
-- `<ready-label>`: not used. The sidebar move to `Needs Review` is the ready signal.
+- `<ready-label>`: not used. The Section 9 report is the handoff.
 - `<label-script>`: `gh issue edit <N> --add-label` (or `--remove-label`) followed by the
   read-back `gh issue view <N> --json labels`, as step 2 shows
 - `<labels-note>`: [issue-labels.md](../_shared/issue-labels.md)
@@ -55,7 +55,7 @@ Takes one argument: the issue number. `/implement 717`, `/implement #717`, and
 - `<writing-rules>`: the Constraints list under Overrides, Section 4
 - `<repo-constraints>`: the Constraints list under Overrides, Section 4
 - `<static-checks>`: `bash .claude/skills/run-rpgclubbot/smoke.sh`, which runs `tsc`,
-  lint, and the unit tests
+  lint, and the unit tests. Its final pass is one more run after the review loop.
 - `<pr-checks>`: the `CI` workflow in `.github/workflows/ci.yml` (`lint`, `compile`,
   `test`)
 - `<test-dispatch>`, `<test-run-rules>`, `<shared-env>`, `<branch-age-note>`,
@@ -113,10 +113,10 @@ gh pr list --state open --search "<N> in:body" --json number,headRefName,url
 
 The local list matters: worktrees share branches, and a holder's branch only reaches
 origin at step 7. Any one found means another session holds the issue. Do not open a
-second branch. Report who holds it, move to `Blocked`, record this issue itself with
+second branch. Report who holds it, record this issue itself with
 `scripts/catchup.py add-issue`, keep one `wait` running, and end the turn, per
-[sidebar-groups.md](../_shared/sidebar-groups.md#blocked-by-another-issue). The
-holder's merge closes it, and a closed own issue means `Completed`. None found: the
+[run-watch.md](../_shared/run-watch.md#waiting-on-a-blocking-issue). The
+holder's merge closes it, and a closed own issue ends the task: report it. None found: the
 label is stale, left by a session that ended before it cut a branch. Say so, and carry
 on; step 2's add is then a no-op that still reads back. Every session runs as the same
 GitHub user, so an assignee cannot tell holders apart and is not checked.
@@ -138,8 +138,7 @@ gh issue edit <N> --add-label "In Progress"
 gh issue view <N> --json labels --jq '[.labels[].name] | join(", ")'
 ```
 
-Once the label reads back, move the session to `Working` (see Added gates, Sidebar
-moves). Do this before cutting the branch. The Area label subsection does not apply.
+Do this before cutting the branch. The Area label subsection does not apply.
 
 ### Section 3, Branch in an isolated worktree
 
@@ -270,6 +269,9 @@ section when the change is not testable in Discord>
 ## Self review
 <filled in by the self review loop>
 
+## Settled decisions
+<every review finding sorted, with its evidence and the commit it was checked against>
+
 ## Checklist
 - [x] Type-check passes (`npx tsc --noEmit`)
 - [x] Lint passes (`npm run lint`)
@@ -332,14 +334,13 @@ something to hand back to the user.
 
 ### Section 7, Review it yourself before handing it over
 
-The whole general subsection of this name is replaced, including its three-pass cap, its
-minor-findings rule, and its final-checks line. The loop in
-[self-review.md](../_shared/self-review.md), which `scripts/self_review_gate.py`
-enforces, applies instead. Once the PR is mergeable, without waiting for CI, move to
-`Self Review` and
-run `code-review` at `high` on the PR number, read the diff against this repo's rules,
-fix every finding that holds, and run another full pass, until a pass comes back clean.
-Fill in the `Self review` section of the body as it goes.
+The general subsection applies, with these bindings. `<self-review>` is
+[self-review.md](../_shared/self-review.md): the `code-review` skill at `high` on the PR
+number, a read against this repo's rules, at most three passes, minor findings noted and
+left unfixed, and the `Settled decisions` and `Self review` body sections. There is no
+step 6 dispatch, so "every dispatch green" reads as "smoke.sh green". CI gates only the
+end of the loop, per that note, and the loop's fixes rerun smoke.sh. Nothing enforces the
+loop: the session holds itself to it and does not end its turn inside it.
 
 ### Section 8, Record what you learned
 
@@ -352,7 +353,7 @@ The investigation log and test accounts parts do not apply.
 
 ### Section 9, Report
 
-Move the session to `Needs Review` (see Sidebar moves), and give the user:
+Give the user:
 
 - the issue and PR URLs, and a short summary of what changed;
 - the smoke test and CI result, and anything that was not verified;
@@ -419,39 +420,9 @@ The general section is replaced by this one. When the PR merges (`wait` printing
    The first command must print `MERGED`. Skip the `push --delete` when the branch is
    already gone on origin. Uncommitted changes in the working tree are a finding to
    report, never a reason to discard them.
-5. Move the session to the group
-   [sidebar-groups.md](../_shared/sidebar-groups.md) names for a merge. The general
-   step that archives the session does not apply.
+5. The general step that archives the session does not apply.
 
 ## Added gates
-
-### Sidebar moves
-
-The session files itself in the Code tab sidebar at each step. These moves are part of
-the steps, not optional extras, and skipping one leaves the user unable to see where
-the session stands.
-
-Before the first move, load the tools in one call:
-
-```
-ToolSearch select:mcp__ccd_sidebar__list_groups,mcp__ccd_sidebar__create_group,mcp__ccd_sidebar__move_sessions
-```
-
-Each move: `mcp__ccd_sidebar__list_groups`, take the id of the group by name (create it
-with `mcp__ccd_sidebar__create_group` when missing), then
-`mcp__ccd_sidebar__move_sessions` with `session_ids: ["self"]` and that id. Ids are
-never stored; look them up every time. A tool that fails is reported in one line and
-skipped, per [sidebar-groups.md](../_shared/sidebar-groups.md#rules).
-
-- Section 1 or the dependency check stops on a holder or an open dependency: `Blocked`.
-- Section 2, once `In Progress` reads back: `Working`.
-- Section 7, as the self review starts: `Self Review`.
-- Section 9, after a clean self review pass with CI green, and nothing else in
-  progress: `Needs Review`. Never before; the loop does not end the turn mid-way.
-- Review comments, a CI failure, or a user answer to act on: `Working`, then back
-  through `Self Review` to `Needs Review` once the fix is pushed.
-- Section 10, after the merge: the group sidebar-groups.md names for a merge, usually
-  `Completed`.
 
 ### Check dependencies
 
@@ -463,10 +434,9 @@ gh issue view <X> --json state,title
 ```
 
 If it is still open, stop and report: "Issue #N depends on #X which is still open."
-Move the session to the `Blocked` sidebar group, record #X with
-`scripts/catchup.py add-issue`, keep one `wait` running, and end the turn, per
-[sidebar-groups.md](../_shared/sidebar-groups.md#blocked-by-another-issue). When `wait`
-prints `issue: <X> closed`, move to `Working` and start this skill over at Section 1.
+Record #X with `scripts/catchup.py add-issue`, keep one `wait` running, and end the turn,
+per [run-watch.md](../_shared/run-watch.md#waiting-on-a-blocking-issue). When `wait`
+prints `issue: <X> closed`, start this skill over at Section 1.
 Leave issue N unlabeled while blocked: the label claims work in progress, and a blocked
 session is not doing any.
 
@@ -478,10 +448,9 @@ Common mistakes to avoid:
 - Do NOT skip the dependency check.
 - Do NOT cut a branch before `In Progress` reads back on the issue.
 - Do NOT leave `In Progress` on the issue after the merge.
-- Do NOT skip a sidebar move. Each one under Sidebar moves is part of its step.
 - Do NOT open a PR while smoke.sh fails.
-- Do NOT hand the PR over before a clean self review pass, and do NOT end a turn in the
-  middle of the loop. "Partly reviewed" is never reported.
+- Do NOT hand the PR over before the self review loop ends, and do NOT end a turn in the
+  middle of it. "Partly reviewed" is never reported.
 - Do NOT commit directly to main.
 - Do NOT put multiple issue numbers on one `Closes` line.
 - Do NOT merge without asking, and do NOT offer to merge before a passing conductor

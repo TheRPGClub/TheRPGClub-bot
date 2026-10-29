@@ -35,14 +35,4 @@ When doing implementation work, always pull main, then open a fresh branch and c
 When catching API errors in bot commands, always include both the full request (method, URL, body) and the full response (status, body) in the user-facing error message, each formatted as a JSON code block. Never surface just the status code or axios message alone.
 Every pull request a session opens is watched for its merge, whether a skill opened it or
 not: record it with `scripts/catchup.py add-pr` and keep one `wait` running, per
-`.claude/skills/_shared/run-watch.md`. A `PostToolUse` hook reminds the session after each
-`gh pr create`.
-Every session files itself in the sidebar under `Blocked`, `Working`, `Self Review`,
-`Needs Review`, or `Completed` as its task moves along. The moves are in
-`.claude/skills/_shared/sidebar-groups.md`. Skills that link that file require the moves,
-not suggest them.
-Every pull request a session opens is gated by `scripts/self_review_gate.py`. Its
-hooks record each `code-review` pass and its finding count, and they block ending a turn or
-moving to `Needs Review` until the PR's head has a zero-finding pass, green CI (or no
-checks), and no conflict with its base. A reread is not a pass. When the gate blocks, do
-what its message says; never work around it.
+`.claude/skills/_shared/run-watch.md`.

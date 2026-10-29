@@ -40,10 +40,9 @@ the rows still open. `--all` waits for every row instead. `add`, `add-pr`, `add-
 and `check` take a lock beside the ledger to rewrite it, so a row recorded while `wait`
 is checking keeps its row. Adding a row again replaces it rather than duplicating it.
 
-A `sidebar:` line names the move the session makes in the Code tab sidebar, per
-.claude/skills/_shared/sidebar-groups.md. A `wait` that exits on a closed issue prints the
-move out of Blocked. One that exits on a closed pull request prints the move back to
-Working, or to Completed when nothing is left.
+A `next:` line names what the session does when a row closes. A `wait` that exits on a closed
+issue prints that the deferred task starts again from its first step. One that exits on a
+closed pull request prints that the after-merge steps run.
 
 `wait` also listens for GitHub's workflow_run, pull_request and issues events through
 `gh webhook forward` (the cli/gh-webhook extension), so a row settles within seconds.
@@ -225,7 +224,7 @@ def handed_back(path, before, every):
 
 
 def report_finished(path, before):
-    """Print the rows finished since wait started and the sidebar move. False if none."""
+    """Print the rows finished since wait started and what comes next. False if none."""
     finished = done_rows(path) - before
     if not finished:
         return False
@@ -233,12 +232,10 @@ def report_finished(path, before):
     print(f'wait: {len(finished)} finished; {left} still open'
           + ('; act on the result, then run wait again' if left else ''))
     if any(is_pr(key) for key in finished):
-        print('sidebar: a pull request closed; move this session to Working if it still '
-              'holds work (open rows, running agents, another open pull request, an '
-              'unfinished task), or to Completed once the after-merge steps leave nothing')
+        print('next: a pull request closed; run the after-merge steps')
     if any(is_issue(key) for key in finished):
-        print('sidebar: a blocking issue closed; move this session from Blocked to Working, '
-              'then start the deferred task again from its first step')
+        print('next: a blocking issue closed; start the deferred task again from its '
+              'first step')
     return True
 
 
@@ -937,7 +934,7 @@ def wait(path, interval, every=False):
                 if key in still_open and reads:
                     pending[key] = (now + EVENT_RECHECK, reads)
         # The loop test skips handed_back once nothing is open, so the last row's
-        # sidebar move is printed here.
+        # next step is printed here.
         if not remaining:
             report_finished(path, before)
     finally:

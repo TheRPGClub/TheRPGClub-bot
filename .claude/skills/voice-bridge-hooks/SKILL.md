@@ -28,7 +28,7 @@ vendored copy pinned by `.claude/att-docs.lock`; never edit it here.
 - `<entry-points>`: the plugin's own scripts. This repository keeps no shims.
 - `<review-label>`: `Ready for Review`, set in [extension.json](extension.json) because the
   hooks need the key. This repository has no such label and does not use a ready label
-  (the sidebar move to `Needs Review` is the ready signal), so the label announcement
+  (the Section 9 report is the handoff), so the label announcement
   never fires here.
 - `<ready-line>`: `PULL REQUEST <N> IS READY FOR YOUR REVIEW`, the generic default
 - `<ledger-module>`: not set. `scripts/catchup.py` has no `STATIC_CHECKS_NAME`, which the

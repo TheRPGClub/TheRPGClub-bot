@@ -87,10 +87,9 @@ When a passing report is on the current head, and the pull request still reads
 head it ran against. Offer to squash-merge it or leave it for the user.
 
 - Yes: `gh pr merge <N> --squash`, then run the after-merge steps straight away:
-  `/implement` step 12 when that skill opened the pull request. Otherwise remove any
+  `/implement` Section 10 when that skill opened the pull request. Otherwise remove any
   `In Progress` label it added, per [issue-labels.md](issue-labels.md), delete the
-  branch as `/implement` step 12 does, and move to the group
-  [sidebar-groups.md](sidebar-groups.md) names for a merge.
+  branch as `/implement` Section 10 does.
 - No, or no answer: leave the pull request open. The merge stays the user's.
 
 A request to merge before a passing report exists is answered with the report's state,

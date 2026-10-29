@@ -30,10 +30,7 @@ vendored copy pinned by `.claude/att-docs.lock`; never edit it here.
 Do not run this skill until the user has approved both points under Repository
 notes in this session. Until then, tell the user what blocks it and stop.
 
-The general skill's cap of three self review passes is replaced by the loop in
-[self-review.md](../_shared/self-review.md), which has no cap and is enforced by
-`scripts/self_review_gate.py`. Two more things about this repository change what the
-general skill assumes. Both are Repository notes below, and both need the user's
+Two things about this repository change what the general skill assumes. Both are Repository notes below, and both need the user's
 decision before the skill is run.
 
 ## Repository notes

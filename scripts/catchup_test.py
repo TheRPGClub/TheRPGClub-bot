@@ -254,7 +254,7 @@ class IssueRow(Rows):
         gh.assert_not_called()
         self.assertIn('0 of 1 done; still waiting: 1 open', out)
 
-    def test_a_closed_issue_names_the_move_out_of_blocked(self):
+    def test_a_closed_issue_names_the_restart(self):
         self.run_main('add-issue', self.ledger, '9')
         before = catchup.done_rows(self.ledger)
         out = io.StringIO()
@@ -263,7 +263,7 @@ class IssueRow(Rows):
             self.assertEqual(catchup.reconcile_rows(self.ledger, issues_only=True), set())
             self.assertTrue(catchup.report_finished(self.ledger, before))
         self.assertIn('issue: 9 closed', out.getvalue())
-        self.assertIn('sidebar: a blocking issue closed; move this session from Blocked',
+        self.assertIn('next: a blocking issue closed; start the deferred task again',
                       out.getvalue())
 
     def test_issues_only_leaves_pull_request_rows_unread(self):
@@ -292,7 +292,7 @@ class PullRequestRow(Rows):
             catchup.report_finished(self.ledger, before)
         self.assertIn('merged abcdef123 at 2026-09-23T19:00:00Z', out.getvalue())
         self.assertIn('pr: 5 merged', out.getvalue())
-        self.assertIn('sidebar: a pull request closed', out.getvalue())
+        self.assertIn('next: a pull request closed; run the after-merge steps', out.getvalue())
 
 
 class Forwarder(TempLedger):

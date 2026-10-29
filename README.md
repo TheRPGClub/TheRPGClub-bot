@@ -124,7 +124,6 @@ it reads is defined in `.github/pull-request-testing-format.md`.
 - `npm run start:prod` - Run compiled output with pm2.
 - `npm run buildProd` - Build and restart or start pm2.
 - `npm run import:igdb-platforms` - Sync IGDB platforms into GameDB.
-- `npm run session:start` - Run session startup tasks.
 - `npm run conductor` - Run the PR test conductor (see `docs/conductor.md`).
 - `npm run backup:docker-volumes` - Backup docker volumes.
 
