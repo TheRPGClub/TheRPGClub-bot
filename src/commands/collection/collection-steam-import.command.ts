@@ -623,6 +623,10 @@ export class CollectionSteamImportCommand {
             userId: interaction.user.id,
             error: String(error?.message ?? "unknown"),
           });
+          if (isOpenImportConflict(error)) {
+            await safeReply(interaction, buildTextReply(OPEN_IMPORT_CONFLICT_LABEL, true));
+            return;
+          }
           if (error instanceof SteamApiError) {
             await safeReply(interaction, buildTextReply(error.message, true));
             return;
@@ -630,12 +634,7 @@ export class CollectionSteamImportCommand {
           await safeReply(
             interaction,
             buildErrorReply(
-              buildCaughtErrorMessage(
-                isOpenImportConflict(error)
-                  ? OPEN_IMPORT_CONFLICT_LABEL
-                  : "Failed to start Steam import",
-                error,
-              ),
+              buildCaughtErrorMessage("Failed to start Steam import", error),
               true,
             ),
           );

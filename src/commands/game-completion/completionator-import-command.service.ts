@@ -14,16 +14,11 @@ import { CompletionatorWorkflowService } from "./completionator-workflow.service
 import { BOT_DEV_CHANNEL_ID } from "../../config/channels.js";
 import {
   buildComponentsV2Flags,
-  buildErrorReply,
   buildTextContainer,
   buildTextReply,
   safeV2TextContent,
 } from "../../functions/ComponentsV2Utils.js";
-import {
-  OPEN_IMPORT_CONFLICT_LABEL,
-  buildApiErrorMessage,
-  isOpenImportConflict,
-} from "../../utilities/ApiErrorUtils.js";
+import { OPEN_IMPORT_CONFLICT_LABEL, isOpenImportConflict } from "../../utilities/ApiErrorUtils.js";
 
 export async function handleCompletionatorImport(
   interaction: CommandInteraction,
@@ -89,10 +84,7 @@ export async function handleCompletionatorImport(
       });
     } catch (error: unknown) {
       if (!isOpenImportConflict(error)) throw error;
-      await safeReply(interaction, buildErrorReply(
-        buildApiErrorMessage(OPEN_IMPORT_CONFLICT_LABEL, error),
-        ephemeral,
-      ));
+      await safeReply(interaction, buildTextReply(OPEN_IMPORT_CONFLICT_LABEL, ephemeral));
       return;
     }
 
