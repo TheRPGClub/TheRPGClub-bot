@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """Names the background work in a session that will wake it on its own.
 
-usage: background_pending.py <transcript.jsonl> [session-pid]
+usage: background_pending.py [--describe] <transcript.jsonl> [session-pid]
 
 Prints the ids of the pending work, one per line, and exits 0 when there is any, 1 when
-there is none. speak-attention.sh asks it at Stop, so a turn that ends while something is
+there is none. With --describe each line is the id, the kind of work (agent, bash, run,
+monitor, wakeup or work), and what it is, separated by tabs. speak-attention.sh asks it at Stop, so a turn that ends while something is
 still due to wake the session stays quiet. STOP_AT in the environment is when the Stop hook
 started, in epoch ms.
 
@@ -268,7 +269,49 @@ def unanswered(entries, stop_ms):
     return ids
 
 
+KINDS = {'Agent': 'agent', 'Task': 'agent', 'Workflow': 'agent', 'Bash': 'bash',
+         'Monitor': 'monitor', 'ScheduleWakeup': 'wakeup'}
+# What a description says at most, so a long command stays one short line.
+WHAT_LIMIT = 80
+
+
+def describe(entries, ids):
+    """(id, kind, what) for each pending id, from the tool call that launched it. kind is
+    agent, bash, run (a Bash or Monitor command that watches a CI run), monitor, wakeup, or
+    work when the launch is not found; what is the call's description or command on one
+    line, or empty."""
+    calls, launches = {}, {}
+    for entry in entries:
+        content = (entry.get('message') or {}).get('content')
+        if not isinstance(content, list):
+            continue
+        for block in content:
+            if not isinstance(block, dict):
+                continue
+            if block.get('type') == 'tool_use':
+                calls[block.get('id')] = block
+            elif block.get('type') == 'tool_result' and isinstance(entry.get('toolUseResult'), dict):
+                started = launch(entry['toolUseResult'], None)
+                if started:
+                    launches[started[0]] = block.get('tool_use_id')
+    rows = []
+    for ident in ids:
+        call = calls.get(launches.get(ident)) or {}
+        given = call.get('input') if isinstance(call.get('input'), dict) else {}
+        kind = KINDS.get(call.get('name'), 'work')
+        said = given.get('description') or given.get('command') or given.get('prompt') or ''
+        said = ' '.join(str(said).split())
+        if kind in ('bash', 'monitor') and re.search(r'\bgh run watch\b', given.get('command') or ''):
+            kind = 'run'
+        if len(said) > WHAT_LIMIT:
+            said = said[:WHAT_LIMIT - 1].rstrip() + '\u2026'
+        rows.append((ident, kind, said))
+    return rows
+
+
 def main(argv):
+    flags = [a for a in argv[1:] if a == '--describe']
+    argv = [argv[0]] + [a for a in argv[1:] if a != '--describe']
     if len(argv) not in (2, 3) or (len(argv) == 3 and not re.fullmatch(r'[0-9]+', argv[2])):
         print(__doc__.strip().splitlines()[2], file=sys.stderr)
         return 2
@@ -282,8 +325,12 @@ def main(argv):
     if re.fullmatch(r'[0-9]+', stop_at):
         moved_on = unanswered(entries, int(stop_at) - STOP_SLACK_MS)
         ids += [i for i in moved_on if i not in ids]
-    for ident in ids:
-        print(ident)
+    if flags:
+        for row in describe(entries, ids):
+            print('\t'.join(row))
+    else:
+        for ident in ids:
+            print(ident)
     return 0 if ids else 1
 
 
