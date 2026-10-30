@@ -40,7 +40,7 @@ All of them ship in this folder.
 | `speechctl` | Drives the speech `speak-attention.sh` reads aloud: `status`, `skip`, `next`, `clear`, `pause`/`resume`/`toggle`, `volume`, `voice`/`voices`, `sessions`, `speech <session> on\|alerts\|off\|cycle` and `managed <session> on\|off`. Put it on `PATH` for the conky widget and keyboard shortcuts | no |
 | `sessions.py` | Lists the open Claude sessions the way the bridge's `list_sessions` does; imported by `speechctl` | no |
 | `speak_pending.py` | Picks the text blocks a turn has not had read aloud yet | no |
-| `background_pending.py` | Names the background work still due to wake a session, so a stop stays quiet | no |
+| `background_pending.py` | Names the background work still due to wake a session, so a stop stays quiet; `--describe` also says what each item is, for the bridge's session list | no |
 | `hook_config.py` | Reads `<config>` | |
 | `defaults.json` | The config for a repository with no extension file; the plugin's `hooks/run.sh` passes it | |
 

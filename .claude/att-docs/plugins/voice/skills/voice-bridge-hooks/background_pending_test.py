@@ -340,6 +340,57 @@ class Main(unittest.TestCase):
     def test_started_ms_without_proc(self):
         self.assertIsNone(bp.started_ms(1, os.path.join(self.dir, 'none'), ticks=100))
 
+    def call(self, ident, name, given):
+        return {'type': 'assistant', 'timestamp': T0, 'message': {'content': [
+            {'type': 'tool_use', 'id': ident, 'name': name, 'input': given}]}}
+
+    def launched_by(self, call_id, fields):
+        row = result(fields)
+        row['message']['content'][0]['tool_use_id'] = call_id
+        return row
+
+    def test_describe_names_each_kind_of_work(self):
+        rows = [
+            self.call('t1', 'Agent', {'description': 'Opus review of PR 5'}),
+            self.launched_by('t1', {'status': 'async_launched', 'agentId': 'a1'}),
+            self.call('t2', 'Bash', {'command': 'gh run watch 41064131838', 'description': 'watch'}),
+            self.launched_by('t2', {'backgroundTaskId': 'b1'}),
+            self.call('t3', 'Bash', {'command': 'sleep 600 &&\n echo done'}),
+            self.launched_by('t3', {'backgroundTaskId': 'b2'}),
+            self.call('t4', 'Monitor', {'command': 'tail -f log', 'description': 'log'}),
+            self.launched_by('t4', {'taskId': 'm1', 'persistent': True}),
+            self.call('t5', 'ScheduleWakeup', {'reason': 'check'}),
+            self.launched_by('t5', {'scheduledFor': 2 * T0_MS}),
+        ]
+        ids = bp.pending(rows, now_ms=T0_MS)
+        self.assertEqual(bp.describe(rows, ids), [
+            ('a1', 'agent', 'Opus review of PR 5'),
+            ('b1', 'run', 'watch'),
+            ('b2', 'bash', 'sleep 600 && echo done'),
+            ('m1', 'monitor', 'log'),
+            ('wakeup', 'wakeup', ''),
+        ])
+
+    def test_describe_clips_long_text_and_survives_a_missing_call(self):
+        rows = [self.call('t1', 'Agent', {'description': 'x' * 200}),
+                self.launched_by('t1', {'status': 'async_launched', 'agentId': 'a1'}),
+                result({'backgroundTaskId': 'b9'})]
+        (first, second) = bp.describe(rows, ['a1', 'b9'])
+        self.assertEqual(len(first[2]), bp.WHAT_LIMIT)
+        self.assertEqual(second, ('b9', 'work', ''))
+
+    def test_describe_flag_prints_tab_separated_rows(self):
+        rows = [self.call('t1', 'Agent', {'description': 'review'}),
+                self.launched_by('t1', {'status': 'async_launched', 'agentId': 'a1'})]
+        with open(self.path, 'w') as f:
+            f.write('\n'.join(json.dumps(r) for r in rows) + '\n')
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            code = bp.main(['background_pending.py', '--describe', self.path])
+        self.assertEqual((code, out.getvalue()), (0, 'a1\tagent\treview\n'))
+        with contextlib.redirect_stdout(out):
+            self.assertEqual(bp.main(['background_pending.py', self.path, '--describe']), 0)
+
 
 if __name__ == '__main__':
     unittest.main()
