@@ -252,6 +252,22 @@ git log --oneline origin/<default-branch>..HEAD
 
 Must print nothing.
 
+### Name the session
+
+With the branch cut, give the session the name of its work, so several
+sessions in one repository can be told apart in the sidebar and by voice. When
+the voice bridge's `rename_session` tool is available, call `list_sessions` and
+find the one session it says is working on this issue; the branch name is what
+tells it so. Call `rename_session` for that session with `work` set to a few
+words from the issue title, such as `read server window`. The bridge keeps the
+session's base title, such as `Overmind 2`, and replaces only the work name
+after the dash, so names do not pile up when the session moves on to other
+work, and spoken references to the base title still find it. Do the same
+whenever the session starts work on a different issue. When no session, or more
+than one, is listed as working on the issue, or the tool is missing or
+refuses, skip the rename and go on, since the name is a convenience and never
+gates the work.
+
 ## 4. Do the work
 
 Follow the issue's acceptance criteria literally. Deliver the whole scope, not

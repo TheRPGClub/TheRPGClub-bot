@@ -1,5 +1,5 @@
 repo=merph518/Overmind
-tag=v0.24.0
-commit=e7780985f79cd2f6d5397a222b0c3a972f5b0c6c
-tree=1ad429d6e969e6c869798089f6a511ce4ab5508e
+tag=v0.24.2
+commit=ffeefd32fd6f3a4b96b2b7c395f60918e06a3cfc
+tree=93942a76effdc6e64233af6423b8d7ead9d8df6c
 paths=plugins/general plugins/voice/skills
