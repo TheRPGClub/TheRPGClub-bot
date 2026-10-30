@@ -160,6 +160,10 @@ skill, so these rules reach it only through the bridge's own tool text.
   nickname matches nothing. A number is fine as a tool argument.
 - When asked to poll, keep calling `next_update` until told to stop. Do not
   pause to ask whether to continue; the user is listening and asked for it.
+- Say every reply a `next_update` answer carries before the next call. The
+  cursor only tells the bridge the answer arrived, so a reply skipped to poll
+  again is lost. Several replies are said in one turn, one session at a time.
+  Never claim to have said a reply that was not said.
 - When starting a session with `start_session`, pick a name and go. Do not ask
   for approval of the name; it can be renamed later.
 - When changing a session's follow mode, confirm the change in a few words. Do
