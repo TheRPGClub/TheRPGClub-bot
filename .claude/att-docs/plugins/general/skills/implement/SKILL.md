@@ -252,6 +252,54 @@ git log --oneline origin/<default-branch>..HEAD
 
 Must print nothing.
 
+### Name the session
+
+With the branch cut, give the session the name of its work, so several
+sessions in one repository can be told apart in the sidebar and by voice. The
+session sets its own title with `session_title.py`, a script in the voice
+plugin's `voice-bridge-hooks` folder (under `.claude/att-docs` in a repository
+that vendors the plugins), and never through the voice bridge's tools:
+
+```bash
+python3 <voice-bridge-hooks folder>/session_title.py work "read server window"
+```
+
+The work name is a few words from the issue title. The script finds the session
+it runs in, keeps its base title, such as `Overmind 2`, and replaces only the
+work name after the dash, so names do not pile up when the session moves on to
+other work, and spoken references to the base title still find it. Run it again
+whenever the session starts work on a different issue. If the script is missing
+or reports an error, skip the rename and go on, since the name is a convenience
+and never gates the work.
+
+### Show when the session stops or waits
+
+When the session stops, stalls or waits on something other than its own work,
+it appends its status in parentheses after its current name, with the same
+script and one of these words:
+
+- `idle`: no work is left to do, the task is finished and nothing is queued;
+- `waiting on you`: it has asked the user something or needs a decision;
+- `waiting on CI`: it is waiting on a check or a run to finish;
+- `stuck`: it cannot go on without help and has said why;
+- `stopped`: it ended on an error or was stopped.
+
+```bash
+python3 <voice-bridge-hooks folder>/session_title.py status "waiting on you"
+```
+
+Run it just before the turn that stops, such as the one that asks a question or
+reports the work ready, so the sidebar and the voice bridge show at a glance
+which sessions need attention. When work resumes, naming the work again with
+`work` takes the status away, and `status ""` takes it away without naming new
+work. A status never changes the base title, so the session is still reached by
+it; a long work name is shortened, or dropped, to make room for the status and
+is not restored, so name the work again when work resumes.
+
+Only the top-level session sets its title and status. A subagent or other
+delegated agent runs inside the same session process, so it leaves both alone
+and the session reports for it.
+
 ## 4. Do the work
 
 Follow the issue's acceptance criteria literally. Deliver the whole scope, not
@@ -817,7 +865,8 @@ gh pr create --title "<type>: <summary> (#<N>)" --body-file <scratchpad>/pr-body
   deviation gate, by path and one line each with the run link that proved it,
   under a heading that names them as awaiting validation and the user's hand
   check.
-- Never run `gh pr merge`. The user merges.
+- Never run `gh pr merge`, except where the extension names an exception. The user
+  merges.
 - Never commit to `<default-branch>` directly.
 
 Then read the pull request's mergeable state and resolve any conflict before

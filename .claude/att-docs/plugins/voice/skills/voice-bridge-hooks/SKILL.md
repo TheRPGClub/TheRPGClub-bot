@@ -40,6 +40,7 @@ All of them ship in this folder.
 | `speechctl` | Drives the speech `speak-attention.sh` reads aloud: `status`, `skip`, `next`, `clear`, `pause`/`resume`/`toggle`, `volume`, `voice`/`voices`, `sessions`, `speech <session> on\|alerts\|off\|cycle` and `managed <session> on\|off`. Put it on `PATH` for the conky widget and keyboard shortcuts | no |
 | `sessions.py` | Lists the open Claude sessions the way the bridge's `list_sessions` does; imported by `speechctl` | no |
 | `speak_pending.py` | Picks the text blocks a turn has not had read aloud yet | no |
+| `session_title.py` | Sets the title of the session it runs in: `work` names its work after the base title, `status` appends a stop or wait status in parentheses; it talks to the session's own inbox, never to the voice bridge | no |
 | `background_pending.py` | Names the background work still due to wake a session, so a stop stays quiet; `--describe` also says what each item is, for the bridge's session list | no |
 | `hook_config.py` | Reads `<config>` | |
 | `defaults.json` | The config for a repository with no extension file; the plugin's `hooks/run.sh` passes it | |
@@ -180,6 +181,13 @@ by the user. A repository needs the `voice` plugin installed and kept current wi
 `claude plugin update voice@att-docs` after a version bump. `update_bridge` fast-forwards the
 bridge checkout and redirects the hooks, but the skill loads from the cached plugin install,
 which can lag. See the `voice-request` skill.
+
+## Tools that load at startup
+
+Claude Code defers MCP tools behind a tool search, which pauses the first call. The bridge's
+`tools/list` marks `send`, `read_reply` and `catch_up` with `_meta` `anthropic/alwaysLoad`
+set to true, so Claude Code lists those three up front, and leaves every other tool
+deferred to keep the startup list short. The set is `ALWAYS_LOAD_TOOLS` in `voice-bridge.mjs`.
 
 ## Tests
 
