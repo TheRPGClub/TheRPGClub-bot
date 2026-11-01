@@ -52,6 +52,11 @@ export const NEW_GAME_ANNOUNCEMENT_CHANNEL_ID = resolveId(
   "1469320594708369528",
 );
 /**
+ * Where the bot posts achievement Highlights. Empty until the channel exists, which turns
+ * Highlight posting off; AchievementHighlightService still posts the PSN auth alert.
+ */
+export const ACHIEVEMENTS_CHANNEL_ID = resolveId("ACHIEVEMENTS_CHANNEL_ID", "");
+/**
  * Destination for mirrored ephemeral replies. Only read in test mode, so the
  * production value is inert and simply points at the bot dev channel.
  */
