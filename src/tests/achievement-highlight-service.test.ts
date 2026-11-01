@@ -7,7 +7,7 @@ import {
   MAX_PENDING_PAGES_PER_TICK,
   resolveAchievementHighlightConfig,
   runAchievementHighlightTick,
-  startAchievementHighlightService,
+  buildAchievementHighlightDeps,
   type IAchievementHighlight,
   type IAchievementHighlightDeps,
   type IAchievementHubAlerts,
@@ -103,9 +103,11 @@ function harness(
         alertAcks.push(alert);
       },
     },
-    getHighlightChannel: async () => highlightChannel,
+    highlights: {
+      getChannel: async () => highlightChannel,
+      wwwBaseUrl: "https://club.example",
+    },
     getAdminChannel: async () => adminChannel,
-    wwwBaseUrl: "https://club.example",
     ackRetryDelayMs: 0,
   };
   return { deps, highlightChannel, adminChannel, highlightAcks, alertAcks };
@@ -303,9 +305,23 @@ test("an API error is logged and leaves everything for the next tick", async () 
   assert.deepEqual(h.highlightAcks, []);
 });
 
-test("the service is disabled without an achievements channel", () => {
+test("without an achievements channel only Highlight posting is off", () => {
   assert.equal(resolveAchievementHighlightConfig("", "https://club.example"), null);
-  assert.equal(startAchievementHighlightService({} as Client, { channelId: "" }), false);
+  const deps = buildAchievementHighlightDeps({} as Client, { channelId: "" });
+  assert.equal(deps.highlights, null);
+  assert.equal(typeof deps.getAdminChannel, "function");
+});
+
+test("with Highlight posting off the PSN alert is still posted, and nothing is acked", async () => {
+  const h = harness([page([highlight(1)], EXPIRED_ALERTS)]);
+  h.deps.highlights = null;
+
+  await runAchievementHighlightTick(h.deps);
+
+  assert.equal(h.adminChannel.sent.length, 1);
+  assert.deepEqual(h.alertAcks, ["psn_auth_expired"]);
+  assert.equal(h.highlightChannel.sent.length, 0);
+  assert.deepEqual(h.highlightAcks, []);
 });
 
 test("the service is disabled without the www base URL", () => {

@@ -101,12 +101,18 @@ export interface IAchievementHighlightApi {
   ackAlert: (alert: AchievementHubAlert) => Promise<void>;
 }
 
-export interface IAchievementHighlightDeps {
-  api: IAchievementHighlightApi;
-  getHighlightChannel: () => Promise<IHighlightChannel | null>;
-  getAdminChannel: () => Promise<IHighlightChannel | null>;
+/** Where and how Highlights are posted. */
+export interface IHighlightPosting {
+  getChannel: () => Promise<IHighlightChannel | null>;
   /** The www origin that each Highlight's `url_path` is joined to. */
   wwwBaseUrl: string;
+}
+
+export interface IAchievementHighlightDeps {
+  api: IAchievementHighlightApi;
+  /** Null when Highlight posting is not configured; the PSN auth alert still runs. */
+  highlights: IHighlightPosting | null;
+  getAdminChannel: () => Promise<IHighlightChannel | null>;
   /** Wait before retrying a failed ack. Defaults to ACK_RETRY_DELAY_MS. */
   ackRetryDelayMs?: number;
 }
@@ -192,7 +198,7 @@ const HIDDEN_ACHIEVEMENT_NAME = "Hidden achievement";
  */
 export function buildHighlightCardText(
   item: IAchievementHighlight,
-  deps: Pick<IAchievementHighlightDeps, "wwwBaseUrl">,
+  deps: Pick<IHighlightPosting, "wwwBaseUrl">,
 ): string {
   const member = cardField(item.display_name, item.user_id);
   const achievement = item.achievement.hidden
@@ -208,7 +214,7 @@ export function buildHighlightCardText(
 
 export function buildHighlightCard(
   item: IAchievementHighlight,
-  deps: Pick<IAchievementHighlightDeps, "wwwBaseUrl">,
+  deps: Pick<IHighlightPosting, "wwwBaseUrl">,
 ): ContainerBuilder {
   return buildCard(item, buildHighlightCardText(item, deps));
 }
@@ -288,7 +294,10 @@ export async function runAchievementHighlightTick(deps: IAchievementHighlightDep
     return;
   }
 
-  await runStep("postHighlights", () => postHighlights(deps, pending.data));
+  const posting = deps.highlights;
+  if (posting) {
+    await runStep("postHighlights", () => postHighlights(deps, posting, pending.data));
+  }
   await runStep("postPsnAuthAlert", () => postPsnAuthAlert(deps, pending.alerts));
 }
 
@@ -299,10 +308,11 @@ export async function runAchievementHighlightTick(deps: IAchievementHighlightDep
  */
 async function postHighlights(
   deps: IAchievementHighlightDeps,
+  posting: IHighlightPosting,
   firstPage: IAchievementHighlight[],
 ): Promise<void> {
   if (firstPage.length === 0) return;
-  const channel = await deps.getHighlightChannel();
+  const channel = await posting.getChannel();
   if (!channel) {
     logWarn(LOG_CONTEXT, "The achievements channel is unavailable; Highlights stay pending.");
     return;
@@ -312,7 +322,7 @@ async function postHighlights(
   for (let pages = 1; ; pages++) {
     const fresh = highlights.filter((item) => !posted.has(item.id));
     if (fresh.length === 0) return;
-    await postPage(deps, channel, fresh);
+    await postPage(deps, posting, channel, fresh);
     for (const item of fresh) posted.add(item.id);
     if (pages >= MAX_PENDING_PAGES_PER_TICK) return;
     highlights = (await deps.api.fetchPending()).data;
@@ -321,11 +331,12 @@ async function postHighlights(
 
 async function postPage(
   deps: IAchievementHighlightDeps,
+  posting: IHighlightPosting,
   channel: IHighlightChannel,
   highlights: IAchievementHighlight[],
 ): Promise<void> {
   const cards = highlights.map((item) => {
-    const text = buildHighlightCardText(item, deps);
+    const text = buildHighlightCardText(item, posting);
     return { item, container: buildCard(item, text), textLength: text.length };
   });
   for (const group of groupIntoMessages(cards)) {
@@ -411,7 +422,7 @@ export interface IAchievementHighlightConfig {
   wwwBaseUrl: string;
 }
 
-/** The service's config, or null (with a warning) when any part of it is missing. */
+/** The Highlight posting config, or null (with a warning) when any part of it is missing. */
 export function resolveAchievementHighlightConfig(
   channelId: string,
   wwwBaseUrl: string | undefined,
@@ -422,7 +433,11 @@ export function resolveAchievementHighlightConfig(
     baseUrl ? null : "RPGCLUB_WWW_BASE_URL",
   ].filter((name): name is string => name !== null);
   if (missing.length > 0) {
-    logWarn(LOG_CONTEXT, `Disabled: ${missing.join(" and ")} not configured.`);
+    logWarn(
+      LOG_CONTEXT,
+      `Highlight posting is off: ${missing.join(" and ")} not configured. ` +
+        "The PSN auth alert still runs.",
+    );
     return null;
   }
   return { channelId: channelId.trim(), wwwBaseUrl: baseUrl };
@@ -460,9 +475,31 @@ export interface IStartAchievementHighlightOptions {
 }
 
 /**
- * Starts the hourly Highlight poster. Hourly and never faster (ADR 0003: Neon must idle).
- * Returns false when the service is disabled or already running. The interval is tracked,
- * so the shutdown service stops it with the others.
+ * The live deps. Highlight posting needs ACHIEVEMENTS_CHANNEL_ID and RPGCLUB_WWW_BASE_URL;
+ * without them it is off, but the PSN auth alert (admin channel only) still runs.
+ */
+export function buildAchievementHighlightDeps(
+  client: Client,
+  options: IStartAchievementHighlightOptions = {},
+): IAchievementHighlightDeps {
+  const config = resolveAchievementHighlightConfig(
+    options.channelId ?? ACHIEVEMENTS_CHANNEL_ID,
+    options.wwwBaseUrl ?? process.env.RPGCLUB_WWW_BASE_URL,
+  );
+  return {
+    api: achievementHighlightApi,
+    highlights: config && {
+      getChannel: () => fetchSendableChannel(client, config.channelId),
+      wwwBaseUrl: config.wwwBaseUrl,
+    },
+    getAdminChannel: () => fetchSendableChannel(client, ADMIN_CHANNEL_ID),
+  };
+}
+
+/**
+ * Starts the hourly Highlight and PSN alert poster. Hourly and never faster (ADR 0003:
+ * Neon must idle). Returns false when already running. The interval is tracked, so the
+ * shutdown service stops it with the others.
  */
 export function startAchievementHighlightService(
   client: Client,
@@ -472,18 +509,7 @@ export function startAchievementHighlightService(
     logWarn(LOG_CONTEXT, "Already started, ignoring a second start.");
     return false;
   }
-  const config = resolveAchievementHighlightConfig(
-    options.channelId ?? ACHIEVEMENTS_CHANNEL_ID,
-    options.wwwBaseUrl ?? process.env.RPGCLUB_WWW_BASE_URL,
-  );
-  if (!config) return false;
-
-  const deps: IAchievementHighlightDeps = {
-    api: achievementHighlightApi,
-    getHighlightChannel: () => fetchSendableChannel(client, config.channelId),
-    getAdminChannel: () => fetchSendableChannel(client, ADMIN_CHANNEL_ID),
-    wwwBaseUrl: config.wwwBaseUrl,
-  };
+  const deps = buildAchievementHighlightDeps(client, options);
   highlightTask = createIntervalTask({
     name: `${LOG_CONTEXT}.polling`,
     intervalMs: POLL_INTERVAL_MS,
