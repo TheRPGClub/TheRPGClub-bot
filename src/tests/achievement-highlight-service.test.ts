@@ -2,6 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import type { Client } from "discordx";
 import {
+  HIGHLIGHT_MESSAGE_TEXT_BUDGET,
+  HIGHLIGHTS_PER_MESSAGE,
   resolveAchievementHighlightConfig,
   runAchievementHighlightTick,
   startAchievementHighlightService,
@@ -63,8 +65,7 @@ function fakeChannel(failOnCall?: number): IFakeChannel {
   return {
     sent,
     send: async (message: IHighlightMessage) => {
-      if (failOnCall === sent.length + 1)
-        throw new Error("Discord rejected the message");
+      if (failOnCall === sent.length + 1) throw new Error("Discord rejected the message");
       sent.push(message);
       return {};
     },
@@ -120,9 +121,7 @@ test("a pending Highlight is posted without mentions, then its id is acked", asy
 });
 
 function range(from: number, to: number): IAchievementHighlight[] {
-  return Array.from({ length: to - from + 1 }, (_, index) =>
-    highlight(from + index),
-  );
+  return Array.from({ length: to - from + 1 }, (_, index) => highlight(from + index));
 }
 
 function ids(items: IAchievementHighlight[]): number[] {
@@ -138,10 +137,7 @@ test("more than 10 Highlights are split into messages of at most 10 cards", asyn
     h.highlightChannel.sent.map((message) => message.components.length),
     [10, 10, 5],
   );
-  assert.deepEqual(
-    h.highlightAcks,
-    [range(1, 10), range(11, 20), range(21, 25)].map(ids),
-  );
+  assert.deepEqual(h.highlightAcks, [range(1, 10), range(11, 20), range(21, 25)].map(ids));
 });
 
 test("a message Discord rejects is not acked, and the tick stops there", async () => {
@@ -202,22 +198,14 @@ test("a card names the member without a mention and shows the Achievement", asyn
   await runAchievementHighlightTick(h.deps);
 
   const text = cardText(h.highlightChannel.sent[0]!);
-  assert.ok(
-    !text.includes("<@191938640413327360>"),
-    "the member is never mentioned",
-  );
+  assert.ok(!text.includes("<@191938640413327360>"), "the member is never mentioned");
   assert.ok(text.includes("Achievement 7"));
   assert.ok(text.includes("Chrono Trigger"));
   assert.ok(text.includes("Steam"));
   assert.ok(text.includes("3.25%"));
+  assert.ok(text.includes("https://cdn.example/a7.png"), "the Achievement icon is shown");
   assert.ok(
-    text.includes("https://cdn.example/a7.png"),
-    "the Achievement icon is shown",
-  );
-  assert.ok(
-    text.includes(
-      "https://club.example/members/191938640413327360/achievements/42",
-    ),
+    text.includes("https://club.example/members/191938640413327360/achievements/42"),
     "the card links the www set page",
   );
 });
@@ -315,14 +303,8 @@ test("an API error is logged and leaves everything for the next tick", async () 
 });
 
 test("the service is disabled without an achievements channel", () => {
-  assert.equal(
-    resolveAchievementHighlightConfig("", "https://club.example"),
-    null,
-  );
-  assert.equal(
-    startAchievementHighlightService({} as Client, { channelId: "" }),
-    false,
-  );
+  assert.equal(resolveAchievementHighlightConfig("", "https://club.example"), null);
+  assert.equal(startAchievementHighlightService({} as Client, { channelId: "" }), false);
 });
 
 test("the service is disabled without the www base URL", () => {
@@ -330,11 +312,77 @@ test("the service is disabled without the www base URL", () => {
 });
 
 test("the service config trims the www base URL", () => {
-  assert.deepEqual(
-    resolveAchievementHighlightConfig("123", " https://club.example/ "),
-    {
-      channelId: "123",
-      wwwBaseUrl: "https://club.example",
+  assert.deepEqual(resolveAchievementHighlightConfig("123", " https://club.example/ "), {
+    channelId: "123",
+    wwwBaseUrl: "https://club.example",
+  });
+});
+
+/** Every text display's content in a message, as Discord counts it against 4000. */
+function textContents(value: unknown): string[] {
+  if (Array.isArray(value)) return value.flatMap(textContents);
+  if (value && typeof value === "object") {
+    return Object.entries(value).flatMap(([key, field]) =>
+      key === "content" && typeof field === "string" ? [field] : textContents(field),
+    );
+  }
+  return [];
+}
+
+function messageTextLength(message: IHighlightMessage): number {
+  return textContents(message.components.map((component) => component.toJSON())).join("").length;
+}
+
+function markdownHeavy(id: number): IAchievementHighlight {
+  const noisy = "_*~`|".repeat(40);
+  return highlight(id, {
+    display_name: noisy,
+    achievement: { ...highlight(id).achievement, name: noisy },
+    achievement_set: {
+      ...highlight(id).achievement_set,
+      title: noisy,
+      platform_label: noisy,
     },
+  });
+}
+
+test("each message stays under Discord's text budget, however much the fields escape", async () => {
+  const h = harness([page(Array.from({ length: 25 }, (_, index) => markdownHeavy(index + 1)))]);
+
+  await runAchievementHighlightTick(h.deps);
+
+  assert.ok(h.highlightChannel.sent.length > 3, "the budget splits before 10 cards");
+  for (const message of h.highlightChannel.sent) {
+    assert.ok(messageTextLength(message) <= HIGHLIGHT_MESSAGE_TEXT_BUDGET);
+    assert.ok(message.components.length <= HIGHLIGHTS_PER_MESSAGE);
+  }
+  assert.deepEqual(
+    h.highlightAcks.flat(),
+    Array.from({ length: 25 }, (_, index) => index + 1),
   );
+});
+
+test("a card field is capped after escaping", async () => {
+  const h = harness([page([markdownHeavy(1)])]);
+
+  await runAchievementHighlightTick(h.deps);
+
+  const setLine = textContents(h.highlightChannel.sent[0]!.components[0]!.toJSON())
+    .join("")
+    .split("\n")[1]!;
+  const [title, platform] = setLine.split(" · ");
+  assert.ok(title!.length <= 80 + 2, `title is ${title!.length} characters`);
+  assert.ok(platform!.length <= 80, `platform is ${platform!.length} characters`);
+});
+
+test("a blank platform label leaves no empty segment in the set line", async () => {
+  const blank = highlight(1, {
+    achievement_set: { ...highlight(1).achievement_set, platform_label: "   " },
+  });
+  const h = harness([page([blank])]);
+
+  await runAchievementHighlightTick(h.deps);
+
+  const text = textContents(h.highlightChannel.sent[0]!.components[0]!.toJSON()).join("");
+  assert.match(text, /\*Chrono Trigger\* · Steam/);
 });

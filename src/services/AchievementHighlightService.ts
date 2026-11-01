@@ -15,7 +15,6 @@ import {
   buildContentContainer,
   buildMaskedLink,
 } from "../functions/ComponentsV2Utils.js";
-import { chunk } from "../utilities/ArrayUtils.js";
 import { createIntervalTask, type IIntervalTask } from "../utilities/IntervalUtils.js";
 import { truncateWithEllipsis } from "../utilities/ValidationUtils.js";
 import { apiGet, apiPostOrThrow } from "./RpgClubApiClient.js";
@@ -32,6 +31,12 @@ const ALERTS_ACK_PATH = "/api/v1/achievements/alerts/ack";
  * with an icon is four (container, section, text, thumbnail).
  */
 export const HIGHLIGHTS_PER_MESSAGE = 10;
+
+/**
+ * Text characters per message. Discord allows 4000 across all of a Components V2
+ * message's text displays; the margin covers anything a card adds beyond its fields.
+ */
+export const HIGHLIGHT_MESSAGE_TEXT_BUDGET = 3800;
 
 export type HighlightKind = "platinum" | "completion" | "mastery" | "rare";
 export type AchievementProvider = "retroachievements" | "steam" | "psn";
@@ -126,12 +131,17 @@ const HIGHLIGHT_COLORS: Record<HighlightKind, number> = {
   rare: COLOR_INFO,
 };
 
-// A Components V2 message holds at most 4000 characters of text, shared by its cards.
+// Escaped length of one card field, so a card stays a small share of the message budget.
 const CARD_FIELD_MAX_LENGTH = 80;
 
+/** A trimmed, escaped field, truncated until its escaped form fits CARD_FIELD_MAX_LENGTH. */
 function cardField(value: string | null | undefined, fallback: string): string {
   const text = (value ?? "").trim() || fallback;
-  return escapeMarkdown(truncateWithEllipsis(text, CARD_FIELD_MAX_LENGTH));
+  for (let max = Math.min(text.length, CARD_FIELD_MAX_LENGTH); max > 0; max--) {
+    const escaped = escapeMarkdown(truncateWithEllipsis(text, max));
+    if (escaped.length <= CARD_FIELD_MAX_LENGTH) return escaped;
+  }
+  return "";
 }
 
 function capitalize(value: string): string {
@@ -156,7 +166,8 @@ function buildMarkerLine(item: IAchievementHighlight): string {
 function buildSetLine(item: IAchievementHighlight): string {
   const set = item.achievement_set;
   const parts = [`*${cardField(set.title, "Unknown set")}*`];
-  if (set.platform_label) parts.push(cardField(set.platform_label, ""));
+  const platform = cardField(set.platform_label, "");
+  if (platform) parts.push(platform);
   parts.push(PROVIDER_LABELS[set.provider]);
   return parts.join(" · ");
 }
@@ -167,28 +178,66 @@ export function buildSetPageUrl(wwwBaseUrl: string, urlPath: string): string {
 }
 
 /**
- * One Highlight card. The member is named by display name, never mentioned, so the post
- * pings nobody even if the message's allowed mentions were ever widened.
+ * The text of one Highlight card. The member is named by display name, never mentioned,
+ * so the post pings nobody even if the message's allowed mentions were ever widened.
  */
-export function buildHighlightCard(
+export function buildHighlightCardText(
   item: IAchievementHighlight,
   deps: Pick<IAchievementHighlightDeps, "wwwBaseUrl">,
-): ContainerBuilder {
+): string {
   const member = cardField(item.display_name, item.user_id);
   const achievement = cardField(item.achievement.name, "Hidden achievement");
-  const lines = [
+  return [
     `**${member}** unlocked **${achievement}**`,
     buildSetLine(item),
     buildMarkerLine(item),
     buildMaskedLink("View set", buildSetPageUrl(deps.wwwBaseUrl, item.url_path)),
-  ];
-  const icon = item.achievement.icon_url || item.achievement_set.icon_url || null;
-  return buildContentContainer(lines.join("\n"), icon).setAccentColor(
-    HIGHLIGHT_COLORS[item.highlight],
-  );
+  ].join("\n");
 }
 
-/** Wraps one already chunked set of cards (see HIGHLIGHTS_PER_MESSAGE) as a message. */
+export function buildHighlightCard(
+  item: IAchievementHighlight,
+  deps: Pick<IAchievementHighlightDeps, "wwwBaseUrl">,
+): ContainerBuilder {
+  return buildCard(item, buildHighlightCardText(item, deps));
+}
+
+function buildCard(item: IAchievementHighlight, text: string): ContainerBuilder {
+  const icon = item.achievement.icon_url || item.achievement_set.icon_url || null;
+  return buildContentContainer(text, icon).setAccentColor(HIGHLIGHT_COLORS[item.highlight]);
+}
+
+interface IHighlightCard {
+  item: IAchievementHighlight;
+  container: ContainerBuilder;
+  textLength: number;
+}
+
+/**
+ * Groups cards into messages of at most HIGHLIGHTS_PER_MESSAGE cards and
+ * HIGHLIGHT_MESSAGE_TEXT_BUDGET characters of text, keeping their order.
+ */
+function groupIntoMessages(cards: IHighlightCard[]): IHighlightCard[][] {
+  const groups: IHighlightCard[][] = [];
+  let current: IHighlightCard[] = [];
+  let textLength = 0;
+  for (const card of cards) {
+    const full =
+      current.length === HIGHLIGHTS_PER_MESSAGE ||
+      textLength + card.textLength > HIGHLIGHT_MESSAGE_TEXT_BUDGET;
+    if (current.length > 0 && full) {
+      groups.push(current);
+      current = [];
+      textLength = 0;
+    }
+    current.push(card);
+    textLength += card.textLength;
+  }
+  if (current.length > 0) groups.push(current);
+  return groups;
+}
+
+/** Wraps one message's worth of cards as a message. */
 function toQuietMessage(containers: ContainerBuilder[]): IHighlightMessage {
   return {
     components: containers,
@@ -241,11 +290,15 @@ async function postHighlights(
     logWarn(LOG_CONTEXT, "The achievements channel is unavailable; Highlights stay pending.");
     return;
   }
-  for (const batch of chunk(highlights, HIGHLIGHTS_PER_MESSAGE)) {
-    await channel.send(toQuietMessage(batch.map((item) => buildHighlightCard(item, deps))));
+  const cards = highlights.map((item) => {
+    const text = buildHighlightCardText(item, deps);
+    return { item, container: buildCard(item, text), textLength: text.length };
+  });
+  for (const group of groupIntoMessages(cards)) {
+    await channel.send(toQuietMessage(group.map((card) => card.container)));
     await ackHighlights(
       deps,
-      batch.map((item) => item.id),
+      group.map((card) => card.item.id),
     );
   }
 }
