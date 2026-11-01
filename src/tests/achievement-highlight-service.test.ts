@@ -497,3 +497,35 @@ test("a failed page stops the tick without fetching another", async () => {
   assert.equal(fetches, 1);
   assert.deepEqual(h.highlightAcks, []);
 });
+
+test("a hidden Achievement is masked: no name, no icon, no description", async () => {
+  const secret = highlight(7, {
+    achievement: {
+      ...highlight(7).achievement,
+      name: "The Secret Ending",
+      description: "Spoiler: everyone was a ghost",
+      hidden: true,
+    },
+    achievement_set: { ...highlight(7).achievement_set, icon_url: "https://cdn.example/set.png" },
+  });
+  const h = harness([page([secret])]);
+
+  await runAchievementHighlightTick(h.deps);
+
+  const text = cardText(h.highlightChannel.sent[0]!);
+  assert.match(text, /Hidden achievement/);
+  assert.ok(!text.includes("Secret Ending"));
+  assert.ok(!text.includes("ghost"));
+  assert.ok(!text.includes("https://cdn.example/a7.png"), "the Achievement icon is withheld");
+  assert.ok(text.includes("https://cdn.example/set.png"), "the set icon stands in");
+});
+
+test("an Achievement without the hidden flag is shown", async () => {
+  const h = harness([
+    page([highlight(7, { achievement: { ...highlight(7).achievement, hidden: false } })]),
+  ]);
+
+  await runAchievementHighlightTick(h.deps);
+
+  assert.match(cardText(h.highlightChannel.sent[0]!), /Achievement 7/);
+});

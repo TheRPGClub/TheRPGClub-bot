@@ -60,6 +60,8 @@ export interface IAchievementHighlight {
     tier?: AchievementTier | null;
     points?: number | null;
     rarity?: number | null;
+    /** A secret Achievement. Missing (an older API) is treated as false. */
+    hidden?: boolean;
   };
   achievement_set: {
     id: number;
@@ -180,16 +182,22 @@ export function buildSetPageUrl(wwwBaseUrl: string, urlPath: string): string {
   return `${wwwBaseUrl.replace(/\/+$/, "")}/${urlPath.replace(/^\/+/, "")}`;
 }
 
+const HIDDEN_ACHIEVEMENT_NAME = "Hidden achievement";
+
 /**
- * The text of one Highlight card. The member is named by display name, never mentioned,
- * so the post pings nobody even if the message's allowed mentions were ever widened.
+ * The text of one Highlight card. A hidden Achievement is masked as on www: no name, and
+ * the set's icon in place of its own, so the public post spoils nothing. The member is
+ * named by display name, never mentioned, so the post pings nobody even if the message's
+ * allowed mentions were ever widened.
  */
 export function buildHighlightCardText(
   item: IAchievementHighlight,
   deps: Pick<IAchievementHighlightDeps, "wwwBaseUrl">,
 ): string {
   const member = cardField(item.display_name, item.user_id);
-  const achievement = cardField(item.achievement.name, "Hidden achievement");
+  const achievement = item.achievement.hidden
+    ? HIDDEN_ACHIEVEMENT_NAME
+    : cardField(item.achievement.name, HIDDEN_ACHIEVEMENT_NAME);
   return [
     `**${member}** unlocked **${achievement}**`,
     buildSetLine(item),
@@ -206,7 +214,8 @@ export function buildHighlightCard(
 }
 
 function buildCard(item: IAchievementHighlight, text: string): ContainerBuilder {
-  const icon = item.achievement.icon_url || item.achievement_set.icon_url || null;
+  const achievementIcon = item.achievement.hidden ? null : item.achievement.icon_url;
+  const icon = achievementIcon || item.achievement_set.icon_url || null;
   return buildContentContainer(text, icon).setAccentColor(HIGHLIGHT_COLORS[item.highlight]);
 }
 
