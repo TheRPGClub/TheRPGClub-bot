@@ -295,12 +295,52 @@ async function postHighlights(
     return { item, container: buildCard(item, text), textLength: text.length };
   });
   for (const group of groupIntoMessages(cards)) {
-    await channel.send(toQuietMessage(group.map((card) => card.container)));
-    await ackHighlights(
-      deps,
-      group.map((card) => card.item.id),
-    );
+    await postCards(deps, channel, group);
   }
+}
+
+// Statuses that say the channel or bot is unusable, or to wait, rather than that a card is bad.
+const CHANNEL_LEVEL_STATUSES = new Set([401, 403, 404, 429]);
+
+/**
+ * True when Discord rejected the message's content (a 4xx such as 400 Invalid Form Body),
+ * so sending the same cards again would fail the same way.
+ */
+export function isRejectedContent(err: unknown): boolean {
+  const status = (err as { status?: unknown } | null)?.status;
+  return (
+    typeof status === "number" &&
+    status >= 400 &&
+    status < 500 &&
+    !CHANNEL_LEVEL_STATUSES.has(status)
+  );
+}
+
+/**
+ * Sends cards as one message and acks them. When Discord rejects the content, each card is
+ * retried as its own message, and a card rejected on its own is logged, acked and skipped,
+ * so one bad card cannot hold back the outbox. Any other failure stops the tick.
+ */
+async function postCards(
+  deps: IAchievementHighlightDeps,
+  channel: IHighlightChannel,
+  cards: IHighlightCard[],
+): Promise<void> {
+  try {
+    await channel.send(toQuietMessage(cards.map((card) => card.container)));
+  } catch (err) {
+    if (!isRejectedContent(err)) throw err;
+    if (cards.length > 1) {
+      for (const card of cards) await postCards(deps, channel, [card]);
+      return;
+    }
+    logWarn(LOG_CONTEXT, `Discord rejected Highlight ${cards[0]!.item.id}; skipping it.`);
+    logError(`${LOG_CONTEXT}.skippedHighlight`, err);
+  }
+  await ackHighlights(
+    deps,
+    cards.map((card) => card.item.id),
+  );
 }
 
 /** Acks posted Highlights, retrying once so a brief API blip does not repost them. */

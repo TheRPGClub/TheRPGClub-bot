@@ -386,3 +386,59 @@ test("a blank platform label leaves no empty segment in the set line", async () 
   const text = textContents(h.highlightChannel.sent[0]!.components[0]!.toJSON()).join("");
   assert.match(text, /\*Chrono Trigger\* · Steam/);
 });
+
+function discordError(status: number): Error {
+  return Object.assign(new Error(`Discord answered ${status}`), { status });
+}
+
+/** A channel that throws `error` for any message containing a card that mentions `needle`. */
+function rejectingChannel(needle: string, error: Error): IFakeChannel {
+  const sent: IHighlightMessage[] = [];
+  return {
+    sent,
+    send: async (message: IHighlightMessage) => {
+      if (JSON.stringify(message.components.map((c) => c.toJSON())).includes(needle)) {
+        throw error;
+      }
+      sent.push(message);
+      return {};
+    },
+  };
+}
+
+test("a card Discord rejects is retried alone, then skipped and acked", async () => {
+  const h = harness([page(range(1, 5))], {
+    highlightChannel: rejectingChannel("Achievement 3", discordError(400)),
+  });
+
+  await runAchievementHighlightTick(h.deps);
+
+  assert.deepEqual(
+    h.highlightChannel.sent.map((message) => message.components.length),
+    [1, 1, 1, 1],
+  );
+  assert.deepEqual(h.highlightAcks, [[1], [2], [3], [4], [5]]);
+});
+
+test("a lone card Discord rejects is skipped and acked", async () => {
+  const h = harness([page([highlight(3)])], {
+    highlightChannel: rejectingChannel("Achievement 3", discordError(400)),
+  });
+
+  await runAchievementHighlightTick(h.deps);
+
+  assert.deepEqual(h.highlightAcks, [[3]]);
+});
+
+for (const status of [403, 429, 503]) {
+  test(`a ${status} from Discord skips nothing and stops the tick`, async () => {
+    const h = harness([page(range(1, 5))], {
+      highlightChannel: rejectingChannel("Achievement 3", discordError(status)),
+    });
+
+    await runAchievementHighlightTick(h.deps);
+
+    assert.equal(h.highlightChannel.sent.length, 0);
+    assert.deepEqual(h.highlightAcks, []);
+  });
+}
