@@ -4,6 +4,7 @@ import type { Client } from "discordx";
 import {
   HIGHLIGHT_MESSAGE_TEXT_BUDGET,
   HIGHLIGHTS_PER_MESSAGE,
+  MAX_PENDING_PAGES_PER_TICK,
   resolveAchievementHighlightConfig,
   runAchievementHighlightTick,
   startAchievementHighlightService,
@@ -442,3 +443,57 @@ for (const status of [403, 429, 503]) {
     assert.deepEqual(h.highlightAcks, []);
   });
 }
+
+test("a tick keeps fetching pending pages until the outbox is empty", async () => {
+  const h = harness([page(range(1, 25), EXPIRED_ALERTS), page(range(26, 50), EXPIRED_ALERTS)]);
+
+  await runAchievementHighlightTick(h.deps);
+
+  assert.deepEqual(h.highlightAcks.flat(), ids(range(1, 50)));
+  assert.equal(h.adminChannel.sent.length, 1, "the alert is posted once per tick");
+});
+
+test("a tick fetches at most 10 pages", async () => {
+  const h = harness([]);
+  let fetches = 0;
+  h.deps.api.fetchPending = async () => {
+    fetches += 1;
+    return page(range(fetches * 100, fetches * 100 + 24));
+  };
+
+  await runAchievementHighlightTick(h.deps);
+
+  assert.equal(fetches, MAX_PENDING_PAGES_PER_TICK);
+  assert.equal(h.highlightAcks.flat().length, 25 * MAX_PENDING_PAGES_PER_TICK);
+});
+
+test("a page of Highlights already posted this tick is not posted again", async () => {
+  const h = harness([]);
+  let fetches = 0;
+  h.deps.api.fetchPending = async () => {
+    fetches += 1;
+    return page(range(1, 3));
+  };
+
+  await runAchievementHighlightTick(h.deps);
+
+  assert.equal(fetches, 2);
+  assert.equal(h.highlightChannel.sent.length, 1);
+});
+
+test("a failed page stops the tick without fetching another", async () => {
+  const h = harness([page(range(1, 25)), page(range(26, 50))], {
+    highlightChannel: fakeChannel(1),
+  });
+  let fetches = 0;
+  const fetchPending = h.deps.api.fetchPending;
+  h.deps.api.fetchPending = async () => {
+    fetches += 1;
+    return fetchPending();
+  };
+
+  await runAchievementHighlightTick(h.deps);
+
+  assert.equal(fetches, 1);
+  assert.deepEqual(h.highlightAcks, []);
+});

@@ -111,6 +111,9 @@ export interface IAchievementHighlightDeps {
 
 const ACK_RETRY_DELAY_MS = 2000;
 
+/** Pending pages (25 Unlocks each) one tick may post. Re-fetches add no extra wakeups. */
+export const MAX_PENDING_PAGES_PER_TICK = 10;
+
 const PROVIDER_LABELS: Record<AchievementProvider, string> = {
   retroachievements: "RetroAchievements",
   steam: "Steam",
@@ -280,16 +283,38 @@ export async function runAchievementHighlightTick(deps: IAchievementHighlightDep
   await runStep("postPsnAuthAlert", () => postPsnAuthAlert(deps, pending.alerts));
 }
 
+/**
+ * Posts the first pending page, then re-fetches until the outbox is empty, so a backlog
+ * drains within one tick instead of 25 an hour. Bounded by MAX_PENDING_PAGES_PER_TICK, and
+ * stops early if a page holds nothing new (an ack the API did not apply).
+ */
 async function postHighlights(
   deps: IAchievementHighlightDeps,
-  highlights: IAchievementHighlight[],
+  firstPage: IAchievementHighlight[],
 ): Promise<void> {
-  if (highlights.length === 0) return;
+  if (firstPage.length === 0) return;
   const channel = await deps.getHighlightChannel();
   if (!channel) {
     logWarn(LOG_CONTEXT, "The achievements channel is unavailable; Highlights stay pending.");
     return;
   }
+  const posted = new Set<number>();
+  let highlights = firstPage;
+  for (let pages = 1; ; pages++) {
+    const fresh = highlights.filter((item) => !posted.has(item.id));
+    if (fresh.length === 0) return;
+    await postPage(deps, channel, fresh);
+    for (const item of fresh) posted.add(item.id);
+    if (pages >= MAX_PENDING_PAGES_PER_TICK) return;
+    highlights = (await deps.api.fetchPending()).data;
+  }
+}
+
+async function postPage(
+  deps: IAchievementHighlightDeps,
+  channel: IHighlightChannel,
+  highlights: IAchievementHighlight[],
+): Promise<void> {
   const cards = highlights.map((item) => {
     const text = buildHighlightCardText(item, deps);
     return { item, container: buildCard(item, text), textLength: text.length };
