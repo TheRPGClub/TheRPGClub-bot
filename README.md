@@ -73,6 +73,9 @@ These are required or commonly used by the bot. Values depend on your deployment
 - `BACKBLAZE_B2_BUCKET_ID`
 - `BACKBLAZE_B2_BUCKET_NAME`
 - `TEST_GUILD_ID`
+- `RPGCLUB_WWW_BASE_URL`: the website origin that achievement Highlight cards link to.
+  Highlight posting stays off until it and `ACHIEVEMENTS_CHANNEL_ID` are set; the PSN
+  auth alert to the admin channel runs regardless.
 
 ### Test guild mode
 
