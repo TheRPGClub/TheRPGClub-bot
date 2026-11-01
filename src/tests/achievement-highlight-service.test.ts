@@ -1,7 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import type { Client } from "discordx";
 import {
+  resolveAchievementHighlightConfig,
   runAchievementHighlightTick,
+  startAchievementHighlightService,
   type IAchievementHighlight,
   type IAchievementHighlightDeps,
   type IAchievementHubAlerts,
@@ -190,4 +193,80 @@ test("a card shows the PSN tier and the RetroAchievements hardcore marker", asyn
   assert.match(cardText(message, 1), /Mastery/);
   assert.match(cardText(message, 1), /Hardcore/);
   assert.match(cardText(message, 1), /RetroAchievements/);
+});
+
+const EXPIRED_ALERTS: IAchievementHubAlerts = {
+  psn_auth_expired_at: "2026-11-01T06:00:00Z",
+  psn_auth_alerted: false,
+};
+
+test("an expired PSN token is posted to the admin channel once, then acked", async () => {
+  const h = harness([page([], EXPIRED_ALERTS)]);
+
+  await runAchievementHighlightTick(h.deps);
+
+  assert.equal(h.adminChannel.sent.length, 1);
+  assert.deepEqual(h.adminChannel.sent[0]!.allowedMentions, { parse: [] });
+  assert.match(cardText(h.adminChannel.sent[0]!), /psn_npsso/);
+  assert.deepEqual(h.alertAcks, ["psn_auth_expired"]);
+  assert.equal(h.highlightChannel.sent.length, 0);
+  assert.deepEqual(h.highlightAcks, []);
+});
+
+test("an alert already posted for this expiry is not posted again", async () => {
+  const alerted = { ...EXPIRED_ALERTS, psn_auth_alerted: true };
+  const h = harness([page([], alerted)]);
+
+  await runAchievementHighlightTick(h.deps);
+
+  assert.equal(h.adminChannel.sent.length, 0);
+  assert.deepEqual(h.alertAcks, []);
+});
+
+test("the alert is not acked when Discord rejects it", async () => {
+  const h = harness([page([], EXPIRED_ALERTS)], { adminChannel: fakeChannel(1) });
+
+  await runAchievementHighlightTick(h.deps);
+
+  assert.deepEqual(h.alertAcks, []);
+});
+
+test("the alert is still posted when posting Highlights fails", async () => {
+  const h = harness([page([highlight(1)], EXPIRED_ALERTS)], {
+    highlightChannel: fakeChannel(1),
+  });
+
+  await runAchievementHighlightTick(h.deps);
+
+  assert.equal(h.adminChannel.sent.length, 1);
+  assert.deepEqual(h.alertAcks, ["psn_auth_expired"]);
+});
+
+test("an API error is logged and leaves everything for the next tick", async () => {
+  const h = harness([]);
+  h.deps.api.fetchPending = async () => {
+    throw new Error("503 Service Unavailable");
+  };
+
+  await runAchievementHighlightTick(h.deps);
+
+  assert.equal(h.highlightChannel.sent.length, 0);
+  assert.equal(h.adminChannel.sent.length, 0);
+  assert.deepEqual(h.highlightAcks, []);
+});
+
+test("the service is disabled without an achievements channel", () => {
+  assert.equal(resolveAchievementHighlightConfig("", "https://club.example"), null);
+  assert.equal(startAchievementHighlightService({} as Client, { channelId: "" }), false);
+});
+
+test("the service is disabled without the www base URL", () => {
+  assert.equal(resolveAchievementHighlightConfig("123", " "), null);
+});
+
+test("the service config trims the www base URL", () => {
+  assert.deepEqual(resolveAchievementHighlightConfig("123", " https://club.example/ "), {
+    channelId: "123",
+    wwwBaseUrl: "https://club.example",
+  });
 });

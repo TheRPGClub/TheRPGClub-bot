@@ -1,20 +1,31 @@
 import type { ContainerBuilder } from "@discordjs/builders";
 import { escapeMarkdown } from "discord.js";
+import type { Client } from "discordx";
+import { ACHIEVEMENTS_CHANNEL_ID, ADMIN_CHANNEL_ID } from "../config/channels.js";
 import {
   COLOR_HIGHLIGHT,
   COLOR_INFO,
   COLOR_PURPLE,
   COLOR_SUCCESS,
+  COLOR_WARNING,
 } from "../config/colors.js";
 import {
+  buildAccentContainer,
   buildComponentsV2EditFlags,
   buildContentContainer,
   buildMaskedLink,
 } from "../functions/ComponentsV2Utils.js";
+import { chunk } from "../utilities/ArrayUtils.js";
+import { createIntervalTask, type IIntervalTask } from "../utilities/IntervalUtils.js";
 import { truncateWithEllipsis } from "../utilities/ValidationUtils.js";
-import { logError } from "../utilities/LogUtils.js";
+import { apiGet, apiPostOrThrow } from "./RpgClubApiClient.js";
+import { logError, logWarn } from "../utilities/LogUtils.js";
 
 const LOG_CONTEXT = "AchievementHighlightService";
+
+const PENDING_PATH = "/api/v1/achievements/highlights/pending";
+const HIGHLIGHTS_ACK_PATH = "/api/v1/achievements/highlights/ack";
+const ALERTS_ACK_PATH = "/api/v1/achievements/alerts/ack";
 
 /**
  * Cards per message. Discord caps a Components V2 message at 40 components, and a card
@@ -88,14 +99,6 @@ export interface IAchievementHighlightDeps {
   getAdminChannel: () => Promise<IHighlightChannel | null>;
   /** The www origin that each Highlight's `url_path` is joined to. */
   wwwBaseUrl: string;
-}
-
-function chunk<T>(items: T[], size: number): T[][] {
-  const batches: T[][] = [];
-  for (let start = 0; start < items.length; start += size) {
-    batches.push(items.slice(start, start + size));
-  }
-  return batches;
 }
 
 const PROVIDER_LABELS: Record<AchievementProvider, string> = {
@@ -180,7 +183,8 @@ export function buildHighlightCard(
   );
 }
 
-function buildMessage(containers: ContainerBuilder[]): IHighlightMessage {
+/** Wraps one already chunked set of cards (see HIGHLIGHTS_PER_MESSAGE) as a message. */
+function toQuietMessage(containers: ContainerBuilder[]): IHighlightMessage {
   return {
     components: containers,
     flags: buildComponentsV2EditFlags(),
@@ -188,10 +192,26 @@ function buildMessage(containers: ContainerBuilder[]): IHighlightMessage {
   };
 }
 
+export const PSN_AUTH_EXPIRED_ALERT_TEXT =
+  "**PSN token expired.** Refresh `psn_npsso` in the API credentials so PSN sync can resume.";
+
+/** True while PSN auth is expired and this expiry has not been posted yet. */
+export function needsPsnAuthAlert(alerts: IAchievementHubAlerts): boolean {
+  return Boolean(alerts.psn_auth_expired_at) && !alerts.psn_auth_alerted;
+}
+
+async function runStep(name: string, step: () => Promise<void>): Promise<void> {
+  try {
+    await step();
+  } catch (err) {
+    logError(`${LOG_CONTEXT}.${name}`, err);
+  }
+}
+
 /**
  * One hourly tick: post pending Highlights, acking the cursor after each message Discord
- * accepts, then post the PSN auth alert once. Any failure stops the tick; the next tick
- * picks up from the stored cursor.
+ * accepts, then post the PSN auth alert once. A failed step is logged and left for the
+ * next tick, which picks up from the stored cursor and alert state.
  */
 export async function runAchievementHighlightTick(
   deps: IAchievementHighlightDeps,
@@ -204,22 +224,126 @@ export async function runAchievementHighlightTick(
     return;
   }
 
-  const channel = await deps.getHighlightChannel();
-  if (!channel) return;
-  try {
-    await postHighlights(deps, channel, pending.data);
-  } catch (err) {
-    logError(`${LOG_CONTEXT}.postHighlights`, err);
-  }
+  await runStep("postHighlights", () => postHighlights(deps, pending.data));
+  await runStep("postPsnAuthAlert", () => postPsnAuthAlert(deps, pending.alerts));
 }
 
 async function postHighlights(
   deps: IAchievementHighlightDeps,
-  channel: IHighlightChannel,
   highlights: IAchievementHighlight[],
 ): Promise<void> {
+  if (highlights.length === 0) return;
+  const channel = await deps.getHighlightChannel();
+  if (!channel) {
+    logWarn(LOG_CONTEXT, "The achievements channel is unavailable; Highlights stay pending.");
+    return;
+  }
   for (const batch of chunk(highlights, HIGHLIGHTS_PER_MESSAGE)) {
-    await channel.send(buildMessage(batch.map((item) => buildHighlightCard(item, deps))));
+    await channel.send(toQuietMessage(batch.map((item) => buildHighlightCard(item, deps))));
     await deps.api.ackHighlights(batch[batch.length - 1]!.id);
   }
+}
+
+async function postPsnAuthAlert(
+  deps: IAchievementHighlightDeps,
+  alerts: IAchievementHubAlerts,
+): Promise<void> {
+  if (!needsPsnAuthAlert(alerts)) return;
+  const channel = await deps.getAdminChannel();
+  if (!channel) {
+    logWarn(LOG_CONTEXT, "The admin channel is unavailable; the PSN auth alert stays pending.");
+    return;
+  }
+  await channel.send(
+    toQuietMessage([buildAccentContainer(PSN_AUTH_EXPIRED_ALERT_TEXT, COLOR_WARNING)]),
+  );
+  await deps.api.ackAlert("psn_auth_expired");
+}
+
+const POLL_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
+
+export interface IAchievementHighlightConfig {
+  channelId: string;
+  wwwBaseUrl: string;
+}
+
+/** The service's config, or null (with a warning) when any part of it is missing. */
+export function resolveAchievementHighlightConfig(
+  channelId: string,
+  wwwBaseUrl: string | undefined,
+): IAchievementHighlightConfig | null {
+  const baseUrl = (wwwBaseUrl ?? "").trim().replace(/\/+$/, "");
+  const missing = [
+    channelId.trim() ? null : "ACHIEVEMENTS_CHANNEL_ID",
+    baseUrl ? null : "RPGCLUB_WWW_BASE_URL",
+  ].filter((name): name is string => name !== null);
+  if (missing.length > 0) {
+    logWarn(LOG_CONTEXT, `Disabled: ${missing.join(" and ")} not configured.`);
+    return null;
+  }
+  return { channelId: channelId.trim(), wwwBaseUrl: baseUrl };
+}
+
+/** The Highlight endpoints, called only through RpgClubApiClient. */
+export const achievementHighlightApi: IAchievementHighlightApi = {
+  fetchPending: async () => {
+    const pending = await apiGet<IPendingHighlights>(PENDING_PATH);
+    if (!pending) throw new Error(`GET ${PENDING_PATH} returned 404.`);
+    return pending;
+  },
+  ackHighlights: async (cursor) => {
+    await apiPostOrThrow(HIGHLIGHTS_ACK_PATH, { cursor });
+  },
+  ackAlert: async (alert) => {
+    await apiPostOrThrow(ALERTS_ACK_PATH, { alert });
+  },
+};
+
+async function fetchSendableChannel(
+  client: Client,
+  channelId: string,
+): Promise<IHighlightChannel | null> {
+  const channel = await client.channels.fetch(channelId).catch(() => null);
+  if (!channel || !channel.isSendable()) return null;
+  return channel;
+}
+
+let highlightTask: IIntervalTask | null = null;
+
+export interface IStartAchievementHighlightOptions {
+  channelId?: string;
+  wwwBaseUrl?: string;
+}
+
+/**
+ * Starts the hourly Highlight poster. Hourly and never faster (ADR 0003: Neon must idle).
+ * Returns false when the service is disabled or already running. The interval is tracked,
+ * so the shutdown service stops it with the others.
+ */
+export function startAchievementHighlightService(
+  client: Client,
+  options: IStartAchievementHighlightOptions = {},
+): boolean {
+  if (highlightTask) {
+    logWarn(LOG_CONTEXT, "Already started, ignoring a second start.");
+    return false;
+  }
+  const config = resolveAchievementHighlightConfig(
+    options.channelId ?? ACHIEVEMENTS_CHANNEL_ID,
+    options.wwwBaseUrl ?? process.env.RPGCLUB_WWW_BASE_URL,
+  );
+  if (!config) return false;
+
+  const deps: IAchievementHighlightDeps = {
+    api: achievementHighlightApi,
+    getHighlightChannel: () => fetchSendableChannel(client, config.channelId),
+    getAdminChannel: () => fetchSendableChannel(client, ADMIN_CHANNEL_ID),
+    wwwBaseUrl: config.wwwBaseUrl,
+  };
+  highlightTask = createIntervalTask({
+    name: `${LOG_CONTEXT}.polling`,
+    intervalMs: POLL_INTERVAL_MS,
+    task: () => runAchievementHighlightTick(deps),
+  });
+  return highlightTask.start();
 }
