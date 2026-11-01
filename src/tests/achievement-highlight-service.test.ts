@@ -51,11 +51,7 @@ function page(
   data: IAchievementHighlight[],
   alerts: IAchievementHubAlerts = HEALTHY_ALERTS,
 ): IPendingHighlights {
-  return {
-    data,
-    meta: { cursor: 0, next_cursor: data.length ? data[data.length - 1]!.id : null },
-    alerts,
-  };
+  return { data, alerts };
 }
 
 interface IFakeChannel extends IHighlightChannel {
@@ -67,7 +63,8 @@ function fakeChannel(failOnCall?: number): IFakeChannel {
   return {
     sent,
     send: async (message: IHighlightMessage) => {
-      if (failOnCall === sent.length + 1) throw new Error("Discord rejected the message");
+      if (failOnCall === sent.length + 1)
+        throw new Error("Discord rejected the message");
       sent.push(message);
       return {};
     },
@@ -78,24 +75,27 @@ interface IHarness {
   deps: IAchievementHighlightDeps;
   highlightChannel: IFakeChannel;
   adminChannel: IFakeChannel;
-  highlightAcks: number[];
+  highlightAcks: number[][];
   alertAcks: string[];
 }
 
 function harness(
   pages: IPendingHighlights[],
-  options: { highlightChannel?: IFakeChannel; adminChannel?: IFakeChannel } = {},
+  options: {
+    highlightChannel?: IFakeChannel;
+    adminChannel?: IFakeChannel;
+  } = {},
 ): IHarness {
   const highlightChannel = options.highlightChannel ?? fakeChannel();
   const adminChannel = options.adminChannel ?? fakeChannel();
-  const highlightAcks: number[] = [];
+  const highlightAcks: number[][] = [];
   const alertAcks: string[] = [];
   let fetches = 0;
   const deps: IAchievementHighlightDeps = {
     api: {
       fetchPending: async () => pages[fetches++] ?? page([]),
-      ackHighlights: async (cursor: number) => {
-        highlightAcks.push(cursor);
+      ackHighlights: async (ids: number[]) => {
+        highlightAcks.push(ids);
       },
       ackAlert: async (alert: string) => {
         alertAcks.push(alert);
@@ -104,22 +104,29 @@ function harness(
     getHighlightChannel: async () => highlightChannel,
     getAdminChannel: async () => adminChannel,
     wwwBaseUrl: "https://club.example",
+    ackRetryDelayMs: 0,
   };
   return { deps, highlightChannel, adminChannel, highlightAcks, alertAcks };
 }
 
-test("a pending Highlight is posted without mentions, then its cursor is acked", async () => {
+test("a pending Highlight is posted without mentions, then its id is acked", async () => {
   const h = harness([page([highlight(7)])]);
 
   await runAchievementHighlightTick(h.deps);
 
   assert.equal(h.highlightChannel.sent.length, 1);
   assert.deepEqual(h.highlightChannel.sent[0]!.allowedMentions, { parse: [] });
-  assert.deepEqual(h.highlightAcks, [7]);
+  assert.deepEqual(h.highlightAcks, [[7]]);
 });
 
 function range(from: number, to: number): IAchievementHighlight[] {
-  return Array.from({ length: to - from + 1 }, (_, index) => highlight(from + index));
+  return Array.from({ length: to - from + 1 }, (_, index) =>
+    highlight(from + index),
+  );
+}
+
+function ids(items: IAchievementHighlight[]): number[] {
+  return items.map((item) => item.id);
 }
 
 test("more than 10 Highlights are split into messages of at most 10 cards", async () => {
@@ -127,10 +134,14 @@ test("more than 10 Highlights are split into messages of at most 10 cards", asyn
 
   await runAchievementHighlightTick(h.deps);
 
-  assert.deepEqual(h.highlightChannel.sent.map((message) => message.components.length), [
-    10, 10, 5,
-  ]);
-  assert.deepEqual(h.highlightAcks, [10, 20, 25]);
+  assert.deepEqual(
+    h.highlightChannel.sent.map((message) => message.components.length),
+    [10, 10, 5],
+  );
+  assert.deepEqual(
+    h.highlightAcks,
+    [range(1, 10), range(11, 20), range(21, 25)].map(ids),
+  );
 });
 
 test("a message Discord rejects is not acked, and the tick stops there", async () => {
@@ -139,11 +150,42 @@ test("a message Discord rejects is not acked, and the tick stops there", async (
   await runAchievementHighlightTick(h.deps);
 
   assert.equal(h.highlightChannel.sent.length, 1);
-  assert.deepEqual(h.highlightAcks, [10]);
+  assert.deepEqual(h.highlightAcks, [ids(range(1, 10))]);
+});
+
+test("a failed ack is retried once", async () => {
+  const h = harness([page([highlight(7)])]);
+  let calls = 0;
+  h.deps.api.ackHighlights = async (acked: number[]) => {
+    calls += 1;
+    if (calls === 1) throw new Error("503 Service Unavailable");
+    h.highlightAcks.push(acked);
+  };
+
+  await runAchievementHighlightTick(h.deps);
+
+  assert.equal(calls, 2);
+  assert.deepEqual(h.highlightAcks, [[7]]);
+});
+
+test("an ack that fails twice stops posting Highlights for this tick", async () => {
+  const h = harness([page(range(1, 15))]);
+  let calls = 0;
+  h.deps.api.ackHighlights = async () => {
+    calls += 1;
+    throw new Error("503 Service Unavailable");
+  };
+
+  await runAchievementHighlightTick(h.deps);
+
+  assert.equal(calls, 2);
+  assert.equal(h.highlightChannel.sent.length, 1);
 });
 
 test("nothing is acked when the first message fails", async () => {
-  const h = harness([page([highlight(3)])], { highlightChannel: fakeChannel(1) });
+  const h = harness([page([highlight(3)])], {
+    highlightChannel: fakeChannel(1),
+  });
 
   await runAchievementHighlightTick(h.deps);
 
@@ -160,14 +202,22 @@ test("a card names the member without a mention and shows the Achievement", asyn
   await runAchievementHighlightTick(h.deps);
 
   const text = cardText(h.highlightChannel.sent[0]!);
-  assert.ok(!text.includes("<@191938640413327360>"), "the member is never mentioned");
+  assert.ok(
+    !text.includes("<@191938640413327360>"),
+    "the member is never mentioned",
+  );
   assert.ok(text.includes("Achievement 7"));
   assert.ok(text.includes("Chrono Trigger"));
   assert.ok(text.includes("Steam"));
   assert.ok(text.includes("3.25%"));
-  assert.ok(text.includes("https://cdn.example/a7.png"), "the Achievement icon is shown");
   assert.ok(
-    text.includes("https://club.example/members/191938640413327360/achievements/42"),
+    text.includes("https://cdn.example/a7.png"),
+    "the Achievement icon is shown",
+  );
+  assert.ok(
+    text.includes(
+      "https://club.example/members/191938640413327360/achievements/42",
+    ),
     "the card links the www set page",
   );
 });
@@ -175,13 +225,20 @@ test("a card names the member without a mention and shows the Achievement", asyn
 test("a card shows the PSN tier and the RetroAchievements hardcore marker", async () => {
   const platinum = highlight(1, {
     highlight: "platinum",
-    achievement: { ...highlight(1).achievement, tier: "platinum", rarity: 12.5 },
+    achievement: {
+      ...highlight(1).achievement,
+      tier: "platinum",
+      rarity: 12.5,
+    },
     achievement_set: { ...highlight(1).achievement_set, provider: "psn" },
   });
   const mastery = highlight(2, {
     highlight: "mastery",
     hardcore: true,
-    achievement_set: { ...highlight(2).achievement_set, provider: "retroachievements" },
+    achievement_set: {
+      ...highlight(2).achievement_set,
+      provider: "retroachievements",
+    },
   });
   const h = harness([page([platinum, mastery])]);
 
@@ -224,7 +281,9 @@ test("an alert already posted for this expiry is not posted again", async () => 
 });
 
 test("the alert is not acked when Discord rejects it", async () => {
-  const h = harness([page([], EXPIRED_ALERTS)], { adminChannel: fakeChannel(1) });
+  const h = harness([page([], EXPIRED_ALERTS)], {
+    adminChannel: fakeChannel(1),
+  });
 
   await runAchievementHighlightTick(h.deps);
 
@@ -256,8 +315,14 @@ test("an API error is logged and leaves everything for the next tick", async () 
 });
 
 test("the service is disabled without an achievements channel", () => {
-  assert.equal(resolveAchievementHighlightConfig("", "https://club.example"), null);
-  assert.equal(startAchievementHighlightService({} as Client, { channelId: "" }), false);
+  assert.equal(
+    resolveAchievementHighlightConfig("", "https://club.example"),
+    null,
+  );
+  assert.equal(
+    startAchievementHighlightService({} as Client, { channelId: "" }),
+    false,
+  );
 });
 
 test("the service is disabled without the www base URL", () => {
@@ -265,8 +330,11 @@ test("the service is disabled without the www base URL", () => {
 });
 
 test("the service config trims the www base URL", () => {
-  assert.deepEqual(resolveAchievementHighlightConfig("123", " https://club.example/ "), {
-    channelId: "123",
-    wwwBaseUrl: "https://club.example",
-  });
+  assert.deepEqual(
+    resolveAchievementHighlightConfig("123", " https://club.example/ "),
+    {
+      channelId: "123",
+      wwwBaseUrl: "https://club.example",
+    },
+  );
 });

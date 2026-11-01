@@ -70,9 +70,9 @@ export interface IAchievementHubAlerts {
   psn_auth_alerted: boolean;
 }
 
+/** Un-announced Unlocks, oldest first, capped at 25 per request. */
 export interface IPendingHighlights {
   data: IAchievementHighlight[];
-  meta: { cursor: number; next_cursor: number | null };
   alerts: IAchievementHubAlerts;
 }
 
@@ -89,7 +89,8 @@ export interface IHighlightChannel {
 
 export interface IAchievementHighlightApi {
   fetchPending: () => Promise<IPendingHighlights>;
-  ackHighlights: (cursor: number) => Promise<void>;
+  /** Marks these Unlocks announced. Idempotent, so a retry is safe. */
+  ackHighlights: (ids: number[]) => Promise<void>;
   ackAlert: (alert: AchievementHubAlert) => Promise<void>;
 }
 
@@ -99,7 +100,11 @@ export interface IAchievementHighlightDeps {
   getAdminChannel: () => Promise<IHighlightChannel | null>;
   /** The www origin that each Highlight's `url_path` is joined to. */
   wwwBaseUrl: string;
+  /** Wait before retrying a failed ack. Defaults to ACK_RETRY_DELAY_MS. */
+  ackRetryDelayMs?: number;
 }
+
+const ACK_RETRY_DELAY_MS = 2000;
 
 const PROVIDER_LABELS: Record<AchievementProvider, string> = {
   retroachievements: "RetroAchievements",
@@ -209,13 +214,11 @@ async function runStep(name: string, step: () => Promise<void>): Promise<void> {
 }
 
 /**
- * One hourly tick: post pending Highlights, acking the cursor after each message Discord
+ * One hourly tick: post pending Highlights, acking their ids after each message Discord
  * accepts, then post the PSN auth alert once. A failed step is logged and left for the
- * next tick, which picks up from the stored cursor and alert state.
+ * next tick, which picks up whatever is still un-announced.
  */
-export async function runAchievementHighlightTick(
-  deps: IAchievementHighlightDeps,
-): Promise<void> {
+export async function runAchievementHighlightTick(deps: IAchievementHighlightDeps): Promise<void> {
   let pending: IPendingHighlights;
   try {
     pending = await deps.api.fetchPending();
@@ -240,7 +243,21 @@ async function postHighlights(
   }
   for (const batch of chunk(highlights, HIGHLIGHTS_PER_MESSAGE)) {
     await channel.send(toQuietMessage(batch.map((item) => buildHighlightCard(item, deps))));
-    await deps.api.ackHighlights(batch[batch.length - 1]!.id);
+    await ackHighlights(
+      deps,
+      batch.map((item) => item.id),
+    );
+  }
+}
+
+/** Acks posted Highlights, retrying once so a brief API blip does not repost them. */
+async function ackHighlights(deps: IAchievementHighlightDeps, ids: number[]): Promise<void> {
+  try {
+    await deps.api.ackHighlights(ids);
+  } catch (err) {
+    logWarn(LOG_CONTEXT, `Highlight ack failed, retrying once: ${String(err)}`);
+    await new Promise((resolve) => setTimeout(resolve, deps.ackRetryDelayMs ?? ACK_RETRY_DELAY_MS));
+    await deps.api.ackHighlights(ids);
   }
 }
 
@@ -291,8 +308,8 @@ export const achievementHighlightApi: IAchievementHighlightApi = {
     if (!pending) throw new Error(`GET ${PENDING_PATH} returned 404.`);
     return pending;
   },
-  ackHighlights: async (cursor) => {
-    await apiPostOrThrow(HIGHLIGHTS_ACK_PATH, { cursor });
+  ackHighlights: async (ids) => {
+    await apiPostOrThrow(HIGHLIGHTS_ACK_PATH, { data: { ids } });
   },
   ackAlert: async (alert) => {
     await apiPostOrThrow(ALERTS_ACK_PATH, { alert });
