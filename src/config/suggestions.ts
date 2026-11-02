@@ -15,3 +15,8 @@ export const DEFAULT_SUGGESTION_TARGET_REPO: SuggestionTargetRepo = "TheRPGClub/
 export function isSuggestionTargetRepo(value: unknown): value is SuggestionTargetRepo {
   return SUGGESTION_TARGET_REPOS.some((repo) => repo.value === value);
 }
+
+/** Longest Suggestion title an outcome post quotes (the API caps neither title nor reason). */
+export const SUGGESTION_NOTICE_TITLE_MAX = 200;
+/** Discord's limit on a message's content, which an outcome post must fit. */
+export const DISCORD_MESSAGE_CONTENT_MAX = 2000;
