@@ -11,7 +11,7 @@ Issues and specs for this repo live as GitHub issues. Use the `gh` CLI for all o
 - **Comment on an issue**: `gh issue comment <number> --body-file <file>`
 - **Apply / remove labels**: `gh issue edit <number> --add-label "..."` / `--remove-label "..."`, then read the labels back as `.claude/skills/_shared/issue-labels.md` requires. That doc also governs `In Progress` (the claim label) and forbids creating labels.
 - **Close**: `gh issue comment <number> --body-file <file>`, then `gh issue close <number>`, removing any `In Progress` label first per `issue-labels.md`
-- **Blocking**: GitHub's native issue dependencies. Add an edge with `gh api --method POST repos/<owner>/<repo>/issues/<child>/dependencies/blocked_by -F issue_id=<blocker-db-id>`, where `<blocker-db-id>` is the blocker's numeric database id (`gh api repos/<owner>/<repo>/issues/<n> --jq .id`, not the `#number`); the blocker may live in another repo. Read it back from `issue_dependencies_summary.blocked_by` on `gh api repos/<owner>/<repo>/issues/<n>` (`gh issue list --json` does not return it).
+- **Blocking**: GitHub's native issue dependencies. Add an edge with `gh api --method POST repos/<owner>/<repo>/issues/<child>/dependencies/blocked_by -F issue_id=<blocker-db-id>`, where `<blocker-db-id>` is the blocker's numeric database id (`gh api repos/<owner>/<repo>/issues/<n> --jq .id`, not the `#number`); the blocker may live in another repo. Read it back from `issue_dependencies_summary.total_blocked_by` on `gh api repos/<owner>/<repo>/issues/<n>` (`blocked_by` counts open blockers only; `gh issue list --json` returns neither).
 
 This repo is `TheRPGClub/TheRPGClub-bot`. Use that name when writing `<owner>/<repo>`, even if `git remote -v` still shows an older name; `gh` resolves the repo automatically when run inside a clone.
 
@@ -38,3 +38,7 @@ Create a GitHub issue.
 ## When a skill says "fetch the relevant ticket"
 
 Read it as in **Read an issue** above.
+
+## Wayfinding
+
+`/wayfinder` is not supported in this repo: its `wayfinder:*` labels don't exist, and `issue-labels.md` forbids creating labels. Run wayfinding maps in TheRPGClub-api instead.

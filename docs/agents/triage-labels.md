@@ -10,4 +10,4 @@ The skills speak in terms of five canonical triage roles. This file maps those r
 
 When a skill mentions a role (e.g. "apply the AFK-ready triage label"), use the corresponding label string from this list.
 
-Edit the right-hand label strings to match whatever vocabulary you actually use.
+All five labels exist in this repo. Use only these strings; never create a label (see `.claude/skills/_shared/issue-labels.md`).
