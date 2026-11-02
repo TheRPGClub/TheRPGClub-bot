@@ -10,6 +10,7 @@ import {
 } from "./GiveawayClaimService.js";
 import { getSuggestionById, type ISuggestionItem } from "../classes/Suggestion.js";
 import { BOT_DEV_CHANNEL_ID, GAMEDB_UPDATES_CHANNEL_ID } from "../config/channels.js";
+import { BOT_DEV_PING_USER_ID } from "../config/users.js";
 import {
   buildSuggestionApprovedNotice,
   buildSuggestionRejectedNotice,
@@ -34,8 +35,16 @@ export interface IBotJobSurface {
   refreshGiveawayHub(): Promise<void>;
   /** GET /suggestions/:id with the service token; null on 404. */
   fetchSuggestion(suggestionId: number): Promise<ISuggestionItem | null>;
-  /** Posts to a text channel. Throws the discord.js error, or when it can't hold messages. */
-  sendChannelMessage(channelId: string, content: string): Promise<void>;
+  /**
+   * Posts to a text channel; only the listed users' mentions ping (never @everyone or a
+   * role, which website text could hold). Throws the discord.js error, or when the channel
+   * can't hold messages.
+   */
+  sendChannelMessage(
+    channelId: string,
+    content: string,
+    pingUserIds: readonly string[],
+  ): Promise<void>;
 }
 
 export function createBotJobSurface(client: Client): IBotJobSurface {
@@ -50,12 +59,12 @@ export function createBotJobSurface(client: Client): IBotJobSurface {
     },
     refreshGiveawayHub: () => refreshGiveawayHubMessage(client, 0, { throwOnFailure: true }),
     fetchSuggestion: getSuggestionById,
-    sendChannelMessage: async (channelId, content) => {
+    sendChannelMessage: async (channelId, content, pingUserIds) => {
       const channel = await client.channels.fetch(channelId);
       if (!channel || !channel.isSendable()) {
         throw new Error(`Channel ${channelId} is missing or the bot cannot post in it.`);
       }
-      await channel.send({ content });
+      await channel.send({ content, allowedMentions: { users: [...pingUserIds] } });
     },
   };
 }
@@ -173,7 +182,11 @@ export const handleSuggestionSubmitted: BotJobHandler = async (payload, surface)
   }
   const author = suggestion.createdBy ?? createdBy;
   const authorLabel = suggestion.createdByName ?? (author ? userMention(author) : "Someone");
-  await surface.sendChannelMessage(BOT_DEV_CHANNEL_ID, buildSuggestionSubmittedPing(authorLabel));
+  await surface.sendChannelMessage(
+    BOT_DEV_CHANNEL_ID,
+    buildSuggestionSubmittedPing(authorLabel),
+    author ? [BOT_DEV_PING_USER_ID, author] : [BOT_DEV_PING_USER_ID],
+  );
 };
 
 /**
@@ -203,7 +216,11 @@ export const handleSuggestionOutcome: BotJobHandler = async (payload, surface) =
       JSON.stringify(outcome)
     }.`);
   }
-  await surface.sendChannelMessage(GAMEDB_UPDATES_CHANNEL_ID, content);
+  await surface.sendChannelMessage(
+    GAMEDB_UPDATES_CHANNEL_ID,
+    content,
+    createdBy ? [createdBy] : [],
+  );
 };
 
 /** Job kind (BotJob::KINDS in the API) to handler. One line per kind. */

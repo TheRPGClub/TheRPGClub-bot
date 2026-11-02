@@ -26,6 +26,7 @@ function fakeApi(): IBotJobApi & { acks: Ack[] } {
 
 interface ISuggestionSurface extends IBotJobSurface {
   posts: { channelId: string; content: string }[];
+  pings: (readonly string[])[];
   suggestionFetches: number[];
 }
 
@@ -52,6 +53,7 @@ function fakeSurface(options: {
   const suggestion = options.suggestion === undefined ? storedSuggestion() : options.suggestion;
   const surface: ISuggestionSurface = {
     posts: [],
+    pings: [],
     suggestionFetches: [],
     requestVotingEventPoll: () => {},
     fetchGameKey: async () => null,
@@ -63,9 +65,10 @@ function fakeSurface(options: {
       if (options.fetchError) throw options.fetchError;
       return suggestion;
     },
-    sendChannelMessage: async (channelId, content) => {
+    sendChannelMessage: async (channelId, content, pingUserIds) => {
       if (options.postError) throw options.postError;
       surface.posts.push({ channelId, content });
+      surface.pings.push(pingUserIds);
     },
   };
   return surface;
@@ -228,4 +231,43 @@ test("outcome fails the job when Discord refuses the post", async () => {
   const surface = fakeSurface({ postError: new Error("Missing Access") });
   const acks = await run(surface, [job(1, "suggestion_outcome", approvedPayload)]);
   assert.match(failure(acks), /Missing Access/);
+});
+
+test("website text in an outcome post can only ping the author", async () => {
+  // The title and reason come from the website, which /suggestion's sanitizer never sees.
+  const surface = fakeSurface();
+  await run(surface, [job(1, "suggestion_outcome", {
+    ...rejectedPayload,
+    title: "@everyone free keys",
+    rejection_reason: "<@&123> see <@999>",
+  })]);
+  assert.deepEqual(surface.pings, [["author-1"]]);
+});
+
+test("an outcome post without an author pings nobody", async () => {
+  const surface = fakeSurface();
+  await run(surface, [job(1, "suggestion_outcome", { ...approvedPayload, created_by: null })]);
+  assert.deepEqual(surface.pings, [[]]);
+});
+
+test("a submitted ping can only ping the bot dev and the author", async () => {
+  const surface = fakeSurface({ suggestion: storedSuggestion({ createdByName: "@everyone" }) });
+  await run(surface, [
+    job(1, "suggestion_submitted", { suggestion_id: 7, created_by: "author-1" }),
+  ]);
+  assert.deepEqual(surface.pings, [[BOT_DEV_PING_USER_ID, "author-1"]]);
+});
+
+test("a rejected notice fits Discord's 2000 character limit", async () => {
+  // The API caps neither the title nor a website reviewer's reason.
+  const surface = fakeSurface();
+  const acks = await run(surface, [job(1, "suggestion_outcome", {
+    ...rejectedPayload,
+    title: "t".repeat(600),
+    rejection_reason: "r".repeat(2000),
+  })]);
+  assert.deepEqual(acks, [{ id: 1, status: "done" }]);
+  const content = surface.posts[0]?.content ?? "";
+  assert.ok(content.length <= 2000, `posted ${content.length} characters`);
+  assert.match(content, /^<@author-1> Your suggestion "t+\.\.\." was not accepted\. Reason: r+/);
 });

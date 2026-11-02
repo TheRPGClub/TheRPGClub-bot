@@ -1,5 +1,10 @@
 import { userMention } from "discord.js";
 import { BOT_DEV_PING_USER_ID } from "../config/users.js";
+import {
+  DISCORD_MESSAGE_CONTENT_MAX,
+  SUGGESTION_NOTICE_TITLE_MAX,
+} from "../config/suggestions.js";
+import { truncateWithEllipsis } from "../utilities/ValidationUtils.js";
 
 /** The bot dev channel ping for a new Suggestion, from /suggestion or the website. */
 export function buildSuggestionSubmittedPing(authorLabel: string): string {
@@ -20,12 +25,16 @@ export function buildSuggestionApprovedNotice(
     `#${issueNumber}: ${issueUrl}`;
 }
 
-/** The GameDB updates post telling the author their Suggestion was rejected, and why. */
+/**
+ * The GameDB updates post telling the author their Suggestion was rejected, and why. The
+ * title and reason are cut to fit one Discord message.
+ */
 export function buildSuggestionRejectedNotice(
   createdBy: string | null,
   title: string,
   reason: string,
 ): string {
-  return `${authorMention(createdBy)} Your suggestion "${title}" was not accepted. ` +
-    `Reason: ${reason}`;
+  const head = `${authorMention(createdBy)} Your suggestion ` +
+    `"${truncateWithEllipsis(title, SUGGESTION_NOTICE_TITLE_MAX)}" was not accepted. Reason: `;
+  return head + truncateWithEllipsis(reason, DISCORD_MESSAGE_CONTENT_MAX - head.length);
 }
