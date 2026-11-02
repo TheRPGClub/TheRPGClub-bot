@@ -98,7 +98,10 @@ test("a 409 says the suggestion was already reviewed", async () => {
     reason: "No",
   });
   assert.equal(result.ok, false);
-  assert.equal(result.message, "Suggestion #7 was already reviewed.");
+  assert.match(result.message, /^Suggestion #7 was already reviewed\./);
+  assert.match(result.message, /"url": "\/api\/v1\/suggestions\/7\/approve"/);
+  assert.match(result.message, /"status": 409/);
+  assert.match(result.message, /not_pending/);
 });
 
 test("a 404 says the suggestion no longer exists", async () => {
@@ -110,7 +113,10 @@ test("a 404 says the suggestion no longer exists", async () => {
     targetRepo: "TheRPGClub/TheRPGClub-bot",
   });
   assert.equal(result.ok, false);
-  assert.equal(result.message, "Suggestion #7 no longer exists.");
+  assert.match(result.message, /^Suggestion #7 no longer exists\./);
+  assert.match(result.message, /"url": "\/api\/v1\/suggestions\/7\/approve"/);
+  assert.match(result.message, /"status": 404/);
+  assert.match(result.message, /not_found/);
 });
 
 for (const [status, code] of [[502, "github_issue_failed"], [503, "github_not_configured"]]) {
@@ -146,4 +152,19 @@ test("any other API failure reports the full request and response", async () => 
   assert.match(result.message, /^Failed to reject suggestion #7/);
   assert.match(result.message, /\/api\/v1\/suggestions\/7\/reject/);
   assert.match(result.message, /Reason too long/);
+});
+
+test("a 503 that is not GitHub's is not labelled a GitHub failure", async () => {
+  const api = fakeApi(apiError(503, { error: "service_unavailable" },
+    "/api/v1/suggestions/7/reject"));
+  const result = await reviewSuggestion(api, {
+    decision: "reject",
+    suggestionId: 7,
+    reviewerId: "reviewer-1",
+    reason: "x",
+  });
+  assert.equal(result.ok, false);
+  assert.match(result.message, /^Failed to reject suggestion #7/);
+  assert.doesNotMatch(result.message, /GitHub/);
+  assert.match(result.message, /service_unavailable/);
 });

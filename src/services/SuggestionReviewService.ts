@@ -41,14 +41,20 @@ function responseStatus(err: unknown): number | undefined {
   return axios.isAxiosError(err) ? err.response?.status : undefined;
 }
 
-function responseMessage(err: unknown): string {
+function responseField(err: unknown, field: "error" | "message"): string {
   if (!axios.isAxiosError(err)) return "";
   const data: unknown = err.response?.data;
-  if (data && typeof data === "object" && "message" in data) {
-    return String(data.message);
+  if (data && typeof data === "object" && field in data) {
+    return String((data as Record<string, unknown>)[field]);
   }
   return "";
 }
+
+/** The API's error codes for a GitHub issue that could not be opened (502 and 503). */
+const GITHUB_ERROR_CODES: ReadonlySet<string> = new Set([
+  "github_issue_failed",
+  "github_not_configured",
+]);
 
 /**
  * Approves or rejects a Suggestion through the API with the reviewer's Discord id. The
@@ -73,16 +79,22 @@ export async function reviewSuggestion(
   } catch (err: unknown) {
     const status = responseStatus(err);
     if (status === 409) {
-      return { ok: false, message: `Suggestion #${suggestionId} was already reviewed.` };
+      return {
+        ok: false,
+        message: buildApiErrorMessage(`Suggestion #${suggestionId} was already reviewed.`, err),
+      };
     }
     if (status === 404) {
-      return { ok: false, message: `Suggestion #${suggestionId} no longer exists.` };
+      return {
+        ok: false,
+        message: buildApiErrorMessage(`Suggestion #${suggestionId} no longer exists.`, err),
+      };
     }
-    if (status === 502 || status === 503) {
+    if (GITHUB_ERROR_CODES.has(responseField(err, "error"))) {
       return {
         ok: false,
         message: buildApiErrorMessage(
-          `Could not open the GitHub issue: ${responseMessage(err) || "no message"}`,
+          `Could not open the GitHub issue: ${responseField(err, "message") || "no message"}`,
           err,
         ),
       };
