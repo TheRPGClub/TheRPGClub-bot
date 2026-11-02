@@ -29,15 +29,17 @@ axios.defaults.adapter = adapter;
 
 const { default: Member } = await import("../classes/Member.js");
 const { reportMemberRoles } = await import("../services/MemberRoleSync.js");
+const { HOME_GUILD_ID } = await import("../config/guilds.js");
 
-const GUILD_ID = "100000000000000000";
+const GUILD_ID = HOME_GUILD_ID;
+const OTHER_GUILD_ID = "100000000000000000";
 const MEMBERS = "747520789003239530";
 const REGULARS = "267883288817958912";
 const JOINED_AT = new Date("2026-01-02T03:04:05Z");
 
-function fakeMember(roleIds: string[]): GuildMember {
+function fakeMember(roleIds: string[], guildId = GUILD_ID): GuildMember {
   return {
-    guild: { id: GUILD_ID },
+    guild: { id: guildId },
     roles: { cache: new Collection(roleIds.map((id) => [id, { id }])) },
     joinedAt: JOINED_AT,
     user: { id: "42", bot: false, username: "tester", globalName: "Tester" },
@@ -82,4 +84,15 @@ test("a role report for an unknown member falls back to an upsert with roles", a
   assert.deepEqual(requests[0]?.body, { data: { role_ids: [MEMBERS] } });
   const upsertBody = requests[1]?.body as { data: { role_ids: string[] } } | undefined;
   assert.deepEqual(upsertBody?.data.role_ids, [MEMBERS]);
+});
+
+test("upserting a member of another guild leaves their roles alone", async () => {
+  requests.length = 0;
+  statusFor = () => 200;
+
+  await Member.upsertGuildMember(fakeMember([OTHER_GUILD_ID, MEMBERS], OTHER_GUILD_ID));
+
+  const body = requests[0]?.body as { data: Record<string, unknown> } | undefined;
+  assert.equal(body?.data.discord_id, "42");
+  assert.equal("role_ids" in (body?.data ?? {}), false);
 });

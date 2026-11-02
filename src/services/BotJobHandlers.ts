@@ -1,4 +1,5 @@
 import { RESTJSONErrorCodes, userMention, type Client } from "discord.js";
+import { describeRequestError } from "../utilities/ApiErrorUtils.js";
 import { getGameKeyById, type IGameKey } from "../classes/GameKey.js";
 import { requestVotingEventPoll } from "./VotingEventService.js";
 import { refreshGiveawayHubMessage } from "./GiveawayHubService.js";
@@ -29,7 +30,7 @@ export interface IBotJobSurface {
   runGiveawayClaimSideEffects(claimerId: string, key: IClaimedGiveawayKey): Promise<string>;
   /** DMs a user. Throws the discord.js error (closed DMs: code 50007). */
   sendDm(userId: string, content: string): Promise<void>;
-  /** Re-renders the giveaway hub message from the API's current keys. */
+  /** Re-renders the giveaway hub from the API's current keys. Throws when it could not. */
   refreshGiveawayHub(): Promise<void>;
   /** GET /suggestions/:id with the service token; null on 404. */
   fetchSuggestion(suggestionId: number): Promise<ISuggestionItem | null>;
@@ -47,7 +48,7 @@ export function createBotJobSurface(client: Client): IBotJobSurface {
       const user = await client.users.fetch(userId);
       await user.send({ content });
     },
-    refreshGiveawayHub: () => refreshGiveawayHubMessage(client),
+    refreshGiveawayHub: () => refreshGiveawayHubMessage(client, 0, { throwOnFailure: true }),
     fetchSuggestion: getSuggestionById,
     sendChannelMessage: async (channelId, content) => {
       const channel = await client.channels.fetch(channelId);
@@ -79,7 +80,7 @@ export const handleVotingPollWakeup: BotJobHandler = async (_payload, surface) =
   surface.requestVotingEventPoll();
 };
 
-function requirePositiveInt(payload: Record<string, unknown>, field: string): number {
+function payloadPositiveInt(payload: Record<string, unknown>, field: string): number {
   const value = payload[field];
   if (typeof value !== "number" || !Number.isInteger(value) || value <= 0) {
     throw new Error(`Invalid payload: ${field} must be a positive integer, got ${
@@ -105,7 +106,7 @@ function requireString(payload: Record<string, unknown>, field: string): string 
  * to the claimer by DM, and the claim is logged and the donor told, as /giveaway does.
  */
 export const handleGiveawayClaimNotice: BotJobHandler = async (payload, surface) => {
-  const keyId = requirePositiveInt(payload, "key_id");
+  const keyId = payloadPositiveInt(payload, "key_id");
   const claimerId = requireString(payload, "claimed_by_user_id");
   const key = await surface.fetchGameKey(keyId);
   if (!key) {
@@ -125,7 +126,11 @@ export const handleGiveawayClaimNotice: BotJobHandler = async (payload, surface)
         { cause: err },
       );
     }
-    throw err;
+    // Never rethrow the discord.js error: its request body is the DM, key included. The
+    // cause is kept for the local log only; a job's error message never formats it.
+    throw new Error(`Could not DM the claimer their key: ${describeRequestError(err)}`, {
+      cause: err,
+    });
   }
 };
 
@@ -160,7 +165,7 @@ function optionalString(payload: Record<string, unknown>, field: string): string
  * does. The name comes from the Suggestion itself.
  */
 export const handleSuggestionSubmitted: BotJobHandler = async (payload, surface) => {
-  const suggestionId = requirePositiveInt(payload, "suggestion_id");
+  const suggestionId = payloadPositiveInt(payload, "suggestion_id");
   const createdBy = optionalString(payload, "created_by");
   const suggestion = await surface.fetchSuggestion(suggestionId);
   if (!suggestion) {
@@ -177,14 +182,14 @@ export const handleSuggestionSubmitted: BotJobHandler = async (payload, surface)
  * Discord reviews included, so this is the only place the outcome is announced.
  */
 export const handleSuggestionOutcome: BotJobHandler = async (payload, surface) => {
-  requirePositiveInt(payload, "suggestion_id");
+  payloadPositiveInt(payload, "suggestion_id");
   const createdBy = optionalString(payload, "created_by");
   const outcome = payload.outcome;
   let content: string;
   if (outcome === "approved") {
     content = buildSuggestionApprovedNotice(
       createdBy,
-      requirePositiveInt(payload, "github_issue_number"),
+      payloadPositiveInt(payload, "github_issue_number"),
       requireString(payload, "github_issue_url"),
     );
   } else if (outcome === "rejected") {

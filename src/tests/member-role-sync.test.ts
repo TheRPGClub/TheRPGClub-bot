@@ -1,10 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { AxiosError, AxiosHeaders } from "axios";
 import { Collection, type GuildMember } from "discord.js";
 import { recordRoleChange, type IRoleReportClient } from "../services/MemberRoleSync.js";
 import { memberRoleIds } from "../utilities/MemberRoleUtils.js";
+import { HOME_GUILD_ID } from "../config/guilds.js";
 
-const GUILD_ID = "100000000000000000";
+const GUILD_ID = HOME_GUILD_ID;
+const OTHER_GUILD_ID = "100000000000000000";
 const ADMIN = "461891227613265940";
 const MEMBERS = "747520789003239530";
 
@@ -12,11 +15,12 @@ function fakeMember(opts: {
   roleIds: string[];
   partial?: boolean;
   bot?: boolean;
+  guildId?: string;
 }): GuildMember {
   const roles = new Collection(opts.roleIds.map((id) => [id, { id }]));
   return {
     partial: opts.partial ?? false,
-    guild: { id: GUILD_ID },
+    guild: { id: opts.guildId ?? GUILD_ID },
     roles: { cache: roles },
     user: { id: "42", bot: opts.bot ?? false },
   } as unknown as GuildMember;
@@ -141,4 +145,50 @@ test("an API failure is logged, not thrown", async (t) => {
   await recordRoleChange(oldMember, newMember, { client, testMode: false });
 
   assert.equal(errors.mock.callCount(), 1);
+});
+
+test("a role change in another guild reports nothing", async () => {
+  const { client, calls } = fakeClient();
+  const oldMember = fakeMember({ roleIds: [OTHER_GUILD_ID], guildId: OTHER_GUILD_ID });
+  const newMember = fakeMember({ roleIds: [OTHER_GUILD_ID, ADMIN], guildId: OTHER_GUILD_ID });
+
+  await recordRoleChange(oldMember, newMember, { client, testMode: false });
+
+  assert.deepEqual(calls, []);
+});
+
+function duplicateUpsertError(): AxiosError {
+  const config: any = { method: "post", url: "/api/v1/users/upsert", headers: new AxiosHeaders() };
+  const response: any = {
+    status: 422,
+    data: { error: "duplicate value violates a unique constraint" },
+    headers: {},
+    statusText: "Unprocessable Entity",
+    config,
+  };
+  return new AxiosError("Request failed", "ERR_BAD_REQUEST", config, null, response);
+}
+
+test("a fallback upsert that loses the join race re-sends the roles quietly", async (t) => {
+  const errors = t.mock.method(console, "error", () => undefined);
+  const calls: string[] = [];
+  let puts = 0;
+  const client: IRoleReportClient = {
+    put: async () => {
+      calls.push("put");
+      puts++;
+      return puts === 1 ? null : { data: {} };
+    },
+    upsertMember: async () => {
+      calls.push("upsert");
+      throw duplicateUpsertError();
+    },
+  };
+  const oldMember = fakeMember({ roleIds: [] });
+  const newMember = fakeMember({ roleIds: [MEMBERS] });
+
+  await recordRoleChange(oldMember, newMember, { client, testMode: false });
+
+  assert.deepEqual(calls, ["put", "upsert", "put"]);
+  assert.equal(errors.mock.callCount(), 0);
 });

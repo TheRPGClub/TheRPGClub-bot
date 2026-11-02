@@ -145,14 +145,20 @@ test("a failed write is logged, not thrown, so the event handler never rejects",
   assert.match(String(logged[0]), /Could not remove deleted channel 103: API down/);
 });
 
-function fakeClient(channels: unknown[], fetchedGuilds: string[] = []): any {
+function fakeClient(
+  channels: unknown[],
+  fetchedGuilds: string[] = [],
+  cache?: Map<string, unknown>,
+): any {
+  const fetched = new Map(channels.map((channel, i) => [String(i), channel]));
   return {
     guilds: {
       fetch: async (guildId: string) => {
         fetchedGuilds.push(guildId);
         return {
           channels: {
-            fetch: async () => new Map(channels.map((channel, i) => [String(i), channel])),
+            fetch: async () => fetched,
+            cache: cache ?? fetched,
           },
         };
       },
@@ -197,4 +203,34 @@ test("a failed startup sync throws so the startup sequence reports the step", as
     syncAllGuildChannels(fakeClient([fakeChannel()]), deps),
     /Could not sync the guild channel list: 422/,
   );
+});
+
+test("startup re-sends channel changes that landed while the snapshot was in flight", async () => {
+  const calls: IApiCall[] = [];
+  const general = fakeChannel({ id: "100", name: "general" });
+  const rules = fakeChannel({ id: "150", name: "rules" });
+  const cache = new Map<string, unknown>([["100", general], ["150", rules]]);
+  const deps = fakeDeps(calls);
+  deps.api.sync = async (body) => {
+    calls.push({ method: "POST", path: "/sync", body });
+    // Gateway events during the POST: one channel created, one deleted, one renamed.
+    cache.set("300", fakeChannel({ id: "300", name: "lfg" }));
+    cache.delete("100");
+    cache.set("150", fakeChannel({ id: "150", name: "server-rules" }));
+    cache.set("400", fakeChannel({ id: "400", thread: true, type: ChannelType.PublicThread }));
+  };
+  await syncAllGuildChannels(fakeClient([general, rules], [], cache), deps);
+  assert.deepEqual(calls.slice(1), [
+    {
+      method: "PUT",
+      path: "/150",
+      body: { data: { name: "server-rules", channel_type: 0, parent_id: "900", position: 3 } },
+    },
+    {
+      method: "PUT",
+      path: "/300",
+      body: { data: { name: "lfg", channel_type: 0, parent_id: "900", position: 3 } },
+    },
+    { method: "DELETE", path: "/100" },
+  ]);
 });

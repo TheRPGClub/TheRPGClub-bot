@@ -18,20 +18,24 @@ import {
 
 // The website's hands in Discord: the API queues a job when a website action needs the
 // bot (a DM, a channel post, a hub refresh), and this service claims, performs and acks
-// them. Nothing is held only in memory: a job claimed before a crash goes back to the
-// queue when its lease runs out.
+// them. Delivery is at least once: a job claimed before a crash, or one whose ack never
+// landed before a restart, goes back to the queue when its lease runs out and is performed
+// again. Within one process a missed ack is remembered, so the job is only re-acked.
 
-/** What this process remembers between polls. */
+/** The ack a performed job is owed: done, or failed with its error message. */
+export type BotJobPendingAck = { status: "done" } | { status: "failed"; error: string };
+
+/** What this process remembers between polls (lost on restart). */
 export interface IBotJobDeliveryState {
   /**
-   * Jobs performed whose done ack did not land. When the lease hands one back it is only
-   * acked, never performed twice (a second DM, a second post).
+   * Jobs performed whose ack (done or failed) did not land. When the lease hands one back
+   * it is only acked, never performed twice (a second DM, a second post).
    */
-  delivered: Set<number>;
+  pendingAcks: Map<number, BotJobPendingAck>;
 }
 
 export function createBotJobDeliveryState(): IBotJobDeliveryState {
-  return { delivered: new Set() };
+  return { pendingAcks: new Map() };
 }
 
 const deliveryState = createBotJobDeliveryState();
@@ -42,10 +46,16 @@ function truncateErrorMessage(message: string): string {
   return message.slice(0, BOT_JOB_ERROR_MESSAGE_MAX - marker.length) + marker;
 }
 
-/** The error_message a failed job is acked with: the full request and response. */
+/**
+ * The error_message a failed job is acked with: the full request and response, except a
+ * Discord request's body. Admins read error_message on the website, and a DM's body can
+ * hold the game key the API keeps out of the job.
+ */
 export function buildBotJobErrorMessage(job: IBotJob, err: unknown): string {
   const label = `Bot job ${job.id} (${job.kind}) failed`;
-  return truncateErrorMessage(buildAnyErrorMessage(label, err, { devPing: false }));
+  return truncateErrorMessage(
+    buildAnyErrorMessage(label, err, { devPing: false, omitDiscordRequestBody: true }),
+  );
 }
 
 async function ack(label: string, send: () => Promise<void>): Promise<boolean> {
@@ -62,7 +72,8 @@ async function ack(label: string, send: () => Promise<void>): Promise<boolean> {
 /**
  * Performs each claimed job in order and acks it done or failed. A job that throws is
  * acked failed with its error and the batch goes on; a kind with no handler fails
- * without running anything. An ack that does not land is logged and left to the lease.
+ * without running anything. An ack that does not land is logged, remembered and left to
+ * the lease, so the returning job is only acked.
  */
 export async function processBotJobs(
   jobs: readonly IBotJob[],
@@ -73,28 +84,40 @@ export async function processBotJobs(
 ): Promise<void> {
   for (const job of jobs) {
     const label = `job ${job.id} (${job.kind})`;
-    if (state.delivered.has(job.id)) {
-      if (await ack(label, () => api.done(job.id))) state.delivered.delete(job.id);
+    const pending = state.pendingAcks.get(job.id);
+    if (pending) {
+      if (await sendAck(label, job.id, pending, api)) state.pendingAcks.delete(job.id);
       continue;
     }
     const handler = Object.hasOwn(handlers, job.kind) ? handlers[job.kind] : undefined;
+    let result: BotJobPendingAck;
     if (!handler) {
       const message = `Bot job ${job.id} failed: unknown kind "${job.kind}". ` +
         "This bot has no handler for it.";
       logError("BotJobService", new Error(message));
-      await ack(label, () => api.failed(job.id, message));
-      continue;
+      result = { status: "failed", error: message };
+    } else {
+      try {
+        await handler(job.payload, surface);
+        logInfo("BotJobService", `Performed ${label}.`);
+        result = { status: "done" };
+      } catch (err) {
+        logError(`BotJobService.${job.kind}`, err);
+        result = { status: "failed", error: buildBotJobErrorMessage(job, err) };
+      }
     }
-    try {
-      await handler(job.payload, surface);
-    } catch (err) {
-      logError(`BotJobService.${job.kind}`, err);
-      await ack(label, () => api.failed(job.id, buildBotJobErrorMessage(job, err)));
-      continue;
-    }
-    logInfo("BotJobService", `Performed ${label}.`);
-    if (!(await ack(label, () => api.done(job.id)))) state.delivered.add(job.id);
+    if (!(await sendAck(label, job.id, result, api))) state.pendingAcks.set(job.id, result);
   }
+}
+
+function sendAck(
+  label: string,
+  jobId: number,
+  result: BotJobPendingAck,
+  api: IBotJobApi,
+): Promise<boolean> {
+  return ack(label, () =>
+    result.status === "done" ? api.done(jobId) : api.failed(jobId, result.error));
 }
 
 /**

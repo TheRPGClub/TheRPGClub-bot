@@ -232,15 +232,17 @@ async function updateGiveawayHubMessages(
   client: Client,
   channel: TextBasedChannel,
   payload: GiveawayHubPayload,
-  options?: { suppressNotifications?: boolean },
+  options?: { suppressNotifications?: boolean; throwOnFailure?: boolean },
 ): Promise<void> {
   if (!("send" in channel)) {
     return;
   }
+  const strict = options?.throwOnFailure ?? false;
 
   const messages = await channel.messages
     .fetch({ limit: GIVEAWAY_HUB_SCAN_LIMIT })
-    .catch((err) => {
+    .catch((err: unknown) => {
+      if (strict) throw err;
       logError("GiveawayHubService.fetch", err);
       return null;
     });
@@ -263,7 +265,8 @@ async function updateGiveawayHubMessages(
           flags: buildComponentsV2EditFlags(),
         },
       },
-    ).catch((err) => {
+    ).catch((err: unknown) => {
+      if (strict) throw err;
       logError("GiveawayHubService.edit", err);
     });
   } else {
@@ -273,6 +276,7 @@ async function updateGiveawayHubMessages(
         ? MessageFlags.IsComponentsV2 | MessageFlags.SuppressNotifications
         : MessageFlags.IsComponentsV2,
     }).catch((err: unknown) => {
+      if (strict) throw err;
       logError("GiveawayHubService.send", err);
     });
   }
@@ -288,24 +292,29 @@ async function updateGiveawayHubMessages(
 export async function refreshGiveawayHubMessage(
   client: Client,
   page = 0,
-  options?: { forceRecreate?: boolean },
+  options?: { forceRecreate?: boolean; throwOnFailure?: boolean },
 ): Promise<void> {
+  // A bot job must fail when the hub was not refreshed; other callers only log it.
+  const strict = options?.throwOnFailure ?? false;
+  const skip = (message: string): void => {
+    if (strict) throw new Error(message);
+    logWarn("GiveawayHubService.updateHub", message);
+  };
   if (!client.user) {
+    skip("The bot is not logged in, so the giveaway hub was not refreshed.");
     return;
   }
 
   const channel = await client.channels
     .fetch(GIVEAWAY_HUB_CHANNEL_ID)
-    .catch((err) => {
+    .catch((err: unknown) => {
+      if (strict) throw err;
       logError("GiveawayHubService.channelFetch", err);
       return null;
     });
   const textChannel = channel?.isTextBased() ? channel : null;
   if (!textChannel) {
-    logWarn(
-      "GiveawayHubService.updateHub",
-      `Giveaway hub channel ${GIVEAWAY_HUB_CHANNEL_ID} not found or not text-based.`,
-    );
+    skip(`Giveaway hub channel ${GIVEAWAY_HUB_CHANNEL_ID} not found or not text-based.`);
     return;
   }
 
@@ -313,17 +322,18 @@ export async function refreshGiveawayHubMessage(
   const shouldRecreate = options?.forceRecreate ?? false;
   if (shouldRecreate) {
     if (!("send" in textChannel)) {
-      logWarn("GiveawayHubService.updateHub", "Giveaway hub channel does not support send.");
+      skip("Giveaway hub channel does not support send.");
       return;
     }
     await deleteGiveawayHubMessages(client, textChannel);
     await updateGiveawayHubMessages(client, textChannel, payload, {
       suppressNotifications: true,
+      throwOnFailure: strict,
     });
     return;
   }
 
-  await updateGiveawayHubMessages(client, textChannel, payload);
+  await updateGiveawayHubMessages(client, textChannel, payload, { throwOnFailure: strict });
 }
 
 export async function recreateGiveawayHubMessage(client: Client): Promise<void> {

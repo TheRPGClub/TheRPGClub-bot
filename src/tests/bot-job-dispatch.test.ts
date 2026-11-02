@@ -244,3 +244,50 @@ test("a claimed job maps from the API's shape, a null payload as empty", () => {
     requestedByUserId: "123",
   });
 });
+
+test("a Discord failure's request body never reaches the failed ack", async () => {
+  const api = fakeApi();
+  const handlers: BotJobHandlers = {
+    posts: async () => {
+      throw Object.assign(new Error("Internal Server Error"), {
+        method: "POST",
+        url: "https://discord.com/api/v10/channels/555/messages",
+        status: 500,
+        rawError: { message: "Internal Server Error", code: 0 },
+        requestBody: { json: { content: "secret-content" } },
+      });
+    },
+  };
+  await processBotJobs([job(30, "posts")], handlers, fakeSurface(), api);
+  const ack = api.acks[0];
+  const error = ack.status === "failed" ? ack.error : "";
+  assert.doesNotMatch(error, /secret-content/);
+  assert.match(error, /"status": 500/);
+  assert.match(error, /channels\/555\/messages/);
+});
+
+test("a failed job whose failed ack missed is only re-acked failed when it comes back", async () => {
+  const state = createBotJobDeliveryState();
+  let failAck = true;
+  let runs = 0;
+  const failedAcks: { id: number; error: string }[] = [];
+  const api = fakeApi([], {
+    failed: async (id, error) => {
+      if (failAck) throw new Error("API down");
+      failedAcks.push({ id, error });
+    },
+  });
+  const handlers: BotJobHandlers = {
+    breaks: async () => {
+      runs++;
+      throw new Error("Missing Access");
+    },
+  };
+  await processBotJobs([job(31, "breaks")], handlers, fakeSurface(), api, state);
+  failAck = false;
+  await processBotJobs([job(31, "breaks")], handlers, fakeSurface(), api, state);
+  assert.equal(runs, 1);
+  assert.equal(failedAcks.length, 1);
+  assert.equal(failedAcks[0].id, 31);
+  assert.match(failedAcks[0].error, /Missing Access/);
+});

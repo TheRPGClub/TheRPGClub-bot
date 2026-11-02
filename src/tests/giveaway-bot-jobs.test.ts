@@ -183,3 +183,23 @@ test("hub refresh fails the job when the hub cannot be updated", async () => {
   ]);
   assert.match(failure(acks), /Unknown Channel/);
 });
+
+function discordDmError(status: number, code: number, message: string): Error {
+  return Object.assign(new Error(message), {
+    method: "POST",
+    url: "https://discord.com/api/v10/channels/555/messages",
+    status,
+    code,
+    rawError: { message, code },
+    requestBody: { json: { content: "You claimed it. Key: `AAAA-BBBB-CCCC`" } },
+  });
+}
+
+test("claim notice with a Discord DM failure acks failed without the key", async () => {
+  const surface = fakeSurface({ dmError: discordDmError(403, 50001, "Missing Access") });
+  const acks = await run(surface, [job(10, "giveaway_claim_notice", claimPayload)]);
+  const error = failure(acks);
+  assert.doesNotMatch(error, /AAAA-BBBB-CCCC/);
+  assert.match(error, /403/);
+  assert.match(error, /Missing Access/);
+});
