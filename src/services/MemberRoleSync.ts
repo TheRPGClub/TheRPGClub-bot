@@ -1,3 +1,4 @@
+import axios from "axios";
 import type { GuildMember, PartialGuildMember } from "discord.js";
 import Member from "../classes/Member.js";
 import { HOME_GUILD_ID } from "../config/guilds.js";
@@ -35,10 +36,19 @@ function rolesChanged(
   return before.length !== after.length || before.some((id, i) => id !== after[i]);
 }
 
+const DUPLICATE_VALUE_TEXT = "duplicate value violates a unique constraint";
+
+/** The API's 422 for a unique insert that lost a race with another insert of the row. */
+function isDuplicateInsert(err: unknown): boolean {
+  if (!axios.isAxiosError(err) || err.response?.status !== 422) return false;
+  return JSON.stringify(err.response.data ?? "").includes(DUPLICATE_VALUE_TEXT);
+}
+
 /**
  * Reports the member's roles with `PUT /users/:id/roles`. The API answers 404 for a
  * user it has no record of, so that member is upserted instead (the upsert carries
- * the role IDs too).
+ * the role IDs too). A new member's join upsert can insert the row first, failing the
+ * fallback's insert; the row then exists, so the PUT is sent once more.
  */
 export async function reportMemberRoles(
   member: GuildMember,
@@ -49,10 +59,24 @@ export async function reportMemberRoles(
   try {
     const result = await client.put(path, body);
     if (result === null) {
-      await client.upsertMember(member);
+      await upsertOrRetryPut(member, client, path, body);
     }
   } catch (err: unknown) {
     logError("MemberRoleSync.reportMemberRoles", describeRequestError(err));
+  }
+}
+
+async function upsertOrRetryPut(
+  member: GuildMember,
+  client: IRoleReportClient,
+  path: string,
+  body: unknown,
+): Promise<void> {
+  try {
+    await client.upsertMember(member);
+  } catch (err: unknown) {
+    if (!isDuplicateInsert(err)) throw err;
+    await client.put(path, body);
   }
 }
 
