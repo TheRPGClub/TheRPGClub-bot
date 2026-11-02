@@ -80,7 +80,7 @@ export const handleVotingPollWakeup: BotJobHandler = async (_payload, surface) =
   surface.requestVotingEventPoll();
 };
 
-function requirePositiveInt(payload: Record<string, unknown>, field: string): number {
+function payloadPositiveInt(payload: Record<string, unknown>, field: string): number {
   const value = payload[field];
   if (typeof value !== "number" || !Number.isInteger(value) || value <= 0) {
     throw new Error(`Invalid payload: ${field} must be a positive integer, got ${
@@ -106,7 +106,7 @@ function requireString(payload: Record<string, unknown>, field: string): string 
  * to the claimer by DM, and the claim is logged and the donor told, as /giveaway does.
  */
 export const handleGiveawayClaimNotice: BotJobHandler = async (payload, surface) => {
-  const keyId = requirePositiveInt(payload, "key_id");
+  const keyId = payloadPositiveInt(payload, "key_id");
   const claimerId = requireString(payload, "claimed_by_user_id");
   const key = await surface.fetchGameKey(keyId);
   if (!key) {
@@ -161,7 +161,7 @@ function optionalString(payload: Record<string, unknown>, field: string): string
  * does. The name comes from the Suggestion itself.
  */
 export const handleSuggestionSubmitted: BotJobHandler = async (payload, surface) => {
-  const suggestionId = requirePositiveInt(payload, "suggestion_id");
+  const suggestionId = payloadPositiveInt(payload, "suggestion_id");
   const createdBy = optionalString(payload, "created_by");
   const suggestion = await surface.fetchSuggestion(suggestionId);
   if (!suggestion) {
@@ -178,14 +178,14 @@ export const handleSuggestionSubmitted: BotJobHandler = async (payload, surface)
  * Discord reviews included, so this is the only place the outcome is announced.
  */
 export const handleSuggestionOutcome: BotJobHandler = async (payload, surface) => {
-  requirePositiveInt(payload, "suggestion_id");
+  payloadPositiveInt(payload, "suggestion_id");
   const createdBy = optionalString(payload, "created_by");
   const outcome = payload.outcome;
   let content: string;
   if (outcome === "approved") {
     content = buildSuggestionApprovedNotice(
       createdBy,
-      requirePositiveInt(payload, "github_issue_number"),
+      payloadPositiveInt(payload, "github_issue_number"),
       requireString(payload, "github_issue_url"),
     );
   } else if (outcome === "rejected") {
