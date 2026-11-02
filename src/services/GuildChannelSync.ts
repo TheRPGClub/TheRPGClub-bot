@@ -145,9 +145,42 @@ interface ISyncResult {
 }
 
 /**
+ * The snapshot replaces the API's list, so a channel event stored while it was in flight
+ * would be undone. The guild's channel cache follows those events, so anything that now
+ * differs from the snapshot is sent again: a created or changed channel is PUT and a
+ * deleted one DELETEd. Failures are logged, as the events' own writes are.
+ */
+async function resendChangesSinceSnapshot(
+  current: ReadonlyMap<string, Channel | null>,
+  snapshot: readonly IGuildChannelPayload[],
+  deps: IGuildChannelSyncDeps,
+): Promise<void> {
+  const sent = new Map(snapshot.map((payload) => [payload.channel_id, payload]));
+  const live = new Set<string>();
+  for (const channel of current.values()) {
+    if (!channel || !isSyncedChannel(channel, deps.homeGuildId)) continue;
+    live.add(channel.id);
+    const before = sent.get(channel.id);
+    if (before && sameStoredFields(before, toGuildChannelPayload(channel))) continue;
+    await send(
+      `Could not store channel ${channel.id} changed during the startup sync`,
+      () => deps.api.upsert(channel.id, toUpsertBody(channel)),
+    );
+  }
+  for (const channelId of sent.keys()) {
+    if (live.has(channelId)) continue;
+    await send(
+      `Could not remove channel ${channelId} deleted during the startup sync`,
+      () => deps.api.remove(channelId),
+    );
+  }
+}
+
+/**
  * Startup: sends every home guild channel (threads are never listed) as one snapshot,
- * which replaces the API's list. Throws with the full request and response so the
- * startup sequence names the failed step.
+ * which replaces the API's list, then re-sends any channel event that landed meanwhile.
+ * Throws with the full request and response so the startup sequence names the failed
+ * step.
  */
 export async function syncAllGuildChannels(
   client: Pick<Client, "guilds">,
@@ -171,4 +204,5 @@ export async function syncAllGuildChannels(
     const label = "Could not sync the guild channel list";
     throw new Error(buildApiErrorMessage(label, error), { cause: error });
   }
+  await resendChangesSinceSnapshot(guild.channels.cache, data, deps);
 }
