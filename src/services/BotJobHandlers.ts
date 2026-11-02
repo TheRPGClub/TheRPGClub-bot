@@ -30,7 +30,7 @@ export interface IBotJobSurface {
   runGiveawayClaimSideEffects(claimerId: string, key: IClaimedGiveawayKey): Promise<string>;
   /** DMs a user. Throws the discord.js error (closed DMs: code 50007). */
   sendDm(userId: string, content: string): Promise<void>;
-  /** Re-renders the giveaway hub message from the API's current keys. */
+  /** Re-renders the giveaway hub from the API's current keys. Throws when it could not. */
   refreshGiveawayHub(): Promise<void>;
   /** GET /suggestions/:id with the service token; null on 404. */
   fetchSuggestion(suggestionId: number): Promise<ISuggestionItem | null>;
@@ -48,7 +48,7 @@ export function createBotJobSurface(client: Client): IBotJobSurface {
       const user = await client.users.fetch(userId);
       await user.send({ content });
     },
-    refreshGiveawayHub: () => refreshGiveawayHubMessage(client),
+    refreshGiveawayHub: () => refreshGiveawayHubMessage(client, 0, { throwOnFailure: true }),
     fetchSuggestion: getSuggestionById,
     sendChannelMessage: async (channelId, content) => {
       const channel = await client.channels.fetch(channelId);
