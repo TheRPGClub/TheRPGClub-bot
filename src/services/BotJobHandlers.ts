@@ -123,10 +123,14 @@ export const handleGiveawayClaimNotice: BotJobHandler = async (payload, surface)
       throw new Error(
         "The bot could not DM you your key because your Discord DMs are closed. " +
           "The key is still yours: it is shown on the website.",
+        { cause: err },
       );
     }
-    // Never rethrow the discord.js error: its request body is the DM, key included.
-    throw new Error(`Could not DM the claimer their key: ${describeRequestError(err)}`);
+    // Never rethrow the discord.js error: its request body is the DM, key included. The
+    // cause is kept for the local log only; a job's error message never formats it.
+    throw new Error(`Could not DM the claimer their key: ${describeRequestError(err)}`, {
+      cause: err,
+    });
   }
 };
 
