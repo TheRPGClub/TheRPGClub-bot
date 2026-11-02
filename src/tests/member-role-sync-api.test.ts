@@ -28,7 +28,9 @@ const adapter: AxiosAdapter = async (config) => {
 axios.defaults.adapter = adapter;
 
 const { default: Member } = await import("../classes/Member.js");
-const { reportMemberRoles } = await import("../services/MemberRoleSync.js");
+const { recordMemberDeparture, reportMemberRoles } = await import(
+  "../services/MemberRoleSync.js",
+);
 const { HOME_GUILD_ID } = await import("../config/guilds.js");
 
 const GUILD_ID = HOME_GUILD_ID;
@@ -95,4 +97,15 @@ test("upserting a member of another guild leaves their roles alone", async () =>
   const body = requests[0]?.body as { data: Record<string, unknown> } | undefined;
   assert.equal(body?.data.discord_id, "42");
   assert.equal("role_ids" in (body?.data ?? {}), false);
+});
+
+test("a departure for a user the API doesn't know sends only the empty role PUT", async () => {
+  requests.length = 0;
+  statusFor = (method) => (method === "PUT" ? 404 : 201);
+
+  await recordMemberDeparture(fakeMember([GUILD_ID, MEMBERS]), { testMode: false });
+
+  assert.deepEqual(requests, [
+    { method: "PUT", url: "/api/v1/users/42/roles", body: { data: { role_ids: [] } } },
+  ]);
 });

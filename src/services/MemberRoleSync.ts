@@ -93,3 +93,24 @@ export async function recordRoleChange(
   if (!rolesChanged(oldMember, newMember)) return;
   await reportMemberRoles(newMember, opts.client);
 }
+
+/**
+ * Clears a departed member's website roles by reporting an empty role list. Discord
+ * sends guildMemberRemove for a leave, a kick and a ban alike. A 404 means the API has
+ * no record of the user, so there is nothing to clear and no fallback upsert.
+ */
+export async function recordMemberDeparture(
+  member: GuildMember | PartialGuildMember,
+  opts: { client?: IRoleReportClient; testMode?: boolean; homeGuildId?: string } = {},
+): Promise<void> {
+  if (!memberEventWritesEnabled(opts.testMode ?? IS_TEST_MODE)) return;
+  if (!member.user || member.user.bot) return;
+  if (member.guild.id !== (opts.homeGuildId ?? HOME_GUILD_ID)) return;
+  const client = opts.client ?? defaultClient;
+  const path = `/api/v1/users/${member.user.id}/roles`;
+  try {
+    await client.put(path, { data: { role_ids: [] } });
+  } catch (err: unknown) {
+    logError("MemberRoleSync.recordMemberDeparture", describeRequestError(err));
+  }
+}

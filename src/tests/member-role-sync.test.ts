@@ -2,7 +2,11 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { AxiosError, AxiosHeaders } from "axios";
 import { Collection, type GuildMember } from "discord.js";
-import { recordRoleChange, type IRoleReportClient } from "../services/MemberRoleSync.js";
+import {
+  recordMemberDeparture,
+  recordRoleChange,
+  type IRoleReportClient,
+} from "../services/MemberRoleSync.js";
 import { memberRoleIds } from "../utilities/MemberRoleUtils.js";
 import { HOME_GUILD_ID } from "../config/guilds.js";
 
@@ -191,4 +195,66 @@ test("a fallback upsert that loses the join race re-sends the roles quietly", as
 
   assert.deepEqual(calls, ["put", "upsert", "put"]);
   assert.equal(errors.mock.callCount(), 0);
+});
+
+test("a departed member's roles are reported as an empty list", async () => {
+  const { client, calls } = fakeClient();
+  const member = fakeMember({ roleIds: [GUILD_ID, MEMBERS, ADMIN] });
+
+  await recordMemberDeparture(member, { client, testMode: false });
+
+  assert.deepEqual(calls, [
+    { kind: "put", path: "/api/v1/users/42/roles", body: { data: { role_ids: [] } } },
+  ]);
+});
+
+test("an uncached departed member is still cleared", async () => {
+  const { client, calls } = fakeClient();
+  const member = fakeMember({ roleIds: [], partial: true });
+
+  await recordMemberDeparture(member, { client, testMode: false });
+
+  assert.deepEqual(calls[0]?.body, { data: { role_ids: [] } });
+});
+
+test("a departed member unknown to the API (404) is not upserted", async () => {
+  const { client, calls } = fakeClient(null);
+  const member = fakeMember({ roleIds: [MEMBERS] });
+
+  await recordMemberDeparture(member, { client, testMode: false });
+
+  assert.deepEqual(
+    calls.map((call) => call.kind),
+    ["put"],
+  );
+});
+
+test("a departed bot, test mode or another guild reports nothing", async () => {
+  const { client, calls } = fakeClient();
+
+  await recordMemberDeparture(fakeMember({ roleIds: [MEMBERS], bot: true }), {
+    client,
+    testMode: false,
+  });
+  await recordMemberDeparture(fakeMember({ roleIds: [MEMBERS] }), { client, testMode: true });
+  await recordMemberDeparture(fakeMember({ roleIds: [], guildId: OTHER_GUILD_ID }), {
+    client,
+    testMode: false,
+  });
+
+  assert.deepEqual(calls, []);
+});
+
+test("a failed departure report is logged, not thrown", async (t) => {
+  const errors = t.mock.method(console, "error", () => undefined);
+  const client: IRoleReportClient = {
+    put: async () => {
+      throw new Error("boom");
+    },
+    upsertMember: async () => undefined,
+  };
+
+  await recordMemberDeparture(fakeMember({ roleIds: [MEMBERS] }), { client, testMode: false });
+
+  assert.equal(errors.mock.callCount(), 1);
 });
