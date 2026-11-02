@@ -1,11 +1,9 @@
 import type { ButtonInteraction, CommandInteraction } from "discord.js";
 import {
-  ButtonStyle,
   ContainerBuilder,
   MessageFlags,
   ModalSubmitInteraction,
   TextDisplayBuilder,
-  userMention,
 } from "discord.js";
 import {
   CheckboxGroupBuilder,
@@ -22,16 +20,12 @@ import {
 } from "discordx";
 import {
   safeDeferReply,
-  safeEditReply,
-  safeFollowUpIfSettled,
   safeReply,
   safeUpdate,
   sanitizeUserInput,
-  withClickedRowDisabled,
 } from "../functions/InteractionUtils.js";
 import {
   createSuggestion,
-  deleteSuggestion,
   getSuggestionById,
   listSuggestions,
   countSuggestions,
@@ -41,9 +35,19 @@ import {
   getSuggestionReviewSession,
   type ISuggestionReviewSession,
 } from "../classes/SuggestionReviewSession.js";
-import { createIssue } from "../services/GithubIssuesService.js";
-import { BOT_DEV_CHANNEL_ID, GAMEDB_UPDATES_CHANNEL_ID } from "../config/channels.js";
+import { BOT_DEV_CHANNEL_ID } from "../config/channels.js";
 import { BOT_DEV_PING_USER_ID } from "../config/users.js";
+import {
+  DEFAULT_SUGGESTION_TARGET_REPO,
+  isSuggestionTargetRepo,
+  SUGGESTION_TARGET_REPOS,
+  type SuggestionTargetRepo,
+} from "../config/suggestions.js";
+import {
+  reviewSuggestion,
+  SUGGESTION_REVIEW_API,
+} from "../services/SuggestionReviewService.js";
+import { buildSuggestionSubmittedPing } from "../services/SuggestionNotices.js";
 import {
   buildComponentsV2Flags,
   buildTextContainer,
@@ -51,19 +55,13 @@ import {
   buildTextReply,
   safeV2TextContent,
 } from "../functions/ComponentsV2Utils.js";
-import { buildCaughtErrorMessage } from "../utilities/ApiErrorUtils.js";
 import { formatStructuredLog, logError, logInfo, logWarn } from "../utilities/LogUtils.js";
 import { isPositiveInt, truncateWithEllipsis } from "../utilities/ValidationUtils.js";
 import { parseCustomIdSegments } from "../utilities/CustomIdUtils.js";
-import {
-  buildActionButton,
-  buildButtonRow,
-  buildTextInputLabel,
-} from "../functions/uiComponents.js";
+import { buildTextInputLabel } from "../functions/uiComponents.js";
 import { toUnixTimestamp } from "../functions/DateFormatUtils.js";
 import { commandMention } from "../services/CommandMentionService.js";
 
-const SUGGESTION_APPROVE_PREFIX = "suggestion-approve";
 const SUGGESTION_CREATE_MODAL_ID = "suggestion-create-modal";
 const SUGGESTION_CREATE_TITLE_ID = "suggestion-create-title";
 const SUGGESTION_CREATE_DETAILS_ID = "suggestion-create-details";
@@ -75,6 +73,7 @@ const SUGGESTION_REVIEW_DECISION_MODAL_PREFIX = "suggestion-review-decision";
 const SUGGESTION_REVIEW_SUMMARY_ID = "suggestion-review-summary";
 const SUGGESTION_REVIEW_DECISION_ID = "suggestion-review-decision-choice";
 const SUGGESTION_REVIEW_REASON_ID = "suggestion-review-decision-reason";
+const SUGGESTION_REVIEW_REPO_ID = "suggestion-review-decision-repo";
 type SuggestionReviewSession = ISuggestionReviewSession;
 const MAX_MODAL_TEXT_INPUT_VALUE = 4000;
 
@@ -177,13 +176,29 @@ export function buildSuggestionReviewDecisionModal(
               {
                 label: "Accept",
                 value: "accept",
-                description: "Create GitHub issue from this suggestion",
+                description: "Open a GitHub issue in the repository below",
               },
               {
                 label: "Reject",
                 value: "reject",
                 description: "Reject and notify the suggestion author",
               },
+            ),
+        ),
+      new LabelBuilder()
+        .setLabel("Repository (used when Accept)")
+        .setDescription("Where the GitHub issue is opened")
+        .setRadioGroupComponent(
+          new RadioGroupBuilder()
+            .setCustomId(SUGGESTION_REVIEW_REPO_ID)
+            .setRequired(true)
+            .setOptions(
+              ...SUGGESTION_TARGET_REPOS.map((repo) => ({
+                label: repo.label,
+                value: repo.value,
+                description: repo.description,
+                default: repo.value === DEFAULT_SUGGESTION_TARGET_REPO,
+              })),
             ),
         ),
       buildTextInputLabel({
@@ -299,8 +314,7 @@ function buildSuggestionReviewSummaryText(
 
 function extractReviewDecisionFromInteraction(
   interaction: ModalSubmitInteraction,
-): { decision: string | null; reason: string } {
-  let decision: string | null = null;
+): { decision: string | null; targetRepo: string | null; reason: string } {
 
   const components = (interaction.components ?? []) as Array<{
     type?: number;
@@ -322,19 +336,18 @@ function extractReviewDecisionFromInteraction(
     }
   }
 
-  for (const field of flatFields) {
-    if (!field || field.customId !== SUGGESTION_REVIEW_DECISION_ID) {
-      continue;
+  const radioValue = (customId: string): string | null => {
+    for (const field of flatFields) {
+      if (!field || field.customId !== customId) continue;
+      if (typeof field.value === "string") return field.value;
+      if (Array.isArray(field.values) && typeof field.values[0] === "string") {
+        return field.values[0];
+      }
     }
-    if (typeof field.value === "string") {
-      decision = field.value;
-      break;
-    }
-    if (Array.isArray(field.values) && typeof field.values[0] === "string") {
-      decision = field.values[0];
-      break;
-    }
-  }
+    return null;
+  };
+  const decision = radioValue(SUGGESTION_REVIEW_DECISION_ID);
+  const targetRepo = radioValue(SUGGESTION_REVIEW_REPO_ID);
 
   let reason: string;
   try {
@@ -344,7 +357,7 @@ function extractReviewDecisionFromInteraction(
     reason = "";
   }
 
-  return { decision, reason };
+  return { decision, targetRepo, reason };
 }
 
 function buildSuggestionReviewContainer(
@@ -374,7 +387,7 @@ function buildSuggestionReviewContainer(
   if (totalCount > total) {
     container.addTextDisplayComponents(
       new TextDisplayBuilder().setContent(
-        safeV2TextContent(`Showing ${total} most recent suggestions out of ${totalCount}.`, 1000),
+        safeV2TextContent(`Showing ${total} of ${totalCount} pending suggestions.`, 1000),
       ),
     );
   }
@@ -391,7 +404,8 @@ async function getCurrentSuggestionForReview(
   while (session.index < session.suggestionIds.length) {
     const suggestionId = session.suggestionIds[session.index];
     const suggestion = await getSuggestionById(suggestionId);
-    if (suggestion) {
+    // Reviewed and withdrawn suggestions are kept now, so skip them like deleted ones.
+    if (suggestion?.status === "pending") {
       return {
         suggestion,
         index: session.index,
@@ -406,38 +420,6 @@ async function getCurrentSuggestionForReview(
     index: Math.max(0, session.suggestionIds.length - 1),
     total: session.suggestionIds.length,
   };
-}
-
-function getSuggestionAuthorMention(
-  suggestion: Awaited<ReturnType<typeof getSuggestionById>>,
-): string {
-  return suggestion?.createdBy ? userMention(suggestion.createdBy) : "Unknown user";
-}
-
-async function sendSuggestionUpdateMessage(
-  interaction: CommandInteraction | ButtonInteraction | ModalSubmitInteraction,
-  content: string,
-): Promise<void> {
-  try {
-    const channel = await interaction.client.channels.fetch(GAMEDB_UPDATES_CHANNEL_ID);
-    if (channel && "send" in channel) {
-      await (channel as any).send({ content });
-    }
-  } catch {
-    // ignore notification failures
-  }
-}
-
-function buildSuggestionApproveId(suggestionId: number): string {
-  return `${SUGGESTION_APPROVE_PREFIX}:${suggestionId}`;
-}
-
-function parseSuggestionApproveId(id: string): number | null {
-  if (!id.startsWith(`${SUGGESTION_APPROVE_PREFIX}:`)) return null;
-  const segs = parseCustomIdSegments(id, 1);
-  if (!segs) return null;
-  const suggestionId = Number(segs[0]);
-  return isPositiveInt(suggestionId) ? suggestionId : null;
 }
 
 async function openSuggestionCreateModal(interaction: CommandInteraction): Promise<void> {
@@ -536,12 +518,13 @@ export class SuggestionCommand {
 
     await safeReply(interaction, buildTextReply(`Thanks! Suggestion #${suggestion.suggestionId} submitted.`, true));
 
+    // The API queues no `suggestion_submitted` job for the bot's own (service) creates,
+    // so the bot dev is pinged here.
     try {
       const channel = await interaction.client.channels.fetch(BOT_DEV_CHANNEL_ID);
-      if (channel && "send" in channel) {
-        await (channel as any).send({
-          content:
-            `${userMention(BOT_DEV_PING_USER_ID)} ${interaction.user.username} has submitted a suggestion!`,
+      if (channel?.isSendable()) {
+        await channel.send({
+          content: buildSuggestionSubmittedPing(interaction.user.username),
         });
       }
     } catch {
@@ -628,85 +611,15 @@ export class SuggestionCommand {
     }
   }
 
+  // Retired: approving needs a repository choice now, which only the review form offers.
+  // Kept so a button left on an old message answers instead of failing.
   @ButtonComponent({ id: /^suggestion-approve:\d+$/ })
   async approveSuggestion(interaction: ButtonInteraction): Promise<void> {
-    const suggestionId = parseSuggestionApproveId(interaction.customId);
-    if (!suggestionId) {
-      await safeUpdate(interaction, { components: [] });
-      return;
-    }
-
-    const isOwner = interaction.guild?.ownerId === interaction.user.id;
-    const isBotDev = interaction.user.id === BOT_DEV_PING_USER_ID;
-    if (!isOwner && !isBotDev) {
-      await safeReply(interaction, buildTextReply("Only the server owner or bot dev can approve suggestions.", true));
-      return;
-    }
-
-    await withClickedRowDisabled(interaction, async () => {
-      const suggestion = await getSuggestionById(suggestionId);
-      if (!suggestion) {
-        await safeFollowUpIfSettled(interaction, buildTextReply("Suggestion not found.", true));
-        return;
-      }
-
-      const authorName = suggestion.createdByName ?? "Unknown";
-      const description = suggestion.details ?? "No details provided.";
-      const body = `${authorName}: ${description}`;
-      const labels = suggestion.labels
-        ? suggestion.labels.split(",").map((label) => label.trim()).filter(Boolean)
-        : [];
-
-      let issue;
-      try {
-        issue = await createIssue({
-          title: suggestion.title,
-          body,
-          labels,
-        });
-      } catch (err: any) {
-        await safeFollowUpIfSettled(
-          interaction,
-          buildErrorReply(buildCaughtErrorMessage("Failed to create GitHub issue", err), true),
-        );
-        return;
-      }
-      // The issue exists now, so a failed delete still renders Approved below: restoring
-      // the button would let a retry file a second issue.
-      try {
-        await deleteSuggestion(suggestionId);
-      } catch (err: any) {
-        await safeFollowUpIfSettled(
-          interaction,
-          buildErrorReply(
-            buildCaughtErrorMessage(
-              `Created GitHub issue #${issue.number}, but could not remove the suggestion`,
-              err,
-            ),
-            true,
-          ),
-        );
-      }
-
-      const authorMention = getSuggestionAuthorMention(suggestion);
-      await sendSuggestionUpdateMessage(
-        interaction,
-        `${authorMention} Your suggestion was accepted and logged as GitHub issue ` +
-          `#${issue.number}: ${issue.htmlUrl}`,
-      );
-
-      const approvedRow = buildButtonRow(
-        buildActionButton({
-          customId: buildSuggestionApproveId(suggestionId),
-          label: "Approved",
-          style: ButtonStyle.Success,
-        }).setDisabled(true),
-      );
-
-      await safeEditReply(interaction, {
-        components: [approvedRow],
-      });
-    }, { workingLabel: "Approving..." });
+    await safeReply(interaction, buildTextReply(
+      `This button is retired. Review suggestions from ${commandMention("todo")} ` +
+        "with Review Suggestions.",
+      true,
+    ));
   }
 
   @ButtonComponent({ id: /^suggestion-review:.+$/ })
@@ -807,71 +720,40 @@ export class SuggestionCommand {
       return;
     }
 
+    const targetRepo: SuggestionTargetRepo = isSuggestionTargetRepo(extracted.targetRepo)
+      ? extracted.targetRepo
+      : DEFAULT_SUGGESTION_TARGET_REPO;
+
     await safeDeferReply(interaction, { flags: MessageFlags.Ephemeral });
 
-    if (decision === "accept") {
-      const suggestion = await getSuggestionById(parsed.suggestionId);
-      if (suggestion) {
-        const authorName = suggestion.createdByName ?? "Unknown";
-        const description = suggestion.details ?? "No details provided.";
-        const body = `${authorName}: ${description}`;
-        const labels = suggestion.labels
-          ? suggestion.labels.split(",").map((label) => label.trim()).filter(Boolean)
-          : [];
-
-        let issue;
-        try {
-          issue = await createIssue({
-            title: suggestion.title,
-            body,
-            labels,
-          });
-          await deleteSuggestion(parsed.suggestionId);
-        } catch (err: any) {
-          await safeReply(
-            interaction,
-            buildErrorReply(buildCaughtErrorMessage("Failed to create GitHub issue", err), true),
-          );
-          return;
+    // The API queues the `suggestion_outcome` job for this review too, and that job is
+    // what tells the author, so nothing is posted here (it would post twice).
+    const result = await reviewSuggestion(
+      SUGGESTION_REVIEW_API,
+      decision === "accept"
+        ? {
+          decision,
+          suggestionId: parsed.suggestionId,
+          reviewerId: interaction.user.id,
+          targetRepo,
         }
-
-        const authorMention = getSuggestionAuthorMention(suggestion);
-        await sendSuggestionUpdateMessage(
-          interaction,
-          `${authorMention} Your suggestion was accepted and logged as GitHub issue #${issue.number}: ${issue.htmlUrl}`,
-        );
-      }
-
-    } else if (decision === "reject") {
-      const suggestion = await getSuggestionById(parsed.suggestionId);
-      if (suggestion) {
-        try {
-          await deleteSuggestion(parsed.suggestionId);
-        } catch (err: any) {
-          await safeReply(
-            interaction,
-            buildErrorReply(buildCaughtErrorMessage("Failed to reject suggestion", err), true),
-          );
-          return;
-        }
-
-        const authorMention = getSuggestionAuthorMention(suggestion);
-        await sendSuggestionUpdateMessage(
-          interaction,
-          `${authorMention} Your suggestion "${suggestion.title}" was not accepted. Reason: ${reason}`,
-        );
-      }
-
+        : {
+          decision,
+          suggestionId: parsed.suggestionId,
+          reviewerId: interaction.user.id,
+          reason,
+        },
+    );
+    if (!result.ok) {
+      await safeReply(interaction, buildErrorReply(result.message, true));
+      return;
     }
 
     const remainingCount = await countSuggestions();
-    const outcomeLabel = decision === "accept"
-      ? "Accepted."
-      : "Rejected.";
     await safeReply(interaction, buildTextReply(remainingCount > 0
-        ? `${outcomeLabel} ${remainingCount} suggestion(s) remain. ` +
+        ? `${result.message}\n${remainingCount} suggestion(s) remain. ` +
           `Use Review Suggestions again from ${commandMention("todo")}.`
-        : `${outcomeLabel} No pending suggestions remain.`, true));
+        : `${result.message}\nNo pending suggestions remain.`, true));
   }
 
 }

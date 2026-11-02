@@ -44,6 +44,25 @@ test("suggestion modals serialize checkbox and radio label components", () => {
   assert.equal(JSON.stringify(reviewModal.toJSON()).includes("\"type\":21"), true);
 });
 
+test("suggestion review modal offers the three repos, the bot repo preselected", () => {
+  const json = buildSuggestionReviewDecisionModal(
+    "suggestion-review-decision:123456789012345678:42",
+    "Suggestion: #42 - Test",
+  ).toJSON();
+  const repoGroup = json.components
+    .map((label: any) => label.component)
+    .find((component: any) => component?.custom_id === "suggestion-review-decision-repo");
+  assert.ok(repoGroup, "repo radio group missing");
+  assert.deepEqual(
+    repoGroup.options.map((option: any) => [option.value, option.default === true]),
+    [
+      ["TheRPGClub/TheRPGClub-bot", true],
+      ["TheRPGClub/TheRPGClub-api", false],
+      ["TheRPGClub/TheRPGClub-www", false],
+    ],
+  );
+});
+
 test("buildTextInputLabel puts the label on a Label wrapping the text input", () => {
   const json = buildTextInputLabel({
     customId: "field-id",

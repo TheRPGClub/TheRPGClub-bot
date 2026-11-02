@@ -76,6 +76,8 @@ function fakeSurface(options: {
       if (options.hubError) throw options.hubError;
       surface.hubRefreshes++;
     },
+    fetchSuggestion: async () => null,
+    sendChannelMessage: async () => {},
   };
   return surface;
 }
