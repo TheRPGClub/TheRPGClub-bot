@@ -10,7 +10,6 @@ import {
   ModalSubmitInteraction,
   StringSelectMenuBuilder,
   StringSelectMenuInteraction,
-  userMention,
 } from "discord.js";
 import {
   ButtonComponent,
@@ -60,11 +59,15 @@ import {
   listAllAvailableKeys,
   refreshGiveawayHubMessage,
 } from "../services/GiveawayHubService.js";
-import { GIVEAWAY_HUB_CHANNEL_ID, GIVEAWAY_LOG_CHANNEL_ID } from "../config/channels.js";
+import { GIVEAWAY_HUB_CHANNEL_ID } from "../config/channels.js";
+import {
+  buildClaimedKeyDm,
+  runGiveawayClaimSideEffects,
+  type IClaimedGiveawayKey,
+} from "../services/GiveawayClaimService.js";
 import { hasMemberRole } from "../functions/RoleUtils.js";
 import { isPositiveInt } from "../utilities/ValidationUtils.js";
 import { logError } from "../utilities/LogUtils.js";
-import { COLOR_SUCCESS } from "../config/colors.js";
 import { CLAIM_MENU_CHUNK_SIZE } from "../config/pagination.js";
 import {
   GIVEAWAY_MAX_TITLE_LENGTH,
@@ -139,21 +142,6 @@ function buildKeySelectMenus(
     rows.push(buildSelectRow(select));
   }
   return rows;
-}
-
-async function logGiveawayClaim(
-  channel: any,
-  userId: string,
-  keyTitle: string,
-  platform: string,
-  keyId: number,
-): Promise<void> {
-  const message =
-    `${userMention(userId)} claimed **${keyTitle}** (${platform}) [Key ID: ${keyId}].`;
-  if (channel && typeof channel.send === "function") {
-    const container = buildTitledContainer("Giveaway claim", message, { color: COLOR_SUCCESS });
-    safeIgnore(channel.send({ components: [container], flags: buildComponentsV2EditFlags() }));
-  }
 }
 
 type ClaimResult =
@@ -342,46 +330,12 @@ async function claimKey(
   };
 }
 
-/**
- * Writes the claim log and notifies the donor. Never throws: any failure is
- * logged and swallowed so the claimant's key DM still proceeds. Returns the
- * donor display name (falls back to a mention).
- */
+/** The /giveaway claim's side effects: see runGiveawayClaimSideEffects. */
 export async function runClaimSideEffects(
   interaction: AnyRepliable,
-  key: { donorUserId: string; gameTitle: string; platform: string; keyId: number },
+  key: IClaimedGiveawayKey,
 ): Promise<string> {
-  let donorName: string = userMention(key.donorUserId);
-  try {
-    const logChannel = await interaction.client.channels
-      .fetch(GIVEAWAY_LOG_CHANNEL_ID)
-      .catch(() => null);
-    const textChannel = logChannel?.isTextBased() ? logChannel : null;
-    await logGiveawayClaim(
-      textChannel,
-      interaction.user.id,
-      key.gameTitle,
-      key.platform,
-      key.keyId,
-    );
-
-    const donorUser = await interaction.client.users
-      .fetch(key.donorUserId)
-      .catch(() => null);
-    donorName = donorUser?.username ?? userMention(key.donorUserId);
-    const notifyDonor = await Member.getGiveawayDonorNotifySetting(key.donorUserId);
-    if (notifyDonor && donorUser && key.donorUserId !== interaction.user.id) {
-      const claimantMention = userMention(interaction.user.id);
-      safeIgnore(donorUser.send({
-        content:
-          `Your donated key for **${key.gameTitle}** (${key.platform}) was claimed by ` +
-          `${claimantMention}. Thanks for contributing!`,
-      }));
-    }
-  } catch (err: unknown) {
-    logError("giveaway.runClaimSideEffects", err);
-  }
-  return donorName;
+  return runGiveawayClaimSideEffects(interaction.client, interaction.user.id, key);
 }
 
 function buildDonateModal(): ModalBuilder {
@@ -937,10 +891,12 @@ export class GiveawayCommand {
 
         const dmResult = await interaction.user
           .send({
-            content:
-              `You claimed **${result.key.keyTitle}** (${result.key.platform}).\n` +
-              `Key: \`${result.key.keyValue}\`\n` +
-              `This key was donated by ${result.key.donorName}, be sure to thank them!`,
+            content: buildClaimedKeyDm(
+              result.key.keyTitle,
+              result.key.platform,
+              result.key.keyValue,
+              result.key.donorName,
+            ),
           })
           .catch((err: unknown) => {
             logError("giveaway.handleClaimConfirm.dm", err);
