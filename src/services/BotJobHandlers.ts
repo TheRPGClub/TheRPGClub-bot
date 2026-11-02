@@ -1,4 +1,5 @@
 import { RESTJSONErrorCodes, userMention, type Client } from "discord.js";
+import { describeRequestError } from "../utilities/ApiErrorUtils.js";
 import { getGameKeyById, type IGameKey } from "../classes/GameKey.js";
 import { requestVotingEventPoll } from "./VotingEventService.js";
 import { refreshGiveawayHubMessage } from "./GiveawayHubService.js";
@@ -122,10 +123,10 @@ export const handleGiveawayClaimNotice: BotJobHandler = async (payload, surface)
       throw new Error(
         "The bot could not DM you your key because your Discord DMs are closed. " +
           "The key is still yours: it is shown on the website.",
-        { cause: err },
       );
     }
-    throw err;
+    // Never rethrow the discord.js error: its request body is the DM, key included.
+    throw new Error(`Could not DM the claimer their key: ${describeRequestError(err)}`);
   }
 };
 

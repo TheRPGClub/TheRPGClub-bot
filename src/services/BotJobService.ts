@@ -42,10 +42,16 @@ function truncateErrorMessage(message: string): string {
   return message.slice(0, BOT_JOB_ERROR_MESSAGE_MAX - marker.length) + marker;
 }
 
-/** The error_message a failed job is acked with: the full request and response. */
+/**
+ * The error_message a failed job is acked with: the full request and response, except a
+ * Discord request's body. Admins read error_message on the website, and a DM's body can
+ * hold the game key the API keeps out of the job.
+ */
 export function buildBotJobErrorMessage(job: IBotJob, err: unknown): string {
   const label = `Bot job ${job.id} (${job.kind}) failed`;
-  return truncateErrorMessage(buildAnyErrorMessage(label, err, { devPing: false }));
+  return truncateErrorMessage(
+    buildAnyErrorMessage(label, err, { devPing: false, omitDiscordRequestBody: true }),
+  );
 }
 
 async function ack(label: string, send: () => Promise<void>): Promise<boolean> {
