@@ -230,6 +230,19 @@ export async function apiPut<T>(
 }
 
 /**
+ * PUT a resource and throw the `AxiosError` for every non-2xx response, 404 included,
+ * so callers can report the full request and response.
+ */
+export async function apiPutOrThrow<T>(
+  path: string,
+  body?: unknown,
+  config?: AxiosRequestConfig,
+): Promise<T> {
+  const response = await getClient().put<T>(path, body, config);
+  return response.data;
+}
+
+/**
  * POST to a resource with multipart/form-data. Returns the parsed response body,
  * or `null` on 404. Throws for all other non-2xx responses.
  */
