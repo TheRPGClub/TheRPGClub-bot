@@ -62,6 +62,8 @@ function fakeSurface(): IFakeSurface {
     runGiveawayClaimSideEffects: async () => "",
     sendDm: async () => {},
     refreshGiveawayHub: async () => {},
+    fetchSuggestion: async () => null,
+    sendChannelMessage: async () => {},
   };
   return surface;
 }

@@ -1,4 +1,4 @@
-import { RESTJSONErrorCodes, type Client } from "discord.js";
+import { RESTJSONErrorCodes, userMention, type Client } from "discord.js";
 import { getGameKeyById, type IGameKey } from "../classes/GameKey.js";
 import { requestVotingEventPoll } from "./VotingEventService.js";
 import { refreshGiveawayHubMessage } from "./GiveawayHubService.js";
@@ -7,6 +7,13 @@ import {
   runGiveawayClaimSideEffects,
   type IClaimedGiveawayKey,
 } from "./GiveawayClaimService.js";
+import { getSuggestionById, type ISuggestionItem } from "../classes/Suggestion.js";
+import { BOT_DEV_CHANNEL_ID, GAMEDB_UPDATES_CHANNEL_ID } from "../config/channels.js";
+import {
+  buildSuggestionApprovedNotice,
+  buildSuggestionRejectedNotice,
+  buildSuggestionSubmittedPing,
+} from "./SuggestionNotices.js";
 
 /**
  * The narrow slice of Discord (and of the bot's own services) that job handlers may use,
@@ -24,6 +31,10 @@ export interface IBotJobSurface {
   sendDm(userId: string, content: string): Promise<void>;
   /** Re-renders the giveaway hub message from the API's current keys. */
   refreshGiveawayHub(): Promise<void>;
+  /** GET /suggestions/:id with the service token; null on 404. */
+  fetchSuggestion(suggestionId: number): Promise<ISuggestionItem | null>;
+  /** Posts to a text channel. Throws the discord.js error, or when it can't hold messages. */
+  sendChannelMessage(channelId: string, content: string): Promise<void>;
 }
 
 export function createBotJobSurface(client: Client): IBotJobSurface {
@@ -37,6 +48,14 @@ export function createBotJobSurface(client: Client): IBotJobSurface {
       await user.send({ content });
     },
     refreshGiveawayHub: () => refreshGiveawayHubMessage(client),
+    fetchSuggestion: getSuggestionById,
+    sendChannelMessage: async (channelId, content) => {
+      const channel = await client.channels.fetch(channelId);
+      if (!channel || !channel.isSendable()) {
+        throw new Error(`Channel ${channelId} is missing or the bot cannot post in it.`);
+      }
+      await channel.send({ content });
+    },
   };
 }
 
@@ -124,9 +143,69 @@ export const handleGiveawayHubRefresh: BotJobHandler = async (_payload, surface)
   await surface.refreshGiveawayHub();
 };
 
+function optionalString(payload: Record<string, unknown>, field: string): string | null {
+  const value = payload[field];
+  if (value === null || value === undefined) return null;
+  if (typeof value !== "string") {
+    throw new Error(`Invalid payload: ${field} must be a string or null, got ${
+      JSON.stringify(value)
+    }.`);
+  }
+  return value;
+}
+
+/**
+ * Payload: `{ suggestion_id, created_by }`. A member submitted a Suggestion on the website
+ * (the bot's own /suggestion pings inline instead), so the bot dev is pinged as /suggestion
+ * does. The name comes from the Suggestion itself.
+ */
+export const handleSuggestionSubmitted: BotJobHandler = async (payload, surface) => {
+  const suggestionId = requirePositiveInt(payload, "suggestion_id");
+  const createdBy = optionalString(payload, "created_by");
+  const suggestion = await surface.fetchSuggestion(suggestionId);
+  if (!suggestion) {
+    throw new Error(`Suggestion ${suggestionId} no longer exists, so no ping was sent.`);
+  }
+  const author = suggestion.createdBy ?? createdBy;
+  const authorLabel = suggestion.createdByName ?? (author ? userMention(author) : "Someone");
+  await surface.sendChannelMessage(BOT_DEV_CHANNEL_ID, buildSuggestionSubmittedPing(authorLabel));
+};
+
+/**
+ * Payload: `{ suggestion_id, outcome, created_by, title, github_issue_number,
+ * github_issue_url, rejection_reason }`. Queued by the API for every review, the bot's own
+ * Discord reviews included, so this is the only place the outcome is announced.
+ */
+export const handleSuggestionOutcome: BotJobHandler = async (payload, surface) => {
+  requirePositiveInt(payload, "suggestion_id");
+  const createdBy = optionalString(payload, "created_by");
+  const outcome = payload.outcome;
+  let content: string;
+  if (outcome === "approved") {
+    content = buildSuggestionApprovedNotice(
+      createdBy,
+      requirePositiveInt(payload, "github_issue_number"),
+      requireString(payload, "github_issue_url"),
+    );
+  } else if (outcome === "rejected") {
+    content = buildSuggestionRejectedNotice(
+      createdBy,
+      requireString(payload, "title"),
+      requireString(payload, "rejection_reason"),
+    );
+  } else {
+    throw new Error(`Invalid payload: outcome must be "approved" or "rejected", got ${
+      JSON.stringify(outcome)
+    }.`);
+  }
+  await surface.sendChannelMessage(GAMEDB_UPDATES_CHANNEL_ID, content);
+};
+
 /** Job kind (BotJob::KINDS in the API) to handler. One line per kind. */
 export const BOT_JOB_HANDLERS: BotJobHandlers = {
   voting_poll_wakeup: handleVotingPollWakeup,
   giveaway_claim_notice: handleGiveawayClaimNotice,
   giveaway_hub_refresh: handleGiveawayHubRefresh,
+  suggestion_submitted: handleSuggestionSubmitted,
+  suggestion_outcome: handleSuggestionOutcome,
 };
