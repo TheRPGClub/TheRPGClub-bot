@@ -58,6 +58,10 @@ function fakeSurface(): IFakeSurface {
     requestVotingEventPoll: () => {
       surface.wakeups++;
     },
+    fetchGameKey: async () => null,
+    runGiveawayClaimSideEffects: async () => "",
+    sendDm: async () => {},
+    refreshGiveawayHub: async () => {},
   };
   return surface;
 }
