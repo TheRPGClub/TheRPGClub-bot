@@ -3,8 +3,10 @@ import test from "node:test";
 import { Collection, type GuildMember } from "discord.js";
 import { recordRoleChange, type IRoleReportClient } from "../services/MemberRoleSync.js";
 import { memberRoleIds } from "../utilities/MemberRoleUtils.js";
+import { HOME_GUILD_ID } from "../config/guilds.js";
 
-const GUILD_ID = "100000000000000000";
+const GUILD_ID = HOME_GUILD_ID;
+const OTHER_GUILD_ID = "100000000000000000";
 const ADMIN = "461891227613265940";
 const MEMBERS = "747520789003239530";
 
@@ -12,11 +14,12 @@ function fakeMember(opts: {
   roleIds: string[];
   partial?: boolean;
   bot?: boolean;
+  guildId?: string;
 }): GuildMember {
   const roles = new Collection(opts.roleIds.map((id) => [id, { id }]));
   return {
     partial: opts.partial ?? false,
-    guild: { id: GUILD_ID },
+    guild: { id: opts.guildId ?? GUILD_ID },
     roles: { cache: roles },
     user: { id: "42", bot: opts.bot ?? false },
   } as unknown as GuildMember;
@@ -141,4 +144,14 @@ test("an API failure is logged, not thrown", async (t) => {
   await recordRoleChange(oldMember, newMember, { client, testMode: false });
 
   assert.equal(errors.mock.callCount(), 1);
+});
+
+test("a role change in another guild reports nothing", async () => {
+  const { client, calls } = fakeClient();
+  const oldMember = fakeMember({ roleIds: [OTHER_GUILD_ID], guildId: OTHER_GUILD_ID });
+  const newMember = fakeMember({ roleIds: [OTHER_GUILD_ID, ADMIN], guildId: OTHER_GUILD_ID });
+
+  await recordRoleChange(oldMember, newMember, { client, testMode: false });
+
+  assert.deepEqual(calls, []);
 });

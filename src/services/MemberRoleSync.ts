@@ -1,5 +1,6 @@
 import type { GuildMember, PartialGuildMember } from "discord.js";
 import Member from "../classes/Member.js";
+import { HOME_GUILD_ID } from "../config/guilds.js";
 import { IS_TEST_MODE } from "../config/testMode.js";
 import { describeRequestError } from "../utilities/ApiErrorUtils.js";
 import { logError } from "../utilities/LogUtils.js";
@@ -59,10 +60,12 @@ export async function reportMemberRoles(
 export async function recordRoleChange(
   oldMember: GuildMember | PartialGuildMember,
   newMember: GuildMember,
-  opts: { client?: IRoleReportClient; testMode?: boolean } = {},
+  opts: { client?: IRoleReportClient; testMode?: boolean; homeGuildId?: string } = {},
 ): Promise<void> {
   if (!memberEventWritesEnabled(opts.testMode ?? IS_TEST_MODE)) return;
   if (newMember.user.bot) return;
+  // Only the club's roles set website access; another guild's set would clear it.
+  if (newMember.guild.id !== (opts.homeGuildId ?? HOME_GUILD_ID)) return;
   if (!rolesChanged(oldMember, newMember)) return;
   await reportMemberRoles(newMember, opts.client);
 }

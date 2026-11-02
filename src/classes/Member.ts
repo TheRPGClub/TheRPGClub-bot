@@ -4,7 +4,7 @@ import { isPositiveInt, requirePositiveInt } from "../utilities/ValidationUtils.
 import { logError } from "../utilities/LogUtils.js";
 import { apiGet, apiPost, apiPatch, apiDelete } from "../services/RpgClubApiClient.js";
 import { UserFacingError } from "../utilities/ApiErrorUtils.js";
-import { memberRoleIds } from "../utilities/MemberRoleUtils.js";
+import { homeGuildRoleIds } from "../utilities/MemberRoleUtils.js";
 
 export interface IMemberRecord {
   userId: string;
@@ -1260,9 +1260,10 @@ export default class Member {
     }, roleIds);
   }
 
-  // Sends the member's role IDs too, so member scan and joins keep website access current.
+  // Sends the member's role IDs too (home guild only), so member scan and joins keep
+  // website access current.
   static async upsertGuildMember(member: GuildMember): Promise<void> {
-    await Member.upsertDiscordUser(member.user, member.joinedAt ?? null, memberRoleIds(member));
+    await Member.upsertDiscordUser(member.user, member.joinedAt ?? null, homeGuildRoleIds(member));
   }
 
   static async markDepartedNotIn(userIds: string[]): Promise<number> {
