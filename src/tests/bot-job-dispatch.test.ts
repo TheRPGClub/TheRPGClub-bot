@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { AxiosError, AxiosHeaders } from "axios";
+import { DiscordAPIError } from "discord.js";
 import { mapBotJobClaim, type IBotJob, type IBotJobApi } from "../classes/BotJobs.js";
 import {
   BOT_JOB_HANDLERS,
@@ -15,6 +16,7 @@ import {
 import {
   BOT_JOB_CLAIM_LIMIT,
   BOT_JOB_ERROR_MESSAGE_MAX,
+  BOT_JOB_MAX_ATTEMPTS,
   BOT_JOB_POLL_INTERVAL_MS,
 } from "../config/botJobs.js";
 
@@ -68,14 +70,19 @@ function fakeSurface(): IFakeSurface {
   return surface;
 }
 
-function job(id: number, kind: string, payload: Record<string, unknown> = {}): IBotJob {
-  return { id, kind, payload, attempts: 1, requestedByUserId: null };
+function job(
+  id: number,
+  kind: string,
+  payload: Record<string, unknown> = {},
+  attempts = 1,
+): IBotJob {
+  return { id, kind, payload, attempts, requestedByUserId: null };
 }
 
-function apiError(): AxiosError {
+function apiError(status = 500): AxiosError {
   const request = { method: "get", url: "/api/v1/giveaways/7", data: undefined };
   const response: any = {
-    status: 500,
+    status,
     data: { error: "boom" },
     headers: {},
     statusText: "Internal Server Error",
@@ -137,7 +144,8 @@ test("an API failure acks with the full request and response", async () => {
       throw apiError();
     },
   };
-  await processBotJobs([job(6, "fetches")], handlers, fakeSurface(), api);
+  await processBotJobs([job(6, "fetches", {}, BOT_JOB_MAX_ATTEMPTS)], handlers, fakeSurface(),
+    api);
   const ack = api.acks[0];
   assert.equal(ack.status, "failed");
   const error = ack.status === "failed" ? ack.error : "";
@@ -294,3 +302,61 @@ test(
     assert.match(failedAcks[0].error, /Missing Access/);
   },
 );
+
+function throwing(err: unknown): BotJobHandlers {
+  return {
+    flaky: async () => {
+      throw err;
+    },
+  };
+}
+
+test("a temporary API failure is left unacked so the lease retries the job", async () => {
+  const api = fakeApi();
+  const state = createBotJobDeliveryState();
+  await processBotJobs([job(20, "flaky")], throwing(apiError(503)), fakeSurface(), api, state);
+  assert.deepEqual(api.acks, []);
+  assert.equal(state.pendingAcks.size, 0);
+});
+
+test("an API request with no response (timeout) is left for the lease", async () => {
+  const api = fakeApi();
+  const config: any = { method: "get", url: "/api/v1/game_keys/1", headers: new AxiosHeaders() };
+  const err = new AxiosError("timeout of 20000ms exceeded", "ECONNABORTED", config, {});
+  await processBotJobs([job(21, "flaky")], throwing(err), fakeSurface(), api);
+  assert.deepEqual(api.acks, []);
+});
+
+test("a Discord server error is left for the lease", async () => {
+  const api = fakeApi();
+  const err = new DiscordAPIError(
+    { code: 0, message: "Internal Server Error" }, 0, 502, "POST",
+    "https://discord.com/api/v10/channels/1/messages", { body: {} },
+  );
+  await processBotJobs([job(23, "flaky")], throwing(err), fakeSurface(), api);
+  assert.deepEqual(api.acks, []);
+});
+
+test("a temporary failure on the last attempt acks failed with the error", async () => {
+  const api = fakeApi();
+  await processBotJobs(
+    [job(24, "flaky", {}, BOT_JOB_MAX_ATTEMPTS)], throwing(apiError(503)), fakeSurface(), api,
+  );
+  assert.equal(api.acks[0]?.status, "failed");
+  assert.match(api.acks[0]?.status === "failed" ? api.acks[0].error : "", /"status": 503/);
+});
+
+test("a permanent API failure (404) acks failed on the first attempt", async () => {
+  const api = fakeApi();
+  await processBotJobs([job(25, "flaky")], throwing(apiError(404)), fakeSurface(), api);
+  assert.equal(api.acks[0]?.status, "failed");
+});
+
+test("an error wrapping a temporary failure is still final", async () => {
+  // Handlers wrap an error on purpose when a retry would repeat a side effect (the claim
+  // DM runs after the claim log post and donor DM), so only the thrown error is classed.
+  const api = fakeApi();
+  const err = new Error("Could not DM the claimer their key", { cause: apiError(503) });
+  await processBotJobs([job(26, "flaky")], throwing(err), fakeSurface(), api);
+  assert.equal(api.acks[0]?.status, "failed");
+});

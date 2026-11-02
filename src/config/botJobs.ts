@@ -11,3 +11,8 @@ export const BOT_JOB_ERROR_BACKOFF_MS = 30 * 1000;
 export const BOT_JOB_CLAIM_LIMIT = 10;
 /** The API's limit on a failed job's error_message. */
 export const BOT_JOB_ERROR_MESSAGE_MAX = 2000;
+/**
+ * Claims a job gets before the API fails it (BotJob::MAX_ATTEMPTS). A temporary failure is
+ * left unacked for the lease to hand back until this attempt, which acks it failed.
+ */
+export const BOT_JOB_MAX_ATTEMPTS = 3;

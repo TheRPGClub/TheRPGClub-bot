@@ -1,12 +1,14 @@
-import type { Client } from "discord.js";
+import { DiscordAPIError, HTTPError, RateLimitError, type Client } from "discord.js";
 import { BOT_JOB_API, type IBotJob, type IBotJobApi } from "../classes/BotJobs.js";
 import {
   BOT_JOB_CLAIM_LIMIT,
   BOT_JOB_ERROR_BACKOFF_MS,
   BOT_JOB_ERROR_MESSAGE_MAX,
+  BOT_JOB_MAX_ATTEMPTS,
   BOT_JOB_POLL_INTERVAL_MS,
 } from "../config/botJobs.js";
 import { buildAnyErrorMessage } from "../utilities/ApiErrorUtils.js";
+import { isTransientApiError } from "./RpgClubApiClient.js";
 import { createScheduledTask, type IScheduledTask } from "../utilities/IntervalUtils.js";
 import { logError, logInfo } from "../utilities/LogUtils.js";
 import {
@@ -58,6 +60,20 @@ export function buildBotJobErrorMessage(job: IBotJob, err: unknown): string {
   );
 }
 
+/**
+ * A failure the next attempt may not repeat: the API unreachable or restarting, or Discord
+ * answering 5xx or rate limited. Only the thrown error is classed, never its cause: a
+ * handler wraps an error on purpose when a retry would repeat a side effect.
+ */
+export function isTemporaryJobError(err: unknown): boolean {
+  if (isTransientApiError(err)) return true;
+  if (err instanceof RateLimitError) return true;
+  if (err instanceof DiscordAPIError || err instanceof HTTPError) {
+    return err.status >= 500 || err.status === 429;
+  }
+  return false;
+}
+
 async function ack(label: string, send: () => Promise<void>): Promise<boolean> {
   try {
     await send();
@@ -71,8 +87,9 @@ async function ack(label: string, send: () => Promise<void>): Promise<boolean> {
 
 /**
  * Performs each claimed job in order and acks it done or failed. A job that throws is
- * acked failed with its error and the batch goes on; a kind with no handler fails
- * without running anything. An ack that does not land is logged, remembered and left to
+ * acked failed with its error and the batch goes on, unless the error is temporary and
+ * attempts remain: then it is left unacked for the lease to retry. A kind with no handler
+ * fails without running anything. An ack that does not land is logged, remembered and left to
  * the lease, so the returning job is only acked.
  */
 export async function processBotJobs(
@@ -103,6 +120,11 @@ export async function processBotJobs(
         result = { status: "done" };
       } catch (err) {
         logError(`BotJobService.${job.kind}`, err);
+        if (isTemporaryJobError(err) && job.attempts < BOT_JOB_MAX_ATTEMPTS) {
+          // Left unacked: the lease hands it back and the next attempt runs it again.
+          logInfo("BotJobService", `Left ${label} for the lease to retry (temporary error).`);
+          continue;
+        }
         result = { status: "failed", error: buildBotJobErrorMessage(job, err) };
       }
     }
