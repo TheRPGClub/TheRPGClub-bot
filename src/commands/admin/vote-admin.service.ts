@@ -49,6 +49,10 @@ import {
   loadNominationsByKind,
   postVotePanels,
 } from "../../functions/VotePanelPosting.js";
+import {
+  repostVotingPanels,
+  type VotingPanelRepostOutcome,
+} from "../../functions/VotingPanelRepost.js";
 import { toUnixTimestamp } from "../../functions/DateFormatUtils.js";
 import {
   buildResolvedTieContainer,
@@ -175,6 +179,24 @@ async function handleVotingOpenTestMode(
   }, "Could not post the test voting panels");
 }
 
+/** Why /admin voting-open posted nothing, for its reply. */
+function describeRepostRefusal(
+  outcome: Exclude<VotingPanelRepostOutcome, { status: "posted" }>,
+): string {
+  if (outcome.status === "no_round") return NO_VOTING_ROUND_SCHEDULED;
+  const roundNumber = outcome.round.roundNumber;
+  if (outcome.status === "not_open_yet") {
+    return `Voting for Round ${roundNumber} opens ` +
+      `<t:${toUnixTimestamp(outcome.round.votingOpensAt)}:F>, ` +
+      "and the panels post on their own then.";
+  }
+  if (outcome.status === "no_votable_nominations") {
+    return `There are no votable nominations for Round ${roundNumber}, ` +
+      "so no panels were posted.";
+  }
+  return `Voting for Round ${roundNumber} has ended, so there are no panels to repost.`;
+}
+
 /**
  * Reposts the current round's voting panels. The API opens voting on schedule
  * and queues the panels itself (the voting_opened event), so this only
@@ -201,64 +223,19 @@ export async function handleVotingOpen(
     return;
   }
   await withErrorReply(interaction, async () => {
-    const current = await VotingRounds.getCurrent();
-    if (!current) {
-      await safeReply(interaction, buildTextReply(NO_VOTING_ROUND_SCHEDULED, true));
-      return;
-    }
-    const roundNumber = current.roundNumber;
-    if (current.nominationsOpen) {
-      await safeReply(
-        interaction,
-        buildTextReply(
-          `Voting for Round ${roundNumber} opens ` +
-            `<t:${toUnixTimestamp(current.votingOpensAt)}:F>, ` +
-            "and the panels post on their own then.",
-          true,
-        ),
-      );
-      return;
-    }
-    if (!current.votingOpen) {
-      await safeReply(
-        interaction,
-        buildTextReply(
-          `Voting for Round ${roundNumber} has ended, so there are no panels to repost.`,
-          true,
-        ),
-      );
-      return;
-    }
-
-    const nominationsByKind = await loadNominationsByKind(roundNumber);
-    if (!hasVotableNominations(nominationsByKind)) {
-      await safeReply(
-        interaction,
-        buildTextReply(
-          `There are no votable nominations for Round ${roundNumber}, ` +
-            "so no panels were posted.",
-          true,
-        ),
-      );
-      return;
-    }
-
     const channelId =
       postHere && interaction.channelId ? interaction.channelId : ANNOUNCEMENT_CHANNEL_ID;
-    const { lines: resultLines } = await postVotePanels({
-      client: interaction.client,
-      channelId,
-      roundNumber,
-      monthLabel: current.monthYear,
-      voteDeadline: current.votingClosesAt,
-      nominationsByKind,
-    });
-
+    const outcome = await repostVotingPanels({ client: interaction.client, channelId });
+    if (outcome.status !== "posted") {
+      await safeReply(interaction, buildTextReply(describeRepostRefusal(outcome), true));
+      return;
+    }
+    const { round, result } = outcome;
     await safeReply(
       interaction,
       buildTextReply(
-        `Round ${roundNumber} voting panels reposted. Voting closes ` +
-          `<t:${toUnixTimestamp(current.votingClosesAt)}:F>.\n${resultLines.join("\n")}`,
+        `Round ${round.roundNumber} voting panels reposted. Voting closes ` +
+          `<t:${toUnixTimestamp(round.votingClosesAt)}:F>.\n${result.lines.join("\n")}`,
         true,
       ),
     );
