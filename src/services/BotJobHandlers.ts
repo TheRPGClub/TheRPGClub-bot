@@ -10,6 +10,7 @@ import {
 } from "./GiveawayClaimService.js";
 import { getSuggestionById, type ISuggestionItem } from "../classes/Suggestion.js";
 import {
+  ANNOUNCEMENT_CHANNEL_ID,
   BOT_DEV_CHANNEL_ID,
   GAMEDB_UPDATES_CHANNEL_ID,
   LIVE_EVENT_FORUM_ID,
@@ -28,9 +29,6 @@ import {
   buildRefreshedNominationList,
   postNominationChange,
 } from "../functions/NominationAdminHelpers.js";
-
-/** A round category as job payloads spell it (the API's `category`). */
-export type RoundCategory = "gotm" | "nr_gotm";
 import Member, { type ICompletionRecord } from "../classes/Member.js";
 import Game from "../classes/Game.js";
 import type { IGame } from "../types/GameTypes.js";
@@ -64,6 +62,21 @@ import {
   runMemberScan,
   type IMemberScanCounts,
 } from "../functions/MemberScan.js";
+import {
+  repostVotingPanels,
+  type VotingPanelRepostOutcome,
+} from "../functions/VotingPanelRepost.js";
+import VotingRounds, {
+  NO_VOTING_ROUND_SCHEDULED,
+  type VotingRoundCategory,
+} from "../classes/VotingRounds.js";
+import {
+  announceTieBreak,
+  announceVotingResults,
+  type IResultsRound,
+  type ITieBreakPick,
+} from "./VotingResultsAnnouncement.js";
+import { VOTING_CATEGORY_LABEL } from "../functions/VotingTiePrompt.js";
 
 /**
  * What the say handler asks the surface to post. allowedMentions is the payload's, passed
@@ -75,23 +88,6 @@ export interface ISayMessage {
   replyTo: { channelId: string; messageId: string } | null;
   allowedMentions: { parse: "users"[] };
 }
-
-import {
-  repostVotingPanels,
-  type VotingPanelRepostOutcome,
-} from "../functions/VotingPanelRepost.js";
-import { ANNOUNCEMENT_CHANNEL_ID } from "../config/channels.js";
-import VotingRounds, { NO_VOTING_ROUND_SCHEDULED } from "../classes/VotingRounds.js";
-import {
-  announceTieBreak,
-  announceVotingResults,
-  type IResultsRound,
-  type ITieBreakPick,
-} from "./VotingResultsAnnouncement.js";
-import { VOTING_CATEGORY_LABEL } from "../functions/VotingTiePrompt.js";
-
-/** What the completion_announce handler asks the surface to post. */
-export type ICompletionAnnouncement = ICompletionAnnouncementInput;
 
 /**
  * The narrow slice of Discord (and of the bot's own services) that job handlers may use,
@@ -122,7 +118,7 @@ export interface IBotJobSurface {
     pingUserIds: readonly string[],
   ): Promise<void>;
   /** Re-reads one GOTM or NR-GOTM round from the API into the bot's round data. */
-  reloadGotmRound(category: RoundCategory, roundNumber: number): Promise<void>;
+  reloadGotmRound(category: VotingRoundCategory, roundNumber: number): Promise<void>;
   /**
    * Posts a nomination change notice with the round's refreshed list to that kind's
    * nomination channel. Throws when it could not (missing channel, discord.js error).
@@ -133,7 +129,7 @@ export interface IBotJobSurface {
   /** GET /games/:id; null on 404. */
   fetchGame(gameId: number): Promise<IGame | null>;
   /** Posts the Whatcha Playing completion announcement. Throws when it could not. */
-  announceCompletion(announcement: ICompletionAnnouncement): Promise<void>;
+  announceCompletion(announcement: ICompletionAnnouncementInput): Promise<void>;
   /** GET /live_events/:id; null on 404. */
   fetchLiveEvent(liveEventId: number): Promise<ILiveEvent | null>;
   /** PATCH /live_events/:id with a step's Discord id and status. Throws when it could not. */
@@ -409,7 +405,7 @@ export const handleSuggestionOutcome: BotJobHandler = async (payload, surface) =
   );
 };
 
-function payloadCategory(payload: Record<string, unknown>): RoundCategory {
+function payloadCategory(payload: Record<string, unknown>): VotingRoundCategory {
   const value = payload.category;
   if (value !== "gotm" && value !== "nr_gotm") {
     throw new Error(`Invalid payload: category must be "gotm" or "nr_gotm", got ${

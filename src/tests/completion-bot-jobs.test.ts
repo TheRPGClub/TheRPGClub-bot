@@ -2,14 +2,13 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { ICompletionRecord } from "../classes/Member.js";
 import type { IGame } from "../types/GameTypes.js";
-import {
-  BOT_JOB_HANDLERS,
-  type ICompletionAnnouncement,
-  type IBotJobSurface,
-} from "../services/BotJobHandlers.js";
+import { BOT_JOB_HANDLERS, type IBotJobSurface } from "../services/BotJobHandlers.js";
 import { processBotJobs } from "../services/BotJobService.js";
 import type { IBotJob, IBotJobApi } from "../classes/BotJobs.js";
-import { buildCompletionAnnouncementText } from "../functions/CompletionHelpers.js";
+import {
+  buildCompletionAnnouncementText,
+  type ICompletionAnnouncementInput,
+} from "../functions/CompletionHelpers.js";
 
 type Ack =
   | { id: number; status: "done"; resultText?: string }
@@ -51,7 +50,7 @@ const storedGame = { id: 9, title: "Chrono Trigger", coverUrl: null } as unknown
 
 interface ICompletionSurface extends IBotJobSurface {
   completionFetches: { userId: string; completionId: number }[];
-  announcements: ICompletionAnnouncement[];
+  announcements: ICompletionAnnouncementInput[];
 }
 
 function fakeSurface(options: {
