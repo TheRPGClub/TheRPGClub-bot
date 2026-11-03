@@ -18,7 +18,8 @@ export interface IBotJob {
 /** The queue endpoints the consumer calls; tests pass a fake. */
 export interface IBotJobApi {
   claim(limit: number): Promise<IBotJob[]>;
-  done(id: number): Promise<void>;
+  /** `resultText` (already trimmed and cut to fit) is sent only when given. */
+  done(id: number, resultText?: string): Promise<void>;
   failed(id: number, errorMessage: string): Promise<void>;
 }
 
@@ -53,8 +54,9 @@ export const BOT_JOB_API: IBotJobApi = {
     );
     return (response?.data ?? []).map(mapBotJobClaim);
   },
-  async done(id: number): Promise<void> {
-    await apiPostOrThrow(`/api/v1/bot_jobs/${id}/done`);
+  async done(id: number, resultText?: string): Promise<void> {
+    const body = resultText === undefined ? undefined : { data: { result_text: resultText } };
+    await apiPostOrThrow(`/api/v1/bot_jobs/${id}/done`, body);
   },
   async failed(id: number, errorMessage: string): Promise<void> {
     await apiPostOrThrow(`/api/v1/bot_jobs/${id}/failed`, {
