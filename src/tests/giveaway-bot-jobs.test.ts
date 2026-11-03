@@ -86,6 +86,10 @@ function fakeSurface(options: {
     announceTieBreak: async () => [],
     fetchGame: async () => null,
     announceCompletion: async () => {},
+    applyLatestPresence: async () => {},
+    sendSayMessage: async () => {},
+    sharedStateRefusal: () => null,
+    runMemberScan: async () => ({ upserted: 0, failed: 0, departed: 0 }),
   };
   return surface;
 }

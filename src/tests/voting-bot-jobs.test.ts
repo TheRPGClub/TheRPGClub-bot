@@ -59,6 +59,10 @@ function fakeSurface(options: {
     reloadGotmRound: async () => {},
     announceNominationChange: async () => {},
     fetchCompletionForUser: async () => null,
+    applyLatestPresence: async () => {},
+    sendSayMessage: async () => {},
+    sharedStateRefusal: () => null,
+    runMemberScan: async () => ({ upserted: 0, failed: 0, departed: 0 }),
     fetchGame: async () => null,
     announceCompletion: async () => {},
     publishVotingResults: async (round) => {

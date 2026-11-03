@@ -51,6 +51,10 @@ function fakeSurface(options: { reloadError?: unknown; announceError?: unknown }
       if (options.announceError) throw options.announceError;
       surface.notices.push({ kind, round, content });
     },
+    applyLatestPresence: async () => {},
+    sendSayMessage: async () => {},
+    sharedStateRefusal: () => null,
+    runMemberScan: async () => ({ upserted: 0, failed: 0, departed: 0 }),
   };
   return surface;
 }
