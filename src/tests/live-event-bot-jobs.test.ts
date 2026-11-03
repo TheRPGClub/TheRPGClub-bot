@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { AxiosError, AxiosHeaders } from "axios";
 import { DiscordAPIError } from "discord.js";
 import { BOT_JOB_HANDLERS, type IBotJobSurface } from "../services/BotJobHandlers.js";
 import { processBotJobs } from "../services/BotJobService.js";
@@ -188,4 +189,88 @@ test("an event with no image is created without one", async () => {
   assert.ok(!surface.calls.some((call) => call.startsWith("image")));
   assert.equal(surface.threads[0]?.imageUrl, null);
   assert.equal(surface.schedules[0]?.image, null);
+});
+
+function discordError(status: number, message: string, method = "POST"): DiscordAPIError {
+  return new DiscordAPIError(
+    { code: 50001, message },
+    50001,
+    status,
+    method,
+    "https://discord.com/api/v10/channels/forum/threads",
+    { body: { name: "secret body" }, files: undefined },
+  );
+}
+
+test("fails the job when the live event is gone", async () => {
+  const surface = fakeSurface({ event: null });
+  const acks = await run(surface, [job(1, { live_event_id: 7 })]);
+  assert.match(failure(acks), /Live event 7 no longer exists/);
+  assert.deepEqual(surface.calls, ["fetch 7"]);
+});
+
+test("fails the job on a bad payload", async () => {
+  const acks = await run(fakeSurface(), [job(1, { live_event_id: "7" })]);
+  assert.match(failure(acks), /live_event_id must be a positive integer/);
+});
+
+test("a lasting thread failure names the step and marks the live event failed", async () => {
+  const surface = fakeSurface({ threadError: discordError(403, "Missing Access") });
+  const acks = await run(surface, [job(1, { live_event_id: 7 })]);
+  const error = failure(acks);
+  assert.match(error, /Creating the forum thread failed/);
+  assert.match(error, /POST \/channels\/forum\/threads -> 403/);
+  assert.doesNotMatch(error, /secret body/);
+  assert.deepEqual(surface.steps, [{ id: 7, step: { status: "failed" } }]);
+});
+
+test("a lasting event failure names the step and keeps the thread", async () => {
+  const surface = fakeSurface({ scheduleError: discordError(400, "Invalid Form Body") });
+  const acks = await run(surface, [job(1, { live_event_id: 7 })]);
+  assert.match(failure(acks), /Creating the Discord scheduled event failed/);
+  assert.deepEqual(surface.steps, [
+    { id: 7, step: { discordThreadId: "900", status: "thread_created" } },
+    { id: 7, step: { status: "failed" } },
+  ]);
+});
+
+test("a bad image fails before anything is made", async () => {
+  const surface = fakeSurface({ imageError: new Error("Image URL returned content type") });
+  const acks = await run(surface, [job(1, { live_event_id: 7 })]);
+  assert.match(failure(acks), /Downloading the image failed: Image URL returned content type/);
+  assert.ok(!surface.calls.includes("thread"));
+});
+
+test("a temporary Discord error is left for the lease, recording nothing", async () => {
+  const surface = fakeSurface({ scheduleError: discordError(503, "Service Unavailable") });
+  const acks = await run(surface, [job(1, { live_event_id: 7 })]);
+  assert.deepEqual(acks, []);
+  assert.deepEqual(surface.steps, [
+    { id: 7, step: { discordThreadId: "900", status: "thread_created" } },
+  ]);
+});
+
+test("a temporary error on the last attempt still names the step", async () => {
+  const surface = fakeSurface({ threadError: discordError(503, "Service Unavailable") });
+  const acks = await run(surface, [job(1, { live_event_id: 7 }, 3)]);
+  assert.match(failure(acks), /Creating the forum thread failed/);
+});
+
+test("a thread made but not recorded stops the job rather than make a second", async () => {
+  const config: any = {
+    method: "patch",
+    url: "/api/v1/live_events/7",
+    data: JSON.stringify({ data: { discord_thread_id: "900", status: "thread_created" } }),
+    headers: new AxiosHeaders(),
+  };
+  const unreachable = new AxiosError("socket hang up", "ECONNRESET", config, {});
+  const surface = fakeSurface({
+    recordError: (step) => (step.status === "thread_created" ? unreachable : null),
+  });
+  const acks = await run(surface, [job(1, { live_event_id: 7 })]);
+  const error = failure(acks);
+  assert.match(error, /Recording the forum thread failed/);
+  assert.ok(error.includes(threadUrl));
+  assert.match(error, /"url": "\/api\/v1\/live_events\/7"/);
+  assert.ok(!surface.calls.includes("schedule"));
 });

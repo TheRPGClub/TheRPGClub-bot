@@ -40,6 +40,8 @@ import {
 } from "./LiveEventService.js";
 import { LIVE_EVENT_FORUM_ID } from "../config/channels.js";
 import { HOME_GUILD_ID } from "../config/guilds.js";
+import { BotJobStepError, isTemporaryJobError, stepFailed } from "./BotJobErrors.js";
+import { logError } from "../utilities/LogUtils.js";
 
 /** What the completion_announce handler asks the surface to post. */
 export type ICompletionAnnouncement = ICompletionAnnouncementInput;
@@ -326,36 +328,97 @@ export const handleLiveEventCreate: BotJobHandler = async (payload, surface) => 
   if (!event) {
     throw new Error(`Live event ${liveEventId} no longer exists, so nothing was created.`);
   }
+  try {
+    return await createLiveEventSteps(event, surface);
+  } catch (err) {
+    // A temporary failure goes back to the lease, so the live event is not failed yet.
+    if (!isTemporaryJobError(err)) await markLiveEventFailed(event.id, surface);
+    throw err;
+  }
+};
+
+async function runStep<T>(step: string, action: () => Promise<T>): Promise<T> {
+  try {
+    return await action();
+  } catch (err) {
+    throw stepFailed(step, err);
+  }
+}
+
+/**
+ * Records a Discord id just made. Its failure is never temporary: a retry would not see
+ * the id and would make the thread or event a second time.
+ */
+async function recordCreated(
+  surface: IBotJobSurface,
+  liveEventId: number,
+  step: ILiveEventStep,
+  what: string,
+  url: string,
+): Promise<void> {
+  try {
+    await surface.recordLiveEventStep(liveEventId, step);
+  } catch (err) {
+    throw new BotJobStepError(
+      `Recording the ${what} failed (it was made: ${url}). The job stopped rather than ` +
+        `make a second one`,
+      err,
+      false,
+    );
+  }
+}
+
+async function createLiveEventSteps(event: ILiveEvent, surface: IBotJobSurface):
+  Promise<string> {
   let threadId = event.discordThreadId;
   let eventId = event.discordEventId;
   // The image is only the scheduled event's cover; the thread shows it by URL. Downloading
   // it first still stops a bad image before anything is made, as the slash command does.
-  const image = !eventId && event.imageUrl
-    ? await surface.fetchLiveEventImage(event.imageUrl)
+  const imageUrl = event.imageUrl;
+  const image = !eventId && imageUrl
+    ? await runStep("Downloading the image", () => surface.fetchLiveEventImage(imageUrl))
     : null;
   if (!threadId) {
-    threadId = await surface.createLiveEventThread({
-      topic: event.topic,
-      imageUrl: event.imageUrl,
-    });
-    await surface.recordLiveEventStep(liveEventId, {
-      discordThreadId: threadId,
-      status: "thread_created",
-    });
+    threadId = await runStep("Creating the forum thread", () =>
+      surface.createLiveEventThread({ topic: event.topic, imageUrl }));
+    await recordCreated(
+      surface,
+      event.id,
+      { discordThreadId: threadId, status: "thread_created" },
+      "forum thread",
+      buildLiveEventThreadUrl(HOME_GUILD_ID, threadId),
+    );
   }
   const threadUrl = buildLiveEventThreadUrl(HOME_GUILD_ID, threadId);
   if (!eventId) {
-    eventId = await surface.createLiveEventScheduledEvent({
-      topic: event.topic,
-      startsAt: event.startsAt,
-      endsAt: event.endsAt,
-      location: threadUrl,
-      image,
-    });
-    await surface.recordLiveEventStep(liveEventId, { discordEventId: eventId, status: "created" });
+    eventId = await runStep("Creating the Discord scheduled event", () =>
+      surface.createLiveEventScheduledEvent({
+        topic: event.topic,
+        startsAt: event.startsAt,
+        endsAt: event.endsAt,
+        location: threadUrl,
+        image,
+      }));
+    await recordCreated(
+      surface,
+      event.id,
+      { discordEventId: eventId, status: "created" },
+      "Discord scheduled event",
+      buildLiveEventUrl(HOME_GUILD_ID, eventId),
+    );
   }
   return `Thread: ${threadUrl}\nEvent: ${buildLiveEventUrl(HOME_GUILD_ID, eventId)}`;
-};
+}
+
+/** Best effort: the job's own failed ack carries the error either way. */
+async function markLiveEventFailed(liveEventId: number, surface: IBotJobSurface):
+  Promise<void> {
+  try {
+    await surface.recordLiveEventStep(liveEventId, { status: "failed" });
+  } catch (err) {
+    logError("BotJobHandlers.live_event_create", err);
+  }
+}
 
 /** Job kind (BotJob::KINDS in the API) to handler. One line per kind. */
 export const BOT_JOB_HANDLERS: BotJobHandlers = {
