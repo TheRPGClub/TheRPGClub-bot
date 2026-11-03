@@ -7,6 +7,9 @@ import { truncateLabel } from "../../config/textLimits.js";
 import GamePlatformRegionService from "../../classes/GamePlatformRegionService.js";
 import { importGameFromIgdb } from "../../functions/GameIgdbSync.js";
 import GameSearchService from "../../classes/GameSearchService.js";
+import { UserFacingError } from "../../utilities/ApiErrorUtils.js";
+
+export const GAME_NOT_FOUND_IN_GAMEDB_OR_IGDB = "Could not find that title in GameDB or IGDB.";
 
 export type ResolvedCollectionGame =
   | { kind: "resolved"; gameId: number; title: string }
@@ -47,11 +50,17 @@ export async function buildCollectionIgdbSelectOptions(
   });
 }
 
+/**
+ * Resolves an autocomplete value (a GameDB id, or an IGDB id to import) or a typed title.
+ * `titleOnly` treats the input as a title even when it is numeric, for free text such as
+ * a modal field, where "1942" is a game name and not an id.
+ */
 export async function resolveCollectionGameForAdd(
   gameIdRaw: string,
+  options?: { titleOnly?: boolean },
 ): Promise<ResolvedCollectionGame> {
   const numericValue = Number(gameIdRaw);
-  if (isPositiveInt(numericValue)) {
+  if (!options?.titleOnly && isPositiveInt(numericValue)) {
     const localGame = await Game.getGameById(numericValue);
     if (localGame) {
       return { kind: "resolved", gameId: localGame.id, title: localGame.title };
@@ -76,7 +85,7 @@ export async function resolveCollectionGameForAdd(
 
   const igdbSearch = await igdbService.searchGames(titleQuery, 10);
   if (!igdbSearch.results.length) {
-    throw new Error("Could not find that title in GameDB or IGDB.");
+    throw new UserFacingError(GAME_NOT_FOUND_IN_GAMEDB_OR_IGDB);
   }
 
   return {

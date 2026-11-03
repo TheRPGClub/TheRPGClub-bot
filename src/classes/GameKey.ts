@@ -3,6 +3,7 @@ import { apiGet, apiPost, apiDelete } from "../services/RpgClubApiClient.js";
 export interface IGameKey {
   keyId: number;
   gameTitle: string;
+  gamedbGameId: number | null;
   platform: string;
   keyValue: string;
   donorUserId: string;
@@ -15,6 +16,7 @@ export interface IGameKey {
 type GameKeyApiData = {
   key_id: number;
   game_title: string;
+  gamedb_game_id: number | null;
   platform: string;
   key_value: string;
   donor_user_id: string;
@@ -34,6 +36,7 @@ function mapGameKeyApi(d: GameKeyApiData): IGameKey {
   return {
     keyId: Number(d.key_id),
     gameTitle: d.game_title,
+    gamedbGameId: d.gamedb_game_id ?? null,
     platform: d.platform,
     keyValue: d.key_value,
     donorUserId: d.donor_user_id,
@@ -45,6 +48,7 @@ function mapGameKeyApi(d: GameKeyApiData): IGameKey {
 }
 
 export async function createGameKey(
+  gamedbGameId: number,
   title: string,
   platform: string,
   keyValue: string,
@@ -52,6 +56,7 @@ export async function createGameKey(
 ): Promise<IGameKey> {
   const response = await apiPost<GameKeyResponse>("/api/v1/game_keys", {
     data: {
+      gamedb_game_id: gamedbGameId,
       game_title: title,
       platform,
       key_value: keyValue,

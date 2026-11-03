@@ -37,6 +37,7 @@ function storedKey(overrides: Partial<IGameKey> = {}): IGameKey {
   return {
     keyId: 42,
     gameTitle: "Chrono Trigger",
+    gamedbGameId: null,
     platform: "Steam",
     keyValue: "AAAA-BBBB-CCCC",
     donorUserId: "donor-1",

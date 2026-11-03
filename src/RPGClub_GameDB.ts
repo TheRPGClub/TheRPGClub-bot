@@ -2,7 +2,6 @@ import "dotenv/config";
 import { dirname, importx } from "@discordx/importer";
 import type {
   Channel,
-  ChatInputCommandInteraction,
   Interaction,
   Message,
   TextBasedChannel,
@@ -40,7 +39,7 @@ import { restoreJournalMessageContextsFromDb } from "./commands/now-playing/nowP
 import GameSearchService from "./classes/GameSearchService.js";
 import GamePlatformRegionService from "./classes/GamePlatformRegionService.js";
 import GameProfileService from "./classes/GameProfileService.js";
-import { truncateWithEllipsis } from "./utilities/ValidationUtils.js";
+import { formatSlashCommandParams } from "./functions/SlashCommandLogUtils.js";
 import {
   assertTestGuildIdsComplete,
   IS_TEST_MODE,
@@ -128,11 +127,6 @@ export const bot: Client = new Client({
 });
 
 type ChannelWithName = { id?: string; name?: string };
-type ISlashOptionNode = {
-  name: string;
-  value?: unknown;
-  options?: readonly ISlashOptionNode[];
-};
 
 function getChannelName(channel: Channel | TextBasedChannel | null): string {
   if (!channel) {
@@ -149,47 +143,6 @@ function getChannelName(channel: Channel | TextBasedChannel | null): string {
   }
 
   return "unknown";
-}
-
-function sanitizeSlashValue(value: unknown): string {
-  if (typeof value === "string") {
-    return JSON.stringify(truncateWithEllipsis(value, 120));
-  }
-
-  if (typeof value === "number" || typeof value === "boolean" || typeof value === "bigint") {
-    return String(value);
-  }
-
-  if (value === null || value === undefined) {
-    return "null";
-  }
-
-  try {
-    const serialized = JSON.stringify(value);
-    if (!serialized) return "\"\"";
-    return truncateWithEllipsis(serialized, 200);
-  } catch {
-    return String(value);
-  }
-}
-
-function formatSlashOption(option: ISlashOptionNode): string {
-  if (option.options && option.options.length > 0) {
-    const nested = option.options.map(formatSlashOption).join(", ");
-    return `${option.name}={${nested}}`;
-  }
-
-  if (option.value === undefined) {
-    return option.name;
-  }
-
-  return `${option.name}=${sanitizeSlashValue(option.value)}`;
-}
-
-function getSlashCommandParams(interaction: ChatInputCommandInteraction): string {
-  const options = interaction.options.data as readonly ISlashOptionNode[];
-  if (!options || options.length === 0) return "none";
-  return options.map(formatSlashOption).join("; ");
 }
 
 bot.once("clientReady", async () => {
@@ -230,7 +183,10 @@ bot.on("interactionCreate", async (interaction: Interaction) => {
   try {
     if ("isChatInputCommand" in interaction && interaction.isChatInputCommand()) {
       const commandPath: string = getSlashCommandPath(interaction);
-      const params: string = getSlashCommandParams(interaction);
+      const params: string = formatSlashCommandParams(
+        interaction.commandName,
+        interaction.options.data,
+      );
       const userTag: string = interaction.user?.tag ?? interaction.user?.id ?? "unknown";
       const channel: Channel | null = interaction.channel;
       const channelName: string = getChannelName(channel);
