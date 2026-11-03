@@ -38,6 +38,9 @@ function fakeSurface(options: { reloadError?: unknown; announceError?: unknown }
     fetchSuggestion: async () => null,
     sendChannelMessage: async () => {},
     fetchCompletionForUser: async () => null,
+    publishVotingResults: async () => {},
+    repostVotingPanels: async () => ({ status: "no_round" }),
+    announceTieBreak: async () => [],
     fetchGame: async () => null,
     announceCompletion: async () => {},
     reloadGotmRound: async (category, roundNumber) => {

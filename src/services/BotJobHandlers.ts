@@ -76,6 +76,20 @@ export interface ISayMessage {
   allowedMentions: { parse: "users"[] };
 }
 
+import {
+  repostVotingPanels,
+  type VotingPanelRepostOutcome,
+} from "../functions/VotingPanelRepost.js";
+import { ANNOUNCEMENT_CHANNEL_ID } from "../config/channels.js";
+import VotingRounds, { NO_VOTING_ROUND_SCHEDULED } from "../classes/VotingRounds.js";
+import {
+  announceTieBreak,
+  announceVotingResults,
+  type IResultsRound,
+  type ITieBreakPick,
+} from "./VotingResultsAnnouncement.js";
+import { VOTING_CATEGORY_LABEL } from "../functions/VotingTiePrompt.js";
+
 /** What the completion_announce handler asks the surface to post. */
 export type ICompletionAnnouncement = ICompletionAnnouncementInput;
 
@@ -130,6 +144,22 @@ export interface IBotJobSurface {
   createLiveEventThread(input: ILiveEventThreadInput): Promise<string>;
   /** Creates the home guild's Discord scheduled event; returns its id. */
   createLiveEventScheduledEvent(input: ILiveEventScheduleInput): Promise<string>;
+  /**
+   * Posts a round's results and winner posts to announcements, creating or renaming each
+   * sole winner's thread (an existing linked thread is reused). Throws when nothing posted.
+   */
+  publishVotingResults(round: IResultsRound): Promise<void>;
+  /**
+   * Posts the current round's voting panels to announcements when it is roundNumber and
+   * its voting is open; otherwise posts nothing and says why. A panel that fails to send
+   * is reported in the result, not thrown.
+   */
+  repostVotingPanels(roundNumber: number): Promise<VotingPanelRepostOutcome>;
+  /**
+   * Announces a tie-break pick in announcements with the winner thread for a sole winner.
+   * Returns links to the posts. Throws when the round is gone or nothing could be posted.
+   */
+  announceTieBreak(roundNumber: number, pick: ITieBreakPick): Promise<string[]>;
   /** Re-applies the latest saved presence. Throws when it could not (none saved too). */
   applyLatestPresence(): Promise<void>;
   /** Posts, or replies to replyTo's message, as given. Throws the discord.js error. */
@@ -183,6 +213,19 @@ export function createBotJobSurface(client: Client): IBotJobSurface {
     },
     createLiveEventScheduledEvent: async (input) =>
       createLiveEventScheduledEvent(await client.guilds.fetch(HOME_GUILD_ID), input),
+    publishVotingResults: (round) => announceVotingResults(client, round),
+    repostVotingPanels: (roundNumber) => repostVotingPanels({
+      client,
+      channelId: ANNOUNCEMENT_CHANNEL_ID,
+      expectedRoundNumber: roundNumber,
+    }),
+    announceTieBreak: async (roundNumber, pick) => {
+      const round = await VotingRounds.getByRound(roundNumber);
+      if (!round) {
+        throw new Error(`The API has no voting round ${roundNumber}, so no tie break was posted.`);
+      }
+      return announceTieBreak(client, round, pick);
+    },
     applyLatestPresence: () => updateBotPresence(client, { throwOnFailure: true }),
     sendSayMessage: (message) => sendSayMessage(client, message),
     sharedStateRefusal: (actionName) => sharedStateCommandRefusal(actionName),
@@ -534,6 +577,107 @@ async function markLiveEventFailed(liveEventId: number, surface: IBotJobSurface)
 }
 
 /**
+ * Payload: `{ round_number, month_label }`. An Admin published a round's results on the
+ * website (voting has ended), so they go to announcements as /admin voting-results
+ * publish does. Repeatable: a winner's existing thread is renamed, not made again.
+ */
+export const handleVotingResultsPublish: BotJobHandler = async (payload, surface) => {
+  const roundNumber = payloadPositiveInt(payload, "round_number");
+  const monthLabel = requireString(payload, "month_label");
+  await surface.publishVotingResults({ roundNumber, monthLabel });
+  return `Posted the round ${roundNumber} results to announcements.`;
+};
+
+/** Why a voting_panels_repost job posted nothing, for its failed ack. */
+function describePanelRepostRefusal(
+  roundNumber: number,
+  outcome: Exclude<VotingPanelRepostOutcome, { status: "posted" }>,
+): string {
+  switch (outcome.status) {
+    case "no_round":
+      return `${NO_VOTING_ROUND_SCHEDULED} No panels were posted.`;
+    case "other_round":
+      return `Round ${roundNumber} is no longer the current voting round ` +
+        `(round ${outcome.round.roundNumber} is), so no panels were posted.`;
+    case "not_open_yet":
+      return `Voting for round ${roundNumber} has not opened yet, so no panels were posted.`;
+    case "ended":
+      return `Voting for round ${roundNumber} has ended, so no panels were posted.`;
+    case "no_votable_nominations":
+      return `There are no votable nominations for round ${roundNumber}, ` +
+        "so no panels were posted.";
+  }
+}
+
+/**
+ * Payload: `{ round_number }`. An Admin asked the website to repost the voting panels
+ * (voting was open when queued), so they go to announcements as /admin voting-open does.
+ * A refusal, or a panel that would not send, acks failed with the reason; a failed panel is
+ * not retried, since that would post the sent ones twice.
+ */
+export const handleVotingPanelsRepost: BotJobHandler = async (payload, surface) => {
+  const roundNumber = payloadPositiveInt(payload, "round_number");
+  const outcome = await surface.repostVotingPanels(roundNumber);
+  if (outcome.status !== "posted") {
+    throw new Error(describePanelRepostRefusal(roundNumber, outcome));
+  }
+  const { posted, failed, lines } = outcome.result;
+  if (failed > 0) {
+    throw new Error(
+      `Posted ${posted} of ${posted + failed} voting panels for round ${roundNumber}. ` +
+        lines.join(" "),
+    );
+  }
+  const noun = posted === 1 ? "panel" : "panels";
+  return `Reposted ${posted} voting ${noun} for round ${roundNumber} in announcements.`;
+};
+
+function payloadTieBreakGames(payload: Record<string, unknown>): ITieBreakPick["games"] {
+  const value = payload.games;
+  if (!Array.isArray(value) || value.length === 0) {
+    throw new Error(`Invalid payload: games must be a non-empty list, got ${
+      JSON.stringify(value)
+    }.`);
+  }
+  return value.map((entry: unknown, index) => {
+    const game = (typeof entry === "object" && entry !== null ? entry : {}) as
+      Record<string, unknown>;
+    // Keyed by the full path so a bad field is named as games[i].field.
+    const idField = `games[${index}].game_id`;
+    const titleField = `games[${index}].title`;
+    return {
+      gameId: payloadPositiveInt({ [idField]: game.game_id }, idField),
+      title: requireString({ [titleField]: game.title }, titleField),
+    };
+  });
+}
+
+/**
+ * Payload: `{ round_number, category, games: [{ game_id, title }] }`. An Admin broke a tie
+ * on the website (already saved), so the pick is announced as the tie-break select does,
+ * then the voting poller is woken for the round_decided a last tie leaves. The wake comes
+ * after the announcement, even a failed one, so round_decided's winner threads never race
+ * this one's.
+ */
+export const handleVotingTieBroken: BotJobHandler = async (payload, surface) => {
+  const roundNumber = payloadPositiveInt(payload, "round_number");
+  const category = payloadCategory(payload);
+  const games = payloadTieBreakGames(payload);
+  let links: string[];
+  try {
+    links = await surface.announceTieBreak(roundNumber, { category, games });
+  } finally {
+    surface.requestVotingEventPoll();
+  }
+  const titles = games.map((game) => game.title).join(", ");
+  return [
+    `Announced the ${VOTING_CATEGORY_LABEL[category]} round ${roundNumber} tie break: ` +
+      `${titles}.`,
+    ...links,
+  ].join(" ");
+};
+
+/**
  * Payload: `{ activity_name }`. A Moderator set the presence on the website, so it applies
  * now instead of at the hourly refresh. The latest saved row is re-read rather than the
  * payload name, so a stale job never overrides a newer presence.
@@ -613,6 +757,9 @@ export const BOT_JOB_HANDLERS: BotJobHandlers = {
   nomination_deleted: handleNominationDeleted,
   completion_announce: handleCompletionAnnounce,
   live_event_create: handleLiveEventCreate,
+  voting_results_publish: handleVotingResultsPublish,
+  voting_panels_repost: handleVotingPanelsRepost,
+  voting_tie_broken: handleVotingTieBroken,
   presence_set: handlePresenceSet,
   say: handleSay,
   memberscan: handleMemberscan,
