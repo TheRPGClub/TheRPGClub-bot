@@ -326,24 +326,34 @@ export const handleLiveEventCreate: BotJobHandler = async (payload, surface) => 
   if (!event) {
     throw new Error(`Live event ${liveEventId} no longer exists, so nothing was created.`);
   }
-  const image = event.imageUrl ? await surface.fetchLiveEventImage(event.imageUrl) : null;
-  const threadId = await surface.createLiveEventThread({
-    topic: event.topic,
-    imageUrl: event.imageUrl,
-  });
-  await surface.recordLiveEventStep(liveEventId, {
-    discordThreadId: threadId,
-    status: "thread_created",
-  });
+  let threadId = event.discordThreadId;
+  let eventId = event.discordEventId;
+  // The image is only the scheduled event's cover; the thread shows it by URL. Downloading
+  // it first still stops a bad image before anything is made, as the slash command does.
+  const image = !eventId && event.imageUrl
+    ? await surface.fetchLiveEventImage(event.imageUrl)
+    : null;
+  if (!threadId) {
+    threadId = await surface.createLiveEventThread({
+      topic: event.topic,
+      imageUrl: event.imageUrl,
+    });
+    await surface.recordLiveEventStep(liveEventId, {
+      discordThreadId: threadId,
+      status: "thread_created",
+    });
+  }
   const threadUrl = buildLiveEventThreadUrl(HOME_GUILD_ID, threadId);
-  const eventId = await surface.createLiveEventScheduledEvent({
-    topic: event.topic,
-    startsAt: event.startsAt,
-    endsAt: event.endsAt,
-    location: threadUrl,
-    image,
-  });
-  await surface.recordLiveEventStep(liveEventId, { discordEventId: eventId, status: "created" });
+  if (!eventId) {
+    eventId = await surface.createLiveEventScheduledEvent({
+      topic: event.topic,
+      startsAt: event.startsAt,
+      endsAt: event.endsAt,
+      location: threadUrl,
+      image,
+    });
+    await surface.recordLiveEventStep(liveEventId, { discordEventId: eventId, status: "created" });
+  }
   return `Thread: ${threadUrl}\nEvent: ${buildLiveEventUrl(HOME_GUILD_ID, eventId)}`;
 };
 

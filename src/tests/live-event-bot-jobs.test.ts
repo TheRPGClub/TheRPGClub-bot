@@ -156,3 +156,36 @@ test("creates the thread, then the event, recording each, and links both", async
     { id: 7, step: { discordEventId: "800", status: "created" } },
   ]);
 });
+
+test("a retry after the thread was recorded only creates the event", async () => {
+  const surface = fakeSurface({
+    event: storedEvent({ status: "thread_created", discordThreadId: "900" }),
+  });
+  const acks = await run(surface, [job(1, { live_event_id: 7 }, 2)]);
+  assert.deepEqual(acks, [{ id: 1, status: "done", resultText: doneText }]);
+  assert.deepEqual(surface.calls, [
+    "fetch 7",
+    "image https://cdn.example.com/live-events/direct.png",
+    "schedule",
+    "record created",
+  ]);
+  assert.equal(surface.schedules[0]?.location, threadUrl);
+});
+
+test("a retry after both were recorded creates nothing and still links both", async () => {
+  const surface = fakeSurface({
+    event: storedEvent({ status: "created", discordThreadId: "900", discordEventId: "800" }),
+  });
+  const acks = await run(surface, [job(1, { live_event_id: 7 }, 2)]);
+  assert.deepEqual(acks, [{ id: 1, status: "done", resultText: doneText }]);
+  assert.deepEqual(surface.calls, ["fetch 7"]);
+});
+
+test("an event with no image is created without one", async () => {
+  const surface = fakeSurface({ event: storedEvent({ imageUrl: null }) });
+  const acks = await run(surface, [job(1, { live_event_id: 7 })]);
+  assert.equal(acks[0]?.status, "done");
+  assert.ok(!surface.calls.some((call) => call.startsWith("image")));
+  assert.equal(surface.threads[0]?.imageUrl, null);
+  assert.equal(surface.schedules[0]?.image, null);
+});
