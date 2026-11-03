@@ -71,6 +71,9 @@ function fakeSurface(): IFakeSurface {
     refreshGiveawayHub: async () => {},
     fetchSuggestion: async () => null,
     sendChannelMessage: async () => {},
+    fetchCompletionForUser: async () => null,
+    fetchGame: async () => null,
+    announceCompletion: async () => {},
   };
   return surface;
 }
