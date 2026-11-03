@@ -36,3 +36,20 @@ When catching API errors in bot commands, always include both the full request (
 Every pull request a session opens is watched for its merge, whether a skill opened it or
 not: record it with `scripts/catchup.py add-pr` and keep one `wait` running, per
 `.claude/skills/_shared/run-watch.md`.
+
+## Agent skills
+
+### Issue tracker
+
+Issues and specs live in this repo's GitHub Issues (`gh` CLI).
+See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Default five-role vocabulary (needs-triage, needs-info, ready-for-agent,
+ready-for-human, wontfix). See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context; the club-wide glossary lives in TheRPGClub-api.
+See `docs/agents/domain.md`.
