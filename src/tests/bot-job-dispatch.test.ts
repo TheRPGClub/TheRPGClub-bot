@@ -74,6 +74,9 @@ function fakeSurface(): IFakeSurface {
     reloadGotmRound: async () => {},
     announceNominationChange: async () => {},
     fetchCompletionForUser: async () => null,
+    publishVotingResults: async () => {},
+    repostVotingPanels: async () => ({ status: "no_round" }),
+    announceTieBreak: async () => [],
     fetchGame: async () => null,
     announceCompletion: async () => {},
   };

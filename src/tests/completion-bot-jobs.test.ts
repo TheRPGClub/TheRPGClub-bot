@@ -77,6 +77,9 @@ function fakeSurface(options: {
       surface.completionFetches.push({ userId, completionId });
       return completion;
     },
+    publishVotingResults: async () => {},
+    repostVotingPanels: async () => ({ status: "no_round" }),
+    announceTieBreak: async () => [],
     fetchGame: async () => game,
     announceCompletion: async (announcement) => {
       if (options.announceError) throw options.announceError;
