@@ -72,6 +72,9 @@ function fakeSurface(options: {
     },
     reloadGotmRound: async () => {},
     announceNominationChange: async () => {},
+    fetchCompletionForUser: async () => null,
+    fetchGame: async () => null,
+    announceCompletion: async () => {},
   };
   return surface;
 }

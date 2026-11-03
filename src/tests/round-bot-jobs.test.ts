@@ -37,6 +37,9 @@ function fakeSurface(options: { reloadError?: unknown; announceError?: unknown }
     refreshGiveawayHub: async () => {},
     fetchSuggestion: async () => null,
     sendChannelMessage: async () => {},
+    fetchCompletionForUser: async () => null,
+    fetchGame: async () => null,
+    announceCompletion: async () => {},
     reloadGotmRound: async (category, roundNumber) => {
       if (options.reloadError) throw options.reloadError;
       surface.reloads.push({ category, roundNumber });

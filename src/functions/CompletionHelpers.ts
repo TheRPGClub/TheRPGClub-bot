@@ -1,6 +1,8 @@
 import {
   ButtonStyle,
   type ButtonInteraction,
+  type Client,
+  type User,
   type CommandInteraction,
   type ModalSubmitInteraction,
   type StringSelectMenuInteraction,
@@ -193,69 +195,131 @@ export async function announceCompletion(
   isAdminOverride: boolean = false,
 ): Promise<void> {
   try {
-    const channel = await interaction.client.channels.fetch(WHATCHA_PLAYING_CHANNEL_ID);
-    if (!channel || !("send" in channel)) {
-      return;
-    }
-
-    const user = await safeUserFetch(interaction.client, userId);
-    if (!user) {
-      return;
-    }
-
-    const completions = await GameProfileService.getGameCompletions(game.id);
-    const isFirst = completions.length === 1;
-
-    const playtimeText = formatPlaytimeHours(finalPlaytimeHours);
-    const effectiveDate = completedAt ?? new Date();
-    const dateStr = formatTableDate(effectiveDate);
-    const hoursStr = playtimeText ? ` - ${playtimeText}` : "";
-    const completionYear = effectiveDate.getFullYear();
-    const yearlyCount = await Member.countCompletions(userId, completionYear);
-    const yearlySummary = `\nGame completion #${yearlyCount} for ${completionYear}`;
-    const userName = user.displayName ?? user.username ?? user.id;
-    let desc =
-      `${renderUsernameWithEmoji(user.id, userName)} has added a game completion: **${game.title}** - ` +
-      `${completionType} - ${dateStr}${hoursStr}` +
-      yearlySummary;
-    if (isAdminOverride && interaction.user.id !== userId) {
-      const admin = interaction.user;
-      const adminName = admin.displayName ?? admin.username ?? admin.id;
-      const adminMention = renderUsernameWithEmoji(admin.id, adminName);
-      const userMentionStr = renderUsernameWithEmoji(user.id, userName);
-      desc =
-        `${adminMention} added a game completion for ${userMentionStr}: ` +
-        `**${game.title}** - ${completionType} - ${dateStr}${hoursStr}` +
-        yearlySummary;
-    }
-    const summaryLines = [
-      `### ${user.displayName ?? user.username}`,
-      desc,
-    ];
-    if (isFirst) {
-      summaryLines.push("This is the first recorded completion for this game in the club!");
-    }
-
-    const summaryText = summaryLines.join("\n\n");
-    const container = new ContainerBuilder();
-    const section = new SectionBuilder().addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(safeV2TextContent(summaryText, 3500)),
-    );
-    const thumbnailUrl = game.coverUrl ?? null;
-    if (thumbnailUrl) {
-      section.setThumbnailAccessory(
-        new ThumbnailBuilder().setURL(thumbnailUrl).setDescription(game.title),
-      );
-    }
-    container.addSectionComponents(section);
-
-    await (channel as any).send({
-      components: [container],
-      flags: buildComponentsV2EditFlags(),
+    await postCompletionAnnouncement(interaction.client, {
+      userId,
+      actorUserId: isAdminOverride ? interaction.user.id : userId,
+      game,
+      completionType,
+      completedAt,
+      finalPlaytimeHours,
     });
   } catch (err) {
     logError("CompletionHelpers.announceCompletion", err);
   }
+}
+
+export interface ICompletionAnnouncementInput {
+  /** The member the completion belongs to. */
+  userId: string;
+  /** Who logged it; differs from userId when a Superadmin logged it for the member. */
+  actorUserId: string;
+  game: IGame;
+  completionType: string;
+  completedAt: Date | null;
+  finalPlaytimeHours: number | null;
+}
+
+interface IAnnouncedUser {
+  id: string;
+  name: string;
+}
+
+/**
+ * The announcement's text: a heading with the member's name, the completion line (naming
+ * the actor when it is someone else), the yearly count and, for a game's first club
+ * completion, a line saying so.
+ */
+export function buildCompletionAnnouncementText(params: {
+  user: IAnnouncedUser;
+  actor: IAnnouncedUser | null;
+  title: string;
+  completionType: string;
+  completedAt: Date;
+  playtimeText: string | null;
+  yearlyCount: number;
+  isFirst: boolean;
+}): string {
+  const { user, actor } = params;
+  const userLabel = renderUsernameWithEmoji(user.id, user.name);
+  const hoursStr = params.playtimeText ? ` - ${params.playtimeText}` : "";
+  const details = `**${params.title}** - ${params.completionType} - ` +
+    `${formatTableDate(params.completedAt)}${hoursStr}`;
+  const yearlySummary =
+    `\nGame completion #${params.yearlyCount} for ${params.completedAt.getFullYear()}`;
+  const desc = actor && actor.id !== user.id
+    ? `${renderUsernameWithEmoji(actor.id, actor.name)} added a game completion for ` +
+      `${userLabel}: ${details}${yearlySummary}`
+    : `${userLabel} has added a game completion: ${details}${yearlySummary}`;
+  const lines = [`### ${user.name}`, desc];
+  if (params.isFirst) {
+    lines.push("This is the first recorded completion for this game in the club!");
+  }
+  return lines.join("\n\n");
+}
+
+function announcedUser(user: User): IAnnouncedUser {
+  return { id: user.id, name: user.displayName ?? user.username ?? user.id };
+}
+
+/**
+ * Posts a completion announcement to the Whatcha Playing channel. Throws when the channel
+ * or a user can't be fetched or the post fails, so a bot job acks failed; the slash
+ * command path (announceCompletion) logs instead.
+ */
+export async function postCompletionAnnouncement(
+  client: Client,
+  input: ICompletionAnnouncementInput,
+): Promise<void> {
+  const { game } = input;
+  const channel = await client.channels.fetch(WHATCHA_PLAYING_CHANNEL_ID);
+  if (!channel || !channel.isSendable()) {
+    throw new Error(
+      `Channel ${WHATCHA_PLAYING_CHANNEL_ID} is missing or the bot cannot post in it.`,
+    );
+  }
+  const user = await safeUserFetch(client, input.userId);
+  if (!user) {
+    throw new Error(`Discord user ${input.userId} could not be fetched.`);
+  }
+  let actor: IAnnouncedUser | null = null;
+  if (input.actorUserId !== input.userId) {
+    const actorUser = await safeUserFetch(client, input.actorUserId);
+    if (!actorUser) {
+      throw new Error(`Discord user ${input.actorUserId} could not be fetched.`);
+    }
+    actor = announcedUser(actorUser);
+  }
+
+  const completions = await GameProfileService.getGameCompletions(game.id);
+  const completedAt = input.completedAt ?? new Date();
+  const yearlyCount = await Member.countCompletions(input.userId, completedAt.getFullYear());
+  const summaryText = buildCompletionAnnouncementText({
+    user: announcedUser(user),
+    actor,
+    title: game.title,
+    completionType: input.completionType,
+    completedAt,
+    playtimeText: formatPlaytimeHours(input.finalPlaytimeHours),
+    yearlyCount,
+    isFirst: completions.length === 1,
+  });
+
+  const container = new ContainerBuilder();
+  const section = new SectionBuilder().addTextDisplayComponents(
+    new TextDisplayBuilder().setContent(safeV2TextContent(summaryText, 3500)),
+  );
+  const thumbnailUrl = game.coverUrl ?? null;
+  if (thumbnailUrl) {
+    section.setThumbnailAccessory(
+      new ThumbnailBuilder().setURL(thumbnailUrl).setDescription(game.title),
+    );
+  }
+  container.addSectionComponents(section);
+
+  await channel.send({
+    components: [container],
+    flags: buildComponentsV2EditFlags(),
+  });
 }
 
 /**
