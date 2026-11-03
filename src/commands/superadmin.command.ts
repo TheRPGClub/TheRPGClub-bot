@@ -35,8 +35,7 @@ import {
   safeUpdate,
   sanitizeUserInput,
 } from "../functions/InteractionUtils.js";
-import { fetchAllGuildMembers } from "../functions/GuildMemberFetch.js";
-import Member from "../classes/Member.js";
+import { buildMemberScanSummary, scanGuildMembers } from "../functions/MemberScan.js";
 import type { IGame } from "../types/GameTypes.js";
 import Game from "../classes/Game.js";
 import { STANDARD_PLATFORM_IDS } from "../config/standardPlatforms.js";
@@ -745,24 +744,8 @@ export class SuperAdmin {
 
     await safeReply(interaction, buildTextReply("Fetching all guild members... this may take a moment.", true));
 
-    const members = await fetchAllGuildMembers(guild);
-    const departedCount = await Member.markDepartedNotIn(Array.from(members.keys()));
-
-    let successCount = 0;
-    let failCount = 0;
-
-    for (const member of members.values()) {
-      try {
-        await Member.upsertGuildMember(member);
-        successCount++;
-      } catch (err) {
-        failCount++;
-        logError("SuperadminCommand.upsertUser", err);
-      }
-    }
-
-    await safeReply(interaction, buildTextReply(`Member scan complete. Upserts succeeded: ${successCount}. Failed: ${failCount}. ` +
-        `Marked departed: ${departedCount}.`, true));
+    const counts = await scanGuildMembers(guild);
+    await safeReply(interaction, buildTextReply(buildMemberScanSummary(counts), true));
   }
 
   @Slash({

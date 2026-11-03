@@ -1,4 +1,4 @@
-import { RESTJSONErrorCodes, userMention, type Client } from "discord.js";
+import { ChannelType, RESTJSONErrorCodes, userMention, type Client } from "discord.js";
 import { describeRequestError } from "../utilities/ApiErrorUtils.js";
 import { getGameKeyById, type IGameKey } from "../classes/GameKey.js";
 import { requestVotingEventPoll } from "./VotingEventService.js";
@@ -9,13 +9,85 @@ import {
   type IClaimedGiveawayKey,
 } from "./GiveawayClaimService.js";
 import { getSuggestionById, type ISuggestionItem } from "../classes/Suggestion.js";
-import { BOT_DEV_CHANNEL_ID, GAMEDB_UPDATES_CHANNEL_ID } from "../config/channels.js";
+import {
+  ANNOUNCEMENT_CHANNEL_ID,
+  BOT_DEV_CHANNEL_ID,
+  GAMEDB_UPDATES_CHANNEL_ID,
+  LIVE_EVENT_FORUM_ID,
+} from "../config/channels.js";
 import { BOT_DEV_PING_USER_ID } from "../config/users.js";
 import {
   buildSuggestionApprovedNotice,
   buildSuggestionRejectedNotice,
   buildSuggestionSubmittedPing,
 } from "./SuggestionNotices.js";
+import type { NominationKind } from "../classes/Nomination.js";
+import { reloadGotmRoundFromDb } from "../classes/Gotm.js";
+import { reloadNrGotmRoundFromDb } from "../classes/NrGotm.js";
+import {
+  buildNominationDeletedNotice,
+  buildRefreshedNominationList,
+  postNominationChange,
+} from "../functions/NominationAdminHelpers.js";
+import Member, { type ICompletionRecord } from "../classes/Member.js";
+import Game from "../classes/Game.js";
+import type { IGame } from "../types/GameTypes.js";
+import {
+  postCompletionAnnouncement,
+  type ICompletionAnnouncementInput,
+} from "../functions/CompletionHelpers.js";
+import {
+  getLiveEventById,
+  recordLiveEventStep,
+  type ILiveEvent,
+  type ILiveEventStep,
+} from "../classes/LiveEvent.js";
+import {
+  buildLiveEventThreadUrl,
+  buildLiveEventUrl,
+  createLiveEventScheduledEvent,
+  createLiveEventThread,
+  fetchLiveEventImage,
+  type ILiveEventScheduleInput,
+  type ILiveEventThreadInput,
+} from "./LiveEventService.js";
+import { HOME_GUILD_ID } from "../config/guilds.js";
+import { BotJobStepError, isTemporaryJobError, stepFailed } from "./BotJobErrors.js";
+import { logError } from "../utilities/LogUtils.js";
+import { buildTextReply } from "../functions/ComponentsV2Utils.js";
+import { updateBotPresence } from "../functions/SetPresence.js";
+import { sharedStateCommandRefusal } from "../functions/SharedStateCommandGuard.js";
+import {
+  buildMemberScanSummary,
+  runMemberScan,
+  type IMemberScanCounts,
+} from "../functions/MemberScan.js";
+import {
+  repostVotingPanels,
+  type VotingPanelRepostOutcome,
+} from "../functions/VotingPanelRepost.js";
+import VotingRounds, {
+  NO_VOTING_ROUND_SCHEDULED,
+  type VotingRoundCategory,
+} from "../classes/VotingRounds.js";
+import {
+  announceTieBreak,
+  announceVotingResults,
+  type IResultsRound,
+  type ITieBreakPick,
+} from "./VotingResultsAnnouncement.js";
+import { VOTING_CATEGORY_LABEL } from "../functions/VotingTiePrompt.js";
+
+/**
+ * What the say handler asks the surface to post. allowedMentions is the payload's, passed
+ * through as is; the handler only lets it parse "users" (never everyone, here or roles).
+ */
+export interface ISayMessage {
+  channelId: string;
+  content: string;
+  replyTo: { channelId: string; messageId: string } | null;
+  allowedMentions: { parse: "users"[] };
+}
 
 /**
  * The narrow slice of Discord (and of the bot's own services) that job handlers may use,
@@ -45,6 +117,57 @@ export interface IBotJobSurface {
     content: string,
     pingUserIds: readonly string[],
   ): Promise<void>;
+  /** Re-reads one GOTM or NR-GOTM round from the API into the bot's round data. */
+  reloadGotmRound(category: VotingRoundCategory, roundNumber: number): Promise<void>;
+  /**
+   * Posts a nomination change notice with the round's refreshed list to that kind's
+   * nomination channel. Throws when it could not (missing channel, discord.js error).
+   */
+  announceNominationChange(kind: NominationKind, round: number, content: string): Promise<void>;
+  /** GET /completions/:id; null on 404 or when it belongs to someone other than userId. */
+  fetchCompletionForUser(userId: string, completionId: number): Promise<ICompletionRecord | null>;
+  /** GET /games/:id; null on 404. */
+  fetchGame(gameId: number): Promise<IGame | null>;
+  /** Posts the Whatcha Playing completion announcement. Throws when it could not. */
+  announceCompletion(announcement: ICompletionAnnouncementInput): Promise<void>;
+  /** GET /live_events/:id; null on 404. */
+  fetchLiveEvent(liveEventId: number): Promise<ILiveEvent | null>;
+  /** PATCH /live_events/:id with a step's Discord id and status. Throws when it could not. */
+  recordLiveEventStep(liveEventId: number, step: ILiveEventStep): Promise<void>;
+  /** Downloads a live event's image. Throws when it is not an image. */
+  fetchLiveEventImage(imageUrl: string): Promise<Buffer>;
+  /** Opens the thread in the Live Events forum; returns its id. */
+  createLiveEventThread(input: ILiveEventThreadInput): Promise<string>;
+  /** Creates the home guild's Discord scheduled event; returns its id. */
+  createLiveEventScheduledEvent(input: ILiveEventScheduleInput): Promise<string>;
+  /**
+   * Posts a round's results and winner posts to announcements, creating or renaming each
+   * sole winner's thread (an existing linked thread is reused). Throws when nothing posted.
+   * Calls onPosted after each message goes out.
+   */
+  publishVotingResults(round: IResultsRound, onPosted: () => void): Promise<void>;
+  /**
+   * Posts the current round's voting panels to announcements when it is roundNumber and
+   * its voting is open; otherwise posts nothing and says why. A panel that fails to send
+   * is reported in the result, not thrown. Calls onPosted after each panel goes out.
+   */
+  repostVotingPanels(
+    roundNumber: number,
+    onPosted: () => void,
+  ): Promise<VotingPanelRepostOutcome>;
+  /**
+   * Announces a tie-break pick in announcements with the winner thread for a sole winner.
+   * Returns links to the posts. Throws when the round is gone or nothing could be posted.
+   */
+  announceTieBreak(roundNumber: number, pick: ITieBreakPick): Promise<string[]>;
+  /** Re-applies the latest saved presence. Throws when it could not (none saved too). */
+  applyLatestPresence(): Promise<void>;
+  /** Posts, or replies to replyTo's message, as given. Throws the discord.js error. */
+  sendSayMessage(message: ISayMessage): Promise<void>;
+  /** Why an action writing state shared with production may not run here; null if it may. */
+  sharedStateRefusal(actionName: string): string | null;
+  /** Scans the home guild's members into the member list. Throws when the fetch fails. */
+  runMemberScan(): Promise<IMemberScanCounts>;
 }
 
 export function createBotJobSurface(client: Client): IBotJobSurface {
@@ -66,18 +189,77 @@ export function createBotJobSurface(client: Client): IBotJobSurface {
       }
       await channel.send({ content, allowedMentions: { users: [...pingUserIds] } });
     },
+    reloadGotmRound: (category, roundNumber) =>
+      category === "gotm"
+        ? reloadGotmRoundFromDb(roundNumber)
+        : reloadNrGotmRoundFromDb(roundNumber),
+    announceNominationChange: async (kind, round, content) => {
+      const list = await buildRefreshedNominationList(kind, round);
+      await postNominationChange(kind, client, content, list);
+    },
+    fetchCompletionForUser: (userId, completionId) =>
+      Member.getCompletionForUser(userId, completionId),
+    fetchGame: (gameId) => Game.getGameById(gameId),
+    announceCompletion: (announcement) => postCompletionAnnouncement(client, announcement),
+    fetchLiveEvent: getLiveEventById,
+    recordLiveEventStep,
+    fetchLiveEventImage,
+    createLiveEventThread: async (input) => {
+      const forum = await client.channels.fetch(LIVE_EVENT_FORUM_ID);
+      if (!forum || forum.type !== ChannelType.GuildForum) {
+        throw new Error(`Live Events forum ${LIVE_EVENT_FORUM_ID} is missing or not a forum.`);
+      }
+      return (await createLiveEventThread(forum, input)).id;
+    },
+    createLiveEventScheduledEvent: async (input) =>
+      createLiveEventScheduledEvent(await client.guilds.fetch(HOME_GUILD_ID), input),
+    publishVotingResults: (round, onPosted) => announceVotingResults(client, round, { onPosted }),
+    repostVotingPanels: (roundNumber, onPosted) => repostVotingPanels({
+      client,
+      channelId: ANNOUNCEMENT_CHANNEL_ID,
+      expectedRoundNumber: roundNumber,
+      onPosted,
+    }),
+    announceTieBreak: async (roundNumber, pick) => {
+      const round = await VotingRounds.getByRound(roundNumber);
+      if (!round) {
+        throw new Error(`The API has no voting round ${roundNumber}, so no tie break was posted.`);
+      }
+      return announceTieBreak(client, round, pick);
+    },
+    applyLatestPresence: () => updateBotPresence(client, { throwOnFailure: true }),
+    sendSayMessage: (message) => sendSayMessage(client, message),
+    sharedStateRefusal: (actionName) => sharedStateCommandRefusal(actionName),
+    runMemberScan: () => runMemberScan(client),
   };
+}
+
+async function sendSayMessage(client: Client, message: ISayMessage): Promise<void> {
+  const { channelId, content, replyTo, allowedMentions } = message;
+  const channel = await client.channels.fetch(channelId);
+  if (!channel || !channel.isSendable()) {
+    throw new Error(`Channel ${channelId} is missing or the bot cannot post in it.`);
+  }
+  if (!replyTo) {
+    await channel.send({ content, allowedMentions });
+    return;
+  }
+  // As /superadmin say: a plain post, but a reply in a Components V2 container.
+  const target = await channel.messages.fetch(replyTo.messageId);
+  await target.reply({ ...buildTextReply(content, false), allowedMentions });
 }
 
 /**
  * Performs one job. Resolving acks it done; throwing acks it failed with the error, so
  * let API (axios) and discord.js errors escape as they are: the dispatcher formats them
- * with the full request and response.
+ * with the full request and response. Resolve with a short result text (counts, a link to
+ * the thread or event) and the done ack carries it to the website's activity list; resolve
+ * with nothing when there is nothing worth saying. Plain words: staff read it as is.
  */
 export type BotJobHandler = (
   payload: Record<string, unknown>,
   surface: IBotJobSurface,
-) => Promise<void>;
+) => Promise<string | void>;
 
 export type BotJobHandlers = Readonly<Record<string, BotJobHandler>>;
 
@@ -223,6 +405,374 @@ export const handleSuggestionOutcome: BotJobHandler = async (payload, surface) =
   );
 };
 
+function payloadCategory(payload: Record<string, unknown>): VotingRoundCategory {
+  const value = payload.category;
+  if (value !== "gotm" && value !== "nr_gotm") {
+    throw new Error(`Invalid payload: category must be "gotm" or "nr_gotm", got ${
+      JSON.stringify(value)
+    }.`);
+  }
+  return value;
+}
+
+/**
+ * Payload: `{ category, round_number }`. A round was added or a game in it edited on the
+ * website, so the bot re-reads that round instead of waiting for a restart.
+ */
+export const handleGotmCacheReload: BotJobHandler = async (payload, surface) => {
+  const category = payloadCategory(payload);
+  await surface.reloadGotmRound(category, payloadPositiveInt(payload, "round_number"));
+};
+
+/**
+ * Payload: `{ category, round_number, user_id, game_title, deleted_by_user_id, reason }`.
+ * An Admin removed someone's nomination on the website (already deleted), so the change
+ * and the refreshed list go to the nomination channel, as /admin's delete does. No DM.
+ */
+export const handleNominationDeleted: BotJobHandler = async (payload, surface) => {
+  const kind: NominationKind = payloadCategory(payload) === "gotm" ? "gotm" : "nr-gotm";
+  const round = payloadPositiveInt(payload, "round_number");
+  const content = buildNominationDeletedNotice(
+    kind,
+    round,
+    requireString(payload, "deleted_by_user_id"),
+    requireString(payload, "user_id"),
+    optionalString(payload, "game_title"),
+    requireString(payload, "reason"),
+  );
+  await surface.announceNominationChange(kind, round, content);
+};
+
+/**
+ * Payload: `{ completion_id, user_id, game_id, actor_user_id }`. A Game Completion was
+ * logged with announce on (a Superadmin's for another member on the website, or the
+ * member's own), so it is announced in Whatcha Playing as /game-completion add does,
+ * naming the actor when it is not the member. actor_user_id is null for a service create.
+ */
+export const handleCompletionAnnounce: BotJobHandler = async (payload, surface) => {
+  const completionId = payloadPositiveInt(payload, "completion_id");
+  const userId = requireString(payload, "user_id");
+  const gameId = payloadPositiveInt(payload, "game_id");
+  const actorUserId = optionalString(payload, "actor_user_id") ?? userId;
+  const completion = await surface.fetchCompletionForUser(userId, completionId);
+  if (!completion) {
+    throw new Error(
+      `Game Completion ${completionId} of ${userId} no longer exists, so it was not announced.`,
+    );
+  }
+  const game = await surface.fetchGame(gameId);
+  if (!game) {
+    throw new Error(`GameDB game ${gameId} no longer exists, so it was not announced.`);
+  }
+  await surface.announceCompletion({
+    userId,
+    actorUserId,
+    game,
+    completionType: completion.completionType,
+    completedAt: completion.completedAt,
+    finalPlaytimeHours: completion.finalPlaytimeHours,
+  });
+};
+
+/**
+ * Payload: `{ live_event_id }`. A Moderator created a live event on the website, so the bot
+ * makes its forum thread and then its Discord scheduled event, as /mod create-live-event
+ * does, recording each id with the API as it goes.
+ */
+export const handleLiveEventCreate: BotJobHandler = async (payload, surface) => {
+  const liveEventId = payloadPositiveInt(payload, "live_event_id");
+  const event = await surface.fetchLiveEvent(liveEventId);
+  if (!event) {
+    throw new Error(`Live event ${liveEventId} no longer exists, so nothing was created.`);
+  }
+  try {
+    return await createLiveEventSteps(event, surface);
+  } catch (err) {
+    // A temporary failure goes back to the lease, so the live event is not failed yet.
+    if (!isTemporaryJobError(err)) await markLiveEventFailed(event.id, surface);
+    throw err;
+  }
+};
+
+async function runStep<T>(step: string, action: () => Promise<T>): Promise<T> {
+  try {
+    return await action();
+  } catch (err) {
+    throw stepFailed(step, err);
+  }
+}
+
+/**
+ * Records a Discord id just made. Its failure is never temporary: a retry would not see
+ * the id and would make the thread or event a second time.
+ */
+async function recordCreated(
+  surface: IBotJobSurface,
+  liveEventId: number,
+  step: ILiveEventStep,
+  what: string,
+  url: string,
+): Promise<void> {
+  try {
+    await surface.recordLiveEventStep(liveEventId, step);
+  } catch (err) {
+    throw new BotJobStepError(
+      `Recording the ${what} failed (it was made: ${url}). The job stopped rather than ` +
+        `make a second one`,
+      err,
+      false,
+    );
+  }
+}
+
+async function createLiveEventSteps(event: ILiveEvent, surface: IBotJobSurface):
+  Promise<string> {
+  let threadId = event.discordThreadId;
+  let eventId = event.discordEventId;
+  // The image is only the scheduled event's cover; the thread shows it by URL. Downloading
+  // it first still stops a bad image before anything is made, as the slash command does.
+  const imageUrl = event.imageUrl;
+  const image = !eventId && imageUrl
+    ? await runStep("Downloading the image", () => surface.fetchLiveEventImage(imageUrl))
+    : null;
+  if (!threadId) {
+    threadId = await runStep("Creating the forum thread", () =>
+      surface.createLiveEventThread({ topic: event.topic, imageUrl }));
+    await recordCreated(
+      surface,
+      event.id,
+      { discordThreadId: threadId, status: "thread_created" },
+      "forum thread",
+      buildLiveEventThreadUrl(HOME_GUILD_ID, threadId),
+    );
+  }
+  const threadUrl = buildLiveEventThreadUrl(HOME_GUILD_ID, threadId);
+  if (!eventId) {
+    eventId = await runStep("Creating the Discord scheduled event", () =>
+      surface.createLiveEventScheduledEvent({
+        topic: event.topic,
+        startsAt: event.startsAt,
+        endsAt: event.endsAt,
+        location: threadUrl,
+        image,
+      }));
+    await recordCreated(
+      surface,
+      event.id,
+      { discordEventId: eventId, status: "created" },
+      "Discord scheduled event",
+      buildLiveEventUrl(HOME_GUILD_ID, eventId),
+    );
+  }
+  return `Thread: ${threadUrl}\nEvent: ${buildLiveEventUrl(HOME_GUILD_ID, eventId)}`;
+}
+
+/** Best effort: the job's own failed ack carries the error either way. */
+async function markLiveEventFailed(liveEventId: number, surface: IBotJobSurface):
+  Promise<void> {
+  try {
+    await surface.recordLiveEventStep(liveEventId, { status: "failed" });
+  } catch (err) {
+    logError("BotJobHandlers.live_event_create", err);
+  }
+}
+
+/**
+ * Runs a step that posts several Discord messages. A failure before the first post keeps
+ * its own class (a temporary one is left for the lease); once any post has gone out it is
+ * never temporary, since a retry would post that message again.
+ */
+async function postOnce<T>(step: string, run: (onPosted: () => void) => Promise<T>):
+  Promise<T> {
+  let posted = false;
+  try {
+    return await run(() => {
+      posted = true;
+    });
+  } catch (err) {
+    if (!posted) throw err;
+    throw new BotJobStepError(`${step} failed after a post went out`, err, false);
+  }
+}
+
+/**
+ * Payload: `{ round_number, month_label }`. An Admin published a round's results on the
+ * website (voting has ended), so they go to announcements as /admin voting-results
+ * publish does. A failure once a post has gone out acks failed rather than retrying, which
+ * would post the results twice; before that, a temporary one is left for the lease.
+ */
+export const handleVotingResultsPublish: BotJobHandler = async (payload, surface) => {
+  const roundNumber = payloadPositiveInt(payload, "round_number");
+  const monthLabel = requireString(payload, "month_label");
+  await postOnce(
+    `Posting the round ${roundNumber} results`,
+    (onPosted) => surface.publishVotingResults({ roundNumber, monthLabel }, onPosted),
+  );
+  return `Posted the round ${roundNumber} results to announcements.`;
+};
+
+/** Why a voting_panels_repost job posted nothing, for its failed ack. */
+function describePanelRepostRefusal(
+  roundNumber: number,
+  outcome: Exclude<VotingPanelRepostOutcome, { status: "posted" }>,
+): string {
+  switch (outcome.status) {
+    case "no_round":
+      return `${NO_VOTING_ROUND_SCHEDULED} No panels were posted.`;
+    case "other_round":
+      return `Round ${roundNumber} is no longer the current voting round ` +
+        `(round ${outcome.round.roundNumber} is), so no panels were posted.`;
+    case "not_open_yet":
+      return `Voting for round ${roundNumber} has not opened yet, so no panels were posted.`;
+    case "ended":
+      return `Voting for round ${roundNumber} has ended, so no panels were posted.`;
+    case "no_votable_nominations":
+      return `There are no votable nominations for round ${roundNumber}, ` +
+        "so no panels were posted.";
+  }
+}
+
+/**
+ * Payload: `{ round_number }`. An Admin asked the website to repost the voting panels
+ * (voting was open when queued), so they go to announcements as /admin voting-open does.
+ * A refusal, or a panel that would not send, acks failed with the reason. Nothing is retried
+ * once a panel has gone out (a failed send, or an error after one), since that would post
+ * the sent ones twice.
+ */
+export const handleVotingPanelsRepost: BotJobHandler = async (payload, surface) => {
+  const roundNumber = payloadPositiveInt(payload, "round_number");
+  const outcome = await postOnce(
+    `Reposting the voting panels for round ${roundNumber}`,
+    (onPosted) => surface.repostVotingPanels(roundNumber, onPosted),
+  );
+  if (outcome.status !== "posted") {
+    throw new Error(describePanelRepostRefusal(roundNumber, outcome));
+  }
+  const { posted, failed, lines } = outcome.result;
+  if (failed > 0) {
+    throw new Error(
+      `Posted ${posted} of ${posted + failed} voting panels for round ${roundNumber}. ` +
+        lines.join(" "),
+    );
+  }
+  const noun = posted === 1 ? "panel" : "panels";
+  return `Reposted ${posted} voting ${noun} for round ${roundNumber} in announcements.`;
+};
+
+function payloadTieBreakGames(payload: Record<string, unknown>): ITieBreakPick["games"] {
+  const value = payload.games;
+  if (!Array.isArray(value) || value.length === 0) {
+    throw new Error(`Invalid payload: games must be a non-empty list, got ${
+      JSON.stringify(value)
+    }.`);
+  }
+  return value.map((entry: unknown, index) => {
+    const game = (typeof entry === "object" && entry !== null ? entry : {}) as
+      Record<string, unknown>;
+    // Keyed by the full path so a bad field is named as games[i].field.
+    const idField = `games[${index}].game_id`;
+    const titleField = `games[${index}].title`;
+    return {
+      gameId: payloadPositiveInt({ [idField]: game.game_id }, idField),
+      title: requireString({ [titleField]: game.title }, titleField),
+    };
+  });
+}
+
+/**
+ * Payload: `{ round_number, category, games: [{ game_id, title }] }`. An Admin broke a tie
+ * on the website (already saved), so the pick is announced as the tie-break select does,
+ * then the voting poller is woken for the round_decided a last tie leaves. The wake comes
+ * after the announcement, even a failed one, so round_decided's winner threads never race
+ * this one's.
+ */
+export const handleVotingTieBroken: BotJobHandler = async (payload, surface) => {
+  const roundNumber = payloadPositiveInt(payload, "round_number");
+  const category = payloadCategory(payload);
+  const games = payloadTieBreakGames(payload);
+  let links: string[];
+  try {
+    links = await surface.announceTieBreak(roundNumber, { category, games });
+  } finally {
+    surface.requestVotingEventPoll();
+  }
+  const titles = games.map((game) => game.title).join(", ");
+  return [
+    `Announced the ${VOTING_CATEGORY_LABEL[category]} round ${roundNumber} tie break: ` +
+      `${titles}.`,
+    ...links,
+  ].join(" ");
+};
+
+/**
+ * Payload: `{ activity_name }`. A Moderator set the presence on the website, so it applies
+ * now instead of at the hourly refresh. The latest saved row is re-read rather than the
+ * payload name, so a stale job never overrides a newer presence.
+ */
+export const handlePresenceSet: BotJobHandler = async (_payload, surface) => {
+  await surface.applyLatestPresence();
+};
+
+function sayAllowedMentions(payload: Record<string, unknown>): ISayMessage["allowedMentions"] {
+  const value = payload.allowed_mentions;
+  const invalid = (): Error => new Error(
+    "Invalid payload: allowed_mentions may only parse \"users\" (never everyone, here or " +
+      `roles), got ${JSON.stringify(value)}.`,
+  );
+  if (typeof value !== "object" || value === null || Array.isArray(value)) throw invalid();
+  const keys = Object.keys(value);
+  if (keys.length !== 1 || keys[0] !== "parse") throw invalid();
+  const parse: unknown = (value as { parse: unknown }).parse;
+  if (!Array.isArray(parse) || !parse.every((entry) => entry === "users")) throw invalid();
+  return { parse: parse as "users"[] };
+}
+
+function sayReplyTo(
+  payload: Record<string, unknown>,
+  channelId: string,
+): ISayMessage["replyTo"] {
+  const value = payload.reply_to;
+  if (value === null || value === undefined) return null;
+  if (typeof value !== "object" || Array.isArray(value)) {
+    throw new Error(`Invalid payload: reply_to must be an object or null, got ${
+      JSON.stringify(value)
+    }.`);
+  }
+  const replyTo = value as Record<string, unknown>;
+  const replyChannelId = requireString(replyTo, "channel_id");
+  if (replyChannelId !== channelId) {
+    throw new Error(`Invalid payload: reply_to.channel_id must equal channel_id, got ${
+      JSON.stringify(replyChannelId)
+    } and ${JSON.stringify(channelId)}.`);
+  }
+  return { channelId, messageId: requireString(replyTo, "message_id") };
+}
+
+/**
+ * Payload: `{ channel_id, content, reply_to: { channel_id, message_id } | null,
+ * allowed_mentions: { parse: ["users"] } }`. A Superadmin had the bot speak from the
+ * website, as /superadmin say does: a post in the channel, or a reply to the linked message.
+ * Only plain user mentions may ping, so a payload asking for more is refused, not trimmed.
+ */
+export const handleSay: BotJobHandler = async (payload, surface) => {
+  const channelId = requireString(payload, "channel_id");
+  const content = requireString(payload, "content");
+  const allowedMentions = sayAllowedMentions(payload);
+  const replyTo = sayReplyTo(payload, channelId);
+  await surface.sendSayMessage({ channelId, content, replyTo, allowedMentions });
+};
+
+/**
+ * Payload: `{}`. A Superadmin started a member scan on the website, as /superadmin
+ * memberscan does; the counts are the result text. Refused (failed) where the shared-state
+ * guard says the bot must not write production data, as the slash command is.
+ */
+export const handleMemberscan: BotJobHandler = async (_payload, surface) => {
+  const refusal = surface.sharedStateRefusal("memberscan");
+  if (refusal) throw new Error(refusal);
+  return buildMemberScanSummary(await surface.runMemberScan());
+};
+
 /** Job kind (BotJob::KINDS in the API) to handler. One line per kind. */
 export const BOT_JOB_HANDLERS: BotJobHandlers = {
   voting_poll_wakeup: handleVotingPollWakeup,
@@ -230,4 +780,14 @@ export const BOT_JOB_HANDLERS: BotJobHandlers = {
   giveaway_hub_refresh: handleGiveawayHubRefresh,
   suggestion_submitted: handleSuggestionSubmitted,
   suggestion_outcome: handleSuggestionOutcome,
+  gotm_cache_reload: handleGotmCacheReload,
+  nomination_deleted: handleNominationDeleted,
+  completion_announce: handleCompletionAnnounce,
+  live_event_create: handleLiveEventCreate,
+  voting_results_publish: handleVotingResultsPublish,
+  voting_panels_repost: handleVotingPanelsRepost,
+  voting_tie_broken: handleVotingTieBroken,
+  presence_set: handlePresenceSet,
+  say: handleSay,
+  memberscan: handleMemberscan,
 };

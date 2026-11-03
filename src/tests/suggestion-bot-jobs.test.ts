@@ -70,6 +70,23 @@ function fakeSurface(options: {
       surface.posts.push({ channelId, content });
       surface.pings.push(pingUserIds);
     },
+    reloadGotmRound: async () => {},
+    announceNominationChange: async () => {},
+    fetchCompletionForUser: async () => null,
+    publishVotingResults: async () => {},
+    repostVotingPanels: async () => ({ status: "no_round" }),
+    announceTieBreak: async () => [],
+    fetchGame: async () => null,
+    announceCompletion: async () => {},
+    fetchLiveEvent: async () => null,
+    recordLiveEventStep: async () => {},
+    fetchLiveEventImage: async () => Buffer.alloc(0),
+    createLiveEventThread: async () => "",
+    createLiveEventScheduledEvent: async () => "",
+    applyLatestPresence: async () => {},
+    sendSayMessage: async () => {},
+    sharedStateRefusal: () => null,
+    runMemberScan: async () => ({ upserted: 0, failed: 0, departed: 0 }),
   };
   return surface;
 }

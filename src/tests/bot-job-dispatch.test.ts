@@ -18,9 +18,12 @@ import {
   BOT_JOB_ERROR_MESSAGE_MAX,
   BOT_JOB_MAX_ATTEMPTS,
   BOT_JOB_POLL_INTERVAL_MS,
+  BOT_JOB_RESULT_TEXT_MAX,
 } from "../config/botJobs.js";
 
-type Ack = { id: number; status: "done" } | { id: number; status: "failed"; error: string };
+type Ack =
+  | { id: number; status: "done"; resultText?: string }
+  | { id: number; status: "failed"; error: string };
 
 interface IFakeApi extends IBotJobApi {
   acks: Ack[];
@@ -40,8 +43,10 @@ function fakeApi(
       claims.push(limit);
       return batches.shift() ?? [];
     },
-    done: async (id) => {
-      acks.push({ id, status: "done" });
+    done: async (id, resultText) => {
+      acks.push(
+        resultText === undefined ? { id, status: "done" } : { id, status: "done", resultText },
+      );
     },
     failed: async (id, error) => {
       acks.push({ id, status: "failed", error });
@@ -66,6 +71,23 @@ function fakeSurface(): IFakeSurface {
     refreshGiveawayHub: async () => {},
     fetchSuggestion: async () => null,
     sendChannelMessage: async () => {},
+    reloadGotmRound: async () => {},
+    announceNominationChange: async () => {},
+    fetchCompletionForUser: async () => null,
+    publishVotingResults: async () => {},
+    repostVotingPanels: async () => ({ status: "no_round" }),
+    announceTieBreak: async () => [],
+    fetchGame: async () => null,
+    announceCompletion: async () => {},
+    fetchLiveEvent: async () => null,
+    recordLiveEventStep: async () => {},
+    fetchLiveEventImage: async () => Buffer.alloc(0),
+    createLiveEventThread: async () => "",
+    createLiveEventScheduledEvent: async () => "",
+    applyLatestPresence: async () => {},
+    sendSayMessage: async () => {},
+    sharedStateRefusal: () => null,
+    runMemberScan: async () => ({ upserted: 0, failed: 0, departed: 0 }),
   };
   return surface;
 }
@@ -359,4 +381,62 @@ test("an error wrapping a temporary failure is still final", async () => {
   const err = new Error("Could not DM the claimer their key", { cause: apiError(503) });
   await processBotJobs([job(26, "flaky")], throwing(err), fakeSurface(), api);
   assert.equal(api.acks[0]?.status, "failed");
+});
+
+test("a handler's result text goes with the done ack", async () => {
+  const api = fakeApi();
+  const handlers: BotJobHandlers = {
+    scan: async () => "Scanned 120 members: 3 joined, 1 left.",
+  };
+  await processBotJobs([job(40, "scan")], handlers, fakeSurface(), api);
+  assert.deepEqual(api.acks, [
+    { id: 40, status: "done", resultText: "Scanned 120 members: 3 joined, 1 left." },
+  ]);
+});
+
+test("a handler that returns nothing acks done with no result text", async () => {
+  const api = fakeApi();
+  await processBotJobs([job(41, "voting_poll_wakeup")], BOT_JOB_HANDLERS, fakeSurface(), api);
+  assert.deepEqual(api.acks, [{ id: 41, status: "done" }]);
+});
+
+test("a blank result text acks done with no result text", async () => {
+  const api = fakeApi();
+  const handlers: BotJobHandlers = { quiet: async () => "   " };
+  await processBotJobs([job(42, "quiet")], handlers, fakeSurface(), api);
+  assert.deepEqual(api.acks, [{ id: 42, status: "done" }]);
+});
+
+test("a long result text is cut to the API's limit", async () => {
+  const api = fakeApi();
+  const handlers: BotJobHandlers = { chatty: async () => "y".repeat(5000) };
+  await processBotJobs([job(43, "chatty")], handlers, fakeSurface(), api);
+  const ack = api.acks[0];
+  const text = ack.status === "done" ? ack.resultText ?? "" : "";
+  assert.equal(text.length, BOT_JOB_RESULT_TEXT_MAX);
+  assert.ok(text.endsWith("..."));
+});
+
+test("a missed done ack is re-sent with its result text, not re-run", async () => {
+  const state = createBotJobDeliveryState();
+  let failDone = true;
+  let runs = 0;
+  const sent: { id: number; resultText?: string | null }[] = [];
+  const api = fakeApi([], {
+    done: async (id, resultText) => {
+      if (failDone) throw new Error("API down");
+      sent.push({ id, resultText });
+    },
+  });
+  const handlers: BotJobHandlers = {
+    scan: async () => {
+      runs++;
+      return "Thread: https://discord.com/channels/1/2";
+    },
+  };
+  await processBotJobs([job(44, "scan")], handlers, fakeSurface(), api, state);
+  failDone = false;
+  await processBotJobs([job(44, "scan")], handlers, fakeSurface(), api, state);
+  assert.equal(runs, 1);
+  assert.deepEqual(sent, [{ id: 44, resultText: "Thread: https://discord.com/channels/1/2" }]);
 });
