@@ -10,6 +10,7 @@ import {
 } from "./GiveawayClaimService.js";
 import { getSuggestionById, type ISuggestionItem } from "../classes/Suggestion.js";
 import {
+  ANNOUNCEMENT_CHANNEL_ID,
   BOT_DEV_CHANNEL_ID,
   GAMEDB_UPDATES_CHANNEL_ID,
   LIVE_EVENT_FORUM_ID,
@@ -28,9 +29,6 @@ import {
   buildRefreshedNominationList,
   postNominationChange,
 } from "../functions/NominationAdminHelpers.js";
-
-/** A round category as job payloads spell it (the API's `category`). */
-export type RoundCategory = "gotm" | "nr_gotm";
 import Member, { type ICompletionRecord } from "../classes/Member.js";
 import Game from "../classes/Game.js";
 import type { IGame } from "../types/GameTypes.js";
@@ -64,6 +62,21 @@ import {
   runMemberScan,
   type IMemberScanCounts,
 } from "../functions/MemberScan.js";
+import {
+  repostVotingPanels,
+  type VotingPanelRepostOutcome,
+} from "../functions/VotingPanelRepost.js";
+import VotingRounds, {
+  NO_VOTING_ROUND_SCHEDULED,
+  type VotingRoundCategory,
+} from "../classes/VotingRounds.js";
+import {
+  announceTieBreak,
+  announceVotingResults,
+  type IResultsRound,
+  type ITieBreakPick,
+} from "./VotingResultsAnnouncement.js";
+import { VOTING_CATEGORY_LABEL } from "../functions/VotingTiePrompt.js";
 
 /**
  * What the say handler asks the surface to post. allowedMentions is the payload's, passed
@@ -75,23 +88,6 @@ export interface ISayMessage {
   replyTo: { channelId: string; messageId: string } | null;
   allowedMentions: { parse: "users"[] };
 }
-
-import {
-  repostVotingPanels,
-  type VotingPanelRepostOutcome,
-} from "../functions/VotingPanelRepost.js";
-import { ANNOUNCEMENT_CHANNEL_ID } from "../config/channels.js";
-import VotingRounds, { NO_VOTING_ROUND_SCHEDULED } from "../classes/VotingRounds.js";
-import {
-  announceTieBreak,
-  announceVotingResults,
-  type IResultsRound,
-  type ITieBreakPick,
-} from "./VotingResultsAnnouncement.js";
-import { VOTING_CATEGORY_LABEL } from "../functions/VotingTiePrompt.js";
-
-/** What the completion_announce handler asks the surface to post. */
-export type ICompletionAnnouncement = ICompletionAnnouncementInput;
 
 /**
  * The narrow slice of Discord (and of the bot's own services) that job handlers may use,
@@ -122,7 +118,7 @@ export interface IBotJobSurface {
     pingUserIds: readonly string[],
   ): Promise<void>;
   /** Re-reads one GOTM or NR-GOTM round from the API into the bot's round data. */
-  reloadGotmRound(category: RoundCategory, roundNumber: number): Promise<void>;
+  reloadGotmRound(category: VotingRoundCategory, roundNumber: number): Promise<void>;
   /**
    * Posts a nomination change notice with the round's refreshed list to that kind's
    * nomination channel. Throws when it could not (missing channel, discord.js error).
@@ -133,7 +129,7 @@ export interface IBotJobSurface {
   /** GET /games/:id; null on 404. */
   fetchGame(gameId: number): Promise<IGame | null>;
   /** Posts the Whatcha Playing completion announcement. Throws when it could not. */
-  announceCompletion(announcement: ICompletionAnnouncement): Promise<void>;
+  announceCompletion(announcement: ICompletionAnnouncementInput): Promise<void>;
   /** GET /live_events/:id; null on 404. */
   fetchLiveEvent(liveEventId: number): Promise<ILiveEvent | null>;
   /** PATCH /live_events/:id with a step's Discord id and status. Throws when it could not. */
@@ -147,14 +143,18 @@ export interface IBotJobSurface {
   /**
    * Posts a round's results and winner posts to announcements, creating or renaming each
    * sole winner's thread (an existing linked thread is reused). Throws when nothing posted.
+   * Calls onPosted after each message goes out.
    */
-  publishVotingResults(round: IResultsRound): Promise<void>;
+  publishVotingResults(round: IResultsRound, onPosted: () => void): Promise<void>;
   /**
    * Posts the current round's voting panels to announcements when it is roundNumber and
    * its voting is open; otherwise posts nothing and says why. A panel that fails to send
-   * is reported in the result, not thrown.
+   * is reported in the result, not thrown. Calls onPosted after each panel goes out.
    */
-  repostVotingPanels(roundNumber: number): Promise<VotingPanelRepostOutcome>;
+  repostVotingPanels(
+    roundNumber: number,
+    onPosted: () => void,
+  ): Promise<VotingPanelRepostOutcome>;
   /**
    * Announces a tie-break pick in announcements with the winner thread for a sole winner.
    * Returns links to the posts. Throws when the round is gone or nothing could be posted.
@@ -213,11 +213,12 @@ export function createBotJobSurface(client: Client): IBotJobSurface {
     },
     createLiveEventScheduledEvent: async (input) =>
       createLiveEventScheduledEvent(await client.guilds.fetch(HOME_GUILD_ID), input),
-    publishVotingResults: (round) => announceVotingResults(client, round),
-    repostVotingPanels: (roundNumber) => repostVotingPanels({
+    publishVotingResults: (round, onPosted) => announceVotingResults(client, round, { onPosted }),
+    repostVotingPanels: (roundNumber, onPosted) => repostVotingPanels({
       client,
       channelId: ANNOUNCEMENT_CHANNEL_ID,
       expectedRoundNumber: roundNumber,
+      onPosted,
     }),
     announceTieBreak: async (roundNumber, pick) => {
       const round = await VotingRounds.getByRound(roundNumber);
@@ -404,7 +405,7 @@ export const handleSuggestionOutcome: BotJobHandler = async (payload, surface) =
   );
 };
 
-function payloadCategory(payload: Record<string, unknown>): RoundCategory {
+function payloadCategory(payload: Record<string, unknown>): VotingRoundCategory {
   const value = payload.category;
   if (value !== "gotm" && value !== "nr_gotm") {
     throw new Error(`Invalid payload: category must be "gotm" or "nr_gotm", got ${
@@ -577,14 +578,36 @@ async function markLiveEventFailed(liveEventId: number, surface: IBotJobSurface)
 }
 
 /**
+ * Runs a step that posts several Discord messages. A failure before the first post keeps
+ * its own class (a temporary one is left for the lease); once any post has gone out it is
+ * never temporary, since a retry would post that message again.
+ */
+async function postOnce<T>(step: string, run: (onPosted: () => void) => Promise<T>):
+  Promise<T> {
+  let posted = false;
+  try {
+    return await run(() => {
+      posted = true;
+    });
+  } catch (err) {
+    if (!posted) throw err;
+    throw new BotJobStepError(`${step} failed after a post went out`, err, false);
+  }
+}
+
+/**
  * Payload: `{ round_number, month_label }`. An Admin published a round's results on the
  * website (voting has ended), so they go to announcements as /admin voting-results
- * publish does. Repeatable: a winner's existing thread is renamed, not made again.
+ * publish does. A failure once a post has gone out acks failed rather than retrying, which
+ * would post the results twice; before that, a temporary one is left for the lease.
  */
 export const handleVotingResultsPublish: BotJobHandler = async (payload, surface) => {
   const roundNumber = payloadPositiveInt(payload, "round_number");
   const monthLabel = requireString(payload, "month_label");
-  await surface.publishVotingResults({ roundNumber, monthLabel });
+  await postOnce(
+    `Posting the round ${roundNumber} results`,
+    (onPosted) => surface.publishVotingResults({ roundNumber, monthLabel }, onPosted),
+  );
   return `Posted the round ${roundNumber} results to announcements.`;
 };
 
@@ -612,12 +635,16 @@ function describePanelRepostRefusal(
 /**
  * Payload: `{ round_number }`. An Admin asked the website to repost the voting panels
  * (voting was open when queued), so they go to announcements as /admin voting-open does.
- * A refusal, or a panel that would not send, acks failed with the reason; a failed panel is
- * not retried, since that would post the sent ones twice.
+ * A refusal, or a panel that would not send, acks failed with the reason. Nothing is retried
+ * once a panel has gone out (a failed send, or an error after one), since that would post
+ * the sent ones twice.
  */
 export const handleVotingPanelsRepost: BotJobHandler = async (payload, surface) => {
   const roundNumber = payloadPositiveInt(payload, "round_number");
-  const outcome = await surface.repostVotingPanels(roundNumber);
+  const outcome = await postOnce(
+    `Reposting the voting panels for round ${roundNumber}`,
+    (onPosted) => surface.repostVotingPanels(roundNumber, onPosted),
+  );
   if (outcome.status !== "posted") {
     throw new Error(describePanelRepostRefusal(roundNumber, outcome));
   }

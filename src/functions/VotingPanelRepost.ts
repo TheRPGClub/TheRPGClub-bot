@@ -25,6 +25,8 @@ export interface IRepostVotingPanelsParams {
   channelId: string;
   /** Posts nothing unless the current round is this one. */
   expectedRoundNumber?: number;
+  /** Called after each panel is sent. */
+  onPosted?: () => void;
 }
 
 /**
@@ -53,6 +55,7 @@ export async function repostVotingPanels(
     monthLabel: round.monthYear,
     voteDeadline: round.votingClosesAt,
     nominationsByKind,
+    onPosted: params.onPosted,
   });
   return { status: "posted", round, result };
 }

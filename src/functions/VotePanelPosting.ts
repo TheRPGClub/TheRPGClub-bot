@@ -91,6 +91,8 @@ export interface IPostVotePanelsParams {
    * `nominationsByKind` holds only each tied category's tied games.
    */
   ballot?: VoteBallot;
+  /** Called after each panel is sent, so a caller knows a retry would post it again. */
+  onPosted?: () => void;
 }
 
 export interface IPostVotePanelsResult {
@@ -172,6 +174,7 @@ export async function postVotePanels(
     const sent = failure === null;
     if (sent) {
       posted += 1;
+      params.onPosted?.();
     } else {
       failed += 1;
     }
