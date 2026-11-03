@@ -16,6 +16,16 @@ import {
   buildSuggestionRejectedNotice,
   buildSuggestionSubmittedPing,
 } from "./SuggestionNotices.js";
+import Member, { type ICompletionRecord } from "../classes/Member.js";
+import Game from "../classes/Game.js";
+import type { IGame } from "../types/GameTypes.js";
+import {
+  postCompletionAnnouncement,
+  type ICompletionAnnouncementInput,
+} from "../functions/CompletionHelpers.js";
+
+/** What the completion_announce handler asks the surface to post. */
+export type ICompletionAnnouncement = ICompletionAnnouncementInput;
 
 /**
  * The narrow slice of Discord (and of the bot's own services) that job handlers may use,
@@ -45,6 +55,12 @@ export interface IBotJobSurface {
     content: string,
     pingUserIds: readonly string[],
   ): Promise<void>;
+  /** GET /completions/:id; null on 404 or when it belongs to someone other than userId. */
+  fetchCompletionForUser(userId: string, completionId: number): Promise<ICompletionRecord | null>;
+  /** GET /games/:id; null on 404. */
+  fetchGame(gameId: number): Promise<IGame | null>;
+  /** Posts the Whatcha Playing completion announcement. Throws when it could not. */
+  announceCompletion(announcement: ICompletionAnnouncement): Promise<void>;
 }
 
 export function createBotJobSurface(client: Client): IBotJobSurface {
@@ -66,6 +82,10 @@ export function createBotJobSurface(client: Client): IBotJobSurface {
       }
       await channel.send({ content, allowedMentions: { users: [...pingUserIds] } });
     },
+    fetchCompletionForUser: (userId, completionId) =>
+      Member.getCompletionForUser(userId, completionId),
+    fetchGame: (gameId) => Game.getGameById(gameId),
+    announceCompletion: (announcement) => postCompletionAnnouncement(client, announcement),
   };
 }
 
@@ -225,6 +245,37 @@ export const handleSuggestionOutcome: BotJobHandler = async (payload, surface) =
   );
 };
 
+/**
+ * Payload: `{ completion_id, user_id, game_id, actor_user_id }`. A Game Completion was
+ * logged with announce on (a Superadmin's for another member on the website, or the
+ * member's own), so it is announced in Whatcha Playing as /game-completion add does,
+ * naming the actor when it is not the member. actor_user_id is null for a service create.
+ */
+export const handleCompletionAnnounce: BotJobHandler = async (payload, surface) => {
+  const completionId = payloadPositiveInt(payload, "completion_id");
+  const userId = requireString(payload, "user_id");
+  const gameId = payloadPositiveInt(payload, "game_id");
+  const actorUserId = optionalString(payload, "actor_user_id") ?? userId;
+  const completion = await surface.fetchCompletionForUser(userId, completionId);
+  if (!completion) {
+    throw new Error(
+      `Game Completion ${completionId} of ${userId} no longer exists, so it was not announced.`,
+    );
+  }
+  const game = await surface.fetchGame(gameId);
+  if (!game) {
+    throw new Error(`GameDB game ${gameId} no longer exists, so it was not announced.`);
+  }
+  await surface.announceCompletion({
+    userId,
+    actorUserId,
+    game,
+    completionType: completion.completionType,
+    completedAt: completion.completedAt,
+    finalPlaytimeHours: completion.finalPlaytimeHours,
+  });
+};
+
 /** Job kind (BotJob::KINDS in the API) to handler. One line per kind. */
 export const BOT_JOB_HANDLERS: BotJobHandlers = {
   voting_poll_wakeup: handleVotingPollWakeup,
@@ -232,4 +283,5 @@ export const BOT_JOB_HANDLERS: BotJobHandlers = {
   giveaway_hub_refresh: handleGiveawayHubRefresh,
   suggestion_submitted: handleSuggestionSubmitted,
   suggestion_outcome: handleSuggestionOutcome,
+  completion_announce: handleCompletionAnnounce,
 };
