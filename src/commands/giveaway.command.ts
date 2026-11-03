@@ -220,8 +220,8 @@ export const GIVEAWAY_GAME_NOT_FOUND_MESSAGE =
 
 /**
  * Creates the key for a resolved game, then refreshes the hub and thanks the donor. A
- * failed create replies with the API error; the reply is outside the try so a Discord
- * failure after a successful create is never reported as a failed donation.
+ * failed create replies with the API error. A Discord failure on the thanks reply is only
+ * logged, so a donation that went through is never reported as failed.
  */
 async function donateToGame(
   interaction: AnyRepliable,
@@ -255,7 +255,7 @@ async function donateToGame(
       true,
     ),
     ...(forceFollowUp ? { __forceFollowUp: true } : {}),
-  });
+  }).catch((err: unknown) => logError("giveaway donate.thanks_reply_failed", err));
 }
 
 async function importAndDonate(

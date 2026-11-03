@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { AxiosError, AxiosHeaders } from "axios";
 import { formatStructuredLog } from "../utilities/LogUtils.js";
 
 test("formatStructuredLog preserves Error message and stack", () => {
@@ -45,4 +46,24 @@ test("formatStructuredLog keeps an Error cause without its extra fields", () => 
   const parsed = JSON.parse(formatStructuredLog({ context: "ctx", error }));
   assert.equal(parsed.error.cause.message, "Request failed with status code 422");
   assert.equal(parsed.error.cause.config, undefined);
+});
+
+test("formatStructuredLog leaves an API error's request config out", () => {
+  const error = new AxiosError("Request failed", "ERR_BAD_REQUEST", {
+    headers: new AxiosHeaders({ Authorization: "Bearer test-token" }),
+    data: JSON.stringify({ data: { key_value: "SECRET-KEY" } }),
+    method: "post",
+    url: "/api/v1/game_keys",
+  });
+  error.status = 422;
+  const line = formatStructuredLog({ context: "ctx", error: new Error("wrap", { cause: error }) });
+  const direct = formatStructuredLog({ context: "ctx", error });
+
+  for (const text of [line, direct]) {
+    assert.ok(!text.includes("SECRET-KEY"));
+    assert.ok(!text.includes("test-token"));
+  }
+  const parsed = JSON.parse(direct);
+  assert.equal(parsed.error.message, "Request failed");
+  assert.equal(parsed.error.status, 422);
 });
