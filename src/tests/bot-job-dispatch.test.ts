@@ -81,6 +81,10 @@ function fakeSurface(): IFakeSurface {
     fetchLiveEventImage: async () => Buffer.alloc(0),
     createLiveEventThread: async () => "",
     createLiveEventScheduledEvent: async () => "",
+    applyLatestPresence: async () => {},
+    sendSayMessage: async () => {},
+    sharedStateRefusal: () => null,
+    runMemberScan: async () => ({ upserted: 0, failed: 0, departed: 0 }),
   };
   return surface;
 }

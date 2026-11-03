@@ -9,7 +9,11 @@ import {
   type IClaimedGiveawayKey,
 } from "./GiveawayClaimService.js";
 import { getSuggestionById, type ISuggestionItem } from "../classes/Suggestion.js";
-import { BOT_DEV_CHANNEL_ID, GAMEDB_UPDATES_CHANNEL_ID } from "../config/channels.js";
+import {
+  BOT_DEV_CHANNEL_ID,
+  GAMEDB_UPDATES_CHANNEL_ID,
+  LIVE_EVENT_FORUM_ID,
+} from "../config/channels.js";
 import { BOT_DEV_PING_USER_ID } from "../config/users.js";
 import {
   buildSuggestionApprovedNotice,
@@ -49,10 +53,28 @@ import {
   type ILiveEventScheduleInput,
   type ILiveEventThreadInput,
 } from "./LiveEventService.js";
-import { LIVE_EVENT_FORUM_ID } from "../config/channels.js";
 import { HOME_GUILD_ID } from "../config/guilds.js";
 import { BotJobStepError, isTemporaryJobError, stepFailed } from "./BotJobErrors.js";
 import { logError } from "../utilities/LogUtils.js";
+import { buildTextReply } from "../functions/ComponentsV2Utils.js";
+import { updateBotPresence } from "../functions/SetPresence.js";
+import { sharedStateCommandRefusal } from "../functions/SharedStateCommandGuard.js";
+import {
+  buildMemberScanSummary,
+  runMemberScan,
+  type IMemberScanCounts,
+} from "../functions/MemberScan.js";
+
+/**
+ * What the say handler asks the surface to post. allowedMentions is the payload's, passed
+ * through as is; the handler only lets it parse "users" (never everyone, here or roles).
+ */
+export interface ISayMessage {
+  channelId: string;
+  content: string;
+  replyTo: { channelId: string; messageId: string } | null;
+  allowedMentions: { parse: "users"[] };
+}
 
 /** What the completion_announce handler asks the surface to post. */
 export type ICompletionAnnouncement = ICompletionAnnouncementInput;
@@ -108,6 +130,14 @@ export interface IBotJobSurface {
   createLiveEventThread(input: ILiveEventThreadInput): Promise<string>;
   /** Creates the home guild's Discord scheduled event; returns its id. */
   createLiveEventScheduledEvent(input: ILiveEventScheduleInput): Promise<string>;
+  /** Re-applies the latest saved presence. Throws when it could not (none saved too). */
+  applyLatestPresence(): Promise<void>;
+  /** Posts, or replies to replyTo's message, as given. Throws the discord.js error. */
+  sendSayMessage(message: ISayMessage): Promise<void>;
+  /** Why an action writing state shared with production may not run here; null if it may. */
+  sharedStateRefusal(actionName: string): string | null;
+  /** Scans the home guild's members into the member list. Throws when the fetch fails. */
+  runMemberScan(): Promise<IMemberScanCounts>;
 }
 
 export function createBotJobSurface(client: Client): IBotJobSurface {
@@ -153,7 +183,26 @@ export function createBotJobSurface(client: Client): IBotJobSurface {
     },
     createLiveEventScheduledEvent: async (input) =>
       createLiveEventScheduledEvent(await client.guilds.fetch(HOME_GUILD_ID), input),
+    applyLatestPresence: () => updateBotPresence(client, { throwOnFailure: true }),
+    sendSayMessage: (message) => sendSayMessage(client, message),
+    sharedStateRefusal: (actionName) => sharedStateCommandRefusal(actionName),
+    runMemberScan: () => runMemberScan(client),
   };
+}
+
+async function sendSayMessage(client: Client, message: ISayMessage): Promise<void> {
+  const { channelId, content, replyTo, allowedMentions } = message;
+  const channel = await client.channels.fetch(channelId);
+  if (!channel || !channel.isSendable()) {
+    throw new Error(`Channel ${channelId} is missing or the bot cannot post in it.`);
+  }
+  if (!replyTo) {
+    await channel.send({ content, allowedMentions });
+    return;
+  }
+  // As /superadmin say: a plain post, but a reply in a Components V2 container.
+  const target = await channel.messages.fetch(replyTo.messageId);
+  await target.reply({ ...buildTextReply(content, false), allowedMentions });
 }
 
 /**
@@ -484,6 +533,75 @@ async function markLiveEventFailed(liveEventId: number, surface: IBotJobSurface)
   }
 }
 
+/**
+ * Payload: `{ activity_name }`. A Moderator set the presence on the website, so it applies
+ * now instead of at the hourly refresh. The latest saved row is re-read rather than the
+ * payload name, so a stale job never overrides a newer presence.
+ */
+export const handlePresenceSet: BotJobHandler = async (_payload, surface) => {
+  await surface.applyLatestPresence();
+};
+
+function sayAllowedMentions(payload: Record<string, unknown>): ISayMessage["allowedMentions"] {
+  const value = payload.allowed_mentions;
+  const invalid = (): Error => new Error(
+    "Invalid payload: allowed_mentions may only parse \"users\" (never everyone, here or " +
+      `roles), got ${JSON.stringify(value)}.`,
+  );
+  if (typeof value !== "object" || value === null || Array.isArray(value)) throw invalid();
+  const keys = Object.keys(value);
+  if (keys.length !== 1 || keys[0] !== "parse") throw invalid();
+  const parse: unknown = (value as { parse: unknown }).parse;
+  if (!Array.isArray(parse) || !parse.every((entry) => entry === "users")) throw invalid();
+  return { parse: parse as "users"[] };
+}
+
+function sayReplyTo(
+  payload: Record<string, unknown>,
+  channelId: string,
+): ISayMessage["replyTo"] {
+  const value = payload.reply_to;
+  if (value === null || value === undefined) return null;
+  if (typeof value !== "object" || Array.isArray(value)) {
+    throw new Error(`Invalid payload: reply_to must be an object or null, got ${
+      JSON.stringify(value)
+    }.`);
+  }
+  const replyTo = value as Record<string, unknown>;
+  const replyChannelId = requireString(replyTo, "channel_id");
+  if (replyChannelId !== channelId) {
+    throw new Error(`Invalid payload: reply_to.channel_id must equal channel_id, got ${
+      JSON.stringify(replyChannelId)
+    } and ${JSON.stringify(channelId)}.`);
+  }
+  return { channelId, messageId: requireString(replyTo, "message_id") };
+}
+
+/**
+ * Payload: `{ channel_id, content, reply_to: { channel_id, message_id } | null,
+ * allowed_mentions: { parse: ["users"] } }`. A Superadmin had the bot speak from the
+ * website, as /superadmin say does: a post in the channel, or a reply to the linked message.
+ * Only plain user mentions may ping, so a payload asking for more is refused, not trimmed.
+ */
+export const handleSay: BotJobHandler = async (payload, surface) => {
+  const channelId = requireString(payload, "channel_id");
+  const content = requireString(payload, "content");
+  const allowedMentions = sayAllowedMentions(payload);
+  const replyTo = sayReplyTo(payload, channelId);
+  await surface.sendSayMessage({ channelId, content, replyTo, allowedMentions });
+};
+
+/**
+ * Payload: `{}`. A Superadmin started a member scan on the website, as /superadmin
+ * memberscan does; the counts are the result text. Refused (failed) where the shared-state
+ * guard says the bot must not write production data, as the slash command is.
+ */
+export const handleMemberscan: BotJobHandler = async (_payload, surface) => {
+  const refusal = surface.sharedStateRefusal("memberscan");
+  if (refusal) throw new Error(refusal);
+  return buildMemberScanSummary(await surface.runMemberScan());
+};
+
 /** Job kind (BotJob::KINDS in the API) to handler. One line per kind. */
 export const BOT_JOB_HANDLERS: BotJobHandlers = {
   voting_poll_wakeup: handleVotingPollWakeup,
@@ -495,4 +613,7 @@ export const BOT_JOB_HANDLERS: BotJobHandlers = {
   nomination_deleted: handleNominationDeleted,
   completion_announce: handleCompletionAnnounce,
   live_event_create: handleLiveEventCreate,
+  presence_set: handlePresenceSet,
+  say: handleSay,
+  memberscan: handleMemberscan,
 };

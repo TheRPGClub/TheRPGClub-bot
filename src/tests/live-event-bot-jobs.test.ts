@@ -78,6 +78,12 @@ function fakeSurface(options: {
     fetchCompletionForUser: async () => null,
     fetchGame: async () => null,
     announceCompletion: async () => {},
+    reloadGotmRound: async () => {},
+    announceNominationChange: async () => {},
+    applyLatestPresence: async () => {},
+    sendSayMessage: async () => {},
+    sharedStateRefusal: () => null,
+    runMemberScan: async () => ({ upserted: 0, failed: 0, departed: 0 }),
     fetchLiveEvent: async (id) => {
       surface.calls.push(`fetch ${id}`);
       return event;
