@@ -57,6 +57,11 @@ function fakeSurface(options: {
     announceCompletion: async () => {},
     reloadGotmRound: async () => {},
     announceNominationChange: async () => {},
+    fetchLiveEvent: async () => null,
+    recordLiveEventStep: async () => {},
+    fetchLiveEventImage: async () => Buffer.alloc(0),
+    createLiveEventThread: async () => "",
+    createLiveEventScheduledEvent: async () => "",
     applyLatestPresence: async () => {
       if (options.presenceError) throw options.presenceError;
       surface.presenceApplies++;

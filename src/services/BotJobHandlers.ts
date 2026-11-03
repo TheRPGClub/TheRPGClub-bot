@@ -1,4 +1,4 @@
-import { RESTJSONErrorCodes, userMention, type Client } from "discord.js";
+import { ChannelType, RESTJSONErrorCodes, userMention, type Client } from "discord.js";
 import { describeRequestError } from "../utilities/ApiErrorUtils.js";
 import { getGameKeyById, type IGameKey } from "../classes/GameKey.js";
 import { requestVotingEventPoll } from "./VotingEventService.js";
@@ -9,7 +9,11 @@ import {
   type IClaimedGiveawayKey,
 } from "./GiveawayClaimService.js";
 import { getSuggestionById, type ISuggestionItem } from "../classes/Suggestion.js";
-import { BOT_DEV_CHANNEL_ID, GAMEDB_UPDATES_CHANNEL_ID } from "../config/channels.js";
+import {
+  BOT_DEV_CHANNEL_ID,
+  GAMEDB_UPDATES_CHANNEL_ID,
+  LIVE_EVENT_FORUM_ID,
+} from "../config/channels.js";
 import { BOT_DEV_PING_USER_ID } from "../config/users.js";
 import {
   buildSuggestionApprovedNotice,
@@ -34,6 +38,24 @@ import {
   postCompletionAnnouncement,
   type ICompletionAnnouncementInput,
 } from "../functions/CompletionHelpers.js";
+import {
+  getLiveEventById,
+  recordLiveEventStep,
+  type ILiveEvent,
+  type ILiveEventStep,
+} from "../classes/LiveEvent.js";
+import {
+  buildLiveEventThreadUrl,
+  buildLiveEventUrl,
+  createLiveEventScheduledEvent,
+  createLiveEventThread,
+  fetchLiveEventImage,
+  type ILiveEventScheduleInput,
+  type ILiveEventThreadInput,
+} from "./LiveEventService.js";
+import { HOME_GUILD_ID } from "../config/guilds.js";
+import { BotJobStepError, isTemporaryJobError, stepFailed } from "./BotJobErrors.js";
+import { logError } from "../utilities/LogUtils.js";
 import { buildTextReply } from "../functions/ComponentsV2Utils.js";
 import { updateBotPresence } from "../functions/SetPresence.js";
 import { sharedStateCommandRefusal } from "../functions/SharedStateCommandGuard.js";
@@ -98,6 +120,16 @@ export interface IBotJobSurface {
   fetchGame(gameId: number): Promise<IGame | null>;
   /** Posts the Whatcha Playing completion announcement. Throws when it could not. */
   announceCompletion(announcement: ICompletionAnnouncement): Promise<void>;
+  /** GET /live_events/:id; null on 404. */
+  fetchLiveEvent(liveEventId: number): Promise<ILiveEvent | null>;
+  /** PATCH /live_events/:id with a step's Discord id and status. Throws when it could not. */
+  recordLiveEventStep(liveEventId: number, step: ILiveEventStep): Promise<void>;
+  /** Downloads a live event's image. Throws when it is not an image. */
+  fetchLiveEventImage(imageUrl: string): Promise<Buffer>;
+  /** Opens the thread in the Live Events forum; returns its id. */
+  createLiveEventThread(input: ILiveEventThreadInput): Promise<string>;
+  /** Creates the home guild's Discord scheduled event; returns its id. */
+  createLiveEventScheduledEvent(input: ILiveEventScheduleInput): Promise<string>;
   /** Re-applies the latest saved presence. Throws when it could not (none saved too). */
   applyLatestPresence(): Promise<void>;
   /** Posts, or replies to replyTo's message, as given. Throws the discord.js error. */
@@ -139,6 +171,18 @@ export function createBotJobSurface(client: Client): IBotJobSurface {
       Member.getCompletionForUser(userId, completionId),
     fetchGame: (gameId) => Game.getGameById(gameId),
     announceCompletion: (announcement) => postCompletionAnnouncement(client, announcement),
+    fetchLiveEvent: getLiveEventById,
+    recordLiveEventStep,
+    fetchLiveEventImage,
+    createLiveEventThread: async (input) => {
+      const forum = await client.channels.fetch(LIVE_EVENT_FORUM_ID);
+      if (!forum || forum.type !== ChannelType.GuildForum) {
+        throw new Error(`Live Events forum ${LIVE_EVENT_FORUM_ID} is missing or not a forum.`);
+      }
+      return (await createLiveEventThread(forum, input)).id;
+    },
+    createLiveEventScheduledEvent: async (input) =>
+      createLiveEventScheduledEvent(await client.guilds.fetch(HOME_GUILD_ID), input),
     applyLatestPresence: () => updateBotPresence(client, { throwOnFailure: true }),
     sendSayMessage: (message) => sendSayMessage(client, message),
     sharedStateRefusal: (actionName) => sharedStateCommandRefusal(actionName),
@@ -387,6 +431,109 @@ export const handleCompletionAnnounce: BotJobHandler = async (payload, surface) 
 };
 
 /**
+ * Payload: `{ live_event_id }`. A Moderator created a live event on the website, so the bot
+ * makes its forum thread and then its Discord scheduled event, as /mod create-live-event
+ * does, recording each id with the API as it goes.
+ */
+export const handleLiveEventCreate: BotJobHandler = async (payload, surface) => {
+  const liveEventId = payloadPositiveInt(payload, "live_event_id");
+  const event = await surface.fetchLiveEvent(liveEventId);
+  if (!event) {
+    throw new Error(`Live event ${liveEventId} no longer exists, so nothing was created.`);
+  }
+  try {
+    return await createLiveEventSteps(event, surface);
+  } catch (err) {
+    // A temporary failure goes back to the lease, so the live event is not failed yet.
+    if (!isTemporaryJobError(err)) await markLiveEventFailed(event.id, surface);
+    throw err;
+  }
+};
+
+async function runStep<T>(step: string, action: () => Promise<T>): Promise<T> {
+  try {
+    return await action();
+  } catch (err) {
+    throw stepFailed(step, err);
+  }
+}
+
+/**
+ * Records a Discord id just made. Its failure is never temporary: a retry would not see
+ * the id and would make the thread or event a second time.
+ */
+async function recordCreated(
+  surface: IBotJobSurface,
+  liveEventId: number,
+  step: ILiveEventStep,
+  what: string,
+  url: string,
+): Promise<void> {
+  try {
+    await surface.recordLiveEventStep(liveEventId, step);
+  } catch (err) {
+    throw new BotJobStepError(
+      `Recording the ${what} failed (it was made: ${url}). The job stopped rather than ` +
+        `make a second one`,
+      err,
+      false,
+    );
+  }
+}
+
+async function createLiveEventSteps(event: ILiveEvent, surface: IBotJobSurface):
+  Promise<string> {
+  let threadId = event.discordThreadId;
+  let eventId = event.discordEventId;
+  // The image is only the scheduled event's cover; the thread shows it by URL. Downloading
+  // it first still stops a bad image before anything is made, as the slash command does.
+  const imageUrl = event.imageUrl;
+  const image = !eventId && imageUrl
+    ? await runStep("Downloading the image", () => surface.fetchLiveEventImage(imageUrl))
+    : null;
+  if (!threadId) {
+    threadId = await runStep("Creating the forum thread", () =>
+      surface.createLiveEventThread({ topic: event.topic, imageUrl }));
+    await recordCreated(
+      surface,
+      event.id,
+      { discordThreadId: threadId, status: "thread_created" },
+      "forum thread",
+      buildLiveEventThreadUrl(HOME_GUILD_ID, threadId),
+    );
+  }
+  const threadUrl = buildLiveEventThreadUrl(HOME_GUILD_ID, threadId);
+  if (!eventId) {
+    eventId = await runStep("Creating the Discord scheduled event", () =>
+      surface.createLiveEventScheduledEvent({
+        topic: event.topic,
+        startsAt: event.startsAt,
+        endsAt: event.endsAt,
+        location: threadUrl,
+        image,
+      }));
+    await recordCreated(
+      surface,
+      event.id,
+      { discordEventId: eventId, status: "created" },
+      "Discord scheduled event",
+      buildLiveEventUrl(HOME_GUILD_ID, eventId),
+    );
+  }
+  return `Thread: ${threadUrl}\nEvent: ${buildLiveEventUrl(HOME_GUILD_ID, eventId)}`;
+}
+
+/** Best effort: the job's own failed ack carries the error either way. */
+async function markLiveEventFailed(liveEventId: number, surface: IBotJobSurface):
+  Promise<void> {
+  try {
+    await surface.recordLiveEventStep(liveEventId, { status: "failed" });
+  } catch (err) {
+    logError("BotJobHandlers.live_event_create", err);
+  }
+}
+
+/**
  * Payload: `{ activity_name }`. A Moderator set the presence on the website, so it applies
  * now instead of at the hourly refresh. The latest saved row is re-read rather than the
  * payload name, so a stale job never overrides a newer presence.
@@ -465,6 +612,7 @@ export const BOT_JOB_HANDLERS: BotJobHandlers = {
   gotm_cache_reload: handleGotmCacheReload,
   nomination_deleted: handleNominationDeleted,
   completion_announce: handleCompletionAnnounce,
+  live_event_create: handleLiveEventCreate,
   presence_set: handlePresenceSet,
   say: handleSay,
   memberscan: handleMemberscan,

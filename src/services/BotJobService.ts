@@ -1,4 +1,4 @@
-import { DiscordAPIError, HTTPError, RateLimitError, type Client } from "discord.js";
+import type { Client } from "discord.js";
 import { BOT_JOB_API, type IBotJob, type IBotJobApi } from "../classes/BotJobs.js";
 import {
   BOT_JOB_CLAIM_LIMIT,
@@ -9,7 +9,7 @@ import {
   BOT_JOB_RESULT_TEXT_MAX,
 } from "../config/botJobs.js";
 import { buildAnyErrorMessage } from "../utilities/ApiErrorUtils.js";
-import { isTransientApiError } from "./RpgClubApiClient.js";
+import { isTemporaryJobError } from "./BotJobErrors.js";
 import { createScheduledTask, type IScheduledTask } from "../utilities/IntervalUtils.js";
 import { logError, logInfo } from "../utilities/LogUtils.js";
 import {
@@ -48,6 +48,8 @@ export function createBotJobDeliveryState(): IBotJobDeliveryState {
 
 const deliveryState = createBotJobDeliveryState();
 
+export { isTemporaryJobError };
+
 function truncateErrorMessage(message: string): string {
   if (message.length <= BOT_JOB_ERROR_MESSAGE_MAX) return message;
   const marker = "\n...(truncated)";
@@ -75,20 +77,6 @@ export function buildBotJobErrorMessage(job: IBotJob, err: unknown): string {
   return truncateErrorMessage(
     buildAnyErrorMessage(label, err, { devPing: false, omitDiscordRequestBody: true }),
   );
-}
-
-/**
- * A failure the next attempt may not repeat: the API unreachable or restarting, or Discord
- * answering 5xx or rate limited. Only the thrown error is classed, never its cause: a
- * handler wraps an error on purpose when a retry would repeat a side effect.
- */
-export function isTemporaryJobError(err: unknown): boolean {
-  if (isTransientApiError(err)) return true;
-  if (err instanceof RateLimitError) return true;
-  if (err instanceof DiscordAPIError || err instanceof HTTPError) {
-    return err.status >= 500 || err.status === 429;
-  }
-  return false;
 }
 
 async function ack(label: string, send: () => Promise<void>): Promise<boolean> {

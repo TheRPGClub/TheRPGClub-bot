@@ -82,6 +82,11 @@ function fakeSurface(options: {
       if (options.announceError) throw options.announceError;
       surface.announcements.push(announcement);
     },
+    fetchLiveEvent: async () => null,
+    recordLiveEventStep: async () => {},
+    fetchLiveEventImage: async () => Buffer.alloc(0),
+    createLiveEventThread: async () => "",
+    createLiveEventScheduledEvent: async () => "",
     applyLatestPresence: async () => {},
     sendSayMessage: async () => {},
     sharedStateRefusal: () => null,

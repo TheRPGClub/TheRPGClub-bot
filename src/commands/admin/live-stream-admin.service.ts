@@ -1,19 +1,12 @@
-import axios from "axios";
 import { DateTime } from "luxon";
 import {
   type CommandInteraction,
-  GuildScheduledEventEntityType,
-  GuildScheduledEventPrivacyLevel,
   MessageFlags,
   ModalSubmitInteraction,
   type ForumChannel,
   channelMention,
 } from "discord.js";
-import {
-  ModalBuilder,
-  MediaGalleryBuilder,
-  MediaGalleryItemBuilder,
-} from "@discordjs/builders";
+import { ModalBuilder } from "@discordjs/builders";
 import { buildTextInputLabel } from "../../functions/uiComponents.js";
 import { LIVE_EVENT_FORUM_ID } from "../../config/channels.js";
 import {
@@ -22,12 +15,13 @@ import {
   safeReply,
   sanitizeUserInput,
 } from "../../functions/InteractionUtils.js";
+import { buildErrorReply, buildTextReply } from "../../functions/ComponentsV2Utils.js";
 import {
-  buildComponentsV2Flags,
-  buildErrorReply,
-  buildTextReply,
-} from "../../functions/ComponentsV2Utils.js";
-import { truncateLabel } from "../../config/textLimits.js";
+  buildLiveEventUrl,
+  createLiveEventScheduledEvent,
+  createLiveEventThread,
+  fetchLiveEventImage,
+} from "../../services/LiveEventService.js";
 import { assertCustomIdSegments } from "../../utilities/CustomIdUtils.js";
 import {
   buildApiErrorMessage,
@@ -189,21 +183,6 @@ export function parseLiveStreamModalInput(
   };
 }
 
-async function fetchImageBuffer(imageUrl: string): Promise<Buffer> {
-  const response = await axios.get<ArrayBuffer>(imageUrl, {
-    responseType: "arraybuffer",
-    timeout: 15_000,
-  });
-  const contentType = String(response.headers["content-type"] ?? "").toLowerCase();
-  if (!contentType.startsWith("image/")) {
-    throw new Error(
-      `Image URL returned content type "${contentType}" (HTTP ${response.status}), ` +
-        "not an image.",
-    );
-  }
-  return Buffer.from(response.data);
-}
-
 export async function openLiveStreamCreateModal(interaction: CommandInteraction): Promise<void> {
   await interaction.showModal(
     buildLiveStreamModal(
@@ -249,7 +228,7 @@ export async function handleLiveStreamCreateModal(interaction: ModalSubmitIntera
   let imageBuffer: Buffer | null = null;
   if (imageUrl) {
     try {
-      imageBuffer = await fetchImageBuffer(imageUrl);
+      imageBuffer = await fetchLiveEventImage(imageUrl);
     } catch (error: unknown) {
       const msg = buildApiErrorMessage("Image fetch failed", error);
       await safeReply(interaction, buildTextReply(msg, true));
@@ -260,20 +239,7 @@ export async function handleLiveStreamCreateModal(interaction: ModalSubmitIntera
   let threadUrl: string;
   let threadId: string;
   try {
-    const threadMessage: Record<string, unknown> = {
-      content: `Live event discussion for **${topic}**`,
-    };
-    if (imageUrl) {
-      const gallery = new MediaGalleryBuilder().addItems(
-        new MediaGalleryItemBuilder().setURL(imageUrl),
-      );
-      threadMessage.components = [gallery];
-      threadMessage.flags = buildComponentsV2Flags(false);
-    }
-    const thread = await forum.threads.create({
-      message: threadMessage as any,
-      name: truncateLabel(topic),
-    });
+    const thread = await createLiveEventThread(forum, { imageUrl: imageUrl ?? null, topic });
     threadUrl = thread.url;
     threadId = thread.id;
   } catch (error: unknown) {
@@ -283,21 +249,18 @@ export async function handleLiveStreamCreateModal(interaction: ModalSubmitIntera
   }
 
   try {
-    const event = await interaction.guild?.scheduledEvents.create({
-      entityMetadata: { location: threadUrl },
-      entityType: GuildScheduledEventEntityType.External,
-      image: imageBuffer ?? undefined,
-      name: topic,
-      privacyLevel: GuildScheduledEventPrivacyLevel.GuildOnly,
-      scheduledEndTime: endsAt,
-      scheduledStartTime: startsAt,
-    });
-
-    if (!event) {
+    if (!interaction.guild) {
       throw new Error("Discord did not return a created scheduled event.");
     }
+    const eventId = await createLiveEventScheduledEvent(interaction.guild, {
+      endsAt,
+      image: imageBuffer,
+      location: threadUrl,
+      startsAt,
+      topic,
+    });
 
-    const eventUrl = `https://discord.com/events/${interaction.guildId}/${event.id}`;
+    const eventUrl = buildLiveEventUrl(interaction.guild.id, eventId);
     await safeReply(interaction, buildTextReply(
       `Created live event resources.\n` +
       `Thread: ${channelMention(threadId)}\n` +
