@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { runClaimSideEffects } from "../commands/giveaway.command.js";
 import Member from "../classes/Member.js";
+import { runGiveawayClaimSideEffects } from "../services/GiveawayClaimService.js";
 
 function buildInteraction(donorSends: unknown[]): any {
   return {
@@ -52,6 +53,44 @@ test("runClaimSideEffects notifies the donor when the setting is enabled", async
     Member.getGiveawayDonorNotifySetting = (async () => true) as any;
     await runClaimSideEffects(buildInteraction(donorSends), key);
     assert.equal(donorSends.length, 1, "donor receives a notification DM");
+  } finally {
+    Member.getGiveawayDonorNotifySetting = original;
+  }
+});
+
+test("runGiveawayClaimSideEffects posts the claim log for the claimer", async () => {
+  const original = Member.getGiveawayDonorNotifySetting;
+  const logs: any[] = [];
+  try {
+    Member.getGiveawayDonorNotifySetting = (async () => false) as any;
+    const client: any = {
+      channels: {
+        fetch: async () => ({
+          isTextBased: () => true,
+          send: async (payload: unknown) => {
+            logs.push(payload);
+          },
+        }),
+      },
+      users: { fetch: async () => ({ username: "DonorName", send: async () => {} }) },
+    };
+    await runGiveawayClaimSideEffects(client, "web-claimer", key);
+    assert.equal(logs.length, 1, "one claim log post");
+    assert.match(JSON.stringify(logs[0]), /<@web-claimer> claimed \*\*Some Game\*\* \(Steam\)/);
+  } finally {
+    Member.getGiveawayDonorNotifySetting = original;
+  }
+});
+
+test("runGiveawayClaimSideEffects does not DM a donor who claimed their own key", async () => {
+  const original = Member.getGiveawayDonorNotifySetting;
+  const donorSends: unknown[] = [];
+  try {
+    Member.getGiveawayDonorNotifySetting = (async () => true) as any;
+    const client = buildInteraction(donorSends).client;
+    const donorName = await runGiveawayClaimSideEffects(client, "donor-1", key);
+    assert.equal(donorName, "DonorName");
+    assert.equal(donorSends.length, 0, "no self-notification");
   } finally {
     Member.getGiveawayDonorNotifySetting = original;
   }

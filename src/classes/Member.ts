@@ -4,6 +4,7 @@ import { isPositiveInt, requirePositiveInt } from "../utilities/ValidationUtils.
 import { logError } from "../utilities/LogUtils.js";
 import { apiGet, apiPost, apiPatch, apiDelete } from "../services/RpgClubApiClient.js";
 import { UserFacingError } from "../utilities/ApiErrorUtils.js";
+import { homeGuildRoleIds } from "../utilities/MemberRoleUtils.js";
 
 export interface IMemberRecord {
   userId: string;
@@ -1208,7 +1209,8 @@ export default class Member {
     return results;
   }
 
-  static async upsert(record: IMemberRecord): Promise<void> {
+  // `roleIds`, when given, replaces the user's Admin, Moderator, Regulars and Members flags.
+  static async upsert(record: IMemberRecord, roleIds?: string[]): Promise<void> {
     const body: Record<string, unknown> = {
       discord_id: record.userId,
       username: record.username,
@@ -1219,13 +1221,20 @@ export default class Member {
     if (record.serverJoinedAt != null) {
       body.server_joined_at = record.serverJoinedAt.toISOString();
     }
+    if (roleIds) {
+      body.role_ids = roleIds;
+    }
     await apiPost("/api/v1/users/upsert", { data: body });
   }
 
   // The API rejects rows keyed to a user it has no record of ("User must exist"), so callers
   // that save per-user data for a guild member upsert the user first (issue #1153).
   // A null join date leaves the stored server_joined_at untouched.
-  static async upsertDiscordUser(user: User, serverJoinedAt: Date | null): Promise<void> {
+  static async upsertDiscordUser(
+    user: User,
+    serverJoinedAt: Date | null,
+    roleIds?: string[],
+  ): Promise<void> {
     await Member.upsert({
       userId: user.id,
       isBot: user.bot ? 1 : 0,
@@ -1248,11 +1257,13 @@ export default class Member {
       steamUrl: null,
       profileImage: null,
       profileImageAt: null,
-    });
+    }, roleIds);
   }
 
+  // Sends the member's role IDs too (home guild only), so member scan and joins keep
+  // website access current.
   static async upsertGuildMember(member: GuildMember): Promise<void> {
-    await Member.upsertDiscordUser(member.user, member.joinedAt ?? null);
+    await Member.upsertDiscordUser(member.user, member.joinedAt ?? null, homeGuildRoleIds(member));
   }
 
   static async markDepartedNotIn(userIds: string[]): Promise<number> {

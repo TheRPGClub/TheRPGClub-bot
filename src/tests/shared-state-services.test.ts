@@ -33,5 +33,6 @@ test("every service that claims or writes shared API state is gated", () => {
     "ThreadLinkPromptService",
     "GameReleaseAnnouncementService",
     "RssFeedService",
+    "BotJobService",
   ]);
 });

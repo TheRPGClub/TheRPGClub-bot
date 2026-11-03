@@ -23,6 +23,7 @@ import Member from "./classes/Member.js";
 import { joinAllTargetForumThreads } from "./services/ForumThreadJoinService.js";
 import { startSharedStateServices } from "./services/SharedStateServices.js";
 import { runStartupSequence } from "./services/StartupSequence.js";
+import { syncAllGuildChannels } from "./services/GuildChannelSync.js";
 import { refreshGiveawayHubMessage } from "./services/GiveawayHubService.js";
 import { startUserEmojiService } from "./services/UserEmojiService.js";
 import { announcePreviewReady } from "./services/PreviewReadyService.js";
@@ -216,6 +217,7 @@ bot.once("clientReady", async () => {
     // A background service that writes through the API goes in SHARED_STATE_SERVICES,
     // so PR previews in test mode never run it against production data.
     { name: "sharedStateServices", run: () => startSharedStateServices(bot) },
+    { name: "syncGuildChannels", run: () => syncAllGuildChannels(bot) },
     { name: "joinAllTargetForumThreads", run: () => joinAllTargetForumThreads(bot) },
     { name: "refreshGiveawayHubMessage", run: () => refreshGiveawayHubMessage(bot) },
     { name: "startUserEmojiService", run: () => startUserEmojiService(bot) },

@@ -12,6 +12,11 @@ export interface IErrorMessageOptions {
    * guild have no dev role, so the mention renders as `@unknown-role`.
    */
   devPing?: boolean;
+  /**
+   * Leave a discord.js REST failure's request body out (shown as REDACTED). For messages
+   * stored where others can read them: a DM body can hold a game key.
+   */
+  omitDiscordRequestBody?: boolean;
 }
 
 function pingSuffix(options: IErrorMessageOptions | undefined): string {
@@ -122,7 +127,7 @@ export function buildDiscordErrorMessage(
   return `${label}\n${formatApiError(
     err.method,
     err.url,
-    err.requestBody?.json ?? null,
+    options?.omitDiscordRequestBody ? "REDACTED" : err.requestBody?.json ?? null,
     err.status,
     err.rawError ?? null,
     options,
