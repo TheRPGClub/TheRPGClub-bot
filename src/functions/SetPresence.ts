@@ -56,7 +56,15 @@ export async function setPresence(
   );
 }
 
-export async function updateBotPresence(bot: Client): Promise<void> {
+/**
+ * Re-asserts the latest saved presence (or the preview's). Errors are logged and swallowed
+ * for the hourly refresh; `throwOnFailure` (a website change's job) lets them escape, and
+ * treats no saved presence as a failure too.
+ */
+export async function updateBotPresence(
+  bot: Client,
+  options: { throwOnFailure?: boolean } = {},
+): Promise<void> {
   if (PREVIEW_PRESENCE) {
     await internalSetPresence(bot, PREVIEW_PRESENCE);
     return;
@@ -65,10 +73,13 @@ export async function updateBotPresence(bot: Client): Promise<void> {
     const activityName: string | null = await BotPresenceHistory.getLatestPresenceActivity();
     if (activityName) {
       await internalSetPresence(bot, activityName);
+    } else if (options.throwOnFailure) {
+      throw new Error("No presence is saved yet, so there is nothing to apply.");
     } else {
       logInfo("SetPresence", "No presence data found in database.");
     }
   } catch (error) {
+    if (options.throwOnFailure) throw error;
     logError("SetPresence.read", error);
   }
 }
