@@ -70,6 +70,8 @@ function fakeSurface(options: {
       surface.posts.push({ channelId, content });
       surface.pings.push(pingUserIds);
     },
+    reloadGotmRound: async () => {},
+    announceNominationChange: async () => {},
     fetchCompletionForUser: async () => null,
     fetchGame: async () => null,
     announceCompletion: async () => {},

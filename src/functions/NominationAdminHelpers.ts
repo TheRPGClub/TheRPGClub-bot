@@ -6,6 +6,7 @@ import {
   TextInputStyle,
   type Client,
   type TextBasedChannel,
+  userMention,
 } from "discord.js";
 import {
   GOTM_NOMINATION_CHANNEL_ID,
@@ -129,30 +130,75 @@ export function buildDeletionReasonState(
   };
 }
 
+/**
+ * Posts a nomination change notice and the list to the GOTM or NR-GOTM nomination channel.
+ * Throws the discord.js error, or when the channel can't hold messages, so a bot job acks
+ * failed. Slash commands use announceNominationChange, which logs instead.
+ */
+export async function postNominationChange(
+  kind: NominationKind,
+  client: Client,
+  content: string,
+  payload: NominationListPayload,
+): Promise<void> {
+  const channelId =
+    kind === "gotm" ? GOTM_NOMINATION_CHANNEL_ID : NR_GOTM_NOMINATION_CHANNEL_ID;
+  const channel = await client.channels.fetch(channelId);
+  const textChannel: TextBasedChannel | null = channel?.isTextBased()
+    ? (channel as TextBasedChannel)
+    : null;
+  if (!textChannel || !isSendableTextChannel(textChannel)) {
+    throw new Error(`Nomination channel ${channelId} is missing or the bot cannot post in it.`);
+  }
+  await textChannel.send({
+    components: [buildNominationNoticeContainer(content), ...payload.components],
+    files: payload.files,
+    flags: buildComponentsV2Flags(false),
+    allowedMentions: { parse: [] },
+  });
+}
+
 export async function announceNominationChange(
   kind: NominationKind,
   interaction: { client: Client },
   content: string,
   payload: NominationListPayload,
 ): Promise<void> {
-  const channelId =
-    kind === "gotm" ? GOTM_NOMINATION_CHANNEL_ID : NR_GOTM_NOMINATION_CHANNEL_ID;
-
   try {
-    const channel = await interaction.client.channels.fetch(channelId);
-    const textChannel: TextBasedChannel | null = channel?.isTextBased()
-      ? (channel as TextBasedChannel)
-      : null;
-    if (!textChannel || !isSendableTextChannel(textChannel)) return;
-    await textChannel.send({
-      components: [buildNominationNoticeContainer(content), ...payload.components],
-      files: payload.files,
-      flags: buildComponentsV2Flags(false),
-      allowedMentions: { parse: [] },
-    });
+    await postNominationChange(kind, interaction.client, content, payload);
   } catch (err) {
     logError("NominationAdminHelpers.announceChange", err);
   }
+}
+
+/** The round's current nominations as the public list, for a change notice. */
+export async function buildRefreshedNominationList(
+  kind: NominationKind,
+  round: number,
+): Promise<NominationListPayload> {
+  const nominations = await listNominationsForRound(kind, round);
+  const window = await getUpcomingNominationWindow();
+  return buildNominationListPayload(
+    kind === "gotm" ? "GOTM" : "NR-GOTM",
+    "/gotm nominate",
+    { ...window, targetRound: round },
+    nominations,
+    false,
+  );
+}
+
+/** "X deleted Y's nomination "Title" for GOTM Round N. Reason: ..." (title left out if none). */
+export function buildNominationDeletedNotice(
+  kind: NominationKind,
+  round: number,
+  deletedByUserId: string,
+  nominatorUserId: string,
+  gameTitle: string | null,
+  reason: string,
+): string {
+  const game = gameTitle ? ` "${gameTitle}"` : "";
+  return `${userMention(deletedByUserId)} deleted ${userMention(nominatorUserId)}'s ` +
+    `nomination${game} for ${kind.toUpperCase()} Round ${round}. Reason: ${reason}`;
 }
 
 export function parseDeletionSelectCustomId(

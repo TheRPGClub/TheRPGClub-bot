@@ -78,6 +78,8 @@ function fakeSurface(options: {
     },
     fetchSuggestion: async () => null,
     sendChannelMessage: async () => {},
+    reloadGotmRound: async () => {},
+    announceNominationChange: async () => {},
     fetchCompletionForUser: async () => null,
     fetchGame: async () => null,
     announceCompletion: async () => {},
