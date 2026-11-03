@@ -55,6 +55,8 @@ function fakeSurface(options: {
     fetchCompletionForUser: async () => null,
     fetchGame: async () => null,
     announceCompletion: async () => {},
+    reloadGotmRound: async () => {},
+    announceNominationChange: async () => {},
     applyLatestPresence: async () => {
       if (options.presenceError) throw options.presenceError;
       surface.presenceApplies++;
