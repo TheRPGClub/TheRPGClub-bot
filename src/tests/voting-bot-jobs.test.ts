@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { AxiosError, AxiosHeaders } from "axios";
+import { DiscordAPIError } from "discord.js";
 import { BOT_JOB_HANDLERS, type IBotJobSurface } from "../services/BotJobHandlers.js";
 import { processBotJobs } from "../services/BotJobService.js";
 import type { IBotJob, IBotJobApi } from "../classes/BotJobs.js";
@@ -39,7 +40,11 @@ interface IVotingSurface extends IBotJobSurface {
 
 function fakeSurface(options: {
   publishError?: unknown;
+  /** Posts once (as the tally message would), then throws this. */
+  publishErrorAfterPost?: unknown;
   repost?: VotingPanelRepostOutcome;
+  /** Posts once (as the first panel would), then throws this. */
+  repostErrorAfterPost?: unknown;
   tieBreakError?: unknown;
 } = {}): IVotingSurface {
   const surface: IVotingSurface = {
@@ -70,12 +75,20 @@ function fakeSurface(options: {
     fetchLiveEventImage: async () => Buffer.alloc(0),
     createLiveEventThread: async () => "",
     createLiveEventScheduledEvent: async () => "",
-    publishVotingResults: async (round) => {
+    publishVotingResults: async (round, onPosted) => {
       if (options.publishError) throw options.publishError;
+      if (options.publishErrorAfterPost) {
+        onPosted();
+        throw options.publishErrorAfterPost;
+      }
       surface.published.push(round);
     },
-    repostVotingPanels: async (roundNumber) => {
+    repostVotingPanels: async (roundNumber, onPosted) => {
       surface.reposts.push(roundNumber);
+      if (options.repostErrorAfterPost) {
+        onPosted();
+        throw options.repostErrorAfterPost;
+      }
       return options.repost ?? { status: "no_round" };
     },
     announceTieBreak: async (roundNumber, pick) => {
@@ -144,6 +157,27 @@ test("results publish hitting a temporary API error is left for the lease", asyn
   assert.deepEqual(acks, []);
 });
 
+function discord503(): DiscordAPIError {
+  return new DiscordAPIError(
+    { code: 0, message: "Service Unavailable" },
+    0,
+    503,
+    "POST",
+    "https://discord.com/api/v10/channels/1/messages",
+    { body: undefined, files: undefined },
+  );
+}
+
+test("results publish failing after a post went out acks failed, not retried", async () => {
+  const surface = fakeSurface({ publishErrorAfterPost: discord503() });
+  const acks = await run(surface, [
+    job(1, "voting_results_publish", { round_number: 42, month_label: "November 2026" }),
+  ]);
+  const error = failure(acks);
+  assert.match(error, /round 42 results/);
+  assert.match(error, /503/);
+});
+
 const openRound = { roundNumber: 42, monthYear: "November 2026" } as unknown as IVotingRound;
 
 function postedOutcome(
@@ -176,6 +210,21 @@ test("panels repost acks failed when a panel could not be sent", async () => {
   const error = failure(acks);
   assert.match(error, /Posted 1 of 2 voting panels for round 42/);
   assert.match(error, /NR-GOTM: failed to post the voting panel in <#1>: Missing Access/);
+});
+
+test("panels repost failing after a panel went out acks failed, not retried", async () => {
+  const config = {
+    method: "get",
+    url: "/api/v1/voting_rounds/42/tally",
+    headers: new AxiosHeaders(),
+  };
+  const err = new AxiosError("Request failed with status code 503", "ERR_BAD_RESPONSE", config, {},
+    { status: 503, statusText: "Service Unavailable", headers: {}, config, data: {} });
+  const surface = fakeSurface({ repostErrorAfterPost: err });
+  const acks = await run(surface, [job(1, "voting_panels_repost", { round_number: 42 })]);
+  const error = failure(acks);
+  assert.match(error, /voting panels for round 42/);
+  assert.match(error, /503/);
 });
 
 const refusals: Array<[string, VotingPanelRepostOutcome, RegExp]> = [

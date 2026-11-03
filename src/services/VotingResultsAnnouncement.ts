@@ -66,6 +66,8 @@ export interface IAnnounceResultsOptions {
   rehearsal?: boolean;
   /** Where the tallies and nominations are read; the API unless the sandbox runs. */
   source?: IVotingDataSource;
+  /** Called after each message is sent, so a caller knows a retry would post it again. */
+  onPosted?: () => void;
 }
 
 /**
@@ -123,7 +125,7 @@ async function postWinnerAnnouncements(
   sendable: SendableChannel,
   roundNumber: number,
   winnerAnnouncements: IWinnerAnnouncement[],
-  options: { rehearsal: boolean },
+  options: { rehearsal: boolean; onPosted?: () => void },
 ): Promise<string[]> {
   const { rehearsal } = options;
   const posted: string[] = [];
@@ -160,6 +162,7 @@ async function postWinnerAnnouncements(
       flags: buildComponentsV2Flags(false),
       allowedMentions: { parse: [] },
     });
+    options.onPosted?.();
     const url = (message as { url?: unknown } | null)?.url;
     if (typeof url === "string") posted.push(url);
   }
@@ -194,7 +197,11 @@ async function postResults(
     flags: buildComponentsV2Flags(false),
     allowedMentions: { parse: [] },
   });
-  await postWinnerAnnouncements(client, sendable, roundNumber, announcements, { rehearsal });
+  options.onPosted?.();
+  await postWinnerAnnouncements(client, sendable, roundNumber, announcements, {
+    rehearsal,
+    onPosted: options.onPosted,
+  });
 }
 
 /**
