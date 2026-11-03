@@ -71,6 +71,8 @@ function fakeSurface(options: {
     refreshGiveawayHub: async () => {},
     fetchSuggestion: async () => null,
     sendChannelMessage: async () => {},
+    reloadGotmRound: async () => {},
+    announceNominationChange: async () => {},
     fetchCompletionForUser: async (userId, completionId) => {
       surface.completionFetches.push({ userId, completionId });
       return completion;

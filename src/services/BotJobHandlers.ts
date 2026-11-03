@@ -16,6 +16,17 @@ import {
   buildSuggestionRejectedNotice,
   buildSuggestionSubmittedPing,
 } from "./SuggestionNotices.js";
+import type { NominationKind } from "../classes/Nomination.js";
+import { reloadGotmRoundFromDb } from "../classes/Gotm.js";
+import { reloadNrGotmRoundFromDb } from "../classes/NrGotm.js";
+import {
+  buildNominationDeletedNotice,
+  buildRefreshedNominationList,
+  postNominationChange,
+} from "../functions/NominationAdminHelpers.js";
+
+/** A round category as job payloads spell it (the API's `category`). */
+export type RoundCategory = "gotm" | "nr_gotm";
 import Member, { type ICompletionRecord } from "../classes/Member.js";
 import Game from "../classes/Game.js";
 import type { IGame } from "../types/GameTypes.js";
@@ -74,6 +85,13 @@ export interface IBotJobSurface {
     content: string,
     pingUserIds: readonly string[],
   ): Promise<void>;
+  /** Re-reads one GOTM or NR-GOTM round from the API into the bot's round data. */
+  reloadGotmRound(category: RoundCategory, roundNumber: number): Promise<void>;
+  /**
+   * Posts a nomination change notice with the round's refreshed list to that kind's
+   * nomination channel. Throws when it could not (missing channel, discord.js error).
+   */
+  announceNominationChange(kind: NominationKind, round: number, content: string): Promise<void>;
   /** GET /completions/:id; null on 404 or when it belongs to someone other than userId. */
   fetchCompletionForUser(userId: string, completionId: number): Promise<ICompletionRecord | null>;
   /** GET /games/:id; null on 404. */
@@ -108,6 +126,14 @@ export function createBotJobSurface(client: Client): IBotJobSurface {
         throw new Error(`Channel ${channelId} is missing or the bot cannot post in it.`);
       }
       await channel.send({ content, allowedMentions: { users: [...pingUserIds] } });
+    },
+    reloadGotmRound: (category, roundNumber) =>
+      category === "gotm"
+        ? reloadGotmRoundFromDb(roundNumber)
+        : reloadNrGotmRoundFromDb(roundNumber),
+    announceNominationChange: async (kind, round, content) => {
+      const list = await buildRefreshedNominationList(kind, round);
+      await postNominationChange(kind, client, content, list);
     },
     fetchCompletionForUser: (userId, completionId) =>
       Member.getCompletionForUser(userId, completionId),
@@ -291,6 +317,44 @@ export const handleSuggestionOutcome: BotJobHandler = async (payload, surface) =
   );
 };
 
+function payloadCategory(payload: Record<string, unknown>): RoundCategory {
+  const value = payload.category;
+  if (value !== "gotm" && value !== "nr_gotm") {
+    throw new Error(`Invalid payload: category must be "gotm" or "nr_gotm", got ${
+      JSON.stringify(value)
+    }.`);
+  }
+  return value;
+}
+
+/**
+ * Payload: `{ category, round_number }`. A round was added or a game in it edited on the
+ * website, so the bot re-reads that round instead of waiting for a restart.
+ */
+export const handleGotmCacheReload: BotJobHandler = async (payload, surface) => {
+  const category = payloadCategory(payload);
+  await surface.reloadGotmRound(category, payloadPositiveInt(payload, "round_number"));
+};
+
+/**
+ * Payload: `{ category, round_number, user_id, game_title, deleted_by_user_id, reason }`.
+ * An Admin removed someone's nomination on the website (already deleted), so the change
+ * and the refreshed list go to the nomination channel, as /admin's delete does. No DM.
+ */
+export const handleNominationDeleted: BotJobHandler = async (payload, surface) => {
+  const kind: NominationKind = payloadCategory(payload) === "gotm" ? "gotm" : "nr-gotm";
+  const round = payloadPositiveInt(payload, "round_number");
+  const content = buildNominationDeletedNotice(
+    kind,
+    round,
+    requireString(payload, "deleted_by_user_id"),
+    requireString(payload, "user_id"),
+    optionalString(payload, "game_title"),
+    requireString(payload, "reason"),
+  );
+  await surface.announceNominationChange(kind, round, content);
+};
+
 /**
  * Payload: `{ completion_id, user_id, game_id, actor_user_id }`. A Game Completion was
  * logged with announce on (a Superadmin's for another member on the website, or the
@@ -398,6 +462,8 @@ export const BOT_JOB_HANDLERS: BotJobHandlers = {
   giveaway_hub_refresh: handleGiveawayHubRefresh,
   suggestion_submitted: handleSuggestionSubmitted,
   suggestion_outcome: handleSuggestionOutcome,
+  gotm_cache_reload: handleGotmCacheReload,
+  nomination_deleted: handleNominationDeleted,
   completion_announce: handleCompletionAnnounce,
   presence_set: handlePresenceSet,
   say: handleSay,

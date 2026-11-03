@@ -3,7 +3,7 @@ import type {
   ModalSubmitInteraction,
   StringSelectMenuInteraction,
 } from "discord.js";
-import { MessageFlags, userMention } from "discord.js";
+import { MessageFlags } from "discord.js";
 import { safeDeferReply, safeReply, sanitizeUserInput } from "../../functions/InteractionUtils.js";
 import { buildTextReply } from "../../functions/ComponentsV2Utils.js";
 import {
@@ -21,6 +21,8 @@ import {
   parseDeletionReasonStateId,
   parseDeletionSelectCustomId,
   announceNominationChange,
+  buildNominationDeletedNotice,
+  buildRefreshedNominationList,
 } from "../../functions/NominationAdminHelpers.js";
 import { buildNominationListPayload } from "../../functions/NominationListComponents.js";
 import { buildComponentsV2Flags } from "../../functions/ComponentsV2Utils.js";
@@ -147,22 +149,15 @@ export async function handleAdminNominationDeleteReasonModal(
 
   await safeDeferReply(interaction, { flags: MessageFlags.Ephemeral });
   await deleteNominationForUser(sessionState.kind, sessionState.round, sessionState.userId);
-  const nominations = await listNominationsForRound(sessionState.kind, sessionState.round);
-  const window = await getUpcomingNominationWindow();
-  const payload = await buildNominationListPayload(
-    sessionState.kind === "gotm" ? "GOTM" : "NR-GOTM",
-    "/gotm nominate",
-    {
-      ...window,
-      targetRound: sessionState.round,
-    },
-    nominations,
-    false,
+  const payload = await buildRefreshedNominationList(sessionState.kind, sessionState.round);
+  const content = buildNominationDeletedNotice(
+    sessionState.kind,
+    sessionState.round,
+    interaction.user.id,
+    sessionState.userId,
+    sessionState.gameTitle,
+    reason,
   );
-  const content =
-    `${userMention(interaction.user.id)} deleted ${userMention(sessionState.userId)}'s nomination ` +
-    `"${sessionState.gameTitle}" for ${sessionState.kind.toUpperCase()} Round ${sessionState.round}. ` +
-    `Reason: ${reason}`;
 
   const textContainer = buildTextReply(content, true);
   await safeReply(interaction, {
