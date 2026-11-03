@@ -51,6 +51,7 @@ import {
   listAvailableGameKeys,
   listKeysByDonor,
   revokeGameKey,
+  type IGameKey,
 } from "../classes/GameKey.js";
 import Member from "../classes/Member.js";
 import { isAdmin } from "./admin/admin-auth.utils.js";
@@ -103,7 +104,11 @@ import {
   buildApiErrorMessage,
   buildCaughtErrorMessage,
 } from "../utilities/ApiErrorUtils.js";
-const GIVEAWAY_GROUP_NAME = "giveaway";
+import {
+  GIVEAWAY_DONATE_KEY_OPTION,
+  GIVEAWAY_DONATE_SUBCOMMAND,
+  GIVEAWAY_GROUP_NAME,
+} from "../config/giveaway.js";
 const GIVEAWAY_HUB_SUBCOMMAND = "hub";
 const GIVEAWAY_DONATE_MODAL_ID = "giveaway-donate-modal";
 const GIVEAWAY_REVOKE_MODAL_ID = "giveaway-revoke-modal";
@@ -213,20 +218,36 @@ export const GIVEAWAY_GAME_NOT_FOUND_MESSAGE =
   "Could not find that game in GameDB or IGDB, so nothing was donated. " +
   "Check the title and try again.";
 
+/**
+ * Creates the key for a resolved game, then refreshes the hub and thanks the donor. A
+ * failed create replies with the API error; the reply is outside the try so a Discord
+ * failure after a successful create is never reported as a failed donation.
+ */
 async function donateToGame(
   interaction: AnyRepliable,
   game: { gameId: number; title: string },
   fields: DonationFields,
   forceFollowUp: boolean,
 ): Promise<void> {
-  const created = await createGameKey(
-    game.gameId,
-    game.title,
-    fields.trimmedPlatform,
-    fields.trimmedKey,
-    interaction.user.id,
-  );
+  let created: IGameKey;
+  try {
+    created = await createGameKey(
+      game.gameId,
+      game.title,
+      fields.trimmedPlatform,
+      fields.trimmedKey,
+      interaction.user.id,
+    );
+  } catch (err: unknown) {
+    logError("giveaway donate.create_key_failed", err);
+    await safeReply(interaction, {
+      ...buildErrorReply(buildApiErrorMessage("Failed to donate the key.", err), true),
+      ...(forceFollowUp ? { __forceFollowUp: true } : {}),
+    });
+    return;
+  }
 
+  safeIgnore(refreshGiveawayHubMessage(interaction.client));
   await safeReply(interaction, {
     ...buildTextReply(
       `Thanks! Added **${created.gameTitle}** (${created.platform}) to the giveaway pool ` +
@@ -235,7 +256,26 @@ async function donateToGame(
     ),
     ...(forceFollowUp ? { __forceFollowUp: true } : {}),
   });
-  safeIgnore(refreshGiveawayHubMessage(interaction.client));
+}
+
+async function importAndDonate(
+  interaction: StringSelectMenuInteraction,
+  igdbId: number,
+  fields: DonationFields,
+): Promise<void> {
+  let imported: { gameId: number; title: string };
+  try {
+    imported = await importGameFromIgdb(igdbId);
+  } catch (err: unknown) {
+    logError("giveaway donate.igdb_import_failed", err);
+    const detail = buildApiErrorMessage(
+      "Failed to import the game from IGDB, so nothing was donated.",
+      err,
+    );
+    await safeReply(interaction, { ...buildErrorReply(detail, true), __forceFollowUp: true });
+    return;
+  }
+  await donateToGame(interaction, imported, fields, true);
 }
 
 /**
@@ -258,8 +298,9 @@ export async function handleDonation(
 
   let resolution: ResolvedCollectionGame;
   try {
+    // The slash value is an autocomplete GameDB id or typed text, never an IGDB id.
     resolution = await resolveCollectionGameForAdd(normalized.trimmedTitle, {
-      titleOnly: source === "modal",
+      ids: source === "modal" ? "none" : "gamedb",
     });
   } catch (err: unknown) {
     if (err instanceof UserFacingError && err.message === GAME_NOT_FOUND_IN_GAMEDB_OR_IGDB) {
@@ -276,35 +317,14 @@ export async function handleDonation(
   }
 
   if (resolution.kind === "resolved") {
-    try {
-      await donateToGame(interaction, resolution, normalized, false);
-    } catch (err: unknown) {
-      logError("giveaway donate.create_key_failed", err);
-      const detail = buildApiErrorMessage("Failed to donate the key.", err);
-      await safeReply(interaction, buildErrorReply(detail, true));
-    }
+    await donateToGame(interaction, resolution, normalized, false);
     return;
   }
 
   const { components } = createIgdbSession(
     interaction.user.id,
     resolution.options,
-    async (selectionInteraction, igdbId) => {
-      try {
-        const imported = await importGameFromIgdb(igdbId);
-        await donateToGame(selectionInteraction, imported, normalized, true);
-      } catch (err: unknown) {
-        logError("giveaway donate.igdb_import_failed", err);
-        const detail = buildApiErrorMessage(
-          "Failed to import from IGDB and donate the key, so nothing was donated.",
-          err,
-        );
-        await safeReply(selectionInteraction, {
-          ...buildErrorReply(detail, true),
-          __forceFollowUp: true,
-        });
-      }
-    },
+    (selectionInteraction, igdbId) => importAndDonate(selectionInteraction, igdbId, normalized),
   );
 
   await safeReply(interaction, {
@@ -603,7 +623,10 @@ export class GiveawayCommand {
     await safeReply(interaction, payload);
   }
 
-  @Slash({ description: "Donate a game key to the giveaway pool", name: "donate" })
+  @Slash({
+    description: "Donate a game key to the giveaway pool",
+    name: GIVEAWAY_DONATE_SUBCOMMAND,
+  })
   async donateKey(
     @SlashOption({
       description: "Game title from GameDB",
@@ -622,7 +645,7 @@ export class GiveawayCommand {
     platform: string,
     @SlashOption({
       description: "The key to give away",
-      name: "key",
+      name: GIVEAWAY_DONATE_KEY_OPTION,
       required: true,
       type: ApplicationCommandOptionType.String,
     })

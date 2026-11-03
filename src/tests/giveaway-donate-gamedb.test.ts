@@ -13,6 +13,11 @@ import {
 } from "../commands/giveaway.command.js";
 import { formatSlashCommandParams } from "../functions/SlashCommandLogUtils.js";
 import { formatApiError } from "../utilities/ApiErrorUtils.js";
+import {
+  GIVEAWAY_DONATE_KEY_OPTION,
+  GIVEAWAY_DONATE_SUBCOMMAND,
+  GIVEAWAY_GROUP_NAME,
+} from "../config/giveaway.js";
 
 const OWNER = "333333333333333333";
 const KEY = "SECRET-KEY-1234";
@@ -271,18 +276,32 @@ test("the Donate modal reads a numeric title as a title, not a GameDB id", async
   assert.equal(keyPosts()[0].body.data.gamedb_game_id, GAME_ID);
 });
 
+test("/giveaway donate never imports a typed number as an IGDB id", async (t) => {
+  stubSessionStore(t);
+  t.mock.method(Game, "getGameById", async () => null);
+  const createGame = t.mock.method(Game, "createGame", async () => ({ id: 1, title: "x" }));
+  const game = { id: GAME_ID, title: "2048" };
+  t.mock.method(GameSearchService, "searchGames", async () => [game]);
+  const { client } = fakeClient();
+
+  await command.donateKey("2048", "Steam", KEY, fakeInteraction(client));
+
+  assert.equal(createGame.mock.callCount(), 0);
+  assert.equal(keyPosts()[0].body.data.gamedb_game_id, GAME_ID);
+});
+
 test("the command log line masks the donated key", () => {
-  const line = formatSlashCommandParams("giveaway", [{
-    name: "donate",
+  const line = formatSlashCommandParams(GIVEAWAY_GROUP_NAME, [{
+    name: GIVEAWAY_DONATE_SUBCOMMAND,
     options: [
       { name: "title", value: "777" },
       { name: "platform", value: "Steam" },
-      { name: "key", value: KEY },
+      { name: GIVEAWAY_DONATE_KEY_OPTION, value: KEY },
     ],
   }]);
 
   assert.ok(!line.includes(KEY));
-  assert.match(line, /key=REDACTED/);
+  assert.match(line, new RegExp(`${GIVEAWAY_DONATE_KEY_OPTION}=REDACTED`));
   assert.match(line, /platform="Steam"/);
 });
 
@@ -292,9 +311,9 @@ test("an API error reply masks the donated key", () => {
     "/api/v1/game_keys",
     { data: { game_title: "Chrono Trigger", key_value: KEY } },
     422,
-    { error: "game_not_found" },
+    { error: "game_not_found", data: { key_value: KEY } },
   );
 
   assert.ok(!text.includes(KEY));
-  assert.match(text, /"key_value": "REDACTED"/);
+  assert.equal(text.match(/"key_value": "REDACTED"/g)?.length, 2);
 });

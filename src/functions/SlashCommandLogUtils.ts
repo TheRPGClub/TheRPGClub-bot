@@ -1,4 +1,9 @@
 import { truncateWithEllipsis } from "../utilities/ValidationUtils.js";
+import {
+  GIVEAWAY_DONATE_KEY_OPTION,
+  GIVEAWAY_DONATE_SUBCOMMAND,
+  GIVEAWAY_GROUP_NAME,
+} from "../config/giveaway.js";
 
 export type ISlashOptionNode = {
   name: string;
@@ -7,7 +12,9 @@ export type ISlashOptionNode = {
 };
 
 /** Option paths whose values never reach the command log: a donated game key. */
-const SECRET_SLASH_OPTION_PATHS = new Set(["giveaway donate key"]);
+const SECRET_SLASH_OPTION_PATHS = new Set([
+  [GIVEAWAY_GROUP_NAME, GIVEAWAY_DONATE_SUBCOMMAND, GIVEAWAY_DONATE_KEY_OPTION].join(" "),
+]);
 
 function sanitizeSlashValue(value: unknown): string {
   if (typeof value === "string") {

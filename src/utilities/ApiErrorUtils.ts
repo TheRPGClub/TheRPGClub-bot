@@ -34,13 +34,24 @@ export function redactUrlSecrets(url: string): string {
 
 const DATA_URI = /^data:[^;,]+(?:;base64)?,/;
 
-// Request body fields whose values never belong in a reply: a donated game key.
+// Body fields whose values never belong in a reply: a donated game key.
 const SECRET_BODY_FIELDS = new Set(["key_value"]);
 
-/**
- * Swap inline file payloads (base64 data URIs, e.g. an event cover) for their size, and
- * secret fields for REDACTED.
- */
+/** Swap the value of every secret field, at any depth, for REDACTED. */
+function redactSecretFields(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(redactSecretFields);
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, item]) => [
+        key,
+        SECRET_BODY_FIELDS.has(key) ? "REDACTED" : redactSecretFields(item),
+      ]),
+    );
+  }
+  return value;
+}
+
+/** Swap inline file payloads (base64 data URIs, e.g. an event cover) for their size. */
 function redactDataUris(value: unknown): unknown {
   if (typeof value === "string") {
     const prefix = DATA_URI.exec(value)?.[0];
@@ -51,11 +62,9 @@ function redactDataUris(value: unknown): unknown {
     return Object.fromEntries(
       Object.entries(value).map(([key, item]) => [
         key,
-        SECRET_BODY_FIELDS.has(key)
-          ? "REDACTED"
-          : key === "csv_text" && typeof item === "string"
-            ? `<${item.length} chars>`
-            : redactDataUris(item),
+        key === "csv_text" && typeof item === "string"
+          ? `<${item.length} chars>`
+          : redactDataUris(item),
       ]),
     );
   }
@@ -74,11 +83,14 @@ export function formatApiError(
     {
       method: method.toUpperCase(),
       url: redactUrlSecrets(url),
-      body: redactDataUris(requestBody ?? null),
+      body: redactDataUris(redactSecretFields(requestBody ?? null)),
     },
     null, 2,
   );
-  const res = JSON.stringify({ status: status ?? null, body: responseBody ?? null }, null, 2);
+  const res = JSON.stringify(
+    { status: status ?? null, body: redactSecretFields(responseBody ?? null) },
+    null, 2,
+  );
   return (
     `Request:\n${jsonCodeBlock(req)}\n` +
     `Response:\n${jsonCodeBlock(res)}${pingSuffix(options)}`

@@ -51,23 +51,29 @@ export async function buildCollectionIgdbSelectOptions(
 }
 
 /**
- * Resolves an autocomplete value (a GameDB id, or an IGDB id to import) or a typed title.
- * `titleOnly` treats the input as a title even when it is numeric, for free text such as
- * a modal field, where "1942" is a game name and not an id.
+ * How a numeric input is read: "gamedb-or-igdb" tries a GameDB id, then imports it as an
+ * IGDB id; "gamedb" tries a GameDB id, then searches it as a title; "none" always treats
+ * it as a title, for free text such as a modal field where "1942" is a game name.
  */
+export type ResolveGameIdMode = "gamedb-or-igdb" | "gamedb" | "none";
+
+/** Resolves an autocomplete value (a GameDB id, or an IGDB id to import) or a typed title. */
 export async function resolveCollectionGameForAdd(
   gameIdRaw: string,
-  options?: { titleOnly?: boolean },
+  options?: { ids?: ResolveGameIdMode },
 ): Promise<ResolvedCollectionGame> {
+  const idMode = options?.ids ?? "gamedb-or-igdb";
   const numericValue = Number(gameIdRaw);
-  if (!options?.titleOnly && isPositiveInt(numericValue)) {
+  if (idMode !== "none" && isPositiveInt(numericValue)) {
     const localGame = await Game.getGameById(numericValue);
     if (localGame) {
       return { kind: "resolved", gameId: localGame.id, title: localGame.title };
     }
 
-    const importedById = await importGameFromIgdb(numericValue);
-    return { kind: "resolved", gameId: importedById.gameId, title: importedById.title };
+    if (idMode === "gamedb-or-igdb") {
+      const importedById = await importGameFromIgdb(numericValue);
+      return { kind: "resolved", gameId: importedById.gameId, title: importedById.title };
+    }
   }
 
   const titleQuery = sanitizeUserInput(gameIdRaw, { preserveNewlines: false }).trim();
