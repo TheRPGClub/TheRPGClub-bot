@@ -13,6 +13,7 @@ import {
 } from "../commands/giveaway.command.js";
 import { formatSlashCommandParams } from "../functions/SlashCommandLogUtils.js";
 import { formatApiError } from "../utilities/ApiErrorUtils.js";
+import { GIVEAWAY_MAX_TITLE_LENGTH } from "../config/textLimits.js";
 import {
   GIVEAWAY_DONATE_KEY_OPTION,
   GIVEAWAY_DONATE_SUBCOMMAND,
@@ -288,6 +289,17 @@ test("/giveaway donate never imports a typed number as an IGDB id", async (t) =>
 
   assert.equal(createGame.mock.callCount(), 0);
   assert.equal(keyPosts()[0].body.data.gamedb_game_id, GAME_ID);
+});
+
+test("a GameDB title longer than the key title limit is cut to fit", async (t) => {
+  stubSessionStore(t);
+  const game = { id: GAME_ID, title: "A".repeat(GIVEAWAY_MAX_TITLE_LENGTH + 50) };
+  t.mock.method(Game, "getGameById", async () => game);
+  const { client } = fakeClient();
+
+  await command.donateKey(String(GAME_ID), "Steam", KEY, fakeInteraction(client));
+
+  assert.equal(keyPosts()[0].body.data.game_title.length, GIVEAWAY_MAX_TITLE_LENGTH);
 });
 
 test("the command log line masks the donated key", () => {

@@ -66,4 +66,5 @@ test("formatStructuredLog leaves an API error's request config out", () => {
   const parsed = JSON.parse(direct);
   assert.equal(parsed.error.message, "Request failed");
   assert.equal(parsed.error.status, 422);
+  assert.equal(parsed.error.request, "POST /api/v1/game_keys");
 });

@@ -233,7 +233,8 @@ async function donateToGame(
   try {
     created = await createGameKey(
       game.gameId,
-      game.title,
+      // A GameDB title can be longer than the key table's title column.
+      game.title.slice(0, GIVEAWAY_MAX_TITLE_LENGTH),
       fields.trimmedPlatform,
       fields.trimmedKey,
       interaction.user.id,

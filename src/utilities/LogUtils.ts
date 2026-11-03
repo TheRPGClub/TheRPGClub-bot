@@ -1,3 +1,6 @@
+import axios from "axios";
+import { redactUrlSecrets } from "./ApiErrorUtils.js";
+
 // Extra string-ish fields pg attaches to query/connection errors. Worth keeping
 // in logs; the noisy `client` property pg-pool attaches is intentionally dropped.
 const ERROR_EXTRA_FIELDS = [
@@ -24,6 +27,11 @@ function normalizeError(error: Error): Record<string, unknown> {
   const source = error as unknown as Record<string, unknown>;
   for (const field of ERROR_EXTRA_FIELDS) {
     if (source[field] !== undefined) normalized[field] = source[field];
+  }
+  // The request line only: the config's headers and body can hold a token or a secret.
+  if (axios.isAxiosError(error) && error.config) {
+    const method = (error.config.method ?? "?").toUpperCase();
+    normalized.request = `${method} ${redactUrlSecrets(error.config.url ?? "?")}`;
   }
   // The stringify replacer normalizes a nested Error cause the same way, so an axios
   // cause logs its message and stack but not its config or auth headers.
