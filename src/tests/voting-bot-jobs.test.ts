@@ -65,6 +65,11 @@ function fakeSurface(options: {
     runMemberScan: async () => ({ upserted: 0, failed: 0, departed: 0 }),
     fetchGame: async () => null,
     announceCompletion: async () => {},
+    fetchLiveEvent: async () => null,
+    recordLiveEventStep: async () => {},
+    fetchLiveEventImage: async () => Buffer.alloc(0),
+    createLiveEventThread: async () => "",
+    createLiveEventScheduledEvent: async () => "",
     publishVotingResults: async (round) => {
       if (options.publishError) throw options.publishError;
       surface.published.push(round);

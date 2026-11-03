@@ -111,6 +111,9 @@ function fakeSurface(options: {
       surface.schedules.push(input);
       return "800";
     },
+    publishVotingResults: async () => {},
+    repostVotingPanels: async () => ({ status: "no_round" }),
+    announceTieBreak: async () => [],
   };
   return surface;
 }
