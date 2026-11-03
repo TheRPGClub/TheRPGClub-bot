@@ -81,6 +81,11 @@ function fakeSurface(options: {
     fetchCompletionForUser: async () => null,
     fetchGame: async () => null,
     announceCompletion: async () => {},
+    fetchLiveEvent: async () => null,
+    recordLiveEventStep: async () => {},
+    fetchLiveEventImage: async () => Buffer.alloc(0),
+    createLiveEventThread: async () => "",
+    createLiveEventScheduledEvent: async () => "",
   };
   return surface;
 }

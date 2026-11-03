@@ -1,4 +1,4 @@
-import { RESTJSONErrorCodes, userMention, type Client } from "discord.js";
+import { ChannelType, RESTJSONErrorCodes, userMention, type Client } from "discord.js";
 import { describeRequestError } from "../utilities/ApiErrorUtils.js";
 import { getGameKeyById, type IGameKey } from "../classes/GameKey.js";
 import { requestVotingEventPoll } from "./VotingEventService.js";
@@ -23,6 +23,23 @@ import {
   postCompletionAnnouncement,
   type ICompletionAnnouncementInput,
 } from "../functions/CompletionHelpers.js";
+import {
+  getLiveEventById,
+  recordLiveEventStep,
+  type ILiveEvent,
+  type ILiveEventStep,
+} from "../classes/LiveEvent.js";
+import {
+  buildLiveEventThreadUrl,
+  buildLiveEventUrl,
+  createLiveEventScheduledEvent,
+  createLiveEventThread,
+  fetchLiveEventImage,
+  type ILiveEventScheduleInput,
+  type ILiveEventThreadInput,
+} from "./LiveEventService.js";
+import { LIVE_EVENT_FORUM_ID } from "../config/channels.js";
+import { HOME_GUILD_ID } from "../config/guilds.js";
 
 /** What the completion_announce handler asks the surface to post. */
 export type ICompletionAnnouncement = ICompletionAnnouncementInput;
@@ -61,6 +78,16 @@ export interface IBotJobSurface {
   fetchGame(gameId: number): Promise<IGame | null>;
   /** Posts the Whatcha Playing completion announcement. Throws when it could not. */
   announceCompletion(announcement: ICompletionAnnouncement): Promise<void>;
+  /** GET /live_events/:id; null on 404. */
+  fetchLiveEvent(liveEventId: number): Promise<ILiveEvent | null>;
+  /** PATCH /live_events/:id with a step's Discord id and status. Throws when it could not. */
+  recordLiveEventStep(liveEventId: number, step: ILiveEventStep): Promise<void>;
+  /** Downloads a live event's image. Throws when it is not an image. */
+  fetchLiveEventImage(imageUrl: string): Promise<Buffer>;
+  /** Opens the thread in the Live Events forum; returns its id. */
+  createLiveEventThread(input: ILiveEventThreadInput): Promise<string>;
+  /** Creates the home guild's Discord scheduled event; returns its id. */
+  createLiveEventScheduledEvent(input: ILiveEventScheduleInput): Promise<string>;
 }
 
 export function createBotJobSurface(client: Client): IBotJobSurface {
@@ -86,6 +113,18 @@ export function createBotJobSurface(client: Client): IBotJobSurface {
       Member.getCompletionForUser(userId, completionId),
     fetchGame: (gameId) => Game.getGameById(gameId),
     announceCompletion: (announcement) => postCompletionAnnouncement(client, announcement),
+    fetchLiveEvent: getLiveEventById,
+    recordLiveEventStep,
+    fetchLiveEventImage,
+    createLiveEventThread: async (input) => {
+      const forum = await client.channels.fetch(LIVE_EVENT_FORUM_ID);
+      if (!forum || forum.type !== ChannelType.GuildForum) {
+        throw new Error(`Live Events forum ${LIVE_EVENT_FORUM_ID} is missing or not a forum.`);
+      }
+      return (await createLiveEventThread(forum, input)).id;
+    },
+    createLiveEventScheduledEvent: async (input) =>
+      createLiveEventScheduledEvent(await client.guilds.fetch(HOME_GUILD_ID), input),
   };
 }
 
@@ -276,6 +315,38 @@ export const handleCompletionAnnounce: BotJobHandler = async (payload, surface) 
   });
 };
 
+/**
+ * Payload: `{ live_event_id }`. A Moderator created a live event on the website, so the bot
+ * makes its forum thread and then its Discord scheduled event, as /mod create-live-event
+ * does, recording each id with the API as it goes.
+ */
+export const handleLiveEventCreate: BotJobHandler = async (payload, surface) => {
+  const liveEventId = payloadPositiveInt(payload, "live_event_id");
+  const event = await surface.fetchLiveEvent(liveEventId);
+  if (!event) {
+    throw new Error(`Live event ${liveEventId} no longer exists, so nothing was created.`);
+  }
+  const image = event.imageUrl ? await surface.fetchLiveEventImage(event.imageUrl) : null;
+  const threadId = await surface.createLiveEventThread({
+    topic: event.topic,
+    imageUrl: event.imageUrl,
+  });
+  await surface.recordLiveEventStep(liveEventId, {
+    discordThreadId: threadId,
+    status: "thread_created",
+  });
+  const threadUrl = buildLiveEventThreadUrl(HOME_GUILD_ID, threadId);
+  const eventId = await surface.createLiveEventScheduledEvent({
+    topic: event.topic,
+    startsAt: event.startsAt,
+    endsAt: event.endsAt,
+    location: threadUrl,
+    image,
+  });
+  await surface.recordLiveEventStep(liveEventId, { discordEventId: eventId, status: "created" });
+  return `Thread: ${threadUrl}\nEvent: ${buildLiveEventUrl(HOME_GUILD_ID, eventId)}`;
+};
+
 /** Job kind (BotJob::KINDS in the API) to handler. One line per kind. */
 export const BOT_JOB_HANDLERS: BotJobHandlers = {
   voting_poll_wakeup: handleVotingPollWakeup,
@@ -284,4 +355,5 @@ export const BOT_JOB_HANDLERS: BotJobHandlers = {
   suggestion_submitted: handleSuggestionSubmitted,
   suggestion_outcome: handleSuggestionOutcome,
   completion_announce: handleCompletionAnnounce,
+  live_event_create: handleLiveEventCreate,
 };
