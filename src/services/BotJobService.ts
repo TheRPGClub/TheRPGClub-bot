@@ -6,6 +6,7 @@ import {
   BOT_JOB_ERROR_MESSAGE_MAX,
   BOT_JOB_MAX_ATTEMPTS,
   BOT_JOB_POLL_INTERVAL_MS,
+  BOT_JOB_RESULT_TEXT_MAX,
 } from "../config/botJobs.js";
 import { buildAnyErrorMessage } from "../utilities/ApiErrorUtils.js";
 import { isTransientApiError } from "./RpgClubApiClient.js";
@@ -24,8 +25,13 @@ import {
 // landed before a restart, goes back to the queue when its lease runs out and is performed
 // again. Within one process a missed ack is remembered, so the job is only re-acked.
 
-/** The ack a performed job is owed: done, or failed with its error message. */
-export type BotJobPendingAck = { status: "done" } | { status: "failed"; error: string };
+/**
+ * The ack a performed job is owed: done (with the handler's result text, if any), or
+ * failed with its error message.
+ */
+export type BotJobPendingAck =
+  | { status: "done"; resultText?: string }
+  | { status: "failed"; error: string };
 
 /** What this process remembers between polls (lost on restart). */
 export interface IBotJobDeliveryState {
@@ -46,6 +52,17 @@ function truncateErrorMessage(message: string): string {
   if (message.length <= BOT_JOB_ERROR_MESSAGE_MAX) return message;
   const marker = "\n...(truncated)";
   return message.slice(0, BOT_JOB_ERROR_MESSAGE_MAX - marker.length) + marker;
+}
+
+/**
+ * A handler's result text as the done ack sends it: trimmed, cut to the API's limit, and
+ * undefined when blank or absent (the ack then has no body, as before result texts).
+ */
+export function normalizeResultText(text: string | void): string | undefined {
+  const trimmed = typeof text === "string" ? text.trim() : "";
+  if (!trimmed) return undefined;
+  if (trimmed.length <= BOT_JOB_RESULT_TEXT_MAX) return trimmed;
+  return trimmed.slice(0, BOT_JOB_RESULT_TEXT_MAX - 3) + "...";
 }
 
 /**
@@ -115,9 +132,9 @@ export async function processBotJobs(
       result = { status: "failed", error: message };
     } else {
       try {
-        await handler(job.payload, surface);
+        const resultText = normalizeResultText(await handler(job.payload, surface));
         logInfo("BotJobService", `Performed ${label}.`);
-        result = { status: "done" };
+        result = resultText === undefined ? { status: "done" } : { status: "done", resultText };
       } catch (err) {
         logError(`BotJobService.${job.kind}`, err);
         if (isTemporaryJobError(err) && job.attempts < BOT_JOB_MAX_ATTEMPTS) {
@@ -139,7 +156,9 @@ function sendAck(
   api: IBotJobApi,
 ): Promise<boolean> {
   return ack(label, () =>
-    result.status === "done" ? api.done(jobId) : api.failed(jobId, result.error));
+    result.status === "done"
+      ? api.done(jobId, result.resultText)
+      : api.failed(jobId, result.error));
 }
 
 /**

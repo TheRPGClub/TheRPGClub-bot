@@ -72,12 +72,14 @@ export function createBotJobSurface(client: Client): IBotJobSurface {
 /**
  * Performs one job. Resolving acks it done; throwing acks it failed with the error, so
  * let API (axios) and discord.js errors escape as they are: the dispatcher formats them
- * with the full request and response.
+ * with the full request and response. Resolve with a short result text (counts, a link to
+ * the thread or event) and the done ack carries it to the website's activity list; resolve
+ * with nothing when there is nothing worth saying. Plain words: staff read it as is.
  */
 export type BotJobHandler = (
   payload: Record<string, unknown>,
   surface: IBotJobSurface,
-) => Promise<void>;
+) => Promise<string | void>;
 
 export type BotJobHandlers = Readonly<Record<string, BotJobHandler>>;
 
