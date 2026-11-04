@@ -32,6 +32,7 @@ import {
   getModalField,
 } from "../functions/InteractionUtils.js";
 import {
+  buildErrorReply,
   buildTextReply,
   buildTextContainer,
   buildTitledContainer,
@@ -50,6 +51,7 @@ import {
   listAvailableGameKeys,
   listKeysByDonor,
   revokeGameKey,
+  type IGameKey,
 } from "../classes/GameKey.js";
 import Member from "../classes/Member.js";
 import { isAdmin } from "./admin/admin-auth.utils.js";
@@ -89,7 +91,24 @@ import {
 } from "../functions/uiComponents.js";
 import { safeIgnore } from "../utilities/AsyncUtils.js";
 import { buildCommandMention } from "../functions/CommandMentionUtils.js";
-const GIVEAWAY_GROUP_NAME = "giveaway";
+import {
+  GAME_NOT_FOUND_IN_GAMEDB_OR_IGDB,
+  resolveCollectionGameForAdd,
+  type ResolvedCollectionGame,
+} from "./collection/collection-game-resolve.utils.js";
+import { autocompleteBacklogGameTitle } from "./backlog/backlog-autocomplete.utils.js";
+import { createIgdbSession } from "../services/IGDB/IgdbSelectService.js";
+import { importGameFromIgdb } from "../functions/GameIgdbSync.js";
+import {
+  UserFacingError,
+  buildApiErrorMessage,
+  buildCaughtErrorMessage,
+} from "../utilities/ApiErrorUtils.js";
+import {
+  GIVEAWAY_DONATE_KEY_OPTION,
+  GIVEAWAY_DONATE_SUBCOMMAND,
+  GIVEAWAY_GROUP_NAME,
+} from "../config/giveaway.js";
 const GIVEAWAY_HUB_SUBCOMMAND = "hub";
 const GIVEAWAY_DONATE_MODAL_ID = "giveaway-donate-modal";
 const GIVEAWAY_REVOKE_MODAL_ID = "giveaway-revoke-modal";
@@ -157,13 +176,13 @@ type ClaimResult =
   }
   | { status: "unavailable" };
 
-type DonationInput =
-  | {
-    trimmedTitle: string;
-    trimmedPlatform: string;
-    trimmedKey: string;
-  }
-  | { error: string };
+type DonationFields = {
+  trimmedTitle: string;
+  trimmedPlatform: string;
+  trimmedKey: string;
+};
+
+type DonationInput = DonationFields | { error: string };
 
 function normalizeDonationInput(
   title: string,
@@ -193,31 +212,128 @@ function normalizeDonationInput(
   return { trimmedTitle, trimmedPlatform, trimmedKey };
 }
 
-async function handleDonation(
+type DonationSource = "slash" | "modal";
+
+export const GIVEAWAY_GAME_NOT_FOUND_MESSAGE =
+  "Could not find that game in GameDB or IGDB, so nothing was donated. " +
+  "Check the title and try again.";
+
+/**
+ * Creates the key for a resolved game, then refreshes the hub and thanks the donor. A
+ * failed create replies with the API error. A Discord failure on the thanks reply is only
+ * logged, so a donation that went through is never reported as failed.
+ */
+async function donateToGame(
+  interaction: AnyRepliable,
+  game: { gameId: number; title: string },
+  fields: DonationFields,
+  forceFollowUp: boolean,
+): Promise<void> {
+  let created: IGameKey;
+  try {
+    created = await createGameKey(
+      game.gameId,
+      // A GameDB title can be longer than the key table's title column.
+      game.title.slice(0, GIVEAWAY_MAX_TITLE_LENGTH),
+      fields.trimmedPlatform,
+      fields.trimmedKey,
+      interaction.user.id,
+    );
+  } catch (err: unknown) {
+    logError("giveaway donate.create_key_failed", err);
+    await safeReply(interaction, {
+      ...buildErrorReply(buildApiErrorMessage("Failed to donate the key.", err), true),
+      ...(forceFollowUp ? { __forceFollowUp: true } : {}),
+    });
+    return;
+  }
+
+  safeIgnore(refreshGiveawayHubMessage(interaction.client));
+  await safeReply(interaction, {
+    ...buildTextReply(
+      `Thanks! Added **${created.gameTitle}** (${created.platform}) to the giveaway pool ` +
+      `(Key ID: ${created.keyId}).`,
+      true,
+    ),
+    ...(forceFollowUp ? { __forceFollowUp: true } : {}),
+  }).catch((err: unknown) => logError("giveaway donate.thanks_reply_failed", err));
+}
+
+async function importAndDonate(
+  interaction: StringSelectMenuInteraction,
+  igdbId: number,
+  fields: DonationFields,
+): Promise<void> {
+  let imported: { gameId: number; title: string };
+  try {
+    imported = await importGameFromIgdb(igdbId);
+  } catch (err: unknown) {
+    logError("giveaway donate.igdb_import_failed", err);
+    const detail = buildApiErrorMessage(
+      "Failed to import the game from IGDB, so nothing was donated.",
+      err,
+    );
+    await safeReply(interaction, { ...buildErrorReply(detail, true), __forceFollowUp: true });
+    return;
+  }
+  await donateToGame(interaction, imported, fields, true);
+}
+
+/**
+ * Ties the donation to a GameDB game: a resolved game donates at once, and a title with
+ * no exact GameDB match offers an IGDB pick that imports the game, then donates.
+ * The IGDB session stays in memory only, because its closure holds the key.
+ */
+export async function handleDonation(
   interaction: AnyRepliable,
   title: string,
   platform: string,
   keyValue: string,
-): Promise<boolean> {
+  source: DonationSource,
+): Promise<void> {
   const normalized = normalizeDonationInput(title, platform, keyValue);
   if ("error" in normalized) {
     await safeReply(interaction, buildTextReply(normalized.error, true));
-    return false;
+    return;
   }
 
-  const created = await createGameKey(
-    normalized.trimmedTitle,
-    normalized.trimmedPlatform,
-    normalized.trimmedKey,
+  let resolution: ResolvedCollectionGame;
+  try {
+    // The slash value is an autocomplete GameDB id or typed text, never an IGDB id.
+    resolution = await resolveCollectionGameForAdd(normalized.trimmedTitle, {
+      ids: source === "modal" ? "none" : "gamedb",
+    });
+  } catch (err: unknown) {
+    if (err instanceof UserFacingError && err.message === GAME_NOT_FOUND_IN_GAMEDB_OR_IGDB) {
+      await safeReply(interaction, buildTextReply(GIVEAWAY_GAME_NOT_FOUND_MESSAGE, true));
+      return;
+    }
+    logError("giveaway donate.resolve_game_failed", err);
+    const msg = buildCaughtErrorMessage(
+      "Could not resolve that game, so nothing was donated",
+      err,
+    );
+    await safeReply(interaction, buildErrorReply(msg, true));
+    return;
+  }
+
+  if (resolution.kind === "resolved") {
+    await donateToGame(interaction, resolution, normalized, false);
+    return;
+  }
+
+  const { components } = createIgdbSession(
     interaction.user.id,
+    resolution.options,
+    (selectionInteraction, igdbId) => importAndDonate(selectionInteraction, igdbId, normalized),
   );
 
-  await safeReply(interaction, buildTextReply(
-    `Thanks! Added **${created.gameTitle}** (${created.platform}) to the giveaway pool ` +
-    `(Key ID: ${created.keyId}).`,
-    true,
-  ));
-  return true;
+  await safeReply(interaction, {
+    content:
+      `No exact GameDB match found for "${resolution.titleQuery}". ` +
+      "Select the correct IGDB game to import, and your key will be donated for it:",
+    components,
+  });
 }
 
 async function handleRevoke(interaction: AnyRepliable, keyId: number): Promise<boolean> {
@@ -508,13 +624,17 @@ export class GiveawayCommand {
     await safeReply(interaction, payload);
   }
 
-  @Slash({ description: "Donate a game key to the giveaway pool", name: "donate" })
+  @Slash({
+    description: "Donate a game key to the giveaway pool",
+    name: GIVEAWAY_DONATE_SUBCOMMAND,
+  })
   async donateKey(
     @SlashOption({
-      description: "Game title",
+      description: "Game title from GameDB",
       name: "title",
       required: true,
       type: ApplicationCommandOptionType.String,
+      autocomplete: autocompleteBacklogGameTitle,
     })
     title: string,
     @SlashOption({
@@ -526,7 +646,7 @@ export class GiveawayCommand {
     platform: string,
     @SlashOption({
       description: "The key to give away",
-      name: "key",
+      name: GIVEAWAY_DONATE_KEY_OPTION,
       required: true,
       type: ApplicationCommandOptionType.String,
     })
@@ -537,10 +657,7 @@ export class GiveawayCommand {
     title = sanitizeUserInput(title, { preserveNewlines: false });
     platform = sanitizeUserInput(platform, { preserveNewlines: false });
     keyValue = sanitizeUserInput(keyValue, { preserveNewlines: false });
-    const created = await handleDonation(interaction, title, platform, keyValue);
-    if (created) {
-      safeIgnore(refreshGiveawayHubMessage(interaction.client));
-    }
+    await handleDonation(interaction, title, platform, keyValue, "slash");
   }
 
   @Slash({ description: "Revoke a donated game key", name: "revoke" })
@@ -968,10 +1085,7 @@ export class GiveawayCommand {
     const platform = getModalField(interaction, GIVEAWAY_DONATE_PLATFORM_ID);
     const keyValue = getModalField(interaction, GIVEAWAY_DONATE_KEY_ID);
 
-    const created = await handleDonation(interaction, title, platform, keyValue);
-    if (created) {
-      safeIgnore(refreshGiveawayHubMessage(interaction.client));
-    }
+    await handleDonation(interaction, title, platform, keyValue, "modal");
   }
    
   @ModalComponent({ id: GIVEAWAY_REVOKE_MODAL_ID })

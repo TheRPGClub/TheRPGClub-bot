@@ -1,3 +1,6 @@
+import axios from "axios";
+import { redactUrlSecrets } from "./ApiErrorUtils.js";
+
 // Extra string-ish fields pg attaches to query/connection errors. Worth keeping
 // in logs; the noisy `client` property pg-pool attaches is intentionally dropped.
 const ERROR_EXTRA_FIELDS = [
@@ -11,6 +14,8 @@ const ERROR_EXTRA_FIELDS = [
   "column",
   "constraint",
   "routine",
+  // An AxiosError's HTTP status.
+  "status",
 ] as const;
 
 function normalizeError(error: Error): Record<string, unknown> {
@@ -23,6 +28,11 @@ function normalizeError(error: Error): Record<string, unknown> {
   for (const field of ERROR_EXTRA_FIELDS) {
     if (source[field] !== undefined) normalized[field] = source[field];
   }
+  // The request line only: the config's headers and body can hold a token or a secret.
+  if (axios.isAxiosError(error) && error.config) {
+    const method = (error.config.method ?? "?").toUpperCase();
+    normalized.request = `${method} ${redactUrlSecrets(error.config.url ?? "?")}`;
+  }
   // The stringify replacer normalizes a nested Error cause the same way, so an axios
   // cause logs its message and stack but not its config or auth headers.
   if (error.cause !== undefined) normalized.cause = error.cause;
@@ -33,9 +43,12 @@ export function formatStructuredLog(fields: Record<string, unknown>): string {
   // Error message/stack are non-enumerable, so a raw stringify drops them while
   // serializing any attached object (e.g. pg-pool sets err.client). Normalize
   // Errors and guard against circular references so logs stay small and useful.
+  // The replacer sees a value after its toJSON() ran, and AxiosError.toJSON() copies the
+  // request config, so the original is read from the holder (`this[key]`) instead.
   const seen = new WeakSet<object>();
-  return JSON.stringify(fields, (_key, value) => {
-    if (value instanceof Error) return normalizeError(value);
+  return JSON.stringify(fields, function (this: Record<string, unknown>, key, value) {
+    const original = this[key];
+    if (original instanceof Error) return normalizeError(original);
     if (typeof value === "object" && value !== null) {
       if (seen.has(value)) return "[Circular]";
       seen.add(value);

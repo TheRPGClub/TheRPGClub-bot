@@ -7,6 +7,9 @@ import { truncateLabel } from "../../config/textLimits.js";
 import GamePlatformRegionService from "../../classes/GamePlatformRegionService.js";
 import { importGameFromIgdb } from "../../functions/GameIgdbSync.js";
 import GameSearchService from "../../classes/GameSearchService.js";
+import { UserFacingError } from "../../utilities/ApiErrorUtils.js";
+
+export const GAME_NOT_FOUND_IN_GAMEDB_OR_IGDB = "Could not find that title in GameDB or IGDB.";
 
 export type ResolvedCollectionGame =
   | { kind: "resolved"; gameId: number; title: string }
@@ -47,18 +50,30 @@ export async function buildCollectionIgdbSelectOptions(
   });
 }
 
+/**
+ * How a numeric input is read: "gamedb-or-igdb" tries a GameDB id, then imports it as an
+ * IGDB id; "gamedb" tries a GameDB id, then searches it as a title; "none" always treats
+ * it as a title, for free text such as a modal field where "1942" is a game name.
+ */
+export type ResolveGameIdMode = "gamedb-or-igdb" | "gamedb" | "none";
+
+/** Resolves an autocomplete value (a GameDB id, or an IGDB id to import) or a typed title. */
 export async function resolveCollectionGameForAdd(
   gameIdRaw: string,
+  options?: { ids?: ResolveGameIdMode },
 ): Promise<ResolvedCollectionGame> {
+  const idMode = options?.ids ?? "gamedb-or-igdb";
   const numericValue = Number(gameIdRaw);
-  if (isPositiveInt(numericValue)) {
+  if (idMode !== "none" && isPositiveInt(numericValue)) {
     const localGame = await Game.getGameById(numericValue);
     if (localGame) {
       return { kind: "resolved", gameId: localGame.id, title: localGame.title };
     }
 
-    const importedById = await importGameFromIgdb(numericValue);
-    return { kind: "resolved", gameId: importedById.gameId, title: importedById.title };
+    if (idMode === "gamedb-or-igdb") {
+      const importedById = await importGameFromIgdb(numericValue);
+      return { kind: "resolved", gameId: importedById.gameId, title: importedById.title };
+    }
   }
 
   const titleQuery = sanitizeUserInput(gameIdRaw, { preserveNewlines: false }).trim();
@@ -76,7 +91,7 @@ export async function resolveCollectionGameForAdd(
 
   const igdbSearch = await igdbService.searchGames(titleQuery, 10);
   if (!igdbSearch.results.length) {
-    throw new Error("Could not find that title in GameDB or IGDB.");
+    throw new UserFacingError(GAME_NOT_FOUND_IN_GAMEDB_OR_IGDB);
   }
 
   return {
