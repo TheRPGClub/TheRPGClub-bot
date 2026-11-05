@@ -14,9 +14,13 @@ import {
   buildTextContainer,
   safeV2TextContent,
 } from "../../functions/ComponentsV2Utils.js";
-import type { ImportCandidate } from "../../functions/ImportCandidateUtils.js";
 import { logError } from "../../utilities/LogUtils.js";
 import GamePlatformRegionService from "../../classes/GamePlatformRegionService.js";
+
+export type ImportCandidate = {
+  gameId: number;
+  title: string;
+};
 
 export async function buildImportCandidatesContainer(params: {
   ownerId: string;
