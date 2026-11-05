@@ -7,6 +7,7 @@ import { setAutomaticPresence } from "../functions/SetPresence.js";
 import {
   buildGotmPresence,
   pinWinnerThread,
+  reportWinnerStepFailure,
 } from "../services/WinnerThreadService.js";
 
 function presenceClient(seen: string[]): Client {
@@ -109,4 +110,33 @@ test("pinWinnerThread leaves an already pinned winner alone", async () => {
   await pinWinnerThread(fakeForum([winner]), "new");
   assert.equal(winner.pinned, true);
   assert.equal(unpinned, false);
+});
+
+test("reportWinnerStepFailure tells the admin channel which step failed and why", async () => {
+  const sent: string[] = [];
+  const admin = {
+    isTextBased: () => true,
+    send: async (payload: { components: { toJSON: () => unknown }[] }) => {
+      sent.push(JSON.stringify(payload.components.map((part) => part.toJSON())));
+    },
+  };
+  const client = { channels: { fetch: async () => admin } } as unknown as Client;
+  await reportWinnerStepFailure(
+    { client, gameId: 7, gameTitle: "Weave", roundNumber: 12, kindLabel: "GOTM" },
+    "pin the winner thread",
+    new Error("Missing Permissions"),
+  );
+  assert.equal(sent.length, 1);
+  assert.match(sent[0] ?? "", /pin the winner thread/);
+  assert.match(sent[0] ?? "", /Weave \[GOTM Round 12\]/);
+  assert.match(sent[0] ?? "", /Missing Permissions/);
+});
+
+test("reportWinnerStepFailure does not throw when the admin channel is missing", async () => {
+  const client = { channels: { fetch: async () => null } } as unknown as Client;
+  await reportWinnerStepFailure(
+    { client, gameId: 7, gameTitle: "Weave", roundNumber: 12, kindLabel: "NR-GOTM" },
+    "set up the winner thread",
+    new Error("boom"),
+  );
 });

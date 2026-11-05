@@ -14,9 +14,15 @@ import {
   upsertThreadRecord,
 } from "../classes/Thread.js";
 import { GOTM_FORUM_TAG_ID, NR_GOTM_FORUM_TAG_ID } from "../config/tags.js";
-import { NOW_PLAYING_FORUM_ID } from "../config/channels.js";
+import { ADMIN_CHANNEL_ID, NOW_PLAYING_FORUM_ID } from "../config/channels.js";
+import { COLOR_WARNING } from "../config/colors.js";
 import { DISCORD_ACTIVITY_NAME_MAX, DISCORD_THREAD_NAME_MAX } from "../config/textLimits.js";
 import { setAutomaticPresence } from "../functions/SetPresence.js";
+import { fetchSendableChannel } from "../functions/ChannelUtils.js";
+import {
+  buildAccentContainer,
+  buildComponentsV2Flags,
+} from "../functions/ComponentsV2Utils.js";
 import { logError } from "../utilities/LogUtils.js";
 import { truncateWithEllipsis } from "../utilities/ValidationUtils.js";
 
@@ -65,7 +71,13 @@ function winnerForumTagId(kindLabel: WinnerKindLabel): string {
 export async function ensureWinnerThread(
   params: IWinnerThreadParams,
 ): Promise<IWinnerThreadResult> {
-  const result = await findOrCreateWinnerThread(params);
+  let result: IWinnerThreadResult;
+  try {
+    result = await findOrCreateWinnerThread(params);
+  } catch (error) {
+    await reportWinnerStepFailure(params, "set up the winner thread", error);
+    throw error;
+  }
   if (params.kindLabel === "GOTM") {
     await spotlightGotmWinner(params, result.threadId);
   }
@@ -97,7 +109,7 @@ async function spotlightGotmWinner(
     try {
       await pinWinnerThread(params.client, threadId);
     } catch (error) {
-      logError("WinnerThreadService.pinWinnerThread", error);
+      await reportWinnerStepFailure(params, "pin the winner thread", error);
     }
   }
   try {
@@ -106,7 +118,38 @@ async function spotlightGotmWinner(
       buildGotmPresence(params.gameTitle, params.roundNumber),
     );
   } catch (error) {
-    logError("WinnerThreadService.setAutomaticPresence", error);
+    await reportWinnerStepFailure(params, "set the bot status", error);
+  }
+}
+
+/**
+ * Logs a failed winner step and tells the admin channel, since these steps run
+ * unattended and a console log alone goes unseen. Never throws.
+ */
+export async function reportWinnerStepFailure(
+  params: IWinnerThreadParams,
+  step: string,
+  error: unknown,
+): Promise<void> {
+  logError(`WinnerThreadService.${step}`, error);
+  const reason = error instanceof Error ? error.message : String(error);
+  const winner = `${params.gameTitle} [${params.kindLabel} Round ${params.roundNumber}]`;
+  const text = [
+    `**The bot could not ${step} for ${winner}.**`,
+    "```",
+    reason,
+    "```",
+    "-# Check that the bot has Manage Threads in the Now Playing forum, then fix it by hand.",
+  ].join("\n");
+  try {
+    const channel = await fetchSendableChannel(params.client, ADMIN_CHANNEL_ID);
+    await channel?.send({
+      components: [buildAccentContainer(text, COLOR_WARNING)],
+      flags: buildComponentsV2Flags(false),
+      allowedMentions: { parse: [] },
+    });
+  } catch (sendError) {
+    logError("WinnerThreadService.reportWinnerStepFailure", sendError);
   }
 }
 
