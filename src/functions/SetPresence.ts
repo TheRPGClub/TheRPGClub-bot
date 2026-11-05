@@ -57,6 +57,17 @@ export async function setPresence(
 }
 
 /**
+ * Sets a status the bot chose itself (no member set it) and saves it, so the hourly
+ * refresh keeps it. A status that is already the latest saved one is not saved again,
+ * so a redelivered event adds no history row. A preview keeps its own status.
+ */
+export async function setAutomaticPresence(client: Client, activityName: string): Promise<void> {
+  if (PREVIEW_PRESENCE) return;
+  const latest = await BotPresenceHistory.getLatestPresenceActivity();
+  await internalSetPresence(client, activityName, null, null, latest !== activityName);
+}
+
+/**
  * Re-asserts the latest saved presence (or the preview's). Errors are logged and swallowed
  * for the hourly refresh; `throwOnFailure` (a website change's job) lets them escape, and
  * treats no saved presence as a failure too.

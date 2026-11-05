@@ -1,5 +1,6 @@
 import {
   AttachmentBuilder,
+  ChannelFlags,
   ChannelType,
   type Client,
   type ForumChannel,
@@ -13,8 +14,16 @@ import {
   upsertThreadRecord,
 } from "../classes/Thread.js";
 import { GOTM_FORUM_TAG_ID, NR_GOTM_FORUM_TAG_ID } from "../config/tags.js";
-import { NOW_PLAYING_FORUM_ID } from "../config/channels.js";
-import { DISCORD_THREAD_NAME_MAX } from "../config/textLimits.js";
+import { ADMIN_CHANNEL_ID, NOW_PLAYING_FORUM_ID } from "../config/channels.js";
+import { COLOR_WARNING } from "../config/colors.js";
+import { DISCORD_ACTIVITY_NAME_MAX, DISCORD_THREAD_NAME_MAX } from "../config/textLimits.js";
+import { setAutomaticPresence } from "../functions/SetPresence.js";
+import { fetchSendableChannel } from "../functions/ChannelUtils.js";
+import {
+  buildAccentContainer,
+  buildComponentsV2Flags,
+} from "../functions/ComponentsV2Utils.js";
+import { logError } from "../utilities/LogUtils.js";
 import { truncateWithEllipsis } from "../utilities/ValidationUtils.js";
 
 export type WinnerKindLabel = "GOTM" | "NR-GOTM";
@@ -43,6 +52,12 @@ export function buildWinnerThreadTitle(
   );
 }
 
+/** The bot's status while a game is the GOTM, e.g. "Title [GOTM Round 12]". */
+export function buildGotmPresence(gameTitle: string, roundNumber: number): string {
+  const suffix = ` [GOTM Round ${roundNumber}]`;
+  return `${truncateWithEllipsis(gameTitle, DISCORD_ACTIVITY_NAME_MAX - suffix.length)}${suffix}`;
+}
+
 function winnerForumTagId(kindLabel: WinnerKindLabel): string {
   return kindLabel === "GOTM" ? GOTM_FORUM_TAG_ID : NR_GOTM_FORUM_TAG_ID;
 }
@@ -56,6 +71,22 @@ function winnerForumTagId(kindLabel: WinnerKindLabel): string {
 export async function ensureWinnerThread(
   params: IWinnerThreadParams,
 ): Promise<IWinnerThreadResult> {
+  let result: IWinnerThreadResult;
+  try {
+    result = await findOrCreateWinnerThread(params);
+  } catch (error) {
+    await reportWinnerStepFailure(params, "set up the winner thread", error);
+    throw error;
+  }
+  if (params.kindLabel === "GOTM") {
+    await spotlightGotmWinner(params, result.threadId);
+  }
+  return result;
+}
+
+async function findOrCreateWinnerThread(
+  params: IWinnerThreadParams,
+): Promise<IWinnerThreadResult> {
   const existingIds = await getThreadsByGameId(params.gameId);
   for (const threadId of existingIds) {
     const updated = await updateExistingWinnerThread(params, threadId);
@@ -64,6 +95,87 @@ export async function ensureWinnerThread(
     }
   }
   return createWinnerThread(params);
+}
+
+/**
+ * Pins the GOTM winner's thread and sets the bot's status to it. Each step is
+ * best-effort and safe to repeat, so one failing does not skip the other.
+ */
+async function spotlightGotmWinner(
+  params: IWinnerThreadParams,
+  threadId: string | null,
+): Promise<void> {
+  if (threadId) {
+    try {
+      await pinWinnerThread(params.client, threadId);
+    } catch (error) {
+      await reportWinnerStepFailure(params, "pin the winner thread", error);
+    }
+  }
+  try {
+    await setAutomaticPresence(
+      params.client,
+      buildGotmPresence(params.gameTitle, params.roundNumber),
+    );
+  } catch (error) {
+    await reportWinnerStepFailure(params, "set the bot status", error);
+  }
+}
+
+/**
+ * Logs a failed winner step and tells the admin channel, since these steps run
+ * unattended and a console log alone goes unseen. Never throws.
+ */
+export async function reportWinnerStepFailure(
+  params: IWinnerThreadParams,
+  step: string,
+  error: unknown,
+): Promise<void> {
+  logError(`WinnerThreadService.${step}`, error);
+  const reason = error instanceof Error ? error.message : String(error);
+  const winner = `${params.gameTitle} [${params.kindLabel} Round ${params.roundNumber}]`;
+  const text = [
+    `**The bot could not ${step} for ${winner}.**`,
+    "```",
+    reason,
+    "```",
+    "-# Check that the bot has Manage Threads in the Now Playing forum, then fix it by hand.",
+  ].join("\n");
+  try {
+    const channel = await fetchSendableChannel(params.client, ADMIN_CHANNEL_ID);
+    await channel?.send({
+      components: [buildAccentContainer(text, COLOR_WARNING)],
+      flags: buildComponentsV2Flags(false),
+      allowedMentions: { parse: [] },
+    });
+  } catch (sendError) {
+    logError("WinnerThreadService.reportWinnerStepFailure", sendError);
+  }
+}
+
+/**
+ * Pins a forum thread. A forum holds one pinned post, so the forum's other
+ * pinned thread (the last winner) is unpinned first. Does nothing outside a
+ * forum or when the thread is already pinned.
+ */
+export async function pinWinnerThread(client: Client, threadId: string): Promise<void> {
+  const channel = await client.channels.fetch(threadId).catch(() => null);
+  if (!channel?.isThread() || channel.parent?.type !== ChannelType.GuildForum) {
+    return;
+  }
+  if (channel.flags.has(ChannelFlags.Pinned)) {
+    return;
+  }
+  const { threads } = await channel.parent.threads.fetchActive();
+  for (const other of threads.values()) {
+    if (other.id !== threadId && other.flags.has(ChannelFlags.Pinned)) {
+      await other.unpin();
+    }
+  }
+  if (channel.archived) {
+    await channel.setArchived(false);
+  }
+  await channel.pin();
 }
 
 /**
