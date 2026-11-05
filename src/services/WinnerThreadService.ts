@@ -1,5 +1,6 @@
 import {
   AttachmentBuilder,
+  ChannelFlags,
   ChannelType,
   type Client,
   type ForumChannel,
@@ -14,7 +15,9 @@ import {
 } from "../classes/Thread.js";
 import { GOTM_FORUM_TAG_ID, NR_GOTM_FORUM_TAG_ID } from "../config/tags.js";
 import { NOW_PLAYING_FORUM_ID } from "../config/channels.js";
-import { DISCORD_THREAD_NAME_MAX } from "../config/textLimits.js";
+import { DISCORD_ACTIVITY_NAME_MAX, DISCORD_THREAD_NAME_MAX } from "../config/textLimits.js";
+import { setAutomaticPresence } from "../functions/SetPresence.js";
+import { logError } from "../utilities/LogUtils.js";
 import { truncateWithEllipsis } from "../utilities/ValidationUtils.js";
 
 export type WinnerKindLabel = "GOTM" | "NR-GOTM";
@@ -43,6 +46,12 @@ export function buildWinnerThreadTitle(
   );
 }
 
+/** The bot's status while a game is the GOTM, e.g. "Title [GOTM Round 12]". */
+export function buildGotmPresence(gameTitle: string, roundNumber: number): string {
+  const suffix = ` [GOTM Round ${roundNumber}]`;
+  return `${truncateWithEllipsis(gameTitle, DISCORD_ACTIVITY_NAME_MAX - suffix.length)}${suffix}`;
+}
+
 function winnerForumTagId(kindLabel: WinnerKindLabel): string {
   return kindLabel === "GOTM" ? GOTM_FORUM_TAG_ID : NR_GOTM_FORUM_TAG_ID;
 }
@@ -56,6 +65,16 @@ function winnerForumTagId(kindLabel: WinnerKindLabel): string {
 export async function ensureWinnerThread(
   params: IWinnerThreadParams,
 ): Promise<IWinnerThreadResult> {
+  const result = await findOrCreateWinnerThread(params);
+  if (params.kindLabel === "GOTM") {
+    await spotlightGotmWinner(params, result.threadId);
+  }
+  return result;
+}
+
+async function findOrCreateWinnerThread(
+  params: IWinnerThreadParams,
+): Promise<IWinnerThreadResult> {
   const existingIds = await getThreadsByGameId(params.gameId);
   for (const threadId of existingIds) {
     const updated = await updateExistingWinnerThread(params, threadId);
@@ -64,6 +83,56 @@ export async function ensureWinnerThread(
     }
   }
   return createWinnerThread(params);
+}
+
+/**
+ * Pins the GOTM winner's thread and sets the bot's status to it. Each step is
+ * best-effort and safe to repeat, so one failing does not skip the other.
+ */
+async function spotlightGotmWinner(
+  params: IWinnerThreadParams,
+  threadId: string | null,
+): Promise<void> {
+  if (threadId) {
+    try {
+      await pinWinnerThread(params.client, threadId);
+    } catch (error) {
+      logError("WinnerThreadService.pinWinnerThread", error);
+    }
+  }
+  try {
+    await setAutomaticPresence(
+      params.client,
+      buildGotmPresence(params.gameTitle, params.roundNumber),
+    );
+  } catch (error) {
+    logError("WinnerThreadService.setAutomaticPresence", error);
+  }
+}
+
+/**
+ * Pins a forum thread. A forum holds one pinned post, so the forum's other
+ * pinned thread (the last winner) is unpinned first. Does nothing outside a
+ * forum or when the thread is already pinned.
+ */
+export async function pinWinnerThread(client: Client, threadId: string): Promise<void> {
+  const channel = await client.channels.fetch(threadId).catch(() => null);
+  if (!channel?.isThread() || channel.parent?.type !== ChannelType.GuildForum) {
+    return;
+  }
+  if (channel.flags.has(ChannelFlags.Pinned)) {
+    return;
+  }
+  const { threads } = await channel.parent.threads.fetchActive();
+  for (const other of threads.values()) {
+    if (other.id !== threadId && other.flags.has(ChannelFlags.Pinned)) {
+      await other.unpin();
+    }
+  }
+  if (channel.archived) {
+    await channel.setArchived(false);
+  }
+  await channel.pin();
 }
 
 /**
