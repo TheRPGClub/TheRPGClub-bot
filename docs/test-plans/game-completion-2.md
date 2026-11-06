@@ -132,18 +132,17 @@ Ephemeral: no
 ```
 /game-completion common member_one:@yourself
 ```
-Expected: pick yourself for member_one. A public reply, "Shared Completions", with
-"Chrono Trigger" and "game completions in common." Every one of your completed games is
-shared, since both sides are you.
+Expected: pick yourself for member_one. A public reply, "Pick two different members to
+compare."
 Ephemeral: no
 
 ### Step 16: Compare with every filter set
 ```
-/game-completion common member_one:@yourself member_two:@yourself sort:Title (A-Z)
-year:2024 platform:SNES query:Chrono private:true
+/game-completion common member_one:@RPGClubbot (Preview) sort:Title (A-Z) year:2024
+platform:SNES query:Chrono private:true
 ```
-Expected: pick the platform from autocomplete. A private reply, "Shared Completions",
-"Year: 2024", "Platform:", "Query:", and "Chrono Trigger".
+Expected: pick the platform from autocomplete. A private reply,
+"No shared Game Completions matched those filters."
 Ephemeral: yes
 
 ### Step 17: Compare with a bad year
@@ -164,14 +163,14 @@ Ephemeral: yes
 ```
 /game-completion common member_one:@RPGClubbot (Preview) private:true
 ```
-Expected: a private reply, "No shared completions matched those filters."
+Expected: a private reply, "No shared Game Completions matched those filters."
 Ephemeral: yes
 
 ### Step 20: Compare with yourself from the context menu
 ```
 right-click your own name in the member list, Apps, Compare completions
 ```
-Expected: a private reply, "Shared Completions", with "Chrono Trigger".
+Expected: a private reply, "Pick two different members to compare."
 Ephemeral: yes
 
 ### Step 21: Export your completions
