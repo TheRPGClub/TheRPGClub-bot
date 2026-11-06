@@ -7,7 +7,6 @@ import {
 } from "discord.js";
 import { ContainerBuilder } from "@discordjs/builders";
 import { buildDisabledPrevNextRowWithIds } from "../../functions/PaginationUtils.js";
-import Member, { type ICompletionRecord } from "../../classes/Member.js";
 import { safeDeferUpdate, safeReply } from "../../functions/InteractionUtils.js";
 import { formatPlatformDisplayName } from "../../functions/PlatformDisplay.js";
 import {
@@ -21,6 +20,8 @@ import { renderUsernameWithEmoji } from "../../services/UserEmojiService.js";
 import {
   COMPLETION_PAGE_SIZE,
 } from "../profile.command.js";
+import { apiGetRaw } from "../../services/RpgClubApiClient.js";
+import { formatApiError } from "../../utilities/ApiErrorUtils.js";
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
 import { MAX_CONTAINER_TEXT, MAX_SECTION_TEXT } from "../../config/textLimits.js";
 import { safeIgnore } from "../../utilities/AsyncUtils.js";
@@ -46,22 +47,6 @@ type InteractionLike =
   | CommandInteraction
   | ButtonInteraction
   | ModalSubmitInteraction;
-
-type IUserCompletionSummary = {
-  entries: ICompletionRecord[];
-  latest: ICompletionRecord;
-};
-
-type ICommonCompletionRow = {
-  gameId: number;
-  title: string;
-  left: IUserCompletionSummary;
-  right: IUserCompletionSummary;
-  latestSharedDate: Date | null;
-  years: Set<number>;
-  hasUnknownDate: boolean;
-  platforms: Set<number>;
-};
 
 type ICommonCompletionState = {
   leftId: string;
@@ -181,159 +166,6 @@ function parseCommonNavCustomId(
   };
 }
 
-function completionTimestamp(value: Date | null): number {
-  return value ? value.getTime() : Number.NEGATIVE_INFINITY;
-}
-
-function sortCompletionEntries(a: ICompletionRecord, b: ICompletionRecord): number {
-  const dateDiff = completionTimestamp(b.completedAt) - completionTimestamp(a.completedAt);
-  if (dateDiff !== 0) return dateDiff;
-  return b.completionId - a.completionId;
-}
-
-function buildPerGameMap(completions: ICompletionRecord[]): Map<number, IUserCompletionSummary> {
-  const map = new Map<number, ICompletionRecord[]>();
-  for (const completion of completions) {
-    const list = map.get(completion.gameId);
-    if (list) {
-      list.push(completion);
-    } else {
-      map.set(completion.gameId, [completion]);
-    }
-  }
-
-  const perGame = new Map<number, IUserCompletionSummary>();
-  for (const [gameId, entries] of map.entries()) {
-    const sorted = [...entries].sort(sortCompletionEntries);
-    const latest = sorted[0];
-    if (!latest) continue;
-    perGame.set(gameId, { entries: sorted, latest });
-  }
-
-  return perGame;
-}
-
-function createCommonRows(
-  leftCompletions: ICompletionRecord[],
-  rightCompletions: ICompletionRecord[],
-): ICommonCompletionRow[] {
-  const leftPerGame = buildPerGameMap(leftCompletions);
-  const rightPerGame = buildPerGameMap(rightCompletions);
-  const rows: ICommonCompletionRow[] = [];
-
-  for (const [gameId, left] of leftPerGame.entries()) {
-    const right = rightPerGame.get(gameId);
-    if (!right) continue;
-
-    const years = new Set<number>();
-    const platforms = new Set<number>();
-    let hasUnknownDate = false;
-
-    for (const entry of left.entries) {
-      if (entry.completedAt) {
-        years.add(entry.completedAt.getFullYear());
-      } else {
-        hasUnknownDate = true;
-      }
-      if (entry.platformId != null) {
-        platforms.add(entry.platformId);
-      }
-    }
-
-    for (const entry of right.entries) {
-      if (entry.completedAt) {
-        years.add(entry.completedAt.getFullYear());
-      } else {
-        hasUnknownDate = true;
-      }
-      if (entry.platformId != null) {
-        platforms.add(entry.platformId);
-      }
-    }
-
-    const leftDate = left.latest.completedAt;
-    const rightDate = right.latest.completedAt;
-    let latestSharedDate: Date | null = null;
-    if (leftDate && rightDate) {
-      latestSharedDate = leftDate.getTime() >= rightDate.getTime() ? leftDate : rightDate;
-    } else if (leftDate) {
-      latestSharedDate = leftDate;
-    } else if (rightDate) {
-      latestSharedDate = rightDate;
-    }
-
-    rows.push({
-      gameId,
-      title: left.latest.title,
-      left,
-      right,
-      latestSharedDate,
-      years,
-      hasUnknownDate,
-      platforms,
-    });
-  }
-
-  return rows;
-}
-
-function applyFilters(
-  rows: ICommonCompletionRow[],
-  filters: Pick<ICommonCompletionState, "query" | "year" | "platformId">,
-): ICommonCompletionRow[] {
-  const titleFilter = filters.query?.trim().toLowerCase();
-  return rows.filter((row) => {
-    if (titleFilter && !row.title.toLowerCase().includes(titleFilter)) {
-      return false;
-    }
-    if (filters.year === "unknown" && !row.hasUnknownDate) {
-      return false;
-    }
-    if (typeof filters.year === "number" && !row.years.has(filters.year)) {
-      return false;
-    }
-    if (filters.platformId != null && !row.platforms.has(filters.platformId)) {
-      return false;
-    }
-    return true;
-  });
-}
-
-function sortRows(
-  rows: ICommonCompletionRow[], 
-  sort: CommonCompletionSort,
-): ICommonCompletionRow[] {
-  const sorted = [...rows];
-  sorted.sort((a, b) => {
-    if (sort === "title_asc") {
-      return a.title.localeCompare(b.title, "en", { sensitivity: "base" });
-    }
-    if (sort === "title_desc") {
-      return b.title.localeCompare(a.title, "en", { sensitivity: "base" });
-    }
-
-    const aTime = a.latestSharedDate ? a.latestSharedDate.getTime() : Number.NEGATIVE_INFINITY;
-    const bTime = b.latestSharedDate ? b.latestSharedDate.getTime() : Number.NEGATIVE_INFINITY;
-
-    if (sort === "date_asc") {
-      if (aTime === bTime) {
-        return a.title.localeCompare(b.title, "en", { sensitivity: "base" });
-      }
-      if (aTime === Number.NEGATIVE_INFINITY) return 1;
-      if (bTime === Number.NEGATIVE_INFINITY) return -1;
-      return aTime - bTime;
-    }
-
-    if (aTime === bTime) {
-      return a.title.localeCompare(b.title, "en", { sensitivity: "base" });
-    }
-    if (aTime === Number.NEGATIVE_INFINITY) return 1;
-    if (bTime === Number.NEGATIVE_INFINITY) return -1;
-    return bTime - aTime;
-  });
-  return sorted;
-}
-
 function buildV2Flags(ephemeral: boolean): number {
   return buildComponentsV2Flags(ephemeral);
 }
@@ -370,43 +202,106 @@ function displayUserName(user: User): string {
   return user.displayName ?? user.username ?? user.id;
 }
 
+type CommonCompletionEntry = {
+  game: { title: string };
+};
+
+type CommonCompletionResponse = {
+  data: CommonCompletionEntry[];
+  meta: { page: number; pages: number; count: number; per: number };
+};
+
+type CommonCompletionPage = {
+  rows: CommonCompletionEntry[];
+  page: number;
+  pages: number;
+  total: number;
+};
+
+function buildCommonCompletionPath(state: ICommonCompletionState, page: number): string {
+  const params = new URLSearchParams({
+    other_user_id: state.rightId,
+    sort: state.sort,
+    page: String(page + 1),
+    per: String(COMPLETION_PAGE_SIZE),
+  });
+  if (state.year !== null) params.set("year", String(state.year));
+  if (state.platformId != null) params.set("platform_id", String(state.platformId));
+  const query = state.query?.trim();
+  if (query) params.set("q", query);
+  return `/api/v1/users/${state.leftId}/completions/common?${params.toString()}`;
+}
+
+// The API answers 404 for an unknown member and 422 for a bad filter or the same member
+// twice. Every failure is shown with the full request and response.
+async function fetchCommonCompletionPage(
+  state: ICommonCompletionState,
+  page: number,
+): Promise<CommonCompletionPage | string> {
+  const path = buildCommonCompletionPath(state, page);
+  const result = await apiGetRaw<CommonCompletionResponse>(path);
+  const body = result.rawData as CommonCompletionResponse | null;
+  if (result.errorMessage || !body?.meta || !Array.isArray(body.data)) {
+    const detail = formatApiError("GET", result.url, null, result.status, result.rawData);
+    return `Could not load shared Game Completions.\n${detail}`;
+  }
+  return {
+    rows: body.data,
+    page: Math.max(body.meta.page - 1, 0),
+    pages: Math.max(body.meta.pages, 1),
+    total: body.meta.count,
+  };
+}
+
 export async function renderCommonCompletionPage(
   interaction: InteractionLike,
   state: ICommonCompletionState,
   page: number,
   ephemeral: boolean,
 ): Promise<void> {
-  const [leftUser, rightUser, leftCompletions, rightCompletions, allPlatforms] = await Promise.all([
+  if (state.leftId === state.rightId) {
+    await safeReply(interaction, {
+      components: [buildTextContainer("Pick two different members to compare.")],
+      flags: buildV2Flags(ephemeral),
+    });
+    return;
+  }
+
+  const [leftUser, rightUser, allPlatforms] = await Promise.all([
     interaction.client.users.fetch(state.leftId).catch(() => interaction.user),
     interaction.client.users.fetch(state.rightId).catch(() => interaction.user),
-    Member.getAllCompletions(state.leftId),
-    Member.getAllCompletions(state.rightId),
-    GamePlatformRegionService.getAllPlatforms(),
+    state.platformId != null ? GamePlatformRegionService.getAllPlatforms() : [],
   ]);
 
   const platformMap = new Map(
     allPlatforms.map((platform) => [platform.id, platform.abbreviation ?? platform.name]),
   );
 
-  const commonRows = createCommonRows(leftCompletions, rightCompletions);
-  const filtered = applyFilters(commonRows, state);
-  const sorted = sortRows(filtered, "title_asc");
+  let fetched = await fetchCommonCompletionPage(state, page);
+  if (typeof fetched !== "string" && fetched.rows.length === 0 && fetched.total > 0) {
+    fetched = await fetchCommonCompletionPage(state, fetched.pages - 1);
+  }
+  if (typeof fetched === "string") {
+    await safeReply(interaction, {
+      components: [buildTextContainer(safeV2TextContent(fetched, MAX_CONTAINER_TEXT))],
+      flags: buildV2Flags(ephemeral),
+    });
+    return;
+  }
 
-  if (!sorted.length) {
+  if (!fetched.rows.length) {
     await safeReply(interaction, {
       components: [
-        buildTextContainer("No shared completions matched those filters."),
+        buildTextContainer("No shared Game Completions matched those filters."),
       ],
       flags: buildV2Flags(ephemeral),
     });
     return;
   }
 
-  const total = sorted.length;
-  const totalPages = Math.max(1, Math.ceil(total / COMPLETION_PAGE_SIZE));
-  const safePage = Math.min(Math.max(page, 0), totalPages - 1);
+  const { total, pages: totalPages, page: safePage } = fetched;
   const offset = safePage * COMPLETION_PAGE_SIZE;
-  const pageRows = sorted.slice(offset, offset + COMPLETION_PAGE_SIZE);
+  const pageRows = fetched.rows;
 
   const leftLabel = displayUserName(leftUser);
   const rightLabel = displayUserName(rightUser);
@@ -417,11 +312,14 @@ export async function renderCommonCompletionPage(
   const rightDisplay = renderUsernameWithEmoji(state.rightId, rightLabel);
   containers.push(
     buildTextContainer(
-        safeV2TextContent(`## Shared Completions\n### ${leftDisplay} & ${rightDisplay}`, MAX_CONTAINER_TEXT),
+      safeV2TextContent(
+        `## Shared Game Completions\n### ${leftDisplay} & ${rightDisplay}`,
+        MAX_CONTAINER_TEXT,
       ),
+    ),
   );
 
-  const lines = pageRows.map((row, index) => `${offset + index + 1}. **${row.title}**`);
+  const lines = pageRows.map((row, index) => `${offset + index + 1}. **${row.game.title}**`);
   pushChunked(containers, lines);
 
   const footerLines: string[] = [];
@@ -436,9 +334,11 @@ export async function renderCommonCompletionPage(
     footerLines.push(`-# Query: "${state.query.trim()}"`);
   }
   if (totalPages > 1) {
-    footerLines.push(`-# ${total} game completions in common. Page ${safePage + 1} of ${totalPages}.`);
+    footerLines.push(
+      `-# ${total} Game Completions in common. Page ${safePage + 1} of ${totalPages}.`,
+    );
   } else {
-    footerLines.push(`-# ${total} game completions in common.`);
+    footerLines.push(`-# ${total} Game Completions in common.`);
   }
   containers.push(
     buildTextContainer(safeV2TextContent(footerLines.join("\n"), MAX_SECTION_TEXT)),
