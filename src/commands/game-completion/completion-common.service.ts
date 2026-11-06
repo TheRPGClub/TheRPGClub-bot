@@ -202,14 +202,8 @@ function displayUserName(user: User): string {
   return user.displayName ?? user.username ?? user.id;
 }
 
-type CommonCompletionSide = { latest: unknown; count: number };
-
 type CommonCompletionEntry = {
-  gamedb_game_id: number;
-  latest_shared_date: string | null;
-  game: { game_id: number; title: string };
-  left: CommonCompletionSide;
-  right: CommonCompletionSide;
+  game: { title: string };
 };
 
 type CommonCompletionResponse = {
@@ -318,8 +312,11 @@ export async function renderCommonCompletionPage(
   const rightDisplay = renderUsernameWithEmoji(state.rightId, rightLabel);
   containers.push(
     buildTextContainer(
-        safeV2TextContent(`## Shared Game Completions\n### ${leftDisplay} & ${rightDisplay}`, MAX_CONTAINER_TEXT),
+      safeV2TextContent(
+        `## Shared Game Completions\n### ${leftDisplay} & ${rightDisplay}`,
+        MAX_CONTAINER_TEXT,
       ),
+    ),
   );
 
   const lines = pageRows.map((row, index) => `${offset + index + 1}. **${row.game.title}**`);
@@ -337,7 +334,9 @@ export async function renderCommonCompletionPage(
     footerLines.push(`-# Query: "${state.query.trim()}"`);
   }
   if (totalPages > 1) {
-    footerLines.push(`-# ${total} Game Completions in common. Page ${safePage + 1} of ${totalPages}.`);
+    footerLines.push(
+      `-# ${total} Game Completions in common. Page ${safePage + 1} of ${totalPages}.`,
+    );
   } else {
     footerLines.push(`-# ${total} Game Completions in common.`);
   }
