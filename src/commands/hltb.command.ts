@@ -21,7 +21,9 @@ import {
 import {
   formatGameTitleWithYear,
   getReleaseYear,
+  moveArticleToFront,
   parseTitleWithYear,
+  stripArticle,
 } from "../functions/GameTitleAutocompleteUtils.js";
 import { truncateLabel } from "../config/textLimits.js";
 import GameSearchService from "../classes/GameSearchService.js";
@@ -143,9 +145,9 @@ async function resolveHltbResult(title: string): Promise<HltbSearchResult | null
   if (!searchTerm) return null;
 
   const matches = await GameSearchService.searchGames(searchTerm);
-  const normalizedTitle = searchTerm.toLowerCase();
+  const normalizedTitle = stripArticle(searchTerm).toLowerCase();
   const exactTitleMatches = matches.filter(
-    (game) => game.title.toLowerCase() === normalizedTitle,
+    (game) => stripArticle(game.title).toLowerCase() === normalizedTitle,
   );
   let candidate: (typeof matches)[number] | null = null;
   if (parsedTitle.hasYearSuffix && exactTitleMatches.length > 0) {
@@ -181,7 +183,7 @@ async function resolveHltbResult(title: string): Promise<HltbSearchResult | null
     }
   }
 
-  const scraped = await searchHltb(searchTerm);
+  const scraped = await searchHltb(moveArticleToFront(searchTerm));
   if (!scraped) return null;
 
   if (candidate && candidate.initialReleaseDate) {
