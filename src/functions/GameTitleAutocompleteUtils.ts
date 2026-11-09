@@ -82,6 +82,29 @@ export function parseTitleWithYear(
   return { title: input, year: null, hasYearSuffix: false };
 }
 
+const LEADING_ARTICLE = /^(the|a|an)\s+(.*\S)$/i;
+const TRAILING_ARTICLE = /^(.*\S),\s*(the|a|an)$/i;
+
+/**
+ * GameDB stores "The Sims" as "Sims, The" (API docs/adr/0004). Moves that
+ * trailing article back to the front for services that expect the title as
+ * people write it, e.g. the HLTB search.
+ */
+export function moveArticleToFront(title: string): string {
+  const value = title.trim();
+  const match = value.match(TRAILING_ARTICLE);
+  return match ? `${match[2]} ${match[1]}` : value;
+}
+
+/** The title without a leading or trailing article, so "The Sims" and "Sims, The" compare equal. */
+export function stripArticle(title: string): string {
+  const value = title.trim();
+  const leading = value.match(LEADING_ARTICLE);
+  if (leading) return leading[2];
+  const trailing = value.match(TRAILING_ARTICLE);
+  return trailing ? trailing[1] : value;
+}
+
 /**
  * Collapses a title to a punctuation/accent-insensitive key so titles that
  * differ only by colon vs. hyphen, curly quotes, or spacing still compare
