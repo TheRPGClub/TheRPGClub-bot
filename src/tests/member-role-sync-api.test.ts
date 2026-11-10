@@ -109,3 +109,21 @@ test("a departure for a user the API doesn't know sends only the empty role PUT"
     { method: "PUT", url: "/api/v1/users/42/roles", body: { data: { role_ids: [] } } },
   ]);
 });
+
+test("a role report sends the dev role, so the API knows a Superadmin", async () => {
+  requests.length = 0;
+  statusFor = () => 200;
+  // The production dev role ID, literal on purpose: the API maps exactly this ID.
+  const DEV = "1500977607473103039";
+
+  await reportMemberRoles(fakeMember([GUILD_ID, MEMBERS, DEV]));
+  await Member.upsertGuildMember(fakeMember([GUILD_ID, DEV]));
+
+  assert.deepEqual(requests[0], {
+    method: "PUT",
+    url: "/api/v1/users/42/roles",
+    body: { data: { role_ids: [DEV, MEMBERS] } },
+  });
+  const upsertBody = requests[1]?.body as { data: { role_ids: string[] } } | undefined;
+  assert.deepEqual(upsertBody?.data.role_ids, [DEV]);
+});
