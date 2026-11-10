@@ -80,6 +80,12 @@ export const FEATURE_COMPONENT_PREFIXES: ReadonlyArray<readonly [string, string]
 ];
 
 /**
+ * The News Hub Feature (spec api#355). It has no posts: the bot records News Items while
+ * it is Preview or Live and does nothing while it is Off.
+ */
+export const NEWS_HUB_FEATURE_KEY = "news_hub";
+
+/**
  * The Feature each kind of automated public post belongs to (the registry's `posts`
  * coverage). Its flag decides where the post goes: the normal channel when Live, the
  * bot-dev channel in Preview, nowhere when Off.
