@@ -10,8 +10,8 @@ import { userMention } from "discord.js";
 import { DISCORD_AUTOCOMPLETE_CHOICES_MAX } from "../config/textLimits.js";
 import type { FeatureState } from "../functions/FeatureGate.js";
 import { buildApiErrorMessage } from "../utilities/ApiErrorUtils.js";
-import { clearFeatureFlagCache } from "./FeatureAccessService.js";
-import { apiGet, apiPatchOrThrow } from "./RpgClubApiClient.js";
+import { refreshFeatureFlagCache } from "./FeatureAccessService.js";
+import { apiGetOrThrow, apiPatchOrThrow } from "./RpgClubApiClient.js";
 
 export const FEATURE_STATES: readonly FeatureState[] = ["off", "preview", "live"];
 
@@ -142,11 +142,13 @@ const FEATURES_PATH = "/api/v1/features";
 
 export const FEATURE_FLAG_API: IFeatureFlagApi = {
   async listFeatureFlags(actingUserId) {
-    const payload = await apiGet<{ data: FeatureFlagEntryPayload[] }>(FEATURES_PATH, {
-      params: { acting_user_id: actingUserId },
-    });
-    // The list answers 200 for staff and 403 otherwise, so a 404 means the API predates it.
-    if (!payload) throw new Error(`GET ${FEATURES_PATH} returned 404`);
+    // The list answers 200 for staff and 403 otherwise; a 404 (an API that predates it) is
+    // thrown as is, so the error reply shows the full request and response. The query is
+    // in the path because the error reply shows the request's url, not its params.
+    const query = new URLSearchParams({ acting_user_id: actingUserId });
+    const payload = await apiGetOrThrow<{ data: FeatureFlagEntryPayload[] }>(
+      `${FEATURES_PATH}?${query.toString()}`,
+    );
     return payload.data.map(toFeatureFlagEntry);
   },
   async setFeatureFlag(key, update) {
@@ -184,7 +186,7 @@ function featureLabel(feature: { key: string; name: string }): string {
 export interface IFeatureFlagDeps {
   api?: IFeatureFlagApi;
   /** Re-reads the bot's club-wide Feature Flags, so the change shows in the bot at once. */
-  clearFlagCache?: () => void;
+  refreshFlagCache?: () => void;
 }
 
 /**
@@ -198,7 +200,7 @@ export async function setFeatureFlagReply(
   deps: IFeatureFlagDeps = {},
 ): Promise<string> {
   const api = deps.api ?? FEATURE_FLAG_API;
-  const clearFlagCache = deps.clearFlagCache ?? clearFeatureFlagCache;
+  const refreshFlagCache = deps.refreshFlagCache ?? refreshFeatureFlagCache;
   let result: Awaited<ReturnType<IFeatureFlagApi["setFeatureFlag"]>>;
   try {
     result = await api.setFeatureFlag(input.key, {
@@ -214,7 +216,7 @@ export async function setFeatureFlagReply(
     }
     throw err;
   }
-  clearFlagCache();
+  refreshFlagCache();
 
   const { entry, changed } = result;
   const stateLabel = FEATURE_STATE_LABELS[entry.state];

@@ -109,7 +109,7 @@ test("routeVotingPost: a rehearsal or another channel goes where it was asked", 
   assert.deepEqual(routeVotingPost("preview", elsewhere), elsewhere);
 });
 
-test("resolveVotingPostTarget: reads the flag once, and not at all when not routed",
+test("resolveVotingPostTarget: reads the flag once and routes as routeVotingPost does",
   async (t) => {
     t.mock.method(console, "log", () => undefined);
     const preview = fakeSource("voting_gotm", "preview");
@@ -122,7 +122,8 @@ test("resolveVotingPostTarget: reads the flag once, and not at all when not rout
     assert.equal(await resolveVotingPostTarget(TO_ANNOUNCEMENTS, off), null);
     const elsewhere = { channelId: GAMEDB_UPDATES_CHANNEL_ID, rehearsal: false };
     assert.deepEqual(await resolveVotingPostTarget(elsewhere, off), elsewhere);
-    assert.equal(off.reads, 1);
+    const rehearsal = { ...TO_ANNOUNCEMENTS, rehearsal: true };
+    assert.deepEqual(await resolveVotingPostTarget(rehearsal, off), rehearsal);
   });
 
 type Ack = { id: number; status: "done" | "failed"; text?: string };
@@ -176,24 +177,6 @@ function countingHandlers(): { handlers: BotJobHandlers; runs: number[] } {
     },
   };
 }
-
-test("bot jobs: an Off Feature's public-post job is suppressed and acked done", async () => {
-  const api = fakeJobApi();
-  const { handlers, runs } = countingHandlers();
-  const surface = stateSurface({ giveaways: "off" });
-  await processBotJobs(
-    [job(1, { n: 1, feature_key: "giveaways" })],
-    handlers,
-    surface,
-    api,
-    createBotJobDeliveryState(),
-  );
-  assert.deepEqual(runs, []);
-  assert.deepEqual(surface.asked, ["giveaways"]);
-  assert.deepEqual(api.acks, [
-    { id: 1, status: "done", text: "Not posted: the giveaways Feature is Off." },
-  ]);
-});
 
 test("bot jobs: a Preview Feature's job runs and its result says it went to bot-dev",
   async () => {

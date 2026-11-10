@@ -94,6 +94,24 @@ export async function apiGet<T>(
   }
 }
 
+/**
+ * GET a resource (retrying transient failures as apiGet does) and throw the `AxiosError`
+ * for every non-2xx response, 404 included, so callers can report the full request and
+ * response.
+ */
+export async function apiGetOrThrow<T>(
+  path: string,
+  config?: AxiosRequestConfig,
+): Promise<T> {
+  const response = await withRetry(() => getClient().get<T>(path, config), {
+    attempts: GET_RETRY_ATTEMPTS,
+    baseDelayMs: GET_RETRY_BASE_DELAY_MS,
+    isRetryable: isTransientApiError,
+    context: `RpgClubApiClient.apiGetOrThrow ${path}`,
+  });
+  return response.data;
+}
+
 export type ApiGetRawMeta = {
   rawData: unknown;
   status: number;

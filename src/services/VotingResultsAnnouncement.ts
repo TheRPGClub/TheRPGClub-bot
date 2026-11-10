@@ -37,9 +37,7 @@ import {
   COLOR_WARNING,
 } from "../config/colors.js";
 import { ANNOUNCEMENT_CHANNEL_ID } from "../config/channels.js";
-import { POST_FEATURE_KEYS } from "../config/featureGate.js";
 import type { IVotingPostTarget } from "../functions/FeatureGate.js";
-import { FeaturePostSuppressedError, resolveVotingPostTarget } from "./FeaturePostRouting.js";
 import { fetchGameCoverBuffer } from "./GameImageService.js";
 import { fetchSendableChannel, type SendableChannel } from "../functions/ChannelUtils.js";
 import { logError } from "../utilities/LogUtils.js";
@@ -71,11 +69,6 @@ export interface IAnnounceResultsOptions {
   source?: IVotingDataSource;
   /** Called after each message is sent, so a caller knows a retry would post it again. */
   onPosted?: () => void;
-  /**
-   * The caller already routed the channel and rehearsal by the Voting & GOTM flag
-   * (resolveVotingPostTarget), so they are used as given.
-   */
-  featureRouted?: boolean;
 }
 
 /**
@@ -178,33 +171,13 @@ async function postWinnerAnnouncements(
 }
 
 /**
- * Where an announcement goes. Unless the caller already routed it (featureRouted), one
- * bound for announcements follows the Voting & GOTM Feature's flag
- * (resolveVotingPostTarget): in Preview it goes to the bot-dev channel as a rehearsal
- * (banner, no winner thread created or renamed), and when Off nothing is posted
- * (FeaturePostSuppressedError).
+ * Announce options for a target the caller routed by the Voting & GOTM flag
+ * (resolveVotingPostTarget). The announcement functions post where they are told.
  */
-async function routeAnnouncement(
-  options: IAnnounceResultsOptions,
-): Promise<IAnnounceResultsOptions> {
-  if (options.featureRouted) return options;
-  const target = await resolveVotingPostTarget({
-    channelId: options.channelIdOverride ?? ANNOUNCEMENT_CHANNEL_ID,
-    rehearsal: Boolean(options.rehearsal),
-  });
-  if (!target) throw new FeaturePostSuppressedError(POST_FEATURE_KEYS.voting);
-  return { ...options, ...routedAnnounceOptions(target) };
-}
-
-/** Announce options for a target the caller already routed by the Voting & GOTM flag. */
 export function routedAnnounceOptions(
   target: IVotingPostTarget,
-): Pick<IAnnounceResultsOptions, "channelIdOverride" | "rehearsal" | "featureRouted"> {
-  return {
-    channelIdOverride: target.channelId,
-    rehearsal: target.rehearsal,
-    featureRouted: true,
-  };
+): Pick<IAnnounceResultsOptions, "channelIdOverride" | "rehearsal"> {
+  return { channelIdOverride: target.channelId, rehearsal: target.rehearsal };
 }
 
 /**
@@ -217,12 +190,11 @@ async function postResults(
   roundNumber: number,
   tallyContainers: ContainerBuilder[],
   announcements: IWinnerAnnouncement[],
-  announceOptions: IAnnounceResultsOptions,
+  options: IAnnounceResultsOptions,
 ): Promise<void> {
   if (!tallyContainers.length) {
     throw new NothingToAnnounceError(roundNumber);
   }
-  const options = await routeAnnouncement(announceOptions);
   const channelId = options.channelIdOverride ?? ANNOUNCEMENT_CHANNEL_ID;
   const rehearsal = Boolean(options.rehearsal);
   const sendable = await fetchSendableChannel(client, channelId);
@@ -247,7 +219,7 @@ async function postResults(
  * Posts the round's results to the announcements channel: one message with
  * the full tallies, then one winner announcement per category (with the
  * winning game's cover when available). Throws when nothing can be posted so
- * callers can surface the failure. Follows the Voting & GOTM flag (routeAnnouncement).
+ * callers can surface the failure. Callers route it by the Voting & GOTM flag first.
  */
 export async function announceVotingResults(
   client: Client,
@@ -377,15 +349,14 @@ export interface ITieBreakPick {
  * Announces an admin's tie-break pick in the announcements channel, the way the
  * results name a winner: the cover and winner thread for a sole winner, joint winners
  * named together. A rehearsal posts the test banner first and creates no thread.
- * Returns links to the posts. Follows the Voting & GOTM flag (routeAnnouncement).
+ * Returns links to the posts. Callers route it by the Voting & GOTM flag first.
  */
 export async function announceTieBreak(
   client: Client,
   round: IVotingRound,
   pick: ITieBreakPick,
-  announceOptions: IAnnounceResultsOptions = {},
+  options: IAnnounceResultsOptions = {},
 ): Promise<string[]> {
-  const options = await routeAnnouncement(announceOptions);
   const channelId = options.channelIdOverride ?? ANNOUNCEMENT_CHANNEL_ID;
   const rehearsal = Boolean(options.rehearsal);
   const sendable = await fetchSendableChannel(client, channelId);

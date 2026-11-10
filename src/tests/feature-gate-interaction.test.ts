@@ -1,9 +1,16 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { MessageFlags, type Interaction } from "discord.js";
+import { MessageFlags, MessageFlagsBitField, type Interaction } from "discord.js";
 
+import { BOT_DEV_CHANNEL_ID } from "../config/channels.js";
 import { buildTextReply } from "../functions/ComponentsV2Utils.js";
-import { enforceFeatureGate, safeReply } from "../functions/InteractionUtils.js";
+import {
+  enforceFeatureGate,
+  safeDeferUpdate,
+  safeEditReply,
+  safeReply,
+  safeUpdate,
+} from "../functions/InteractionUtils.js";
 import type {
   FeatureState,
   IFeatureFlag,
@@ -18,7 +25,10 @@ function source(state: FeatureState, staff: boolean): IFeatureGateSource & {
     calls,
     async flags(): Promise<IFeatureFlag[]> {
       calls.push("flags");
-      return [{ key: "journals", name: "Journals", state }];
+      return [
+        { key: "journals", name: "Journals", state },
+        { key: "voting_gotm", name: "Voting & GOTM", state },
+      ];
     },
     async isStaff(userId: string): Promise<boolean> {
       calls.push(`staff:${userId}`);
@@ -93,3 +103,116 @@ test("enforceFeatureGate: unmapped commands and autocomplete never look anything
   assert.equal(await enforceFeatureGate(autocomplete as unknown as Interaction, lookups), false);
   assert.deepEqual(lookups.calls, []);
 });
+
+type FakeComponent = Interaction & {
+  sent: Array<{ via: string; payload: unknown }>;
+  replied: boolean;
+  deferred: boolean;
+};
+
+/**
+ * A button click on a message. `owner` is the user whose command the message answers
+ * (none for a message the bot posted on its own, such as a voting panel).
+ */
+function buttonClick(options: {
+  customId: string;
+  channelId?: string;
+  owner?: string;
+  ephemeral?: boolean;
+  roles?: string[];
+}): FakeComponent {
+  const sent: Array<{ via: string; payload: unknown }> = [];
+  const record = (via: string) => async (payload: unknown) => {
+    sent.push({ via, payload });
+    if (via === "reply" || via === "update") interaction.replied = true;
+  };
+  const interaction = {
+    sent,
+    customId: options.customId,
+    channelId: options.channelId ?? "1",
+    user: { id: "42" },
+    member: { roles: options.roles ?? [] },
+    guild: { ownerId: "999" },
+    deferred: false,
+    replied: false,
+    ephemeral: null,
+    message: {
+      interactionMetadata: options.owner ? { user: { id: options.owner } } : null,
+      flags: new MessageFlagsBitField(options.ephemeral ? MessageFlags.Ephemeral : 0),
+    },
+    isAutocomplete: () => false,
+    isChatInputCommand: () => false,
+    isContextMenuCommand: () => false,
+    isMessageComponent: () => true,
+    isModalSubmit: () => false,
+    isRepliable: () => true,
+    reply: record("reply"),
+    followUp: record("followUp"),
+    update: record("update"),
+    editReply: record("editReply"),
+    deferUpdate: async () => {
+      interaction.deferred = true;
+    },
+  } as unknown as FakeComponent;
+  return interaction;
+}
+
+test("enforceFeatureGate: an Admin without the dev role can use a Preview post in bot-dev",
+  async () => {
+    const click = buttonClick({ customId: "vote-cast:1", channelId: BOT_DEV_CHANNEL_ID });
+
+    assert.equal(await enforceFeatureGate(click, source("preview", true)), false);
+    await safeUpdate(click as never, buildTextReply("Vote counted.", false));
+
+    assert.deepEqual(click.sent.map((entry) => entry.via), ["update"]);
+    assert.doesNotMatch(sentJson(click.sent[0].payload), /Only the command owner/);
+  });
+
+test("enforceFeatureGate: bot-dev still guards another member's command reply", async () => {
+  const click = buttonClick({
+    customId: "vote-cast:1",
+    channelId: BOT_DEV_CHANNEL_ID,
+    owner: "7",
+  });
+
+  assert.equal(await enforceFeatureGate(click, source("preview", true)), false);
+  await safeUpdate(click as never, buildTextReply("Vote counted.", false));
+
+  assert.match(sentJson(click.sent[0].payload), /Only the command owner/);
+});
+
+test("Preview note: an update of a shared message never carries it", async () => {
+  const click = buttonClick({ customId: "vote-cast:1" });
+  await enforceFeatureGate(click, source("preview", true));
+
+  await safeUpdate(click as never, buildTextReply("Panel", false));
+
+  assert.equal(click.sent[0].via, "update");
+  assert.doesNotMatch(sentJson(click.sent[0].payload), /Preview - staff only/);
+});
+
+test("Preview note: an edit of a shared message after a deferred update never carries it",
+  async () => {
+    const click = buttonClick({ customId: "vote-cast:1" });
+    await enforceFeatureGate(click, source("preview", true));
+
+    await safeDeferUpdate(click as never);
+    await safeEditReply(click as never, buildTextReply("Panel", false));
+
+    assert.deepEqual(click.sent.map((entry) => entry.via), ["editReply"]);
+    assert.doesNotMatch(sentJson(click.sent[0].payload), /Preview - staff only/);
+  });
+
+test("Preview note: the staff member's own ephemeral message and new replies carry it",
+  async () => {
+    const own = buttonClick({ customId: "game-journal-hmenu-add:1:2", ephemeral: true });
+    await enforceFeatureGate(own, source("preview", true));
+    await safeUpdate(own as never, buildTextReply("Your journal.", true));
+    assert.match(sentJson(own.sent[0].payload), /Preview - staff only/);
+
+    const shared = buttonClick({ customId: "vote-cast:1" });
+    await enforceFeatureGate(shared, source("preview", true));
+    await safeReply(shared as never, buildTextReply("Your vote.", true));
+    assert.equal(shared.sent[0].via, "reply");
+    assert.match(sentJson(shared.sent[0].payload), /Preview - staff only/);
+  });

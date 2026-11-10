@@ -11,7 +11,6 @@ import {
 import { buildAnyErrorMessage } from "../utilities/ApiErrorUtils.js";
 import { isTemporaryJobError } from "./BotJobErrors.js";
 import { featurePostDestination } from "../functions/FeatureGate.js";
-import { featureOffNotice } from "./FeaturePostRouting.js";
 import { createScheduledTask, type IScheduledTask } from "../utilities/IntervalUtils.js";
 import { logError, logInfo } from "../utilities/LogUtils.js";
 import {
@@ -114,9 +113,10 @@ async function ack(label: string, send: () => Promise<void>): Promise<boolean> {
  * acked failed with its error and the batch goes on, unless the error is temporary and
  * attempts remain: then it is left unacked for the lease to retry. A kind with no handler
  * fails without running anything. An ack that does not land is logged, remembered and left to
- * the lease, so the returning job is only acked. A public-post job of an Off Feature (its
- * payload's `feature_key`) is acked done without running; in Preview its posts go to the
- * bot-dev channel (each post site routes itself) and its result text says so.
+ * the lease, so the returning job is only acked. A public-post job (its payload's
+ * `feature_key`) runs with its Feature's state in its context: the handler routes its public
+ * posts by it (none when Off, the bot-dev channel in Preview) and keeps what is not a public
+ * post, such as a DM or a poll nudge. In Preview the result text says where posts went.
  */
 export async function processBotJobs(
   jobs: readonly IBotJob[],
@@ -150,7 +150,8 @@ export async function processBotJobs(
 
 /**
  * Runs one job's handler and returns the ack it is owed, or null to leave it for the lease
- * (a temporary error with attempts left). Routes a public-post job by its Feature first.
+ * (a temporary error with attempts left). Reads a public-post job's Feature state once,
+ * for the handler.
  */
 async function performJob(
   job: IBotJob,
@@ -164,8 +165,7 @@ async function performJob(
     : null;
   const destination = featurePostDestination(feature?.state ?? null);
   if (feature && destination === "suppressed") {
-    logInfo("BotJobService", `Suppressed ${label}: the ${feature.key} Feature is Off.`);
-    return { status: "done", resultText: featureOffNotice(feature.key) };
+    logInfo("BotJobService", `Running ${label} with its posts held: ${feature.key} is Off.`);
   }
   try {
     const handlerText = await handler(job.payload, surface, { feature });

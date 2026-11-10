@@ -23,11 +23,13 @@ function fakeApi(): IBotJobApi & { acks: Ack[] } {
 
 interface IPostingSurface extends IBotJobSurface {
   posts: { channelId: string; content: string; pings: readonly string[] }[];
+  hubLeftPreview: string[];
 }
 
 function fakeSurface(): IPostingSurface {
   const surface: IPostingSurface = {
     posts: [],
+    hubLeftPreview: [],
     requestVotingEventPoll: () => {},
     fetchGameKey: async () => null,
     runGiveawayClaimSideEffects: async () => "",
@@ -56,6 +58,9 @@ function fakeSurface(): IPostingSurface {
     runMemberScan: async () => ({ upserted: 0, failed: 0, departed: 0 }),
     featureState: async () => null,
     featureFlagsChanged: () => undefined,
+    giveawayHubLeftPreview: async (state) => {
+      surface.hubLeftPreview.push(state);
+    },
   };
   return surface;
 }
@@ -118,4 +123,16 @@ test("feature_flag_changed: a payload missing its states fails without posting",
   assert.equal(acks[0]?.status, "failed");
   assert.match(acks[0]?.status === "failed" ? acks[0].error : "", /to_state/);
   assert.deepEqual(surface.posts, []);
+});
+
+test("feature_flag_changed: Giveaways leaving Preview takes its hub out of bot-dev", async () => {
+  const surface = fakeSurface();
+  const giveaways = { ...changedPayload, key: "giveaways", name: "Giveaways" };
+  await run(surface, [
+    job(1, { ...giveaways, from_state: "preview", to_state: "live" }),
+    job(2, { ...giveaways, from_state: "live", to_state: "preview" }),
+    job(3, { ...changedPayload, from_state: "preview", to_state: "off" }),
+    job(4, { ...giveaways, from_state: "preview", to_state: "off" }),
+  ]);
+  assert.deepEqual(surface.hubLeftPreview, ["live", "off"]);
 });

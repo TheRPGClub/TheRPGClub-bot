@@ -2,7 +2,7 @@ import { ChannelType, RESTJSONErrorCodes, userMention, type Client } from "disco
 import { describeRequestError } from "../utilities/ApiErrorUtils.js";
 import { getGameKeyById, type IGameKey } from "../classes/GameKey.js";
 import { requestVotingEventPoll } from "./VotingEventService.js";
-import { refreshGiveawayHubMessage } from "./GiveawayHubService.js";
+import { refreshGiveawayHubMessage, removePreviewGiveawayHub } from "./GiveawayHubService.js";
 import {
   buildClaimedKeyDm,
   runGiveawayClaimSideEffects,
@@ -14,6 +14,7 @@ import {
   ANNOUNCEMENT_CHANNEL_ID,
   BOT_DEV_CHANNEL_ID,
   GAMEDB_UPDATES_CHANNEL_ID,
+  GIVEAWAY_LOG_CHANNEL_ID,
   LIVE_EVENT_FORUM_ID,
 } from "../config/channels.js";
 import { BOT_DEV_PING_USER_ID } from "../config/users.js";
@@ -80,6 +81,7 @@ import {
 } from "./VotingResultsAnnouncement.js";
 import { VOTING_CATEGORY_LABEL } from "../functions/VotingTiePrompt.js";
 import {
+  featurePostDestination,
   routeFeaturePost,
   routeVotingPost,
   type FeatureState,
@@ -87,7 +89,7 @@ import {
 } from "../functions/FeatureGate.js";
 import { POST_FEATURE_KEYS } from "../config/featureGate.js";
 import { featureOffNotice, getFeatureState } from "./FeaturePostRouting.js";
-import { clearFeatureFlagCache } from "./FeatureAccessService.js";
+import { refreshFeatureFlagCache } from "./FeatureAccessService.js";
 import { buildFeatureFlagChangedNotice, isFeatureState } from "./FeatureFlagService.js";
 
 /**
@@ -111,12 +113,22 @@ export interface IBotJobSurface {
   requestVotingEventPoll(): void;
   /** GET /game_keys/:id with the service token (key value included); null on 404. */
   fetchGameKey(keyId: number): Promise<IGameKey | null>;
-  /** The /giveaway claim's log post and donor DM. Never throws; returns the donor's name. */
-  runGiveawayClaimSideEffects(claimerId: string, key: IClaimedGiveawayKey): Promise<string>;
+  /**
+   * The /giveaway claim's log post (to logChannelId; none when null) and donor DM. Never
+   * throws; returns the donor's name.
+   */
+  runGiveawayClaimSideEffects(
+    claimerId: string,
+    key: IClaimedGiveawayKey,
+    logChannelId: string | null,
+  ): Promise<string>;
   /** DMs a user. Throws the discord.js error (closed DMs: code 50007). */
   sendDm(userId: string, content: string): Promise<void>;
-  /** Re-renders the giveaway hub from the API's current keys. Throws when it could not. */
-  refreshGiveawayHub(): Promise<void>;
+  /**
+   * Re-renders the giveaway hub from the API's current keys, where the Giveaways Feature's
+   * `state` routes it. Throws when it could not.
+   */
+  refreshGiveawayHub(state: FeatureState | null): Promise<void>;
   /** GET /suggestions/:id with the service token; null on 404. */
   fetchSuggestion(suggestionId: number): Promise<ISuggestionItem | null>;
   /**
@@ -133,15 +145,27 @@ export interface IBotJobSurface {
   reloadGotmRound(category: VotingRoundCategory, roundNumber: number): Promise<void>;
   /**
    * Posts a nomination change notice with the round's refreshed list to that kind's
-   * nomination channel. Throws when it could not (missing channel, discord.js error).
+   * nomination channel, or where the Voting & GOTM Feature's `state` routes it. Throws when
+   * it could not (missing channel, discord.js error).
    */
-  announceNominationChange(kind: NominationKind, round: number, content: string): Promise<void>;
+  announceNominationChange(
+    kind: NominationKind,
+    round: number,
+    content: string,
+    state: FeatureState | null,
+  ): Promise<void>;
   /** GET /completions/:id; null on 404 or when it belongs to someone other than userId. */
   fetchCompletionForUser(userId: string, completionId: number): Promise<ICompletionRecord | null>;
   /** GET /games/:id; null on 404. */
   fetchGame(gameId: number): Promise<IGame | null>;
-  /** Posts the Whatcha Playing completion announcement. Throws when it could not. */
-  announceCompletion(announcement: ICompletionAnnouncementInput): Promise<void>;
+  /**
+   * Posts the Whatcha Playing completion announcement, where the Game Completions
+   * Feature's `state` routes it. Throws when it could not.
+   */
+  announceCompletion(
+    announcement: ICompletionAnnouncementInput,
+    state: FeatureState | null,
+  ): Promise<void>;
   /** GET /live_events/:id; null on 404. */
   fetchLiveEvent(liveEventId: number): Promise<ILiveEvent | null>;
   /** PATCH /live_events/:id with a step's Discord id and status. Throws when it could not. */
@@ -196,19 +220,25 @@ export interface IBotJobSurface {
   featureState(featureKey: string): Promise<FeatureState | null>;
   /** A Feature Flag changed: re-read the club-wide flags now. */
   featureFlagsChanged(): void;
+  /**
+   * The Giveaways Feature left Preview for `state`: removes the Preview hub from bot-dev
+   * and re-renders the hub where `state` routes it. Never throws (failures are logged).
+   */
+  giveawayHubLeftPreview(state: FeatureState): Promise<void>;
 }
 
 export function createBotJobSurface(client: Client): IBotJobSurface {
   return {
     requestVotingEventPoll,
     fetchGameKey: getGameKeyById,
-    runGiveawayClaimSideEffects: (claimerId, key) =>
-      runGiveawayClaimSideEffects(client, claimerId, key),
+    runGiveawayClaimSideEffects: (claimerId, key, logChannelId) =>
+      runGiveawayClaimSideEffects(client, claimerId, key, logChannelId),
     sendDm: async (userId, content) => {
       const user = await client.users.fetch(userId);
       await user.send({ content });
     },
-    refreshGiveawayHub: () => refreshGiveawayHubMessage(client, 0, { throwOnFailure: true }),
+    refreshGiveawayHub: (state) =>
+      refreshGiveawayHubMessage(client, 0, { throwOnFailure: true, featureState: state }),
     fetchSuggestion: getSuggestionById,
     sendChannelMessage: async (channelId, content, pingUserIds) => {
       const channel = await client.channels.fetch(channelId);
@@ -221,14 +251,15 @@ export function createBotJobSurface(client: Client): IBotJobSurface {
       category === "gotm"
         ? reloadGotmRoundFromDb(roundNumber)
         : reloadNrGotmRoundFromDb(roundNumber),
-    announceNominationChange: async (kind, round, content) => {
+    announceNominationChange: async (kind, round, content, state) => {
       const list = await buildRefreshedNominationList(kind, round);
-      await postNominationChange(kind, client, content, list);
+      await postNominationChange(kind, client, content, list, state);
     },
     fetchCompletionForUser: (userId, completionId) =>
       Member.getCompletionForUser(userId, completionId),
     fetchGame: (gameId) => Game.getGameById(gameId),
-    announceCompletion: (announcement) => postCompletionAnnouncement(client, announcement),
+    announceCompletion: (announcement, state) =>
+      postCompletionAnnouncement(client, announcement, state),
     fetchLiveEvent: getLiveEventById,
     recordLiveEventStep,
     fetchLiveEventImage,
@@ -248,7 +279,6 @@ export function createBotJobSurface(client: Client): IBotJobSurface {
       channelId: target.channelId,
       expectedRoundNumber: roundNumber,
       onPosted,
-      featureRouted: true,
     }),
     announceTieBreak: async (roundNumber, pick, target) => {
       const round = await VotingRounds.getByRound(roundNumber);
@@ -262,7 +292,11 @@ export function createBotJobSurface(client: Client): IBotJobSurface {
     sharedStateRefusal: (actionName) => sharedStateCommandRefusal(actionName),
     runMemberScan: () => runMemberScan(client),
     featureState: (featureKey) => getFeatureState(featureKey),
-    featureFlagsChanged: clearFeatureFlagCache,
+    featureFlagsChanged: refreshFeatureFlagCache,
+    giveawayHubLeftPreview: async (state) => {
+      await removePreviewGiveawayHub(client);
+      await refreshGiveawayHubMessage(client, 0, { featureState: state });
+    },
   };
 }
 
@@ -311,6 +345,11 @@ async function jobFeatureState(
 ): Promise<FeatureState | null> {
   const feature = context?.feature;
   return feature?.key === featureKey ? feature.state : surface.featureState(featureKey);
+}
+
+/** True when a Feature in `state` posts nothing (Off). */
+function isSuppressed(state: FeatureState | null): boolean {
+  return featurePostDestination(state) === "suppressed";
 }
 
 /**
@@ -363,16 +402,22 @@ function requireString(payload: Record<string, unknown>, field: string): string 
 /**
  * Payload: `{ key_id, claimed_by_user_id, donor_user_id, game_title, platform }`. A member
  * claimed a key on the website: the key (fetched from the API, never in the payload) goes
- * to the claimer by DM, and the claim is logged and the donor told, as /giveaway does.
+ * to the claimer by DM, and the claim is logged and the donor told, as /giveaway does. The
+ * claim log follows the Giveaways Feature's flag (bot-dev in Preview), and while it is Off
+ * neither the log nor the donor notice goes out. The claimer's key DM always goes out: a
+ * claim made just before Giveaways went Off must not lose its key.
  */
-export const handleGiveawayClaimNotice: BotJobHandler = async (payload, surface) => {
+export const handleGiveawayClaimNotice: BotJobHandler = async (payload, surface, context) => {
   const keyId = payloadPositiveInt(payload, "key_id");
   const claimerId = requireString(payload, "claimed_by_user_id");
   const key = await surface.fetchGameKey(keyId);
   if (!key) {
     throw new Error(`Game key ${keyId} no longer exists (it was revoked), so no DM was sent.`);
   }
-  const donorName = await surface.runGiveawayClaimSideEffects(claimerId, key);
+  const featureKey = POST_FEATURE_KEYS.giveawayClaimLog;
+  const state = await jobFeatureState(featureKey, surface, context);
+  const logChannelId = routeFeaturePost(state, GIVEAWAY_LOG_CHANNEL_ID);
+  const donorName = await surface.runGiveawayClaimSideEffects(claimerId, key, logChannelId);
   try {
     await surface.sendDm(
       claimerId,
@@ -392,6 +437,9 @@ export const handleGiveawayClaimNotice: BotJobHandler = async (payload, surface)
       cause: err,
     });
   }
+  if (!logChannelId) {
+    return `Sent the key by DM. No claim log or donor notice: the ${featureKey} Feature is Off.`;
+  }
 };
 
 function isClosedDmError(err: unknown): boolean {
@@ -401,11 +449,14 @@ function isClosedDmError(err: unknown): boolean {
 
 /**
  * Payload: `{ reason: "donate" | "claim" | "revoke", key_id }`. A key changed on the
- * website, so the hub re-renders from the API's current list. The key may be gone
- * (revoke), so it is not fetched.
+ * website, so the hub re-renders from the API's current list where the Giveaways Feature's
+ * flag routes it (nothing when Off). The key may be gone (revoke), so it is not fetched.
  */
-export const handleGiveawayHubRefresh: BotJobHandler = async (_payload, surface) => {
-  await surface.refreshGiveawayHub();
+export const handleGiveawayHubRefresh: BotJobHandler = async (_payload, surface, context) => {
+  const featureKey = POST_FEATURE_KEYS.giveawayHub;
+  const state = await jobFeatureState(featureKey, surface, context);
+  if (isSuppressed(state)) return featureOffNotice(featureKey);
+  await surface.refreshGiveawayHub(state);
 };
 
 function optionalString(payload: Record<string, unknown>, field: string): string | null {
@@ -422,11 +473,18 @@ function optionalString(payload: Record<string, unknown>, field: string): string
 /**
  * Payload: `{ suggestion_id, created_by }`. A member submitted a Suggestion on the website
  * (the bot's own /suggestion pings inline instead), so the bot dev is pinged as /suggestion
- * does. The name comes from the Suggestion itself.
+ * does, in the bot-dev channel whether the Suggestions Feature is Live or in Preview, and
+ * not at all when it is Off. The name comes from the Suggestion itself.
  */
-export const handleSuggestionSubmitted: BotJobHandler = async (payload, surface) => {
+export const handleSuggestionSubmitted: BotJobHandler = async (payload, surface, context) => {
   const suggestionId = payloadPositiveInt(payload, "suggestion_id");
   const createdBy = optionalString(payload, "created_by");
+  const featureKey = POST_FEATURE_KEYS.suggestions;
+  const channelId = routeFeaturePost(
+    await jobFeatureState(featureKey, surface, context),
+    BOT_DEV_CHANNEL_ID,
+  );
+  if (!channelId) return featureOffNotice(featureKey);
   const suggestion = await surface.fetchSuggestion(suggestionId);
   if (!suggestion) {
     throw new Error(`Suggestion ${suggestionId} no longer exists, so no ping was sent.`);
@@ -434,7 +492,7 @@ export const handleSuggestionSubmitted: BotJobHandler = async (payload, surface)
   const author = suggestion.createdBy ?? createdBy;
   const authorLabel = suggestion.createdByName ?? (author ? userMention(author) : "Someone");
   await surface.sendChannelMessage(
-    BOT_DEV_CHANNEL_ID,
+    channelId,
     buildSuggestionSubmittedPing(authorLabel),
     author ? [BOT_DEV_PING_USER_ID, author] : [BOT_DEV_PING_USER_ID],
   );
@@ -473,7 +531,6 @@ export const handleSuggestionOutcome: BotJobHandler = async (payload, surface, c
     await jobFeatureState(featureKey, surface, context),
     GAMEDB_UPDATES_CHANNEL_ID,
   );
-  // A tagged job of an Off Feature never gets here (the dispatcher acks it unrun).
   if (!channelId) return featureOffNotice(featureKey);
   await surface.sendChannelMessage(channelId, content, createdBy ? [createdBy] : []);
 };
@@ -502,9 +559,12 @@ export const handleGotmCacheReload: BotJobHandler = async (payload, surface) => 
  * An Admin removed someone's nomination on the website (already deleted), so the change
  * and the refreshed list go to the nomination channel, as /admin's delete does. No DM.
  */
-export const handleNominationDeleted: BotJobHandler = async (payload, surface) => {
+export const handleNominationDeleted: BotJobHandler = async (payload, surface, context) => {
   const kind: NominationKind = payloadCategory(payload) === "gotm" ? "gotm" : "nr-gotm";
   const round = payloadPositiveInt(payload, "round_number");
+  const featureKey = POST_FEATURE_KEYS.voting;
+  const state = await jobFeatureState(featureKey, surface, context);
+  if (isSuppressed(state)) return featureOffNotice(featureKey);
   const content = buildNominationDeletedNotice(
     kind,
     round,
@@ -513,7 +573,7 @@ export const handleNominationDeleted: BotJobHandler = async (payload, surface) =
     optionalString(payload, "game_title"),
     requireString(payload, "reason"),
   );
-  await surface.announceNominationChange(kind, round, content);
+  await surface.announceNominationChange(kind, round, content, state);
 };
 
 /**
@@ -522,11 +582,14 @@ export const handleNominationDeleted: BotJobHandler = async (payload, surface) =
  * member's own), so it is announced in Whatcha Playing as /game-completion add does,
  * naming the actor when it is not the member. actor_user_id is null for a service create.
  */
-export const handleCompletionAnnounce: BotJobHandler = async (payload, surface) => {
+export const handleCompletionAnnounce: BotJobHandler = async (payload, surface, context) => {
   const completionId = payloadPositiveInt(payload, "completion_id");
   const userId = requireString(payload, "user_id");
   const gameId = payloadPositiveInt(payload, "game_id");
   const actorUserId = optionalString(payload, "actor_user_id") ?? userId;
+  const featureKey = POST_FEATURE_KEYS.completions;
+  const state = await jobFeatureState(featureKey, surface, context);
+  if (isSuppressed(state)) return featureOffNotice(featureKey);
   const completion = await surface.fetchCompletionForUser(userId, completionId);
   if (!completion) {
     throw new Error(
@@ -544,7 +607,7 @@ export const handleCompletionAnnounce: BotJobHandler = async (payload, surface) 
     completionType: completion.completionType,
     completedAt: completion.completedAt,
     finalPlaytimeHours: completion.finalPlaytimeHours,
-  });
+  }, state);
 };
 
 /**
@@ -867,21 +930,31 @@ function payloadFeatureState(payload: Record<string, unknown>, field: string): F
  * Payload: `{ key, name, from_state, to_state, changed_by, changed_by_name, reason }`.
  * Staff changed a Feature Flag (website or /flag set), so the admin channel hears who
  * changed what, from and to which state, and why. It carries no `feature_key`: the
- * announcement goes out whatever the Feature's own state. Nobody is pinged.
+ * announcement goes out whatever the Feature's own state. Nobody is pinged. Giveaways
+ * leaving Preview also takes its Preview hub out of the bot-dev channel.
  */
 export const handleFeatureFlagChanged: BotJobHandler = async (payload, surface) => {
   // Re-read the flags first, so the bot follows the change at once, not a TTL later.
   surface.featureFlagsChanged();
+  const key = requireString(payload, "key");
+  const fromState = payloadFeatureState(payload, "from_state");
+  const toState = payloadFeatureState(payload, "to_state");
   const content = buildFeatureFlagChangedNotice({
-    key: requireString(payload, "key"),
+    key,
     name: requireString(payload, "name"),
-    fromState: payloadFeatureState(payload, "from_state"),
-    toState: payloadFeatureState(payload, "to_state"),
+    fromState,
+    toState,
     changedBy: requireString(payload, "changed_by"),
     changedByName: optionalString(payload, "changed_by_name"),
     reason: optionalString(payload, "reason"),
   });
   await surface.sendChannelMessage(ADMIN_CHANNEL_ID, content, []);
+  // The Preview hub in bot-dev goes once Giveaways leaves Preview. The new state is passed
+  // on, since the flag cache may not hold it yet.
+  const leftPreview = fromState === "preview" && toState !== "preview";
+  if (key === POST_FEATURE_KEYS.giveawayHub && leftPreview) {
+    await surface.giveawayHubLeftPreview(toState);
+  }
 };
 
 /** Job kind (BotJob::KINDS in the API) to handler. One line per kind. */

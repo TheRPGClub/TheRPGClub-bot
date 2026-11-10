@@ -1,6 +1,7 @@
 import { PermissionsBitField, type Interaction } from "discord.js";
 
 import { ADMIN_ROLE_ID, DEV_ROLE_ID } from "../../config/roles.js";
+import { memberHasAnyRole } from "../../utilities/MemberRoleUtils.js";
 
 /**
  * `staff` is Feature Flag staff (/flag): the API's Admins and Superadmins, by the Admin or
@@ -14,14 +15,6 @@ type HelpAccessSource = Pick<Interaction, "guild" | "member" | "memberPermission
 
 const STAFF_ROLE_IDS = [ADMIN_ROLE_ID, DEV_ROLE_ID];
 
-function hasAnyRole(member: HelpAccessSource["member"], roleIds: readonly string[]): boolean {
-  const roles = member?.roles;
-  if (!roles) return false;
-  // A cached GuildMember has a role manager; a raw API member has a string[].
-  const held: readonly string[] = Array.isArray(roles) ? roles : [...roles.cache.keys()];
-  return roleIds.some((roleId) => held.includes(roleId));
-}
-
 /**
  * Silent version of the isModerator/isAdmin/isSuperAdmin gates, for deciding what help to
  * list. memberPermissions is resolved for the invoking channel, like permissionsIn, and is
@@ -32,7 +25,7 @@ export function getHelpAccess(interaction: HelpAccessSource): HelpAccess {
   const admin = permissions?.has(PermissionsBitField.Flags.Administrator) ?? false;
   const moderator = admin || (permissions?.has(PermissionsBitField.Flags.ManageMessages) ?? false);
   const owner = Boolean(interaction.guild) && interaction.guild?.ownerId === interaction.user.id;
-  const staff = admin || hasAnyRole(interaction.member, STAFF_ROLE_IDS);
+  const staff = admin || memberHasAnyRole(interaction.member, STAFF_ROLE_IDS);
   return { member: true, moderator, admin, staff, owner };
 }
 

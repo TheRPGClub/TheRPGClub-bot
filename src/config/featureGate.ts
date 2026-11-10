@@ -88,5 +88,6 @@ export const POST_FEATURE_KEYS = {
   voting: "voting_gotm",
   completions: "game_completions",
   giveawayHub: "giveaways",
+  giveawayClaimLog: "giveaways",
   suggestions: "suggestions",
 } as const;

@@ -71,6 +71,7 @@ function fakeSurface(options: {
     runMemberScan: async () => ({ upserted: 0, failed: 0, departed: 0 }),
     featureState: async () => null,
     featureFlagsChanged: () => undefined,
+    giveawayHubLeftPreview: async () => undefined,
     fetchGame: async () => null,
     announceCompletion: async () => {},
     fetchLiveEvent: async () => null,

@@ -70,11 +70,11 @@ function fakeApi(options: {
   return api;
 }
 
-function cacheSpy(): { clear: () => void; clears: number } {
+function cacheSpy(): { refresh: () => void; refreshes: number } {
   const spy = {
-    clears: 0,
-    clear: () => {
-      spy.clears += 1;
+    refreshes: 0,
+    refresh: () => {
+      spy.refreshes += 1;
     },
   };
   return spy;
@@ -89,18 +89,18 @@ const previewChange = {
   changedAt: "2026-11-10T15:00:00Z",
 };
 
-test("setFeatureFlagReply: names the acting user and clears the flag cache", async () => {
+test("setFeatureFlagReply: names the acting user and refreshes the flag cache", async () => {
   const api = fakeApi({ set: { entry: entry({ lastChange: previewChange }), changed: true } });
   const cache = cacheSpy();
   const text = await setFeatureFlagReply(
     { actingUserId: "42", key: "reviews", state: "preview", reason: "Testing" },
-    { api, clearFlagCache: cache.clear },
+    { api, refreshFlagCache: cache.refresh },
   );
   assert.deepEqual(api.sets, [{
     key: "reviews",
     update: { state: "preview", reason: "Testing", actingUserId: "42" },
   }]);
-  assert.equal(cache.clears, 1);
+  assert.equal(cache.refreshes, 1);
   assert.equal(
     text,
     "Reviews (`reviews`) is now **Preview** (was Live). " +
@@ -113,7 +113,7 @@ test("setFeatureFlagReply: the state it already has says so and changes nothing"
   const cache = cacheSpy();
   const text = await setFeatureFlagReply(
     { actingUserId: "42", key: "reviews", state: "preview", reason: null },
-    { api, clearFlagCache: cache.clear },
+    { api, refreshFlagCache: cache.refresh },
   );
   assert.equal(text, "Reviews (`reviews`) is already **Preview**. Nothing changed.");
 });
@@ -133,11 +133,11 @@ test("setFeatureFlagReply: a non-staff user gets the polite refusal with the ful
     const cache = cacheSpy();
     const text = await setFeatureFlagReply(
       { actingUserId: "7", key: "reviews", state: "off", reason: null },
-      { api, clearFlagCache: cache.clear },
+      { api, refreshFlagCache: cache.refresh },
     );
     assertRefusal(text, FEATURE_FLAG_STAFF_ONLY_MESSAGE, 403);
     assert.match(text, /"error": "forbidden"/);
-    assert.equal(cache.clears, 0);
+    assert.equal(cache.refreshes, 0);
   });
 
 test("setFeatureFlagReply: an unknown Feature key is named back with the full exchange",
@@ -146,10 +146,10 @@ test("setFeatureFlagReply: an unknown Feature key is named back with the full ex
     const cache = cacheSpy();
     const text = await setFeatureFlagReply(
       { actingUserId: "42", key: "nope", state: "off", reason: null },
-      { api, clearFlagCache: cache.clear },
+      { api, refreshFlagCache: cache.refresh },
     );
     assertRefusal(text, "There is no Feature `nope`. Pick one from the list.", 404);
-    assert.equal(cache.clears, 0);
+    assert.equal(cache.refreshes, 0);
   });
 
 test("setFeatureFlagReply: other API errors are thrown for the full error reply", async () => {
@@ -159,11 +159,11 @@ test("setFeatureFlagReply: other API errors are thrown for the full error reply"
   await assert.rejects(
     setFeatureFlagReply(
       { actingUserId: "42", key: "reviews", state: "off", reason: "x" },
-      { api, clearFlagCache: cache.clear },
+      { api, refreshFlagCache: cache.refresh },
     ),
     (err: unknown) => err === error,
   );
-  assert.equal(cache.clears, 0);
+  assert.equal(cache.refreshes, 0);
 });
 
 test("listFeatureFlagsReply: every Feature with its state, Core first", async () => {

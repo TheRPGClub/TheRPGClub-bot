@@ -1,4 +1,7 @@
-import { FEATURE_ACCESS_CACHE_TTL_MS } from "../config/cacheDefaults.js";
+import {
+  AUTOCOMPLETE_CACHE_RETRY_DELAY_MS,
+  FEATURE_ACCESS_CACHE_TTL_MS,
+} from "../config/cacheDefaults.js";
 import { createTtlCache, type ITtlCache } from "../functions/TtlCache.js";
 import type {
   FeatureState,
@@ -8,8 +11,7 @@ import type {
   IFeatureFlagSource,
   IFeatureGateSource,
 } from "../functions/FeatureGate.js";
-import { logError } from "../utilities/LogUtils.js";
-import { apiGet } from "./RpgClubApiClient.js";
+import { apiGetOrThrow } from "./RpgClubApiClient.js";
 
 type FeatureAccessEntryPayload = {
   key: string;
@@ -45,11 +47,10 @@ export interface IFeatureAccessApi {
 
 export const FEATURE_ACCESS_API: IFeatureAccessApi = {
   async fetchFeatureAccess(userId: string): Promise<IFeatureAccess> {
+    // The lookup answers 200 for every Discord user; a 404 (an API that predates it) is
+    // thrown as is, so the log shows the full request and response.
     const path = `/api/v1/users/${encodeURIComponent(userId)}/feature_access`;
-    const payload = await apiGet<FeatureAccessPayload>(path);
-    // The lookup answers 200 for every Discord user, so a 404 means the API predates it.
-    if (!payload) throw new Error(`GET ${path} returned 404`);
-    return toFeatureAccess(payload);
+    return toFeatureAccess(await apiGetOrThrow<FeatureAccessPayload>(path));
   },
 };
 
@@ -101,44 +102,57 @@ export function createFeatureAccessCache(
 
 export interface IFeatureFlagCache extends IFeatureFlagSource {
   /**
-   * Forgets the flags and starts reading them again at once, so the next use waits for
-   * the new answer instead of the old one (after `/flag set` or `feature_flag_changed`).
+   * Starts reading the flags again at once (after `/flag set` or `feature_flag_changed`).
+   * Reads keep getting the last flags until the new ones land, and keep them if the read
+   * fails, so a refresh never leaves the gate with nothing to go on.
    */
-  clear(): void;
+  refresh(): void;
 }
 
 /**
  * The club-wide Feature Flags: one stale-while-revalidate TtlCache for the whole bot. Only
- * the first read (or the first after clear()) waits; after that every read is answered at
- * once while a refresh runs in the background past the TTL. The API has no club-wide read
- * for the service token, so the states come from the access lookup for `lookupUserId()`
- * (the bot's own user): a Feature's state does not depend on who asks. Rejects while
- * there is no lookup user (the bot is not logged in yet).
+ * the first read waits; after that every read is answered at once while a refresh runs in
+ * the background past the TTL (or after refresh()). The API has no club-wide read for the
+ * service token, so the states come from the access lookup for `lookupUserId()` (the
+ * bot's own user): a Feature's state does not depend on who asks. Rejects while there is
+ * no lookup user (the bot is not logged in yet). While there are no flags yet, a failed
+ * read is not retried for `retryDelayMs` (reads reject at once instead), so an API outage
+ * does not make every interaction wait on a read of its own.
  */
 export function createFeatureFlagCache(
   lookupUserId: () => string | null,
   api: IFeatureAccessApi = FEATURE_ACCESS_API,
   ttlMs: number = FEATURE_ACCESS_CACHE_TTL_MS,
+  retryDelayMs: number = AUTOCOMPLETE_CACHE_RETRY_DELAY_MS,
 ): IFeatureFlagCache {
+  let loaded = false;
+  let failure: { until: number; err: unknown } | null = null;
   const cache = createTtlCache<readonly IFeatureFlag[]>(
     "featureFlags",
     async () => {
-      const userId = lookupUserId();
-      if (!userId) throw new Error("Feature Flags cannot be read before the bot logs in.");
-      const access = await api.fetchFeatureAccess(userId);
-      return access.features.map(({ key, name, state }) => ({ key, name, state }));
+      try {
+        const userId = lookupUserId();
+        if (!userId) throw new Error("Feature Flags cannot be read before the bot logs in.");
+        const access = await api.fetchFeatureAccess(userId);
+        loaded = true;
+        failure = null;
+        return access.features.map(({ key, name, state }) => ({ key, name, state }));
+      } catch (err) {
+        if (!loaded) failure = { until: Date.now() + retryDelayMs, err };
+        throw err;
+      }
     },
     ttlMs,
+    retryDelayMs,
   );
   return {
-    flags: () => cache.get(),
-    clear(): void {
-      cache.clear();
-      if (lookupUserId()) {
-        cache.get().catch((err: unknown) => {
-          logError("FeatureAccessService: reloading the Feature Flags failed", err);
-        });
-      }
+    flags(): Promise<readonly IFeatureFlag[]> {
+      if (failure && Date.now() < failure.until) return Promise.reject(failure.err);
+      return cache.get();
+    },
+    refresh(): void {
+      failure = null;
+      if (lookupUserId()) void cache.refresh();
     },
   };
 }
@@ -163,10 +177,10 @@ export const featureGateSource: IFeatureGateSource = {
  */
 export function startFeatureFlagCache(userId: string): void {
   botUserId = userId;
-  featureFlagCache.clear();
+  featureFlagCache.refresh();
 }
 
 /** Re-reads the club-wide Feature Flags, e.g. right after a flag changed. */
-export function clearFeatureFlagCache(): void {
-  featureFlagCache.clear();
+export function refreshFeatureFlagCache(): void {
+  featureFlagCache.refresh();
 }
