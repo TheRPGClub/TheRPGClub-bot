@@ -397,6 +397,29 @@ test("catch-up: a message deleted while the bot was down loses its News Item", a
   assert.match(text, /1 removed/);
 });
 
+test("catch-up: keeps a message recorded live after the thread was read", async () => {
+  const releases = thread(RELEASES_THREAD, 10, 8);
+  const api = fakeApi(releases.map((m) => recorded(m, "releases")));
+  const discord = fakeDiscord({ [RELEASES_THREAD]: releases });
+  const late = message(snowflake(30), RELEASES_THREAD);
+  const readThread = discord.fetchMessages;
+  discord.fetchMessages = async (channelId, options) => {
+    const page = await readThread(channelId, options);
+    if (channelId === RELEASES_THREAD && !api.store.has(late.id)) {
+      // Posted and recorded by the live listener between Discord's answer and the feed read.
+      releases.push(late);
+      api.store.set(late.id, recorded(late, "releases"));
+    }
+    return page;
+  };
+
+  const text = await catchUp(api, discord);
+
+  assert.equal(api.store.has(late.id), true);
+  assert.equal(api.writes.includes(`remove ${late.id}`), false);
+  assert.match(text, /0 removed/);
+});
+
 test("catch-up: a message whose link was edited away loses its News Item", async () => {
   const releases = thread(RELEASES_THREAD, 10, 8);
   const api = fakeApi(releases.map((m) => recorded(m, "releases")));
