@@ -31,6 +31,28 @@ const ITEM_COLUMNS = [
   "image_count",
 ] as const satisfies readonly (keyof INewsImportListItem)[];
 
+/** The columns holding what members wrote and linked, with their links' previews. */
+const MEMBER_TEXT_COLUMNS: ReadonlySet<string> = new Set<keyof INewsImportListItem>([
+  "author_name",
+  "comment",
+  "link_url",
+  "link_title",
+  "link_site_name",
+  "link_description",
+]);
+
+/** Starts that make a spreadsheet program read a cell as a formula. */
+const FORMULA_START = /^[=+\-@\t\r]/;
+
+/**
+ * Spreadsheet-safe cells: member text a spreadsheet would read as a formula gets a leading
+ * single quote, so it shows as text. Upload reads only message_id and category, so nothing
+ * needs undoing.
+ */
+function spreadsheetSafe(column: string, value: string): string {
+  return MEMBER_TEXT_COLUMNS.has(column) && FORMULA_START.test(value) ? `'${value}` : value;
+}
+
 const MESSAGE_ID_COLUMN = "message_id";
 const CATEGORY_COLUMN = "category";
 
@@ -57,7 +79,8 @@ function line(fields: readonly string[]): string {
 const HEADER_LINE = BYTE_ORDER_MARK + line(NEWS_IMPORT_FILE_COLUMNS);
 
 function itemLine(item: Readonly<INewsImportListItem>): string {
-  const fields = ITEM_COLUMNS.map((column) => String(item[column] ?? ""));
+  const fields = ITEM_COLUMNS.map((column) =>
+    spreadsheetSafe(column, String(item[column] ?? "")));
   return line([...fields, ""]);
 }
 
