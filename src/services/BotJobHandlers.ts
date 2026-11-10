@@ -10,6 +10,7 @@ import {
 } from "./GiveawayClaimService.js";
 import { getSuggestionById, type ISuggestionItem } from "../classes/Suggestion.js";
 import {
+  ADMIN_CHANNEL_ID,
   ANNOUNCEMENT_CHANNEL_ID,
   BOT_DEV_CHANNEL_ID,
   GAMEDB_UPDATES_CHANNEL_ID,
@@ -77,6 +78,8 @@ import {
   type ITieBreakPick,
 } from "./VotingResultsAnnouncement.js";
 import { VOTING_CATEGORY_LABEL } from "../functions/VotingTiePrompt.js";
+import type { FeatureState } from "../functions/FeatureGate.js";
+import { buildFeatureFlagChangedNotice, isFeatureState } from "./FeatureFlagService.js";
 
 /**
  * What the say handler asks the surface to post. allowedMentions is the payload's, passed
@@ -773,6 +776,35 @@ export const handleMemberscan: BotJobHandler = async (_payload, surface) => {
   return buildMemberScanSummary(await surface.runMemberScan());
 };
 
+function payloadFeatureState(payload: Record<string, unknown>, field: string): FeatureState {
+  const value = payload[field];
+  if (!isFeatureState(value)) {
+    throw new Error(`Invalid payload: ${field} must be "off", "preview" or "live", got ${
+      JSON.stringify(value)
+    }.`);
+  }
+  return value;
+}
+
+/**
+ * Payload: `{ key, name, from_state, to_state, changed_by, changed_by_name, reason }`.
+ * Staff changed a Feature Flag (website or /flag set), so the admin channel hears who
+ * changed what, from and to which state, and why. It carries no `feature_key`: the
+ * announcement goes out whatever the Feature's own state. Nobody is pinged.
+ */
+export const handleFeatureFlagChanged: BotJobHandler = async (payload, surface) => {
+  const content = buildFeatureFlagChangedNotice({
+    key: requireString(payload, "key"),
+    name: requireString(payload, "name"),
+    fromState: payloadFeatureState(payload, "from_state"),
+    toState: payloadFeatureState(payload, "to_state"),
+    changedBy: requireString(payload, "changed_by"),
+    changedByName: optionalString(payload, "changed_by_name"),
+    reason: optionalString(payload, "reason"),
+  });
+  await surface.sendChannelMessage(ADMIN_CHANNEL_ID, content, []);
+};
+
 /** Job kind (BotJob::KINDS in the API) to handler. One line per kind. */
 export const BOT_JOB_HANDLERS: BotJobHandlers = {
   voting_poll_wakeup: handleVotingPollWakeup,
@@ -790,4 +822,5 @@ export const BOT_JOB_HANDLERS: BotJobHandlers = {
   presence_set: handlePresenceSet,
   say: handleSay,
   memberscan: handleMemberscan,
+  feature_flag_changed: handleFeatureFlagChanged,
 };

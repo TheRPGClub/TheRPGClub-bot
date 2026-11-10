@@ -1,0 +1,292 @@
+/**
+ * Feature Flags for staff (spec api#347, bot#1522): `/flag list`, `/flag set` and the
+ * admin-channel announcement of a flag change. The API decides who may list or change a
+ * flag (ADR 0005); the bot only names the acting Discord user and shows the answer.
+ */
+
+import axios from "axios";
+import { userMention } from "discord.js";
+
+import { DISCORD_AUTOCOMPLETE_CHOICES_MAX } from "../config/textLimits.js";
+import type { FeatureState } from "../functions/FeatureGate.js";
+import { clearFeatureAccessCache } from "./FeatureAccessService.js";
+import { apiGet, apiPatch } from "./RpgClubApiClient.js";
+
+export const FEATURE_STATES: readonly FeatureState[] = ["off", "preview", "live"];
+
+export const FEATURE_STATE_LABELS: Readonly<Record<FeatureState, string>> = {
+  off: "Off",
+  preview: "Preview",
+  live: "Live",
+};
+
+/** The `changed_by` of a change the API made itself (the seed migration). */
+const SYSTEM_CHANGER = "system";
+
+export function isFeatureState(value: unknown): value is FeatureState {
+  return typeof value === "string" && (FEATURE_STATES as readonly string[]).includes(value);
+}
+
+/** Who changed a flag: the Discord user (mentioned, never pinged) or "system". */
+function describeChanger(changedBy: string, changedByName: string | null): string {
+  if (changedBy === SYSTEM_CHANGER) return SYSTEM_CHANGER;
+  const mention = userMention(changedBy);
+  return changedByName && changedByName !== changedBy
+    ? `${mention} (${changedByName})`
+    : mention;
+}
+
+/** The `feature_flag_changed` bot job payload (api#351), camelCased. */
+export interface IFeatureFlagChangeNotice {
+  key: string;
+  name: string;
+  fromState: FeatureState;
+  toState: FeatureState;
+  changedBy: string;
+  changedByName: string | null;
+  reason: string | null;
+}
+
+/** The admin-channel post for a flag change: what, from, to, who and why. */
+export function buildFeatureFlagChangedNotice(change: IFeatureFlagChangeNotice): string {
+  return [
+    `**Feature Flag changed:** ${change.name} (\`${change.key}\`) is now ` +
+      `**${FEATURE_STATE_LABELS[change.toState]}** ` +
+      `(was ${FEATURE_STATE_LABELS[change.fromState]}).`,
+    `Changed by ${describeChanger(change.changedBy, change.changedByName)}.`,
+    `Reason: ${change.reason?.trim() || "none given"}`,
+  ].join("\n");
+}
+
+/** The private reply when the API says the acting user is not an Admin or Superadmin. */
+export const FEATURE_FLAG_STAFF_ONLY_MESSAGE =
+  "Only Admins and Superadmins can manage Feature Flags.";
+
+export interface IFeatureFlagLastChange {
+  fromState: FeatureState;
+  toState: FeatureState;
+  changedBy: string;
+  changedByName: string | null;
+  reason: string | null;
+  changedAt: string;
+}
+
+/** One Feature on the staff list (`FeatureFlagEntry` in the API's swagger), camelCased. */
+export interface IFeatureFlagEntry {
+  key: string;
+  name: string;
+  state: FeatureState;
+  core: boolean;
+  hideable: boolean;
+  lastChange: IFeatureFlagLastChange | null;
+}
+
+export interface IFeatureFlagUpdate {
+  state: FeatureState;
+  reason: string | null;
+  /** The Discord user acting through the bot; the API checks their stored roles. */
+  actingUserId: string;
+}
+
+export interface IFeatureFlagApi {
+  /** GET /api/v1/features. Throws the AxiosError on 403 (not staff). */
+  listFeatureFlags(actingUserId: string): Promise<IFeatureFlagEntry[]>;
+  /** PATCH /api/v1/features/:key; null when the key is not a Feature (404). */
+  setFeatureFlag(
+    key: string,
+    update: IFeatureFlagUpdate,
+  ): Promise<{ entry: IFeatureFlagEntry; changed: boolean } | null>;
+}
+
+type FeatureFlagLastChangePayload = {
+  from_state: FeatureState;
+  to_state: FeatureState;
+  changed_by: string;
+  changed_by_name: string | null;
+  reason: string | null;
+  changed_at: string;
+};
+
+type FeatureFlagEntryPayload = {
+  key: string;
+  name: string;
+  state: FeatureState;
+  core: boolean;
+  hideable: boolean;
+  last_change: FeatureFlagLastChangePayload | null;
+};
+
+function toFeatureFlagEntry(payload: FeatureFlagEntryPayload): IFeatureFlagEntry {
+  const change = payload.last_change;
+  return {
+    key: payload.key,
+    name: payload.name,
+    state: payload.state,
+    core: payload.core,
+    hideable: payload.hideable,
+    lastChange: change
+      ? {
+        fromState: change.from_state,
+        toState: change.to_state,
+        changedBy: change.changed_by,
+        changedByName: change.changed_by_name,
+        reason: change.reason,
+        changedAt: change.changed_at,
+      }
+      : null,
+  };
+}
+
+const FEATURES_PATH = "/api/v1/features";
+
+export const FEATURE_FLAG_API: IFeatureFlagApi = {
+  async listFeatureFlags(actingUserId) {
+    const payload = await apiGet<{ data: FeatureFlagEntryPayload[] }>(FEATURES_PATH, {
+      params: { acting_user_id: actingUserId },
+    });
+    // The list answers 200 for staff and 403 otherwise, so a 404 means the API predates it.
+    if (!payload) throw new Error(`GET ${FEATURES_PATH} returned 404`);
+    return payload.data.map(toFeatureFlagEntry);
+  },
+  async setFeatureFlag(key, update) {
+    const payload = await apiPatch<{ data: FeatureFlagEntryPayload; meta: { changed: boolean } }>(
+      `${FEATURES_PATH}/${encodeURIComponent(key)}`,
+      {
+        data: {
+          state: update.state,
+          reason: update.reason,
+          acting_user_id: update.actingUserId,
+        },
+      },
+    );
+    if (!payload) return null;
+    return { entry: toFeatureFlagEntry(payload.data), changed: payload.meta.changed };
+  },
+};
+
+function isForbidden(err: unknown): boolean {
+  return axios.isAxiosError(err) && err.response?.status === 403;
+}
+
+function featureLabel(feature: { key: string; name: string }): string {
+  return `${feature.name} (\`${feature.key}\`)`;
+}
+
+export interface IFeatureFlagDeps {
+  api?: IFeatureFlagApi;
+  /** Forgets the bot's cached Feature access, so the change shows in the bot at once. */
+  clearAccessCache?: () => void;
+}
+
+/**
+ * `/flag set`: asks the API to change the flag for the acting user and returns the private
+ * reply. A 403 becomes the polite staff-only refusal and an unknown key is named back;
+ * any other API error is thrown so the command can show the full request and response.
+ * After any successful answer the bot's Feature access cache is cleared.
+ */
+export async function setFeatureFlagReply(
+  input: { actingUserId: string; key: string; state: FeatureState; reason: string | null },
+  deps: IFeatureFlagDeps = {},
+): Promise<string> {
+  const api = deps.api ?? FEATURE_FLAG_API;
+  const clearAccessCache = deps.clearAccessCache ?? clearFeatureAccessCache;
+  let result: Awaited<ReturnType<IFeatureFlagApi["setFeatureFlag"]>>;
+  try {
+    result = await api.setFeatureFlag(input.key, {
+      state: input.state,
+      reason: input.reason,
+      actingUserId: input.actingUserId,
+    });
+  } catch (err: unknown) {
+    if (isForbidden(err)) return FEATURE_FLAG_STAFF_ONLY_MESSAGE;
+    throw err;
+  }
+  if (!result) return `There is no Feature \`${input.key}\`. Pick one from the list.`;
+  clearAccessCache();
+
+  const { entry, changed } = result;
+  const stateLabel = FEATURE_STATE_LABELS[entry.state];
+  if (!changed) return `${featureLabel(entry)} is already **${stateLabel}**. Nothing changed.`;
+  const from = entry.lastChange
+    ? ` (was ${FEATURE_STATE_LABELS[entry.lastChange.fromState]})`
+    : "";
+  return `${featureLabel(entry)} is now **${stateLabel}**${from}. ` +
+    "The change is announced in the admin channel.";
+}
+
+/** Longest reason shown on a `/flag list` line; the announcement carries it in full. */
+const LIST_REASON_MAX = 120;
+
+function describeLastChange(change: IFeatureFlagLastChange | null): string {
+  // The seed's "system" rows say nothing staff need; only show a person's change.
+  if (!change || change.changedBy === SYSTEM_CHANGER) return "";
+  const seconds = Math.floor(Date.parse(change.changedAt) / 1000);
+  const when = Number.isFinite(seconds) ? ` <t:${seconds}:R>` : "";
+  const reason = change.reason?.trim();
+  const shortReason = reason && reason.length > LIST_REASON_MAX
+    ? `${reason.slice(0, LIST_REASON_MAX - 3)}...`
+    : reason;
+  return `, set${when} by ${describeChanger(change.changedBy, change.changedByName)}` +
+    (shortReason ? `: ${shortReason}` : "");
+}
+
+function featureListLine(entry: IFeatureFlagEntry): string {
+  return `- ${featureLabel(entry)}: **${FEATURE_STATE_LABELS[entry.state]}**` +
+    describeLastChange(entry.lastChange);
+}
+
+/**
+ * `/flag list`: every Feature with its state and last change, Core Features first, as the
+ * private reply. A 403 becomes the polite staff-only refusal; any other API error is
+ * thrown so the command can show the full request and response.
+ */
+export async function listFeatureFlagsReply(
+  actingUserId: string,
+  deps: Pick<IFeatureFlagDeps, "api"> = {},
+): Promise<string> {
+  const api = deps.api ?? FEATURE_FLAG_API;
+  let entries: IFeatureFlagEntry[];
+  try {
+    entries = await api.listFeatureFlags(actingUserId);
+  } catch (err: unknown) {
+    if (isForbidden(err)) return FEATURE_FLAG_STAFF_ONLY_MESSAGE;
+    throw err;
+  }
+  const lines = ["**Feature Flags**"];
+  const sections: [string, IFeatureFlagEntry[]][] = [
+    ["Core Features", entries.filter((entry) => entry.core)],
+    ["Hideable Features", entries.filter((entry) => !entry.core)],
+  ];
+  for (const [title, sectionEntries] of sections) {
+    if (!sectionEntries.length) continue;
+    lines.push("", `**${title}**`, ...sectionEntries.map(featureListLine));
+  }
+  return lines.join("\n");
+}
+
+/** A Feature as autocomplete needs it (the access lookup's entries fit). */
+export interface IFeatureChoiceSource {
+  key: string;
+  name: string;
+  state: FeatureState;
+}
+
+/**
+ * Autocomplete for `/flag set feature:`: registry Features whose name or key contains the
+ * typed text (any case), labelled with their current state, with the key as the value.
+ */
+export function featureFlagChoices(
+  query: string,
+  features: readonly IFeatureChoiceSource[],
+): { name: string; value: string }[] {
+  const needle = query.trim().toLowerCase();
+  return features
+    .filter((feature) => !needle ||
+      feature.name.toLowerCase().includes(needle) ||
+      feature.key.includes(needle))
+    .slice(0, DISCORD_AUTOCOMPLETE_CHOICES_MAX)
+    .map((feature) => ({
+      name: `${feature.name} (${FEATURE_STATE_LABELS[feature.state]})`,
+      value: feature.key,
+    }));
+}
