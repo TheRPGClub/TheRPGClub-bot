@@ -87,7 +87,14 @@ import {
   type FeatureState,
   type IVotingPostTarget,
 } from "../functions/FeatureGate.js";
-import { POST_FEATURE_KEYS } from "../config/featureGate.js";
+import { NEWS_HUB_FEATURE_KEY, POST_FEATURE_KEYS } from "../config/featureGate.js";
+import {
+  createNewsHubJobDeps,
+  newsCatchUpSummary,
+  renewNewsItem,
+  runNewsCatchUp,
+  type INewsHubJobDeps,
+} from "./NewsHubJobs.js";
 import { featureOffNotice, getFeatureState } from "./FeaturePostRouting.js";
 import { refreshFeatureFlagCache } from "./FeatureAccessService.js";
 import { buildFeatureFlagChangedNotice, isFeatureState } from "./FeatureFlagService.js";
@@ -225,6 +232,11 @@ export interface IBotJobSurface {
    * and re-renders the hub where `state` routes it. Never throws (failures are logged).
    */
   giveawayHubLeftPreview(state: FeatureState): Promise<void>;
+  /**
+   * What the News Hub jobs read and write: the category threads and the Game News Archive,
+   * and the News Item endpoints. Optional so fakes for other jobs need not build it.
+   */
+  newsHub?: INewsHubJobDeps;
 }
 
 export function createBotJobSurface(client: Client): IBotJobSurface {
@@ -297,6 +309,7 @@ export function createBotJobSurface(client: Client): IBotJobSurface {
       await removePreviewGiveawayHub(client);
       await refreshGiveawayHubMessage(client, 0, { featureState: state });
     },
+    newsHub: createNewsHubJobDeps(client),
   };
 }
 
@@ -957,6 +970,40 @@ export const handleFeatureFlagChanged: BotJobHandler = async (payload, surface) 
   }
 };
 
+function newsHubDeps(surface: IBotJobSurface): INewsHubJobDeps {
+  if (!surface.newsHub) throw new Error("This bot job surface cannot reach the News Hub.");
+  return surface.newsHub;
+}
+
+/**
+ * Payload: `{ message_id, channel_id, feature_key: "news_hub" }`. The website served a News
+ * Item whose Discord image address had expired: the message is fetched again and recorded
+ * whole (fresh addresses), or its News Item removed when the message is gone or no longer
+ * qualifies. Works for a category thread and the Game News Archive. Nothing while Off.
+ */
+export const handleNewsImagesRenew: BotJobHandler = async (payload, surface, context) => {
+  const messageId = requireString(payload, "message_id");
+  const channelId = requireString(payload, "channel_id");
+  const state = await jobFeatureState(NEWS_HUB_FEATURE_KEY, surface, context);
+  if (state === "off") return "Nothing renewed: the News Hub is Off.";
+  return renewNewsItem(messageId, channelId, newsHubDeps(surface));
+};
+
+/**
+ * Payload: `{ from_state: "off", to_state, feature_key: "news_hub" }`. The News Hub left
+ * Off, so the category threads are scanned for what was posted, edited or deleted while it
+ * was Off. The state is read from the API again, not taken from the dispatcher: the flag
+ * cache can still say Off. Fails, after the other threads, when a thread could not be read.
+ */
+export const handleNewsCatchUp: BotJobHandler = async (_payload, surface) => {
+  const outcome = await runNewsCatchUp(newsHubDeps(surface));
+  const summary = newsCatchUpSummary(outcome);
+  if (outcome.status === "done" && outcome.failures.length > 0) {
+    throw new Error([summary, ...outcome.failures].join("\n\n"));
+  }
+  return summary;
+};
+
 /** Job kind (BotJob::KINDS in the API) to handler. One line per kind. */
 export const BOT_JOB_HANDLERS: BotJobHandlers = {
   voting_poll_wakeup: handleVotingPollWakeup,
@@ -975,4 +1022,6 @@ export const BOT_JOB_HANDLERS: BotJobHandlers = {
   say: handleSay,
   memberscan: handleMemberscan,
   feature_flag_changed: handleFeatureFlagChanged,
+  news_images_renew: handleNewsImagesRenew,
+  news_catch_up: handleNewsCatchUp,
 };

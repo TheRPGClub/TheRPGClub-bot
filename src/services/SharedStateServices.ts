@@ -2,6 +2,7 @@ import type { Client } from "discordx";
 import { IS_TEST_MODE } from "../config/testMode.js";
 import { logInfo } from "../utilities/LogUtils.js";
 import { startBotJobService } from "./BotJobService.js";
+import { startNewsCatchUp } from "./NewsHubJobs.js";
 import { startGameReleaseAnnouncementService } from "./GameReleaseAnnouncementService.js";
 import { startPublicReminderService } from "./PublicReminderService.js";
 import { startRssFeedService } from "./RssFeedService.js";
@@ -31,6 +32,8 @@ export const SHARED_STATE_SERVICES: readonly ISharedStateService[] = [
   { name: "GameReleaseAnnouncementService", start: startGameReleaseAnnouncementService },
   { name: "RssFeedService", start: startRssFeedService },
   { name: "BotJobService", start: startBotJobService },
+  // Records what the News Category threads gained, lost or changed while the bot was down.
+  { name: "NewsHubCatchUp", start: startNewsCatchUp },
 ];
 
 /** Starts the shared-state services, or logs that test mode skipped them. */
