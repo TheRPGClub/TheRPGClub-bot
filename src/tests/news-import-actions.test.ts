@@ -49,6 +49,12 @@ function fakeApi(options: {
       if (options.batchError) throw options.batchError;
       return { created: items.length, updated: 0, previouslyRemoved: 0, rejected: [] };
     },
+    async list() {
+      throw new Error("the scan does not list");
+    },
+    async assign() {
+      throw new Error("the scan does not assign");
+    },
   };
   return api;
 }
