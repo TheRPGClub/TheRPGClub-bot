@@ -70,6 +70,7 @@ type HelpTopicId =
   | "publicreminder"
   | "giveaway"
   | "thread"
+  | "flag"
   | "admin"
   | "mod"
   | "superadmin"
@@ -354,6 +355,17 @@ const HELP_TOPICS: HelpTopic[] = [
     access: "admin",
   },
   {
+    id: "flag",
+    label: "/flag",
+    summary: "List Feature Flags or set a Feature Off, Preview or Live (Admins and Superadmins).",
+    syntax: "Syntax: /flag list | /flag set feature:<feature> state:<off|preview|live> " +
+      "[reason:<string>]",
+    notes:
+      "Off: nobody can use the Feature. Preview: only Admins and Superadmins. Live: " +
+      "everyone. Each change is announced in the admin channel. Replies are private.",
+    access: "admin",
+  },
+  {
     id: "admin",
     label: "/admin",
     summary: "Admin tools for GOTM/NR-GOTM management.",
@@ -425,7 +437,16 @@ const HELP_CATEGORIES: { id: string; name: string; topicIds: HelpTopicId[] }[] =
   {
     id: "server-admin",
     name: "Server Administration",
-    topicIds: ["mod", "admin", "superadmin", "todo", "publicreminder", "thread", "rss"],
+    topicIds: [
+      "mod",
+      "admin",
+      "superadmin",
+      "flag",
+      "todo",
+      "publicreminder",
+      "thread",
+      "rss",
+    ],
   },
 ];
 
@@ -948,6 +969,7 @@ const MAIN_MENU_SUMMARIES: Record<HelpTopicId, string> = {
   publicreminder: "Schedule public reminders.",
   thread: "Create threads and link them to GameDB games.",
   rss: "Manage RSS relays with filters.",
+  flag: "Turn Features Off, Preview or Live.",
 };
 
 function getVisibleCategoryTopics(categoryId: string, access: HelpAccess): HelpTopic[] {
