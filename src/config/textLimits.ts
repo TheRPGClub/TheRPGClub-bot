@@ -16,6 +16,7 @@ export const DISCORD_THREAD_NAME_MAX = 100;
 export const DISCORD_ACTIVITY_NAME_MAX = 128;
 
 export const DISCORD_AUTOCOMPLETE_DESC_MAX = 95;
+export const DISCORD_AUTOCOMPLETE_CHOICES_MAX = 25;
 export const DISCORD_EMBED_FIELD_VALUE_MAX = 1024;
 
 // Application-defined limits
