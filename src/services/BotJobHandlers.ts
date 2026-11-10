@@ -77,6 +77,9 @@ import {
   type ITieBreakPick,
 } from "./VotingResultsAnnouncement.js";
 import { VOTING_CATEGORY_LABEL } from "../functions/VotingTiePrompt.js";
+import { routeFeaturePost, type FeatureState } from "../functions/FeatureGate.js";
+import { POST_FEATURE_KEYS } from "../config/featureGate.js";
+import { getFeatureState } from "./FeaturePostRouting.js";
 
 /**
  * What the say handler asks the surface to post. allowedMentions is the payload's, passed
@@ -168,6 +171,11 @@ export interface IBotJobSurface {
   sharedStateRefusal(actionName: string): string | null;
   /** Scans the home guild's members into the member list. Throws when the fetch fails. */
   runMemberScan(): Promise<IMemberScanCounts>;
+  /**
+   * A Feature's club-wide flag state, for routing its public posts (bot#1521). Null when it
+   * could not be read, which posts as Live. Never rejects.
+   */
+  featureState(featureKey: string): Promise<FeatureState | null>;
 }
 
 export function createBotJobSurface(client: Client): IBotJobSurface {
@@ -231,6 +239,7 @@ export function createBotJobSurface(client: Client): IBotJobSurface {
     sendSayMessage: (message) => sendSayMessage(client, message),
     sharedStateRefusal: (actionName) => sharedStateCommandRefusal(actionName),
     runMemberScan: () => runMemberScan(client),
+    featureState: (featureKey) => getFeatureState(client, featureKey),
   };
 }
 
@@ -374,7 +383,8 @@ export const handleSuggestionSubmitted: BotJobHandler = async (payload, surface)
 /**
  * Payload: `{ suggestion_id, outcome, created_by, title, github_issue_number,
  * github_issue_url, rejection_reason }`. Queued by the API for every review, the bot's own
- * Discord reviews included, so this is the only place the outcome is announced.
+ * Discord reviews included, so this is the only place the outcome is announced. Posted where
+ * the Suggestions Feature's flag routes it (the bot-dev channel in Preview).
  */
 export const handleSuggestionOutcome: BotJobHandler = async (payload, surface) => {
   payloadPositiveInt(payload, "suggestion_id");
@@ -398,11 +408,14 @@ export const handleSuggestionOutcome: BotJobHandler = async (payload, surface) =
       JSON.stringify(outcome)
     }.`);
   }
-  await surface.sendChannelMessage(
+  const featureKey = POST_FEATURE_KEYS.suggestions;
+  const channelId = routeFeaturePost(
+    await surface.featureState(featureKey),
     GAMEDB_UPDATES_CHANNEL_ID,
-    content,
-    createdBy ? [createdBy] : [],
   );
+  // The dispatcher acks an Off Feature's job before it runs; this covers a flip in between.
+  if (!channelId) return `Not posted: the ${featureKey} Feature is Off.`;
+  await surface.sendChannelMessage(channelId, content, createdBy ? [createdBy] : []);
 };
 
 function payloadCategory(payload: Record<string, unknown>): VotingRoundCategory {

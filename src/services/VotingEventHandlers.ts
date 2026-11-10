@@ -9,7 +9,12 @@ import type { VoteBallot } from "../classes/Vote.js";
 import NrGotm, { reloadNrGotmRoundFromDb } from "../classes/NrGotm.js";
 import type { IVotingEvent } from "../classes/VotingEvents.js";
 import { toVotingRoundCategory, type IVotingRound } from "../classes/VotingRounds.js";
-import { ADMIN_CHANNEL_ID, ANNOUNCEMENT_CHANNEL_ID } from "../config/channels.js";
+import {
+  ADMIN_CHANNEL_ID,
+  ANNOUNCEMENT_CHANNEL_ID,
+  BOT_DEV_CHANNEL_ID,
+} from "../config/channels.js";
+import { POST_FEATURE_KEYS } from "../config/featureGate.js";
 import { NOMINATION_DISCUSSION_CHANNEL_IDS } from "../config/nominationChannels.js";
 import { fetchSendableChannel } from "../functions/ChannelUtils.js";
 import { toUnixTimestamp } from "../functions/DateFormatUtils.js";
@@ -35,6 +40,7 @@ import {
 } from "./VotingResultsAnnouncement.js";
 import { ensureWinnerThread, type WinnerKindLabel } from "./WinnerThreadService.js";
 import { apiVotingDataSource, type IVotingDataSource } from "./VotingDataSource.js";
+import { getFeaturePostDestination, logSuppressedPost } from "./FeaturePostRouting.js";
 
 /**
  * What handling an event came to. Both outcomes are acked: "skipped" means
@@ -63,6 +69,12 @@ export interface IVotingEventContext {
    * through the API, so the sandbox replaces it.
    */
   recordWinners: (client: Client, roundNumber: number) => Promise<void>;
+  /**
+   * Set while the Voting & GOTM Feature is in Preview (bot#1521): every public post goes to
+   * this channel (bot-dev) instead, the results as a rehearsal, and nothing public is made
+   * (no winner thread, no scheduled event).
+   */
+  previewChannelId?: string;
 }
 
 export function buildNominationReminderText(roundNumber: number, votingOpensAt: Date): string {
@@ -99,7 +111,10 @@ async function postNominationReminder(
     buildNominationReminderText(round.roundNumber, round.votingOpensAt),
   );
   let sent = 0;
-  for (const channelId of NOMINATION_DISCUSSION_CHANNEL_IDS) {
+  const channelIds = context.previewChannelId
+    ? [context.previewChannelId]
+    : NOMINATION_DISCUSSION_CHANNEL_IDS;
+  for (const channelId of channelIds) {
     const channel = await fetchSendableChannel(client, channelId);
     if (!channel) {
       logWarn("VotingEventHandlers.reminder", `Skipped channel ${channelId}: cannot send.`);
@@ -139,7 +154,7 @@ async function postVotingPanels(
 
   const result = await postVotePanels({
     client,
-    channelId: ANNOUNCEMENT_CHANNEL_ID,
+    channelId: context.previewChannelId ?? ANNOUNCEMENT_CHANNEL_ID,
     roundNumber: round.roundNumber,
     monthLabel: round.monthYear,
     voteDeadline: round.votingClosesAt,
@@ -171,7 +186,11 @@ async function postVotingResults(
     await announceVotingResults(
       client,
       { roundNumber: round.roundNumber, monthLabel: round.monthYear },
-      { rehearsal: context.rehearsal, source: context.source },
+      {
+        rehearsal: context.rehearsal,
+        source: context.source,
+        channelIdOverride: context.previewChannelId,
+      },
     );
   } catch (err) {
     if (err instanceof NothingToAnnounceError) {
@@ -216,7 +235,7 @@ async function postRunoffPanels(
 
   const result = await postVotePanels({
     client,
-    channelId: ANNOUNCEMENT_CHANNEL_ID,
+    channelId: context.previewChannelId ?? ANNOUNCEMENT_CHANNEL_ID,
     roundNumber: round.roundNumber,
     monthLabel: round.monthYear,
     voteDeadline: round.runoffClosesAt,
@@ -251,6 +270,7 @@ async function postRunoffResults(
     await announceRunoffResults(client, round, {
       rehearsal: context.rehearsal,
       source: context.source,
+      channelIdOverride: context.previewChannelId,
     });
   } catch (err) {
     if (err instanceof NothingToAnnounceError) {
@@ -347,10 +367,14 @@ async function scheduleNextVoteEvent(
   });
 }
 
-async function recordLiveWinners(client: Client, roundNumber: number): Promise<void> {
+async function reloadDecidedRound(roundNumber: number): Promise<void> {
   // The API recorded the winners; the caches only load at startup otherwise.
   await reloadGotmRoundFromDb(roundNumber);
   await reloadNrGotmRoundFromDb(roundNumber);
+}
+
+async function recordLiveWinners(client: Client, roundNumber: number): Promise<void> {
+  await reloadDecidedRound(roundNumber);
   await ensureRoundWinnerThreads(client, roundNumber);
 }
 
@@ -366,17 +390,54 @@ async function finishDecidedRound(
   context: IVotingEventContext,
 ): Promise<VotingEventOutcome> {
   await context.recordWinners(client, event.roundNumber);
+  // A Preview round makes nothing public, so members get no scheduled event either.
+  if (context.previewChannelId) return "delivered";
   // Throws to retry the event; the step above is safe to repeat.
   await scheduleNextVoteEvent(client, event.roundNumber, context.source);
   return "delivered";
 }
 
-/** Performs the Discord side of one voting event. Throws to have it retried. */
+/**
+ * The live context as the Voting & GOTM Feature's flag routes it (bot#1521): unchanged when
+ * Live, its public posts sent to the bot-dev channel in Preview, and null when Off (its
+ * public posts are suppressed). A rehearsal (the sandbox) is never routed.
+ */
+async function routeVotingEventContext(
+  client: Client,
+  context: IVotingEventContext,
+): Promise<IVotingEventContext | null> {
+  if (context.rehearsal) return context;
+  const destination = await getFeaturePostDestination(client, POST_FEATURE_KEYS.voting);
+  if (destination === "suppressed") return null;
+  if (destination === "normal") return context;
+  return {
+    ...context,
+    rehearsal: true,
+    previewChannelId: BOT_DEV_CHANNEL_ID,
+    recordWinners: (_client, roundNumber) => reloadDecidedRound(roundNumber),
+  };
+}
+
+/**
+ * Performs the Discord side of one voting event. Throws to have it retried. While the
+ * Voting & GOTM Feature is Off, an event that posts publicly is skipped (acked, nothing
+ * posted); the admin channel's tie prompt still goes out.
+ */
 export async function handleVotingEvent(
   client: Client,
   event: IVotingEvent,
-  context: IVotingEventContext = LIVE_VOTING_EVENT_CONTEXT,
+  baseContext: IVotingEventContext = LIVE_VOTING_EVENT_CONTEXT,
 ): Promise<VotingEventOutcome> {
+  if (event.kind === "tie_pending") return postTiePendingNotice(client, event, baseContext);
+  if (event.kind === "unknown") {
+    logWarn("VotingEventHandlers", `Unknown voting event kind "${event.rawKind}"; acking.`);
+    return "skipped";
+  }
+  const context = await routeVotingEventContext(client, baseContext);
+  if (!context) {
+    logSuppressedPost(POST_FEATURE_KEYS.voting, `voting event ${event.id} (${event.kind})`);
+    return "skipped";
+  }
   switch (event.kind) {
     case "nomination_reminder_5d":
     case "nomination_reminder_1d":
@@ -389,12 +450,7 @@ export async function handleVotingEvent(
       return postRunoffPanels(client, event, context);
     case "runoff_closed":
       return postRunoffResults(client, event, context);
-    case "tie_pending":
-      return postTiePendingNotice(client, event, context);
     case "round_decided":
       return finishDecidedRound(client, event, context);
-    case "unknown":
-      logWarn("VotingEventHandlers", `Unknown voting event kind "${event.rawKind}"; acking.`);
-      return "skipped";
   }
 }

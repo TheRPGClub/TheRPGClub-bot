@@ -9,6 +9,9 @@ import {
 import { ContainerBuilder } from "@discordjs/builders";
 import { countAvailableGameKeys, listAvailableGameKeys } from "../classes/GameKey.js";
 import { GIVEAWAY_HUB_CHANNEL_ID } from "../config/channels.js";
+import { POST_FEATURE_KEYS } from "../config/featureGate.js";
+import type { IFeatureAccessSource } from "../functions/FeatureGate.js";
+import { routeFeaturePostFor } from "./FeaturePostRouting.js";
 import { buildPageFooterText } from "../functions/PaginationUtils.js";
 import { logError, logWarn } from "../utilities/LogUtils.js";
 import { buildActionButton, buildButtonRow } from "../functions/uiComponents.js";
@@ -289,10 +292,19 @@ async function updateGiveawayHubMessages(
   }
 }
 
+/**
+ * Re-renders the giveaway hub where the Giveaways Feature's flag routes it: the hub channel
+ * when Live, the bot-dev channel in Preview, and nowhere when Off (the hub is left as it is).
+ */
 export async function refreshGiveawayHubMessage(
   client: Client,
   page = 0,
-  options?: { forceRecreate?: boolean; throwOnFailure?: boolean },
+  options?: {
+    forceRecreate?: boolean;
+    throwOnFailure?: boolean;
+    /** Where the flag state is read; the shared access cache unless a test passes one. */
+    featureAccess?: IFeatureAccessSource;
+  },
 ): Promise<void> {
   // A bot job must fail when the hub was not refreshed; other callers only log it.
   const strict = options?.throwOnFailure ?? false;
@@ -305,8 +317,16 @@ export async function refreshGiveawayHubMessage(
     return;
   }
 
+  const hubChannelId = await routeFeaturePostFor(
+    client,
+    POST_FEATURE_KEYS.giveawayHub,
+    GIVEAWAY_HUB_CHANNEL_ID,
+    options?.featureAccess,
+  );
+  if (!hubChannelId) return;
+
   const channel = await client.channels
-    .fetch(GIVEAWAY_HUB_CHANNEL_ID)
+    .fetch(hubChannelId)
     .catch((err: unknown) => {
       if (strict) throw err;
       logError("GiveawayHubService.channelFetch", err);
@@ -314,7 +334,7 @@ export async function refreshGiveawayHubMessage(
     });
   const textChannel = channel?.isTextBased() ? channel : null;
   if (!textChannel) {
-    skip(`Giveaway hub channel ${GIVEAWAY_HUB_CHANNEL_ID} not found or not text-based.`);
+    skip(`Giveaway hub channel ${hubChannelId} not found or not text-based.`);
     return;
   }
 

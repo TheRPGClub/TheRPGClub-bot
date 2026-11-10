@@ -46,6 +46,14 @@ before(async () => {
       const url = req.url ?? "";
       const body = await readBody(req);
       requests.push({ method, url, body });
+      if (method === "GET" && url.endsWith("/feature_access")) {
+        // The hub refresh routes by the Giveaways Feature's flag (bot#1521): Live here.
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ data: { user_id: "bot", staff: false, features: [
+          { key: "giveaways", name: "Giveaways", state: "live", can_use: true, preview: false },
+        ] } }));
+        return;
+      }
       const data = body.data ?? {};
       res.writeHead(201, { "Content-Type": "application/json" });
       res.end(JSON.stringify({
@@ -78,18 +86,32 @@ beforeEach(() => {
   requests.length = 0;
 });
 
-function fakeClient(): { client: any; hubFetches: () => number } {
+function fakeClient(): {
+  client: any;
+  hubFetches: () => number;
+  hubFetched: () => Promise<void>;
+} {
   let fetches = 0;
+  let markFetched: () => void = () => undefined;
+  const fetched = new Promise<void>((resolve) => {
+    markFetched = resolve;
+  });
   const client = {
     user: { id: "bot" },
     channels: {
       fetch: async () => {
         fetches += 1;
+        markFetched();
         return null;
       },
     },
   };
-  return { client, hubFetches: () => fetches };
+  // The fire-and-forget hub refresh reads the flag first, so it reaches the channel later.
+  const hubFetched = (): Promise<void> => Promise.race([
+    fetched,
+    new Promise<void>((resolve) => setTimeout(resolve, 2000)),
+  ]);
+  return { client, hubFetches: () => fetches, hubFetched };
 }
 
 function fakeInteraction(client: any, extra: Record<string, unknown> = {}): any {
@@ -202,7 +224,7 @@ for (const entry of entryPoints) {
     t.mock.method(Game, "getGameById", async () => game);
     t.mock.method(GameSearchService, "searchGames", async () => [game]);
     const igdbSearch = t.mock.method(igdbService, "searchGames", async () => ({ results: [] }));
-    const { client, hubFetches } = fakeClient();
+    const { client, hubFetches, hubFetched } = fakeClient();
 
     const title = entry.name === "/giveaway donate" ? String(GAME_ID) : "chrono trigger";
     const interaction = await entry.donate(client, title);
@@ -215,6 +237,7 @@ for (const entry of entryPoints) {
     assert.equal(posts[0].body.data.key_value, KEY);
     assert.equal(igdbSearch.mock.callCount(), 0);
     assert.match(JSON.stringify(interaction.sent), /Added \*\*Chrono Trigger\*\*/);
+    await hubFetched();
     assert.equal(hubFetches(), 1, "the hub refreshes after a donation");
   });
 
@@ -225,7 +248,7 @@ for (const entry of entryPoints) {
       id: GAME_ID + 1,
       title: "Chrono Cross",
     }));
-    const { client, hubFetches } = fakeClient();
+    const { client, hubFetches, hubFetched } = fakeClient();
 
     const interaction = await entry.donate(client, "Chrono Cross Remaster");
     assert.equal(keyPosts().length, 0, "nothing is donated before the pick");
@@ -245,6 +268,7 @@ for (const entry of entryPoints) {
     assert.equal(posts[0].body.data.gamedb_game_id, GAME_ID + 1);
     assert.equal(posts[0].body.data.game_title, "Chrono Cross");
     assert.match(JSON.stringify(select.sent), /Added \*\*Chrono Cross\*\*/);
+    await hubFetched();
     assert.equal(hubFetches(), 1);
     assert.equal(saved.length, 0, "the IGDB session holding the key is never persisted");
   });

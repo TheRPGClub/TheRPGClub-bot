@@ -20,6 +20,12 @@ import { buildTestPanelNoticeText, dedupeNominationsByGame } from "./VoteResults
 import { buildNominatorDisplayNames } from "./NominationListComponents.js";
 import { logError } from "../utilities/LogUtils.js";
 import { describeRequestError } from "../utilities/ApiErrorUtils.js";
+import { ANNOUNCEMENT_CHANNEL_ID } from "../config/channels.js";
+import { POST_FEATURE_KEYS } from "../config/featureGate.js";
+import {
+  FeaturePostSuppressedError,
+  routeFeaturePostFor,
+} from "../services/FeaturePostRouting.js";
 
 // Posting a round's voting panels, shared by /admin voting-open and the
 // voting_opened voting event (VotingEventService), which has no interaction.
@@ -128,10 +134,25 @@ async function loadPanelArt(
   return { files: image.files, art: { voteImageUrl: image.voteImageUrl, nominatorNames } };
 }
 
+/**
+ * Panels bound for announcements (and not the sandbox's, which carry their own notice)
+ * follow the Voting & GOTM Feature's flag: the bot-dev channel in Preview, null when Off.
+ */
+async function routePanelChannel(params: IPostVotePanelsParams): Promise<string | null> {
+  if (params.channelId !== ANNOUNCEMENT_CHANNEL_ID || params.notice) return params.channelId;
+  return routeFeaturePostFor(params.client, POST_FEATURE_KEYS.voting, params.channelId);
+}
+
 /** Posts one panel per category and reports what happened. */
 export async function postVotePanels(
-  params: IPostVotePanelsParams,
+  requested: IPostVotePanelsParams,
 ): Promise<IPostVotePanelsResult> {
+  const channelId = await routePanelChannel(requested);
+  if (!channelId) {
+    const reason = new FeaturePostSuppressedError(POST_FEATURE_KEYS.voting).message;
+    return { lines: [reason], posted: 0, failed: 0 };
+  }
+  const params = { ...requested, channelId };
   const resultLines: string[] = [];
   let posted = 0;
   let failed = 0;

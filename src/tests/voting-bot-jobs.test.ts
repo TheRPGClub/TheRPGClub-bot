@@ -68,6 +68,7 @@ function fakeSurface(options: {
     sendSayMessage: async () => {},
     sharedStateRefusal: () => null,
     runMemberScan: async () => ({ upserted: 0, failed: 0, departed: 0 }),
+    featureState: async () => null,
     fetchGame: async () => null,
     announceCompletion: async () => {},
     fetchLiveEvent: async () => null,
