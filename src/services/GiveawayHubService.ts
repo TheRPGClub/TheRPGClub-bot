@@ -10,7 +10,7 @@ import { ContainerBuilder } from "@discordjs/builders";
 import { countAvailableGameKeys, listAvailableGameKeys } from "../classes/GameKey.js";
 import { GIVEAWAY_HUB_CHANNEL_ID } from "../config/channels.js";
 import { POST_FEATURE_KEYS } from "../config/featureGate.js";
-import type { IFeatureFlagSource } from "../functions/FeatureGate.js";
+import type { FeatureState, IFeatureFlagSource } from "../functions/FeatureGate.js";
 import { routeFeaturePostFor } from "./FeaturePostRouting.js";
 import { buildPageFooterText } from "../functions/PaginationUtils.js";
 import { logError, logWarn } from "../utilities/LogUtils.js";
@@ -302,6 +302,8 @@ export async function refreshGiveawayHubMessage(
   options?: {
     forceRecreate?: boolean;
     throwOnFailure?: boolean;
+    /** The Giveaways Feature's state when already read (a bot job's); else it is read. */
+    featureState?: FeatureState | null;
     /** Where the flag state is read; the shared flag cache unless a test passes one. */
     featureFlags?: IFeatureFlagSource;
   },
@@ -320,7 +322,7 @@ export async function refreshGiveawayHubMessage(
   const hubChannelId = await routeFeaturePostFor(
     POST_FEATURE_KEYS.giveawayHub,
     GIVEAWAY_HUB_CHANNEL_ID,
-    options?.featureFlags,
+    { state: options?.featureState, source: options?.featureFlags },
   );
   if (!hubChannelId) return;
 

@@ -36,6 +36,14 @@ export async function getFeaturePostDestination(
   return featurePostDestination(await getFeatureState(featureKey, source));
 }
 
+/** How a post site learns its Feature's state: given (a bot job's read), or read now. */
+export interface IFeaturePostRouteOptions {
+  /** The state already read, e.g. by the bot job dispatcher; omitted, it is read now. */
+  state?: FeatureState | null;
+  /** Where to read it when no state is given; the shared flag cache by default. */
+  source?: IFeatureFlagSource;
+}
+
 /**
  * The channel a Feature's post goes to instead of `normalChannelId`: the same channel when
  * Live, the bot-dev channel in Preview, null when Off (the post is suppressed and logged).
@@ -43,9 +51,12 @@ export async function getFeaturePostDestination(
 export async function routeFeaturePostFor(
   featureKey: string,
   normalChannelId: string,
-  source: IFeatureFlagSource = featureFlagCache,
+  options: IFeaturePostRouteOptions = {},
 ): Promise<string | null> {
-  const channelId = routeFeaturePost(await getFeatureState(featureKey, source), normalChannelId);
+  const state = options.state !== undefined
+    ? options.state
+    : await getFeatureState(featureKey, options.source);
+  const channelId = routeFeaturePost(state, normalChannelId);
   if (!channelId) logSuppressedPost(featureKey, `a post to channel ${normalChannelId}`);
   return channelId;
 }

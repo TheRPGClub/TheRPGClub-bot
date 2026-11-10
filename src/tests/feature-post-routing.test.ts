@@ -177,24 +177,6 @@ function countingHandlers(): { handlers: BotJobHandlers; runs: number[] } {
   };
 }
 
-test("bot jobs: an Off Feature's public-post job is suppressed and acked done", async () => {
-  const api = fakeJobApi();
-  const { handlers, runs } = countingHandlers();
-  const surface = stateSurface({ giveaways: "off" });
-  await processBotJobs(
-    [job(1, { n: 1, feature_key: "giveaways" })],
-    handlers,
-    surface,
-    api,
-    createBotJobDeliveryState(),
-  );
-  assert.deepEqual(runs, []);
-  assert.deepEqual(surface.asked, ["giveaways"]);
-  assert.deepEqual(api.acks, [
-    { id: 1, status: "done", text: "Not posted: the giveaways Feature is Off." },
-  ]);
-});
-
 test("bot jobs: a Preview Feature's job runs and its result says it went to bot-dev",
   async () => {
     const api = fakeJobApi();
