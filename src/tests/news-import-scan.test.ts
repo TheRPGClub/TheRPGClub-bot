@@ -82,6 +82,12 @@ function fakeApi(options: {
     async status() {
       return { sorted: 0, unsorted: api.stored.size, removed: 0 };
     },
+    async list() {
+      throw new Error("the scan does not list");
+    },
+    async assign() {
+      throw new Error("the scan does not assign");
+    },
   };
   return api;
 }

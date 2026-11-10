@@ -370,11 +370,16 @@ const HELP_TOPICS: HelpTopic[] = [
     id: "news-import",
     label: "/news-import",
     summary: "Import the Game News Archive into the News Hub (Admins and Superadmins).",
-    syntax: "Syntax: /news-import scan | /news-import status",
+    syntax: "Syntax: /news-import scan | /news-import status | /news-import download | " +
+      "/news-import upload file:<csv>",
     notes:
       "scan reads the whole archive and imports its news as unsorted News Items, hidden " +
       "until sorted; its progress is posted in the channel, and it is safe to run again. " +
-      "status shows how many imported items are sorted, unsorted and removed.",
+      "status shows how many imported items are sorted, unsorted and removed. download " +
+      "gives the unsorted items as a .csv file (several when it is large); fill in its " +
+      "category column with a News Category key, or skip to remove the item, then upload " +
+      "it. upload assigns the categories, lists rejected rows with reasons, and can be run " +
+      "again to change a category.",
     access: "staff",
   },
   {
