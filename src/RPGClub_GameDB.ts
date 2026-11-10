@@ -53,6 +53,7 @@ import {
 import { withRetry } from "./utilities/RetryUtils.js";
 import { isTransientApiError } from "./services/RpgClubApiClient.js";
 import { CLIENT_MAKE_CACHE, CLIENT_SWEEPERS } from "./config/clientCache.js";
+import { enforceFeatureGate } from "./functions/InteractionUtils.js";
 installConsoleLogging();
 
 // Since Node 15 an unhandled rejection kills the process, so one uncaught
@@ -198,6 +199,9 @@ bot.on("interactionCreate", async (interaction: Interaction) => {
         void Member.touchLastSeen(interaction.user.id);
       }
     }
+
+    // Feature Flags: refuse a Preview or Off Feature's command before its handler runs.
+    if (await enforceFeatureGate(interaction)) return;
 
     await bot.executeInteraction(interaction);
   } catch (err: unknown) {
