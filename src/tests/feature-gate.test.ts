@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { ContainerBuilder, MessageFlags, TextDisplayBuilder } from "discord.js";
 
+import { safeV2TextContent } from "../functions/ComponentsV2Utils.js";
 import {
   addPreviewNote,
   decideFeatureGate,
@@ -11,28 +12,16 @@ import {
   resolveFeatureGate,
   type FeatureState,
   type IFeatureAccess,
+  type IFeatureFlag,
+  type IFeatureGateSource,
 } from "../functions/FeatureGate.js";
 import {
   createFeatureAccessCache,
+  createFeatureFlagCache,
   toFeatureAccess,
   type FeatureAccessPayload,
   type IFeatureAccessApi,
 } from "../services/FeatureAccessService.js";
-
-/**
- * Builds the API lookup's answer for one Feature the way api#350 computes it:
- * Live is usable by everyone, Preview by staff only, Off by nobody.
- */
-function accessFor(key: string, state: FeatureState, staff: boolean): IFeatureAccess {
-  const canUse = state === "live" || (state === "preview" && staff);
-  return {
-    userId: "42",
-    staff,
-    features: [
-      { key, name: key, state, canUse, preview: staff && state === "preview" },
-    ],
-  };
-}
 
 const MATRIX: Array<[FeatureState, boolean, string]> = [
   ["live", false, "run"],
@@ -46,14 +35,19 @@ const MATRIX: Array<[FeatureState, boolean, string]> = [
 for (const [state, staff, expected] of MATRIX) {
   const who = staff ? "staff" : "non-staff";
   test(`decideFeatureGate: ${state} Feature for ${who} -> ${expected}`, () => {
-    assert.equal(decideFeatureGate("journals", accessFor("journals", state, staff)), expected);
+    assert.equal(decideFeatureGate(state, staff), expected);
   });
 }
 
-test("decideFeatureGate: an unmapped command always runs, whatever the flags", () => {
-  assert.equal(decideFeatureGate(null, accessFor("journals", "off", false)), "run");
+test("decideFeatureGate: no state (unmapped, unlisted or unread) always runs", () => {
+  assert.equal(decideFeatureGate(null, false), "run");
   assert.equal(decideFeatureGate(null, null), "run");
 });
+
+test("decideFeatureGate: Preview with an unknown staff answer runs (outage is no refusal)",
+  () => {
+    assert.equal(decideFeatureGate("preview", null), "run");
+  });
 
 const COMMANDS: Array<[string, string | null]> = [
   ["gamedb", "game_index"],
@@ -124,16 +118,45 @@ for (const [customId, expected] of COMPONENTS) {
   });
 }
 
-/** A fake API client that answers like api#350 and counts lookups per user. */
-function fakeApi(state: FeatureState = "live"): IFeatureAccessApi & { calls: string[] } {
+/** The api#350 lookup's answer for one user: `states` for every Feature, and `staff`. */
+function accessFor(
+  userId: string,
+  states: Record<string, FeatureState>,
+  staff = false,
+): IFeatureAccess {
+  return {
+    userId,
+    staff,
+    features: Object.entries(states).map(([key, state]) => ({
+      key,
+      name: key,
+      state,
+      canUse: state === "live" || (state === "preview" && staff),
+      preview: staff && state === "preview",
+    })),
+  };
+}
+
+/** A fake API client that answers like api#350 and records whom it was asked about. */
+function fakeApi(
+  states: () => Record<string, FeatureState> = () => ({ journals: "live" }),
+  staffIds: readonly string[] = [],
+): IFeatureAccessApi & { calls: string[] } {
   const calls: string[] = [];
   return {
     calls,
     async fetchFeatureAccess(userId: string): Promise<IFeatureAccess> {
       calls.push(userId);
-      return { ...accessFor("journals", state, false), userId };
+      return accessFor(userId, states(), staffIds.includes(userId));
     },
   };
+}
+
+/** A gate source over the real caches and a fake API, as the bot wires them. */
+function gateSource(api: IFeatureAccessApi): IFeatureGateSource {
+  const flags = createFeatureFlagCache(() => "bot", api);
+  const access = createFeatureAccessCache(api);
+  return { flags: () => flags.flags(), isStaff: async (id) => (await access.get(id)).staff };
 }
 
 test("toFeatureAccess: maps the API lookup's payload", () => {
@@ -157,6 +180,51 @@ test("toFeatureAccess: maps the API lookup's payload", () => {
   });
 });
 
+test("feature flag cache: one club-wide lookup, through the bot's own user", async () => {
+  const api = fakeApi(() => ({ journals: "off", reviews: "live" }));
+  const cache = createFeatureFlagCache(() => "bot", api, 60_000);
+  assert.deepEqual(await cache.flags(), [
+    { key: "journals", name: "journals", state: "off" },
+    { key: "reviews", name: "reviews", state: "live" },
+  ]);
+  await cache.flags();
+  assert.deepEqual(api.calls, ["bot"]);
+});
+
+test("feature flag cache: clear() reads the flags again at once (/flag set)", async () => {
+  let state: FeatureState = "live";
+  const api = fakeApi(() => ({ journals: state }));
+  const cache = createFeatureFlagCache(() => "bot", api, 60_000);
+  assert.equal((await cache.flags())[0].state, "live");
+  state = "off";
+  cache.clear();
+  assert.equal(api.calls.length, 2, "clear() starts the new read itself");
+  assert.equal((await cache.flags())[0].state, "off");
+  assert.equal(api.calls.length, 2);
+});
+
+test("feature flag cache: past the TTL the old flags answer at once while it refreshes",
+  async (t) => {
+    t.mock.timers.enable({ apis: ["Date"], now: 0 });
+    let state: FeatureState = "live";
+    const api = fakeApi(() => ({ journals: state }));
+    const cache = createFeatureFlagCache(() => "bot", api, 60_000);
+    await cache.flags();
+    state = "off";
+    t.mock.timers.tick(61_000);
+    assert.equal((await cache.flags())[0].state, "live");
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal((await cache.flags())[0].state, "off");
+  });
+
+test("feature flag cache: before the bot logs in there are no flags to read", async () => {
+  const api = fakeApi();
+  const cache = createFeatureFlagCache(() => null, api);
+  await assert.rejects(cache.flags(), /before the bot logs in/);
+  cache.clear();
+  assert.deepEqual(api.calls, []);
+});
+
 test("feature access cache: one lookup per user within the TTL", async () => {
   const api = fakeApi();
   const cache = createFeatureAccessCache(api, 60_000);
@@ -167,68 +235,63 @@ test("feature access cache: one lookup per user within the TTL", async () => {
   assert.equal((await cache.get("2")).userId, "2");
 });
 
-test("feature access cache: clear() makes the next use look up again (/flag set)", async () => {
-  const api = fakeApi();
-  const cache = createFeatureAccessCache(api, 60_000);
-  await cache.get("1");
-  await cache.get("2");
-  cache.clear();
-  await cache.get("1");
-  assert.deepEqual(api.calls, ["1", "2", "1"]);
-});
-
-test("feature access cache: a user idle past the TTL waits for a fresh answer", async (t) => {
-  t.mock.timers.enable({ apis: ["Date"], now: 0 });
-  let state: FeatureState = "live";
-  const calls: string[] = [];
-  const api: IFeatureAccessApi = {
-    async fetchFeatureAccess(userId) {
-      calls.push(userId);
-      return accessFor("journals", state, false);
-    },
-  };
-  const cache = createFeatureAccessCache(api, 60_000);
-  assert.equal((await cache.get("1")).features[0].state, "live");
-
-  state = "off";
-  t.mock.timers.tick(30_000);
-  assert.equal((await cache.get("1")).features[0].state, "live");
-  assert.equal(calls.length, 1);
-
-  t.mock.timers.tick(61_000);
-  assert.equal((await cache.get("1")).features[0].state, "off");
-  assert.equal(calls.length, 2);
-});
-
 test("resolveFeatureGate: an unmapped command never asks the API", async () => {
-  const api = fakeApi("off");
-  const cache = createFeatureAccessCache(api);
-  const decision = await resolveFeatureGate({ type: "command", name: "help" }, "1", cache);
+  const api = fakeApi(() => ({ journals: "off" }));
+  const decision = await resolveFeatureGate(
+    { type: "command", name: "help" },
+    "1",
+    gateSource(api),
+  );
   assert.equal(decision, "run");
   assert.deepEqual(api.calls, []);
 });
 
-test("resolveFeatureGate: a mapped command follows the user's access", async () => {
-  const off = createFeatureAccessCache(fakeApi("off"));
-  const target = { type: "command", name: "game-journal" } as const;
-  assert.equal(await resolveFeatureGate(target, "1", off), "not_available");
+test("resolveFeatureGate: Live and Off read only the club-wide flags, never the member",
+  async () => {
+    const target = { type: "command", name: "game-journal" } as const;
+    const off = fakeApi(() => ({ journals: "off" }));
+    assert.equal(await resolveFeatureGate(target, "member", gateSource(off)), "not_available");
+    const live = fakeApi(() => ({ journals: "live" }));
+    const source = gateSource(live);
+    assert.equal(await resolveFeatureGate(target, "member", source), "run");
+    assert.equal(await resolveFeatureGate(target, "other", source), "run");
+    assert.deepEqual([...off.calls, ...live.calls], ["bot", "bot"]);
+  });
 
-  const staffPreview = { get: async () => accessFor("journals", "preview", true) };
+test("resolveFeatureGate: Preview asks who is staff", async () => {
+  const api = fakeApi(() => ({ journals: "preview" }), ["admin"]);
+  const source = gateSource(api);
   const component = { type: "component", customId: "game-journal-hmenu-add:1:2" } as const;
-  assert.equal(await resolveFeatureGate(component, "1", staffPreview), "preview_note");
+  assert.equal(await resolveFeatureGate(component, "admin", source), "preview_note");
+  assert.equal(await resolveFeatureGate(component, "member", source), "not_available");
+  assert.deepEqual(api.calls, ["bot", "admin", "member"]);
 });
 
-test("resolveFeatureGate: a failed lookup lets the command run", async (t) => {
+test("resolveFeatureGate: a failed flag lookup lets the command run", async (t) => {
   t.mock.method(console, "error", () => undefined);
-  const failing = { get: async (): Promise<IFeatureAccess> => { throw new Error("down"); } };
+  const failing: IFeatureGateSource = {
+    flags: async () => {
+      throw new Error("down");
+    },
+    isStaff: async () => false,
+  };
   const target = { type: "command", name: "giveaway" } as const;
   assert.equal(await resolveFeatureGate(target, "1", failing), "run");
 });
 
-test("resolveFeatureGate: a lookup slower than the wait lets the command run", async () => {
-  const hanging = { get: () => new Promise<IFeatureAccess>(() => undefined) };
+test("resolveFeatureGate: a lookup slower than the wait lets the command run", async (t) => {
+  t.mock.method(console, "warn", () => undefined);
   const target = { type: "command", name: "giveaway" } as const;
-  assert.equal(await resolveFeatureGate(target, "1", hanging, 5), "run");
+  const hangingFlags: IFeatureGateSource = {
+    flags: () => new Promise<readonly IFeatureFlag[]>(() => undefined),
+    isStaff: async () => false,
+  };
+  assert.equal(await resolveFeatureGate(target, "1", hangingFlags, 5), "run");
+  const hangingStaff: IFeatureGateSource = {
+    flags: async () => [{ key: "giveaways", name: "Giveaways", state: "preview" }],
+    isStaff: () => new Promise<boolean>(() => undefined),
+  };
+  assert.equal(await resolveFeatureGate(target, "1", hangingStaff, 5), "run");
 });
 
 test("feature gate copy: the refusal and the Preview note", () => {
@@ -261,6 +324,33 @@ test("addPreviewNote: plain text and content replies get the note appended", () 
   const noted = addPreviewNote({ content: "Saved.", embeds: [] });
   assert.deepEqual(noted, { content: "Saved.\n-# Preview - staff only", embeds: [] });
   assert.deepEqual(addPreviewNote(noted), noted);
+});
+
+test("addPreviewNote: a V2 reply already at 40 components is left without the note", () => {
+  const container = new ContainerBuilder();
+  for (let i = 0; i < 39; i += 1) {
+    const row = new TextDisplayBuilder().setContent(safeV2TextContent(`Row ${i}`, 10));
+    container.addTextDisplayComponents(row);
+  }
+  const full = { components: [container], flags: MessageFlags.IsComponentsV2 };
+  assert.deepEqual(componentsJson(addPreviewNote(full)), componentsJson(full));
+
+  const room = new ContainerBuilder().addTextDisplayComponents(
+    new TextDisplayBuilder().setContent("Row"),
+  );
+  const noted = addPreviewNote({ components: [room], flags: MessageFlags.IsComponentsV2 });
+  assert.equal(componentsJson(noted).length, 2);
+});
+
+test("addPreviewNote: a V2 reply with no text room left is left without the note", () => {
+  const text = new TextDisplayBuilder().setContent(safeV2TextContent("x".repeat(3990), 4000));
+  const full = { components: [text], flags: MessageFlags.IsComponentsV2 };
+  assert.equal(componentsJson(addPreviewNote(full)).length, 1);
+});
+
+test("addPreviewNote: a content reply at 2000 characters is left without the note", () => {
+  const long = "x".repeat(1990);
+  assert.equal(addPreviewNote(long), long);
 });
 
 test("addPreviewNote: an edit that keeps the message body is left alone", () => {

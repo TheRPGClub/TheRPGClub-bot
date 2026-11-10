@@ -363,7 +363,7 @@ const HELP_TOPICS: HelpTopic[] = [
     notes:
       "Off: nobody can use the Feature. Preview: only Admins and Superadmins. Live: " +
       "everyone. Each change is announced in the admin channel. Replies are private.",
-    access: "admin",
+    access: "staff",
   },
   {
     id: "admin",

@@ -75,12 +75,19 @@ import {
   announceTieBreak,
   announceVotingResults,
   type IResultsRound,
+  routedAnnounceOptions,
   type ITieBreakPick,
 } from "./VotingResultsAnnouncement.js";
 import { VOTING_CATEGORY_LABEL } from "../functions/VotingTiePrompt.js";
-import { routeFeaturePost, type FeatureState } from "../functions/FeatureGate.js";
+import {
+  routeFeaturePost,
+  routeVotingPost,
+  type FeatureState,
+  type IVotingPostTarget,
+} from "../functions/FeatureGate.js";
 import { POST_FEATURE_KEYS } from "../config/featureGate.js";
-import { getFeatureState } from "./FeaturePostRouting.js";
+import { featureOffNotice, getFeatureState } from "./FeaturePostRouting.js";
+import { clearFeatureFlagCache } from "./FeatureAccessService.js";
 import { buildFeatureFlagChangedNotice, isFeatureState } from "./FeatureFlagService.js";
 
 /**
@@ -150,7 +157,11 @@ export interface IBotJobSurface {
    * sole winner's thread (an existing linked thread is reused). Throws when nothing posted.
    * Calls onPosted after each message goes out.
    */
-  publishVotingResults(round: IResultsRound, onPosted: () => void): Promise<void>;
+  publishVotingResults(
+    round: IResultsRound,
+    onPosted: () => void,
+    target: IVotingPostTarget,
+  ): Promise<void>;
   /**
    * Posts the current round's voting panels to announcements when it is roundNumber and
    * its voting is open; otherwise posts nothing and says why. A panel that fails to send
@@ -159,12 +170,17 @@ export interface IBotJobSurface {
   repostVotingPanels(
     roundNumber: number,
     onPosted: () => void,
+    target: IVotingPostTarget,
   ): Promise<VotingPanelRepostOutcome>;
   /**
    * Announces a tie-break pick in announcements with the winner thread for a sole winner.
    * Returns links to the posts. Throws when the round is gone or nothing could be posted.
    */
-  announceTieBreak(roundNumber: number, pick: ITieBreakPick): Promise<string[]>;
+  announceTieBreak(
+    roundNumber: number,
+    pick: ITieBreakPick,
+    target: IVotingPostTarget,
+  ): Promise<string[]>;
   /** Re-applies the latest saved presence. Throws when it could not (none saved too). */
   applyLatestPresence(): Promise<void>;
   /** Posts, or replies to replyTo's message, as given. Throws the discord.js error. */
@@ -178,6 +194,8 @@ export interface IBotJobSurface {
    * could not be read, which posts as Live. Never rejects.
    */
   featureState(featureKey: string): Promise<FeatureState | null>;
+  /** A Feature Flag changed: re-read the club-wide flags now. */
+  featureFlagsChanged(): void;
 }
 
 export function createBotJobSurface(client: Client): IBotJobSurface {
@@ -223,25 +241,28 @@ export function createBotJobSurface(client: Client): IBotJobSurface {
     },
     createLiveEventScheduledEvent: async (input) =>
       createLiveEventScheduledEvent(await client.guilds.fetch(HOME_GUILD_ID), input),
-    publishVotingResults: (round, onPosted) => announceVotingResults(client, round, { onPosted }),
-    repostVotingPanels: (roundNumber, onPosted) => repostVotingPanels({
+    publishVotingResults: (round, onPosted, target) =>
+      announceVotingResults(client, round, { onPosted, ...routedAnnounceOptions(target) }),
+    repostVotingPanels: (roundNumber, onPosted, target) => repostVotingPanels({
       client,
-      channelId: ANNOUNCEMENT_CHANNEL_ID,
+      channelId: target.channelId,
       expectedRoundNumber: roundNumber,
       onPosted,
+      featureRouted: true,
     }),
-    announceTieBreak: async (roundNumber, pick) => {
+    announceTieBreak: async (roundNumber, pick, target) => {
       const round = await VotingRounds.getByRound(roundNumber);
       if (!round) {
         throw new Error(`The API has no voting round ${roundNumber}, so no tie break was posted.`);
       }
-      return announceTieBreak(client, round, pick);
+      return announceTieBreak(client, round, pick, routedAnnounceOptions(target));
     },
     applyLatestPresence: () => updateBotPresence(client, { throwOnFailure: true }),
     sendSayMessage: (message) => sendSayMessage(client, message),
     sharedStateRefusal: (actionName) => sharedStateCommandRefusal(actionName),
     runMemberScan: () => runMemberScan(client),
-    featureState: (featureKey) => getFeatureState(client, featureKey),
+    featureState: (featureKey) => getFeatureState(featureKey),
+    featureFlagsChanged: clearFeatureFlagCache,
   };
 }
 
@@ -270,7 +291,44 @@ async function sendSayMessage(client: Client, message: ISayMessage): Promise<voi
 export type BotJobHandler = (
   payload: Record<string, unknown>,
   surface: IBotJobSurface,
+  context?: IBotJobContext,
 ) => Promise<string | void>;
+
+/** What the dispatcher read before running a job, so the handler need not read it again. */
+export interface IBotJobContext {
+  /** The job's Feature (its payload's `feature_key`) and that Feature's state, or null. */
+  feature: { key: string; state: FeatureState | null } | null;
+}
+
+/**
+ * The state of the Feature a job posts for: as the dispatcher read it when the job is
+ * tagged with that Feature, otherwise read now (once).
+ */
+async function jobFeatureState(
+  featureKey: string,
+  surface: IBotJobSurface,
+  context: IBotJobContext | undefined,
+): Promise<FeatureState | null> {
+  const feature = context?.feature;
+  return feature?.key === featureKey ? feature.state : surface.featureState(featureKey);
+}
+
+/**
+ * Where a voting job posts (announcements, or the bot-dev channel as a rehearsal in
+ * Preview), resolved once and passed down; null when the Feature is Off.
+ */
+async function votingJobTarget(
+  surface: IBotJobSurface,
+  context: IBotJobContext | undefined,
+): Promise<IVotingPostTarget | null> {
+  const state = await jobFeatureState(POST_FEATURE_KEYS.voting, surface, context);
+  return routeVotingPost(state, { channelId: ANNOUNCEMENT_CHANNEL_ID, rehearsal: false });
+}
+
+/** Names where a voting job posted, for its result text. */
+function votingPostPlace(target: IVotingPostTarget): string {
+  return target.channelId === BOT_DEV_CHANNEL_ID ? "the bot-dev channel" : "announcements";
+}
 
 export type BotJobHandlers = Readonly<Record<string, BotJobHandler>>;
 
@@ -388,7 +446,7 @@ export const handleSuggestionSubmitted: BotJobHandler = async (payload, surface)
  * Discord reviews included, so this is the only place the outcome is announced. Posted where
  * the Suggestions Feature's flag routes it (the bot-dev channel in Preview).
  */
-export const handleSuggestionOutcome: BotJobHandler = async (payload, surface) => {
+export const handleSuggestionOutcome: BotJobHandler = async (payload, surface, context) => {
   payloadPositiveInt(payload, "suggestion_id");
   const createdBy = optionalString(payload, "created_by");
   const outcome = payload.outcome;
@@ -412,11 +470,11 @@ export const handleSuggestionOutcome: BotJobHandler = async (payload, surface) =
   }
   const featureKey = POST_FEATURE_KEYS.suggestions;
   const channelId = routeFeaturePost(
-    await surface.featureState(featureKey),
+    await jobFeatureState(featureKey, surface, context),
     GAMEDB_UPDATES_CHANNEL_ID,
   );
-  // The dispatcher acks an Off Feature's job before it runs; this covers a flip in between.
-  if (!channelId) return `Not posted: the ${featureKey} Feature is Off.`;
+  // A tagged job of an Off Feature never gets here (the dispatcher acks it unrun).
+  if (!channelId) return featureOffNotice(featureKey);
   await surface.sendChannelMessage(channelId, content, createdBy ? [createdBy] : []);
 };
 
@@ -616,14 +674,16 @@ async function postOnce<T>(step: string, run: (onPosted: () => void) => Promise<
  * publish does. A failure once a post has gone out acks failed rather than retrying, which
  * would post the results twice; before that, a temporary one is left for the lease.
  */
-export const handleVotingResultsPublish: BotJobHandler = async (payload, surface) => {
+export const handleVotingResultsPublish: BotJobHandler = async (payload, surface, context) => {
   const roundNumber = payloadPositiveInt(payload, "round_number");
   const monthLabel = requireString(payload, "month_label");
+  const target = await votingJobTarget(surface, context);
+  if (!target) return featureOffNotice(POST_FEATURE_KEYS.voting);
   await postOnce(
     `Posting the round ${roundNumber} results`,
-    (onPosted) => surface.publishVotingResults({ roundNumber, monthLabel }, onPosted),
+    (onPosted) => surface.publishVotingResults({ roundNumber, monthLabel }, onPosted, target),
   );
-  return `Posted the round ${roundNumber} results to announcements.`;
+  return `Posted the round ${roundNumber} results to ${votingPostPlace(target)}.`;
 };
 
 /** Why a voting_panels_repost job posted nothing, for its failed ack. */
@@ -654,11 +714,13 @@ function describePanelRepostRefusal(
  * once a panel has gone out (a failed send, or an error after one), since that would post
  * the sent ones twice.
  */
-export const handleVotingPanelsRepost: BotJobHandler = async (payload, surface) => {
+export const handleVotingPanelsRepost: BotJobHandler = async (payload, surface, context) => {
   const roundNumber = payloadPositiveInt(payload, "round_number");
+  const target = await votingJobTarget(surface, context);
+  if (!target) return featureOffNotice(POST_FEATURE_KEYS.voting);
   const outcome = await postOnce(
     `Reposting the voting panels for round ${roundNumber}`,
-    (onPosted) => surface.repostVotingPanels(roundNumber, onPosted),
+    (onPosted) => surface.repostVotingPanels(roundNumber, onPosted, target),
   );
   if (outcome.status !== "posted") {
     throw new Error(describePanelRepostRefusal(roundNumber, outcome));
@@ -671,7 +733,8 @@ export const handleVotingPanelsRepost: BotJobHandler = async (payload, surface) 
     );
   }
   const noun = posted === 1 ? "panel" : "panels";
-  return `Reposted ${posted} voting ${noun} for round ${roundNumber} in announcements.`;
+  return `Reposted ${posted} voting ${noun} for round ${roundNumber} in ` +
+    `${votingPostPlace(target)}.`;
 };
 
 function payloadTieBreakGames(payload: Record<string, unknown>): ITieBreakPick["games"] {
@@ -701,13 +764,15 @@ function payloadTieBreakGames(payload: Record<string, unknown>): ITieBreakPick["
  * after the announcement, even a failed one, so round_decided's winner threads never race
  * this one's.
  */
-export const handleVotingTieBroken: BotJobHandler = async (payload, surface) => {
+export const handleVotingTieBroken: BotJobHandler = async (payload, surface, context) => {
   const roundNumber = payloadPositiveInt(payload, "round_number");
   const category = payloadCategory(payload);
   const games = payloadTieBreakGames(payload);
   let links: string[];
   try {
-    links = await surface.announceTieBreak(roundNumber, { category, games });
+    const target = await votingJobTarget(surface, context);
+    if (!target) return featureOffNotice(POST_FEATURE_KEYS.voting);
+    links = await surface.announceTieBreak(roundNumber, { category, games }, target);
   } finally {
     surface.requestVotingEventPoll();
   }
@@ -805,6 +870,8 @@ function payloadFeatureState(payload: Record<string, unknown>, field: string): F
  * announcement goes out whatever the Feature's own state. Nobody is pinged.
  */
 export const handleFeatureFlagChanged: BotJobHandler = async (payload, surface) => {
+  // Re-read the flags first, so the bot follows the change at once, not a TTL later.
+  surface.featureFlagsChanged();
   const content = buildFeatureFlagChangedNotice({
     key: requireString(payload, "key"),
     name: requireString(payload, "name"),

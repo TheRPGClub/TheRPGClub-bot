@@ -275,7 +275,6 @@ export async function postCompletionAnnouncement(
 ): Promise<void> {
   const { game } = input;
   const channelId = await routeFeaturePostFor(
-    client,
     POST_FEATURE_KEYS.completions,
     WHATCHA_PLAYING_CHANNEL_ID,
   );

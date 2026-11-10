@@ -20,11 +20,10 @@ import { buildTestPanelNoticeText, dedupeNominationsByGame } from "./VoteResults
 import { buildNominatorDisplayNames } from "./NominationListComponents.js";
 import { logError } from "../utilities/LogUtils.js";
 import { describeRequestError } from "../utilities/ApiErrorUtils.js";
-import { ANNOUNCEMENT_CHANNEL_ID } from "../config/channels.js";
 import { POST_FEATURE_KEYS } from "../config/featureGate.js";
 import {
-  FeaturePostSuppressedError,
-  routeFeaturePostFor,
+  featureOffNotice,
+  resolveVotingPostTarget,
 } from "../services/FeaturePostRouting.js";
 
 // Posting a round's voting panels, shared by /admin voting-open and the
@@ -99,6 +98,11 @@ export interface IPostVotePanelsParams {
   ballot?: VoteBallot;
   /** Called after each panel is sent, so a caller knows a retry would post it again. */
   onPosted?: () => void;
+  /**
+   * The caller already routed channelId by the Voting & GOTM flag
+   * (resolveVotingPostTarget), so it is used as given.
+   */
+  featureRouted?: boolean;
 }
 
 export interface IPostVotePanelsResult {
@@ -106,6 +110,8 @@ export interface IPostVotePanelsResult {
   lines: string[];
   posted: number;
   failed: number;
+  /** Where the panels went after routing; null when the Feature is Off (none posted). */
+  channelId: string | null;
 }
 
 /**
@@ -137,10 +143,12 @@ async function loadPanelArt(
 /**
  * Panels bound for announcements (and not the sandbox's, which carry their own notice)
  * follow the Voting & GOTM Feature's flag: the bot-dev channel in Preview, null when Off.
+ * A caller that already routed them (featureRouted) is taken at its word.
  */
 async function routePanelChannel(params: IPostVotePanelsParams): Promise<string | null> {
-  if (params.channelId !== ANNOUNCEMENT_CHANNEL_ID || params.notice) return params.channelId;
-  return routeFeaturePostFor(params.client, POST_FEATURE_KEYS.voting, params.channelId);
+  if (params.featureRouted || params.notice) return params.channelId;
+  const target = await resolveVotingPostTarget({ channelId: params.channelId, rehearsal: false });
+  return target?.channelId ?? null;
 }
 
 /** Posts one panel per category and reports what happened. */
@@ -149,8 +157,12 @@ export async function postVotePanels(
 ): Promise<IPostVotePanelsResult> {
   const channelId = await routePanelChannel(requested);
   if (!channelId) {
-    const reason = new FeaturePostSuppressedError(POST_FEATURE_KEYS.voting).message;
-    return { lines: [reason], posted: 0, failed: 0 };
+    return {
+      lines: [featureOffNotice(POST_FEATURE_KEYS.voting)],
+      posted: 0,
+      failed: 0,
+      channelId: null,
+    };
   }
   const params = { ...requested, channelId };
   const resultLines: string[] = [];
@@ -206,5 +218,5 @@ export async function postVotePanels(
           `${channelMention(params.channelId)}: ${failure}`,
     );
   }
-  return { lines: resultLines, posted, failed };
+  return { lines: resultLines, posted, failed, channelId };
 }

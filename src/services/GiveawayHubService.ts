@@ -10,7 +10,7 @@ import { ContainerBuilder } from "@discordjs/builders";
 import { countAvailableGameKeys, listAvailableGameKeys } from "../classes/GameKey.js";
 import { GIVEAWAY_HUB_CHANNEL_ID } from "../config/channels.js";
 import { POST_FEATURE_KEYS } from "../config/featureGate.js";
-import type { IFeatureAccessSource } from "../functions/FeatureGate.js";
+import type { IFeatureFlagSource } from "../functions/FeatureGate.js";
 import { routeFeaturePostFor } from "./FeaturePostRouting.js";
 import { buildPageFooterText } from "../functions/PaginationUtils.js";
 import { logError, logWarn } from "../utilities/LogUtils.js";
@@ -302,8 +302,8 @@ export async function refreshGiveawayHubMessage(
   options?: {
     forceRecreate?: boolean;
     throwOnFailure?: boolean;
-    /** Where the flag state is read; the shared access cache unless a test passes one. */
-    featureAccess?: IFeatureAccessSource;
+    /** Where the flag state is read; the shared flag cache unless a test passes one. */
+    featureFlags?: IFeatureFlagSource;
   },
 ): Promise<void> {
   // A bot job must fail when the hub was not refreshed; other callers only log it.
@@ -318,10 +318,9 @@ export async function refreshGiveawayHubMessage(
   }
 
   const hubChannelId = await routeFeaturePostFor(
-    client,
     POST_FEATURE_KEYS.giveawayHub,
     GIVEAWAY_HUB_CHANNEL_ID,
-    options?.featureAccess,
+    options?.featureFlags,
   );
   if (!hubChannelId) return;
 

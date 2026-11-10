@@ -55,6 +55,7 @@ function fakeSurface(): IPostingSurface {
     sharedStateRefusal: () => null,
     runMemberScan: async () => ({ upserted: 0, failed: 0, departed: 0 }),
     featureState: async () => null,
+    featureFlagsChanged: () => undefined,
   };
   return surface;
 }

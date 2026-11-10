@@ -9,11 +9,7 @@ import type { VoteBallot } from "../classes/Vote.js";
 import NrGotm, { reloadNrGotmRoundFromDb } from "../classes/NrGotm.js";
 import type { IVotingEvent } from "../classes/VotingEvents.js";
 import { toVotingRoundCategory, type IVotingRound } from "../classes/VotingRounds.js";
-import {
-  ADMIN_CHANNEL_ID,
-  ANNOUNCEMENT_CHANNEL_ID,
-  BOT_DEV_CHANNEL_ID,
-} from "../config/channels.js";
+import { ADMIN_CHANNEL_ID, ANNOUNCEMENT_CHANNEL_ID } from "../config/channels.js";
 import { POST_FEATURE_KEYS } from "../config/featureGate.js";
 import { NOMINATION_DISCUSSION_CHANNEL_IDS } from "../config/nominationChannels.js";
 import { fetchSendableChannel } from "../functions/ChannelUtils.js";
@@ -40,7 +36,9 @@ import {
 } from "./VotingResultsAnnouncement.js";
 import { ensureWinnerThread, type WinnerKindLabel } from "./WinnerThreadService.js";
 import { apiVotingDataSource, type IVotingDataSource } from "./VotingDataSource.js";
-import { getFeaturePostDestination, logSuppressedPost } from "./FeaturePostRouting.js";
+import { logSuppressedPost, resolveVotingPostTarget } from "./FeaturePostRouting.js";
+import { featureFlagCache } from "./FeatureAccessService.js";
+import type { IFeatureFlagSource } from "../functions/FeatureGate.js";
 
 /**
  * What handling an event came to. Both outcomes are acked: "skipped" means
@@ -75,6 +73,11 @@ export interface IVotingEventContext {
    * (no winner thread, no scheduled event).
    */
   previewChannelId?: string;
+  /**
+   * Reloads the bot's GOTM caches for a decided round, posting nothing: what round_decided
+   * still does in Preview and Off. reloadDecidedRound unless a test passes its own.
+   */
+  reloadRound?: (roundNumber: number) => Promise<void>;
 }
 
 export function buildNominationReminderText(roundNumber: number, votingOpensAt: Date): string {
@@ -162,6 +165,7 @@ async function postVotingPanels(
     source: context.source,
     ids: context.panelIds?.main,
     notice: context.panelNotice,
+    featureRouted: true,
   });
   if (result.posted === 0) {
     throw new Error(
@@ -190,6 +194,7 @@ async function postVotingResults(
         rehearsal: context.rehearsal,
         source: context.source,
         channelIdOverride: context.previewChannelId,
+        featureRouted: true,
       },
     );
   } catch (err) {
@@ -243,6 +248,7 @@ async function postRunoffPanels(
     source: context.source,
     ids: context.panelIds?.runoff,
     notice: context.panelNotice,
+    featureRouted: true,
     ballot: "runoff",
   });
   if (result.posted === 0) {
@@ -271,6 +277,7 @@ async function postRunoffResults(
       rehearsal: context.rehearsal,
       source: context.source,
       channelIdOverride: context.previewChannelId,
+      featureRouted: true,
     });
   } catch (err) {
     if (err instanceof NothingToAnnounceError) {
@@ -398,44 +405,52 @@ async function finishDecidedRound(
 }
 
 /**
- * The live context as the Voting & GOTM Feature's flag routes it (bot#1521): unchanged when
- * Live, its public posts sent to the bot-dev channel in Preview, and null when Off (its
- * public posts are suppressed). A rehearsal (the sandbox) is never routed.
+ * The live context as the Voting & GOTM Feature's flag routes it (bot#1521), resolved once
+ * per event and passed down to every post: unchanged when Live, its public posts sent to
+ * the bot-dev channel in Preview, and null when Off (its public posts are suppressed). A
+ * rehearsal (the sandbox) is never routed.
  */
 async function routeVotingEventContext(
-  client: Client,
   context: IVotingEventContext,
+  flags: IFeatureFlagSource,
 ): Promise<IVotingEventContext | null> {
   if (context.rehearsal) return context;
-  const destination = await getFeaturePostDestination(client, POST_FEATURE_KEYS.voting);
-  if (destination === "suppressed") return null;
-  if (destination === "normal") return context;
+  const target = await resolveVotingPostTarget(undefined, flags);
+  if (!target) return null;
+  if (!target.rehearsal) return context;
+  const reloadRound = context.reloadRound ?? reloadDecidedRound;
   return {
     ...context,
     rehearsal: true,
-    previewChannelId: BOT_DEV_CHANNEL_ID,
-    recordWinners: (_client, roundNumber) => reloadDecidedRound(roundNumber),
+    previewChannelId: target.channelId,
+    recordWinners: (_client, roundNumber) => reloadRound(roundNumber),
   };
 }
 
 /**
  * Performs the Discord side of one voting event. Throws to have it retried. While the
  * Voting & GOTM Feature is Off, an event that posts publicly is skipped (acked, nothing
- * posted); the admin channel's tie prompt still goes out.
+ * posted); the admin channel's tie prompt still goes out, and a decided round still
+ * reloads the bot's GOTM caches (no winner threads and no scheduled event: those are
+ * public, and Off pauses the Feature's automated activity).
  */
 export async function handleVotingEvent(
   client: Client,
   event: IVotingEvent,
   baseContext: IVotingEventContext = LIVE_VOTING_EVENT_CONTEXT,
+  flags: IFeatureFlagSource = featureFlagCache,
 ): Promise<VotingEventOutcome> {
   if (event.kind === "tie_pending") return postTiePendingNotice(client, event, baseContext);
   if (event.kind === "unknown") {
     logWarn("VotingEventHandlers", `Unknown voting event kind "${event.rawKind}"; acking.`);
     return "skipped";
   }
-  const context = await routeVotingEventContext(client, baseContext);
+  const context = await routeVotingEventContext(baseContext, flags);
   if (!context) {
     logSuppressedPost(POST_FEATURE_KEYS.voting, `voting event ${event.id} (${event.kind})`);
+    if (event.kind === "round_decided") {
+      await (baseContext.reloadRound ?? reloadDecidedRound)(event.roundNumber);
+    }
     return "skipped";
   }
   switch (event.kind) {

@@ -36,9 +36,10 @@ import {
   COLOR_PRIMARY,
   COLOR_WARNING,
 } from "../config/colors.js";
-import { ANNOUNCEMENT_CHANNEL_ID, BOT_DEV_CHANNEL_ID } from "../config/channels.js";
+import { ANNOUNCEMENT_CHANNEL_ID } from "../config/channels.js";
 import { POST_FEATURE_KEYS } from "../config/featureGate.js";
-import { FeaturePostSuppressedError, getFeaturePostDestination } from "./FeaturePostRouting.js";
+import type { IVotingPostTarget } from "../functions/FeatureGate.js";
+import { FeaturePostSuppressedError, resolveVotingPostTarget } from "./FeaturePostRouting.js";
 import { fetchGameCoverBuffer } from "./GameImageService.js";
 import { fetchSendableChannel, type SendableChannel } from "../functions/ChannelUtils.js";
 import { logError } from "../utilities/LogUtils.js";
@@ -70,6 +71,11 @@ export interface IAnnounceResultsOptions {
   source?: IVotingDataSource;
   /** Called after each message is sent, so a caller knows a retry would post it again. */
   onPosted?: () => void;
+  /**
+   * The caller already routed the channel and rehearsal by the Voting & GOTM flag
+   * (resolveVotingPostTarget), so they are used as given.
+   */
+  featureRouted?: boolean;
 }
 
 /**
@@ -172,21 +178,33 @@ async function postWinnerAnnouncements(
 }
 
 /**
- * Where an announcement goes. One bound for announcements (no channel override, not a
- * rehearsal) follows the Voting & GOTM Feature's flag: in Preview it goes to the bot-dev
- * channel as a rehearsal (banner, no winner thread created or renamed), and when Off
- * nothing is posted (FeaturePostSuppressedError).
+ * Where an announcement goes. Unless the caller already routed it (featureRouted), one
+ * bound for announcements follows the Voting & GOTM Feature's flag
+ * (resolveVotingPostTarget): in Preview it goes to the bot-dev channel as a rehearsal
+ * (banner, no winner thread created or renamed), and when Off nothing is posted
+ * (FeaturePostSuppressedError).
  */
 async function routeAnnouncement(
-  client: Client,
   options: IAnnounceResultsOptions,
 ): Promise<IAnnounceResultsOptions> {
-  if (options.channelIdOverride || options.rehearsal) return options;
-  const featureKey = POST_FEATURE_KEYS.voting;
-  const destination = await getFeaturePostDestination(client, featureKey);
-  if (destination === "suppressed") throw new FeaturePostSuppressedError(featureKey);
-  if (destination === "normal") return options;
-  return { ...options, channelIdOverride: BOT_DEV_CHANNEL_ID, rehearsal: true };
+  if (options.featureRouted) return options;
+  const target = await resolveVotingPostTarget({
+    channelId: options.channelIdOverride ?? ANNOUNCEMENT_CHANNEL_ID,
+    rehearsal: Boolean(options.rehearsal),
+  });
+  if (!target) throw new FeaturePostSuppressedError(POST_FEATURE_KEYS.voting);
+  return { ...options, ...routedAnnounceOptions(target) };
+}
+
+/** Announce options for a target the caller already routed by the Voting & GOTM flag. */
+export function routedAnnounceOptions(
+  target: IVotingPostTarget,
+): Pick<IAnnounceResultsOptions, "channelIdOverride" | "rehearsal" | "featureRouted"> {
+  return {
+    channelIdOverride: target.channelId,
+    rehearsal: target.rehearsal,
+    featureRouted: true,
+  };
 }
 
 /**
@@ -204,7 +222,7 @@ async function postResults(
   if (!tallyContainers.length) {
     throw new NothingToAnnounceError(roundNumber);
   }
-  const options = await routeAnnouncement(client, announceOptions);
+  const options = await routeAnnouncement(announceOptions);
   const channelId = options.channelIdOverride ?? ANNOUNCEMENT_CHANNEL_ID;
   const rehearsal = Boolean(options.rehearsal);
   const sendable = await fetchSendableChannel(client, channelId);
@@ -367,7 +385,7 @@ export async function announceTieBreak(
   pick: ITieBreakPick,
   announceOptions: IAnnounceResultsOptions = {},
 ): Promise<string[]> {
-  const options = await routeAnnouncement(client, announceOptions);
+  const options = await routeAnnouncement(announceOptions);
   const channelId = options.channelIdOverride ?? ANNOUNCEMENT_CHANNEL_ID;
   const rehearsal = Boolean(options.rehearsal);
   const sendable = await fetchSendableChannel(client, channelId);

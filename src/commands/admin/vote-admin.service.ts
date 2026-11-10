@@ -42,6 +42,7 @@ import {
 import {
   announceTieBreak,
   announceVotingResults,
+  routedAnnounceOptions,
   type IAnnounceResultsOptions,
 } from "../../services/VotingResultsAnnouncement.js";
 import {
@@ -67,6 +68,12 @@ import {
 } from "../../services/VotingDataSource.js";
 import { requestVotingEventPoll } from "../../services/VotingEventService.js";
 import { ANNOUNCEMENT_CHANNEL_ID } from "../../config/channels.js";
+import { POST_FEATURE_KEYS } from "../../config/featureGate.js";
+import type { IVotingPostTarget } from "../../functions/FeatureGate.js";
+import {
+  featureOffNotice,
+  resolveVotingPostTarget,
+} from "../../services/FeaturePostRouting.js";
 import { buildApiErrorMessage } from "../../utilities/ApiErrorUtils.js";
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
 
@@ -179,6 +186,28 @@ async function handleVotingOpenTestMode(
   }, "Could not post the test voting panels");
 }
 
+/** Notes a post the Voting & GOTM flag sent to bot-dev instead of where it was asked. */
+function previewSuffix(requestedChannelId: string, postedChannelId: string): string {
+  return postedChannelId !== requestedChannelId
+    ? " (Voting & GOTM is in Preview, so not in announcements)"
+    : "";
+}
+
+/** What /admin voting-results publish posted and where, for its reply. */
+function describeResultsPost(
+  round: number,
+  target: IVotingPostTarget,
+  testMode: boolean,
+): string {
+  const where = channelMention(target.channelId);
+  if (!target.rehearsal) return `Round ${round} results were posted in ${where}.`;
+  const lead = testMode
+    ? `🧪 Test mode: Round ${round} results were posted in ${where}.`
+    : `Voting & GOTM is in Preview, so Round ${round} results were posted in ${where} ` +
+      "as a rehearsal, not in announcements.";
+  return `${lead} No winner thread was created or renamed.`;
+}
+
 /** Why /admin voting-open posted nothing, for its reply. */
 function describeRepostRefusal(
   outcome: Exclude<VotingPanelRepostOutcome, { status: "posted" }>,
@@ -231,11 +260,17 @@ export async function handleVotingOpen(
       return;
     }
     const { round, result } = outcome;
+    if (!result.channelId) {
+      await safeReply(interaction, buildTextReply(result.lines.join("\n"), true));
+      return;
+    }
     await safeReply(
       interaction,
       buildTextReply(
-        `Round ${round.roundNumber} voting panels reposted. Voting closes ` +
-          `<t:${toUnixTimestamp(round.votingClosesAt)}:F>.\n${result.lines.join("\n")}`,
+        `Round ${round.roundNumber} voting panels reposted in ` +
+          `${channelMention(result.channelId)}${previewSuffix(channelId, result.channelId)}. ` +
+          `Voting closes <t:${toUnixTimestamp(round.votingClosesAt)}:F>.\n` +
+          result.lines.join("\n"),
         true,
       ),
     );
@@ -423,23 +458,27 @@ export async function handleVotingResults(
         );
         return;
       }
-      // A channel override makes this a rehearsal: banner added, no winner thread.
-      const rehearsal = Boolean(channelOverrideId);
+      // A channel override makes this a rehearsal: banner added, no winner thread. Results
+      // bound for announcements follow the Voting & GOTM flag, resolved once here.
+      const target = await resolveVotingPostTarget({
+        channelId: channelOverrideId ?? ANNOUNCEMENT_CHANNEL_ID,
+        rehearsal: Boolean(channelOverrideId),
+      });
+      if (!target) {
+        await safeReply(
+          interaction,
+          buildTextReply(featureOffNotice(POST_FEATURE_KEYS.voting), true),
+        );
+        return;
+      }
       await announceVotingResults(
         interaction.client,
         { roundNumber: round, monthLabel },
-        { channelIdOverride: channelOverrideId, rehearsal },
+        routedAnnounceOptions(target),
       );
-      const targetChannelId = channelOverrideId ?? ANNOUNCEMENT_CHANNEL_ID;
       await safeReply(
         interaction,
-        buildTextReply(
-          rehearsal
-            ? `🧪 Test mode: Round ${round} results were posted in ` +
-              `${channelMention(targetChannelId)}. No winner thread was created or renamed.`
-            : `Round ${round} results were posted in ${channelMention(targetChannelId)}.`,
-          true,
-        ),
+        buildTextReply(describeResultsPost(round, target, Boolean(channelOverrideId)), true),
       );
       return;
     }

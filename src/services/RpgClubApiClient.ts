@@ -210,6 +210,19 @@ export async function apiPatch<T>(
 }
 
 /**
+ * PATCH a resource and throw the `AxiosError` for every non-2xx response,
+ * 404 included, so callers can report the full request and response.
+ */
+export async function apiPatchOrThrow<T>(
+  path: string,
+  body?: unknown,
+  config?: AxiosRequestConfig,
+): Promise<T> {
+  const response = await getClient().patch<T>(path, body, config);
+  return response.data;
+}
+
+/**
  * PUT a resource. Returns the parsed response body, or `null` on 404.
  * Throws for all other non-2xx responses.
  */

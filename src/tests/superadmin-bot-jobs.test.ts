@@ -79,6 +79,7 @@ function fakeSurface(options: {
       return options.scanCounts ?? { upserted: 0, failed: 0, departed: 0 };
     },
     featureState: async () => null,
+    featureFlagsChanged: () => undefined,
   };
   return surface;
 }

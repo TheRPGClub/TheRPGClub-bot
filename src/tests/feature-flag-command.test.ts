@@ -48,7 +48,7 @@ interface IFakeFlagApi extends IFeatureFlagApi {
 }
 
 function fakeApi(options: {
-  set?: { entry: IFeatureFlagEntry; changed: boolean } | null;
+  set?: { entry: IFeatureFlagEntry; changed: boolean };
   setError?: unknown;
   list?: IFeatureFlagEntry[];
   listError?: unknown;
@@ -64,7 +64,7 @@ function fakeApi(options: {
     setFeatureFlag: async (key, update) => {
       api.sets.push({ key, update });
       if (options.setError) throw options.setError;
-      return options.set === undefined ? null : options.set;
+      return options.set ?? { entry: entry(), changed: false };
     },
   };
   return api;
@@ -94,7 +94,7 @@ test("setFeatureFlagReply: names the acting user and clears the flag cache", asy
   const cache = cacheSpy();
   const text = await setFeatureFlagReply(
     { actingUserId: "42", key: "reviews", state: "preview", reason: "Testing" },
-    { api, clearAccessCache: cache.clear },
+    { api, clearFlagCache: cache.clear },
   );
   assert.deepEqual(api.sets, [{
     key: "reviews",
@@ -113,32 +113,44 @@ test("setFeatureFlagReply: the state it already has says so and changes nothing"
   const cache = cacheSpy();
   const text = await setFeatureFlagReply(
     { actingUserId: "42", key: "reviews", state: "preview", reason: null },
-    { api, clearAccessCache: cache.clear },
+    { api, clearFlagCache: cache.clear },
   );
   assert.equal(text, "Reviews (`reviews`) is already **Preview**. Nothing changed.");
 });
 
-test("setFeatureFlagReply: a non-staff user gets the API's polite refusal", async () => {
-  const api = fakeApi({ setError: apiError(403, { error: "forbidden" }) });
-  const cache = cacheSpy();
-  const text = await setFeatureFlagReply(
-    { actingUserId: "7", key: "reviews", state: "off", reason: null },
-    { api, clearAccessCache: cache.clear },
-  );
-  assert.equal(text, FEATURE_FLAG_STAFF_ONLY_MESSAGE);
-  assert.equal(cache.clears, 0);
-});
+/** The friendly line, then the full request and response as JSON blocks (CLAUDE.md). */
+function assertRefusal(text: string, friendly: string, status: number): void {
+  assert.ok(text.startsWith(friendly), text);
+  assert.match(text, /Request:\n```json/);
+  assert.match(text, /"url": "\/api\/v1\/features\/reviews"/);
+  assert.match(text, /"acting_user_id"/);
+  assert.match(text, new RegExp(`Response:\\n\`\`\`json[\\s\\S]*"status": ${status}`));
+}
 
-test("setFeatureFlagReply: an unknown Feature key is named back", async () => {
-  const api = fakeApi({ set: null });
-  const cache = cacheSpy();
-  const text = await setFeatureFlagReply(
-    { actingUserId: "42", key: "nope", state: "off", reason: null },
-    { api, clearAccessCache: cache.clear },
-  );
-  assert.equal(text, "There is no Feature `nope`. Pick one from the list.");
-  assert.equal(cache.clears, 0);
-});
+test("setFeatureFlagReply: a non-staff user gets the polite refusal with the full exchange",
+  async () => {
+    const api = fakeApi({ setError: apiError(403, { error: "forbidden" }) });
+    const cache = cacheSpy();
+    const text = await setFeatureFlagReply(
+      { actingUserId: "7", key: "reviews", state: "off", reason: null },
+      { api, clearFlagCache: cache.clear },
+    );
+    assertRefusal(text, FEATURE_FLAG_STAFF_ONLY_MESSAGE, 403);
+    assert.match(text, /"error": "forbidden"/);
+    assert.equal(cache.clears, 0);
+  });
+
+test("setFeatureFlagReply: an unknown Feature key is named back with the full exchange",
+  async () => {
+    const api = fakeApi({ setError: apiError(404, { error: "not_found" }) });
+    const cache = cacheSpy();
+    const text = await setFeatureFlagReply(
+      { actingUserId: "42", key: "nope", state: "off", reason: null },
+      { api, clearFlagCache: cache.clear },
+    );
+    assertRefusal(text, "There is no Feature `nope`. Pick one from the list.", 404);
+    assert.equal(cache.clears, 0);
+  });
 
 test("setFeatureFlagReply: other API errors are thrown for the full error reply", async () => {
   const error = apiError(422, { error: "reason is too long" });
@@ -147,7 +159,7 @@ test("setFeatureFlagReply: other API errors are thrown for the full error reply"
   await assert.rejects(
     setFeatureFlagReply(
       { actingUserId: "42", key: "reviews", state: "off", reason: "x" },
-      { api, clearAccessCache: cache.clear },
+      { api, clearFlagCache: cache.clear },
     ),
     (err: unknown) => err === error,
   );
@@ -178,10 +190,13 @@ test("listFeatureFlagsReply: every Feature with its state, Core first", async ()
   ].join("\n"));
 });
 
-test("listFeatureFlagsReply: a non-staff user gets the API's polite refusal", async () => {
-  const api = fakeApi({ listError: apiError(403, { error: "forbidden" }, "get") });
-  assert.equal(await listFeatureFlagsReply("7", { api }), FEATURE_FLAG_STAFF_ONLY_MESSAGE);
-});
+test("listFeatureFlagsReply: a non-staff user gets the polite refusal with the full exchange",
+  async () => {
+    const api = fakeApi({ listError: apiError(403, { error: "forbidden" }, "get") });
+    const text = await listFeatureFlagsReply("7", { api });
+    assertRefusal(text, FEATURE_FLAG_STAFF_ONLY_MESSAGE, 403);
+    assert.match(text, /"method": "GET"/);
+  });
 
 test("listFeatureFlagsReply: other API errors are thrown for the full error reply", async () => {
   const error = apiError(500, { error: "boom" }, "get");

@@ -50,9 +50,9 @@ import {
   FEATURE_NOT_AVAILABLE_MESSAGE,
   resolveFeatureGate,
   type FeatureGateTarget,
-  type IFeatureAccessSource,
+  type IFeatureGateSource,
 } from "./FeatureGate.js";
-import { featureAccessCache } from "../services/FeatureAccessService.js";
+import { featureGateSource } from "../services/FeatureAccessService.js";
 
 export type AnyRepliable = RepliableInteraction | CommandInteraction;
 
@@ -407,11 +407,12 @@ function featureGateTarget(interaction: Interaction): FeatureGateTarget | null {
  * true when the interaction was refused with the private not-available reply, so the
  * caller must not run its handler. For a Preview Feature used by staff it marks the
  * interaction, and the reply helpers below add the Preview note to every reply. Commands
- * and components with no Feature, and autocomplete, pass without a lookup.
+ * and components with no Feature, and autocomplete, pass without a lookup. A Live or Off
+ * Feature reads only the club-wide flag cache, so members never wait on a per-user lookup.
  */
 export async function enforceFeatureGate(
   interaction: Interaction,
-  source: IFeatureAccessSource = featureAccessCache,
+  source: IFeatureGateSource = featureGateSource,
 ): Promise<boolean> {
   if (interaction.isAutocomplete() || !interaction.isRepliable()) return false;
   const target = featureGateTarget(interaction);

@@ -145,7 +145,6 @@ export async function postNominationChange(
   payload: NominationListPayload,
 ): Promise<void> {
   const channelId = await routeFeaturePostFor(
-    client,
     POST_FEATURE_KEYS.voting,
     kind === "gotm" ? GOTM_NOMINATION_CHANNEL_ID : NR_GOTM_NOMINATION_CHANNEL_ID,
   );

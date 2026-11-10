@@ -11,6 +11,7 @@ import {
 import { buildAnyErrorMessage } from "../utilities/ApiErrorUtils.js";
 import { isTemporaryJobError } from "./BotJobErrors.js";
 import { featurePostDestination } from "../functions/FeatureGate.js";
+import { featureOffNotice } from "./FeaturePostRouting.js";
 import { createScheduledTask, type IScheduledTask } from "../utilities/IntervalUtils.js";
 import { logError, logInfo } from "../utilities/LogUtils.js";
 import {
@@ -158,15 +159,16 @@ async function performJob(
   label: string,
 ): Promise<BotJobPendingAck | null> {
   const featureKey = jobFeatureKey(job);
-  const destination = featureKey
-    ? featurePostDestination(await surface.featureState(featureKey))
-    : "normal";
-  if (destination === "suppressed") {
-    logInfo("BotJobService", `Suppressed ${label}: the ${featureKey} Feature is Off.`);
-    return { status: "done", resultText: `Not posted: the ${featureKey} Feature is Off.` };
+  const feature = featureKey
+    ? { key: featureKey, state: await surface.featureState(featureKey) }
+    : null;
+  const destination = featurePostDestination(feature?.state ?? null);
+  if (feature && destination === "suppressed") {
+    logInfo("BotJobService", `Suppressed ${label}: the ${feature.key} Feature is Off.`);
+    return { status: "done", resultText: featureOffNotice(feature.key) };
   }
   try {
-    const handlerText = await handler(job.payload, surface);
+    const handlerText = await handler(job.payload, surface, { feature });
     const resultText = normalizeResultText(
       destination === "bot_dev" ? withPreviewResultNote(handlerText) : handlerText,
     );
