@@ -225,6 +225,11 @@ function oldestId(messages: readonly INewsMessage[]): string {
   return messages.reduce((oldest, m) => (isBefore(m.id, oldest) ? m.id : oldest), messages[0].id);
 }
 
+function newestId(messages: readonly INewsMessage[]): string | null {
+  if (messages.length === 0) return null;
+  return messages.reduce((newest, m) => (isBefore(newest, m.id) ? m.id : newest), messages[0].id);
+}
+
 /**
  * The thread's recorded live News Items from `floorId` on, and the newest one it recorded
  * (null when none). Imported items sorted into the category share its feed and are left
@@ -284,6 +289,10 @@ async function fetchMissed(
  * are now; a recorded one that is gone or no longer qualifies is removed), and the messages
  * between the newest recorded News Item and that window are recorded. A thread shorter
  * than the window is checked whole. Every write is idempotent by message ID.
+ *
+ * Discord is read before the feed, so a message posted in between can be recorded by the
+ * live listener without being in the window: only recorded items at or below the window's
+ * newest message are considered for removal.
  */
 async function catchUpThread(
   threadId: string,
@@ -292,6 +301,7 @@ async function catchUpThread(
 ): Promise<ThreadCounts> {
   const window = await deps.discord.fetchMessages(threadId, { limit: deps.recentWindow });
   const windowFull = window.length >= deps.recentWindow;
+  const ceilingId = newestId(window);
   // Every message in a thread comes after the thread's own ID.
   const floorId = windowFull ? oldestId(window) : threadId;
   const recorded = await readRecorded(categoryKey, floorId, windowFull, deps.api);
@@ -313,6 +323,7 @@ async function catchUpThread(
   }
   for (const messageId of recorded.recent) {
     if (qualifying.has(messageId)) continue;
+    if (ceilingId === null || isBefore(ceilingId, messageId)) continue;
     await deps.api.remove(messageId);
     counts.removed += 1;
   }

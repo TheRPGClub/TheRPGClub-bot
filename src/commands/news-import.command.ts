@@ -118,10 +118,19 @@ async function attachmentText(attachment: Attachment, maxBytes: number): Promise
 @SlashGroup(NEWS_IMPORT_COMMAND)
 export class NewsImportCommand {
   @Slash({
-    description: "Read the whole Game News Archive and import its news, unsorted",
+    description: "Import the Game News Archive's news, unsorted, continuing where it stopped",
     name: "scan",
   })
-  async scan(interaction: CommandInteraction): Promise<void> {
+  async scan(
+    @SlashOption({
+      description: "Start over from the archive's newest message instead",
+      name: "from-newest",
+      required: false,
+      type: ApplicationCommandOptionType.Boolean,
+    })
+    fromNewest: boolean | undefined,
+    interaction: CommandInteraction,
+  ): Promise<void> {
     await safeDeferReply(interaction, { flags: MessageFlags.Ephemeral });
     const channel = interaction.channel;
     if (!channel?.isSendable()) {
@@ -138,6 +147,7 @@ export class NewsImportCommand {
         testMode: IS_TEST_MODE,
         archive: discordArchiveReader(interaction.client, GAME_NEWS_CHANNEL_ID),
         archiveId: GAME_NEWS_CHANNEL_ID,
+        fromNewest: fromNewest ?? false,
         post: (text) => postProgress(channel, text),
         postDetails: (text) => postScanError(channel, text),
       });

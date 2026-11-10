@@ -46,6 +46,46 @@ test("commas, quotes and line breaks in a comment are quoted", () => {
   assert.ok(part.includes(",\"Finally, \"\"the\"\" remake\nis out\","));
 });
 
+test("member-written cells that a spreadsheet would read as a formula start with a quote", () => {
+  const starts = ["=", "+", "-", "@", "\t", "\r"];
+  const items = starts.map((start, i) => item(i + 1, {
+    author_name: `${start}name`,
+    comment: `${start}comment`,
+    link_url: `${start}https://example.com/${i}`,
+    link_title: `${start}title`,
+    link_site_name: `${start}site`,
+    link_description: `${start}description`,
+  }));
+  const [part] = newsImportFileParts(items, 1e6);
+
+  const rows = parseDelimited(part).records.slice(1).map((record) => record.fields);
+  rows.forEach((fields, i) => {
+    const start = starts[i];
+    assert.deepEqual(fields.slice(2, 8), [
+      `'${start}name`,
+      `'${start}comment`,
+      `'${start}https://example.com/${i}`,
+      `'${start}title`,
+      `'${start}site`,
+      `'${start}description`,
+    ]);
+    assert.equal(fields[0], items[i].message_id);
+  });
+});
+
+test("member-written cells are left as they are when they start with anything else", () => {
+  const [part] = newsImportFileParts([item(1, {
+    author_name: "Ada = Lovelace",
+    comment: "1+1 -> @everyone",
+    link_title: "'quoted' title",
+  })], 1e6);
+
+  const fields = parseDelimited(part).records[1].fields;
+  assert.equal(fields[2], "Ada = Lovelace");
+  assert.equal(fields[3], "1+1 -> @everyone");
+  assert.equal(fields[5], "'quoted' title");
+});
+
 test("a downloaded file reads back with every item unsorted", () => {
   const items = [item(1, { comment: "a, \"b\"\r\nc" }), item(2)];
   const [part] = newsImportFileParts(items, 1e6);

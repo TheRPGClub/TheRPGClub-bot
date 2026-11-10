@@ -42,7 +42,7 @@ function fakeApi(options: {
     async status(actingUserId: string): Promise<INewsImportStatus> {
       api.statusFor.push(actingUserId);
       if (options.statusError) throw options.statusError;
-      return options.status ?? { sorted: 0, unsorted: 0, removed: 0 };
+      return options.status ?? { sorted: 0, unsorted: 0, removed: 0, oldestMessageId: null };
     },
     async recordBatch(items: readonly unknown[]) {
       api.batches += 1;
@@ -60,7 +60,7 @@ function fakeApi(options: {
 }
 
 test("status shows the sorted, unsorted and removed counts for the acting member", async () => {
-  const api = fakeApi({ status: { sorted: 12, unsorted: 340, removed: 5 } });
+  const api = fakeApi({ status: { sorted: 12, unsorted: 340, removed: 5, oldestMessageId: null } });
 
   const text = await newsImportStatusReply(STAFF_ID, { api, runner: new NewsImportScanRunner() });
 
@@ -142,7 +142,7 @@ function scanStart(
   return { start, channel };
 }
 
-test("staff start a scan: the reply links the progress message, which ends with counts", async () => {
+test("staff start a scan: the reply links the progress message, ending with counts", async () => {
   const api = fakeApi();
   const { start, channel } = scanStart(api, new NewsImportScanRunner());
 
@@ -158,6 +158,59 @@ test("staff start a scan: the reply links the progress message, which ends with 
   assert.match(final, /Recorded \*\*1\*\*/);
   assert.match(final, /1 text only/);
   assert.deepEqual(channel.details, []);
+});
+
+/** An archive of `messages` that pages like discord.js and keeps the cursors it was asked. */
+function pagedArchive(messages: INewsMessage[]): IArchiveReader & { cursors: (string | null)[] } {
+  const newestFirst = [...messages].reverse();
+  const archive = {
+    cursors: [] as (string | null)[],
+    async page(before: string | null, limit: number): Promise<INewsMessage[]> {
+      archive.cursors.push(before);
+      const older = before === null
+        ? newestFirst
+        : newestFirst.filter((m) => BigInt(m.id) < BigInt(before));
+      return older.slice(0, limit);
+    },
+  };
+  return archive;
+}
+
+test("a scan continues from just before the oldest message already imported", async () => {
+  const messages = Array.from({ length: 6 }, (_, i) => newsMessage(i + 1));
+  const archive = pagedArchive(messages);
+  const api = fakeApi({
+    status: { sorted: 0, unsorted: 3, removed: 0, oldestMessageId: messages[3].id },
+  });
+  const { start, channel } = scanStart(api, new NewsImportScanRunner(), { archive });
+
+  const { reply, finished } = await startNewsImportScanReply(start);
+  await finished;
+
+  assert.deepEqual(archive.cursors, [messages[3].id]);
+  assert.match(reply, /continuing where the last scan stopped/);
+  const restartNote = "If the bot restarts, run the scan again; it continues where it stopped.";
+  assert.ok(channel.posts[0].includes(restartNote));
+  assert.match(channel.edits.at(-1) ?? "", /Scanned \*\*3\*\* messages/);
+});
+
+test("a scan started over reads the archive from the newest message", async () => {
+  const messages = Array.from({ length: 6 }, (_, i) => newsMessage(i + 1));
+  const archive = pagedArchive(messages);
+  const api = fakeApi({
+    status: { sorted: 0, unsorted: 3, removed: 0, oldestMessageId: messages[3].id },
+  });
+  const { start, channel } = scanStart(api, new NewsImportScanRunner(), {
+    archive,
+    fromNewest: true,
+  });
+
+  const { reply, finished } = await startNewsImportScanReply(start);
+  await finished;
+
+  assert.deepEqual(archive.cursors, [null]);
+  assert.match(reply, /from the newest message/);
+  assert.match(channel.edits.at(-1) ?? "", /Scanned \*\*6\*\* messages/);
 });
 
 test("a scan is refused in test mode before any call", async () => {

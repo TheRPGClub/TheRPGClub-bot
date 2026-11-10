@@ -45,7 +45,8 @@ export interface INewsLinkPayload {
 
 export interface INewsImagePayload {
   url: string;
-  expires_at: string;
+  /** When the signed address expires; null for an address that does not expire. */
+  expires_at: string | null;
 }
 
 /** One News Item as the API records it: the PUT body's `data` plus the message ID. */
@@ -141,22 +142,22 @@ function isImage(attachment: INewsAttachment): boolean {
 
 /**
  * When a Discord address expires: its `ex` parameter, hex unix seconds. An address without
- * one counts as expired from the moment it was posted, so the API asks for a fresh one.
+ * a readable one is not a signed address and does not expire (null), so it is never renewed.
  */
-function expiresAt(url: string, postedAt: Date): string {
+function expiresAt(url: string): string | null {
   let seconds = Number.NaN;
   try {
     seconds = Number.parseInt(new URL(url).searchParams.get("ex") ?? "", 16);
   } catch {
-    // Not a parseable address: fall through to the posted time.
+    // Not a parseable address: no expiry to read.
   }
-  return Number.isFinite(seconds) ? new Date(seconds * 1000).toISOString() : postedAt.toISOString();
+  return Number.isFinite(seconds) ? new Date(seconds * 1000).toISOString() : null;
 }
 
 function imagesOf(message: INewsMessage): INewsImagePayload[] {
   return [...message.attachments.values()]
     .filter(isImage)
-    .map((image) => ({ url: image.url, expires_at: expiresAt(image.url, message.createdAt) }));
+    .map((image) => ({ url: image.url, expires_at: expiresAt(image.url) }));
 }
 
 function escapeRegExp(text: string): string {

@@ -270,7 +270,8 @@ export async function newsImportUploadReply(
     "still unsorted.");
   if (!problems.length) return reply(lines.join("\n"));
 
-  const listed = `${lines.join("\n")}\n\n**Rejected rows**\n${problems.map(problemLine).join("\n")}`;
+  const rejectedRows = problems.map(problemLine).join("\n");
+  const listed = `${lines.join("\n")}\n\n**Rejected rows**\n${rejectedRows}`;
   if (listed.length <= MAX_CONTAINER_TEXT) return reply(listed);
   lines.push("", `The rejected rows and their reasons are in the attached ${code(REJECTED_FILE)}.`);
   return reply(lines.join("\n"), [rejectedFile(problems)]);
