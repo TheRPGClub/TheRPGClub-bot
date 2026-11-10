@@ -2,7 +2,7 @@ import { ChannelType, RESTJSONErrorCodes, userMention, type Client } from "disco
 import { describeRequestError } from "../utilities/ApiErrorUtils.js";
 import { getGameKeyById, type IGameKey } from "../classes/GameKey.js";
 import { requestVotingEventPoll } from "./VotingEventService.js";
-import { refreshGiveawayHubMessage } from "./GiveawayHubService.js";
+import { refreshGiveawayHubMessage, removePreviewGiveawayHub } from "./GiveawayHubService.js";
 import {
   buildClaimedKeyDm,
   runGiveawayClaimSideEffects,
@@ -220,6 +220,11 @@ export interface IBotJobSurface {
   featureState(featureKey: string): Promise<FeatureState | null>;
   /** A Feature Flag changed: re-read the club-wide flags now. */
   featureFlagsChanged(): void;
+  /**
+   * The Giveaways Feature left Preview for `state`: removes the Preview hub from bot-dev
+   * and re-renders the hub where `state` routes it. Never throws (failures are logged).
+   */
+  giveawayHubLeftPreview(state: FeatureState): Promise<void>;
 }
 
 export function createBotJobSurface(client: Client): IBotJobSurface {
@@ -289,6 +294,10 @@ export function createBotJobSurface(client: Client): IBotJobSurface {
     runMemberScan: () => runMemberScan(client),
     featureState: (featureKey) => getFeatureState(featureKey),
     featureFlagsChanged: refreshFeatureFlagCache,
+    giveawayHubLeftPreview: async (state) => {
+      await removePreviewGiveawayHub(client);
+      await refreshGiveawayHubMessage(client, 0, { featureState: state });
+    },
   };
 }
 
@@ -922,21 +931,31 @@ function payloadFeatureState(payload: Record<string, unknown>, field: string): F
  * Payload: `{ key, name, from_state, to_state, changed_by, changed_by_name, reason }`.
  * Staff changed a Feature Flag (website or /flag set), so the admin channel hears who
  * changed what, from and to which state, and why. It carries no `feature_key`: the
- * announcement goes out whatever the Feature's own state. Nobody is pinged.
+ * announcement goes out whatever the Feature's own state. Nobody is pinged. Giveaways
+ * leaving Preview also takes its Preview hub out of the bot-dev channel.
  */
 export const handleFeatureFlagChanged: BotJobHandler = async (payload, surface) => {
   // Re-read the flags first, so the bot follows the change at once, not a TTL later.
   surface.featureFlagsChanged();
+  const key = requireString(payload, "key");
+  const fromState = payloadFeatureState(payload, "from_state");
+  const toState = payloadFeatureState(payload, "to_state");
   const content = buildFeatureFlagChangedNotice({
-    key: requireString(payload, "key"),
+    key,
     name: requireString(payload, "name"),
-    fromState: payloadFeatureState(payload, "from_state"),
-    toState: payloadFeatureState(payload, "to_state"),
+    fromState,
+    toState,
     changedBy: requireString(payload, "changed_by"),
     changedByName: optionalString(payload, "changed_by_name"),
     reason: optionalString(payload, "reason"),
   });
   await surface.sendChannelMessage(ADMIN_CHANNEL_ID, content, []);
+  // The Preview hub in bot-dev goes once Giveaways leaves Preview. The new state is passed
+  // on, since the flag cache may not hold it yet.
+  const leftPreview = fromState === "preview" && toState !== "preview";
+  if (key === POST_FEATURE_KEYS.giveawayHub && leftPreview) {
+    await surface.giveawayHubLeftPreview(toState);
+  }
 };
 
 /** Job kind (BotJob::KINDS in the API) to handler. One line per kind. */

@@ -86,6 +86,7 @@ function fakeSurface(options: {
     runMemberScan: async () => ({ upserted: 0, failed: 0, departed: 0 }),
     featureState: async () => null,
     featureFlagsChanged: () => undefined,
+    giveawayHubLeftPreview: async () => undefined,
     fetchLiveEvent: async (id) => {
       surface.calls.push(`fetch ${id}`);
       return event;

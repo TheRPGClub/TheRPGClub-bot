@@ -80,6 +80,7 @@ function fakeSurface(options: {
     },
     featureState: async () => null,
     featureFlagsChanged: () => undefined,
+    giveawayHubLeftPreview: async () => undefined,
   };
   return surface;
 }
