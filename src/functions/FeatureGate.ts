@@ -7,6 +7,7 @@
 import { TextDisplayBuilder } from "discord.js";
 
 import { FEATURE_ACCESS_WAIT_MS } from "../config/cacheDefaults.js";
+import { BOT_DEV_CHANNEL_ID } from "../config/channels.js";
 import { FEATURE_COMMANDS, FEATURE_COMPONENT_PREFIXES } from "../config/featureGate.js";
 import { logError, logWarn } from "../utilities/LogUtils.js";
 import { hasComponentsV2Flag, safeV2TextContent } from "./ComponentsV2Utils.js";
@@ -147,4 +148,54 @@ export function addPreviewNote<T>(payload: T): T {
   }
   if (typeof options.content !== "string") return payload;
   return { ...payload, content: withNoteLine(options.content) };
+}
+
+/**
+ * Where a Feature's automated public post goes (bot#1521): its normal channel when Live,
+ * the bot-dev channel in Preview so staff can check the real output, nowhere when Off.
+ * With no state (the lookup failed) it goes to its normal channel, as a command runs.
+ */
+export type FeaturePostDestination = "normal" | "bot_dev" | "suppressed";
+
+export function featurePostDestination(state: FeatureState | null): FeaturePostDestination {
+  if (state === "off") return "suppressed";
+  return state === "preview" ? "bot_dev" : "normal";
+}
+
+/** The channel a Feature's post goes to instead of `normalChannelId`, or null when Off. */
+export function routeFeaturePost(
+  state: FeatureState | null,
+  normalChannelId: string,
+): string | null {
+  const destination = featurePostDestination(state);
+  if (destination === "suppressed") return null;
+  return destination === "bot_dev" ? BOT_DEV_CHANNEL_ID : normalChannelId;
+}
+
+/** The club-wide state of a Feature in an access lookup, or null when it is not listed. */
+export function featureStateFor(
+  featureKey: string,
+  access: IFeatureAccess | null,
+): FeatureState | null {
+  return access?.features.find((feature) => feature.key === featureKey)?.state ?? null;
+}
+
+/**
+ * A Feature's club-wide state for routing a post. A flag's state does not depend on who
+ * asks, so the lookup runs for `lookupUserId` (the bot's own user). With no user (the bot
+ * is not logged in) or a failed lookup (logged) there is no state, and the post goes to
+ * its normal channel: the gate never loses a post to an API outage.
+ */
+export async function resolveFeatureState(
+  featureKey: string,
+  lookupUserId: string | null,
+  source: IFeatureAccessSource,
+): Promise<FeatureState | null> {
+  if (!lookupUserId) return null;
+  try {
+    return featureStateFor(featureKey, await source.get(lookupUserId));
+  } catch (err) {
+    logError(`FeatureGate: state lookup for ${featureKey} failed; posting as Live`, err);
+    return null;
+  }
 }

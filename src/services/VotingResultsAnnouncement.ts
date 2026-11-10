@@ -36,7 +36,9 @@ import {
   COLOR_PRIMARY,
   COLOR_WARNING,
 } from "../config/colors.js";
-import { ANNOUNCEMENT_CHANNEL_ID } from "../config/channels.js";
+import { ANNOUNCEMENT_CHANNEL_ID, BOT_DEV_CHANNEL_ID } from "../config/channels.js";
+import { POST_FEATURE_KEYS } from "../config/featureGate.js";
+import { FeaturePostSuppressedError, getFeaturePostDestination } from "./FeaturePostRouting.js";
 import { fetchGameCoverBuffer } from "./GameImageService.js";
 import { fetchSendableChannel, type SendableChannel } from "../functions/ChannelUtils.js";
 import { logError } from "../utilities/LogUtils.js";
@@ -170,6 +172,24 @@ async function postWinnerAnnouncements(
 }
 
 /**
+ * Where an announcement goes. One bound for announcements (no channel override, not a
+ * rehearsal) follows the Voting & GOTM Feature's flag: in Preview it goes to the bot-dev
+ * channel as a rehearsal (banner, no winner thread created or renamed), and when Off
+ * nothing is posted (FeaturePostSuppressedError).
+ */
+async function routeAnnouncement(
+  client: Client,
+  options: IAnnounceResultsOptions,
+): Promise<IAnnounceResultsOptions> {
+  if (options.channelIdOverride || options.rehearsal) return options;
+  const featureKey = POST_FEATURE_KEYS.voting;
+  const destination = await getFeaturePostDestination(client, featureKey);
+  if (destination === "suppressed") throw new FeaturePostSuppressedError(featureKey);
+  if (destination === "normal") return options;
+  return { ...options, channelIdOverride: BOT_DEV_CHANNEL_ID, rehearsal: true };
+}
+
+/**
  * Sends one results post: the tallies (under the rehearsal banner when it is
  * one), then each category's winner announcement. Throws
  * NothingToAnnounceError when there is no tally to post.
@@ -179,11 +199,12 @@ async function postResults(
   roundNumber: number,
   tallyContainers: ContainerBuilder[],
   announcements: IWinnerAnnouncement[],
-  options: IAnnounceResultsOptions,
+  announceOptions: IAnnounceResultsOptions,
 ): Promise<void> {
   if (!tallyContainers.length) {
     throw new NothingToAnnounceError(roundNumber);
   }
+  const options = await routeAnnouncement(client, announceOptions);
   const channelId = options.channelIdOverride ?? ANNOUNCEMENT_CHANNEL_ID;
   const rehearsal = Boolean(options.rehearsal);
   const sendable = await fetchSendableChannel(client, channelId);
@@ -208,7 +229,7 @@ async function postResults(
  * Posts the round's results to the announcements channel: one message with
  * the full tallies, then one winner announcement per category (with the
  * winning game's cover when available). Throws when nothing can be posted so
- * callers can surface the failure.
+ * callers can surface the failure. Follows the Voting & GOTM flag (routeAnnouncement).
  */
 export async function announceVotingResults(
   client: Client,
@@ -338,14 +359,15 @@ export interface ITieBreakPick {
  * Announces an admin's tie-break pick in the announcements channel, the way the
  * results name a winner: the cover and winner thread for a sole winner, joint winners
  * named together. A rehearsal posts the test banner first and creates no thread.
- * Returns links to the posts.
+ * Returns links to the posts. Follows the Voting & GOTM flag (routeAnnouncement).
  */
 export async function announceTieBreak(
   client: Client,
   round: IVotingRound,
   pick: ITieBreakPick,
-  options: IAnnounceResultsOptions = {},
+  announceOptions: IAnnounceResultsOptions = {},
 ): Promise<string[]> {
+  const options = await routeAnnouncement(client, announceOptions);
   const channelId = options.channelIdOverride ?? ANNOUNCEMENT_CHANNEL_ID;
   const rehearsal = Boolean(options.rehearsal);
   const sendable = await fetchSendableChannel(client, channelId);

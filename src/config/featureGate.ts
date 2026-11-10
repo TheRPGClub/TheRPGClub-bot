@@ -78,3 +78,15 @@ export const FEATURE_COMPONENT_PREFIXES: ReadonlyArray<readonly [string, string]
   ["suggestion-", "suggestions"],
   ["todo-review-suggestions", "suggestions"],
 ];
+
+/**
+ * The Feature each kind of automated public post belongs to (the registry's `posts`
+ * coverage). Its flag decides where the post goes: the normal channel when Live, the
+ * bot-dev channel in Preview, nowhere when Off.
+ */
+export const POST_FEATURE_KEYS = {
+  voting: "voting_gotm",
+  completions: "game_completions",
+  giveawayHub: "giveaways",
+  suggestions: "suggestions",
+} as const;
