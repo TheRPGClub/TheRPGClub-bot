@@ -165,7 +165,6 @@ async function postVotingPanels(
     source: context.source,
     ids: context.panelIds?.main,
     notice: context.panelNotice,
-    featureRouted: true,
   });
   if (result.posted === 0) {
     throw new Error(
@@ -194,7 +193,6 @@ async function postVotingResults(
         rehearsal: context.rehearsal,
         source: context.source,
         channelIdOverride: context.previewChannelId,
-        featureRouted: true,
       },
     );
   } catch (err) {
@@ -248,7 +246,6 @@ async function postRunoffPanels(
     source: context.source,
     ids: context.panelIds?.runoff,
     notice: context.panelNotice,
-    featureRouted: true,
     ballot: "runoff",
   });
   if (result.posted === 0) {
@@ -277,7 +274,6 @@ async function postRunoffResults(
       rehearsal: context.rehearsal,
       source: context.source,
       channelIdOverride: context.previewChannelId,
-      featureRouted: true,
     });
   } catch (err) {
     if (err instanceof NothingToAnnounceError) {

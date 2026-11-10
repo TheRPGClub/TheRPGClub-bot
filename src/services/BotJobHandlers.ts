@@ -279,7 +279,6 @@ export function createBotJobSurface(client: Client): IBotJobSurface {
       channelId: target.channelId,
       expectedRoundNumber: roundNumber,
       onPosted,
-      featureRouted: true,
     }),
     announceTieBreak: async (roundNumber, pick, target) => {
       const round = await VotingRounds.getByRound(roundNumber);

@@ -109,7 +109,7 @@ test("routeVotingPost: a rehearsal or another channel goes where it was asked", 
   assert.deepEqual(routeVotingPost("preview", elsewhere), elsewhere);
 });
 
-test("resolveVotingPostTarget: reads the flag once, and not at all when not routed",
+test("resolveVotingPostTarget: reads the flag once and routes as routeVotingPost does",
   async (t) => {
     t.mock.method(console, "log", () => undefined);
     const preview = fakeSource("voting_gotm", "preview");
@@ -122,7 +122,8 @@ test("resolveVotingPostTarget: reads the flag once, and not at all when not rout
     assert.equal(await resolveVotingPostTarget(TO_ANNOUNCEMENTS, off), null);
     const elsewhere = { channelId: GAMEDB_UPDATES_CHANNEL_ID, rehearsal: false };
     assert.deepEqual(await resolveVotingPostTarget(elsewhere, off), elsewhere);
-    assert.equal(off.reads, 1);
+    const rehearsal = { ...TO_ANNOUNCEMENTS, rehearsal: true };
+    assert.deepEqual(await resolveVotingPostTarget(rehearsal, off), rehearsal);
   });
 
 type Ack = { id: number; status: "done" | "failed"; text?: string };

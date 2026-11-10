@@ -20,11 +20,6 @@ import { buildTestPanelNoticeText, dedupeNominationsByGame } from "./VoteResults
 import { buildNominatorDisplayNames } from "./NominationListComponents.js";
 import { logError } from "../utilities/LogUtils.js";
 import { describeRequestError } from "../utilities/ApiErrorUtils.js";
-import { POST_FEATURE_KEYS } from "../config/featureGate.js";
-import {
-  featureOffNotice,
-  resolveVotingPostTarget,
-} from "../services/FeaturePostRouting.js";
 
 // Posting a round's voting panels, shared by /admin voting-open and the
 // voting_opened voting event (VotingEventService), which has no interaction.
@@ -98,11 +93,6 @@ export interface IPostVotePanelsParams {
   ballot?: VoteBallot;
   /** Called after each panel is sent, so a caller knows a retry would post it again. */
   onPosted?: () => void;
-  /**
-   * The caller already routed channelId by the Voting & GOTM flag
-   * (resolveVotingPostTarget), so it is used as given.
-   */
-  featureRouted?: boolean;
 }
 
 export interface IPostVotePanelsResult {
@@ -110,8 +100,6 @@ export interface IPostVotePanelsResult {
   lines: string[];
   posted: number;
   failed: number;
-  /** Where the panels went after routing; null when the Feature is Off (none posted). */
-  channelId: string | null;
 }
 
 /**
@@ -141,30 +129,12 @@ async function loadPanelArt(
 }
 
 /**
- * Panels bound for announcements (and not the sandbox's, which carry their own notice)
- * follow the Voting & GOTM Feature's flag: the bot-dev channel in Preview, null when Off.
- * A caller that already routed them (featureRouted) is taken at its word.
+ * Posts one panel per category to `channelId` and reports what happened. The channel is
+ * used as given: callers route it by the Voting & GOTM flag first (resolveVotingPostTarget).
  */
-async function routePanelChannel(params: IPostVotePanelsParams): Promise<string | null> {
-  if (params.featureRouted || params.notice) return params.channelId;
-  const target = await resolveVotingPostTarget({ channelId: params.channelId, rehearsal: false });
-  return target?.channelId ?? null;
-}
-
-/** Posts one panel per category and reports what happened. */
 export async function postVotePanels(
-  requested: IPostVotePanelsParams,
+  params: IPostVotePanelsParams,
 ): Promise<IPostVotePanelsResult> {
-  const channelId = await routePanelChannel(requested);
-  if (!channelId) {
-    return {
-      lines: [featureOffNotice(POST_FEATURE_KEYS.voting)],
-      posted: 0,
-      failed: 0,
-      channelId: null,
-    };
-  }
-  const params = { ...requested, channelId };
   const resultLines: string[] = [];
   let posted = 0;
   let failed = 0;
@@ -218,5 +188,5 @@ export async function postVotePanels(
           `${channelMention(params.channelId)}: ${failure}`,
     );
   }
-  return { lines: resultLines, posted, failed, channelId };
+  return { lines: resultLines, posted, failed };
 }

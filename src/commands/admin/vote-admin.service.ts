@@ -254,21 +254,28 @@ export async function handleVotingOpen(
   await withErrorReply(interaction, async () => {
     const channelId =
       postHere && interaction.channelId ? interaction.channelId : ANNOUNCEMENT_CHANNEL_ID;
-    const outcome = await repostVotingPanels({ client: interaction.client, channelId });
+    const target = await resolveVotingPostTarget({ channelId, rehearsal: false });
+    if (!target) {
+      await safeReply(
+        interaction,
+        buildTextReply(featureOffNotice(POST_FEATURE_KEYS.voting), true),
+      );
+      return;
+    }
+    const outcome = await repostVotingPanels({
+      client: interaction.client,
+      channelId: target.channelId,
+    });
     if (outcome.status !== "posted") {
       await safeReply(interaction, buildTextReply(describeRepostRefusal(outcome), true));
       return;
     }
     const { round, result } = outcome;
-    if (!result.channelId) {
-      await safeReply(interaction, buildTextReply(result.lines.join("\n"), true));
-      return;
-    }
     await safeReply(
       interaction,
       buildTextReply(
         `Round ${round.roundNumber} voting panels reposted in ` +
-          `${channelMention(result.channelId)}${previewSuffix(channelId, result.channelId)}. ` +
+          `${channelMention(target.channelId)}${previewSuffix(channelId, target.channelId)}. ` +
           `Voting closes <t:${toUnixTimestamp(round.votingClosesAt)}:F>.\n` +
           result.lines.join("\n"),
         true,
@@ -584,6 +591,18 @@ export async function handleTieBreakSelect(
     );
   }
   try {
+    // A pick bound for announcements follows the Voting & GOTM flag, resolved here once.
+    const postTarget = await resolveVotingPostTarget({
+      channelId: announce.channelIdOverride ?? ANNOUNCEMENT_CHANNEL_ID,
+      rehearsal: Boolean(announce.rehearsal),
+    });
+    if (!postTarget) {
+      await safeFollowUpIfSettled(
+        interaction,
+        buildTextReply(featureOffNotice(POST_FEATURE_KEYS.voting), true),
+      );
+      return [];
+    }
     return await announceTieBreak(
       interaction.client,
       round,
@@ -591,7 +610,7 @@ export async function handleTieBreakSelect(
         category: target.category,
         games: gameIds.map((gameId, index) => ({ gameId, title: titles[index] ?? "" })),
       },
-      { source, ...announce },
+      { source, ...announce, ...routedAnnounceOptions(postTarget) },
     );
   } catch (err: unknown) {
     await followUpTieBreakError(
