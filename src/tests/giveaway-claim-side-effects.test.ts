@@ -95,3 +95,37 @@ test("runGiveawayClaimSideEffects does not DM a donor who claimed their own key"
     Member.getGiveawayDonorNotifySetting = original;
   }
 });
+
+test("runGiveawayClaimSideEffects with no log channel (Giveaways Off) logs and tells no one",
+  async () => {
+    const original = Member.getGiveawayDonorNotifySetting;
+    const donorSends: unknown[] = [];
+    const logs: unknown[] = [];
+    try {
+      Member.getGiveawayDonorNotifySetting = (async () => true) as any;
+      const client: any = {
+        channels: {
+          fetch: async () => ({
+            isTextBased: () => true,
+            send: async (payload: unknown) => {
+              logs.push(payload);
+            },
+          }),
+        },
+        users: {
+          fetch: async () => ({
+            username: "DonorName",
+            send: async (payload: unknown) => {
+              donorSends.push(payload);
+            },
+          }),
+        },
+      };
+      const donorName = await runGiveawayClaimSideEffects(client, "web-claimer", key, null);
+      assert.equal(donorName, "DonorName", "the claimer's DM still names the donor");
+      assert.deepEqual(logs, []);
+      assert.deepEqual(donorSends, []);
+    } finally {
+      Member.getGiveawayDonorNotifySetting = original;
+    }
+  });

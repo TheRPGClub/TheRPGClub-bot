@@ -53,10 +53,11 @@ export function buildClaimedKeyDm(
 }
 
 /**
- * Writes the claim log to `logChannelId` (none when null: a website claim's log while the
- * Giveaways Feature is Off) and notifies the donor (when their setting is on and they are
- * not the claimer). Never throws: any failure is logged and swallowed so the claimer's key
- * DM still proceeds. Returns the donor display name (falls back to a mention).
+ * Writes the claim log to `logChannelId` and notifies the donor (when their setting is on
+ * and they are not the claimer). A null `logChannelId` (a website claim while the
+ * Giveaways Feature is Off) does neither. Never throws: any failure is logged and swallowed
+ * so the claimer's key DM still proceeds. Returns the donor display name (falls back to a
+ * mention).
  */
 export async function runGiveawayClaimSideEffects(
   client: GiveawayClaimClient,
@@ -74,7 +75,7 @@ export async function runGiveawayClaimSideEffects(
 
     const donorUser = await client.users.fetch(key.donorUserId).catch(() => null);
     donorName = donorUser?.username ?? userMention(key.donorUserId);
-    if (!donorUser || key.donorUserId === claimerId) {
+    if (!logChannelId || !donorUser || key.donorUserId === claimerId) {
       return donorName;
     }
     const notifyDonor = await Member.getGiveawayDonorNotifySetting(key.donorUserId);

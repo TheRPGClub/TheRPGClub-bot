@@ -395,8 +395,9 @@ function requireString(payload: Record<string, unknown>, field: string): string 
  * Payload: `{ key_id, claimed_by_user_id, donor_user_id, game_title, platform }`. A member
  * claimed a key on the website: the key (fetched from the API, never in the payload) goes
  * to the claimer by DM, and the claim is logged and the donor told, as /giveaway does. The
- * claim log follows the Giveaways Feature's flag (bot-dev in Preview, none when Off); the
- * DMs are not public posts, so they go out whatever its state.
+ * claim log follows the Giveaways Feature's flag (bot-dev in Preview), and while it is Off
+ * neither the log nor the donor notice goes out. The claimer's key DM always goes out: a
+ * claim made just before Giveaways went Off must not lose its key.
  */
 export const handleGiveawayClaimNotice: BotJobHandler = async (payload, surface, context) => {
   const keyId = payloadPositiveInt(payload, "key_id");
@@ -429,7 +430,7 @@ export const handleGiveawayClaimNotice: BotJobHandler = async (payload, surface,
     });
   }
   if (!logChannelId) {
-    return `Sent the key by DM. The claim log was not posted: the ${featureKey} Feature is Off.`;
+    return `Sent the key by DM. No claim log or donor notice: the ${featureKey} Feature is Off.`;
   }
 };
 
