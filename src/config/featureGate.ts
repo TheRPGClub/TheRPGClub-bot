@@ -25,6 +25,9 @@ export const FEATURE_COMMANDS: Readonly<Record<string, string>> = {
   giveaway: "giveaways",
   gamegiveaway: "giveaways",
   suggestion: "suggestions",
+  // Admins and Superadmins in Preview and Live, nobody while Off: this gate refuses
+  // everyone while Off, and the API refuses anyone but Admins and Superadmins.
+  "news-import": "news_hub",
 };
 
 /**
@@ -78,6 +81,12 @@ export const FEATURE_COMPONENT_PREFIXES: ReadonlyArray<readonly [string, string]
   ["suggestion-", "suggestions"],
   ["todo-review-suggestions", "suggestions"],
 ];
+
+/**
+ * The News Hub Feature (spec api#355). It has no posts: the bot records News Items while
+ * it is Preview or Live and does nothing while it is Off.
+ */
+export const NEWS_HUB_FEATURE_KEY = "news_hub";
 
 /**
  * The Feature each kind of automated public post belongs to (the registry's `posts`

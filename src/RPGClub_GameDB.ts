@@ -29,6 +29,7 @@ import { announcePreviewReady } from "./services/PreviewReadyService.js";
 import { refreshCommandMentions } from "./services/CommandMentionService.js";
 import { registerClientObservability } from "./services/ClientObservability.js";
 import { registerUncachedThreadDeleteCleanup } from "./services/ThreadDeleteCleanup.js";
+import { registerUncachedNewsListeners } from "./services/NewsHubRecording.js";
 import {
   createShutdown,
   installShutdownSignalHandlers,
@@ -265,6 +266,7 @@ registerClientObservability(bot, () => {
   void shutdown("unrecoverable shard disconnect", 1);
 });
 registerUncachedThreadDeleteCleanup(bot);
+registerUncachedNewsListeners(bot);
 
 async function run(): Promise<void> {
   if (!process.env.BOT_TOKEN) {

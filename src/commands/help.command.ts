@@ -71,6 +71,7 @@ type HelpTopicId =
   | "giveaway"
   | "thread"
   | "flag"
+  | "news-import"
   | "admin"
   | "mod"
   | "superadmin"
@@ -366,6 +367,26 @@ const HELP_TOPICS: HelpTopic[] = [
     access: "staff",
   },
   {
+    id: "news-import",
+    label: "/news-import",
+    summary: "Import the Game News Archive into the News Hub (Admins and Superadmins).",
+    syntax: "Syntax: /news-import scan [from-newest:<true|false>] | /news-import status | " +
+      "/news-import download | /news-import upload file:<csv>",
+    notes:
+      "Works for Admins and Superadmins while the News Hub is Preview or Live, and for " +
+      "nobody while it is Off. " +
+      "scan reads the archive and imports its news as unsorted News Items, hidden until " +
+      "sorted; its progress is posted in the channel. If it stops (a restart, an error), " +
+      "run it again: it continues where it stopped; from-newest:true starts over from the " +
+      "newest message. Running it again never records anything twice. " +
+      "status shows how many imported items are sorted, unsorted and removed. download " +
+      "gives the unsorted items as a .csv file (several when it is large); fill in its " +
+      "category column with a News Category key, or skip to remove the item, then upload " +
+      "it. upload assigns the categories, lists rejected rows with reasons, and can be run " +
+      "again to change a category.",
+    access: "staff",
+  },
+  {
     id: "admin",
     label: "/admin",
     summary: "Admin tools for GOTM/NR-GOTM management.",
@@ -442,6 +463,7 @@ const HELP_CATEGORIES: { id: string; name: string; topicIds: HelpTopicId[] }[] =
       "admin",
       "superadmin",
       "flag",
+      "news-import",
       "todo",
       "publicreminder",
       "thread",
@@ -970,6 +992,7 @@ const MAIN_MENU_SUMMARIES: Record<HelpTopicId, string> = {
   thread: "Create threads and link them to GameDB games.",
   rss: "Manage RSS relays with filters.",
   flag: "Turn Features Off, Preview or Live.",
+  "news-import": "Import the Game News Archive into the News Hub.",
 };
 
 function getVisibleCategoryTopics(categoryId: string, access: HelpAccess): HelpTopic[] {

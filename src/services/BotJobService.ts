@@ -11,6 +11,7 @@ import {
 import { buildAnyErrorMessage } from "../utilities/ApiErrorUtils.js";
 import { isTemporaryJobError } from "./BotJobErrors.js";
 import { featurePostDestination } from "../functions/FeatureGate.js";
+import { POST_FEATURE_KEYS } from "../config/featureGate.js";
 import { createScheduledTask, type IScheduledTask } from "../utilities/IntervalUtils.js";
 import { logError, logInfo } from "../utilities/LogUtils.js";
 import {
@@ -92,6 +93,17 @@ function jobFeatureKey(job: IBotJob): string | null {
 
 const PREVIEW_RESULT_NOTE = "Preview: posted to the bot-dev channel instead.";
 
+const POSTING_FEATURE_KEYS: ReadonlySet<string> = new Set(Object.values(POST_FEATURE_KEYS));
+
+/**
+ * Whether the Feature's flag routes the job's public posts. A Feature with no posts (the
+ * News Hub's background work) still tags its jobs with its key, but posts nothing, so its
+ * results carry no Preview note and its Off log does not speak of held posts.
+ */
+function routesPosts(featureKey: string): boolean {
+  return POSTING_FEATURE_KEYS.has(featureKey);
+}
+
 function withPreviewResultNote(text: string | void): string {
   const trimmed = typeof text === "string" ? text.trim() : "";
   return trimmed ? `${PREVIEW_RESULT_NOTE} ${trimmed}` : PREVIEW_RESULT_NOTE;
@@ -163,14 +175,15 @@ async function performJob(
   const feature = featureKey
     ? { key: featureKey, state: await surface.featureState(featureKey) }
     : null;
+  const posts = feature !== null && routesPosts(feature.key);
   const destination = featurePostDestination(feature?.state ?? null);
-  if (feature && destination === "suppressed") {
+  if (posts && destination === "suppressed") {
     logInfo("BotJobService", `Running ${label} with its posts held: ${feature.key} is Off.`);
   }
   try {
     const handlerText = await handler(job.payload, surface, { feature });
     const resultText = normalizeResultText(
-      destination === "bot_dev" ? withPreviewResultNote(handlerText) : handlerText,
+      posts && destination === "bot_dev" ? withPreviewResultNote(handlerText) : handlerText,
     );
     logInfo("BotJobService", `Performed ${label}.`);
     return resultText === undefined ? { status: "done" } : { status: "done", resultText };
