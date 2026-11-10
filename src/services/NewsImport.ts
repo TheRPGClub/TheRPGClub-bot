@@ -18,9 +18,10 @@ import {
   type NewsImportSkipReason,
 } from "./NewsImportScan.js";
 
-// `/news-import` (spec api#355, bot#1526): the staff actions of the News Import. The API
-// decides who may use them (Admins and Superadmins, from the acting member's stored roles,
-// in every Feature state); the bot names the acting Discord user and shows the answer.
+// `/news-import` (spec api#355, bot#1526): the staff actions of the News Import. They work
+// for Admins and Superadmins while the News Hub is Preview or Live, and for nobody while it
+// is Off (the bot's feature gate refuses the command). The API decides who is staff, from
+// the acting member's stored roles; the bot names the acting Discord user.
 
 const LOG_CONTEXT = "NewsImport";
 
@@ -121,12 +122,11 @@ function runSummary(run: Readonly<INewsImportScanRun>): string {
     (run.progress ? scanCountsText(run.progress) : "It is reading its first page.");
 }
 
-const RERUN_NOTE = `Run \`/${NEWS_IMPORT_COMMAND} scan\` again: it reads the archive from the ` +
-  "newest message again and records nothing twice.";
+const RERUN_NOTE = `Run \`/${NEWS_IMPORT_COMMAND} scan\` again; it continues where it stopped.`;
+const RESTART_NOTE = "If the bot restarts, run the scan again; it continues where it stopped.";
 
 function runningText(run: Readonly<INewsImportScanRun>): string {
-  return `**News Import scan** ${runSummary(run)}\n` +
-    `-# If the bot restarts, the scan stops. ${RERUN_NOTE}`;
+  return `**News Import scan** ${runSummary(run)}\n-# ${RESTART_NOTE}`;
 }
 
 function finishedText(
@@ -155,6 +155,12 @@ export interface INewsImportScanStart extends INewsImportDeps {
   testMode: boolean;
   archive: IArchiveReader;
   archiveId: string;
+  /**
+   * Start over from the archive's newest message. By default the scan continues from just
+   * before the oldest message already imported (the archive is locked, so nothing newer
+   * appears).
+   */
+  fromNewest?: boolean;
   /** Posts the progress message. A failure is thrown to the command's error reply. */
   post(text: string): Promise<IScanProgressMessage>;
   /** Posts the full error that stopped a scan, below the progress message. */
@@ -196,8 +202,8 @@ function progressEditor(
 
 /**
  * `/news-import scan`: refuses in test mode, then asks the API whether the acting member is
- * staff (the batch write is service-only, so the status read is the check), then starts
- * the scan unless one is running. Returns the private reply, and `finished`, which settles
+ * staff (the batch write is service-only, so the status read is the check) and where the
+ * last scan stopped, then starts the scan unless one is running. Returns the private reply, and `finished`, which settles
  * (never rejects) once the progress message shows the final counts; null when not started.
  */
 export async function startNewsImportScanReply(
@@ -205,13 +211,15 @@ export async function startNewsImportScanReply(
 ): Promise<{ reply: string; finished: Promise<void> | null }> {
   const testRefusal = sharedStateCommandRefusal(`/${NEWS_IMPORT_COMMAND} scan`, start.testMode);
   if (testRefusal) return { reply: testRefusal, finished: null };
+  let status: Awaited<ReturnType<INewsImportApi["status"]>>;
   try {
-    await start.api.status(start.actingUserId);
+    status = await start.api.status(start.actingUserId);
   } catch (error: unknown) {
     const refusal = newsImportRefusal(error);
     if (refusal) return { reply: refusal, finished: null };
     throw error;
   }
+  const startBefore = start.fromNewest ? null : status.oldestMessageId;
   const running = start.runner.current();
   if (running) return { reply: alreadyRunningReply(running), finished: null };
 
@@ -223,6 +231,7 @@ export async function startNewsImportScanReply(
     archive: start.archive,
     api: start.api,
     archiveId: start.archiveId,
+    startBefore,
     onProgress: () => {
       const current = start.runner.current();
       if (current) editor.show(() => runningText(current));
@@ -249,8 +258,12 @@ export async function startNewsImportScanReply(
   ).catch((error: unknown) => {
     logError(LOG_CONTEXT, buildAnyErrorMessage("Could not report the News Import scan", error));
   });
+  const from = startBefore
+    ? "continuing where the last scan stopped"
+    : "from the newest message";
   return {
-    reply: `The News Import scan has started. Its progress is posted here: ${message.url}`,
+    reply: `The News Import scan has started, ${from}. Its progress is posted here: ` +
+      message.url,
     finished,
   };
 }

@@ -80,7 +80,7 @@ function fakeApi(options: {
       return result;
     },
     async status() {
-      return { sorted: 0, unsorted: api.stored.size, removed: 0 };
+      return { sorted: 0, unsorted: api.stored.size, removed: 0, oldestMessageId: null };
     },
     async list() {
       throw new Error("the scan does not list");
@@ -106,6 +106,24 @@ test("the scan pages back through the whole archive and imports every News Item"
   assert.deepEqual([...api.stored.keys()].sort(), range(1, 25).map((n) => message(n).id).sort());
   assert.deepEqual(archive.cursors, [null, message(16).id, message(6).id]);
   assert.equal(progress.finished, true);
+});
+
+test("a scan given a starting point reads only the messages before it", async () => {
+  const archive = fakeArchive(range(1, 25).map((n) => message(n)));
+  const api = fakeApi();
+
+  const progress = await scanNewsArchive({
+    archive,
+    api,
+    archiveId: ARCHIVE,
+    pageSize: 10,
+    startBefore: message(18).id,
+  });
+
+  assert.equal(progress.finished, true);
+  assert.equal(progress.scanned, 17);
+  assert.deepEqual([...api.stored.keys()].sort(), range(1, 17).map((n) => message(n).id).sort());
+  assert.deepEqual(archive.cursors, [message(18).id, message(8).id]);
 });
 
 test("text-only, bot, webhook and system messages are skipped and counted by reason", async () => {

@@ -4,7 +4,8 @@ import { apiGetOrThrow, apiPostOrThrow } from "./RpgClubApiClient.js";
 
 // The News Import endpoints (spec api#355, api#359). The batch write is service-only; the
 // rest are for Admins and Superadmins, named by `acting_user_id` (the API checks the
-// member's stored roles and answers 403 for anyone else, in every Feature state).
+// member's stored roles and answers 403 for anyone else). The service token is not
+// feature-gated: the bot's own gate keeps /news-import to Preview and Live.
 
 /** The most archive messages one batch write takes (the API answers 422 above it). */
 export const NEWS_IMPORT_BATCH_MAX = 100;
@@ -71,11 +72,23 @@ export interface INewsImportStatus {
   unsorted: number;
   /** Archive messages staff removed with `skip`. */
   removed: number;
+  /**
+   * The oldest archive message imported so far, kept or removed with `skip`; null before
+   * any. A re-run scan continues from just before it.
+   */
+  oldestMessageId: string | null;
 }
 
+type StatusPayload = {
+  sorted: number;
+  unsorted: number;
+  removed: number;
+  oldest_message_id: string | null;
+};
+
 /**
- * The bot's view of the News Import endpoints. Every method throws the AxiosError on a non-2xx answer, so replies can show the
- * full request and response.
+ * The bot's view of the News Import endpoints. Every method throws the AxiosError on a
+ * non-2xx answer, so replies can show the full request and response.
  */
 export interface INewsImportApi {
   /** POST /api/v1/news_import/items: at most NEWS_IMPORT_BATCH_MAX items. */
@@ -136,10 +149,16 @@ export const NEWS_IMPORT_API: INewsImportApi = {
     };
   },
   async status(actingUserId) {
-    const payload = await apiGetOrThrow<{ data: INewsImportStatus }>(
+    const payload = await apiGetOrThrow<{ data: StatusPayload }>(
       actingPath("/status", actingUserId),
     );
-    return payload.data;
+    const status = payload.data;
+    return {
+      sorted: status.sorted,
+      unsorted: status.unsorted,
+      removed: status.removed,
+      oldestMessageId: status.oldest_message_id ?? null,
+    };
   },
   async list(actingUserId, page, per) {
     const payload = await apiGetOrThrow<{

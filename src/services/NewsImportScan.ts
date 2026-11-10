@@ -46,6 +46,11 @@ export interface INewsImportScanDeps {
   api: Pick<INewsImportApi, "recordBatch">;
   /** The Game News Archive's channel ID; its messages take no News Category. */
   archiveId: string;
+  /**
+   * Read only the messages before this one (exclusive); null or absent reads from the
+   * newest. A re-run passes the oldest message already imported, to continue from there.
+   */
+  startBefore?: string | null;
   pageSize?: number;
   batchSize?: number;
   /**
@@ -78,7 +83,7 @@ export interface INewsImportScanProgress {
   skipped: Partial<Record<NewsImportSkipReason, number>>;
   /** True once the oldest message was read and every batch sent. */
   finished: boolean;
-  /** What stopped the scan early, or null. A re-run starts again from the newest message. */
+  /** What stopped the scan early, or null. A re-run continues where this one stopped. */
   failure: { label: string; error: unknown } | null;
 }
 
@@ -145,8 +150,9 @@ async function step<T>(label: string, run: () => Promise<T>): Promise<T> {
 }
 
 /**
- * Reads the whole archive back from its newest message and imports every News Item in it.
- * Safe to run again after an interruption: the API's batch write is idempotent by message
+ * Reads the archive back from its newest message (or from `startBefore`) and imports every
+ * News Item in it. Batches go out newest first, so the oldest message imported marks how
+ * far a stopped scan got. Safe to run again: the API's batch write is idempotent by message
  * ID, keeps assigned categories and leaves out messages staff removed with `skip`.
  */
 export async function scanNewsArchive(
@@ -185,7 +191,7 @@ async function scanInto(
     }
   };
 
-  let before: string | null = null;
+  let before: string | null = deps.startBefore ?? null;
   for (;;) {
     const where: string = before ? `before message ${before}` : "from its newest message";
     const page: readonly INewsMessage[] = await step(
@@ -216,7 +222,7 @@ export interface INewsImportScanRun {
 
 /**
  * Runs one scan at a time inside the bot. A scan does not survive a restart; staff run it
- * again, which is safe.
+ * again, and it continues from the oldest message already imported.
  */
 export class NewsImportScanRunner {
   private run: INewsImportScanRun | null = null;
