@@ -6,7 +6,8 @@ import {
 } from "discord.js";
 import { Discord, Slash, SlashChoice, SlashGroup, SlashOption } from "discordx";
 
-import type { FeatureState } from "../functions/FeatureGate.js";
+import { FEATURE_ACCESS_WAIT_MS } from "../config/cacheDefaults.js";
+import { settleWithin, type FeatureState } from "../functions/FeatureGate.js";
 import {
   safeDeferReply,
   safeReply,
@@ -14,7 +15,7 @@ import {
   sanitizeUserInput,
 } from "../functions/InteractionUtils.js";
 import { buildErrorReply, buildTextReply } from "../functions/ComponentsV2Utils.js";
-import { featureAccessCache } from "../services/FeatureAccessService.js";
+import { featureFlagCache } from "../services/FeatureAccessService.js";
 import {
   FEATURE_STATE_LABELS,
   FEATURE_STATES,
@@ -23,7 +24,6 @@ import {
   setFeatureFlagReply,
 } from "../services/FeatureFlagService.js";
 import { buildApiErrorMessage } from "../utilities/ApiErrorUtils.js";
-import { logError } from "../utilities/LogUtils.js";
 
 /** The API's limit on a flag change reason (PATCH /features/:key). */
 const FLAG_REASON_MAX = 500;
@@ -34,19 +34,18 @@ const FLAG_STATE_CHOICES = FEATURE_STATES.map((state) => ({
 }));
 
 /**
- * Offers the registry's Features from the bot's cached access lookup, which lists all 11
- * for any Discord user, so it costs no extra API call and works before the API has said
- * whether the user is staff.
+ * Offers the registry's Features from the bot's club-wide flag cache, so it costs no API
+ * call once warm. A cold or failing read is capped at FEATURE_ACCESS_WAIT_MS (logged) and
+ * offers nothing, well inside Discord's autocomplete window.
  */
 async function autocompleteFeature(interaction: AutocompleteInteraction): Promise<void> {
   const query = String(interaction.options.getFocused() ?? "");
-  try {
-    const access = await featureAccessCache.get(interaction.user.id);
-    await safeRespond(interaction, featureFlagChoices(query, access.features));
-  } catch (err: unknown) {
-    logError("FlagCommand.autocompleteFeature", err);
-    await safeRespond(interaction, []);
-  }
+  const flags = await settleWithin(
+    "Feature Flag lookup for /flag autocomplete",
+    featureFlagCache.flags(),
+    FEATURE_ACCESS_WAIT_MS,
+  );
+  await safeRespond(interaction, featureFlagChoices(query, flags ?? []));
 }
 
 /**

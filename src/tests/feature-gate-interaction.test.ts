@@ -4,29 +4,25 @@ import { MessageFlags, type Interaction } from "discord.js";
 
 import { buildTextReply } from "../functions/ComponentsV2Utils.js";
 import { enforceFeatureGate, safeReply } from "../functions/InteractionUtils.js";
-import type { FeatureState, IFeatureAccess } from "../functions/FeatureGate.js";
+import type {
+  FeatureState,
+  IFeatureFlag,
+  IFeatureGateSource,
+} from "../functions/FeatureGate.js";
 
-function source(state: FeatureState, staff: boolean): {
+function source(state: FeatureState, staff: boolean): IFeatureGateSource & {
   calls: string[];
-  get(userId: string): Promise<IFeatureAccess>;
 } {
   const calls: string[] = [];
   return {
     calls,
-    async get(userId: string): Promise<IFeatureAccess> {
-      calls.push(userId);
-      const canUse = state === "live" || (state === "preview" && staff);
-      return {
-        userId,
-        staff,
-        features: [{
-          key: "journals",
-          name: "Journals",
-          state,
-          canUse,
-          preview: staff && state === "preview",
-        }],
-      };
+    async flags(): Promise<IFeatureFlag[]> {
+      calls.push("flags");
+      return [{ key: "journals", name: "Journals", state }];
+    },
+    async isStaff(userId: string): Promise<boolean> {
+      calls.push(`staff:${userId}`);
+      return staff;
     },
   };
 }
@@ -79,10 +75,12 @@ test("enforceFeatureGate: staff in Preview run the command and see the note", as
   assert.match(sent, /"type":10,"content":"-# Preview - staff only"/);
 });
 
-test("enforceFeatureGate: a Live Feature runs with no note", async () => {
+test("enforceFeatureGate: a Live Feature runs with no note and no member lookup", async () => {
   const interaction = slashCommand("game-journal");
+  const lookups = source("live", false);
 
-  assert.equal(await enforceFeatureGate(interaction, source("live", false)), false);
+  assert.equal(await enforceFeatureGate(interaction, lookups), false);
+  assert.deepEqual(lookups.calls, ["flags"]);
   await safeReply(interaction as never, buildTextReply("Your journal.", true));
   assert.doesNotMatch(sentJson(interaction.sent[0]), /Preview/);
 });

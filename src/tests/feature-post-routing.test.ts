@@ -10,6 +10,11 @@ import {
   GIVEAWAY_HUB_CHANNEL_ID,
 } from "../config/channels.js";
 import { refreshGiveawayHubMessage } from "../services/GiveawayHubService.js";
+import type { IVotingEvent } from "../classes/VotingEvents.js";
+import {
+  handleVotingEvent,
+  type IVotingEventContext,
+} from "../services/VotingEventHandlers.js";
 import {
   BOT_JOB_HANDLERS,
   type BotJobHandlers,
@@ -20,10 +25,12 @@ import {
   featurePostDestination,
   resolveFeatureState,
   routeFeaturePost,
+  routeVotingPost,
   type FeatureState,
-  type IFeatureAccess,
-  type IFeatureAccessSource,
+  type IFeatureFlag,
+  type IFeatureFlagSource,
 } from "../functions/FeatureGate.js";
+import { resolveVotingPostTarget } from "../services/FeaturePostRouting.js";
 
 const NORMAL_CHANNEL_ID = ANNOUNCEMENT_CHANNEL_ID;
 
@@ -47,56 +54,75 @@ test("routeFeaturePost: with no state (lookup failed) the post goes to its norma
   assert.equal(routeFeaturePost(null, NORMAL_CHANNEL_ID), NORMAL_CHANNEL_ID);
 });
 
-/** A fake access lookup: one Feature in `state`, as the API answers for a non-staff user. */
-function fakeSource(key: string, state: FeatureState): IFeatureAccessSource & {
-  lookups: string[];
-} {
-  const lookups: string[] = [];
-  return {
-    lookups,
-    get: async (userId: string): Promise<IFeatureAccess> => {
-      lookups.push(userId);
-      return {
-        userId,
-        staff: false,
-        features: [
-          { key, name: key, state, canUse: state === "live", preview: false },
-        ],
-      };
+/** A fake club-wide flag source: one Feature in `state`, counting reads. */
+function fakeSource(key: string, state: FeatureState): IFeatureFlagSource & { reads: number } {
+  const source = {
+    reads: 0,
+    flags: async (): Promise<IFeatureFlag[]> => {
+      source.reads += 1;
+      return [{ key, name: key, state }];
     },
   };
+  return source;
 }
 
 for (const state of ["off", "preview", "live"] as const) {
-  test(`resolveFeatureState: reads the club-wide ${state} state from the lookup`, async () => {
+  test(`resolveFeatureState: reads the club-wide ${state} state`, async () => {
     const source = fakeSource("giveaways", state);
-    assert.equal(await resolveFeatureState("giveaways", "bot-user", source), state);
-    assert.deepEqual(source.lookups, ["bot-user"]);
+    assert.equal(await resolveFeatureState("giveaways", source), state);
+    assert.equal(source.reads, 1);
   });
 }
 
-test("resolveFeatureState: a Feature missing from the lookup has no state", async () => {
-  assert.equal(await resolveFeatureState("journals", "bot-user", fakeSource("giveaways", "off")),
-    null);
+test("resolveFeatureState: a Feature missing from the flags has no state", async () => {
+  assert.equal(await resolveFeatureState("journals", fakeSource("giveaways", "off")), null);
 });
 
 test("resolveFeatureState: a failed lookup has no state, so the post is not lost", async (t) => {
   t.mock.method(console, "error", () => undefined);
-  const source: IFeatureAccessSource = {
-    get: async () => {
+  const source: IFeatureFlagSource = {
+    flags: async () => {
       throw new Error("API down");
     },
   };
-  const state = await resolveFeatureState("giveaways", "bot-user", source);
+  const state = await resolveFeatureState("giveaways", source);
   assert.equal(state, null);
   assert.equal(routeFeaturePost(state, NORMAL_CHANNEL_ID), NORMAL_CHANNEL_ID);
 });
 
-test("resolveFeatureState: with no user to look up (bot not logged in) there is no state",
-  async () => {
-    const source = fakeSource("giveaways", "off");
-    assert.equal(await resolveFeatureState("giveaways", null, source), null);
-    assert.deepEqual(source.lookups, []);
+const TO_ANNOUNCEMENTS = { channelId: ANNOUNCEMENT_CHANNEL_ID, rehearsal: false };
+
+test("routeVotingPost: announcements follow the Voting & GOTM flag", () => {
+  assert.deepEqual(routeVotingPost("live", TO_ANNOUNCEMENTS), TO_ANNOUNCEMENTS);
+  assert.deepEqual(routeVotingPost(null, TO_ANNOUNCEMENTS), TO_ANNOUNCEMENTS);
+  assert.deepEqual(routeVotingPost("preview", TO_ANNOUNCEMENTS), {
+    channelId: BOT_DEV_CHANNEL_ID,
+    rehearsal: true,
+  });
+  assert.equal(routeVotingPost("off", TO_ANNOUNCEMENTS), null);
+});
+
+test("routeVotingPost: a rehearsal or another channel goes where it was asked", () => {
+  const rehearsal = { channelId: ANNOUNCEMENT_CHANNEL_ID, rehearsal: true };
+  assert.deepEqual(routeVotingPost("off", rehearsal), rehearsal);
+  const elsewhere = { channelId: GAMEDB_UPDATES_CHANNEL_ID, rehearsal: false };
+  assert.deepEqual(routeVotingPost("preview", elsewhere), elsewhere);
+});
+
+test("resolveVotingPostTarget: reads the flag once, and not at all when not routed",
+  async (t) => {
+    t.mock.method(console, "log", () => undefined);
+    const preview = fakeSource("voting_gotm", "preview");
+    assert.deepEqual(await resolveVotingPostTarget(undefined, preview), {
+      channelId: BOT_DEV_CHANNEL_ID,
+      rehearsal: true,
+    });
+    assert.equal(preview.reads, 1);
+    const off = fakeSource("voting_gotm", "off");
+    assert.equal(await resolveVotingPostTarget(TO_ANNOUNCEMENTS, off), null);
+    const elsewhere = { channelId: GAMEDB_UPDATES_CHANNEL_ID, rehearsal: false };
+    assert.deepEqual(await resolveVotingPostTarget(elsewhere, off), elsewhere);
+    assert.equal(off.reads, 1);
   });
 
 type Ack = { id: number; status: "done" | "failed"; text?: string };
@@ -222,18 +248,20 @@ const REJECTED_OUTCOME = {
   feature_key: "suggestions",
 };
 
-function postingSurface(state: FeatureState | null): IBotJobSurface & {
-  posts: string[];
-} {
+function postingSurface(): IBotJobSurface & { posts: string[]; asked: number } {
   const posts: string[] = [];
   const surface = {
     posts,
-    featureState: async () => state,
+    asked: 0,
+    featureState: async () => {
+      surface.asked += 1;
+      return "off" as const;
+    },
     sendChannelMessage: async (channelId: string) => {
       posts.push(channelId);
     },
   };
-  return surface as unknown as IBotJobSurface & { posts: string[] };
+  return surface as unknown as IBotJobSurface & { posts: string[]; asked: number };
 }
 
 for (const [state, expected] of [
@@ -241,13 +269,124 @@ for (const [state, expected] of [
   ["preview", BOT_DEV_CHANNEL_ID],
   [null, GAMEDB_UPDATES_CHANNEL_ID],
 ] as const) {
-  test(`suggestion_outcome: a ${state ?? "unknown"} Suggestions Feature posts to ${expected}`,
-    async () => {
-      const surface = postingSurface(state);
-      await BOT_JOB_HANDLERS.suggestion_outcome(REJECTED_OUTCOME, surface);
-      assert.deepEqual(surface.posts, [expected]);
-    });
+  test(`suggestion_outcome: a ${state ?? "unknown"} Suggestions Feature posts to ${expected}` +
+    " (the dispatcher's read, not a second one)", async () => {
+    const surface = postingSurface();
+    const context = { feature: { key: "suggestions", state } };
+    await BOT_JOB_HANDLERS.suggestion_outcome(REJECTED_OUTCOME, surface, context);
+    assert.deepEqual(surface.posts, [expected]);
+    assert.equal(surface.asked, 0);
+  });
 }
+
+test("bot jobs: the dispatcher reads a job's Feature once and hands it to the handler",
+  async () => {
+    const api = fakeJobApi();
+    const seen: unknown[] = [];
+    const surface = stateSurface({ suggestions: "preview" });
+    await processBotJobs(
+      [job(5, { feature_key: "suggestions" })],
+      { announce: async (_payload, _surface, context) => { seen.push(context); } },
+      surface,
+      api,
+      createBotJobDeliveryState(),
+    );
+    assert.deepEqual(surface.asked, ["suggestions"]);
+    assert.deepEqual(seen, [{ feature: { key: "suggestions", state: "preview" } }]);
+  });
+
+function votingSurface(): IBotJobSurface & { targets: unknown[] } {
+  const targets: unknown[] = [];
+  const surface = {
+    targets,
+    featureState: async () => null,
+    publishVotingResults: async (_round: unknown, _onPosted: unknown, target: unknown) => {
+      targets.push(target);
+    },
+  };
+  return surface as unknown as IBotJobSurface & { targets: unknown[] };
+}
+
+test("voting_results_publish: in Preview the results go to bot-dev, and the text says so",
+  async () => {
+    const surface = votingSurface();
+    const text = await BOT_JOB_HANDLERS.voting_results_publish(
+      { round_number: 5, month_label: "May 2027", feature_key: "voting_gotm" },
+      surface,
+      { feature: { key: "voting_gotm", state: "preview" } },
+    );
+    assert.deepEqual(surface.targets, [{ channelId: BOT_DEV_CHANNEL_ID, rehearsal: true }]);
+    assert.equal(text, "Posted the round 5 results to the bot-dev channel.");
+  });
+
+test("voting_results_publish: Live results go to announcements", async () => {
+  const surface = votingSurface();
+  const text = await BOT_JOB_HANDLERS.voting_results_publish(
+    { round_number: 5, month_label: "May 2027", feature_key: "voting_gotm" },
+    surface,
+    { feature: { key: "voting_gotm", state: "live" } },
+  );
+  assert.deepEqual(surface.targets, [TO_ANNOUNCEMENTS]);
+  assert.equal(text, "Posted the round 5 results to announcements.");
+});
+
+test("feature_flag_changed: the bot re-reads its Feature Flags at once", async () => {
+  let changed = 0;
+  const surface = {
+    featureFlagsChanged: () => {
+      changed += 1;
+    },
+    sendChannelMessage: async () => undefined,
+  } as unknown as IBotJobSurface;
+  await BOT_JOB_HANDLERS.feature_flag_changed({
+    key: "reviews",
+    name: "Reviews",
+    from_state: "preview",
+    to_state: "live",
+    changed_by: "42",
+    changed_by_name: "Ada",
+    reason: null,
+  }, surface);
+  assert.equal(changed, 1);
+});
+
+function decidedEvent(): IVotingEvent {
+  return {
+    id: 9,
+    roundNumber: 12,
+    kind: "round_decided",
+    rawKind: "round_decided",
+    payload: {},
+    availableAt: new Date(0),
+    expiresAt: null,
+    attempts: 1,
+  };
+}
+
+test("round_decided while Voting & GOTM is Off: caches reload, nothing public", async (t) => {
+  t.mock.method(console, "log", () => undefined);
+  const reloaded: number[] = [];
+  const recorded: number[] = [];
+  const context: IVotingEventContext = {
+    source: {} as IVotingEventContext["source"],
+    rehearsal: false,
+    recordWinners: async (_client, roundNumber) => {
+      recorded.push(roundNumber);
+    },
+    reloadRound: async (roundNumber) => {
+      reloaded.push(roundNumber);
+    },
+  };
+  const outcome = await handleVotingEvent(
+    {} as Client,
+    decidedEvent(),
+    context,
+    fakeSource("voting_gotm", "off"),
+  );
+  assert.equal(outcome, "skipped");
+  assert.deepEqual(reloaded, [12]);
+  assert.deepEqual(recorded, []);
+});
 
 /** A client whose channels are all missing, recording which ones were fetched. */
 function channelRecordingClient(): { client: Client; fetched: string[] } {
@@ -276,7 +415,7 @@ for (const [state, expected] of [
     t.mock.method(console, "log", () => undefined);
     const { client, fetched } = channelRecordingClient();
     await refreshGiveawayHubMessage(client, 0, {
-      featureAccess: fakeSource("giveaways", state),
+      featureFlags: fakeSource("giveaways", state),
     });
     assert.deepEqual(fetched, expected);
   });

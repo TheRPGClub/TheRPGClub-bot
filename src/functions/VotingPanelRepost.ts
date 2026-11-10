@@ -27,6 +27,8 @@ export interface IRepostVotingPanelsParams {
   expectedRoundNumber?: number;
   /** Called after each panel is sent. */
   onPosted?: () => void;
+  /** channelId is already routed by the Voting & GOTM flag (resolveVotingPostTarget). */
+  featureRouted?: boolean;
 }
 
 /**
@@ -56,6 +58,7 @@ export async function repostVotingPanels(
     voteDeadline: round.votingClosesAt,
     nominationsByKind,
     onPosted: params.onPosted,
+    featureRouted: params.featureRouted,
   });
   return { status: "posted", round, result };
 }

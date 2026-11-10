@@ -9,8 +9,9 @@ import { userMention } from "discord.js";
 
 import { DISCORD_AUTOCOMPLETE_CHOICES_MAX } from "../config/textLimits.js";
 import type { FeatureState } from "../functions/FeatureGate.js";
-import { clearFeatureAccessCache } from "./FeatureAccessService.js";
-import { apiGet, apiPatch } from "./RpgClubApiClient.js";
+import { buildApiErrorMessage } from "../utilities/ApiErrorUtils.js";
+import { clearFeatureFlagCache } from "./FeatureAccessService.js";
+import { apiGet, apiPatchOrThrow } from "./RpgClubApiClient.js";
 
 export const FEATURE_STATES: readonly FeatureState[] = ["off", "preview", "live"];
 
@@ -91,11 +92,11 @@ export interface IFeatureFlagUpdate {
 export interface IFeatureFlagApi {
   /** GET /api/v1/features. Throws the AxiosError on 403 (not staff). */
   listFeatureFlags(actingUserId: string): Promise<IFeatureFlagEntry[]>;
-  /** PATCH /api/v1/features/:key; null when the key is not a Feature (404). */
+  /** PATCH /api/v1/features/:key. Throws the AxiosError on 403 and 404 (no such key). */
   setFeatureFlag(
     key: string,
     update: IFeatureFlagUpdate,
-  ): Promise<{ entry: IFeatureFlagEntry; changed: boolean } | null>;
+  ): Promise<{ entry: IFeatureFlagEntry; changed: boolean }>;
 }
 
 type FeatureFlagLastChangePayload = {
@@ -149,7 +150,8 @@ export const FEATURE_FLAG_API: IFeatureFlagApi = {
     return payload.data.map(toFeatureFlagEntry);
   },
   async setFeatureFlag(key, update) {
-    const payload = await apiPatch<{ data: FeatureFlagEntryPayload; meta: { changed: boolean } }>(
+    type Payload = { data: FeatureFlagEntryPayload; meta: { changed: boolean } };
+    const payload = await apiPatchOrThrow<Payload>(
       `${FEATURES_PATH}/${encodeURIComponent(key)}`,
       {
         data: {
@@ -159,13 +161,20 @@ export const FEATURE_FLAG_API: IFeatureFlagApi = {
         },
       },
     );
-    if (!payload) return null;
     return { entry: toFeatureFlagEntry(payload.data), changed: payload.meta.changed };
   },
 };
 
-function isForbidden(err: unknown): boolean {
-  return axios.isAxiosError(err) && err.response?.status === 403;
+function responseStatus(err: unknown): number | null {
+  return axios.isAxiosError(err) ? err.response?.status ?? null : null;
+}
+
+/**
+ * The reply for an API refusal staff can act on: the friendly line, then the full request
+ * and response (CLAUDE.md), with no dev ping since nothing is broken.
+ */
+function refusalReply(friendly: string, err: unknown): string {
+  return buildApiErrorMessage(friendly, err, { devPing: false });
 }
 
 function featureLabel(feature: { key: string; name: string }): string {
@@ -174,22 +183,22 @@ function featureLabel(feature: { key: string; name: string }): string {
 
 export interface IFeatureFlagDeps {
   api?: IFeatureFlagApi;
-  /** Forgets the bot's cached Feature access, so the change shows in the bot at once. */
-  clearAccessCache?: () => void;
+  /** Re-reads the bot's club-wide Feature Flags, so the change shows in the bot at once. */
+  clearFlagCache?: () => void;
 }
 
 /**
  * `/flag set`: asks the API to change the flag for the acting user and returns the private
- * reply. A 403 becomes the polite staff-only refusal and an unknown key is named back;
- * any other API error is thrown so the command can show the full request and response.
- * After any successful answer the bot's Feature access cache is cleared.
+ * reply. A 403 gets the polite staff-only line and an unknown key (404) is named back, each
+ * with the full request and response; any other API error is thrown for the command's
+ * error reply. After any successful answer the bot re-reads its Feature Flags.
  */
 export async function setFeatureFlagReply(
   input: { actingUserId: string; key: string; state: FeatureState; reason: string | null },
   deps: IFeatureFlagDeps = {},
 ): Promise<string> {
   const api = deps.api ?? FEATURE_FLAG_API;
-  const clearAccessCache = deps.clearAccessCache ?? clearFeatureAccessCache;
+  const clearFlagCache = deps.clearFlagCache ?? clearFeatureFlagCache;
   let result: Awaited<ReturnType<IFeatureFlagApi["setFeatureFlag"]>>;
   try {
     result = await api.setFeatureFlag(input.key, {
@@ -198,11 +207,14 @@ export async function setFeatureFlagReply(
       actingUserId: input.actingUserId,
     });
   } catch (err: unknown) {
-    if (isForbidden(err)) return FEATURE_FLAG_STAFF_ONLY_MESSAGE;
+    const status = responseStatus(err);
+    if (status === 403) return refusalReply(FEATURE_FLAG_STAFF_ONLY_MESSAGE, err);
+    if (status === 404) {
+      return refusalReply(`There is no Feature \`${input.key}\`. Pick one from the list.`, err);
+    }
     throw err;
   }
-  if (!result) return `There is no Feature \`${input.key}\`. Pick one from the list.`;
-  clearAccessCache();
+  clearFlagCache();
 
   const { entry, changed } = result;
   const stateLabel = FEATURE_STATE_LABELS[entry.state];
@@ -237,8 +249,8 @@ function featureListLine(entry: IFeatureFlagEntry): string {
 
 /**
  * `/flag list`: every Feature with its state and last change, Core Features first, as the
- * private reply. A 403 becomes the polite staff-only refusal; any other API error is
- * thrown so the command can show the full request and response.
+ * private reply. A 403 gets the polite staff-only line with the full request and response;
+ * any other API error is thrown for the command's error reply.
  */
 export async function listFeatureFlagsReply(
   actingUserId: string,
@@ -249,7 +261,7 @@ export async function listFeatureFlagsReply(
   try {
     entries = await api.listFeatureFlags(actingUserId);
   } catch (err: unknown) {
-    if (isForbidden(err)) return FEATURE_FLAG_STAFF_ONLY_MESSAGE;
+    if (responseStatus(err) === 403) return refusalReply(FEATURE_FLAG_STAFF_ONLY_MESSAGE, err);
     throw err;
   }
   const lines = ["**Feature Flags**"];
@@ -264,7 +276,7 @@ export async function listFeatureFlagsReply(
   return lines.join("\n");
 }
 
-/** A Feature as autocomplete needs it (the access lookup's entries fit). */
+/** A Feature as autocomplete needs it (the club-wide flags fit). */
 export interface IFeatureChoiceSource {
   key: string;
   name: string;
