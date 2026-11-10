@@ -32,6 +32,9 @@ import {
   getUpcomingNominationWindow,
 } from "./NominationWindow.js";
 import { logError } from "../utilities/LogUtils.js";
+import { POST_FEATURE_KEYS } from "../config/featureGate.js";
+import { routeFeaturePostFor } from "../services/FeaturePostRouting.js";
+import type { FeatureState } from "./FeatureGate.js";
 
 export const ADMIN_NOMINATION_DELETE_SELECT_PREFIX = "admin-nom-del-select";
 export const ADMIN_NOMINATION_DELETE_REASON_MODAL_PREFIX = "admin-nom-del-reason";
@@ -131,18 +134,25 @@ export function buildDeletionReasonState(
 }
 
 /**
- * Posts a nomination change notice and the list to the GOTM or NR-GOTM nomination channel.
- * Throws the discord.js error, or when the channel can't hold messages, so a bot job acks
- * failed. Slash commands use announceNominationChange, which logs instead.
+ * Posts a nomination change notice and the list to the GOTM or NR-GOTM nomination channel,
+ * or where the Voting & GOTM Feature's flag routes it (bot-dev in Preview, nothing when
+ * Off). Throws the discord.js error, or when the channel can't hold messages, so a bot job
+ * acks failed. Slash commands use announceNominationChange, which logs instead.
+ * `featureState` is the state a bot job already read; omitted, it is read here.
  */
 export async function postNominationChange(
   kind: NominationKind,
   client: Client,
   content: string,
   payload: NominationListPayload,
+  featureState?: FeatureState | null,
 ): Promise<void> {
-  const channelId =
-    kind === "gotm" ? GOTM_NOMINATION_CHANNEL_ID : NR_GOTM_NOMINATION_CHANNEL_ID;
+  const channelId = await routeFeaturePostFor(
+    POST_FEATURE_KEYS.voting,
+    kind === "gotm" ? GOTM_NOMINATION_CHANNEL_ID : NR_GOTM_NOMINATION_CHANNEL_ID,
+    { state: featureState },
+  );
+  if (!channelId) return;
   const channel = await client.channels.fetch(channelId);
   const textChannel: TextBasedChannel | null = channel?.isTextBased()
     ? (channel as TextBasedChannel)

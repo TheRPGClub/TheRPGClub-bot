@@ -13,9 +13,9 @@ import type {
   CommandInteraction,
   Guild,
   GuildMember,
-  GuildMemberRoleManager,
   AnySelectMenuInteraction,
   ButtonInteraction,
+  Interaction,
   InteractionDeferReplyOptions,
   ModalMessageModalSubmitInteraction,
   ModalSubmitInteraction,
@@ -32,6 +32,7 @@ import {
   mirrorEphemeralUpdate,
 } from "./EphemeralMirror.js";
 import { DEV_ROLE_ID } from "../config/roles.js";
+import { memberHasAnyRole } from "../utilities/MemberRoleUtils.js";
 import { IS_TEST_MODE } from "../config/testMode.js";
 import { sendWithInvalidEmojiRetry } from "./InvalidEmojiRetry.js";
 import { disableClickedRow, type IRawComponent } from "./ClickedRowLock.js";
@@ -44,6 +45,14 @@ import {
   hasComponentsV2Flag,
   safeV2TextContent,
 } from "./ComponentsV2Utils.js";
+import {
+  addPreviewNote,
+  FEATURE_NOT_AVAILABLE_MESSAGE,
+  resolveFeatureGate,
+  type FeatureGateTarget,
+  type IFeatureGateSource,
+} from "./FeatureGate.js";
+import { featureGateSource } from "../services/FeatureAccessService.js";
 
 export type AnyRepliable = RepliableInteraction | CommandInteraction;
 
@@ -51,6 +60,8 @@ export type AnyRepliable = RepliableInteraction | CommandInteraction;
 type AugmentedInteraction = AnyRepliable & {
   __rpgAcked?: boolean;
   __rpgDeferred?: boolean;
+  /** Set by enforceFeatureGate: every reply carries the Preview note. */
+  __rpgFeaturePreview?: boolean;
 };
 
 export function memberHasPermission(
@@ -323,14 +334,7 @@ function getCommandOwnerId(interaction: AnyRepliable): string | null {
 }
 
 function memberHasDevRole(interaction: AnyRepliable): boolean {
-  const roles = interaction.member?.roles;
-  if (!roles) return false;
-  // Cached GuildMember exposes a role manager; raw API members expose a string[].
-  if (typeof (roles as GuildMemberRoleManager).cache?.has === "function") {
-    return (roles as GuildMemberRoleManager).cache.has(DEV_ROLE_ID);
-  }
-  if (Array.isArray(roles)) return (roles as string[]).includes(DEV_ROLE_ID);
-  return false;
+  return memberHasAnyRole(interaction.member, [DEV_ROLE_ID]);
 }
 
 function shouldBlockDevChannelInteraction(interaction: AnyRepliable): boolean {
@@ -344,6 +348,10 @@ function shouldBlockDevChannelInteraction(interaction: AnyRepliable): boolean {
   const userId = interaction.user?.id ?? null;
   if (!userId) return true;
   if (userId === commandOwnerId) return false;
+  // A Preview Feature's own posts (voting panels, the giveaway hub) land here so staff can
+  // try them: the gate already found this user is staff, so Admins need no dev role.
+  const isFeaturePreview = Boolean((interaction as AugmentedInteraction).__rpgFeaturePreview);
+  if (isFeaturePreview && !commandOwnerId) return false;
   return !memberHasDevRole(interaction);
 }
 
@@ -372,6 +380,87 @@ function applyDevChannelOverrides(interaction: AnyRepliable, options: any): any 
   if (!("flags" in options)) return options;
   const flags = stripEphemeralFlag(options.flags);
   return { ...options, flags };
+}
+
+/** Normalizes a reply payload and applies the dev-channel overrides. */
+function prepareReplyOptions(interaction: AnyRepliable, options: any): any {
+  return applyDevChannelOverrides(interaction, normalizeOptions(options));
+}
+
+/**
+ * What a payload lands on: a new message (a reply or follow-up), the interaction's original
+ * response (editReply), or the message the component sits on (update).
+ */
+type ReplyTarget = "new" | "original" | "source";
+
+/** The message a component (or a modal opened from one) sits on, if any. */
+function sourceMessage(interaction: AnyRepliable): { flags?: unknown } | null {
+  if (interaction.isMessageComponent()) return interaction.message;
+  return interaction.isModalSubmit() ? interaction.message ?? null : null;
+}
+
+/**
+ * True when a payload for `target` edits a message other members see: the update of a
+ * public message, or an editReply that lands on it because the click was answered with a
+ * deferred update (or an update) rather than a reply of its own.
+ */
+function editsSharedMessage(interaction: AnyRepliable, target: ReplyTarget): boolean {
+  if (target === "new") return false;
+  const message = sourceMessage(interaction);
+  if (!message) return false;
+  // discord.js sets `ephemeral` only once the interaction has a reply of its own.
+  if (target === "original" && interaction.ephemeral != null) return false;
+  const flags = message.flags as { has?: (flag: number) => boolean } | undefined;
+  return !flags?.has?.(MessageFlags.Ephemeral);
+}
+
+/**
+ * Adds the Preview note to a payload addressed to the staff member using a Preview Feature
+ * (enforceFeatureGate): replies, follow-ups and edits of their own messages, but never an
+ * edit of a shared message, such as a voting panel or the giveaway hub, which every member
+ * would then see.
+ */
+function withPreviewNote(interaction: AnyRepliable, payload: any, target: ReplyTarget): any {
+  const isPreview = Boolean((interaction as AugmentedInteraction).__rpgFeaturePreview);
+  if (!isPreview || editsSharedMessage(interaction, target)) return payload;
+  return addPreviewNote(payload);
+}
+
+function featureGateTarget(interaction: Interaction): FeatureGateTarget | null {
+  if (interaction.isChatInputCommand() || interaction.isContextMenuCommand()) {
+    return { type: "command", name: interaction.commandName };
+  }
+  if (interaction.isMessageComponent() || interaction.isModalSubmit()) {
+    return { type: "component", customId: interaction.customId };
+  }
+  return null;
+}
+
+/**
+ * The feature gate (spec api#347), run once per interaction before its handler. Returns
+ * true when the interaction was refused with the private not-available reply, so the
+ * caller must not run its handler. For a Preview Feature used by staff it marks the
+ * interaction, and the reply helpers below add the Preview note to every reply. Commands
+ * and components with no Feature, and autocomplete, pass without a lookup. A Live or Off
+ * Feature reads only the club-wide flag cache, so members never wait on a per-user lookup.
+ */
+export async function enforceFeatureGate(
+  interaction: Interaction,
+  source: IFeatureGateSource = featureGateSource,
+): Promise<boolean> {
+  if (interaction.isAutocomplete() || !interaction.isRepliable()) return false;
+  const target = featureGateTarget(interaction);
+  if (!target) return false;
+
+  const decision = await resolveFeatureGate(target, interaction.user.id, source);
+  if (decision === "not_available") {
+    await safeReply(interaction, buildTextReply(FEATURE_NOT_AVAILABLE_MESSAGE, true));
+    return true;
+  }
+  if (decision === "preview_note") {
+    (interaction as AugmentedInteraction).__rpgFeaturePreview = true;
+  }
+  return false;
 }
 
 // Safely defer a reply, ignoring errors and avoiding double-deferral
@@ -653,7 +742,9 @@ async function sendSafeReply(interaction: AnyRepliable, options: any): Promise<a
     return;
   }
   const forceFollowUp = Boolean(options?.__forceFollowUp);
-  const normalizedOptions = applyDevChannelOverrides(interaction, normalizeOptions(options));
+  const prepared = prepareReplyOptions(interaction, options);
+  const normalizedOptions = withPreviewNote(interaction, prepared, "new");
+  const originalOptions = withPreviewNote(interaction, prepared, "original");
 
   const deferred: boolean = Boolean(
     aug.__rpgDeferred !== undefined ? aug.__rpgDeferred : aug.deferred,
@@ -665,7 +756,7 @@ async function sendSafeReply(interaction: AnyRepliable, options: any): Promise<a
     try {
       if (typeof options === "string") {
         // eslint-disable-next-line local/no-plain-text-v1-reply
-        return await interaction.followUp({ content: options });
+        return await interaction.followUp({ content: normalizedOptions });
       } else {
         return await interaction.followUp(normalizedOptions);
       }
@@ -680,9 +771,9 @@ async function sendSafeReply(interaction: AnyRepliable, options: any): Promise<a
     try {
       if (typeof options === "string") {
         // eslint-disable-next-line local/no-plain-text-v1-reply
-        return await interaction.editReply({ content: options });
+        return await interaction.editReply({ content: originalOptions });
       } else {
-        const result = await interaction.editReply(normalizedOptions);
+        const result = await interaction.editReply(originalOptions);
         logInfo("InteractionUtils.safeReply", { step: "editReply success", messageId: result?.id });
         return result;
       }
@@ -701,7 +792,7 @@ async function sendSafeReply(interaction: AnyRepliable, options: any): Promise<a
         try {
           if (typeof options === "string") {
             // eslint-disable-next-line local/no-plain-text-v1-reply
-            return await interaction.followUp({ content: options });
+            return await interaction.followUp({ content: normalizedOptions });
           } else {
             return await interaction.followUp(normalizedOptions);
           }
@@ -719,7 +810,7 @@ async function sendSafeReply(interaction: AnyRepliable, options: any): Promise<a
     try {
       if (typeof options === "string") {
         // eslint-disable-next-line local/no-plain-text-v1-reply
-        return await interaction.followUp({ content: options });
+        return await interaction.followUp({ content: normalizedOptions });
       } else {
         return await interaction.followUp(normalizedOptions);
       }
@@ -732,7 +823,7 @@ async function sendSafeReply(interaction: AnyRepliable, options: any): Promise<a
   // First-time acknowledgement: normal reply
   try {
     const replyOptions = typeof options === "string"
-      ? { content: options }
+      ? { content: normalizedOptions }
       : { ...normalizedOptions };
 
     const result = await interaction.reply(replyOptions);
@@ -783,12 +874,13 @@ async function updateOrReply(
     await sendDevChannelBlockResponse(interaction);
     return;
   }
-  const normalizedOptions = applyDevChannelOverrides(interaction, normalizeOptions(options));
+  const normalizedOptions = prepareReplyOptions(interaction, options);
 
   if (canUpdateSource(interaction, fromModal)) {
     try {
-      let sent = normalizedOptions;
-      await sendWithInvalidEmojiRetry(normalizedOptions, (payload) => {
+      const updateOptions = withPreviewNote(interaction, normalizedOptions, "source");
+      let sent = updateOptions;
+      await sendWithInvalidEmojiRetry(updateOptions, (payload) => {
         sent = payload;
         return interaction.update(payload);
       });
@@ -837,7 +929,11 @@ export async function safeEditReply(interaction: AnyRepliable, options: any): Pr
     return safeReply(interaction, options);
   }
 
-  const normalizedOptions = applyDevChannelOverrides(interaction, normalizeOptions(options));
+  const normalizedOptions = withPreviewNote(
+    interaction,
+    prepareReplyOptions(interaction, options),
+    "original",
+  );
   try {
     let sent = normalizedOptions;
     const result = await sendWithInvalidEmojiRetry(normalizedOptions, (payload) => {

@@ -10,11 +10,13 @@ import {
 } from "../config/botJobs.js";
 import { buildAnyErrorMessage } from "../utilities/ApiErrorUtils.js";
 import { isTemporaryJobError } from "./BotJobErrors.js";
+import { featurePostDestination } from "../functions/FeatureGate.js";
 import { createScheduledTask, type IScheduledTask } from "../utilities/IntervalUtils.js";
 import { logError, logInfo } from "../utilities/LogUtils.js";
 import {
   BOT_JOB_HANDLERS,
   createBotJobSurface,
+  type BotJobHandler,
   type BotJobHandlers,
   type IBotJobSurface,
 } from "./BotJobHandlers.js";
@@ -79,6 +81,22 @@ export function buildBotJobErrorMessage(job: IBotJob, err: unknown): string {
   );
 }
 
+/**
+ * The Feature a public-post job belongs to (api#353 adds `feature_key` to those payloads),
+ * or null for a job that posts nothing public, which always runs.
+ */
+function jobFeatureKey(job: IBotJob): string | null {
+  const key = job.payload.feature_key;
+  return typeof key === "string" && key !== "" ? key : null;
+}
+
+const PREVIEW_RESULT_NOTE = "Preview: posted to the bot-dev channel instead.";
+
+function withPreviewResultNote(text: string | void): string {
+  const trimmed = typeof text === "string" ? text.trim() : "";
+  return trimmed ? `${PREVIEW_RESULT_NOTE} ${trimmed}` : PREVIEW_RESULT_NOTE;
+}
+
 async function ack(label: string, send: () => Promise<void>): Promise<boolean> {
   try {
     await send();
@@ -95,7 +113,10 @@ async function ack(label: string, send: () => Promise<void>): Promise<boolean> {
  * acked failed with its error and the batch goes on, unless the error is temporary and
  * attempts remain: then it is left unacked for the lease to retry. A kind with no handler
  * fails without running anything. An ack that does not land is logged, remembered and left to
- * the lease, so the returning job is only acked.
+ * the lease, so the returning job is only acked. A public-post job (its payload's
+ * `feature_key`) runs with its Feature's state in its context: the handler routes its public
+ * posts by it (none when Off, the bot-dev channel in Preview) and keeps what is not a public
+ * post, such as a DM or a poll nudge. In Preview the result text says where posts went.
  */
 export async function processBotJobs(
   jobs: readonly IBotJob[],
@@ -112,28 +133,54 @@ export async function processBotJobs(
       continue;
     }
     const handler = Object.hasOwn(handlers, job.kind) ? handlers[job.kind] : undefined;
-    let result: BotJobPendingAck;
+    let result: BotJobPendingAck | null;
     if (!handler) {
       const message = `Bot job ${job.id} failed: unknown kind "${job.kind}". ` +
         "This bot has no handler for it.";
       logError("BotJobService", new Error(message));
       result = { status: "failed", error: message };
     } else {
-      try {
-        const resultText = normalizeResultText(await handler(job.payload, surface));
-        logInfo("BotJobService", `Performed ${label}.`);
-        result = resultText === undefined ? { status: "done" } : { status: "done", resultText };
-      } catch (err) {
-        logError(`BotJobService.${job.kind}`, err);
-        if (isTemporaryJobError(err) && job.attempts < BOT_JOB_MAX_ATTEMPTS) {
-          // Left unacked: the lease hands it back and the next attempt runs it again.
-          logInfo("BotJobService", `Left ${label} for the lease to retry (temporary error).`);
-          continue;
-        }
-        result = { status: "failed", error: buildBotJobErrorMessage(job, err) };
-      }
+      result = await performJob(job, handler, surface, label);
+      // Left unacked: the lease hands it back and the next attempt runs it again.
+      if (!result) continue;
     }
     if (!(await sendAck(label, job.id, result, api))) state.pendingAcks.set(job.id, result);
+  }
+}
+
+/**
+ * Runs one job's handler and returns the ack it is owed, or null to leave it for the lease
+ * (a temporary error with attempts left). Reads a public-post job's Feature state once,
+ * for the handler.
+ */
+async function performJob(
+  job: IBotJob,
+  handler: BotJobHandler,
+  surface: IBotJobSurface,
+  label: string,
+): Promise<BotJobPendingAck | null> {
+  const featureKey = jobFeatureKey(job);
+  const feature = featureKey
+    ? { key: featureKey, state: await surface.featureState(featureKey) }
+    : null;
+  const destination = featurePostDestination(feature?.state ?? null);
+  if (feature && destination === "suppressed") {
+    logInfo("BotJobService", `Running ${label} with its posts held: ${feature.key} is Off.`);
+  }
+  try {
+    const handlerText = await handler(job.payload, surface, { feature });
+    const resultText = normalizeResultText(
+      destination === "bot_dev" ? withPreviewResultNote(handlerText) : handlerText,
+    );
+    logInfo("BotJobService", `Performed ${label}.`);
+    return resultText === undefined ? { status: "done" } : { status: "done", resultText };
+  } catch (err) {
+    logError(`BotJobService.${job.kind}`, err);
+    if (isTemporaryJobError(err) && job.attempts < BOT_JOB_MAX_ATTEMPTS) {
+      logInfo("BotJobService", `Left ${label} for the lease to retry (temporary error).`);
+      return null;
+    }
+    return { status: "failed", error: buildBotJobErrorMessage(job, err) };
   }
 }
 

@@ -128,7 +128,10 @@ async function loadPanelArt(
   return { files: image.files, art: { voteImageUrl: image.voteImageUrl, nominatorNames } };
 }
 
-/** Posts one panel per category and reports what happened. */
+/**
+ * Posts one panel per category to `channelId` and reports what happened. The channel is
+ * used as given: callers route it by the Voting & GOTM flag first (resolveVotingPostTarget).
+ */
 export async function postVotePanels(
   params: IPostVotePanelsParams,
 ): Promise<IPostVotePanelsResult> {

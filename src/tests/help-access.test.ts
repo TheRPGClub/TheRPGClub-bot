@@ -3,14 +3,20 @@ import assert from "node:assert/strict";
 import { PermissionsBitField } from "discord.js";
 
 import { canUseHelpLevel, getHelpAccess } from "../commands/help/help-access.js";
+import { ADMIN_ROLE_ID, DEV_ROLE_ID } from "../config/roles.js";
 import { buildHelpCategoryResponse, buildMainHelpResponse } from "../commands/help.command.js";
 
 const OWNER_ID = "100";
 const MEMBER_ID = "200";
 
-function fakeInteraction(userId: string, flags: bigint[]): Parameters<typeof getHelpAccess>[0] {
+function fakeInteraction(
+  userId: string,
+  flags: bigint[],
+  roleIds: string[] = [],
+): Parameters<typeof getHelpAccess>[0] {
   return {
     guild: { ownerId: OWNER_ID },
+    member: { roles: roleIds },
     memberPermissions: new PermissionsBitField(flags),
     user: { id: userId },
   } as unknown as Parameters<typeof getHelpAccess>[0];
@@ -24,7 +30,25 @@ function responseText(response: { components: unknown[] }): string {
 
 test("getHelpAccess: plain member sees member help only", () => {
   const access = getHelpAccess(fakeInteraction(MEMBER_ID, []));
-  assert.deepEqual(access, { member: true, moderator: false, admin: false, owner: false });
+  assert.deepEqual(access, {
+    member: true, moderator: false, admin: false, staff: false, owner: false,
+  });
+});
+
+test("getHelpAccess: Feature Flag staff are Administrators, Admins or Superadmins", () => {
+  assert.equal(getHelpAccess(fakeInteraction(MEMBER_ID, [], [DEV_ROLE_ID])).staff, true);
+  assert.equal(getHelpAccess(fakeInteraction(MEMBER_ID, [], [ADMIN_ROLE_ID])).staff, true);
+  const administrator = [PermissionsBitField.Flags.Administrator];
+  assert.equal(getHelpAccess(fakeInteraction(MEMBER_ID, administrator)).staff, true);
+  assert.equal(getHelpAccess(fakeInteraction(MEMBER_ID, [], ["999"])).staff, false);
+});
+
+test("/help lists /flag for a Superadmin without Discord Administrator", () => {
+  const superadmin = getHelpAccess(fakeInteraction(MEMBER_ID, [], [DEV_ROLE_ID]));
+  const category = buildHelpCategoryResponse("server-admin", superadmin);
+  assert.ok(category && responseText(category).includes("flag"));
+  const member = getHelpAccess(fakeInteraction(MEMBER_ID, []));
+  assert.ok(!responseText(buildMainHelpResponse(member)).includes("/flag"));
 });
 
 test("getHelpAccess: Manage Messages grants moderator, Administrator grants both", () => {
@@ -44,7 +68,9 @@ test("getHelpAccess: guild owner is owner, and nothing is granted outside a guil
 
   const dm = { guild: null, memberPermissions: null, user: { id: OWNER_ID } };
   const access = getHelpAccess(dm as unknown as Parameters<typeof getHelpAccess>[0]);
-  assert.deepEqual(access, { member: true, moderator: false, admin: false, owner: false });
+  assert.deepEqual(access, {
+    member: true, moderator: false, admin: false, staff: false, owner: false,
+  });
 });
 
 test("canUseHelpLevel: an unset level means every member", () => {
@@ -64,6 +90,7 @@ test("buildMainHelpResponse hides staff commands from members", () => {
     member: true,
     moderator: true,
     admin: true,
+    staff: true,
     owner: true,
   }));
   for (const shown of ["superadmin", "publicreminder", "Admin tools", "Moderator tools", "rss"]) {

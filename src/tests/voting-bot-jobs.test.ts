@@ -8,6 +8,7 @@ import type { IBotJob, IBotJobApi } from "../classes/BotJobs.js";
 import type { IResultsRound } from "../services/VotingResultsAnnouncement.js";
 import type { IVotingRound } from "../classes/VotingRounds.js";
 import type { VotingPanelRepostOutcome } from "../functions/VotingPanelRepost.js";
+import { ANNOUNCEMENT_CHANNEL_ID } from "../config/channels.js";
 import type { ITieBreakPick } from "../services/VotingResultsAnnouncement.js";
 
 type Ack =
@@ -68,6 +69,9 @@ function fakeSurface(options: {
     sendSayMessage: async () => {},
     sharedStateRefusal: () => null,
     runMemberScan: async () => ({ upserted: 0, failed: 0, departed: 0 }),
+    featureState: async () => null,
+    featureFlagsChanged: () => undefined,
+    giveawayHubLeftPreview: async () => undefined,
     fetchGame: async () => null,
     announceCompletion: async () => {},
     fetchLiveEvent: async () => null,
@@ -185,7 +189,8 @@ function postedOutcome(
   failed: number,
   lines: string[],
 ): VotingPanelRepostOutcome {
-  return { status: "posted", round: openRound, result: { posted, failed, lines } };
+  const result = { posted, failed, lines, channelId: ANNOUNCEMENT_CHANNEL_ID };
+  return { status: "posted", round: openRound, result };
 }
 
 test("panels repost posts the round's panels to announcements", async () => {

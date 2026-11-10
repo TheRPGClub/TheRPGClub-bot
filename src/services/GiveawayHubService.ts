@@ -8,7 +8,10 @@ import {
 } from "discord.js";
 import { ContainerBuilder } from "@discordjs/builders";
 import { countAvailableGameKeys, listAvailableGameKeys } from "../classes/GameKey.js";
-import { GIVEAWAY_HUB_CHANNEL_ID } from "../config/channels.js";
+import { BOT_DEV_CHANNEL_ID, GIVEAWAY_HUB_CHANNEL_ID } from "../config/channels.js";
+import { POST_FEATURE_KEYS } from "../config/featureGate.js";
+import type { FeatureState, IFeatureFlagSource } from "../functions/FeatureGate.js";
+import { routeFeaturePostFor } from "./FeaturePostRouting.js";
 import { buildPageFooterText } from "../functions/PaginationUtils.js";
 import { logError, logWarn } from "../utilities/LogUtils.js";
 import { buildActionButton, buildButtonRow } from "../functions/uiComponents.js";
@@ -17,6 +20,13 @@ import {
   buildComponentsV2EditFlags,
 } from "../functions/ComponentsV2Utils.js";
 const GIVEAWAY_HUB_SCAN_LIMIT = 50;
+
+/**
+ * The hub message the bot last posted or found in each channel, so a busy channel (bot-dev,
+ * where the hub lives while Giveaways is in Preview) never has to find it by scanning its
+ * latest messages. Lost on restart, when the scan finds the hub again.
+ */
+const hubMessageIds = new Map<string, string>();
 
 export const KEYS_PAGE_SIZE = 20;
 
@@ -181,6 +191,13 @@ export async function deleteGiveawayHubMessages(
   client: Client,
   channel: TextBasedChannel,
 ): Promise<void> {
+  const tracked = await fetchTrackedHub(client, channel);
+  hubMessageIds.delete(channel.id);
+  if (tracked) {
+    await tracked.delete().catch((err) => {
+      logError("GiveawayHubService.cleanupDelete", err);
+    });
+  }
   let before: string | undefined;
   for (;;) {
     const fetched = await channel.messages
@@ -228,6 +245,21 @@ function isGiveawayHubMessage(client: Client, message: GiveawayMessage): boolean
   ) ?? false;
 }
 
+/** The hub this channel's id points at, if it is still there. */
+async function fetchTrackedHub(
+  client: Client,
+  channel: TextBasedChannel,
+): Promise<GiveawayMessage | null> {
+  const messageId = hubMessageIds.get(channel.id);
+  if (!messageId) return null;
+  const message = await channel.messages.fetch(messageId).catch(() => null);
+  if (message && isGiveawayHubMessage(client, message as GiveawayMessage)) {
+    return message as GiveawayMessage;
+  }
+  hubMessageIds.delete(channel.id);
+  return null;
+}
+
 async function updateGiveawayHubMessages(
   client: Client,
   channel: TextBasedChannel,
@@ -246,15 +278,20 @@ async function updateGiveawayHubMessages(
       logError("GiveawayHubService.fetch", err);
       return null;
     });
-  const hubMessages = messages
-    ? Array.from(messages.values())
-      .filter((message) => isGiveawayHubMessage(client, message as GiveawayMessage))
+  const scanned = messages
+    ? Array.from(messages.values(), (message) => message as GiveawayMessage)
+      .filter((message) => isGiveawayHubMessage(client, message))
       .sort((a, b) => a.createdTimestamp - b.createdTimestamp)
     : [];
+  const tracked = await fetchTrackedHub(client, channel);
+  const hubMessages = tracked
+    ? [tracked, ...scanned.filter((message) => message.id !== tracked.id)]
+    : scanned;
 
   const allComponents = [...payload.containers, ...payload.actionRows];
   const existing = hubMessages[0];
   if (existing) {
+    hubMessageIds.set(channel.id, existing.id);
     const hubMsg = existing as GiveawayMessage;
     await client.rest.patch(
       Routes.channelMessage(hubMsg.channelId, hubMsg.id),
@@ -270,7 +307,7 @@ async function updateGiveawayHubMessages(
       logError("GiveawayHubService.edit", err);
     });
   } else {
-    await (channel as any).send({
+    const sent: { id: string } | null = await (channel as any).send({
       components: allComponents,
       flags: options?.suppressNotifications
         ? MessageFlags.IsComponentsV2 | MessageFlags.SuppressNotifications
@@ -278,7 +315,9 @@ async function updateGiveawayHubMessages(
     }).catch((err: unknown) => {
       if (strict) throw err;
       logError("GiveawayHubService.send", err);
+      return null;
     });
+    if (sent) hubMessageIds.set(channel.id, sent.id);
   }
 
   const extras = hubMessages.slice(1);
@@ -289,10 +328,36 @@ async function updateGiveawayHubMessages(
   }
 }
 
+/**
+ * Removes the Preview hub from the bot-dev channel: the one this process posted or found,
+ * and any its latest messages hold. For when Giveaways leaves Preview.
+ */
+export async function removePreviewGiveawayHub(client: Client): Promise<void> {
+  if (GIVEAWAY_HUB_CHANNEL_ID === BOT_DEV_CHANNEL_ID) return;
+  const channel = await client.channels.fetch(BOT_DEV_CHANNEL_ID).catch((err: unknown) => {
+    logError("GiveawayHubService.previewChannelFetch", err);
+    return null;
+  });
+  if (!channel?.isTextBased()) return;
+  await deleteGiveawayHubMessages(client, channel);
+}
+
+/**
+ * Re-renders the giveaway hub where the Giveaways Feature's flag routes it: the hub channel
+ * when Live, the bot-dev channel in Preview, and nowhere when Off (the hub channel's hub is
+ * left as it is). Out of Preview, a Preview hub this process left in bot-dev is removed.
+ */
 export async function refreshGiveawayHubMessage(
   client: Client,
   page = 0,
-  options?: { forceRecreate?: boolean; throwOnFailure?: boolean },
+  options?: {
+    forceRecreate?: boolean;
+    throwOnFailure?: boolean;
+    /** The Giveaways Feature's state when already read (a bot job's); else it is read. */
+    featureState?: FeatureState | null;
+    /** Where the flag state is read; the shared flag cache unless a test passes one. */
+    featureFlags?: IFeatureFlagSource;
+  },
 ): Promise<void> {
   // A bot job must fail when the hub was not refreshed; other callers only log it.
   const strict = options?.throwOnFailure ?? false;
@@ -305,8 +370,18 @@ export async function refreshGiveawayHubMessage(
     return;
   }
 
+  const hubChannelId = await routeFeaturePostFor(
+    POST_FEATURE_KEYS.giveawayHub,
+    GIVEAWAY_HUB_CHANNEL_ID,
+    { state: options?.featureState, source: options?.featureFlags },
+  );
+  if (hubChannelId !== BOT_DEV_CHANNEL_ID && hubMessageIds.has(BOT_DEV_CHANNEL_ID)) {
+    await removePreviewGiveawayHub(client);
+  }
+  if (!hubChannelId) return;
+
   const channel = await client.channels
-    .fetch(GIVEAWAY_HUB_CHANNEL_ID)
+    .fetch(hubChannelId)
     .catch((err: unknown) => {
       if (strict) throw err;
       logError("GiveawayHubService.channelFetch", err);
@@ -314,7 +389,7 @@ export async function refreshGiveawayHubMessage(
     });
   const textChannel = channel?.isTextBased() ? channel : null;
   if (!textChannel) {
-    skip(`Giveaway hub channel ${GIVEAWAY_HUB_CHANNEL_ID} not found or not text-based.`);
+    skip(`Giveaway hub channel ${hubChannelId} not found or not text-based.`);
     return;
   }
 

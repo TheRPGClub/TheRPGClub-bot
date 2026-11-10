@@ -37,6 +37,7 @@ import {
   COLOR_WARNING,
 } from "../config/colors.js";
 import { ANNOUNCEMENT_CHANNEL_ID } from "../config/channels.js";
+import type { IVotingPostTarget } from "../functions/FeatureGate.js";
 import { fetchGameCoverBuffer } from "./GameImageService.js";
 import { fetchSendableChannel, type SendableChannel } from "../functions/ChannelUtils.js";
 import { logError } from "../utilities/LogUtils.js";
@@ -170,6 +171,16 @@ async function postWinnerAnnouncements(
 }
 
 /**
+ * Announce options for a target the caller routed by the Voting & GOTM flag
+ * (resolveVotingPostTarget). The announcement functions post where they are told.
+ */
+export function routedAnnounceOptions(
+  target: IVotingPostTarget,
+): Pick<IAnnounceResultsOptions, "channelIdOverride" | "rehearsal"> {
+  return { channelIdOverride: target.channelId, rehearsal: target.rehearsal };
+}
+
+/**
  * Sends one results post: the tallies (under the rehearsal banner when it is
  * one), then each category's winner announcement. Throws
  * NothingToAnnounceError when there is no tally to post.
@@ -208,7 +219,7 @@ async function postResults(
  * Posts the round's results to the announcements channel: one message with
  * the full tallies, then one winner announcement per category (with the
  * winning game's cover when available). Throws when nothing can be posted so
- * callers can surface the failure.
+ * callers can surface the failure. Callers route it by the Voting & GOTM flag first.
  */
 export async function announceVotingResults(
   client: Client,
@@ -338,7 +349,7 @@ export interface ITieBreakPick {
  * Announces an admin's tie-break pick in the announcements channel, the way the
  * results name a winner: the cover and winner thread for a sole winner, joint winners
  * named together. A rehearsal posts the test banner first and creates no thread.
- * Returns links to the posts.
+ * Returns links to the posts. Callers route it by the Voting & GOTM flag first.
  */
 export async function announceTieBreak(
   client: Client,

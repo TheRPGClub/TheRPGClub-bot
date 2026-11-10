@@ -53,6 +53,8 @@ import {
 import { withRetry } from "./utilities/RetryUtils.js";
 import { isTransientApiError } from "./services/RpgClubApiClient.js";
 import { CLIENT_MAKE_CACHE, CLIENT_SWEEPERS } from "./config/clientCache.js";
+import { enforceFeatureGate } from "./functions/InteractionUtils.js";
+import { startFeatureFlagCache } from "./services/FeatureAccessService.js";
 installConsoleLogging();
 
 // Since Node 15 an unhandled rejection kills the process, so one uncaught
@@ -151,6 +153,9 @@ bot.once("clientReady", async () => {
   void GameSearchService.refreshGameTitleCache();
   void GamePlatformRegionService.refreshPlatformCache();
   void GameProfileService.refreshCompanyCache();
+  // Feature Flags are read through the bot's own user; loading them now keeps the first
+  // gated command after a restart from waiting on the API.
+  if (bot.user) startFeatureFlagCache(bot.user.id);
 
   setConsoleLoggingClient(bot);
 
@@ -198,6 +203,9 @@ bot.on("interactionCreate", async (interaction: Interaction) => {
         void Member.touchLastSeen(interaction.user.id);
       }
     }
+
+    // Feature Flags: refuse a Preview or Off Feature's command before its handler runs.
+    if (await enforceFeatureGate(interaction)) return;
 
     await bot.executeInteraction(interaction);
   } catch (err: unknown) {

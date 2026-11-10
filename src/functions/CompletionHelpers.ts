@@ -45,6 +45,9 @@ import { logError } from "../utilities/LogUtils.js";
 import { buildActionButton, buildButtonRow } from "./uiComponents.js";
 import { assertCustomIdSegments } from "../utilities/CustomIdUtils.js";
 import { NOW_PLAYING_REMOVE_CONFIRM_PREFIX } from "../config/customIdPrefixes.js";
+import { POST_FEATURE_KEYS } from "../config/featureGate.js";
+import { routeFeaturePostFor } from "../services/FeaturePostRouting.js";
+import type { FeatureState } from "./FeatureGate.js";
 
 const MAX_PLAYTIME_HOURS = 999999.99;
 
@@ -262,20 +265,27 @@ function announcedUser(user: User): IAnnouncedUser {
 }
 
 /**
- * Posts a completion announcement to the Whatcha Playing channel. Throws when the channel
- * or a user can't be fetched or the post fails, so a bot job acks failed; the slash
- * command path (announceCompletion) logs instead.
+ * Posts a completion announcement to the Whatcha Playing channel, or where the Game
+ * Completions Feature's flag routes it (bot-dev in Preview, nothing when Off). Throws when
+ * the channel or a user can't be fetched or the post fails, so a bot job acks failed; the
+ * slash command path (announceCompletion) logs instead. `featureState` is the state a bot
+ * job already read; omitted, it is read here.
  */
 export async function postCompletionAnnouncement(
   client: Client,
   input: ICompletionAnnouncementInput,
+  featureState?: FeatureState | null,
 ): Promise<void> {
   const { game } = input;
-  const channel = await client.channels.fetch(WHATCHA_PLAYING_CHANNEL_ID);
+  const channelId = await routeFeaturePostFor(
+    POST_FEATURE_KEYS.completions,
+    WHATCHA_PLAYING_CHANNEL_ID,
+    { state: featureState },
+  );
+  if (!channelId) return;
+  const channel = await client.channels.fetch(channelId);
   if (!channel || !channel.isSendable()) {
-    throw new Error(
-      `Channel ${WHATCHA_PLAYING_CHANNEL_ID} is missing or the bot cannot post in it.`,
-    );
+    throw new Error(`Channel ${channelId} is missing or the bot cannot post in it.`);
   }
   const user = await safeUserFetch(client, input.userId);
   if (!user) {

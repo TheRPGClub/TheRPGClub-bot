@@ -93,6 +93,9 @@ function fakeSurface(options: {
     sendSayMessage: async () => {},
     sharedStateRefusal: () => null,
     runMemberScan: async () => ({ upserted: 0, failed: 0, departed: 0 }),
+    featureState: async () => null,
+    featureFlagsChanged: () => undefined,
+    giveawayHubLeftPreview: async () => undefined,
   };
   return surface;
 }
