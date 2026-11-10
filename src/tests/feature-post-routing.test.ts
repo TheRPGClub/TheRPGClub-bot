@@ -197,6 +197,22 @@ test("bot jobs: a Preview Feature's job runs and its result says it went to bot-
     }]);
   });
 
+test("bot jobs: a Preview job of a Feature with no posts gets no bot-dev note", async () => {
+  const api = fakeJobApi();
+  const { handlers, runs } = countingHandlers();
+  await processBotJobs(
+    [job(5, { n: 5, feature_key: "news_hub" })],
+    handlers,
+    stateSurface({ news_hub: "preview" }),
+    api,
+    createBotJobDeliveryState(),
+  );
+  assert.deepEqual(runs, [5]);
+  assert.deepEqual(api.acks, [
+    { id: 5, status: "done", text: "Posted the thing to announcements." },
+  ]);
+});
+
 test("bot jobs: a Live Feature's job runs as before", async () => {
   const api = fakeJobApi();
   const { handlers, runs } = countingHandlers();
