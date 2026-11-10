@@ -89,6 +89,25 @@ test("an image alone is a News Item with no link, its expiry read from its addre
   assert.deepEqual(item?.images, [{ url: IMAGE_URL, expires_at: IMAGE_EXPIRES }]);
 });
 
+test("an image address without an `ex` parameter does not expire", () => {
+  const plain = "https://media.discordapp.net/attachments/1/2/plain.png";
+  const odd = "https://cdn.discordapp.com/attachments/1/2/odd.png?ex=zz";
+  const item = newsItemFrom(
+    message({
+      attachments: attachments(
+        { url: plain, contentType: "image/png", name: "plain.png" },
+        { url: odd, contentType: "image/png", name: "odd.png" },
+      ),
+    }),
+    PLACES,
+  );
+
+  assert.deepEqual(item?.images, [
+    { url: plain, expires_at: null },
+    { url: odd, expires_at: null },
+  ]);
+});
+
 test("a video or other file alone is not a News Item", () => {
   const video = "https://cdn.discordapp.com/attachments/1/2/clip.mp4?ex=69120000&is=1&hm=2";
   const item = newsItemFrom(
