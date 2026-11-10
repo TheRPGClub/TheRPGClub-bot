@@ -25,6 +25,8 @@ export const FEATURE_COMMANDS: Readonly<Record<string, string>> = {
   giveaway: "giveaways",
   gamegiveaway: "giveaways",
   suggestion: "suggestions",
+  // Staff only: the API also refuses anyone but Admins and Superadmins once it is Live.
+  "news-import": "news_hub",
 };
 
 /**

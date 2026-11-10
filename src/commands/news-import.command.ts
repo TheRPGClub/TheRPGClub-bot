@@ -1,0 +1,134 @@
+import {
+  AttachmentBuilder,
+  type CommandInteraction,
+  FileBuilder,
+  MessageFlags,
+  type SendableChannels,
+} from "discord.js";
+import { Discord, Slash, SlashGroup } from "discordx";
+
+import { GAME_NEWS_CHANNEL_ID } from "../config/channels.js";
+import { DEV_ROLE_ID } from "../config/roles.js";
+import { MAX_CONTAINER_TEXT } from "../config/textLimits.js";
+import { IS_TEST_MODE } from "../config/testMode.js";
+import {
+  buildComponentsV2EditFlags,
+  buildErrorReply,
+  buildTextContainer,
+  buildTextReply,
+  buildTextSend,
+} from "../functions/ComponentsV2Utils.js";
+import { safeDeferReply, safeReply } from "../functions/InteractionUtils.js";
+import {
+  DEFAULT_NEWS_IMPORT_DEPS,
+  NEWS_IMPORT_COMMAND,
+  newsImportStatusReply,
+  startNewsImportScanReply,
+  type IScanProgressMessage,
+} from "../services/NewsImport.js";
+import { discordArchiveReader } from "../services/NewsImportScan.js";
+import { buildAnyErrorMessage, buildApiErrorMessage } from "../utilities/ApiErrorUtils.js";
+
+const SCAN_ERROR_FILE = "news-import-scan-error.txt";
+
+/** Posts a progress message that names the staff member without pinging them. */
+async function postProgress(
+  channel: SendableChannels,
+  text: string,
+): Promise<IScanProgressMessage> {
+  const message = await channel.send({ ...buildTextSend(text), allowedMentions: { parse: [] } });
+  return {
+    url: message.url,
+    edit: async (next) => {
+      await message.edit({ ...buildTextSend(next), allowedMentions: { parse: [] } });
+    },
+  };
+}
+
+/**
+ * Posts the error that stopped a scan. A failed batch's request holds up to 100 messages,
+ * more than a message shows, so a long error goes in a text file in full.
+ */
+async function postScanError(channel: SendableChannels, text: string): Promise<void> {
+  const allowedMentions = { roles: [DEV_ROLE_ID] };
+  if (text.length <= MAX_CONTAINER_TEXT) {
+    await channel.send({ ...buildTextSend(text), allowedMentions });
+    return;
+  }
+  const firstLine = text.split("\n", 1)[0];
+  const container = buildTextContainer(
+    `${firstLine}\nThe full request and response are in the attached file.`,
+  ).addFileComponents(new FileBuilder().setURL(`attachment://${SCAN_ERROR_FILE}`));
+  await channel.send({
+    components: [container],
+    flags: buildComponentsV2EditFlags(),
+    files: [new AttachmentBuilder(Buffer.from(text, "utf-8"), { name: SCAN_ERROR_FILE })],
+    allowedMentions,
+  });
+}
+
+/**
+ * `/news-import` (spec api#355): staff move the Game News Archive into the News Hub. The
+ * API decides who may (Admins and Superadmins, from the acting member's stored roles), so
+ * the command has no Discord permission check. It belongs to the News Hub Feature.
+ * bot#1527 adds `download` and `upload` as further @Slash methods here.
+ */
+@Discord()
+@SlashGroup({
+  description: "Import the Game News Archive into the News Hub (Admins and Superadmins)",
+  name: NEWS_IMPORT_COMMAND,
+})
+@SlashGroup(NEWS_IMPORT_COMMAND)
+export class NewsImportCommand {
+  @Slash({
+    description: "Read the whole Game News Archive and import its news, unsorted",
+    name: "scan",
+  })
+  async scan(interaction: CommandInteraction): Promise<void> {
+    await safeDeferReply(interaction, { flags: MessageFlags.Ephemeral });
+    const channel = interaction.channel;
+    if (!channel?.isSendable()) {
+      const text = "Run the scan in a channel where the bot can post its progress.";
+      await safeReply(interaction, buildTextReply(text, true));
+      return;
+    }
+
+    let reply: string;
+    try {
+      const started = await startNewsImportScanReply({
+        ...DEFAULT_NEWS_IMPORT_DEPS,
+        actingUserId: interaction.user.id,
+        testMode: IS_TEST_MODE,
+        archive: discordArchiveReader(interaction.client, GAME_NEWS_CHANNEL_ID),
+        archiveId: GAME_NEWS_CHANNEL_ID,
+        post: (text) => postProgress(channel, text),
+        postDetails: (text) => postScanError(channel, text),
+      });
+      // The scan outlives the interaction; it reports in the progress message.
+      void started.finished;
+      reply = started.reply;
+    } catch (error: unknown) {
+      const message = buildAnyErrorMessage("Could not start the News Import scan", error);
+      await safeReply(interaction, buildErrorReply(message, true));
+      return;
+    }
+    await safeReply(interaction, buildTextReply(reply, true));
+  }
+
+  @Slash({
+    description: "Show how many imported News Items are sorted, unsorted and removed",
+    name: "status",
+  })
+  async status(interaction: CommandInteraction): Promise<void> {
+    await safeDeferReply(interaction, { flags: MessageFlags.Ephemeral });
+    let text: string;
+    try {
+      text = await newsImportStatusReply(interaction.user.id);
+    } catch (error: unknown) {
+      const message = buildApiErrorMessage("Could not read the News Import status", error);
+      await safeReply(interaction, buildErrorReply(message, true));
+      return;
+    }
+    await safeReply(interaction, buildTextReply(text, true));
+  }
+}
