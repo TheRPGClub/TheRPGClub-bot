@@ -7,7 +7,7 @@
 
 import { TextDisplayBuilder } from "discord.js";
 
-import { FEATURE_ACCESS_WAIT_MS } from "../config/cacheDefaults.js";
+import { FEATURE_ACCESS_WAIT_MS, FEATURE_STAFF_WAIT_MS } from "../config/cacheDefaults.js";
 import { ANNOUNCEMENT_CHANNEL_ID, BOT_DEV_CHANNEL_ID } from "../config/channels.js";
 import { FEATURE_COMMANDS, FEATURE_COMPONENT_PREFIXES } from "../config/featureGate.js";
 import {
@@ -77,17 +77,18 @@ export function featureKeyFor(target: FeatureGateTarget): string | null {
 
 /**
  * Decides what happens to an interaction of a Feature in `state` (null when it is not
- * mapped, not listed, or the flags could not be read). Live runs for everyone and Off for
- * nobody; Preview runs with the note for staff and is refused to everyone else. `staff`
- * is only needed in Preview; null there (the staff lookup failed) runs it: the gate never
- * turns an API outage into a refusal.
+ * mapped, not listed, or the flags could not be read, which runs it: an outage never turns
+ * a Live Feature off). Live runs for everyone and Off for nobody; Preview runs with the
+ * note for staff and is refused to everyone else. `staff` is only needed in Preview; null
+ * there (the staff lookup failed) refuses: a Preview Feature fails closed, since running
+ * it would show members what only staff may see.
  */
 export function decideFeatureGate(
   state: FeatureState | null,
   staff: boolean | null,
 ): FeatureGateDecision {
   if (state === "off") return "not_available";
-  if (state !== "preview" || staff === null) return "run";
+  if (state !== "preview") return "run";
   return staff ? "preview_note" : "not_available";
 }
 
@@ -141,26 +142,26 @@ export async function settleWithin<T>(
 /**
  * The gate for one interaction: maps it to a Feature, reads that Feature's club-wide state
  * (cached, so a Live or Off Feature costs no API call once warm) and only in Preview asks
- * whether the user is staff. Each read that fails, or that takes longer than `waitMs`,
- * lets the interaction run ungated (logged).
+ * whether the user is staff. A flag read that fails, or takes longer than `waitMs`, lets
+ * the interaction run ungated; a staff lookup that fails, or takes longer than its own
+ * `staffWaitMs`, refuses it (both logged; see decideFeatureGate).
  */
 export async function resolveFeatureGate(
   target: FeatureGateTarget,
   userId: string,
   source: IFeatureGateSource,
   waitMs: number = FEATURE_ACCESS_WAIT_MS,
+  staffWaitMs: number = FEATURE_STAFF_WAIT_MS,
 ): Promise<FeatureGateDecision> {
   const featureKey = featureKeyFor(target);
   if (!featureKey) return "run";
-  const startedAt = Date.now();
   const flags = await settleWithin("Feature Flag lookup", source.flags(), waitMs);
   const state = featureStateFor(featureKey, flags);
   if (state !== "preview") return decideFeatureGate(state, null);
-  const remainingMs = Math.max(0, waitMs - (Date.now() - startedAt));
   const staff = await settleWithin(
     `staff lookup for ${userId}`,
     source.isStaff(userId),
-    remainingMs,
+    staffWaitMs,
   );
   return decideFeatureGate(state, staff);
 }

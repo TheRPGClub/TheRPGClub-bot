@@ -87,7 +87,7 @@ import {
 } from "../functions/FeatureGate.js";
 import { POST_FEATURE_KEYS } from "../config/featureGate.js";
 import { featureOffNotice, getFeatureState } from "./FeaturePostRouting.js";
-import { clearFeatureFlagCache } from "./FeatureAccessService.js";
+import { refreshFeatureFlagCache } from "./FeatureAccessService.js";
 import { buildFeatureFlagChangedNotice, isFeatureState } from "./FeatureFlagService.js";
 
 /**
@@ -262,7 +262,7 @@ export function createBotJobSurface(client: Client): IBotJobSurface {
     sharedStateRefusal: (actionName) => sharedStateCommandRefusal(actionName),
     runMemberScan: () => runMemberScan(client),
     featureState: (featureKey) => getFeatureState(featureKey),
-    featureFlagsChanged: clearFeatureFlagCache,
+    featureFlagsChanged: refreshFeatureFlagCache,
   };
 }
 

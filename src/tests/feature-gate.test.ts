@@ -44,9 +44,9 @@ test("decideFeatureGate: no state (unmapped, unlisted or unread) always runs", (
   assert.equal(decideFeatureGate(null, null), "run");
 });
 
-test("decideFeatureGate: Preview with an unknown staff answer runs (outage is no refusal)",
+test("decideFeatureGate: Preview with an unknown staff answer is refused (fails closed)",
   () => {
-    assert.equal(decideFeatureGate("preview", null), "run");
+    assert.equal(decideFeatureGate("preview", null), "not_available");
   });
 
 const COMMANDS: Array<[string, string | null]> = [
@@ -191,17 +191,58 @@ test("feature flag cache: one club-wide lookup, through the bot's own user", asy
   assert.deepEqual(api.calls, ["bot"]);
 });
 
-test("feature flag cache: clear() reads the flags again at once (/flag set)", async () => {
+test("feature flag cache: refresh() reads the flags again at once (/flag set)", async () => {
   let state: FeatureState = "live";
   const api = fakeApi(() => ({ journals: state }));
   const cache = createFeatureFlagCache(() => "bot", api, 60_000);
   assert.equal((await cache.flags())[0].state, "live");
   state = "off";
-  cache.clear();
-  assert.equal(api.calls.length, 2, "clear() starts the new read itself");
+  cache.refresh();
+  assert.equal(api.calls.length, 2, "refresh() starts the new read itself");
+  await new Promise((resolve) => setImmediate(resolve));
   assert.equal((await cache.flags())[0].state, "off");
   assert.equal(api.calls.length, 2);
 });
+
+test("feature flag cache: refresh() keeps the last flags until the new read lands",
+  async (t) => {
+    t.mock.method(console, "error", () => undefined);
+    let fail = false;
+    const flags = fakeApi(() => ({ journals: "off" }));
+    const api: IFeatureAccessApi = {
+      async fetchFeatureAccess(userId) {
+        if (fail) throw new Error("API down");
+        return flags.fetchFeatureAccess(userId);
+      },
+    };
+    const cache = createFeatureFlagCache(() => "bot", api, 60_000);
+    assert.equal((await cache.flags())[0].state, "off");
+    fail = true;
+    cache.refresh();
+    assert.equal((await cache.flags())[0].state, "off", "no wait while the read is out");
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal((await cache.flags())[0].state, "off", "a failed read keeps the last flags");
+  });
+
+test("feature flag cache: with no flags yet, a failed read backs off before the next",
+  async (t) => {
+    t.mock.method(console, "error", () => undefined);
+    t.mock.timers.enable({ apis: ["Date"], now: 0 });
+    let calls = 0;
+    const api: IFeatureAccessApi = {
+      async fetchFeatureAccess() {
+        calls += 1;
+        throw new Error("API down");
+      },
+    };
+    const cache = createFeatureFlagCache(() => "bot", api, 60_000, 30_000);
+    await assert.rejects(cache.flags(), /API down/);
+    await assert.rejects(cache.flags(), /API down/);
+    assert.equal(calls, 1, "the next interaction does not wait on another read");
+    t.mock.timers.tick(30_001);
+    await assert.rejects(cache.flags(), /API down/);
+    assert.equal(calls, 2);
+  });
 
 test("feature flag cache: past the TTL the old flags answer at once while it refreshes",
   async (t) => {
@@ -221,7 +262,7 @@ test("feature flag cache: before the bot logs in there are no flags to read", as
   const api = fakeApi();
   const cache = createFeatureFlagCache(() => null, api);
   await assert.rejects(cache.flags(), /before the bot logs in/);
-  cache.clear();
+  cache.refresh();
   assert.deepEqual(api.calls, []);
 });
 
@@ -287,11 +328,30 @@ test("resolveFeatureGate: a lookup slower than the wait lets the command run", a
     isStaff: async () => false,
   };
   assert.equal(await resolveFeatureGate(target, "1", hangingFlags, 5), "run");
+});
+
+test("resolveFeatureGate: a Preview staff lookup that never answers refuses", async (t) => {
+  t.mock.method(console, "warn", () => undefined);
+  const target = { type: "command", name: "giveaway" } as const;
   const hangingStaff: IFeatureGateSource = {
     flags: async () => [{ key: "giveaways", name: "Giveaways", state: "preview" }],
     isStaff: () => new Promise<boolean>(() => undefined),
   };
-  assert.equal(await resolveFeatureGate(target, "1", hangingStaff, 5), "run");
+  assert.equal(
+    await resolveFeatureGate(target, "1", hangingStaff, 5, 5),
+    "not_available",
+  );
+});
+
+test("resolveFeatureGate: a slow flag read leaves the staff lookup its own wait", async () => {
+  const target = { type: "command", name: "giveaway" } as const;
+  const later = <T>(value: T, ms: number): Promise<T> =>
+    new Promise((resolve) => setTimeout(() => resolve(value), ms));
+  const slowFlags: IFeatureGateSource = {
+    flags: () => later([{ key: "giveaways", name: "Giveaways", state: "preview" }], 30),
+    isStaff: () => later(true, 30),
+  };
+  assert.equal(await resolveFeatureGate(target, "1", slowFlags, 40, 40), "preview_note");
 });
 
 test("feature gate copy: the refusal and the Preview note", () => {
