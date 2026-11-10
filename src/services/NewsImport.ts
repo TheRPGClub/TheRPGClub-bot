@@ -203,8 +203,9 @@ function progressEditor(
 /**
  * `/news-import scan`: refuses in test mode, then asks the API whether the acting member is
  * staff (the batch write is service-only, so the status read is the check) and where the
- * last scan stopped, then starts the scan unless one is running. Returns the private reply, and `finished`, which settles
- * (never rejects) once the progress message shows the final counts; null when not started.
+ * last scan stopped, then starts the scan unless one is running. Returns the private reply,
+ * and `finished`, which settles (never rejects) once the progress message shows the final
+ * counts; null when not started.
  */
 export async function startNewsImportScanReply(
   start: INewsImportScanStart,

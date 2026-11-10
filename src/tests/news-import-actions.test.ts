@@ -142,7 +142,7 @@ function scanStart(
   return { start, channel };
 }
 
-test("staff start a scan: the reply links the progress message, which ends with counts", async () => {
+test("staff start a scan: the reply links the progress message, ending with counts", async () => {
   const api = fakeApi();
   const { start, channel } = scanStart(api, new NewsImportScanRunner());
 

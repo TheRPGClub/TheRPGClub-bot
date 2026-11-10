@@ -240,7 +240,7 @@ test("upload assigns categories, removes skip rows, leaves blank rows out", asyn
   assert.match(reply.text, /\*\*1\*\* imported News Items? (is|are) still unsorted/);
 });
 
-test("upload reports the file's and the API's rejected rows by line, valid rows applied", async () => {
+test("upload reports the file's and the API's rejected rows by line, applies others", async () => {
   const api = fakeApi([item(1), item(2)]);
   const text = fileOf([
     row(id(1), "piracy"),
@@ -323,7 +323,7 @@ test("upload refuses a member who is not an Admin or Superadmin, unread", async 
   assert.deepEqual(api.assignCalls, []);
 });
 
-test("upload refuses a file that is not a .csv, one over the size limit, a wrong header", async () => {
+test("upload refuses a non-.csv file, one over the size limit, a wrong header", async () => {
   const api = fakeApi([item(1)]);
   const good = fileOf([row(id(1), "general")]);
 
