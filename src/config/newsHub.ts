@@ -1,4 +1,5 @@
 import {
+  GAME_NEWS_CHANNEL_ID,
   NEWS_ANNOUNCEMENTS_THREAD_ID,
   NEWS_EMULATION_THREAD_ID,
   NEWS_GENERAL_THREAD_ID,
@@ -25,26 +26,44 @@ export const NEWS_CATEGORY_KEYS = [
 export type NewsCategoryKey = (typeof NEWS_CATEGORY_KEYS)[number];
 
 /**
- * Where News Items are posted: channel or thread ID -> the News Category a message there
- * takes. Null means no category (the Game News Archive, whose items staff sort in the
- * News Import). A channel that is not a key is not a place for news.
+ * Where News Items are posted: channel ID -> the News Category a message there takes, or
+ * null when the bot picks it (the News Channel) or staff sort it (the News Import). A
+ * channel that is not a key is not a place for news.
  */
 export type NewsPlaces = ReadonlyMap<string, NewsCategoryKey | null>;
 
-const CATEGORY_THREADS: readonly (readonly [string, NewsCategoryKey])[] = [
-  [NEWS_ANNOUNCEMENTS_THREAD_ID, "announcements"],
-  [NEWS_RELEASES_THREAD_ID, "releases"],
-  [NEWS_EMULATION_THREAD_ID, "emulation"],
-  [NEWS_INDUSTRY_THREAD_ID, "industry"],
-  [NEWS_HARDWARE_THREAD_ID, "hardware"],
-  [NEWS_RUMOURS_THREAD_ID, "rumours"],
-  [NEWS_GENERAL_THREAD_ID, "general"],
-];
-
 /**
- * The seven News Category threads in the game news forum. A test-mode ID with no override
- * resolves to "", which is left out so it can never match a channel.
+ * The News Channel (spec api#367): the reopened game news channel, where members share news
+ * and discuss it in threads on their messages. Its category is picked per message. A
+ * test-mode ID with no override resolves to "", which is left out so it never matches.
  */
-export const NEWS_CATEGORY_THREADS: NewsPlaces = new Map(
-  CATEGORY_THREADS.filter(([threadId]) => threadId !== ""),
+export const NEWS_CHANNEL_PLACES: NewsPlaces = new Map(
+  GAME_NEWS_CHANNEL_ID === "" ? [] : [[GAME_NEWS_CHANNEL_ID, null]],
 );
+
+/** A News Category's thread in the game news forum, where only the bot posts News Copies. */
+export interface INewsCategoryThread {
+  threadId: string;
+  /**
+   * The emoji in the thread's name, which the bot reacts with on the original: a Unicode
+   * emoji, or `name:id` for a custom one.
+   */
+  emoji: string;
+}
+
+export type NewsCategoryThreads = Readonly<Record<NewsCategoryKey, INewsCategoryThread>>;
+
+// PLACEHOLDER bot#1537: the emojis below are stand-ins. Replace each with the emoji in its
+// category thread's name before the cutover (bot#1543).
+export const NEWS_CATEGORY_THREADS: NewsCategoryThreads = {
+  announcements: { threadId: NEWS_ANNOUNCEMENTS_THREAD_ID, emoji: "📣" },
+  releases: { threadId: NEWS_RELEASES_THREAD_ID, emoji: "📦" },
+  emulation: { threadId: NEWS_EMULATION_THREAD_ID, emoji: "🕹️" },
+  industry: { threadId: NEWS_INDUSTRY_THREAD_ID, emoji: "🏢" },
+  hardware: { threadId: NEWS_HARDWARE_THREAD_ID, emoji: "🖥️" },
+  rumours: { threadId: NEWS_RUMOURS_THREAD_ID, emoji: "🤫" },
+  general: { threadId: NEWS_GENERAL_THREAD_ID, emoji: "📰" },
+};
+
+/** How long a new post waits for Discord's link preview before its category is picked. */
+export const NEWS_PREVIEW_WAIT_MS = 10_000;

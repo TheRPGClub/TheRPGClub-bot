@@ -1,11 +1,7 @@
 import { RESTJSONErrorCodes, SnowflakeUtil, type Client } from "discord.js";
 import { GAME_NEWS_CHANNEL_ID } from "../config/channels.js";
 import { NEWS_HUB_FEATURE_KEY } from "../config/featureGate.js";
-import {
-  NEWS_CATEGORY_THREADS,
-  type NewsCategoryKey,
-  type NewsPlaces,
-} from "../config/newsHub.js";
+import type { NewsCategoryKey, NewsPlaces } from "../config/newsHub.js";
 import type { FeatureState } from "../functions/FeatureGate.js";
 import { newsItemFrom, type INewsMessage } from "../functions/NewsItem.js";
 import { buildAnyErrorMessage, buildApiErrorMessage } from "../utilities/ApiErrorUtils.js";
@@ -16,7 +12,7 @@ import {
   NEWS_ITEM_API,
   newsItemRecordBody,
   type INewsItemApi,
-} from "./NewsHubRecording.js";
+} from "./NewsItemApi.js";
 import { apiGetOrThrow } from "./RpgClubApiClient.js";
 
 // The News Hub's bot jobs (spec api#355, bot#1525): image renewal, and the catch-up scan
@@ -60,9 +56,9 @@ export interface INewsHubApi extends INewsItemApi {
 }
 
 export interface INewsHubJobDeps {
-  /** The category threads, each with its News Category. */
+  /** The category threads the catch-up scans, each with its News Category. */
   categoryThreads: NewsPlaces;
-  /** The Game News Archive, whose imported items renewal also covers. */
+  /** The News Channel, whose live and imported items renewal covers. */
   archiveChannelId: string;
   api: INewsHubApi;
   discord: INewsChannelReader;
@@ -145,7 +141,9 @@ async function readNewsHubState(client: Client): Promise<FeatureState | null> {
 
 export function createNewsHubJobDeps(client: Client): INewsHubJobDeps {
   return {
-    categoryThreads: NEWS_CATEGORY_THREADS,
+    // None: News Items are no longer posted in the category threads (bot#1537), which
+    // hold only News Copies. The News Channel catch-up replaces this scan (bot#1540).
+    categoryThreads: new Map(),
     archiveChannelId: GAME_NEWS_CHANNEL_ID,
     api: NEWS_HUB_API,
     discord: discordReader(client),
